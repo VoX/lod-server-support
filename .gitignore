@@ -1,0 +1,12 @@
+.gradle/
+build/
+.idea/
+*.iml
+*.ipr
+*.iws
+run/
+out/
+.fabric/
+remappedSrc/
+test-server/
+libs/
