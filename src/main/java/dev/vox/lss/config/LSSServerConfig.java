@@ -17,8 +17,6 @@ public class LSSServerConfig extends JsonConfig {
     public int maxBytesPerSecondGlobal = 10_485_760;
     public int maxRequestsPerBatch = 256;
     public int maxPendingRequestsPerPlayer = 512;
-    public boolean skipUndergroundSections = true;
-    public int undergroundSkipMargin = 0;
     public boolean enableChunkGeneration = true;
     public int generationDistanceChunks = 64;
     public int maxConcurrentGenerations = 16;

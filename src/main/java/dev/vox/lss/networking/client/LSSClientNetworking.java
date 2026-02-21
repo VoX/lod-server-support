@@ -24,6 +24,7 @@ import net.minecraft.world.level.chunk.LevelChunkSection;
 import net.minecraft.world.level.chunk.PalettedContainer;
 import net.minecraft.world.level.chunk.Strategy;
 
+import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicLong;
 
 public class LSSClientNetworking {
@@ -199,11 +200,21 @@ public class LSSClientNetworking {
 
                 DataLayer blockLight = null;
                 DataLayer skyLight = null;
-                if ((payload.lightFlags() & 1) != 0 && payload.blockLight() != null) {
+                if ((payload.lightFlags() & 0x01) != 0 && payload.blockLight() != null) {
                     blockLight = new DataLayer(payload.blockLight().clone());
+                } else if ((payload.lightFlags() & 0x04) != 0) {
+                    byte[] expanded = new byte[2048];
+                    byte val = (byte) ((payload.uniformBlockLight() & 0xF) | ((payload.uniformBlockLight() & 0xF) << 4));
+                    Arrays.fill(expanded, val);
+                    blockLight = new DataLayer(expanded);
                 }
-                if ((payload.lightFlags() & 2) != 0 && payload.skyLight() != null) {
+                if ((payload.lightFlags() & 0x02) != 0 && payload.skyLight() != null) {
                     skyLight = new DataLayer(payload.skyLight().clone());
+                } else if ((payload.lightFlags() & 0x08) != 0) {
+                    byte[] expanded = new byte[2048];
+                    byte val = (byte) ((payload.uniformSkyLight() & 0xF) | ((payload.uniformSkyLight() & 0xF) << 4));
+                    Arrays.fill(expanded, val);
+                    skyLight = new DataLayer(expanded);
                 }
 
                 // Dispatch to registered consumers

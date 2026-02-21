@@ -17,6 +17,8 @@ public record ChunkSectionS2CPayload(
         byte lightFlags,
         byte[] blockLight,
         byte[] skyLight,
+        byte uniformBlockLight,
+        byte uniformSkyLight,
         long columnTimestamp
 ) implements CustomPacketPayload {
     public static final CustomPacketPayload.Type<ChunkSectionS2CPayload> TYPE =
@@ -35,11 +37,17 @@ public record ChunkSectionS2CPayload(
         buf.writeUtf(payload.dimension.identifier().toString());
         buf.writeByteArray(payload.sectionData);
         buf.writeByte(payload.lightFlags);
-        if ((payload.lightFlags & 1) != 0 && payload.blockLight != null) {
+        if ((payload.lightFlags & 0x01) != 0 && payload.blockLight != null) {
             buf.writeBytes(payload.blockLight);
         }
-        if ((payload.lightFlags & 2) != 0 && payload.skyLight != null) {
+        if ((payload.lightFlags & 0x04) != 0) {
+            buf.writeByte(payload.uniformBlockLight);
+        }
+        if ((payload.lightFlags & 0x02) != 0 && payload.skyLight != null) {
             buf.writeBytes(payload.skyLight);
+        }
+        if ((payload.lightFlags & 0x08) != 0) {
+            buf.writeByte(payload.uniformSkyLight);
         }
         buf.writeLong(payload.columnTimestamp);
     }
@@ -53,16 +61,24 @@ public record ChunkSectionS2CPayload(
         byte flags = buf.readByte();
         byte[] bl = null;
         byte[] sl = null;
-        if ((flags & 1) != 0) {
+        byte uniformBl = 0;
+        byte uniformSl = 0;
+        if ((flags & 0x01) != 0) {
             bl = new byte[2048];
             buf.readBytes(bl);
         }
-        if ((flags & 2) != 0) {
+        if ((flags & 0x04) != 0) {
+            uniformBl = buf.readByte();
+        }
+        if ((flags & 0x02) != 0) {
             sl = new byte[2048];
             buf.readBytes(sl);
         }
+        if ((flags & 0x08) != 0) {
+            uniformSl = buf.readByte();
+        }
         long columnTimestamp = buf.isReadable() ? buf.readLong() : 0L;
-        return new ChunkSectionS2CPayload(cx, sy, cz, dim, sectionData, flags, bl, sl, columnTimestamp);
+        return new ChunkSectionS2CPayload(cx, sy, cz, dim, sectionData, flags, bl, sl, uniformBl, uniformSl, columnTimestamp);
     }
 
     @Override

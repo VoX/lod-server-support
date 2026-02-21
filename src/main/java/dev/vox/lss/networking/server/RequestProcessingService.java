@@ -16,8 +16,8 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.LightLayer;
 import net.minecraft.world.level.chunk.LevelChunk;
+import net.minecraft.world.level.chunk.DataLayer;
 import net.minecraft.world.level.chunk.LevelChunkSection;
-import net.minecraft.world.level.levelgen.Heightmap;
 
 import java.util.Map;
 import java.util.UUID;
@@ -37,13 +37,11 @@ public class RequestProcessingService {
     private int lastTickDiskQueued = 0;
     private int lastTickDiskDrained = 0;
     private int lastTickBatchesCompleted = 0;
-    private int lastTickSectionsSkipped = 0;
     private int lastTickGenDrained = 0;
     private int curTickSectionsSent = 0;
     private int curTickDiskQueued = 0;
     private int curTickDiskDrained = 0;
     private int curTickBatchesCompleted = 0;
-    private int curTickSectionsSkipped = 0;
     private int curTickGenDrained = 0;
 
     public RequestProcessingService(MinecraftServer server) {
@@ -359,19 +357,10 @@ public class RequestProcessingService {
         int minSectionY = level.getMinSectionY();
         var sections = chunk.getSections();
 
-        int minSurfaceSectionY = Integer.MIN_VALUE;
-        if (LSSServerConfig.CONFIG.skipUndergroundSections && !level.dimensionType().hasCeiling()) {
-            minSurfaceSectionY = computeMinSurfaceSectionY(chunk, LSSServerConfig.CONFIG.undergroundSkipMargin);
-        }
-
         for (int i = 0; i < sections.length; i++) {
             int sectionY = minSectionY + i;
             var section = sections[i];
             if (section == null || section.hasOnlyAir()) continue;
-            if (sectionY < minSurfaceSectionY) {
-                this.curTickSectionsSkipped++;
-                continue;
-            }
 
             var payload = serializeLoadedSection(level, section, cx, sectionY, cz, columnTimestamp);
             if (payload != null) {
@@ -380,21 +369,6 @@ public class RequestProcessingService {
                 this.serializationsThisTick++;
             }
         }
-    }
-
-    static int computeMinSurfaceSectionY(LevelChunk chunk, int margin) {
-        int minY = Integer.MAX_VALUE;
-        int noSurface = chunk.getMinY() - 1;
-        for (int x = 0; x < 16; x++) {
-            for (int z = 0; z < 16; z++) {
-                int h = chunk.getHeight(Heightmap.Types.OCEAN_FLOOR, x, z);
-                if (h > noSurface) {
-                    minY = Math.min(minY, h);
-                }
-            }
-        }
-        if (minY == Integer.MAX_VALUE) return Integer.MIN_VALUE;
-        return (minY >> 4) - margin;
     }
 
     static ChunkSectionS2CPayload serializeLoadedSection(
@@ -409,6 +383,8 @@ public class RequestProcessingService {
             byte lightFlags = 0;
             byte[] blockLight = null;
             byte[] skyLight = null;
+            byte uniformBlockLight = 0;
+            byte uniformSkyLight = 0;
 
             if (LSSServerConfig.CONFIG.sendLightData) {
                 var sectionPos = SectionPos.of(cx, sectionY, cz);
@@ -416,18 +392,29 @@ public class RequestProcessingService {
                 var slLayer = level.getLightEngine().getLayerListener(LightLayer.SKY).getDataLayerData(sectionPos);
 
                 if (blLayer != null && !blLayer.isEmpty()) {
-                    lightFlags |= 1;
-                    blockLight = blLayer.getData().clone();
+                    if (isUniformLayer(blLayer)) {
+                        lightFlags |= 0x04;
+                        uniformBlockLight = (byte) blLayer.get(0, 0, 0);
+                    } else {
+                        lightFlags |= 0x01;
+                        blockLight = blLayer.getData().clone();
+                    }
                 }
                 if (slLayer != null && !slLayer.isEmpty()) {
-                    lightFlags |= 2;
-                    skyLight = slLayer.getData().clone();
+                    if (isUniformLayer(slLayer)) {
+                        lightFlags |= 0x08;
+                        uniformSkyLight = (byte) slLayer.get(0, 0, 0);
+                    } else {
+                        lightFlags |= 0x02;
+                        skyLight = slLayer.getData().clone();
+                    }
                 }
             }
 
             return new ChunkSectionS2CPayload(
                     cx, sectionY, cz, level.dimension(),
-                    sectionData, lightFlags, blockLight, skyLight, columnTimestamp
+                    sectionData, lightFlags, blockLight, skyLight,
+                    uniformBlockLight, uniformSkyLight, columnTimestamp
             );
         } catch (Exception e) {
             LSSLogger.error("Failed to serialize section at " + cx + "," + sectionY + "," + cz, e);
@@ -435,6 +422,19 @@ public class RequestProcessingService {
         } finally {
             buf.release();
         }
+    }
+
+    private static boolean isUniformLayer(DataLayer layer) {
+        return isUniformArray(layer.getData());
+    }
+
+    static boolean isUniformArray(byte[] data) {
+        if (data.length == 0) return true;
+        byte first = data[0];
+        for (int i = 1; i < data.length; i++) {
+            if (data[i] != first) return false;
+        }
+        return true;
     }
 
     private void drainCompletedBatches(PlayerRequestState state) {
@@ -460,13 +460,11 @@ public class RequestProcessingService {
         this.lastTickDiskQueued = this.curTickDiskQueued;
         this.lastTickDiskDrained = this.curTickDiskDrained;
         this.lastTickBatchesCompleted = this.curTickBatchesCompleted;
-        this.lastTickSectionsSkipped = this.curTickSectionsSkipped;
         this.lastTickGenDrained = this.curTickGenDrained;
         this.curTickSectionsSent = 0;
         this.curTickDiskQueued = 0;
         this.curTickDiskDrained = 0;
         this.curTickBatchesCompleted = 0;
-        this.curTickSectionsSkipped = 0;
         this.curTickGenDrained = 0;
         this.serializationsThisTick = 0;
     }
@@ -485,8 +483,8 @@ public class RequestProcessingService {
 
     public String getTickDiagnostics() {
         var sb = new StringBuilder();
-        sb.append(String.format("last_tick: sections_sent=%d, sections_skipped=%d, disk_queued=%d, disk_drained=%d, batches_completed=%d",
-                lastTickSectionsSent, lastTickSectionsSkipped, lastTickDiskQueued, lastTickDiskDrained, lastTickBatchesCompleted));
+        sb.append(String.format("last_tick: sections_sent=%d, disk_queued=%d, disk_drained=%d, batches_completed=%d",
+                lastTickSectionsSent, lastTickDiskQueued, lastTickDiskDrained, lastTickBatchesCompleted));
         if (this.generationService != null) {
             sb.append(String.format(", gen_drained=%d", lastTickGenDrained));
         }

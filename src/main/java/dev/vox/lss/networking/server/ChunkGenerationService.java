@@ -235,17 +235,11 @@ public class ChunkGenerationService {
         int minSectionY = level.getMinSectionY();
         var sections = chunk.getSections();
 
-        int minSurfaceSectionY = Integer.MIN_VALUE;
-        if (LSSServerConfig.CONFIG.skipUndergroundSections && !level.dimensionType().hasCeiling()) {
-            minSurfaceSectionY = RequestProcessingService.computeMinSurfaceSectionY(chunk, LSSServerConfig.CONFIG.undergroundSkipMargin);
-        }
-
         var payloads = new ArrayList<ChunkSectionS2CPayload>();
         for (int i = 0; i < sections.length; i++) {
             int sectionY = minSectionY + i;
             var section = sections[i];
             if (section == null || section.hasOnlyAir()) continue;
-            if (sectionY < minSurfaceSectionY) continue;
 
             var payload = RequestProcessingService.serializeLoadedSection(
                     level, section, cx, sectionY, cz, columnTimestamp);

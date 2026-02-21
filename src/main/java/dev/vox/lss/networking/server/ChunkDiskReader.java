@@ -55,7 +55,6 @@ public class ChunkDiskReader {
     private final AtomicLong notFullStatusCount = new AtomicLong();
     private final AtomicLong noSectionsCount = new AtomicLong();
     private final AtomicLong totalPayloadsProduced = new AtomicLong();
-    private final AtomicLong skippedUndergroundCount = new AtomicLong();
 
     public ChunkDiskReader(int threadCount) {
         this.executor = Executors.newFixedThreadPool(threadCount, r -> {
@@ -72,14 +71,11 @@ public class ChunkDiskReader {
         this.submittedCount.incrementAndGet();
         var dimension = level.dimension();
         var registryAccess = level.registryAccess();
-        int minBuildHeight = level.getMinY();
-        int worldHeight = level.getHeight();
-        boolean hasCeiling = level.dimensionType().hasCeiling();
         var chunkMap = ((dev.vox.lss.mixin.AccessorServerChunkCache) level.getChunkSource()).getChunkMap();
         this.executor.submit(() -> {
             if (this.isShutdown.get()) return;
             try {
-                this.readChunkFromDisk(playerUuid, batchId, chunkMap, chunkX, chunkZ, dimension, registryAccess, clientTimestamp, minBuildHeight, worldHeight, hasCeiling);
+                this.readChunkFromDisk(playerUuid, batchId, chunkMap, chunkX, chunkZ, dimension, registryAccess, clientTimestamp);
             } catch (Exception e) {
                 LSSLogger.error("Failed to read chunk from disk at " + chunkX + ", " + chunkZ, e);
                 this.errorCount.incrementAndGet();
@@ -92,7 +88,7 @@ public class ChunkDiskReader {
     private void readChunkFromDisk(UUID playerUuid, int batchId, net.minecraft.server.level.ChunkMap chunkMap,
                                     int chunkX, int chunkZ,
                                     ResourceKey<Level> dimension, RegistryAccess registryAccess,
-                                    long clientTimestamp, int minBuildHeight, int worldHeight, boolean hasCeiling) {
+                                    long clientTimestamp) {
         if (this.isShutdown.get()) return;
 
         CompoundTag chunkNbt;
@@ -139,11 +135,6 @@ public class ChunkDiskReader {
             return;
         }
 
-        int minSurfaceSectionY = Integer.MIN_VALUE;
-        if (LSSServerConfig.CONFIG.skipUndergroundSections && !hasCeiling) {
-            minSurfaceSectionY = extractMinSurfaceSectionY(chunkNbt, LSSServerConfig.CONFIG.undergroundSkipMargin, minBuildHeight, worldHeight);
-        }
-
         var factory = PalettedContainerFactory.create(registryAccess);
         var blockStateCodec = factory.blockStatesContainerCodec();
         var biomeCodec = factory.biomeContainerCodec();
@@ -168,10 +159,6 @@ public class ChunkDiskReader {
             var sectionTag = (CompoundTag) sectionElement;
             int sectionY = sectionTag.getIntOr("Y", Integer.MIN_VALUE);
             if (sectionY == Integer.MIN_VALUE) continue;
-            if (sectionY < minSurfaceSectionY) {
-                this.skippedUndergroundCount.incrementAndGet();
-                continue;
-            }
 
             var payload = parseSectionFromNbt(sectionTag, sectionY, chunkX, chunkZ, dimension,
                     registryAccess, blockStateCodec, biomeCodec, defaultBiome, lastUpdate);
@@ -238,21 +225,34 @@ public class ChunkDiskReader {
             byte lightFlags = 0;
             byte[] blockLight = null;
             byte[] skyLight = null;
+            byte uniformBlockLight = 0;
+            byte uniformSkyLight = 0;
 
             if (LSSServerConfig.CONFIG.sendLightData) {
                 if (blockLightData.length == 2048) {
-                    lightFlags |= 1;
-                    blockLight = blockLightData;
+                    if (RequestProcessingService.isUniformArray(blockLightData)) {
+                        lightFlags |= 0x04;
+                        uniformBlockLight = (byte) (blockLightData[0] & 0x0F);
+                    } else {
+                        lightFlags |= 0x01;
+                        blockLight = blockLightData;
+                    }
                 }
                 if (skyLightData.length == 2048) {
-                    lightFlags |= 2;
-                    skyLight = skyLightData;
+                    if (RequestProcessingService.isUniformArray(skyLightData)) {
+                        lightFlags |= 0x08;
+                        uniformSkyLight = (byte) (skyLightData[0] & 0x0F);
+                    } else {
+                        lightFlags |= 0x02;
+                        skyLight = skyLightData;
+                    }
                 }
             }
 
             return new ChunkSectionS2CPayload(
                     chunkX, sectionY, chunkZ, dimension,
-                    sectionData, lightFlags, blockLight, skyLight, columnTimestamp
+                    sectionData, lightFlags, blockLight, skyLight,
+                    uniformBlockLight, uniformSkyLight, columnTimestamp
             );
         } catch (Exception e) {
             LSSLogger.error("Failed to serialize disk-read section at " + chunkX + "," + sectionY + "," + chunkZ, e);
@@ -262,55 +262,15 @@ public class ChunkDiskReader {
         }
     }
 
-    private static int extractMinSurfaceSectionY(CompoundTag chunkNbt, int margin, int minBuildHeight, int worldHeight) {
-        var heightmaps = chunkNbt.getCompound("Heightmaps");
-        if (heightmaps.isEmpty()) return Integer.MIN_VALUE;
-
-        var oceanFloor = heightmaps.get().getLongArray("OCEAN_FLOOR");
-        if (oceanFloor.isEmpty()) return Integer.MIN_VALUE;
-        long[] packed = oceanFloor.get();
-        if (packed.length == 0) return Integer.MIN_VALUE;
-
-        int bits = ceilLog2(worldHeight + 1);
-        if (bits <= 0) return Integer.MIN_VALUE;
-        int valuesPerLong = 64 / bits;
-        int expectedLength = (256 + valuesPerLong - 1) / valuesPerLong;
-        if (packed.length != expectedLength) return Integer.MIN_VALUE;
-        long mask = (1L << bits) - 1;
-        int minHeight = Integer.MAX_VALUE;
-        int index = 0;
-
-        for (long word : packed) {
-            for (int v = 0; v < valuesPerLong && index < 256; v++) {
-                int height = (int) (word & mask);
-                if (height > 0) {
-                    minHeight = Math.min(minHeight, height);
-                }
-                word >>>= bits;
-                index++;
-            }
-        }
-
-        if (minHeight == Integer.MAX_VALUE) return Integer.MIN_VALUE;
-
-        int blockY = minHeight + minBuildHeight - 1;
-        return (blockY >> 4) - margin;
-    }
-
-    private static int ceilLog2(int value) {
-        if (value <= 1) return 0;
-        return Integer.SIZE - Integer.numberOfLeadingZeros(value - 1);
-    }
-
     public ReadResult pollResult() {
         return this.results.poll();
     }
 
     public String getDiagnostics() {
-        return String.format("submitted=%d, completed=%d, empty=%d, notFull=%d, noSections=%d, errors=%d, payloads=%d, pending=%d, underground_skipped=%d",
+        return String.format("submitted=%d, completed=%d, empty=%d, notFull=%d, noSections=%d, errors=%d, payloads=%d, pending=%d",
                 submittedCount.get(), completedCount.get(), emptyCount.get(),
                 notFullStatusCount.get(), noSectionsCount.get(), errorCount.get(),
-                totalPayloadsProduced.get(), results.size(), skippedUndergroundCount.get());
+                totalPayloadsProduced.get(), results.size());
     }
 
     public void shutdown() {
