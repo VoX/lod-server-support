@@ -2,6 +2,10 @@
 
 A Fabric mod that distributes LOD (Level of Detail) chunk data from the server to connected clients. Clients request the chunks they need and the server responds, enabling LOD rendering mods to display terrain far beyond the vanilla render distance on multiplayer servers.
 
+## Downloads
+
+Built mod JARs are available as artifacts from the [GitHub Actions build workflow](https://github.com/VoX/lod-server-support/actions/workflows/build.yml?query=branch%3Amain+is%3Asuccess).
+
 ## Installation
 
 Install the mod on **both the server and all clients**. The server distributes LOD chunk data, and the client requests and processes it.
@@ -43,8 +47,6 @@ Server config is generated at `config/lss-server-config.json` on first run. Key 
 | `maxSendQueueSize` | `4800` | Max queued sections per player |
 | `maxRequestsPerBatch` | `256` | Max chunk requests per client batch |
 | `maxPendingRequestsPerPlayer` | `512` | Max pending requests per player |
-| `skipUndergroundSections` | `true` | Skip sections below the surface to save bandwidth |
-| `undergroundSkipMargin` | `0` | Extra sections below surface to include |
 | `enableChunkGeneration` | `true` | Generate missing chunks on demand for LOD data |
 | `generationDistanceChunks` | `64` | Max distance from player for chunk generation |
 | `maxConcurrentGenerations` | `16` | Max chunks generating server-wide at once |

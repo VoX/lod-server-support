@@ -6,6 +6,8 @@
     "defaultRequire": 1
   },
   "mixins": [
-    "AccessorServerChunkCache"
+    "AccessorServerChunkCache",
+    "AccessorChunkMap",
+    "ChunkMapSaveHook"
   ]
 }

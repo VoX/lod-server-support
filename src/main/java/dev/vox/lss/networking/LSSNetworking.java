@@ -4,13 +4,14 @@ import dev.vox.lss.networking.payloads.CancelRequestC2SPayload;
 import dev.vox.lss.networking.payloads.ChunkRequestC2SPayload;
 import dev.vox.lss.networking.payloads.ChunkSectionS2CPayload;
 import dev.vox.lss.networking.payloads.ColumnUpToDateS2CPayload;
+import dev.vox.lss.networking.payloads.DirtyColumnsS2CPayload;
 import dev.vox.lss.networking.payloads.HandshakeC2SPayload;
 import dev.vox.lss.networking.payloads.RequestCompleteS2CPayload;
 import dev.vox.lss.networking.payloads.SessionConfigS2CPayload;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 
 public class LSSNetworking {
-    public static final int PROTOCOL_VERSION = 3;
+    public static final int PROTOCOL_VERSION = 5;
 
     public static void registerPayloads() {
         // Client -> Server
@@ -43,6 +44,10 @@ public class LSSNetworking {
         PayloadTypeRegistry.playS2C().register(
                 ColumnUpToDateS2CPayload.TYPE,
                 ColumnUpToDateS2CPayload.CODEC
+        );
+        PayloadTypeRegistry.playS2C().register(
+                DirtyColumnsS2CPayload.TYPE,
+                DirtyColumnsS2CPayload.CODEC
         );
     }
 }

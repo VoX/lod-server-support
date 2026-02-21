@@ -7,7 +7,6 @@ public class LSSClientConfig extends JsonConfig {
 
     public boolean receiveServerLods = true;
     public int lodDistanceChunks = 0;
-    public int resyncIntervalSeconds = 600;
     public int resyncBatchSize = 32;
 
     @Override
@@ -18,7 +17,8 @@ public class LSSClientConfig extends JsonConfig {
     @Override
     protected void validate() {
         lodDistanceChunks = Math.max(lodDistanceChunks, 0); // 0 = use server default
-        resyncIntervalSeconds = Math.max(resyncIntervalSeconds, 10);
+        lodDistanceChunks = Math.min(lodDistanceChunks, 512);
         resyncBatchSize = Math.max(resyncBatchSize, 1);
+        resyncBatchSize = Math.min(resyncBatchSize, 256);
     }
 }

@@ -77,7 +77,7 @@ public record ChunkSectionS2CPayload(
         if ((flags & 0x08) != 0) {
             uniformSl = buf.readByte();
         }
-        long columnTimestamp = buf.isReadable() ? buf.readLong() : 0L;
+        long columnTimestamp = buf.readLong();
         return new ChunkSectionS2CPayload(cx, sy, cz, dim, sectionData, flags, bl, sl, uniformBl, uniformSl, columnTimestamp);
     }
 

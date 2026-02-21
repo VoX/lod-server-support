@@ -31,6 +31,10 @@ public class ColumnCacheStore {
                 return map;
             }
             int count = in.readInt();
+            if (count < 0 || count > 2_000_000) {
+                LSSLogger.warn("Column cache " + file + " has invalid entry count " + count + ", discarding");
+                return map;
+            }
             map.ensureCapacity(count);
             for (int i = 0; i < count; i++) {
                 long pos = in.readLong();

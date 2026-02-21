@@ -6,6 +6,7 @@ import dev.vox.lss.config.LSSClientConfig;
 import dev.vox.lss.networking.LSSNetworking;
 import dev.vox.lss.networking.payloads.ChunkSectionS2CPayload;
 import dev.vox.lss.networking.payloads.ColumnUpToDateS2CPayload;
+import dev.vox.lss.networking.payloads.DirtyColumnsS2CPayload;
 import dev.vox.lss.networking.payloads.HandshakeC2SPayload;
 import dev.vox.lss.networking.payloads.RequestCompleteS2CPayload;
 import dev.vox.lss.networking.payloads.SessionConfigS2CPayload;
@@ -121,6 +122,18 @@ public class LSSClientNetworking {
                         var manager = requestManager;
                         if (manager != null) {
                             manager.onColumnUpToDate(payload.chunkX(), payload.chunkZ());
+                        }
+                    });
+                }
+        );
+
+        ClientPlayNetworking.registerGlobalReceiver(
+                DirtyColumnsS2CPayload.TYPE,
+                (payload, context) -> {
+                    context.client().execute(() -> {
+                        var manager = requestManager;
+                        if (manager != null) {
+                            manager.onDirtyColumns(payload.dirtyPositions());
                         }
                     });
                 }

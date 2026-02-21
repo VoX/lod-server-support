@@ -10,3 +10,6 @@ out/
 remappedSrc/
 test-server/
 libs/
+logs/
+config/
+net/

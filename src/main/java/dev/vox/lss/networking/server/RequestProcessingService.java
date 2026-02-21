@@ -6,6 +6,7 @@ import dev.vox.lss.networking.payloads.CancelRequestC2SPayload;
 import dev.vox.lss.networking.payloads.ChunkRequestC2SPayload;
 import dev.vox.lss.networking.payloads.ChunkSectionS2CPayload;
 import dev.vox.lss.networking.payloads.ColumnUpToDateS2CPayload;
+import dev.vox.lss.networking.payloads.DirtyColumnsS2CPayload;
 import dev.vox.lss.networking.payloads.RequestCompleteS2CPayload;
 import io.netty.buffer.Unpooled;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
@@ -19,6 +20,8 @@ import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.DataLayer;
 import net.minecraft.world.level.chunk.LevelChunkSection;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -32,6 +35,7 @@ public class RequestProcessingService {
 
     private record GenerationRetry(UUID playerUuid, int batchId, int cx, int cz) {}
     private GenerationRetry pendingGenRetry = null;
+    private int dirtyBroadcastCounter = 0;
 
     private int lastTickSectionsSent = 0;
     private int lastTickDiskQueued = 0;
@@ -127,13 +131,15 @@ public class RequestProcessingService {
         var config = LSSServerConfig.CONFIG;
         long perPlayerCap = Math.min(perPlayerAllocation, config.maxBytesPerSecondPerPlayer);
 
+        List<UUID> toRemove = null;
         for (var state : this.players.values()) {
             if (!state.hasCompletedHandshake()) continue;
 
             if (state.getPlayer().isRemoved()) {
                 var current = this.server.getPlayerList().getPlayer(state.getPlayer().getUUID());
                 if (current == null) {
-                    this.removePlayer(state.getPlayer().getUUID());
+                    if (toRemove == null) toRemove = new ArrayList<>();
+                    toRemove.add(state.getPlayer().getUUID());
                     continue;
                 }
                 state.updatePlayer(current);
@@ -154,6 +160,61 @@ public class RequestProcessingService {
             this.flushSendQueue(state, perPlayerCap, config);
             this.processRequestBatches(state, config);
             this.drainCompletedBatches(state);
+        }
+        if (toRemove != null) {
+            for (UUID uuid : toRemove) this.removePlayer(uuid);
+        }
+
+        int intervalTicks = config.dirtyBroadcastIntervalSeconds * 20;
+        if (++this.dirtyBroadcastCounter >= intervalTicks) {
+            this.dirtyBroadcastCounter = 0;
+            this.broadcastDirtyColumns(config);
+        }
+    }
+
+    private void broadcastDirtyColumns(LSSServerConfig config) {
+        long[] filterBuf = null;
+
+        for (var level : this.server.getAllLevels()) {
+            var dimension = level.dimension();
+            long[] dirty = ChunkChangeTracker.drainDirty(dimension);
+            if (dirty == null || dirty.length == 0) continue;
+
+            int bufLen = Math.min(dirty.length, DirtyColumnsS2CPayload.MAX_POSITIONS);
+            if (filterBuf == null || filterBuf.length < bufLen) {
+                filterBuf = new long[bufLen];
+            }
+
+            for (var state : this.players.values()) {
+                if (!state.hasCompletedHandshake()) continue;
+                if (!state.getLastDimension().equals(dimension)) continue;
+
+                var player = state.getPlayer();
+                if (player.isRemoved()) continue;
+                int playerCx = player.blockPosition().getX() >> 4;
+                int playerCz = player.blockPosition().getZ() >> 4;
+                int lodDist = config.lodDistanceChunks;
+
+                int count = 0;
+                for (long packed : dirty) {
+                    int cx = ChunkRequestC2SPayload.unpackX(packed);
+                    int cz = ChunkRequestC2SPayload.unpackZ(packed);
+                    if (Math.max(Math.abs(cx - playerCx), Math.abs(cz - playerCz)) <= lodDist) {
+                        filterBuf[count++] = packed;
+                        if (count >= DirtyColumnsS2CPayload.MAX_POSITIONS) break;
+                    }
+                }
+
+                if (count > 0) {
+                    long[] result = new long[count];
+                    System.arraycopy(filterBuf, 0, result, 0, count);
+                    try {
+                        ServerPlayNetworking.send(player, new DirtyColumnsS2CPayload(result));
+                    } catch (Exception e) {
+                        LSSLogger.error("Failed to send dirty columns to " + player.getName().getString(), e);
+                    }
+                }
+            }
         }
     }
 
@@ -479,6 +540,10 @@ public class RequestProcessingService {
 
     public ChunkGenerationService getGenerationService() {
         return this.generationService;
+    }
+
+    public SharedBandwidthLimiter getBandwidthLimiter() {
+        return this.bandwidthLimiter;
     }
 
     public String getTickDiagnostics() {

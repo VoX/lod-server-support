@@ -31,16 +31,25 @@ public class LodRequestManager {
     }
 
     private final LongOpenHashSet pendingColumns = new LongOpenHashSet();
-    private final Int2ObjectOpenHashMap<long[]> activeBatches = new Int2ObjectOpenHashMap<>();
+    private final Int2ObjectOpenHashMap<TrackedBatch> activeBatches = new Int2ObjectOpenHashMap<>();
     private int nextBatchId = 0;
+
+    private static final long BATCH_TIMEOUT_MS = 60_000;
+
+    private record TrackedBatch(long[] positions, long createdAt) {}
     private boolean cacheLoaded = false;
 
+    // Positions pushed by the server's dirty column broadcast that need re-requesting.
+    // Tracked separately so they're prioritized like fresh requests in the scan.
+    private final LongOpenHashSet dirtyColumns = new LongOpenHashSet();
+
     // Single scan state — walks the spiral once, classifying each position into
-    // fresh (never requested), generation (empty, retryable), or resync (has data).
+    // fresh (never requested), dirty (server-pushed change), generation (empty, retryable),
+    // or resync (has cached data from previous session).
     private int scanRadius = 0;
     private int generationBudget = 0;
     private int generationDistance = 0;
-    private long lastResyncSweepTime = 0;
+    private boolean needsResync = false;
 
     private int receivedCount = 0;
     private int emptyCount = 0;
@@ -81,10 +90,11 @@ public class LodRequestManager {
         this.pendingColumns.clear();
         this.activeBatches.clear();
         this.clearTimestamps();
+        this.dirtyColumns.clear();
         this.scanRadius = 0;
         this.lastDimension = null;
         this.cacheLoaded = false;
-        this.lastResyncSweepTime = System.currentTimeMillis();
+        this.needsResync = true;
     }
 
     public void tick() {
@@ -111,9 +121,23 @@ public class LodRequestManager {
 
         if (playerCx != this.lastChunkX || playerCz != this.lastChunkZ) {
             this.pruneOutOfRangePositions(playerCx, playerCz);
+            this.pruneOutOfRangeTimestamps(playerCx, playerCz);
             this.lastChunkX = playerCx;
             this.lastChunkZ = playerCz;
             this.scanRadius = 0;
+        }
+
+        // Purge stale batches that the server never completed
+        long now = System.currentTimeMillis();
+        var staleIter = this.activeBatches.int2ObjectEntrySet().iterator();
+        while (staleIter.hasNext()) {
+            var entry = staleIter.next();
+            if (now - entry.getValue().createdAt > BATCH_TIMEOUT_MS) {
+                for (long pos : entry.getValue().positions) {
+                    this.pendingColumns.remove(pos);
+                }
+                staleIter.remove();
+            }
         }
 
         if (this.pendingColumns.size() >= this.sessionConfig.maxPendingRequests()) return;
@@ -125,18 +149,19 @@ public class LodRequestManager {
      * Single spiral scan that classifies each position and builds one unified batch.
      * <ul>
      *   <li><b>Fresh</b> (ts == -1) — never requested. Always collected with timestamp 0.</li>
+     *   <li><b>Dirty</b> (in dirtyColumns set) — server pushed a change notification.
+     *       Collected with stored timestamp, counted against main budget.</li>
      *   <li><b>Generation</b> (ts == 0) — empty, within generation distance.
      *       Collected with timestamp 0, subject to generation sub-budget.
      *       If generation is disabled (budget == 0), treated as settled.</li>
-     *   <li><b>Resync</b> (ts &gt; 0) — has data.
-     *       Collected with stored timestamp when resync cooldown has elapsed.</li>
+     *   <li><b>Resync</b> (ts &gt; 0, needsResync) — has cached data from a previous session.
+     *       Collected with stored timestamp during the initial join sweep only.</li>
      * </ul>
      * Pending positions naturally pace generation retries — a position stays pending
      * until its batch completes, preventing redundant re-requests without a timer.
      */
     private void tickScan(int playerCx, int playerCz, Minecraft mc) {
         var clientConfig = LSSClientConfig.CONFIG;
-        long now = System.currentTimeMillis();
 
         int exclusionRadius = mc.options.getEffectiveRenderDistance();
         int exclusionDistSq = exclusionRadius * exclusionRadius;
@@ -145,12 +170,15 @@ public class LodRequestManager {
 
         int budgetRemaining = this.sessionConfig.maxRequestsPerBatch();
         int genRemaining = this.generationBudget; // 0 if generation disabled
+        int resyncRemaining = 0;
+        if (this.needsResync) {
+            resyncRemaining = Math.min(clientConfig.resyncBatchSize, budgetRemaining / 4);
+            budgetRemaining -= resyncRemaining;
+        }
 
-        boolean resyncDue = now - this.lastResyncSweepTime >= clientConfig.resyncIntervalSeconds * 1000L;
-        int resyncRemaining = resyncDue ? clientConfig.resyncBatchSize : 0;
-
-        // Single unified buffer
-        int maxBatchSize = budgetRemaining + resyncRemaining;
+        // Single unified buffer — capped to the server's per-batch limit
+        int maxBatchSize = Math.min(budgetRemaining + resyncRemaining,
+                this.sessionConfig.maxRequestsPerBatch());
         long[] posBuf = new long[maxBatchSize];
         long[] tsBuf = new long[maxBatchSize];
         int count = 0;
@@ -191,6 +219,17 @@ public class LodRequestManager {
                             budgetRemaining--;
                         }
                         canAdvance = false;
+                    } else if (this.dirtyColumns.contains(packed)) {
+                        // Dirty — server notified us this column changed
+                        if (budgetRemaining > 0
+                                && this.pendingColumns.size() + count < maxPending) {
+                            posBuf[count] = packed;
+                            tsBuf[count] = storedTs;
+                            count++;
+                            budgetRemaining--;
+                            this.dirtyColumns.remove(packed);
+                        }
+                        canAdvance = false;
                     } else if (storedTs == 0L) {
                         // Empty — generation retry
                         if (genRemaining > 0 && budgetRemaining > 0
@@ -208,7 +247,7 @@ public class LodRequestManager {
                         }
                         // else: generation disabled (budget == 0) — treat as settled
                     } else {
-                        // Has data — resync
+                        // Has data — resync only on initial join sweep
                         if (resyncRemaining > 0
                                 && this.pendingColumns.size() + count < maxPending) {
                             posBuf[count] = packed;
@@ -226,10 +265,10 @@ public class LodRequestManager {
             }
         }
 
-        // Sweep completed — reset and update resync cooldown
+        // Sweep completed — reset scan and mark initial resync done
         if (this.scanRadius > lodDistance) {
             this.scanRadius = 0;
-            if (resyncDue) this.lastResyncSweepTime = now;
+            if (this.needsResync) this.needsResync = false;
         }
 
         // Send unified batch
@@ -242,7 +281,7 @@ public class LodRequestManager {
             int batchId = this.nextBatchId++;
             try {
                 ClientPlayNetworking.send(new ChunkRequestC2SPayload(batchId, positions, timestamps));
-                this.activeBatches.put(batchId, positions);
+                this.activeBatches.put(batchId, new TrackedBatch(positions, System.currentTimeMillis()));
                 for (long pos : positions) {
                     this.pendingColumns.add(pos);
                 }
@@ -257,7 +296,17 @@ public class LodRequestManager {
     public void onSectionReceived(int cx, int cz, long columnTimestamp) {
         long packed = ChunkRequestC2SPayload.packPosition(cx, cz);
         this.pendingColumns.remove(packed);
+        this.dirtyColumns.remove(packed);
         this.putTimestamp(packed, columnTimestamp);
+    }
+
+    public void onDirtyColumns(long[] dirtyPositions) {
+        for (long packed : dirtyPositions) {
+            long ts = this.columnTimestamps.get(packed);
+            if (ts > 0) {
+                this.dirtyColumns.add(packed);
+            }
+        }
     }
 
     public void onColumnUpToDate(int cx, int cz) {
@@ -267,8 +316,9 @@ public class LodRequestManager {
     }
 
     public void onBatchComplete(int batchId, int status) {
-        long[] positions = this.activeBatches.remove(batchId);
-        if (positions != null) {
+        var batch = this.activeBatches.remove(batchId);
+        if (batch != null) {
+            long[] positions = batch.positions;
             for (long pos : positions) {
                 this.pendingColumns.remove(pos);
                 if (status != RequestCompleteS2CPayload.STATUS_REJECTED
@@ -286,8 +336,9 @@ public class LodRequestManager {
         this.pendingColumns.clear();
         this.activeBatches.clear();
         this.clearTimestamps();
+        this.dirtyColumns.clear();
         this.scanRadius = 0;
-        this.lastResyncSweepTime = 0;
+        this.needsResync = true;
         this.loadTimestamps(ColumnCacheStore.load(this.serverAddress, newDimension));
         this.cacheLoaded = true;
     }
@@ -305,8 +356,9 @@ public class LodRequestManager {
         this.clearTimestamps();
         this.pendingColumns.clear();
         this.activeBatches.clear();
+        this.dirtyColumns.clear();
         this.scanRadius = 0;
-        this.lastResyncSweepTime = 0;
+        this.needsResync = false;
     }
 
     private void pruneOutOfRangePositions(int playerCx, int playerCz) {
@@ -316,7 +368,8 @@ public class LodRequestManager {
         var toCancel = new IntArrayList();
 
         for (var entry : this.activeBatches.int2ObjectEntrySet()) {
-            long[] positions = entry.getValue();
+            long[] positions = entry.getValue().positions;
+            long createdAt = entry.getValue().createdAt;
             int kept = 0;
             for (int i = 0; i < positions.length; i++) {
                 int cx = ChunkRequestC2SPayload.unpackX(positions[i]);
@@ -333,7 +386,7 @@ public class LodRequestManager {
             } else if (kept < positions.length) {
                 long[] shrunk = new long[kept];
                 System.arraycopy(positions, 0, shrunk, 0, kept);
-                entry.setValue(shrunk);
+                entry.setValue(new TrackedBatch(shrunk, createdAt));
             }
         }
 
@@ -348,6 +401,23 @@ public class LodRequestManager {
 
         for (int id : cancelIds) {
             this.activeBatches.remove(id);
+        }
+    }
+
+    private void pruneOutOfRangeTimestamps(int playerCx, int playerCz) {
+        int lodDistance = getEffectiveLodDistance();
+        int pruneDistance = lodDistance + 32; // buffer to avoid thrashing
+        var iter = this.columnTimestamps.long2LongEntrySet().iterator();
+        while (iter.hasNext()) {
+            var entry = iter.next();
+            int cx = ChunkRequestC2SPayload.unpackX(entry.getLongKey());
+            int cz = ChunkRequestC2SPayload.unpackZ(entry.getLongKey());
+            if (Math.max(Math.abs(cx - playerCx), Math.abs(cz - playerCz)) > pruneDistance) {
+                long ts = entry.getLongValue();
+                if (ts > 0) this.receivedCount--;
+                else if (ts == 0) this.emptyCount--;
+                iter.remove();
+            }
         }
     }
 
@@ -369,4 +439,18 @@ public class LodRequestManager {
     public int getGenerationBudget() { return this.generationBudget; }
     public long getTotalBatchesSent() { return this.totalBatchesSent; }
     public long getTotalPositionsRequested() { return this.totalPositionsRequested; }
+
+    /**
+     * Computes the resync and main budgets for a single tick's scan.
+     * Returns [budgetRemaining, resyncRemaining].
+     */
+    static int[] computeBudgets(int maxRequestsPerBatch, int resyncBatchSize, boolean needsResync) {
+        int budgetRemaining = maxRequestsPerBatch;
+        int resyncRemaining = 0;
+        if (needsResync) {
+            resyncRemaining = Math.min(resyncBatchSize, budgetRemaining / 4);
+            budgetRemaining -= resyncRemaining;
+        }
+        return new int[]{budgetRemaining, resyncRemaining};
+    }
 }

@@ -77,7 +77,7 @@ public class LSSServerNetworking {
         );
 
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
-            if (!server.isDedicatedServer()) {
+            if (!server.isDedicatedServer() && !Boolean.getBoolean("lss.test.integratedServer")) {
                 LSSLogger.info("LSS LOD request processing skipped for integrated server");
                 return;
             }

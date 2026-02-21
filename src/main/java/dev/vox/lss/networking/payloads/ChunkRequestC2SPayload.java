@@ -33,7 +33,7 @@ public record ChunkRequestC2SPayload(
                     },
                     buf -> {
                         int batchId = buf.readVarInt();
-                        int rawLen = buf.readVarInt();
+                        int rawLen = Math.max(buf.readVarInt(), 0);
                         int len = Math.min(rawLen, MAX_POSITIONS);
                         long[] positions = new long[len];
                         for (int i = 0; i < rawLen; i++) {

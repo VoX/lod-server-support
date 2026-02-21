@@ -20,10 +20,12 @@ public record CancelRequestC2SPayload(int[] batchIds) implements CustomPacketPay
                         }
                     },
                     buf -> {
-                        int len = Math.min(buf.readVarInt(), MAX_BATCH_IDS);
+                        int rawLen = Math.max(buf.readVarInt(), 0);
+                        int len = Math.min(rawLen, MAX_BATCH_IDS);
                         int[] batchIds = new int[len];
-                        for (int i = 0; i < len; i++) {
-                            batchIds[i] = buf.readVarInt();
+                        for (int i = 0; i < rawLen; i++) {
+                            int id = buf.readVarInt();
+                            if (i < len) batchIds[i] = id;
                         }
                         return new CancelRequestC2SPayload(batchIds);
                     }

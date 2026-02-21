@@ -1,0 +1,14 @@
+{
+    "schemaVersion": 1,
+    "id": "lss-test",
+    "version": "1.0.0",
+    "name": "LSS Tests",
+    "environment": "*",
+    "entrypoints": {
+        "fabric-gametest": ["dev.vox.lss.test.LSSGameTests"],
+        "fabric-client-gametest": ["dev.vox.lss.test.LSSClientGameTests"]
+    },
+    "depends": {
+        "lss": "*"
+    }
+}

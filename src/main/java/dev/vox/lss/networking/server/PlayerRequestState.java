@@ -29,6 +29,8 @@ public class PlayerRequestState {
     private long lastSecondNanos = 0;
     private int sectionsSentThisTick = 0;
 
+    private long lastTruncationWarnNanos = 0;
+
     private long totalSectionsSent = 0;
     private long totalBytesSent = 0;
     private long totalRequestsReceived = 0;
@@ -89,8 +91,12 @@ public class PlayerRequestState {
             System.arraycopy(raw, 0, truncated, 0, maxRequestsPerBatch);
             System.arraycopy(rawTs, 0, truncatedTs, 0, maxRequestsPerBatch);
             this.totalRequestsRejected += raw.length - maxRequestsPerBatch;
-            LSSLogger.warn("Truncated batch from " + raw.length + " to " + maxRequestsPerBatch
-                    + " positions from " + this.player.getName().getString());
+            long now = System.nanoTime();
+            if (now - this.lastTruncationWarnNanos > 1_000_000_000L) {
+                this.lastTruncationWarnNanos = now;
+                LSSLogger.warn("Truncated batch from " + raw.length + " to " + maxRequestsPerBatch
+                        + " positions from " + this.player.getName().getString());
+            }
             raw = truncated;
             rawTs = truncatedTs;
         }
@@ -129,7 +135,11 @@ public class PlayerRequestState {
             int rejected = raw.length - validCount;
             this.totalRequestsRejected += rejected;
             if (rejected > 0) {
-                LSSLogger.warn("Rejected " + rejected + " out-of-range positions from " + this.player.getName().getString());
+                long now = System.nanoTime();
+                if (now - this.lastTruncationWarnNanos > 1_000_000_000L) {
+                    this.lastTruncationWarnNanos = now;
+                    LSSLogger.warn("Rejected " + rejected + " out-of-range positions from " + this.player.getName().getString());
+                }
             }
         }
 

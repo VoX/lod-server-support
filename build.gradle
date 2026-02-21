@@ -14,6 +14,32 @@ dependencies {
     mappings loom.officialMojangMappings()
     modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
     modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+    testImplementation "net.fabricmc:fabric-loader-junit:${project.loader_version}"
+}
+
+test {
+    useJUnitPlatform()
+}
+
+fabricApi {
+    configureTests {
+        createSourceSet = true
+        modId = "lss-test"
+        enableGameTests = true
+        enableClientGameTests = true
+        eula = true
+    }
+}
+
+afterEvaluate {
+    loom.runs.configureEach {
+        if (name.toLowerCase().contains("gametest")) {
+            vmArg "-Dlss.test.integratedServer=true"
+        }
+        if (name.toLowerCase().contains("clientgametest")) {
+            vmArg "-Dfabric.client.gametest.disableNetworkSynchronizer=true"
+        }
+    }
 }
 
 processResources {
