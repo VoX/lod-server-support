@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "id": "lss",
+  "version": "${version}",
+  "name": "LOD Server Support",
+  "description": "Server-side LOD chunk distribution using a client-request model. Provides chunk data over the network for LOD rendering mods.",
+  "authors": [
+    "VoX"
+  ],
+  "contact": {
+    "sources": "https://github.com/VoX/lod-server-support"
+  },
+  "license": "MIT",
+  "icon": "assets/lss/icon.png",
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "dev.vox.lss.LSSMod"
+    ],
+    "client": [
+      "dev.vox.lss.LSSClient"
+    ]
+  },
+  "mixins": [
+    "lss.mixins.json"
+  ],
+  "depends": {
+    "minecraft": ["1.21.11"],
+    "fabricloader": ">=0.14.22",
+    "fabric-api": ">=0.91.1"
+  }
+}
