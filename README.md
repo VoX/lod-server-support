@@ -2,6 +2,8 @@
 
 A Fabric mod that distributes LOD (Level of Detail) chunk data from the server to connected clients. Clients request the chunks they need and the server responds, enabling LOD rendering mods to display terrain far beyond the vanilla render distance on multiplayer servers.
 
+https://github.com/user-attachments/assets/87a5a46b-b096-4e26-9220-8990775f1bc8
+
 ## Downloads
 
 Built mod JARs are available as artifacts from the [GitHub Actions build workflow](https://github.com/VoX/lod-server-support/actions/workflows/build.yml?query=branch%3Amain+is%3Asuccess).
