@@ -4,7 +4,7 @@ Distributes LOD (Level of Detail) chunk data from the server to connected client
 
 Supports both **Fabric** and **Paper** servers. The client is always a Fabric mod.
 
-https://github.com/user-attachments/assets/87a5a46b-b096-4e26-9220-8990775f1bc8
+https://github.com/user-attachments/assets/721fb344-890e-4e03-ab36-539444427f7b
 
 ## Downloads
 
