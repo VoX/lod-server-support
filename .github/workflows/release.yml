@@ -19,9 +19,15 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
-      - run: ./gradlew build
+      - name: Build Fabric
+        run: ./gradlew :fabric:build -x runClientGameTest
+
+      - name: Build Paper
+        run: ./gradlew :paper:shadowJar
 
       - uses: softprops/action-gh-release@v2
         with:
-          files: build/libs/*.jar
+          files: |
+            fabric/build/libs/*.jar
+            paper/build/libs/*-all.jar
           generate_release_notes: true

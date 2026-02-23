@@ -1,0 +1,19 @@
+plugins {
+    id 'java-library'
+}
+
+version = project.mod_version
+group = project.maven_group
+
+repositories {
+    mavenCentral()
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
+}
+
+dependencies {
+    api 'org.slf4j:slf4j-api:2.0.17'
+}

@@ -1,0 +1,15 @@
+name: LodServerSupport
+version: '${version}'
+main: dev.vox.lss.paper.LSSPaperPlugin
+api-version: '1.21'
+description: Server-side LOD chunk distribution for LOD rendering mods
+author: VoX
+commands:
+  lsslod:
+    description: LOD Server Support admin commands
+    usage: /lsslod <stats|diag>
+    permission: lss.admin
+permissions:
+  lss.admin:
+    description: Access to LSS admin commands
+    default: op

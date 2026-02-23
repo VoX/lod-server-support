@@ -8,7 +8,7 @@ Vanilla Minecraft servers only stream full chunk data to clients within the serv
 
 ### What LSS does
 
-LSS implements a custom client-pull networking protocol that lets clients request distant chunks from the server in batches. The server reads chunks from memory, disk, or generates them on demand, serializes them using Minecraft's native section codec, and streams them back with bandwidth limiting. Minecraft's network layer applies zlib/DEFLATE compression to all packets >256 bytes, so raw section data compresses efficiently without application-level pre-compression. The client deserializes the data and dispatches it to LOD rendering mods (currently Voxy) via a reflection-based compatibility bridge. A persistent client-side cache tracks which chunks have been received and their timestamps. The server hooks chunk saves and periodically broadcasts dirty column notifications, enabling event-driven re-requests instead of blind periodic resync.
+LSS implements a custom client-pull networking protocol that lets clients request distant chunks from the server in batches. The server reads chunks from memory, disk, or generates them on demand, serializes them using Minecraft's native section codec, and streams them back with bandwidth limiting. Supports both **Fabric** (mod, client + server) and **Paper** (plugin, server only) — the client is always Fabric. Both platforms produce identical wire format over Plugin Messaging channels, so the Fabric client works with either server. Minecraft's network layer applies zlib/DEFLATE compression to all packets >256 bytes, so raw section data compresses efficiently without application-level pre-compression. The client deserializes the data and dispatches it to LOD rendering mods (currently Voxy) via a reflection-based compatibility bridge. A persistent client-side cache tracks which chunks have been received and their timestamps. On Fabric, the server hooks chunk saves and periodically broadcasts dirty column notifications, enabling event-driven re-requests instead of blind periodic resync. On Paper, dirty column tracking is not yet implemented — clients rely on periodic resync.
 
 ### End-to-end lifecycle
 
@@ -44,24 +44,31 @@ Client joins -> sends Handshake(protocolVersion=5)
 - **Three-tier chunk sourcing**: Memory (instant) -> disk (async, 2 threads) -> generation (async, ticket-based). Graceful fallback with backpressure at each tier.
 - **Uniform light optimization**: Detects all-same light layers (common: all-zero underground, all-15 sky) and sends 1 byte instead of 2048, saving ~73% of light bytes.
 
-### Architecture (34 files, ~3,500 lines)
+### Architecture (3 subprojects, ~50 files, ~5,000 lines)
 
 | Layer | Key files | Role |
 |---|---|---|
-| Entry points | `LSSMod`, `LSSClient` | Register payloads, start services |
-| Protocol | `LSSNetworking` + 8 payload records | Wire format (v5) |
-| Server engine | `RequestProcessingService` (563 lines) | Per-tick orchestration: batch processing, send queue flushing, bandwidth enforcement, dirty column broadcast |
-| Server I/O | `ChunkDiskReader` (281 lines) | Async region file reading with NBT parsing |
-| Server gen | `ChunkGenerationService` (310 lines) | Ticket-based async chunk generation with two-tier queue |
-| Server state | `PlayerRequestState` (287 lines) | Per-player batch tracking, send queue, bandwidth metering |
-| Server bandwidth | `SharedBandwidthLimiter` (34 lines) | Fair global bandwidth division |
-| Server change tracking | `ChunkChangeTracker` + `ChunkMapSaveHook` mixin | Tracks saved chunks per dimension, drained for dirty broadcast |
-| Client scan | `LodRequestManager` (441 lines) | Expanding spiral scan, batch management, dirty column re-requests, batch timeout, timestamp pruning |
+| Common | `LSSConstants`, `LSSLogger`, `SharedBandwidthLimiter`, `PositionUtil` | Shared pure-Java utilities |
+| Fabric entry | `LSSMod`, `LSSClient` | Register payloads, start services |
+| Paper entry | `LSSPaperPlugin` | Plugin Messaging channels, tick loop |
+| Protocol (Fabric) | `LSSNetworking` + 8 payload records | Wire format (v5) via StreamCodec |
+| Protocol (Paper) | `PaperPayloadHandler` | Same wire format via raw FriendlyByteBuf |
+| Server engine (Fabric) | `RequestProcessingService` (563 lines) | Per-tick orchestration, dirty column broadcast |
+| Server engine (Paper) | `PaperRequestProcessingService` (522 lines) | Same orchestration, Plugin Messaging sends |
+| Server I/O (Fabric) | `ChunkDiskReader` (281 lines) | Async region file reading (mixin accessor) |
+| Server I/O (Paper) | `PaperChunkDiskReader` (314 lines) | Async region file reading (direct NMS) |
+| Server gen (Fabric) | `ChunkGenerationService` (310 lines) | Ticket-based async chunk generation |
+| Server gen (Paper) | `PaperChunkGenerationService` (365 lines) | Same, using `addRegionTicket` API |
+| Server state (Fabric) | `PlayerRequestState` (287 lines) | Per-player batch tracking, send queue |
+| Server state (Paper) | `PaperPlayerRequestState` | Adapted for byte[] payloads |
+| Server change tracking | `ChunkChangeTracker` + `ChunkMapSaveHook` mixin | Fabric only; tracks saved chunks per dimension |
+| Client scan | `LodRequestManager` (441 lines) | Expanding spiral scan, batch management |
 | Client networking | `LSSClientNetworking` (245 lines) | Packet handlers, section deserialization |
 | Client cache | `ColumnCacheStore` (118 lines) | Persistent binary cache (per-server, per-dimension) |
 | Compat | `VoxyCompat` (60 lines) | MethodHandle bridge to Voxy's rawIngest() |
 | API | `LSSApi` + `ChunkSectionConsumer` | Public consumer registration |
-| Config | `LSSServerConfig`, `LSSClientConfig` | GSON-based with validation |
+| Config (Fabric) | `LSSServerConfig`, `LSSClientConfig` | GSON-based with validation |
+| Config (Paper) | `PaperConfig` | GSON JSON, same defaults as Fabric |
 
 ### Performance profile
 
@@ -86,8 +93,9 @@ Client joins -> sends Handshake(protocolVersion=5)
 4. **No deduplication** — Same chunk serialized independently for each player requesting it.
 5. **No priority ordering** — Server processes batch positions in client-submitted order (spiral), doesn't reorder by current distance.
 6. **No delta updates** — Any change to a section causes full re-send.
-7. **Integrated server unsupported** — Only runs on dedicated servers.
+7. **Integrated server unsupported** — Only runs on dedicated servers (Fabric or Paper).
 8. **No cross-mod protocol** — Only works with LSS client mod; can't serve Distant Horizons or other LOD clients.
+9. **Paper: no dirty column tracking** — Paper lacks the `ChunkMapSaveHook` mixin. Clients on Paper servers rely on the `resyncBatchSize` mechanism during initial join sweeps to detect world changes.
 
 ---
 

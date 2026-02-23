@@ -20,13 +20,21 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
-      - name: Build + Tier 1 & 2 tests
-        run: ./gradlew build -x runClientGameTest
+      - name: Build Fabric + Tier 1 & 2 tests
+        run: ./gradlew :fabric:build -x runClientGameTest
+
+      - name: Build Paper plugin
+        run: ./gradlew :paper:shadowJar
 
       - uses: actions/upload-artifact@v4
         with:
-          name: lod-server-support
-          path: build/libs/*.jar
+          name: lod-server-support-fabric
+          path: fabric/build/libs/*.jar
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lod-server-support-paper
+          path: paper/build/libs/*-all.jar
 
   client-gametest:
     name: Client GameTests
@@ -42,7 +50,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
 
       - name: Tier 3 client gametests
-        run: ./gradlew runClientGameTest
+        run: ./gradlew :fabric:runClientGameTest
         timeout-minutes: 5
         env:
           MESA_GL_VERSION_OVERRIDE: "4.5"

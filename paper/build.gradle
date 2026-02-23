@@ -1,0 +1,31 @@
+plugins {
+    id 'java'
+    id 'io.papermc.paperweight.userdev' version '2.0.0-beta.19'
+    id 'com.gradleup.shadow' version '9.0.0-beta12'
+}
+
+repositories {
+    mavenCentral()
+    maven { url = 'https://repo.papermc.io/repository/maven-public/' }
+}
+
+dependencies {
+    implementation project(':common')
+    paperweight.paperDevBundle('1.21.11-R0.1-SNAPSHOT')
+}
+
+shadowJar {
+    archiveBaseName = 'lod-server-support-paper'
+    configurations = [project.configurations.runtimeClasspath]
+    exclude 'org/slf4j/**'
+    exclude 'META-INF/maven/org.slf4j/**'
+}
+
+tasks.withType(JavaCompile).configureEach {
+    it.options.release = 21
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
+}
