@@ -5,8 +5,7 @@
     "name": "LSS Tests",
     "environment": "*",
     "entrypoints": {
-        "fabric-gametest": ["dev.vox.lss.test.LSSGameTests"],
-        "fabric-client-gametest": ["dev.vox.lss.test.LSSClientGameTests"]
+        "fabric-gametest": ["dev.vox.lss.test.LSSGameTests"]
     },
     "depends": {
         "lss": "*"

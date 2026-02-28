@@ -3,13 +3,13 @@ package dev.vox.lss.test;
 import dev.vox.lss.config.LSSServerConfig;
 import dev.vox.lss.networking.server.ChunkChangeTracker;
 import dev.vox.lss.networking.server.LSSServerNetworking;
-import net.fabricmc.fabric.api.gametest.v1.GameTest;
+import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.world.level.Level;
 
 public class LSSGameTests {
 
-    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    @GameTest(template = "fabric-gametest-api-v1:empty")
     public void serviceStartsOnDedicatedServer(GameTestHelper helper) {
         helper.assertTrue(
                 LSSServerNetworking.getRequestService() != null,
@@ -18,7 +18,7 @@ public class LSSGameTests {
         helper.succeed();
     }
 
-    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    @GameTest(template = "fabric-gametest-api-v1:empty")
     public void diagnosticsReturnMetrics(GameTestHelper helper) {
         var service = LSSServerNetworking.getRequestService();
         helper.assertTrue(service != null, "RequestProcessingService should be active");
@@ -30,7 +30,7 @@ public class LSSGameTests {
         helper.succeed();
     }
 
-    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    @GameTest(template = "fabric-gametest-api-v1:empty")
     public void noPlayersInitially(GameTestHelper helper) {
         var service = LSSServerNetworking.getRequestService();
         helper.assertTrue(service != null, "RequestProcessingService should be active");
@@ -41,7 +41,7 @@ public class LSSGameTests {
         helper.succeed();
     }
 
-    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    @GameTest(template = "fabric-gametest-api-v1:empty")
     public void lsslodCommandRegistered(GameTestHelper helper) {
         var dispatcher = helper.getLevel().getServer().getCommands().getDispatcher();
         var result = dispatcher.parse(
@@ -55,7 +55,7 @@ public class LSSGameTests {
         helper.succeed();
     }
 
-    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    @GameTest(template = "fabric-gametest-api-v1:empty")
     public void configLoadedWithValidValues(GameTestHelper helper) {
         var config = LSSServerConfig.CONFIG;
         helper.assertTrue(
@@ -71,7 +71,7 @@ public class LSSGameTests {
 
     // --- New server gametests (S1-S6) ---
 
-    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    @GameTest(template = "fabric-gametest-api-v1:empty")
     public void diskReaderCreatedWhenEnabled(GameTestHelper helper) {
         var service = LSSServerNetworking.getRequestService();
         helper.assertTrue(service != null, "Service should be active");
@@ -80,7 +80,7 @@ public class LSSGameTests {
         helper.succeed();
     }
 
-    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    @GameTest(template = "fabric-gametest-api-v1:empty")
     public void generationServiceCreatedWhenEnabled(GameTestHelper helper) {
         var service = LSSServerNetworking.getRequestService();
         helper.assertTrue(service != null, "Service should be active");
@@ -89,7 +89,7 @@ public class LSSGameTests {
         helper.succeed();
     }
 
-    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    @GameTest(template = "fabric-gametest-api-v1:empty")
     public void bandwidthUsageZeroInitially(GameTestHelper helper) {
         var service = LSSServerNetworking.getRequestService();
         helper.assertTrue(service != null, "Service should be active");
@@ -98,7 +98,7 @@ public class LSSGameTests {
         helper.succeed();
     }
 
-    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    @GameTest(template = "fabric-gametest-api-v1:empty")
     public void dirtyTrackerDrainClearsState(GameTestHelper helper) {
         // First drain may return data (chunks saved during startup) — that's fine
         ChunkChangeTracker.drainDirty(Level.OVERWORLD);
@@ -109,7 +109,7 @@ public class LSSGameTests {
         helper.succeed();
     }
 
-    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    @GameTest(template = "fabric-gametest-api-v1:empty")
     public void diagnosticsContainAllFields(GameTestHelper helper) {
         var service = LSSServerNetworking.getRequestService();
         helper.assertTrue(service != null, "Service should be active");
@@ -121,7 +121,7 @@ public class LSSGameTests {
         helper.succeed();
     }
 
-    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    @GameTest(template = "fabric-gametest-api-v1:empty")
     public void allConfigFieldsInValidRange(GameTestHelper helper) {
         var c = LSSServerConfig.CONFIG;
         helper.assertTrue(c.maxSectionsPerTickPerPlayer >= 1 && c.maxSectionsPerTickPerPlayer <= 10000, "maxSectionsPerTickPerPlayer");

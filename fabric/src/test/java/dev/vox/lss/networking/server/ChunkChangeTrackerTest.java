@@ -2,8 +2,8 @@ package dev.vox.lss.networking.server;
 
 import net.minecraft.SharedConstants;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.Bootstrap;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
@@ -21,7 +21,7 @@ class ChunkChangeTrackerTest {
     }
 
     private static ResourceKey<Level> testDimension(String name) {
-        return ResourceKey.create(Registries.DIMENSION, Identifier.parse("lss_test:" + name));
+        return ResourceKey.create(Registries.DIMENSION, new ResourceLocation("lss_test:" + name));
     }
 
     @Test

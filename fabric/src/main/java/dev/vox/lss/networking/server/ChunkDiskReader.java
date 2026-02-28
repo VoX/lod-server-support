@@ -12,7 +12,6 @@ import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtOps;
-import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
@@ -22,10 +21,11 @@ import net.minecraft.world.level.biome.Biomes;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunkSection;
 import net.minecraft.world.level.chunk.PalettedContainer;
-import net.minecraft.world.level.chunk.PalettedContainerFactory;
 import net.minecraft.world.level.chunk.PalettedContainerRO;
-import net.minecraft.world.level.chunk.Strategy;
-import net.minecraft.world.level.chunk.status.ChunkStatus;
+import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.world.level.chunk.ChunkStatus;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.Block;
 
 import java.nio.file.Path;
 import java.util.UUID;
@@ -133,29 +133,23 @@ public class ChunkDiskReader {
 
         if (this.isShutdown.get()) return;
 
-        var statusStr = chunkNbt.getStringOr("Status", null);
-        boolean isFull = statusStr != null && ChunkStatus.byName(statusStr) == ChunkStatus.FULL;
+        var statusStr = chunkNbt.getString("Status");
+        boolean isFull = !statusStr.isEmpty() && ChunkStatus.byName(statusStr) == ChunkStatus.FULL;
         if (!isFull) {
             this.notFullStatusCount.incrementAndGet();
             this.completedCount.incrementAndGet();
-            // Route to generation service so MC upgrades the partial chunk to FULL status.
-            this.playerResults.computeIfAbsent(playerUuid, k -> new ConcurrentLinkedQueue<>()).add(new ReadResult(playerUuid, batchId, chunkX, chunkZ,
-                    new ChunkSectionS2CPayload[0], 0L, false, true, submissionOrder));
+            this.playerResults.computeIfAbsent(playerUuid, k -> new ConcurrentLinkedQueue<>()).add(new ReadResult(playerUuid, batchId, chunkX, chunkZ, new ChunkSectionS2CPayload[0], 0L, false, true, submissionOrder));
             return;
         }
 
-        // Use region header timestamp (epoch seconds) as columnTimestamp.
-        // Fall back to NBT LastUpdate if header timestamp is unavailable.
-        long columnTimestamp = headerTimestamp > 0 ? headerTimestamp : chunkNbt.getLongOr("LastUpdate", 0L);
+        long columnTimestamp = headerTimestamp > 0 ? headerTimestamp : chunkNbt.getLong("LastUpdate");
 
-        var factory = PalettedContainerFactory.create(registryAccess);
-        var blockStateCodec = factory.blockStatesContainerCodec();
-        var biomeCodec = factory.biomeContainerCodec();
+        var blockStateCodec = PalettedContainer.codecRW(Block.BLOCK_STATE_REGISTRY, BlockState.CODEC, PalettedContainer.Strategy.SECTION_STATES, Blocks.AIR.defaultBlockState());
+        var biomeRegistry = registryAccess.registryOrThrow(Registries.BIOME);
+        var defaultBiome = biomeRegistry.getHolderOrThrow(Biomes.PLAINS);
+        var biomeCodec = PalettedContainer.codecRO(biomeRegistry.asHolderIdMap(), biomeRegistry.holderByNameCodec(), PalettedContainer.Strategy.SECTION_BIOMES, defaultBiome);
 
-        var biomeRegistry = registryAccess.lookupOrThrow(Registries.BIOME);
-        var defaultBiome = biomeRegistry.getOrThrow(Biomes.PLAINS);
-
-        var sectionsTag = chunkNbt.getList("sections");
+        var sectionsTag = chunkNbt.getList("sections", 10);
         if (sectionsTag.isEmpty()) {
             this.noSectionsCount.incrementAndGet();
             this.completedCount.incrementAndGet();
@@ -163,21 +157,15 @@ public class ChunkDiskReader {
             return;
         }
 
-        var sectionsList = sectionsTag.orElseThrow();
         var payloads = new java.util.ArrayList<ChunkSectionS2CPayload>();
-
-        for (var sectionElement : sectionsList) {
+        for (int i = 0; i < sectionsTag.size(); i++) {
             if (this.isShutdown.get()) break;
-
-            var sectionTag = (CompoundTag) sectionElement;
-            int sectionY = sectionTag.getIntOr("Y", Integer.MIN_VALUE);
+            var sectionTag = sectionsTag.getCompound(i);
+            int sectionY = sectionTag.contains("Y") ? sectionTag.getInt("Y") : Integer.MIN_VALUE;
             if (sectionY == Integer.MIN_VALUE) continue;
 
-            var payload = parseSectionFromNbt(sectionTag, sectionY, chunkX, chunkZ, dimension,
-                    registryAccess, blockStateCodec, biomeCodec, defaultBiome, columnTimestamp);
-            if (payload != null) {
-                payloads.add(payload);
-            }
+            var payload = parseSectionFromNbt(sectionTag, sectionY, chunkX, chunkZ, dimension, registryAccess, blockStateCodec, biomeCodec, defaultBiome, columnTimestamp);
+            if (payload != null) payloads.add(payload);
         }
 
         this.totalPayloadsProduced.addAndGet(payloads.size());
@@ -199,41 +187,35 @@ public class ChunkDiskReader {
             return null;
         }
 
-        var blockStatesResult = blockStateCodec.parse(NbtOps.INSTANCE, sectionTag.getCompound("block_states").get());
-        if (!blockStatesResult.hasResultOrPartial()) {
-            return null;
-        }
-        var blockStates = blockStatesResult.getPartialOrThrow();
+        var blockStatesResult = blockStateCodec.parse(NbtOps.INSTANCE, sectionTag.get("block_states"));
+        
+        var blockStatesOpt = blockStatesResult.resultOrPartial(err -> LSSLogger.error(err));
+        if (blockStatesOpt.isEmpty()) return null;
+        var blockStates = blockStatesOpt.get();
 
-        PalettedContainerRO<Holder<Biome>> biomes;
-        var optBiomes = sectionTag.getCompound("biomes");
-        if (optBiomes.isPresent()) {
-            var biomesResult = biomeCodec.parse(NbtOps.INSTANCE, optBiomes.get());
+        PalettedContainerRO<Holder<Biome>> biomes = null;
+        var optBiomes = sectionTag.get("biomes");
+        if (optBiomes != null) {
+            var biomesResult = biomeCodec.parse(NbtOps.INSTANCE, optBiomes);
             biomes = biomesResult.result().orElse(null);
-        } else {
-            biomes = null;
+        }
+        if (biomes == null) {
+            var biomeRegistry = registryAccess.registryOrThrow(Registries.BIOME);
+            biomes = new PalettedContainer<>(biomeRegistry.asHolderIdMap(), defaultBiome, PalettedContainer.Strategy.SECTION_BIOMES);
         }
 
-        LevelChunkSection section;
-        if (biomes instanceof PalettedContainer<Holder<Biome>> biomeContainer) {
-            section = new LevelChunkSection(blockStates, biomeContainer);
-        } else {
-            var biomeRegistry = registryAccess.lookupOrThrow(Registries.BIOME);
-            var defaultBiomeContainer = new PalettedContainer<>(
-                    defaultBiome,
-                    Strategy.createForBiomes(biomeRegistry.asHolderIdMap())
-            );
-            section = new LevelChunkSection(blockStates, defaultBiomeContainer);
-        }
+        LevelChunkSection section = new LevelChunkSection(blockStates, biomes);
 
-        var buf = new RegistryFriendlyByteBuf(Unpooled.buffer(8192), registryAccess);
+        section.recalcBlockCounts();
+
+        var buf = new FriendlyByteBuf(Unpooled.buffer(8192));
         try {
             section.write(buf);
             byte[] sectionData = new byte[buf.readableBytes()];
             buf.readBytes(sectionData);
 
-            byte[] blockLightData = sectionTag.getByteArray("BlockLight").orElse(EMPTY);
-            byte[] skyLightData = sectionTag.getByteArray("SkyLight").orElse(EMPTY);
+            byte[] blockLightData = sectionTag.getByteArray("BlockLight");
+            byte[] skyLightData = sectionTag.getByteArray("SkyLight");
 
             byte lightFlags = 0;
             byte[] blockLight = null;
@@ -250,7 +232,12 @@ public class ChunkDiskReader {
                         lightFlags |= 0x01;
                         blockLight = blockLightData;
                     }
+                } else {
+                    // If block light data is missing - send 0
+                    lightFlags |= 0x04;
+                    uniformBlockLight = 0;
                 }
+                
                 if (skyLightData.length == 2048) {
                     if (LSSUtil.isUniformArray(skyLightData)) {
                         lightFlags |= 0x08;
@@ -259,6 +246,10 @@ public class ChunkDiskReader {
                         lightFlags |= 0x02;
                         skyLight = skyLightData;
                     }
+                } else {
+                    // If sky light data is missing - send 15 (maximum brightness for LOD)
+                    lightFlags |= 0x08;
+                    uniformSkyLight = 15;
                 }
             }
 

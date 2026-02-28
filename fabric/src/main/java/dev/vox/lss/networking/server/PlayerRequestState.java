@@ -5,7 +5,6 @@ import dev.vox.lss.common.PositionUtil;
 import dev.vox.lss.networking.payloads.ChunkRequestC2SPayload;
 import it.unimi.dsi.fastutil.ints.IntOpenHashSet;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
-import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.Level;
@@ -57,13 +56,15 @@ public class PlayerRequestState {
     }
 
     public static class QueuedPayload implements Comparable<QueuedPayload> {
-        public final CustomPacketPayload payload;
+        public final net.minecraft.resources.ResourceLocation id;
+        public final java.util.function.Consumer<net.minecraft.network.FriendlyByteBuf> writer;
         public final int batchId;
         public final int estimatedBytes;
         public final long submissionOrder;
 
-        public QueuedPayload(CustomPacketPayload payload, int batchId, int estimatedBytes, long submissionOrder) {
-            this.payload = payload;
+        public QueuedPayload(net.minecraft.resources.ResourceLocation id, java.util.function.Consumer<net.minecraft.network.FriendlyByteBuf> writer, int batchId, int estimatedBytes, long submissionOrder) {
+            this.id = id;
+            this.writer = writer;
             this.batchId = batchId;
             this.estimatedBytes = estimatedBytes;
             this.submissionOrder = submissionOrder;

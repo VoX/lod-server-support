@@ -14,7 +14,6 @@ import dev.vox.lss.networking.payloads.RequestCompleteS2CPayload;
 import io.netty.buffer.Unpooled;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.core.SectionPos;
-import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -94,8 +93,9 @@ public class RequestProcessingService {
         if (state.getPendingBatchCount() >= config.maxPendingRequestsPerPlayer) {
             LSSLogger.warn("Player " + player.getName().getString() + " exceeded max pending requests, rejecting batch " + payload.batchId());
             try {
-                ServerPlayNetworking.send(player, new RequestCompleteS2CPayload(
-                        payload.batchId(), RequestCompleteS2CPayload.STATUS_REJECTED));
+                net.minecraft.network.FriendlyByteBuf buf = net.fabricmc.fabric.api.networking.v1.PacketByteBufs.create();
+                new RequestCompleteS2CPayload(payload.batchId(), RequestCompleteS2CPayload.STATUS_REJECTED).write(buf);
+                ServerPlayNetworking.send(player, RequestCompleteS2CPayload.ID, buf);
             } catch (Exception e) {
                 LSSLogger.error("Failed to send rejection to " + player.getName().getString(), e);
             }
@@ -214,7 +214,9 @@ public class RequestProcessingService {
                     long[] result = new long[count];
                     System.arraycopy(filterBuf, 0, result, 0, count);
                     try {
-                        ServerPlayNetworking.send(player, new DirtyColumnsS2CPayload(result));
+                        net.minecraft.network.FriendlyByteBuf buf = net.fabricmc.fabric.api.networking.v1.PacketByteBufs.create();
+                        new DirtyColumnsS2CPayload(result).write(buf);
+                        ServerPlayNetworking.send(player, DirtyColumnsS2CPayload.ID, buf);
                     } catch (Exception e) {
                         LSSLogger.error("Failed to send dirty columns to " + player.getName().getString(), e);
                     }
@@ -265,12 +267,15 @@ public class RequestProcessingService {
                     if (!result.notFound()) {
                         if (result.upToDate()) {
                             state.getSendQueue().add(new PlayerRequestState.QueuedPayload(
-                                    new ColumnUpToDateS2CPayload(cx, cz),
+                                    ColumnUpToDateS2CPayload.ID,
+                                    b -> new ColumnUpToDateS2CPayload(cx, cz).write(b),
                                     result.batchId(), 8, result.submissionOrder()));
                         } else {
                             for (var payload : result.payloads()) {
                                 state.getSendQueue().add(new PlayerRequestState.QueuedPayload(
-                                        payload, result.batchId(), payload.sectionData().length + 20, result.submissionOrder()));
+                                        ChunkSectionS2CPayload.ID,
+                                        b -> payload.write(b),
+                                        result.batchId(), payload.sectionData().length + 20, result.submissionOrder()));
                             }
                         }
                     }
@@ -297,7 +302,9 @@ public class RequestProcessingService {
                 state.markDiskReadDone(result.chunkX(), result.chunkZ());
                 for (var payload : result.payloads()) {
                     state.getSendQueue().add(new PlayerRequestState.QueuedPayload(
-                            payload, result.batchId(), payload.sectionData().length + 20, result.submissionOrder()));
+                            ChunkSectionS2CPayload.ID,
+                            b -> payload.write(b),
+                            result.batchId(), payload.sectionData().length + 20, result.submissionOrder()));
                 }
                 this.curTickGenDrained++;
             }
@@ -314,7 +321,9 @@ public class RequestProcessingService {
             var queued = queue.poll();
             if (state.isBatchCancelled(queued.batchId)) continue;
             try {
-                ServerPlayNetworking.send(state.getPlayer(), queued.payload);
+                net.minecraft.network.FriendlyByteBuf buf = net.fabricmc.fabric.api.networking.v1.PacketByteBufs.create();
+                queued.writer.accept(buf);
+                ServerPlayNetworking.send(state.getPlayer(), queued.id, buf);
                 state.recordSend(queued.estimatedBytes);
                 this.bandwidthLimiter.recordSend(queued.estimatedBytes);
                 this.curTickSectionsSent++;
@@ -401,7 +410,7 @@ public class RequestProcessingService {
     private void sendLoadedChunkColumn(PlayerRequestState state, ServerLevel level,
                                         LevelChunk chunk, int cx, int cz, int batchId,
                                         long columnTimestamp, long order) {
-        int minSectionY = level.getMinSectionY();
+        int minSectionY = level.getMinBuildHeight() >> 4;
         var sections = chunk.getSections();
 
         for (int i = 0; i < sections.length; i++) {
@@ -412,7 +421,9 @@ public class RequestProcessingService {
             var payload = serializeLoadedSection(level, section, cx, sectionY, cz, columnTimestamp);
             if (payload != null) {
                 state.getSendQueue().add(new PlayerRequestState.QueuedPayload(
-                        payload, batchId, payload.sectionData().length + 20, order));
+                        ChunkSectionS2CPayload.ID,
+                        b -> payload.write(b),
+                        batchId, payload.sectionData().length + 20, order));
                 this.serializationsThisTick++;
             }
         }
@@ -421,7 +432,7 @@ public class RequestProcessingService {
     static ChunkSectionS2CPayload serializeLoadedSection(
             ServerLevel level, LevelChunkSection section, int cx, int sectionY, int cz,
             long columnTimestamp) {
-        var buf = new RegistryFriendlyByteBuf(Unpooled.buffer(8192), level.registryAccess());
+        var buf = new net.minecraft.network.FriendlyByteBuf(Unpooled.buffer(8192));
         try {
             section.write(buf);
             byte[] sectionData = new byte[buf.readableBytes()];
@@ -446,7 +457,11 @@ public class RequestProcessingService {
                         lightFlags |= 0x01;
                         blockLight = blLayer.getData().clone();
                     }
+                } else {
+                    lightFlags |= 0x04;
+                    uniformBlockLight = 0;
                 }
+                
                 if (slLayer != null && !slLayer.isEmpty()) {
                     if (isUniformLayer(slLayer)) {
                         lightFlags |= 0x08;
@@ -455,6 +470,9 @@ public class RequestProcessingService {
                         lightFlags |= 0x02;
                         skyLight = slLayer.getData().clone();
                     }
+                } else {
+                    lightFlags |= 0x08;
+                    uniformSkyLight = 15;
                 }
             }
 
@@ -484,8 +502,9 @@ public class RequestProcessingService {
                     ? RequestCompleteS2CPayload.STATUS_CANCELLED
                     : RequestCompleteS2CPayload.STATUS_DONE;
             try {
-                ServerPlayNetworking.send(state.getPlayer(),
-                        new RequestCompleteS2CPayload(batch.batchId, status));
+                net.minecraft.network.FriendlyByteBuf buf = net.fabricmc.fabric.api.networking.v1.PacketByteBufs.create();
+                new RequestCompleteS2CPayload(batch.batchId, status).write(buf);
+                ServerPlayNetworking.send(state.getPlayer(), RequestCompleteS2CPayload.ID, buf);
                 this.curTickBatchesCompleted++;
             } catch (Exception e) {
                 LSSLogger.error("Failed to send batch complete to " + state.getPlayer().getName().getString(), e);

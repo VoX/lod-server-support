@@ -2,54 +2,49 @@ package dev.vox.lss.networking.payloads;
 
 import dev.vox.lss.common.LSSConstants;
 import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 public record ChunkRequestC2SPayload(
         int batchId,
         long[] positions,
         long[] timestamps
-) implements CustomPacketPayload {
+) {
     public static final int MAX_POSITIONS = LSSConstants.MAX_CHUNK_REQUEST_POSITIONS;
 
-    public static final CustomPacketPayload.Type<ChunkRequestC2SPayload> TYPE =
-            new CustomPacketPayload.Type<>(Identifier.parse("lss:chunk_request"));
+    // Using ResourceLocation as the channel identifier in 1.20.1
+    public static final ResourceLocation ID = new ResourceLocation("lss", "chunk_request");
 
-    public static final StreamCodec<FriendlyByteBuf, ChunkRequestC2SPayload> CODEC =
-            StreamCodec.of(
-                    (buf, payload) -> {
-                        buf.writeVarInt(payload.batchId);
-                        buf.writeVarInt(payload.positions.length);
-                        for (long pos : payload.positions) {
-                            buf.writeLong(pos);
-                        }
-                        for (long ts : payload.timestamps) {
-                            buf.writeLong(ts);
-                        }
-                    },
-                    buf -> {
-                        int batchId = buf.readVarInt();
-                        int rawLen = Math.max(buf.readVarInt(), 0);
-                        int len = Math.min(rawLen, MAX_POSITIONS);
-                        long[] positions = new long[len];
-                        for (int i = 0; i < rawLen; i++) {
-                            long pos = buf.readLong();
-                            if (i < len) positions[i] = pos;
-                        }
-                        long[] timestamps = new long[len];
-                        if (buf.isReadable()) {
-                            for (int i = 0; i < rawLen; i++) {
-                                long ts = buf.readLong();
-                                if (i < len) timestamps[i] = ts;
-                            }
-                        }
-                        return new ChunkRequestC2SPayload(batchId, positions, timestamps);
-                    }
-            );
+    // Deserialization method (read from buffer on the server side)
+    public static ChunkRequestC2SPayload read(FriendlyByteBuf buf) {
+        int batchId = buf.readVarInt();
+        int rawLen = Math.max(buf.readVarInt(), 0);
+        int len = Math.min(rawLen, MAX_POSITIONS);
+        
+        long[] positions = new long[len];
+        for (int i = 0; i < rawLen; i++) {
+            long pos = buf.readLong();
+            if (i < len) positions[i] = pos;
+        }
+        
+        long[] timestamps = new long[len];
+        if (buf.isReadable()) {
+            for (int i = 0; i < rawLen; i++) {
+                long ts = buf.readLong();
+                if (i < len) timestamps[i] = ts;
+            }
+        }
+        return new ChunkRequestC2SPayload(batchId, positions, timestamps);
+    }
 
-    @Override
-    public Type<? extends CustomPacketPayload> type() {
-        return TYPE;
+    // Serialization method (write to buffer on the client side)
+    public void write(FriendlyByteBuf buf) {
+        buf.writeVarInt(this.batchId);
+        buf.writeVarInt(this.positions.length);
+        for (long pos : this.positions) {
+            buf.writeLong(pos);
+        }
+        for (long ts : this.timestamps) {
+            buf.writeLong(ts);
+        }
     }
 }
