@@ -14,16 +14,16 @@ import io.netty.buffer.Unpooled;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
+import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.world.level.biome.Biomes;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.chunk.DataLayer;
 import net.minecraft.world.level.chunk.LevelChunkSection;
 import net.minecraft.world.level.chunk.PalettedContainer;
-import net.minecraft.world.level.chunk.Strategy;
 
 import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicLong;
@@ -57,40 +57,44 @@ public class LSSClientNetworking {
 
     public static void init() {
         ClientPlayNetworking.registerGlobalReceiver(
-                SessionConfigS2CPayload.TYPE,
-                (payload, context) -> context.client().execute(() -> {
-                    LSSLogger.info("Server session config received (protocol v" + payload.protocolVersion()
-                            + ", LOD distance: " + payload.lodDistanceChunks() + " chunks"
-                            + ", enabled: " + payload.enabled()
-                            + ", maxBatch: " + payload.maxRequestsPerBatch()
-                            + ", maxPending: " + payload.maxPendingRequests()
-                            + ", genBudget: " + payload.maxGenerationRequestsPerBatch()
-                            + ", genDistance: " + payload.generationDistanceChunks() + ")");
+                SessionConfigS2CPayload.ID,
+                (client, handler, buf, responseSender) -> {
+                    SessionConfigS2CPayload payload = SessionConfigS2CPayload.read(buf);
+                    client.execute(() -> {
+                        LSSLogger.info("Server session config received (protocol v" + payload.protocolVersion()
+                                + ", LOD distance: " + payload.lodDistanceChunks() + " chunks"
+                                + ", enabled: " + payload.enabled()
+                                + ", maxBatch: " + payload.maxRequestsPerBatch()
+                                + ", maxPending: " + payload.maxPendingRequests()
+                                + ", genBudget: " + payload.maxGenerationRequestsPerBatch()
+                                + ", genDistance: " + payload.generationDistanceChunks() + ")");
 
-                    if (payload.protocolVersion() != LSSConstants.PROTOCOL_VERSION) {
-                        LSSLogger.warn("Server has incompatible LSS protocol version " + payload.protocolVersion()
-                                + " (client: " + LSSConstants.PROTOCOL_VERSION + "), LOD distribution disabled");
-                        serverEnabled = false;
-                        return;
-                    }
+                        if (payload.protocolVersion() != LSSConstants.PROTOCOL_VERSION) {
+                            LSSLogger.warn("Server has incompatible LSS protocol version " + payload.protocolVersion()
+                                    + " (client: " + LSSConstants.PROTOCOL_VERSION + "), LOD distribution disabled");
+                            serverEnabled = false;
+                            return;
+                        }
 
-                    serverEnabled = payload.enabled();
-                    serverLodDistance = payload.lodDistanceChunks();
+                        serverEnabled = payload.enabled();
+                        serverLodDistance = payload.lodDistanceChunks();
 
-                    if (payload.enabled()) {
-                        var manager = new LodRequestManager();
-                        var serverData = Minecraft.getInstance().getCurrentServer();
-                        String serverAddr = serverData != null ? serverData.ip : "unknown";
-                        manager.onSessionConfig(payload, serverAddr);
-                        requestManager = manager;
-                    }
-                })
+                        if (payload.enabled()) {
+                            var manager = new LodRequestManager();
+                            var serverData = Minecraft.getInstance().getCurrentServer();
+                            String serverAddr = serverData != null ? serverData.ip : "unknown";
+                            manager.onSessionConfig(payload, serverAddr);
+                            requestManager = manager;
+                        }
+                    });
+                }
         );
 
         ClientPlayNetworking.registerGlobalReceiver(
-                RequestCompleteS2CPayload.TYPE,
-                (payload, context) -> {
-                    context.client().execute(() -> {
+                RequestCompleteS2CPayload.ID,
+                (client, handler, buf, responseSender) -> {
+                    RequestCompleteS2CPayload payload = RequestCompleteS2CPayload.read(buf);
+                    client.execute(() -> {
                         var manager = requestManager;
                         if (manager != null) {
                             manager.onBatchComplete(payload.batchId(), payload.status());
@@ -100,12 +104,13 @@ public class LSSClientNetworking {
         );
 
         ClientPlayNetworking.registerGlobalReceiver(
-                ChunkSectionS2CPayload.TYPE,
-                (payload, context) -> {
+                ChunkSectionS2CPayload.ID,
+                (client, handler, buf, responseSender) -> {
+                    ChunkSectionS2CPayload payload = ChunkSectionS2CPayload.read(buf);
                     sectionsReceived.incrementAndGet();
                     bytesReceived.addAndGet(payload.sectionData().length + 20);
 
-                    context.client().execute(() -> {
+                    client.execute(() -> {
                         var manager = requestManager;
                         if (manager != null) {
                             manager.onSectionReceived(payload.chunkX(), payload.chunkZ(), payload.columnTimestamp());
@@ -116,9 +121,10 @@ public class LSSClientNetworking {
         );
 
         ClientPlayNetworking.registerGlobalReceiver(
-                ColumnUpToDateS2CPayload.TYPE,
-                (payload, context) -> {
-                    context.client().execute(() -> {
+                ColumnUpToDateS2CPayload.ID,
+                (client, handler, buf, responseSender) -> {
+                    ColumnUpToDateS2CPayload payload = ColumnUpToDateS2CPayload.read(buf);
+                    client.execute(() -> {
                         var manager = requestManager;
                         if (manager != null) {
                             manager.onColumnUpToDate(payload.chunkX(), payload.chunkZ());
@@ -128,9 +134,10 @@ public class LSSClientNetworking {
         );
 
         ClientPlayNetworking.registerGlobalReceiver(
-                DirtyColumnsS2CPayload.TYPE,
-                (payload, context) -> {
-                    context.client().execute(() -> {
+                DirtyColumnsS2CPayload.ID,
+                (client, handler, buf, responseSender) -> {
+                    DirtyColumnsS2CPayload payload = DirtyColumnsS2CPayload.read(buf);
+                    client.execute(() -> {
                         var manager = requestManager;
                         if (manager != null) {
                             manager.onDirtyColumns(payload.dirtyPositions());
@@ -146,14 +153,15 @@ public class LSSClientNetworking {
 
             if (!LSSClientConfig.CONFIG.receiveServerLods) return;
 
-            // Don't activate on singleplayer/integrated servers (unless testing)
             if (Minecraft.getInstance().hasSingleplayerServer()
                     && !Boolean.getBoolean("lss.test.integratedServer")) {
                 return;
             }
 
             try {
-                ClientPlayNetworking.send(new HandshakeC2SPayload(LSSConstants.PROTOCOL_VERSION));
+                FriendlyByteBuf buf = PacketByteBufs.create();
+                new HandshakeC2SPayload(LSSConstants.PROTOCOL_VERSION).write(buf);
+                ClientPlayNetworking.send(HandshakeC2SPayload.ID, buf);
             } catch (Exception e) {
                 LSSLogger.debug("Handshake send failed (server likely doesn't have LSS): " + e.getMessage());
             }
@@ -193,29 +201,31 @@ public class LSSClientNetworking {
         }
 
         try {
-            var buf = new RegistryFriendlyByteBuf(
-                    Unpooled.wrappedBuffer(payload.sectionData()),
-                    level.registryAccess()
-            );
+            // RegistryFriendlyByteBuf does not exist in 1.20.1, using standard FriendlyByteBuf
+            var buf = new FriendlyByteBuf(Unpooled.wrappedBuffer(payload.sectionData()));
 
             try {
                 buf.readShort();
 
                 var blockStates = new PalettedContainer<>(
+                        Block.BLOCK_STATE_REGISTRY,
                         Blocks.AIR.defaultBlockState(),
-                        Strategy.createForBlockStates(Block.BLOCK_STATE_REGISTRY)
+                        PalettedContainer.Strategy.SECTION_STATES
                 );
                 blockStates.read(buf);
 
-                var biomeRegistry = level.registryAccess().lookupOrThrow(Registries.BIOME);
-                var defaultBiome = biomeRegistry.getOrThrow(Biomes.PLAINS);
+                var biomeRegistry = level.registryAccess().registryOrThrow(Registries.BIOME);
+                var defaultBiome = biomeRegistry.getHolderOrThrow(Biomes.PLAINS); // Using getHolderOrThrow
                 var biomes = new PalettedContainer<>(
+                        biomeRegistry.asHolderIdMap(),
                         defaultBiome,
-                        Strategy.createForBiomes(biomeRegistry.asHolderIdMap())
+                        PalettedContainer.Strategy.SECTION_BIOMES
                 );
                 biomes.read(buf);
 
                 var section = new LevelChunkSection(blockStates, biomes);
+
+                section.recalcBlockCounts();
 
                 DataLayer blockLight = null;
                 DataLayer skyLight = null;
@@ -236,7 +246,6 @@ public class LSSClientNetworking {
                     skyLight = new DataLayer(expanded);
                 }
 
-                // Dispatch to registered consumers
                 LSSApi.dispatch(level, payload.dimension(), section,
                         payload.chunkX(), payload.sectionY(), payload.chunkZ(),
                         blockLight, skyLight);

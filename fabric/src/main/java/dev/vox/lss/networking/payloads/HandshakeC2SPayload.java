@@ -1,22 +1,16 @@
 package dev.vox.lss.networking.payloads;
 
 import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
-public record HandshakeC2SPayload(int protocolVersion) implements CustomPacketPayload {
-    public static final CustomPacketPayload.Type<HandshakeC2SPayload> TYPE =
-            new CustomPacketPayload.Type<>(Identifier.parse("lss:handshake_c2s"));
+public record HandshakeC2SPayload(int protocolVersion) {
+    public static final ResourceLocation ID = new ResourceLocation("lss", "handshake_c2s");
 
-    public static final StreamCodec<FriendlyByteBuf, HandshakeC2SPayload> CODEC =
-            StreamCodec.of(
-                    (buf, payload) -> buf.writeVarInt(payload.protocolVersion),
-                    buf -> new HandshakeC2SPayload(buf.readVarInt())
-            );
+    public static HandshakeC2SPayload read(FriendlyByteBuf buf) {
+        return new HandshakeC2SPayload(buf.readVarInt());
+    }
 
-    @Override
-    public Type<? extends CustomPacketPayload> type() {
-        return TYPE;
+    public void write(FriendlyByteBuf buf) {
+        buf.writeVarInt(this.protocolVersion);
     }
 }

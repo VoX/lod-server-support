@@ -28,7 +28,6 @@ fabricApi {
         createSourceSet = true
         modId = "lss-test"
         enableGameTests = true
-        enableClientGameTests = true
         eula = true
     }
 }

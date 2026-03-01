@@ -34,7 +34,7 @@ class PayloadCodecOversizedTest {
         for (int i = 0; i < rawCount; i++) {
             b.writeLong(i * 100L);
         }
-        var decoded = ChunkRequestC2SPayload.CODEC.decode(b);
+        var decoded = ChunkRequestC2SPayload.read(b);
         assertEquals(ChunkRequestC2SPayload.MAX_POSITIONS, decoded.positions().length);
         assertEquals(ChunkRequestC2SPayload.MAX_POSITIONS, decoded.timestamps().length);
         // All bytes consumed — buffer should be empty
@@ -50,7 +50,7 @@ class PayloadCodecOversizedTest {
         for (int i = 0; i < rawCount; i++) {
             b.writeLong(PositionUtil.packPosition(i, i));
         }
-        var decoded = DirtyColumnsS2CPayload.CODEC.decode(b);
+        var decoded = DirtyColumnsS2CPayload.read(b);
         assertEquals(DirtyColumnsS2CPayload.MAX_POSITIONS, decoded.dirtyPositions().length);
         // All bytes consumed
         assertEquals(0, b.readableBytes());
@@ -65,7 +65,7 @@ class PayloadCodecOversizedTest {
         for (int i = 0; i < rawCount; i++) {
             b.writeVarInt(i);
         }
-        var decoded = CancelRequestC2SPayload.CODEC.decode(b);
+        var decoded = CancelRequestC2SPayload.read(b);
         assertEquals(CancelRequestC2SPayload.MAX_BATCH_IDS, decoded.batchIds().length);
         // All bytes consumed — excess VarInts drained
         assertEquals(0, b.readableBytes());

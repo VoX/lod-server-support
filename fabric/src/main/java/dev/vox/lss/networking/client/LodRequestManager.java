@@ -279,7 +279,9 @@ public class LodRequestManager {
 
             int batchId = this.nextBatchId++;
             try {
-                ClientPlayNetworking.send(new ChunkRequestC2SPayload(batchId, positions, timestamps));
+                net.minecraft.network.FriendlyByteBuf buf = net.fabricmc.fabric.api.networking.v1.PacketByteBufs.create();
+                new ChunkRequestC2SPayload(batchId, positions, timestamps).write(buf);
+                ClientPlayNetworking.send(ChunkRequestC2SPayload.ID, buf);
                 this.activeBatches.put(batchId, new TrackedBatch(positions, System.currentTimeMillis()));
                 for (long pos : positions) {
                     this.pendingColumns.add(pos);
@@ -393,7 +395,9 @@ public class LodRequestManager {
 
         int[] cancelIds = toCancel.toIntArray();
         try {
-            ClientPlayNetworking.send(new CancelRequestC2SPayload(cancelIds));
+            net.minecraft.network.FriendlyByteBuf buf = net.fabricmc.fabric.api.networking.v1.PacketByteBufs.create();
+            new CancelRequestC2SPayload(cancelIds).write(buf);
+            ClientPlayNetworking.send(CancelRequestC2SPayload.ID, buf);
         } catch (Exception e) {
             LSSLogger.error("Failed to send cancel request", e);
         }

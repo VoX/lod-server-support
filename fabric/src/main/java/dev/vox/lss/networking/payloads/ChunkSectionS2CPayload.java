@@ -3,10 +3,8 @@ package dev.vox.lss.networking.payloads;
 import dev.vox.lss.common.LSSConstants;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.Level;
 
 public record ChunkSectionS2CPayload(
@@ -21,43 +19,14 @@ public record ChunkSectionS2CPayload(
         byte uniformBlockLight,
         byte uniformSkyLight,
         long columnTimestamp
-) implements CustomPacketPayload {
-    public static final CustomPacketPayload.Type<ChunkSectionS2CPayload> TYPE =
-            new CustomPacketPayload.Type<>(Identifier.parse("lss:chunk_section"));
+) {
+    public static final ResourceLocation ID = new ResourceLocation("lss", "chunk_section");
 
-    public static final StreamCodec<FriendlyByteBuf, ChunkSectionS2CPayload> CODEC =
-            StreamCodec.of(
-                    ChunkSectionS2CPayload::write,
-                    ChunkSectionS2CPayload::read
-            );
-
-    private static void write(FriendlyByteBuf buf, ChunkSectionS2CPayload payload) {
-        buf.writeInt(payload.chunkX);
-        buf.writeInt(payload.sectionY);
-        buf.writeInt(payload.chunkZ);
-        buf.writeUtf(payload.dimension.identifier().toString());
-        buf.writeByteArray(payload.sectionData);
-        buf.writeByte(payload.lightFlags);
-        if ((payload.lightFlags & 0x01) != 0 && payload.blockLight != null) {
-            buf.writeBytes(payload.blockLight);
-        }
-        if ((payload.lightFlags & 0x04) != 0) {
-            buf.writeByte(payload.uniformBlockLight);
-        }
-        if ((payload.lightFlags & 0x02) != 0 && payload.skyLight != null) {
-            buf.writeBytes(payload.skyLight);
-        }
-        if ((payload.lightFlags & 0x08) != 0) {
-            buf.writeByte(payload.uniformSkyLight);
-        }
-        buf.writeLong(payload.columnTimestamp);
-    }
-
-    private static ChunkSectionS2CPayload read(FriendlyByteBuf buf) {
+    public static ChunkSectionS2CPayload read(FriendlyByteBuf buf) {
         int cx = buf.readInt();
         int sy = buf.readInt();
         int cz = buf.readInt();
-        ResourceKey<Level> dim = ResourceKey.create(Registries.DIMENSION, Identifier.parse(buf.readUtf(256)));
+        ResourceKey<Level> dim = ResourceKey.create(Registries.DIMENSION, new ResourceLocation(buf.readUtf(256)));
         byte[] sectionData = buf.readByteArray(LSSConstants.MAX_SECTION_DATA_SIZE);
         byte flags = buf.readByte();
         byte[] bl = null;
@@ -82,8 +51,25 @@ public record ChunkSectionS2CPayload(
         return new ChunkSectionS2CPayload(cx, sy, cz, dim, sectionData, flags, bl, sl, uniformBl, uniformSl, columnTimestamp);
     }
 
-    @Override
-    public Type<? extends CustomPacketPayload> type() {
-        return TYPE;
+    public void write(FriendlyByteBuf buf) {
+        buf.writeInt(this.chunkX);
+        buf.writeInt(this.sectionY);
+        buf.writeInt(this.chunkZ);
+        buf.writeUtf(this.dimension.location().toString()); 
+        buf.writeByteArray(this.sectionData);
+        buf.writeByte(this.lightFlags);
+        if ((this.lightFlags & 0x01) != 0) { 
+            buf.writeBytes(this.blockLight); 
+        }
+        if ((this.lightFlags & 0x04) != 0) {
+            buf.writeByte(this.uniformBlockLight);
+        }
+        if ((this.lightFlags & 0x02) != 0) { 
+            buf.writeBytes(this.skyLight); 
+        }
+        if ((this.lightFlags & 0x08) != 0) {
+            buf.writeByte(this.uniformSkyLight);
+        }
+        buf.writeLong(this.columnTimestamp);
     }
 }

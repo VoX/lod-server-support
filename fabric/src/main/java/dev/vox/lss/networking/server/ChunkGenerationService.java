@@ -20,7 +20,7 @@ import java.util.UUID;
 
 public class ChunkGenerationService {
     // flags=2 (LOADING) makes the chunk load/generate; timeout=0 means we manage lifetime ourselves
-    private static final TicketType LSS_GEN_TICKET = new TicketType(0, 2);
+    private static final TicketType<ChunkPos> LSS_GEN_TICKET = TicketType.create("lss_gen", java.util.Comparator.comparingLong(ChunkPos::toLong));
 
     record Callback(UUID playerUuid, int batchId, long submissionOrder) {}
 
@@ -80,7 +80,7 @@ public class ChunkGenerationService {
         int playerActive = this.perPlayerActiveCount.getOrDefault(playerUuid, 0);
         if (this.active.size() < this.maxConcurrent && playerActive < this.maxPerPlayerActive) {
             var pos = new ChunkPos(cx, cz);
-            level.getChunkSource().addTicketWithRadius(LSS_GEN_TICKET, pos, 0);
+            level.getChunkSource().addRegionTicket(LSS_GEN_TICKET, pos, 0, pos);
 
             var gen = new PendingGeneration(pos, level);
             gen.callbacks.add(new Callback(playerUuid, batchId, submissionOrder));
@@ -118,7 +118,7 @@ public class ChunkGenerationService {
                             new ChunkSectionS2CPayload[0], 0L, false, false, cb.submissionOrder));
                     decrementCount(this.perPlayerActiveCount, cb.playerUuid);
                 }
-                gen.level.getChunkSource().removeTicketWithRadius(LSS_GEN_TICKET, gen.pos, 0);
+                gen.level.getChunkSource().removeRegionTicket(LSS_GEN_TICKET, gen.pos, 0, gen.pos);
                 iter.remove();
                 this.totalTimeouts++;
                 continue;
@@ -147,7 +147,7 @@ public class ChunkGenerationService {
                     }
                     this.totalCompleted++;
                 }
-                gen.level.getChunkSource().removeTicketWithRadius(LSS_GEN_TICKET, gen.pos, 0);
+                gen.level.getChunkSource().removeRegionTicket(LSS_GEN_TICKET, gen.pos, 0, gen.pos);
                 iter.remove();
             }
         }
@@ -193,7 +193,7 @@ public class ChunkGenerationService {
                 incrementCount(this.perPlayerActiveCount, cb.playerUuid);
             }
             gen.ticksWaiting = 0;
-            gen.level.getChunkSource().addTicketWithRadius(LSS_GEN_TICKET, gen.pos, 0);
+            gen.level.getChunkSource().addRegionTicket(LSS_GEN_TICKET, gen.pos, 0, gen.pos);
             this.active.put(bestKey, gen);
         }
     }
@@ -214,7 +214,7 @@ public class ChunkGenerationService {
 
     private static ChunkSectionS2CPayload[] serializeChunkColumn(
             ServerLevel level, LevelChunk chunk, int cx, int cz, long columnTimestamp) {
-        int minSectionY = level.getMinSectionY();
+        int minSectionY = level.getMinBuildHeight() >> 4;
         var sections = chunk.getSections();
 
         var payloads = new ArrayList<ChunkSectionS2CPayload>();
@@ -254,7 +254,7 @@ public class ChunkGenerationService {
             var gen = iter.next().getValue();
             gen.callbacks.removeIf(cb -> cb.playerUuid.equals(playerUuid));
             if (gen.callbacks.isEmpty()) {
-                gen.level.getChunkSource().removeTicketWithRadius(LSS_GEN_TICKET, gen.pos, 0);
+                gen.level.getChunkSource().removeRegionTicket(LSS_GEN_TICKET, gen.pos, 0, gen.pos);
                 iter.remove();
             }
         }
@@ -272,7 +272,7 @@ public class ChunkGenerationService {
 
     public void shutdown() {
         for (var gen : this.active.values()) {
-            gen.level.getChunkSource().removeTicketWithRadius(LSS_GEN_TICKET, gen.pos, 0);
+            gen.level.getChunkSource().removeRegionTicket(LSS_GEN_TICKET, gen.pos, 0, gen.pos);
         }
         this.active.clear();
         this.waiting.clear();

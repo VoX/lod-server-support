@@ -5,8 +5,8 @@ import io.netty.buffer.Unpooled;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.Bootstrap;
 import net.minecraft.world.level.Level;
 import org.junit.jupiter.api.BeforeAll;
@@ -32,8 +32,8 @@ class PayloadCodecTest {
     void handshakeRoundtrip() {
         var original = new HandshakeC2SPayload(4);
         var b = buf();
-        HandshakeC2SPayload.CODEC.encode(b, original);
-        var decoded = HandshakeC2SPayload.CODEC.decode(b);
+        original.write(b);
+        var decoded = HandshakeC2SPayload.read(b);
         assertEquals(original.protocolVersion(), decoded.protocolVersion());
         b.release();
     }
@@ -44,8 +44,8 @@ class PayloadCodecTest {
     void sessionConfigRoundtrip() {
         var original = new SessionConfigS2CPayload(4, true, 128, 256, 512, 8, 64);
         var b = buf();
-        SessionConfigS2CPayload.CODEC.encode(b, original);
-        var decoded = SessionConfigS2CPayload.CODEC.decode(b);
+        original.write(b);
+        var decoded = SessionConfigS2CPayload.read(b);
         assertEquals(original.protocolVersion(), decoded.protocolVersion());
         assertEquals(original.enabled(), decoded.enabled());
         assertEquals(original.lodDistanceChunks(), decoded.lodDistanceChunks());
@@ -62,8 +62,8 @@ class PayloadCodecTest {
     void requestCompleteRoundtrip() {
         var original = new RequestCompleteS2CPayload(42, RequestCompleteS2CPayload.STATUS_DONE);
         var b = buf();
-        RequestCompleteS2CPayload.CODEC.encode(b, original);
-        var decoded = RequestCompleteS2CPayload.CODEC.decode(b);
+        original.write(b);
+        var decoded = RequestCompleteS2CPayload.read(b);
         assertEquals(original.batchId(), decoded.batchId());
         assertEquals(original.status(), decoded.status());
         b.release();
@@ -75,8 +75,8 @@ class PayloadCodecTest {
     void columnUpToDateRoundtrip() {
         var original = new ColumnUpToDateS2CPayload(100, -200);
         var b = buf();
-        ColumnUpToDateS2CPayload.CODEC.encode(b, original);
-        var decoded = ColumnUpToDateS2CPayload.CODEC.decode(b);
+        original.write(b);
+        var decoded = ColumnUpToDateS2CPayload.read(b);
         assertEquals(original.chunkX(), decoded.chunkX());
         assertEquals(original.chunkZ(), decoded.chunkZ());
         b.release();
@@ -88,8 +88,8 @@ class PayloadCodecTest {
     void cancelRequestRoundtrip() {
         var original = new CancelRequestC2SPayload(new int[]{1, 2, 3, 42});
         var b = buf();
-        CancelRequestC2SPayload.CODEC.encode(b, original);
-        var decoded = CancelRequestC2SPayload.CODEC.decode(b);
+        original.write(b);
+        var decoded = CancelRequestC2SPayload.read(b);
         assertArrayEquals(original.batchIds(), decoded.batchIds());
         b.release();
     }
@@ -104,8 +104,8 @@ class PayloadCodecTest {
         };
         var original = new DirtyColumnsS2CPayload(positions);
         var b = buf();
-        DirtyColumnsS2CPayload.CODEC.encode(b, original);
-        var decoded = DirtyColumnsS2CPayload.CODEC.decode(b);
+        original.write(b);
+        var decoded = DirtyColumnsS2CPayload.read(b);
         assertArrayEquals(original.dirtyPositions(), decoded.dirtyPositions());
         b.release();
     }
@@ -118,8 +118,8 @@ class PayloadCodecTest {
         }
         var original = new DirtyColumnsS2CPayload(positions);
         var b = buf();
-        DirtyColumnsS2CPayload.CODEC.encode(b, original);
-        var decoded = DirtyColumnsS2CPayload.CODEC.decode(b);
+        original.write(b);
+        var decoded = DirtyColumnsS2CPayload.read(b);
         assertEquals(DirtyColumnsS2CPayload.MAX_POSITIONS, decoded.dirtyPositions().length);
         b.release();
     }
@@ -135,8 +135,8 @@ class PayloadCodecTest {
         long[] timestamps = {1000L, 2000L};
         var original = new ChunkRequestC2SPayload(7, positions, timestamps);
         var b = buf();
-        ChunkRequestC2SPayload.CODEC.encode(b, original);
-        var decoded = ChunkRequestC2SPayload.CODEC.decode(b);
+        original.write(b);
+        var decoded = ChunkRequestC2SPayload.read(b);
         assertEquals(original.batchId(), decoded.batchId());
         assertArrayEquals(original.positions(), decoded.positions());
         assertArrayEquals(original.timestamps(), decoded.timestamps());
@@ -153,8 +153,8 @@ class PayloadCodecTest {
         }
         var original = new ChunkRequestC2SPayload(1, positions, timestamps);
         var b = buf();
-        ChunkRequestC2SPayload.CODEC.encode(b, original);
-        var decoded = ChunkRequestC2SPayload.CODEC.decode(b);
+        original.write(b);
+        var decoded = ChunkRequestC2SPayload.read(b);
         assertEquals(ChunkRequestC2SPayload.MAX_POSITIONS, decoded.positions().length);
         assertEquals(ChunkRequestC2SPayload.MAX_POSITIONS, decoded.timestamps().length);
         b.release();
@@ -166,14 +166,14 @@ class PayloadCodecTest {
     void chunkSectionRoundtripNoLight() {
         byte[] sectionData = new byte[256];
         for (int i = 0; i < sectionData.length; i++) sectionData[i] = (byte) (i & 0xFF);
-        var dim = ResourceKey.create(Registries.DIMENSION, Identifier.parse("minecraft:overworld"));
+        var dim = ResourceKey.create(Registries.DIMENSION, new ResourceLocation("minecraft:overworld"));
         var original = new ChunkSectionS2CPayload(
                 10, 3, -20, dim, sectionData, (byte) 0x00,
                 null, null, (byte) 0, (byte) 0, 12345L
         );
         var b = buf();
-        ChunkSectionS2CPayload.CODEC.encode(b, original);
-        var decoded = ChunkSectionS2CPayload.CODEC.decode(b);
+        original.write(b);
+        var decoded = ChunkSectionS2CPayload.read(b);
         assertEquals(original.chunkX(), decoded.chunkX());
         assertEquals(original.sectionY(), decoded.sectionY());
         assertEquals(original.chunkZ(), decoded.chunkZ());
@@ -193,14 +193,14 @@ class PayloadCodecTest {
             blockLight[i] = (byte) (i & 0xFF);
             skyLight[i] = (byte) ((i + 1) & 0xFF);
         }
-        var dim = ResourceKey.create(Registries.DIMENSION, Identifier.parse("minecraft:overworld"));
+        var dim = ResourceKey.create(Registries.DIMENSION, new ResourceLocation("minecraft:overworld"));
         var original = new ChunkSectionS2CPayload(
                 5, -1, 8, dim, sectionData, (byte) (0x01 | 0x02),
                 blockLight, skyLight, (byte) 0, (byte) 0, 99999L
         );
         var b = buf();
-        ChunkSectionS2CPayload.CODEC.encode(b, original);
-        var decoded = ChunkSectionS2CPayload.CODEC.decode(b);
+        original.write(b);
+        var decoded = ChunkSectionS2CPayload.read(b);
         assertArrayEquals(original.sectionData(), decoded.sectionData());
         assertArrayEquals(original.blockLight(), decoded.blockLight());
         assertArrayEquals(original.skyLight(), decoded.skyLight());
@@ -211,14 +211,14 @@ class PayloadCodecTest {
     @Test
     void chunkSectionRoundtripWithUniformLight() {
         byte[] sectionData = new byte[64];
-        var dim = ResourceKey.create(Registries.DIMENSION, Identifier.parse("minecraft:the_nether"));
+        var dim = ResourceKey.create(Registries.DIMENSION, new ResourceLocation("minecraft:the_nether"));
         var original = new ChunkSectionS2CPayload(
                 0, 0, 0, dim, sectionData, (byte) (0x04 | 0x08),
                 null, null, (byte) 7, (byte) 15, 55555L
         );
         var b = buf();
-        ChunkSectionS2CPayload.CODEC.encode(b, original);
-        var decoded = ChunkSectionS2CPayload.CODEC.decode(b);
+        original.write(b);
+        var decoded = ChunkSectionS2CPayload.read(b);
         assertArrayEquals(original.sectionData(), decoded.sectionData());
         assertEquals(original.uniformBlockLight(), decoded.uniformBlockLight());
         assertEquals(original.uniformSkyLight(), decoded.uniformSkyLight());

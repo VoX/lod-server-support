@@ -6,14 +6,13 @@ import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
-import net.minecraft.server.permissions.Permissions;
 
 public class LSSServerCommands {
     public static void init() {
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
             dispatcher.register(
                     Commands.literal("lsslod")
-                            .requires(source -> source.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER))
+                            .requires(source -> source.hasPermission(2))
                             .then(Commands.literal("stats")
                                     .executes(ctx -> showStats(ctx.getSource()))
                             )

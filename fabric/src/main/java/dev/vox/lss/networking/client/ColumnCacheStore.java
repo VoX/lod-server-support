@@ -35,7 +35,7 @@ public class ColumnCacheStore {
                 LSSLogger.warn("Column cache " + file + " has invalid entry count " + count + ", discarding");
                 return map;
             }
-            map.ensureCapacity(count);
+            //map.ensureCapacity(count);
             for (int i = 0; i < count; i++) {
                 long pos = in.readLong();
                 long timestamp = in.readLong();
@@ -113,7 +113,7 @@ public class ColumnCacheStore {
     }
 
     private static String dimensionKey(ResourceKey<Level> dimension) {
-        return sanitize(dimension.identifier().toString());
+        return sanitize(dimension.location().toString());
     }
 
     private static String sanitize(String name) {
