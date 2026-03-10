@@ -1,13 +1,13 @@
 package dev.vox.lss.networking;
 
+import dev.vox.lss.networking.payloads.BandwidthUpdateC2SPayload;
 import dev.vox.lss.networking.payloads.CancelRequestC2SPayload;
-import dev.vox.lss.networking.payloads.ChunkRequestC2SPayload;
-import dev.vox.lss.networking.payloads.ChunkSectionS2CPayload;
-import dev.vox.lss.networking.payloads.ColumnUpToDateS2CPayload;
+import dev.vox.lss.networking.payloads.BatchChunkRequestC2SPayload;
+import dev.vox.lss.networking.payloads.BatchResponseS2CPayload;
 import dev.vox.lss.networking.payloads.DirtyColumnsS2CPayload;
 import dev.vox.lss.networking.payloads.HandshakeC2SPayload;
-import dev.vox.lss.networking.payloads.RequestCompleteS2CPayload;
 import dev.vox.lss.networking.payloads.SessionConfigS2CPayload;
+import dev.vox.lss.networking.payloads.VoxelColumnS2CPayload;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 
 public class LSSNetworking {
@@ -19,12 +19,16 @@ public class LSSNetworking {
                 HandshakeC2SPayload.CODEC
         );
         PayloadTypeRegistry.playC2S().register(
-                ChunkRequestC2SPayload.TYPE,
-                ChunkRequestC2SPayload.CODEC
+                BatchChunkRequestC2SPayload.TYPE,
+                BatchChunkRequestC2SPayload.CODEC
         );
         PayloadTypeRegistry.playC2S().register(
                 CancelRequestC2SPayload.TYPE,
                 CancelRequestC2SPayload.CODEC
+        );
+        PayloadTypeRegistry.playC2S().register(
+                BandwidthUpdateC2SPayload.TYPE,
+                BandwidthUpdateC2SPayload.CODEC
         );
 
         // Server -> Client
@@ -33,20 +37,16 @@ public class LSSNetworking {
                 SessionConfigS2CPayload.CODEC
         );
         PayloadTypeRegistry.playS2C().register(
-                ChunkSectionS2CPayload.TYPE,
-                ChunkSectionS2CPayload.CODEC
-        );
-        PayloadTypeRegistry.playS2C().register(
-                RequestCompleteS2CPayload.TYPE,
-                RequestCompleteS2CPayload.CODEC
-        );
-        PayloadTypeRegistry.playS2C().register(
-                ColumnUpToDateS2CPayload.TYPE,
-                ColumnUpToDateS2CPayload.CODEC
+                BatchResponseS2CPayload.TYPE,
+                BatchResponseS2CPayload.CODEC
         );
         PayloadTypeRegistry.playS2C().register(
                 DirtyColumnsS2CPayload.TYPE,
                 DirtyColumnsS2CPayload.CODEC
+        );
+        PayloadTypeRegistry.playS2C().register(
+                VoxelColumnS2CPayload.TYPE,
+                VoxelColumnS2CPayload.CODEC
         );
     }
 }

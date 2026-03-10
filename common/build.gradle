@@ -9,11 +9,11 @@ repositories {
     mavenCentral()
 }
 
-java {
-    sourceCompatibility = JavaVersion.VERSION_21
-    targetCompatibility = JavaVersion.VERSION_21
+tasks.withType(JavaCompile).configureEach {
+    it.options.release = 21
 }
 
 dependencies {
     api 'org.slf4j:slf4j-api:2.0.17'
+    compileOnly 'it.unimi.dsi:fastutil:8.5.15'
 }

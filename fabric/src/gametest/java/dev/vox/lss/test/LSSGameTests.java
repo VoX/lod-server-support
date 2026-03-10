@@ -1,11 +1,10 @@
 package dev.vox.lss.test;
 
+import dev.vox.lss.common.LSSConstants;
 import dev.vox.lss.config.LSSServerConfig;
-import dev.vox.lss.networking.server.ChunkChangeTracker;
 import dev.vox.lss.networking.server.LSSServerNetworking;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
-import net.minecraft.world.level.Level;
 
 public class LSSGameTests {
 
@@ -14,18 +13,6 @@ public class LSSGameTests {
         helper.assertTrue(
                 LSSServerNetworking.getRequestService() != null,
                 "RequestProcessingService should be active"
-        );
-        helper.succeed();
-    }
-
-    @GameTest(structure = "fabric-gametest-api-v1:empty")
-    public void diagnosticsReturnMetrics(GameTestHelper helper) {
-        var service = LSSServerNetworking.getRequestService();
-        helper.assertTrue(service != null, "RequestProcessingService should be active");
-        String diag = service.getTickDiagnostics();
-        helper.assertTrue(
-                diag.contains("last_tick"),
-                "Diagnostics should contain tick metrics"
         );
         helper.succeed();
     }
@@ -56,27 +43,11 @@ public class LSSGameTests {
     }
 
     @GameTest(structure = "fabric-gametest-api-v1:empty")
-    public void configLoadedWithValidValues(GameTestHelper helper) {
-        var config = LSSServerConfig.CONFIG;
-        helper.assertTrue(
-                config.lodDistanceChunks >= 1 && config.lodDistanceChunks <= 512,
-                "lodDistanceChunks should be in [1, 512]"
-        );
-        helper.assertTrue(
-                config.diskReaderThreads >= 1 && config.diskReaderThreads <= 64,
-                "diskReaderThreads should be in [1, 64]"
-        );
-        helper.succeed();
-    }
-
-    // --- New server gametests (S1-S6) ---
-
-    @GameTest(structure = "fabric-gametest-api-v1:empty")
-    public void diskReaderCreatedWhenEnabled(GameTestHelper helper) {
+    public void diskReaderAlwaysCreated(GameTestHelper helper) {
         var service = LSSServerNetworking.getRequestService();
         helper.assertTrue(service != null, "Service should be active");
         helper.assertTrue(service.getDiskReader() != null,
-                "DiskReader should be created when enableDiskReading=true");
+                "DiskReader should always be created");
         helper.succeed();
     }
 
@@ -93,17 +64,20 @@ public class LSSGameTests {
     public void bandwidthUsageZeroInitially(GameTestHelper helper) {
         var service = LSSServerNetworking.getRequestService();
         helper.assertTrue(service != null, "Service should be active");
-        helper.assertTrue(service.getBandwidthLimiter().getTotalBytesSentThisSecond() == 0,
+        helper.assertTrue(service.getBandwidthLimiter().getTotalBytesSent() == 0,
                 "Bandwidth usage should be zero with no players");
         helper.succeed();
     }
 
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void dirtyTrackerDrainClearsState(GameTestHelper helper) {
-        // First drain may return data (chunks saved during startup) — that's fine
-        ChunkChangeTracker.drainDirty(Level.OVERWORLD);
+        var service = LSSServerNetworking.getRequestService();
+        helper.assertTrue(service != null, "Service should be active");
+        var tracker = service.getDirtyTracker();
+        // First drain may return data (chunks marked dirty during startup) — that's fine
+        tracker.drainDirty(LSSConstants.DIM_STR_OVERWORLD);
         // Second drain should be empty since drainDirty clears the set
-        long[] second = ChunkChangeTracker.drainDirty(Level.OVERWORLD);
+        long[] second = tracker.drainDirty(LSSConstants.DIM_STR_OVERWORLD);
         helper.assertTrue(second == null || second.length == 0,
                 "Dirty tracker should be empty after drain");
         helper.succeed();
@@ -114,28 +88,26 @@ public class LSSGameTests {
         var service = LSSServerNetworking.getRequestService();
         helper.assertTrue(service != null, "Service should be active");
         String diag = service.getTickDiagnostics();
-        helper.assertTrue(diag.contains("sections_sent"), "Should contain sections_sent");
-        helper.assertTrue(diag.contains("disk_queued"), "Should contain disk_queued");
-        helper.assertTrue(diag.contains("disk_drained"), "Should contain disk_drained");
-        helper.assertTrue(diag.contains("batches_completed"), "Should contain batches_completed");
+        helper.assertTrue(diag.contains("sent="), "Should contain sent=");
+        helper.assertTrue(diag.contains("disk="), "Should contain disk=");
+        helper.assertTrue(diag.contains("utd="), "Should contain utd=");
+        helper.assertTrue(diag.contains("gen="), "Should contain gen=");
         helper.succeed();
     }
 
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void allConfigFieldsInValidRange(GameTestHelper helper) {
         var c = LSSServerConfig.CONFIG;
-        helper.assertTrue(c.maxSectionsPerTickPerPlayer >= 1 && c.maxSectionsPerTickPerPlayer <= 10000, "maxSectionsPerTickPerPlayer");
-        helper.assertTrue(c.maxBytesPerSecondPerPlayer >= 1024 && c.maxBytesPerSecondPerPlayer <= 104_857_600, "maxBytesPerSecondPerPlayer");
-        helper.assertTrue(c.maxConcurrentDiskReads >= 1 && c.maxConcurrentDiskReads <= 512, "maxConcurrentDiskReads");
-        helper.assertTrue(c.maxSendQueueSize >= 1 && c.maxSendQueueSize <= 100_000, "maxSendQueueSize");
-        helper.assertTrue(c.maxBytesPerSecondGlobal >= 1024 && c.maxBytesPerSecondGlobal <= 1_073_741_824, "maxBytesPerSecondGlobal");
-        helper.assertTrue(c.maxRequestsPerBatch >= 1 && c.maxRequestsPerBatch <= 1024, "maxRequestsPerBatch");
-        helper.assertTrue(c.maxPendingRequestsPerPlayer >= 1 && c.maxPendingRequestsPerPlayer <= 4096, "maxPendingRequestsPerPlayer");
-        helper.assertTrue(c.generationDistanceChunks >= 1 && c.generationDistanceChunks <= 512, "generationDistanceChunks");
-        helper.assertTrue(c.maxConcurrentGenerations >= 1 && c.maxConcurrentGenerations <= 256, "maxConcurrentGenerations");
-        helper.assertTrue(c.maxConcurrentGenerationsPerPlayer >= 1 && c.maxConcurrentGenerationsPerPlayer <= 64, "maxConcurrentGenerationsPerPlayer");
-        helper.assertTrue(c.generationTimeoutSeconds >= 1 && c.generationTimeoutSeconds <= 600, "generationTimeoutSeconds");
-        helper.assertTrue(c.dirtyBroadcastIntervalSeconds >= 1 && c.dirtyBroadcastIntervalSeconds <= 300, "dirtyBroadcastIntervalSeconds");
+        helper.assertTrue(c.bytesPerSecondLimitPerPlayer >= LSSConstants.MIN_BYTES_PER_SECOND && c.bytesPerSecondLimitPerPlayer <= LSSConstants.MAX_BYTES_PER_SECOND_PER_PLAYER, "bytesPerSecondLimitPerPlayer");
+        helper.assertTrue(c.sendQueueLimitPerPlayer >= LSSConstants.MIN_SEND_QUEUE_SIZE && c.sendQueueLimitPerPlayer <= LSSConstants.MAX_SEND_QUEUE_SIZE, "sendQueueLimitPerPlayer");
+        helper.assertTrue(c.bytesPerSecondLimitGlobal >= LSSConstants.MIN_BYTES_PER_SECOND && c.bytesPerSecondLimitGlobal <= LSSConstants.MAX_BYTES_PER_SECOND_GLOBAL_LIMIT, "bytesPerSecondLimitGlobal");
+        helper.assertTrue(c.generationConcurrencyLimitGlobal >= LSSConstants.MIN_CONCURRENT_GENERATIONS && c.generationConcurrencyLimitGlobal <= LSSConstants.MAX_CONCURRENT_GENERATIONS, "generationConcurrencyLimitGlobal");
+        helper.assertTrue(c.generationTimeoutSeconds >= LSSConstants.MIN_GENERATION_TIMEOUT && c.generationTimeoutSeconds <= LSSConstants.MAX_GENERATION_TIMEOUT, "generationTimeoutSeconds");
+        helper.assertTrue(c.dirtyBroadcastIntervalSeconds >= LSSConstants.MIN_DIRTY_BROADCAST_INTERVAL && c.dirtyBroadcastIntervalSeconds <= LSSConstants.MAX_DIRTY_BROADCAST_INTERVAL, "dirtyBroadcastIntervalSeconds");
+        helper.assertTrue(c.syncOnLoadRateLimitPerPlayer >= LSSConstants.MIN_RATE_LIMIT && c.syncOnLoadRateLimitPerPlayer <= LSSConstants.MAX_RATE_LIMIT, "syncOnLoadRateLimitPerPlayer");
+        helper.assertTrue(c.syncOnLoadConcurrencyLimitPerPlayer >= LSSConstants.MIN_CONCURRENCY_LIMIT && c.syncOnLoadConcurrencyLimitPerPlayer <= LSSConstants.MAX_CONCURRENCY_LIMIT, "syncOnLoadConcurrencyLimitPerPlayer");
+        helper.assertTrue(c.generationRateLimitPerPlayer >= LSSConstants.MIN_RATE_LIMIT && c.generationRateLimitPerPlayer <= LSSConstants.MAX_RATE_LIMIT, "generationRateLimitPerPlayer");
+        helper.assertTrue(c.generationConcurrencyLimitPerPlayer >= LSSConstants.MIN_CONCURRENCY_LIMIT && c.generationConcurrencyLimitPerPlayer <= LSSConstants.MAX_CONCURRENCY_LIMIT, "generationConcurrencyLimitPerPlayer");
         helper.succeed();
     }
 }

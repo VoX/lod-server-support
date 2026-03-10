@@ -1,28 +1,26 @@
 package dev.vox.lss.config;
 
+import dev.vox.lss.common.LSSConstants;
+
 public class LSSServerConfig extends JsonConfig {
     private static final String FILE_NAME = "lss-server-config.json";
 
-    public static LSSServerConfig CONFIG = load(LSSServerConfig.class, FILE_NAME);
+    public static final LSSServerConfig CONFIG = load(LSSServerConfig.class, FILE_NAME);
 
     public boolean enabled = true;
-    public int lodDistanceChunks = 128;
-    public int maxSectionsPerTickPerPlayer = 200;
-    public int maxBytesPerSecondPerPlayer = 2_097_152;
-    public boolean sendLightData = true;
-    public boolean enableDiskReading = true;
-    public int maxConcurrentDiskReads = 64;
-    public int diskReaderThreads = 2;
-    public int maxSendQueueSize = 4800;
-    public int maxBytesPerSecondGlobal = 10_485_760;
-    public int maxRequestsPerBatch = 256;
-    public int maxPendingRequestsPerPlayer = 512;
+    public int lodDistanceChunks = 256;
+    public int bytesPerSecondLimitPerPlayer = 20_971_520;
+    public int diskReaderThreads = 5;
+    public int sendQueueLimitPerPlayer = 4000;
+    public int bytesPerSecondLimitGlobal = 104_857_600;
     public boolean enableChunkGeneration = true;
-    public int generationDistanceChunks = 64;
-    public int maxConcurrentGenerations = 16;
-    public int maxConcurrentGenerationsPerPlayer = 8;
+    public int generationConcurrencyLimitGlobal = 32;
     public int generationTimeoutSeconds = 60;
-    public int dirtyBroadcastIntervalSeconds = 15;
+    public int dirtyBroadcastIntervalSeconds = 10;
+    public int syncOnLoadRateLimitPerPlayer = 800;
+    public int syncOnLoadConcurrencyLimitPerPlayer = 200;
+    public int generationRateLimitPerPlayer = 80;
+    public int generationConcurrencyLimitPerPlayer = 16;
 
     @Override
     protected String getFileName() {
@@ -31,19 +29,18 @@ public class LSSServerConfig extends JsonConfig {
 
     @Override
     protected void validate() {
-        lodDistanceChunks = clamp(lodDistanceChunks, 1, 512);
-        maxSectionsPerTickPerPlayer = clamp(maxSectionsPerTickPerPlayer, 1, 10000);
-        maxBytesPerSecondPerPlayer = clamp(maxBytesPerSecondPerPlayer, 1024, 104_857_600);
-        maxConcurrentDiskReads = clamp(maxConcurrentDiskReads, 1, 512);
-        diskReaderThreads = clamp(diskReaderThreads, 1, 64);
-        maxSendQueueSize = clamp(maxSendQueueSize, 1, 100_000);
-        maxBytesPerSecondGlobal = clamp(maxBytesPerSecondGlobal, 1024, 1_073_741_824);
-        maxRequestsPerBatch = clamp(maxRequestsPerBatch, 1, 1024);
-        maxPendingRequestsPerPlayer = clamp(maxPendingRequestsPerPlayer, 1, 4096);
-        generationDistanceChunks = clamp(generationDistanceChunks, 1, 512);
-        maxConcurrentGenerations = clamp(maxConcurrentGenerations, 1, 256);
-        maxConcurrentGenerationsPerPlayer = clamp(maxConcurrentGenerationsPerPlayer, 1, 64);
-        generationTimeoutSeconds = clamp(generationTimeoutSeconds, 1, 600);
-        dirtyBroadcastIntervalSeconds = clamp(dirtyBroadcastIntervalSeconds, 1, 300);
+        lodDistanceChunks = Math.clamp(lodDistanceChunks, LSSConstants.MIN_LOD_DISTANCE, LSSConstants.MAX_LOD_DISTANCE);
+        bytesPerSecondLimitPerPlayer = Math.clamp(bytesPerSecondLimitPerPlayer, LSSConstants.MIN_BYTES_PER_SECOND, LSSConstants.MAX_BYTES_PER_SECOND_PER_PLAYER);
+        diskReaderThreads = Math.clamp(diskReaderThreads, LSSConstants.MIN_DISK_READER_THREADS, LSSConstants.MAX_DISK_READER_THREADS);
+        sendQueueLimitPerPlayer = Math.clamp(sendQueueLimitPerPlayer, LSSConstants.MIN_SEND_QUEUE_SIZE, LSSConstants.MAX_SEND_QUEUE_SIZE);
+        bytesPerSecondLimitGlobal = (int) Math.clamp((long) bytesPerSecondLimitGlobal, LSSConstants.MIN_BYTES_PER_SECOND, LSSConstants.MAX_BYTES_PER_SECOND_GLOBAL_LIMIT);
+        generationConcurrencyLimitGlobal = Math.clamp(generationConcurrencyLimitGlobal, LSSConstants.MIN_CONCURRENT_GENERATIONS, LSSConstants.MAX_CONCURRENT_GENERATIONS);
+
+        generationTimeoutSeconds = Math.clamp(generationTimeoutSeconds, LSSConstants.MIN_GENERATION_TIMEOUT, LSSConstants.MAX_GENERATION_TIMEOUT);
+        dirtyBroadcastIntervalSeconds = Math.clamp(dirtyBroadcastIntervalSeconds, LSSConstants.MIN_DIRTY_BROADCAST_INTERVAL, LSSConstants.MAX_DIRTY_BROADCAST_INTERVAL);
+        syncOnLoadRateLimitPerPlayer = Math.clamp(syncOnLoadRateLimitPerPlayer, LSSConstants.MIN_RATE_LIMIT, LSSConstants.MAX_RATE_LIMIT);
+        syncOnLoadConcurrencyLimitPerPlayer = Math.clamp(syncOnLoadConcurrencyLimitPerPlayer, LSSConstants.MIN_CONCURRENCY_LIMIT, LSSConstants.MAX_CONCURRENCY_LIMIT);
+        generationRateLimitPerPlayer = Math.clamp(generationRateLimitPerPlayer, LSSConstants.MIN_RATE_LIMIT, LSSConstants.MAX_RATE_LIMIT);
+        generationConcurrencyLimitPerPlayer = Math.clamp(generationConcurrencyLimitPerPlayer, LSSConstants.MIN_CONCURRENCY_LIMIT, LSSConstants.MAX_CONCURRENCY_LIMIT);
     }
 }

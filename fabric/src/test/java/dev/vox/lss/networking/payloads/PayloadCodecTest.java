@@ -1,12 +1,10 @@
 package dev.vox.lss.networking.payloads;
 
+import dev.vox.lss.common.LSSConstants;
 import dev.vox.lss.common.PositionUtil;
 import io.netty.buffer.Unpooled;
 import net.minecraft.SharedConstants;
-import net.minecraft.core.registries.Registries;
 import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.resources.Identifier;
-import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.Bootstrap;
 import net.minecraft.world.level.Level;
 import org.junit.jupiter.api.BeforeAll;
@@ -26,15 +24,26 @@ class PayloadCodecTest {
         return new FriendlyByteBuf(Unpooled.buffer());
     }
 
+    /** Create a minimal raw empty column (0 sections). */
+    private byte[] emptyColumn() {
+        var wireBuf = new FriendlyByteBuf(Unpooled.buffer());
+        wireBuf.writeVarInt(0);
+        byte[] raw = new byte[wireBuf.readableBytes()];
+        wireBuf.readBytes(raw);
+        wireBuf.release();
+        return raw;
+    }
+
     // --- HandshakeC2SPayload ---
 
     @Test
     void handshakeRoundtrip() {
-        var original = new HandshakeC2SPayload(4);
+        var original = new HandshakeC2SPayload(4, 1);
         var b = buf();
         HandshakeC2SPayload.CODEC.encode(b, original);
         var decoded = HandshakeC2SPayload.CODEC.decode(b);
         assertEquals(original.protocolVersion(), decoded.protocolVersion());
+        assertEquals(original.capabilities(), decoded.capabilities());
         b.release();
     }
 
@@ -42,43 +51,43 @@ class PayloadCodecTest {
 
     @Test
     void sessionConfigRoundtrip() {
-        var original = new SessionConfigS2CPayload(4, true, 128, 256, 512, 8, 64);
+        var original = new SessionConfigS2CPayload(9, true, 128, 1, 50, 100, 20, 40, true, 8_388_608L);
         var b = buf();
         SessionConfigS2CPayload.CODEC.encode(b, original);
         var decoded = SessionConfigS2CPayload.CODEC.decode(b);
         assertEquals(original.protocolVersion(), decoded.protocolVersion());
         assertEquals(original.enabled(), decoded.enabled());
         assertEquals(original.lodDistanceChunks(), decoded.lodDistanceChunks());
-        assertEquals(original.maxRequestsPerBatch(), decoded.maxRequestsPerBatch());
-        assertEquals(original.maxPendingRequests(), decoded.maxPendingRequests());
-        assertEquals(original.maxGenerationRequestsPerBatch(), decoded.maxGenerationRequestsPerBatch());
-        assertEquals(original.generationDistanceChunks(), decoded.generationDistanceChunks());
+        assertEquals(original.serverCapabilities(), decoded.serverCapabilities());
+        assertEquals(original.syncOnLoadRateLimitPerPlayer(), decoded.syncOnLoadRateLimitPerPlayer());
+        assertEquals(original.syncOnLoadConcurrencyLimitPerPlayer(), decoded.syncOnLoadConcurrencyLimitPerPlayer());
+        assertEquals(original.generationRateLimitPerPlayer(), decoded.generationRateLimitPerPlayer());
+        assertEquals(original.generationConcurrencyLimitPerPlayer(), decoded.generationConcurrencyLimitPerPlayer());
+        assertEquals(original.generationEnabled(), decoded.generationEnabled());
+        assertEquals(original.playerBandwidthLimit(), decoded.playerBandwidthLimit());
         b.release();
     }
 
-    // --- RequestCompleteS2CPayload ---
+    // --- BatchResponseS2CPayload ---
 
     @Test
-    void requestCompleteRoundtrip() {
-        var original = new RequestCompleteS2CPayload(42, RequestCompleteS2CPayload.STATUS_DONE);
+    void batchResponseRoundtrip() {
+        byte[] types = {
+                LSSConstants.RESPONSE_RATE_LIMITED,
+                LSSConstants.RESPONSE_UP_TO_DATE,
+                LSSConstants.RESPONSE_NOT_GENERATED
+        };
+        int[] requestIds = {42, 99, 77};
+        var original = new BatchResponseS2CPayload(types, requestIds, 3);
         var b = buf();
-        RequestCompleteS2CPayload.CODEC.encode(b, original);
-        var decoded = RequestCompleteS2CPayload.CODEC.decode(b);
-        assertEquals(original.batchId(), decoded.batchId());
-        assertEquals(original.status(), decoded.status());
-        b.release();
-    }
-
-    // --- ColumnUpToDateS2CPayload ---
-
-    @Test
-    void columnUpToDateRoundtrip() {
-        var original = new ColumnUpToDateS2CPayload(100, -200);
-        var b = buf();
-        ColumnUpToDateS2CPayload.CODEC.encode(b, original);
-        var decoded = ColumnUpToDateS2CPayload.CODEC.decode(b);
-        assertEquals(original.chunkX(), decoded.chunkX());
-        assertEquals(original.chunkZ(), decoded.chunkZ());
+        BatchResponseS2CPayload.CODEC.encode(b, original);
+        var decoded = BatchResponseS2CPayload.CODEC.decode(b);
+        assertEquals(3, decoded.count());
+        for (int i = 0; i < 3; i++) {
+            assertEquals(types[i], decoded.responseTypes()[i]);
+            assertEquals(requestIds[i], decoded.requestIds()[i]);
+        }
+        assertEquals(0, b.readableBytes());
         b.release();
     }
 
@@ -86,11 +95,23 @@ class PayloadCodecTest {
 
     @Test
     void cancelRequestRoundtrip() {
-        var original = new CancelRequestC2SPayload(new int[]{1, 2, 3, 42});
+        var original = new CancelRequestC2SPayload(55);
         var b = buf();
         CancelRequestC2SPayload.CODEC.encode(b, original);
         var decoded = CancelRequestC2SPayload.CODEC.decode(b);
-        assertArrayEquals(original.batchIds(), decoded.batchIds());
+        assertEquals(original.requestId(), decoded.requestId());
+        b.release();
+    }
+
+    // --- BandwidthUpdateC2SPayload ---
+
+    @Test
+    void bandwidthUpdateRoundtrip() {
+        var original = new BandwidthUpdateC2SPayload(1_000_000L);
+        var b = buf();
+        BandwidthUpdateC2SPayload.CODEC.encode(b, original);
+        var decoded = BandwidthUpdateC2SPayload.CODEC.decode(b);
+        assertEquals(original.desiredRate(), decoded.desiredRate());
         b.release();
     }
 
@@ -110,119 +131,65 @@ class PayloadCodecTest {
         b.release();
     }
 
-    @Test
-    void dirtyColumnsTruncation() {
-        long[] positions = new long[5000]; // exceeds MAX_POSITIONS (4096)
-        for (int i = 0; i < positions.length; i++) {
-            positions[i] = PositionUtil.packPosition(i, i);
-        }
-        var original = new DirtyColumnsS2CPayload(positions);
-        var b = buf();
-        DirtyColumnsS2CPayload.CODEC.encode(b, original);
-        var decoded = DirtyColumnsS2CPayload.CODEC.decode(b);
-        assertEquals(DirtyColumnsS2CPayload.MAX_POSITIONS, decoded.dirtyPositions().length);
-        b.release();
-    }
-
-    // --- ChunkRequestC2SPayload ---
+    // --- BatchChunkRequestC2SPayload ---
 
     @Test
-    void chunkRequestRoundtrip() {
+    void batchChunkRequestRoundtrip() {
+        int[] requestIds = {7, 42, 99};
         long[] positions = {
                 PositionUtil.packPosition(10, 20),
-                PositionUtil.packPosition(-5, 100)
+                PositionUtil.packPosition(-5, 100),
+                PositionUtil.packPosition(7, -3)
         };
-        long[] timestamps = {1000L, 2000L};
-        var original = new ChunkRequestC2SPayload(7, positions, timestamps);
+        long[] timestamps = {1000L, 0L, -1L};
+        var original = new BatchChunkRequestC2SPayload(requestIds, positions, timestamps, 3);
         var b = buf();
-        ChunkRequestC2SPayload.CODEC.encode(b, original);
-        var decoded = ChunkRequestC2SPayload.CODEC.decode(b);
-        assertEquals(original.batchId(), decoded.batchId());
-        assertArrayEquals(original.positions(), decoded.positions());
-        assertArrayEquals(original.timestamps(), decoded.timestamps());
+        BatchChunkRequestC2SPayload.CODEC.encode(b, original);
+        var decoded = BatchChunkRequestC2SPayload.CODEC.decode(b);
+        assertEquals(3, decoded.count());
+        assertArrayEquals(requestIds, decoded.requestIds());
+        assertArrayEquals(positions, decoded.packedPositions());
+        assertArrayEquals(timestamps, decoded.clientTimestamps());
         b.release();
     }
 
-    @Test
-    void chunkRequestTruncation() {
-        long[] positions = new long[1500]; // exceeds MAX_POSITIONS (1024)
-        long[] timestamps = new long[1500];
-        for (int i = 0; i < positions.length; i++) {
-            positions[i] = PositionUtil.packPosition(i, i);
-            timestamps[i] = i * 100L;
-        }
-        var original = new ChunkRequestC2SPayload(1, positions, timestamps);
-        var b = buf();
-        ChunkRequestC2SPayload.CODEC.encode(b, original);
-        var decoded = ChunkRequestC2SPayload.CODEC.decode(b);
-        assertEquals(ChunkRequestC2SPayload.MAX_POSITIONS, decoded.positions().length);
-        assertEquals(ChunkRequestC2SPayload.MAX_POSITIONS, decoded.timestamps().length);
-        b.release();
-    }
-
-    // --- ChunkSectionS2CPayload ---
+    // --- VoxelColumnS2CPayload dimension encoding ---
 
     @Test
-    void chunkSectionRoundtripNoLight() {
-        byte[] sectionData = new byte[256];
-        for (int i = 0; i < sectionData.length; i++) sectionData[i] = (byte) (i & 0xFF);
-        var dim = ResourceKey.create(Registries.DIMENSION, Identifier.parse("minecraft:overworld"));
-        var original = new ChunkSectionS2CPayload(
-                10, 3, -20, dim, sectionData, (byte) 0x00,
-                null, null, (byte) 0, (byte) 0, 12345L
-        );
+    void voxelColumnOverworldDimensionRoundtrip() {
+        byte[] sections = emptyColumn();
+        var original = new VoxelColumnS2CPayload(1, 10, 20, Level.OVERWORLD, 12345L, sections);
         var b = buf();
-        ChunkSectionS2CPayload.CODEC.encode(b, original);
-        var decoded = ChunkSectionS2CPayload.CODEC.decode(b);
+        VoxelColumnS2CPayload.CODEC.encode(b, original);
+        var decoded = VoxelColumnS2CPayload.CODEC.decode(b);
+        assertEquals(Level.OVERWORLD, decoded.dimension());
         assertEquals(original.chunkX(), decoded.chunkX());
-        assertEquals(original.sectionY(), decoded.sectionY());
         assertEquals(original.chunkZ(), decoded.chunkZ());
-        assertEquals(original.dimension(), decoded.dimension());
-        assertArrayEquals(original.sectionData(), decoded.sectionData());
-        assertEquals(original.lightFlags(), decoded.lightFlags());
         assertEquals(original.columnTimestamp(), decoded.columnTimestamp());
+        assertEquals(0, b.readableBytes());
         b.release();
     }
 
     @Test
-    void chunkSectionRoundtripWithFullLight() {
-        byte[] sectionData = new byte[128];
-        byte[] blockLight = new byte[2048];
-        byte[] skyLight = new byte[2048];
-        for (int i = 0; i < 2048; i++) {
-            blockLight[i] = (byte) (i & 0xFF);
-            skyLight[i] = (byte) ((i + 1) & 0xFF);
-        }
-        var dim = ResourceKey.create(Registries.DIMENSION, Identifier.parse("minecraft:overworld"));
-        var original = new ChunkSectionS2CPayload(
-                5, -1, 8, dim, sectionData, (byte) (0x01 | 0x02),
-                blockLight, skyLight, (byte) 0, (byte) 0, 99999L
-        );
+    void voxelColumnNetherDimensionRoundtrip() {
+        byte[] sections = emptyColumn();
+        var original = new VoxelColumnS2CPayload(2, 5, -5, Level.NETHER, 99L, sections);
         var b = buf();
-        ChunkSectionS2CPayload.CODEC.encode(b, original);
-        var decoded = ChunkSectionS2CPayload.CODEC.decode(b);
-        assertArrayEquals(original.sectionData(), decoded.sectionData());
-        assertArrayEquals(original.blockLight(), decoded.blockLight());
-        assertArrayEquals(original.skyLight(), decoded.skyLight());
-        assertEquals(original.lightFlags(), decoded.lightFlags());
+        VoxelColumnS2CPayload.CODEC.encode(b, original);
+        var decoded = VoxelColumnS2CPayload.CODEC.decode(b);
+        assertEquals(Level.NETHER, decoded.dimension());
         b.release();
     }
 
     @Test
-    void chunkSectionRoundtripWithUniformLight() {
-        byte[] sectionData = new byte[64];
-        var dim = ResourceKey.create(Registries.DIMENSION, Identifier.parse("minecraft:the_nether"));
-        var original = new ChunkSectionS2CPayload(
-                0, 0, 0, dim, sectionData, (byte) (0x04 | 0x08),
-                null, null, (byte) 7, (byte) 15, 55555L
-        );
+    void voxelColumnEndDimensionRoundtrip() {
+        byte[] sections = emptyColumn();
+        var original = new VoxelColumnS2CPayload(3, 0, 0, Level.END, 0L, sections);
         var b = buf();
-        ChunkSectionS2CPayload.CODEC.encode(b, original);
-        var decoded = ChunkSectionS2CPayload.CODEC.decode(b);
-        assertArrayEquals(original.sectionData(), decoded.sectionData());
-        assertEquals(original.uniformBlockLight(), decoded.uniformBlockLight());
-        assertEquals(original.uniformSkyLight(), decoded.uniformSkyLight());
-        assertEquals(original.lightFlags(), decoded.lightFlags());
+        VoxelColumnS2CPayload.CODEC.encode(b, original);
+        var decoded = VoxelColumnS2CPayload.CODEC.decode(b);
+        assertEquals(Level.END, decoded.dimension());
         b.release();
     }
+
 }

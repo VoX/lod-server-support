@@ -1,12 +1,12 @@
 package dev.vox.lss.paper;
 
-import dev.vox.lss.common.LSSLogger;
+import dev.vox.lss.common.DiagnosticsFormatter;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabCompleter;
 
-import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
@@ -55,16 +55,15 @@ public class PaperCommands implements CommandExecutor, TabCompleter {
             var player = state.getPlayer();
 
             String line = String.format(
-                    "%s: handshake=%s, sent=%d sections (%s), batches=%d, pending_disk=%d, send_queue=%d, requests=%d, rejected=%d",
+                    "%s: handshake=%s, sent=%d sections (%s), pending_sync=%d, pending_gen=%d, send_queue=%d, requests=%d",
                     player.getName().getString(),
                     state.hasCompletedHandshake() ? "yes" : "no",
                     state.getTotalSectionsSent(),
-                    LSSLogger.formatBytes(state.getTotalBytesSent()),
-                    state.getPendingBatchCount(),
-                    state.getPendingDiskReadCount(),
+                    DiagnosticsFormatter.formatBytes(state.getTotalBytesSent()),
+                    state.getPendingSyncCount(),
+                    state.getPendingGenerationCount(),
                     state.getSendQueueSize(),
-                    state.getTotalRequestsReceived(),
-                    state.getTotalRequestsRejected()
+                    state.getTotalRequestsReceived()
             );
             sender.sendMessage(line);
         }
@@ -72,48 +71,51 @@ public class PaperCommands implements CommandExecutor, TabCompleter {
 
     private void showDiagnostics(CommandSender sender, PaperRequestProcessingService service) {
         var config = this.plugin.getLssConfig();
-        sender.sendMessage("=== LSS LOD Diagnostics ===");
-        sender.sendMessage(String.format(
-                "Config: enabled=%s, diskReading=%s, lodDist=%d, maxSections/tick=%d, maxBytes/s/player=%d, globalBytes/s=%d, maxBatch=%d, maxPending=%d",
-                config.enabled, config.enableDiskReading, config.lodDistanceChunks,
-                config.maxSectionsPerTickPerPlayer, config.maxBytesPerSecondPerPlayer,
-                config.maxBytesPerSecondGlobal, config.maxRequestsPerBatch, config.maxPendingRequestsPerPlayer
-        ));
-
+        long uptimeSec = service.getUptimeSeconds();
+        var diag = service.getOffThreadProcessor().getDiagnostics();
         var diskReader = service.getDiskReader();
-        if (diskReader != null) {
-            sender.sendMessage("DiskReader: " + diskReader.getDiagnostics());
-        } else {
-            sender.sendMessage("DiskReader: disabled");
-        }
-
+        long diskCompleted = diskReader != null ? diskReader.getDiag().getSuccessfulReadCount() : 0;
         var genService = service.getGenerationService();
-        if (genService != null) {
-            sender.sendMessage("Generation: " + genService.getDiagnostics());
-        } else {
-            sender.sendMessage("Generation: disabled");
-        }
+        var bwLimiter = service.getBandwidthLimiter();
 
-        sender.sendMessage("Tick: " + service.getTickDiagnostics());
-
+        long totalSent = 0;
+        long totalBytes = 0;
+        var players = new ArrayList<DiagnosticsFormatter.PlayerDiag>();
         for (var entry : service.getPlayers().entrySet()) {
             var state = entry.getValue();
-            sender.sendMessage(String.format("  %s: send_queue=%d, pending_disk=%d, pending_gen=%d, batches=%d, total_sent=%d (%s)",
+            totalSent += state.getTotalSectionsSent();
+            totalBytes += state.getTotalBytesSent();
+            players.add(new DiagnosticsFormatter.PlayerDiag(
                     state.getPlayer().getName().getString(),
-                    state.getSendQueueSize(),
-                    state.getPendingDiskReadCount(),
-                    state.getPendingGenerationCount(),
-                    state.getPendingBatchCount(),
-                    state.getTotalSectionsSent(),
-                    LSSLogger.formatBytes(state.getTotalBytesSent())
+                    state.getSendQueueSize(), config.sendQueueLimitPerPlayer,
+                    state.getPendingSyncCount(), state.getPendingGenerationCount(),
+                    state.getTotalSectionsSent(), state.getTotalBytesSent()
             ));
+        }
+
+        var data = new DiagnosticsFormatter.DiagData(
+                config.enabled, config.lodDistanceChunks,
+                config.bytesPerSecondLimitPerPlayer, config.bytesPerSecondLimitGlobal,
+                uptimeSec, totalSent, totalBytes,
+                diag.getTotalInMemory(), diag.getTotalUpToDate(), diag.getTotalGenDrained(),
+                diskCompleted,
+                service.getTickDiagnostics(),
+                diskReader != null ? diskReader.getDiagnostics() : "N/A",
+                genService != null ? genService.getDiagnostics() : null, genService != null,
+                bwLimiter.getTotalBytesSent(),
+                service.getWindowBandwidthRate(),
+                players
+        );
+
+        for (var line : DiagnosticsFormatter.formatDiagnostics(data)) {
+            sender.sendMessage(line);
         }
     }
 
     @Override
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
         if (args.length == 1) {
-            return Arrays.asList("stats", "diag").stream()
+            return List.of("stats", "diag").stream()
                     .filter(s -> s.startsWith(args[0].toLowerCase()))
                     .toList();
         }

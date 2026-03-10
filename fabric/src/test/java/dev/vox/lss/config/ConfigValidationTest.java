@@ -25,39 +25,15 @@ class ConfigValidationTest {
     }
 
     @Test
-    void maxSectionsPerTickPerPlayerClamped() {
+    void bytesPerSecondLimitPerPlayerClamped() {
         var c = serverConfig();
-        c.maxSectionsPerTickPerPlayer = 0;
+        c.bytesPerSecondLimitPerPlayer = 100;
         c.validate();
-        assertEquals(1, c.maxSectionsPerTickPerPlayer);
+        assertEquals(1024, c.bytesPerSecondLimitPerPlayer);
 
-        c.maxSectionsPerTickPerPlayer = 99999;
+        c.bytesPerSecondLimitPerPlayer = 200_000_000;
         c.validate();
-        assertEquals(10000, c.maxSectionsPerTickPerPlayer);
-    }
-
-    @Test
-    void maxBytesPerSecondPerPlayerClamped() {
-        var c = serverConfig();
-        c.maxBytesPerSecondPerPlayer = 100;
-        c.validate();
-        assertEquals(1024, c.maxBytesPerSecondPerPlayer);
-
-        c.maxBytesPerSecondPerPlayer = 200_000_000;
-        c.validate();
-        assertEquals(104_857_600, c.maxBytesPerSecondPerPlayer);
-    }
-
-    @Test
-    void maxConcurrentDiskReadsClamped() {
-        var c = serverConfig();
-        c.maxConcurrentDiskReads = 0;
-        c.validate();
-        assertEquals(1, c.maxConcurrentDiskReads);
-
-        c.maxConcurrentDiskReads = 1000;
-        c.validate();
-        assertEquals(512, c.maxConcurrentDiskReads);
+        assertEquals(104_857_600, c.bytesPerSecondLimitPerPlayer);
     }
 
     @Test
@@ -73,87 +49,39 @@ class ConfigValidationTest {
     }
 
     @Test
-    void maxSendQueueSizeClamped() {
+    void sendQueueLimitPerPlayerClamped() {
         var c = serverConfig();
-        c.maxSendQueueSize = 0;
+        c.sendQueueLimitPerPlayer = 0;
         c.validate();
-        assertEquals(1, c.maxSendQueueSize);
+        assertEquals(1, c.sendQueueLimitPerPlayer);
 
-        c.maxSendQueueSize = 999999;
+        c.sendQueueLimitPerPlayer = 999999;
         c.validate();
-        assertEquals(100_000, c.maxSendQueueSize);
+        assertEquals(100_000, c.sendQueueLimitPerPlayer);
     }
 
     @Test
-    void maxBytesPerSecondGlobalClamped() {
+    void bytesPerSecondLimitGlobalClamped() {
         var c = serverConfig();
-        c.maxBytesPerSecondGlobal = 100;
+        c.bytesPerSecondLimitGlobal = 100;
         c.validate();
-        assertEquals(1024, c.maxBytesPerSecondGlobal);
+        assertEquals(1024, c.bytesPerSecondLimitGlobal);
 
-        c.maxBytesPerSecondGlobal = 2_000_000_000;
+        c.bytesPerSecondLimitGlobal = 2_000_000_000;
         c.validate();
-        assertEquals(1_073_741_824, c.maxBytesPerSecondGlobal);
+        assertEquals(1_073_741_824, c.bytesPerSecondLimitGlobal);
     }
 
     @Test
-    void maxRequestsPerBatchClamped() {
+    void generationConcurrencyLimitGlobalClamped() {
         var c = serverConfig();
-        c.maxRequestsPerBatch = 0;
+        c.generationConcurrencyLimitGlobal = 0;
         c.validate();
-        assertEquals(1, c.maxRequestsPerBatch);
+        assertEquals(1, c.generationConcurrencyLimitGlobal);
 
-        c.maxRequestsPerBatch = 9999;
+        c.generationConcurrencyLimitGlobal = 999;
         c.validate();
-        assertEquals(1024, c.maxRequestsPerBatch);
-    }
-
-    @Test
-    void maxPendingRequestsPerPlayerClamped() {
-        var c = serverConfig();
-        c.maxPendingRequestsPerPlayer = 0;
-        c.validate();
-        assertEquals(1, c.maxPendingRequestsPerPlayer);
-
-        c.maxPendingRequestsPerPlayer = 99999;
-        c.validate();
-        assertEquals(4096, c.maxPendingRequestsPerPlayer);
-    }
-
-    @Test
-    void generationDistanceChunksClamped() {
-        var c = serverConfig();
-        c.generationDistanceChunks = 0;
-        c.validate();
-        assertEquals(1, c.generationDistanceChunks);
-
-        c.generationDistanceChunks = 999;
-        c.validate();
-        assertEquals(512, c.generationDistanceChunks);
-    }
-
-    @Test
-    void maxConcurrentGenerationsClamped() {
-        var c = serverConfig();
-        c.maxConcurrentGenerations = 0;
-        c.validate();
-        assertEquals(1, c.maxConcurrentGenerations);
-
-        c.maxConcurrentGenerations = 999;
-        c.validate();
-        assertEquals(256, c.maxConcurrentGenerations);
-    }
-
-    @Test
-    void maxConcurrentGenerationsPerPlayerClamped() {
-        var c = serverConfig();
-        c.maxConcurrentGenerationsPerPlayer = 0;
-        c.validate();
-        assertEquals(1, c.maxConcurrentGenerationsPerPlayer);
-
-        c.maxConcurrentGenerationsPerPlayer = 999;
-        c.validate();
-        assertEquals(64, c.maxConcurrentGenerationsPerPlayer);
+        assertEquals(256, c.generationConcurrencyLimitGlobal);
     }
 
     @Test
@@ -180,6 +108,54 @@ class ConfigValidationTest {
         assertEquals(300, c.dirtyBroadcastIntervalSeconds);
     }
 
+    @Test
+    void syncOnLoadRateLimitPerPlayerClamped() {
+        var c = serverConfig();
+        c.syncOnLoadRateLimitPerPlayer = 0;
+        c.validate();
+        assertEquals(1, c.syncOnLoadRateLimitPerPlayer);
+
+        c.syncOnLoadRateLimitPerPlayer = 9999;
+        c.validate();
+        assertEquals(1000, c.syncOnLoadRateLimitPerPlayer);
+    }
+
+    @Test
+    void syncOnLoadConcurrencyLimitPerPlayerClamped() {
+        var c = serverConfig();
+        c.syncOnLoadConcurrencyLimitPerPlayer = 0;
+        c.validate();
+        assertEquals(1, c.syncOnLoadConcurrencyLimitPerPlayer);
+
+        c.syncOnLoadConcurrencyLimitPerPlayer = 9999;
+        c.validate();
+        assertEquals(1000, c.syncOnLoadConcurrencyLimitPerPlayer);
+    }
+
+    @Test
+    void generationRateLimitPerPlayerClamped() {
+        var c = serverConfig();
+        c.generationRateLimitPerPlayer = 0;
+        c.validate();
+        assertEquals(1, c.generationRateLimitPerPlayer);
+
+        c.generationRateLimitPerPlayer = 9999;
+        c.validate();
+        assertEquals(1000, c.generationRateLimitPerPlayer);
+    }
+
+    @Test
+    void generationConcurrencyLimitPerPlayerClamped() {
+        var c = serverConfig();
+        c.generationConcurrencyLimitPerPlayer = 0;
+        c.validate();
+        assertEquals(1, c.generationConcurrencyLimitPerPlayer);
+
+        c.generationConcurrencyLimitPerPlayer = 9999;
+        c.validate();
+        assertEquals(1000, c.generationConcurrencyLimitPerPlayer);
+    }
+
     // --- LSSClientConfig ---
 
     private LSSClientConfig clientConfig() {
@@ -198,15 +174,4 @@ class ConfigValidationTest {
         assertEquals(512, c.lodDistanceChunks);
     }
 
-    @Test
-    void clientResyncBatchSizeClamped() {
-        var c = clientConfig();
-        c.resyncBatchSize = 0;
-        c.validate();
-        assertEquals(1, c.resyncBatchSize);
-
-        c.resyncBatchSize = 999;
-        c.validate();
-        assertEquals(256, c.resyncBatchSize);
-    }
 }

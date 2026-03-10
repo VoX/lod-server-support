@@ -13,10 +13,23 @@ import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.regex.Pattern;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class ColumnCacheStore {
-    private static final int FORMAT_VERSION = 1;
+    private static final Pattern SANITIZE_PATTERN = Pattern.compile("[^a-zA-Z0-9._-]");
+    private static final int FORMAT_VERSION = 3;
+    private static final int MAX_CACHE_ENTRIES = 2_000_000;
     private static final Path CACHE_DIR = FabricLoader.getInstance().getConfigDir().resolve("lss").resolve("cache");
+    // Daemon thread — saves use atomic rename so JVM shutdown mid-write won't corrupt,
+    // but the save may be lost. Acceptable for a rebuildable client cache.
+    private static final ExecutorService IO_EXECUTOR = Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(r, "LSS-CacheIO");
+        t.setDaemon(true);
+        return t;
+    });
 
     public static Long2LongOpenHashMap load(String serverAddress, ResourceKey<Level> dimension) {
         var map = new Long2LongOpenHashMap();
@@ -26,26 +39,45 @@ public class ColumnCacheStore {
 
         try (var in = new DataInputStream(Files.newInputStream(file))) {
             int version = in.readInt();
-            if (version != FORMAT_VERSION) {
+            if (version != FORMAT_VERSION && version != 2 && version != 1) {
                 LSSLogger.warn("Column cache " + file + " has unsupported version " + version + ", discarding");
                 return map;
             }
             int count = in.readInt();
-            if (count < 0 || count > 2_000_000) {
+            if (count < 0 || count > MAX_CACHE_ENTRIES) {
                 LSSLogger.warn("Column cache " + file + " has invalid entry count " + count + ", discarding");
                 return map;
             }
             map.ensureCapacity(count);
             for (int i = 0; i < count; i++) {
                 long pos = in.readLong();
-                long timestamp = in.readLong();
-                map.put(pos, timestamp);
+                long value = in.readLong();
+                if (version == 2) {
+                    // v2: encoded as (timestamp << 8 | level) — strip level bits
+                    map.put(pos, value >> 8);
+                } else {
+                    // v1 and v3: raw timestamp
+                    map.put(pos, value);
+                }
             }
-            LSSLogger.info("Loaded " + count + " cached column entries for " + dimensionKey(dimension));
+            String migration = version < FORMAT_VERSION ? " (migrated from v" + version + ")" : "";
+            LSSLogger.info("Loaded " + count + " cached column entries for " + dimensionKey(dimension) + migration);
         } catch (IOException e) {
             LSSLogger.warn("Failed to load column cache from " + file, e);
         }
         return map;
+    }
+
+    public static CompletableFuture<Long2LongOpenHashMap> loadAsync(String serverAddress, ResourceKey<Level> dimension) {
+        return CompletableFuture.supplyAsync(() -> load(serverAddress, dimension), IO_EXECUTOR);
+    }
+
+    public static void saveAsync(String serverAddress, ResourceKey<Level> dimension, Long2LongOpenHashMap columns) {
+        if (columns.isEmpty()) return;
+        // Defensive copy so the caller can mutate the original freely
+        var copy = new Long2LongOpenHashMap(columns);
+        copy.defaultReturnValue(-1L);
+        IO_EXECUTOR.execute(() -> save(serverAddress, dimension, copy));
     }
 
     public static void save(String serverAddress, ResourceKey<Level> dimension, Long2LongOpenHashMap columns) {
@@ -60,14 +92,16 @@ public class ColumnCacheStore {
                 out.writeInt(columns.size());
                 for (var entry : columns.long2LongEntrySet()) {
                     out.writeLong(entry.getLongKey());
-                    out.writeLong(entry.getLongValue());
+                    out.writeLong(entry.getLongValue()); // raw timestamp
                 }
             }
             Files.move(tmpFile, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
             LSSLogger.info("Saved " + columns.size() + " cached column entries for " + dimensionKey(dimension));
         } catch (IOException e) {
             LSSLogger.warn("Failed to save column cache to " + file, e);
-            try { Files.deleteIfExists(tmpFile); } catch (IOException ignored) {}
+            try { Files.deleteIfExists(tmpFile); } catch (IOException e2) {
+                LSSLogger.warn("Failed to clean up temporary cache file " + tmpFile, e2);
+            }
         }
     }
 
@@ -91,6 +125,7 @@ public class ColumnCacheStore {
 
         try (DirectoryStream<Path> servers = Files.newDirectoryStream(CACHE_DIR)) {
             for (Path serverDir : servers) {
+                if (!Files.isDirectory(serverDir)) continue;
                 try (DirectoryStream<Path> files = Files.newDirectoryStream(serverDir)) {
                     for (Path file : files) {
                         Files.deleteIfExists(file);
@@ -105,7 +140,7 @@ public class ColumnCacheStore {
     }
 
     private static Path getServerDir(String serverAddress) {
-        return CACHE_DIR.resolve(sanitize(serverAddress));
+        return CACHE_DIR.resolve(sanitizeForFilePath(serverAddress));
     }
 
     private static Path getCacheFile(String serverAddress, ResourceKey<Level> dimension) {
@@ -113,10 +148,10 @@ public class ColumnCacheStore {
     }
 
     private static String dimensionKey(ResourceKey<Level> dimension) {
-        return sanitize(dimension.identifier().toString());
+        return sanitizeForFilePath(dimension.identifier().toString());
     }
 
-    private static String sanitize(String name) {
-        return name.replaceAll("[^a-zA-Z0-9._-]", "_");
+    static String sanitizeForFilePath(String name) {
+        return SANITIZE_PATTERN.matcher(name).replaceAll("_");
     }
 }

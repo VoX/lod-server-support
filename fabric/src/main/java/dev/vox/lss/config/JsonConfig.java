@@ -34,10 +34,6 @@ public abstract class JsonConfig {
         return FabricLoader.getInstance().getConfigDir().resolve(getFileName());
     }
 
-    protected static int clamp(int value, int min, int max) {
-        return Math.max(min, Math.min(max, value));
-    }
-
     protected static <T extends JsonConfig> T load(Class<T> type, String fileName) {
         Path path = FabricLoader.getInstance().getConfigDir().resolve(fileName);
         boolean fileExists = Files.isRegularFile(path);

@@ -46,12 +46,15 @@ public class LSSClientGameTests implements FabricClientGameTest {
                 throw new AssertionError("Effective LOD distance should be positive");
             }
 
-            // Wait for scanning + server processing + response
-            context.waitTicks(200);
+            // Wait for scanning + server processing + response.
+            // CI runners (2 vCPU, llvmpipe software rendering) are heavily starved —
+            // the server can fall 2+ seconds behind during spawn prep, so we need
+            // generous tick budgets for generation + voxelization + send cycles.
+            context.waitTicks(400);
 
-            // Test 2: Client receives sections
-            if (LSSClientNetworking.getSectionsReceived() <= 0) {
-                throw new AssertionError("Client should have received at least one section");
+            // Test 2: Client receives columns
+            if (LSSClientNetworking.getColumnsReceived() <= 0) {
+                throw new AssertionError("Client should have received at least one column");
             }
             if (LSSClientNetworking.getBytesReceived() <= 0) {
                 throw new AssertionError("Client should have received bytes");
@@ -65,48 +68,41 @@ public class LSSClientGameTests implements FabricClientGameTest {
             if (manager.getReceivedColumnCount() <= 0) {
                 throw new AssertionError("Should have received column timestamps");
             }
-            if (manager.getTotalBatchesSent() <= 0) {
-                throw new AssertionError("Should have sent at least one batch");
+            if (manager.getTotalSendCycles() <= 0) {
+                throw new AssertionError("Should have sent at least one send cycle");
             }
 
             // C3: Spiral scan made progress
-            if (manager.getTotalBatchesSent() <= 0) {
-                throw new AssertionError("Should have sent at least one batch");
-            }
             if (manager.getTotalPositionsRequested() <= 0) {
                 throw new AssertionError("Should have requested at least one position");
             }
 
-            // C4: Batch lifecycle completion
-            if (manager.getActiveBatchCount() >= manager.getTotalBatchesSent()) {
-                throw new AssertionError("Some batches should have completed: active="
-                        + manager.getActiveBatchCount() + " total=" + manager.getTotalBatchesSent());
+            // C4: Request/response lifecycle (v9 — individual responses, no batch completion)
+            long totalResponses = manager.getTotalColumnsReceived()
+                    + manager.getTotalUpToDate()
+                    + manager.getTotalNotGenerated();
+            if (totalResponses <= 0) {
+                throw new AssertionError("Should have received at least one response: "
+                        + "columns=" + manager.getTotalColumnsReceived()
+                        + " upToDate=" + manager.getTotalUpToDate()
+                        + " notGenerated=" + manager.getTotalNotGenerated());
             }
 
-            // C5: Timestamp tracking (already asserted via getReceivedColumnCount above)
-            if (manager.getReceivedColumnCount() <= 0) {
-                throw new AssertionError("Should have received column timestamps");
-            }
-
-            // C6: Bandwidth is bounded
-            long maxExpectedBytes = (long) LSSServerConfig.CONFIG.maxBytesPerSecondPerPlayer * 15;
+            // C5: Bandwidth is bounded
+            long maxExpectedBytes = (long) LSSServerConfig.CONFIG.bytesPerSecondLimitPerPlayer * 15;
             if (LSSClientNetworking.getBytesReceived() > maxExpectedBytes) {
                 throw new AssertionError("Bytes received exceeds bandwidth budget: "
                         + LSSClientNetworking.getBytesReceived() + " > " + maxExpectedBytes);
             }
 
-            // C7: No pending column leaks — wait for in-flight to settle
-            context.waitTicks(100); // 300 total ticks
+            // C6: Columns received after settling
+            context.waitTicks(200); // 600 total ticks
 
-            if (manager.getPendingColumnCount() > manager.getTotalPositionsRequested() / 2) {
-                throw new AssertionError("Too many pending columns after settling: "
-                        + manager.getPendingColumnCount() + " of " + manager.getTotalPositionsRequested());
+            if (manager.getTotalColumnsReceived() <= 0) {
+                throw new AssertionError("Should have received columns after settling: "
+                        + manager.getTotalColumnsReceived());
             }
 
-            // C8: Generation budget propagated
-            if (LSSServerConfig.CONFIG.enableChunkGeneration && manager.getGenerationBudget() <= 0) {
-                throw new AssertionError("Generation budget should be set when generation is enabled");
-            }
 
         }
     }

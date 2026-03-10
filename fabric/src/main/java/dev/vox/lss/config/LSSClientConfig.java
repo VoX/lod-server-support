@@ -7,7 +7,7 @@ public class LSSClientConfig extends JsonConfig {
 
     public boolean receiveServerLods = true;
     public int lodDistanceChunks = 0;
-    public int resyncBatchSize = 32;
+    public boolean offThreadSectionProcessing = true;
 
     @Override
     protected String getFileName() {
@@ -16,9 +16,6 @@ public class LSSClientConfig extends JsonConfig {
 
     @Override
     protected void validate() {
-        lodDistanceChunks = Math.max(lodDistanceChunks, 0); // 0 = use server default
-        lodDistanceChunks = Math.min(lodDistanceChunks, 512);
-        resyncBatchSize = Math.max(resyncBatchSize, 1);
-        resyncBatchSize = Math.min(resyncBatchSize, 256);
+        lodDistanceChunks = Math.clamp(lodDistanceChunks, 0, 512); // 0 = use server default
     }
 }

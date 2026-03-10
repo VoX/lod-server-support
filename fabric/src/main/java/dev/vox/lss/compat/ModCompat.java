@@ -1,7 +1,8 @@
 package dev.vox.lss.compat;
 
-import dev.vox.lss.common.LSSLogger;
 import net.fabricmc.loader.api.FabricLoader;
+
+import java.util.OptionalInt;
 
 /**
  * Handles optional mod integrations. Checks for supported LOD mods at startup
@@ -11,9 +12,16 @@ import net.fabricmc.loader.api.FabricLoader;
  * when the target mod is not present.
  */
 public final class ModCompat {
+    private static boolean voxyLoaded;
+
     public static void init() {
         if (FabricLoader.getInstance().isModLoaded("voxy")) {
-            VoxyCompat.init();
+            voxyLoaded = VoxyCompat.init();
         }
+    }
+
+    public static OptionalInt getVoxyViewDistanceChunks() {
+        if (!voxyLoaded) return OptionalInt.empty();
+        return VoxyCompat.getViewDistanceChunks();
     }
 }

@@ -32,7 +32,7 @@ public class LSSPaperPlugin extends JavaPlugin implements PluginMessageListener,
         getServer().getMessenger().registerIncomingPluginChannel(this, LSSConstants.CHANNEL_HANDSHAKE, this);
         getServer().getMessenger().registerIncomingPluginChannel(this, LSSConstants.CHANNEL_CHUNK_REQUEST, this);
         getServer().getMessenger().registerIncomingPluginChannel(this, LSSConstants.CHANNEL_CANCEL_REQUEST, this);
-
+        getServer().getMessenger().registerIncomingPluginChannel(this, LSSConstants.CHANNEL_BANDWIDTH_UPDATE, this);
         // Register event listener for player quit
         getServer().getPluginManager().registerEvents(this, this);
 
@@ -40,6 +40,10 @@ public class LSSPaperPlugin extends JavaPlugin implements PluginMessageListener,
         var nmsServer = ((CraftServer) getServer()).getServer();
         this.requestService = new PaperRequestProcessingService(nmsServer, this, this.lssConfig);
         LSSLogger.info("Starting LSS LOD request processing service");
+
+        // Register dirty chunk event listeners
+        var worldHandler = new PaperWorldHandler(this, this.requestService.getDirtyTracker());
+        worldHandler.registerUpdateListeners(this.lssConfig.updateEvents);
 
         // Register command
         var cmd = getCommand("lsslod");
@@ -81,14 +85,16 @@ public class LSSPaperPlugin extends JavaPlugin implements PluginMessageListener,
     public void onPluginMessageReceived(String channel, Player player, byte[] message) {
         var service = this.requestService;
         if (service == null) return;
+        if (message == null || message.length == 0) return;
 
         ServerPlayer nmsPlayer = ((CraftPlayer) player).getHandle();
 
         try {
             switch (channel) {
                 case LSSConstants.CHANNEL_HANDSHAKE -> handleHandshake(player, nmsPlayer, message);
-                case LSSConstants.CHANNEL_CHUNK_REQUEST -> handleChunkRequest(player, nmsPlayer, message);
+                case LSSConstants.CHANNEL_CHUNK_REQUEST -> handleBatchChunkRequest(nmsPlayer, message);
                 case LSSConstants.CHANNEL_CANCEL_REQUEST -> handleCancelRequest(nmsPlayer, message);
+                case LSSConstants.CHANNEL_BANDWIDTH_UPDATE -> handleBandwidthUpdate(nmsPlayer, message);
             }
         } catch (Exception e) {
             LSSLogger.error("Error handling plugin message on channel " + channel + " from " + player.getName(), e);
@@ -96,51 +102,69 @@ public class LSSPaperPlugin extends JavaPlugin implements PluginMessageListener,
     }
 
     private void handleHandshake(Player bukkitPlayer, ServerPlayer nmsPlayer, byte[] data) {
-        int protocolVersion = PaperPayloadHandler.decodeHandshakeProtocolVersion(data);
+        var handshake = PaperPayloadHandler.decodeHandshake(data);
+        if (handshake == null) return;
 
         LSSLogger.info("LSS handshake received from " + nmsPlayer.getName().getString()
-                + " (protocol v" + protocolVersion + ")");
+                + " (protocol v" + handshake.protocolVersion()
+                + ", capabilities=" + handshake.capabilities() + ")");
 
         boolean effectiveEnabled = this.lssConfig.enabled && this.requestService != null;
+
+        int serverCaps = LSSConstants.CAPABILITY_VOXEL_COLUMNS;
 
         PaperPayloadHandler.sendSessionConfig(bukkitPlayer,
                 LSSConstants.PROTOCOL_VERSION,
                 effectiveEnabled,
                 this.lssConfig.lodDistanceChunks,
-                this.lssConfig.maxRequestsPerBatch,
-                this.lssConfig.maxPendingRequestsPerPlayer,
-                this.lssConfig.enableChunkGeneration ? this.lssConfig.maxConcurrentGenerationsPerPlayer : 0,
-                this.lssConfig.generationDistanceChunks
-        );
+                serverCaps,
+                this.lssConfig.syncOnLoadRateLimitPerPlayer,
+                this.lssConfig.syncOnLoadConcurrencyLimitPerPlayer,
+                this.lssConfig.generationRateLimitPerPlayer,
+                this.lssConfig.generationConcurrencyLimitPerPlayer,
+                this.lssConfig.enableChunkGeneration,
+                this.lssConfig.bytesPerSecondLimitPerPlayer);
 
-        if (protocolVersion != LSSConstants.PROTOCOL_VERSION) {
+        if (handshake.protocolVersion() != LSSConstants.PROTOCOL_VERSION) {
             LSSLogger.warn("Player " + nmsPlayer.getName().getString()
-                    + " has incompatible LSS protocol version " + protocolVersion
+                    + " has incompatible LSS protocol version " + handshake.protocolVersion()
                     + " (server: " + LSSConstants.PROTOCOL_VERSION + "), skipping LOD distribution");
             return;
         }
 
         if (effectiveEnabled) {
-            this.requestService.registerPlayer(nmsPlayer);
+            this.requestService.registerPlayer(nmsPlayer, handshake.capabilities());
             LSSLogger.info("Player " + nmsPlayer.getName().getString()
-                    + " registered for LSS LOD request processing");
+                    + " registered for LSS LOD request processing"
+                    + (handshake.capabilities() != 0
+                            ? " (caps=" + handshake.capabilities() + ")" : ""));
         }
     }
 
-    private void handleChunkRequest(Player bukkitPlayer, ServerPlayer nmsPlayer, byte[] data) {
-        var decoded = PaperPayloadHandler.decodeChunkRequest(data);
+    private void handleBatchChunkRequest(ServerPlayer nmsPlayer, byte[] data) {
+        var decoded = PaperPayloadHandler.decodeBatchChunkRequest(data);
+        if (decoded == null) return;
         var service = this.requestService;
         if (service != null) {
-            service.handleRequestBatch(nmsPlayer, bukkitPlayer,
-                    decoded.batchId(), decoded.positions(), decoded.timestamps());
+            service.handleBatchRequest(nmsPlayer, decoded);
         }
     }
 
     private void handleCancelRequest(ServerPlayer nmsPlayer, byte[] data) {
-        int[] batchIds = PaperPayloadHandler.decodeCancelRequest(data);
+        var decoded = PaperPayloadHandler.decodeCancelRequest(data);
+        if (decoded == null) return;
         var service = this.requestService;
         if (service != null) {
-            service.handleCancelRequest(nmsPlayer, batchIds);
+            service.handleCancel(nmsPlayer, decoded.requestId());
+        }
+    }
+
+    private void handleBandwidthUpdate(ServerPlayer nmsPlayer, byte[] data) {
+        var decoded = PaperPayloadHandler.decodeBandwidthUpdate(data);
+        if (decoded == null) return;
+        var service = this.requestService;
+        if (service != null) {
+            service.handleBandwidthUpdate(nmsPlayer, decoded.desiredRate());
         }
     }
 

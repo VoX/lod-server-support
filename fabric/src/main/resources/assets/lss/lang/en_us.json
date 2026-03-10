@@ -1,0 +1,10 @@
+{
+  "lss.config.page": "General",
+  "lss.config.receive_server_lods": "Receive Server LODs",
+  "lss.config.receive_server_lods.tooltip": "Whether to receive LOD chunk data from the server. Disabling this stops all LOD networking.",
+  "lss.config.lod_distance": "LOD Distance",
+  "lss.config.lod_distance.tooltip": "Maximum LOD distance in chunks. Set to 0 to use the server's configured distance.",
+  "lss.config.lod_distance.server_default": "Server Default",
+  "lss.config.off_thread_processing": "Off-Thread Section Processing",
+  "lss.config.off_thread_processing.tooltip": "Process received LOD sections on a separate thread to reduce main thread load."
+}

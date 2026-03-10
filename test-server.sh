@@ -20,6 +20,7 @@ PAPER_MC_VERSION="1.21.11"
 # --- Download URLs ---
 FABRIC_SERVER_URL="https://meta.fabricmc.net/v2/versions/loader/${FABRIC_MC_VERSION}/${FABRIC_LOADER_VERSION}/${FABRIC_INSTALLER_VERSION}/server/jar"
 FABRIC_API_URL="https://cdn.modrinth.com/data/P7dR8mSH/versions/gB6TkYEJ/fabric-api-0.140.2%2B1.21.11.jar"
+C2ME_URL="https://cdn.modrinth.com/data/VSNURh3q/versions/olrVZpJd/c2me-fabric-mc1.21.11-0.3.6.0.0.jar"
 
 # --- Settings ---
 SERVER_RAM="${SERVER_RAM:-2G}"
@@ -90,8 +91,8 @@ write_server_properties() {
         cat > "$dir/server.properties" << EOF
 online-mode=false
 spawn-protection=0
-view-distance=10
-simulation-distance=10
+view-distance=4
+simulation-distance=4
 max-players=5
 level-name=world
 enable-command-block=true
@@ -99,6 +100,46 @@ server-port=$port
 motd=$motd
 EOF
     fi
+}
+
+write_ops_json() {
+    local dir="$1"
+    if [ ! -f "$dir/ops.json" ]; then
+        echo "  Creating ops.json"
+        cat > "$dir/ops.json" << 'EOF'
+[
+  {
+    "uuid": "270f8c92-35c1-35d6-9b80-ca694ebb4367",
+    "name": "Voximus_Maximus",
+    "level": 4,
+    "bypassesPlayerLimit": true
+  }
+]
+EOF
+    fi
+}
+
+write_lss_config() {
+    local dir="$1"
+    echo "  Writing lss-server-config.json"
+    mkdir -p "$dir"
+    cat > "$dir/lss-server-config.json" << 'EOF'
+{
+  "enabled": true,
+  "lodDistanceChunks": 64,
+  "bytesPerSecondLimitPerPlayer": 8388608,
+  "diskReaderThreads": 8,
+  "sendQueueLimitPerPlayer": 9600,
+  "bytesPerSecondLimitGlobal": 41943040,
+  "syncOnLoadRateLimitPerPlayer": 1000,
+  "syncOnLoadConcurrencyLimitPerPlayer": 400,
+  "generationRateLimitPerPlayer": 100,
+  "generationConcurrencyLimitPerPlayer": 40,
+  "enableChunkGeneration": true,
+  "generationConcurrencyLimitGlobal": 40,
+  "generationTimeoutSeconds": 60
+}
+EOF
 }
 
 # ============================================================
@@ -117,9 +158,12 @@ setup_fabric() {
     fi
 
     write_server_properties "$FABRIC_DIR" 25565 "LSS Test Server (Fabric)"
+    write_ops_json "$FABRIC_DIR"
+    write_lss_config "$FABRIC_DIR/config"
 
     echo "=== Installing Fabric mods ==="
     download "$FABRIC_API_URL" "$mods_dir/fabric-api.jar"
+    download "$C2ME_URL" "$mods_dir/c2me.jar"
 
     echo "  Installing LSS..."
     local lss_jar
@@ -150,6 +194,8 @@ setup_paper() {
     fi
 
     write_server_properties "$PAPER_DIR" 25566 "LSS Test Server (Paper)"
+    write_ops_json "$PAPER_DIR"
+    write_lss_config "$PAPER_DIR/plugins/LodServerSupport"
 
     echo "=== Installing Paper plugins ==="
     echo "  Installing LSS..."

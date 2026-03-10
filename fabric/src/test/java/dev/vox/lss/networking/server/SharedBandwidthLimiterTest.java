@@ -77,10 +77,13 @@ class SharedBandwidthLimiterTest {
     }
 
     @Test
-    void diagnosticsByteSentTracking() {
+    void totalBytesSentTracking() {
         var limiter = new SharedBandwidthLimiter(10_000_000);
+        assertEquals(0, limiter.getTotalBytesSent(), "Total should be 0 initially");
         limiter.recordSend(1000);
         limiter.recordSend(2000);
-        assertEquals(3000, limiter.getTotalBytesSentThisSecond());
+        assertEquals(3000, limiter.getTotalBytesSent(), "Total should accumulate sends");
+        limiter.recordSend(500);
+        assertEquals(3500, limiter.getTotalBytesSent(), "Total should keep accumulating");
     }
 }

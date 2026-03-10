@@ -1,15 +1,17 @@
 package dev.vox.lss.paper;
 
 import dev.vox.lss.common.LSSConstants;
+import dev.vox.lss.common.LSSLogger;
 import io.netty.buffer.Unpooled;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket;
 import net.minecraft.network.protocol.common.custom.DiscardedPayload;
 import net.minecraft.resources.Identifier;
-import net.minecraft.resources.ResourceKey;
-import net.minecraft.world.level.Level;
 import org.bukkit.craftbukkit.entity.CraftPlayer;
 import org.bukkit.entity.Player;
+
+import java.util.function.Consumer;
+import java.util.function.Function;
 
 /**
  * Encodes S2C payloads and decodes C2S payloads using the same wire format as Fabric.
@@ -25,85 +27,177 @@ public final class PaperPayloadHandler {
 
     // Cached Identifier instances for constant channel strings
     private static final Identifier ID_SESSION_CONFIG = Identifier.parse(LSSConstants.CHANNEL_SESSION_CONFIG);
-    private static final Identifier ID_CHUNK_SECTION = Identifier.parse(LSSConstants.CHANNEL_CHUNK_SECTION);
-    private static final Identifier ID_COLUMN_UP_TO_DATE = Identifier.parse(LSSConstants.CHANNEL_COLUMN_UP_TO_DATE);
-    private static final Identifier ID_REQUEST_COMPLETE = Identifier.parse(LSSConstants.CHANNEL_REQUEST_COMPLETE);
     private static final Identifier ID_DIRTY_COLUMNS = Identifier.parse(LSSConstants.CHANNEL_DIRTY_COLUMNS);
+    static final Identifier ID_VOXEL_COLUMN = Identifier.parse(LSSConstants.CHANNEL_VOXEL_COLUMN);
+    private static final Identifier ID_BATCH_RESPONSE = Identifier.parse(LSSConstants.CHANNEL_BATCH_RESPONSE);
 
     // ---- S2C Encoding ----
 
     public static void sendSessionConfig(Player player,
                                           int protocolVersion, boolean enabled,
-                                          int lodDistanceChunks, int maxRequestsPerBatch,
-                                          int maxPendingRequests, int maxGenerationRequestsPerBatch,
-                                          int generationDistanceChunks) {
-        var buf = new FriendlyByteBuf(Unpooled.buffer());
-        try {
+                                          int lodDistanceChunks, int serverCapabilities,
+                                          int syncOnLoadRateLimitPerPlayer, int syncOnLoadConcurrencyLimitPerPlayer,
+                                          int generationRateLimitPerPlayer, int generationConcurrencyLimitPerPlayer,
+                                          boolean generationEnabled, long playerBandwidthLimit) {
+        sendEncoded(player, ID_SESSION_CONFIG, buf -> {
             buf.writeVarInt(protocolVersion);
             buf.writeBoolean(enabled);
             buf.writeVarInt(lodDistanceChunks);
-            buf.writeVarInt(maxRequestsPerBatch);
-            buf.writeVarInt(maxPendingRequests);
-            buf.writeVarInt(maxGenerationRequestsPerBatch);
-            buf.writeVarInt(generationDistanceChunks);
-            sendNmsPayload(player, ID_SESSION_CONFIG, buf);
-        } finally {
-            buf.release();
-        }
+            buf.writeVarInt(serverCapabilities);
+            buf.writeVarInt(syncOnLoadRateLimitPerPlayer);
+            buf.writeVarInt(syncOnLoadConcurrencyLimitPerPlayer);
+            buf.writeVarInt(generationRateLimitPerPlayer);
+            buf.writeVarInt(generationConcurrencyLimitPerPlayer);
+            buf.writeBoolean(generationEnabled);
+            buf.writeVarLong(playerBandwidthLimit);
+        });
     }
 
-    public static byte[] encodeChunkSection(int chunkX, int sectionY, int chunkZ,
-                                             ResourceKey<Level> dimension,
-                                             byte[] sectionData, byte lightFlags,
-                                             byte[] blockLight, byte[] skyLight,
-                                             byte uniformBlockLight, byte uniformSkyLight,
-                                             long columnTimestamp) {
-        var buf = new FriendlyByteBuf(Unpooled.buffer());
-        try {
+    public static void sendBatchResponse(Player player, byte[] responseTypes, int[] requestIds, int count) {
+        sendEncoded(player, ID_BATCH_RESPONSE, buf -> {
+            buf.writeVarInt(count);
+            for (int i = 0; i < count; i++) {
+                buf.writeByte(responseTypes[i]);
+                buf.writeVarInt(requestIds[i]);
+            }
+        });
+    }
+
+    /**
+     * Returns the cached {@link Identifier} for a channel string constant.
+     * Used by callers that need to send pre-encoded payloads via {@link #sendRawNmsPayload}.
+     */
+    public static Identifier channelId(String channel) {
+        return switch (channel) {
+            case LSSConstants.CHANNEL_SESSION_CONFIG -> ID_SESSION_CONFIG;
+            case LSSConstants.CHANNEL_DIRTY_COLUMNS -> ID_DIRTY_COLUMNS;
+            case LSSConstants.CHANNEL_VOXEL_COLUMN -> ID_VOXEL_COLUMN;
+            case LSSConstants.CHANNEL_BATCH_RESPONSE -> ID_BATCH_RESPONSE;
+            default -> Identifier.parse(channel);
+        };
+    }
+
+    /**
+     * Encode a column payload with serialized section bytes.
+     * Writes the per-request header, then writes sectionBytes as a length-prefixed byte array.
+     */
+    public static byte[] encodeVoxelColumnPreEncoded(int requestId, int chunkX, int chunkZ,
+                                                      String dimensionStr, long columnTimestamp,
+                                                      byte[] sectionBytes) {
+        return encodeToBytes(buf -> {
+            buf.writeVarInt(requestId);
             buf.writeInt(chunkX);
-            buf.writeInt(sectionY);
             buf.writeInt(chunkZ);
-            buf.writeUtf(dimension.identifier().toString());
-            buf.writeByteArray(sectionData);
-            buf.writeByte(lightFlags);
-            if ((lightFlags & 0x01) != 0 && blockLight != null) {
-                buf.writeBytes(blockLight);
-            }
-            if ((lightFlags & 0x04) != 0) {
-                buf.writeByte(uniformBlockLight);
-            }
-            if ((lightFlags & 0x02) != 0 && skyLight != null) {
-                buf.writeBytes(skyLight);
-            }
-            if ((lightFlags & 0x08) != 0) {
-                buf.writeByte(uniformSkyLight);
+            int ordinal = LSSConstants.dimensionStringToOrdinal(dimensionStr);
+            buf.writeVarInt(ordinal);
+            if (ordinal == LSSConstants.DIM_CUSTOM) {
+                buf.writeUtf(dimensionStr);
             }
             buf.writeLong(columnTimestamp);
-            return extractBytes(buf);
-        } finally {
-            buf.release();
-        }
+            buf.writeByteArray(sectionBytes);
+        });
     }
 
-    public static void sendRequestComplete(Player player, int batchId, int status) {
-        var buf = new FriendlyByteBuf(Unpooled.buffer());
-        try {
-            buf.writeVarInt(batchId);
-            buf.writeVarInt(status);
-            sendNmsPayload(player, ID_REQUEST_COMPLETE, buf);
-        } finally {
-            buf.release();
-        }
+    /**
+     * Encode a DirtyColumnsS2CPayload. Wire format: VarInt length + long[] positions.
+     * Identical to Fabric's DirtyColumnsS2CPayload.CODEC.
+     */
+    public static byte[] encodeDirtyColumns(long[] dirtyPositions) {
+        int len = Math.min(dirtyPositions.length, LSSConstants.MAX_DIRTY_COLUMN_POSITIONS);
+        return encodeToBytes(buf -> {
+            buf.writeVarInt(len);
+            for (int i = 0; i < len; i++) {
+                buf.writeLong(dirtyPositions[i]);
+            }
+        });
     }
 
     public static void sendDirtyColumns(Player player, long[] dirtyPositions) {
+        byte[] data = encodeDirtyColumns(dirtyPositions);
+        sendRawNmsPayload(player, ID_DIRTY_COLUMNS, data);
+    }
+
+    // ---- C2S Decoding ----
+
+    public record DecodedHandshake(int protocolVersion, int capabilities) {}
+
+    public static DecodedHandshake decodeHandshake(byte[] data) {
+        if (data == null || data.length == 0) {
+            LSSLogger.warn("Received empty handshake payload");
+            return null;
+        }
+        return withReadBuffer(data, buf -> {
+            int version = buf.readVarInt();
+            int caps = buf.isReadable() ? buf.readVarInt() : 0;
+            return new DecodedHandshake(version, caps);
+        });
+    }
+
+    public record DecodedBatchChunkRequest(int[] requestIds, long[] packedPositions, long[] clientTimestamps, int count) {}
+
+    public static DecodedBatchChunkRequest decodeBatchChunkRequest(byte[] data) {
+        if (data == null || data.length == 0) {
+            LSSLogger.warn("Received empty batch chunk request payload");
+            return null;
+        }
+        return withReadBuffer(data, buf -> {
+            int count = buf.readVarInt();
+            if (count < 0 || count > LSSConstants.MAX_BATCH_CHUNK_REQUESTS) {
+                LSSLogger.warn("Batch chunk request count out of range: " + count);
+                return null;
+            }
+            int[] requestIds = new int[count];
+            long[] packedPositions = new long[count];
+            long[] clientTimestamps = new long[count];
+            for (int i = 0; i < count; i++) {
+                requestIds[i] = buf.readVarInt();
+                packedPositions[i] = buf.readLong();
+                clientTimestamps[i] = buf.readLong();
+            }
+            return new DecodedBatchChunkRequest(requestIds, packedPositions, clientTimestamps, count);
+        });
+    }
+
+    public record DecodedCancelRequest(int requestId) {}
+
+    public static DecodedCancelRequest decodeCancelRequest(byte[] data) {
+        if (data == null || data.length == 0) return null;
+        return withReadBuffer(data, buf -> new DecodedCancelRequest(buf.readVarInt()));
+    }
+
+    public record DecodedBandwidthUpdate(long desiredRate) {}
+
+    public static DecodedBandwidthUpdate decodeBandwidthUpdate(byte[] data) {
+        if (data == null || data.length == 0) return null;
+        return withReadBuffer(data, buf -> new DecodedBandwidthUpdate(buf.readVarLong()));
+    }
+
+    // ---- Helpers ----
+
+    private static <T> T withReadBuffer(byte[] data, Function<FriendlyByteBuf, T> fn) {
+        var buf = new FriendlyByteBuf(Unpooled.wrappedBuffer(data));
+        try {
+            return fn.apply(buf);
+        } finally {
+            buf.release();
+        }
+    }
+
+    private static void sendEncoded(Player player, Identifier channelId, Consumer<FriendlyByteBuf> writer) {
+        byte[] bytes = encodeToBytes(writer);
+        var nmsPlayer = ((CraftPlayer) player).getHandle();
+        if (nmsPlayer.connection == null) return;
+        nmsPlayer.connection.send(new ClientboundCustomPayloadPacket(
+                new DiscardedPayload(channelId, bytes)));
+    }
+
+    private static byte[] encodeToBytes(Consumer<FriendlyByteBuf> writer) {
         var buf = new FriendlyByteBuf(Unpooled.buffer());
         try {
-            buf.writeVarInt(dirtyPositions.length);
-            for (long pos : dirtyPositions) {
-                buf.writeLong(pos);
-            }
-            sendNmsPayload(player, ID_DIRTY_COLUMNS, buf);
+            writer.accept(buf);
+            byte[] bytes = new byte[buf.readableBytes()];
+            buf.readBytes(bytes);
+            return bytes;
         } finally {
             buf.release();
         }
@@ -115,94 +209,8 @@ public final class PaperPayloadHandler {
      */
     public static void sendRawNmsPayload(Player player, Identifier channelId, byte[] data) {
         var nmsPlayer = ((CraftPlayer) player).getHandle();
+        if (nmsPlayer.connection == null) return;
         nmsPlayer.connection.send(new ClientboundCustomPayloadPacket(
                 new DiscardedPayload(channelId, data)));
-    }
-
-    /**
-     * Returns the cached {@link Identifier} for a channel string constant.
-     * Used by callers that need to send pre-encoded payloads via {@link #sendRawNmsPayload}.
-     */
-    public static Identifier channelId(String channel) {
-        return switch (channel) {
-            case LSSConstants.CHANNEL_SESSION_CONFIG -> ID_SESSION_CONFIG;
-            case LSSConstants.CHANNEL_CHUNK_SECTION -> ID_CHUNK_SECTION;
-            case LSSConstants.CHANNEL_COLUMN_UP_TO_DATE -> ID_COLUMN_UP_TO_DATE;
-            case LSSConstants.CHANNEL_REQUEST_COMPLETE -> ID_REQUEST_COMPLETE;
-            case LSSConstants.CHANNEL_DIRTY_COLUMNS -> ID_DIRTY_COLUMNS;
-            default -> Identifier.parse(channel);
-        };
-    }
-
-    // ---- C2S Decoding ----
-
-    public static int decodeHandshakeProtocolVersion(byte[] data) {
-        var buf = new FriendlyByteBuf(Unpooled.wrappedBuffer(data));
-        try {
-            return buf.readVarInt();
-        } finally {
-            buf.release();
-        }
-    }
-
-    public record DecodedChunkRequest(int batchId, long[] positions, long[] timestamps) {}
-
-    public static DecodedChunkRequest decodeChunkRequest(byte[] data) {
-        var buf = new FriendlyByteBuf(Unpooled.wrappedBuffer(data));
-        try {
-            int batchId = buf.readVarInt();
-            int rawLen = Math.max(buf.readVarInt(), 0);
-            int len = Math.min(rawLen, LSSConstants.MAX_CHUNK_REQUEST_POSITIONS);
-            long[] positions = new long[len];
-            for (int i = 0; i < rawLen; i++) {
-                long pos = buf.readLong();
-                if (i < len) positions[i] = pos;
-            }
-            long[] timestamps = new long[len];
-            if (buf.isReadable()) {
-                for (int i = 0; i < rawLen; i++) {
-                    long ts = buf.readLong();
-                    if (i < len) timestamps[i] = ts;
-                }
-            }
-            return new DecodedChunkRequest(batchId, positions, timestamps);
-        } finally {
-            buf.release();
-        }
-    }
-
-    public static int[] decodeCancelRequest(byte[] data) {
-        var buf = new FriendlyByteBuf(Unpooled.wrappedBuffer(data));
-        try {
-            int rawLen = Math.max(buf.readVarInt(), 0);
-            int len = Math.min(rawLen, LSSConstants.MAX_CANCEL_BATCH_IDS);
-            int[] batchIds = new int[len];
-            for (int i = 0; i < rawLen; i++) {
-                int id = buf.readVarInt();
-                if (i < len) batchIds[i] = id;
-            }
-            return batchIds;
-        } finally {
-            buf.release();
-        }
-    }
-
-    // ---- Helpers ----
-
-    /**
-     * Sends a custom payload packet directly via NMS, bypassing Bukkit's
-     * {@code sendPluginMessage()} channel registration check.
-     */
-    private static void sendNmsPayload(Player player, Identifier channelId, FriendlyByteBuf buf) {
-        byte[] bytes = extractBytes(buf);
-        var nmsPlayer = ((CraftPlayer) player).getHandle();
-        nmsPlayer.connection.send(new ClientboundCustomPayloadPacket(
-                new DiscardedPayload(channelId, bytes)));
-    }
-
-    private static byte[] extractBytes(FriendlyByteBuf buf) {
-        byte[] bytes = new byte[buf.readableBytes()];
-        buf.readBytes(bytes);
-        return bytes;
     }
 }

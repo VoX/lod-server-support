@@ -1,22 +1,27 @@
 package dev.vox.lss.networking.client;
 
+import dev.vox.lss.common.LSSConstants;
 import dev.vox.lss.common.LSSLogger;
-import dev.vox.lss.common.PositionUtil;
-import dev.vox.lss.config.LSSClientConfig;
+import dev.vox.lss.networking.payloads.BatchChunkRequestC2SPayload;
 import dev.vox.lss.networking.payloads.CancelRequestC2SPayload;
-import dev.vox.lss.networking.payloads.ChunkRequestC2SPayload;
-import dev.vox.lss.networking.payloads.RequestCompleteS2CPayload;
 import dev.vox.lss.networking.payloads.SessionConfigS2CPayload;
-import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
-import it.unimi.dsi.fastutil.ints.IntArrayList;
 import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.level.Level;
 
+import java.util.concurrent.CompletableFuture;
+
 public class LodRequestManager {
+    /** Backpressure threshold: halt sending when column processing queue exceeds this fraction. */
+    private static final int BACKPRESSURE_NUMERATOR = 3;
+    private static final int BACKPRESSURE_DENOMINATOR = 4;
+    private static final int MIN_SEND_PER_TICK = 16;
+    private static final long TIMEOUT_NANOS = 10_000L * LSSConstants.NANOS_PER_MS;
+
     private SessionConfigS2CPayload sessionConfig;
     private String serverAddress;
 
@@ -24,327 +29,359 @@ public class LodRequestManager {
     private int lastChunkZ;
     private ResourceKey<Level> lastDimension;
 
-    // Key: packed position, Value: server timestamp (>0 = received with data, 0 = empty/no data)
-    // defaultReturnValue(-1L) → -1 means "not in map / never requested"
+    // Key: packed position, Value: raw column timestamp
+    // defaultReturnValue(-1L) -> -1 means "not in map / never requested"
     private final Long2LongOpenHashMap columnTimestamps = new Long2LongOpenHashMap();
     {
         columnTimestamps.defaultReturnValue(-1L);
     }
 
-    private final LongOpenHashSet pendingColumns = new LongOpenHashSet();
-    private final Int2ObjectOpenHashMap<TrackedBatch> activeBatches = new Int2ObjectOpenHashMap<>();
-    private int nextBatchId = 0;
+    // In-flight request tracking (position ↔ requestId ↔ sendTime)
+    private final InFlightTracker tracker = new InFlightTracker();
 
-    private static final long BATCH_TIMEOUT_MS = 60_000;
+    // Request queue — populated by scanner, consumed by drainQueue()
+    private final RequestQueue queue = new RequestQueue();
 
-    private record TrackedBatch(long[] positions, long createdAt) {}
     private boolean cacheLoaded = false;
+    private volatile CompletableFuture<Long2LongOpenHashMap> pendingCacheLoad = null;
 
     // Positions pushed by the server's dirty column broadcast that need re-requesting.
-    // Tracked separately so they're prioritized like fresh requests in the scan.
     private final LongOpenHashSet dirtyColumns = new LongOpenHashSet();
 
-    // Single scan state — walks the spiral once, classifying each position into
-    // fresh (never requested), dirty (server-pushed change), generation (empty, retryable),
-    // or resync (has cached data from previous session).
-    private int scanRadius = 0;
-    private int generationBudget = 0;
-    private int generationDistance = 0;
-    private boolean needsResync = false;
+    // Positions that were rate-limited and need retry on next scan cycle.
+    private final LongOpenHashSet rateLimitRetryPositions = new LongOpenHashSet();
 
-    private int receivedCount = 0;
-    private int emptyCount = 0;
-    private long totalBatchesSent = 0;
-    private long totalPositionsRequested = 0;
+    // Positions confirmed current (received data or up-to-date) in this session.
+    // Cleared on reconnect/dimension change. Unvalidated cached positions are re-requested.
+    private final LongOpenHashSet validatedThisSession = new LongOpenHashSet();
+
+    // Metrics tracking (counters + rolling rates)
+    private final RequestMetrics metrics = new RequestMetrics();
+
+    // Fixed per-type concurrency caps (set from session config)
+    private int maxGenConcurrency;
+    private int maxSyncConcurrency;
+    private boolean skipNextScan;
+
+    // Derived per-tick send cap: 1/20th of last scan's queued count, floored at MIN_SEND_PER_TICK
+    private int maxSendPerTick = MIN_SEND_PER_TICK;
+
+    // Pre-allocated send buffers for drainQueue() to avoid per-tick allocation
+    private int[] sendRequestIdBuffer = new int[MIN_SEND_PER_TICK];
+    private long[] sendPositionBuffer = new long[MIN_SEND_PER_TICK];
+    private long[] sendTimestampBuffer = new long[MIN_SEND_PER_TICK];
+
+    // Expanding ring scanner
+    private final SpiralScanner scanner = new SpiralScanner();
 
     private void putTimestamp(long packed, long timestamp) {
         long old = this.columnTimestamps.put(packed, timestamp);
-        // Update counters: remove old bucket, add new bucket
-        if (old > 0) this.receivedCount--;
-        else if (old == 0) this.emptyCount--;
-        if (timestamp > 0) this.receivedCount++;
-        else if (timestamp == 0) this.emptyCount++;
+        this.metrics.adjustCounters(old, timestamp);
     }
 
     private void clearTimestamps() {
         this.columnTimestamps.clear();
-        this.receivedCount = 0;
-        this.emptyCount = 0;
+        this.metrics.reset();
     }
 
     private void loadTimestamps(Long2LongOpenHashMap loaded) {
         this.columnTimestamps.putAll(loaded);
-        // Recount after bulk load
-        this.receivedCount = 0;
-        this.emptyCount = 0;
-        for (long ts : this.columnTimestamps.values()) {
-            if (ts > 0) this.receivedCount++;
-            else if (ts == 0) this.emptyCount++;
-        }
+        this.metrics.bulkRecount(this.columnTimestamps);
     }
 
     public void onSessionConfig(SessionConfigS2CPayload config, String serverAddress) {
         this.sessionConfig = config;
         this.serverAddress = serverAddress;
-        this.generationBudget = config.maxGenerationRequestsPerBatch();
-        this.generationDistance = config.generationDistanceChunks();
-        this.pendingColumns.clear();
-        this.activeBatches.clear();
-        this.clearTimestamps();
-        this.dirtyColumns.clear();
-        this.scanRadius = 0;
+        resetRequestState();
         this.lastDimension = null;
         this.cacheLoaded = false;
-        this.needsResync = true;
+        this.scanner.reset();
+        this.maxGenConcurrency = config.generationConcurrencyLimitPerPlayer();
+        this.maxSyncConcurrency = config.syncOnLoadConcurrencyLimitPerPlayer();
+        this.skipNextScan = false;
+    }
+
+    private static int countMissingVanillaChunks(ClientLevel level, int playerCx, int playerCz, int radius) {
+        var chunkSource = level.getChunkSource();
+        int missing = 0;
+        for (int dx = -radius; dx <= radius; dx++) {
+            for (int dz = -radius; dz <= radius; dz++) {
+                if (!chunkSource.hasChunk(playerCx + dx, playerCz + dz)) {
+                    missing++;
+                }
+            }
+        }
+        return missing;
     }
 
     public void tick() {
+        // --- Guards ---
         if (this.sessionConfig == null || !this.sessionConfig.enabled()) return;
-
         var mc = Minecraft.getInstance();
         var player = mc.player;
-        if (player == null) return;
-
+        if (player == null || player.isDeadOrDying()) return;
         var level = mc.level;
         if (level == null) return;
 
-        int playerCx = player.blockPosition().getX() >> 4;
-        int playerCz = player.blockPosition().getZ() >> 4;
+        int playerCx = player.getBlockX() >> 4;
+        int playerCz = player.getBlockZ() >> 4;
         var currentDim = level.dimension();
 
+        // --- Dimension change: flush state, reload cache ---
         if (this.lastDimension != null && !currentDim.equals(this.lastDimension)) {
             this.onDimensionChange(currentDim);
         } else if (!this.cacheLoaded) {
-            this.loadTimestamps(ColumnCacheStore.load(this.serverAddress, currentDim));
             this.cacheLoaded = true;
+            startAsyncCacheLoad(currentDim);
         }
         this.lastDimension = currentDim;
 
+        // --- Movement: prune out-of-range data + cancel stale requests ---
         if (playerCx != this.lastChunkX || playerCz != this.lastChunkZ) {
-            this.pruneOutOfRangePositions(playerCx, playerCz);
-            this.pruneOutOfRangeTimestamps(playerCx, playerCz);
+            int pruneDistance = this.scanner.getPruneDistance(this.sessionConfig);
+            this.scanner.pruneOutOfRangeTimestamps(this.columnTimestamps, this.metrics, playerCx, playerCz, pruneDistance);
+            this.scanner.pruneOutOfRangePositions(this.dirtyColumns, playerCx, playerCz, pruneDistance);
+            this.scanner.pruneOutOfRangePositions(this.rateLimitRetryPositions, playerCx, playerCz, pruneDistance);
+            this.scanner.pruneOutOfRangePositions(this.validatedThisSession, playerCx, playerCz, pruneDistance);
+            this.pruneAndCancelOutOfRangePending(playerCx, playerCz, pruneDistance);
             this.lastChunkX = playerCx;
             this.lastChunkZ = playerCz;
-            this.scanRadius = 0;
+            this.scanner.resetScanCounter();
         }
 
-        // Purge stale batches that the server never completed
-        long now = System.currentTimeMillis();
-        var staleIter = this.activeBatches.int2ObjectEntrySet().iterator();
-        while (staleIter.hasNext()) {
-            var entry = staleIter.next();
-            if (now - entry.getValue().createdAt > BATCH_TIMEOUT_MS) {
-                for (long pos : entry.getValue().positions) {
-                    this.pendingColumns.remove(pos);
+        // --- Metrics ---
+        this.metrics.updateRollingRates();
+
+        // --- Backpressure: halt when column processing queue is mostly full ---
+        int columnQueueSize = LSSClientNetworking.getQueuedColumnCount();
+        int columnQueueCapacity = ClientColumnProcessor.MAX_QUEUED_COLUMNS;
+        if (columnQueueSize >= columnQueueCapacity * BACKPRESSURE_NUMERATOR / BACKPRESSURE_DENOMINATOR) return;
+
+        // --- Cache gate: don't scan until timestamp cache has loaded ---
+        // Poll inline rather than relying on thenAcceptAsync callback scheduling,
+        // which can be delayed on starved render threads (e.g., CI with llvmpipe).
+        if (this.pendingCacheLoad != null) {
+            if (!this.pendingCacheLoad.isDone()) return;
+            try {
+                var loaded = this.pendingCacheLoad.getNow(null);
+                if (loaded != null && this.lastDimension != null) {
+                    this.loadTimestamps(loaded);
                 }
-                staleIter.remove();
-            }
+            } catch (Exception ignored) {}
+            this.pendingCacheLoad = null;
         }
 
-        if (this.pendingColumns.size() >= this.sessionConfig.maxPendingRequests()) return;
+        // --- Periodic scan (every 20 ticks): discover positions needing requests ---
+        if (this.scanner.advanceScanTick()) {
+            if (this.skipNextScan) {
+                this.skipNextScan = false;
+            } else {
+                int viewDistance = mc.options.getEffectiveRenderDistance();
 
-        this.tickScan(playerCx, playerCz, mc);
+                // Measure vanilla chunk loading pressure
+                int missingVanilla = countMissingVanillaChunks(level, playerCx, playerCz, viewDistance);
+                this.scanner.updateMissingVanillaChunks(missingVanilla);
+
+                // Compute scan budget: base × queue-pressure-scale × vanilla-load-scale
+                int budget = SpiralScanner.baseBudget(this.sessionConfig);
+                int haltThreshold = columnQueueCapacity * BACKPRESSURE_NUMERATOR / BACKPRESSURE_DENOMINATOR;
+                if (columnQueueSize > 0) {
+                    budget = Math.max(1, Math.round(budget * Math.max(0f, 1f - (float) columnQueueSize / haltThreshold)));
+                }
+                if (missingVanilla > 0) {
+                    int exclusionArea = (2 * viewDistance + 1) * (2 * viewDistance + 1);
+                    float vanillaScale = Math.max(0f, 1f - (float) missingVanilla / exclusionArea);
+                    if (vanillaScale <= 0f) budget = 0;
+                    else budget = Math.max(1, Math.round(budget * vanillaScale));
+                }
+
+                // Scan expanding rings for positions that need requesting
+                if (budget > 0) {
+                    var scanResult = this.scanner.scan(playerCx, playerCz, viewDistance,
+                            this.columnTimestamps, this.dirtyColumns, this.rateLimitRetryPositions,
+                            this.validatedThisSession, this.tracker::isInFlight, this.sessionConfig, budget);
+                    if (scanResult.count() > 0) {
+                        this.queue.populate(scanResult);
+                        updateSendPerTick(scanResult.count());
+                    }
+                }
+            }
+
+            // Timeout sweep: evict stale requests (always, even if scan skipped)
+            this.tracker.timeoutSweep(TIMEOUT_NANOS);
+        }
+
+        // --- Every tick: drain queue through concurrency limits ---
+        if (this.queue.hasNext()) {
+            int sent = drainQueue(this.maxSendPerTick);
+            if (sent > 0) sendRequests(this.sendPositionBuffer, this.sendTimestampBuffer, sent);
+        }
     }
 
-    /**
-     * Single spiral scan that classifies each position and builds one unified batch.
-     * <ul>
-     *   <li><b>Fresh</b> (ts == -1) — never requested. Always collected with timestamp 0.</li>
-     *   <li><b>Dirty</b> (in dirtyColumns set) — server pushed a change notification.
-     *       Collected with stored timestamp, counted against main budget.</li>
-     *   <li><b>Generation</b> (ts == 0) — empty, within generation distance.
-     *       Collected with timestamp 0, subject to generation sub-budget.
-     *       If generation is disabled (budget == 0), treated as settled.</li>
-     *   <li><b>Resync</b> (ts &gt; 0, needsResync) — has cached data from a previous session.
-     *       Collected with stored timestamp during the initial join sweep only.</li>
-     * </ul>
-     * Pending positions naturally pace generation retries — a position stays pending
-     * until its batch completes, preventing redundant re-requests without a timer.
-     */
-    private void tickScan(int playerCx, int playerCz, Minecraft mc) {
-        var clientConfig = LSSClientConfig.CONFIG;
+    // --- Send rate adaptation ---
 
-        int exclusionRadius = mc.options.getEffectiveRenderDistance();
-        int exclusionDistSq = exclusionRadius * exclusionRadius;
-        int lodDistance = getEffectiveLodDistance();
-        int maxPending = this.sessionConfig.maxPendingRequests();
+    private void updateSendPerTick(int lastScanQueued) {
+        int perTick = Math.min(LSSConstants.MAX_BATCH_CHUNK_REQUESTS,
+                Math.max(MIN_SEND_PER_TICK, (lastScanQueued + LSSConstants.TICKS_PER_SECOND - 1) / LSSConstants.TICKS_PER_SECOND));
+        if (perTick != this.maxSendPerTick) {
+            this.maxSendPerTick = perTick;
+            if (perTick > this.sendPositionBuffer.length) {
+                this.sendRequestIdBuffer = new int[perTick];
+                this.sendPositionBuffer = new long[perTick];
+                this.sendTimestampBuffer = new long[perTick];
+            }
+        }
+    }
 
-        int[] budgets = computeBudgets(this.sessionConfig.maxRequestsPerBatch(),
-                clientConfig.resyncBatchSize, this.needsResync);
-        int budgetRemaining = budgets[0];
-        int resyncRemaining = budgets[1];
-        int genRemaining = this.generationBudget; // 0 if generation disabled
+    // --- Queue drain ---
 
-        // Single unified buffer — capped to the server's per-batch limit
-        int maxBatchSize = Math.min(budgetRemaining, this.sessionConfig.maxRequestsPerBatch());
-        long[] posBuf = new long[maxBatchSize];
-        long[] tsBuf = new long[maxBatchSize];
+    private int drainQueue(int maxToSend) {
+        long now = System.nanoTime();
+        long[] positionBuffer = this.sendPositionBuffer;
+        long[] timestampBuffer = this.sendTimestampBuffer;
         int count = 0;
 
-        for (int radius = this.scanRadius; radius <= lodDistance; radius++) {
-            if (this.pendingColumns.size() + count >= maxPending) break;
-            if (budgetRemaining <= 0) break;
+        while (count < maxToSend && this.queue.hasNext()) {
+            long pos = this.queue.peekPosition();
+            long ts = this.queue.peekTimestamp();
+            if (this.tracker.isInFlight(pos)) { this.queue.skip(); continue; }
+            long stored = this.columnTimestamps.get(pos);
+            if (stored > 0 && !this.dirtyColumns.contains(pos) && !this.rateLimitRetryPositions.contains(pos)
+                    && this.validatedThisSession.contains(pos)) { this.queue.skip(); continue; }
 
-            boolean canAdvance = true;
+            // Per-type concurrency check — skip if this type is full, try next
+            boolean isGen = ts == 0;
+            if (isGen && this.tracker.generationCount() >= this.maxGenConcurrency) { this.queue.skip(); continue; }
+            if (!isGen && (this.tracker.size() - this.tracker.generationCount()) >= this.maxSyncConcurrency) { this.queue.skip(); continue; }
 
-            for (int side = 0; side < 4; side++) {
-                for (int i = -radius; i <= radius; i++) {
-                    int dx, dz;
-                    switch (side) {
-                        case 0 -> { dx = i; dz = -radius; }
-                        case 1 -> { dx = i; dz = radius; }
-                        case 2 -> { dx = -radius; dz = i; }
-                        default -> { dx = radius; dz = i; }
-                    }
-                    if (side >= 2 && (dz == -radius || dz == radius)) continue;
-                    if (dx * dx + dz * dz <= exclusionDistSq) continue;
-
-                    int cx = playerCx + dx;
-                    int cz = playerCz + dz;
-                    long packed = PositionUtil.packPosition(cx, cz);
-
-                    if (this.pendingColumns.contains(packed)) continue;
-
-                    long storedTs = this.columnTimestamps.get(packed);
-
-                    if (storedTs == -1L) {
-                        // Fresh — never requested
-                        if (budgetRemaining > 0
-                                && this.pendingColumns.size() + count < maxPending) {
-                            posBuf[count] = packed;
-                            tsBuf[count] = 0L;
-                            count++;
-                            budgetRemaining--;
-                        }
-                        canAdvance = false;
-                    } else if (this.dirtyColumns.contains(packed)) {
-                        // Dirty — server notified us this column changed
-                        if (budgetRemaining > 0
-                                && this.pendingColumns.size() + count < maxPending) {
-                            posBuf[count] = packed;
-                            tsBuf[count] = storedTs;
-                            count++;
-                            budgetRemaining--;
-                            this.dirtyColumns.remove(packed);
-                        }
-                        canAdvance = false;
-                    } else if (storedTs == 0L) {
-                        // Empty — generation retry
-                        if (genRemaining > 0 && budgetRemaining > 0
-                                && radius <= this.generationDistance
-                                && this.pendingColumns.size() + count < maxPending) {
-                            posBuf[count] = packed;
-                            tsBuf[count] = 0L;
-                            count++;
-                            budgetRemaining--;
-                            genRemaining--;
-                            canAdvance = false;
-                        } else if (this.generationBudget > 0 && radius <= this.generationDistance) {
-                            // Generation available but budget exhausted — block advancement
-                            canAdvance = false;
-                        }
-                        // else: generation disabled (budget == 0) — treat as settled
-                    } else {
-                        // Has data — resync only on initial join sweep
-                        if (resyncRemaining > 0 && budgetRemaining > 0
-                                && this.pendingColumns.size() + count < maxPending) {
-                            posBuf[count] = packed;
-                            tsBuf[count] = storedTs;
-                            count++;
-                            resyncRemaining--;
-                            budgetRemaining--;
-                        }
-                        // Settled — don't prevent advancement
-                    }
-                }
-            }
-
-            if (canAdvance) {
-                this.scanRadius = radius + 1;
-            }
+            this.queue.skip();
+            positionBuffer[count] = pos;
+            timestampBuffer[count] = ts;
+            this.tracker.markPending(pos, now, isGen);
+            this.rateLimitRetryPositions.remove(pos);
+            this.dirtyColumns.remove(pos);
+            count++;
         }
 
-        // Sweep completed — reset scan and mark initial resync done
-        if (this.scanRadius > lodDistance) {
-            this.scanRadius = 0;
-            if (this.needsResync) this.needsResync = false;
-        }
-
-        // Send unified batch
-        if (count > 0) {
-            long[] positions = new long[count];
-            long[] timestamps = new long[count];
-            System.arraycopy(posBuf, 0, positions, 0, count);
-            System.arraycopy(tsBuf, 0, timestamps, 0, count);
-
-            int batchId = this.nextBatchId++;
-            try {
-                ClientPlayNetworking.send(new ChunkRequestC2SPayload(batchId, positions, timestamps));
-                this.activeBatches.put(batchId, new TrackedBatch(positions, System.currentTimeMillis()));
-                for (long pos : positions) {
-                    this.pendingColumns.add(pos);
-                }
-                this.totalBatchesSent++;
-                this.totalPositionsRequested += count;
-            } catch (Exception e) {
-                LSSLogger.error("Failed to send chunk request batch", e);
-            }
-        }
+        return count;
     }
 
-    public void onSectionReceived(int cx, int cz, long columnTimestamp) {
-        long packed = PositionUtil.packPosition(cx, cz);
-        this.pendingColumns.remove(packed);
-        this.dirtyColumns.remove(packed);
-        this.putTimestamp(packed, columnTimestamp);
+    // --- Request sending and callbacks ---
+
+    private void sendRequests(long[] positionBuffer, long[] timestampBuffer, int count) {
+        int[] requestIds = this.sendRequestIdBuffer;
+        for (int i = 0; i < count; i++) {
+            requestIds[i] = this.tracker.send(positionBuffer[i]);
+        }
+        try {
+            ClientPlayNetworking.send(new BatchChunkRequestC2SPayload(requestIds, positionBuffer, timestampBuffer, count));
+        } catch (Exception e) {
+            LSSLogger.error("Failed to send batch chunk request", e);
+            for (int i = 0; i < count; i++) {
+                this.tracker.removeByRequestId(requestIds[i]);
+            }
+        }
+        this.metrics.recordSendCycle(count);
+    }
+
+    public void onColumnReceived(int requestId, long columnTimestamp) {
+        var completion = this.tracker.removeByRequestId(requestId);
+        if (completion != null) {
+            this.dirtyColumns.remove(completion.position());
+            this.putTimestamp(completion.position(), columnTimestamp);
+            this.validatedThisSession.add(completion.position());
+        }
+        this.metrics.recordColumnReceived();
     }
 
     public void onDirtyColumns(long[] dirtyPositions) {
+        boolean added = false;
         for (long packed : dirtyPositions) {
-            long ts = this.columnTimestamps.get(packed);
-            if (ts > 0) {
+            long stored = this.columnTimestamps.get(packed);
+            if (stored > 0) {
                 this.dirtyColumns.add(packed);
+                added = true;
             }
+        }
+        if (added) {
+            this.scanner.resetScanCounter();
         }
     }
 
-    public void onColumnUpToDate(int cx, int cz) {
-        long packed = PositionUtil.packPosition(cx, cz);
-        this.pendingColumns.remove(packed);
-        // Keep existing timestamp — data is current
+    public void onColumnNotGenerated(int requestId) {
+        var removal = this.tracker.removeByRequestId(requestId);
+        if (removal != null) {
+            this.putTimestamp(removal.position(), 0L);
+        }
+        this.metrics.recordNotGenerated();
     }
 
-    public void onBatchComplete(int batchId, int status) {
-        var batch = this.activeBatches.remove(batchId);
-        if (batch != null) {
-            long[] positions = batch.positions;
-            for (long pos : positions) {
-                this.pendingColumns.remove(pos);
-                if (status != RequestCompleteS2CPayload.STATUS_REJECTED
-                        && !this.columnTimestamps.containsKey(pos)) {
-                    // Mark as empty (timestamp 0). When the server has a generation budget,
-                    // the scan will re-request these positions on subsequent sweeps.
-                    this.putTimestamp(pos, 0L);
-                }
+    public void onColumnUpToDate(int requestId) {
+        var completion = this.tracker.removeByRequestId(requestId);
+        if (completion != null) {
+            this.validatedThisSession.add(completion.position());
+            // Empty columns never get a VoxelColumn response, so columnTimestamps stays -1L.
+            // Without a positive timestamp the scanner treats the position as "never requested"
+            // and re-queues it every cycle. Stamp it now so the validatedThisSession gate works.
+            if (this.columnTimestamps.get(completion.position()) == -1L) {
+                this.putTimestamp(completion.position(), LSSConstants.epochSeconds());
             }
         }
+        this.metrics.recordUpToDate();
+    }
+
+    public void onRateLimited(int requestId) {
+        var removal = this.tracker.removeByRequestId(requestId);
+        if (removal != null) {
+            this.rateLimitRetryPositions.add(removal.position());
+        }
+        this.metrics.recordRateLimited();
+        this.skipNextScan = true;
     }
 
     private void onDimensionChange(ResourceKey<Level> newDimension) {
         saveCache();
-        this.pendingColumns.clear();
-        this.activeBatches.clear();
+        this.cancelAllPending();
+        resetRequestState();
+        this.queue.clear();
+        this.scanner.resetScanCounter();
+        this.cacheLoaded = true;
+        startAsyncCacheLoad(newDimension);
+    }
+
+    private void resetRequestState() {
         this.clearTimestamps();
         this.dirtyColumns.clear();
-        this.scanRadius = 0;
-        this.needsResync = true;
-        this.loadTimestamps(ColumnCacheStore.load(this.serverAddress, newDimension));
-        this.cacheLoaded = true;
+        this.rateLimitRetryPositions.clear();
+        this.validatedThisSession.clear();
+        this.tracker.clear();
+        this.skipNextScan = false;
+    }
+
+    private void startAsyncCacheLoad(ResourceKey<Level> dimension) {
+        this.pendingCacheLoad = ColumnCacheStore.loadAsync(this.serverAddress, dimension);
+    }
+
+    private void sendCancelPacket(int reqId) {
+        try { ClientPlayNetworking.send(new CancelRequestC2SPayload(reqId)); }
+        catch (Exception ignored) {}
+    }
+
+    private void pruneAndCancelOutOfRangePending(int playerCx, int playerCz, int pruneDistance) {
+        this.tracker.pruneOutOfRange(playerCx, playerCz, pruneDistance, this::sendCancelPacket);
+    }
+
+    private void cancelAllPending() {
+        this.tracker.forEachRequestId(this::sendCancelPacket);
+    }
+
+    public void disconnect() {
+        this.tracker.clear();
     }
 
     public void saveCache() {
         if (this.serverAddress != null && this.lastDimension != null && !this.columnTimestamps.isEmpty()) {
-            ColumnCacheStore.save(this.serverAddress, this.lastDimension, this.columnTimestamps);
+            ColumnCacheStore.saveAsync(this.serverAddress, this.lastDimension, this.columnTimestamps);
         }
     }
 
@@ -352,103 +389,39 @@ public class LodRequestManager {
         if (this.serverAddress != null) {
             ColumnCacheStore.clearForServer(this.serverAddress);
         }
-        this.clearTimestamps();
-        this.pendingColumns.clear();
-        this.activeBatches.clear();
-        this.dirtyColumns.clear();
-        this.scanRadius = 0;
-        this.needsResync = false;
+        resetRequestState();
+        this.queue.clear();
+        this.scanner.resetScanCounter();
     }
 
-    private void pruneOutOfRangePositions(int playerCx, int playerCz) {
-        if (this.sessionConfig == null) return;
-        int lodDistance = getEffectiveLodDistance();
+    // --- Public getters ---
 
-        var toCancel = new IntArrayList();
+    public int getReceivedColumnCount() { return this.metrics.getReceivedCount(); }
+    public int getEmptyColumnCount() { return this.metrics.getEmptyCount(); }
+    public int getEffectiveLodDistanceChunks() { return this.sessionConfig != null ? this.scanner.getEffectiveLodDistance(this.sessionConfig) : 0; }
+    public long getTotalSendCycles() { return this.metrics.getTotalSendCycles(); }
+    public long getTotalPositionsRequested() { return this.metrics.getTotalPositionsRequested(); }
+    public int getDirtyColumnCount() { return this.dirtyColumns.size(); }
+    public int getConfirmedRing() { return this.scanner.getConfirmedRing(); }
+    public int getScanRing() { return this.scanner.getScanRing(); }
+    public int getMissingVanillaChunks() { return this.scanner.getMissingVanillaChunks(); }
 
-        for (var entry : this.activeBatches.int2ObjectEntrySet()) {
-            long[] positions = entry.getValue().positions;
-            long createdAt = entry.getValue().createdAt;
-            int kept = 0;
-            for (int i = 0; i < positions.length; i++) {
-                int cx = PositionUtil.unpackX(positions[i]);
-                int cz = PositionUtil.unpackZ(positions[i]);
-                if (Math.max(Math.abs(cx - playerCx), Math.abs(cz - playerCz)) <= lodDistance) {
-                    positions[kept++] = positions[i];
-                } else {
-                    this.pendingColumns.remove(positions[i]);
-                }
-            }
+    // Response counters
+    public long getTotalColumnsReceived() { return this.metrics.getTotalColumnsReceived(); }
+    public long getTotalUpToDate() { return this.metrics.getTotalUpToDate(); }
+    public long getTotalNotGenerated() { return this.metrics.getTotalNotGenerated(); }
+    public long getTotalRateLimited() { return this.metrics.getTotalRateLimited(); }
 
-            if (kept == 0) {
-                toCancel.add(entry.getIntKey());
-            } else if (kept < positions.length) {
-                long[] shrunk = new long[kept];
-                System.arraycopy(positions, 0, shrunk, 0, kept);
-                entry.setValue(new TrackedBatch(shrunk, createdAt));
-            }
-        }
+    // Rolling rates
+    public double getReceiveRate() { return this.metrics.getReceiveRate(); }
+    public double getRequestRate() { return this.metrics.getRequestRate(); }
 
-        if (toCancel.isEmpty()) return;
+    // Concurrency
+    public int getPendingCount() { return this.tracker.size(); }
+    public int getQueueRemaining() { return this.queue.remaining(); }
 
-        int[] cancelIds = toCancel.toIntArray();
-        try {
-            ClientPlayNetworking.send(new CancelRequestC2SPayload(cancelIds));
-        } catch (Exception e) {
-            LSSLogger.error("Failed to send cancel request", e);
-        }
-
-        for (int id : cancelIds) {
-            this.activeBatches.remove(id);
-        }
-    }
-
-    private void pruneOutOfRangeTimestamps(int playerCx, int playerCz) {
-        int lodDistance = getEffectiveLodDistance();
-        int pruneDistance = lodDistance + 32; // buffer to avoid thrashing
-        var iter = this.columnTimestamps.long2LongEntrySet().iterator();
-        while (iter.hasNext()) {
-            var entry = iter.next();
-            int cx = PositionUtil.unpackX(entry.getLongKey());
-            int cz = PositionUtil.unpackZ(entry.getLongKey());
-            if (Math.max(Math.abs(cx - playerCx), Math.abs(cz - playerCz)) > pruneDistance) {
-                long ts = entry.getLongValue();
-                if (ts > 0) this.receivedCount--;
-                else if (ts == 0) this.emptyCount--;
-                iter.remove();
-            }
-        }
-    }
-
-    private int getEffectiveLodDistance() {
-        int serverDistance = this.sessionConfig.lodDistanceChunks();
-        int clientDistance = LSSClientConfig.CONFIG.lodDistanceChunks;
-        if (clientDistance > 0) {
-            return Math.min(clientDistance, serverDistance);
-        }
-        return serverDistance;
-    }
-
-    public int getPendingColumnCount() { return this.pendingColumns.size(); }
-    public int getReceivedColumnCount() { return this.receivedCount; }
-    public int getEmptyColumnCount() { return this.emptyCount; }
-    public int getActiveBatchCount() { return this.activeBatches.size(); }
-    public int getScanRadius() { return this.scanRadius; }
-    public int getEffectiveLodDistanceChunks() { return this.sessionConfig != null ? getEffectiveLodDistance() : 0; }
-    public int getGenerationBudget() { return this.generationBudget; }
-    public long getTotalBatchesSent() { return this.totalBatchesSent; }
-    public long getTotalPositionsRequested() { return this.totalPositionsRequested; }
-
-    /**
-     * Computes the resync and main budgets for a single tick's scan.
-     * Returns [budgetRemaining, resyncRemaining].
-     */
-    static int[] computeBudgets(int maxRequestsPerBatch, int resyncBatchSize, boolean needsResync) {
-        int budgetRemaining = maxRequestsPerBatch;
-        int resyncRemaining = 0;
-        if (needsResync) {
-            resyncRemaining = Math.min(resyncBatchSize, budgetRemaining / 4);
-        }
-        return new int[]{budgetRemaining, resyncRemaining};
-    }
+    // Last scan budget
+    public int getLastBudget() { return this.scanner.getLastBudget(); }
+    public int getLastSyncQueued() { return this.scanner.getLastSyncQueued(); }
+    public int getLastGenQueued() { return this.scanner.getLastGenQueued(); }
 }

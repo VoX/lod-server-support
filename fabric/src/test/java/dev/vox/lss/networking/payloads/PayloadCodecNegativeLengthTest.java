@@ -22,17 +22,6 @@ class PayloadCodecNegativeLengthTest {
     }
 
     @Test
-    void chunkRequestNegativeLength() {
-        var b = buf();
-        b.writeVarInt(1);  // batchId
-        b.writeVarInt(-1); // negative positions count
-        var decoded = ChunkRequestC2SPayload.CODEC.decode(b);
-        assertEquals(0, decoded.positions().length);
-        assertEquals(0, decoded.timestamps().length);
-        b.release();
-    }
-
-    @Test
     void dirtyColumnsNegativeLength() {
         var b = buf();
         b.writeVarInt(-1); // negative positions count
@@ -41,12 +30,4 @@ class PayloadCodecNegativeLengthTest {
         b.release();
     }
 
-    @Test
-    void cancelRequestNegativeLength() {
-        var b = buf();
-        b.writeVarInt(-1); // negative batch IDs count
-        var decoded = CancelRequestC2SPayload.CODEC.decode(b);
-        assertEquals(0, decoded.batchIds().length);
-        b.release();
-    }
 }
