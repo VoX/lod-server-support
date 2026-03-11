@@ -13,15 +13,11 @@ Without LSS, Voxy can only build LOD data from chunks the client has already loa
 1. Client connects and performs a handshake with the server
 2. Server sends session config (distance limits, rate limits, generation settings)
 3. Client scans outward in an expanding spiral, batch-requesting chunks it doesn't have cached
-4. Server reads chunks from disk (or generates them on demand), serializes the raw MC section data (block states, biomes, lighting), Zstd-compresses it, and streams it back
+4. Server reads chunks from disk (or generates them on demand), serializes the raw MC section data (block states, biomes, lighting), and streams it back
 5. Client receives the section data and feeds it directly into Voxy's rendering engine via `rawIngest`
 6. After initial sync, the server pushes notifications when chunks change so clients stay up to date
 
 The result: players see fully rendered terrain out to hundreds of chunks on multiplayer servers, without needing to explore the world first.
-
-## Voxy Integration
-
-When Voxy is installed alongside LSS on the client, integration is automatic — no configuration needed. LSS detects Voxy at startup and registers a bridge that passes received MC-native `LevelChunkSection` and `DataLayer` objects directly into Voxy's `rawIngest` API — no intermediate translation needed.
 
 ## Downloads
 
