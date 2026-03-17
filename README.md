@@ -21,7 +21,7 @@ The result: players see fully rendered terrain out to hundreds of chunks on mult
 
 ## Downloads
 
-Built JARs are available as artifacts from the [GitHub Actions build workflow](https://github.com/VoX/lod-server-support/actions/workflows/build.yml?query=branch%3Amain+is%3Asuccess):
+Download from [Modrinth](https://modrinth.com/plugin/lod-server-support):
 
 - **lod-server-support-fabric** — Fabric mod JAR (client + server)
 - **lod-server-support-paper** — Paper plugin JAR (server only)
@@ -36,7 +36,7 @@ Clients should also install [Voxy](https://modrinth.com/mod/voxy) to actually re
 
 ### Paper Server
 
-1. Place `lod-server-support-paper-all.jar` in the server's `plugins/` directory
+1. Place `lod-server-support-paper.jar` in the server's `plugins/` directory
 2. Install the Fabric mod **and** Voxy on all clients
 3. Restart the server — config is generated at `plugins/LodServerSupport/lss-server-config.json`
 

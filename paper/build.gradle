@@ -4,6 +4,8 @@ plugins {
     id 'com.gradleup.shadow' version '9.0.0-beta12'
 }
 
+version = project.mod_version
+
 repositories {
     mavenCentral()
     maven { url = 'https://repo.papermc.io/repository/maven-public/' }
@@ -23,6 +25,7 @@ processResources {
 
 shadowJar {
     archiveBaseName = 'lod-server-support-paper'
+    archiveClassifier = ''
     configurations = [project.configurations.runtimeClasspath]
     exclude 'org/slf4j/**'
     exclude 'META-INF/maven/org.slf4j/**'
@@ -30,5 +33,6 @@ shadowJar {
 
 tasks.withType(JavaCompile).configureEach {
     it.options.release = 21
+
 }
 

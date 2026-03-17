@@ -85,7 +85,7 @@ final class PaperNbtSectionSerializer {
             buf.writeVarInt(parsed.size());
             for (var p : parsed) {
                 buf.writeByte(p.sectionY);
-                p.section.write(buf);
+                p.section.write(buf, null, 0);
 
                 boolean hasBlockLight = p.blockLight.length == 2048;
                 buf.writeBoolean(hasBlockLight);
@@ -141,7 +141,7 @@ final class PaperNbtSectionSerializer {
             section = new LevelChunkSection(blockStates, biomeContainer);
         } else {
             var defaultBiomeContainer = new PalettedContainer<>(
-                    defaultBiome, Strategy.createForBiomes(biomeHolderMap));
+                    defaultBiome, Strategy.createForBiomes(biomeHolderMap), null);
             section = new LevelChunkSection(blockStates, defaultBiomeContainer);
         }
 
