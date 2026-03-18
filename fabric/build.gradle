@@ -9,6 +9,10 @@ base {
     archivesName = project.archives_base_name
 }
 
+tasks.withType(AbstractArchiveTask).configureEach {
+    archiveVersion = ''
+}
+
 repositories {
     exclusiveContent {
         forRepository {

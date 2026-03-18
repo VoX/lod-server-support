@@ -26,6 +26,7 @@ processResources {
 shadowJar {
     archiveBaseName = 'lod-server-support-paper'
     archiveClassifier = ''
+    archiveVersion = ''
     configurations = [project.configurations.runtimeClasspath]
     exclude 'org/slf4j/**'
     exclude 'META-INF/maven/org.slf4j/**'

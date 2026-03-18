@@ -26,8 +26,8 @@ lod-server-support/
 ```
 
 Output JARs:
-- `fabric/build/libs/lod-server-support-fabric-*.jar` — Fabric mod (client + server)
-- `paper/build/libs/lod-server-support-paper-all.jar` — Paper plugin (server only, shadow JAR)
+- `fabric/build/libs/lod-server-support-fabric.jar` — Fabric mod (client + server)
+- `paper/build/libs/lod-server-support-paper.jar` — Paper plugin (server only, shadow JAR)
 
 ## Test Commands
 

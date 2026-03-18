@@ -62,22 +62,20 @@ download_paper_jar() {
 
 build_fabric_jar() {
     local jar
-    jar=$(ls -t "$SCRIPT_DIR"/fabric/build/libs/lod-server-support-fabric-*.jar 2>/dev/null | head -1)
-    if [ -z "$jar" ]; then
+    jar="$SCRIPT_DIR/fabric/build/libs/lod-server-support-fabric.jar"
+    if [ ! -f "$jar" ]; then
         echo "No Fabric LSS JAR found, building..." >&2
         (cd "$SCRIPT_DIR" && ./gradlew :fabric:build -x runClientGameTest) >&2
-        jar=$(ls -t "$SCRIPT_DIR"/fabric/build/libs/lod-server-support-fabric-*.jar | head -1)
     fi
     echo "$jar"
 }
 
 build_paper_jar() {
     local jar
-    jar=$(ls -t "$SCRIPT_DIR"/paper/build/libs/lod-server-support-paper-all.jar 2>/dev/null | head -1)
-    if [ -z "$jar" ]; then
+    jar="$SCRIPT_DIR/paper/build/libs/lod-server-support-paper.jar"
+    if [ ! -f "$jar" ]; then
         echo "No Paper LSS JAR found, building..." >&2
         (cd "$SCRIPT_DIR" && ./gradlew :paper:shadowJar) >&2
-        jar=$(ls -t "$SCRIPT_DIR"/paper/build/libs/lod-server-support-paper-all.jar | head -1)
     fi
     echo "$jar"
 }
@@ -168,7 +166,7 @@ setup_fabric() {
     echo "  Installing LSS..."
     local lss_jar
     lss_jar=$(build_fabric_jar)
-    rm -f "$mods_dir"/lod-server-support-fabric-*.jar
+    rm -f "$mods_dir"/lod-server-support-fabric*.jar
     cp "$lss_jar" "$mods_dir/"
     echo "  Installed: $(basename "$lss_jar")"
 }
@@ -255,7 +253,7 @@ case "${1:-run}" in
 
         mkdir -p "$FABRIC_DIR/mods" "$PAPER_DIR/plugins"
 
-        rm -f "$FABRIC_DIR/mods"/lod-server-support-fabric-*.jar
+        rm -f "$FABRIC_DIR/mods"/lod-server-support-fabric*.jar
         cp "$fabric_jar" "$FABRIC_DIR/mods/"
         echo "  Fabric: $(basename "$fabric_jar")"
 
