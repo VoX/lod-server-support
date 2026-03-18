@@ -29,5 +29,29 @@ jobs:
         with:
           files: |
             fabric/build/libs/*.jar
-            paper/build/libs/*-all.jar
+            paper/build/libs/lod-server-support-paper-*.jar
           generate_release_notes: true
+
+      - name: Upload Fabric to Modrinth
+        uses: Kir-Antipov/mc-publish@v3.3
+        with:
+          modrinth-id: lod-server-support
+          modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
+          files: fabric/build/libs/lod-server-support-fabric-*.jar
+          name: ${{ github.ref_name }} - Fabric
+          version: ${{ github.ref_name }}+fabric
+          version-type: release
+          loaders: fabric
+          game-versions: 1.21.11
+
+      - name: Upload Paper to Modrinth
+        uses: Kir-Antipov/mc-publish@v3.3
+        with:
+          modrinth-id: lod-server-support
+          modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
+          files: paper/build/libs/lod-server-support-paper-*.jar
+          name: ${{ github.ref_name }} - Paper
+          version: ${{ github.ref_name }}+paper
+          version-type: release
+          loaders: paper
+          game-versions: 1.21.11

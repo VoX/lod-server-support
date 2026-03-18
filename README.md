@@ -30,27 +30,32 @@ Download from [Modrinth](https://modrinth.com/plugin/lod-server-support):
 
 ### Fabric Server
 
-Install the mod on **both the server and all clients**. The server distributes LOD chunk data, and the client requests and processes it.
-
-Clients should also install [Voxy](https://modrinth.com/mod/voxy) to actually render the received data.
+1. Place `lod-server-support-fabric.jar` in the server's `mods/` directory
+2. Install the Fabric mod **and** [Voxy](https://modrinth.com/mod/voxy) on all clients
+3. Restart the server — config is generated at `config/lss-server-config.json`
 
 ### Paper Server
 
 1. Place `lod-server-support-paper.jar` in the server's `plugins/` directory
-2. Install the Fabric mod **and** Voxy on all clients
+2. Install the Fabric mod **and** [Voxy](https://modrinth.com/mod/voxy) on all clients
 3. Restart the server — config is generated at `plugins/LodServerSupport/lss-server-config.json`
 
 ## Requirements
 
-### Fabric
+### Fabric Server
 - Minecraft 1.21.11
 - Fabric Loader 0.14.22+
 - Fabric API
-- [Voxy](https://modrinth.com/mod/voxy) (client-side, for rendering)
+- Java 21+
 
-### Paper
+### Paper Server
 - Paper 1.21.11+
 - Java 21+
+
+### Client (both platforms)
+- Fabric Loader 0.14.22+
+- Fabric API
+- [Voxy](https://modrinth.com/mod/voxy)
 
 ## Commands
 
@@ -65,9 +70,11 @@ Clients should also install [Voxy](https://modrinth.com/mod/voxy) to actually re
 
 ## Configuration
 
-### Fabric Server
+### Server (Fabric and Paper)
 
-Server config is generated at `config/lss-server-config.json` on first run. Key settings:
+Server config is generated on first run:
+- **Fabric:** `config/lss-server-config.json`
+- **Paper:** `plugins/LodServerSupport/lss-server-config.json`
 
 | Setting | Default | Description |
 |---------|---------|-------------|
@@ -86,9 +93,7 @@ Server config is generated at `config/lss-server-config.json` on first run. Key 
 | `generationTimeoutSeconds` | `60` | Timeout for pending chunk generation |
 | `dirtyBroadcastIntervalSeconds` | `10` | Interval for pushing dirty column notifications to clients |
 
-### Paper Server
-
-Server config is generated at `plugins/LodServerSupport/lss-server-config.json` on first run. Same settings as Fabric, plus an `updateEvents` list of Bukkit event class names used for dirty chunk detection. Requires the `lss.admin` permission (or op) to use `/lsslod` commands.
+**Paper-specific:** The config also includes an `updateEvents` list of Bukkit event class names used for dirty chunk detection. `/lsslod` commands require the `lss.admin` permission (or op).
 
 ### Client
 

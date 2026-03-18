@@ -389,9 +389,10 @@ public class LodRequestManager {
         if (this.serverAddress != null) {
             ColumnCacheStore.clearForServer(this.serverAddress);
         }
+        this.cancelAllPending();
         resetRequestState();
         this.queue.clear();
-        this.scanner.resetScanCounter();
+        this.scanner.reset();
     }
 
     // --- Public getters ---
