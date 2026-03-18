@@ -35,7 +35,7 @@ jobs:
       - name: Upload Fabric to Modrinth
         uses: Kir-Antipov/mc-publish@v3.3
         with:
-          modrinth-id: lod-server-support
+          modrinth-id: lKiXKLvv
           modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
           files: fabric/build/libs/lod-server-support-fabric-*.jar
           name: ${{ github.ref_name }} - Fabric
@@ -47,7 +47,7 @@ jobs:
       - name: Upload Paper to Modrinth
         uses: Kir-Antipov/mc-publish@v3.3
         with:
-          modrinth-id: lod-server-support
+          modrinth-id: lKiXKLvv
           modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
           files: paper/build/libs/lod-server-support-paper-*.jar
           name: ${{ github.ref_name }} - Paper
