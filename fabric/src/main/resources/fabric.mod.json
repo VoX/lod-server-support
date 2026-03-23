@@ -3,7 +3,7 @@
   "id": "lss",
   "version": "${version}",
   "name": "LOD Server Support",
-  "description": "Server-side LOD chunk distribution using a client-request model. Provides chunk data over the network for LOD rendering mods.",
+  "description": "LOD Server Support (aka LSS) is a Fabric client/server mod and Paper Plugin that provides unofficial multiplayer support for Voxy.",
   "authors": [
     "VoX"
   ],
