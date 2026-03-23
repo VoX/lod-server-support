@@ -2,7 +2,7 @@ name: LodServerSupport
 version: '${version}'
 main: dev.vox.lss.paper.LSSPaperPlugin
 api-version: '1.21'
-description: LOD Server Support (aka LSS) is a Fabric client/server mod and Paper Plugin that provides unofficial multiplayer support for Voxy.
+description: Paper Plugin that provides unofficial multiplayer support for Voxy.
 author: VoX
 website: https://modrinth.com/plugin/lod-server-support
 commands:

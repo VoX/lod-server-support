@@ -3,7 +3,7 @@
   "id": "lss",
   "version": "${version}",
   "name": "LOD Server Support",
-  "description": "LOD Server Support (aka LSS) is a Fabric client/server mod and Paper Plugin that provides unofficial multiplayer support for Voxy.",
+  "description": "Fabric client/server Mod that provides unofficial multiplayer support for Voxy.",
   "authors": [
     "VoX"
   ],
@@ -31,7 +31,9 @@
     "lss.mixins.json"
   ],
   "depends": {
-    "minecraft": ["1.21.11"],
+    "minecraft": [
+      "1.21.11"
+    ],
     "fabricloader": ">=0.14.22",
     "fabric-api": ">=0.91.1"
   },
