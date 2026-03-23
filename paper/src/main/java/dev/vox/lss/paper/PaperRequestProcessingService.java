@@ -217,6 +217,10 @@ public class PaperRequestProcessingService {
             if (!removed && state.checkDimensionChange()) {
                 state.onDimensionChange();
                 cleanupPlayerServices(state.getPlayer().getUUID());
+                // Re-create result queues so disk reads and generation results
+                // are not silently dropped after dimension change
+                this.diskReader.registerPlayer(state.getPlayer().getUUID());
+                if (this.generationService != null) this.generationService.registerPlayer(state.getPlayer().getUUID());
                 dimensionChanged = true;
             }
 
