@@ -20,10 +20,10 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
 
       - name: Build Fabric
-        run: ./gradlew :fabric:build -x runClientGameTest
+        run: ./gradlew :fabric:build -x runClientGameTest -Pmod_version=${GITHUB_REF_NAME#v}
 
       - name: Build Paper
-        run: ./gradlew :paper:shadowJar
+        run: ./gradlew :paper:shadowJar -Pmod_version=${GITHUB_REF_NAME#v}
 
       - uses: softprops/action-gh-release@v2
         with:

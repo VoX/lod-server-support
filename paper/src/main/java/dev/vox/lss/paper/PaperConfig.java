@@ -31,6 +31,7 @@ public class PaperConfig {
     public int syncOnLoadConcurrencyLimitPerPlayer = 200;
     public int generationRateLimitPerPlayer = 80;
     public int generationConcurrencyLimitPerPlayer = 16;
+    public int perDimensionTimestampCacheSizeMB = 32;
     public int dirtyBroadcastIntervalSeconds = 10;
     public List<String> updateEvents = List.of(
             "org.bukkit.event.block.BlockPlaceEvent",
@@ -55,6 +56,7 @@ public class PaperConfig {
         syncOnLoadConcurrencyLimitPerPlayer = Math.clamp(syncOnLoadConcurrencyLimitPerPlayer, LSSConstants.MIN_CONCURRENCY_LIMIT, LSSConstants.MAX_CONCURRENCY_LIMIT);
         generationRateLimitPerPlayer = Math.clamp(generationRateLimitPerPlayer, LSSConstants.MIN_RATE_LIMIT, LSSConstants.MAX_RATE_LIMIT);
         generationConcurrencyLimitPerPlayer = Math.clamp(generationConcurrencyLimitPerPlayer, LSSConstants.MIN_CONCURRENCY_LIMIT, LSSConstants.MAX_CONCURRENCY_LIMIT);
+        perDimensionTimestampCacheSizeMB = Math.clamp(perDimensionTimestampCacheSizeMB, LSSConstants.MIN_TIMESTAMP_CACHE_SIZE_MB, LSSConstants.MAX_TIMESTAMP_CACHE_SIZE_MB);
         dirtyBroadcastIntervalSeconds = Math.clamp(dirtyBroadcastIntervalSeconds, LSSConstants.MIN_DIRTY_BROADCAST_INTERVAL, LSSConstants.MAX_DIRTY_BROADCAST_INTERVAL);
         if (updateEvents == null) updateEvents = List.of();
     }

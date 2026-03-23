@@ -21,6 +21,7 @@ public class LSSServerConfig extends JsonConfig {
     public int syncOnLoadConcurrencyLimitPerPlayer = 200;
     public int generationRateLimitPerPlayer = 80;
     public int generationConcurrencyLimitPerPlayer = 16;
+    public int perDimensionTimestampCacheSizeMB = 32;
 
     @Override
     protected String getFileName() {
@@ -42,5 +43,6 @@ public class LSSServerConfig extends JsonConfig {
         syncOnLoadConcurrencyLimitPerPlayer = Math.clamp(syncOnLoadConcurrencyLimitPerPlayer, LSSConstants.MIN_CONCURRENCY_LIMIT, LSSConstants.MAX_CONCURRENCY_LIMIT);
         generationRateLimitPerPlayer = Math.clamp(generationRateLimitPerPlayer, LSSConstants.MIN_RATE_LIMIT, LSSConstants.MAX_RATE_LIMIT);
         generationConcurrencyLimitPerPlayer = Math.clamp(generationConcurrencyLimitPerPlayer, LSSConstants.MIN_CONCURRENCY_LIMIT, LSSConstants.MAX_CONCURRENCY_LIMIT);
+        perDimensionTimestampCacheSizeMB = Math.clamp(perDimensionTimestampCacheSizeMB, LSSConstants.MIN_TIMESTAMP_CACHE_SIZE_MB, LSSConstants.MAX_TIMESTAMP_CACHE_SIZE_MB);
     }
 }

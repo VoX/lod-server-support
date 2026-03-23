@@ -24,9 +24,9 @@ public class PaperOffThreadProcessor extends OffThreadProcessor<PaperPlayerReque
     public PaperOffThreadProcessor(Map<UUID, PaperPlayerRequestState> players,
                                     PaperChunkDiskReader diskReader,
                                     PaperChunkGenerationService generationService,
-                                    Path dataDir) {
+                                    Path dataDir, int perDimensionTimestampCacheSizeMB) {
         super(players,
-                diskReader != null, generationService != null, dataDir);
+                diskReader != null, generationService != null, dataDir, perDimensionTimestampCacheSizeMB);
         this.diskReader = diskReader;
         this.generationService = generationService;
     }

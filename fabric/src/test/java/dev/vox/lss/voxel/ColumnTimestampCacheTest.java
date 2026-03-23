@@ -11,12 +11,14 @@ import java.nio.file.Path;
 import static org.junit.jupiter.api.Assertions.*;
 
 class ColumnTimestampCacheTest {
+    private static final int DEFAULT_MAX = ColumnTimestampCache.mbToEntries(32);
+
     private ColumnTimestampCache cache;
     private long now;
 
     @BeforeEach
     void setUp() {
-        cache = new ColumnTimestampCache();
+        cache = new ColumnTimestampCache(DEFAULT_MAX);
         now = LSSConstants.epochSeconds();
     }
 
@@ -65,6 +67,15 @@ class ColumnTimestampCacheTest {
         assertEquals(3, cache.size());
     }
 
+    // ---- mbToEntries ----
+
+    @Test
+    void mbToEntriesConversion() {
+        // 1 MB = 1048576 bytes / 16 bytes per entry = 65536
+        assertEquals(65536, ColumnTimestampCache.mbToEntries(1));
+        assertEquals(65536 * 32, ColumnTimestampCache.mbToEntries(32));
+    }
+
     // ---- Size-based eviction ----
 
     @Test
@@ -77,15 +88,23 @@ class ColumnTimestampCacheTest {
 
     @Test
     void evictIfOversizedRemovesOldestEntries() {
-        // Insert entries with different insertion times
-        for (int i = 0; i < 10; i++) {
-            cache.put(LSSConstants.DIM_STR_OVERWORLD, i, i * 100L, now + i);
+        // Use a small cache to actually test eviction
+        var smallCache = new ColumnTimestampCache(5);
+        for (int i = 0; i < 8; i++) {
+            smallCache.put(LSSConstants.DIM_STR_OVERWORLD, i, i * 100L, now + i);
         }
-        assertEquals(10, cache.size());
+        assertEquals(8, smallCache.size());
 
-        // Eviction only triggers when exceeding MAX_ENTRIES_PER_DIMENSION (2M),
-        // so with 10 entries nothing is evicted
-        assertEquals(0, cache.evictIfOversized());
+        int evicted = smallCache.evictIfOversized();
+        assertEquals(3, evicted);
+        assertEquals(5, smallCache.size());
+
+        // Oldest entries (inserted at now+0, now+1, now+2) should be evicted
+        assertEquals(0L, smallCache.get(LSSConstants.DIM_STR_OVERWORLD, 0));
+        assertEquals(0L, smallCache.get(LSSConstants.DIM_STR_OVERWORLD, 1));
+        assertEquals(0L, smallCache.get(LSSConstants.DIM_STR_OVERWORLD, 2));
+        // Newer entries should remain
+        assertEquals(700L, smallCache.get(LSSConstants.DIM_STR_OVERWORLD, 7));
     }
 
     @Test
@@ -103,7 +122,7 @@ class ColumnTimestampCacheTest {
 
         cache.save(tempDir);
 
-        var loaded = new ColumnTimestampCache();
+        var loaded = new ColumnTimestampCache(DEFAULT_MAX);
         loaded.load(tempDir);
 
         assertEquals(3, loaded.size());
@@ -114,14 +133,14 @@ class ColumnTimestampCacheTest {
 
     @Test
     void loadFromNonexistentDirDoesNothing(@TempDir Path tempDir) {
-        var loaded = new ColumnTimestampCache();
+        var loaded = new ColumnTimestampCache(DEFAULT_MAX);
         loaded.load(tempDir.resolve("nonexistent"));
         assertEquals(0, loaded.size());
     }
 
     @Test
     void loadFromEmptyDirDoesNothing(@TempDir Path tempDir) {
-        var loaded = new ColumnTimestampCache();
+        var loaded = new ColumnTimestampCache(DEFAULT_MAX);
         loaded.load(tempDir);
         assertEquals(0, loaded.size());
     }
@@ -139,12 +158,12 @@ class ColumnTimestampCacheTest {
         cache.save(tempDir);
 
         // Overwrite with different data
-        var cache2 = new ColumnTimestampCache();
+        var cache2 = new ColumnTimestampCache(DEFAULT_MAX);
         cache2.put(LSSConstants.DIM_STR_OVERWORLD, 1L, 999L, now);
         cache2.put(LSSConstants.DIM_STR_OVERWORLD, 5L, 500L, now);
         cache2.save(tempDir);
 
-        var loaded = new ColumnTimestampCache();
+        var loaded = new ColumnTimestampCache(DEFAULT_MAX);
         loaded.load(tempDir);
         assertEquals(2, loaded.size());
         assertEquals(999L, loaded.get(LSSConstants.DIM_STR_OVERWORLD, 1L));
@@ -171,7 +190,7 @@ class ColumnTimestampCacheTest {
         cache.save(tempDir);
 
         // Load into a cache that already has a different entry
-        var loaded = new ColumnTimestampCache();
+        var loaded = new ColumnTimestampCache(DEFAULT_MAX);
         loaded.put(LSSConstants.DIM_STR_OVERWORLD, 99L, 999L, now);
         loaded.load(tempDir);
 

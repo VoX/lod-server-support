@@ -26,13 +26,23 @@ public class ColumnTimestampCache {
 
     private static final int FORMAT_VERSION = 1;
     private static final String FILE_NAME = "lss-timestamps.bin";
-    static final int MAX_ENTRIES_PER_DIMENSION = 2_000_000;
+    private static final int BYTES_PER_ENTRY = 16; // 8 bytes packed position + 8 bytes timestamp
 
     private record DimensionCache(Long2LongOpenHashMap timestamps, Long2LongOpenHashMap insertionTimes) {
         DimensionCache() { this(new Long2LongOpenHashMap(), new Long2LongOpenHashMap()); }
     }
 
     private final Map<String, DimensionCache> caches = new HashMap<>();
+    private final int maxEntriesPerDimension;
+
+    public ColumnTimestampCache(int maxEntriesPerDimension) {
+        this.maxEntriesPerDimension = maxEntriesPerDimension;
+    }
+
+    /** Converts an approximate MB size to an entry count. */
+    public static int mbToEntries(int mb) {
+        return mb * (1024 * 1024 / BYTES_PER_ENTRY);
+    }
 
     public void put(String dimension, long packed, long timestamp, long now) {
         var cache = caches.computeIfAbsent(dimension, k -> new DimensionCache());
@@ -65,7 +75,7 @@ public class ColumnTimestampCache {
     public int evictIfOversized() {
         int evicted = 0;
         for (var cache : caches.values()) {
-            int excess = cache.timestamps.size() - MAX_ENTRIES_PER_DIMENSION;
+            int excess = cache.timestamps.size() - this.maxEntriesPerDimension;
             if (excess <= 0) continue;
             evicted += evictOldest(cache, excess);
         }
@@ -170,7 +180,7 @@ public class ColumnTimestampCache {
             for (int d = 0; d < dimCount; d++) {
                 String dimension = in.readUTF();
                 int entryCount = in.readInt();
-                if (entryCount < 0 || entryCount > MAX_ENTRIES_PER_DIMENSION) {
+                if (entryCount < 0 || entryCount > this.maxEntriesPerDimension) {
                     LSSLogger.warn("Timestamp cache dimension " + dimension + " has invalid count " + entryCount + ", skipping");
                     // Skip remaining bytes for this dimension
                     in.skipBytes(entryCount * 16);
@@ -198,7 +208,7 @@ public class ColumnTimestampCache {
      * The returned cache contains only timestamps (no insertion times) and should only be used for {@link #save}.
      */
     public ColumnTimestampCache snapshotForSave() {
-        var snapshot = new ColumnTimestampCache();
+        var snapshot = new ColumnTimestampCache(this.maxEntriesPerDimension);
         for (var entry : caches.entrySet()) {
             var dimCache = entry.getValue();
             var copy = new DimensionCache(

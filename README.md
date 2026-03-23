@@ -96,6 +96,7 @@ Server config is generated on first run:
 | `enableChunkGeneration` | `true` | Generate missing chunks on demand for LOD data |
 | `generationConcurrencyLimitGlobal` | `32` | Max chunks generating server-wide at once |
 | `generationTimeoutSeconds` | `60` | Timeout for pending chunk generation |
+| `perDimensionTimestampCacheSizeMB` | `32` | Max timestamp cache size per dimension in MB (used for up-to-date checks on reconnect) |
 | `dirtyBroadcastIntervalSeconds` | `10` | Interval for pushing dirty column notifications to clients |
 
 **Paper-specific:** The config also includes an `updateEvents` list of Bukkit event class names used for dirty chunk detection. `/lsslod` commands require the `lss.admin` permission (or op).

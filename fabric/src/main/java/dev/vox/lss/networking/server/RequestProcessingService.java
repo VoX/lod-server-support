@@ -77,7 +77,8 @@ public class RequestProcessingService {
         var dataDir = server.getWorldPath(LevelResource.ROOT).resolve("data");
         this.offThreadProcessor = new FabricOffThreadProcessor(
                 this.players,
-                this.diskReader, this.generationService, dataDir);
+                this.diskReader, this.generationService, dataDir,
+                config.perDimensionTimestampCacheSizeMB);
         this.offThreadProcessor.start();
 
         this.dirtyBroadcaster = new DirtyColumnBroadcaster(

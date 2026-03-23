@@ -58,6 +58,8 @@ public final class LSSConstants {
     public static final int MAX_RATE_LIMIT = 1000;
     public static final int MIN_CONCURRENCY_LIMIT = 1;
     public static final int MAX_CONCURRENCY_LIMIT = 1000;
+    public static final int MIN_TIMESTAMP_CACHE_SIZE_MB = 1;
+    public static final int MAX_TIMESTAMP_CACHE_SIZE_MB = 256;
     public static final int MAX_BATCH_CHUNK_REQUESTS = 1024;
     public static final int MAX_BATCH_RESPONSES = 4096;
 

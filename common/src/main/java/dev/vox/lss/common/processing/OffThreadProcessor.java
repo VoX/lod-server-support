@@ -67,12 +67,13 @@ public abstract class OffThreadProcessor<PlayerState extends PlayerStateAccess, 
 
     protected OffThreadProcessor(Map<UUID, PlayerState> players,
                                   boolean diskReadingAvailable, boolean generationAvailable,
-                                  Path dataDir) {
+                                  Path dataDir, int perDimensionTimestampCacheSizeMB) {
         this.players = players;
         this.diskReadingAvailable = diskReadingAvailable;
         this.generationAvailable = generationAvailable;
         this.dataDir = dataDir;
-        this.timestampCache = new ColumnTimestampCache();
+        this.timestampCache = new ColumnTimestampCache(
+                ColumnTimestampCache.mbToEntries(perDimensionTimestampCacheSizeMB));
         if (dataDir != null) {
             this.timestampCache.load(dataDir);
         }
