@@ -5,9 +5,12 @@ import dev.vox.lss.common.LSSLogger;
 import dev.vox.lss.common.PositionUtil;
 import dev.vox.lss.common.voxel.ColumnTimestampCache;
 
+import java.nio.file.Path;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * Core processing loop running on a dedicated thread.
@@ -22,7 +25,7 @@ public abstract class OffThreadProcessor<PlayerState extends PlayerStateAccess, 
     private static final int SNAPSHOT_POLL_MS = 50;
     private static final int SHUTDOWN_JOIN_MS = 5000;
     private static final int EVICTION_INTERVAL_CYCLES = 1200; // ~60s at 20 TPS
-    private static final long EVICTION_TTL_SECONDS = 2 * 60 * 60; // 2 hours
+    private static final int SAVE_INTERVAL_CYCLES = 6000; // ~5 min at 20 TPS
 
     /** Request for the main thread to submit a generation ticket (requires MC world state). */
     public record GenerationTicketRequest(UUID playerUuid, int requestId, int cx, int cz,
@@ -50,16 +53,29 @@ public abstract class OffThreadProcessor<PlayerState extends PlayerStateAccess, 
 
     // Cross-player disk read deduplication (processing-thread-owned)
     private final DedupTracker dedupTracker = new DedupTracker();
+    private final Path dataDir;
     private int evictionCounter;
+    private int saveCounter;
     private int consecutiveErrors;
     private long cycleNow; // cached epochSeconds for current processing cycle
 
+    private static final ExecutorService SAVE_EXECUTOR = Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(r, "LSS-TimestampSave");
+        t.setDaemon(true);
+        return t;
+    });
+
     protected OffThreadProcessor(Map<UUID, PlayerState> players,
-                                  boolean diskReadingAvailable, boolean generationAvailable) {
+                                  boolean diskReadingAvailable, boolean generationAvailable,
+                                  Path dataDir) {
         this.players = players;
         this.diskReadingAvailable = diskReadingAvailable;
         this.generationAvailable = generationAvailable;
+        this.dataDir = dataDir;
         this.timestampCache = new ColumnTimestampCache();
+        if (dataDir != null) {
+            this.timestampCache.load(dataDir);
+        }
         this.ctx = new ProcessingContext(this.sendActions, this.generationTicketRequests,
                 new ProcessingDiagnostics(), new SequenceCounter());
         this.requestRouter = new IncomingRequestRouter<>(this.timestampCache,
@@ -187,10 +203,16 @@ public abstract class OffThreadProcessor<PlayerState extends PlayerStateAccess, 
 
         if (++this.evictionCounter >= EVICTION_INTERVAL_CYCLES) {
             this.evictionCounter = 0;
-            int evicted = this.timestampCache.evictOlderThan(EVICTION_TTL_SECONDS);
+            int evicted = this.timestampCache.evictIfOversized();
             if (evicted > 0 && LSSLogger.isDebugEnabled()) {
-                LSSLogger.debug("Evicted " + evicted + " stale timestamp cache entries (" + this.timestampCache.size() + " remaining)");
+                LSSLogger.debug("Evicted " + evicted + " oversized timestamp cache entries (" + this.timestampCache.size() + " remaining)");
             }
+        }
+
+        if (this.dataDir != null && ++this.saveCounter >= SAVE_INTERVAL_CYCLES) {
+            this.saveCounter = 0;
+            var cacheSnapshot = this.timestampCache.snapshotForSave();
+            SAVE_EXECUTOR.execute(() -> cacheSnapshot.save(this.dataDir));
         }
     }
 
@@ -282,7 +304,12 @@ public abstract class OffThreadProcessor<PlayerState extends PlayerStateAccess, 
                     handleDiskNotFound(playerUuid, state, requestId, cx, cz, pending);
                 } else {
                     state.markDiskReadDone(cx, cz);
-                    this.enqueueResultPayloads(state, result);
+                    if (result.sectionBytes() != null) {
+                        this.enqueueResultPayloads(state, result);
+                    } else {
+                        // All-air chunk (exists on disk but no visible sections) — notify client
+                        this.ctx.sendActions().add(new SendAction.ColumnUpToDate(playerUuid, requestId));
+                    }
                     // Store timestamp so reconnecting clients get up-to-date responses
                     this.timestampCache.put(entry.getValue().dimension(), packed, result.columnTimestamp(), this.cycleNow);
                 }
@@ -419,6 +446,11 @@ public abstract class OffThreadProcessor<PlayerState extends PlayerStateAccess, 
             }
         } catch (InterruptedException ignored) {
             Thread.currentThread().interrupt();
+        }
+
+        // Save timestamp cache to disk (synchronous — server is shutting down)
+        if (this.dataDir != null) {
+            this.timestampCache.save(this.dataDir);
         }
     }
 }

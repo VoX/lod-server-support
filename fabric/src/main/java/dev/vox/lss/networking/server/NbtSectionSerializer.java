@@ -77,7 +77,7 @@ final class NbtSectionSerializer {
             }
         }
 
-        if (parsed.isEmpty()) return null;
+        if (parsed.isEmpty()) return new byte[0];
 
         // Second pass: serialize to wire format
         var buf = new FriendlyByteBuf(Unpooled.buffer(parsed.size() * 1024));

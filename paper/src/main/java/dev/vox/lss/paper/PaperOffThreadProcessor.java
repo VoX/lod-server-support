@@ -4,6 +4,7 @@ import dev.vox.lss.common.LSSLogger;
 import dev.vox.lss.common.processing.OffThreadProcessor;
 import net.minecraft.server.level.ServerLevel;
 
+import java.nio.file.Path;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -22,9 +23,10 @@ public class PaperOffThreadProcessor extends OffThreadProcessor<PaperPlayerReque
 
     public PaperOffThreadProcessor(Map<UUID, PaperPlayerRequestState> players,
                                     PaperChunkDiskReader diskReader,
-                                    PaperChunkGenerationService generationService) {
+                                    PaperChunkGenerationService generationService,
+                                    Path dataDir) {
         super(players,
-                diskReader != null, generationService != null);
+                diskReader != null, generationService != null, dataDir);
         this.diskReader = diskReader;
         this.generationService = generationService;
     }

@@ -8,6 +8,7 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
 
+import java.nio.file.Path;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -29,8 +30,9 @@ public class FabricOffThreadProcessor extends OffThreadProcessor<PlayerRequestSt
 
     public FabricOffThreadProcessor(Map<UUID, PlayerRequestState> players,
                                      ChunkDiskReader diskReader,
-                                     ChunkGenerationService generationService) {
-        super(players, diskReader != null, generationService != null);
+                                     ChunkGenerationService generationService,
+                                     Path dataDir) {
+        super(players, diskReader != null, generationService != null, dataDir);
         this.diskReader = diskReader;
         this.generationService = generationService;
     }

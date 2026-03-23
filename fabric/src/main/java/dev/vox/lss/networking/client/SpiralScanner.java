@@ -84,6 +84,8 @@ class SpiralScanner {
         long[] tsBuf = this.tsBuf;
         int count = 0;
 
+        int genCap = sessionConfig.generationConcurrencyLimitPerPlayer() * BUDGET_MULTIPLIER;
+
         int exclusionDistSq = exclusionRadius * exclusionRadius;
         int[] chunkCoords = new int[2];
         int localScanRing = -1;
@@ -127,6 +129,7 @@ class SpiralScanner {
                 if (stored == -1L) {
                     ts = -1L; // Unknown — sync-on-load first; server generates only on explicit retry
                 } else if (stored == 0L && sessionConfig.generationEnabled()) {
+                    if (genQueued >= genCap) { ringFullySatisfied = false; continue; }
                     ts = 0L; // Not generated — generation retry
                 } else if (dirtyColumns.contains(packed)) {
                     ts = stored; // Server-pushed dirty

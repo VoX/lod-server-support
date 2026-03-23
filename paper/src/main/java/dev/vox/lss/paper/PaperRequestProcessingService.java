@@ -18,6 +18,7 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.chunk.LevelChunk;
+import net.minecraft.world.level.storage.LevelResource;
 import org.bukkit.plugin.Plugin;
 
 import java.util.ArrayList;
@@ -71,9 +72,10 @@ public class PaperRequestProcessingService {
         }
         this.bandwidthLimiter = new SharedBandwidthLimiter(config.bytesPerSecondLimitGlobal);
 
+        var dataDir = server.getWorldPath(LevelResource.ROOT).resolve("data");
         this.offThreadProcessor = new PaperOffThreadProcessor(
                 this.players,
-                this.diskReader, this.generationService);
+                this.diskReader, this.generationService, dataDir);
         this.offThreadProcessor.start();
 
         this.dirtyTracker = new DirtyColumnTracker();

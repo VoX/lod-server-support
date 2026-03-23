@@ -21,6 +21,7 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.chunk.LevelChunk;
+import net.minecraft.world.level.storage.LevelResource;
 
 import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
@@ -73,9 +74,10 @@ public class RequestProcessingService {
         }
         this.bandwidthLimiter = new SharedBandwidthLimiter(config.bytesPerSecondLimitGlobal);
 
+        var dataDir = server.getWorldPath(LevelResource.ROOT).resolve("data");
         this.offThreadProcessor = new FabricOffThreadProcessor(
                 this.players,
-                this.diskReader, this.generationService);
+                this.diskReader, this.generationService, dataDir);
         this.offThreadProcessor.start();
 
         this.dirtyBroadcaster = new DirtyColumnBroadcaster(

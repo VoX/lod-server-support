@@ -93,6 +93,17 @@ public class PaperChunkDiskReader extends AbstractChunkDiskReader<PaperChunkDisk
                 return;
             }
 
+            if (serialized.length == 0) {
+                // Chunk exists on disk (FULL status) but is all air — resolve as found, not "not found"
+                long columnTimestamp = LSSConstants.epochSeconds();
+                String dimensionStr = dimension.identifier().toString();
+                this.diag.recordEmpty();
+                this.diag.recordCompleted(System.nanoTime() - startNs);
+                addResult(playerUuid, new SimpleReadResult(playerUuid, requestId, chunkX, chunkZ,
+                        null, dimensionStr, 0, columnTimestamp, false, false, submissionOrder));
+                return;
+            }
+
             long columnTimestamp = LSSConstants.epochSeconds();
             String dimensionStr = dimension.identifier().toString();
             int estimatedBytes = serialized.length + LSSConstants.ESTIMATED_COLUMN_OVERHEAD_BYTES;
