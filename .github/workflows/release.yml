@@ -53,5 +53,7 @@ jobs:
           name: ${{ github.ref_name }} - Paper
           version: ${{ github.ref_name }}+paper
           version-type: release
-          loaders: paper
+          loaders: |
+            paper
+            purpur
           game-versions: 1.21.11

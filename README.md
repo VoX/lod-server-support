@@ -34,6 +34,11 @@ Download from [Modrinth](https://modrinth.com/plugin/lod-server-support):
 2. Install the Fabric mod **and** [Voxy](https://modrinth.com/mod/voxy) on all clients
 3. Restart the server — config is generated at `config/lss-server-config.json`
 
+### Fabric Client
+
+1. Install [Voxy](https://modrinth.com/mod/voxy) and place `lod-server-support-fabric.jar` in the client's `mods/` directory
+2. Join a server running LSS — client config is generated at `config/lss-client-config.json`
+
 ### Paper Server
 
 1. Place `lod-server-support-paper.jar` in the server's `plugins/` directory
