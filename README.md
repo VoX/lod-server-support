@@ -114,3 +114,7 @@ Client config is generated at `config/lss-client-config.json` on first run.
 ## License
 
 MIT
+
+## Links
+
+[![Hypercommit](https://img.shields.io/badge/Hypercommit-DB2475)](https://hypercommit.com/lod-server-support)
