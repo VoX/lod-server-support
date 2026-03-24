@@ -11,6 +11,47 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract release notes from tag
+        id: release_notes
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+
+          # Annotated tags have objecttype 'tag'; lightweight have 'commit'
+          TAG_TYPE=$(git for-each-ref --format='%(objecttype)' "refs/tags/${TAG}")
+          if [ "$TAG_TYPE" = "tag" ]; then
+            NOTES=$(git for-each-ref --format='%(contents)' "refs/tags/${TAG}")
+          else
+            NOTES=""
+          fi
+
+          # Fallback for lightweight tags: commit subjects as bullet list
+          if [ -z "$NOTES" ]; then
+            PREV_TAG=$(git tag -l 'v*' --sort=-v:refname | grep -v "^${TAG}$" | head -1)
+            if [ -n "$PREV_TAG" ]; then
+              NOTES=$(git log --format="- %s" "${PREV_TAG}..${TAG}")
+            else
+              NOTES=$(git log --format="- %s" "${TAG}")
+            fi
+          fi
+
+          # Append compare link
+          PREV_TAG=$(git tag -l 'v*' --sort=-v:refname | grep -v "^${TAG}$" | head -1)
+          if [ -n "$PREV_TAG" ]; then
+            COMPARE="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/compare/${PREV_TAG}...${TAG}"
+          else
+            COMPARE="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/commits/${TAG}"
+          fi
+          NOTES=$(printf '%s\n\n**Full Changelog**: %s' "$NOTES" "$COMPARE")
+
+          {
+            echo "notes<<RELEASE_NOTES_EOF"
+            echo "$NOTES"
+            echo "RELEASE_NOTES_EOF"
+          } >> "$GITHUB_OUTPUT"
 
       - uses: actions/setup-java@v4
         with:
@@ -27,10 +68,10 @@ jobs:
 
       - uses: softprops/action-gh-release@v2
         with:
+          body: ${{ steps.release_notes.outputs.notes }}
           files: |
             fabric/build/libs/lod-server-support-fabric.jar
             paper/build/libs/lod-server-support-paper.jar
-          generate_release_notes: true
 
       - name: Upload Fabric to Modrinth
         uses: Kir-Antipov/mc-publish@v3.3
@@ -43,6 +84,7 @@ jobs:
           version-type: release
           loaders: fabric
           game-versions: 1.21.11
+          changelog: ${{ steps.release_notes.outputs.notes }}
 
       - name: Upload Paper to Modrinth
         uses: Kir-Antipov/mc-publish@v3.3
@@ -57,3 +99,4 @@ jobs:
             paper
             purpur
           game-versions: 1.21.11
+          changelog: ${{ steps.release_notes.outputs.notes }}

@@ -206,3 +206,62 @@ The shell script builds the mod, starts a dedicated server (`runBenchmarkServer`
 - **No compile-time optional deps** — all mod compat uses `MethodHandle` bridges (MC types must use direct class literals, not `Class.forName()`, due to Fabric remapping)
 - **Mappings:** Mojang official (not Yarn). Paper uses Mojang mappings natively via paperweight-userdev.
 - **Package:** `dev.vox.lss` (Fabric), `dev.vox.lss.paper` (Paper), `dev.vox.lss.common` (shared)
+
+## Releasing
+
+Releases are triggered by pushing an **annotated tag** (`git tag -a`). The tag annotation message becomes the release notes on both GitHub and Modrinth. The CI workflow extracts it automatically.
+
+### Tagging a Release
+
+1. Review commits since the last tag: `git log $(git describe --tags --abbrev=0)..HEAD --oneline`
+2. Write release notes as the tag annotation (see format below)
+3. Create the annotated tag: `git tag -a v<version> -m "<release notes>"`
+4. Push: `git push origin v<version>`
+
+### Release Notes Format
+
+Write for **Minecraft server admins and mod users**, not developers. Use markdown with category headers — omit empty categories:
+
+```
+### Bug Fixes
+
+- **Short summary** — What changed and why it matters to users.
+
+### New Features
+
+- **Short summary** — What it does and how users benefit.
+
+### Configuration
+
+- **Short summary** — New/changed config options with defaults.
+
+### Performance
+
+- **Short summary** — What improved and the user-visible impact.
+```
+
+Rules:
+- Each item: bold summary + dash + 1-2 sentence explanation
+- Mention Fabric or Paper when a change is platform-specific; omit qualifier when it affects both
+- Skip internal-only changes (CI, README, refactoring) unless they have user-visible impact
+- Use present tense ("Fixes X" not "Fixed X" — GitHub/Modrinth display these as current release notes)
+- No version heading — the tag name is displayed as the title automatically
+
+### Example
+
+```bash
+git tag -a v0.2.4 -m "$(cat <<'EOF'
+### Bug Fixes
+
+- **Fixes infinite generation loop in The End** — All-air chunks were treated as missing, causing endless re-generation in void dimensions.
+
+### New Features
+
+- **Purpur server support** — Paper builds now work on Purpur servers.
+
+### Configuration
+
+- **Configurable timestamp cache size** — New `perDimensionTimestampCacheSizeMB` option (default 32 MB) controls memory used for chunk freshness tracking.
+EOF
+)"
+```
