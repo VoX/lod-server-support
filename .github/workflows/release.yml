@@ -63,7 +63,7 @@ jobs:
       - name: Build Fabric
         run: ./gradlew :fabric:build -x runClientGameTest -Pmod_version=${GITHUB_REF_NAME#v}
 
-      - name: Build Paper
+      - name: Build Paper (compile check only — not published until Paper 26.1 stabilizes)
         run: ./gradlew :paper:shadowJar -Pmod_version=${GITHUB_REF_NAME#v}
 
       - uses: softprops/action-gh-release@v2

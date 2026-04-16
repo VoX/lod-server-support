@@ -14,6 +14,7 @@ public class LSSClientGameTests implements FabricClientGameTest {
         // Without a consumer, capabilities=0 and the server skips all request routing.
         LSSApi.registerColumnConsumer((level, dimension, chunkX, chunkZ, columnData) -> {});
 
+        // Low values prevent llvmpipe from starving the integrated server on CI
         context.runOnClient(client -> {
             client.options.renderDistance().set(2);
             client.options.simulationDistance().set(2);

@@ -23,7 +23,7 @@ FABRIC_API_URL="https://cdn.modrinth.com/data/P7dR8mSH/versions/Jj2SOUMp/fabric-
 C2ME_URL="https://cdn.modrinth.com/data/VSNURh3q/versions/tKXPZtpT/c2me-fabric-mc26.1-0.3.7%2Balpha.0.61.jar"
 
 # --- Java version check ---
-JAVA_MAJOR=$(java -version 2>&1 | head -1 | sed 's/.*"\([0-9]*\).*/\1/')
+JAVA_MAJOR=$(java -version 2>&1 | head -1 | sed 's/.*"\([0-9]\+\).*/\1/')
 if [ "$JAVA_MAJOR" -lt 25 ] 2>/dev/null; then
     echo "ERROR: Java 25+ required for MC 26.1. Found: Java $JAVA_MAJOR" >&2
     echo "  Set JAVA_HOME to a JDK 25+ installation." >&2
