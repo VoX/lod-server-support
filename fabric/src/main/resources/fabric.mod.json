@@ -32,13 +32,14 @@
   ],
   "depends": {
     "minecraft": [
-      "1.21.11"
+      "26.1"
     ],
-    "fabricloader": ">=0.14.22",
-    "fabric-api": ">=0.91.1"
+    "fabricloader": ">=0.18.4",
+    "fabric-api": ">=0.146.0"
   },
   "suggests": {
-    "sodium": ">=0.8.6",
-    "modmenu": "*"
+    "sodium": ">=0.8.7",
+    "modmenu": "*",
+    "voxy": ">=0.2.14-alpha"
   }
 }

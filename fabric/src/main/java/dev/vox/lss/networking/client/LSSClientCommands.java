@@ -2,7 +2,7 @@ package dev.vox.lss.networking.client;
 
 import com.mojang.brigadier.Command;
 import dev.vox.lss.common.DiagnosticsFormatter;
-import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
+import net.fabricmc.fabric.api.client.command.v2.ClientCommands;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
 import net.minecraft.ChatFormatting;
@@ -11,8 +11,8 @@ import net.minecraft.network.chat.Component;
 public class LSSClientCommands {
     public static void init() {
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> {
-            dispatcher.register(ClientCommandManager.literal("lss")
-                    .then(ClientCommandManager.literal("clearcache")
+            dispatcher.register(ClientCommands.literal("lss")
+                    .then(ClientCommands.literal("clearcache")
                             .executes(context -> {
                                 var manager = LSSClientNetworking.getRequestManager();
                                 if (manager != null) {
@@ -27,7 +27,7 @@ public class LSSClientCommands {
                                 return Command.SINGLE_SUCCESS;
                             })
                     )
-                    .then(ClientCommandManager.literal("diag")
+                    .then(ClientCommands.literal("diag")
                             .executes(context -> {
                                 showDiagnostics(context.getSource());
                                 return Command.SINGLE_SUCCESS;

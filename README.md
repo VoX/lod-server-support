@@ -4,6 +4,15 @@ Distributes LOD (Level of Detail) chunk data from servers to connected clients o
 
 Supports both **Fabric** and **Paper** servers. The client is always a Fabric mod.
 
+### Version Compatibility
+
+| LSS Version | Minecraft | Fabric | Paper | Voxy | Java |
+|---|---|---|---|---|---|
+| **v0.3.x** | **26.1** | Server + Client | *Coming soon* | 0.2.14-alpha+ | 25+ |
+| v0.2.x | 1.21.11 | Server + Client | Server | 0.2.13-alpha | 21+ |
+
+Paper 26.1 support will ship in a future release once Paper 26.1 stabilizes. Paper server admins on 1.21.11 should continue using [v0.2.2](https://modrinth.com/plugin/lod-server-support/versions).
+
 https://github.com/user-attachments/assets/721fb344-890e-4e03-ab36-539444427f7b
 
 ## How It Works
@@ -23,8 +32,8 @@ The result: players see fully rendered terrain out to hundreds of chunks on mult
 
 Download from [Modrinth](https://modrinth.com/plugin/lod-server-support):
 
-- **lod-server-support-fabric** — Fabric mod JAR (client + server)
-- **lod-server-support-paper** — Paper plugin JAR (server only)
+- **v0.3.x (MC 26.1):** `lod-server-support-fabric` — Fabric mod JAR (client + server)
+- **v0.2.x (MC 1.21.11):** `lod-server-support-fabric` + `lod-server-support-paper` — includes Paper plugin
 
 ## Installation
 
@@ -39,28 +48,28 @@ Download from [Modrinth](https://modrinth.com/plugin/lod-server-support):
 1. Install [Voxy](https://modrinth.com/mod/voxy) and place `lod-server-support-fabric.jar` in the client's `mods/` directory
 2. Join a server running LSS — client config is generated at `config/lss-client-config.json`
 
-### Paper Server
+### Paper Server (v0.2.x only — MC 1.21.11)
+
+Paper 26.1 support is not yet available. Paper server admins should use [v0.2.2](https://modrinth.com/plugin/lod-server-support/versions) with MC 1.21.11.
 
 1. Place `lod-server-support-paper.jar` in the server's `plugins/` directory
 2. Install the Fabric mod **and** [Voxy](https://modrinth.com/mod/voxy) on all clients
 3. Restart the server — config is generated at `plugins/LodServerSupport/lss-server-config.json`
 
-## Requirements
+## Requirements (v0.3.x — MC 26.1)
 
 ### Fabric Server
-- Minecraft 1.21.11
-- Fabric Loader 0.14.22+
+- Minecraft 26.1
+- Fabric Loader 0.18.4+
 - Fabric API
-- Java 21+
+- Java 25+
 
-### Paper Server
-- Paper 1.21.11+
-- Java 21+
-
-### Client (both platforms)
-- Fabric Loader 0.14.22+
+### Client
+- Minecraft 26.1
+- Fabric Loader 0.18.4+
 - Fabric API
-- [Voxy](https://modrinth.com/mod/voxy)
+- [Voxy](https://modrinth.com/mod/voxy) 0.2.14-alpha+
+- Java 25+
 
 ## Commands
 

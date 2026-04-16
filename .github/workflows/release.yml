@@ -56,7 +56,7 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: 21
+          java-version: 25
 
       - uses: gradle/actions/setup-gradle@v4
 
@@ -71,7 +71,6 @@ jobs:
           body: ${{ steps.release_notes.outputs.notes }}
           files: |
             fabric/build/libs/lod-server-support-fabric.jar
-            paper/build/libs/lod-server-support-paper.jar
 
       - name: Upload Fabric to Modrinth
         uses: Kir-Antipov/mc-publish@v3.3
@@ -79,24 +78,9 @@ jobs:
           modrinth-id: lKiXKLvv
           modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
           files: fabric/build/libs/lod-server-support-fabric.jar
-          name: ${{ github.ref_name }} - Fabric
-          version: ${{ github.ref_name }}+fabric
+          name: ${{ github.ref_name }} - Fabric (MC 26.1)
+          version: ${{ github.ref_name }}+fabric+mc26.1
           version-type: release
           loaders: fabric
-          game-versions: 1.21.11
-          changelog: ${{ steps.release_notes.outputs.notes }}
-
-      - name: Upload Paper to Modrinth
-        uses: Kir-Antipov/mc-publish@v3.3
-        with:
-          modrinth-id: lKiXKLvv
-          modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
-          files: paper/build/libs/lod-server-support-paper.jar
-          name: ${{ github.ref_name }} - Paper
-          version: ${{ github.ref_name }}+paper
-          version-type: release
-          loaders: |
-            paper
-            purpur
-          game-versions: 1.21.11
+          game-versions: 26.1
           changelog: ${{ steps.release_notes.outputs.notes }}

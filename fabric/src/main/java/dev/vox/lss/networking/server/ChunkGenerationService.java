@@ -108,11 +108,11 @@ public class ChunkGenerationService {
             gen.ticksWaiting++;
 
             if (gen.ticksWaiting > this.timeoutTicks) {
-                LSSLogger.debug("Generation timeout for chunk " + gen.pos.x + "," + gen.pos.z
+                LSSLogger.debug("Generation timeout for chunk " + gen.pos.x() + "," + gen.pos.z()
                         + " after " + gen.ticksWaiting + " ticks (" + gen.callbacks.size() + " callbacks)");
                 for (var cb : gen.callbacks) {
                     this.addResult(cb.playerUuid, ChunkDiskReader.emptyResult(
-                            cb.playerUuid, cb.requestId, gen.pos.x, gen.pos.z, cb.submissionOrder));
+                            cb.playerUuid, cb.requestId, gen.pos.x(), gen.pos.z(), cb.submissionOrder));
                     decrementCount(this.perPlayerActiveCount, cb.playerUuid);
                 }
                 gen.level.getChunkSource().removeTicketWithRadius(LSS_GEN_TICKET, gen.pos, 0);
@@ -121,12 +121,12 @@ public class ChunkGenerationService {
                 continue;
             }
 
-            LevelChunk chunk = gen.level.getChunkSource().getChunkNow(gen.pos.x, gen.pos.z);
+            LevelChunk chunk = gen.level.getChunkSource().getChunkNow(gen.pos.x(), gen.pos.z());
             if (chunk != null) {
                 try {
                     long columnTimestamp = LSSConstants.epochSeconds();
                     LoadedColumnData columnData = SectionSerializer.serializeColumn(
-                            gen.level, chunk, gen.pos.x, gen.pos.z);
+                            gen.level, chunk, gen.pos.x(), gen.pos.z());
 
                     // One GenerationReadyData per callback — processing thread will voxelize
                     for (var cb : gen.callbacks) {
@@ -138,10 +138,10 @@ public class ChunkGenerationService {
                     }
                     this.totalCompleted++;
                 } catch (Exception e) {
-                    LSSLogger.error("Failed to extract primitives for generated chunk at " + gen.pos.x + ", " + gen.pos.z, e);
+                    LSSLogger.error("Failed to extract primitives for generated chunk at " + gen.pos.x() + ", " + gen.pos.z(), e);
                     for (var cb : gen.callbacks) {
                         this.addResult(cb.playerUuid, ChunkDiskReader.emptyResult(
-                                cb.playerUuid, cb.requestId, gen.pos.x, gen.pos.z, cb.submissionOrder));
+                                cb.playerUuid, cb.requestId, gen.pos.x(), gen.pos.z(), cb.submissionOrder));
                         decrementCount(this.perPlayerActiveCount, cb.playerUuid);
                     }
                 }
