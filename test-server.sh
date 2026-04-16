@@ -10,7 +10,7 @@ FABRIC_DIR="$SCRIPT_DIR/test-server/fabric"
 PAPER_DIR="$SCRIPT_DIR/test-server/paper"
 
 # --- Fabric versions ---
-FABRIC_MC_VERSION="26.1"
+FABRIC_MC_VERSION="26.1.2"
 FABRIC_LOADER_VERSION="0.18.5"
 FABRIC_INSTALLER_VERSION="1.1.1"
 
@@ -20,7 +20,7 @@ PAPER_MC_VERSION="1.21.11"
 # --- Download URLs ---
 FABRIC_SERVER_URL="https://meta.fabricmc.net/v2/versions/loader/${FABRIC_MC_VERSION}/${FABRIC_LOADER_VERSION}/${FABRIC_INSTALLER_VERSION}/server/jar"
 FABRIC_API_URL="https://cdn.modrinth.com/data/P7dR8mSH/versions/Jj2SOUMp/fabric-api-0.146.0%2B26.1.2.jar"
-C2ME_URL="https://cdn.modrinth.com/data/VSNURh3q/versions/tKXPZtpT/c2me-fabric-mc26.1-0.3.7%2Balpha.0.61.jar"
+C2ME_URL="https://cdn.modrinth.com/data/VSNURh3q/versions/yrNQQ1AQ/c2me-fabric-mc26.1.2-0.3.7%2Balpha.0.65.jar"
 
 # --- Java version check ---
 JAVA_MAJOR=$(java -version 2>&1 | head -1 | sed 's/.*"\([0-9]\+\).*/\1/')

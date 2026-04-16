@@ -8,7 +8,7 @@ Supports both **Fabric** and **Paper** servers. The client is always a Fabric mo
 
 | LSS Version | Minecraft | Fabric | Paper | Voxy | Java |
 |---|---|---|---|---|---|
-| **v0.3.x** | **26.1** | Server + Client | *Coming soon* | 0.2.14-alpha+ | 25+ |
+| **v0.3.x** | **26.1.x** | Server + Client | *Coming soon* | 0.2.14-alpha+ | 25+ |
 | v0.2.x | 1.21.11 | Server + Client | Server | 0.2.13-alpha | 21+ |
 
 Paper 26.1 support will ship in a future release once Paper 26.1 stabilizes. Paper server admins on 1.21.11 should continue using [v0.2.2](https://modrinth.com/plugin/lod-server-support/versions).

@@ -82,5 +82,8 @@ jobs:
           version: ${{ github.ref_name }}+fabric+mc26.1
           version-type: release
           loaders: fabric
-          game-versions: 26.1
+          game-versions: |
+            26.1
+            26.1.1
+            26.1.2
           changelog: ${{ steps.release_notes.outputs.notes }}
