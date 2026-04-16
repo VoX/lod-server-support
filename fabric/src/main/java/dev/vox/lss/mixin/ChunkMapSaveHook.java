@@ -24,7 +24,7 @@ public class ChunkMapSaveHook {
                     ServerLevel level = ((AccessorChunkMap) (Object) this).getLevel();
                     this.lss$cachedDimension = level.dimension().identifier().toString();
                 }
-                service.getDirtyTracker().markDirty(this.lss$cachedDimension, chunk.getPos().x, chunk.getPos().z);
+                service.getDirtyTracker().markDirty(this.lss$cachedDimension, chunk.getPos().x(), chunk.getPos().z());
             }
         }
     }

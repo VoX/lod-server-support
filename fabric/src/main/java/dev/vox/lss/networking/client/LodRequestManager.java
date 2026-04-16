@@ -190,7 +190,8 @@ public class LodRequestManager {
                 }
                 if (missingVanilla > 0) {
                     int exclusionArea = (2 * viewDistance + 1) * (2 * viewDistance + 1);
-                    float vanillaScale = Math.max(0f, 1f - (float) missingVanilla / exclusionArea);
+                    float missingFraction = (float) missingVanilla / exclusionArea;
+                    float vanillaScale = Math.max(0f, 1f - missingFraction * missingFraction);
                     if (vanillaScale <= 0f) budget = 0;
                     else budget = Math.max(1, Math.round(budget * vanillaScale));
                 }

@@ -14,37 +14,37 @@ public class LSSNetworking {
 
     public static void registerPayloads() {
         // Client -> Server
-        PayloadTypeRegistry.playC2S().register(
+        PayloadTypeRegistry.serverboundPlay().register(
                 HandshakeC2SPayload.TYPE,
                 HandshakeC2SPayload.CODEC
         );
-        PayloadTypeRegistry.playC2S().register(
+        PayloadTypeRegistry.serverboundPlay().register(
                 BatchChunkRequestC2SPayload.TYPE,
                 BatchChunkRequestC2SPayload.CODEC
         );
-        PayloadTypeRegistry.playC2S().register(
+        PayloadTypeRegistry.serverboundPlay().register(
                 CancelRequestC2SPayload.TYPE,
                 CancelRequestC2SPayload.CODEC
         );
-        PayloadTypeRegistry.playC2S().register(
+        PayloadTypeRegistry.serverboundPlay().register(
                 BandwidthUpdateC2SPayload.TYPE,
                 BandwidthUpdateC2SPayload.CODEC
         );
 
         // Server -> Client
-        PayloadTypeRegistry.playS2C().register(
+        PayloadTypeRegistry.clientboundPlay().register(
                 SessionConfigS2CPayload.TYPE,
                 SessionConfigS2CPayload.CODEC
         );
-        PayloadTypeRegistry.playS2C().register(
+        PayloadTypeRegistry.clientboundPlay().register(
                 BatchResponseS2CPayload.TYPE,
                 BatchResponseS2CPayload.CODEC
         );
-        PayloadTypeRegistry.playS2C().register(
+        PayloadTypeRegistry.clientboundPlay().register(
                 DirtyColumnsS2CPayload.TYPE,
                 DirtyColumnsS2CPayload.CODEC
         );
-        PayloadTypeRegistry.playS2C().register(
+        PayloadTypeRegistry.clientboundPlay().register(
                 VoxelColumnS2CPayload.TYPE,
                 VoxelColumnS2CPayload.CODEC
         );

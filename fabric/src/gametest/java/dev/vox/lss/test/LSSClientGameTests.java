@@ -1,5 +1,6 @@
 package dev.vox.lss.test;
 
+import dev.vox.lss.api.LSSApi;
 import dev.vox.lss.config.LSSServerConfig;
 import dev.vox.lss.networking.client.LSSClientNetworking;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
@@ -9,11 +10,11 @@ public class LSSClientGameTests implements FabricClientGameTest {
 
     @Override
     public void runTest(ClientGameTestContext context) {
-        // Reduce render and simulation distance to prevent llvmpipe software
-        // rendering from starving the integrated server on CI's 2-vCPU runners.
-        // Spawn preparation is hardcoded to ~529 chunks regardless of view distance,
-        // but lower settings reduce client-side rendering work so the chunk worker
-        // threads get enough CPU time to complete generation within the 60s timeout.
+        // Register a no-op consumer so the handshake includes CAPABILITY_VOXEL_COLUMNS.
+        // Without a consumer, capabilities=0 and the server skips all request routing.
+        LSSApi.registerColumnConsumer((level, dimension, chunkX, chunkZ, columnData) -> {});
+
+        // Low values prevent llvmpipe from starving the integrated server on CI
         context.runOnClient(client -> {
             client.options.renderDistance().set(2);
             client.options.simulationDistance().set(2);
