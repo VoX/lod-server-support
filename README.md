@@ -120,6 +120,12 @@ Client config is generated at `config/lss-client-config.json` on first run.
 | `lodDistanceChunks` | `0` | Max LOD request distance in chunks (0 = use server limit) |
 | `offThreadSectionProcessing` | `true` | Process received sections off the render thread |
 
+## For Xantha (author of voxy-server-side)
+
+If you're reading this — your [voxy-server-side](https://modrinth.com/mod/voxy-server-side) project appears to be a rebuild of this repo: identical 57-class structure after a `dev.vox.lss → dev.xantha.vss` rename, same Fabric/Loom/MC toolchain, same mixin set, same networking payload shapes. MIT license makes that fine, but I'd rather collaborate than have two parallel ports drift apart.
+
+If you want to merge efforts — co-maintainership, credit, upstream PRs, or just a conversation — email **vox@bitvox.me**. No hard feelings either way.
+
 ## License
 
 MIT
