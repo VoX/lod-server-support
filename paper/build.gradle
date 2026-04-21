@@ -30,6 +30,10 @@ shadowJar {
     configurations = [project.configurations.runtimeClasspath]
     exclude 'org/slf4j/**'
     exclude 'META-INF/maven/org.slf4j/**'
+
+    from(rootProject.file("LICENSE")) {
+        rename { "${it}_lod-server-support-paper" }
+    }
 }
 
 tasks.withType(JavaCompile).configureEach {
