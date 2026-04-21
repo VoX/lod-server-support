@@ -120,9 +120,6 @@ Client config is generated at `config/lss-client-config.json` on first run.
 | `lodDistanceChunks` | `0` | Max LOD request distance in chunks (0 = use server limit) |
 | `offThreadSectionProcessing` | `true` | Process received sections off the render thread |
 
-## Xantha
-
-Email me at **vox@bitvox.me** — let's work together.
 
 ## License
 
