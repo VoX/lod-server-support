@@ -1,0 +1,287 @@
+package dev.vox.lss.paper;
+
+import com.mojang.serialization.Lifecycle;
+import io.netty.buffer.Unpooled;
+import net.minecraft.SharedConstants;
+import net.minecraft.core.HolderLookup;
+import net.minecraft.core.MappedRegistry;
+import net.minecraft.core.RegistrationInfo;
+import net.minecraft.core.RegistryAccess;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.data.registries.VanillaRegistries;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.NbtOps;
+import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.server.Bootstrap;
+import net.minecraft.world.level.biome.Biome;
+import net.minecraft.world.level.biome.Biomes;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.chunk.LevelChunkSection;
+import net.minecraft.world.level.chunk.PalettedContainerFactory;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+/**
+ * Paper mirror of the Fabric {@code dev.vox.lss.networking.server.NbtSectionSerializerTest}.
+ * Covers {@link PaperNbtSectionSerializer#serializeChunkNbt} (the region-NBT -> wire-bytes path).
+ * Uses the same reference grammar, so it also pins Paper's serializer to the Fabric output.
+ */
+// new LevelChunkSection(PalettedContainerFactory) is @Deprecated on Paper (anti-xray overload),
+// but is the canonical decode ctor used by the client; the 1-arg form is vanilla-identical.
+@SuppressWarnings("deprecation")
+class NbtSectionSerializerTest {
+
+    private static RegistryAccess REGISTRY_ACCESS;
+    private static PalettedContainerFactory FACTORY;
+
+    @BeforeAll
+    static void setup() {
+        SharedConstants.tryDetectVersion();
+        Bootstrap.bootStrap();
+        REGISTRY_ACCESS = buildRegistryAccess();
+        FACTORY = PalettedContainerFactory.create(REGISTRY_ACCESS);
+    }
+
+    private static RegistryAccess buildRegistryAccess() {
+        HolderLookup.Provider provider = VanillaRegistries.createLookup();
+        HolderLookup.RegistryLookup<Biome> src = provider.lookupOrThrow(Registries.BIOME);
+        MappedRegistry<Biome> biomes = new MappedRegistry<>(Registries.BIOME, Lifecycle.stable());
+        src.listElements().forEach(ref -> biomes.register(ref.key(), ref.value(), RegistrationInfo.BUILT_IN));
+        biomes.freeze();
+        return new RegistryAccess.ImmutableRegistryAccess(List.of(biomes));
+    }
+
+    private CompoundTag chunkNbt(String status, CompoundTag... sections) {
+        var c = new CompoundTag();
+        if (status != null) c.putString("Status", status);
+        var list = new ListTag();
+        for (var s : sections) list.add(s);
+        c.put("sections", list);
+        return c;
+    }
+
+    private CompoundTag sectionNbt(int y, boolean stone, boolean includeBiomes, byte[] blockLight, byte[] skyLight) {
+        var sec = new LevelChunkSection(FACTORY);
+        if (stone) sec.setBlockState(0, 0, 0, Blocks.STONE.defaultBlockState());
+        var s = new CompoundTag();
+        s.putInt("Y", y);
+        s.put("block_states", FACTORY.blockStatesContainerCodec().encodeStart(NbtOps.INSTANCE, sec.getStates()).getOrThrow());
+        if (includeBiomes) {
+            s.put("biomes", FACTORY.biomeContainerCodec().encodeStart(NbtOps.INSTANCE, sec.getBiomes()).getOrThrow());
+        }
+        if (blockLight != null) s.putByteArray("BlockLight", blockLight);
+        if (skyLight != null) s.putByteArray("SkyLight", skyLight);
+        return s;
+    }
+
+    private static byte[] light(int index, byte value) {
+        byte[] b = new byte[2048];
+        b[index] = value;
+        return b;
+    }
+
+    private record DecodedSection(int y, LevelChunkSection section,
+                                  boolean hasBlockLight, byte[] blockLight,
+                                  boolean hasSkyLight, byte[] skyLight) {}
+
+    private List<DecodedSection> decode(byte[] wire) {
+        var buf = new FriendlyByteBuf(Unpooled.wrappedBuffer(wire));
+        try {
+            int count = buf.readVarInt();
+            var out = new ArrayList<DecodedSection>(count);
+            for (int i = 0; i < count; i++) {
+                int y = buf.readByte();
+                var section = new LevelChunkSection(FACTORY);
+                section.read(buf);
+                boolean hasBl = buf.readBoolean();
+                byte[] bl = null;
+                if (hasBl) {
+                    bl = new byte[2048];
+                    buf.readBytes(bl);
+                }
+                boolean hasSl = buf.readBoolean();
+                byte[] sl = null;
+                if (hasSl) {
+                    sl = new byte[2048];
+                    buf.readBytes(sl);
+                }
+                out.add(new DecodedSection(y, section, hasBl, bl, hasSl, sl));
+            }
+            assertEquals(0, buf.readableBytes(), "wire buffer fully drained");
+            return out;
+        } finally {
+            buf.release();
+        }
+    }
+
+    @Test
+    void happyPath_stoneSection_roundTrips() {
+        byte[] wire = PaperNbtSectionSerializer.serializeChunkNbt(
+                chunkNbt("minecraft:full", sectionNbt(0, true, true, null, null)), REGISTRY_ACCESS);
+        var sections = decode(wire);
+        assertEquals(1, sections.size());
+        assertEquals(0, sections.get(0).y());
+        assertFalse(sections.get(0).section().hasOnlyAir());
+        assertEquals(Blocks.STONE.defaultBlockState(), sections.get(0).section().getBlockState(0, 0, 0));
+    }
+
+    @Test
+    void lightBytesPreserved() {
+        byte[] bl = light(0, (byte) 0x10);
+        byte[] sl = light(5, (byte) 0x0F);
+        byte[] wire = PaperNbtSectionSerializer.serializeChunkNbt(
+                chunkNbt("minecraft:full", sectionNbt(0, true, true, bl, sl)), REGISTRY_ACCESS);
+        var d = decode(wire).get(0);
+        assertTrue(d.hasBlockLight());
+        assertArrayEquals(bl, d.blockLight());
+        assertTrue(d.hasSkyLight());
+        assertArrayEquals(sl, d.skyLight());
+    }
+
+    @Test
+    void airOnly_withBlockLight_kept() {
+        byte[] bl = light(100, (byte) 0x01);
+        byte[] wire = PaperNbtSectionSerializer.serializeChunkNbt(
+                chunkNbt("minecraft:full", sectionNbt(3, false, true, bl, null)), REGISTRY_ACCESS);
+        var sections = decode(wire);
+        assertEquals(1, sections.size());
+        assertTrue(sections.get(0).section().hasOnlyAir());
+        assertTrue(sections.get(0).hasBlockLight());
+        assertArrayEquals(bl, sections.get(0).blockLight());
+    }
+
+    @Test
+    void airOnly_zeroBlockLight_dropped() {
+        byte[] wire = PaperNbtSectionSerializer.serializeChunkNbt(
+                chunkNbt("minecraft:full", sectionNbt(0, false, true, new byte[2048], new byte[2048])), REGISTRY_ACCESS);
+        assertEquals(0, wire.length);
+    }
+
+    @Test
+    void airOnly_noLightTag_dropped() {
+        byte[] wire = PaperNbtSectionSerializer.serializeChunkNbt(
+                chunkNbt("minecraft:full", sectionNbt(0, false, true, null, null)), REGISTRY_ACCESS);
+        assertEquals(0, wire.length);
+    }
+
+    @Test
+    void missingBiomes_defaultBiomePath_roundTrips() {
+        // Paper takes a divergent default-biome branch (factory.createForBiomes()) — assert it
+        // still produces a valid section that round-trips.
+        byte[] wire = PaperNbtSectionSerializer.serializeChunkNbt(
+                chunkNbt("minecraft:full", sectionNbt(0, true, false, null, null)), REGISTRY_ACCESS);
+        var sections = decode(wire);
+        assertEquals(1, sections.size());
+        assertEquals(Blocks.STONE.defaultBlockState(), sections.get(0).section().getBlockState(0, 0, 0));
+    }
+
+    @Test
+    void statusNotFull_returnsNull() {
+        assertNull(PaperNbtSectionSerializer.serializeChunkNbt(
+                chunkNbt("minecraft:features", sectionNbt(0, true, true, null, null)), REGISTRY_ACCESS));
+    }
+
+    @Test
+    void noSectionsList_returnsNull() {
+        var c = new CompoundTag();
+        c.putString("Status", "minecraft:full");
+        assertNull(PaperNbtSectionSerializer.serializeChunkNbt(c, REGISTRY_ACCESS));
+    }
+
+    @Test
+    void multiSection_orderAndNegativeY() {
+        byte[] wire = PaperNbtSectionSerializer.serializeChunkNbt(
+                chunkNbt("minecraft:full",
+                        sectionNbt(0, true, true, null, null),
+                        sectionNbt(-4, true, true, null, null)),
+                REGISTRY_ACCESS);
+        var sections = decode(wire);
+        assertEquals(2, sections.size());
+        assertEquals(0, sections.get(0).y());
+        assertEquals(-4, sections.get(1).y());
+    }
+
+    @Test
+    void statusMissing_returnsNull() {
+        assertNull(PaperNbtSectionSerializer.serializeChunkNbt(
+                chunkNbt(null, sectionNbt(0, true, true, null, null)), REGISTRY_ACCESS));
+    }
+
+    @Test
+    void missingBlockStates_sectionDropped() {
+        var noStates = new CompoundTag();
+        noStates.putInt("Y", 1);
+        noStates.put("biomes", FACTORY.biomeContainerCodec()
+                .encodeStart(NbtOps.INSTANCE, new LevelChunkSection(FACTORY).getBiomes()).getOrThrow());
+        byte[] wire = PaperNbtSectionSerializer.serializeChunkNbt(
+                chunkNbt("minecraft:full", noStates, sectionNbt(2, true, true, null, null)), REGISTRY_ACCESS);
+        var sections = decode(wire);
+        assertEquals(1, sections.size());
+        assertEquals(2, sections.get(0).y());
+    }
+
+    @Test
+    void sectionMissingY_skipped() {
+        var noY = new CompoundTag();
+        noY.put("block_states", FACTORY.blockStatesContainerCodec()
+                .encodeStart(NbtOps.INSTANCE, new LevelChunkSection(FACTORY).getStates()).getOrThrow());
+        byte[] wire = PaperNbtSectionSerializer.serializeChunkNbt(
+                chunkNbt("minecraft:full", noY, sectionNbt(7, true, true, null, null)), REGISTRY_ACCESS);
+        var sections = decode(wire);
+        assertEquals(1, sections.size());
+        assertEquals(7, sections.get(0).y());
+    }
+
+    @Test
+    void airOnly_skyLightOnly_dropped() {
+        byte[] wire = PaperNbtSectionSerializer.serializeChunkNbt(
+                chunkNbt("minecraft:full", sectionNbt(3, false, true, null, light(100, (byte) 0x0F))), REGISTRY_ACCESS);
+        assertEquals(0, wire.length, "air-only with only SkyLight (no BlockLight) is dropped");
+    }
+
+    @Test
+    void multiBlockSection_paletteRoundTrips() {
+        var states = FACTORY.createForBlockStates();
+        states.set(0, 0, 0, Blocks.STONE.defaultBlockState());
+        states.set(15, 15, 15, Blocks.DIRT.defaultBlockState());
+        states.set(7, 8, 9, Blocks.GLASS.defaultBlockState());
+        var section = decode(PaperNbtSectionSerializer.serializeChunkNbt(
+                chunkNbt("minecraft:full", sectionFrom(1, states, FACTORY.createForBiomes())), REGISTRY_ACCESS))
+                .get(0).section();
+        assertEquals(Blocks.STONE.defaultBlockState(), section.getBlockState(0, 0, 0));
+        assertEquals(Blocks.DIRT.defaultBlockState(), section.getBlockState(15, 15, 15));
+        assertEquals(Blocks.GLASS.defaultBlockState(), section.getBlockState(7, 8, 9), "multi-entry palette round-trips");
+    }
+
+    @Test
+    void biomeData_roundTrips() {
+        var states = FACTORY.createForBlockStates();
+        states.set(0, 0, 0, Blocks.STONE.defaultBlockState());
+        var biomes = FACTORY.createForBiomes();
+        biomes.set(0, 0, 0, REGISTRY_ACCESS.lookupOrThrow(Registries.BIOME).getOrThrow(Biomes.DESERT));
+        var section = decode(PaperNbtSectionSerializer.serializeChunkNbt(
+                chunkNbt("minecraft:full", sectionFrom(0, states, biomes)), REGISTRY_ACCESS))
+                .get(0).section();
+        assertTrue(section.getBiomes().get(0, 0, 0).is(Biomes.DESERT), "non-default biome (DESERT) survives the round-trip");
+        assertEquals(Blocks.STONE.defaultBlockState(), section.getBlockState(0, 0, 0));
+    }
+
+    private CompoundTag sectionFrom(int y, net.minecraft.world.level.chunk.PalettedContainer<net.minecraft.world.level.block.state.BlockState> states,
+                                    net.minecraft.world.level.chunk.PalettedContainer<net.minecraft.core.Holder<Biome>> biomes) {
+        var s = new CompoundTag();
+        s.putInt("Y", y);
+        s.put("block_states", FACTORY.blockStatesContainerCodec().encodeStart(NbtOps.INSTANCE, states).getOrThrow());
+        s.put("biomes", FACTORY.biomeContainerCodec().encodeStart(NbtOps.INSTANCE, biomes).getOrThrow());
+        return s;
+    }
+}

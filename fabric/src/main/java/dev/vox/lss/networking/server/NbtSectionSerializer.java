@@ -42,8 +42,15 @@ final class NbtSectionSerializer {
         var future = chunkMap.read(new ChunkPos(cx, cz));
         var optionalTag = future.get(LSSConstants.DISK_READ_TIMEOUT_SECONDS, TimeUnit.SECONDS);
         if (optionalTag.isEmpty()) return null;
-        var chunkNbt = optionalTag.get();
+        return serializeChunkNbt(optionalTag.get(), registryAccess);
+    }
 
+    /**
+     * Serialize a chunk's NBT (as read from a region file) into MC-native wire format.
+     * Returns {@code null} if the chunk is not FULL or has no sections, an empty array if every
+     * section is empty, or the serialized section bytes. Package-visible for testing.
+     */
+    static byte[] serializeChunkNbt(CompoundTag chunkNbt, RegistryAccess registryAccess) {
         var statusStr = chunkNbt.getStringOr("Status", null);
         if (statusStr == null || ChunkStatus.byName(statusStr) != ChunkStatus.FULL) return null;
 

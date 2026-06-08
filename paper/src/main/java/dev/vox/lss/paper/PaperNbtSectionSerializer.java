@@ -34,17 +34,24 @@ final class PaperNbtSectionSerializer {
      * into MC-native wire format.
      * Returns the serialized byte array, or null if the chunk is missing/not FULL/empty.
      */
-    // LevelChunkSection.write(buf) is @Deprecated on Paper (an anti-xray overload was added),
-    // but the 1-arg form is the canonical vanilla serialization and is byte-identical to the
-    // Fabric path. The wire format must match Fabric exactly, so keep this call (do not migrate).
-    @SuppressWarnings("deprecation")
     static byte[] readAndSerializeSections(ChunkMap chunkMap, RegistryAccess registryAccess,
                                             int cx, int cz) throws Exception {
         var future = chunkMap.read(new ChunkPos(cx, cz));
         var optionalTag = future.get(LSSConstants.DISK_READ_TIMEOUT_SECONDS, TimeUnit.SECONDS);
         if (optionalTag.isEmpty()) return null;
-        var chunkNbt = optionalTag.get();
+        return serializeChunkNbt(optionalTag.get(), registryAccess);
+    }
 
+    /**
+     * Serialize a chunk's NBT (as read from a region file) into MC-native wire format.
+     * Returns {@code null} if the chunk is not FULL or has no sections, an empty array if every
+     * section is empty, or the serialized section bytes. Package-visible for testing.
+     */
+    // LevelChunkSection.write(buf) is @Deprecated on Paper (an anti-xray overload was added),
+    // but the 1-arg form is the canonical vanilla serialization and is byte-identical to the
+    // Fabric path. The wire format must match Fabric exactly, so keep this call (do not migrate).
+    @SuppressWarnings("deprecation")
+    static byte[] serializeChunkNbt(CompoundTag chunkNbt, RegistryAccess registryAccess) {
         var statusStr = chunkNbt.getStringOr("Status", null);
         if (statusStr == null || ChunkStatus.byName(statusStr) != ChunkStatus.FULL) return null;
 

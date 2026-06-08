@@ -30,15 +30,19 @@ and a custom dimension. Extracted Bukkit-free `encodeSessionConfig` / `encodeBat
 bug). Both suites pass (Fabric 9/9, Paper 9/9); any future Fabric/Paper wire drift now reds one
 suite.
 
-### #16 — Region-NBT → section serialization is untested  (MEDIUM)
-`NbtSectionSerializer` / `PaperNbtSectionSerializer` produce wire bytes from on-disk chunk NBT
-with zero test coverage (the default-biome path, air-only-with-skylight handling, etc.).
-- **Why deferred:** needs an MC-bootstrapped test (`Bootstrap.bootStrap()`) building in-memory
-  chunk `CompoundTag`s — more than the existing pure-logic unit tests do.
-- **Suggested approach:** `fabric/src/test/.../NbtSectionSerializerTest` covering: normal
-  populated section; air-only + non-zero block light (kept); air-only no light (dropped);
-  missing `biomes` tag (default-biome path); assert bytes equal the loaded-chunk
-  `SectionSerializer` output for an equivalent section.
+### #16 — Region-NBT → section serialization  ✅ DONE
+**Implemented.** Extracted a testable `serializeChunkNbt(CompoundTag, RegistryAccess)` seam from
+`readAndSerializeSections` (both modules) and added `NbtSectionSerializerTest` to each (15 tests).
+Each bootstraps MC and builds a `RegistryAccess` with biomes (copied from
+`VanillaRegistries.createLookup()` into a fresh tag-less `MappedRegistry` — the only registry
+`PalettedContainerFactory` needs), constructs in-memory chunk NBT by encoding real
+`LevelChunkSection` containers through the factory codecs, runs `serializeChunkNbt`, and
+round-trips the output through the client's wire grammar. Covers: populated round-trip, multi-entry
+block palette, non-default (DESERT) biome round-trip, block + sky light, air-only kept (block
+light) / dropped (zero / none / sky-light-only), missing block_states, missing-biomes default
+path, status guards, missing-Y skip, multi-section + negative Y. A 3-reviewer adversarial review
+caught 6 coverage gaps (vacuous biome assertion, sky-light-only-air, Paper missing 3 cases,
+single-block-only palette) — all fixed. fabric 107 JUnit + 10 gametests / paper 24 JUnit, green.
 
 ### #13 — `probeLoadedChunks` re-serializes undrained columns every tick  (MEDIUM, perf)
 `RequestProcessingService`/`PaperRequestProcessingService` (~L299–319) re-serialize loaded
