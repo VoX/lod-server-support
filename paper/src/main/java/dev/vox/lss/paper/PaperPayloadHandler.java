@@ -33,13 +33,12 @@ public final class PaperPayloadHandler {
 
     // ---- S2C Encoding ----
 
-    public static void sendSessionConfig(Player player,
-                                          int protocolVersion, boolean enabled,
-                                          int lodDistanceChunks, int serverCapabilities,
-                                          int syncOnLoadRateLimitPerPlayer, int syncOnLoadConcurrencyLimitPerPlayer,
-                                          int generationRateLimitPerPlayer, int generationConcurrencyLimitPerPlayer,
-                                          boolean generationEnabled, long playerBandwidthLimit) {
-        sendEncoded(player, ID_SESSION_CONFIG, buf -> {
+    public static byte[] encodeSessionConfig(int protocolVersion, boolean enabled,
+                                             int lodDistanceChunks, int serverCapabilities,
+                                             int syncOnLoadRateLimitPerPlayer, int syncOnLoadConcurrencyLimitPerPlayer,
+                                             int generationRateLimitPerPlayer, int generationConcurrencyLimitPerPlayer,
+                                             boolean generationEnabled, long playerBandwidthLimit) {
+        return encodeToBytes(buf -> {
             buf.writeVarInt(protocolVersion);
             buf.writeBoolean(enabled);
             buf.writeVarInt(lodDistanceChunks);
@@ -53,14 +52,31 @@ public final class PaperPayloadHandler {
         });
     }
 
-    public static void sendBatchResponse(Player player, byte[] responseTypes, int[] requestIds, int count) {
-        sendEncoded(player, ID_BATCH_RESPONSE, buf -> {
+    public static void sendSessionConfig(Player player,
+                                          int protocolVersion, boolean enabled,
+                                          int lodDistanceChunks, int serverCapabilities,
+                                          int syncOnLoadRateLimitPerPlayer, int syncOnLoadConcurrencyLimitPerPlayer,
+                                          int generationRateLimitPerPlayer, int generationConcurrencyLimitPerPlayer,
+                                          boolean generationEnabled, long playerBandwidthLimit) {
+        sendRawNmsPayload(player, ID_SESSION_CONFIG, encodeSessionConfig(
+                protocolVersion, enabled, lodDistanceChunks, serverCapabilities,
+                syncOnLoadRateLimitPerPlayer, syncOnLoadConcurrencyLimitPerPlayer,
+                generationRateLimitPerPlayer, generationConcurrencyLimitPerPlayer,
+                generationEnabled, playerBandwidthLimit));
+    }
+
+    public static byte[] encodeBatchResponse(byte[] responseTypes, int[] requestIds, int count) {
+        return encodeToBytes(buf -> {
             buf.writeVarInt(count);
             for (int i = 0; i < count; i++) {
                 buf.writeByte(responseTypes[i]);
                 buf.writeVarInt(requestIds[i]);
             }
         });
+    }
+
+    public static void sendBatchResponse(Player player, byte[] responseTypes, int[] requestIds, int count) {
+        sendRawNmsPayload(player, ID_BATCH_RESPONSE, encodeBatchResponse(responseTypes, requestIds, count));
     }
 
     /**
@@ -181,14 +197,6 @@ public final class PaperPayloadHandler {
         } finally {
             buf.release();
         }
-    }
-
-    private static void sendEncoded(Player player, Identifier channelId, Consumer<FriendlyByteBuf> writer) {
-        byte[] bytes = encodeToBytes(writer);
-        var nmsPlayer = ((CraftPlayer) player).getHandle();
-        if (nmsPlayer.connection == null) return;
-        nmsPlayer.connection.send(new ClientboundCustomPayloadPacket(
-                new DiscardedPayload(channelId, bytes)));
     }
 
     private static byte[] encodeToBytes(Consumer<FriendlyByteBuf> writer) {
