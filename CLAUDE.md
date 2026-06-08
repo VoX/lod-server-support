@@ -13,8 +13,8 @@ Multi-project Gradle build with three subprojects:
 ```
 lod-server-support/
 ├── common/   Pure Java utilities (no MC deps) — shared by fabric/ and paper/
-├── fabric/   Fabric mod (client + server), Minecraft 26.1
-└── paper/    Paper plugin (server only), Minecraft 1.21.11
+├── fabric/   Fabric mod (client + server), Minecraft 26.1.2
+└── paper/    Paper plugin (server only), Minecraft 26.1.2
 ```
 
 ## Build Commands

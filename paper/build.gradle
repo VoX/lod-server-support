@@ -1,7 +1,7 @@
 plugins {
     id 'java'
     id 'io.papermc.paperweight.userdev' version '2.0.0-beta.21'
-    id 'com.gradleup.shadow' version '9.0.0-beta12'
+    id 'com.gradleup.shadow' version '9.4.2'
 }
 
 version = project.mod_version
@@ -13,7 +13,7 @@ repositories {
 
 dependencies {
     implementation project(':common')
-    paperweight.paperDevBundle('26.1.2.build.52-beta')
+    paperweight.paperDevBundle('26.1.2.build.69-stable')
 }
 
 processResources {

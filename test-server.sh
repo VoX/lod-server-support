@@ -11,16 +11,16 @@ PAPER_DIR="$SCRIPT_DIR/test-server/paper"
 
 # --- Fabric versions ---
 FABRIC_MC_VERSION="26.1.2"
-FABRIC_LOADER_VERSION="0.18.5"
+FABRIC_LOADER_VERSION="0.19.3"
 FABRIC_INSTALLER_VERSION="1.1.1"
 
 # --- Paper versions ---
-PAPER_MC_VERSION="1.21.11"
+PAPER_MC_VERSION="26.1.2"
 
 # --- Download URLs ---
 FABRIC_SERVER_URL="https://meta.fabricmc.net/v2/versions/loader/${FABRIC_MC_VERSION}/${FABRIC_LOADER_VERSION}/${FABRIC_INSTALLER_VERSION}/server/jar"
-FABRIC_API_URL="https://cdn.modrinth.com/data/P7dR8mSH/versions/Jj2SOUMp/fabric-api-0.146.0%2B26.1.2.jar"
-C2ME_URL="https://cdn.modrinth.com/data/VSNURh3q/versions/yrNQQ1AQ/c2me-fabric-mc26.1.2-0.3.7%2Balpha.0.65.jar"
+FABRIC_API_URL="https://cdn.modrinth.com/data/P7dR8mSH/versions/yALY9gHM/fabric-api-0.151.0%2B26.1.2.jar"
+C2ME_URL="https://cdn.modrinth.com/data/VSNURh3q/versions/MmyZoUyp/c2me-fabric-mc26.1.2-0.4.0-alpha.0.4.jar"
 
 # --- Java version check ---
 JAVA_MAJOR=$(java -version 2>&1 | head -1 | sed 's/.*"\([0-9]\+\).*/\1/')
@@ -54,17 +54,24 @@ download_paper_jar() {
         echo "  Already exists: paper.jar"
         return 0
     fi
-    echo "  Fetching latest Paper build for MC ${PAPER_MC_VERSION}..."
+    echo "  Fetching latest stable Paper build for MC ${PAPER_MC_VERSION}..."
+    # PaperMC retired the old api.papermc.io/v2 API for the 26.x line — use fill.papermc.io/v3.
     local builds_json
-    builds_json=$(curl -fsSL "https://api.papermc.io/v2/projects/paper/versions/${PAPER_MC_VERSION}/builds")
-    local build
-    build=$(echo "$builds_json" | python3 -c "import sys,json; builds=json.load(sys.stdin)['builds']; print(builds[-1]['build'])")
-    if [ -z "$build" ]; then
-        echo "ERROR: Failed to determine Paper build number" >&2
+    builds_json=$(curl -fsSL -A "lod-server-support/test-server" \
+        "https://fill.papermc.io/v3/projects/paper/versions/${PAPER_MC_VERSION}/builds")
+    local url
+    url=$(echo "$builds_json" | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+builds = data if isinstance(data, list) else data.get('builds', [])
+stable = [b for b in builds if b.get('channel') == 'STABLE'] or builds
+print(stable[0]['downloads']['server:default']['url']) if stable else print('')
+")
+    if [ -z "$url" ]; then
+        echo "ERROR: Failed to resolve Paper download URL" >&2
         return 1
     fi
-    local url="https://api.papermc.io/v2/projects/paper/versions/${PAPER_MC_VERSION}/builds/${build}/downloads/paper-${PAPER_MC_VERSION}-${build}.jar"
-    echo "  Downloading: paper-${PAPER_MC_VERSION}-${build}.jar"
+    echo "  Downloading: $(basename "$url")"
     curl -fsSL -o "$dest" "$url"
 }
 
