@@ -80,20 +80,6 @@ public final class PaperPayloadHandler {
     }
 
     /**
-     * Returns the cached {@link Identifier} for a channel string constant.
-     * Used by callers that need to send pre-encoded payloads via {@link #sendRawNmsPayload}.
-     */
-    public static Identifier channelId(String channel) {
-        return switch (channel) {
-            case LSSConstants.CHANNEL_SESSION_CONFIG -> ID_SESSION_CONFIG;
-            case LSSConstants.CHANNEL_DIRTY_COLUMNS -> ID_DIRTY_COLUMNS;
-            case LSSConstants.CHANNEL_VOXEL_COLUMN -> ID_VOXEL_COLUMN;
-            case LSSConstants.CHANNEL_BATCH_RESPONSE -> ID_BATCH_RESPONSE;
-            default -> Identifier.parse(channel);
-        };
-    }
-
-    /**
      * Encode a column payload with serialized section bytes.
      * Writes the per-request header, then writes sectionBytes as a length-prefixed byte array.
      */

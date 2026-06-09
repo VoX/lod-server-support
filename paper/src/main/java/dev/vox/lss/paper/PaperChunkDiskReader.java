@@ -7,7 +7,6 @@ import dev.vox.lss.common.processing.ReadResultAccess;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ChunkMap;
-import net.minecraft.server.level.ServerChunkCache;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
 
@@ -50,7 +49,7 @@ public class PaperChunkDiskReader extends AbstractChunkDiskReader<PaperChunkDisk
         this.diag.recordSubmitted();
         var dimension = level.dimension();
         var registryAccess = level.registryAccess();
-        var chunkMap = ((ServerChunkCache) level.getChunkSource()).chunkMap;
+        var chunkMap = level.getChunkSource().chunkMap;
         try {
             this.executor.submit(() -> {
                 if (isShutdown()) return;

@@ -6,6 +6,7 @@ import dev.vox.lss.common.PositionUtil;
 import dev.vox.lss.common.voxel.ColumnTimestampCache;
 
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -70,6 +71,10 @@ public abstract class OffThreadProcessor<PlayerState extends PlayerStateAccess, 
         return t;
     });
 
+    // this-escape is benign: the Thread is created here but only started later via start()
+    // (post-construction), and processingLoop is private (not subclass-overridable), so no
+    // partially-initialized subclass state is touched before construction completes.
+    @SuppressWarnings("this-escape")
     protected OffThreadProcessor(Map<UUID, PlayerState> players,
                                   boolean diskReadingAvailable, boolean generationAvailable,
                                   Path dataDir, int perDimensionTimestampCacheSizeMB) {
@@ -152,10 +157,10 @@ public abstract class OffThreadProcessor<PlayerState extends PlayerStateAccess, 
     /**
      * Store timestamp and enqueue pre-serialized column data as a payload.
      */
-    protected boolean compressAndEnqueueLoaded(PlayerState state, LoadedColumnData column,
-                                               int requestId, long columnTimestamp,
-                                               long submissionOrder,
-                                               String dimension) {
+    protected boolean enqueueLoadedColumn(PlayerState state, LoadedColumnData column,
+                                          int requestId, long columnTimestamp,
+                                          long submissionOrder,
+                                          String dimension) {
         if (column.serializedSections() == null || column.serializedSections().length == 0) {
             return false;
         }
@@ -290,7 +295,7 @@ public abstract class OffThreadProcessor<PlayerState extends PlayerStateAccess, 
         }
     }
 
-    private void cleanupDedupGroups(java.util.List<DedupTracker.RemovedGroup> removedGroups) {
+    private void cleanupDedupGroups(List<DedupTracker.RemovedGroup> removedGroups) {
         for (var rg : removedGroups) {
             int cx = PositionUtil.unpackX(rg.packed());
             int cz = PositionUtil.unpackZ(rg.packed());
@@ -443,7 +448,7 @@ public abstract class OffThreadProcessor<PlayerState extends PlayerStateAccess, 
             var playerData = snapshot.players().get(genReady.playerUuid());
             if (playerData == null) continue;
             String dimension = playerData.dimension();
-            boolean sent = this.compressAndEnqueueLoaded(state, genReady.columnData(), genReady.requestId(),
+            boolean sent = this.enqueueLoadedColumn(state, genReady.columnData(), genReady.requestId(),
                     genReady.columnTimestamp(), genReady.submissionOrder(),
                     dimension);
             if (!sent) {
@@ -457,7 +462,7 @@ public abstract class OffThreadProcessor<PlayerState extends PlayerStateAccess, 
 
     private void routeIncomingRequests(TickSnapshot snapshot) {
         this.requestRouter.routeAll(snapshot, this.players,
-                this::submitDiskRead, this::compressAndEnqueueLoaded, this.cycleNow);
+                this::submitDiskRead, this::enqueueLoadedColumn, this.cycleNow);
     }
 
     public ProcessingDiagnostics getDiagnostics() {

@@ -55,7 +55,7 @@ public class ChunkDiskReader extends AbstractChunkDiskReader<ChunkDiskReader.Rea
                     this.diag.recordError();
                     this.diag.recordCompleted(0);
                     addResult(playerUuid, emptyResult(playerUuid, requestId, chunkX, chunkZ, submissionOrder));
-                    if (t instanceof Error) throw (Error) t;
+                    if (t instanceof Error err) throw err;
                 }
             });
         } catch (RejectedExecutionException e) {

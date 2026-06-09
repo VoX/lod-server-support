@@ -5,6 +5,7 @@ plugins {
 }
 
 version = project.mod_version
+group = project.maven_group
 
 repositories {
     mavenCentral()
@@ -44,6 +45,5 @@ shadowJar {
 
 tasks.withType(JavaCompile).configureEach {
     it.options.release = 25
-
 }
 

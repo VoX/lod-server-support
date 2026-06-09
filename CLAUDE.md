@@ -198,7 +198,7 @@ The shell script builds the mod, starts a dedicated server (`runBenchmarkServer`
 
 ## Key Patterns
 
-- **Java 25** target for Fabric (`options.release = 25`), **Java 21** for Paper and common. Uses `var`, records, sealed-pattern `instanceof`, switch expressions.
+- **Java 25** target for Fabric and Paper (`options.release = 25`), **Java 21** for common. Uses `var`, records, sealed-pattern `instanceof`, switch expressions.
 - **Payloads:** Fabric uses `StreamCodec` with lambda encode/decode registered in `LSSNetworking`; Paper uses raw `FriendlyByteBuf` in `PaperPayloadHandler`. Both produce identical wire bytes.
 - **Raw chunk shipping:** Server serializes MC-native `LevelChunkSection` data (block states + biomes via `section.write(buf)`) plus light `DataLayer` nibbles and sends. MC's built-in zlib network compression handles packet compression. No server-side voxelization or caching — client receives MC objects directly.
 - **Off-thread processing:** Main server thread serializes loaded chunks into `LoadedColumnData` (pre-serialized bytes); a dedicated processing thread prepares payloads and schedules sends via `OffThreadProcessor`. `ColumnTimestampCache` provides in-memory up-to-date checks.

@@ -79,11 +79,10 @@ class ClientColumnProcessor {
 
         if (LSSClientConfig.CONFIG.offThreadSectionProcessing) {
             if (this.processing.compareAndSet(false, true)) {
-                var capturedLevel = level;
                 try {
                     this.executor.execute(() -> {
                         try {
-                            drainColumnQueue(capturedLevel);
+                            drainColumnQueue(level);
                         } finally {
                             this.processing.set(false);
                         }

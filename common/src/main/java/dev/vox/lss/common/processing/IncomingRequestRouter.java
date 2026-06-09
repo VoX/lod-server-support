@@ -203,8 +203,7 @@ class IncomingRequestRouter<PS extends PlayerStateAccess> {
         var probe = probes.get(packed);
         if (probe == null) return false;
 
-        long ts = cycleNow;
-        boolean sent = loadedSerializer.serializeAndEnqueue(state, probe, req.requestId(), ts,
+        boolean sent = loadedSerializer.serializeAndEnqueue(state, probe, req.requestId(), cycleNow,
                 this.ctx.sequence().next(), dimension);
         if (!sent) {
             this.ctx.sendActions().add(new SendAction.ColumnUpToDate(playerUuid, req.requestId()));

@@ -222,7 +222,7 @@ public class RequestProcessingService {
             }
 
             var player = state.getPlayer();
-            var level = (ServerLevel) player.level();
+            var level = player.level();
             String dimension = this.dimensionStringCache.computeIfAbsent(level,
                     l -> l.dimension().identifier().toString());
 
@@ -333,7 +333,7 @@ public class RequestProcessingService {
 
             var player = state.getPlayer();
             if (player.isRemoved()) continue;
-            var level = (ServerLevel) player.level();
+            var level = player.level();
             boolean accepted = this.generationService.submitGeneration(
                     req.playerUuid(), req.requestId(), level, req.cx(), req.cz(),
                     req.submissionOrder());

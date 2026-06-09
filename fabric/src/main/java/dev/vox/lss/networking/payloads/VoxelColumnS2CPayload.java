@@ -60,7 +60,7 @@ public final class VoxelColumnS2CPayload implements CustomPacketPayload {
     public byte[] decompressedSections() { return sectionBytes; }
 
     public int estimatedBytes() {
-        return sectionBytes.length + 25;
+        return sectionBytes.length + LSSConstants.ESTIMATED_COLUMN_OVERHEAD_BYTES;
     }
 
     /** Map a dimension ResourceKey to a wire ordinal via identity comparison (avoids String allocation). */

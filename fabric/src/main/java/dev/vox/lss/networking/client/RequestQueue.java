@@ -1,7 +1,7 @@
 package dev.vox.lss.networking.client;
 
 /**
- * Ring buffer of chunk positions to request, populated by the scanner and
+ * Single-pass buffer of chunk positions to request, populated by the scanner and
  * consumed by {@link LodRequestManager}.
  *
  * <p><b>Thread safety:</b> Not thread-safe. All methods must be called from

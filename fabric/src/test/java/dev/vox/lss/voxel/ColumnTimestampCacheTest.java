@@ -51,7 +51,6 @@ class ColumnTimestampCacheTest {
     void invalidateCleansInsertionTimeToo() {
         cache.put(LSSConstants.DIM_STR_OVERWORLD, 1L, 100L, now);
         cache.invalidate(LSSConstants.DIM_STR_OVERWORLD, new long[]{1L});
-        assertEquals(1, cache.size() == 0 ? 1 : 0, "size should be 0 after invalidation");
         assertEquals(0, cache.size());
         // Re-insert — should work cleanly with no stale insertion time
         cache.put(LSSConstants.DIM_STR_OVERWORLD, 1L, 200L, now);

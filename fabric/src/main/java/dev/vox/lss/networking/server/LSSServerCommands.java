@@ -40,8 +40,7 @@ class LSSServerCommands {
         }
 
         source.sendSuccess(() -> Component.literal("=== LSS LOD Request Stats ==="), false);
-        for (var entry : players.entrySet()) {
-            var state = entry.getValue();
+        for (var state : players.values()) {
             var player = state.getPlayer();
 
             String line = String.format(
@@ -71,15 +70,14 @@ class LSSServerCommands {
         long uptimeSec = service.getUptimeSeconds();
         var diag = service.getOffThreadProcessor().getDiagnostics();
         var diskReader = service.getDiskReader();
-        long diskCompleted = diskReader != null ? diskReader.getDiag().getSuccessfulReadCount() : 0;
+        long diskCompleted = diskReader.getDiag().getSuccessfulReadCount();
         var genService = service.getGenerationService();
         var bwLimiter = service.getBandwidthLimiter();
 
         long totalSent = 0;
         long totalBytes = 0;
         var players = new ArrayList<DiagnosticsFormatter.PlayerDiag>();
-        for (var entry : service.getPlayers().entrySet()) {
-            var state = entry.getValue();
+        for (var state : service.getPlayers().values()) {
             totalSent += state.getTotalSectionsSent();
             totalBytes += state.getTotalBytesSent();
             players.add(new DiagnosticsFormatter.PlayerDiag(
@@ -97,7 +95,7 @@ class LSSServerCommands {
                 diag.getTotalInMemory(), diag.getTotalUpToDate(), diag.getTotalGenDrained(),
                 diskCompleted,
                 service.getTickDiagnostics(),
-                diskReader != null ? diskReader.getDiagnostics() : "N/A",
+                diskReader.getDiagnostics(),
                 genService != null ? genService.getDiagnostics() : null, genService != null,
                 bwLimiter.getTotalBytesSent(),
                 service.getWindowBandwidthRate(),
