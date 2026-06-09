@@ -1,5 +1,7 @@
 package dev.vox.lss.networking.server;
 
+import dev.vox.lss.common.LSSConstants;
+import dev.vox.lss.common.LSSLogger;
 import dev.vox.lss.common.processing.OffThreadProcessor;
 import dev.vox.lss.networking.payloads.VoxelColumnS2CPayload;
 import net.minecraft.core.registries.Registries;
@@ -68,14 +70,15 @@ public class FabricOffThreadProcessor extends OffThreadProcessor<PlayerRequestSt
     }
 
     @Override
-    protected void submitDiskRead(UUID playerUuid, int requestId, String dimension,
+    protected boolean submitDiskRead(UUID playerUuid, int requestId, String dimension,
                                    int cx, int cz,
                                    long submissionOrder) {
-        if (this.diskReader == null) return;
+        if (this.diskReader == null) return false;
         var level = this.dimensionLevelMap.get(dimension);
-        if (level == null) return;
+        if (level == null) return false;
         this.diskReader.submitReadDirect(playerUuid, requestId, level,
                 cx, cz, submissionOrder);
+        return true;
     }
 
     @Override
@@ -83,6 +86,12 @@ public class FabricOffThreadProcessor extends OffThreadProcessor<PlayerRequestSt
                                                  String dimension, int requestId,
                                                  long columnTimestamp, long submissionOrder,
                                                  byte[] sectionBytes, int estimatedBytes) {
+        if (sectionBytes.length > LSSConstants.MAX_SECTIONS_SIZE) {
+            LSSLogger.warn("Dropping oversized column [" + cx + ", " + cz + "] in " + dimension
+                    + ": " + sectionBytes.length + " bytes exceeds wire limit "
+                    + LSSConstants.MAX_SECTIONS_SIZE + " (client decoder would reject it)");
+            return;
+        }
         var dimensionKey = this.dimensionKeyCache.computeIfAbsent(dimension,
                 d -> ResourceKey.create(Registries.DIMENSION, Identifier.parse(d)));
         var payload = new VoxelColumnS2CPayload(requestId, cx, cz, dimensionKey, columnTimestamp,

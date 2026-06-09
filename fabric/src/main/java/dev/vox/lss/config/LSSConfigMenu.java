@@ -45,7 +45,7 @@ public class LSSConfigMenu implements ConfigEntryPoint {
         distanceOption.setName(Component.translatable("lss.config.lod_distance"));
         distanceOption.setTooltip(Component.translatable("lss.config.lod_distance.tooltip"));
         distanceOption.setDefaultValue(0);
-        distanceOption.setRange(new Range(0, 512, 1));
+        distanceOption.setRange(new Range(0, LSSConstants.MAX_LOD_DISTANCE, 1));
         distanceOption.setValueFormatter(v -> v == 0
                 ? Component.translatable("lss.config.lod_distance.server_default")
                 : Component.literal(Integer.toString(v)));

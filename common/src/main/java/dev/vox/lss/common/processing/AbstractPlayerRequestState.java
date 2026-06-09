@@ -174,6 +174,12 @@ public abstract class AbstractPlayerRequestState<Q extends Comparable<Q>> implem
         this.waitingQueue.clear();
         this.pendingSyncCount = 0;
         this.pendingGenerationCount = 0;
+        // A dimension change abandons all in-flight requests (pending cleared above, and the disk/
+        // generation result queues are discarded by cleanupPlayerServices), so reset the
+        // concurrency limiters. Otherwise the permits held by those discarded requests leak and
+        // the player's effective concurrency erodes across repeated dimension changes.
+        this.rateLimiters.syncOnLoad().reset();
+        this.rateLimiters.generation().reset();
     }
 
     // ---- PlayerStateAccess per-request methods ----

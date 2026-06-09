@@ -29,6 +29,15 @@ public class ConcurrencyLimiter {
         }
     }
 
+    /**
+     * Reset the in-flight count to zero. Used when all tracked requests are abandoned at once
+     * (e.g. on a dimension change, where pending state is cleared and disk/gen results are
+     * discarded), so the abandoned permits are not leaked. Processing-thread only.
+     */
+    public void reset() {
+        this.currentConcurrency = 0;
+    }
+
     public int getCurrentConcurrency() {
         return this.currentConcurrency;
     }

@@ -20,8 +20,9 @@ class IncomingRequestRouter<PS extends PlayerStateAccess> {
 
     @FunctionalInterface
     interface DiskReadSubmitter {
-        void submit(UUID playerUuid, int requestId, String dimension,
-                    int cx, int cz, long submissionOrder);
+        /** @return false if the read could not be submitted, so the caller can unwind. */
+        boolean submit(UUID playerUuid, int requestId, String dimension,
+                       int cx, int cz, long submissionOrder);
     }
 
     @FunctionalInterface
@@ -243,8 +244,15 @@ class IncomingRequestRouter<PS extends PlayerStateAccess> {
             // Route through disk reader (with cross-player dedup)
             state.addPendingRequest(new PendingRequest(req.requestId(), req.cx(), req.cz(), type));
             boolean attached = this.dedupTracker.tryAttachOrCreate(packed, dimension, playerUuid, req.requestId(), order);
-            if (!attached) {
-                diskReadSubmitter.submit(playerUuid, req.requestId(), dimension, req.cx(), req.cz(), order);
+            if (!attached && !diskReadSubmitter.submit(playerUuid, req.requestId(), dimension, req.cx(), req.cz(), order)) {
+                // Submit was a no-op (e.g. the dimension's level isn't registered yet). Unwind the
+                // pending entry, dedup group, and permit we just took so they aren't leaked, and
+                // tell the client we couldn't serve this position so it re-requests later.
+                this.dedupTracker.removeGroup(packed, dimension);
+                state.removePendingByRequestId(req.requestId());
+                limiter.release();
+                this.ctx.sendActions().add(new SendAction.ColumnNotGenerated(playerUuid, req.requestId()));
+                return;
             }
             this.ctx.diagnostics().incrementDiskQueued();
         } else if (type == RequestType.GENERATION && this.generationAvailable) {

@@ -37,6 +37,9 @@ public final class LSSConstants {
     public static final int MAX_DIRTY_COLUMN_POSITIONS = 10240;
     /** Estimated per-column wire overhead bytes (requestId + coord + timestamp + framing). */
     public static final int ESTIMATED_COLUMN_OVERHEAD_BYTES = 25;
+    /** Max serialized section bytes per column. The client decoder rejects (and disconnects on)
+     *  anything larger, so the server drops oversized columns rather than send an unreadable frame. */
+    public static final int MAX_SECTIONS_SIZE = 2_097_152; // 2 MB
 
     // Config validation bounds (shared between Fabric and Paper)
     public static final int MIN_LOD_DISTANCE = 1;

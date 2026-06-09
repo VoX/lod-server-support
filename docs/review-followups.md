@@ -8,6 +8,37 @@ release-ready tree. Each is real; this is a backlog, not a dismissal.
 
 ---
 
+## Round 2 (branch `paper-release-26.1.2`)
+
+A second multi-agent review (8+ focused read-only Explore agents) re-swept the tree after the
+parity/NBT test work. Adversarial verification was partly degraded by API rate-limiting, so
+findings were re-verified against the code by hand before fixing. Net: **1 HIGH + 6 lows fixed**;
+1 low deferred.
+
+**Fixed:**
+- **HIGH — dimension-change concurrency-permit leak.** `clearProcessingState()` cleared pending
+  tracking but never reset the `ConcurrencyLimiter`s; on a dimension change `cleanupPlayerServices`
+  discards in-flight disk-read results, so their permits were never released → a player's effective
+  disk/gen concurrency eroded across repeated dimension changes (nether portals etc.), eventually
+  starving LOD delivery. Fix: added `ConcurrencyLimiter.reset()`, called for both limiters in
+  `clearProcessingState()` (processing-thread-safe).
+- **Low #3** — oversized-column wire bound (see table).
+- **Low #10** — `submitDiskRead` no-op permit/dedup leak (see table).
+- **Low #17** — client LOD-distance clamp now uses `LSSConstants.MAX_LOD_DISTANCE` (see table).
+- **mixin `compatibilityLevel` JAVA_21 → JAVA_25** to match the Java-25 mod bytecode.
+- **Timestamp-cache shutdown save race** — the final save now routes through the single-threaded
+  `SAVE_EXECUTOR` and waits, so a late periodic save can't overwrite it with an older snapshot.
+- **`ColumnCacheStore` clear race** — `clearForServer`/`clearAll` now run on `IO_EXECUTOR`
+  (serialized FIFO with saves/loads) and wait, so a queued save can't resurrect just-deleted files.
+
+**Deferred:**
+- **Low #11** — Paper gen timeout vs. pending future: a gen timeout removes the active entry while
+  its async future is still pending; a same-chunk re-request in that window creates a new entry the
+  stale future then removes. Rare and self-healing (client re-requests). Needs a generation token to
+  disambiguate stale completions — a structural change for a rare edge; left for a focused pass.
+
+---
+
 ## Deferred confirmed findings
 
 ### #15 — Fabric/Paper twin duplication → shared base  (MEDIUM, large)
@@ -65,21 +96,21 @@ before acting. Grouped by area.
 |---|------|----------|-------|
 | 1 | concurrency | SharedBandwidthLimiter.java:15,40-47 | `totalBytesSent` non-volatile long read from stats/command threads |
 | 2 | concurrency | ChunkMapSaveHook.java:15-28 | dimension string cached in non-volatile field with racy lazy init |
-| 3 | wire | VoxelColumnS2CPayload.java:85 vs 101 | decode caps sectionBytes at 2MB but encode is unbounded → pathological column kicks client (Paper encode unbounded too) |
+| 3 | wire | VoxelColumnS2CPayload.java:85 vs 101 | decode caps sectionBytes at 2MB but encode is unbounded → pathological column kicks client (Paper encode unbounded too) — ✅ **fixed (round 2)**: `MAX_SECTIONS_SIZE` moved to `LSSConstants`, oversize guard at `buildAndEnqueueColumnPayload` on both platforms |
 | 4 | wire | PaperPayloadHandler.java:129-133 vs HandshakeC2SPayload.java:19-23 | Handshake caps read: Paper guards `isReadable()`, Fabric reads unconditionally (benign now, fragile for protocol evolution) |
 | 5 | untrusted-input | PayloadCodecNegativeLengthTest/OversizedTest | negative/oversized-length tests only cover an S2C payload; the untrusted C2S BatchChunkRequest count is untested |
 | 6 | correctness | SectionSerializer.java:63 (+3 mirrors) | section Y serialized as a single signed byte; truncates for extreme custom dimension heights |
 | 7 | correctness | IncomingRequestRouter.java:220-233 | up-to-date check uses serve-time epoch, not content version → needless full re-sends across reconnects |
 | 8 | resource | ColumnTimestampCache.java:183-187 | (now partly fixed in ec040de — load aborts on bad count) remaining: `DataInputStream.skipBytes` can short-skip elsewhere |
 | 9 | error-handling | OffThreadProcessor.java:94-106,220-230 | snapshot-overwrite discards an already-generated column; client recovers only via the 10s timeout + regen |
-| 10 | error-handling | FabricOffThreadProcessor:70-79 / PaperOffThreadProcessor:63-75 | `submitDiskRead` silent no-op paths (level==null / reader shut down) leak the permit + orphan the dedup group (same vector as the fixed Error path) |
+| 10 | error-handling | FabricOffThreadProcessor:70-79 / PaperOffThreadProcessor:63-75 | `submitDiskRead` silent no-op paths (level==null / reader shut down) leak the permit + orphan the dedup group (same vector as the fixed Error path) — ✅ **fixed (round 2)**: `submitDiskRead` returns boolean; router unwinds pending+dedup+permit and notifies the client on no-op |
 | 11 | mc-integration | PaperChunkGenerationService.java:187-202 vs 125-128 | gen timeout removes the active entry while its async future is still pending; a re-request creates a new entry the stale future then removes |
 | 12 | mc-integration | SectionSerializer.java:45 / NbtSectionSerializer:148-158 | all-air sections carrying only sky light are dropped on both platforms — confirm intended |
 | 13 | perf | SendActionBatcher.java:35-37 | per-tick `clear()` drops the PlayerBatch arrays instead of reusing them |
 | 14 | perf | ChunkDiskReader.java:93,102 (+paper) | disk reader allocates `dimension.identifier().toString()` on every read |
 | 15 | perf | DedupTracker.java:61-76 | `removePlayer` scans every pending group on each disconnect/dimension-change |
 | 16 | config | ColumnTimestampCache.java:183-187 | skip-size `entryCount*16` int-overflow (mitigated in ec040de by aborting on bad count) |
-| 17 | config | LSSClientConfig.java:19 | `lodDistanceChunks` clamps to hardcoded 0..512 instead of `LSSConstants.MAX_LOD_DISTANCE`; Sodium GUI Range hardcodes 512 too |
+| 17 | config | LSSClientConfig.java:19 | `lodDistanceChunks` clamps to hardcoded 0..512 instead of `LSSConstants.MAX_LOD_DISTANCE`; Sodium GUI Range hardcodes 512 too — ✅ **fixed (round 2)**: both sites use `LSSConstants.MAX_LOD_DISTANCE` |
 | 18 | config | ColumnCacheStore.java:47-50,83-99 | 2,000,000-entry cap enforced only on load; an oversized save is silently discarded wholesale next load |
 | 19 | api-quality | DirtyColumnsS2CPayload.java:19-24 | (fixed in ec040de — Fabric encoder now clamps to match Paper) |
 | 20 | wire | ClientColumnProcessor.java | (fixed in ec040de — section count now bounded by world height) |

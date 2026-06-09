@@ -11,6 +11,7 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Core processing loop running on a dedicated thread.
@@ -138,8 +139,13 @@ public abstract class OffThreadProcessor<PlayerState extends PlayerStateAccess, 
     /** Enqueue payloads from a disk/gen result into the player's ready queue. */
     protected abstract void enqueueResultPayloads(PlayerState state, ReadResult result);
 
-    /** Submit a disk read for unloaded chunk (called from processing thread). */
-    protected abstract void submitDiskRead(UUID playerUuid, int requestId, String dimension,
+    /**
+     * Submit a disk read for an unloaded chunk (called from processing thread). Returns
+     * {@code false} if the read could not be submitted (e.g. no reader, or the dimension's level
+     * is not registered yet) so the caller can unwind the permit + dedup group instead of leaking
+     * them.
+     */
+    protected abstract boolean submitDiskRead(UUID playerUuid, int requestId, String dimension,
                                             int cx, int cz,
                                             long submissionOrder);
 
@@ -470,9 +476,17 @@ public abstract class OffThreadProcessor<PlayerState extends PlayerStateAccess, 
             Thread.currentThread().interrupt();
         }
 
-        // Save timestamp cache to disk (synchronous — server is shutting down)
+        // Save timestamp cache to disk. Route the final save through SAVE_EXECUTOR (single-threaded,
+        // FIFO) so it runs after any in-flight periodic save, then wait for it — otherwise a late
+        // async save could overwrite the final state with an older snapshot.
         if (this.dataDir != null) {
-            this.timestampCache.save(this.dataDir);
+            var snapshot = this.timestampCache.snapshotForSave();
+            try {
+                SAVE_EXECUTOR.submit(() -> snapshot.save(this.dataDir))
+                        .get(SHUTDOWN_JOIN_MS, TimeUnit.MILLISECONDS);
+            } catch (Exception e) {
+                LSSLogger.warn("Timestamp cache final save did not complete cleanly", e);
+            }
         }
     }
 }

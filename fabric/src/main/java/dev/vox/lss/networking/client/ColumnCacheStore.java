@@ -15,6 +15,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.regex.Pattern;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -106,36 +107,55 @@ public class ColumnCacheStore {
     }
 
     public static void clearForServer(String serverAddress) {
-        var dir = getServerDir(serverAddress);
-        if (!Files.exists(dir)) return;
+        // Run on the IO thread (serialized FIFO with in-flight saves/loads so a queued save can't
+        // re-create the files we delete) and wait, to preserve the synchronous clear contract.
+        runIoAndWait(() -> {
+            var dir = getServerDir(serverAddress);
+            if (!Files.exists(dir)) return;
 
-        try (DirectoryStream<Path> stream = Files.newDirectoryStream(dir)) {
-            for (Path file : stream) {
-                Files.deleteIfExists(file);
+            try (DirectoryStream<Path> stream = Files.newDirectoryStream(dir)) {
+                for (Path file : stream) {
+                    Files.deleteIfExists(file);
+                }
+                Files.deleteIfExists(dir);
+                LSSLogger.info("Cleared column cache for server " + serverAddress);
+            } catch (IOException e) {
+                LSSLogger.warn("Failed to clear column cache for " + serverAddress, e);
             }
-            Files.deleteIfExists(dir);
-            LSSLogger.info("Cleared column cache for server " + serverAddress);
-        } catch (IOException e) {
-            LSSLogger.warn("Failed to clear column cache for " + serverAddress, e);
-        }
+        });
     }
 
     public static void clearAll() {
-        if (!Files.exists(CACHE_DIR)) return;
+        // Run on the IO thread (serialized FIFO with in-flight saves/loads) and wait, to preserve
+        // the synchronous clear contract.
+        runIoAndWait(() -> {
+            if (!Files.exists(CACHE_DIR)) return;
 
-        try (DirectoryStream<Path> servers = Files.newDirectoryStream(CACHE_DIR)) {
-            for (Path serverDir : servers) {
-                if (!Files.isDirectory(serverDir)) continue;
-                try (DirectoryStream<Path> files = Files.newDirectoryStream(serverDir)) {
-                    for (Path file : files) {
-                        Files.deleteIfExists(file);
+            try (DirectoryStream<Path> servers = Files.newDirectoryStream(CACHE_DIR)) {
+                for (Path serverDir : servers) {
+                    if (!Files.isDirectory(serverDir)) continue;
+                    try (DirectoryStream<Path> files = Files.newDirectoryStream(serverDir)) {
+                        for (Path file : files) {
+                            Files.deleteIfExists(file);
+                        }
                     }
+                    Files.deleteIfExists(serverDir);
                 }
-                Files.deleteIfExists(serverDir);
+                LSSLogger.info("Cleared all column caches");
+            } catch (IOException e) {
+                LSSLogger.warn("Failed to clear all column caches", e);
             }
-            LSSLogger.info("Cleared all column caches");
-        } catch (IOException e) {
-            LSSLogger.warn("Failed to clear all column caches", e);
+        });
+    }
+
+    /** Run a cache IO task on the single IO thread and wait for it (serializes with saves/loads). */
+    private static void runIoAndWait(Runnable task) {
+        try {
+            IO_EXECUTOR.submit(task).get();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        } catch (ExecutionException e) {
+            LSSLogger.warn("Column cache IO task failed", e.getCause());
         }
     }
 

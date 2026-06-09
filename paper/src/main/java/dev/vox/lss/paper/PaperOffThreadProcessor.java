@@ -1,5 +1,6 @@
 package dev.vox.lss.paper;
 
+import dev.vox.lss.common.LSSConstants;
 import dev.vox.lss.common.LSSLogger;
 import dev.vox.lss.common.processing.OffThreadProcessor;
 import net.minecraft.server.level.ServerLevel;
@@ -61,17 +62,18 @@ public class PaperOffThreadProcessor extends OffThreadProcessor<PaperPlayerReque
     }
 
     @Override
-    protected void submitDiskRead(UUID playerUuid, int requestId, String dimension,
+    protected boolean submitDiskRead(UUID playerUuid, int requestId, String dimension,
                                     int cx, int cz,
                                     long submissionOrder) {
-        if (this.diskReader == null) return;
+        if (this.diskReader == null) return false;
         var level = this.dimensionLevelMap.get(dimension);
         if (level == null) {
             LSSLogger.debug("No dimension context for " + dimension + ", skipping disk read for " + cx + "," + cz);
-            return;
+            return false;
         }
         this.diskReader.submitReadDirect(playerUuid, requestId, level,
                 cx, cz, submissionOrder);
+        return true;
     }
 
     @Override
@@ -79,6 +81,12 @@ public class PaperOffThreadProcessor extends OffThreadProcessor<PaperPlayerReque
                                                  String dimension, int requestId,
                                                  long columnTimestamp, long submissionOrder,
                                                  byte[] sectionBytes, int estimatedBytes) {
+        if (sectionBytes.length > LSSConstants.MAX_SECTIONS_SIZE) {
+            LSSLogger.warn("Dropping oversized column [" + cx + ", " + cz + "] in " + dimension
+                    + ": " + sectionBytes.length + " bytes exceeds wire limit "
+                    + LSSConstants.MAX_SECTIONS_SIZE + " (client decoder would reject it)");
+            return;
+        }
         byte[] encoded = PaperPayloadHandler.encodeVoxelColumnPreEncoded(
                 requestId, cx, cz, dimension, columnTimestamp, sectionBytes);
         state.addReadyPayload(new PaperPlayerRequestState.QueuedPayload(
