@@ -81,7 +81,7 @@ class IncomingRequestRouter<PS extends AbstractPlayerRequestState<?>> {
     /** Returns true if the request is a known duplicate (already served or in-flight). */
     private boolean resolvedAsDuplicate(PS state, UUID playerUuid, IncomingRequest req, long packed) {
         if (state.hasDiskReadDone(req.cx(), req.cz())) {
-            this.ctx.sendActions().add(new SendAction.ColumnUpToDate(playerUuid, packed));
+            this.ctx.sendActions().add(new SendAction.ColumnUpToDate(playerUuid, packed, state));
             return true;
         }
         if (state.hasPendingRequest(req.cx(), req.cz())) {
@@ -110,7 +110,7 @@ class IncomingRequestRouter<PS extends AbstractPlayerRequestState<?>> {
         boolean sent = this.processor.enqueueLoadedColumn(state, probe, this.cycleNow,
                 this.ctx.sequence().next(), dimension);
         if (!sent) {
-            this.ctx.sendActions().add(new SendAction.ColumnUpToDate(playerUuid, packed));
+            this.ctx.sendActions().add(new SendAction.ColumnUpToDate(playerUuid, packed, state));
         }
         state.markDiskReadDone(req.cx(), req.cz());
         this.ctx.diagnostics().incrementInMemory();
@@ -128,7 +128,7 @@ class IncomingRequestRouter<PS extends AbstractPlayerRequestState<?>> {
         long cachedTs = this.timestampCache.get(dimension, packed);
         if (cachedTs > 0 && cachedTs <= req.clientTimestamp()) {
             state.markDiskReadDone(req.cx(), req.cz());
-            this.ctx.sendActions().add(new SendAction.ColumnUpToDate(playerUuid, packed));
+            this.ctx.sendActions().add(new SendAction.ColumnUpToDate(playerUuid, packed, state));
             this.ctx.diagnostics().incrementUpToDate();
             return true;
         }
@@ -144,7 +144,7 @@ class IncomingRequestRouter<PS extends AbstractPlayerRequestState<?>> {
         if (type == RequestType.SYNC || this.diskReadingAvailable) {
             // Route through disk reader (with cross-player dedup)
             if (!state.tryAdmit(new PendingRequest(req.cx(), req.cz(), type, SlotType.SYNC_ON_LOAD))) {
-                rateLimit(playerUuid, req, packed, type, dimension);
+                rateLimit(state, playerUuid, req, packed, type, dimension);
                 return;
             }
             long order = this.ctx.sequence().next();
@@ -155,28 +155,28 @@ class IncomingRequestRouter<PS extends AbstractPlayerRequestState<?>> {
                 // and tell the client we couldn't serve this position so it re-requests later.
                 this.dedupTracker.removeGroup(packed, dimension);
                 state.removePendingByPosition(req.cx(), req.cz());
-                this.ctx.sendActions().add(new SendAction.ColumnNotGenerated(playerUuid, packed));
+                this.ctx.sendActions().add(new SendAction.ColumnNotGenerated(playerUuid, packed, state));
                 return;
             }
             this.ctx.diagnostics().incrementDiskQueued();
         } else if (this.generationAvailable) {
             // No disk reader — direct generation (type is GENERATION here by the branch above)
             if (!state.tryAdmit(new PendingRequest(req.cx(), req.cz(), type, SlotType.GENERATION))) {
-                rateLimit(playerUuid, req, packed, type, dimension);
+                rateLimit(state, playerUuid, req, packed, type, dimension);
                 return;
             }
             this.ctx.generationTicketRequests().add(
                     new OffThreadProcessor.GenerationTicketRequest(playerUuid, req.cx(), req.cz(),
-                            this.ctx.sequence().next()));
+                            dimension, this.ctx.sequence().next()));
         } else {
             // No disk reader AND no generation — can't serve
-            this.ctx.sendActions().add(new SendAction.ColumnNotGenerated(playerUuid, packed));
+            this.ctx.sendActions().add(new SendAction.ColumnNotGenerated(playerUuid, packed, state));
         }
     }
 
-    private void rateLimit(UUID playerUuid, IncomingRequest req, long packed,
+    private void rateLimit(PS state, UUID playerUuid, IncomingRequest req, long packed,
                             RequestType type, String dimension) {
-        this.ctx.sendActions().add(new SendAction.RateLimited(playerUuid, packed));
+        this.ctx.sendActions().add(new SendAction.RateLimited(playerUuid, packed, state));
         this.ctx.diagnostics().incrementRateLimited(type);
         if (LSSLogger.isDebugEnabled()) {
             LSSLogger.debug("Rate-limited " + playerUuid + " (" + type + "): slot full"

@@ -29,6 +29,14 @@ public record SessionConfigS2CPayload(
                     },
                     buf -> {
                         int version = buf.readVarInt();
+                        if (version != LSSConstants.PROTOCOL_VERSION) {
+                            // Foreign layout (e.g. a v15 server's 10-field config). The version
+                            // VarInt is the first field in every layout, so drain the rest to
+                            // avoid a trailing-bytes decoder kick and let the handler's version
+                            // gate log the mismatch and disable LSS.
+                            buf.skipBytes(buf.readableBytes());
+                            return new SessionConfigS2CPayload(version, false, 0, 0, 0, false);
+                        }
                         boolean enabled = buf.readBoolean();
                         int lodDist = buf.readVarInt();
                         int syncConc = buf.readVarInt();

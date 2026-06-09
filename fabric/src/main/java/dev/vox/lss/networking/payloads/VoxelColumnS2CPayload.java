@@ -20,8 +20,6 @@ import net.minecraft.world.level.Level;
  */
 public final class VoxelColumnS2CPayload implements CustomPacketPayload {
 
-    private static final int MAX_DIMENSION_STRING_LENGTH = 256;
-
     public static final CustomPacketPayload.Type<VoxelColumnS2CPayload> TYPE =
             new CustomPacketPayload.Type<>(Identifier.parse(LSSConstants.CHANNEL_VOXEL_COLUMN));
 
@@ -62,7 +60,7 @@ public final class VoxelColumnS2CPayload implements CustomPacketPayload {
     private static void write(FriendlyByteBuf buf, VoxelColumnS2CPayload payload) {
         buf.writeInt(payload.chunkX);
         buf.writeInt(payload.chunkZ);
-        buf.writeUtf(payload.dimension.identifier().toString());
+        buf.writeUtf(payload.dimension.identifier().toString(), LSSConstants.MAX_DIMENSION_STRING_LENGTH);
         buf.writeLong(payload.columnTimestamp);
         buf.writeByteArray(payload.sectionBytes);
     }
@@ -71,7 +69,7 @@ public final class VoxelColumnS2CPayload implements CustomPacketPayload {
         int cx = buf.readInt();
         int cz = buf.readInt();
         ResourceKey<Level> dim = ResourceKey.create(Registries.DIMENSION,
-                Identifier.parse(buf.readUtf(MAX_DIMENSION_STRING_LENGTH)));
+                Identifier.parse(buf.readUtf(LSSConstants.MAX_DIMENSION_STRING_LENGTH)));
         long columnTimestamp = buf.readLong();
         byte[] sectionBytes = buf.readByteArray(LSSConstants.MAX_SECTIONS_SIZE);
 

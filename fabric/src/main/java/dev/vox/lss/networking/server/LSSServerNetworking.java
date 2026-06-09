@@ -36,6 +36,17 @@ public class LSSServerNetworking {
                             + " (protocol v" + payload.protocolVersion()
                             + ", capabilities=" + payload.capabilities() + ")");
 
+                    if (payload.protocolVersion() != LSSConstants.PROTOCOL_VERSION) {
+                        // Must not reply: a mismatched client's SessionConfig codec has a
+                        // different field layout on the same channel id, so any frame we
+                        // send decodes as a DecoderException and kicks the player. Sending
+                        // nothing leaves its LSS disabled (no LodRequestManager is created).
+                        LSSLogger.warn("Player " + player.getName().getString()
+                                + " has incompatible LSS protocol version " + payload.protocolVersion()
+                                + " (server: " + LSSConstants.PROTOCOL_VERSION + "), skipping LOD distribution");
+                        return;
+                    }
+
                     var config = LSSServerConfig.CONFIG;
                     var service = requestService;
                     boolean effectiveEnabled = config.enabled && service != null;
@@ -48,13 +59,6 @@ public class LSSServerNetworking {
                             config.generationConcurrencyLimitPerPlayer,
                             config.enableChunkGeneration
                     ));
-
-                    if (payload.protocolVersion() != LSSConstants.PROTOCOL_VERSION) {
-                        LSSLogger.warn("Player " + player.getName().getString()
-                                + " has incompatible LSS protocol version " + payload.protocolVersion()
-                                + " (server: " + LSSConstants.PROTOCOL_VERSION + "), skipping LOD distribution");
-                        return;
-                    }
 
                     if ((payload.capabilities() & LSSConstants.CAPABILITY_VOXEL_COLUMNS) == 0) {
                         // No consumer on the client — registering would only create a zombie

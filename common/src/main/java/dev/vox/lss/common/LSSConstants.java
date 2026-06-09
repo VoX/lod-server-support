@@ -38,6 +38,8 @@ public final class LSSConstants {
     /** Max serialized section bytes per column. The client decoder rejects (and disconnects on)
      *  anything larger, so the server drops oversized columns rather than send an unreadable frame. */
     public static final int MAX_SECTIONS_SIZE = 2_097_152; // 2 MB
+    /** Max chars for the VoxelColumn dimension resource-location string (caps both writers and the reader). */
+    public static final int MAX_DIMENSION_STRING_LENGTH = 256;
 
     // Config validation bounds (shared between Fabric and Paper)
     public static final int MIN_LOD_DISTANCE = 1;

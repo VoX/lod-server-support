@@ -16,11 +16,11 @@ public record ChunkReadResult(UUID playerUuid, int chunkX, int chunkZ,
                               boolean notFound, boolean saturated,
                               long submissionOrder) {
 
-    public static ChunkReadResult empty(UUID playerUuid, int chunkX, int chunkZ, long submissionOrder) {
-        return new ChunkReadResult(playerUuid, chunkX, chunkZ, null, null, 0, 0L, true, false, submissionOrder);
+    public static ChunkReadResult empty(UUID playerUuid, int chunkX, int chunkZ, String dimension, long submissionOrder) {
+        return new ChunkReadResult(playerUuid, chunkX, chunkZ, null, dimension, 0, 0L, true, false, submissionOrder);
     }
 
-    public static ChunkReadResult saturated(UUID playerUuid, int chunkX, int chunkZ, long submissionOrder) {
-        return new ChunkReadResult(playerUuid, chunkX, chunkZ, null, null, 0, 0L, false, true, submissionOrder);
+    public static ChunkReadResult saturated(UUID playerUuid, int chunkX, int chunkZ, String dimension, long submissionOrder) {
+        return new ChunkReadResult(playerUuid, chunkX, chunkZ, null, dimension, 0, 0L, false, true, submissionOrder);
     }
 }

@@ -81,15 +81,29 @@ class SlotAdmissionTest {
 
     @Test
     void samePositionReadmissionSwapsSlotInsteadOfLeaking() {
-        // A GENERATION-type request routed disk-first holds a SYNC slot; when the disk read
-        // comes back not-found, the pending entry is removed and a GENERATION-slot entry is
-        // admitted for the same position. Simulate the same-position replace path directly.
+        // Production removes the pending entry before re-admitting (OffThreadProcessor
+        // .deliverDiskResult -> handleDiskNotFound), so this replace path is defensive-only;
+        // pin its accounting anyway so a same-position put can never leak a slot.
         assertTrue(state.tryAdmit(sync(3, 3)));
         assertTrue(state.tryAdmit(gen(3, 3)), "same-position admit replaces the entry");
         assertEquals(0, state.getHeldSyncSlots(), "replaced entry's slot must be freed");
         assertEquals(1, state.getHeldGenSlots());
         assertNotNull(state.removePendingByPosition(3, 3));
         assertEquals(0, state.getHeldGenSlots());
+    }
+
+    @Test
+    void diskNotFoundEscalationBounceLeavesNoPendingEntry() {
+        // The real escalation sequence (OffThreadProcessor.deliverDiskResult ->
+        // handleDiskNotFound): the SYNC slot is freed on delivery, then GENERATION
+        // re-admission either succeeds or bounces leaving no pending entry.
+        assertTrue(state.tryAdmit(gen(7, 7)), "fill the gen cap (1)");
+        assertTrue(state.tryAdmit(sync(3, 3)), "disk-first GENERATION request holds a SYNC slot");
+        assertNotNull(state.removePendingByPosition(3, 3), "disk result delivery frees the slot");
+        assertFalse(state.tryAdmit(gen(3, 3)), "gen-cap-full escalation must bounce");
+        assertFalse(state.hasPendingRequest(3, 3), "bounced escalation must not leave a pending entry");
+        assertEquals(0, state.getHeldSyncSlots());
+        assertEquals(1, state.getHeldGenSlots());
     }
 
     @Test

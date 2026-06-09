@@ -82,14 +82,14 @@ Chunk coordinates are packed as `((long)chunkX << 32) | (chunkZ & 0xFFFFFFFFL)`.
 - `ColumnTimestampCache` — in-memory per-dimension `(packedXZ → epochSeconds)` timestamp cache for up-to-date checks without disk IO
 - `OffThreadProcessor` — abstract base for main-thread → processing-thread handoff (prepares pre-serialized column data off-thread, routes requests via `IncomingRequestRouter`)
 - `IncomingRequestRouter` — routes incoming chunk requests: checks timestamps for up-to-date, probes loaded chunks, dispatches disk reads, with cross-player dedup via `DedupTracker`
-- `RateLimiterSet` — holds sync-on-load + generation limiter pair per player
+- `PendingRequest` / `SlotType` — derived admission: a pending-map entry IS the held sync/generation slot (no separate limiter object)
 - `DirtyColumnTracker` — thread-safe tracker of per-dimension dirty chunk positions, drained by broadcasters
 - `SendActionBatcher` — reusable per-tick accumulator for batching `SendAction` responses by player
 
 ### Fabric Server-Side (`fabric/`)
 
 - `RequestProcessingService` — orchestrates per-player processing, ticks on server thread, broadcasts dirty columns
-- `PlayerRequestState` — per-player request state, rate limiters, send queue, metrics
+- `PlayerRequestState` — per-player request state, pending-request slot admission, send queue, metrics
 - `ChunkDiskReader` — async region file reader with configurable thread pool
 - `FabricOffThreadProcessor` — extends `OffThreadProcessor`; main thread probes loaded chunks via `SectionSerializer`, processing thread prepares payloads and schedules sends
 - `SectionSerializer` — serializes loaded MC `LevelChunkSection` + light data into wire-format bytes using MC's native `section.write(buf)`
@@ -118,7 +118,7 @@ Chunk coordinates are packed as `((long)chunkX << 32) | (chunkZ & 0xFFFFFFFFL)`.
 
 ### Client-Side
 
-- `LodRequestManager` — expanding spiral scan with 1-second (20-tick) scan interval, per-request tracking, rate-limit retry, request cancellation, dirty column re-requests, timestamp pruning on movement
+- `LodRequestManager` — expanding spiral scan with 1-second (20-tick) scan interval, per-request tracking, rate-limit retry, dirty column re-requests, timestamp pruning on movement
 - `ColumnCacheStore` — per-server per-dimension binary cache of column positions and timestamps (enables resync across sessions)
 - `LSSClientNetworking` — packet handlers, dispatches sections to `LSSApi` consumers
 

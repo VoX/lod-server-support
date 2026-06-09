@@ -73,7 +73,7 @@ public abstract class AbstractChunkDiskReader {
                     LSSLogger.error("Failed to read chunk from disk at " + chunkX + ", " + chunkZ, t);
                     this.diag.recordError();
                     this.diag.recordCompleted(0);
-                    addResult(playerUuid, ChunkReadResult.empty(playerUuid, chunkX, chunkZ, submissionOrder));
+                    addResult(playerUuid, ChunkReadResult.empty(playerUuid, chunkX, chunkZ, dimension, submissionOrder));
                     if (t instanceof Error err) throw err;
                 }
             });
@@ -81,7 +81,7 @@ public abstract class AbstractChunkDiskReader {
             LSSLogger.warn("Disk reader executor saturated, returning rate-limited for " + chunkX + "," + chunkZ);
             this.diag.recordSaturation();
             this.diag.recordCompleted(0);
-            addResult(playerUuid, ChunkReadResult.saturated(playerUuid, chunkX, chunkZ, submissionOrder));
+            addResult(playerUuid, ChunkReadResult.saturated(playerUuid, chunkX, chunkZ, dimension, submissionOrder));
         }
     }
 
@@ -97,14 +97,14 @@ public abstract class AbstractChunkDiskReader {
             LSSLogger.error("Failed to read chunk NBT from disk at " + chunkX + ", " + chunkZ, e);
             this.diag.recordError();
             this.diag.recordCompleted(System.nanoTime() - startNs);
-            addResult(playerUuid, ChunkReadResult.empty(playerUuid, chunkX, chunkZ, submissionOrder));
+            addResult(playerUuid, ChunkReadResult.empty(playerUuid, chunkX, chunkZ, dimension, submissionOrder));
             return;
         }
 
         if (serializedSections == null) {
             this.diag.recordEmpty();
             this.diag.recordCompleted(System.nanoTime() - startNs);
-            addResult(playerUuid, ChunkReadResult.empty(playerUuid, chunkX, chunkZ, submissionOrder));
+            addResult(playerUuid, ChunkReadResult.empty(playerUuid, chunkX, chunkZ, dimension, submissionOrder));
             return;
         }
 

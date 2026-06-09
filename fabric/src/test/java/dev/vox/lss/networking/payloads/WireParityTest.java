@@ -20,7 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
- * Locks the Fabric wire format for all 8 payloads to an explicit byte reference built from raw
+ * Locks the Fabric wire format for all 6 payloads to an explicit byte reference built from raw
  * {@link FriendlyByteBuf} ops. The Paper module has a mirror test
  * ({@code dev.vox.lss.paper.WireParityTest}) asserting its codec against the IDENTICAL reference
  * ops — so if either implementation drifts, one of the two suites fails. This is the cross-impl
@@ -109,6 +109,31 @@ class WireParityTest {
             b.writeBoolean(false);
         });
         assertArrayEquals(expected, encode(SessionConfigS2CPayload.CODEC, p));
+    }
+
+    @Test
+    void sessionConfigToleratesForeignVersionLayout() {
+        // A v15 server's 10-field SessionConfig frame. The v16 decoder must consume the whole
+        // frame (no trailing bytes -> no decoder kick) and surface the version so the
+        // client-side protocol gate can fire.
+        byte[] v15Frame = ref(b -> {
+            b.writeVarInt(15);          // protocolVersion
+            b.writeBoolean(true);       // enabled
+            b.writeVarInt(8);           // lodDistanceChunks
+            b.writeVarInt(1);           // serverCapabilities
+            b.writeVarInt(40);          // syncOnLoadRateLimitPerPlayer
+            b.writeVarInt(300);         // syncOnLoadConcurrencyLimitPerPlayer
+            b.writeVarInt(20);          // generationRateLimitPerPlayer
+            b.writeVarInt(16);          // generationConcurrencyLimitPerPlayer
+            b.writeBoolean(true);       // generationEnabled
+            b.writeVarLong(1_000_000L); // playerBandwidthLimit
+        });
+        var buf = new FriendlyByteBuf(Unpooled.wrappedBuffer(v15Frame));
+        var p = SessionConfigS2CPayload.CODEC.decode(buf);
+        assertEquals(0, buf.readableBytes(), "decoder must consume the full foreign frame");
+        buf.release();
+        assertEquals(15, p.protocolVersion());
+        assertEquals(false, p.enabled());
     }
 
     @Test

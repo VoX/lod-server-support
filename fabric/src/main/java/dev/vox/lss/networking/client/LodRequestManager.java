@@ -202,7 +202,11 @@ public class LodRequestManager {
         this.metrics.recordSendCycle(count);
     }
 
-    public void onColumnReceived(long packed, long columnTimestamp) {
+    public void onColumnReceived(long packed, long columnTimestamp, ResourceKey<Level> dimension) {
+        // A column from another dimension is discarded by the dispatch drain
+        // (ClientColumnProcessor filters on level.dimension()), so stamping it here would
+        // mark the position SATISFIED in the current dimension's map with no data delivered.
+        if (this.lastDimension != null && !this.lastDimension.equals(dimension)) return;
         // Apply even if the position is no longer tracked (e.g. it timed out client-side):
         // the data is authoritative for the position, and stamping it prevents the
         // timeout → silent-duplicate → second-timeout stall.
@@ -273,6 +277,7 @@ public class LodRequestManager {
         if (this.serverAddress != null) {
             ColumnCacheStore.clearForServer(this.serverAddress);
         }
+        this.pendingCacheLoad = null; // drop any in-flight load — its pre-clear result would resurrect flushed timestamps
         resetRequestState();
         this.queue.clear();
         this.scanner.reset();

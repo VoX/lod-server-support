@@ -36,7 +36,7 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
     private static final int SAVE_INTERVAL_CYCLES = 6000; // ~5 min at 20 TPS
 
     /** Request for the main thread to submit a generation ticket (requires MC world state). */
-    public record GenerationTicketRequest(UUID playerUuid, int cx, int cz,
+    public record GenerationTicketRequest(UUID playerUuid, int cx, int cz, String dimension,
                                            long submissionOrder) {}
 
     private record TimestampInvalidation(String dimension, long[] positions) {}
@@ -186,7 +186,10 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
         SendAction action;
         while ((action = this.sendActions.poll()) != null) {
             var state = this.players.get(action.playerUuid());
-            if (state == null || !state.hasCompletedHandshake()) continue;
+            // Identity check: a dimension change re-registers the same UUID with a fresh
+            // state — actions produced for the old session must not reach the new one.
+            if (state == null || state != action.producerState()
+                    || !state.hasCompletedHandshake()) continue;
             this.sendActionBatcher.add(action.playerUuid(), action.responseType(), action.packedPosition());
         }
 
@@ -294,7 +297,7 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
 
         applyEvents(take);
         drainDiskResultsForAllPlayers(take.snapshot());
-        processGenerationReady(take.generationReady());
+        processGenerationReady(take.generationReady(), take.snapshot());
         routeIncomingRequests(take.snapshot());
 
         if (++this.evictionCounter >= EVICTION_INTERVAL_CYCLES) {
@@ -363,15 +366,22 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
 
             ChunkReadResult result;
             while ((result = queue.poll()) != null) {
+                if (!dimension.equals(result.dimension())) {
+                    // Read submitted before a dimension change: the pending entry, slot, and
+                    // dedup group that backed it died with the removed state. Delivering it here
+                    // would stamp diskReadDone/timestampCache under the NEW dimension and could
+                    // tear down a live new-dimension dedup group at the same packed position.
+                    continue;
+                }
                 int cx = result.chunkX();
                 int cz = result.chunkZ();
                 long packed = PositionUtil.packPosition(cx, cz);
 
-                deliverDiskResult(playerUuid, state, result, result.submissionOrder());
+                deliverDiskResult(playerUuid, state, result, result.submissionOrder(), dimension);
 
                 if (!result.saturated() && !result.notFound()) {
                     // Store timestamp so reconnecting clients get up-to-date responses
-                    this.timestampCache.put(dimension, packed, result.columnTimestamp(), this.cycleNow);
+                    this.timestampCache.put(result.dimension(), packed, result.columnTimestamp(), this.cycleNow);
                 }
 
                 // Dispatch the same result to attached players in the dedup group
@@ -381,7 +391,7 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
                         var attachedState = this.players.get(attachment.playerUuid());
                         if (attachedState == null) continue;
                         deliverDiskResult(attachment.playerUuid(), attachedState, result,
-                                attachment.submissionOrder());
+                                attachment.submissionOrder(), dimension);
                     }
                 }
             }
@@ -394,19 +404,19 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
      * Shared by the primary requester and every dedup-attached player.
      */
     private void deliverDiskResult(UUID playerUuid, PlayerState state, ChunkReadResult result,
-                                    long submissionOrder) {
+                                    long submissionOrder, String dimension) {
         int cx = result.chunkX();
         int cz = result.chunkZ();
         long packed = PositionUtil.packPosition(cx, cz);
         var pending = state.removePendingByPosition(cx, cz);
 
         if (result.saturated()) {
-            this.ctx.sendActions().add(new SendAction.RateLimited(playerUuid, packed));
+            this.ctx.sendActions().add(new SendAction.RateLimited(playerUuid, packed, state));
             if (LSSLogger.isDebugEnabled()) {
                 LSSLogger.debug("Rate-limited " + playerUuid + " (disk saturated): chunk [" + cx + ", " + cz + "]");
             }
         } else if (result.notFound()) {
-            handleDiskNotFound(playerUuid, state, packed, cx, cz, pending);
+            handleDiskNotFound(playerUuid, state, packed, cx, cz, pending, dimension);
         } else {
             state.markDiskReadDone(cx, cz);
             if (result.sectionBytes() != null) {
@@ -415,7 +425,7 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
                         result.sectionBytes(), result.estimatedBytes());
             } else {
                 // All-air chunk (exists on disk but no visible sections) — notify client
-                this.ctx.sendActions().add(new SendAction.ColumnUpToDate(playerUuid, packed));
+                this.ctx.sendActions().add(new SendAction.ColumnUpToDate(playerUuid, packed, state));
             }
         }
         this.ctx.diagnostics().incrementDiskDrained();
@@ -424,38 +434,44 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
     /** Disk-first fallback: if the original request was GENERATION and generation is available,
      *  queue a generation ticket; otherwise send ColumnNotGenerated. */
     private void handleDiskNotFound(UUID playerUuid, PlayerState state, long packed,
-                                     int cx, int cz, PendingRequest pending) {
+                                     int cx, int cz, PendingRequest pending, String dimension) {
         if (pending != null && pending.type() == RequestType.GENERATION && this.generationAvailable) {
             if (state.tryAdmit(new PendingRequest(cx, cz, RequestType.GENERATION, SlotType.GENERATION))) {
                 this.ctx.generationTicketRequests().add(new GenerationTicketRequest(
-                        playerUuid, cx, cz, this.ctx.sequence().next()));
+                        playerUuid, cx, cz, dimension, this.ctx.sequence().next()));
             } else {
-                this.ctx.sendActions().add(new SendAction.ColumnNotGenerated(playerUuid, packed));
+                this.ctx.sendActions().add(new SendAction.ColumnNotGenerated(playerUuid, packed, state));
             }
         } else {
-            this.ctx.sendActions().add(new SendAction.ColumnNotGenerated(playerUuid, packed));
+            this.ctx.sendActions().add(new SendAction.ColumnNotGenerated(playerUuid, packed, state));
         }
     }
 
     // ---- Phase 3: Process generation outcomes ----
 
-    private void processGenerationReady(List<TickSnapshot.GenerationReadyData> generationReady) {
+    private void processGenerationReady(List<TickSnapshot.GenerationReadyData> generationReady,
+                                         TickSnapshot snapshot) {
         for (var entry : generationReady) {
             var state = this.players.get(entry.playerUuid());
             if (state == null) continue;
+            // A dimension change replaces the player's state (removePlayer + registerPlayer,
+            // same UUID). Outcomes harvested for the old session carry the old dimension —
+            // skip them instead of poisoning the fresh state (their pending died with it).
+            String current = snapshot.playerDimensions().get(entry.playerUuid());
+            if (current == null || !current.equals(entry.dimension())) continue;
             int cx = entry.cx();
             int cz = entry.cz();
             state.removePendingByPosition(cx, cz);
             long packed = PositionUtil.packPosition(cx, cz);
 
             if (entry.columnData() == null) {
-                this.ctx.sendActions().add(new SendAction.ColumnNotGenerated(entry.playerUuid(), packed));
+                this.ctx.sendActions().add(new SendAction.ColumnNotGenerated(entry.playerUuid(), packed, state));
             } else {
                 state.markDiskReadDone(cx, cz);
                 boolean sent = this.enqueueLoadedColumn(state, entry.columnData(),
                         entry.columnTimestamp(), entry.submissionOrder(), entry.dimension());
                 if (!sent) {
-                    this.sendActions.add(new SendAction.ColumnUpToDate(entry.playerUuid(), packed));
+                    this.sendActions.add(new SendAction.ColumnUpToDate(entry.playerUuid(), packed, state));
                 }
             }
             this.ctx.diagnostics().incrementGenDrained();
@@ -487,7 +503,11 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
         // Save timestamp cache to disk. Route the final save through SAVE_EXECUTOR (single-threaded,
         // FIFO) so it runs after any in-flight periodic save, then wait for it — otherwise a late
         // async save could overwrite the final state with an older snapshot.
-        if (this.dataDir != null) {
+        // Skip if the processing thread is still alive: ColumnTimestampCache is single-owner
+        // (processing thread), so snapshotting it here would race its put/invalidate/evict.
+        if (this.processingThread.isAlive()) {
+            LSSLogger.warn("Skipping final timestamp cache save — processing thread still running");
+        } else if (this.dataDir != null) {
             var snapshot = this.timestampCache.snapshotForSave();
             try {
                 SAVE_EXECUTOR.submit(() -> snapshot.save(this.dataDir))

@@ -286,16 +286,19 @@ public class RequestProcessingService {
             if (state == null || !state.hasCompletedHandshake()) continue;
 
             var player = state.getPlayer();
-            if (player.isRemoved()) continue;
             var level = player.level();
-            boolean accepted = this.generationService.submitGeneration(
+            String dimension = this.dimensionStringCache.computeIfAbsent(level,
+                    l -> l.dimension().identifier().toString());
+            // Ticket queued before a dimension change targets the old dimension's coordinates.
+            // The admitting state was discarded by removePlayer+registerPlayer, so dropping
+            // the stale ticket leaks nothing.
+            if (!dimension.equals(req.dimension())) continue;
+            boolean accepted = !player.isRemoved() && this.generationService.submitGeneration(
                     req.playerUuid(), level, req.cx(), req.cz(),
                     req.submissionOrder());
             if (!accepted) {
-                // Capacity rejection: feed a failure outcome so the processing thread
-                // frees the pending slot and tells the client ColumnNotGenerated.
-                String dimension = this.dimensionStringCache.computeIfAbsent(level,
-                        l -> l.dimension().identifier().toString());
+                // Capacity rejection or removed player: feed a failure outcome so the
+                // processing thread frees the pending slot and tells the client ColumnNotGenerated.
                 this.offThreadProcessor.feedGenerationFailure(
                         req.playerUuid(), req.cx(), req.cz(), dimension, req.submissionOrder());
             }

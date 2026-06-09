@@ -164,7 +164,8 @@ public class LSSClientNetworking {
                         if (manager != null) {
                             manager.onColumnReceived(
                                     PositionUtil.packPosition(payload.chunkX(), payload.chunkZ()),
-                                    payload.columnTimestamp());
+                                    payload.columnTimestamp(),
+                                    payload.dimension());
                         }
                         columnProcessor.offer(payload);
                     });

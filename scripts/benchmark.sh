@@ -159,15 +159,15 @@ CLIENT_PID=""
 
 # Step 10: Collect results
 echo "[benchmark] Collecting results..."
-if [[ -f "$SERVER_RUN_DIR/benchmark-results.json" ]]; then
-    cp "$SERVER_RUN_DIR/benchmark-results.json" "$RESULTS_DIR/server.json"
+if [[ -f "$SERVER_RUN_DIR/benchmark-results/server.json" ]]; then
+    cp "$SERVER_RUN_DIR/benchmark-results/server.json" "$RESULTS_DIR/server.json"
     echo "[benchmark] Server metrics: $RESULTS_DIR/server.json"
 else
     echo "[benchmark] WARNING: No server metrics found"
 fi
 
-if [[ -f "$CLIENT_RUN_DIR/benchmark-results.json" ]]; then
-    cp "$CLIENT_RUN_DIR/benchmark-results.json" "$RESULTS_DIR/client.json"
+if [[ -f "$CLIENT_RUN_DIR/benchmark-results/client.json" ]]; then
+    cp "$CLIENT_RUN_DIR/benchmark-results/client.json" "$RESULTS_DIR/client.json"
     echo "[benchmark] Client metrics: $RESULTS_DIR/client.json"
 else
     echo "[benchmark] WARNING: No client metrics found"

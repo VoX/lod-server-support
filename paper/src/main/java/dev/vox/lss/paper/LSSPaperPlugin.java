@@ -105,6 +105,17 @@ public class LSSPaperPlugin extends JavaPlugin implements PluginMessageListener,
                 + " (protocol v" + handshake.protocolVersion()
                 + ", capabilities=" + handshake.capabilities() + ")");
 
+        if (handshake.protocolVersion() != LSSConstants.PROTOCOL_VERSION) {
+            // Must not reply: a mismatched client's SessionConfig codec has a
+            // different field layout on the same channel id, so any frame we
+            // send decodes as a DecoderException and kicks the player. Sending
+            // nothing leaves its LSS disabled (no LodRequestManager is created).
+            LSSLogger.warn("Player " + nmsPlayer.getName().getString()
+                    + " has incompatible LSS protocol version " + handshake.protocolVersion()
+                    + " (server: " + LSSConstants.PROTOCOL_VERSION + "), skipping LOD distribution");
+            return;
+        }
+
         boolean effectiveEnabled = this.lssConfig.enabled && this.requestService != null;
 
         PaperPayloadHandler.sendSessionConfig(bukkitPlayer,
@@ -114,13 +125,6 @@ public class LSSPaperPlugin extends JavaPlugin implements PluginMessageListener,
                 this.lssConfig.syncOnLoadConcurrencyLimitPerPlayer,
                 this.lssConfig.generationConcurrencyLimitPerPlayer,
                 this.lssConfig.enableChunkGeneration);
-
-        if (handshake.protocolVersion() != LSSConstants.PROTOCOL_VERSION) {
-            LSSLogger.warn("Player " + nmsPlayer.getName().getString()
-                    + " has incompatible LSS protocol version " + handshake.protocolVersion()
-                    + " (server: " + LSSConstants.PROTOCOL_VERSION + "), skipping LOD distribution");
-            return;
-        }
 
         if ((handshake.capabilities() & LSSConstants.CAPABILITY_VOXEL_COLUMNS) == 0) {
             // No consumer on the client — registering would only create a zombie

@@ -86,6 +86,25 @@ class ColumnStateMapTest {
     }
 
     @Test
+    void onReceivedConsumesDirty() {
+        map.onReceived(POS, 5000L);
+        map.markDirtyIfKnown(POS);
+        map.onReceived(POS, 6000L);
+        assertEquals(SATISFIED, map.classify(POS, true),
+                "data arriving while a dirty re-request is in flight consumes the dirty mark");
+        assertEquals(0, map.dirtyCount());
+    }
+
+    @Test
+    void onReceivedKeepsRetry() {
+        map.onReceived(POS, 5000L);
+        map.markRetry(POS);
+        map.onReceived(POS, 6000L);
+        assertEquals(6000L, map.classify(POS, true),
+                "rate-limit retry mark deliberately survives onReceived (unlike markSent)");
+    }
+
+    @Test
     void onUpToDateStampsAbsentPositions() {
         map.onUpToDate(POS);
         assertEquals(SATISFIED, map.classify(POS, true),

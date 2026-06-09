@@ -84,7 +84,7 @@ public final class PaperPayloadHandler {
         return encodeToBytes(sectionBytes.length + 64, buf -> {
             buf.writeInt(chunkX);
             buf.writeInt(chunkZ);
-            buf.writeUtf(dimensionStr);
+            buf.writeUtf(dimensionStr, LSSConstants.MAX_DIMENSION_STRING_LENGTH);
             buf.writeLong(columnTimestamp);
             buf.writeByteArray(sectionBytes);
         });

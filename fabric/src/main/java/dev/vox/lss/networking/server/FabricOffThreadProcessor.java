@@ -49,7 +49,10 @@ public class FabricOffThreadProcessor extends OffThreadProcessor<PlayerRequestSt
                                    long submissionOrder) {
         if (this.diskReader == null) return false;
         var level = this.dimensionLevelMap.get(dimension);
-        if (level == null) return false;
+        if (level == null) {
+            LSSLogger.debug("No dimension context for " + dimension + ", skipping disk read for " + cx + "," + cz);
+            return false;
+        }
         this.diskReader.submitReadDirect(playerUuid, dimension, level,
                 cx, cz, submissionOrder);
         return true;

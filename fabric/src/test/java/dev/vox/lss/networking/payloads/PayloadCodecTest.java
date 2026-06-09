@@ -51,7 +51,9 @@ class PayloadCodecTest {
 
     @Test
     void sessionConfigRoundtrip() {
-        var original = new SessionConfigS2CPayload(9, true, 128, 100, 40, true);
+        // Must use the live protocol version: the decoder treats any other version as a
+        // foreign layout and drains the frame instead of reading the fields.
+        var original = new SessionConfigS2CPayload(LSSConstants.PROTOCOL_VERSION, true, 128, 100, 40, true);
         var b = buf();
         SessionConfigS2CPayload.CODEC.encode(b, original);
         var decoded = SessionConfigS2CPayload.CODEC.decode(b);
