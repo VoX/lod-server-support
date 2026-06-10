@@ -61,7 +61,7 @@ Requires Paper (or Purpur) for Minecraft 26.1.2.
 
 ### Fabric Server
 - Minecraft 26.1.x
-- Fabric Loader 0.19.3+
+- Fabric Loader 0.18.4+
 - Fabric API
 - Java 25+
 
@@ -71,7 +71,7 @@ Requires Paper (or Purpur) for Minecraft 26.1.2.
 
 ### Client
 - Minecraft 26.1.x
-- Fabric Loader 0.19.3+
+- Fabric Loader 0.18.4+
 - Fabric API
 - [Voxy](https://modrinth.com/mod/voxy) 0.2.16-beta+
 - Java 25+
