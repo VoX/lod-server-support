@@ -456,14 +456,25 @@ def evaluate_laws(ctx):
         q1, q2 = ctx.qpoints[k - 1], ctx.qpoints[k]
         ps, cs = snaps[q1.si], snaps[q2.si]
         same_window = (q1.run == q2.run and q1.cseg == q2.cseg and q1.sseg == q2.sseg)
+        # Client-involving laws need more than instant-stillness at the endpoints: the
+        # paired client row can lag the server instant by up to SKEW_MS, so the endpoint
+        # must sit inside a TWO-SIDED still plateau (the pair behind it proves stillness
+        # before; the row after it must be still too, covering the client row's skew).
+        # A one-sided endpoint let a send burst land between the server instant and the
+        # client row — server delta 52, client delta 0, false A1/A2. Also require
+        # distinct ordered client rows (same-row joins make client deltas vacuously 0).
+        def two_sided(q):
+            return q.si + 1 >= len(snaps) or server_pair_quiescent(snaps[q.si], snaps[q.si + 1])
+        client_laws_ok = same_window and q1.ci < q2.ci and two_sided(q1) and two_sided(q2)
         if same_window:
             pc, cc = ctx.runs[q1.run][q1.ci], ctx.runs[q2.run][q2.ci]
             win = window_label(ps, cs, run=q1.run, dim=cc.get("dimension"))
-            violations += law_A1(ps, cs, pc, cc, win)
-            violations += law_A2(ps, cs, pc, cc, win)
+            if client_laws_ok:
+                violations += law_A1(ps, cs, pc, cc, win)
+                violations += law_A2(ps, cs, pc, cc, win)
+                violations += law_A5(ps, cs, pc, cc, win)
             violations += law_A3(ps, cs, win)
             violations += law_A4(ps, cs, win)
-            violations += law_A5(ps, cs, pc, cc, win)
             violations += law_A7_server(ps, cs, win, opt_ins)
         else:
             win = window_label(ps, cs) + " boundary"
