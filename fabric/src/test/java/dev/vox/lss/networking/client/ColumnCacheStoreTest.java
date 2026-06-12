@@ -269,4 +269,175 @@ class ColumnCacheStoreTest {
         assertTrue(ColumnCacheStore.load("test-clear-multi", dimA).isEmpty());
         assertTrue(ColumnCacheStore.load("test-clear-multi", dimB).isEmpty());
     }
+
+    @Test
+    void v2MigrationSignExtendsNegativeValues() throws IOException {
+        var dim = testDimension("v2_negative");
+        Path file = getCacheFile("test-v2-negative", dim);
+        Files.createDirectories(file.getParent());
+        try (var out = new DataOutputStream(Files.newOutputStream(file))) {
+            out.writeInt(2); // v2 encoded values as (timestamp << 8 | detail level)
+            out.writeInt(2);
+            out.writeLong(100L);
+            out.writeLong((-1L << 8) | 7L); // ts=-1 (unknown sentinel) packed with level bits
+            out.writeLong(200L);
+            out.writeLong(-1000L); // corrupt negative raw value
+        }
+
+        var loaded = ColumnCacheStore.load("test-v2-negative", dim);
+        assertEquals(2, loaded.size());
+        assertTrue(loaded.containsKey(100L));
+        // The migration shift must be arithmetic (>>), sign-extending: a packed -1
+        // timestamp recovers exactly the -1 unknown sentinel, and negative garbage stays
+        // negative. A logical >>> would turn -1000 into ~7.2e16 — a far-future epoch the
+        // server answers up-to-date forever, black-holing the position.
+        assertEquals(-1L, loaded.get(100L), "packed -1 timestamp must migrate back to the -1 sentinel");
+        assertEquals(-4L, loaded.get(200L), "negative raw value must sign-extend, not become a huge positive epoch");
+
+        // The recovered -1 composes with the classify ladder: unknown, so it re-requests.
+        // Values below -1 (the 200L entry) are ColumnStateMap's loadFrom guard's concern.
+        var states = new ColumnStateMap();
+        states.loadFrom(loaded);
+        assertEquals(-1L, states.classify(100L, true), "migrated -1 classifies unknown (re-request), not satisfied");
+    }
+
+    @Test
+    void minusOneEntriesRoundtripToUnknownClassify() {
+        var dim = testDimension("minus_one");
+        var map = new Long2LongOpenHashMap();
+        map.defaultReturnValue(-1L);
+        map.put(100L, -1L); // never-seen sentinel explicitly present in the saved map
+        map.put(200L, 5000L);
+
+        ColumnCacheStore.save("test-minus-one", dim, map);
+        var loaded = ColumnCacheStore.load("test-minus-one", dim);
+
+        assertEquals(2, loaded.size(), "-1 entries roundtrip verbatim, not filtered at save or load");
+        assertTrue(loaded.containsKey(100L));
+        assertEquals(-1L, loaded.get(100L));
+
+        var states = new ColumnStateMap();
+        states.loadFrom(loaded);
+        assertEquals(-1L, states.classify(100L, true), "a roundtripped -1 stays unknown — re-requested, never satisfied");
+        assertEquals(1, states.receivedCount(), "only the positive entry counts as received");
+        assertEquals(0, states.emptyCount(), "-1 is not a not-generated stamp");
+    }
+
+    @Test
+    void sanitizationCollapsesColonAndUnderscoreServerIds() {
+        // host:port and host_port sanitize to the same directory — a known, accepted
+        // collision (worst case two server ids share a cache; resync corrects stale stamps).
+        assertEquals(ColumnCacheStore.sanitizeForFilePath("coll.example:25565"),
+                ColumnCacheStore.sanitizeForFilePath("coll.example_25565"));
+
+        var dim = testDimension("collision");
+        var map = new Long2LongOpenHashMap();
+        map.defaultReturnValue(-1L);
+        map.put(1L, 1234L);
+        ColumnCacheStore.save("coll.example:25565", dim, map);
+
+        assertEquals(1234L, ColumnCacheStore.load("coll.example_25565", dim).get(1L),
+                "colliding server ids read each other's cache files");
+        ColumnCacheStore.clearForServer("coll.example_25565");
+        assertTrue(ColumnCacheStore.load("coll.example:25565", dim).isEmpty(),
+                "colliding server ids clear each other's cache files");
+    }
+
+    @Test
+    void hostileServerAddressCannotEscapeCacheDir() {
+        String hostile = "lss-evil/../../traversal-target";
+        String sanitized = ColumnCacheStore.sanitizeForFilePath(hostile);
+        assertEquals("lss-evil_.._.._traversal-target", sanitized);
+        assertFalse(sanitized.contains("/"));
+        assertFalse(sanitized.contains("\\"));
+
+        // ".." survives sanitization only embedded inside a single path segment, where it
+        // has no traversal meaning — the server dir stays a direct child of the cache dir.
+        Path cacheDir = FabricLoader.getInstance().getConfigDir().resolve("lss").resolve("cache").normalize();
+        assertEquals(cacheDir, cacheDir.resolve(sanitized).normalize().getParent());
+
+        var dim = testDimension("traversal");
+        var map = new Long2LongOpenHashMap();
+        map.defaultReturnValue(-1L);
+        map.put(1L, 1L);
+        ColumnCacheStore.save(hostile, dim, map);
+
+        assertTrue(Files.exists(getCacheFile(hostile, dim)), "file must land inside the sanitized server dir");
+        // Where the raw id would have landed if separators were honored: config/lss/traversal-target.
+        assertFalse(Files.exists(cacheDir.resolve(hostile).normalize()),
+                "a traversal id must not write outside the cache dir");
+        ColumnCacheStore.clearForServer(hostile);
+    }
+
+    @Test
+    void oversizedSaveLoadsBackEmptyNotTruncated() {
+        var dim = testDimension("oversized");
+        // One entry over the 2_000_000 load guard (~32 MB file; kept a single test method
+        // so it can be excluded if CI memory ever becomes an issue).
+        var map = new Long2LongOpenHashMap(2_000_001);
+        map.defaultReturnValue(-1L);
+        for (long i = 0; i < 2_000_001; i++) map.put(i, 1L);
+
+        ColumnCacheStore.save("test-oversized", dim, map);
+        assertTrue(Files.exists(getCacheFile("test-oversized", dim)),
+                "save writes the oversized file verbatim — the entry-count guard lives load-side");
+
+        // Wholesale discard (load warns and rebuilds from scratch), never truncation —
+        // silently keeping an arbitrary 2M-entry prefix would resync stale stamps as
+        // authoritative. The discarded load must not throw and must keep the -1 sentinel.
+        var loaded = ColumnCacheStore.load("test-oversized", dim);
+        assertTrue(loaded.isEmpty(), "an oversized cache must be discarded wholesale, not truncated to the cap");
+        assertEquals(-1L, loaded.defaultReturnValue(), "discarded load still answers the unknown sentinel");
+
+        ColumnCacheStore.clearForServer("test-oversized");
+    }
+
+    @Test
+    void clearAllRunsAfterQueuedAsyncSave() {
+        var dim = testDimension("fifo_clear_all");
+        var map = new Long2LongOpenHashMap();
+        map.defaultReturnValue(-1L);
+        map.put(7L, 700L);
+
+        ColumnCacheStore.saveAsync("test-fifo-clear-all", dim, map);
+        // Same FIFO contract as clearForServer: clearAll runs on the single IO thread and
+        // waits, so the queued save cannot re-create files after the global clear.
+        ColumnCacheStore.clearAll();
+
+        assertTrue(ColumnCacheStore.load("test-fifo-clear-all", dim).isEmpty(),
+                "a queued async save must not survive a subsequent global clear");
+    }
+
+    @Test
+    void clearForServerLeavesOtherServersIntact() {
+        var dim = testDimension("server_iso");
+        var map = new Long2LongOpenHashMap();
+        map.defaultReturnValue(-1L);
+        map.put(5L, 500L);
+
+        ColumnCacheStore.save("test-server-iso-a", dim, map);
+        ColumnCacheStore.save("test-server-iso-b", dim, map);
+        ColumnCacheStore.clearForServer("test-server-iso-a");
+
+        assertTrue(ColumnCacheStore.load("test-server-iso-a", dim).isEmpty());
+        assertEquals(500L, ColumnCacheStore.load("test-server-iso-b", dim).get(5L),
+                "clearing one server must not touch another server's cache");
+        ColumnCacheStore.clearForServer("test-server-iso-b");
+    }
+
+    @Test
+    void clearAllRemovesEveryServersCache() {
+        var dimA = testDimension("clear_all_a");
+        var dimB = testDimension("clear_all_b");
+        var map = new Long2LongOpenHashMap();
+        map.defaultReturnValue(-1L);
+        map.put(5L, 500L);
+
+        ColumnCacheStore.save("test-clear-all-1", dimA, map);
+        ColumnCacheStore.save("test-clear-all-2", dimB, map);
+        ColumnCacheStore.clearAll(); // the /lss clearcache fallback when no manager is active
+
+        assertTrue(ColumnCacheStore.load("test-clear-all-1", dimA).isEmpty());
+        assertTrue(ColumnCacheStore.load("test-clear-all-2", dimB).isEmpty());
+    }
 }

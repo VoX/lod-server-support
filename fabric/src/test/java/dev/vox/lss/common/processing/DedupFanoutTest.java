@@ -1,8 +1,10 @@
 package dev.vox.lss.common.processing;
 
 import dev.vox.lss.common.LSSConstants;
+import dev.vox.lss.common.PositionUtil;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -13,6 +15,8 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -55,7 +59,7 @@ class DedupFanoutTest {
 
     private static final class TestProcessor extends OffThreadProcessor<TestState> {
         record Delivery(UUID playerUuid, AbstractPlayerRequestState<?> state, int cx, int cz,
-                        String dimension, byte[] bytes) {}
+                        String dimension, byte[] bytes, long submissionOrder) {}
 
         final GatedDiskReader reader;
         final Map<String, byte[]> bytesByDimension;
@@ -64,7 +68,12 @@ class DedupFanoutTest {
 
         TestProcessor(Map<UUID, TestState> players, GatedDiskReader reader,
                       Map<String, byte[]> bytesByDimension) {
-            super(players, reader, false, null, 1);
+            this(players, reader, bytesByDimension, false);
+        }
+
+        TestProcessor(Map<UUID, TestState> players, GatedDiskReader reader,
+                      Map<String, byte[]> bytesByDimension, boolean generationAvailable) {
+            super(players, reader, generationAvailable, null, 1);
             this.reader = reader;
             this.bytesByDimension = bytesByDimension;
         }
@@ -81,7 +90,8 @@ class DedupFanoutTest {
         protected boolean buildAndEnqueueColumnPayload(TestState state, int cx, int cz, String dimension,
                                                      long columnTimestamp, long submissionOrder,
                                                      byte[] sectionBytes, int estimatedBytes) {
-            this.deliveries.add(new Delivery(state.getPlayerUUID(), state, cx, cz, dimension, sectionBytes));
+            this.deliveries.add(new Delivery(state.getPlayerUUID(), state, cx, cz, dimension,
+                    sectionBytes, submissionOrder));
             return true;
         }
     }
@@ -103,6 +113,61 @@ class DedupFanoutTest {
             proc.postSnapshot(new TickSnapshot(new HashMap<>(dims), Map.of(), 0, false), List.of());
             Thread.sleep(10);
         }
+    }
+
+    /** Post exactly one snapshot (one processing cycle) — per-tick counters stay readable
+     *  afterwards because nothing resets them until the next post. */
+    private static void postOnce(TestProcessor proc, Map<UUID, String> dims) {
+        proc.postSnapshot(new TickSnapshot(new HashMap<>(dims), Map.of(), 0, false), List.of());
+    }
+
+    /** Wait without posting (the condition's cycle was already posted). */
+    private static void waitFor(java.util.function.BooleanSupplier condition, String what)
+            throws InterruptedException {
+        long deadline = System.nanoTime() + 5_000_000_000L;
+        while (!condition.getAsBoolean()) {
+            if (System.nanoTime() > deadline) fail("timed out waiting for: " + what);
+            Thread.sleep(10);
+        }
+    }
+
+    private record Response(UUID player, byte type, long packed) {}
+
+    /** One non-blocking drain of the batched answers produced so far. */
+    private static List<Response> drainResponses(TestProcessor proc) {
+        var collected = new ArrayList<Response>();
+        proc.drainSendActions((state, types, positions, count) -> {
+            for (int i = 0; i < count; i++) {
+                collected.add(new Response(state.getPlayerUUID(), types[i], positions[i]));
+            }
+        });
+        return collected;
+    }
+
+    /** Accumulate drained batched answers until {@code done} or a deadline passes. */
+    private static List<Response> drainUntilResponses(TestProcessor proc,
+                                                      Predicate<List<Response>> done)
+            throws InterruptedException {
+        var collected = new ArrayList<Response>();
+        long deadline = System.nanoTime() + 5_000_000_000L;
+        while (!done.test(collected)) {
+            if (System.nanoTime() > deadline) fail("timed out draining responses; got " + collected);
+            collected.addAll(drainResponses(proc));
+            Thread.sleep(10);
+        }
+        return collected;
+    }
+
+    /** Poll until the processing thread publishes a generation ticket (race-free consume). */
+    private static OffThreadProcessor.GenerationTicketRequest awaitTicket(TestProcessor proc)
+            throws InterruptedException {
+        var ref = new AtomicReference<OffThreadProcessor.GenerationTicketRequest>();
+        waitFor(() -> {
+            var t = proc.pollGenerationTicketRequest();
+            if (t != null) ref.set(t);
+            return ref.get() != null;
+        }, "generation ticket");
+        return ref.get();
     }
 
     /**
@@ -305,5 +370,285 @@ class DedupFanoutTest {
             proc.shutdown();
             reader.shutdown();
         }
+    }
+
+    @Test
+    void attachCountsDiskQueuedAndFanoutCarriesPerRecipientSubmissionOrders() throws Exception {
+        var u1 = UUID.randomUUID();
+        var u2 = UUID.randomUUID();
+        var p1 = newPlayer(u1);
+        var p2 = newPlayer(u2);
+        var players = new ConcurrentHashMap<UUID, TestState>();
+        players.put(u1, p1);
+        players.put(u2, p2);
+        var reader = new GatedDiskReader();
+        reader.registerPlayer(u1);
+        reader.registerPlayer(u2);
+        var proc = new TestProcessor(players, reader, Map.of(OVERWORLD, new byte[]{1, 2, 3}));
+        var dims = Map.of(u1, OVERWORLD, u2, OVERWORLD);
+        try {
+            proc.start();
+            p1.enqueue(new IncomingRequest(7, 7, 1L));
+            postOnce(proc, dims);
+            waitFor(() -> proc.diskSubmits.get() == 1
+                            && proc.getDiagnostics().getLastDiskQueued() == 1,
+                    "primary submit counted disk-queued");
+
+            // The attach must count as disk-queued in ITS cycle (it entered the disk
+            // pipeline) without a second submit — disk accounting balances per request,
+            // not per physical read.
+            p2.enqueue(new IncomingRequest(7, 7, 1L));
+            postOnce(proc, dims);
+            waitFor(() -> p2.getHeldSyncSlots() == 1
+                            && proc.getDiagnostics().getLastDiskQueued() == 1,
+                    "attach counted disk-queued in its own cycle");
+            assertEquals(1, proc.diskSubmits.get(), "attaching must not submit a second read");
+
+            reader.gate.countDown();
+            waitFor(() -> !reader.getPlayerQueue(u1).isEmpty(), "read result landed");
+            postOnce(proc, dims);
+            waitFor(() -> proc.getDiagnostics().getLastDiskDrained() == 2,
+                    "primary + fan-out drain as two deliveries in the same cycle");
+            assertEquals(0, p1.getHeldSyncSlots());
+            assertEquals(0, p2.getHeldSyncSlots());
+
+            var fanout = proc.deliveries.stream().filter(d -> d.cx() == 7 && d.cz() == 7).toList();
+            assertEquals(2, fanout.size());
+            var orderByPlayer = fanout.stream().collect(
+                    Collectors.toMap(TestProcessor.Delivery::playerUuid,
+                            TestProcessor.Delivery::submissionOrder));
+            assertEquals(Set.of(u1, u2), orderByPlayer.keySet());
+            assertNotEquals(orderByPlayer.get(u1), orderByPlayer.get(u2),
+                    "each recipient's payload must carry its OWN submission order, not the primary's");
+            assertTrue(orderByPlayer.get(u1) < orderByPlayer.get(u2),
+                    "orders follow request arrival: primary first, attachment second");
+
+            // Group removed after fan-out: a ts<=0 re-ask re-resolves into a FRESH group
+            // and a second read; a leaked group would swallow it (attach, never submit,
+            // never answer) and this waitFor would time out.
+            p1.enqueue(new IncomingRequest(7, 7, -1L));
+            postOnce(proc, dims);
+            waitFor(() -> proc.diskSubmits.get() == 2, "fresh group re-submits after fan-out");
+            assertEquals(1, proc.getDiagnostics().getTotalReResolved());
+        } finally {
+            reader.gate.countDown();
+            proc.shutdown();
+            reader.shutdown();
+        }
+    }
+
+    @Test
+    void primaryDisconnectFreesAttachmentsSilentlyAndTheirReRequestIsServed() throws Exception {
+        var u1 = UUID.randomUUID();
+        var u2 = UUID.randomUUID();
+        var p1 = newPlayer(u1);
+        var p2 = newPlayer(u2);
+        var players = new ConcurrentHashMap<UUID, TestState>();
+        players.put(u1, p1);
+        players.put(u2, p2);
+        var reader = new GatedDiskReader();
+        reader.registerPlayer(u1);
+        reader.registerPlayer(u2);
+        var proc = new TestProcessor(players, reader, Map.of(OVERWORLD, new byte[]{1, 2, 3}));
+        var dims = Map.of(u1, OVERWORLD, u2, OVERWORLD);
+        try {
+            proc.start();
+            p1.enqueue(new IncomingRequest(7, 7, 1L));
+            pumpUntil(proc, dims, () -> p1.getHeldSyncSlots() == 1 && proc.diskSubmits.get() == 1,
+                    "p1 admitted as dedup primary");
+            p2.enqueue(new IncomingRequest(7, 7, 1L));
+            pumpUntil(proc, dims, () -> p2.getHeldSyncSlots() == 1, "p2 attached");
+
+            // The PRIMARY disconnects while the read is still in flight
+            players.remove(u1);
+            proc.notifyPlayerRemoved(u1);
+            reader.removePlayerResults(u1);
+            pumpUntil(proc, dims, () -> p2.getHeldSyncSlots() == 0,
+                    "primary removal frees the attached pending");
+
+            assertEquals(List.of(), drainResponses(proc),
+                    "freeing an attachment is silent — no RateLimited/NotGenerated/UpToDate is owed;"
+                            + " the client's own timeout re-request recovers the position");
+            assertFalse(p2.hasDiskReadDone(7, 7), "never delivered, must not be marked served");
+
+            // Follow-through: the attached client's timeout re-request is served by a
+            // fresh group + fresh read (the dead primary's group died with it).
+            p2.enqueue(new IncomingRequest(7, 7, 1L));
+            pumpUntil(proc, dims, () -> p2.getHeldSyncSlots() == 1 && proc.diskSubmits.get() == 2,
+                    "re-request submits its own read");
+            reader.gate.countDown();
+            // Pump on the delivery itself (the last effect of deliverDiskResult), so the
+            // done-bit and slot asserts below cannot race the delivering cycle.
+            pumpUntil(proc, dims,
+                    () -> proc.deliveries.stream().anyMatch(d -> d.cx() == 7 && d.cz() == 7),
+                    "re-request resolves");
+            assertEquals(0, p2.getHeldSyncSlots());
+
+            var served = proc.deliveries.stream().filter(d -> d.cx() == 7 && d.cz() == 7).toList();
+            assertEquals(1, served.size(), "exactly one delivery — the dead primary gets nothing");
+            assertEquals(u2, served.get(0).playerUuid());
+            assertSame(p2, served.get(0).state());
+            assertArrayEquals(new byte[]{1, 2, 3}, served.get(0).bytes());
+            assertTrue(p2.hasDiskReadDone(7, 7));
+            assertEquals(List.of(), drainResponses(proc),
+                    "the served re-request produces no batched answer");
+        } finally {
+            reader.gate.countDown();
+            proc.shutdown();
+            reader.shutdown();
+        }
+    }
+
+    @Test
+    void saturatedResultFansOutRateLimitedToEveryRecipientUncounted() throws Exception {
+        var u1 = UUID.randomUUID();
+        var u2 = UUID.randomUUID();
+        var p1 = newPlayer(u1);
+        var p2 = newPlayer(u2);
+        var players = new ConcurrentHashMap<UUID, TestState>();
+        players.put(u1, p1);
+        players.put(u2, p2);
+        var reader = new GatedDiskReader();
+        reader.registerPlayer(u1);
+        reader.registerPlayer(u2);
+        var proc = new TestProcessor(players, reader, Map.of(OVERWORLD, new byte[]{9}));
+        var dims = Map.of(u1, OVERWORLD, u2, OVERWORLD);
+        try {
+            proc.start();
+            p1.enqueue(new IncomingRequest(7, 7, 1L));
+            pumpUntil(proc, dims, () -> p1.getHeldSyncSlots() == 1 && proc.diskSubmits.get() == 1,
+                    "p1 admitted as dedup primary");
+            p2.enqueue(new IncomingRequest(7, 7, 1L));
+            pumpUntil(proc, dims, () -> p2.getHeldSyncSlots() == 1, "p2 attached");
+
+            // The pool bounced the read — inject the saturated result exactly as
+            // AbstractChunkDiskReader's RejectedExecutionException triage would deliver it
+            // (the real gated read stays blocked behind the closed gate).
+            reader.getPlayerQueue(u1).add(ChunkReadResult.saturated(u1, 7, 7, OVERWORLD, 0L));
+            pumpUntil(proc, dims, () -> p1.getHeldSyncSlots() == 0 && p2.getHeldSyncSlots() == 0,
+                    "saturated delivery frees both recipients' slots");
+
+            long packed = PositionUtil.packPosition(7, 7);
+            var responses = drainUntilResponses(proc, rs -> rs.size() >= 2);
+            assertEquals(2, responses.size(), responses.toString());
+            assertEquals(Set.of(u1, u2),
+                    responses.stream().map(Response::player).collect(Collectors.toSet()),
+                    "every recipient of the dedup group must be bounced retryable");
+            for (var r : responses) {
+                assertEquals(LSSConstants.RESPONSE_RATE_LIMITED, r.type());
+                assertEquals(packed, r.packed());
+            }
+            assertFalse(p1.hasDiskReadDone(7, 7), "saturated is retryable, not served");
+            assertFalse(p2.hasDiskReadDone(7, 7));
+            // Pin: disk-saturation bounces are NOT rate-limit-counted — only router-level
+            // slot bounces are. The soak rate-limit conservation law reads these counters
+            // and accounts saturation separately via the disk-reader diagnostics.
+            assertEquals(0, proc.getDiagnostics().getTotalSyncRateLimited());
+            assertEquals(0, proc.getDiagnostics().getTotalGenRateLimited());
+
+            // The failed group died with its result: a retry submits a fresh read.
+            p1.enqueue(new IncomingRequest(7, 7, 1L));
+            pumpUntil(proc, dims, () -> proc.diskSubmits.get() == 2, "retry creates a fresh group");
+        } finally {
+            reader.gate.countDown();
+            proc.shutdown();
+            reader.shutdown();
+        }
+    }
+
+    @Test
+    void notFoundFanoutAnswersSyncRecipientsAndEscalatesGenTypedAttachment() throws Exception {
+        var u1 = UUID.randomUUID();
+        var u2 = UUID.randomUUID();
+        var p1 = newPlayer(u1);
+        var p2 = newPlayer(u2);
+        var players = new ConcurrentHashMap<UUID, TestState>();
+        players.put(u1, p1);
+        players.put(u2, p2);
+        var reader = new GatedDiskReader();
+        reader.registerPlayer(u1);
+        reader.registerPlayer(u2);
+        var proc = new TestProcessor(players, reader, Map.of(OVERWORLD, new byte[]{9}), true);
+        var dims = Map.of(u1, OVERWORLD, u2, OVERWORLD);
+        try {
+            proc.start();
+            p1.enqueue(new IncomingRequest(7, 7, 1L)); // SYNC primary
+            pumpUntil(proc, dims, () -> p1.getHeldSyncSlots() == 1 && proc.diskSubmits.get() == 1,
+                    "SYNC primary admitted");
+            p2.enqueue(new IncomingRequest(7, 7, 0L)); // GENERATION-typed, disk-first attach
+            pumpUntil(proc, dims, () -> p2.getHeldSyncSlots() == 1, "GEN-typed request attached");
+
+            reader.getPlayerQueue(u1).add(ChunkReadResult.empty(u1, 7, 7, OVERWORLD, 0L));
+            pumpUntil(proc, dims, () -> p2.getHeldGenSlots() == 1,
+                    "GEN-typed attachment escalates into its own generation slot");
+
+            assertEquals(0, p1.getHeldSyncSlots());
+            assertEquals(0, p2.getHeldSyncSlots(),
+                    "the disk-first sync slot is swapped for the generation slot");
+            var ticket = awaitTicket(proc);
+            assertEquals(u2, ticket.playerUuid(), "the ticket belongs to the attached requester");
+            assertEquals(7, ticket.cx());
+            assertEquals(7, ticket.cz());
+            assertEquals(OVERWORLD, ticket.dimension());
+            assertNull(proc.pollGenerationTicketRequest(), "the SYNC primary must not escalate");
+            assertTrue(p2.hasPendingRequest(7, 7));
+
+            var responses = drainUntilResponses(proc, rs -> !rs.isEmpty());
+            assertEquals(List.of(new Response(u1, LSSConstants.RESPONSE_NOT_GENERATED,
+                            PositionUtil.packPosition(7, 7))), responses,
+                    "the SYNC recipient is told not-generated; the escalated recipient gets"
+                            + " no batched answer (generation will answer it)");
+            assertFalse(p1.hasDiskReadDone(7, 7));
+            assertFalse(p2.hasDiskReadDone(7, 7));
+        } finally {
+            reader.gate.countDown();
+            proc.shutdown();
+            reader.shutdown();
+        }
+    }
+
+    // ---- DedupTracker map hygiene (direct, same package) ----
+
+    @Test
+    void dedupTrackerPrunesEmptyDimensionMapsOnEveryRemovalPath() {
+        var tracker = new DedupTracker();
+        var u1 = UUID.randomUUID();
+        var u2 = UUID.randomUUID();
+        long pos1 = PositionUtil.packPosition(1, 1);
+        long pos2 = PositionUtil.packPosition(2, 2);
+        assertEquals(0, tracker.size());
+        assertEquals(0, tracker.trackedDimensionCount());
+
+        assertFalse(tracker.tryAttachOrCreate(pos1, OVERWORLD, u1, 1L));
+        assertFalse(tracker.tryAttachOrCreate(pos2, OVERWORLD, u2, 2L));
+        assertFalse(tracker.tryAttachOrCreate(pos1, END, u1, 3L));
+        assertTrue(tracker.tryAttachOrCreate(pos1, END, u2, 4L), "second requester attaches");
+        assertEquals(3, tracker.size(), "an attachment joins a group instead of adding one");
+        assertEquals(2, tracker.trackedDimensionCount());
+
+        // removeGroup prunes a dimension's map exactly when its last group leaves
+        assertNotNull(tracker.removeGroup(pos1, OVERWORLD));
+        assertEquals(2, tracker.size());
+        assertEquals(2, tracker.trackedDimensionCount(), "overworld still holds a group");
+        assertNotNull(tracker.removeGroup(pos2, OVERWORLD));
+        assertEquals(1, tracker.size());
+        assertEquals(1, tracker.trackedDimensionCount(),
+                "an emptied dimension map must be pruned, not retained — datapack dimensions"
+                        + " would accumulate dead maps for a server's whole uptime otherwise");
+        assertNull(tracker.removeGroup(pos2, OVERWORLD), "a pruned dimension yields nothing");
+        assertEquals(1, tracker.trackedDimensionCount());
+
+        // removePlayer of an attachment keeps the group; of the primary, removes + prunes
+        assertEquals(List.of(), tracker.removePlayer(u2),
+                "an attached player's removal removes no group");
+        assertEquals(1, tracker.size());
+        var removedForU1 = tracker.removePlayer(u1);
+        assertEquals(1, removedForU1.size());
+        assertEquals(pos1, removedForU1.get(0).packed());
+        assertTrue(removedForU1.get(0).group().attached().isEmpty(),
+                "u2's attachment was already stripped from the surviving group");
+        assertEquals(0, tracker.size());
+        assertEquals(0, tracker.trackedDimensionCount(),
+                "removePlayer must prune every dimension map it empties");
     }
 }

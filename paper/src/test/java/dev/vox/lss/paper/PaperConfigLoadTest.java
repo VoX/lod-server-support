@@ -2,13 +2,20 @@ package dev.vox.lss.paper;
 
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import dev.vox.lss.common.tracking.DirtyColumnTracker;
+import org.bukkit.Server;
+import org.bukkit.plugin.Plugin;
+import org.bukkit.plugin.PluginManager;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Modifier;
+import java.lang.reflect.Proxy;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
@@ -146,5 +153,64 @@ class PaperConfigLoadTest {
 
         assertEquals(List.of(), c.updateEvents); // null guard in validate(), no NPE downstream
         assertEquals(0, savedJson(dataFolder).getAsJsonArray("updateEvents").size());
+    }
+
+    // ---- registration glue: a Plugin proxy recording PaperWorldHandler's registerEvent calls ----
+
+    private static <T> T proxy(Class<T> iface, InvocationHandler h) {
+        return iface.cast(Proxy.newProxyInstance(iface.getClassLoader(), new Class<?>[]{iface}, h));
+    }
+
+    /** Records the event class of every registerEvent call (same proxy shape as PaperWorldHandlerTest). */
+    private static Plugin recordingPlugin(List<Class<?>> registered) {
+        PluginManager pm = proxy(PluginManager.class, (p, m, args) -> {
+            if ("registerEvent".equals(m.getName())) registered.add((Class<?>) args[0]);
+            return null;
+        });
+        Server server = proxy(Server.class, (p, m, args) ->
+                "getPluginManager".equals(m.getName()) ? pm : null);
+        return proxy(Plugin.class, (p, m, args) ->
+                "getServer".equals(m.getName()) ? server : null);
+    }
+
+    @Test
+    void updateEventsStringInsteadOfArrayRevertsWholeFileAndDefaultsRegister(@TempDir Path dataFolder) throws Exception {
+        // A string where the array is expected fails GSON's collection adapter, which reverts
+        // the WHOLE file to defaults — including the valid lodDistanceChunks customization.
+        String broken = "{\"updateEvents\": \"org.bukkit.event.block.BlockPlaceEvent\", \"lodDistanceChunks\": 64}";
+        Files.writeString(dataFolder.resolve(FILE), broken);
+
+        PaperConfig c = assertDoesNotThrow(() -> PaperConfig.load(dataFolder));
+
+        assertEquals(DEFAULT_EVENTS, c.updateEvents);
+        assertEquals(256, c.lodDistanceChunks); // the valid customization is reverted with the rest
+        assertEquals(broken, Files.readString(dataFolder.resolve(FILE)));
+
+        List<Class<?>> registered = new ArrayList<>();
+        new PaperWorldHandler(recordingPlugin(registered), new DirtyColumnTracker())
+                .registerUpdateListeners(c.updateEvents);
+        assertEquals(DEFAULT_EVENTS.size(), registered.size(),
+                "the fallback default events must all register so dirty detection still works");
+    }
+
+    @Test
+    void updateEventsNullEntrySurvivesLoadAndRegistrationSkipsOnlyTheNull(@TempDir Path dataFolder) throws Exception {
+        // GSON loads a null ELEMENT into the list — a shape List.of-based tests can never build.
+        // Registration must skip it via the per-entry catch and keep both valid neighbours.
+        Files.writeString(dataFolder.resolve(FILE), "{\"updateEvents\": ["
+                + "\"org.bukkit.event.block.BlockPlaceEvent\", null, \"org.bukkit.event.block.BlockBreakEvent\"]}");
+
+        PaperConfig c = assertDoesNotThrow(() -> PaperConfig.load(dataFolder));
+
+        assertEquals(Arrays.asList("org.bukkit.event.block.BlockPlaceEvent", null,
+                "org.bukkit.event.block.BlockBreakEvent"), c.updateEvents);
+        assertEquals(3, savedJson(dataFolder).getAsJsonArray("updateEvents").size()); // write-back keeps the null
+
+        List<Class<?>> registered = new ArrayList<>();
+        assertDoesNotThrow(() -> new PaperWorldHandler(recordingPlugin(registered), new DirtyColumnTracker())
+                .registerUpdateListeners(c.updateEvents));
+        assertEquals(List.of("org.bukkit.event.block.BlockPlaceEvent", "org.bukkit.event.block.BlockBreakEvent"),
+                registered.stream().map(Class::getName).toList(),
+                "entries before AND after the null must register; the null lands in the per-entry catch");
     }
 }

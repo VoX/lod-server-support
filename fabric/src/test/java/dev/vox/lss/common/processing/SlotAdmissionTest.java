@@ -99,6 +99,28 @@ class SlotAdmissionTest {
     }
 
     @Test
+    void samePositionReplacementIsRejectedAtCapAndTheExistingEntrySurvives() {
+        // The cap check runs BEFORE the replacement swap: a same-position re-admission
+        // whose target slot type is full must be rejected without mutating the pending
+        // map. A swap-then-check regression would either free the existing entry's slot
+        // for a bounced request or admit over cap — both visible here.
+        assertTrue(state.tryAdmit(gen(9, 9)), "fill the gen cap (1)");
+        assertTrue(state.tryAdmit(sync(3, 3)));
+
+        assertFalse(state.tryAdmit(gen(3, 3)), "replacement must bounce while gen is at cap");
+        assertTrue(state.hasPendingRequest(3, 3), "rejected replacement must not evict the existing entry");
+        assertEquals(1, state.getHeldSyncSlots(), "the surviving entry still holds its sync slot");
+        assertEquals(1, state.getHeldGenSlots());
+
+        var survivor = state.removePendingByPosition(3, 3);
+        assertNotNull(survivor);
+        assertEquals(SlotType.SYNC_ON_LOAD, survivor.heldSlot(),
+                "the original SYNC entry survives, not the bounced GEN replacement");
+        assertEquals(0, state.getHeldSyncSlots());
+        assertEquals(1, state.getHeldGenSlots());
+    }
+
+    @Test
     void diskNotFoundEscalationBounceLeavesNoPendingEntry() {
         // The real escalation sequence (OffThreadProcessor.deliverDiskResult ->
         // handleDiskNotFound): the SYNC slot is freed on delivery, then GENERATION

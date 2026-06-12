@@ -59,6 +59,25 @@ class DedupTracker {
         return group;
     }
 
+    /** Number of pending dedup groups across all dimensions (live diagnostics export). */
+    int size() {
+        int total = 0;
+        for (var dimMap : this.pending.values()) {
+            total += dimMap.size();
+        }
+        return total;
+    }
+
+    /**
+     * Number of dimensions currently holding a group map. {@link #removeGroup} and
+     * {@link #removePlayer} prune a dimension's map when its last group leaves, so a
+     * nonzero value here with {@link #size()} == 0 is a leak (long-running servers with
+     * datapack dimensions would accumulate empty maps otherwise).
+     */
+    int trackedDimensionCount() {
+        return this.pending.size();
+    }
+
     /**
      * Remove all references to the given player from all groups in all dimensions.
      * If the player is the primary of a group, the entire group is removed and returned

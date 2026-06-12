@@ -53,6 +53,58 @@ class BatchCountGuardTest {
     }
 
     @Test
+    void batchRequestDecoderRejectsIntegerMaxCountBeforeAllocation() {
+        // Integer.MAX_VALUE would be a ~16 GB allocation if the guard ran after
+        // `new long[count]`; the MAX+1 case alone cannot prove guard-before-allocation
+        // because its ~8 KB array would succeed. Mirrors the Paper twin
+        // (PaperPayloadEdgeTest#batchRequestCountGuardRejectsBeforeAllocation).
+        var b = buf();
+        b.writeVarInt(Integer.MAX_VALUE);
+        try {
+            assertThrows(IllegalArgumentException.class,
+                    () -> BatchChunkRequestC2SPayload.CODEC.decode(b));
+        } finally {
+            b.release();
+        }
+    }
+
+    @Test
+    void batchRequestDecoderAcceptsZeroCountAsEmpty() {
+        // {0} is a legal idle-client frame: a `count <= 0` guard tightening would kick
+        // every idle client (Paper's count==0 acceptance is pinned in its WireParityTest).
+        var b = buf();
+        b.writeVarInt(0);
+        try {
+            var decoded = BatchChunkRequestC2SPayload.CODEC.decode(b);
+            assertEquals(0, decoded.count());
+            assertEquals(0, decoded.packedPositions().length);
+            assertEquals(0, decoded.clientTimestamps().length);
+            assertEquals(0, b.readableBytes());
+        } finally {
+            b.release();
+        }
+    }
+
+    @Test
+    void batchRequestTruncatedBodyThrowsInsteadOfZeroFilling() {
+        // count=10 with only 3 pairs present: decode must throw, never return a payload
+        // padded with phantom (0,0) positions — those would be admitted as real requests
+        // for chunk (0,0) under timestamp 0 (a generation ask).
+        var b = buf();
+        b.writeVarInt(10);
+        for (int i = 0; i < 3; i++) {
+            b.writeLong(i + 1);
+            b.writeLong(-1L);
+        }
+        try {
+            assertThrows(IndexOutOfBoundsException.class,
+                    () -> BatchChunkRequestC2SPayload.CODEC.decode(b));
+        } finally {
+            b.release();
+        }
+    }
+
+    @Test
     void batchRequestDecoderAcceptsMaxCount() {
         var b = buf();
         b.writeVarInt(LSSConstants.MAX_BATCH_CHUNK_REQUESTS);

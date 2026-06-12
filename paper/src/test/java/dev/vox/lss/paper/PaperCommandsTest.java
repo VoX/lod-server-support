@@ -79,6 +79,16 @@ class PaperCommandsTest {
     }
 
     @Test
+    void unknownSubcommandWithNullServiceReportsNotActive() {
+        // Precedence pin: the service-null check answers BEFORE subcommand validation, so
+        // /lsslod bogus on an inactive server reports "not active" — never the usage line.
+        // A refactor that validates the subcommand first passes both single-rung tests
+        // above while flipping this answer.
+        assertTrue(run(commands(null, null), "bogus"));
+        assertEquals(List.of("LSS LOD request processing is not active"), messages);
+    }
+
+    @Test
     void statsWithZeroPlayersReportsNoPlayers() {
         var service = mock(PaperRequestProcessingService.class);
         when(service.getPlayers()).thenReturn(Map.of());
@@ -108,6 +118,33 @@ class PaperCommandsTest {
                 "null generation service renders as 'disabled': " + messages);
         assertFalse(messages.contains("Generation: null"),
                 "disabled generation must not format the null diagnostics string");
+    }
+
+    @Test
+    void diagWithEnabledFalseConfigRendersAndStaysServiceable() {
+        // enabled=false disables serving, not observability: diag must still answer with
+        // the full line ladder and the Config line must carry the false flag.
+        var service = mock(PaperRequestProcessingService.class);
+        var offThread = mock(PaperOffThreadProcessor.class);
+        when(offThread.getDiagnostics()).thenReturn(new ProcessingDiagnostics());
+        doReturn(offThread).when(service).getOffThreadProcessor();
+        var diskReader = mock(PaperChunkDiskReader.class);
+        when(diskReader.getDiag()).thenReturn(new DiskReaderDiagnostics());
+        when(diskReader.getDiagnostics()).thenReturn("idle");
+        when(service.getDiskReader()).thenReturn(diskReader);
+        when(service.getBandwidthLimiter()).thenReturn(new SharedBandwidthLimiter(1024));
+        when(service.getTickDiagnostics()).thenReturn("tick");
+        when(service.getPlayers()).thenReturn(Map.of());
+        var config = new PaperConfig();
+        config.enabled = false;
+
+        assertTrue(run(commands(service, config), "diag"));
+
+        assertEquals("=== LSS LOD Diagnostics ===", messages.get(0));
+        assertTrue(messages.get(1).startsWith("Config: enabled=false, lodDist=256, bw/player="),
+                "the Config line must render the disabled flag and the config values: " + messages.get(1));
+        assertEquals(8, messages.size(),
+                "all eight diagnostic lines render with no players connected: " + messages);
     }
 
     @Test

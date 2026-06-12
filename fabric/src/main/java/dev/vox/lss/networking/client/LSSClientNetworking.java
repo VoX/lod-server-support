@@ -18,40 +18,36 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.storage.LevelResource;
 
-import java.util.concurrent.atomic.AtomicLong;
-
 public class LSSClientNetworking {
-    private static volatile boolean serverEnabled = false;
-    // True once a SessionConfig reply (compatible version) arrived for the current
-    // connection — distinguishes "server said disabled" from "no LSS server / not yet
-    // answered". Read by the dev-only soak hook to snapshot disabled sessions.
-    private static volatile boolean sessionConfigReceived = false;
-    private static volatile int serverLodDistance = 0;
-    private static final AtomicLong columnsReceived = new AtomicLong();
-    private static final AtomicLong bytesReceived = new AtomicLong();
-    private static volatile long connectionStartMs = 0;
-    private static volatile LodRequestManager requestManager;
-
     private static final ClientColumnProcessor columnProcessor = new ClientColumnProcessor();
 
+    // Session state and the JOIN / SessionConfig / DISCONNECT ladders live in the gate
+    // (unit-testable); this class wires the production seams — the real handshake send
+    // and manager construction with live server-address resolution.
+    private static final ClientSessionGate sessionGate = new ClientSessionGate(
+            columnProcessor,
+            () -> ClientPlayNetworking.send(new HandshakeC2SPayload(
+                    LSSConstants.PROTOCOL_VERSION, LSSConstants.CAPABILITY_VOXEL_COLUMNS)),
+            LSSClientNetworking::createRequestManager);
+
     public static boolean isServerEnabled() {
-        return serverEnabled;
+        return sessionGate.isServerEnabled();
     }
 
     public static boolean hasReceivedSessionConfig() {
-        return sessionConfigReceived;
+        return sessionGate.hasReceivedSessionConfig();
     }
 
     public static int getServerLodDistance() {
-        return serverLodDistance;
+        return sessionGate.getServerLodDistance();
     }
 
     public static long getColumnsReceived() {
-        return columnsReceived.get();
+        return sessionGate.getColumnsReceived();
     }
 
     public static long getBytesReceived() {
-        return bytesReceived.get();
+        return sessionGate.getBytesReceived();
     }
 
     public static long getColumnsDropped() {
@@ -59,11 +55,11 @@ public class LSSClientNetworking {
     }
 
     public static long getConnectionStartMs() {
-        return connectionStartMs;
+        return sessionGate.getConnectionStartMs();
     }
 
     public static LodRequestManager getRequestManager() {
-        return requestManager;
+        return sessionGate.getRequestManager();
     }
 
     public static int getQueuedColumnCount() {
@@ -79,7 +75,7 @@ public class LSSClientNetworking {
         var mc = Minecraft.getInstance();
         if (mc == null) return; // unit tests / very early startup — no session to repair anyway
         mc.execute(() -> {
-            var manager = requestManager;
+            var manager = sessionGate.getRequestManager();
             if (manager != null) {
                 manager.onIngestFailure(dimension, PositionUtil.packPosition(chunkX, chunkZ));
             }
@@ -98,7 +94,7 @@ public class LSSClientNetworking {
     public static void triggerHostHandshake() {
         Minecraft.getInstance().execute(() -> {
             if (!LSSClientConfig.CONFIG.receiveServerLods) return;
-            if (requestManager != null) return;
+            if (sessionGate.getRequestManager() != null) return;
             if (!LSSApi.hasVoxelConsumers()) return; // no LOD consumer -> stay silent
             try {
                 ClientPlayNetworking.send(new HandshakeC2SPayload(
@@ -115,53 +111,41 @@ public class LSSClientNetworking {
         registerTickHandler();
     }
 
+    /**
+     * Production {@link ClientSessionGate.ManagerFactory}: builds the per-session manager
+     * and resolves the cache-keying server address from the live client (multiplayer ip →
+     * LAN/local world dir → unknown).
+     */
+    private static LodRequestManager createRequestManager(SessionConfigS2CPayload payload) {
+        var manager = new LodRequestManager();
+        var mc = Minecraft.getInstance();
+        String serverAddr;
+        var serverData = mc.getCurrentServer();
+        var spServer = mc.getSingleplayerServer();
+        if (serverData != null && serverData.ip != null) {
+            serverAddr = serverData.ip;
+        } else if (spServer != null) {
+            var worldDir = spServer.getWorldPath(LevelResource.ROOT).getFileName();
+            serverAddr = "local:" + (worldDir != null ? worldDir : "world");
+        } else {
+            serverAddr = "unknown";
+        }
+        manager.onSessionConfig(payload, serverAddr);
+        return manager;
+    }
+
     private static void registerPacketHandlers() {
         ClientPlayNetworking.registerGlobalReceiver(
                 SessionConfigS2CPayload.TYPE,
-                (payload, context) -> context.client().execute(() -> {
-                    LSSLogger.info("Server session config received (protocol v" + payload.protocolVersion()
-                            + ", LOD distance: " + payload.lodDistanceChunks() + " chunks"
-                            + ", enabled: " + payload.enabled() + ")");
-
-                    if (payload.protocolVersion() != LSSConstants.PROTOCOL_VERSION) {
-                        LSSLogger.warn("Server has incompatible LSS protocol version " + payload.protocolVersion()
-                                + " (client: " + LSSConstants.PROTOCOL_VERSION + "), LOD distribution disabled");
-                        serverEnabled = false;
-                        return;
-                    }
-
-                    serverEnabled = payload.enabled();
-                    sessionConfigReceived = true;
-                    serverLodDistance = payload.lodDistanceChunks();
-
-                    // Without a registered LSSApi consumer there is nothing to deliver columns
-                    // to — skip session setup entirely (capability is sampled at JOIN).
-                    if (payload.enabled() && LSSApi.hasVoxelConsumers()) {
-                        connectionStartMs = System.currentTimeMillis();
-                        var manager = new LodRequestManager();
-                        var mc = Minecraft.getInstance();
-                        String serverAddr;
-                        var serverData = mc.getCurrentServer();
-                        var spServer = mc.getSingleplayerServer();
-                        if (serverData != null && serverData.ip != null) {
-                            serverAddr = serverData.ip;
-                        } else if (spServer != null) {
-                            var worldDir = spServer.getWorldPath(LevelResource.ROOT).getFileName();
-                            serverAddr = "local:" + (worldDir != null ? worldDir : "world");
-                        } else {
-                            serverAddr = "unknown";
-                        }
-                        manager.onSessionConfig(payload, serverAddr);
-                        requestManager = manager;
-                    }
-                })
+                (payload, context) -> context.client().execute(
+                        () -> sessionGate.onSessionConfig(payload, LSSApi.hasVoxelConsumers()))
         );
 
         ClientPlayNetworking.registerGlobalReceiver(
                 BatchResponseS2CPayload.TYPE,
                 (payload, context) -> {
                     context.client().execute(() -> {
-                        var manager = requestManager;
+                        var manager = sessionGate.getRequestManager();
                         if (manager == null) return;
                         dispatchBatchResponses(manager, payload);
                     });
@@ -172,7 +156,7 @@ public class LSSClientNetworking {
                 DirtyColumnsS2CPayload.TYPE,
                 (payload, context) -> {
                     context.client().execute(() -> {
-                        var manager = requestManager;
+                        var manager = sessionGate.getRequestManager();
                         if (manager != null) {
                             manager.onDirtyColumns(payload.dirtyPositions());
                         }
@@ -183,11 +167,10 @@ public class LSSClientNetworking {
         ClientPlayNetworking.registerGlobalReceiver(
                 VoxelColumnS2CPayload.TYPE,
                 (payload, context) -> {
-                    columnsReceived.incrementAndGet();
-                    bytesReceived.addAndGet(payload.estimatedBytes());
+                    sessionGate.recordColumnFrame(payload.estimatedBytes());
 
                     context.client().execute(() -> {
-                        var manager = requestManager;
+                        var manager = sessionGate.getRequestManager();
                         if (manager != null) {
                             manager.onColumnReceived(
                                     PositionUtil.packPosition(payload.chunkX(), payload.chunkZ()),
@@ -220,63 +203,23 @@ public class LSSClientNetworking {
 
     private static void registerConnectionLifecycle() {
         ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
-            serverEnabled = false;
-            sessionConfigReceived = false;
-            serverLodDistance = 0;
-            requestManager = null;
-
-            if (!LSSClientConfig.CONFIG.receiveServerLods) return;
-
             // Don't activate on singleplayer/integrated servers (unless testing)
-            if (Minecraft.getInstance().hasSingleplayerServer()
-                    && !Boolean.getBoolean("lss.test.integratedServer")) {
-                return;
-            }
-
-            // Without a consumer the server would ignore our requests anyway — stay silent.
-            if (!LSSApi.hasVoxelConsumers()) return;
-
-            try {
-                ClientPlayNetworking.send(new HandshakeC2SPayload(
-                        LSSConstants.PROTOCOL_VERSION, LSSConstants.CAPABILITY_VOXEL_COLUMNS));
-            } catch (Exception e) {
-                LSSLogger.debug("Handshake send failed (server likely doesn't have LSS): " + e.getMessage());
-            }
+            boolean localIntegratedServer = Minecraft.getInstance().hasSingleplayerServer()
+                    && !Boolean.getBoolean("lss.test.integratedServer");
+            sessionGate.onJoin(LSSClientConfig.CONFIG.receiveServerLods, localIntegratedServer,
+                    LSSApi.hasVoxelConsumers());
         });
 
-        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
-            var manager = requestManager;
-            if (manager != null) {
-                // Unstamp columns still queued for decode BEFORE the cache flush — their
-                // received-stamps would otherwise persist for data no consumer ever saw.
-                // (A column the drain thread polled concurrently still dispatches; if its
-                // consumer then rejects, that single report lands after requestManager is
-                // nulled and is dropped — at most one stale stamp per disconnect, healed
-                // by the next session unless the server kept its timestamp cache. Accepted
-                // residual.)
-                reportUndispatchedColumns(manager);
-                manager.disconnect();
-                manager.saveCache();
-            }
-            columnProcessor.shutdown();
-            columnProcessor.resetStats();
-            serverEnabled = false;
-            sessionConfigReceived = false;
-            serverLodDistance = 0;
-            columnsReceived.set(0);
-            bytesReceived.set(0);
-            connectionStartMs = 0;
-            requestManager = null;
-        });
+        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> sessionGate.onDisconnect());
     }
 
     private static void registerTickHandler() {
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
-            var manager = requestManager;
-            if (manager != null && serverEnabled) {
+            var manager = sessionGate.getRequestManager();
+            if (manager != null && sessionGate.isServerEnabled()) {
                 manager.tick();
             }
-            columnProcessor.scheduleProcessing(serverEnabled);
+            columnProcessor.scheduleProcessing(sessionGate.isServerEnabled());
         });
     }
 }

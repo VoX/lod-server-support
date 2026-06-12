@@ -2,6 +2,8 @@ package dev.vox.lss.compat;
 
 import dev.vox.lss.common.LSSLogger;
 import dev.vox.lss.api.LSSApi;
+import dev.vox.lss.api.VoxelColumnConsumer;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.chunk.DataLayer;
 import net.minecraft.world.level.chunk.LevelChunkSection;
@@ -10,6 +12,7 @@ import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.util.OptionalInt;
+import java.util.function.Consumer;
 
 /**
  * Pure reflection bridge to Voxy — zero compile-time dependency.
@@ -28,16 +31,45 @@ class VoxyCompat {
     private static volatile MethodHandle getVoxyConfig;
     private static volatile MethodHandle getSectionRenderDist;
 
+    /** Resolves the reflected Voxy class names — test seam, see {@link #resetSeams()}. */
+    @FunctionalInterface
+    interface ClassResolver {
+        Class<?> resolve(String name) throws ClassNotFoundException;
+    }
+
+    /** Receives the bridge's ingest-failure reports — test seam, see {@link #resetSeams()}. */
+    @FunctionalInterface
+    interface ReportSink {
+        void report(ResourceKey<Level> dimension, int chunkX, int chunkZ);
+    }
+
+    // Test seams: default-wired to production by resetSeams() (zero behavior change);
+    // VoxyCompatTest swaps them to drive the bridge's failure ladder against stub classes.
+    static ClassResolver classResolver;
+    static ReportSink reportSink;
+    static Consumer<VoxelColumnConsumer> consumerRegistrar;
+
+    static {
+        resetSeams();
+    }
+
+    /** Restores production wiring for the test seams. */
+    static void resetSeams() {
+        classResolver = Class::forName;
+        reportSink = LSSApi::reportIngestFailure;
+        consumerRegistrar = LSSApi::registerColumnConsumer;
+    }
+
     static boolean init() {
         try {
             var lookup = MethodHandles.lookup();
 
-            Class<?> worldIdClass = Class.forName("me.cortex.voxy.commonImpl.WorldIdentifier");
+            Class<?> worldIdClass = classResolver.resolve("me.cortex.voxy.commonImpl.WorldIdentifier");
             worldIdentifierOf = lookup.findStatic(worldIdClass, "of",
                     MethodType.methodType(worldIdClass, Level.class))
                     .asType(MethodType.methodType(Object.class, Level.class));
 
-            Class<?> ingestClass = Class.forName("me.cortex.voxy.common.world.service.VoxelIngestService");
+            Class<?> ingestClass = classResolver.resolve("me.cortex.voxy.common.world.service.VoxelIngestService");
             rawIngest = lookup.findStatic(ingestClass, "rawIngest",
                     MethodType.methodType(boolean.class,
                             worldIdClass, LevelChunkSection.class,
@@ -46,7 +78,7 @@ class VoxyCompat {
 
             // Register column consumer
             var bridgeDead = new java.util.concurrent.atomic.AtomicBoolean();
-            LSSApi.registerColumnConsumer((level, dimension, chunkX, chunkZ, columnData) -> {
+            VoxelColumnConsumer consumer = (level, dimension, chunkX, chunkZ, columnData) -> {
                 if (bridgeDead.get()) return;
                 try {
                     Object worldId = worldIdentifierOf.invoke(level);
@@ -54,7 +86,7 @@ class VoxyCompat {
                         // Voxy has no storage for this world yet (e.g. mid open-to-LAN
                         // transition) — without the report the column is silently lost
                         // and never re-requested.
-                        LSSApi.reportIngestFailure(dimension, chunkX, chunkZ);
+                        reportSink.report(dimension, chunkX, chunkZ);
                         return;
                     }
                     boolean allAccepted = true;
@@ -64,7 +96,7 @@ class VoxyCompat {
                                 s.blockLight(), s.skyLight());
                     }
                     if (!allAccepted) {
-                        LSSApi.reportIngestFailure(dimension, chunkX, chunkZ);
+                        reportSink.report(dimension, chunkX, chunkZ);
                     }
                 } catch (LinkageError e) {
                     // Incompatible Voxy: this will never succeed for any column. Kill the
@@ -76,9 +108,10 @@ class VoxyCompat {
                 } catch (Throwable e) {
                     if (e instanceof Error && !(e instanceof AssertionError)) throw (Error) e;
                     LSSLogger.error("Voxy raw ingest failed", e);
-                    LSSApi.reportIngestFailure(dimension, chunkX, chunkZ);
+                    reportSink.report(dimension, chunkX, chunkZ);
                 }
-            });
+            };
+            consumerRegistrar.accept(consumer);
 
             LSSLogger.info("Voxy detected — registered raw ingest bridge");
             return true;
@@ -97,7 +130,7 @@ class VoxyCompat {
     private static void initConfigHandles() throws Throwable {
         if (getVoxyConfig != null) return;
         var lookup = MethodHandles.lookup();
-        Class<?> voxyConfigClass = Class.forName("me.cortex.voxy.client.config.VoxyConfig");
+        Class<?> voxyConfigClass = classResolver.resolve("me.cortex.voxy.client.config.VoxyConfig");
         var configField = voxyConfigClass.getField("CONFIG");
         getSectionRenderDist = lookup.findGetter(voxyConfigClass, "sectionRenderDistance", float.class)
                 .asType(MethodType.methodType(float.class, Object.class));

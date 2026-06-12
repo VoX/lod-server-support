@@ -113,4 +113,26 @@ class HandshakeGateTest {
         assertTrue(d.sendSessionConfig());
         assertFalse(d.registerPlayer());
     }
+
+    @Test
+    void negativeProtocolVersionSendsNothing() {
+        // Guards a relational rewrite of the version gate (e.g. `version > PROTOCOL_VERSION`
+        // as an only-newer check): hostile or corrupt negative versions must classify
+        // exactly like any other skew — no reply, no registration.
+        for (int version : new int[]{-1, Integer.MIN_VALUE}) {
+            var d = HandshakeGate.evaluate(version, VOXEL_CAPS, true, true);
+            assertEquals(Outcome.VERSION_MISMATCH, d.outcome(), "version " + version);
+            assertFalse(d.sendSessionConfig());
+            assertFalse(d.registerPlayer());
+        }
+    }
+
+    @Test
+    void fullBitmaskCapabilitiesStillRegister() {
+        // 0xFFFFFFFF is -1 as an int: a sign-sensitive capability check (`caps > 0 && ...`)
+        // would refuse a client advertising every bit. Only bit 0 may matter.
+        var d = HandshakeGate.evaluate(V, 0xFFFFFFFF, true, true);
+        assertEquals(Outcome.REGISTER, d.outcome());
+        assertTrue(d.registerPlayer());
+    }
 }

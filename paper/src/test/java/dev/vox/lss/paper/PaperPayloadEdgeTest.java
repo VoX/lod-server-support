@@ -1,13 +1,17 @@
 package dev.vox.lss.paper;
 
+import dev.vox.lss.common.HandshakeGate;
 import dev.vox.lss.common.LSSConstants;
 import dev.vox.lss.common.PositionUtil;
 import dev.vox.lss.common.processing.QueuedPayload;
 import io.netty.buffer.Unpooled;
 import io.netty.handler.codec.DecoderException;
+import io.netty.handler.codec.EncoderException;
 import net.minecraft.SharedConstants;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.Bootstrap;
+import net.minecraft.server.level.ServerPlayer;
+import org.bukkit.craftbukkit.entity.CraftPlayer;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -16,14 +20,18 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 /**
  * Hostile/edge-frame hardening for the Paper plugin-message codec. {@code WireParityTest}
@@ -148,6 +156,34 @@ class PaperPayloadEdgeTest {
         assertEquals(LSSConstants.CAPABILITY_VOXEL_COLUMNS, decoded.capabilities());
     }
 
+    @Test
+    void handshakeNegativeVersionDecodesAndGateRefusesReply() {
+        // A negative protocolVersion VarInt must survive decode sign-intact and classify as
+        // VERSION_MISMATCH (no reply, no registration) — guards a relational rewrite of the
+        // gate (e.g. `version < PROTOCOL_VERSION` would invert for hostile negative input).
+        var decoded = PaperPayloadHandler.decodeHandshake(frame(b -> {
+            b.writeVarInt(-1);
+            b.writeVarInt(LSSConstants.CAPABILITY_VOXEL_COLUMNS);
+        }));
+        assertNotNull(decoded);
+        assertEquals(-1, decoded.protocolVersion(), "negative version must decode sign-intact");
+        var decision = HandshakeGate.evaluate(
+                decoded.protocolVersion(), decoded.capabilities(), true, true);
+        assertEquals(HandshakeGate.Outcome.VERSION_MISMATCH, decision.outcome());
+        assertFalse(decision.sendSessionConfig());
+        assertFalse(decision.registerPlayer());
+    }
+
+    @Test
+    void handshakeMalformedVarIntOverflowThrowsCatchableException() {
+        // Six continuation bytes can never terminate a VarInt. The throw must be an
+        // Exception — LSSPaperPlugin.onPluginMessageReceived catches Exception, so an Error
+        // here would escape the containment and take down the channel handler.
+        byte[] garbage = {(byte) 0x80, (byte) 0x80, (byte) 0x80,
+                (byte) 0x80, (byte) 0x80, (byte) 0x80};
+        assertThrows(Exception.class, () -> PaperPayloadHandler.decodeHandshake(garbage));
+    }
+
     // ---- S2C: dirty-columns encoder clamp ----
 
     @Test
@@ -234,6 +270,30 @@ class PaperPayloadEdgeTest {
         assertThrows(DecoderException.class, () -> clientDecode(data));
     }
 
+    // ---- S2C: voxel column dimension-string cap (Paper arms of the 256-char contract) ----
+
+    @Test
+    void voxelColumnDimensionAt256CharsEncodesAndPassesClientGuard() {
+        // Exactly at the cap: Paper must encode it and the Fabric client decoder (same
+        // grammar + guards as clientDecode) must accept the frame — writer cap == reader cap.
+        String dim = "lss:" + "a".repeat(LSSConstants.MAX_DIMENSION_STRING_LENGTH - 4);
+        assertEquals(LSSConstants.MAX_DIMENSION_STRING_LENGTH, dim.length());
+        byte[] data = PaperPayloadHandler.encodeVoxelColumnPreEncoded(1, 2, dim, 9L, new byte[]{0});
+        var decoded = clientDecode(data);
+        assertEquals(dim, decoded.dimension(),
+                "a 256-char datapack dimension must survive Paper encode -> client decode");
+    }
+
+    @Test
+    void voxelColumnDimensionOver256CharsThrowsOnEncode() {
+        // The writer cap must hold on Paper too: an uncapped writeUtf would emit a frame the
+        // client reader's cap rejects, disconnecting every client receiving that dimension.
+        String dim = "lss:" + "a".repeat(LSSConstants.MAX_DIMENSION_STRING_LENGTH - 3);
+        assertEquals(LSSConstants.MAX_DIMENSION_STRING_LENGTH + 1, dim.length());
+        assertThrows(EncoderException.class, () -> PaperPayloadHandler.encodeVoxelColumnPreEncoded(
+                0, 0, dim, 0L, new byte[]{0}));
+    }
+
     // ---- PaperOffThreadProcessor: oversized-column drop (Paper mirror of the client guard) ----
 
     private static PaperOffThreadProcessor newProcessor() {
@@ -267,5 +327,37 @@ class PaperPayloadEdgeTest {
                 1, 2, "minecraft:overworld", 42L, sections), queued.payload());
         assertEquals(99, queued.estimatedBytes());
         assertEquals(7L, queued.submissionOrder());
+    }
+
+    @Test
+    void processorDropReturnsFalseSoTheDropGetsAnswered() {
+        // The false return is what routes the dropped position to a terminal ColumnUpToDate
+        // in OffThreadProcessor (rejected-enqueue path): a regression returning true while
+        // dropping would stamp diskReadDone with nothing in the send queue, so the client's
+        // ts<=0 re-asks re-resolve the unserveable position forever. Pin both directions.
+        var proc = newProcessor();
+        var state = mock(PaperPlayerRequestState.class);
+        assertFalse(proc.buildAndEnqueueColumnPayload(state, 1, 2, "minecraft:overworld", 42L, 7L,
+                new byte[LSSConstants.MAX_SECTIONS_SIZE + 1], 99),
+                "an oversized drop must report false so the caller answers up-to-date");
+        verify(state, never()).addReadyPayload(any());
+        assertTrue(proc.buildAndEnqueueColumnPayload(state, 1, 2, "minecraft:overworld", 42L, 7L,
+                new byte[]{0}, 9),
+                "a successful enqueue must report true (false would answer up-to-date AND send)");
+    }
+
+    // ---- sendRawNmsPayload: disconnect-race guard ----
+
+    @Test
+    void sendRawNmsPayloadWithNullConnectionIsNoOp() {
+        // Disconnect race: the send-queue flush can run after the player's connection is
+        // torn down. A Mockito-created ServerPlayer never runs a constructor, so its public
+        // `connection` field is null — exactly the shape of the race. Removing the null
+        // guard turns this into an NPE.
+        var nms = mock(ServerPlayer.class);
+        var craft = mock(CraftPlayer.class);
+        when(craft.getHandle()).thenReturn(nms);
+        assertDoesNotThrow(() -> PaperPayloadHandler.sendRawNmsPayload(
+                craft, PaperPayloadHandler.ID_VOXEL_COLUMN, new byte[]{1, 2, 3}));
     }
 }

@@ -109,7 +109,10 @@ public final class DiagnosticsFormatter {
         );
     }
 
-    /** Collect the /lsslod diag data from common-typed sources, shared by both platforms. */
+    /** Collect the /lsslod diag data from common-typed sources, shared by both platforms.
+     *  A null {@code diskReader} (reader not running) renders the DiskReader line as
+     *  "disabled" and contributes zero completed reads — the command must answer in every
+     *  service state, never throw at the admin. */
     public static DiagData collectDiagData(boolean enabled, int lodDistanceChunks,
                                            long bwPerPlayer, long bwGlobal, int sendQueueLimitPerPlayer,
                                            long uptimeSec, String tickDiagnostics, long windowBandwidthRate,
@@ -137,9 +140,9 @@ public final class DiagnosticsFormatter {
                 uptimeSec, totalSent, totalBytes,
                 diag.getTotalInMemory(), diag.getTotalUpToDate(), diag.getTotalGenDrained(),
                 diag.getTotalReResolved(),
-                diskReader.getDiag().getSuccessfulReadCount(),
+                diskReader != null ? diskReader.getDiag().getSuccessfulReadCount() : 0,
                 tickDiagnostics,
-                diskReader.getDiagnostics(),
+                diskReader != null ? diskReader.getDiagnostics() : "disabled",
                 generationDiagnosticsOrNull, generationDiagnosticsOrNull != null,
                 bwLimiter.getTotalBytesSent(),
                 windowBandwidthRate,

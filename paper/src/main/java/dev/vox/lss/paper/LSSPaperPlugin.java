@@ -18,60 +18,146 @@ import org.bukkit.scheduler.BukkitRunnable;
  * Paper plugin entry point for LOD Server Support.
  * Registers Plugin Messaging channels, handles handshake/request lifecycle,
  * and ticks the request processing service on the server main thread.
+ *
+ * <p>The environment-free glue — enable-plan ordering ({@link #runEnablePlan}),
+ * plugin-message dispatch containment ({@link #dispatchPluginMessage}), and the
+ * handshake reply/registration wiring ({@link #handleHandshake(byte[], String,
+ * PaperConfig, boolean, SessionConfigSender, HandshakeRegistrar)}) — is static and
+ * package-private so it is testable without a Bukkit server; the instance methods
+ * only bind the production environment.
  */
 public class LSSPaperPlugin extends JavaPlugin implements PluginMessageListener, Listener {
     private PaperConfig lssConfig;
     private volatile PaperRequestProcessingService requestService;
 
-    @Override
-    public void onEnable() {
-        this.lssConfig = PaperConfig.load(getDataFolder().toPath());
+    /**
+     * The onEnable step set, in the order {@link #runEnablePlan} drives them. The
+     * production implementation lives in {@link #onEnable}; the interface is a test
+     * seam (the plan's step order and enabled gate are pinned without a Bukkit server,
+     * and /reload re-runs the identical sequence).
+     */
+    interface EnableSteps {
+        PaperConfig loadConfig();
+
+        void registerChannels();
+
+        void registerQuitListener();
+
+        PaperRequestProcessingService startService(PaperConfig config);
+
+        void registerWorldHandler(PaperRequestProcessingService service, PaperConfig config);
+
+        void registerCommands();
+
+        void scheduleServiceTick();
+
+        void initSoakBridge();
+    }
+
+    /**
+     * Executes the enable plan. Step order is load-bearing: config before channels
+     * (handlers read it), service before the world handler (it feeds the service's
+     * dirty tracker), and the soak bridge last so the driver sees a fully wired plugin.
+     * /reload runs onDisable then onEnable, so this sequence is also the re-enable
+     * contract.
+     */
+    static void runEnablePlan(EnableSteps steps) {
+        var config = steps.loadConfig();
 
         // Register incoming channels (C2S)
         // Note: S2C packets are sent directly via NMS (bypassing Bukkit's
         // sendPluginMessage channel check), so no outgoing registration needed.
-        getServer().getMessenger().registerIncomingPluginChannel(this, LSSConstants.CHANNEL_HANDSHAKE, this);
-        getServer().getMessenger().registerIncomingPluginChannel(this, LSSConstants.CHANNEL_CHUNK_REQUEST, this);
+        steps.registerChannels();
         // Register event listener for player quit
-        getServer().getPluginManager().registerEvents(this, this);
+        steps.registerQuitListener();
 
         // Start processing service
-        var nmsServer = ((CraftServer) getServer()).getServer();
-        this.requestService = new PaperRequestProcessingService(nmsServer, this, this.lssConfig);
+        var service = steps.startService(config);
         LSSLogger.info("Starting LSS LOD request processing service");
 
         // Register dirty chunk event listeners. enabled=false gates here (mirrors Fabric's
         // ChunkMapSaveHook gate): the service tick — and so the dirty-broadcast drain — is
         // disabled, so marking would grow the DirtyColumnTracker without bound for the whole
         // server run. enabled is immutable per run, so skipping registration is safe.
-        if (this.lssConfig.enabled) {
-            var worldHandler = new PaperWorldHandler(this, this.requestService.getDirtyTracker());
-            worldHandler.registerUpdateListeners(this.lssConfig.updateEvents);
+        if (config.enabled) {
+            steps.registerWorldHandler(service, config);
         }
 
         // Register command
-        var cmd = getCommand("lsslod");
-        if (cmd != null) {
-            var executor = new PaperCommands(this);
-            cmd.setExecutor(executor);
-            cmd.setTabCompleter(executor);
-        }
+        steps.registerCommands();
 
         // Tick the processing service every server tick (50ms)
-        new BukkitRunnable() {
-            @Override
-            public void run() {
-                var service = requestService;
-                if (service != null) {
-                    service.tick();
-                }
-            }
-        }.runTaskTimer(this, 1L, 1L);
+        steps.scheduleServiceTick();
 
         // Dev-only soak harness (no-op unless -Dlss.soak.scenario is set)
-        PaperSoakBridge.init(this);
+        steps.initSoakBridge();
 
         LSSLogger.info("LOD Server Support (Paper) enabled");
+    }
+
+    @Override
+    public void onEnable() {
+        runEnablePlan(new EnableSteps() {
+            @Override
+            public PaperConfig loadConfig() {
+                lssConfig = PaperConfig.load(getDataFolder().toPath());
+                return lssConfig;
+            }
+
+            @Override
+            public void registerChannels() {
+                getServer().getMessenger().registerIncomingPluginChannel(
+                        LSSPaperPlugin.this, LSSConstants.CHANNEL_HANDSHAKE, LSSPaperPlugin.this);
+                getServer().getMessenger().registerIncomingPluginChannel(
+                        LSSPaperPlugin.this, LSSConstants.CHANNEL_CHUNK_REQUEST, LSSPaperPlugin.this);
+            }
+
+            @Override
+            public void registerQuitListener() {
+                getServer().getPluginManager().registerEvents(LSSPaperPlugin.this, LSSPaperPlugin.this);
+            }
+
+            @Override
+            public PaperRequestProcessingService startService(PaperConfig config) {
+                var nmsServer = ((CraftServer) getServer()).getServer();
+                requestService = new PaperRequestProcessingService(nmsServer, LSSPaperPlugin.this, config);
+                return requestService;
+            }
+
+            @Override
+            public void registerWorldHandler(PaperRequestProcessingService service, PaperConfig config) {
+                var worldHandler = new PaperWorldHandler(LSSPaperPlugin.this, service.getDirtyTracker());
+                worldHandler.registerUpdateListeners(config.updateEvents);
+            }
+
+            @Override
+            public void registerCommands() {
+                var cmd = getCommand("lsslod");
+                if (cmd != null) {
+                    var executor = new PaperCommands(LSSPaperPlugin.this);
+                    cmd.setExecutor(executor);
+                    cmd.setTabCompleter(executor);
+                }
+            }
+
+            @Override
+            public void scheduleServiceTick() {
+                new BukkitRunnable() {
+                    @Override
+                    public void run() {
+                        var service = requestService;
+                        if (service != null) {
+                            service.tick();
+                        }
+                    }
+                }.runTaskTimer(LSSPaperPlugin.this, 1L, 1L);
+            }
+
+            @Override
+            public void initSoakBridge() {
+                PaperSoakBridge.init(LSSPaperPlugin.this);
+            }
+        });
     }
 
     @Override
@@ -95,56 +181,115 @@ public class LSSPaperPlugin extends JavaPlugin implements PluginMessageListener,
         if (message == null || message.length == 0) return;
 
         ServerPlayer nmsPlayer = ((CraftPlayer) player).getHandle();
+        dispatchPluginMessage(channel, player.getName(), message,
+                data -> handleHandshake(player, nmsPlayer, data),
+                data -> handleBatchChunkRequest(nmsPlayer, data));
+    }
 
+    /** Test seam: a per-channel message handler; hostile-frame decodes may throw. */
+    @FunctionalInterface
+    interface PluginMessageHandler {
+        void handle(byte[] message) throws Exception;
+    }
+
+    /**
+     * Channel switch + exception containment for {@link #onPluginMessageReceived},
+     * extracted so hostile-frame containment is testable without a CraftPlayer: one
+     * malformed frame must be caught and logged — never propagate into Bukkit's
+     * messenger — and later messages must still dispatch. Unknown channels are ignored.
+     * Errors deliberately propagate (only Exception is contained).
+     */
+    static void dispatchPluginMessage(String channel, String playerName, byte[] message,
+                                      PluginMessageHandler handshakeHandler,
+                                      PluginMessageHandler chunkRequestHandler) {
         try {
             switch (channel) {
-                case LSSConstants.CHANNEL_HANDSHAKE -> handleHandshake(player, nmsPlayer, message);
-                case LSSConstants.CHANNEL_CHUNK_REQUEST -> handleBatchChunkRequest(nmsPlayer, message);
+                case LSSConstants.CHANNEL_HANDSHAKE -> handshakeHandler.handle(message);
+                case LSSConstants.CHANNEL_CHUNK_REQUEST -> chunkRequestHandler.handle(message);
             }
         } catch (Exception e) {
-            LSSLogger.error("Error handling plugin message on channel " + channel + " from " + player.getName(), e);
+            LSSLogger.error("Error handling plugin message on channel " + channel + " from " + playerName, e);
         }
     }
 
+    /**
+     * Test seam: the session-config reply send, production-wired to
+     * {@link PaperPayloadHandler#sendSessionConfig} for the handshaking player.
+     */
+    @FunctionalInterface
+    interface SessionConfigSender {
+        void send(int protocolVersion, boolean enabled, int lodDistanceChunks,
+                  int syncOnLoadConcurrencyLimitPerPlayer,
+                  int generationConcurrencyLimitPerPlayer, boolean generationEnabled);
+    }
+
+    /**
+     * Test seam: player registration, production-wired to
+     * {@link PaperRequestProcessingService#registerPlayer}. Only invoked when the
+     * {@link HandshakeGate} decision says to register, so the production lambda may
+     * capture a service reference that is non-null whenever servicePresent was true.
+     */
+    @FunctionalInterface
+    interface HandshakeRegistrar {
+        void register(int capabilities);
+    }
+
     private void handleHandshake(Player bukkitPlayer, ServerPlayer nmsPlayer, byte[] data) {
+        var service = this.requestService;
+        handleHandshake(data, nmsPlayer.getName().getString(), this.lssConfig, service != null,
+                (protocolVersion, enabled, lodDistanceChunks, syncLimit, genLimit, generationEnabled) ->
+                        PaperPayloadHandler.sendSessionConfig(bukkitPlayer, protocolVersion, enabled,
+                                lodDistanceChunks, syncLimit, genLimit, generationEnabled),
+                capabilities -> service.registerPlayer(nmsPlayer, capabilities));
+    }
+
+    /**
+     * Handshake decode → {@link HandshakeGate} → reply/registration glue, extracted
+     * behind the sender/registrar seams so call-site obedience is testable. Contract:
+     * a VERSION_MISMATCH decision sends NOTHING (any reply would kick the skewed
+     * client — see {@link HandshakeGate.Outcome#VERSION_MISMATCH}); NO_CONSUMER
+     * replies but never registers; the reply advertises the gate's effectiveEnabled
+     * and wires each config field to its session-config slot.
+     */
+    static void handleHandshake(byte[] data, String playerName, PaperConfig config,
+                                boolean servicePresent, SessionConfigSender configSender,
+                                HandshakeRegistrar registrar) {
         var handshake = PaperPayloadHandler.decodeHandshake(data);
         if (handshake == null) return;
 
-        LSSLogger.info("LSS handshake received from " + nmsPlayer.getName().getString()
+        LSSLogger.info("LSS handshake received from " + playerName
                 + " (protocol v" + handshake.protocolVersion()
                 + ", capabilities=" + handshake.capabilities() + ")");
 
-        var service = this.requestService;
         var decision = HandshakeGate.evaluate(handshake.protocolVersion(),
-                handshake.capabilities(), this.lssConfig.enabled, service != null);
+                handshake.capabilities(), config.enabled, servicePresent);
 
         if (!decision.sendSessionConfig()) {
             // See HandshakeGate.Outcome.VERSION_MISMATCH: replying would kick the player.
-            LSSLogger.warn("Player " + nmsPlayer.getName().getString()
+            LSSLogger.warn("Player " + playerName
                     + " has incompatible LSS protocol version " + handshake.protocolVersion()
                     + " (server: " + LSSConstants.PROTOCOL_VERSION + "), skipping LOD distribution");
             return;
         }
 
-        PaperPayloadHandler.sendSessionConfig(bukkitPlayer,
-                LSSConstants.PROTOCOL_VERSION,
+        configSender.send(LSSConstants.PROTOCOL_VERSION,
                 decision.effectiveEnabled(),
-                this.lssConfig.lodDistanceChunks,
-                this.lssConfig.syncOnLoadConcurrencyLimitPerPlayer,
-                this.lssConfig.generationConcurrencyLimitPerPlayer,
-                this.lssConfig.enableChunkGeneration);
+                config.lodDistanceChunks,
+                config.syncOnLoadConcurrencyLimitPerPlayer,
+                config.generationConcurrencyLimitPerPlayer,
+                config.enableChunkGeneration);
 
         if (decision.outcome() == HandshakeGate.Outcome.NO_CONSUMER) {
             // Visible to admins via this log.
-            LSSLogger.info("Player " + nmsPlayer.getName().getString()
+            LSSLogger.info("Player " + playerName
                     + " has no LOD consumer (caps=" + handshake.capabilities()
                     + "), skipping LOD registration");
             return;
         }
 
         if (decision.registerPlayer()) {
-            service.registerPlayer(nmsPlayer, handshake.capabilities());
-            LSSLogger.info("Player " + nmsPlayer.getName().getString()
+            registrar.register(handshake.capabilities());
+            LSSLogger.info("Player " + playerName
                     + " registered for LSS LOD request processing (caps="
                     + handshake.capabilities() + ")");
         }

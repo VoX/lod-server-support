@@ -1,10 +1,12 @@
 package dev.vox.lss.networking.payloads;
 
+import dev.vox.lss.common.HandshakeGate;
 import dev.vox.lss.common.LSSConstants;
 import dev.vox.lss.common.PositionUtil;
 import io.netty.buffer.Unpooled;
 import io.netty.handler.codec.DecoderException;
 import io.netty.handler.codec.EncoderException;
+import net.minecraft.IdentifierException;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.FriendlyByteBuf;
@@ -44,6 +46,84 @@ class WireEdgeCaseTest {
         wireBuf.readBytes(raw);
         wireBuf.release();
         return raw;
+    }
+
+    // ---- HandshakeC2SPayload: hostile/legacy frames ----
+
+    @Test
+    void handshakeTruncatedOneFieldFrameThrows() {
+        // Fabric is strict: a 1-VarInt legacy frame fails decode (the vanilla layer then
+        // kicks the sender). Paper intentionally diverges — its decoder defaults the missing
+        // capabilities to 0 (pinned by PaperPayloadEdgeTest
+        // #handshakeLegacyFrameWithoutCapabilitiesDefaultsToZero). Harmonizing Fabric to the
+        // lenient shape must be a conscious protocol decision, not a drive-by codec edit.
+        var b = buf();
+        b.writeVarInt(LSSConstants.PROTOCOL_VERSION);
+        try {
+            assertThrows(IndexOutOfBoundsException.class,
+                    () -> HandshakeC2SPayload.CODEC.decode(b));
+        } finally {
+            b.release();
+        }
+    }
+
+    @Test
+    void handshakeTrailingBytesLeftUnread() {
+        // Exact-length contract: the decoder consumes exactly two VarInts and never drains
+        // trailing junk — the vanilla layer kicks on unconsumed payload bytes. A "tolerant"
+        // rewrite that drains the tail would silently change what reaches mismatched clients.
+        var b = buf();
+        b.writeVarInt(LSSConstants.PROTOCOL_VERSION);
+        b.writeVarInt(LSSConstants.CAPABILITY_VOXEL_COLUMNS);
+        b.writeBytes(new byte[]{0x01, 0x02, 0x03});
+        try {
+            var decoded = HandshakeC2SPayload.CODEC.decode(b);
+            assertEquals(LSSConstants.PROTOCOL_VERSION, decoded.protocolVersion());
+            assertEquals(LSSConstants.CAPABILITY_VOXEL_COLUMNS, decoded.capabilities());
+            assertEquals(3, b.readableBytes(),
+                    "trailing bytes must stay unread (exact-length handshake contract)");
+        } finally {
+            b.release();
+        }
+    }
+
+    @Test
+    void handshakeNegativeVersionDecodesAndGateRefusesReply() {
+        // A negative protocolVersion VarInt must survive decode sign-intact and classify as
+        // VERSION_MISMATCH (no reply, no registration) — guards a relational rewrite of the
+        // gate (e.g. `version < PROTOCOL_VERSION` would invert for hostile negative input).
+        var b = buf();
+        b.writeVarInt(-1);
+        b.writeVarInt(LSSConstants.CAPABILITY_VOXEL_COLUMNS);
+        try {
+            var decoded = HandshakeC2SPayload.CODEC.decode(b);
+            assertEquals(-1, decoded.protocolVersion(), "negative version must decode sign-intact");
+            var decision = HandshakeGate.evaluate(
+                    decoded.protocolVersion(), decoded.capabilities(), true, true);
+            assertEquals(HandshakeGate.Outcome.VERSION_MISMATCH, decision.outcome());
+            assertFalse(decision.sendSessionConfig());
+            assertFalse(decision.registerPlayer());
+        } finally {
+            b.release();
+        }
+    }
+
+    @Test
+    void handshakeMalformedVarIntOverflowThrowsPinnedType() {
+        // Six continuation bytes can never terminate a VarInt; MC's VarInt.read throws a
+        // plain RuntimeException("VarInt too big"). Exact-class pin: a change of throw type
+        // changes what the connection layer reports/kicks on and must be re-reviewed.
+        var b = buf();
+        b.writeBytes(new byte[]{(byte) 0x80, (byte) 0x80, (byte) 0x80,
+                (byte) 0x80, (byte) 0x80, (byte) 0x80});
+        try {
+            var ex = assertThrows(RuntimeException.class,
+                    () -> HandshakeC2SPayload.CODEC.decode(b));
+            assertEquals(RuntimeException.class, ex.getClass(),
+                    "VarInt-overflow throw type drifted from MC's RuntimeException(\"VarInt too big\")");
+        } finally {
+            b.release();
+        }
     }
 
     // ---- SessionConfigS2CPayload: future version ----
@@ -245,6 +325,81 @@ class WireEdgeCaseTest {
         try {
             assertThrows(EncoderException.class,
                     () -> VoxelColumnS2CPayload.CODEC.encode(b, payload));
+        } finally {
+            b.release();
+        }
+    }
+
+    // ---- VoxelColumnS2CPayload: truncated/malformed header frames ----
+
+    @Test
+    void voxelColumnTruncatedMidDimensionStringThrowsCleanly() {
+        // Frame ends inside the dimension UTF body: the length prefix claims 20 bytes but
+        // only 5 are present. Utf8String.read rejects (claimed > readable) before touching
+        // the rest of the header — no partial payload object can be produced.
+        var b = buf();
+        b.writeInt(1);
+        b.writeInt(2);
+        b.writeVarInt(20); // UTF byte-length claim
+        b.writeBytes(new byte[]{'m', 'i', 'n', 'e', 'c'}); // truncated body
+        try {
+            assertThrows(DecoderException.class, () -> VoxelColumnS2CPayload.CODEC.decode(b));
+        } finally {
+            b.release();
+        }
+    }
+
+    @Test
+    void voxelColumnTruncatedMidTimestampThrowsCleanly() {
+        // Frame ends inside the 8-byte columnTimestamp (4 bytes present).
+        var b = buf();
+        b.writeInt(1);
+        b.writeInt(2);
+        b.writeUtf(LSSConstants.DIM_STR_OVERWORLD, LSSConstants.MAX_DIMENSION_STRING_LENGTH);
+        b.writeInt(0xCAFE); // half a timestamp
+        try {
+            assertThrows(IndexOutOfBoundsException.class,
+                    () -> VoxelColumnS2CPayload.CODEC.decode(b));
+        } finally {
+            b.release();
+        }
+    }
+
+    @Test
+    void voxelColumnInvalidDimensionStringThrowsIdentifierException() {
+        // A buggy/hostile server can ship any UTF string; Identifier.parse rejects illegal
+        // characters with IdentifierException, which at the connection layer kicks the LSS
+        // client. Pinned as the documented consequence — softening this to a fallback
+        // dimension would be a protocol decision, not a refactor.
+        var b = buf();
+        b.writeInt(0);
+        b.writeInt(0);
+        b.writeUtf("lss:Not A Valid Path!", LSSConstants.MAX_DIMENSION_STRING_LENGTH);
+        b.writeLong(0L);
+        b.writeByteArray(emptyColumn());
+        try {
+            assertThrows(IdentifierException.class, () -> VoxelColumnS2CPayload.CODEC.decode(b));
+        } finally {
+            b.release();
+        }
+    }
+
+    @Test
+    void voxelColumnNamespacelessDimensionAliasesToMinecraftNamespace() {
+        // Identifier.parse silently defaults a namespaceless string to minecraft: — a frame
+        // carrying "overworld" lands on the vanilla overworld key. Pinned as intent: any
+        // stricter parse would reject frames from servers emitting short-form dimensions.
+        var b = buf();
+        b.writeInt(3);
+        b.writeInt(4);
+        b.writeUtf("overworld", LSSConstants.MAX_DIMENSION_STRING_LENGTH);
+        b.writeLong(7L);
+        b.writeByteArray(emptyColumn());
+        try {
+            var decoded = VoxelColumnS2CPayload.CODEC.decode(b);
+            assertEquals(Level.OVERWORLD, decoded.dimension());
+            assertEquals("minecraft:overworld", decoded.dimension().identifier().toString());
+            assertEquals(0, b.readableBytes());
         } finally {
             b.release();
         }

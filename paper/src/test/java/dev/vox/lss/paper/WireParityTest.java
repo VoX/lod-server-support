@@ -5,10 +5,13 @@ import dev.vox.lss.common.PositionUtil;
 import io.netty.buffer.Unpooled;
 import net.minecraft.SharedConstants;
 import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.Bootstrap;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import java.util.HashSet;
+import java.util.Set;
 import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -77,6 +80,28 @@ class WireParityTest {
         assertEquals(0, empty.count());
     }
 
+    @Test
+    void batchChunkRequestExtremeCorners() {
+        // ts=-1 (unknown/first request) and ts=Long.MAX_VALUE plus the (MAX,MAX)/(MAX,MIN)
+        // corner positions — identical reference frame to the Fabric twin's
+        // #batchChunkRequestExtremeCorners.
+        long[] pos = {PositionUtil.packPosition(Integer.MAX_VALUE, Integer.MAX_VALUE),
+                PositionUtil.packPosition(Integer.MAX_VALUE, Integer.MIN_VALUE)};
+        long[] ts = {-1L, Long.MAX_VALUE};
+        byte[] frame = ref(b -> {
+            b.writeVarInt(2);
+            for (int i = 0; i < 2; i++) {
+                b.writeLong(pos[i]);
+                b.writeLong(ts[i]);
+            }
+        });
+        var d = PaperPayloadHandler.decodeBatchChunkRequest(frame);
+        assertNotNull(d);
+        assertEquals(2, d.count());
+        assertArrayEquals(pos, d.packedPositions());
+        assertArrayEquals(ts, d.clientTimestamps());
+    }
+
     // ---- S2C (Paper encodes; bytes must match the reference) ----
 
     @Test
@@ -94,6 +119,32 @@ class WireParityTest {
     }
 
     @Test
+    void sessionConfigVarIntBoundaries() {
+        // lodDistance crossing the 1->2 byte VarInt boundary (127/128) and the 512 config
+        // max; concurrency at the 1000 clamp max. Values within each frame are pairwise
+        // distinct so a field transposition in either platform's codec cannot cancel out.
+        // Identical reference ops to the Fabric twin's #sessionConfigVarIntBoundaries.
+        int[][] cases = {
+                {127, 1000, 128},
+                {128, 127, 1000},
+                {512, 1000, 127},
+        };
+        for (int[] c : cases) {
+            byte[] expected = ref(b -> {
+                b.writeVarInt(LSSConstants.PROTOCOL_VERSION);
+                b.writeBoolean(true);
+                b.writeVarInt(c[0]);
+                b.writeVarInt(c[1]);
+                b.writeVarInt(c[2]);
+                b.writeBoolean(false);
+            });
+            assertArrayEquals(expected, PaperPayloadHandler.encodeSessionConfig(
+                    LSSConstants.PROTOCOL_VERSION, true, c[0], c[1], c[2], false),
+                    "sessionConfig lod=" + c[0]);
+        }
+    }
+
+    @Test
     void batchResponse() {
         byte[] types = {LSSConstants.RESPONSE_RATE_LIMITED, LSSConstants.RESPONSE_UP_TO_DATE,
                 LSSConstants.RESPONSE_NOT_GENERATED, (byte) 200};
@@ -107,6 +158,29 @@ class WireParityTest {
             }
         });
         assertArrayEquals(expected, PaperPayloadHandler.encodeBatchResponse(types, positions, 4));
+    }
+
+    @Test
+    void batchResponseAtMaxCountMatchesReference() {
+        // 4096 entries puts the count VarInt in its 2-byte regime — the only count regime
+        // production ever ships at full flush. Identical fill to the Fabric twin's
+        // #batchResponseAtMaxCountMatchesReference, so Fabric codec bytes == Paper encoder
+        // bytes at max count.
+        int max = LSSConstants.MAX_BATCH_RESPONSES;
+        byte[] types = new byte[max];
+        long[] positions = new long[max];
+        for (int i = 0; i < max; i++) {
+            types[i] = (byte) (i % 3);
+            positions[i] = PositionUtil.packPosition(i - 2048, 2048 - i);
+        }
+        byte[] expected = ref(b -> {
+            b.writeVarInt(max);
+            for (int i = 0; i < max; i++) {
+                b.writeByte(types[i]);
+                b.writeLong(positions[i]);
+            }
+        });
+        assertArrayEquals(expected, PaperPayloadHandler.encodeBatchResponse(types, positions, max));
     }
 
     @Test
@@ -149,5 +223,64 @@ class WireParityTest {
         });
         assertArrayEquals(expected, PaperPayloadHandler.encodeVoxelColumnPreEncoded(
                 0, 0, "lsstest:custom", 42L, sections));
+    }
+
+    @Test
+    void voxelColumnEmptySectionBytes() {
+        // sectionBytes=byte[0] is the legitimate "nothing visible" shape: it must encode as
+        // a single 0x00 length VarInt (identical reference to the Fabric twin, whose decoder
+        // is what hands the client its defensive empty-bytes ingest report).
+        byte[] expected = ref(b -> {
+            b.writeInt(11);
+            b.writeInt(-7);
+            b.writeUtf("minecraft:overworld");
+            b.writeLong(5L);
+            b.writeByteArray(new byte[0]);
+        });
+        byte[] encoded = PaperPayloadHandler.encodeVoxelColumnPreEncoded(
+                11, -7, "minecraft:overworld", 5L, new byte[0]);
+        assertArrayEquals(expected, encoded);
+        assertEquals(0, encoded[encoded.length - 1],
+                "empty section bytes must encode as a single 0x00 length VarInt");
+    }
+
+    // ---- Constants pins (Paper-classpath twins of the Fabric ProtocolConstantsTest) ----
+
+    @Test
+    void channelConstantsParseDistinctUnderLssAndVersionPinned() {
+        String[] channels = {
+                LSSConstants.CHANNEL_HANDSHAKE, LSSConstants.CHANNEL_CHUNK_REQUEST,
+                LSSConstants.CHANNEL_SESSION_CONFIG, LSSConstants.CHANNEL_DIRTY_COLUMNS,
+                LSSConstants.CHANNEL_VOXEL_COLUMN, LSSConstants.CHANNEL_BATCH_RESPONSE};
+        var distinct = new HashSet<String>();
+        for (String channel : channels) {
+            var id = Identifier.parse(channel); // throws on a typo'd channel string
+            assertEquals(LSSConstants.MOD_ID, id.getNamespace(),
+                    channel + " must live under the lss: namespace");
+            distinct.add(id.toString());
+        }
+        assertEquals(6, distinct.size(), "channel ids must be pairwise distinct");
+        // Bump the literal only with a deliberate wire change reviewed on both platforms.
+        assertEquals(16, LSSConstants.PROTOCOL_VERSION);
+    }
+
+    // ---- Meta: the parity corpus must cover the whole v16 payload surface ----
+
+    @Test
+    void referenceFramesCoverEveryDeclaredChannel() throws IllegalAccessException {
+        // A 7th payload needs a new CHANNEL_* constant; this set-equality trips then,
+        // forcing a reference frame in this suite (and the Fabric twin) before it goes
+        // green again. The literals below double as this suite's coverage list.
+        var declared = new HashSet<String>();
+        for (var f : LSSConstants.class.getDeclaredFields()) {
+            if (f.getName().startsWith("CHANNEL_") && f.getType() == String.class) {
+                declared.add((String) f.get(null));
+            }
+        }
+        var covered = Set.of("lss:handshake_c2s", "lss:batch_chunk_req", "lss:session_config",
+                "lss:dirty_columns", "lss:voxel_column", "lss:batch_response");
+        assertEquals(covered, declared,
+                "every LSS channel must have a reference frame in this suite — a new payload"
+                + " requires frames in BOTH WireParityTests");
     }
 }

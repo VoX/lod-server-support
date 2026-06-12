@@ -14,6 +14,7 @@ import dev.vox.lss.config.LSSServerConfig;
 import dev.vox.lss.networking.payloads.BatchChunkRequestC2SPayload;
 import dev.vox.lss.networking.payloads.BatchResponseS2CPayload;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -31,6 +32,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 public class RequestProcessingService {
     private final Map<UUID, PlayerRequestState> players = new ConcurrentHashMap<>();
@@ -52,6 +55,11 @@ public class RequestProcessingService {
 
     private static final int DIAG_LOG_INTERVAL_TICKS = 100;
     private static final int MAX_PROBES_PER_TICK_PER_PLAYER = 512;
+
+    // Send-drop fault seam state (see armSendDrops). Static so the soak driver and gametests
+    // can arm it without a service reference; production code never arms it.
+    private static final AtomicInteger PENDING_SEND_DROPS = new AtomicInteger();
+    private static final AtomicLong TOTAL_SEND_DROPS_INJECTED = new AtomicLong();
 
     public RequestProcessingService(MinecraftServer server) {
         this.server = server;
@@ -143,19 +151,37 @@ public class RequestProcessingService {
         return this.generationService.tick();
     }
 
-    private record LifecycleResult(
+    /**
+     * Per-tick snapshot buffers. {@link #newPerTick()} is the only producer and must allocate
+     * fresh maps every tick: ownership transfers to the processing thread at
+     * {@code postSnapshot}, so a reused buffer would be mutated by the next lifecycle pass
+     * while the processing thread iterates it (unsynchronized HashMap). {@link #toSnapshot}
+     * wraps exactly these instances — zero-copy, so what the lifecycle pass wrote is what
+     * the processing thread reads. ServiceGlueTest pins both halves of the contract.
+     */
+    record SnapshotBuffers(
             Map<UUID, String> playerDimensions,
-            Map<UUID, Long2ObjectMap<LoadedColumnData>> loadedChunkProbes,
+            Map<UUID, Long2ObjectMap<LoadedColumnData>> loadedChunkProbes
+    ) {
+        static SnapshotBuffers newPerTick() {
+            return new SnapshotBuffers(new HashMap<>(), new HashMap<>());
+        }
+
+        TickSnapshot toSnapshot(int maxSendQueueSize) {
+            return new TickSnapshot(this.playerDimensions, this.loadedChunkProbes,
+                    maxSendQueueSize, false);
+        }
+    }
+
+    private record LifecycleResult(
+            SnapshotBuffers buffers,
             int activeCount,
             List<UUID> toRemove
     ) {}
 
     private LifecycleResult processPlayerLifecycle(LSSServerConfig config,
                                                      List<TickSnapshot.GenerationReadyData> generationReady) {
-        // Allocated fresh each tick: the snapshot owns these maps after postSnapshot, so the
-        // processing thread can iterate them without racing the next tick's lifecycle pass.
-        Map<UUID, String> playerDimensions = new HashMap<>();
-        Map<UUID, Long2ObjectMap<LoadedColumnData>> loadedChunkProbes = new HashMap<>();
+        var buffers = SnapshotBuffers.newPerTick();
 
         // Per-player set of generation-outcome positions to skip in probeLoadedChunks
         Map<UUID, LongOpenHashSet> genReadyPositions = TickSnapshot.groupPositionsByPlayer(generationReady);
@@ -201,43 +227,108 @@ public class RequestProcessingService {
 
             this.offThreadProcessor.updateDimensionContext(dimension, level);
 
-            playerDimensions.put(player.getUUID(), dimension);
+            buffers.playerDimensions().put(player.getUUID(), dimension);
 
             var skipPositions = genReadyPositions != null
                     ? genReadyPositions.get(player.getUUID()) : null;
             var probes = this.probeLoadedChunks(state, level, skipPositions);
             if (!probes.isEmpty()) {
-                loadedChunkProbes.put(player.getUUID(), probes);
+                buffers.loadedChunkProbes().put(player.getUUID(), probes);
             }
         }
 
-        return new LifecycleResult(playerDimensions, loadedChunkProbes, activeCount, toRemove);
+        return new LifecycleResult(buffers, activeCount, toRemove);
     }
 
     private void postSnapshot(LifecycleResult lifecycle,
                                List<TickSnapshot.GenerationReadyData> generationReady,
                                LSSServerConfig config) {
-        var snapshot = new TickSnapshot(
-                lifecycle.playerDimensions, lifecycle.loadedChunkProbes,
-                config.sendQueueLimitPerPlayer, false);
-        this.offThreadProcessor.postSnapshot(snapshot, generationReady);
+        this.offThreadProcessor.postSnapshot(
+                lifecycle.buffers.toSnapshot(config.sendQueueLimitPerPlayer), generationReady);
+    }
+
+    /** Test seam (D9): puts one column payload on the wire for one player. Production default
+     *  is {@code ServerPlayNetworking.send}; ServiceGlueTest injects recording/throwing senders. */
+    @FunctionalInterface
+    interface ColumnPayloadSender {
+        void send(PlayerRequestState state, CustomPacketPayload payload) throws Exception;
     }
 
     private void flushSendQueues(int activeCount, LSSServerConfig config) {
         long perPlayerAllocation = this.bandwidthLimiter.getPerPlayerAllocation(activeCount);
         long perPlayerCap = Math.min(perPlayerAllocation, config.bytesPerSecondLimitPerPlayer);
+        flushSendQueues(this.players.values(), perPlayerCap, this.bandwidthLimiter, this.diag,
+                (state, payload) -> ServerPlayNetworking.send(state.getPlayer(), payload),
+                this.offThreadProcessor);
+    }
 
-        for (var state : this.players.values()) {
+    // Package-private static: ServiceGlueTest drives this glue with hand-rolled states and an
+    // unstarted processor (constructing RequestProcessingService needs a MinecraftServer).
+    static void flushSendQueues(Iterable<PlayerRequestState> states, long perPlayerCap,
+                                 SharedBandwidthLimiter bandwidthLimiter, TickDiagnostics diag,
+                                 ColumnPayloadSender sender,
+                                 FabricOffThreadProcessor offThreadProcessor) {
+        for (var state : states) {
             if (!state.hasCompletedHandshake()) continue;
-            long[] dropped = state.flushSendQueue(perPlayerCap, this.bandwidthLimiter, this.diag,
-                    payload -> ServerPlayNetworking.send(state.getPlayer(), payload));
+            long[] dropped = state.flushSendQueue(perPlayerCap, bandwidthLimiter, diag,
+                    payload -> {
+                        if (consumeSendDropFault()) return;
+                        sender.send(state, payload);
+                    });
             if (dropped.length > 0) {
                 // A send failure discarded resolved-but-undelivered columns: clear their
                 // done-bits so the client's re-requests re-resolve instead of being
                 // answered up-to-date for data that never arrived.
-                this.offThreadProcessor.clearDiskReadDone(state.getPlayerUUID(), dropped);
+                offThreadProcessor.clearDiskReadDone(state.getPlayerUUID(), dropped);
             }
         }
+    }
+
+    /**
+     * Fault seam: arms the flush path to silently discard the next {@code count}
+     * column-payload sends. A dropped payload vanishes after resolution — the flush treats
+     * it as delivered (queue advances, diskReadDone stays set, no clearDiskReadDone) — so
+     * the honest re-resolution ladder (a ts&le;0 re-request of a served position re-resolves)
+     * can be exercised live by the soak {@code fault send-drop N} command and the client
+     * gametests. Inert in production: no production code path calls this, and arming is
+     * refused unless the JVM carries {@code -Dlss.soak.scenario} (soak server) or
+     * {@code -Dlss.test.integratedServer} (gametest JVMs). Disarming ({@code count <= 0})
+     * is always allowed.
+     */
+    public static void armSendDrops(int count) {
+        if (count > 0 && !sendDropFaultAllowed()) {
+            LSSLogger.warn("Refusing to arm send-drop fault injection: not a soak or gametest JVM");
+            return;
+        }
+        PENDING_SEND_DROPS.set(Math.max(0, count));
+    }
+
+    /** Sends still armed to be dropped by the {@link #armSendDrops} fault seam. */
+    public static int pendingSendDrops() {
+        return PENDING_SEND_DROPS.get();
+    }
+
+    /** Cumulative column sends discarded by the {@link #armSendDrops} fault seam (this JVM). */
+    public static long totalSendDropsInjected() {
+        return TOTAL_SEND_DROPS_INJECTED.get();
+    }
+
+    private static boolean sendDropFaultAllowed() {
+        if (Boolean.getBoolean("lss.test.integratedServer")) return true;
+        // Blank counts as unset: the soakServer run config always defines the property,
+        // as the empty string when no scenario is staged (BenchmarkBridge convention).
+        String scenario = System.getProperty("lss.soak.scenario");
+        return scenario != null && !scenario.isBlank();
+    }
+
+    private static boolean consumeSendDropFault() {
+        int n;
+        do {
+            n = PENDING_SEND_DROPS.get();
+            if (n <= 0) return false;
+        } while (!PENDING_SEND_DROPS.compareAndSet(n, n - 1));
+        TOTAL_SEND_DROPS_INJECTED.incrementAndGet();
+        return true;
     }
 
     private void tickDirtyBroadcast(LSSServerConfig config) {

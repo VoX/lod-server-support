@@ -39,6 +39,24 @@ public class DirtyContentFilter {
     private static final long ALL_AIR_HASH = 0x9E3779B97F4A7C15L;
 
     private final Map<String, Long2LongOpenHashMap> hashesByDimension = new HashMap<>();
+    private final ColumnSerializer serializer;
+
+    /** Serializes a column to exactly the section bytes LSS serves (the hash input).
+     *  Injectable for tests only — lets the exception fail-open path run without MC
+     *  level/chunk objects; production always wires {@link SectionSerializer#serializeColumn}. */
+    @FunctionalInterface
+    interface ColumnSerializer {
+        byte[] serializeSections(ServerLevel level, LevelChunk chunk, int cx, int cz);
+    }
+
+    public DirtyContentFilter() {
+        this((level, chunk, cx, cz) -> SectionSerializer.serializeColumn(level, chunk, cx, cz).serializedSections());
+    }
+
+    /** Test seam (see {@link ColumnSerializer}); zero behavior change when default-wired. */
+    DirtyContentFilter(ColumnSerializer serializer) {
+        this.serializer = serializer;
+    }
 
     /**
      * Record served content as the change baseline. A serve IS a content observation:
@@ -55,14 +73,19 @@ public class DirtyContentFilter {
      * (always true for the first observed save of a position), updating the stored hash.
      */
     public synchronized boolean contentChanged(ServerLevel level, LevelChunk chunk, String dimension) {
-        int cx = chunk.getPos().x();
-        int cz = chunk.getPos().z();
+        return contentChanged(level, chunk, chunk.getPos().x(), chunk.getPos().z(), dimension);
+    }
+
+    /** Position-explicit body; package-visible so tests can drive the injected serializer
+     *  without constructing MC level/chunk objects. Synchronized (reentrant from the public
+     *  overload) so the seam keeps the class's entry-points-hold-the-lock insurance. */
+    synchronized boolean contentChanged(ServerLevel level, LevelChunk chunk, int cx, int cz, String dimension) {
         long hash;
         int lastLen;
         try {
-            var column = SectionSerializer.serializeColumn(level, chunk, cx, cz);
-            hash = hashContent(column.serializedSections());
-            lastLen = column.serializedSections() == null ? 0 : column.serializedSections().length;
+            byte[] sections = this.serializer.serializeSections(level, chunk, cx, cz);
+            hash = hashContent(sections);
+            lastLen = sections == null ? 0 : sections.length;
         } catch (Exception e) {
             LSSLogger.debug("Dirty-content hash failed for chunk " + cx + "," + cz + ": " + e);
             return true;
@@ -103,7 +126,13 @@ public class DirtyContentFilter {
             h ^= (b & 0xFF);
             h *= FNV_PRIME;
         }
-        // 0 is the map's absent sentinel — remap so a real hash never collides with "absent"
+        return remapAbsentSentinel(h);
+    }
+
+    /** 0 is the map's absent sentinel — remap so a real hash never collides with "absent"
+     *  (a stored 0 would make the first observation read as unchanged). Package-visible:
+     *  no constructible input has a raw FNV-1a of 0, so the remap is only pinnable in isolation. */
+    static long remapAbsentSentinel(long h) {
         return h == 0L ? 1L : h;
     }
 }

@@ -14,6 +14,8 @@ import net.minecraft.world.level.Level;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import java.util.HashSet;
+import java.util.Set;
 import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -95,6 +97,27 @@ class WireParityTest {
                 new BatchChunkRequestC2SPayload(new long[0], new long[0], 0)));
     }
 
+    @Test
+    void batchChunkRequestExtremeCorners() {
+        // ts=-1 (unknown/first request) and ts=Long.MAX_VALUE plus the (MAX,MAX)/(MAX,MIN)
+        // corner positions — the matrix cells the base parity frame does not carry.
+        long[] pos = {PositionUtil.packPosition(Integer.MAX_VALUE, Integer.MAX_VALUE),
+                PositionUtil.packPosition(Integer.MAX_VALUE, Integer.MIN_VALUE)};
+        long[] ts = {-1L, Long.MAX_VALUE};
+        byte[] expected = ref(b -> {
+            b.writeVarInt(2);
+            for (int i = 0; i < 2; i++) {
+                b.writeLong(pos[i]);
+                b.writeLong(ts[i]);
+            }
+        });
+        assertArrayEquals(expected, encode(BatchChunkRequestC2SPayload.CODEC,
+                new BatchChunkRequestC2SPayload(pos, ts, 2)));
+        var d = decode(BatchChunkRequestC2SPayload.CODEC, expected);
+        assertArrayEquals(pos, d.packedPositions());
+        assertArrayEquals(ts, d.clientTimestamps());
+    }
+
     // ---- S2C ----
 
     @Test
@@ -137,6 +160,36 @@ class WireParityTest {
     }
 
     @Test
+    void sessionConfigVarIntBoundaries() {
+        // lodDistance crossing the 1->2 byte VarInt boundary (127/128) and the 512 config
+        // max; concurrency at the 1000 clamp max. Values within each frame are pairwise
+        // distinct so a field transposition in either platform's codec cannot cancel out.
+        int[][] cases = {
+                {127, 1000, 128},
+                {128, 127, 1000},
+                {512, 1000, 127},
+        };
+        for (int[] c : cases) {
+            byte[] expected = ref(b -> {
+                b.writeVarInt(LSSConstants.PROTOCOL_VERSION);
+                b.writeBoolean(true);
+                b.writeVarInt(c[0]);
+                b.writeVarInt(c[1]);
+                b.writeVarInt(c[2]);
+                b.writeBoolean(false);
+            });
+            var p = new SessionConfigS2CPayload(LSSConstants.PROTOCOL_VERSION, true,
+                    c[0], c[1], c[2], false);
+            assertArrayEquals(expected, encode(SessionConfigS2CPayload.CODEC, p),
+                    "sessionConfig lod=" + c[0]);
+            var d = decode(SessionConfigS2CPayload.CODEC, expected);
+            assertEquals(c[0], d.lodDistanceChunks());
+            assertEquals(c[1], d.syncOnLoadConcurrencyLimitPerPlayer());
+            assertEquals(c[2], d.generationConcurrencyLimitPerPlayer());
+        }
+    }
+
+    @Test
     void batchResponse() {
         byte[] types = {LSSConstants.RESPONSE_RATE_LIMITED, LSSConstants.RESPONSE_UP_TO_DATE,
                 LSSConstants.RESPONSE_NOT_GENERATED, (byte) 200};
@@ -151,6 +204,28 @@ class WireParityTest {
         });
         assertArrayEquals(expected, encode(BatchResponseS2CPayload.CODEC,
                 new BatchResponseS2CPayload(types, positions, 4)));
+    }
+
+    @Test
+    void batchResponseAtMaxCountMatchesReference() {
+        // 4096 entries puts the count VarInt in its 2-byte regime — the only count regime
+        // production ever ships at full flush. Identical fill in the Paper twin.
+        int max = LSSConstants.MAX_BATCH_RESPONSES;
+        byte[] types = new byte[max];
+        long[] positions = new long[max];
+        for (int i = 0; i < max; i++) {
+            types[i] = (byte) (i % 3);
+            positions[i] = PositionUtil.packPosition(i - 2048, 2048 - i);
+        }
+        byte[] expected = ref(b -> {
+            b.writeVarInt(max);
+            for (int i = 0; i < max; i++) {
+                b.writeByte(types[i]);
+                b.writeLong(positions[i]);
+            }
+        });
+        assertArrayEquals(expected, encode(BatchResponseS2CPayload.CODEC,
+                new BatchResponseS2CPayload(types, positions, max)));
     }
 
     @Test
@@ -196,5 +271,52 @@ class WireParityTest {
         });
         assertArrayEquals(expected, encode(VoxelColumnS2CPayload.CODEC,
                 new VoxelColumnS2CPayload(0, 0, custom, 42L, sections)));
+    }
+
+    @Test
+    void voxelColumnEmptySectionBytes() {
+        // sectionBytes=byte[0] is the legitimate "nothing visible" shape: it must encode as
+        // a single 0x00 length VarInt and decode back to byte[0] — the client's defensive
+        // empty-bytes ingest report depends on actually receiving it.
+        byte[] expected = ref(b -> {
+            b.writeInt(11);
+            b.writeInt(-7);
+            b.writeUtf("minecraft:overworld");
+            b.writeLong(5L);
+            b.writeByteArray(new byte[0]);
+        });
+        assertArrayEquals(expected, encode(VoxelColumnS2CPayload.CODEC,
+                new VoxelColumnS2CPayload(11, -7, Level.OVERWORLD, 5L, new byte[0])));
+        assertEquals(0, expected[expected.length - 1],
+                "empty section bytes must encode as a single 0x00 length VarInt");
+        var d = decode(VoxelColumnS2CPayload.CODEC, expected);
+        assertEquals(0, d.decompressedSections().length);
+    }
+
+    // ---- Meta: the parity corpus must cover the whole v16 payload surface ----
+
+    @Test
+    void referenceFramesCoverEveryDeclaredChannel() throws IllegalAccessException {
+        // A 7th payload registered in LSSNetworking needs a new CHANNEL_* constant; this
+        // set-equality trips then, forcing a reference frame in BOTH WireParityTests (and
+        // the Paper twin's literal list) before the suite goes green again. Also pins that
+        // each payload class binds exactly one declared channel — no extras, no orphans.
+        var declared = new HashSet<String>();
+        for (var f : LSSConstants.class.getDeclaredFields()) {
+            if (f.getName().startsWith("CHANNEL_") && f.getType() == String.class) {
+                declared.add((String) f.get(null));
+            }
+        }
+        var covered = Set.of(
+                HandshakeC2SPayload.TYPE.id().toString(),
+                BatchChunkRequestC2SPayload.TYPE.id().toString(),
+                SessionConfigS2CPayload.TYPE.id().toString(),
+                DirtyColumnsS2CPayload.TYPE.id().toString(),
+                VoxelColumnS2CPayload.TYPE.id().toString(),
+                BatchResponseS2CPayload.TYPE.id().toString());
+        assertEquals(covered, declared,
+                "every LSS channel must map to exactly one payload with a reference frame in "
+                + "this suite — a new payload requires frames in BOTH WireParityTests");
+        assertEquals(6, declared.size());
     }
 }
