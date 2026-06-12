@@ -79,11 +79,36 @@ class IncomingRequestRouter<PS extends AbstractPlayerRequestState<?>> {
         }
     }
 
-    /** Returns true if the request is a known duplicate (already served or in-flight). */
+    /**
+     * Returns true if the request is a known duplicate (already served or in-flight).
+     *
+     * <p>The diskReadDone set records <em>resolution</em>, not <em>delivery</em> — a
+     * payload can still be lost between the two (send-failure queue drop, client decode
+     * error, consumer rejection). A ts&gt;0 re-request comes from a client that HAS data
+     * for the position, so answering up-to-date from the set is honest. A ts&le;0
+     * re-request is the client declaring it has nothing: answering up-to-date would seal
+     * a permanent invisible hole (the open-to-LAN transition bug). Instead, bounce with
+     * rate-limited while the payload is still in the send pipeline, or clear the done-bit
+     * and re-resolve once it isn't.
+     *
+     * <p>Accepted race: a timeout re-ask that crosses its own payload's delivery (sent and
+     * decremented between the client's send and this check) re-resolves once redundantly —
+     * one extra serve per crossed retry, after which the client holds ts&gt;0 and converges.
+     */
     private boolean resolvedAsDuplicate(PS state, UUID playerUuid, IncomingRequest req, long packed) {
         if (state.hasDiskReadDone(req.cx(), req.cz())) {
-            this.ctx.sendActions().add(new SendAction.ColumnUpToDate(playerUuid, packed, state));
-            return true;
+            if (req.clientTimestamp() > 0) {
+                this.ctx.sendActions().add(new SendAction.ColumnUpToDate(playerUuid, packed, state));
+                return true;
+            }
+            if (state.hasEnqueuedColumn(packed)) {
+                this.ctx.sendActions().add(new SendAction.RateLimited(playerUuid, packed, state));
+                this.ctx.diagnostics().incrementRateLimited(
+                        req.clientTimestamp() == 0 ? RequestType.GENERATION : RequestType.SYNC);
+                return true;
+            }
+            state.clearDiskReadDone(packed);
+            this.ctx.diagnostics().incrementReResolved();
         }
         if (state.hasPendingRequest(req.cx(), req.cz())) {
             this.ctx.diagnostics().incrementSkippedDuplicate();

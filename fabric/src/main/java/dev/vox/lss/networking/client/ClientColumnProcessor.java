@@ -3,6 +3,7 @@ package dev.vox.lss.networking.client;
 import dev.vox.lss.api.LSSApi;
 import dev.vox.lss.api.VoxelColumnData;
 import dev.vox.lss.common.LSSLogger;
+import dev.vox.lss.common.PositionUtil;
 import dev.vox.lss.config.LSSClientConfig;
 import dev.vox.lss.networking.payloads.VoxelColumnS2CPayload;
 import io.netty.buffer.Unpooled;
@@ -52,6 +53,10 @@ class ClientColumnProcessor {
                 LSSLogger.warn("Column processing queue full (" + MAX_QUEUED_COLUMNS
                         + "), " + dropped + " columns dropped total");
             }
+            // The receive handler already stamped this position received — without the
+            // report the drop would never be re-requested (permanent hole).
+            LSSClientNetworking.reportIngestFailure(payload.dimension(),
+                    payload.chunkX(), payload.chunkZ());
         }
     }
 
@@ -97,7 +102,14 @@ class ClientColumnProcessor {
             if (!level.dimension().equals(payload.dimension())) continue;
 
             byte[] decompressed = payload.decompressedSections();
-            if (decompressed == null || decompressed.length == 0) continue;
+            if (decompressed == null || decompressed.length == 0) {
+                // Defensive (a compliant server always writes at least the section-count
+                // varint) — but the position was stamped received at arrival, so a silent
+                // drop here would be a permanent false stamp.
+                LSSClientNetworking.reportIngestFailure(payload.dimension(),
+                        payload.chunkX(), payload.chunkZ());
+                continue;
+            }
 
             try {
                 var buf = new FriendlyByteBuf(Unpooled.wrappedBuffer(decompressed));
@@ -140,7 +152,27 @@ class ClientColumnProcessor {
             } catch (Exception e) {
                 LSSLogger.error("Failed to process voxel column at "
                         + payload.chunkX() + "," + payload.chunkZ(), e);
+                LSSClientNetworking.reportIngestFailure(payload.dimension(),
+                        payload.chunkX(), payload.chunkZ());
             }
+        }
+    }
+
+    /**
+     * Drain columns still queued at disconnect and report each as an ingest failure so the
+     * manager forgets their received-stamps BEFORE the cache flush — otherwise the cache
+     * persists stamps for columns no consumer ever saw and the next session resyncs as
+     * up-to-date over the holes. The epoch bump stops any in-progress drain at its next
+     * check; a column it already polled still dispatches normally (and its stamp is then
+     * truthful). Main client thread, from the DISCONNECT handler.
+     */
+    void reportUndispatched(LodRequestManager manager) {
+        this.sessionEpoch++;
+        VoxelColumnS2CPayload payload;
+        while ((payload = this.columnQueue.poll()) != null) {
+            this.queueSize.decrementAndGet();
+            manager.onIngestFailure(payload.dimension(),
+                    PositionUtil.packPosition(payload.chunkX(), payload.chunkZ()));
         }
     }
 

@@ -40,10 +40,11 @@ class SendActionIdentityTest {
         }
 
         @Override
-        protected void buildAndEnqueueColumnPayload(TestState state, int cx, int cz, String dimension,
+        protected boolean buildAndEnqueueColumnPayload(TestState state, int cx, int cz, String dimension,
                                                      long columnTimestamp, long submissionOrder,
                                                      byte[] sectionBytes, int estimatedBytes) {
             // not exercised: generation failures only produce batched send actions
+            return true;
         }
     }
 

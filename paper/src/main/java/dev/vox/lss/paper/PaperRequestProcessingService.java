@@ -240,9 +240,15 @@ public class PaperRequestProcessingService {
             if (!state.hasCompletedHandshake())
                 continue;
             var bukkitPlayer = state.getPlayer().getBukkitEntity();
-            state.flushSendQueue(perPlayerCap, this.bandwidthLimiter, this.diag,
+            long[] dropped = state.flushSendQueue(perPlayerCap, this.bandwidthLimiter, this.diag,
                     data -> PaperPayloadHandler.sendRawNmsPayload(bukkitPlayer,
                             PaperPayloadHandler.ID_VOXEL_COLUMN, data));
+            if (dropped.length > 0) {
+                // A send failure discarded resolved-but-undelivered columns: clear their
+                // done-bits so the client's re-requests re-resolve instead of being
+                // answered up-to-date for data that never arrived.
+                this.offThreadProcessor.clearDiskReadDone(state.getPlayerUUID(), dropped);
+            }
         }
     }
 

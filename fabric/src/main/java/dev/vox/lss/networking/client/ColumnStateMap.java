@@ -2,6 +2,7 @@ package dev.vox.lss.networking.client;
 
 import dev.vox.lss.common.LSSConstants;
 import dev.vox.lss.common.PositionUtil;
+import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 
@@ -33,6 +34,9 @@ class ColumnStateMap {
     // Positions confirmed current (data or up-to-date) in this session; cleared on
     // reconnect/dimension change so cached-but-stale positions get revalidated.
     private final LongOpenHashSet validated = new LongOpenHashSet();
+    // Per-position ingest-failure counts; bounds the reject -> re-serve loop a permanently
+    // failing consumer would otherwise drive forever (see onIngestFailed).
+    private final Long2IntOpenHashMap ingestFailures = new Long2IntOpenHashMap();
 
     // Derived counts, maintained on every timestamp transition.
     private int receivedCount;
@@ -125,6 +129,46 @@ class ColumnStateMap {
         put(packed, 0L);
     }
 
+    /** Re-serve attempts allowed per position per session before parking it. */
+    static final int MAX_INGEST_FAILURES = 3;
+
+    /**
+     * A column that was stamped received never actually reached a consumer (decode error,
+     * consumer rejection, undispatched at disconnect) — forget the stamp so the position
+     * re-requests with ts=-1, and mark retry so the scanner's confirmed-ring reset makes
+     * it reachable again (an unmarked unstamp inside a confirmed ring is never rescanned).
+     *
+     * <p>Ignores positions with no recorded disposition: every legitimate report path
+     * stamps at receive before failing, so an absent position means a pruned straggler or
+     * a buggy consumer passing arbitrary coordinates — marking those would add retry marks
+     * nothing can ever consume (confirmedRing pinned at 0 for a stationary player).
+     *
+     * <p>After {@link #MAX_INGEST_FAILURES} failures the position is parked as satisfied:
+     * a consumer that permanently rejects it (incompatible mod, storage that never comes
+     * up) would otherwise drive a full re-download of it every scan for the whole session.
+     * A parked position heals like any stale stamp (dirty broadcast or next session).
+     */
+    void onIngestFailed(long packed) {
+        long old = this.timestamps.get(packed);
+        if (old == -1L) return;
+
+        int priorFailures = this.ingestFailures.addTo(packed, 1);
+        if (priorFailures + 1 > MAX_INGEST_FAILURES) {
+            put(packed, LSSConstants.epochSeconds());
+            this.validated.add(packed);
+            this.retry.remove(packed);
+            this.dirty.remove(packed);
+            return;
+        }
+
+        this.timestamps.remove(packed);
+        if (old > 0) this.receivedCount--;
+        else if (old == 0) this.emptyCount--;
+        this.validated.remove(packed);
+        this.dirty.remove(packed);
+        this.retry.add(packed);
+    }
+
     void pruneOutOfRange(int playerCx, int playerCz, int pruneDistance) {
         var iter = this.timestamps.long2LongEntrySet().iterator();
         while (iter.hasNext()) {
@@ -139,6 +183,12 @@ class ColumnStateMap {
         pruneSet(this.dirty, playerCx, playerCz, pruneDistance);
         pruneSet(this.retry, playerCx, playerCz, pruneDistance);
         pruneSet(this.validated, playerCx, playerCz, pruneDistance);
+        var failIter = this.ingestFailures.long2IntEntrySet().iterator();
+        while (failIter.hasNext()) {
+            if (PositionUtil.isOutOfRange(failIter.next().getLongKey(), playerCx, playerCz, pruneDistance)) {
+                failIter.remove();
+            }
+        }
     }
 
     private static void pruneSet(LongOpenHashSet set, int playerCx, int playerCz, int pruneDistance) {
@@ -155,6 +205,7 @@ class ColumnStateMap {
         this.dirty.clear();
         this.retry.clear();
         this.validated.clear();
+        this.ingestFailures.clear();
         this.receivedCount = 0;
         this.emptyCount = 0;
     }

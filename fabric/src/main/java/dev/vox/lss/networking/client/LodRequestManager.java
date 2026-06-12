@@ -238,6 +238,24 @@ public class LodRequestManager {
         }
     }
 
+    /**
+     * A column stamped received was never ingested by a consumer (decode failure, consumer
+     * rejection, undispatched at disconnect). Forget the stamp so the next scan re-requests
+     * it with ts=-1 — the server's honest re-resolution then re-serves it instead of
+     * answering up-to-date. Main client thread only.
+     */
+    public void onIngestFailure(ResourceKey<Level> dimension, long packed) {
+        // The state map belongs to the current dimension; a report for another dimension's
+        // column would unstamp the wrong position here.
+        if (this.lastDimension == null || !this.lastDimension.equals(dimension)) return;
+        this.tracker.removeByPosition(packed);
+        this.columns.onIngestFailed(packed);
+        this.metrics.recordIngestFailure();
+        // No resetScanCounter here: it is a debounce (it can only DELAY the next scan,
+        // never advance it), and the retry mark already forces the confirmed-ring reset.
+        // A steady failure trickle would otherwise push the scan cadence back indefinitely.
+    }
+
     public void onColumnNotGenerated(long packed) {
         // BatchResponse carries no dimension, so unlike onColumnReceived this cannot be
         // dimension-guarded. Gate on tracking instead: the tracker is cleared on dimension
@@ -265,6 +283,12 @@ public class LodRequestManager {
     }
 
     private void onDimensionChange(ResourceKey<Level> newDimension) {
+        // Unstamp columns still queued for decode BEFORE saveCache persists the old
+        // dimension's map: their stamps describe data no consumer ever saw (the drain's
+        // dimension filter will discard the payloads once the level switches). At this
+        // point lastDimension is still the OLD dimension, so the per-report guard keeps
+        // new-dimension stragglers (never stamped) from touching the old map.
+        LSSClientNetworking.reportUndispatchedColumns(this);
         saveCache();
         resetRequestState();
         this.queue.clear();
@@ -347,6 +371,7 @@ public class LodRequestManager {
     public long getTotalUpToDate() { return this.metrics.getTotalUpToDate(); }
     public long getTotalNotGenerated() { return this.metrics.getTotalNotGenerated(); }
     public long getTotalRateLimited() { return this.metrics.getTotalRateLimited(); }
+    public long getTotalIngestFailures() { return this.metrics.getTotalIngestFailures(); }
 
     // Rolling rates
     public double getReceiveRate() { return this.metrics.getReceiveRate(); }

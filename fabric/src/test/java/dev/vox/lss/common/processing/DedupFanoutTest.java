@@ -78,10 +78,11 @@ class DedupFanoutTest {
         }
 
         @Override
-        protected void buildAndEnqueueColumnPayload(TestState state, int cx, int cz, String dimension,
+        protected boolean buildAndEnqueueColumnPayload(TestState state, int cx, int cz, String dimension,
                                                      long columnTimestamp, long submissionOrder,
                                                      byte[] sectionBytes, int estimatedBytes) {
             this.deliveries.add(new Delivery(state.getPlayerUUID(), state, cx, cz, dimension, sectionBytes));
+            return true;
         }
     }
 

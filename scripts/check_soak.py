@@ -1477,12 +1477,15 @@ def check_dirty_while_offline(ctx):
                                         "client.received_columns"])
 def check_clearcache_mid_session(ctx):
     """/lss clearcache mid-session (client action hook): the client wipes its column
-    state and cache files, then must cleanly re-request the whole disc. The server's
-    per-session position dedup answers the ts=-1 wave with up_to_date (positions were
-    already served this session), so recovery means a full re-REQUEST resolved without
-    re-transfer — and crucially no wedged state and reconvergence. The action row splits
-    the client series into two segments (metrics are cumulative across the reset;
-    all post-action expectations are DELTAS between segment-end snapshots)."""
+    state and cache files, then must cleanly re-request the whole disc. A ts<=0 request
+    declares "I have nothing": the server's honest re-resolution (the open-to-LAN hole
+    fix) clears its per-session done-bits and RE-SERVES the data instead of answering
+    up_to_date for columns the client just declared it lost — so recovery is a full
+    re-request wave resolved by a full re-download, then reconvergence to quiescence.
+    (Pre-fix the wave was answered up_to_date without re-transfer, which also sealed
+    real delivery losses into permanent holes.) The action row splits the client series
+    into two segments (metrics are cumulative across the reset; all post-action
+    expectations are DELTAS between segment-end snapshots)."""
     acts = [a for a in ctx.run_actions.get(1, []) if a["action"] == "clearcache"]
     if len(acts) != 1:
         yield Violation("clearcache-mid-session", "run1",
@@ -1510,17 +1513,18 @@ def check_clearcache_mid_session(ctx):
         yield Violation("clearcache-mid-session", "post-action final snapshot",
                         "full re-request wave did not happen after clearcache",
                         {"expected": ">= 1000 post-action", "actual": d_req})
-    d_utd = post["responses"]["up_to_date"] - pre["responses"]["up_to_date"]
-    if d_utd < 500:
-        yield Violation("clearcache-mid-session", "post-action final snapshot",
-                        "re-requests were not resolved as up_to_date (session dedup miss)",
-                        {"expected": ">= 500 post-action", "actual": d_utd})
     delta_recv = post["received_columns"] - pre["received_columns"]
-    if delta_recv > 50:
+    if delta_recv < 500:
         yield Violation("clearcache-mid-session", "post-action segment",
-                        "clearcache caused a bulk re-download — expected revalidation "
-                        "without re-transfer",
-                        {"received_delta": delta_recv, "limit": 50})
+                        "clearcache must trigger a full re-download (the client declared "
+                        "it has nothing; up_to_date answers would mask delivery losses)",
+                        {"expected": ">= 500 post-action", "actual": delta_recv})
+    d_utd = post["responses"]["up_to_date"] - pre["responses"]["up_to_date"]
+    if d_utd > delta_recv:
+        yield Violation("clearcache-mid-session", "post-action segment",
+                        "post-clearcache re-requests were mostly answered up_to_date — "
+                        "the session done-bit is overriding the honest re-resolution",
+                        {"up_to_date_delta": d_utd, "received_delta": delta_recv})
     if (len(ctx.server_snaps) - 1) not in ctx.quiescent_server:
         yield Violation("clearcache-mid-session", "final snapshot",
                         "last server snapshot is not verified-quiescent (post-clearcache "
@@ -1583,8 +1587,13 @@ def check_dirty_resave_quiet(ctx):
     churn (inhabitedTime) DirtyContentFilter was built to suppress. Conditional on >=2
     recorded save-all command events: recordings made before the timeline gained the
     re-save steps stay judgeable; on a fresh run the driver logs command rows before
-    execution, so absence means the run died mid-timeline (run-completion also fails)."""
-    save_alls = [c for c in ctx.commands if c["cmd"].strip() == "save-all"]
+    execution, so absence means the run died mid-timeline (run-completion also fails).
+
+    The timeline uses 'save-all flush': plain save-all is THROTTLED (vanilla dribbles the
+    save wave over many seconds), so under machine load the seeding wave from the edit
+    save can drain past the baseline snapshot and late first-observation marks read as
+    violations. flush makes seeding synchronous; the startswith match accepts both."""
+    save_alls = [c for c in ctx.commands if c["cmd"].strip().startswith("save-all")]
     if len(save_alls) < 2:
         return
     resave_wall = save_alls[1]["wallMs"]
@@ -2360,6 +2369,11 @@ def selftest():
     clean("dirty-resave legacy single save-all", list(check_dirty_resave_quiet(_ctx(
         server_snaps=[_srv(90_000, over={"dirty.broadcast_positions": 40})],
         commands=[_cmd(64_000, "save-all")], runs={1: resave_cli}))))
+    clean("dirty-resave flush variant matches", list(check_dirty_resave_quiet(_ctx(
+        server_snaps=[_srv(90_000, over={"dirty.broadcast_positions": 40}),
+                      _srv(140_000, over={"dirty.broadcast_positions": 40})],
+        commands=[_cmd(64_000, "save-all flush"), _cmd(95_000, "save-all flush")],
+        runs={1: resave_cli}))))
 
     # --- dirty-while-offline probes: rise/equality + drain mechanics (hold while empty,
     # drain after rejoin) all discriminating ---
@@ -2449,24 +2463,26 @@ def selftest():
         stress_ctx({**gcs_srv, "generation.completed": 40}, gcs_cli, quiescent_last=False))),
         "generation-capacity-stress")
 
-    # --- clearcache-mid-session: revalidation without re-transfer ---
+    # --- clearcache-mid-session: honest re-resolution = full re-download ---
     cc_action = [{"event": "action", "wallMs": 60_000, "action": "clearcache", "atSeconds": 60}]
-    def cc_ctx(post_received, actions):
+    def cc_ctx(post_received, actions, post_utd=0):
         return _ctx(
             server_snaps=[_srv(120_000)],
             runs={1: [_cli(50_000, seg=0, over={"requested_total": 2200,
                                                 "responses.columns": 2100,
                                                 "received_columns": 2200}),
                       _cli(120_000, seg=1, over={"requested_total": 4400,
-                                                 "responses.up_to_date": 2100,
+                                                 "responses.up_to_date": post_utd,
                                                  "received_columns": post_received})]},
             run_actions={1: actions}, quiescent_server={0})
-    clean("clearcache clean revalidation", list(check_clearcache_mid_session(
-        cc_ctx(post_received=2210, actions=cc_action))))
-    hits("clearcache bulk re-download", list(check_clearcache_mid_session(
-        cc_ctx(post_received=2400, actions=cc_action))), "clearcache-mid-session")
+    clean("clearcache clean re-download", list(check_clearcache_mid_session(
+        cc_ctx(post_received=4250, actions=cc_action, post_utd=40))))
+    hits("clearcache re-download missing (legacy up_to_date dedup)", list(check_clearcache_mid_session(
+        cc_ctx(post_received=2210, actions=cc_action, post_utd=2100))), "clearcache-mid-session")
+    hits("clearcache utd outweighs re-serves (done-bit override)", list(check_clearcache_mid_session(
+        cc_ctx(post_received=2900, actions=cc_action, post_utd=900))), "clearcache-mid-session")
     hits("clearcache action never fired", list(check_clearcache_mid_session(
-        cc_ctx(post_received=2210, actions=[]))), "clearcache-mid-session")
+        cc_ctx(post_received=4250, actions=[]))), "clearcache-mid-session")
 
     # --- dirty-range-filter: drain visible, client silent, follow-up live ---
     drf_cmds = [_cmd(122_000, "setblock -250 310 5 minecraft:stone"),

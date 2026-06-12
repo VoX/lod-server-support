@@ -51,6 +51,19 @@ public class LSSClientGameTests implements FabricClientGameTest {
         // so decoded section content can be asserted against the known flat world.
         var recorder = new RecordingColumnConsumer();
         LSSApi.registerColumnConsumer(recorder);
+        // Rejects exactly the FIRST column it ever sees via LSSApi.reportIngestFailure and
+        // then watches for that position to be re-delivered — the end-to-end pin for the
+        // delivery-honesty loop (consumer reject -> unstamp -> ts=-1 re-request -> server
+        // re-resolves instead of answering up-to-date -> re-serve). Before the honest
+        // re-resolution fix, the re-request was answered up-to-date with no data and the
+        // position stayed a permanent hole.
+        var rejector = new FirstColumnRejectingConsumer();
+        LSSApi.registerColumnConsumer(rejector);
+        // Same loop via the implicit path: a consumer that THROWS from its callback must be
+        // treated as an ingest failure by LSSApi.dispatchColumn's catch (third-party
+        // consumers signal failure by throwing far more often than by calling the API).
+        var thrower = new FirstColumnThrowingConsumer();
+        LSSApi.registerColumnConsumer(thrower);
 
         // Low values prevent llvmpipe from starving the integrated server on CI
         context.runOnClient(client -> {
@@ -58,11 +71,13 @@ public class LSSClientGameTests implements FabricClientGameTest {
             client.options.simulationDistance().set(2);
         });
 
-        runMainFlowTest(context, recorder);
+        runMainFlowTest(context, recorder, rejector, thrower);
         runLanPublishActivationTest(context);
     }
 
-    private static void runMainFlowTest(ClientGameTestContext context, RecordingColumnConsumer recorder) {
+    private static void runMainFlowTest(ClientGameTestContext context, RecordingColumnConsumer recorder,
+                                        FirstColumnRejectingConsumer rejector,
+                                        FirstColumnThrowingConsumer thrower) {
         try (TestSingleplayerContext _ = context.worldBuilder().create()) {
             // Wait for join -> handshake -> session config -> LodRequestManager creation
             context.waitTicks(40);
@@ -154,6 +169,20 @@ public class LSSClientGameTests implements FabricClientGameTest {
                             + LSSClientNetworking.getColumnsReceived()
                             + " (decode/dispatch pipeline broken)");
             assertDecodedFlatWorldContent(recorder.snapshot());
+
+            // C8: ingest-failure recovery loop. The rejector reported its first column as
+            // not-ingested; that exact position must be re-served end-to-end.
+            waitForOrFail(context, rejector::sawRejection, 100,
+                    "rejecting consumer never saw a column (nothing was dispatched?)");
+            waitForOrFail(context, rejector::sawReDelivery, 600,
+                    "rejected column " + rejector.describeRejected() + " was never re-served — "
+                            + "the ingest-failure report did not trigger an honest re-resolution "
+                            + "(permanent invisible hole)");
+
+            // C9: the implicit path — a consumer throw must heal identically.
+            waitForOrFail(context, thrower::sawReDelivery, 600,
+                    "thrown-on column was never re-served — dispatchColumn's catch must "
+                            + "treat a consumer throw as an ingest failure");
         }
     }
 
@@ -314,6 +343,71 @@ public class LSSClientGameTests implements FabricClientGameTest {
         }
         if (!condition.getAsBoolean()) {
             throw new AssertionError(failureMessage);
+        }
+    }
+
+    /** Throws on the first column it ever receives; the re-delivery proves the implicit path. */
+    private static final class FirstColumnThrowingConsumer implements VoxelColumnConsumer {
+        private static final long NONE = Long.MIN_VALUE;
+
+        private final java.util.concurrent.atomic.AtomicLong thrownPacked =
+                new java.util.concurrent.atomic.AtomicLong(NONE);
+        private volatile boolean reDelivered;
+
+        @Override
+        public void onVoxelColumnReceived(ClientLevel level, ResourceKey<Level> dimension,
+                                          int chunkX, int chunkZ, VoxelColumnData columnData) {
+            long packed = ((long) chunkX << 32) | (chunkZ & 0xFFFFFFFFL);
+            if (this.thrownPacked.compareAndSet(NONE, packed)) {
+                throw new IllegalStateException("test consumer rejecting its first column by throwing");
+            }
+            if (packed == this.thrownPacked.get()) {
+                this.reDelivered = true;
+            }
+        }
+
+        boolean sawReDelivery() {
+            return this.reDelivered;
+        }
+    }
+
+    /**
+     * Rejects the first column it ever receives (reports it via the public ingest-failure
+     * API) and records whether that position is later delivered again. One-shot across the
+     * whole client boot: the LAN world reuses the registered consumer list, so the rejection
+     * must not re-trigger there.
+     */
+    private static final class FirstColumnRejectingConsumer implements VoxelColumnConsumer {
+        private static final long NONE = Long.MIN_VALUE;
+
+        private final java.util.concurrent.atomic.AtomicLong rejectedPacked =
+                new java.util.concurrent.atomic.AtomicLong(NONE);
+        private volatile boolean reDelivered;
+
+        @Override
+        public void onVoxelColumnReceived(ClientLevel level, ResourceKey<Level> dimension,
+                                          int chunkX, int chunkZ, VoxelColumnData columnData) {
+            long packed = ((long) chunkX << 32) | (chunkZ & 0xFFFFFFFFL);
+            if (this.rejectedPacked.compareAndSet(NONE, packed)) {
+                LSSApi.reportIngestFailure(dimension, chunkX, chunkZ);
+                return;
+            }
+            if (packed == this.rejectedPacked.get()) {
+                this.reDelivered = true;
+            }
+        }
+
+        boolean sawRejection() {
+            return this.rejectedPacked.get() != NONE;
+        }
+
+        boolean sawReDelivery() {
+            return this.reDelivered;
+        }
+
+        String describeRejected() {
+            long packed = this.rejectedPacked.get();
+            return packed == NONE ? "(none)" : "(" + (int) (packed >> 32) + ", " + (int) packed + ")";
         }
     }
 

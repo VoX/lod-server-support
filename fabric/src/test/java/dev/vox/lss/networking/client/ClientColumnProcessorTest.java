@@ -1,5 +1,8 @@
 package dev.vox.lss.networking.client;
 
+import dev.vox.lss.common.LSSConstants;
+import dev.vox.lss.common.PositionUtil;
+import dev.vox.lss.networking.payloads.SessionConfigS2CPayload;
 import dev.vox.lss.networking.payloads.VoxelColumnS2CPayload;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.registries.Registries;
@@ -90,5 +93,24 @@ class ClientColumnProcessorTest {
         processor.scheduleProcessing(false);
         assertEquals(0, processor.getQueuedCount(),
                 "disabled session must drop the backlog and release the backpressure signal");
+    }
+
+    @Test
+    void reportUndispatchedUnstampsQueuedColumnsBeforeTheCacheFlush() {
+        var dim = ResourceKey.create(Registries.DIMENSION, Identifier.parse("lss_test:processor"));
+        var manager = new LodRequestManager();
+        manager.onSessionConfig(new SessionConfigS2CPayload(LSSConstants.PROTOCOL_VERSION, true,
+                64, 100, 100, true), "lss-test");
+        manager.setLastDimensionForTest(dim);
+        long packed = PositionUtil.packPosition(0, 0);
+        manager.onColumnReceived(packed, 5000L, dim); // stamped at arrival, decode still pending
+
+        offer(1);
+        processor.reportUndispatched(manager);
+
+        assertEquals(0, processor.getQueuedCount(), "undispatched queue must be drained");
+        assertEquals(-1L, manager.columnsForTest().classify(packed, true),
+                "an undispatched column's stamp must be forgotten before saveCache persists it");
+        assertEquals(1, manager.getTotalIngestFailures());
     }
 }

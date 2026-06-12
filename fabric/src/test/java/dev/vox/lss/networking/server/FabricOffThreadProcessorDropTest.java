@@ -58,8 +58,10 @@ class FabricOffThreadProcessorDropTest {
         var h = harness();
         byte[] oversized = new byte[LSSConstants.MAX_SECTIONS_SIZE + 1];
 
-        h.processor().buildAndEnqueueColumnPayload(h.state(), 1, 2, LSSConstants.DIM_STR_OVERWORLD,
+        boolean sent = h.processor().buildAndEnqueueColumnPayload(h.state(), 1, 2,
+                LSSConstants.DIM_STR_OVERWORLD,
                 5L, 1L, oversized, oversized.length + LSSConstants.ESTIMATED_COLUMN_OVERHEAD_BYTES);
+        assertFalse(sent, "the caller answers up-to-date on false so the position resolves terminally");
 
         // Bandwidth and tokens would admit a send — absence proves the drop, not a gate
         assertEquals(0, flush(h.state()).size(),
@@ -72,8 +74,10 @@ class FabricOffThreadProcessorDropTest {
         var h = harness();
         byte[] atCap = new byte[LSSConstants.MAX_SECTIONS_SIZE];
 
-        h.processor().buildAndEnqueueColumnPayload(h.state(), 3, -4, LSSConstants.DIM_STR_THE_END,
+        boolean enqueued = h.processor().buildAndEnqueueColumnPayload(h.state(), 3, -4,
+                LSSConstants.DIM_STR_THE_END,
                 77L, 1L, atCap, atCap.length + LSSConstants.ESTIMATED_COLUMN_OVERHEAD_BYTES);
+        assertTrue(enqueued);
 
         var sent = flush(h.state());
         assertEquals(1, sent.size(), "a column at exactly the cap must be served (guard is >, not >=)");

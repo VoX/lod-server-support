@@ -135,7 +135,7 @@ fi
 # Kill switch budget = expected + 240s slack.
 CLIENT_EXTRA_ARGS=()
 case "$SCENARIO" in
-    fresh-backfill)             CLIENT_RUNS=1; EXPECTED_SECONDS=280 ;;
+    fresh-backfill)             CLIENT_RUNS=1; EXPECTED_SECONDS=300 ;;
     warm-rejoin)                CLIENT_RUNS=2; EXPECTED_SECONDS=360 ;;
     dimension-trip)             CLIENT_RUNS=1; EXPECTED_SECONDS=440 ;;
     dirty-broadcast)            CLIENT_RUNS=1; EXPECTED_SECONDS=270 ;;
@@ -266,11 +266,16 @@ cp "$SCENARIO_CONFIG" "$SERVER_CONFIG_DIR/lss-server-config.json"
 # Step 6b: Write server.properties + eula.txt. Superflat: fresh noise terrain carries
 # minutes of unsettled fluid ticks (aquifers, gen-border flows) that mutate chunk content
 # on every save cycle and keep the system from ever quiescing — flat terrain settles
-# instantly and the conservation laws don't care about terrain shape.
+# instantly and the conservation laws don't care about terrain shape. Structures must be
+# OFF: the classic flat preset generates villages, and live villagers toggle doors and
+# path around (real block-state changes the content filter CORRECTLY marks dirty) —
+# whether a village churns during a quiet window depends on the villager state captured
+# at base-world save time, i.e. nondeterministic across base rebuilds.
 cat > "$SERVER_RUN_DIR/server.properties" <<'PROPS'
 online-mode=false
 level-seed=soak-seed-42
 level-type=minecraft\:flat
+generate-structures=false
 spawn-protection=0
 max-tick-time=-1
 pause-when-empty-seconds=-1

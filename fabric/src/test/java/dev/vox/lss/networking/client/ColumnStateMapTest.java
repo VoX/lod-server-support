@@ -204,6 +204,92 @@ class ColumnStateMapTest {
         assertFalse(map.hasRetries());
     }
 
+    // ---- onIngestFailed ----
+
+    @Test
+    void ingestFailedForgetsReceivedStampAndMarksRetry() {
+        map.onReceived(POS, 5000L);
+        assertEquals(1, map.receivedCount());
+
+        map.onIngestFailed(POS);
+
+        assertEquals(-1L, map.timestampFor(POS), "stamp must be forgotten so the re-ask carries ts=-1");
+        assertEquals(0, map.receivedCount(), "received count must not leak");
+        assertTrue(map.hasRetries(), "retry mark forces the confirmed-ring reset");
+        assertEquals(-1L, map.classify(POS, true), "position must re-request as unknown");
+    }
+
+    @Test
+    void ingestFailedOnNotGeneratedStampKeepsEmptyCountConsistent() {
+        map.onNotGenerated(POS);
+        assertEquals(1, map.emptyCount());
+
+        map.onIngestFailed(POS);
+
+        assertEquals(0, map.emptyCount());
+        assertEquals(-1L, map.timestampFor(POS));
+    }
+
+    @Test
+    void ingestFailedOnAbsentPositionIsIgnored() {
+        map.onIngestFailed(POS);
+
+        assertEquals(0, map.receivedCount(), "no counter underflow for an unknown position");
+        assertEquals(0, map.emptyCount());
+        assertEquals(-1L, map.classify(POS, true));
+        assertFalse(map.hasRetries(),
+                "an unknown position must not gain a retry mark nothing can consume");
+    }
+
+    @Test
+    void ingestFailureCapParksThePosition() {
+        for (int i = 0; i < ColumnStateMap.MAX_INGEST_FAILURES; i++) {
+            map.onReceived(POS, 5000L + i);
+            map.onIngestFailed(POS);
+            assertEquals(-1L, map.classify(POS, true), "failure " + (i + 1) + " must re-request");
+        }
+        map.onReceived(POS, 9000L);
+        map.onIngestFailed(POS); // cap exceeded: park
+
+        assertEquals(SATISFIED, map.classify(POS, true),
+                "a permanently failing consumer must not drive an endless re-serve loop");
+        assertFalse(map.hasRetries(), "parking must not leave an unconsumable retry mark");
+        assertTrue(map.timestampFor(POS) > 0, "parked positions carry a satisfied epoch stamp");
+        assertEquals(1, map.receivedCount(), "park bookkeeping must keep counts consistent");
+    }
+
+    @Test
+    void ingestFailureCapResetsWithSessionState() {
+        for (int i = 0; i <= ColumnStateMap.MAX_INGEST_FAILURES; i++) {
+            map.onReceived(POS, 5000L);
+            map.onIngestFailed(POS);
+        }
+        assertEquals(SATISFIED, map.classify(POS, true), "parked");
+
+        map.clear(); // clearcache / dimension change / reconnect
+        map.onReceived(POS, 6000L);
+        map.onIngestFailed(POS);
+
+        assertEquals(-1L, map.classify(POS, true), "the cap must reset with the session state");
+    }
+
+    @Test
+    void ingestFailedClearsDirtyAndValidatedAndLifecycleResumes() {
+        map.onReceived(POS, 5000L);
+        map.markDirtyIfKnown(POS);
+
+        map.onIngestFailed(POS);
+        assertEquals(0, map.dirtyCount());
+
+        // normal lifecycle resumes: re-request then receive again
+        map.markSent(POS);
+        map.onReceived(POS, 6000L);
+        assertEquals(SATISFIED, map.classify(POS, true));
+        assertEquals(1, map.receivedCount());
+        assertFalse(map.hasRetries(),
+                "a stuck retry mark would pin confirmedRing at 0 for the whole session");
+    }
+
     @Test
     void clearResetsEverything() {
         map.onReceived(POS, 100L);

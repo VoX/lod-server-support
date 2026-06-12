@@ -37,10 +37,11 @@ class OffThreadProcessorMailboxTest {
             return true; // returning false would unwind the dedup group test 2 depends on
         }
         @Override
-        protected void buildAndEnqueueColumnPayload(TestState state, int cx, int cz, String dimension,
+        protected boolean buildAndEnqueueColumnPayload(TestState state, int cx, int cz, String dimension,
                                                      long columnTimestamp, long submissionOrder,
                                                      byte[] sectionBytes, int estimatedBytes) {
             // no-op: tests only observe send actions and slot counts
+            return true;
         }
     }
 

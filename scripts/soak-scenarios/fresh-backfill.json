@@ -14,6 +14,11 @@
     },
     {
       "anchor": 1,
+      "at": 2,
+      "cmd": "gamerule mobGriefing false"
+    },
+    {
+      "anchor": 1,
       "at": 3,
       "cmd": "gamerule doFireTick false"
     },
@@ -26,10 +31,15 @@
       "anchor": 1,
       "at": 4,
       "cmd": "tp @a 0 150 0"
+    },
+    {
+      "anchor": 1,
+      "at": 195,
+      "cmd": "save-all flush"
     }
   ],
   "end": {
     "anchor": 1,
-    "at": 240
+    "at": 255
   }
 }

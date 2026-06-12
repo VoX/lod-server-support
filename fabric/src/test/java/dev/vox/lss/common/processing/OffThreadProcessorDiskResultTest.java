@@ -50,6 +50,7 @@ class OffThreadProcessorDiskResultTest {
 
         final ConcurrentLinkedQueue<DiskSubmit> diskSubmits = new ConcurrentLinkedQueue<>();
         final ConcurrentLinkedQueue<EnqueuedColumn> enqueuedColumns = new ConcurrentLinkedQueue<>();
+        volatile boolean rejectEnqueue; // models the platform oversized-payload drop
 
         TestProcessor(Map<UUID, TestState> players, AbstractChunkDiskReader reader,
                       boolean generationAvailable) {
@@ -63,11 +64,13 @@ class OffThreadProcessorDiskResultTest {
         }
 
         @Override
-        protected void buildAndEnqueueColumnPayload(TestState state, int cx, int cz, String dimension,
+        protected boolean buildAndEnqueueColumnPayload(TestState state, int cx, int cz, String dimension,
                                                      long columnTimestamp, long submissionOrder,
                                                      byte[] sectionBytes, int estimatedBytes) {
+            if (rejectEnqueue) return false;
             enqueuedColumns.add(new EnqueuedColumn(state.getPlayerUUID(), cx, cz, dimension,
                     columnTimestamp, sectionBytes));
+            return true;
         }
     }
 
@@ -187,6 +190,32 @@ class OffThreadProcessorDiskResultTest {
             rig.state.enqueue(new IncomingRequest(5, 5, 1L));
             rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
             waitFor(() -> rig.proc.diskSubmits.size() == 2, "retry resubmits the disk read");
+        } finally {
+            rig.proc.shutdown();
+        }
+    }
+
+    @Test
+    void rejectedEnqueueAnswersUpToDateInsteadOfSilence() throws Exception {
+        // An oversized column can't go on the wire. The old path dropped it silently with
+        // diskReadDone already set — the client retried an unserveable position forever
+        // (or, post-honest-re-resolution, re-read the disk forever). The terminal answer
+        // is up-to-date.
+        var rig = new Rig(false);
+        try {
+            rig.proc.rejectEnqueue = true;
+            rig.state.enqueue(new IncomingRequest(9, 9, 1L));
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
+            waitFor(() -> rig.proc.diskSubmits.size() == 1, "disk submit");
+
+            rig.inject(dataResult(rig.uuid, 9, 9, DIM, new byte[]{1, 2, 3}, COLUMN_TS, 1L));
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
+
+            long packed = PositionUtil.packPosition(9, 9);
+            drainUntil(rig.proc, received(rig.uuid, LSSConstants.RESPONSE_UP_TO_DATE, packed));
+            assertTrue(rig.state.hasDiskReadDone(9, 9), "unserveable position resolves terminally");
+            assertEquals(0, rig.state.getHeldSyncSlots(), "delivery must free the slot");
+            assertTrue(rig.proc.enqueuedColumns.isEmpty());
         } finally {
             rig.proc.shutdown();
         }

@@ -45,18 +45,38 @@ class VoxyCompat {
                             DataLayer.class, DataLayer.class));
 
             // Register column consumer
+            var bridgeDead = new java.util.concurrent.atomic.AtomicBoolean();
             LSSApi.registerColumnConsumer((level, dimension, chunkX, chunkZ, columnData) -> {
+                if (bridgeDead.get()) return;
                 try {
                     Object worldId = worldIdentifierOf.invoke(level);
-                    if (worldId == null) return;
+                    if (worldId == null) {
+                        // Voxy has no storage for this world yet (e.g. mid open-to-LAN
+                        // transition) — without the report the column is silently lost
+                        // and never re-requested.
+                        LSSApi.reportIngestFailure(dimension, chunkX, chunkZ);
+                        return;
+                    }
+                    boolean allAccepted = true;
                     for (var s : columnData.sections()) {
-                        rawIngest.invoke(worldId, s.section(),
+                        allAccepted &= (boolean) rawIngest.invoke(worldId, s.section(),
                                 chunkX, s.sectionY(), chunkZ,
                                 s.blockLight(), s.skyLight());
                     }
+                    if (!allAccepted) {
+                        LSSApi.reportIngestFailure(dimension, chunkX, chunkZ);
+                    }
+                } catch (LinkageError e) {
+                    // Incompatible Voxy: this will never succeed for any column. Kill the
+                    // bridge instead of reporting — a report would re-serve the column and
+                    // re-fail it (capped per position, but pure waste at session scale).
+                    bridgeDead.set(true);
+                    LSSLogger.error("Voxy raw ingest is incompatible with this Voxy version — "
+                            + "disabling the bridge for this session", e);
                 } catch (Throwable e) {
-                    if (e instanceof Error && !(e instanceof LinkageError || e instanceof AssertionError)) throw (Error) e;
+                    if (e instanceof Error && !(e instanceof AssertionError)) throw (Error) e;
                     LSSLogger.error("Voxy raw ingest failed", e);
+                    LSSApi.reportIngestFailure(dimension, chunkX, chunkZ);
                 }
             });
 

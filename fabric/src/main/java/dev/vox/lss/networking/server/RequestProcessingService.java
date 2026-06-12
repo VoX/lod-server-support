@@ -229,8 +229,14 @@ public class RequestProcessingService {
 
         for (var state : this.players.values()) {
             if (!state.hasCompletedHandshake()) continue;
-            state.flushSendQueue(perPlayerCap, this.bandwidthLimiter, this.diag,
+            long[] dropped = state.flushSendQueue(perPlayerCap, this.bandwidthLimiter, this.diag,
                     payload -> ServerPlayNetworking.send(state.getPlayer(), payload));
+            if (dropped.length > 0) {
+                // A send failure discarded resolved-but-undelivered columns: clear their
+                // done-bits so the client's re-requests re-resolve instead of being
+                // answered up-to-date for data that never arrived.
+                this.offThreadProcessor.clearDiskReadDone(state.getPlayerUUID(), dropped);
+            }
         }
     }
 

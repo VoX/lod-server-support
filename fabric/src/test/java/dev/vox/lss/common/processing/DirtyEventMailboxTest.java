@@ -59,7 +59,7 @@ class DirtyEventMailboxTest {
         }
 
         @Override
-        protected void buildAndEnqueueColumnPayload(TestState state, int cx, int cz, String dimension,
+        protected boolean buildAndEnqueueColumnPayload(TestState state, int cx, int cz, String dimension,
                                                      long columnTimestamp, long submissionOrder,
                                                      byte[] sectionBytes, int estimatedBytes) {
             this.deliveredPositions.add(PositionUtil.packPosition(cx, cz));
@@ -71,6 +71,7 @@ class DirtyEventMailboxTest {
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             }
+            return true;
         }
     }
 

@@ -240,17 +240,22 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
         long packed = PositionUtil.packPosition(column.cx(), column.cz());
         this.timestampCache.put(dimension, packed, columnTimestamp, this.cycleNow);
 
-        buildAndEnqueueColumnPayload(state, column.cx(), column.cz(), dimension,
+        return buildAndEnqueueColumnPayload(state, column.cx(), column.cz(), dimension,
                 columnTimestamp, submissionOrder,
                 column.serializedSections(), estimatedBytes);
-        return true;
     }
 
-    /** Build platform-specific payload from serialized section bytes and enqueue to the player's ready queue. */
-    protected abstract void buildAndEnqueueColumnPayload(PlayerState state, int cx, int cz,
-                                                          String dimension,
-                                                          long columnTimestamp, long submissionOrder,
-                                                          byte[] sectionBytes, int estimatedBytes);
+    /**
+     * Build platform-specific payload from serialized section bytes and enqueue to the
+     * player's ready queue. Returns false when the column cannot go on the wire (oversized
+     * payload) — every caller then answers up-to-date so the position resolves terminally
+     * instead of dropping silently (the old silent drop left diskReadDone set with no
+     * response, and the client retried an unserveable position forever).
+     */
+    protected abstract boolean buildAndEnqueueColumnPayload(PlayerState state, int cx, int cz,
+                                                             String dimension,
+                                                             long columnTimestamp, long submissionOrder,
+                                                             byte[] sectionBytes, int estimatedBytes);
 
     // ---- Processing loop ----
 
@@ -419,12 +424,12 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
             handleDiskNotFound(playerUuid, state, packed, cx, cz, pending, dimension);
         } else {
             state.markDiskReadDone(cx, cz);
-            if (result.sectionBytes() != null) {
-                buildAndEnqueueColumnPayload(state, cx, cz, result.dimension(),
-                        result.columnTimestamp(), submissionOrder,
-                        result.sectionBytes(), result.estimatedBytes());
-            } else {
-                // All-air chunk (exists on disk but no visible sections) — notify client
+            boolean sent = result.sectionBytes() != null
+                    && buildAndEnqueueColumnPayload(state, cx, cz, result.dimension(),
+                            result.columnTimestamp(), submissionOrder,
+                            result.sectionBytes(), result.estimatedBytes());
+            if (!sent) {
+                // All-air chunk (no visible sections) or oversized column — notify client
                 this.ctx.sendActions().add(new SendAction.ColumnUpToDate(playerUuid, packed, state));
             }
         }

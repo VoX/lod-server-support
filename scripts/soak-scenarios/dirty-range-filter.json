@@ -2,21 +2,89 @@
   "snapshotIntervalSeconds": 5,
   "joinTimeoutSeconds": 240,
   "steps": [
-    { "anchor": 1, "at": 2, "cmd": "gamerule randomTickSpeed 0" },
-    { "anchor": 1, "at": 2, "cmd": "gamerule doMobSpawning false" },
-    { "anchor": 1, "at": 3, "cmd": "gamerule doFireTick false" },
-    { "anchor": 1, "at": 3, "cmd": "gamerule doDaylightCycle false" },
-    { "anchor": 1, "at": 4, "cmd": "tp @a 0 150 0" },
-    { "anchor": 1, "at": 60, "cmd": "tp @a 320 150 0" },
-    { "anchor": 1, "at": 90, "cmd": "save-all" },
-    { "anchor": 1, "at": 120, "cmd": "forceload add -250 5" },
-    { "anchor": 1, "at": 122, "cmd": "setblock -250 310 5 minecraft:stone" },
-    { "anchor": 1, "at": 124, "cmd": "save-all" },
-    { "anchor": 1, "at": 126, "cmd": "forceload remove -250 5" },
-    { "anchor": 1, "at": 180, "cmd": "forceload add 560 5" },
-    { "anchor": 1, "at": 182, "cmd": "setblock 560 310 5 minecraft:stone" },
-    { "anchor": 1, "at": 184, "cmd": "save-all" },
-    { "anchor": 1, "at": 186, "cmd": "forceload remove 560 5" }
+    {
+      "anchor": 1,
+      "at": 2,
+      "cmd": "gamerule randomTickSpeed 0"
+    },
+    {
+      "anchor": 1,
+      "at": 2,
+      "cmd": "gamerule doMobSpawning false"
+    },
+    {
+      "anchor": 1,
+      "at": 2,
+      "cmd": "gamerule mobGriefing false"
+    },
+    {
+      "anchor": 1,
+      "at": 3,
+      "cmd": "gamerule doFireTick false"
+    },
+    {
+      "anchor": 1,
+      "at": 3,
+      "cmd": "gamerule doDaylightCycle false"
+    },
+    {
+      "anchor": 1,
+      "at": 4,
+      "cmd": "tp @a 0 150 0"
+    },
+    {
+      "anchor": 1,
+      "at": 60,
+      "cmd": "tp @a 320 150 0"
+    },
+    {
+      "anchor": 1,
+      "at": 90,
+      "cmd": "save-all"
+    },
+    {
+      "anchor": 1,
+      "at": 120,
+      "cmd": "forceload add -250 5"
+    },
+    {
+      "anchor": 1,
+      "at": 122,
+      "cmd": "setblock -250 310 5 minecraft:stone"
+    },
+    {
+      "anchor": 1,
+      "at": 124,
+      "cmd": "save-all"
+    },
+    {
+      "anchor": 1,
+      "at": 126,
+      "cmd": "forceload remove -250 5"
+    },
+    {
+      "anchor": 1,
+      "at": 180,
+      "cmd": "forceload add 560 5"
+    },
+    {
+      "anchor": 1,
+      "at": 182,
+      "cmd": "setblock 560 310 5 minecraft:stone"
+    },
+    {
+      "anchor": 1,
+      "at": 184,
+      "cmd": "save-all"
+    },
+    {
+      "anchor": 1,
+      "at": 186,
+      "cmd": "forceload remove 560 5"
+    }
   ],
-  "end": { "anchor": 1, "at": 240 }
+  "end": {
+    "anchor": 1,
+    "at": 240
+  }
 }

@@ -61,7 +61,7 @@ class OffThreadProcessorLifecycleTest {
         }
 
         @Override
-        protected void buildAndEnqueueColumnPayload(TestState state, int cx, int cz, String dimension,
+        protected boolean buildAndEnqueueColumnPayload(TestState state, int cx, int cz, String dimension,
                                                      long columnTimestamp, long submissionOrder,
                                                      byte[] sectionBytes, int estimatedBytes) {
             if (PositionUtil.packPosition(cx, cz) == poisonPacked) {
@@ -72,6 +72,7 @@ class OffThreadProcessorLifecycleTest {
                 throw new LinkageError("poisoned column " + cx + "," + cz);
             }
             enqueuedColumns.add(new EnqueuedColumn(cx, cz, columnTimestamp, sectionBytes));
+            return true;
         }
     }
 

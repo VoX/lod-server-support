@@ -2,6 +2,7 @@ package dev.vox.lss.paper;
 
 import dev.vox.lss.common.LSSConstants;
 import dev.vox.lss.common.LSSLogger;
+import dev.vox.lss.common.PositionUtil;
 import dev.vox.lss.common.processing.OffThreadProcessor;
 import dev.vox.lss.common.processing.QueuedPayload;
 import net.minecraft.server.level.ServerLevel;
@@ -51,19 +52,21 @@ public class PaperOffThreadProcessor extends OffThreadProcessor<PaperPlayerReque
     }
 
     @Override
-    protected void buildAndEnqueueColumnPayload(PaperPlayerRequestState state, int cx, int cz,
-                                                 String dimension,
-                                                 long columnTimestamp, long submissionOrder,
-                                                 byte[] sectionBytes, int estimatedBytes) {
+    protected boolean buildAndEnqueueColumnPayload(PaperPlayerRequestState state, int cx, int cz,
+                                                    String dimension,
+                                                    long columnTimestamp, long submissionOrder,
+                                                    byte[] sectionBytes, int estimatedBytes) {
         if (sectionBytes.length > LSSConstants.MAX_SECTIONS_SIZE) {
             LSSLogger.warn("Dropping oversized column [" + cx + ", " + cz + "] in " + dimension
                     + ": " + sectionBytes.length + " bytes exceeds wire limit "
                     + LSSConstants.MAX_SECTIONS_SIZE + " (client decoder would reject it)");
-            return;
+            return false;
         }
         byte[] encoded = PaperPayloadHandler.encodeVoxelColumnPreEncoded(
                 cx, cz, dimension, columnTimestamp, sectionBytes);
-        state.addReadyPayload(new QueuedPayload<>(encoded, estimatedBytes, submissionOrder));
+        state.addReadyPayload(new QueuedPayload<>(encoded, estimatedBytes, submissionOrder,
+                PositionUtil.packPosition(cx, cz)));
+        return true;
     }
 
     @Override

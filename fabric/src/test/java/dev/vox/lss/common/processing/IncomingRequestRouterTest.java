@@ -65,10 +65,11 @@ class IncomingRequestRouterTest {
         }
 
         @Override
-        protected void buildAndEnqueueColumnPayload(TestState state, int cx, int cz, String dimension,
+        protected boolean buildAndEnqueueColumnPayload(TestState state, int cx, int cz, String dimension,
                                                      long columnTimestamp, long submissionOrder,
                                                      byte[] sectionBytes, int estimatedBytes) {
             this.payloads.add(new CapturedPayload(cx, cz, dimension, columnTimestamp, sectionBytes));
+            return true;
         }
     }
 
@@ -166,7 +167,7 @@ class IncomingRequestRouterTest {
             p1.enqueue(new IncomingRequest(2, 0, 0));    // generation ticket (gen slot 1/1)
             p1.enqueue(new IncomingRequest(3, 0, 0));    // gen rate-limited (gen slot full)
             p1.enqueue(new IncomingRequest(4, 0, 2000)); // up-to-date (cached 1000 <= 2000)
-            p1.enqueue(new IncomingRequest(4, 0, -1));   // duplicate answered (diskReadDone)
+            p1.enqueue(new IncomingRequest(4, 0, 3000)); // ts>0 duplicate answered (diskReadDone)
             p1.enqueue(new IncomingRequest(5, 0, -1));   // in-memory probe payload, no slot
             p1.enqueue(new IncomingRequest(6, 0, -1));   // disk submit (sync slot 2/2)
             p1.enqueue(new IncomingRequest(7, 0, -1));   // sync rate-limited — batch marker
@@ -369,12 +370,72 @@ class IncomingRequestRouterTest {
     }
 
     @Test
+    void servedPositionReRequestsFollowTheHonestReResolutionLadder(@TempDir Path tempDir) throws Exception {
+        var players = new ConcurrentHashMap<UUID, TestState>();
+        var p1 = addPlayer(players, 8, 2);
+        var proc = new TestProcessor(players, null, true, tempDir);
+        try {
+            proc.start();
+            // Cycle 1: probe-serve (30,0) — resolution marks diskReadDone before delivery
+            p1.enqueue(new IncomingRequest(30, 0, -1));
+            var probes = new Long2ObjectOpenHashMap<LoadedColumnData>();
+            probes.put(packed(30, 0), new LoadedColumnData(30, 0, new byte[]{7}, 16));
+            proc.postSnapshot(snapshot(Map.of(p1.getPlayerUUID(), probes), 0, p1), List.of());
+            waitFor(() -> p1.hasDiskReadDone(30, 0), "probe served");
+            assertEquals(1, proc.payloads.size());
+
+            // (31,0)/(32,0): served, payload still in the send pipeline. (33,0): served
+            // and the client kept its data (its re-ask carries ts>0).
+            p1.markDiskReadDone(31, 0);
+            p1.addReadyPayload(new QueuedPayload<>(new Object(), 10, 1, packed(31, 0)));
+            p1.markDiskReadDone(32, 0);
+            p1.addReadyPayload(new QueuedPayload<>(new Object(), 10, 2, packed(32, 0)));
+            p1.markDiskReadDone(33, 0);
+
+            // Cycle 2: the four re-request flavors. (30,0)'s payload was "lost" after the
+            // send (nothing enqueued): the old router answered up-to-date and sealed a
+            // permanent invisible hole — it must re-resolve instead.
+            p1.enqueue(new IncomingRequest(30, 0, -1)); // lost after send: re-resolve to disk
+            p1.enqueue(new IncomingRequest(31, 0, -1)); // still in pipeline: rate-limited (sync)
+            p1.enqueue(new IncomingRequest(32, 0, 0));  // still in pipeline: rate-limited (gen)
+            p1.enqueue(new IncomingRequest(33, 0, 50)); // client has data: up-to-date is honest
+            proc.postSnapshot(snapshot(p1), List.of());
+
+            var delivered = drainUntil(proc, contains(LSSConstants.RESPONSE_UP_TO_DATE, packed(33, 0)));
+            assertEquals(1, count(delivered, LSSConstants.RESPONSE_RATE_LIMITED, packed(31, 0)));
+            assertEquals(1, count(delivered, LSSConstants.RESPONSE_RATE_LIMITED, packed(32, 0)));
+            assertEquals(1, count(delivered, LSSConstants.RESPONSE_UP_TO_DATE, packed(33, 0)));
+            assertEquals(3, delivered.size(),
+                    "the lost position must not be answered at all this cycle: " + delivered);
+
+            // The lost position re-entered resolution: disk submit with a pending slot
+            assertEquals(List.of(packed(30, 0)), submitPositions(proc));
+            assertTrue(p1.hasPendingRequest(30, 0));
+            // Bounced and ts>0 positions keep the done-bit
+            assertTrue(p1.hasDiskReadDone(31, 0));
+            assertTrue(p1.hasDiskReadDone(32, 0));
+            assertTrue(p1.hasDiskReadDone(33, 0));
+
+            var diag = proc.getDiagnostics();
+            assertEquals(1, diag.getTotalReResolved());
+            assertEquals(1, diag.getTotalSyncRateLimited(),
+                    "sync bounce counted for rate-limit conservation (soak law B1)");
+            assertEquals(1, diag.getTotalGenRateLimited(),
+                    "gen bounce counted for rate-limit conservation (soak law B1)");
+            assertEquals(0, diag.getTotalUpToDate(),
+                    "diskReadDone answers are not timestamp-ladder up-to-dates");
+        } finally {
+            proc.shutdown();
+        }
+    }
+
+    @Test
     void sendQueueFullBreaksRoutingButAnswersDuplicatesAndKeepsBacklog() throws Exception {
         var players = new ConcurrentHashMap<UUID, TestState>();
         var p1 = addPlayer(players, 4, 1);
         var p2 = addPlayer(players, 4, 1);
         // One stuck payload + maxSendQueueSize=1 makes p1's send queue read as full
-        p1.addReadyPayload(new QueuedPayload<>(new Object(), 100, 0));
+        p1.addReadyPayload(new QueuedPayload<>(new Object(), 100, 0, packed(5, 5)));
         p1.flushSendQueue(0, new SharedBandwidthLimiter(1_000_000), new TickDiagnostics(),
                 payload -> fail("zero allocation must not send"));
         assertEquals(1, p1.getSendQueueSize());
@@ -383,7 +444,7 @@ class IncomingRequestRouterTest {
         var proc = new TestProcessor(players, null, false, null);
         try {
             proc.start();
-            p1.enqueue(new IncomingRequest(5, 5, -1)); // duplicate: answered despite the full queue
+            p1.enqueue(new IncomingRequest(5, 5, -1)); // duplicate (payload enqueued): bounced despite the full queue
             p1.enqueue(new IncomingRequest(6, 6, -1)); // hits the full queue: consumed, breaks the loop
             p1.enqueue(new IncomingRequest(7, 7, -1)); // behind the break: must stay queued
             proc.postSnapshot(snapshot(Map.of(), 1, p1), List.of());
@@ -397,10 +458,14 @@ class IncomingRequestRouterTest {
 
             assertEquals(List.of(new IncomingRequest(7, 7, -1)), incoming(p1),
                     "break must leave the rest of the backlog for the next cycle");
-            var delivered = drainUntil(proc, contains(LSSConstants.RESPONSE_UP_TO_DATE, packed(5, 5)));
+            var delivered = drainUntil(proc, contains(LSSConstants.RESPONSE_RATE_LIMITED, packed(5, 5)));
             assertEquals(1, delivered.size(),
                     "duplicate answered before the queue-full check; the breaker gets nothing: " + delivered);
             assertSame(p1, delivered.get(0).state());
+            assertTrue(p1.hasDiskReadDone(5, 5),
+                    "an enqueued-bounce keeps the done-bit — the payload is still coming");
+            assertEquals(1, proc.getDiagnostics().getTotalSyncRateLimited(),
+                    "the bounce must be counted for rate-limit conservation (soak law B1)");
             assertEquals(List.of(packed(50, 50)), submitPositions(proc),
                     "no submit for the breaker or the backlog");
             assertEquals(0, p1.getHeldSyncSlots());

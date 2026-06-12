@@ -2,6 +2,7 @@ package dev.vox.lss.networking.server;
 
 import dev.vox.lss.common.LSSConstants;
 import dev.vox.lss.common.LSSLogger;
+import dev.vox.lss.common.PositionUtil;
 import dev.vox.lss.common.processing.OffThreadProcessor;
 import dev.vox.lss.common.processing.QueuedPayload;
 import dev.vox.lss.networking.payloads.VoxelColumnS2CPayload;
@@ -59,21 +60,23 @@ public class FabricOffThreadProcessor extends OffThreadProcessor<PlayerRequestSt
     }
 
     @Override
-    protected void buildAndEnqueueColumnPayload(PlayerRequestState state, int cx, int cz,
-                                                 String dimension,
-                                                 long columnTimestamp, long submissionOrder,
-                                                 byte[] sectionBytes, int estimatedBytes) {
+    protected boolean buildAndEnqueueColumnPayload(PlayerRequestState state, int cx, int cz,
+                                                    String dimension,
+                                                    long columnTimestamp, long submissionOrder,
+                                                    byte[] sectionBytes, int estimatedBytes) {
         if (sectionBytes.length > LSSConstants.MAX_SECTIONS_SIZE) {
             LSSLogger.warn("Dropping oversized column [" + cx + ", " + cz + "] in " + dimension
                     + ": " + sectionBytes.length + " bytes exceeds wire limit "
                     + LSSConstants.MAX_SECTIONS_SIZE + " (client decoder would reject it)");
-            return;
+            return false;
         }
         var dimensionKey = this.dimensionKeyCache.computeIfAbsent(dimension,
                 d -> ResourceKey.create(Registries.DIMENSION, Identifier.parse(d)));
         var payload = new VoxelColumnS2CPayload(cx, cz, dimensionKey, columnTimestamp,
                 sectionBytes);
-        state.addReadyPayload(new QueuedPayload<>(payload, estimatedBytes, submissionOrder));
+        state.addReadyPayload(new QueuedPayload<>(payload, estimatedBytes, submissionOrder,
+                PositionUtil.packPosition(cx, cz)));
+        return true;
     }
 
     @Override

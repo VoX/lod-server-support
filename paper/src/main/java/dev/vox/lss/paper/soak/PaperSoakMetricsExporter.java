@@ -47,6 +47,7 @@ public final class PaperSoakMetricsExporter {
         serviceMap.put("disk_resolved", reader != null ? reader.getDiag().getSuccessfulReadCount() : 0L);
         serviceMap.put("sync_rate_limited", diag.getTotalSyncRateLimited());
         serviceMap.put("gen_rate_limited", diag.getTotalGenRateLimited());
+        serviceMap.put("re_resolved", diag.getTotalReResolved());
         result.put("service", serviceMap);
 
         var diskMap = new LinkedHashMap<String, Object>();

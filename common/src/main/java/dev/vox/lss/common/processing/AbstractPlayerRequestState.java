@@ -1,6 +1,7 @@
 package dev.vox.lss.common.processing;
 
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
+import it.unimi.dsi.fastutil.longs.LongArrayList;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 
 import dev.vox.lss.common.LSSConstants;
@@ -10,6 +11,7 @@ import dev.vox.lss.common.SharedBandwidthLimiter;
 
 import java.util.PriorityQueue;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -47,6 +49,12 @@ public abstract class AbstractPlayerRequestState<T> {
     // Owned by main thread (drained from readyPayloads, flushed to the wire)
     private final PriorityQueue<QueuedPayload<T>> sendQueue = new PriorityQueue<>();
     private final LongOpenHashSet diskReadDone = new LongOpenHashSet();
+    // Column positions with a payload somewhere in the send pipeline (readyPayloads or
+    // sendQueue). Incremented at enqueue (processing thread), decremented on wire send or
+    // send-failure drop (main thread), read by the router (processing thread) to answer
+    // "is this position's data still on its way?" — counted, not a set, because a dirty
+    // re-serve can put a second payload for the same position in flight.
+    private final ConcurrentHashMap<Long, Integer> enqueuedColumns = new ConcurrentHashMap<>();
     private final PlayerBandwidthTracker bandwidth = new PlayerBandwidthTracker();
     private final AtomicLong totalRequestsReceived = new AtomicLong();
     private final AtomicLong totalIncomingDropped = new AtomicLong();
@@ -111,20 +119,28 @@ public abstract class AbstractPlayerRequestState<T> {
         void send(T payload) throws Exception;
     }
 
+    private static final long[] NO_DROPPED_POSITIONS = new long[0];
+
     /**
      * Drain ready payloads from the processing thread into the send queue, then flush as
      * many as the bandwidth allocation allows through the platform sender. A send failure
-     * drops the remaining queue (the client re-requests on its next scan).
-     * Called by the main thread each tick.
+     * drops the remaining queue and returns the dropped packed positions — the caller MUST
+     * route them to {@code OffThreadProcessor.clearDiskReadDone} so the client's
+     * re-requests re-resolve instead of being answered up-to-date for data that was never
+     * delivered. Called by the main thread each tick.
+     *
+     * @return packed positions of column payloads dropped by a send failure (empty when
+     *         everything sent or remains queued)
      */
-    public void flushSendQueue(long allocationBytes, SharedBandwidthLimiter globalLimiter,
-                                TickDiagnostics diag, PayloadSender<T> sender) {
+    public long[] flushSendQueue(long allocationBytes, SharedBandwidthLimiter globalLimiter,
+                                  TickDiagnostics diag, PayloadSender<T> sender) {
         QueuedPayload<T> ready;
         while ((ready = this.readyPayloads.poll()) != null) {
             this.sendQueue.add(ready);
         }
         this.sendQueueSizeSnapshot = this.sendQueue.size();
 
+        long[] dropped = NO_DROPPED_POSITIONS;
         while (!this.sendQueue.isEmpty()) {
             if (!this.bandwidth.canSend(allocationBytes)) break;
 
@@ -132,17 +148,25 @@ public abstract class AbstractPlayerRequestState<T> {
             try {
                 sender.send(queued.payload());
                 this.sendQueue.poll();
+                decrementEnqueued(queued.packedPos());
                 this.bandwidth.recordSend(queued.estimatedBytes());
                 globalLimiter.recordSend(queued.estimatedBytes());
                 diag.recordSectionSent(queued.estimatedBytes());
             } catch (Exception e) {
                 LSSLogger.error("Failed to send queued payload to " + getPlayerName()
                         + ", dropping remaining queue (" + this.sendQueue.size() + " entries)", e);
+                var droppedList = new LongArrayList(this.sendQueue.size());
+                for (var entry : this.sendQueue) {
+                    droppedList.add(entry.packedPos());
+                    decrementEnqueued(entry.packedPos());
+                }
                 this.sendQueue.clear();
+                dropped = droppedList.toLongArray();
                 break;
             }
         }
         this.sendQueueSizeSnapshot = this.sendQueue.size();
+        return dropped;
     }
 
     // ---- Processing-thread-facing per-request API ----
@@ -203,6 +227,20 @@ public abstract class AbstractPlayerRequestState<T> {
         }
     }
 
+    /** Clear one position from diskReadDone (processing thread, honest re-resolution of a ts&le;0 re-request). */
+    public void clearDiskReadDone(long packed) {
+        this.diskReadDone.remove(packed);
+    }
+
+    /** True while a column payload for this position sits in the send pipeline (any thread). */
+    public boolean hasEnqueuedColumn(long packed) {
+        return this.enqueuedColumns.containsKey(packed);
+    }
+
+    private void decrementEnqueued(long packed) {
+        this.enqueuedColumns.computeIfPresent(packed, (k, v) -> v <= 1 ? null : v - 1);
+    }
+
     // ---- Accessors for concurrent queues (used by sibling classes) ----
 
     public Iterable<IncomingRequest> getIncomingRequests() {
@@ -210,6 +248,7 @@ public abstract class AbstractPlayerRequestState<T> {
     }
 
     public void addReadyPayload(QueuedPayload<T> payload) {
+        this.enqueuedColumns.merge(payload.packedPos(), 1, Integer::sum);
         this.readyPayloads.add(payload);
     }
 

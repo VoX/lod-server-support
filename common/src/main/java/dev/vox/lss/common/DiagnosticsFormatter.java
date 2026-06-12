@@ -21,7 +21,7 @@ public final class DiagnosticsFormatter {
             boolean enabled, int lodDist,
             long bwPerPlayer, long bwGlobal,
             long uptimeSec, long totalSent, long totalBytes,
-            long cumInMem, long cumUtd, long cumGen,
+            long cumInMem, long cumUtd, long cumGen, long cumReResolved,
             long diskCompleted,
             String tickDiagnostics,
             String diskReaderDiagnostics,
@@ -57,8 +57,8 @@ public final class DiagnosticsFormatter {
 
         // Sources (total)
         lines.add(String.format(
-                "Sources (total): in_mem=%d, disk=%d, up_to_date=%d, gen=%d",
-                d.cumInMem, Math.max(0, d.diskCompleted), d.cumUtd, d.cumGen
+                "Sources (total): in_mem=%d, disk=%d, up_to_date=%d, gen=%d, re_resolved=%d",
+                d.cumInMem, Math.max(0, d.diskCompleted), d.cumUtd, d.cumGen, d.cumReResolved
         ));
 
         // Sources (tick)
@@ -136,6 +136,7 @@ public final class DiagnosticsFormatter {
                 bwPerPlayer, bwGlobal,
                 uptimeSec, totalSent, totalBytes,
                 diag.getTotalInMemory(), diag.getTotalUpToDate(), diag.getTotalGenDrained(),
+                diag.getTotalReResolved(),
                 diskReader.getDiag().getSuccessfulReadCount(),
                 tickDiagnostics,
                 diskReader.getDiagnostics(),

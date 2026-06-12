@@ -2,15 +2,59 @@
   "snapshotIntervalSeconds": 5,
   "joinTimeoutSeconds": 240,
   "steps": [
-    { "anchor": 1, "at": 2, "cmd": "gamerule randomTickSpeed 0" },
-    { "anchor": 1, "at": 2, "cmd": "gamerule doMobSpawning false" },
-    { "anchor": 1, "at": 3, "cmd": "gamerule doFireTick false" },
-    { "anchor": 1, "at": 3, "cmd": "gamerule doDaylightCycle false" },
-    { "anchor": 1, "at": 4, "cmd": "tp @a 0 150 0" },
-    { "anchor": 1, "at": 10, "cmd": "forceload add 320 0" },
-    { "anchor": 1, "at": 12, "cmd": "setblock 320 310 0 minecraft:stone" },
-    { "anchor": 1, "at": 14, "cmd": "save-all" },
-    { "anchor": 1, "at": 18, "cmd": "forceload remove 320 0" }
+    {
+      "anchor": 1,
+      "at": 2,
+      "cmd": "gamerule randomTickSpeed 0"
+    },
+    {
+      "anchor": 1,
+      "at": 2,
+      "cmd": "gamerule doMobSpawning false"
+    },
+    {
+      "anchor": 1,
+      "at": 2,
+      "cmd": "gamerule mobGriefing false"
+    },
+    {
+      "anchor": 1,
+      "at": 3,
+      "cmd": "gamerule doFireTick false"
+    },
+    {
+      "anchor": 1,
+      "at": 3,
+      "cmd": "gamerule doDaylightCycle false"
+    },
+    {
+      "anchor": 1,
+      "at": 4,
+      "cmd": "tp @a 0 150 0"
+    },
+    {
+      "anchor": 1,
+      "at": 10,
+      "cmd": "forceload add 320 0"
+    },
+    {
+      "anchor": 1,
+      "at": 12,
+      "cmd": "setblock 320 310 0 minecraft:stone"
+    },
+    {
+      "anchor": 1,
+      "at": 14,
+      "cmd": "save-all"
+    },
+    {
+      "anchor": 1,
+      "at": 18,
+      "cmd": "forceload remove 320 0"
+    }
   ],
-  "end": { "anchor": 1, "at": 130 }
+  "end": {
+    "anchor": 1,
+    "at": 130
+  }
 }

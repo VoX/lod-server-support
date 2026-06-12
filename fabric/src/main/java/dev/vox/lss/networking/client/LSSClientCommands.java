@@ -79,8 +79,8 @@ public class LSSClientCommands {
         int empty = manager.getEmptyColumnCount();
         int dirty = manager.getDirtyColumnCount();
         source.sendFeedback(Component.literal(String.format(
-                "Columns: received=%d, empty=%d, dirty=%d",
-                receivedCols, empty, dirty
+                "Columns: received=%d, empty=%d, dirty=%d, ingest_failed=%d",
+                receivedCols, empty, dirty, manager.getTotalIngestFailures()
         )).withStyle(ChatFormatting.GRAY));
 
         // Responses line

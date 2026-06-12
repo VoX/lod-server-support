@@ -25,6 +25,7 @@ public class ProcessingDiagnostics {
     private volatile long totalGenRateLimited;
     private volatile long totalDuplicateSkips;
     private volatile long totalRequestsRouted;
+    private volatile long totalReResolved;
 
     public void resetTickCounters() {
         procTickDiskQueued = 0;
@@ -82,6 +83,11 @@ public class ProcessingDiagnostics {
         }
     }
 
+    /** A ts&le;0 re-request cleared a stale diskReadDone entry and re-entered resolution. */
+    public void incrementReResolved() {
+        totalReResolved++;
+    }
+
     // Per-tick getters (read by main thread)
     public int getLastDiskQueued() { return procTickDiskQueued; }
     public int getLastDiskDrained() { return procTickDiskDrained; }
@@ -98,4 +104,5 @@ public class ProcessingDiagnostics {
     public long getTotalQueueFull() { return totalQueueFull; }
     public long getTotalDuplicateSkips() { return totalDuplicateSkips; }
     public long getTotalRequestsRouted() { return totalRequestsRouted; }
+    public long getTotalReResolved() { return totalReResolved; }
 }

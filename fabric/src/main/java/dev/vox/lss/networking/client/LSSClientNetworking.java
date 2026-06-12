@@ -14,6 +14,8 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.Minecraft;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.storage.LevelResource;
 
 import java.util.concurrent.atomic.AtomicLong;
@@ -66,6 +68,31 @@ public class LSSClientNetworking {
 
     public static int getQueuedColumnCount() {
         return columnProcessor.getQueuedCount();
+    }
+
+    /**
+     * Report a delivered-but-not-ingested column (decode failure or consumer rejection
+     * via {@link LSSApi#reportIngestFailure}). Hops to the main thread, where the manager
+     * forgets the received-stamp and schedules a re-request. Safe from any thread.
+     */
+    public static void reportIngestFailure(ResourceKey<Level> dimension, int chunkX, int chunkZ) {
+        var mc = Minecraft.getInstance();
+        if (mc == null) return; // unit tests / very early startup — no session to repair anyway
+        mc.execute(() -> {
+            var manager = requestManager;
+            if (manager != null) {
+                manager.onIngestFailure(dimension, PositionUtil.packPosition(chunkX, chunkZ));
+            }
+        });
+    }
+
+    /**
+     * Drain the decode queue and unstamp every undispatched column via the manager —
+     * called before any cache persistence (disconnect, dimension change) so stamps for
+     * never-ingested data cannot outlive the session state that recorded them.
+     */
+    static void reportUndispatchedColumns(LodRequestManager manager) {
+        columnProcessor.reportUndispatched(manager);
     }
 
     public static void triggerHostHandshake() {
@@ -220,6 +247,14 @@ public class LSSClientNetworking {
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
             var manager = requestManager;
             if (manager != null) {
+                // Unstamp columns still queued for decode BEFORE the cache flush — their
+                // received-stamps would otherwise persist for data no consumer ever saw.
+                // (A column the drain thread polled concurrently still dispatches; if its
+                // consumer then rejects, that single report lands after requestManager is
+                // nulled and is dropped — at most one stale stamp per disconnect, healed
+                // by the next session unless the server kept its timestamp cache. Accepted
+                // residual.)
+                reportUndispatchedColumns(manager);
                 manager.disconnect();
                 manager.saveCache();
             }

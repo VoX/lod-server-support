@@ -157,7 +157,12 @@ No wire/protocol changes. Unit tests for each new counter path.
 - Staging per scenario (bash case): world (`fresh` | copy `soak-worlds/base`), client cache
   (`clear` = delete `<client run dir>/config/lss/cache/`, else keep), copy
   `<name>-config.json` → `<server run dir>/config/lss-server-config.json`, write
-  server.properties (`online-mode=false`, fixed seed, `level-type=minecraft\:flat` —
+  server.properties (`online-mode=false`, fixed seed, `level-type=minecraft\:flat`,
+  `generate-structures=false` — the classic flat preset generates villages, and live
+  villagers toggle doors/path around: real block changes the content filter correctly
+  marks, nondeterministic across base rebuilds; timelines also set `mobGriefing false`
+  because chunk-gen initial population spawns sheep regardless of doMobSpawning, and
+  sheep eating grass (AI, not random-tick) churns grass->dirt —
   fresh noise terrain carries minutes of unsettled fluid ticks that re-dirty chunks on
   every save and block quiescence, `pause-when-empty-seconds=-1`, `view-distance=8`,
   `gamemode=creative`, `force-gamemode=true`, `spawn-protection=0`, `max-tick-time=-1`)
@@ -280,10 +285,10 @@ a doctored inconsistency. Unrecognized new fields → one-line warning, never a 
 
 | Scenario | World/cache | Timeline sketch | ~Runtime |
 |---|---|---|---|
-| fresh-backfill | fresh, clear | gamerules → backfill → quiesce → end; saves soak-worlds/base | ~4 min |
+| fresh-backfill | fresh, clear | gamerules → backfill → `save-all flush` @195s (forces the post-gen re-mark wave — border light settles after the gen-path filter seed — to drain in-window instead of racing vanilla's ~5-min staggered autosave) → quiesce → end; saves soak-worlds/base | ~4.5 min |
 | warm-rejoin | base, clear (run 1 populates the cache; run 2 rejoins warm — under `all` ordering a kept cache would leave the run1-vs-run2 check nothing to compare) | backfill→quiesce→kick @160; join2: resync→quiesce→tp 400→quiesce→end | ~6 min |
 | dimension-trip | base, clear | quiesce → `execute in minecraft:the_end run tp @a 100 52 0` → End quiesce → return tp → quiesce | ~7 min |
-| dirty-broadcast | base, keep | quiesce → `forceload add` → `setblock 320 100 0 stone` → `save-all` → `forceload remove` → drain window → end | ~4 min |
+| dirty-broadcast | base, keep | quiesce → `forceload add` → `setblock 320 310 0 stone` → `save-all flush` → two no-edit `save-all flush` re-saves (region stays forceloaded: unload-saves serialize late-settled light and would leak correct-but-confusing marks into the quiet window) → end | ~4 min |
 
 Post-approval additions (same staging/laws machinery): rate-limit-storm, disk-saturation,
 generation-disabled, generation-capacity-stress, bandwidth-throttle, cold-restart-resync,

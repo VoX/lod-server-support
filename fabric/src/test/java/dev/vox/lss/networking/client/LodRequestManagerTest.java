@@ -399,4 +399,33 @@ class LodRequestManagerTest {
         assertEquals(1, manager.getTotalUpToDate());
         assertTrue(tracker.isInFlight(p2), "entries past count are not part of the batch");
     }
+
+    // ---- onIngestFailure ----
+
+    @Test
+    void ingestFailureUnstampsSoTheReAskCarriesUnknown() {
+        manager.setLastDimensionForTest(dim("overworld"));
+        manager.onColumnReceived(POS, 5000L, dim("overworld"));
+        assertEquals(SATISFIED, manager.columnsForTest().classify(POS, true));
+
+        manager.onIngestFailure(dim("overworld"), POS);
+
+        assertEquals(-1L, manager.columnsForTest().classify(POS, true),
+                "the position must re-request with ts=-1 so the server re-serves the data");
+        assertTrue(manager.columnsForTest().hasRetries(),
+                "retry mark must reset the confirmed ring so the position is rescanned");
+        assertEquals(1, manager.getTotalIngestFailures());
+    }
+
+    @Test
+    void ingestFailureForAnotherDimensionIsIgnored() {
+        manager.setLastDimensionForTest(dim("overworld"));
+        manager.onColumnReceived(POS, 5000L, dim("overworld"));
+
+        manager.onIngestFailure(dim("the_end"), POS);
+
+        assertEquals(SATISFIED, manager.columnsForTest().classify(POS, true),
+                "a report for another dimension's column must not unstamp the current map");
+        assertEquals(0, manager.getTotalIngestFailures());
+    }
 }
