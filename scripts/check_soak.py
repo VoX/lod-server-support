@@ -2395,6 +2395,24 @@ def selftest():
         runs={1: [_cli(2000, over={"received_columns": 100}),
                   _cli(10000, over={"received_columns": 100})]}))), "dirty-broadcast")
 
+    # --- dimension-trip named check (was selftest-dark): overworld -> end -> overworld, each segment quiescent ---
+    def _dt(mid_dim):
+        return [_cli(1000, seg=0, over={"dimension": "minecraft:overworld"}),
+                _cli(2000, seg=0, over={"dimension": "minecraft:overworld"}),
+                _cli(3000, seg=1, over={"dimension": mid_dim}),
+                _cli(4000, seg=1, over={"dimension": mid_dim}),
+                _cli(5000, seg=2, over={"dimension": "minecraft:overworld"}),
+                _cli(6000, seg=2, over={"dimension": "minecraft:overworld"})]
+    dt_quiescent = {(1, 1), (1, 3), (1, 5)}  # last index of each of the 3 segments
+    clean("dimension-trip healthy", list(check_dimension_trip(_ctx(
+        runs={1: _dt("minecraft:the_end")}, quiescent_client=dt_quiescent))))
+    hits("dimension-trip wrong dimension sequence", list(check_dimension_trip(_ctx(
+        runs={1: _dt("minecraft:the_nether")}, quiescent_client=dt_quiescent))), "dimension-trip")
+    hits("dimension-trip segment not quiescent", list(check_dimension_trip(_ctx(
+        runs={1: _dt("minecraft:the_end")}, quiescent_client={(1, 1), (1, 5)}))), "dimension-trip")
+    hits("dimension-trip no client", list(check_dimension_trip(_ctx(
+        runs={}, quiescent_client=dt_quiescent))), "dimension-trip")
+
     # --- cold-restart-resync: warm dominance; re-download caught ---
     clean("cold-restart warm", list(check_cold_restart_resync(_ctx(
         server_snaps=[_srv(1000, over={"service.up_to_date": 2000})],
