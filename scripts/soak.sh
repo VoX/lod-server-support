@@ -368,7 +368,13 @@ if [[ "$SCENARIO" == "fresh-backfill" && -d "$SERVER_RUN_DIR/world" ]]; then
     fi
 fi
 
-# Step 14: Run the checker — its exit code is this script's exit code
+# Step 14: Anomaly digest (a lens, not a gate — always written, never fails the run).
+# Lets a reviewer skim each run for spikes/stalls/unexpected counters beyond pass/fail.
+python3 "$PROJECT_ROOT/scripts/soak_report.py" "$RUN_RESULTS_DIR" > "$RUN_RESULTS_DIR/report.md" 2>&1 \
+    && echo "[soak] Anomaly digest: $RUN_RESULTS_DIR/report.md" \
+    || echo "[soak] WARNING: soak_report.py failed (non-fatal)"
+
+# Step 15: Run the checker — its exit code is this script's exit code
 echo "[soak] Running checker..."
 if python3 "$PROJECT_ROOT/scripts/check_soak.py" "$RUN_RESULTS_DIR" "$SCENARIO"; then
     echo "[soak] PASS: $SCENARIO — results in $RUN_RESULTS_DIR"
