@@ -155,8 +155,12 @@ SERVER_MONOTONIC = (
     "disk.errors", "disk.saturated", "disk.successful",
     "generation.submitted", "generation.completed", "generation.timeouts",
     "generation.removed_in_flight",
-    "dirty.broadcast_positions",
+    "dirty.broadcast_positions", "dirty.suppressed_total",
     "bandwidth.total_bytes",
+    # The flagship a9bee8d honest-re-resolution counter — emitted every snapshot, cumulative.
+    # Was assertable by nothing before round 2; now A6-monotonic and floor-checked in the
+    # ingest-failure / send-drop scenarios.
+    "service.re_resolved",
 )
 CLIENT_MONOTONIC = (
     "received_columns", "received_bytes", "dropped",
@@ -174,9 +178,13 @@ GLOBAL_CLIENT_FIELDS = (
 
 # Known top-level keys per row type — anything else is collected into ONE aggregated warning.
 KNOWN_SERVER_KEYS = {
+    # dedup/jvm/tscache and the *_hw / mspt_avg_window gauges are the round-2 data-capture
+    # additions (sampled per tick by the driver); probe_hashes appears only when the server
+    # JVM runs with -Dlss.soak.probes. All are observational — no law requires their presence.
     "snapshot": {"event", "wallMs", "tick", "service", "disk", "generation", "dirty",
-                 "bandwidth", "players"},
-    "command": {"event", "wallMs", "tick", "cmd", "anchor", "at"},
+                 "bandwidth", "players", "dedup", "jvm", "tscache",
+                 "mailbox_depth_hw", "mspt_avg_window", "probe_hashes"},
+    "command": {"event", "wallMs", "tick", "cmd", "anchor", "at", "ok"},
     "join": {"event", "wallMs", "tick", "player", "joinIndex"},
     "end": {"event", "wallMs", "tick", "reason"},
 }
@@ -184,9 +192,12 @@ KNOWN_CLIENT_KEYS = {
     # server_enabled and probes are optional additions (older recordings predate them):
     # server_enabled = the session-config enabled flag; probes = per-position timestamps
     # emitted only when the client runs with -Dlss.soak.probes.
+    # effective_lod/request_queue/rtt/ingest_failures are the round-2 client data-capture
+    # additions; like probes they are presence-optional (older recordings predate them).
     "snapshot": {"event", "wallMs", "dimension", "received_columns", "received_bytes",
                  "dropped", "responses", "requested_total", "send_cycles", "columns",
-                 "scan", "tracker_in_flight", "queued", "server_enabled", "probes"},
+                 "scan", "tracker_in_flight", "queued", "server_enabled", "probes",
+                 "effective_lod", "request_queue", "rtt", "ingest_failures"},
     # One scripted client-side action (-Dlss.soak.clientActionAt); resets the request
     # metrics, so the loader treats it as a client segment boundary.
     "action": {"event", "wallMs", "action", "atSeconds"},
@@ -2067,12 +2078,12 @@ def _srv(wall=1000, seg=0, over=None):
             "service": {"requests_received": 0, "columns_sent": 0, "bytes_sent": 0,
                         "duplicate_skips": 0, "queue_full": 0, "up_to_date": 0,
                         "in_memory": 0, "disk_resolved": 0, "gen_drained": 0,
-                        "sync_rate_limited": 0, "gen_rate_limited": 0},
+                        "sync_rate_limited": 0, "gen_rate_limited": 0, "re_resolved": 0},
             "disk": {"submitted": 0, "completed": 0, "not_found": 0, "all_air": 0,
                      "errors": 0, "saturated": 0, "successful": 0, "pending": 0},
             "generation": {"submitted": 0, "completed": 0, "timeouts": 0,
                            "removed_in_flight": 0, "active": 0},
-            "dirty": {"pending": 0, "broadcast_positions": 0},
+            "dirty": {"pending": 0, "broadcast_positions": 0, "suppressed_total": 0},
             "bandwidth": {"total_bytes": 0}, "players": []}
     for k, v in (over or {}).items():
         _set_path(snap, k, v)
@@ -2180,6 +2191,12 @@ def selftest():
     hits("A6 broadcast_positions decrement", law_A6_server([
         _srv(1000, over={"dirty.broadcast_positions": 7}),
         _srv(6000, over={"dirty.broadcast_positions": 6})]), "A6")
+    hits("A6 re_resolved decrement", law_A6_server([
+        _srv(1000, over={"service.re_resolved": 9}),
+        _srv(6000, over={"service.re_resolved": 8})]), "A6")
+    hits("A6 suppressed_total decrement", law_A6_server([
+        _srv(1000, over={"dirty.suppressed_total": 5}),
+        _srv(6000, over={"dirty.suppressed_total": 4})]), "A6")
 
     # --- A6 client: monotonic inside one dimension segment, reset allowed across ---
     hits("A6 client in-segment decrement", law_A6_client(1, [
