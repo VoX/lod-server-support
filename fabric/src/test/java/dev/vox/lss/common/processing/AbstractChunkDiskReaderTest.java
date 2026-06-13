@@ -249,4 +249,56 @@ class AbstractChunkDiskReaderTest {
         assertNull(reader.getPlayerQueue(player),
                 "player queues are cleared on shutdown — nothing can deliver");
     }
+
+    // ---- SP-074: a result completing after the player was removed is dropped, not stored ----
+
+    @Test
+    void resultsDeliveredAfterPlayerRemovalAreSilentlyDropped() throws InterruptedException {
+        var readStarted = new CountDownLatch(1);
+        var holdRead = new CountDownLatch(1);
+        reader.submit(player, 5, 5, 1L, () -> {
+            readStarted.countDown();
+            holdRead.await(); // block the read in flight until we've removed the player
+            return new byte[]{1, 2, 3};
+        });
+        assertTrue(readStarted.await(5, TimeUnit.SECONDS), "the read started");
+
+        reader.removePlayerResults(player); // the player's queue is gone before the read finishes
+        holdRead.countDown();               // now the read completes and attempts delivery
+
+        // Barrier behind the dropped delivery: the single reader thread is FIFO, so once a
+        // second (registered) player's result lands, the first delivery attempt has happened.
+        UUID other = UUID.randomUUID();
+        reader.registerPlayer(other);
+        reader.submit(other, 0, 0, 2L, () -> new byte[0]);
+        long deadline = System.nanoTime() + 5_000_000_000L;
+        while (reader.getPlayerQueue(other).isEmpty()) {
+            if (System.nanoTime() > deadline) fail("barrier read never delivered");
+            Thread.sleep(5);
+        }
+
+        assertNull(reader.getPlayerQueue(player), "a late delivery does not resurrect the removed queue");
+        reader.registerPlayer(player);
+        assertTrue(reader.getPlayerQueue(player).isEmpty(),
+                "re-registering yields a fresh empty queue — the dropped result is gone for good");
+    }
+
+    // ---- SP-075: shutdown is bounded — it interrupts an in-flight read instead of hanging ----
+
+    @Test
+    void shutdownReturnsPromptlyByInterruptingAnInFlightRead() throws InterruptedException {
+        var readStarted = new CountDownLatch(1);
+        reader.submit(player, 1, 1, 1L, () -> {
+            readStarted.countDown();
+            Thread.sleep(60_000); // long but interruptible — shutdownNow must cut it short
+            return new byte[0];
+        });
+        assertTrue(readStarted.await(5, TimeUnit.SECONDS), "the slow read started");
+
+        long start = System.nanoTime();
+        reader.shutdown();
+        long elapsedMs = (System.nanoTime() - start) / 1_000_000;
+        assertTrue(elapsedMs < 5_000,
+                "shutdown is bounded — it interrupted the 60s read rather than awaiting it (" + elapsedMs + "ms)");
+    }
 }
