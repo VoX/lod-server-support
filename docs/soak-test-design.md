@@ -81,15 +81,27 @@ lag we measured). Field names below are the contract.
 ```json
 {"event":"snapshot","wallMs":0,"tick":0,
  "service":{"requests_received":0,"columns_sent":0,"bytes_sent":0,"duplicate_skips":0,
-            "queue_full":0,"up_to_date":0,"in_memory":0,"disk_resolved":0,"gen_drained":0},
+            "queue_full":0,"up_to_date":0,"in_memory":0,"disk_resolved":0,"gen_drained":0,
+            "sync_rate_limited":0,"gen_rate_limited":0,"re_resolved":0},
  "disk":{"submitted":0,"completed":0,"not_found":0,"all_air":0,"errors":0,"saturated":0,
-         "successful":0,"pending":0},
- "generation":{"submitted":0,"completed":0,"timeouts":0,"removed_in_flight":0,"active":0},
- "dirty":{"pending":0,"broadcast_positions":0},
+         "successful":0,"pending":0,"pending_hw":0},
+ "generation":{"submitted":0,"completed":0,"timeouts":0,"removed_in_flight":0,"active":0,
+               "active_hw":0},
+ "dirty":{"pending":0,"broadcast_positions":0,"marked_total":0,"suppressed_total":0},
  "bandwidth":{"total_bytes":0},
- "players":[{"name":"","held_sync":0,"held_gen":0,"send_queue":0,"sent":0,"bytes":0,
-             "requests":0}]}
+ "dedup":{"groups":0},
+ "jvm":{"heap_used_mb":0.0,"gc_count":0,"gc_time_ms":0},
+ "tscache":{"evictions":0,"size_per_dimension":{}},
+ "mailbox_depth_hw":0,"mspt_avg_window":-1.0,
+ "players":[{"name":"","held_sync":0,"held_gen":0,"send_queue":0,"send_queue_hw":0,
+             "sent":0,"bytes":0,"requests":0}]}
 ```
+
+Round-2 data-capture additions (observational; the checker treats new keys as warn-not-fail):
+`service.{sync_rate_limited,gen_rate_limited,re_resolved}` (re_resolved + dirty.suppressed_total
+are A6-monotonic), the `*_hw` high-water gauges (per-tick sampled by the driver, reset each
+snapshot), `dedup.groups`, `jvm.*`, `tscache.*`, `mspt_avg_window`. `probe_hashes` appears only
+under `-Dlss.soak.probes`. `command` rows gain `ok` (the step did not throw).
 
 `client.jsonl` events: `snapshot` (every 5 s), `action` (scripted client action — `action`,
 `atSeconds` fields; a counter-reset segment boundary like a dimension change), `disconnect`
@@ -99,11 +111,16 @@ lag we measured). Field names below are the contract.
 {"event":"snapshot","wallMs":0,"dimension":"minecraft:overworld","server_enabled":true,
  "received_columns":0,"received_bytes":0,"dropped":0,
  "responses":{"columns":0,"up_to_date":0,"not_generated":0,"rate_limited":0},
- "requested_total":0,"send_cycles":0,
+ "requested_total":0,"send_cycles":0,"ingest_failures":0,"effective_lod":0,"request_queue":0,
  "columns":{"known":0,"empty":0,"dirty":0},
  "scan":{"confirmed":0,"ring":0,"missing_vanilla":0},
+ "rtt":{"p50_ms":-1.0,"p95_ms":-1.0},
  "tracker_in_flight":0,"queued":0}
 ```
+
+Client round-2 additions: `ingest_failures`, `effective_lod`, `request_queue` (positions parked
+in the RequestQueue, distinct from `queued` = decode-queue depth), and `rtt.{p50_ms,p95_ms}`
+(request→receive latency percentiles; -1.0 until samples exist).
 
 `probes` (optional, only when `-Dlss.soak.probes=x:z,...` is set): per-position client
 timestamp map.
