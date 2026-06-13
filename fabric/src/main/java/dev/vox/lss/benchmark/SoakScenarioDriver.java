@@ -94,6 +94,10 @@ public final class SoakScenarioDriver {
         if (this.ended) return;
         this.tickCount++;
 
+        // Per-tick gauge sample so the *_hw high-water marks and mspt window in each 5 s
+        // snapshot reflect bursts between snapshots, not just the point sample at snapshot time.
+        BenchmarkMetricsExporter.sampleServerGauges();
+
         fireDueSteps(server);
 
         if (this.tickCount % ((long) this.scenario.snapshotIntervalSeconds * LSSConstants.TICKS_PER_SECOND) == 0) {
@@ -123,16 +127,22 @@ public final class SoakScenarioDriver {
             step.fired = true;
             this.lastProgressTick = this.tickCount;
             LSSLogger.info("[Soak] Executing step (anchor " + step.anchor + " +" + step.at + "s): " + step.cmd);
+            boolean threw = false;
+            try {
+                server.getCommands().performPrefixedCommand(server.createCommandSourceStack(), step.cmd);
+            } catch (RuntimeException e) {
+                threw = true;
+                LSSLogger.error("[Soak] Step command failed: " + step.cmd, e);
+            }
+            // Row carries ok=did-not-throw so a step that raised is a visible breadcrumb; a
+            // command that parsed but had no effect is caught by soak_report's snapshot-delta
+            // "[no observable effect]" tag rather than here (performPrefixedCommand returns void).
             var row = baseRow("command");
             row.put("cmd", step.cmd);
             row.put("anchor", step.anchor);
             row.put("at", step.at);
+            row.put("ok", !threw);
             BenchmarkMetricsExporter.appendJsonLine(OUTPUT, row);
-            try {
-                server.getCommands().performPrefixedCommand(server.createCommandSourceStack(), step.cmd);
-            } catch (RuntimeException e) {
-                LSSLogger.error("[Soak] Step command failed: " + step.cmd, e);
-            }
         }
     }
 

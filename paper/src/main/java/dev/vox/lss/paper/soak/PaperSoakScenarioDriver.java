@@ -119,6 +119,11 @@ public final class PaperSoakScenarioDriver implements Listener {
         if (this.ended) return;
         this.tickCount++;
 
+        // Per-tick gauge sample so the *_hw high-water marks and mspt window in each 5 s
+        // snapshot reflect bursts between snapshots, not just the point sample at snapshot time.
+        var service = this.plugin.getRequestService();
+        if (service != null) PaperSoakMetricsExporter.sampleServerGauges(service);
+
         fireDueSteps();
 
         if (this.tickCount % ((long) this.scenario.snapshotIntervalSeconds * LSSConstants.TICKS_PER_SECOND) == 0) {
@@ -148,16 +153,21 @@ public final class PaperSoakScenarioDriver implements Listener {
             step.fired = true;
             this.lastProgressTick = this.tickCount;
             LSSLogger.info("[Soak] Executing step (anchor " + step.anchor + " +" + step.at + "s): " + step.cmd);
+            boolean threw = false;
+            try {
+                executeStepCommand(step.cmd);
+            } catch (RuntimeException e) {
+                threw = true;
+                LSSLogger.error("[Soak] Step command failed: " + step.cmd, e);
+            }
+            // ok=did-not-throw breadcrumb (twin of the Fabric driver); no-effect commands are
+            // flagged by soak_report's snapshot-delta tag, not here.
             var row = baseRow("command");
             row.put("cmd", step.cmd);
             row.put("anchor", step.anchor);
             row.put("at", step.at);
+            row.put("ok", !threw);
             PaperSoakMetricsExporter.appendJsonLine(OUTPUT, row);
-            try {
-                executeStepCommand(step.cmd);
-            } catch (RuntimeException e) {
-                LSSLogger.error("[Soak] Step command failed: " + step.cmd, e);
-            }
         }
     }
 
