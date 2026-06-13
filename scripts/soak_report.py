@@ -25,6 +25,7 @@ import argparse
 import importlib.util
 import json
 import os
+import re
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -40,31 +41,35 @@ def _load_check_soak():
 
 CS = _load_check_soak()
 
-# Counters that are NOT illegal but are worth a reviewer's eye when nonzero. Friendly name ->
-# dotted path. ANOMALY_OPT_INS marks the scenarios where some of these are the whole point.
-SERVER_WATCH = {
+# CONCERNING counters: nonzero is a genuine "look at this" in a healthy run (errors, lost work,
+# capacity exhaustion). These increment the anomaly count unless the scenario opts in via
+# ANOMALY_OPT_INS. MECHANISM counters: nonzero is normal operation (the honesty/dedup/filter
+# machinery doing its job) — shown for context, never counted as an anomaly. Friendly name -> path.
+SERVER_CONCERNING = {
     "disk read errors": "disk.errors",
     "disk pool saturated": "disk.saturated",
     "generation timeouts": "generation.timeouts",
     "gen removed in-flight": "generation.removed_in_flight",
     "send-queue full drops": "service.queue_full",
+}
+SERVER_MECHANISM = {
     "duplicate skips": "service.duplicate_skips",
     "sync rate-limited": "service.sync_rate_limited",
     "gen rate-limited": "service.gen_rate_limited",
     "honest re-resolutions": "service.re_resolved",
     "dirty re-saves suppressed": "dirty.suppressed_total",
 }
-CLIENT_WATCH = {
+CLIENT_CONCERNING = {
     "columns dropped": "dropped",
-    "client rate-limited": "responses.rate_limited",
     "ingest failures": "ingest_failures",
 }
-# Which SERVER_WATCH names are the declared purpose of a scenario (suppressed from "unexpected").
+CLIENT_MECHANISM = {
+    "client rate-limited": "responses.rate_limited",
+}
+# Which CONCERNING names are the declared purpose of a scenario (then not counted as anomalies).
 OPT_IN_NAMES = {
-    "sync rate-limited": "rate_limited",
-    "gen rate-limited": "rate_limited",
-    "client rate-limited": "rate_limited",
     "disk pool saturated": "saturated",
+    "ingest failures": "rate_limited",  # ingest-failure scenarios opt into the same vocab
 }
 HIGH_WATER = {
     "disk pending": "disk.pending_hw",
@@ -152,7 +157,10 @@ def load_dir(results_dir):
     if verdict and isinstance(verdict, dict):
         scenario = verdict.get("scenario")
     if not scenario:
-        scenario = os.path.basename(os.path.normpath(results_dir)).rsplit("-", 2)[0]
+        # Dir is "<scenario>-[paper-]<YYYYMMDDTHHMMSSZ>"; strip the optional platform tag and
+        # the timestamp. A plain rsplit("-") would mangle hyphenated names (fresh-backfill).
+        base = os.path.basename(os.path.normpath(results_dir))
+        scenario = re.sub(r"-(?:paper-)?\d{8}T\d{6}Z$", "", base) or base
     return {"scenario": scenario, "server": server, "client_runs": client_runs,
             "verdict": verdict, "warnings": warnings, "unknown_keys": uk}
 
@@ -269,32 +277,30 @@ def _first_nonzero_wall(snaps, path):
 def section_unexpected(rep, d):
     out = []
     opt = CS.ANOMALY_OPT_INS.get(d["scenario"], frozenset())
+
+    def scan(label, snaps, watch, concerning):
+        final = snaps[-1] if snaps else {}
+        for name, path in watch.items():
+            v = _get(final, path, 0) or 0
+            if v == 0:
+                continue
+            when = _first_nonzero_wall(snaps, path)
+            if concerning:
+                opted = OPT_IN_NAMES.get(name) in opt
+                note = "  (declared scenario purpose)" if opted else "  <-- CONCERNING"
+                out.append(f"  {label} {name}: {v} (first @{when}ms){note}")
+                if not opted:
+                    rep["anomalies"] += 1
+            else:
+                out.append(f"  {label} {name}: {v} (first @{when}ms)  [mechanism]")
+
     if d["server"]:
         snaps = d["server"]["snapshots"]
-        final = snaps[-1] if snaps else {}
-        for name, path in SERVER_WATCH.items():
-            v = _get(final, path, 0) or 0
-            if v == 0:
-                continue
-            opted = OPT_IN_NAMES.get(name) in opt
-            note = "  (declared scenario purpose)" if opted else ""
-            when = _first_nonzero_wall(snaps, path)
-            out.append(f"  server {name}: {v} (first @{when}ms){note}")
-            if not opted:
-                rep["anomalies"] += 1
+        scan("server", snaps, SERVER_CONCERNING, True)
+        scan("server", snaps, SERVER_MECHANISM, False)
     for ri, run in enumerate(d["client_runs"]):
-        snaps = run["snapshots"]
-        final = snaps[-1] if snaps else {}
-        for name, path in CLIENT_WATCH.items():
-            v = _get(final, path, 0) or 0
-            if v == 0:
-                continue
-            opted = OPT_IN_NAMES.get(name) in opt
-            note = "  (declared scenario purpose)" if opted else ""
-            when = _first_nonzero_wall(snaps, path)
-            out.append(f"  client-run{ri+1} {name}: {v} (first @{when}ms){note}")
-            if not opted:
-                rep["anomalies"] += 1
+        scan(f"client-run{ri+1}", run["snapshots"], CLIENT_CONCERNING, True)
+        scan(f"client-run{ri+1}", run["snapshots"], CLIENT_MECHANISM, False)
     return out or ["  none — all watched counters zero"]
 
 
@@ -477,14 +483,31 @@ def _selftest():
     section_identities(rep3, d)
     check(rep3["anomalies"] == 1, "identity mismatch not caught")
 
-    # unexpected nonzero: re_resolved nonzero outside an opt-in scenario flags
-    snaps2 = [CS._srv(1000, over={"service.re_resolved": 0}),
-              CS._srv(6000, over={"service.re_resolved": 4})]
-    d2 = {"scenario": "fresh-backfill", "server": {"snapshots": snaps2, "commands": [], "joins": [], "ends": []},
-          "client_runs": [], "verdict": None, "warnings": [], "unknown_keys": set()}
-    rep4 = {"anomalies": 0}
-    un = section_unexpected(rep4, d2)
-    check(rep4["anomalies"] == 1 and any("re-resolution" in l for l in un), "re_resolved not surfaced")
+    # CONCERNING nonzero (disk.errors) outside an opt-in flags an anomaly.
+    snaps_err = [CS._srv(1000, over={"disk.errors": 0}), CS._srv(6000, over={"disk.errors": 3})]
+    d_err = {"scenario": "fresh-backfill", "server": {"snapshots": snaps_err, "commands": [], "joins": [], "ends": []},
+             "client_runs": [], "verdict": None, "warnings": [], "unknown_keys": set()}
+    rep_err = {"anomalies": 0}
+    un_err = section_unexpected(rep_err, d_err)
+    check(rep_err["anomalies"] == 1 and any("CONCERNING" in l for l in un_err), "disk.errors not flagged concerning")
+
+    # MECHANISM nonzero (re_resolved) is SHOWN but NOT counted as an anomaly.
+    snaps_mech = [CS._srv(1000, over={"service.re_resolved": 0}),
+                  CS._srv(6000, over={"service.re_resolved": 4})]
+    d_mech = {"scenario": "fresh-backfill", "server": {"snapshots": snaps_mech, "commands": [], "joins": [], "ends": []},
+              "client_runs": [], "verdict": None, "warnings": [], "unknown_keys": set()}
+    rep_mech = {"anomalies": 0}
+    un_mech = section_unexpected(rep_mech, d_mech)
+    check(rep_mech["anomalies"] == 0 and any("re-resolution" in l and "mechanism" in l for l in un_mech),
+          "re_resolved should be shown as mechanism, not an anomaly")
+
+    # disk.saturated is CONCERNING but opted-in for disk-saturation -> shown, not counted.
+    snaps_sat = [CS._srv(1000, over={"disk.saturated": 0}), CS._srv(6000, over={"disk.saturated": 9})]
+    d_sat = {"scenario": "disk-saturation", "server": {"snapshots": snaps_sat, "commands": [], "joins": [], "ends": []},
+             "client_runs": [], "verdict": None, "warnings": [], "unknown_keys": set()}
+    rep_sat = {"anomalies": 0}
+    section_unexpected(rep_sat, d_sat)
+    check(rep_sat["anomalies"] == 0, "opted-in saturated should not count as an anomaly")
 
     print(f"soak_report selftest OK: {n} cases")
     return 0

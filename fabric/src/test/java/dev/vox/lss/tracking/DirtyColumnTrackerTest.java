@@ -65,4 +65,40 @@ class DirtyColumnTrackerTest {
         assertNotNull(result);
         assertEquals(1, result.length);
     }
+
+    // ---- SP-064: a mark racing a drain lands in this drain or the next, never lost ----
+
+    @Test
+    void concurrentMarkDuringDrainNeverLosesAPositionOrThrows() throws InterruptedException {
+        final int n = 4000;
+        var drained = new java.util.concurrent.atomic.AtomicInteger();
+        var failure = new java.util.concurrent.atomic.AtomicReference<Throwable>();
+
+        var marker = new Thread(() -> {
+            try {
+                for (int i = 0; i < n; i++) tracker.markDirty(LSSConstants.DIM_STR_OVERWORLD, i, 0);
+            } catch (Throwable t) { failure.set(t); }
+        });
+        var drainer = new Thread(() -> {
+            try {
+                for (int i = 0; i < n * 2; i++) {
+                    long[] d = tracker.drainDirty(LSSConstants.DIM_STR_OVERWORLD);
+                    if (d != null) drained.addAndGet(d.length);
+                }
+            } catch (Throwable t) { failure.set(t); }
+        });
+
+        marker.start();
+        drainer.start();
+        marker.join();
+        drainer.join();
+        // Final drain absorbs anything marked after the drainer's last poll.
+        long[] tail = tracker.drainDirty(LSSConstants.DIM_STR_OVERWORLD);
+        if (tail != null) drained.addAndGet(tail.length);
+
+        assertNull(failure.get(), "neither thread threw under the race");
+        assertEquals(n, drained.get(), "every distinct marked position is drained exactly once");
+        assertEquals(n, tracker.getTotalMarked());
+        assertEquals(n, tracker.getTotalDrained());
+    }
 }

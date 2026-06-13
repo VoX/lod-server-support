@@ -308,4 +308,73 @@ class ColumnTimestampCacheTest {
         assertEquals(70L, loaded.get(LSSConstants.DIM_STR_OVERWORLD, 7L));
         assertEquals(1, loaded.size());
     }
+
+    // ---- SP-051: per-dimension isolation (same packed position, two dimensions) ----
+
+    @Test
+    void putGetInvalidateAreDimensionScoped() {
+        long p = 42L;
+        cache.put(LSSConstants.DIM_STR_OVERWORLD, p, 100L, now);
+        cache.put(LSSConstants.DIM_STR_THE_NETHER, p, 200L, now);
+        assertEquals(100L, cache.get(LSSConstants.DIM_STR_OVERWORLD, p));
+        assertEquals(200L, cache.get(LSSConstants.DIM_STR_THE_NETHER, p));
+
+        cache.invalidate(LSSConstants.DIM_STR_OVERWORLD, new long[]{p});
+        assertEquals(0L, cache.get(LSSConstants.DIM_STR_OVERWORLD, p), "invalidate is dimension-scoped");
+        assertEquals(200L, cache.get(LSSConstants.DIM_STR_THE_NETHER, p),
+                "the same packed position in another dimension survives");
+    }
+
+    // ---- SP-052: eviction refreshes age on re-put and evicts per dimension ----
+
+    @Test
+    void rePutRefreshesInsertionAgeSoTheReputEntrySurvivesEviction() {
+        var small = new ColumnTimestampCache(3);
+        small.put(LSSConstants.DIM_STR_OVERWORLD, 1L, 10L, 1L);
+        small.put(LSSConstants.DIM_STR_OVERWORLD, 2L, 20L, 2L);
+        small.put(LSSConstants.DIM_STR_OVERWORLD, 3L, 30L, 3L);
+        small.put(LSSConstants.DIM_STR_OVERWORLD, 1L, 11L, 10L); // re-put p1: now the NEWEST
+        small.put(LSSConstants.DIM_STR_OVERWORLD, 4L, 40L, 11L); // 4 entries, cap is 3
+        assertEquals(1, small.evictIfOversized(), "one excess entry evicted");
+        assertEquals(11L, small.get(LSSConstants.DIM_STR_OVERWORLD, 1L),
+                "the re-put refreshed p1's insertion age, so it survives");
+        assertEquals(0L, small.get(LSSConstants.DIM_STR_OVERWORLD, 2L),
+                "the genuinely-oldest entry (p2) is the one evicted");
+    }
+
+    @Test
+    void evictionIsScopedToTheOversizedDimension() {
+        var small = new ColumnTimestampCache(2);
+        small.put(LSSConstants.DIM_STR_OVERWORLD, 1L, 10L, 1L);
+        small.put(LSSConstants.DIM_STR_OVERWORLD, 2L, 20L, 2L);
+        small.put(LSSConstants.DIM_STR_OVERWORLD, 3L, 30L, 3L); // overworld over its cap
+        small.put(LSSConstants.DIM_STR_THE_NETHER, 9L, 90L, 1L); // nether within cap
+        small.evictIfOversized();
+        assertEquals(90L, small.get(LSSConstants.DIM_STR_THE_NETHER, 9L),
+                "a within-cap dimension is untouched by another dimension's eviction");
+    }
+
+    // ---- SP-054: save fails gracefully; snapshotForSave is isolated from later mutation ----
+
+    @Test
+    void saveToAPathThatIsAFileFailsGracefullyLeavingNoTempFile(@TempDir Path tempDir) throws IOException {
+        var blocker = tempDir.resolve("blocker"); // a regular file where save expects a directory
+        Files.writeString(blocker, "x");
+        cache.put(LSSConstants.DIM_STR_OVERWORLD, 1L, 100L, now);
+        assertDoesNotThrow(() -> cache.save(blocker), "the IO failure is swallowed, not thrown");
+        assertFalse(Files.exists(blocker.resolve("lss-timestamps.bin.tmp")),
+                "the half-written temp file is cleaned up / never created");
+    }
+
+    @Test
+    void snapshotForSaveIsUnaffectedByLaterMutation() {
+        cache.put(LSSConstants.DIM_STR_OVERWORLD, 1L, 100L, now);
+        var snap = cache.snapshotForSave();
+        cache.invalidate(LSSConstants.DIM_STR_OVERWORLD, new long[]{1L}); // mutate the original after snapshotting
+        cache.put(LSSConstants.DIM_STR_OVERWORLD, 2L, 200L, now);
+        assertEquals(100L, snap.get(LSSConstants.DIM_STR_OVERWORLD, 1L),
+                "the snapshot keeps the entry the original invalidated");
+        assertEquals(0L, snap.get(LSSConstants.DIM_STR_OVERWORLD, 2L),
+                "the snapshot excludes a put made after it was taken");
+    }
 }
