@@ -723,4 +723,63 @@ class SpiralScannerTest {
                     + " (confirmedRing=" + s.getConfirmedRing() + ")");
         }
     }
+
+    // ---- CL-014: a late not_generated below the confirmed ring is re-reached by a re-walk ----
+
+    /** Validate every ring-1 position except the target (treated as in-flight in scan 1), then
+     *  scan once so the ring confirms PAST the in-flight target. Returns the target's packed pos. */
+    private static long stageRing1WithOneInFlightTarget(SpiralScanner s, ColumnStateMap columns,
+                                                        RequestQueue queue) {
+        int[] c = new int[2];
+        long target = 0;
+        for (int i = 0; i < 8; i++) {
+            SpiralScanner.ringIndexToCoord(1, i, CX, CZ, c);
+            long packed = PositionUtil.packPosition(c[0], c[1]);
+            if (i == 0) { target = packed; continue; } // leave the target unvalidated (in-flight)
+            columns.onReceived(packed, 5000L); // validated this session -> SATISFIED
+        }
+        final long t = target;
+        fireScanFull(s, CX, CZ, 0, 0, 1000, 0, columns, pos -> pos == t, queue);
+        drain(queue);
+        assertTrue(s.getConfirmedRing() > 1, "premise: the ring confirmed past the in-flight target");
+        return target;
+    }
+
+    @Test
+    void lateNotGeneratedBelowConfirmedRingIsRereachedByResetConfirmedRing() {
+        var s = scanner(1, 4, 4); // gen ENABLED
+        var columns = new ColumnStateMap();
+        var queue = new RequestQueue();
+        long target = stageRing1WithOneInFlightTarget(s, columns, queue);
+
+        // The late not_generated arrives: target no longer in-flight, stamped ts=0 (gen-retry-able).
+        columns.onNotGenerated(target);
+
+        // A normal scan starts at the confirmed ring (past the target) — it stays stranded.
+        assertEquals(0, fireScanFull(s, CX, CZ, 0, 0, 1000, 0, columns, pos -> false, queue),
+                "without the re-walk a below-ring ts=0 position is never rescanned (the CL-014 hole)");
+
+        // The fix forces a re-walk from the innermost ring, re-reaching it.
+        s.resetConfirmedRing();
+        int recount = fireScanFull(s, CX, CZ, 0, 0, 1000, 0, columns, pos -> false, queue);
+        var emitted = drain(queue);
+        assertEquals(1, recount, "resetConfirmedRing re-walks and re-emits the stranded ts=0 position");
+        assertEquals(target, emitted.get(0));
+    }
+
+    @Test
+    void lateNotGeneratedStaysParkedWhenGenerationDisabled() {
+        var s = new SpiralScanner();
+        s.setConfig(new SessionConfigS2CPayload(LSSConstants.PROTOCOL_VERSION, true, 1, 4, 4, false));
+        var columns = new ColumnStateMap();
+        var queue = new RequestQueue();
+        long target = stageRing1WithOneInFlightTarget(s, columns, queue);
+
+        columns.onNotGenerated(target);
+        s.resetConfirmedRing();
+        // classify parks a ts=0 position SATISFIED when generation is off, so even after the
+        // re-walk it is NOT re-requested — the reset is gen-disabled-safe (no re-request loop).
+        assertEquals(0, fireScanFull(s, CX, CZ, 0, 0, 1000, 0, columns, pos -> false, queue),
+                "with generation disabled a not_generated position parks, it must not loop re-requests");
+    }
 }

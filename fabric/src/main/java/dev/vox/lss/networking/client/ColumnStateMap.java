@@ -213,7 +213,12 @@ class ColumnStateMap {
     /** Bulk-load cached timestamps (resync across sessions). */
     void loadFrom(Long2LongOpenHashMap loaded) {
         for (var entry : loaded.long2LongEntrySet()) {
-            put(entry.getLongKey(), entry.getLongValue());
+            long ts = entry.getLongValue();
+            // Clamp a corrupt/garbage stamp below the -1 "unknown" sentinel (a truncated cache
+            // file, or negative v2-migration sign-extension) to -1: it matches no classify rung
+            // and would otherwise park the position SATISFIED for the whole session. As -1 it
+            // re-requests, and the next save rewrites it clean.
+            put(entry.getLongKey(), ts < -1L ? -1L : ts);
         }
     }
 

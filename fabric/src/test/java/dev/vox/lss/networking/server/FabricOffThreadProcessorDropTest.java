@@ -70,6 +70,23 @@ class FabricOffThreadProcessorDropTest {
     }
 
     @Test
+    void over256CharDimensionIsDroppedBeforeEnqueue() throws InterruptedException {
+        var h = harness();
+        byte[] sections = new byte[64];
+        // #4 fix: a pathological >256-char dimension id is dropped at the guard (returns false →
+        // caller answers up-to-date) instead of letting the send-time writeUtf throw and drop
+        // the whole flush queue. The guard runs before the Identifier.parse, so it can't throw.
+        String oversizedDim = "lss:" + "a".repeat(LSSConstants.MAX_DIMENSION_STRING_LENGTH - 3); // 257
+
+        boolean sent = h.processor().buildAndEnqueueColumnPayload(h.state(), 1, 2, oversizedDim,
+                5L, 1L, sections, sections.length + LSSConstants.ESTIMATED_COLUMN_OVERHEAD_BYTES);
+        assertFalse(sent, "an oversized dimension id drops the column (false), it must not throw");
+        assertEquals(0, flush(h.state()).size(),
+                "a column with an oversized dimension must never reach the send queue");
+        assertEquals(0, h.state().getSendQueueSize());
+    }
+
+    @Test
     void columnAtExactCapIsEnqueuedWithItsCoordinates() throws InterruptedException {
         var h = harness();
         byte[] atCap = new byte[LSSConstants.MAX_SECTIONS_SIZE];

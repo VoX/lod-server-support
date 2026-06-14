@@ -62,10 +62,15 @@ public class PaperOffThreadProcessor extends OffThreadProcessor<PaperPlayerReque
                     + LSSConstants.MAX_SECTIONS_SIZE + " (client decoder would reject it)");
             return false;
         }
-        // Known limitation: a >256-char dimension id (datapack) makes encodeVoxelColumnPreEncoded
-        // throw out of this method, aborting the WHOLE processing cycle (retried next take)
-        // instead of dropping just this column with a warn + up-to-date answer. Pinned by
-        // PaperOffThreadProcessorTest; a source guard is deliberately deferred.
+        if (dimension.length() > LSSConstants.MAX_DIMENSION_STRING_LENGTH) {
+            // Drop just this column (like an oversized one): without the guard
+            // encodeVoxelColumnPreEncoded's writeUtf throws out of this method and aborts the
+            // WHOLE processing cycle. No real dimension id is this long; the !sent path answers
+            // the client up-to-date so it stops asking.
+            LSSLogger.warn("Dropping column [" + cx + ", " + cz + "] with oversized dimension id ("
+                    + dimension.length() + " chars > " + LSSConstants.MAX_DIMENSION_STRING_LENGTH + ")");
+            return false;
+        }
         byte[] encoded = PaperPayloadHandler.encodeVoxelColumnPreEncoded(
                 cx, cz, dimension, columnTimestamp, sectionBytes);
         state.addReadyPayload(new QueuedPayload<>(encoded, estimatedBytes, submissionOrder,

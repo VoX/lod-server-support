@@ -70,6 +70,14 @@ public class FabricOffThreadProcessor extends OffThreadProcessor<PlayerRequestSt
                     + LSSConstants.MAX_SECTIONS_SIZE + " (client decoder would reject it)");
             return false;
         }
+        if (dimension.length() > LSSConstants.MAX_DIMENSION_STRING_LENGTH) {
+            // Drop just this column (like an oversized one) rather than letting writeUtf throw
+            // at send time and nuke the whole send queue. No real dimension id is this long;
+            // the !sent path answers the client up-to-date so it stops asking.
+            LSSLogger.warn("Dropping column [" + cx + ", " + cz + "] with oversized dimension id ("
+                    + dimension.length() + " chars > " + LSSConstants.MAX_DIMENSION_STRING_LENGTH + ")");
+            return false;
+        }
         var dimensionKey = this.dimensionKeyCache.computeIfAbsent(dimension,
                 d -> ResourceKey.create(Registries.DIMENSION, Identifier.parse(d)));
         var payload = new VoxelColumnS2CPayload(cx, cz, dimensionKey, columnTimestamp,

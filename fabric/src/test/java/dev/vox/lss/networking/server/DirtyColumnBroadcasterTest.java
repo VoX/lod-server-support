@@ -28,7 +28,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * Direct tests of {@link DirtyColumnBroadcaster} through its test seams (injected dimension
  * source + {@link DirtyColumnBroadcaster.PlayerView}): exact broadcast cadence, the raw
  * lodDistance range gate (no request-gate +32 buffer), per-dimension recipient isolation,
- * the MAX_POSITIONS truncation (stale-until-rejoin, pinned as current behavior),
+ * the MAX_POSITIONS pagination (a >cap flood splits into multiple packets, not truncated),
  * clear-before-send ordering, and the broadcast-scoped send-failure skip.
  */
 class DirtyColumnBroadcasterTest {
@@ -292,15 +292,15 @@ class DirtyColumnBroadcasterTest {
         assertArrayEquals(new long[]{endPos}, only(invalidationsFor(rig, LSSConstants.DIM_STR_THE_END)));
     }
 
-    // ---- FP-050: MAX_POSITIONS truncation (current behavior pinned, not redesigned) ----
+    // ---- FP-050 (#8 fix): >MAX_POSITIONS flood paginates instead of truncating ----
 
     @Test
-    void floodBeyondMaxPositionsTruncatesAndLeavesRemainderStaleUntilRejoin() {
+    void floodBeyondMaxPositionsPaginatesAcrossPacketsCoveringEveryPosition() {
         var rig = new Rig(List.of(Level.OVERWORLD));
         rig.config.lodDistanceChunks = 128;
         var player = rig.addPlayer(Level.OVERWORLD, 0, 0);
 
-        assertEquals(10240, DirtyColumnsS2CPayload.MAX_POSITIONS, "the cap this test pins");
+        assertEquals(10240, DirtyColumnsS2CPayload.MAX_POSITIONS, "the per-packet wire cap");
         int flood = DirtyColumnsS2CPayload.MAX_POSITIONS + 1;
         var dirtySet = new HashSet<Long>();
         outer:
@@ -315,24 +315,28 @@ class DirtyColumnBroadcasterTest {
 
         rig.fire();
 
-        var sent = asSet(only(sentTo(rig, player)));
-        assertEquals(DirtyColumnsS2CPayload.MAX_POSITIONS, sent.size(), "exactly the cap is notified");
-        assertTrue(dirtySet.containsAll(sent), "every notified position was dirty");
-        assertEquals(sent, asSet(only(clearsFor(rig, player))),
-                "done-bits clear only for the notified positions — the dropped one stays marked served");
+        // The overflow is split into a second packet, not dropped: every in-range position is
+        // notified, each packet still respects the wire cap.
+        var batches = sentTo(rig, player);
+        assertEquals(2, batches.size(), "a >cap flood splits into two packets");
+        assertEquals(DirtyColumnsS2CPayload.MAX_POSITIONS, batches.get(0).length, "first packet is full");
+        assertEquals(1, batches.get(1).length, "second packet carries the remainder");
+        var allSent = new HashSet<Long>();
+        for (long[] b : batches) {
+            assertTrue(b.length <= DirtyColumnsS2CPayload.MAX_POSITIONS, "every packet respects the wire cap");
+            for (long p : b) allSent.add(p);
+        }
+        assertEquals(dirtySet, allSent, "every in-range dirty position is notified across the packets");
 
-        var leftover = new HashSet<>(dirtySet);
-        leftover.removeAll(sent);
-        assertEquals(1, leftover.size(), "one in-range position was silently dropped");
-        assertEquals(0, rig.tracker.pendingCount(), "the dropped position was still drained");
-        assertEquals(dirtySet, asSet(only(invalidationsFor(rig, LSSConstants.DIM_STR_OVERWORLD))),
-                "the dropped position was still invalidated server-side");
+        var allCleared = new HashSet<Long>();
+        for (long[] c : clearsFor(rig, player)) for (long p : c) allCleared.add(p);
+        assertEquals(dirtySet, allCleared, "done-bits clear for every notified position");
+        assertEquals(0, rig.tracker.pendingCount(), "the whole set was drained");
 
-        // Current behavior, pinned: the remainder is never re-queued — the client keeps a
-        // stale column until rejoin/clearcache forces re-resolution.
+        // The complete set went out in this one broadcast, so a later interval re-broadcasts nothing.
         rig.events.clear();
         rig.fire();
-        assertTrue(rig.events.isEmpty(), "no re-broadcast of the truncated remainder on later intervals");
+        assertTrue(rig.events.isEmpty(), "nothing left to re-broadcast after a complete paginated send");
     }
 
     // ---- FP-051: clear-before-send ordering ----

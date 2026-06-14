@@ -17,6 +17,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -34,7 +35,7 @@ import static org.mockito.Mockito.when;
  * live paper-dirty-falling-block soak chain). The sender seam replaces the static plugin-
  * message send; a recording {@link PaperOffThreadProcessor} subclass observes timestamp
  * invalidation and done-bit clears. Pins the per-player gates (handshake, dimension,
- * removed), the raw-lodDistance range filter (NO +32 request-gate buffer), the 10240 cap,
+ * removed), the raw-lodDistance range filter (NO +32 request-gate buffer), the 10240-cap pagination,
  * clear-BEFORE-send ordering (a send failure must leave the clear applied), timestamp
  * invalidation with zero recipients (dirty-while-offline correctness), the exact
  * interval-ticks cadence with mid-run config pickup, and failed-send player isolation.
@@ -199,7 +200,7 @@ class PaperDirtyColumnBroadcasterTest {
     }
 
     @Test
-    void broadcastCapsAtMaxDirtyColumnPositionsAndClearsExactlyTheSentSet() {
+    void broadcastPaginatesBeyondMaxDirtyColumnPositionsCoveringEveryPosition() {
         var uuid = UUID.randomUUID();
         addPlayer(uuid, overworld, true, false);
         int total = LSSConstants.MAX_DIRTY_COLUMN_POSITIONS + 1; // 10241
@@ -209,15 +210,24 @@ class PaperDirtyColumnBroadcasterTest {
 
         fireBroadcast();
 
-        assertEquals(1, sent.size());
-        assertEquals(LSSConstants.MAX_DIRTY_COLUMN_POSITIONS, sent.get(0).positions().length,
-                "the notification frame is capped at the wire limit");
-        assertArrayEquals(sortedPositions(sent.get(0).positions()),
-                sortedPositions(processor.clears.get(0).positions()),
-                "the cleared set IS the sent set — clearing the uncapped set would leave the "
-                        + "overflow position cleared but never announced");
+        // #8 fix: the overflow paginates into a second frame, not dropped — each frame within
+        // the wire cap, together covering every in-range position.
+        assertEquals(2, sent.size(), "a >cap flood splits into two frames");
+        assertEquals(LSSConstants.MAX_DIRTY_COLUMN_POSITIONS, sent.get(0).positions().length, "first frame full");
+        assertEquals(1, sent.get(1).positions().length, "second frame carries the remainder");
+        var allSent = new HashSet<Long>();
+        for (var s : sent) {
+            assertTrue(s.positions().length <= LSSConstants.MAX_DIRTY_COLUMN_POSITIONS,
+                    "every frame respects the wire cap");
+            for (long p : s.positions()) allSent.add(p);
+        }
+        assertEquals(total, allSent.size(), "every in-range position is notified across the frames");
+
+        var allCleared = new HashSet<Long>();
+        for (var c : processor.clears) for (long p : c.positions()) allCleared.add(p);
+        assertEquals(allSent, allCleared, "done-bits clear for every notified position");
         assertEquals(total, processor.invalidations.get(0).positions().length,
-                "every drained position is invalidated; the overflow stays stale-until-rejoin (pinned)");
+                "every drained position is invalidated");
         assertEquals(0, tracker.pendingCount());
     }
 

@@ -203,6 +203,19 @@ class SpiralScanner {
     }
 
     /**
+     * Force the next scan to re-walk from the innermost ring (cheaply skipping already-satisfied
+     * positions) WITHOUT resetting the scan-tick cadence. Used when a position BELOW the confirmed
+     * ring became requestable again — a late not-generated stamp on a position the ring confirmed
+     * past while it was in-flight: only a re-walk re-reaches it. Unlike {@link #resetScanCounter}
+     * this leaves the cadence alone (a steady not-generated trickle would otherwise debounce scans
+     * back indefinitely), and unlike a retry mark it leaves {@link ColumnStateMap#classify} free to
+     * correctly PARK the position when generation is disabled instead of looping re-requests.
+     */
+    void resetConfirmedRing() {
+        this.confirmedRing = 0;
+    }
+
+    /**
      * A dimension change discards any pending rate-limit backoff — it belonged to the old
      * dimension's load. Deliberately NOT part of resetScanCounter(): the movement and
      * dirty-broadcast paths call that too and must preserve the backoff.

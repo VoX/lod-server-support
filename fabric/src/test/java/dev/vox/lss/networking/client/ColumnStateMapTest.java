@@ -340,29 +340,26 @@ class ColumnStateMapTest {
     }
 
     /**
-     * KNOWN LIMITATION pin (CL-028): loadFrom has no sanitization, so a corrupt cache value
-     * below -1 (e.g. negative garbage surviving the v2 migration, see
-     * ColumnCacheStoreTest#v2MigrationSignExtendsNegativeValues) classifies SATISFIED for
-     * the rest of the session — it matches no classify rung. It is NOT a permanent black
-     * hole: the value counts as neither received nor empty, and the dirty rescue still
-     * reaches it (the re-request carries the stored ts&le;0, which the server's honest
-     * re-resolution path re-serves). PKG-A is tests-only; the one-line loadFrom guard is
-     * recorded in handoff-PKG-A.md — update this test when it lands.
+     * CL-028 fix: loadFrom clamps a corrupt cache value below -1 (e.g. negative garbage
+     * surviving the v2 migration, see ColumnCacheStoreTest#v2MigrationSignExtendsNegativeValues)
+     * to the -1 "unknown" sentinel. Without the clamp such a value matched no classify rung
+     * and parked the position SATISFIED for the rest of the session; clamped, it re-requests
+     * on the next scan and the next save rewrites it clean.
      */
     @Test
-    void subMinusOneCacheValueClassifiesSatisfiedUntilDirtyRescue() {
+    void subMinusOneCacheValueClampsToUnknownAndReRequests() {
         var loaded = new Long2LongOpenHashMap();
         loaded.put(POS, -4L);
         map.loadFrom(loaded);
 
         assertEquals(0, map.receivedCount(), "a sub--1 value must not count as received");
         assertEquals(0, map.emptyCount(), "...nor as a not-generated stamp");
-        assertEquals(SATISFIED, map.classify(POS, true),
-                "current behavior: a corrupt negative stamp is silently satisfied in-session");
+        assertEquals(-1L, map.classify(POS, true),
+                "a corrupt negative stamp clamps to unknown and re-requests (no silent SATISFIED park)");
 
-        assertTrue(map.markDirtyIfKnown(POS), "the dirty rescue must still reach the corrupt stamp");
-        assertEquals(-4L, map.classify(POS, true),
-                "rescued re-request carries the stored ts<=0 — the server re-resolves it honestly");
+        // It is now -1 (unknown); the scan ladder requests -1 positions anyway, so the dirty
+        // rescue (which only fires for a KNOWN disposition) correctly does not apply.
+        assertFalse(map.markDirtyIfKnown(POS), "a clamped-to-unknown stamp is not a known disposition");
         map.markSent(POS);
         map.onReceived(POS, 8000L);
         assertEquals(SATISFIED, map.classify(POS, true));

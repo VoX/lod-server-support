@@ -38,9 +38,19 @@ public class PaperChunkGenerationService {
      * when Paper finishes loading/generating the chunk to FULL status.
      */
     static class ActiveGeneration {
+        // Monotonic id of this launch. A stale async completion (from an entry that already
+        // timed out and was resubmitted under the same key) carries the OLD token, so
+        // onChunkReady can reject it and leave the current entry for its own completion —
+        // otherwise the stale (possibly failed) result consumes the fresh entry by key match.
+        final long token;
         final List<GenerationCallback> callbacks = new ArrayList<>();
         int ticksWaiting = 0;
+
+        ActiveGeneration(long token) { this.token = token; }
     }
+
+    // Main-thread-owned: assigns a unique token to each ActiveGeneration launch.
+    private long nextGenerationToken = 0;
 
     private final LinkedHashMap<PendingGenerationKey, ActiveGeneration> active = new LinkedHashMap<>();
     private final Map<UUID, Integer> perPlayerActiveCount = new HashMap<>();
@@ -100,13 +110,13 @@ public class PaperChunkGenerationService {
         // Try to add directly to active and launch async load
         int playerActive = this.perPlayerActiveCount.getOrDefault(playerUuid, 0);
         if (this.active.size() < this.maxConcurrent && playerActive < this.maxPerPlayerActive) {
-            var gen = new ActiveGeneration();
+            var gen = new ActiveGeneration(++this.nextGenerationToken);
             gen.callbacks.add(new GenerationCallback(playerUuid, submissionOrder));
             this.active.put(key, gen);
             incrementCount(this.perPlayerActiveCount, playerUuid);
             this.totalSubmitted++;
 
-            launchAsyncLoad(key, level, cx, cz);
+            launchAsyncLoad(key, level, cx, cz, gen.token);
             return true;
         }
 
@@ -119,7 +129,7 @@ public class PaperChunkGenerationService {
      * when the chunk reaches FULL status. Paper manages tickets automatically.
      * Package-visible seam: tests override this to capture the launch.
      */
-    void launchAsyncLoad(PendingGenerationKey key, ServerLevel level, int cx, int cz) {
+    void launchAsyncLoad(PendingGenerationKey key, ServerLevel level, int cx, int cz, long token) {
         level.getWorld().getChunkAtAsync(cx, cz, true, false).whenComplete((chunk, ex) -> {
             if (ex != null) {
                 LSSLogger.error("Async chunk load failed at " + cx + "," + cz, ex);
@@ -128,7 +138,7 @@ public class PaperChunkGenerationService {
             // Ensure callback runs on the main thread — whenComplete does not guarantee thread
             try {
                 this.mainThreadScheduler.schedule(() ->
-                        onChunkReady(key, level, readyChunk, cx, cz));
+                        onChunkReady(key, level, readyChunk, cx, cz, token));
             } catch (Exception scheduleEx) {
                 // Plugin disabled during shutdown — do not call onChunkReady inline
                 // because we're on an async thread and active map is not thread-safe.
@@ -143,9 +153,14 @@ public class PaperChunkGenerationService {
      * Package-visible so tests can fire the completion that launchAsyncLoad would schedule.
      */
     void onChunkReady(PendingGenerationKey key, ServerLevel level,
-                       Chunk chunk, int cx, int cz) {
-        var gen = this.active.remove(key);
-        if (gen == null) return; // cleaned up by removePlayer or timeout
+                       Chunk chunk, int cx, int cz, long token) {
+        var gen = this.active.get(key);
+        // Reject a stale completion: the entry that launched this load already timed out and a
+        // new entry was resubmitted under the same key (different token). Leaving the current
+        // entry untouched lets ITS own completion serve it — a stale (often failed) result must
+        // not consume the fresh entry. null = the entry was cleaned up by removePlayer/timeout.
+        if (gen == null || gen.token != token) return;
+        this.active.remove(key);
 
         if (chunk != null) {
             try {

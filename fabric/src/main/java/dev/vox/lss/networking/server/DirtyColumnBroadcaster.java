@@ -111,18 +111,22 @@ class DirtyColumnBroadcaster {
                 // gate's +32 buffer never receive dirty pushes.
                 int lodDist = config.lodDistanceChunks;
 
-                int count = 0;
-                for (long packed : dirty) {
-                    if (!PositionUtil.isOutOfRange(packed, playerCx, playerCz, lodDist)) {
-                        this.positionFilterBuffer[count++] = packed;
-                        // Known limitation: in-range positions beyond MAX_POSITIONS were already
-                        // drained and invalidated but are never notified or re-queued — the
-                        // client keeps its done-bit and stays stale until rejoin/re-request.
-                        if (count >= DirtyColumnsS2CPayload.MAX_POSITIONS) break;
+                // Paginate: a single DirtyColumns payload caps at MAX_POSITIONS, so when a player
+                // has more in-range dirty positions than the cap, send multiple payloads rather
+                // than dropping the overflow (which was already drained+invalidated and would
+                // otherwise stay stale on the client until rejoin). The global drain/mark
+                // accounting is untouched — only the number of packets changes.
+                int idx = 0;
+                while (idx < dirty.length) {
+                    int count = 0;
+                    while (idx < dirty.length && count < DirtyColumnsS2CPayload.MAX_POSITIONS) {
+                        long packed = dirty[idx++];
+                        if (!PositionUtil.isOutOfRange(packed, playerCx, playerCz, lodDist)) {
+                            this.positionFilterBuffer[count++] = packed;
+                        }
                     }
-                }
+                    if (count == 0) continue;
 
-                if (count > 0) {
                     long[] result = new long[count];
                     System.arraycopy(this.positionFilterBuffer, 0, result, 0, count);
                     // Done-bits clear before the send: a re-request racing the notification
@@ -134,6 +138,7 @@ class DirtyColumnBroadcaster {
                         LSSLogger.error("Failed to send dirty columns to " + state.getPlayerName(), e);
                         if (failedPlayers == null) failedPlayers = new HashSet<>();
                         failedPlayers.add(uuid);
+                        break; // stop paginating to this player for this broadcast
                     }
                 }
             }

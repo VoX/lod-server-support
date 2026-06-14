@@ -760,7 +760,10 @@ public class GenerationLifecycleGameTests {
      * and re-throws every server tick (D7: the release already sits in a finally; this
      * test is the regression pin).
      */
-    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 600)
+    // maxTicks 1200 (not 600): the faulted entry generates a chunk at the gametest structure's
+    // far origin, whose cold generation can exceed 600 ticks on the first run (the warm re-run is
+    // fast) — a 600-tick budget made this an intermittent timeout flake.
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 1200)
     public void serializationThrowableDuringCompletionReleasesTicketAndBalancesBooks(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         var origin = ChunkPos.containing(helper.absolutePos(BlockPos.ZERO));

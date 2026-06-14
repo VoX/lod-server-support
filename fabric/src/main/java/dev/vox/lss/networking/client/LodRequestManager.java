@@ -333,6 +333,13 @@ public class LodRequestManager {
         if (!this.tracker.isInFlight(packed)) { this.metrics.recordNotGenerated(); return; }
         this.tracker.removeByPosition(packed);
         this.columns.onNotGenerated(packed);
+        // The scanner skips in-flight positions without breaking ring confirmation, so the ring
+        // can confirm PAST this position while it was in-flight. With generation enabled the ts=0
+        // stamp is gen-retry-able (classify -> 0), but a below-ring position is never rescanned
+        // until the ring re-walks — force that re-walk so a stationary player does not keep an
+        // ungenerated hole (CL-014). Cadence-neutral and gen-disabled-safe (classify parks ts=0
+        // when generation is off, so the re-walk just skips it).
+        this.scanner.resetConfirmedRing();
         this.metrics.recordNotGenerated();
     }
 

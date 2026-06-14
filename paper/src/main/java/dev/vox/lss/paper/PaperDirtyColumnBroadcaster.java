@@ -80,15 +80,22 @@ class PaperDirtyColumnBroadcaster {
                 int playerCz = player.getBlockZ() >> 4;
                 int lodDist = config.lodDistanceChunks;
 
-                int count = 0;
-                for (long packed : dirty) {
-                    if (!PositionUtil.isOutOfRange(packed, playerCx, playerCz, lodDist)) {
-                        this.positionFilterBuffer[count++] = packed;
-                        if (count >= MAX_POSITIONS) break;
+                // Paginate (twin of the Fabric broadcaster): a single dirty-columns frame caps
+                // at MAX_POSITIONS, so when a player has more in-range dirty positions than the
+                // cap, send multiple frames rather than dropping the overflow (already drained +
+                // invalidated, otherwise stale on the client until rejoin). Drain/mark accounting
+                // is untouched — only the packet count changes.
+                int idx = 0;
+                while (idx < dirty.length) {
+                    int count = 0;
+                    while (idx < dirty.length && count < MAX_POSITIONS) {
+                        long packed = dirty[idx++];
+                        if (!PositionUtil.isOutOfRange(packed, playerCx, playerCz, lodDist)) {
+                            this.positionFilterBuffer[count++] = packed;
+                        }
                     }
-                }
+                    if (count == 0) continue;
 
-                if (count > 0) {
                     long[] result = new long[count];
                     System.arraycopy(this.positionFilterBuffer, 0, result, 0, count);
                     this.offThreadProcessor.clearDiskReadDone(player.getUUID(), result);
@@ -98,6 +105,7 @@ class PaperDirtyColumnBroadcaster {
                         LSSLogger.error("Failed to send dirty columns to " + player.getName().getString(), e);
                         if (failedPlayers == null) failedPlayers = new HashSet<>();
                         failedPlayers.add(player.getUUID());
+                        break; // stop paginating to this player for this broadcast
                     }
                 }
             }
