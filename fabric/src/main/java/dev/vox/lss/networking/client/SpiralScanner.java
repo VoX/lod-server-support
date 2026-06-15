@@ -123,12 +123,6 @@ class SpiralScanner {
 
         outer:
         for (int r = localConfirmedRing; r <= lodDistance; r++) {
-            // Chebyshev exclusion to match vanilla's loaded-chunk square. A Euclidean circle
-            // leaves the square's corner chunks eligible for LOD requests while they are
-            // loaded and continuously re-saving (inhabitedTime), which turns the dirty
-            // broadcast into a permanent re-request/re-serve loop on those corners.
-            if (r <= exclusionRadius) { localConfirmedRing = r + 1; continue; }
-
             boolean ringFullySatisfied = true;
             int ringSize = 8 * r;
             for (int i = 0; i < ringSize; i++) {
@@ -139,6 +133,19 @@ class SpiralScanner {
                 int cz = chunkCoords[1];
 
                 long packed = PositionUtil.packPosition(cx, cz);
+
+                // Exclude chunks vanilla RENDERS, replicating its own view-distance test
+                // (ChunkTrackingView.isInViewDistance: a 1-chunk-buffered Euclidean radius). The
+                // render SQUARE's corners fall OUTSIDE this rounded view — e.g. at viewDistance 12
+                // the corner (12,12) is buffered-distance 11^2+11^2=242 vs 12^2=144 — so vanilla
+                // never renders them, and the old Chebyshev exclusion (max(|dx|,|dz|) <= vd) left
+                // them blank until the player moved. They now fall through to LOD. Like an in-flight
+                // skip, an excluded (in-view) chunk does NOT break ring confirmation. Loop-safe:
+                // DirtyContentFilter suppresses metadata-only (inhabitedTime) re-saves of a served
+                // corner, so re-serving one cannot revive the old re-request loop.
+                int adx = Math.max(0, Math.abs(cx - playerCx) - 1);
+                int adz = Math.max(0, Math.abs(cz - playerCz) - 1);
+                if ((long) adx * adx + (long) adz * adz < (long) exclusionRadius * exclusionRadius) continue;
 
                 // In-flight positions are satisfied — skip without breaking ring confirmation
                 if (isInFlight.test(packed)) continue;
@@ -154,9 +161,9 @@ class SpiralScanner {
                 if (localScanRing < r) localScanRing = r;
             }
 
-            // Contiguous prefix only: confirming a satisfied OUTER ring while an inner ring
-            // still has unsatisfied positions (e.g. gen-cap skips) would start every later
-            // scan past the inner ring — a permanent LOD hole for a stationary player.
+            // Contiguous prefix only: confirming a satisfied OUTER ring while an inner ring still
+            // has unsatisfied positions (gen-cap skips, or an uncovered corner hole) would start
+            // every later scan past the inner ring — a permanent LOD hole for a stationary player.
             if (ringFullySatisfied && localConfirmedRing == r) {
                 localConfirmedRing = r + 1;
             }

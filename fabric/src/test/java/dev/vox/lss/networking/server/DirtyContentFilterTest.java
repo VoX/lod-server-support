@@ -113,6 +113,32 @@ class DirtyContentFilterTest {
     }
 
     /**
+     * Regression for the continuous-reload loop the coverage-aware scanner exclusion now relies on
+     * being suppressed (SpiralScannerTest#uncoveredCornerInsideExclusionRadiusIsRequested): the LOD
+     * corners the client serves are loaded and ticking on the server, so vanilla re-saves them every
+     * ~10s for inhabitedTime alone. inhabitedTime is chunk metadata, NOT in the serialized section
+     * bytes, so the served LOD content is byte-identical across those re-saves — the filter must
+     * report them unchanged so the dirty broadcast never re-requests the corner. A genuine edit
+     * still marks.
+     */
+    @Test
+    void metadataOnlyResaveOfAServedCornerIsSuppressed_noReloadLoop() {
+        var dim = "minecraft:overworld";
+        var liveContent = new java.util.concurrent.atomic.AtomicReference<byte[]>(new byte[]{1, 2, 3, 4});
+        var filter = new DirtyContentFilter((level, chunk, cx, cz) -> liveContent.get());
+        int cx = 7, cz = -7; // a square-corner column the coverage-aware exclusion now serves
+
+        assertTrue(filter.contentChanged(null, null, cx, cz, dim), "first serve records the baseline");
+        for (int i = 0; i < 5; i++) {
+            assertFalse(filter.contentChanged(null, null, cx, cz, dim),
+                    "metadata-only re-save #" + i + " must stay quiet — re-marking would revive the reload loop");
+        }
+        liveContent.set(new byte[]{9, 9, 9, 9});
+        assertTrue(filter.contentChanged(null, null, cx, cz, dim),
+                "a real content change at the same corner still re-marks dirty");
+    }
+
+    /**
      * Absent-sentinel coupling: the per-dimension fastutil map uses defaultReturnValue(0), so
      * a stored hash of exactly 0 is indistinguishable from "never observed" — the FIRST save
      * of such content would read as unchanged and the column would never mark dirty. fnv1a64

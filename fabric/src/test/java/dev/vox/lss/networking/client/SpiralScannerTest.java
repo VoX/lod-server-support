@@ -126,8 +126,40 @@ class SpiralScannerTest {
         return last;
     }
 
+    // ─── Render-square corner exclusion — full history of this bug (read before editing the
+    //     SpiralScanner.scan() exclusion). LOD must cover EXACTLY what vanilla does not render;
+    //     the trap is that vanilla's render boundary is a rounded disc, not a square. ───
+    //
+    //  1. Euclidean-per-RING exclusion (`2*r*r <= R*R`, pre-683f67f): excluded a ring only when its
+    //     far corner was within R, so it UNDER-excluded — square edge chunks (within vanilla's view,
+    //     loaded and re-saving inhabitedTime every ~10s) stayed LOD-eligible → a permanent
+    //     re-request/re-serve LOOP on them.
+    //  2. Chebyshev SQUARE exclusion (`max(|dx|,|dz|) <= R`, 683f67f): killed the loop by excluding
+    //     the whole square — but vanilla's view is a rounded disc, so the square's 4 corners (which
+    //     vanilla never renders) were now excluded from LOD too → 4 blank corner chunks on a
+    //     stationary join (they filled once the player moved and the square shifted off them). Only
+    //     visible at vd >= 4; at vd <= 3 the 1-chunk buffer makes the disc subsume the square.
+    //  3. hasChunk coverage-aware exclusion (first attempt here): WRONG signal — the client STORES
+    //     chunks out to renderDistance+3 (ClientChunkCache.calculateStorageRange), so the corners are
+    //     received (hasChunk=true) but unrendered; the exclusion skipped them and they stayed blank.
+    //  4. Buffered-Euclidean exclusion (current): replicate vanilla's OWN view test verbatim —
+    //     ChunkTrackingView.isInViewDistance = `max(0,|dx|-1)^2 + max(0,|dz|-1)^2 < R^2`. LOD now
+    //     covers exactly the complement (corners + beyond): no gap, no edge over-request. The step-1
+    //     loop does NOT return — DirtyContentFilter (also 683f67f) independently suppresses the
+    //     metadata-only re-saves, so a served corner never re-loops (see DirtyContentFilterTest
+    //     #metadataOnlyResaveOfAServedCornerIsSuppressed_noReloadLoop).
+    //
+    // The four tests below pin all four lessons: small-vd subsumption, corners requested (step-2
+    // regression), the exact formula incl. edges-excluded (step-1 / over-request regression).
+
     @Test
-    void exclusionIsChebyshevMatchingVanillasLoadedSquare() {
+    void smallViewDistanceRoundedViewSubsumesTheWholeSquare_noReloadLoop() {
+        // Vanilla's view (ChunkTrackingView.isInViewDistance) is a 1-chunk-buffered Euclidean
+        // radius; at small viewDistance it subsumes the WHOLE Chebyshev square — at vd=2 even the
+        // corner (2,2) is buffered-distance 1^2+1^2=2 < 2^2=4 — so the scanner requests ONLY the LOD
+        // annulus beyond it, never an in-view chunk. Client side of the reload guard: in-view chunks
+        // (which vanilla re-saves) are never LOD-requested, so they cannot drive a re-request loop.
+        // (Server side — suppressing their metadata-only re-saves — is in DirtyContentFilterTest.)
         var s = scanner(4, 100, 100);
         var queue = new RequestQueue();
         int queued = fireScan(s, 2, new ColumnStateMap(), queue);
@@ -137,10 +169,65 @@ class SpiralScannerTest {
             int cheb = Math.max(Math.abs(PositionUtil.unpackX(packed) - CX),
                     Math.abs(PositionUtil.unpackZ(packed) - CZ));
             assertTrue(cheb > 2 && cheb <= 4,
-                    "position at Chebyshev " + cheb + " violates exclusion(2)/lod(4)");
+                    "an in-view chunk must never be requested; cheb=" + cheb + " violates exclusion(2)/lod(4)");
         }
-        // Full annulus: rings 3 and 4 = 8*3 + 8*4 positions
-        assertEquals(8 * 3 + 8 * 4, queued);
+        assertEquals(8 * 3 + 8 * 4, queued); // full annulus: rings 3 and 4
+    }
+
+    @Test
+    void renderSquareCornersBeyondVanillasRoundedViewAreRequested() {
+        // THE FIX. Once viewDistance >= 4 the render SQUARE's corners fall OUTSIDE vanilla's
+        // 1-chunk-buffered Euclidean view, so vanilla never renders them and they must get LOD.
+        // At vd=4: corner (4,4) -> buffered 3^2+3^2=18 >= 16 (requested); axis edge (4,0) -> 3^2=9
+        // < 16 (in view, excluded); (4,3) -> 9+4=13 < 16 (in view, excluded). The old Chebyshev
+        // exclusion (max(|dx|,|dz|) <= vd) left these corners blank until the player moved.
+        var s = scanner(6, 100, 100);
+        var queue = new RequestQueue();
+        int queued = fireScan(s, 4, new ColumnStateMap(), queue);
+        var drained = new java.util.HashSet<>(drain(queue));
+        assertTrue(queued > 0);
+
+        for (int sx : new int[]{-4, 4}) {
+            for (int sz : new int[]{-4, 4}) {
+                assertTrue(drained.contains(PositionUtil.packPosition(CX + sx, CZ + sz)),
+                        "render-square corner (" + sx + "," + sz + ") is outside vanilla's rounded view and must be LOD-requested");
+            }
+        }
+        assertFalse(drained.contains(PositionUtil.packPosition(CX + 4, CZ)),
+                "axis edge (4,0) is within vanilla's rounded view and must NOT be requested");
+        assertFalse(drained.contains(PositionUtil.packPosition(CX + 4, CZ + 3)),
+                "(4,3) is within vanilla's rounded view (9+4=13 < 16) and must NOT be requested");
+    }
+
+    @Test
+    void exclusionReplicatesVanillaBufferedEuclideanViewExactly() {
+        // Strongest guard against geometry drift: for EVERY chunk in the lod square, LOD must
+        // request it IFF vanilla does NOT consider it in view — the verbatim ChunkTrackingView
+        // formula `max(0,|dx|-1)^2 + max(0,|dz|-1)^2 < vd^2`. Fails if the exclusion ever reverts to
+        // a square (corners read in-view here → blank-corner gap) or drops the 1-chunk buffer (the
+        // boundary ring shifts → edge over-request, reviving the step-1 re-save loop). vd well below
+        // lod so the whole rounded boundary lies inside the scanned square.
+        int vd = 8, lod = 12;
+        var s = scanner(lod, 1000, 1000); // budget large enough that nothing is dropped for capacity
+        var queue = new RequestQueue();
+        int queued = fireScan(s, vd, new ColumnStateMap(), queue);
+        var requested = new java.util.HashSet<>(drain(queue));
+        long vd2 = (long) vd * vd;
+
+        int mismatches = 0;
+        for (int dx = -lod; dx <= lod; dx++) {
+            for (int dz = -lod; dz <= lod; dz++) {
+                int adx = Math.max(0, Math.abs(dx) - 1), adz = Math.max(0, Math.abs(dz) - 1);
+                boolean inView = (long) adx * adx + (long) adz * adz < vd2;
+                boolean req = requested.contains(PositionUtil.packPosition(CX + dx, CZ + dz));
+                // out-of-view ⇒ requested, in-view ⇒ excluded; the player's own (0,0) is in-view and
+                // never emitted by the ring walk (both false), which is a match (inView != req).
+                if (inView == req) mismatches++;
+            }
+        }
+        assertEquals(0, mismatches,
+                "every chunk must be LOD-requested IFF it is OUTSIDE vanilla's buffered-Euclidean view");
+        assertTrue(queued > 0, "the corner + annulus complement is non-empty");
     }
 
     @Test
@@ -383,12 +470,16 @@ class SpiralScannerTest {
 
     @Test
     void viewDistanceCoveringLodDistanceConfirmsWithoutRequests() {
-        // vd == lod: vanilla already renders the whole disc — nothing to request.
+        // vd comfortably exceeding lod: vanilla's rounded (buffered-Euclidean) view subsumes the
+        // WHOLE lod disc — including its corners — so nothing is requested and it confirms to lod+1.
+        // (NB at vd == lod the disc leaves the lod square's corners OUTSIDE the view; those are the
+        // corner-fix annulus, pinned by renderSquareCornersBeyondVanillasRoundedViewAreRequested.
+        // Here vd=5 > lod=4 so the corner (4,4) at buffered 3^2+3^2=18 < 5^2=25 is in view.)
         var s = scanner(4, 100, 100);
         var queue = new RequestQueue();
-        assertEquals(0, fireScan(s, 4, new ColumnStateMap(), queue), "vanilla covers the whole disc");
+        assertEquals(0, fireScan(s, 5, new ColumnStateMap(), queue), "vanilla's rounded view covers the whole disc");
         assertEquals(5, s.getConfirmedRing(), "exclusion-skipped disc confirms to lodDistance+1");
-        assertEquals(0, fireScan(s, 4, new ColumnStateMap(), queue), "no spin: stays settled");
+        assertEquals(0, fireScan(s, 5, new ColumnStateMap(), queue), "no spin: stays settled");
         assertEquals(5, s.getConfirmedRing());
 
         // vd > lod: confirmation still caps at lod+1, never tracks the overshooting exclusion.
