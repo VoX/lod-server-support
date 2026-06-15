@@ -272,10 +272,25 @@ Releases are triggered by pushing an **annotated tag** (`git tag -a`). The tag a
 
 ### Tagging a Release
 
+`main` is branch-protected (changes must land via PR; tags are **not** protected). Full flow:
+
 1. Review commits since the last tag: `git log $(git describe --tags --abbrev=0)..HEAD --oneline`
-2. Write release notes as the tag annotation (see format below)
-3. Create the annotated tag: `git tag -a v<version> -m "<release notes>"`
-4. Push: `git push origin v<version>`
+2. **Pre-flight the exact release build locally** before tagging — the tag triggers an irreversible GitHub + Modrinth publish, so it must be green first:
+   `CI=true ./gradlew :fabric:build -x runClientGameTest :paper:shadowJar -Pmod_version=<version> && python3 scripts/release_check.py`
+   (`release_check.py` must print `OK`; `:fabric:build` runs Tier 1 + Tier 2.)
+3. Get the release commit onto `main` via PR (protected branch): push the release branch, `gh pr create --base main`, then `gh pr merge --merge`. Use **`--merge`** (a merge commit) — `--squash`/`--rebase` rewrite SHAs and orphan the tag.
+4. Write release notes to a file (format below) and create the annotated tag with **`--cleanup=verbatim`** so the `###` headers survive:
+   `git tag -a v<version> -F <notes-file> --cleanup=verbatim`
+   Verify before pushing: `git for-each-ref --format='%(contents)' refs/tags/v<version>` (are the headers present?).
+5. Push the tag — this triggers `release.yml`: `git push origin v<version>`
+6. Watch CI (`gh run watch <id> --exit-status`); after it publishes, **verify the rendered notes** on GitHub (`gh release view v<version>`) and Modrinth — see Pitfalls.
+
+### Release Pitfalls (all hit v0.4.0 — see also memory `release-tag-notes-gotchas`)
+
+- **`###` headers stripped from the tag message.** `git tag` defaults to `--cleanup=strip`, which deletes `#`-leading lines as comments. Always pass `--cleanup=verbatim`.
+- **CI can publish a commit-dump instead of the annotation.** `actions/checkout` leaves a *lightweight* tag on tag-triggered runs, so the extract step's `objecttype` reads `commit` and falls back to `git log` commit subjects. Fixed in `release.yml` by force-fetching the annotated tag (`git fetch --force origin "refs/tags/$TAG:refs/tags/$TAG"`); if the notes still render wrong, fix GitHub instantly with `gh release edit v<version> --notes-file <file>`.
+- **Modrinth changelog can't be fixed locally.** `MODRINTH_TOKEN` is a CI-only secret, so a wrong Modrinth changelog must be edited by hand on the web (project `lKiXKLvv`). Keep a short, player-focused variant of the notes ready for this.
+- **A Tier-2 gametest can flake on CI** (`GenerationLifecycleGameTests` serialization/cold-gen timing). If a post-merge `main` build fails on identical, already-green code, re-run it (`gh run rerun <id> --failed`) before assuming a regression.
 
 ### Release Notes Format
 
