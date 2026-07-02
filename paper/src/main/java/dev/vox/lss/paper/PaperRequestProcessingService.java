@@ -29,6 +29,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
  * Core orchestrator for per-player LOD request processing on Paper.
@@ -142,6 +143,37 @@ public class PaperRequestProcessingService {
         return this.dirtyTracker;
     }
 
+    /** Cross-thread lifecycle ingress. On Folia, handshakes and PlayerQuit arrive on region
+     *  threads; registerPlayer/removePlayer mutate pump-owned state (including the generation
+     *  service's non-concurrent maps), so region-thread callers enqueue here and tick() drains
+     *  first — one queue preserves arrival order across a kick→rejoin of the same UUID. */
+    private sealed interface LifecycleEvent {
+        record Register(ServerPlayer player, int capabilities) implements LifecycleEvent {}
+        record Remove(UUID uuid) implements LifecycleEvent {}
+    }
+
+    private final ConcurrentLinkedQueue<LifecycleEvent> lifecycleMailbox = new ConcurrentLinkedQueue<>();
+
+    /** Any thread. Applied at the top of the next tick(). */
+    public void enqueueRegister(ServerPlayer player, int capabilities) {
+        this.lifecycleMailbox.add(new LifecycleEvent.Register(player, capabilities));
+    }
+
+    /** Any thread. Applied at the top of the next tick(). */
+    public void enqueueRemove(UUID uuid) {
+        this.lifecycleMailbox.add(new LifecycleEvent.Remove(uuid));
+    }
+
+    private void drainLifecycleMailbox() {
+        LifecycleEvent ev;
+        while ((ev = this.lifecycleMailbox.poll()) != null) {
+            switch (ev) {
+                case LifecycleEvent.Register r -> registerPlayer(r.player(), r.capabilities());
+                case LifecycleEvent.Remove r -> removePlayer(r.uuid());
+            }
+        }
+    }
+
     public PaperPlayerRequestState registerPlayer(ServerPlayer player, int capabilities) {
         var state = this.players.computeIfAbsent(player.getUUID(), uuid -> new PaperPlayerRequestState(
                 player, this.config.syncOnLoadConcurrencyLimitPerPlayer, this.config.generationConcurrencyLimitPerPlayer));
@@ -181,6 +213,11 @@ public class PaperRequestProcessingService {
     }
 
     public void tick() {
+        // BEFORE the enabled guard: a disabled server still receives quits (onPlayerQuit
+        // enqueues unconditionally) and the queue must not grow unbounded. Draining while
+        // disabled is safe by construction: HandshakeGate never invokes the registrar when
+        // disabled, and removePlayer of an unregistered UUID is a no-op.
+        drainLifecycleMailbox();
         if (!this.config.enabled)
             return;
 
