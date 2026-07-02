@@ -91,9 +91,18 @@ class VoxyCompat {
                     }
                     boolean allAccepted = true;
                     for (var s : columnData.sections()) {
+                        // H-12 guard: LSS ships "absent light layer = null" (the universal
+                        // "absent means all-zero" wire default). Voxy renders a null sky-light
+                        // layer as full daylight, so a no-sky dimension (nether/end,
+                        // hasSkyLight()==false) — where MC never stores sky light, so every
+                        // section arrives null — would light its topmost surfaces as if skylit
+                        // until vanilla loaded the chunk. Hand Voxy an explicit all-zero
+                        // (present, non-empty) DataLayer so those surfaces render dark. Overworld
+                        // skylit surfaces ship a real non-null layer and are unaffected.
+                        DataLayer skyLight = s.skyLight() != null ? s.skyLight() : new DataLayer(new byte[2048]);
                         allAccepted &= (boolean) rawIngest.invoke(worldId, s.section(),
                                 chunkX, s.sectionY(), chunkZ,
-                                s.blockLight(), s.skyLight());
+                                s.blockLight(), skyLight);
                     }
                     if (!allAccepted) {
                         reportSink.report(dimension, chunkX, chunkZ);

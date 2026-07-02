@@ -116,6 +116,43 @@ class VoxyCompatTest {
     }
 
     @Test
+    void nullSkyLightIsSubstitutedWithAllZeroLayerSoNoSkyDimensionsRenderDark() {
+        // H-12 regression guard. LSS ships "absent light layer = null at the consumer"
+        // (SectionLightDefaultsTest), so a no-sky dimension (nether/end, hasSkyLight()==false)
+        // arrives with every section's sky layer null. Voxy renders a null sky layer as full
+        // daylight (15), which made the topmost end/nether surfaces glow until vanilla loaded
+        // the chunk. The bridge must hand Voxy an explicit all-zero (present, non-empty)
+        // DataLayer so those surfaces render dark. Block light is left untouched.
+        var consumer = initBridge();
+        var section = new VoxelColumnData.SectionData(3, null, null, null);
+
+        consumer.onVoxelColumnReceived(null, DIM, 0, 0, column(section));
+
+        assertEquals(1, VoxelIngestService.calls.size());
+        var call = VoxelIngestService.calls.get(0);
+        assertNotNull(call.skyLight(), "null sky light must be replaced, not passed through as null");
+        for (byte b : call.skyLight().getData()) {
+            assertEquals(0, b, "substituted sky light must be all-zero (dark), not daylight");
+        }
+        assertNull(call.blockLight(), "block light is not substituted — Voxy renders null block light dark");
+    }
+
+    @Test
+    void nonNullSkyLightPassesThroughUnchanged() {
+        // The substitution must be surgical: a real (non-null) sky layer — e.g. an overworld
+        // surface's shipped daylight — reaches Voxy byte-identical, never replaced.
+        var consumer = initBridge();
+        var skyLight = new DataLayer(new byte[2048]);
+        skyLight.set(0, 0, 0, 15);
+        var section = new VoxelColumnData.SectionData(1, null, new DataLayer(new byte[2048]), skyLight);
+
+        consumer.onVoxelColumnReceived(null, DIM, 0, 0, column(section));
+
+        var call = VoxelIngestService.calls.get(0);
+        assertSame(skyLight, call.skyLight(), "a present sky layer must pass through unchanged");
+    }
+
+    @Test
     void nullWorldIdReportsOnceWithoutIngestAttempt() {
         var consumer = initBridge();
         WorldIdentifier.returned = null;
