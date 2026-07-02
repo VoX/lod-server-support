@@ -19,11 +19,15 @@ import java.util.concurrent.atomic.AtomicInteger;
  * file with a VALID header but garbage zlib chunk data is read by vanilla's
  * {@code RegionFileStorage}, whose inflate failure is caught upstream and surfaces to the
  * reader as an empty/absent chunk — so in MC 26.1.2 a corrupt chunk resolves as NOT-FOUND,
- * not as a thrown ERROR (empirically confirmed: errors=0, not_found=1). What FP-027 actually
+ * not as a thrown ERROR (errors=0, not_found=1 on 26.1.2; on MC 1.21.11 vanilla propagates
+ * the ZipException so the SAME read resolves as ERROR, errors=1, not_found=0 — both paths
+ * deliver the identical ChunkReadResult.empty (notFound=true), so containment is unchanged).
+ * What FP-027 actually
  * guarantees, and what this test pins, is CONTAINMENT: the corrupt read completes through the
  * pool without erroring or going thread-fatal, frees its slot, leaks nothing, and the SAME
  * reader pool then serves a valid disk read. (The error-vs-not-found classification is a
- * vanilla-internal detail; the containment + pool-survival contract is the load-bearing one.)
+ * vanilla-internal detail; the containment + pool-survival contract is the load-bearing one,
+ * so the assertion accepts either label.)
  *
  * <p>The corrupt chunk sits ~1900 chunks away in a region no IO worker has ever opened
  * (region file handles are cached per region; writing under an open handle would race).
@@ -104,15 +108,16 @@ public class RegionFaultGameTests {
             service.tick();
             var diskDiag = service.getDiskReader().getDiag();
             // Containment: both reads ran through the same pool to completion; the corrupt one
-            // resolved not-found (vanilla swallowed the inflate failure) WITHOUT erroring or
-            // saturating, and the valid read still served — proof the pool survived the corrupt
-            // read intact. This is the FP-027 guarantee; the not-found vs error label is vanilla's.
+            // resolved to a single empty result — classified not-found on 26.1.2, error on
+            // 1.21.11 (vanilla-internal, see class doc) — WITHOUT saturating, and the valid read
+            // still served, proof the pool survived the corrupt read intact. This is the FP-027
+            // guarantee; the not-found-vs-error label is vanilla's, so we accept either.
             helper.assertTrue(diskDiag.getSubmittedCount() == 2 && diskDiag.getCompletedCount() == 2
                             && diskDiag.getSuccessfulReadCount() == 1 && state.getTotalSectionsSent() == 1
-                            && diskDiag.getNotFoundCount() == 1 && diskDiag.getErrorCount() == 0
+                            && (diskDiag.getNotFoundCount() + diskDiag.getErrorCount()) == 1
                             && diskDiag.getSaturationCount() == 0,
-                    "waiting for both reads to complete with the corrupt one contained as not-found "
-                            + "and the valid one served (errors=" + diskDiag.getErrorCount()
+                    "waiting for both reads to complete with the corrupt one contained as an empty "
+                            + "resolution (not-found or error) and the valid one served (errors=" + diskDiag.getErrorCount()
                             + " success=" + diskDiag.getSuccessfulReadCount()
                             + " sent=" + state.getTotalSectionsSent()
                             + " submitted=" + diskDiag.getSubmittedCount()
