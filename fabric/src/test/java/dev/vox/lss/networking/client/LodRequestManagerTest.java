@@ -499,7 +499,7 @@ class LodRequestManagerTest {
     }
 
     @Test
-    void ingestFailureForAnotherDimensionIsIgnored() {
+    void ingestFailureForAnotherDimensionDoesNotTouchTheCurrentMap() {
         manager.setLastDimensionForTest(dim("overworld"));
         manager.onColumnReceived(POS, 5000L, dim("overworld"));
 
@@ -508,6 +508,30 @@ class LodRequestManagerTest {
         assertEquals(SATISFIED, manager.columnsForTest().classify(POS, true),
                 "a report for another dimension's column must not unstamp the current map");
         assertEquals(0, manager.getTotalIngestFailures());
+    }
+
+    @Test
+    void crossDimensionIngestReportUnstampsTheOtherDimensionsSavedCache() {
+        var mgr = new LodRequestManager();
+        final String server = "test-crossdim-" + System.nanoTime();
+        var dimA = dim("overworld");
+        mgr.onSessionConfig(config(64, 100, 100, true), server); // sets serverAddress
+        try {
+            // A false stamp is already persisted in dimA's cache (as saveCache wrote it on the
+            // dimension change) — the report arrives after the player moved to dimB.
+            var map = new Long2LongOpenHashMap();
+            map.put(POS, 5000L);
+            ColumnCacheStore.save(server, dimA, map);
+
+            mgr.setLastDimensionForTest(dim("the_end")); // player is now in dimB
+            mgr.onIngestFailure(dimA, POS);              // async report for dimA
+            ColumnCacheStore.flushPendingIo();
+
+            assertFalse(ColumnCacheStore.load(server, dimA).containsKey(POS),
+                    "a cross-dimension report unstamps the false stamp in the other dimension's cache (#36)");
+        } finally {
+            ColumnCacheStore.clearForServer(server);
+        }
     }
 
     @Test

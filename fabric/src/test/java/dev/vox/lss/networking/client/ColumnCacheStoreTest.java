@@ -251,6 +251,28 @@ class ColumnCacheStoreTest {
     }
 
     @Test
+    void removeAsyncUnstampsOnePositionAndDeletesTheFileWhenEmptied() {
+        var dim = testDimension("remove_async");
+        var map = new Long2LongOpenHashMap();
+        map.defaultReturnValue(-1L);
+        map.put(1L, 5000L);
+        map.put(2L, 6000L);
+        ColumnCacheStore.save("test-remove", dim, map);
+
+        ColumnCacheStore.removeAsync("test-remove", dim, 1L);
+        ColumnCacheStore.flushPendingIo();
+        var loaded = ColumnCacheStore.load("test-remove", dim);
+        assertFalse(loaded.containsKey(1L), "the cross-dimension-reported position is unstamped");
+        assertEquals(6000L, loaded.get(2L), "other positions survive");
+
+        // Removing the last entry deletes the file (save skips empty maps).
+        ColumnCacheStore.removeAsync("test-remove", dim, 2L);
+        ColumnCacheStore.flushPendingIo();
+        assertTrue(ColumnCacheStore.load("test-remove", dim).isEmpty());
+        ColumnCacheStore.clearForServer("test-remove");
+    }
+
+    @Test
     void v4RoundTripsRawServerTimestamps() {
         var dim = testDimension("v4_roundtrip");
         var map = new Long2LongOpenHashMap();

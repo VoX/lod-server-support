@@ -102,6 +102,31 @@ public class ColumnCacheStore {
         }
     }
 
+    /**
+     * Remove one position from a dimension's persisted cache on the IO thread. Used for a
+     * cross-dimension ingest-failure report: the failing column's stamp is already saved in the
+     * OTHER dimension's cache (the report arrived after the player changed dimension, so its
+     * in-memory state map is gone), and leaving it would answer a false up_to_date next time
+     * that dimension is visited. Unconditional (like the same-dimension unstamp): a legitimate
+     * re-serve since then just costs one harmless re-request on the next visit.
+     */
+    public static void removeAsync(String serverAddress, ResourceKey<Level> dimension, long packed) {
+        IO_EXECUTOR.execute(() -> {
+            var map = load(serverAddress, dimension); // reuses the FIFO IO thread's file access
+            if (map.remove(packed) == map.defaultReturnValue()) return; // wasn't present
+            if (map.isEmpty()) {
+                // save() skips empty maps, so delete the now-empty file directly.
+                try {
+                    Files.deleteIfExists(getCacheFile(serverAddress, dimension));
+                } catch (IOException e) {
+                    LSSLogger.warn("Failed to delete emptied column cache for " + dimensionKey(dimension), e);
+                }
+            } else {
+                save(serverAddress, dimension, map);
+            }
+        });
+    }
+
     public static void clearForServer(String serverAddress) {
         // Run on the IO thread (serialized FIFO with in-flight saves/loads so a queued save can't
         // re-create the files we delete) and wait, to preserve the synchronous clear contract.

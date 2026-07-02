@@ -343,9 +343,16 @@ public class LodRequestManager {
      * answering up-to-date. Main client thread only.
      */
     public void onIngestFailure(ResourceKey<Level> dimension, long packed) {
-        // The state map belongs to the current dimension; a report for another dimension's
-        // column would unstamp the wrong position here.
-        if (this.lastDimension == null || !this.lastDimension.equals(dimension)) return;
+        if (this.lastDimension == null || !this.lastDimension.equals(dimension)) {
+            // A report for another dimension (a consumer rejected asynchronously after the
+            // player changed dimension): its in-memory state map is gone, but the false stamp is
+            // already saved in that dimension's cache. Remove it there directly so the next visit
+            // re-resolves honestly instead of getting a false up_to_date (#36).
+            if (this.serverAddress != null && dimension != null) {
+                ColumnCacheStore.removeAsync(this.serverAddress, dimension, packed);
+            }
+            return;
+        }
         this.tracker.removeByPosition(packed);
         this.columns.onIngestFailed(packed);
         this.metrics.recordIngestFailure();
