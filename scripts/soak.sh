@@ -19,9 +19,9 @@ set -euo pipefail
 # SOAK_PLATFORM=paper runs the identical scenario against a real Paper server
 # (:paper:runSoakServer + PaperSoakScenarioDriver) with the UNCHANGED Fabric soak
 # client and checker. Paper keeps its own base-world snapshot (soak-worlds/base-paper);
-# on MC 26.1.2 Paper uses the vanilla unified layout (world/dimensions/minecraft/<dim>,
-# no split world_nether/world_the_end dirs), so the snapshot carries every dimension —
-# including the End — exactly like Fabric's.
+# on MC 1.21.11 Paper/Folia use the legacy split layout (world/, world_nether/,
+# world_the_end/), while Fabric keeps a single world/ — the world* glob covers both, so the
+# snapshot carries every dimension (including the End) on every platform.
 #
 # SOAK_PLATFORM=folia runs the Paper scenario set against a real Folia server
 # (:paper:runFolia downloads the jar; base world soak-worlds/base-folia). Same plugin,
@@ -91,6 +91,9 @@ case "$SOAK_PLATFORM" in
         exit 1
         ;;
 esac
+
+# Base worlds are MC-version-specific; fresh-backfill stamps this marker when it saves one.
+WORLD_VERSION_MARKER="$BASE_WORLD_DIR/mc-version"
 
 source "$PROJECT_ROOT/scripts/lib/mc-run.sh"
 
@@ -222,6 +225,14 @@ echo "========================================="
 echo " LSS Soak: platform=$SOAK_PLATFORM, scenario=$SCENARIO, client runs=$CLIENT_RUNS, budget=${RUNTIME_BUDGET}s"
 echo "========================================="
 
+# Base worlds are MC-version-specific; a 26.1.2 world will not downgrade to 1.21.11. Clear a
+# stale base BEFORE Step 1 so its '! -d "$BASE_WORLD_DIR/world"' check regenerates naturally
+# (must run before that check — clearing after staging would boot 1.21.11 against a 26.1.2 world).
+if [[ -d "$BASE_WORLD_DIR" && "$(cat "$WORLD_VERSION_MARKER" 2>/dev/null)" != "1.21.11" ]]; then
+    echo "[soak] Base world at $BASE_WORLD_DIR is not for MC 1.21.11 — clearing (will re-run fresh-backfill)"
+    rm -rf "$BASE_WORLD_DIR"
+fi
+
 # Step 1: Auto-run fresh-backfill first if a base world is required but missing
 # (fresh-world scenarios never need it). cold-restart-resync additionally needs the
 # client-cache snapshot taken at the same instant as the base world — a base world
@@ -256,13 +267,13 @@ mkdir -p "$RUN_RESULTS_DIR"
 
 # Step 5a: Stage world. Fresh-world scenarios start from nothing (generation paths);
 # only fresh-backfill SAVES its world as the reusable base afterwards (Step 13).
-# Both platforms keep all dimensions inside world/ (Paper on MC 26.1.2 uses the vanilla
-# unified world/dimensions/minecraft/<dim> layout, not the legacy split
-# world_nether/world_the_end dirs), so clearing/copying world/ covers the End too.
+# 1.21.11 Bukkit platforms (Paper/Folia) use the legacy split world_nether/world_the_end
+# layout; Fabric keeps a single world/ (dedicated-server DIM-1/DIM1 nest inside it) — the
+# world* glob covers both, so the End round-trips on every platform.
 echo "[soak] Staging world for scenario: $SCENARIO"
-rm -rf "$SERVER_RUN_DIR/world"
+rm -rf "$SERVER_RUN_DIR"/world "$SERVER_RUN_DIR"/world_nether "$SERVER_RUN_DIR"/world_the_end
 if [[ " $FRESH_WORLD_SCENARIOS " != *" $SCENARIO "* ]]; then
-    cp -r "$BASE_WORLD_DIR/world" "$SERVER_RUN_DIR/world"
+    cp -r "$BASE_WORLD_DIR"/world* "$SERVER_RUN_DIR"/
 fi
 
 # Step 5b: Stage client column cache. warm-rejoin clears too: its run 1 IS the
@@ -407,8 +418,12 @@ cp "$SCENARIO_JSON" "$RUN_RESULTS_DIR/"
 if [[ "$SCENARIO" == "fresh-backfill" && -d "$SERVER_RUN_DIR/world" ]]; then
     echo "[soak] Saving world to $BASE_WORLD_DIR/ for reuse"
     mkdir -p "$BASE_WORLD_DIR"
-    rm -rf "$BASE_WORLD_DIR/world"
-    cp -r "$SERVER_RUN_DIR/world" "$BASE_WORLD_DIR/world"
+    # Remove ALL prior world dirs before copying: leaving a stale world_nether/world_the_end
+    # in place would make the world* glob-copy nest world_nether/world_nether and silently keep
+    # the STALE End/Nether in the snapshot (the exact failure this split-world handling fixes).
+    rm -rf "$BASE_WORLD_DIR"/world "$BASE_WORLD_DIR"/world_nether "$BASE_WORLD_DIR"/world_the_end
+    cp -r "$SERVER_RUN_DIR"/world* "$BASE_WORLD_DIR"/
+    printf '%s' "1.21.11" > "$WORLD_VERSION_MARKER"
     if [[ -d "$CLIENT_RUN_DIR/config/lss/cache" ]]; then
         echo "[soak] Saving client column cache snapshot to $BASE_WORLD_DIR/client-cache"
         rm -rf "$BASE_WORLD_DIR/client-cache"

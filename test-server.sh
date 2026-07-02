@@ -11,24 +11,24 @@ PAPER_DIR="$SCRIPT_DIR/test-server/paper"
 FOLIA_DIR="$SCRIPT_DIR/test-server/folia"
 
 # --- Fabric versions ---
-FABRIC_MC_VERSION="26.1.2"
+FABRIC_MC_VERSION="1.21.11"
 FABRIC_LOADER_VERSION="0.19.3"
 FABRIC_INSTALLER_VERSION="1.1.1"
 
 # --- Paper/Folia versions ---
-PAPER_MC_VERSION="26.1.2"
-FOLIA_MC_VERSION="26.1.2"
+PAPER_MC_VERSION="1.21.11"
+FOLIA_MC_VERSION="1.21.11"
 
 # --- Download URLs ---
 FABRIC_SERVER_URL="https://meta.fabricmc.net/v2/versions/loader/${FABRIC_MC_VERSION}/${FABRIC_LOADER_VERSION}/${FABRIC_INSTALLER_VERSION}/server/jar"
-FABRIC_API_URL="https://cdn.modrinth.com/data/P7dR8mSH/versions/yALY9gHM/fabric-api-0.151.0%2B26.1.2.jar"
-C2ME_URL="https://cdn.modrinth.com/data/VSNURh3q/versions/MmyZoUyp/c2me-fabric-mc26.1.2-0.4.0-alpha.0.4.jar"
+FABRIC_API_URL="https://cdn.modrinth.com/data/P7dR8mSH/versions/5zJNhXV2/fabric-api-0.141.4%2B1.21.11.jar"
+C2ME_URL="https://cdn.modrinth.com/data/VSNURh3q/versions/MfQIu1Y0/c2me-fabric-mc1.21.11-0.4.0-alpha.0.18.jar"
 
 # --- Java version check ---
 JAVA_MAJOR=$(java -version 2>&1 | head -1 | sed 's/.*"\([0-9]\+\).*/\1/')
-if [ "$JAVA_MAJOR" -lt 25 ] 2>/dev/null; then
-    echo "ERROR: Java 25+ required for MC 26.1. Found: Java $JAVA_MAJOR" >&2
-    echo "  Set JAVA_HOME to a JDK 25+ installation." >&2
+if [ "$JAVA_MAJOR" -lt 21 ] 2>/dev/null; then
+    echo "ERROR: Java 21+ required for MC 1.21.11. Found: Java $JAVA_MAJOR" >&2
+    echo "  Set JAVA_HOME to a JDK 21+ installation." >&2
     exit 1
 fi
 
