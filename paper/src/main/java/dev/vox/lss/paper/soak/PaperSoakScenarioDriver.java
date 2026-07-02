@@ -3,6 +3,7 @@ package dev.vox.lss.paper.soak;
 import com.google.gson.Gson;
 import dev.vox.lss.common.LSSConstants;
 import dev.vox.lss.common.LSSLogger;
+import dev.vox.lss.paper.FoliaSupport;
 import dev.vox.lss.paper.LSSPaperPlugin;
 import net.minecraft.server.MinecraftServer;
 import org.bukkit.craftbukkit.CraftServer;
@@ -158,11 +159,16 @@ public final class PaperSoakScenarioDriver implements Listener {
             this.lastProgressTick = this.tickCount;
             LSSLogger.info("[Soak] Executing step (anchor " + step.anchor + " +" + step.at + "s): " + step.cmd);
             boolean threw = false;
-            try {
-                executeStepCommand(step.cmd);
-            } catch (RuntimeException e) {
-                threw = true;
-                LSSLogger.error("[Soak] Step command failed: " + step.cmd, e);
+            boolean mapped = mapsToFoliaNoOp(step.cmd, FoliaSupport.IS_FOLIA);
+            if (mapped) {
+                LSSLogger.info("[Soak] Folia: mapping to no-op: " + step.cmd);
+            } else {
+                try {
+                    executeStepCommand(step.cmd);
+                } catch (RuntimeException e) {
+                    threw = true;
+                    LSSLogger.error("[Soak] Step command failed: " + step.cmd, e);
+                }
             }
             // ok=did-not-throw breadcrumb (twin of the Fabric driver); no-effect commands are
             // flagged by soak_report's snapshot-delta tag, not here.
@@ -171,8 +177,22 @@ public final class PaperSoakScenarioDriver implements Listener {
             row.put("anchor", step.anchor);
             row.put("at", step.at);
             row.put("ok", !threw);
+            if (mapped) row.put("mapped", true); // only when true: Paper rows stay byte-identical
             PaperSoakMetricsExporter.appendJsonLine(OUTPUT, row);
         }
+    }
+
+    /**
+     * Folia unregisters /save-all (docs.papermc.io/folia/faq); executing it would log
+     * "Unknown command" and save nothing. The Folia soak staging compensates with an
+     * aggressive bukkit.yml autosave and the end-of-scenario halt(false) full save
+     * (RegionShutdownThread saves all worlds), so the timeline step becomes an
+     * acknowledged no-op instead of a per-platform scenario fork.
+     */
+    static boolean mapsToFoliaNoOp(String cmd, boolean folia) {
+        if (!folia) return false;
+        String bare = cmd.startsWith("/") ? cmd.substring(1) : cmd;
+        return bare.equals("save-all") || bare.startsWith("save-all ");
     }
 
     /**
