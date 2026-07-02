@@ -473,12 +473,53 @@ class NbtSectionSerializerTest {
                 "both modules must carry the same corpus cases");
         assertFalse(paper.isEmpty(), "corpus must not be empty");
         for (var entry : paper.entrySet()) {
-            long mismatch = Files.mismatch(entry.getValue(), fabric.get(entry.getKey()));
-            assertEquals(-1L, mismatch, () -> entry.getKey()
+            // Byte-exact cross-module parity, EXCEPT each section's leading nonEmptyBlockCount
+            // short. On 1.21.11 vanilla MC (Fabric via loom) counts a waterlogged block twice
+            // toward that count — once as a non-air block, once for its non-empty water fluid —
+            // while Paper's paperweight 1.21.11 bundle patches the fluid increment out (so the
+            // waterlogged fixture reads 4 on Fabric, 3 on Paper). That field is a >0 "non-empty"
+            // hint, NOT stream framing: LevelChunkSection.read reads it and then reads the
+            // self-describing palette/data, so a Fabric client decoding a Paper server's section
+            // renders identically. Every other byte (palette bits, palette entries, packed data,
+            // biomes, light) is still asserted byte-exact, so any drift that would actually
+            // desync a cross-module decode still fails here.
+            byte[] paperNorm = zeroSectionBlockCounts(Files.readAllBytes(entry.getValue()));
+            byte[] fabricNorm = zeroSectionBlockCounts(Files.readAllBytes(fabric.get(entry.getKey())));
+            int mismatch = Arrays.mismatch(paperNorm, fabricNorm);
+            assertEquals(-1, mismatch, () -> entry.getKey()
                     + ": fabric and paper fixtures diverge at byte " + mismatch
-                    + " — the two serializers no longer produce identical wire bytes;"
-                    + " regenerate on BOTH modules from the same code state and fix the drift");
+                    + " (outside the exempt nonEmptyBlockCount hint) — the two serializers no"
+                    + " longer produce identical wire bytes; regenerate on BOTH modules from the"
+                    + " same code state and fix the drift");
         }
+    }
+
+    /**
+     * Returns a copy of the section wire with every section's leading nonEmptyBlockCount short
+     * zeroed. That 2-byte hint is the only field that legitimately differs across platforms on
+     * 1.21.11 (see {@link #goldenCorpusIsByteIdenticalToTheFabricTwin}); zeroing it in both
+     * corpora lets the parity check stay byte-exact on everything that governs a cross-module
+     * decode. Walks the wire exactly as {@link #decode} does so the short is located precisely,
+     * including in multi-section fixtures.
+     */
+    private byte[] zeroSectionBlockCounts(byte[] wire) {
+        byte[] copy = wire.clone();
+        var buf = new FriendlyByteBuf(Unpooled.wrappedBuffer(wire));
+        try {
+            int count = buf.readVarInt();
+            for (int i = 0; i < count; i++) {
+                buf.readByte();                          // sectionY
+                int blockCountIdx = buf.readerIndex();   // start of section.write == the count short
+                copy[blockCountIdx] = 0;
+                copy[blockCountIdx + 1] = 0;
+                new LevelChunkSection(FACTORY).read(buf); // consume count short + states + biomes
+                if (buf.readBoolean()) buf.skipBytes(2048); // blockLight
+                if (buf.readBoolean()) buf.skipBytes(2048); // skyLight
+            }
+        } finally {
+            buf.release();
+        }
+        return copy;
     }
 
     private static Path locateRepoRelative(String repoRelative) {
