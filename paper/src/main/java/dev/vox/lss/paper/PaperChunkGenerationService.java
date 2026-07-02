@@ -220,7 +220,7 @@ public class PaperChunkGenerationService {
 
         if (columnData != null) {
             long columnTimestamp = LSSConstants.epochSeconds();
-            String dimension = key.dimension().identifier().toString();
+            String dimension = key.dimension().location().toString();
             for (var cb : gen.callbacks) {
                 this.mainReady.add(new TickSnapshot.GenerationReadyData(
                         cb.playerUuid, cx, cz, dimension,
@@ -242,7 +242,7 @@ public class PaperChunkGenerationService {
      * (soak law A4).
      */
     private void addFailures(List<GenerationCallback> callbacks, PendingGenerationKey key, int cx, int cz) {
-        String dimension = key.dimension().identifier().toString();
+        String dimension = key.dimension().location().toString();
         for (var cb : callbacks) {
             this.mainReady.add(new TickSnapshot.GenerationReadyData(
                     cb.playerUuid, cx, cz, dimension, null, 0L, cb.submissionOrder));

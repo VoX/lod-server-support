@@ -5,7 +5,6 @@ import dev.vox.lss.common.processing.ChunkReadResult;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.MappedRegistry;
-import net.minecraft.core.RegistrationInfo;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.data.registries.VanillaRegistries;
@@ -58,7 +57,7 @@ class PaperDiskReaderEnvelopeTest {
         HolderLookup.Provider provider = VanillaRegistries.createLookup();
         HolderLookup.RegistryLookup<Biome> src = provider.lookupOrThrow(Registries.BIOME);
         MappedRegistry<Biome> biomes = new MappedRegistry<>(Registries.BIOME, Lifecycle.stable());
-        biomes.register(Biomes.PLAINS, src.getOrThrow(Biomes.PLAINS).value(), RegistrationInfo.BUILT_IN);
+        biomes.register(Biomes.PLAINS, src.getOrThrow(Biomes.PLAINS).value(), Lifecycle.stable());
         biomes.freeze();
         REGISTRY_ACCESS = new RegistryAccess.ImmutableRegistryAccess(List.of(biomes));
     }

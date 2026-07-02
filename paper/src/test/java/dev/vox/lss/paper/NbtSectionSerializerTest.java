@@ -5,7 +5,6 @@ import io.netty.buffer.Unpooled;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.MappedRegistry;
-import net.minecraft.core.RegistrationInfo;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.data.registries.VanillaRegistries;
@@ -21,7 +20,6 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.chunk.LevelChunkSection;
-import net.minecraft.world.level.chunk.PalettedContainerFactory;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -45,7 +43,7 @@ import static org.junit.jupiter.api.Assertions.fail;
  * Covers {@link PaperNbtSectionSerializer#serializeChunkNbt} (the region-NBT -> wire-bytes path).
  * Uses the same reference grammar, so it also pins Paper's serializer to the Fabric output.
  */
-// new LevelChunkSection(PalettedContainerFactory) is @Deprecated on Paper (anti-xray overload),
+// new LevelChunkSection(TestContainerFactory) is @Deprecated on Paper (anti-xray overload),
 // but is the canonical decode ctor used by the client; the 1-arg form is vanilla-identical.
 @SuppressWarnings("deprecation")
 class NbtSectionSerializerTest {
@@ -58,12 +56,12 @@ class NbtSectionSerializerTest {
     }
 
     private static RegistryAccess REGISTRY_ACCESS;
-    private static PalettedContainerFactory FACTORY;
+    private static TestContainerFactory FACTORY;
 
     @BeforeAll
     static void setup() {
         REGISTRY_ACCESS = buildRegistryAccess();
-        FACTORY = PalettedContainerFactory.create(REGISTRY_ACCESS);
+        FACTORY = TestContainerFactory.create(REGISTRY_ACCESS);
     }
 
     /**
@@ -78,7 +76,7 @@ class NbtSectionSerializerTest {
         HolderLookup.RegistryLookup<Biome> src = provider.lookupOrThrow(Registries.BIOME);
         MappedRegistry<Biome> biomes = new MappedRegistry<>(Registries.BIOME, Lifecycle.stable());
         for (var key : List.of(Biomes.PLAINS, Biomes.DESERT, Biomes.JUNGLE, Biomes.SNOWY_TAIGA)) {
-            biomes.register(key, src.getOrThrow(key).value(), RegistrationInfo.BUILT_IN);
+            biomes.register(key, src.getOrThrow(key).value(), Lifecycle.stable());
         }
         biomes.freeze();
         return new RegistryAccess.ImmutableRegistryAccess(List.of(biomes));
@@ -94,13 +92,13 @@ class NbtSectionSerializerTest {
     }
 
     private CompoundTag sectionNbt(int y, boolean stone, boolean includeBiomes, byte[] blockLight, byte[] skyLight) {
-        var sec = new LevelChunkSection(FACTORY);
+        var sec = new LevelChunkSection(FACTORY.biomeRegistry());
         if (stone) sec.setBlockState(0, 0, 0, Blocks.STONE.defaultBlockState());
         var s = new CompoundTag();
         s.putInt("Y", y);
-        s.put("block_states", FACTORY.blockStatesContainerCodec().encodeStart(NbtOps.INSTANCE, sec.getStates()).getOrThrow());
+        s.put("block_states", FACTORY.blockStatesContainerCodec().encodeStart(NbtOps.INSTANCE, sec.getStates()).getOrThrow(false, msg -> {}));
         if (includeBiomes) {
-            s.put("biomes", FACTORY.biomeContainerCodec().encodeStart(NbtOps.INSTANCE, sec.getBiomes()).getOrThrow());
+            s.put("biomes", FACTORY.biomeContainerCodec().encodeStart(NbtOps.INSTANCE, sec.getBiomes()).getOrThrow(false, msg -> {}));
         }
         if (blockLight != null) s.putByteArray("BlockLight", blockLight);
         if (skyLight != null) s.putByteArray("SkyLight", skyLight);
@@ -124,7 +122,7 @@ class NbtSectionSerializerTest {
             var out = new ArrayList<DecodedSection>(count);
             for (int i = 0; i < count; i++) {
                 int y = buf.readByte();
-                var section = new LevelChunkSection(FACTORY);
+                var section = new LevelChunkSection(FACTORY.biomeRegistry());
                 section.read(buf);
                 boolean hasBl = buf.readBoolean();
                 byte[] bl = null;
@@ -247,7 +245,7 @@ class NbtSectionSerializerTest {
         var noStates = new CompoundTag();
         noStates.putInt("Y", 1);
         noStates.put("biomes", FACTORY.biomeContainerCodec()
-                .encodeStart(NbtOps.INSTANCE, new LevelChunkSection(FACTORY).getBiomes()).getOrThrow());
+                .encodeStart(NbtOps.INSTANCE, new LevelChunkSection(FACTORY.biomeRegistry()).getBiomes()).getOrThrow(false, msg -> {}));
         byte[] wire = PaperNbtSectionSerializer.serializeChunkNbt(
                 chunkNbt("minecraft:full", noStates, sectionNbt(2, true, true, null, null)), REGISTRY_ACCESS);
         var sections = decode(wire);
@@ -259,7 +257,7 @@ class NbtSectionSerializerTest {
     void sectionMissingY_skipped() {
         var noY = new CompoundTag();
         noY.put("block_states", FACTORY.blockStatesContainerCodec()
-                .encodeStart(NbtOps.INSTANCE, new LevelChunkSection(FACTORY).getStates()).getOrThrow());
+                .encodeStart(NbtOps.INSTANCE, new LevelChunkSection(FACTORY.biomeRegistry()).getStates()).getOrThrow(false, msg -> {}));
         byte[] wire = PaperNbtSectionSerializer.serializeChunkNbt(
                 chunkNbt("minecraft:full", noY, sectionNbt(7, true, true, null, null)), REGISTRY_ACCESS);
         var sections = decode(wire);
@@ -352,8 +350,8 @@ class NbtSectionSerializerTest {
                                     net.minecraft.world.level.chunk.PalettedContainer<net.minecraft.core.Holder<Biome>> biomes) {
         var s = new CompoundTag();
         s.putInt("Y", y);
-        s.put("block_states", FACTORY.blockStatesContainerCodec().encodeStart(NbtOps.INSTANCE, states).getOrThrow());
-        s.put("biomes", FACTORY.biomeContainerCodec().encodeStart(NbtOps.INSTANCE, biomes).getOrThrow());
+        s.put("block_states", FACTORY.blockStatesContainerCodec().encodeStart(NbtOps.INSTANCE, states).getOrThrow(false, msg -> {}));
+        s.put("biomes", FACTORY.biomeContainerCodec().encodeStart(NbtOps.INSTANCE, biomes).getOrThrow(false, msg -> {}));
         return s;
     }
 
@@ -374,22 +372,18 @@ class NbtSectionSerializerTest {
 
     @Test
     void nonCompoundSectionElement_failsWholeChunk() {
-        // Each sections-list element is blindly cast to CompoundTag (PaperNbtSectionSerializer
-        // first pass). A non-compound element — NBT lists are heterogeneous since 1.21.5,
-        // so a corrupt region or rogue tool can produce one — throws CCE out of
-        // serializeChunkNbt; AbstractChunkDiskReader.readAndDeliver catches it on the
-        // reader thread, counts an error, and answers the not-found envelope. Pinned:
-        // the WHOLE chunk resolves NOT_GENERATED — surviving siblings do not serve
-        // (contrast with the per-section skip of malformed block_states below).
+        // 1.20.1 backport: NBT lists are HOMOGENEOUS here (heterogeneous lists arrived in
+        // 1.21.5), so a mixed sections list is unrepresentable — ListTag.add throws UOE at
+        // construction. The nearest corrupt-region shape is a sections list of the WRONG
+        // element type: getList("sections", TAG_COMPOUND) then returns an empty list and
+        // serializeChunkNbt resolves null — the WHOLE chunk answers the not-found envelope,
+        // preserving the pinned outcome (surviving siblings do not serve).
         var corrupt = new CompoundTag();
         corrupt.putString("Status", "minecraft:full");
         var list = new ListTag();
-        list.add(sectionNbt(0, true, true, null, null));
         list.add(StringTag.valueOf("not-a-section"));
-        list.add(sectionNbt(2, true, true, null, null));
         corrupt.put("sections", list);
-        assertThrows(ClassCastException.class,
-                () -> PaperNbtSectionSerializer.serializeChunkNbt(corrupt, REGISTRY_ACCESS));
+        assertNull(PaperNbtSectionSerializer.serializeChunkNbt(corrupt, REGISTRY_ACCESS));
     }
 
     @Test
@@ -474,15 +468,14 @@ class NbtSectionSerializerTest {
         assertFalse(paper.isEmpty(), "corpus must not be empty");
         for (var entry : paper.entrySet()) {
             // Byte-exact cross-module parity, EXCEPT each section's leading nonEmptyBlockCount
-            // short. On 1.21.11 vanilla MC (Fabric via loom) counts a waterlogged block twice
-            // toward that count — once as a non-air block, once for its non-empty water fluid —
-            // while Paper's paperweight 1.21.11 bundle patches the fluid increment out (so the
-            // waterlogged fixture reads 4 on Fabric, 3 on Paper). That field is a >0 "non-empty"
-            // hint, NOT stream framing: LevelChunkSection.read reads it and then reads the
-            // self-describing palette/data, so a Fabric client decoding a Paper server's section
-            // renders identically. Every other byte (palette bits, palette entries, packed data,
-            // biomes, light) is still asserted byte-exact, so any drift that would actually
-            // desync a cross-module decode still fails here.
+            // short. On some versions vanilla MC (Fabric via loom) and Paper's patched
+            // recalcBlockCounts disagree on whether a waterlogged block's fluid counts toward
+            // that short (observed on 1.21.11: 4 vs 3). The field is a >0 "non-empty" hint,
+            // NOT stream framing: LevelChunkSection.read consumes it and then reads the
+            // self-describing palette/data, so a Fabric client decoding a Paper server's
+            // section renders identically. Every other byte (palette bits, entries, packed
+            // data, biomes, light) stays asserted byte-exact, so any drift that would
+            // actually desync a cross-module decode still fails here.
             byte[] paperNorm = zeroSectionBlockCounts(Files.readAllBytes(entry.getValue()));
             byte[] fabricNorm = zeroSectionBlockCounts(Files.readAllBytes(fabric.get(entry.getKey())));
             int mismatch = Arrays.mismatch(paperNorm, fabricNorm);
@@ -496,11 +489,9 @@ class NbtSectionSerializerTest {
 
     /**
      * Returns a copy of the section wire with every section's leading nonEmptyBlockCount short
-     * zeroed. That 2-byte hint is the only field that legitimately differs across platforms on
-     * 1.21.11 (see {@link #goldenCorpusIsByteIdenticalToTheFabricTwin}); zeroing it in both
-     * corpora lets the parity check stay byte-exact on everything that governs a cross-module
-     * decode. Walks the wire exactly as {@link #decode} does so the short is located precisely,
-     * including in multi-section fixtures.
+     * zeroed — the only field that may legitimately differ across platforms (see the parity
+     * test above). Walks the wire exactly as {@link #decode} does so the short is located
+     * precisely, including in multi-section fixtures.
      */
     private byte[] zeroSectionBlockCounts(byte[] wire) {
         byte[] copy = wire.clone();
@@ -512,7 +503,7 @@ class NbtSectionSerializerTest {
                 int blockCountIdx = buf.readerIndex();   // start of section.write == the count short
                 copy[blockCountIdx] = 0;
                 copy[blockCountIdx + 1] = 0;
-                new LevelChunkSection(FACTORY).read(buf); // consume count short + states + biomes
+                new LevelChunkSection(FACTORY.biomeRegistry()).read(buf); // count short + states + biomes
                 if (buf.readBoolean()) buf.skipBytes(2048); // blockLight
                 if (buf.readBoolean()) buf.skipBytes(2048); // skyLight
             }

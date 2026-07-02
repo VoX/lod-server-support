@@ -5,7 +5,7 @@ import dev.vox.lss.common.PositionUtil;
 import io.netty.buffer.Unpooled;
 import net.minecraft.SharedConstants;
 import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.Bootstrap;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -254,7 +254,7 @@ class WireParityTest {
                 LSSConstants.CHANNEL_VOXEL_COLUMN, LSSConstants.CHANNEL_BATCH_RESPONSE};
         var distinct = new HashSet<String>();
         for (String channel : channels) {
-            var id = Identifier.parse(channel); // throws on a typo'd channel string
+            var id = new ResourceLocation(channel); // throws on a typo'd channel string
             assertEquals(LSSConstants.MOD_ID, id.getNamespace(),
                     channel + " must live under the lss: namespace");
             distinct.add(id.toString());

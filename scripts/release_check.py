@@ -10,7 +10,8 @@ Inspects the built release jars and the workflow/metadata that publishes them, a
   * the dev-only Paper soak jar (lss-paper-soak*.jar) never matches the release glob;
   * required content is present — fabric.mod.json / plugin.yml, the common classes, LICENSE;
   * version placeholders are expanded (no literal ${version} in plugin.yml / fabric.mod.json);
-  * Paper keeps the paperweight-mappings-namespace: mojang manifest attr through the shadowJar;
+  * Paper 1.20.1 ships REOBFUSCATED (spigot-mapped runtime below 1.20.5): the release jar
+    must carry paperweight-mappings-namespace: spigot through the reobfJar;
   * release.yml's publish globs actually match the CI artifact names (and not the soak jar);
   * discovery is unambiguous — stale jars from earlier builds fail the run (or are excluded
     by an explicit --version), so a green pre-flight always validated the jar being tagged.
@@ -138,9 +139,9 @@ def check_paper_jar(jar, problems):
                             "(Folia refuses to load the plugin without it)")
     if not any(n.startswith("dev/vox/lss/common/") and n.endswith(".class") for n in names):
         problems.append(f"{base}: shaded jar missing the shared common/ classes")
-    if "paperweight-mappings-namespace: mojang" not in _manifest(jar):
-        problems.append(f"{base}: manifest lost 'paperweight-mappings-namespace: mojang' "
-                        "(server will refuse to load remapped NMS)")
+    if "paperweight-mappings-namespace: spigot" not in _manifest(jar):
+        problems.append(f"{base}: manifest is not 'paperweight-mappings-namespace: spigot' "
+                        "(1.20.1 runtime is spigot-mapped; a mojang-mapped jar will not load)")
 
 
 def check_glob_hygiene(problems, fabric_jars, paper_jars, soak_jars):
@@ -293,7 +294,7 @@ def _selftest():
             "plugin.yml": "name: LodServerSupport\nversion: 0.4.0\nfolia-supported: true\n",
             "dev/vox/lss/paper/LSSPaperPlugin.class": "x",
             "dev/vox/lss/common/PositionUtil.class": "x",
-        }, manifest="Manifest-Version: 1.0\npaperweight-mappings-namespace: mojang\n")
+        }, manifest="Manifest-Version: 1.0\npaperweight-mappings-namespace: spigot\n")
         p = []
         check_paper_jar(good_pap, p)
         check(p == [], f"clean paper jar flagged: {p}")
@@ -304,7 +305,7 @@ def _selftest():
             "plugin.yml": "name: LodServerSupport\nversion: 0.4.0\n",
             "dev/vox/lss/paper/LSSPaperPlugin.class": "x",
             "dev/vox/lss/common/PositionUtil.class": "x",
-        }, manifest="Manifest-Version: 1.0\npaperweight-mappings-namespace: mojang\n")
+        }, manifest="Manifest-Version: 1.0\npaperweight-mappings-namespace: spigot\n")
         p = []
         check_paper_jar(noflag_pap, p)
         check(any("folia-supported" in m for m in p), "missing folia-supported flag not caught")
@@ -329,7 +330,7 @@ def _selftest():
             "dev/vox/lss/paper/LSSPaperPlugin.class": "x",
             "dev/vox/lss/common/PositionUtil.class": "x",
             "dev/vox/lss/common/benchmark/SharedBenchHook.class": "x",  # leaked dev code
-        }, manifest="Manifest-Version: 1.0\npaperweight-mappings-namespace: mojang\n")
+        }, manifest="Manifest-Version: 1.0\npaperweight-mappings-namespace: spigot\n")
         p = []
         check_paper_jar(common_leak_pap, p)
         check(any("common/benchmark" in m for m in p),

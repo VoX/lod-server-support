@@ -41,7 +41,7 @@ class PaperPlayerRequestStateTest {
         when(level.dimension()).thenReturn(Level.OVERWORLD);
         var player = mock(ServerPlayer.class);
         when(player.getUUID()).thenReturn(uuid);
-        when(player.level()).thenReturn(level);
+        when(player.serverLevel()).thenReturn(level);
 
         var state = new PaperPlayerRequestState(player, 7, 3);
         assertEquals(uuid, state.getPlayerUUID(), "constructor wires the player's UUID");

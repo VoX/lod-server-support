@@ -17,7 +17,7 @@ public class PaperPlayerRequestState extends AbstractPlayerRequestState<byte[]> 
     public PaperPlayerRequestState(ServerPlayer player, int syncConcurrency, int genConcurrency) {
         super(player.getUUID(), syncConcurrency, genConcurrency);
         this.player = player;
-        this.lastDimension = player.level().dimension();
+        this.lastDimension = player.serverLevel().dimension();
     }
 
     public void addRequest(int cx, int cz, long clientTimestamp) {
@@ -35,7 +35,7 @@ public class PaperPlayerRequestState extends AbstractPlayerRequestState<byte[]> 
     public ResourceKey<Level> getLastDimension() { return this.lastDimension; }
 
     public boolean checkDimensionChange() {
-        var currentDim = this.player.level().dimension();
+        var currentDim = this.player.serverLevel().dimension();
         if (!currentDim.equals(this.lastDimension)) {
             this.lastDimension = currentDim;
             return true;

@@ -4,18 +4,22 @@ import com.mojang.serialization.Codec;
 import dev.vox.lss.common.LSSConstants;
 import io.netty.buffer.Unpooled;
 import net.minecraft.core.Holder;
+import net.minecraft.core.Registry;
 import net.minecraft.core.RegistryAccess;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtOps;
+import net.minecraft.nbt.Tag;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ChunkMap;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunkSection;
+import net.minecraft.world.level.biome.Biomes;
+import net.minecraft.world.level.chunk.ChunkStatus;
 import net.minecraft.world.level.chunk.PalettedContainer;
-import net.minecraft.world.level.chunk.PalettedContainerFactory;
 import net.minecraft.world.level.chunk.PalettedContainerRO;
-import net.minecraft.world.level.chunk.status.ChunkStatus;
+import net.minecraft.world.level.chunk.storage.ChunkSerializer;
 
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -61,17 +65,18 @@ final class PaperNbtSectionSerializer {
     // Fabric path. The wire format must match Fabric exactly, so keep this call (do not migrate).
     @SuppressWarnings("deprecation")
     static byte[] serializeChunkNbt(CompoundTag chunkNbt, RegistryAccess registryAccess) {
-        var statusStr = chunkNbt.getStringOr("Status", null);
-        if (statusStr == null || ChunkStatus.byName(statusStr) != ChunkStatus.FULL) return null;
+        var statusStr = chunkNbt.getString("Status");
+        if (statusStr.isEmpty() || ChunkStatus.byName(statusStr) != ChunkStatus.FULL) return null;
 
-        var factory = PalettedContainerFactory.create(registryAccess);
-        var blockStateCodec = factory.blockStatesContainerCodec();
-        var biomeCodec = factory.biomeContainerCodec();
+        var biomeRegistry = registryAccess.registryOrThrow(Registries.BIOME);
+        var blockStateCodec = ChunkSerializer.BLOCK_STATE_CODEC;
+        var biomeCodec = PalettedContainer.codecRO(
+                biomeRegistry.asHolderIdMap(), biomeRegistry.holderByNameCodec(),
+                PalettedContainer.Strategy.SECTION_BIOMES,
+                biomeRegistry.getHolderOrThrow(Biomes.PLAINS));
 
-        var sectionsTag = chunkNbt.getList("sections");
-        if (sectionsTag.isEmpty()) return null;
-
-        var sectionsList = sectionsTag.orElseThrow();
+        var sectionsList = chunkNbt.getList("sections", Tag.TAG_COMPOUND);
+        if (sectionsList.isEmpty()) return null;
 
         // First pass: parse sections and check if any are non-empty
         record ParsedSection(int sectionY, LevelChunkSection section, byte[] blockLight, byte[] skyLight) {}
@@ -79,14 +84,14 @@ final class PaperNbtSectionSerializer {
 
         for (var sectionElement : sectionsList) {
             var sectionTag = (CompoundTag) sectionElement;
-            int sectionY = sectionTag.getIntOr("Y", Integer.MIN_VALUE);
-            if (sectionY == Integer.MIN_VALUE) continue;
+            if (!sectionTag.contains("Y", Tag.TAG_ANY_NUMERIC)) continue;
+            int sectionY = sectionTag.getInt("Y");
 
-            byte[] blockLightData = sectionTag.getByteArray("BlockLight").orElse(EMPTY);
+            byte[] blockLightData = sectionTag.getByteArray("BlockLight");
             var result = parseSection(sectionTag, sectionY, blockStateCodec, biomeCodec,
-                    factory, blockLightData);
+                    biomeRegistry, blockLightData);
             if (result != null) {
-                byte[] skyLightData = sectionTag.getByteArray("SkyLight").orElse(EMPTY);
+                byte[] skyLightData = sectionTag.getByteArray("SkyLight");
                 parsed.add(new ParsedSection(sectionY, result, blockLightData, skyLightData));
             }
         }
@@ -134,20 +139,18 @@ final class PaperNbtSectionSerializer {
             CompoundTag sectionTag, int sectionY,
             Codec<PalettedContainer<BlockState>> blockStateCodec,
             Codec<PalettedContainerRO<Holder<Biome>>> biomeCodec,
-            PalettedContainerFactory factory,
+            Registry<Biome> biomeRegistry,
             byte[] blockLightData) {
 
-        var blockStatesOpt = sectionTag.getCompound("block_states");
-        if (blockStatesOpt.isEmpty()) return null;
+        if (!sectionTag.contains("block_states", Tag.TAG_COMPOUND)) return null;
 
-        var blockStatesResult = blockStateCodec.parse(NbtOps.INSTANCE, blockStatesOpt.get());
+        var blockStatesResult = blockStateCodec.parse(NbtOps.INSTANCE, sectionTag.getCompound("block_states"));
         var blockStates = blockStatesResult.result().orElse(null);
         if (blockStates == null) return null;
 
         PalettedContainerRO<Holder<Biome>> biomes;
-        var optBiomes = sectionTag.getCompound("biomes");
-        if (optBiomes.isPresent()) {
-            var biomesResult = biomeCodec.parse(NbtOps.INSTANCE, optBiomes.get());
+        if (sectionTag.contains("biomes", Tag.TAG_COMPOUND)) {
+            var biomesResult = biomeCodec.parse(NbtOps.INSTANCE, sectionTag.getCompound("biomes"));
             biomes = biomesResult.result().orElse(null);
         } else {
             biomes = null;
@@ -157,7 +160,9 @@ final class PaperNbtSectionSerializer {
         if (biomes instanceof PalettedContainer<Holder<Biome>> biomeContainer) {
             section = new LevelChunkSection(blockStates, biomeContainer);
         } else {
-            section = new LevelChunkSection(blockStates, factory.createForBiomes());
+            section = new LevelChunkSection(blockStates, new PalettedContainer<>(
+                    biomeRegistry.asHolderIdMap(), biomeRegistry.getHolderOrThrow(Biomes.PLAINS),
+                    PalettedContainer.Strategy.SECTION_BIOMES));
         }
 
         if (section.hasOnlyAir()) {

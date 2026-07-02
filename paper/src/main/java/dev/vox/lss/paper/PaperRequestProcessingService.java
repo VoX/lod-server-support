@@ -169,9 +169,10 @@ public class PaperRequestProcessingService {
     private void drainLifecycleMailbox() {
         LifecycleEvent ev;
         while ((ev = this.lifecycleMailbox.poll()) != null) {
-            switch (ev) {
-                case LifecycleEvent.Register r -> registerPlayer(r.player(), r.capabilities());
-                case LifecycleEvent.Remove r -> removePlayer(r.uuid());
+            if (ev instanceof LifecycleEvent.Register r) {
+                registerPlayer(r.player(), r.capabilities());
+            } else if (ev instanceof LifecycleEvent.Remove r) {
+                removePlayer(r.uuid());
             }
         }
     }
@@ -183,7 +184,7 @@ public class PaperRequestProcessingService {
                     this.config.generationConcurrencyLimitPerPlayer);
             // Session identity for the router's stale-snapshot guard (set before the map
             // publish so the processing thread never sees it null on a live state).
-            s.setRegisteredDimension(player.level().dimension().identifier().toString());
+            s.setRegisteredDimension(player.serverLevel().dimension().location().toString());
             return s;
         });
         this.diskReader.registerPlayer(player.getUUID());
@@ -315,9 +316,9 @@ public class PaperRequestProcessingService {
             }
 
             var player = state.getPlayer();
-            var level = player.level();
+            var level = player.serverLevel();
             String dimension = this.dimensionStringCache.computeIfAbsent(level.dimension(),
-                    k -> k.identifier().toString());
+                    k -> k.location().toString());
 
             this.offThreadProcessor.updateDimensionContext(dimension, level);
 
@@ -410,9 +411,9 @@ public class PaperRequestProcessingService {
                 continue;
 
             var player = state.getPlayer();
-            var level = player.level();
+            var level = player.serverLevel();
             String dimension = this.dimensionStringCache.computeIfAbsent(level.dimension(),
-                    k -> k.identifier().toString());
+                    k -> k.location().toString());
             // Ticket queued before a dimension change targets the old dimension's coordinates.
             // The admitting state was discarded by removePlayer+registerPlayer, so dropping
             // the stale ticket leaks nothing.

@@ -37,7 +37,7 @@ final class PaperSectionSerializer {
     // Fabric path. The wire format must match Fabric exactly, so keep this call (do not migrate).
     @SuppressWarnings("deprecation")
     static LoadedColumnData serializeColumn(ServerLevel level, LevelChunk chunk, int cx, int cz) {
-        int minSectionY = level.getMinSectionY();
+        int minSectionY = level.getMinSection();
         var sections = chunk.getSections();
         var lightEngine = level.getLightEngine();
         var blockLightListener = lightEngine.getLayerListener(LightLayer.BLOCK);

@@ -17,11 +17,17 @@ repositories {
 
 dependencies {
     implementation project(':common')
-    paperweight.paperDevBundle('1.21.11-R0.1-SNAPSHOT')
+    paperweight.paperDevBundle('1.20.1-R0.1-SNAPSHOT')
     testImplementation 'org.junit.jupiter:junit-jupiter:5.11.4'
     testImplementation 'org.mockito:mockito-core:5.20.0'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
+
+// 1.20.1 backport: production Paper 1.20.1 is spigot-mapped at runtime — make the
+// reobfuscated jar the production artifact (dev bundle server stays mojang-mapped).
+// Must come after the paperweight.paperDevBundle(...) dependency declaration.
+paperweight.reobfArtifactConfiguration =
+        io.papermc.paperweight.userdev.ReobfArtifactConfiguration.getREOBF_PRODUCTION()
 
 test {
     useJUnitPlatform()
@@ -35,9 +41,12 @@ processResources {
 }
 
 shadowJar {
-    archiveBaseName = 'lod-server-support-paper'
+    // 1.20.1 backport: the mojang-mapped shadow jar is a DEV artifact now (the reobf'd jar
+    // is the release); keep its base name outside the release/CI glob
+    // (lod-server-support-paper-*.jar) so it can never be published (soak-jar precedent).
+    archiveBaseName = 'lss-paper-mojang-dev'
     archiveClassifier = ''
-    // CI builds carry the full version in the filename (lod-server-support-paper-0.5.0+1.21.11.jar);
+    // CI builds carry the full version in the filename (lod-server-support-paper-0.5.0+1.20.1.jar);
     // local dev builds keep the stable unversioned name (mirrors fabric/build.gradle).
     archiveVersion = providers.environmentVariable('CI').map { it == 'true' }.getOrElse(false)
             ? "${project.mod_version}+${project.minecraft_version}" : ''
@@ -74,13 +83,39 @@ def soakShadowJar = tasks.register('soakShadowJar',
     manifest.inheritFrom(tasks.jar.manifest)
 }
 
+// The reobf'd jar IS the release artifact on 1.20.1 — give it the release naming
+// (shadowJar was auto-reclassified to -dev-all by REOBF_PRODUCTION, so no collision).
+tasks.named('reobfJar', io.papermc.paperweight.tasks.RemapJar) {
+    def ci = providers.environmentVariable('CI').map { it == 'true' }.getOrElse(false)
+    outputJar.set(layout.buildDirectory.file(ci
+            ? "libs/lod-server-support-paper-${project.mod_version}+${project.minecraft_version}.jar"
+            : 'libs/lod-server-support-paper.jar'))
+}
+tasks.named('assemble') { dependsOn 'reobfJar' }
+
+// 1.20.1 backport: Paper's RUNTIME is spigot-mapped below 1.20.5, so any jar a real
+// Paper/Folia 1.20.1 server loads must be reobfuscated. paperweight-userdev auto-wires
+// :paper:reobfJar to consume shadowJar when the shadow plugin is applied; the soak jar
+// needs its own RemapJar twin sharing reobfJar's mappings/remapper wiring.
+def soakReobfJar = tasks.register('soakReobfJar', io.papermc.paperweight.tasks.RemapJar) {
+    def reobf = tasks.named('reobfJar', io.papermc.paperweight.tasks.RemapJar).get()
+    inputJar.set(soakShadowJar.flatMap { it.archiveFile })
+    outputJar.set(layout.buildDirectory.file('libs/lss-paper-soak-reobf.jar'))
+    mappingsFile.set(reobf.mappingsFile)
+    remapClasspath.setFrom(reobf.remapClasspath)
+    remapper.setFrom(reobf.remapper)
+    remapperArgs.set(reobf.remapperArgs)
+    fromNamespace.set(reobf.fromNamespace)
+    toNamespace.set(reobf.toNamespace)
+}
+
 // Soak harness run (scripts/soak.sh) — same gate/property plumbing as fabric's soakServer
 // loom run. The orchestrator stages world/config/server.properties/eula into the run dir
 // before launching; RunServer itself supplies --nogui and disables the watchdog.
 tasks.register('runSoakServer', xyz.jpenilla.runpaper.task.RunServer) {
     minecraftVersion(project.minecraft_version)
     runDirectory(file('build/run/soak-server'))
-    pluginJars(soakShadowJar.flatMap { it.archiveFile })
+    pluginJars(soakReobfJar.flatMap { it.outputJar })
     systemProperty 'lss.soak.scenario', findProperty('soak.scenario') ?: ''
     maxHeapSize = '2G'
 }
@@ -99,12 +134,12 @@ runPaper.folia.pluginsMode = xyz.jpenilla.runpaper.RunPaperExtension.Folia.Plugi
 runPaper.folia.registerTask {
     minecraftVersion(project.minecraft_version)
     runDirectory(file('build/run/folia-soak-server'))
-    pluginJars(soakShadowJar.flatMap { it.archiveFile })
+    pluginJars(soakReobfJar.flatMap { it.outputJar })
     systemProperty 'lss.soak.scenario', findProperty('soak.scenario') ?: ''
     maxHeapSize = '2G'
 }
 
 tasks.withType(JavaCompile).configureEach {
-    it.options.release = 21
+    it.options.release = 17
 }
 

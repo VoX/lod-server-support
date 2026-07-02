@@ -161,7 +161,7 @@ class PaperWorldHandlerTest {
     /** Register the event's own class and deliver it through the captured executor. */
     private void registerAndFire(Event event) throws Exception {
         handler.registerUpdateListeners(List.of(event.getClass().getName()));
-        var reg = registrations.getLast();
+        var reg = registrations.get(registrations.size() - 1);
         fire(reg, event);
     }
 
@@ -301,14 +301,14 @@ class PaperWorldHandlerTest {
     void eventWithoutExtractorMarksNothingEvenWhenRefired() throws Exception {
         var event = new OpaqueEvent();
         registerAndFire(event);
-        fire(registrations.getLast(), event); // second fire exercises the negative-cache path
+        fire(registrations.get(registrations.size() - 1), event); // second fire exercises the negative-cache path
         assertEquals(0, tracker.pendingCount());
     }
 
     @Test
     void cachedMethodPathStillExtractsOnSecondFire() throws Exception {
         registerAndFire(new SingleBlockEvent(block(overworld, 0, 0)));
-        fire(registrations.getLast(), new SingleBlockEvent(block(overworld, 16, 0)));
+        fire(registrations.get(registrations.size() - 1), new SingleBlockEvent(block(overworld, 16, 0)));
         assertDirty(OVERWORLD, PositionUtil.packPosition(0, 0), PositionUtil.packPosition(1, 0));
     }
 
@@ -451,7 +451,7 @@ class PaperWorldHandlerTest {
         // PP-014: Bukkit delivers subclasses of the registered class; discovery keyed on the
         // REGISTERED class would miss SubWithBlockListEvent's richer blockList() extractor.
         handler.registerUpdateListeners(List.of(BaseBlockEvent.class.getName()));
-        var reg = registrations.getLast();
+        var reg = registrations.get(registrations.size() - 1);
 
         fire(reg, new SubWithBlockListEvent(
                 block(overworld, 0, 0), List.of(block(overworld, 160, 0))));
@@ -546,7 +546,7 @@ class PaperWorldHandlerTest {
         assertNotSame(SingleBlockEvent.class, reloaded, "premise: a genuinely fresh Class object");
         Event fresh = (Event) reloaded.getConstructor(Block.class)
                 .newInstance(block(overworld, 33, 0));
-        fire(registrations.getLast(), fresh);
+        fire(registrations.get(registrations.size() - 1), fresh);
         assertDirty(OVERWORLD, PositionUtil.packPosition(2, 0));
     }
 
@@ -580,7 +580,7 @@ class PaperWorldHandlerTest {
         // suppression is Bukkit's contract for this flag — untestable in a proxy harness,
         // so the pin is the literal argument the handler registers with.
         handler.registerUpdateListeners(List.of(SingleBlockEvent.class.getName()));
-        assertTrue(registrations.getLast().ignoreCancelled());
+        assertTrue(registrations.get(registrations.size() - 1).ignoreCancelled());
     }
 
     // ---- extractor invocation failure ----
@@ -600,7 +600,7 @@ class PaperWorldHandlerTest {
         // PP-016: a throwing extractor must be debug-logged, never rethrown into the event
         // bus, and must not poison the cached method for later events.
         handler.registerUpdateListeners(List.of(ThrowingBlockEvent.class.getName()));
-        var reg = registrations.getLast();
+        var reg = registrations.get(registrations.size() - 1);
 
         assertDoesNotThrow(() -> fire(reg, new ThrowingBlockEvent(null)));
         assertEquals(0, tracker.pendingCount());

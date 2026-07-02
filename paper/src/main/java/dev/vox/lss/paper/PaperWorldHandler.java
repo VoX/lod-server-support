@@ -109,11 +109,14 @@ public class PaperWorldHandler {
         markBlockDirty(pistonDimension, piston.getX(), piston.getZ());
         markBlockDirty(pistonDimension, piston.getX() + dx, piston.getZ() + dz);
         markBlockDirty(pistonDimension, piston.getX() - dx, piston.getZ() - dz);
-        List<Block> moved = switch (event) {
-            case BlockPistonExtendEvent extend -> extend.getBlocks();
-            case BlockPistonRetractEvent retract -> retract.getBlocks();
-            default -> List.<Block>of();
-        };
+        List<Block> moved;
+        if (event instanceof BlockPistonExtendEvent extend) {
+            moved = extend.getBlocks();
+        } else if (event instanceof BlockPistonRetractEvent retract) {
+            moved = retract.getBlocks();
+        } else {
+            moved = List.of();
+        }
         for (Block block : moved) {
             String dimension = block.getWorld().getKey().toString();
             markBlockDirty(dimension, block.getX(), block.getZ());

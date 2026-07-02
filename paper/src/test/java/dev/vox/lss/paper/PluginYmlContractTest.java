@@ -84,18 +84,17 @@ class PluginYmlContractTest {
         String apiVersion = yml.getString("api-version");
         assertNotNull(apiVersion);
 
-        var props = new Properties();
-        props.load(new StringReader(Files.readString(locate("gradle.properties"))));
-        assertEquals(props.getProperty("minecraft_version"), apiVersion,
-                "api-version must move in lockstep with the minecraft_version the build targets");
-
+        // 1.20.1 backport: Bukkit <= 1.20.4 only accepts two-part api-versions
+        // (CraftMagicNumbers.SUPPORTED_API = ["1.13" .. "1.20"]); a three-part value is an
+        // InvalidPluginException at load. api-version is therefore the dev bundle's
+        // minecraft version truncated to major.minor.
         var bundle = Pattern.compile("paperweight\\.paperDevBundle\\('([^']+)'\\)")
                 .matcher(Files.readString(locate("paper/build.gradle")));
         assertTrue(bundle.find(), "paper/build.gradle must declare paperweight.paperDevBundle('...')");
-        String devBundle = bundle.group(1);
-        assertTrue(devBundle.startsWith(apiVersion + ".") || devBundle.startsWith(apiVersion + "-R"),
-                "dev bundle " + devBundle + " must be a build of api-version " + apiVersion
-                        + " (new '<mc>.build.N' or old '<mc>-R0.1-SNAPSHOT' scheme)");
+        var mcVersion = bundle.group(1).split("-")[0];             // 1.20.1
+        var parts = mcVersion.split("\\.");
+        assertEquals(parts[0] + "." + parts[1], apiVersion,
+                "api-version must be the dev bundle's minecraft version truncated to major.minor");
     }
 
     @Test

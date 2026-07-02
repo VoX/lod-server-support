@@ -6,7 +6,7 @@ import dev.vox.lss.common.LSSLogger;
 import dev.vox.lss.paper.FoliaSupport;
 import dev.vox.lss.paper.LSSPaperPlugin;
 import net.minecraft.server.MinecraftServer;
-import org.bukkit.craftbukkit.CraftServer;
+import org.bukkit.craftbukkit.v1_20_R1.CraftServer;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
@@ -206,7 +206,7 @@ public final class PaperSoakScenarioDriver implements Listener {
         String bare = cmd.startsWith("/") ? cmd.substring(1) : cmd;
         if (bare.startsWith("gamerule ")) {
             for (var level : this.server.getAllLevels()) {
-                String scoped = "execute in " + level.dimension().identifier() + " run " + bare;
+                String scoped = "execute in " + level.dimension().location() + " run " + bare;
                 this.server.getCommands().performPrefixedCommand(
                         this.server.createCommandSourceStack(), scoped);
             }

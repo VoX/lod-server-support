@@ -115,7 +115,7 @@ class PaperDirtyColumnBroadcasterTest {
     private PaperPlayerRequestState addPlayer(UUID uuid, ServerLevel level, boolean handshook, boolean removed) {
         var p = mock(ServerPlayer.class);
         when(p.getUUID()).thenReturn(uuid);
-        when(p.level()).thenReturn(level);
+        when(p.serverLevel()).thenReturn(level);
         when(p.isRemoved()).thenReturn(removed);
         when(p.getName()).thenReturn(Component.literal("p-" + uuid.toString().substring(0, 8)));
         var state = new PaperPlayerRequestState(p, 4, 4);

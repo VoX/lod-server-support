@@ -229,7 +229,7 @@ class PaperRequestProcessingServiceTest {
     private static ServerPlayer playerIn(UUID uuid, ServerLevel level) {
         var p = mock(ServerPlayer.class);
         when(p.getUUID()).thenReturn(uuid);
-        when(p.level()).thenReturn(level);
+        when(p.serverLevel()).thenReturn(level);
         // getPlayerName() is dereferenced by the flush-failure log path
         when(p.getName()).thenReturn(Component.literal("p-" + uuid.toString().substring(0, 8)));
         return p;
@@ -323,10 +323,10 @@ class PaperRequestProcessingServiceTest {
 
         var end = level(Level.END);  // build the mock BEFORE opening the when() stub (no nested stubbing)
         assertFalse(state.checkDimensionChange(), "construction captures the join dimension");
-        when(player.level()).thenReturn(end);
+        when(player.serverLevel()).thenReturn(end);
         assertTrue(state.checkDimensionChange(), "first check after the flip reports it");
         assertFalse(state.checkDimensionChange(), "the flip is consumed — no repeat re-registration");
-        when(player.level()).thenReturn(overworld);
+        when(player.serverLevel()).thenReturn(overworld);
         assertTrue(state.checkDimensionChange(), "the round trip back is a fresh flip");
         assertFalse(state.checkDimensionChange());
     }
@@ -342,7 +342,7 @@ class PaperRequestProcessingServiceTest {
         old.addReadyPayload(new QueuedPayload<>(new byte[]{1}, 1, 1L, packed));
 
         var end = level(Level.END);  // build the mock BEFORE opening the when() stub (no nested stubbing)
-        when(player.level()).thenReturn(end);
+        when(player.serverLevel()).thenReturn(end);
         service.tick();
 
         var fresh = service.getPlayers().get(uuid);

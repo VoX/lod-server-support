@@ -6,7 +6,6 @@ import dev.vox.lss.common.processing.TickSnapshot;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.MappedRegistry;
-import net.minecraft.core.RegistrationInfo;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.data.registries.VanillaRegistries;
@@ -18,11 +17,10 @@ import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.LevelChunkSection;
-import net.minecraft.world.level.chunk.PalettedContainerFactory;
 import net.minecraft.world.level.lighting.LayerLightEventListener;
 import net.minecraft.world.level.lighting.LevelLightEngine;
 import org.bukkit.Chunk;
-import org.bukkit.craftbukkit.CraftWorld;
+import org.bukkit.craftbukkit.v1_20_R1.CraftWorld;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -56,12 +54,12 @@ import static org.mockito.Mockito.when;
  * pump-side books. Every outcome path (success, null chunk, extraction Throwable, timeout,
  * removePlayer) must drain the active map and free the per-player slots.
  */
-// new LevelChunkSection(PalettedContainerFactory) is @Deprecated on Paper (anti-xray overload),
+// new LevelChunkSection(TestContainerFactory) is @Deprecated on Paper (anti-xray overload),
 // but is the canonical vanilla ctor; same suppression as NbtSectionSerializerTest.
 @SuppressWarnings("deprecation")
 class PaperChunkGenerationServiceTest {
 
-    private static PalettedContainerFactory FACTORY;
+    private static TestContainerFactory FACTORY;
 
     @BeforeAll
     static void setup() {
@@ -72,9 +70,9 @@ class PaperChunkGenerationServiceTest {
         HolderLookup.Provider provider = VanillaRegistries.createLookup();
         HolderLookup.RegistryLookup<Biome> src = provider.lookupOrThrow(Registries.BIOME);
         MappedRegistry<Biome> biomes = new MappedRegistry<>(Registries.BIOME, Lifecycle.stable());
-        src.listElements().forEach(ref -> biomes.register(ref.key(), ref.value(), RegistrationInfo.BUILT_IN));
+        src.listElements().forEach(ref -> biomes.register(ref.key(), ref.value(), Lifecycle.stable()));
         biomes.freeze();
-        FACTORY = PalettedContainerFactory.create(
+        FACTORY = TestContainerFactory.create(
                 new RegistryAccess.ImmutableRegistryAccess(List.of(biomes)));
     }
 
@@ -353,7 +351,7 @@ class PaperChunkGenerationServiceTest {
 
         // Real section so PaperSectionSerializer produces actual bytes (mock light engine
         // reports no light data; minSectionY defaults to 0 on the mock).
-        var section = new LevelChunkSection(FACTORY);
+        var section = new LevelChunkSection(FACTORY.biomeRegistry());
         section.setBlockState(0, 0, 0, Blocks.STONE.defaultBlockState());
         var nmsChunk = mock(LevelChunk.class);
         when(nmsChunk.getSections()).thenReturn(new LevelChunkSection[]{section});
@@ -404,7 +402,7 @@ class PaperChunkGenerationServiceTest {
         UUID a = UUID.randomUUID(), b = UUID.randomUUID();
 
         // Success-path wiring (same as successFansOutSharedColumnDataToAllCallbacks)
-        var section = new LevelChunkSection(FACTORY);
+        var section = new LevelChunkSection(FACTORY.biomeRegistry());
         section.setBlockState(0, 0, 0, Blocks.STONE.defaultBlockState());
         var nmsChunk = mock(LevelChunk.class);
         when(nmsChunk.getSections()).thenReturn(new LevelChunkSection[]{section});
@@ -503,7 +501,7 @@ class PaperChunkGenerationServiceTest {
 
     /** Success-path wiring so a resubmitted entry's OWN completion serves real column data. */
     private static ServerLevel successWiredLevel() {
-        var section = new LevelChunkSection(FACTORY);
+        var section = new LevelChunkSection(FACTORY.biomeRegistry());
         section.setBlockState(0, 0, 0, Blocks.STONE.defaultBlockState());
         var nmsChunk = mock(LevelChunk.class);
         when(nmsChunk.getSections()).thenReturn(new LevelChunkSection[]{section});

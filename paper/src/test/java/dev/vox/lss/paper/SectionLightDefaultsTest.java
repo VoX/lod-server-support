@@ -5,7 +5,6 @@ import io.netty.buffer.Unpooled;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.MappedRegistry;
-import net.minecraft.core.RegistrationInfo;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.SectionPos;
 import net.minecraft.core.registries.Registries;
@@ -22,7 +21,6 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.chunk.DataLayer;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.LevelChunkSection;
-import net.minecraft.world.level.chunk.PalettedContainerFactory;
 import net.minecraft.world.level.lighting.LayerLightEventListener;
 import net.minecraft.world.level.lighting.LevelLightEngine;
 import org.junit.jupiter.api.BeforeAll;
@@ -57,13 +55,13 @@ import static org.mockito.Mockito.when;
  * Paper has no gametest tier, so this is the only executable home for the live flag rules
  * (same harness pattern as PaperChunkGenerationServiceTest).
  */
-// new LevelChunkSection(PalettedContainerFactory) is @Deprecated on Paper (anti-xray overload),
+// new LevelChunkSection(TestContainerFactory) is @Deprecated on Paper (anti-xray overload),
 // but is the canonical decode ctor; same suppression as NbtSectionSerializerTest.
 @SuppressWarnings("deprecation")
 class SectionLightDefaultsTest {
 
     private static RegistryAccess REGISTRY_ACCESS;
-    private static PalettedContainerFactory FACTORY;
+    private static TestContainerFactory FACTORY;
 
     @BeforeAll
     static void setup() {
@@ -72,10 +70,10 @@ class SectionLightDefaultsTest {
         HolderLookup.Provider provider = VanillaRegistries.createLookup();
         HolderLookup.RegistryLookup<Biome> src = provider.lookupOrThrow(Registries.BIOME);
         MappedRegistry<Biome> biomes = new MappedRegistry<>(Registries.BIOME, Lifecycle.stable());
-        src.listElements().forEach(ref -> biomes.register(ref.key(), ref.value(), RegistrationInfo.BUILT_IN));
+        src.listElements().forEach(ref -> biomes.register(ref.key(), ref.value(), Lifecycle.stable()));
         biomes.freeze();
         REGISTRY_ACCESS = new RegistryAccess.ImmutableRegistryAccess(List.of(biomes));
-        FACTORY = PalettedContainerFactory.create(REGISTRY_ACCESS);
+        FACTORY = TestContainerFactory.create(REGISTRY_ACCESS);
     }
 
     // ---- NBT builders (same grammar as NbtSectionSerializerTest) ----
@@ -90,12 +88,12 @@ class SectionLightDefaultsTest {
     }
 
     private CompoundTag sectionNbt(int y, byte[] blockLight, byte[] skyLight) {
-        var sec = new LevelChunkSection(FACTORY);
+        var sec = new LevelChunkSection(FACTORY.biomeRegistry());
         sec.setBlockState(0, 0, 0, Blocks.STONE.defaultBlockState());
         var s = new CompoundTag();
         s.putInt("Y", y);
-        s.put("block_states", FACTORY.blockStatesContainerCodec().encodeStart(NbtOps.INSTANCE, sec.getStates()).getOrThrow());
-        s.put("biomes", FACTORY.biomeContainerCodec().encodeStart(NbtOps.INSTANCE, sec.getBiomes()).getOrThrow());
+        s.put("block_states", FACTORY.blockStatesContainerCodec().encodeStart(NbtOps.INSTANCE, sec.getStates()).getOrThrow(false, msg -> {}));
+        s.put("biomes", FACTORY.biomeContainerCodec().encodeStart(NbtOps.INSTANCE, sec.getBiomes()).getOrThrow(false, msg -> {}));
         if (blockLight != null) s.putByteArray("BlockLight", blockLight);
         if (skyLight != null) s.putByteArray("SkyLight", skyLight);
         return s;
@@ -120,7 +118,7 @@ class SectionLightDefaultsTest {
             var out = new ArrayList<DecodedSection>(count);
             for (int i = 0; i < count; i++) {
                 int y = buf.readByte();
-                var section = new LevelChunkSection(FACTORY);
+                var section = new LevelChunkSection(FACTORY.biomeRegistry());
                 section.read(buf);
                 boolean hasBl = buf.readBoolean();
                 byte[] bl = null;
@@ -228,7 +226,7 @@ class SectionLightDefaultsTest {
         when(lightEngine.getLayerListener(LightLayer.BLOCK)).thenReturn(blockListener);
         when(lightEngine.getLayerListener(LightLayer.SKY)).thenReturn(skyListener);
         ServerLevel level = mock(ServerLevel.class);
-        when(level.getMinSectionY()).thenReturn(MIN_SECTION_Y);
+        when(level.getMinSection()).thenReturn(MIN_SECTION_Y);
         when(level.getLightEngine()).thenReturn(lightEngine);
         var chunk = mock(LevelChunk.class);
         when(chunk.getSections()).thenReturn(sections);
@@ -236,7 +234,7 @@ class SectionLightDefaultsTest {
     }
 
     private LevelChunkSection stoneSection() {
-        var sec = new LevelChunkSection(FACTORY);
+        var sec = new LevelChunkSection(FACTORY.biomeRegistry());
         sec.setBlockState(0, 0, 0, Blocks.STONE.defaultBlockState());
         return sec;
     }
