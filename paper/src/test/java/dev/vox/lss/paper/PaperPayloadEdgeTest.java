@@ -307,7 +307,7 @@ class PaperPayloadEdgeTest {
         var proc = newProcessor();
         var state = mock(PaperPlayerRequestState.class);
         proc.buildAndEnqueueColumnPayload(state, 1, 2, "minecraft:overworld", 42L, 7L,
-                new byte[LSSConstants.MAX_SECTIONS_SIZE + 1], 99);
+                new byte[LSSConstants.MAX_SEND_SECTIONS_SIZE + 1], 99);
         verify(state, never()).addReadyPayload(any());
     }
 
@@ -316,7 +316,7 @@ class PaperPayloadEdgeTest {
     void processorEncodesAndEnqueuesColumnAtSectionsLimit() {
         var proc = newProcessor();
         var state = mock(PaperPlayerRequestState.class);
-        byte[] sections = new byte[LSSConstants.MAX_SECTIONS_SIZE];
+        byte[] sections = new byte[LSSConstants.MAX_SEND_SECTIONS_SIZE];
         sections[123] = 0x5A;
         proc.buildAndEnqueueColumnPayload(state, 1, 2, "minecraft:overworld", 42L, 7L, sections, 99);
 
@@ -338,7 +338,7 @@ class PaperPayloadEdgeTest {
         var proc = newProcessor();
         var state = mock(PaperPlayerRequestState.class);
         assertFalse(proc.buildAndEnqueueColumnPayload(state, 1, 2, "minecraft:overworld", 42L, 7L,
-                new byte[LSSConstants.MAX_SECTIONS_SIZE + 1], 99),
+                new byte[LSSConstants.MAX_SEND_SECTIONS_SIZE + 1], 99),
                 "an oversized drop must report false so the caller answers up-to-date");
         verify(state, never()).addReadyPayload(any());
         assertTrue(proc.buildAndEnqueueColumnPayload(state, 1, 2, "minecraft:overworld", 42L, 7L,

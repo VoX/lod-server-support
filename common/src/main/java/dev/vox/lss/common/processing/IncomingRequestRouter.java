@@ -134,11 +134,21 @@ class IncomingRequestRouter<PS extends AbstractPlayerRequestState<?>> {
         if (probe == null) return false;
 
         long order = this.ctx.sequence().next();
-        boolean sent = this.processor.enqueueLoadedColumn(state, probe, this.cycleNow, order, dimension);
+        boolean allAir = probe.serializedSections() == null || probe.serializedSections().length == 0;
+        boolean sent = !allAir
+                && this.processor.enqueueLoadedColumn(state, probe, this.cycleNow, order, dimension);
         if (!sent) {
-            // The loaded chunk is all-air. A resync client (ts>0) may hold stale content there,
-            // so send a clearing 0-section column; a client with nothing (ts<=0) gets up_to_date.
-            if (req.clientTimestamp() > 0
+            if (allAir) {
+                // Stamp the all-air resolution (the data path stamps inside enqueueLoadedColumn)
+                // so future resyncs converge to a warm up_to_date instead of re-resolving —
+                // and re-clearing — the same void column every session.
+                this.processor.recordAllAirResolution(dimension, packed, this.cycleNow);
+            }
+            // All-air: a resync client (ts>0) may hold stale content there, so send a clearing
+            // 0-section column; a client with nothing (ts<=0) gets up_to_date. An enqueue
+            // REJECTION (oversized column) is NOT all-air — clearing would erase the client's
+            // stale-but-real terrain; the terminal answer is up_to_date.
+            if (allAir && req.clientTimestamp() > 0
                     && this.processor.sendEmptiedColumn(state, req.cx(), req.cz(), dimension, this.cycleNow, order)) {
                 // clearing column sent
             } else {

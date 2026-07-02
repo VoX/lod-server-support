@@ -484,16 +484,21 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
             handleDiskNotFound(playerUuid, state, packed, cx, cz, pending, dimension);
         } else {
             state.markDiskReadDone(cx, cz);
-            boolean sent = result.sectionBytes() != null
+            boolean allAir = result.sectionBytes() == null;
+            boolean sent = !allAir
                     && buildAndEnqueueColumnPayload(state, cx, cz, result.dimension(),
                             result.columnTimestamp(), submissionOrder,
                             result.sectionBytes(), result.estimatedBytes());
             if (!sent) {
-                // All-air chunk (no visible sections) or oversized column. A resync client
-                // (claimsData) may hold stale content here, so send a clearing 0-section column;
-                // a client with nothing (first serve) gets a cheap up_to_date.
+                // All-air chunk (no visible sections): a resync client (claimsData) may hold
+                // stale content here, so send an authoritative clearing 0-section column; a
+                // client with nothing (first serve) gets a cheap up_to_date. An enqueue
+                // REJECTION (oversized column / oversized dimension id) is NOT all-air: the
+                // server knows real content exists, so a clear would erase the client's
+                // stale-but-real terrain and seal the fabricated air — the terminal answer is
+                // up_to_date so the client keeps what it has.
                 boolean claimsData = pending != null && pending.claimsData();
-                if (!(claimsData && sendEmptiedColumn(state, cx, cz, result.dimension(),
+                if (!(allAir && claimsData && sendEmptiedColumn(state, cx, cz, result.dimension(),
                         result.columnTimestamp(), submissionOrder))) {
                     this.ctx.sendActions().add(new SendAction.ColumnUpToDate(playerUuid, packed, state));
                 }
@@ -516,6 +521,16 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
         int est = ZERO_SECTION_COLUMN.length + LSSConstants.ESTIMATED_COLUMN_OVERHEAD_BYTES;
         return buildAndEnqueueColumnPayload(state, cx, cz, dimension, columnTimestamp,
                 submissionOrder, ZERO_SECTION_COLUMN, est);
+    }
+
+    /**
+     * Stamp an all-air in-memory resolution (the data path stamps inside
+     * {@link #enqueueLoadedColumn}; all-air skips it) so a client that received the clear or
+     * up_to_date converges to a cheap warm up_to_date on future resyncs instead of
+     * re-resolving — and re-clearing — the same void column every session.
+     */
+    void recordAllAirResolution(String dimension, long packed, long columnTimestamp) {
+        this.timestampCache.put(dimension, packed, columnTimestamp, this.cycleNow);
     }
 
     /** Disk-first fallback: if the original request was GENERATION and generation is available,
@@ -555,14 +570,24 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
                 this.ctx.sendActions().add(new SendAction.ColumnNotGenerated(entry.playerUuid(), packed, state));
             } else {
                 state.markDiskReadDone(cx, cz);
-                boolean sent = this.enqueueLoadedColumn(state, entry.columnData(),
+                byte[] genSections = entry.columnData().serializedSections();
+                boolean allAir = genSections == null || genSections.length == 0;
+                boolean sent = !allAir && this.enqueueLoadedColumn(state, entry.columnData(),
                         entry.columnTimestamp(), entry.submissionOrder(), entry.dimension());
                 if (!sent) {
-                    // Generated all-air. A sync resync escalated to generation (claimsData) may
-                    // hold stale content — send a clearing column; a pure gen request (ts=0) gets
-                    // up_to_date.
+                    if (allAir) {
+                        // Stamp so future resyncs at this timestamp converge to a cheap
+                        // up_to_date instead of re-resolving every session (the data path
+                        // stamps inside enqueueLoadedColumn; all-air skips it).
+                        this.timestampCache.put(entry.dimension(), packed,
+                                entry.columnTimestamp(), this.cycleNow);
+                    }
+                    // Generated all-air: a sync resync escalated to generation (claimsData) may
+                    // hold stale content — send a clearing column; a pure gen request (ts=0)
+                    // gets up_to_date. An enqueue REJECTION (oversized) is NOT all-air — see
+                    // deliverDiskResult: clearing would erase real terrain; answer up_to_date.
                     boolean claimsData = pending != null && pending.claimsData();
-                    if (!(claimsData && sendEmptiedColumn(state, cx, cz, entry.dimension(),
+                    if (!(allAir && claimsData && sendEmptiedColumn(state, cx, cz, entry.dimension(),
                             entry.columnTimestamp(), entry.submissionOrder()))) {
                         this.sendActions.add(new SendAction.ColumnUpToDate(entry.playerUuid(), packed, state));
                     }

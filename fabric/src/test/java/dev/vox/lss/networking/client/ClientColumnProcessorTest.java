@@ -210,6 +210,30 @@ class ClientColumnProcessorTest {
     }
 
     @Test
+    void admissionIsBoundedByBytesAsWellAsCount() {
+        // The count cap alone admits up to 8000 x 2 MiB = 16 GiB of retained payloads from a
+        // hostile server before any drop fires; the byte budget closes that.
+        assertTrue(ClientColumnProcessor.admits(0, 0, 1024));
+        assertTrue(ClientColumnProcessor.admits(0,
+                ClientColumnProcessor.MAX_QUEUED_BYTES - 10, 10), "budget boundary is inclusive");
+        assertFalse(ClientColumnProcessor.admits(0,
+                ClientColumnProcessor.MAX_QUEUED_BYTES - 10, 11), "over-budget payload must drop");
+        assertFalse(ClientColumnProcessor.admits(ClientColumnProcessor.MAX_QUEUED_COLUMNS, 0, 1),
+                "count cap still applies");
+    }
+
+    @Test
+    void offerTracksQueuedBytesAndShutdownDrainsThem() {
+        var sized = new VoxelColumnS2CPayload(0, 0, dimKey("bytes"), 1L, new byte[64]);
+        processor.offer(sized, false);
+        processor.offer(sized, false);
+        assertEquals(128, processor.getQueuedBytes(), "offers must count toward the byte budget");
+        processor.shutdown();
+        assertEquals(0, processor.getQueuedBytes(),
+                "a stale byte budget would throttle the next session's admissions");
+    }
+
+    @Test
     void shutdownZeroesBackpressureSignalAndKeepsDropStats() {
         offer(ClientColumnProcessor.MAX_QUEUED_COLUMNS + 5);
         assertEquals(5, processor.getColumnsDropped());

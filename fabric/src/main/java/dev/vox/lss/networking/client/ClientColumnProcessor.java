@@ -26,6 +26,11 @@ import java.util.function.Supplier;
 
 class ClientColumnProcessor {
     static final int MAX_QUEUED_COLUMNS = 8000;
+    /** Byte budget for queued (still-compressed-in-memory) section payloads: the count cap
+     *  alone admits up to 8000 x 2 MiB = 16 GiB from a hostile or misbehaving server before
+     *  any drop fires. 256 MiB is ~13 s of backlog at the default 20 MB/s bandwidth cap —
+     *  unreachable in normal play, fatal-allocation-proof under attack. */
+    static final long MAX_QUEUED_BYTES = 256L * 1024 * 1024;
     private static final long DROP_WARN_INTERVAL_MS = 5000;
 
     /**
@@ -64,6 +69,7 @@ class ClientColumnProcessor {
 
     private final ConcurrentLinkedQueue<QueuedColumn> columnQueue = new ConcurrentLinkedQueue<>();
     private final AtomicInteger queueSize = new AtomicInteger();
+    private final AtomicLong queuedBytes = new AtomicLong();
     private final AtomicLong columnsDropped = new AtomicLong();
     private volatile long lastDropWarnMs = 0;
 
@@ -93,10 +99,24 @@ class ClientColumnProcessor {
         return mc != null ? mc.level : null;
     }
 
+    private static int sectionBytesOf(VoxelColumnS2CPayload payload) {
+        return payload.decompressedSections() == null ? 0 : payload.decompressedSections().length;
+    }
+
+    /** Queue admission: bounded by count AND bytes (either alone admits multi-GiB retention). */
+    static boolean admits(int queuedCount, long queuedBytes, int payloadBytes) {
+        return queuedCount < MAX_QUEUED_COLUMNS
+                && queuedBytes + payloadBytes <= MAX_QUEUED_BYTES;
+    }
+
     void offer(VoxelColumnS2CPayload payload, boolean resync) {
-        if (this.queueSize.get() < MAX_QUEUED_COLUMNS) {
+        // Null/corrupt section bytes still traverse the queue (the drain reports them):
+        // count them as zero rather than NPE here.
+        int payloadBytes = sectionBytesOf(payload);
+        if (admits(this.queueSize.get(), this.queuedBytes.get(), payloadBytes)) {
             this.columnQueue.add(new QueuedColumn(payload, resync));
             this.queueSize.incrementAndGet();
+            this.queuedBytes.addAndGet(payloadBytes);
         } else {
             long dropped = this.columnsDropped.incrementAndGet();
             long now = System.currentTimeMillis();
@@ -154,6 +174,7 @@ class ClientColumnProcessor {
         QueuedColumn queued;
         while ((queued = this.columnQueue.poll()) != null) {
             this.queueSize.decrementAndGet();
+            this.queuedBytes.addAndGet(-sectionBytesOf(queued.payload()));
             var payload = queued.payload();
             this.failureReporter.report(payload.dimension(),
                     payload.chunkX(), payload.chunkZ());
@@ -181,6 +202,7 @@ class ClientColumnProcessor {
         QueuedColumn queued;
         while (epoch == this.sessionEpoch && (queued = this.columnQueue.poll()) != null) {
             this.queueSize.decrementAndGet();
+            this.queuedBytes.addAndGet(-sectionBytesOf(queued.payload()));
             var payload = queued.payload();
             if (!levelDimension.equals(payload.dimension())) continue;
 
@@ -314,6 +336,7 @@ class ClientColumnProcessor {
         QueuedColumn queued;
         while ((queued = this.columnQueue.poll()) != null) {
             this.queueSize.decrementAndGet();
+            this.queuedBytes.addAndGet(-sectionBytesOf(queued.payload()));
             var payload = queued.payload();
             manager.onIngestFailure(payload.dimension(),
                     PositionUtil.packPosition(payload.chunkX(), payload.chunkZ()));
@@ -328,12 +351,15 @@ class ClientColumnProcessor {
         // has not yet decremented, permanently driving the lifetime-singleton's queueSize to
         // -1 (drift accumulates across sessions). Pairing every poll with one decrement keeps
         // the counter self-consistent no matter which thread removes each item.
-        while (this.columnQueue.poll() != null) {
+        QueuedColumn drained;
+        while ((drained = this.columnQueue.poll()) != null) {
             this.queueSize.decrementAndGet();
+            this.queuedBytes.addAndGet(-sectionBytesOf(drained.payload()));
         }
     }
 
     int getQueuedCount() { return this.queueSize.get(); }
+    long getQueuedBytes() { return this.queuedBytes.get(); }
     long getColumnsDropped() { return this.columnsDropped.get(); }
 
     /** Current session epoch, for tests driving the drain loop directly. */

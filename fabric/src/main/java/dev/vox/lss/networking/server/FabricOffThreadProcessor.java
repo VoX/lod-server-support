@@ -67,10 +67,10 @@ public class FabricOffThreadProcessor extends OffThreadProcessor<PlayerRequestSt
                                                     String dimension,
                                                     long columnTimestamp, long submissionOrder,
                                                     byte[] sectionBytes, int estimatedBytes) {
-        if (sectionBytes.length > LSSConstants.MAX_SECTIONS_SIZE) {
+        if (sectionBytes.length > LSSConstants.MAX_SEND_SECTIONS_SIZE) {
             LSSLogger.warn("Dropping oversized column [" + cx + ", " + cz + "] in " + dimension
-                    + ": " + sectionBytes.length + " bytes exceeds wire limit "
-                    + LSSConstants.MAX_SECTIONS_SIZE + " (client decoder would reject it)");
+                    + ": " + sectionBytes.length + " bytes exceeds send limit "
+                    + LSSConstants.MAX_SEND_SECTIONS_SIZE + " (netty frame cap would kill the connection)");
             return false;
         }
         if (dimension.length() > LSSConstants.MAX_DIMENSION_STRING_LENGTH) {
