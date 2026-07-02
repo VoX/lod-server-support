@@ -142,17 +142,21 @@ class ColumnCacheStoreTest {
     }
 
     @Test
-    void excessiveCountReturnsEmpty() throws IOException {
-        var dim = testDimension("excess_count");
-        Path file = getCacheFile("test-excess", dim);
-        Files.createDirectories(file.getParent());
-        try (var out = new DataOutputStream(Files.newOutputStream(file))) {
-            out.writeInt(1); // correct version
-            out.writeInt(3_000_000); // exceeds 2_000_000 guard
-        }
+    void excessiveOrNegativeCountReturnsEmpty() throws IOException {
+        // These headers must be the CURRENT format version: a stale v1 header dies at the
+        // version gate before the count guard runs, and the test passes vacuously.
+        for (int badCount : new int[]{3_000_000, -1}) {
+            var dim = testDimension("excess_count_" + badCount);
+            Path file = getCacheFile("test-excess", dim);
+            Files.createDirectories(file.getParent());
+            try (var out = new DataOutputStream(Files.newOutputStream(file))) {
+                out.writeInt(ColumnCacheStore.FORMAT_VERSION);
+                out.writeInt(badCount); // outside the [0, 2_000_000] guard
+            }
 
-        var loaded = ColumnCacheStore.load("test-excess", dim);
-        assertTrue(loaded.isEmpty());
+            var loaded = ColumnCacheStore.load("test-excess", dim);
+            assertTrue(loaded.isEmpty(), "count " + badCount + " must be rejected wholesale");
+        }
     }
 
     @Test
@@ -161,7 +165,7 @@ class ColumnCacheStoreTest {
         Path file = getCacheFile("test-truncated", dim);
         Files.createDirectories(file.getParent());
         try (var out = new DataOutputStream(Files.newOutputStream(file))) {
-            out.writeInt(1); // correct version
+            out.writeInt(ColumnCacheStore.FORMAT_VERSION);
             out.writeInt(5); // claims 5 entries
             // Only write 1 complete entry
             out.writeLong(42L);
@@ -170,9 +174,10 @@ class ColumnCacheStoreTest {
         }
 
         var loaded = ColumnCacheStore.load("test-truncated", dim);
-        // IOException during read → returns partial map (whatever was read before error)
-        // The implementation catches IOException and returns whatever was loaded
-        assertTrue(loaded.size() <= 1);
+        // IOException mid-read → the entries read before the error survive (resync can
+        // still use them); the missing tail just re-requests cold.
+        assertEquals(1, loaded.size(), "the one complete entry must survive a truncated tail");
+        assertEquals(100L, loaded.get(42L));
     }
 
     @Test

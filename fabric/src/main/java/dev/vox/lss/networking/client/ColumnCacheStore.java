@@ -23,7 +23,7 @@ import java.util.concurrent.TimeoutException;
 
 public class ColumnCacheStore {
     private static final Pattern SANITIZE_PATTERN = Pattern.compile("[^a-zA-Z0-9._-]");
-    private static final int FORMAT_VERSION = 4;
+    static final int FORMAT_VERSION = 4; // package-visible: corruption tests write real headers
     private static final int MAX_CACHE_ENTRIES = 2_000_000;
     private static final Path CACHE_DIR = FabricLoader.getInstance().getConfigDir().resolve("lss").resolve("cache");
     // Daemon thread — saves use atomic rename so JVM shutdown mid-write won't corrupt,
