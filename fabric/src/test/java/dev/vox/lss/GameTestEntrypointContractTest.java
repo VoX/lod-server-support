@@ -36,10 +36,13 @@ class GameTestEntrypointContractTest {
                         locate("fabric/src/gametest/resources/fabric.mod.json")))
                 .getAsJsonObject().getAsJsonObject("entrypoints");
         Set<String> listedServer = names(entrypoints, "fabric-gametest");
-        Set<String> listedClient = names(entrypoints, "fabric-client-gametest");
+        // 1.20.1 backport: fabric-api 0.92 has no client gametest API — Tier 3 and its
+        // fabric-client-gametest entrypoint are gone on this branch, so only the server
+        // listing is contract-checked.
+        assertFalse(entrypoints.has("fabric-client-gametest"),
+                "fabric-client-gametest entrypoint must not exist on 1.20.1 (no API in 0.92)");
 
         Set<String> foundServer = new TreeSet<>();
-        Set<String> foundClient = new TreeSet<>();
         try (Stream<Path> files = Files.list(sources)) {
             for (Path file : files.filter(f -> f.toString().endsWith(".java")).toList()) {
                 String name = file.getFileName().toString();
@@ -48,9 +51,6 @@ class GameTestEntrypointContractTest {
                 if (GAMETEST_ANNOTATION.matcher(source).find()) {
                     foundServer.add(fqcn);
                 }
-                if (source.contains("implements FabricClientGameTest")) {
-                    foundClient.add(fqcn);
-                }
             }
         }
         assertFalse(foundServer.isEmpty(), "no @GameTest sources found — scan is broken");
@@ -58,8 +58,6 @@ class GameTestEntrypointContractTest {
         assertEquals(foundServer, listedServer,
                 "fabric-gametest entrypoint must list exactly the classes with @GameTest methods"
                         + " — an unlisted class compiles but NEVER runs; a stale entry breaks the runner");
-        assertEquals(foundClient, listedClient,
-                "fabric-client-gametest entrypoint must list exactly the FabricClientGameTest classes");
     }
 
     private static Set<String> names(JsonObject entrypoints, String key) {

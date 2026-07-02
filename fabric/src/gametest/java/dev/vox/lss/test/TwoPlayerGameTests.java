@@ -11,7 +11,7 @@ import dev.vox.lss.networking.payloads.SessionConfigS2CPayload;
 import dev.vox.lss.networking.server.LSSServerNetworking;
 import dev.vox.lss.networking.server.PlayerRequestState;
 import dev.vox.lss.networking.server.RequestProcessingService;
-import net.fabricmc.fabric.api.gametest.v1.GameTest;
+import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ServerLevel;
@@ -54,7 +54,7 @@ public class TwoPlayerGameTests {
      * batches are queued before the first tick, so both route in the same processing cycle,
      * strictly before any result can drain — the attach window is structural, not timed.
      */
-    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 1200)
+    @GameTest(template = "fabric-gametest-api-v1:empty", timeoutTicks = 1200)
     public void overlappingRequestsFromTwoPlayersDedupeDiskReadsAndBothConverge(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         var server = level.getServer();
@@ -70,14 +70,14 @@ public class TwoPlayerGameTests {
         for (int i = 0; i < 3; i++) {
             chunkPositions[i] = new ChunkPos(pcx - DEDUP_CHUNK_OFFSET, pcz + i);
             positions[i] = PositionUtil.packPosition(chunkPositions[i].x, chunkPositions[i].z);
-            chunkSource.addTicketWithRadius(TicketType.PLAYER_LOADING, chunkPositions[i], 0);
+            chunkSource.addRegionTicket(TicketType.PLAYER, chunkPositions[i], 0, chunkPositions[i]);
             level.getChunk(chunkPositions[i].x, chunkPositions[i].z);
         }
         // Release after generation: the serves must come from DISK (a loaded chunk
         // probe-serves and never engages the dedup tracker).
         helper.runAfterDelay(4, () -> {
             for (var pos : chunkPositions) {
-                chunkSource.removeTicketWithRadius(TicketType.PLAYER_LOADING, pos, 0);
+                chunkSource.removeRegionTicket(TicketType.PLAYER, pos, 0, pos);
             }
         });
 
@@ -135,7 +135,7 @@ public class TwoPlayerGameTests {
      * bucket recovers on later ticks. Bounds, never exact splits — refills are wall-time
      * driven and the loop only ever waits on tick-spaced counter observations.
      */
-    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 600)
+    @GameTest(template = "fabric-gametest-api-v1:empty", timeoutTicks = 600)
     public void bandwidthFairnessBoundsBusySpendAndIdleDilutionRecovers(GameTestHelper helper) {
         var server = helper.getLevel().getServer();
         var playerList = server.getPlayerList();
@@ -211,7 +211,7 @@ public class TwoPlayerGameTests {
      * of a player state IS the zero-LSS-frames guarantee, asserted alongside the
      * byte-accounting identity (every LSS byte belongs to the registered player).
      */
-    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 600)
+    @GameTest(template = "fabric-gametest-api-v1:empty", timeoutTicks = 600)
     public void vanillaPlayerWithoutHandshakeStaysInvisibleWhilePipelineFlows(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         var server = level.getServer();
@@ -223,7 +223,7 @@ public class TwoPlayerGameTests {
         var chunkPos = new ChunkPos(pcx - VANILLA_CHUNK_OFFSET, pcz + 6);
         long packed = PositionUtil.packPosition(chunkPos.x, chunkPos.z);
         var chunkSource = level.getChunkSource();
-        chunkSource.addTicketWithRadius(TicketType.PLAYER_LOADING, chunkPos, 0);
+        chunkSource.addRegionTicket(TicketType.PLAYER, chunkPos, 0, chunkPos);
         level.getChunk(chunkPos.x, chunkPos.z);
 
         var service = new RequestProcessingService(server);
@@ -252,7 +252,7 @@ public class TwoPlayerGameTests {
                             == state.getTotalBytesSent(),
                     "every LSS byte must be attributed to the registered player — there is no "
                             + "state through which the vanilla player could be sent anything");
-            chunkSource.removeTicketWithRadius(TicketType.PLAYER_LOADING, chunkPos, 0);
+            chunkSource.removeRegionTicket(TicketType.PLAYER, chunkPos, 0, chunkPos);
             service.shutdown();
             playerList.remove(vanilla);
             playerList.remove(registered);
@@ -270,7 +270,7 @@ public class TwoPlayerGameTests {
      * and invalidate the stamp — observable as both re-requests re-serving instead of
      * resolving up-to-date.
      */
-    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 1200)
+    @GameTest(template = "fabric-gametest-api-v1:empty", timeoutTicks = 1200)
     public void editedColumnPropagatesToBothHoldersThroughBroadcastFanout(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         var server = level.getServer();
@@ -287,7 +287,7 @@ public class TwoPlayerGameTests {
         long packed = PositionUtil.packPosition(chunkPos.x, chunkPos.z);
         var dim = LSSConstants.DIM_STR_OVERWORLD;
         var chunkSource = level.getChunkSource();
-        chunkSource.addTicketWithRadius(TicketType.PLAYER_LOADING, chunkPos, 0);
+        chunkSource.addRegionTicket(TicketType.PLAYER, chunkPos, 0, chunkPos);
         level.getChunk(chunkPos.x, chunkPos.z);
         var editPos = new BlockPos(chunkPos.x * 16 + 4, -61, chunkPos.z * 16 + 4);
 
@@ -366,7 +366,7 @@ public class TwoPlayerGameTests {
                                     + "(an undelivered clear resolves the re-request up-to-date "
                                     + "off the stale done-bit): A=" + stateA.getTotalSectionsSent()
                                     + " B=" + stateB.getTotalSectionsSent());
-                    chunkSource.removeTicketWithRadius(TicketType.PLAYER_LOADING, chunkPos, 0);
+                    chunkSource.removeRegionTicket(TicketType.PLAYER, chunkPos, 0, chunkPos);
                     service.shutdown();
                     playerList.remove(mockA);
                     playerList.remove(mockB);

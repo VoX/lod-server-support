@@ -390,15 +390,18 @@ class NbtSectionSerializerTest {
         // reader thread, counts an error, and answers the not-found envelope. Pinned:
         // the WHOLE chunk resolves NOT_GENERATED — surviving siblings do not serve
         // (contrast with the per-section skip of malformed block_states below).
+        // 1.20.1 backport: NBT lists are HOMOGENEOUS here (heterogeneous lists arrived in
+        // 1.21.5), so a mixed sections list is unrepresentable — ListTag.add throws UOE at
+        // construction. The nearest corrupt-region shape is a sections list of the WRONG
+        // element type: getList("sections", TAG_COMPOUND) then returns an empty list and
+        // serializeChunkNbt resolves null — the WHOLE chunk answers the not-found envelope,
+        // preserving the pinned outcome (surviving siblings do not serve).
         var corrupt = new CompoundTag();
         corrupt.putString("Status", "minecraft:full");
         var list = new ListTag();
-        list.add(sectionNbt(0, true, true, null, null));
         list.add(StringTag.valueOf("not-a-section"));
-        list.add(sectionNbt(2, true, true, null, null));
         corrupt.put("sections", list);
-        assertThrows(ClassCastException.class,
-                () -> NbtSectionSerializer.serializeChunkNbt(corrupt, REGISTRY_ACCESS));
+        assertNull(NbtSectionSerializer.serializeChunkNbt(corrupt, REGISTRY_ACCESS));
     }
 
     @Test

@@ -17,7 +17,7 @@ import dev.vox.lss.networking.server.LSSServerNetworking;
 import dev.vox.lss.networking.server.PlayerRequestState;
 import dev.vox.lss.networking.server.RequestProcessingService;
 import io.netty.buffer.Unpooled;
-import net.fabricmc.fabric.api.gametest.v1.GameTest;
+import net.minecraft.gametest.framework.GameTest;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTestHelper;
@@ -29,7 +29,7 @@ import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.chunk.LevelChunk;
-import net.minecraft.world.level.chunk.status.ChunkStatus;
+import net.minecraft.world.level.chunk.ChunkStatus;
 
 import java.util.ArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -79,7 +79,7 @@ public class ServiceLifecycleGameTests {
         return helper.makeMockServerPlayerInLevel();
     }
 
-    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    @GameTest(template = "fabric-gametest-api-v1:empty")
     public void batchRequestDistanceGuardBoundaryAndNegativeCoords(GameTestHelper helper) {
         var server = helper.getLevel().getServer();
         var playerList = server.getPlayerList();
@@ -146,7 +146,7 @@ public class ServiceLifecycleGameTests {
      * Integer.MAX_VALUE; a regression to naive int subtraction would wrap an extreme coord under
      * the distance gate and admit a far-off position — a disk read for a chunk light-years away.
      */
-    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    @GameTest(template = "fabric-gametest-api-v1:empty")
     public void batchRequestDistanceGuardGatesExtremeCoordsWithoutOverflow(GameTestHelper helper) {
         var server = helper.getLevel().getServer();
         var playerList = server.getPlayerList();
@@ -196,7 +196,7 @@ public class ServiceLifecycleGameTests {
      * can call it after a manual shutdown (e.g. an integrated server published to LAN then closed),
      * so a second call must be a harmless no-op rather than an exception or a double-free.
      */
-    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    @GameTest(template = "fabric-gametest-api-v1:empty")
     public void serviceShutdownIsIdempotentAndClearsEveryPerPlayerStructure(GameTestHelper helper) {
         var server = helper.getLevel().getServer();
         var playerList = server.getPlayerList();
@@ -226,7 +226,7 @@ public class ServiceLifecycleGameTests {
         helper.succeed();
     }
 
-    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    @GameTest(template = "fabric-gametest-api-v1:empty")
     public void removePlayerCleansAllStateAndLifecycleAutoRemovesOnlyDelistedPlayers(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         var server = level.getServer();
@@ -322,7 +322,7 @@ public class ServiceLifecycleGameTests {
      * client needs would be swallowed. (Generation serves DO seed — freshly generated content
      * cannot be stale-held by anyone; probe serves must not.)
      */
-    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 300)
+    @GameTest(template = "fabric-gametest-api-v1:empty", timeoutTicks = 300)
     public void probeServesLoadedChunkFromMemoryWithoutSeedingDirtyFilter(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         var server = level.getServer();
@@ -346,7 +346,7 @@ public class ServiceLifecycleGameTests {
         var editPos = new BlockPos(cx * 16 + 4, -61, cz * 16 + 4);
 
         // Keep the chunk loaded for the whole test so the serve must come from the probe path.
-        chunkSource.addTicketWithRadius(TicketType.PLAYER_LOADING, chunkPos, 0);
+        chunkSource.addRegionTicket(TicketType.PLAYER, chunkPos, 0, chunkPos);
         level.getChunk(cx, cz);
 
         var service = new RequestProcessingService(server);
@@ -408,7 +408,7 @@ public class ServiceLifecycleGameTests {
                     helper.assertTrue(containsPosition(dirty, packed),
                             "a save after a real edit must mark the column dirty end-to-end "
                                     + "(save hook -> content filter -> dirty tracker)");
-                    chunkSource.removeTicketWithRadius(TicketType.PLAYER_LOADING, chunkPos, 0);
+                    chunkSource.removeRegionTicket(TicketType.PLAYER, chunkPos, 0, chunkPos);
                     service.shutdown();
                     server.getPlayerList().remove(mock);
                 }
@@ -424,7 +424,7 @@ public class ServiceLifecycleGameTests {
      * nothing may reach the disk reader or the generation service. With zero accepted
      * requests nothing can ever submit, so the zero-submission asserts are race-free.
      */
-    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    @GameTest(template = "fabric-gametest-api-v1:empty")
     public void extremeCoordinateRequestsAreGatedWithoutOverflowOrSubmission(GameTestHelper helper) {
         var server = helper.getLevel().getServer();
         var playerList = server.getPlayerList();
@@ -474,7 +474,7 @@ public class ServiceLifecycleGameTests {
      * is what spawns a second processing thread and disk-reader pool — so unchanged identity
      * is exactly "no second thread/pool, no host re-handshake".
      */
-    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    @GameTest(template = "fabric-gametest-api-v1:empty")
     public void startServiceForLanIsIdempotentOnRunningService(GameTestHelper helper) {
         var server = helper.getLevel().getServer();
         var live = LSSServerNetworking.getRequestService();
@@ -496,7 +496,7 @@ public class ServiceLifecycleGameTests {
      * per-player disk-reader queues dropped. A second shutdown must throw nothing (the
      * server-stopping path can race a test/LAN teardown into a double call).
      */
-    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    @GameTest(template = "fabric-gametest-api-v1:empty")
     public void serviceShutdownIsIdempotentAndReleasesPlayersAndGeneration(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         var server = level.getServer();
@@ -545,7 +545,7 @@ public class ServiceLifecycleGameTests {
      * skipped player's queued request stays unconsumed and its pending slot is neither
      * leaked nor torn down until disconnect.
      */
-    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 400)
+    @GameTest(template = "fabric-gametest-api-v1:empty", timeoutTicks = 400)
     public void reHandshakeReusesStateResendsConfigAndCapsZeroSkipsRouting(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         var server = level.getServer();
@@ -604,7 +604,7 @@ public class ServiceLifecycleGameTests {
 
         // Control player proves a routing cycle ran end-to-end while A was skipped.
         var chunkPos = new ChunkPos(pcx - 152, pcz - 16);
-        level.getChunkSource().addTicketWithRadius(TicketType.PLAYER_LOADING, chunkPos, 0);
+        level.getChunkSource().addRegionTicket(TicketType.PLAYER, chunkPos, 0, chunkPos);
         level.getChunk(chunkPos.x, chunkPos.z);
         var stateB = service.registerPlayer(mockB, LSSConstants.CAPABILITY_VOXEL_COLUMNS);
         stateB.addRequest(PositionUtil.packPosition(chunkPos.x, chunkPos.z), -1L);
@@ -629,7 +629,7 @@ public class ServiceLifecycleGameTests {
                             && !fresh.hasPendingRequest(pcx - 148, pcz - 12),
                     "disconnect must be the boundary that releases the skipped player's pendings");
 
-            level.getChunkSource().removeTicketWithRadius(TicketType.PLAYER_LOADING, chunkPos, 0);
+            level.getChunkSource().removeRegionTicket(TicketType.PLAYER, chunkPos, 0, chunkPos);
             service.shutdown();
             playerList.remove(mockA);
             playerList.remove(mockB);
@@ -643,7 +643,7 @@ public class ServiceLifecycleGameTests {
      * registration here would create a state the router skips forever while the lifecycle
      * pass ticks it every tick.
      */
-    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    @GameTest(template = "fabric-gametest-api-v1:empty")
     public void capsZeroHandshakeRepliesWithoutRegistering(GameTestHelper helper) {
         var server = helper.getLevel().getServer();
         var playerList = server.getPlayerList();
@@ -675,7 +675,7 @@ public class ServiceLifecycleGameTests {
      * mismatched client's SessionConfig codec has a different field layout on the same
      * channel id — and must leave the connection and player list untouched.
      */
-    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    @GameTest(template = "fabric-gametest-api-v1:empty")
     public void foreignVersionHandshakeProducesNoReplyAndNoKick(GameTestHelper helper) {
         var server = helper.getLevel().getServer();
         var playerList = server.getPlayerList();
@@ -711,7 +711,7 @@ public class ServiceLifecycleGameTests {
      * and restored within this single synchronous callback — gametest callbacks own the
      * main thread, so no other test (or the live service tick) can observe the window.
      */
-    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    @GameTest(template = "fabric-gametest-api-v1:empty")
     public void sessionConfigReplyWiresConfigFieldsByNameNotPosition(GameTestHelper helper) {
         var server = helper.getLevel().getServer();
         var playerList = server.getPlayerList();
@@ -775,7 +775,7 @@ public class ServiceLifecycleGameTests {
      * pins "resumes within a tick". The global flip is confined to this synchronous
      * callback with a finally-restore.
      */
-    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 400)
+    @GameTest(template = "fabric-gametest-api-v1:empty", timeoutTicks = 400)
     public void disabledTickFreezesPipelineAndFrozenEventsApplyOnFirstResumedCycle(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         var server = level.getServer();
@@ -787,7 +787,7 @@ public class ServiceLifecycleGameTests {
         var chunkPos = new ChunkPos(pcx - 140, pcz - 4);
         long packed = PositionUtil.packPosition(chunkPos.x, chunkPos.z);
         var chunkSource = level.getChunkSource();
-        chunkSource.addTicketWithRadius(TicketType.PLAYER_LOADING, chunkPos, 0);
+        chunkSource.addRegionTicket(TicketType.PLAYER, chunkPos, 0, chunkPos);
         level.getChunk(chunkPos.x, chunkPos.z);
 
         var service = new RequestProcessingService(server);
@@ -820,7 +820,7 @@ public class ServiceLifecycleGameTests {
             helper.assertTrue(diag.getTotalInMemory() == 1,
                     "the frozen done-bit clear must apply BEFORE routing: the ts>0 re-request "
                             + "must probe-serve (a stale done-bit answers it up-to-date instead)");
-            chunkSource.removeTicketWithRadius(TicketType.PLAYER_LOADING, chunkPos, 0);
+            chunkSource.removeRegionTicket(TicketType.PLAYER, chunkPos, 0, chunkPos);
             service.shutdown();
             playerList.remove(mock);
         });
@@ -833,7 +833,7 @@ public class ServiceLifecycleGameTests {
      * survive) and subsequent requests must resolve against the NEW reference (the probe
      * reads {@code player.level()} and the flush sends through the new connection).
      */
-    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 400)
+    @GameTest(template = "fabric-gametest-api-v1:empty", timeoutTicks = 400)
     public void respawnSwapsPlayerReferenceKeepingPendingAndDoneState(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         var server = level.getServer();
@@ -850,7 +850,7 @@ public class ServiceLifecycleGameTests {
                 "premise: pending seeded before the respawn");
         state.markDiskReadDone(pcx - 144, pcz - 9);
 
-        var fresh = playerList.respawn(mock, true, Entity.RemovalReason.DISCARDED);
+        var fresh = playerList.respawn(mock, true);
         helper.assertTrue(fresh != mock, "premise: respawn must produce a NEW ServerPlayer instance");
         helper.assertTrue(playerList.getPlayer(uuid) == fresh,
                 "premise: the player list must hold the respawned instance");
@@ -871,7 +871,7 @@ public class ServiceLifecycleGameTests {
         // A request must now resolve against the NEW reference end-to-end.
         var chunkPos = new ChunkPos(pcx - 144, pcz - 10);
         var chunkSource = level.getChunkSource();
-        chunkSource.addTicketWithRadius(TicketType.PLAYER_LOADING, chunkPos, 0);
+        chunkSource.addRegionTicket(TicketType.PLAYER, chunkPos, 0, chunkPos);
         level.getChunk(chunkPos.x, chunkPos.z);
         state.addRequest(PositionUtil.packPosition(chunkPos.x, chunkPos.z), -1L);
 
@@ -880,7 +880,7 @@ public class ServiceLifecycleGameTests {
             helper.assertTrue(state.getTotalSectionsSent() >= 1,
                     "waiting for the post-respawn request to serve through the new player "
                             + "reference (probe + flush both read state.getPlayer())");
-            chunkSource.removeTicketWithRadius(TicketType.PLAYER_LOADING, chunkPos, 0);
+            chunkSource.removeRegionTicket(TicketType.PLAYER, chunkPos, 0, chunkPos);
             service.shutdown();
             var listed = playerList.getPlayer(uuid);
             if (listed != null) {
@@ -897,7 +897,7 @@ public class ServiceLifecycleGameTests {
      * the test fails. The 512 fillers are pre-seeded done-bits answered up-to-date with
      * zero slot pressure, so nothing rate-limits and no retry modeling is needed.
      */
-    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 600)
+    @GameTest(template = "fabric-gametest-api-v1:empty", timeoutTicks = 600)
     public void probeBudgetPushesTrailingLoadedRequestsToDiskWithoutStarvation(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         var server = level.getServer();
@@ -908,8 +908,8 @@ public class ServiceLifecycleGameTests {
         var chunkSource = level.getChunkSource();
         var posK1 = new ChunkPos(pcx - 156, pcz - 20);
         var posK2 = new ChunkPos(pcx - 156, pcz - 21);
-        chunkSource.addTicketWithRadius(TicketType.PLAYER_LOADING, posK1, 0);
-        chunkSource.addTicketWithRadius(TicketType.PLAYER_LOADING, posK2, 0);
+        chunkSource.addRegionTicket(TicketType.PLAYER, posK1, 0, posK1);
+        chunkSource.addRegionTicket(TicketType.PLAYER, posK2, 0, posK2);
         level.getChunk(posK1.x, posK1.z);
         level.getChunk(posK2.x, posK2.z);
         // The pair must exist on disk: the budget routes them to the disk reader.
@@ -942,8 +942,8 @@ public class ServiceLifecycleGameTests {
                     "every request must be routed exactly once, got " + diag.getTotalRequestsRouted());
             helper.assertTrue(state.getHeldSyncSlots() == 0 && state.getHeldGenSlots() == 0,
                     "all slots must be free at rest");
-            chunkSource.removeTicketWithRadius(TicketType.PLAYER_LOADING, posK1, 0);
-            chunkSource.removeTicketWithRadius(TicketType.PLAYER_LOADING, posK2, 0);
+            chunkSource.removeRegionTicket(TicketType.PLAYER, posK1, 0, posK1);
+            chunkSource.removeRegionTicket(TicketType.PLAYER, posK2, 0, posK2);
             service.shutdown();
             playerList.remove(mock);
         });
@@ -956,7 +956,7 @@ public class ServiceLifecycleGameTests {
      * guard (D makes the cut and probe-serves); without it the duplicates spend the
      * budget and D falls to the disk reader (in_memory=1, submits=1).
      */
-    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 600)
+    @GameTest(template = "fabric-gametest-api-v1:empty", timeoutTicks = 600)
     public void duplicateQueuedPositionsSerializeOncePerProbePass(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         var server = level.getServer();
@@ -967,8 +967,8 @@ public class ServiceLifecycleGameTests {
         var chunkSource = level.getChunkSource();
         var posC = new ChunkPos(pcx - 164, pcz - 24);
         var posD = new ChunkPos(pcx - 164, pcz - 25);
-        chunkSource.addTicketWithRadius(TicketType.PLAYER_LOADING, posC, 0);
-        chunkSource.addTicketWithRadius(TicketType.PLAYER_LOADING, posD, 0);
+        chunkSource.addRegionTicket(TicketType.PLAYER, posC, 0, posC);
+        chunkSource.addRegionTicket(TicketType.PLAYER, posD, 0, posD);
         level.getChunk(posC.x, posC.z);
         level.getChunk(posD.x, posD.z);
 
@@ -999,8 +999,8 @@ public class ServiceLifecycleGameTests {
             helper.assertTrue(diskDiag.getSubmittedCount() == 0,
                     "nothing may reach the disk reader when the dedup guard holds, got "
                             + diskDiag.getSubmittedCount());
-            chunkSource.removeTicketWithRadius(TicketType.PLAYER_LOADING, posC, 0);
-            chunkSource.removeTicketWithRadius(TicketType.PLAYER_LOADING, posD, 0);
+            chunkSource.removeRegionTicket(TicketType.PLAYER, posC, 0, posC);
+            chunkSource.removeRegionTicket(TicketType.PLAYER, posD, 0, posD);
             service.shutdown();
             playerList.remove(mock);
         });
@@ -1014,7 +1014,7 @@ public class ServiceLifecycleGameTests {
      * control proving the save ran and the hook is live. Drain–save–drain runs in one
      * synchronous callback so no other test's marks interleave.
      */
-    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 300)
+    @GameTest(template = "fabric-gametest-api-v1:empty", timeoutTicks = 300)
     public void protoChunkSavesAreExcludedFromDirtyMarking(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         var liveService = LSSServerNetworking.getRequestService();
@@ -1026,7 +1026,7 @@ public class ServiceLifecycleGameTests {
         // Control: a loaded LevelChunk with an edit must mark in the same save pass.
         var controlPos = new ChunkPos(origin.x - 172, origin.z - 32);
         long controlPacked = PositionUtil.packPosition(controlPos.x, controlPos.z);
-        chunkSource.addTicketWithRadius(TicketType.PLAYER_LOADING, controlPos, 0);
+        chunkSource.addRegionTicket(TicketType.PLAYER, controlPos, 0, controlPos);
         level.getChunk(controlPos.x, controlPos.z);
         var editPos = new BlockPos(controlPos.x * 16 + 4, -61, controlPos.z * 16 + 4);
         var edit = level.getBlockState(editPos).is(Blocks.STONE) ? Blocks.COBBLESTONE : Blocks.STONE;
@@ -1039,7 +1039,7 @@ public class ServiceLifecycleGameTests {
         var proto = chunkSource.getChunk(protoCx, protoCz, ChunkStatus.STRUCTURE_STARTS, true);
         helper.assertTrue(proto != null && !(proto instanceof LevelChunk),
                 "premise: a STRUCTURE_STARTS chunk must still be a ProtoChunk");
-        proto.markUnsaved();
+        proto.setUnsaved(true);
         long protoPacked = PositionUtil.packPosition(protoCx, protoCz);
 
         var tracker = liveService.getDirtyTracker();
@@ -1052,7 +1052,7 @@ public class ServiceLifecycleGameTests {
         helper.assertTrue(!containsPosition(dirty, protoPacked),
                 "a ProtoChunk save must NOT mark dirty (ChunkMapSaveHook must exclude "
                         + "generation-stage saves — they have no LOD-servable content)");
-        chunkSource.removeTicketWithRadius(TicketType.PLAYER_LOADING, controlPos, 0);
+        chunkSource.removeRegionTicket(TicketType.PLAYER, controlPos, 0, controlPos);
         helper.succeed();
     }
 
@@ -1066,7 +1066,7 @@ public class ServiceLifecycleGameTests {
      * constant-vs-vanilla-frame-cap decision itself belongs to the unit-leg owner (D5);
      * this leg pins that the send pipeline delivers the largest admissible column intact.
      */
-    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 400)
+    @GameTest(template = "fabric-gametest-api-v1:empty", timeoutTicks = 400)
     public void largestEncodableColumnFlushesThroughTheRealSendPath(GameTestHelper helper) {
         var server = helper.getLevel().getServer();
         var playerList = server.getPlayerList();
@@ -1085,7 +1085,7 @@ public class ServiceLifecycleGameTests {
         // Explicit codec encode: the exact wire size, independent of local-channel shortcuts.
         var buf = new FriendlyByteBuf(Unpooled.buffer());
         try {
-            VoxelColumnS2CPayload.CODEC.encode(buf, payload);
+            payload.write(buf);
             int encoded = buf.readableBytes();
             helper.assertTrue(encoded > LSSConstants.MAX_SECTIONS_SIZE
                             && encoded - LSSConstants.MAX_SECTIONS_SIZE

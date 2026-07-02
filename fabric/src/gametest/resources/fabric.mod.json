@@ -1,22 +1,21 @@
 {
-    "schemaVersion": 1,
-    "id": "lss-test",
-    "version": "1.0.0",
-    "name": "LSS Tests",
-    "environment": "*",
-    "entrypoints": {
-        "fabric-gametest": [
-            "dev.vox.lss.test.CommandGameTests",
-            "dev.vox.lss.test.GenerationLifecycleGameTests",
-            "dev.vox.lss.test.LSSGameTests",
-            "dev.vox.lss.test.RegionFaultGameTests",
-            "dev.vox.lss.test.SerializerParityGameTests",
-            "dev.vox.lss.test.ServiceLifecycleGameTests",
-            "dev.vox.lss.test.TwoPlayerGameTests"
-        ],
-        "fabric-client-gametest": ["dev.vox.lss.test.LSSClientGameTests"]
-    },
-    "depends": {
-        "lss": "*"
-    }
+  "schemaVersion": 1,
+  "id": "lss-test",
+  "version": "1.0.0",
+  "name": "LSS Tests",
+  "environment": "*",
+  "entrypoints": {
+    "fabric-gametest": [
+      "dev.vox.lss.test.CommandGameTests",
+      "dev.vox.lss.test.GenerationLifecycleGameTests",
+      "dev.vox.lss.test.LSSGameTests",
+      "dev.vox.lss.test.RegionFaultGameTests",
+      "dev.vox.lss.test.SerializerParityGameTests",
+      "dev.vox.lss.test.ServiceLifecycleGameTests",
+      "dev.vox.lss.test.TwoPlayerGameTests"
+    ]
+  },
+  "depends": {
+    "lss": "*"
+  }
 }

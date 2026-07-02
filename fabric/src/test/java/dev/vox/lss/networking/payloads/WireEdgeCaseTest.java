@@ -342,7 +342,10 @@ class WireEdgeCaseTest {
         b.writeVarInt(20); // UTF byte-length claim
         b.writeBytes(new byte[]{'m', 'i', 'n', 'e', 'c'}); // truncated body
         try {
-            assertThrows(DecoderException.class, () -> VoxelColumnS2CPayload.read(b));
+            // 26.x rejects the short claim with a DecoderException before reading; 1.20.1's
+            // readUtf reads into the missing bytes and netty throws IndexOutOfBoundsException.
+            // Either way the read throws cleanly and no partial payload object is produced.
+            assertThrows(RuntimeException.class, () -> VoxelColumnS2CPayload.read(b));
         } finally {
             b.release();
         }

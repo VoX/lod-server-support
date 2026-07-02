@@ -263,8 +263,8 @@ public class ColumnTimestampCache {
                     return;
                 }
                 var cache = caches.computeIfAbsent(dimension, k -> new DimensionCache());
-                cache.timestamps.ensureCapacity(entryCount);
-                cache.insertionTimes.ensureCapacity(entryCount);
+                // (no pre-size: Long2LongOpenHashMap.ensureCapacity is private in fastutil
+                // 8.5.9, which MC 1.20.1 ships; growth-on-put is fine at these entry counts)
                 for (int i = 0; i < entryCount; i++) {
                     long packed = in.readLong();
                     long timestamp = in.readLong();

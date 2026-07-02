@@ -14,7 +14,7 @@ import dev.vox.lss.networking.server.RequestProcessingService;
 import dev.vox.lss.networking.server.SectionSerializer;
 import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
-import net.fabricmc.fabric.api.gametest.v1.GameTest;
+import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ServerLevel;
@@ -81,7 +81,7 @@ public class SerializerParityGameTests {
      * path re-palettizes containers (first-appearance order), so a never-reloaded chunk differs
      * from its own save for reasons outside LSS's serializers.
      */
-    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 1200)
+    @GameTest(template = "fabric-gametest-api-v1:empty", timeoutTicks = 1200)
     public void diskReadBytesMatchLiveBytesForDiskLoadedColumn(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         var origin = new ChunkPos(helper.absolutePos(BlockPos.ZERO));
@@ -93,11 +93,11 @@ public class SerializerParityGameTests {
         var torchPos = new BlockPos(cx * 16 + 8, -60, cz * 16 + 8);
 
         // Hold the chunk loaded for the torch dance (plain getChunk tickets expire after 1 tick).
-        chunkSource.addTicketWithRadius(TicketType.PLAYER_LOADING, chunkPos, 0);
+        chunkSource.addRegionTicket(TicketType.PLAYER, chunkPos, 0, chunkPos);
         level.getChunk(cx, cz);
         level.setBlock(torchPos, Blocks.TORCH.defaultBlockState(), 3);
         helper.runAfterDelay(4, () -> level.setBlock(torchPos, Blocks.AIR.defaultBlockState(), 3));
-        helper.runAfterDelay(8, () -> chunkSource.removeTicketWithRadius(TicketType.PLAYER_LOADING, chunkPos, 0));
+        helper.runAfterDelay(8, () -> chunkSource.removeRegionTicket(TicketType.PLAYER, chunkPos, 0, chunkPos));
 
         var reader = new ChunkDiskReader(1);
         var readerId = UUID.randomUUID();
@@ -153,7 +153,7 @@ public class SerializerParityGameTests {
      * makes the filter worth having), a real block edit re-marks, and the post-edit baseline
      * suppresses again.
      */
-    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 200)
+    @GameTest(template = "fabric-gametest-api-v1:empty", timeoutTicks = 200)
     public void dirtyContentFilterSuppressesIdenticalResavesAndCatchesEdits(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         var origin = new ChunkPos(helper.absolutePos(BlockPos.ZERO));
@@ -169,7 +169,7 @@ public class SerializerParityGameTests {
         // Keep the chunk loaded across the ladder so every step hashes the same live chunk
         // (a getChunk ticket lasts 1 tick; an unload+reload between steps would re-palettize
         // the sections and fake a content change).
-        chunkSource.addTicketWithRadius(TicketType.PLAYER_LOADING, chunkPos, 0);
+        chunkSource.addRegionTicket(TicketType.PLAYER, chunkPos, 0, chunkPos);
         level.getChunk(cx, cz);
 
         // Tick 2: generation-time light has settled; take the baseline and pin same-tick quiet.
@@ -198,7 +198,7 @@ public class SerializerParityGameTests {
                     "a real block edit must re-mark the column dirty");
             helper.assertTrue(!filter.contentChanged(level, chunk, dim),
                     "the save after the edit is absorbed must stay quiet again");
-            chunkSource.removeTicketWithRadius(TicketType.PLAYER_LOADING, chunkPos, 0);
+            chunkSource.removeRegionTicket(TicketType.PLAYER, chunkPos, 0, chunkPos);
             helper.succeed();
         });
     }
@@ -208,7 +208,7 @@ public class SerializerParityGameTests {
      * hash as a stable sentinel — air-to-air saves stay quiet, an all-air serve seed agrees with
      * the next all-air save, and an air-to-built transition still marks dirty.
      */
-    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 200)
+    @GameTest(template = "fabric-gametest-api-v1:empty", timeoutTicks = 200)
     public void dirtyContentFilterAllAirSentinelInEndVoid(GameTestHelper helper) {
         ServerLevel endLevel = helper.getLevel().getServer().getLevel(Level.END);
         helper.assertTrue(endLevel != null, "the End dimension must exist on the gametest server");
@@ -258,7 +258,7 @@ public class SerializerParityGameTests {
      * as found (all-air triage, null section bytes, real timestamp for the up-to-date economy),
      * never as "not found" — which would re-trigger generation forever.
      */
-    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 200)
+    @GameTest(template = "fabric-gametest-api-v1:empty", timeoutTicks = 200)
     public void allAirEndChunkDiskReadResolvesFoundNotMissing(GameTestHelper helper) {
         ServerLevel endLevel = helper.getLevel().getServer().getLevel(Level.END);
         helper.assertTrue(endLevel != null, "the End dimension must exist on the gametest server");
@@ -305,7 +305,7 @@ public class SerializerParityGameTests {
      * baseline. Both reads run against the same settled-light chunk, so the edit is the
      * only delta between them.
      */
-    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 400)
+    @GameTest(template = "fabric-gametest-api-v1:empty", timeoutTicks = 400)
     public void readAfterSaveWithoutUnloadSeesTheLatestBytes(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         var origin = new ChunkPos(helper.absolutePos(BlockPos.ZERO));
@@ -316,7 +316,7 @@ public class SerializerParityGameTests {
         var editPos = new BlockPos(cx * 16 + 4, -61, cz * 16 + 4);
 
         // Held for the whole test: the read must hit disk state while the chunk is loaded.
-        chunkSource.addTicketWithRadius(TicketType.PLAYER_LOADING, chunkPos, 0);
+        chunkSource.addRegionTicket(TicketType.PLAYER, chunkPos, 0, chunkPos);
         level.getChunk(cx, cz);
 
         var reader = new ChunkDiskReader(1);
@@ -360,7 +360,7 @@ public class SerializerParityGameTests {
                             "a read fired right after a forced save of a still-loaded chunk "
                                     + "must see the edit — byte-identical results mean the "
                                     + "read silently served stale pre-save state");
-                    chunkSource.removeTicketWithRadius(TicketType.PLAYER_LOADING, chunkPos, 0);
+                    chunkSource.removeRegionTicket(TicketType.PLAYER, chunkPos, 0, chunkPos);
                 }
                 default -> helper.fail("unexpected read-after-save step " + step.get());
             }
@@ -376,7 +376,7 @@ public class SerializerParityGameTests {
      * the disk-served bytes (pinned by the parity test), so a seeded filter would return
      * false here.
      */
-    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 1200)
+    @GameTest(template = "fabric-gametest-api-v1:empty", timeoutTicks = 1200)
     public void diskReadServesDoNotSeedTheDirtyContentFilter(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         var server = level.getServer();
@@ -390,9 +390,9 @@ public class SerializerParityGameTests {
         long packed = PositionUtil.packPosition(cx, cz);
 
         // Generate, then let the chunk unload so the serve must come from disk.
-        chunkSource.addTicketWithRadius(TicketType.PLAYER_LOADING, chunkPos, 0);
+        chunkSource.addRegionTicket(TicketType.PLAYER, chunkPos, 0, chunkPos);
         level.getChunk(cx, cz);
-        helper.runAfterDelay(4, () -> chunkSource.removeTicketWithRadius(TicketType.PLAYER_LOADING, chunkPos, 0));
+        helper.runAfterDelay(4, () -> chunkSource.removeRegionTicket(TicketType.PLAYER, chunkPos, 0, chunkPos));
 
         var mock = placeMockServerPlayer(helper);
         var service = new RequestProcessingService(server);
@@ -420,7 +420,7 @@ public class SerializerParityGameTests {
                                     && service.getOffThreadProcessor().getDiagnostics().getTotalInMemory() == 0,
                             "premise: the serve must come from DISK, not the in-memory probe");
                     // Reload for the filter check; settle light before hashing.
-                    chunkSource.addTicketWithRadius(TicketType.PLAYER_LOADING, chunkPos, 0);
+                    chunkSource.addRegionTicket(TicketType.PLAYER, chunkPos, 0, chunkPos);
                     level.getChunk(cx, cz);
                     step.set(2);
                     helper.assertTrue(false, "chunk reloading for the filter probe");
@@ -436,7 +436,7 @@ public class SerializerParityGameTests {
                                     + "If seeding was added intentionally, flip this pin.");
                     helper.assertTrue(!filter.contentChanged(level, chunk, dim),
                             "control: the check above must have baselined the live filter");
-                    chunkSource.removeTicketWithRadius(TicketType.PLAYER_LOADING, chunkPos, 0);
+                    chunkSource.removeRegionTicket(TicketType.PLAYER, chunkPos, 0, chunkPos);
                     service.shutdown();
                     playerList.remove(mock);
                 }
@@ -455,7 +455,7 @@ public class SerializerParityGameTests {
      * H-11/H-25 stale-geometry class). The send-action drain is captured manually — the
      * service is never ticked, so the recorder is the only drainer.
      */
-    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 600)
+    @GameTest(template = "fabric-gametest-api-v1:empty", timeoutTicks = 600)
     public void becomesAllAirReServeSendsClearingColumnWhenClientClaimsData(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         var server = level.getServer();
@@ -468,7 +468,7 @@ public class SerializerParityGameTests {
         var dim = LSSConstants.DIM_STR_OVERWORLD;
         long packed = PositionUtil.packPosition(cx, cz);
 
-        chunkSource.addTicketWithRadius(TicketType.PLAYER_LOADING, chunkPos, 0);
+        chunkSource.addRegionTicket(TicketType.PLAYER, chunkPos, 0, chunkPos);
         level.getChunk(cx, cz);
 
         var mock = placeMockServerPlayer(helper);
@@ -549,7 +549,7 @@ public class SerializerParityGameTests {
                     helper.assertTrue(proc.getDiagnostics().getTotalInMemory() == 2,
                             "premise: both requests must have taken the probe route, got "
                                     + proc.getDiagnostics().getTotalInMemory());
-                    chunkSource.removeTicketWithRadius(TicketType.PLAYER_LOADING, chunkPos, 0);
+                    chunkSource.removeRegionTicket(TicketType.PLAYER, chunkPos, 0, chunkPos);
                     service.shutdown();
                     playerList.remove(mock);
                 }

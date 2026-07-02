@@ -3,7 +3,7 @@ package dev.vox.lss.test;
 import dev.vox.lss.common.LSSConstants;
 import dev.vox.lss.common.PositionUtil;
 import dev.vox.lss.networking.server.RequestProcessingService;
-import net.fabricmc.fabric.api.gametest.v1.GameTest;
+import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.TicketType;
@@ -44,7 +44,7 @@ public class RegionFaultGameTests {
         return helper.makeMockServerPlayerInLevel();
     }
 
-    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 1200)
+    @GameTest(template = "fabric-gametest-api-v1:empty", timeoutTicks = 1200)
     public void corruptRegionChunkResolvesAsContainedErrorAndReaderSurvives(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         var server = level.getServer();
@@ -85,10 +85,10 @@ public class RegionFaultGameTests {
         // through the same reader pool the corrupt read errors on.
         var validPos = new ChunkPos(pcx - VALID_CHUNK_OFFSET, pcz + 2);
         long validPacked = PositionUtil.packPosition(validPos.x, validPos.z);
-        chunkSource.addTicketWithRadius(TicketType.PLAYER_LOADING, validPos, 0);
+        chunkSource.addRegionTicket(TicketType.PLAYER, validPos, 0, validPos);
         level.getChunk(validPos.x, validPos.z);
         helper.runAfterDelay(4, () ->
-                chunkSource.removeTicketWithRadius(TicketType.PLAYER_LOADING, validPos, 0));
+                chunkSource.removeRegionTicket(TicketType.PLAYER, validPos, 0, validPos));
 
         var service = new RequestProcessingService(server);
         var state = service.registerPlayer(mock, LSSConstants.CAPABILITY_VOXEL_COLUMNS);

@@ -3,14 +3,14 @@ package dev.vox.lss.test;
 import dev.vox.lss.common.LSSConstants;
 import dev.vox.lss.config.LSSServerConfig;
 import dev.vox.lss.networking.server.LSSServerNetworking;
-import net.fabricmc.fabric.api.gametest.v1.GameTest;
+import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.core.SectionPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTestHelper;
 
 public class LSSGameTests {
 
-    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    @GameTest(template = "fabric-gametest-api-v1:empty")
     public void serviceStartsOnDedicatedServer(GameTestHelper helper) {
         helper.assertTrue(
                 LSSServerNetworking.getRequestService() != null,
@@ -19,7 +19,7 @@ public class LSSGameTests {
         helper.succeed();
     }
 
-    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    @GameTest(template = "fabric-gametest-api-v1:empty")
     public void noPlayersInitially(GameTestHelper helper) {
         var service = LSSServerNetworking.getRequestService();
         helper.assertTrue(service != null, "RequestProcessingService should be active");
@@ -30,7 +30,7 @@ public class LSSGameTests {
         helper.succeed();
     }
 
-    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    @GameTest(template = "fabric-gametest-api-v1:empty")
     public void lsslodCommandRegistered(GameTestHelper helper) {
         var dispatcher = helper.getLevel().getServer().getCommands().getDispatcher();
         var result = dispatcher.parse(
@@ -44,7 +44,7 @@ public class LSSGameTests {
         helper.succeed();
     }
 
-    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    @GameTest(template = "fabric-gametest-api-v1:empty")
     public void diskReaderAlwaysCreated(GameTestHelper helper) {
         var service = LSSServerNetworking.getRequestService();
         helper.assertTrue(service != null, "Service should be active");
@@ -53,7 +53,7 @@ public class LSSGameTests {
         helper.succeed();
     }
 
-    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    @GameTest(template = "fabric-gametest-api-v1:empty")
     public void generationServiceCreatedWhenEnabled(GameTestHelper helper) {
         var service = LSSServerNetworking.getRequestService();
         helper.assertTrue(service != null, "Service should be active");
@@ -62,7 +62,7 @@ public class LSSGameTests {
         helper.succeed();
     }
 
-    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    @GameTest(template = "fabric-gametest-api-v1:empty")
     public void bandwidthUsageZeroInitially(GameTestHelper helper) {
         var service = LSSServerNetworking.getRequestService();
         helper.assertTrue(service != null, "Service should be active");
@@ -71,7 +71,7 @@ public class LSSGameTests {
         helper.succeed();
     }
 
-    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    @GameTest(template = "fabric-gametest-api-v1:empty")
     public void dirtyTrackerDrainClearsState(GameTestHelper helper) {
         var service = LSSServerNetworking.getRequestService();
         helper.assertTrue(service != null, "Service should be active");
@@ -85,7 +85,7 @@ public class LSSGameTests {
         helper.succeed();
     }
 
-    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    @GameTest(template = "fabric-gametest-api-v1:empty")
     public void diagnosticsContainAllFields(GameTestHelper helper) {
         var service = LSSServerNetworking.getRequestService();
         helper.assertTrue(service != null, "Service should be active");
@@ -103,17 +103,17 @@ public class LSSGameTests {
      * type's section range must fit [-128, 127] — a future world-height bump past that
      * range would alias section coordinates silently on the wire; this fails loudly first.
      */
-    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    @GameTest(template = "fabric-gametest-api-v1:empty")
     public void registeredDimensionTypeSectionRangesFitTheWireByte(GameTestHelper helper) {
         var registry = helper.getLevel().getServer().registryAccess()
-                .lookupOrThrow(Registries.DIMENSION_TYPE);
+                .registryOrThrow(Registries.DIMENSION_TYPE);
         int checked = 0;
         for (var entry : registry.entrySet()) {
             var type = entry.getValue();
             int minSection = SectionPos.blockToSectionCoord(type.minY());
             int maxSection = SectionPos.blockToSectionCoord(type.minY() + type.height() - 1);
             helper.assertTrue(minSection >= Byte.MIN_VALUE && maxSection <= Byte.MAX_VALUE,
-                    entry.getKey().identifier() + " section range [" + minSection + ".."
+                    entry.getKey().location() + " section range [" + minSection + ".."
                             + maxSection + "] no longer fits the single-byte sectionY wire "
                             + "field — the protocol needs a wider encoding before this "
                             + "dimension can ship");
@@ -124,7 +124,7 @@ public class LSSGameTests {
         helper.succeed();
     }
 
-    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    @GameTest(template = "fabric-gametest-api-v1:empty")
     public void allConfigFieldsInValidRange(GameTestHelper helper) {
         var c = LSSServerConfig.CONFIG;
         helper.assertTrue(c.bytesPerSecondLimitPerPlayer >= LSSConstants.MIN_BYTES_PER_SECOND && c.bytesPerSecondLimitPerPlayer <= LSSConstants.MAX_BYTES_PER_SECOND_PER_PLAYER, "bytesPerSecondLimitPerPlayer");
