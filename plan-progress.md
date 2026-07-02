@@ -59,6 +59,30 @@ empirical probes against a real folia-26.1.2-8 server). Load-bearing verified fa
 - Work branches off the unmerged `fix/lod-lighting-and-review-findings` as `feat/folia-support`
   (Folia work builds on the accumulated delivery-honesty state; both merge together or in order).
 
+### Stage 3 — Plan review + fixes (DONE 2026-07-02)
+
+Adversarial workflow `folia-plan-review` (26 agents; 4 lenses: Folia-fact accuracy,
+code-consistency, concurrency adversary, completeness → per-finding verification): 22 raw
+findings → 20 survived (most CONFIRMED), 2 refuted. Consolidated into 13 distinct fixes applied
+to spec + plan (see plan §"Post-review revisions"). Highest-value catches:
+
+1. **runFolia duplicate-plugin hazard (CONFIRMED from run-task 3.0.2 bytecode):** default
+   `pluginsMode=PLUGIN_JAR_DETECTION` auto-adds the *release* shadowJar next to the explicitly
+   wired soakShadowJar → two same-named plugins, nondeterministic winner, soak hangs when the
+   soak-stripped release jar wins. Fix: `pluginsMode = INHERIT_NONE`.
+2. **Driver onJoin region-thread race:** PlayerJoinEvent fires on the joining player's region
+   thread on Folia; the driver's join-anchor state is global-thread-owned. Fix: hop the body to
+   the pump via GlobalRegionScheduler.execute.
+3. **Mailbox drain placement:** draining after the `enabled` guard would leak the queue forever
+   on enabled=false servers (quits enqueue unconditionally). Fix: drain before the guard (+ test).
+4. **Wrong exception fact:** disabled-plugin scheduling throws `IllegalPluginAccessException`
+   (same type as legacy scheduler — exact parity), not IllegalStateException.
+5. **No durable wiring pin:** added a class-reference contract test (constant-pool scan: no
+   BukkitRunnable/BukkitScheduler refs in Folia-critical classes; plugin wires enqueue*).
+6. Checker/report integration: `mapped` key → `KNOWN_SERVER_KEYS` + only-when-true emission;
+   soak_report.py results-dir regex learns the `folia-` tag; CI gains `:paper:test` (was never
+   in CI — all new pins would have been dev-machine-only).
+
 ## Major decisions
 
 - **D1 — Single jar, not a new subproject (2026-07-02).** The existing Paper plugin becomes
@@ -96,4 +120,11 @@ empirical probes against a real folia-26.1.2-8 server). Load-bearing verified fa
   *Alternatives rejected:* MockBukkit Folia mocks (API-shape only, no region semantics); manual
   smoke only (the harness already exists and is the project's Paper-runtime gate).
 - **D6 — /reload documented as unsupported on Folia (2026-07-02);** normal stop verified safe for
-  our blocking onDisable joins.
+  our blocking onDisable joins. Runtime plugin-manager disables get cheap containment (volatile
+  `shuttingDown` checked by tick(); onDisable nulls the service field before shutdown) and are
+  documented best-effort.
+- **D7 — First Folia release ships labeled "experimental" (2026-07-02, from review finding).**
+  The live gate exercises one player region + the global region; concurrent multi-region ingress
+  (a second simultaneous soak client) is the recorded exit criterion for dropping the label.
+  *Alternative rejected for now:* building two-client soak support into the harness first —
+  real harness surgery that would gate all Folia value on it; revisit post-release.

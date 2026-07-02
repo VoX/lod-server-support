@@ -10,7 +10,8 @@
 
 ## Global Constraints
 
-- Minecraft 26.1.2; Folia server = `folia-26.1.2` build 8 (downloaded by run-paper; never vendored).
+- Minecraft 26.1.2; Folia server = latest stable `folia-26.1.2` build downloaded by run-paper at
+  task execution (build 8 at research time — record the actual build from the boot log in Task 14).
 - Protocol stays **v16**; zero wire/client changes.
 - No new runtime dependencies; no reflection except the one `Class.forName("io.papermc.paper.threadedregions.RegionizedServer")` platform probe.
 - One release artifact: `lod-server-support-paper.jar` (globs/manifest in `release_check.py` unchanged except the new plugin.yml assertion).
@@ -20,14 +21,12 @@
 
 ---
 
-### Task 1: Branch + docs
+### Task 1: Branch + docs (PRE-COMPLETED — verify only)
 
-**Files:**
-- Create: branch `feat/folia-support` off `fix/lod-lighting-and-review-findings`
-- Commit: `docs/superpowers/specs/2026-07-02-folia-support-design.md`, `docs/superpowers/plans/2026-07-02-folia-support.md`, `plan-progress.md`
+Branch `feat/folia-support` already exists (checked out, commit 8eea132 contains spec + plan +
+plan-progress.md). Executors: verify with `git branch --show-current` and skip.
 
-- [ ] **Step 1:** `git checkout -b feat/folia-support`
-- [ ] **Step 2:** `git add docs/superpowers/specs/2026-07-02-folia-support-design.md docs/superpowers/plans/2026-07-02-folia-support.md plan-progress.md && git commit -m "docs: Folia support design spec + implementation plan"`
+- [x] **Step 1:** branch created and docs committed (8eea132).
 
 ### Task 2: Scheduler swap — service tick + soak driver tick
 
@@ -68,8 +67,39 @@ plugin.getServer().getGlobalRegionScheduler().runAtFixedRate(
 
 Update the class javadoc sentence "a 1-tick repeating task for the tick clock — both main thread" to "a 1-tick repeating GlobalRegionScheduler task for the tick clock — main thread on Paper, the global region thread on Folia".
 
-- [ ] **Step 3:** Run: `./gradlew :paper:test` — Expected: PASS (no seam touched).
-- [ ] **Step 4:** Commit: `git commit -am "folia: service + soak driver tick via GlobalRegionScheduler"`
+- [ ] **Step 3: Hop the driver's join anchor to the pump.** On Folia, `PlayerJoinEvent` fires on
+the joining player's REGION thread, but `onJoin` mutates global-thread-owned driver state
+(`joinTicks` HashMap, `joinCount`, `lastProgressTick`) and reads `tickCount`. Extract the body
+into a private `recordJoin(String playerName)` and make the listener hop:
+
+```java
+@EventHandler
+public void onJoin(PlayerJoinEvent event) {
+    // Folia fires join events on the player's region thread; all driver state is owned by
+    // the global-region pump, so hop (≤1 tick anchor shift — timelines are second-granular).
+    String name = event.getPlayer().getName();
+    this.plugin.getServer().getGlobalRegionScheduler().execute(this.plugin,
+            () -> recordJoin(name));
+}
+
+private void recordJoin(String name) {
+    if (this.ended) return;
+    this.joinCount++;
+    this.joinTicks.put(this.joinCount, this.tickCount);
+    this.lastProgressTick = this.tickCount;
+    var row = baseRow("join");
+    row.put("player", name);
+    row.put("joinIndex", this.joinCount);
+    PaperSoakMetricsExporter.appendJsonLine(OUTPUT, row);
+    LSSLogger.info("[Soak] Join #" + this.joinCount + " (" + name + ") at tick " + this.tickCount);
+}
+```
+
+(No unit pin — Bukkit scheduler glue; the wiring is pinned by Task 5b's class-reference test
+and exercised live by every Folia soak scenario's join anchor.)
+
+- [ ] **Step 4:** Run: `./gradlew :paper:test` — Expected: PASS (no seam touched).
+- [ ] **Step 5:** Commit: `git commit -am "folia: service + soak driver tick via GlobalRegionScheduler; region-safe join anchor"`
 
 ### Task 3: Generation completion hop via GlobalRegionScheduler
 
@@ -86,7 +116,7 @@ this.mainThreadScheduler = task ->
         plugin.getServer().getGlobalRegionScheduler().execute(plugin, task);
 ```
 
-Update the seam javadoc: "Production default is the GlobalRegionScheduler (main thread on Paper, the pump's global-region thread on Folia), which throws once the plugin is disabled — tests inject throwing schedulers to pin that rejection containment." Rename the seam-facing comments from "main thread" to "pump thread" where they describe the hop target (`onChunkReady` javadoc line 152, field comment line 57).
+Update the seam javadoc: "Production default is the GlobalRegionScheduler (main thread on Paper, the pump's global-region thread on Folia), which throws `IllegalPluginAccessException` once the plugin is disabled — the identical type the legacy CraftScheduler threw, so containment is exact parity; it must keep catching broad `Exception`, never a named type. Tests inject throwing schedulers to pin that rejection containment." Rename the seam-facing comments from "main thread" to "pump thread" where they describe the hop target (`onChunkReady` javadoc line 152, field comment line 57).
 
 - [ ] **Step 2:** Run: `./gradlew :paper:test --tests '*PaperChunkGenerationServiceTest*'` — Expected: PASS.
 - [ ] **Step 3:** Commit: `git commit -am "folia: generation completion hop via GlobalRegionScheduler"`
@@ -100,11 +130,14 @@ Update the seam javadoc: "Production default is the GlobalRegionScheduler (main 
 **Interfaces:**
 - Produces: `public void enqueueRegister(ServerPlayer player, int capabilities)`; `public void enqueueRemove(UUID uuid)`. Both callable from any thread; effects apply at the top of the next `tick()`. `registerPlayer`/`removePlayer` remain public, pump-context-only.
 
-- [ ] **Step 1: Write failing tests** (use the file's existing `playerIn(uuid, level)` mock helper and Wiring-based `service` from `setUp`):
+- [ ] **Step 1: Write failing tests** (use the file's existing `playerIn(uuid, level)` mock
+helper, the `level(Level.OVERWORLD)` factory — there is NO `overworld` fixture field; declare it
+locally per file convention — and the Wiring-based `service` built in `buildRig()`):
 
 ```java
 @Test
 void enqueuedRegisterAppliesAtNextTick() {
+    var overworld = level(Level.OVERWORLD);
     var player = playerIn(UUID.randomUUID(), overworld);
     service.enqueueRegister(player, 1);
     assertTrue(service.getPlayers().isEmpty(), "mailbox must not apply before tick");
@@ -115,6 +148,7 @@ void enqueuedRegisterAppliesAtNextTick() {
 
 @Test
 void enqueuedRemoveAppliesAtNextTick() {
+    var overworld = level(Level.OVERWORLD);
     var player = playerIn(UUID.randomUUID(), overworld);
     service.registerPlayer(player, 1);
     service.enqueueRemove(player.getUUID());
@@ -125,6 +159,7 @@ void enqueuedRemoveAppliesAtNextTick() {
 
 @Test
 void kickThenRejoinSameUuidPreservesArrivalOrder() {
+    var overworld = level(Level.OVERWORLD);
     var uuid = UUID.randomUUID();
     var first = playerIn(uuid, overworld);
     service.registerPlayer(first, 1);
@@ -136,6 +171,41 @@ void kickThenRejoinSameUuidPreservesArrivalOrder() {
     assertEquals(1, service.getPlayers().size());
     assertSame(rejoined, service.getPlayers().get(uuid).getPlayer(),
             "remove must apply before the re-register that followed it");
+}
+
+@Test
+void mailboxDrainsEvenWhenServiceDisabled() {
+    // A disabled server still sees quits (onPlayerQuit enqueues unconditionally); the drain
+    // must run BEFORE the enabled guard or the queue grows for the whole server run.
+    var overworld = level(Level.OVERWORLD);
+    var disabled = disabledConfigService(); // build a service over a config with enabled=false,
+                                            // same Wiring shape as buildRig()
+    var player = playerIn(UUID.randomUUID(), overworld);
+    disabled.registerPlayer(player, 1);
+    disabled.enqueueRemove(player.getUUID());
+    disabled.tick();
+    assertTrue(disabled.getPlayers().isEmpty(),
+            "enqueued remove must apply even with enabled=false");
+}
+
+@Test
+void enqueuesFromForeignThreadsAreVisibleToThePump() throws Exception {
+    // The mailbox's whole job is cross-thread handoff (Folia region threads → pump).
+    var overworld = level(Level.OVERWORLD);
+    int n = 8;
+    var pool = java.util.concurrent.Executors.newFixedThreadPool(n);
+    try {
+        var futures = new java.util.ArrayList<java.util.concurrent.Future<?>>();
+        for (int i = 0; i < n; i++) {
+            var player = playerIn(UUID.randomUUID(), overworld);
+            futures.add(pool.submit(() -> service.enqueueRegister(player, 1)));
+        }
+        for (var f : futures) f.get();
+    } finally {
+        pool.shutdown();
+    }
+    service.tick();
+    assertEquals(n, service.getPlayers().size(), "all foreign-thread registers must apply");
 }
 ```
 
@@ -175,7 +245,11 @@ private void drainLifecycleMailbox() {
 }
 ```
 
-and insert `drainLifecycleMailbox();` as the first statement of `tick()` after the `config.enabled` guard.
+and insert `drainLifecycleMailbox();` as the **first statement of `tick()`, BEFORE the
+`config.enabled` guard** — a disabled server still receives quits and the queue must not grow
+unbounded. Draining while disabled is safe by construction: `HandshakeGate` never invokes the
+registrar when disabled (no Register events can exist in that mode) and `removePlayer` of an
+unregistered UUID is a no-op. Add that as a comment on the call.
 
 - [ ] **Step 4:** Run: `./gradlew :paper:test --tests '*PaperRequestProcessingServiceTest*'` — Expected: PASS.
 - [ ] **Step 5:** Commit: `git commit -am "folia: lifecycle mailbox — pump-owned register/remove"`
@@ -191,6 +265,90 @@ and insert `drainLifecycleMailbox();` as the first statement of `tick()` after t
 - [ ] **Step 1:** In `handleHandshake` (instance method), change the registrar lambda to `capabilities -> service.enqueueRegister(nmsPlayer, capabilities)`. In `onPlayerQuit`, change `service.removePlayer(...)` to `service.enqueueRemove(event.getPlayer().getUniqueId())`. Update the `HandshakeRegistrar` javadoc ("production-wired to `PaperRequestProcessingService#enqueueRegister` — on Folia this runs on the player's region thread; the pump applies it next tick").
 - [ ] **Step 2:** Run: `./gradlew :paper:test` — Expected: PASS.
 - [ ] **Step 3:** Commit: `git commit -am "folia: region-thread ingress (handshake register, quit) via lifecycle mailbox"`
+
+### Task 5b: Class-reference wiring contract test (TDD)
+
+The three load-bearing production swaps (scheduler, generation hop, lambda rewiring) have no
+durable pin — the glue tests pin step *order* through seams, never the production lambda bodies.
+A constant-pool scan pins the only Folia-fatal regression class cheaply.
+
+**Files:**
+- Create: `paper/src/test/java/dev/vox/lss/paper/FoliaWiringContractTest.java`
+
+- [ ] **Step 1: Write the test** (it PASSES only after Tasks 2–5 — if executing in order it
+should already be green; run it against a stashed pre-Task-2 tree to see red if desired):
+
+```java
+package dev.vox.lss.paper;
+
+import org.junit.jupiter.api.Test;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+/**
+ * Folia wiring pins, enforced at the constant-pool level: the legacy BukkitScheduler family
+ * throws UnsupportedOperationException on Folia, so ANY reference to it in the classes that
+ * run there is a Folia-fatal regression; and LSSPaperPlugin must route lifecycle ingress
+ * through the mailbox (enqueue*), never the pump-only direct methods. String-scanning the
+ * .class bytes catches every reference form (new X, method ref, subclass) without loading
+ * Bukkit classes.
+ */
+class FoliaWiringContractTest {
+
+    private static String classBytes(Class<?> c) throws IOException {
+        String res = "/" + c.getName().replace('.', '/') + ".class";
+        try (InputStream in = c.getResourceAsStream(res)) {
+            return new String(in.readAllBytes(), StandardCharsets.ISO_8859_1);
+        }
+    }
+
+    private static String classBytes(String binaryName) throws IOException {
+        String res = "/" + binaryName.replace('.', '/') + ".class";
+        try (InputStream in = FoliaWiringContractTest.class.getResourceAsStream(res)) {
+            return new String(in.readAllBytes(), StandardCharsets.ISO_8859_1);
+        }
+    }
+
+    @Test
+    void noLegacySchedulerReferencesInFoliaCriticalClasses() throws IOException {
+        for (String name : new String[] {
+                "dev.vox.lss.paper.LSSPaperPlugin",
+                "dev.vox.lss.paper.PaperChunkGenerationService",
+                "dev.vox.lss.paper.soak.PaperSoakScenarioDriver"}) {
+            String bytes = classBytes(name);
+            assertFalse(bytes.contains("org/bukkit/scheduler/BukkitRunnable"),
+                    name + " references BukkitRunnable (throws on Folia)");
+            assertFalse(bytes.contains("org/bukkit/scheduler/BukkitScheduler"),
+                    name + " references BukkitScheduler (throws on Folia)");
+        }
+    }
+
+    @Test
+    void pluginRoutesLifecycleThroughTheMailbox() throws IOException {
+        String bytes = classBytes(LSSPaperPlugin.class);
+        assertTrue(bytes.contains("enqueueRegister"),
+                "handshake registrar must enqueue, not register directly");
+        assertTrue(bytes.contains("enqueueRemove"),
+                "quit listener must enqueue, not remove directly");
+        assertFalse(bytes.contains("registerPlayer"),
+                "LSSPaperPlugin must not call the pump-only registerPlayer");
+        assertFalse(bytes.contains("removePlayer"),
+                "LSSPaperPlugin must not call the pump-only removePlayer");
+    }
+}
+```
+
+(If `LSSPaperPlugin` legitimately mentions `registerPlayer` in a javadoc `@link` only, that does
+not reach the constant pool — string constants and member refs do; adjust the assertion message
+if a false positive appears and document why.)
+
+- [ ] **Step 2:** Run: `./gradlew :paper:test --tests '*FoliaWiringContractTest*'` — Expected: PASS.
+- [ ] **Step 3:** Commit: `git commit -am "folia: class-reference wiring contract test"`
 
 ### Task 6: Folia detection + driver `save-all` mapping (TDD)
 
@@ -283,7 +441,7 @@ static boolean mapsToFoliaNoOp(String cmd, boolean folia) {
 }
 ```
 
-and in `fireDueSteps`, replace the `executeStepCommand(step.cmd)` call site:
+and in `fireDueSteps`, replace the WHOLE existing `boolean threw = false; try { executeStepCommand(step.cmd); } catch (RuntimeException e) {...}` block (driver lines ~156-163 — the snippet below re-declares `threw`, so the old declaration must go too):
 
 ```java
 boolean threw = false;
@@ -300,7 +458,16 @@ if (mapped) {
 }
 ```
 
-and add `row.put("mapped", mapped);` next to the existing `row.put("ok", !threw);` (checker treats unknown keys as inert; `ok` stays true for mapped rows).
+then next to the existing `row.put("ok", !threw);` add:
+
+```java
+if (mapped) row.put("mapped", true); // only when true: Paper command rows stay byte-identical
+```
+
+- [ ] **Step 4b: Teach the checker the new key.** `check_soak.py` validates command rows against
+`KNOWN_SERVER_KEYS["command"]` (~line 195: `{event, wallMs, tick, cmd, anchor, at, ok}`) and
+aggregates unknown keys into a verdict warning — add `"mapped"` to that set, plus one
+`--selftest` case: a command row carrying `"mapped": true` produces no unknown-key warning.
 
 - [ ] **Step 5:** Run: `./gradlew :paper:test` — Expected: PASS.
 - [ ] **Step 6:** Commit: `git commit -am "folia: platform probe + soak driver save-all mapping"`
@@ -342,6 +509,35 @@ On Folia `/lsslod` runs on the sender's region thread (player) or the global thr
 
 - [ ] **Step 1:** Trace every read reachable from `PaperCommands.onCommand`: `service.getPlayers()` (CHM — safe), per-state metrics (verify atomic/volatile), `getTickDiagnostics()` → `TickDiagnostics.format` (verify primitives only), `genService.getDiagnostics()` (volatile counters + racy `active.size()` — safe, stale-tolerable), disk-reader diagnostics (verify atomics). Record findings in the commit message.
 - [ ] **Step 2:** Update `PaperChunkGenerationService.getActiveCount()`/`getDiagnostics()` comments: "Pump thread for exact values; command threads read racily (stale-tolerable admin diagnostics — never iterate `active` off-pump)." Add a sentence to `PaperCommands` class javadoc: "On Folia, command dispatch is region-threaded; every read on this path is a concurrent structure or a stale-tolerable primitive (audited 2026-07-02)."
+- [ ] **Step 2b: Runtime-disable containment.** Third-party plugin managers can call
+`PluginManager.disablePlugin` from a player region thread (no thread check), running
+`shutdown()` concurrently with a mid-flight pump `tick()`. Two-line containment:
+
+In `PaperRequestProcessingService`: add `private volatile boolean shuttingDown = false;`; first
+line of `shutdown()`: `this.shuttingDown = true;`; and extend the tick guard:
+
+```java
+public void tick() {
+    drainLifecycleMailbox();
+    if (this.shuttingDown || !this.config.enabled)
+        return;
+    ...
+```
+
+In `LSSPaperPlugin.onDisable`, null the field BEFORE shutting down so the next pump fire no-ops:
+
+```java
+var service = this.requestService;
+this.requestService = null;
+if (service != null) {
+    LSSLogger.info("Stopping LSS LOD request processing service");
+    service.shutdown();
+}
+```
+
+Test (in `PaperRequestProcessingServiceTest`): `shutdownStopsSubsequentTicks` — call
+`service.shutdown()`, then `service.tick()`, assert no collaborator interaction (e.g. the
+recording broadcaster's tick count stays 0) — plus keep all existing shutdown tests green.
 - [ ] **Step 3:** If (and only if) Step 1 found a non-concurrent iteration: write the failing test proving the unsafe read, fix minimally, re-run `./gradlew :paper:test`.
 - [ ] **Step 4:** Commit: `git commit -am "folia: audit + document cross-thread command reads"`
 
@@ -357,7 +553,11 @@ On Folia `/lsslod` runs on the sender's region thread (player) or the global thr
 // downloads folia-<mc>-<build>.jar from the PaperMC downloads service; we point it at the
 // same soakShadowJar + scenario plumbing as runSoakServer. It doubles as the manual Folia
 // smoke task; without -Psoak.scenario the driver stays inert (empty system property).
+// pluginsMode INHERIT_NONE is load-bearing: the default PLUGIN_JAR_DETECTION auto-adds the
+// RELEASE shadowJar (soak-excluded) next to soakShadowJar — two same-named plugins, and
+// whichever loads first wins nondeterministically.
 runPaper.folia.registerTask()
+runPaper.folia.pluginsMode = xyz.jpenilla.runpaper.RunPaperExtension.Folia.PluginsMode.INHERIT_NONE
 tasks.named('runFolia', xyz.jpenilla.runpaper.task.RunServer) {
     minecraftVersion(project.minecraft_version)
     runDirectory(file('build/run/folia-soak-server'))
@@ -367,7 +567,14 @@ tasks.named('runFolia', xyz.jpenilla.runpaper.task.RunServer) {
 }
 ```
 
+(If the Groovy enum path differs, check the actual nested type with
+`javap -classpath ~/.gradle/caches/... xyz.jpenilla.runpaper.RunPaperExtension$Folia` or the
+run-task source; `INHERIT_NONE` is the verified enum constant name.)
+
 - [ ] **Step 2:** Run: `./gradlew :paper:tasks --all | grep -i folia` — Expected: `runFolia` and `cleanFoliaCache` listed. Then `./gradlew :paper:test` still green.
+- [ ] **Step 2b:** After the first Task 14 boot, assert exactly ONE LSS jar landed:
+`ls paper/build/run/folia-soak-server/plugins/*.jar` → only `lss-paper-soak.jar` (fail loudly in
+plan-progress.md if the release jar appears beside it).
 - [ ] **Step 3:** Commit: `git commit -am "folia: runFolia soak server task (run-paper folia download)"`
 
 ### Task 10: soak.sh `SOAK_PLATFORM=folia`
@@ -440,8 +647,12 @@ BUKKIT
 fi
 ```
 
-- [ ] **Step 7:** Syntax check: `bash -n scripts/soak.sh` — Expected: silent. `SOAK_PLATFORM=folia ./scripts/soak.sh definitely-not-a-scenario` — Expected: unknown-scenario error mentioning folia usage.
-- [ ] **Step 8:** Commit: `git commit -am "folia: SOAK_PLATFORM=folia harness platform"`
+- [ ] **Step 7: soak_report.py platform tag.** The results-dir parser strips only the `paper-`
+tag (`soak_report.py` ~line 181, regex `-(?:paper-)?\d{8}T\d{6}Z$`), so `fresh-backfill-folia-…`
+would mis-parse as scenario `fresh-backfill-folia`. Widen it to `-(?:paper-|folia-)?\d{8}T\d{6}Z$`
+(update the adjacent comment) and add a `--selftest` case for a folia-tagged dir name.
+- [ ] **Step 8:** Syntax check: `bash -n scripts/soak.sh` — Expected: silent. `SOAK_PLATFORM=folia ./scripts/soak.sh definitely-not-a-scenario` — Expected: unknown-scenario error mentioning folia usage. `python3 scripts/soak_report.py --selftest && python3 scripts/check_soak.py --selftest` — Expected: PASS with the new cases counted.
+- [ ] **Step 9:** Commit: `git commit -am "folia: SOAK_PLATFORM=folia harness platform"`
 
 ### Task 11: release_check.py — folia-supported gate (TDD via selftest)
 
@@ -456,10 +667,25 @@ fi
 ### Task 12: Docs + release loaders
 
 **Files:**
-- Modify: `README.md` (supported-platforms section: add Folia; note /reload unsupported on Folia), `CLAUDE.md` (Project line: "Paper (server only)" → "Paper/Folia (server only)"; Soak Testing section: add `SOAK_PLATFORM=folia`; Architecture: one sentence on the GlobalRegionScheduler pump + lifecycle mailbox), `.github/workflows/release.yml` (paper mc-publish step: add `folia` to `loaders`)
-- [ ] **Step 1:** Make the three edits. In release.yml the paper step's loaders list (currently `paper` + `purpur`) gains `folia`.
+- Modify: `README.md` — platform claims live in FIVE places, update all: intro (line ~5),
+  compatibility table (line ~9), downloads list (line ~36), "Paper Server" install section
+  (lines ~52-56 — add the Folia notes here: experimental label, /reload unsupported),
+  Requirements (lines ~68-69, "Requires Paper (or Purpur)" → "Requires Paper, Purpur, or Folia
+  (experimental)")
+- Modify: `CLAUDE.md` (Project line: "Paper (server only)" → "Paper/Folia (server only)"; Soak
+  Testing section: add `SOAK_PLATFORM=folia`; Architecture: one sentence on the
+  GlobalRegionScheduler pump + lifecycle mailbox)
+- Modify: `.github/workflows/release.yml` (paper mc-publish step: add `folia` to `loaders`)
+- Modify: `.github/workflows/build.yml` — add a `./gradlew :paper:test` step after the Paper
+  build (CI never ran the Paper suite; every pin this plan adds would otherwise be
+  dev-machine-only; the dev bundle is already resolved by :paper:shadowJar so cost is
+  incremental)
+
+- [ ] **Step 1:** Make the edits. Folia support is labeled **experimental** everywhere
+user-facing (the live validation covers one player region + the global region; concurrent
+multi-region ingress is the exit criterion for dropping the label — record in plan-progress.md).
 - [ ] **Step 2:** Run: `python3 scripts/release_check.py --selftest && bash -n scripts/soak.sh` — Expected: green (no functional change).
-- [ ] **Step 3:** Commit: `git commit -am "folia: docs + release loaders"`
+- [ ] **Step 3:** Commit: `git commit -am "folia: docs, CI paper tests, release loaders"`
 
 ### Task 13: Static verification suite
 
@@ -471,7 +697,7 @@ fi
 
 ### Task 14: Live validation (Stage 5 of the pipeline)
 
-- [ ] **Step 1:** `SOAK_PLATFORM=folia ./scripts/soak.sh fresh-backfill` — first run downloads `folia-26.1.2-8.jar` via run-paper; watch for the `Done (` ready line, driver activation, and a passing verdict. Expected: `verdict.json` all-green; base world saved to `soak-worlds/base-folia`.
+- [ ] **Step 1:** `SOAK_PLATFORM=folia ./scripts/soak.sh fresh-backfill` — first run downloads the latest stable folia-26.1.2 jar via run-paper (**record the actual build number from the boot log in plan-progress.md** — all dossier facts were verified against build 8); watch for the `Done (` ready line, driver activation, and a passing verdict. Verify exactly one LSS jar in `paper/build/run/folia-soak-server/plugins/` (Task 9 Step 2b). Expected: `verdict.json` all-green; base world saved to `soak-worlds/base-folia`.
 - [ ] **Step 2:** `SOAK_PLATFORM=folia ./scripts/soak.sh all` — Expected: all four scenarios pass.
 - [ ] **Step 3:** Paper regression: `SOAK_PLATFORM=paper ./scripts/soak.sh all` — Expected: all four pass (the scheduler swap must not regress Paper).
 - [ ] **Step 4:** Inspect one Folia `server.jsonl`: confirm `command` rows show `"mapped": true` only for `save-all` steps, and `soak_report.py` output flags no new anomaly class.
@@ -479,6 +705,19 @@ fi
 
 ## Self-Review notes
 
-- Spec coverage: §2→T7/T11/T12, §3→T2/T3, §4→T4/T5, §5→T2/T3/T6/T7/T8, §6→T6/T9/T10/T13/T14, §7→T11/T12. §8 has no tasks by design.
+- Spec coverage: §2→T7/T11/T12, §3→T2/T3, §4→T4/T5/T5b, §5→T2/T3/T6/T7/T8, §6→T6/T9/T10/T13/T14 (+T5b/T12 for §6.4-6.5), §7→T11/T12. §8 has no tasks by design.
 - The pinned `foliaSupportedIsAbsent` test flips in T7 *after* the scheduler/mailbox work (T2–T5) removes its reason — ordering is load-bearing.
 - Type consistency: `enqueueRegister(ServerPlayer, int)` / `enqueueRemove(UUID)` used identically in T4 (definition) and T5 (call sites); `mapsToFoliaNoOp(String, boolean)` in T6 only.
+
+## Post-review revisions (Stage 3, 2026-07-02)
+
+Adversarial 4-lens review (26 agents) surfaced 20 surviving findings → 13 distinct fixes folded
+in above: runFolia pluginsMode INHERIT_NONE (duplicate-plugin hazard, CONFIRMED from run-task
+bytecode); IllegalPluginAccessException not IllegalStateException; mailbox drain moved BEFORE
+the enabled guard (+ disabled-drain and foreign-thread tests); driver onJoin hopped to the pump
+(region-thread join events); Task 5b class-reference wiring pins; `mapped` key emitted
+only-when-true + checker schema + selftests; soak_report folia- tag regex; runtime-disable
+shuttingDown containment; CI :paper:test; README five touch points + experimental label;
+build-number recording; Task 1 marked pre-completed; test snippets fixed to file conventions
+(`level(Level.OVERWORLD)` local, `buildRig`). Two findings REFUTED (kick-ordering hazard;
+fresh-backfill save-all dependence — checker verified independent).

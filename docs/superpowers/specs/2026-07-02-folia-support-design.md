@@ -110,15 +110,30 @@ fire on region threads on Folia) write only to the synchronized `DirtyColumnTrac
 - **Generation completion hop** (`PaperChunkGenerationService`): the production
   `mainThreadScheduler` default swaps from `Bukkit.getScheduler().runTask(plugin, task)` to
   `plugin.getServer().getGlobalRegionScheduler().execute(plugin, task)`. The seam, the token
-  protocol, and the disabled-plugin rejection containment are unchanged (Folia's schedulers also
-  throw `IllegalStateException` for disabled plugins). `getChunkAtAsync` itself is callable from
+  protocol, and the disabled-plugin rejection containment are unchanged: for a disabled plugin
+  the Folia schedulers throw the *identical* `org.bukkit.plugin.IllegalPluginAccessException`
+  ("Plugin attempted to register task while disabled") the legacy `CraftScheduler` throws —
+  exact parity, provided containment keeps catching broad `Exception`, never a narrower named
+  type (verified in dev bundle `26.1.2.build.69`, `FoliaGlobalRegionScheduler` lines 63-64/90-91).
+  `getChunkAtAsync` itself is callable from
   any thread on Folia (Chunky ships exactly this pattern); `onChunkReady` then serializes on the
   pump thread — legal per §3.
 - **Soak driver tick** (`PaperSoakScenarioDriver.init`): same `BukkitRunnable` →
   `GlobalRegionScheduler.runAtFixedRate` swap. Driver commands via
   `server.getCommands().performPrefixedCommand` from the global thread are exactly
   console-equivalent on Folia (verified); `MinecraftServer.halt(false)` is legal from a
-  scheduler thread and saves all worlds via Folia's `RegionShutdownThread`.
+  scheduler thread and saves all worlds via Folia's `RegionShutdownThread`. **Driver join
+  anchors:** on Folia, `PlayerJoinEvent` fires on the joining player's *region* thread while
+  the driver's `joinTicks`/`joinCount`/`lastProgressTick` state is global-thread-owned — the
+  `onJoin` body therefore hops to the pump via `GlobalRegionScheduler.execute` (≤1 tick anchor
+  shift; timelines are second-granularity).
+- **Runtime disable containment:** normal stop and `/reload` are serialized with the pump (see
+  below), but a third-party plugin manager can call `PluginManager.disablePlugin` from a player
+  region thread, running `shutdown()` concurrently with a mid-flight `tick()`. Containment:
+  `PaperRequestProcessingService.shutdown()` sets a `volatile shuttingDown` flag checked at the
+  top of `tick()`, and `onDisable` nulls the `requestService` field *before* calling
+  `shutdown()`, shrinking the overlap to at most the one in-flight tick. Runtime plugin
+  managers are documented best-effort (Folia ecosystem norm).
 - **Commands** (`PaperCommands`): on Folia, player-sender commands run on the sender's region
   thread, console commands on the global thread — so `/lsslod` reads cross thread boundaries.
   All reads on those paths are CHM iteration, atomic/volatile counters, or racy-tolerable
@@ -147,7 +162,14 @@ many plugins' build files but zero CI workflows. Our answer:
    - `paper/build.gradle`: `runPaper.folia.registerTask()` registers `runFolia`
      (a `RunServer` wired to the Folia downloads service); we configure it as the Folia soak
      server (runDirectory `paper/build/run/folia-soak-server`, `pluginJars(soakShadowJar)`,
-     `-Dlss.soak.scenario` plumbing, 2G heap) — mirroring `runSoakServer`.
+     `-Dlss.soak.scenario` plumbing, 2G heap) — mirroring `runSoakServer`. **Critical:**
+     `runPaper.folia.pluginsMode` must be set to `INHERIT_NONE` — the default
+     `PLUGIN_JAR_DETECTION` auto-adds the *release* shadowJar (soak-excluded) next to the
+     soakShadowJar, two same-named plugins, and whichever loads first wins nondeterministically
+     (verified in run-task 3.0.2 bytecode). run-paper downloads the latest stable
+     folia-26.1.2 build at execution time (build 8 at research time — the build all dossier
+     facts were verified against); the actually-downloaded build is recorded from the boot log
+     at validation time.
    - `scripts/soak.sh`: new `folia` platform case (task `:paper:runFolia`, config dir
      `plugins/LodServerSupport`, base world `soak-worlds/base-folia`, `PLATFORM_TAG="folia-"`,
      ready timeout 240 s) + `FOLIA_SCENARIOS` (same four as Paper) + gating + `all` dispatch.
@@ -160,11 +182,27 @@ many plugins' build files but zero CI workflows. Our answer:
      maps `save-all*` steps to an acknowledged no-op row (ok=true, logged as mapped); the Folia
      staging adds a `bukkit.yml` with an aggressive autosave interval (`ticks-per: autosave:
      100`) so chunks still flush continuously mid-run, and the end-of-scenario `halt(false)`
-     performs a full save regardless. If the checker still shows a disk-accounting delta in
-     Stage 5, the fallback is a scenario-config override, not a driver redesign.
+     performs a full save regardless (confirmed: fresh-backfill's named checks do not depend on
+     mid-run save-all effects). The driver emits `"mapped": true` on the no-op's command row
+     (only when true, keeping Paper rows byte-identical) and `check_soak.py`'s
+     `KNOWN_SERVER_KEYS["command"]` gains the key so verdicts stay warning-free;
+     `soak_report.py`'s results-dir regex learns the `folia-` platform tag (it currently strips
+     only `paper-`). If the checker still shows a disk-accounting delta in Stage 5, the
+     fallback is a scenario-config override, not a driver redesign.
 3. **Paper regression** — the scheduler swap also changes Paper's execution path (same thread,
    possibly different intra-tick phase), so `SOAK_PLATFORM=paper ./scripts/soak.sh all` and the
    full Tier-1/Tier-2 suites re-run as the regression gate.
+4. **Wiring pins + CI** — a class-reference contract test (reads `.class` bytes off the test
+   classpath) asserts no `org/bukkit/scheduler/BukkitRunnable|BukkitScheduler` constant-pool
+   references remain in `LSSPaperPlugin`, `PaperChunkGenerationService`, or the soak driver,
+   and that `LSSPaperPlugin` wires `enqueueRegister`/`enqueueRemove` rather than the direct
+   lifecycle methods — the only Folia-fatal regression class, pinned cheaply. CI's `build.yml`
+   gains a `:paper:test` step (it never ran the Paper suite; all new pins would otherwise be
+   dev-machine-only).
+5. **Honest scope:** the soak validates one headless client — one player region plus the global
+   region; no *concurrent* player-region ingress is exercised. First release therefore labels
+   Folia support **experimental** in README/release notes, with multi-region (second concurrent
+   soak client) validation recorded as the exit criterion for dropping the label.
 
 ## 7. Release & docs
 
@@ -172,8 +210,11 @@ many plugins' build files but zero CI workflows. Our answer:
   (extend the existing plugin.yml expansion check + selftest fixtures). No new artifact, so jar
   globs/discovery are unchanged.
 - `release.yml`: the paper mc-publish step adds `folia` to its loaders list.
-- Docs: README + CLAUDE.md gain Folia support statements, the `SOAK_PLATFORM=folia` harness, and
-  the `/reload`-unsupported note. Modrinth listing gains the folia loader (manual, at release).
+- Docs: README + CLAUDE.md gain Folia support statements (labeled experimental — §6.5), the
+  `SOAK_PLATFORM=folia` harness, and the `/reload`-unsupported note. README's platform claims
+  live in five places (intro, compatibility table, downloads list, install section,
+  requirements) — all five are updated. Modrinth listing gains the folia loader (manual, at
+  release).
 
 ## 8. Out of scope
 
