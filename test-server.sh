@@ -2,20 +2,22 @@
 set -euo pipefail
 
 # Test server script for LOD Server Support (LSS)
-# Sets up a Fabric and/or Paper server and runs them on different ports.
-# Fabric: localhost:25565   Paper: localhost:25566
+# Sets up Fabric/Paper/Folia servers and runs them on different ports.
+# Fabric: localhost:25565   Paper: localhost:25566   Folia: localhost:25567
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 FABRIC_DIR="$SCRIPT_DIR/test-server/fabric"
 PAPER_DIR="$SCRIPT_DIR/test-server/paper"
+FOLIA_DIR="$SCRIPT_DIR/test-server/folia"
 
 # --- Fabric versions ---
 FABRIC_MC_VERSION="26.1.2"
 FABRIC_LOADER_VERSION="0.19.3"
 FABRIC_INSTALLER_VERSION="1.1.1"
 
-# --- Paper versions ---
+# --- Paper/Folia versions ---
 PAPER_MC_VERSION="26.1.2"
+FOLIA_MC_VERSION="26.1.2"
 
 # --- Download URLs ---
 FABRIC_SERVER_URL="https://meta.fabricmc.net/v2/versions/loader/${FABRIC_MC_VERSION}/${FABRIC_LOADER_VERSION}/${FABRIC_INSTALLER_VERSION}/server/jar"
@@ -48,17 +50,20 @@ download() {
     curl -fsSL -o "$dest" "$url"
 }
 
-download_paper_jar() {
-    local dest="$PAPER_DIR/paper.jar"
+# Downloads the latest stable build of a PaperMC-family server (paper|folia) via
+# fill.papermc.io/v3 (PaperMC retired the old api.papermc.io/v2 API for the 26.x line).
+download_papermc_jar() {
+    local project="$1"
+    local mc_version="$2"
+    local dest="$3"
     if [ -f "$dest" ]; then
-        echo "  Already exists: paper.jar"
+        echo "  Already exists: $(basename "$dest")"
         return 0
     fi
-    echo "  Fetching latest stable Paper build for MC ${PAPER_MC_VERSION}..."
-    # PaperMC retired the old api.papermc.io/v2 API for the 26.x line — use fill.papermc.io/v3.
+    echo "  Fetching latest stable ${project} build for MC ${mc_version}..."
     local builds_json
     builds_json=$(curl -fsSL -A "lod-server-support/test-server" \
-        "https://fill.papermc.io/v3/projects/paper/versions/${PAPER_MC_VERSION}/builds")
+        "https://fill.papermc.io/v3/projects/${project}/versions/${mc_version}/builds")
     local url
     url=$(echo "$builds_json" | python3 -c "
 import sys, json
@@ -68,7 +73,7 @@ stable = [b for b in builds if b.get('channel') == 'STABLE'] or builds
 print(stable[0]['downloads']['server:default']['url']) if stable else print('')
 ")
     if [ -z "$url" ]; then
-        echo "ERROR: Failed to resolve Paper download URL" >&2
+        echo "ERROR: Failed to resolve ${project} download URL" >&2
         return 1
     fi
     echo "  Downloading: $(basename "$url")"
@@ -198,7 +203,7 @@ setup_paper() {
     local plugins_dir="$PAPER_DIR/plugins"
     mkdir -p "$PAPER_DIR" "$plugins_dir"
 
-    download_paper_jar
+    download_papermc_jar paper "$PAPER_MC_VERSION" "$PAPER_DIR/paper.jar"
 
     if [ ! -f "$PAPER_DIR/eula.txt" ]; then
         echo "eula=true" > "$PAPER_DIR/eula.txt"
@@ -223,13 +228,47 @@ run_paper() {
 }
 
 # ============================================================
+# Folia
+# ============================================================
+
+setup_folia() {
+    echo "=== Setting up Folia server ==="
+    local plugins_dir="$FOLIA_DIR/plugins"
+    mkdir -p "$FOLIA_DIR" "$plugins_dir"
+
+    download_papermc_jar folia "$FOLIA_MC_VERSION" "$FOLIA_DIR/folia.jar"
+
+    if [ ! -f "$FOLIA_DIR/eula.txt" ]; then
+        echo "eula=true" > "$FOLIA_DIR/eula.txt"
+    fi
+
+    write_server_properties "$FOLIA_DIR" 25567 "LSS Test Server (Folia)"
+    write_ops_json "$FOLIA_DIR"
+    write_lss_config "$FOLIA_DIR/plugins/LodServerSupport"
+
+    echo "=== Installing Folia plugins ==="
+    echo "  Installing LSS (same jar as Paper — folia-supported: true)..."
+    local lss_jar
+    lss_jar=$(build_paper_jar)
+    rm -f "$plugins_dir"/lod-server-support-paper*.jar
+    cp "$lss_jar" "$plugins_dir/"
+    echo "  Installed: $(basename "$lss_jar")"
+}
+
+run_folia() {
+    cd "$FOLIA_DIR"
+    java -Xmx${SERVER_RAM} -Xms${SERVER_RAM} -jar folia.jar nogui
+}
+
+# ============================================================
 # Combined
 # ============================================================
 
-run_both() {
-    echo "=== Starting both servers ==="
+run_all() {
+    echo "=== Starting all servers ==="
     echo "  Fabric: localhost:25565"
     echo "  Paper:  localhost:25566"
+    echo "  Folia:  localhost:25567"
     echo "  Commands: /lsslod stats, /lsslod diag"
     echo ""
 
@@ -243,8 +282,14 @@ run_both() {
     java -Xmx${SERVER_RAM} -Xms${SERVER_RAM} -jar paper.jar nogui &
     PAPER_PID=$!
 
-    trap 'echo ""; echo "Stopping servers..."; kill $FABRIC_PID $PAPER_PID 2>/dev/null; wait $FABRIC_PID $PAPER_PID 2>/dev/null; echo "Done."' INT TERM EXIT
-    wait $FABRIC_PID $PAPER_PID 2>/dev/null
+    sleep 2
+
+    cd "$FOLIA_DIR"
+    java -Xmx${SERVER_RAM} -Xms${SERVER_RAM} -jar folia.jar nogui &
+    FOLIA_PID=$!
+
+    trap 'echo ""; echo "Stopping servers..."; kill $FABRIC_PID $PAPER_PID $FOLIA_PID 2>/dev/null; wait $FABRIC_PID $PAPER_PID $FOLIA_PID 2>/dev/null; echo "Done."' INT TERM EXIT
+    wait $FABRIC_PID $PAPER_PID $FOLIA_PID 2>/dev/null
 }
 
 # ============================================================
@@ -257,14 +302,16 @@ case "${1:-run}" in
         echo ""
         setup_paper
         echo ""
-        echo "Setup complete. Run '$0 run' to start both servers."
+        setup_folia
+        echo ""
+        echo "Setup complete. Run '$0 run' to start all servers."
         ;;
     update)
         echo "=== Updating LSS JARs ==="
         fabric_jar=$(build_fabric_jar)
         paper_jar=$(build_paper_jar)
 
-        mkdir -p "$FABRIC_DIR/mods" "$PAPER_DIR/plugins"
+        mkdir -p "$FABRIC_DIR/mods" "$PAPER_DIR/plugins" "$FOLIA_DIR/plugins"
 
         rm -f "$FABRIC_DIR/mods"/lod-server-support-fabric*.jar
         cp "$fabric_jar" "$FABRIC_DIR/mods/"
@@ -274,6 +321,11 @@ case "${1:-run}" in
         cp "$paper_jar" "$PAPER_DIR/plugins/"
         echo "  Paper:  $(basename "$paper_jar")"
 
+        # Folia runs the same plugin jar as Paper (folia-supported: true)
+        rm -f "$FOLIA_DIR/plugins"/lod-server-support-paper*.jar
+        cp "$paper_jar" "$FOLIA_DIR/plugins/"
+        echo "  Folia:  $(basename "$paper_jar")"
+
         echo "  Restart the servers to apply."
         ;;
     run)
@@ -281,7 +333,9 @@ case "${1:-run}" in
         echo ""
         setup_paper
         echo ""
-        run_both
+        setup_folia
+        echo ""
+        run_all
         ;;
     run-fabric)
         setup_fabric
@@ -299,20 +353,29 @@ case "${1:-run}" in
         echo ""
         run_paper
         ;;
+    run-folia)
+        setup_folia
+        echo ""
+        echo "=== Starting Folia server ==="
+        echo "  Connect to: localhost:25567"
+        echo ""
+        run_folia
+        ;;
     clean)
         echo "Removing test servers..."
         rm -rf "$SCRIPT_DIR/test-server"
         echo "Done."
         ;;
     *)
-        echo "Usage: $0 {setup|run|run-fabric|run-paper|update|clean}"
+        echo "Usage: $0 {setup|run|run-fabric|run-paper|run-folia|update|clean}"
         echo ""
-        echo "  setup      - Download and set up both servers"
-        echo "  run        - Set up and start both servers (default)"
+        echo "  setup      - Download and set up all servers"
+        echo "  run        - Set up and start all servers (default)"
         echo "  run-fabric - Set up and start Fabric server only (port 25565)"
         echo "  run-paper  - Set up and start Paper server only (port 25566)"
-        echo "  update     - Rebuild and install LSS JARs for both servers"
-        echo "  clean      - Delete both test server directories"
+        echo "  run-folia  - Set up and start Folia server only (port 25567)"
+        echo "  update     - Rebuild and install LSS JARs for all servers"
+        echo "  clean      - Delete all test server directories"
         echo ""
         echo "Environment variables:"
         echo "  SERVER_RAM  - Server memory allocation per server (default: 2G)"
