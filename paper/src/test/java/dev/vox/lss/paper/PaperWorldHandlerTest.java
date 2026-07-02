@@ -325,6 +325,9 @@ class PaperWorldHandlerTest {
         assertFalse(defaults.contains("org.bukkit.event.world.ChunkPopulateEvent"),
                 "ChunkPopulateEvent must not be a default: it re-marks every LSS-generated chunk");
         assertTrue(defaults.contains("org.bukkit.event.block.BlockBreakEvent"));
+        assertTrue(defaults.contains("org.bukkit.event.entity.EntityExplodeEvent"),
+                "entity explosions (creeper/TNT/wither) must mark chunks dirty — BlockExplodeEvent"
+                + " only covers block-caused explosions");
         handler.registerUpdateListeners(defaults);
         assertEquals(defaults.size(), registrations.size(),
                 "every default event class name resolves on the Paper API (catches typos in defaults)");

@@ -82,7 +82,12 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
     private int consecutiveErrors;
     private long cycleNow; // cached epochSeconds for current processing cycle
 
-    private static final ExecutorService SAVE_EXECUTOR = Executors.newSingleThreadExecutor(r -> {
+    // Per-instance (not static): a static executor's non-expiring daemon thread pins the
+    // OffThreadProcessor class — and, on Paper, the whole plugin classloader — for the JVM's
+    // life, leaking one thread + classloader on every /reload. Bounding it to the processor
+    // and stopping it in shutdown() ties its lifetime to the server run. The factory captures
+    // no instance state, so initializing it in the field initializer is this-escape-safe.
+    private final ExecutorService saveExecutor = Executors.newSingleThreadExecutor(r -> {
         Thread t = new Thread(r, "LSS-TimestampSave");
         t.setDaemon(true);
         return t;
@@ -343,7 +348,7 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
         if (this.dataDir != null && ++this.saveCounter >= SAVE_INTERVAL_CYCLES) {
             this.saveCounter = 0;
             var cacheSnapshot = this.timestampCache.snapshotForSave();
-            SAVE_EXECUTOR.execute(() -> cacheSnapshot.save(this.dataDir));
+            this.saveExecutor.execute(() -> cacheSnapshot.save(this.dataDir));
         }
     }
 
@@ -572,11 +577,15 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
         } else if (this.dataDir != null) {
             var snapshot = this.timestampCache.snapshotForSave();
             try {
-                SAVE_EXECUTOR.submit(() -> snapshot.save(this.dataDir))
+                this.saveExecutor.submit(() -> snapshot.save(this.dataDir))
                         .get(SHUTDOWN_JOIN_MS, TimeUnit.MILLISECONDS);
             } catch (Exception e) {
                 LSSLogger.warn("Timestamp cache final save did not complete cleanly", e);
             }
         }
+
+        // Stop the save thread (graceful: any queued periodic save still runs) so it cannot
+        // outlive the server run and pin the Paper plugin classloader across a /reload.
+        this.saveExecutor.shutdown();
     }
 }
