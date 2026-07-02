@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-LOD Server Support (LSS) — distributes LOD chunk data from servers to clients over a custom networking protocol. Supports Fabric (client + server) and Paper/Folia (server only — one plugin jar, `folia-supported: true`; Folia is experimental: single-player soak validated, concurrent multi-region ingress untested — the exit criterion for dropping the label). Clients request distant chunks individually; the server reads them from disk or memory and streams serialized sections back, enabling LOD rendering mods to display terrain beyond vanilla render distance.
+LOD Server Support (LSS) — distributes LOD chunk data from servers to clients over a custom networking protocol. Supports Fabric (client + server) and Paper/Purpur (server only). **This is the MC 1.20.1 support line: Folia is NOT supported here** (only frozen 2023 alpha Folia builds exist for 1.20.1 and their chunk-load semantics break LSS generation — plugin.yml deliberately omits `folia-supported`, so Folia rejects the plugin loudly; main and the 1.21.11 line keep Folia). Clients request distant chunks individually; the server reads them from disk or memory and streams serialized sections back, enabling LOD rendering mods to display terrain beyond vanilla render distance.
 
 ## Project Structure
 
@@ -27,7 +27,7 @@ lod-server-support/
 
 Output JARs:
 - `fabric/build/libs/lod-server-support-fabric.jar` — Fabric mod (client + server)
-- `paper/build/libs/lod-server-support-paper.jar` — Paper/Folia plugin (server only, shadow JAR; one artifact serves Paper, Purpur, and Folia via `folia-supported: true`)
+- `paper/build/libs/lod-server-support-paper.jar` — Paper/Purpur plugin (server only; the REOBFUSCATED spigot-mapped jar — 1.20.1 Paper's runtime is spigot-mapped, the mojang-mapped shadow jar `lss-paper-mojang-dev*` is dev-only and never ships)
 
 CI builds (env `CI=true`) name the jars `lod-server-support-<platform>-<mod_version>+<minecraft_version>.jar` (e.g. `lod-server-support-fabric-0.4.0+26.1.2.jar`); the release workflow feeds `mod_version` from the tag. Local dev builds keep the stable unversioned names.
 
@@ -42,7 +42,7 @@ CI builds (env `CI=true`) name the jars `lod-server-support-<platform>-<mod_vers
 ./gradlew :paper:test                                       # Paper JUnit tests (wire parity, NBT serialization, config)
 ```
 
-Most tests live in the Fabric module. Paper has Tier 1 JUnit tests as well (`./gradlew :paper:test`, ~222 tests; also run by CI) — Fabric/Paper wire parity, payload edge frames, NBT section serialization (incl. a golden cross-module byte corpus + live-vs-NBT parity), the shared handshake gate, config validation + malformed-file tolerance, world-handler event reflection, the request-service / broadcaster / generation-service / disk-reader twins driven through injection seams, plugin enable-plan/dispatch/handshake glue + plugin.yml contract (incl. `folia-supported: true`), the Folia seams (lifecycle mailbox incl. foreign-thread visibility, the `FoliaSupport` platform probe, the soak driver's save-all mapping, the generation completion-thread extraction ladder), `FoliaWiringContractTest` (constant-pool scan of every production class, nested classes included: no legacy-scheduler references, lifecycle routed through the mailbox), exporter schema parity, and command output. Paper runtime behavior is validated live by the soak harness on both Bukkit platforms (`SOAK_PLATFORM=paper` / `SOAK_PLATFORM=folia ./scripts/soak.sh all` — fresh-backfill, warm-rejoin, dimension-trip, paper-dirty-falling-block against a real Paper / Folia server).
+Most tests live in the Fabric module. Paper has Tier 1 JUnit tests as well (`./gradlew :paper:test`, ~222 tests; also run by CI) — Fabric/Paper wire parity, payload edge frames, NBT section serialization (incl. a golden cross-module byte corpus + live-vs-NBT parity), the shared handshake gate, config validation + malformed-file tolerance, world-handler event reflection, the request-service / broadcaster / generation-service / disk-reader twins driven through injection seams, plugin enable-plan/dispatch/handshake glue + plugin.yml contract (incl. pinning the ABSENCE of `folia-supported` on this line), the Folia seams (lifecycle mailbox incl. foreign-thread visibility, the `FoliaSupport` platform probe, the soak driver's save-all mapping, the generation completion-thread extraction ladder), `FoliaWiringContractTest` (constant-pool scan of every production class, nested classes included: no legacy-scheduler references, lifecycle routed through the mailbox), exporter schema parity, and command output. Paper runtime behavior is validated live by the soak harness (`SOAK_PLATFORM=paper ./scripts/soak.sh all` — fresh-backfill, warm-rejoin, dimension-trip, paper-dirty-falling-block against a real Paper server). The `SOAK_PLATFORM=folia` plumbing remains for diagnosis but cannot pass on this line: the plugin declines to load on Folia 1.20.1 (see the support-line note in Releasing).
 
 ### Test Architecture
 
@@ -239,7 +239,6 @@ Scenario-driven correctness harness: a real dedicated server + headless client e
 ./scripts/soak.sh dirty-broadcast   # setblock → dirty broadcast → client re-request
 ./scripts/soak.sh all               # All 17 Fabric scenarios in order; stops at first failure
 SOAK_PLATFORM=paper ./scripts/soak.sh all   # Paper port: fresh-backfill, warm-rejoin, dimension-trip, paper-dirty-falling-block
-SOAK_PLATFORM=folia ./scripts/soak.sh all   # Folia: same four scenarios against a real Folia server (:paper:runFolia)
 ```
 
 Further scenarios (same invocation): rate-limit-storm, disk-saturation, generation-disabled, generation-capacity-stress, bandwidth-throttle, cold-restart-resync, enabled-false, teleport-prune, dirty-range-filter, dirty-during-backfill, dirty-while-offline, clearcache-mid-session, dimension-rejoin-warm.
@@ -295,8 +294,8 @@ Releases are triggered by pushing an **annotated tag** (`git tag -a`). The tag a
 
 1. Review commits since the last tag: `git log $(git describe --tags --abbrev=0)..HEAD --oneline`
 2. **Pre-flight the exact release build locally** before tagging — the tag triggers an irreversible GitHub + Modrinth publish, so it must be green first:
-   `CI=true ./gradlew :fabric:build -x runClientGameTest :paper:test :paper:shadowJar -Pmod_version=<version> && python3 scripts/release_check.py --version <version>`
-   (`release_check.py` must print `OK`; `--version` pins the check to the jars just built — stale jars in build/libs otherwise fail the run; `:fabric:build` runs Tier 1 + Tier 2, `:paper:test` gates the Paper jar. CI runs Tier 3 (`:fabric:runClientGameTest`) as a separate build.yml job — check it is green on the release commit before tagging.)
+   `CI=true ./gradlew :fabric:build :paper:test :paper:build -Pmod_version=<version> && python3 scripts/release_check.py --version <version>`
+   (`release_check.py` must print `OK`; `--version` pins the check to the jars just built — stale jars in build/libs otherwise fail the run; `:fabric:build` runs Tier 1 + Tier 2, `:paper:test` gates the Paper jar, `:paper:build` produces the REOBFUSCATED release jar. There is no Tier 3 on this line — check build.yml is green on the release commit before tagging.)
 3. Get the release commit onto `main` via PR (protected branch): push the release branch, `gh pr create --base main`, then `gh pr merge --merge`. Use **`--merge`** (a merge commit) — `--squash`/`--rebase` rewrite SHAs and orphan the tag.
 4. Write release notes to a file (format below) and create the annotated tag with **`--cleanup=verbatim`** so the `###` headers survive:
    `git tag -a v<version> -F <notes-file> --cleanup=verbatim`

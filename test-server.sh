@@ -235,6 +235,13 @@ run_paper() {
 # ============================================================
 
 setup_folia() {
+    # 1.20.1 line: Folia support is DROPPED (plugin.yml has no folia-supported — only frozen
+    # 2023 alpha Folia builds exist for 1.20.1 and their chunk-load semantics break LSS
+    # generation). A Folia server would refuse to load the plugin, so decline loudly here.
+    echo "ERROR: Folia is not supported on the MC 1.20.1 line — the plugin declines to load there." >&2
+    echo "       Use run-fabric / run-paper instead (main and the 1.21.11 line keep Folia)." >&2
+    exit 1
+
     echo "=== Setting up Folia server ==="
     local plugins_dir="$FOLIA_DIR/plugins"
     mkdir -p "$FOLIA_DIR" "$plugins_dir"
@@ -271,7 +278,7 @@ run_all() {
     echo "=== Starting all servers ==="
     echo "  Fabric: localhost:25565"
     echo "  Paper:  localhost:25566"
-    echo "  Folia:  localhost:25567"
+    echo "  (Folia not supported on the MC 1.20.1 line)"
     echo "  Commands: /lsslod stats, /lsslod diag"
     echo ""
 
@@ -289,12 +296,6 @@ run_all() {
 
     cd "$PAPER_DIR"
     java -Xmx${SERVER_RAM} -Xms${SERVER_RAM} -jar paper.jar nogui &
-    SERVER_PIDS+=($!)
-
-    sleep 2
-
-    cd "$FOLIA_DIR"
-    java -Xmx${SERVER_RAM} -Xms${SERVER_RAM} -jar folia.jar nogui &
     SERVER_PIDS+=($!)
 
     wait "${SERVER_PIDS[@]}" 2>/dev/null
@@ -341,7 +342,7 @@ case "${1:-run}" in
         echo ""
         setup_paper
         echo ""
-        setup_folia
+        echo "(Folia skipped — not supported on the MC 1.20.1 line)"
         echo ""
         run_all
         ;;
