@@ -74,8 +74,11 @@ class PaperRequestProcessingServiceTest {
         final List<GenFailure> genFailures = new ArrayList<>();
         final ArrayDeque<OffThreadProcessor.GenerationTicketRequest> ticketQueue = new ArrayDeque<>();
         final AtomicInteger sendActionDrains = new AtomicInteger();
+        record Invalidation(String dimension, long[] positions) {}
+        final List<Invalidation> invalidations = new ArrayList<>();
         boolean throwOnShutdown = false;
         boolean shutdownCalled = false;
+        boolean invalidationsSeenBeforeShutdown = false;
 
         RecordingProcessor(Map<UUID, PaperPlayerRequestState> players, PaperChunkDiskReader diskReader) {
             // Never start()ed: the recording overrides observe the main-thread glue only.
@@ -114,8 +117,14 @@ class PaperRequestProcessingServiceTest {
         }
 
         @Override
+        public void invalidateTimestamps(String dimension, long[] positions) {
+            invalidations.add(new Invalidation(dimension, positions));
+        }
+
+        @Override
         public void shutdown() {
             shutdownCalled = true;
+            invalidationsSeenBeforeShutdown = !invalidations.isEmpty();
             if (throwOnShutdown) throw new IllegalStateException("processor shutdown boom");
         }
     }
@@ -616,5 +625,118 @@ class PaperRequestProcessingServiceTest {
         assertNull(diskReader.getPlayerQueue(uuid));
         assertEquals(0, diskReader.getDiag().getSubmittedCount(),
                 "post-shutdown submits are rejected before they are counted");
+    }
+
+    // ---- PP-012: shutdown freezes subsequent ticks (runtime plugin-manager disable) ----
+
+    @Test
+    void shutdownStopsSubsequentTicks() {
+        service.shutdown();
+        service.tick();
+        assertEquals(0, broadcaster.ticks, "a post-shutdown tick must be a no-op");
+        assertTrue(processor.snapshots.isEmpty(), "no snapshot may be posted after shutdown");
+    }
+
+    @Test
+    void mailboxEventsAfterShutdownAreNotApplied() {
+        // The overlapped-disable tick must not register into mid-teardown collaborators
+        // (players.clear() vs registerPlayer, a shut-down disk reader): shuttingDown is
+        // checked BEFORE the mailbox drain.
+        var overworld = level(Level.OVERWORLD);
+        service.shutdown();
+        service.enqueueRegister(playerIn(UUID.randomUUID(), overworld), 1);
+        service.tick();
+        assertTrue(service.getPlayers().isEmpty(),
+                "a register racing shutdown must not apply into torn-down collaborators");
+    }
+
+    // ---- PP-013: shutdown drains pending dirty marks into cache invalidations ----
+
+    @Test
+    void shutdownDrainsPendingDirtyMarksIntoInvalidationsBeforeProcessorShutdown() {
+        // Marks accumulated since the last broadcast interval would otherwise die with the
+        // tracker while the final cache save persists their pre-edit stamps — false
+        // up_to_date for edited columns across the restart.
+        service.getDirtyTracker().markDirty("minecraft:overworld", 3, 4);
+        service.getDirtyTracker().markDirty("minecraft:the_end", 7, 8);
+        service.shutdown();
+        assertEquals(2, processor.invalidations.size(), "every dirty dimension must invalidate");
+        assertTrue(processor.invalidationsSeenBeforeShutdown,
+                "invalidations must be enqueued BEFORE the processor shutdown that saves the cache");
+        assertEquals(0, service.getDirtyTracker().pendingCount(), "the tracker must be drained");
+    }
+
+    // ---- PP-011: lifecycle mailbox (Folia region-thread ingress → pump-owned apply) ----
+
+    @Test
+    void enqueuedRegisterAppliesAtNextTick() {
+        var overworld = level(Level.OVERWORLD);
+        var player = playerIn(UUID.randomUUID(), overworld);
+        service.enqueueRegister(player, 1);
+        assertTrue(service.getPlayers().isEmpty(), "mailbox must not apply before tick");
+        service.tick();
+        assertEquals(1, service.getPlayers().size());
+        assertTrue(service.getPlayers().get(player.getUUID()).hasCompletedHandshake());
+    }
+
+    @Test
+    void enqueuedRemoveAppliesAtNextTick() {
+        var overworld = level(Level.OVERWORLD);
+        var player = playerIn(UUID.randomUUID(), overworld);
+        service.registerPlayer(player, 1);
+        service.enqueueRemove(player.getUUID());
+        assertEquals(1, service.getPlayers().size(), "mailbox must not apply before tick");
+        service.tick();
+        assertTrue(service.getPlayers().isEmpty());
+    }
+
+    @Test
+    void kickThenRejoinSameUuidPreservesArrivalOrder() {
+        var overworld = level(Level.OVERWORLD);
+        var uuid = UUID.randomUUID();
+        var first = playerIn(uuid, overworld);
+        service.registerPlayer(first, 1);
+        // Quit and re-handshake land in the mailbox before the pump runs (Folia region threads).
+        service.enqueueRemove(uuid);
+        var rejoined = playerIn(uuid, overworld);
+        service.enqueueRegister(rejoined, 1);
+        service.tick();
+        assertEquals(1, service.getPlayers().size());
+        assertSame(rejoined, service.getPlayers().get(uuid).getPlayer(),
+                "remove must apply before the re-register that followed it");
+    }
+
+    @Test
+    void mailboxDrainsEvenWhenServiceDisabled() {
+        // A disabled server still sees quits (onPlayerQuit enqueues unconditionally); the
+        // drain must run BEFORE the enabled guard or the queue grows for the whole run.
+        var overworld = level(Level.OVERWORLD);
+        var player = playerIn(UUID.randomUUID(), overworld);
+        service.registerPlayer(player, 1);
+        config.enabled = false;
+        service.enqueueRemove(player.getUUID());
+        service.tick();
+        assertTrue(service.getPlayers().isEmpty(),
+                "enqueued remove must apply even with enabled=false");
+    }
+
+    @Test
+    void enqueuesFromForeignThreadsAreVisibleToThePump() throws Exception {
+        // The mailbox's whole job is cross-thread handoff (Folia region threads → pump).
+        var overworld = level(Level.OVERWORLD);
+        int n = 8;
+        var pool = java.util.concurrent.Executors.newFixedThreadPool(n);
+        try {
+            var futures = new ArrayList<java.util.concurrent.Future<?>>();
+            for (int i = 0; i < n; i++) {
+                var player = playerIn(UUID.randomUUID(), overworld);
+                futures.add(pool.submit(() -> service.enqueueRegister(player, 1)));
+            }
+            for (var f : futures) f.get();
+        } finally {
+            pool.shutdown();
+        }
+        service.tick();
+        assertEquals(n, service.getPlayers().size(), "all foreign-thread registers must apply");
     }
 }

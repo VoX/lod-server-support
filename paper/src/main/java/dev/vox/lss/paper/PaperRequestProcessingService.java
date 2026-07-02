@@ -14,7 +14,9 @@ import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.Level;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.storage.LevelResource;
@@ -27,6 +29,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
  * Core orchestrator for per-player LOD request processing on Paper.
@@ -45,9 +48,15 @@ public class PaperRequestProcessingService {
     private final PaperDirtyColumnBroadcaster dirtyBroadcaster;
 
     private final long startTimeNanos = System.nanoTime();
-    private final Map<ServerLevel, String> dimensionStringCache = new HashMap<>();
+    // Keyed by the lightweight ResourceKey (not ServerLevel): a ServerLevel key strongly
+    // retains every world an LSS player ever visited — including unloaded ones on
+    // world-cycling Paper servers (Multiverse/minigames). The dimension string is derivable
+    // from the key.
+    private final Map<ResourceKey<Level>, String> dimensionStringCache = new HashMap<>();
 
     private int diagLogCounter = 0;
+
+    private volatile boolean shuttingDown = false;
 
     private final TickDiagnostics diag = new TickDiagnostics();
 
@@ -136,9 +145,47 @@ public class PaperRequestProcessingService {
         return this.dirtyTracker;
     }
 
+    /** Cross-thread lifecycle ingress. On Folia, handshakes and PlayerQuit arrive on region
+     *  threads; registerPlayer/removePlayer mutate pump-owned state (including the generation
+     *  service's non-concurrent maps), so region-thread callers enqueue here and tick() drains
+     *  first — one queue preserves arrival order across a kick→rejoin of the same UUID. */
+    private sealed interface LifecycleEvent {
+        record Register(ServerPlayer player, int capabilities) implements LifecycleEvent {}
+        record Remove(UUID uuid) implements LifecycleEvent {}
+    }
+
+    private final ConcurrentLinkedQueue<LifecycleEvent> lifecycleMailbox = new ConcurrentLinkedQueue<>();
+
+    /** Any thread. Applied at the top of the next tick(). */
+    public void enqueueRegister(ServerPlayer player, int capabilities) {
+        this.lifecycleMailbox.add(new LifecycleEvent.Register(player, capabilities));
+    }
+
+    /** Any thread. Applied at the top of the next tick(). */
+    public void enqueueRemove(UUID uuid) {
+        this.lifecycleMailbox.add(new LifecycleEvent.Remove(uuid));
+    }
+
+    private void drainLifecycleMailbox() {
+        LifecycleEvent ev;
+        while ((ev = this.lifecycleMailbox.poll()) != null) {
+            switch (ev) {
+                case LifecycleEvent.Register r -> registerPlayer(r.player(), r.capabilities());
+                case LifecycleEvent.Remove r -> removePlayer(r.uuid());
+            }
+        }
+    }
+
     public PaperPlayerRequestState registerPlayer(ServerPlayer player, int capabilities) {
-        var state = this.players.computeIfAbsent(player.getUUID(), uuid -> new PaperPlayerRequestState(
-                player, this.config.syncOnLoadConcurrencyLimitPerPlayer, this.config.generationConcurrencyLimitPerPlayer));
+        var state = this.players.computeIfAbsent(player.getUUID(), uuid -> {
+            var s = new PaperPlayerRequestState(player,
+                    this.config.syncOnLoadConcurrencyLimitPerPlayer,
+                    this.config.generationConcurrencyLimitPerPlayer);
+            // Session identity for the router's stale-snapshot guard (set before the map
+            // publish so the processing thread never sees it null on a live state).
+            s.setRegisteredDimension(player.level().dimension().identifier().toString());
+            return s;
+        });
         this.diskReader.registerPlayer(player.getUUID());
         state.setCapabilities(capabilities);
         state.markHandshakeComplete();
@@ -175,6 +222,17 @@ public class PaperRequestProcessingService {
     }
 
     public void tick() {
+        // shuttingDown FIRST: an overlapped tick during a runtime plugin-manager disable must
+        // not apply lifecycle events into mid-teardown collaborators (registerPlayer racing
+        // players.clear() / a shut-down disk reader). Post-shutdown mailbox growth is bounded:
+        // onDisable nulls the service field, so producers stop within a tick.
+        if (this.shuttingDown)
+            return;
+        // ...but BEFORE the enabled guard: a disabled server still receives quits (onPlayerQuit
+        // enqueues unconditionally) and the queue must not grow unbounded. Draining while
+        // disabled is safe by construction: HandshakeGate never invokes the registrar when
+        // disabled, and removePlayer of an unregistered UUID is a no-op.
+        drainLifecycleMailbox();
         if (!this.config.enabled)
             return;
 
@@ -258,8 +316,8 @@ public class PaperRequestProcessingService {
 
             var player = state.getPlayer();
             var level = player.level();
-            String dimension = this.dimensionStringCache.computeIfAbsent(level,
-                    l -> l.dimension().identifier().toString());
+            String dimension = this.dimensionStringCache.computeIfAbsent(level.dimension(),
+                    k -> k.identifier().toString());
 
             this.offThreadProcessor.updateDimensionContext(dimension, level);
 
@@ -353,8 +411,8 @@ public class PaperRequestProcessingService {
 
             var player = state.getPlayer();
             var level = player.level();
-            String dimension = this.dimensionStringCache.computeIfAbsent(level,
-                    l -> l.dimension().identifier().toString());
+            String dimension = this.dimensionStringCache.computeIfAbsent(level.dimension(),
+                    k -> k.identifier().toString());
             // Ticket queued before a dimension change targets the old dimension's coordinates.
             // The admitting state was discarded by removePlayer+registerPlayer, so dropping
             // the stale ticket leaks nothing.
@@ -412,7 +470,19 @@ public class PaperRequestProcessingService {
     }
 
     public void shutdown() {
+        // Normal stop and /reload are serialized with the pump (region shutdown thread /
+        // global tick thread), but a runtime plugin manager can disable us from a player
+        // region thread — this flag shrinks the tick-vs-shutdown overlap to at most the one
+        // in-flight tick (runtime disables are documented best-effort on Folia).
+        this.shuttingDown = true;
         try {
+            // Marks accumulated since the last broadcast interval must still invalidate the
+            // timestamp cache BEFORE its final save (the invalidations ride the shutdown
+            // sentinel take) — otherwise the persisted stamps answer false up_to_date for
+            // edited columns across the restart.
+            for (var entry : this.dirtyTracker.drainAll().entrySet()) {
+                this.offThreadProcessor.invalidateTimestamps(entry.getKey(), entry.getValue());
+            }
             this.offThreadProcessor.shutdown();
         } catch (Exception e) {
             LSSLogger.error("Error shutting down off-thread processor", e);

@@ -404,6 +404,9 @@ public final class BenchmarkMetricsExporter {
         var columns = new LinkedHashMap<String, Object>();
         columns.put("known", manager != null ? manager.getReceivedColumnCount() : 0);
         columns.put("empty", manager != null ? manager.getEmptyColumnCount() : 0);
+        // All-air/ingest-parked positions resolved this session without a server timestamp
+        // (delivery-honesty: they no longer fabricate a >0 stamp, so they left "known").
+        columns.put("satisfied", manager != null ? manager.getSatisfiedColumnCount() : 0);
         columns.put("dirty", manager != null ? manager.getDirtyColumnCount() : 0);
         result.put("columns", columns);
 

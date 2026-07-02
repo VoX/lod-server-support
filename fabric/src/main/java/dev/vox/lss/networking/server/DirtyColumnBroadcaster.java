@@ -129,8 +129,11 @@ class DirtyColumnBroadcaster {
 
                     long[] result = new long[count];
                     System.arraycopy(this.positionFilterBuffer, 0, result, 0, count);
-                    // Done-bits clear before the send: a re-request racing the notification
-                    // re-serves at worst, never resolves to a stale up_to_date.
+                    // clearDiskReadDone only ENQUEUES a mailbox event; correctness comes from
+                    // applyEvents (which applies it) running before routeIncomingRequests in
+                    // every processing cycle, so a re-request routed after this notification
+                    // (network + client-scan latency later) sees the cleared done-bit and
+                    // re-resolves — never a stale up_to_date.
                     this.offThreadProcessor.clearDiskReadDone(uuid, result);
                     try {
                         this.playerView.send(state, new DirtyColumnsS2CPayload(result));

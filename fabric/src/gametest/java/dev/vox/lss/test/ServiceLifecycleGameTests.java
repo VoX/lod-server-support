@@ -568,7 +568,7 @@ public class ServiceLifecycleGameTests {
 
         // Seed live work: a held pending slot, a done-bit, and a queued incoming request.
         helper.assertTrue(state.tryAdmit(new PendingRequest(pcx - 148, pcz - 12,
-                        RequestType.SYNC, SlotType.SYNC_ON_LOAD)),
+                        RequestType.SYNC, SlotType.SYNC_ON_LOAD, false)),
                 "premise: pending seeded");
         state.markDiskReadDone(pcx - 148, pcz - 13);
         state.addRequest(PositionUtil.packPosition(pcx - 149, pcz - 12), -1L);
@@ -846,7 +846,7 @@ public class ServiceLifecycleGameTests {
 
         var state = service.registerPlayer(mock, LSSConstants.CAPABILITY_VOXEL_COLUMNS);
         helper.assertTrue(state.tryAdmit(new PendingRequest(pcx - 144, pcz - 8,
-                        RequestType.SYNC, SlotType.SYNC_ON_LOAD)),
+                        RequestType.SYNC, SlotType.SYNC_ON_LOAD, false)),
                 "premise: pending seeded before the respawn");
         state.markDiskReadDone(pcx - 144, pcz - 9);
 

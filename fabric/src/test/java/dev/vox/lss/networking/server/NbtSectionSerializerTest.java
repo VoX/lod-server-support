@@ -433,10 +433,11 @@ class NbtSectionSerializerTest {
     // Each case serializes a DETERMINISTIC in-code chunk NBT (fixed blocks/biomes/light, no
     // randomness) and byte-compares the output against the committed fixture in
     // src/test/resources/nbt-corpus/. The Paper NbtSectionSerializerTest runs the IDENTICAL
-    // corpus against identically-named fixtures in its own module, and the two committed
-    // copies are diffed for cross-module parity — so any byte drift between
-    // NbtSectionSerializer and PaperNbtSectionSerializer, or across an MC version bump
-    // (registry ids and the paletted-container format are baked into these bytes), fails.
+    // corpus against identically-named fixtures in its own module, and its
+    // goldenCorpusIsByteIdenticalToTheFabricTwin test diffs the two committed copies for
+    // cross-module parity — so any byte drift between NbtSectionSerializer and
+    // PaperNbtSectionSerializer, or across an MC version bump (registry ids and the
+    // paletted-container format are baked into these bytes), fails under :paper:test.
     //
     // Goldens are NEVER authored by hand. To (re)generate: run these tests with
     // -Dlss.regenGoldens=true on the test JVM (env LSS_REGEN_GOLDENS=true also works; with

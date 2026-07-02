@@ -111,13 +111,21 @@ final class ClientSessionGate {
             return;
         }
 
-        this.serverEnabled = payload.enabled();
+        // Clamp every server-supplied numeric field to the same bounds the server enforces
+        // on itself (ServerConfigBase.validate). A hostile or compromised server is fully
+        // untrusted input here: without this clamp its syncOnLoad concurrency limit becomes
+        // the client's scan budget and drives RequestQueue.ensureCapacity, and its LOD
+        // distance bounds the scan-ring loop — either lets a single SessionConfig packet
+        // force a multi-gigabyte client allocation (OOM crash).
+        var config = clampToProtocolBounds(payload);
+
+        this.serverEnabled = config.enabled();
         this.sessionConfigReceived = true;
-        this.serverLodDistance = payload.lodDistanceChunks();
+        this.serverLodDistance = config.lodDistanceChunks();
 
         // Without a registered LSSApi consumer there is nothing to deliver columns
         // to — skip session setup entirely (capability is sampled at JOIN).
-        if (payload.enabled() && hasConsumers) {
+        if (config.enabled() && hasConsumers) {
             // A re-sent config mid-session replaces the manager: retire the old one
             // exactly like a disconnect so its session's stamps are reported and saved,
             // not silently dropped. (A consumer rejection racing the swap reports to the
@@ -128,8 +136,24 @@ final class ClientSessionGate {
                 teardownManager(previous);
             }
             this.connectionStartMs = System.currentTimeMillis();
-            this.requestManager = this.managerFactory.create(payload);
+            this.requestManager = this.managerFactory.create(config);
         }
+    }
+
+    /**
+     * Re-clamp a server-supplied session config to the protocol's own bounds. The server
+     * clamps these on load; this defends against a server that does not (hostile, buggy, or
+     * a different implementation), so a downstream consumer can never turn an out-of-range
+     * value into an unbounded allocation or loop.
+     */
+    private static SessionConfigS2CPayload clampToProtocolBounds(SessionConfigS2CPayload p) {
+        return new SessionConfigS2CPayload(
+                p.protocolVersion(),
+                p.enabled(),
+                Math.clamp(p.lodDistanceChunks(), LSSConstants.MIN_LOD_DISTANCE, LSSConstants.MAX_LOD_DISTANCE),
+                Math.clamp(p.syncOnLoadConcurrencyLimitPerPlayer(), LSSConstants.MIN_CONCURRENCY_LIMIT, LSSConstants.MAX_CONCURRENCY_LIMIT),
+                Math.clamp(p.generationConcurrencyLimitPerPlayer(), LSSConstants.MIN_CONCURRENCY_LIMIT, LSSConstants.MAX_CONCURRENCY_LIMIT),
+                p.generationEnabled());
     }
 
     /**

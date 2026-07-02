@@ -40,6 +40,13 @@ public class LodRequestManager {
 
     private boolean cacheLoaded = false;
     private volatile CompletableFuture<Long2LongOpenHashMap> pendingCacheLoad = null;
+    // Ingest failures reported while this dimension's cache load is still in flight: applied
+    // against the not-yet-loaded map they are absorbed (onIngestFailed no-ops on an absent
+    // entry) and loadFrom would then resurrect the stale ts>0 stamp from disk — a claim for
+    // data no consumer holds, revalidated up_to_date every session. Buffer and re-apply
+    // after the load lands. Main client thread only.
+    private final it.unimi.dsi.fastutil.longs.LongOpenHashSet failuresDuringCacheLoad =
+            new it.unimi.dsi.fastutil.longs.LongOpenHashSet();
 
     // Metrics tracking (counters + rolling rates)
     private final RequestMetrics metrics = new RequestMetrics();
@@ -137,6 +144,9 @@ public class LodRequestManager {
             int pruneDistance = this.scanner.getPruneDistance();
             this.columns.pruneOutOfRange(playerCx, playerCz, pruneDistance);
             this.tracker.pruneOutOfRange(playerCx, playerCz, pruneDistance);
+            // Pruned in-flight requests will never get a tracked answer — drop their RTT
+            // stamps with them or they orphan toward the sampling cap.
+            this.metrics.pruneRttStampsOutOfRange(playerCx, playerCz, pruneDistance);
             this.lastChunkX = playerCx;
             this.lastChunkZ = playerCz;
             this.scanner.resetScanCounter();
@@ -167,6 +177,14 @@ public class LodRequestManager {
                 }
             } catch (Exception ignored) {}
             this.pendingCacheLoad = null;
+            if (!this.failuresDuringCacheLoad.isEmpty()) {
+                // Failures reported during the load: the load may have just resurrected their
+                // stale stamps — re-apply so the positions unstamp and re-request honestly.
+                for (long failed : this.failuresDuringCacheLoad) {
+                    this.columns.onIngestFailed(failed);
+                }
+                this.failuresDuringCacheLoad.clear();
+            }
         }
         return true;
     }
@@ -222,9 +240,13 @@ public class LodRequestManager {
 
         while (count < maxToSend && this.queue.hasNext()) {
             long pos = this.queue.peekPosition();
-            long ts = this.queue.peekTimestamp();
             if (this.tracker.isInFlight(pos)) { this.queue.skip(); continue; }
-            if (this.columns.classify(pos, generationEnabled) == ColumnStateMap.SATISFIED) { this.queue.skip(); continue; }
+            // Re-derive the timestamp from classify at SEND time, not the scan-time value the
+            // queue buffered: a stamp forgotten between scan and drain (e.g. an ingest failure
+            // reset it to -1) would otherwise go out as a stale ts>0 claiming data the client
+            // no longer holds, defeating the server's ts<=0 honest re-resolution.
+            long ts = this.columns.classify(pos, generationEnabled);
+            if (ts == ColumnStateMap.SATISFIED) { this.queue.skip(); continue; }
 
             // Per-type concurrency check — skip if this type is full, try next
             boolean isGen = ts == 0;
@@ -263,37 +285,59 @@ public class LodRequestManager {
     private BatchSender batchSender = payload -> ClientPlayNetworking.send(payload);
 
     private void sendRequests(long[] positionBuffer, long[] timestampBuffer, int count) {
+        // Snapshot to exact-length arrays: BatchChunkRequestC2SPayload's StreamCodec reads
+        // these lazily when the connection encodes on the netty event loop, which races the
+        // next tick's drainQueue overwriting the reused sendPositionBuffer/sendTimestampBuffer.
+        // The payload must own its data so a request's positions can't be corrupted mid-encode.
+        long[] positions = java.util.Arrays.copyOf(positionBuffer, count);
+        long[] timestamps = java.util.Arrays.copyOf(timestampBuffer, count);
         try {
-            this.batchSender.send(new BatchChunkRequestC2SPayload(positionBuffer, timestampBuffer, count));
+            this.batchSender.send(new BatchChunkRequestC2SPayload(positions, timestamps, count));
             long nowMs = System.currentTimeMillis();
             for (int i = 0; i < count; i++) {
-                this.metrics.recordRequestSent(positionBuffer[i], nowMs); // RTT send stamp per position
+                this.metrics.recordRequestSent(positions[i], nowMs); // RTT send stamp per position
             }
         } catch (Exception e) {
             LSSLogger.error("Failed to send batch chunk request", e);
             for (int i = 0; i < count; i++) {
-                this.tracker.removeByPosition(positionBuffer[i]);
+                this.tracker.removeByPosition(positions[i]);
                 // drainQueue consumed the dirty/retry marks at markSent, so without
                 // restoration a validated position whose batch never reached the wire
                 // classifies SATISFIED forever — the same orphan class as a timeout
                 // eviction (see sweepTimeouts), without the 10 s grace. Re-mark retry:
                 // classify re-asks with the stored timestamp, no invented stamps.
-                this.columns.markRetry(positionBuffer[i]);
+                this.columns.markRetry(positions[i]);
             }
         }
         this.metrics.recordSendCycle(count); // counts attempts — a failed batch still counts
     }
 
     public void onColumnReceived(long packed, long columnTimestamp, ResourceKey<Level> dimension) {
+        onColumnReceived(packed, columnTimestamp, dimension, false);
+    }
+
+    /**
+     * @param authoritativeClear the received column was a 0-section content-&gt;air CLEAR (see
+     *        {@link ClientColumnProcessor#isClearColumn}). If the consumer later rejects it, the
+     *        re-request must carry the pre-clear content stamp so the server re-sends the clear;
+     *        recorded via {@link ColumnStateMap#markAuthoritativeClear} inside the dimension guard.
+     */
+    public void onColumnReceived(long packed, long columnTimestamp, ResourceKey<Level> dimension,
+                                 boolean authoritativeClear) {
         // A column from another dimension is discarded by the dispatch drain
         // (ClientColumnProcessor filters on level.dimension()), so stamping it here would
         // mark the position SATISFIED in the current dimension's map with no data delivered.
         if (this.lastDimension != null && !this.lastDimension.equals(dimension)) return;
+        // Capture the pre-clear content stamp BEFORE onReceived overwrites it with the clear's
+        // timestamp — a rejected clear re-requests with this value, not ts=-1.
+        long preClearStamp = authoritativeClear ? this.columns.timestampFor(packed) : -1L;
         // Apply even if the position is no longer tracked (e.g. it timed out client-side):
         // the data is authoritative for the position, and stamping it prevents the
         // timeout → silent-duplicate → second-timeout stall.
         this.tracker.removeByPosition(packed);
         this.columns.onReceived(packed, columnTimestamp);
+        if (authoritativeClear) this.columns.markAuthoritativeClear(packed, preClearStamp);
+        consumeStaleCrossing(packed); // a dirty that crossed this in-flight first serve forces a re-request
         this.metrics.recordColumnReceived(packed, System.currentTimeMillis()); // RTT sample + counter
     }
 
@@ -301,9 +345,28 @@ public class LodRequestManager {
         boolean added = false;
         for (long packed : dirtyPositions) {
             added |= this.columns.markDirtyIfKnown(packed);
+            // Record a crossing REGARDLESS of markDirtyIfKnown's result: a dirty crossing an
+            // in-flight request survives onReceived's dirty-clear only via staleInFlight. This
+            // must cover the resync case (stored>0, where markDirtyIfKnown returns true) as well
+            // as the first-serve case (stored==-1, returns false) — otherwise a second edit that
+            // arrives while the first serve is in flight has its dirty mark cleared by onReceived
+            // and is never re-requested (a permanent stale column). No-op when not in flight.
+            this.columns.noteStaleIfInFlight(packed, this.tracker.isInFlight(packed));
         }
         if (added) {
             this.scanner.resetScanCounter();
+        }
+    }
+
+    /**
+     * If a dirty broadcast crossed this position's in-flight first serve, un-settle it and
+     * force a ring re-walk so the (pre-edit) answer that just arrived is superseded by a
+     * re-request. Called from every terminal first-serve outcome.
+     */
+    private void consumeStaleCrossing(long packed) {
+        if (this.columns.resolveStale(packed)) {
+            this.columns.markDirtyIfKnown(packed); // now that it has a disposition, re-mark for re-request
+            this.scanner.resetConfirmedRing();     // reach it below the confirmed ring
         }
     }
 
@@ -314,10 +377,22 @@ public class LodRequestManager {
      * answering up-to-date. Main client thread only.
      */
     public void onIngestFailure(ResourceKey<Level> dimension, long packed) {
-        // The state map belongs to the current dimension; a report for another dimension's
-        // column would unstamp the wrong position here.
-        if (this.lastDimension == null || !this.lastDimension.equals(dimension)) return;
+        if (this.lastDimension == null || !this.lastDimension.equals(dimension)) {
+            // A report for another dimension (a consumer rejected asynchronously after the
+            // player changed dimension): its in-memory state map is gone, but the false stamp is
+            // already saved in that dimension's cache. Remove it there directly so the next visit
+            // re-resolves honestly instead of getting a false up_to_date (#36).
+            if (this.serverAddress != null && dimension != null) {
+                ColumnCacheStore.removeAsync(this.serverAddress, dimension, packed);
+            }
+            return;
+        }
         this.tracker.removeByPosition(packed);
+        if (this.pendingCacheLoad != null) {
+            // The in-memory apply below is absorbed while the map is empty pre-load; remember
+            // the position so tickCacheGatePhase re-applies the failure over the loaded stamps.
+            this.failuresDuringCacheLoad.add(packed);
+        }
         this.columns.onIngestFailed(packed);
         this.metrics.recordIngestFailure();
         // No resetScanCounter here: it is a debounce (it can only DELAY the next scan,
@@ -330,9 +405,18 @@ public class LodRequestManager {
         // dimension-guarded. Gate on tracking instead: the tracker is cleared on dimension
         // change / timeout / prune, so a late status can never stamp the fresh map
         // (matches the pre-v16 requestId gate).
-        if (!this.tracker.isInFlight(packed)) { this.metrics.recordNotGenerated(); return; }
+        if (!this.tracker.isInFlight(packed)) {
+            // Untracked terminal answer (the tracker entry died to a timeout/prune): the RTT
+            // stamp is equally dead — orphans otherwise accumulate to the 4096-stamp cap and
+            // permanently silence RTT sampling for the session.
+            this.metrics.discardRttStamp(packed);
+            this.metrics.recordNotGenerated();
+            return;
+        }
         this.tracker.removeByPosition(packed);
+        this.metrics.discardRttStamp(packed); // terminal non-column answer: the RTT stamp is dead
         this.columns.onNotGenerated(packed);
+        consumeStaleCrossing(packed); // a dirty that crossed this in-flight first serve forces a re-request
         // The scanner skips in-flight positions without breaking ring confirmation, so the ring
         // can confirm PAST this position while it was in-flight. With generation enabled the ts=0
         // stamp is gen-retry-able (classify -> 0), but a below-ring position is never rescanned
@@ -344,16 +428,27 @@ public class LodRequestManager {
     }
 
     public void onColumnUpToDate(long packed) {
-        if (!this.tracker.isInFlight(packed)) { this.metrics.recordUpToDate(); return; }
+        if (!this.tracker.isInFlight(packed)) {
+            this.metrics.discardRttStamp(packed); // untracked terminal answer: stamp is dead (see onColumnNotGenerated)
+            this.metrics.recordUpToDate();
+            return;
+        }
         this.tracker.removeByPosition(packed);
+        this.metrics.discardRttStamp(packed); // terminal non-column answer: the RTT stamp is dead
         this.columns.onUpToDate(packed);
+        consumeStaleCrossing(packed); // a dirty that crossed this in-flight first serve forces a re-request
         this.metrics.recordUpToDate();
     }
 
     public void onRateLimited(long packed) {
         this.scanner.noteRateLimited(); // backoff regardless of tracking (pre-v16 set skipNextScan outside the gate)
-        if (!this.tracker.isInFlight(packed)) { this.metrics.recordRateLimited(); return; }
+        if (!this.tracker.isInFlight(packed)) {
+            this.metrics.discardRttStamp(packed); // untracked terminal answer: stamp is dead (see onColumnNotGenerated)
+            this.metrics.recordRateLimited();
+            return;
+        }
         this.tracker.removeByPosition(packed);
+        this.metrics.discardRttStamp(packed); // a bounce is terminal for THIS request; the retry re-stamps
         this.columns.markRetry(packed);
         this.metrics.recordRateLimited();
     }
@@ -381,6 +476,7 @@ public class LodRequestManager {
     }
 
     private void startAsyncCacheLoad(ResourceKey<Level> dimension) {
+        this.failuresDuringCacheLoad.clear(); // per-dimension buffer; a new load starts clean
         this.pendingCacheLoad = ColumnCacheStore.loadAsync(this.serverAddress, dimension);
     }
 
@@ -399,6 +495,7 @@ public class LodRequestManager {
             ColumnCacheStore.clearForServer(this.serverAddress);
         }
         this.pendingCacheLoad = null; // drop any in-flight load — its pre-clear result would resurrect flushed timestamps
+        this.failuresDuringCacheLoad.clear();
         resetRequestState();
         this.queue.clear();
         this.scanner.reset();
@@ -443,8 +540,18 @@ public class LodRequestManager {
         return this.columns.timestampFor(PositionUtil.packPosition(cx, cz));
     }
 
+    /**
+     * True if the client already holds server data for this position (a resync). Must be
+     * queried BEFORE {@link #onColumnReceived} stamps the arriving column. Drives the decode's
+     * authoritative air-fill: a resync clears ghost terrain for absent sections, a first serve
+     * (nothing held) does not.
+     */
+    public boolean heldContentBefore(long packed) { return this.columns.timestampFor(packed) > 0; }
+
     public int getReceivedColumnCount() { return this.columns.receivedCount(); }
     public int getEmptyColumnCount() { return this.columns.emptyCount(); }
+    /** Positions resolved this session with no server data (all-air up-to-date, ingest-parked). */
+    public int getSatisfiedColumnCount() { return this.columns.sessionSatisfiedCount(); }
     public int getEffectiveLodDistanceChunks() { return this.sessionConfig != null ? this.scanner.getEffectiveLodDistance() : 0; }
     public long getTotalSendCycles() { return this.metrics.getTotalSendCycles(); }
     public long getTotalPositionsRequested() { return this.metrics.getTotalPositionsRequested(); }

@@ -3,6 +3,7 @@ package dev.vox.lss.networking.client;
 import com.mojang.serialization.Lifecycle;
 import dev.vox.lss.api.LSSApi;
 import dev.vox.lss.api.VoxelColumnConsumer;
+import dev.vox.lss.api.VoxelColumnData;
 import dev.vox.lss.common.LSSConstants;
 import dev.vox.lss.common.PositionUtil;
 import dev.vox.lss.config.LSSClientConfig;
@@ -52,6 +53,7 @@ class ClientColumnProcessorTest {
     private static PalettedContainerFactory FACTORY;
     /** Section count of the test "client level" the drain runs against. */
     private static final int LEVEL_SECTIONS = 4;
+    private static final int MIN_SECTION_Y = -4;
 
     @BeforeAll
     static void setup() {
@@ -101,7 +103,7 @@ class ClientColumnProcessorTest {
     }
 
     private void offer(int count) {
-        for (int i = 0; i < count; i++) processor.offer(payload);
+        for (int i = 0; i < count; i++) processor.offer(payload, false);
     }
 
     // ---- Wire-byte builders (SectionSerializer grammar) ----
@@ -156,7 +158,7 @@ class ClientColumnProcessorTest {
     }
 
     private void drainNow() {
-        processor.drainColumnQueue(dim, LEVEL_SECTIONS, FACTORY, recordingDispatcher,
+        processor.drainColumnQueue(dim, LEVEL_SECTIONS, MIN_SECTION_Y, FACTORY, recordingDispatcher,
                 processor.sessionEpochForTest());
     }
 
@@ -208,6 +210,47 @@ class ClientColumnProcessorTest {
     }
 
     @Test
+    void errorDuringDrainReportsBeforePropagating() {
+        // Throwable containment (mirrors LSSApi.dispatchColumn's policy): an Error escaping
+        // the per-column try would consume the column — polled, decremented — with no
+        // dispatch AND no report, a permanent false received-stamp persisted to the cache.
+        // The report must land BEFORE the Error propagates.
+        var wire = sectionWire(1, 1);
+        processor.offer(new VoxelColumnS2CPayload(3, 4, dim, 9L, wire), false);
+        assertThrows(LinkageError.class, () -> processor.drainColumnQueue(dim, LEVEL_SECTIONS,
+                MIN_SECTION_Y, FACTORY,
+                (d, cx, cz, data) -> { throw new LinkageError("boom"); },
+                processor.sessionEpochForTest()));
+        assertEquals(List.of(new Report(dim, 3, 4)), reports,
+                "the column must report (unstamp) before the Error surfaces");
+        assertEquals(0, processor.getQueuedCount(), "the column was consumed exactly once");
+    }
+
+    @Test
+    void admissionIsBoundedByBytesAsWellAsCount() {
+        // The count cap alone admits up to 8000 x 2 MiB = 16 GiB of retained payloads from a
+        // hostile server before any drop fires; the byte budget closes that.
+        assertTrue(ClientColumnProcessor.admits(0, 0, 1024));
+        assertTrue(ClientColumnProcessor.admits(0,
+                ClientColumnProcessor.MAX_QUEUED_BYTES - 10, 10), "budget boundary is inclusive");
+        assertFalse(ClientColumnProcessor.admits(0,
+                ClientColumnProcessor.MAX_QUEUED_BYTES - 10, 11), "over-budget payload must drop");
+        assertFalse(ClientColumnProcessor.admits(ClientColumnProcessor.MAX_QUEUED_COLUMNS, 0, 1),
+                "count cap still applies");
+    }
+
+    @Test
+    void offerTracksQueuedBytesAndShutdownDrainsThem() {
+        var sized = new VoxelColumnS2CPayload(0, 0, dimKey("bytes"), 1L, new byte[64]);
+        processor.offer(sized, false);
+        processor.offer(sized, false);
+        assertEquals(128, processor.getQueuedBytes(), "offers must count toward the byte budget");
+        processor.shutdown();
+        assertEquals(0, processor.getQueuedBytes(),
+                "a stale byte budget would throttle the next session's admissions");
+    }
+
+    @Test
     void shutdownZeroesBackpressureSignalAndKeepsDropStats() {
         offer(ClientColumnProcessor.MAX_QUEUED_COLUMNS + 5);
         assertEquals(5, processor.getColumnsDropped());
@@ -246,6 +289,46 @@ class ClientColumnProcessorTest {
                 "disabled session must drop the backlog and release the backpressure signal");
     }
 
+    // ---- WS3 authoritative air-fill: a resync clears ghost terrain for absent sections ----
+
+    @Test
+    void airFillAddsAllAirSectionsForEveryAbsentYOnResync() {
+        var present = new VoxelColumnData.SectionData[]{
+                new VoxelColumnData.SectionData(-4, new LevelChunkSection(FACTORY), null, null)};
+        var filled = ClientColumnProcessor.withAirFilledAbsentSections(present, LEVEL_SECTIONS, MIN_SECTION_Y, FACTORY);
+
+        var ys = new java.util.HashSet<Integer>();
+        for (var s : filled) ys.add(s.sectionY());
+        assertEquals(java.util.Set.of(-4, -3, -2, -1), ys,
+                "every section-Y in [minSectionY, minSectionY+levelSectionCount) is present after air-fill");
+        for (var s : filled) {
+            if (s.sectionY() != -4) {
+                assertTrue(s.section().hasOnlyAir(), "absent-Y sections are all-air (clear ghost terrain)");
+                assertNull(s.skyLight());
+                assertNull(s.blockLight());
+            }
+        }
+    }
+
+    @Test
+    void resyncColumnAirFillsAbsentSectionsButFirstServeDoesNot() {
+        var dim = ResourceKey.create(Registries.DIMENSION, Identifier.parse("lss_test:processor"));
+        // sectionWire writes sections at Y=0,1,..., so use minSectionY=0 -> range {0,1,2,3}.
+        byte[] wire = sectionWire(1, 1); // one section at Y=0
+
+        processor.offer(new VoxelColumnS2CPayload(0, 0, dim, 5000L, wire), true); // resync
+        processor.drainColumnQueue(dim, LEVEL_SECTIONS, 0, FACTORY, recordingDispatcher,
+                processor.sessionEpochForTest());
+        assertEquals(LEVEL_SECTIONS, dispatches.get(dispatches.size() - 1).sectionCount(),
+                "a resync fills every absent section-Y with air (present + air = full level range)");
+
+        processor.offer(new VoxelColumnS2CPayload(1, 1, dim, 5000L, wire), false); // first serve
+        processor.drainColumnQueue(dim, LEVEL_SECTIONS, 0, FACTORY, recordingDispatcher,
+                processor.sessionEpochForTest());
+        assertEquals(1, dispatches.get(dispatches.size() - 1).sectionCount(),
+                "a first serve dispatches only the carried section — no air-fill (absent == air == no-op)");
+    }
+
     @Test
     void reportUndispatchedUnstampsQueuedColumnsBeforeTheCacheFlush() {
         var dim = ResourceKey.create(Registries.DIMENSION, Identifier.parse("lss_test:processor"));
@@ -272,7 +355,7 @@ class ClientColumnProcessorTest {
         offer(ClientColumnProcessor.MAX_QUEUED_COLUMNS);
         assertEquals(List.of(), reports, "in-cap offers must not report");
 
-        processor.offer(new VoxelColumnS2CPayload(7, -3, dim, 1L, new byte[0]));
+        processor.offer(new VoxelColumnS2CPayload(7, -3, dim, 1L, new byte[0]), false);
 
         assertEquals(1, processor.getColumnsDropped());
         assertEquals(List.of(new Report(dim, 7, -3)), reports,
@@ -322,13 +405,33 @@ class ClientColumnProcessorTest {
                 "a negative claimed count clamps to zero, never a negative-size allocation");
     }
 
+    // ---- isClearColumn: identify a 0-section authoritative clear ----
+
+    @Test
+    void isClearColumnTrueForZeroSectionBody() {
+        assertTrue(ClientColumnProcessor.isClearColumn(sectionWire(0, 0)),
+                "a 0-section body is the wire form of a content->air clear");
+    }
+
+    @Test
+    void isClearColumnFalseForContentBody() {
+        assertFalse(ClientColumnProcessor.isClearColumn(sectionWire(1, 1)),
+                "any body carrying sections is content, not a clear");
+    }
+
+    @Test
+    void isClearColumnFalseForEmptyOrNullBytes() {
+        assertFalse(ClientColumnProcessor.isClearColumn(new byte[0]));
+        assertFalse(ClientColumnProcessor.isClearColumn(null));
+    }
+
     // ---- CL-039: decode failures report once and the drain continues ----
 
     @Test
     void corruptAndTruncatedColumnsReportOnceEachAndDrainContinues() {
-        processor.offer(new VoxelColumnS2CPayload(1, 1, dim, 1L, truncatedColumnWire()));
-        processor.offer(new VoxelColumnS2CPayload(3, 3, dim, 1L, truncatedLightWire()));
-        processor.offer(new VoxelColumnS2CPayload(2, 2, dim, 1L, sectionWire(1, 1)));
+        processor.offer(new VoxelColumnS2CPayload(1, 1, dim, 1L, truncatedColumnWire()), false);
+        processor.offer(new VoxelColumnS2CPayload(3, 3, dim, 1L, truncatedLightWire()), false);
+        processor.offer(new VoxelColumnS2CPayload(2, 2, dim, 1L, sectionWire(1, 1)), false);
 
         drainNow();
 
@@ -344,7 +447,7 @@ class ClientColumnProcessorTest {
 
     @Test
     void wrongDimensionColumnIsConsumedWithoutDispatchOrReport() {
-        processor.offer(new VoxelColumnS2CPayload(1, 1, dimKey("elsewhere"), 1L, sectionWire(1, 1)));
+        processor.offer(new VoxelColumnS2CPayload(1, 1, dimKey("elsewhere"), 1L, sectionWire(1, 1)), false);
 
         drainNow();
 
@@ -363,9 +466,9 @@ class ClientColumnProcessorTest {
         manager.onColumnReceived(PositionUtil.packPosition(1, 1), 5000L, dim);
         manager.onColumnReceived(PositionUtil.packPosition(2, 2), 5000L, dim);
         manager.onColumnReceived(PositionUtil.packPosition(3, 3), 5000L, dim);
-        processor.offer(new VoxelColumnS2CPayload(1, 1, dim, 5000L, sectionWire(1, 1)));
-        processor.offer(new VoxelColumnS2CPayload(2, 2, dim, 5000L, sectionWire(1, 1)));
-        processor.offer(new VoxelColumnS2CPayload(3, 3, dim, 5000L, sectionWire(1, 1)));
+        processor.offer(new VoxelColumnS2CPayload(1, 1, dim, 5000L, sectionWire(1, 1)), false);
+        processor.offer(new VoxelColumnS2CPayload(2, 2, dim, 5000L, sectionWire(1, 1)), false);
+        processor.offer(new VoxelColumnS2CPayload(3, 3, dim, 5000L, sectionWire(1, 1)), false);
         int epoch = processor.sessionEpochForTest();
 
         ClientColumnProcessor.ColumnDispatcher teardownMidDispatch = (d, cx, cz, data) -> {
@@ -373,9 +476,9 @@ class ClientColumnProcessorTest {
             // Teardown lands while the first column is mid-dispatch, then a straggler
             // arrives: the stale drain must stop at its NEXT poll, not finish the queue.
             processor.reportUndispatched(manager);
-            processor.offer(new VoxelColumnS2CPayload(4, 4, dim, 5000L, sectionWire(1, 1)));
+            processor.offer(new VoxelColumnS2CPayload(4, 4, dim, 5000L, sectionWire(1, 1)), false);
         };
-        processor.drainColumnQueue(dim, LEVEL_SECTIONS, FACTORY, teardownMidDispatch, epoch);
+        processor.drainColumnQueue(dim, LEVEL_SECTIONS, MIN_SECTION_Y, FACTORY, teardownMidDispatch, epoch);
 
         assertEquals(List.of(new Dispatched(1, 1, 1)), dispatches,
                 "at most the already-polled column dispatches (the accepted ≤1 residual)");
@@ -393,8 +496,8 @@ class ClientColumnProcessorTest {
 
     @Test
     void receiveServerLodsDisableFlipReportsClearedBacklog() {
-        processor.offer(new VoxelColumnS2CPayload(1, 2, dim, 1L, sectionWire(1, 1)));
-        processor.offer(new VoxelColumnS2CPayload(3, 4, dim, 1L, sectionWire(1, 1)));
+        processor.offer(new VoxelColumnS2CPayload(1, 2, dim, 1L, sectionWire(1, 1)), false);
+        processor.offer(new VoxelColumnS2CPayload(3, 4, dim, 1L, sectionWire(1, 1)), false);
         boolean prior = LSSClientConfig.CONFIG.receiveServerLods;
         LSSClientConfig.CONFIG.receiveServerLods = false;
         try {
@@ -413,7 +516,7 @@ class ClientColumnProcessorTest {
     void consumerDeregistrationReportsClearedBacklog() {
         assertFalse(LSSApi.hasVoxelConsumers(),
                 "precondition: consumer-registering tests must deregister in finally");
-        processor.offer(new VoxelColumnS2CPayload(8, 9, dim, 1L, sectionWire(1, 1)));
+        processor.offer(new VoxelColumnS2CPayload(8, 9, dim, 1L, sectionWire(1, 1)), false);
         boolean prior = LSSClientConfig.CONFIG.receiveServerLods;
         LSSClientConfig.CONFIG.receiveServerLods = true;
         try {
@@ -434,7 +537,7 @@ class ClientColumnProcessorTest {
         LSSClientConfig.CONFIG.receiveServerLods = true;
         LSSApi.registerColumnConsumer(consumer);
         try {
-            processor.offer(new VoxelColumnS2CPayload(3, 3, dim, 1L, sectionWire(1, 1)));
+            processor.offer(new VoxelColumnS2CPayload(3, 3, dim, 1L, sectionWire(1, 1)), false);
             processor.scheduleProcessing(true); // levelSupplier yields null: the disconnect race window
         } finally {
             LSSApi.removeColumnConsumer(consumer);
@@ -450,9 +553,9 @@ class ClientColumnProcessorTest {
 
     @Test
     void emptyAndNullSectionBytesReportAndDrainContinues() {
-        processor.offer(new VoxelColumnS2CPayload(4, 5, dim, 1L, new byte[0]));
-        processor.offer(new VoxelColumnS2CPayload(6, 7, dim, 1L, null));
-        processor.offer(new VoxelColumnS2CPayload(2, 2, dim, 1L, sectionWire(1, 1)));
+        processor.offer(new VoxelColumnS2CPayload(4, 5, dim, 1L, new byte[0]), false);
+        processor.offer(new VoxelColumnS2CPayload(6, 7, dim, 1L, null), false);
+        processor.offer(new VoxelColumnS2CPayload(2, 2, dim, 1L, sectionWire(1, 1)), false);
 
         drainNow();
 
@@ -470,7 +573,7 @@ class ClientColumnProcessorTest {
         var gate = new ClientSessionGate(processor, () -> {}, cfg -> new OrderRecordingManager(events));
         gate.onSessionConfig(new SessionConfigS2CPayload(LSSConstants.PROTOCOL_VERSION, true,
                 64, 100, 100, true), true);
-        processor.offer(new VoxelColumnS2CPayload(5, 5, dim, 1L, sectionWire(1, 1)));
+        processor.offer(new VoxelColumnS2CPayload(5, 5, dim, 1L, sectionWire(1, 1)), false);
 
         gate.onDisconnect();
 
@@ -496,7 +599,7 @@ class ClientColumnProcessorTest {
         processorField.setAccessible(true);
         var staticProcessor = (ClientColumnProcessor) processorField.get(null);
         try {
-            staticProcessor.offer(new VoxelColumnS2CPayload(1, 2, dim, 9L, new byte[0]));
+            staticProcessor.offer(new VoxelColumnS2CPayload(1, 2, dim, 9L, new byte[0]), false);
 
             var onDimensionChange = LodRequestManager.class
                     .getDeclaredMethod("onDimensionChange", ResourceKey.class);
@@ -514,18 +617,18 @@ class ClientColumnProcessorTest {
     void epochGuardRefusesStaleDrainAfterTeardown() {
         var manager = managedManager();
         int staleEpoch = processor.sessionEpochForTest();
-        processor.offer(new VoxelColumnS2CPayload(1, 1, dim, 1L, sectionWire(1, 1)));
+        processor.offer(new VoxelColumnS2CPayload(1, 1, dim, 1L, sectionWire(1, 1)), false);
         processor.reportUndispatched(manager); // teardown bumps the session epoch
-        processor.offer(new VoxelColumnS2CPayload(2, 2, dim, 1L, sectionWire(1, 1))); // straggler
+        processor.offer(new VoxelColumnS2CPayload(2, 2, dim, 1L, sectionWire(1, 1)), false); // straggler
 
-        processor.drainColumnQueue(dim, LEVEL_SECTIONS, FACTORY, recordingDispatcher, staleEpoch);
+        processor.drainColumnQueue(dim, LEVEL_SECTIONS, MIN_SECTION_Y, FACTORY, recordingDispatcher, staleEpoch);
 
         assertEquals(List.of(), dispatches,
                 "a drain scheduled before teardown must not dispatch into the new session");
         assertEquals(1, processor.getQueuedCount(),
                 "the straggler is left for shutdown, not consumed by the stale drain");
 
-        processor.drainColumnQueue(dim, LEVEL_SECTIONS, FACTORY, recordingDispatcher,
+        processor.drainColumnQueue(dim, LEVEL_SECTIONS, MIN_SECTION_Y, FACTORY, recordingDispatcher,
                 processor.sessionEpochForTest());
         assertEquals(List.of(new Dispatched(2, 2, 1)), dispatches,
                 "only the epoch gates the drain — a current-epoch drain still serves");
@@ -552,8 +655,8 @@ class ClientColumnProcessorTest {
         gate.onSessionConfig(new SessionConfigS2CPayload(LSSConstants.PROTOCOL_VERSION, true,
                 64, 100, 100, true), true);
         try {
-            proc.offer(new VoxelColumnS2CPayload(11, 11, dim, 6000L, truncatedColumnWire()));
-            proc.drainColumnQueue(dim, LEVEL_SECTIONS, FACTORY, (d, cx, cz, data) -> {},
+            proc.offer(new VoxelColumnS2CPayload(11, 11, dim, 6000L, truncatedColumnWire()), false);
+            proc.drainColumnQueue(dim, LEVEL_SECTIONS, MIN_SECTION_Y, FACTORY, (d, cx, cz, data) -> {},
                     proc.sessionEpochForTest());
             assertEquals(-1L, manager.getColumnTimestamp(11, 11),
                     "premise: the decode failure unstamped the position");

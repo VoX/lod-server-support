@@ -8,9 +8,12 @@ import org.bukkit.NamespacedKey;
 import org.bukkit.Server;
 import org.bukkit.World;
 import org.bukkit.block.Block;
+import org.bukkit.block.BlockFace;
 import org.bukkit.block.BlockState;
 import org.bukkit.event.Event;
 import org.bukkit.event.HandlerList;
+import org.bukkit.event.block.BlockPistonExtendEvent;
+import org.bukkit.event.block.BlockPistonRetractEvent;
 import org.bukkit.event.Listener;
 import org.bukkit.plugin.EventExecutor;
 import org.bukkit.plugin.IllegalPluginAccessException;
@@ -20,6 +23,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -32,6 +36,7 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -325,6 +330,9 @@ class PaperWorldHandlerTest {
         assertFalse(defaults.contains("org.bukkit.event.world.ChunkPopulateEvent"),
                 "ChunkPopulateEvent must not be a default: it re-marks every LSS-generated chunk");
         assertTrue(defaults.contains("org.bukkit.event.block.BlockBreakEvent"));
+        assertTrue(defaults.contains("org.bukkit.event.entity.EntityExplodeEvent"),
+                "entity explosions (creeper/TNT/wither) must mark chunks dirty — BlockExplodeEvent"
+                + " only covers block-caused explosions");
         handler.registerUpdateListeners(defaults);
         assertEquals(defaults.size(), registrations.size(),
                 "every default event class name resolves on the Paper API (catches typos in defaults)");
@@ -456,6 +464,112 @@ class PaperWorldHandlerTest {
         fire(reg, new SubWithBlockListEvent(
                 block(overworld, 320, 320), List.of(block(overworld, 480, 0))));
         assertDirty(OVERWORLD, PositionUtil.packPosition(30, 0));
+    }
+
+    // ---- piston events (special-cased: source + destination + head chunks) ----
+
+    @Test
+    void pistonExtendAcrossAChunkBorderMarksTheDestinationChunk() throws Exception {
+        // A piston pushes a block from chunk (0,0) into chunk (1,0). The generic ladder
+        // reads getBlocks() — SOURCE positions only — so the chunk where the block lands
+        // was never marked and clients kept stale LOD there indefinitely (Paper has no
+        // save-hook fallback).
+        registerAndFire(new BlockPistonExtendEvent(
+                block(overworld, 14, 0), List.of(block(overworld, 15, 0)), BlockFace.EAST));
+        assertDirty(OVERWORLD, PositionUtil.packPosition(0, 0), PositionUtil.packPosition(1, 0));
+    }
+
+    @Test
+    void barePistonExtendStillMarksTheHeadChunk() throws Exception {
+        // Nothing in front: getBlocks() is empty, but the head itself appears at
+        // piston+direction — possibly across the chunk border. The list-only walk marked
+        // nothing at all.
+        registerAndFire(new BlockPistonExtendEvent(
+                block(overworld, 15, 0), List.of(), BlockFace.EAST));
+        assertDirty(OVERWORLD, PositionUtil.packPosition(0, 0), PositionUtil.packPosition(1, 0));
+    }
+
+    @Test
+    void pistonRetractMarksThePistonChunkNotJustTheMovedBlocks() throws Exception {
+        // Sticky piston in chunk (1,0) facing WEST pulls the block at (14,0) [chunk (0,0)]
+        // to (15,0). getDirection() on the moved-blocks fire is the motion direction (EAST
+        // here). The piston base's own extended->retracted state change and the vanishing
+        // head are never in getBlocks(), so chunk (1,0) went unmarked.
+        registerAndFire(new BlockPistonRetractEvent(
+                block(overworld, 16, 0), List.of(block(overworld, 14, 0)), BlockFace.EAST));
+        assertDirty(OVERWORLD, PositionUtil.packPosition(0, 0), PositionUtil.packPosition(1, 0));
+    }
+
+    // ---- multi-place events (getReplacedBlockStates rung) ----
+
+    /** Mirrors BlockMultiPlaceEvent: getReplacedBlockStates() (all placed halves) + inherited getBlock(). */
+    public static class MultiPlaceLikeEvent extends Event {
+        private final List<BlockState> replaced;
+        private final Block clicked;
+        public MultiPlaceLikeEvent(List<BlockState> replaced, Block clicked) {
+            this.replaced = replaced;
+            this.clicked = clicked;
+        }
+        public List<BlockState> getReplacedBlockStates() { return replaced; }
+        public Block getBlock() { return clicked; }
+        @Override public HandlerList getHandlers() { return new HandlerList(); }
+    }
+
+    @Test
+    void multiPlaceShapedEventMarksEveryPlacedHalfNotJustTheClickedBlock() throws Exception {
+        // A bed/door spanning a chunk border places two halves; getBlock() is only the
+        // clicked half, so the second half's chunk was never marked.
+        registerAndFire(new MultiPlaceLikeEvent(
+                List.of(blockState(overworld, 15, 0), blockState(overworld, 16, 0)),
+                block(overworld, 15, 0)));
+        assertDirty(OVERWORLD, PositionUtil.packPosition(0, 0), PositionUtil.packPosition(1, 0));
+        // and the real Bukkit class discovers this rung (it shares BlockPlaceEvent's
+        // HandlerList, so it arrives at listeners registered for the plain place event):
+        Method discovered = PaperWorldHandler.discoverMethod(
+                org.bukkit.event.block.BlockMultiPlaceEvent.class);
+        assertNotNull(discovered);
+        assertEquals("getReplacedBlockStates", discovered.getName());
+    }
+
+    // ---- hot-reloaded event classes (extractor cache keyed by Class, not name) ----
+
+    @Test
+    void sameNamedEventClassFromAFreshClassloaderStillExtracts() throws Exception {
+        // PlugMan-style hot reload: the registration (and our extractor cache) outlives the
+        // plugin's classloader. A name-keyed cache returns the OLD class's Method, which
+        // throws IllegalArgumentException on every new-loader instance — swallowed at
+        // debug level, all dirty marks from that event silently lost until restart.
+        registerAndFire(new SingleBlockEvent(block(overworld, 5, 5)));
+        assertDirty(OVERWORLD, PositionUtil.packPosition(0, 0));
+
+        Class<?> reloaded = reloadClass(SingleBlockEvent.class);
+        assertNotSame(SingleBlockEvent.class, reloaded, "premise: a genuinely fresh Class object");
+        Event fresh = (Event) reloaded.getConstructor(Block.class)
+                .newInstance(block(overworld, 33, 0));
+        fire(registrations.getLast(), fresh);
+        assertDirty(OVERWORLD, PositionUtil.packPosition(2, 0));
+    }
+
+    /** Define the class's bytes again in a child-first loader — same FQCN, different Class. */
+    private static Class<?> reloadClass(Class<?> original) throws Exception {
+        String resource = original.getName().replace('.', '/') + ".class";
+        byte[] bytes;
+        try (var in = original.getClassLoader().getResourceAsStream(resource)) {
+            bytes = Objects.requireNonNull(in, resource).readAllBytes();
+        }
+        var loader = new ClassLoader(original.getClassLoader()) {
+            @Override
+            protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
+                if (name.equals(original.getName())) {
+                    Class<?> found = findLoadedClass(name);
+                    if (found == null) found = defineClass(name, bytes, 0, bytes.length);
+                    if (resolve) resolveClass(found);
+                    return found;
+                }
+                return super.loadClass(name, resolve);
+            }
+        };
+        return Class.forName(original.getName(), false, loader);
     }
 
     // ---- registration arguments ----

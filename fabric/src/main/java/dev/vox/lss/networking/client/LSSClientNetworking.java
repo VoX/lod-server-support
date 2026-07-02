@@ -169,18 +169,35 @@ public class LSSClientNetworking {
                 (payload, context) -> {
                     sessionGate.recordColumnFrame(payload.estimatedBytes());
 
-                    context.client().execute(() -> {
-                        var manager = sessionGate.getRequestManager();
-                        if (manager != null) {
-                            manager.onColumnReceived(
-                                    PositionUtil.packPosition(payload.chunkX(), payload.chunkZ()),
-                                    payload.columnTimestamp(),
-                                    payload.dimension());
-                        }
-                        columnProcessor.offer(payload);
-                    });
+                    context.client().execute(() ->
+                            handleVoxelColumn(sessionGate.getRequestManager(), columnProcessor, payload));
                 }
         );
+    }
+
+    /**
+     * VoxelColumn receive glue (main client thread). Ordering is load-bearing: "did the
+     * client already hold data here" must be captured BEFORE {@code onColumnReceived}
+     * stamps the position — a resync must air-fill absent sections to clear ghost terrain.
+     * A 0-section column is an authoritative content→air clear REGARDLESS of the held
+     * check: the server only sends it to data-claiming clients, so heldContentBefore==false
+     * here means the stamp was dropped moments earlier (an ingest-failure report racing the
+     * delivery). Treating that as a plain first serve would dispatch zero sections with no
+     * air-fill yet stamp ts&gt;0 — a validated hole that up_to_date pins for the session.
+     * Package-private so tests can pin the ladder without a network receiver.
+     */
+    static void handleVoxelColumn(LodRequestManager manager, ClientColumnProcessor processor,
+                                  VoxelColumnS2CPayload payload) {
+        long packed = PositionUtil.packPosition(payload.chunkX(), payload.chunkZ());
+        boolean resync = manager != null && manager.heldContentBefore(packed);
+        boolean clear = ClientColumnProcessor.isClearColumn(payload.decompressedSections());
+        if (manager != null) {
+            manager.onColumnReceived(packed, payload.columnTimestamp(),
+                    payload.dimension(), clear);
+        }
+        // A clear air-fills even when the held check missed (see above) — the consumer must
+        // overwrite whatever it renders there with air.
+        processor.offer(payload, resync || clear);
     }
 
     /**

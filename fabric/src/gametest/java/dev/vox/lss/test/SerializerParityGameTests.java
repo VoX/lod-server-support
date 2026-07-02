@@ -456,7 +456,7 @@ public class SerializerParityGameTests {
      * service is never ticked, so the recorder is the only drainer.
      */
     @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 600)
-    public void becomesAllAirReServeResolvesUpToDateWithNoColumnPayload(GameTestHelper helper) {
+    public void becomesAllAirReServeSendsClearingColumnWhenClientClaimsData(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         var server = level.getServer();
         var playerList = server.getPlayerList();
@@ -534,21 +534,18 @@ public class SerializerParityGameTests {
                             recordedPositions.add(positions[i]);
                         }
                     });
-                    helper.assertTrue(!recordedPositions.isEmpty(),
-                            "waiting for the all-air re-serve to answer");
-                    helper.assertTrue(recordedPositions.size() == 1
-                                    && recordedPositions.get(0) == packed
-                                    && recordedTypes.get(0) == LSSConstants.RESPONSE_UP_TO_DATE,
-                            "the became-all-air re-serve must answer exactly one UP_TO_DATE "
-                                    + "for the position, got types=" + recordedTypes
-                                    + " positions=" + recordedPositions);
-                    helper.assertTrue(!state.hasEnqueuedColumn(packed),
-                            "no column payload may ship for an all-air column (the server "
-                                    + "never sends empty-section frames)");
+                    // WS3: a ts>0 all-air re-serve (the client claims data) now ships a CLEARING
+                    // 0-section column so the client drops ghost terrain — NOT an up_to_date
+                    // status. Emptiness for a data-claiming client travels as a column payload.
+                    helper.assertTrue(recordedPositions.isEmpty(),
+                            "the clearing re-serve travels as a column payload, not a batch status; "
+                                    + "got types=" + recordedTypes + " positions=" + recordedPositions);
+                    helper.assertTrue(state.hasEnqueuedColumn(packed),
+                            "waiting for the all-air re-serve to enqueue its clearing 0-section column");
                     state.flushSendQueue(1_073_741_824L, limiter, flushDiag, p -> {});
-                    helper.assertTrue(state.getTotalSectionsSent() == 1,
-                            "the re-serve must not flush a second payload — emptiness travels "
-                                    + "as a status, not as bytes");
+                    helper.assertTrue(state.getTotalSectionsSent() == 2,
+                            "the clearing column flushes as a second payload (present serve + "
+                                    + "clearing re-serve), got " + state.getTotalSectionsSent());
                     helper.assertTrue(proc.getDiagnostics().getTotalInMemory() == 2,
                             "premise: both requests must have taken the probe route, got "
                                     + proc.getDiagnostics().getTotalInMemory());

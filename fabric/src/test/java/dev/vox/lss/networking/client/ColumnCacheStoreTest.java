@@ -72,6 +72,37 @@ class ColumnCacheStoreTest {
     }
 
     @Test
+    void hungIoThreadCannotFreezeASynchronousClearForever() throws Exception {
+        // clearForServer/clearAll run on the main client (render) thread via /lss clearcache.
+        // The clear contract only needs submit-side FIFO ordering (the clear task is queued
+        // behind in-flight saves, so a queued save can't resurrect cleared files) — the WAIT
+        // must be bounded, or a cache dir on a hung network/removable mount hard-freezes the
+        // whole client.
+        var gate = new java.util.concurrent.CountDownLatch(1);
+        long oldTimeout = ColumnCacheStore.ioWaitTimeoutMs;
+        ColumnCacheStore.ioWaitTimeoutMs = 250;
+        var caller = new Thread(() -> ColumnCacheStore.clearForServer("test-hung-io"), "test-hung-io-caller");
+        try {
+            ColumnCacheStore.runIoAsyncForTest(() -> {
+                try {
+                    gate.await();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            });
+            caller.start();
+            caller.join(5_000);
+            assertFalse(caller.isAlive(),
+                    "a hung IO thread must not block the synchronous clear past its timeout");
+        } finally {
+            gate.countDown();
+            caller.join(5_000);
+            ColumnCacheStore.ioWaitTimeoutMs = oldTimeout;
+            ColumnCacheStore.flushPendingIo(); // drain the gate task before other tests share the FIFO thread
+        }
+    }
+
+    @Test
     void flushPendingIoWaitsForQueuedAsyncSave() {
         var dim = testDimension("flush_wait");
         var map = new Long2LongOpenHashMap();
@@ -111,17 +142,21 @@ class ColumnCacheStoreTest {
     }
 
     @Test
-    void excessiveCountReturnsEmpty() throws IOException {
-        var dim = testDimension("excess_count");
-        Path file = getCacheFile("test-excess", dim);
-        Files.createDirectories(file.getParent());
-        try (var out = new DataOutputStream(Files.newOutputStream(file))) {
-            out.writeInt(1); // correct version
-            out.writeInt(3_000_000); // exceeds 2_000_000 guard
-        }
+    void excessiveOrNegativeCountReturnsEmpty() throws IOException {
+        // These headers must be the CURRENT format version: a stale v1 header dies at the
+        // version gate before the count guard runs, and the test passes vacuously.
+        for (int badCount : new int[]{3_000_000, -1}) {
+            var dim = testDimension("excess_count_" + badCount);
+            Path file = getCacheFile("test-excess", dim);
+            Files.createDirectories(file.getParent());
+            try (var out = new DataOutputStream(Files.newOutputStream(file))) {
+                out.writeInt(ColumnCacheStore.FORMAT_VERSION);
+                out.writeInt(badCount); // outside the [0, 2_000_000] guard
+            }
 
-        var loaded = ColumnCacheStore.load("test-excess", dim);
-        assertTrue(loaded.isEmpty());
+            var loaded = ColumnCacheStore.load("test-excess", dim);
+            assertTrue(loaded.isEmpty(), "count " + badCount + " must be rejected wholesale");
+        }
     }
 
     @Test
@@ -130,7 +165,7 @@ class ColumnCacheStoreTest {
         Path file = getCacheFile("test-truncated", dim);
         Files.createDirectories(file.getParent());
         try (var out = new DataOutputStream(Files.newOutputStream(file))) {
-            out.writeInt(1); // correct version
+            out.writeInt(ColumnCacheStore.FORMAT_VERSION);
             out.writeInt(5); // claims 5 entries
             // Only write 1 complete entry
             out.writeLong(42L);
@@ -139,9 +174,10 @@ class ColumnCacheStoreTest {
         }
 
         var loaded = ColumnCacheStore.load("test-truncated", dim);
-        // IOException during read → returns partial map (whatever was read before error)
-        // The implementation catches IOException and returns whatever was loaded
-        assertTrue(loaded.size() <= 1);
+        // IOException mid-read → the entries read before the error survive (resync can
+        // still use them); the missing tail just re-requests cold.
+        assertEquals(1, loaded.size(), "the one complete entry must survive a truncated tail");
+        assertEquals(100L, loaded.get(42L));
     }
 
     @Test
@@ -159,44 +195,24 @@ class ColumnCacheStoreTest {
     }
 
     @Test
-    void v2FileMigrationStripsLevelBits() throws IOException {
-        var dim = testDimension("v2_migration");
-        Path file = getCacheFile("test-v2-migration", dim);
-        Files.createDirectories(file.getParent());
-        long ts1 = 1_750_000_000L;
-        long ts2 = 12_345L;
-        try (var out = new DataOutputStream(Files.newOutputStream(file))) {
-            out.writeInt(2); // v2 encoded values as (timestamp << 8 | detail level)
-            out.writeInt(2);
-            out.writeLong(100L);
-            out.writeLong((ts1 << 8) | 7L);
-            out.writeLong(200L);
-            out.writeLong((ts2 << 8) | 0L);
+    void preV4CachesAreDiscardedNotMigrated() throws IOException {
+        // Pre-v4 caches may hold fabricated client-clock stamps indistinguishable from real
+        // server timestamps (the permanent-hole bug this format bump closes), so any older
+        // version is discarded on load rather than migrated. The cache is rebuildable — one
+        // cold resync after upgrade.
+        for (int oldVersion : new int[]{1, 2, 3}) {
+            var dim = testDimension("discard_v" + oldVersion);
+            Path file = getCacheFile("test-discard-v" + oldVersion, dim);
+            Files.createDirectories(file.getParent());
+            try (var out = new DataOutputStream(Files.newOutputStream(file))) {
+                out.writeInt(oldVersion);
+                out.writeInt(1);
+                out.writeLong(42L);
+                out.writeLong(1_700_000_000L);
+            }
+            assertTrue(ColumnCacheStore.load("test-discard-v" + oldVersion, dim).isEmpty(),
+                    "v" + oldVersion + " cache is discarded, not migrated");
         }
-
-        var loaded = ColumnCacheStore.load("test-v2-migration", dim);
-        assertEquals(2, loaded.size());
-        // Loading v2 values raw would inflate timestamps ~256x — the server would then
-        // answer up-to-date for stale columns forever.
-        assertEquals(ts1, loaded.get(100L), "v2 entries must have the packed level bits stripped");
-        assertEquals(ts2, loaded.get(200L));
-    }
-
-    @Test
-    void v1FileLoadsTimestampsVerbatim() throws IOException {
-        var dim = testDimension("v1_verbatim");
-        Path file = getCacheFile("test-v1-verbatim", dim);
-        Files.createDirectories(file.getParent());
-        try (var out = new DataOutputStream(Files.newOutputStream(file))) {
-            out.writeInt(1); // v1: raw timestamps, nothing packed
-            out.writeInt(1);
-            out.writeLong(42L);
-            out.writeLong(1_700_000_000L);
-        }
-
-        var loaded = ColumnCacheStore.load("test-v1-verbatim", dim);
-        assertEquals(1, loaded.size());
-        assertEquals(1_700_000_000L, loaded.get(42L), "v1 values must not be shifted on load");
     }
 
     @Test
@@ -271,34 +287,41 @@ class ColumnCacheStoreTest {
     }
 
     @Test
-    void v2MigrationSignExtendsNegativeValues() throws IOException {
-        var dim = testDimension("v2_negative");
-        Path file = getCacheFile("test-v2-negative", dim);
-        Files.createDirectories(file.getParent());
-        try (var out = new DataOutputStream(Files.newOutputStream(file))) {
-            out.writeInt(2); // v2 encoded values as (timestamp << 8 | detail level)
-            out.writeInt(2);
-            out.writeLong(100L);
-            out.writeLong((-1L << 8) | 7L); // ts=-1 (unknown sentinel) packed with level bits
-            out.writeLong(200L);
-            out.writeLong(-1000L); // corrupt negative raw value
-        }
+    void removeAsyncUnstampsOnePositionAndDeletesTheFileWhenEmptied() {
+        var dim = testDimension("remove_async");
+        var map = new Long2LongOpenHashMap();
+        map.defaultReturnValue(-1L);
+        map.put(1L, 5000L);
+        map.put(2L, 6000L);
+        ColumnCacheStore.save("test-remove", dim, map);
 
-        var loaded = ColumnCacheStore.load("test-v2-negative", dim);
+        ColumnCacheStore.removeAsync("test-remove", dim, 1L);
+        ColumnCacheStore.flushPendingIo();
+        var loaded = ColumnCacheStore.load("test-remove", dim);
+        assertFalse(loaded.containsKey(1L), "the cross-dimension-reported position is unstamped");
+        assertEquals(6000L, loaded.get(2L), "other positions survive");
+
+        // Removing the last entry deletes the file (save skips empty maps).
+        ColumnCacheStore.removeAsync("test-remove", dim, 2L);
+        ColumnCacheStore.flushPendingIo();
+        assertTrue(ColumnCacheStore.load("test-remove", dim).isEmpty());
+        ColumnCacheStore.clearForServer("test-remove");
+    }
+
+    @Test
+    void v4RoundTripsRawServerTimestamps() {
+        var dim = testDimension("v4_roundtrip");
+        var map = new Long2LongOpenHashMap();
+        map.defaultReturnValue(-1L);
+        map.put(100L, 1_750_000_000L);
+        map.put(200L, 12_345L);
+        ColumnCacheStore.save("test-v4-roundtrip", dim, map);
+
+        var loaded = ColumnCacheStore.load("test-v4-roundtrip", dim);
         assertEquals(2, loaded.size());
-        assertTrue(loaded.containsKey(100L));
-        // The migration shift must be arithmetic (>>), sign-extending: a packed -1
-        // timestamp recovers exactly the -1 unknown sentinel, and negative garbage stays
-        // negative. A logical >>> would turn -1000 into ~7.2e16 — a far-future epoch the
-        // server answers up-to-date forever, black-holing the position.
-        assertEquals(-1L, loaded.get(100L), "packed -1 timestamp must migrate back to the -1 sentinel");
-        assertEquals(-4L, loaded.get(200L), "negative raw value must sign-extend, not become a huge positive epoch");
-
-        // The recovered -1 composes with the classify ladder: unknown, so it re-requests.
-        // Values below -1 (the 200L entry) are ColumnStateMap's loadFrom guard's concern.
-        var states = new ColumnStateMap();
-        states.loadFrom(loaded);
-        assertEquals(-1L, states.classify(100L, true), "migrated -1 classifies unknown (re-request), not satisfied");
+        assertEquals(1_750_000_000L, loaded.get(100L), "v4 stores raw server timestamps verbatim");
+        assertEquals(12_345L, loaded.get(200L));
+        ColumnCacheStore.clearForServer("test-v4-roundtrip");
     }
 
     @Test

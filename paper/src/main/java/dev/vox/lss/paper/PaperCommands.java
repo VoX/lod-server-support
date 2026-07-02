@@ -12,6 +12,13 @@ import java.util.function.Supplier;
 
 /**
  * Bukkit command handler for /lsslod stats and /lsslod diag.
+ *
+ * <p>On Folia, command dispatch is region-threaded (player senders) or global-threaded
+ * (console), so these handlers read pump-owned state cross-thread. Every read on this path
+ * is a concurrent structure (the players CHM) or a stale-tolerable primitive (volatile
+ * counters, plain int/long gauges like the generation active-count and the
+ * TickDiagnostics/SharedBandwidthLimiter fields) — audited 2026-07-02; nothing iterates a
+ * non-concurrent collection off the pump.
  */
 public class PaperCommands implements CommandExecutor, TabCompleter {
     private final Supplier<PaperRequestProcessingService> serviceSupplier;

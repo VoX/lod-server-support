@@ -32,6 +32,13 @@ public abstract class AbstractPlayerRequestState<T> {
     private final UUID playerUuid;
     private volatile boolean hasHandshake = false;
     private volatile int capabilities = 0;
+    // The dimension this state was REGISTERED under — invariant for the state's lifetime
+    // (a dimension change replaces the state via removePlayer+registerPlayer). The router
+    // uses it to reject a stale snapshot's dimension: a multi-tick processing cycle can
+    // otherwise route the NEW session's requests under the OLD snapshot's dimension,
+    // leaking pending slots against disk reads whose results are dimension-skipped.
+    // Null in bare test rigs (guard is skipped) — both platform services always set it.
+    private volatile String registeredDimension;
 
     // Bound on the per-player incoming queue: a flooding client must not grow it without
     // limit (heap OOM / main-thread DoS). Dropped entries are harmless — the client re-requests
@@ -82,6 +89,14 @@ public abstract class AbstractPlayerRequestState<T> {
 
     public int getCapabilities() {
         return this.capabilities;
+    }
+
+    public String registeredDimension() {
+        return this.registeredDimension;
+    }
+
+    public void setRegisteredDimension(String dimension) {
+        this.registeredDimension = dimension;
     }
 
     public boolean supportsVoxelColumns() {

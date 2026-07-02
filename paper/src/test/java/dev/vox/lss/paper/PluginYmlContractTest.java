@@ -12,7 +12,6 @@ import java.util.Properties;
 import java.util.regex.Pattern;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -24,8 +23,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * is invisible until a real Paper server refuses to load — or silently mis-loads — the
  * plugin: an unresolvable {@code main} or wrong {@code api-version} aborts plugin load, a
  * renamed plugin moves the {@code plugins/LodServerSupport/} data folder the config and
- * soak staging rely on, and a {@code folia-supported} flag would let Folia run a plugin
- * built on main-thread BukkitRunnable assumptions.
+ * soak staging rely on, and {@code folia-supported} must stay {@code true} now that the
+ * pump runs on GlobalRegionScheduler — removing it silently drops Folia support.
  */
 class PluginYmlContractTest {
 
@@ -98,9 +97,13 @@ class PluginYmlContractTest {
     }
 
     @Test
-    void foliaSupportedIsAbsent() {
-        assertFalse(yml.contains("folia-supported"),
-                "the plugin ticks via BukkitRunnable on the main thread; claiming Folia support would let Folia load it");
+    void foliaSupportedIsDeclared() {
+        // Flipped 2026-07-02: the pump now runs on GlobalRegionScheduler and lifecycle
+        // ingress is mailboxed (FoliaWiringContractTest pins both), so the old reason for
+        // the absence pin — BukkitRunnable main-thread assumptions — is gone. Folia refuses
+        // to load plugins without this flag; removing it silently drops Folia support.
+        assertTrue(yml.getBoolean("folia-supported"),
+                "folia-supported: true is required for Folia to load the plugin");
     }
 
     @Test

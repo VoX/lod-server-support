@@ -3,15 +3,21 @@
 
 Inspects the built release jars and the workflow/metadata that publishes them, asserting:
   * no dev-only code ships — Fabric excludes dev/vox/lss/benchmark/** (which also holds the
-    soak driver); Paper's release shadowJar excludes dev/vox/lss/paper/soak/**;
+    soak driver); Paper's release shadowJar excludes dev/vox/lss/paper/soak/**; any future
+    dev/vox/lss/common/{soak,benchmark}/** is forbidden on both platforms, and the scan
+    recurses into Loom's nested Jar-in-Jar entries (META-INF/jars/*.jar — the Fabric jar
+    ships common/ that way, invisible to a top-level-only namelist scan);
   * the dev-only Paper soak jar (lss-paper-soak*.jar) never matches the release glob;
   * required content is present — fabric.mod.json / plugin.yml, the common classes, LICENSE;
   * version placeholders are expanded (no literal ${version} in plugin.yml / fabric.mod.json);
   * Paper keeps the paperweight-mappings-namespace: mojang manifest attr through the shadowJar;
-  * release.yml's publish globs actually match the CI artifact names (and not the soak jar).
+  * release.yml's publish globs actually match the CI artifact names (and not the soak jar);
+  * discovery is unambiguous — stale jars from earlier builds fail the run (or are excluded
+    by an explicit --version), so a green pre-flight always validated the jar being tagged.
 
 Run after a CI-style build:
-  CI=true ./gradlew :fabric:build -x runClientGameTest :paper:shadowJar
+  CI=true ./gradlew :fabric:build -x runClientGameTest :paper:shadowJar -Pmod_version=X.Y.Z
+  python3 scripts/release_check.py --version X.Y.Z   # check exactly the release jars
   python3 scripts/release_check.py            # auto-discovers fabric/ + paper/ build/libs
   python3 scripts/release_check.py --selftest # synthetic-jar fixtures, no build needed
 
@@ -23,6 +29,7 @@ import fnmatch
 import io
 import json
 import os
+import re
 import sys
 import tempfile
 import zipfile
@@ -32,6 +39,9 @@ ROOT = os.path.dirname(HERE)
 
 FABRIC_FORBIDDEN = "dev/vox/lss/benchmark/"        # benchmark + soak driver live here on Fabric
 PAPER_FORBIDDEN = "dev/vox/lss/paper/soak/"
+# Dev-only namespaces that would live in common/ (e.g. a deduped soak-driver twin): common
+# ships on BOTH platforms — nested in the Fabric jar, shaded into the Paper jar.
+COMMON_FORBIDDEN = ("dev/vox/lss/common/soak/", "dev/vox/lss/common/benchmark/")
 RELEASE_GLOBS = ("lod-server-support-fabric-*.jar", "lod-server-support-paper-*.jar")
 SOAK_JAR_PREFIX = "lss-paper-soak"
 
@@ -39,6 +49,39 @@ SOAK_JAR_PREFIX = "lss-paper-soak"
 def _names(jar):
     with zipfile.ZipFile(jar) as z:
         return z.namelist()
+
+
+def _nested_jars(jar):
+    """[(label, namelist)] for every jar nested inside (Loom Jar-in-Jar), recursively —
+    the Fabric release jar ships common/ as META-INF/jars/common-*.jar, so a top-level
+    namelist scan never sees its classes."""
+    with zipfile.ZipFile(jar) as z:
+        out = []
+        for entry in z.namelist():
+            if entry.startswith("META-INF/jars/") and entry.endswith(".jar"):
+                out.extend(_walk_nested(entry, z.read(entry)))
+        return out
+
+
+def _walk_nested(label, data):
+    out = []
+    with zipfile.ZipFile(io.BytesIO(data)) as z:
+        names = z.namelist()
+        out.append((label, names))
+        for entry in names:
+            if entry.startswith("META-INF/jars/") and entry.endswith(".jar"):
+                out.extend(_walk_nested(f"{label}!{entry}", z.read(entry)))
+    return out
+
+
+def _scan_forbidden(jar, base, prefixes, problems):
+    """Flag forbidden-prefix entries at the top level AND inside every nested jar."""
+    for label, names in [(None, _names(jar))] + _nested_jars(jar):
+        leaked = [n for n in names if n.startswith(prefixes)]
+        if leaked:
+            where = base if label is None else f"{base}!{label}"
+            problems.append(f"{where}: ships dev-only code "
+                            f"({len(leaked)} entries, e.g. {leaked[0]})")
 
 
 def _read(jar, entry):
@@ -60,9 +103,7 @@ def _looks_unexpanded(text):
 def check_fabric_jar(jar, problems):
     names = _names(jar)
     base = os.path.basename(jar)
-    leaked = [n for n in names if n.startswith(FABRIC_FORBIDDEN)]
-    if leaked:
-        problems.append(f"{base}: ships dev-only {FABRIC_FORBIDDEN} ({len(leaked)} entries, e.g. {leaked[0]})")
+    _scan_forbidden(jar, base, (FABRIC_FORBIDDEN,) + COMMON_FORBIDDEN, problems)
     if not any(n == "fabric.mod.json" for n in names):
         problems.append(f"{base}: missing fabric.mod.json")
     else:
@@ -85,15 +126,16 @@ def check_fabric_jar(jar, problems):
 def check_paper_jar(jar, problems):
     names = _names(jar)
     base = os.path.basename(jar)
-    leaked = [n for n in names if n.startswith(PAPER_FORBIDDEN)]
-    if leaked:
-        problems.append(f"{base}: ships dev-only {PAPER_FORBIDDEN} ({len(leaked)} entries, e.g. {leaked[0]})")
+    _scan_forbidden(jar, base, (PAPER_FORBIDDEN,) + COMMON_FORBIDDEN, problems)
     if not any(n == "plugin.yml" for n in names):
         problems.append(f"{base}: missing plugin.yml")
     else:
         ymltext = _read(jar, "plugin.yml")
         if _looks_unexpanded(ymltext):
             problems.append(f"{base}: plugin.yml has an unexpanded ${{version}} placeholder")
+        if not re.search(r"^folia-supported:\s*true\s*$", ymltext, re.MULTILINE):
+            problems.append(f"{base}: plugin.yml must declare folia-supported: true "
+                            "(Folia refuses to load the plugin without it)")
     if not any(n.startswith("dev/vox/lss/common/") and n.endswith(".class") for n in names):
         problems.append(f"{base}: shaded jar missing the shared common/ classes")
     if "paperweight-mappings-namespace: mojang" not in _manifest(jar):
@@ -120,12 +162,18 @@ def check_glob_hygiene(problems, fabric_jars, paper_jars, soak_jars):
         problems.append("CI-named soak jar matches the Paper release glob")
 
 
-def discover(problems):
+def discover(problems, expected_version=None):
     fab = _jars_in(os.path.join(ROOT, "fabric", "build", "libs"), "lod-server-support-fabric")
     pap = _jars_in(os.path.join(ROOT, "paper", "build", "libs"), "lod-server-support-paper")
     soak = _jars_in(os.path.join(ROOT, "paper", "build", "libs"), SOAK_JAR_PREFIX)
     if not fab and not pap:
         problems.append("no release jars found under fabric/ or paper/ build/libs — run a build first")
+    if expected_version:
+        fab = _require_version(fab, "fabric", expected_version, problems)
+        pap = _require_version(pap, "paper", expected_version, problems)
+    else:
+        _flag_ambiguous(fab, "fabric", problems)
+        _flag_ambiguous(pap, "paper", problems)
     for jar in fab:
         check_fabric_jar(jar, problems)
     for jar in pap:
@@ -139,6 +187,31 @@ def _jars_in(d, prefix):
         return []
     return [os.path.join(d, n) for n in sorted(os.listdir(d))
             if n.startswith(prefix) and n.endswith(".jar")]
+
+
+def _require_version(jars, platform, version, problems):
+    """Restrict checking to the exact release jar for `version`; a missing jar is a failure
+    — otherwise a stale jar from an earlier build gets validated in its place and the
+    pre-flight green-lights code that was never built."""
+    want_prefix = f"lod-server-support-{platform}-{version}+"
+    want_exact = f"lod-server-support-{platform}-{version}.jar"
+    matched = [j for j in jars
+               if os.path.basename(j).startswith(want_prefix)
+               or os.path.basename(j) == want_exact]
+    if not matched:
+        problems.append(f"{platform}: no jar for version {version} in build/libs "
+                        f"(found: {[os.path.basename(j) for j in jars] or 'none'}) — "
+                        f"build with CI=true and -Pmod_version={version} first")
+    return matched
+
+
+def _flag_ambiguous(jars, platform, problems):
+    """Without --version, more than one candidate jar means stale artifacts from earlier
+    builds would be validated alongside (or instead of) the fresh one — refuse to guess."""
+    if len(jars) > 1:
+        problems.append(f"{platform}: {len(jars)} release jars in build/libs "
+                        f"({[os.path.basename(j) for j in jars]}) — stale artifacts from "
+                        f"earlier builds; run './gradlew clean' or pass --version")
 
 
 # ----------------------------------------------------------------------------- selftest
@@ -183,15 +256,58 @@ def _selftest():
         check(any("placeholder" in m for m in p), "unexpanded version not caught")
         check(any("LICENSE" in m for m in p), "missing LICENSE not caught")
 
+        # The real Fabric jar ships common/ as nested Jar-in-Jar (META-INF/jars/*.jar):
+        # a clean nested common jar passes, dev code hidden inside it must be caught.
+        nested_clean = io.BytesIO()
+        with zipfile.ZipFile(nested_clean, "w") as z:
+            z.writestr("dev/vox/lss/common/PositionUtil.class", "x")
+        nested_fab = os.path.join(td, "lod-server-support-fabric-nested.jar")
+        _make_jar(nested_fab, {
+            "fabric.mod.json": json.dumps({"version": "0.4.0"}),
+            "dev/vox/lss/LSSMod.class": "x",
+            "META-INF/jars/common-0.4.0.jar": nested_clean.getvalue(),
+            "LICENSE_lod-server-support-fabric": "MIT",
+        })
+        p = []
+        check_fabric_jar(nested_fab, p)
+        check(p == [], f"clean nested common jar flagged: {p}")
+
+        nested_dirty = io.BytesIO()
+        with zipfile.ZipFile(nested_dirty, "w") as z:
+            z.writestr("dev/vox/lss/common/PositionUtil.class", "x")
+            z.writestr("dev/vox/lss/common/soak/SharedSoakDriver.class", "x")  # hidden leak
+        leaky_fab = os.path.join(td, "leaky-nested-fabric.jar")
+        _make_jar(leaky_fab, {
+            "fabric.mod.json": json.dumps({"version": "0.4.0"}),
+            "dev/vox/lss/LSSMod.class": "x",
+            "META-INF/jars/common-0.4.0.jar": nested_dirty.getvalue(),
+            "LICENSE_lod-server-support-fabric": "MIT",
+        })
+        p = []
+        check_fabric_jar(leaky_fab, p)
+        check(any("common/soak" in m and "META-INF/jars" in m for m in p),
+              f"dev code inside a nested jar not caught: {p}")
+
         good_pap = os.path.join(td, "lod-server-support-paper.jar")
         _make_jar(good_pap, {
-            "plugin.yml": "name: LodServerSupport\nversion: 0.4.0\n",
+            "plugin.yml": "name: LodServerSupport\nversion: 0.4.0\nfolia-supported: true\n",
             "dev/vox/lss/paper/LSSPaperPlugin.class": "x",
             "dev/vox/lss/common/PositionUtil.class": "x",
         }, manifest="Manifest-Version: 1.0\npaperweight-mappings-namespace: mojang\n")
         p = []
         check_paper_jar(good_pap, p)
         check(p == [], f"clean paper jar flagged: {p}")
+
+        # a paper jar without the folia-supported flag must be caught (Folia refuses to load it)
+        noflag_pap = os.path.join(td, "noflag-paper.jar")
+        _make_jar(noflag_pap, {
+            "plugin.yml": "name: LodServerSupport\nversion: 0.4.0\n",
+            "dev/vox/lss/paper/LSSPaperPlugin.class": "x",
+            "dev/vox/lss/common/PositionUtil.class": "x",
+        }, manifest="Manifest-Version: 1.0\npaperweight-mappings-namespace: mojang\n")
+        p = []
+        check_paper_jar(noflag_pap, p)
+        check(any("folia-supported" in m for m in p), "missing folia-supported flag not caught")
 
         bad_pap = os.path.join(td, "bad-paper.jar")
         _make_jar(bad_pap, {
@@ -205,6 +321,41 @@ def _selftest():
         check(any("soak" in m for m in p), "leaked soak package not caught")
         check(any("placeholder" in m for m in p), "paper unexpanded version not caught")
         check(any("mappings-namespace" in m for m in p), "lost mappings namespace not caught")
+
+        # Paper shades common/ at the top level: a dev-only common namespace must be caught.
+        common_leak_pap = os.path.join(td, "common-leak-paper.jar")
+        _make_jar(common_leak_pap, {
+            "plugin.yml": "name: LodServerSupport\nversion: 0.4.0\nfolia-supported: true\n",
+            "dev/vox/lss/paper/LSSPaperPlugin.class": "x",
+            "dev/vox/lss/common/PositionUtil.class": "x",
+            "dev/vox/lss/common/benchmark/SharedBenchHook.class": "x",  # leaked dev code
+        }, manifest="Manifest-Version: 1.0\npaperweight-mappings-namespace: mojang\n")
+        p = []
+        check_paper_jar(common_leak_pap, p)
+        check(any("common/benchmark" in m for m in p),
+              f"dev code in a shaded common namespace not caught: {p}")
+
+        # Discovery ambiguity: stale jars alongside the fresh one must fail without
+        # --version, and --version must select exactly the requested release jar.
+        p = []
+        _flag_ambiguous(["a/lod-server-support-fabric.jar",
+                         "a/lod-server-support-fabric-0.4.0+26.1.2.jar"], "fabric", p)
+        check(any("stale artifacts" in m for m in p), "ambiguous multi-jar dir not flagged")
+        p = []
+        _flag_ambiguous(["a/lod-server-support-fabric-0.5.0+26.1.2.jar"], "fabric", p)
+        check(p == [], f"single jar wrongly flagged as ambiguous: {p}")
+        p = []
+        got = _require_version(["a/lod-server-support-fabric-0.4.0+26.1.2.jar",
+                                "a/lod-server-support-fabric-0.5.0+26.1.2.jar"],
+                               "fabric", "0.5.0", p)
+        check(p == [] and [os.path.basename(j) for j in got]
+              == ["lod-server-support-fabric-0.5.0+26.1.2.jar"],
+              f"--version did not select exactly the requested jar: {got} {p}")
+        p = []
+        got = _require_version(["a/lod-server-support-fabric-0.4.0+26.1.2.jar"],
+                               "fabric", "0.5.0", p)
+        check(got == [] and any("no jar for version 0.5.0" in m for m in p),
+              f"missing requested version not caught: {got} {p}")
 
         # glob hygiene: a CI-named soak jar must not match the paper release glob
         p = []
@@ -224,12 +375,15 @@ def _selftest():
 def main(argv):
     ap = argparse.ArgumentParser(description="Gate release jars + publish metadata before shipping.")
     ap.add_argument("--selftest", action="store_true", help="run synthetic-fixture checks and exit")
+    ap.add_argument("--version", metavar="X.Y.Z",
+                    help="require and check exactly the release jars for this mod_version "
+                         "(ignores stale artifacts from earlier builds)")
     args = ap.parse_args(argv)
     if args.selftest:
         return _selftest()
 
     problems = []
-    fab, pap, soak = discover(problems)
+    fab, pap, soak = discover(problems, expected_version=args.version)
     print(f"release_check: fabric jars={len(fab)} paper jars={len(pap)} soak jars={len(soak)}")
     if problems:
         print(f"FAIL: {len(problems)} release problem(s):")

@@ -127,8 +127,11 @@ timestamp map.
 
 `service.*` are NEW cumulative service-level counters (see below) — per-player rows reset
 on kick AND on dimension change (removePlayer+registerPlayer) and are diagnostic color
-only. Client counters are per-process-run and reset on dimension change → the checker
-segments windows accordingly.
+only. Client counters are per-process-run and CUMULATIVE across dimension changes
+(RequestMetrics.reset() clears only in-flight state, never the totals) → the checker
+still segments windows at boundaries, because the switch intentionally drops in-flight
+tracking and response conservation legitimately breaks across it; monotonicity (A6)
+holds for the whole run.
 
 ## Production diagnostics additions (common/, parity via shared formatter; Paper free except gen service)
 

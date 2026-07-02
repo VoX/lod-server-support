@@ -175,12 +175,16 @@ def load_dir(results_dir):
     if verdict and isinstance(verdict, dict):
         scenario = verdict.get("scenario")
     if not scenario:
-        # Dir is "<scenario>-[paper-]<YYYYMMDDTHHMMSSZ>"; strip the optional platform tag and
-        # the timestamp. A plain rsplit("-") would mangle hyphenated names (fresh-backfill).
         base = os.path.basename(os.path.normpath(results_dir))
-        scenario = re.sub(r"-(?:paper-)?\d{8}T\d{6}Z$", "", base) or base
+        scenario = _scenario_from_dirname(base)
     return {"scenario": scenario, "server": server, "client_runs": client_runs,
             "verdict": verdict, "warnings": warnings, "unknown_keys": uk}
+
+
+def _scenario_from_dirname(base):
+    """Dir is "<scenario>-[paper-|folia-]<YYYYMMDDTHHMMSSZ>"; strip the optional platform tag
+    and the timestamp. A plain rsplit("-") would mangle hyphenated names (fresh-backfill)."""
+    return re.sub(r"-(?:paper-|folia-)?\d{8}T\d{6}Z$", "", base) or base
 
 
 class _P:
@@ -482,6 +486,14 @@ def _selftest():
     # median/mad sanity
     check(median([3, 1, 2]) == 2, "median odd")
     check(median([4, 1, 2, 3]) == 2.5, "median even")
+
+    # results-dir scenario parsing: every platform tag strips cleanly
+    check(_scenario_from_dirname("fresh-backfill-20260702T010203Z") == "fresh-backfill",
+          "fabric dir name mis-parsed")
+    check(_scenario_from_dirname("fresh-backfill-paper-20260702T010203Z") == "fresh-backfill",
+          "paper dir name mis-parsed")
+    check(_scenario_from_dirname("fresh-backfill-folia-20260702T010203Z") == "fresh-backfill",
+          "folia dir name mis-parsed")
 
     # high-water + identity over a synthetic dir-like report
     snaps = [

@@ -9,7 +9,6 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.chunk.LevelChunk;
 
-import org.bukkit.Bukkit;
 import org.bukkit.Chunk;
 import org.bukkit.plugin.Plugin;
 
@@ -54,24 +53,26 @@ public class PaperChunkGenerationService {
 
     private final LinkedHashMap<PendingGenerationKey, ActiveGeneration> active = new LinkedHashMap<>();
     private final Map<UUID, Integer> perPlayerActiveCount = new HashMap<>();
-    // Main-thread-owned (onChunkReady is scheduled to the main thread via runTask; tick() swaps it out)
+    // Pump-thread-owned (onChunkReady is scheduled to the pump via the GlobalRegionScheduler;
+    // tick() swaps it out on the same thread)
     private List<TickSnapshot.GenerationReadyData> mainReady = new ArrayList<>();
 
-    private final Plugin plugin;
     private final int maxConcurrent;
     private final int maxPerPlayerActive;
     private final int timeoutTicks;
 
-    /** Test seam: hands the async-load completion back to the main thread. Production
-     *  default is Bukkit's scheduler, which throws once the plugin is disabled —
-     *  tests inject throwing schedulers to pin that rejection containment. */
+    /** Test seam: hands the async-load completion back to the pump thread. Production
+     *  default is the GlobalRegionScheduler (main thread on Paper, the pump's global-region
+     *  thread on Folia), which throws {@code IllegalPluginAccessException} once the plugin is
+     *  disabled — the identical type the legacy CraftScheduler threw, so containment is exact
+     *  parity; it must keep catching broad {@code Exception}, never a named type. Tests
+     *  inject throwing schedulers to pin that rejection containment. */
     @FunctionalInterface
     interface MainThreadScheduler {
         void schedule(Runnable task) throws Exception;
     }
 
-    // Wired in the constructor (default references the blank-final plugin field, which is
-    // not definitely assigned until the constructor body runs).
+    // Wired in the constructor (the default captures the constructor's plugin parameter).
     private MainThreadScheduler mainThreadScheduler;
 
     void setMainThreadScheduler(MainThreadScheduler scheduler) {
@@ -85,11 +86,11 @@ public class PaperChunkGenerationService {
     private volatile long totalRemovedInFlight = 0;
 
     public PaperChunkGenerationService(PaperConfig config, Plugin plugin) {
-        this.plugin = plugin;
         this.maxConcurrent = config.generationConcurrencyLimitGlobal;
         this.maxPerPlayerActive = config.generationConcurrencyLimitPerPlayer;
         this.timeoutTicks = config.generationTimeoutSeconds * LSSConstants.TICKS_PER_SECOND;
-        this.mainThreadScheduler = task -> Bukkit.getScheduler().runTask(this.plugin, task);
+        this.mainThreadScheduler = task ->
+                plugin.getServer().getGlobalRegionScheduler().execute(plugin, task);
     }
 
     /**
@@ -125,35 +126,90 @@ public class PaperChunkGenerationService {
     }
 
     /**
-     * Launches Paper's async chunk load. The callback fires on the main thread
-     * when the chunk reaches FULL status. Paper manages tickets automatically.
-     * Package-visible seam: tests override this to capture the launch.
+     * Launches Paper's async chunk load. The completion fires {@link #completeAsyncLoad} on
+     * the load's completion thread. Package-visible seam: tests override this to capture the
+     * launch.
      */
     void launchAsyncLoad(PendingGenerationKey key, ServerLevel level, int cx, int cz, long token) {
-        level.getWorld().getChunkAtAsync(cx, cz, true, false).whenComplete((chunk, ex) -> {
-            if (ex != null) {
-                LSSLogger.error("Async chunk load failed at " + cx + "," + cz, ex);
-            }
-            var readyChunk = ex == null ? chunk : null;
-            // Ensure callback runs on the main thread — whenComplete does not guarantee thread
-            try {
-                this.mainThreadScheduler.schedule(() ->
-                        onChunkReady(key, level, readyChunk, cx, cz, token));
-            } catch (Exception scheduleEx) {
-                // Plugin disabled during shutdown — do not call onChunkReady inline
-                // because we're on an async thread and active map is not thread-safe.
-                // shutdown() already clears the active map.
-                LSSLogger.warn("Could not schedule generation callback (plugin shutting down) at " + cx + "," + cz);
-            }
-        });
+        level.getWorld().getChunkAtAsync(cx, cz, true, false).whenComplete((chunk, ex) ->
+                completeAsyncLoad(key, level, chunk, ex, cx, cz, token));
     }
 
     /**
-     * Called on the main thread when Paper finishes loading/generating a chunk to FULL.
-     * Package-visible so tests can fire the completion that launchAsyncLoad would schedule.
+     * Completion-thread half of a generation: serialize the freshly loaded chunk HERE, then
+     * hand only the immutable result to the pump. On Folia this thread is the chunk's owning
+     * REGION thread — the only place the chunk is guaranteed still loaded: the load ticket
+     * dies with this callback, and an isolated LOD chunk (no players nearby) can unload again
+     * before a hop to the global tick runs. Deferring extraction to the pump lost ~93% of
+     * generations that way (observed live: 6.9k "was null after async load" failures in one
+     * fresh-backfill). On Paper this is the main thread — where the old post-hop extraction
+     * ran anyway. The reads are region-legal and tear-free off-pump (getChunkNow is a
+     * concurrent-map lookup; light reads clone SWMR state; PalettedContainer.write is
+     * synchronized). Package-visible so tests can drive the completion exactly as
+     * getChunkAtAsync would.
      */
-    void onChunkReady(PendingGenerationKey key, ServerLevel level,
-                       Chunk chunk, int cx, int cz, long token) {
+    void completeAsyncLoad(PendingGenerationKey key, ServerLevel level, Chunk chunk,
+                           Throwable ex, int cx, int cz, long token) {
+        if (ex != null) {
+            LSSLogger.error("Async chunk load failed at " + cx + "," + cz, ex);
+        }
+        LoadedColumnData extracted = null;
+        Error rethrow = null;
+        if (ex == null && chunk != null) {
+            try {
+                extracted = extractColumnData(level, cx, cz);
+            } catch (Error e) {
+                // Books first (mirrors the Fabric twin): the failure hop below must still be
+                // scheduled or every callback's generation slot leaks until disconnect.
+                LSSLogger.error("Failed to extract primitives for generated chunk at " + cx + ", " + cz, e);
+                rethrow = e;
+            }
+        }
+        var columnData = extracted;
+        try {
+            this.mainThreadScheduler.schedule(() -> onChunkReady(key, columnData, cx, cz, token));
+        } catch (Exception scheduleEx) {
+            // Plugin disabled during shutdown — do not call onChunkReady inline
+            // because we're not on the pump and the active map is not thread-safe.
+            // shutdown() already clears the active map.
+            LSSLogger.warn("Could not schedule generation callback (plugin shutting down) at " + cx + "," + cz);
+        }
+        if (rethrow != null) {
+            // A plain rethrow would vanish: whenComplete captures it into an unobserved
+            // dependent future. Hand it to the thread's uncaught handler instead, so an
+            // Error (OOME, linkage) stays as loud as the old scheduled-task rethrow was.
+            Thread.currentThread().getUncaughtExceptionHandler()
+                    .uncaughtException(Thread.currentThread(), rethrow);
+        }
+    }
+
+    /**
+     * Serializes the just-loaded chunk on the completion thread; null on any failure —
+     * the failure books happen on the pump when {@link #onChunkReady} sees the null.
+     * Errors propagate to {@link #completeAsyncLoad}, which schedules the failure outcome
+     * before rethrowing.
+     */
+    LoadedColumnData extractColumnData(ServerLevel level, int cx, int cz) {
+        try {
+            LevelChunk nmsChunk = level.getChunkSource().getChunkNow(cx, cz);
+            if (nmsChunk == null) {
+                LSSLogger.warn("Chunk at " + cx + "," + cz + " was null after async load completed");
+                return null;
+            }
+            return PaperSectionSerializer.serializeColumn(level, nmsChunk, cx, cz);
+        } catch (Exception e) {
+            LSSLogger.error("Failed to extract primitives for generated chunk at " + cx + ", " + cz, e);
+            return null;
+        }
+    }
+
+    /**
+     * Called on the pump thread with the completion-thread's extraction result (null = the
+     * load failed, the chunk vanished, or extraction threw). Books only — no chunk access.
+     * Package-visible so tests can fire the completion that completeAsyncLoad would schedule.
+     */
+    void onChunkReady(PendingGenerationKey key, LoadedColumnData columnData,
+                      int cx, int cz, long token) {
         var gen = this.active.get(key);
         // Reject a stale completion: the entry that launched this load already timed out and a
         // new entry was resubmitted under the same key (different token). Leaving the current
@@ -162,36 +218,16 @@ public class PaperChunkGenerationService {
         if (gen == null || gen.token != token) return;
         this.active.remove(key);
 
-        if (chunk != null) {
-            try {
-                LevelChunk nmsChunk = level.getChunkSource().getChunkNow(cx, cz);
-                if (nmsChunk != null) {
-                    long columnTimestamp = LSSConstants.epochSeconds();
-                    LoadedColumnData columnData = PaperSectionSerializer.serializeColumn(
-                            level, nmsChunk, cx, cz);
-                    String dimension = key.dimension().identifier().toString();
-
-                    for (var cb : gen.callbacks) {
-                        this.mainReady.add(new TickSnapshot.GenerationReadyData(
-                                cb.playerUuid, cx, cz, dimension,
-                                columnData, columnTimestamp, cb.submissionOrder));
-                        decrementCount(this.perPlayerActiveCount, cb.playerUuid);
-                    }
-                    this.totalCompleted++;
-                } else {
-                    LSSLogger.warn("Chunk at " + cx + "," + cz + " was null after async load completed");
-                    addFailures(gen.callbacks, key, cx, cz);
-                    this.totalRemovedInFlight++;
-                }
-            } catch (Throwable t) {
-                // Throwable, not Exception (mirrors the Fabric twin): an Error here would
-                // otherwise skip addFailures and leak every callback's generation slot and
-                // per-player count until disconnect.
-                LSSLogger.error("Failed to extract primitives for generated chunk at " + cx + ", " + cz, t);
-                addFailures(gen.callbacks, key, cx, cz);
-                this.totalRemovedInFlight++;
-                if (t instanceof Error err) throw err;
+        if (columnData != null) {
+            long columnTimestamp = LSSConstants.epochSeconds();
+            String dimension = key.dimension().identifier().toString();
+            for (var cb : gen.callbacks) {
+                this.mainReady.add(new TickSnapshot.GenerationReadyData(
+                        cb.playerUuid, cx, cz, dimension,
+                        columnData, columnTimestamp, cb.submissionOrder));
+                decrementCount(this.perPlayerActiveCount, cb.playerUuid);
             }
+            this.totalCompleted++;
         } else {
             addFailures(gen.callbacks, key, cx, cz);
             this.totalRemovedInFlight++;
@@ -285,7 +321,8 @@ public class PaperChunkGenerationService {
 
     public long getTotalRemovedInFlight() { return this.totalRemovedInFlight; }
 
-    /** Main thread only (like every other read of {@code active}). */
+    /** Pump thread for exact values; command threads read racily (stale-tolerable admin
+     *  diagnostics — never iterate {@code active} off-pump, size() is a plain field read). */
     public int getActiveCount() { return this.active.size(); }
 
     private static void incrementCount(Map<UUID, Integer> map, UUID uuid) {

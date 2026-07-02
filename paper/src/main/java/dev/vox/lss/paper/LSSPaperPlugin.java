@@ -12,7 +12,6 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.plugin.messaging.PluginMessageListener;
-import org.bukkit.scheduler.BukkitRunnable;
 
 /**
  * Paper plugin entry point for LOD Server Support.
@@ -142,15 +141,18 @@ public class LSSPaperPlugin extends JavaPlugin implements PluginMessageListener,
 
             @Override
             public void scheduleServiceTick() {
-                new BukkitRunnable() {
-                    @Override
-                    public void run() {
-                        var service = requestService;
-                        if (service != null) {
-                            service.tick();
-                        }
-                    }
-                }.runTaskTimer(LSSPaperPlugin.this, 1L, 1L);
+                // GlobalRegionScheduler, not BukkitScheduler: on Folia the legacy scheduler
+                // throws UnsupportedOperationException; on plain Paper this runs on the main
+                // thread every tick, exactly like the BukkitRunnable it replaces. The
+                // global-region thread is the plugin's single pump — every single-owner
+                // structure in the pipeline hangs off this cadence (Folia design spec §3).
+                getServer().getGlobalRegionScheduler().runAtFixedRate(LSSPaperPlugin.this,
+                        scheduledTask -> {
+                            var service = requestService;
+                            if (service != null) {
+                                service.tick();
+                            }
+                        }, 1L, 1L);
             }
 
             @Override
@@ -162,11 +164,14 @@ public class LSSPaperPlugin extends JavaPlugin implements PluginMessageListener,
 
     @Override
     public void onDisable() {
+        // Null the field BEFORE shutting down so the next pump fire no-ops — a runtime
+        // plugin-manager disable can arrive from a region thread while the pump is mid-tick
+        // (the service's shuttingDown flag covers the one already-in-flight tick).
         var service = this.requestService;
+        this.requestService = null;
         if (service != null) {
             LSSLogger.info("Stopping LSS LOD request processing service");
             service.shutdown();
-            this.requestService = null;
         }
 
         getServer().getMessenger().unregisterIncomingPluginChannel(this);
@@ -225,9 +230,11 @@ public class LSSPaperPlugin extends JavaPlugin implements PluginMessageListener,
 
     /**
      * Test seam: player registration, production-wired to
-     * {@link PaperRequestProcessingService#registerPlayer}. Only invoked when the
-     * {@link HandshakeGate} decision says to register, so the production lambda may
-     * capture a service reference that is non-null whenever servicePresent was true.
+     * {@link PaperRequestProcessingService#enqueueRegister} — on Folia the handshake message
+     * arrives on the player's region thread, so registration is mailboxed and the pump
+     * applies it next tick. Only invoked when the {@link HandshakeGate} decision says to
+     * register, so the production lambda may capture a service reference that is non-null
+     * whenever servicePresent was true.
      */
     @FunctionalInterface
     interface HandshakeRegistrar {
@@ -240,7 +247,7 @@ public class LSSPaperPlugin extends JavaPlugin implements PluginMessageListener,
                 (protocolVersion, enabled, lodDistanceChunks, syncLimit, genLimit, generationEnabled) ->
                         PaperPayloadHandler.sendSessionConfig(bukkitPlayer, protocolVersion, enabled,
                                 lodDistanceChunks, syncLimit, genLimit, generationEnabled),
-                capabilities -> service.registerPlayer(nmsPlayer, capabilities));
+                capabilities -> service.enqueueRegister(nmsPlayer, capabilities));
     }
 
     /**
@@ -308,7 +315,9 @@ public class LSSPaperPlugin extends JavaPlugin implements PluginMessageListener,
     public void onPlayerQuit(PlayerQuitEvent event) {
         var service = this.requestService;
         if (service != null) {
-            service.removePlayer(event.getPlayer().getUniqueId());
+            // Mailboxed: on Folia this event fires on the quitting player's region thread,
+            // and removal mutates pump-owned state (generation service maps among others).
+            service.enqueueRemove(event.getPlayer().getUniqueId());
         }
     }
 

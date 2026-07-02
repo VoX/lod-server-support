@@ -98,6 +98,10 @@ class PaperDirtyColumnBroadcaster {
 
                     long[] result = new long[count];
                     System.arraycopy(this.positionFilterBuffer, 0, result, 0, count);
+                    // clearDiskReadDone only ENQUEUES a mailbox event; correctness comes from
+                    // applyEvents running before routeIncomingRequests in every processing cycle,
+                    // so a re-request routed after this notification sees the cleared done-bit and
+                    // re-resolves — never a stale up_to_date.
                     this.offThreadProcessor.clearDiskReadDone(player.getUUID(), result);
                     try {
                         this.dirtySender.send(player, result);

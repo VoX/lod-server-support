@@ -35,9 +35,17 @@ public final class LSSConstants {
     public static final int MAX_DIRTY_COLUMN_POSITIONS = 10240;
     /** Estimated per-column wire overhead bytes (coords + dimension string + timestamp + framing). */
     public static final int ESTIMATED_COLUMN_OVERHEAD_BYTES = 45;
-    /** Max serialized section bytes per column. The client decoder rejects (and disconnects on)
-     *  anything larger, so the server drops oversized columns rather than send an unreadable frame. */
+    /** Max serialized section bytes the CLIENT decoder accepts (hostile-frame guard; the
+     *  decoder rejects — and disconnects on — anything larger). Kept above the send threshold
+     *  so frames from older servers stay readable. */
     public static final int MAX_SECTIONS_SIZE = 2_097_152; // 2 MB
+    /** Max serialized section bytes the SERVER will put on the wire. Strictly below the client
+     *  cap AND below Minecraft's netty frame limit: Varint21LengthFieldPrepender throws (and
+     *  the connection dies) for any frame over 2_097_151 bytes, and with compression disabled
+     *  the frame is sections + ~60 bytes of envelope — a column admitted at the old 2 MiB cap
+     *  could kill the connection in a rejoin/re-serve kick loop. 2_000_000 leaves ~97 KB of
+     *  margin for envelope growth and deflate expansion of incompressible data. */
+    public static final int MAX_SEND_SECTIONS_SIZE = 2_000_000;
     /** Max chars for the VoxelColumn dimension resource-location string (caps both writers and the reader). */
     public static final int MAX_DIMENSION_STRING_LENGTH = 256;
 

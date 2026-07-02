@@ -41,11 +41,11 @@ class SlotAdmissionTest {
     }
 
     private static PendingRequest sync(int cx, int cz) {
-        return new PendingRequest(cx, cz, RequestType.SYNC, SlotType.SYNC_ON_LOAD);
+        return new PendingRequest(cx, cz, RequestType.SYNC, SlotType.SYNC_ON_LOAD, false);
     }
 
     private static PendingRequest gen(int cx, int cz) {
-        return new PendingRequest(cx, cz, RequestType.GENERATION, SlotType.GENERATION);
+        return new PendingRequest(cx, cz, RequestType.GENERATION, SlotType.GENERATION, false);
     }
 
     @Test

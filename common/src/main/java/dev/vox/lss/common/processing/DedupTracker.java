@@ -43,6 +43,13 @@ class DedupTracker {
         return false;
     }
 
+    /** True while a disk read for this position is in flight (group created at submit,
+     *  removed at delivery — results parked in a player queue still count). */
+    boolean hasGroup(long packed, String dimension) {
+        var dimMap = this.pending.get(dimension);
+        return dimMap != null && dimMap.containsKey(packed);
+    }
+
     /**
      * Remove and return the dedup group for the given packed position in the given dimension.
      * Called when the primary disk read completes.

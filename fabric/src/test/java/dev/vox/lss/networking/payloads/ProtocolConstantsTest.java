@@ -97,7 +97,7 @@ class ProtocolConstantsTest {
         // only handshaken clients receive columns, every such client has the LSS channel
         // codec registered (so the 1 MiB DiscardedPayload cap never applies to it; the
         // governing client cap is readByteArray(MAX_SECTIONS_SIZE)), and both platforms'
-        // processors DROP any column whose sectionBytes exceed MAX_SECTIONS_SIZE before
+        // processors DROP any column whose sectionBytes exceed MAX_SEND_SECTIONS_SIZE before
         // send (pinned by FabricOffThreadProcessorDropTest and PaperPayloadEdgeTest). The
         // frame must still clear the 8 MiB uncompressed packet ceiling that vanilla
         // enforces on compressed connections.
@@ -113,6 +113,21 @@ class ProtocolConstantsTest {
                 "a max-size voxel-column frame (" + voxelColumnMax + " bytes) must fit the"
                 + " 8 MiB vanilla uncompressed packet ceiling — shrink MAX_SECTIONS_SIZE or"
                 + " redesign the framing before raising it");
+
+        // The SEND threshold governs what actually goes on the wire, and its binding cap is
+        // netty's frame limit: Varint21LengthFieldPrepender throws (killing the connection)
+        // for any frame over 2_097_151 bytes, and with network compression disabled the frame
+        // is the raw packet. The largest sendable column body plus generous envelope headroom
+        // (packet id, channel identifier, framing varint) must stay under it — otherwise an
+        // admitted column kicks the client in a rejoin/re-serve loop.
+        int sendColumnBodyMax = 4 + 4 + dimensionMax + 8
+                + varIntSize(LSSConstants.MAX_SEND_SECTIONS_SIZE) + LSSConstants.MAX_SEND_SECTIONS_SIZE;
+        assertTrue(sendColumnBodyMax + 256 <= 2_097_151,
+                "the largest sendable voxel-column frame (" + sendColumnBodyMax + " + envelope)"
+                + " must fit netty's 2_097_151-byte frame cap — shrink MAX_SEND_SECTIONS_SIZE");
+        assertTrue(LSSConstants.MAX_SEND_SECTIONS_SIZE < LSSConstants.MAX_SECTIONS_SIZE,
+                "the client decode cap must stay above the send threshold so frames from"
+                + " older servers (which sent up to the decode cap) remain readable");
     }
 
     // ---- ESTIMATED_COLUMN_OVERHEAD_BYTES vs real encoded headers ----

@@ -28,7 +28,7 @@ class OffThreadProcessorMailboxTest {
         void enqueue(IncomingRequest r) { enqueueIncomingRequest(r); }
     }
 
-    private static final class TestProcessor extends OffThreadProcessor<TestState> {
+    private static class TestProcessor extends OffThreadProcessor<TestState> {
         TestProcessor(Map<UUID, TestState> players) {
             super(players, null, false, null, 1);
         }
@@ -167,6 +167,50 @@ class OffThreadProcessorMailboxTest {
 
             waitFor(() -> newState.getHeldSyncSlots() == 1,
                     "the fresh same-UUID session's request is admitted despite the buffered removal");
+        } finally {
+            proc.shutdown();
+        }
+    }
+
+    // ---- A processing-cycle Throwable must not lose the take's lossless events ----
+
+    @Test
+    void losslessEventIsRetriedAfterAProcessingCycleThrows() throws Exception {
+        var uuid = UUID.randomUUID();
+        var state = new TestState(uuid);
+        state.markHandshakeComplete();
+        var players = new ConcurrentHashMap<UUID, TestState>();
+        players.put(uuid, state);
+
+        // buildAndEnqueueColumnPayload throws on its first call, succeeds after. The first
+        // cycle that processes the generation-success outcome therefore throws mid-cycle; the
+        // outcome must be re-queued and delivered on a later cycle, not silently dropped.
+        var throwsLeft = new java.util.concurrent.atomic.AtomicInteger(1);
+        var delivered = java.util.concurrent.ConcurrentHashMap.<Long>newKeySet();
+        var proc = new TestProcessor(players) {
+            @Override
+            protected boolean buildAndEnqueueColumnPayload(TestState s, int cx, int cz, String dim,
+                                                           long ts, long order, byte[] bytes, int est) {
+                if (throwsLeft.getAndDecrement() > 0) {
+                    throw new RuntimeException("injected cycle failure");
+                }
+                delivered.add(PositionUtil.packPosition(cx, cz)); // only a retry ever reaches here
+                return true;
+            }
+        };
+        try {
+            proc.start();
+            var column = new LoadedColumnData(4, 2, new byte[]{1, 2, 3}, 3);
+            proc.postSnapshot(snapshot(uuid), new ArrayList<>(List.of(
+                    new TickSnapshot.GenerationReadyData(uuid, 4, 2, DIM, column, 123L, 1L))));
+
+            long deadline = System.nanoTime() + 5_000_000_000L;
+            while (delivered.isEmpty() && System.nanoTime() < deadline) {
+                proc.postSnapshot(snapshot(uuid), List.of()); // keep the loop cycling for the retry
+                Thread.sleep(10);
+            }
+            assertEquals(Set.of(PositionUtil.packPosition(4, 2)), delivered,
+                    "the generation outcome dropped by the throwing cycle must be retried, not lost");
         } finally {
             proc.shutdown();
         }

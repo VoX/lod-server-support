@@ -19,7 +19,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Pins the Fabric server-side encoder guard: columns whose serialized sections exceed
- * MAX_SECTIONS_SIZE are dropped before payload construction (the client decoder rejects
+ * MAX_SEND_SECTIONS_SIZE are dropped before payload construction (the netty frame cap rejects
  * such frames with a disconnect, so sending one would kick the player on every re-request
  * of the same mega-column), while columns at exactly the cap are enqueued.
  */
@@ -56,7 +56,7 @@ class FabricOffThreadProcessorDropTest {
     @Test
     void oversizedColumnIsDroppedBeforeEnqueue() throws InterruptedException {
         var h = harness();
-        byte[] oversized = new byte[LSSConstants.MAX_SECTIONS_SIZE + 1];
+        byte[] oversized = new byte[LSSConstants.MAX_SEND_SECTIONS_SIZE + 1];
 
         boolean sent = h.processor().buildAndEnqueueColumnPayload(h.state(), 1, 2,
                 LSSConstants.DIM_STR_OVERWORLD,
@@ -89,7 +89,7 @@ class FabricOffThreadProcessorDropTest {
     @Test
     void columnAtExactCapIsEnqueuedWithItsCoordinates() throws InterruptedException {
         var h = harness();
-        byte[] atCap = new byte[LSSConstants.MAX_SECTIONS_SIZE];
+        byte[] atCap = new byte[LSSConstants.MAX_SEND_SECTIONS_SIZE];
 
         boolean enqueued = h.processor().buildAndEnqueueColumnPayload(h.state(), 3, -4,
                 LSSConstants.DIM_STR_THE_END,
@@ -104,6 +104,6 @@ class FabricOffThreadProcessorDropTest {
         assertEquals(-4, column.chunkZ());
         assertEquals(77L, column.columnTimestamp());
         assertEquals(LSSConstants.DIM_STR_THE_END, column.dimension().identifier().toString());
-        assertEquals(LSSConstants.MAX_SECTIONS_SIZE, column.decompressedSections().length);
+        assertEquals(LSSConstants.MAX_SEND_SECTIONS_SIZE, column.decompressedSections().length);
     }
 }

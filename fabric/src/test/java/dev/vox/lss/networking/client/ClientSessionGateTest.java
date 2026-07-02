@@ -171,6 +171,47 @@ class ClientSessionGateTest {
     }
 
     @Test
+    void hostileServerConfigIsClampedToProtocolBoundsBeforeUse() {
+        // A hostile/compromised server is untrusted input: its syncOnLoad concurrency limit
+        // becomes the client's scan budget (RequestQueue.ensureCapacity allocation) and its
+        // LOD distance bounds the scan-ring loop. Without a client-side clamp a single
+        // SessionConfig packet forces a multi-gigabyte allocation (OOM crash). The gate must
+        // clamp every numeric field to the same bounds the server enforces on itself, and
+        // hand the CLAMPED config to the manager it builds.
+        var captured = new java.util.concurrent.atomic.AtomicReference<SessionConfigS2CPayload>();
+        var g = new ClientSessionGate(processor, handshakesSent::incrementAndGet,
+                cfg -> { captured.set(cfg); return new RecordingManager(events); });
+
+        g.onSessionConfig(new SessionConfigS2CPayload(V, true,
+                Integer.MAX_VALUE, 200_000_000, 500_000_000, true), true);
+
+        var used = captured.get();
+        assertNotNull(used, "the manager must be built with the clamped config");
+        assertEquals(LSSConstants.MAX_LOD_DISTANCE, used.lodDistanceChunks(),
+                "LOD distance clamped to the protocol max");
+        assertEquals(LSSConstants.MAX_CONCURRENCY_LIMIT, used.syncOnLoadConcurrencyLimitPerPlayer(),
+                "sync concurrency clamped to the protocol max — bounds the scan-budget allocation");
+        assertEquals(LSSConstants.MAX_CONCURRENCY_LIMIT, used.generationConcurrencyLimitPerPlayer(),
+                "generation concurrency clamped to the protocol max");
+        assertEquals(LSSConstants.MAX_LOD_DISTANCE, g.getServerLodDistance(),
+                "the stored server LOD distance is the clamped value");
+    }
+
+    @Test
+    void belowRangeServerConfigIsClampedUpToProtocolMinimum() {
+        var captured = new java.util.concurrent.atomic.AtomicReference<SessionConfigS2CPayload>();
+        var g = new ClientSessionGate(processor, handshakesSent::incrementAndGet,
+                cfg -> { captured.set(cfg); return new RecordingManager(events); });
+
+        g.onSessionConfig(new SessionConfigS2CPayload(V, true, 0, 0, -5, true), true);
+
+        var used = captured.get();
+        assertEquals(LSSConstants.MIN_LOD_DISTANCE, used.lodDistanceChunks());
+        assertEquals(LSSConstants.MIN_CONCURRENCY_LIMIT, used.syncOnLoadConcurrencyLimitPerPlayer());
+        assertEquals(LSSConstants.MIN_CONCURRENCY_LIMIT, used.generationConcurrencyLimitPerPlayer());
+    }
+
+    @Test
     void validConfigWithoutConsumersSkipsSessionSetup() {
         gate.onSessionConfig(config(V, true), false);
 
@@ -187,7 +228,7 @@ class ClientSessionGateTest {
         events.clear();
         // One column still queued for decode: the teardown must report it, not drop it —
         // its received-stamp would otherwise persist for data no consumer ever saw.
-        processor.offer(new VoxelColumnS2CPayload(3, -4, dim("overworld"), 1L, new byte[0]));
+        processor.offer(new VoxelColumnS2CPayload(3, -4, dim("overworld"), 1L, new byte[0]), false);
 
         gate.onSessionConfig(config(V, true), true);
 

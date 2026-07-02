@@ -285,6 +285,36 @@ class IncomingRequestRouterTest {
     }
 
     @Test
+    void staleSnapshotDimensionDoesNotRouteAReRegisteredSession() throws Exception {
+        // A dimension change replaces the state after a snapshot was built (a multi-tick
+        // processing cycle): routing the NEW session's requests under the OLD snapshot
+        // dimension submits disk reads whose results get dimension-skipped — the pending
+        // slots leak for the whole session. The registered-dimension guard defers routing
+        // to the next cycle's fresh snapshot instead.
+        var players = new ConcurrentHashMap<UUID, TestState>();
+        var state = addPlayer(players, 4, 4);
+        state.setRegisteredDimension("minecraft:the_end"); // the session's real dimension
+        var proc = new TestProcessor(players, null, false, null);
+        try {
+            proc.start();
+            state.enqueue(new IncomingRequest(3, 3, -1));
+            proc.postSnapshot(snapshot(state), List.of()); // stale snapshot claims DIM (overworld)
+            var endDims = new HashMap<UUID, String>();
+            endDims.put(state.getPlayerUUID(), "minecraft:the_end");
+            proc.postSnapshot(new TickSnapshot(endDims, Map.of(), 0, false), List.of());
+
+            waitFor(() -> !proc.submits.isEmpty(), "routed under the session's dimension");
+            var submit = proc.submits.poll();
+            assertEquals("minecraft:the_end", submit.dimension(),
+                    "the stale overworld snapshot must never route the End session's requests");
+            assertTrue(proc.submits.isEmpty(), "the request routes exactly once");
+            assertEquals(1, state.getHeldSyncSlots());
+        } finally {
+            proc.shutdown();
+        }
+    }
+
+    @Test
     void clientTimestampLadderDecidesUpToDateVsReserve(@TempDir Path tempDir) throws Exception {
         long cached = 1000L;
         seedTimestamps(tempDir, cached, packed(10, 0), packed(11, 0), packed(12, 0), packed(14, 0));

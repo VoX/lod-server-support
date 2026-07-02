@@ -207,4 +207,88 @@ class OffThreadProcessorLifecycleTest {
             proc2.shutdown();
         }
     }
+
+    @Test
+    void invalidationsQueuedAtShutdownStillReachTheFinalSave(@TempDir Path dataDir)
+            throws Exception {
+        var u = UUID.randomUUID();
+        long packed = PositionUtil.packPosition(11, 11);
+
+        // --- Session 1: serve (11,11), then an edit invalidates it right as the server stops.
+        // The invalidation rides the shutdown sentinel take — it must still hit the cache
+        // before the final save, or the persisted stamp answers false up_to_date forever.
+        var s1 = newPlayer(u);
+        var players1 = new ConcurrentHashMap<UUID, TestState>();
+        players1.put(u, s1);
+        var reader1 = new StubDiskReader();
+        reader1.registerPlayer(u);
+        var proc1 = new TestProcessor(players1, reader1, dataDir);
+        try {
+            proc1.start();
+            s1.enqueue(new IncomingRequest(11, 11, 1L));
+            proc1.postSnapshot(snapshot(u), List.of());
+            waitFor(() -> proc1.diskSubmits.size() == 1, "session-1 disk submit");
+            reader1.getPlayerQueue(u).add(dataResult(u, 11, 11, new byte[]{1, 2}, COLUMN_TS, 1L));
+            proc1.postSnapshot(snapshot(u), List.of());
+            waitFor(() -> !proc1.enqueuedColumns.isEmpty(), "session-1 column served");
+        } finally {
+            proc1.invalidateTimestamps(DIM, new long[]{packed}); // rides the sentinel
+            proc1.shutdown();
+        }
+
+        // --- Session 2: the resync at the old stamp must RE-READ, not answer up_to_date ---
+        var s2 = newPlayer(u);
+        var players2 = new ConcurrentHashMap<UUID, TestState>();
+        players2.put(u, s2);
+        var reader2 = new StubDiskReader();
+        reader2.registerPlayer(u);
+        var proc2 = new TestProcessor(players2, reader2, dataDir);
+        try {
+            proc2.start();
+            s2.enqueue(new IncomingRequest(11, 11, COLUMN_TS));
+            proc2.postSnapshot(snapshot(u), List.of());
+            waitFor(() -> proc2.diskSubmits.contains(packed),
+                    "invalidated position must re-read the disk after restart");
+        } finally {
+            proc2.shutdown();
+        }
+    }
+
+    @Test
+    void invalidationTriggersADebouncedSaveWellBeforeThePeriodicInterval(@TempDir Path dataDir)
+            throws Exception {
+        var u = UUID.randomUUID();
+        var s = newPlayer(u);
+        var players = new ConcurrentHashMap<UUID, TestState>();
+        players.put(u, s);
+        var reader = new StubDiskReader();
+        reader.registerPlayer(u);
+        var proc = new TestProcessor(players, reader, dataDir);
+        var cacheFile = dataDir.resolve("lss-timestamps.bin");
+        try {
+            proc.start();
+            // Serve a disk read so the timestamp cache holds an entry for (10,10).
+            s.enqueue(new IncomingRequest(10, 10, 1L));
+            proc.postSnapshot(snapshot(u), List.of());
+            waitFor(() -> proc.diskSubmits.size() == 1, "disk submit");
+            reader.getPlayerQueue(u).add(dataResult(u, 10, 10, new byte[]{1, 2}, COLUMN_TS, 1L));
+            proc.postSnapshot(snapshot(u), List.of());
+            waitFor(() -> !proc.enqueuedColumns.isEmpty(), "column served (cache stamped)");
+            assertFalse(Files.exists(cacheFile), "no periodic save yet (interval is ~5 min)");
+
+            // A dirty-broadcast invalidation of the stamped position arms the debounced save;
+            // it must land within seconds (well under SAVE_INTERVAL_CYCLES), not resurrect on a
+            // crash inside the periodic window.
+            proc.invalidateTimestamps(DIM, new long[]{PositionUtil.packPosition(10, 10)});
+            long deadline = System.nanoTime() + 5_000_000_000L;
+            while (!Files.exists(cacheFile) && System.nanoTime() < deadline) {
+                proc.postSnapshot(snapshot(u), List.of());
+                Thread.sleep(10);
+            }
+            assertTrue(Files.exists(cacheFile),
+                    "an invalidation must trigger a debounced save within seconds, not only every ~5 min");
+        } finally {
+            proc.shutdown();
+        }
+    }
 }

@@ -53,6 +53,13 @@ class IncomingRequestRouter<PS extends AbstractPlayerRequestState<?>> {
             var state = this.players.get(entry.getKey());
             if (state == null) continue;
             if (!state.supportsVoxelColumns()) continue;
+            // Stale-snapshot session guard: a dimension change replaced the state after this
+            // snapshot was built. Routing the NEW session's requests under the OLD dimension
+            // would submit disk reads whose results get dimension-skipped, leaking the pending
+            // slots for the whole session. Requests stay queued; the next cycle's fresh
+            // snapshot routes them under the right dimension. (Null = bare test rig.)
+            String registered = state.registeredDimension();
+            if (registered != null && !registered.equals(entry.getValue())) continue;
 
             processIncomingRequests(state, entry.getKey(), entry.getValue(), snapshot);
         }
@@ -133,10 +140,27 @@ class IncomingRequestRouter<PS extends AbstractPlayerRequestState<?>> {
         var probe = probes.get(packed);
         if (probe == null) return false;
 
-        boolean sent = this.processor.enqueueLoadedColumn(state, probe, this.cycleNow,
-                this.ctx.sequence().next(), dimension);
+        long order = this.ctx.sequence().next();
+        boolean allAir = probe.serializedSections() == null || probe.serializedSections().length == 0;
+        boolean sent = !allAir
+                && this.processor.enqueueLoadedColumn(state, probe, this.cycleNow, order, dimension);
         if (!sent) {
-            this.ctx.sendActions().add(new SendAction.ColumnUpToDate(playerUuid, packed, state));
+            if (allAir) {
+                // Stamp the all-air resolution (the data path stamps inside enqueueLoadedColumn)
+                // so future resyncs converge to a warm up_to_date instead of re-resolving —
+                // and re-clearing — the same void column every session.
+                this.processor.recordAllAirResolution(dimension, packed, this.cycleNow);
+            }
+            // All-air: a resync client (ts>0) may hold stale content there, so send a clearing
+            // 0-section column; a client with nothing (ts<=0) gets up_to_date. An enqueue
+            // REJECTION (oversized column) is NOT all-air — clearing would erase the client's
+            // stale-but-real terrain; the terminal answer is up_to_date.
+            if (allAir && req.clientTimestamp() > 0
+                    && this.processor.sendEmptiedColumn(state, req.cx(), req.cz(), dimension, this.cycleNow, order)) {
+                // clearing column sent
+            } else {
+                this.ctx.sendActions().add(new SendAction.ColumnUpToDate(playerUuid, packed, state));
+            }
         }
         state.markDiskReadDone(req.cx(), req.cz());
         this.ctx.diagnostics().incrementInMemory();
@@ -169,7 +193,8 @@ class IncomingRequestRouter<PS extends AbstractPlayerRequestState<?>> {
                                            long packed, String dimension, RequestType type) {
         if (type == RequestType.SYNC || this.diskReadingAvailable) {
             // Route through disk reader (with cross-player dedup)
-            if (!state.tryAdmit(new PendingRequest(req.cx(), req.cz(), type, SlotType.SYNC_ON_LOAD))) {
+            boolean claimsData = req.clientTimestamp() > 0;
+            if (!state.tryAdmit(new PendingRequest(req.cx(), req.cz(), type, SlotType.SYNC_ON_LOAD, claimsData))) {
                 rateLimit(state, playerUuid, req, packed, type, dimension);
                 return;
             }
@@ -187,7 +212,7 @@ class IncomingRequestRouter<PS extends AbstractPlayerRequestState<?>> {
             this.ctx.diagnostics().incrementDiskQueued();
         } else if (this.generationAvailable) {
             // No disk reader — direct generation (type is GENERATION here by the branch above)
-            if (!state.tryAdmit(new PendingRequest(req.cx(), req.cz(), type, SlotType.GENERATION))) {
+            if (!state.tryAdmit(new PendingRequest(req.cx(), req.cz(), type, SlotType.GENERATION, req.clientTimestamp() > 0))) {
                 rateLimit(state, playerUuid, req, packed, type, dimension);
                 return;
             }

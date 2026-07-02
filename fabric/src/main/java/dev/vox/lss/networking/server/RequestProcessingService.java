@@ -16,7 +16,9 @@ import dev.vox.lss.networking.payloads.BatchResponseS2CPayload;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.Level;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.storage.LevelResource;
@@ -48,7 +50,11 @@ public class RequestProcessingService {
     private final long startTimeNanos = System.nanoTime();
 
     private final DirtyColumnBroadcaster dirtyBroadcaster;
-    private final Map<ServerLevel, String> dimensionStringCache = new HashMap<>();
+    // Keyed by the lightweight ResourceKey (not ServerLevel): a ServerLevel key strongly
+    // retains every world an LSS player ever visited — harmless for vanilla's permanent
+    // dimensions, but a leak on world-cycling servers. The dimension string is derivable
+    // from the key.
+    private final Map<ResourceKey<Level>, String> dimensionStringCache = new HashMap<>();
     private int diagLogCounter = 0;
 
     private final TickDiagnostics diag = new TickDiagnostics();
@@ -89,8 +95,14 @@ public class RequestProcessingService {
 
     public PlayerRequestState registerPlayer(ServerPlayer player, int capabilities) {
         var config = LSSServerConfig.CONFIG;
-        var state = this.players.computeIfAbsent(player.getUUID(), uuid -> new PlayerRequestState(
-                player, config.syncOnLoadConcurrencyLimitPerPlayer, config.generationConcurrencyLimitPerPlayer));
+        var state = this.players.computeIfAbsent(player.getUUID(), uuid -> {
+            var s = new PlayerRequestState(player, config.syncOnLoadConcurrencyLimitPerPlayer,
+                    config.generationConcurrencyLimitPerPlayer);
+            // Session identity for the router's stale-snapshot guard (set before the map
+            // publish so the processing thread never sees it null on a live state).
+            s.setRegisteredDimension(player.level().dimension().identifier().toString());
+            return s;
+        });
         this.diskReader.registerPlayer(player.getUUID());
         state.setCapabilities(capabilities);
         state.markHandshakeComplete();
@@ -222,8 +234,8 @@ public class RequestProcessingService {
 
             var player = state.getPlayer();
             var level = player.level();
-            String dimension = this.dimensionStringCache.computeIfAbsent(level,
-                    l -> l.dimension().identifier().toString());
+            String dimension = this.dimensionStringCache.computeIfAbsent(level.dimension(),
+                    k -> k.identifier().toString());
 
             this.offThreadProcessor.updateDimensionContext(dimension, level);
 
@@ -391,8 +403,8 @@ public class RequestProcessingService {
 
             var player = state.getPlayer();
             var level = player.level();
-            String dimension = this.dimensionStringCache.computeIfAbsent(level,
-                    l -> l.dimension().identifier().toString());
+            String dimension = this.dimensionStringCache.computeIfAbsent(level.dimension(),
+                    k -> k.identifier().toString());
             // Ticket queued before a dimension change targets the old dimension's coordinates.
             // The admitting state was discarded by removePlayer+registerPlayer, so dropping
             // the stale ticket leaks nothing.
@@ -461,6 +473,13 @@ public class RequestProcessingService {
 
     public void shutdown() {
         try {
+            // Marks accumulated since the last broadcast interval must still invalidate the
+            // timestamp cache BEFORE its final save (the invalidations ride the shutdown
+            // sentinel take) — otherwise the persisted stamps answer false up_to_date for
+            // edited columns across the restart.
+            for (var entry : this.dirtyTracker.drainAll().entrySet()) {
+                this.offThreadProcessor.invalidateTimestamps(entry.getKey(), entry.getValue());
+            }
             this.offThreadProcessor.shutdown();
         } catch (Exception e) {
             LSSLogger.error("Error shutting down off-thread processor", e);

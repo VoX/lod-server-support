@@ -4,6 +4,7 @@ import dev.vox.lss.common.LSSConstants;
 import dev.vox.lss.common.LSSLogger;
 import dev.vox.lss.common.PositionUtil;
 import dev.vox.lss.common.voxel.ColumnTimestampCache;
+import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -14,6 +15,7 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -82,7 +84,24 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
     private int consecutiveErrors;
     private long cycleNow; // cached epochSeconds for current processing cycle
 
-    private static final ExecutorService SAVE_EXECUTOR = Executors.newSingleThreadExecutor(r -> {
+    // WS4 durable invalidation: a dirty-broadcast invalidation removes cache entries in memory;
+    // without a prompt save, a crash within the ~5-min periodic window resurrects them (false
+    // up_to_date). Debounce on the processing thread: on the FIRST removal since the last save,
+    // arm a countdown; save when it elapses (coalesce, do NOT reset) so continuous churn cannot
+    // starve durability, and the countdown floor (~2s) bounds how often snapshotForSave's deep
+    // copy runs under a high edit rate. Atomic-move gives atomicity, not power-loss durability
+    // (no fsync) — the shrunk window covers graceful/process crashes; power-loss is deferred to
+    // the tombstone fallback.
+    private static final int INVALIDATE_SAVE_MAX_CYCLES = 40; // ~2s at 20 cycles/s
+    private boolean invalidationDirty = false;
+    private int invalidationCountdown = 0;
+
+    // Per-instance (not static): a static executor's non-expiring daemon thread pins the
+    // OffThreadProcessor class — and, on Paper, the whole plugin classloader — for the JVM's
+    // life, leaking one thread + classloader on every /reload. Bounding it to the processor
+    // and stopping it in shutdown() ties its lifetime to the server run. The factory captures
+    // no instance state, so initializing it in the field initializer is this-escape-safe.
+    private final ExecutorService saveExecutor = Executors.newSingleThreadExecutor(r -> {
         Thread t = new Thread(r, "LSS-TimestampSave");
         t.setDaemon(true);
         return t;
@@ -279,7 +298,17 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
                 this.pendingDirtyClears = new HashMap<>();
             }
 
-            if (take.snapshot().shutdown()) return;
+            if (take.snapshot().shutdown()) {
+                // The sentinel take destructively drained the lossless buffers with it. The
+                // per-session events (removals, dirty-clears, generation outcomes) die with
+                // the session, but queued INVALIDATIONS must still hit the cache — shutdown's
+                // final save otherwise persists pre-edit stamps that answer false up_to_date
+                // across the restart.
+                for (var inv : take.invalidations()) {
+                    this.timestampCache.invalidate(inv.dimension(), inv.positions());
+                }
+                return;
+            }
 
             try {
                 this.processCycle(take);
@@ -288,10 +317,37 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
                 // Catch Throwable (not just Exception) so a transient Error doesn't silently
                 // kill the processing thread and stop the LOD pipeline for every player.
                 LSSLogger.error("Error in processing cycle", t);
+                // The take destructively drained the lossless event buffers; discarding them
+                // on a failed cycle permanently loses player removals (leaked slots/dedup
+                // groups), generation outcomes (stranded pending generations), and
+                // dirty-clears/invalidations (up_to_date answered for stale content). Re-queue
+                // them so the next cycle retries — every one of these events is idempotent, so
+                // re-applying any a partial cycle already applied is harmless (a re-sent column
+                // or up_to_date is position-idempotent on the client).
+                requeueLosslessEvents(take);
                 if (++this.consecutiveErrors >= 10) {
                     LSSLogger.error("Processing thread hit " + this.consecutiveErrors + " consecutive errors, backing off");
                     try { Thread.sleep(1000); } catch (InterruptedException ie) { return; }
                 }
+            }
+        }
+    }
+
+    /**
+     * Re-inject a failed cycle's lossless events into the mailbox so the next cycle retries
+     * them. Ordering does not matter: removals, invalidations, and dirty-clears are set/map
+     * removals (idempotent), and generation outcomes are keyed by position (a duplicate
+     * response is idempotent on the client). The snapshot is intentionally NOT restored — it
+     * is latest-wins and the next tick posts a fresh one within ~50 ms.
+     */
+    private void requeueLosslessEvents(MailboxTake take) {
+        synchronized (this.mailboxLock) {
+            this.pendingGenerationReady.addAll(take.generationReady());
+            this.pendingRemovals.addAll(take.removals());
+            this.pendingInvalidations.addAll(take.invalidations());
+            for (var entry : take.dirtyClears().entrySet()) {
+                this.pendingDirtyClears.merge(entry.getKey(), entry.getValue(),
+                        (existing, taken) -> { existing.addAll(taken); return existing; });
             }
         }
     }
@@ -313,10 +369,21 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
             }
         }
 
-        if (this.dataDir != null && ++this.saveCounter >= SAVE_INTERVAL_CYCLES) {
+        boolean periodicDue = ++this.saveCounter >= SAVE_INTERVAL_CYCLES;
+        boolean invalidationDue = this.invalidationDirty && --this.invalidationCountdown <= 0;
+        if (this.dataDir != null && (periodicDue || invalidationDue)) {
             this.saveCounter = 0;
+            this.invalidationDirty = false; // a save flushes any pending invalidation too
             var cacheSnapshot = this.timestampCache.snapshotForSave();
-            SAVE_EXECUTOR.execute(() -> cacheSnapshot.save(this.dataDir));
+            try {
+                this.saveExecutor.execute(() -> cacheSnapshot.save(this.dataDir));
+            } catch (RejectedExecutionException e) {
+                // Shutdown already called saveExecutor.shutdown() while this processing thread
+                // was still finishing a cycle (it outlived the join timeout). The final save is
+                // handled there; swallow rather than let this surface as a spurious ERROR from
+                // the processingLoop catch — the state is already being persisted on the way out.
+                LSSLogger.debug("Skipped periodic timestamp cache save — save executor is shutting down");
+            }
         }
     }
 
@@ -324,7 +391,22 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
 
     private void applyEvents(MailboxTake take) {
         for (var inv : take.invalidations()) {
-            this.timestampCache.invalidate(inv.dimension(), inv.positions());
+            int removed = this.timestampCache.invalidate(inv.dimension(), inv.positions());
+            if (removed > 0 && !this.invalidationDirty) {
+                this.invalidationDirty = true;
+                this.invalidationCountdown = INVALIDATE_SAVE_MAX_CYCLES;
+            }
+            // A disk read in flight for an invalidated position may carry PRE-edit bytes;
+            // delivering it later in this same cycle (or a following one) must not re-stamp
+            // the cache or re-mark diskReadDone, or the client's dirty re-request draws a
+            // false up_to_date and pre-edit terrain seals against both healing ladders.
+            for (long packed : inv.positions()) {
+                if (this.dedupTracker.hasGroup(packed, inv.dimension())) {
+                    this.invalidatedInFlight
+                            .computeIfAbsent(inv.dimension(), k -> new LongOpenHashSet())
+                            .add(packed);
+                }
+            }
         }
 
         // Player removals (disconnect or dimension change): release the player's dedup groups
@@ -353,7 +435,20 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
                     attachedState.removePendingByPosition(cx, cz);
                 }
             }
+            // The read backing this group will never deliver — drop its stale-guard entry.
+            consumeInvalidatedInFlight(rg.group().dimension(), rg.packed());
         }
+    }
+
+    /** Marks positions whose in-flight disk read was overtaken by a dirty invalidation
+     *  (processing-thread only; entries consumed at delivery or with their dedup group). */
+    private final Map<String, LongOpenHashSet> invalidatedInFlight = new HashMap<>();
+
+    private boolean consumeInvalidatedInFlight(String dimension, long packed) {
+        var set = this.invalidatedInFlight.get(dimension);
+        if (set == null || !set.remove(packed)) return false;
+        if (set.isEmpty()) this.invalidatedInFlight.remove(dimension);
+        return true;
     }
 
     // ---- Phase 2: Drain disk reader results (with cross-player dedup dispatch) ----
@@ -382,11 +477,27 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
                 int cz = result.chunkZ();
                 long packed = PositionUtil.packPosition(cx, cz);
 
-                deliverDiskResult(playerUuid, state, result, result.submissionOrder(), dimension);
+                // A dirty invalidation overtook this read while it was in flight: the bytes
+                // may predate the edit. Deliver the column (better than nothing), but leave
+                // diskReadDone and the timestamp cache unset so the client's dirty
+                // re-request re-resolves from disk instead of drawing a false up_to_date.
+                boolean staleAgainstEdit = consumeInvalidatedInFlight(dimension, packed);
 
-                if (!result.saturated() && !result.notFound()) {
+                deliverDiskResult(playerUuid, state, result, result.submissionOrder(), dimension,
+                        staleAgainstEdit);
+
+                if (!staleAgainstEdit && !result.saturated() && !result.notFound()) {
                     // Store timestamp so reconnecting clients get up-to-date responses
                     this.timestampCache.put(result.dimension(), packed, result.columnTimestamp(), this.cycleNow);
+                } else if (result.notFound()) {
+                    // Disk says the chunk no longer exists (region trimmed/deleted outside
+                    // MC). A stale cached stamp would answer up_to_date to data-claiming
+                    // clients forever — ghost terrain for a chunk the server cannot serve.
+                    int removed = this.timestampCache.invalidate(result.dimension(), new long[]{packed});
+                    if (removed > 0 && !this.invalidationDirty) {
+                        this.invalidationDirty = true;
+                        this.invalidationCountdown = INVALIDATE_SAVE_MAX_CYCLES;
+                    }
                 }
 
                 // Dispatch the same result to attached players in the dedup group
@@ -396,7 +507,7 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
                         var attachedState = this.players.get(attachment.playerUuid());
                         if (attachedState == null) continue;
                         deliverDiskResult(attachment.playerUuid(), attachedState, result,
-                                attachment.submissionOrder(), dimension);
+                                attachment.submissionOrder(), dimension, staleAgainstEdit);
                     }
                 }
             }
@@ -409,7 +520,8 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
      * Shared by the primary requester and every dedup-attached player.
      */
     private void deliverDiskResult(UUID playerUuid, PlayerState state, ChunkReadResult result,
-                                    long submissionOrder, String dimension) {
+                                    long submissionOrder, String dimension,
+                                    boolean staleAgainstEdit) {
         int cx = result.chunkX();
         int cz = result.chunkZ();
         long packed = PositionUtil.packPosition(cx, cz);
@@ -423,17 +535,56 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
         } else if (result.notFound()) {
             handleDiskNotFound(playerUuid, state, packed, cx, cz, pending, dimension);
         } else {
-            state.markDiskReadDone(cx, cz);
-            boolean sent = result.sectionBytes() != null
+            if (!staleAgainstEdit) {
+                state.markDiskReadDone(cx, cz);
+            }
+            boolean allAir = result.sectionBytes() == null;
+            boolean sent = !allAir
                     && buildAndEnqueueColumnPayload(state, cx, cz, result.dimension(),
                             result.columnTimestamp(), submissionOrder,
                             result.sectionBytes(), result.estimatedBytes());
             if (!sent) {
-                // All-air chunk (no visible sections) or oversized column — notify client
-                this.ctx.sendActions().add(new SendAction.ColumnUpToDate(playerUuid, packed, state));
+                // All-air chunk (no visible sections): a resync client (claimsData) may hold
+                // stale content here, so send an authoritative clearing 0-section column; a
+                // client with nothing (first serve) gets a cheap up_to_date. An enqueue
+                // REJECTION (oversized column / oversized dimension id) is NOT all-air: the
+                // server knows real content exists, so a clear would erase the client's
+                // stale-but-real terrain and seal the fabricated air — the terminal answer is
+                // up_to_date so the client keeps what it has.
+                boolean claimsData = pending != null && pending.claimsData();
+                if (!(allAir && claimsData && sendEmptiedColumn(state, cx, cz, result.dimension(),
+                        result.columnTimestamp(), submissionOrder))) {
+                    this.ctx.sendActions().add(new SendAction.ColumnUpToDate(playerUuid, packed, state));
+                }
             }
         }
         this.ctx.diagnostics().incrementDiskDrained();
+    }
+
+    // A VoxelColumn body carrying zero sections (one varint 0). Sent to a data-claiming client
+    // for an all-air resolution so it clears ghost terrain by ingesting air for every section.
+    private static final byte[] ZERO_SECTION_COLUMN = new byte[]{0x00};
+
+    /**
+     * Authoritative all-air serve: enqueue a 0-section {@code VoxelColumn} (carrying the server
+     * columnTimestamp) so a data-claiming client clears the column. Returns false if the payload
+     * could not be enqueued (caller falls back to up_to_date).
+     */
+    boolean sendEmptiedColumn(PlayerState state, int cx, int cz, String dimension,
+                              long columnTimestamp, long submissionOrder) {
+        int est = ZERO_SECTION_COLUMN.length + LSSConstants.ESTIMATED_COLUMN_OVERHEAD_BYTES;
+        return buildAndEnqueueColumnPayload(state, cx, cz, dimension, columnTimestamp,
+                submissionOrder, ZERO_SECTION_COLUMN, est);
+    }
+
+    /**
+     * Stamp an all-air in-memory resolution (the data path stamps inside
+     * {@link #enqueueLoadedColumn}; all-air skips it) so a client that received the clear or
+     * up_to_date converges to a cheap warm up_to_date on future resyncs instead of
+     * re-resolving — and re-clearing — the same void column every session.
+     */
+    void recordAllAirResolution(String dimension, long packed, long columnTimestamp) {
+        this.timestampCache.put(dimension, packed, columnTimestamp, this.cycleNow);
     }
 
     /** Disk-first fallback: if the original request was GENERATION and generation is available,
@@ -441,7 +592,7 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
     private void handleDiskNotFound(UUID playerUuid, PlayerState state, long packed,
                                      int cx, int cz, PendingRequest pending, String dimension) {
         if (pending != null && pending.type() == RequestType.GENERATION && this.generationAvailable) {
-            if (state.tryAdmit(new PendingRequest(cx, cz, RequestType.GENERATION, SlotType.GENERATION))) {
+            if (state.tryAdmit(new PendingRequest(cx, cz, RequestType.GENERATION, SlotType.GENERATION, pending.claimsData()))) {
                 this.ctx.generationTicketRequests().add(new GenerationTicketRequest(
                         playerUuid, cx, cz, dimension, this.ctx.sequence().next()));
             } else {
@@ -466,17 +617,34 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
             if (current == null || !current.equals(entry.dimension())) continue;
             int cx = entry.cx();
             int cz = entry.cz();
-            state.removePendingByPosition(cx, cz);
+            var pending = state.removePendingByPosition(cx, cz);
             long packed = PositionUtil.packPosition(cx, cz);
 
             if (entry.columnData() == null) {
                 this.ctx.sendActions().add(new SendAction.ColumnNotGenerated(entry.playerUuid(), packed, state));
             } else {
                 state.markDiskReadDone(cx, cz);
-                boolean sent = this.enqueueLoadedColumn(state, entry.columnData(),
+                byte[] genSections = entry.columnData().serializedSections();
+                boolean allAir = genSections == null || genSections.length == 0;
+                boolean sent = !allAir && this.enqueueLoadedColumn(state, entry.columnData(),
                         entry.columnTimestamp(), entry.submissionOrder(), entry.dimension());
                 if (!sent) {
-                    this.sendActions.add(new SendAction.ColumnUpToDate(entry.playerUuid(), packed, state));
+                    if (allAir) {
+                        // Stamp so future resyncs at this timestamp converge to a cheap
+                        // up_to_date instead of re-resolving every session (the data path
+                        // stamps inside enqueueLoadedColumn; all-air skips it).
+                        this.timestampCache.put(entry.dimension(), packed,
+                                entry.columnTimestamp(), this.cycleNow);
+                    }
+                    // Generated all-air: a sync resync escalated to generation (claimsData) may
+                    // hold stale content — send a clearing column; a pure gen request (ts=0)
+                    // gets up_to_date. An enqueue REJECTION (oversized) is NOT all-air — see
+                    // deliverDiskResult: clearing would erase real terrain; answer up_to_date.
+                    boolean claimsData = pending != null && pending.claimsData();
+                    if (!(allAir && claimsData && sendEmptiedColumn(state, cx, cz, entry.dimension(),
+                            entry.columnTimestamp(), entry.submissionOrder()))) {
+                        this.sendActions.add(new SendAction.ColumnUpToDate(entry.playerUuid(), packed, state));
+                    }
                 }
             }
             this.ctx.diagnostics().incrementGenDrained();
@@ -545,11 +713,15 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
         } else if (this.dataDir != null) {
             var snapshot = this.timestampCache.snapshotForSave();
             try {
-                SAVE_EXECUTOR.submit(() -> snapshot.save(this.dataDir))
+                this.saveExecutor.submit(() -> snapshot.save(this.dataDir))
                         .get(SHUTDOWN_JOIN_MS, TimeUnit.MILLISECONDS);
             } catch (Exception e) {
                 LSSLogger.warn("Timestamp cache final save did not complete cleanly", e);
             }
         }
+
+        // Stop the save thread (graceful: any queued periodic save still runs) so it cannot
+        // outlive the server run and pin the Paper plugin classloader across a /reload.
+        this.saveExecutor.shutdown();
     }
 }

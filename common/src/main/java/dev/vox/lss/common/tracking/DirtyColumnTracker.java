@@ -32,6 +32,24 @@ public class DirtyColumnTracker {
         return result;
     }
 
+    /**
+     * Drain every dimension's pending dirty positions at once. Shutdown path: marks
+     * accumulated since the last broadcast interval must still invalidate the timestamp
+     * cache before its final save, or the persisted stamps answer false up_to_date for
+     * edited columns across the restart.
+     */
+    public synchronized Map<String, long[]> drainAll() {
+        Map<String, long[]> out = new HashMap<>();
+        for (var entry : dirtyColumns.entrySet()) {
+            if (entry.getValue().isEmpty()) continue;
+            long[] positions = entry.getValue().toLongArray();
+            entry.getValue().clear();
+            totalDrained += positions.length;
+            out.put(entry.getKey(), positions);
+        }
+        return out;
+    }
+
     /** Dirty positions accumulated and not yet drained, across all dimensions. */
     public synchronized int pendingCount() {
         int total = 0;

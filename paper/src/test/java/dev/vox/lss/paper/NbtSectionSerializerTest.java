@@ -424,8 +424,9 @@ class NbtSectionSerializerTest {
     // Twin of the Fabric NbtSectionSerializerTest corpus: the IDENTICAL deterministic
     // in-code chunk NBT cases, serialized by PaperNbtSectionSerializer and byte-compared
     // against identically-named fixtures in THIS module's src/test/resources/nbt-corpus/.
-    // The committed fabric and paper fixture copies are diffed for cross-module parity, so
-    // any byte drift between the two serializers (or across an MC version bump) fails.
+    // goldenCorpusIsByteIdenticalToTheFabricTwin diffs the committed fabric and paper
+    // fixture copies for cross-module parity, so any byte drift between the two
+    // serializers (or across an MC version bump regenerated per-module) fails here.
     //
     // Goldens are NEVER authored by hand. To (re)generate: run these tests with
     // -Dlss.regenGoldens=true on the test JVM (env LSS_REGEN_GOLDENS=true also works; with
@@ -454,6 +455,48 @@ class NbtSectionSerializerTest {
         }
         throw new IllegalStateException("cannot locate the paper module source tree from "
                 + Path.of("").toAbsolutePath() + " — the golden corpus reads/writes src/test/resources");
+    }
+
+    @Test
+    void goldenCorpusIsByteIdenticalToTheFabricTwin() throws IOException {
+        // The corpus exists for CROSS-MODULE parity, but each module's golden tests only
+        // self-compare against their OWN fixtures — and regeneration (-Dlss.regenGoldens)
+        // rewrites each module's fixtures from its own serializer. Without this test, an
+        // MC bump that makes the two serializers drift lets a developer regenerate both
+        // fixture sets and commit the divergence green; Fabric clients would then
+        // mis-decode Paper servers' disk-read columns.
+        Path paperDir = goldenPath("probe").getParent();
+        Path fabricDir = locateRepoRelative("fabric/src/test/resources/nbt-corpus");
+        java.util.Map<String, Path> paper = corpusFiles(paperDir);
+        java.util.Map<String, Path> fabric = corpusFiles(fabricDir);
+        assertEquals(fabric.keySet(), paper.keySet(),
+                "both modules must carry the same corpus cases");
+        assertFalse(paper.isEmpty(), "corpus must not be empty");
+        for (var entry : paper.entrySet()) {
+            long mismatch = Files.mismatch(entry.getValue(), fabric.get(entry.getKey()));
+            assertEquals(-1L, mismatch, () -> entry.getKey()
+                    + ": fabric and paper fixtures diverge at byte " + mismatch
+                    + " — the two serializers no longer produce identical wire bytes;"
+                    + " regenerate on BOTH modules from the same code state and fix the drift");
+        }
+    }
+
+    private static Path locateRepoRelative(String repoRelative) {
+        Path dir = Path.of("").toAbsolutePath();
+        for (int i = 0; i < 6 && dir != null; i++, dir = dir.getParent()) {
+            Path candidate = dir.resolve(repoRelative);
+            if (Files.exists(candidate)) return candidate;
+        }
+        throw new IllegalStateException("cannot locate " + repoRelative + " above "
+                + Path.of("").toAbsolutePath());
+    }
+
+    private static java.util.Map<String, Path> corpusFiles(Path dir) throws IOException {
+        try (var stream = Files.list(dir)) {
+            return stream.filter(f -> f.getFileName().toString().endsWith(".bin"))
+                    .collect(java.util.stream.Collectors.toMap(
+                            f -> f.getFileName().toString(), f -> f));
+        }
     }
 
     private static void assertMatchesGolden(String name, byte[] wire) throws IOException {

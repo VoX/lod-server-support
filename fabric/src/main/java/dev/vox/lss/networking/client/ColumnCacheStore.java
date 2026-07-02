@@ -18,10 +18,12 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 public class ColumnCacheStore {
     private static final Pattern SANITIZE_PATTERN = Pattern.compile("[^a-zA-Z0-9._-]");
-    private static final int FORMAT_VERSION = 3;
+    static final int FORMAT_VERSION = 4; // package-visible: corruption tests write real headers
     private static final int MAX_CACHE_ENTRIES = 2_000_000;
     private static final Path CACHE_DIR = FabricLoader.getInstance().getConfigDir().resolve("lss").resolve("cache");
     // Daemon thread — saves use atomic rename so JVM shutdown mid-write won't corrupt,
@@ -40,8 +42,12 @@ public class ColumnCacheStore {
 
         try (var in = new DataInputStream(Files.newInputStream(file))) {
             int version = in.readInt();
-            if (version != FORMAT_VERSION && version != 2 && version != 1) {
-                LSSLogger.warn("Column cache " + file + " has unsupported version " + version + ", discarding");
+            if (version != FORMAT_VERSION) {
+                // Pre-v4 caches may hold fabricated client-clock stamps that are
+                // indistinguishable from real server timestamps, so they are discarded rather
+                // than migrated (the cache is rebuildable; one cold resync after upgrade).
+                LSSLogger.info("Column cache " + file + " is v" + version + " (< v" + FORMAT_VERSION
+                        + "); discarding — timestamps rebuild on resync");
                 return map;
             }
             int count = in.readInt();
@@ -52,17 +58,9 @@ public class ColumnCacheStore {
             map.ensureCapacity(count);
             for (int i = 0; i < count; i++) {
                 long pos = in.readLong();
-                long value = in.readLong();
-                if (version == 2) {
-                    // v2: encoded as (timestamp << 8 | level) — strip level bits
-                    map.put(pos, value >> 8);
-                } else {
-                    // v1 and v3: raw timestamp
-                    map.put(pos, value);
-                }
+                map.put(pos, in.readLong()); // raw server timestamp
             }
-            String migration = version < FORMAT_VERSION ? " (migrated from v" + version + ")" : "";
-            LSSLogger.info("Loaded " + count + " cached column entries for " + dimensionKey(dimension) + migration);
+            LSSLogger.info("Loaded " + count + " cached column entries for " + dimensionKey(dimension));
         } catch (IOException e) {
             LSSLogger.warn("Failed to load column cache from " + file, e);
         }
@@ -104,6 +102,31 @@ public class ColumnCacheStore {
                 LSSLogger.warn("Failed to clean up temporary cache file " + tmpFile, e2);
             }
         }
+    }
+
+    /**
+     * Remove one position from a dimension's persisted cache on the IO thread. Used for a
+     * cross-dimension ingest-failure report: the failing column's stamp is already saved in the
+     * OTHER dimension's cache (the report arrived after the player changed dimension, so its
+     * in-memory state map is gone), and leaving it would answer a false up_to_date next time
+     * that dimension is visited. Unconditional (like the same-dimension unstamp): a legitimate
+     * re-serve since then just costs one harmless re-request on the next visit.
+     */
+    public static void removeAsync(String serverAddress, ResourceKey<Level> dimension, long packed) {
+        IO_EXECUTOR.execute(() -> {
+            var map = load(serverAddress, dimension); // reuses the FIFO IO thread's file access
+            if (map.remove(packed) == map.defaultReturnValue()) return; // wasn't present
+            if (map.isEmpty()) {
+                // save() skips empty maps, so delete the now-empty file directly.
+                try {
+                    Files.deleteIfExists(getCacheFile(serverAddress, dimension));
+                } catch (IOException e) {
+                    LSSLogger.warn("Failed to delete emptied column cache for " + dimensionKey(dimension), e);
+                }
+            } else {
+                save(serverAddress, dimension, map);
+            }
+        });
     }
 
     public static void clearForServer(String serverAddress) {
@@ -159,14 +182,34 @@ public class ColumnCacheStore {
         runIoAndWait(() -> {});
     }
 
+    /**
+     * Upper bound on how long a synchronous cache call ({@link #clearForServer},
+     * {@link #clearAll}, {@link #flushPendingIo}) blocks its caller — these run on the main
+     * client (render) thread via {@code /lss clearcache}. The clear contract only needs
+     * submit-side FIFO ordering (the task is queued behind in-flight saves on the single IO
+     * thread, so a queued save can never resurrect cleared files); an unbounded wait adds
+     * nothing but a client hard-freeze when the cache dir sits on a hung network/removable
+     * mount. Package-visible so tests can shrink it.
+     */
+    static volatile long ioWaitTimeoutMs = 30_000;
+
+    /** Test seam: occupy the single IO thread with an arbitrary task (e.g. a gate latch). */
+    static void runIoAsyncForTest(Runnable task) {
+        IO_EXECUTOR.execute(task);
+    }
+
     /** Run a cache IO task on the single IO thread and wait for it (serializes with saves/loads). */
     private static void runIoAndWait(Runnable task) {
+        var future = IO_EXECUTOR.submit(task);
         try {
-            IO_EXECUTOR.submit(task).get();
+            future.get(ioWaitTimeoutMs, TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         } catch (ExecutionException e) {
             LSSLogger.warn("Column cache IO task failed", e.getCause());
+        } catch (TimeoutException e) {
+            LSSLogger.warn("Column cache IO wait exceeded " + ioWaitTimeoutMs
+                    + "ms — abandoning the wait (the task stays queued on the IO thread)");
         }
     }
 

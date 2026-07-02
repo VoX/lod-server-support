@@ -61,7 +61,10 @@ public final class PaperPayloadHandler {
     }
 
     public static byte[] encodeBatchResponse(byte[] responseTypes, long[] packedPositions, int count) {
-        return encodeToBytes(buf -> {
+        // Exact size up front (1 byte type + 8 byte position per entry, +5 for the count
+        // VarInt): a full broadcast frame is ~37 KB, which from the default 256 bytes forces
+        // ~8 doubling reallocations + copies every flush tick.
+        return encodeToBytes(count * 9 + 5, buf -> {
             buf.writeVarInt(count);
             for (int i = 0; i < count; i++) {
                 buf.writeByte(responseTypes[i]);
@@ -96,7 +99,9 @@ public final class PaperPayloadHandler {
      */
     public static byte[] encodeDirtyColumns(long[] dirtyPositions) {
         int len = Math.min(dirtyPositions.length, LSSConstants.MAX_DIRTY_COLUMN_POSITIONS);
-        return encodeToBytes(buf -> {
+        // Exact size up front (8 bytes per position, +5 for the count VarInt): a full frame is
+        // ~82 KB, otherwise grown from 256 bytes by repeated doubling+copy every broadcast.
+        return encodeToBytes(len * 8 + 5, buf -> {
             buf.writeVarInt(len);
             for (int i = 0; i < len; i++) {
                 buf.writeLong(dirtyPositions[i]);

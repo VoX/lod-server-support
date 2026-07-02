@@ -50,7 +50,11 @@ class OffThreadProcessorDiskResultTest {
 
         final ConcurrentLinkedQueue<DiskSubmit> diskSubmits = new ConcurrentLinkedQueue<>();
         final ConcurrentLinkedQueue<EnqueuedColumn> enqueuedColumns = new ConcurrentLinkedQueue<>();
-        volatile boolean rejectEnqueue; // models the platform oversized-payload drop
+        volatile boolean rejectEnqueue; // blanket rejection (queue-full style)
+        // Mirrors the REAL platform guard: only payloads over the send limit bounce, so the
+        // 1-byte clearing column would be accepted — pins that no clear is fabricated for a
+        // rejected real column (the blanket flag above can't: it rejects the clear too).
+        volatile boolean rejectOversizedOnly;
 
         TestProcessor(Map<UUID, TestState> players, AbstractChunkDiskReader reader,
                       boolean generationAvailable) {
@@ -68,6 +72,7 @@ class OffThreadProcessorDiskResultTest {
                                                      long columnTimestamp, long submissionOrder,
                                                      byte[] sectionBytes, int estimatedBytes) {
             if (rejectEnqueue) return false;
+            if (rejectOversizedOnly && sectionBytes.length > LSSConstants.MAX_SEND_SECTIONS_SIZE) return false;
             enqueuedColumns.add(new EnqueuedColumn(state.getPlayerUUID(), cx, cz, dimension,
                     columnTimestamp, sectionBytes));
             return true;
@@ -252,6 +257,186 @@ class OffThreadProcessorDiskResultTest {
             drainUntil(rig.proc, received(u2, LSSConstants.RESPONSE_UP_TO_DATE, packed));
             assertEquals(1, rig.proc.diskSubmits.size(), "warm request must not submit another disk read");
             assertEquals(0, p2.getHeldSyncSlots(), "warm resolution must not consume a slot");
+        } finally {
+            rig.proc.shutdown();
+        }
+    }
+
+    @Test
+    void invalidationOvertakingAnInFlightReadSuppressesTheStaleStamp() throws Exception {
+        // A disk read races a chunk edit: the read captured PRE-edit bytes, and the edit's
+        // dirty invalidation is applied while the read is still in flight. Delivering the
+        // result must not re-stamp the timestamp cache or re-mark diskReadDone, or the
+        // client's dirty re-request draws a false up_to_date and the pre-edit terrain seals
+        // against both healing ladders (full-review finding: phase ordering in processCycle).
+        var rig = new Rig(false);
+        try {
+            rig.state.enqueue(new IncomingRequest(7, 7, -1L));
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
+            waitFor(() -> rig.proc.diskSubmits.size() == 1, "disk submit");
+
+            long packed = PositionUtil.packPosition(7, 7);
+            rig.proc.invalidateTimestamps(DIM, new long[]{packed});
+            rig.inject(dataResult(rig.uuid, 7, 7, DIM, new byte[]{1, 2}, COLUMN_TS, 1L));
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
+
+            // The column is still delivered (better than nothing)...
+            waitFor(() -> !rig.proc.enqueuedColumns.isEmpty(), "stale column still delivered");
+            assertFalse(rig.state.hasDiskReadDone(7, 7),
+                    "a stale-against-edit delivery must not set the done-bit");
+            assertEquals(0, rig.state.getHeldSyncSlots(), "delivery still frees the slot");
+
+            // ...and the dirty re-request at the delivered stamp re-reads the disk (which by
+            // now holds the post-edit bytes) instead of resolving up_to_date/duplicate.
+            rig.state.enqueue(new IncomingRequest(7, 7, COLUMN_TS));
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
+            waitFor(() -> rig.proc.diskSubmits.size() == 2, "dirty re-request re-reads the disk");
+        } finally {
+            rig.proc.shutdown();
+        }
+    }
+
+    @Test
+    void notFoundInvalidatesAStaleTimestampStamp() throws Exception {
+        // Region trimmed/deleted outside Minecraft: the position was served (and stamped)
+        // once, but disk now says not-found. Without invalidation the stale stamp answers
+        // up_to_date to data-claiming clients forever — the ghost terrain can never clear.
+        var rig = new Rig(false);
+        try {
+            long packed = PositionUtil.packPosition(12, 12);
+            rig.state.enqueue(new IncomingRequest(12, 12, -1L));
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
+            waitFor(() -> rig.proc.diskSubmits.size() == 1, "first disk submit");
+            rig.inject(dataResult(rig.uuid, 12, 12, DIM, new byte[]{1}, COLUMN_TS, 1L));
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
+            waitFor(() -> !rig.proc.enqueuedColumns.isEmpty(), "column served + stamped");
+
+            // The dirty pipeline reopens the position; the re-read finds the region gone.
+            rig.proc.clearDiskReadDone(rig.uuid, new long[]{packed});
+            rig.state.enqueue(new IncomingRequest(12, 12, COLUMN_TS - 1));
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
+            waitFor(() -> rig.proc.diskSubmits.size() == 2, "re-read submitted");
+            rig.inject(ChunkReadResult.empty(rig.uuid, 12, 12, DIM, 2L));
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
+            drainUntil(rig.proc, received(LSSConstants.RESPONSE_NOT_GENERATED, packed));
+
+            // A resync at the old stamp must RE-RESOLVE (stale stamp invalidated), not draw
+            // a false up_to_date for data that no longer exists.
+            rig.state.enqueue(new IncomingRequest(12, 12, COLUMN_TS));
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
+            waitFor(() -> rig.proc.diskSubmits.size() == 3,
+                    "the not-found position must re-read, not answer up_to_date");
+        } finally {
+            rig.proc.shutdown();
+        }
+    }
+
+    @Test
+    void oversizedResultForClaimsDataAnswersUpToDateNotClear() throws Exception {
+        // An enqueue REJECTION (oversized column) is not an all-air resolution: the server
+        // KNOWS real content exists there, so an authoritative clear would erase the client's
+        // stale-but-real terrain and seal fabricated air (the 1-byte clear passes the size
+        // guard the real column failed). The terminal answer is up_to_date — the client keeps
+        // what it has.
+        var rig = new Rig(false);
+        try {
+            rig.proc.rejectOversizedOnly = true;
+            rig.state.enqueue(new IncomingRequest(9, 9, COLUMN_TS)); // ts>0: claimsData resync
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
+            waitFor(() -> rig.proc.diskSubmits.size() == 1, "disk submit");
+
+            rig.inject(dataResult(rig.uuid, 9, 9, DIM,
+                    new byte[LSSConstants.MAX_SEND_SECTIONS_SIZE + 1], COLUMN_TS + 5, 1L));
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
+
+            long packed = PositionUtil.packPosition(9, 9);
+            drainUntil(rig.proc, received(rig.uuid, LSSConstants.RESPONSE_UP_TO_DATE, packed));
+            assertTrue(rig.proc.enqueuedColumns.isEmpty(),
+                    "no clearing column may be fabricated for a rejected real column");
+            assertTrue(rig.state.hasDiskReadDone(9, 9), "unserveable position resolves terminally");
+            assertEquals(0, rig.state.getHeldSyncSlots());
+        } finally {
+            rig.proc.shutdown();
+        }
+    }
+
+    @Test
+    void allAirResultForClaimsDataSendsClearingColumn() throws Exception {
+        // The WS3 server half, previously unpinned: a genuinely all-air resolution for a
+        // data-claiming resync client sends the authoritative 0-section column (carrying the
+        // server timestamp) so the client clears its ghost terrain.
+        var rig = new Rig(true);
+        try {
+            rig.proc.rejectOversizedOnly = true; // real-guard model: the clear must pass
+            rig.state.enqueue(new IncomingRequest(8, 8, COLUMN_TS));
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
+            waitFor(() -> rig.proc.diskSubmits.size() == 1, "disk submit");
+
+            rig.inject(allAirResult(rig.uuid, 8, 8, DIM, COLUMN_TS + 5, 1L));
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
+
+            waitFor(() -> !rig.proc.enqueuedColumns.isEmpty(), "clearing column enqueued");
+            var col = rig.proc.enqueuedColumns.poll();
+            assertArrayEquals(new byte[]{0x00}, col.bytes(), "authoritative clear = zero-section body");
+            assertEquals(COLUMN_TS + 5, col.columnTimestamp(), "clear carries the server timestamp");
+            assertTrue(rig.state.hasDiskReadDone(8, 8));
+            assertEquals(0, rig.state.getHeldSyncSlots());
+        } finally {
+            rig.proc.shutdown();
+        }
+    }
+
+    @Test
+    void oversizedGenerationOutcomeAnswersUpToDateNotClear() throws Exception {
+        var rig = new Rig(true);
+        try {
+            rig.proc.rejectOversizedOnly = true;
+            var ticket = escalateToGenTicket(rig, 4, 6);
+
+            byte[] oversized = new byte[LSSConstants.MAX_SEND_SECTIONS_SIZE + 1];
+            var data = new LoadedColumnData(4, 6, oversized,
+                    oversized.length + LSSConstants.ESTIMATED_COLUMN_OVERHEAD_BYTES);
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid), new ArrayList<>(List.of(
+                    new TickSnapshot.GenerationReadyData(rig.uuid, 4, 6, DIM, data,
+                            COLUMN_TS, ticket.submissionOrder()))));
+
+            long packed = PositionUtil.packPosition(4, 6);
+            drainUntil(rig.proc, received(rig.uuid, LSSConstants.RESPONSE_UP_TO_DATE, packed));
+            assertTrue(rig.proc.enqueuedColumns.isEmpty(),
+                    "no clearing column may be fabricated for a rejected generated column");
+            assertEquals(0, rig.state.getHeldGenSlots());
+        } finally {
+            rig.proc.shutdown();
+        }
+    }
+
+    @Test
+    void allAirGenerationOutcomeStampsTimestampCache() throws Exception {
+        // The generation all-air path previously skipped the timestamp stamp (the data path
+        // stamps inside enqueueLoadedColumn), so the same void column re-resolved every
+        // session instead of converging to a warm up_to_date.
+        var rig = new Rig(true);
+        try {
+            var ticket = escalateToGenTicket(rig, 4, 6);
+
+            var allAir = new LoadedColumnData(4, 6, null, 0);
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid), new ArrayList<>(List.of(
+                    new TickSnapshot.GenerationReadyData(rig.uuid, 4, 6, DIM, allAir,
+                            COLUMN_TS, ticket.submissionOrder()))));
+
+            long packed = PositionUtil.packPosition(4, 6);
+            drainUntil(rig.proc, received(rig.uuid, LSSConstants.RESPONSE_UP_TO_DATE, packed));
+            assertTrue(rig.proc.enqueuedColumns.isEmpty(), "gen requests (ts=0) never claim data");
+
+            // Warm resync at the stamped timestamp resolves without another disk read.
+            int diskBefore = rig.proc.diskSubmits.size();
+            var u2 = UUID.randomUUID();
+            var p2 = rig.addPlayer(u2);
+            p2.enqueue(new IncomingRequest(4, 6, COLUMN_TS));
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid, u2), List.of());
+            drainUntil(rig.proc, received(u2, LSSConstants.RESPONSE_UP_TO_DATE, packed));
+            assertEquals(diskBefore, rig.proc.diskSubmits.size(),
+                    "warm request must not submit another disk read");
         } finally {
             rig.proc.shutdown();
         }

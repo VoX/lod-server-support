@@ -19,8 +19,12 @@ import java.util.concurrent.ConcurrentHashMap;
 public class PaperOffThreadProcessor extends OffThreadProcessor<PaperPlayerRequestState> {
     private final PaperChunkDiskReader diskReader;
 
-    // Stored dimension strings for disk read submission. Grows but never prunes — acceptable because
-    // vanilla only has 3 permanent dimensions, and the map is cleared on shutdown.
+    // Maps a dimension id to its live ServerLevel for disk-read submission. Refreshed every
+    // tick (put, not putIfAbsent): a Paper world unloaded and recreated under the same name
+    // (Multiverse/arena resets) reuses the dimension id, so a stale putIfAbsent entry would
+    // aim every disk read at the dead world's closed ChunkMap (mass not-found). Cleared on
+    // shutdown. (Residual: a permanently-unloaded, never-recreated world's level stays until
+    // shutdown — bounded, and vanilla dimensions never unload.)
     private final ConcurrentHashMap<String, ServerLevel> dimensionLevelMap = new ConcurrentHashMap<>();
 
     public PaperOffThreadProcessor(Map<UUID, PaperPlayerRequestState> players,
@@ -33,7 +37,7 @@ public class PaperOffThreadProcessor extends OffThreadProcessor<PaperPlayerReque
     }
 
     public void updateDimensionContext(String dimension, ServerLevel level) {
-        this.dimensionLevelMap.putIfAbsent(dimension, level);
+        this.dimensionLevelMap.put(dimension, level);
     }
 
     @Override
@@ -56,10 +60,10 @@ public class PaperOffThreadProcessor extends OffThreadProcessor<PaperPlayerReque
                                                     String dimension,
                                                     long columnTimestamp, long submissionOrder,
                                                     byte[] sectionBytes, int estimatedBytes) {
-        if (sectionBytes.length > LSSConstants.MAX_SECTIONS_SIZE) {
+        if (sectionBytes.length > LSSConstants.MAX_SEND_SECTIONS_SIZE) {
             LSSLogger.warn("Dropping oversized column [" + cx + ", " + cz + "] in " + dimension
-                    + ": " + sectionBytes.length + " bytes exceeds wire limit "
-                    + LSSConstants.MAX_SECTIONS_SIZE + " (client decoder would reject it)");
+                    + ": " + sectionBytes.length + " bytes exceeds send limit "
+                    + LSSConstants.MAX_SEND_SECTIONS_SIZE + " (netty frame cap would kill the connection)");
             return false;
         }
         if (dimension.length() > LSSConstants.MAX_DIMENSION_STRING_LENGTH) {

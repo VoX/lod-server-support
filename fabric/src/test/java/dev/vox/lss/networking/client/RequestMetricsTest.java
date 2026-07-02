@@ -67,6 +67,27 @@ class RequestMetricsTest {
         assertEquals(2, m.getTotalSendCycles());
     }
 
+    @Test
+    void discardingDeadStampsRevivesRttSamplingAfterTheCapFills() {
+        var m = new RequestMetrics();
+        // Fill the pending-stamp map to its 4096 cap with sends that get a terminal non-column
+        // answer (up-to-date / not-generated) — their awaited column never arrives.
+        for (int i = 0; i < 4096; i++) m.recordRequestSent(i, 1000L);
+        // At the cap, a brand-new position cannot be stamped, so its receive records no sample.
+        m.recordRequestSent(999_999L, 1000L);
+        m.recordColumnReceived(999_999L, 1500L);
+        assertEquals(-1.0, m.getRttP50Ms(),
+                "premise: once the stamp cap fills, new sends are unstamped and RTT sampling dies");
+
+        // The manager now calls discardRttStamp on every up-to-date / not-generated answer.
+        for (int i = 0; i < 4096; i++) m.discardRttStamp(i);
+
+        m.recordRequestSent(999_999L, 2000L);
+        m.recordColumnReceived(999_999L, 2400L);
+        assertEquals(400.0, m.getRttP50Ms(),
+                "discarding dead stamps frees room so RTT sampling resumes for the session");
+    }
+
     // ---- RTT distribution (request->receive latency) ----
 
     @Test

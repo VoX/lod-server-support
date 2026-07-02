@@ -68,6 +68,46 @@ class ColumnStateMapTest {
         assertEquals(SATISFIED, map.classify(POS, true));
     }
 
+    // ---- sessionSatisfied: satisfied-without-a-stamp, dirty always wins (delivery-honesty) ----
+
+    @Test
+    void sessionSatisfiedClassifiesSatisfiedButDirtyStillWins() {
+        map.markSessionSatisfied(POS);
+        assertEquals(SATISFIED, map.classify(POS, true), "a session-satisfied position needs no request");
+        assertEquals(-1L, map.timestampFor(POS), "no timestamp is fabricated for a satisfied position");
+
+        // A dirty broadcast must outrank sessionSatisfied so an air->content edit re-requests.
+        assertTrue(map.markDirtyIfKnown(POS), "dirty fires for a session-satisfied position");
+        assertFalse(map.isSessionSatisfied(POS), "the dirty un-parks it");
+        assertEquals(-1L, map.classify(POS, true), "dirty outranks sessionSatisfied — re-request as first serve");
+    }
+
+    @Test
+    void staleInFlightRecordsAndResolvesOnce() {
+        map.noteStaleIfInFlight(POS, true);     // dirty crossed the in-flight first serve
+        assertTrue(map.resolveStale(POS), "a crossed-dirty position resolves stale exactly once");
+        assertFalse(map.resolveStale(POS), "the mark is consumed");
+
+        long other = PositionUtil.packPosition(9, 9);
+        map.noteStaleIfInFlight(other, false);  // not in flight -> no mark (dirty handled normally)
+        assertFalse(map.resolveStale(other));
+    }
+
+    @Test
+    void sessionSatisfiedIsClearedAndDistancePruned() {
+        long near = PositionUtil.packPosition(0, 0);
+        long far = PositionUtil.packPosition(1000, 1000);
+        map.markSessionSatisfied(near);
+        map.markSessionSatisfied(far);
+
+        map.pruneOutOfRange(0, 0, 32);
+        assertTrue(map.isSessionSatisfied(near), "in-range stays");
+        assertFalse(map.isSessionSatisfied(far), "out-of-range pruned so the set cannot grow unbounded");
+
+        map.clear();
+        assertFalse(map.isSessionSatisfied(near), "clear (reconnect/dimension change) empties it");
+    }
+
     @Test
     void dirtyOutranksValidation() {
         map.onReceived(POS, 5000L);
@@ -158,11 +198,14 @@ class ColumnStateMapTest {
     }
 
     @Test
-    void onUpToDateStampsAbsentPositions() {
+    void onUpToDateSatisfiesAbsentPositionsWithoutFabricatingAStamp() {
         map.onUpToDate(POS);
         assertEquals(SATISFIED, map.classify(POS, true),
                 "empty column (never sent data) must not be re-requested every scan");
-        assertEquals(1, map.receivedCount(), "stamped with a positive timestamp");
+        assertEquals(0, map.receivedCount(),
+                "no client-clock timestamp is fabricated — the position is session-satisfied");
+        assertEquals(-1L, map.timestampFor(POS), "timestamps stays honest (unknown)");
+        assertTrue(map.isSessionSatisfied(POS));
     }
 
     @Test
@@ -277,8 +320,10 @@ class ColumnStateMapTest {
         assertEquals(SATISFIED, map.classify(POS, true),
                 "a permanently failing consumer must not drive an endless re-serve loop");
         assertFalse(map.hasRetries(), "parking must not leave an unconsumable retry mark");
-        assertTrue(map.timestampFor(POS) > 0, "parked positions carry a satisfied epoch stamp");
-        assertEquals(1, map.receivedCount(), "park bookkeeping must keep counts consistent");
+        assertEquals(-1L, map.timestampFor(POS),
+                "park drops to unknown — no fabricated or retained >0 stamp to lie next session");
+        assertTrue(map.isSessionSatisfied(POS), "parked via session-satisfied, not a timestamp");
+        assertEquals(0, map.receivedCount(), "park bookkeeping keeps counts consistent (no stamp held)");
     }
 
     @Test
@@ -313,10 +358,62 @@ class ColumnStateMapTest {
                 "a stuck retry mark would pin confirmedRing at 0 for the whole session");
     }
 
+    // ---- rejected authoritative clear self-heals (WS3 completion, review #2/#3) ----
+
+    @Test
+    void rejectedClearReRequestsWithPreClearStampNotMinusOne() {
+        // Client held content at T_content=3000, then the server sent a 0-section clearing column
+        // at T_clear=5000 (content->air). The consumer rejected it. The re-request MUST carry the
+        // pre-clear stamp (3000, a real server-issued value < the server's cached clear stamp) so
+        // the up_to_date check fails and the server re-sends the clear. A ts=-1 re-request would
+        // instead draw an all-air up_to_date (the clear is only sent for claimsData/ts>0), leaving
+        // ghost terrain stranded for the whole session.
+        map.onReceived(POS, 3000L);              // pre-clear content
+        map.onReceived(POS, 5000L);              // the clearing column overwrites the stamp
+        map.markAuthoritativeClear(POS, 3000L);  // networking flags this delivery as a 0-section clear
+
+        map.onIngestFailed(POS);                 // consumer rejects the clear
+
+        assertEquals(3000L, map.classify(POS, true),
+                "a rejected clear re-requests with the pre-clear content stamp, not ts=-1");
+        assertTrue(map.hasRetries(), "retry mark forces the confirmed-ring reset so it is rescanned");
+    }
+
+    @Test
+    void contentSupersedesAPendingClearFlag() {
+        map.onReceived(POS, 5000L);
+        map.markAuthoritativeClear(POS, 3000L);
+        map.onReceived(POS, 7000L);   // real content arrives AFTER the clear flag — supersedes it
+
+        map.onIngestFailed(POS);      // now this is a plain content rejection
+
+        assertEquals(-1L, map.classify(POS, true),
+                "once real content supersedes the clear flag, a rejection re-requests as content (ts=-1)");
+    }
+
+    @Test
+    void repeatedlyRejectedClearParksAtCap() {
+        for (int i = 0; i < ColumnStateMap.MAX_INGEST_FAILURES; i++) {
+            map.onReceived(POS, 5000L + i);          // server re-sends the clear
+            map.markAuthoritativeClear(POS, 3000L);
+            map.onIngestFailed(POS);
+            assertEquals(3000L, map.classify(POS, true),
+                    "clear failure " + (i + 1) + " re-requests with the pre-clear stamp");
+        }
+        map.onReceived(POS, 9000L);
+        map.markAuthoritativeClear(POS, 3000L);
+        map.onIngestFailed(POS); // cap exceeded
+
+        assertEquals(SATISFIED, map.classify(POS, true),
+                "a permanently rejected clear must not drive an endless re-clear loop");
+        assertTrue(map.isSessionSatisfied(POS), "parked via session-satisfied");
+    }
+
     @Test
     void clearResetsEverything() {
         map.onReceived(POS, 100L);
         map.markRetry(POS);
+        map.markAuthoritativeClear(POS, 50L);
         map.clear();
         assertEquals(0, map.receivedCount());
         assertEquals(0, map.emptyCount());
@@ -395,50 +492,46 @@ class ColumnStateMapTest {
     }
 
     @Test
-    void dirtyHealsIngestParkedPositionForExactlyOneAttempt() {
+    void dirtyUnparksAnIngestParkedPositionSoItReRequests() {
         parkViaIngestFailures(POS);
-        long parkStamp = map.timestampFor(POS);
-        assertTrue(parkStamp > 0);
+        assertEquals(-1L, map.timestampFor(POS), "park holds no fabricated stamp");
 
-        assertTrue(map.markDirtyIfKnown(POS), "a dirty broadcast reaches the parked stamp");
-        assertEquals(parkStamp, map.classify(POS, true), "exactly one re-request, with the park stamp");
+        // A dirty broadcast (content changed there) must un-park it so it re-requests as a
+        // first serve — not stay SATISFIED forever (the air->content permanent hole).
+        assertTrue(map.markDirtyIfKnown(POS), "dirty reaches a session-satisfied parked position");
+        assertFalse(map.isSessionSatisfied(POS), "un-parked");
+        assertEquals(-1L, map.classify(POS, true), "re-requests as a first serve (no fabricated stamp)");
+
+        // The re-served content resolves it honestly with the real server stamp.
         map.markSent(POS);
-        assertEquals(SATISFIED, map.classify(POS, true), "the single heal attempt is consumed at send");
-
         map.onReceived(POS, 9000L);
-        map.onIngestFailed(POS); // the consumer still rejects the re-served content
-        assertEquals(SATISFIED, map.classify(POS, true),
-                "the failure count survived the park: one more report re-parks immediately, no second loop");
-        assertFalse(map.hasRetries(), "the immediate re-park must not leave an unconsumable retry mark");
+        assertEquals(SATISFIED, map.classify(POS, true), "resolved with the server stamp");
+        assertEquals(9000L, map.timestampFor(POS));
+        assertFalse(map.hasRetries(), "no unconsumable retry mark left behind");
     }
 
     @Test
-    void ingestParkStampPersistsToCacheAndRevalidatesNextSession() {
+    void ingestParkDoesNotPersistAFalseStampAndReAsksNextSession() {
         var dim = ResourceKey.create(Registries.DIMENSION, Identifier.parse("lss_test:park_persist"));
         final String server = "test-park-persist";
         try {
             parkViaIngestFailures(POS);
-            long parkStamp = map.timestampFor(POS);
+            assertEquals(-1L, map.timestampFor(POS), "park holds no stamp");
+            assertFalse(map.mapForSave().containsKey(POS),
+                    "a parked position must not persist a fabricated stamp (the permanent-hole bug)");
 
             ColumnCacheStore.save(server, dim, map.mapForSave()); // the disconnect saveCache path
 
             var next = new ColumnStateMap(); // fresh session
             next.loadFrom(ColumnCacheStore.load(server, dim));
-            assertEquals(parkStamp, next.timestampFor(POS), "the park stamp (>0) must survive the cache roundtrip");
-            assertEquals(parkStamp, next.classify(POS, true),
-                    "next session revalidates the parked position once (resync with the park stamp)");
-
-            // Content unchanged since the park: the server answers up-to-date and it stays settled.
-            next.markSent(POS);
-            next.onUpToDate(POS);
-            assertEquals(SATISFIED, next.classify(POS, true));
-
-            // Content changed instead: the re-serve gives the consumer a fresh chance, because
-            // the failure count is session state and did NOT persist with the stamp.
-            next.onReceived(POS, parkStamp + 100);
-            next.onIngestFailed(POS);
+            assertEquals(-1L, next.timestampFor(POS), "next session holds nothing for the parked position");
             assertEquals(-1L, next.classify(POS, true),
-                    "the reloaded map gets a fresh failure cap — a persisted count would insta-park here");
+                    "next session re-asks honestly (-1), never a false up-to-date");
+
+            // The re-serve gives the consumer a fresh chance; a transient failure heals.
+            next.markSent(POS);
+            next.onReceived(POS, 6000L);
+            assertEquals(SATISFIED, next.classify(POS, true), "transient failure heals next session");
         } finally {
             ColumnCacheStore.clearForServer(server);
         }
@@ -492,14 +585,13 @@ class ColumnStateMapTest {
         map.markSent(genPos);
         assertEquals(SATISFIED, map.classify(genPos, false), "the consumed retry re-parks the gen-disabled stamp");
 
-        // retry × parked: a bounce on a parked position re-asks exactly once with the park stamp.
+        // retry × parked: a parked position is session-satisfied (never in-flight), so a stray
+        // retry mark cannot resurrect it — it heals via dirty or next session, not a bounce.
         long parked = PositionUtil.packPosition(3, 3);
         parkViaIngestFailures(parked);
-        long parkStamp = map.timestampFor(parked);
         map.markRetry(parked);
-        assertEquals(parkStamp, map.classify(parked, true), "the retry mark re-asks the parked stamp once");
-        map.markSent(parked);
-        assertEquals(SATISFIED, map.classify(parked, true), "...and the park holds afterwards");
+        assertEquals(SATISFIED, map.classify(parked, true),
+                "sessionSatisfied outranks a spurious retry mark on a parked position");
     }
 
     @Test

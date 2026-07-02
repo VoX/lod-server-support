@@ -51,6 +51,17 @@ class ColumnTimestampCacheTest {
     }
 
     @Test
+    void invalidateReturnsRemovedCount() {
+        cache.put(LSSConstants.DIM_STR_OVERWORLD, 1L, 100L, now);
+        cache.put(LSSConstants.DIM_STR_OVERWORLD, 2L, 200L, now);
+        assertEquals(2, cache.invalidate(LSSConstants.DIM_STR_OVERWORLD, new long[]{1L, 2L, 3L}),
+                "returns the count actually removed (3L was never cached)");
+        assertEquals(0, cache.invalidate(LSSConstants.DIM_STR_OVERWORLD, new long[]{1L}),
+                "already-removed positions count zero — the debounced save trips only on a real removal");
+        assertEquals(0, cache.invalidate("lss_test:absent", new long[]{1L}), "unknown dimension removes nothing");
+    }
+
+    @Test
     void invalidateCleansInsertionTimeToo() {
         cache.put(LSSConstants.DIM_STR_OVERWORLD, 1L, 100L, now);
         cache.invalidate(LSSConstants.DIM_STR_OVERWORLD, new long[]{1L});
@@ -73,9 +84,12 @@ class ColumnTimestampCacheTest {
 
     @Test
     void mbToEntriesConversion() {
-        // 1 MB = 1048576 bytes / 16 bytes per entry = 65536
-        assertEquals(65536, ColumnTimestampCache.mbToEntries(1));
-        assertEquals(65536 * 32, ColumnTimestampCache.mbToEntries(32));
+        // 1 MB = 1048576 bytes / 64 bytes LIVE HEAP per entry = 16384. The divisor models
+        // real heap (two Long2LongOpenHashMap slots at 0.75 load factor + pow2 overshoot),
+        // not the 16-byte disk record — the old divisor made the configured MB cap mean
+        // 3-5x more RAM than the admin asked for.
+        assertEquals(16384, ColumnTimestampCache.mbToEntries(1));
+        assertEquals(16384 * 32, ColumnTimestampCache.mbToEntries(32));
     }
 
     // ---- Size-based eviction ----
@@ -275,12 +289,15 @@ class ColumnTimestampCacheTest {
     }
 
     @Test
-    void loadOversizedEntryCountIsDiscarded(@TempDir Path tempDir) throws IOException {
+    void loadOverCapButFileValidCountLoadsThenIsEvictable(@TempDir Path tempDir) throws IOException {
+        // 6 real entries with a cap of 5: this is a LEGITIMATE overshoot (save()/snapshotForSave
+        // never evict, so a file can hold more than the cap). It must load — not be discarded as
+        // corrupt — and the normal eviction pass then trims it back to the cap.
         try (var out = cacheFileOut(tempDir)) {
             out.writeInt(1);
             out.writeInt(1);
             out.writeUTF(LSSConstants.DIM_STR_OVERWORLD);
-            out.writeInt(6); // exceeds maxEntriesPerDimension below — treated as corrupt
+            out.writeInt(6);
             for (int i = 0; i < 6; i++) {
                 out.writeLong(i); out.writeLong(i * 100L);
             }
@@ -288,7 +305,26 @@ class ColumnTimestampCacheTest {
 
         var small = new ColumnTimestampCache(5);
         assertDoesNotThrow(() -> small.load(tempDir));
-        assertEquals(0, small.size(), "a count beyond the cache bound must not allocate/load");
+        assertEquals(6, small.size(), "a valid over-cap count must load, not be discarded");
+        assertEquals(1, small.evictIfOversized(), "the next eviction pass trims the overshoot");
+        assertEquals(5, small.size());
+    }
+
+    @Test
+    void loadEntryCountBeyondFileContentsIsDiscarded(@TempDir Path tempDir) throws IOException {
+        // A count larger than the file can physically hold is real corruption (the stream would
+        // desync into the next dimension), so the rest is discarded.
+        try (var out = cacheFileOut(tempDir)) {
+            out.writeInt(1);
+            out.writeInt(1);
+            out.writeUTF(LSSConstants.DIM_STR_OVERWORLD);
+            out.writeInt(1_000_000); // file holds only a handful of entries
+            out.writeLong(1L); out.writeLong(100L);
+        }
+
+        var loaded = new ColumnTimestampCache(DEFAULT_MAX);
+        assertDoesNotThrow(() -> loaded.load(tempDir));
+        assertEquals(0, loaded.size(), "an impossible count must not allocate/load");
     }
 
     @Test
@@ -362,8 +398,10 @@ class ColumnTimestampCacheTest {
         Files.writeString(blocker, "x");
         cache.put(LSSConstants.DIM_STR_OVERWORLD, 1L, 100L, now);
         assertDoesNotThrow(() -> cache.save(blocker), "the IO failure is swallowed, not thrown");
-        assertFalse(Files.exists(blocker.resolve("lss-timestamps.bin.tmp")),
-                "the half-written temp file is cleaned up / never created");
+        try (var files = Files.list(tempDir)) {
+            assertTrue(files.noneMatch(f -> f.getFileName().toString().startsWith("lss-timestamps.bin.tmp")),
+                    "the half-written temp file is cleaned up / never created");
+        }
     }
 
     @Test

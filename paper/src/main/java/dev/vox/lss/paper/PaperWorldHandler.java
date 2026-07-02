@@ -9,12 +9,14 @@ import org.bukkit.block.BlockState;
 import org.bukkit.event.Event;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
+import org.bukkit.event.block.BlockPistonEvent;
+import org.bukkit.event.block.BlockPistonExtendEvent;
+import org.bukkit.event.block.BlockPistonRetractEvent;
 import org.bukkit.plugin.Plugin;
 
 import java.lang.reflect.Method;
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.Optional;
 
 /**
  * Registers configurable Bukkit event listeners for dirty chunk detection.
@@ -24,9 +26,21 @@ import java.util.concurrent.ConcurrentHashMap;
 public class PaperWorldHandler {
     private final Plugin plugin;
     private final DirtyColumnTracker dirtyTracker;
-    private final Map<String, Method> eventMethods = new ConcurrentHashMap<>();
-    private final java.util.Set<String> noMethodClasses = ConcurrentHashMap.newKeySet();
     private final Listener dummyListener = new Listener() {};
+
+    /**
+     * Per-class extractor cache. Keyed by the runtime {@link Class} object via ClassValue
+     * (which does not pin the classloader): after a plugin hot-reload, the same-named event
+     * class is a fresh Class and gets its own discovery pass — a name-keyed cache returned
+     * the OLD class's Method, which throws IllegalArgumentException on every new-loader
+     * instance and silently killed that event's dirty marks. Empty = no extractor.
+     */
+    private static final ClassValue<Optional<Method>> EXTRACTORS = new ClassValue<>() {
+        @Override
+        protected Optional<Method> computeValue(Class<?> type) {
+            return Optional.ofNullable(discoverMethod(type));
+        }
+    };
 
     public PaperWorldHandler(Plugin plugin, DirtyColumnTracker dirtyTracker) {
         this.plugin = plugin;
@@ -56,14 +70,15 @@ public class PaperWorldHandler {
     }
 
     private void handleUpdateEvent(Event event) {
-        String className = event.getClass().getName();
-        if (noMethodClasses.contains(className)) return;
-        Method method = eventMethods.get(className);
-        if (method == null) {
-            method = discoverMethod(event.getClass());
-            if (method == null) { noMethodClasses.add(className); return; }
-            eventMethods.put(className, method);
+        if (event instanceof BlockPistonEvent piston) {
+            // Special-cased: the generic ladder reads getBlocks() — the moved blocks'
+            // SOURCE positions only — missing the destination chunk of a cross-border push
+            // and marking nothing at all for a bare piston (empty list).
+            submitPistonEvent(piston);
+            return;
         }
+        Method method = EXTRACTORS.get(event.getClass()).orElse(null);
+        if (method == null) return;
 
         try {
             Object result = method.invoke(event);
@@ -75,8 +90,39 @@ public class PaperWorldHandler {
                 submitFromObject(result);
             }
         } catch (Exception e) {
-            LSSLogger.debug("Failed to extract position from " + className, e);
+            LSSLogger.debug("Failed to extract position from " + event.getClass().getName(), e);
         }
+    }
+
+    /**
+     * Marks the piston's own chunk, both piston neighbors (the head appears on extend /
+     * vanishes on retract next to the base, and getDirection() is the blocks' motion
+     * direction on the moved-blocks fire but the piston FACING on Paper's empty-retract
+     * fires — both sides covers either convention), and each moved block's source and
+     * destination chunk. The tracker dedups repeats.
+     */
+    private void submitPistonEvent(BlockPistonEvent event) {
+        Block piston = event.getBlock();
+        String pistonDimension = piston.getWorld().getKey().toString();
+        int dx = event.getDirection().getModX();
+        int dz = event.getDirection().getModZ();
+        markBlockDirty(pistonDimension, piston.getX(), piston.getZ());
+        markBlockDirty(pistonDimension, piston.getX() + dx, piston.getZ() + dz);
+        markBlockDirty(pistonDimension, piston.getX() - dx, piston.getZ() - dz);
+        List<Block> moved = switch (event) {
+            case BlockPistonExtendEvent extend -> extend.getBlocks();
+            case BlockPistonRetractEvent retract -> retract.getBlocks();
+            default -> List.<Block>of();
+        };
+        for (Block block : moved) {
+            String dimension = block.getWorld().getKey().toString();
+            markBlockDirty(dimension, block.getX(), block.getZ());
+            markBlockDirty(dimension, block.getX() + dx, block.getZ() + dz);
+        }
+    }
+
+    private void markBlockDirty(String dimension, int blockX, int blockZ) {
+        dirtyTracker.markDirty(dimension, blockX >> 4, blockZ >> 4);
     }
 
     private void submitFromObject(Object obj) {
@@ -95,12 +141,15 @@ public class PaperWorldHandler {
 
     /**
      * DH-style method discovery. Try methods in order:
-     * blockList(), getBlocks(), getBlock(), getLocation(), getChunk().
-     * Keyed on the event's runtime class. Package-visible so tests can assert every
+     * blockList(), getBlocks(), getReplacedBlockStates(), getBlock(), getLocation(), getChunk().
+     * getReplacedBlockStates precedes getBlock so BlockMultiPlaceEvent (bed/door halves,
+     * possibly spanning a chunk border) marks every placed position, not just the clicked
+     * block. Keyed on the event's runtime class. Package-visible so tests can assert every
      * default updateEvents class yields an extractor (not just that it resolves).
      */
     static Method discoverMethod(Class<?> clazz) {
-        for (String name : new String[]{"blockList", "getBlocks", "getBlock", "getLocation", "getChunk"}) {
+        for (String name : new String[]{
+                "blockList", "getBlocks", "getReplacedBlockStates", "getBlock", "getLocation", "getChunk"}) {
             try {
                 Method m = clazz.getMethod(name);
                 m.setAccessible(true);

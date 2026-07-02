@@ -46,6 +46,11 @@ dependencies {
 
 test {
     useJUnitPlatform()
+    // GameTestEntrypointContractTest reads these at runtime (repo-walk); without declaring
+    // them as inputs, adding a gametest class or editing the entrypoint list leaves the
+    // task UP-TO-DATE locally and the contract never re-checks.
+    inputs.dir("src/gametest/java").withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.file("src/gametest/resources/fabric.mod.json").withPathSensitivity(PathSensitivity.RELATIVE)
 }
 
 fabricApi {

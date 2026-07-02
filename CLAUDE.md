@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-LOD Server Support (LSS) — distributes LOD chunk data from servers to clients over a custom networking protocol. Supports both Fabric (client + server) and Paper (server only). Clients request distant chunks individually; the server reads them from disk or memory and streams serialized sections back, enabling LOD rendering mods to display terrain beyond vanilla render distance.
+LOD Server Support (LSS) — distributes LOD chunk data from servers to clients over a custom networking protocol. Supports Fabric (client + server) and Paper/Folia (server only — one plugin jar, `folia-supported: true`; Folia is experimental: single-player soak validated, concurrent multi-region ingress untested — the exit criterion for dropping the label). Clients request distant chunks individually; the server reads them from disk or memory and streams serialized sections back, enabling LOD rendering mods to display terrain beyond vanilla render distance.
 
 ## Project Structure
 
@@ -14,7 +14,7 @@ Multi-project Gradle build with three subprojects:
 lod-server-support/
 ├── common/   Pure Java utilities (no MC deps) — shared by fabric/ and paper/
 ├── fabric/   Fabric mod (client + server), Minecraft 26.1.2
-└── paper/    Paper plugin (server only), Minecraft 26.1.2
+└── paper/    Paper/Folia plugin (server only), Minecraft 26.1.2
 ```
 
 ## Build Commands
@@ -27,7 +27,7 @@ lod-server-support/
 
 Output JARs:
 - `fabric/build/libs/lod-server-support-fabric.jar` — Fabric mod (client + server)
-- `paper/build/libs/lod-server-support-paper.jar` — Paper plugin (server only, shadow JAR)
+- `paper/build/libs/lod-server-support-paper.jar` — Paper/Folia plugin (server only, shadow JAR; one artifact serves Paper, Purpur, and Folia via `folia-supported: true`)
 
 CI builds (env `CI=true`) name the jars `lod-server-support-<platform>-<mod_version>+<minecraft_version>.jar` (e.g. `lod-server-support-fabric-0.4.0+26.1.2.jar`); the release workflow feeds `mod_version` from the tag. Local dev builds keep the stable unversioned names.
 
@@ -42,15 +42,29 @@ CI builds (env `CI=true`) name the jars `lod-server-support-<platform>-<mod_vers
 ./gradlew :paper:test                                       # Paper JUnit tests (wire parity, NBT serialization, config)
 ```
 
-Most tests live in the Fabric module. Paper has Tier 1 JUnit tests as well (`./gradlew :paper:test`, ~209 tests) — Fabric/Paper wire parity, payload edge frames, NBT section serialization (incl. a golden cross-module byte corpus + live-vs-NBT parity), the shared handshake gate, config validation + malformed-file tolerance, world-handler event reflection, the request-service / broadcaster / generation-service / disk-reader twins driven through injection seams, plugin enable-plan/dispatch/handshake glue + plugin.yml contract, exporter schema parity, and command output. Paper runtime behavior is validated live by the Paper soak harness (`SOAK_PLATFORM=paper ./scripts/soak.sh all` — fresh-backfill, warm-rejoin, dimension-trip, paper-dirty-falling-block against a real Paper server).
+Most tests live in the Fabric module. Paper has Tier 1 JUnit tests as well (`./gradlew :paper:test`, ~222 tests; also run by CI) — Fabric/Paper wire parity, payload edge frames, NBT section serialization (incl. a golden cross-module byte corpus + live-vs-NBT parity), the shared handshake gate, config validation + malformed-file tolerance, world-handler event reflection, the request-service / broadcaster / generation-service / disk-reader twins driven through injection seams, plugin enable-plan/dispatch/handshake glue + plugin.yml contract (incl. `folia-supported: true`), the Folia seams (lifecycle mailbox incl. foreign-thread visibility, the `FoliaSupport` platform probe, the soak driver's save-all mapping, the generation completion-thread extraction ladder), `FoliaWiringContractTest` (constant-pool scan of every production class, nested classes included: no legacy-scheduler references, lifecycle routed through the mailbox), exporter schema parity, and command output. Paper runtime behavior is validated live by the soak harness on both Bukkit platforms (`SOAK_PLATFORM=paper` / `SOAK_PLATFORM=folia ./scripts/soak.sh all` — fresh-backfill, warm-rejoin, dimension-trip, paper-dirty-falling-block against a real Paper / Folia server).
 
 ### Test Architecture
 
-- **Tier 1** (`fabric/src/test/java/dev/vox/lss/`, ~536 tests): JUnit 5 tests via `fabric-loader-junit`. Tests position packing, bandwidth limiter, config validation + GSON whole-file-fallback semantics, column cache store (migration / path-sanitization / oversize), column state map, in-flight tracker, request queue, column timestamp cache (per-dimension isolation / eviction age / save atomicity), dirty tracking and content filtering (fail-open + zero-hash sentinel), slot admission and the off-thread processor mailbox (incl. same-UUID re-registration survival), payload codecs + protocol-constant envelope, Fabric/Paper wire parity, NBT section serialization + a golden cross-module byte corpus + section-light defaults, negative/oversized payload edge cases, the LodRequestManager request-loop contract (untracked-response gates, dimension guard, drain non-starvation, ingest-failure unstamping, send-failure mark-restoration, tick decomposition, RTT distribution), the extracted client `ClientSessionGate` (handshake/session-config/disconnect ladder), `ClientColumnProcessor` decode drain (silent-clear paths report through ingest-failure), the reflective Voxy bridge (full report/latch/rethrow ladder, stubbed), spiral-scanner budget scaling and retry reset, IncomingRequestRouter conservation + clientTimestamp routing + the honest re-resolution ladder + clock-skew, cross-player dedup fan-out, the disk-reader submit envelope + late-delivery drop + bounded shutdown, OffThreadProcessor disk-result delivery and lifecycle, send-action batching, the shared HandshakeGate ladder, client column decode + LSSApi dispatch, the data-capture exporter schema contracts (both platforms), DiagnosticsFormatter golden lines, column cache v1/v2 migration, and malformed-config-file tolerance.
-- **Tier 2** (`fabric/src/gametest/java/dev/vox/lss/test/`): 55 Fabric server gametests across 7 classes (all listed in the `fabric-gametest` entrypoint of `fabric/src/gametest/resources/fabric.mod.json` — a new class MUST be added there or it compiles but never runs) — `LSSGameTests` (service activation, diagnostics, command registration, config loading), `ServiceLifecycleGameTests` (player registration/cleanup, in-memory probe without dirty-filter seeding, batch-request distance guards incl. extreme-coord overflow safety, idempotent shutdown), `SerializerParityGameTests` (disk-read vs live serializer byte parity, DirtyContentFilter re-save suppression, End-void all-air sentinel), `GenerationLifecycleGameTests` (generation caps/piggybacking/timeouts, dimension-change re-registration), `CommandGameTests` (`/lsslod` permission gating + stats/diag dispatch rendering + exporter/formatter agreement), `TwoPlayerGameTests` (two-player dedup convergence, bandwidth fairness + idle dilution, vanilla-player-without-handshake invisibility, edited-column broadcast fan-out to two holders), `RegionFaultGameTests` (corrupt-region containment: garbage-zlib resolves not-found, the read pool survives). The in-game runner additionally counts vanilla's built-in `minecraft:always_pass` test instance.
+- **Tier 1** (`fabric/src/test/java/dev/vox/lss/`, ~570 tests): JUnit 5 tests via `fabric-loader-junit`. Tests position packing, bandwidth limiter, config validation + GSON whole-file-fallback semantics, column cache store (pre-v4 discard / path-sanitization / oversize / corruption guards), column state map, in-flight tracker, request queue, column timestamp cache (per-dimension isolation / eviction age / save atomicity), dirty tracking and content filtering (fail-open + zero-hash sentinel), slot admission and the off-thread processor mailbox (incl. same-UUID re-registration survival), payload codecs + protocol-constant envelope, Fabric/Paper wire parity, NBT section serialization + a golden cross-module byte corpus + section-light defaults, negative/oversized payload edge cases, the LodRequestManager request-loop contract (untracked-response gates, dimension guard, drain non-starvation, ingest-failure unstamping, send-failure mark-restoration, tick decomposition, RTT distribution), the extracted client `ClientSessionGate` (handshake/session-config/disconnect ladder), `ClientColumnProcessor` decode drain (silent-clear paths report through ingest-failure), the reflective Voxy bridge (full report/latch/rethrow ladder, stubbed), spiral-scanner budget scaling and retry reset, IncomingRequestRouter conservation + clientTimestamp routing + the honest re-resolution ladder + clock-skew, cross-player dedup fan-out, the disk-reader submit envelope + late-delivery drop + bounded shutdown, OffThreadProcessor disk-result delivery and lifecycle, send-action batching, the shared HandshakeGate ladder, client column decode + LSSApi dispatch, the data-capture exporter schema contracts (both platforms), DiagnosticsFormatter golden lines, the column cache pre-v4 discard-not-migrate gate, the VoxelColumn receiver glue (held-before ordering + authoritative 0-section clears), the gametest-entrypoint listing contract, and malformed-config-file tolerance.
+- **Tier 2** (`fabric/src/gametest/java/dev/vox/lss/test/`): 55 Fabric server gametests across 7 classes (all listed in the `fabric-gametest` entrypoint of `fabric/src/gametest/resources/fabric.mod.json` — a new class MUST be added there or it compiles but never runs; `GameTestEntrypointContractTest` in Tier 1 enforces the listing) — `LSSGameTests` (service activation, diagnostics, command registration, config loading), `ServiceLifecycleGameTests` (player registration/cleanup, in-memory probe without dirty-filter seeding, batch-request distance guards incl. extreme-coord overflow safety, idempotent shutdown), `SerializerParityGameTests` (disk-read vs live serializer byte parity, DirtyContentFilter re-save suppression, End-void all-air sentinel), `GenerationLifecycleGameTests` (generation caps/piggybacking/timeouts, dimension-change re-registration), `CommandGameTests` (`/lsslod` permission gating + stats/diag dispatch rendering + exporter/formatter agreement), `TwoPlayerGameTests` (two-player dedup convergence, bandwidth fairness + idle dilution, vanilla-player-without-handshake invisibility, edited-column broadcast fan-out to two holders), `RegionFaultGameTests` (corrupt-region containment: garbage-zlib resolves not-found, the read pool survives). The in-game runner additionally counts vanilla's built-in `minecraft:always_pass` test instance.
 - **Tier 3** (`fabric/src/gametest/java/dev/vox/lss/test/LSSClientGameTests.java`): End-to-end client-server flow test. Validates handshake, session config, spiral scanning, chunk section receipt, decoded section content asserted at a registered `LSSApi` consumer (flat-world block layers, off-render-thread dispatch), and the ingest-failure recovery loop (a consumer rejecting a column — by `LSSApi.reportIngestFailure` or by throwing — gets it re-served end-to-end). Fabric Loom handles headless rendering automatically.
 
 The system property `-Dlss.test.integratedServer=true` (set in fabric/build.gradle for gametest JVMs) allows `RequestProcessingService` to activate on integrated servers during testing.
+
+## Local Test Servers (manual play)
+
+```bash
+./test-server.sh              # set up + run all three: Fabric :25565, Paper :25566, Folia :25567
+./test-server.sh run-folia    # one platform only (also run-fabric, run-paper)
+./test-server.sh update       # rebuild + reinstall the LSS jars into all three (restart to apply)
+./test-server.sh clean        # delete test-server/
+```
+
+Downloads real server jars (Fabric launcher; Paper/Folia latest stable via fill.papermc.io),
+installs the built LSS jars (Folia gets the same Paper plugin jar), and stages
+offline-mode config under `test-server/<platform>/`. For joining with a real client and
+eyeballing LOD behavior — the automated gates are the test tiers and the soak harness above.
 
 ## Architecture
 
@@ -110,19 +124,20 @@ Chunk coordinates are packed as `((long)chunkX << 32) | (chunkZ & 0xFFFFFFFFL)`.
 
 ### Paper Server-Side (`paper/`)
 
-- `PaperRequestProcessingService` — same orchestration as Fabric, sends via Plugin Messaging instead of Fabric networking
+- `PaperRequestProcessingService` — same orchestration as Fabric, sends via Plugin Messaging instead of Fabric networking; ticks on the GlobalRegionScheduler pump (main thread on Paper, the global-region thread on Folia) and drains a cross-thread lifecycle mailbox (`enqueueRegister`/`enqueueRemove` — handshakes and quits arrive on region threads on Folia) at the top of `tick()`
 - `PaperPlayerRequestState` — per-player state adapted for `byte[]` payloads instead of `CustomPacketPayload`
 - `PaperChunkDiskReader` — async disk reader using direct NMS `ChunkMap` access (no mixin needed)
 - `PaperOffThreadProcessor` — extends `OffThreadProcessor`; same main-thread/off-thread split as Fabric
 - `PaperSectionSerializer` — Paper-side serializer using NMS `LevelChunkSection.write(buf)` + light data
 - `PaperNbtSectionSerializer` — parses region file NBT into `LevelChunkSection` objects, then serializes them (used by `PaperChunkDiskReader`)
-- `PaperChunkGenerationService` — async chunk generation via Paper's `World.getChunkAtAsync()` API, auto-triggered on disk-read "not found"
+- `PaperChunkGenerationService` — async chunk generation via Paper's `World.getChunkAtAsync()` API, auto-triggered on disk-read "not found"; serializes the generated chunk inside the completion callback (`completeAsyncLoad` — on Folia that is the owning region thread and the chunk can unload before a hop to the global tick) and hands only the immutable `LoadedColumnData` to the pump
+- `FoliaSupport` — platform probe (`Class.forName` on Folia's regionizer class); used only where Folia removes functionality outright (e.g. the soak driver's save-all mapping)
 - `PaperPayloadHandler` — encodes S2C / decodes C2S payloads using same wire format as Fabric
 - `PaperCommands` — Bukkit `CommandExecutor` for `/lsslod stats` and `/lsslod diag`
 - `PaperConfig` — GSON JSON config (same defaults/validation as Fabric)
 - `PaperDirtyColumnBroadcaster` — broadcasts dirty column notifications to connected players (same as Fabric's `DirtyColumnBroadcaster`)
 - `PaperWorldHandler` — registers configurable Bukkit event listeners for dirty chunk detection via reflection-based position extraction
-- `PaperSoakBridge` — reflective gate from `LSSPaperPlugin` into the dev-only `dev.vox.lss.paper.soak` package (soak scenario driver + metrics exporter twins; excluded from the release shadowJar, retained by `soakShadowJar` for `SOAK_PLATFORM=paper` runs)
+- `PaperSoakBridge` — reflective gate from `LSSPaperPlugin` into the dev-only `dev.vox.lss.paper.soak` package (soak scenario driver + metrics exporter twins; excluded from the release shadowJar, retained by `soakShadowJar` for `SOAK_PLATFORM=paper` and `SOAK_PLATFORM=folia` runs)
 
 ### Client-Side
 
@@ -224,6 +239,7 @@ Scenario-driven correctness harness: a real dedicated server + headless client e
 ./scripts/soak.sh dirty-broadcast   # setblock → dirty broadcast → client re-request
 ./scripts/soak.sh all               # All 17 Fabric scenarios in order; stops at first failure
 SOAK_PLATFORM=paper ./scripts/soak.sh all   # Paper port: fresh-backfill, warm-rejoin, dimension-trip, paper-dirty-falling-block
+SOAK_PLATFORM=folia ./scripts/soak.sh all   # Folia: same four scenarios against a real Folia server (:paper:runFolia)
 ```
 
 Further scenarios (same invocation): rate-limit-storm, disk-saturation, generation-disabled, generation-capacity-stress, bandwidth-throttle, cold-restart-resync, enabled-false, teleport-prune, dirty-range-filter, dirty-during-backfill, dirty-while-offline, clearcache-mid-session, dimension-rejoin-warm.
@@ -239,7 +255,7 @@ Scenarios needing a base world auto-run `fresh-backfill` first. warm-rejoin, dir
 
 ### How It Works
 
-`soak.sh` stages world/cache/config per scenario, pre-validates the timeline (`check_soak.py --validate`), then starts `runSoakServer` and `runSoakClient` (no JFR). `SoakScenarioDriver` fires timeline commands at join-anchored offsets, snapshots every 5 s, and halts the server at scenario end; the soak client synchronously flushes its column cache before exiting. The checker evaluates deltas between verified-quiescent snapshots and writes `verdict.json`; any violation exits nonzero. `SOAK_PLATFORM=paper` runs the identical scenario timelines against a real Paper server (`:paper:runSoakServer`, a run-paper task fed by the dev-only `soakShadowJar` that retains the soak package) with the unchanged Fabric soak client and checker; Paper keeps its own base world at `soak-worlds/base-paper`. Per-scenario client instrumentation: `-Psoak.probes=x:z,...` adds per-position timestamp probes to client snapshots; `-Psoak.clientActionAt=SECONDS:ACTION` fires one scripted client action (e.g. `60:clearcache`). warm-rejoin, dirty-while-offline, and dimension-rejoin-warm use two client runs.
+`soak.sh` stages world/cache/config per scenario, pre-validates the timeline (`check_soak.py --validate`), then starts `runSoakServer` and `runSoakClient` (no JFR). `SoakScenarioDriver` fires timeline commands at join-anchored offsets, snapshots every 5 s, and halts the server at scenario end; the soak client synchronously flushes its column cache before exiting. The checker evaluates deltas between verified-quiescent snapshots and writes `verdict.json`; any violation exits nonzero. `SOAK_PLATFORM=paper` runs the identical scenario timelines against a real Paper server (`:paper:runSoakServer`, a run-paper task fed by the dev-only `soakShadowJar` that retains the soak package) with the unchanged Fabric soak client and checker; Paper keeps its own base world at `soak-worlds/base-paper`. `SOAK_PLATFORM=folia` does the same against a real Folia server (`:paper:runFolia`, run-paper's Folia download task with `pluginsMode = INHERIT_NONE` — the default plugin-jar detection would add the soak-stripped release jar alongside the soak jar; base world `soak-worlds/base-folia`): the driver maps `save-all` to an acknowledged no-op (`"mapped": true` command-row key — Folia unregisters the command) and the staging writes a `bukkit.yml` with a 100-tick autosave so chunks still flush mid-run. Per-scenario client instrumentation: `-Psoak.probes=x:z,...` adds per-position timestamp probes to client snapshots; `-Psoak.clientActionAt=SECONDS:ACTION` fires one scripted client action (e.g. `60:clearcache`). warm-rejoin, dirty-while-offline, and dimension-rejoin-warm use two client runs.
 
 ### Key Files
 
@@ -247,7 +263,7 @@ Scenarios needing a base world auto-run `fresh-backfill` first. warm-rejoin, dir
 - `scripts/soak-scenarios/<name>.json` + `<name>-config.json` — driver timeline + sparse server-config overrides
 - `scripts/check_soak.py` — stdlib Python invariant checker (`--validate` pre-flight, post-run laws, `--selftest` — ~115 in-memory pass/catch cases incl. all four oldest named checks)
 - `scripts/soak_report.py` — stdlib post-run anomaly digest (spikes/stalls, concerning-vs-mechanism counters, high-water marks, cadence/TPS, law margins, cross-identity audits); a lens, never a gate (`--strict` to exit nonzero on any anomaly; `--compare`, `--selftest`)
-- `scripts/release_check.py` — release-jar safety gate (no dev-only benchmark/soak packages ship; version expansion; mappings-namespace manifest; glob hygiene). Wired into `.github/workflows/build.yml` alongside the three `--selftest` runs.
+- `scripts/release_check.py` — release-jar safety gate (no dev-only benchmark/soak packages ship, incl. inside nested Jar-in-Jar entries and dev/vox/lss/common namespaces; stale-jar ambiguity guard + `--version` pinning; version expansion; mappings-namespace manifest; glob hygiene). Wired into `.github/workflows/build.yml` alongside the three `--selftest` runs.
 - `scripts/lib/mc-run.sh` — shared server/client lifecycle helpers (sourced by soak.sh and benchmark.sh)
 - `fabric/src/main/java/dev/vox/lss/benchmark/SoakScenarioDriver.java` — server-side timeline executor + JSONL snapshots
 - `paper/src/main/java/dev/vox/lss/paper/soak/PaperSoakScenarioDriver.java` — Paper twin of the Fabric driver (Bukkit join anchors + 1-tick scheduler, same JSONL contract)
@@ -261,6 +277,7 @@ Scenarios needing a base world auto-run `fresh-backfill` first. warm-rejoin, dir
 - **Payloads:** Fabric uses `StreamCodec` with lambda encode/decode registered in `LSSNetworking`; Paper uses raw `FriendlyByteBuf` in `PaperPayloadHandler`. Both produce identical wire bytes.
 - **Raw chunk shipping:** Server serializes MC-native `LevelChunkSection` data (block states + biomes via `section.write(buf)`) plus light `DataLayer` nibbles and sends. MC's built-in zlib network compression handles packet compression. No server-side voxelization or caching — client receives MC objects directly.
 - **Off-thread processing:** Main server thread serializes loaded chunks into `LoadedColumnData` (pre-serialized bytes); a dedicated processing thread prepares payloads and schedules sends via `OffThreadProcessor`. `ColumnTimestampCache` provides in-memory up-to-date checks.
+- **Folia (Paper module, experimental):** the service tick runs on the `GlobalRegionScheduler` (main thread on Paper, the single global-region thread on Folia — same pump semantics both ways); handshake registration and PlayerQuit arrive on region threads and go through a lifecycle mailbox drained at the top of `tick()`; generated chunks are serialized inside the `getChunkAtAsync` completion (the owning region thread — the chunk can unload before a hop to the global tick). `FoliaWiringContractTest` scans every production class's constant pool (nested classes included) so no `BukkitRunnable`/`BukkitScheduler` reference creeps back in (they throw on Folia). `/reload` is unsupported on Folia. Release notes for Folia-affecting changes should mention the experimental status.
 - **Thread safety** via `ConcurrentHashMap`, `AtomicLong`/`AtomicInteger`, `volatile`, `CopyOnWriteArrayList`
 - **No compile-time optional deps** — all mod compat uses `MethodHandle` bridges (MC types must use direct class literals, not `Class.forName()`, due to Fabric remapping)
 - **Mappings:** Mojang official (not Yarn). Paper uses Mojang mappings natively via paperweight-userdev.
@@ -276,8 +293,8 @@ Releases are triggered by pushing an **annotated tag** (`git tag -a`). The tag a
 
 1. Review commits since the last tag: `git log $(git describe --tags --abbrev=0)..HEAD --oneline`
 2. **Pre-flight the exact release build locally** before tagging — the tag triggers an irreversible GitHub + Modrinth publish, so it must be green first:
-   `CI=true ./gradlew :fabric:build -x runClientGameTest :paper:shadowJar -Pmod_version=<version> && python3 scripts/release_check.py`
-   (`release_check.py` must print `OK`; `:fabric:build` runs Tier 1 + Tier 2.)
+   `CI=true ./gradlew :fabric:build -x runClientGameTest :paper:test :paper:shadowJar -Pmod_version=<version> && python3 scripts/release_check.py --version <version>`
+   (`release_check.py` must print `OK`; `--version` pins the check to the jars just built — stale jars in build/libs otherwise fail the run; `:fabric:build` runs Tier 1 + Tier 2, `:paper:test` gates the Paper jar. CI runs Tier 3 (`:fabric:runClientGameTest`) as a separate build.yml job — check it is green on the release commit before tagging.)
 3. Get the release commit onto `main` via PR (protected branch): push the release branch, `gh pr create --base main`, then `gh pr merge --merge`. Use **`--merge`** (a merge commit) — `--squash`/`--rebase` rewrite SHAs and orphan the tag.
 4. Write release notes to a file (format below) and create the annotated tag with **`--cleanup=verbatim`** so the `###` headers survive:
    `git tag -a v<version> -F <notes-file> --cleanup=verbatim`
@@ -317,6 +334,8 @@ Write for **Minecraft server admins and mod users**, not developers. Use markdow
 Rules:
 - Each item: bold summary + dash + 1-2 sentence explanation
 - Mention Fabric or Paper when a change is platform-specific; omit qualifier when it affects both
+- Folia-affecting items must mention Folia support's **experimental** status (the label stays
+  until concurrent multi-region soak validation — see the spec's exit criterion)
 - Skip internal-only changes (CI, README, refactoring) unless they have user-visible impact
 - Use present tense ("Fixes X" not "Fixed X" — GitHub/Modrinth display these as current release notes)
 - No version heading — the tag name is displayed as the title automatically

@@ -4,8 +4,10 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import dev.vox.lss.common.LSSLogger;
 
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 
 /**
  * Generic JSON config loader. Subclasses declare public fields as config entries;
@@ -27,7 +29,16 @@ public abstract class JsonConfig {
         try {
             Path path = this.configDir.resolve(getFileName());
             Files.createDirectories(path.getParent());
-            Files.writeString(path, GSON.toJson(this));
+            // Write to a temp file then atomically move over the target. load() re-saves on
+            // every startup, so a plain truncate-then-write that crashes mid-write would leave
+            // a corrupt file and every subsequent boot would silently fall back to all defaults.
+            Path tmp = path.resolveSibling(getFileName() + ".tmp");
+            Files.writeString(tmp, GSON.toJson(this));
+            try {
+                Files.move(tmp, path, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+            } catch (AtomicMoveNotSupportedException e) {
+                Files.move(tmp, path, StandardCopyOption.REPLACE_EXISTING);
+            }
         } catch (Exception e) {
             LSSLogger.error("Failed to save config " + getFileName(), e);
         }

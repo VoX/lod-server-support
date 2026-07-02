@@ -79,7 +79,16 @@ class VoxyCompat {
             // Register column consumer
             var bridgeDead = new java.util.concurrent.atomic.AtomicBoolean();
             VoxelColumnConsumer consumer = (level, dimension, chunkX, chunkZ, columnData) -> {
-                if (bridgeDead.get()) return;
+                if (bridgeDead.get()) {
+                    // The latch stops the churn, but the receive handler already stamped this
+                    // position received (ts>0): returning SILENTLY would keep — and persist —
+                    // a stamp for data Voxy never stored, poisoning the cache across sessions
+                    // (after a Voxy upgrade every such position resyncs up_to_date and stays
+                    // a hole). Report instead: each position parks honestly (ts=-1 +
+                    // session-satisfied) at the bounded failure cap.
+                    reportSink.report(dimension, chunkX, chunkZ);
+                    return;
+                }
                 try {
                     Object worldId = worldIdentifierOf.invoke(level);
                     if (worldId == null) {
@@ -91,20 +100,31 @@ class VoxyCompat {
                     }
                     boolean allAccepted = true;
                     for (var s : columnData.sections()) {
+                        // H-12 guard: LSS ships "absent light layer = null" (the universal
+                        // "absent means all-zero" wire default). Voxy renders a null sky-light
+                        // layer as full daylight, so a no-sky dimension (nether/end,
+                        // hasSkyLight()==false) — where MC never stores sky light, so every
+                        // section arrives null — would light its topmost surfaces as if skylit
+                        // until vanilla loaded the chunk. Hand Voxy an explicit all-zero
+                        // (present, non-empty) DataLayer so those surfaces render dark. Overworld
+                        // skylit surfaces ship a real non-null layer and are unaffected.
+                        DataLayer skyLight = s.skyLight() != null ? s.skyLight() : new DataLayer(new byte[2048]);
                         allAccepted &= (boolean) rawIngest.invoke(worldId, s.section(),
                                 chunkX, s.sectionY(), chunkZ,
-                                s.blockLight(), s.skyLight());
+                                s.blockLight(), skyLight);
                     }
                     if (!allAccepted) {
                         reportSink.report(dimension, chunkX, chunkZ);
                     }
                 } catch (LinkageError e) {
-                    // Incompatible Voxy: this will never succeed for any column. Kill the
-                    // bridge instead of reporting — a report would re-serve the column and
-                    // re-fail it (capped per position, but pure waste at session scale).
+                    // Incompatible Voxy: this will never succeed for any column. Latch to
+                    // stop re-serve churn, but keep the stamps honest — this column (and every
+                    // later one, via the latch branch above) still reports so it parks at
+                    // ts=-1 instead of retaining a fabricated received-stamp.
                     bridgeDead.set(true);
                     LSSLogger.error("Voxy raw ingest is incompatible with this Voxy version — "
                             + "disabling the bridge for this session", e);
+                    reportSink.report(dimension, chunkX, chunkZ);
                 } catch (Throwable e) {
                     if (e instanceof Error && !(e instanceof AssertionError)) throw (Error) e;
                     LSSLogger.error("Voxy raw ingest failed", e);

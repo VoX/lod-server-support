@@ -173,6 +173,71 @@ class LodRequestManagerTest {
         assertTrue(fireScan(scanner) > 0, "backoff lasts exactly one scan");
     }
 
+    // ---- dirty crossing an in-flight first serve forces a re-request (#11) ----
+
+    @Test
+    void dirtyCrossingAnInFlightFirstServeReRequestsOnUpToDate() {
+        var tracker = manager.trackerForTest();
+        tracker.markPending(POS, System.nanoTime(), false); // first serve in flight (stored == -1)
+
+        manager.onDirtyColumns(new long[]{POS});            // dirty crosses the in-flight serve
+        manager.onColumnUpToDate(POS);                      // the pre-edit (all-air) answer lands
+
+        assertNotEquals(SATISFIED, manager.columnsForTest().classify(POS, true),
+                "a dirty that crossed the in-flight first serve must force a re-request, not settle");
+    }
+
+    @Test
+    void dirtyCrossingAnInFlightFirstServeReRequestsOnReceived() {
+        manager.setLastDimensionForTest(dim("overworld"));
+        var tracker = manager.trackerForTest();
+        tracker.markPending(POS, System.nanoTime(), false);
+
+        manager.onDirtyColumns(new long[]{POS});
+        manager.onColumnReceived(POS, 5000L, dim("overworld")); // pre-edit content lands
+
+        assertNotEquals(SATISFIED, manager.columnsForTest().classify(POS, true),
+                "a crossed dirty re-requests even when real (pre-edit) data arrived");
+    }
+
+    @Test
+    void dirtyCrossingAnInFlightResyncReRequests() {
+        // A second edit landing while the FIRST edit's resync is still in flight. markDirtyIfKnown
+        // returns true here (the column is already held, stored > 0), so the crossing is preserved
+        // only if noteStaleIfInFlight is called unconditionally — not just when the position is
+        // unknown. Without that, onColumnReceived clears the dirty mark and the second edit is lost.
+        manager.setLastDimensionForTest(dim("overworld"));
+        manager.onColumnReceived(POS, 5000L, dim("overworld")); // held from an earlier serve
+        assertEquals(SATISFIED, manager.columnsForTest().classify(POS, true));
+
+        var tracker = manager.trackerForTest();
+        tracker.markPending(POS, System.nanoTime(), false); // resync (first edit) in flight
+
+        manager.onDirtyColumns(new long[]{POS});               // second edit crosses the resync
+        manager.onColumnReceived(POS, 6000L, dim("overworld")); // first-edit content lands, clears dirty
+
+        assertNotEquals(SATISFIED, manager.columnsForTest().classify(POS, true),
+                "a dirty crossing an in-flight resync must re-request, not settle on stale content");
+    }
+
+    // ---- a rejected authoritative clear self-heals (WS3 completion, review #2/#3) ----
+
+    @Test
+    void rejectedAuthoritativeClearReRequestsWithPreClearStamp() {
+        // End-to-end through the manager: the client holds content, the server sends a 0-section
+        // clearing column (content->air), the consumer rejects it. The re-request must carry the
+        // pre-clear stamp so the server re-sends the clear, not ts=-1 (which draws an all-air
+        // up_to_date and strands ghost terrain for the session).
+        manager.setLastDimensionForTest(dim("overworld"));
+        manager.onColumnReceived(POS, 3000L, dim("overworld"));       // pre-clear content held
+        manager.onColumnReceived(POS, 5000L, dim("overworld"), true); // authoritative 0-section clear
+
+        manager.onIngestFailure(dim("overworld"), POS);               // consumer rejects the clear
+
+        assertEquals(3000L, manager.columnsForTest().classify(POS, true),
+                "a rejected clear re-requests with the pre-clear content stamp, not ts=-1");
+    }
+
     // ---- tracked status responses: apply state AND release the in-flight slot ----
 
     @Test
@@ -183,8 +248,10 @@ class LodRequestManagerTest {
         manager.onColumnUpToDate(POS);
 
         assertFalse(tracker.isInFlight(POS), "slot leak would throttle later requests until timeout");
-        assertEquals(1, manager.getReceivedColumnCount(), "up-to-date stamps the never-seen position");
+        assertEquals(0, manager.getReceivedColumnCount(),
+                "up-to-date on a never-seen position is session-satisfied, not stamped");
         assertEquals(SATISFIED, manager.columnsForTest().classify(POS, true));
+        assertTrue(manager.columnsForTest().isSessionSatisfied(POS));
         assertEquals(1, manager.getTotalUpToDate());
     }
 
@@ -278,6 +345,10 @@ class LodRequestManagerTest {
         long gen2 = PositionUtil.packPosition(2, 0);
         long sync1 = PositionUtil.packPosition(3, 0);
         long sync2 = PositionUtil.packPosition(4, 0);
+        // drainQueue re-derives the send ts from classify, so a gen request (ts=0) must have a
+        // not-generated column state; sync requests (ts=-1) stay unstamped.
+        manager.columnsForTest().onNotGenerated(gen1);
+        manager.columnsForTest().onNotGenerated(gen2);
         seedQueue(gen1, 0L, gen2, 0L, sync1, -1L, sync2, -1L); // gen requests head the queue
 
         int sent = manager.drainQueue(16);
@@ -300,6 +371,9 @@ class LodRequestManagerTest {
         long sync1 = PositionUtil.packPosition(1, 0);
         long gen1 = PositionUtil.packPosition(2, 0);
         long gen2 = PositionUtil.packPosition(3, 0);
+        // Re-derived drain ts: gen requests need not-generated column state (ts=0).
+        manager.columnsForTest().onNotGenerated(gen1);
+        manager.columnsForTest().onNotGenerated(gen2);
         seedQueue(sync1, -1L, gen1, 0L, gen2, 0L);
 
         int sent = manager.drainQueue(16);
@@ -417,7 +491,8 @@ class LodRequestManagerTest {
         assertEquals(1, manager.getTotalRateLimited());
         assertEquals(2, manager.getTotalUpToDate(), "the entry AFTER the unknown type must still dispatch");
         assertEquals(1, manager.getTotalNotGenerated());
-        assertEquals(2, manager.getReceivedColumnCount(), "both up-to-date entries stamped");
+        assertEquals(0, manager.getReceivedColumnCount(),
+                "up-to-date on never-seen positions is session-satisfied, not stamped");
         assertEquals(1, manager.getEmptyColumnCount(), "not-generated entry stamped");
         assertFalse(tracker.isInFlight(pRate));
         assertFalse(tracker.isInFlight(pUpToDate));
@@ -462,7 +537,7 @@ class LodRequestManagerTest {
     }
 
     @Test
-    void ingestFailureForAnotherDimensionIsIgnored() {
+    void ingestFailureForAnotherDimensionDoesNotTouchTheCurrentMap() {
         manager.setLastDimensionForTest(dim("overworld"));
         manager.onColumnReceived(POS, 5000L, dim("overworld"));
 
@@ -471,6 +546,30 @@ class LodRequestManagerTest {
         assertEquals(SATISFIED, manager.columnsForTest().classify(POS, true),
                 "a report for another dimension's column must not unstamp the current map");
         assertEquals(0, manager.getTotalIngestFailures());
+    }
+
+    @Test
+    void crossDimensionIngestReportUnstampsTheOtherDimensionsSavedCache() {
+        var mgr = new LodRequestManager();
+        final String server = "test-crossdim-" + System.nanoTime();
+        var dimA = dim("overworld");
+        mgr.onSessionConfig(config(64, 100, 100, true), server); // sets serverAddress
+        try {
+            // A false stamp is already persisted in dimA's cache (as saveCache wrote it on the
+            // dimension change) — the report arrives after the player moved to dimB.
+            var map = new Long2LongOpenHashMap();
+            map.put(POS, 5000L);
+            ColumnCacheStore.save(server, dimA, map);
+
+            mgr.setLastDimensionForTest(dim("the_end")); // player is now in dimB
+            mgr.onIngestFailure(dimA, POS);              // async report for dimA
+            ColumnCacheStore.flushPendingIo();
+
+            assertFalse(ColumnCacheStore.load(server, dimA).containsKey(POS),
+                    "a cross-dimension report unstamps the false stamp in the other dimension's cache (#36)");
+        } finally {
+            ColumnCacheStore.clearForServer(server);
+        }
     }
 
     @Test
@@ -521,14 +620,15 @@ class LodRequestManagerTest {
     // ---- terminal up_to_date for an unknown ask (SP-078 client leg) ----
 
     @Test
-    void unknownAskAnsweredUpToDateStampsEpochAndStopsReAsking() {
+    void unknownAskAnsweredUpToDateSatisfiesWithoutStampAndStopsReAsking() {
         seedQueue(POS, -1L);
         assertEquals(1, manager.drainQueue(16), "the ts=-1 ask goes out");
 
         manager.onColumnUpToDate(POS); // terminal server answer (e.g. oversized column dropped before send)
 
-        assertTrue(manager.columnsForTest().timestampFor(POS) > 0,
-                "an unknown (ts=-1) ask answered up_to_date must stamp a real epoch timestamp");
+        assertEquals(-1L, manager.columnsForTest().timestampFor(POS),
+                "an unknown (ts=-1) ask answered up_to_date is session-satisfied — no fabricated stamp");
+        assertTrue(manager.columnsForTest().isSessionSatisfied(POS));
         assertEquals(SATISFIED, manager.columnsForTest().classify(POS, true));
         assertFalse(manager.trackerForTest().isInFlight(POS));
         seedQueue(POS, -1L);
@@ -686,10 +786,10 @@ class LodRequestManagerTest {
                 "an all-unknown late push must not debounce the fresh dimension's scan");
     }
 
-    // ---- drain sends the scan-time timestamp (pinned accounting drift) ----
+    // ---- drain RE-DERIVES the timestamp at send time (delivery-honesty #5) ----
 
     @Test
-    void drainSendsTheScanTimeTimestampWhenClassificationChangedSinceScan() {
+    void drainReDerivesTheTimestampFromClassifyAtSendTime() {
         recordSends();
         manager.setLastDimensionForTest(dim("overworld"));
         var cached = new Long2LongOpenHashMap();
@@ -704,11 +804,34 @@ class LodRequestManagerTest {
 
         assertEquals(1, sent.size());
         assertEquals(POS, sent.get(0).positions()[0]);
-        assertEquals(5000L, sent.get(0).timestamps()[0],
-                "the drain sends the scan-time queued timestamp, not a re-derived one — pinned"
-                        + " drift: the stale ts>0 claim can be answered up_to_date from the server's"
-                        + " done-bit, so the data the failure asked for waits for the next failure"
-                        + " report or dirty mark (bounded by the scan->drain window)");
+        assertEquals(-1L, sent.get(0).timestamps()[0],
+                "the drain re-derives the send ts from classify (-1 now), NOT the stale scan-time"
+                        + " 5000L: a ts>0 claim for data the client no longer holds would be answered"
+                        + " up_to_date from the server's done-bit, sealing a hole. Sending -1 makes the"
+                        + " server re-resolve honestly.");
+    }
+
+    // ---- ingest failures racing a pending cache load ----
+
+    @Test
+    void ingestFailureDuringPendingCacheLoadIsNotResurrectedByTheLoad() {
+        // A consumer rejection (any-thread API, hops to the main thread) lands while the
+        // dimension's cache load is still in flight: applied against the empty map it is
+        // absorbed, and loadFrom would then resurrect the stale ts>0 stamp — a claim for
+        // data no consumer holds, revalidated up_to_date every session (the same-dimension
+        // sibling of the WS5/#36 cross-dimension hole).
+        manager.setLastDimensionForTest(dim("overworld"));
+        var pending = new CompletableFuture<Long2LongOpenHashMap>();
+        manager.setPendingCacheLoadForTest(pending);
+
+        manager.onIngestFailure(dim("overworld"), POS); // absorbed by the empty pre-load map
+
+        var loaded = new Long2LongOpenHashMap();
+        loaded.put(POS, 5000L);
+        pending.complete(loaded);
+        assertTrue(manager.tickCacheGatePhase());
+        assertEquals(-1L, manager.columnsForTest().timestampFor(POS),
+                "the loaded stale stamp must be re-unstamped for the rejected column");
     }
 
     // ---- flushCache drops an in-flight cache load ----

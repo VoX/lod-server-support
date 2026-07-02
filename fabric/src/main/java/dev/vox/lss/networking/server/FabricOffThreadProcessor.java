@@ -41,7 +41,10 @@ public class FabricOffThreadProcessor extends OffThreadProcessor<PlayerRequestSt
 
     /** Register a dimension context for disk read submission (called from main thread). */
     public void updateDimensionContext(String dimension, ServerLevel level) {
-        this.dimensionLevelMap.putIfAbsent(dimension, level);
+        // put, not putIfAbsent: refresh to the current ServerLevel so a recreated dimension
+        // (e.g. an integrated world re-published to LAN) doesn't leave a stale level cached.
+        // Matches PaperOffThreadProcessor.updateDimensionContext so the twins can't drift.
+        this.dimensionLevelMap.put(dimension, level);
     }
 
     @Override
@@ -64,10 +67,10 @@ public class FabricOffThreadProcessor extends OffThreadProcessor<PlayerRequestSt
                                                     String dimension,
                                                     long columnTimestamp, long submissionOrder,
                                                     byte[] sectionBytes, int estimatedBytes) {
-        if (sectionBytes.length > LSSConstants.MAX_SECTIONS_SIZE) {
+        if (sectionBytes.length > LSSConstants.MAX_SEND_SECTIONS_SIZE) {
             LSSLogger.warn("Dropping oversized column [" + cx + ", " + cz + "] in " + dimension
-                    + ": " + sectionBytes.length + " bytes exceeds wire limit "
-                    + LSSConstants.MAX_SECTIONS_SIZE + " (client decoder would reject it)");
+                    + ": " + sectionBytes.length + " bytes exceeds send limit "
+                    + LSSConstants.MAX_SEND_SECTIONS_SIZE + " (netty frame cap would kill the connection)");
             return false;
         }
         if (dimension.length() > LSSConstants.MAX_DIMENSION_STRING_LENGTH) {

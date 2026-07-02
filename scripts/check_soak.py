@@ -73,7 +73,7 @@ ANOMALY_OPT_INS = {
     "dirty-while-offline": frozenset({"rate_limited", "saturated"}),
     "clearcache-mid-session": frozenset({"rate_limited", "saturated"}),
     "dimension-rejoin-warm": frozenset({"rate_limited", "saturated"}),
-    # Paper-only (SOAK_PLATFORM=paper): cold-cache disc resync from the base world, like
+    # Paper/Folia (SOAK_PLATFORM=paper|folia): cold-cache disc resync from the base world, like
     # warm-rejoin run 1, so the same load-shaped opt-ins apply.
     "paper-dirty-falling-block": frozenset({"rate_limited", "saturated"}),
 }
@@ -192,7 +192,9 @@ KNOWN_SERVER_KEYS = {
     "snapshot": {"event", "wallMs", "tick", "service", "disk", "generation", "dirty",
                  "bandwidth", "players", "dedup", "jvm", "tscache",
                  "mailbox_depth_hw", "mspt_avg_window", "probe_hashes"},
-    "command": {"event", "wallMs", "tick", "cmd", "anchor", "at", "ok"},
+    # mapped appears only on Folia runs, only when true: the driver acknowledged a timeline
+    # command Folia unregisters (save-all) as a deliberate no-op instead of executing it.
+    "command": {"event", "wallMs", "tick", "cmd", "anchor", "at", "ok", "mapped"},
     "join": {"event", "wallMs", "tick", "player", "joinIndex"},
     "end": {"event", "wallMs", "tick", "reason"},
 }
@@ -292,9 +294,11 @@ def load_server(path, warnings, unknown_keys, unknown_events):
 def load_client_run(path, warnings, unknown_keys, unknown_events):
     """Returns (snaps, actions): snapshot-bearing rows (event snapshot or disconnect —
     the disconnect row carries the final snapshot inline), each tagged _seg, plus the
-    scripted-action rows. Segments split on dimension change AND on action rows — both
-    reset the client request counters, so per-segment monotonicity/window machinery
-    applies unchanged."""
+    scripted-action rows. Segments split on dimension change AND on action rows. Client
+    counters are run-CUMULATIVE across segments (RequestMetrics.reset() clears only
+    in-flight state, never the totals); segmentation exists because conservation windows
+    must not span a boundary — the switch intentionally drops in-flight tracking, so a
+    request answered after it increments requested_total with no response counter."""
     rows = parse_jsonl(path, warnings, path.name)
     snaps, actions = [], []
     seg, prev_dim = 0, None
@@ -521,17 +525,17 @@ def law_A6_server(snaps):
 
 
 def law_A6_client(run, snaps):
-    """Client counters are monotonic only within one run AND one dimension segment."""
+    """Client counters are cumulative for the whole run — dimension/action boundaries do
+    NOT reset them (RequestMetrics.reset() clears only in-flight state, never the totals),
+    so monotonicity holds across segment boundaries too. Only a new process (run) resets."""
     out = []
     for i in range(1, len(snaps)):
         prev, cur = snaps[i - 1], snaps[i]
-        if prev["_seg"] != cur["_seg"]:
-            continue  # reset at dimension change is legitimate
         for path in CLIENT_MONOTONIC:
             pv, cv = get_path(prev, path), get_path(cur, path)
             if cv < pv:
                 out.append(Violation("A6", window_label(prev, cur, run=run, dim=cur.get("dimension")),
-                                     f"client counter {path} decreased inside one dimension segment",
+                                     f"client counter {path} decreased within one run",
                                      {"field": path, "prev": pv, "cur": cv}))
     return out
 
@@ -556,7 +560,9 @@ def law_A7_server(prev, cur, window, opt_ins):
 
 
 def law_A7_client(prev, cur, window, opt_ins):
-    """prev may be None: head window from run/segment start (client counters reset there)."""
+    """prev may be None: the run-head window (counters are exactly 0 at process start).
+    Later segment heads anchor at the last pre-boundary row instead — counters are
+    run-cumulative, so pv=0 there would re-bill earlier segments' anomalies."""
     out = []
     _anomaly(prev, cur, "dropped", window, "client dropped", opt_ins, None, out)
     _anomaly(prev, cur, "responses.rate_limited", window, "responses.rate_limited",
@@ -754,7 +760,11 @@ def evaluate_laws(ctx):
                 qs_by_seg.setdefault(q.cseg, []).append(q.ci)
         for seg, dim, lo, hi in client_segments(csnaps):
             qcis = sorted(set(qs_by_seg.get(seg, [])))
-            chain = [None] + [csnaps[ci] for ci in qcis]
+            # Head anchor: None (pv=0) only for the run's first segment — counters are
+            # run-cumulative, so later segments anchor at the last pre-boundary row for
+            # an exact segment delta (pv=0 would re-bill earlier segments' anomalies).
+            head = None if lo == 0 else csnaps[lo - 1]
+            chain = [head] + [csnaps[ci] for ci in qcis]
             if not qcis or qcis[-1] < hi:
                 chain.append(csnaps[hi])
             for j in range(1, len(chain)):
@@ -943,12 +953,15 @@ def check_dirty_broadcast(ctx):
 
 def make_disc_completeness(scenario, run=1):
     """Independent disc-completeness check: at the end of a run the client must hold an
-    entry (known data OR a parked not-generated/empty mark) for at least every position of
-    the scanned annulus — area accounting that does NOT trust the scanner's own confirmed-ring
-    bookkeeping. A silently-orphaned position produces zero traffic, so conservation laws
-    can never see it; this floor can. Extra entries (pre-teleport spawn-offset discs, cache
-    reloads, in-exclusion fills) only push the count up, so >= is exact for the orphan class."""
-    @named_check(scenario, ["client.columns.known", "client.columns.empty"])
+    entry (known data, a parked not-generated/empty mark, OR a session-satisfied all-air/parked
+    mark) for at least every position of the scanned annulus — area accounting that does NOT
+    trust the scanner's own confirmed-ring bookkeeping. A silently-orphaned position produces
+    zero traffic, so conservation laws can never see it; this floor can. Extra entries
+    (pre-teleport spawn-offset discs, cache reloads, in-exclusion fills) only push the count up,
+    so >= is exact for the orphan class. NOTE: all-air/parked positions are counted in
+    columns.satisfied (they no longer fabricate a >0 stamp into columns.known)."""
+    @named_check(scenario, ["client.columns.known", "client.columns.empty",
+                            "client.columns.satisfied"])
     def check(ctx):
         lod = ctx.config.get("lodDistanceChunks")
         if not isinstance(lod, int) or isinstance(lod, bool) or lod <= EXCLUSION_RADIUS:
@@ -963,13 +976,16 @@ def make_disc_completeness(scenario, run=1):
                             f"no client snapshots in run {run}", {})
             return
         area = (2 * lod + 1) ** 2 - (2 * EXCLUSION_RADIUS + 1) ** 2
-        known, empty = fc["columns"]["known"], fc["columns"]["empty"]
-        if known + empty < area:
+        cols = fc["columns"]
+        known, empty = cols["known"], cols["empty"]
+        satisfied = cols.get("satisfied", 0)  # all-air/parked positions with no server stamp
+        total = known + empty + satisfied
+        if total < area:
             yield Violation("disc-completeness", f"run{run} final snapshot",
-                            "columns.known+empty below the scanned annulus area — "
+                            "columns.known+empty+satisfied below the scanned annulus area — "
                             "positions were silently orphaned",
-                            {"known": known, "empty": empty, "total": known + empty,
-                             "annulus_area": area, "lodDistanceChunks": lod,
+                            {"known": known, "empty": empty, "satisfied": satisfied,
+                             "total": total, "annulus_area": area, "lodDistanceChunks": lod,
                              "exclusion_radius": EXCLUSION_RADIUS})
     check.__name__ = f"check_disc_completeness_run{run}"
     return check
@@ -1586,10 +1602,16 @@ def check_dimension_rejoin_warm(ctx):
         yield Violation("dimension-rejoin-warm", "run2 End segment",
                         "End resync was not warm — minecraft_the_end.bin not load-bearing",
                         {"expected": ">= 300", "actual": end_final["responses"]["up_to_date"]})
-    if ow_final["responses"]["up_to_date"] < 300:
+    # Client counters are run-cumulative (dimension boundaries do NOT reset them), so the
+    # overworld segment's final up_to_date INCLUDES the End segment's count — only the
+    # segment DELTA proves the overworld cache file was load-bearing. The raw cumulative
+    # value trivially clears the floor whenever the End leg passed.
+    ow_delta = ow_final["responses"]["up_to_date"] - end_final["responses"]["up_to_date"]
+    if ow_delta < 300:
         yield Violation("dimension-rejoin-warm", "run2 overworld segment",
                         "overworld resync was not warm — minecraft_overworld.bin not load-bearing",
-                        {"expected": ">= 300", "actual": ow_final["responses"]["up_to_date"]})
+                        {"expected": ">= 300 up_to_date beyond the End segment's total",
+                         "actual": ow_delta})
     for seg, dim, lo, hi in segs2:
         if (2, hi) not in ctx.quiescent_client:
             yield Violation("dimension-rejoin-warm",
@@ -1664,7 +1686,7 @@ def check_dirty_resave_quiet(ctx):
 @named_check("paper-dirty-falling-block", ["server.dirty.broadcast_positions",
                                            "client.columns.dirty", "client.received_columns"])
 def check_paper_dirty_falling_block(ctx):
-    """Paper-native dirty pipeline (SOAK_PLATFORM=paper): /setblock fires no Bukkit event,
+    """Paper-native dirty pipeline (SOAK_PLATFORM=paper|folia): /setblock fires no Bukkit event,
     so the edit is a summoned falling block whose landing fires EntityChangeBlockEvent —
     the only E2E proof that PaperWorldHandler's event registration + Bukkit-world-key to
     NMS-dimension-string mapping feeds the broadcaster (a key mismatch is otherwise
@@ -1774,7 +1796,7 @@ CHECKS = {
                               make_handshake_check("dimension-rejoin-warm"),
                               make_disc_completeness("dimension-rejoin-warm", run=1),
                               make_disc_completeness("dimension-rejoin-warm", run=2)],
-    # Paper-only scenario (scripts/soak.sh SOAK_PLATFORM=paper); the conservation laws
+    # Paper/Folia scenario (scripts/soak.sh SOAK_PLATFORM=paper|folia); the conservation laws
     # themselves are platform-blind — the Paper exporter twin emits the same schema.
     "paper-dirty-falling-block": [check_paper_dirty_falling_block,
                                   make_handshake_check("paper-dirty-falling-block"),
@@ -2220,13 +2242,17 @@ def selftest():
         _srv(1000, over={"dirty.suppressed_total": 5}),
         _srv(6000, over={"dirty.suppressed_total": 4})]), "A6")
 
-    # --- A6 client: monotonic inside one dimension segment, reset allowed across ---
+    # --- A6 client: monotonic for the whole run (counters are run-cumulative; a
+    # dimension/action boundary does NOT excuse a decrement) ---
     hits("A6 client in-segment decrement", law_A6_client(1, [
         _cli(1000, over={"responses.rate_limited": 5}),
         _cli(6000, over={"responses.rate_limited": 4})]), "A6")
-    clean("A6 client segment reset", law_A6_client(1, [
+    hits("A6 client cross-segment decrement", law_A6_client(1, [
         _cli(1000, seg=0, over={"responses.rate_limited": 5}),
-        _cli(6000, seg=1, over={"responses.rate_limited": 0})]))
+        _cli(6000, seg=1, over={"responses.rate_limited": 0})]), "A6")
+    clean("A6 client cross-segment growth", law_A6_client(1, [
+        _cli(1000, seg=0, over={"responses.rate_limited": 5}),
+        _cli(6000, seg=1, over={"responses.rate_limited": 5})]))
 
     # --- A7 server: errors/timeouts always fail; saturated honors the opt-in ---
     hits("A7 disk.errors", law_A7_server(
@@ -2268,6 +2294,21 @@ def selftest():
         _srv(1000), _srv(6000, over={"bandwidth.total_bytes": 1_000_000})], cap))
     hits("B2 cap burst", law_B2([
         _srv(1000), _srv(6000, over={"bandwidth.total_bytes": 2_000_000})], cap), "B2")
+    # Whole-run cumulative leg (arms only past 30 s — the 5 s fixtures above never reach
+    # it): a sustained 1.2x-of-cap pace hides inside the 1.3x per-window headroom
+    # (1_572_864 per 5 s window < cap*5*1.3 = 1_703_936), so only the cumulative 5%
+    # bound can catch it. 12 windows x 5 s = 60 s span.
+    clean("B2 sustained under cap across 60s", law_B2(
+        [_srv(1000 + 5000 * i, over={"bandwidth.total_bytes": 1_000_000 * i})
+         for i in range(13)], cap))
+    sustained = law_B2(
+        [_srv(1000 + 5000 * i, over={"bandwidth.total_bytes": 1_572_864 * i})
+         for i in range(13)], cap)
+    hits("B2 sustained 1.2x pacing regression", sustained, "B2")
+    cases[0] += 1
+    assert all("whole-run" in v.window for v in sustained), \
+        f"B2 sustained: the CUMULATIVE leg must fire (per-window stays under headroom): " \
+        f"{[v.line() for v in sustained]}"
 
     # --- Quiescence predicate ---
     quiet_player = {"name": "p", "held_sync": 0, "held_gen": 0, "send_queue": 0}
@@ -2351,6 +2392,23 @@ def selftest():
             "action segmentation: action row must be returned separately"
         cases[0] += 1
         assert not uk and not ue, f"action segmentation: unexpected unknowns {uk} {ue}"
+    finally:
+        tmp_path.unlink()
+
+    # --- Folia mapped command rows are schema-known (no unknown-key warning) ---
+    with tempfile.NamedTemporaryFile("w", suffix=".jsonl", delete=False) as tf:
+        tf.write(json.dumps({"event": "command", "wallMs": 1000, "tick": 20,
+                             "cmd": "save-all flush", "anchor": 1, "at": 30,
+                             "ok": True, "mapped": True}) + "\n")
+        tmp_path = Path(tf.name)
+    try:
+        w, uk, ue = [], set(), set()
+        server = load_server(tmp_path, w, uk, ue)
+        cases[0] += 1
+        assert len(server["commands"]) == 1 and server["commands"][0].get("mapped") is True, \
+            "folia mapped command: row must load as a command"
+        cases[0] += 1
+        assert not uk, f"folia mapped command: 'mapped' must be schema-known, got unknowns {uk}"
     finally:
         tmp_path.unlink()
 
@@ -2682,12 +2740,16 @@ def selftest():
          "paper-dirty-falling-block")
 
     # --- dimension-rejoin-warm: rejoin lands in the End, both resyncs warm ---
-    def drw_ctx(run2_first_dim, end_utd=400):
+    def drw_ctx(run2_first_dim, end_utd=400, ow_utd=None):
+        # Counters are run-cumulative: the overworld segment's final up_to_date INCLUDES
+        # the End segment's count. Default overworld delta: +400.
+        if ow_utd is None:
+            ow_utd = end_utd + 400
         r1 = [_cli(1000, seg=0), _cli(50_000, seg=1, over={"dimension": "minecraft:the_end"})]
         r2 = [_cli(200_000, seg=0, over={"dimension": run2_first_dim,
                                          "responses.up_to_date": end_utd}),
               _cli(280_000, seg=1, over={"dimension": "minecraft:overworld",
-                                         "responses.up_to_date": 500})]
+                                         "responses.up_to_date": ow_utd})]
         return _ctx(runs={1: r1, 2: r2}, quiescent_client={(2, 0), (2, 1)})
     clean("dimension-rejoin-warm good", list(check_dimension_rejoin_warm(
         drw_ctx("minecraft:the_end"))))
@@ -2695,6 +2757,12 @@ def selftest():
         drw_ctx("minecraft:overworld"))), "dimension-rejoin-warm")
     hits("dimension-rejoin-warm cold End resync", list(check_dimension_rejoin_warm(
         drw_ctx("minecraft:the_end", end_utd=100))), "dimension-rejoin-warm")
+    # The cumulative counter hides a cold overworld leg behind the End total: the raw
+    # value (2000) clears any absolute floor while the overworld segment contributed 0.
+    hits("dimension-rejoin-warm cold overworld resync behind a warm End total",
+         list(check_dimension_rejoin_warm(
+             drw_ctx("minecraft:the_end", end_utd=2000, ow_utd=2000))),
+         "dimension-rejoin-warm")
 
     # --- Config override allowlist ---
     cases[0] += 1

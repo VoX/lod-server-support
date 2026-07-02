@@ -26,6 +26,9 @@ jobs:
       - name: Build Paper plugin
         run: ./gradlew :paper:shadowJar
 
+      - name: Paper Tier 1 tests
+        run: ./gradlew :paper:test
+
       - name: Soak checker + report selftests
         run: |
           python3 scripts/check_soak.py --selftest
@@ -44,3 +47,26 @@ jobs:
         with:
           name: lod-server-support-paper
           path: paper/build/libs/*.jar
+
+  # Tier 3: the only end-to-end pins for the client-server flow, LSSApi consumer
+  # dispatch, the ingest-failure recovery loop, and the IntegratedServerLanHook path.
+  # Runs headless via llvmpipe (same env the original Tier-3 job used on these runners).
+  client-gametest:
+    name: Client GameTests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 25
+
+      - uses: gradle/actions/setup-gradle@v5
+
+      - name: Tier 3 client gametests
+        run: ./gradlew :fabric:runClientGameTest
+        timeout-minutes: 20
+        env:
+          MESA_GL_VERSION_OVERRIDE: "4.5"
+          GALLIUM_DRIVER: llvmpipe

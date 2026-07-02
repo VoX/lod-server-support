@@ -20,6 +20,11 @@ public class PaperConfig extends ServerConfigBase {
             "org.bukkit.event.block.BlockPlaceEvent",
             "org.bukkit.event.block.BlockBreakEvent",
             "org.bukkit.event.block.BlockExplodeEvent",
+            // Entity-caused explosions (creeper/TNT/wither) — BlockExplodeEvent only covers
+            // block-caused ones (beds, respawn anchors), so without this the most common
+            // explosions never mark chunks dirty on Paper. Its blockList() feeds the same
+            // extractor. Fabric catches these via the chunk-save hook.
+            "org.bukkit.event.entity.EntityExplodeEvent",
             "org.bukkit.event.block.BlockBurnEvent",
             "org.bukkit.event.block.BlockFadeEvent",
             "org.bukkit.event.block.BlockFormEvent",

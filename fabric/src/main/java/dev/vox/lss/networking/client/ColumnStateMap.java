@@ -1,6 +1,5 @@
 package dev.vox.lss.networking.client;
 
-import dev.vox.lss.common.LSSConstants;
 import dev.vox.lss.common.PositionUtil;
 import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
@@ -34,9 +33,24 @@ class ColumnStateMap {
     // Positions confirmed current (data or up-to-date) in this session; cleared on
     // reconnect/dimension change so cached-but-stale positions get revalidated.
     private final LongOpenHashSet validated = new LongOpenHashSet();
+    // Positions resolved for THIS session that hold no server data — all-air up-to-date and
+    // ingest-parked columns. Stops the within-session re-request loop WITHOUT fabricating a
+    // client-clock timestamp (which would persist and lie next session). Never persisted;
+    // cleared on reconnect/dimension change and pruned by distance.
+    private final LongOpenHashSet sessionSatisfied = new LongOpenHashSet();
+    // Positions dirtied WHILE their first serve was in flight (stored == -1, so
+    // markDirtyIfKnown could not record them). Resolved when that in-flight request reaches
+    // any terminal outcome, forcing a re-request because the arriving column predates the edit.
+    private final LongOpenHashSet staleInFlight = new LongOpenHashSet();
     // Per-position ingest-failure counts; bounds the reject -> re-serve loop a permanently
     // failing consumer would otherwise drive forever (see onIngestFailed).
     private final Long2IntOpenHashMap ingestFailures = new Long2IntOpenHashMap();
+    // Positions whose last authoritative delivery was a 0-section CLEAR (content->air), mapped to
+    // the PRE-CLEAR content stamp. If the consumer rejects a clear, onIngestFailed must re-request
+    // with that pre-clear stamp (a real server-issued value, < the server's cached clear stamp) so
+    // the server re-sends the clearing column — a ts=-1 re-request would draw an all-air up_to_date
+    // (a clear is only sent for claimsData/ts>0), stranding ghost terrain. Content supersedes.
+    private final Long2LongOpenHashMap clearedResync = new Long2LongOpenHashMap();
 
     // Derived counts, maintained on every timestamp transition.
     private int receivedCount;
@@ -50,13 +64,52 @@ class ColumnStateMap {
      *         or {@link #SATISFIED} when nothing should be sent
      */
     long classify(long packed, boolean generationEnabled) {
+        // Dirty outranks EVERYTHING (incl. sessionSatisfied): a server-pushed change must
+        // re-request even a settled all-air/parked position, or an air->content edit becomes a
+        // permanent hole. An unknown-but-dirty position re-asks as a first serve (-1).
+        if (this.dirty.contains(packed)) {
+            long dirtyStored = this.timestamps.get(packed);
+            return dirtyStored == -1L ? -1L : dirtyStored;
+        }
+        if (this.sessionSatisfied.contains(packed)) return SATISFIED; // resolved this session, no server data
         long stored = this.timestamps.get(packed);
         if (stored == -1L) return -1L; // Unknown — sync-on-load first; server generates only on explicit retry
         if (stored == 0L && generationEnabled) return 0L; // Not generated — generation retry
-        if (this.dirty.contains(packed)) return stored; // Server-pushed dirty
         if (this.retry.contains(packed)) return stored; // Rate-limit retry
         if (stored > 0 && !this.validated.contains(packed)) return stored; // Cached but not validated this session
         return SATISFIED;
+    }
+
+    void markSessionSatisfied(long packed) { this.sessionSatisfied.add(packed); }
+
+    boolean isSessionSatisfied(long packed) { return this.sessionSatisfied.contains(packed); }
+
+    int sessionSatisfiedCount() { return this.sessionSatisfied.size(); }
+
+    /**
+     * Record that a dirty broadcast crossed a position while its FIRST serve was in flight
+     * (stored == -1, so {@link #markDirtyIfKnown} could not record it). Resolved at the
+     * request's terminal outcome, forcing a re-request because the arriving column predates
+     * the edit. A no-op when the position is not in flight (the dirty is handled normally).
+     */
+    void noteStaleIfInFlight(long packed, boolean inFlight) {
+        if (inFlight) this.staleInFlight.add(packed);
+    }
+
+    /** True (and clears) if this position was dirtied mid-first-serve. */
+    boolean resolveStale(long packed) {
+        return this.staleInFlight.remove(packed);
+    }
+
+    /**
+     * Flag that the column just delivered for {@code packed} was an authoritative 0-section
+     * CLEAR (content-&gt;air), recording the pre-clear content stamp so a rejected clear can
+     * re-request honestly. Called by the networking layer AFTER {@link #onReceived} (which
+     * removes any prior flag — content supersedes). A no-op unless the client actually held
+     * content before ({@code preClearStamp > 0}); a first serve had nothing to leave a ghost.
+     */
+    void markAuthoritativeClear(long packed, long preClearStamp) {
+        if (preClearStamp > 0) this.clearedResync.put(packed, preClearStamp);
     }
 
     private void put(long packed, long timestamp) {
@@ -79,7 +132,16 @@ class ColumnStateMap {
      * positions stay unmarked — the scan ladder requests those anyway.
      */
     boolean markDirtyIfKnown(long packed) {
-        if (this.timestamps.get(packed) != -1L) {
+        // Fire if the client has ANY disposition for the column: a stored timestamp (data or
+        // not-generated) OR a session-satisfied mark (an all-air/parked position with no stored
+        // value). The sessionSatisfied clause is the fix for the air->content permanent hole:
+        // without it, a settled all-air column that gains content is never re-requested, because
+        // classify's sessionSatisfied rung would keep returning SATISFIED. Removing it from
+        // sessionSatisfied (and dirty outranking it in classify) lets the position re-request.
+        // Truly-unknown -1 positions (not session-satisfied) stay unmarked — the scan ladder
+        // requests those anyway, and marking them would add retry marks nothing can consume.
+        if (this.timestamps.get(packed) != -1L || this.sessionSatisfied.contains(packed)) {
+            this.sessionSatisfied.remove(packed);
             this.dirty.add(packed);
             return true;
         }
@@ -99,6 +161,11 @@ class ColumnStateMap {
     /** Column data arrived (authoritative for the position, even if no longer tracked). */
     void onReceived(long packed, long columnTimestamp) {
         this.dirty.remove(packed);
+        this.sessionSatisfied.remove(packed); // real data supersedes any session-satisfied mark
+        // Content supersedes a pending clear flag. A 0-section clear delivery also lands here, so
+        // the networking layer re-flags it via markAuthoritativeClear AFTER this call; a content
+        // delivery (>=1 section) does not, so the flag stays cleared and a rejection re-asks ts=-1.
+        this.clearedResync.remove(packed);
         // An answer supersedes any pending retry. Rate-limit bounces (the original retry
         // writer) guarantee no response is coming, but the timeout sweep retries positions
         // whose response may still arrive late — leaving the mark would re-request every
@@ -111,21 +178,23 @@ class ColumnStateMap {
     /** Server confirmed the column is current. */
     void onUpToDate(long packed) {
         this.retry.remove(packed); // an up-to-date answer supersedes a pending retry (see onReceived)
-        this.validated.add(packed);
-        // Up-to-date is the server affirming this position is current, so it must satisfy
-        // BOTH unsatisfied states: -1 (all-air columns never get a VoxelColumn response)
-        // and 0 (a not-generated stamp whose chunk has since resolved as all-air on the
-        // server). Leaving 0 in place re-classifies the position as generation-needed
-        // every scan — in the End this looped ~50 req/s forever AND starved the scan
-        // budget on the nearest rings so the outer disc was never requested.
+        // Up-to-date must satisfy BOTH unsatisfied states, or classify re-requests forever:
+        // -1 (all-air columns never get a VoxelColumn response) and 0 (a not-generated stamp
+        // whose chunk resolved as all-air on the server) — in the End this looped ~50 req/s
+        // and starved the outer disc. For those the client holds NO server data, so mark it
+        // session-satisfied instead of fabricating a client-clock stamp (which persists and
+        // reads as a false up_to_date next session). A real >0 position validates as before.
         long stored = this.timestamps.get(packed);
         if (stored == -1L || stored == 0L) {
-            put(packed, LSSConstants.epochSeconds());
+            this.sessionSatisfied.add(packed);
+        } else {
+            this.validated.add(packed);
         }
     }
 
     /** Server cannot serve the column (not generated / not servable). */
     void onNotGenerated(long packed) {
+        this.sessionSatisfied.remove(packed); // a not-generated answer re-opens a satisfied position
         put(packed, 0L);
     }
 
@@ -154,13 +223,40 @@ class ColumnStateMap {
 
         int priorFailures = this.ingestFailures.addTo(packed, 1);
         if (priorFailures + 1 > MAX_INGEST_FAILURES) {
-            put(packed, LSSConstants.epochSeconds());
-            this.validated.add(packed);
+            // Park WITHOUT a fabricated or retained >0 stamp: the consumer never stored the
+            // data, so claiming ts>0 next session would be the same lie that causes a permanent
+            // hole. Drop the timestamp to -1 (honest "I hold nothing") and mark session-
+            // satisfied so it stops re-downloading THIS session. Next session it re-asks -1;
+            // a transient failure (storage briefly down) heals, a permanent one (incompatible
+            // consumer) costs one re-attempt per session, bounded by this cap.
+            this.timestamps.remove(packed);
+            if (old > 0) this.receivedCount--;
+            else if (old == 0) this.emptyCount--;
+            this.sessionSatisfied.add(packed);
+            this.validated.remove(packed);
             this.retry.remove(packed);
             this.dirty.remove(packed);
+            this.clearedResync.remove(packed);
             return;
         }
 
+        long clearPreStamp = this.clearedResync.getOrDefault(packed, -1L);
+        if (clearPreStamp > 0) {
+            // Lost CLEAR (the consumer rejected a 0-section content->air column). Re-request with
+            // the pre-clear content stamp — a real server-issued value that is < the server's
+            // cached clear stamp, so the up_to_date check fails and the server re-sends the
+            // clearing column. Dropping to -1 (the lost-content path below) would instead draw an
+            // all-air up_to_date (a clear is only sent for claimsData/ts>0), stranding ghost
+            // terrain for the session. Restoring the stamp, not fabricating one, keeps delivery
+            // honest. Counts net zero: put swaps one >0 stamp (T_clear) for another (T_content).
+            put(packed, clearPreStamp);
+            this.validated.remove(packed);
+            this.dirty.remove(packed);
+            this.retry.add(packed);
+            return;
+        }
+
+        // Lost CONTENT: forget the stamp (honest "I hold nothing") so the server re-serves on ts=-1.
         this.timestamps.remove(packed);
         if (old > 0) this.receivedCount--;
         else if (old == 0) this.emptyCount--;
@@ -183,10 +279,18 @@ class ColumnStateMap {
         pruneSet(this.dirty, playerCx, playerCz, pruneDistance);
         pruneSet(this.retry, playerCx, playerCz, pruneDistance);
         pruneSet(this.validated, playerCx, playerCz, pruneDistance);
+        pruneSet(this.sessionSatisfied, playerCx, playerCz, pruneDistance);
+        pruneSet(this.staleInFlight, playerCx, playerCz, pruneDistance);
         var failIter = this.ingestFailures.long2IntEntrySet().iterator();
         while (failIter.hasNext()) {
             if (PositionUtil.isOutOfRange(failIter.next().getLongKey(), playerCx, playerCz, pruneDistance)) {
                 failIter.remove();
+            }
+        }
+        var clearIter = this.clearedResync.long2LongEntrySet().iterator();
+        while (clearIter.hasNext()) {
+            if (PositionUtil.isOutOfRange(clearIter.next().getLongKey(), playerCx, playerCz, pruneDistance)) {
+                clearIter.remove();
             }
         }
     }
@@ -205,7 +309,10 @@ class ColumnStateMap {
         this.dirty.clear();
         this.retry.clear();
         this.validated.clear();
+        this.sessionSatisfied.clear();
+        this.staleInFlight.clear();
         this.ingestFailures.clear();
+        this.clearedResync.clear();
         this.receivedCount = 0;
         this.emptyCount = 0;
     }
