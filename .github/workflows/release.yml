@@ -106,8 +106,11 @@ jobs:
           modrinth-id: lKiXKLvv
           modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
           files: fabric/build/libs/lod-server-support-fabric-*.jar
-          name: ${{ github.ref_name }} - Fabric (MC 1.21.11)
-          version: ${{ github.ref_name }}+fabric
+          # Built from the bare MOD_VERSION (not the tag, which already carries +mc1.21.11):
+          # platform-first ordering matches main's published style (v0.5.0+fabric+mc26.1) and
+          # must stay unique project-wide on Modrinth across both release lines.
+          name: v${{ env.MOD_VERSION }} - Fabric (MC 1.21.11)
+          version: v${{ env.MOD_VERSION }}+fabric+mc1.21.11
           version-type: release
           loaders: fabric
           game-versions: |
@@ -120,8 +123,8 @@ jobs:
           modrinth-id: lKiXKLvv
           modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
           files: paper/build/libs/lod-server-support-paper-*.jar
-          name: ${{ github.ref_name }} - Paper/Folia (MC 1.21.11)
-          version: ${{ github.ref_name }}+paper
+          name: v${{ env.MOD_VERSION }} - Paper/Folia (MC 1.21.11)
+          version: v${{ env.MOD_VERSION }}+paper+mc1.21.11
           version-type: release
           # One artifact serves all three Bukkit-family loaders (plugin.yml declares
           # folia-supported: true; release_check.py gates it). Folia support is experimental —
