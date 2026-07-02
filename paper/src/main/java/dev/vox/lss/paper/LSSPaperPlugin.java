@@ -227,9 +227,11 @@ public class LSSPaperPlugin extends JavaPlugin implements PluginMessageListener,
 
     /**
      * Test seam: player registration, production-wired to
-     * {@link PaperRequestProcessingService#registerPlayer}. Only invoked when the
-     * {@link HandshakeGate} decision says to register, so the production lambda may
-     * capture a service reference that is non-null whenever servicePresent was true.
+     * {@link PaperRequestProcessingService#enqueueRegister} — on Folia the handshake message
+     * arrives on the player's region thread, so registration is mailboxed and the pump
+     * applies it next tick. Only invoked when the {@link HandshakeGate} decision says to
+     * register, so the production lambda may capture a service reference that is non-null
+     * whenever servicePresent was true.
      */
     @FunctionalInterface
     interface HandshakeRegistrar {
@@ -242,7 +244,7 @@ public class LSSPaperPlugin extends JavaPlugin implements PluginMessageListener,
                 (protocolVersion, enabled, lodDistanceChunks, syncLimit, genLimit, generationEnabled) ->
                         PaperPayloadHandler.sendSessionConfig(bukkitPlayer, protocolVersion, enabled,
                                 lodDistanceChunks, syncLimit, genLimit, generationEnabled),
-                capabilities -> service.registerPlayer(nmsPlayer, capabilities));
+                capabilities -> service.enqueueRegister(nmsPlayer, capabilities));
     }
 
     /**
@@ -310,7 +312,9 @@ public class LSSPaperPlugin extends JavaPlugin implements PluginMessageListener,
     public void onPlayerQuit(PlayerQuitEvent event) {
         var service = this.requestService;
         if (service != null) {
-            service.removePlayer(event.getPlayer().getUniqueId());
+            // Mailboxed: on Folia this event fires on the quitting player's region thread,
+            // and removal mutates pump-owned state (generation service maps among others).
+            service.enqueueRemove(event.getPlayer().getUniqueId());
         }
     }
 
