@@ -117,6 +117,14 @@ afterEvaluate {
             vmArg "-Dlss.test.integratedServer=true"
         }
     }
+    // 1.20.1: fabric-api 0.92's gametest server REUSES the run-dir world across invocations
+    // (26.x recreates it). Gametests mutate world content (block edits, layer strips), so a
+    // stale world poisons the next run's premises — wipe it like 26.x does.
+    tasks.named('runGameTest') {
+        doFirst {
+            delete 'build/run/gameTest/world'
+        }
+    }
 }
 
 processResources {

@@ -91,39 +91,28 @@ class ProtocolConstantsTest {
                 + dirtyColumnsMax + " bytes; it must stay under the 1 MiB cap");
         assertTrue(sessionConfigMax < 1_048_576);
 
-        // VoxelColumn is the DOCUMENTED EXEMPTION from the naive 1 MiB inequality: a
-        // max-size column frame intentionally exceeds it. The true safety relationship:
-        // only handshaken clients receive columns, every such client has the LSS channel
-        // codec registered (so the 1 MiB DiscardedPayload cap never applies to it; the
-        // governing client cap is readByteArray(MAX_SECTIONS_SIZE)), and both platforms'
-        // processors DROP any column whose sectionBytes exceed MAX_SEND_SECTIONS_SIZE before
-        // send (pinned by FabricOffThreadProcessorDropTest and PaperPayloadEdgeTest). The
-        // frame must still clear the 8 MiB uncompressed packet ceiling that vanilla
-        // enforces on compressed connections.
+        // 1.20.1 line: there is NO voxel-column exemption. ClientboundCustomPayloadPacket
+        // enforces MAX_PAYLOAD_SIZE = 1_048_576 in its CONSTRUCTOR — on the server when the
+        // packet is built (ServerPlayNetworking.send throws) and on the client when decoded —
+        // so even a codec-registered channel cannot carry a larger frame (main's 2 MiB cap
+        // relied on 26.x's registered-codec path, which has no such ceiling). The worst-case
+        // column frame must therefore fit the naive 1 MiB inequality like every other payload.
         int dimensionMax = varIntSize(LSSConstants.MAX_DIMENSION_STRING_LENGTH * 3)
                 + LSSConstants.MAX_DIMENSION_STRING_LENGTH * 3; // worst-case UTF-8 expansion
         int voxelColumnMax = 4 + 4 + dimensionMax + 8
                 + varIntSize(LSSConstants.MAX_SECTIONS_SIZE) + LSSConstants.MAX_SECTIONS_SIZE;
-        assertTrue(voxelColumnMax > 1_048_576,
-                "the voxel-column exemption above is only documented while it is real: if"
-                + " MAX_SECTIONS_SIZE now fits the 1 MiB cap, delete the exemption comment"
-                + " and fold the payload into the naive table");
-        assertTrue(voxelColumnMax <= 8_388_608,
+        assertTrue(voxelColumnMax <= 1_048_576,
                 "a max-size voxel-column frame (" + voxelColumnMax + " bytes) must fit the"
-                + " 8 MiB vanilla uncompressed packet ceiling — shrink MAX_SECTIONS_SIZE or"
-                + " redesign the framing before raising it");
+                + " 1 MiB custom-payload constructor cap on 1.20.1 — shrink MAX_SECTIONS_SIZE");
 
-        // The SEND threshold governs what actually goes on the wire, and its binding cap is
-        // netty's frame limit: Varint21LengthFieldPrepender throws (killing the connection)
-        // for any frame over 2_097_151 bytes, and with network compression disabled the frame
-        // is the raw packet. The largest sendable column body plus generous envelope headroom
-        // (packet id, channel identifier, framing varint) must stay under it — otherwise an
-        // admitted column kicks the client in a rejoin/re-serve loop.
+        // The SEND threshold governs what actually goes on the wire; its binding cap on this
+        // line is the same 1 MiB constructor check (netty's 2_097_151 frame cap is now the
+        // looser bound). Envelope headroom covers packet id + channel identifier + framing.
         int sendColumnBodyMax = 4 + 4 + dimensionMax + 8
                 + varIntSize(LSSConstants.MAX_SEND_SECTIONS_SIZE) + LSSConstants.MAX_SEND_SECTIONS_SIZE;
-        assertTrue(sendColumnBodyMax + 256 <= 2_097_151,
+        assertTrue(sendColumnBodyMax + 256 <= 1_048_576,
                 "the largest sendable voxel-column frame (" + sendColumnBodyMax + " + envelope)"
-                + " must fit netty's 2_097_151-byte frame cap — shrink MAX_SEND_SECTIONS_SIZE");
+                + " must fit the 1 MiB custom-payload cap — shrink MAX_SEND_SECTIONS_SIZE");
         assertTrue(LSSConstants.MAX_SEND_SECTIONS_SIZE < LSSConstants.MAX_SECTIONS_SIZE,
                 "the client decode cap must stay above the send threshold so frames from"
                 + " older servers (which sent up to the decode cap) remain readable");
