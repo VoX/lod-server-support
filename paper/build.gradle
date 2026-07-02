@@ -85,6 +85,22 @@ tasks.register('runSoakServer', xyz.jpenilla.runpaper.task.RunServer) {
     maxHeapSize = '2G'
 }
 
+// Folia soak twin (scripts/soak.sh SOAK_PLATFORM=folia). run-paper's opt-in Folia task
+// (named runFolia) downloads folia-<mc>-<build>.jar from the PaperMC downloads service; we
+// point it at the same soakShadowJar + scenario plumbing as runSoakServer. It doubles as the
+// manual Folia smoke task; without -Psoak.scenario the driver stays inert (empty property).
+// pluginsMode INHERIT_NONE is load-bearing: the default PLUGIN_JAR_DETECTION auto-adds the
+// RELEASE shadowJar (soak-excluded) next to soakShadowJar — two same-named plugins, and
+// whichever loads first wins nondeterministically.
+runPaper.folia.pluginsMode = xyz.jpenilla.runpaper.RunPaperExtension.Folia.PluginsMode.INHERIT_NONE
+runPaper.folia.registerTask {
+    minecraftVersion(project.minecraft_version)
+    runDirectory(file('build/run/folia-soak-server'))
+    pluginJars(soakShadowJar.flatMap { it.archiveFile })
+    systemProperty 'lss.soak.scenario', findProperty('soak.scenario') ?: ''
+    maxHeapSize = '2G'
+}
+
 tasks.withType(JavaCompile).configureEach {
     it.options.release = 25
 }
