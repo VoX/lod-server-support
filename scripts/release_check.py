@@ -134,9 +134,10 @@ def check_paper_jar(jar, problems):
         ymltext = _read(jar, "plugin.yml")
         if _looks_unexpanded(ymltext):
             problems.append(f"{base}: plugin.yml has an unexpanded ${{version}} placeholder")
-        if not re.search(r"^folia-supported:\s*true\s*$", ymltext, re.MULTILINE):
-            problems.append(f"{base}: plugin.yml must declare folia-supported: true "
-                            "(Folia refuses to load the plugin without it)")
+        if re.search(r"^folia-supported:", ymltext, re.MULTILINE):
+            problems.append(f"{base}: plugin.yml declares folia-supported on the 1.20.1 line "
+                            "(frozen-alpha Folia breaks generation; the claim was dropped -- "
+                            "absence makes Folia reject the plugin loudly)")
     if not any(n.startswith("dev/vox/lss/common/") and n.endswith(".class") for n in names):
         problems.append(f"{base}: shaded jar missing the shared common/ classes")
     if "paperweight-mappings-namespace: spigot" not in _manifest(jar):
@@ -291,7 +292,7 @@ def _selftest():
 
         good_pap = os.path.join(td, "lod-server-support-paper.jar")
         _make_jar(good_pap, {
-            "plugin.yml": "name: LodServerSupport\nversion: 0.4.0\nfolia-supported: true\n",
+            "plugin.yml": "name: LodServerSupport\nversion: 0.4.0\n",
             "dev/vox/lss/paper/LSSPaperPlugin.class": "x",
             "dev/vox/lss/common/PositionUtil.class": "x",
         }, manifest="Manifest-Version: 1.0\npaperweight-mappings-namespace: spigot\n")
@@ -299,16 +300,17 @@ def _selftest():
         check_paper_jar(good_pap, p)
         check(p == [], f"clean paper jar flagged: {p}")
 
-        # a paper jar without the folia-supported flag must be caught (Folia refuses to load it)
+        # a paper jar DECLARING folia-supported must be caught on this line (claim dropped:
+        # frozen-alpha Folia 1.20.1 breaks generation; absence = loud rejection at load)
         noflag_pap = os.path.join(td, "noflag-paper.jar")
         _make_jar(noflag_pap, {
-            "plugin.yml": "name: LodServerSupport\nversion: 0.4.0\n",
+            "plugin.yml": "name: LodServerSupport\nversion: 0.4.0\nfolia-supported: true\n",
             "dev/vox/lss/paper/LSSPaperPlugin.class": "x",
             "dev/vox/lss/common/PositionUtil.class": "x",
         }, manifest="Manifest-Version: 1.0\npaperweight-mappings-namespace: spigot\n")
         p = []
         check_paper_jar(noflag_pap, p)
-        check(any("folia-supported" in m for m in p), "missing folia-supported flag not caught")
+        check(any("folia-supported" in m for m in p), "declared folia-supported flag not caught")
 
         bad_pap = os.path.join(td, "bad-paper.jar")
         _make_jar(bad_pap, {
@@ -326,7 +328,7 @@ def _selftest():
         # Paper shades common/ at the top level: a dev-only common namespace must be caught.
         common_leak_pap = os.path.join(td, "common-leak-paper.jar")
         _make_jar(common_leak_pap, {
-            "plugin.yml": "name: LodServerSupport\nversion: 0.4.0\nfolia-supported: true\n",
+            "plugin.yml": "name: LodServerSupport\nversion: 0.4.0\n",
             "dev/vox/lss/paper/LSSPaperPlugin.class": "x",
             "dev/vox/lss/common/PositionUtil.class": "x",
             "dev/vox/lss/common/benchmark/SharedBenchHook.class": "x",  # leaked dev code

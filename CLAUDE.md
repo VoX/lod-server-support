@@ -13,15 +13,15 @@ Multi-project Gradle build with three subprojects:
 ```
 lod-server-support/
 ├── common/   Pure Java utilities (no MC deps) — shared by fabric/ and paper/
-├── fabric/   Fabric mod (client + server), Minecraft 26.1.2
-└── paper/    Paper/Folia plugin (server only), Minecraft 26.1.2
+├── fabric/   Fabric mod (client + server), Minecraft 1.20.1 (this support line)
+└── paper/    Paper/Folia plugin (server only), Minecraft 1.20.1 — release jar is REOBFUSCATED (spigot-mapped runtime)
 ```
 
 ## Build Commands
 
 ```bash
-./gradlew :fabric:build -x runClientGameTest  # Build Fabric mod + Tier 1 & 2 tests
-./gradlew :paper:shadowJar                    # Build Paper plugin JAR
+./gradlew :fabric:build                       # Build Fabric mod + Tier 1 & 2 tests
+./gradlew :paper:build                        # Build Paper plugin (reobf release jar + tests)
 ./gradlew clean                               # Clean build artifacts
 ```
 
@@ -34,11 +34,11 @@ CI builds (env `CI=true`) name the jars `lod-server-support-<platform>-<mod_vers
 ## Test Commands
 
 ```bash
-./gradlew :fabric:test -x runGameTest -x runClientGameTest  # Tier 1: JUnit unit tests only (fast, ~7s)
-./gradlew :fabric:runGameTest                                # Tier 2: server gametests (starts dedicated server, ~13s)
-./gradlew :fabric:test -x runClientGameTest                  # Tier 1 + 2 combined
-./gradlew :fabric:runClientGameTest                          # Tier 3: client gametests (starts integrated server + client)
-./gradlew :fabric:build -x runClientGameTest                 # Full build + Tier 1 + 2 tests
+./gradlew :fabric:test -x runGameTest    # Tier 1: JUnit unit tests only (fast, ~7s)
+./gradlew :fabric:runGameTest             # Tier 2: server gametests (starts dedicated server)
+./gradlew :fabric:test                    # Tier 1 + 2 combined
+# Tier 3 does not exist on the 1.20.1 line (fabric-api 0.92 has no client gametest API)
+./gradlew :fabric:build                   # Full build + Tier 1 + 2 tests
 ./gradlew :paper:test                                       # Paper JUnit tests (wire parity, NBT serialization, config)
 ```
 
@@ -289,7 +289,7 @@ Releases are triggered by pushing an **annotated tag** (`git tag -a`). The tag a
 
 ### Tagging a Release
 
-> **Support line (`support/mc1.21.11` branch):** this branch releases the MC 1.21.11 line. Tags are `v<version>+mc1.21.11` (e.g. `v0.5.0+mc1.21.11`) — the `+mc1.21.11` is SemVer **build metadata** (`+`, never a `-` prerelease, which would break `--sort=-v:refname`). `release.yml` strips it so Gradle's `mod_version` is the bare `<version>` (the pre-flight below already passes the bare `<version>`, so the command is unchanged). Land release commits on `support/mc1.21.11` (not `main`) via PR, then tag that branch. `PREV_TAG` globs and Modrinth game-versions (`1.21.11`) are scoped to this line so it never crosses main's 26.1 releases.
+> **Support line (`support/mc1.20.1` branch):** this branch releases the MC 1.20.1 line. Tags are `v<version>+mc1.20.1` — the `+mc1.20.1` is SemVer **build metadata** (`+`, never a `-` prerelease, which would break `--sort=-v:refname`). `release.yml` strips it so Gradle's `mod_version` is the bare `<version>`. Land release commits on `support/mc1.20.1` (not `main`) via PR, then tag that branch. `PREV_TAG` globs and Modrinth game-versions (`1.20.1`) are scoped to this line. **1.20.1-line differences:** the Paper RELEASE artifact is the REOBFUSCATED `reobfJar` output (spigot-mapped runtime below 1.20.5; `release_check.py` expects `paperweight-mappings-namespace: spigot`); Tier 3 does not exist (no client gametest API in fabric-api 0.92 — drop `-x runClientGameTest` from all commands, the task is gone); the pre-flight is `CI=true ./gradlew :fabric:build :paper:test :paper:build -Pmod_version=<version> && python3 scripts/release_check.py --version <version>`; Voxy has no public 1.20.1 build (release notes must say the bridge is dormant); **Folia is DROPPED on this line** (frozen 2023 alphas break generation — plugin.yml has no `folia-supported`, Folia refuses the plugin, Modrinth loaders are paper+purpur, and `PluginYmlContractTest`/`release_check.py` pin the flag's ABSENCE).
 
 `main` is branch-protected (changes must land via PR; tags are **not** protected). Full flow:
 

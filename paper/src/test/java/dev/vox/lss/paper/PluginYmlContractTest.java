@@ -12,6 +12,7 @@ import java.util.Properties;
 import java.util.regex.Pattern;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -98,13 +99,17 @@ class PluginYmlContractTest {
     }
 
     @Test
-    void foliaSupportedIsDeclared() {
-        // Flipped 2026-07-02: the pump now runs on GlobalRegionScheduler and lifecycle
-        // ingress is mailboxed (FoliaWiringContractTest pins both), so the old reason for
-        // the absence pin — BukkitRunnable main-thread assumptions — is gone. Folia refuses
-        // to load plugins without this flag; removing it silently drops Folia support.
-        assertTrue(yml.getBoolean("folia-supported"),
-                "folia-supported: true is required for Folia to load the plugin");
+    void foliaSupportedIsAbsentOnThisLine() {
+        // 1.20.1 line: Folia 1.20.1 exists only as frozen 2023 alphas (build 17) whose
+        // async-load semantics defeat the generation path — observed live: 1 of 1840
+        // generations completed; every other chunk was null after the load completed, even
+        // on the region completion thread, and cross-region ticket pinning is forbidden.
+        // Shipping the flag would let the plugin ENABLE and then silently fail its core
+        // job, so this line drops the claim: without the flag Folia refuses the plugin
+        // loudly at load. (main and the 1.21.11 line keep folia-supported: true.)
+        assertFalse(rawText.contains("folia-supported"),
+                "folia-supported must NOT be declared on the 1.20.1 line (frozen-alpha Folia"
+                        + " breaks generation; absence makes Folia reject the plugin loudly)");
     }
 
     @Test
