@@ -943,12 +943,15 @@ def check_dirty_broadcast(ctx):
 
 def make_disc_completeness(scenario, run=1):
     """Independent disc-completeness check: at the end of a run the client must hold an
-    entry (known data OR a parked not-generated/empty mark) for at least every position of
-    the scanned annulus — area accounting that does NOT trust the scanner's own confirmed-ring
-    bookkeeping. A silently-orphaned position produces zero traffic, so conservation laws
-    can never see it; this floor can. Extra entries (pre-teleport spawn-offset discs, cache
-    reloads, in-exclusion fills) only push the count up, so >= is exact for the orphan class."""
-    @named_check(scenario, ["client.columns.known", "client.columns.empty"])
+    entry (known data, a parked not-generated/empty mark, OR a session-satisfied all-air/parked
+    mark) for at least every position of the scanned annulus — area accounting that does NOT
+    trust the scanner's own confirmed-ring bookkeeping. A silently-orphaned position produces
+    zero traffic, so conservation laws can never see it; this floor can. Extra entries
+    (pre-teleport spawn-offset discs, cache reloads, in-exclusion fills) only push the count up,
+    so >= is exact for the orphan class. NOTE: all-air/parked positions are counted in
+    columns.satisfied (they no longer fabricate a >0 stamp into columns.known)."""
+    @named_check(scenario, ["client.columns.known", "client.columns.empty",
+                            "client.columns.satisfied"])
     def check(ctx):
         lod = ctx.config.get("lodDistanceChunks")
         if not isinstance(lod, int) or isinstance(lod, bool) or lod <= EXCLUSION_RADIUS:
@@ -963,13 +966,16 @@ def make_disc_completeness(scenario, run=1):
                             f"no client snapshots in run {run}", {})
             return
         area = (2 * lod + 1) ** 2 - (2 * EXCLUSION_RADIUS + 1) ** 2
-        known, empty = fc["columns"]["known"], fc["columns"]["empty"]
-        if known + empty < area:
+        cols = fc["columns"]
+        known, empty = cols["known"], cols["empty"]
+        satisfied = cols.get("satisfied", 0)  # all-air/parked positions with no server stamp
+        total = known + empty + satisfied
+        if total < area:
             yield Violation("disc-completeness", f"run{run} final snapshot",
-                            "columns.known+empty below the scanned annulus area — "
+                            "columns.known+empty+satisfied below the scanned annulus area — "
                             "positions were silently orphaned",
-                            {"known": known, "empty": empty, "total": known + empty,
-                             "annulus_area": area, "lodDistanceChunks": lod,
+                            {"known": known, "empty": empty, "satisfied": satisfied,
+                             "total": total, "annulus_area": area, "lodDistanceChunks": lod,
                              "exclusion_radius": EXCLUSION_RADIUS})
     check.__name__ = f"check_disc_completeness_run{run}"
     return check

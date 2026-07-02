@@ -344,7 +344,10 @@ class LodRequestManagerTickTest {
                 "the committed queue entry is exempt from the prune and still goes out —"
                         + " the server's distance guard absorbs it");
         assertEquals(far, sent.get(0).positions()[0]);
-        assertEquals(5000L, sent.get(0).timestamps()[0], "with its scan-time timestamp");
+        assertEquals(-1L, sent.get(0).timestamps()[0],
+                "the drain re-derives the ts from classify at send time: the pruned position is now"
+                        + " unknown (-1), and the server distance guard absorbs it regardless — CL-071's"
+                        + " send-once + in-flight-churn-bound essence holds");
         assertTrue(manager.trackerForTest().isInFlight(far));
 
         seedQueue(far, 5000L);

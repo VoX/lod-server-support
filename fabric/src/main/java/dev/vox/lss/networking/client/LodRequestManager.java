@@ -222,9 +222,13 @@ public class LodRequestManager {
 
         while (count < maxToSend && this.queue.hasNext()) {
             long pos = this.queue.peekPosition();
-            long ts = this.queue.peekTimestamp();
             if (this.tracker.isInFlight(pos)) { this.queue.skip(); continue; }
-            if (this.columns.classify(pos, generationEnabled) == ColumnStateMap.SATISFIED) { this.queue.skip(); continue; }
+            // Re-derive the timestamp from classify at SEND time, not the scan-time value the
+            // queue buffered: a stamp forgotten between scan and drain (e.g. an ingest failure
+            // reset it to -1) would otherwise go out as a stale ts>0 claiming data the client
+            // no longer holds, defeating the server's ts<=0 honest re-resolution.
+            long ts = this.columns.classify(pos, generationEnabled);
+            if (ts == ColumnStateMap.SATISFIED) { this.queue.skip(); continue; }
 
             // Per-type concurrency check — skip if this type is full, try next
             boolean isGen = ts == 0;
@@ -453,6 +457,8 @@ public class LodRequestManager {
 
     public int getReceivedColumnCount() { return this.columns.receivedCount(); }
     public int getEmptyColumnCount() { return this.columns.emptyCount(); }
+    /** Positions resolved this session with no server data (all-air up-to-date, ingest-parked). */
+    public int getSatisfiedColumnCount() { return this.columns.sessionSatisfiedCount(); }
     public int getEffectiveLodDistanceChunks() { return this.sessionConfig != null ? this.scanner.getEffectiveLodDistance() : 0; }
     public long getTotalSendCycles() { return this.metrics.getTotalSendCycles(); }
     public long getTotalPositionsRequested() { return this.metrics.getTotalPositionsRequested(); }

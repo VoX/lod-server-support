@@ -183,8 +183,10 @@ class LodRequestManagerTest {
         manager.onColumnUpToDate(POS);
 
         assertFalse(tracker.isInFlight(POS), "slot leak would throttle later requests until timeout");
-        assertEquals(1, manager.getReceivedColumnCount(), "up-to-date stamps the never-seen position");
+        assertEquals(0, manager.getReceivedColumnCount(),
+                "up-to-date on a never-seen position is session-satisfied, not stamped");
         assertEquals(SATISFIED, manager.columnsForTest().classify(POS, true));
+        assertTrue(manager.columnsForTest().isSessionSatisfied(POS));
         assertEquals(1, manager.getTotalUpToDate());
     }
 
@@ -278,6 +280,10 @@ class LodRequestManagerTest {
         long gen2 = PositionUtil.packPosition(2, 0);
         long sync1 = PositionUtil.packPosition(3, 0);
         long sync2 = PositionUtil.packPosition(4, 0);
+        // drainQueue re-derives the send ts from classify, so a gen request (ts=0) must have a
+        // not-generated column state; sync requests (ts=-1) stay unstamped.
+        manager.columnsForTest().onNotGenerated(gen1);
+        manager.columnsForTest().onNotGenerated(gen2);
         seedQueue(gen1, 0L, gen2, 0L, sync1, -1L, sync2, -1L); // gen requests head the queue
 
         int sent = manager.drainQueue(16);
@@ -300,6 +306,9 @@ class LodRequestManagerTest {
         long sync1 = PositionUtil.packPosition(1, 0);
         long gen1 = PositionUtil.packPosition(2, 0);
         long gen2 = PositionUtil.packPosition(3, 0);
+        // Re-derived drain ts: gen requests need not-generated column state (ts=0).
+        manager.columnsForTest().onNotGenerated(gen1);
+        manager.columnsForTest().onNotGenerated(gen2);
         seedQueue(sync1, -1L, gen1, 0L, gen2, 0L);
 
         int sent = manager.drainQueue(16);
@@ -417,7 +426,8 @@ class LodRequestManagerTest {
         assertEquals(1, manager.getTotalRateLimited());
         assertEquals(2, manager.getTotalUpToDate(), "the entry AFTER the unknown type must still dispatch");
         assertEquals(1, manager.getTotalNotGenerated());
-        assertEquals(2, manager.getReceivedColumnCount(), "both up-to-date entries stamped");
+        assertEquals(0, manager.getReceivedColumnCount(),
+                "up-to-date on never-seen positions is session-satisfied, not stamped");
         assertEquals(1, manager.getEmptyColumnCount(), "not-generated entry stamped");
         assertFalse(tracker.isInFlight(pRate));
         assertFalse(tracker.isInFlight(pUpToDate));
@@ -521,14 +531,15 @@ class LodRequestManagerTest {
     // ---- terminal up_to_date for an unknown ask (SP-078 client leg) ----
 
     @Test
-    void unknownAskAnsweredUpToDateStampsEpochAndStopsReAsking() {
+    void unknownAskAnsweredUpToDateSatisfiesWithoutStampAndStopsReAsking() {
         seedQueue(POS, -1L);
         assertEquals(1, manager.drainQueue(16), "the ts=-1 ask goes out");
 
         manager.onColumnUpToDate(POS); // terminal server answer (e.g. oversized column dropped before send)
 
-        assertTrue(manager.columnsForTest().timestampFor(POS) > 0,
-                "an unknown (ts=-1) ask answered up_to_date must stamp a real epoch timestamp");
+        assertEquals(-1L, manager.columnsForTest().timestampFor(POS),
+                "an unknown (ts=-1) ask answered up_to_date is session-satisfied — no fabricated stamp");
+        assertTrue(manager.columnsForTest().isSessionSatisfied(POS));
         assertEquals(SATISFIED, manager.columnsForTest().classify(POS, true));
         assertFalse(manager.trackerForTest().isInFlight(POS));
         seedQueue(POS, -1L);
@@ -686,10 +697,10 @@ class LodRequestManagerTest {
                 "an all-unknown late push must not debounce the fresh dimension's scan");
     }
 
-    // ---- drain sends the scan-time timestamp (pinned accounting drift) ----
+    // ---- drain RE-DERIVES the timestamp at send time (delivery-honesty #5) ----
 
     @Test
-    void drainSendsTheScanTimeTimestampWhenClassificationChangedSinceScan() {
+    void drainReDerivesTheTimestampFromClassifyAtSendTime() {
         recordSends();
         manager.setLastDimensionForTest(dim("overworld"));
         var cached = new Long2LongOpenHashMap();
@@ -704,11 +715,11 @@ class LodRequestManagerTest {
 
         assertEquals(1, sent.size());
         assertEquals(POS, sent.get(0).positions()[0]);
-        assertEquals(5000L, sent.get(0).timestamps()[0],
-                "the drain sends the scan-time queued timestamp, not a re-derived one — pinned"
-                        + " drift: the stale ts>0 claim can be answered up_to_date from the server's"
-                        + " done-bit, so the data the failure asked for waits for the next failure"
-                        + " report or dirty mark (bounded by the scan->drain window)");
+        assertEquals(-1L, sent.get(0).timestamps()[0],
+                "the drain re-derives the send ts from classify (-1 now), NOT the stale scan-time"
+                        + " 5000L: a ts>0 claim for data the client no longer holds would be answered"
+                        + " up_to_date from the server's done-bit, sealing a hole. Sending -1 makes the"
+                        + " server re-resolve honestly.");
     }
 
     // ---- flushCache drops an in-flight cache load ----

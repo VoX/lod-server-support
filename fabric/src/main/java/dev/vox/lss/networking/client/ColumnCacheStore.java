@@ -21,7 +21,7 @@ import java.util.concurrent.Executors;
 
 public class ColumnCacheStore {
     private static final Pattern SANITIZE_PATTERN = Pattern.compile("[^a-zA-Z0-9._-]");
-    private static final int FORMAT_VERSION = 3;
+    private static final int FORMAT_VERSION = 4;
     private static final int MAX_CACHE_ENTRIES = 2_000_000;
     private static final Path CACHE_DIR = FabricLoader.getInstance().getConfigDir().resolve("lss").resolve("cache");
     // Daemon thread — saves use atomic rename so JVM shutdown mid-write won't corrupt,
@@ -40,8 +40,12 @@ public class ColumnCacheStore {
 
         try (var in = new DataInputStream(Files.newInputStream(file))) {
             int version = in.readInt();
-            if (version != FORMAT_VERSION && version != 2 && version != 1) {
-                LSSLogger.warn("Column cache " + file + " has unsupported version " + version + ", discarding");
+            if (version != FORMAT_VERSION) {
+                // Pre-v4 caches may hold fabricated client-clock stamps that are
+                // indistinguishable from real server timestamps, so they are discarded rather
+                // than migrated (the cache is rebuildable; one cold resync after upgrade).
+                LSSLogger.info("Column cache " + file + " is v" + version + " (< v" + FORMAT_VERSION
+                        + "); discarding — timestamps rebuild on resync");
                 return map;
             }
             int count = in.readInt();
@@ -52,17 +56,9 @@ public class ColumnCacheStore {
             map.ensureCapacity(count);
             for (int i = 0; i < count; i++) {
                 long pos = in.readLong();
-                long value = in.readLong();
-                if (version == 2) {
-                    // v2: encoded as (timestamp << 8 | level) — strip level bits
-                    map.put(pos, value >> 8);
-                } else {
-                    // v1 and v3: raw timestamp
-                    map.put(pos, value);
-                }
+                map.put(pos, in.readLong()); // raw server timestamp
             }
-            String migration = version < FORMAT_VERSION ? " (migrated from v" + version + ")" : "";
-            LSSLogger.info("Loaded " + count + " cached column entries for " + dimensionKey(dimension) + migration);
+            LSSLogger.info("Loaded " + count + " cached column entries for " + dimensionKey(dimension));
         } catch (IOException e) {
             LSSLogger.warn("Failed to load column cache from " + file, e);
         }

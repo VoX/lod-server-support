@@ -7,6 +7,7 @@
 columns.dirty=int
 columns.empty=int
 columns.known=int
+columns.satisfied=int
 dimension=string
 dropped=long
 effective_lod=int

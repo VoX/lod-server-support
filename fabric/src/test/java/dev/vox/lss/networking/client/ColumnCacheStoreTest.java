@@ -159,44 +159,24 @@ class ColumnCacheStoreTest {
     }
 
     @Test
-    void v2FileMigrationStripsLevelBits() throws IOException {
-        var dim = testDimension("v2_migration");
-        Path file = getCacheFile("test-v2-migration", dim);
-        Files.createDirectories(file.getParent());
-        long ts1 = 1_750_000_000L;
-        long ts2 = 12_345L;
-        try (var out = new DataOutputStream(Files.newOutputStream(file))) {
-            out.writeInt(2); // v2 encoded values as (timestamp << 8 | detail level)
-            out.writeInt(2);
-            out.writeLong(100L);
-            out.writeLong((ts1 << 8) | 7L);
-            out.writeLong(200L);
-            out.writeLong((ts2 << 8) | 0L);
+    void preV4CachesAreDiscardedNotMigrated() throws IOException {
+        // Pre-v4 caches may hold fabricated client-clock stamps indistinguishable from real
+        // server timestamps (the permanent-hole bug this format bump closes), so any older
+        // version is discarded on load rather than migrated. The cache is rebuildable — one
+        // cold resync after upgrade.
+        for (int oldVersion : new int[]{1, 2, 3}) {
+            var dim = testDimension("discard_v" + oldVersion);
+            Path file = getCacheFile("test-discard-v" + oldVersion, dim);
+            Files.createDirectories(file.getParent());
+            try (var out = new DataOutputStream(Files.newOutputStream(file))) {
+                out.writeInt(oldVersion);
+                out.writeInt(1);
+                out.writeLong(42L);
+                out.writeLong(1_700_000_000L);
+            }
+            assertTrue(ColumnCacheStore.load("test-discard-v" + oldVersion, dim).isEmpty(),
+                    "v" + oldVersion + " cache is discarded, not migrated");
         }
-
-        var loaded = ColumnCacheStore.load("test-v2-migration", dim);
-        assertEquals(2, loaded.size());
-        // Loading v2 values raw would inflate timestamps ~256x — the server would then
-        // answer up-to-date for stale columns forever.
-        assertEquals(ts1, loaded.get(100L), "v2 entries must have the packed level bits stripped");
-        assertEquals(ts2, loaded.get(200L));
-    }
-
-    @Test
-    void v1FileLoadsTimestampsVerbatim() throws IOException {
-        var dim = testDimension("v1_verbatim");
-        Path file = getCacheFile("test-v1-verbatim", dim);
-        Files.createDirectories(file.getParent());
-        try (var out = new DataOutputStream(Files.newOutputStream(file))) {
-            out.writeInt(1); // v1: raw timestamps, nothing packed
-            out.writeInt(1);
-            out.writeLong(42L);
-            out.writeLong(1_700_000_000L);
-        }
-
-        var loaded = ColumnCacheStore.load("test-v1-verbatim", dim);
-        assertEquals(1, loaded.size());
-        assertEquals(1_700_000_000L, loaded.get(42L), "v1 values must not be shifted on load");
     }
 
     @Test
@@ -271,34 +251,19 @@ class ColumnCacheStoreTest {
     }
 
     @Test
-    void v2MigrationSignExtendsNegativeValues() throws IOException {
-        var dim = testDimension("v2_negative");
-        Path file = getCacheFile("test-v2-negative", dim);
-        Files.createDirectories(file.getParent());
-        try (var out = new DataOutputStream(Files.newOutputStream(file))) {
-            out.writeInt(2); // v2 encoded values as (timestamp << 8 | detail level)
-            out.writeInt(2);
-            out.writeLong(100L);
-            out.writeLong((-1L << 8) | 7L); // ts=-1 (unknown sentinel) packed with level bits
-            out.writeLong(200L);
-            out.writeLong(-1000L); // corrupt negative raw value
-        }
+    void v4RoundTripsRawServerTimestamps() {
+        var dim = testDimension("v4_roundtrip");
+        var map = new Long2LongOpenHashMap();
+        map.defaultReturnValue(-1L);
+        map.put(100L, 1_750_000_000L);
+        map.put(200L, 12_345L);
+        ColumnCacheStore.save("test-v4-roundtrip", dim, map);
 
-        var loaded = ColumnCacheStore.load("test-v2-negative", dim);
+        var loaded = ColumnCacheStore.load("test-v4-roundtrip", dim);
         assertEquals(2, loaded.size());
-        assertTrue(loaded.containsKey(100L));
-        // The migration shift must be arithmetic (>>), sign-extending: a packed -1
-        // timestamp recovers exactly the -1 unknown sentinel, and negative garbage stays
-        // negative. A logical >>> would turn -1000 into ~7.2e16 — a far-future epoch the
-        // server answers up-to-date forever, black-holing the position.
-        assertEquals(-1L, loaded.get(100L), "packed -1 timestamp must migrate back to the -1 sentinel");
-        assertEquals(-4L, loaded.get(200L), "negative raw value must sign-extend, not become a huge positive epoch");
-
-        // The recovered -1 composes with the classify ladder: unknown, so it re-requests.
-        // Values below -1 (the 200L entry) are ColumnStateMap's loadFrom guard's concern.
-        var states = new ColumnStateMap();
-        states.loadFrom(loaded);
-        assertEquals(-1L, states.classify(100L, true), "migrated -1 classifies unknown (re-request), not satisfied");
+        assertEquals(1_750_000_000L, loaded.get(100L), "v4 stores raw server timestamps verbatim");
+        assertEquals(12_345L, loaded.get(200L));
+        ColumnCacheStore.clearForServer("test-v4-roundtrip");
     }
 
     @Test
