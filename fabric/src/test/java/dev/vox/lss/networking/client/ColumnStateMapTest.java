@@ -4,7 +4,7 @@ import dev.vox.lss.common.PositionUtil;
 import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.Bootstrap;
 import org.junit.jupiter.api.BeforeAll;
@@ -512,7 +512,7 @@ class ColumnStateMapTest {
 
     @Test
     void ingestParkDoesNotPersistAFalseStampAndReAsksNextSession() {
-        var dim = ResourceKey.create(Registries.DIMENSION, Identifier.parse("lss_test:park_persist"));
+        var dim = ResourceKey.create(Registries.DIMENSION, new ResourceLocation("lss_test:park_persist"));
         final String server = "test-park-persist";
         try {
             parkViaIngestFailures(POS);

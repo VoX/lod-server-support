@@ -40,8 +40,8 @@ class PayloadCodecTest {
     void handshakeRoundtrip() {
         var original = new HandshakeC2SPayload(4, 1);
         var b = buf();
-        HandshakeC2SPayload.CODEC.encode(b, original);
-        var decoded = HandshakeC2SPayload.CODEC.decode(b);
+        original.write(b);
+        var decoded = HandshakeC2SPayload.read(b);
         assertEquals(original.protocolVersion(), decoded.protocolVersion());
         assertEquals(original.capabilities(), decoded.capabilities());
         b.release();
@@ -55,8 +55,8 @@ class PayloadCodecTest {
         // foreign layout and drains the frame instead of reading the fields.
         var original = new SessionConfigS2CPayload(LSSConstants.PROTOCOL_VERSION, true, 128, 100, 40, true);
         var b = buf();
-        SessionConfigS2CPayload.CODEC.encode(b, original);
-        var decoded = SessionConfigS2CPayload.CODEC.decode(b);
+        original.write(b);
+        var decoded = SessionConfigS2CPayload.read(b);
         assertEquals(original.protocolVersion(), decoded.protocolVersion());
         assertEquals(original.enabled(), decoded.enabled());
         assertEquals(original.lodDistanceChunks(), decoded.lodDistanceChunks());
@@ -82,8 +82,8 @@ class PayloadCodecTest {
         };
         var original = new BatchResponseS2CPayload(types, positions, 3);
         var b = buf();
-        BatchResponseS2CPayload.CODEC.encode(b, original);
-        var decoded = BatchResponseS2CPayload.CODEC.decode(b);
+        original.write(b);
+        var decoded = BatchResponseS2CPayload.read(b);
         assertEquals(3, decoded.count());
         for (int i = 0; i < 3; i++) {
             assertEquals(types[i], decoded.responseTypes()[i]);
@@ -103,8 +103,8 @@ class PayloadCodecTest {
         };
         var original = new DirtyColumnsS2CPayload(positions);
         var b = buf();
-        DirtyColumnsS2CPayload.CODEC.encode(b, original);
-        var decoded = DirtyColumnsS2CPayload.CODEC.decode(b);
+        original.write(b);
+        var decoded = DirtyColumnsS2CPayload.read(b);
         assertArrayEquals(original.dirtyPositions(), decoded.dirtyPositions());
         b.release();
     }
@@ -121,8 +121,8 @@ class PayloadCodecTest {
         long[] timestamps = {1000L, 0L, -1L};
         var original = new BatchChunkRequestC2SPayload(positions, timestamps, 3);
         var b = buf();
-        BatchChunkRequestC2SPayload.CODEC.encode(b, original);
-        var decoded = BatchChunkRequestC2SPayload.CODEC.decode(b);
+        original.write(b);
+        var decoded = BatchChunkRequestC2SPayload.read(b);
         assertEquals(3, decoded.count());
         assertArrayEquals(positions, decoded.packedPositions());
         assertArrayEquals(timestamps, decoded.clientTimestamps());
@@ -136,8 +136,8 @@ class PayloadCodecTest {
         byte[] sections = emptyColumn();
         var original = new VoxelColumnS2CPayload(10, 20, Level.OVERWORLD, 12345L, sections);
         var b = buf();
-        VoxelColumnS2CPayload.CODEC.encode(b, original);
-        var decoded = VoxelColumnS2CPayload.CODEC.decode(b);
+        original.write(b);
+        var decoded = VoxelColumnS2CPayload.read(b);
         assertEquals(Level.OVERWORLD, decoded.dimension());
         assertEquals(original.chunkX(), decoded.chunkX());
         assertEquals(original.chunkZ(), decoded.chunkZ());
@@ -151,8 +151,8 @@ class PayloadCodecTest {
         byte[] sections = emptyColumn();
         var original = new VoxelColumnS2CPayload(5, -5, Level.NETHER, 99L, sections);
         var b = buf();
-        VoxelColumnS2CPayload.CODEC.encode(b, original);
-        var decoded = VoxelColumnS2CPayload.CODEC.decode(b);
+        original.write(b);
+        var decoded = VoxelColumnS2CPayload.read(b);
         assertEquals(Level.NETHER, decoded.dimension());
         b.release();
     }
@@ -162,8 +162,8 @@ class PayloadCodecTest {
         byte[] sections = emptyColumn();
         var original = new VoxelColumnS2CPayload(0, 0, Level.END, 0L, sections);
         var b = buf();
-        VoxelColumnS2CPayload.CODEC.encode(b, original);
-        var decoded = VoxelColumnS2CPayload.CODEC.decode(b);
+        original.write(b);
+        var decoded = VoxelColumnS2CPayload.read(b);
         assertEquals(Level.END, decoded.dimension());
         b.release();
     }

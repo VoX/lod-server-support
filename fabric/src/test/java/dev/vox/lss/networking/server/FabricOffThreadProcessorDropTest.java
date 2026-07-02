@@ -5,7 +5,7 @@ import dev.vox.lss.common.SharedBandwidthLimiter;
 import dev.vox.lss.common.processing.TickDiagnostics;
 import dev.vox.lss.networking.payloads.VoxelColumnS2CPayload;
 import net.minecraft.SharedConstants;
-import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import net.fabricmc.fabric.api.networking.v1.FabricPacket;
 import net.minecraft.server.Bootstrap;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -45,9 +45,9 @@ class FabricOffThreadProcessorDropTest {
     }
 
     /** Flush whatever was enqueued for the player (FlushSendQueueTest token-bucket pattern). */
-    private static List<CustomPacketPayload> flush(PlayerRequestState state) throws InterruptedException {
+    private static List<FabricPacket> flush(PlayerRequestState state) throws InterruptedException {
         Thread.sleep(50); // the empty per-player token bucket only refills after >=1ms
-        var sent = new ArrayList<CustomPacketPayload>();
+        var sent = new ArrayList<FabricPacket>();
         state.flushSendQueue(BIG_ALLOCATION, new SharedBandwidthLimiter(BIG_ALLOCATION),
                 new TickDiagnostics(), sent::add);
         return sent;
@@ -75,7 +75,7 @@ class FabricOffThreadProcessorDropTest {
         byte[] sections = new byte[64];
         // #4 fix: a pathological >256-char dimension id is dropped at the guard (returns false →
         // caller answers up-to-date) instead of letting the send-time writeUtf throw and drop
-        // the whole flush queue. The guard runs before the Identifier.parse, so it can't throw.
+        // the whole flush queue. The guard runs before the ResourceLocation.parse, so it can't throw.
         String oversizedDim = "lss:" + "a".repeat(LSSConstants.MAX_DIMENSION_STRING_LENGTH - 3); // 257
 
         boolean sent = h.processor().buildAndEnqueueColumnPayload(h.state(), 1, 2, oversizedDim,
@@ -103,7 +103,7 @@ class FabricOffThreadProcessorDropTest {
         assertEquals(3, column.chunkX());
         assertEquals(-4, column.chunkZ());
         assertEquals(77L, column.columnTimestamp());
-        assertEquals(LSSConstants.DIM_STR_THE_END, column.dimension().identifier().toString());
+        assertEquals(LSSConstants.DIM_STR_THE_END, column.dimension().location().toString());
         assertEquals(LSSConstants.MAX_SEND_SECTIONS_SIZE, column.decompressedSections().length);
     }
 }

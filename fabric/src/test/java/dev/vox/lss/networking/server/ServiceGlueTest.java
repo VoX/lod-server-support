@@ -8,7 +8,7 @@ import dev.vox.lss.common.processing.QueuedPayload;
 import dev.vox.lss.common.processing.TickDiagnostics;
 import dev.vox.lss.common.processing.TickSnapshot;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
-import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import net.fabricmc.fabric.api.networking.v1.FabricPacket;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
@@ -50,8 +50,9 @@ class ServiceGlueTest {
     }
 
     /** Opaque stand-in payload: the flush path never reads the type. */
-    private record TestPayload(String name) implements CustomPacketPayload {
-        @Override public Type<? extends CustomPacketPayload> type() { return null; }
+    private record TestPayload(String name) implements FabricPacket {
+        @Override public void write(net.minecraft.network.FriendlyByteBuf buf) {}
+        @Override public net.fabricmc.fabric.api.networking.v1.PacketType<?> getType() { return null; }
     }
 
     /** Records what the glue routes into the real {@code clearDiskReadDone} entry point
@@ -95,7 +96,7 @@ class ServiceGlueTest {
                 new SharedBandwidthLimiter(BIG_ALLOCATION), new TickDiagnostics(), sender, proc);
     }
 
-    private static List<String> names(List<CustomPacketPayload> payloads) {
+    private static List<String> names(List<FabricPacket> payloads) {
         var out = new ArrayList<String>();
         for (var p : payloads) out.add(((TestPayload) p).name());
         return out;
@@ -121,7 +122,7 @@ class ServiceGlueTest {
         state.addReadyPayload(new QueuedPayload<>(new TestPayload("third"), 0, 2, POS_3));
         Thread.sleep(50); // the empty per-player token bucket only refills after >=1ms
 
-        var sent = new ArrayList<CustomPacketPayload>();
+        var sent = new ArrayList<FabricPacket>();
         flush(players, (s, p) -> {
             if (!sent.isEmpty()) throw new Exception("broken connection");
             sent.add(p);
@@ -138,7 +139,7 @@ class ServiceGlueTest {
 
         // A later clean flush has nothing left to send or clear: drops do not resurface.
         Thread.sleep(50);
-        var resent = new ArrayList<CustomPacketPayload>();
+        var resent = new ArrayList<FabricPacket>();
         flush(players, (s, p) -> resent.add(p), proc);
         assertEquals(List.of(), resent, "dropped payloads must not resurface on the next flush");
         assertEquals(1, proc.cleared.size(), "a clean flush must never touch clearDiskReadDone");
@@ -152,7 +153,7 @@ class ServiceGlueTest {
         state.addReadyPayload(new QueuedPayload<>(new TestPayload("early"), 0, 0, POS_1));
         Thread.sleep(50);
 
-        var sent = new ArrayList<CustomPacketPayload>();
+        var sent = new ArrayList<FabricPacket>();
         flush(players, (s, p) -> sent.add(p), proc);
         assertEquals(List.of(), sent, "no payload may go on the wire before the handshake completes");
         assertEquals(List.of(), proc.cleared, "skipping a gated player is not a drop");
@@ -275,7 +276,7 @@ class ServiceGlueTest {
             RequestProcessingService.armSendDrops(2);
             assertEquals(2, RequestProcessingService.pendingSendDrops(), "soak JVMs may arm the fault");
 
-            var sent = new ArrayList<CustomPacketPayload>();
+            var sent = new ArrayList<FabricPacket>();
             flush(players, (s, p) -> sent.add(p), proc);
 
             assertEquals(List.of("third"), names(sent),
@@ -331,7 +332,7 @@ class ServiceGlueTest {
             var proc = new RecordingProcessor(players);
             state.addReadyPayload(new QueuedPayload<>(new TestPayload("prod"), 0, 0, POS_1));
             Thread.sleep(50);
-            var sent = new ArrayList<CustomPacketPayload>();
+            var sent = new ArrayList<FabricPacket>();
             flush(players, (s, p) -> sent.add(p), proc);
             assertEquals(List.of("prod"), names(sent),
                     "with the seam unarmed the flush must behave exactly like production");

@@ -4,6 +4,7 @@ import com.mojang.serialization.Lifecycle;
 import dev.vox.lss.api.LSSApi;
 import dev.vox.lss.api.VoxelColumnConsumer;
 import dev.vox.lss.api.VoxelColumnData;
+import dev.vox.lss.networking.server.TestContainerFactory;
 import dev.vox.lss.common.LSSConstants;
 import dev.vox.lss.common.PositionUtil;
 import dev.vox.lss.config.LSSClientConfig;
@@ -13,19 +14,19 @@ import io.netty.buffer.Unpooled;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.MappedRegistry;
-import net.minecraft.core.RegistrationInfo;
+import com.mojang.serialization.Lifecycle;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.data.registries.VanillaRegistries;
 import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.Bootstrap;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.biome.Biomes;
 import net.minecraft.world.level.chunk.LevelChunkSection;
-import net.minecraft.world.level.chunk.PalettedContainerFactory;
+
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -50,7 +51,7 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 class ClientColumnProcessorTest {
 
-    private static PalettedContainerFactory FACTORY;
+    private static TestContainerFactory FACTORY;
     /** Section count of the test "client level" the drain runs against. */
     private static final int LEVEL_SECTIONS = 4;
     private static final int MIN_SECTION_Y = -4;
@@ -59,11 +60,11 @@ class ClientColumnProcessorTest {
     static void setup() {
         SharedConstants.tryDetectVersion();
         Bootstrap.bootStrap();
-        FACTORY = PalettedContainerFactory.create(buildRegistryAccess());
+        FACTORY = TestContainerFactory.create(buildRegistryAccess());
     }
 
     /**
-     * Minimal RegistryAccess for {@link PalettedContainerFactory#create}: only the BIOME
+     * Minimal RegistryAccess for {@link TestContainerFactory#create}: only the BIOME
      * registry is read, and the decode tests never reference a non-default biome, so a
      * single PLAINS entry (the factory default) suffices — no golden bytes depend on ids
      * here (contrast NbtSectionSerializerTest, which must pin a multi-biome order).
@@ -72,7 +73,7 @@ class ClientColumnProcessorTest {
         HolderLookup.Provider provider = VanillaRegistries.createLookup();
         HolderLookup.RegistryLookup<Biome> src = provider.lookupOrThrow(Registries.BIOME);
         MappedRegistry<Biome> biomes = new MappedRegistry<>(Registries.BIOME, Lifecycle.stable());
-        biomes.register(Biomes.PLAINS, src.getOrThrow(Biomes.PLAINS).value(), RegistrationInfo.BUILT_IN);
+        biomes.register(Biomes.PLAINS, src.getOrThrow(Biomes.PLAINS).value(), Lifecycle.stable());
         biomes.freeze();
         return new RegistryAccess.ImmutableRegistryAccess(List.of(biomes));
     }
@@ -99,7 +100,7 @@ class ClientColumnProcessorTest {
     }
 
     private static ResourceKey<Level> dimKey(String name) {
-        return ResourceKey.create(Registries.DIMENSION, Identifier.parse("lss_test:" + name));
+        return ResourceKey.create(Registries.DIMENSION, new ResourceLocation("lss_test:" + name));
     }
 
     private void offer(int count) {
@@ -121,7 +122,7 @@ class ClientColumnProcessorTest {
             buf.writeVarInt(claimed);
             for (int i = 0; i < actual; i++) {
                 buf.writeByte(i);
-                new LevelChunkSection(FACTORY).write(buf);
+                new LevelChunkSection(FACTORY.biomeRegistry()).write(buf);
                 buf.writeBoolean(false);
                 buf.writeBoolean(false);
             }
@@ -148,7 +149,7 @@ class ClientColumnProcessorTest {
         try {
             buf.writeVarInt(1);
             buf.writeByte(0);
-            new LevelChunkSection(FACTORY).write(buf);
+            new LevelChunkSection(FACTORY.biomeRegistry()).write(buf);
             buf.writeBoolean(true);
             buf.writeBytes(new byte[16]);
             return drainToArray(buf);
@@ -158,7 +159,7 @@ class ClientColumnProcessorTest {
     }
 
     private void drainNow() {
-        processor.drainColumnQueue(dim, LEVEL_SECTIONS, MIN_SECTION_Y, FACTORY, recordingDispatcher,
+        processor.drainColumnQueue(dim, LEVEL_SECTIONS, MIN_SECTION_Y, FACTORY.biomeRegistry(), recordingDispatcher,
                 processor.sessionEpochForTest());
     }
 
@@ -218,7 +219,7 @@ class ClientColumnProcessorTest {
         var wire = sectionWire(1, 1);
         processor.offer(new VoxelColumnS2CPayload(3, 4, dim, 9L, wire), false);
         assertThrows(LinkageError.class, () -> processor.drainColumnQueue(dim, LEVEL_SECTIONS,
-                MIN_SECTION_Y, FACTORY,
+                MIN_SECTION_Y, FACTORY.biomeRegistry(),
                 (d, cx, cz, data) -> { throw new LinkageError("boom"); },
                 processor.sessionEpochForTest()));
         assertEquals(List.of(new Report(dim, 3, 4)), reports,
@@ -294,8 +295,8 @@ class ClientColumnProcessorTest {
     @Test
     void airFillAddsAllAirSectionsForEveryAbsentYOnResync() {
         var present = new VoxelColumnData.SectionData[]{
-                new VoxelColumnData.SectionData(-4, new LevelChunkSection(FACTORY), null, null)};
-        var filled = ClientColumnProcessor.withAirFilledAbsentSections(present, LEVEL_SECTIONS, MIN_SECTION_Y, FACTORY);
+                new VoxelColumnData.SectionData(-4, new LevelChunkSection(FACTORY.biomeRegistry()), null, null)};
+        var filled = ClientColumnProcessor.withAirFilledAbsentSections(present, LEVEL_SECTIONS, MIN_SECTION_Y, FACTORY.biomeRegistry());
 
         var ys = new java.util.HashSet<Integer>();
         for (var s : filled) ys.add(s.sectionY());
@@ -312,18 +313,18 @@ class ClientColumnProcessorTest {
 
     @Test
     void resyncColumnAirFillsAbsentSectionsButFirstServeDoesNot() {
-        var dim = ResourceKey.create(Registries.DIMENSION, Identifier.parse("lss_test:processor"));
+        var dim = ResourceKey.create(Registries.DIMENSION, new ResourceLocation("lss_test:processor"));
         // sectionWire writes sections at Y=0,1,..., so use minSectionY=0 -> range {0,1,2,3}.
         byte[] wire = sectionWire(1, 1); // one section at Y=0
 
         processor.offer(new VoxelColumnS2CPayload(0, 0, dim, 5000L, wire), true); // resync
-        processor.drainColumnQueue(dim, LEVEL_SECTIONS, 0, FACTORY, recordingDispatcher,
+        processor.drainColumnQueue(dim, LEVEL_SECTIONS, 0, FACTORY.biomeRegistry(), recordingDispatcher,
                 processor.sessionEpochForTest());
         assertEquals(LEVEL_SECTIONS, dispatches.get(dispatches.size() - 1).sectionCount(),
                 "a resync fills every absent section-Y with air (present + air = full level range)");
 
         processor.offer(new VoxelColumnS2CPayload(1, 1, dim, 5000L, wire), false); // first serve
-        processor.drainColumnQueue(dim, LEVEL_SECTIONS, 0, FACTORY, recordingDispatcher,
+        processor.drainColumnQueue(dim, LEVEL_SECTIONS, 0, FACTORY.biomeRegistry(), recordingDispatcher,
                 processor.sessionEpochForTest());
         assertEquals(1, dispatches.get(dispatches.size() - 1).sectionCount(),
                 "a first serve dispatches only the carried section — no air-fill (absent == air == no-op)");
@@ -331,7 +332,7 @@ class ClientColumnProcessorTest {
 
     @Test
     void reportUndispatchedUnstampsQueuedColumnsBeforeTheCacheFlush() {
-        var dim = ResourceKey.create(Registries.DIMENSION, Identifier.parse("lss_test:processor"));
+        var dim = ResourceKey.create(Registries.DIMENSION, new ResourceLocation("lss_test:processor"));
         var manager = new LodRequestManager();
         manager.onSessionConfig(new SessionConfigS2CPayload(LSSConstants.PROTOCOL_VERSION, true,
                 64, 100, 100, true), "lss-test");
@@ -371,7 +372,7 @@ class ClientColumnProcessorTest {
         // the claim sizes the array and the decode walks off the end of the buffer.
         byte[] wire = sectionWire(1_000_000, LEVEL_SECTIONS);
 
-        var sections = ClientColumnProcessor.decodeSections(wire, LEVEL_SECTIONS, FACTORY);
+        var sections = ClientColumnProcessor.decodeSections(wire, LEVEL_SECTIONS, FACTORY.biomeRegistry());
 
         assertEquals(LEVEL_SECTIONS, sections.length,
                 "the claimed varint must never size the allocation — hostile counts clamp to the level height");
@@ -387,7 +388,7 @@ class ClientColumnProcessorTest {
         // no throw, no report (the column dispatches partially, silently).
         byte[] wire = sectionWire(6, 6);
 
-        var sections = ClientColumnProcessor.decodeSections(wire, LEVEL_SECTIONS, FACTORY);
+        var sections = ClientColumnProcessor.decodeSections(wire, LEVEL_SECTIONS, FACTORY.biomeRegistry());
 
         assertEquals(LEVEL_SECTIONS, sections.length,
                 "sections beyond the client level's height are silently dropped");
@@ -399,7 +400,7 @@ class ClientColumnProcessorTest {
     void decodeNegativeSectionCountYieldsEmptyColumn() {
         byte[] wire = sectionWire(-3, 0);
 
-        var sections = ClientColumnProcessor.decodeSections(wire, LEVEL_SECTIONS, FACTORY);
+        var sections = ClientColumnProcessor.decodeSections(wire, LEVEL_SECTIONS, FACTORY.biomeRegistry());
 
         assertEquals(0, sections.length,
                 "a negative claimed count clamps to zero, never a negative-size allocation");
@@ -478,7 +479,7 @@ class ClientColumnProcessorTest {
             processor.reportUndispatched(manager);
             processor.offer(new VoxelColumnS2CPayload(4, 4, dim, 5000L, sectionWire(1, 1)), false);
         };
-        processor.drainColumnQueue(dim, LEVEL_SECTIONS, MIN_SECTION_Y, FACTORY, teardownMidDispatch, epoch);
+        processor.drainColumnQueue(dim, LEVEL_SECTIONS, MIN_SECTION_Y, FACTORY.biomeRegistry(), teardownMidDispatch, epoch);
 
         assertEquals(List.of(new Dispatched(1, 1, 1)), dispatches,
                 "at most the already-polled column dispatches (the accepted ≤1 residual)");
@@ -621,14 +622,14 @@ class ClientColumnProcessorTest {
         processor.reportUndispatched(manager); // teardown bumps the session epoch
         processor.offer(new VoxelColumnS2CPayload(2, 2, dim, 1L, sectionWire(1, 1)), false); // straggler
 
-        processor.drainColumnQueue(dim, LEVEL_SECTIONS, MIN_SECTION_Y, FACTORY, recordingDispatcher, staleEpoch);
+        processor.drainColumnQueue(dim, LEVEL_SECTIONS, MIN_SECTION_Y, FACTORY.biomeRegistry(), recordingDispatcher, staleEpoch);
 
         assertEquals(List.of(), dispatches,
                 "a drain scheduled before teardown must not dispatch into the new session");
         assertEquals(1, processor.getQueuedCount(),
                 "the straggler is left for shutdown, not consumed by the stale drain");
 
-        processor.drainColumnQueue(dim, LEVEL_SECTIONS, MIN_SECTION_Y, FACTORY, recordingDispatcher,
+        processor.drainColumnQueue(dim, LEVEL_SECTIONS, MIN_SECTION_Y, FACTORY.biomeRegistry(), recordingDispatcher,
                 processor.sessionEpochForTest());
         assertEquals(List.of(new Dispatched(2, 2, 1)), dispatches,
                 "only the epoch gates the drain — a current-epoch drain still serves");
@@ -656,7 +657,7 @@ class ClientColumnProcessorTest {
                 64, 100, 100, true), true);
         try {
             proc.offer(new VoxelColumnS2CPayload(11, 11, dim, 6000L, truncatedColumnWire()), false);
-            proc.drainColumnQueue(dim, LEVEL_SECTIONS, MIN_SECTION_Y, FACTORY, (d, cx, cz, data) -> {},
+            proc.drainColumnQueue(dim, LEVEL_SECTIONS, MIN_SECTION_Y, FACTORY.biomeRegistry(), (d, cx, cz, data) -> {},
                     proc.sessionEpochForTest());
             assertEquals(-1L, manager.getColumnTimestamp(11, 11),
                     "premise: the decode failure unstamped the position");

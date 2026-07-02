@@ -4,8 +4,7 @@ import dev.vox.lss.common.LSSConstants;
 import io.netty.buffer.Unpooled;
 import net.minecraft.SharedConstants;
 import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.Bootstrap;
 import net.minecraft.world.level.Level;
@@ -45,9 +44,9 @@ class ProtocolConstantsTest {
         return size;
     }
 
-    private static <T> byte[] encode(StreamCodec<FriendlyByteBuf, T> codec, T payload) {
+    private static byte[] encode(net.fabricmc.fabric.api.networking.v1.FabricPacket packet) {
         var b = new FriendlyByteBuf(Unpooled.buffer());
-        codec.encode(b, payload);
+        packet.write(b);
         byte[] out = new byte[b.readableBytes()];
         b.readBytes(out);
         b.release();
@@ -141,7 +140,7 @@ class ProtocolConstantsTest {
         for (Case c : new Case[]{new Case(Level.OVERWORLD, "minecraft:overworld"),
                 new Case(Level.NETHER, "minecraft:the_nether"),
                 new Case(Level.END, "minecraft:the_end")}) {
-            byte[] frame = encode(VoxelColumnS2CPayload.CODEC, new VoxelColumnS2CPayload(
+            byte[] frame = encode(new VoxelColumnS2CPayload(
                     Integer.MIN_VALUE, Integer.MAX_VALUE, c.key(), Long.MAX_VALUE, new byte[0]));
             assertTrue(frame.length <= LSSConstants.ESTIMATED_COLUMN_OVERHEAD_BYTES,
                     c.dim() + " header is " + frame.length + " bytes — raise"
@@ -150,7 +149,7 @@ class ProtocolConstantsTest {
         }
         // Worst case includes the 4-byte section length prefix at MAX_SECTIONS_SIZE with
         // the longest vanilla dimension string.
-        byte[] big = encode(VoxelColumnS2CPayload.CODEC, new VoxelColumnS2CPayload(
+        byte[] big = encode(new VoxelColumnS2CPayload(
                 0, 0, Level.NETHER, 0L, new byte[LSSConstants.MAX_SECTIONS_SIZE]));
         assertTrue(big.length - LSSConstants.MAX_SECTIONS_SIZE
                         <= LSSConstants.ESTIMATED_COLUMN_OVERHEAD_BYTES,
@@ -168,7 +167,7 @@ class ProtocolConstantsTest {
                 LSSConstants.CHANNEL_VOXEL_COLUMN, LSSConstants.CHANNEL_BATCH_RESPONSE};
         var distinct = new HashSet<String>();
         for (String channel : channels) {
-            var id = Identifier.parse(channel); // throws on a typo'd channel string
+            var id = new ResourceLocation(channel); // throws on a typo'd channel string
             assertEquals(LSSConstants.MOD_ID, id.getNamespace(),
                     channel + " must live under the lss: namespace");
             distinct.add(id.toString());
@@ -187,16 +186,16 @@ class ProtocolConstantsTest {
     @Test
     void payloadTypesBindTheDeclaredChannels() {
         assertEquals(LSSConstants.CHANNEL_HANDSHAKE,
-                HandshakeC2SPayload.TYPE.id().toString());
+                HandshakeC2SPayload.TYPE.getId().toString());
         assertEquals(LSSConstants.CHANNEL_CHUNK_REQUEST,
-                BatchChunkRequestC2SPayload.TYPE.id().toString());
+                BatchChunkRequestC2SPayload.TYPE.getId().toString());
         assertEquals(LSSConstants.CHANNEL_SESSION_CONFIG,
-                SessionConfigS2CPayload.TYPE.id().toString());
+                SessionConfigS2CPayload.TYPE.getId().toString());
         assertEquals(LSSConstants.CHANNEL_DIRTY_COLUMNS,
-                DirtyColumnsS2CPayload.TYPE.id().toString());
+                DirtyColumnsS2CPayload.TYPE.getId().toString());
         assertEquals(LSSConstants.CHANNEL_VOXEL_COLUMN,
-                VoxelColumnS2CPayload.TYPE.id().toString());
+                VoxelColumnS2CPayload.TYPE.getId().toString());
         assertEquals(LSSConstants.CHANNEL_BATCH_RESPONSE,
-                BatchResponseS2CPayload.TYPE.id().toString());
+                BatchResponseS2CPayload.TYPE.getId().toString());
     }
 }

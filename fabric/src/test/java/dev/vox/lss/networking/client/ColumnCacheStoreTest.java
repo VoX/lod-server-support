@@ -3,7 +3,7 @@ package dev.vox.lss.networking.client;
 import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.Bootstrap;
 import net.minecraft.world.level.Level;
@@ -27,11 +27,11 @@ class ColumnCacheStoreTest {
     }
 
     private static ResourceKey<Level> testDimension(String name) {
-        return ResourceKey.create(Registries.DIMENSION, Identifier.parse("lss_test:" + name));
+        return ResourceKey.create(Registries.DIMENSION, new ResourceLocation("lss_test:" + name));
     }
 
     private static Path getCacheFile(String serverAddress, ResourceKey<Level> dimension) {
-        String dimKey = dimension.identifier().toString().replaceAll("[^a-zA-Z0-9._-]", "_");
+        String dimKey = dimension.location().toString().replaceAll("[^a-zA-Z0-9._-]", "_");
         String serverKey = serverAddress.replaceAll("[^a-zA-Z0-9._-]", "_");
         return FabricLoader.getInstance().getConfigDir()
                 .resolve("lss").resolve("cache").resolve(serverKey).resolve(dimKey + ".bin");

@@ -6,8 +6,7 @@ import io.netty.buffer.Unpooled;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.Bootstrap;
 import net.minecraft.world.level.Level;
@@ -46,18 +45,18 @@ class WireParityTest {
         return out;
     }
 
-    private static <T> byte[] encode(StreamCodec<FriendlyByteBuf, T> codec, T payload) {
+    private static byte[] encode(net.fabricmc.fabric.api.networking.v1.FabricPacket packet) {
         var b = new FriendlyByteBuf(Unpooled.buffer());
-        codec.encode(b, payload);
+        packet.write(b);
         byte[] out = new byte[b.readableBytes()];
         b.readBytes(out);
         b.release();
         return out;
     }
 
-    private static <T> T decode(StreamCodec<FriendlyByteBuf, T> codec, byte[] frame) {
+    private static <T> T decode(java.util.function.Function<FriendlyByteBuf, T> reader, byte[] frame) {
         var b = new FriendlyByteBuf(Unpooled.wrappedBuffer(frame));
-        T r = codec.decode(b);
+        T r = reader.apply(b);
         b.release();
         return r;
     }
@@ -71,9 +70,9 @@ class WireParityTest {
                 b.writeVarInt(f[0]);
                 b.writeVarInt(f[1]);
             });
-            assertArrayEquals(expected, encode(HandshakeC2SPayload.CODEC, new HandshakeC2SPayload(f[0], f[1])),
+            assertArrayEquals(expected, encode(new HandshakeC2SPayload(f[0], f[1])),
                     "handshake " + f[0] + "," + f[1]);
-            var d = decode(HandshakeC2SPayload.CODEC, expected);
+            var d = decode(HandshakeC2SPayload::read, expected);
             assertEquals(f[0], d.protocolVersion());
             assertEquals(f[1], d.capabilities());
         }
@@ -90,11 +89,9 @@ class WireParityTest {
                 b.writeLong(ts[i]);
             }
         });
-        assertArrayEquals(expected, encode(BatchChunkRequestC2SPayload.CODEC,
-                new BatchChunkRequestC2SPayload(pos, ts, 3)));
+        assertArrayEquals(expected, encode(new BatchChunkRequestC2SPayload(pos, ts, 3)));
         // empty
-        assertArrayEquals(new byte[]{0}, encode(BatchChunkRequestC2SPayload.CODEC,
-                new BatchChunkRequestC2SPayload(new long[0], new long[0], 0)));
+        assertArrayEquals(new byte[]{0}, encode(new BatchChunkRequestC2SPayload(new long[0], new long[0], 0)));
     }
 
     @Test
@@ -111,9 +108,8 @@ class WireParityTest {
                 b.writeLong(ts[i]);
             }
         });
-        assertArrayEquals(expected, encode(BatchChunkRequestC2SPayload.CODEC,
-                new BatchChunkRequestC2SPayload(pos, ts, 2)));
-        var d = decode(BatchChunkRequestC2SPayload.CODEC, expected);
+        assertArrayEquals(expected, encode(new BatchChunkRequestC2SPayload(pos, ts, 2)));
+        var d = decode(BatchChunkRequestC2SPayload::read, expected);
         assertArrayEquals(pos, d.packedPositions());
         assertArrayEquals(ts, d.clientTimestamps());
     }
@@ -131,7 +127,7 @@ class WireParityTest {
             b.writeVarInt(16);
             b.writeBoolean(false);
         });
-        assertArrayEquals(expected, encode(SessionConfigS2CPayload.CODEC, p));
+        assertArrayEquals(expected, encode(p));
     }
 
     @Test
@@ -152,7 +148,7 @@ class WireParityTest {
             b.writeVarLong(1_000_000L); // playerBandwidthLimit
         });
         var buf = new FriendlyByteBuf(Unpooled.wrappedBuffer(v15Frame));
-        var p = SessionConfigS2CPayload.CODEC.decode(buf);
+        var p = SessionConfigS2CPayload.read(buf);
         assertEquals(0, buf.readableBytes(), "decoder must consume the full foreign frame");
         buf.release();
         assertEquals(15, p.protocolVersion());
@@ -180,9 +176,9 @@ class WireParityTest {
             });
             var p = new SessionConfigS2CPayload(LSSConstants.PROTOCOL_VERSION, true,
                     c[0], c[1], c[2], false);
-            assertArrayEquals(expected, encode(SessionConfigS2CPayload.CODEC, p),
+            assertArrayEquals(expected, encode(p),
                     "sessionConfig lod=" + c[0]);
-            var d = decode(SessionConfigS2CPayload.CODEC, expected);
+            var d = decode(SessionConfigS2CPayload::read, expected);
             assertEquals(c[0], d.lodDistanceChunks());
             assertEquals(c[1], d.syncOnLoadConcurrencyLimitPerPlayer());
             assertEquals(c[2], d.generationConcurrencyLimitPerPlayer());
@@ -202,8 +198,7 @@ class WireParityTest {
                 b.writeLong(positions[i]);
             }
         });
-        assertArrayEquals(expected, encode(BatchResponseS2CPayload.CODEC,
-                new BatchResponseS2CPayload(types, positions, 4)));
+        assertArrayEquals(expected, encode(new BatchResponseS2CPayload(types, positions, 4)));
     }
 
     @Test
@@ -224,8 +219,7 @@ class WireParityTest {
                 b.writeLong(positions[i]);
             }
         });
-        assertArrayEquals(expected, encode(BatchResponseS2CPayload.CODEC,
-                new BatchResponseS2CPayload(types, positions, max)));
+        assertArrayEquals(expected, encode(new BatchResponseS2CPayload(types, positions, max)));
     }
 
     @Test
@@ -236,7 +230,7 @@ class WireParityTest {
             b.writeVarInt(3);
             for (long p : positions) b.writeLong(p);
         });
-        assertArrayEquals(expected, encode(DirtyColumnsS2CPayload.CODEC, new DirtyColumnsS2CPayload(positions)));
+        assertArrayEquals(expected, encode(new DirtyColumnsS2CPayload(positions)));
     }
 
     @Test
@@ -252,8 +246,7 @@ class WireParityTest {
                 b.writeLong(-1L);
                 b.writeByteArray(sections);
             });
-            assertArrayEquals(expected, encode(VoxelColumnS2CPayload.CODEC,
-                    new VoxelColumnS2CPayload(-5, Integer.MAX_VALUE, c.key(), -1L, sections)),
+            assertArrayEquals(expected, encode(new VoxelColumnS2CPayload(-5, Integer.MAX_VALUE, c.key(), -1L, sections)),
                     "voxelColumn dim " + c.dim());
         }
     }
@@ -261,7 +254,7 @@ class WireParityTest {
     @Test
     void voxelColumnCustomDimension() {
         byte[] sections = {1, 2, 3};
-        var custom = ResourceKey.create(Registries.DIMENSION, Identifier.parse("lsstest:custom"));
+        var custom = ResourceKey.create(Registries.DIMENSION, new ResourceLocation("lsstest:custom"));
         byte[] expected = ref(b -> {
             b.writeInt(0);
             b.writeInt(0);
@@ -269,8 +262,7 @@ class WireParityTest {
             b.writeLong(42L);
             b.writeByteArray(sections);
         });
-        assertArrayEquals(expected, encode(VoxelColumnS2CPayload.CODEC,
-                new VoxelColumnS2CPayload(0, 0, custom, 42L, sections)));
+        assertArrayEquals(expected, encode(new VoxelColumnS2CPayload(0, 0, custom, 42L, sections)));
     }
 
     @Test
@@ -285,11 +277,10 @@ class WireParityTest {
             b.writeLong(5L);
             b.writeByteArray(new byte[0]);
         });
-        assertArrayEquals(expected, encode(VoxelColumnS2CPayload.CODEC,
-                new VoxelColumnS2CPayload(11, -7, Level.OVERWORLD, 5L, new byte[0])));
+        assertArrayEquals(expected, encode(new VoxelColumnS2CPayload(11, -7, Level.OVERWORLD, 5L, new byte[0])));
         assertEquals(0, expected[expected.length - 1],
                 "empty section bytes must encode as a single 0x00 length VarInt");
-        var d = decode(VoxelColumnS2CPayload.CODEC, expected);
+        var d = decode(VoxelColumnS2CPayload::read, expected);
         assertEquals(0, d.decompressedSections().length);
     }
 
@@ -308,12 +299,12 @@ class WireParityTest {
             }
         }
         var covered = Set.of(
-                HandshakeC2SPayload.TYPE.id().toString(),
-                BatchChunkRequestC2SPayload.TYPE.id().toString(),
-                SessionConfigS2CPayload.TYPE.id().toString(),
-                DirtyColumnsS2CPayload.TYPE.id().toString(),
-                VoxelColumnS2CPayload.TYPE.id().toString(),
-                BatchResponseS2CPayload.TYPE.id().toString());
+                HandshakeC2SPayload.TYPE.getId().toString(),
+                BatchChunkRequestC2SPayload.TYPE.getId().toString(),
+                SessionConfigS2CPayload.TYPE.getId().toString(),
+                DirtyColumnsS2CPayload.TYPE.getId().toString(),
+                VoxelColumnS2CPayload.TYPE.getId().toString(),
+                BatchResponseS2CPayload.TYPE.getId().toString());
         assertEquals(covered, declared,
                 "every LSS channel must map to exactly one payload with a reference frame in "
                 + "this suite — a new payload requires frames in BOTH WireParityTests");

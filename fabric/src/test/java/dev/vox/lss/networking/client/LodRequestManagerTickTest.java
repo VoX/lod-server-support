@@ -6,7 +6,7 @@ import dev.vox.lss.networking.payloads.SessionConfigS2CPayload;
 import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.Bootstrap;
 import net.minecraft.world.level.Level;
@@ -72,7 +72,7 @@ class LodRequestManagerTickTest {
     }
 
     private static ResourceKey<Level> dim(String name) {
-        return ResourceKey.create(Registries.DIMENSION, Identifier.parse("lss_test:" + name));
+        return ResourceKey.create(Registries.DIMENSION, new ResourceLocation("lss_test:" + name));
     }
 
     /** Seed the manager's request queue with (position, clientTimestamp) pairs. */

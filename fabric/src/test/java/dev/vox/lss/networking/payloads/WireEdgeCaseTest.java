@@ -6,11 +6,11 @@ import dev.vox.lss.common.PositionUtil;
 import io.netty.buffer.Unpooled;
 import io.netty.handler.codec.DecoderException;
 import io.netty.handler.codec.EncoderException;
-import net.minecraft.IdentifierException;
+import net.minecraft.ResourceLocationException;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.Bootstrap;
 import net.minecraft.world.level.Level;
@@ -61,7 +61,7 @@ class WireEdgeCaseTest {
         b.writeVarInt(LSSConstants.PROTOCOL_VERSION);
         try {
             assertThrows(IndexOutOfBoundsException.class,
-                    () -> HandshakeC2SPayload.CODEC.decode(b));
+                    () -> HandshakeC2SPayload.read(b));
         } finally {
             b.release();
         }
@@ -77,7 +77,7 @@ class WireEdgeCaseTest {
         b.writeVarInt(LSSConstants.CAPABILITY_VOXEL_COLUMNS);
         b.writeBytes(new byte[]{0x01, 0x02, 0x03});
         try {
-            var decoded = HandshakeC2SPayload.CODEC.decode(b);
+            var decoded = HandshakeC2SPayload.read(b);
             assertEquals(LSSConstants.PROTOCOL_VERSION, decoded.protocolVersion());
             assertEquals(LSSConstants.CAPABILITY_VOXEL_COLUMNS, decoded.capabilities());
             assertEquals(3, b.readableBytes(),
@@ -96,7 +96,7 @@ class WireEdgeCaseTest {
         b.writeVarInt(-1);
         b.writeVarInt(LSSConstants.CAPABILITY_VOXEL_COLUMNS);
         try {
-            var decoded = HandshakeC2SPayload.CODEC.decode(b);
+            var decoded = HandshakeC2SPayload.read(b);
             assertEquals(-1, decoded.protocolVersion(), "negative version must decode sign-intact");
             var decision = HandshakeGate.evaluate(
                     decoded.protocolVersion(), decoded.capabilities(), true, true);
@@ -118,7 +118,7 @@ class WireEdgeCaseTest {
                 (byte) 0x80, (byte) 0x80, (byte) 0x80});
         try {
             var ex = assertThrows(RuntimeException.class,
-                    () -> HandshakeC2SPayload.CODEC.decode(b));
+                    () -> HandshakeC2SPayload.read(b));
             assertEquals(RuntimeException.class, ex.getClass(),
                     "VarInt-overflow throw type drifted from MC's RuntimeException(\"VarInt too big\")");
         } finally {
@@ -140,7 +140,7 @@ class WireEdgeCaseTest {
         b.writeLong(0xCAFEBABEL);     // unknown future field
         b.writeUtf("future-field");   // unknown future field
         try {
-            var decoded = SessionConfigS2CPayload.CODEC.decode(b);
+            var decoded = SessionConfigS2CPayload.read(b);
             assertEquals(LSSConstants.PROTOCOL_VERSION + 1, decoded.protocolVersion());
             assertFalse(decoded.enabled(), "a foreign-version config must decode disabled");
             assertEquals(0, b.readableBytes(),
@@ -171,8 +171,8 @@ class WireEdgeCaseTest {
 
         var b = buf();
         try {
-            BatchResponseS2CPayload.CODEC.encode(b, new BatchResponseS2CPayload(types, positions, 3));
-            var decoded = BatchResponseS2CPayload.CODEC.decode(b);
+            new BatchResponseS2CPayload(types, positions, 3).write(b);
+            var decoded = BatchResponseS2CPayload.read(b);
             assertEquals(3, decoded.count());
             assertEquals(3, decoded.responseTypes().length, "decoded arrays are exactly count-sized");
             for (int i = 0; i < 3; i++) {
@@ -198,9 +198,8 @@ class WireEdgeCaseTest {
 
         var b = buf();
         try {
-            BatchChunkRequestC2SPayload.CODEC.encode(b,
-                    new BatchChunkRequestC2SPayload(positions, timestamps, 2));
-            var decoded = BatchChunkRequestC2SPayload.CODEC.decode(b);
+            new BatchChunkRequestC2SPayload(positions, timestamps, 2).write(b);
+            var decoded = BatchChunkRequestC2SPayload.read(b);
             assertEquals(2, decoded.count());
             assertEquals(2, decoded.packedPositions().length);
             assertEquals(positions[0], decoded.packedPositions()[0]);
@@ -223,8 +222,8 @@ class WireEdgeCaseTest {
         }
         var b = buf();
         try {
-            DirtyColumnsS2CPayload.CODEC.encode(b, new DirtyColumnsS2CPayload(positions));
-            var decoded = DirtyColumnsS2CPayload.CODEC.decode(b);
+            new DirtyColumnsS2CPayload(positions).write(b);
+            var decoded = DirtyColumnsS2CPayload.read(b);
             assertArrayEquals(positions, decoded.dirtyPositions(),
                     "a batch of exactly MAX positions must survive untouched");
             assertEquals(0, b.readableBytes());
@@ -243,7 +242,7 @@ class WireEdgeCaseTest {
         }
         var b = buf();
         try {
-            DirtyColumnsS2CPayload.CODEC.encode(b, new DirtyColumnsS2CPayload(positions));
+            new DirtyColumnsS2CPayload(positions).write(b);
             assertEquals(LSSConstants.MAX_DIRTY_COLUMN_POSITIONS, b.readVarInt(),
                     "encoder must clamp the count VarInt to the decoder cap");
             assertEquals(LSSConstants.MAX_DIRTY_COLUMN_POSITIONS * Long.BYTES, b.readableBytes(),
@@ -268,7 +267,7 @@ class WireEdgeCaseTest {
         b.writeVarInt(LSSConstants.MAX_SECTIONS_SIZE + 1);
         b.writeBytes(new byte[LSSConstants.MAX_SECTIONS_SIZE + 1]);
         try {
-            assertThrows(DecoderException.class, () -> VoxelColumnS2CPayload.CODEC.decode(b),
+            assertThrows(DecoderException.class, () -> VoxelColumnS2CPayload.read(b),
                     "section bytes over the 2MB cap must be rejected, not allocated");
         } finally {
             b.release();
@@ -283,8 +282,8 @@ class WireEdgeCaseTest {
         var original = new VoxelColumnS2CPayload(3, -4, Level.OVERWORLD, 123L, sections);
         var b = buf();
         try {
-            VoxelColumnS2CPayload.CODEC.encode(b, original);
-            var decoded = VoxelColumnS2CPayload.CODEC.decode(b);
+            original.write(b);
+            var decoded = VoxelColumnS2CPayload.read(b);
             assertEquals(LSSConstants.MAX_SECTIONS_SIZE, decoded.decompressedSections().length,
                     "a legitimate column at exactly the cap must survive (guard is >, not >=)");
             assertEquals(42, decoded.decompressedSections()[0]);
@@ -299,12 +298,12 @@ class WireEdgeCaseTest {
     void voxelColumnDimensionStringAtMaxLengthRoundTrips() {
         String dimStr = "lss:" + "a".repeat(LSSConstants.MAX_DIMENSION_STRING_LENGTH - 4);
         assertEquals(LSSConstants.MAX_DIMENSION_STRING_LENGTH, dimStr.length());
-        var dim = ResourceKey.create(Registries.DIMENSION, Identifier.parse(dimStr));
+        var dim = ResourceKey.create(Registries.DIMENSION, new ResourceLocation(dimStr));
         var original = new VoxelColumnS2CPayload(1, 2, dim, 9L, emptyColumn());
         var b = buf();
         try {
-            VoxelColumnS2CPayload.CODEC.encode(b, original);
-            var decoded = VoxelColumnS2CPayload.CODEC.decode(b);
+            original.write(b);
+            var decoded = VoxelColumnS2CPayload.read(b);
             assertEquals(dim, decoded.dimension(),
                     "a datapack dimension id at exactly 256 chars must round-trip");
             assertEquals(0, b.readableBytes());
@@ -319,12 +318,12 @@ class WireEdgeCaseTest {
         // reader's cap rejects, disconnecting every client receiving that dimension.
         String dimStr = "lss:" + "a".repeat(LSSConstants.MAX_DIMENSION_STRING_LENGTH - 3);
         assertEquals(LSSConstants.MAX_DIMENSION_STRING_LENGTH + 1, dimStr.length());
-        var dim = ResourceKey.create(Registries.DIMENSION, Identifier.parse(dimStr));
+        var dim = ResourceKey.create(Registries.DIMENSION, new ResourceLocation(dimStr));
         var payload = new VoxelColumnS2CPayload(0, 0, dim, 0L, emptyColumn());
         var b = buf();
         try {
             assertThrows(EncoderException.class,
-                    () -> VoxelColumnS2CPayload.CODEC.encode(b, payload));
+                    () -> payload.write(b));
         } finally {
             b.release();
         }
@@ -343,7 +342,7 @@ class WireEdgeCaseTest {
         b.writeVarInt(20); // UTF byte-length claim
         b.writeBytes(new byte[]{'m', 'i', 'n', 'e', 'c'}); // truncated body
         try {
-            assertThrows(DecoderException.class, () -> VoxelColumnS2CPayload.CODEC.decode(b));
+            assertThrows(DecoderException.class, () -> VoxelColumnS2CPayload.read(b));
         } finally {
             b.release();
         }
@@ -359,7 +358,7 @@ class WireEdgeCaseTest {
         b.writeInt(0xCAFE); // half a timestamp
         try {
             assertThrows(IndexOutOfBoundsException.class,
-                    () -> VoxelColumnS2CPayload.CODEC.decode(b));
+                    () -> VoxelColumnS2CPayload.read(b));
         } finally {
             b.release();
         }
@@ -367,8 +366,8 @@ class WireEdgeCaseTest {
 
     @Test
     void voxelColumnInvalidDimensionStringThrowsIdentifierException() {
-        // A buggy/hostile server can ship any UTF string; Identifier.parse rejects illegal
-        // characters with IdentifierException, which at the connection layer kicks the LSS
+        // A buggy/hostile server can ship any UTF string; ResourceLocation.parse rejects illegal
+        // characters with ResourceLocationException, which at the connection layer kicks the LSS
         // client. Pinned as the documented consequence — softening this to a fallback
         // dimension would be a protocol decision, not a refactor.
         var b = buf();
@@ -378,7 +377,7 @@ class WireEdgeCaseTest {
         b.writeLong(0L);
         b.writeByteArray(emptyColumn());
         try {
-            assertThrows(IdentifierException.class, () -> VoxelColumnS2CPayload.CODEC.decode(b));
+            assertThrows(ResourceLocationException.class, () -> VoxelColumnS2CPayload.read(b));
         } finally {
             b.release();
         }
@@ -386,7 +385,7 @@ class WireEdgeCaseTest {
 
     @Test
     void voxelColumnNamespacelessDimensionAliasesToMinecraftNamespace() {
-        // Identifier.parse silently defaults a namespaceless string to minecraft: — a frame
+        // ResourceLocation.parse silently defaults a namespaceless string to minecraft: — a frame
         // carrying "overworld" lands on the vanilla overworld key. Pinned as intent: any
         // stricter parse would reject frames from servers emitting short-form dimensions.
         var b = buf();
@@ -396,9 +395,9 @@ class WireEdgeCaseTest {
         b.writeLong(7L);
         b.writeByteArray(emptyColumn());
         try {
-            var decoded = VoxelColumnS2CPayload.CODEC.decode(b);
+            var decoded = VoxelColumnS2CPayload.read(b);
             assertEquals(Level.OVERWORLD, decoded.dimension());
-            assertEquals("minecraft:overworld", decoded.dimension().identifier().toString());
+            assertEquals("minecraft:overworld", decoded.dimension().location().toString());
             assertEquals(0, b.readableBytes());
         } finally {
             b.release();

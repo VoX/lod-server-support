@@ -6,7 +6,7 @@ import io.netty.buffer.Unpooled;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.MappedRegistry;
-import net.minecraft.core.RegistrationInfo;
+import com.mojang.serialization.Lifecycle;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.data.registries.VanillaRegistries;
@@ -19,7 +19,7 @@ import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.chunk.DataLayer;
 import net.minecraft.world.level.chunk.LevelChunkSection;
-import net.minecraft.world.level.chunk.PalettedContainerFactory;
+
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -58,7 +58,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class SectionLightDefaultsTest {
 
     private static RegistryAccess REGISTRY_ACCESS;
-    private static PalettedContainerFactory FACTORY;
+    private static TestContainerFactory FACTORY;
 
     @BeforeAll
     static void setup() {
@@ -67,10 +67,10 @@ class SectionLightDefaultsTest {
         HolderLookup.Provider provider = VanillaRegistries.createLookup();
         HolderLookup.RegistryLookup<Biome> src = provider.lookupOrThrow(Registries.BIOME);
         MappedRegistry<Biome> biomes = new MappedRegistry<>(Registries.BIOME, Lifecycle.stable());
-        src.listElements().forEach(ref -> biomes.register(ref.key(), ref.value(), RegistrationInfo.BUILT_IN));
+        src.listElements().forEach(ref -> biomes.register(ref.key(), ref.value(), Lifecycle.stable()));
         biomes.freeze();
         REGISTRY_ACCESS = new RegistryAccess.ImmutableRegistryAccess(List.of(biomes));
-        FACTORY = PalettedContainerFactory.create(REGISTRY_ACCESS);
+        FACTORY = TestContainerFactory.create(REGISTRY_ACCESS);
     }
 
     // ---- NBT builders (same grammar as NbtSectionSerializerTest) ----
@@ -85,12 +85,12 @@ class SectionLightDefaultsTest {
     }
 
     private CompoundTag sectionNbt(int y, byte[] blockLight, byte[] skyLight) {
-        var sec = new LevelChunkSection(FACTORY);
+        var sec = new LevelChunkSection(FACTORY.biomeRegistry());
         sec.setBlockState(0, 0, 0, Blocks.STONE.defaultBlockState());
         var s = new CompoundTag();
         s.putInt("Y", y);
-        s.put("block_states", FACTORY.blockStatesContainerCodec().encodeStart(NbtOps.INSTANCE, sec.getStates()).getOrThrow());
-        s.put("biomes", FACTORY.biomeContainerCodec().encodeStart(NbtOps.INSTANCE, sec.getBiomes()).getOrThrow());
+        s.put("block_states", FACTORY.blockStatesContainerCodec().encodeStart(NbtOps.INSTANCE, sec.getStates()).getOrThrow(false, msg -> {}));
+        s.put("biomes", FACTORY.biomeContainerCodec().encodeStart(NbtOps.INSTANCE, sec.getBiomes()).getOrThrow(false, msg -> {}));
         if (blockLight != null) s.putByteArray("BlockLight", blockLight);
         if (skyLight != null) s.putByteArray("SkyLight", skyLight);
         return s;
@@ -115,7 +115,7 @@ class SectionLightDefaultsTest {
             var out = new ArrayList<VoxelColumnData.SectionData>(count);
             for (int i = 0; i < count; i++) {
                 int sectionY = buf.readByte();
-                var section = new LevelChunkSection(FACTORY);
+                var section = new LevelChunkSection(FACTORY.biomeRegistry());
                 section.read(buf);
                 DataLayer blockLight = null;
                 if (buf.readBoolean()) {

@@ -166,9 +166,8 @@ class SendActionBatcherTest {
         batcher.forEach((uuid, types, positions, count) -> {
             var b = new FriendlyByteBuf(Unpooled.buffer());
             try {
-                BatchResponseS2CPayload.CODEC.encode(b,
-                        new BatchResponseS2CPayload(types, positions, count));
-                var decoded = BatchResponseS2CPayload.CODEC.decode(b);
+                new BatchResponseS2CPayload(types, positions, count).write(b);
+                var decoded = BatchResponseS2CPayload.read(b);
                 assertEquals(0, b.readableBytes(), "decoded frame must consume all its bytes");
                 roundTripped.add(new Frame(uuid, decoded.responseTypes(),
                         decoded.packedPositions(), decoded.count()));

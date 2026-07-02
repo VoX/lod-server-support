@@ -5,7 +5,7 @@ import io.netty.buffer.Unpooled;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.MappedRegistry;
-import net.minecraft.core.RegistrationInfo;
+import com.mojang.serialization.Lifecycle;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.data.registries.VanillaRegistries;
@@ -21,7 +21,7 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.chunk.LevelChunkSection;
-import net.minecraft.world.level.chunk.PalettedContainerFactory;
+
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -56,17 +56,17 @@ class NbtSectionSerializerTest {
     }
 
     private static RegistryAccess REGISTRY_ACCESS;
-    private static PalettedContainerFactory FACTORY;
+    private static TestContainerFactory FACTORY;
 
     @BeforeAll
     static void setup() {
         REGISTRY_ACCESS = buildRegistryAccess();
-        FACTORY = PalettedContainerFactory.create(REGISTRY_ACCESS);
+        FACTORY = TestContainerFactory.create(REGISTRY_ACCESS);
     }
 
     /**
      * Build a RegistryAccess carrying the BIOME registry (the only registry
-     * {@link PalettedContainerFactory#create} reads — block states come from static bootstrap
+     * {@link TestContainerFactory#create} reads — block states come from static bootstrap
      * state). The golden corpus bytes embed biome palette ids, so ids must be platform- and
      * version-independent: register exactly the corpus biomes in this fixed order (full-vanilla
      * listElements() order differs between the Fabric and Paper test runtimes and skewed the
@@ -77,7 +77,7 @@ class NbtSectionSerializerTest {
         HolderLookup.RegistryLookup<Biome> src = provider.lookupOrThrow(Registries.BIOME);
         MappedRegistry<Biome> biomes = new MappedRegistry<>(Registries.BIOME, Lifecycle.stable());
         for (var key : List.of(Biomes.PLAINS, Biomes.DESERT, Biomes.JUNGLE, Biomes.SNOWY_TAIGA)) {
-            biomes.register(key, src.getOrThrow(key).value(), RegistrationInfo.BUILT_IN);
+            biomes.register(key, src.getOrThrow(key).value(), Lifecycle.stable());
         }
         biomes.freeze();
         return new RegistryAccess.ImmutableRegistryAccess(List.of(biomes));
@@ -96,13 +96,13 @@ class NbtSectionSerializerTest {
 
     /** A section CompoundTag carrying a STONE block at (0,0,0) when {@code stone}. */
     private CompoundTag sectionNbt(int y, boolean stone, boolean includeBiomes, byte[] blockLight, byte[] skyLight) {
-        var sec = new LevelChunkSection(FACTORY);
+        var sec = new LevelChunkSection(FACTORY.biomeRegistry());
         if (stone) sec.setBlockState(0, 0, 0, Blocks.STONE.defaultBlockState());
         var s = new CompoundTag();
         s.putInt("Y", y);
-        s.put("block_states", FACTORY.blockStatesContainerCodec().encodeStart(NbtOps.INSTANCE, sec.getStates()).getOrThrow());
+        s.put("block_states", FACTORY.blockStatesContainerCodec().encodeStart(NbtOps.INSTANCE, sec.getStates()).getOrThrow(false, msg -> {}));
         if (includeBiomes) {
-            s.put("biomes", FACTORY.biomeContainerCodec().encodeStart(NbtOps.INSTANCE, sec.getBiomes()).getOrThrow());
+            s.put("biomes", FACTORY.biomeContainerCodec().encodeStart(NbtOps.INSTANCE, sec.getBiomes()).getOrThrow(false, msg -> {}));
         }
         if (blockLight != null) s.putByteArray("BlockLight", blockLight);
         if (skyLight != null) s.putByteArray("SkyLight", skyLight);
@@ -128,7 +128,7 @@ class NbtSectionSerializerTest {
             var out = new ArrayList<DecodedSection>(count);
             for (int i = 0; i < count; i++) {
                 int y = buf.readByte();
-                var section = new LevelChunkSection(FACTORY);
+                var section = new LevelChunkSection(FACTORY.biomeRegistry());
                 section.read(buf);
                 boolean hasBl = buf.readBoolean();
                 byte[] bl = null;
@@ -224,7 +224,7 @@ class NbtSectionSerializerTest {
         var noStates = new CompoundTag();
         noStates.putInt("Y", 1);
         noStates.put("biomes", FACTORY.biomeContainerCodec()
-                .encodeStart(NbtOps.INSTANCE, new LevelChunkSection(FACTORY).getBiomes()).getOrThrow());
+                .encodeStart(NbtOps.INSTANCE, new LevelChunkSection(FACTORY.biomeRegistry()).getBiomes()).getOrThrow(false, msg -> {}));
         byte[] wire = NbtSectionSerializer.serializeChunkNbt(
                 chunkNbt("minecraft:full", noStates, sectionNbt(2, true, true, null, null)), REGISTRY_ACCESS);
         var sections = decode(wire);
@@ -266,7 +266,7 @@ class NbtSectionSerializerTest {
     void sectionMissingY_skipped() {
         var noY = new CompoundTag();
         noY.put("block_states", FACTORY.blockStatesContainerCodec()
-                .encodeStart(NbtOps.INSTANCE, new LevelChunkSection(FACTORY).getStates()).getOrThrow());
+                .encodeStart(NbtOps.INSTANCE, new LevelChunkSection(FACTORY.biomeRegistry()).getStates()).getOrThrow(false, msg -> {}));
         byte[] wire = NbtSectionSerializer.serializeChunkNbt(
                 chunkNbt("minecraft:full", noY, sectionNbt(7, true, true, null, null)), REGISTRY_ACCESS);
         var sections = decode(wire);
@@ -361,8 +361,8 @@ class NbtSectionSerializerTest {
                                     net.minecraft.world.level.chunk.PalettedContainer<net.minecraft.core.Holder<Biome>> biomes) {
         var s = new CompoundTag();
         s.putInt("Y", y);
-        s.put("block_states", FACTORY.blockStatesContainerCodec().encodeStart(NbtOps.INSTANCE, states).getOrThrow());
-        s.put("biomes", FACTORY.biomeContainerCodec().encodeStart(NbtOps.INSTANCE, biomes).getOrThrow());
+        s.put("block_states", FACTORY.blockStatesContainerCodec().encodeStart(NbtOps.INSTANCE, states).getOrThrow(false, msg -> {}));
+        s.put("biomes", FACTORY.biomeContainerCodec().encodeStart(NbtOps.INSTANCE, biomes).getOrThrow(false, msg -> {}));
         return s;
     }
 

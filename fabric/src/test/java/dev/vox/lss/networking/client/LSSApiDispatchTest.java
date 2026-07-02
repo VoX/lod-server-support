@@ -5,7 +5,7 @@ import dev.vox.lss.api.VoxelColumnConsumer;
 import dev.vox.lss.api.VoxelColumnData;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.Bootstrap;
 import net.minecraft.world.level.Level;
@@ -34,7 +34,7 @@ class LSSApiDispatchTest {
 
     @Test
     void throwingConsumersDoNotStarveOthers() {
-        var dim = ResourceKey.create(Registries.DIMENSION, Identifier.parse("lss_test:dispatch"));
+        var dim = ResourceKey.create(Registries.DIMENSION, new ResourceLocation("lss_test:dispatch"));
         var columnData = new VoxelColumnData(new VoxelColumnData.SectionData[0], 42L);
 
         List<Received> first = new ArrayList<>();

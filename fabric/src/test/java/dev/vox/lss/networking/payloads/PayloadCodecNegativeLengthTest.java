@@ -26,7 +26,7 @@ class PayloadCodecNegativeLengthTest {
     void dirtyColumnsNegativeLength() {
         var b = buf();
         b.writeVarInt(-1); // negative positions count
-        var decoded = DirtyColumnsS2CPayload.CODEC.decode(b);
+        var decoded = DirtyColumnsS2CPayload.read(b);
         assertEquals(0, decoded.dirtyPositions().length);
         b.release();
     }
@@ -37,7 +37,7 @@ class PayloadCodecNegativeLengthTest {
         // the legitimate empty-broadcast shape and must decode to long[0] without a throw.
         var b = buf();
         b.writeVarInt(0);
-        var decoded = DirtyColumnsS2CPayload.CODEC.decode(b);
+        var decoded = DirtyColumnsS2CPayload.read(b);
         assertEquals(0, decoded.dirtyPositions().length);
         assertEquals(0, b.readableBytes());
         b.release();
@@ -57,7 +57,7 @@ class PayloadCodecNegativeLengthTest {
         b.writeVarInt(-1); // sectionBytes length
         try {
             assertThrows(NegativeArraySizeException.class,
-                    () -> VoxelColumnS2CPayload.CODEC.decode(b));
+                    () -> VoxelColumnS2CPayload.read(b));
         } finally {
             b.release();
         }

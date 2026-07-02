@@ -160,8 +160,8 @@ class DirtyColumnBroadcasterTest {
     private static List<long[]> sentTo(Rig rig, FakePlayerState player) {
         var out = new ArrayList<long[]>();
         for (var e : rig.events) {
-            if (e instanceof Sent(UUID p, long[] positions) && p.equals(player.getPlayerUUID())) {
-                out.add(positions);
+            if (e instanceof Sent sent && sent.player().equals(player.getPlayerUUID())) {
+                out.add(sent.positions());
             }
         }
         return out;
@@ -170,8 +170,8 @@ class DirtyColumnBroadcasterTest {
     private static List<long[]> clearsFor(Rig rig, FakePlayerState player) {
         var out = new ArrayList<long[]>();
         for (var e : rig.events) {
-            if (e instanceof Cleared(UUID p, long[] positions) && p.equals(player.getPlayerUUID())) {
-                out.add(positions);
+            if (e instanceof Cleared cleared && cleared.player().equals(player.getPlayerUUID())) {
+                out.add(cleared.positions());
             }
         }
         return out;
@@ -180,8 +180,8 @@ class DirtyColumnBroadcasterTest {
     private static List<long[]> invalidationsFor(Rig rig, String dimension) {
         var out = new ArrayList<long[]>();
         for (var e : rig.events) {
-            if (e instanceof Invalidated(String d, long[] positions) && d.equals(dimension)) {
-                out.add(positions);
+            if (e instanceof Invalidated inv && inv.dimension().equals(dimension)) {
+                out.add(inv.positions());
             }
         }
         return out;

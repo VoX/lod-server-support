@@ -30,7 +30,7 @@ class PayloadCodecOversizedTest {
         for (int i = 0; i < rawCount; i++) {
             b.writeLong(PositionUtil.packPosition(i, i));
         }
-        var decoded = DirtyColumnsS2CPayload.CODEC.decode(b);
+        var decoded = DirtyColumnsS2CPayload.read(b);
         assertEquals(DirtyColumnsS2CPayload.MAX_POSITIONS, decoded.dirtyPositions().length);
         // Excess entries are drained to avoid leaving unconsumed bytes in the buffer
         assertEquals(0, b.readableBytes());
@@ -51,7 +51,7 @@ class PayloadCodecOversizedTest {
             b.writeLong(PositionUtil.packPosition(i, -i));
         }
         try {
-            var decoded = DirtyColumnsS2CPayload.CODEC.decode(b);
+            var decoded = DirtyColumnsS2CPayload.read(b);
             assertEquals(max, decoded.dirtyPositions().length);
             assertEquals(PositionUtil.packPosition(0, 0), decoded.dirtyPositions()[0]);
             assertEquals(PositionUtil.packPosition(max - 1, -(max - 1)),
@@ -75,7 +75,7 @@ class PayloadCodecOversizedTest {
         }
         try {
             assertThrows(IndexOutOfBoundsException.class,
-                    () -> DirtyColumnsS2CPayload.CODEC.decode(b));
+                    () -> DirtyColumnsS2CPayload.read(b));
         } finally {
             b.release();
         }

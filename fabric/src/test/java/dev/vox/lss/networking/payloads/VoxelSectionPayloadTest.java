@@ -5,7 +5,7 @@ import io.netty.buffer.Unpooled;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.Bootstrap;
 import net.minecraft.world.level.Level;
@@ -39,13 +39,13 @@ class VoxelSectionPayloadTest {
 
     @Test
     void roundtripPreservesHeaderFields() {
-        var dim = ResourceKey.create(Registries.DIMENSION, Identifier.parse(LSSConstants.DIM_STR_OVERWORLD));
+        var dim = ResourceKey.create(Registries.DIMENSION, new ResourceLocation(LSSConstants.DIM_STR_OVERWORLD));
         byte[] sections = emptyColumn();
         var original = new VoxelColumnS2CPayload(10, -20, dim, 99999L, sections);
 
         var b = buf();
-        VoxelColumnS2CPayload.CODEC.encode(b, original);
-        var decoded = VoxelColumnS2CPayload.CODEC.decode(b);
+        original.write(b);
+        var decoded = VoxelColumnS2CPayload.read(b);
 
         assertEquals(10, decoded.chunkX());
         assertEquals(-20, decoded.chunkZ());
@@ -56,7 +56,7 @@ class VoxelSectionPayloadTest {
 
     @Test
     void roundtripPreservesSectionData() {
-        var dim = ResourceKey.create(Registries.DIMENSION, Identifier.parse(LSSConstants.DIM_STR_OVERWORLD));
+        var dim = ResourceKey.create(Registries.DIMENSION, new ResourceLocation(LSSConstants.DIM_STR_OVERWORLD));
         // Write VarInt sectionCount=2, then dummy bytes
         var wireBuf = new FriendlyByteBuf(Unpooled.buffer());
         wireBuf.writeVarInt(2);
@@ -69,8 +69,8 @@ class VoxelSectionPayloadTest {
         var original = new VoxelColumnS2CPayload(-5, 100, dim, 12345L, raw);
 
         var b = buf();
-        VoxelColumnS2CPayload.CODEC.encode(b, original);
-        var decoded = VoxelColumnS2CPayload.CODEC.decode(b);
+        original.write(b);
+        var decoded = VoxelColumnS2CPayload.read(b);
 
         assertNotNull(decoded.decompressedSections());
         // Verify we can read the VarInt sectionCount back
@@ -87,13 +87,13 @@ class VoxelSectionPayloadTest {
 
     @Test
     void roundtripEmptyColumn() {
-        var dim = ResourceKey.create(Registries.DIMENSION, Identifier.parse(LSSConstants.DIM_STR_THE_END));
+        var dim = ResourceKey.create(Registries.DIMENSION, new ResourceLocation(LSSConstants.DIM_STR_THE_END));
         byte[] sections = emptyColumn();
         var original = new VoxelColumnS2CPayload(0, 0, dim, 0L, sections);
 
         var b = buf();
-        VoxelColumnS2CPayload.CODEC.encode(b, original);
-        var decoded = VoxelColumnS2CPayload.CODEC.decode(b);
+        original.write(b);
+        var decoded = VoxelColumnS2CPayload.read(b);
 
         assertNotNull(decoded.decompressedSections());
         var readBuf = new FriendlyByteBuf(Unpooled.wrappedBuffer(decoded.decompressedSections()));
@@ -108,7 +108,7 @@ class VoxelSectionPayloadTest {
 
     @Test
     void estimatedBytesPositive() {
-        var dim = ResourceKey.create(Registries.DIMENSION, Identifier.parse(LSSConstants.DIM_STR_OVERWORLD));
+        var dim = ResourceKey.create(Registries.DIMENSION, new ResourceLocation(LSSConstants.DIM_STR_OVERWORLD));
         byte[] sections = emptyColumn();
         var payload = new VoxelColumnS2CPayload(0, 0, dim, 0L, sections);
         assertTrue(payload.estimatedBytes() > 0);
@@ -118,8 +118,8 @@ class VoxelSectionPayloadTest {
     void handshakeWithCapabilitiesRoundtrip() {
         var original = new HandshakeC2SPayload(5, 1);
         var b = buf();
-        HandshakeC2SPayload.CODEC.encode(b, original);
-        var decoded = HandshakeC2SPayload.CODEC.decode(b);
+        original.write(b);
+        var decoded = HandshakeC2SPayload.read(b);
         assertEquals(5, decoded.protocolVersion());
         assertEquals(1, decoded.capabilities());
         b.release();
@@ -131,8 +131,8 @@ class VoxelSectionPayloadTest {
         // foreign layout and drains the frame instead of reading the fields.
         var original = new SessionConfigS2CPayload(LSSConstants.PROTOCOL_VERSION, true, 128, 100, 40, true);
         var b = buf();
-        SessionConfigS2CPayload.CODEC.encode(b, original);
-        var decoded = SessionConfigS2CPayload.CODEC.decode(b);
+        original.write(b);
+        var decoded = SessionConfigS2CPayload.read(b);
         assertEquals(100, decoded.syncOnLoadConcurrencyLimitPerPlayer());
         assertEquals(40, decoded.generationConcurrencyLimitPerPlayer());
         assertTrue(decoded.generationEnabled());
@@ -144,8 +144,8 @@ class VoxelSectionPayloadTest {
         byte[] sections = emptyColumn();
         var original = new VoxelColumnS2CPayload(1, 3, Level.OVERWORLD, 50000L, sections);
         var b = buf();
-        VoxelColumnS2CPayload.CODEC.encode(b, original);
-        var decoded = VoxelColumnS2CPayload.CODEC.decode(b);
+        original.write(b);
+        var decoded = VoxelColumnS2CPayload.read(b);
         assertEquals(Level.OVERWORLD, decoded.dimension());
         b.release();
     }
@@ -155,8 +155,8 @@ class VoxelSectionPayloadTest {
         byte[] sections = emptyColumn();
         var original = new VoxelColumnS2CPayload(0, 0, Level.NETHER, 0L, sections);
         var b = buf();
-        VoxelColumnS2CPayload.CODEC.encode(b, original);
-        var decoded = VoxelColumnS2CPayload.CODEC.decode(b);
+        original.write(b);
+        var decoded = VoxelColumnS2CPayload.read(b);
         assertEquals(Level.NETHER, decoded.dimension());
         b.release();
     }
@@ -166,8 +166,8 @@ class VoxelSectionPayloadTest {
         byte[] sections = emptyColumn();
         var original = new VoxelColumnS2CPayload(0, 0, Level.END, 0L, sections);
         var b = buf();
-        VoxelColumnS2CPayload.CODEC.encode(b, original);
-        var decoded = VoxelColumnS2CPayload.CODEC.decode(b);
+        original.write(b);
+        var decoded = VoxelColumnS2CPayload.read(b);
         assertEquals(Level.END, decoded.dimension());
         b.release();
     }

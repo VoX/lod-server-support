@@ -8,7 +8,7 @@ import me.cortex.voxy.common.world.service.VoxelIngestService;
 import me.cortex.voxy.commonImpl.WorldIdentifier;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.Bootstrap;
 import net.minecraft.world.level.Level;
@@ -42,7 +42,7 @@ class VoxyCompatTest {
     }
 
     private static final ResourceKey<Level> DIM =
-            ResourceKey.create(Registries.DIMENSION, Identifier.parse("lss_test:voxy"));
+            ResourceKey.create(Registries.DIMENSION, new ResourceLocation("lss_test:voxy"));
 
     private record Report(ResourceKey<Level> dimension, int chunkX, int chunkZ) {}
 

@@ -34,7 +34,7 @@ class BatchCountGuardTest {
         b.writeVarInt(LSSConstants.MAX_BATCH_CHUNK_REQUESTS + 1);
         try {
             assertThrows(IllegalArgumentException.class,
-                    () -> BatchChunkRequestC2SPayload.CODEC.decode(b));
+                    () -> BatchChunkRequestC2SPayload.read(b));
         } finally {
             b.release();
         }
@@ -46,7 +46,7 @@ class BatchCountGuardTest {
         b.writeVarInt(-1);
         try {
             assertThrows(IllegalArgumentException.class,
-                    () -> BatchChunkRequestC2SPayload.CODEC.decode(b));
+                    () -> BatchChunkRequestC2SPayload.read(b));
         } finally {
             b.release();
         }
@@ -62,7 +62,7 @@ class BatchCountGuardTest {
         b.writeVarInt(Integer.MAX_VALUE);
         try {
             assertThrows(IllegalArgumentException.class,
-                    () -> BatchChunkRequestC2SPayload.CODEC.decode(b));
+                    () -> BatchChunkRequestC2SPayload.read(b));
         } finally {
             b.release();
         }
@@ -75,7 +75,7 @@ class BatchCountGuardTest {
         var b = buf();
         b.writeVarInt(0);
         try {
-            var decoded = BatchChunkRequestC2SPayload.CODEC.decode(b);
+            var decoded = BatchChunkRequestC2SPayload.read(b);
             assertEquals(0, decoded.count());
             assertEquals(0, decoded.packedPositions().length);
             assertEquals(0, decoded.clientTimestamps().length);
@@ -98,7 +98,7 @@ class BatchCountGuardTest {
         }
         try {
             assertThrows(IndexOutOfBoundsException.class,
-                    () -> BatchChunkRequestC2SPayload.CODEC.decode(b));
+                    () -> BatchChunkRequestC2SPayload.read(b));
         } finally {
             b.release();
         }
@@ -113,7 +113,7 @@ class BatchCountGuardTest {
             b.writeLong(-1L); // client timestamp
         }
         try {
-            var decoded = BatchChunkRequestC2SPayload.CODEC.decode(b);
+            var decoded = BatchChunkRequestC2SPayload.read(b);
             assertEquals(LSSConstants.MAX_BATCH_CHUNK_REQUESTS, decoded.count());
         } finally {
             b.release();
@@ -126,7 +126,7 @@ class BatchCountGuardTest {
         b.writeVarInt(LSSConstants.MAX_BATCH_RESPONSES + 1);
         try {
             assertThrows(IllegalArgumentException.class,
-                    () -> BatchResponseS2CPayload.CODEC.decode(b));
+                    () -> BatchResponseS2CPayload.read(b));
         } finally {
             b.release();
         }
@@ -138,7 +138,7 @@ class BatchCountGuardTest {
         b.writeVarInt(-1);
         try {
             assertThrows(IllegalArgumentException.class,
-                    () -> BatchResponseS2CPayload.CODEC.decode(b));
+                    () -> BatchResponseS2CPayload.read(b));
         } finally {
             b.release();
         }
