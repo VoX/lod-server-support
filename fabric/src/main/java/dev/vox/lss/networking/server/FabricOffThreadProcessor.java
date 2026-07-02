@@ -7,7 +7,7 @@ import dev.vox.lss.common.processing.OffThreadProcessor;
 import dev.vox.lss.common.processing.QueuedPayload;
 import dev.vox.lss.networking.payloads.VoxelColumnS2CPayload;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
@@ -82,7 +82,7 @@ public class FabricOffThreadProcessor extends OffThreadProcessor<PlayerRequestSt
             return false;
         }
         var dimensionKey = this.dimensionKeyCache.computeIfAbsent(dimension,
-                d -> ResourceKey.create(Registries.DIMENSION, Identifier.parse(d)));
+                d -> ResourceKey.create(Registries.DIMENSION, new ResourceLocation(d)));
         var payload = new VoxelColumnS2CPayload(cx, cz, dimensionKey, columnTimestamp,
                 sectionBytes);
         state.addReadyPayload(new QueuedPayload<>(payload, estimatedBytes, submissionOrder,

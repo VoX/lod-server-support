@@ -20,6 +20,6 @@ public class LSSClientConfig extends JsonConfig {
 
     @Override
     public void validate() {
-        lodDistanceChunks = Math.clamp(lodDistanceChunks, 0, LSSConstants.MAX_LOD_DISTANCE); // 0 = use server default
+        lodDistanceChunks = net.minecraft.util.Mth.clamp(lodDistanceChunks, 0, LSSConstants.MAX_LOD_DISTANCE); // 0 = use server default
     }
 }

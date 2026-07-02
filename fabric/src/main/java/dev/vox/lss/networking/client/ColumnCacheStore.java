@@ -55,7 +55,8 @@ public class ColumnCacheStore {
                 LSSLogger.warn("Column cache " + file + " has invalid entry count " + count + ", discarding");
                 return map;
             }
-            map.ensureCapacity(count);
+            // (no pre-size: Long2LongOpenHashMap.ensureCapacity is private in fastutil 8.5.9,
+            // which 1.20.1 ships; growth-on-put is fine at these entry counts)
             for (int i = 0; i < count; i++) {
                 long pos = in.readLong();
                 map.put(pos, in.readLong()); // raw server timestamp
@@ -222,7 +223,7 @@ public class ColumnCacheStore {
     }
 
     private static String dimensionKey(ResourceKey<Level> dimension) {
-        return sanitizeForFilePath(dimension.identifier().toString());
+        return sanitizeForFilePath(dimension.location().toString());
     }
 
     static String sanitizeForFilePath(String name) {

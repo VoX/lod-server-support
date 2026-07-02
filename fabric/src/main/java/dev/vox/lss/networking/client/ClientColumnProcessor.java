@@ -14,7 +14,9 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.chunk.DataLayer;
 import net.minecraft.world.level.chunk.LevelChunkSection;
-import net.minecraft.world.level.chunk.PalettedContainerFactory;
+import net.minecraft.core.Registry;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.world.level.biome.Biome;
 
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutorService;
@@ -182,8 +184,8 @@ class ClientColumnProcessor {
     }
 
     private void drainColumnQueue(ClientLevel level, int epoch) {
-        drainColumnQueue(level.dimension(), level.getSectionsCount(), level.getMinSectionY(),
-                PalettedContainerFactory.create(level.registryAccess()),
+        drainColumnQueue(level.dimension(), level.getSectionsCount(), level.getMinSection(),
+                level.registryAccess().registryOrThrow(Registries.BIOME),
                 (dimension, chunkX, chunkZ, columnData) ->
                         LSSApi.dispatchColumn(level, dimension, chunkX, chunkZ, columnData),
                 epoch);
@@ -198,7 +200,7 @@ class ClientColumnProcessor {
      * poll, so a teardown mid-drain lets at most the already-polled column dispatch.
      */
     void drainColumnQueue(ResourceKey<Level> levelDimension, int levelSectionCount, int minSectionY,
-                          PalettedContainerFactory factory, ColumnDispatcher dispatcher, int epoch) {
+                          Registry<Biome> biomeRegistry, ColumnDispatcher dispatcher, int epoch) {
         QueuedColumn queued;
         while (epoch == this.sessionEpoch && (queued = this.columnQueue.poll()) != null) {
             this.queueSize.decrementAndGet();
@@ -217,14 +219,14 @@ class ClientColumnProcessor {
             }
 
             try {
-                var sections = decodeSections(decompressed, levelSectionCount, factory);
+                var sections = decodeSections(decompressed, levelSectionCount, biomeRegistry);
                 if (queued.resync()) {
                     // The client already held data here; the server sends the current column
                     // (which OMITS air sections) authoritatively. Fill every absent section-Y
                     // with an all-air section so the consumer overwrites terrain the server
                     // cleared (WorldEdit clears, fully-emptied 0-section columns). Only on
                     // resync — a first serve had nothing, so absent == air == no-op.
-                    sections = withAirFilledAbsentSections(sections, levelSectionCount, minSectionY, factory);
+                    sections = withAirFilledAbsentSections(sections, levelSectionCount, minSectionY, biomeRegistry);
                 }
                 var columnData = new VoxelColumnData(sections, payload.columnTimestamp());
                 dispatcher.dispatch(payload.dimension(),
@@ -250,13 +252,13 @@ class ClientColumnProcessor {
      * Append an all-air {@link VoxelColumnData.SectionData} for every section-Y in
      * {@code [minSectionY, minSectionY + levelSectionCount)} that the decoded column does not
      * already carry, so a resync overwrites ghost terrain the server cleared. A fresh all-air
-     * {@link LevelChunkSection} per absent Y — {@code new LevelChunkSection(factory)} is all-air
+     * {@link LevelChunkSection} per absent Y — {@code new LevelChunkSection(biomeRegistry)} is all-air
      * until written — with null light layers (dark), consistent with the absent-means-all-zero
      * light default.
      */
     static VoxelColumnData.SectionData[] withAirFilledAbsentSections(
             VoxelColumnData.SectionData[] present, int levelSectionCount, int minSectionY,
-            PalettedContainerFactory factory) {
+            Registry<Biome> biomeRegistry) {
         var seen = new java.util.HashSet<Integer>(present.length * 2);
         for (var s : present) seen.add(s.sectionY());
 
@@ -265,7 +267,7 @@ class ClientColumnProcessor {
         for (int i = 0; i < levelSectionCount; i++) {
             int y = minSectionY + i;
             if (!seen.contains(y)) {
-                out.add(new VoxelColumnData.SectionData(y, new LevelChunkSection(factory), null, null));
+                out.add(new VoxelColumnData.SectionData(y, new LevelChunkSection(biomeRegistry), null, null));
             }
         }
         return out.toArray(new VoxelColumnData.SectionData[0]);
@@ -296,7 +298,7 @@ class ClientColumnProcessor {
      * drain converts into an ingest-failure report for the column.
      */
     static VoxelColumnData.SectionData[] decodeSections(byte[] decompressed, int levelSectionCount,
-                                                        PalettedContainerFactory factory) {
+                                                        Registry<Biome> biomeRegistry) {
         var buf = new FriendlyByteBuf(Unpooled.wrappedBuffer(decompressed));
         try {
             int sectionCount = Math.max(0, Math.min(buf.readVarInt(), levelSectionCount));
@@ -305,7 +307,7 @@ class ClientColumnProcessor {
             for (int i = 0; i < sectionCount; i++) {
                 int sectionY = buf.readByte();
 
-                var section = new LevelChunkSection(factory);
+                var section = new LevelChunkSection(biomeRegistry);
                 section.read(buf);
 
                 DataLayer blockLight = null;

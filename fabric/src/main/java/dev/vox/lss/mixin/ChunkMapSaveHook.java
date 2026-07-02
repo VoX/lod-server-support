@@ -30,7 +30,7 @@ public class ChunkMapSaveHook {
             if (service != null && LSSServerConfig.CONFIG.enabled) {
                 ServerLevel level = ((AccessorChunkMap) (Object) this).getLevel();
                 if (this.lss$cachedDimension == null) {
-                    this.lss$cachedDimension = level.dimension().identifier().toString();
+                    this.lss$cachedDimension = level.dimension().location().toString();
                 }
                 // Vanilla re-saves loaded chunks for metadata alone (inhabitedTime), so a
                 // save is not evidence of change — only hash-confirmed content edits count.

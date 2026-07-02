@@ -27,7 +27,7 @@ public final class SectionSerializer {
     private record SectionInfo(int index, int sectionY, SectionPos sectionPos, DataLayer blLayer, boolean hasBlockLight) {}
 
     public static LoadedColumnData serializeColumn(ServerLevel level, LevelChunk chunk, int cx, int cz) {
-        int minSectionY = level.getMinSectionY();
+        int minSectionY = level.getMinSection();
         var sections = chunk.getSections();
         var lightEngine = level.getLightEngine();
         var blockLightListener = lightEngine.getLayerListener(LightLayer.BLOCK);

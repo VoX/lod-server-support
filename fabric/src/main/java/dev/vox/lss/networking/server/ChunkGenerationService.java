@@ -21,7 +21,10 @@ import java.util.UUID;
 
 public class ChunkGenerationService {
     // flags=2 (LOADING) makes the chunk load/generate; timeout=0 means we manage lifetime ourselves
-    private static final TicketType LSS_GEN_TICKET = new TicketType(0, 2);
+    // Region ticket at distance 0 (reference-branch-proven on 1.20.1); the ChunkPos doubles
+    // as the ticket key so add/remove pair exactly.
+    private static final TicketType<ChunkPos> LSS_GEN_TICKET =
+            TicketType.create("lss_gen", java.util.Comparator.comparingLong(ChunkPos::toLong));
 
     record GenerationCallback(UUID playerUuid, long submissionOrder) {}
 
@@ -100,7 +103,7 @@ public class ChunkGenerationService {
         int playerActive = this.perPlayerActiveCount.getOrDefault(playerUuid, 0);
         if (this.active.size() < this.maxConcurrent && playerActive < this.maxPerPlayerActive) {
             var pos = new ChunkPos(cx, cz);
-            level.getChunkSource().addTicketWithRadius(LSS_GEN_TICKET, pos, 0);
+            level.getChunkSource().addRegionTicket(LSS_GEN_TICKET, pos, 0, pos);
 
             var gen = new PendingGeneration(pos, level);
             gen.callbacks.add(new GenerationCallback(playerUuid, submissionOrder));
@@ -133,7 +136,7 @@ public class ChunkGenerationService {
                         + " after " + gen.ticksWaiting + " ticks (" + gen.callbacks.size() + " callbacks)");
                 if (ready == null) ready = new ArrayList<>();
                 addFailures(ready, gen);
-                gen.level.getChunkSource().removeTicketWithRadius(LSS_GEN_TICKET, gen.pos, 0);
+                gen.level.getChunkSource().removeRegionTicket(LSS_GEN_TICKET, gen.pos, 0, gen.pos);
                 iter.remove();
                 this.totalTimeouts++;
                 continue;
@@ -146,7 +149,7 @@ public class ChunkGenerationService {
                     long columnTimestamp = LSSConstants.epochSeconds();
                     LoadedColumnData columnData = this.columnSerializer.serialize(
                             gen.level, chunk, gen.pos.x, gen.pos.z);
-                    String dimension = gen.level.dimension().identifier().toString();
+                    String dimension = gen.level.dimension().location().toString();
 
                     // Seed the dirty filter with the served bytes: the chunk's imminent
                     // unload-save would otherwise count as "first observed save" and
@@ -175,7 +178,7 @@ public class ChunkGenerationService {
                     // Always release the force-load ticket and drop the active entry — even on an
                     // Error during serialization — or the chunk stays force-loaded forever and the
                     // entry is retried (and re-throws) every server tick.
-                    gen.level.getChunkSource().removeTicketWithRadius(LSS_GEN_TICKET, gen.pos, 0);
+                    gen.level.getChunkSource().removeRegionTicket(LSS_GEN_TICKET, gen.pos, 0, gen.pos);
                     iter.remove();
                 }
             }
@@ -185,7 +188,7 @@ public class ChunkGenerationService {
 
     /** Add a failure outcome (columnData == null) for every callback of the entry. */
     private void addFailures(List<TickSnapshot.GenerationReadyData> ready, PendingGeneration gen) {
-        String dimension = gen.level.dimension().identifier().toString();
+        String dimension = gen.level.dimension().location().toString();
         for (var cb : gen.callbacks) {
             ready.add(new TickSnapshot.GenerationReadyData(
                     cb.playerUuid, gen.pos.x, gen.pos.z, dimension,
@@ -203,7 +206,7 @@ public class ChunkGenerationService {
             var gen = iter.next().getValue();
             gen.callbacks.removeIf(cb -> cb.playerUuid.equals(playerUuid));
             if (gen.callbacks.isEmpty()) {
-                gen.level.getChunkSource().removeTicketWithRadius(LSS_GEN_TICKET, gen.pos, 0);
+                gen.level.getChunkSource().removeRegionTicket(LSS_GEN_TICKET, gen.pos, 0, gen.pos);
                 iter.remove();
                 // Submitted but neither completed nor timed out — without this counter the
                 // submitted/completed books can never re-balance after a kick or dimension change
@@ -214,7 +217,7 @@ public class ChunkGenerationService {
 
     public void shutdown() {
         for (var gen : this.active.values()) {
-            gen.level.getChunkSource().removeTicketWithRadius(LSS_GEN_TICKET, gen.pos, 0);
+            gen.level.getChunkSource().removeRegionTicket(LSS_GEN_TICKET, gen.pos, 0, gen.pos);
         }
         this.active.clear();
         this.perPlayerActiveCount.clear();
