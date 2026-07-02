@@ -35,7 +35,7 @@ public class ChunkMapSaveHook {
                 // Vanilla re-saves loaded chunks for metadata alone (inhabitedTime), so a
                 // save is not evidence of change — only hash-confirmed content edits count.
                 if (service.getDirtyContentFilter().contentChanged(level, levelChunk, this.lss$cachedDimension)) {
-                    service.getDirtyTracker().markDirty(this.lss$cachedDimension, chunk.getPos().x(), chunk.getPos().z());
+                    service.getDirtyTracker().markDirty(this.lss$cachedDimension, chunk.getPos().x, chunk.getPos().z);
                 }
             }
         }

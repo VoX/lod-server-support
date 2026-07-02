@@ -69,9 +69,9 @@ public class TwoPlayerGameTests {
         var chunkPositions = new ChunkPos[3];
         for (int i = 0; i < 3; i++) {
             chunkPositions[i] = new ChunkPos(pcx - DEDUP_CHUNK_OFFSET, pcz + i);
-            positions[i] = PositionUtil.packPosition(chunkPositions[i].x(), chunkPositions[i].z());
+            positions[i] = PositionUtil.packPosition(chunkPositions[i].x, chunkPositions[i].z);
             chunkSource.addTicketWithRadius(TicketType.PLAYER_LOADING, chunkPositions[i], 0);
-            level.getChunk(chunkPositions[i].x(), chunkPositions[i].z());
+            level.getChunk(chunkPositions[i].x, chunkPositions[i].z);
         }
         // Release after generation: the serves must come from DISK (a loaded chunk
         // probe-serves and never engages the dedup tracker).
@@ -90,7 +90,7 @@ public class TwoPlayerGameTests {
             helper.assertTrue(helper.getTick() >= 6, "waiting for the ticket release");
             if (step.get() == 0) {
                 for (var pos : chunkPositions) {
-                    helper.assertTrue(chunkSource.getChunkNow(pos.x(), pos.z()) == null,
+                    helper.assertTrue(chunkSource.getChunkNow(pos.x, pos.z) == null,
                             "waiting for the dedup chunks to unload");
                 }
                 level.save(null, true, false);
@@ -221,10 +221,10 @@ public class TwoPlayerGameTests {
         int pcx = registered.getBlockX() >> 4;
         int pcz = registered.getBlockZ() >> 4;
         var chunkPos = new ChunkPos(pcx - VANILLA_CHUNK_OFFSET, pcz + 6);
-        long packed = PositionUtil.packPosition(chunkPos.x(), chunkPos.z());
+        long packed = PositionUtil.packPosition(chunkPos.x, chunkPos.z);
         var chunkSource = level.getChunkSource();
         chunkSource.addTicketWithRadius(TicketType.PLAYER_LOADING, chunkPos, 0);
-        level.getChunk(chunkPos.x(), chunkPos.z());
+        level.getChunk(chunkPos.x, chunkPos.z);
 
         var service = new RequestProcessingService(server);
         var state = service.registerPlayer(registered, LSSConstants.CAPABILITY_VOXEL_COLUMNS);
@@ -284,12 +284,12 @@ public class TwoPlayerGameTests {
         var chunkPos = new ChunkPos(pcx - FANOUT_CHUNK_OFFSET, pcz + 4);
         helper.assertTrue(FANOUT_CHUNK_OFFSET <= LSSServerConfig.CONFIG.lodDistanceChunks,
                 "premise: the column must be inside the broadcaster's RAW lodDistance range");
-        long packed = PositionUtil.packPosition(chunkPos.x(), chunkPos.z());
+        long packed = PositionUtil.packPosition(chunkPos.x, chunkPos.z);
         var dim = LSSConstants.DIM_STR_OVERWORLD;
         var chunkSource = level.getChunkSource();
         chunkSource.addTicketWithRadius(TicketType.PLAYER_LOADING, chunkPos, 0);
-        level.getChunk(chunkPos.x(), chunkPos.z());
-        var editPos = new BlockPos(chunkPos.x() * 16 + 4, -61, chunkPos.z() * 16 + 4);
+        level.getChunk(chunkPos.x, chunkPos.z);
+        var editPos = new BlockPos(chunkPos.x * 16 + 4, -61, chunkPos.z * 16 + 4);
 
         var service = new RequestProcessingService(server);
         var stateA = service.registerPlayer(mockA, LSSConstants.CAPABILITY_VOXEL_COLUMNS);
@@ -309,7 +309,7 @@ public class TwoPlayerGameTests {
                                     && stateB.getTotalSectionsSent() == 1,
                             "waiting for both holders' initial probe serves to flush");
                     // Baseline the LIVE filter pre-edit (an earlier save's state).
-                    var chunk = level.getChunk(chunkPos.x(), chunkPos.z());
+                    var chunk = level.getChunk(chunkPos.x, chunkPos.z);
                     var liveFilter = liveService.getDirtyContentFilter();
                     liveFilter.contentChanged(level, chunk, dim);
                     helper.assertTrue(!liveFilter.contentChanged(level, chunk, dim),
@@ -345,7 +345,7 @@ public class TwoPlayerGameTests {
                                     + "column dirty (save hook -> live filter -> live tracker)");
                     // Forward the mark to this test's own service and fire ITS broadcaster:
                     // intervalTicks manual ticks guarantee at least one broadcast pass.
-                    service.getDirtyTracker().markDirty(dim, chunkPos.x(), chunkPos.z());
+                    service.getDirtyTracker().markDirty(dim, chunkPos.x, chunkPos.z);
                     int intervalTicks = LSSServerConfig.CONFIG.dirtyBroadcastIntervalSeconds
                             * LSSConstants.TICKS_PER_SECOND;
                     for (int i = 0; i < intervalTicks; i++) {

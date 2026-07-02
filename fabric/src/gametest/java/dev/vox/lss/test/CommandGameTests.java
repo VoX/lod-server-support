@@ -216,16 +216,16 @@ public class CommandGameTests {
         var chunkSource = level.getChunkSource();
         var pos1 = new ChunkPos(pcx - DIAG_CHUNK_OFFSET, pcz);
         var pos2 = new ChunkPos(pcx - DIAG_CHUNK_OFFSET, pcz + 1);
-        long packed1 = PositionUtil.packPosition(pos1.x(), pos1.z());
+        long packed1 = PositionUtil.packPosition(pos1.x, pos1.z);
         chunkSource.addTicketWithRadius(TicketType.PLAYER_LOADING, pos1, 0);
         chunkSource.addTicketWithRadius(TicketType.PLAYER_LOADING, pos2, 0);
-        level.getChunk(pos1.x(), pos1.z());
-        level.getChunk(pos2.x(), pos2.z());
+        level.getChunk(pos1.x, pos1.z);
+        level.getChunk(pos2.x, pos2.z);
 
         var service = new RequestProcessingService(server);
         var state = service.registerPlayer(mock, LSSConstants.CAPABILITY_VOXEL_COLUMNS);
         state.addRequest(packed1, -1L);
-        state.addRequest(PositionUtil.packPosition(pos2.x(), pos2.z()), -1L);
+        state.addRequest(PositionUtil.packPosition(pos2.x, pos2.z), -1L);
         var step = new AtomicInteger();
 
         helper.succeedWhen(() -> {

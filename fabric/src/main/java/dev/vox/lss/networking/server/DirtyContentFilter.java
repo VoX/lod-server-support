@@ -78,7 +78,7 @@ public class DirtyContentFilter {
      * (always true for the first observed save of a position), updating the stored hash.
      */
     public synchronized boolean contentChanged(ServerLevel level, LevelChunk chunk, String dimension) {
-        return contentChanged(level, chunk, chunk.getPos().x(), chunk.getPos().z(), dimension);
+        return contentChanged(level, chunk, chunk.getPos().x, chunk.getPos().z, dimension);
     }
 
     /** Position-explicit body; package-visible so tests can drive the injected serializer

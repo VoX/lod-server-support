@@ -80,9 +80,9 @@ public class RegionFaultGameTests {
         // Valid disk target: generated now, then unloaded + saved so its serve hits disk
         // through the same reader pool the corrupt read errors on.
         var validPos = new ChunkPos(pcx - VALID_CHUNK_OFFSET, pcz + 2);
-        long validPacked = PositionUtil.packPosition(validPos.x(), validPos.z());
+        long validPacked = PositionUtil.packPosition(validPos.x, validPos.z);
         chunkSource.addTicketWithRadius(TicketType.PLAYER_LOADING, validPos, 0);
-        level.getChunk(validPos.x(), validPos.z());
+        level.getChunk(validPos.x, validPos.z);
         helper.runAfterDelay(4, () ->
                 chunkSource.removeTicketWithRadius(TicketType.PLAYER_LOADING, validPos, 0));
 
@@ -93,7 +93,7 @@ public class RegionFaultGameTests {
         helper.succeedWhen(() -> {
             helper.assertTrue(helper.getTick() >= 6, "waiting for the ticket release");
             if (step.get() == 0) {
-                helper.assertTrue(chunkSource.getChunkNow(validPos.x(), validPos.z()) == null,
+                helper.assertTrue(chunkSource.getChunkNow(validPos.x, validPos.z) == null,
                         "waiting for the valid chunk to unload");
                 level.save(null, true, false);
                 state.addRequest(corruptPacked, -1L);

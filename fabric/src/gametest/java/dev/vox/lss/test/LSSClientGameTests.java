@@ -78,7 +78,7 @@ public class LSSClientGameTests implements FabricClientGameTest {
     private static void runMainFlowTest(ClientGameTestContext context, RecordingColumnConsumer recorder,
                                         FirstColumnRejectingConsumer rejector,
                                         FirstColumnThrowingConsumer thrower) {
-        try (TestSingleplayerContext _ = context.worldBuilder().create()) {
+        try (TestSingleplayerContext ignored = context.worldBuilder().create()) {
             // Wait for join -> handshake -> session config -> LodRequestManager creation
             context.waitTicks(40);
 
@@ -282,7 +282,7 @@ public class LSSClientGameTests implements FabricClientGameTest {
      */
     private static void runLanPublishActivationTest(ClientGameTestContext context) {
         String override = System.clearProperty("lss.test.integratedServer");
-        try (TestSingleplayerContext _ = context.worldBuilder().create()) {
+        try (TestSingleplayerContext ignored = context.worldBuilder().create()) {
             // A (buggy) join-time handshake + session config roundtrip would land well within
             // this window, so the negative assertions below are meaningful.
             context.waitTicks(40);
