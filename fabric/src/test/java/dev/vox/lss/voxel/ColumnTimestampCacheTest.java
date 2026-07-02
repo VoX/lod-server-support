@@ -84,9 +84,12 @@ class ColumnTimestampCacheTest {
 
     @Test
     void mbToEntriesConversion() {
-        // 1 MB = 1048576 bytes / 16 bytes per entry = 65536
-        assertEquals(65536, ColumnTimestampCache.mbToEntries(1));
-        assertEquals(65536 * 32, ColumnTimestampCache.mbToEntries(32));
+        // 1 MB = 1048576 bytes / 64 bytes LIVE HEAP per entry = 16384. The divisor models
+        // real heap (two Long2LongOpenHashMap slots at 0.75 load factor + pow2 overshoot),
+        // not the 16-byte disk record — the old divisor made the configured MB cap mean
+        // 3-5x more RAM than the admin asked for.
+        assertEquals(16384, ColumnTimestampCache.mbToEntries(1));
+        assertEquals(16384 * 32, ColumnTimestampCache.mbToEntries(32));
     }
 
     // ---- Size-based eviction ----
@@ -395,8 +398,10 @@ class ColumnTimestampCacheTest {
         Files.writeString(blocker, "x");
         cache.put(LSSConstants.DIM_STR_OVERWORLD, 1L, 100L, now);
         assertDoesNotThrow(() -> cache.save(blocker), "the IO failure is swallowed, not thrown");
-        assertFalse(Files.exists(blocker.resolve("lss-timestamps.bin.tmp")),
-                "the half-written temp file is cleaned up / never created");
+        try (var files = Files.list(tempDir)) {
+            assertTrue(files.noneMatch(f -> f.getFileName().toString().startsWith("lss-timestamps.bin.tmp")),
+                    "the half-written temp file is cleaned up / never created");
+        }
     }
 
     @Test

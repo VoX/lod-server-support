@@ -489,6 +489,15 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
                 if (!staleAgainstEdit && !result.saturated() && !result.notFound()) {
                     // Store timestamp so reconnecting clients get up-to-date responses
                     this.timestampCache.put(result.dimension(), packed, result.columnTimestamp(), this.cycleNow);
+                } else if (result.notFound()) {
+                    // Disk says the chunk no longer exists (region trimmed/deleted outside
+                    // MC). A stale cached stamp would answer up_to_date to data-claiming
+                    // clients forever — ghost terrain for a chunk the server cannot serve.
+                    int removed = this.timestampCache.invalidate(result.dimension(), new long[]{packed});
+                    if (removed > 0 && !this.invalidationDirty) {
+                        this.invalidationDirty = true;
+                        this.invalidationCountdown = INVALIDATE_SAVE_MAX_CYCLES;
+                    }
                 }
 
                 // Dispatch the same result to attached players in the dedup group

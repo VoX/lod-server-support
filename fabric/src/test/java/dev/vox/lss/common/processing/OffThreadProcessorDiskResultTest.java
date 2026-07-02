@@ -297,6 +297,41 @@ class OffThreadProcessorDiskResultTest {
     }
 
     @Test
+    void notFoundInvalidatesAStaleTimestampStamp() throws Exception {
+        // Region trimmed/deleted outside Minecraft: the position was served (and stamped)
+        // once, but disk now says not-found. Without invalidation the stale stamp answers
+        // up_to_date to data-claiming clients forever — the ghost terrain can never clear.
+        var rig = new Rig(false);
+        try {
+            long packed = PositionUtil.packPosition(12, 12);
+            rig.state.enqueue(new IncomingRequest(12, 12, -1L));
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
+            waitFor(() -> rig.proc.diskSubmits.size() == 1, "first disk submit");
+            rig.inject(dataResult(rig.uuid, 12, 12, DIM, new byte[]{1}, COLUMN_TS, 1L));
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
+            waitFor(() -> !rig.proc.enqueuedColumns.isEmpty(), "column served + stamped");
+
+            // The dirty pipeline reopens the position; the re-read finds the region gone.
+            rig.proc.clearDiskReadDone(rig.uuid, new long[]{packed});
+            rig.state.enqueue(new IncomingRequest(12, 12, COLUMN_TS - 1));
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
+            waitFor(() -> rig.proc.diskSubmits.size() == 2, "re-read submitted");
+            rig.inject(ChunkReadResult.empty(rig.uuid, 12, 12, DIM, 2L));
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
+            drainUntil(rig.proc, received(LSSConstants.RESPONSE_NOT_GENERATED, packed));
+
+            // A resync at the old stamp must RE-RESOLVE (stale stamp invalidated), not draw
+            // a false up_to_date for data that no longer exists.
+            rig.state.enqueue(new IncomingRequest(12, 12, COLUMN_TS));
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
+            waitFor(() -> rig.proc.diskSubmits.size() == 3,
+                    "the not-found position must re-read, not answer up_to_date");
+        } finally {
+            rig.proc.shutdown();
+        }
+    }
+
+    @Test
     void oversizedResultForClaimsDataAnswersUpToDateNotClear() throws Exception {
         // An enqueue REJECTION (oversized column) is not an all-air resolution: the server
         // KNOWS real content exists there, so an authoritative clear would erase the client's
