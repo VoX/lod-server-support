@@ -338,6 +338,7 @@ public class LodRequestManager {
         // (matches the pre-v16 requestId gate).
         if (!this.tracker.isInFlight(packed)) { this.metrics.recordNotGenerated(); return; }
         this.tracker.removeByPosition(packed);
+        this.metrics.discardRttStamp(packed); // terminal non-column answer: the RTT stamp is dead
         this.columns.onNotGenerated(packed);
         // The scanner skips in-flight positions without breaking ring confirmation, so the ring
         // can confirm PAST this position while it was in-flight. With generation enabled the ts=0
@@ -352,6 +353,7 @@ public class LodRequestManager {
     public void onColumnUpToDate(long packed) {
         if (!this.tracker.isInFlight(packed)) { this.metrics.recordUpToDate(); return; }
         this.tracker.removeByPosition(packed);
+        this.metrics.discardRttStamp(packed); // terminal non-column answer: the RTT stamp is dead
         this.columns.onUpToDate(packed);
         this.metrics.recordUpToDate();
     }

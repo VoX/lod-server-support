@@ -275,12 +275,15 @@ class ColumnTimestampCacheTest {
     }
 
     @Test
-    void loadOversizedEntryCountIsDiscarded(@TempDir Path tempDir) throws IOException {
+    void loadOverCapButFileValidCountLoadsThenIsEvictable(@TempDir Path tempDir) throws IOException {
+        // 6 real entries with a cap of 5: this is a LEGITIMATE overshoot (save()/snapshotForSave
+        // never evict, so a file can hold more than the cap). It must load — not be discarded as
+        // corrupt — and the normal eviction pass then trims it back to the cap.
         try (var out = cacheFileOut(tempDir)) {
             out.writeInt(1);
             out.writeInt(1);
             out.writeUTF(LSSConstants.DIM_STR_OVERWORLD);
-            out.writeInt(6); // exceeds maxEntriesPerDimension below — treated as corrupt
+            out.writeInt(6);
             for (int i = 0; i < 6; i++) {
                 out.writeLong(i); out.writeLong(i * 100L);
             }
@@ -288,7 +291,26 @@ class ColumnTimestampCacheTest {
 
         var small = new ColumnTimestampCache(5);
         assertDoesNotThrow(() -> small.load(tempDir));
-        assertEquals(0, small.size(), "a count beyond the cache bound must not allocate/load");
+        assertEquals(6, small.size(), "a valid over-cap count must load, not be discarded");
+        assertEquals(1, small.evictIfOversized(), "the next eviction pass trims the overshoot");
+        assertEquals(5, small.size());
+    }
+
+    @Test
+    void loadEntryCountBeyondFileContentsIsDiscarded(@TempDir Path tempDir) throws IOException {
+        // A count larger than the file can physically hold is real corruption (the stream would
+        // desync into the next dimension), so the rest is discarded.
+        try (var out = cacheFileOut(tempDir)) {
+            out.writeInt(1);
+            out.writeInt(1);
+            out.writeUTF(LSSConstants.DIM_STR_OVERWORLD);
+            out.writeInt(1_000_000); // file holds only a handful of entries
+            out.writeLong(1L); out.writeLong(100L);
+        }
+
+        var loaded = new ColumnTimestampCache(DEFAULT_MAX);
+        assertDoesNotThrow(() -> loaded.load(tempDir));
+        assertEquals(0, loaded.size(), "an impossible count must not allocate/load");
     }
 
     @Test

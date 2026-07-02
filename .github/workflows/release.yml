@@ -36,7 +36,7 @@ jobs:
 
           # Fallback for lightweight tags: commit subjects as bullet list
           if [ -z "$NOTES" ]; then
-            PREV_TAG=$(git tag -l 'v*' --sort=-v:refname | grep -v "^${TAG}$" | head -1)
+            PREV_TAG=$(git tag -l 'v*' --sort=-v:refname | grep -v "^${TAG}$" | head -1 || true)
             if [ -n "$PREV_TAG" ]; then
               NOTES=$(git log --format="- %s" "${PREV_TAG}..${TAG}")
             else
@@ -45,7 +45,9 @@ jobs:
           fi
 
           # Append compare link
-          PREV_TAG=$(git tag -l 'v*' --sort=-v:refname | grep -v "^${TAG}$" | head -1)
+          # `|| true`: under `set -euo pipefail`, grep -v exits 1 (aborting the step) when the
+          # pushed tag is the only v* tag — i.e. the first-ever release. Tolerate the empty result.
+          PREV_TAG=$(git tag -l 'v*' --sort=-v:refname | grep -v "^${TAG}$" | head -1 || true)
           if [ -n "$PREV_TAG" ]; then
             COMPARE="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/compare/${PREV_TAG}...${TAG}"
           else

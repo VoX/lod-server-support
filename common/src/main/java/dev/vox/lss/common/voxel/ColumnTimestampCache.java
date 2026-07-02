@@ -200,6 +200,20 @@ public class ColumnTimestampCache {
         long now = LSSConstants.epochSeconds();
         int totalLoaded = 0;
 
+        // Sanity-bound each declared entry count by what the file could physically hold
+        // (>= 16 bytes per on-disk entry), NOT by maxEntriesPerDimension. save()/snapshotForSave
+        // never evict, so a file legitimately holds more than the cap after puts overshoot
+        // between eviction cycles, and a config shrink (smaller perDimensionTimestampCacheSizeMB)
+        // does the same — rejecting those discarded a valid cache and forced a cold, disk-heavy
+        // resync. Over-cap dimensions load here and the next evictIfOversized cycle trims them.
+        long maxPlausibleEntries;
+        try {
+            maxPlausibleEntries = Files.size(file) / 16;
+        } catch (IOException e) {
+            LSSLogger.warn("Failed to stat timestamp cache " + file, e);
+            return;
+        }
+
         try (var in = new DataInputStream(Files.newInputStream(file))) {
             int version = in.readInt();
             if (version != FORMAT_VERSION) {
@@ -210,10 +224,10 @@ public class ColumnTimestampCache {
             for (int d = 0; d < dimCount; d++) {
                 String dimension = in.readUTF();
                 int entryCount = in.readInt();
-                if (entryCount < 0 || entryCount > this.maxEntriesPerDimension) {
-                    // A bad count means the file is corrupt; the byte stream can no longer be
-                    // reliably positioned (skip math could overflow / short-skip and desync),
-                    // so stop loading. The cache is only an optimization and rebuilds itself.
+                if (entryCount < 0 || entryCount > maxPlausibleEntries) {
+                    // A count larger than the file can hold (or negative) is real corruption:
+                    // the byte stream can no longer be reliably positioned, so stop loading.
+                    // The cache is only an optimization and rebuilds itself.
                     LSSLogger.warn("Timestamp cache " + file + " has invalid entry count " + entryCount
                             + " for dimension " + dimension + ", discarding rest");
                     return;

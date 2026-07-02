@@ -77,6 +77,16 @@ class RequestMetrics {
         recordColumnReceived();
     }
 
+    /**
+     * Drop a position's pending RTT send-stamp without recording a sample. Terminal answers
+     * that are not column data (up-to-date, not-generated) mean the awaited column will never
+     * arrive, so the stamp is dead; without this it lingers until the MAX_PENDING_RTT_STAMPS
+     * cap fills and silences ALL future RTT sampling for the session.
+     */
+    void discardRttStamp(long packedPosition) {
+        this.rttSendStamps.remove(packedPosition);
+    }
+
     void recordUpToDate() {
         this.totalUpToDate++;
     }
