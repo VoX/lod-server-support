@@ -1,7 +1,7 @@
 name: LodServerSupport
 version: '${version}'
 main: dev.vox.lss.paper.LSSPaperPlugin
-api-version: '26.1.2'
+api-version: '1.21.11'
 folia-supported: true
 description: Paper Plugin that provides unofficial multiplayer support for Voxy.
 author: VoX

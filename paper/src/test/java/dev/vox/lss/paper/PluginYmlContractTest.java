@@ -92,8 +92,10 @@ class PluginYmlContractTest {
         var bundle = Pattern.compile("paperweight\\.paperDevBundle\\('([^']+)'\\)")
                 .matcher(Files.readString(locate("paper/build.gradle")));
         assertTrue(bundle.find(), "paper/build.gradle must declare paperweight.paperDevBundle('...')");
-        assertTrue(bundle.group(1).startsWith(apiVersion + "."),
-                "dev bundle " + bundle.group(1) + " must be a build of api-version " + apiVersion);
+        String devBundle = bundle.group(1);
+        assertTrue(devBundle.startsWith(apiVersion + ".") || devBundle.startsWith(apiVersion + "-R"),
+                "dev bundle " + devBundle + " must be a build of api-version " + apiVersion
+                        + " (new '<mc>.build.N' or old '<mc>-R0.1-SNAPSHOT' scheme)");
     }
 
     @Test
