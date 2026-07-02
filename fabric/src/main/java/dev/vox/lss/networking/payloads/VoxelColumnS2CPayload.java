@@ -1,12 +1,12 @@
 package dev.vox.lss.networking.payloads;
 
 import dev.vox.lss.common.LSSConstants;
+import net.fabricmc.fabric.api.networking.v1.FabricPacket;
+import net.fabricmc.fabric.api.networking.v1.PacketType;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.Level;
 
 /**
@@ -18,16 +18,10 @@ import net.minecraft.world.level.Level;
  * <p>
  * Dimension is encoded as a length-capped UTF resource-location string (v16+).
  */
-public final class VoxelColumnS2CPayload implements CustomPacketPayload {
+public final class VoxelColumnS2CPayload implements FabricPacket {
 
-    public static final CustomPacketPayload.Type<VoxelColumnS2CPayload> TYPE =
-            new CustomPacketPayload.Type<>(Identifier.parse(LSSConstants.CHANNEL_VOXEL_COLUMN));
-
-    public static final StreamCodec<FriendlyByteBuf, VoxelColumnS2CPayload> CODEC =
-            StreamCodec.of(
-                    VoxelColumnS2CPayload::write,
-                    VoxelColumnS2CPayload::read
-            );
+    public static final PacketType<VoxelColumnS2CPayload> TYPE =
+            PacketType.create(new ResourceLocation(LSSConstants.CHANNEL_VOXEL_COLUMN), VoxelColumnS2CPayload::read);
 
     private final int chunkX;
     private final int chunkZ;
@@ -57,19 +51,11 @@ public final class VoxelColumnS2CPayload implements CustomPacketPayload {
         return sectionBytes.length + LSSConstants.ESTIMATED_COLUMN_OVERHEAD_BYTES;
     }
 
-    private static void write(FriendlyByteBuf buf, VoxelColumnS2CPayload payload) {
-        buf.writeInt(payload.chunkX);
-        buf.writeInt(payload.chunkZ);
-        buf.writeUtf(payload.dimension.identifier().toString(), LSSConstants.MAX_DIMENSION_STRING_LENGTH);
-        buf.writeLong(payload.columnTimestamp);
-        buf.writeByteArray(payload.sectionBytes);
-    }
-
-    private static VoxelColumnS2CPayload read(FriendlyByteBuf buf) {
+    public static VoxelColumnS2CPayload read(FriendlyByteBuf buf) {
         int cx = buf.readInt();
         int cz = buf.readInt();
         ResourceKey<Level> dim = ResourceKey.create(Registries.DIMENSION,
-                Identifier.parse(buf.readUtf(LSSConstants.MAX_DIMENSION_STRING_LENGTH)));
+                new ResourceLocation(buf.readUtf(LSSConstants.MAX_DIMENSION_STRING_LENGTH)));
         long columnTimestamp = buf.readLong();
         byte[] sectionBytes = buf.readByteArray(LSSConstants.MAX_SECTIONS_SIZE);
 
@@ -77,7 +63,16 @@ public final class VoxelColumnS2CPayload implements CustomPacketPayload {
     }
 
     @Override
-    public Type<? extends CustomPacketPayload> type() {
+    public void write(FriendlyByteBuf buf) {
+        buf.writeInt(this.chunkX);
+        buf.writeInt(this.chunkZ);
+        buf.writeUtf(this.dimension.location().toString(), LSSConstants.MAX_DIMENSION_STRING_LENGTH);
+        buf.writeLong(this.columnTimestamp);
+        buf.writeByteArray(this.sectionBytes);
+    }
+
+    @Override
+    public PacketType<?> getType() {
         return TYPE;
     }
 }

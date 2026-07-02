@@ -114,16 +114,16 @@ public class LSSServerNetworking {
     public static void init() {
         ServerPlayNetworking.registerGlobalReceiver(
                 HandshakeC2SPayload.TYPE,
-                (payload, context) -> handleHandshake(payload, context.player(), requestService,
-                        reply -> ServerPlayNetworking.send(context.player(), reply))
+                (payload, player, responseSender) -> handleHandshake(payload, player, requestService,
+                        reply -> ServerPlayNetworking.send(player, reply))
         );
 
         ServerPlayNetworking.registerGlobalReceiver(
                 BatchChunkRequestC2SPayload.TYPE,
-                (payload, context) -> {
+                (payload, player, responseSender) -> {
                     var service = requestService;
                     if (service != null) {
-                        service.handleBatchRequest(context.player(), payload);
+                        service.handleBatchRequest(player, payload);
                     }
                 }
         );

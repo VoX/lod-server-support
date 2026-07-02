@@ -19,12 +19,6 @@
     ],
     "client": [
       "dev.vox.lss.LSSClient"
-    ],
-    "sodium:config_api_user": [
-      "dev.vox.lss.config.LSSConfigMenu"
-    ],
-    "modmenu": [
-      "dev.vox.lss.config.LSSModMenuIntegration"
     ]
   },
   "mixins": [

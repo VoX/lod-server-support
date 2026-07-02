@@ -14,7 +14,7 @@ import dev.vox.lss.config.LSSServerConfig;
 import dev.vox.lss.networking.payloads.BatchChunkRequestC2SPayload;
 import dev.vox.lss.networking.payloads.BatchResponseS2CPayload;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
-import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import net.fabricmc.fabric.api.networking.v1.FabricPacket;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
@@ -263,7 +263,7 @@ public class RequestProcessingService {
      *  is {@code ServerPlayNetworking.send}; ServiceGlueTest injects recording/throwing senders. */
     @FunctionalInterface
     interface ColumnPayloadSender {
-        void send(PlayerRequestState state, CustomPacketPayload payload) throws Exception;
+        void send(PlayerRequestState state, FabricPacket payload) throws Exception;
     }
 
     private void flushSendQueues(int activeCount, LSSServerConfig config) {

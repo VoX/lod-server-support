@@ -135,42 +135,39 @@ public class LSSClientNetworking {
     }
 
     private static void registerPacketHandlers() {
+        // fabric-api 0.92's typed FabricPacket handlers are invoked on the client thread
+        // already (decode happens on netty), so the old context.client().execute wrappers
+        // unwrap to direct calls.
         ClientPlayNetworking.registerGlobalReceiver(
                 SessionConfigS2CPayload.TYPE,
-                (payload, context) -> context.client().execute(
-                        () -> sessionGate.onSessionConfig(payload, LSSApi.hasVoxelConsumers()))
+                (payload, player, responseSender) ->
+                        sessionGate.onSessionConfig(payload, LSSApi.hasVoxelConsumers())
         );
 
         ClientPlayNetworking.registerGlobalReceiver(
                 BatchResponseS2CPayload.TYPE,
-                (payload, context) -> {
-                    context.client().execute(() -> {
-                        var manager = sessionGate.getRequestManager();
-                        if (manager == null) return;
-                        dispatchBatchResponses(manager, payload);
-                    });
+                (payload, player, responseSender) -> {
+                    var manager = sessionGate.getRequestManager();
+                    if (manager == null) return;
+                    dispatchBatchResponses(manager, payload);
                 }
         );
 
         ClientPlayNetworking.registerGlobalReceiver(
                 DirtyColumnsS2CPayload.TYPE,
-                (payload, context) -> {
-                    context.client().execute(() -> {
-                        var manager = sessionGate.getRequestManager();
-                        if (manager != null) {
-                            manager.onDirtyColumns(payload.dirtyPositions());
-                        }
-                    });
+                (payload, player, responseSender) -> {
+                    var manager = sessionGate.getRequestManager();
+                    if (manager != null) {
+                        manager.onDirtyColumns(payload.dirtyPositions());
+                    }
                 }
         );
 
         ClientPlayNetworking.registerGlobalReceiver(
                 VoxelColumnS2CPayload.TYPE,
-                (payload, context) -> {
+                (payload, player, responseSender) -> {
                     sessionGate.recordColumnFrame(payload.estimatedBytes());
-
-                    context.client().execute(() ->
-                            handleVoxelColumn(sessionGate.getRequestManager(), columnProcessor, payload));
+                    handleVoxelColumn(sessionGate.getRequestManager(), columnProcessor, payload);
                 }
         );
     }

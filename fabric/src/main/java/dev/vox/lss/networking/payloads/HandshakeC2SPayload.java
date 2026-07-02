@@ -1,30 +1,29 @@
 package dev.vox.lss.networking.payloads;
 
 import dev.vox.lss.common.LSSConstants;
+import net.fabricmc.fabric.api.networking.v1.FabricPacket;
+import net.fabricmc.fabric.api.networking.v1.PacketType;
 import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
-public record HandshakeC2SPayload(int protocolVersion, int capabilities) implements CustomPacketPayload {
-    public static final CustomPacketPayload.Type<HandshakeC2SPayload> TYPE =
-            new CustomPacketPayload.Type<>(Identifier.parse(LSSConstants.CHANNEL_HANDSHAKE));
+public record HandshakeC2SPayload(int protocolVersion, int capabilities) implements FabricPacket {
+    public static final PacketType<HandshakeC2SPayload> TYPE =
+            PacketType.create(new ResourceLocation(LSSConstants.CHANNEL_HANDSHAKE), HandshakeC2SPayload::read);
 
-    public static final StreamCodec<FriendlyByteBuf, HandshakeC2SPayload> CODEC =
-            StreamCodec.of(
-                    (buf, payload) -> {
-                        buf.writeVarInt(payload.protocolVersion);
-                        buf.writeVarInt(payload.capabilities);
-                    },
-                    buf -> {
-                        int version = buf.readVarInt();
-                        int caps = buf.readVarInt();
-                        return new HandshakeC2SPayload(version, caps);
-                    }
-            );
+    public static HandshakeC2SPayload read(FriendlyByteBuf buf) {
+        int version = buf.readVarInt();
+        int caps = buf.readVarInt();
+        return new HandshakeC2SPayload(version, caps);
+    }
 
     @Override
-    public Type<? extends CustomPacketPayload> type() {
+    public void write(FriendlyByteBuf buf) {
+        buf.writeVarInt(this.protocolVersion);
+        buf.writeVarInt(this.capabilities);
+    }
+
+    @Override
+    public PacketType<?> getType() {
         return TYPE;
     }
 }
