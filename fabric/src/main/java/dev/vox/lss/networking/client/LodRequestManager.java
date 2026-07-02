@@ -263,22 +263,28 @@ public class LodRequestManager {
     private BatchSender batchSender = payload -> ClientPlayNetworking.send(payload);
 
     private void sendRequests(long[] positionBuffer, long[] timestampBuffer, int count) {
+        // Snapshot to exact-length arrays: BatchChunkRequestC2SPayload's StreamCodec reads
+        // these lazily when the connection encodes on the netty event loop, which races the
+        // next tick's drainQueue overwriting the reused sendPositionBuffer/sendTimestampBuffer.
+        // The payload must own its data so a request's positions can't be corrupted mid-encode.
+        long[] positions = java.util.Arrays.copyOf(positionBuffer, count);
+        long[] timestamps = java.util.Arrays.copyOf(timestampBuffer, count);
         try {
-            this.batchSender.send(new BatchChunkRequestC2SPayload(positionBuffer, timestampBuffer, count));
+            this.batchSender.send(new BatchChunkRequestC2SPayload(positions, timestamps, count));
             long nowMs = System.currentTimeMillis();
             for (int i = 0; i < count; i++) {
-                this.metrics.recordRequestSent(positionBuffer[i], nowMs); // RTT send stamp per position
+                this.metrics.recordRequestSent(positions[i], nowMs); // RTT send stamp per position
             }
         } catch (Exception e) {
             LSSLogger.error("Failed to send batch chunk request", e);
             for (int i = 0; i < count; i++) {
-                this.tracker.removeByPosition(positionBuffer[i]);
+                this.tracker.removeByPosition(positions[i]);
                 // drainQueue consumed the dirty/retry marks at markSent, so without
                 // restoration a validated position whose batch never reached the wire
                 // classifies SATISFIED forever — the same orphan class as a timeout
                 // eviction (see sweepTimeouts), without the 10 s grace. Re-mark retry:
                 // classify re-asks with the stored timestamp, no invented stamps.
-                this.columns.markRetry(positionBuffer[i]);
+                this.columns.markRetry(positions[i]);
             }
         }
         this.metrics.recordSendCycle(count); // counts attempts — a failed batch still counts

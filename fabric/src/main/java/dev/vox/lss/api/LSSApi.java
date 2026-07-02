@@ -104,6 +104,15 @@ public final class LSSApi {
      */
     public static void dispatchColumn(ClientLevel level, ResourceKey<Level> dimension,
                                        int chunkX, int chunkZ, VoxelColumnData columnData) {
+        if (columnConsumers.isEmpty()) {
+            // Every consumer deregistered between scheduleProcessing's hasVoxelConsumers()
+            // gate and this dispatch: the column was stamped received at arrival, so a silent
+            // drop here is a permanent hole. Report it so the manager forgets the stamp and
+            // re-requests (bounded by the per-position ingest-failure cap if no consumer
+            // returns).
+            reportSink.report(dimension, chunkX, chunkZ);
+            return;
+        }
         for (var consumer : columnConsumers) {
             try {
                 consumer.onVoxelColumnReceived(level, dimension, chunkX, chunkZ, columnData);

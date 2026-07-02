@@ -263,8 +263,14 @@ class ClientColumnProcessor {
     /** End the current session: any in-flight drain self-terminates at its next epoch check. */
     void shutdown() {
         this.sessionEpoch++;
-        this.columnQueue.clear();
-        this.queueSize.set(0);
+        // Drain with the same poll+decrement discipline as the decode loop rather than
+        // clear()+set(0): a set(0) races a decode iteration that already polled an item but
+        // has not yet decremented, permanently driving the lifetime-singleton's queueSize to
+        // -1 (drift accumulates across sessions). Pairing every poll with one decrement keeps
+        // the counter self-consistent no matter which thread removes each item.
+        while (this.columnQueue.poll() != null) {
+            this.queueSize.decrementAndGet();
+        }
     }
 
     int getQueuedCount() { return this.queueSize.get(); }

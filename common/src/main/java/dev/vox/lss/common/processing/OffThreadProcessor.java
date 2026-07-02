@@ -288,10 +288,37 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
                 // Catch Throwable (not just Exception) so a transient Error doesn't silently
                 // kill the processing thread and stop the LOD pipeline for every player.
                 LSSLogger.error("Error in processing cycle", t);
+                // The take destructively drained the lossless event buffers; discarding them
+                // on a failed cycle permanently loses player removals (leaked slots/dedup
+                // groups), generation outcomes (stranded pending generations), and
+                // dirty-clears/invalidations (up_to_date answered for stale content). Re-queue
+                // them so the next cycle retries — every one of these events is idempotent, so
+                // re-applying any a partial cycle already applied is harmless (a re-sent column
+                // or up_to_date is position-idempotent on the client).
+                requeueLosslessEvents(take);
                 if (++this.consecutiveErrors >= 10) {
                     LSSLogger.error("Processing thread hit " + this.consecutiveErrors + " consecutive errors, backing off");
                     try { Thread.sleep(1000); } catch (InterruptedException ie) { return; }
                 }
+            }
+        }
+    }
+
+    /**
+     * Re-inject a failed cycle's lossless events into the mailbox so the next cycle retries
+     * them. Ordering does not matter: removals, invalidations, and dirty-clears are set/map
+     * removals (idempotent), and generation outcomes are keyed by position (a duplicate
+     * response is idempotent on the client). The snapshot is intentionally NOT restored — it
+     * is latest-wins and the next tick posts a fresh one within ~50 ms.
+     */
+    private void requeueLosslessEvents(MailboxTake take) {
+        synchronized (this.mailboxLock) {
+            this.pendingGenerationReady.addAll(take.generationReady());
+            this.pendingRemovals.addAll(take.removals());
+            this.pendingInvalidations.addAll(take.invalidations());
+            for (var entry : take.dirtyClears().entrySet()) {
+                this.pendingDirtyClears.merge(entry.getKey(), entry.getValue(),
+                        (existing, taken) -> { existing.addAll(taken); return existing; });
             }
         }
     }
