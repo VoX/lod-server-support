@@ -174,7 +174,13 @@ public class PaperChunkGenerationService {
             // shutdown() already clears the active map.
             LSSLogger.warn("Could not schedule generation callback (plugin shutting down) at " + cx + "," + cz);
         }
-        if (rethrow != null) throw rethrow;
+        if (rethrow != null) {
+            // A plain rethrow would vanish: whenComplete captures it into an unobserved
+            // dependent future. Hand it to the thread's uncaught handler instead, so an
+            // Error (OOME, linkage) stays as loud as the old scheduled-task rethrow was.
+            Thread.currentThread().getUncaughtExceptionHandler()
+                    .uncaughtException(Thread.currentThread(), rethrow);
+        }
     }
 
     /**

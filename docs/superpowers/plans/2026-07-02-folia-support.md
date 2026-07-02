@@ -1,5 +1,11 @@
 # Folia Support Implementation Plan
 
+> **STATUS: EXECUTED (2026-07-02).** All tasks implemented and live-validated (8/8 soak
+> scenarios on Folia 26.1.2-8 + Paper regression); checkbox state below was not maintained
+> during execution — `plan-progress.md` at the repo root is the authoritative completion
+> record, including the post-plan discoveries (D8 region-thread serialization, Stage 6
+> review fixes).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** The existing Paper plugin (`lod-server-support-paper.jar`) runs correctly on Folia 26.1.2, declared via `folia-supported: true`, validated by unit tests plus a `SOAK_PLATFORM=folia` port of the live soak harness.

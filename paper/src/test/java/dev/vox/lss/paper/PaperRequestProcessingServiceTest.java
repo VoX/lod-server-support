@@ -628,6 +628,19 @@ class PaperRequestProcessingServiceTest {
         assertTrue(processor.snapshots.isEmpty(), "no snapshot may be posted after shutdown");
     }
 
+    @Test
+    void mailboxEventsAfterShutdownAreNotApplied() {
+        // The overlapped-disable tick must not register into mid-teardown collaborators
+        // (players.clear() vs registerPlayer, a shut-down disk reader): shuttingDown is
+        // checked BEFORE the mailbox drain.
+        var overworld = level(Level.OVERWORLD);
+        service.shutdown();
+        service.enqueueRegister(playerIn(UUID.randomUUID(), overworld), 1);
+        service.tick();
+        assertTrue(service.getPlayers().isEmpty(),
+                "a register racing shutdown must not apply into torn-down collaborators");
+    }
+
     // ---- PP-011: lifecycle mailbox (Folia region-thread ingress → pump-owned apply) ----
 
     @Test

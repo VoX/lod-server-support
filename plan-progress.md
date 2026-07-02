@@ -114,7 +114,7 @@ All plan tasks 2–12 implemented TDD on `feat/folia-support`, one commit per ta
 - T12: README (5 touch points, experimental label), CLAUDE.md, release.yml folia loader,
   build.yml gains `:paper:test`.
 
-### Stage 5 — Live validation (2026-07-02, in progress)
+### Stage 5 — Live validation (DONE 2026-07-02)
 
 **First live Folia run caught a real design bug the plan review missed.** fresh-backfill ran
 end-to-end (server booted 12 s, plugin loaded, driver + client + checker all functional) but
@@ -144,6 +144,36 @@ exactly on the mapped save-all command row; soak_report parses `-folia-` result 
 the single report anomaly is the expected fresh-backfill startup request spike (lens, not
 gate). Plus the full static suite: Fabric Tier 1+2, Paper Tier 1 (~230 tests incl. the new
 seams), release_check OK, all three selftests (120/20/11).
+
+### Stage 6 — Implementation review + fixes (DONE 2026-07-02)
+
+Adversarial workflow `folia-impl-review` (20 agents; 6 lenses over `27ba6ab..HEAD`, prompts
+aimed at what a single-player stationary soak cannot catch): 14 raw → 12 CONFIRMED survived,
+2 refuted (deferred-registration batch race — self-heals by protocol design; mapped-row
+ok-semantics — checker-verified). 9 distinct fixes applied:
+
+1. **FoliaWiringContractTest was blind to nested classes** (the standout: a `BukkitRunnable`
+   revert compiles its only scheduler constants into `LSSPaperPlugin$1$1.class`, which the
+   test never opened — verified by probe compile). Now walks EVERY production class under
+   `dev/vox/lss/paper` (nested + soak), checks CONSTANT_Class entries as well as method-ref
+   owners (an anonymous BukkitRunnable subclass's call is owned by the subclass — only the
+   tag-7 superclass constant names org/bukkit/scheduler), and a coverage canary asserts the
+   pump's threadedregions ref is inside the scanned set.
+2. **`completeAsyncLoad`'s Error rethrow was dead code** — whenComplete captures a rethrow
+   into an unobserved dependent future. Errors now go to the thread's uncaught handler
+   (books-first preserved; test pins the handoff via a capturing handler).
+3. **Guard order:** `shuttingDown` is checked BEFORE the mailbox drain (an overlapped
+   runtime-disable tick must not registerPlayer into mid-teardown collaborators); the
+   drain-before-enabled behavior is preserved and both are pinned.
+4. `PaperSectionSerializer`'s "must be called on the server thread" contract rewritten to the
+   real concurrent contract (completion threads + pump; stateless/reentrant).
+5. CLAUDE.md gains the experimental qualifier (spec §6.5 drift).
+6. soak.sh header + check_soak.py docstrings updated for the folia platform.
+7. `runFolia` build.gradle comment now honest about manual-smoke reuse of soak staging (EULA,
+   leftover scenario config).
+8. release.yml Modrinth display name → "Paper/Folia (MC 26.1.2)"; CLAUDE.md notes Folia
+   release-notes must carry the experimental status.
+9. Bookkeeping: Stage 5 heading fixed; plan doc carries an EXECUTED banner pointing here.
 
 ## Major decisions
 

@@ -2,14 +2,14 @@
 set -euo pipefail
 
 # LSS Soak Test Orchestrator
-# Usage: [SOAK_PLATFORM=fabric|paper] ./scripts/soak.sh <scenario>|all
+# Usage: [SOAK_PLATFORM=fabric|paper|folia] ./scripts/soak.sh <scenario>|all
 #   scenario: fresh-backfill | warm-rejoin | dimension-trip | dirty-broadcast
 #           | rate-limit-storm | disk-saturation | generation-disabled
 #           | generation-capacity-stress | bandwidth-throttle
 #           | cold-restart-resync | enabled-false | teleport-prune
 #           | dirty-range-filter | dirty-during-backfill | dirty-while-offline
 #           | clearcache-mid-session | dimension-rejoin-warm
-#           | paper-dirty-falling-block (SOAK_PLATFORM=paper only)
+#           | paper-dirty-falling-block (SOAK_PLATFORM=paper|folia)
 #
 # Runs a real dedicated server + headless client through a scripted timeline
 # (scripts/soak-scenarios/<name>.json), collects jsonl snapshots from both
@@ -22,6 +22,11 @@ set -euo pipefail
 # on MC 26.1.2 Paper uses the vanilla unified layout (world/dimensions/minecraft/<dim>,
 # no split world_nether/world_the_end dirs), so the snapshot carries every dimension —
 # including the End — exactly like Fabric's.
+#
+# SOAK_PLATFORM=folia runs the Paper scenario set against a real Folia server
+# (:paper:runFolia downloads the jar; base world soak-worlds/base-folia). Same plugin,
+# same driver: the driver maps save-all to an acknowledged no-op (Folia unregisters the
+# command) and the staging compensates with an aggressive bukkit.yml autosave.
 
 SCENARIO="${1:-}"
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"

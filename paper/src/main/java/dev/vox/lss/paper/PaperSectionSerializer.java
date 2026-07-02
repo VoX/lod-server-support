@@ -15,7 +15,13 @@ import net.minecraft.world.level.chunk.LevelChunkSection;
  * Uses {@link LevelChunkSection#write(FriendlyByteBuf)} for block states + biomes,
  * plus raw DataLayer nibble bytes for light data.
  *
- * <p>Must be called on the server thread (reads LightEngine).
+ * <p>Thread contract: called concurrently from chunk-load completion threads (the owning
+ * region thread on Folia, the main thread on Paper — {@code completeAsyncLoad}) and from the
+ * pump's loaded-chunk probes (on Folia the global region thread reading chunks other regions
+ * own). All state is method-local, so the class must stay stateless/reentrant; the MC reads
+ * are legal and tear-free off-thread — getChunkNow is a concurrent-map lookup, light
+ * listeners clone SWMR state, PalettedContainer.write is synchronized (audited for the Folia
+ * port, spec §3/§5).
  */
 final class PaperSectionSerializer {
     private PaperSectionSerializer() {}

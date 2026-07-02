@@ -112,7 +112,7 @@ jobs:
           modrinth-id: lKiXKLvv
           modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
           files: paper/build/libs/lod-server-support-paper-*.jar
-          name: ${{ github.ref_name }} - Paper (MC 26.1.2)
+          name: ${{ github.ref_name }} - Paper/Folia (MC 26.1.2)
           version: ${{ github.ref_name }}+paper+mc26.1.2
           version-type: release
           loaders: |

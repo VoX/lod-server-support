@@ -215,12 +215,18 @@ public class PaperRequestProcessingService {
     }
 
     public void tick() {
-        // BEFORE the enabled guard: a disabled server still receives quits (onPlayerQuit
+        // shuttingDown FIRST: an overlapped tick during a runtime plugin-manager disable must
+        // not apply lifecycle events into mid-teardown collaborators (registerPlayer racing
+        // players.clear() / a shut-down disk reader). Post-shutdown mailbox growth is bounded:
+        // onDisable nulls the service field, so producers stop within a tick.
+        if (this.shuttingDown)
+            return;
+        // ...but BEFORE the enabled guard: a disabled server still receives quits (onPlayerQuit
         // enqueues unconditionally) and the queue must not grow unbounded. Draining while
         // disabled is safe by construction: HandshakeGate never invokes the registrar when
         // disabled, and removePlayer of an unregistered UUID is a no-op.
         drainLifecycleMailbox();
-        if (this.shuttingDown || !this.config.enabled)
+        if (!this.config.enabled)
             return;
 
         this.diag.reset(this.offThreadProcessor.getDiagnostics());

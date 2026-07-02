@@ -39,7 +39,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -315,23 +315,34 @@ class PaperChunkGenerationServiceTest {
     }
 
     @Test
-    void extractionErrorStillEmitsFailureBeforeRethrowing() {
+    void extractionErrorStillEmitsFailureBeforeSurfacing() {
         var svc = new CapturingGenService(config(32, 1, 60));
         var level = overworldLevel();
         when(level.getChunkSource()).thenThrow(new LinkageError("boom"));
         UUID a = UUID.randomUUID();
 
-        assertTrue(svc.submitGeneration(a, level, 0, 0, 1L));
-        assertThrows(LinkageError.class,
-                () -> svc.completeAsyncLoad(svc.launches.get(0).key(), level, bukkitChunk(), null, 0, 0, svc.launches.get(0).token()),
-                "Errors propagate (not swallowed)");
+        // A rethrow inside whenComplete would vanish into an unobserved dependent future, so
+        // completeAsyncLoad hands Errors to the thread's uncaught handler instead — capture it.
+        var surfaced = new ArrayList<Throwable>();
+        var thread = Thread.currentThread();
+        var previous = thread.getUncaughtExceptionHandler();
+        thread.setUncaughtExceptionHandler((t, e) -> surfaced.add(e));
+        try {
+            assertTrue(svc.submitGeneration(a, level, 0, 0, 1L));
+            svc.completeAsyncLoad(svc.launches.get(0).key(), level, bukkitChunk(), null, 0, 0,
+                    svc.launches.get(0).token());
+        } finally {
+            thread.setUncaughtExceptionHandler(previous);
+        }
+        assertEquals(1, surfaced.size(), "the Error surfaces via the uncaught handler");
+        assertInstanceOf(LinkageError.class, surfaced.get(0), "Errors stay loud (not swallowed)");
 
-        // ...but the books were balanced first: without the Throwable catch the slot would leak
+        // ...and the books were balanced first: without the containment the slot would leak
         var ready = svc.tick();
         assertEquals(1, ready.size());
         assertNull(ready.get(0).columnData());
         assertEquals(1L, svc.getTotalRemovedInFlight(),
-                "the removal was counted before the Error propagated");
+                "the removal was counted before the Error surfaced");
         assertTrue(svc.submitGeneration(a, level, 1, 0, 2L));
     }
 

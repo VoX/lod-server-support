@@ -73,7 +73,7 @@ ANOMALY_OPT_INS = {
     "dirty-while-offline": frozenset({"rate_limited", "saturated"}),
     "clearcache-mid-session": frozenset({"rate_limited", "saturated"}),
     "dimension-rejoin-warm": frozenset({"rate_limited", "saturated"}),
-    # Paper-only (SOAK_PLATFORM=paper): cold-cache disc resync from the base world, like
+    # Paper/Folia (SOAK_PLATFORM=paper|folia): cold-cache disc resync from the base world, like
     # warm-rejoin run 1, so the same load-shaped opt-ins apply.
     "paper-dirty-falling-block": frozenset({"rate_limited", "saturated"}),
 }
@@ -1672,7 +1672,7 @@ def check_dirty_resave_quiet(ctx):
 @named_check("paper-dirty-falling-block", ["server.dirty.broadcast_positions",
                                            "client.columns.dirty", "client.received_columns"])
 def check_paper_dirty_falling_block(ctx):
-    """Paper-native dirty pipeline (SOAK_PLATFORM=paper): /setblock fires no Bukkit event,
+    """Paper-native dirty pipeline (SOAK_PLATFORM=paper|folia): /setblock fires no Bukkit event,
     so the edit is a summoned falling block whose landing fires EntityChangeBlockEvent —
     the only E2E proof that PaperWorldHandler's event registration + Bukkit-world-key to
     NMS-dimension-string mapping feeds the broadcaster (a key mismatch is otherwise
@@ -1782,7 +1782,7 @@ CHECKS = {
                               make_handshake_check("dimension-rejoin-warm"),
                               make_disc_completeness("dimension-rejoin-warm", run=1),
                               make_disc_completeness("dimension-rejoin-warm", run=2)],
-    # Paper-only scenario (scripts/soak.sh SOAK_PLATFORM=paper); the conservation laws
+    # Paper/Folia scenario (scripts/soak.sh SOAK_PLATFORM=paper|folia); the conservation laws
     # themselves are platform-blind — the Paper exporter twin emits the same schema.
     "paper-dirty-falling-block": [check_paper_dirty_falling_block,
                                   make_handshake_check("paper-dirty-falling-block"),

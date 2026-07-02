@@ -87,8 +87,11 @@ tasks.register('runSoakServer', xyz.jpenilla.runpaper.task.RunServer) {
 
 // Folia soak twin (scripts/soak.sh SOAK_PLATFORM=folia). run-paper's opt-in Folia task
 // (named runFolia) downloads folia-<mc>-<build>.jar from the PaperMC downloads service; we
-// point it at the same soakShadowJar + scenario plumbing as runSoakServer. It doubles as the
-// manual Folia smoke task; without -Psoak.scenario the driver stays inert (empty property).
+// point it at the same soakShadowJar + scenario plumbing as runSoakServer. It can double as
+// a manual Folia smoke task — without -Psoak.scenario the driver stays inert (empty
+// property) — but it REUSES the soak staging dir: accept the EULA by hand on a fresh
+// checkout, and expect whatever server.properties/lss-server-config.json/bukkit.yml the
+// last soak scenario staged there (offline-mode superflat + 5s autosave) to apply.
 // pluginsMode INHERIT_NONE is load-bearing: the default PLUGIN_JAR_DETECTION auto-adds the
 // RELEASE shadowJar (soak-excluded) next to soakShadowJar — two same-named plugins, and
 // whichever loads first wins nondeterministically.
