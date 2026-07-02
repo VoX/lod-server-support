@@ -80,21 +80,24 @@ print(stable[0]['downloads']['server:default']['url']) if stable else print('')
     curl -fsSL -o "$dest" "$url"
 }
 
+# build_*_jar: build only when the jar is missing (first-time setup). Pass force=1 to
+# always run gradle — `update` promises a REBUILD, and skipping it silently reinstalls
+# whatever stale jar a previous build left (gradle's up-to-date check keeps no-ops cheap).
 build_fabric_jar() {
-    local jar
+    local force="${1:-}" jar
     jar="$SCRIPT_DIR/fabric/build/libs/lod-server-support-fabric.jar"
-    if [ ! -f "$jar" ]; then
-        echo "No Fabric LSS JAR found, building..." >&2
+    if [ -n "$force" ] || [ ! -f "$jar" ]; then
+        echo "Building Fabric LSS JAR..." >&2
         (cd "$SCRIPT_DIR" && ./gradlew :fabric:build -x runClientGameTest) >&2
     fi
     echo "$jar"
 }
 
 build_paper_jar() {
-    local jar
+    local force="${1:-}" jar
     jar="$SCRIPT_DIR/paper/build/libs/lod-server-support-paper.jar"
-    if [ ! -f "$jar" ]; then
-        echo "No Paper LSS JAR found, building..." >&2
+    if [ -n "$force" ] || [ ! -f "$jar" ]; then
+        echo "Building Paper LSS JAR..." >&2
         (cd "$SCRIPT_DIR" && ./gradlew :paper:shadowJar) >&2
     fi
     echo "$jar"
@@ -272,24 +275,29 @@ run_all() {
     echo "  Commands: /lsslod stats, /lsslod diag"
     echo ""
 
+    # Install the trap BEFORE the first launch: a Ctrl+C during the startup sleeps would
+    # otherwise orphan the already-started JVMs (holding their ports and failing the next
+    # run's — or soak.sh's — port pre-flight).
+    SERVER_PIDS=()
+    trap 'echo ""; echo "Stopping servers..."; kill "${SERVER_PIDS[@]}" 2>/dev/null; wait "${SERVER_PIDS[@]}" 2>/dev/null; echo "Done."' INT TERM EXIT
+
     cd "$FABRIC_DIR"
     java -Xmx${SERVER_RAM} -Xms${SERVER_RAM} -jar fabric-server-launch.jar nogui &
-    FABRIC_PID=$!
+    SERVER_PIDS+=($!)
 
     sleep 2
 
     cd "$PAPER_DIR"
     java -Xmx${SERVER_RAM} -Xms${SERVER_RAM} -jar paper.jar nogui &
-    PAPER_PID=$!
+    SERVER_PIDS+=($!)
 
     sleep 2
 
     cd "$FOLIA_DIR"
     java -Xmx${SERVER_RAM} -Xms${SERVER_RAM} -jar folia.jar nogui &
-    FOLIA_PID=$!
+    SERVER_PIDS+=($!)
 
-    trap 'echo ""; echo "Stopping servers..."; kill $FABRIC_PID $PAPER_PID $FOLIA_PID 2>/dev/null; wait $FABRIC_PID $PAPER_PID $FOLIA_PID 2>/dev/null; echo "Done."' INT TERM EXIT
-    wait $FABRIC_PID $PAPER_PID $FOLIA_PID 2>/dev/null
+    wait "${SERVER_PIDS[@]}" 2>/dev/null
 }
 
 # ============================================================
@@ -308,8 +316,8 @@ case "${1:-run}" in
         ;;
     update)
         echo "=== Updating LSS JARs ==="
-        fabric_jar=$(build_fabric_jar)
-        paper_jar=$(build_paper_jar)
+        fabric_jar=$(build_fabric_jar force)
+        paper_jar=$(build_paper_jar force)
 
         mkdir -p "$FABRIC_DIR/mods" "$PAPER_DIR/plugins" "$FOLIA_DIR/plugins"
 

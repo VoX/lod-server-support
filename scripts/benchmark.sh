@@ -85,9 +85,21 @@ mc_wait_server_ready "$SERVER_RUN_DIR/logs/latest.log" "$RESULTS_DIR/server.log"
 # Step 7: Start client
 mc_start_client "$RESULTS_DIR/client.log" :fabric:runBenchmarkClient
 
-# Step 8: Wait for server to exit (auto-stops after duration)
+# Step 8: Wait for server to exit (auto-stops after duration). Enforce the deadline: the
+# benchmark server only halts on tick count (max-tick-time=-1 disables the vanilla
+# watchdog), so a stalled JVM would otherwise hang this script forever.
 TOTAL_TIMEOUT=$((DURATION + 120))
 echo "[benchmark] Waiting up to ${TOTAL_TIMEOUT}s for benchmark to complete..."
+elapsed=0
+while kill -0 "$SERVER_PID" 2>/dev/null; do
+    if [ "$elapsed" -ge "$TOTAL_TIMEOUT" ]; then
+        echo "[benchmark] Deadline exceeded (${TOTAL_TIMEOUT}s) — killing stalled server" >&2
+        kill "$SERVER_PID" 2>/dev/null || true
+        break
+    fi
+    sleep 1
+    elapsed=$((elapsed + 1))
+done
 if wait "$SERVER_PID" 2>/dev/null; then
     echo "[benchmark] Server exited normally"
 else

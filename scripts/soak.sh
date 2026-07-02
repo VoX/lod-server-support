@@ -212,7 +212,9 @@ soak_port_in_use() {
     if command -v ss >/dev/null 2>&1; then
         [[ -n "$(ss -ltn 2>/dev/null | awk '$4 ~ /:25565$/')" ]]
     else
-        [[ -n "$(awk '$2 ~ /:63[Dd][Dd]$/' /proc/net/tcp /proc/net/tcp6 2>/dev/null)" ]]
+        # LISTEN state only ($4 == 0A) — matching any state falsely flags the previous
+        # scenario's just-halted server whose sockets linger in TIME_WAIT for ~60s.
+        [[ -n "$(awk '$4 == "0A" && $2 ~ /:63[Dd][Dd]$/' /proc/net/tcp /proc/net/tcp6 2>/dev/null)" ]]
     fi
 }
 
@@ -271,6 +273,14 @@ fi
 # cold-restart-resync RESTORES the snapshot taken alongside the base world: the client
 # cache and the world's data/lss-timestamps.bin were persisted at the same instant, so
 # a brand-new server JVM must resync this client almost entirely via up_to_date.
+# Provenance guard: the cache is keyed only by server address (localhost_25565), which
+# ALL platforms share — a kept cache populated against another platform's base world
+# carries stamps from a different world's clock and fails the warm-path expectations.
+CACHE_PLATFORM_MARKER="$CLIENT_RUN_DIR/config/lss/cache-platform"
+if [[ -f "$CACHE_PLATFORM_MARKER" && "$(cat "$CACHE_PLATFORM_MARKER")" != "$SOAK_PLATFORM" ]]; then
+    echo "[soak] Client cache was populated on platform '$(cat "$CACHE_PLATFORM_MARKER")' — clearing for $SOAK_PLATFORM"
+    rm -rf "$CLIENT_RUN_DIR/config/lss/cache"
+fi
 case "$SCENARIO" in
     dirty-broadcast)
         echo "[soak] Keeping client column cache"
@@ -286,6 +296,8 @@ case "$SCENARIO" in
         rm -rf "$CLIENT_RUN_DIR/config/lss/cache"
         ;;
 esac
+mkdir -p "$CLIENT_RUN_DIR/config/lss"
+printf '%s' "$SOAK_PLATFORM" > "$CACHE_PLATFORM_MARKER"
 
 # Step 6a: Stage server config override (fabric: config/; paper: the plugin data folder)
 mkdir -p "$SERVER_CONFIG_DIR"
