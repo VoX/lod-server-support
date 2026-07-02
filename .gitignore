@@ -34,3 +34,4 @@ oracle/
 .worktrees/
 
 __pycache__/
+.claude/
