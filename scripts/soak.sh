@@ -19,7 +19,7 @@ set -euo pipefail
 # SOAK_PLATFORM=paper runs the identical scenario against a real Paper server
 # (:paper:runSoakServer + PaperSoakScenarioDriver) with the UNCHANGED Fabric soak
 # client and checker. Paper keeps its own base-world snapshot (soak-worlds/base-paper);
-# on MC 1.21.11 Paper/Folia use the legacy split layout (world/, world_nether/,
+# on MC 1.20.1 Paper/Folia use the legacy split layout (world/, world_nether/,
 # world_the_end/), while Fabric keeps a single world/ — the world* glob covers both, so the
 # snapshot carries every dimension (including the End) on every platform.
 #
@@ -225,11 +225,11 @@ echo "========================================="
 echo " LSS Soak: platform=$SOAK_PLATFORM, scenario=$SCENARIO, client runs=$CLIENT_RUNS, budget=${RUNTIME_BUDGET}s"
 echo "========================================="
 
-# Base worlds are MC-version-specific; a 26.1.2 world will not downgrade to 1.21.11. Clear a
+# Base worlds are MC-version-specific; a newer-version world will not downgrade to 1.20.1. Clear a
 # stale base BEFORE Step 1 so its '! -d "$BASE_WORLD_DIR/world"' check regenerates naturally
 # (must run before that check — clearing after staging would boot 1.21.11 against a 26.1.2 world).
-if [[ -d "$BASE_WORLD_DIR" && "$(cat "$WORLD_VERSION_MARKER" 2>/dev/null)" != "1.21.11" ]]; then
-    echo "[soak] Base world at $BASE_WORLD_DIR is not for MC 1.21.11 — clearing (will re-run fresh-backfill)"
+if [[ -d "$BASE_WORLD_DIR" && "$(cat "$WORLD_VERSION_MARKER" 2>/dev/null)" != "1.20.1" ]]; then
+    echo "[soak] Base world at $BASE_WORLD_DIR is not for MC 1.20.1 — clearing (will re-run fresh-backfill)"
     rm -rf "$BASE_WORLD_DIR"
 fi
 
@@ -255,7 +255,7 @@ python3 "$PROJECT_ROOT/scripts/check_soak.py" --validate "$SCENARIO"
 # the dev plugin jar that retains the soak package)
 echo "[soak] Building mod..."
 cd "$PROJECT_ROOT"
-./gradlew :fabric:build -x test -x runGameTest -x runClientGameTest --quiet
+./gradlew :fabric:build -x test -x runGameTest --quiet
 if [[ "$SOAK_PLATFORM" == "paper" || "$SOAK_PLATFORM" == "folia" ]]; then
     ./gradlew :paper:soakShadowJar --quiet
 fi
@@ -267,7 +267,7 @@ mkdir -p "$RUN_RESULTS_DIR"
 
 # Step 5a: Stage world. Fresh-world scenarios start from nothing (generation paths);
 # only fresh-backfill SAVES its world as the reusable base afterwards (Step 13).
-# 1.21.11 Bukkit platforms (Paper/Folia) use the legacy split world_nether/world_the_end
+# 1.20.1 Bukkit platforms (Paper/Folia) use the legacy split world_nether/world_the_end
 # layout; Fabric keeps a single world/ (dedicated-server DIM-1/DIM1 nest inside it) — the
 # world* glob covers both, so the End round-trips on every platform.
 echo "[soak] Staging world for scenario: $SCENARIO"
@@ -423,7 +423,7 @@ if [[ "$SCENARIO" == "fresh-backfill" && -d "$SERVER_RUN_DIR/world" ]]; then
     # the STALE End/Nether in the snapshot (the exact failure this split-world handling fixes).
     rm -rf "$BASE_WORLD_DIR"/world "$BASE_WORLD_DIR"/world_nether "$BASE_WORLD_DIR"/world_the_end
     cp -r "$SERVER_RUN_DIR"/world* "$BASE_WORLD_DIR"/
-    printf '%s' "1.21.11" > "$WORLD_VERSION_MARKER"
+    printf '%s' "1.20.1" > "$WORLD_VERSION_MARKER"
     if [[ -d "$CLIENT_RUN_DIR/config/lss/cache" ]]; then
         echo "[soak] Saving client column cache snapshot to $BASE_WORLD_DIR/client-cache"
         rm -rf "$BASE_WORLD_DIR/client-cache"

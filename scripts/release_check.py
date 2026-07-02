@@ -17,7 +17,7 @@ Inspects the built release jars and the workflow/metadata that publishes them, a
     by an explicit --version), so a green pre-flight always validated the jar being tagged.
 
 Run after a CI-style build:
-  CI=true ./gradlew :fabric:build -x runClientGameTest :paper:shadowJar -Pmod_version=X.Y.Z
+  CI=true ./gradlew :fabric:build :paper:test :paper:build -Pmod_version=X.Y.Z
   python3 scripts/release_check.py --version X.Y.Z   # check exactly the release jars
   python3 scripts/release_check.py            # auto-discovers fabric/ + paper/ build/libs
   python3 scripts/release_check.py --selftest # synthetic-jar fixtures, no build needed

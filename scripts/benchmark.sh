@@ -25,7 +25,7 @@ echo "========================================="
 # Step 1: Build
 echo "[benchmark] Building mod..."
 cd "$PROJECT_ROOT"
-./gradlew :fabric:build -x test -x runGameTest -x runClientGameTest --quiet
+./gradlew :fabric:build -x test -x runGameTest --quiet
 
 # Step 2: Prepare run directories
 mkdir -p "$SERVER_RUN_DIR" "$CLIENT_RUN_DIR" "$RESULTS_DIR"

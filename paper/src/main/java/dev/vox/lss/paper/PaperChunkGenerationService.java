@@ -85,10 +85,14 @@ public class PaperChunkGenerationService {
     private volatile long totalTimeouts = 0;
     private volatile long totalRemovedInFlight = 0;
 
+    // For plugin chunk tickets on the 1.20.1 load-pinning path (see launchAsyncLoad).
+    private final Plugin plugin;
+
     public PaperChunkGenerationService(PaperConfig config, Plugin plugin) {
         this.maxConcurrent = config.generationConcurrencyLimitGlobal;
         this.maxPerPlayerActive = config.generationConcurrencyLimitPerPlayer;
         this.timeoutTicks = config.generationTimeoutSeconds * LSSConstants.TICKS_PER_SECOND;
+        this.plugin = plugin;
         this.mainThreadScheduler = task ->
                 plugin.getServer().getGlobalRegionScheduler().execute(plugin, task);
     }
@@ -131,8 +135,38 @@ public class PaperChunkGenerationService {
      * launch.
      */
     void launchAsyncLoad(PendingGenerationKey key, ServerLevel level, int cx, int cz, long token) {
-        level.getWorld().getChunkAtAsync(cx, cz, true, false).whenComplete((chunk, ex) ->
-                completeAsyncLoad(key, level, chunk, ex, cx, cz, token));
+        // 1.20.1 Paper: the async load's internal ticket can lapse before whenComplete runs,
+        // so an isolated LOD chunk (no players nearby) may unload again between the load
+        // completing and extractColumnData's lookup — observed live as ~1% of generations
+        // resolving "null after async load" and double-counting the soak books (A5). Pin the
+        // chunk with a plugin ticket for the load's duration. NOT on Folia: ticket ops are
+        // region-checked there (the pump is the global region, the chunk belongs to another),
+        // and Folia doesn't need the pin — its completion thread IS the owning region thread.
+        var world = level.getWorld();
+        boolean ticketed = false;
+        if (!FoliaSupport.IS_FOLIA) {
+            try {
+                world.addPluginChunkTicket(cx, cz, this.plugin);
+                ticketed = true;
+            } catch (Exception e) {
+                // Plugin disabling mid-launch: proceed unpinned — worst case is the pre-pin
+                // race, which the not_generated retry path already self-heals.
+            }
+        }
+        boolean releaseTicket = ticketed;
+        world.getChunkAtAsync(cx, cz, true, false).whenComplete((chunk, ex) -> {
+            try {
+                completeAsyncLoad(key, level, chunk, ex, cx, cz, token);
+            } finally {
+                if (releaseTicket) {
+                    try {
+                        world.removePluginChunkTicket(cx, cz, this.plugin);
+                    } catch (Exception ignored) {
+                        // Plugin already disabled — Bukkit removes plugin tickets on disable.
+                    }
+                }
+            }
+        });
     }
 
     /**
