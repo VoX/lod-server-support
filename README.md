@@ -9,6 +9,7 @@ Supports **Fabric**, **Paper**, and **Folia** (experimental) servers. The client
 | LSS Version | Minecraft | Fabric | Paper | Voxy | Java |
 |---|---|---|---|---|---|
 | **v0.5.x** | **26.1.x** | Server + Client | Server + Folia (experimental) | 0.2.16-beta+ | 25+ |
+| **v0.5.x+mc1.21.11** | **1.21.11** | Server + Client | Server + Folia (experimental) | 0.2.15-beta+ | 21+ |
 | v0.4.x | 26.1.x | Server + Client | Server | 0.2.16-beta+ | 25+ |
 | v0.3.x | 26.1.x | Server + Client | — | 0.2.14-alpha+ | 25+ |
 | v0.2.x | 1.21.11 | Server + Client | Server | 0.2.13-alpha | 21+ |
@@ -16,9 +17,10 @@ Supports **Fabric**, **Paper**, and **Folia** (experimental) servers. The client
 v0.5.0 adds **Folia** support (experimental — see the Paper Server section) and a set of
 client-sync correctness fixes; after upgrading, clients rebuild their local LOD cache once
 (the cache format changed), so the first rejoin re-syncs from the server. Paper server
-support is built against Paper 26.1.2 and also runs on Purpur. Paper server admins on the
-older 1.21.11 line should continue using
-[v0.2.3](https://modrinth.com/plugin/lod-server-support/versions).
+support is built against Paper 26.1.2 and also runs on Purpur. Servers still on **Minecraft
+1.21.11** now get the full v0.5.0 feature set (Paper + Folia + the client-sync fixes) from the
+long-lived [`support/mc1.21.11`](https://github.com/VoX/lod-server-support/tree/support/mc1.21.11)
+branch, published as `v<version>+mc1.21.11` releases — v0.2.3 is no longer the ceiling for that line.
 
 https://github.com/user-attachments/assets/721fb344-890e-4e03-ab36-539444427f7b
 
@@ -40,7 +42,8 @@ The result: players see fully rendered terrain out to hundreds of chunks on mult
 Download from [Modrinth](https://modrinth.com/plugin/lod-server-support):
 
 - **v0.5.x (MC 26.1.x):** `lod-server-support-fabric` — Fabric mod JAR (client + server) — and `lod-server-support-paper` — Paper/Purpur/Folia server plugin
-- **v0.2.x (MC 1.21.11):** `lod-server-support-fabric` + `lod-server-support-paper` — includes Paper plugin
+- **v0.5.x+mc1.21.11 (MC 1.21.11):** the same `lod-server-support-fabric` + `lod-server-support-paper` artifacts built for 1.21.11 — the full v0.5.0 feature set (incl. Folia) for the older line
+- **v0.2.x (MC 1.21.11):** `lod-server-support-fabric` + `lod-server-support-paper` — the original 1.21.11 line (superseded by v0.5.x+mc1.21.11)
 
 ## Installation
 

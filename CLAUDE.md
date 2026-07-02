@@ -289,6 +289,8 @@ Releases are triggered by pushing an **annotated tag** (`git tag -a`). The tag a
 
 ### Tagging a Release
 
+> **Support line (`support/mc1.21.11` branch):** this branch releases the MC 1.21.11 line. Tags are `v<version>+mc1.21.11` (e.g. `v0.5.0+mc1.21.11`) — the `+mc1.21.11` is SemVer **build metadata** (`+`, never a `-` prerelease, which would break `--sort=-v:refname`). `release.yml` strips it so Gradle's `mod_version` is the bare `<version>` (the pre-flight below already passes the bare `<version>`, so the command is unchanged). Land release commits on `support/mc1.21.11` (not `main`) via PR, then tag that branch. `PREV_TAG` globs and Modrinth game-versions (`1.21.11`) are scoped to this line so it never crosses main's 26.1 releases.
+
 `main` is branch-protected (changes must land via PR; tags are **not** protected). Full flow:
 
 1. Review commits since the last tag: `git log $(git describe --tags --abbrev=0)..HEAD --oneline`
