@@ -5,6 +5,7 @@ import dev.vox.lss.common.LSSConstants;
 import dev.vox.lss.common.LSSLogger;
 import dev.vox.lss.common.PositionUtil;
 import dev.vox.lss.common.SharedBandwidthLimiter;
+import dev.vox.lss.common.processing.IncomingRequest;
 import dev.vox.lss.common.processing.LoadedColumnData;
 import dev.vox.lss.common.processing.OffThreadProcessor;
 import dev.vox.lss.common.processing.TickDiagnostics;
@@ -104,13 +105,21 @@ public class PaperRequestProcessingService {
     // ownership check; Folia soak baselines show ~150 in-memory serves per fresh-backfill).
     // Every one of those serves serialized a chunk the owning region thread may have been
     // mutating concurrently: a torn palette read shipped to the client as "up to date".
-    // Regionized probing removes that race: the pump snapshots pending positions and
-    // dispatches a probe task to each player's owning region via the EntityScheduler; the
-    // task serializes only chunks that region owns (isOwnedByCurrentRegion) and publishes
-    // an immutable-after-publish batch that the NEXT tick's lifecycle pass merges into the
-    // snapshot. Costs one tick of latency, so only positions still queued at the next
-    // routing cycle draw an in-memory serve (deep backfill bursts, dirty re-requests) —
-    // the rest resolve from disk or generation exactly as they already do.
+    // Regionized probing removes that race: the pump dispatches a probe task to each
+    // player's owning region via the EntityScheduler; the task serializes only chunks that
+    // region owns (isOwnedByCurrentRegion) and publishes an immutable-after-publish batch
+    // the pump consumes into a later snapshot.
+    //
+    // Probe results are useless if they trail their requests: the router drains the whole
+    // incoming queue every cycle, so a probe published between ticks T and T+1 describes
+    // requests that were already routed at cycle T (a soak run measured exactly 0 in-memory
+    // serves with that shape). The pump therefore HOLDS each tick's fresh arrivals for one
+    // tick: at tick T it drains them, schedules their probe task, and parks them; at T+1 it
+    // consumes the published batch and re-injects the parked requests, so routing cycle T+1
+    // sees request and probe result in the same snapshot. Costs ~50 ms added latency per
+    // request on Folia only — noise against the client's 1 s scan cadence. A probe task
+    // that runs late simply misses: the release is unconditional, the requests route to
+    // disk/generation as before, and the orphan batch is discarded on its next consume.
 
     /** Test seam: runs a task on the player's owning region. Production default is the
      *  EntityScheduler (the main thread on Paper); a task whose entity is removed before
@@ -157,6 +166,10 @@ public class PaperRequestProcessingService {
     record RegionProbeBatch(String dimension, Long2ObjectOpenHashMap<LoadedColumnData> probes) {}
 
     private final ConcurrentHashMap<UUID, RegionProbeBatch> regionProbeResults = new ConcurrentHashMap<>();
+
+    /** Pump-only. Requests drained at tick T, released into the routing queue at T+1 once
+     *  their probe task has had a region tick to publish. */
+    private final Map<UUID, List<IncomingRequest>> heldForProbe = new HashMap<>();
 
     /** Collaborator set for the package-private constructor. Tests build it over recording
      *  collaborators; production wiring lives in {@link #productionWiring} only. */
@@ -262,6 +275,7 @@ public class PaperRequestProcessingService {
     public void removePlayer(UUID uuid) {
         this.players.remove(uuid);
         this.regionProbeResults.remove(uuid);
+        this.heldForProbe.remove(uuid);
         this.offThreadProcessor.notifyPlayerRemoved(uuid);
         cleanupPlayerServices(uuid);
     }
@@ -401,10 +415,11 @@ public class PaperRequestProcessingService {
                     ? genReadyPositions.get(player.getUUID()) : null;
             Long2ObjectMap<LoadedColumnData> probes;
             if (this.regionizedProbing) {
-                // Consume last tick's region-published batch, then schedule the next task.
-                // The sync probe is skipped entirely: the pump owns no chunks on Folia.
+                // Consume last tick's region-published batch, then advance the hold-release
+                // pipeline (release last tick's arrivals, park + probe this tick's). The
+                // sync probe is skipped entirely: the pump owns no chunks on Folia.
                 probes = consumeRegionProbes(player.getUUID(), dimension, skipPositions);
-                scheduleRegionProbe(state, player, level, skipPositions);
+                holdAndScheduleRegionProbe(state, player, level, skipPositions);
             } else {
                 probes = this.probeLoadedChunks(state, level, skipPositions);
             }
@@ -493,11 +508,33 @@ public class PaperRequestProcessingService {
         return batch.probes();
     }
 
-    /** Pump only. Snapshots up to {@link #MAX_PROBES_PER_TICK_PER_PLAYER} distinct pending
-     *  positions into an immutable array and hands them to the player's owning region. */
-    private void scheduleRegionProbe(PaperPlayerRequestState state, ServerPlayer player,
-                                     ServerLevel level, LongOpenHashSet skipPositions) {
-        long[] positions = snapshotProbePositions(state, skipPositions);
+    /** Pump only. Advances the one-tick hold-release pipeline: drains this tick's fresh
+     *  arrivals, releases the previous tick's held batch back into the routing queue (its
+     *  probe results were consumed just above), then parks the fresh batch and hands its
+     *  positions to the player's owning region. The processing thread may concurrently
+     *  poll the same queue for an in-flight routing cycle — either consumer owning a given
+     *  request is correct (a stolen request routes without probe results, exactly as a
+     *  non-regionized request would). */
+    private void holdAndScheduleRegionProbe(PaperPlayerRequestState state, ServerPlayer player,
+                                            ServerLevel level, LongOpenHashSet skipPositions) {
+        List<IncomingRequest> fresh = null;
+        IncomingRequest req;
+        while ((req = state.pollIncomingRequest()) != null) {
+            if (fresh == null) fresh = new ArrayList<>();
+            fresh.add(req);
+        }
+
+        var released = this.heldForProbe.remove(player.getUUID());
+        if (released != null) {
+            for (var r : released) {
+                state.reinjectIncomingRequest(r);
+            }
+        }
+
+        if (fresh == null) return;
+        this.heldForProbe.put(player.getUUID(), fresh);
+
+        long[] positions = snapshotProbePositions(fresh, skipPositions);
         if (positions.length == 0) return;
         UUID uuid = player.getUUID();
         this.regionTaskScheduler.schedule(player, () -> runRegionProbe(uuid, level, positions));
@@ -505,10 +542,11 @@ public class PaperRequestProcessingService {
 
     private static final long[] NO_POSITIONS = new long[0];
 
-    private long[] snapshotProbePositions(PaperPlayerRequestState state,
+    /** Up to {@link #MAX_PROBES_PER_TICK_PER_PLAYER} distinct positions from the held batch. */
+    private long[] snapshotProbePositions(List<IncomingRequest> held,
                                           LongOpenHashSet skipPositions) {
         LongOpenHashSet positions = null;
-        for (var req : state.getIncomingRequests()) {
+        for (var req : held) {
             long packed = PositionUtil.packPosition(req.cx(), req.cz());
             if (skipPositions != null && skipPositions.contains(packed)) continue;
             if (positions == null) positions = new LongOpenHashSet();

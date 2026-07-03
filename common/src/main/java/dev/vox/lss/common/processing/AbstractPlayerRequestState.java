@@ -192,6 +192,18 @@ public abstract class AbstractPlayerRequestState<T> {
         return r;
     }
 
+    /**
+     * Re-queues a request previously drained via {@link #pollIncomingRequest} without
+     * re-counting it as received (it was counted at arrival) and without the queue-full
+     * drop guard (re-injection never grows the queue beyond what was drained). Used by
+     * Folia's regionized probing, which holds fresh arrivals for one tick so they route
+     * in the same snapshot their region-probe results land in.
+     */
+    public void reinjectIncomingRequest(IncomingRequest request) {
+        this.incomingRequests.add(request);
+        this.incomingRequestCount.incrementAndGet();
+    }
+
     public boolean tryAdmit(PendingRequest pending) {
         int cap = pending.heldSlot() == SlotType.SYNC_ON_LOAD ? this.syncSlotCap : this.genSlotCap;
         int held = pending.heldSlot() == SlotType.SYNC_ON_LOAD ? this.heldSyncSlots : this.heldGenSlots;

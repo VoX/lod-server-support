@@ -29,6 +29,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -219,6 +220,67 @@ class RegionProbeSchedulingTest {
         assertTrue(probes.containsKey(PositionUtil.packPosition(1, 1))
                         && probes.containsKey(PositionUtil.packPosition(2, 2)),
                 "publishes stacked before a consume merge instead of clobbering");
+    }
+
+    // ---- RP-008: the one-tick hold-release pipeline aligns requests with their probes ----
+
+    @Test
+    void freshRequestsAreHeldOneTickAndReleasedWithTheirProbeResults() {
+        service.setLoadedColumnProbe((level, cx, cz) -> column(cx, cz));
+        var uuid = UUID.randomUUID();
+        var player = playerIn(uuid, level(Level.OVERWORLD));
+        var state = service.registerPlayer(player, 1);
+        state.addRequest(5, 7, -1);
+
+        service.tick();
+        assertNull(state.pollIncomingRequest(),
+                "fresh arrivals are parked for one tick, not routable from the queue");
+
+        scheduledTasks.get(0).run();
+        service.tick();
+
+        var released = state.pollIncomingRequest();
+        assertNotNull(released,
+                "the held batch is released the tick its probe results are consumed");
+        assertEquals(5, released.cx());
+        assertEquals(7, released.cz());
+        var probes = probesInLastSnapshot(uuid);
+        assertNotNull(probes, "request and probe result must meet in the same snapshot");
+        assertTrue(probes.containsKey(PositionUtil.packPosition(5, 7)));
+    }
+
+    @Test
+    void aLateProbeTaskNeverDelaysTheRelease() {
+        var uuid = UUID.randomUUID();
+        var player = playerIn(uuid, level(Level.OVERWORLD));
+        var state = service.registerPlayer(player, 1);
+        state.addRequest(5, 7, -1);
+
+        service.tick();                    // held; the scheduled task never runs ("region lagged")
+        service.tick();
+
+        assertNotNull(state.pollIncomingRequest(),
+                "release is unconditional — a late probe only misses, it never delays routing");
+    }
+
+    @Test
+    void heldBatchDiesWithTheRemovedPlayer() {
+        var uuid = UUID.randomUUID();
+        var overworld = level(Level.OVERWORLD);
+        var player = playerIn(uuid, overworld);
+        var state = service.registerPlayer(player, 1);
+        state.addRequest(6, 6, -1);
+
+        service.tick();                    // held
+        when(player.isRemoved()).thenReturn(true);
+        service.tick();                    // lifecycle removes the player, dropping the batch
+
+        var rejoined = playerIn(uuid, overworld);
+        var freshState = service.registerPlayer(rejoined, 1);
+        service.tick();
+
+        assertNull(freshState.pollIncomingRequest(),
+                "a removed player's held batch must not resurrect into the rejoined state");
     }
 
     // ---- RP-003: the ownership guard bounds what the region task may read ----
