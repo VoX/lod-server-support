@@ -52,6 +52,16 @@ Most tests live in the Fabric module. Paper has Tier 1 JUnit tests as well (`./g
 
 The system property `-Dlss.test.integratedServer=true` (set in fabric/build.gradle for gametest JVMs) allows `RequestProcessingService` to activate on integrated servers during testing.
 
+### Known Test Flakes & Environmental Failures
+
+**This section is the canonical home for known CI test flakes and environment-specific test failures — keep it up to date, and record all similar findings here.** When a test failure is diagnosed as a flake or an environment quirk (not a code regression), add an entry here so the next contributor/session **re-runs rather than chases a phantom regression**. Each entry gives the test, the symptom, why it's benign, and the action. (These are also mirrored in the assistant's project memory, but this file is the in-repo source of truth.)
+
+- **`RegionFaultGameTests` (Tier 2) — environmental on some dev boxes.** `region_fault_..._corrupt_region_chunk_resolves_as_contained_error_and_reader_survives` can fail (`errors=1 ... not_found=0 on tick 1202`) on constrained / WSL2 machines **regardless of load** (reproduces with all changes stashed) yet passes in clean CI. The corrupt-region triage is version-robust (a broad `catch (Exception)` resolves to not-found). Action: trust clean CI — a local red here is not a regression.
+- **`LSSClientGameTests` superflat section count (Tier 3) — serialization-window flake on starved CI.** `assertDecodedFlatWorldContent` can fail with *"superflat columns must decode to exactly the one non-air section, got 24"* when a column is serialized during unsettled spawn-prep (its air sections not yet culled by `SectionSerializer`'s `hasOnlyAir` / block-light filter) and that stale delivery lingers in `recorder.snapshot()`. Passes locally and on re-run. **`release.yml` runs `-x runClientGameTest`, so this never gates the publish** — it only affects the PR `build.yml` `Client GameTests` job. Action: `gh run rerun <id> --failed`. (Hardening idea: assert "exactly one *non-air* section, any extras all-air" instead of strict `length == 1`.)
+- **`TwoPlayerGameTests` fan-out (Tier 2) — probe-race flake on 2-core CI.** `editedColumnPropagatesToBothHoldersThroughBroadcastFanout` step 1 is a high-rate probe-race that can miss on starved 2-core runners. Action: re-run the failed job; it does not block a release.
+- **`GenerationLifecycleGameTests` (Tier 2) — cold-gen / serialization timing flake.** Can fail on CI on identical, already-green code. Action: re-run before assuming a regression.
+- **Soak checker (`check_soak.py`) — benign timing / light-settle drift on constrained boxes.** Occasional dirty-resave / quiescence drift is tolerated by design (the checker carries settle tolerances); treat as a re-run, not a rewrite.
+
 ## Local Test Servers (manual play)
 
 ```bash
@@ -307,7 +317,7 @@ Releases are triggered by pushing an **annotated tag** (`git tag -a`). The tag a
 - **`###` headers stripped from the tag message.** `git tag` defaults to `--cleanup=strip`, which deletes `#`-leading lines as comments. Always pass `--cleanup=verbatim`.
 - **CI can publish a commit-dump instead of the annotation.** `actions/checkout` leaves a *lightweight* tag on tag-triggered runs, so the extract step's `objecttype` reads `commit` and falls back to `git log` commit subjects. Fixed in `release.yml` by force-fetching the annotated tag (`git fetch --force origin "refs/tags/$TAG:refs/tags/$TAG"`); if the notes still render wrong, fix GitHub instantly with `gh release edit v<version> --notes-file <file>`.
 - **Modrinth changelog can't be fixed locally.** `MODRINTH_TOKEN` is a CI-only secret, so a wrong Modrinth changelog must be edited by hand on the web (project `lKiXKLvv`). Keep a short, player-focused variant of the notes ready for this.
-- **A Tier-2 gametest can flake on CI** (`GenerationLifecycleGameTests` serialization/cold-gen timing). If a post-merge `main` build fails on identical, already-green code, re-run it (`gh run rerun <id> --failed`) before assuming a regression.
+- **A gametest can flake on CI** — see **Known Test Flakes & Environmental Failures** (in the Test Commands section) for the full catalog (`GenerationLifecycleGameTests` cold-gen timing, `TwoPlayerGameTests` fan-out, `LSSClientGameTests` superflat section count, `RegionFaultGameTests`). If a post-merge `main` build fails on identical, already-green code, re-run it (`gh run rerun <id> --failed`) before assuming a regression.
 
 ### Release Notes Format
 
