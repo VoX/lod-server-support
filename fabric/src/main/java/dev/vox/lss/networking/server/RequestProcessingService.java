@@ -406,8 +406,11 @@ public class RequestProcessingService {
             String dimension = this.dimensionStringCache.computeIfAbsent(level.dimension(),
                     k -> k.identifier().toString());
             // Ticket queued before a dimension change targets the old dimension's coordinates.
-            // The admitting state was discarded by removePlayer+registerPlayer, so dropping
-            // the stale ticket leaks nothing.
+            // Dropping it leaks nothing: the admitting state was discarded by
+            // removePlayer+registerPlayer (its slot dies with it), AND that same removePlayer
+            // enqueues the removal event that sweeps the processing thread's UUID-keyed
+            // generation in-flight tracking (removeGenerationTracking) — without that sweep the
+            // dropped ticket's tracking would leak (do not add a drop path that skips it).
             if (!dimension.equals(req.dimension())) continue;
             boolean accepted = !player.isRemoved() && this.generationService.submitGeneration(
                     req.playerUuid(), level, req.cx(), req.cz(),

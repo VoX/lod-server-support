@@ -51,6 +51,7 @@ class OffThreadProcessorDiskResultTest {
         final ConcurrentLinkedQueue<DiskSubmit> diskSubmits = new ConcurrentLinkedQueue<>();
         final ConcurrentLinkedQueue<EnqueuedColumn> enqueuedColumns = new ConcurrentLinkedQueue<>();
         volatile boolean rejectEnqueue; // blanket rejection (queue-full style)
+        volatile boolean throwOnNextSubmit; // one-shot: fail a phase-4 disk submit to exercise requeue
         // Mirrors the REAL platform guard: only payloads over the send limit bounce, so the
         // 1-byte clearing column would be accepted — pins that no clear is fabricated for a
         // rejected real column (the blanket flag above can't: it rejects the clear too).
@@ -63,6 +64,10 @@ class OffThreadProcessorDiskResultTest {
 
         @Override
         protected boolean submitDiskRead(UUID playerUuid, String dimension, int cx, int cz, long order) {
+            if (throwOnNextSubmit) {
+                throwOnNextSubmit = false;
+                throw new RuntimeException("injected phase-4 routing failure");
+            }
             diskSubmits.add(new DiskSubmit(playerUuid, dimension, cx, cz));
             return true;
         }
@@ -372,6 +377,82 @@ class OffThreadProcessorDiskResultTest {
     }
 
     @Test
+    void aFailedCycleDoesNotRedeliverAnAlreadyProcessedGenerationOutcome() throws Exception {
+        // requeueLosslessEvents re-queues a failed cycle's UN-applied events. A generation
+        // outcome consumed in processGenerationReady (phase 3) must NOT be re-queued when a
+        // LATER phase throws: re-delivery would find the stale mark already consumed and
+        // re-stamp pre-edit terrain as up_to_date (full-review finding: error-retry replay
+        // defeats the stale guard). The phase-completion flags gate the requeue.
+        var rig = new Rig(true);
+        try {
+            var ticket = escalateToGenTicket(rig, 5, 5);
+            byte[] bytes = {1, 2};
+            var data = new LoadedColumnData(5, 5, bytes,
+                    bytes.length + LSSConstants.ESTIMATED_COLUMN_OVERHEAD_BYTES);
+            // A fresh request whose disk submit throws makes phase 4 fail AFTER phase 3
+            // delivered the generation outcome, so the failed cycle re-queues lossless events.
+            rig.state.enqueue(new IncomingRequest(6, 6, -1L));
+            rig.proc.throwOnNextSubmit = true;
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid), new ArrayList<>(List.of(
+                    new TickSnapshot.GenerationReadyData(rig.uuid, 5, 5, DIM, data,
+                            COLUMN_TS, ticket.submissionOrder()))));
+            waitFor(() -> rig.proc.enqueuedColumns.stream().anyMatch(c -> c.cx() == 5),
+                    "generation outcome delivered in the failed cycle's phase 3");
+
+            // Drive a recovery cycle (the one-shot throw has cleared). A re-queued outcome would
+            // re-deliver a SECOND (5,5) column here; the (8,8) submit signals the cycle ran.
+            rig.state.enqueue(new IncomingRequest(8, 8, -1L));
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
+            waitFor(() -> rig.proc.diskSubmits.stream().anyMatch(s -> s.cx() == 8),
+                    "recovery cycle routed the (8,8) request");
+            long served55 = rig.proc.enqueuedColumns.stream().filter(c -> c.cx() == 5).count();
+            assertEquals(1, served55, "the generation outcome must be delivered exactly once — "
+                    + "the error-retry requeue must not re-deliver an already-consumed outcome");
+        } finally {
+            rig.proc.shutdown();
+        }
+    }
+
+    @Test
+    void anEditTaintsEveryInFlightGenerationHolderOfAPosition() throws Exception {
+        // Generation does not dedup, so two players can generate the same column independently.
+        // An edit that overtakes the position must taint BOTH outcomes (per-player), not just
+        // the first to drain — the multi-holder invariant the per-player rewrite replaced the
+        // refcount to preserve, previously unpinned (full-review finding).
+        var rig = new Rig(true);
+        var bUuid = UUID.randomUUID();
+        var bState = rig.addPlayer(bUuid);
+        try {
+            // Both players independently escalate a generation at the SAME (5,5) — generation
+            // does not dedup, so both are in flight at once.
+            var ticketA = escalateToGenTicket(rig, rig.state, rig.uuid, 5, 5);
+            var ticketB = escalateToGenTicket(rig, bState, bUuid, 5, 5);
+
+            // The edit taints the position while BOTH generations are in flight.
+            rig.proc.invalidateTimestamps(DIM, new long[]{PositionUtil.packPosition(5, 5)});
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid, bUuid), List.of());
+
+            // Deliver both outcomes; each must be treated as stale (no done-bit → re-resolves).
+            var dataA = new LoadedColumnData(5, 5, new byte[]{1, 2},
+                    2 + LSSConstants.ESTIMATED_COLUMN_OVERHEAD_BYTES);
+            var dataB = new LoadedColumnData(5, 5, new byte[]{1, 2},
+                    2 + LSSConstants.ESTIMATED_COLUMN_OVERHEAD_BYTES);
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid, bUuid), new ArrayList<>(List.of(
+                    new TickSnapshot.GenerationReadyData(rig.uuid, 5, 5, DIM, dataA, COLUMN_TS,
+                            ticketA.submissionOrder()),
+                    new TickSnapshot.GenerationReadyData(bUuid, 5, 5, DIM, dataB, COLUMN_TS,
+                            ticketB.submissionOrder()))));
+            waitFor(() -> rig.proc.enqueuedColumns.size() >= 2, "both generated columns delivered");
+            assertFalse(rig.state.hasDiskReadDone(5, 5),
+                    "player A's tainted generation must not set the done-bit");
+            assertFalse(bState.hasDiskReadDone(5, 5),
+                    "player B's tainted generation must not set the done-bit — EVERY holder is tainted");
+        } finally {
+            rig.proc.shutdown();
+        }
+    }
+
+    @Test
     void notFoundInvalidatesAStaleTimestampStamp() throws Exception {
         // Region trimmed/deleted outside Minecraft: the position was served (and stamped)
         // once, but disk now says not-found. Without invalidation the stale stamp answers
@@ -551,18 +632,26 @@ class OffThreadProcessorDiskResultTest {
      *  injects not-found, and returns the escalated generation ticket. */
     private static OffThreadProcessor.GenerationTicketRequest escalateToGenTicket(
             Rig rig, int cx, int cz) throws InterruptedException {
-        int before = rig.proc.diskSubmits.size();
-        rig.state.enqueue(new IncomingRequest(cx, cz, 0L));
-        rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
-        waitFor(() -> rig.proc.diskSubmits.size() == before + 1, "disk-first submit");
+        return escalateToGenTicket(rig, rig.state, rig.uuid, cx, cz);
+    }
 
-        rig.inject(ChunkReadResult.empty(rig.uuid, cx, cz, DIM, 1L));
-        rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
+    /** As above, for a specific player — so two players can be escalated independently at the
+     *  same position (generation does not dedup). Routes only {@code uuid} in each snapshot. */
+    private static OffThreadProcessor.GenerationTicketRequest escalateToGenTicket(
+            Rig rig, TestState state, UUID uuid, int cx, int cz) throws InterruptedException {
+        long before = rig.proc.diskSubmits.stream().filter(s -> s.player().equals(uuid)).count();
+        state.enqueue(new IncomingRequest(cx, cz, 0L));
+        rig.proc.postSnapshot(snapshot(DIM, uuid), List.of());
+        waitFor(() -> rig.proc.diskSubmits.stream().filter(s -> s.player().equals(uuid)).count() == before + 1,
+                "disk-first submit");
+
+        rig.inject(ChunkReadResult.empty(uuid, cx, cz, DIM, 1L));
+        rig.proc.postSnapshot(snapshot(DIM, uuid), List.of());
 
         var ref = new AtomicReference<OffThreadProcessor.GenerationTicketRequest>();
         waitFor(() -> {
             var t = rig.proc.pollGenerationTicketRequest();
-            if (t != null) ref.set(t);
+            if (t != null && t.playerUuid().equals(uuid)) ref.set(t);
             return ref.get() != null;
         }, "escalated generation ticket");
         return ref.get();

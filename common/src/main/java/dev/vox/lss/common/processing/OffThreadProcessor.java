@@ -83,6 +83,14 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
     private int saveCounter;
     private int consecutiveErrors;
     private long cycleNow; // cached epochSeconds for current processing cycle
+    // Per-cycle phase-completion flags (processing-thread only): a failed cycle re-queues only
+    // the lossless events whose phase did NOT complete, so an already-applied phase is never
+    // re-run. Re-running a completed phase is NOT idempotent — re-delivering a consumed
+    // generation outcome would find its stale mark already consumed and re-stamp pre-edit
+    // terrain (false up_to_date), and re-applying a removal could sweep a re-registered
+    // same-UUID player's fresh dedup/generation tracking.
+    private boolean phase1EventsApplied;
+    private boolean generationReadyApplied;
 
     // WS4 durable invalidation: a dirty-broadcast invalidation removes cache entries in memory;
     // without a prompt save, a crash within the ~5-min periodic window resurrects them (false
@@ -337,9 +345,11 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
                 // on a failed cycle permanently loses player removals (leaked slots/dedup
                 // groups), generation outcomes (stranded pending generations), and
                 // dirty-clears/invalidations (up_to_date answered for stale content). Re-queue
-                // them so the next cycle retries — every one of these events is idempotent, so
-                // re-applying any a partial cycle already applied is harmless (a re-sent column
-                // or up_to_date is position-idempotent on the client).
+                // only the events whose phase did NOT complete (via the phase-completion flags),
+                // so a fully-applied phase is never re-run — re-applying is NOT idempotent (a
+                // re-delivered generation outcome finds its stale mark consumed and re-stamps
+                // pre-edit terrain; a re-applied removal can sweep a re-registered player's
+                // fresh tracking).
                 requeueLosslessEvents(take);
                 if (++this.consecutiveErrors >= 10) {
                     LSSLogger.error("Processing thread hit " + this.consecutiveErrors + " consecutive errors, backing off");
@@ -350,20 +360,26 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
     }
 
     /**
-     * Re-inject a failed cycle's lossless events into the mailbox so the next cycle retries
-     * them. Ordering does not matter: removals, invalidations, and dirty-clears are set/map
-     * removals (idempotent), and generation outcomes are keyed by position (a duplicate
-     * response is idempotent on the client). The snapshot is intentionally NOT restored — it
-     * is latest-wins and the next tick posts a fresh one within ~50 ms.
+     * Re-inject a failed cycle's not-yet-applied lossless events into the mailbox so the next
+     * cycle retries them, gated by the phase-completion flags so a completed phase is never
+     * re-run. A completed phase's events would NOT be idempotent on re-application: a
+     * re-delivered generation outcome finds its stale mark already consumed and re-stamps
+     * pre-edit terrain, and a re-applied removal can sweep a re-registered same-UUID player's
+     * fresh dedup/generation tracking. The snapshot is intentionally NOT restored — it is
+     * latest-wins and the next tick posts a fresh one within ~50 ms.
      */
     private void requeueLosslessEvents(MailboxTake take) {
         synchronized (this.mailboxLock) {
-            this.pendingGenerationReady.addAll(take.generationReady());
-            this.pendingRemovals.addAll(take.removals());
-            this.pendingInvalidations.addAll(take.invalidations());
-            for (var entry : take.dirtyClears().entrySet()) {
-                this.pendingDirtyClears.merge(entry.getKey(), entry.getValue(),
-                        (existing, taken) -> { existing.addAll(taken); return existing; });
+            if (!this.generationReadyApplied) {
+                this.pendingGenerationReady.addAll(take.generationReady());
+            }
+            if (!this.phase1EventsApplied) {
+                this.pendingRemovals.addAll(take.removals());
+                this.pendingInvalidations.addAll(take.invalidations());
+                for (var entry : take.dirtyClears().entrySet()) {
+                    this.pendingDirtyClears.merge(entry.getKey(), entry.getValue(),
+                            (existing, taken) -> { existing.addAll(taken); return existing; });
+                }
             }
         }
     }
@@ -371,10 +387,14 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
     private void processCycle(MailboxTake take) {
         this.cycleNow = LSSConstants.epochSeconds();
         this.ctx.diagnostics().resetTickCounters();
+        this.phase1EventsApplied = false;
+        this.generationReadyApplied = false;
 
         applyEvents(take);
+        this.phase1EventsApplied = true; // invalidations, removals, dirty-clears fully applied
         drainDiskResultsForAllPlayers(take.snapshot());
         processGenerationReady(take.generationReady(), take.snapshot());
+        this.generationReadyApplied = true; // every generation outcome consumed
         routeIncomingRequests(take.snapshot());
 
         if (++this.evictionCounter >= EVICTION_INTERVAL_CYCLES) {
@@ -417,7 +437,8 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
             // must not re-stamp the cache or re-mark diskReadDone, or the client's dirty
             // re-request draws a false up_to_date and pre-edit terrain seals against both
             // healing ladders. Disk reads are tracked via their dedup group; generation does
-            // not dedup, so it has its own per-player in-flight oracle (markGenerationStale).
+            // not dedup, so it has its own per-player in-flight oracle (generationInFlight),
+            // tainted here by markGenerationStale.
             for (long packed : inv.positions()) {
                 if (this.dedupTracker.hasGroup(packed, inv.dimension())) {
                     this.invalidatedInFlight
@@ -430,7 +451,7 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
 
         // Player removals (disconnect or dimension change): release the player's dedup groups
         // and the attached players' pending entries, and drop its generation in-flight tracking
-        // (an escalated generation abandoned before its outcome drains would otherwise leak).
+        // (a generation abandoned before its outcome drains would otherwise leak).
         // The removed state itself is simply dropped — its slot counts die with it.
         for (UUID removed : take.removals()) {
             cleanupDedupGroups(this.dedupTracker.removePlayer(removed));
@@ -472,9 +493,10 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
         return true;
     }
 
-    /** Positions with a generation ticket admitted (via disk-not-found escalation) but whose
-     *  outcome has not yet drained, keyed by player then dimension. Generation does NOT dedup,
-     *  so — unlike the disk path, which tracks in-flight reads through their dedup group — this
+    /** Positions with a generation ticket admitted (via disk-not-found escalation in
+     *  {@link #handleDiskNotFound}, or the router's direct-generation path) but whose outcome
+     *  has not yet drained, keyed by player then dimension. Generation does NOT dedup, so —
+     *  unlike the disk path, which tracks in-flight reads through their dedup group — this map
      *  is generation's own in-flight oracle. Keyed by PLAYER so {@link #removeGenerationTracking}
      *  can sweep it on removal (disconnect / dimension change) exactly as {@link #cleanupDedupGroups}
      *  sweeps the disk path's {@link #invalidatedInFlight}: a generation abandoned before its
@@ -522,7 +544,7 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
 
     /** Retire one player's drained generation outcome and report whether an edit tainted it
      *  while it was buffered. Called for every drained outcome; a generation abandoned before
-     *  its outcome drains (the player left) is retired instead by
+     *  its outcome drains (the player disconnected or changed dimension) is retired instead by
      *  {@link #removeGenerationTracking} on the removal event, so nothing leaks. */
     private boolean consumeGenerationInFlight(UUID player, String dimension, long packed) {
         boolean stale = false;

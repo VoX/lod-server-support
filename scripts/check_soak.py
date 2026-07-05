@@ -336,6 +336,19 @@ def client_segments(snaps):
     return [tuple(s) for s in segs]
 
 
+def client_run_completion_violations(run_name, snaps):
+    """A client run's completion gate: the client writes a disconnect row on EVERY controlled
+    exit (kick between runs or server halt), then halt(0). Its absence means the client JVM died
+    mid-run — the mirror of the server end-event requirement. As a silent pass this let a crash
+    after the main phase (which also skips the synchronous cache flush) produce a clean PASS.
+    Returns a list of Violations (empty when the run completed). Shared by run_checker and the
+    selftest so the gate itself — not a re-implementation of it — is exercised."""
+    if snaps and not any(s.get("event") == "disconnect" for s in snaps):
+        return [Violation("run-completion", run_name,
+                          "no disconnect event — client died mid-run (uncontrolled exit)", {})]
+    return []
+
+
 # ------------------------------------------------------------------------- quiescence
 
 @dataclass
@@ -1998,14 +2011,8 @@ def run_checker(results_dir, scenario):
         snaps, actions = load_client_run(run_path, warnings, unknown_keys, unknown_events)
         if not snaps:
             violations.append(Violation("input", run_path.name, "zero snapshot rows", {}))
-        elif not any(s.get("event") == "disconnect" for s in snaps):
-            # The client writes a disconnect row on EVERY controlled exit (kick between runs or
-            # server halt), then halt(0). Its absence means the client JVM died mid-run — the
-            # mirror of the server end-event requirement below. As a silent pass this let a
-            # crash after the main phase (which also skips the synchronous cache flush) produce
-            # a clean PASS.
-            violations.append(Violation("run-completion", run_path.name,
-                                        "no disconnect event — client died mid-run (uncontrolled exit)", {}))
+        else:
+            violations.extend(client_run_completion_violations(run_path.name, snaps))
         runs[n] = snaps
         run_actions[n] = actions
     for extra in sorted(results_dir.glob("client-run*.jsonl")):
@@ -2403,7 +2410,11 @@ def selftest():
     finally:
         tmp_path.unlink()
 
-    # --- Client disconnect-row completion gate: present passes, absent caught ---
+    # --- Client disconnect-row completion gate: exercise the REAL gate function (not a copy) ---
+    # A controlled exit ends with a disconnect row → gate passes; a crashed run lacks it → gate
+    # fires the run-completion violation. Both cases run the loaded snaps through the exact
+    # client_run_completion_violations() that run_checker calls, so an inverted/moved/dropped
+    # gate would flip these assertions.
     with tempfile.NamedTemporaryFile("w", suffix=".jsonl", delete=False) as tf:
         tf.write(json.dumps({"event": "snapshot", "wallMs": 1000, "dimension": "minecraft:overworld"}) + "\n")
         tf.write(json.dumps({"event": "disconnect", "wallMs": 2000, "dimension": "minecraft:overworld",
@@ -2413,8 +2424,8 @@ def selftest():
         w, uk, ue = [], set(), set()
         snaps, _ = load_client_run(tmp_path, w, uk, ue)
         cases[0] += 1
-        assert any(s.get("event") == "disconnect" for s in snaps), \
-            "disconnect gate: a controlled exit's disconnect row must be visible to the completion check"
+        assert client_run_completion_violations("client-run1.jsonl", snaps) == [], \
+            "disconnect gate: a controlled exit (disconnect row present) must not fire a violation"
     finally:
         tmp_path.unlink()
     with tempfile.NamedTemporaryFile("w", suffix=".jsonl", delete=False) as tf:
@@ -2425,8 +2436,9 @@ def selftest():
         w, uk, ue = [], set(), set()
         snaps, _ = load_client_run(tmp_path, w, uk, ue)
         cases[0] += 1
-        assert not any(s.get("event") == "disconnect" for s in snaps), \
-            "disconnect gate: a run that crashed before its disconnect row must be caught (none present)"
+        viols = client_run_completion_violations("client-run1.jsonl", snaps)
+        assert len(viols) == 1 and viols[0].law == "run-completion", \
+            "disconnect gate: a crashed run (no disconnect row) must fire a run-completion violation"
     finally:
         tmp_path.unlink()
 
