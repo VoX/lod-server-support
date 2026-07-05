@@ -314,15 +314,27 @@ public class TwoPlayerGameTests {
                     liveFilter.contentChanged(level, chunk, dim);
                     helper.assertTrue(!liveFilter.contentChanged(level, chunk, dim),
                             "premise: live filter baselined pre-edit");
-                    // B's edit, then A's re-ask: the probe re-serve lands between edit and save.
+                    // B's edit; A's re-ask is issued (and retried) in step 1 — the probe re-serve
+                    // must land between edit and save.
                     var edit = level.getBlockState(editPos).is(Blocks.STONE)
                             ? Blocks.COBBLESTONE : Blocks.STONE;
                     level.setBlock(editPos, edit.defaultBlockState(), 3);
-                    stateA.addRequest(packed, -1L);
                     step.set(1);
                     helper.assertTrue(false, "edit placed, awaiting A's post-edit probe re-serve");
                 }
                 case 1 -> {
+                    // A's ts<=0 re-ask re-resolves the flushed position via the loaded-chunk
+                    // probe. That probe needs the chunk resident at snapshot-build time and the
+                    // send pipeline clear; on slow (2-core) CI either can miss, and the design
+                    // expects the client to RETRY (the one-shot re-ask was a documented flake).
+                    // Keep the chunk resident and re-issue until the re-serve lands — but only
+                    // when no re-ask is in flight, so A re-serves EXACTLY once (step 2 asserts A==3).
+                    level.getChunk(chunkPos.x(), chunkPos.z());
+                    if (stateA.getTotalSectionsSent() < 2 && stateA.getIncomingRequestCount() == 0
+                            && !stateA.hasEnqueuedColumn(packed)
+                            && !stateA.hasPendingRequest(chunkPos.x(), chunkPos.z())) {
+                        stateA.addRequest(packed, -1L);
+                    }
                     service.tick();
                     helper.assertTrue(stateA.getTotalSectionsSent() == 2,
                             "waiting for A's post-edit re-serve (a ts<=0 re-ask of a flushed "
