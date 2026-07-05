@@ -274,6 +274,11 @@ public abstract class AbstractPlayerRequestState<T> {
         return this.incomingRequests;
     }
 
+    /** Number of requests currently queued for routing (not yet polled). */
+    public int getIncomingRequestCount() {
+        return this.incomingRequestCount.get();
+    }
+
     public void addReadyPayload(QueuedPayload<T> payload) {
         this.enqueuedColumns.merge(payload.packedPos(), 1, Integer::sum);
         this.readyPayloads.add(payload);
