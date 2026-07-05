@@ -336,6 +336,42 @@ class OffThreadProcessorDiskResultTest {
     }
 
     @Test
+    void generationTrackingIsSweptWhenAPlayerLeavesMidGeneration() throws Exception {
+        // A generation escalates and an edit taints it, then the player leaves before the
+        // outcome drains (disconnect / dimension change), so nothing ever consumes the taint.
+        // The removal event must sweep the per-player generation tracking; otherwise the stale
+        // flag leaks and a later generation for the same player+position is spuriously
+        // suppressed forever (full-review finding: the guard had no removal-cleanup hook,
+        // unlike the disk path's dedup-group sweep in cleanupDedupGroups).
+        var rig = new Rig(true);
+        long packed = PositionUtil.packPosition(7, 7);
+        try {
+            escalateToGenTicket(rig, 7, 7);                       // in-flight for this player
+            rig.proc.invalidateTimestamps(DIM, new long[]{packed});
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of()); // applyEvents taints it
+            // The player leaves mid-generation: the escalated ticket's outcome never drains.
+            rig.proc.notifyPlayerRemoved(rig.uuid);
+            rig.proc.postSnapshot(snapshot(DIM), List.of());          // applyEvents must sweep it
+
+            // Reconnect discards the old state's held gen slot; re-generate the SAME position
+            // with NO fresh edit. A leaked stale flag would resurface here.
+            rig.state.removePendingByPosition(7, 7);
+            var readmitted = escalateToGenTicket(rig, 7, 7);
+            byte[] bytes = {1, 2};
+            var data = new LoadedColumnData(7, 7, bytes,
+                    bytes.length + LSSConstants.ESTIMATED_COLUMN_OVERHEAD_BYTES);
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid), new ArrayList<>(List.of(
+                    new TickSnapshot.GenerationReadyData(rig.uuid, 7, 7, DIM, data,
+                            COLUMN_TS, readmitted.submissionOrder()))));
+            waitFor(() -> !rig.proc.enqueuedColumns.isEmpty(), "re-generated column delivered");
+            assertTrue(rig.state.hasDiskReadDone(7, 7),
+                    "the swept taint must not resurface — the fresh generation stamps + marks served");
+        } finally {
+            rig.proc.shutdown();
+        }
+    }
+
+    @Test
     void notFoundInvalidatesAStaleTimestampStamp() throws Exception {
         // Region trimmed/deleted outside Minecraft: the position was served (and stamped)
         // once, but disk now says not-found. Without invalidation the stale stamp answers

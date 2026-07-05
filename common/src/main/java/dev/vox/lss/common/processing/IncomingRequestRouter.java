@@ -216,6 +216,11 @@ class IncomingRequestRouter<PS extends AbstractPlayerRequestState<?>> {
                 rateLimit(state, playerUuid, req, packed, type, dimension);
                 return;
             }
+            // Register in-flight so an overtaking edit taints the outcome, same as the
+            // disk-not-found escalation path (handleDiskNotFound). Unreachable in production
+            // today — both platforms always construct a disk reader — but the guard must cover
+            // every gen-ticket producer or this path re-stamps pre-edit terrain as up_to_date.
+            this.processor.addGenerationInFlight(playerUuid, dimension, packed);
             this.ctx.generationTicketRequests().add(
                     new OffThreadProcessor.GenerationTicketRequest(playerUuid, req.cx(), req.cz(),
                             dimension, this.ctx.sequence().next()));
