@@ -239,6 +239,16 @@ setup_folia() {
     local plugins_dir="$FOLIA_DIR/plugins"
     mkdir -p "$FOLIA_DIR" "$plugins_dir"
 
+    # Folia lags Paper when a new Minecraft version lands — it may not have a build for
+    # FOLIA_MC_VERSION yet. Skip the local Folia server gracefully (the Paper plugin jar already
+    # carries Folia support) instead of aborting the whole script under `set -e`.
+    if ! curl -fsSL -A "lod-server-support/test-server" -o /dev/null \
+            "https://fill.papermc.io/v3/projects/folia/versions/${FOLIA_MC_VERSION}/builds" 2>/dev/null; then
+        echo "  NOTE: Folia has no MC ${FOLIA_MC_VERSION} build published upstream yet — skipping the local Folia server."
+        echo "  (Folia support ships inside the Paper plugin jar; only the standalone Folia test server is skipped.)"
+        return 0
+    fi
+
     download_papermc_jar folia "$FOLIA_MC_VERSION" "$FOLIA_DIR/folia.jar"
 
     if [ ! -f "$FOLIA_DIR/eula.txt" ]; then
@@ -259,6 +269,10 @@ setup_folia() {
 }
 
 run_folia() {
+    if [ ! -f "$FOLIA_DIR/folia.jar" ]; then
+        echo "Folia server not set up (no MC ${FOLIA_MC_VERSION} build upstream yet) — nothing to run."
+        return 0
+    fi
     cd "$FOLIA_DIR"
     java -Xmx${SERVER_RAM} -Xms${SERVER_RAM} -jar folia.jar nogui
 }
@@ -293,9 +307,11 @@ run_all() {
 
     sleep 2
 
-    cd "$FOLIA_DIR"
-    java -Xmx${SERVER_RAM} -Xms${SERVER_RAM} -jar folia.jar nogui &
-    SERVER_PIDS+=($!)
+    if [ -f "$FOLIA_DIR/folia.jar" ]; then
+        cd "$FOLIA_DIR"
+        java -Xmx${SERVER_RAM} -Xms${SERVER_RAM} -jar folia.jar nogui &
+        SERVER_PIDS+=($!)
+    fi
 
     wait "${SERVER_PIDS[@]}" 2>/dev/null
 }

@@ -11,9 +11,12 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(IntegratedServer.class)
 public class IntegratedServerLanHook {
-    // MC 26.2 added a leading MultiplayerScope parameter to IntegratedServer#publishServer; the
-    // injected handler's descriptor must match the target or the mixin fails to apply.
-    @Inject(method = "publishServer", at = @At("RETURN"))
+    // MC 26.2 added a leading MultiplayerScope parameter to IntegratedServer#publishServer AND a
+    // second publishServer(MultiplayerScope, int) overload. Pin the full descriptor so the inject
+    // targets exactly the (scope, gameType, allowCheats, port) overload — the bare "publishServer"
+    // selector now matches both, and the injected handler's descriptor must match the target.
+    @Inject(method = "publishServer(Lnet/minecraft/server/MinecraftServer$MultiplayerScope;Lnet/minecraft/world/level/GameType;ZI)Z",
+            at = @At("RETURN"))
     private void lss$onLanPublished(MinecraftServer.MultiplayerScope scope, GameType gameType,
                                      boolean allowCheats, int port,
                                      CallbackInfoReturnable<Boolean> cir) {
