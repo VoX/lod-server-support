@@ -98,14 +98,12 @@ jobs:
           modrinth-id: lKiXKLvv
           modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
           files: fabric/build/libs/lod-server-support-fabric-*.jar
-          name: ${{ github.ref_name }} - Fabric (MC 26.1)
-          version: ${{ github.ref_name }}+fabric+mc26.1
+          name: ${{ github.ref_name }} - Fabric (MC 26.2)
+          version: ${{ github.ref_name }}+fabric+mc26.2
           version-type: release
           loaders: fabric
           game-versions: |
-            26.1
-            26.1.1
-            26.1.2
+            26.2
           changelog: ${{ steps.release_notes.outputs.notes }}
 
       - name: Upload Paper to Modrinth
@@ -114,16 +112,16 @@ jobs:
           modrinth-id: lKiXKLvv
           modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
           files: paper/build/libs/lod-server-support-paper-*.jar
-          name: ${{ github.ref_name }} - Paper/Folia (MC 26.1.2)
-          version: ${{ github.ref_name }}+paper+mc26.1.2
+          name: ${{ github.ref_name }} - Paper/Purpur (MC 26.2)
+          version: ${{ github.ref_name }}+paper+mc26.2
           version-type: release
-          # One artifact serves all three Bukkit-family loaders (plugin.yml declares
-          # folia-supported: true; release_check.py gates it). Folia support is experimental —
-          # release notes must say so (CLAUDE.md, Release Notes Format rules).
+          # The jar still declares folia-supported: true, but Folia has not published a 26.2
+          # build yet, so v0.6.0 advertises only paper + purpur on Modrinth. Re-add `folia` here
+          # once Folia ships 26.2 and the soak passes (Folia support is experimental —
+          # CLAUDE.md, Release Notes Format rules).
           loaders: |
             paper
             purpur
-            folia
           game-versions: |
-            26.1.2
+            26.2
           changelog: ${{ steps.release_notes.outputs.notes }}

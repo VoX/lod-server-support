@@ -11,23 +11,23 @@ PAPER_DIR="$SCRIPT_DIR/test-server/paper"
 FOLIA_DIR="$SCRIPT_DIR/test-server/folia"
 
 # --- Fabric versions ---
-FABRIC_MC_VERSION="26.1.2"
+FABRIC_MC_VERSION="26.2"
 FABRIC_LOADER_VERSION="0.19.3"
 FABRIC_INSTALLER_VERSION="1.1.1"
 
 # --- Paper/Folia versions ---
-PAPER_MC_VERSION="26.1.2"
-FOLIA_MC_VERSION="26.1.2"
+PAPER_MC_VERSION="26.2"
+FOLIA_MC_VERSION="26.2"
 
 # --- Download URLs ---
 FABRIC_SERVER_URL="https://meta.fabricmc.net/v2/versions/loader/${FABRIC_MC_VERSION}/${FABRIC_LOADER_VERSION}/${FABRIC_INSTALLER_VERSION}/server/jar"
-FABRIC_API_URL="https://cdn.modrinth.com/data/P7dR8mSH/versions/yALY9gHM/fabric-api-0.151.0%2B26.1.2.jar"
-C2ME_URL="https://cdn.modrinth.com/data/VSNURh3q/versions/MmyZoUyp/c2me-fabric-mc26.1.2-0.4.0-alpha.0.4.jar"
+FABRIC_API_URL="https://cdn.modrinth.com/data/P7dR8mSH/versions/Cpy2Px2f/fabric-api-0.154.0%2B26.2.jar"
+C2ME_URL="https://cdn.modrinth.com/data/VSNURh3q/versions/nvOkOiyi/c2me-fabric-mc26.2-0.4.2-alpha.0.9.jar"
 
 # --- Java version check ---
 JAVA_MAJOR=$(java -version 2>&1 | head -1 | sed 's/.*"\([0-9]\+\).*/\1/')
 if [ "$JAVA_MAJOR" -lt 25 ] 2>/dev/null; then
-    echo "ERROR: Java 25+ required for MC 26.1. Found: Java $JAVA_MAJOR" >&2
+    echo "ERROR: Java 25+ required for MC 26.2. Found: Java $JAVA_MAJOR" >&2
     echo "  Set JAVA_HOME to a JDK 25+ installation." >&2
     exit 1
 fi
@@ -239,6 +239,16 @@ setup_folia() {
     local plugins_dir="$FOLIA_DIR/plugins"
     mkdir -p "$FOLIA_DIR" "$plugins_dir"
 
+    # Folia lags Paper when a new Minecraft version lands — it may not have a build for
+    # FOLIA_MC_VERSION yet. Skip the local Folia server gracefully (the Paper plugin jar already
+    # carries Folia support) instead of aborting the whole script under `set -e`.
+    if ! curl -fsSL -A "lod-server-support/test-server" -o /dev/null \
+            "https://fill.papermc.io/v3/projects/folia/versions/${FOLIA_MC_VERSION}/builds" 2>/dev/null; then
+        echo "  NOTE: Folia has no MC ${FOLIA_MC_VERSION} build published upstream yet — skipping the local Folia server."
+        echo "  (Folia support ships inside the Paper plugin jar; only the standalone Folia test server is skipped.)"
+        return 0
+    fi
+
     download_papermc_jar folia "$FOLIA_MC_VERSION" "$FOLIA_DIR/folia.jar"
 
     if [ ! -f "$FOLIA_DIR/eula.txt" ]; then
@@ -259,6 +269,10 @@ setup_folia() {
 }
 
 run_folia() {
+    if [ ! -f "$FOLIA_DIR/folia.jar" ]; then
+        echo "Folia server not set up (no MC ${FOLIA_MC_VERSION} build upstream yet) — nothing to run."
+        return 0
+    fi
     cd "$FOLIA_DIR"
     java -Xmx${SERVER_RAM} -Xms${SERVER_RAM} -jar folia.jar nogui
 }
@@ -293,9 +307,11 @@ run_all() {
 
     sleep 2
 
-    cd "$FOLIA_DIR"
-    java -Xmx${SERVER_RAM} -Xms${SERVER_RAM} -jar folia.jar nogui &
-    SERVER_PIDS+=($!)
+    if [ -f "$FOLIA_DIR/folia.jar" ]; then
+        cd "$FOLIA_DIR"
+        java -Xmx${SERVER_RAM} -Xms${SERVER_RAM} -jar folia.jar nogui &
+        SERVER_PIDS+=($!)
+    fi
 
     wait "${SERVER_PIDS[@]}" 2>/dev/null
 }

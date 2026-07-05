@@ -11,6 +11,7 @@ import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.resources.ResourceKey;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.util.HttpUtil;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.Level;
@@ -297,10 +298,12 @@ public class LSSClientGameTests implements FabricClientGameTest {
                 throw new AssertionError("No LodRequestManager may exist before LAN publish");
             }
 
-            // Publish from the client thread, exactly like ShareToLanScreen does.
+            // Publish from the client thread, exactly like ShareToLanScreen does. MC 26.2 added a
+            // leading MultiplayerScope argument (LAN = share to LAN).
             boolean published = context.computeOnClient(client ->
                     client.getSingleplayerServer().publishServer(
-                            GameType.SURVIVAL, false, HttpUtil.getAvailablePort()));
+                            MinecraftServer.MultiplayerScope.LAN, GameType.SURVIVAL, false,
+                            HttpUtil.getAvailablePort()));
             if (!published) {
                 throw new AssertionError("publishServer must succeed (LAN port bind failed?)");
             }

@@ -13,8 +13,8 @@ Multi-project Gradle build with three subprojects:
 ```
 lod-server-support/
 ├── common/   Pure Java utilities (no MC deps) — shared by fabric/ and paper/
-├── fabric/   Fabric mod (client + server), Minecraft 26.1.2
-└── paper/    Paper/Folia plugin (server only), Minecraft 26.1.2
+├── fabric/   Fabric mod (client + server), Minecraft 26.2
+└── paper/    Paper/Folia plugin (server only), Minecraft 26.2
 ```
 
 ## Build Commands
@@ -29,7 +29,7 @@ Output JARs:
 - `fabric/build/libs/lod-server-support-fabric.jar` — Fabric mod (client + server)
 - `paper/build/libs/lod-server-support-paper.jar` — Paper/Folia plugin (server only, shadow JAR; one artifact serves Paper, Purpur, and Folia via `folia-supported: true`)
 
-CI builds (env `CI=true`) name the jars `lod-server-support-<platform>-<mod_version>+<minecraft_version>.jar` (e.g. `lod-server-support-fabric-0.4.0+26.1.2.jar`); the release workflow feeds `mod_version` from the tag. Local dev builds keep the stable unversioned names.
+CI builds (env `CI=true`) name the jars `lod-server-support-<platform>-<mod_version>+<minecraft_version>.jar` (e.g. `lod-server-support-fabric-0.6.0+26.2.jar`); the release workflow feeds `mod_version` from the tag. Local dev builds keep the stable unversioned names.
 
 ## Test Commands
 
