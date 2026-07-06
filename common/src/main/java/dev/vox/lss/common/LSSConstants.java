@@ -51,7 +51,7 @@ public final class LSSConstants {
 
     // Config validation bounds (shared between Fabric and Paper)
     public static final int MIN_LOD_DISTANCE = 1;
-    public static final int MAX_LOD_DISTANCE = 512;
+    public static final int MAX_LOD_DISTANCE = 2048;
     public static final int MIN_BYTES_PER_SECOND = 1024;
     public static final int MAX_BYTES_PER_SECOND_PER_PLAYER = 104_857_600;
     public static final int MIN_DISK_READER_THREADS = 1;

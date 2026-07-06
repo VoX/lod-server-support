@@ -23,11 +23,11 @@ class PaperConfigValidationTest {
     @Test
     void validateClampsInheritedFieldsAndGuardsUpdateEvents() {
         PaperConfig c = new PaperConfig();
-        c.lodDistanceChunks = 999;
+        c.lodDistanceChunks = 99999;
         c.syncOnLoadConcurrencyLimitPerPlayer = 0;
         c.updateEvents = null;
         c.validate();
-        assertEquals(512, c.lodDistanceChunks);                  // LSSConstants.MAX_LOD_DISTANCE via super.validate()
+        assertEquals(2048, c.lodDistanceChunks);                 // LSSConstants.MAX_LOD_DISTANCE via super.validate()
         assertEquals(1, c.syncOnLoadConcurrencyLimitPerPlayer);  // LSSConstants.MIN_CONCURRENCY_LIMIT via super.validate()
         assertEquals(List.of(), c.updateEvents);                 // Paper-only null guard
     }

@@ -86,11 +86,11 @@ class PositionPackingTest {
     @Test
     void hostileExtremeCoordinatesCannotSlipUnderTheGate() {
         // Overflowed int math reports these as near the player (negative or wrapped-small
-        // distance) and the server would serve them. 512 = MAX_LOD_DISTANCE.
+        // distance) and the server would serve them. 2048 = MAX_LOD_DISTANCE.
         assertTrue(PositionUtil.isOutOfRange(
-                PositionUtil.packPosition(Integer.MIN_VALUE, Integer.MIN_VALUE), 0, 0, 512));
+                PositionUtil.packPosition(Integer.MIN_VALUE, Integer.MIN_VALUE), 0, 0, 2048));
         // Player near the world border, request wraps around: int distance would be 21
         assertTrue(PositionUtil.isOutOfRange(
-                PositionUtil.packPosition(Integer.MIN_VALUE + 10, 0), Integer.MAX_VALUE - 10, 0, 512));
+                PositionUtil.packPosition(Integer.MIN_VALUE + 10, 0), Integer.MAX_VALUE - 10, 0, 2048));
     }
 }

@@ -161,13 +161,13 @@ class WireParityTest {
 
     @Test
     void sessionConfigVarIntBoundaries() {
-        // lodDistance crossing the 1->2 byte VarInt boundary (127/128) and the 512 config
+        // lodDistance crossing the 1->2 byte VarInt boundary (127/128) and the 2048 config
         // max; concurrency at the 1000 clamp max. Values within each frame are pairwise
         // distinct so a field transposition in either platform's codec cannot cancel out.
         int[][] cases = {
                 {127, 1000, 128},
                 {128, 127, 1000},
-                {512, 1000, 127},
+                {2048, 1000, 127},
         };
         for (int[] c : cases) {
             byte[] expected = ref(b -> {

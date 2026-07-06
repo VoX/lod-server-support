@@ -24,9 +24,9 @@ class ConfigValidationTest {
         c.validate();
         assertEquals(1, c.lodDistanceChunks);
 
-        c.lodDistanceChunks = 999;
+        c.lodDistanceChunks = 99999;
         c.validate();
-        assertEquals(512, c.lodDistanceChunks);
+        assertEquals(2048, c.lodDistanceChunks);
     }
 
     @Test
@@ -213,9 +213,9 @@ class ConfigValidationTest {
         c.validate();
         assertEquals(0, c.lodDistanceChunks);
 
-        c.lodDistanceChunks = 999;
+        c.lodDistanceChunks = 99999;
         c.validate();
-        assertEquals(512, c.lodDistanceChunks);
+        assertEquals(2048, c.lodDistanceChunks);
     }
 
 }

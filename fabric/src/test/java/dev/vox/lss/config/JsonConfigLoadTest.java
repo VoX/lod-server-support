@@ -174,8 +174,8 @@ class JsonConfigLoadTest {
 
         TestServerConfig c = TestServerConfig.load(configDir);
 
-        assertEquals(512, c.lodDistanceChunks); // LSSConstants.MAX_LOD_DISTANCE
-        assertEquals(512, savedJson(configDir).get("lodDistanceChunks").getAsInt());
+        assertEquals(2048, c.lodDistanceChunks); // LSSConstants.MAX_LOD_DISTANCE
+        assertEquals(2048, savedJson(configDir).get("lodDistanceChunks").getAsInt());
     }
 
     @Test
@@ -284,7 +284,7 @@ class JsonConfigLoadTest {
         Path outOfRange = tempDir.resolve("out-of-range");
         Files.createDirectories(outOfRange);
         Files.writeString(outOfRange.resolve(FILE), "{\"lodDistanceChunks\": \"99999\"}");
-        assertEquals(512, TestServerConfig.load(outOfRange).lodDistanceChunks); // parsed, then clamped
+        assertEquals(2048, TestServerConfig.load(outOfRange).lodDistanceChunks); // parsed, then clamped
     }
 
     @Test
@@ -306,7 +306,7 @@ class JsonConfigLoadTest {
         TestServerConfig c = assertDoesNotThrow(() -> TestServerConfig.load(configDir));
 
         // The overflow dies in the PARSER, before validate() ever runs: the result is the
-        // compiled default (256), not the clamp ceiling (512) a successful bind would produce.
+        // compiled default (256), not the clamp ceiling (2048) a successful bind would produce.
         assertEquals(256, c.lodDistanceChunks);
         assertEquals(broken, Files.readString(configDir.resolve(FILE)));
     }
