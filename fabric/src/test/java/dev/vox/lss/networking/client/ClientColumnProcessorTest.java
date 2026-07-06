@@ -18,14 +18,14 @@ import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.data.registries.VanillaRegistries;
 import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.Bootstrap;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.biome.Biomes;
 import net.minecraft.world.level.chunk.LevelChunkSection;
-import net.minecraft.world.level.chunk.PalettedContainerFactory;
+import net.minecraft.core.Registry;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -50,7 +50,7 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 class ClientColumnProcessorTest {
 
-    private static PalettedContainerFactory FACTORY;
+    private static Registry<Biome> FACTORY;
     /** Section count of the test "client level" the drain runs against. */
     private static final int LEVEL_SECTIONS = 4;
     private static final int MIN_SECTION_Y = -4;
@@ -59,14 +59,14 @@ class ClientColumnProcessorTest {
     static void setup() {
         SharedConstants.tryDetectVersion();
         Bootstrap.bootStrap();
-        FACTORY = PalettedContainerFactory.create(buildRegistryAccess());
+        FACTORY = buildRegistryAccess().lookupOrThrow(Registries.BIOME);
     }
 
     /**
-     * Minimal RegistryAccess for {@link PalettedContainerFactory#create}: only the BIOME
-     * registry is read, and the decode tests never reference a non-default biome, so a
-     * single PLAINS entry (the factory default) suffices — no golden bytes depend on ids
-     * here (contrast NbtSectionSerializerTest, which must pin a multi-biome order).
+     * Minimal RegistryAccess for section decode: only the BIOME registry is read, and the
+     * decode tests never reference a non-default biome, so a single PLAINS entry (the biome
+     * default) suffices — no golden bytes depend on ids here (contrast NbtSectionSerializerTest,
+     * which must pin a multi-biome order).
      */
     private static RegistryAccess buildRegistryAccess() {
         HolderLookup.Provider provider = VanillaRegistries.createLookup();
@@ -99,7 +99,7 @@ class ClientColumnProcessorTest {
     }
 
     private static ResourceKey<Level> dimKey(String name) {
-        return ResourceKey.create(Registries.DIMENSION, Identifier.parse("lss_test:" + name));
+        return ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse("lss_test:" + name));
     }
 
     private void offer(int count) {
@@ -312,7 +312,7 @@ class ClientColumnProcessorTest {
 
     @Test
     void resyncColumnAirFillsAbsentSectionsButFirstServeDoesNot() {
-        var dim = ResourceKey.create(Registries.DIMENSION, Identifier.parse("lss_test:processor"));
+        var dim = ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse("lss_test:processor"));
         // sectionWire writes sections at Y=0,1,..., so use minSectionY=0 -> range {0,1,2,3}.
         byte[] wire = sectionWire(1, 1); // one section at Y=0
 
@@ -331,7 +331,7 @@ class ClientColumnProcessorTest {
 
     @Test
     void reportUndispatchedUnstampsQueuedColumnsBeforeTheCacheFlush() {
-        var dim = ResourceKey.create(Registries.DIMENSION, Identifier.parse("lss_test:processor"));
+        var dim = ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse("lss_test:processor"));
         var manager = new LodRequestManager();
         manager.onSessionConfig(new SessionConfigS2CPayload(LSSConstants.PROTOCOL_VERSION, true,
                 64, 100, 100, true), "lss-test");

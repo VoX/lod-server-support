@@ -4,7 +4,7 @@ import dev.vox.lss.common.LSSConstants;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 public record DirtyColumnsS2CPayload(
         long[] dirtyPositions
@@ -12,7 +12,7 @@ public record DirtyColumnsS2CPayload(
     public static final int MAX_POSITIONS = LSSConstants.MAX_DIRTY_COLUMN_POSITIONS;
 
     public static final CustomPacketPayload.Type<DirtyColumnsS2CPayload> TYPE =
-            new CustomPacketPayload.Type<>(Identifier.parse(LSSConstants.CHANNEL_DIRTY_COLUMNS));
+            new CustomPacketPayload.Type<>(ResourceLocation.parse(LSSConstants.CHANNEL_DIRTY_COLUMNS));
 
     public static final StreamCodec<FriendlyByteBuf, DirtyColumnsS2CPayload> CODEC =
             StreamCodec.of(

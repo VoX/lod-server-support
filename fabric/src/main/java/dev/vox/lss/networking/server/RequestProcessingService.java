@@ -100,7 +100,7 @@ public class RequestProcessingService {
                     config.generationConcurrencyLimitPerPlayer);
             // Session identity for the router's stale-snapshot guard (set before the map
             // publish so the processing thread never sees it null on a live state).
-            s.setRegisteredDimension(player.level().dimension().identifier().toString());
+            s.setRegisteredDimension(player.level().dimension().location().toString());
             return s;
         });
         this.diskReader.registerPlayer(player.getUUID());
@@ -235,7 +235,7 @@ public class RequestProcessingService {
             var player = state.getPlayer();
             var level = player.level();
             String dimension = this.dimensionStringCache.computeIfAbsent(level.dimension(),
-                    k -> k.identifier().toString());
+                    k -> k.location().toString());
 
             this.offThreadProcessor.updateDimensionContext(dimension, level);
 
@@ -404,7 +404,7 @@ public class RequestProcessingService {
             var player = state.getPlayer();
             var level = player.level();
             String dimension = this.dimensionStringCache.computeIfAbsent(level.dimension(),
-                    k -> k.identifier().toString());
+                    k -> k.location().toString());
             // Ticket queued before a dimension change targets the old dimension's coordinates.
             // Dropping it leaks nothing: the admitting state was discarded by
             // removePlayer+registerPlayer (its slot dies with it), AND that same removePlayer

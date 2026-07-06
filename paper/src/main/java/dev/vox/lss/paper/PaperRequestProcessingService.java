@@ -263,7 +263,7 @@ public class PaperRequestProcessingService {
                     this.config.generationConcurrencyLimitPerPlayer);
             // Session identity for the router's stale-snapshot guard (set before the map
             // publish so the processing thread never sees it null on a live state).
-            s.setRegisteredDimension(player.level().dimension().identifier().toString());
+            s.setRegisteredDimension(player.level().dimension().location().toString());
             return s;
         });
         this.diskReader.registerPlayer(player.getUUID());
@@ -405,7 +405,7 @@ public class PaperRequestProcessingService {
             var player = state.getPlayer();
             var level = player.level();
             String dimension = this.dimensionStringCache.computeIfAbsent(level.dimension(),
-                    k -> k.identifier().toString());
+                    k -> k.location().toString());
 
             this.offThreadProcessor.updateDimensionContext(dimension, level);
 
@@ -572,7 +572,7 @@ public class PaperRequestProcessingService {
             }
         }
         if (found == null) return;
-        var batch = new RegionProbeBatch(level.dimension().identifier().toString(), found);
+        var batch = new RegionProbeBatch(level.dimension().location().toString(), found);
         this.regionProbeResults.compute(uuid, (k, prev) -> {
             if (prev == null || !prev.dimension().equals(batch.dimension())) return batch;
             prev.probes().putAll(batch.probes());
@@ -599,7 +599,7 @@ public class PaperRequestProcessingService {
             var player = state.getPlayer();
             var level = player.level();
             String dimension = this.dimensionStringCache.computeIfAbsent(level.dimension(),
-                    k -> k.identifier().toString());
+                    k -> k.location().toString());
             // Ticket queued before a dimension change targets the old dimension's coordinates.
             // Dropping it leaks nothing: the admitting state was discarded by
             // removePlayer+registerPlayer (its slot dies with it), AND that same removePlayer

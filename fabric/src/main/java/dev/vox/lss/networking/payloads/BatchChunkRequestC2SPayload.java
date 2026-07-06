@@ -4,7 +4,7 @@ import dev.vox.lss.common.LSSConstants;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 public record BatchChunkRequestC2SPayload(
         long[] packedPositions,
@@ -13,7 +13,7 @@ public record BatchChunkRequestC2SPayload(
 ) implements CustomPacketPayload {
 
     public static final CustomPacketPayload.Type<BatchChunkRequestC2SPayload> TYPE =
-            new CustomPacketPayload.Type<>(Identifier.parse(LSSConstants.CHANNEL_CHUNK_REQUEST));
+            new CustomPacketPayload.Type<>(ResourceLocation.parse(LSSConstants.CHANNEL_CHUNK_REQUEST));
 
     public static final StreamCodec<FriendlyByteBuf, BatchChunkRequestC2SPayload> CODEC =
             StreamCodec.of(

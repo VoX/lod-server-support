@@ -4,7 +4,7 @@ import dev.vox.lss.common.LSSConstants;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 public record SessionConfigS2CPayload(
         int protocolVersion,
@@ -15,7 +15,7 @@ public record SessionConfigS2CPayload(
         boolean generationEnabled
 ) implements CustomPacketPayload {
     public static final CustomPacketPayload.Type<SessionConfigS2CPayload> TYPE =
-            new CustomPacketPayload.Type<>(Identifier.parse(LSSConstants.CHANNEL_SESSION_CONFIG));
+            new CustomPacketPayload.Type<>(ResourceLocation.parse(LSSConstants.CHANNEL_SESSION_CONFIG));
 
     public static final StreamCodec<FriendlyByteBuf, SessionConfigS2CPayload> CODEC =
             StreamCodec.of(

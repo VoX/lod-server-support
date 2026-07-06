@@ -2,6 +2,21 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+> **Support branch: `support/mc1.21.8`.** This is a long-lived backport of the v0.6.x feature set
+> to **Minecraft 1.21.8** (do NOT merge to `main`). Divergences from the primary 26.2 line:
+> **Java 21** (not 25) everywhere (`options.release = 21`); the toolchain is `fabric-loom-remap`
+> with `officialMojangMappings()`; the paper dev bundle pins codebook 1.0.15, which cannot parse
+> Java 25 class files, so **paperweight tasks must run on a Java 21 JDK locally** (CI already uses
+> Java 21) — e.g. `./gradlew -Dorg.gradle.java.home=/path/to/jdk-21 :paper:test`. 1.21.8 predates
+> the 1.21.9 API refactor: `ResourceLocation` (not `Identifier`), `ResourceKey.location()` (not
+> `.identifier()`), the pre-`PalettedContainerFactory` `PalettedContainer.codecRW/codecRO` forms,
+> `ChunkPos.x/.z` public fields, `CommandSourceStack(..., int permissionLevel, ...)`, and
+> `GameTestHelper.assertTrue(boolean, Component)`. The in-game config screen is dropped (Sodium's
+> config API needs 0.8+; 1.21.8's newest Sodium is 0.7.3) — JSON config still works. Sections of
+> this doc below that say "26.2 / Java 25" reflect the primary line and are not re-verified here.
+> **jdtls resolves against main's 26.2 deps, so its diagnostics on this branch are inverted noise —
+> the Gradle build with 1.21.8 deps is the authoritative arbiter.**
+
 ## Project
 
 LOD Server Support (LSS) — distributes LOD chunk data from servers to clients over a custom networking protocol. Supports Fabric (client + server) and Paper/Folia (server only — one plugin jar, `folia-supported: true`; Folia is experimental: single-player soak validated, concurrent multi-region ingress untested — the exit criterion for dropping the label). Clients request distant chunks individually; the server reads them from disk or memory and streams serialized sections back, enabling LOD rendering mods to display terrain beyond vanilla render distance.

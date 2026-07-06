@@ -2,7 +2,7 @@ package dev.vox.lss.api;
 
 import net.minecraft.SharedConstants;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.Bootstrap;
 import net.minecraft.world.level.Level;
@@ -34,7 +34,7 @@ class LSSApiDispatchReportTest {
     private record Report(ResourceKey<Level> dimension, int chunkX, int chunkZ) {}
 
     private static ResourceKey<Level> dim() {
-        return ResourceKey.create(Registries.DIMENSION, Identifier.parse("lss_test:dispatch_report"));
+        return ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse("lss_test:dispatch_report"));
     }
 
     @Test

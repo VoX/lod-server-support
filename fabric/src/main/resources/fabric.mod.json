@@ -19,25 +19,17 @@
     ],
     "client": [
       "dev.vox.lss.LSSClient"
-    ],
-    "sodium:config_api_user": [
-      "dev.vox.lss.config.LSSConfigMenu"
-    ],
-    "modmenu": [
-      "dev.vox.lss.config.LSSModMenuIntegration"
     ]
   },
   "mixins": [
     "lss.mixins.json"
   ],
   "depends": {
-    "minecraft": ">=26.2",
+    "minecraft": "1.21.8",
     "fabricloader": ">=0.18.4",
-    "fabric-api": ">=0.146.0"
+    "fabric-api": ">=0.136.0"
   },
   "suggests": {
-    "sodium": ">=0.8.12",
-    "modmenu": "*",
-    "voxy": ">=0.2.16-beta"
+    "voxy": ">=0.2.5-alpha"
   }
 }

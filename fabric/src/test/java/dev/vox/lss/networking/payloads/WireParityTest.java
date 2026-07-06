@@ -7,7 +7,7 @@ import net.minecraft.SharedConstants;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.Bootstrap;
 import net.minecraft.world.level.Level;
@@ -261,7 +261,7 @@ class WireParityTest {
     @Test
     void voxelColumnCustomDimension() {
         byte[] sections = {1, 2, 3};
-        var custom = ResourceKey.create(Registries.DIMENSION, Identifier.parse("lsstest:custom"));
+        var custom = ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse("lsstest:custom"));
         byte[] expected = ref(b -> {
             b.writeInt(0);
             b.writeInt(0);

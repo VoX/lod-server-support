@@ -529,7 +529,7 @@ public class LodRequestManager {
     /** Dimension id of the level this manager is currently scanning, or "none" before the first tick. */
     public String getCurrentDimensionId() {
         var dim = this.lastDimension;
-        return dim != null ? dim.identifier().toString() : "none";
+        return dim != null ? dim.location().toString() : "none";
     }
 
     /**

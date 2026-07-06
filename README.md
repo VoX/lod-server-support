@@ -13,6 +13,7 @@ https://github.com/user-attachments/assets/721fb344-890e-4e03-ab36-539444427f7b
 | **v0.6.x** | **26.2** | Server + Client | Server (Folia pending 26.2) | 0.2.16-beta+ | 25+ |
 | **v0.5.x** | **26.1.x** | Server + Client | Server + Folia (experimental) | 0.2.16-beta+ | 25+ |
 | **v0.5.x+mc1.21.11** | **1.21.11** | Server + Client | Server + Folia (experimental) | 0.2.15-beta+ | 21+ |
+| **v0.6.x+mc1.21.8** | **1.21.8** | Server + Client | Server + Folia (experimental) | 0.2.5-alpha+ | 21+ |
 | **v0.5.x+mc1.20.1** | **1.20.1** | Server + Client | Server (no Folia) | — (no public Voxy build) | 17+ |
 | v0.4.x | 26.1.x | Server + Client | Server | 0.2.16-beta+ | 25+ |
 | v0.3.x | 26.1.x | Server + Client | — | 0.2.14-alpha+ | 25+ |
@@ -28,11 +29,15 @@ v0.5.0 adds **Folia** support (experimental — see the Paper Server section) an
 client-sync correctness fixes; after upgrading, clients rebuild their local LOD cache once
 (the cache format changed), so the first rejoin re-syncs from the server.
 
-The full v0.5.0 feature set is also published for two older Minecraft versions from
-long-lived support branches:
+The feature set is also published for older Minecraft versions from long-lived support branches:
 
 - **MC 1.21.11** — [`support/mc1.21.11`](https://github.com/VoX/lod-server-support/tree/support/mc1.21.11),
   released as `v<version>+mc1.21.11` (supersedes v0.2.3 as the recommended version for this line).
+- **MC 1.21.8** — [`support/mc1.21.8`](https://github.com/VoX/lod-server-support/tree/support/mc1.21.8),
+  released as `v<version>+mc1.21.8`. Carries the v0.6.x feature set built for 1.21.8, including
+  experimental Folia (Folia publishes a 1.21.8 build). The in-game config screen is unavailable on
+  this line — Sodium's config API requires Sodium 0.8+, and 1.21.8's newest Sodium is 0.7.3 — but
+  the JSON config files work exactly as on the primary line.
 - **MC 1.20.1** — [`support/mc1.20.1`](https://github.com/VoX/lod-server-support/tree/support/mc1.20.1),
   released as `v<version>+mc1.20.1`. **Note:** Voxy has no public 1.20.1 build, so the bundled
   Voxy bridge stays dormant there — this line serves players using a private/self-built Voxy
@@ -60,6 +65,7 @@ Download from [Modrinth](https://modrinth.com/plugin/lod-server-support):
 - **v0.6.x (MC 26.2):** `lod-server-support-fabric` — Fabric mod JAR (client + server) — and `lod-server-support-paper` — Paper/Purpur server plugin (Folia returns once Folia ships 26.2)
 - **v0.5.x (MC 26.1.x):** `lod-server-support-fabric` — Fabric mod JAR (client + server) — and `lod-server-support-paper` — Paper/Purpur/Folia server plugin
 - **v0.5.x+mc1.21.11 (MC 1.21.11):** the same Fabric + Paper artifacts built for 1.21.11 — the full v0.5.0 feature set (incl. Folia) for the older line
+- **v0.6.x+mc1.21.8 (MC 1.21.8):** the same Fabric + Paper artifacts built for 1.21.8 — the v0.6.x feature set incl. experimental Folia (no in-game config screen on this line; JSON config only)
 - **v0.5.x+mc1.20.1 (MC 1.20.1):** the same artifacts built for 1.20.1 (Paper/Purpur only; requires an `LSSApi` consumer — no public Voxy build exists for 1.20.1)
 - **v0.2.x (MC 1.21.11):** `lod-server-support-fabric` + `lod-server-support-paper` — the original 1.21.11 line (superseded by v0.5.x+mc1.21.11)
 

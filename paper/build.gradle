@@ -17,7 +17,7 @@ repositories {
 
 dependencies {
     implementation project(':common')
-    paperweight.paperDevBundle('26.2.build.48-alpha')
+    paperweight.paperDevBundle('1.21.8-R0.1-SNAPSHOT')
     testImplementation 'org.junit.jupiter:junit-jupiter:5.11.4'
     testImplementation 'org.mockito:mockito-core:5.20.0'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
@@ -37,7 +37,7 @@ processResources {
 shadowJar {
     archiveBaseName = 'lod-server-support-paper'
     archiveClassifier = ''
-    // CI builds carry the full version in the filename (lod-server-support-paper-0.4.0+26.1.2.jar);
+    // CI builds carry the full version in the filename (lod-server-support-paper-0.6.1+1.21.8.jar);
     // local dev builds keep the stable unversioned name (mirrors fabric/build.gradle).
     archiveVersion = providers.environmentVariable('CI').map { it == 'true' }.getOrElse(false)
             ? "${project.mod_version}+${project.minecraft_version}" : ''
@@ -105,6 +105,6 @@ runPaper.folia.registerTask {
 }
 
 tasks.withType(JavaCompile).configureEach {
-    it.options.release = 25
+    it.options.release = 21
 }
 

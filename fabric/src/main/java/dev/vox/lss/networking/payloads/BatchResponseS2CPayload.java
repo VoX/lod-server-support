@@ -4,7 +4,7 @@ import dev.vox.lss.common.LSSConstants;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 public record BatchResponseS2CPayload(
         byte[] responseTypes,
@@ -13,7 +13,7 @@ public record BatchResponseS2CPayload(
 ) implements CustomPacketPayload {
 
     public static final CustomPacketPayload.Type<BatchResponseS2CPayload> TYPE =
-            new CustomPacketPayload.Type<>(Identifier.parse(LSSConstants.CHANNEL_BATCH_RESPONSE));
+            new CustomPacketPayload.Type<>(ResourceLocation.parse(LSSConstants.CHANNEL_BATCH_RESPONSE));
 
     public static final StreamCodec<FriendlyByteBuf, BatchResponseS2CPayload> CODEC =
             StreamCodec.of(

@@ -1,5 +1,6 @@
 package dev.vox.lss.paper;
 
+import net.minecraft.core.Registry;
 import com.mojang.serialization.Lifecycle;
 import dev.vox.lss.common.processing.LoadedColumnData;
 import dev.vox.lss.common.processing.TickSnapshot;
@@ -18,7 +19,6 @@ import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.LevelChunkSection;
-import net.minecraft.world.level.chunk.PalettedContainerFactory;
 import net.minecraft.world.level.lighting.LayerLightEventListener;
 import net.minecraft.world.level.lighting.LevelLightEngine;
 import org.bukkit.Chunk;
@@ -61,7 +61,7 @@ import static org.mockito.Mockito.when;
 @SuppressWarnings("deprecation")
 class PaperChunkGenerationServiceTest {
 
-    private static PalettedContainerFactory FACTORY;
+    private static Registry<Biome> BIOME_REGISTRY;
 
     @BeforeAll
     static void setup() {
@@ -74,8 +74,7 @@ class PaperChunkGenerationServiceTest {
         MappedRegistry<Biome> biomes = new MappedRegistry<>(Registries.BIOME, Lifecycle.stable());
         src.listElements().forEach(ref -> biomes.register(ref.key(), ref.value(), RegistrationInfo.BUILT_IN));
         biomes.freeze();
-        FACTORY = PalettedContainerFactory.create(
-                new RegistryAccess.ImmutableRegistryAccess(List.of(biomes)));
+        BIOME_REGISTRY = biomes;
     }
 
     // ---- harness ----
@@ -353,7 +352,7 @@ class PaperChunkGenerationServiceTest {
 
         // Real section so PaperSectionSerializer produces actual bytes (mock light engine
         // reports no light data; minSectionY defaults to 0 on the mock).
-        var section = new LevelChunkSection(FACTORY);
+        var section = new LevelChunkSection(BIOME_REGISTRY);
         section.setBlockState(0, 0, 0, Blocks.STONE.defaultBlockState());
         var nmsChunk = mock(LevelChunk.class);
         when(nmsChunk.getSections()).thenReturn(new LevelChunkSection[]{section});
@@ -404,7 +403,7 @@ class PaperChunkGenerationServiceTest {
         UUID a = UUID.randomUUID(), b = UUID.randomUUID();
 
         // Success-path wiring (same as successFansOutSharedColumnDataToAllCallbacks)
-        var section = new LevelChunkSection(FACTORY);
+        var section = new LevelChunkSection(BIOME_REGISTRY);
         section.setBlockState(0, 0, 0, Blocks.STONE.defaultBlockState());
         var nmsChunk = mock(LevelChunk.class);
         when(nmsChunk.getSections()).thenReturn(new LevelChunkSection[]{section});
@@ -503,7 +502,7 @@ class PaperChunkGenerationServiceTest {
 
     /** Success-path wiring so a resubmitted entry's OWN completion serves real column data. */
     private static ServerLevel successWiredLevel() {
-        var section = new LevelChunkSection(FACTORY);
+        var section = new LevelChunkSection(BIOME_REGISTRY);
         section.setBlockState(0, 0, 0, Blocks.STONE.defaultBlockState());
         var nmsChunk = mock(LevelChunk.class);
         when(nmsChunk.getSections()).thenReturn(new LevelChunkSection[]{section});

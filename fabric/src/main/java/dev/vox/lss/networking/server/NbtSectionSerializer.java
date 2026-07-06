@@ -13,12 +13,12 @@ import net.minecraft.server.level.ChunkMap;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.biome.Biomes;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunkSection;
 import net.minecraft.world.level.chunk.PalettedContainer;
-import net.minecraft.world.level.chunk.PalettedContainerFactory;
 import net.minecraft.world.level.chunk.PalettedContainerRO;
-import net.minecraft.world.level.chunk.Strategy;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
 
 import java.util.concurrent.TimeUnit;
@@ -54,12 +54,17 @@ final class NbtSectionSerializer {
         var statusStr = chunkNbt.getStringOr("Status", null);
         if (statusStr == null || ChunkStatus.byName(statusStr) != ChunkStatus.FULL) return null;
 
-        var factory = PalettedContainerFactory.create(registryAccess);
-        var blockStateCodec = factory.blockStatesContainerCodec();
-        var biomeCodec = factory.biomeContainerCodec();
         var biomeRegistry = registryAccess.lookupOrThrow(Registries.BIOME);
         var defaultBiome = biomeRegistry.getOrThrow(Biomes.PLAINS);
         var biomeHolderMap = biomeRegistry.asHolderIdMap();
+        // 1.21.8 predates PalettedContainerFactory — build the section paletted-container codecs
+        // the pre-1.21.9 way (codecRW for block states, codecRO for biomes).
+        var blockStateCodec = PalettedContainer.codecRW(
+                Block.BLOCK_STATE_REGISTRY, BlockState.CODEC,
+                PalettedContainer.Strategy.SECTION_STATES, Blocks.AIR.defaultBlockState());
+        var biomeCodec = PalettedContainer.codecRO(
+                biomeHolderMap, biomeRegistry.holderByNameCodec(),
+                PalettedContainer.Strategy.SECTION_BIOMES, defaultBiome);
 
         var sectionsTag = chunkNbt.getList("sections");
         if (sectionsTag.isEmpty()) return null;
@@ -153,7 +158,7 @@ final class NbtSectionSerializer {
             section = new LevelChunkSection(blockStates, biomeContainer);
         } else {
             var defaultBiomeContainer = new PalettedContainer<>(
-                    defaultBiome, Strategy.createForBiomes(biomeHolderMap));
+                    biomeHolderMap, defaultBiome, PalettedContainer.Strategy.SECTION_BIOMES);
             section = new LevelChunkSection(blockStates, defaultBiomeContainer);
         }
 

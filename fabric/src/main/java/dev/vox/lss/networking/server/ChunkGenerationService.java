@@ -20,8 +20,8 @@ import java.util.Map;
 import java.util.UUID;
 
 public class ChunkGenerationService {
-    // flags=2 (LOADING) makes the chunk load/generate; timeout=0 means we manage lifetime ourselves
-    private static final TicketType LSS_GEN_TICKET = new TicketType(0, 2);
+    // timeout=0: we manage lifetime ourselves; persist=false; LOADING makes the chunk load/generate
+    private static final TicketType LSS_GEN_TICKET = new TicketType(0L, false, TicketType.TicketUse.LOADING);
 
     record GenerationCallback(UUID playerUuid, long submissionOrder) {}
 
@@ -129,7 +129,7 @@ public class ChunkGenerationService {
             gen.ticksWaiting++;
 
             if (gen.ticksWaiting > this.timeoutTicks) {
-                LSSLogger.debug("Generation timeout for chunk " + gen.pos.x() + "," + gen.pos.z()
+                LSSLogger.debug("Generation timeout for chunk " + gen.pos.x + "," + gen.pos.z
                         + " after " + gen.ticksWaiting + " ticks (" + gen.callbacks.size() + " callbacks)");
                 if (ready == null) ready = new ArrayList<>();
                 addFailures(ready, gen);
@@ -139,33 +139,33 @@ public class ChunkGenerationService {
                 continue;
             }
 
-            LevelChunk chunk = gen.level.getChunkSource().getChunkNow(gen.pos.x(), gen.pos.z());
+            LevelChunk chunk = gen.level.getChunkSource().getChunkNow(gen.pos.x, gen.pos.z);
             if (chunk != null) {
                 if (ready == null) ready = new ArrayList<>();
                 try {
                     long columnTimestamp = LSSConstants.epochSeconds();
                     LoadedColumnData columnData = this.columnSerializer.serialize(
-                            gen.level, chunk, gen.pos.x(), gen.pos.z());
-                    String dimension = gen.level.dimension().identifier().toString();
+                            gen.level, chunk, gen.pos.x, gen.pos.z);
+                    String dimension = gen.level.dimension().location().toString();
 
                     // Seed the dirty filter with the served bytes: the chunk's imminent
                     // unload-save would otherwise count as "first observed save" and
                     // trigger a pointless second send of the identical column.
                     if (this.dirtyContentFilter != null) {
-                        this.dirtyContentFilter.seed(dimension, gen.pos.x(), gen.pos.z(),
+                        this.dirtyContentFilter.seed(dimension, gen.pos.x, gen.pos.z,
                                 columnData.serializedSections());
                     }
 
                     // One GenerationReadyData per callback — processing thread will voxelize
                     for (var cb : gen.callbacks) {
                         ready.add(new TickSnapshot.GenerationReadyData(
-                                cb.playerUuid, gen.pos.x(), gen.pos.z(), dimension,
+                                cb.playerUuid, gen.pos.x, gen.pos.z, dimension,
                                 columnData, columnTimestamp, cb.submissionOrder));
                         decrementCount(this.perPlayerActiveCount, cb.playerUuid);
                     }
                     this.totalCompleted++;
                 } catch (Throwable t) {
-                    LSSLogger.error("Failed to extract primitives for generated chunk at " + gen.pos.x() + ", " + gen.pos.z(), t);
+                    LSSLogger.error("Failed to extract primitives for generated chunk at " + gen.pos.x + ", " + gen.pos.z, t);
                     addFailures(ready, gen);
                     // Failed extraction is a terminal removal that is neither completed nor a
                     // timeout — count it as removed-in-flight so the generation books
@@ -185,10 +185,10 @@ public class ChunkGenerationService {
 
     /** Add a failure outcome (columnData == null) for every callback of the entry. */
     private void addFailures(List<TickSnapshot.GenerationReadyData> ready, PendingGeneration gen) {
-        String dimension = gen.level.dimension().identifier().toString();
+        String dimension = gen.level.dimension().location().toString();
         for (var cb : gen.callbacks) {
             ready.add(new TickSnapshot.GenerationReadyData(
-                    cb.playerUuid, gen.pos.x(), gen.pos.z(), dimension,
+                    cb.playerUuid, gen.pos.x, gen.pos.z, dimension,
                     null, 0L, cb.submissionOrder));
             decrementCount(this.perPlayerActiveCount, cb.playerUuid);
         }

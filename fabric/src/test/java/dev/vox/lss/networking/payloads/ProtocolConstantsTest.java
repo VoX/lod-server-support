@@ -5,7 +5,7 @@ import io.netty.buffer.Unpooled;
 import net.minecraft.SharedConstants;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.Bootstrap;
 import net.minecraft.world.level.Level;
@@ -168,7 +168,7 @@ class ProtocolConstantsTest {
                 LSSConstants.CHANNEL_VOXEL_COLUMN, LSSConstants.CHANNEL_BATCH_RESPONSE};
         var distinct = new HashSet<String>();
         for (String channel : channels) {
-            var id = Identifier.parse(channel); // throws on a typo'd channel string
+            var id = ResourceLocation.parse(channel); // throws on a typo'd channel string
             assertEquals(LSSConstants.MOD_ID, id.getNamespace(),
                     channel + " must live under the lss: namespace");
             distinct.add(id.toString());

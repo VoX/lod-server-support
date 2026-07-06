@@ -1,5 +1,5 @@
 plugins {
-    id 'net.fabricmc.fabric-loom' version "${loom_version}"
+    id 'net.fabricmc.fabric-loom-remap' version "${loom_version}"
 }
 
 version = project.mod_version
@@ -9,7 +9,7 @@ base {
     archivesName = project.archives_base_name
 }
 
-// CI builds carry the full version in the filename (lod-server-support-fabric-0.4.0+26.1.2.jar),
+// CI builds carry the full version in the filename (lod-server-support-fabric-0.6.1+1.21.8.jar),
 // derived from mod_version (overridden from the tag by release.yml) + minecraft_version.
 // Local dev builds keep the stable unversioned name so run configs and scripts never chase it.
 def ciArchiveVersion = providers.environmentVariable('CI').map { it == 'true' }.getOrElse(false)
@@ -35,13 +35,15 @@ repositories {
 
 dependencies {
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
-    implementation "net.fabricmc:fabric-loader:${project.loader_version}"
-    implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+    mappings loom.officialMojangMappings()
+    modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
     testImplementation "net.fabricmc:fabric-loader-junit:${project.loader_version}"
     implementation project(':common')
     include project(':common')
-    compileOnly "maven.modrinth:sodium:mc26.2-0.9.1-beta.3-fabric"
-    compileOnly "maven.modrinth:modmenu:20.0.0-beta.4"
+    // No sodium/modmenu compile deps on this line: the in-game config screen (the only code
+    // that used them) is dropped on 1.21.8 — Sodium's config API needs 0.8+, and 1.21.8's
+    // newest Sodium is 0.7.3. The JSON config path has no third-party dependency.
 }
 
 test {
@@ -130,7 +132,7 @@ processResources {
 }
 
 tasks.withType(JavaCompile).configureEach {
-    it.options.release = 25
+    it.options.release = 21
 }
 
 jar {

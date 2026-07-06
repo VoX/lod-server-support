@@ -1,5 +1,11 @@
 package dev.vox.lss.paper;
 
+import com.mojang.serialization.Codec;
+import net.minecraft.core.Registry;
+import net.minecraft.world.level.biome.Biomes;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.chunk.PalettedContainerRO;
 import com.mojang.serialization.Lifecycle;
 import dev.vox.lss.common.processing.LoadedColumnData;
 import io.netty.buffer.Unpooled;
@@ -25,7 +31,6 @@ import net.minecraft.world.level.chunk.DataLayer;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.LevelChunkSection;
 import net.minecraft.world.level.chunk.PalettedContainer;
-import net.minecraft.world.level.chunk.PalettedContainerFactory;
 import net.minecraft.world.level.lighting.LayerLightEventListener;
 import net.minecraft.world.level.lighting.LevelLightEngine;
 import org.junit.jupiter.api.BeforeAll;
@@ -61,7 +66,7 @@ import static org.mockito.Mockito.when;
 class PaperSerializerParityTest {
 
     private static RegistryAccess REGISTRY_ACCESS;
-    private static PalettedContainerFactory FACTORY;
+    private static Registry<Biome> BIOME_REGISTRY;
 
     private static final int CX = 9, CZ = -6, MIN_SECTION_Y = -4;
 
@@ -75,8 +80,19 @@ class PaperSerializerParityTest {
         src.listElements().forEach(ref -> biomes.register(ref.key(), ref.value(), RegistrationInfo.BUILT_IN));
         biomes.freeze();
         REGISTRY_ACCESS = new RegistryAccess.ImmutableRegistryAccess(List.of(biomes));
-        FACTORY = PalettedContainerFactory.create(REGISTRY_ACCESS);
+        BIOME_REGISTRY = REGISTRY_ACCESS.lookupOrThrow(Registries.BIOME);
     }
+    // 1.21.8 predates PalettedContainerFactory; build the section containers/codecs directly.
+    private static Codec<PalettedContainer<BlockState>> blockStatesCodec() {
+        return PalettedContainer.codecRW(Block.BLOCK_STATE_REGISTRY, BlockState.CODEC,
+                PalettedContainer.Strategy.SECTION_STATES, Blocks.AIR.defaultBlockState());
+    }
+
+    private static Codec<PalettedContainerRO<Holder<Biome>>> biomeCodec() {
+        return PalettedContainer.codecRO(BIOME_REGISTRY.asHolderIdMap(), BIOME_REGISTRY.holderByNameCodec(),
+                PalettedContainer.Strategy.SECTION_BIOMES, BIOME_REGISTRY.getOrThrow(Biomes.PLAINS));
+    }
+
 
     // ---- the two paths over the same in-memory content ----
 
@@ -111,8 +127,8 @@ class PaperSerializerParityTest {
             if (sections[i] == null) continue;
             var s = new CompoundTag();
             s.putInt("Y", MIN_SECTION_Y + i);
-            s.put("block_states", FACTORY.blockStatesContainerCodec().encodeStart(NbtOps.INSTANCE, sections[i].getStates()).getOrThrow());
-            s.put("biomes", FACTORY.biomeContainerCodec().encodeStart(NbtOps.INSTANCE, sections[i].getBiomes()).getOrThrow());
+            s.put("block_states", blockStatesCodec().encodeStart(NbtOps.INSTANCE, sections[i].getStates()).getOrThrow());
+            s.put("biomes", biomeCodec().encodeStart(NbtOps.INSTANCE, sections[i].getBiomes()).getOrThrow());
             if (blockLight[i] != null) s.putByteArray("BlockLight", blockLight[i].getData());
             if (skyLight[i] != null) s.putByteArray("SkyLight", skyLight[i].getData());
             list.add(s);
@@ -140,14 +156,14 @@ class PaperSerializerParityTest {
     // ---- content builders ----
 
     private LevelChunkSection stoneAndGlassSection() {
-        var sec = new LevelChunkSection(FACTORY);
+        var sec = new LevelChunkSection(BIOME_REGISTRY);
         sec.setBlockState(0, 0, 0, Blocks.STONE.defaultBlockState());
         sec.setBlockState(15, 15, 15, Blocks.GLASS.defaultBlockState());
         return normalized(sec);
     }
 
     private LevelChunkSection dirtSection() {
-        var sec = new LevelChunkSection(FACTORY);
+        var sec = new LevelChunkSection(BIOME_REGISTRY);
         sec.setBlockState(3, 4, 5, Blocks.DIRT.defaultBlockState());
         return normalized(sec);
     }
@@ -160,10 +176,10 @@ class PaperSerializerParityTest {
      * from the canonical disk shape both paths then share.
      */
     private LevelChunkSection normalized(LevelChunkSection sec) {
-        var statesNbt = FACTORY.blockStatesContainerCodec().encodeStart(NbtOps.INSTANCE, sec.getStates()).getOrThrow();
-        var biomesNbt = FACTORY.biomeContainerCodec().encodeStart(NbtOps.INSTANCE, sec.getBiomes()).getOrThrow();
-        var states = FACTORY.blockStatesContainerCodec().parse(NbtOps.INSTANCE, statesNbt).getOrThrow();
-        if (!(FACTORY.biomeContainerCodec().parse(NbtOps.INSTANCE, biomesNbt).getOrThrow()
+        var statesNbt = blockStatesCodec().encodeStart(NbtOps.INSTANCE, sec.getStates()).getOrThrow();
+        var biomesNbt = biomeCodec().encodeStart(NbtOps.INSTANCE, sec.getBiomes()).getOrThrow();
+        var states = blockStatesCodec().parse(NbtOps.INSTANCE, statesNbt).getOrThrow();
+        if (!(biomeCodec().parse(NbtOps.INSTANCE, biomesNbt).getOrThrow()
                 instanceof PalettedContainer<Holder<Biome>> biomes)) {
             throw new IllegalStateException("parsed biome container is not the concrete PalettedContainer");
         }
@@ -191,7 +207,7 @@ class PaperSerializerParityTest {
             var out = new ArrayList<DecodedSection>(count);
             for (int i = 0; i < count; i++) {
                 int y = buf.readByte();
-                var section = new LevelChunkSection(FACTORY);
+                var section = new LevelChunkSection(BIOME_REGISTRY);
                 section.read(buf);
                 boolean hasBl = buf.readBoolean();
                 byte[] bl = null;
@@ -261,7 +277,7 @@ class PaperSerializerParityTest {
         // H-13: an air section adjacent to lava carries propagated BLOCK light that must
         // ship. Both paths keep the air section for its block light alone.
         byte[] lavaGlow = light(100, (byte) 0x0E);
-        var sections = new LevelChunkSection[]{new LevelChunkSection(FACTORY)};
+        var sections = new LevelChunkSection[]{new LevelChunkSection(BIOME_REGISTRY)};
         var blockLight = new DataLayer[]{new DataLayer(lavaGlow)};
         var skyLight = new DataLayer[]{null};
 
@@ -281,7 +297,7 @@ class PaperSerializerParityTest {
         // air-only section (only block light does — the H-13 rule). The resulting all-air
         // column collapses to each path's sentinel: live = null serializedSections,
         // disk = empty byte[]; both resolve as "all air, found" upstream.
-        var sections = new LevelChunkSection[]{new LevelChunkSection(FACTORY)};
+        var sections = new LevelChunkSection[]{new LevelChunkSection(BIOME_REGISTRY)};
         var blockLight = new DataLayer[]{null};
         var skyLight = new DataLayer[]{new DataLayer(light(100, (byte) 0x0F))};
 

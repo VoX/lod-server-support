@@ -36,7 +36,7 @@ jobs:
 
           # Fallback for lightweight tags: commit subjects as bullet list
           if [ -z "$NOTES" ]; then
-            PREV_TAG=$(git tag -l 'v*' --sort=-v:refname | grep -v "^${TAG}$" | head -1 || true)
+            PREV_TAG=$(git tag -l 'v*+mc1.21.8*' --sort=-v:refname | grep -v "^${TAG}$" | head -1 || true)
             if [ -n "$PREV_TAG" ]; then
               NOTES=$(git log --format="- %s" "${PREV_TAG}..${TAG}")
             else
@@ -47,7 +47,7 @@ jobs:
           # Append compare link
           # `|| true`: under `set -euo pipefail`, grep -v exits 1 (aborting the step) when the
           # pushed tag is the only v* tag — i.e. the first-ever release. Tolerate the empty result.
-          PREV_TAG=$(git tag -l 'v*' --sort=-v:refname | grep -v "^${TAG}$" | head -1 || true)
+          PREV_TAG=$(git tag -l 'v*+mc1.21.8*' --sort=-v:refname | grep -v "^${TAG}$" | head -1 || true)
           if [ -n "$PREV_TAG" ]; then
             COMPARE="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/compare/${PREV_TAG}...${TAG}"
           else
@@ -64,23 +64,31 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: 25
+          java-version: 21
 
       - uses: gradle/actions/setup-gradle@v4
 
+      # Support-line tags carry SemVer build metadata (v0.5.0+mc1.21.8); strip it so Gradle's
+      # mod_version is the bare X.Y.Z. The jar name then appends +minecraft_version cleanly, and
+      # a stray '+' in mod_version would otherwise corrupt artifact names and release_check globs.
+      - name: Derive mod_version
+        run: |
+          MOD_VERSION="${GITHUB_REF_NAME#v}"; MOD_VERSION="${MOD_VERSION%%+*}"
+          echo "MOD_VERSION=$MOD_VERSION" >> "$GITHUB_ENV"
+
       - name: Build Fabric
-        run: ./gradlew :fabric:build -x runClientGameTest -Pmod_version=${GITHUB_REF_NAME#v}
+        run: ./gradlew :fabric:build -x runClientGameTest -Pmod_version="$MOD_VERSION"
 
       # :paper:test gates the publish — :paper:shadowJar alone has no test dependency,
       # and this pipeline ships the Paper jar to three loaders irreversibly.
       - name: Build Paper + Tier 1 tests
-        run: ./gradlew :paper:test :paper:shadowJar -Pmod_version=${GITHUB_REF_NAME#v}
+        run: ./gradlew :paper:test :paper:shadowJar -Pmod_version="$MOD_VERSION"
 
       # Gate the tag-versioned artifacts that actually ship (build.yml gates only the default-version
       # CI build). GitHub Actions exports CI=true, so the build steps above produced CI-named jars
       # that release_check's RELEASE_GLOBS match. Runs after the builds, before the irreversible publish.
       - name: Release-jar safety gate
-        run: python3 scripts/release_check.py --version "${GITHUB_REF_NAME#v}"
+        run: python3 scripts/release_check.py --version "$MOD_VERSION"
 
       - uses: softprops/action-gh-release@v2
         with:
@@ -98,12 +106,15 @@ jobs:
           modrinth-id: lKiXKLvv
           modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
           files: fabric/build/libs/lod-server-support-fabric-*.jar
-          name: ${{ github.ref_name }} - Fabric (MC 26.2)
-          version: ${{ github.ref_name }}+fabric+mc26.2
+          # Built from the bare MOD_VERSION (not the tag, which already carries +mc1.21.8):
+          # platform-first ordering matches main's published style (v0.5.0+fabric+mc26.1) and
+          # must stay unique project-wide on Modrinth across both release lines.
+          name: v${{ env.MOD_VERSION }} - Fabric (MC 1.21.8)
+          version: v${{ env.MOD_VERSION }}+fabric+mc1.21.8
           version-type: release
           loaders: fabric
           game-versions: |
-            26.2
+            1.21.8
           changelog: ${{ steps.release_notes.outputs.notes }}
 
       - name: Upload Paper to Modrinth
@@ -112,16 +123,16 @@ jobs:
           modrinth-id: lKiXKLvv
           modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
           files: paper/build/libs/lod-server-support-paper-*.jar
-          name: ${{ github.ref_name }} - Paper/Purpur (MC 26.2)
-          version: ${{ github.ref_name }}+paper+mc26.2
+          name: v${{ env.MOD_VERSION }} - Paper/Folia (MC 1.21.8)
+          version: v${{ env.MOD_VERSION }}+paper+mc1.21.8
           version-type: release
-          # The jar still declares folia-supported: true, but Folia has not published a 26.2
-          # build yet, so v0.6.0 advertises only paper + purpur on Modrinth. Re-add `folia` here
-          # once Folia ships 26.2 and the soak passes (Folia support is experimental —
-          # CLAUDE.md, Release Notes Format rules).
+          # One artifact serves all three Bukkit-family loaders (plugin.yml declares
+          # folia-supported: true; release_check.py gates it). Folia support is experimental —
+          # release notes must say so (CLAUDE.md, Release Notes Format rules).
           loaders: |
             paper
             purpur
+            folia
           game-versions: |
-            26.2
+            1.21.8
           changelog: ${{ steps.release_notes.outputs.notes }}

@@ -5,7 +5,7 @@ import io.netty.buffer.Unpooled;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.Bootstrap;
 import net.minecraft.world.level.Level;
@@ -39,7 +39,7 @@ class VoxelSectionPayloadTest {
 
     @Test
     void roundtripPreservesHeaderFields() {
-        var dim = ResourceKey.create(Registries.DIMENSION, Identifier.parse(LSSConstants.DIM_STR_OVERWORLD));
+        var dim = ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse(LSSConstants.DIM_STR_OVERWORLD));
         byte[] sections = emptyColumn();
         var original = new VoxelColumnS2CPayload(10, -20, dim, 99999L, sections);
 
@@ -56,7 +56,7 @@ class VoxelSectionPayloadTest {
 
     @Test
     void roundtripPreservesSectionData() {
-        var dim = ResourceKey.create(Registries.DIMENSION, Identifier.parse(LSSConstants.DIM_STR_OVERWORLD));
+        var dim = ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse(LSSConstants.DIM_STR_OVERWORLD));
         // Write VarInt sectionCount=2, then dummy bytes
         var wireBuf = new FriendlyByteBuf(Unpooled.buffer());
         wireBuf.writeVarInt(2);
@@ -87,7 +87,7 @@ class VoxelSectionPayloadTest {
 
     @Test
     void roundtripEmptyColumn() {
-        var dim = ResourceKey.create(Registries.DIMENSION, Identifier.parse(LSSConstants.DIM_STR_THE_END));
+        var dim = ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse(LSSConstants.DIM_STR_THE_END));
         byte[] sections = emptyColumn();
         var original = new VoxelColumnS2CPayload(0, 0, dim, 0L, sections);
 
@@ -108,7 +108,7 @@ class VoxelSectionPayloadTest {
 
     @Test
     void estimatedBytesPositive() {
-        var dim = ResourceKey.create(Registries.DIMENSION, Identifier.parse(LSSConstants.DIM_STR_OVERWORLD));
+        var dim = ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse(LSSConstants.DIM_STR_OVERWORLD));
         byte[] sections = emptyColumn();
         var payload = new VoxelColumnS2CPayload(0, 0, dim, 0L, sections);
         assertTrue(payload.estimatedBytes() > 0);

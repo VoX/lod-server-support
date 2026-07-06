@@ -21,7 +21,12 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.chunk.LevelChunkSection;
-import net.minecraft.world.level.chunk.PalettedContainerFactory;
+import com.mojang.serialization.Codec;
+import net.minecraft.core.Holder;
+import net.minecraft.core.Registry;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.chunk.PalettedContainer;
+import net.minecraft.world.level.chunk.PalettedContainerRO;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -56,18 +61,39 @@ class NbtSectionSerializerTest {
     }
 
     private static RegistryAccess REGISTRY_ACCESS;
-    private static PalettedContainerFactory FACTORY;
+    private static Registry<Biome> BIOME_REGISTRY;
 
     @BeforeAll
     static void setup() {
         REGISTRY_ACCESS = buildRegistryAccess();
-        FACTORY = PalettedContainerFactory.create(REGISTRY_ACCESS);
+        BIOME_REGISTRY = REGISTRY_ACCESS.lookupOrThrow(Registries.BIOME);
+    }
+
+    // 1.21.8 predates PalettedContainerFactory; build the section containers/codecs directly.
+    private static Codec<PalettedContainer<BlockState>> blockStatesCodec() {
+        return PalettedContainer.codecRW(Block.BLOCK_STATE_REGISTRY, BlockState.CODEC,
+                PalettedContainer.Strategy.SECTION_STATES, Blocks.AIR.defaultBlockState());
+    }
+
+    private static Codec<PalettedContainerRO<Holder<Biome>>> biomeCodec() {
+        return PalettedContainer.codecRO(BIOME_REGISTRY.asHolderIdMap(), BIOME_REGISTRY.holderByNameCodec(),
+                PalettedContainer.Strategy.SECTION_BIOMES, BIOME_REGISTRY.getOrThrow(Biomes.PLAINS));
+    }
+
+    private static PalettedContainer<BlockState> createForBlockStates() {
+        return new PalettedContainer<>(Block.BLOCK_STATE_REGISTRY, Blocks.AIR.defaultBlockState(),
+                PalettedContainer.Strategy.SECTION_STATES);
+    }
+
+    private static PalettedContainer<Holder<Biome>> createForBiomes() {
+        return new PalettedContainer<>(BIOME_REGISTRY.asHolderIdMap(), BIOME_REGISTRY.getOrThrow(Biomes.PLAINS),
+                PalettedContainer.Strategy.SECTION_BIOMES);
     }
 
     /**
-     * Build a RegistryAccess carrying the BIOME registry (the only registry
-     * {@link PalettedContainerFactory#create} reads — block states come from static bootstrap
-     * state). The golden corpus bytes embed biome palette ids, so ids must be platform- and
+     * Build a RegistryAccess carrying the BIOME registry (the only registry the section
+     * paletted-container codecs read — block states come from static bootstrap state). The
+     * golden corpus bytes embed biome palette ids, so ids must be platform- and
      * version-independent: register exactly the corpus biomes in this fixed order (full-vanilla
      * listElements() order differs between the Fabric and Paper test runtimes and skewed the
      * fixtures). Never reorder; if this list changes, regenerate all goldens on BOTH modules.
@@ -96,13 +122,13 @@ class NbtSectionSerializerTest {
 
     /** A section CompoundTag carrying a STONE block at (0,0,0) when {@code stone}. */
     private CompoundTag sectionNbt(int y, boolean stone, boolean includeBiomes, byte[] blockLight, byte[] skyLight) {
-        var sec = new LevelChunkSection(FACTORY);
+        var sec = new LevelChunkSection(BIOME_REGISTRY);
         if (stone) sec.setBlockState(0, 0, 0, Blocks.STONE.defaultBlockState());
         var s = new CompoundTag();
         s.putInt("Y", y);
-        s.put("block_states", FACTORY.blockStatesContainerCodec().encodeStart(NbtOps.INSTANCE, sec.getStates()).getOrThrow());
+        s.put("block_states", blockStatesCodec().encodeStart(NbtOps.INSTANCE, sec.getStates()).getOrThrow());
         if (includeBiomes) {
-            s.put("biomes", FACTORY.biomeContainerCodec().encodeStart(NbtOps.INSTANCE, sec.getBiomes()).getOrThrow());
+            s.put("biomes", biomeCodec().encodeStart(NbtOps.INSTANCE, sec.getBiomes()).getOrThrow());
         }
         if (blockLight != null) s.putByteArray("BlockLight", blockLight);
         if (skyLight != null) s.putByteArray("SkyLight", skyLight);
@@ -128,7 +154,7 @@ class NbtSectionSerializerTest {
             var out = new ArrayList<DecodedSection>(count);
             for (int i = 0; i < count; i++) {
                 int y = buf.readByte();
-                var section = new LevelChunkSection(FACTORY);
+                var section = new LevelChunkSection(BIOME_REGISTRY);
                 section.read(buf);
                 boolean hasBl = buf.readBoolean();
                 byte[] bl = null;
@@ -223,8 +249,8 @@ class NbtSectionSerializerTest {
     void missingBlockStates_sectionDropped() {
         var noStates = new CompoundTag();
         noStates.putInt("Y", 1);
-        noStates.put("biomes", FACTORY.biomeContainerCodec()
-                .encodeStart(NbtOps.INSTANCE, new LevelChunkSection(FACTORY).getBiomes()).getOrThrow());
+        noStates.put("biomes", biomeCodec()
+                .encodeStart(NbtOps.INSTANCE, new LevelChunkSection(BIOME_REGISTRY).getBiomes()).getOrThrow());
         byte[] wire = NbtSectionSerializer.serializeChunkNbt(
                 chunkNbt("minecraft:full", noStates, sectionNbt(2, true, true, null, null)), REGISTRY_ACCESS);
         var sections = decode(wire);
@@ -265,8 +291,8 @@ class NbtSectionSerializerTest {
     @Test
     void sectionMissingY_skipped() {
         var noY = new CompoundTag();
-        noY.put("block_states", FACTORY.blockStatesContainerCodec()
-                .encodeStart(NbtOps.INSTANCE, new LevelChunkSection(FACTORY).getStates()).getOrThrow());
+        noY.put("block_states", blockStatesCodec()
+                .encodeStart(NbtOps.INSTANCE, new LevelChunkSection(BIOME_REGISTRY).getStates()).getOrThrow());
         byte[] wire = NbtSectionSerializer.serializeChunkNbt(
                 chunkNbt("minecraft:full", noY, sectionNbt(7, true, true, null, null)), REGISTRY_ACCESS);
         var sections = decode(wire);
@@ -331,12 +357,12 @@ class NbtSectionSerializerTest {
 
     @Test
     void multiBlockSection_paletteRoundTrips() {
-        var states = FACTORY.createForBlockStates();
+        var states = createForBlockStates();
         states.set(0, 0, 0, Blocks.STONE.defaultBlockState());
         states.set(15, 15, 15, Blocks.DIRT.defaultBlockState());
         states.set(7, 8, 9, Blocks.GLASS.defaultBlockState());
         var section = decode(NbtSectionSerializer.serializeChunkNbt(
-                chunkNbt("minecraft:full", sectionFrom(1, states, FACTORY.createForBiomes())), REGISTRY_ACCESS))
+                chunkNbt("minecraft:full", sectionFrom(1, states, createForBiomes())), REGISTRY_ACCESS))
                 .get(0).section();
         assertEquals(Blocks.STONE.defaultBlockState(), section.getBlockState(0, 0, 0));
         assertEquals(Blocks.DIRT.defaultBlockState(), section.getBlockState(15, 15, 15));
@@ -345,9 +371,9 @@ class NbtSectionSerializerTest {
 
     @Test
     void biomeData_roundTrips() {
-        var states = FACTORY.createForBlockStates();
+        var states = createForBlockStates();
         states.set(0, 0, 0, Blocks.STONE.defaultBlockState());
-        var biomes = FACTORY.createForBiomes();
+        var biomes = createForBiomes();
         biomes.set(0, 0, 0, REGISTRY_ACCESS.lookupOrThrow(Registries.BIOME).getOrThrow(Biomes.DESERT));
         var section = decode(NbtSectionSerializer.serializeChunkNbt(
                 chunkNbt("minecraft:full", sectionFrom(0, states, biomes)), REGISTRY_ACCESS))
@@ -361,8 +387,8 @@ class NbtSectionSerializerTest {
                                     net.minecraft.world.level.chunk.PalettedContainer<net.minecraft.core.Holder<Biome>> biomes) {
         var s = new CompoundTag();
         s.putInt("Y", y);
-        s.put("block_states", FACTORY.blockStatesContainerCodec().encodeStart(NbtOps.INSTANCE, states).getOrThrow());
-        s.put("biomes", FACTORY.biomeContainerCodec().encodeStart(NbtOps.INSTANCE, biomes).getOrThrow());
+        s.put("block_states", blockStatesCodec().encodeStart(NbtOps.INSTANCE, states).getOrThrow());
+        s.put("biomes", biomeCodec().encodeStart(NbtOps.INSTANCE, biomes).getOrThrow());
         return s;
     }
 
@@ -499,17 +525,17 @@ class NbtSectionSerializerTest {
 
     @Test
     void golden_multiSection_listOrderPreserved() throws IOException {
-        var bottom = FACTORY.createForBlockStates();
+        var bottom = createForBlockStates();
         bottom.set(0, 0, 0, Blocks.STONE.defaultBlockState());
-        var middle = FACTORY.createForBlockStates();
+        var middle = createForBlockStates();
         middle.set(8, 8, 8, Blocks.DIRT.defaultBlockState());
-        var top = FACTORY.createForBlockStates();
+        var top = createForBlockStates();
         top.set(15, 15, 15, Blocks.GLASS.defaultBlockState());
         byte[] wire = NbtSectionSerializer.serializeChunkNbt(
                 chunkNbt("minecraft:full",
-                        sectionFrom(0, middle, FACTORY.createForBiomes()),
-                        sectionFrom(-4, bottom, FACTORY.createForBiomes()),
-                        sectionFrom(7, top, FACTORY.createForBiomes())),
+                        sectionFrom(0, middle, createForBiomes()),
+                        sectionFrom(-4, bottom, createForBiomes()),
+                        sectionFrom(7, top, createForBiomes())),
                 REGISTRY_ACCESS);
         var sections = decode(wire);
         assertEquals(3, sections.size());
@@ -535,7 +561,7 @@ class NbtSectionSerializerTest {
 
     @Test
     void golden_multiPaletteFullSection() throws IOException {
-        var states = FACTORY.createForBlockStates();
+        var states = createForBlockStates();
         for (int y = 0; y < 16; y++) {
             for (int z = 0; z < 16; z++) {
                 for (int x = 0; x < 16; x++) {
@@ -544,7 +570,7 @@ class NbtSectionSerializerTest {
             }
         }
         byte[] wire = NbtSectionSerializer.serializeChunkNbt(
-                chunkNbt("minecraft:full", sectionFrom(2, states, FACTORY.createForBiomes())),
+                chunkNbt("minecraft:full", sectionFrom(2, states, createForBiomes())),
                 REGISTRY_ACCESS);
         var section = decode(wire).get(0).section();
         assertEquals(Blocks.STONE.defaultBlockState(), section.getBlockState(0, 0, 0));
@@ -556,7 +582,7 @@ class NbtSectionSerializerTest {
     void golden_nonDefaultBiomePattern() throws IOException {
         var biomeRegistry = REGISTRY_ACCESS.lookupOrThrow(Registries.BIOME);
         var corpusBiomes = List.of(Biomes.DESERT, Biomes.JUNGLE, Biomes.SNOWY_TAIGA);
-        var biomes = FACTORY.createForBiomes();
+        var biomes = createForBiomes();
         for (int qy = 0; qy < 4; qy++) {
             for (int qz = 0; qz < 4; qz++) {
                 for (int qx = 0; qx < 4; qx++) {
@@ -564,7 +590,7 @@ class NbtSectionSerializerTest {
                 }
             }
         }
-        var states = FACTORY.createForBlockStates();
+        var states = createForBlockStates();
         states.set(0, 0, 0, Blocks.STONE.defaultBlockState());
         byte[] wire = NbtSectionSerializer.serializeChunkNbt(
                 chunkNbt("minecraft:full", sectionFrom(0, states, biomes)), REGISTRY_ACCESS);
@@ -610,12 +636,12 @@ class NbtSectionSerializerTest {
 
     @Test
     void golden_waterloggedBlockStateProperty() throws IOException {
-        var states = FACTORY.createForBlockStates();
+        var states = createForBlockStates();
         states.set(0, 0, 0, Blocks.OAK_STAIRS.defaultBlockState().setValue(BlockStateProperties.WATERLOGGED, true));
         states.set(1, 0, 0, Blocks.OAK_STAIRS.defaultBlockState());
         states.set(2, 0, 0, Blocks.STONE.defaultBlockState());
         byte[] wire = NbtSectionSerializer.serializeChunkNbt(
-                chunkNbt("minecraft:full", sectionFrom(1, states, FACTORY.createForBiomes())),
+                chunkNbt("minecraft:full", sectionFrom(1, states, createForBiomes())),
                 REGISTRY_ACCESS);
         var section = decode(wire).get(0).section();
         assertTrue(section.getBlockState(0, 0, 0).getValue(BlockStateProperties.WATERLOGGED),

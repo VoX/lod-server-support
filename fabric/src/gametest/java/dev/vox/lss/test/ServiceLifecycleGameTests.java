@@ -1,5 +1,6 @@
 package dev.vox.lss.test;
 
+import net.minecraft.network.chat.Component;
 import dev.vox.lss.common.LSSConstants;
 import dev.vox.lss.common.PositionUtil;
 import dev.vox.lss.common.SharedBandwidthLimiter;
@@ -84,6 +85,13 @@ public class ServiceLifecycleGameTests {
         var server = helper.getLevel().getServer();
         var playerList = server.getPlayerList();
         var mock = placeMockServerPlayer(helper);
+        // The gametest framework spawns the mock at this test's structure origin, which on some
+        // MC versions is millions of blocks out (1.21.8 places this batch far in +z, so a
+        // spawn-relative negative-quadrant position would never reach negative absolute Z). Snap
+        // the player to chunk (0,0) so the negative-quadrant coords below genuinely exercise
+        // negative packing in both the high and low 32 bits on every version. The distance guard
+        // reads player.getBlockX()>>4 live, so this is consistent with pcx/pcz below.
+        mock.snapTo(8.0, mock.getY(), 8.0);
         var stranger = placeMockServerPlayer(helper);
         var service = new RequestProcessingService(server);
         try {
@@ -92,7 +100,8 @@ public class ServiceLifecycleGameTests {
             int pcz = mock.getBlockZ() >> 4;
             int maxDist = LSSServerConfig.CONFIG.lodDistanceChunks + LSSConstants.LOD_DISTANCE_BUFFER;
             helper.assertTrue(pcx - maxDist < 0 && pcz - maxDist < 0,
-                    "premise: spawn-relative far positions must reach the negative quadrant");
+                    Component.literal("premise: spawn-relative far positions must reach the negative quadrant"
+                            + " (pcx=" + pcx + " pcz=" + pcz + " maxDist=" + maxDist + ")"));
 
             long boundary = PositionUtil.packPosition(pcx + maxDist, pcz);
             long beyondX = PositionUtil.packPosition(pcx + maxDist + 1, pcz);
@@ -106,32 +115,32 @@ public class ServiceLifecycleGameTests {
 
             // The service is never ticked, so the incoming queue is exactly what the guard let through.
             helper.assertTrue(state.getTotalRequestsReceived() == 2,
-                    "only the two boundary positions must pass the distance guard, got "
-                            + state.getTotalRequestsReceived());
+                    Component.literal("only the two boundary positions must pass the distance guard, got "
+                            + state.getTotalRequestsReceived()));
             var it = state.getIncomingRequests().iterator();
-            helper.assertTrue(it.hasNext(), "boundary request must be queued");
+            helper.assertTrue(it.hasNext(), Component.literal("boundary request must be queued"));
             var first = it.next();
             helper.assertTrue(first.cx() == pcx + maxDist && first.cz() == pcz,
-                    "request at exactly lodDistance+buffer must be accepted, got ["
-                            + first.cx() + ", " + first.cz() + "]");
+                    Component.literal("request at exactly lodDistance+buffer must be accepted, got ["
+                            + first.cx() + ", " + first.cz() + "]"));
             helper.assertTrue(first.clientTimestamp() == -1L,
-                    "client timestamp must survive intact, got " + first.clientTimestamp());
-            helper.assertTrue(it.hasNext(), "negative-quadrant boundary request must be queued");
+                    Component.literal("client timestamp must survive intact, got " + first.clientTimestamp()));
+            helper.assertTrue(it.hasNext(), Component.literal("negative-quadrant boundary request must be queued"));
             var second = it.next();
             helper.assertTrue(second.cx() == pcx - maxDist && second.cz() == pcz - maxDist,
-                    "negative-quadrant boundary coords must round-trip exactly (sign bug in "
-                            + "packing or distance), got [" + second.cx() + ", " + second.cz() + "]");
+                    Component.literal("negative-quadrant boundary coords must round-trip exactly (sign bug in "
+                            + "packing or distance), got [" + second.cx() + ", " + second.cz() + "]"));
             helper.assertTrue(second.clientTimestamp() == 12345L,
-                    "negative-quadrant timestamp must survive intact, got " + second.clientTimestamp());
-            helper.assertTrue(!it.hasNext(), "beyond-distance requests must be dropped, not queued");
+                    Component.literal("negative-quadrant timestamp must survive intact, got " + second.clientTimestamp()));
+            helper.assertTrue(!it.hasNext(), Component.literal("beyond-distance requests must be dropped, not queued"));
 
             // Unregistered player: silent no-op — no state created, nothing queued anywhere.
             service.handleBatchRequest(stranger, new BatchChunkRequestC2SPayload(
                     new long[]{boundary}, new long[]{-1L}, 1));
             helper.assertTrue(!service.getPlayers().containsKey(stranger.getUUID()),
-                    "a batch request from an unregistered player must not create state");
+                    Component.literal("a batch request from an unregistered player must not create state"));
             helper.assertTrue(state.getTotalRequestsReceived() == 2,
-                    "an unregistered player's request must not leak into another player's queue");
+                    Component.literal("an unregistered player's request must not leak into another player's queue"));
         } finally {
             service.shutdown();
             playerList.remove(mock);
@@ -168,22 +177,22 @@ public class ServiceLifecycleGameTests {
                     positions, new long[]{-1L, -1L, -1L, -1L, 42L}, 5));
 
             helper.assertTrue(state.getTotalRequestsReceived() == 1,
-                    "only the in-range position passes; the four extremes are gated without "
-                            + "overflow, got " + state.getTotalRequestsReceived());
+                    Component.literal("only the in-range position passes; the four extremes are gated without "
+                            + "overflow, got " + state.getTotalRequestsReceived()));
             var it = state.getIncomingRequests().iterator();
-            helper.assertTrue(it.hasNext(), "the in-range request must be queued");
+            helper.assertTrue(it.hasNext(), Component.literal("the in-range request must be queued"));
             var req = it.next();
             helper.assertTrue(req.cx() == pcx && req.cz() == pcz,
-                    "the surviving request must be the player's own chunk, got ["
-                            + req.cx() + ", " + req.cz() + "]");
-            helper.assertTrue(!it.hasNext(), "no extreme-coord request may slip under the gate");
+                    Component.literal("the surviving request must be the player's own chunk, got ["
+                            + req.cx() + ", " + req.cz() + "]"));
+            helper.assertTrue(!it.hasNext(), Component.literal("no extreme-coord request may slip under the gate"));
 
             // No tick has run, so the gate alone must not have submitted any disk/gen work.
             helper.assertTrue(service.getDiskReader().getPendingResultCount() == 0,
-                    "a gated batch must not submit a disk read for an extreme coord");
+                    Component.literal("a gated batch must not submit a disk read for an extreme coord"));
             var gen = service.getGenerationService();
             helper.assertTrue(gen == null || gen.getActiveCount() == 0,
-                    "a gated batch must not submit generation for an extreme coord");
+                    Component.literal("a gated batch must not submit generation for an extreme coord"));
         } finally {
             service.shutdown();
             playerList.remove(mock);
@@ -205,21 +214,21 @@ public class ServiceLifecycleGameTests {
         var service = new RequestProcessingService(server);
         try {
             service.registerPlayer(mock, LSSConstants.CAPABILITY_VOXEL_COLUMNS);
-            helper.assertTrue(service.getPlayers().containsKey(uuid), "premise: a player is registered");
+            helper.assertTrue(service.getPlayers().containsKey(uuid), Component.literal("premise: a player is registered"));
             helper.assertTrue(service.getDiskReader().getPlayerQueue(uuid) != null,
-                    "premise: the disk-reader queue exists");
+                    Component.literal("premise: the disk-reader queue exists"));
 
             service.shutdown();
-            helper.assertTrue(service.getPlayers().isEmpty(), "shutdown clears the players map");
+            helper.assertTrue(service.getPlayers().isEmpty(), Component.literal("shutdown clears the players map"));
             helper.assertTrue(service.getDiskReader().getPlayerQueue(uuid) == null,
-                    "shutdown tears down the disk-reader result queue");
+                    Component.literal("shutdown tears down the disk-reader result queue"));
             var gen = service.getGenerationService();
             helper.assertTrue(gen == null || gen.getActiveCount() == 0,
-                    "shutdown clears any active generation");
+                    Component.literal("shutdown clears any active generation"));
 
             // The second call (server-stop after a manual shutdown) must not throw or re-break.
             service.shutdown();
-            helper.assertTrue(service.getPlayers().isEmpty(), "a second shutdown stays clean");
+            helper.assertTrue(service.getPlayers().isEmpty(), Component.literal("a second shutdown stays clean"));
         } finally {
             playerList.remove(mock);
         }
@@ -238,73 +247,73 @@ public class ServiceLifecycleGameTests {
             // Registration creates every per-player structure.
             var state = service.registerPlayer(mock, LSSConstants.CAPABILITY_VOXEL_COLUMNS);
             helper.assertTrue(service.getPlayers().containsKey(uuid),
-                    "registered player must appear in the players map");
+                    Component.literal("registered player must appear in the players map"));
             helper.assertTrue(state.hasCompletedHandshake(),
-                    "registerPlayer must complete the handshake");
+                    Component.literal("registerPlayer must complete the handshake"));
             helper.assertTrue(state.getCapabilities() == LSSConstants.CAPABILITY_VOXEL_COLUMNS,
-                    "capabilities from the handshake must be stored");
+                    Component.literal("capabilities from the handshake must be stored"));
             helper.assertTrue(service.getDiskReader().getPlayerQueue(uuid) != null,
-                    "registration must create the disk-reader result queue");
+                    Component.literal("registration must create the disk-reader result queue"));
 
             // computeIfAbsent contract: re-registering an online UUID updates the existing
             // state in place (capability change on re-handshake) and never replaces it.
             var reRegistered = service.registerPlayer(mock, 0);
             helper.assertTrue(reRegistered == state,
-                    "re-registering an online player must return the SAME state, not wipe it");
+                    Component.literal("re-registering an online player must return the SAME state, not wipe it"));
             helper.assertTrue(state.getCapabilities() == 0,
-                    "re-registration must apply the new capabilities to the existing state");
+                    Component.literal("re-registration must apply the new capabilities to the existing state"));
             helper.assertTrue(state.hasCompletedHandshake(),
-                    "re-registration must keep the handshake complete");
+                    Component.literal("re-registration must keep the handshake complete"));
 
             // Seed an in-flight generation, then removePlayer must clean every structure.
             // No tick() runs between submit and remove, so the entry cannot complete first.
             var gen = service.getGenerationService();
             helper.assertTrue(gen != null,
-                    "generation service expected (gametest config has enableChunkGeneration=true)");
+                    Component.literal("generation service expected (gametest config has enableChunkGeneration=true)"));
             int pcx = mock.getBlockX() >> 4;
             int pcz = mock.getBlockZ() >> 4;
             helper.assertTrue(gen.submitGeneration(uuid, level, pcx - GEN_CHUNK_OFFSET, pcz + GEN_CHUNK_OFFSET, 1L),
-                    "a fresh generation service must accept a submission");
-            helper.assertTrue(gen.getActiveCount() == 1, "submission must be tracked as active");
+                    Component.literal("a fresh generation service must accept a submission"));
+            helper.assertTrue(gen.getActiveCount() == 1, Component.literal("submission must be tracked as active"));
 
             service.removePlayer(uuid);
             helper.assertTrue(!service.getPlayers().containsKey(uuid),
-                    "removePlayer must drop the players-map entry");
+                    Component.literal("removePlayer must drop the players-map entry"));
             helper.assertTrue(service.getDiskReader().getPlayerQueue(uuid) == null,
-                    "removePlayer must remove the disk-reader result queue");
+                    Component.literal("removePlayer must remove the disk-reader result queue"));
             helper.assertTrue(gen.getActiveCount() == 0,
-                    "removePlayer must release the player's in-flight generation entry");
+                    Component.literal("removePlayer must release the player's in-flight generation entry"));
             helper.assertTrue(gen.getTotalRemovedInFlight() == 1,
-                    "the released in-flight generation must be booked as removed (or the "
-                            + "submitted/completed accounting never re-balances after a kick)");
+                    Component.literal("the released in-flight generation must be booked as removed (or the "
+                            + "submitted/completed accounting never re-balances after a kick)"));
 
             // After removal the same UUID re-registers with a FRESH state.
             var fresh = service.registerPlayer(mock, LSSConstants.CAPABILITY_VOXEL_COLUMNS);
             helper.assertTrue(fresh != state,
-                    "a removed UUID must re-register with a fresh state object");
+                    Component.literal("a removed UUID must re-register with a fresh state object"));
 
             // Lifecycle polarity: discarded but still in the player list is the death/respawn
             // shape — the session must survive. Removing on isRemoved() alone would wipe every
             // player's LOD session on every death.
             mock.discard();
-            helper.assertTrue(mock.isRemoved(), "premise: discard marks the entity removed");
+            helper.assertTrue(mock.isRemoved(), Component.literal("premise: discard marks the entity removed"));
             helper.assertTrue(playerList.getPlayer(uuid) != null,
-                    "premise: discard must not delist the player");
+                    Component.literal("premise: discard must not delist the player"));
             service.tick();
             service.tick();
             helper.assertTrue(service.getPlayers().containsKey(uuid),
-                    "a discarded-but-listed player must keep its session (death/respawn must not "
-                            + "wipe LOD state)");
+                    Component.literal("a discarded-but-listed player must keep its session (death/respawn must not "
+                            + "wipe LOD state)"));
 
             // Only a delisted player auto-removes — and without any disconnect event, since a
             // direct player-list removal never fires one.
             playerList.remove(mock);
-            helper.assertTrue(playerList.getPlayer(uuid) == null, "premise: player delisted");
+            helper.assertTrue(playerList.getPlayer(uuid) == null, Component.literal("premise: player delisted"));
             service.tick();
             helper.assertTrue(!service.getPlayers().containsKey(uuid),
-                    "one tick must auto-remove a delisted player (disconnect-event-less cleanup)");
+                    Component.literal("one tick must auto-remove a delisted player (disconnect-event-less cleanup)"));
             helper.assertTrue(service.getDiskReader().getPlayerQueue(uuid) == null,
-                    "lifecycle auto-remove must run the same per-player cleanup as removePlayer");
+                    Component.literal("lifecycle auto-remove must run the same per-player cleanup as removePlayer"));
         } finally {
             service.shutdown();
             if (playerList.getPlayer(uuid) != null) {
@@ -328,7 +337,7 @@ public class ServiceLifecycleGameTests {
         var server = level.getServer();
         var liveService = LSSServerNetworking.getRequestService();
         helper.assertTrue(liveService != null,
-                "live RequestProcessingService must be active (save-hook leg depends on it)");
+                Component.literal("live RequestProcessingService must be active (save-hook leg depends on it)"));
 
         var mock = placeMockServerPlayer(helper);
         int pcx = mock.getBlockX() >> 4;
@@ -337,7 +346,7 @@ public class ServiceLifecycleGameTests {
         int cz = pcz - PROBE_CHUNK_OFFSET;
         int maxDist = LSSServerConfig.CONFIG.lodDistanceChunks + LSSConstants.LOD_DISTANCE_BUFFER;
         helper.assertTrue(PositionUtil.chebyshevDistance(cx, cz, pcx, pcz) <= maxDist,
-                "premise: the probe chunk must be inside the request distance guard");
+                Component.literal("premise: the probe chunk must be inside the request distance guard"));
         var chunkPos = new ChunkPos(cx, cz);
         var chunkSource = level.getChunkSource();
         var dim = LSSConstants.DIM_STR_OVERWORLD;
@@ -358,9 +367,9 @@ public class ServiceLifecycleGameTests {
         helper.runAfterDelay(2, () -> {
             var chunk = level.getChunk(cx, cz);
             helper.assertTrue(filter.contentChanged(level, chunk, dim),
-                    "first observation must baseline the virgin filter");
+                    Component.literal("first observation must baseline the virgin filter"));
             helper.assertTrue(!filter.contentChanged(level, chunk, dim),
-                    "identical content must stay quiet once baselined");
+                    Component.literal("identical content must stay quiet once baselined"));
             // Toggle so the edit is a real content change even if a previous run (the gametest
             // world persists) already left stone at this position.
             var edit = level.getBlockState(editPos).is(Blocks.STONE) ? Blocks.COBBLESTONE : Blocks.STONE;
@@ -368,31 +377,31 @@ public class ServiceLifecycleGameTests {
             service.handleBatchRequest(mock, new BatchChunkRequestC2SPayload(
                     new long[]{packed}, new long[]{-1L}, 1));
             helper.assertTrue(state.getTotalRequestsReceived() == 1,
-                    "the in-range request must be accepted");
+                    Component.literal("the in-range request must be accepted"));
         });
 
         var step = new AtomicInteger();
         helper.succeedWhen(() -> {
-            helper.assertTrue(helper.getTick() >= 4, "waiting for the baseline+edit setup");
+            helper.assertTrue(helper.getTick() >= 4, Component.literal("waiting for the baseline+edit setup"));
             switch (step.get()) {
                 case 0 -> {
                     // Manual tick: main thread probes the loaded chunk, processing thread
                     // serves it, the next manual tick's flush sends it to the mock player.
                     service.tick();
                     helper.assertTrue(state.getTotalSectionsSent() >= 1,
-                            "waiting for the probe serve to flush");
+                            Component.literal("waiting for the probe serve to flush"));
                     helper.assertTrue(
                             service.getOffThreadProcessor().getDiagnostics().getTotalInMemory() == 1,
-                            "the serve must come from the in-memory probe, not disk");
+                            Component.literal("the serve must come from the in-memory probe, not disk"));
                     var chunk = level.getChunk(cx, cz);
                     helper.assertTrue(filter.contentChanged(level, chunk, dim),
-                            "a probe serve must NOT seed the dirty filter: the save after the "
+                            Component.literal("a probe serve must NOT seed the dirty filter: the save after the "
                                     + "edit no longer sees a change, swallowing the dirty "
-                                    + "broadcast other clients need");
+                                    + "broadcast other clients need"));
                     helper.assertTrue(!filter.contentChanged(level, chunk, dim),
-                            "the check above must have stored the new hash (filter is live)");
+                            Component.literal("the check above must have stored the new hash (filter is live)"));
                     step.set(1);
-                    helper.assertTrue(false, "no-seed verified, running the live save-hook leg");
+                    helper.assertTrue(false, Component.literal("no-seed verified, running the live save-hook leg"));
                 }
                 case 1 -> {
                     // Live end-to-end: edit → real save → the position must surface in the live
@@ -406,13 +415,13 @@ public class ServiceLifecycleGameTests {
                     level.save(null, true, false);
                     long[] dirty = liveService.getDirtyTracker().drainDirty(dim);
                     helper.assertTrue(containsPosition(dirty, packed),
-                            "a save after a real edit must mark the column dirty end-to-end "
-                                    + "(save hook -> content filter -> dirty tracker)");
+                            Component.literal("a save after a real edit must mark the column dirty end-to-end "
+                                    + "(save hook -> content filter -> dirty tracker)"));
                     chunkSource.removeTicketWithRadius(TicketType.PLAYER_LOADING, chunkPos, 0);
                     service.shutdown();
                     server.getPlayerList().remove(mock);
                 }
-                default -> helper.fail("unexpected probe test step " + step.get());
+                default -> helper.fail(Component.literal("unexpected probe test step " + step.get()));
             }
         });
     }
@@ -447,19 +456,19 @@ public class ServiceLifecycleGameTests {
                     extremes, new long[]{-1L, 0L, 12345L, -1L, 0L, 12345L}, extremes.length));
 
             helper.assertTrue(state.getTotalRequestsReceived() == 0,
-                    "extreme coordinates must be dropped by the distance guard (an overflowed "
+                    Component.literal("extreme coordinates must be dropped by the distance guard (an overflowed "
                             + "Chebyshev distance admits them), got "
-                            + state.getTotalRequestsReceived() + " accepted");
+                            + state.getTotalRequestsReceived() + " accepted"));
             service.tick();
             service.tick();
             helper.assertTrue(state.getHeldSyncSlots() == 0 && state.getHeldGenSlots() == 0,
-                    "gated extremes must never hold a slot");
+                    Component.literal("gated extremes must never hold a slot"));
             helper.assertTrue(service.getDiskReader().getDiag().getSubmittedCount() == 0,
-                    "gated extremes must never reach the disk reader, got "
-                            + service.getDiskReader().getDiag().getSubmittedCount() + " submits");
+                    Component.literal("gated extremes must never reach the disk reader, got "
+                            + service.getDiskReader().getDiag().getSubmittedCount() + " submits"));
             helper.assertTrue(service.getGenerationService() != null
                             && service.getGenerationService().getTotalSubmitted() == 0,
-                    "gated extremes must never reach the generation service");
+                    Component.literal("gated extremes must never reach the generation service"));
         } finally {
             service.shutdown();
             playerList.remove(mock);
@@ -478,15 +487,15 @@ public class ServiceLifecycleGameTests {
     public void startServiceForLanIsIdempotentOnRunningService(GameTestHelper helper) {
         var server = helper.getLevel().getServer();
         var live = LSSServerNetworking.getRequestService();
-        helper.assertTrue(live != null, "premise: the dedicated gametest server runs the live service");
+        helper.assertTrue(live != null, Component.literal("premise: the dedicated gametest server runs the live service"));
 
         LSSServerNetworking.startServiceForLan(server);
         LSSServerNetworking.startServiceForLan(server);
 
         helper.assertTrue(LSSServerNetworking.getRequestService() == live,
-                "startServiceForLan must keep the already-running service instance — a "
+                Component.literal("startServiceForLan must keep the already-running service instance — a "
                         + "replacement would orphan the live service's processing thread and "
-                        + "disk pool and wipe every registered player");
+                        + "disk pool and wipe every registered player"));
         helper.succeed();
     }
 
@@ -507,26 +516,26 @@ public class ServiceLifecycleGameTests {
         try {
             service.registerPlayer(mock, LSSConstants.CAPABILITY_VOXEL_COLUMNS);
             var gen = service.getGenerationService();
-            helper.assertTrue(gen != null, "generation service expected (gametest config)");
+            helper.assertTrue(gen != null, Component.literal("generation service expected (gametest config)"));
             int pcx = mock.getBlockX() >> 4;
             int pcz = mock.getBlockZ() >> 4;
             helper.assertTrue(gen.submitGeneration(uuid, level, pcx - 132, pcz + 132, 1L),
-                    "premise: an in-flight generation entry must exist at shutdown");
-            helper.assertTrue(gen.getActiveCount() == 1, "premise: entry tracked as active");
+                    Component.literal("premise: an in-flight generation entry must exist at shutdown"));
+            helper.assertTrue(gen.getActiveCount() == 1, Component.literal("premise: entry tracked as active"));
 
             service.shutdown();
             helper.assertTrue(service.getPlayers().isEmpty(),
-                    "the first shutdown must clear the players map");
+                    Component.literal("the first shutdown must clear the players map"));
             helper.assertTrue(gen.getActiveCount() == 0,
-                    "the first shutdown must release every in-flight generation entry "
-                            + "(a held entry keeps its chunk force-loaded forever)");
+                    Component.literal("the first shutdown must release every in-flight generation entry "
+                            + "(a held entry keeps its chunk force-loaded forever)"));
             helper.assertTrue(service.getDiskReader().getPlayerQueue(uuid) == null,
-                    "the first shutdown must drop the per-player disk-reader result queue");
+                    Component.literal("the first shutdown must drop the per-player disk-reader result queue"));
 
             try {
                 service.shutdown();
             } catch (Throwable t) {
-                helper.fail("a second shutdown must be a quiet no-op, threw: " + t);
+                helper.fail(Component.literal("a second shutdown must be a quiet no-op, threw: " + t));
             }
         } finally {
             playerList.remove(mock);
@@ -564,70 +573,70 @@ public class ServiceLifecycleGameTests {
                 mockA, service, recorder);
         var state = service.getPlayers().get(uuidA);
         helper.assertTrue(state != null && replies.size() == 1,
-                "premise: first handshake must register and reply");
+                Component.literal("premise: first handshake must register and reply"));
 
         // Seed live work: a held pending slot, a done-bit, and a queued incoming request.
         helper.assertTrue(state.tryAdmit(new PendingRequest(pcx - 148, pcz - 12,
                         RequestType.SYNC, SlotType.SYNC_ON_LOAD, false)),
-                "premise: pending seeded");
+                Component.literal("premise: pending seeded"));
         state.markDiskReadDone(pcx - 148, pcz - 13);
         state.addRequest(PositionUtil.packPosition(pcx - 149, pcz - 12), -1L);
-        helper.assertTrue(state.getTotalRequestsReceived() == 1, "premise: request queued");
+        helper.assertTrue(state.getTotalRequestsReceived() == 1, Component.literal("premise: request queued"));
 
         // Duplicate handshake: same instance, work survives, config re-sent.
         LSSServerNetworking.handleHandshake(
                 new HandshakeC2SPayload(LSSConstants.PROTOCOL_VERSION, LSSConstants.CAPABILITY_VOXEL_COLUMNS),
                 mockA, service, recorder);
         helper.assertTrue(service.getPlayers().get(uuidA) == state,
-                "a duplicate handshake must reuse the SAME state (a replacement wipes pendings)");
+                Component.literal("a duplicate handshake must reuse the SAME state (a replacement wipes pendings)"));
         helper.assertTrue(replies.size() == 2,
-                "a duplicate handshake must re-send the session config, got " + replies.size());
+                Component.literal("a duplicate handshake must re-send the session config, got " + replies.size()));
         helper.assertTrue(state.getHeldSyncSlots() == 1
                         && state.hasPendingRequest(pcx - 148, pcz - 12)
                         && state.hasDiskReadDone(pcx - 148, pcz - 13)
                         && state.getTotalRequestsReceived() == 1,
-                "pendings, done-bits, and queued requests must survive a duplicate handshake");
+                Component.literal("pendings, done-bits, and queued requests must survive a duplicate handshake"));
 
         // caps=0 through the receiver: reply-no-register leaves the registration untouched.
         LSSServerNetworking.handleHandshake(
                 new HandshakeC2SPayload(LSSConstants.PROTOCOL_VERSION, 0), mockA, service, recorder);
         helper.assertTrue(replies.size() == 3,
-                "a caps=0 re-handshake must still be answered with the session config");
+                Component.literal("a caps=0 re-handshake must still be answered with the session config"));
         helper.assertTrue(service.getPlayers().get(uuidA) == state
                         && state.getCapabilities() == LSSConstants.CAPABILITY_VOXEL_COLUMNS,
-                "the NO_CONSUMER arm must return before registerPlayer: the existing "
-                        + "registration (and its capabilities) stays untouched");
+                Component.literal("the NO_CONSUMER arm must return before registerPlayer: the existing "
+                        + "registration (and its capabilities) stays untouched"));
 
         // Service-level capability update (re-register path): now the router must skip A.
         service.registerPlayer(mockA, 0);
-        helper.assertTrue(state.getCapabilities() == 0, "premise: capabilities updated in place");
+        helper.assertTrue(state.getCapabilities() == 0, Component.literal("premise: capabilities updated in place"));
 
         // Control player proves a routing cycle ran end-to-end while A was skipped.
         var chunkPos = new ChunkPos(pcx - 152, pcz - 16);
         level.getChunkSource().addTicketWithRadius(TicketType.PLAYER_LOADING, chunkPos, 0);
-        level.getChunk(chunkPos.x(), chunkPos.z());
+        level.getChunk(chunkPos.x, chunkPos.z);
         var stateB = service.registerPlayer(mockB, LSSConstants.CAPABILITY_VOXEL_COLUMNS);
-        stateB.addRequest(PositionUtil.packPosition(chunkPos.x(), chunkPos.z()), -1L);
+        stateB.addRequest(PositionUtil.packPosition(chunkPos.x, chunkPos.z), -1L);
 
         helper.succeedWhen(() -> {
             service.tick();
             helper.assertTrue(
                     service.getOffThreadProcessor().getDiagnostics().getTotalInMemory() >= 1,
-                    "waiting for the control player's probe serve (proves routing cycles ran)");
+                    Component.literal("waiting for the control player's probe serve (proves routing cycles ran)"));
             helper.assertTrue(state.getIncomingRequests().iterator().hasNext(),
-                    "a caps=0 player's queued request must stay unconsumed (router skips the "
-                            + "player wholesale)");
+                    Component.literal("a caps=0 player's queued request must stay unconsumed (router skips the "
+                            + "player wholesale)"));
             helper.assertTrue(state.getHeldSyncSlots() == 1
                             && state.hasPendingRequest(pcx - 148, pcz - 12),
-                    "a caps=0 player's pending slot must be neither leaked nor torn down "
-                            + "until disconnect");
+                    Component.literal("a caps=0 player's pending slot must be neither leaked nor torn down "
+                            + "until disconnect"));
 
             // Disconnect is the cleanup boundary: a fresh registration starts clean.
             service.removePlayer(uuidA);
             var fresh = service.registerPlayer(mockA, LSSConstants.CAPABILITY_VOXEL_COLUMNS);
             helper.assertTrue(fresh != state && fresh.getHeldSyncSlots() == 0
                             && !fresh.hasPendingRequest(pcx - 148, pcz - 12),
-                    "disconnect must be the boundary that releases the skipped player's pendings");
+                    Component.literal("disconnect must be the boundary that releases the skipped player's pendings"));
 
             level.getChunkSource().removeTicketWithRadius(TicketType.PLAYER_LOADING, chunkPos, 0);
             service.shutdown();
@@ -655,13 +664,13 @@ public class ServiceLifecycleGameTests {
                     new HandshakeC2SPayload(LSSConstants.PROTOCOL_VERSION, 0),
                     mock, service, replies::add);
             helper.assertTrue(replies.size() == 1,
-                    "a caps=0 handshake must be answered with exactly one session config, got "
-                            + replies.size());
+                    Component.literal("a caps=0 handshake must be answered with exactly one session config, got "
+                            + replies.size()));
             helper.assertTrue(replies.get(0).protocolVersion() == LSSConstants.PROTOCOL_VERSION
                             && replies.get(0).enabled(),
-                    "the reply must advertise the server's protocol version and effective enabled");
+                    Component.literal("the reply must advertise the server's protocol version and effective enabled"));
             helper.assertTrue(!service.getPlayers().containsKey(mock.getUUID()),
-                    "a caps=0 client must NOT be registered (zombie state the router skips forever)");
+                    Component.literal("a caps=0 client must NOT be registered (zombie state the router skips forever)"));
         } finally {
             service.shutdown();
             playerList.remove(mock);
@@ -689,14 +698,14 @@ public class ServiceLifecycleGameTests {
                             LSSConstants.CAPABILITY_VOXEL_COLUMNS),
                     mock, service, replies::add);
             helper.assertTrue(replies.isEmpty(),
-                    "a version-mismatched handshake must produce zero reply frames (any reply "
+                    Component.literal("a version-mismatched handshake must produce zero reply frames (any reply "
                             + "decodes as a DecoderException on the old client and kicks it), got "
-                            + replies.size());
+                            + replies.size()));
             helper.assertTrue(!service.getPlayers().containsKey(uuid),
-                    "a version-mismatched client must not be registered");
+                    Component.literal("a version-mismatched client must not be registered"));
             helper.assertTrue(playerList.getPlayer(uuid) == mock && !mock.isRemoved()
                             && mock.connection != null,
-                    "the mismatch path must leave the player connected and its connection untouched");
+                    Component.literal("the mismatch path must leave the player connected and its connection untouched"));
         } finally {
             service.shutdown();
             playerList.remove(mock);
@@ -718,7 +727,7 @@ public class ServiceLifecycleGameTests {
         var mock = placeMockServerPlayer(helper);
         var service = new RequestProcessingService(server);
         var config = LSSServerConfig.CONFIG;
-        helper.assertTrue(config.enabled, "premise: gametest config runs enabled");
+        helper.assertTrue(config.enabled, Component.literal("premise: gametest config runs enabled"));
 
         int prevLod = config.lodDistanceChunks;
         int prevSync = config.syncOnLoadConcurrencyLimitPerPlayer;
@@ -742,22 +751,22 @@ public class ServiceLifecycleGameTests {
             config.enableChunkGeneration = prevGenEnabled;
         }
         try {
-            helper.assertTrue(replies.size() == 1, "premise: REGISTER handshake must reply once");
+            helper.assertTrue(replies.size() == 1, Component.literal("premise: REGISTER handshake must reply once"));
             var reply = replies.get(0);
             helper.assertTrue(reply.enabled(),
-                    "effectiveEnabled must be true (config enabled + service present)");
+                    Component.literal("effectiveEnabled must be true (config enabled + service present)"));
             helper.assertTrue(reply.lodDistanceChunks() == 251,
-                    "lodDistanceChunks must wire from CONFIG.lodDistanceChunks, got "
-                            + reply.lodDistanceChunks());
+                    Component.literal("lodDistanceChunks must wire from CONFIG.lodDistanceChunks, got "
+                            + reply.lodDistanceChunks()));
             helper.assertTrue(reply.syncOnLoadConcurrencyLimitPerPlayer() == 252,
-                    "syncOnLoadConcurrencyLimitPerPlayer must wire from its own CONFIG field "
+                    Component.literal("syncOnLoadConcurrencyLimitPerPlayer must wire from its own CONFIG field "
                             + "(transposition with the adjacent generation limit compiles), got "
-                            + reply.syncOnLoadConcurrencyLimitPerPlayer());
+                            + reply.syncOnLoadConcurrencyLimitPerPlayer()));
             helper.assertTrue(reply.generationConcurrencyLimitPerPlayer() == 253,
-                    "generationConcurrencyLimitPerPlayer must wire from its own CONFIG field, got "
-                            + reply.generationConcurrencyLimitPerPlayer());
+                    Component.literal("generationConcurrencyLimitPerPlayer must wire from its own CONFIG field, got "
+                            + reply.generationConcurrencyLimitPerPlayer()));
             helper.assertTrue(!reply.generationEnabled(),
-                    "generationEnabled must wire from CONFIG.enableChunkGeneration");
+                    Component.literal("generationEnabled must wire from CONFIG.enableChunkGeneration"));
         } finally {
             service.shutdown();
             playerList.remove(mock);
@@ -785,15 +794,15 @@ public class ServiceLifecycleGameTests {
         int pcx = mock.getBlockX() >> 4;
         int pcz = mock.getBlockZ() >> 4;
         var chunkPos = new ChunkPos(pcx - 140, pcz - 4);
-        long packed = PositionUtil.packPosition(chunkPos.x(), chunkPos.z());
+        long packed = PositionUtil.packPosition(chunkPos.x, chunkPos.z);
         var chunkSource = level.getChunkSource();
         chunkSource.addTicketWithRadius(TicketType.PLAYER_LOADING, chunkPos, 0);
-        level.getChunk(chunkPos.x(), chunkPos.z());
+        level.getChunk(chunkPos.x, chunkPos.z);
 
         var service = new RequestProcessingService(server);
         var state = service.registerPlayer(mock, LSSConstants.CAPABILITY_VOXEL_COLUMNS);
         // Stale done-bit + a ts>0 request: only the frozen-queued clear makes it re-serve.
-        state.markDiskReadDone(chunkPos.x(), chunkPos.z());
+        state.markDiskReadDone(chunkPos.x, chunkPos.z);
         state.addRequest(packed, 5L);
 
         var diag = service.getOffThreadProcessor().getDiagnostics();
@@ -804,9 +813,9 @@ public class ServiceLifecycleGameTests {
                 service.tick();
             }
             helper.assertTrue(diag.getTotalRequestsRouted() == 0,
-                    "a disabled tick must post no snapshot — nothing can route while frozen");
+                    Component.literal("a disabled tick must post no snapshot — nothing can route while frozen"));
             helper.assertTrue(state.getIncomingRequests().iterator().hasNext(),
-                    "the queued request must sit untouched while frozen");
+                    Component.literal("the queued request must sit untouched while frozen"));
             // Event posted while frozen: lossless, must apply before the first resumed routing.
             service.getOffThreadProcessor().clearDiskReadDone(uuid, new long[]{packed});
         } finally {
@@ -816,10 +825,10 @@ public class ServiceLifecycleGameTests {
 
         helper.succeedWhen(() -> {
             helper.assertTrue(diag.getTotalRequestsRouted() == 1,
-                    "the first resumed tick must post the snapshot that routes the frozen request");
+                    Component.literal("the first resumed tick must post the snapshot that routes the frozen request"));
             helper.assertTrue(diag.getTotalInMemory() == 1,
-                    "the frozen done-bit clear must apply BEFORE routing: the ts>0 re-request "
-                            + "must probe-serve (a stale done-bit answers it up-to-date instead)");
+                    Component.literal("the frozen done-bit clear must apply BEFORE routing: the ts>0 re-request "
+                            + "must probe-serve (a stale done-bit answers it up-to-date instead)"));
             chunkSource.removeTicketWithRadius(TicketType.PLAYER_LOADING, chunkPos, 0);
             service.shutdown();
             playerList.remove(mock);
@@ -847,39 +856,39 @@ public class ServiceLifecycleGameTests {
         var state = service.registerPlayer(mock, LSSConstants.CAPABILITY_VOXEL_COLUMNS);
         helper.assertTrue(state.tryAdmit(new PendingRequest(pcx - 144, pcz - 8,
                         RequestType.SYNC, SlotType.SYNC_ON_LOAD, false)),
-                "premise: pending seeded before the respawn");
+                Component.literal("premise: pending seeded before the respawn"));
         state.markDiskReadDone(pcx - 144, pcz - 9);
 
         var fresh = playerList.respawn(mock, true, Entity.RemovalReason.DISCARDED);
-        helper.assertTrue(fresh != mock, "premise: respawn must produce a NEW ServerPlayer instance");
+        helper.assertTrue(fresh != mock, Component.literal("premise: respawn must produce a NEW ServerPlayer instance"));
         helper.assertTrue(playerList.getPlayer(uuid) == fresh,
-                "premise: the player list must hold the respawned instance");
-        helper.assertTrue(mock.isRemoved(), "premise: the old instance is removed");
+                Component.literal("premise: the player list must hold the respawned instance"));
+        helper.assertTrue(mock.isRemoved(), Component.literal("premise: the old instance is removed"));
 
         service.tick();
         helper.assertTrue(service.getPlayers().get(uuid) == state,
-                "the respawn swap must keep the SAME state object (a teardown would wipe the "
-                        + "session on every death)");
+                Component.literal("the respawn swap must keep the SAME state object (a teardown would wipe the "
+                        + "session on every death)"));
         helper.assertTrue(state.getPlayer() == fresh,
-                "the lifecycle pass must swap the state's player reference to the respawned "
-                        + "instance");
+                Component.literal("the lifecycle pass must swap the state's player reference to the respawned "
+                        + "instance"));
         helper.assertTrue(state.getHeldSyncSlots() == 1
                         && state.hasPendingRequest(pcx - 144, pcz - 8)
                         && state.hasDiskReadDone(pcx - 144, pcz - 9),
-                "pendings and done-bits must survive the reference swap");
+                Component.literal("pendings and done-bits must survive the reference swap"));
 
         // A request must now resolve against the NEW reference end-to-end.
         var chunkPos = new ChunkPos(pcx - 144, pcz - 10);
         var chunkSource = level.getChunkSource();
         chunkSource.addTicketWithRadius(TicketType.PLAYER_LOADING, chunkPos, 0);
-        level.getChunk(chunkPos.x(), chunkPos.z());
-        state.addRequest(PositionUtil.packPosition(chunkPos.x(), chunkPos.z()), -1L);
+        level.getChunk(chunkPos.x, chunkPos.z);
+        state.addRequest(PositionUtil.packPosition(chunkPos.x, chunkPos.z), -1L);
 
         helper.succeedWhen(() -> {
             service.tick();
             helper.assertTrue(state.getTotalSectionsSent() >= 1,
-                    "waiting for the post-respawn request to serve through the new player "
-                            + "reference (probe + flush both read state.getPlayer())");
+                    Component.literal("waiting for the post-respawn request to serve through the new player "
+                            + "reference (probe + flush both read state.getPlayer())"));
             chunkSource.removeTicketWithRadius(TicketType.PLAYER_LOADING, chunkPos, 0);
             service.shutdown();
             var listed = playerList.getPlayer(uuid);
@@ -910,8 +919,8 @@ public class ServiceLifecycleGameTests {
         var posK2 = new ChunkPos(pcx - 156, pcz - 21);
         chunkSource.addTicketWithRadius(TicketType.PLAYER_LOADING, posK1, 0);
         chunkSource.addTicketWithRadius(TicketType.PLAYER_LOADING, posK2, 0);
-        level.getChunk(posK1.x(), posK1.z());
-        level.getChunk(posK2.x(), posK2.z());
+        level.getChunk(posK1.x, posK1.z);
+        level.getChunk(posK2.x, posK2.z);
         // The pair must exist on disk: the budget routes them to the disk reader.
         level.save(null, true, false);
 
@@ -923,25 +932,25 @@ public class ServiceLifecycleGameTests {
             state.markDiskReadDone(1_000_000 + i, 77);
             state.addRequest(PositionUtil.packPosition(1_000_000 + i, 77), 5L);
         }
-        state.addRequest(PositionUtil.packPosition(posK1.x(), posK1.z()), -1L);
-        state.addRequest(PositionUtil.packPosition(posK2.x(), posK2.z()), -1L);
+        state.addRequest(PositionUtil.packPosition(posK1.x, posK1.z), -1L);
+        state.addRequest(PositionUtil.packPosition(posK2.x, posK2.z), -1L);
 
         var diag = service.getOffThreadProcessor().getDiagnostics();
         var diskDiag = service.getDiskReader().getDiag();
         helper.succeedWhen(() -> {
             service.tick();
             helper.assertTrue(diskDiag.getSuccessfulReadCount() >= 2 && state.getTotalSectionsSent() >= 2,
-                    "waiting for the disk-served pair to flush (budget remainder must still serve)");
+                    Component.literal("waiting for the disk-served pair to flush (budget remainder must still serve)"));
             helper.assertTrue(diag.getTotalInMemory() == 0,
-                    "the trailing loaded pair must NOT be probe-served: 512 queue entries ahead "
-                            + "of it must exhaust the per-tick probe budget (misses count too)");
+                    Component.literal("the trailing loaded pair must NOT be probe-served: 512 queue entries ahead "
+                            + "of it must exhaust the per-tick probe budget (misses count too)"));
             helper.assertTrue(diskDiag.getSubmittedCount() == 2,
-                    "exactly the budget-excluded pair must reach the disk reader, got "
-                            + diskDiag.getSubmittedCount());
+                    Component.literal("exactly the budget-excluded pair must reach the disk reader, got "
+                            + diskDiag.getSubmittedCount()));
             helper.assertTrue(diag.getTotalRequestsRouted() == 514,
-                    "every request must be routed exactly once, got " + diag.getTotalRequestsRouted());
+                    Component.literal("every request must be routed exactly once, got " + diag.getTotalRequestsRouted()));
             helper.assertTrue(state.getHeldSyncSlots() == 0 && state.getHeldGenSlots() == 0,
-                    "all slots must be free at rest");
+                    Component.literal("all slots must be free at rest"));
             chunkSource.removeTicketWithRadius(TicketType.PLAYER_LOADING, posK1, 0);
             chunkSource.removeTicketWithRadius(TicketType.PLAYER_LOADING, posK2, 0);
             service.shutdown();
@@ -969,12 +978,12 @@ public class ServiceLifecycleGameTests {
         var posD = new ChunkPos(pcx - 164, pcz - 25);
         chunkSource.addTicketWithRadius(TicketType.PLAYER_LOADING, posC, 0);
         chunkSource.addTicketWithRadius(TicketType.PLAYER_LOADING, posD, 0);
-        level.getChunk(posC.x(), posC.z());
-        level.getChunk(posD.x(), posD.z());
+        level.getChunk(posC.x, posC.z);
+        level.getChunk(posD.x, posD.z);
 
         var service = new RequestProcessingService(server);
         var state = service.registerPlayer(mock, LSSConstants.CAPABILITY_VOXEL_COLUMNS);
-        long packedC = PositionUtil.packPosition(posC.x(), posC.z());
+        long packedC = PositionUtil.packPosition(posC.x, posC.z);
         state.addRequest(packedC, -1L);
         // Duplicate re-asks carry ts>0 so their routing outcome (up-to-date off the fresh
         // done-bit) is independent of whether the main-thread flush already sent C's payload.
@@ -985,20 +994,20 @@ public class ServiceLifecycleGameTests {
             state.markDiskReadDone(1_010_000 + i, 88);
             state.addRequest(PositionUtil.packPosition(1_010_000 + i, 88), 5L);
         }
-        state.addRequest(PositionUtil.packPosition(posD.x(), posD.z()), -1L);
+        state.addRequest(PositionUtil.packPosition(posD.x, posD.z), -1L);
 
         var diag = service.getOffThreadProcessor().getDiagnostics();
         var diskDiag = service.getDiskReader().getDiag();
         helper.succeedWhen(() -> {
             service.tick();
             helper.assertTrue(diag.getTotalRequestsRouted() == 516 && state.getTotalSectionsSent() >= 2,
-                    "waiting for all 516 requests to route and both columns to flush");
+                    Component.literal("waiting for all 516 requests to route and both columns to flush"));
             helper.assertTrue(diag.getTotalInMemory() == 2,
-                    "C and D must BOTH probe-serve: duplicate positions must not consume probe "
-                            + "budget (a guard regression pushes D past the 512 cap to disk)");
+                    Component.literal("C and D must BOTH probe-serve: duplicate positions must not consume probe "
+                            + "budget (a guard regression pushes D past the 512 cap to disk)"));
             helper.assertTrue(diskDiag.getSubmittedCount() == 0,
-                    "nothing may reach the disk reader when the dedup guard holds, got "
-                            + diskDiag.getSubmittedCount());
+                    Component.literal("nothing may reach the disk reader when the dedup guard holds, got "
+                            + diskDiag.getSubmittedCount()));
             chunkSource.removeTicketWithRadius(TicketType.PLAYER_LOADING, posC, 0);
             chunkSource.removeTicketWithRadius(TicketType.PLAYER_LOADING, posD, 0);
             service.shutdown();
@@ -1018,27 +1027,27 @@ public class ServiceLifecycleGameTests {
     public void protoChunkSavesAreExcludedFromDirtyMarking(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         var liveService = LSSServerNetworking.getRequestService();
-        helper.assertTrue(liveService != null, "live service required (the save hook feeds it)");
-        var origin = ChunkPos.containing(helper.absolutePos(BlockPos.ZERO));
+        helper.assertTrue(liveService != null, Component.literal("live service required (the save hook feeds it)"));
+        var origin = new ChunkPos(helper.absolutePos(BlockPos.ZERO));
         var dim = LSSConstants.DIM_STR_OVERWORLD;
         var chunkSource = level.getChunkSource();
 
         // Control: a loaded LevelChunk with an edit must mark in the same save pass.
-        var controlPos = new ChunkPos(origin.x() - 172, origin.z() - 32);
-        long controlPacked = PositionUtil.packPosition(controlPos.x(), controlPos.z());
+        var controlPos = new ChunkPos(origin.x - 172, origin.z - 32);
+        long controlPacked = PositionUtil.packPosition(controlPos.x, controlPos.z);
         chunkSource.addTicketWithRadius(TicketType.PLAYER_LOADING, controlPos, 0);
-        level.getChunk(controlPos.x(), controlPos.z());
-        var editPos = new BlockPos(controlPos.x() * 16 + 4, -61, controlPos.z() * 16 + 4);
+        level.getChunk(controlPos.x, controlPos.z);
+        var editPos = new BlockPos(controlPos.x * 16 + 4, -61, controlPos.z * 16 + 4);
         var edit = level.getBlockState(editPos).is(Blocks.STONE) ? Blocks.COBBLESTONE : Blocks.STONE;
         level.setBlock(editPos, edit.defaultBlockState(), 3);
 
         // Proto: per-run salted coords — a previous run's chunk would load already-generated
         // and not be unsaved, making the save pass skip it and the assertion vacuous.
-        int protoCx = origin.x() - 168;
-        int protoCz = origin.z() + (int) Math.floorMod(System.nanoTime(), 64L);
+        int protoCx = origin.x - 168;
+        int protoCz = origin.z + (int) Math.floorMod(System.nanoTime(), 64L);
         var proto = chunkSource.getChunk(protoCx, protoCz, ChunkStatus.STRUCTURE_STARTS, true);
         helper.assertTrue(proto != null && !(proto instanceof LevelChunk),
-                "premise: a STRUCTURE_STARTS chunk must still be a ProtoChunk");
+                Component.literal("premise: a STRUCTURE_STARTS chunk must still be a ProtoChunk"));
         proto.markUnsaved();
         long protoPacked = PositionUtil.packPosition(protoCx, protoCz);
 
@@ -1047,11 +1056,11 @@ public class ServiceLifecycleGameTests {
         level.save(null, true, false);
         long[] dirty = tracker.drainDirty(dim);
         helper.assertTrue(containsPosition(dirty, controlPacked),
-                "premise/control: the edited LevelChunk must mark dirty in this save pass "
-                        + "(proves the save ran and the hook is live)");
+                Component.literal("premise/control: the edited LevelChunk must mark dirty in this save pass "
+                        + "(proves the save ran and the hook is live)"));
         helper.assertTrue(!containsPosition(dirty, protoPacked),
-                "a ProtoChunk save must NOT mark dirty (ChunkMapSaveHook must exclude "
-                        + "generation-stage saves — they have no LOD-servable content)");
+                Component.literal("a ProtoChunk save must NOT mark dirty (ChunkMapSaveHook must exclude "
+                        + "generation-stage saves — they have no LOD-servable content)"));
         chunkSource.removeTicketWithRadius(TicketType.PLAYER_LOADING, controlPos, 0);
         helper.succeed();
     }
@@ -1090,9 +1099,9 @@ public class ServiceLifecycleGameTests {
             helper.assertTrue(encoded > LSSConstants.MAX_SECTIONS_SIZE
                             && encoded - LSSConstants.MAX_SECTIONS_SIZE
                                     <= LSSConstants.ESTIMATED_COLUMN_OVERHEAD_BYTES,
-                    "the largest admissible column must encode to MAX_SECTIONS_SIZE plus at most "
+                    Component.literal("the largest admissible column must encode to MAX_SECTIONS_SIZE plus at most "
                             + "ESTIMATED_COLUMN_OVERHEAD_BYTES of header, got " + encoded
-                            + " bytes (header " + (encoded - LSSConstants.MAX_SECTIONS_SIZE) + ")");
+                            + " bytes (header " + (encoded - LSSConstants.MAX_SECTIONS_SIZE) + ")"));
         } finally {
             buf.release();
         }
@@ -1111,13 +1120,13 @@ public class ServiceLifecycleGameTests {
                     p -> ServerPlayNetworking.send(mock, p));
             if (dropped.length > 0) {
                 // Terminal: retrying would wait on an emptied queue with a misleading message.
-                helper.fail("the largest admissible column was exception-dropped by the real "
-                        + "send path — the wire envelope rejects what the size guard admits");
+                helper.fail(Component.literal("the largest admissible column was exception-dropped by the real "
+                        + "send path — the wire envelope rejects what the size guard admits"));
             }
             helper.assertTrue(state.getTotalSectionsSent() == 1,
-                    "waiting for the bandwidth window to admit the 2 MiB payload");
+                    Component.literal("waiting for the bandwidth window to admit the 2 MiB payload"));
             helper.assertTrue(state.getSendQueueSize() == 0 && !state.hasEnqueuedColumn(packed),
-                    "the flushed column must fully leave the send pipeline");
+                    Component.literal("the flushed column must fully leave the send pipeline"));
             playerList.remove(mock);
         });
     }

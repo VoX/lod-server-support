@@ -5,7 +5,7 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.level.Level;
 
@@ -21,7 +21,7 @@ import net.minecraft.world.level.Level;
 public final class VoxelColumnS2CPayload implements CustomPacketPayload {
 
     public static final CustomPacketPayload.Type<VoxelColumnS2CPayload> TYPE =
-            new CustomPacketPayload.Type<>(Identifier.parse(LSSConstants.CHANNEL_VOXEL_COLUMN));
+            new CustomPacketPayload.Type<>(ResourceLocation.parse(LSSConstants.CHANNEL_VOXEL_COLUMN));
 
     public static final StreamCodec<FriendlyByteBuf, VoxelColumnS2CPayload> CODEC =
             StreamCodec.of(
@@ -60,7 +60,7 @@ public final class VoxelColumnS2CPayload implements CustomPacketPayload {
     private static void write(FriendlyByteBuf buf, VoxelColumnS2CPayload payload) {
         buf.writeInt(payload.chunkX);
         buf.writeInt(payload.chunkZ);
-        buf.writeUtf(payload.dimension.identifier().toString(), LSSConstants.MAX_DIMENSION_STRING_LENGTH);
+        buf.writeUtf(payload.dimension.location().toString(), LSSConstants.MAX_DIMENSION_STRING_LENGTH);
         buf.writeLong(payload.columnTimestamp);
         buf.writeByteArray(payload.sectionBytes);
     }
@@ -69,7 +69,7 @@ public final class VoxelColumnS2CPayload implements CustomPacketPayload {
         int cx = buf.readInt();
         int cz = buf.readInt();
         ResourceKey<Level> dim = ResourceKey.create(Registries.DIMENSION,
-                Identifier.parse(buf.readUtf(LSSConstants.MAX_DIMENSION_STRING_LENGTH)));
+                ResourceLocation.parse(buf.readUtf(LSSConstants.MAX_DIMENSION_STRING_LENGTH)));
         long columnTimestamp = buf.readLong();
         byte[] sectionBytes = buf.readByteArray(LSSConstants.MAX_SECTIONS_SIZE);
 

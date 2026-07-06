@@ -5,15 +5,18 @@ import dev.vox.lss.common.LSSConstants;
 import io.netty.buffer.Unpooled;
 import net.minecraft.core.Holder;
 import net.minecraft.core.RegistryAccess;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtOps;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ChunkMap;
 import net.minecraft.world.level.biome.Biome;
+import net.minecraft.world.level.biome.Biomes;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunkSection;
 import net.minecraft.world.level.chunk.PalettedContainer;
-import net.minecraft.world.level.chunk.PalettedContainerFactory;
 import net.minecraft.world.level.chunk.PalettedContainerRO;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
 
@@ -64,9 +67,17 @@ final class PaperNbtSectionSerializer {
         var statusStr = chunkNbt.getStringOr("Status", null);
         if (statusStr == null || ChunkStatus.byName(statusStr) != ChunkStatus.FULL) return null;
 
-        var factory = PalettedContainerFactory.create(registryAccess);
-        var blockStateCodec = factory.blockStatesContainerCodec();
-        var biomeCodec = factory.biomeContainerCodec();
+        var biomeRegistry = registryAccess.lookupOrThrow(Registries.BIOME);
+        var defaultBiome = biomeRegistry.getOrThrow(Biomes.PLAINS);
+        var biomeHolderMap = biomeRegistry.asHolderIdMap();
+        // 1.21.8 predates PalettedContainerFactory — build the section paletted-container codecs
+        // the pre-1.21.9 way (codecRW for block states, codecRO for biomes).
+        var blockStateCodec = PalettedContainer.codecRW(
+                Block.BLOCK_STATE_REGISTRY, BlockState.CODEC,
+                PalettedContainer.Strategy.SECTION_STATES, Blocks.AIR.defaultBlockState());
+        var biomeCodec = PalettedContainer.codecRO(
+                biomeHolderMap, biomeRegistry.holderByNameCodec(),
+                PalettedContainer.Strategy.SECTION_BIOMES, defaultBiome);
 
         var sectionsTag = chunkNbt.getList("sections");
         if (sectionsTag.isEmpty()) return null;
@@ -84,7 +95,7 @@ final class PaperNbtSectionSerializer {
 
             byte[] blockLightData = sectionTag.getByteArray("BlockLight").orElse(EMPTY);
             var result = parseSection(sectionTag, sectionY, blockStateCodec, biomeCodec,
-                    factory, blockLightData);
+                    defaultBiome, biomeHolderMap, blockLightData);
             if (result != null) {
                 byte[] skyLightData = sectionTag.getByteArray("SkyLight").orElse(EMPTY);
                 parsed.add(new ParsedSection(sectionY, result, blockLightData, skyLightData));
@@ -134,7 +145,8 @@ final class PaperNbtSectionSerializer {
             CompoundTag sectionTag, int sectionY,
             Codec<PalettedContainer<BlockState>> blockStateCodec,
             Codec<PalettedContainerRO<Holder<Biome>>> biomeCodec,
-            PalettedContainerFactory factory,
+            Holder<Biome> defaultBiome,
+            net.minecraft.core.IdMap<Holder<Biome>> biomeHolderMap,
             byte[] blockLightData) {
 
         var blockStatesOpt = sectionTag.getCompound("block_states");
@@ -157,7 +169,9 @@ final class PaperNbtSectionSerializer {
         if (biomes instanceof PalettedContainer<Holder<Biome>> biomeContainer) {
             section = new LevelChunkSection(blockStates, biomeContainer);
         } else {
-            section = new LevelChunkSection(blockStates, factory.createForBiomes());
+            var defaultBiomeContainer = new PalettedContainer<>(
+                    biomeHolderMap, defaultBiome, PalettedContainer.Strategy.SECTION_BIOMES);
+            section = new LevelChunkSection(blockStates, defaultBiomeContainer);
         }
 
         if (section.hasOnlyAir()) {

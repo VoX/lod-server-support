@@ -222,7 +222,7 @@ public class ColumnCacheStore {
     }
 
     private static String dimensionKey(ResourceKey<Level> dimension) {
-        return sanitizeForFilePath(dimension.identifier().toString());
+        return sanitizeForFilePath(dimension.location().toString());
     }
 
     static String sanitizeForFilePath(String name) {

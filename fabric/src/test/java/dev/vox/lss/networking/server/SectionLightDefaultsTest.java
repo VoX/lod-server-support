@@ -19,7 +19,14 @@ import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.chunk.DataLayer;
 import net.minecraft.world.level.chunk.LevelChunkSection;
-import net.minecraft.world.level.chunk.PalettedContainerFactory;
+import com.mojang.serialization.Codec;
+import net.minecraft.core.Holder;
+import net.minecraft.core.Registry;
+import net.minecraft.world.level.biome.Biomes;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.chunk.PalettedContainer;
+import net.minecraft.world.level.chunk.PalettedContainerRO;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -58,7 +65,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class SectionLightDefaultsTest {
 
     private static RegistryAccess REGISTRY_ACCESS;
-    private static PalettedContainerFactory FACTORY;
+    private static Registry<Biome> BIOME_REGISTRY;
 
     @BeforeAll
     static void setup() {
@@ -70,7 +77,18 @@ class SectionLightDefaultsTest {
         src.listElements().forEach(ref -> biomes.register(ref.key(), ref.value(), RegistrationInfo.BUILT_IN));
         biomes.freeze();
         REGISTRY_ACCESS = new RegistryAccess.ImmutableRegistryAccess(List.of(biomes));
-        FACTORY = PalettedContainerFactory.create(REGISTRY_ACCESS);
+        BIOME_REGISTRY = REGISTRY_ACCESS.lookupOrThrow(Registries.BIOME);
+    }
+
+    // 1.21.8 predates PalettedContainerFactory; build the section paletted-container codecs directly.
+    private static Codec<PalettedContainer<BlockState>> blockStatesCodec() {
+        return PalettedContainer.codecRW(Block.BLOCK_STATE_REGISTRY, BlockState.CODEC,
+                PalettedContainer.Strategy.SECTION_STATES, Blocks.AIR.defaultBlockState());
+    }
+
+    private static Codec<PalettedContainerRO<Holder<Biome>>> biomeCodec() {
+        return PalettedContainer.codecRO(BIOME_REGISTRY.asHolderIdMap(), BIOME_REGISTRY.holderByNameCodec(),
+                PalettedContainer.Strategy.SECTION_BIOMES, BIOME_REGISTRY.getOrThrow(Biomes.PLAINS));
     }
 
     // ---- NBT builders (same grammar as NbtSectionSerializerTest) ----
@@ -85,12 +103,12 @@ class SectionLightDefaultsTest {
     }
 
     private CompoundTag sectionNbt(int y, byte[] blockLight, byte[] skyLight) {
-        var sec = new LevelChunkSection(FACTORY);
+        var sec = new LevelChunkSection(BIOME_REGISTRY);
         sec.setBlockState(0, 0, 0, Blocks.STONE.defaultBlockState());
         var s = new CompoundTag();
         s.putInt("Y", y);
-        s.put("block_states", FACTORY.blockStatesContainerCodec().encodeStart(NbtOps.INSTANCE, sec.getStates()).getOrThrow());
-        s.put("biomes", FACTORY.biomeContainerCodec().encodeStart(NbtOps.INSTANCE, sec.getBiomes()).getOrThrow());
+        s.put("block_states", blockStatesCodec().encodeStart(NbtOps.INSTANCE, sec.getStates()).getOrThrow());
+        s.put("biomes", biomeCodec().encodeStart(NbtOps.INSTANCE, sec.getBiomes()).getOrThrow());
         if (blockLight != null) s.putByteArray("BlockLight", blockLight);
         if (skyLight != null) s.putByteArray("SkyLight", skyLight);
         return s;
@@ -115,7 +133,7 @@ class SectionLightDefaultsTest {
             var out = new ArrayList<VoxelColumnData.SectionData>(count);
             for (int i = 0; i < count; i++) {
                 int sectionY = buf.readByte();
-                var section = new LevelChunkSection(FACTORY);
+                var section = new LevelChunkSection(BIOME_REGISTRY);
                 section.read(buf);
                 DataLayer blockLight = null;
                 if (buf.readBoolean()) {
