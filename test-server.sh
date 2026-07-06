@@ -10,26 +10,56 @@ FABRIC_DIR="$SCRIPT_DIR/test-server/fabric"
 PAPER_DIR="$SCRIPT_DIR/test-server/paper"
 FOLIA_DIR="$SCRIPT_DIR/test-server/folia"
 
-# --- Fabric versions ---
-FABRIC_MC_VERSION="26.2"
+# --- Fabric versions (support/mc1.21.8 line) ---
+FABRIC_MC_VERSION="1.21.8"
 FABRIC_LOADER_VERSION="0.19.3"
 FABRIC_INSTALLER_VERSION="1.1.1"
 
 # --- Paper/Folia versions ---
-PAPER_MC_VERSION="26.2"
-FOLIA_MC_VERSION="26.2"
+PAPER_MC_VERSION="1.21.8"
+FOLIA_MC_VERSION="1.21.8"
 
-# --- Download URLs ---
+# --- Download URLs (pinned to the 1.21.8 builds; fabric-api matches gradle.properties) ---
 FABRIC_SERVER_URL="https://meta.fabricmc.net/v2/versions/loader/${FABRIC_MC_VERSION}/${FABRIC_LOADER_VERSION}/${FABRIC_INSTALLER_VERSION}/server/jar"
-FABRIC_API_URL="https://cdn.modrinth.com/data/P7dR8mSH/versions/Cpy2Px2f/fabric-api-0.154.0%2B26.2.jar"
-C2ME_URL="https://cdn.modrinth.com/data/VSNURh3q/versions/nvOkOiyi/c2me-fabric-mc26.2-0.4.2-alpha.0.9.jar"
+FABRIC_API_URL="https://cdn.modrinth.com/data/P7dR8mSH/versions/g58ofrov/fabric-api-0.136.1%2B1.21.8.jar"
+C2ME_URL="https://cdn.modrinth.com/data/VSNURh3q/versions/EnLnlw6z/c2me-fabric-mc1.21.8-0.3.5%2Balpha.0.9.jar"
 
-# --- Java version check ---
-JAVA_MAJOR=$(java -version 2>&1 | head -1 | sed 's/.*"\([0-9]\+\).*/\1/')
-if [ "$JAVA_MAJOR" -lt 25 ] 2>/dev/null; then
-    echo "ERROR: Java 25+ required for MC 26.2. Found: Java $JAVA_MAJOR" >&2
-    echo "  Set JAVA_HOME to a JDK 25+ installation." >&2
-    exit 1
+# --- Java: MC 1.21.8 targets Java 21 ---
+# This script needs a Java 21 JDK specifically (not merely 21+): Paper's 1.21.8 dev bundle pins a
+# remapper (codebook 1.0.15) that cannot parse Java 25 class files, so ':paper:shadowJar' fails
+# under Java 25, and Paper's 1.21.8 runtime is validated on Java 21. Auto-detect a Java 21 home and
+# use it for both the Gradle builds and the servers; override with JAVA21_HOME=/path/to/jdk-21.
+detect_java21() {
+    if [ -n "${JAVA21_HOME:-}" ] && [ -x "${JAVA21_HOME}/bin/java" ]; then echo "$JAVA21_HOME"; return; fi
+    local c
+    for c in /usr/lib/jvm/java-21-openjdk-amd64 /usr/lib/jvm/temurin-21-jdk-amd64 \
+             /usr/lib/jvm/jdk-21* /usr/lib/jvm/java-21* "$HOME"/.sdkman/candidates/java/21*; do
+        if [ -x "$c/bin/java" ] && "$c/bin/java" -version 2>&1 | head -1 | grep -q '"21'; then
+            echo "$c"; return
+        fi
+    done
+    echo ""
+}
+JAVA21_HOME="$(detect_java21)"
+if [ -n "$JAVA21_HOME" ]; then
+    JAVA_BIN="$JAVA21_HOME/bin/java"
+    GRADLE_JAVA_ARG="-Dorg.gradle.java.home=$JAVA21_HOME"
+    echo "Using Java 21: $JAVA21_HOME"
+else
+    JAVA_BIN="java"
+    GRADLE_JAVA_ARG=""
+    JAVA_MAJOR=$(java -version 2>&1 | head -1 | sed 's/.*"\([0-9]\+\).*/\1/')
+    if [ "$JAVA_MAJOR" -lt 21 ] 2>/dev/null; then
+        echo "ERROR: Java 21+ required for MC 1.21.8. Found: Java $JAVA_MAJOR" >&2
+        echo "  Install a Java 21 JDK or set JAVA21_HOME=/path/to/jdk-21." >&2
+        exit 1
+    fi
+    if [ "$JAVA_MAJOR" -ge 25 ] 2>/dev/null; then
+        echo "WARNING: no Java 21 JDK auto-detected; falling back to Java $JAVA_MAJOR." >&2
+        echo "  Building the Paper jar (:paper:shadowJar) will FAIL under Java 25 — paperweight's" >&2
+        echo "  codebook 1.0.15 cannot parse Java 25 classes. Set JAVA21_HOME=/path/to/jdk-21 for" >&2
+        echo "  Paper/Folia. Fabric-only testing (run-fabric) works fine on Java $JAVA_MAJOR." >&2
+    fi
 fi
 
 # --- Settings ---
@@ -88,7 +118,7 @@ build_fabric_jar() {
     jar="$SCRIPT_DIR/fabric/build/libs/lod-server-support-fabric.jar"
     if [ -n "$force" ] || [ ! -f "$jar" ]; then
         echo "Building Fabric LSS JAR..." >&2
-        (cd "$SCRIPT_DIR" && ./gradlew :fabric:build -x runClientGameTest) >&2
+        (cd "$SCRIPT_DIR" && ./gradlew $GRADLE_JAVA_ARG :fabric:build -x runClientGameTest) >&2
     fi
     echo "$jar"
 }
@@ -98,7 +128,7 @@ build_paper_jar() {
     jar="$SCRIPT_DIR/paper/build/libs/lod-server-support-paper.jar"
     if [ -n "$force" ] || [ ! -f "$jar" ]; then
         echo "Building Paper LSS JAR..." >&2
-        (cd "$SCRIPT_DIR" && ./gradlew :paper:shadowJar) >&2
+        (cd "$SCRIPT_DIR" && ./gradlew $GRADLE_JAVA_ARG :paper:shadowJar) >&2
     fi
     echo "$jar"
 }
@@ -194,7 +224,7 @@ setup_fabric() {
 
 run_fabric() {
     cd "$FABRIC_DIR"
-    java -Xmx${SERVER_RAM} -Xms${SERVER_RAM} -jar fabric-server-launch.jar nogui
+    "$JAVA_BIN" -Xmx${SERVER_RAM} -Xms${SERVER_RAM} -jar fabric-server-launch.jar nogui
 }
 
 # ============================================================
@@ -227,7 +257,7 @@ setup_paper() {
 
 run_paper() {
     cd "$PAPER_DIR"
-    java -Xmx${SERVER_RAM} -Xms${SERVER_RAM} -jar paper.jar nogui
+    "$JAVA_BIN" -Xmx${SERVER_RAM} -Xms${SERVER_RAM} -jar paper.jar nogui
 }
 
 # ============================================================
@@ -274,7 +304,7 @@ run_folia() {
         return 0
     fi
     cd "$FOLIA_DIR"
-    java -Xmx${SERVER_RAM} -Xms${SERVER_RAM} -jar folia.jar nogui
+    "$JAVA_BIN" -Xmx${SERVER_RAM} -Xms${SERVER_RAM} -jar folia.jar nogui
 }
 
 # ============================================================
@@ -296,20 +326,20 @@ run_all() {
     trap 'echo ""; echo "Stopping servers..."; kill "${SERVER_PIDS[@]}" 2>/dev/null; wait "${SERVER_PIDS[@]}" 2>/dev/null; echo "Done."' INT TERM EXIT
 
     cd "$FABRIC_DIR"
-    java -Xmx${SERVER_RAM} -Xms${SERVER_RAM} -jar fabric-server-launch.jar nogui &
+    "$JAVA_BIN" -Xmx${SERVER_RAM} -Xms${SERVER_RAM} -jar fabric-server-launch.jar nogui &
     SERVER_PIDS+=($!)
 
     sleep 2
 
     cd "$PAPER_DIR"
-    java -Xmx${SERVER_RAM} -Xms${SERVER_RAM} -jar paper.jar nogui &
+    "$JAVA_BIN" -Xmx${SERVER_RAM} -Xms${SERVER_RAM} -jar paper.jar nogui &
     SERVER_PIDS+=($!)
 
     sleep 2
 
     if [ -f "$FOLIA_DIR/folia.jar" ]; then
         cd "$FOLIA_DIR"
-        java -Xmx${SERVER_RAM} -Xms${SERVER_RAM} -jar folia.jar nogui &
+        "$JAVA_BIN" -Xmx${SERVER_RAM} -Xms${SERVER_RAM} -jar folia.jar nogui &
         SERVER_PIDS+=($!)
     fi
 
