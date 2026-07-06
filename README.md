@@ -35,9 +35,10 @@ The feature set is also published for older Minecraft versions from long-lived s
   released as `v<version>+mc1.21.11` (supersedes v0.2.3 as the recommended version for this line).
 - **MC 1.21.8** — [`support/mc1.21.8`](https://github.com/VoX/lod-server-support/tree/support/mc1.21.8),
   released as `v<version>+mc1.21.8`. Carries the v0.6.x feature set built for 1.21.8, including
-  experimental Folia (Folia publishes a 1.21.8 build). The in-game config screen is unavailable on
-  this line — Sodium's config API requires Sodium 0.8+, and 1.21.8's newest Sodium is 0.7.3 — but
-  the JSON config files work exactly as on the primary line.
+  experimental Folia (Folia publishes a 1.21.8 build). Needs Java 21 and Fabric Loader 0.16.13+
+  (the floor Fabric API 0.136 requires on 1.21.8). The in-game config screen is unavailable on this
+  line — Sodium's config API requires Sodium 0.8+, and 1.21.8's newest Sodium is 0.7.3 — but the
+  JSON config files work exactly as on the primary line.
 - **MC 1.20.1** — [`support/mc1.20.1`](https://github.com/VoX/lod-server-support/tree/support/mc1.20.1),
   released as `v<version>+mc1.20.1`. **Note:** Voxy has no public 1.20.1 build, so the bundled
   Voxy bridge stays dormant there — this line serves players using a private/self-built Voxy
