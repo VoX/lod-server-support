@@ -1,44 +1,25 @@
 # LOD Server Support
 
-Distributes LOD (Level of Detail) chunk data from servers to connected clients over a custom networking protocol. Built primarily as a multiplayer backend for [Voxy](https://modrinth.com/mod/voxy) — clients request distant chunks in batches, the server reads them from disk or memory and streams the data back, enabling Voxy to render terrain far beyond the vanilla render distance on multiplayer servers.
+Distributes LOD (Level of Detail) chunk data from servers to connected clients over a custom networking protocol. Built primarily as a multiplayer backend for [Voxy](https://modrinth.com/mod/voxy) — clients request distant chunks in batches, the server reads them from disk or memory and streams the data back, enabling Voxy to render terrain far beyond the vanilla render distance on multiplayer servers without the need to travel there first.
 
-Supports **Fabric**, **Paper**, and **Folia** (experimental) servers. The client is always a Fabric mod.
+Supports **Fabric** (client + server) and **Paper / Purpur / Folia** (server only; Folia support is experimental).
 
 https://github.com/user-attachments/assets/721fb344-890e-4e03-ab36-539444427f7b
 
-### Version Compatibility
+## Version Compatibility
 
-| LSS Version | Minecraft | Fabric | Paper | Voxy | Java |
-|---|---|---|---|---|---|
-| **v0.6.x** | **26.2** | Server + Client | Server (Folia pending 26.2) | 0.2.16-beta+ | 25+ |
-| **v0.5.x** | **26.1.x** | Server + Client | Server + Folia (experimental) | 0.2.16-beta+ | 25+ |
-| **v0.5.x+mc1.21.11** | **1.21.11** | Server + Client | Server + Folia (experimental) | 0.2.15-beta+ | 21+ |
-| **v0.5.x+mc1.20.1** | **1.20.1** | Server + Client | Server (no Folia) | — (no public Voxy build) | 17+ |
-| v0.4.x | 26.1.x | Server + Client | Server | 0.2.16-beta+ | 25+ |
-| v0.3.x | 26.1.x | Server + Client | — | 0.2.14-alpha+ | 25+ |
-| v0.2.x | 1.21.11 | Server + Client | Server | 0.2.13-alpha | 21+ |
+Each Minecraft version has its own build; only the latest is listed. Older-MC builds are versioned `v<x.y.z>+mc<version>` and carry the same feature set from long-lived support branches.
 
-v0.6.0 moves the primary Fabric and Paper builds to **Minecraft 26.2**, carrying the
-full v0.5.x feature set with no gameplay changes. Paper server support is built against
-Paper 26.2 and also runs on Purpur. The 26.1.x line stays available at v0.5.1. Several 26.2
-upstreams are still pre-release at the time of writing — Paper and C2ME are in alpha, Sodium
-in beta, and Folia has not yet published a 26.2 build — so treat the 26.2 line as a preview.
+| Minecraft | LSS Version | Fabric | Paper | Folia | Voxy | Java |
+|---|---|---|---|---|---|---|
+| **26.2** | v0.6.1 | ✅ | ✅ | — | 0.2.16-beta+ | 25+ |
+| **26.1.x** | v0.5.1 | ✅ | ✅ | ✅ | 0.2.16-beta+ | 25+ |
+| **1.21.11** | v0.5.0+mc1.21.11 | ✅ | ✅ | ✅ | 0.2.15-beta+ | 21+ |
+| **1.21.8** | v0.6.1+mc1.21.8 | ✅ | ✅ | ✅ | 0.2.5-alpha+ | 21+ |
 
-v0.5.0 adds **Folia** support (experimental — see the Paper Server section) and a set of
-client-sync correctness fixes; after upgrading, clients rebuild their local LOD cache once
-(the cache format changed), so the first rejoin re-syncs from the server.
+Fabric builds are client + server; the Paper plugin is server-only and also runs on Purpur. Folia uses the same plugin JAR (support is experimental). 26.2 has no Folia build yet upstream.
 
-The full v0.5.0 feature set is also published for two older Minecraft versions from
-long-lived support branches:
-
-- **MC 1.21.11** — [`support/mc1.21.11`](https://github.com/VoX/lod-server-support/tree/support/mc1.21.11),
-  released as `v<version>+mc1.21.11` (supersedes v0.2.3 as the recommended version for this line).
-- **MC 1.20.1** — [`support/mc1.20.1`](https://github.com/VoX/lod-server-support/tree/support/mc1.20.1),
-  released as `v<version>+mc1.20.1`. **Note:** Voxy has no public 1.20.1 build, so the bundled
-  Voxy bridge stays dormant there — this line serves players using a private/self-built Voxy
-  port or another LOD renderer integrating via `LSSApi`. Folia is not supported on 1.20.1
-  (only frozen 2023 alpha Folia builds exist and their chunk-loading breaks LSS generation;
-  the plugin declines to load there rather than run degraded).
+On 1.21.8 the in-game config screen is unavailable (it requires Sodium 0.8+, and 1.21.8's newest Sodium is 0.7.3); the JSON config files still work as normal.
 
 ## How It Works
 
@@ -55,62 +36,26 @@ The result: players see fully rendered terrain out to hundreds of chunks on mult
 
 ## Downloads
 
-Download from [Modrinth](https://modrinth.com/plugin/lod-server-support):
-
-- **v0.6.x (MC 26.2):** `lod-server-support-fabric` — Fabric mod JAR (client + server) — and `lod-server-support-paper` — Paper/Purpur server plugin (Folia returns once Folia ships 26.2)
-- **v0.5.x (MC 26.1.x):** `lod-server-support-fabric` — Fabric mod JAR (client + server) — and `lod-server-support-paper` — Paper/Purpur/Folia server plugin
-- **v0.5.x+mc1.21.11 (MC 1.21.11):** the same Fabric + Paper artifacts built for 1.21.11 — the full v0.5.0 feature set (incl. Folia) for the older line
-- **v0.5.x+mc1.20.1 (MC 1.20.1):** the same artifacts built for 1.20.1 (Paper/Purpur only; requires an `LSSApi` consumer — no public Voxy build exists for 1.20.1)
-- **v0.2.x (MC 1.21.11):** `lod-server-support-fabric` + `lod-server-support-paper` — the original 1.21.11 line (superseded by v0.5.x+mc1.21.11)
+All builds are on [Modrinth](https://modrinth.com/plugin/lod-server-support) — pick the file matching your Minecraft version: `lod-server-support-fabric` (the client/server Fabric mod) or `lod-server-support-paper` (the server plugin).
 
 ## Installation
 
 ### Fabric Server
 
-1. Place `lod-server-support-fabric.jar` in the server's `mods/` directory
+1. Place `lod-server-support-fabric.jar` in the server's `mods/` directory (requires Fabric API)
 2. Install the Fabric mod **and** [Voxy](https://modrinth.com/mod/voxy) on all clients
 3. Restart the server — config is generated at `config/lss-server-config.json`
 
 ### Fabric Client
 
-1. Install [Voxy](https://modrinth.com/mod/voxy) and place `lod-server-support-fabric.jar` in the client's `mods/` directory
+1. Install [Voxy](https://modrinth.com/mod/voxy) and place `lod-server-support-fabric.jar` in the client's `mods/` directory (requires Fabric API)
 2. Join a server running LSS — client config is generated at `config/lss-client-config.json`
 
 ### Paper Server
 
-Requires Paper or Purpur for Minecraft 26.2. Folia support returns once Folia publishes a 26.2 build.
-
-1. Place `lod-server-support-paper.jar` in the server's `plugins/` directory
+1. Place `lod-server-support-paper.jar` in the server's `plugins/` directory (Paper or Purpur)
 2. Install the Fabric mod **and** [Voxy](https://modrinth.com/mod/voxy) on all clients
 3. Restart the server — config is generated at `plugins/LodServerSupport/lss-server-config.json`
-
-**Folia notes (experimental, since v0.5.0):** Folia has not yet published a Minecraft 26.2
-build, so Folia support on 26.2 is pending its release; the notes here apply once it ships. The
-same plugin JAR runs on Folia's regionized threading — the request pipeline runs on Folia's
-global region tick. Support is validated by
-an automated single-player soak suite against a real Folia server; busy multi-region servers
-are less tested, so treat it as experimental and report issues. `/reload` is not supported on
-Folia (restart the server instead), and runtime plugin managers (enable/disable without a
-restart) are best-effort.
-
-## Requirements (v0.6.x — MC 26.2)
-
-### Fabric Server
-- Minecraft 26.2
-- Fabric Loader 0.18.4+
-- Fabric API
-- Java 25+
-
-### Paper Server
-- Paper or Purpur for Minecraft 26.2 (Folia, experimental, once Folia publishes 26.2)
-- Java 25+
-
-### Client
-- Minecraft 26.2
-- Fabric Loader 0.18.4+
-- Fabric API
-- [Voxy](https://modrinth.com/mod/voxy) 0.2.16-beta+
-- Java 25+
 
 ## Commands
 
@@ -158,7 +103,6 @@ Client config is generated at `config/lss-client-config.json` on first run.
 |---------|---------|-------------|
 | `receiveServerLods` | `true` | Enable receiving LOD data from the server |
 | `lodDistanceChunks` | `0` | Max LOD request distance in chunks (0 = use server limit) |
-
 
 ## License
 
