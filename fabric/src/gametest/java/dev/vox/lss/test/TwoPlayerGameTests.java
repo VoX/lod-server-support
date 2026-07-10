@@ -363,6 +363,10 @@ public class TwoPlayerGameTests {
                     for (int i = 0; i < intervalTicks; i++) {
                         service.tick();
                     }
+                    step.set(2);
+                    helper.assertTrue(false, "broadcast fired, awaiting both re-serves");
+                }
+                case 2 -> {
                     // Both holders re-request with their stored stamps: only a delivered
                     // fan-out (done-bit cleared + timestamp invalidated, per player) re-serves.
                     // Stamp 1L (not epochSeconds()+N): still >0 so the request claimsData and
@@ -371,12 +375,26 @@ public class TwoPlayerGameTests {
                     // cachedTs <= clientTimestamp(1). A future stamp made this racy on 2-core CI —
                     // whichever holder routed first re-stamped, and the second then short-circuited
                     // to up_to_date off cachedTs(now) <= now+10000, freezing its section count.
-                    stateA.addRequest(packed, 1L);
-                    stateB.addRequest(packed, 1L);
-                    step.set(2);
-                    helper.assertTrue(false, "broadcast fired, awaiting both re-serves");
-                }
-                case 2 -> {
+                    //
+                    // The re-asks are issued HERE and retried like a real client (mirrors step 1):
+                    // a one-shot ask could route before the broadcaster's dirty-clear mailbox
+                    // event applied on the processing thread and terminally resolve up_to_date
+                    // off the stale done-bit (the documented 2-core CI flake, "A=3 B=1"). If the
+                    // fan-out clear never arrives at all, every re-ask keeps bouncing up_to_date
+                    // and the counts stay frozen — the regression this test pins still fails at
+                    // maxTicks. The step-1 guards keep at most one ask in flight per holder, so
+                    // each holder re-serves EXACTLY once.
+                    level.getChunk(chunkPos.x(), chunkPos.z());
+                    if (stateA.getTotalSectionsSent() < 3 && stateA.getIncomingRequestCount() == 0
+                            && !stateA.hasEnqueuedColumn(packed)
+                            && !stateA.hasPendingRequest(chunkPos.x(), chunkPos.z())) {
+                        stateA.addRequest(packed, 1L);
+                    }
+                    if (stateB.getTotalSectionsSent() < 2 && stateB.getIncomingRequestCount() == 0
+                            && !stateB.hasEnqueuedColumn(packed)
+                            && !stateB.hasPendingRequest(chunkPos.x(), chunkPos.z())) {
+                        stateB.addRequest(packed, 1L);
+                    }
                     service.tick();
                     helper.assertTrue(stateA.getTotalSectionsSent() == 3
                                     && stateB.getTotalSectionsSent() == 2,
