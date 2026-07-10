@@ -5,7 +5,7 @@ Distributes LOD (Level of Detail) chunk data from servers to connected clients o
 Supports **Fabric** (client + server) and **Paper / Purpur / Folia**.
 
 > [!IMPORTANT]
-> Install LSS on **both** the server (Fabric mod or Paper plugin) and **every client** (LSS Fabric mod + Voxy).
+> Install **LOD Server Support (LSS)** on **both** the server (Fabric mod or Paper plugin) and **every client** (LSS Fabric mod + Voxy).
 
 https://github.com/user-attachments/assets/721fb344-890e-4e03-ab36-539444427f7b
 
