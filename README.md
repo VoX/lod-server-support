@@ -4,10 +4,33 @@ Distributes LOD (Level of Detail) chunk data from servers to connected clients o
 
 Supports **Fabric** (client + server) and **Paper / Purpur / Folia**.
 
+https://github.com/user-attachments/assets/721fb344-890e-4e03-ab36-539444427f7b
+
+## Downloads
+
+All builds are on [Modrinth](https://modrinth.com/plugin/lod-server-support) — pick the file matching your Minecraft version: `lod-server-support-fabric` (the client/server Fabric mod) or `lod-server-support-paper` (the server plugin).
+
+## Installation
+
 > [!IMPORTANT]
 > Install **LOD Server Support (LSS)** on **both** the server (Fabric mod or Paper plugin) and **every client** (LSS Fabric mod + Voxy).
 
-https://github.com/user-attachments/assets/721fb344-890e-4e03-ab36-539444427f7b
+### Fabric Clients
+
+1. Install [Voxy](https://modrinth.com/mod/voxy) and place `lod-server-support-fabric.jar` in the client's `mods/` directory (requires Fabric API)
+2. Join a server running LSS — client config is generated at `config/lss-client-config.json`
+
+### Fabric Server
+
+1. Place `lod-server-support-fabric.jar` in the server's `mods/` directory (requires Fabric API)
+2. Install the Fabric mod **and** [Voxy](https://modrinth.com/mod/voxy) on all clients
+3. Restart the server — config is generated at `config/lss-server-config.json`
+
+### Paper Server
+
+1. Place `lod-server-support-paper.jar` in the server's `plugins/` directory (Paper or Purpur)
+2. Install the Fabric mod **and** [Voxy](https://modrinth.com/mod/voxy) on all clients
+3. Restart the server — config is generated at `plugins/LodServerSupport/lss-server-config.json`
 
 ## Version Compatibility
 
@@ -36,29 +59,6 @@ Without LSS, Voxy can only build LOD data from chunks the client has already loa
 6. After initial sync, the server pushes notifications when chunks change so clients stay up to date
 
 The result: players see fully rendered terrain out to hundreds of chunks on multiplayer servers, without needing to explore the world first.
-
-## Downloads
-
-All builds are on [Modrinth](https://modrinth.com/plugin/lod-server-support) — pick the file matching your Minecraft version: `lod-server-support-fabric` (the client/server Fabric mod) or `lod-server-support-paper` (the server plugin).
-
-## Installation
-
-### Fabric Server
-
-1. Place `lod-server-support-fabric.jar` in the server's `mods/` directory (requires Fabric API)
-2. Install the Fabric mod **and** [Voxy](https://modrinth.com/mod/voxy) on all clients
-3. Restart the server — config is generated at `config/lss-server-config.json`
-
-### Fabric Client
-
-1. Install [Voxy](https://modrinth.com/mod/voxy) and place `lod-server-support-fabric.jar` in the client's `mods/` directory (requires Fabric API)
-2. Join a server running LSS — client config is generated at `config/lss-client-config.json`
-
-### Paper Server
-
-1. Place `lod-server-support-paper.jar` in the server's `plugins/` directory (Paper or Purpur)
-2. Install the Fabric mod **and** [Voxy](https://modrinth.com/mod/voxy) on all clients
-3. Restart the server — config is generated at `plugins/LodServerSupport/lss-server-config.json`
 
 ## Commands
 
