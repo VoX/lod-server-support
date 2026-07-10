@@ -2,7 +2,7 @@
 
 Distributes LOD (Level of Detail) chunk data from servers to connected clients over a custom networking protocol. Built primarily as a multiplayer backend for [Voxy](https://modrinth.com/mod/voxy) — clients request distant chunks in batches, the server reads them from disk or memory and streams the data back, enabling Voxy to render terrain far beyond the vanilla render distance on multiplayer servers without the need to travel there first.
 
-Supports **Fabric** (client + server) and **Paper / Purpur / Folia**.
+Supports **Fabric** clients and **Fabric**, **Paper**, **Purpur**, **Folia** servers.
 
 https://github.com/user-attachments/assets/721fb344-890e-4e03-ab36-539444427f7b
 
