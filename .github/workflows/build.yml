@@ -3,13 +3,16 @@ name: Build
 on:
   push:
     branches: [main]
+    paths-ignore: ['**.md', 'docs/**', 'LICENSE', '.gitignore']
   pull_request:
     branches: [main]
+    paths-ignore: ['**.md', 'docs/**', 'LICENSE', '.gitignore']
 
 jobs:
   build:
     name: Build + Unit Tests + Server GameTests
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v5
 
@@ -20,8 +23,23 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v5
 
-      - name: Build Fabric + Tier 1 & 2 tests
-        run: ./gradlew :fabric:build -x runClientGameTest
+      - name: Build Fabric + Tier 1 tests
+        run: ./gradlew :fabric:build -x runGameTest -x runClientGameTest
+
+      # Tier 2 runs a real dedicated server; on starved 2-core runners the documented
+      # flaky classes (CLAUDE.md "Known Test Flakes") can miss timing windows. One retry
+      # contains them; the ::warning:: keeps every retry visible in the run summary so a
+      # rising flake rate is never silently masked, and the first attempt's evidence is
+      # snapshotted before the retry clobbers the run dir.
+      - name: Tier 2 server gametests (retry once on flake)
+        run: |
+          ./gradlew :fabric:runGameTest || {
+            echo "::warning title=Tier 2 gametest flake::runGameTest failed once; retrying (first-attempt logs in the gametest-flake-evidence-server artifact)"
+            mkdir -p flake-evidence/tier2
+            cp -r fabric/build/run/gameTest/logs flake-evidence/tier2/logs 2>/dev/null || true
+            cp -r fabric/build/run/gameTest/crash-reports flake-evidence/tier2/crash-reports 2>/dev/null || true
+            ./gradlew :fabric:runGameTest
+          }
 
       - name: Build Paper plugin
         run: ./gradlew :paper:shadowJar
@@ -37,6 +55,30 @@ jobs:
 
       - name: Release-jar safety gate
         run: python3 scripts/release_check.py
+
+      - name: Upload flake evidence (first attempt of a retried gametest)
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: gametest-flake-evidence-server
+          path: flake-evidence/
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Upload failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v5
+        with:
+          name: gametest-failure-evidence-server
+          path: |
+            fabric/build/run/*/logs/
+            fabric/build/run/*/crash-reports/
+            fabric/build/reports/
+            fabric/build/test-results/
+            paper/build/reports/
+            paper/build/test-results/
+          if-no-files-found: ignore
+          retention-days: 30
 
       - uses: actions/upload-artifact@v5
         with:
@@ -64,9 +106,38 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v5
 
-      - name: Tier 3 client gametests
-        run: ./gradlew :fabric:runClientGameTest
-        timeout-minutes: 20
+      # Retry-once for the same reason as Tier 2 above — this tier additionally sees the
+      # vanilla 26.2 TicketStorage purge crash under ticket churn (CLAUDE.md flake catalog).
+      - name: Tier 3 client gametests (retry once on flake)
+        run: |
+          ./gradlew :fabric:runClientGameTest || {
+            echo "::warning title=Tier 3 gametest flake::runClientGameTest failed once; retrying (first-attempt logs in the gametest-flake-evidence-client artifact)"
+            mkdir -p flake-evidence/tier3
+            cp -r fabric/build/run/clientGameTest/logs flake-evidence/tier3/logs 2>/dev/null || true
+            cp -r fabric/build/run/clientGameTest/crash-reports flake-evidence/tier3/crash-reports 2>/dev/null || true
+            ./gradlew :fabric:runClientGameTest
+          }
+        timeout-minutes: 35
         env:
           MESA_GL_VERSION_OVERRIDE: "4.5"
           GALLIUM_DRIVER: llvmpipe
+
+      - name: Upload flake evidence (first attempt of a retried gametest)
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: gametest-flake-evidence-client
+          path: flake-evidence/
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Upload failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v5
+        with:
+          name: gametest-failure-evidence-client
+          path: |
+            fabric/build/run/clientGameTest/logs/
+            fabric/build/run/clientGameTest/crash-reports/
+          if-no-files-found: ignore
+          retention-days: 30

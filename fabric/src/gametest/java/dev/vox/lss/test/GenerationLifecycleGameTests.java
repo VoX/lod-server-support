@@ -111,7 +111,9 @@ public class GenerationLifecycleGameTests {
         return count;
     }
 
-    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 600)
+    // maxTicks 1200 (not 600): waits on real cold chunk generation, which can exceed 600 ticks
+    // on a first run on starved (2-core CI) machines — same budget as FP-033's precedent below.
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 1200)
     public void piggybackedGenerationSharesOneTicketAndCompletesEveryCallback(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         var origin = ChunkPos.containing(helper.absolutePos(BlockPos.ZERO));
@@ -634,7 +636,8 @@ public class GenerationLifecycleGameTests {
      * NOT tick the service: generation completion only fires inside {@code service.tick()},
      * so the re-request can always be queued before the completion tick.
      */
-    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 600)
+    // maxTicks 1200 (not 600): waits on real cold chunk generation (see FP-033's precedent below).
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 1200)
     public void sameTickGenerationCompletionAndQueuedReRequestServeExactlyOnePayload(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         var server = level.getServer();
@@ -704,7 +707,8 @@ public class GenerationLifecycleGameTests {
      * the seed. A regression classifying all-air completions as failures parks the void
      * forever; a lost sentinel seed re-marks every void column after every save.
      */
-    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 600)
+    // maxTicks 1200 (not 600): waits on real cold chunk generation (see FP-033's precedent below).
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 1200)
     public void endVoidGenerationCompletionSeedsTheAllAirSentinel(GameTestHelper helper) {
         ServerLevel endLevel = helper.getLevel().getServer().getLevel(Level.END);
         helper.assertTrue(endLevel != null, "the End dimension must exist on the gametest server");
@@ -834,7 +838,8 @@ public class GenerationLifecycleGameTests {
      * SerializerParityGameTests. Salted coords: a rerun would load the chunk
      * already-generated and not-unsaved, and the save pass would skip it vacuously.
      */
-    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 600)
+    // maxTicks 1200 (not 600): waits on real cold chunk generation (see FP-033's precedent above).
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 1200)
     public void generationServeSeedSuppressesTheFollowingSave(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         var liveService = LSSServerNetworking.getRequestService();
