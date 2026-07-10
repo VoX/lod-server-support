@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Soak-harness invariant checker (stdlib only). Authoritative contract:
-docs/soak-test-design.md
+docs/planning/soak-test-design.md
 
 Laws (evaluated as deltas between consecutive VERIFIED-QUIESCENT snapshots within
 same-client-run, same-dimension windows; dimension/join boundaries get anomaly checks only):

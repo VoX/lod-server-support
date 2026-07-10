@@ -24,7 +24,7 @@ import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Paper twin of the server-side half of Fabric's BenchmarkMetricsExporter. Emits the
- * exact snapshot schema the soak checker contracts on (docs/soak-test-design.md) so
+ * exact snapshot schema the soak checker contracts on (docs/planning/soak-test-design.md) so
  * scripts/check_soak.py judges Paper runs with zero changes — the key set and value
  * types are pinned by PaperExporterContractTest against the SAME checked-in contract
  * literal as the Fabric exporter (fabric/src/test/resources/exporter-contract/).

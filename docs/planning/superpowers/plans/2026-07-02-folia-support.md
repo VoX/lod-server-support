@@ -10,7 +10,7 @@
 
 **Goal:** The existing Paper plugin (`lod-server-support-paper.jar`) runs correctly on Folia 26.1.2, declared via `folia-supported: true`, validated by unit tests plus a `SOAK_PLATFORM=folia` port of the live soak harness.
 
-**Architecture:** Single jar (no new subproject). Swap the three `BukkitScheduler` sites to `GlobalRegionScheduler` (present in plain Paper's API; main-thread semantics on Paper, global-region thread on Folia — the service keeps its single-pump model). Add a lifecycle mailbox so handshake registration and player-quit removal (which arrive on region threads on Folia) are drained on the pump. Map the soak driver's `save-all` (unregistered on Folia) to an acknowledged no-op with aggressive autosave staging. Spec: `docs/superpowers/specs/2026-07-02-folia-support-design.md`.
+**Architecture:** Single jar (no new subproject). Swap the three `BukkitScheduler` sites to `GlobalRegionScheduler` (present in plain Paper's API; main-thread semantics on Paper, global-region thread on Folia — the service keeps its single-pump model). Add a lifecycle mailbox so handshake registration and player-quit removal (which arrive on region threads on Folia) are drained on the pump. Map the soak driver's `save-all` (unregistered on Folia) to an acknowledged no-op with aggressive autosave staging. Spec: `docs/planning/superpowers/specs/2026-07-02-folia-support-design.md`.
 
 **Tech Stack:** Java 25, Paper API 26.1.2 (`paperweight.paperDevBundle '26.1.2.build.69-stable'`), run-paper 3.0.2 (`runPaper.folia.registerTask()`), JUnit 5 + Mockito, bash soak harness + Python checker.
 

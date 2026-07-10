@@ -24,7 +24,7 @@ import java.util.Map;
  * JOIN event, because a freshly launched headless client takes 30-90s of Gradle/MC boot
  * and absolute offsets would race it. Everything runs on the server main thread.
  *
- * <p>Row schema is the checker contract — see docs/soak-test-design.md.
+ * <p>Row schema is the checker contract — see docs/planning/soak-test-design.md.
  */
 public final class SoakScenarioDriver {
     private static final Path OUTPUT = Path.of("soak-results", "server.jsonl");

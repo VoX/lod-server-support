@@ -238,7 +238,7 @@ The shell script builds the mod, starts a dedicated server (`runBenchmarkServer`
 
 ## Soak Testing
 
-Scenario-driven correctness harness: a real dedicated server + headless client execute a scripted timeline, both sides append JSONL diagnostic snapshots, and a Python checker enforces conservation invariants (request/delivery/generation/disk accounting) plus per-scenario expectations. Gated behind `-Dlss.soak.scenario=<path>` (server) and `-Dlss.soak=true` (client) — never activates in production. Design spec: `docs/soak-test-design.md`.
+Scenario-driven correctness harness: a real dedicated server + headless client execute a scripted timeline, both sides append JSONL diagnostic snapshots, and a Python checker enforces conservation invariants (request/delivery/generation/disk accounting) plus per-scenario expectations. Gated behind `-Dlss.soak.scenario=<path>` (server) and `-Dlss.soak=true` (client) — never activates in production. Design spec: `docs/planning/soak-test-design.md`.
 
 ### Quick Start
 

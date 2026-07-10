@@ -202,7 +202,7 @@ public final class BenchmarkMetricsExporter {
 
     /**
      * Full server diagnostic snapshot keyed by the soak checker contract
-     * (docs/soak-test-design.md). Cumulative counters here are
+     * (docs/planning/soak-test-design.md). Cumulative counters here are
      * service-scoped so they survive per-player state teardown on kick/dimension change.
      * Returns null when the processing service isn't running yet.
      */
