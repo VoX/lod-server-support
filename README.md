@@ -2,7 +2,7 @@
 
 Distributes LOD (Level of Detail) chunk data from servers to connected clients over a custom networking protocol. Built primarily as a multiplayer backend for [Voxy](https://modrinth.com/mod/voxy) — clients request distant chunks in batches, the server reads them from disk or memory and streams the data back, enabling Voxy to render terrain far beyond the vanilla render distance on multiplayer servers without the need to travel there first.
 
-Supports **Fabric** (client + server) and **Paper / Purpur / Folia** (server only; Folia support is experimental).
+Supports **Fabric** (client + server) and **Paper / Purpur / Folia**.
 
 > [!IMPORTANT]
 > Install LSS on **both** the server (Fabric mod or Paper plugin) and **every client** (LSS Fabric mod + Voxy).
@@ -20,7 +20,7 @@ Each Minecraft version has its own build; only the latest is listed. Older-MC bu
 | **1.21.11** | v0.5.0+mc1.21.11 | ✅ | ✅ | ✅ | 0.2.15-beta+ | 21+ |
 | **1.21.8** | v0.6.1+mc1.21.8 | ✅ | ✅ | ✅ | 0.2.5-alpha+ | 21+ |
 
-Fabric builds are client + server; the Paper plugin is server-only and also runs on Purpur. Folia uses the same plugin JAR (support is experimental). 26.2 has no Folia build yet upstream.
+Fabric builds are client + server; the Paper plugin is server-only and also runs on Purpur. Folia uses the same plugin JAR. 26.2 has no Folia build yet upstream.
 
 On 1.21.8 the in-game config screen is unavailable (it requires Sodium 0.8+, and 1.21.8's newest Sodium is 0.7.3); the JSON config files still work as normal.
 
