@@ -2,6 +2,7 @@ package dev.vox.lss.common.processing;
 
 import dev.vox.lss.common.LSSConstants;
 import dev.vox.lss.common.LSSLogger;
+import dev.vox.lss.common.LogThrottle;
 
 import java.util.UUID;
 import java.util.concurrent.ArrayBlockingQueue;
@@ -31,6 +32,13 @@ public abstract class AbstractChunkDiskReader {
 
     private static final AtomicInteger THREAD_COUNTER = new AtomicInteger();
     private static final int QUEUE_CAPACITY_PER_THREAD = 32;
+
+    // Saturation is a normal, self-healing protocol path (the bounced request comes back as
+    // rate-limited and the client retries on a later scan), but while the pool is behind
+    // demand it can reject many reads per second — one WARN per position floods the console
+    // (#32). Aggregate to at most one warning per minute carrying the rejected count;
+    // per-delivery detail stays on the debug path in OffThreadProcessor.
+    private final LogThrottle saturationWarn = new LogThrottle(60_000);
 
     private final ExecutorService executor;
     private final ConcurrentHashMap<UUID, ConcurrentLinkedQueue<ChunkReadResult>> playerResults = new ConcurrentHashMap<>();
@@ -78,7 +86,12 @@ public abstract class AbstractChunkDiskReader {
                 }
             });
         } catch (RejectedExecutionException e) {
-            LSSLogger.warn("Disk reader executor saturated, returning rate-limited for " + chunkX + "," + chunkZ);
+            long rejected = this.saturationWarn.recordAndTryAcquire(System.currentTimeMillis());
+            if (rejected > 0) {
+                LSSLogger.warn("Disk reader saturated: " + rejected + " chunk read(s) bounced as rate-limited"
+                        + " since the last warning — clients retry automatically; raise diskReaderThreads"
+                        + " in lss-server-config.json if this persists");
+            }
             this.diag.recordSaturation();
             this.diag.recordCompleted(0);
             addResult(playerUuid, ChunkReadResult.saturated(playerUuid, chunkX, chunkZ, dimension, submissionOrder));

@@ -126,11 +126,13 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
         this.players = players;
         this.diskReader = diskReader;
         this.generationAvailable = generationAvailable;
-        this.dataDir = dataDir;
+        // normalize(): both platforms derive this from getWorldPath(LevelResource.ROOT), which
+        // ends in "/." and otherwise prints as "./world/./data/..." in every cache log line (#32)
+        this.dataDir = dataDir == null ? null : dataDir.normalize();
         this.timestampCache = new ColumnTimestampCache(
                 ColumnTimestampCache.mbToEntries(perDimensionTimestampCacheSizeMB));
-        if (dataDir != null) {
-            this.timestampCache.load(dataDir);
+        if (this.dataDir != null) {
+            this.timestampCache.load(this.dataDir);
         }
         this.ctx = new ProcessingContext(this.sendActions, this.generationTicketRequests,
                 new ProcessingDiagnostics(), new SequenceCounter());

@@ -210,7 +210,10 @@ public class ColumnTimestampCache {
                 // JsonConfig.save): a torn file on crash is tolerable, the loader discards it.
                 Files.move(tmpFile, file, StandardCopyOption.REPLACE_EXISTING);
             }
-            LSSLogger.info("Saved " + size() + " timestamp cache entries to " + file);
+            // debug, not info: besides the ~5-min periodic save, the invalidation debounce
+            // saves within ~2s of any dirty-broadcast — on a busy server that is a console
+            // line every few seconds (#32). Failures below still WARN.
+            LSSLogger.debug("Saved " + size() + " timestamp cache entries to " + file);
         } catch (IOException e) {
             LSSLogger.warn("Failed to save timestamp cache to " + file, e);
             try { Files.deleteIfExists(tmpFile); } catch (IOException e2) {
