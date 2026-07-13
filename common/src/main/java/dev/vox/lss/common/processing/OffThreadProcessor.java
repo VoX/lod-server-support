@@ -253,6 +253,15 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
                                             long submissionOrder);
 
     /**
+     * True when the disk reader can accept another read without rejecting. The router gates
+     * new (non-deduped) disk submits on this so the pool never saturates into a rejection
+     * (issue #32). Overridable so tests can drive the pool-full path directly.
+     */
+    protected boolean hasDiskReadCapacity() {
+        return this.diskReader == null || this.diskReader.hasReadCapacity();
+    }
+
+    /**
      * Store timestamp and enqueue pre-serialized column data as a payload.
      */
     protected boolean enqueueLoadedColumn(PlayerState state, LoadedColumnData column,

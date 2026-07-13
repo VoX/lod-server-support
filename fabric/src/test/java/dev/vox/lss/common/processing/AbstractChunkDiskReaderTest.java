@@ -234,6 +234,52 @@ class AbstractChunkDiskReaderTest {
                         + d.getErrorCount() + d.getSaturationCount());
     }
 
+    // ---- Capacity gate (B): admission checks headroom before submitting ----
+
+    @Test
+    void maxReadCapacityIsQueuePlusRunning() {
+        // threadCount 1 → queue 32 + 1 running = 33 outstanding before rejection.
+        assertEquals(33, reader.maxReadCapacity());
+    }
+
+    @Test
+    void hasReadCapacityFlipsFalseWhenQueueFullAndTrueAfterDrain() throws Exception {
+        // Pin the single worker on a gated read and fill the 32-slot queue behind it, exactly
+        // as the saturation test does — the 33rd task in flight leaves the queue full.
+        var started = new CountDownLatch(1);
+        var gate = new CountDownLatch(1);
+        reader.submit(player, 0, 0, 1L, () -> {
+            started.countDown();
+            if (!gate.await(10, TimeUnit.SECONDS)) throw new IllegalStateException("gate never opened");
+            return new byte[0];
+        });
+        assertTrue(started.await(5, TimeUnit.SECONDS), "worker occupied");
+        assertTrue(reader.hasReadCapacity(), "queue empty behind the running task — capacity available");
+
+        for (int i = 1; i <= 32; i++) {
+            reader.submit(player, i, 0, 1L + i, () -> {
+                if (!gate.await(10, TimeUnit.SECONDS)) throw new IllegalStateException("gate never opened");
+                return new byte[0];
+            });
+        }
+        assertFalse(reader.hasReadCapacity(), "queue full (32 queued behind 1 running) — no capacity");
+        assertEquals(0, reader.getDiag().getSaturationCount(), "still exactly at capacity, nothing rejected yet");
+
+        gate.countDown();
+        awaitResults(33);
+        assertTrue(reader.hasReadCapacity(), "capacity restored once the queue drains");
+    }
+
+    @Test
+    void capacityAdvisoryFiresOnlyWhenCapExceedsPool() {
+        // maxReadCapacity == 33 here.
+        assertNull(reader.capacityAdvisory(33), "cap equal to pool capacity is consistent — no advisory");
+        assertNull(reader.capacityAdvisory(1), "cap below pool capacity — no advisory");
+        String msg = reader.capacityAdvisory(200);
+        assertNotNull(msg, "cap above pool capacity must advise");
+        assertTrue(msg.contains("200") && msg.contains("33"), "advisory names both the cap and the pool capacity");
+    }
+
     @Test
     void shutDownReaderIsSilent() throws Exception {
         reader.submit(player, 1, 1, 1L, () -> new byte[0]);

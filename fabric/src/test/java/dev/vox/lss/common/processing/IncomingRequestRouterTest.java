@@ -54,10 +54,16 @@ class IncomingRequestRouterTest {
         final ConcurrentLinkedQueue<CapturedPayload> payloads = new ConcurrentLinkedQueue<>();
         volatile boolean failSubmits;
         volatile boolean dropPayloads; // models the platform oversized-payload drop (payloads still records the attempt)
+        volatile boolean diskFull;     // drives the pool-full capacity gate (B) without a real full queue
 
         TestProcessor(Map<UUID, TestState> players, AbstractChunkDiskReader diskReader,
                       boolean generationAvailable, Path dataDir) {
             super(players, diskReader, generationAvailable, dataDir, 1);
+        }
+
+        @Override
+        protected boolean hasDiskReadCapacity() {
+            return !this.diskFull;
         }
 
         @Override
@@ -172,6 +178,70 @@ class IncomingRequestRouterTest {
     }
 
     // ---- Tests ----
+
+    @Test
+    void diskFullBouncesNewSyncRequestBeforeAdmissionAndRecovers(@TempDir Path tempDir) throws Exception {
+        // B: when the pool has no headroom, a fresh (non-deduped) sync request is bounced
+        // rate-limited BEFORE it takes a slot or submits — so the executor never rejects.
+        var players = new ConcurrentHashMap<UUID, TestState>();
+        var p1 = addPlayer(players, 2, 1);
+        var proc = new TestProcessor(players, null, true, tempDir);
+        try {
+            proc.diskFull = true;
+            proc.start();
+            p1.enqueue(new IncomingRequest(1, 0, -1));
+            proc.postSnapshot(snapshot(p1), List.of());
+
+            var delivered = drainUntil(proc, contains(LSSConstants.RESPONSE_RATE_LIMITED, packed(1, 0)));
+            assertEquals(1, delivered.size(), "the only disposition is the rate-limit bounce: " + delivered);
+            assertEquals(1, count(delivered, LSSConstants.RESPONSE_RATE_LIMITED, packed(1, 0)));
+            assertTrue(proc.submits.isEmpty(), "a full pool must NOT submit — that is the rejection we prevent");
+            assertEquals(0, p1.getHeldSyncSlots(), "the bounce takes no slot (gate is before tryAdmit)");
+            assertFalse(p1.hasPendingRequest(1, 0));
+            assertEquals(1, proc.getDiagnostics().getTotalSyncRateLimited());
+
+            // Recovery: with headroom, the same position now submits — proving the bounce left
+            // no phantom dedup group and no held slot behind.
+            proc.diskFull = false;
+            p1.enqueue(new IncomingRequest(1, 0, -1));
+            proc.postSnapshot(snapshot(p1), List.of());
+            waitFor(() -> !proc.submits.isEmpty(), "submit after capacity returns");
+            assertEquals(List.of(packed(1, 0)), submitPositions(proc));
+            assertEquals(1, p1.getHeldSyncSlots(), "the recovered request holds exactly one slot");
+        } finally {
+            proc.shutdown();
+        }
+    }
+
+    @Test
+    void attachedDedupRequestProceedsEvenWhenDiskFull(@TempDir Path tempDir) throws Exception {
+        // B: a request that will ATTACH to an in-flight dedup group adds no pool load, so the
+        // capacity gate must let it through even when the pool is full.
+        var players = new ConcurrentHashMap<UUID, TestState>();
+        var p1 = addPlayer(players, 2, 1);
+        var p2 = addPlayer(players, 2, 1);
+        var proc = new TestProcessor(players, null, true, tempDir);
+        try {
+            proc.start();
+            // p1 creates the group and submits the one disk read (capacity available).
+            p1.enqueue(new IncomingRequest(5, 5, -1));
+            proc.postSnapshot(snapshot(p1, p2), List.of());
+            waitFor(() -> !proc.submits.isEmpty(), "primary submit");
+            assertEquals(List.of(packed(5, 5)), submitPositions(proc));
+
+            // Now the pool is full, but p2 requesting the SAME position attaches to p1's group.
+            proc.diskFull = true;
+            p2.enqueue(new IncomingRequest(5, 5, -1));
+            proc.postSnapshot(snapshot(p1, p2), List.of());
+            waitFor(() -> p2.hasPendingRequest(5, 5), "p2 attaches despite the full pool");
+
+            assertEquals(1, proc.submits.size(), "attach adds no second disk read");
+            assertEquals(1, p2.getHeldSyncSlots(), "p2 holds its own slot for the shared read");
+            assertEquals(0, proc.getDiagnostics().getTotalSyncRateLimited(), "no bounce for the attached read");
+        } finally {
+            proc.shutdown();
+        }
+    }
 
     @Test
     void mixedBatchEveryRequestGetsExactlyOneDisposition(@TempDir Path tempDir) throws Exception {

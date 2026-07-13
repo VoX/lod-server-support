@@ -194,6 +194,15 @@ class IncomingRequestRouter<PS extends AbstractPlayerRequestState<?>> {
         if (type == RequestType.SYNC || this.diskReadingAvailable) {
             // Route through disk reader (with cross-player dedup)
             boolean claimsData = req.clientTimestamp() > 0;
+            // Gate on real pool headroom BEFORE admitting, but only when this request would
+            // actually submit a read — a request that will attach to an in-flight dedup group
+            // adds no pool load and must not be bounced. Checking before tryAdmit avoids taking
+            // (and unwinding) a slot on the bounce. The router is the sole submitter, so a
+            // non-full queue here guarantees the later submit won't reject (issue #32).
+            if (!this.dedupTracker.hasGroup(packed, dimension) && !this.processor.hasDiskReadCapacity()) {
+                rateLimit(state, playerUuid, req, packed, type, dimension);
+                return;
+            }
             if (!state.tryAdmit(new PendingRequest(req.cx(), req.cz(), type, SlotType.SYNC_ON_LOAD, claimsData))) {
                 rateLimit(state, playerUuid, req, packed, type, dimension);
                 return;

@@ -20,7 +20,12 @@ public abstract class ServerConfigBase extends JsonConfig {
     public int generationConcurrencyLimitGlobal = 32;
     public int generationTimeoutSeconds = 60;
     public int dirtyBroadcastIntervalSeconds = 10;
-    public int syncOnLoadConcurrencyLimitPerPlayer = 200;
+    // 128 sits below the default disk-reader capacity (diskReaderThreads 5 × 32 + 5 = 165), so
+    // a single player's in-flight reads never overflow the pool and trigger routine rate-limits
+    // (issue #32). Not a throughput change: 5 reader threads are the bottleneck and 128 in-flight
+    // already keeps them saturated; the old 200 could never all sit in the pool at once. Admission
+    // gates on real pool headroom, so any custom cap-vs-threads mismatch still degrades gracefully.
+    public int syncOnLoadConcurrencyLimitPerPlayer = 128;
     public int generationConcurrencyLimitPerPlayer = 16;
     public int perDimensionTimestampCacheSizeMB = 32;
 

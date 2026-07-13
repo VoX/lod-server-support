@@ -6,6 +6,7 @@ import dev.vox.lss.common.LogThrottle;
 
 import java.util.UUID;
 import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutorService;
@@ -42,6 +43,11 @@ public abstract class AbstractChunkDiskReader {
     private final LogThrottle saturationWarn = new LogThrottle(SATURATION_WARN_INTERVAL_MS);
 
     private final ExecutorService executor;
+    // Direct handle on the executor's work queue so admission can gate on real headroom
+    // (hasReadCapacity) before submitting — the router is the sole submitter and reader
+    // threads only dequeue, so remainingCapacity()>0 guarantees the next submit won't reject.
+    private final BlockingQueue<Runnable> workQueue;
+    private final int maxReadCapacity;
     private final ConcurrentHashMap<UUID, ConcurrentLinkedQueue<ChunkReadResult>> playerResults = new ConcurrentHashMap<>();
     private final AtomicBoolean isShutdown = new AtomicBoolean(false);
 
@@ -49,13 +55,47 @@ public abstract class AbstractChunkDiskReader {
 
     protected AbstractChunkDiskReader(int threadCount) {
         int queueCapacity = threadCount * QUEUE_CAPACITY_PER_THREAD;
+        this.workQueue = new ArrayBlockingQueue<>(queueCapacity);
+        // Reads outstanding before the pool would reject: queueCapacity queued + threadCount
+        // running (once all core threads are busy, submits queue; a full queue rejects).
+        this.maxReadCapacity = queueCapacity + threadCount;
         this.executor = new ThreadPoolExecutor(threadCount, threadCount, 0L, TimeUnit.MILLISECONDS,
-                new ArrayBlockingQueue<>(queueCapacity), r -> {
+                this.workQueue, r -> {
             var thread = new Thread(r, "LSS Disk Reader #" + THREAD_COUNTER.incrementAndGet());
             thread.setDaemon(true);
             thread.setPriority(Thread.MIN_PRIORITY);
             return thread;
         });
+    }
+
+    /**
+     * True when a {@link #submitRead} would NOT be rejected. The executor's only producer is
+     * the single processing thread and its consumers (reader threads) only remove work, so a
+     * non-full queue here means the immediately-following submit is guaranteed a seat. Admission
+     * gates on this so the pool never throws {@link RejectedExecutionException} in normal
+     * operation (issue #32 root cause: the per-player slot cap could exceed pool capacity).
+     */
+    public boolean hasReadCapacity() {
+        return this.workQueue.remainingCapacity() > 0;
+    }
+
+    /** Reads that can be outstanding (queued + running) before the pool would reject. */
+    public int maxReadCapacity() {
+        return this.maxReadCapacity;
+    }
+
+    /**
+     * Startup advisory: returns a warning when the per-player in-flight ceiling exceeds the
+     * whole pool's capacity (a single player can then be routinely rate-limited), or null when
+     * they are consistent. Admission degrades gracefully either way — this only tells the admin
+     * how to align the two knobs.
+     */
+    public String capacityAdvisory(int syncOnLoadConcurrencyLimitPerPlayer) {
+        if (syncOnLoadConcurrencyLimitPerPlayer <= this.maxReadCapacity) return null;
+        return "syncOnLoadConcurrencyLimitPerPlayer (" + syncOnLoadConcurrencyLimitPerPlayer
+                + ") exceeds disk reader capacity (" + this.maxReadCapacity + "): requests above "
+                + this.maxReadCapacity + " are rate-limited until reads drain (clients retry). "
+                + "Raise diskReaderThreads or lower the cap to align them.";
     }
 
     protected boolean isShutdown() {

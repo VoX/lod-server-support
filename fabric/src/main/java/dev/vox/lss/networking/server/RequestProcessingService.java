@@ -74,6 +74,8 @@ public class RequestProcessingService {
         this.dirtyTracker = new DirtyColumnTracker();
 
         this.diskReader = new ChunkDiskReader(config.diskReaderThreads);
+        var advisory = this.diskReader.capacityAdvisory(config.syncOnLoadConcurrencyLimitPerPlayer);
+        if (advisory != null) LSSLogger.warn(advisory);
         if (config.enableChunkGeneration) {
             this.generationService = new ChunkGenerationService(config);
             this.generationService.setDirtyContentFilter(this.dirtyContentFilter);

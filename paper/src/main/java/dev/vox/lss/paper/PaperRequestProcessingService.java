@@ -205,6 +205,8 @@ public class PaperRequestProcessingService {
     private static Wiring productionWiring(MinecraftServer server, Plugin plugin, PaperConfig config) {
         Map<UUID, PaperPlayerRequestState> players = new ConcurrentHashMap<>();
         var diskReader = new PaperChunkDiskReader(config.diskReaderThreads);
+        var advisory = diskReader.capacityAdvisory(config.syncOnLoadConcurrencyLimitPerPlayer);
+        if (advisory != null) LSSLogger.warn(advisory);
         PaperChunkGenerationService generationService = config.enableChunkGeneration
                 ? new PaperChunkGenerationService(config, plugin) : null;
 
