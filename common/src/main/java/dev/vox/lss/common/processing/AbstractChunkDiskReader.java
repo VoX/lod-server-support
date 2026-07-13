@@ -38,7 +38,8 @@ public abstract class AbstractChunkDiskReader {
     // demand it can reject many reads per second — one WARN per position floods the console
     // (#32). Aggregate to at most one warning per minute carrying the rejected count;
     // per-delivery detail stays on the debug path in OffThreadProcessor.
-    private final LogThrottle saturationWarn = new LogThrottle(60_000);
+    private static final long SATURATION_WARN_INTERVAL_MS = 60_000;
+    private final LogThrottle saturationWarn = new LogThrottle(SATURATION_WARN_INTERVAL_MS);
 
     private final ExecutorService executor;
     private final ConcurrentHashMap<UUID, ConcurrentLinkedQueue<ChunkReadResult>> playerResults = new ConcurrentHashMap<>();
@@ -86,7 +87,9 @@ public abstract class AbstractChunkDiskReader {
                 }
             });
         } catch (RejectedExecutionException e) {
-            long rejected = this.saturationWarn.recordAndTryAcquire(System.currentTimeMillis());
+            // nanoTime, not currentTimeMillis: the wall clock can step backwards (NTP), which
+            // would silence the aggregate warning exactly while the pool is behind demand.
+            long rejected = this.saturationWarn.recordAndTryAcquire(System.nanoTime() / 1_000_000);
             if (rejected > 0) {
                 LSSLogger.warn("Disk reader saturated: " + rejected + " chunk read(s) bounced as rate-limited"
                         + " since the last warning — clients retry automatically; raise diskReaderThreads"

@@ -8,7 +8,9 @@ import java.util.concurrent.atomic.AtomicLong;
  * the condition surfaces as soon as it starts; later events stay silent until the interval
  * elapses, then the next event carries the total suppressed since the last release.
  *
- * <p>Thread-safe. Callers supply the clock ({@code nowMs}) so the windowing is testable.
+ * <p>Thread-safe. Callers supply the clock ({@code nowMs}) so the windowing is testable —
+ * use a monotonic source (e.g. {@code System.nanoTime() / 1_000_000}), not the wall clock:
+ * a backwards wall-clock step would silence releases until real time catches back up.
  */
 public final class LogThrottle {
 
