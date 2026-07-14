@@ -61,9 +61,16 @@ public class LodRequestManager {
     // Expanding ring scanner (owns scan cadence + budget policy)
     private final SpiralScanner scanner = new SpiralScanner();
 
+    // Adaptive in-flight sync ceiling (AIMD): replaces the static advertised cap so the client
+    // converges to the server's sustainable throughput instead of re-offering peak pressure.
+    // Created per session from the advertised cap; drives both the drain gate and the scan budget.
+    private AdaptiveConcurrencyWindow syncWindow = new AdaptiveConcurrencyWindow(1);
+    private int windowUpdateCounter;
+
     public void onSessionConfig(SessionConfigS2CPayload config, String serverAddress) {
         this.sessionConfig = config;
         this.serverAddress = serverAddress;
+        this.syncWindow = new AdaptiveConcurrencyWindow(config.syncOnLoadConcurrencyLimitPerPlayer());
         resetRequestState();
         this.lastDimension = null;
         this.cacheLoaded = false;
@@ -149,7 +156,12 @@ public class LodRequestManager {
             this.metrics.pruneRttStampsOutOfRange(playerCx, playerCz, pruneDistance);
             this.lastChunkX = playerCx;
             this.lastChunkZ = playerCz;
-            this.scanner.resetScanCounter();
+            // resetConfirmedRing (NOT resetScanCounter): re-survey from the innermost ring after
+            // moving, but leave the scan cadence running. resetScanCounter zeros the cadence too,
+            // and since movement fires it every chunk crossing, fast travel (elytra/boats/tp) would
+            // reset it faster than it can reach 20 ticks and no scan would ever fire — LODs would
+            // stop loading entirely while moving. The dirty-broadcast path still uses resetScanCounter.
+            this.scanner.resetConfirmedRing();
         }
     }
 
@@ -195,7 +207,7 @@ public class LodRequestManager {
      */
     int tickScanPhase(int playerCx, int playerCz, int viewDistance, int columnQueueSize,
                       IntSupplier missingVanilla) {
-        int scanned = this.scanner.maybeScan(playerCx, playerCz, viewDistance,
+        int scanned = this.scanner.maybeScan(playerCx, playerCz, viewDistance, this.syncWindow.current(),
                 columnQueueSize, haltThreshold(), missingVanilla,
                 this.columns, this.tracker::isInFlight, this.queue);
         if (scanned >= 0) {
@@ -204,6 +216,15 @@ public class LodRequestManager {
             }
             // Timeout sweep: evict stale requests on the scan cadence (even if scan skipped).
             sweepTimeouts();
+        }
+        // Adaptive window: evaluate once per second on an INDEPENDENT counter, NOT the scan
+        // cadence — continuous movement resets the scan counter every chunk crossing, which
+        // would otherwise freeze the window (never grow, never back off) for the whole trip.
+        // A decode-backpressure halt returns before this phase, correctly freezing the window
+        // (no sends → no signals to act on).
+        if (++this.windowUpdateCounter >= LSSConstants.TICKS_PER_SECOND) {
+            this.windowUpdateCounter = 0;
+            this.syncWindow.update();
         }
         return scanned;
     }
@@ -235,7 +256,7 @@ public class LodRequestManager {
         long now = System.nanoTime();
         boolean generationEnabled = this.sessionConfig.generationEnabled();
         int maxGenConcurrency = this.sessionConfig.generationConcurrencyLimitPerPlayer();
-        int maxSyncConcurrency = this.sessionConfig.syncOnLoadConcurrencyLimitPerPlayer();
+        int maxSyncConcurrency = this.syncWindow.current();
         int count = 0;
 
         while (count < maxToSend && this.queue.hasNext()) {
@@ -251,7 +272,11 @@ public class LodRequestManager {
             // Per-type concurrency check — skip if this type is full, try next
             boolean isGen = ts == 0;
             if (isGen && this.tracker.generationCount() >= maxGenConcurrency) { this.queue.skip(); continue; }
-            if (!isGen && (this.tracker.size() - this.tracker.generationCount()) >= maxSyncConcurrency) { this.queue.skip(); continue; }
+            if (!isGen && (this.tracker.size() - this.tracker.generationCount()) >= maxSyncConcurrency) {
+                this.syncWindow.noteWindowLimited(); // saturated: wanted to send but the window is full → eligible to grow
+                this.queue.skip();
+                continue;
+            }
 
             this.queue.skip();
             this.sendPositionBuffer[count] = pos;
@@ -441,8 +466,12 @@ public class LodRequestManager {
     }
 
     public void onRateLimited(long packed) {
-        this.scanner.noteRateLimited(); // backoff regardless of tracking (pre-v16 set skipNextScan outside the gate)
-        if (!this.tracker.isInFlight(packed)) {
+        // Feed the adaptive window only on a SYNC bounce (generation keeps its own static caps).
+        // Classify BEFORE removeByPosition clears the entry; an untracked bounce defaults to sync.
+        boolean tracked = this.tracker.isInFlight(packed);
+        boolean gen = tracked && this.tracker.isGeneration(packed);
+        if (!gen) this.syncWindow.onRateLimited();
+        if (!tracked) {
             this.metrics.discardRttStamp(packed); // untracked terminal answer: stamp is dead (see onColumnNotGenerated)
             this.metrics.recordRateLimited();
             return;
@@ -464,7 +493,7 @@ public class LodRequestManager {
         resetRequestState();
         this.queue.clear();
         this.scanner.resetScanCounter();
-        this.scanner.clearSkipNextScan();
+        this.syncWindow.reset(); // fresh dimension: re-probe capacity optimistically from the cap
         this.cacheLoaded = true;
         startAsyncCacheLoad(newDimension);
     }
@@ -499,6 +528,7 @@ public class LodRequestManager {
         resetRequestState();
         this.queue.clear();
         this.scanner.reset();
+        this.syncWindow.reset(); // parity with scanner.reset(): don't carry a shrunk window across a flush
     }
 
     // --- Test seams ---
@@ -509,6 +539,7 @@ public class LodRequestManager {
     InFlightTracker trackerForTest() { return this.tracker; }
     RequestQueue queueForTest() { return this.queue; }
     SpiralScanner scannerForTest() { return this.scanner; }
+    AdaptiveConcurrencyWindow syncWindowForTest() { return this.syncWindow; }
 
     /** tick() derives this from the client level; tests set it directly. */
     void setLastDimensionForTest(ResourceKey<Level> dimension) { this.lastDimension = dimension; }

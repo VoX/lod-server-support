@@ -83,7 +83,7 @@ class LodRequestManagerTest {
         var columns = new ColumnStateMap();
         var queue = new RequestQueue();
         for (int i = 0; i < LSSConstants.TICKS_PER_SECOND + 1; i++) {
-            int n = scanner.maybeScan(0, 0, 2, 0, 1000, () -> 0, columns, pos -> false, queue);
+            int n = scanner.maybeScan(0, 0, 2, scanner.configuredSyncCap(), 0, 1000, () -> 0, columns, pos -> false, queue);
             if (n >= 0) return n;
         }
         throw new AssertionError("scan cadence never fired");
@@ -107,7 +107,7 @@ class LodRequestManagerTest {
      * the lod distance, so a fired scan queues nothing — pure cadence observation.
      */
     private int maybeScanOnce() {
-        return manager.scannerForTest().maybeScan(0, 0, 64, 0, 1000, () -> 0,
+        return manager.scannerForTest().maybeScan(0, 0, 64, manager.scannerForTest().configuredSyncCap(), 0, 1000, () -> 0,
                 manager.columnsForTest(), pos -> false, manager.queueForTest());
     }
 
@@ -163,14 +163,17 @@ class LodRequestManagerTest {
     }
 
     @Test
-    void untrackedRateLimitedStillLatchesScanBackoff() {
+    void untrackedRateLimitedFeedsTheWindowWithoutSkippingScans() {
         manager.onSessionConfig(config(4, 100, 100, true), "lss-test");
 
-        manager.onRateLimited(POS); // untracked — the gate returns early, but backoff latches first
+        manager.onRateLimited(POS); // untracked — the gate returns early, but the window still counts it
 
+        // Unlike the retired skipNextScan backoff, a bounce no longer skips a scan: the adaptive
+        // window IS the backoff and needs sustained bounces to shrink (tested in
+        // AdaptiveConcurrencyWindowTest / windowShrinksUnderSustainedBounces).
         var scanner = manager.scannerForTest();
-        assertEquals(0, fireScan(scanner), "scan after a rate-limited response is skipped");
-        assertTrue(fireScan(scanner) > 0, "backoff lasts exactly one scan");
+        assertTrue(fireScan(scanner) > 0, "a single rate-limited response no longer skips the next scan");
+        assertEquals(1, manager.getTotalRateLimited());
     }
 
     // ---- dirty crossing an in-flight first serve forces a re-request (#11) ----

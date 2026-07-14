@@ -154,8 +154,9 @@ Chunk coordinates are packed as `((long)chunkX << 32) | (chunkZ & 0xFFFFFFFFL)`.
 
 ### Client-Side
 
-- `LodRequestManager` — orchestrates the client request loop: drip-feeds queued requests each tick, applies in-flight timeouts and rate-limit retries, handles dirty column re-requests and pruning on movement
-- `SpiralScanner` — expanding Chebyshev ring scan (20-tick cadence); owns scan policy: request budget, queue-pressure scaling, rate-limit backoff
+- `LodRequestManager` — orchestrates the client request loop: drip-feeds queued requests each tick, applies in-flight timeouts and rate-limit retries, handles dirty column re-requests and pruning on movement. Owns the `AdaptiveConcurrencyWindow` and evaluates it once per second on a counter independent of the scan cadence (so continuous movement can't freeze it)
+- `AdaptiveConcurrencyWindow` — AIMD congestion window for the in-flight sync ceiling: starts at the server-advertised cap, shrinks ×0.7 on sustained sync rate-limiting, grows additively while saturating the window without pushback (TCP cwnd-limited rule). Drives both the drain-gate limit and the scan-budget base, so the client converges to the server's sustainable throughput instead of re-offering peak pressure. Replaced the old one-scan `skipNextScan` backoff (retired)
+- `SpiralScanner` — expanding Chebyshev ring scan (20-tick cadence); owns scan policy: request budget (base = the adaptive window × 4), queue-pressure scaling, vanilla-load scaling. Movement re-surveys via `resetConfirmedRing` (keeps the cadence) so fast travel no longer suspends LOD loading; the dirty-broadcast path still debounces via `resetScanCounter`
 - `ColumnStateMap` — single owner of per-column client state (timestamps + dirty/retry/validated marks); its `classify` ladder decides whether a position needs a request
 - `InFlightTracker` / `RequestQueue` — pending requests keyed by packed position; accepted-position queue between scanner and sender
 - `ClientColumnProcessor` — off-render-thread decode of received column payloads before dispatch to consumers

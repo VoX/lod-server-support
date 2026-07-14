@@ -26,7 +26,6 @@ class SpiralScanner {
     private int scanRing = 0;
     private int scanTickCounter = LSSConstants.TICKS_PER_SECOND - 1; // starts at max so first scan fires immediately on join
     private int missingVanillaChunks = Integer.MAX_VALUE;
-    private boolean skipNextScan;
 
     // Last scan budget tracking
     private int lastBudget;
@@ -42,10 +41,11 @@ class SpiralScanner {
         this.sessionConfig = sessionConfig;
     }
 
-    /** A rate-limited response arrived — back off by skipping the next scan. */
-    void noteRateLimited() {
-        this.skipNextScan = true;
+    /** The server-advertised sync cap the adaptive window starts from (diagnostics/tests). */
+    int configuredSyncCap() {
+        return this.sessionConfig.syncOnLoadConcurrencyLimitPerPlayer();
     }
+
 
     /**
      * Advance the scan cadence and, when it fires, run a budgeted ring scan that writes
@@ -56,7 +56,7 @@ class SpiralScanner {
      * @return -1 when the cadence did not fire this tick; otherwise the number of queued
      *         positions (0 for a skipped or empty scan)
      */
-    int maybeScan(int playerCx, int playerCz, int viewDistance,
+    int maybeScan(int playerCx, int playerCz, int viewDistance, int syncWindow,
                   int columnQueueSize, int columnQueueHaltThreshold,
                   IntSupplier missingVanilla,
                   ColumnStateMap columns, LongPredicate isInFlight,
@@ -64,15 +64,12 @@ class SpiralScanner {
         if (++this.scanTickCounter < LSSConstants.TICKS_PER_SECOND) return -1;
         this.scanTickCounter = 0;
 
-        if (this.skipNextScan) {
-            this.skipNextScan = false;
-            return 0;
-        }
-
         this.missingVanillaChunks = missingVanilla.getAsInt();
 
-        // Compute scan budget: base × queue-pressure-scale × vanilla-load-scale
-        int budget = this.sessionConfig.syncOnLoadConcurrencyLimitPerPlayer() * BUDGET_MULTIPLIER;
+        // Compute scan budget: base × queue-pressure-scale × vanilla-load-scale. The base tracks
+        // the adaptive in-flight window (not the static cap), so a shrunk window also stops
+        // discovering positions it can't send — no wasted classify work under backoff.
+        int budget = syncWindow * BUDGET_MULTIPLIER;
         if (columnQueueSize > 0) {
             budget = Math.max(1, Math.round(budget * Math.max(0f, 1f - (float) columnQueueSize / columnQueueHaltThreshold)));
         }
@@ -108,6 +105,8 @@ class SpiralScanner {
         queue.ensureCapacity(budget);
         int count = 0;
 
+        // Generation is deliberately un-windowed in v1 (low-volume, its own server caps), so
+        // its scan sub-cap keeps reading the static config value — mirrors the static gen drain gate.
         int genCap = this.sessionConfig.generationConcurrencyLimitPerPlayer() * BUDGET_MULTIPLIER;
 
         int[] chunkCoords = new int[2];
@@ -201,7 +200,6 @@ class SpiralScanner {
         this.missingVanillaChunks = Integer.MAX_VALUE;
         this.cachedVoxyDistance = -1;
         this.voxyDistanceStaleness = 0;
-        this.skipNextScan = false;
     }
 
     void resetScanCounter() {
@@ -220,15 +218,6 @@ class SpiralScanner {
      */
     void resetConfirmedRing() {
         this.confirmedRing = 0;
-    }
-
-    /**
-     * A dimension change discards any pending rate-limit backoff — it belonged to the old
-     * dimension's load. Deliberately NOT part of resetScanCounter(): the movement and
-     * dirty-broadcast paths call that too and must preserve the backoff.
-     */
-    void clearSkipNextScan() {
-        this.skipNextScan = false;
     }
 
     int getEffectiveLodDistance() {

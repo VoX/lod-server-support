@@ -52,6 +52,11 @@ class InFlightTracker {
         return this.generationPositions.size();
     }
 
+    /** Whether an in-flight position is a generation request (ts==0). Query before removal. */
+    boolean isGeneration(long position) {
+        return this.generationPositions.contains(position);
+    }
+
     /**
      * Sweep all timed-out requests, removing them from tracking and reporting each evicted
      * position. Callers MUST mark evictions for retry: while a position is in flight the

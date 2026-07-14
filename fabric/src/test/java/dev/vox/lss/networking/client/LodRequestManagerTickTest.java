@@ -107,74 +107,92 @@ class LodRequestManagerTickTest {
     }
 
     @Test
-    void firstTickOutsideChunkOriginCancelsThePrimedImmediateScan() {
-        // Pinned quirk (tickMovementPhase javadoc): lastChunkX/Z init to (0,0), so a player
-        // joining anywhere else takes the movement branch on tick 1, which restarts the primed
-        // join cadence — the first scan lands a full window after join instead of immediately.
+    void firstTickOutsideChunkOriginKeepsThePrimedImmediateScan() {
+        // Movement now re-surveys via resetConfirmedRing WITHOUT resetting the cadence, so a
+        // player joining off (0,0) — which takes the first-tick movement branch — keeps the
+        // primed immediate scan instead of eating a ~1s cadence-restart delay (the old CL-002 quirk).
         var overworld = dim("overworld");
 
         manager.tickWithContext(10, 0, overworld, 0, 0, () -> 0);
-        assertEquals(0, sent.size(), "tick-1 scan cancelled by the first-tick movement branch");
-        assertEquals(0, manager.getQueueRemaining());
-
-        for (int i = 0; i < LSSConstants.TICKS_PER_SECOND - 2; i++) {
-            manager.tickWithContext(10, 0, overworld, 0, 0, () -> 0);
-        }
-        assertEquals(0, sent.size(), "still inside the restarted cadence window");
-
-        manager.tickWithContext(10, 0, overworld, 0, 0, () -> 0); // 20th tick after the reset
-        assertEquals(1, sent.size(), "the first scan fires one full window after join");
+        assertEquals(1, sent.size(), "the primed first scan fires on tick 1 even when joining off (0,0)");
     }
 
-    // ---- cadence starvation under boundary crossing (CL-003, pinned) ----
+    // ---- movement no longer starves scans or the timeout sweep (CL-003, was a pinned coupling) ----
 
     @Test
-    void chunkBoundaryCrossingFasterThanTheCadenceStarvesScansAndSweepsUntilRest() {
+    void chunkBoundaryCrossingDoesNotStarveScansOrTheTimeoutSweep() {
         var overworld = dim("overworld");
         var tracker = manager.trackerForTest();
         long stale = PositionUtil.packPosition(5, 5);
         tracker.markPending(stale, System.nanoTime() - 11_000L * LSSConstants.NANOS_PER_MS, false);
 
-        // Cross a chunk boundary every 10 ticks for 60 ticks: each crossing restarts the cadence.
+        // Cross a chunk boundary every 10 ticks for 60 ticks. Movement re-surveys (resetConfirmedRing)
+        // but no longer resets the cadence, so the 20-tick scan clock — and the timeout sweep that
+        // rides it — keep firing while moving.
         for (int i = 0; i < 60; i++) {
             int cx = 1 - (i / 10) % 2;
             manager.tickWithContext(cx, 0, overworld, 0, 0, () -> 0);
         }
-        assertEquals(0, sent.size(),
-                "pinned coupling: scans starve while boundary crossings outpace the 20-tick cadence");
-        assertTrue(tracker.isInFlight(stale),
-                "pinned coupling: the timeout sweep rides the scan cadence, so it starves too");
-
-        // Resting at the last position recovers both within one window.
-        for (int i = 0; i < LSSConstants.TICKS_PER_SECOND; i++) {
-            manager.tickWithContext(0, 0, overworld, 0, 0, () -> 0);
-        }
-        assertFalse(tracker.isInFlight(stale), "rest restores the timeout sweep");
+        assertFalse(sent.isEmpty(),
+                "scans keep firing while moving fast — LODs load during travel (the fix)");
+        assertFalse(tracker.isInFlight(stale),
+                "the timeout sweep keeps running too — the stale request is evicted mid-travel");
         assertTrue(manager.columnsForTest().hasRetries(), "the evicted request is marked for retry");
-        assertFalse(sent.isEmpty(), "rest restores scanning");
     }
 
-    // ---- backoff-skipped scans still sweep; backoffs never compound (CL-004 tick leg) ----
+    // ---- rate-limited responses no longer skip scans (CL-004: the window is the backoff) ----
 
     @Test
-    void backoffSkippedScanStillSweepsTimeoutsAndBackoffsDoNotCompound() {
+    void rateLimitedResponsesNoLongerSkipTheScanAndTheSweepStillRuns() {
         var overworld = dim("overworld");
         var tracker = manager.trackerForTest();
         long stale = PositionUtil.packPosition(5, 5);
         tracker.markPending(stale, System.nanoTime() - 11_000L * LSSConstants.NANOS_PER_MS, false);
-        manager.onRateLimited(PositionUtil.packPosition(40, 40)); // latch backoff...
-        manager.onRateLimited(PositionUtil.packPosition(41, 40)); // ...twice (must not compound)
+        manager.onRateLimited(PositionUtil.packPosition(40, 40));
+        manager.onRateLimited(PositionUtil.packPosition(41, 40));
 
-        manager.tickWithContext(0, 0, overworld, 0, 0, () -> 0); // primed cadence fires: skipped scan
-        assertEquals(0, sent.size(), "the backoff skipped the scan");
-        assertEquals(0, manager.getQueueRemaining());
-        assertFalse(tracker.isInFlight(stale), "a skipped scan must still run the timeout sweep");
+        manager.tickWithContext(0, 0, overworld, 0, 0, () -> 0); // primed cadence fires
+        assertFalse(sent.isEmpty(),
+                "a rate-limited response no longer skips the scan — the adaptive window is the backoff");
+        assertFalse(tracker.isInFlight(stale), "the timeout sweep runs on the scan cadence");
         assertTrue(manager.columnsForTest().hasRetries());
+    }
+
+    // ---- adaptive window: independent update cadence + sync-only signal ----
+
+    @Test
+    void syncWindowShrinksUnderSustainedBouncesEvenWhileMovingFast() {
+        var overworld = dim("overworld");
+        var window = manager.syncWindowForTest();
+        int cap = window.current();
+
+        // Continuous movement (cross a boundary every tick) AND sustained sync rate-limiting for
+        // one cadence window. The window update rides an INDEPENDENT counter, so it must still fire
+        // (and shrink) despite the scan cadence being reset on every crossing — the whole point of
+        // decoupling it from maybeScan.
+        for (int i = 0; i < LSSConstants.TICKS_PER_SECOND; i++) {
+            for (int b = 0; b < 10; b++) manager.onRateLimited(PositionUtil.packPosition(1000 + b, i));
+            manager.tickWithContext(i % 2, 0, overworld, 0, 0, () -> 0);
+        }
+        assertTrue(window.current() < cap,
+                "window shrank under sustained bounces even though continuous movement starved the scan cadence");
+    }
+
+    @Test
+    void generationBouncesDoNotShrinkTheSyncWindow() {
+        var overworld = dim("overworld");
+        var window = manager.syncWindowForTest();
+        int cap = window.current();
 
         for (int i = 0; i < LSSConstants.TICKS_PER_SECOND; i++) {
+            for (int b = 0; b < 10; b++) {
+                long p = PositionUtil.packPosition(2000 + b, i);
+                manager.trackerForTest().markPending(p, System.nanoTime(), true); // in-flight GENERATION
+                manager.onRateLimited(p); // classified gen before removal → must NOT feed the sync window
+            }
             manager.tickWithContext(0, 0, overworld, 0, 0, () -> 0);
         }
-        assertFalse(sent.isEmpty(), "two rate-limited responses cost one skipped scan, not two");
+        assertEquals(cap, window.current(), "generation bounces must not move the sync window");
     }
 
     // ---- per-tick send cap derivation (CL-021) ----

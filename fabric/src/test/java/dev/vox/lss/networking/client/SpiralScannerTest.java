@@ -46,7 +46,7 @@ class SpiralScannerTest {
                                 int columnQueueHaltThreshold, int missingVanilla,
                                 ColumnStateMap columns, RequestQueue queue) {
         for (int i = 0; i < LSSConstants.TICKS_PER_SECOND + 1; i++) {
-            int n = s.maybeScan(CX, CZ, viewDistance, columnQueueSize, columnQueueHaltThreshold,
+            int n = s.maybeScan(CX, CZ, viewDistance, s.configuredSyncCap(), columnQueueSize, columnQueueHaltThreshold,
                     () -> missingVanilla, columns, pos -> false, queue);
             if (n >= 0) return n;
         }
@@ -67,7 +67,7 @@ class SpiralScannerTest {
                                     int columnQueueSize, int columnQueueHaltThreshold, int missingVanilla,
                                     ColumnStateMap columns, LongPredicate isInFlight, RequestQueue queue) {
         for (int i = 0; i < LSSConstants.TICKS_PER_SECOND + 1; i++) {
-            int n = s.maybeScan(cx, cz, viewDistance, columnQueueSize, columnQueueHaltThreshold,
+            int n = s.maybeScan(cx, cz, viewDistance, s.configuredSyncCap(), columnQueueSize, columnQueueHaltThreshold,
                     () -> missingVanilla, columns, isInFlight, queue);
             if (n >= 0) return n;
         }
@@ -311,15 +311,6 @@ class SpiralScannerTest {
     }
 
     @Test
-    void rateLimitBackoffSkipsExactlyOneScan() {
-        var s = scanner(4, 100, 100);
-        var queue = new RequestQueue();
-        s.noteRateLimited();
-        assertEquals(0, fireScan(s, 2, new ColumnStateMap(), queue), "backoff scan queues nothing");
-        assertTrue(fireScan(s, 2, new ColumnStateMap(), queue) > 0, "next scan proceeds normally");
-    }
-
-    @Test
     void budgetBoundsQueuedPositions() {
         // budget = syncLimit * 4 = 8 with a huge annulus
         var s = scanner(16, 2, 100);
@@ -390,26 +381,26 @@ class SpiralScannerTest {
     }
 
     @Test
-    void backoffSurvivesMovementResetButNotDimensionChangeClear() {
-        // Movement and dirty-broadcast paths call resetScanCounter() alone; it must
-        // preserve a pending rate-limit backoff.
+    void movementReSurveysFromRingZeroWithoutStoppingScans() {
+        // The movement path calls resetConfirmedRing() (NOT resetScanCounter): it re-surveys
+        // from the innermost ring but leaves the scan cadence running, so LODs keep loading
+        // while moving. A confirmed disc is re-walked on the next steady scan.
+        var columns = new ColumnStateMap();
+        seedSatisfied(columns, 3, 4);
         var s = scanner(4, 100, 100);
         var queue = new RequestQueue();
-        s.noteRateLimited();
-        s.resetScanCounter();
-        assertEquals(0, fireScan(s, 2, new ColumnStateMap(), queue),
-                "backoff still pending after a movement-path reset");
-        assertTrue(fireScan(s, 2, new ColumnStateMap(), queue) > 0, "next scan proceeds normally");
+        assertEquals(0, fireScan(s, 2, columns, queue));
+        assertEquals(5, s.getConfirmedRing(), "precondition: disc confirmed");
 
-        // The dimension-change path additionally calls clearSkipNextScan() — the backoff
-        // belonged to the old dimension's load and must be discarded.
-        s = scanner(4, 100, 100);
-        queue = new RequestQueue();
-        s.noteRateLimited();
-        s.resetScanCounter();
-        s.clearSkipNextScan();
-        assertTrue(fireScan(s, 2, new ColumnStateMap(), queue) > 0,
-                "dimension change discards the pending backoff");
+        long retried = ringPos(4, 0);
+        columns.markRetry(retried);
+        s.resetConfirmedRing(); // the production movement primitive
+
+        assertEquals(0, s.getConfirmedRing(), "movement re-survey zeroes ring confirmation");
+        assertTrue(columns.hasRetries(), "movement preserves in-range retry marks");
+        assertEquals(1, fireScan(s, 2, columns, queue),
+                "the very next scan re-walks the disc and queues the retry — no cadence stall");
+        assertEquals(List.of(retried), drain(queue));
     }
 
     @Test
@@ -466,12 +457,12 @@ class SpiralScannerTest {
 
         // A fresh scanner is primed: the very FIRST cadence call must fire (join burst),
         // not the 20th — the fireScan helper used elsewhere cannot tell those apart.
-        int first = s.maybeScan(CX, CZ, 2, 0, 1000, () -> 0, new ColumnStateMap(), pos -> false, queue);
+        int first = s.maybeScan(CX, CZ, 2, s.configuredSyncCap(), 0, 1000, () -> 0, new ColumnStateMap(), pos -> false, queue);
         assertEquals(8 * 3 + 8 * 4, first, "first maybeScan on a fresh scanner must fire and queue the annulus");
 
         // reset() (new session / flushCache) re-primes: again a single call fires.
         s.reset();
-        int afterReset = s.maybeScan(CX, CZ, 2, 0, 1000, () -> 0, new ColumnStateMap(), pos -> false, queue);
+        int afterReset = s.maybeScan(CX, CZ, 2, s.configuredSyncCap(), 0, 1000, () -> 0, new ColumnStateMap(), pos -> false, queue);
         assertEquals(8 * 3 + 8 * 4, afterReset, "first maybeScan after reset() must fire immediately");
     }
 
@@ -519,24 +510,13 @@ class SpiralScannerTest {
         assertEquals(5, s2.getConfirmedRing(), "confirmation caps at lodDistance+1 when vd overshoots");
     }
 
-    // ---- backoff latch is level-triggered (CL-008) ----
+    // ---- reset matrix: dirty-broadcast / dimension change / disconnect (CL-016) ----
 
     @Test
-    void multipleRateLimitNoticesBeforeOneScanConsumeExactlyOneSkip() {
-        var s = scanner(4, 100, 100);
-        var queue = new RequestQueue();
-        s.noteRateLimited();
-        s.noteRateLimited();
-        s.noteRateLimited();
-        assertEquals(0, fireScan(s, 2, new ColumnStateMap(), queue), "one skipped scan");
-        assertTrue(fireScan(s, 2, new ColumnStateMap(), queue) > 0,
-                "level-triggered latch: N rate-limit notices cost exactly one skip, not N");
-    }
-
-    // ---- reset matrix: movement / dimension change / disconnect (CL-016) ----
-
-    @Test
-    void movementResetZeroesConfirmedRingRestartsCadenceAndKeepsMarks() {
+    void resetScanCounterZeroesConfirmedRingRestartsCadenceAndKeepsMarks() {
+        // resetScanCounter (the dirty-broadcast path) zeroes ring confirmation AND restarts the
+        // 20-tick cadence — a debounce. (The movement path no longer uses it; see
+        // movementReSurveysFromRingZeroWithoutStoppingScans.)
         var columns = new ColumnStateMap();
         seedSatisfied(columns, 3, 4);
         var s = scanner(4, 100, 100);
@@ -545,16 +525,14 @@ class SpiralScannerTest {
         assertEquals(5, s.getConfirmedRing(), "precondition: disc confirmed");
         long retried = ringPos(4, 0);
         columns.markRetry(retried);
-        s.noteRateLimited();
 
-        s.resetScanCounter(); // the movement path (LodRequestManager.tick: prune + resetScanCounter)
+        s.resetScanCounter();
 
         assertEquals(0, s.getConfirmedRing(),
-                "movement reset must zero ring confirmation (SpiralScanner.resetScanCounter)");
-        assertEquals(-1, s.maybeScan(CX, CZ, 2, 0, 1000, () -> 0, columns, p -> false, queue),
+                "resetScanCounter must zero ring confirmation");
+        assertEquals(-1, s.maybeScan(CX, CZ, 2, s.configuredSyncCap(), 0, 1000, () -> 0, columns, p -> false, queue),
                 "resetScanCounter restarts the full 20-tick cadence (a debounce, unlike reset())");
-        assertTrue(columns.hasRetries(), "movement preserves in-range retry marks");
-        assertEquals(0, fireScan(s, 2, columns, queue), "pending rate-limit backoff survives movement");
+        assertTrue(columns.hasRetries(), "reset preserves in-range retry marks");
         assertEquals(1, fireScan(s, 2, columns, queue), "next scan re-walks the disc and queues the retry");
         assertEquals(List.of(retried), drain(queue));
     }
@@ -573,19 +551,17 @@ class SpiralScannerTest {
         assertEquals(4, fireScan(s, 2, columns, queue), "precondition: gen-capped scan");
         assertEquals(4, s.getLastGenQueued());
         columns.markRetry(ringPos(4, 0));
-        s.noteRateLimited();
 
         // The production dimension-change sequence (LodRequestManager.onDimensionChange).
         columns.clear();
         queue.clear();
         s.resetScanCounter();
-        s.clearSkipNextScan();
 
         assertEquals(0, s.getConfirmedRing(), "dimension change must zero ring confirmation");
         assertFalse(columns.hasRetries(), "map clear drops retry marks with the old dimension");
         assertFalse(queue.hasNext(), "the old dimension's queued requests are dropped");
         int n = fireScan(s, 2, columns, queue);
-        assertEquals(8 * 3 + 8 * 4, n, "no backoff pending; the full annulus re-requests as unknown");
+        assertEquals(8 * 3 + 8 * 4, n, "the full annulus re-requests as unknown");
         assertEquals(0, s.getLastGenQueued(), "scan stats recomputed for the fresh scan, never stale");
         assertEquals(n, s.getLastSyncQueued(), "everything re-asks sync after the map clear");
         while (queue.hasNext()) {
@@ -603,7 +579,6 @@ class SpiralScannerTest {
         assertEquals(0, fireScan(s, 2, columns, queue));
         assertEquals(5, s.getConfirmedRing(), "precondition: disc confirmed");
         columns.markRetry(ringPos(3, 5));
-        s.noteRateLimited();
 
         // Production disconnect→rejoin: disconnect() clears only the tracker; the new
         // session's onSessionConfig runs resetRequestState() (columns.clear) + scanner.reset().
@@ -612,9 +587,9 @@ class SpiralScannerTest {
 
         assertEquals(0, s.getConfirmedRing(), "reset() zeroes ring confirmation");
         assertFalse(columns.hasRetries(), "session state cleared with the map");
-        int first = s.maybeScan(CX, CZ, 2, 0, 1000, () -> 0, columns, p -> false, queue);
+        int first = s.maybeScan(CX, CZ, 2, s.configuredSyncCap(), 0, 1000, () -> 0, columns, p -> false, queue);
         assertEquals(8 * 3 + 8 * 4, first,
-                "reset() primes the cadence: the rejoin scan fires on the FIRST call with the backoff discarded");
+                "reset() primes the cadence: the rejoin scan fires on the FIRST call");
     }
 
     // ---- lod distance shrink/grow (CL-015) ----
@@ -813,7 +788,7 @@ class SpiralScannerTest {
                     inFlight.add(pos);
                     int roll = rng.nextInt(100);
                     if (roll < 30) { inFlight.remove(pos); columns.onReceived(pos, 1_000L + cyc); }
-                    else if (roll < 45) { inFlight.remove(pos); columns.markRetry(pos); s.noteRateLimited(); }
+                    else if (roll < 45) { inFlight.remove(pos); columns.markRetry(pos); } // rate-limited bounce: retry mark (window backoff is tested separately)
                     else if (roll < 60) { inFlight.remove(pos); columns.onNotGenerated(pos); }
                     else if (roll < 70) { inFlight.remove(pos); columns.onUpToDate(pos); }
                     else if (roll < 85) { scheduled.add(new Scheduled(pos, cyc + 1 + rng.nextInt(3), false)); }
