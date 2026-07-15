@@ -87,6 +87,7 @@ Server config is generated on first run:
 | `bytesPerSecondLimitPerPlayer` | `20971520` | Per-player pre-compression bandwidth cap (20 MB/s) |
 | `bytesPerSecondLimitGlobal` | `104857600` | Total pre-compression bandwidth cap (100 MB/s) |
 | `diskReaderThreads` | `5` | Thread pool size for async disk reads |
+| `useBackgroundReadPriority` | `true` | LOD disk reads yield to vanilla/gameplay chunk loading, so streaming distant terrain doesn't delay the chunks players are actively loading (Fabric: IOWorker BACKGROUND priority; Paper/Folia: Moonrise LOW priority). Set `false` to restore foreground reads |
 | `sendQueueLimitPerPlayer` | `4000` | Max queued column payloads per player (each carries a full chunk column of sections) |
 | `syncOnLoadConcurrencyLimitPerPlayer` | `200` | Max in-flight sync requests per player |
 | `generationConcurrencyLimitPerPlayer` | `16` | Max in-flight generation requests per player |
