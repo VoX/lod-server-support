@@ -8,6 +8,8 @@
   "mixins": [
     "AccessorServerChunkCache",
     "AccessorChunkMap",
+    "AccessorSimpleRegionStorage",
+    "AccessorIOWorker",
     "ChunkMapSaveHook"
   ],
   "client": [
