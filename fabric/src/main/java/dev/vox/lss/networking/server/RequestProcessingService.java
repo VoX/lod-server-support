@@ -73,7 +73,7 @@ public class RequestProcessingService {
 
         this.dirtyTracker = new DirtyColumnTracker();
 
-        this.diskReader = new ChunkDiskReader(config.diskReaderThreads);
+        this.diskReader = new ChunkDiskReader(config.diskReaderThreads, config.useBackgroundReadPriority);
         if (config.enableChunkGeneration) {
             this.generationService = new ChunkGenerationService(config);
             this.generationService.setDirtyContentFilter(this.dirtyContentFilter);

@@ -3,6 +3,7 @@ package dev.vox.lss.test;
 import dev.vox.lss.common.LSSConstants;
 import dev.vox.lss.common.PositionUtil;
 import dev.vox.lss.common.SharedBandwidthLimiter;
+import dev.vox.lss.common.processing.ChunkReadResult;
 import dev.vox.lss.common.processing.LoadedColumnData;
 import dev.vox.lss.common.processing.TickDiagnostics;
 import dev.vox.lss.common.processing.TickSnapshot;
@@ -57,6 +58,7 @@ public class SerializerParityGameTests {
     private static final int READ_AFTER_SAVE_CHUNK_OFFSET = 104;
     private static final int DISK_SEED_CHUNK_OFFSET = 112;
     private static final int ALL_AIR_TRANSITION_CHUNK_OFFSET = 128;
+    private static final int BACKGROUND_READ_CHUNK_OFFSET = 144;
 
     /** Deprecated upstream without a replacement; it is the only factory that places a real
      *  ServerPlayer (player list entry + embedded-channel connection) inside a gametest. */
@@ -99,7 +101,7 @@ public class SerializerParityGameTests {
         helper.runAfterDelay(4, () -> level.setBlock(torchPos, Blocks.AIR.defaultBlockState(), 3));
         helper.runAfterDelay(8, () -> chunkSource.removeTicketWithRadius(TicketType.PLAYER_LOADING, chunkPos, 0));
 
-        var reader = new ChunkDiskReader(1);
+        var reader = new ChunkDiskReader(1, false);
         var readerId = UUID.randomUUID();
         reader.registerPlayer(readerId);
         var step = new AtomicInteger();
@@ -142,6 +144,83 @@ public class SerializerParityGameTests {
                             describeMismatch(diskBytes.get(), live));
                 }
                 default -> helper.fail("unexpected parity test step " + step.get());
+            }
+        });
+    }
+
+    /**
+     * A BACKGROUND-priority read (scheduled on the IOWorker's own executor at priority 1, reading
+     * straight from RegionFileStorage) must return byte-identical section bytes to the default
+     * FOREGROUND read of the same on-disk chunk. This is the live check on the whole accessor-mixin
+     * path: a renamed field fails the mixin apply at server boot, and a reordered
+     * {@code IOWorker$Priority} enum — the one silent risk behind the pinned ordinal — lands the
+     * read on the wrong priority, which this parity assertion is positioned to catch.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 1200)
+    public void backgroundPriorityReadMatchesForegroundReadForDiskLoadedColumn(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        var origin = ChunkPos.containing(helper.absolutePos(BlockPos.ZERO));
+        int cx = origin.x() + BACKGROUND_READ_CHUNK_OFFSET;
+        int cz = origin.z() + 5;
+        var chunkPos = new ChunkPos(cx, cz);
+        var chunkSource = level.getChunkSource();
+
+        chunkSource.addTicketWithRadius(TicketType.PLAYER_LOADING, chunkPos, 0);
+        level.getChunk(cx, cz);
+        helper.runAfterDelay(4, () -> chunkSource.removeTicketWithRadius(TicketType.PLAYER_LOADING, chunkPos, 0));
+
+        var foreground = new ChunkDiskReader(1, false);
+        var background = new ChunkDiskReader(1, true);
+        var fgId = UUID.randomUUID();
+        var bgId = UUID.randomUUID();
+        foreground.registerPlayer(fgId);
+        background.registerPlayer(bgId);
+        var step = new AtomicInteger();
+        // Each result is polled exactly once and cached: succeedWhen re-runs this block on every
+        // retry tick, and a reader's queue is gone once it is shut down, so re-polling would turn
+        // a genuine byte-mismatch failure into an NPE on the following tick.
+        var fgResult = new AtomicReference<ChunkReadResult>();
+        var bgResult = new AtomicReference<ChunkReadResult>();
+
+        helper.succeedWhen(() -> {
+            helper.assertTrue(helper.getTick() >= 6, "waiting for the ticket release");
+            switch (step.get()) {
+                case 0 -> {
+                    helper.assertTrue(chunkSource.getChunkNow(cx, cz) == null,
+                            "waiting for the chunk to unload");
+                    level.save(null, true, false);
+                    foreground.submitReadDirect(fgId, LSSConstants.DIM_STR_OVERWORLD, level, cx, cz, 0);
+                    background.submitReadDirect(bgId, LSSConstants.DIM_STR_OVERWORLD, level, cx, cz, 0);
+                    step.set(1);
+                    helper.assertTrue(false, "foreground + background reads submitted");
+                }
+                case 1 -> {
+                    if (fgResult.get() == null) {
+                        fgResult.set(foreground.getPlayerQueue(fgId).poll());
+                    }
+                    var fg = fgResult.get();
+                    helper.assertTrue(fg != null, "waiting for the foreground read result");
+                    helper.assertTrue(!fg.notFound() && !fg.saturated() && fg.sectionBytes() != null,
+                            "foreground read of the saved superflat chunk must return content");
+                    // Shut down only once this reader's result is validated: shutdown() clears the
+                    // player-results map, so an earlier call would strand a retried assertion.
+                    foreground.shutdown();
+                    step.set(2);
+                    helper.assertTrue(false, "foreground bytes captured, awaiting background result");
+                }
+                case 2 -> {
+                    if (bgResult.get() == null) {
+                        bgResult.set(background.getPlayerQueue(bgId).poll());
+                    }
+                    var bg = bgResult.get();
+                    helper.assertTrue(bg != null, "waiting for the background read result");
+                    helper.assertTrue(!bg.notFound() && !bg.saturated() && bg.sectionBytes() != null,
+                            "background-priority read must return content, not not-found/saturated");
+                    background.shutdown();
+                    helper.assertTrue(Arrays.equals(fgResult.get().sectionBytes(), bg.sectionBytes()),
+                            describeMismatch(fgResult.get().sectionBytes(), bg.sectionBytes()));
+                }
+                default -> helper.fail("unexpected background-read step " + step.get());
             }
         });
     }
@@ -272,7 +351,7 @@ public class SerializerParityGameTests {
         // Flush the freshly generated chunk to its region file so the read below hits real disk state.
         endLevel.save(null, true, false);
 
-        var reader = new ChunkDiskReader(1);
+        var reader = new ChunkDiskReader(1, false);
         var readerId = UUID.randomUUID();
         reader.registerPlayer(readerId);
         reader.submitReadDirect(readerId, LSSConstants.DIM_STR_THE_END, endLevel, cx, cz, 0);
@@ -319,7 +398,7 @@ public class SerializerParityGameTests {
         chunkSource.addTicketWithRadius(TicketType.PLAYER_LOADING, chunkPos, 0);
         level.getChunk(cx, cz);
 
-        var reader = new ChunkDiskReader(1);
+        var reader = new ChunkDiskReader(1, false);
         var readerId = UUID.randomUUID();
         reader.registerPlayer(readerId);
         var step = new AtomicInteger();
