@@ -24,8 +24,13 @@ public class ChunkDiskReader extends AbstractChunkDiskReader {
     // IOWorker$Priority is package-private and cannot be named here (and Fabric's intermediary
     // remapping rules out resolving it reflectively), so the ordinal is pinned. Verified against
     // the 26.2 jar: FOREGROUND(0), BACKGROUND(1), SHUTDOWN(2) — scheduleWithResult takes the
-    // priority as an int, which is how vanilla passes it too. Scheduling LOD reads at
-    // BACKGROUND(1) makes them yield to vanilla's foreground chunk loads on the shared executor.
+    // priority as an int, which is how vanilla passes it too.
+    //
+    // Where this lands us on the shared per-dimension executor: vanilla's chunk loads
+    // (loadAsync -> submitTask) run FOREGROUND, and vanilla's chunk saves (storePendingChunk) run
+    // BACKGROUND. So LOD reads at BACKGROUND sit strictly below the loads players wait on, and
+    // tie with saves — an improvement for both, since chunkMap.read used to put LOD reads at
+    // FOREGROUND, level with vanilla's loads and ahead of its saves.
     private static final int IOWORKER_PRIORITY_BACKGROUND = 1;
 
     private final boolean useBackgroundReadPriority;
@@ -53,8 +58,10 @@ public class ChunkDiskReader extends AbstractChunkDiskReader {
      *
      * <p>Going straight to storage skips IOWorker's pendingWrites, so this path gives up
      * read-your-writes: a chunk saved but not yet flushed reads as its previous on-disk state.
-     * Acceptable for LOD — a just-edited column is covered by a dirty-broadcast re-request, so a
-     * momentarily stale read self-heals. (Paper has no such gap; Moonrise serves pending writes.)
+     * The window is narrow — a save already queued ahead of us flushes first (same priority, FIFO)
+     * — but it is real when the save is queued behind our read. Acceptable for LOD: the save that
+     * we raced is itself what marks the column dirty, so the dirty broadcast re-request heals it.
+     * (Paper has no such gap; Moonrise serves pending writes.)
      */
     private NbtSectionSerializer.ChunkNbtRead backgroundReader(ChunkMap chunkMap) {
         var worker = (AccessorIOWorker) ((AccessorSimpleRegionStorage) chunkMap).lss$getWorker();

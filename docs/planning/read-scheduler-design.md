@@ -223,3 +223,34 @@ The two paths meet only at the shared `RegionFileStorage` handle cache + `Region
 **How difficult, concretely:** a *separate* Paper reader strategy (moderate effort — a new `submitReadDirect` branch calling `MoonriseRegionFileIO.loadDataAsync` at low priority, feeding the existing `PaperNbtSectionSerializer` → `ChunkReadResult` pipeline; rework of who owns the read threads; flag wiring; soak-harness validation on real Paper/Folia since there's no cheap byte-parity gametest for it). Conceptually identical idea to Fabric-A, different (and arguably nicer) API.
 
 **Sharper insight for the pick:** the shared-serialized-queue starvation that A precisely fixes is largely a **Fabric-specific** phenomenon. On Paper, LSS (legacy IOWorker / `Util.ioPool()`) and gameplay (Moonrise pool) are *already* on separate thread pools, so LSS can't monopolize a gameplay queue there; the residual Paper contention is RegionFile-lock + disk-bandwidth, which even Moonrise-priority routing only partially orders (disk bandwidth is disk bandwidth). Issue #32's saturation was LSS's *own* pool saturating (a platform-independent, self-inflicted signal) — which is exactly what **B** throttles, on both platforms, with no MC-internal coupling. So this investigation **reinforces the B pick**: A's exact win is Fabric-only by nature, a proper Paper equivalent is a whole second implementation against internal Moonrise API, and B already covers the actual cross-platform saturation problem. A (Fabric IOWorker priority) + a Moonrise-`loadDataAsync` Paper twin remains the "true prioritization everywhere" endgame if B's approximation ever proves insufficient under real-server measurement.
+
+### 10.3 Implementation finding — where BACKGROUND actually lands us (verified from 26.2 bytecode)
+
+Implementing A (commits on `feat/read-io-priority`) surfaced a fact neither §10.1 nor §10.2 knew,
+and it strengthens the case for the approach. Disassembling `IOWorker` on the real 26.2 jar shows
+the priorities vanilla itself schedules at on the shared per-dimension `PriorityConsecutiveExecutor`:
+
+| Task | Vanilla priority |
+|---|---|
+| chunk **loads** (`loadAsync` → `submitTask`) | `FOREGROUND` (0) |
+| chunk **saves** (`storePendingChunk`) | `BACKGROUND` (1) |
+| shutdown flush (`synchronize`) | `SHUTDOWN` (2) |
+
+So LSS's reads move as follows:
+
+- **Before:** `chunkMap.read` → `loadAsync` → **FOREGROUND** — LSS reads were level with the chunk
+  loads players wait on, *and ranked ahead of vanilla's own saves*.
+- **After:** **BACKGROUND** — strictly below vanilla's loads, and tied with vanilla's saves.
+
+Both vanilla loads *and* vanilla saves therefore get better, not just loads: the change doesn't
+merely deprioritize LSS relative to gameplay reads, it also stops LOD streaming from outranking the
+server's own chunk writes. It also pins down the read-your-writes gap precisely: reads and saves
+share BACKGROUND, so the executor orders them FIFO — a save already queued ahead of an LSS read
+flushes first, and only a save queued *behind* an in-flight read can be missed. That window is
+self-healing, because the save we raced is the very event that marks the column dirty.
+
+`IOWorker$Priority` is a package-private `final class`, so the ordinal must be pinned as a literal
+(`1`); `scheduleWithResult(int, Consumer<CompletableFuture<T>>)` takes the priority as an `int`,
+which is how vanilla passes it too (`Priority.FOREGROUND.ordinal()`). A reordering of the 3-constant
+enum is the one silent risk, and `SerializerParityGameTests
+.backgroundPriorityReadMatchesForegroundReadForDiskLoadedColumn` is positioned to catch it.
