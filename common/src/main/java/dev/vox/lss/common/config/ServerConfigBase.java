@@ -23,6 +23,13 @@ public abstract class ServerConfigBase extends JsonConfig {
     public int syncOnLoadConcurrencyLimitPerPlayer = 200;
     public int generationConcurrencyLimitPerPlayer = 16;
     public int perDimensionTimestampCacheSizeMB = 32;
+    /**
+     * When true (default), LSS disk reads yield to vanilla/gameplay chunk loading: Fabric
+     * schedules them at IOWorker BACKGROUND priority; Paper/Folia route them through Moonrise
+     * at Priority.LOW. Set false to restore FOREGROUND reads (the pre-0.7 behavior) as a
+     * rollback. No clamp: a boolean has no out-of-range value.
+     */
+    public boolean useBackgroundReadPriority = true;
 
     @Override
     protected String getFileName() {

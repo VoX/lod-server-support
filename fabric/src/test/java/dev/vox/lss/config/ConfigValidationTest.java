@@ -200,6 +200,13 @@ class ConfigValidationTest {
         }
     }
 
+    /** LOD reads yield to gameplay out of the box; false is the documented rollback. */
+    @Test
+    void backgroundReadPriorityDefaultsOn() {
+        assertTrue(serverConfig().useBackgroundReadPriority,
+                "background read priority must default on");
+    }
+
     // --- LSSClientConfig ---
 
     private LSSClientConfig clientConfig() {

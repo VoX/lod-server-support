@@ -11,6 +11,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Pins PaperConfig.validate(): the shared ServerConfigBase clamps must run through the Paper
@@ -30,6 +31,13 @@ class PaperConfigValidationTest {
         assertEquals(2048, c.lodDistanceChunks);                 // LSSConstants.MAX_LOD_DISTANCE via super.validate()
         assertEquals(1, c.syncOnLoadConcurrencyLimitPerPlayer);  // LSSConstants.MIN_CONCURRENCY_LIMIT via super.validate()
         assertEquals(List.of(), c.updateEvents);                 // Paper-only null guard
+    }
+
+    /** Paper inherits the shared read-priority default: LOD reads yield to gameplay out of the box. */
+    @Test
+    void backgroundReadPriorityDefaultsOn() {
+        assertTrue(new PaperConfig().useBackgroundReadPriority,
+                "background read priority must default on (Paper)");
     }
 
     // ---- full both-ends clamp sweep: Paper twin of ConfigValidationTest's reflective sweep ----
