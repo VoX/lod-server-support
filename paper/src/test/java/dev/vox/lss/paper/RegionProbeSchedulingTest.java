@@ -75,7 +75,7 @@ class RegionProbeSchedulingTest {
         config = new PaperConfig();
         config.validate();
         players = new ConcurrentHashMap<>();
-        diskReader = new PaperChunkDiskReader(1);
+        diskReader = new PaperChunkDiskReader(1, false);
         processor = new PaperRequestProcessingServiceTest.RecordingProcessor(players, diskReader);
         genService = new PaperRequestProcessingServiceTest.RecordingGenService(config);
         server = mock(MinecraftServer.class);

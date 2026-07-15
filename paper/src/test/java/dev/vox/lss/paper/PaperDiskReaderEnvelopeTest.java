@@ -69,7 +69,7 @@ class PaperDiskReaderEnvelopeTest {
 
     @BeforeEach
     void buildRig() {
-        reader = new PaperChunkDiskReader(1);
+        reader = new PaperChunkDiskReader(1, false);
         uuid = UUID.randomUUID();
         reader.registerPlayer(uuid);
         level = mock(ServerLevel.class);

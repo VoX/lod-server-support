@@ -198,7 +198,7 @@ class PaperRequestProcessingServiceTest {
         config = new PaperConfig();
         config.validate();
         players = new ConcurrentHashMap<>();
-        diskReader = new PaperChunkDiskReader(1);
+        diskReader = new PaperChunkDiskReader(1, false);
         processor = new RecordingProcessor(players, diskReader);
         genService = new RecordingGenService(config);
         server = mock(MinecraftServer.class);
