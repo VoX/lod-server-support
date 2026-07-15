@@ -9,7 +9,6 @@ import net.minecraft.server.level.ChunkMap;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
 
-import java.io.IOException;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -73,7 +72,11 @@ public class ChunkDiskReader extends AbstractChunkDiskReader {
                     (CompletableFuture<Optional<CompoundTag>> f) -> {
                         try {
                             f.complete(Optional.ofNullable(storage.read(pos)));
-                        } catch (IOException e) {
+                        } catch (Exception e) {
+                            // As broad as vanilla's own read task (submitThrowingTask catches
+                            // Exception): a corrupt region can fail unchecked, and anything that
+                            // escapes here leaves the future uncompleted, stalling a reader thread
+                            // until DISK_READ_TIMEOUT_SECONDS instead of triaging immediately.
                             f.completeExceptionally(e);
                         }
                     });
