@@ -89,7 +89,15 @@ public abstract class AbstractPlayerRequestState<T> {
     // 20th — collapsing in-memory probe coverage to roughly half. Published on apply, cleared when
     // the backlog drains so a converged player is not probed forever. Single-writer (processing
     // thread), volatile for the main thread's read; IncomingBatch is immutable.
+    //
+    // INVARIANT: published iff the backlog is non-empty — i.e. exactly while work is still owed.
+    // Maintained in three places: replaceBacklogWith (apply), pollBacklog (null on drain-to-empty)
+    // and restoreBacklog (republish, because the steady-state pass drains before it restores).
     private volatile IncomingBatch publishedWantSet;
+
+    // The want-set most recently applied to the backlog, retained so restoreBacklog can republish
+    // on a cycle where no new batch arrived (batches land at 1Hz; the pass runs at 20Hz).
+    private IncomingBatch appliedWantSet;
 
     // Admission slots: caps are immutable; held counts are derived from the pending map
     // (single-writer: processing thread; volatile for /lsslod command reads).
@@ -195,7 +203,8 @@ public abstract class AbstractPlayerRequestState<T> {
         this.backlog.clear();
         Collections.addAll(this.backlog, batch.requests());
         this.backlogSizeSnapshot = this.backlog.size();
-        publishWantSet(batch.size() == 0 ? null : batch);
+        this.appliedWantSet = batch.size() == 0 ? null : batch;
+        publishWantSet(this.appliedWantSet);
         return dropped;
     }
 
@@ -208,13 +217,22 @@ public abstract class AbstractPlayerRequestState<T> {
         return r;
     }
 
-    /** Restore entries the router pass retained (slot full / pool full / queue full),
-     *  in their original order, ahead of whatever remains. */
+    /**
+     * Restore entries the router pass retained (slot full / pool full / queue full),
+     * in their original order, ahead of whatever remains.
+     *
+     * <p>Republishes the applied want-set: a pass that retains has work still owed, but
+     * {@link #pollBacklog} has already published null if the pass drained the deque before
+     * restoring — which the steady state ALWAYS does, since SLOT_FULL retains and continues.
+     * Without this the probe source would be null on every tick outside saturation, which is
+     * exactly backwards (see the {@link #publishedWantSet} note).
+     */
     public void restoreBacklog(List<IncomingRequest> retained) {
         for (int i = retained.size() - 1; i >= 0; i--) {
             this.backlog.addFirst(retained.get(i));
         }
         this.backlogSizeSnapshot = this.backlog.size();
+        if (!this.backlog.isEmpty()) publishWantSet(this.appliedWantSet);
     }
 
     /** Volatile snapshot for exporters and the soak quiescence gauge. */

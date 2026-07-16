@@ -110,6 +110,31 @@ class BacklogReplaceTest {
     }
 
     @Test
+    void retainedEntriesKeepTheWantSetPublishedAcrossTheDrainAndRestore() {
+        // The steady-state router pass: SLOT_FULL retains-and-CONTINUES, so a pass polls the
+        // ENTIRE backlog (emptying it) and only then restores the retained entries. pollBacklog
+        // publishes null the moment the deque empties, so without a republish here the probe
+        // source would be null on every tick while entries are still owed — collapsing in-memory
+        // probe coverage to ~zero in exactly the un-saturated case rough edge #2 budgets for.
+        // Invariant: the want-set is published exactly while there is backlog left to route.
+        var s = new TestState();
+        var b = batch(1, 2);
+        s.replaceBacklogWith(b);
+        var first = s.pollBacklog();  // admitted
+        var second = s.pollBacklog(); // SLOT_FULL → retained; backlog now empty
+        assertNull(s.peekWantSet(), "drained mid-pass: transiently unpublished");
+        s.restoreBacklog(List.of(second));
+        assertSame(b, s.peekWantSet(), "work is still owed → the probe source must be live again");
+        assertEquals(1, first.cx());
+
+        // A later cycle with no new batch still republishes the SAME applied want-set.
+        assertEquals(2, s.pollBacklog().cx());
+        assertNull(s.peekWantSet(), "drained again");
+        s.restoreBacklog(List.of(second));
+        assertSame(b, s.peekWantSet(), "the applied want-set survives cycles without a new batch");
+    }
+
+    @Test
     void emptyClearBatchPublishesNothingToProbe() {
         var s = new TestState();
         s.replaceBacklogWith(batch(1, 2));

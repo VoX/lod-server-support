@@ -372,10 +372,13 @@ public class RequestProcessingService {
      * mailbox would see null on ~19 of every 20 ticks and roughly halve probe coverage.
      *
      * <p>Alignment is best-effort: a position admitted before its first probe pass serves
-     * from disk once — the 1 Hz re-declare re-probes it and the dirty broadcast heals any
-     * stale read. The published want-set still lists already-routed positions until the next
-     * batch replaces it; a probe for an already-routed position is simply unused by the
-     * router (bounded by {@link #MAX_PROBES_PER_TICK_PER_PLAYER}).
+     * from disk once — the next pass re-probes what is still owed and the dirty broadcast
+     * heals any stale read. The want-set stays published exactly while the backlog is
+     * non-empty (cleared on drain-to-empty, republished by {@code restoreBacklog}), so it
+     * still lists positions this player already had routed; a probe for an already-routed
+     * position is simply unused by the router (bounded by
+     * {@link #MAX_PROBES_PER_TICK_PER_PLAYER}, which the closest-first order spends on the
+     * head of the want-set).
      *
      * @param skipPositions packed positions already extracted by the generation service (may be null)
      */

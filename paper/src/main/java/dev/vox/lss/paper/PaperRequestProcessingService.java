@@ -478,8 +478,11 @@ public class PaperRequestProcessingService {
      *
      * <p>Alignment is best-effort here (Folia's one-tick hold-release is the deterministic
      * variant): a position admitted before its first probe pass serves from disk once — the
-     * 1 Hz re-declare re-probes it and the dirty broadcast heals any stale read. A probe for
-     * an already-routed position is simply unused by the router.
+     * next pass re-probes what is still owed and the dirty broadcast heals any stale read.
+     * The want-set stays published exactly while the backlog is non-empty (cleared on
+     * drain-to-empty, republished by {@code restoreBacklog}), so it still lists positions
+     * this player already had routed; a probe for an already-routed position is simply
+     * unused by the router.
      */
     private Long2ObjectMap<LoadedColumnData> probeLoadedChunks(
             PaperPlayerRequestState state, ServerLevel level,
