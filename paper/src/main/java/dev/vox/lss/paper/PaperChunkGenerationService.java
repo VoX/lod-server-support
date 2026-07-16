@@ -4,12 +4,14 @@ import dev.vox.lss.common.LSSConstants;
 import dev.vox.lss.common.LSSLogger;
 import dev.vox.lss.common.processing.LoadedColumnData;
 import dev.vox.lss.common.processing.TickSnapshot;
+import ca.spottedleaf.concurrentutil.util.Priority;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.chunk.LevelChunk;
+import net.minecraft.world.level.chunk.status.ChunkStatus;
 
-import org.bukkit.Chunk;
 import org.bukkit.plugin.Plugin;
 
 import java.util.ArrayList;
@@ -21,8 +23,13 @@ import java.util.UUID;
 
 /**
  * Manages chunk generation requests for the Paper plugin.
- * Uses Paper's async chunk API ({@code World.getChunkAtAsync}) which guarantees
- * {@code ChunkStatus.FULL} before the callback fires and manages tickets automatically.
+ * Loads/generates via Moonrise's priority-aware scheduler
+ * ({@code PlatformHooks.get().scheduleChunkLoad(..., Priority.LOW, ...)}) so LOD generation
+ * DEFERS to player-driven NORMAL generation — the generation analogue of the Moonrise
+ * {@code Priority.LOW} disk-read path. {@code addTicket=true} lets Moonrise own the load
+ * ticket, and {@code ChunkStatus.FULL} is guaranteed before the completion fires (on the
+ * chunk's owning thread — the region thread on Folia). Failure surfaces as a NULL chunk:
+ * there is no throwable channel.
  */
 public class PaperChunkGenerationService {
 
@@ -117,7 +124,10 @@ public class PaperChunkGenerationService {
             incrementCount(this.perPlayerActiveCount, playerUuid);
             this.totalSubmitted++;
 
-            launchAsyncLoad(key, level, cx, cz, gen.token);
+            // Priority.LOW: LOD generation yields to player-driven (NORMAL) generation. Safe
+            // against starvation-shaped timeouts because a timeout is a TRANSIENT outcome —
+            // the client re-declares and the load is retried, never blanked NOT_GENERATED.
+            launchAsyncLoad(key, level, cx, cz, gen.token, Priority.LOW);
             return true;
         }
 
@@ -126,13 +136,17 @@ public class PaperChunkGenerationService {
     }
 
     /**
-     * Launches Paper's async chunk load. The completion fires {@link #completeAsyncLoad} on
-     * the load's completion thread. Package-visible seam: tests override this to capture the
-     * launch.
+     * Launches the Moonrise priority-aware chunk load. The completion fires
+     * {@link #completeAsyncLoad} on the load's completion thread (the chunk's owning region
+     * thread on Folia) with an NMS {@code ChunkAccess} — null is the failure outcome, there
+     * is no throwable channel. Package-visible seam: tests override this to capture the
+     * launch (and the priority, pinned to {@code Priority.LOW}).
      */
-    void launchAsyncLoad(PendingGenerationKey key, ServerLevel level, int cx, int cz, long token) {
-        level.getWorld().getChunkAtAsync(cx, cz, true, false).whenComplete((chunk, ex) ->
-                completeAsyncLoad(key, level, chunk, ex, cx, cz, token));
+    void launchAsyncLoad(PendingGenerationKey key, ServerLevel level, int cx, int cz, long token,
+                         Priority priority) {
+        ca.spottedleaf.moonrise.common.PlatformHooks.get().scheduleChunkLoad(
+                level, cx, cz, /*gen=*/true, ChunkStatus.FULL, /*addTicket=*/true, priority,
+                chunk -> completeAsyncLoad(key, level, chunk, cx, cz, token));
     }
 
     /**
@@ -145,17 +159,19 @@ public class PaperChunkGenerationService {
      * fresh-backfill). On Paper this is the main thread — where the old post-hop extraction
      * ran anyway. The reads are region-legal and tear-free off-pump (getChunkNow is a
      * concurrent-map lookup; light reads clone SWMR state; PalettedContainer.write is
-     * synchronized). Package-visible so tests can drive the completion exactly as
-     * getChunkAtAsync would.
+     * synchronized). Package-visible so tests can drive the completion exactly as the
+     * Moonrise consumer would. A null {@code chunk} is the failure outcome (permanent:
+     * NOT_GENERATED downstream — a failed load/vanished chunk must not be hammered).
      */
-    void completeAsyncLoad(PendingGenerationKey key, ServerLevel level, Chunk chunk,
-                           Throwable ex, int cx, int cz, long token) {
-        if (ex != null) {
-            LSSLogger.error("Async chunk load failed at " + cx + "," + cz, ex);
+    void completeAsyncLoad(PendingGenerationKey key, ServerLevel level, ChunkAccess chunk,
+                           int cx, int cz, long token) {
+        if (chunk == null) {
+            // Moonrise's failure outcome — no throwable channel exists.
+            LSSLogger.warn("Async chunk load failed (null chunk) at " + cx + "," + cz);
         }
         LoadedColumnData extracted = null;
         Error rethrow = null;
-        if (ex == null && chunk != null) {
+        if (chunk != null) {
             try {
                 extracted = extractColumnData(level, cx, cz);
             } catch (Error e) {
@@ -175,9 +191,9 @@ public class PaperChunkGenerationService {
             LSSLogger.warn("Could not schedule generation callback (plugin shutting down) at " + cx + "," + cz);
         }
         if (rethrow != null) {
-            // A plain rethrow would vanish: whenComplete captures it into an unobserved
-            // dependent future. Hand it to the thread's uncaught handler instead, so an
-            // Error (OOME, linkage) stays as loud as the old scheduled-task rethrow was.
+            // A plain rethrow would vanish into Moonrise's completion plumbing. Hand it to
+            // the thread's uncaught handler instead, so an Error (OOME, linkage) stays as
+            // loud as the old scheduled-task rethrow was.
             Thread.currentThread().getUncaughtExceptionHandler()
                     .uncaughtException(Thread.currentThread(), rethrow);
         }
@@ -308,8 +324,8 @@ public class PaperChunkGenerationService {
     }
 
     public void shutdown() {
-        // No manual ticket cleanup needed — Paper manages tickets via getChunkAtAsync.
-        // Active async futures will complete but onChunkReady will find empty active map.
+        // No manual ticket cleanup needed — Moonrise owns the load ticket (addTicket=true).
+        // Active async loads will complete but onChunkReady will find an empty active map.
         this.active.clear();
         this.perPlayerActiveCount.clear();
         this.mainReady.clear();
