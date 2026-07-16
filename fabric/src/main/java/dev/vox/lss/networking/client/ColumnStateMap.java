@@ -178,6 +178,12 @@ class ColumnStateMap {
     /** Server confirmed the column is current. */
     void onUpToDate(long packed) {
         this.retry.remove(packed); // an up-to-date answer supersedes a pending retry (see onReceived)
+        // Answer-time mark consumption: under want-set re-declaration marks are no longer consumed
+        // at send (markSent is gone) — the terminal answer is their only consumer. A mark consumed
+        // at send would classify SATISFIED while the answer was still in flight, so a server-side
+        // supersession would lose the edit until the next session. The dirty-crossed-an-in-flight-
+        // serve race stays covered by staleInFlight, which re-marks dirty at the terminal outcome.
+        this.dirty.remove(packed);
         // Up-to-date must satisfy BOTH unsatisfied states, or classify re-requests forever:
         // -1 (all-air columns never get a VoxelColumn response) and 0 (a not-generated stamp
         // whose chunk resolved as all-air on the server) — in the End this looped ~50 req/s
@@ -195,6 +201,8 @@ class ColumnStateMap {
     /** Server cannot serve the column (not generated / not servable). */
     void onNotGenerated(long packed) {
         this.sessionSatisfied.remove(packed); // a not-generated answer re-opens a satisfied position
+        this.dirty.remove(packed);  // answer-time consumption — see onUpToDate
+        this.retry.remove(packed);
         put(packed, 0L);
     }
 

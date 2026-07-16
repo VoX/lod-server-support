@@ -596,24 +596,34 @@ class ColumnStateMapTest {
 
     @Test
     void notGeneratedAnswerAcrossDirtyRetryAndParkedPriorStates() {
-        // notGenerated × dirty: the dirty mark survives (unlike onReceived/onUpToDate),
-        // keeping the position requestable as ts=0 even with generation disabled.
+        // Marks are consumed by ANSWERS, not by sends (want-set model — markSent is gone; under
+        // re-declaration a send-time consumption would classify SATISFIED while the answer was
+        // still in flight, losing the edit to any server-side supersession).
+        //
+        // A dirty that CROSSED the in-flight ask is not lost by this: LodRequestManager records
+        // every crossing in staleInFlight (onDirtyColumns calls noteStaleIfInFlight regardless of
+        // markDirtyIfKnown's result, covering stored>0 as well as stored==-1) and re-marks it at
+        // the terminal outcome via consumeStaleCrossing. That protection belongs at the manager
+        // layer, which is the layer that knows what is in flight — the map deliberately does not.
+        //
+        // notGenerated × dirty: the answer consumes the mark.
         long dirtyPos = PositionUtil.packPosition(1, 1);
         map.onReceived(dirtyPos, 5000L);
         map.markDirtyIfKnown(dirtyPos);
         map.onNotGenerated(dirtyPos);
-        assertEquals(1, map.dirtyCount(), "a not-generated answer must not consume the dirty mark");
-        assertEquals(0L, map.classify(dirtyPos, true));
-        assertEquals(0L, map.classify(dirtyPos, false),
-                "dirty keeps the ts=0 stamp requestable (disk-first) without generation");
+        assertEquals(0, map.dirtyCount(), "a not-generated answer consumes the dirty mark");
+        assertEquals(0L, map.classify(dirtyPos, true), "ts=0 stays a generation retry while generation is on");
+        assertEquals(SATISFIED, map.classify(dirtyPos, false),
+                "generation off: the answered position parks — a surviving mark would re-declare it forever");
 
-        // notGenerated × retry: the pending retry also survives.
+        // notGenerated × retry: the pending retry is consumed too.
         long retryPos = PositionUtil.packPosition(2, 2);
         map.onReceived(retryPos, 6000L);
         map.markRetry(retryPos);
         map.onNotGenerated(retryPos);
-        assertTrue(map.hasRetries(), "a not-generated answer leaves the pending retry in place");
-        assertEquals(0L, map.classify(retryPos, false), "the retry keeps the stamp requestable until consumed");
+        assertFalse(map.hasRetries(), "a not-generated answer consumes the pending retry");
+        assertEquals(SATISFIED, map.classify(retryPos, false),
+                "the consumed retry parks the gen-disabled stamp");
 
         // notGenerated × parked: the answer overwrites the park stamp with 0 — re-opened as
         // a generation retry (gen on) or silently re-parked (gen off).
@@ -641,5 +651,39 @@ class ColumnStateMapTest {
         map.onIngestFailed(POS);
         assertEquals(SATISFIED, map.classify(POS, true),
                 "the surviving failure count re-parks immediately on the next rejection");
+    }
+
+    // ---- Answer-time mark consumption (want-set groundwork) ----
+    // Under want-set re-declaration the client re-declares every unsatisfied position each scan
+    // and markSent() is gone, so the terminal ANSWER is the only thing that may consume a
+    // dirty/retry mark. A mark consumed at send would classify SATISFIED while the answer is
+    // still in flight — and if the server superseded that ask, the edit is lost until next session.
+
+    @Test
+    void upToDateAnswerConsumesDirtyAndRetryMarks() {
+        var map = new ColumnStateMap();
+        long pos = PositionUtil.packPosition(3, 4);
+        map.onReceived(pos, 100L);
+        map.markDirtyIfKnown(pos);
+        map.markRetry(pos);
+        map.onUpToDate(pos);
+        assertEquals(SATISFIED, map.classify(pos, true),
+                "an up-to-date answer must consume the dirty and retry marks — under "
+                + "re-declaration nothing else ever consumes them");
+    }
+
+    @Test
+    void notGeneratedAnswerConsumesDirtyAndRetryMarksButStaysGenRetryable() {
+        var map = new ColumnStateMap();
+        long pos = PositionUtil.packPosition(5, 6);
+        map.onReceived(pos, 100L);
+        map.markDirtyIfKnown(pos);
+        map.markRetry(pos);
+        map.onNotGenerated(pos);
+        assertEquals(0L, map.classify(pos, true),
+                "ts=0 + generation enabled must still classify as a gen retry");
+        assertEquals(SATISFIED, map.classify(pos, false),
+                "with generation disabled the position must park — a surviving dirty/retry "
+                + "mark would re-declare it forever");
     }
 }
