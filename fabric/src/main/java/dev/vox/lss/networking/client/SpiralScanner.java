@@ -20,18 +20,6 @@ import java.util.function.IntSupplier;
  * also means it blocks ring confirmation until its data actually lands.
  */
 class SpiralScanner {
-    /**
-     * Scan budget relative to the server's per-player sync slot cap. 4× leaves the want-set
-     * comfortably larger than the in-flight set it now re-declares, so there is always frontier
-     * headroom. Raising it buys nothing: the window self-throttles to the serve rate (as heads
-     * resolve they classify SATISFIED and drop out), so a bigger window only inflates
-     * duplicate-skip traffic. Shared with {@code ServerConfigBase.validate()} via
-     * {@link LSSConstants#SCAN_BUDGET_MULTIPLIER}: that clamp reserves
-     * {@link LSSConstants#WANT_SET_FRONTIER_RESERVE} frontier positions using this exact multiplier,
-     * so the two must never drift — the want-set cap dominating the slot caps is what keeps frontier
-     * discovery from starving (Global Constraint #28).
-     */
-    private static final int BUDGET_MULTIPLIER = LSSConstants.SCAN_BUDGET_MULTIPLIER;
 
     private SessionConfigS2CPayload sessionConfig;
 
@@ -42,8 +30,7 @@ class SpiralScanner {
 
     // Last scan budget tracking
     private int lastBudget;
-    private int lastSyncQueued;
-    private int lastGenQueued;
+    private int lastQueued;
 
     // Cached Voxy view distance — rechecked once per second (20 ticks)
     private int cachedVoxyDistance = -1; // -1 = not present
@@ -74,8 +61,13 @@ class SpiralScanner {
 
         this.missingVanillaChunks = missingVanilla.getAsInt();
 
-        // Compute scan budget: base × queue-pressure-scale × vanilla-load-scale
-        int budget = this.sessionConfig.syncOnLoadConcurrencyLimitPerPlayer() * BUDGET_MULTIPLIER;
+        // Compute scan budget: base × queue-pressure-scale × vanilla-load-scale. The base is
+        // the ONE want-set budget — a constant; no client budget derives from any server cap
+        // (server-owned generation). Raising it buys nothing: the window self-throttles to
+        // the serve rate (as heads resolve they classify SATISFIED and drop out), so a bigger
+        // window only inflates duplicate-skip traffic. WantSetBudgetInvariantTest pins it
+        // above the worst-case in-flight set with frontier headroom and inside one wire batch.
+        int budget = LSSConstants.WANT_SET_BUDGET;
         if (columnQueueSize > 0) {
             budget = Math.max(1, Math.round(budget * Math.max(0f, 1f - (float) columnQueueSize / columnQueueHaltThreshold)));
         }
@@ -104,16 +96,12 @@ class SpiralScanner {
                      long[] posOut, long[] tsOut, int budget) {
         int exclusionRadius = viewDistance;
         int lodDistance = getEffectiveLodDistance();
-        boolean generationEnabled = this.sessionConfig.generationEnabled();
 
         int count = 0;
 
-        int genCap = this.sessionConfig.generationConcurrencyLimitPerPlayer() * BUDGET_MULTIPLIER;
-
         int[] chunkCoords = new int[2];
         int localScanRing = -1;
-        int syncQueued = 0;
-        int genQueued = 0;
+        int queued = 0;
 
         if (columns.hasRetries()) {
             this.confirmedRing = 0;
@@ -152,21 +140,20 @@ class SpiralScanner {
                 // that. An awaited position is unsatisfied, so it blocks ring confirmation
                 // until its data actually arrives — confirmedRing lags the frontier by the
                 // in-flight window, and satisfied positions skip free, so the walk stays cheap.
-                long ts = columns.classify(packed, generationEnabled);
+                long ts = columns.classify(packed);
                 if (ts == ColumnStateMap.SATISFIED) continue;
-                if (ts == 0L && genQueued >= genCap) { ringFullySatisfied = false; continue; }
 
                 ringFullySatisfied = false;
                 posOut[count] = packed;
                 tsOut[count] = ts;
                 count++;
-                if (ts == 0) genQueued++; else syncQueued++;
+                queued++;
                 if (localScanRing < r) localScanRing = r;
             }
 
             // Contiguous prefix only: confirming a satisfied OUTER ring while an inner ring still
-            // has unsatisfied positions (gen-cap skips, or an uncovered corner hole) would start
-            // every later scan past the inner ring — a permanent LOD hole for a stationary player.
+            // has unsatisfied positions (an uncovered corner hole) would start every later scan
+            // past the inner ring — a permanent LOD hole for a stationary player.
             if (ringFullySatisfied && localConfirmedRing == r) {
                 localConfirmedRing = r + 1;
             }
@@ -175,8 +162,7 @@ class SpiralScanner {
         this.confirmedRing = localConfirmedRing;
         this.scanRing = localScanRing >= 0 ? localScanRing : localConfirmedRing;
         this.lastBudget = budget;
-        this.lastSyncQueued = syncQueued;
-        this.lastGenQueued = genQueued;
+        this.lastQueued = queued;
 
         return count;
     }
@@ -214,11 +200,10 @@ class SpiralScanner {
     /**
      * Force the next scan to re-walk from the innermost ring (cheaply skipping already-satisfied
      * positions) WITHOUT resetting the scan-tick cadence. Used when a position BELOW the confirmed
-     * ring became requestable again — a late not-generated stamp on a position the ring confirmed
-     * past while it was in-flight: only a re-walk re-reaches it. Unlike {@link #resetScanCounter}
-     * this leaves the cadence alone (a steady not-generated trickle would otherwise debounce scans
-     * back indefinitely), and unlike a retry mark it leaves {@link ColumnStateMap#classify} free to
-     * correctly PARK the position when generation is disabled instead of looping re-requests.
+     * ring became requestable again while the ring confirmed past it — a dirty mark landing at a
+     * terminal outcome (the stale-crossing path): only a re-walk re-reaches it. Unlike
+     * {@link #resetScanCounter} this leaves the cadence alone (a steady trickle of terminal
+     * answers would otherwise debounce scans back indefinitely).
      */
     void resetConfirmedRing() {
         this.confirmedRing = 0;
@@ -260,6 +245,5 @@ class SpiralScanner {
     int getScanRing() { return this.scanRing; }
     int getMissingVanillaChunks() { return this.missingVanillaChunks; }
     int getLastBudget() { return this.lastBudget; }
-    int getLastSyncQueued() { return this.lastSyncQueued; }
-    int getLastGenQueued() { return this.lastGenQueued; }
+    int getLastQueued() { return this.lastQueued; }
 }

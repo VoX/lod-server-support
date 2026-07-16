@@ -11,8 +11,10 @@ import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
  * {@link #classify} is the one request-need ladder consulted by the scanner when it builds
  * each want-set.
  *
- * <p>Timestamp semantics: absent (-1) = never seen; 0 = server said not-generated;
- * &gt;0 = received/validated at that epoch-second.
+ * <p>Timestamp semantics: absent (-1) = never seen; &gt;0 = received/validated at that
+ * epoch-second. A stored 0 is a LEGACY value only (pre-server-owned-generation caches
+ * persisted 0 for not-generated answers) and classifies as "no data" — the client never
+ * writes one anymore: a NOT_GENERATED answer is a permanent session-satisfy instead.
  *
  * <p><b>Thread safety:</b> Not thread-safe. Main client thread only.
  */
@@ -62,30 +64,33 @@ class ColumnStateMap {
 
     /**
      * Decide whether a position needs a request and which clientTimestamp to send.
-     * Priority, highest first: dirty &gt; session-satisfied &gt; unknown &gt; generation retry
-     * &gt; ingest-failure retry &gt; revalidation.
+     * Priority, highest first: dirty &gt; session-satisfied &gt; unknown &gt; ingest-failure
+     * retry &gt; revalidation. There is no generation rung: the client never classifies
+     * generation — the server decides it on the disk miss (server-owned generation).
      *
-     * @return the timestamp to send (-1 unknown, 0 generation, &gt;0 resync),
+     * @return the timestamp to send (-1 no data, &gt;0 resync),
      *         or {@link #SATISFIED} when nothing should be sent
      */
-    long classify(long packed, boolean generationEnabled) {
+    long classify(long packed) {
         // Dirty outranks EVERYTHING (incl. sessionSatisfied): a server-pushed change must
         // re-request even a settled all-air/parked position, or an air->content edit becomes a
-        // permanent hole. An unknown-but-dirty position re-asks as a first serve (-1).
+        // permanent hole. An unknown-but-dirty position re-asks as a first serve (-1); a legacy
+        // 0-stamp (pre-server-owned-generation cache) normalizes to -1 the same way.
         if (this.dirty.contains(packed)) {
             long dirtyStored = this.timestamps.get(packed);
-            return dirtyStored == -1L ? -1L : dirtyStored;
+            return dirtyStored <= 0L ? -1L : dirtyStored;
         }
         if (this.sessionSatisfied.contains(packed)) return SATISFIED; // resolved this session, no server data
         long stored = this.timestamps.get(packed);
-        if (stored == -1L) return -1L; // Unknown — sync-on-load first; server generates only on explicit retry
-        if (stored == 0L && generationEnabled) return 0L; // Not generated — generation retry
+        // No data: absent (-1) or a LEGACY not-generated 0-stamp loaded from a released
+        // client's cache — both declare -1 ("I have nothing"); the client never emits 0.
+        if (stored <= 0L) return -1L;
         // Ingest-failure retry. Defence-in-depth: onIngestFailed always clears `validated`
         // alongside the mark, so the revalidation rung below would return the same stored
         // value — this rung keeps the request flowing even if a future path ever leaves a
         // retry-marked position validated.
         if (this.retry.contains(packed)) return stored;
-        if (stored > 0 && !this.validated.contains(packed)) return stored; // Cached but not validated this session
+        if (!this.validated.contains(packed)) return stored; // Cached but not validated this session
         return SATISFIED;
     }
 
@@ -132,13 +137,14 @@ class ColumnStateMap {
     }
 
     /**
-     * Mark dirty if the client has any recorded disposition for the column (data OR a
-     * not-generated stamp). A dirty broadcast means the server just SAVED content there,
-     * so a ts==0 stamp is stale — without this rescue, a not-generated answer under
-     * enableChunkGeneration=false (or any probe-miss race on a fresh world) parks the
-     * position permanently even after the chunk exists on disk. The re-request goes out
-     * with ts=0, which the server routes disk-first and can now serve. Unknown (-1)
-     * positions stay unmarked — the scan ladder requests those anyway.
+     * Mark dirty if the client has any recorded disposition for the column (data or a
+     * session-satisfied mark). A dirty broadcast means the server just SAVED content
+     * there — this is the ONE revival path for a NOT_GENERATED position (which sits in
+     * sessionSatisfied with no stamp): without this rescue, a not-generated answer under
+     * enableChunkGeneration=false parks the position permanently even after the chunk
+     * exists on disk. The re-request goes out with the stored stamp (or -1), which the
+     * server routes disk-first and can now serve. Unknown (-1) positions stay unmarked —
+     * the scan ladder requests those anyway.
      */
     boolean markDirtyIfKnown(long packed) {
         // Fire if the client has ANY disposition for the column: a stored timestamp (data or
@@ -209,12 +215,19 @@ class ColumnStateMap {
         }
     }
 
-    /** Server cannot serve the column (not generated / not servable). */
+    /**
+     * Server cannot serve the column — PERMANENT for the session: the position joins
+     * {@code sessionSatisfied} and the spiral never re-asks, regardless of movement. The
+     * only revival is a dirty broadcast ({@link #markDirtyIfKnown} fires on the
+     * session-satisfied mark and outranks it in classify) — if the chunk later exists,
+     * the server's dirty detection pushes it. Any existing stamp stays untouched: a
+     * data-claiming client keeps its stale-but-real terrain (mirrors {@link #onUpToDate}'s
+     * no-data handling; no fabricated or zeroed stamps).
+     */
     void onNotGenerated(long packed) {
-        this.sessionSatisfied.remove(packed); // a not-generated answer re-opens a satisfied position
         this.dirty.remove(packed);  // answer-time consumption — see onUpToDate
         this.retry.remove(packed);
-        put(packed, 0L);
+        this.sessionSatisfied.add(packed);
     }
 
     /** Re-serve attempts allowed per position per session before parking it. */

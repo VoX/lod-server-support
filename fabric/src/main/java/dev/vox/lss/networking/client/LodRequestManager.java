@@ -367,20 +367,12 @@ public class LodRequestManager {
         this.metrics.discardRttStamp(packed); // terminal non-column answer: the RTT stamp is dead
         this.columns.onNotGenerated(packed);
         consumeStaleCrossing(packed); // a dirty that crossed this in-flight first serve forces a re-request
-        // Defence-in-depth, no longer a live fix. Under the declarative want-set an awaited
-        // position is an ordinary unsatisfied member that blocks its own ring's confirmation
-        // (pinned by awaitedPositionsAreReDeclaredAndBlockRingConfirmation), and to receive
-        // this answer at all the position must have been in the last declared want-set — so
-        // the ring cannot have confirmed past it, and there is nothing below the ring to
-        // re-reach. It predates that: the old scanner skipped in-flight positions WITHOUT
-        // breaking confirmation, so the ring could confirm past a position while it was
-        // in-flight, stranding the ts=0 hole below the ring for a stationary player (CL-014).
-        // Kept because it is cadence-neutral and gen-disabled-safe (classify parks ts=0 when
-        // generation is off, so a re-walk just skips it), and cheap insurance against the
-        // ring ever confirming past an awaited position again. resetConfirmedRing itself
-        // stays load-bearing on consumeStaleCrossing's path, which CAN park a position below
-        // a confirmed ring.
-        this.scanner.resetConfirmedRing();
+        // No resetConfirmedRing here (the old ts=0 gen-retry needed one — CL-014): a
+        // NOT_GENERATED position is now PERMANENTLY session-satisfied, so there is no hole
+        // below the ring to re-reach, and during a gen-disabled backfill the answer stream
+        // would force a full re-walk per answer for nothing. The one path that CAN park a
+        // re-requestable position below a confirmed ring — a dirty crossing the in-flight
+        // answer — is consumeStaleCrossing above, which does its own confirmed-ring reset.
         this.metrics.recordNotGenerated();
     }
 
@@ -518,6 +510,5 @@ public class LodRequestManager {
     public int getPendingCount() { return this.tracker.size(); }
     // Last scan budget
     public int getLastBudget() { return this.scanner.getLastBudget(); }
-    public int getLastSyncQueued() { return this.scanner.getLastSyncQueued(); }
-    public int getLastGenQueued() { return this.scanner.getLastGenQueued(); }
+    public int getLastQueued() { return this.scanner.getLastQueued(); }
 }

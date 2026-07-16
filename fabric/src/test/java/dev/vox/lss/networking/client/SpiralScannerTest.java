@@ -119,7 +119,7 @@ class SpiralScannerTest {
         for (int r = rFrom; r <= rTo; r++) {
             for (int i = 0; i < 8 * r; i++) {
                 SpiralScanner.ringIndexToCoord(r, i, CX, CZ, c);
-                if (columns.classify(PositionUtil.packPosition(c[0], c[1]), true) != ColumnStateMap.SATISFIED) {
+                if (columns.classify(PositionUtil.packPosition(c[0], c[1])) != ColumnStateMap.SATISFIED) {
                     return false;
                 }
             }
@@ -282,28 +282,25 @@ class SpiralScannerTest {
 
     @Test
     void satisfiedOuterRingMustNotConfirmPastUnsatisfiedInnerRing() {
-        // genCap = genLimit * 4 = 4: ring 3 (24 not-generated positions) can only queue 4
-        // per scan — unsatisfied; rings 4-5 are fully satisfied. Confirmation must hold at
-        // ring 3 rather than jumping to 6 and orphaning ring 3's remaining 20 positions.
+        // Queue pressure shrinks the budget to 4 (800 * (1 - 995/1000), rounded, floor 1):
+        // ring 3 (24 unknown positions) declares only 4 this scan — unsatisfied; rings 4-5
+        // are fully satisfied. Confirmation must hold at ring 3 rather than jumping to 6
+        // and orphaning ring 3's remaining 20 positions.
         var columns = new ColumnStateMap();
         int[] c = new int[2];
-        for (int r = 3; r <= 5; r++) {
+        for (int r = 4; r <= 5; r++) {
             for (int i = 0; i < 8 * r; i++) {
                 SpiralScanner.ringIndexToCoord(r, i, CX, CZ, c);
                 long packed = PositionUtil.packPosition(c[0], c[1]);
-                if (r == 3) {
-                    columns.onNotGenerated(packed);          // ts == 0 → wants generation
-                } else {
-                    columns.onReceived(packed, 1000L);       // satisfied
-                    columns.onUpToDate(packed);
-                }
+                columns.onReceived(packed, 1000L);       // satisfied
+                columns.onUpToDate(packed);
             }
         }
 
         var s = scanner(5, 100, 1);
         var queue = new Sink();
-        int queued = fireScan(s, 2, columns, queue);
-        assertEquals(4, queued, "gen cap (1*4) bounds the queued generation retries");
+        int queued = fireScan(s, 2, 995, 1000, 0, columns, queue);
+        assertEquals(4, queued, "queue pressure bounds the scan to 4 declared positions");
         assertTrue(s.getConfirmedRing() <= 3,
                 "confirmed ring " + s.getConfirmedRing()
                         + " jumped past unsatisfied ring 3 — permanent LOD hole");
@@ -329,10 +326,10 @@ class SpiralScannerTest {
 
     @Test
     void budgetBoundsQueuedPositions() {
-        // budget = syncLimit * 4 = 8 with a huge annulus
+        // The constant want-set budget (800) with a larger annulus (rings 3..16 = 1064)
         var s = scanner(16, 2, 100);
         var queue = new Sink();
-        assertEquals(8, fireScan(s, 2, new ColumnStateMap(), queue));
+        assertEquals(LSSConstants.WANT_SET_BUDGET, fireScan(s, 2, new ColumnStateMap(), queue));
     }
 
     @Test
@@ -369,11 +366,11 @@ class SpiralScannerTest {
 
     @Test
     void queuePressureShrinksBudgetLinearlyWithFloorOne() {
-        // base budget = 25 * 4 = 100; rings 3..16 hold 1064 candidates, far above any budget
+        // base budget = WANT_SET_BUDGET (800); rings 3..16 hold 1064 candidates, above it
         var s = scanner(16, 25, 100);
         var queue = new Sink();
-        assertEquals(75, fireScan(s, 2, 250, 1000, 0, new ColumnStateMap(), queue),
-                "column queue at 25% of halt threshold scales the budget linearly to 75");
+        assertEquals(600, fireScan(s, 2, 250, 1000, 0, new ColumnStateMap(), queue),
+                "column queue at 25% of halt threshold scales the budget linearly to 600");
 
         // At the halt threshold the linear scale reaches 0 but the budget floors at 1
         s = scanner(16, 25, 100);
@@ -384,11 +381,11 @@ class SpiralScannerTest {
 
     @Test
     void missingVanillaShrinksBudgetQuadraticallyToZero() {
-        // base = 100; viewDistance 2 → exclusion area 25; 15 missing → fraction 0.6,
-        // quadratic scale 1 - 0.36 = 0.64 (a linear scale would give 40)
+        // base = 800; viewDistance 2 → exclusion area 25; 15 missing → fraction 0.6,
+        // quadratic scale 1 - 0.36 = 0.64 → 512 (a linear scale would give 320)
         var s = scanner(16, 25, 100);
         var queue = new Sink();
-        assertEquals(64, fireScan(s, 2, 0, 1000, 15, new ColumnStateMap(), queue),
+        assertEquals(512, fireScan(s, 2, 0, 1000, 15, new ColumnStateMap(), queue),
                 "vanilla-load scale is quadratic in the missing fraction");
 
         // All 25 exclusion chunks missing → scale 0 → no walk at all (no floor on this path).
@@ -397,7 +394,7 @@ class SpiralScannerTest {
         s = scanner(16, 25, 100);
         queue = new Sink();
         var columns = new ColumnStateMap();
-        assertEquals(100, fireScan(s, 2, columns, queue), "premise: a normal scan zeroes the counter");
+        assertEquals(800, fireScan(s, 2, columns, queue), "premise: a normal scan zeroes the counter");
         int last = 0;
         for (int i = 0; i < LSSConstants.TICKS_PER_SECOND; i++) {
             last = s.maybeScan(CX, CZ, 2, 0, 1000, () -> 25, columns, queue.pos, queue.ts);
@@ -531,15 +528,15 @@ class SpiralScannerTest {
     void dimensionChangeClearsMapMarksAndRecomputesScanStats() {
         var columns = new ColumnStateMap();
         int[] c = new int[2];
-        for (int i = 0; i < 8 * 3; i++) { // ring 3: not-generated stamps (gen candidates)
+        for (int i = 0; i < 8 * 3; i++) { // ring 3: NOT_GENERATED answers — permanent session-satisfy
             SpiralScanner.ringIndexToCoord(3, i, CX, CZ, c);
             columns.onNotGenerated(PositionUtil.packPosition(c[0], c[1]));
         }
         seedSatisfied(columns, 4, 4);
-        var s = scanner(4, 100, 1); // genCap 4
+        var s = scanner(4, 100, 1);
         var queue = new Sink();
-        assertEquals(4, fireScan(s, 2, columns, queue), "precondition: gen-capped scan");
-        assertEquals(4, s.getLastGenQueued());
+        assertEquals(0, fireScan(s, 2, columns, queue),
+                "precondition: NOT_GENERATED parks permanently — the settled disc declares nothing");
         columns.markRetry(ringPos(4, 0));
 
         // The production dimension-change sequence (LodRequestManager.onDimensionChange).
@@ -552,8 +549,7 @@ class SpiralScannerTest {
         assertFalse(queue.hasNext(), "the old dimension's want-set is dropped");
         int n = fireScan(s, 2, columns, queue);
         assertEquals(8 * 3 + 8 * 4, n, "the full annulus re-declares as unknown");
-        assertEquals(0, s.getLastGenQueued(), "scan stats recomputed for the fresh scan, never stale");
-        assertEquals(n, s.getLastSyncQueued(), "everything re-asks sync after the map clear");
+        assertEquals(n, s.getLastQueued(), "scan stats recomputed for the fresh scan, never stale");
         for (int i = 0; i < n; i++) {
             assertEquals(-1L, queue.ts[i], "cleared map re-requests with ts=-1, not stale stamps");
         }
@@ -845,28 +841,29 @@ class SpiralScannerTest {
     }
 
     @Test
-    void ts0PositionBelowConfirmedRingIsRereachedByResetConfirmedRing() {
-        var s = scanner(1, 4, 4); // gen ENABLED
+    void dirtiedPositionBelowConfirmedRingIsRereachedByResetConfirmedRing() {
+        var s = scanner(1, 4, 4);
         var columns = new ColumnStateMap();
         var queue = new Sink();
         long target = stageRing1Confirmed(s, columns, queue);
 
-        // The target is re-opened as not-generated (ts=0, gen-retry-able) below the confirmed ring.
-        columns.onNotGenerated(target);
+        // A dirty broadcast re-opens the below-ring position (the stale-crossing shape:
+        // consumeStaleCrossing marks dirty at a terminal outcome, below the confirmed ring).
+        columns.markDirtyIfKnown(target);
 
         // A normal scan starts at the confirmed ring (past the target) — it stays stranded.
         assertEquals(0, fireScanFull(s, CX, CZ, 0, 0, 1000, 0, columns, queue),
-                "without the re-walk a below-ring ts=0 position is never rescanned (the CL-014 hole)");
+                "without the re-walk a below-ring re-opened position is never rescanned (CL-014)");
 
         // The fix forces a re-walk from the innermost ring, re-reaching it.
         s.resetConfirmedRing();
         int recount = fireScanFull(s, CX, CZ, 0, 0, 1000, 0, columns, queue);
-        assertEquals(1, recount, "resetConfirmedRing re-walks and re-emits the stranded ts=0 position");
+        assertEquals(1, recount, "resetConfirmedRing re-walks and re-emits the re-opened position");
         assertEquals(List.of(target), queue.positions());
     }
 
     @Test
-    void ts0PositionStaysParkedWhenGenerationDisabled() {
+    void notGeneratedPositionStaysParkedThroughAConfirmedRingReset() {
         var s = new SpiralScanner();
         s.setConfig(new SessionConfigS2CPayload(LSSConstants.PROTOCOL_VERSION, true, 1, 4, 4, false));
         var columns = new ColumnStateMap();
@@ -875,10 +872,10 @@ class SpiralScannerTest {
 
         columns.onNotGenerated(target);
         s.resetConfirmedRing();
-        // classify parks a ts=0 position SATISFIED when generation is off, so even after the
-        // re-walk it is NOT re-requested — the reset is gen-disabled-safe (no re-request loop).
+        // A NOT_GENERATED position is permanently session-satisfied, so even a full re-walk
+        // must NOT re-request it — only a dirty broadcast revives it (no re-request loop).
         assertEquals(0, fireScanFull(s, CX, CZ, 0, 0, 1000, 0, columns, queue),
-                "with generation disabled a not_generated position parks, it must not loop re-requests");
+                "a NOT_GENERATED position is parked for the session — a re-walk must not re-ask it");
     }
 
     // ---- re-declaration (the load-bearing want-set invariant) ----

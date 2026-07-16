@@ -420,8 +420,7 @@ public final class BenchmarkMetricsExporter {
         scan.put("ring", manager != null ? manager.getScanRing() : 0);
         scan.put("missing_vanilla", manager != null ? manager.getMissingVanillaChunks() : 0);
         scan.put("budget", manager != null ? manager.getLastBudget() : 0);
-        scan.put("sync_queued", manager != null ? manager.getLastSyncQueued() : 0);
-        scan.put("gen_queued", manager != null ? manager.getLastGenQueued() : 0);
+        scan.put("queued", manager != null ? manager.getLastQueued() : 0);
         result.put("scan", scan);
 
         // Declared-and-unanswered (the awaiting-answer set), replaced per scan.

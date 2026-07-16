@@ -151,16 +151,17 @@ class LodRequestManagerTickTest {
         // The surviving half of CL-021: the send buffers are sized at MAX_BATCH_CHUNK_REQUESTS, so
         // a want-set larger than the cap would overflow them. The drip-feed used to enforce this at
         // the drain; the scanner now enforces it as a budget clamp, before it writes a single entry.
-        setupManager(config(512, 10_000, 100, true)); // budget 10_000*4 = 40_000, far above the cap
+        setupManager(config(512, 10_000, 100, true)); // lod 512: the disc dwarfs any budget
 
         int scanned = fireScanPhase(0, 0, 0);
 
-        assertEquals(LSSConstants.MAX_BATCH_CHUNK_REQUESTS, scanned,
-                "the scan budget is clamped to the protocol batch cap, so the want-set always fits"
-                        + " one wire frame (replace semantics tear across frames) and the fixed send"
-                        + " buffers can never overflow");
+        assertEquals(LSSConstants.WANT_SET_BUDGET, scanned,
+                "one scan declares exactly the constant want-set budget — which the invariant"
+                        + " test pins under MAX_BATCH_CHUNK_REQUESTS, so the want-set always fits"
+                        + " one wire frame (replace semantics tear across frames) and the fixed"
+                        + " send buffers can never overflow");
         assertEquals(1, sent.size(), "one scan, one batch — never a split");
-        assertEquals(LSSConstants.MAX_BATCH_CHUNK_REQUESTS, sent.get(0).count());
+        assertEquals(LSSConstants.WANT_SET_BUDGET, sent.get(0).count());
     }
 
     // ---- lifecycle exits inform the state map — no silent orphans (CL-025 matrix rows) ----
@@ -201,7 +202,7 @@ class LodRequestManagerTickTest {
         assertEquals(0, manager.getReceivedColumnCount());
         assertEquals(-1L, manager.columnsForTest().timestampFor(stamped),
                 "wholesale reset: the old stamp lives on only in the saved cache");
-        assertEquals(-1L, manager.columnsForTest().classify(inFlightOnly, true),
+        assertEquals(-1L, manager.columnsForTest().classify(inFlightOnly),
                 "a position in flight at the flip stays unknown -> re-requested, never orphaned");
         assertFalse(manager.columnsForTest().hasRetries(), "no stale retry marks leak into the fresh map");
         assertEquals(0, sent.size(), "nothing was sent around the flip");
@@ -223,7 +224,7 @@ class LodRequestManagerTickTest {
         assertEquals(0, manager.getPendingCount(), "disconnect drops the whole awaiting set");
         assertEquals(5000L, manager.columnsForTest().timestampFor(stamped),
                 "stamps survive disconnect — the session-gate teardown saves them to the cache next");
-        assertEquals(-1L, manager.columnsForTest().classify(inFlightOnly, true),
+        assertEquals(-1L, manager.columnsForTest().classify(inFlightOnly),
                 "an answer-less awaited position stays unknown -> the next session re-requests it");
         assertFalse(manager.columnsForTest().hasRetries(),
                 "no retry marks at disconnect: the session is over, nothing left to rescan");
@@ -313,39 +314,43 @@ class LodRequestManagerTickTest {
     // ---- generation toggle suppression at want-set level (CG-029) ----
 
     @Test
-    void generationDisabledDeclaresZeroGenRequestsAndReEnableResumes() {
-        setupManager(config(2, 100, 100, false)); // generation disabled
+    void notGeneratedParksPermanentlyAndLegacyZeroStampsDeclareAsNoData() {
+        // The client never classifies generation anymore (server-owned generation): a
+        // NOT_GENERATED answer parks the position for the session regardless of the
+        // generationEnabled flag, and NO ask ever leaves the client with ts==0.
+        setupManager(config(2, 100, 100, false));
         long notGen = PositionUtil.packPosition(1, 1);
         manager.trackerForTest().replaceWith(new long[]{notGen}, 1);
-        manager.onColumnNotGenerated(notGen); // server said not-generated -> stored ts == 0
+        manager.onColumnNotGenerated(notGen); // permanent session-satisfy
 
         assertEquals(23, fireScanPhase(0, 0, 0),
-                "the parked ts==0 position is excluded from the scan (24-position annulus minus it)");
+                "the parked position is excluded from the scan (24-position annulus minus it)");
         for (var batch : sent) {
             for (int i = 0; i < batch.count(); i++) {
-                assertNotEquals(0L, batch.timestamps()[i],
-                        "no ts==0 (generation) ask may leave the client while generation is disabled");
+                assertNotEquals(0L, batch.timestamps()[i], "the client never emits ts==0");
                 assertNotEquals(notGen, batch.positions()[i], "the parked position is never asked");
             }
         }
 
-        // The toggle flip arrives as a fresh session config; the cache restores the ts==0 stamp.
+        // A legacy cache 0-stamp (written by a released pre-server-owned-generation client)
+        // re-declares as -1 next session — never as 0, and never silently SATISFIED (R5).
         setupManager(config(2, 100, 100, true));
         var restored = new Long2LongOpenHashMap();
         restored.put(notGen, 0L);
         manager.columnsForTest().loadFrom(restored);
         assertEquals(24, fireScanPhase(0, 0, 0),
-                "premise: the restored ts==0 stamp re-enters the scan once generation is enabled");
-        boolean genAskSent = false;
+                "the legacy 0-stamp re-enters the scan as an ordinary no-data want");
+        boolean declared = false;
         for (var batch : sent) {
             for (int i = 0; i < batch.count(); i++) {
+                assertNotEquals(0L, batch.timestamps()[i], "the client never emits ts==0");
                 if (batch.positions()[i] == notGen) {
-                    assertEquals(0L, batch.timestamps()[i]);
-                    genAskSent = true;
+                    assertEquals(-1L, batch.timestamps()[i], "a legacy 0-stamp declares as -1");
+                    declared = true;
                 }
             }
         }
-        assertTrue(genAskSent, "the generation ask went on the wire with ts=0");
+        assertTrue(declared, "the legacy-stamp position went on the wire as -1");
     }
 
     // ---- requested total counts every DECLARED entry (HD-040 manager half) ----

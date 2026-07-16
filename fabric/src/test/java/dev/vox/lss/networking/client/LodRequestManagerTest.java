@@ -173,7 +173,7 @@ class LodRequestManagerTest {
 
         assertEquals(1, manager.getTotalNotGenerated(), "late responses still count in diagnostics");
         assertEquals(0, manager.getEmptyColumnCount());
-        assertEquals(-1L, manager.columnsForTest().classify(POS, true),
+        assertEquals(-1L, manager.columnsForTest().classify(POS),
                 "an untracked status must not fabricate a not-generated stamp"
                         + " (would trigger spurious generation requests every scan)");
     }
@@ -184,7 +184,7 @@ class LodRequestManagerTest {
 
         assertEquals(1, manager.getTotalUpToDate());
         assertEquals(0, manager.getReceivedColumnCount());
-        assertEquals(-1L, manager.columnsForTest().classify(POS, true),
+        assertEquals(-1L, manager.columnsForTest().classify(POS),
                 "a wrongly-SATISFIED stamp would be a permanent invisible hole — no data was ever delivered");
     }
 
@@ -207,7 +207,7 @@ class LodRequestManagerTest {
         manager.onDirtyColumns(new long[]{POS});            // dirty crosses the in-flight serve
         manager.onColumnUpToDate(POS);                      // the pre-edit (all-air) answer lands
 
-        assertNotEquals(SATISFIED, manager.columnsForTest().classify(POS, true),
+        assertNotEquals(SATISFIED, manager.columnsForTest().classify(POS),
                 "a dirty that crossed the in-flight first serve must force a re-request, not settle");
     }
 
@@ -220,7 +220,7 @@ class LodRequestManagerTest {
         manager.onDirtyColumns(new long[]{POS});
         manager.onColumnReceived(POS, 5000L, dim("overworld")); // pre-edit content lands
 
-        assertNotEquals(SATISFIED, manager.columnsForTest().classify(POS, true),
+        assertNotEquals(SATISFIED, manager.columnsForTest().classify(POS),
                 "a crossed dirty re-requests even when real (pre-edit) data arrived");
     }
 
@@ -232,7 +232,7 @@ class LodRequestManagerTest {
         // unknown. Without that, onColumnReceived clears the dirty mark and the second edit is lost.
         manager.setLastDimensionForTest(dim("overworld"));
         manager.onColumnReceived(POS, 5000L, dim("overworld")); // held from an earlier serve
-        assertEquals(SATISFIED, manager.columnsForTest().classify(POS, true));
+        assertEquals(SATISFIED, manager.columnsForTest().classify(POS));
 
         var tracker = manager.trackerForTest();
         tracker.replaceWith(new long[]{POS}, 1); // resync (first edit) in flight
@@ -240,7 +240,7 @@ class LodRequestManagerTest {
         manager.onDirtyColumns(new long[]{POS});               // second edit crosses the resync
         manager.onColumnReceived(POS, 6000L, dim("overworld")); // first-edit content lands, clears dirty
 
-        assertNotEquals(SATISFIED, manager.columnsForTest().classify(POS, true),
+        assertNotEquals(SATISFIED, manager.columnsForTest().classify(POS),
                 "a dirty crossing an in-flight resync must re-request, not settle on stale content");
     }
 
@@ -258,7 +258,7 @@ class LodRequestManagerTest {
 
         manager.onIngestFailure(dim("overworld"), POS);               // consumer rejects the clear
 
-        assertEquals(3000L, manager.columnsForTest().classify(POS, true),
+        assertEquals(3000L, manager.columnsForTest().classify(POS),
                 "a rejected clear re-requests with the pre-clear content stamp, not ts=-1");
     }
 
@@ -274,22 +274,23 @@ class LodRequestManagerTest {
         assertFalse(tracker.isInFlight(POS), "slot leak would throttle later requests until timeout");
         assertEquals(0, manager.getReceivedColumnCount(),
                 "up-to-date on a never-seen position is session-satisfied, not stamped");
-        assertEquals(SATISFIED, manager.columnsForTest().classify(POS, true));
+        assertEquals(SATISFIED, manager.columnsForTest().classify(POS));
         assertTrue(manager.columnsForTest().isSessionSatisfied(POS));
         assertEquals(1, manager.getTotalUpToDate());
     }
 
     @Test
-    void trackedNotGeneratedStampsGenerationRetryAndReleasesSlot() {
+    void trackedNotGeneratedSessionSatisfiesAndReleasesSlot() {
         var tracker = manager.trackerForTest();
         tracker.replaceWith(new long[]{POS}, 1);
 
         manager.onColumnNotGenerated(POS);
 
         assertFalse(tracker.isInFlight(POS));
-        assertEquals(1, manager.getEmptyColumnCount());
-        assertEquals(0L, manager.columnsForTest().classify(POS, true),
-                "not-generated retries as a generation request");
+        assertEquals(SATISFIED, manager.columnsForTest().classify(POS),
+                "NOT_GENERATED is a permanent session-satisfy — the spiral never re-asks");
+        assertTrue(manager.columnsForTest().isSessionSatisfied(POS));
+        assertEquals(0, manager.getEmptyColumnCount(), "no 0-stamp is written anymore");
         assertEquals(1, manager.getTotalNotGenerated());
     }
 
@@ -309,7 +310,7 @@ class LodRequestManagerTest {
 
         assertEquals(1, manager.getTotalColumnsReceived());
         assertEquals(1, manager.getReceivedColumnCount());
-        assertEquals(SATISFIED, manager.columnsForTest().classify(POS, true),
+        assertEquals(SATISFIED, manager.columnsForTest().classify(POS),
                 "data is authoritative for the position; gating on isInFlight reintroduces"
                         + " the timeout -> silent-duplicate -> second-timeout stall");
     }
@@ -334,7 +335,7 @@ class LodRequestManagerTest {
 
         assertEquals(0, manager.getTotalColumnsReceived());
         assertEquals(0, manager.getReceivedColumnCount());
-        assertEquals(-1L, manager.columnsForTest().classify(POS, true),
+        assertEquals(-1L, manager.columnsForTest().classify(POS),
                 "the dispatch drain discards cross-dimension bytes, so stamping here would mark"
                         + " SATISFIED with no data delivered — a permanent hole after a dimension trip");
     }
@@ -399,7 +400,7 @@ class LodRequestManagerTest {
         manager.onColumnReceived(target, 6000L, dim("overworld")); // the ANSWER is the only consumer
 
         assertEquals(0, manager.getDirtyColumnCount(), "the terminal answer consumed the mark");
-        assertEquals(SATISFIED, columns.classify(target, true));
+        assertEquals(SATISFIED, columns.classify(target));
         assertEquals(0, fireScanRing1(), "scan 3 omits it");
         assertEquals(2, sent.size(), "...and sends nothing at all");
     }
@@ -487,7 +488,9 @@ class LodRequestManagerTest {
         assertEquals(1, manager.getTotalNotGenerated());
         assertEquals(0, manager.getReceivedColumnCount(),
                 "up-to-date on never-seen positions is session-satisfied, not stamped");
-        assertEquals(1, manager.getEmptyColumnCount(), "not-generated entry stamped");
+        assertEquals(0, manager.getEmptyColumnCount(),
+                "not-generated writes no 0-stamp — it session-satisfies");
+        assertTrue(manager.columnsForTest().isSessionSatisfied(pNotGen));
         assertFalse(tracker.isInFlight(pUpToDate));
         assertFalse(tracker.isInFlight(pNotGen));
         assertFalse(tracker.isInFlight(pAfterUnknown));
@@ -499,7 +502,7 @@ class LodRequestManagerTest {
         // (rather than renumbering UP_TO_DATE/NOT_GENERATED down) safe forever — and it is the
         // load-bearing half, because an inert byte 0 that silently SATISFIED a position would
         // be a permanent invisible hole.
-        assertEquals(-1L, manager.columnsForTest().classify(pReserved, true),
+        assertEquals(-1L, manager.columnsForTest().classify(pReserved),
                 "a reserved-type entry must not stamp, satisfy, or retry-mark its position");
         assertFalse(manager.columnsForTest().hasRetries(), "a reserved-type entry marks no retry");
         assertTrue(tracker.isInFlight(pReserved),
@@ -529,11 +532,11 @@ class LodRequestManagerTest {
     void ingestFailureUnstampsSoTheReAskCarriesUnknown() {
         manager.setLastDimensionForTest(dim("overworld"));
         manager.onColumnReceived(POS, 5000L, dim("overworld"));
-        assertEquals(SATISFIED, manager.columnsForTest().classify(POS, true));
+        assertEquals(SATISFIED, manager.columnsForTest().classify(POS));
 
         manager.onIngestFailure(dim("overworld"), POS);
 
-        assertEquals(-1L, manager.columnsForTest().classify(POS, true),
+        assertEquals(-1L, manager.columnsForTest().classify(POS),
                 "the position must re-request with ts=-1 so the server re-serves the data");
         assertTrue(manager.columnsForTest().hasRetries(),
                 "retry mark must reset the confirmed ring so the position is rescanned");
@@ -547,7 +550,7 @@ class LodRequestManagerTest {
 
         manager.onIngestFailure(dim("the_end"), POS);
 
-        assertEquals(SATISFIED, manager.columnsForTest().classify(POS, true),
+        assertEquals(SATISFIED, manager.columnsForTest().classify(POS),
                 "a report for another dimension's column must not unstamp the current map");
         assertEquals(0, manager.getTotalIngestFailures());
     }
@@ -610,10 +613,10 @@ class LodRequestManagerTest {
                     "a batch that never reached the wire must not be credited as awaiting, or a"
                             + " late status would be gated in against a declaration that never happened");
         }
-        assertEquals(5000L, columns.classify(held, true),
+        assertEquals(5000L, columns.classify(held),
                 "the dirty mark survives the failed send (marks are answer-consumed now, so there"
                         + " is nothing to restore) and re-asks with the STORED timestamp");
-        assertEquals(-1L, columns.classify(ring[1], true), "no invented timestamps");
+        assertEquals(-1L, columns.classify(ring[1]), "no invented timestamps");
         assertEquals(8, manager.getTotalPositionsRequested(), "a failed batch still counts as attempted");
 
         recordSends(); // transport recovers
@@ -648,7 +651,7 @@ class LodRequestManagerTest {
         assertEquals(-1L, columns.timestampFor(target),
                 "an unknown (ts=-1) ask answered up_to_date is session-satisfied — no fabricated stamp");
         assertTrue(columns.isSessionSatisfied(target));
-        assertEquals(SATISFIED, columns.classify(target, true));
+        assertEquals(SATISFIED, columns.classify(target));
         assertFalse(manager.trackerForTest().isInFlight(target));
 
         assertEquals(0, fireScanRing1(),
@@ -675,14 +678,15 @@ class LodRequestManagerTest {
                         LSSConstants.RESPONSE_NOT_GENERATED, LSSConstants.RESPONSE_UP_TO_DATE},
                 new long[]{pA, pA, pB, pB}, 4));
 
-        assertEquals(SATISFIED, manager.columnsForTest().classify(pA, true),
+        assertEquals(SATISFIED, manager.columnsForTest().classify(pA),
                 "the trailing duplicate (reserved byte 0) must not un-satisfy the up-to-date position");
         assertFalse(tracker.isInFlight(pA));
-        assertEquals(0L, manager.columnsForTest().timestampFor(pB));
-        assertEquals(0L, manager.columnsForTest().classify(pB, true),
-                "the trailing duplicate up-to-date arrives untracked and must not overwrite the"
-                        + " not-generated stamp — convergent, never half-applied");
-        assertFalse(manager.columnsForTest().isSessionSatisfied(pB));
+        assertEquals(SATISFIED, manager.columnsForTest().classify(pB),
+                "the first entry (NOT_GENERATED) session-satisfies pB; the trailing duplicate"
+                        + " up-to-date arrives untracked and changes nothing — convergent");
+        assertTrue(manager.columnsForTest().isSessionSatisfied(pB),
+                "parked by the NOT_GENERATED answer, no stamp written");
+        assertEquals(-1L, manager.columnsForTest().timestampFor(pB));
         assertFalse(tracker.isInFlight(pB));
         assertEquals(2, manager.getTotalUpToDate(), "every known-type entry still counts in diagnostics");
         assertEquals(1, manager.getTotalNotGenerated());
@@ -726,21 +730,24 @@ class LodRequestManagerTest {
     }
 
     @Test
-    void notGeneratedResponseResetsConfirmedRingSoTheStrandedHoleIsRewalked() {
-        // CL-014 end-to-end wiring: a not-generated response must force a confirmed-ring re-walk so
-        // a stationary player does not strand an ungenerated hole below the ring. SpiralScannerTest
-        // pins resetConfirmedRing() in isolation; this pins that onColumnNotGenerated actually calls
-        // it (deleting LodRequestManager's scanner.resetConfirmedRing() leaves that suite green).
+    void notGeneratedResponseDoesNotResetTheConfirmedRing() {
+        // CL-014's reset is deliberately GONE under server-owned generation: a NOT_GENERATED
+        // position is permanently session-satisfied, so there is no hole below the ring to
+        // re-walk — and during a gen-disabled backfill a per-answer reset would force a full
+        // re-walk per answer. The stale-crossing path (consumeStaleCrossing) keeps its own
+        // reset; that is pinned by dirtyCrossingInFlightAnswer tests, not this one.
         manager.onColumnReceived(POS, 5000L, dim("overworld")); // a known column so the scan confirms
         advanceToOneCallBeforeScanFire();
-        assertTrue(manager.getConfirmedRing() > 0, "precondition: ring confirmed past the hole");
+        int confirmedBefore = manager.getConfirmedRing();
+        assertTrue(confirmedBefore > 0, "precondition: ring confirmed");
 
         manager.trackerForTest().replaceWith(new long[]{POS}, 1); // awaited -> tracked path
 
         manager.onColumnNotGenerated(POS);
 
-        assertEquals(0, manager.getConfirmedRing(),
-                "a not-generated response must reset ring confirmation so the hole is re-walked");
+        assertEquals(confirmedBefore, manager.getConfirmedRing(),
+                "a not-generated answer must NOT reset ring confirmation — the position is "
+                        + "satisfied, and a reset per answer is pure re-walk churn");
     }
 
     @Test
@@ -829,7 +836,7 @@ class LodRequestManagerTest {
         columns.loadFrom(cached);                          // cached, unvalidated -> classify 5000
         manager.onIngestFailure(dim("overworld"), target); // the consumer never actually held it
 
-        assertEquals(-1L, columns.classify(target, true), "premise: classification is now unknown");
+        assertEquals(-1L, columns.classify(target), "premise: classification is now unknown");
         assertEquals(1, fireScanRing1());
 
         assertEquals(1, sent.size());

@@ -107,11 +107,10 @@ public class LSSClientCommands {
 
         // Budget line
         int budget = manager.getLastBudget();
-        int syncQueued = manager.getLastSyncQueued();
-        int genQueued = manager.getLastGenQueued();
+        int lastQueued = manager.getLastQueued();
         source.sendFeedback(Component.literal(String.format(
-                "Budget: used=%d/%d (sync=%d, gen=%d)",
-                syncQueued + genQueued, budget, syncQueued, genQueued
+                "Budget: used=%d/%d",
+                lastQueued, budget
         )).withStyle(ChatFormatting.GRAY));
     }
 }

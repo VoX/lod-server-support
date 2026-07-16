@@ -343,7 +343,7 @@ class ClientColumnProcessorTest {
         processor.reportUndispatched(manager);
 
         assertEquals(0, processor.getQueuedCount(), "undispatched queue must be drained");
-        assertEquals(-1L, manager.columnsForTest().classify(packed, true),
+        assertEquals(-1L, manager.columnsForTest().classify(packed),
                 "an undispatched column's stamp must be forgotten before saveCache persists it");
         assertEquals(1, manager.getTotalIngestFailures());
     }
