@@ -27,7 +27,8 @@ import java.util.concurrent.atomic.AtomicInteger;
  *
  * <p>The corrupt chunk sits ~1900 chunks away in a region no IO worker has ever opened
  * (region file handles are cached per region; writing under an open handle would race).
- * Requests are seeded via {@code state.addRequest} — the distance guard is not under test.
+ * Requests are seeded as one declared want-set via {@link GameTestSeeding} — the distance
+ * guard is not under test.
  */
 public class RegionFaultGameTests {
 
@@ -96,8 +97,10 @@ public class RegionFaultGameTests {
                 helper.assertTrue(chunkSource.getChunkNow(validPos.x(), validPos.z()) == null,
                         "waiting for the valid chunk to unload");
                 level.save(null, true, false);
-                state.addRequest(corruptPacked, -1L);
-                state.addRequest(validPacked, -1L);
+                // ONE batch: two sequential offers would supersede the corrupt position and
+                // the pool-survival premise (both reads through the same pool) would evaporate.
+                GameTestSeeding.seedRequests(state,
+                        new long[]{corruptPacked, validPacked}, new long[]{-1L, -1L});
                 step.set(1);
                 helper.assertTrue(false, "requests queued, awaiting both disk resolutions");
             }

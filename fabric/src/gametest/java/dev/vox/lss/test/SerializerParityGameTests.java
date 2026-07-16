@@ -486,7 +486,7 @@ public class SerializerParityGameTests {
                     helper.assertTrue(chunkSource.getChunkNow(cx, cz) == null,
                             "waiting for the chunk to unload");
                     level.save(null, true, false);
-                    state.addRequest(packed, -1L);
+                    GameTestSeeding.seedRequest(state, packed, -1L);
                     step.set(1);
                     helper.assertTrue(false, "request queued, awaiting the disk serve");
                 }
@@ -569,7 +569,7 @@ public class SerializerParityGameTests {
                     var built = SectionSerializer.serializeColumn(level, chunk, cx, cz);
                     helper.assertTrue(built.serializedSections() != null,
                             "premise: the superflat column serves non-air content first");
-                    state.addRequest(packed, -1L);
+                    GameTestSeeding.seedRequest(state, packed, -1L);
                     Long2ObjectMap<LoadedColumnData> probes = new Long2ObjectOpenHashMap<>();
                     probes.put(packed, built);
                     proc.postSnapshot(new TickSnapshot(Map.of(uuid, dim), Map.of(uuid, probes),
@@ -598,7 +598,7 @@ public class SerializerParityGameTests {
                     // its stored stamp; all posted before one snapshot = one mailbox take.
                     proc.invalidateTimestamps(dim, new long[]{packed});
                     proc.clearDiskReadDone(uuid, new long[]{packed});
-                    state.addRequest(packed, LSSConstants.epochSeconds() + 10_000);
+                    GameTestSeeding.seedRequest(state, packed, LSSConstants.epochSeconds() + 10_000);
                     Long2ObjectMap<LoadedColumnData> probes = new Long2ObjectOpenHashMap<>();
                     probes.put(packed, emptied);
                     proc.postSnapshot(new TickSnapshot(Map.of(uuid, dim), Map.of(uuid, probes),

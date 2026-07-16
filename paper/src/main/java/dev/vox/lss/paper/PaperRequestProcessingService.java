@@ -472,17 +472,23 @@ public class PaperRequestProcessingService {
     }
 
     /**
-     * Probe loaded chunks for positions in the player's PUBLISHED want-set (never the
-     * mailbox: {@code takeIncomingBatch()} nulls it within ~50 ms of arrival while batches
-     * arrive at only 1 Hz, so probing the mailbox would roughly halve coverage).
+     * Probe loaded chunks for positions the player still wants (Paper's sync path — Folia
+     * uses the regionized hold-release instead).
      *
-     * <p>Alignment is best-effort here (Folia's one-tick hold-release is the deterministic
-     * variant): a position admitted before its first probe pass serves from disk once — the
-     * next pass re-probes what is still owed and the dirty broadcast heals any stale read.
-     * The want-set stays published exactly while the backlog is non-empty (cleared on
-     * drain-to-empty, republished by {@code restoreBacklog}), so it still lists positions
-     * this player already had routed; a probe for an already-routed position is simply
-     * unused by the router.
+     * <p><b>Source: the mailbox first, then the published want-set.</b> The MAILBOX holds a
+     * batch that arrived since the last routing cycle; probing it on its ARRIVAL tick is what
+     * puts its probes in the snapshot the router routes it against. Without that a freshly
+     * declared position is never probed on its first routing cycle, and a want-set that fits
+     * under the per-player slot cap — the converged steady state, and every single-position
+     * dirty-broadcast re-request — has no second cycle, so it disk-reads. Folia's one-tick
+     * hold-release makes the same alignment deterministic; this is the sync path's
+     * equivalent. The PUBLISHED want-set then covers the other ~19 ticks of each second
+     * ({@code takeIncomingBatch()} nulls the mailbox within ~50 ms of arrival while batches
+     * arrive at only 1 Hz) and carries a want-set too large for the slot cap across the
+     * cycles that work it off (published exactly while the backlog is non-empty).
+     *
+     * <p>Both sources may list already-routed positions; such a probe is simply unused by the
+     * router, bounded by {@link #MAX_PROBES_PER_TICK_PER_PLAYER}.
      */
     private Long2ObjectMap<LoadedColumnData> probeLoadedChunks(
             PaperPlayerRequestState state, ServerLevel level,
@@ -490,7 +496,9 @@ public class PaperRequestProcessingService {
         var probes = new Long2ObjectOpenHashMap<LoadedColumnData>();
         int probed = 0;
 
-        var wantSet = state.peekWantSet();
+        var wantSet = state.peekIncomingBatch();
+        if (wantSet == null)
+            wantSet = state.peekWantSet();
         if (wantSet == null)
             return probes;   // nothing pending — converged player, no probe cost
         for (var req : wantSet.requests()) {

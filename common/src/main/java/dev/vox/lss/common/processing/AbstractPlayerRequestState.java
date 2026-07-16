@@ -82,12 +82,15 @@ public abstract class AbstractPlayerRequestState<T> {
     // Single-writer (processing thread) — volatile for exporter/diagnostic reads.
     private volatile int backlogSizeSnapshot = 0;
 
-    // The want-set the processing thread most recently applied to the backlog. The main-thread
-    // probe reads THIS, never the mailbox: takeIncomingBatch() nulls the mailbox within ~50ms of
-    // arrival (the processing loop polls at 20Hz) while batches arrive at only 1Hz, so a probe
-    // peeking the mailbox would see null on ~19 of every 20 ticks AND lose a coin-flip race on the
-    // 20th — collapsing in-memory probe coverage to roughly half. Published on apply, cleared when
-    // the backlog drains so a converged player is not probed forever. Single-writer (processing
+    // The want-set the processing thread most recently applied to the backlog. This is the
+    // main-thread probe's FALLBACK source, read when the mailbox is empty — which is almost
+    // always: takeIncomingBatch() nulls the mailbox within ~50ms of arrival (the processing loop
+    // polls at 20Hz) while batches arrive at only 1Hz, so a probe reading the mailbox ALONE would
+    // see null on ~19 of every 20 ticks. This carries a want-set too large for the per-player slot
+    // cap across the cycles that work it off. (The mailbox arm is not redundant with it: it is the
+    // only thing that probes a batch on its ARRIVAL tick, before this field is even written — see
+    // the probeLoadedChunks javadoc on either platform.) Published on apply, cleared when the
+    // backlog drains so a converged player is not probed forever. Single-writer (processing
     // thread), volatile for the main thread's read; IncomingBatch is immutable.
     //
     // INVARIANT: published iff the backlog is non-empty — i.e. exactly while work is still owed.
@@ -153,13 +156,16 @@ public abstract class AbstractPlayerRequestState<T> {
         }
     }
 
-    /** Non-destructive read of the MAILBOX (tests + Folia hold-release only — NOT the probe;
-     *  see {@link #peekWantSet}). */
+    /** Non-destructive read of the MAILBOX. Read by the main-thread probe (its first source:
+     *  this is a batch that has not been applied yet, so it is probed on its arrival tick),
+     *  the Folia hold-release, and tests. See also {@link #peekWantSet}, the fallback source
+     *  for the ~19 ticks per second on which no batch arrives. */
     public IncomingBatch peekIncomingBatch() {
         return this.pendingBatch.get();
     }
 
-    /** Main-thread loaded-chunk probe source: the applied want-set, or null when nothing pends. */
+    /** Main-thread loaded-chunk probe FALLBACK source (after {@link #peekIncomingBatch}): the
+     *  applied want-set, or null when nothing pends. */
     public IncomingBatch peekWantSet() {
         return this.publishedWantSet;
     }

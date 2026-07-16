@@ -254,9 +254,12 @@ class PaperRequestProcessingServiceTest {
     }
 
     /** Stand in for the processing thread having APPLIED a want-set to the backlog — that is
-     *  what publishes it, and the main-thread probe reads the published set, never the mailbox
-     *  (probing the mailbox would roughly halve coverage). These tests drive the pump directly
-     *  with no processing thread behind it, so they publish the same way replaceBacklogWith does. */
+     *  what publishes it. The main-thread probe reads the mailbox FIRST and falls back to the
+     *  published set; publishing (with an empty mailbox) is how these tests exercise the
+     *  fallback arm, which is the one that carries a want-set across the ~19 ticks per second
+     *  on which no batch arrives. These tests drive the pump directly with no processing
+     *  thread behind it, so they publish the same way replaceBacklogWith does.
+     *  {@link #freshMailboxBatchIsProbedOnItsArrivalTickWithNothingPublished} pins the other arm. */
     private static void publish(PaperPlayerRequestState state, IncomingRequest... reqs) {
         state.publishWantSet(new IncomingBatch(reqs));
     }
@@ -578,6 +581,50 @@ class PaperRequestProcessingServiceTest {
     }
 
     // ---- PP-010: probe budget, dedupe, generation-ready skip ----
+
+    /**
+     * The probe reads the MAILBOX before the published want-set. A batch that arrived since
+     * the last routing cycle must be probed on its ARRIVAL tick — nothing is published yet,
+     * because publishing is what the processing thread does when it APPLIES the batch, which
+     * happens after this snapshot is built.
+     *
+     * <p>Without the mailbox arm a freshly declared position is never probed on its first
+     * routing cycle, and a want-set that fits under the per-player slot cap has no second
+     * cycle: it admits everything at once, the backlog drains, the want-set unpublishes.
+     * That is the converged steady state and every single-position dirty-broadcast
+     * re-request — i.e. the edited-loaded-column case, which would then disk-read
+     * pre-edit bytes instead of serving live. Folia's hold-release makes the same alignment
+     * deterministic; this is the sync path's equivalent, and only this test fails if it is
+     * "simplified" back to peekWantSet() alone.
+     */
+    @Test
+    void freshMailboxBatchIsProbedOnItsArrivalTickWithNothingPublished() {
+        var uuid = UUID.randomUUID();
+        var player = playerIn(uuid, level(Level.OVERWORLD));
+        var state = service.registerPlayer(player, 1);
+
+        long packed = PositionUtil.packPosition(1000, 0);
+        // Ingress only — exactly what handleBatchRequest does. Nothing applied, nothing published.
+        state.offerIncomingBatch(new IncomingBatch(
+                new IncomingRequest[]{new IncomingRequest(1000, 0, -1L)}));
+        assertNull(state.peekWantSet(),
+                "premise: the processing thread has not applied the batch, so nothing is published");
+
+        var probedPositions = new ArrayList<Long>();
+        service.setLoadedColumnProbe((lvl, cx, cz) -> {
+            probedPositions.add(PositionUtil.packPosition(cx, cz));
+            return new LoadedColumnData(cx, cz, new byte[]{1}, 10);
+        });
+
+        service.tick();
+
+        assertEquals(List.of(packed), probedPositions,
+                "the freshly arrived batch must be probed on its arrival tick");
+        var probes = processor.snapshots.get(0).loadedChunkProbes().get(uuid);
+        assertNotNull(probes, "the arrival tick's snapshot must carry the probe the router "
+                + "needs to resolve this very batch in-memory");
+        assertNotNull(probes.get(packed));
+    }
 
     @Test
     void probeBudgetCountsNullChunkAttemptsButNotDuplicateSkips() {

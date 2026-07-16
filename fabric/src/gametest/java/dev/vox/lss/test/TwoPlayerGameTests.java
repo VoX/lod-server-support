@@ -239,7 +239,7 @@ public class TwoPlayerGameTests {
         helper.assertTrue(state.getTotalRequestsReceived() == 0,
                 "the vanilla player's request must not leak into the registered player's queue");
 
-        state.addRequest(packed, -1L);
+        GameTestSeeding.seedRequest(state, packed, -1L);
         helper.succeedWhen(() -> {
             service.tick();
             helper.assertTrue(state.getTotalSectionsSent() == 1,
@@ -301,8 +301,8 @@ public class TwoPlayerGameTests {
             switch (step.get()) {
                 case 0 -> {
                     if (stateA.getTotalRequestsReceived() == 0) {
-                        stateA.addRequest(packed, -1L);
-                        stateB.addRequest(packed, -1L);
+                        GameTestSeeding.seedRequest(stateA, packed, -1L);
+                        GameTestSeeding.seedRequest(stateB, packed, -1L);
                     }
                     service.tick();
                     helper.assertTrue(stateA.getTotalSectionsSent() == 1
@@ -330,10 +330,11 @@ public class TwoPlayerGameTests {
                     // Keep the chunk resident and re-issue until the re-serve lands — but only
                     // when no re-ask is in flight, so A re-serves EXACTLY once (step 2 asserts A==3).
                     level.getChunk(chunkPos.x(), chunkPos.z());
-                    if (stateA.getTotalSectionsSent() < 2 && stateA.getIncomingRequestCount() == 0
+                    if (stateA.getTotalSectionsSent() < 2
+                            && GameTestSeeding.noDeclarationOutstanding(stateA)
                             && !stateA.hasEnqueuedColumn(packed)
                             && !stateA.hasPendingRequest(chunkPos.x(), chunkPos.z())) {
-                        stateA.addRequest(packed, -1L);
+                        GameTestSeeding.seedRequest(stateA, packed, -1L);
                     }
                     service.tick();
                     helper.assertTrue(stateA.getTotalSectionsSent() == 2,
@@ -385,15 +386,17 @@ public class TwoPlayerGameTests {
                     // maxTicks. The step-1 guards keep at most one ask in flight per holder, so
                     // each holder re-serves EXACTLY once.
                     level.getChunk(chunkPos.x(), chunkPos.z());
-                    if (stateA.getTotalSectionsSent() < 3 && stateA.getIncomingRequestCount() == 0
+                    if (stateA.getTotalSectionsSent() < 3
+                            && GameTestSeeding.noDeclarationOutstanding(stateA)
                             && !stateA.hasEnqueuedColumn(packed)
                             && !stateA.hasPendingRequest(chunkPos.x(), chunkPos.z())) {
-                        stateA.addRequest(packed, 1L);
+                        GameTestSeeding.seedRequest(stateA, packed, 1L);
                     }
-                    if (stateB.getTotalSectionsSent() < 2 && stateB.getIncomingRequestCount() == 0
+                    if (stateB.getTotalSectionsSent() < 2
+                            && GameTestSeeding.noDeclarationOutstanding(stateB)
                             && !stateB.hasEnqueuedColumn(packed)
                             && !stateB.hasPendingRequest(chunkPos.x(), chunkPos.z())) {
-                        stateB.addRequest(packed, 1L);
+                        GameTestSeeding.seedRequest(stateB, packed, 1L);
                     }
                     service.tick();
                     helper.assertTrue(stateA.getTotalSectionsSent() == 3

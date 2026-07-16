@@ -460,7 +460,107 @@ Plan: docs/superpowers/plans/2026-07-15-declarative-want-set-requests.md (1469 l
     KNOWN_CLIENT_KEYS, PLAYER_DRAINS + backlog, SERVER_MONOTONIC, SERVER_MECHANISM, the design-doc
     tables). Nothing to do here — flagged only so nobody runs a soak between Tasks 6 and 8 and reads
     the KNOWN-key rejection as a regression. Soak is not a gate for this commit.
-- Task 7: NOT STARTED — Tier 2 gametests + Tier 3 (~1215-1258).
+- Task 7: COMPLETE — see commit below. **Tier 2 and Tier 3 are GREEN again** (the Task 4-7 red
+  window is closed). Tier 2: 57/57 (`:fabric:runGameTest`, incl. the +1 vanilla `always_pass`);
+  Tier 3: `:fabric:runClientGameTest` BUILD SUCCESSFUL first run, **no budget changes needed**
+  (plan Step 3's re-derivation held: `getTotalSendCycles()` per-scan pacing and the 1 Hz
+  re-declare both clear the existing L131/L168-184 budgets with margin). Tier 1 green (593, 0);
+  `:paper:test` green (247, 0 — 246 + the new probe pin). RegionFaultGameTests PASSED on this
+  WSL2 box (the CLAUDE.md env flake did not fire; no stash-compare was needed).
+  NEW: `fabric/src/gametest/…/test/GameTestSeeding.java` — package-private helper (seedRequests /
+  seedRequest / noDeclarationOutstanding). Not a @GameTest class, so the entrypoint contract test
+  correctly ignores it (verified: it stays out of `foundServer`).
+
+  ### Task 7 PLAN DEVIATIONS / FINDINGS
+
+  - **D7-1 (THE BIG ONE — a real v17 probe regression the Tier-2 corpus caught; FIXED IN
+    PRODUCTION, both platforms).** Plan Step 2 says the probe "iterates `peekIncomingBatch()
+    .requests()`". The code as landed reads `peekWantSet()` ONLY (rough edge #2's amendment,
+    hardened again by D4-10). Those are not the same thing, and the difference is a live bug:
+    **the snapshot is built BEFORE the processing thread applies the batch, so on a fresh
+    declaration's first routing cycle `peekWantSet()` is still null → zero probes → every
+    position disk-reads.** The plan's stated mitigation ("the next pass re-probes what is still
+    owed") only holds when the pass RETAINS. With the default `syncOnLoadConcurrencyLimitPerPlayer
+    = 200`, any want-set that fits under the cap admits everything in one cycle, the backlog drains,
+    `pollBacklog` unpublishes — and there IS no next pass. That is precisely **the converged steady
+    state and every single-position dirty-broadcast re-request**, i.e. the hottest path: an edited,
+    LOADED column. Worse than a perf regression — on Fabric with `useBackgroundReadPriority` the
+    reader bypasses IOWorker's `pendingWrites` (CLAUDE.md: "Fabric gives up read-your-writes here"),
+    so that column disk-reads **PRE-edit bytes** instead of serializing live.
+    **Caught, not theorised:** `ServiceLifecycleGameTests.probeServesLoadedChunkFromMemoryWithout-
+    SeedingDirtyFilter` was the sole Tier-2 red after the mechanical seeding pass ("the serve must
+    come from the in-memory probe, not disk on tick 302"). It seeds through the REAL ingress
+    (`handleBatchRequest`), so it had no test-staging excuse — the production path genuinely
+    stopped probing.
+    **Fix:** `probeLoadedChunks` reads the mailbox FIRST, falling back to the published want-set
+    (`var b = state.peekIncomingBatch(); if (b == null) b = state.peekWantSet();`) — 3 lines on
+    Fabric (`RequestProcessingService`) and Paper (`PaperRequestProcessingService`). The two arms
+    are complementary, neither is redundant: the mailbox is the ONLY thing that probes a batch on
+    its arrival tick (before `publishedWantSet` is even written); the published set is the only
+    thing alive on the other ~19 ticks/second and across the cycles that work off an over-cap
+    want-set. Cost: one extra probe pass per player per second, bounded by the 512 budget.
+    **Corroboration that this is the intended design, not my invention:** Folia's regionized path
+    ALREADY does exactly this — `holdAndScheduleRegionProbe` deliberately holds the FRESH mailbox
+    batch one tick "so a request and its region-published probe result meet in the same snapshot"
+    (CLAUDE.md). The sync path silently lost that alignment in v17; this restores platform parity
+    and v16's behaviour. Rough edge #2 was right that the mailbox ALONE halves coverage; the error
+    was reading that as "never the mailbox" instead of "not the mailbox alone".
+    **Chose FIX over restaging the test.** I first staged it the other way (helper also called
+    `publishWantSet`) and it went green — then threw that away: making the test agree with the code
+    instead of the invariant is exactly D4-10's sin, and the invariant ("a loaded column in the
+    want-set serves live, not from disk") plainly still matters. Decisive evidence the fix is right
+    rather than the seam: with mailbox-first, the ENTIRE Tier-2 corpus passes **with no test seam
+    at all** — every test keeps its original staging and `GameTestSeeding` is a bare
+    `offerIncomingBatch`, identical to what `handleBatchRequest` does. A design that needs a seam in
+    9 tests to look correct is the tell.
+  - **D7-2 (D7-1's Paper arm was unpinned — new Tier-1 test, mutation-proved).** Fabric's arm is
+    pinned by the gametest that caught it. Paper's had nothing: per D4-6 every Paper probe test
+    seeds via the `publish(...)` helper (the fallback arm), so `peekIncomingBatch()` could be
+    "simplified" out of `PaperRequestProcessingService` and all 246 tests would stay green. Added
+    `PaperRequestProcessingServiceTest.freshMailboxBatchIsProbedOnItsArrivalTickWithNothing-
+    Published` (offers through the real ingress shape, asserts nothing is published as its premise,
+    then asserts the arrival tick's snapshot carries the probe). **Mutation-verified per method:**
+    reverting Paper to `peekWantSet()`-only fails exactly this test and nothing else (1 of 26).
+  - **D7-3 (stale-comment sweep — 4 sites, the Task 2/4/5/6 lesson).** D7-1 falsified every comment
+    asserting the probe reads the published set "never the mailbox". Corrected in MAIN source:
+    `AbstractPlayerRequestState`'s `publishedWantSet` field comment (now: the FALLBACK source, and
+    why the mailbox arm is not redundant), `peekIncomingBatch`'s javadoc (was "NOT the probe" —
+    false), `peekWantSet`'s javadoc. In TEST source: `BacklogReplaceTest:94`'s rationale, which
+    also now names the two service-layer tests that pin the arm it cannot see (per D4-10's lesson:
+    a cross-layer invariant needs a test at the layer that can break it). Both platform
+    `probeLoadedChunks` javadocs rewritten to describe what the code does and why both arms exist.
+    Comment-only; all gates re-run green afterwards.
+  - **D7-4 (plan Step 2's last bullet was a non-issue — verified, not skipped).** Plan says
+    `LSSGameTests.diagnosticsContainAllFields` (:89) and `CommandGameTests.serverMetricsExporter-
+    AgreesWithDiagFormatterCounters` (:208) must "reconcile with the Task-6 field set (add
+    superseded, drop the rate-limited pair)". Neither reads a deleted key: the former asserts only
+    `sent=`/`disk=`/`utd=`/`gen=` (all still emitted), the latter reads `columns_sent`/`up_to_date`/
+    `in_memory`/`requests_received`. `grep -rni "rate_limited|incoming_dropped|request_queue"` over
+    the whole gametest tree returns ZERO hits. No edit made. (Its `requests == 3` still holds: one
+    2-entry batch + one 1-entry re-declaration; `offerIncomingBatch` adds `batch.size()` to
+    `totalRequestsReceived`, so re-declares count, as law A1 expects.)
+  - **D7-5 (distance-guard tests: `getIncomingRequests()` → `peekIncomingBatch().requests()`, plus
+    the plan's range_filtered assertion).** Both guard tests asserted the dropped entries via
+    `!it.hasNext()` ("beyond-distance requests must be dropped, not queued"). Under v17 the array
+    is positional, so absence is asserted by `batch.size()` — but that alone would silently lose
+    the "dropped" half of the invariant. Added the plan's `drainPendingRangeFiltered()` assertion
+    (3 and 4 respectively): the drop is now pinned as COUNTED at ingress, not merely absent, which
+    is strictly stronger than the iterator check and is the term law A1 depends on.
+  - **D7-6 (`getIncomingRequestCount() == 0` → `noDeclarationOutstanding`, TwoPlayer fan-out).**
+    The PR #19/#30 guarded-re-ask retries gate on "no ask in flight". Its v17 successor must check
+    BOTH mailbox and backlog (`peekIncomingBatch() == null && getBacklogSize() == 0`) — a
+    declaration lives in the mailbox until a cycle takes it, then in the backlog until that cycle
+    disposes of it. Checking only one would let a second ask be issued while the first is mid-cycle
+    and re-open the "A=3 B=1" flake this hardening exists to prevent. Guards otherwise untouched;
+    the exactly-once pin (A==3, B==2) is unchanged. Both fan-out tests passed on every Tier-2 run.
+  - **D7-7 (FP-022/FP-024 seeded as one batch — discrimination re-checked, not assumed).** Both
+    probe-budget tests build ONE 514-/516-entry batch in probe order. Traced the arithmetic to
+    confirm the mutation still fails: FP-024 with the containsKey guard probes C(1) + 510 fillers
+    + D(512) → `in_memory=2, submits=0`; without it, C×5 spends the budget and D falls past 512 →
+    `in_memory=1, submits=1`. FP-022: 512 fillers exhaust the budget before K1/K2 → `in_memory=0,
+    submits=2`; budget gone → `in_memory=2, submits=0`. Both still discriminate exactly as before.
+    Note these were only NON-vacuous because of D7-1 — with `peekWantSet()`-only they would have
+    passed by never probing at all (FP-022 vacuously green, FP-024 red).
 - Task 8: NOT STARTED — soak harness (part of the change, not a gate) (~1259-1327).
 - Task 9: NOT STARTED — docs (CLAUDE.md, README, read-scheduler-design.md supersession note).
 - Task 10: NOT STARTED — validation gauntlet + live soak.
@@ -469,7 +569,14 @@ Plan: docs/superpowers/plans/2026-07-15-declarative-want-set-requests.md (1469 l
 
 - HARD SEQUENCING: no commit may ship server-side silent drops while the client still suppresses
   in-flight positions at send (10s-class stall). Client lands FIRST — that is why Tasks 1-2 precede 3-4.
-- Tier 2/3 are EXPECTED RED between Tasks 4 and 7 (plan rough edge #6). Tier 1 + :paper:test gate
-  every commit. Do not push to CI expecting green gametests in that window.
+- ~~Tier 2/3 are EXPECTED RED between Tasks 4 and 7~~ — **CLOSED at Task 7.** All four gates are now
+  green (Tier 1 593, :paper:test 247, Tier 2 57/57, Tier 3). From here on a red gametest is a REAL
+  regression, not the expected window. Tasks 8-10 touch scripts/docs + validation only.
+- **The probe reads the mailbox FIRST, then the published want-set** (D7-1). Do not "simplify" it
+  back to either arm alone: the mailbox arm is the only arrival-tick coverage (its loss disk-reads
+  every dirty re-request, pre-edit bytes on Fabric), the published arm is the only coverage on the
+  other ~19 ticks/second. Pinned at the service layer on both platforms — Fabric's
+  `probeServesLoadedChunkFromMemoryWithoutSeedingDirtyFilter` (Tier 2) and Paper's
+  `freshMailboxBatchIsProbedOnItsArrivalTickWithNothingPublished` (Tier 1).
 - Folia 26.2 unpublished upstream → SOAK_PLATFORM=folia cannot run. Paper soak + RegionProbeSchedulingTest carry it.
 - `:fabric:test` does NOT pull runGameTest into its graph — run `:fabric:runGameTest` explicitly for Tier 2.

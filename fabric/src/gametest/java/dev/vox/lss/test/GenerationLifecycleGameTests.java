@@ -405,10 +405,13 @@ public class GenerationLifecycleGameTests {
 
             // Stale work of all three kinds: queued incoming requests, an in-flight generation
             // entry (with its MC ticket), and the per-player disk-reader queue.
-            oldState.addRequest(PositionUtil.packPosition(gx, gz + 1), -1L);
-            oldState.addRequest(PositionUtil.packPosition(gx, gz + 2), 12345L);
-            helper.assertTrue(oldState.getTotalRequestsReceived() == 2,
-                    "premise: stale requests queued on the old state");
+            GameTestSeeding.seedRequests(oldState,
+                    new long[]{PositionUtil.packPosition(gx, gz + 1),
+                            PositionUtil.packPosition(gx, gz + 2)},
+                    new long[]{-1L, 12345L});
+            helper.assertTrue(oldState.getTotalRequestsReceived() == 2
+                            && oldState.peekIncomingBatch() != null,
+                    "premise: a stale want-set is declared on the old state");
 
             var gen = service.getGenerationService();
             helper.assertTrue(gen != null,
@@ -445,8 +448,10 @@ public class GenerationLifecycleGameTests {
             helper.assertTrue(newState.getLastDimension().equals(Level.END),
                     "the fresh state must adopt the new dimension as its baseline");
             helper.assertTrue(newState.getTotalRequestsReceived() == 0
-                            && !newState.getIncomingRequests().iterator().hasNext(),
-                    "requests queued before the dimension change must die with the old state");
+                            && newState.getBacklogSize() == 0
+                            && newState.peekIncomingBatch() == null,
+                    "the want-set declared before the dimension change must die with the old "
+                            + "state — neither its mailbox batch nor a backlog may carry over");
             helper.assertTrue(gen.getActiveCount() == 0,
                     "the in-flight generation entry must be dropped on dimension change");
             helper.assertTrue(gen.getTotalRemovedInFlight() == 1,
@@ -505,7 +510,7 @@ public class GenerationLifecycleGameTests {
         helper.assertTrue(level.getChunkSource().getChunkNow(cx, cz) == null,
                 "premise: the requested chunk must not be loaded (a probe serve would bypass "
                         + "the disk-notfound path)");
-        oldState.addRequest(PositionUtil.packPosition(cx, cz), 0L); // clientTimestamp 0 = generation
+        GameTestSeeding.seedRequest(oldState, PositionUtil.packPosition(cx, cz), 0L); // ts 0 = generation
 
         // Tick 1 registers the dimension context and posts the routing snapshot. Its drain
         // cannot submit anything: the disk-notfound -> generation conversion needs a second
@@ -584,7 +589,7 @@ public class GenerationLifecycleGameTests {
         var state = service.registerPlayer(mock, LSSConstants.CAPABILITY_VOXEL_COLUMNS);
         helper.assertTrue(level.getChunkSource().getChunkNow(cx, cz) == null,
                 "premise: the requested chunk must not be loaded");
-        state.addRequest(PositionUtil.packPosition(cx, cz), 0L); // clientTimestamp 0 = generation
+        GameTestSeeding.seedRequest(state, PositionUtil.packPosition(cx, cz), 0L); // ts 0 = generation
 
         // Tick 1 registers the dimension context; the disk-notfound -> generation conversion
         // needs further processing cycles driven by manual snapshots (no drain in between).
@@ -654,7 +659,7 @@ public class GenerationLifecycleGameTests {
         helper.assertTrue(level.getChunkSource().getChunkNow(cx, cz) == null,
                 "premise: the chunk must not be loaded (the request must take the "
                         + "disk-notfound -> generation route)");
-        state.addRequest(packed, 0L);
+        GameTestSeeding.seedRequest(state, packed, 0L);
 
         var diag = service.getOffThreadProcessor().getDiagnostics();
         var phase = new AtomicInteger();
@@ -673,7 +678,10 @@ public class GenerationLifecycleGameTests {
                         "waiting for the ticketed chunk to load");
                 // ts>0 keeps the duplicate answer independent of the concurrent flush
                 // (a ts<=0 re-ask could legally re-resolve if the payload already left).
-                state.addRequest(packed, 5L);
+                // A fresh single-entry want-set: the first declaration was consumed by a
+                // routing cycle long ago (its generation is in flight), so this re-declaration
+                // supersedes nothing.
+                GameTestSeeding.seedRequest(state, packed, 5L);
                 service.tick(); // harvests the completion AND routes the re-request
                 phase.set(2);
                 helper.assertTrue(false, "completion tick executed, awaiting the outcome");

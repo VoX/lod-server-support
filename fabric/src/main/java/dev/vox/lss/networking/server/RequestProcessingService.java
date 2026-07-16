@@ -363,22 +363,39 @@ public class RequestProcessingService {
     }
 
     /**
-     * Probe loaded chunks for positions in the player's PUBLISHED want-set.
-     * Called on the main thread. Serializes loaded chunks so the processing thread
-     * can compress and send without touching MC world state.
+     * Probe loaded chunks for positions the player still wants. Called on the main thread.
+     * Serializes loaded chunks so the processing thread can compress and send without
+     * touching MC world state.
      *
-     * <p>Reads the published want-set, never the mailbox: {@code takeIncomingBatch()} nulls
-     * the mailbox within ~50 ms of arrival while batches arrive at only 1 Hz, so probing the
-     * mailbox would see null on ~19 of every 20 ticks and roughly halve probe coverage.
-     *
-     * <p>Alignment is best-effort: a position admitted before its first probe pass serves
-     * from disk once — the next pass re-probes what is still owed and the dirty broadcast
-     * heals any stale read. The want-set stays published exactly while the backlog is
-     * non-empty (cleared on drain-to-empty, republished by {@code restoreBacklog}), so it
-     * still lists positions this player already had routed; a probe for an already-routed
-     * position is simply unused by the router (bounded by
+     * <p><b>Source: the mailbox first, then the published want-set.</b> Both are needed and
+     * neither alone suffices:
+     * <ul>
+     *   <li>The MAILBOX holds a batch that arrived since the last routing cycle. It is
+     *       probed on its ARRIVAL tick, before the processing thread applies it, so the
+     *       snapshot the router routes it against already carries its probes. Without this a
+     *       freshly declared position is never probed on its first routing cycle, and for a
+     *       want-set that fits under the per-player slot cap — the converged steady state,
+     *       and every single-position dirty-broadcast re-request — there IS no second cycle:
+     *       it admits everything at once, the backlog drains, the want-set unpublishes, and
+     *       the position disk-reads. That is not merely slower: with
+     *       {@code useBackgroundReadPriority} the reader bypasses IOWorker's pendingWrites,
+     *       so a just-edited column read from disk yields PRE-edit bytes until the save
+     *       lands. The edited-chunk re-request is exactly the case that must serve live.
+     *       (Folia's regionized path makes the same alignment deterministic by holding the
+     *       fresh batch one tick — see {@code holdAndScheduleRegionProbe}; this is the sync
+     *       path's equivalent.)</li>
+     *   <li>The PUBLISHED want-set covers the other ~19 ticks of each second:
+     *       {@code takeIncomingBatch()} nulls the mailbox within ~50 ms of arrival while
+     *       batches arrive at only 1 Hz, so the mailbox alone would see null on almost every
+     *       tick. It stays published exactly while the backlog is non-empty (cleared on
+     *       drain-to-empty, republished by {@code restoreBacklog}), which is what carries a
+     *       want-set too large for the slot cap across the cycles that work it off.</li>
+     * </ul>
+     * Both sources list positions that may already be routed; a probe for an already-routed
+     * position is simply unused by the router, and the cost is bounded by
      * {@link #MAX_PROBES_PER_TICK_PER_PLAYER}, which the closest-first order spends on the
-     * head of the want-set).
+     * head of the want-set. Re-probing the same positions on the arrival tick and the
+     * following tick costs one extra pass per second per player.
      *
      * @param skipPositions packed positions already extracted by the generation service (may be null)
      */
@@ -388,7 +405,8 @@ public class RequestProcessingService {
         var probes = new Long2ObjectOpenHashMap<LoadedColumnData>();
         int probed = 0;
 
-        var batch = state.peekWantSet();
+        var batch = state.peekIncomingBatch();
+        if (batch == null) batch = state.peekWantSet();
         if (batch == null) return probes;   // nothing pending — converged player, no probe cost
         for (var req : batch.requests()) {
             if (probed >= MAX_PROBES_PER_TICK_PER_PLAYER) break;

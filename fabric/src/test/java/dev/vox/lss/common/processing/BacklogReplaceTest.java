@@ -91,10 +91,13 @@ class BacklogReplaceTest {
 
     @Test
     void applyPublishesTheWantSetAndDrainingTheBacklogClearsIt() {
-        // The main-thread probe reads peekWantSet(), never the mailbox: takeIncomingBatch()
-        // nulls the mailbox within ~50ms while batches arrive at 1Hz, so a mailbox-peeking
-        // probe would see null on ~19 of every 20 ticks. The published want-set survives the
-        // take and lives exactly as long as there is backlog left to route.
+        // peekWantSet() is the probe's FALLBACK source, behind the mailbox: takeIncomingBatch()
+        // nulls the mailbox within ~50ms while batches arrive at 1Hz, so a probe reading the
+        // mailbox alone would see null on ~19 of every 20 ticks. The published want-set survives
+        // the take and lives exactly as long as there is backlog left to route. (The arrival-tick
+        // mailbox arm is pinned at the service layer — the only layer that can break it — by
+        // Fabric's probeServesLoadedChunkFromMemoryWithoutSeedingDirtyFilter gametest and Paper's
+        // freshMailboxBatchIsProbedOnItsArrivalTickWithNothingPublished.)
         var s = new TestState();
         var b = batch(1, 2);
         s.offerIncomingBatch(b);
