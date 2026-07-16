@@ -302,3 +302,54 @@ self-healing, because the save we raced is the very event that marks the column 
 which is how vanilla passes it too (`Priority.FOREGROUND.ordinal()`). A reordering of the 3-constant
 enum is the one silent risk, and `SerializerParityGameTests
 .backgroundPriorityReadMatchesForegroundReadForDiskLoadedColumn` is positioned to catch it.
+
+### 10.4 Shipped resolution — A + B synthesis (supersedes both §10.1 "pick B" and the later "A everywhere")
+
+The bake-off (§10.1) picked B; the code that actually shipped (PR #36, §10.2/§10.3) was **A** —
+IOWorker `BACKGROUND` on Fabric, Moonrise `Priority.LOW` on Paper/Folia — because A is the
+*fundamentally correct* mechanism (true priority on the shared bottleneck, §10.1's own "where A is
+genuinely better"). That left B built but unwired.
+
+**The C2ME incident (2026-07-16) forced the synthesis.** A live Fabric server running C2ME
+NPE-stormed every LOD read: C2ME's chunkio rewrite replaces vanilla's single-threaded IOWorker with
+its own concurrent IO, leaving `consecutiveExecutor`/`storage` null on the vanilla shell that A
+reaches through accessor mixins (see the `c2me-background-read-incompat` memory + the CLAUDE.md
+Known-issues note). The first fix (`f65a447`) fell back to bare foreground `chunkMap.read` — correct,
+but it dropped **all** read protection exactly on the servers most likely to be disk-pressured. B was
+the missing half: it needs no vanilla internals at all (a pure `common/` AIMD law keyed on LSS's own
+read latency), so it is precisely what still works when A's substrate is gone.
+
+**Shipped design = A default, B as the auto-engaged Fabric fallback:**
+
+- **A is the default and is unchanged on the compatible path.** When the IOWorker executor resolves,
+  reads schedule at `BACKGROUND` exactly as before; the throttle stays null (throttling a working-A
+  server would only cost LSS throughput for zero gameplay benefit).
+- **Detection is maximally fail-safe** (`ChunkDiskReader.backgroundReaderOrFallback`): a null handle
+  **or any `Throwable`** from accessor resolution latches a server-wide one-way `backgroundIncompatible`
+  flag, enables the throttle, warns exactly once, and reads foreground thereafter. A mod we cannot
+  anticipate has changed vanilla's internals, so detection itself must never throw.
+- **B integrates through `hasHeadroom()`, not the old saturated bounce.** This is the one change from
+  B's §10.1 prototype that protocol v17 made possible: the want-set router *retains* a throttled-out
+  read (the `NO_DISK_HEADROOM` path) and the client's 1 Hz re-declaration heals it — no
+  `RESPONSE_RATE_LIMITED` (retired in v17), no bounce on the wire. B became a headroom modifier
+  instead of a self-heal-via-bounce mechanism.
+- **`useBackgroundReadPriority = false` remains a true rollback:** plain foreground, no throttle. A
+  user who disables A has opted out of all read protection.
+- **Paper never engages B.** Its A path (`MoonriseRegionFileIO.loadDataAsync`) is a compile-time call
+  to an always-present class — a missing Moonrise fails loudly at class-load, never as a silent null —
+  so Paper never detects incompatibility. Paper's protection stays Moonrise `Priority.LOW`.
+
+**Test-reachability (the honest limit, unchanged from §10.1's caveat and §10.3):** the fallback
+end-to-end cannot be reached by any automated test — gametests and soak run plain vanilla IO where the
+executor is always non-null, and no dev/CI environment loads a chunk-IO-overhaul mod. Every *reachable*
+piece is pinned as a `common/`/Fabric unit test — the null/throwable predicate, the AIMD control law,
+the enable→narrow-`hasHeadroom`→recover wiring, the throwable-latch→enable→warn-once path via an
+injected throwing resolver — and the decisive end-to-end is a **manual C2ME smoke test** (the built
+Fabric jar on a C2ME server: exactly one warning, no NPE, LOD still streams, `/lsslod diag` shows the
+throttle ENGAGED and adapting). This is the same reachability limitation the Paper Moonrise LOW path
+already lives with.
+
+**Still the endgame if B's approximation proves insufficient** (unchanged from §10.1/§10.2): a hardened
+A everywhere — resolve the `Priority` ordinal by enum-name, deliberate pending-writes semantics, and a
+Moonrise-based Paper twin — remains "true prioritization everywhere." A+B is not that; it is A where A
+works, and self-restraint where A cannot reach, with zero gameplay-harming failure modes on either path.

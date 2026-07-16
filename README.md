@@ -91,7 +91,7 @@ Server config is generated on first run:
 | `bytesPerSecondLimitPerPlayer` | `20971520` | Per-player pre-compression bandwidth cap (20 MB/s) |
 | `bytesPerSecondLimitGlobal` | `104857600` | Total pre-compression bandwidth cap (100 MB/s) |
 | `diskReaderThreads` | `5` | Thread pool size for async disk reads |
-| `useBackgroundReadPriority` | `true` | LOD disk reads yield to vanilla/gameplay chunk loading, so streaming distant terrain doesn't delay the chunks players are actively loading (Fabric: IOWorker BACKGROUND priority; Paper/Folia: Moonrise LOW priority). Set `false` to restore foreground reads |
+| `useBackgroundReadPriority` | `true` | LOD disk reads yield to vanilla/gameplay chunk loading, so streaming distant terrain doesn't delay the chunks players are actively loading (Fabric: IOWorker BACKGROUND priority; Paper/Folia: Moonrise LOW priority). On Fabric servers running a chunk-IO-overhaul mod (e.g. C2ME) that replaces vanilla's IOWorker, LSS automatically switches to adaptive read throttling (self-restraint that still yields to gameplay), logging one warning. Set `false` to restore foreground reads with no read protection |
 | `sendQueueLimitPerPlayer` | `4000` | Max queued column payloads per player (each carries a full chunk column of sections) |
 | `syncOnLoadConcurrencyLimitPerPlayer` | `200` | Max concurrently serviced sync requests per player — above this, requests queue on the server until a slot frees |
 | `generationConcurrencyLimitPerPlayer` | `16` | Max concurrently serviced generation requests per player — above this, requests queue on the server until a slot frees |
