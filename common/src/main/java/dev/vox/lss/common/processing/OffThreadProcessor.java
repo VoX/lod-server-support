@@ -187,13 +187,18 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
     }
 
     /**
-     * Feed a generation failure for a request whose ticket could not be submitted
-     * (e.g. generation capacity rejection). Delivered like any other generation outcome.
+     * Feed a generation failure for a request whose ticket could not be submitted.
+     * Delivered like any other generation outcome. {@code transientFailure = true} for
+     * transient pressure (capacity rejection, removed player) — dropped silently and
+     * counted superseded, so the client's re-declaration retries it; {@code false} only
+     * for permanent unservability, which answers ColumnNotGenerated (a session-permanent
+     * "stop asking" on the client).
      */
-    public void feedGenerationFailure(UUID playerUuid, int cx, int cz, String dimension, long submissionOrder) {
+    public void feedGenerationFailure(UUID playerUuid, int cx, int cz, String dimension,
+                                      long submissionOrder, boolean transientFailure) {
         synchronized (this.mailboxLock) {
             this.pendingGenerationReady.add(new TickSnapshot.GenerationReadyData(
-                    playerUuid, cx, cz, dimension, null, 0L, submissionOrder));
+                    playerUuid, cx, cz, dimension, null, 0L, submissionOrder, transientFailure));
         }
     }
 
@@ -732,20 +737,32 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
         this.timestampCache.put(dimension, packed, columnTimestamp, this.cycleNow);
     }
 
-    /** Disk-first fallback: if the original request was GENERATION and generation is available,
-     *  queue a generation ticket; otherwise send ColumnNotGenerated. */
+    /** Server-owned generation: a disk miss IS the generation trigger — no client
+     *  classification is consulted. Gen available: take a GENERATION slot and queue a
+     *  ticket; a full slot is TRANSIENT (silent drop, counted superseded — the next
+     *  want-set declaration retries the miss; a NOT_GENERATED here would blank the
+     *  position for the whole session). Gen unavailable: ColumnNotGenerated — the one
+     *  permanent disposition, the client stops asking until a dirty broadcast revives it. */
     private void handleDiskNotFound(UUID playerUuid, PlayerState state, long packed,
                                      int cx, int cz, PendingRequest pending, String dimension) {
-        if (pending != null && pending.type() == RequestType.GENERATION && this.generationAvailable) {
-            if (state.tryAdmit(new PendingRequest(cx, cz, RequestType.GENERATION, SlotType.GENERATION, pending.claimsData()))) {
-                addGenerationInFlight(playerUuid, dimension, packed);
-                this.ctx.generationTicketRequests().add(new GenerationTicketRequest(
-                        playerUuid, cx, cz, dimension, this.ctx.sequence().next()));
-            } else {
-                this.ctx.sendActions().add(new SendAction.ColumnNotGenerated(playerUuid, packed, state));
-            }
-        } else {
+        if (pending == null) {
+            // No live pending backs this delivery (duplicate/raced result). Under permanent
+            // NOT_GENERATED semantics a wire answer here could session-satisfy a position off
+            // a ghost delivery — drop silently; a still-wanted position is re-declared.
+            this.ctx.diagnostics().addSuperseded(1);
+            return;
+        }
+        if (!this.generationAvailable) {
             this.ctx.sendActions().add(new SendAction.ColumnNotGenerated(playerUuid, packed, state));
+            return;
+        }
+        if (state.tryAdmit(new PendingRequest(cx, cz, RequestType.GENERATION, SlotType.GENERATION, pending.claimsData()))) {
+            addGenerationInFlight(playerUuid, dimension, packed);
+            this.ctx.generationTicketRequests().add(new GenerationTicketRequest(
+                    playerUuid, cx, cz, dimension, this.ctx.sequence().next()));
+        } else {
+            // Transient: the gen slot cap is momentarily full — never a wire answer.
+            this.ctx.diagnostics().addSuperseded(1);
         }
     }
 
@@ -773,7 +790,14 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
             var pending = state.removePendingByPosition(cx, cz);
 
             if (entry.columnData() == null) {
-                this.ctx.sendActions().add(new SendAction.ColumnNotGenerated(entry.playerUuid(), packed, state));
+                if (entry.transientFailure()) {
+                    // Transient outcome (timeout / capacity reject): never a wire answer —
+                    // NOT_GENERATED is session-permanent on the client, so transient pressure
+                    // must drop silently (counted superseded) and heal by re-declaration.
+                    this.ctx.diagnostics().addSuperseded(1);
+                } else {
+                    this.ctx.sendActions().add(new SendAction.ColumnNotGenerated(entry.playerUuid(), packed, state));
+                }
             } else {
                 // A dirty invalidation overtook this generation while its outcome was buffered:
                 // the serialized bytes predate the edit. Deliver the column (better than

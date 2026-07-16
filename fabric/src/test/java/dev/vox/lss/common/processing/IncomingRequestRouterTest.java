@@ -180,6 +180,15 @@ class IncomingRequestRouterTest {
         }
     }
 
+    /** One non-blocking drain of the answers produced so far (for "nothing was sent" pins). */
+    private static List<Delivered> drainSendActions(TestProcessor proc) {
+        var delivered = new ArrayList<Delivered>();
+        proc.drainSendActions((state, types, positions, count) -> {
+            for (int i = 0; i < count; i++) delivered.add(new Delivered(state, types[i], positions[i]));
+        });
+        return delivered;
+    }
+
     // ---- Tests ----
 
     @Test
@@ -424,7 +433,7 @@ class IncomingRequestRouterTest {
     }
 
     @Test
-    void submitFailureUnwindsSlotAndDedupGroupAndAnswersClient() throws Exception {
+    void submitFailureUnwindsSlotAndDedupGroupAndDropsSilently() throws Exception {
         var players = new ConcurrentHashMap<UUID, TestState>();
         var p1 = addPlayer(players, 2, 1);
         var proc = new TestProcessor(players, null, false, null);
@@ -434,10 +443,13 @@ class IncomingRequestRouterTest {
             p1.enqueue(new IncomingRequest(9, 9, -1));
             proc.postSnapshot(snapshot(p1), List.of());
 
-            var delivered = drainUntil(proc,
-                    contains(LSSConstants.RESPONSE_NOT_GENERATED, packed(9, 9)));
-            assertEquals(1, delivered.size(),
-                    "failed submit must answer exactly one not-generated: " + delivered);
+            // A submit no-op (level not registered yet) is TRANSIENT: under permanent
+            // NOT_GENERATED semantics it must never answer the wire — silent drop, counted
+            // superseded, healed by the next want-set declaration.
+            waitFor(() -> proc.getDiagnostics().getTotalSuperseded() == 1,
+                    "the no-op submit is booked as superseded");
+            assertTrue(drainSendActions(proc).isEmpty(),
+                    "a failed submit answers NOTHING: no not-generated, no bounce");
             assertEquals(List.of(packed(9, 9)), submitPositions(proc));
             assertFalse(p1.hasPendingRequest(9, 9), "pending entry must be unwound");
             assertEquals(0, p1.getHeldSyncSlots(), "slot must be freed");
@@ -911,14 +923,16 @@ class IncomingRequestRouterTest {
             proc.start();
             // Cycle 1: two disk submits + one silent duplicate skip
             offer(p1,
-                    new IncomingRequest(1, 0, -1), // SYNC -> disk, will resolve not-found
+                    new IncomingRequest(1, 0, -1), // SYNC -> disk, will miss and escalate
                     new IncomingRequest(1, 0, -1), // duplicate of the in-flight read
-                    new IncomingRequest(2, 0, 0)); // GENERATION -> disk-first, will escalate
+                    new IncomingRequest(2, 0, 0)); // retired-0 ts -> disk-first, same as any miss
             proc.postSnapshot(snapshot(p1), List.of());
             waitFor(() -> proc.submits.size() == 2
                     && proc.getDiagnostics().getTotalDuplicateSkips() == 1, "cycle 1 routed");
 
-            // Cycle 2: both reads come back not-found; ladder answers + a probe payload
+            // Cycle 2: both reads come back not-found. Server-owned generation: the FIRST
+            // miss in delivery order (1,0) takes the single gen slot; the second (2,0) finds
+            // the cap full — a TRANSIENT silent drop counted superseded, never a wire answer.
             reader.getPlayerQueue(p1.getPlayerUUID())
                     .add(ChunkReadResult.empty(p1.getPlayerUUID(), 1, 0, DIM, 1L));
             reader.getPlayerQueue(p1.getPlayerUUID())
@@ -930,8 +944,9 @@ class IncomingRequestRouterTest {
             var probes = new Long2ObjectOpenHashMap<LoadedColumnData>();
             probes.put(packed(4, 0), new LoadedColumnData(4, 0, new byte[]{1}, 16));
             proc.postSnapshot(snapshot(Map.of(p1.getPlayerUUID(), probes), 0, p1), List.of());
-            waitFor(() -> p1.getHeldGenSlots() == 1 && proc.payloads.size() == 1,
-                    "cycle 2 drained and routed");
+            waitFor(() -> p1.getHeldGenSlots() == 1 && proc.payloads.size() == 1
+                            && proc.getDiagnostics().getTotalSuperseded() == 1,
+                    "cycle 2 drained and routed (one escalation + one cap-full drop)");
 
             // Cycle 3: a queue-full breaker is retained unanswered
             p1.addReadyPayload(new QueuedPayload<>(new Object(), 100, 0, packed(99, 99)));
@@ -942,15 +957,16 @@ class IncomingRequestRouterTest {
             waitFor(() -> proc.getDiagnostics().getTotalQueueFull() == 1, "queue-full break");
 
             var delivered = drainUntil(proc, d ->
-                    count(d, LSSConstants.RESPONSE_UP_TO_DATE, packed(3, 0)) == 2
-                            && count(d, LSSConstants.RESPONSE_NOT_GENERATED, packed(1, 0)) == 1);
-            assertEquals(3, delivered.size(), "answers at rest: " + delivered);
+                    count(d, LSSConstants.RESPONSE_UP_TO_DATE, packed(3, 0)) == 2);
+            assertEquals(2, delivered.size(),
+                    "answers at rest (no NOT_GENERATED: the cap-full miss dropped silently): "
+                            + delivered);
 
             var ticket = proc.pollGenerationTicketRequest();
-            assertNotNull(ticket, "the not-found GENERATION read escalates to a gen ticket");
-            assertEquals(packed(2, 0), packed(ticket.cx(), ticket.cz()));
+            assertNotNull(ticket, "the first not-found in delivery order escalates to a gen ticket");
+            assertEquals(packed(1, 0), packed(ticket.cx(), ticket.cz()));
             assertNull(proc.pollGenerationTicketRequest());
-            assertTrue(p1.hasPendingRequest(2, 0), "the escalated ticket is the only in-flight work");
+            assertTrue(p1.hasPendingRequest(1, 0), "the escalated ticket is the only in-flight work");
             assertEquals(0, p1.getHeldSyncSlots());
             assertEquals(1, p1.getHeldGenSlots());
 

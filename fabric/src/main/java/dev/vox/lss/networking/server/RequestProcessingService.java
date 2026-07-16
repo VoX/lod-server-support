@@ -468,10 +468,11 @@ public class RequestProcessingService {
                     req.playerUuid(), level, req.cx(), req.cz(),
                     req.submissionOrder());
             if (!accepted) {
-                // Capacity rejection or removed player: feed a failure outcome so the
-                // processing thread frees the pending slot and tells the client ColumnNotGenerated.
+                // Capacity rejection or removed player — TRANSIENT: feed a transient outcome
+                // so the processing thread frees the pending slot silently (superseded); the
+                // client's re-declaration retries. Never NOT_GENERATED (session-permanent).
                 this.offThreadProcessor.feedGenerationFailure(
-                        req.playerUuid(), req.cx(), req.cz(), dimension, req.submissionOrder());
+                        req.playerUuid(), req.cx(), req.cz(), dimension, req.submissionOrder(), true);
             }
         }
     }

@@ -559,7 +559,10 @@ class DedupFanoutTest {
     }
 
     @Test
-    void notFoundFanoutAnswersSyncRecipientsAndEscalatesGenTypedAttachment() throws Exception {
+    void notFoundFanoutEscalatesEveryRecipientToGeneration() throws Exception {
+        // Server-owned generation: a shared disk miss escalates EVERY dedup recipient into
+        // its own generation slot/ticket (the generation service piggybacks the actual
+        // worldgen); nothing answers the wire until the generation resolves.
         var u1 = UUID.randomUUID();
         var u2 = UUID.randomUUID();
         var p1 = newPlayer(u1);
@@ -574,32 +577,35 @@ class DedupFanoutTest {
         var dims = Map.of(u1, OVERWORLD, u2, OVERWORLD);
         try {
             proc.start();
-            p1.enqueue(new IncomingRequest(7, 7, 1L)); // SYNC primary
+            p1.enqueue(new IncomingRequest(7, 7, 1L)); // resync primary
             pumpUntil(proc, dims, () -> p1.getHeldSyncSlots() == 1 && proc.diskSubmits.get() == 1,
-                    "SYNC primary admitted");
-            p2.enqueue(new IncomingRequest(7, 7, 0L)); // GENERATION-typed, disk-first attach
-            pumpUntil(proc, dims, () -> p2.getHeldSyncSlots() == 1, "GEN-typed request attached");
+                    "primary admitted");
+            p2.enqueue(new IncomingRequest(7, 7, 0L)); // retired-0 ts, disk-first attach
+            pumpUntil(proc, dims, () -> p2.getHeldSyncSlots() == 1, "second request attached");
 
             reader.getPlayerQueue(u1).add(ChunkReadResult.empty(u1, 7, 7, OVERWORLD, 0L));
-            pumpUntil(proc, dims, () -> p2.getHeldGenSlots() == 1,
-                    "GEN-typed attachment escalates into its own generation slot");
+            pumpUntil(proc, dims, () -> p1.getHeldGenSlots() == 1 && p2.getHeldGenSlots() == 1,
+                    "both recipients escalate into their own generation slots");
 
-            assertEquals(0, p1.getHeldSyncSlots());
+            assertEquals(0, p1.getHeldSyncSlots(),
+                    "the disk-first sync slot is swapped for the generation slot");
             assertEquals(0, p2.getHeldSyncSlots(),
                     "the disk-first sync slot is swapped for the generation slot");
-            var ticket = awaitTicket(proc);
-            assertEquals(u2, ticket.playerUuid(), "the ticket belongs to the attached requester");
-            assertEquals(7, ticket.cx());
-            assertEquals(7, ticket.cz());
-            assertEquals(OVERWORLD, ticket.dimension());
-            assertNull(proc.pollGenerationTicketRequest(), "the SYNC primary must not escalate");
+            var first = awaitTicket(proc);
+            var second = awaitTicket(proc);
+            assertEquals(u1, first.playerUuid(), "primary delivery escalates first");
+            assertEquals(u2, second.playerUuid(), "the attached recipient escalates too");
+            for (var ticket : List.of(first, second)) {
+                assertEquals(7, ticket.cx());
+                assertEquals(7, ticket.cz());
+                assertEquals(OVERWORLD, ticket.dimension());
+            }
+            assertNull(proc.pollGenerationTicketRequest(), "exactly one ticket per recipient");
+            assertTrue(p1.hasPendingRequest(7, 7));
             assertTrue(p2.hasPendingRequest(7, 7));
 
-            var responses = drainUntilResponses(proc, rs -> !rs.isEmpty());
-            assertEquals(List.of(new Response(u1, LSSConstants.RESPONSE_NOT_GENERATED,
-                            PositionUtil.packPosition(7, 7))), responses,
-                    "the SYNC recipient is told not-generated; the escalated recipient gets"
-                            + " no batched answer (generation will answer it)");
+            assertTrue(drainResponses(proc).isEmpty(),
+                    "no wire answer for an escalated miss — generation will answer both");
             assertFalse(p1.hasDiskReadDone(7, 7));
             assertFalse(p2.hasDiskReadDone(7, 7));
         } finally {

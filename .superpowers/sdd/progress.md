@@ -744,7 +744,10 @@ Plan: docs/superpowers/plans/2026-07-15-declarative-want-set-requests.md (1469 l
     drain" to the pool only, so it was left alone. Root cause worth carrying to Task 10: the
     retain-and-stop-for-both framing originates in the **plan's own** Task 9 bullet, so it will
     keep re-importing itself into any doc written from the plan text.
-- Task 10: IN PROGRESS — validation gauntlet + live soak.
+- Task 10: COMPLETE (header corrected on coordinator resume — the RESULT + FIX PASS blocks below
+  show the gauntlet, both soak suites, and Global Constraint #28 all landed and verified).
+  Coordinator INDEPENDENTLY re-verified the committed tip (73d7b3d): forced `:fabric:test :paper:test`
+  → BUILD SUCCESSFUL, Fabric 594 / Paper 248 / 0 failures. Branch: 74 files, +5409/-2054, PROTOCOL_VERSION 17.
   Step 1 gauntlet GREEN, all forced (no UP-TO-DATE reads): Tier 1 **593/0**, Tier 2 **57/57**
   (incl. vanilla `always_pass`), Tier 3 `runClientGameTest` BUILD SUCCESSFUL, `:paper:test`
   **247/0**, `:paper:shadowJar` OK, `check_soak --selftest` 133→**134**, `soak_report --selftest`
@@ -925,3 +928,19 @@ Plan: docs/superpowers/plans/2026-07-15-declarative-want-set-requests.md (1469 l
   stopped creating contention (also a real finding). Only after clearing the premise should the
   number be recalibrated — with a comment.
 - `:fabric:test` does NOT pull runGameTest into its graph — run `:fabric:runGameTest` explicitly for Tier 2.
+
+---
+
+## A+B adaptive-throttle fallback (docs/superpowers/plans/2026-07-16-adaptive-throttle-fallback.md)
+
+Inline execution (not subagent-driven), on feat/want-set-requests, building on f65a447 (C2ME fail-safe).
+
+- Task 1: COMPLETE — adabaf5. Restored AdaptiveReadThrottle control law + 14 tests + LSSConstants.ADAPTIVE_READ_TARGET_LATENCY_MS=20.
+- Task 2: COMPLETE — 8393fda. Runtime-enableable throttle in AbstractChunkDiskReader via hasHeadroom() (narrow, not bounce); recordRealCompletion feeds only real-IO latencies; throttleForTest seam; wiring test (enable→collapse→recover). Tier1 green.
+- Task 3: COMPLETE — 15f46b6. Fabric backgroundReaderOrFallback: catch(Throwable)+null → one-way backgroundIncompatible latch + enableThrottle + warn-once; submitReadDirect skips accessor once latched. resolveBackgroundHandles/warnBackgroundUnavailable seams; throwing-resolver latch test. Tier1+Tier2 green (compatible path byte-identical).
+- Task 4: COMPLETE — 904b314. Paper comment: Moonrise always present → B never engages.
+- Task 5: COMPLETE — 92cf6d2. getDiagnostics() appends read_throttle=ENGAGED(limit/max) only when engaged (off-case byte-identical, goldens unmoved). Test added.
+- Task 6: COMPLETE — 90d0657. Docs: CLAUDE.md ChunkDiskReader bullet, README row, read-scheduler-design §10.4 (A+B synthesis, C2ME 2026-07-16 drove it), c2me memory updated.
+- Task 7: PARTIAL. Automated gauntlet GREEN — Tier1, Tier2, Tier3, :paper:test, :paper:shadowJar. DEFERRED to user: soak fresh-backfill + SOAK_PLATFORM=paper all (blocked — port 25565 held by user's manual fabric-server-launch.jar, likely their C2ME smoke server; not killed); manual C2ME smoke test (Step 3, inherently manual — one warn, no NPE, LOD streams, /lsslod diag shows ENGAGED).
+
+Final subagent review (opus, whole A+B range d45850e..HEAD): CLEAN — no confirmed correctness/concurrency defects; all Global Constraints satisfied; tests sound. One noted doc-imprecision (throttle javadoc says "submit→result" but startNs is captured post-dequeue = read-execution time) — reviewer refuted as a bug (signal still meaningful, arguably cleaner). Left as-is.

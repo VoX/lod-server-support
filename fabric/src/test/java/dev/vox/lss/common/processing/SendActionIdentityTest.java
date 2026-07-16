@@ -73,7 +73,7 @@ class SendActionIdentityTest {
      */
     private static void produceNotGenerated(TestProcessor proc, UUID uuid, int cx, int cz,
                                             long expectedTotalGenDrained) throws InterruptedException {
-        proc.feedGenerationFailure(uuid, cx, cz, DIM, expectedTotalGenDrained);
+        proc.feedGenerationFailure(uuid, cx, cz, DIM, expectedTotalGenDrained, false);
         proc.postSnapshot(snapshot(uuid), List.of());
         waitFor(() -> proc.getDiagnostics().getTotalGenDrained() == expectedTotalGenDrained,
                 "generation outcome " + expectedTotalGenDrained + " processed");

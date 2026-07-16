@@ -278,13 +278,15 @@ class IncomingRequestRouter<PS extends AbstractPlayerRequestState<?>> {
                 return AdmitResult.NO_DISK_HEADROOM;
             }
             if (!attached && !this.processor.submitDiskRead(playerUuid, dimension, req.cx(), req.cz(), order)) {
-                // Submit was a no-op (e.g. the dimension's level isn't registered yet). Unwind the
-                // pending entry (which frees the slot) and the dedup group so they aren't leaked,
-                // and tell the client we couldn't serve this position so it re-requests later.
+                // Submit was a no-op (e.g. the dimension's level isn't registered yet) — a
+                // TRANSIENT condition. Unwind the pending entry (which frees the slot) and the
+                // dedup group so they aren't leaked, and drop silently (counted superseded):
+                // NOT_GENERATED is session-permanent on the client, so a transient no-op must
+                // never answer it — the next want-set declaration retries.
                 this.dedupTracker.removeGroup(packed, dimension);
                 state.removePendingByPosition(req.cx(), req.cz());
-                this.ctx.sendActions().add(new SendAction.ColumnNotGenerated(playerUuid, packed, state));
-                return AdmitResult.SUBMITTED; // dispositioned (answered not-generated)
+                this.ctx.diagnostics().addSuperseded(1);
+                return AdmitResult.SUBMITTED; // dispositioned (silent transient drop)
             }
             this.ctx.diagnostics().incrementDiskQueued();
             return AdmitResult.SUBMITTED;

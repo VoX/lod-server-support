@@ -22,9 +22,12 @@ import static org.junit.jupiter.api.Assertions.*;
  * saturated results drop silently and count superseded (nothing marked served — the
  * client recovers by re-declaring, not by a bounce), all-air
  * results serve up-to-date and stamp the timestamp cache (the End-void retry-storm
- * fix), data results become column payloads, not-found swaps a GENERATION request's
- * sync slot for a generation ticket with every outcome freeing the slot, and disk
- * results or generation outcomes carrying a stale dimension are inert.
+ * fix), data results become column payloads, not-found escalates ANY request's sync
+ * slot to a generation ticket (server-owned generation — the disk miss IS the trigger;
+ * gen unavailable answers NOT_GENERATED, a momentarily full gen slot drops silently as
+ * superseded) with every outcome freeing the slot, transient generation outcomes drop
+ * silently while permanent ones answer NOT_GENERATED, and disk results or generation
+ * outcomes carrying a stale dimension are inert.
  */
 class OffThreadProcessorDiskResultTest {
 
@@ -728,27 +731,60 @@ class OffThreadProcessorDiskResultTest {
     }
 
     @Test
-    void escalatedGenerationFailureSendsNotGeneratedAndFreesGenSlot() throws Exception {
+    void permanentGenerationFailureSendsNotGeneratedAndFreesGenSlot() throws Exception {
         var rig = new Rig(true);
         try {
             var ticket = escalateToGenTicket(rig, 4, 6);
 
-            // Main thread could not submit/complete the ticket — fed back like any outcome
-            rig.proc.feedGenerationFailure(rig.uuid, 4, 6, DIM, ticket.submissionOrder());
+            // Permanent unservability (extraction error / failed load) — the one disposition
+            // that reaches the wire: the client session-satisfies and stops asking.
+            rig.proc.feedGenerationFailure(rig.uuid, 4, 6, DIM, ticket.submissionOrder(), false);
             rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
 
             long packed = PositionUtil.packPosition(4, 6);
             drainUntil(rig.proc, received(LSSConstants.RESPONSE_NOT_GENERATED, packed));
             assertEquals(0, rig.state.getHeldGenSlots(), "failed generation must free the gen slot");
-            assertFalse(rig.state.hasDiskReadDone(4, 6), "failed position stays re-requestable");
+            assertFalse(rig.state.hasDiskReadDone(4, 6),
+                    "a failed position must not be marked served");
         } finally {
             rig.proc.shutdown();
         }
     }
 
     @Test
-    void notFoundSyncRequestBouncesStraightToNotGenerated() throws Exception {
-        // Generation IS available — a SYNC-typed request must still not escalate
+    void transientGenerationFailureDropsSilentlyAndFreesGenSlot() throws Exception {
+        // Timeout / capacity rejection: NOT_GENERATED is session-permanent on the client, so
+        // a transient outcome must never answer it — silent drop, counted superseded, and the
+        // client's next want-set declaration retries the position.
+        var rig = new Rig(true);
+        try {
+            var ticket = escalateToGenTicket(rig, 4, 6);
+
+            rig.proc.feedGenerationFailure(rig.uuid, 4, 6, DIM, ticket.submissionOrder(), true);
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
+
+            waitFor(() -> rig.state.getHeldGenSlots() == 0,
+                    "transient outcome must free the gen slot");
+            waitFor(() -> rig.proc.getDiagnostics().getTotalSuperseded() == 1,
+                    "the silent drop is booked as superseded");
+            assertTrue(drainSendActions(rig.proc).isEmpty(),
+                    "a transient generation failure answers NOTHING on the wire");
+            assertFalse(rig.state.hasDiskReadDone(4, 6),
+                    "transient is retryable — must not be marked served");
+
+            // The re-declaration must reach the disk again: nothing stamped or marked.
+            rig.state.enqueue(new IncomingRequest(4, 6, -1L));
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
+            waitFor(() -> rig.proc.diskSubmits.size() == 2, "re-declared position re-reads disk");
+        } finally {
+            rig.proc.shutdown();
+        }
+    }
+
+    @Test
+    void notFoundEscalatesToGenerationForAnySyncRequest() throws Exception {
+        // Server-owned generation: the disk miss IS the trigger — no client classification.
+        // A plain resync (ts>0) that misses disk escalates to a generation ticket.
         var rig = new Rig(true);
         try {
             rig.state.enqueue(new IncomingRequest(1, 9, 1L));
@@ -758,19 +794,28 @@ class OffThreadProcessorDiskResultTest {
             rig.inject(ChunkReadResult.empty(rig.uuid, 1, 9, DIM, 1L));
             rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
 
-            long packed = PositionUtil.packPosition(1, 9);
-            drainUntil(rig.proc, received(LSSConstants.RESPONSE_NOT_GENERATED, packed));
-            assertNull(rig.proc.pollGenerationTicketRequest(),
-                    "SYNC not-found must not emit a generation ticket");
-            assertEquals(0, rig.state.getHeldSyncSlots());
-            assertEquals(0, rig.state.getHeldGenSlots(), "SYNC not-found must not occupy a gen slot");
+            var ref = new AtomicReference<OffThreadProcessor.GenerationTicketRequest>();
+            waitFor(() -> {
+                var t = rig.proc.pollGenerationTicketRequest();
+                if (t != null) ref.set(t);
+                return ref.get() != null;
+            }, "sync not-found must escalate to a generation ticket");
+            assertEquals(1, ref.get().cx());
+            assertEquals(9, ref.get().cz());
+            assertEquals(0, rig.state.getHeldSyncSlots(), "escalation must swap the sync slot");
+            assertEquals(1, rig.state.getHeldGenSlots(), "escalation holds a gen slot");
+            assertTrue(drainSendActions(rig.proc).isEmpty(),
+                    "an escalated miss answers nothing until the generation resolves");
         } finally {
             rig.proc.shutdown();
         }
     }
 
     @Test
-    void notFoundEscalationBouncesToNotGeneratedWhenGenCapFull() throws Exception {
+    void notFoundWithGenCapFullDropsSilentlyAsSuperseded() throws Exception {
+        // A momentarily full gen slot is TRANSIENT: under permanent NOT_GENERATED semantics a
+        // wire answer here would blank the position for the whole session — the miss drops
+        // silently (superseded) and the next want-set declaration retries it.
         var rig = new Rig(true, 4, 1);
         try {
             escalateToGenTicket(rig, 1, 1); // holds the only gen slot
@@ -782,13 +827,36 @@ class OffThreadProcessorDiskResultTest {
             rig.inject(ChunkReadResult.empty(rig.uuid, 2, 2, DIM, 2L));
             rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
 
-            long packed = PositionUtil.packPosition(2, 2);
-            drainUntil(rig.proc, received(LSSConstants.RESPONSE_NOT_GENERATED, packed));
+            waitFor(() -> rig.proc.getDiagnostics().getTotalSuperseded() == 1,
+                    "the cap-full miss is booked as superseded");
+            assertTrue(drainSendActions(rig.proc).isEmpty(),
+                    "a cap-full miss answers NOTHING: no NOT_GENERATED, no bounce");
             assertFalse(rig.state.hasPendingRequest(2, 2),
-                    "bounced escalation must leave no pending entry");
+                    "dropped escalation must leave no pending entry");
             assertEquals(1, rig.state.getHeldGenSlots(), "the first escalation keeps its slot");
             assertEquals(0, rig.state.getHeldSyncSlots());
-            assertNull(rig.proc.pollGenerationTicketRequest(), "no ticket for the bounced position");
+            assertNull(rig.proc.pollGenerationTicketRequest(), "no ticket for the dropped position");
+            assertFalse(rig.state.hasDiskReadDone(2, 2),
+                    "dropped position stays re-declarable");
+        } finally {
+            rig.proc.shutdown();
+        }
+    }
+
+    @Test
+    void ghostNotFoundWithoutPendingDropsSilently() throws Exception {
+        // A not-found delivery with no live pending behind it (duplicate/raced result) must
+        // not answer the wire: NOT_GENERATED off a ghost delivery would session-satisfy a
+        // position the player may still want.
+        var rig = new Rig(false);
+        try {
+            rig.inject(ChunkReadResult.empty(rig.uuid, 3, 3, DIM, 1L));
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
+
+            waitFor(() -> rig.proc.getDiagnostics().getTotalSuperseded() == 1,
+                    "the ghost delivery is booked as superseded");
+            assertTrue(drainSendActions(rig.proc).isEmpty(),
+                    "a pending-less not-found answers NOTHING");
         } finally {
             rig.proc.shutdown();
         }

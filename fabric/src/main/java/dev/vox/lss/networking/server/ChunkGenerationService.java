@@ -132,7 +132,9 @@ public class ChunkGenerationService {
                 LSSLogger.debug("Generation timeout for chunk " + gen.pos.x() + "," + gen.pos.z()
                         + " after " + gen.ticksWaiting + " ticks (" + gen.callbacks.size() + " callbacks)");
                 if (ready == null) ready = new ArrayList<>();
-                addFailures(ready, gen);
+                // Timeout is TRANSIENT: the outcome drops silently server-side and the client's
+                // re-declaration retries — never NOT_GENERATED, which is session-permanent.
+                addFailures(ready, gen, true);
                 gen.level.getChunkSource().removeTicketWithRadius(LSS_GEN_TICKET, gen.pos, 0);
                 iter.remove();
                 this.totalTimeouts++;
@@ -166,7 +168,9 @@ public class ChunkGenerationService {
                     this.totalCompleted++;
                 } catch (Throwable t) {
                     LSSLogger.error("Failed to extract primitives for generated chunk at " + gen.pos.x() + ", " + gen.pos.z(), t);
-                    addFailures(ready, gen);
+                    // Extraction failure is PERMANENT (a corrupt chunk must not be hammered):
+                    // the client gets NOT_GENERATED and only a dirty broadcast revives it.
+                    addFailures(ready, gen, false);
                     // Failed extraction is a terminal removal that is neither completed nor a
                     // timeout — count it as removed-in-flight so the generation books
                     // (submitted == completed + timeouts + removed) still balance (soak law A4).
@@ -183,13 +187,17 @@ public class ChunkGenerationService {
         return ready != null ? ready : List.of();
     }
 
-    /** Add a failure outcome (columnData == null) for every callback of the entry. */
-    private void addFailures(List<TickSnapshot.GenerationReadyData> ready, PendingGeneration gen) {
+    /** Add a failure outcome (columnData == null) for every callback of the entry.
+     *  {@code transientFailure} picks the wire disposition downstream: true = silent
+     *  drop + superseded (timeout), false = ColumnNotGenerated (permanent extraction
+     *  failure). The generation books count the entry the same either way. */
+    private void addFailures(List<TickSnapshot.GenerationReadyData> ready, PendingGeneration gen,
+                             boolean transientFailure) {
         String dimension = gen.level.dimension().identifier().toString();
         for (var cb : gen.callbacks) {
             ready.add(new TickSnapshot.GenerationReadyData(
                     cb.playerUuid, gen.pos.x(), gen.pos.z(), dimension,
-                    null, 0L, cb.submissionOrder));
+                    null, 0L, cb.submissionOrder, transientFailure));
             decrementCount(this.perPlayerActiveCount, cb.playerUuid);
         }
     }

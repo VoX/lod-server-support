@@ -229,7 +229,9 @@ public class PaperChunkGenerationService {
             }
             this.totalCompleted++;
         } else {
-            addFailures(gen.callbacks, key, cx, cz);
+            // PERMANENT: the load failed, the chunk vanished, or extraction threw — a
+            // corrupt chunk must not be hammered. NOT_GENERATED; dirty broadcast revives.
+            addFailures(gen.callbacks, key, cx, cz, false);
             this.totalRemovedInFlight++;
         }
     }
@@ -239,13 +241,16 @@ public class PaperChunkGenerationService {
      * Callers that removed the active entry must also count it exactly once — totalTimeouts
      * on the timeout path, totalRemovedInFlight on the failure paths (mirrors the Fabric
      * twin) — so the generation books (submitted == completed + timeouts + removed) balance
-     * (soak law A4).
+     * (soak law A4). {@code transientFailure} picks the wire disposition downstream: true =
+     * silent drop + superseded (timeout), false = ColumnNotGenerated (permanent — failed
+     * load / extraction). The books are identical either way.
      */
-    private void addFailures(List<GenerationCallback> callbacks, PendingGenerationKey key, int cx, int cz) {
+    private void addFailures(List<GenerationCallback> callbacks, PendingGenerationKey key,
+                             int cx, int cz, boolean transientFailure) {
         String dimension = key.dimension().identifier().toString();
         for (var cb : callbacks) {
             this.mainReady.add(new TickSnapshot.GenerationReadyData(
-                    cb.playerUuid, cx, cz, dimension, null, 0L, cb.submissionOrder));
+                    cb.playerUuid, cx, cz, dimension, null, 0L, cb.submissionOrder, transientFailure));
             decrementCount(this.perPlayerActiveCount, cb.playerUuid);
         }
     }
@@ -275,7 +280,9 @@ public class PaperChunkGenerationService {
             gen.ticksWaiting++;
 
             if (gen.ticksWaiting > this.timeoutTicks) {
-                addFailures(gen.callbacks, entry.getKey(), entry.getKey().cx, entry.getKey().cz);
+                // Timeout is TRANSIENT (under Priority.LOW a starved load is routine on a
+                // busy server): silent drop downstream, the client's re-declaration retries.
+                addFailures(gen.callbacks, entry.getKey(), entry.getKey().cx, entry.getKey().cz, true);
                 iter.remove();
                 this.totalTimeouts++;
             }

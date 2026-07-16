@@ -72,7 +72,8 @@ class PaperRequestProcessingServiceTest {
         final List<UUID> removals = new ArrayList<>();
         record DirtyClear(UUID playerUuid, long[] positions) {}
         final List<DirtyClear> dirtyClears = new ArrayList<>();
-        record GenFailure(UUID playerUuid, int cx, int cz, String dimension, long submissionOrder) {}
+        record GenFailure(UUID playerUuid, int cx, int cz, String dimension, long submissionOrder,
+                          boolean transientFailure) {}
         final List<GenFailure> genFailures = new ArrayList<>();
         final ArrayDeque<OffThreadProcessor.GenerationTicketRequest> ticketQueue = new ArrayDeque<>();
         final AtomicInteger sendActionDrains = new AtomicInteger();
@@ -104,8 +105,9 @@ class PaperRequestProcessingServiceTest {
         }
 
         @Override
-        public void feedGenerationFailure(UUID playerUuid, int cx, int cz, String dimension, long submissionOrder) {
-            genFailures.add(new GenFailure(playerUuid, cx, cz, dimension, submissionOrder));
+        public void feedGenerationFailure(UUID playerUuid, int cx, int cz, String dimension,
+                                          long submissionOrder, boolean transientFailure) {
+            genFailures.add(new GenFailure(playerUuid, cx, cz, dimension, submissionOrder, transientFailure));
         }
 
         @Override
@@ -511,9 +513,11 @@ class PaperRequestProcessingServiceTest {
         service.tick();
 
         assertEquals(List.of(new RecordingGenService.Submitted(uuid, 5, 5, 9L)), genService.submitted);
-        assertEquals(List.of(new RecordingProcessor.GenFailure(uuid, 5, 5, "minecraft:overworld", 9L)),
+        assertEquals(List.of(new RecordingProcessor.GenFailure(uuid, 5, 5, "minecraft:overworld", 9L, true)),
                 processor.genFailures,
-                "a bounced submit must feed a failure or the pending slot leaks forever");
+                "a bounced submit must feed a TRANSIENT failure (capacity is momentary — a "
+                        + "permanent NOT_GENERATED would blank the position for the session) "
+                        + "or the pending slot leaks forever");
     }
 
     @Test
@@ -529,7 +533,7 @@ class PaperRequestProcessingServiceTest {
         service.tick();
 
         assertTrue(genService.submitted.isEmpty(), "isRemoved short-circuits before submitGeneration");
-        assertEquals(List.of(new RecordingProcessor.GenFailure(uuid, 6, 6, "minecraft:overworld", 11L)),
+        assertEquals(List.of(new RecordingProcessor.GenFailure(uuid, 6, 6, "minecraft:overworld", 11L, true)),
                 processor.genFailures);
     }
 

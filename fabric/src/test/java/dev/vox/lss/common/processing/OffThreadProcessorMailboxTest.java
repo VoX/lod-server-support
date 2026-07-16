@@ -85,7 +85,7 @@ class OffThreadProcessorMailboxTest {
             // All posted BEFORE start(): the second snapshot replaces the first (latest-wins),
             // but every generation outcome must survive (lossless events).
             proc.postSnapshot(snapshot(uuid), new ArrayList<>(List.of(failure(uuid, 1, 0, 1L))));
-            proc.feedGenerationFailure(uuid, 2, 0, DIM, 2L);
+            proc.feedGenerationFailure(uuid, 2, 0, DIM, 2L, false);
             proc.postSnapshot(snapshot(uuid), new ArrayList<>(List.of(failure(uuid, 3, 0, 3L))));
             proc.start();
 
