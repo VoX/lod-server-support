@@ -661,7 +661,74 @@ Plan: docs/superpowers/plans/2026-07-15-declarative-want-set-requests.md (1469 l
     avoid a collision, not because it is unknown. Task 9 should also drop B1 from that law list.
     `docs/planning/soak-test-design.md`'s own count/law list WAS updated here (115 → 133, B1
     struck), since that doc is this task's.
-- Task 9: NOT STARTED — docs (CLAUDE.md, README, read-scheduler-design.md supersession note).
+- Task 9: COMPLETE — fee250c. Docs only; no Java/scripts touched. Gates re-run anyway and green:
+  Tier 1 593/0 (`cleanTest` forced — not an UP-TO-DATE read), `:paper:test` 247/0,
+  `check_soak.py --selftest` 133, `soak_report.py --selftest` 20.
+  **Counts RECOUNTED from real runs, not guessed** (the plan's explicit instruction): Tier 1
+  ~592→**593**, Paper ~243→**247**, Tier 2 55→**56** LSS gametests (`grep -c @GameTest` across the
+  7 classes; the ledger's "57/57" includes vanilla's `always_pass`, which CLAUDE.md already accounts
+  for separately), check_soak selftest 127→**133** (D8-10's hand-off literal, confirmed by running it).
+  DONE — CLAUDE.md: Networking Protocol section rewritten for v17 (want-set model + the five
+  load-bearing invariants: re-declaration is the only self-heal, no send-time suppression,
+  up_to_date/not_generated are what empty the want-set, silence-not-heartbeat at convergence with
+  the one edge-triggered clear, byte 0 retired+reserved, the breaking-bump warning); backpressure
+  relocation summary; `IncomingBatch` + `AbstractPlayerRequestState` (mailbox/backlog/publishedWantSet)
+  + `IncomingRequestRouter` (replace + retain semantics) bullets; OffThreadProcessor's saturation
+  silent-drop; client list (`RequestQueue` gone, `InFlightTracker` re-described as the awaiting set,
+  scanner/manager de-drip-fed); :141 Folia bullet (batch hold-release + `republishHeldBatch` CAS,
+  release-before-take and WHY); Key-Patterns Folia bullet likewise; :203/:235/:241 Benchmarking;
+  soak field lists (`service.{superseded,range_filtered}`, `players[].backlog`; −`request_queue`);
+  the v17-only-harness warning; the rate-limit-storm/disk-saturation historical-name note.
+  README: how-it-works steps 3-6 re-written declaratively, both concurrency-limit rows re-worded
+  ("queue on the server"), + a protocol-mismatch IMPORTANT note (see D9-4).
+  read-scheduler-design.md: supersession notes at the top Status line, §1, §3, §7.
+
+  ### Task 9 PLAN DEVIATIONS / FINDINGS
+
+  - **D9-1 (a claim I wrote was WRONG; the code corrected me — SLOT_FULL does not stop the pass).**
+    I first documented "slot-full and disk-headroom both retain and stop the drain", copying the
+    plan's framing. `IncomingRequestRouter:124-139` disagrees: SLOT_FULL retains and **keeps
+    scanning** (deliberate — "a full SYNC slot must not starve admissible GENERATION entries behind
+    it"); only NO_DISK_HEADROOM sets `stopPass`, and sendQueueFull `break`s. Corrected in all three
+    places I had written it (protocol section, router bullet, flow paragraph). Worth flagging: the
+    plan's own Task 9 bullet says "retain-and-stop" for both, so this misconception is IN the plan
+    text and a future reader may re-import it.
+  - **D9-2 (soak-test-design.md:142-144 was ALREADY done — no-op, not skipped).** The task brief
+    asks to rewrite `duplicate_skips`' rationale there as actively false. Task 8 already did it
+    (its own D8-9 records the same reasoning, and the doc now reads "Under v17's 1 Hz want-set this
+    is EXPECTED and DOMINANT, not a rare timing artifact … The 10 s client retry this rationale
+    originally cited no longer exists"). Verified rather than assumed; nothing to change, and
+    soak-test-design.md is deliberately absent from this commit.
+  - **D9-3 (D8-10's "drop B1 from CLAUDE.md's law list" — there is no law list in CLAUDE.md).**
+    Grepped: CLAUDE.md never enumerates A1-A7/B1; :278 only says "incl. all four oldest named checks
+    and the disconnect gate". So the only real edit was 127→133 (+ naming the new quiescence
+    client-mirror coverage). The law list D8-10 meant lives in check_soak's own docstring, which
+    Task 8 already updated (its selftest banner now prints "A1-A7, B2" — B1 gone).
+  - **D9-4 (README additions beyond the plan's letter, both user-facing).** (a) The plan's Step 2
+    scopes README to protocol prose + the config table. I also added a Version-Compatibility
+    IMPORTANT note that server and clients must update together, because v17 is the first bump where
+    a mismatch is *silent* (HandshakeGate:63 → VERSION_MISMATCH → no reply, no registration: the user
+    sees vanilla render distance and no error). Worded generically (no version pinned) — the rule
+    predates v17 and outlives it, and Task 10 owns the release notes that name the specific bump.
+    (b) The plan didn't ask for the top-line **Status:** of read-scheduler-design.md to change, but it
+    read "design / not implemented … for replacing the server's dispatch-or-bounce request handling"
+    — a reader hits that before §1's note and is misled twice over (Phase 0 shipped as #36; the
+    bounce is gone). Rewrote it to point at the three section notes.
+  - **D9-5 (REAL FINDING, not documented-away: the want-set cap dominates the slot cap only by
+    accident, and `SpiralScanner`'s javadoc points at a check that does not exist).** The scanner's
+    BUDGET_MULTIPLIER javadoc says "See ServerConfigBase.validate() — the want-set cap must dominate
+    the slot caps or frontier discovery starves." `validate()` (ServerConfigBase:40-52) contains **no
+    such cross-check** — it is eleven independent `Math.clamp` calls. The invariant holds today only
+    because `MAX_BATCH_CHUNK_REQUESTS` (1024) happens to exceed `MAX_CONCURRENCY_LIMIT` (1000), a
+    24-position margin nobody enforces. If an admin's sync cap is raised toward 1000 the scan budget
+    (4× cap, clamped to 1024) barely exceeds the in-flight set; push `MAX_CONCURRENCY_LIMIT` to/past
+    1024 and the want-set can never exceed what is already in flight → **frontier discovery starves
+    silently**, with no test and no config error. I did NOT "fix" this: it is a code change, Task 9 is
+    docs-only, and the current constants are safe. CLAUDE.md now states the true mechanism (constant
+    choice, not a validate check) with the guard-if-either-constant-moves warning, rather than
+    repeating the scanner's inaccurate pointer. **Recommended follow-up for Task 10 or a later
+    change: either add the cross-check to `validate()` or fix the javadoc pointer** — the doc is
+    currently the only thing that knows the check is imaginary.
 - Task 10: NOT STARTED — validation gauntlet + live soak.
 
 ## Standing reminders
