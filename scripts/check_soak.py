@@ -1059,16 +1059,18 @@ def check_rate_limit_storm(ctx):
     On a gen-ENABLED server NOT_GENERATED must never fire (the permanence guarantee is
     pinned in generation-capacity-stress where the bottleneck makes it interesting).
 
-    PROVISIONAL CEILING (plan Task 7): 500, generous over the derived worst case
-    (~100 first-scan drops + re-declared stragglers); RE-BASELINE at Task 10 from the
-    first live run — measured value recorded here when it lands."""
+    MEASURED (Task 10 live run): superseded == 370, all of it miss-drop churn
+    (miss_dropped == 370 exactly; not_found 579 == gen_submitted 209 + 370 — law A5 exact),
+    fully quiescent tail. Ceiling set to ~2x measured: convergent churn is bounded by the
+    disc (165 positions retrying until the 40/64 gen caps drain them), while a broken
+    healing loop grows superseded by ~150/scan for the whole run (thousands)."""
     last = ctx.server_snaps[-1]
-    if last["service"]["superseded"] > 500:
+    if last["service"]["superseded"] > 800:
         yield Violation("rate-limit-storm", "final snapshot",
                         "transient-drop churn did not converge: superseded kept growing, so "
                         "re-declared positions are not being satisfied (the disk-miss "
                         "escalation or the silent-drop healing loop is broken)",
-                        {"expected": "<= 500", "actual": last["service"]["superseded"]})
+                        {"expected": "<= 800", "actual": last["service"]["superseded"]})
     fc = ctx.final_client(1)
     if fc is None:
         yield Violation("rate-limit-storm", "run1", "no client snapshots in run 1", {})
@@ -1189,9 +1191,12 @@ def check_generation_capacity_stress(ctx):
     now exactly the bug class this check exists to catch. One NOT_GENERATED through a
     transient capacity bounce = one column blanked for the whole session.
 
-    PROVISIONAL SUPERSEDED FLOOR (plan Task 7): >= 100 — the churn IS the scenario's
-    subject now (R7's measured worst case); RE-BASELINE at Task 10 from the first live
-    run — measured value recorded here when it lands."""
+    MEASURED (Task 10 live run): superseded == miss_dropped == 10276 for 143 completed
+    generations at the global-cap-1 bottleneck (not_found 10419 == 143 + 10276 — law A5
+    exact), not_generated == 0, fully quiescent. That is R7's worst case quantified:
+    ~30 cheap region-miss re-reads/s while the single slot drains the disc. The >= 100
+    floor stays far below the measurement on purpose — it only needs to prove the churn
+    loop ran at all; the negative-cache revisit trigger is IO pathology, not this count."""
     last = ctx.server_snaps[-1]
     # Calibrated for lodDistance=12 / exclusion~8 at the global=1 bottleneck's ~1 gen/s:
     # vanilla's loaded square covers rings 9-10, leaving ~165 LSS-generated positions.

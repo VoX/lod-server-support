@@ -515,18 +515,19 @@ via the `launchAsyncLoad` override seam.
 
 ### Task 10: Validation gauntlet + measured re-baselines
 
-- [ ] **Step 1:** `./gradlew :fabric:test -x runClientGameTest` (Tier 1+2) + `:paper:test
+- [x] **Step 1:** `./gradlew :fabric:test -x runClientGameTest` (Tier 1+2) + `:paper:test
   :paper:shadowJar` → green.
-- [ ] **Step 2:** `./gradlew :fabric:runClientGameTest` (Tier 3) → green.
-- [ ] **Step 3: Fabric soak.** `./scripts/soak.sh all` (17 scenarios). `fresh-backfill` is the
+- [x] **Step 2:** `./gradlew :fabric:runClientGameTest` (Tier 3) → green.
+- [x] **Step 3: Fabric soak.** `./scripts/soak.sh all` (17 scenarios). `fresh-backfill` is the
   end-to-end server-triggered-generation proof (no client ever asks to generate);
   `generation-disabled` is the primary NOT_GENERATED-terminator exerciser; record the measured
   `rate-limit-storm` ceiling and `generation-capacity-stress` supersession floor and bake them into
   `check_soak.py` (Task 7 committed provisional values).
-- [ ] **Step 4: Paper soak.** `SOAK_PLATFORM=paper ./scripts/soak.sh all` — the live `Priority.LOW`
-  generation path's only gate. Folia: 26.2 upstream jar unpublished (dropped from the release
-  listing) — note it as unrunnable on this line, same as the A+B work did.
-- [ ] **Step 5: Commit** measured thresholds + any flake-catalog notes.
+- [x] **Step 4: Paper soak.** `SOAK_PLATFORM=paper ./scripts/soak.sh all` — the live `Priority.LOW`
+  generation path's only gate. **Ran: 4/4 PASS** (fresh-backfill through the live LOW path:
+  not_found 20360 == gen 2070 + miss_dropped 18290, zero timeouts). Folia: 26.2 upstream jar
+  unpublished (dropped from the release listing) — unrunnable on this line, same as the A+B work.
+- [x] **Step 5: Commit** measured thresholds + any flake-catalog notes.
 
 ---
 
