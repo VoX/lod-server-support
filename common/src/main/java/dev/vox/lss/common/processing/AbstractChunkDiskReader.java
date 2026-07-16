@@ -242,7 +242,15 @@ public abstract class AbstractChunkDiskReader {
     }
 
     public String getDiagnostics() {
-        return this.diag.formatDiagnostics(getPendingResultCount());
+        String base = this.diag.formatDiagnostics(getPendingResultCount());
+        // The throttle is engaged only on the Fabric A-incompatible fallback path (a chunk-IO mod
+        // replaced vanilla IO). On the normal working-A path it is null and the line is unchanged,
+        // so existing diagnostics goldens do not move; when engaged it makes the fallback observable
+        // (the only end-to-end signal — no automated test can reach the C2ME path). limit/max shows
+        // how far AIMD has backed LSS off under shared-IO load.
+        var t = this.throttle;
+        if (t == null) return base;
+        return base + ", read_throttle=ENGAGED(" + t.currentLimit() + "/" + t.maxLimit() + ")";
     }
 
     /** Read results delivered but not yet drained by the processing thread, across all players. */

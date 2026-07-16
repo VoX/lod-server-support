@@ -257,6 +257,23 @@ class AbstractChunkDiskReaderTest {
     }
 
     @Test
+    void getDiagnosticsAppendsThrottleStateOnlyWhenEngaged() {
+        // Working-A path: the throttle is null, so the DiskReader line is byte-identical to before
+        // (goldens do not move) and carries no throttle marker.
+        String off = reader.getDiagnostics();
+        assertFalse(off.contains("read_throttle"), "no throttle marker on the working-A path: " + off);
+
+        // Fallback engaged: the line gains a compact ENGAGED(limit/max) suffix so an operator (and
+        // the Task 7 manual C2ME smoke test) can SEE the fallback — the fallback's only end-to-end
+        // signal, since no automated test reaches the C2ME path.
+        reader.enableThrottle();
+        String on = reader.getDiagnostics();
+        assertTrue(on.startsWith(off), "the engaged line only appends to the base diagnostics: " + on);
+        assertTrue(on.contains("read_throttle=ENGAGED(33/33)"),
+                "engaged line shows the current/max limit (fresh throttle starts at the pool ceiling): " + on);
+    }
+
+    @Test
     void poolSaturationBouncesTheSubmitWithASaturatedResult() throws Exception {
         // 1 reader thread, queue capacity 32 (threadCount * 32): with the worker pinned on
         // a gated read and the queue exactly full, the 34th submit must be rejected.
