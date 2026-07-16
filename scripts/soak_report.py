@@ -54,8 +54,11 @@ SERVER_CONCERNING = {
 }
 SERVER_MECHANISM = {
     "duplicate skips": "service.duplicate_skips",
-    "sync rate-limited": "service.sync_rate_limited",
-    "gen rate-limited": "service.gen_rate_limited",
+    # v17: work RE-PLANNED, not lost. A superseded want (mailbox overwrite / backlog
+    # replace / residual saturation drop) is dropped without a wire response and healed by
+    # the client's 1 Hz re-declaration — under a want-set protocol that is the normal
+    # steady state, not an anomaly. Law A1 conserves it.
+    "want-set superseded": "service.superseded",
     "honest re-resolutions": "service.re_resolved",
     "dirty re-saves suppressed": "dirty.suppressed_total",
 }
@@ -63,15 +66,21 @@ CLIENT_CONCERNING = {
     "columns dropped": "dropped",
     "ingest failures": "ingest_failures",
 }
-CLIENT_MECHANISM = {
-    "client rate-limited": "responses.rate_limited",
-}
+# v17 left this dict EMPTY: its only member was "client rate-limited"
+# (responses.rate_limited), and that response no longer exists on the wire — a slot bounce
+# is now a silently retained server-side backlog entry (see SERVER_MECHANISM's
+# "want-set superseded"). The dict and its plumbing are kept deliberately: the client has
+# no load-shaping mechanism counter today, and a future one belongs here rather than in
+# CLIENT_CONCERNING. Note `ingest_failures` is NOT a mechanism — see the note below.
+CLIENT_MECHANISM = {}
 # Which CONCERNING names are the declared purpose of a scenario (then not counted as anomalies).
 # NOTE: client "ingest failures" is deliberately NOT mapped here. It is genuine lost work (a consumer
 # rejected a column) that the honest-re-resolution machinery exists to recover — never ordinary
-# load-shaping. Mapping it to "rate_limited" (which ~15/17 scenarios opt into) silently labeled every
-# nonzero ingest_failures "expected" and dropped it from the anomaly count. It is now always CONCERNING
-# unless a scenario explicitly lists "ingest failures" in SCENARIO_CONCERNING_OPT_IN below.
+# load-shaping. Mapping it to "rate_limited" (which ~15/17 scenarios opted into) silently labeled
+# every nonzero ingest_failures "expected" and dropped it from the anomaly count. It is now always
+# CONCERNING unless a scenario explicitly lists "ingest failures" in SCENARIO_CONCERNING_OPT_IN below.
+# (v17 retired the "rate_limited" opt-in entirely; "saturated" — which the same ~15/17 scenarios opt
+# into — would inherit the identical mislabel, so the regression guard below still has real teeth.)
 OPT_IN_NAMES = {
     "disk pool saturated": "saturated",
 }
@@ -541,8 +550,10 @@ def _selftest():
     check(rep_sat["anomalies"] == 0, "opted-in saturated should not count as an anomaly")
 
     # Client ingest_failures is genuine lost work: CONCERNING even on a scenario whose SERVER opts
-    # into rate_limited. Regression guard for the old OPT_IN_NAMES["ingest failures"]="rate_limited"
-    # mislabel that inherited the rate_limited opt-in on ~15/17 scenarios and dropped the anomaly.
+    # into a load-shaping flag (rate-limit-storm opts into "saturated"). Regression guard for the old
+    # OPT_IN_NAMES["ingest failures"]="rate_limited" mislabel that inherited another counter's opt-in
+    # on ~15/17 scenarios and dropped the anomaly. v17 retired "rate_limited"; "saturated" carries
+    # the identical inheritance risk, so this guard is unchanged in force.
     cli_ing = {"snapshots": [{"wallMs": 1000, "ingest_failures": 0},
                              {"wallMs": 6000, "ingest_failures": 5}]}
     d_ing = {"scenario": "rate-limit-storm", "server": None,
@@ -550,7 +561,8 @@ def _selftest():
     rep_ing = {"anomalies": 0}
     un_ing = section_unexpected(rep_ing, d_ing)
     check(rep_ing["anomalies"] == 1 and any("ingest failures" in l and "CONCERNING" in l for l in un_ing),
-          "client ingest_failures must stay concerning on a rate_limited-opted scenario")
+          "client ingest_failures must stay concerning on a scenario that opts into "
+          "another load-shaping counter")
 
     print(f"soak_report selftest OK: {n} cases")
     return 0

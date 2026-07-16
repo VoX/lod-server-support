@@ -82,7 +82,7 @@ lag we measured). Field names below are the contract.
 {"event":"snapshot","wallMs":0,"tick":0,
  "service":{"requests_received":0,"columns_sent":0,"bytes_sent":0,"duplicate_skips":0,
             "queue_full":0,"up_to_date":0,"in_memory":0,"disk_resolved":0,"gen_drained":0,
-            "sync_rate_limited":0,"gen_rate_limited":0,"re_resolved":0},
+            "superseded":0,"range_filtered":0,"re_resolved":0},
  "disk":{"submitted":0,"completed":0,"not_found":0,"all_air":0,"errors":0,"saturated":0,
          "successful":0,"pending":0,"pending_hw":0},
  "generation":{"submitted":0,"completed":0,"timeouts":0,"removed_in_flight":0,"active":0,
@@ -94,12 +94,11 @@ lag we measured). Field names below are the contract.
  "tscache":{"evictions":0,"size_per_dimension":{}},
  "mailbox_depth_hw":0,"mspt_avg_window":-1.0,
  "players":[{"name":"","held_sync":0,"held_gen":0,"send_queue":0,"send_queue_hw":0,
-             "sent":0,"bytes":0,"requests":0}]}
+             "sent":0,"bytes":0,"requests":0,"backlog":0}]}
 ```
 
 Round-2 data-capture additions (observational; the checker treats new keys as warn-not-fail):
-`service.{sync_rate_limited,gen_rate_limited,re_resolved}` (re_resolved + dirty.suppressed_total
-are A6-monotonic), the `*_hw` high-water gauges (per-tick sampled by the driver, reset each
+`service.re_resolved` (re_resolved + dirty.suppressed_total are A6-monotonic), the `*_hw` high-water gauges (per-tick sampled by the driver, reset each
 snapshot), `dedup.groups`, `jvm.*`, `tscache.*`, `mspt_avg_window`. `probe_hashes` appears only
 under `-Dlss.soak.probes`. `command` rows gain `ok` (the step did not throw).
 
@@ -110,17 +109,17 @@ under `-Dlss.soak.probes`. `command` rows gain `ok` (the step did not throw).
 ```json
 {"event":"snapshot","wallMs":0,"dimension":"minecraft:overworld","server_enabled":true,
  "received_columns":0,"received_bytes":0,"dropped":0,
- "responses":{"columns":0,"up_to_date":0,"not_generated":0,"rate_limited":0},
- "requested_total":0,"send_cycles":0,"ingest_failures":0,"effective_lod":0,"request_queue":0,
+ "responses":{"columns":0,"up_to_date":0,"not_generated":0},
+ "requested_total":0,"send_cycles":0,"ingest_failures":0,"effective_lod":0,
  "columns":{"known":0,"empty":0,"dirty":0},
  "scan":{"confirmed":0,"ring":0,"missing_vanilla":0},
  "rtt":{"p50_ms":-1.0,"p95_ms":-1.0},
  "tracker_in_flight":0,"queued":0}
 ```
 
-Client round-2 additions: `ingest_failures`, `effective_lod`, `request_queue` (positions parked
-in the RequestQueue, distinct from `queued` = decode-queue depth), and `rtt.{p50_ms,p95_ms}`
-(request→receive latency percentiles; -1.0 until samples exist).
+Client round-2 additions: `ingest_failures`, `effective_lod`, and `rtt.{p50_ms,p95_ms}`
+(latency percentiles; -1.0 until samples exist). `request_queue` left with v17's drip-feed queue;
+`queued` (decode-queue depth) is unrelated and survives.
 
 `probes` (optional, only when `-Dlss.soak.probes=x:z,...` is set): per-position client
 timestamp map.
@@ -140,8 +139,10 @@ holds for the whole run.
    (the saturation path records a completion today, so the current partition is already
    false whenever saturated > 0). Update the `DiskReader:` diag line.
 2. `ProcessingDiagnostics`: cumulative `totalDuplicateSkips` (today per-tick only — the
-   server SILENTLY drops duplicate-while-pending requests and the client legitimately
-   produces them: 10 s client retry vs up-to-60 s server gen pending), cumulative
+   server SILENTLY drops re-declarations of a still-pending position. Under v17's 1 Hz
+   want-set this is EXPECTED and DOMINANT, not a rare timing artifact: one skip per position
+   per scan for as long as it stays in flight, and a load-bearing term in law A1. The 10 s
+   client retry this rationale originally cited no longer exists), cumulative
    `totalRequestsReceived`, cumulative `totalColumnsSent`/`totalBytesSent` (incremented at
    actual send; the existing "sent" sums live player states and resets at boundaries).
 3. Generation services (Fabric `ChunkGenerationService` + Paper twin): cumulative
@@ -205,9 +206,12 @@ No wire/protocol changes. Unit tests for each new counter path.
 **Quiescence predicate** (all laws evaluate as deltas between verified-quiescent
 snapshots): across ≥2 consecutive server snapshots, `service.requests_received`,
 `service.columns_sent`, `disk.submitted`, `generation.submitted/completed` unchanged AND
-`players[].held_sync/held_gen/send_queue == 0`, `disk.pending == 0`,
+`players[].held_sync/held_gen/send_queue/backlog == 0`, `disk.pending == 0`,
 `generation.active == 0`, `dirty.pending == 0`; client mirror: `tracker_in_flight == 0`,
-`queued == 0`. Worlds run with `randomTickSpeed 0`, `doMobSpawning false`,
+`queued == 0`. (v17: `backlog` is the new strict drain — a want entry retained by a full slot
+is real outstanding work that `held_sync`/`held_gen`, which count ADMITTED work only, do not
+report. `service.requests_received` going still IS convergence: a converged v17 client sends
+NOTHING, so that stillness is load-bearing for every law.) Worlds run with `randomTickSpeed 0`, `doMobSpawning false`,
 `doFireTick false` (timeline steps — they're gamerules, not server.properties), otherwise
 ambient chunk churn re-dirties every broadcast interval and quiescence never arrives.
 Scenarios also set `doDaylightCycle false`. Gamerules alone proved insufficient: vanilla
@@ -231,7 +235,12 @@ virtual run-start window anchored on the last pre-join server snapshot with an a
 client baseline, so the backfill/resync burst before the first natural quiescent point is
 law-checked rather than skipped:
 
-- A1 requests: `Δclient.requested_total == Δresponses(columns+up_to_date+not_generated+rate_limited) + Δserver.duplicate_skips + Δserver.queue_full`
+- A1 requests: `Δclient.requested_total == Δresponses(columns+up_to_date+not_generated) +
+  Δserver.duplicate_skips + Δserver.superseded + Δserver.range_filtered` (v17 want-set:
+  `requested_total` counts every DECLARED entry, re-declares included). `queue_full` is NOT a
+  term — a send-queue-full break retains its entries rather than disposing of them, and
+  `backlog == 0` at both quiescent endpoints proves each retained entry resolved or was
+  superseded inside the window
 - A2 delivery: `Δserver.service.columns_sent == Δclient.received_columns` and
   `Δserver.service.bytes_sent == Δclient.received_bytes`; `dropped == 0`
 - A3 sources (sanity bound, not exact — resolution counters increment on failure paths
@@ -244,22 +253,55 @@ law-checked rather than skipped:
 - A6 monotonic whitelist: disk.*, generation totals, service.* cumulatives,
   bandwidth.total_bytes (server, process lifetime); client counters within one run only
   and only within one dimension window
-- A7 anomalies: `errors, timeouts, dropped > 0` always fail; `saturated`/`rate_limited`
-  fail unless the scenario opts in (saturation surfaces as rate-limited BY DESIGN when the
-  reader pool (threads×32 queue) is smaller than the sync cap)
-- B1 rate-limit: `Δclient.responses.rate_limited == Δ(service.sync_rate_limited +
-  service.gen_rate_limited + disk.saturated)` (single client; disk saturation surfaces to
-  the client as rate-limited BY DESIGN)
+- A7 anomalies: `errors, timeouts, dropped > 0` always fail; `saturated` fails unless the
+  scenario opts in. The `saturated`/`rate_limited` opt-in PAIR was split at v17 (the client
+  half no longer exists); `saturated` is kept because v17's `hasHeadroom()` gate should hold
+  it at 0, which makes a hit here a stronger signal (the gate leaked) rather than a vacuous one
+- ~~B1 rate-limit~~ **DELETED at v17.** Its subject — the `RESPONSE_RATE_LIMITED` wire
+  response — no longer exists: a full slot silently retains the want entry and the client's
+  1 Hz re-declaration heals it. The conservation did not disappear, it MOVED: those silent
+  drops are counted in `service.superseded`, a term of law A1. Do not resurrect B1 without a
+  wire response to conserve.
 - B2 pacing: `Δbandwidth.total_bytes ≤ bytesPerSecondLimitGlobal × Δt × 1.3` over every
   consecutive server snapshot pair, plus a whole-run cumulative bound of cap × Δt × 1.05
   (runs longer than 30 s) that catches sustained creep the per-pair jitter headroom would
   absorb — armed only when the scenario config sets the global cap
 - Vacuous-pass guards: every scenario declares per-(run, dimension-segment) floors on the
   number of client-law windows actually evaluated (`MIN_CLIENT_WINDOWS`) — a run where
-  A1/A2/A5/B1 never fired fails loudly — and at least one evaluated window must carry
+  A1/A2/A5 never fired fails loudly — and at least one evaluated window must carry
   nonzero request deltas (`TRAFFIC_FLOOR_EXEMPT={'enabled-false'}`, the only scenario with
   legitimately zero LSS traffic); `--validate` additionally rejects scenario-config keys
   that are not real `lss-server-config.json` fields.
+
+### v17 want-set counters (`superseded`, `range_filtered`, `backlog`)
+
+Protocol v17 replaced the request-slice + bounce protocol with a declarative want-set: once
+per second the client declares its COMPLETE set of unsatisfied positions and the server
+REPLACES its per-player backlog with each arriving batch. `RESPONSE_RATE_LIMITED` left the
+wire. That changes what the harness must account for:
+
+- **`service.superseded`** — a received request dropped WITHOUT a wire response, recoverable
+  because the client re-declares every unsatisfied position each scan. Producers: mailbox
+  overwrite, backlog replace, Folia held-batch CAS loss, residual disk-saturation drop, and
+  dedup-primary-departure attached drops. It is a MECHANISM (work re-planned), not lost work
+  — but it is the ONLY thing standing between a silent drop and an invisible hole, which is
+  why law A1 conserves it.
+- **`service.range_filtered`** — entries dropped by the Chebyshev ingress guard (the client
+  declared a position it had already moved away from). Also answerless; also an A1 term.
+- **`players[].backlog`** — want entries the router has accepted but not yet disposed of
+  (retained behind a full slot or an exhausted disk pool). A strict quiescence drain: it is
+  real outstanding work, and `held_sync`/`held_gen` count ADMITTED work only.
+
+**The convergence-silence invariant.** A converged v17 client sends NOTHING — no heartbeat,
+no empty keepalive. The single exception is one edge-triggered empty batch (count 0) when the
+client ENTERS its decode-queue backpressure halt, which explicitly clears the server backlog.
+This is not an optimisation the harness merely benefits from; it is load-bearing. Quiescence
+keys on `service.requests_received` going still, so a client that heartbeated at 1 Hz would
+keep that counter moving forever, no quiescent window would ever open, and EVERY law above
+would silently stop firing while the suite stayed green. `requested_total` correspondingly
+changes meaning (it counts every DECLARED entry, so re-declares inflate it during activity —
+that is exactly what the new A1 balances), and `rtt.p50/p95` become last-declare→answer
+(current service latency) rather than first-ask→answer.
 
 **Scenario preconditions encoded as data:** teleports ≤ 512 blocks (beyond
 lodDistance+32 the server silently drops), setblock targets inside client LOD distance,
@@ -288,7 +330,9 @@ indexing, `.get()` defaults banned):
 Every scenario additionally registers a handshake check and, except enabled-false, per-run
 disc-completeness checks (the client must end each run holding an unbroken known-column
 disc out to the scenario's effective radius). The 14 post-approval scenarios each carry
-their own named checks (rate-limit storm convergence, saturation surfacing,
+their own named checks (rate-limit storm convergence — the file name is historical, the
+scenario's 4-slot gate now produces supersession instead of bounces; disk-saturation's
+headroom gate holding saturation at zero;
 generation-disabled parking + dirty rescue, bandwidth pacing, cold-restart up_to_date
 resync, enabled-false zero-traffic, teleport pruning, dirty-range filtering, offline-dirty
 probe deltas, clearcache segmentation, warm dimension rejoin, Paper falling-block dirty
@@ -296,10 +340,11 @@ detection) — see the CHECKS dict in scripts/check_soak.py.
 
 **Modes:** `--validate <scenario>` (pre-boot, seconds),
 `check_soak.py <results-dir> <scenario>` → `verdict.json` + human-readable violations,
-exit 1 on any failure, and `--selftest` — 115 in-memory pass/catch cases: every law
-(A1-A7, B1, B2, incl. the re_resolved / suppressed_total monotonic guards), the quiescence
-predicate, disc completeness, window floors, the config allowlist, action segmentation, and
-every named check each pass consistent data and catch a doctored inconsistency. Unrecognized
+exit 1 on any failure, and `--selftest` — 133 in-memory pass/catch cases: every law
+(A1-A7, B2, incl. the re_resolved / suppressed_total monotonic guards), the quiescence
+predicate (server pair AND client mirror), disc completeness, window floors, the config
+allowlist, action segmentation, and every named check each pass consistent data and catch a
+doctored inconsistency. Unrecognized
 new fields → one-line warning, never a failure.
 
 **Post-run digest:** `scripts/soak_report.py <results-dir>` (also auto-written to
