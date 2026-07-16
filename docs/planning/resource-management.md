@@ -133,12 +133,26 @@ Two client-side real-measure throttles that also cut server demand:
 | `pendingByPosition` | IMPLICIT | bounded by slot caps (pending entry *is* the held slot) |
 
 **Concurrency slot caps (in-flight work bound) · HARD LIMIT**
-- `syncOnLoadConcurrencyLimitPerPlayer` = **200**, `generationConcurrencyLimitPerPlayer` = **16**,
-  cross-clamped by Global Constraint #28 so the want-set batch can't be swallowed by
-  re-declared in-flight positions: sync ≤ **956**, gen = `(1024 − syncCap − 64)/4` (= **190**
-  at default). Full slot → `SLOT_FULL`: retain but keep scanning.
+- Per-player SYNC (disk-read) slot cap: the constant `SYNC_ON_LOAD_SLOT_CAP` = **200** (the old
+  config knob is retired; shadowed by the disk pool at the default 5 threads, binding above ~6).
+  `generationConcurrencyLimitPerPlayer` = **16** (clamp 1–1000; the old #28 cross-clamp is gone —
+  no client budget derives from any cap; the successor invariant lives in
+  `WantSetBudgetInvariantTest`). Full slot → `SLOT_FULL`: retain but keep scanning.
 - Generation: `generationConcurrencyLimitGlobal` = **32** (clamp 1–256), `generationTimeoutSeconds`
   = **60** (clamp 1–600), with piggybacking (one generation serves all requesters of a position).
+  The server owns the generation decision entirely: a disk miss generates when a slot is free,
+  drops silently when not (transient — re-declared at 1 Hz), and answers the session-permanent
+  `NOT_GENERATED` only when generation is disabled or hard-failed. Paper/Folia generation runs at
+  Moonrise **`Priority.LOW`** (defers to player-driven NORMAL generation); Fabric has no worldgen
+  priority (ticket-level-pinned, level 33) and no latency throttle (worldgen's variable baseline
+  makes latency a poor congestion signal) — its honest limiter is the concurrency caps; a future
+  adaptive backoff should key on tick health (MSPT), not latency. The Paper dirty-revival gap:
+  walk-in generation does not fire dirty detection by default (`ChunkPopulateEvent` is a
+  deliberate non-default `updateEvents` opt-in), so a NOT_GENERATED-parked position on Paper
+  heals mid-session only via block-edit events, or on reconnect. The accepted churn tradeoff
+  (R7): a miss that can't take a gen slot re-reads disk each scan until one frees — bounded by
+  the pool headroom gate and 1 Hz cadence; if a live run measures pathological IO here, a
+  negative cache is the revisit.
 
 ---
 
@@ -184,13 +198,13 @@ not verdicts.
   Worldgen is among the most expensive server operations; 32 concurrent LOD-driven generations
   can compete with player-driven generation during fresh-world exploration. Consider a lower
   default (piggybacking + the per-player 16 cap partly mitigate).
-- **`syncOnLoadConcurrencyLimitPerPlayer = 200` is shadowed by the disk pool depth (165).** A
-  single player can't hold more pending reads than the shared pool allows, so raising this knob
-  mostly grows the want-set (`4× = 800/scan`), not throughput. To actually serve more per
-  player, raise `diskReaderThreads` alongside it. Worth documenting the coupling.
+- **The sync slot cap is a constant now (`SYNC_ON_LOAD_SLOT_CAP = 200`).** Shadowed by the disk
+  pool depth (165) at the default 5 threads; at `diskReaderThreads >= 7` the constant binds as a
+  fixed per-player fairness ceiling — deliberate (one less coupled knob; the want-set budget is
+  a constant too). Operators tune throughput with `diskReaderThreads`.
 
 **Looks right — leave alone:** `useBackgroundReadPriority=true`, the retain-don't-bounce design,
-cache sizes, `lodDistanceChunks=256`, `dirtyBroadcastIntervalSeconds=10`, the #28 cross-clamp.
+cache sizes, `lodDistanceChunks=256`, `dirtyBroadcastIntervalSeconds=10`.
 
 ---
 
@@ -205,8 +219,8 @@ cache sizes, `lodDistanceChunks=256`, `dirtyBroadcastIntervalSeconds=10`, the #2
 | `sendQueueLimitPerPlayer` | 4000 | 1–100 000 | Network → disk backpressure |
 | `lodDistanceChunks` | 256 | 1–2048 | Network volume |
 | `dirtyBroadcastIntervalSeconds` | 10 | 1–300 | Network |
-| `syncOnLoadConcurrencyLimitPerPlayer` | 200 | 1–1000 → ≤956 | CPU/Mem/Disk in-flight |
-| `generationConcurrencyLimitPerPlayer` | 16 | 1–1000 → ≤190 | CPU/gen |
+| *(const)* `SYNC_ON_LOAD_SLOT_CAP` | 200 | — | CPU/Mem/Disk in-flight |
+| `generationConcurrencyLimitPerPlayer` | 16 | 1–1000 | CPU/gen |
 | `generationConcurrencyLimitGlobal` | 32 | 1–256 | CPU/gen |
 | `generationTimeoutSeconds` | 60 | 1–600 | CPU/gen |
 | `perDimensionTimestampCacheSizeMB` | 32 | 1–256 | Memory |
