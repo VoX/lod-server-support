@@ -280,7 +280,8 @@ public final class PaperSoakMetricsExporter {
             p.put("sent", state.getTotalSectionsSent());
             p.put("bytes", state.getTotalBytesSent());
             p.put("requests", state.getTotalRequestsReceived());
-            p.put("incoming_dropped", state.getTotalIncomingDropped());
+            // removed in Task 6 with the contract (the incoming queue it counted is gone)
+            p.put("incoming_dropped", 0L);
             players.add(p);
         }
         result.put("players", players);

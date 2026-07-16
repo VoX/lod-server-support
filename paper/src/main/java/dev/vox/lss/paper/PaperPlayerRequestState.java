@@ -1,7 +1,6 @@
 package dev.vox.lss.paper;
 
 import dev.vox.lss.common.processing.AbstractPlayerRequestState;
-import dev.vox.lss.common.processing.IncomingRequest;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.Level;
@@ -18,10 +17,6 @@ public class PaperPlayerRequestState extends AbstractPlayerRequestState<byte[]> 
         super(player.getUUID(), syncConcurrency, genConcurrency);
         this.player = player;
         this.lastDimension = player.level().dimension();
-    }
-
-    public void addRequest(int cx, int cz, long clientTimestamp) {
-        enqueueIncomingRequest(new IncomingRequest(cx, cz, clientTimestamp));
     }
 
     public void updatePlayer(ServerPlayer newPlayer) {

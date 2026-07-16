@@ -21,6 +21,9 @@ public class ProcessingDiagnostics {
     private volatile long totalInMemory;
     private volatile long totalUpToDate;
     private volatile long totalGenDrained;
+    // Frozen at 0 since the v17 want-set model retired the rate-limit bounce: a full slot
+    // or a full disk pool now RETAINS the entry (see IncomingRequestRouter). Kept only
+    // because both metrics exporters still read them; deleted with those keys in Task 6.
     private volatile long totalSyncRateLimited;
     private volatile long totalGenRateLimited;
     private volatile long totalDuplicateSkips;
@@ -49,7 +52,9 @@ public class ProcessingDiagnostics {
         totalDuplicateSkips++;
     }
 
-    /** One increment per request polled off a player's incoming queue (whether answered or dropped). */
+    /** One increment per backlog entry PERMANENTLY leaving the backlog with a disposition
+     *  (answered, admitted, or duplicate-skipped). Retained entries are not counted;
+     *  superseded entries are counted in {@code superseded} instead. */
     public void incrementRequestRouted() { totalRequestsRouted++; }
 
     public void incrementGenDrained() {
@@ -67,24 +72,8 @@ public class ProcessingDiagnostics {
         totalUpToDate++;
     }
 
-    public void incrementSyncRateLimited() {
-        totalSyncRateLimited++;
-    }
-
-    public void incrementGenRateLimited() {
-        totalGenRateLimited++;
-    }
-
     public void incrementQueueFull() {
         totalQueueFull++;
-    }
-
-    public void incrementRateLimited(RequestType type) {
-        if (type == RequestType.SYNC) {
-            incrementSyncRateLimited();
-        } else {
-            incrementGenRateLimited();
-        }
     }
 
     /** A ts&le;0 re-request cleared a stale diskReadDone entry and re-entered resolution. */

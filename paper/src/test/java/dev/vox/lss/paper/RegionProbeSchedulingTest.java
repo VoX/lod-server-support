@@ -1,6 +1,8 @@
 package dev.vox.lss.paper;
 
 import dev.vox.lss.common.PositionUtil;
+import dev.vox.lss.common.processing.IncomingBatch;
+import dev.vox.lss.common.processing.IncomingRequest;
 import dev.vox.lss.common.processing.LoadedColumnData;
 import dev.vox.lss.common.processing.TickSnapshot;
 import dev.vox.lss.common.tracking.DirtyColumnTracker;
@@ -124,6 +126,24 @@ class RegionProbeSchedulingTest {
         return snapshot.loadedChunkProbes().get(uuid);
     }
 
+    /** Declare a complete want-set into the MAILBOX — the source the Folia hold-release takes
+     *  from. Each call REPLACES the previous declaration (latest-wins): a client that still
+     *  wants an earlier position re-declares it, so multi-position seeds are ONE batch. */
+    private static void offer(PaperPlayerRequestState state, IncomingRequest... reqs) {
+        state.offerIncomingBatch(new IncomingBatch(reqs));
+    }
+
+    /** Stand in for the processing thread having APPLIED a want-set: what the SYNC (non-Folia)
+     *  probe walks. The regionized path reads the mailbox instead — see {@link #offer}. */
+    private static void publish(PaperPlayerRequestState state, IncomingRequest... reqs) {
+        state.publishWantSet(new IncomingBatch(reqs));
+    }
+
+    /** True when a declaration is sitting in the mailbox (released or never held). */
+    private static boolean hasPendingBatch(PaperPlayerRequestState state) {
+        return state.peekIncomingBatch() != null;
+    }
+
     // ---- RP-001: regionized mode schedules instead of probing synchronously ----
 
     @Test
@@ -135,11 +155,11 @@ class RegionProbeSchedulingTest {
         });
         var player = playerIn(UUID.randomUUID(), level(Level.OVERWORLD));
         var state = service.registerPlayer(player, 1);
-        state.addRequest(3, 4, -1);
+        offer(state, new IncomingRequest(3, 4, -1));
 
         service.tick();
 
-        assertEquals(1, scheduledTasks.size(), "one probe task per player with pending requests");
+        assertEquals(1, scheduledTasks.size(), "one probe task per player with a pending declaration");
         assertEquals(0, probeCalls.get(),
                 "the pump must not probe synchronously in regionized mode (it owns no chunks on Folia)");
         assertTrue(processor.snapshots.get(0).loadedChunkProbes().isEmpty(),
@@ -153,7 +173,8 @@ class RegionProbeSchedulingTest {
 
         service.tick();
 
-        assertTrue(scheduledTasks.isEmpty(), "an empty request queue schedules no region task");
+        assertTrue(scheduledTasks.isEmpty(),
+                "a converged player declares nothing and must cost no region task");
     }
 
     @Test
@@ -163,7 +184,8 @@ class RegionProbeSchedulingTest {
         var uuid = UUID.randomUUID();
         var player = playerIn(uuid, level(Level.OVERWORLD));
         var state = service.registerPlayer(player, 1);
-        state.addRequest(3, 4, -1);
+        // Sync mode walks the APPLIED want-set (no hold-release), so seed the published set.
+        publish(state, new IncomingRequest(3, 4, -1));
 
         service.tick();
 
@@ -182,7 +204,7 @@ class RegionProbeSchedulingTest {
         var uuid = UUID.randomUUID();
         var player = playerIn(uuid, level(Level.OVERWORLD));
         var state = service.registerPlayer(player, 1);
-        state.addRequest(5, 7, -1);
+        offer(state, new IncomingRequest(5, 7, -1));
 
         service.tick();                    // schedules; snapshot 1 empty
         scheduledTasks.get(0).run();       // "region thread" probes and publishes
@@ -202,10 +224,12 @@ class RegionProbeSchedulingTest {
         var uuid = UUID.randomUUID();
         var player = playerIn(uuid, level(Level.OVERWORLD));
         var state = service.registerPlayer(player, 1);
-        state.addRequest(1, 1, -1);
+        offer(state, new IncomingRequest(1, 1, -1));
 
         service.tick();                    // task 1 snapshots {(1,1)}
-        state.addRequest(2, 2, -1);
+        // The client re-declares: (1,1) is still unsatisfied, so the newer want-set carries it
+        // again alongside (2,2). This arrival supersedes the batch held for probing.
+        offer(state, new IncomingRequest(1, 1, -1), new IncomingRequest(2, 2, -1));
         service.tick();                    // task 2 snapshots {(1,1),(2,2)}; nothing to consume
 
         // Task 1 serves (1,1); task 2's probe serves only (2,2) — its (1,1) read misses.
@@ -230,20 +254,23 @@ class RegionProbeSchedulingTest {
         var uuid = UUID.randomUUID();
         var player = playerIn(uuid, level(Level.OVERWORLD));
         var state = service.registerPlayer(player, 1);
-        state.addRequest(5, 7, -1);
+        offer(state, new IncomingRequest(5, 7, -1));
 
         service.tick();
-        assertNull(state.pollIncomingRequest(),
-                "fresh arrivals are parked for one tick, not routable from the queue");
+        assertFalse(hasPendingBatch(state),
+                "a fresh declaration is parked for one tick — invisible to routing, which "
+                        + "takes batches only from the mailbox");
 
         scheduledTasks.get(0).run();
         service.tick();
 
-        var released = state.pollIncomingRequest();
+        var released = state.peekIncomingBatch();
         assertNotNull(released,
-                "the held batch is released the tick its probe results are consumed");
-        assertEquals(5, released.cx());
-        assertEquals(7, released.cz());
+                "the held batch is released back into the mailbox the tick its probe "
+                        + "results are consumed");
+        assertEquals(1, released.size());
+        assertEquals(5, released.requests()[0].cx());
+        assertEquals(7, released.requests()[0].cz());
         var probes = probesInLastSnapshot(uuid);
         assertNotNull(probes, "request and probe result must meet in the same snapshot");
         assertTrue(probes.containsKey(PositionUtil.packPosition(5, 7)));
@@ -254,13 +281,54 @@ class RegionProbeSchedulingTest {
         var uuid = UUID.randomUUID();
         var player = playerIn(uuid, level(Level.OVERWORLD));
         var state = service.registerPlayer(player, 1);
-        state.addRequest(5, 7, -1);
+        offer(state, new IncomingRequest(5, 7, -1));
 
         service.tick();                    // held; the scheduled task never runs ("region lagged")
         service.tick();
 
-        assertNotNull(state.pollIncomingRequest(),
+        assertTrue(hasPendingBatch(state),
                 "release is unconditional — a late probe only misses, it never delays routing");
+    }
+
+    @Test
+    void heldBatchLosesToANewerArrivalAndIsCountedSuperseded() {
+        // The CAS pin. A client that re-declares during the hold tick has SUPERSEDED the held
+        // batch: the newer want-set must win, the held one must die (never be resurrected —
+        // that would resurrect wants the client has already dropped, e.g. after a teleport),
+        // and the drop must be counted so the conservation ledger closes. Releasing before the
+        // take is what makes this observable: taking first would empty the mailbox and let the
+        // CAS succeed unconditionally, republishing the STALE batch while parking the fresh one.
+        service.setLoadedColumnProbe((level, cx, cz) -> column(cx, cz));
+        var uuid = UUID.randomUUID();
+        var player = playerIn(uuid, level(Level.OVERWORLD));
+        var state = service.registerPlayer(player, 1);
+        offer(state, new IncomingRequest(1, 1, -1), new IncomingRequest(2, 2, -1));
+
+        service.tick();                    // batch A held for probing
+        assertFalse(hasPendingBatch(state));
+        assertEquals(0, state.drainPendingSuperseded());
+
+        // Batch B arrives while A is held: a disjoint want-set (the client moved on).
+        offer(state, new IncomingRequest(9, 9, -1));
+        service.tick();
+
+        assertEquals(2, state.drainPendingSuperseded(),
+                "the held batch lost the CAS: both of ITS entries are counted superseded");
+        var pending = state.peekIncomingBatch();
+        assertNull(pending, "the newer batch is now the one held for probing, not routable yet");
+        assertEquals(2, scheduledTasks.size(), "the newer batch gets its own probe task");
+
+        scheduledTasks.get(1).run();
+        service.tick();
+
+        var released = state.peekIncomingBatch();
+        assertNotNull(released, "the newer batch releases on the following tick");
+        assertEquals(1, released.size(), "only the newest declaration survives: " + released.size());
+        assertEquals(9, released.requests()[0].cx(),
+                "a superseded want must never be resurrected by the hold-release");
+        var probes = probesInLastSnapshot(uuid);
+        assertNotNull(probes, "and it meets its own probe results");
+        assertTrue(probes.containsKey(PositionUtil.packPosition(9, 9)));
     }
 
     @Test
@@ -269,7 +337,7 @@ class RegionProbeSchedulingTest {
         var overworld = level(Level.OVERWORLD);
         var player = playerIn(uuid, overworld);
         var state = service.registerPlayer(player, 1);
-        state.addRequest(6, 6, -1);
+        offer(state, new IncomingRequest(6, 6, -1));
 
         service.tick();                    // held
         when(player.isRemoved()).thenReturn(true);
@@ -279,7 +347,7 @@ class RegionProbeSchedulingTest {
         var freshState = service.registerPlayer(rejoined, 1);
         service.tick();
 
-        assertNull(freshState.pollIncomingRequest(),
+        assertFalse(hasPendingBatch(freshState),
                 "a removed player's held batch must not resurrect into the rejoined state");
     }
 
@@ -298,8 +366,7 @@ class RegionProbeSchedulingTest {
         var uuid = UUID.randomUUID();
         var player = playerIn(uuid, level(Level.OVERWORLD));
         var state = service.registerPlayer(player, 1);
-        state.addRequest(1, 1, -1);
-        state.addRequest(2, 2, -1);
+        offer(state, new IncomingRequest(1, 1, -1), new IncomingRequest(2, 2, -1));
 
         service.tick();
         scheduledTasks.get(0).run();
@@ -322,7 +389,7 @@ class RegionProbeSchedulingTest {
         var overworld = level(Level.OVERWORLD);
         var player = playerIn(uuid, overworld);
         var state = service.registerPlayer(player, 1);
-        state.addRequest(9, 9, -1);
+        offer(state, new IncomingRequest(9, 9, -1));
 
         service.tick();                    // task captured against the overworld level
         var task = scheduledTasks.get(0);
@@ -351,7 +418,7 @@ class RegionProbeSchedulingTest {
         var overworld = level(Level.OVERWORLD);
         var player = playerIn(uuid, overworld);
         var state = service.registerPlayer(player, 1);
-        state.addRequest(6, 6, -1);
+        offer(state, new IncomingRequest(6, 6, -1));
 
         service.tick();                    // task captured
         var task = scheduledTasks.get(0);
@@ -383,8 +450,7 @@ class RegionProbeSchedulingTest {
         var uuid = UUID.randomUUID();
         var player = playerIn(uuid, level(Level.OVERWORLD));
         var state = service.registerPlayer(player, 1);
-        state.addRequest(3, 3, 0);
-        state.addRequest(4, 4, -1);
+        offer(state, new IncomingRequest(3, 3, 0), new IncomingRequest(4, 4, -1));
         genService.nextTick = List.of(new TickSnapshot.GenerationReadyData(
                 uuid, 3, 3, "minecraft:overworld", column(3, 3), 1L, 1L));
 
@@ -401,8 +467,7 @@ class RegionProbeSchedulingTest {
         var uuid = UUID.randomUUID();
         var player = playerIn(uuid, level(Level.OVERWORLD));
         var state = service.registerPlayer(player, 1);
-        state.addRequest(3, 3, -1);
-        state.addRequest(4, 4, -1);
+        offer(state, new IncomingRequest(3, 3, -1), new IncomingRequest(4, 4, -1));
 
         service.tick();                    // task snapshots both positions
         scheduledTasks.get(0).run();       // batch = {(3,3), (4,4)}
@@ -429,9 +494,11 @@ class RegionProbeSchedulingTest {
         });
         var player = playerIn(UUID.randomUUID(), level(Level.OVERWORLD));
         var state = service.registerPlayer(player, 1);
-        for (int i = 0; i < 600; i++) {
-            state.addRequest(i, -i, -1);
+        var wants = new IncomingRequest[600];
+        for (int i = 0; i < wants.length; i++) {
+            wants[i] = new IncomingRequest(i, -i, -1);
         }
+        offer(state, wants);
 
         service.tick();
         scheduledTasks.get(0).run();

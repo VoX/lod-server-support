@@ -41,7 +41,10 @@ class IncomingRequestRouterTest {
     private static final class TestState extends AbstractPlayerRequestState<Object> {
         TestState(UUID uuid, int syncCap, int genCap) { super(uuid, syncCap, genCap); }
         @Override public String getPlayerName() { return "test"; }
-        void enqueue(IncomingRequest r) { enqueueIncomingRequest(r); }
+        /** Seeds one want-set batch carrying a single request (the pre-v17 per-request
+         *  enqueue has no equivalent — each declaration REPLACES the backlog). Every call
+         *  site here is separated from the next by a routing cycle, so nothing is superseded. */
+        void enqueue(IncomingRequest r) { offerIncomingBatch(new IncomingBatch(new IncomingRequest[]{r})); }
     }
 
     private record CapturedSubmit(UUID playerUuid, String dimension, int cx, int cz) {}
@@ -134,10 +137,16 @@ class IncomingRequestRouterTest {
         return proc.submits.stream().map(s -> packed(s.cx(), s.cz())).toList();
     }
 
-    private static List<IncomingRequest> incoming(TestState state) {
-        var list = new ArrayList<IncomingRequest>();
-        state.getIncomingRequests().forEach(list::add);
-        return list;
+    /** Declare a complete want-set batch (the v17 wire shape). Each call REPLACES the
+     *  player's backlog — that is the protocol, not a test shortcut. */
+    private static void offer(TestState state, IncomingRequest... reqs) {
+        state.offerIncomingBatch(new IncomingBatch(reqs));
+    }
+
+    /** The un-taken mailbox contents (empty when the processing thread has taken the batch). */
+    private static List<IncomingRequest> pendingBatch(TestState state) {
+        var b = state.peekIncomingBatch();
+        return b == null ? List.of() : List.of(b.requests());
     }
 
     private static Predicate<List<Delivered>> contains(byte type, long packedPos) {
@@ -181,30 +190,32 @@ class IncomingRequestRouterTest {
         var proc = new TestProcessor(players, null, true, tempDir);
         try {
             proc.start();
-            // 9 requests, FIFO; every disposition the router can produce appears at least once
-            p1.enqueue(new IncomingRequest(1, 0, -1));   // disk submit (sync slot 1/2)
-            p1.enqueue(new IncomingRequest(1, 0, -1));   // duplicate skip (pending), silent
-            p1.enqueue(new IncomingRequest(2, 0, 0));    // generation ticket (gen slot 1/1)
-            p1.enqueue(new IncomingRequest(3, 0, 0));    // gen rate-limited (gen slot full)
-            p1.enqueue(new IncomingRequest(4, 0, 2000)); // up-to-date (cached 1000 <= 2000)
-            p1.enqueue(new IncomingRequest(4, 0, 3000)); // ts>0 duplicate answered (diskReadDone)
-            p1.enqueue(new IncomingRequest(5, 0, -1));   // in-memory probe payload, no slot
-            p1.enqueue(new IncomingRequest(6, 0, -1));   // disk submit (sync slot 2/2)
-            p1.enqueue(new IncomingRequest(7, 0, -1));   // sync rate-limited — batch marker
+            // One 9-entry want-set, backlog order; every disposition the router can produce
+            // appears at least once. The two slot-full entries are RETAINED, not bounced —
+            // and the entries BEHIND them still route (SLOT_FULL retains-and-continues).
+            // The barrier is the last entry, which must resolve terminally.
+            offer(p1,
+                    new IncomingRequest(1, 0, -1),   // disk submit (sync slot 1/2)
+                    new IncomingRequest(1, 0, -1),   // duplicate skip (pending), silent
+                    new IncomingRequest(2, 0, 0),    // generation ticket (gen slot 1/1)
+                    new IncomingRequest(3, 0, 0),    // gen slot full -> RETAINED, pass continues
+                    new IncomingRequest(5, 0, -1),   // in-memory probe payload, no slot
+                    new IncomingRequest(6, 0, -1),   // disk submit (sync slot 2/2)
+                    new IncomingRequest(7, 0, -1),   // sync slot full -> RETAINED, pass continues
+                    new IncomingRequest(4, 0, 2000), // up-to-date (cached 1000 <= 2000)
+                    new IncomingRequest(4, 0, 3000));// ts>0 duplicate answered — batch marker
             var probes = new Long2ObjectOpenHashMap<LoadedColumnData>();
             probes.put(packed(5, 0), new LoadedColumnData(5, 0, new byte[]{1, 2, 3}, 48));
             proc.postSnapshot(snapshot(Map.of(p1.getPlayerUUID(), probes), 0, p1), List.of());
 
             var delivered = drainUntil(proc,
-                    contains(LSSConstants.RESPONSE_RATE_LIMITED, packed(7, 0)));
+                    d -> count(d, LSSConstants.RESPONSE_UP_TO_DATE, packed(4, 0)) == 2);
+            // restoreBacklog runs after the pass: wait on it before reading the ledger.
+            waitFor(() -> p1.getBacklogSize() == 2, "both slot-full entries retained in order");
 
-            // Answered now: gen bounce, the two (4,0) up-to-dates, sync bounce — nothing else
-            assertEquals(4, delivered.size(), "exactly four batched answers: " + delivered);
-            assertEquals(1, count(delivered, LSSConstants.RESPONSE_RATE_LIMITED, packed(3, 0)));
+            // Answered now: only the two (4,0) up-to-dates. A full slot is NOT an answer.
+            assertEquals(2, delivered.size(), "exactly two batched answers: " + delivered);
             assertEquals(2, count(delivered, LSSConstants.RESPONSE_UP_TO_DATE, packed(4, 0)));
-            assertEquals(1, count(delivered, LSSConstants.RESPONSE_RATE_LIMITED, packed(7, 0)));
-            assertEquals(1, proc.getDiagnostics().getTotalGenRateLimited());
-            assertEquals(1, proc.getDiagnostics().getTotalSyncRateLimited());
 
             // Served from memory: only the probe position, with the probe's bytes and a real timestamp
             assertEquals(1, proc.payloads.size());
@@ -216,7 +227,8 @@ class IncomingRequestRouterTest {
                     "probe-served columns must carry the cycle timestamp for up-to-date checks");
 
             // In-flight: the slot IS the pending entry, one per submit/ticket
-            assertEquals(List.of(packed(1, 0), packed(6, 0)), submitPositions(proc));
+            assertEquals(List.of(packed(1, 0), packed(6, 0)), submitPositions(proc),
+                    "the sync submit BEHIND the full gen slot still routes");
             var ticket = proc.pollGenerationTicketRequest();
             assertNotNull(ticket);
             assertEquals(2, ticket.cx());
@@ -230,17 +242,29 @@ class IncomingRequestRouterTest {
             for (int cx : new int[]{3, 4, 5, 7}) assertFalse(p1.hasPendingRequest(cx, 0), "resolved " + cx);
 
             var diag = proc.getDiagnostics();
-            assertEquals(9, diag.getTotalRequestsRouted());
+            assertEquals(7, diag.getTotalRequestsRouted(),
+                    "routed counts DISPOSITIONS only — the two retained entries are still owed");
             assertEquals(1, diag.getTotalDuplicateSkips());
             assertEquals(1, diag.getTotalUpToDate());
             assertEquals(1, diag.getTotalInMemory());
             assertEquals(0, diag.getTotalQueueFull());
+            assertEquals(0, diag.getTotalSuperseded(), "no replace happened, so nothing is superseded");
+            assertEquals(0, diag.getTotalRangeFiltered());
 
-            // Conservation: routed == answered + payloads + in-flight + silent duplicate skips
-            assertEquals(diag.getTotalRequestsRouted(),
+            // Conservation over the WHOLE declaration: every received entry is answered,
+            // served a payload, admitted (in-flight), duplicate-skipped, or still queued.
+            assertEquals(p1.getTotalRequestsReceived(),
                     delivered.size() + proc.payloads.size()
                             + p1.getHeldSyncSlots() + p1.getHeldGenSlots()
-                            + diag.getTotalDuplicateSkips());
+                            + diag.getTotalDuplicateSkips() + p1.getBacklogSize()
+                            + diag.getTotalSuperseded() + diag.getTotalRangeFiltered());
+
+            // Order preservation: restoreBacklog prepends the retained entries in their
+            // declared order. Safe to drain from the test thread — the processing thread is
+            // parked waiting for a snapshot and no further one is posted.
+            assertEquals(new IncomingRequest(3, 0, 0), p1.pollBacklog(), "first retained entry");
+            assertEquals(new IncomingRequest(7, 0, -1), p1.pollBacklog(), "second retained entry");
+            assertNull(p1.pollBacklog(), "nothing else was retained");
         } finally {
             proc.shutdown();
         }
@@ -268,16 +292,18 @@ class IncomingRequestRouterTest {
             marker.enqueue(new IncomingRequest(3, 3, -1));
             proc.postSnapshot(snapshot(noCaps, marker), List.of());
             waitFor(() -> submitPositions(proc).contains(packed(3, 3)), "second marker routed");
-            assertEquals(List.of(new IncomingRequest(1, 1, -1)), incoming(noCaps),
-                    "skip must never consume the capability-less player's queue");
+            assertEquals(List.of(new IncomingRequest(1, 1, -1)), pendingBatch(noCaps),
+                    "skip must leave the declared batch un-taken (the capability check runs "
+                            + "in routeAll, before takeIncomingBatch)");
+            assertEquals(0, noCaps.getBacklogSize(), "and it never reaches the backlog");
             assertEquals(2, proc.getDiagnostics().getTotalRequestsRouted(),
                     "skipped requests are never polled, so never counted as routed");
 
             // The skip preserves the backlog: once the capability arrives, it routes normally
             noCaps.setCapabilities(LSSConstants.CAPABILITY_VOXEL_COLUMNS);
             proc.postSnapshot(snapshot(noCaps, marker), List.of());
-            waitFor(() -> submitPositions(proc).contains(packed(1, 1)), "backlog routed after capability set");
-            assertEquals(List.of(), incoming(noCaps));
+            waitFor(() -> submitPositions(proc).contains(packed(1, 1)), "batch routed after capability set");
+            assertEquals(List.of(), pendingBatch(noCaps), "the batch is taken once it may route");
             assertEquals(1, noCaps.getHeldSyncSlots());
         } finally {
             proc.shutdown();
@@ -294,20 +320,31 @@ class IncomingRequestRouterTest {
         var players = new ConcurrentHashMap<UUID, TestState>();
         var state = addPlayer(players, 4, 4);
         state.setRegisteredDimension("minecraft:the_end"); // the session's real dimension
+        var marker = addPlayer(players, 4, 4); // barrier: proves the stale cycle actually ran
         var proc = new TestProcessor(players, null, false, null);
         try {
             proc.start();
             state.enqueue(new IncomingRequest(3, 3, -1));
-            proc.postSnapshot(snapshot(state), List.of()); // stale snapshot claims DIM (overworld)
+            marker.enqueue(new IncomingRequest(40, 40, -1));
+            proc.postSnapshot(snapshot(state, marker), List.of()); // stale snapshot claims DIM (overworld)
+            waitFor(() -> submitPositions(proc).contains(packed(40, 40)), "stale cycle ran");
+            assertEquals(List.of(new IncomingRequest(3, 3, -1)), pendingBatch(state),
+                    "the guard defers by leaving the batch un-taken — a taken-then-dropped "
+                            + "batch would lose the session's whole want-set");
+            assertEquals(0, state.getBacklogSize());
+
             var endDims = new HashMap<UUID, String>();
             endDims.put(state.getPlayerUUID(), "minecraft:the_end");
             proc.postSnapshot(new TickSnapshot(endDims, Map.of(), 0, false), List.of());
 
-            waitFor(() -> !proc.submits.isEmpty(), "routed under the session's dimension");
-            var submit = proc.submits.poll();
+            waitFor(() -> submitPositions(proc).contains(packed(3, 3)),
+                    "routed under the session's dimension");
+            var submit = proc.submits.stream().filter(c -> c.cx() == 3 && c.cz() == 3).findFirst()
+                    .orElseThrow();
             assertEquals("minecraft:the_end", submit.dimension(),
                     "the stale overworld snapshot must never route the End session's requests");
-            assertTrue(proc.submits.isEmpty(), "the request routes exactly once");
+            assertEquals(1, proc.submits.stream().filter(c -> c.cx() == 3).count(),
+                    "the request routes exactly once");
             assertEquals(1, state.getHeldSyncSlots());
         } finally {
             proc.shutdown();
@@ -324,11 +361,12 @@ class IncomingRequestRouterTest {
         var proc = new TestProcessor(players, reader, true, tempDir);
         try {
             proc.start();
-            p1.enqueue(new IncomingRequest(10, 0, -1));         // unknown: cached ts must be ignored
-            p1.enqueue(new IncomingRequest(11, 0, cached));     // boundary: cachedTs == clientTs is fresh
-            p1.enqueue(new IncomingRequest(12, 0, cached - 1)); // stale client copy: re-serve
-            p1.enqueue(new IncomingRequest(13, 0, 500));        // never served (no cache entry): re-serve
-            p1.enqueue(new IncomingRequest(14, 0, 0));          // generation request, reader present
+            offer(p1,
+                    new IncomingRequest(10, 0, -1),         // unknown: cached ts must be ignored
+                    new IncomingRequest(11, 0, cached),     // boundary: cachedTs == clientTs is fresh
+                    new IncomingRequest(12, 0, cached - 1), // stale client copy: re-serve
+                    new IncomingRequest(13, 0, 500),        // never served (no cache entry): re-serve
+                    new IncomingRequest(14, 0, 0));         // generation request, reader present
             proc.postSnapshot(snapshot(p1), List.of());
             waitFor(() -> submitPositions(proc).contains(packed(14, 0)), "last request submitted");
 
@@ -360,8 +398,11 @@ class IncomingRequestRouterTest {
         var proc = new TestProcessor(players, null, true, tempDir);
         try {
             proc.start();
-            p1.enqueue(new IncomingRequest(20, 0, 0));  // generation request, no reader
-            p1.enqueue(new IncomingRequest(21, 0, -1)); // SYNC takes the disk route even without a reader
+            // ONE want-set carries both: two back-to-back declarations would supersede each
+            // other (latest-wins mailbox), which is the protocol, not a seeding accident.
+            offer(p1,
+                    new IncomingRequest(20, 0, 0),   // generation request, no reader
+                    new IncomingRequest(21, 0, -1)); // SYNC takes the disk route even without a reader
             proc.postSnapshot(snapshot(p1), List.of());
             waitFor(() -> submitPositions(proc).contains(packed(21, 0)), "sync request submitted");
 
@@ -441,43 +482,46 @@ class IncomingRequestRouterTest {
             assertEquals(1, proc.payloads.size());
 
             // (31,0)/(32,0): served, payload still in the send pipeline. (33,0): served
-            // and the client kept its data (its re-ask carries ts>0).
+            // and the client kept its data (its re-declare carries ts>0).
             p1.markDiskReadDone(31, 0);
             p1.addReadyPayload(new QueuedPayload<>(new Object(), 10, 1, packed(31, 0)));
             p1.markDiskReadDone(32, 0);
             p1.addReadyPayload(new QueuedPayload<>(new Object(), 10, 2, packed(32, 0)));
             p1.markDiskReadDone(33, 0);
 
-            // Cycle 2: the four re-request flavors. (30,0)'s payload was "lost" after the
+            // Cycle 2: the four re-declaration flavors. (30,0)'s payload was "lost" after the
             // send (nothing enqueued): the old router answered up-to-date and sealed a
-            // permanent invisible hole — it must re-resolve instead.
-            p1.enqueue(new IncomingRequest(30, 0, -1)); // lost after send: re-resolve to disk
-            p1.enqueue(new IncomingRequest(31, 0, -1)); // still in pipeline: rate-limited (sync)
-            p1.enqueue(new IncomingRequest(32, 0, 0));  // still in pipeline: rate-limited (gen)
-            p1.enqueue(new IncomingRequest(33, 0, 50)); // client has data: up-to-date is honest
+            // permanent invisible hole — it must re-resolve instead. THE PERMANENT-INVISIBLE-
+            // HOLE INVARIANT IS THE POINT OF THIS TEST and is unchanged by v17; only the
+            // response to an in-pipeline ts<=0 re-ask moves (bounce -> silent skip).
+            offer(p1,
+                    new IncomingRequest(30, 0, -1), // lost after send: re-resolve to disk
+                    new IncomingRequest(31, 0, -1), // still in pipeline: silent skip (sync)
+                    new IncomingRequest(32, 0, 0),  // still in pipeline: silent skip (gen)
+                    new IncomingRequest(33, 0, 50));// client has data: up-to-date is honest
             proc.postSnapshot(snapshot(p1), List.of());
 
             var delivered = drainUntil(proc, contains(LSSConstants.RESPONSE_UP_TO_DATE, packed(33, 0)));
-            assertEquals(1, count(delivered, LSSConstants.RESPONSE_RATE_LIMITED, packed(31, 0)));
-            assertEquals(1, count(delivered, LSSConstants.RESPONSE_RATE_LIMITED, packed(32, 0)));
             assertEquals(1, count(delivered, LSSConstants.RESPONSE_UP_TO_DATE, packed(33, 0)));
-            assertEquals(3, delivered.size(),
-                    "the lost position must not be answered at all this cycle: " + delivered);
+            assertEquals(1, delivered.size(),
+                    "the two in-pipeline re-asks are answered SILENTLY (the column is already "
+                            + "coming; the client re-declares until it lands) and the lost "
+                            + "position is not answered at all this cycle: " + delivered);
 
             // The lost position re-entered resolution: disk submit with a pending slot
             assertEquals(List.of(packed(30, 0)), submitPositions(proc));
             assertTrue(p1.hasPendingRequest(30, 0));
-            // Bounced and ts>0 positions keep the done-bit
+            // Silently-skipped and ts>0 positions keep the done-bit. Keeping it while the
+            // column is enqueued is what stops a redundant re-read of data about to arrive.
             assertTrue(p1.hasDiskReadDone(31, 0));
             assertTrue(p1.hasDiskReadDone(32, 0));
             assertTrue(p1.hasDiskReadDone(33, 0));
 
             var diag = proc.getDiagnostics();
             assertEquals(1, diag.getTotalReResolved());
-            assertEquals(1, diag.getTotalSyncRateLimited(),
-                    "sync bounce counted for rate-limit conservation (soak law B1)");
-            assertEquals(1, diag.getTotalGenRateLimited(),
-                    "gen bounce counted for rate-limit conservation (soak law B1)");
+            assertEquals(2, diag.getTotalDuplicateSkips(),
+                    "both in-pipeline re-asks are counted as duplicate skips — the silent "
+                            + "disposition that replaces the v16 rate-limited bounce");
             assertEquals(0, diag.getTotalUpToDate(),
                     "diskReadDone answers are not timestamp-ladder up-to-dates");
         } finally {
@@ -486,7 +530,7 @@ class IncomingRequestRouterTest {
     }
 
     @Test
-    void sendQueueFullBreaksRoutingButAnswersDuplicatesAndKeepsBacklog() throws Exception {
+    void sendQueueFullRetainsTheBacklogInOrderUntilAReplaceSupersedesIt() throws Exception {
         var players = new ConcurrentHashMap<UUID, TestState>();
         var p1 = addPlayer(players, 4, 1);
         var p2 = addPlayer(players, 4, 1);
@@ -500,35 +544,56 @@ class IncomingRequestRouterTest {
         var proc = new TestProcessor(players, null, false, null);
         try {
             proc.start();
-            p1.enqueue(new IncomingRequest(5, 5, -1)); // duplicate (payload enqueued): bounced despite the full queue
-            p1.enqueue(new IncomingRequest(6, 6, -1)); // hits the full queue: consumed, breaks the loop
-            p1.enqueue(new IncomingRequest(7, 7, -1)); // behind the break: must stay queued
+            offer(p1,
+                    new IncomingRequest(5, 5, 50), // ts>0 duplicate: ANSWERED despite the full queue
+                    new IncomingRequest(6, 6, -1), // hits the full queue: retained, breaks the pass
+                    new IncomingRequest(7, 7, -1));// behind the break: never even polled
             proc.postSnapshot(snapshot(Map.of(), 1, p1), List.of());
             waitFor(() -> proc.getDiagnostics().getTotalQueueFull() == 1, "queue-full break");
 
             // Cycle barrier: a p2-only snapshot proves cycle 1 finished without touching p1
-            // again — the break-to-continue regression would consume p1's whole backlog.
+            // again — the break-to-continue regression would drain p1's whole backlog.
             p2.enqueue(new IncomingRequest(50, 50, -1));
             proc.postSnapshot(snapshot(Map.of(), 1, p2), List.of());
             waitFor(() -> submitPositions(proc).contains(packed(50, 50)), "barrier player routed");
 
-            assertEquals(List.of(new IncomingRequest(7, 7, -1)), incoming(p1),
-                    "break must leave the rest of the backlog for the next cycle");
-            var delivered = drainUntil(proc, contains(LSSConstants.RESPONSE_RATE_LIMITED, packed(5, 5)));
+            assertEquals(2, p1.getBacklogSize(),
+                    "the breaker is RETAINED (not bounced, not dropped) ahead of the entry "
+                            + "behind it — a full send queue is backpressure, not an answer");
+            var delivered = drainUntil(proc, contains(LSSConstants.RESPONSE_UP_TO_DATE, packed(5, 5)));
             assertEquals(1, delivered.size(),
-                    "duplicate answered before the queue-full check; the breaker gets nothing: " + delivered);
+                    "the done-bit answer resolves BEFORE the queue-full gate; the breaker "
+                            + "gets nothing: " + delivered);
             assertSame(p1, delivered.get(0).state());
-            assertTrue(p1.hasDiskReadDone(5, 5),
-                    "an enqueued-bounce keeps the done-bit — the payload is still coming");
-            assertEquals(1, proc.getDiagnostics().getTotalSyncRateLimited(),
-                    "the bounce must be counted for rate-limit conservation (soak law B1)");
+            assertTrue(p1.hasDiskReadDone(5, 5));
             assertEquals(List.of(packed(50, 50)), submitPositions(proc),
                     "no submit for the breaker or the backlog");
             assertEquals(0, p1.getHeldSyncSlots());
             assertFalse(p1.hasPendingRequest(6, 6));
-            assertEquals(1, proc.getDiagnostics().getTotalQueueFull());
-            assertEquals(3, proc.getDiagnostics().getTotalRequestsRouted(),
-                    "only the duplicate, the breaker, and the barrier are ever polled");
+            assertEquals(1, proc.getDiagnostics().getTotalQueueFull(),
+                    "queue_full stays a pure event counter — it is no longer a law A1 term");
+            assertEquals(2, proc.getDiagnostics().getTotalRequestsRouted(),
+                    "only the duplicate and the barrier reached a disposition");
+
+            // The retained entries survive INTO the next cycle... (posting both snapshots
+            // back-to-back would drop p1's: the snapshot mailbox is latest-wins, so each
+            // cycle must be awaited before the next is posted.)
+            proc.postSnapshot(snapshot(Map.of(), 1, p1), List.of());
+            waitFor(() -> proc.getDiagnostics().getTotalQueueFull() >= 2, "second queue-full break");
+            p2.enqueue(new IncomingRequest(51, 51, -1));
+            proc.postSnapshot(snapshot(Map.of(), 1, p2), List.of());
+            waitFor(() -> submitPositions(proc).contains(packed(51, 51)), "second barrier player routed");
+            assertEquals(2, p1.getBacklogSize(), "still owed, still in order");
+            assertEquals(0, proc.getDiagnostics().getTotalSuperseded());
+
+            // ...until the client's next declaration replaces them. Retention is bounded by
+            // re-declaration, never by a timeout: a want the client dropped dies here.
+            offer(p1, new IncomingRequest(8, 8, -1));
+            proc.postSnapshot(snapshot(Map.of(), 0, p1), List.of()); // cap 0: gate disabled
+            waitFor(() -> submitPositions(proc).contains(packed(8, 8)), "the replacement routes");
+            assertEquals(2, proc.getDiagnostics().getTotalSuperseded(),
+                    "both retained entries were superseded by the newer want-set");
+            assertEquals(0, p1.getBacklogSize());
         } finally {
             proc.shutdown();
         }
@@ -671,8 +736,9 @@ class IncomingRequestRouterTest {
         var proc = new TestProcessor(players, null, false, tempDir);
         try {
             proc.start();
-            p1.enqueue(new IncomingRequest(94, 0, 500));  // done + ts>0: answered before the gate
-            p1.enqueue(new IncomingRequest(95, 0, 2000)); // fresh cache hit: the gate consumes it first
+            offer(p1,
+                    new IncomingRequest(94, 0, 500),  // done + ts>0: answered before the gate
+                    new IncomingRequest(95, 0, 2000));// fresh cache hit: the gate retains it first
             proc.postSnapshot(snapshot(Map.of(), 1, p1), List.of());
             waitFor(() -> proc.getDiagnostics().getTotalQueueFull() == 1, "queue-full break");
 
@@ -685,11 +751,13 @@ class IncomingRequestRouterTest {
             assertEquals(1, delivered.size(),
                     "done+ts>0 answers up-to-date despite the full queue; the cache hit gets nothing: "
                             + delivered);
-            // The timestamp ladder sits AFTER the gate: the fresh cache hit was consumed
-            // by the break without resolving (no done-bit, no ladder up-to-date) — the
-            // client retries it on a later scan.
+            // The timestamp ladder sits AFTER the gate: the fresh cache hit was RETAINED
+            // by the break without resolving (no done-bit, no ladder up-to-date) — it stays
+            // queued for a later cycle instead of being answered.
             assertFalse(p1.hasDiskReadDone(95, 0),
-                    "a request consumed by the queue-full break must not be marked served");
+                    "a request retained by the queue-full break must not be marked served");
+            assertEquals(1, p1.getBacklogSize(),
+                    "the breaker is retained, not dropped — no re-declare is needed to recover it");
             assertEquals(0, proc.getDiagnostics().getTotalUpToDate(),
                     "done-bit answers are not ladder up-to-dates, and the cache hit never reached the ladder");
             assertEquals(1, proc.getDiagnostics().getTotalQueueFull());
@@ -715,8 +783,7 @@ class IncomingRequestRouterTest {
             // regression reading it literally (queue 1 >= cap 0) would consume every
             // request unanswered and permanently starve clients of admins who disabled
             // the cap — this waitFor would time out.
-            p1.enqueue(new IncomingRequest(97, 0, -1));
-            p1.enqueue(new IncomingRequest(98, 0, -1));
+            offer(p1, new IncomingRequest(97, 0, -1), new IncomingRequest(98, 0, -1));
             proc.postSnapshot(snapshot(Map.of(), 0, p1), List.of());
             waitFor(() -> proc.submits.size() == 2, "cap 0 must route everything");
 
@@ -760,9 +827,10 @@ class IncomingRequestRouterTest {
         var proc = new TestProcessor(players, null, true, tempDir);
         try {
             proc.start();
-            p1.enqueue(new IncomingRequest(100, 0, Long.MIN_VALUE));
-            p1.enqueue(new IncomingRequest(101, 0, -5));
-            p1.enqueue(new IncomingRequest(102, 0, Long.MAX_VALUE));
+            offer(p1,
+                    new IncomingRequest(100, 0, Long.MIN_VALUE),
+                    new IncomingRequest(101, 0, -5),
+                    new IncomingRequest(102, 0, Long.MAX_VALUE));
             proc.postSnapshot(snapshot(p1), List.of());
             waitFor(() -> proc.submits.size() == 2, "ts<-1 claims route to re-serve");
 
@@ -801,9 +869,10 @@ class IncomingRequestRouterTest {
 
                 // Fill both slot types to cap at the SAME positions every cycle; the disk
                 // reads never resolve, so each removal happens with work still in flight.
-                state.enqueue(new IncomingRequest(1, 1, -1));
-                state.enqueue(new IncomingRequest(1, 2, -1));
-                state.enqueue(new IncomingRequest(1, 3, 0));
+                offer(state,
+                        new IncomingRequest(1, 1, -1),
+                        new IncomingRequest(1, 2, -1),
+                        new IncomingRequest(1, 3, 0));
                 proc.postSnapshot(snapshot(state), List.of());
                 int expectedSubmits = cycle * 2;
                 waitFor(() -> state.getHeldSyncSlots() == 2 && state.getHeldGenSlots() == 1
@@ -841,9 +910,10 @@ class IncomingRequestRouterTest {
         try {
             proc.start();
             // Cycle 1: two disk submits + one silent duplicate skip
-            p1.enqueue(new IncomingRequest(1, 0, -1)); // SYNC -> disk, will resolve not-found
-            p1.enqueue(new IncomingRequest(1, 0, -1)); // duplicate of the in-flight read
-            p1.enqueue(new IncomingRequest(2, 0, 0));  // GENERATION -> disk-first, will escalate
+            offer(p1,
+                    new IncomingRequest(1, 0, -1), // SYNC -> disk, will resolve not-found
+                    new IncomingRequest(1, 0, -1), // duplicate of the in-flight read
+                    new IncomingRequest(2, 0, 0)); // GENERATION -> disk-first, will escalate
             proc.postSnapshot(snapshot(p1), List.of());
             waitFor(() -> proc.submits.size() == 2
                     && proc.getDiagnostics().getTotalDuplicateSkips() == 1, "cycle 1 routed");
@@ -853,16 +923,17 @@ class IncomingRequestRouterTest {
                     .add(ChunkReadResult.empty(p1.getPlayerUUID(), 1, 0, DIM, 1L));
             reader.getPlayerQueue(p1.getPlayerUUID())
                     .add(ChunkReadResult.empty(p1.getPlayerUUID(), 2, 0, DIM, 2L));
-            p1.enqueue(new IncomingRequest(3, 0, 2000)); // timestamp-ladder up-to-date (cached 1000)
-            p1.enqueue(new IncomingRequest(3, 0, 3000)); // done-bit duplicate up-to-date
-            p1.enqueue(new IncomingRequest(4, 0, -1));   // in-memory probe payload
+            offer(p1,
+                    new IncomingRequest(3, 0, 2000), // timestamp-ladder up-to-date (cached 1000)
+                    new IncomingRequest(3, 0, 3000), // done-bit duplicate up-to-date
+                    new IncomingRequest(4, 0, -1));  // in-memory probe payload
             var probes = new Long2ObjectOpenHashMap<LoadedColumnData>();
             probes.put(packed(4, 0), new LoadedColumnData(4, 0, new byte[]{1}, 16));
             proc.postSnapshot(snapshot(Map.of(p1.getPlayerUUID(), probes), 0, p1), List.of());
             waitFor(() -> p1.getHeldGenSlots() == 1 && proc.payloads.size() == 1,
                     "cycle 2 drained and routed");
 
-            // Cycle 3: a queue-full breaker is consumed unanswered
+            // Cycle 3: a queue-full breaker is retained unanswered
             p1.addReadyPayload(new QueuedPayload<>(new Object(), 100, 0, packed(99, 99)));
             p1.flushSendQueue(0, new SharedBandwidthLimiter(1_000_000), new TickDiagnostics(),
                     payload -> fail("zero allocation must not send"));
@@ -883,20 +954,27 @@ class IncomingRequestRouterTest {
             assertEquals(0, p1.getHeldSyncSlots());
             assertEquals(1, p1.getHeldGenSlots());
 
+            waitFor(() -> p1.getBacklogSize() == 1, "the queue-full breaker is retained");
+
             var diag = proc.getDiagnostics();
-            assertEquals(7, diag.getTotalRequestsRouted());
+            assertEquals(6, diag.getTotalRequestsRouted(),
+                    "the retained breaker has no disposition yet, so it is not routed");
             assertEquals(1, diag.getTotalUpToDate(), "only the ladder answer counts as up-to-date");
-            assertEquals(0, diag.getTotalSyncRateLimited());
-            assertEquals(0, diag.getTotalGenRateLimited());
             assertEquals(0, diag.getTotalReResolved());
 
-            // Full ledger at rest: every polled request ends in exactly one disposition —
-            // batched answer, column payload, held in-flight slot, silent duplicate skip,
-            // or a queue-full breaker (consumed unanswered; the client rescans it later).
-            assertEquals(diag.getTotalRequestsRouted(),
-                    delivered.size() + proc.payloads.size()
+            // Full ledger at rest, closed over RECEIVED (not routed): every received entry is
+            // answered, served a payload, admitted (in-flight), duplicate-skipped, superseded,
+            // range-filtered, or still queued in the backlog. No silent leak class exists —
+            // and unlike v16 there is no "consumed unanswered" class at all: the queue-full
+            // breaker is retained, so queue_full leaves the ledger entirely.
+            long answered = delivered.size() + proc.payloads.size();
+            assertEquals(p1.getTotalRequestsReceived(),
+                    answered + diag.getTotalDuplicateSkips() + diag.getTotalSuperseded()
+                            + diag.getTotalRangeFiltered()
                             + p1.getHeldSyncSlots() + p1.getHeldGenSlots()
-                            + diag.getTotalDuplicateSkips() + diag.getTotalQueueFull());
+                            + p1.getBacklogSize(),
+                    "every received entry is answered, skipped, superseded, range-filtered, "
+                            + "admitted, or still queued — no silent leak class exists");
         } finally {
             proc.shutdown();
             reader.shutdown();
@@ -920,14 +998,16 @@ class IncomingRequestRouterTest {
             // serve and a later save within the same second indistinguishable — equality
             // reads fresh BY DESIGN (the accepted one-second blind spot), even though the
             // cache stamp may postdate the client's copy by up to a second of content.
-            p1.enqueue(new IncomingRequest(110, 0, 1000L));
+            var extremes = new ArrayList<IncomingRequest>();
+            extremes.add(new IncomingRequest(110, 0, 1000L));
             // (111,0): the server clock ran ahead when it stamped (cache in the client's
             // future); the honest lower claim must re-serve, never read up-to-date.
-            p1.enqueue(new IncomingRequest(111, 0, 1000L));
+            extremes.add(new IncomingRequest(111, 0, 1000L));
             // (112,0): convergence under skew — the client stamps with the SERVER-sent
             // columnTimestamp verbatim (never its own clock), so its next claim equals
             // the future stamp and resolves up-to-date.
-            p1.enqueue(new IncomingRequest(112, 0, future));
+            extremes.add(new IncomingRequest(112, 0, future));
+            offer(p1, extremes.toArray(new IncomingRequest[0]));
             proc.postSnapshot(snapshot(p1), List.of());
             waitFor(() -> proc.submits.size() == 1, "skewed-behind claim re-serves");
 
@@ -992,36 +1072,106 @@ class IncomingRequestRouterTest {
     }
 
     @Test
-    void emptyBatchAdmitsNothing() throws Exception {
+    void emptyBatchClearsTheBacklog() throws Exception {
+        // The empty batch is the client's ONE explicit "want nothing" — sent edge-triggered
+        // when it enters its decode-queue backpressure halt. It must replace the backlog with
+        // nothing, so the server stops working on wants the client has abandoned.
         var players = new ConcurrentHashMap<UUID, TestState>();
-        var p1 = addPlayer(players, 2, 1); // empty incoming queue — a decoded {count=0} batch
+        var p1 = addPlayer(players, 1, 1); // sync cap 1: the second entry is retained
         var marker = addPlayer(players, 2, 1);
         var proc = new TestProcessor(players, null, false, null);
         try {
             proc.start();
-            marker.enqueue(new IncomingRequest(120, 0, -1));
-            proc.postSnapshot(snapshot(p1, marker), List.of());
-            waitFor(() -> submitPositions(proc).contains(packed(120, 0)), "marker routed");
+            offer(p1,
+                    new IncomingRequest(120, 0, -1), // admitted, fills the only sync slot
+                    new IncomingRequest(121, 0, -1), // SLOT_FULL -> retained
+                    new IncomingRequest(122, 0, -1));// SLOT_FULL -> retained
+            proc.postSnapshot(snapshot(p1), List.of());
+            waitFor(() -> submitPositions(proc).contains(packed(120, 0)), "p1's first entry admitted");
+            // Cycle barrier: getBacklogSize() is a LIVE gauge (pollBacklog updates it mid-pass),
+            // so it reads 2 transiently before the first entry is even admitted. Only a LATER
+            // cycle proves the pass ran to restoreBacklog. A marker-ONLY snapshot is the barrier:
+            // the processing thread runs one cycle at a time, so the marker's submit means p1's
+            // cycle is complete (a shared snapshot would not — routeAll's player order is a
+            // HashMap iteration, not a sequence). The wait above is required before posting it:
+            // the snapshot mailbox is latest-wins, so an un-awaited p1 snapshot would be dropped.
+            marker.enqueue(new IncomingRequest(199, 0, -1));
+            proc.postSnapshot(snapshot(marker), List.of());
+            waitFor(() -> submitPositions(proc).contains(packed(199, 0)), "p1's retaining pass finished");
+            assertEquals(2, p1.getBacklogSize(), "two entries retained behind the full slot");
+            assertEquals(1, p1.getHeldSyncSlots());
+            assertEquals(0, proc.getDiagnostics().getTotalSuperseded());
 
-            // Cycle barrier (existing pattern): once the second marker routes, cycle 1 —
-            // including its visit to p1 — is provably complete.
-            marker.enqueue(new IncomingRequest(121, 0, -1));
+            // The explicit clear
+            offer(p1);
+            marker.enqueue(new IncomingRequest(200, 0, -1));
             proc.postSnapshot(snapshot(p1, marker), List.of());
-            waitFor(() -> submitPositions(proc).contains(packed(121, 0)), "second marker routed");
+            waitFor(() -> submitPositions(proc).contains(packed(200, 0)), "the clearing cycle ran");
 
-            // Both cycles visited p1: zero requests must mean zero dispositions of any
-            // kind (a count=0 batch frame is a no-op, not an error — idle clients send
-            // them and must not be penalized).
-            assertEquals(2, proc.getDiagnostics().getTotalRequestsRouted(),
-                    "only the two markers were ever polled");
-            assertEquals(0, p1.getHeldSyncSlots());
-            assertEquals(0, p1.getHeldGenSlots());
-            assertEquals(0, p1.getTotalRequestsReceived());
-            proc.drainSendActions((state, types, positions, count) ->
-                    fail("an empty batch must produce no batched answers"));
-            assertEquals(2, proc.submits.size());
+            assertEquals(0, p1.getBacklogSize(), "an empty batch clears the backlog");
+            assertEquals(2, proc.getDiagnostics().getTotalSuperseded(),
+                    "the cleared entries are counted superseded — the ledger stays closed "
+                            + "even though nothing went on the wire");
+            assertNull(p1.peekWantSet(),
+                    "and nothing is left published for the main-thread probe to work on");
+
+            // Admitted work is NEVER cancelled by a clear: the in-flight read still owns its
+            // slot and will deliver. The owner's requirement, structurally.
+            assertEquals(1, p1.getHeldSyncSlots(), "the clear must not cancel in-flight work");
+            assertTrue(p1.hasPendingRequest(120, 0));
+            assertEquals(List.of(packed(120, 0), packed(199, 0), packed(200, 0)), submitPositions(proc));
         } finally {
             proc.shutdown();
+        }
+    }
+
+    @Test
+    void replaceSupersedesUnadmittedButNeverInFlight() throws Exception {
+        // The owner's core requirement: "we never cancel in-progress requests". Admit one
+        // request (slot held, dedup group live), retain one (slot cap 1), then replace with a
+        // disjoint batch: the retained entry is superseded, the admitted one survives to
+        // deliver, and its dedup/stale-guard bookkeeping is untouched.
+        var players = new ConcurrentHashMap<UUID, TestState>();
+        var p1 = addPlayer(players, 1, 1);
+        var reader = new StubDiskReader();
+        reader.registerPlayer(p1.getPlayerUUID());
+        var proc = new TestProcessor(players, reader, false, null);
+        try {
+            proc.start();
+            offer(p1,
+                    new IncomingRequest(70, 0, -1),  // admitted: slot + dedup group
+                    new IncomingRequest(71, 0, -1)); // SLOT_FULL -> retained, never admitted
+            proc.postSnapshot(snapshot(p1), List.of());
+            waitFor(() -> p1.getBacklogSize() == 1 && proc.submits.size() == 1, "one admitted, one retained");
+            assertTrue(p1.hasPendingRequest(70, 0));
+
+            // A disjoint re-declaration: the client no longer wants (71,0)
+            offer(p1, new IncomingRequest(72, 0, -1));
+            proc.postSnapshot(snapshot(p1), List.of());
+            waitFor(() -> proc.getDiagnostics().getTotalSuperseded() == 1, "the retained want is superseded");
+
+            // The un-admitted drop needs zero teardown: no pending, no dedup group, no
+            // stale-guard entry ever existed for it.
+            assertFalse(p1.hasPendingRequest(71, 0));
+            assertEquals(List.of(packed(70, 0)), submitPositions(proc),
+                    "(71,0) never reached the reader, and (72,0) is behind the still-full slot");
+
+            // The IN-FLIGHT read is untouched by the replace and still delivers.
+            assertTrue(p1.hasPendingRequest(70, 0), "a replace must never cancel admitted work");
+            assertEquals(1, p1.getHeldSyncSlots());
+            reader.getPlayerQueue(p1.getPlayerUUID())
+                    .add(dataResult(p1.getPlayerUUID(), 70, 0, new byte[]{1}, 5000L, 1L));
+            proc.postSnapshot(snapshot(p1), List.of());
+            waitFor(() -> proc.payloads.size() == 1, "the admitted read delivers normally");
+            assertTrue(p1.hasDiskReadDone(70, 0));
+
+            // ...and once its slot frees, the surviving want routes.
+            proc.postSnapshot(snapshot(p1), List.of());
+            waitFor(() -> submitPositions(proc).contains(packed(72, 0)),
+                    "the still-declared want routes once the slot frees");
+        } finally {
+            proc.shutdown();
+            reader.shutdown();
         }
     }
 }

@@ -252,6 +252,12 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
                                             int cx, int cz,
                                             long submissionOrder);
 
+    /** True when the reader pool can accept a submit (see AbstractChunkDiskReader#hasHeadroom).
+     *  False when no reader is configured. */
+    boolean hasDiskHeadroom() {
+        return this.diskReader != null && this.diskReader.hasHeadroom();
+    }
+
     /**
      * Store timestamp and enqueue pre-serialized column data as a payload.
      */
@@ -476,7 +482,12 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
             for (var attachment : rg.group().attached()) {
                 var attachedState = this.players.get(attachment.playerUuid());
                 if (attachedState != null) {
-                    attachedState.removePendingByPosition(cx, cz);
+                    if (attachedState.removePendingByPosition(cx, cz) != null) {
+                        // The read backing this pending will never deliver and no message is
+                        // sent (pre-existing silent-drop path) — book it as superseded so the
+                        // request-conservation ledger closes.
+                        this.ctx.diagnostics().addSuperseded(1);
+                    }
                 }
             }
             // The read backing this group will never deliver — drop its stale-guard entry.
@@ -644,7 +655,8 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
 
     /**
      * Deliver one disk read result to one recipient: resolve the pending entry (freeing its
-     * slot), then answer with RateLimited / not-found fallback / column data / up-to-date.
+     * slot), then answer with not-found fallback / column data / up-to-date — or, for a
+     * residual saturated result, drop it silently (counted superseded; the client re-declares).
      * Shared by the primary requester and every dedup-attached player.
      */
     private void deliverDiskResult(UUID playerUuid, PlayerState state, ChunkReadResult result,
@@ -656,9 +668,14 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
         var pending = state.removePendingByPosition(cx, cz);
 
         if (result.saturated()) {
-            this.ctx.sendActions().add(new SendAction.RateLimited(playerUuid, packed, state));
+            // Residual only: the router's headroom gate prevents submits into a full pool,
+            // so this fires only on races/shutdown. Silent drop — the pending slot was
+            // already freed above, no dedup/stale-guard teardown is needed for a result
+            // that already drained, and the client's next want-set re-declares the position.
+            this.ctx.diagnostics().addSuperseded(1);
             if (LSSLogger.isDebugEnabled()) {
-                LSSLogger.debug("Rate-limited " + playerUuid + " (disk saturated): chunk [" + cx + ", " + cz + "]");
+                LSSLogger.debug("Disk-saturated result dropped silently (superseded) for "
+                        + playerUuid + ": chunk [" + cx + ", " + cz + "]");
             }
         } else if (result.notFound()) {
             handleDiskNotFound(playerUuid, state, packed, cx, cz, pending, dimension);

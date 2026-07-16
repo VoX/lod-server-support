@@ -33,7 +33,10 @@ class OffThreadProcessorLifecycleTest {
     private static final class TestState extends AbstractPlayerRequestState<Object> {
         TestState(UUID uuid) { super(uuid, 4, 4); }
         @Override public String getPlayerName() { return "test"; }
-        void enqueue(IncomingRequest r) { enqueueIncomingRequest(r); }
+        /** Seeds one want-set batch carrying a single request (the pre-v17 per-request
+         *  enqueue has no equivalent — each declaration REPLACES the backlog). Every call
+         *  site here is separated from the next by a routing cycle, so nothing is superseded. */
+        void enqueue(IncomingRequest r) { offerIncomingBatch(new IncomingBatch(new IncomingRequest[]{r})); }
     }
 
     /** No abstract members — subclassing only unlocks instantiation; tests bypass the

@@ -19,7 +19,8 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * Pins the deliverDiskResult ladder and its escalation/staleness edges by injecting
  * {@link ChunkReadResult}s straight into the stub reader's per-player queue:
- * saturated results bounce retryable (RateLimited, nothing marked served), all-air
+ * saturated results drop silently and count superseded (nothing marked served — the
+ * client recovers by re-declaring, not by a bounce), all-air
  * results serve up-to-date and stamp the timestamp cache (the End-void retry-storm
  * fix), data results become column payloads, not-found swaps a GENERATION request's
  * sync slot for a generation ticket with every outcome freeing the slot, and disk
@@ -34,7 +35,10 @@ class OffThreadProcessorDiskResultTest {
     private static final class TestState extends AbstractPlayerRequestState<Object> {
         TestState(UUID uuid, int syncCap, int genCap) { super(uuid, syncCap, genCap); }
         @Override public String getPlayerName() { return "test"; }
-        void enqueue(IncomingRequest r) { enqueueIncomingRequest(r); }
+        /** Seeds one want-set batch carrying a single request (the pre-v17 per-request
+         *  enqueue has no equivalent — each declaration REPLACES the backlog). Every call
+         *  site here is separated from the next by a routing cycle, so nothing is superseded. */
+        void enqueue(IncomingRequest r) { offerIncomingBatch(new IncomingBatch(new IncomingRequest[]{r})); }
     }
 
     /** No abstract members — subclassing only unlocks instantiation; tests bypass the
@@ -157,6 +161,17 @@ class OffThreadProcessorDiskResultTest {
         return collected;
     }
 
+    /** One non-blocking drain of the answers produced so far (for "nothing was sent" pins). */
+    private static List<Response> drainSendActions(TestProcessor proc) {
+        var collected = new ArrayList<Response>();
+        proc.drainSendActions((state, types, positions, count) -> {
+            for (int i = 0; i < count; i++) {
+                collected.add(new Response(state.getPlayerUUID(), types[i], positions[i]));
+            }
+        });
+        return collected;
+    }
+
     private static Predicate<List<Response>> received(byte type, long packed) {
         return rs -> rs.stream().anyMatch(r -> r.type() == type && r.packed() == packed);
     }
@@ -178,7 +193,14 @@ class OffThreadProcessorDiskResultTest {
     // ---- deliverDiskResult ladder ----
 
     @Test
-    void saturatedResultBouncesRetryableWithRateLimited() throws Exception {
+    void saturatedResultDropsSilentlyAndCountsSuperseded() throws Exception {
+        // v17: saturation never reaches the wire. The router's headroom gate prevents submits
+        // into a full pool, so this residual path (races/shutdown) drops the result silently and
+        // books it as superseded. The INVARIANT is unchanged from the old rate-limited bounce:
+        // a saturated read must never STRAND the requester. Misclassifying saturated as notFound
+        // would answer NotGenerated and make the client give up on a retryable position; the
+        // recovery is now re-declaration (the client re-asks every unsatisfied position at 1 Hz),
+        // which only works if nothing is stamped, marked served, or left holding a slot.
         var rig = new Rig(false);
         try {
             rig.state.enqueue(new IncomingRequest(5, 5, 1L));
@@ -188,18 +210,22 @@ class OffThreadProcessorDiskResultTest {
             rig.inject(ChunkReadResult.saturated(rig.uuid, 5, 5, DIM, 1L));
             rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
 
-            long packed = PositionUtil.packPosition(5, 5);
-            // Misclassifying saturated as notFound would answer NotGenerated instead,
-            // making the client give up on a retryable position — this drain would time out.
-            drainUntil(rig.proc, received(LSSConstants.RESPONSE_RATE_LIMITED, packed));
-            assertEquals(0, rig.state.getHeldSyncSlots(), "saturated delivery must free the sync slot");
+            // Freeing the slot is the delivery's last act, so it is the barrier that makes
+            // "and nothing was sent" a deterministic assertion rather than a sleep.
+            waitFor(() -> rig.state.getHeldSyncSlots() == 0, "saturated delivery must free the sync slot");
+            assertEquals(1, rig.proc.getDiagnostics().getTotalSuperseded(),
+                    "the silent drop is booked as superseded — the request-conservation "
+                            + "ledger closes without a wire response");
+            assertTrue(drainSendActions(rig.proc).isEmpty(),
+                    "a saturated result answers NOTHING: no bounce, no not-generated");
             assertFalse(rig.state.hasDiskReadDone(5, 5),
                     "saturated is retryable — must not be marked served");
+            assertTrue(rig.proc.enqueuedColumns.isEmpty());
 
-            // The retry must reach the disk again: nothing stamped or marked by the bounce
+            // The re-declaration must reach the disk again: nothing stamped or marked by the drop
             rig.state.enqueue(new IncomingRequest(5, 5, 1L));
             rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
-            waitFor(() -> rig.proc.diskSubmits.size() == 2, "retry resubmits the disk read");
+            waitFor(() -> rig.proc.diskSubmits.size() == 2, "re-declaration resubmits the disk read");
         } finally {
             rig.proc.shutdown();
         }

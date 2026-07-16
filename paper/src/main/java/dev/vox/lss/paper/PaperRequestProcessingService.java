@@ -5,6 +5,7 @@ import dev.vox.lss.common.LSSConstants;
 import dev.vox.lss.common.LSSLogger;
 import dev.vox.lss.common.PositionUtil;
 import dev.vox.lss.common.SharedBandwidthLimiter;
+import dev.vox.lss.common.processing.IncomingBatch;
 import dev.vox.lss.common.processing.IncomingRequest;
 import dev.vox.lss.common.processing.LoadedColumnData;
 import dev.vox.lss.common.processing.OffThreadProcessor;
@@ -167,9 +168,9 @@ public class PaperRequestProcessingService {
 
     private final ConcurrentHashMap<UUID, RegionProbeBatch> regionProbeResults = new ConcurrentHashMap<>();
 
-    /** Pump-only. Requests drained at tick T, released into the routing queue at T+1 once
-     *  their probe task has had a region tick to publish. */
-    private final Map<UUID, List<IncomingRequest>> heldForProbe = new HashMap<>();
+    /** Pump-only. The batch taken at tick T, released back into the mailbox at T+1 once its
+     *  probe task has had a region tick to publish. */
+    private final Map<UUID, IncomingBatch> heldForProbe = new HashMap<>();
 
     /** Collaborator set for the package-private constructor. Tests build it over recording
      *  collaborators; production wiring lives in {@link #productionWiring} only. */
@@ -294,13 +295,18 @@ public class PaperRequestProcessingService {
         int playerCz = player.getBlockZ() >> 4;
         int maxDist = this.config.lodDistanceChunks + LSSConstants.LOD_DISTANCE_BUFFER;
 
+        var accepted = new ArrayList<IncomingRequest>(batch.count());
         for (int i = 0; i < batch.count(); i++) {
             long packedPosition = batch.packedPositions()[i];
             int cx = PositionUtil.unpackX(packedPosition);
             int cz = PositionUtil.unpackZ(packedPosition);
             if (PositionUtil.chebyshevDistance(cx, cz, playerCx, playerCz) > maxDist) continue;
-            state.addRequest(cx, cz, batch.clientTimestamps()[i]);
+            accepted.add(new IncomingRequest(cx, cz, batch.clientTimestamps()[i]));
         }
+        state.recordRangeFiltered(batch.count() - accepted.size());
+        // Offer even when empty: an empty batch is the client's explicit backpressure
+        // clear and must replace the backlog with nothing.
+        state.offerIncomingBatch(new IncomingBatch(accepted.toArray(new IncomingRequest[0])));
     }
 
     public void tick() {
@@ -465,13 +471,26 @@ public class PaperRequestProcessingService {
         }
     }
 
+    /**
+     * Probe loaded chunks for positions in the player's PUBLISHED want-set (never the
+     * mailbox: {@code takeIncomingBatch()} nulls it within ~50 ms of arrival while batches
+     * arrive at only 1 Hz, so probing the mailbox would roughly halve coverage).
+     *
+     * <p>Alignment is best-effort here (Folia's one-tick hold-release is the deterministic
+     * variant): a position admitted before its first probe pass serves from disk once — the
+     * 1 Hz re-declare re-probes it and the dirty broadcast heals any stale read. A probe for
+     * an already-routed position is simply unused by the router.
+     */
     private Long2ObjectMap<LoadedColumnData> probeLoadedChunks(
             PaperPlayerRequestState state, ServerLevel level,
             LongOpenHashSet skipPositions) {
         var probes = new Long2ObjectOpenHashMap<LoadedColumnData>();
         int probed = 0;
 
-        for (var req : state.getIncomingRequests()) {
+        var wantSet = state.peekWantSet();
+        if (wantSet == null)
+            return probes;   // nothing pending — converged player, no probe cost
+        for (var req : wantSet.requests()) {
             if (probed >= MAX_PROBES_PER_TICK_PER_PLAYER)
                 break;
             long packed = PositionUtil.packPosition(req.cx(), req.cz());
@@ -508,29 +527,29 @@ public class PaperRequestProcessingService {
         return batch.probes();
     }
 
-    /** Pump only. Advances the one-tick hold-release pipeline: drains this tick's fresh
-     *  arrivals, releases the previous tick's held batch back into the routing queue (its
-     *  probe results were consumed just above), then parks the fresh batch and hands its
-     *  positions to the player's owning region. The processing thread may concurrently
-     *  poll the same queue for an in-flight routing cycle — either consumer owning a given
-     *  request is correct (a stolen request routes without probe results, exactly as a
-     *  non-regionized request would). */
+    /** Pump only. One-tick hold-release at BATCH granularity: release last tick's held batch
+     *  back into the mailbox — but only if no newer batch arrived during the hold
+     *  (republishHeldBatch CAS; a lost CAS means the held batch was superseded, is counted,
+     *  and is dropped, never resurrected) — otherwise take whatever is pending now, park it,
+     *  and hand its positions to the player's owning region. The processing thread takes
+     *  batches only from the mailbox, so a held batch is invisible to routing until released
+     *  with its probe results already published, and no batch is ever both held and pending.
+     *
+     *  <p>Release strictly precedes the take, and a successful release ends the tick: the CAS
+     *  is {@code compareAndSet(null, held)}, so taking first would empty the mailbox and make
+     *  the CAS unconditionally succeed — resurrecting a batch the client has already
+     *  superseded while parking the newer one behind it. Returning on a successful release
+     *  keeps the pump from immediately stealing back the batch it just handed to routing. */
     private void holdAndScheduleRegionProbe(PaperPlayerRequestState state, ServerPlayer player,
                                             ServerLevel level, LongOpenHashSet skipPositions) {
-        List<IncomingRequest> fresh = null;
-        IncomingRequest req;
-        while ((req = state.pollIncomingRequest()) != null) {
-            if (fresh == null) fresh = new ArrayList<>();
-            fresh.add(req);
-        }
-
         var released = this.heldForProbe.remove(player.getUUID());
-        if (released != null) {
-            for (var r : released) {
-                state.reinjectIncomingRequest(r);
-            }
+        if (released != null && state.republishHeldBatch(released)) {
+            return;
         }
 
+        // Either nothing was held, or the held batch lost the CAS to a newer arrival (dropped
+        // and counted superseded). Whatever is pending now is the newest declaration.
+        var fresh = state.takeIncomingBatch();
         if (fresh == null) return;
         this.heldForProbe.put(player.getUUID(), fresh);
 
@@ -543,10 +562,10 @@ public class PaperRequestProcessingService {
     private static final long[] NO_POSITIONS = new long[0];
 
     /** Up to {@link #MAX_PROBES_PER_TICK_PER_PLAYER} distinct positions from the held batch. */
-    private long[] snapshotProbePositions(List<IncomingRequest> held,
+    private long[] snapshotProbePositions(IncomingBatch held,
                                           LongOpenHashSet skipPositions) {
         LongOpenHashSet positions = null;
-        for (var req : held) {
+        for (var req : held.requests()) {
             long packed = PositionUtil.packPosition(req.cx(), req.cz());
             if (skipPositions != null && skipPositions.contains(packed)) continue;
             if (positions == null) positions = new LongOpenHashSet();

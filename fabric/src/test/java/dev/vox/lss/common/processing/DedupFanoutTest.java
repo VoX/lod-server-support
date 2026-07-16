@@ -36,7 +36,10 @@ class DedupFanoutTest {
     private static final class TestState extends AbstractPlayerRequestState<Object> {
         TestState(UUID uuid) { super(uuid, 4, 4); }
         @Override public String getPlayerName() { return "test"; }
-        void enqueue(IncomingRequest r) { enqueueIncomingRequest(r); }
+        /** Seeds one want-set batch carrying a single request (the pre-v17 per-request
+         *  enqueue has no equivalent — each declaration REPLACES the backlog). Every call
+         *  site here is separated from the next by a routing cycle, so nothing is superseded. */
+        void enqueue(IncomingRequest r) { offerIncomingBatch(new IncomingBatch(new IncomingRequest[]{r})); }
     }
 
     /** Real reader on one thread; reads block on {@code gate} so dedup groups stay pending. */
@@ -467,11 +470,15 @@ class DedupFanoutTest {
                     "primary removal frees the attached pending");
 
             assertEquals(List.of(), drainResponses(proc),
-                    "freeing an attachment is silent — no RateLimited/NotGenerated/UpToDate is owed;"
-                            + " the client's own timeout re-request recovers the position");
+                    "freeing an attachment is silent — no NotGenerated/UpToDate is owed;"
+                            + " the client's re-declaration recovers the position");
+            assertEquals(1, proc.getDiagnostics().getTotalSuperseded(),
+                    "the attachment's read will never deliver and nothing is sent — this "
+                            + "pre-existing silent drop is now booked as superseded so the "
+                            + "request-conservation ledger closes over it");
             assertFalse(p2.hasDiskReadDone(7, 7), "never delivered, must not be marked served");
 
-            // Follow-through: the attached client's timeout re-request is served by a
+            // Follow-through: the attached client's re-declaration is served by a
             // fresh group + fresh read (the dead primary's group died with it).
             p2.enqueue(new IncomingRequest(7, 7, 1L));
             pumpUntil(proc, dims, () -> p2.getHeldSyncSlots() == 1 && proc.diskSubmits.get() == 2,
@@ -500,7 +507,7 @@ class DedupFanoutTest {
     }
 
     @Test
-    void saturatedResultFansOutRateLimitedToEveryRecipientUncounted() throws Exception {
+    void saturatedResultDropsSilentlyAndCountsSupersededPerRecipient() throws Exception {
         var u1 = UUID.randomUUID();
         var u2 = UUID.randomUUID();
         var p1 = newPlayer(u1);
@@ -528,27 +535,22 @@ class DedupFanoutTest {
             pumpUntil(proc, dims, () -> p1.getHeldSyncSlots() == 0 && p2.getHeldSyncSlots() == 0,
                     "saturated delivery frees both recipients' slots");
 
-            long packed = PositionUtil.packPosition(7, 7);
-            var responses = drainUntilResponses(proc, rs -> rs.size() >= 2);
-            assertEquals(2, responses.size(), responses.toString());
-            assertEquals(Set.of(u1, u2),
-                    responses.stream().map(Response::player).collect(Collectors.toSet()),
-                    "every recipient of the dedup group must be bounced retryable");
-            for (var r : responses) {
-                assertEquals(LSSConstants.RESPONSE_RATE_LIMITED, r.type());
-                assertEquals(packed, r.packed());
-            }
+            // v17: saturation is invisible on the wire. The invariant that survives from the old
+            // rate-limited fan-out is that NO recipient of the group is stranded — every one is
+            // released un-served and recovers by re-declaring. Freeing both slots (the pump above)
+            // is the delivery's last act, so "nothing was sent" is deterministic here, not a sleep.
+            assertTrue(drainResponses(proc).isEmpty(),
+                    "a saturated result answers NOTHING to the primary or the attached player");
+            assertEquals(2, proc.getDiagnostics().getTotalSuperseded(),
+                    "the silent drop is booked once PER RECIPIENT — the whole dedup group's "
+                            + "worth of received requests leaves the ledger closed");
             assertFalse(p1.hasDiskReadDone(7, 7), "saturated is retryable, not served");
             assertFalse(p2.hasDiskReadDone(7, 7));
-            // Pin: disk-saturation bounces are NOT rate-limit-counted — only router-level
-            // slot bounces are. The soak rate-limit conservation law reads these counters
-            // and accounts saturation separately via the disk-reader diagnostics.
-            assertEquals(0, proc.getDiagnostics().getTotalSyncRateLimited());
-            assertEquals(0, proc.getDiagnostics().getTotalGenRateLimited());
 
-            // The failed group died with its result: a retry submits a fresh read.
+            // The failed group died with its result: a re-declaration submits a fresh read.
             p1.enqueue(new IncomingRequest(7, 7, 1L));
-            pumpUntil(proc, dims, () -> proc.diskSubmits.get() == 2, "retry creates a fresh group");
+            pumpUntil(proc, dims, () -> proc.diskSubmits.get() == 2,
+                    "re-declaration creates a fresh group");
         } finally {
             reader.gate.countDown();
             proc.shutdown();

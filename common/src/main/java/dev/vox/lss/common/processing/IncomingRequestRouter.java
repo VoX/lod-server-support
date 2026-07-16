@@ -1,18 +1,25 @@
 package dev.vox.lss.common.processing;
 
-import dev.vox.lss.common.LSSLogger;
 import dev.vox.lss.common.PositionUtil;
 import dev.vox.lss.common.voxel.ColumnTimestampCache;
 import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectMaps;
 
+import java.util.ArrayList;
 import java.util.Map;
 import java.util.UUID;
 
 /**
- * Routes incoming chunk requests through the resolution pipeline for all players:
+ * Routes each player's want-set backlog through the resolution pipeline:
  * duplicate check → queue-full check → timestamp check → loaded-probe check →
- * slot admission (or rate-limit bounce) → disk/generation submit.
+ * slot admission → disk/generation submit.
+ *
+ * <p>Want-set replace semantics (protocol v17): each arriving batch REPLACES the backlog
+ * wholesale (dropped entries counted as {@code superseded}); an entry that cannot be
+ * admitted this cycle — full slot, full disk pool, full send queue — is RETAINED in order
+ * rather than bounced, and either routes on a later cycle or is superseded by the next
+ * declaration. Nothing on this path answers "try again": the client re-declares every
+ * unsatisfied position once per second, which is what makes a silent drop recoverable.
  *
  * <p>Processing-thread-owned; collaborates with its owning {@link OffThreadProcessor}
  * (fixed at construction) for disk submission and loaded-column serialization.
@@ -56,8 +63,9 @@ class IncomingRequestRouter<PS extends AbstractPlayerRequestState<?>> {
             // Stale-snapshot session guard: a dimension change replaced the state after this
             // snapshot was built. Routing the NEW session's requests under the OLD dimension
             // would submit disk reads whose results get dimension-skipped, leaking the pending
-            // slots for the whole session. Requests stay queued; the next cycle's fresh
-            // snapshot routes them under the right dimension. (Null = bare test rig.)
+            // slots for the whole session. The pending BATCH is left un-taken and the backlog
+            // untouched; the next cycle's fresh snapshot routes them under the right
+            // dimension. (Null = bare test rig.)
             String registered = state.registeredDimension();
             if (registered != null && !registered.equals(entry.getValue())) continue;
 
@@ -67,23 +75,73 @@ class IncomingRequestRouter<PS extends AbstractPlayerRequestState<?>> {
 
     private void processIncomingRequests(PS state, UUID playerUuid, String dimension,
                                           TickSnapshot snapshot) {
+        // Fold cross-thread supersession/ingress-filter events into the single-writer
+        // diagnostics (drained every cycle, whether or not a batch arrived).
+        this.ctx.diagnostics().addSuperseded(state.drainPendingSuperseded());
+        this.ctx.diagnostics().addRangeFiltered(state.drainPendingRangeFiltered());
+
+        var batch = state.takeIncomingBatch();
+        if (batch != null) {
+            // Replace semantics: everything not yet admitted is dropped — un-admitted
+            // entries have no pending slot, no dedup group, no stale-guard entry, so the
+            // drop needs zero teardown. The client re-declares anything it still wants.
+            this.ctx.diagnostics().addSuperseded(state.replaceBacklogWith(batch));
+        }
+
         var loadedProbes = snapshot.loadedChunkProbes().getOrDefault(playerUuid, Long2ObjectMaps.emptyMap());
+        ArrayList<IncomingRequest> retained = null;
+        boolean stopPass = false;
 
         IncomingRequest req;
-        while ((req = state.pollIncomingRequest()) != null) {
-            this.ctx.diagnostics().incrementRequestRouted();
+        while (!stopPass && (req = state.pollBacklog()) != null) {
             long packed = PositionUtil.packPosition(req.cx(), req.cz());
-            if (resolvedAsDuplicate(state, playerUuid, req, packed)) continue;
-            if (sendQueueFull(state, snapshot)) break;
-
-            if (resolvedFromTimestamp(state, playerUuid, req, packed, dimension)) continue;
-
+            if (resolvedAsDuplicate(state, playerUuid, req, packed)) {
+                this.ctx.diagnostics().incrementRequestRouted();
+                continue;
+            }
+            if (sendQueueFull(state, snapshot)) {
+                // Retain (no disposition): the entry stays queued for the next cycle or is
+                // superseded by the next replace. queue_full stays a pure event counter,
+                // no longer a law A1 term. Stopping the pass keeps order: this entry is
+                // re-prepended by restoreBacklog ahead of the un-polled remainder.
+                if (retained == null) retained = new ArrayList<>();
+                retained.add(req);
+                break;
+            }
+            if (resolvedFromTimestamp(state, playerUuid, req, packed, dimension)) {
+                this.ctx.diagnostics().incrementRequestRouted();
+                continue;
+            }
             // Check loaded probes before admission — in-memory hits don't need a disk/gen slot
-            if (resolvedFromLoadedProbe(state, playerUuid, req, packed, loadedProbes, dimension)) continue;
+            if (resolvedFromLoadedProbe(state, playerUuid, req, packed, loadedProbes, dimension)) {
+                this.ctx.diagnostics().incrementRequestRouted();
+                continue;
+            }
 
             RequestType type = req.clientTimestamp() == 0 ? RequestType.GENERATION : RequestType.SYNC;
-            submitToDiskOrGeneration(state, playerUuid, req, packed, dimension, type);
+            switch (tryAdmitAndSubmit(state, playerUuid, req, packed, dimension, type)) {
+                case SUBMITTED -> this.ctx.diagnostics().incrementRequestRouted();
+                case SLOT_FULL -> {
+                    // Dequeue gate: the per-player cap now means "dequeue at most N
+                    // concurrently", not "reject above N". Retain in order and KEEP
+                    // scanning — a full SYNC slot must not starve admissible GENERATION
+                    // entries behind it (and vice versa; the client-side per-type drain
+                    // gates this replaces made the same guarantee).
+                    if (retained == null) retained = new ArrayList<>();
+                    retained.add(req);
+                }
+                case NO_DISK_HEADROOM -> {
+                    // The shared reader pool is full — nothing disk-bound can be admitted
+                    // this cycle. Retain this entry and STOP the pass: saturation never
+                    // reaches the wire (issue #32's root cause, fixed at the source).
+                    if (retained == null) retained = new ArrayList<>();
+                    retained.add(req);
+                    stopPass = true;
+                }
+            }
         }
+
+        if (retained != null) state.restoreBacklog(retained);
     }
 
     /**
@@ -94,13 +152,13 @@ class IncomingRequestRouter<PS extends AbstractPlayerRequestState<?>> {
      * error, consumer rejection). A ts&gt;0 re-request comes from a client that HAS data
      * for the position, so answering up-to-date from the set is honest. A ts&le;0
      * re-request is the client declaring it has nothing: answering up-to-date would seal
-     * a permanent invisible hole (the open-to-LAN transition bug). Instead, bounce with
-     * rate-limited while the payload is still in the send pipeline, or clear the done-bit
-     * and re-resolve once it isn't.
+     * a permanent invisible hole (the open-to-LAN transition bug). Instead, skip silently
+     * while the payload is still in the send pipeline (it IS coming — the client's next
+     * declaration asks again), or clear the done-bit and re-resolve once it isn't.
      *
-     * <p>Accepted race: a timeout re-ask that crosses its own payload's delivery (sent and
+     * <p>Accepted race: a re-declaration that crosses its own payload's delivery (sent and
      * decremented between the client's send and this check) re-resolves once redundantly —
-     * one extra serve per crossed retry, after which the client holds ts&gt;0 and converges.
+     * one extra serve per crossed re-ask, after which the client holds ts&gt;0 and converges.
      */
     private boolean resolvedAsDuplicate(PS state, UUID playerUuid, IncomingRequest req, long packed) {
         if (state.hasDiskReadDone(req.cx(), req.cz())) {
@@ -109,9 +167,12 @@ class IncomingRequestRouter<PS extends AbstractPlayerRequestState<?>> {
                 return true;
             }
             if (state.hasEnqueuedColumn(packed)) {
-                this.ctx.sendActions().add(new SendAction.RateLimited(playerUuid, packed, state));
-                this.ctx.diagnostics().incrementRateLimited(
-                        req.clientTimestamp() == 0 ? RequestType.GENERATION : RequestType.SYNC);
+                // Delivery honesty, silent form: the column IS already in the send pipeline.
+                // Do NOT clear the done-bit while enqueued (a ts<=0 re-ask must not force a
+                // redundant re-read of data that is about to arrive) and send nothing — the
+                // client re-declares at 1 Hz until the payload lands or is dropped, and a
+                // post-drop re-ask falls through to the clearDiskReadDone re-resolution below.
+                this.ctx.diagnostics().incrementSkippedDuplicate();
                 return true;
             }
             state.clearDiskReadDone(packed);
@@ -186,20 +247,36 @@ class IncomingRequestRouter<PS extends AbstractPlayerRequestState<?>> {
         return false;
     }
 
-    /** Admit into the slot for the route and submit to disk reader (disk-first for both SYNC and
-     *  GENERATION when disk is available) or to the generation service. A full slot bounces the
-     *  request with RateLimited; the client retries on a later scan. */
-    private void submitToDiskOrGeneration(PS state, UUID playerUuid, IncomingRequest req,
+    private enum AdmitResult { SUBMITTED, SLOT_FULL, NO_DISK_HEADROOM }
+
+    /** Admit into the slot for the route and submit (disk-first for both SYNC and
+     *  GENERATION when disk is available). A full slot or a full disk pool is NOT an
+     *  answer — the entry stays in the backlog and the caller retains it. */
+    private AdmitResult tryAdmitAndSubmit(PS state, UUID playerUuid, IncomingRequest req,
                                            long packed, String dimension, RequestType type) {
         if (type == RequestType.SYNC || this.diskReadingAvailable) {
             // Route through disk reader (with cross-player dedup)
             boolean claimsData = req.clientTimestamp() > 0;
             if (!state.tryAdmit(new PendingRequest(req.cx(), req.cz(), type, SlotType.SYNC_ON_LOAD, claimsData))) {
-                rateLimit(state, playerUuid, req, packed, type, dimension);
-                return;
+                return AdmitResult.SLOT_FULL;
             }
             long order = this.ctx.sequence().next();
             boolean attached = this.dedupTracker.tryAttachOrCreate(packed, dimension, playerUuid, order);
+            // Headroom gates FRESH SUBMISSIONS ONLY, and so must be checked AFTER the dedup
+            // decision: an attached request rides another player's already-submitted read and
+            // costs the pool nothing, so a full pool must not defer it — that would throttle
+            // exactly the cross-player convergence dedup exists to accelerate. Unwind the slot
+            // (and the group we just created) and retain the entry for the next cycle.
+            //
+            // Gated on diskReadingAvailable as well: with NO reader configured this branch is
+            // still entered for SYNC (to no-op the submit and answer not-generated), and
+            // hasDiskHeadroom() is false-for-lack-of-a-pool there. Retaining on that would
+            // park the entry forever with no answer instead of dispositioning it.
+            if (!attached && this.diskReadingAvailable && !this.processor.hasDiskHeadroom()) {
+                this.dedupTracker.removeGroup(packed, dimension);
+                state.removePendingByPosition(req.cx(), req.cz());
+                return AdmitResult.NO_DISK_HEADROOM;
+            }
             if (!attached && !this.processor.submitDiskRead(playerUuid, dimension, req.cx(), req.cz(), order)) {
                 // Submit was a no-op (e.g. the dimension's level isn't registered yet). Unwind the
                 // pending entry (which frees the slot) and the dedup group so they aren't leaked,
@@ -207,14 +284,14 @@ class IncomingRequestRouter<PS extends AbstractPlayerRequestState<?>> {
                 this.dedupTracker.removeGroup(packed, dimension);
                 state.removePendingByPosition(req.cx(), req.cz());
                 this.ctx.sendActions().add(new SendAction.ColumnNotGenerated(playerUuid, packed, state));
-                return;
+                return AdmitResult.SUBMITTED; // dispositioned (answered not-generated)
             }
             this.ctx.diagnostics().incrementDiskQueued();
+            return AdmitResult.SUBMITTED;
         } else if (this.generationAvailable) {
             // No disk reader — direct generation (type is GENERATION here by the branch above)
             if (!state.tryAdmit(new PendingRequest(req.cx(), req.cz(), type, SlotType.GENERATION, req.clientTimestamp() > 0))) {
-                rateLimit(state, playerUuid, req, packed, type, dimension);
-                return;
+                return AdmitResult.SLOT_FULL;
             }
             // Register in-flight so an overtaking edit taints the outcome, same as the
             // disk-not-found escalation path (handleDiskNotFound). Unreachable in production
@@ -224,19 +301,11 @@ class IncomingRequestRouter<PS extends AbstractPlayerRequestState<?>> {
             this.ctx.generationTicketRequests().add(
                     new OffThreadProcessor.GenerationTicketRequest(playerUuid, req.cx(), req.cz(),
                             dimension, this.ctx.sequence().next()));
+            return AdmitResult.SUBMITTED;
         } else {
             // No disk reader AND no generation — can't serve
             this.ctx.sendActions().add(new SendAction.ColumnNotGenerated(playerUuid, packed, state));
-        }
-    }
-
-    private void rateLimit(PS state, UUID playerUuid, IncomingRequest req, long packed,
-                            RequestType type, String dimension) {
-        this.ctx.sendActions().add(new SendAction.RateLimited(playerUuid, packed, state));
-        this.ctx.diagnostics().incrementRateLimited(type);
-        if (LSSLogger.isDebugEnabled()) {
-            LSSLogger.debug("Rate-limited " + playerUuid + " (" + type + "): slot full"
-                    + " for chunk [" + req.cx() + ", " + req.cz() + "] in " + dimension);
+            return AdmitResult.SUBMITTED;
         }
     }
 }

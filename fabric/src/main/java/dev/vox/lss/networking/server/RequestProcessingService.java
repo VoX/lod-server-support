@@ -5,6 +5,8 @@ import dev.vox.lss.common.LSSConstants;
 import dev.vox.lss.common.LSSLogger;
 import dev.vox.lss.common.PositionUtil;
 import dev.vox.lss.common.SharedBandwidthLimiter;
+import dev.vox.lss.common.processing.IncomingBatch;
+import dev.vox.lss.common.processing.IncomingRequest;
 import dev.vox.lss.common.processing.LoadedColumnData;
 import dev.vox.lss.common.processing.OffThreadProcessor;
 import dev.vox.lss.common.processing.TickDiagnostics;
@@ -128,13 +130,18 @@ public class RequestProcessingService {
         int playerCz = player.getBlockZ() >> 4;
         int maxDist = LSSServerConfig.CONFIG.lodDistanceChunks + LSSConstants.LOD_DISTANCE_BUFFER;
 
+        var accepted = new ArrayList<IncomingRequest>(payload.count());
         for (int i = 0; i < payload.count(); i++) {
             long packedPosition = payload.packedPositions()[i];
             int cx = PositionUtil.unpackX(packedPosition);
             int cz = PositionUtil.unpackZ(packedPosition);
             if (PositionUtil.chebyshevDistance(cx, cz, playerCx, playerCz) > maxDist) continue;
-            state.addRequest(packedPosition, payload.clientTimestamps()[i]);
+            accepted.add(new IncomingRequest(cx, cz, payload.clientTimestamps()[i]));
         }
+        state.recordRangeFiltered(payload.count() - accepted.size());
+        // Offer even when empty: an empty batch is the client's explicit backpressure
+        // clear and must replace the backlog with nothing.
+        state.offerIncomingBatch(new IncomingBatch(accepted.toArray(new IncomingRequest[0])));
     }
 
     public void tick() {
@@ -356,9 +363,19 @@ public class RequestProcessingService {
     }
 
     /**
-     * Probe loaded chunks for positions in the player's incoming requests.
+     * Probe loaded chunks for positions in the player's PUBLISHED want-set.
      * Called on the main thread. Serializes loaded chunks so the processing thread
      * can compress and send without touching MC world state.
+     *
+     * <p>Reads the published want-set, never the mailbox: {@code takeIncomingBatch()} nulls
+     * the mailbox within ~50 ms of arrival while batches arrive at only 1 Hz, so probing the
+     * mailbox would see null on ~19 of every 20 ticks and roughly halve probe coverage.
+     *
+     * <p>Alignment is best-effort: a position admitted before its first probe pass serves
+     * from disk once — the 1 Hz re-declare re-probes it and the dirty broadcast heals any
+     * stale read. The published want-set still lists already-routed positions until the next
+     * batch replaces it; a probe for an already-routed position is simply unused by the
+     * router (bounded by {@link #MAX_PROBES_PER_TICK_PER_PLAYER}).
      *
      * @param skipPositions packed positions already extracted by the generation service (may be null)
      */
@@ -368,7 +385,9 @@ public class RequestProcessingService {
         var probes = new Long2ObjectOpenHashMap<LoadedColumnData>();
         int probed = 0;
 
-        for (var req : state.getIncomingRequests()) {
+        var batch = state.peekWantSet();
+        if (batch == null) return probes;   // nothing pending — converged player, no probe cost
+        for (var req : batch.requests()) {
             if (probed >= MAX_PROBES_PER_TICK_PER_PLAYER) break;
             long packed = PositionUtil.packPosition(req.cx(), req.cz());
             if (probes.containsKey(packed)) continue;

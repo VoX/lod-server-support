@@ -16,7 +16,6 @@ import java.util.PriorityQueue;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -44,14 +43,6 @@ public abstract class AbstractPlayerRequestState<T> {
     // Null in bare test rigs (guard is skipped) — both platform services always set it.
     private volatile String registeredDimension;
 
-    // Bound on the per-player incoming queue: a flooding client must not grow it without
-    // limit (heap OOM / main-thread DoS). Dropped entries are harmless — the client re-requests
-    // un-acked positions on its next scan. Counts are approximate (best-effort under races).
-    private static final int MAX_INCOMING_QUEUE = 16384;
-
-    // Network handler → processing thread (thread-safe intermediaries)
-    private final ConcurrentLinkedQueue<IncomingRequest> incomingRequests = new ConcurrentLinkedQueue<>();
-    private final AtomicInteger incomingRequestCount = new AtomicInteger();
     // Processing thread → main thread (thread-safe output)
     private final ConcurrentLinkedQueue<QueuedPayload<T>> readyPayloads = new ConcurrentLinkedQueue<>();
 
@@ -68,7 +59,6 @@ public abstract class AbstractPlayerRequestState<T> {
     private final ConcurrentHashMap<Long, Integer> enqueuedColumns = new ConcurrentHashMap<>();
     private final PlayerBandwidthTracker bandwidth = new PlayerBandwidthTracker();
     private final AtomicLong totalRequestsReceived = new AtomicLong();
-    private final AtomicLong totalIncomingDropped = new AtomicLong();
     // Single-writer (main thread) — volatile for cross-thread visibility to processing thread
     private volatile int sendQueueSizeSnapshot = 0;
 
@@ -142,18 +132,6 @@ public abstract class AbstractPlayerRequestState<T> {
 
     public boolean hasCompletedHandshake() {
         return this.hasHandshake;
-    }
-
-    // ---- Incoming request helpers (subclasses call these from addRequest) ----
-
-    protected void enqueueIncomingRequest(IncomingRequest request) {
-        if (this.incomingRequestCount.get() >= MAX_INCOMING_QUEUE) {
-            this.totalIncomingDropped.incrementAndGet();
-            return;
-        }
-        this.incomingRequests.add(request);
-        this.incomingRequestCount.incrementAndGet();
-        this.totalRequestsReceived.incrementAndGet();
     }
 
     // ---- Want-set mailbox (any thread) ----
@@ -305,24 +283,6 @@ public abstract class AbstractPlayerRequestState<T> {
 
     // ---- Processing-thread-facing per-request API ----
 
-    public IncomingRequest pollIncomingRequest() {
-        var r = this.incomingRequests.poll();
-        if (r != null) this.incomingRequestCount.decrementAndGet();
-        return r;
-    }
-
-    /**
-     * Re-queues a request previously drained via {@link #pollIncomingRequest} without
-     * re-counting it as received (it was counted at arrival) and without the queue-full
-     * drop guard (re-injection never grows the queue beyond what was drained). Used by
-     * Folia's regionized probing, which holds fresh arrivals for one tick so they route
-     * in the same snapshot their region-probe results land in.
-     */
-    public void reinjectIncomingRequest(IncomingRequest request) {
-        this.incomingRequests.add(request);
-        this.incomingRequestCount.incrementAndGet();
-    }
-
     public boolean tryAdmit(PendingRequest pending) {
         int cap = pending.heldSlot() == SlotType.SYNC_ON_LOAD ? this.syncSlotCap : this.genSlotCap;
         int held = pending.heldSlot() == SlotType.SYNC_ON_LOAD ? this.heldSyncSlots : this.heldGenSlots;
@@ -389,15 +349,6 @@ public abstract class AbstractPlayerRequestState<T> {
 
     // ---- Accessors for concurrent queues (used by sibling classes) ----
 
-    public Iterable<IncomingRequest> getIncomingRequests() {
-        return this.incomingRequests;
-    }
-
-    /** Number of requests currently queued for routing (not yet polled). */
-    public int getIncomingRequestCount() {
-        return this.incomingRequestCount.get();
-    }
-
     public void addReadyPayload(QueuedPayload<T> payload) {
         this.enqueuedColumns.merge(payload.packedPos(), 1, Integer::sum);
         this.readyPayloads.add(payload);
@@ -415,5 +366,4 @@ public abstract class AbstractPlayerRequestState<T> {
     public long getTotalSectionsSent() { return this.bandwidth.getTotalSectionsSent(); }
     public long getTotalBytesSent() { return this.bandwidth.getTotalBytesSent(); }
     public long getTotalRequestsReceived() { return this.totalRequestsReceived.get(); }
-    public long getTotalIncomingDropped() { return this.totalIncomingDropped.get(); }
 }
