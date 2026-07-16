@@ -45,6 +45,9 @@ Each Minecraft version has its own build; only the latest is listed. Older-MC bu
 
 Fabric builds are client + server; the Paper plugin is server-only and also runs on Purpur. Folia uses the same plugin JAR. 26.2 has no Folia build yet upstream.
 
+> [!IMPORTANT]
+> **Update the server and clients together.** LSS versions a networking protocol, and a client and server on different protocol versions simply establish no LOD session — you see vanilla render distance and no error. Release notes call out which updates carry a protocol bump.
+
 On 1.21.8 the in-game config screen is unavailable (it requires Sodium 0.8+, and 1.21.8's newest Sodium is 0.7.3); the JSON config files still work as normal.
 
 ## How It Works
@@ -53,10 +56,11 @@ Without LSS, Voxy can only build LOD data from chunks the client has already loa
 
 1. Client connects and performs a handshake with the server
 2. Server sends session config (distance limits, concurrency limits, generation settings)
-3. Client scans outward in an expanding spiral, batch-requesting chunks it doesn't have cached
-4. Server reads chunks from disk (or generates them on demand), serializes the raw MC section data (block states, biomes, lighting), and streams it back
-5. Client receives the section data and feeds it directly into Voxy's rendering engine via `rawIngest`
-6. After initial sync, the server pushes notifications when chunks change so clients stay up to date
+3. Once a second, the client scans outward in an expanding spiral and declares the complete set of chunks it still wants, closest-first
+4. The server replaces that player's queue with the new set, so it never works on chunks the player has already moved away from, and never rejects a request the client would just have to re-send
+5. Server reads chunks from disk (or generates them on demand), serializes the raw MC section data (block states, biomes, lighting), and streams it back
+6. Client receives the section data and feeds it directly into Voxy's rendering engine via `rawIngest`; served chunks drop out of the next second's set, so the request naturally stops repeating
+7. After initial sync, the server pushes notifications when chunks change so clients stay up to date
 
 The result: players see fully rendered terrain out to hundreds of chunks on multiplayer servers, without needing to explore the world first.
 
@@ -89,8 +93,8 @@ Server config is generated on first run:
 | `diskReaderThreads` | `5` | Thread pool size for async disk reads |
 | `useBackgroundReadPriority` | `true` | LOD disk reads yield to vanilla/gameplay chunk loading, so streaming distant terrain doesn't delay the chunks players are actively loading (Fabric: IOWorker BACKGROUND priority; Paper/Folia: Moonrise LOW priority). Set `false` to restore foreground reads |
 | `sendQueueLimitPerPlayer` | `4000` | Max queued column payloads per player (each carries a full chunk column of sections) |
-| `syncOnLoadConcurrencyLimitPerPlayer` | `200` | Max in-flight sync requests per player |
-| `generationConcurrencyLimitPerPlayer` | `16` | Max in-flight generation requests per player |
+| `syncOnLoadConcurrencyLimitPerPlayer` | `200` | Max concurrently serviced sync requests per player — above this, requests queue on the server until a slot frees |
+| `generationConcurrencyLimitPerPlayer` | `16` | Max concurrently serviced generation requests per player — above this, requests queue on the server until a slot frees |
 | `enableChunkGeneration` | `true` | Generate missing chunks on demand for LOD data |
 | `generationConcurrencyLimitGlobal` | `32` | Max chunks generating server-wide at once |
 | `generationTimeoutSeconds` | `60` | Timeout for pending chunk generation |

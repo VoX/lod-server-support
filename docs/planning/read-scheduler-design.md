@@ -1,6 +1,6 @@
 # Design: Region-Bucketed Read Scheduler
 
-**Status:** design / not implemented. A concrete design for replacing the server's dispatch-or-bounce request handling with a real, reprioritizable, disk-aware read scheduler — within the existing client-pull, full-resolution-section model.
+**Status:** partly realized, partly superseded — see the notes in §1, §3 and §7 before acting on this doc. Originally a concrete design for replacing the server's dispatch-or-bounce request handling with a real, reprioritizable, disk-aware read scheduler, within the existing client-pull, full-resolution-section model. Since written: **Phase 0 shipped** (PR #36's `useBackgroundReadPriority`, §10.2/§10.3), and **protocol v17's declarative want-set** (`docs/superpowers/plans/2026-07-15-declarative-want-set-requests.md`) deleted the dispatch-or-bounce baseline §1 describes and realized the hold-don't-bounce backlog + reprioritization goals of §3/§7 — by client-declared replace semantics rather than a server-side scheduler. **Still unbuilt:** region bucketing, the nearest-region-first budgeted scheduler, and adaptive concurrency.
 
 **Constraints (fixed):**
 - Client-pull model stays: client scans in a spiral and sends batched (packed position + clientTimestamp) requests; server serves from disk/memory and responds.
@@ -40,6 +40,15 @@ The current design manages none of these; it runs 5 concurrent LSS reads on the 
 
 ## 1. The current pipeline, piece by piece (baseline)
 
+> **SUPERSEDED (2026-07-15) — this baseline no longer exists.** Protocol v17's declarative
+> want-set (`docs/superpowers/plans/2026-07-15-declarative-want-set-requests.md`) deleted every
+> piece described below: `enqueueIncomingRequest`, the per-player FIFO `ConcurrentLinkedQueue`,
+> `MAX_INCOMING_QUEUE = 16384`, and the rate-limited bounce (the response type is off the wire;
+> byte 0 is retired and reserved). The client now declares its **complete want-set** once per
+> second and the server **replaces** a per-player backlog with it; slot-full and pool-full both
+> retain the entry and stop the drain instead of bouncing. Read this section as history — it is
+> accurate about v16 and about *why* the change happened, not about current code.
+
 - **Intake** (`handleBatchRequest`): distance-filters each position (`lodDistance + 32`) against the player's position *at arrival*, then `enqueueIncomingRequest` appends it to a per-player FIFO `ConcurrentLinkedQueue`, tail-dropping at `MAX_INCOMING_QUEUE = 16384`.
 - **Dispatch** (`IncomingRequestRouter.processIncomingRequests`, once per processing cycle, 20/s): drains the *entire* incoming queue. Each request resolves to: up-to-date (timestamp/probe), duplicate-skip, in-memory serve, or — for a cold read — `tryAdmit` a per-player sync slot + `submitDiskRead`, or **bounce as rate-limited** if the slot or the pool queue is full.
 - **Disk pool** (`AbstractChunkDiskReader`): `ThreadPoolExecutor`, 5 threads, `ArrayBlockingQueue(5×32=160)`. FIFO by submission order. On overflow → `RejectedExecutionException` → the request is delivered back as `saturated` → answered `rate-limited`.
@@ -75,6 +84,26 @@ client batch ─▶ INTAKE ─▶ per-player backlog:  region ─▶ {pending co
 ---
 
 ## 3. Piece-by-piece: current → proposed → why → tradeoff
+
+> **PARTLY REALIZED / PARTLY SUPERSEDED (2026-07-15).** Protocol v17's declarative want-set
+> (`docs/superpowers/plans/2026-07-15-declarative-want-set-requests.md`) shipped this section's
+> *goals* by a different mechanism — **client-declared replace semantics, not a server-side
+> region-bucketed scheduler.** Concretely:
+> - **Piece A** (populate a backlog, don't dispatch-or-bounce) and **Piece D** (hold, never
+>   bounce) are DONE. The backlog is a per-player `ArrayDeque` on `AbstractPlayerRequestState`,
+>   replaced wholesale by each 1 Hz want-set; the pool gate is `AbstractChunkDiskReader.hasHeadroom()`,
+>   and a full pool retains the entry and stops the drain (`RejectedExecutionException` is now
+>   unreachable in steady state; any residual is a counted silent drop, never a bounce).
+> - **Piece E** (reprioritization on movement, drop what the player left) is DONE *client-side*:
+>   the client re-declares closest-first every second, so a replaced backlog structurally drops
+>   the positions it has left. No server-side region re-ranking or hysteresis was needed.
+> - **Piece F** is MOOT. Neither option shipped: there is no 10 s client timeout to map (option a's
+>   premise is gone) and no `queued` ack (option b). Held positions simply stay in the want-set and
+>   are re-declared; that *is* the ack.
+> - **Pieces B and C** (region bucketing, the nearest-region-first budgeted scheduler) remain
+>   UNBUILT and are still gated on S1/S2 below — v17 did not touch disk locality.
+>
+> Read the per-piece "Current:" lines as v16 history. The rest of the analysis stands.
 
 ### Piece A — Intake: populate a backlog, don't dispatch-or-bounce
 - **Current:** append to FIFO; the router later dispatches or bounces.
@@ -142,6 +171,23 @@ client batch ─▶ INTAKE ─▶ per-player backlog:  region ─▶ {pending co
 - It eliminates the bounce↔re-request churn, cutting wasted network and CPU, and it scales: the global budget bounds total IO load, and fairness splits it across players.
 
 ## 7. Staging — restaged after verification (the budget already exists)
+
+> **STATUS (2026-07-15) — Phases 0-2 are settled; only the scheduler itself is still open.**
+> - **Phase 0** landed as PR #36 (`useBackgroundReadPriority`, §10.2/§10.3): IOWorker `BACKGROUND`
+>   submission on Fabric, Moonrise `Priority.LOW` on Paper/Folia.
+> - **Phase 1's "hold-don't-bounce backlog" is DONE**, but *not* as this doc stages it — protocol
+>   v17 (`docs/superpowers/plans/2026-07-15-declarative-want-set-requests.md`) put the
+>   reprioritization on the **client** (a complete want-set re-declared closest-first each second,
+>   replacing the server's per-player backlog) instead of building server-side ring/distance
+>   priority. So Phase 1's bounce-churn kill and its sub-second-reprioritization goal are both
+>   banked; its *scheduler* half is not built.
+> - **Phase 2 (`queued` ack) is MOOT** — v17 deleted the client timeout that created the residual
+>   churn it existed to remove, and it deliberately adds no new response type.
+> - **Still genuinely open:** Phase 3's adaptive concurrency, and the region-bucketing question
+>   (S2) — v17 changed *what* is submitted and when, never disk locality.
+>
+> S1/S2/S3 below stand as written. Note S3 ("if the backlog is ever built, absorb dedup into it")
+> was NOT taken: v17's backlog is per-player and `DedupTracker` remains a separate structure.
 
 Verification (§0) collapsed the highest-value step to something far smaller than a scheduler: the IOWorker concurrency budget the whole design is about **already exists as `diskReaderThreads`**, just mis-understood and defaulted for a throughput a single-threaded worker can't give. So build the cheap, high-value, low-risk piece first and measure before committing to the state-heavy scheduler at all.
 
