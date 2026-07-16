@@ -37,9 +37,13 @@ state), **HARD LIMIT** (fixed cap / config clamp), **IMPLICIT** (bounded as a si
 
 **Approach B — adaptive read throttle (Fabric fallback only) · REAL MEASURE (latency)**
 - Engaged **only** when a chunk-IO-overhaul mod (C2ME) nulls vanilla's IOWorker, making A
-  impossible; otherwise `null`. An AIMD law keyed on LSS's own submit→result read latency
+  impossible; otherwise `null`. An AIMD law keyed on LSS's own read-operation latency
   (EWMA α=0.2) steers an in-flight read limit toward a **20 ms** setpoint: ≤ target → +1,
   > target → ×0.7, floor 1, ceiling = pool depth. Self-restraint, not true priority.
+- Signal caveat: the clock starts at operation execution (queue wait excluded), but the
+  window includes NBT parse + section serialization CPU, and the MIN_PRIORITY pool threads
+  deschedule under general CPU load — so the proxy conflates disk contention with CPU
+  pressure. Both misreads are conservative (LSS backs itself off).
 
 **Retention gate — HARD LIMIT composed with the measures**
 - Fixed pool: `diskReaderThreads=5` (clamp [1,64]) at `MIN_PRIORITY`, bounded queue

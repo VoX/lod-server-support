@@ -218,7 +218,7 @@ public abstract class AbstractPlayerRequestState<T> {
         var r = this.backlog.pollFirst();
         this.backlogSizeSnapshot = this.backlog.size();
         // Backlog fully consumed: stop the main thread probing a want-set with nothing left
-        // to route (a converged player must cost zero probes — today's empty CLQ does the same).
+        // to route (a converged player must cost zero probes).
         if (this.backlog.isEmpty()) publishWantSet(null);
         return r;
     }

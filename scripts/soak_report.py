@@ -63,6 +63,10 @@ SERVER_MECHANISM = {
     # (cap full / capacity reject / ghost delivery) — a transient silent drop, re-declared
     # at 1 Hz until a slot frees. The dedicated law-A5 term (subset of superseded events).
     "gen-miss drops": "service.miss_dropped",
+    # Declared positions outside the server's lodDistance (client/server distance-config
+    # mismatch or a teleport mid-declaration) — dropped at backlog replace, healed like any
+    # supersession. Persistent growth means a config mismatch, not data loss.
+    "range filtered": "service.range_filtered",
     "honest re-resolutions": "service.re_resolved",
     "dirty re-saves suppressed": "dirty.suppressed_total",
 }

@@ -135,7 +135,11 @@ public abstract class AbstractChunkDiskReader {
      * Submit a read: the operation runs on the reader pool and its outcome is triaged into
      * the player's result queue (data / all-air / not-found / saturated). An {@link Error}
      * still produces a result first — otherwise the request would be stranded in flight
-     * forever (leaked admission slot + orphaned dedup group) — and is then rethrown.
+     * forever (leaked admission slot + orphaned dedup group). The re-throw after that is
+     * best-effort only: {@code executor.submit()} wraps the task in a FutureTask, which
+     * captures the Error into a Future nobody inspects — it never reaches an uncaught-
+     * exception handler. The logging + result delivery above are the real containment;
+     * the pool thread survives either way.
      */
     protected final void submitRead(UUID playerUuid, int chunkX, int chunkZ, String dimension,
                                      long submissionOrder, ReadOperation operation) {

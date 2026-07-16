@@ -128,7 +128,7 @@ EXCLUSION_RADIUS = 8
 # reads exactly these). GSON silently ignores unknown keys, so a typo in a scenario's
 # -config.json would silently fall back to defaults and de-fang the scenario; --validate
 # rejects unknown keys and wrong JSON types instead.
-SERVER_CONFIG_BOOL_KEYS = frozenset({"enabled", "enableChunkGeneration"})
+SERVER_CONFIG_BOOL_KEYS = frozenset({"enabled", "enableChunkGeneration", "useBackgroundReadPriority"})
 SERVER_CONFIG_INT_KEYS = frozenset({
     "lodDistanceChunks", "bytesPerSecondLimitPerPlayer", "diskReaderThreads",
     "sendQueueLimitPerPlayer", "bytesPerSecondLimitGlobal",
@@ -549,6 +549,12 @@ def law_A5(ps, cs, pc, cc, window):
         # (gen slot full at the miss, capacity/removed-player reject, ghost delivery) —
         # counted in the dedicated service.miss_dropped (NOT service.superseded, whose
         # backlog-replace events never touch disk and would over-balance this identity).
+        # Latent false-positive (documented, accepted): a PERMANENT generation failure
+        # (extraction error / null chunk) counts the miss at not_found and answers
+        # NOT_GENERATED only when the client is still connected to receive it — if the
+        # client disconnects between the miss and the answer, the response never lands in
+        # d_ng and the identity breaks by that count. No scenario currently produces
+        # permanent gen failures; if one appears, see CLAUDE.md's flake catalog first.
         d_md = delta(ps, cs, "service.miss_dropped")
         if d_nf != d_gen_sub + d_ng + d_md:
             out.append(Violation("A5", window,

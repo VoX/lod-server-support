@@ -34,12 +34,17 @@ import dev.vox.lss.common.LSSConstants;
  * side reads without locking (a slightly stale limit only mis-sizes one admission, which
  * the next sample corrects). The controller is a heuristic: exact ordering is not required.
  *
- * <p><b>Known weakness (honest).</b> LSS's own read latency conflates <em>vanilla load</em>
- * with <em>LSS's own backlog</em>: a deep LSS read queue also raises submit&rarr;result time,
- * so the proxy can back off when only LSS itself is busy (and, conversely, under-react if a
- * vanilla burst is short relative to the EWMA window). It reduces the load LSS places on the
- * shared worker, but it does <em>not</em> truly make vanilla's reads jump the queue — there is
- * no priority hand-off here, only self-restraint.
+ * <p><b>Known weakness (honest).</b> The latency sample is taken around the whole read
+ * <em>operation</em> on the pool thread (see {@code AbstractChunkDiskReader.readAndDeliver}:
+ * the clock starts at execution, so LSS's own queue depth is NOT in the window — but NBT
+ * parsing and section serialization CPU are, and the pool threads run at low priority, so
+ * descheduling under general CPU load inflates the sample too). The proxy therefore
+ * conflates <em>disk contention</em> with <em>CPU pressure</em>: it can back off when the
+ * box is CPU-busy but the disk is idle (and, conversely, under-react if a vanilla IO burst
+ * is short relative to the EWMA window). Both misreads are conservative — LSS throttles
+ * itself. It reduces the load LSS places on the shared worker, but it does <em>not</em>
+ * truly make vanilla's reads jump the queue — there is no priority hand-off here, only
+ * self-restraint.
  */
 public final class AdaptiveReadThrottle {
 
