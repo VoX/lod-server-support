@@ -55,7 +55,7 @@ On 1.21.8 the in-game config screen is unavailable (it requires Sodium 0.8+, and
 Without LSS, Voxy can only build LOD data from chunks the client has already loaded — limiting distant terrain rendering to areas the player has personally visited. LSS moves this work to the server:
 
 1. Client connects and performs a handshake with the server
-2. Server sends session config (distance limits, concurrency limits, generation settings)
+2. Server sends session config (distance limits, generation settings)
 3. Once a second, the client scans outward in an expanding spiral and declares the complete set of chunks it still wants, closest-first
 4. The server replaces that player's queue with the new set, so it never works on chunks the player has already moved away from, and never rejects a request the client would just have to re-send
 5. Server reads chunks from disk (or generates them on demand), serializes the raw MC section data (block states, biomes, lighting), and streams it back
@@ -93,7 +93,7 @@ Server config is generated on first run:
 | `diskReaderThreads` | `5` | Thread pool size for async disk reads |
 | `useBackgroundReadPriority` | `true` | LOD disk reads yield to vanilla/gameplay chunk loading, so streaming distant terrain doesn't delay the chunks players are actively loading (Fabric: IOWorker BACKGROUND priority; Paper/Folia: Moonrise LOW priority). On Fabric servers running a chunk-IO-overhaul mod (e.g. C2ME) that replaces vanilla's IOWorker, LSS automatically switches to adaptive read throttling (self-restraint that still yields to gameplay), logging one warning. Set `false` to restore foreground reads with no read protection |
 | `sendQueueLimitPerPlayer` | `4000` | Max queued column payloads per player (each carries a full chunk column of sections) |
-| `generationConcurrencyLimitPerPlayer` | `16` | Max concurrently generating chunks per player — above this, requests queue on the server until a slot frees |
+| `generationConcurrencyLimitPerPlayer` | `16` | Max concurrently generating chunks per player — misses beyond it are retried automatically each second until a slot frees |
 | `enableChunkGeneration` | `true` | Generate missing chunks on demand for LOD data |
 | `generationConcurrencyLimitGlobal` | `32` | Max chunks generating server-wide at once |
 | `generationTimeoutSeconds` | `60` | Timeout for pending chunk generation |

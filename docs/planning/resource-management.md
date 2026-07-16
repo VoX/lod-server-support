@@ -111,7 +111,7 @@ LSS has **no CPU meter**. It protects the vanilla tick structurally:
    Paper-owned async pool).
 
 Two client-side real-measure throttles that also cut server demand:
-- **Scan-budget scaling** — the client's per-scan want-set (`4×syncCap`) is scaled down by its
+- **Scan-budget scaling** — the client's per-scan want-set (the constant `WANT_SET_BUDGET`, 800) is scaled down by its
   own decode-queue pressure and by **vanilla load** (`1 − missingFraction²`): when the client's
   own vanilla chunks aren't loaded, the budget can drop to zero.
 - The adaptive read throttle (§1 B) indirectly caps serialization CPU when engaged.

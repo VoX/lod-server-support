@@ -1106,13 +1106,11 @@ def check_disk_saturation(ctx):
     skipped the check) — the residual saturation drop is silent and counted `superseded`,
     so nothing is lost, but the gate is not doing its job.
 
-    THIS IS ALSO THE HARNESS'S SUPERSESSION PROOF (moved here at Task 10 from
-    `rate-limit-storm`, whose 4-slot config cannot produce supersession by construction —
-    see check_rate_limit_storm). Contention needs a want-set that outruns SERVICE, which is
-    what threads:1 vs a 200-slot cap creates: the 200-slot cap gives the client an 800-entry
-    scan budget (SpiralScanner.BUDGET_MULTIPLIER * syncCap) while one reader thread drains it
-    slowly, so the retained backlog deepens and every 1 Hz replace drops what is still
-    undrained. Unlike the floor this replaces, the number below is MEASURED, not derived."""
+    THIS IS ALSO THE HARNESS'S SUPERSESSION PROOF. Contention needs a want-set that outruns
+    SERVICE, which is what threads:1 creates: the client declares the constant WANT_SET_BUDGET
+    (800) each scan while one reader thread drains it slowly, so the retained backlog deepens
+    and every 1 Hz replace drops what is still undrained. The number below is MEASURED, not
+    derived (superseded=420, backlog high-water 760, pre-server-owned-generation baseline)."""
     last = ctx.server_snaps[-1]
     if last["disk"]["saturated"] != 0:
         yield Violation("disk-saturation", "final snapshot",
