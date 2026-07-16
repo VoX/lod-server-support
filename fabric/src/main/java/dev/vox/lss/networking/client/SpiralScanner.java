@@ -25,10 +25,13 @@ class SpiralScanner {
      * comfortably larger than the in-flight set it now re-declares, so there is always frontier
      * headroom. Raising it buys nothing: the window self-throttles to the serve rate (as heads
      * resolve they classify SATISFIED and drop out), so a bigger window only inflates
-     * duplicate-skip traffic. See ServerConfigBase.validate() — the want-set cap must dominate
-     * the slot caps or frontier discovery starves.
+     * duplicate-skip traffic. Shared with {@code ServerConfigBase.validate()} via
+     * {@link LSSConstants#SCAN_BUDGET_MULTIPLIER}: that clamp reserves
+     * {@link LSSConstants#WANT_SET_FRONTIER_RESERVE} frontier positions using this exact multiplier,
+     * so the two must never drift — the want-set cap dominating the slot caps is what keeps frontier
+     * discovery from starving (Global Constraint #28).
      */
-    private static final int BUDGET_MULTIPLIER = 4;
+    private static final int BUDGET_MULTIPLIER = LSSConstants.SCAN_BUDGET_MULTIPLIER;
 
     private SessionConfigS2CPayload sessionConfig;
 

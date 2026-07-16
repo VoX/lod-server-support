@@ -1,5 +1,6 @@
 package dev.vox.lss.config;
 
+import dev.vox.lss.common.LSSConstants;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Field;
@@ -120,9 +121,12 @@ class ConfigValidationTest {
         c.validate();
         assertEquals(1, c.syncOnLoadConcurrencyLimitPerPlayer);
 
+        // The per-field bound is MAX_CONCURRENCY_LIMIT (1000), but Global Constraint #28's want-set
+        // budget clamp pulls it below that: sync must leave room for the minimum gen hold-back plus
+        // the frontier reserve. 1024 - 64 (reserve) - 1*4 (min gen hold-back) = 956.
         c.syncOnLoadConcurrencyLimitPerPlayer = 9999;
         c.validate();
-        assertEquals(1000, c.syncOnLoadConcurrencyLimitPerPlayer);
+        assertEquals(956, c.syncOnLoadConcurrencyLimitPerPlayer);
     }
 
     @Test
@@ -132,9 +136,34 @@ class ConfigValidationTest {
         c.validate();
         assertEquals(1, c.generationConcurrencyLimitPerPlayer);
 
+        // Per-field bound is MAX_CONCURRENCY_LIMIT (1000), but Global Constraint #28 clamps gen to
+        // whatever want-set budget remains after the (default 200) sync cap + frontier reserve:
+        // (1024 - 200 - 64) / 4 = 190.
         c.generationConcurrencyLimitPerPlayer = 9999;
         c.validate();
-        assertEquals(1000, c.generationConcurrencyLimitPerPlayer);
+        assertEquals(190, c.generationConcurrencyLimitPerPlayer);
+    }
+
+    /**
+     * Global Constraint #28 boundary: at the MAX legal slot caps — the values nobody exercises but
+     * validate() must survive — the client's want-set can still carry every in-flight re-declaration
+     * plus at least the frontier reserve. Without the cross-clamp, syncCap=genCap=1000 would demand
+     * 1000 + 1000*4 = 5000 in-flight slots against a 1024-position batch and starve discovery.
+     */
+    @Test
+    void maxConfigLeavesFrontierHeadroomInTheWantSetBudget() {
+        var c = serverConfig();
+        c.syncOnLoadConcurrencyLimitPerPlayer = LSSConstants.MAX_CONCURRENCY_LIMIT;
+        c.generationConcurrencyLimitPerPlayer = LSSConstants.MAX_CONCURRENCY_LIMIT;
+        c.validate();
+
+        int inFlightWorstCase = c.syncOnLoadConcurrencyLimitPerPlayer
+                + c.generationConcurrencyLimitPerPlayer * LSSConstants.SCAN_BUDGET_MULTIPLIER;
+        assertTrue(inFlightWorstCase + LSSConstants.WANT_SET_FRONTIER_RESERVE
+                        <= LSSConstants.MAX_BATCH_CHUNK_REQUESTS,
+                "MAX config starves the want-set frontier: in-flight re-declarations "
+                        + inFlightWorstCase + " + reserve leave no headroom in the "
+                        + LSSConstants.MAX_BATCH_CHUNK_REQUESTS + "-position batch");
     }
 
     @Test

@@ -843,6 +843,61 @@ Plan: docs/superpowers/plans/2026-07-15-declarative-want-set-requests.md (1469 l
   - **Commits:** `6363505` (checker premise correction + selftest, the load-bearing fix) and a
     docs/ledger commit. NOT pushed, NO PR opened (per task instructions — Step 5 is out of scope).
 
+  ### Task 10 FIX PASS (review finding — Global Constraint #28 implemented, 2026-07-16)
+
+  - **D10-5 (Global Constraint #28 was UNIMPLEMENTED — now landed on this branch, NOT deferred).**
+    A review confirmed what D10-4 (and D9-5 before it) had only DOCUMENTED: `ServerConfigBase.validate()`
+    was eleven independent `Math.clamp` calls with no want-set/slot cross-check, so at the legal config
+    `syncCap=1000` (=`MAX_CONCURRENCY_LIMIT`) `SpiralScanner:75` derives budget=4000, clamps to
+    `MAX_BATCH_CHUNK_REQUESTS=1024`, and ~1000 in-flight positions re-declare into it → ~24 frontier
+    headroom → silent discovery starvation. The plan marks #28 a MUST Global Constraint and forbids
+    shipping a subset; Task 2 was supposed to land it and did not. D10-4's reasoning to defer was
+    OVERRULED: this atomic PR's own gate (Task 10) is where the gap must close, in its own reviewed
+    commit, not a post-merge follow-up. Default config was always safe (syncCap 200 → budget 800 vs
+    ~264 in-flight), so nothing shipped broken — this hardens the extreme.
+    **What landed:**
+      - Two shared constants in `LSSConstants`: `SCAN_BUDGET_MULTIPLIER = 4` and
+        `WANT_SET_FRONTIER_RESERVE = 64`. `SpiralScanner.BUDGET_MULTIPLIER` now *reads*
+        `SCAN_BUDGET_MULTIPLIER` (value unchanged — behaviourally identical), so the scanner's budget
+        derivation and the validate() clamp share ONE source of truth and cannot drift. This also
+        makes D9-5's/D9-1's "the javadoc points at a check that does not exist" true again the other
+        way: the check now exists, and the scanner javadoc points at it correctly.
+      - Cross-clamp in `ServerConfigBase.validate()` after the per-field clamps: sync (the primary
+        discovery path) gets a FIXED ceiling `MAX_BATCH_CHUNK_REQUESTS - reserve - MIN*mult = 956`
+        (room for the minimum gen hold-back + frontier); gen then gets whatever budget remains after
+        the actual sync cap + reserve, `(MAX_BATCH - syncCap - reserve)/mult`. Invariant proven to
+        hold at ALL inputs: `syncCap + genCap*mult + reserve <= MAX_BATCH_CHUNK_REQUESTS`. Sync-primary
+        was a deliberate choice over gen-primary (gen is the secondary hold-back).
+      - Paper mirror is automatic — `PaperConfig` extends `ServerConfigBase` and calls `super.validate()`.
+    **DESIGN NOTE — the cross-clamp makes syncCap/genCap INTERDEPENDENT, which fights the reflective
+    sweeps' "each field has an independent [min,max]" model.** Consequences, all handled (invariants
+    preserved, triggers moved — never a weakened assertion):
+      - Fabric `ConfigValidationTest`: `syncOnLoadConcurrencyLimitPerPlayerClamped` expected 1000→**956**;
+        `generationConcurrencyLimitPerPlayerClamped` 1000→**190** (gen clamps against the DEFAULT sync
+        cap 200: (1024-200-64)/4). The invariant ("extreme values clamp to a safe range") is intact;
+        only the exact post-clamp value moved because a second constraint now applies. The loose
+        reflective sweep (`>=1`, `<MAX_VALUE`) and `defaultsSurviveValidateUnchanged` needed no change
+        (defaults sit inside: 200≤956, 16≤190).
+      - Paper `everyNumericFieldClampsToExactSharedBoundsAtBothEnds` asserts EXACT bounds, so
+        `SHARED_BOUNDS` for the two caps was recomputed from constants: `SYNC_BUDGET_MAX=956` (fixed),
+        `GEN_BUDGET_MAX=190` (couples to the compiled default sync cap `DEFAULT_SYNC_CAP`, which the
+        sweep holds at default when perturbing gen). Both computed from `LSSConstants`, not magic, with
+        a comment naming the coupling. The sweep reuses one config across its four legs per field, so
+        the collateral gen-crush when sync is perturbed to max (gen→1) is invisible — verified by trace.
+      - New MAX-config boundary test on BOTH platforms (`maxConfigLeavesFrontierHeadroomInTheWantSet-
+        Budget`): sets syncCap=genCap=`MAX_CONCURRENCY_LIMIT`, validates, asserts
+        `inFlight + reserve <= MAX_BATCH_CHUNK_REQUESTS` — the exact values #28 says nobody exercises.
+    **Mutation-verified, not assumed** (per method): neutering both cross-clamp `Math.min`s (→100000)
+    fails, on both platforms, exactly the two boundary tests + the two named cap tests (Fabric) /
+    the reflective sweep (Paper) — 5 targeted failures, nothing spurious. Restored, re-ran green.
+    **Gates (all forced, no UP-TO-DATE reads):** Tier 1 fabric+paper green (Fabric ConfigValidationTest
+    16 tests, Paper 5); Tier 2 57/57; Tier 3 `runClientGameTest` BUILD SUCCESSFUL; `:paper:shadowJar`
+    OK; `check_soak --selftest` 134; `soak_report --selftest` 20. No soak scenario or gametest
+    exercises caps above the safe range, so live soak was not re-run (D10-2's checker corrections stand).
+    **Not touched:** `MAX_CONCURRENCY_LIMIT` stays 1000 (the plan wants a validate() clamp, not a
+    constant cut); wire codecs are value-agnostic so `WireParityTest`'s literal-1000 frames are
+    unaffected (they encode a raw VarInt, never run validate()).
+
 ## Standing reminders
 
 - HARD SEQUENCING: no commit may ship server-side silent drops while the client still suppresses

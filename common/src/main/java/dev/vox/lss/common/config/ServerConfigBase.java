@@ -49,5 +49,24 @@ public abstract class ServerConfigBase extends JsonConfig {
         syncOnLoadConcurrencyLimitPerPlayer = Math.clamp(syncOnLoadConcurrencyLimitPerPlayer, LSSConstants.MIN_CONCURRENCY_LIMIT, LSSConstants.MAX_CONCURRENCY_LIMIT);
         generationConcurrencyLimitPerPlayer = Math.clamp(generationConcurrencyLimitPerPlayer, LSSConstants.MIN_CONCURRENCY_LIMIT, LSSConstants.MAX_CONCURRENCY_LIMIT);
         perDimensionTimestampCacheSizeMB = Math.clamp(perDimensionTimestampCacheSizeMB, LSSConstants.MIN_TIMESTAMP_CACHE_SIZE_MB, LSSConstants.MAX_TIMESTAMP_CACHE_SIZE_MB);
+
+        // Global Constraint #28: the want-set cap must dominate the slot caps, or frontier discovery
+        // starves. The client re-declares every in-flight position each scan, so the in-flight set
+        // (syncCap sync slots + genCap * SCAN_BUDGET_MULTIPLIER gen entries) competes for the same
+        // per-batch budget (MAX_BATCH_CHUNK_REQUESTS) as newly discovered frontier positions. Left
+        // unclamped, the legal per-field maxima (syncCap=1000 alone → budget clamps to 1024 with
+        // ~1000 in-flight) collapse frontier headroom below zero and the server drains the batch
+        // then starves for the rest of the second. Reserve WANT_SET_FRONTIER_RESERVE positions for
+        // the frontier, sync (the primary discovery path) taking priority over the gen hold-back.
+        int mult = LSSConstants.SCAN_BUDGET_MULTIPLIER;
+        int reserve = LSSConstants.WANT_SET_FRONTIER_RESERVE;
+        // Sync alone must leave room for the minimum gen hold-back (MIN_CONCURRENCY_LIMIT * mult)
+        // plus the frontier reserve — a fixed ceiling independent of the configured gen cap.
+        int maxSync = LSSConstants.MAX_BATCH_CHUNK_REQUESTS - reserve - LSSConstants.MIN_CONCURRENCY_LIMIT * mult;
+        syncOnLoadConcurrencyLimitPerPlayer = Math.min(syncOnLoadConcurrencyLimitPerPlayer, maxSync);
+        // Gen frontier gets whatever budget remains after sync + reserve.
+        int maxGen = Math.max(LSSConstants.MIN_CONCURRENCY_LIMIT,
+                (LSSConstants.MAX_BATCH_CHUNK_REQUESTS - syncOnLoadConcurrencyLimitPerPlayer - reserve) / mult);
+        generationConcurrencyLimitPerPlayer = Math.min(generationConcurrencyLimitPerPlayer, maxGen);
     }
 }

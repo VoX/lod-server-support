@@ -72,6 +72,17 @@ public final class LSSConstants {
     public static final int MAX_BATCH_CHUNK_REQUESTS = 1024;
     public static final int MAX_BATCH_RESPONSES = 4096;
 
+    // Want-set scan budget coupling (Global Constraint #28). The client's SpiralScanner derives
+    // its per-scan want-set budget as syncCap * SCAN_BUDGET_MULTIPLIER (and holds gen frontier to
+    // genCap * SCAN_BUDGET_MULTIPLIER). Because the want-set now re-declares every in-flight
+    // position each scan, those re-declarations (syncCap sync slots + genCap*MULT gen entries) can
+    // fill the whole MAX_BATCH_CHUNK_REQUESTS batch and starve frontier discovery. ServerConfigBase
+    // .validate() reserves WANT_SET_FRONTIER_RESERVE positions for the frontier by clamping the slot
+    // caps against these constants, so the two derivations MUST share one source of truth —
+    // SpiralScanner.BUDGET_MULTIPLIER reads SCAN_BUDGET_MULTIPLIER for exactly that reason.
+    public static final int SCAN_BUDGET_MULTIPLIER = 4;
+    public static final int WANT_SET_FRONTIER_RESERVE = 64;
+
     // Batch response type tags. Byte 0 was RESPONSE_RATE_LIMITED through v16 — retired by
     // the v17 want-set model (a full slot retains the want in the server's backlog instead of
     // bouncing it) and RESERVED: never reuse 0, and keep 1/2 stable (wire-parity fixtures pin

@@ -44,6 +44,18 @@ class PaperConfigValidationTest {
 
     private record Bounds(int min, int max) {}
 
+    // Global Constraint #28: the want-set budget clamp pulls the two per-player slot caps below
+    // their per-field MAX_CONCURRENCY_LIMIT. Sync loses room for the minimum gen hold-back plus the
+    // frontier reserve (a fixed ceiling); gen loses room to whatever remains after the *default*
+    // sync cap + reserve (so this couples to the compiled default, exercised at default in the sweep).
+    private static final int DEFAULT_SYNC_CAP = new PaperConfig().syncOnLoadConcurrencyLimitPerPlayer;
+    private static final int SYNC_BUDGET_MAX =
+            LSSConstants.MAX_BATCH_CHUNK_REQUESTS - LSSConstants.WANT_SET_FRONTIER_RESERVE
+                    - LSSConstants.MIN_CONCURRENCY_LIMIT * LSSConstants.SCAN_BUDGET_MULTIPLIER;
+    private static final int GEN_BUDGET_MAX = Math.max(LSSConstants.MIN_CONCURRENCY_LIMIT,
+            (LSSConstants.MAX_BATCH_CHUNK_REQUESTS - DEFAULT_SYNC_CAP - LSSConstants.WANT_SET_FRONTIER_RESERVE)
+                    / LSSConstants.SCAN_BUDGET_MULTIPLIER);
+
     /** Expected clamp bounds per shared field — the same LSSConstants ServerConfigBase clamps with. */
     private static final Map<String, Bounds> SHARED_BOUNDS = Map.ofEntries(
             Map.entry("lodDistanceChunks",
@@ -64,9 +76,9 @@ class PaperConfigValidationTest {
             Map.entry("dirtyBroadcastIntervalSeconds",
                     new Bounds(LSSConstants.MIN_DIRTY_BROADCAST_INTERVAL, LSSConstants.MAX_DIRTY_BROADCAST_INTERVAL)),
             Map.entry("syncOnLoadConcurrencyLimitPerPlayer",
-                    new Bounds(LSSConstants.MIN_CONCURRENCY_LIMIT, LSSConstants.MAX_CONCURRENCY_LIMIT)),
+                    new Bounds(LSSConstants.MIN_CONCURRENCY_LIMIT, SYNC_BUDGET_MAX)),
             Map.entry("generationConcurrencyLimitPerPlayer",
-                    new Bounds(LSSConstants.MIN_CONCURRENCY_LIMIT, LSSConstants.MAX_CONCURRENCY_LIMIT)),
+                    new Bounds(LSSConstants.MIN_CONCURRENCY_LIMIT, GEN_BUDGET_MAX)),
             Map.entry("perDimensionTimestampCacheSizeMB",
                     new Bounds(LSSConstants.MIN_TIMESTAMP_CACHE_SIZE_MB, LSSConstants.MAX_TIMESTAMP_CACHE_SIZE_MB)));
 
@@ -107,6 +119,28 @@ class PaperConfigValidationTest {
             c.validate();
             assertEquals(bounds.max(), f.getInt(c), f.getName() + " at the exact maximum must be kept");
         }
+    }
+
+    /**
+     * Global Constraint #28 boundary through the Paper subclass: at the MAX legal slot caps the
+     * want-set can still carry every in-flight re-declaration plus at least the frontier reserve.
+     * Without the shared cross-clamp, syncCap=genCap=1000 would demand 1000 + 1000*4 = 5000
+     * in-flight slots against a 1024-position batch and starve frontier discovery.
+     */
+    @Test
+    void maxConfigLeavesFrontierHeadroomInTheWantSetBudget() {
+        PaperConfig c = new PaperConfig();
+        c.syncOnLoadConcurrencyLimitPerPlayer = LSSConstants.MAX_CONCURRENCY_LIMIT;
+        c.generationConcurrencyLimitPerPlayer = LSSConstants.MAX_CONCURRENCY_LIMIT;
+        c.validate();
+
+        int inFlightWorstCase = c.syncOnLoadConcurrencyLimitPerPlayer
+                + c.generationConcurrencyLimitPerPlayer * LSSConstants.SCAN_BUDGET_MULTIPLIER;
+        assertTrue(inFlightWorstCase + LSSConstants.WANT_SET_FRONTIER_RESERVE
+                        <= LSSConstants.MAX_BATCH_CHUNK_REQUESTS,
+                "MAX config starves the want-set frontier: in-flight re-declarations "
+                        + inFlightWorstCase + " + reserve exceed the "
+                        + LSSConstants.MAX_BATCH_CHUNK_REQUESTS + "-position batch");
     }
 
     /** Compiled Paper defaults must already sit inside the clamp ranges: validate() may not move them. */
