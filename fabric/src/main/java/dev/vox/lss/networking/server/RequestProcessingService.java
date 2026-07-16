@@ -63,6 +63,13 @@ public class RequestProcessingService {
 
     private static final int DIAG_LOG_INTERVAL_TICKS = 100;
     private static final int MAX_PROBES_PER_TICK_PER_PLAYER = 512;
+    // Global ceiling on in-memory column SERIALIZATIONS across ALL players in one tick — the
+    // per-player cap bounds one player, but N backfilling players would otherwise cost up to
+    // 512*N serializations on the main thread. Counts serializations (the expensive work), not
+    // examinations (cheap getChunkNow lookups); a converged player costs zero either way. Once
+    // spent, later players in the tick fall through to the disk-read path (or the next tick) and
+    // the client's 1 Hz re-declaration heals the deferral. Hardcoded: a safety ceiling, not a knob.
+    private static final int MAX_PROBES_PER_TICK_GLOBAL = 2048;
 
     // Send-drop fault seam state (see armSendDrops). Static so the soak driver and gametests
     // can arm it without a service reference; production code never arms it.
@@ -206,6 +213,7 @@ public class RequestProcessingService {
         Map<UUID, LongOpenHashSet> genReadyPositions = TickSnapshot.groupPositionsByPlayer(generationReady);
 
         int activeCount = 0;
+        int globalProbeBudget = MAX_PROBES_PER_TICK_GLOBAL;
         List<UUID> toRemove = null;
         for (var state : this.players.values()) {
             if (!state.hasCompletedHandshake()) continue;
@@ -250,7 +258,8 @@ public class RequestProcessingService {
 
             var skipPositions = genReadyPositions != null
                     ? genReadyPositions.get(player.getUUID()) : null;
-            var probes = this.probeLoadedChunks(state, level, skipPositions);
+            var probes = this.probeLoadedChunks(state, level, skipPositions, globalProbeBudget);
+            globalProbeBudget -= probes.size();   // charge only actual serializations
             if (!probes.isEmpty()) {
                 buffers.loadedChunkProbes().put(player.getUUID(), probes);
             }
@@ -401,7 +410,7 @@ public class RequestProcessingService {
      */
     private Long2ObjectMap<LoadedColumnData> probeLoadedChunks(
             PlayerRequestState state, ServerLevel level,
-            LongOpenHashSet skipPositions) {
+            LongOpenHashSet skipPositions, int globalBudgetRemaining) {
         var probes = new Long2ObjectOpenHashMap<LoadedColumnData>();
         int probed = 0;
 
@@ -409,7 +418,10 @@ public class RequestProcessingService {
         if (batch == null) batch = state.peekWantSet();
         if (batch == null) return probes;   // nothing pending — converged player, no probe cost
         for (var req : batch.requests()) {
-            if (probed >= MAX_PROBES_PER_TICK_PER_PLAYER) break;
+            if (probed >= MAX_PROBES_PER_TICK_PER_PLAYER) break;   // per-player examination cap
+            // Global serialization ceiling: probes.size() counts columns actually serialized this
+            // call, so this stops the moment this player would exceed the tick's remaining budget.
+            if (probes.size() >= globalBudgetRemaining) break;
             long packed = PositionUtil.packPosition(req.cx(), req.cz());
             if (probes.containsKey(packed)) continue;
             if (skipPositions != null && skipPositions.contains(packed)) continue;

@@ -67,6 +67,13 @@ public class PaperRequestProcessingService {
 
     private static final int DIAG_LOG_INTERVAL_TICKS = 100;
     private static final int MAX_PROBES_PER_TICK_PER_PLAYER = 512;
+    // Global ceiling on in-memory column SERIALIZATIONS across ALL players in one pump tick — the
+    // per-player cap bounds one player, but N backfilling players would otherwise cost up to
+    // 512*N serializations on the pump. Counts serializations (the expensive work), not
+    // examinations. Applies to the non-Folia pump probe below; the Folia region-probe path runs
+    // off-pump on owning region threads (distributed), so the per-player cap suffices there. Once
+    // spent, later players fall through to the disk-read path and the 1 Hz re-declaration heals it.
+    private static final int MAX_PROBES_PER_TICK_GLOBAL = 2048;
 
     /** Test seam: puts one encoded voxel-column frame on the wire. Production default is the
      *  raw NMS payload send; tests inject recording/throwing senders. */
@@ -372,6 +379,7 @@ public class PaperRequestProcessingService {
         Map<UUID, LongOpenHashSet> genReadyPositions = TickSnapshot.groupPositionsByPlayer(generationReady);
 
         int activeCount = 0;
+        int globalProbeBudget = MAX_PROBES_PER_TICK_GLOBAL;
         List<UUID> toRemove = null;
         for (var state : this.players.values()) {
             if (!state.hasCompletedHandshake())
@@ -427,7 +435,8 @@ public class PaperRequestProcessingService {
                 probes = consumeRegionProbes(player.getUUID(), dimension, skipPositions);
                 holdAndScheduleRegionProbe(state, player, level, skipPositions);
             } else {
-                probes = this.probeLoadedChunks(state, level, skipPositions);
+                probes = this.probeLoadedChunks(state, level, skipPositions, globalProbeBudget);
+                globalProbeBudget -= probes.size();   // charge only actual serializations (pump path)
             }
             if (probes != null && !probes.isEmpty()) {
                 loadedChunkProbes.put(player.getUUID(), probes);
@@ -492,7 +501,7 @@ public class PaperRequestProcessingService {
      */
     private Long2ObjectMap<LoadedColumnData> probeLoadedChunks(
             PaperPlayerRequestState state, ServerLevel level,
-            LongOpenHashSet skipPositions) {
+            LongOpenHashSet skipPositions, int globalBudgetRemaining) {
         var probes = new Long2ObjectOpenHashMap<LoadedColumnData>();
         int probed = 0;
 
@@ -503,6 +512,10 @@ public class PaperRequestProcessingService {
             return probes;   // nothing pending — converged player, no probe cost
         for (var req : wantSet.requests()) {
             if (probed >= MAX_PROBES_PER_TICK_PER_PLAYER)
+                break;   // per-player examination cap
+            // Global serialization ceiling: probes.size() counts columns actually serialized, so
+            // this stops the moment this player would exceed the tick's remaining pump budget.
+            if (probes.size() >= globalBudgetRemaining)
                 break;
             long packed = PositionUtil.packPosition(req.cx(), req.cz());
             if (probes.containsKey(packed))
