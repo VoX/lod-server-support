@@ -31,8 +31,11 @@ public record TickSnapshot(
      * PERMANENT unservability (extraction error, failed load) and answers ColumnNotGenerated —
      * a session-permanent "stop asking" on the client; {@code true} is transient pressure
      * (timeout, capacity rejection) and is dropped silently, counted superseded — the client's
-     * next want-set declaration retries it. {@code transientFailure} is meaningless when
-     * {@code columnData != null}.
+     * next want-set declaration retries it. {@code missDropped} marks the capacity-reject
+     * flavor of a transient outcome: the disk miss behind it produced NEITHER a generation
+     * submission NOR a wire answer, so it must count into the {@code miss_dropped} term of
+     * soak law A5 (a timeout outcome must NOT — its submission already balanced the miss).
+     * Both flags are meaningless when {@code columnData != null}.
      */
     public record GenerationReadyData(
             UUID playerUuid,
@@ -42,13 +45,23 @@ public record TickSnapshot(
             LoadedColumnData columnData,
             long columnTimestamp,
             long submissionOrder,
-            boolean transientFailure
+            boolean transientFailure,
+            boolean missDropped
     ) {
-        /** Success outcomes and permanent failures — {@code transientFailure = false}. */
+        /** Success outcomes and permanent failures — both flags false. */
         public GenerationReadyData(UUID playerUuid, int cx, int cz, String dimension,
                                    LoadedColumnData columnData, long columnTimestamp,
                                    long submissionOrder) {
-            this(playerUuid, cx, cz, dimension, columnData, columnTimestamp, submissionOrder, false);
+            this(playerUuid, cx, cz, dimension, columnData, columnTimestamp, submissionOrder,
+                    false, false);
+        }
+
+        /** Timeout/extraction outcomes — the generation WAS submitted, so never a miss-drop. */
+        public GenerationReadyData(UUID playerUuid, int cx, int cz, String dimension,
+                                   LoadedColumnData columnData, long columnTimestamp,
+                                   long submissionOrder, boolean transientFailure) {
+            this(playerUuid, cx, cz, dimension, columnData, columnTimestamp, submissionOrder,
+                    transientFailure, false);
         }
     }
 

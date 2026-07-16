@@ -28,6 +28,7 @@ public class ProcessingDiagnostics {
     // per-player AtomicLongs and are drained here each cycle)
     private volatile long totalSuperseded;
     private volatile long totalRangeFiltered;
+    private volatile long totalMissDropped;
 
     public void resetTickCounters() {
         procTickDiskQueued = 0;
@@ -85,6 +86,14 @@ public class ProcessingDiagnostics {
      *  requested_total but never entering the backlog — the A1 term for the motion race). */
     public void addRangeFiltered(long n) { if (n > 0) totalRangeFiltered += n; }
 
+    /** Disk misses that resolved into a TRANSIENT silent drop with no generation submission
+     *  and no wire answer (gen slot full at the miss, capacity/removed-player reject, ghost
+     *  delivery). The dedicated soak-law-A5 term: disk.not_found == generation.submitted +
+     *  not_generated responses + miss_dropped. A subset of {@code superseded} events, but
+     *  counted separately — backlog-replace supersession never touches disk, so folding the
+     *  two would over-balance A5. */
+    public void addMissDropped(long n) { if (n > 0) totalMissDropped += n; }
+
     // Per-tick getters (read by main thread)
     public int getLastDiskQueued() { return procTickDiskQueued; }
     public int getLastDiskDrained() { return procTickDiskDrained; }
@@ -102,4 +111,5 @@ public class ProcessingDiagnostics {
     public long getTotalReResolved() { return totalReResolved; }
     public long getTotalSuperseded() { return totalSuperseded; }
     public long getTotalRangeFiltered() { return totalRangeFiltered; }
+    public long getTotalMissDropped() { return totalMissDropped; }
 }

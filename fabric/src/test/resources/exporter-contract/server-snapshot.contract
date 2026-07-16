@@ -49,6 +49,7 @@ service.disk_resolved=long
 service.duplicate_skips=long
 service.gen_drained=long
 service.in_memory=long
+service.miss_dropped=long
 service.queue_full=long
 service.range_filtered=long
 service.re_resolved=long

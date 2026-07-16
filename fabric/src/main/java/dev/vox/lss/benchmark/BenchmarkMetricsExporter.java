@@ -238,6 +238,7 @@ public final class BenchmarkMetricsExporter {
         serviceMap.put("re_resolved", diag.getTotalReResolved());
         serviceMap.put("superseded", diag.getTotalSuperseded());
         serviceMap.put("range_filtered", diag.getTotalRangeFiltered());
+        serviceMap.put("miss_dropped", diag.getTotalMissDropped());
         result.put("service", serviceMap);
 
         var diskMap = new LinkedHashMap<String, Object>();

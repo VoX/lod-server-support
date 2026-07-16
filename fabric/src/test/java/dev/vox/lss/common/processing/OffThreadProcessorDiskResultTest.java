@@ -767,6 +767,9 @@ class OffThreadProcessorDiskResultTest {
                     "transient outcome must free the gen slot");
             waitFor(() -> rig.proc.getDiagnostics().getTotalSuperseded() == 1,
                     "the silent drop is booked as superseded");
+            assertEquals(1, rig.proc.getDiagnostics().getTotalMissDropped(),
+                    "a capacity-reject transient is a miss-drop (law A5: the miss produced "
+                            + "neither a generation submission nor a wire answer)");
             assertTrue(drainSendActions(rig.proc).isEmpty(),
                     "a transient generation failure answers NOTHING on the wire");
             assertFalse(rig.state.hasDiskReadDone(4, 6),
@@ -776,6 +779,32 @@ class OffThreadProcessorDiskResultTest {
             rig.state.enqueue(new IncomingRequest(4, 6, -1L));
             rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
             waitFor(() -> rig.proc.diskSubmits.size() == 2, "re-declared position re-reads disk");
+        } finally {
+            rig.proc.shutdown();
+        }
+    }
+
+    @Test
+    void timeoutShapedTransientOutcomeIsNotAMissDrop() throws Exception {
+        // A timeout outcome's generation WAS submitted, so its disk miss is already balanced
+        // by generation.submitted in law A5 — counting it into miss_dropped would over-balance.
+        // (Law A5 also skips timeout windows entirely; this pins the counter's own semantics.)
+        var rig = new Rig(true);
+        try {
+            var ticket = escalateToGenTicket(rig, 4, 6);
+
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid), new ArrayList<>(List.of(
+                    new TickSnapshot.GenerationReadyData(rig.uuid, 4, 6, DIM, null,
+                            0L, ticket.submissionOrder(), true))));
+
+            waitFor(() -> rig.state.getHeldGenSlots() == 0,
+                    "transient outcome must free the gen slot");
+            waitFor(() -> rig.proc.getDiagnostics().getTotalSuperseded() == 1,
+                    "the silent drop is booked as superseded");
+            assertEquals(0, rig.proc.getDiagnostics().getTotalMissDropped(),
+                    "a timeout-shaped transient must NOT count as a miss-drop");
+            assertTrue(drainSendActions(rig.proc).isEmpty(),
+                    "a timeout answers NOTHING on the wire");
         } finally {
             rig.proc.shutdown();
         }
@@ -829,6 +858,8 @@ class OffThreadProcessorDiskResultTest {
 
             waitFor(() -> rig.proc.getDiagnostics().getTotalSuperseded() == 1,
                     "the cap-full miss is booked as superseded");
+            assertEquals(1, rig.proc.getDiagnostics().getTotalMissDropped(),
+                    "a cap-full miss is a miss-drop (law A5's dedicated term)");
             assertTrue(drainSendActions(rig.proc).isEmpty(),
                     "a cap-full miss answers NOTHING: no NOT_GENERATED, no bounce");
             assertFalse(rig.state.hasPendingRequest(2, 2),
@@ -855,6 +886,8 @@ class OffThreadProcessorDiskResultTest {
 
             waitFor(() -> rig.proc.getDiagnostics().getTotalSuperseded() == 1,
                     "the ghost delivery is booked as superseded");
+            assertEquals(1, rig.proc.getDiagnostics().getTotalMissDropped(),
+                    "a ghost not-found is a miss-drop (law A5's dedicated term)");
             assertTrue(drainSendActions(rig.proc).isEmpty(),
                     "a pending-less not-found answers NOTHING");
         } finally {

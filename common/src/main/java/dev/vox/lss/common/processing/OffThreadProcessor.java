@@ -197,8 +197,13 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
     public void feedGenerationFailure(UUID playerUuid, int cx, int cz, String dimension,
                                       long submissionOrder, boolean transientFailure) {
         synchronized (this.mailboxLock) {
+            // A transient feed is always a capacity/removed-player reject: the generation was
+            // never submitted, so the disk miss behind it counts into law A5's miss_dropped
+            // term (stamped on the outcome; the counter increments on the processing thread,
+            // which is the diagnostics class's single writer).
             this.pendingGenerationReady.add(new TickSnapshot.GenerationReadyData(
-                    playerUuid, cx, cz, dimension, null, 0L, submissionOrder, transientFailure));
+                    playerUuid, cx, cz, dimension, null, 0L, submissionOrder,
+                    transientFailure, transientFailure));
         }
     }
 
@@ -750,6 +755,7 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
             // NOT_GENERATED semantics a wire answer here could session-satisfy a position off
             // a ghost delivery — drop silently; a still-wanted position is re-declared.
             this.ctx.diagnostics().addSuperseded(1);
+            this.ctx.diagnostics().addMissDropped(1); // law A5: a miss with no submit, no answer
             return;
         }
         if (!this.generationAvailable) {
@@ -763,6 +769,7 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
         } else {
             // Transient: the gen slot cap is momentarily full — never a wire answer.
             this.ctx.diagnostics().addSuperseded(1);
+            this.ctx.diagnostics().addMissDropped(1); // law A5: a miss with no submit, no answer
         }
     }
 
@@ -795,6 +802,12 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
                     // NOT_GENERATED is session-permanent on the client, so transient pressure
                     // must drop silently (counted superseded) and heal by re-declaration.
                     this.ctx.diagnostics().addSuperseded(1);
+                    if (entry.missDropped()) {
+                        // Capacity/removed-player reject: the miss produced neither a
+                        // generation submission nor a wire answer (law A5's miss_dropped term;
+                        // a timeout outcome skips this — its submission balanced the miss).
+                        this.ctx.diagnostics().addMissDropped(1);
+                    }
                 } else {
                     this.ctx.sendActions().add(new SendAction.ColumnNotGenerated(entry.playerUuid(), packed, state));
                 }

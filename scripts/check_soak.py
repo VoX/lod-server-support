@@ -178,6 +178,10 @@ SERVER_MONOTONIC = (
     # drop, dedup-primary departure), healed by the client's 1 Hz re-declaration;
     # range_filtered = dropped by the Chebyshev ingress guard (the movement race).
     "service.superseded", "service.range_filtered",
+    # Server-owned generation: disk misses resolved into transient silent drops (law A5's
+    # dedicated term — a subset of superseded events, counted separately because
+    # backlog-replace supersession never touches disk).
+    "service.miss_dropped",
     "disk.submitted", "disk.completed", "disk.not_found", "disk.all_air",
     "disk.errors", "disk.saturated", "disk.successful",
     "generation.submitted", "generation.completed", "generation.timeouts",
@@ -541,11 +545,18 @@ def law_A5(ps, cs, pc, cc, window):
         d_nf = delta(ps, cs, "disk.not_found")
         d_gen_sub = delta(ps, cs, "generation.submitted")
         d_ng = delta(pc, cc, "responses.not_generated")
-        if d_nf != d_gen_sub + d_ng:
+        # Server-owned generation: a miss can also resolve into a TRANSIENT silent drop
+        # (gen slot full at the miss, capacity/removed-player reject, ghost delivery) —
+        # counted in the dedicated service.miss_dropped (NOT service.superseded, whose
+        # backlog-replace events never touch disk and would over-balance this identity).
+        d_md = delta(ps, cs, "service.miss_dropped")
+        if d_nf != d_gen_sub + d_ng + d_md:
             out.append(Violation("A5", window,
-                                 "disk.not_found != generation.submitted + not_generated responses",
+                                 "disk.not_found != generation.submitted + not_generated "
+                                 "responses + miss_dropped",
                                  {"d_not_found": d_nf, "d_gen_submitted": d_gen_sub,
-                                  "d_not_generated": d_ng, "expected": d_gen_sub + d_ng,
+                                  "d_not_generated": d_ng, "d_miss_dropped": d_md,
+                                  "expected": d_gen_sub + d_ng + d_md,
                                   "actual": d_nf}))
     d_ok = delta(ps, cs, "disk.successful")
     d_part = (delta(ps, cs, "disk.completed") - delta(ps, cs, "disk.not_found")
@@ -2228,7 +2239,8 @@ def _srv(wall=1000, seg=0, over=None):
             "service": {"requests_received": 0, "columns_sent": 0, "bytes_sent": 0,
                         "duplicate_skips": 0, "queue_full": 0, "up_to_date": 0,
                         "in_memory": 0, "disk_resolved": 0, "gen_drained": 0,
-                        "superseded": 0, "range_filtered": 0, "re_resolved": 0},
+                        "superseded": 0, "range_filtered": 0, "re_resolved": 0,
+                        "miss_dropped": 0},
             "disk": {"submitted": 0, "completed": 0, "not_found": 0, "all_air": 0,
                      "errors": 0, "saturated": 0, "successful": 0, "pending": 0},
             "generation": {"submitted": 0, "completed": 0, "timeouts": 0,
@@ -2339,6 +2351,18 @@ def selftest():
                           "disk.successful": 3})
     cc = _cli(6000, over={"responses.not_generated": 2})
     clean("A5 balanced", law_A5(ps, cs, pc, cc, "selftest"))
+    # Server-owned generation: transient miss-drops (cap-full / capacity-reject / ghost)
+    # balance the escalation leg through the dedicated miss_dropped term.
+    cs_md = _srv(6000, over={"disk.not_found": 7, "generation.submitted": 3,
+                             "service.miss_dropped": 2,
+                             "disk.completed": 12, "disk.all_air": 1, "disk.saturated": 1,
+                             "disk.successful": 3})
+    clean("A5 balanced with miss-drops", law_A5(ps, cs_md, pc, cc, "selftest"))
+    cs_bad_md = _srv(6000, over={"disk.not_found": 7, "generation.submitted": 3,
+                                 "service.miss_dropped": 1,
+                                 "disk.completed": 12, "disk.all_air": 1, "disk.saturated": 1,
+                                 "disk.successful": 3})
+    hits("A5 miss-drop leg", law_A5(ps, cs_bad_md, pc, cc, "selftest"), "A5")
     cs_bad = _srv(6000, over={"disk.not_found": 5, "generation.submitted": 2,
                               "disk.completed": 10, "disk.all_air": 1, "disk.saturated": 1,
                               "disk.successful": 3})

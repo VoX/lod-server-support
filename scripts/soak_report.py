@@ -59,6 +59,10 @@ SERVER_MECHANISM = {
     # the client's 1 Hz re-declaration — under a want-set protocol that is the normal
     # steady state, not an anomaly. Law A1 conserves it.
     "want-set superseded": "service.superseded",
+    # Server-owned generation: a disk miss that could not take a generation slot right now
+    # (cap full / capacity reject / ghost delivery) — a transient silent drop, re-declared
+    # at 1 Hz until a slot frees. The dedicated law-A5 term (subset of superseded events).
+    "gen-miss drops": "service.miss_dropped",
     "honest re-resolutions": "service.re_resolved",
     "dirty re-saves suppressed": "dirty.suppressed_total",
 }
