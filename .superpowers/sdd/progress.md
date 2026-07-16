@@ -744,7 +744,64 @@ Plan: docs/superpowers/plans/2026-07-15-declarative-want-set-requests.md (1469 l
     drain" to the pool only, so it was left alone. Root cause worth carrying to Task 10: the
     retain-and-stop-for-both framing originates in the **plan's own** Task 9 bullet, so it will
     keep re-importing itself into any doc written from the plan text.
-- Task 10: NOT STARTED — validation gauntlet + live soak.
+- Task 10: IN PROGRESS — validation gauntlet + live soak.
+  Step 1 gauntlet GREEN, all forced (no UP-TO-DATE reads): Tier 1 **593/0**, Tier 2 **57/57**
+  (incl. vanilla `always_pass`), Tier 3 `runClientGameTest` BUILD SUCCESSFUL, `:paper:test`
+  **247/0**, `:paper:shadowJar` OK, `check_soak --selftest` 133→**134**, `soak_report --selftest`
+  **20**, `release_check --version 0.6.3` **OK**. `RegionFaultGameTests` did NOT fire its
+  documented WSL2 env-flake this run.
+
+  ### Task 10 PLAN DEVIATIONS / FINDINGS
+
+  - **D10-1 (release_check needed a pinned version — stale-jar guard working, not a failure).**
+    Bare `python3 scripts/release_check.py` (the plan's Step 1 literal) FAILS on this box: three
+    fabric + three paper jars sit in build/libs (`0.6.1+1.21.8` from the support line, `0.6.2+26.2`
+    from the shipped release, plus the unversioned dev jar), and the ambiguity guard refuses to
+    guess. **Do not "fix" this by passing `--version 0.6.1`**: `_require_version` matches on the
+    `-<version>+` prefix, so 0.6.1 would silently validate the STALE `0.6.1+1.21.8` support-line
+    jar and green-light a jar this branch never built — the exact substitution the guard exists to
+    prevent. Cleared the two stale versioned jars per platform (build outputs, gitignored,
+    regenerable) and ran the documented release preflight shape instead:
+    `CI=true ./gradlew ... -Pmod_version=0.6.3` + `release_check --version 0.6.3` → `OK: release
+    artifacts clean`. 0.6.3 is a validation-only pin (unambiguous, obviously this-branch); it does
+    NOT choose the release version. Whoever tags re-runs the preflight with the real version.
+  - **D10-2 (REAL HARNESS DEFECT, caught by the first live run exactly as the ledger predicted:
+    `rate-limit-storm`'s supersession floor was UNSATISFIABLE BY CONSTRUCTION).** The run failed
+    `superseded >= 100, actual: 0` — and 0 *exactly*, which is the tell. Premise checked before
+    threshold (per the standing reminder), and the premise is false: **the client's scan budget IS
+    the server's sync cap × 4** (`SpiralScanner:75`, `budget = syncOnLoadConcurrencyLimitPerPlayer
+    * BUDGET_MULTIPLIER`, verified in code). The storm config sets `syncOnLoadConcurrencyLimitPerPlayer:
+    4`, which caps the entire want-set at **16 positions/scan**. Four slots serving sixteen wants
+    per second is abundance — this config cannot leave an entry undrained, so supersession here is
+    *impossible*, not merely absent. Task 8's floor comment ("~800-entry want-sets") had silently
+    assumed the DEFAULT syncCap of 200 (200×4=800) while the scenario sets 4; the two cannot
+    coexist. **Why the selftest missed it:** it fed the check a synthetic `superseded: 4200`, so it
+    validated the derivation's assumption rather than the mechanism. Live evidence: recv=721 total
+    (~16-20/s), backlog high-water 12, `tracker_in_flight` ~0, `duplicate_skips`=0 — i.e. the
+    client re-declares correctly, there is just never anything unsatisfied to re-declare. The
+    scenario's own docstring already said its strongest assertion is the quiescent tail, and that
+    PASSED (52 quiescent snapshots, complete disc, 0 other violations).
+    **Fix = move the trigger, keep the invariant** (never weaken an assertion whose invariant still
+    matters): (a) the impossible floor became a **ceiling** (`superseded <= 50`) that pins the very
+    coupling which makes it impossible — decouple the scan budget from syncCap, or let the client
+    flood a small gate, and supersession appears there immediately; (b) the **supersession floor
+    moved to `disk-saturation`**, where contention is real because the want-set outruns *service*,
+    not slots: threads:1 vs a 200-slot cap (→800-entry budget). Unlike the floor it replaces, its
+    number is **MEASURED, not derived**: a live disk-saturation run gives `superseded=420`, backlog
+    high-water **760**, `duplicate_skips=33`, `disk.saturated=0`, PASS. Floor set to 100
+    (conservative). Both corrected checks were re-run **against the real recordings**, not just
+    synthetic data: storm PASS (0 ≤ 50), disk-saturation PASS (420 ≥ 100). Selftest 133→134 (added
+    a disk-saturation "flood premise broke" catch case; the storm catch case inverted to "want-set
+    outran the gate"). `disk-saturation`'s `named_check` field list gained `server.service.superseded`
+    so the anti-vacuity guard covers the new dependency.
+    **The v17 lesson this generalises to:** under v17 supersession is produced by slow SERVICE
+    relative to the want-set, never by a small slot cap — shrinking `syncOnLoadConcurrencyLimitPerPlayer`
+    shrinks the want-set with it. Any future scenario meaning to create want-set contention must
+    slow the service (disk threads / generation), not the gate.
+  - **D10-3 (`disk.saturated == 0` — the other derived, never-measured flip — HOLDS live).** The
+    ledger flagged it as unproven and as issue #32's territory. Measured on a real run under the
+    harshest disk contention the harness creates (threads:1, backlog high-water 760): **saturated=0**.
+    The `hasHeadroom()` gate did not leak; the backlog absorbed exactly what used to bounce.
 
 ## Standing reminders
 

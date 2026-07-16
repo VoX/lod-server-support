@@ -1029,26 +1029,47 @@ def make_disc_completeness(scenario, run=1):
 
 @named_check("rate-limit-storm", ["server.service.superseded", "server.generation.completed"])
 def check_rate_limit_storm(ctx):
-    """Tiny sync slot cap (syncOnLoadConcurrencyLimitPerPlayer: 4) vs the client's
-    want-set flood.
+    """Tiny sync slot cap (syncOnLoadConcurrencyLimitPerPlayer: 4) vs the client's want-set.
 
     HISTORICAL NAME: pre-v17 this scenario drove the bounce loop (router rateLimit -> wire
     rate-limited -> onRateLimited -> retry mark -> scanner backoff) and asserted it fired.
-    v17 retired RESPONSE_RATE_LIMITED: the same config now produces a deep RETAINED backlog
-    and heavy supersession instead of bounces — the contention is identical, only its
-    disposition changed. The file name is kept (renaming it touches six keyed tables); the
-    premise is re-aimed at what the contention now produces.
+    v17 retired RESPONSE_RATE_LIMITED. The file name is kept (renaming it touches six keyed
+    tables).
 
-    The strongest assertion here is the quiescent tail: convergence to a complete disc
-    through a 4-slot gate, with every dropped want recovered ONLY by re-declaration."""
+    PREMISE CORRECTED AT TASK 10 (measured, was derived). The v17 rewrite assumed this config
+    would now produce "a deep RETAINED backlog and heavy supersession — the contention is
+    identical, only its disposition changed", and asserted superseded >= 100. That is
+    UNSATISFIABLE BY CONSTRUCTION, and the first live run proved it (superseded == 0 exactly,
+    backlog high-water 12, tracker_in_flight ~0). The reason is a v17 coupling the derivation
+    missed: the client's scan budget IS the server's sync cap times four
+    (SpiralScanner.BUDGET_MULTIPLIER), so syncCap=4 caps the whole want-set at 16 positions
+    per scan. The old floor's own comment ("~800-entry want-sets") silently assumed the
+    DEFAULT syncCap of 200 (200*4=800) while the scenario config sets 4 — the two cannot
+    coexist. Four slots serving sixteen wants per second is abundance, not contention: this
+    config can never leave an entry undrained, so supersession here is impossible, not absent.
+    (The selftest missed it because it fed the check a synthetic superseded=4200 — it
+    validated the assumption instead of the mechanism.)
+
+    So the floor is INVERTED into the invariant this config can actually prove, and the
+    supersession floor moves to `disk-saturation`, where contention is real and measured
+    (superseded=420, backlog high-water 760 — see check_disk_saturation).
+
+    THE INVARIANT KEPT: a tiny gate must self-throttle, never stall. Because the want-set is
+    derived from the gate, the client provably cannot outrun it, so supersession must stay
+    near zero here. This ceiling pins that coupling: decouple the scan budget from syncCap
+    (or let the client flood a small gate) and supersession appears here immediately.
+    The strongest assertions remain the quiescent tail + disc completeness: convergence to a
+    complete disc through a 4-slot gate, with nothing orphaned and no bounces."""
     last = ctx.server_snaps[-1]
-    # With a 4-slot gate and ~800-entry want-sets re-declared at 1 Hz, each replace drops
-    # hundreds of not-yet-admitted entries; 100 over a whole run is a floor, not a target.
-    if last["service"]["superseded"] < 100:
+    # Measured: 0 over a full run. The ceiling is generous (a replace racing a slow cycle
+    # could legitimately drop a handful) while still catching a want-set that outruns the gate
+    # by orders of magnitude — the pre-correction derivation expected hundreds here.
+    if last["service"]["superseded"] > 50:
         yield Violation("rate-limit-storm", "final snapshot",
-                        "want-set supersession never built up — the storm premise did not "
-                        "hold (a 4-slot gate must leave entries undrained at each replace)",
-                        {"expected": ">= 100", "actual": last["service"]["superseded"]})
+                        "want-set supersession built up behind a 4-slot gate — the client "
+                        "outran the gate, so the scan budget is no longer derived from "
+                        "syncOnLoadConcurrencyLimitPerPlayer (want-set/gate coupling broken)",
+                        {"expected": "<= 50", "actual": last["service"]["superseded"]})
     fc = ctx.final_client(1)
     if fc is None:
         yield Violation("rate-limit-storm", "run1", "no client snapshots in run 1", {})
@@ -1067,7 +1088,7 @@ def check_rate_limit_storm(ctx):
                         {"wallMs": last["wallMs"]})
 
 
-@named_check("disk-saturation", ["server.disk.saturated"])
+@named_check("disk-saturation", ["server.disk.saturated", "server.service.superseded"])
 def check_disk_saturation(ctx):
     """One reader thread (queue capacity 33) vs a 200-slot sync flood — PREMISE FLIPPED at v17.
 
@@ -1084,13 +1105,32 @@ def check_disk_saturation(ctx):
 
     A nonzero disk.saturated here means the gate leaked (a race, or a submit path that
     skipped the check) — the residual saturation drop is silent and counted `superseded`,
-    so nothing is lost, but the gate is not doing its job."""
+    so nothing is lost, but the gate is not doing its job.
+
+    THIS IS ALSO THE HARNESS'S SUPERSESSION PROOF (moved here at Task 10 from
+    `rate-limit-storm`, whose 4-slot config cannot produce supersession by construction —
+    see check_rate_limit_storm). Contention needs a want-set that outruns SERVICE, which is
+    what threads:1 vs a 200-slot cap creates: the 200-slot cap gives the client an 800-entry
+    scan budget (SpiralScanner.BUDGET_MULTIPLIER * syncCap) while one reader thread drains it
+    slowly, so the retained backlog deepens and every 1 Hz replace drops what is still
+    undrained. Unlike the floor this replaces, the number below is MEASURED, not derived."""
     last = ctx.server_snaps[-1]
     if last["disk"]["saturated"] != 0:
         yield Violation("disk-saturation", "final snapshot",
                         "disk.saturated fired despite the v17 headroom gate — the router "
                         "submitted into a full pool (gate leaked)",
                         {"expected": "== 0", "actual": last["disk"]["saturated"]})
+    # Measured: superseded=420 with backlog high-water 760 on the first live v17 run.
+    # 100 is a conservative floor, not a target: it asserts the retained backlog really did
+    # build and get replaced (i.e. the absorption this scenario claims to prove actually
+    # happened) rather than the flood being served comfortably.
+    if last["service"]["superseded"] < 100:
+        yield Violation("disk-saturation", "final snapshot",
+                        "want-set supersession never built up — the saturation premise did "
+                        "not hold (a 1-thread pool under an 800-entry want-set must leave "
+                        "entries undrained at each replace), so the headroom gate's zero "
+                        "saturation proves nothing here",
+                        {"expected": ">= 100", "actual": last["service"]["superseded"]})
     if ctx.final_client(1) is None:
         yield Violation("disk-saturation", "run1", "no client snapshots in run 1", {})
         return
@@ -2741,24 +2781,31 @@ def selftest():
             quiescent_server={1} if quiescent_last else set(),
             config=config or {})
 
-    # v17: the storm premise is supersession (a 4-slot gate leaves entries undrained at
-    # every replace), not bounces — RESPONSE_RATE_LIMITED no longer exists.
-    storm_srv = {"service.superseded": 4200, "generation.completed": 165}
+    # v17 + Task 10 correction: a 4-slot gate gives the client a 16-entry want-set (the scan
+    # budget IS 4*syncCap), so it cannot outrun the gate — supersession must stay near zero.
+    # (The pre-correction case asserted superseded=4200 here, which the live run showed is
+    # unreachable: it validated the derivation's assumption, not the mechanism.)
+    storm_srv = {"service.superseded": 0, "generation.completed": 165}
     storm_cli = {}
     clean("rate-limit-storm clean", list(check_rate_limit_storm(
         stress_ctx(storm_srv, storm_cli))))
-    hits("rate-limit-storm no supersession", list(check_rate_limit_storm(
-        stress_ctx({**storm_srv, "service.superseded": 0}, storm_cli))),
+    hits("rate-limit-storm want-set outran the gate", list(check_rate_limit_storm(
+        stress_ctx({**storm_srv, "service.superseded": 4200}, storm_cli))),
         "rate-limit-storm")
 
-    # v17: the headroom gate must PREVENT saturation under the same threads:1 flood; the
-    # backlog absorbs what used to bounce. Premise flipped — saturated > 0 is the failure.
-    sat_srv = {"disk.saturated": 0, "disk.submitted": 2000, "disk.completed": 2000}
+    # v17: the headroom gate must PREVENT saturation under the threads:1 flood; the backlog
+    # absorbs what used to bounce. Premise flipped — saturated > 0 is the failure. This is
+    # also where supersession is proven (moved from rate-limit-storm at Task 10): the flood
+    # must actually leave entries undrained, or zero saturation proves nothing.
+    sat_srv = {"disk.saturated": 0, "disk.submitted": 2000, "disk.completed": 2000,
+               "service.superseded": 420}
     sat_cli = {}
     clean("disk-saturation clean", list(check_disk_saturation(
         stress_ctx(sat_srv, sat_cli))))
     hits("disk-saturation headroom gate leaked", list(check_disk_saturation(
         stress_ctx({**sat_srv, "disk.saturated": 12}, sat_cli))), "disk-saturation")
+    hits("disk-saturation no supersession (flood premise broke)", list(check_disk_saturation(
+        stress_ctx({**sat_srv, "service.superseded": 0}, sat_cli))), "disk-saturation")
 
     bw_cfg = {"bytesPerSecondLimitGlobal": 262144}
     bw_srv = {"service.queue_full": 30}
