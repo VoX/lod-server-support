@@ -340,7 +340,7 @@ detection) — see the CHECKS dict in scripts/check_soak.py.
 
 **Modes:** `--validate <scenario>` (pre-boot, seconds),
 `check_soak.py <results-dir> <scenario>` → `verdict.json` + human-readable violations,
-exit 1 on any failure, and `--selftest` — 133 in-memory pass/catch cases: every law
+exit 1 on any failure, and `--selftest` — 134 in-memory pass/catch cases: every law
 (A1-A7, B2, incl. the re_resolved / suppressed_total monotonic guards), the quiescence
 predicate (server pair AND client mirror), disc completeness, window floors, the config
 allowlist, action segmentation, and every named check each pass consistent data and catch a

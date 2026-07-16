@@ -802,6 +802,46 @@ Plan: docs/superpowers/plans/2026-07-15-declarative-want-set-requests.md (1469 l
     ledger flagged it as unproven and as issue #32's territory. Measured on a real run under the
     harshest disk contention the harness creates (threads:1, backlog high-water 760): **saturated=0**.
     The `hasHeadroom()` gate did not leak; the backlog absorbed exactly what used to bounce.
+  - **D10-4 (the D9-5 imaginary-`validate()`-check finding is REAL and REACHABLE, left as a
+    documented follow-up — NOT silently fixed).** Confirmed `ServerConfigBase.validate()`
+    (`common/.../config/ServerConfigBase.java:40-52`) is eleven independent `Math.clamp` calls with
+    no cross-check, and `SpiralScanner:75` derives the scan budget as `syncCap * BUDGET_MULTIPLIER`
+    clamped to `MAX_BATCH_CHUNK_REQUESTS=1024`. So at the legal config `syncCap=1000` (=
+    `MAX_CONCURRENCY_LIMIT`), budget 4000 clamps to 1024 while up to ~1000 in-flight positions are
+    re-declared into that same 1024 → headroom collapses to ~24 and frontier discovery starves
+    silently, with no test and no config error. This is Global-Constraint #28 of the plan ("clamp
+    the want-set cap to dominate the slot caps, Task 2, + a boundary test"), which **Task 2 did not
+    implement** — a genuine gap, not just a stale javadoc. I did NOT add the clamp under Task 10:
+    it is a behavioural code change to a shared config path (client-visible via SessionConfig, and
+    the Paper `SHARED_BOUNDS` sweep must mirror it) that belongs in its own reviewed commit, and the
+    DEFAULT config is safe (syncCap 200 → budget 800 vs ~264 in-flight), so nothing ships broken.
+    RECOMMENDED FOLLOW-UP (carried, not hidden): a small commit adding the cross-clamp in
+    `validate()` + the MAX-config boundary test in `ConfigValidationTest` and its Paper twin, OR —
+    if the constants are treated as fixed — at minimum fix `SpiralScanner`'s javadoc, which points
+    at a `validate()` check that does not exist. Every soak scenario here uses safe caps, so this
+    does not block the gauntlet.
+
+  ### Task 10 RESULT (all verified from verdict.json "passed", never a piped exit code)
+
+  - **Fabric soak: 17/17 PASS** (post-commit runs, 0 violations / 0 warnings each): fresh-backfill,
+    warm-rejoin, dimension-trip, dirty-broadcast, rate-limit-storm, disk-saturation,
+    generation-disabled, generation-capacity-stress, bandwidth-throttle, cold-restart-resync,
+    enabled-false, teleport-prune, dirty-range-filter, dirty-during-backfill, dirty-while-offline,
+    clearcache-mid-session, dimension-rejoin-warm. dimension-trip did NOT hit its phase-drift
+    artifact this run. rate-limit-storm + disk-saturation pass with the D10-2 corrected checks on
+    FRESH recordings (not just the ones the fix was derived from).
+  - **Paper soak: 4/4 PASS** (fresh-backfill, warm-rejoin, dimension-trip, paper-dirty-falling-block;
+    0 violations each). **Folia NOT attempted** — Folia 26.2 is unpublished upstream, so
+    `SOAK_PLATFORM=folia` cannot run on this MC line (per plan + standing reminder);
+    `RegionProbeSchedulingTest` (Tier-1) + this Paper run carry the Bukkit-side validation.
+  - **CLAUDE.md updated** (Step 4): the soak-section paragraph on rate-limit-storm/disk-saturation
+    rewritten from the disproven derived-floor premise to the measured D10-2 reality (ceiling vs
+    floor, the want-set/gate coupling, the general "slow service not small gate" rule); selftest
+    count 133→134 in CLAUDE.md:298 and soak-test-design.md:343. No NEW flake surfaced (RegionFault
+    did not fire; dimension-trip clean), so no new catalog entry — the correction is a premise fix,
+    not a flake.
+  - **Commits:** `6363505` (checker premise correction + selftest, the load-bearing fix) and a
+    docs/ledger commit. NOT pushed, NO PR opened (per task instructions — Step 5 is out of scope).
 
 ## Standing reminders
 
