@@ -6,9 +6,10 @@ import java.util.UUID;
  * Result of an async chunk disk read (or a generation outcome routed through the disk
  * pipeline). Pure-Java — shared verbatim by both platforms.
  *
- * <p>{@code saturated} means the disk reader pool rejected the task; the position should
- * be retried later, not treated as "not found". {@code sectionBytes == null} with
- * {@code !notFound} is an all-air chunk (exists on disk, nothing visible to send).
+ * <p>{@code saturated} means the disk reader pool rejected the task. It must never be
+ * treated as "not found": the position is simply left unanswered (dropped silently and
+ * counted superseded), and the client's next want-set re-declares it. {@code sectionBytes
+ * == null} with {@code !notFound} is an all-air chunk (exists on disk, nothing visible).
  */
 public record ChunkReadResult(UUID playerUuid, int chunkX, int chunkZ,
                               byte[] sectionBytes, String dimension, int estimatedBytes,

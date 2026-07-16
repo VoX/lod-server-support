@@ -85,9 +85,9 @@ public class LSSClientCommands {
 
         // Responses line
         source.sendFeedback(Component.literal(String.format(
-                "Responses: columns=%d, up_to_date=%d, not_generated=%d, rate_limited=%d",
+                "Responses: columns=%d, up_to_date=%d, not_generated=%d",
                 manager.getTotalColumnsReceived(), manager.getTotalUpToDate(),
-                manager.getTotalNotGenerated(), manager.getTotalRateLimited()
+                manager.getTotalNotGenerated()
         )).withStyle(ChatFormatting.GRAY));
 
         // Requests line
@@ -110,9 +110,8 @@ public class LSSClientCommands {
         int syncQueued = manager.getLastSyncQueued();
         int genQueued = manager.getLastGenQueued();
         source.sendFeedback(Component.literal(String.format(
-                "Budget: used=%d/%d (sync=%d, gen=%d), queue=%d",
-                syncQueued + genQueued, budget, syncQueued, genQueued,
-                manager.getQueueRemaining()
+                "Budget: used=%d/%d (sync=%d, gen=%d)",
+                syncQueued + genQueued, budget, syncQueued, genQueued
         )).withStyle(ChatFormatting.GRAY));
     }
 }

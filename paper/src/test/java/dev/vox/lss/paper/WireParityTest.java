@@ -146,7 +146,10 @@ class WireParityTest {
 
     @Test
     void batchResponse() {
-        byte[] types = {LSSConstants.RESPONSE_RATE_LIMITED, LSSConstants.RESPONSE_UP_TO_DATE,
+        // Identical fill to the Fabric twin — type 0 is the retired-and-reserved v16
+        // rate-limited tag, 200 a hypothetical future one. Both platforms' encoders must stay
+        // type-agnostic and produce the same bytes for both; that is the parity being pinned.
+        byte[] types = {(byte) 0, LSSConstants.RESPONSE_UP_TO_DATE,
                 LSSConstants.RESPONSE_NOT_GENERATED, (byte) 200};
         long[] positions = {0L, PositionUtil.packPosition(10, 20), -1L,
                 PositionUtil.packPosition(Integer.MIN_VALUE, Integer.MAX_VALUE)};
@@ -261,10 +264,11 @@ class WireParityTest {
         }
         assertEquals(6, distinct.size(), "channel ids must be pairwise distinct");
         // Bump the literal only with a deliberate wire change reviewed on both platforms.
-        assertEquals(16, LSSConstants.PROTOCOL_VERSION);
+        // 16 -> 17: the declarative want-set model retires the rate-limited bounce (byte 0).
+        assertEquals(17, LSSConstants.PROTOCOL_VERSION);
     }
 
-    // ---- Meta: the parity corpus must cover the whole v16 payload surface ----
+    // ---- Meta: the parity corpus must cover the whole v17 payload surface ----
 
     @Test
     void referenceFramesCoverEveryDeclaredChannel() throws IllegalAccessException {

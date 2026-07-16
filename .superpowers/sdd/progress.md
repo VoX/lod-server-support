@@ -319,7 +319,82 @@ Plan: docs/superpowers/plans/2026-07-15-declarative-want-set-requests.md (1469 l
     for it + the client dispatch arm at `LSSClientNetworking:213`. All three die together in Task 5.
     The two frozen rate-limited counters + getters are KEPT per plan (exporters read them until Task 6);
     `incrementRateLimited`/`incrementSyncRateLimited`/`incrementGenRateLimited` are deleted as specified.
-- Task 5: NOT STARTED — protocol bump, delete RESPONSE_RATE_LIMITED (~1124-1172).
+- Task 5: COMPLETE — fc6b426. PROTOCOL_VERSION 16→17; `RESPONSE_RATE_LIMITED`,
+  `SendAction.RateLimited`, the byte-0 client dispatch arm, `LodRequestManager.onRateLimited` and
+  `LodRequestManager.getTotalRateLimited()` all deleted. Byte 0 RETIRED AND RESERVED — UP_TO_DATE(1)
+  / NOT_GENERATED(2) NOT renumbered. Tier 1 green (593, 0 failures); `:paper:test` green (246, 0).
+  Tier 2/3 remain EXPECTED RED (Task 7). Wire bytes unchanged for batchResponse — see D5-2.
+  KEPT per plan (Task 6 deletes them with their exporter keys): `RequestMetrics.recordRateLimited`
+  /`getTotalRateLimited` + `RequestMetricsTest`, `LodRequestManager.getQueueRemaining()` (still read
+  by `BenchmarkMetricsExporter:428`'s `request_queue`), `ProcessingDiagnostics`' two frozen
+  sync/gen rate-limited counters.
+
+  ### Task 5 PLAN DEVIATIONS / FINDINGS
+
+  - **D5-1 (plan undercounted the exporter callers — 2, not 1).** Plan Step 2 names only
+    `BenchmarkMetricsExporter:397` (`responses.rate_limited`). There is a SECOND caller of the
+    deleted `manager.getTotalRateLimited()` at `:571` (`total_rate_limited`, the soak/JFR client
+    dump). Both are now literal `0L` with a Task-6 pointer comment; missing the second would have
+    failed compilation, so this is a plan gap, not a judgement call.
+  - **D5-2 (kept byte 0 in the wire fixtures instead of replacing it — STRONGER than the plan).**
+    Plan Step 3 says replace the type-0 entry in both `WireParityTest.batchResponse` frames with
+    type 1/2 and "regenerate the expected hex literals by running the test once". Two corrections:
+    (a) there ARE no hex literals — both frames compute `expected` via `ref(b -> …)` from the same
+    `types` array, so nothing needed regenerating and the encoded bytes are byte-identical to v16;
+    (b) replacing 0 with 1/2 would DELETE the only coverage that the codec ships byte 0 unaltered.
+    The codec is type-agnostic by contract, and that is precisely what makes reserving byte 0
+    forward-safe (the plan's own Step 1 comment says so). Kept `(byte) 0` as a raw literal (no
+    constant to reference now) alongside the existing `(byte) 200` future-type entry, on BOTH
+    platforms, with a comment saying why it must stay. Same reasoning applied to
+    `PayloadCodecTest:74` and `WireEdgeCaseTest:165`. Wire parity re-verified: both suites green.
+  - **D5-3 (`SendActionBatcherTest.typeFor` — 3 types → 2, discrimination preserved).** Plan says
+    drop `case 0` and map onto 1/2. Done as `i % 2`. Checked the resulting loss: the helper's job
+    is to catch a type↔position mis-pairing across a frame split, and `positionFor(i)` is injective,
+    so the pairing assertion at `:73` still discriminates every index. Documented on the helper.
+  - **D5-4 (the reserved-byte pin, and PROOF it fires).** Rewrote `LodRequestManagerTest`'s two
+    byte-0 tests from "the stub counts the bounce" into the forward-safety pin the plan asked for:
+    byte 0 must be as inert as the unknown byte 99 (no stamp, no satisfy, no retry mark, no
+    awaiting-entry consumption). **Mutation-verified rather than assumed:** re-adding a
+    `case 0 -> manager.onColumnUpToDate(packed)` arm fails exactly
+    `dispatchRoutesEachTypeAndUnknownTypeSkipsOnlyThatEntry` and
+    `duplicatePositionInOneBatchFrameResolvesConsistently` and nothing else. The load-bearing half
+    is that an inert byte 0 must not SATISFY — that would be a permanent invisible hole.
+    D2-4's duplicate-frame discrimination survives unchanged (byte 0 just lost its metrics leg).
+  - **D5-5 (`markRetry` NOT deleted — deviating from Task 2's hand-off note, with reasoning).**
+    Task 2's ledger said "delete `ColumnStateMap.markRetry` with the stub in Task 5" because the
+    bounce was its only production writer. Confirmed dead in production — but I kept it, because
+    the note was written without checking what its 15 call sites pin. The retry MECHANISM is very
+    much alive (`onIngestFailed` writes the mark; `hasRetries()` → `SpiralScanner:115`'s
+    confirmed-ring reset), and `onIngestFailed` is the only other writer — but it necessarily
+    rewrites the timestamp too (removes it, or restores the pre-clear stamp). So the 15 tests in
+    `ColumnStateMapTest`/`SpiralScannerTest` that pin the retry mark's OWN lifecycle (prune, clear,
+    ring reset, the chaos alphabet) cannot seed through it without changing their premises — the
+    only alternatives were to weaken them or delete them, both worse than a 3-line seam. Kept and
+    documented as an explicit test seam ("not called from production; do not add a production
+    caller"). If someone still wants it gone, the honest route is a test-only helper, not a
+    reseed through `onIngestFailed`.
+  - **D5-6 (stale-comment sweep — Task 2/D4-10's lesson applied; found a user-facing LIE).**
+    I deleted the mechanism several comments still named as live, so I swept for it. Fixed in
+    MAIN source: `ColumnStateMap`'s `retry` field comment ("Positions bounced with rate-limited"
+    — that writer no longer exists), its class javadoc, its `classify` javadoc ladder (which was
+    ALSO already stale independently of this task — it claimed `unknown > generation > dirty`
+    when the code has put dirty first since the delivery-honesty refactor), and the `// Rate-limit
+    retry` rung comment. The worst find was in `common/`: `AbstractChunkDiskReader:36-37` and its
+    **admin-facing WARN string at :109** both still told server operators that saturated reads are
+    "bounced as rate-limited" and that "clients retry automatically" — Task 4 had already made a
+    saturated result a SILENT DROP (`OffThreadProcessor:670`, counted superseded, recovered by
+    re-declaration), and this task removed the bounce from the wire, so the log line was shipping a
+    statement about a wire disposition that no longer exists. Log text and comment corrected;
+    `ChunkReadResult`'s javadoc ("the position should be retried later") likewise. Comment/log-only
+    — no assertion or behaviour changed, both gates re-run green afterwards.
+  - **D5-7 (Task 8 hand-off, NOT actioned here).** `scripts/check_soak.py:1007-1039`'s
+    `rate-limit-storm` named check will now fail by construction: it gates on
+    `service.gen_rate_limited >= 1` and `client.responses.rate_limited >= 50`, and both are frozen
+    at 0 from this commit on. This is exactly Task 8's specified work (its bullet re-premises the
+    scenario onto `service.superseded >= 100`, keeps the generation floor + quiescent tail, and
+    deletes the two `responses.rate_limited` checks) — flagged here only so nobody runs
+    `./scripts/soak.sh rate-limit-storm` between Tasks 5 and 8 and reads the red as a regression.
+    Soak is not a gate for this commit; Tier 1 + `:paper:test` are.
 - Task 6: NOT STARTED — exporters, contracts, diagnostics (~1173-1214).
 - Task 7: NOT STARTED — Tier 2 gametests + Tier 3 (~1215-1258).
 - Task 8: NOT STARTED — soak harness (part of the change, not a gate) (~1259-1327).

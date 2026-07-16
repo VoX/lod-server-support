@@ -181,7 +181,11 @@ class ProtocolConstantsTest {
         // Every other test references the constant symbolically, so a silent bump fails
         // nothing else. Bump this literal only together with a deliberate wire change, a
         // matching bump in release notes, and a review of both platforms' codecs.
-        assertEquals(16, LSSConstants.PROTOCOL_VERSION);
+        // 16 -> 17: the declarative want-set model. The client now declares its whole
+        // unsatisfied set every scan and the server replaces its backlog wholesale, so the
+        // rate-limited bounce (response byte 0) is gone from the wire — a v16 client would
+        // drip-feed against a server that no longer answers bounces. Byte 0 stays RESERVED.
+        assertEquals(17, LSSConstants.PROTOCOL_VERSION);
     }
 
     @Test

@@ -191,10 +191,11 @@ class LodRequestManagerTest {
     // untrackedRateLimitedNeverPoisonsSatisfiedColumnIntoRetry and
     // untrackedRateLimitedStillLatchesScanBackoff are DELETED with their subjects: a bounce no
     // longer marks retry (nothing to poison) and the scan backoff no longer exists (a full slot
-    // retains the entry in the server backlog instead of bouncing it). onRateLimited is a
-    // transitional metrics-only stub until the server stops sending byte 0; the surviving
-    // "a stray status must not touch column state" invariant is pinned by the two untracked
-    // tests above and by duplicatePositionInOneBatchFrameResolvesConsistently below.
+    // retains the entry in the server backlog instead of bouncing it). v17 then retired the
+    // bounce from the wire outright — byte 0 is reserved and inert, pinned by
+    // dispatchRoutesEachTypeAndUnknownTypeSkipsOnlyThatEntry. The surviving "a stray status must
+    // not touch column state" invariant is pinned by the two untracked tests above and by
+    // duplicatePositionInOneBatchFrameResolvesConsistently below.
 
     // ---- dirty crossing an in-flight first serve forces a re-request (#11) ----
 
@@ -468,17 +469,19 @@ class LodRequestManagerTest {
     @Test
     void dispatchRoutesEachTypeAndUnknownTypeSkipsOnlyThatEntry() {
         var tracker = manager.trackerForTest();
-        long pRate = PositionUtil.packPosition(1, 0);
+        long pReserved = PositionUtil.packPosition(1, 0);
         long pUpToDate = PositionUtil.packPosition(2, 0);
         long pNotGen = PositionUtil.packPosition(3, 0);
         long pUnknown = PositionUtil.packPosition(4, 0);
         long pAfterUnknown = PositionUtil.packPosition(5, 0);
-        tracker.replaceWith(new long[]{pRate, pUpToDate, pNotGen, pUnknown, pAfterUnknown}, 5);
+        tracker.replaceWith(new long[]{pReserved, pUpToDate, pNotGen, pUnknown, pAfterUnknown}, 5);
 
+        // Byte 0 (v16's retired rate-limited tag) and byte 99 (a hypothetical future type) are
+        // both unknown to a v17 client and must behave identically: inert.
         LSSClientNetworking.dispatchBatchResponses(manager, new BatchResponseS2CPayload(
-                new byte[]{LSSConstants.RESPONSE_RATE_LIMITED, LSSConstants.RESPONSE_UP_TO_DATE,
+                new byte[]{(byte) 0, LSSConstants.RESPONSE_UP_TO_DATE,
                         LSSConstants.RESPONSE_NOT_GENERATED, (byte) 99, LSSConstants.RESPONSE_UP_TO_DATE},
-                new long[]{pRate, pUpToDate, pNotGen, pUnknown, pAfterUnknown}, 5));
+                new long[]{pReserved, pUpToDate, pNotGen, pUnknown, pAfterUnknown}, 5));
 
         assertEquals(2, manager.getTotalUpToDate(), "the entry AFTER the unknown type must still dispatch");
         assertEquals(1, manager.getTotalNotGenerated());
@@ -491,16 +494,16 @@ class LodRequestManagerTest {
         assertTrue(tracker.isInFlight(pUnknown),
                 "an unknown response type must not consume the awaiting entry");
 
-        // Byte 0 is now the transitional onRateLimited STUB: a slot bounce needs no reaction,
-        // because the next scan re-declares the position anyway. It must move metrics and NOTHING
-        // else. (In the protocol-bump task the server stops sending it, byte 0 is retired and
-        // reserved, and this arm becomes an unknown-type-inert pin like pUnknown above.)
-        assertEquals(1, manager.getTotalRateLimited(), "the stub still counts the bounce");
-        assertEquals(-1L, manager.columnsForTest().classify(pRate, true),
-                "the stub must not stamp, satisfy, or retry-mark the bounced position");
-        assertFalse(manager.columnsForTest().hasRetries(), "a bounce marks no retry any more");
-        assertTrue(tracker.isInFlight(pRate),
-                "the stub consumes no awaiting entry — the next scan's replace clears it");
+        // The RESERVED-byte forward-safety pin. Byte 0 must never again mean anything: it is
+        // fully inert, exactly like the unknown byte 99. This is what makes leaving 0 retired
+        // (rather than renumbering UP_TO_DATE/NOT_GENERATED down) safe forever — and it is the
+        // load-bearing half, because an inert byte 0 that silently SATISFIED a position would
+        // be a permanent invisible hole.
+        assertEquals(-1L, manager.columnsForTest().classify(pReserved, true),
+                "a reserved-type entry must not stamp, satisfy, or retry-mark its position");
+        assertFalse(manager.columnsForTest().hasRetries(), "a reserved-type entry marks no retry");
+        assertTrue(tracker.isInFlight(pReserved),
+                "a reserved-type entry consumes no awaiting entry — the next scan re-declares it");
     }
 
     @Test
@@ -668,12 +671,12 @@ class LodRequestManagerTest {
         // it the trailing up_to_date below would session-satisfy pB and erase its ts=0 generation
         // retry — a permanent ungenerated hole.
         LSSClientNetworking.dispatchBatchResponses(manager, new BatchResponseS2CPayload(
-                new byte[]{LSSConstants.RESPONSE_UP_TO_DATE, LSSConstants.RESPONSE_RATE_LIMITED,
+                new byte[]{LSSConstants.RESPONSE_UP_TO_DATE, (byte) 0,
                         LSSConstants.RESPONSE_NOT_GENERATED, LSSConstants.RESPONSE_UP_TO_DATE},
                 new long[]{pA, pA, pB, pB}, 4));
 
         assertEquals(SATISFIED, manager.columnsForTest().classify(pA, true),
-                "the trailing duplicate (byte-0 stub) must not un-satisfy the up-to-date position");
+                "the trailing duplicate (reserved byte 0) must not un-satisfy the up-to-date position");
         assertFalse(tracker.isInFlight(pA));
         assertEquals(0L, manager.columnsForTest().timestampFor(pB));
         assertEquals(0L, manager.columnsForTest().classify(pB, true),
@@ -681,8 +684,7 @@ class LodRequestManagerTest {
                         + " not-generated stamp — convergent, never half-applied");
         assertFalse(manager.columnsForTest().isSessionSatisfied(pB));
         assertFalse(tracker.isInFlight(pB));
-        assertEquals(2, manager.getTotalUpToDate(), "every entry still counts in diagnostics");
-        assertEquals(1, manager.getTotalRateLimited());
+        assertEquals(2, manager.getTotalUpToDate(), "every known-type entry still counts in diagnostics");
         assertEquals(1, manager.getTotalNotGenerated());
     }
 

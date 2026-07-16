@@ -136,7 +136,7 @@ class WireParityTest {
 
     @Test
     void sessionConfigToleratesForeignVersionLayout() {
-        // A v15 server's 10-field SessionConfig frame. The v16 decoder must consume the whole
+        // A v15 server's 10-field SessionConfig frame. The current decoder must consume the whole
         // frame (no trailing bytes -> no decoder kick) and surface the version so the
         // client-side protocol gate can fire.
         byte[] v15Frame = ref(b -> {
@@ -191,7 +191,11 @@ class WireParityTest {
 
     @Test
     void batchResponse() {
-        byte[] types = {LSSConstants.RESPONSE_RATE_LIMITED, LSSConstants.RESPONSE_UP_TO_DATE,
+        // Type 0 is the RETIRED-and-RESERVED v16 rate-limited tag and 200 is a hypothetical
+        // future tag: neither has a constant, and both are here on purpose. The codec is
+        // type-agnostic by contract — it must ship any byte through unaltered, or a future
+        // response type could not be added without a second wire break. Keep both.
+        byte[] types = {(byte) 0, LSSConstants.RESPONSE_UP_TO_DATE,
                 LSSConstants.RESPONSE_NOT_GENERATED, (byte) 200};
         long[] positions = {0L, PositionUtil.packPosition(10, 20), -1L,
                 PositionUtil.packPosition(Integer.MIN_VALUE, Integer.MAX_VALUE)};
@@ -293,7 +297,7 @@ class WireParityTest {
         assertEquals(0, d.decompressedSections().length);
     }
 
-    // ---- Meta: the parity corpus must cover the whole v16 payload surface ----
+    // ---- Meta: the parity corpus must cover the whole v17 payload surface ----
 
     @Test
     void referenceFramesCoverEveryDeclaredChannel() throws IllegalAccessException {

@@ -11,7 +11,7 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Pins the count guards on the v16 batch codecs. Both decoders allocate arrays sized by a
+ * Pins the count guards on the v17 batch codecs. Both decoders allocate arrays sized by a
  * remote-controlled VarInt; the range check is the only defense against a hostile frame
  * forcing a multi-GB allocation (hostile client vs the server for requests, hostile server
  * vs the client for responses). Dropping a guard in a future protocol edit must fail here.

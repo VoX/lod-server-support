@@ -397,16 +397,6 @@ public class LodRequestManager {
         this.metrics.recordUpToDate();
     }
 
-    /**
-     * Transitional v16 stub: a slot bounce needs no reaction — the position stays unsatisfied
-     * and the next scan re-declares it. Deleted along with the byte-0 dispatch arm in the
-     * protocol-bump task, once the server stops sending bounces.
-     */
-    public void onRateLimited(long packed) {
-        this.metrics.discardRttStamp(packed);
-        this.metrics.recordRateLimited();
-    }
-
     private void onDimensionChange(ResourceKey<Level> newDimension) {
         // Unstamp columns still queued for decode BEFORE saveCache persists the old
         // dimension's map: their stamps describe data no consumer ever saw (the drain's
@@ -514,7 +504,6 @@ public class LodRequestManager {
     public long getTotalColumnsReceived() { return this.metrics.getTotalColumnsReceived(); }
     public long getTotalUpToDate() { return this.metrics.getTotalUpToDate(); }
     public long getTotalNotGenerated() { return this.metrics.getTotalNotGenerated(); }
-    public long getTotalRateLimited() { return this.metrics.getTotalRateLimited(); }
     public long getTotalIngestFailures() { return this.metrics.getTotalIngestFailures(); }
 
     // Rolling rates

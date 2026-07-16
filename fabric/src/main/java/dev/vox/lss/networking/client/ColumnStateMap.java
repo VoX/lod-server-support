@@ -7,9 +7,9 @@ import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 
 /**
  * The single owner of per-column client state: known column timestamps plus the dirty /
- * rate-limit-retry / validated-this-session marks, with derived received/empty counts.
- * {@link #classify} is the one request-need ladder consulted by both the scanner and the
- * queue drain.
+ * ingest-failure-retry / validated-this-session marks, with derived received/empty counts.
+ * {@link #classify} is the one request-need ladder consulted by the scanner when it builds
+ * each want-set.
  *
  * <p>Timestamp semantics: absent (-1) = never seen; 0 = server said not-generated;
  * &gt;0 = received/validated at that epoch-second.
@@ -28,7 +28,11 @@ class ColumnStateMap {
 
     // Positions flagged by the server's dirty broadcast that need re-requesting.
     private final LongOpenHashSet dirty = new LongOpenHashSet();
-    // Positions bounced with rate-limited that need retry on a later scan.
+    // Positions whose delivery was lost after being stamped (ingest failure) and that must be
+    // re-reachable by a later scan. The name is historical: through v16 the rate-limit bounce
+    // was the other writer, but v17 retired the bounce, so onIngestFailed is now the only one.
+    // The mark's live job is hasRetries() -> the scanner's confirmed-ring reset, without which
+    // an unstamped position inside an already-confirmed ring is never rescanned.
     private final LongOpenHashSet retry = new LongOpenHashSet();
     // Positions confirmed current (data or up-to-date) in this session; cleared on
     // reconnect/dimension change so cached-but-stale positions get revalidated.
@@ -58,7 +62,8 @@ class ColumnStateMap {
 
     /**
      * Decide whether a position needs a request and which clientTimestamp to send.
-     * Priority: unknown &gt; generation retry &gt; dirty &gt; rate-limit retry &gt; revalidation.
+     * Priority, highest first: dirty &gt; session-satisfied &gt; unknown &gt; generation retry
+     * &gt; ingest-failure retry &gt; revalidation.
      *
      * @return the timestamp to send (-1 unknown, 0 generation, &gt;0 resync),
      *         or {@link #SATISFIED} when nothing should be sent
@@ -75,7 +80,11 @@ class ColumnStateMap {
         long stored = this.timestamps.get(packed);
         if (stored == -1L) return -1L; // Unknown — sync-on-load first; server generates only on explicit retry
         if (stored == 0L && generationEnabled) return 0L; // Not generated — generation retry
-        if (this.retry.contains(packed)) return stored; // Rate-limit retry
+        // Ingest-failure retry. Defence-in-depth: onIngestFailed always clears `validated`
+        // alongside the mark, so the revalidation rung below would return the same stored
+        // value — this rung keeps the request flowing even if a future path ever leaves a
+        // retry-marked position validated.
+        if (this.retry.contains(packed)) return stored;
         if (stored > 0 && !this.validated.contains(packed)) return stored; // Cached but not validated this session
         return SATISFIED;
     }
@@ -148,6 +157,13 @@ class ColumnStateMap {
         return false;
     }
 
+    /**
+     * Test seam: seed a retry mark in isolation. Production writes the mark only inside
+     * {@link #onIngestFailed} (v17 retired the rate-limit bounce that was the other writer),
+     * and that path necessarily rewrites the timestamp too — so tests that pin the retry
+     * mark's OWN lifecycle (prune, clear, confirmed-ring reset) need it without the
+     * accompanying stamp change. Not called from production; do not add a production caller.
+     */
     void markRetry(long packed) {
         this.retry.add(packed);
     }

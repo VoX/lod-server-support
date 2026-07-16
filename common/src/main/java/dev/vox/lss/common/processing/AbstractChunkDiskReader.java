@@ -33,11 +33,13 @@ public abstract class AbstractChunkDiskReader {
     private static final AtomicInteger THREAD_COUNTER = new AtomicInteger();
     private static final int QUEUE_CAPACITY_PER_THREAD = 32;
 
-    // Saturation is a normal, self-healing protocol path (the bounced request comes back as
-    // rate-limited and the client retries on a later scan), but while the pool is behind
-    // demand it can reject many reads per second — one WARN per position floods the console
-    // (#32). Aggregate to at most one warning per minute carrying the rejected count;
-    // per-delivery detail stays on the debug path in OffThreadProcessor.
+    // Saturation is a normal, self-healing path: the result is dropped silently and the
+    // client's next want-set re-declares the position (v17 — nothing is bounced back). Since
+    // the router's headroom gate stops submits into a full pool, a rejection here is now a
+    // residual (race/shutdown) rather than the steady state, but a burst can still reject many
+    // reads per second, and one WARN per position floods the console (#32). Aggregate to at
+    // most one warning per minute carrying the rejected count; per-delivery detail stays on
+    // the debug path in OffThreadProcessor.
     private static final long SATURATION_WARN_INTERVAL_MS = 60_000;
     private final LogThrottle saturationWarn = new LogThrottle(SATURATION_WARN_INTERVAL_MS);
 
@@ -106,9 +108,9 @@ public abstract class AbstractChunkDiskReader {
             // would silence the aggregate warning exactly while the pool is behind demand.
             long rejected = this.saturationWarn.recordAndTryAcquire(System.nanoTime() / 1_000_000);
             if (rejected > 0) {
-                LSSLogger.warn("Disk reader saturated: " + rejected + " chunk read(s) bounced as rate-limited"
-                        + " since the last warning — clients retry automatically; raise diskReaderThreads"
-                        + " in lss-server-config.json if this persists");
+                LSSLogger.warn("Disk reader saturated: " + rejected + " chunk read(s) dropped"
+                        + " since the last warning — clients re-request automatically; raise"
+                        + " diskReaderThreads in lss-server-config.json if this persists");
             }
             this.diag.recordSaturation();
             this.diag.recordCompleted(0);

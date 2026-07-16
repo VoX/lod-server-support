@@ -203,14 +203,16 @@ public class LSSClientNetworking {
     /**
      * Routes each batch entry to its per-type manager callback. An unknown responseType
      * skips that entry only, never the rest of the batch (forward compat with newer
-     * servers). Package-private so tests can exercise it without a network receiver.
+     * servers). That same skip covers the RETIRED byte 0 (v16's rate-limited bounce): a
+     * pre-v17 server never gets this far (the handshake gate rejects the version mismatch),
+     * but the inert skip is what makes byte 0 safe to leave reserved forever.
+     * Package-private so tests can exercise it without a network receiver.
      */
     static void dispatchBatchResponses(LodRequestManager manager, BatchResponseS2CPayload payload) {
         for (int i = 0; i < payload.count(); i++) {
             long packed = payload.packedPositions()[i];
             byte type = payload.responseTypes()[i];
             switch (type) {
-                case LSSConstants.RESPONSE_RATE_LIMITED -> manager.onRateLimited(packed);
                 case LSSConstants.RESPONSE_UP_TO_DATE -> manager.onColumnUpToDate(packed);
                 case LSSConstants.RESPONSE_NOT_GENERATED -> manager.onColumnNotGenerated(packed);
                 default -> LSSLogger.warn("Unknown batch response type: " + type);

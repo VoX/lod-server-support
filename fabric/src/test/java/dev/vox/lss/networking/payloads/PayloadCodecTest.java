@@ -71,7 +71,8 @@ class PayloadCodecTest {
     @Test
     void batchResponseRoundtrip() {
         byte[] types = {
-                LSSConstants.RESPONSE_RATE_LIMITED,
+                (byte) 0, // the retired-and-reserved v16 rate-limited tag: the codec is
+                          // type-agnostic and must still round-trip it unaltered
                 LSSConstants.RESPONSE_UP_TO_DATE,
                 LSSConstants.RESPONSE_NOT_GENERATED
         };

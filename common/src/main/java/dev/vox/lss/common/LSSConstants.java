@@ -8,7 +8,7 @@ public final class LSSConstants {
 
     public static final String MOD_ID = "lss";
 
-    public static final int PROTOCOL_VERSION = 16;
+    public static final int PROTOCOL_VERSION = 17;
 
     // Channel identifiers (used as Minecraft resource location strings)
     public static final String CHANNEL_HANDSHAKE = "lss:handshake_c2s";
@@ -72,8 +72,10 @@ public final class LSSConstants {
     public static final int MAX_BATCH_CHUNK_REQUESTS = 1024;
     public static final int MAX_BATCH_RESPONSES = 4096;
 
-    // Batch response type tags
-    public static final byte RESPONSE_RATE_LIMITED = 0;
+    // Batch response type tags. Byte 0 was RESPONSE_RATE_LIMITED through v16 — retired by
+    // the v17 want-set model (a full slot retains the want in the server's backlog instead of
+    // bouncing it) and RESERVED: never reuse 0, and keep 1/2 stable (wire-parity fixtures pin
+    // the bytes). The client skips unknown types inert, so a reserved byte is forward-safe.
     public static final byte RESPONSE_UP_TO_DATE = 1;
     public static final byte RESPONSE_NOT_GENERATED = 2;
 

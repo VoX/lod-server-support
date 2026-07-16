@@ -395,7 +395,10 @@ public final class BenchmarkMetricsExporter {
         responses.put("columns", manager != null ? manager.getTotalColumnsReceived() : 0L);
         responses.put("up_to_date", manager != null ? manager.getTotalUpToDate() : 0L);
         responses.put("not_generated", manager != null ? manager.getTotalNotGenerated() : 0L);
-        responses.put("rate_limited", manager != null ? manager.getTotalRateLimited() : 0L);
+        // Frozen at 0 by the v17 want-set model — the server never bounces a want, so there is
+        // nothing to count. The key survives this task only to keep the snapshot-contract tests
+        // stable; it is deleted together with RequestMetrics' counter in the exporter task.
+        responses.put("rate_limited", 0L);
         result.put("responses", responses);
 
         result.put("ingest_failures", manager != null ? manager.getTotalIngestFailures() : 0L);
@@ -568,7 +571,7 @@ public final class BenchmarkMetricsExporter {
         if (manager != null) {
             result.put("total_up_to_date", manager.getTotalUpToDate());
             result.put("total_not_generated", manager.getTotalNotGenerated());
-            result.put("total_rate_limited", manager.getTotalRateLimited());
+            result.put("total_rate_limited", 0L); // frozen at 0 in v17; key deleted in the exporter task
             result.put("send_cycles", manager.getTotalSendCycles());
             result.put("positions_requested", manager.getTotalPositionsRequested());
         }

@@ -162,7 +162,7 @@ class WireEdgeCaseTest {
             types[i] = (byte) 99;
             positions[i] = PositionUtil.packPosition(-999, -999);
         }
-        types[0] = LSSConstants.RESPONSE_RATE_LIMITED;
+        types[0] = (byte) 0; // retired-and-reserved tag; the codec must ship any byte unaltered
         types[1] = LSSConstants.RESPONSE_UP_TO_DATE;
         types[2] = LSSConstants.RESPONSE_NOT_GENERATED;
         positions[0] = PositionUtil.packPosition(1, -1);

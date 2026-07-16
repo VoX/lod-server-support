@@ -15,9 +15,10 @@ import static dev.vox.lss.networking.client.ColumnStateMap.SATISFIED;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Characterization tests for the per-column request-need ladder (the priority order
- * mirrors the original scanner ladder bit-for-bit: unknown &gt; generation &gt; dirty &gt;
- * rate-limit retry &gt; revalidation &gt; satisfied) and the state transitions.
+ * Characterization tests for the per-column request-need ladder (dirty &gt; session-satisfied
+ * &gt; unknown &gt; generation &gt; ingest-failure retry &gt; revalidation &gt; satisfied) and
+ * the state transitions. The retry rung is named for its only surviving writer: v17 retired
+ * the rate-limit bounce that originally wrote it.
  */
 class ColumnStateMapTest {
 
@@ -571,7 +572,7 @@ class ColumnStateMapTest {
         map.onUpToDate(dirtyPos); // the terminal answer: server says the held content is current
         assertEquals(SATISFIED, map.classify(dirtyPos, true), "one answer consumes both marks");
 
-        // retry × ts==0: the bounced gen request retries once even after generation flips off.
+        // retry × ts==0: a retry-marked gen request retries once even after generation flips off.
         long genPos = PositionUtil.packPosition(2, 2);
         map.onNotGenerated(genPos);
         map.markRetry(genPos);
