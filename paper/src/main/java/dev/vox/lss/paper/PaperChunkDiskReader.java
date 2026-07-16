@@ -63,6 +63,13 @@ public class PaperChunkDiskReader extends AbstractChunkDiskReader {
      *
      * <p>{@code intendingToBlock = false}: we block on the returned future from our own throwaway
      * pool thread, and want no blocking-priority escalation quietly overriding LOW.
+     *
+     * <p><b>No adaptive-throttle fallback here.</b> The shared base exposes
+     * {@code enableAdaptiveThrottleFallback()} (Approach B), which Fabric engages when a chunk-IO
+     * mod nulls out vanilla's IOWorker. This Moonrise reference is a direct compile-time call to a
+     * class that is <em>always present</em> on supported Paper/Folia — a missing Moonrise fails
+     * loudly at class-load, never as a silent null — so Paper never detects incompatibility and
+     * never calls the hook. Paper's read protection is Moonrise {@code Priority.LOW}, not the throttle.
      */
     private PaperNbtSectionSerializer.ChunkNbtRead moonriseReader(ServerLevel level) {
         return (cx, cz) -> {
