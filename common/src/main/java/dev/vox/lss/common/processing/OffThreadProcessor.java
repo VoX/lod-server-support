@@ -622,6 +622,14 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
                     // tear down a live new-dimension dedup group at the same packed position.
                     continue;
                 }
+                // Stale-snapshot session guard (the phase-2 twin of the router's): a dimension
+                // change can replace the state MID-CYCLE, after this snapshot was built. The
+                // snapshot-dimension check above then passes (both are the OLD dimension) while
+                // `state` is already the NEW session — delivering would mark an unearned
+                // done-bit on it (a stale up_to_date seal), worst on an A->B->A trip where the
+                // dimension strings match trivially. (Null = bare test rig, guard skipped.)
+                String registered = state.registeredDimension();
+                if (registered != null && !registered.equals(result.dimension())) continue;
                 int cx = result.chunkX();
                 int cz = result.chunkZ();
                 long packed = PositionUtil.packPosition(cx, cz);
@@ -655,6 +663,11 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
                     for (var attachment : group.attached()) {
                         var attachedState = this.players.get(attachment.playerUuid());
                         if (attachedState == null) continue;
+                        // Same stale-snapshot session guard as the primary: an attached
+                        // player's state can also be swapped mid-cycle by a dimension change.
+                        String attachedRegistered = attachedState.registeredDimension();
+                        if (attachedRegistered != null
+                                && !attachedRegistered.equals(result.dimension())) continue;
                         deliverDiskResult(attachment.playerUuid(), attachedState, result,
                                 attachment.submissionOrder(), dimension, staleAgainstEdit);
                     }
@@ -794,6 +807,15 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
             // skip them instead of poisoning the fresh state (their pending died with it).
             String current = snapshot.playerDimensions().get(entry.playerUuid());
             if (current == null || !current.equals(entry.dimension())) continue;
+            // Stale-snapshot session guard (the phase-3 twin of the router's): when a
+            // dimension change swaps the state MID-CYCLE, the snapshot check above compares
+            // OLD-vs-OLD and passes while `state` is already the fresh session. Gate on the
+            // STATE's own registered dimension so an old-session outcome cannot mark a
+            // done-bit — or, worse, answer a session-permanent NOT_GENERATED — on the fresh
+            // session. (Null = bare test rig, guard skipped. A double swap within one ~50ms
+            // cycle could still string-match, but registration takes multiple ticks.)
+            String registered = state.registeredDimension();
+            if (registered != null && !registered.equals(entry.dimension())) continue;
             var pending = state.removePendingByPosition(cx, cz);
 
             if (entry.columnData() == null) {
@@ -840,7 +862,7 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
                     boolean claimsData = pending != null && pending.claimsData();
                     if (!(allAir && claimsData && sendEmptiedColumn(state, cx, cz, entry.dimension(),
                             entry.columnTimestamp(), entry.submissionOrder()))) {
-                        this.sendActions.add(new SendAction.ColumnUpToDate(entry.playerUuid(), packed, state));
+                        this.ctx.sendActions().add(new SendAction.ColumnUpToDate(entry.playerUuid(), packed, state));
                     }
                 }
             }

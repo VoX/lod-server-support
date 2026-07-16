@@ -898,6 +898,64 @@ class OffThreadProcessorDiskResultTest {
     // ---- stale-dimension inertness ----
 
     @Test
+    void staleSnapshotDiskResultIsInertForAReRegisteredSession() throws Exception {
+        // The mid-cycle swap race: a dimension change replaces the state AFTER the snapshot
+        // was built, so the snapshot-dimension check compares OLD-vs-OLD and passes while the
+        // states map already holds the FRESH session. The state's own registeredDimension is
+        // the only honest gate — without it, the old result marks an unearned done-bit on the
+        // new session (a stale up_to_date seal until dirty broadcast/reconnect).
+        var rig = new Rig(false);
+        try {
+            // Player A's fresh session is registered in the END; the snapshot and the late
+            // result both still carry the OLD dimension (overworld). Player B (no registered
+            // dimension — the bare-rig guard skip) is the delivery sentinel: FIFO within one
+            // cycle, so B's payload proves A's stale result was already consumed.
+            rig.state.setRegisteredDimension(END);
+            var bUuid = UUID.randomUUID();
+            var b = rig.addPlayer(bUuid);
+            rig.inject(dataResult(rig.uuid, 3, 3, DIM, new byte[]{9}, COLUMN_TS, 1L));
+            rig.inject(dataResult(bUuid, 4, 4, DIM, new byte[]{7}, COLUMN_TS, 2L));
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid, bUuid), List.of());
+            waitFor(() -> !rig.proc.enqueuedColumns.isEmpty(), "sentinel payload for player B");
+
+            var sentinel = rig.proc.enqueuedColumns.poll();
+            assertEquals(bUuid, sentinel.player(), "only B's result may deliver");
+            assertTrue(rig.proc.enqueuedColumns.isEmpty(),
+                    "an old-session result must not produce a payload for the fresh session");
+            assertFalse(rig.state.hasDiskReadDone(3, 3),
+                    "an old-session result must not mark the fresh session's position served");
+            assertTrue(b.hasDiskReadDone(4, 4), "the unguarded sentinel serves normally");
+        } finally {
+            rig.proc.shutdown();
+        }
+    }
+
+    @Test
+    void staleSnapshotGenerationOutcomeIsInertForAReRegisteredSession() throws Exception {
+        // Phase-3 twin of the disk-result guard. Worst variant without it: a PERMANENT
+        // generation failure from the old session answers ColumnNotGenerated produced WITH
+        // the fresh state — under v17 the client session-satisfies it permanently.
+        var rig = new Rig(true);
+        try {
+            rig.state.setRegisteredDimension(END);
+            var bUuid = UUID.randomUUID();
+            rig.addPlayer(bUuid); // sentinel: no registered dimension, outcome delivers
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid, bUuid), new ArrayList<>(List.of(
+                    new TickSnapshot.GenerationReadyData(rig.uuid, 4, 6, DIM, null, 0L, 1L),
+                    new TickSnapshot.GenerationReadyData(bUuid, 8, 8, DIM, null, 0L, 2L))));
+
+            var delivered = drainUntil(rig.proc,
+                    received(bUuid, LSSConstants.RESPONSE_NOT_GENERATED, PositionUtil.packPosition(8, 8)));
+            assertTrue(delivered.stream().noneMatch(r -> r.player().equals(rig.uuid)),
+                    "an old-session permanent failure must not answer NOT_GENERATED "
+                            + "for the fresh session (session-permanent under v17)");
+            assertFalse(rig.state.hasDiskReadDone(4, 6));
+        } finally {
+            rig.proc.shutdown();
+        }
+    }
+
+    @Test
     void staleDimensionDiskResultIsInert() throws Exception {
         var rig = new Rig(true);
         try {
