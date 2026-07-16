@@ -173,11 +173,14 @@ class ClientSessionGateTest {
     @Test
     void hostileServerConfigIsClampedToProtocolBoundsBeforeUse() {
         // A hostile/compromised server is untrusted input: its syncOnLoad concurrency limit
-        // becomes the client's scan budget (RequestQueue.ensureCapacity allocation) and its
-        // LOD distance bounds the scan-ring loop. Without a client-side clamp a single
-        // SessionConfig packet forces a multi-gigabyte allocation (OOM crash). The gate must
-        // clamp every numeric field to the same bounds the server enforces on itself, and
-        // hand the CLAMPED config to the manager it builds.
+        // becomes the client's scan budget and its LOD distance bounds the scan-ring loop.
+        // Historically the budget also sized a heap allocation (RequestQueue.ensureCapacity), so an
+        // unclamped SessionConfig forced a multi-gigabyte OOM; the want-set closed that particular
+        // vector by construction (fixed send buffers + a budget clamped to MAX_BATCH_CHUNK_REQUESTS).
+        // The clamp is still load-bearing — an unclamped lodDistance still bounds the ring walk, and
+        // clamping untrusted numerics at the boundary is not a defence to relax on a technicality.
+        // The gate must clamp every numeric field to the same bounds the server enforces on itself,
+        // and hand the CLAMPED config to the manager it builds.
         var captured = new java.util.concurrent.atomic.AtomicReference<SessionConfigS2CPayload>();
         var g = new ClientSessionGate(processor, handshakesSent::incrementAndGet,
                 cfg -> { captured.set(cfg); return new RecordingManager(events); });

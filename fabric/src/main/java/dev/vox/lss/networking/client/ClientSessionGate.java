@@ -113,10 +113,12 @@ final class ClientSessionGate {
 
         // Clamp every server-supplied numeric field to the same bounds the server enforces
         // on itself (ServerConfigBase.validate). A hostile or compromised server is fully
-        // untrusted input here: without this clamp its syncOnLoad concurrency limit becomes
-        // the client's scan budget and drives RequestQueue.ensureCapacity, and its LOD
-        // distance bounds the scan-ring loop — either lets a single SessionConfig packet
-        // force a multi-gigabyte client allocation (OOM crash).
+        // untrusted input here: its syncOnLoad concurrency limit becomes the client's scan
+        // budget and its LOD distance bounds the scan-ring loop. The unbounded-allocation
+        // vector that first motivated this clamp is now closed by construction (the send
+        // buffers are fixed-size and the scanner clamps its budget to
+        // min(MAX_BATCH_CHUNK_REQUESTS, posOut.length)), but the clamp still bounds the ring
+        // walk itself — an unclamped LOD distance is a CPU-stall vector, so it stays.
         var config = clampToProtocolBounds(payload);
 
         this.serverEnabled = config.enabled();

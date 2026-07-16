@@ -24,20 +24,22 @@ import static dev.vox.lss.networking.client.ColumnStateMap.SATISFIED;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Contract tests for the manager's response callbacks and queue drain — the glue the
- * position-keyed (no request id) protocol leans on. Pins three asymmetries that look like
- * bugs but are deliberate:
+ * Contract tests for the manager's response callbacks and want-set scan loop — the glue the
+ * position-keyed (no request id) protocol leans on. Pins the asymmetries that look like bugs
+ * but are deliberate:
  * <ul>
- *   <li>Status responses (rate-limited / up-to-date / not-generated) are gated on in-flight
- *       tracking, so a late or duplicate status can never stamp column state the client
- *       never asked about (a wrong SATISFIED stamp is a permanent invisible hole that no
- *       soak conservation law can see).</li>
- *   <li>Column DATA is the opposite: it applies even untracked (self-heal after a client
- *       timeout) but never cross-dimension, because the dispatch drain discards the bytes.</li>
- *   <li>onRateLimited latches the scan backoff BEFORE its tracking gate.</li>
+ *   <li>Status responses (up-to-date / not-generated) are gated on the awaiting set, so a late
+ *       or duplicate status can never stamp column state the client never asked about (a wrong
+ *       SATISFIED stamp is a permanent invisible hole that no soak conservation law can see).</li>
+ *   <li>Column DATA is the opposite: it applies even untracked (self-heal) but never
+ *       cross-dimension, because the dispatch drain discards the bytes.</li>
+ *   <li>Marks are consumed by ANSWERS, never by sends: under want-set re-declaration a mark
+ *       consumed at send would classify SATISFIED while the answer was still outstanding, so a
+ *       server-side supersession would lose the edit for the session.</li>
  * </ul>
- * Plus the drain's per-type concurrency: one full limiter type must never head-of-line
- * block the other (skip-continue, not break), and slot accounting must not leak.
+ * Plus the two hard protocol invariants of the want-set: a converged scan sends NOTHING (a
+ * heartbeat would blind the soak quiescence predicate), and entering the decode-backpressure
+ * halt sends exactly ONE empty clear batch.
  */
 class LodRequestManagerTest {
 
@@ -55,6 +57,8 @@ class LodRequestManagerTest {
     void setUp() {
         manager = new LodRequestManager();
         manager.onSessionConfig(config(64, 100, 100, true), "lss-test");
+        sent.clear();
+        recordSends(); // never let a scan reach the real ClientPlayNetworking transport
     }
 
     private static SessionConfigS2CPayload config(int lodDistance, int syncLimit, int genLimit,
@@ -65,28 +69,6 @@ class LodRequestManagerTest {
 
     private static ResourceKey<Level> dim(String name) {
         return ResourceKey.create(Registries.DIMENSION, Identifier.parse("lss_test:" + name));
-    }
-
-    /** Seed the manager's request queue with (position, clientTimestamp) pairs. */
-    private void seedQueue(long... posTsPairs) {
-        var queue = manager.queueForTest();
-        int n = posTsPairs.length / 2;
-        queue.ensureCapacity(n);
-        for (int i = 0; i < n; i++) {
-            queue.put(i, posTsPairs[2 * i], posTsPairs[2 * i + 1]);
-        }
-        queue.commit(n);
-    }
-
-    /** Drive maybeScan until the 20-tick cadence fires; returns the queued count. */
-    private static int fireScan(SpiralScanner scanner) {
-        var columns = new ColumnStateMap();
-        var queue = new RequestQueue();
-        for (int i = 0; i < LSSConstants.TICKS_PER_SECOND + 1; i++) {
-            int n = scanner.maybeScan(0, 0, 2, 0, 1000, () -> 0, columns, pos -> false, queue);
-            if (n >= 0) return n;
-        }
-        throw new AssertionError("scan cadence never fired");
     }
 
     /** Copies of sent batches — the manager reuses its send buffers across ticks. */
@@ -102,13 +84,69 @@ class LodRequestManagerTest {
                 p.count())));
     }
 
+    /** Positions of the single batch sent by the last fired scan. */
+    private List<Long> lastBatch() {
+        assertEquals(1, sent.size(), "expected exactly one batch on the wire");
+        var out = new ArrayList<Long>();
+        for (long p : sent.get(0).positions()) out.add(p);
+        return out;
+    }
+
+    // The scan buffers the cadence-only helpers write into (the manager owns its own).
+    private final long[] scanPos = new long[LSSConstants.MAX_BATCH_CHUNK_REQUESTS];
+    private final long[] scanTs = new long[LSSConstants.MAX_BATCH_CHUNK_REQUESTS];
+
     /**
      * One maybeScan call against the manager's own collaborators with viewDistance covering
-     * the lod distance, so a fired scan queues nothing — pure cadence observation.
+     * the lod distance, so a fired scan declares nothing — pure cadence observation.
      */
     private int maybeScanOnce() {
         return manager.scannerForTest().maybeScan(0, 0, 64, 0, 1000, () -> 0,
-                manager.columnsForTest(), pos -> false, manager.queueForTest());
+                manager.columnsForTest(), scanPos, scanTs);
+    }
+
+    /**
+     * Reconfigure to a one-ring disc (lodDistance 1, viewDistance 0) so ring 1's 8 positions are
+     * the entire want-set universe and a batch's contents are exactly assertable. Returns the
+     * ring's packed positions. Call BEFORE seeding: onSessionConfig resets all request state.
+     */
+    private long[] configureRing1Disc() {
+        manager.onSessionConfig(config(1, 100, 100, true), "lss-test");
+        manager.markCacheLoadedForTest();
+        recordSends();
+        sent.clear();
+        var ring = new long[8];
+        int[] c = new int[2];
+        for (int i = 0; i < 8; i++) {
+            SpiralScanner.ringIndexToCoord(1, i, 0, 0, c);
+            ring[i] = PositionUtil.packPosition(c[0], c[1]);
+        }
+        return ring;
+    }
+
+    /** Drive the manager's scan phase over the ring-1 disc until the cadence fires. */
+    private int fireScanRing1() {
+        return fireScan(0);
+    }
+
+    /** Drive tickScanPhase at the origin until the 20-tick cadence fires; returns the want-set size. */
+    private int fireScan(int viewDistance) {
+        for (int i = 0; i < LSSConstants.TICKS_PER_SECOND + 1; i++) {
+            int n = manager.tickScanPhase(0, 0, viewDistance, 0, () -> 0);
+            if (n >= 0) return n;
+        }
+        throw new AssertionError("scan cadence never fired");
+    }
+
+    /**
+     * A scan over a FULLY excluded disc: walks, wants nothing. viewDistance must be 90, not 64 —
+     * vanilla's view is a rounded (1-chunk-buffered Euclidean) disc, so at vd == lodDistance == 64
+     * the lod square's corners still fall outside it and are correctly declared (that is the
+     * corner-annulus fix pinned in SpiralScannerTest). Subsuming the whole square needs
+     * (64-1)^2 * 2 = 7938 < vd^2, i.e. vd >= 90.
+     */
+    private int fireScanAtOrigin() {
+        return fireScan(90);
     }
 
     /** Fire one scan to normalize the primed join cadence (counter deterministically 0 after). */
@@ -150,35 +188,20 @@ class LodRequestManagerTest {
                 "a wrongly-SATISFIED stamp would be a permanent invisible hole — no data was ever delivered");
     }
 
-    @Test
-    void untrackedRateLimitedNeverPoisonsSatisfiedColumnIntoRetry() {
-        var columns = manager.columnsForTest();
-        columns.onReceived(POS, 5000L); // satisfied + validated this session
-
-        manager.onRateLimited(POS); // late bounce for a request that already timed out client-side
-
-        assertEquals(1, manager.getTotalRateLimited());
-        assertEquals(SATISFIED, columns.classify(POS, true),
-                "a late rate-limited must not schedule a pointless re-request of a satisfied column");
-    }
-
-    @Test
-    void untrackedRateLimitedStillLatchesScanBackoff() {
-        manager.onSessionConfig(config(4, 100, 100, true), "lss-test");
-
-        manager.onRateLimited(POS); // untracked — the gate returns early, but backoff latches first
-
-        var scanner = manager.scannerForTest();
-        assertEquals(0, fireScan(scanner), "scan after a rate-limited response is skipped");
-        assertTrue(fireScan(scanner) > 0, "backoff lasts exactly one scan");
-    }
+    // untrackedRateLimitedNeverPoisonsSatisfiedColumnIntoRetry and
+    // untrackedRateLimitedStillLatchesScanBackoff are DELETED with their subjects: a bounce no
+    // longer marks retry (nothing to poison) and the scan backoff no longer exists (a full slot
+    // retains the entry in the server backlog instead of bouncing it). onRateLimited is a
+    // transitional metrics-only stub until the server stops sending byte 0; the surviving
+    // "a stray status must not touch column state" invariant is pinned by the two untracked
+    // tests above and by duplicatePositionInOneBatchFrameResolvesConsistently below.
 
     // ---- dirty crossing an in-flight first serve forces a re-request (#11) ----
 
     @Test
     void dirtyCrossingAnInFlightFirstServeReRequestsOnUpToDate() {
         var tracker = manager.trackerForTest();
-        tracker.markPending(POS, System.nanoTime(), false); // first serve in flight (stored == -1)
+        tracker.replaceWith(new long[]{POS}, 1); // first serve in flight (stored == -1)
 
         manager.onDirtyColumns(new long[]{POS});            // dirty crosses the in-flight serve
         manager.onColumnUpToDate(POS);                      // the pre-edit (all-air) answer lands
@@ -191,7 +214,7 @@ class LodRequestManagerTest {
     void dirtyCrossingAnInFlightFirstServeReRequestsOnReceived() {
         manager.setLastDimensionForTest(dim("overworld"));
         var tracker = manager.trackerForTest();
-        tracker.markPending(POS, System.nanoTime(), false);
+        tracker.replaceWith(new long[]{POS}, 1);
 
         manager.onDirtyColumns(new long[]{POS});
         manager.onColumnReceived(POS, 5000L, dim("overworld")); // pre-edit content lands
@@ -211,7 +234,7 @@ class LodRequestManagerTest {
         assertEquals(SATISFIED, manager.columnsForTest().classify(POS, true));
 
         var tracker = manager.trackerForTest();
-        tracker.markPending(POS, System.nanoTime(), false); // resync (first edit) in flight
+        tracker.replaceWith(new long[]{POS}, 1); // resync (first edit) in flight
 
         manager.onDirtyColumns(new long[]{POS});               // second edit crosses the resync
         manager.onColumnReceived(POS, 6000L, dim("overworld")); // first-edit content lands, clears dirty
@@ -243,7 +266,7 @@ class LodRequestManagerTest {
     @Test
     void trackedUpToDateStampsValidationAndReleasesSlot() {
         var tracker = manager.trackerForTest();
-        tracker.markPending(POS, System.nanoTime(), false);
+        tracker.replaceWith(new long[]{POS}, 1);
 
         manager.onColumnUpToDate(POS);
 
@@ -258,7 +281,7 @@ class LodRequestManagerTest {
     @Test
     void trackedNotGeneratedStampsGenerationRetryAndReleasesSlot() {
         var tracker = manager.trackerForTest();
-        tracker.markPending(POS, System.nanoTime(), false);
+        tracker.replaceWith(new long[]{POS}, 1);
 
         manager.onColumnNotGenerated(POS);
 
@@ -269,20 +292,11 @@ class LodRequestManagerTest {
         assertEquals(1, manager.getTotalNotGenerated());
     }
 
-    @Test
-    void trackedRateLimitedMarksRetryAndReleasesSlot() {
-        var columns = manager.columnsForTest();
-        var tracker = manager.trackerForTest();
-        columns.onReceived(POS, 5000L); // a known column being resynced
-        tracker.markPending(POS, System.nanoTime(), false);
-
-        manager.onRateLimited(POS);
-
-        assertFalse(tracker.isInFlight(POS));
-        assertEquals(5000L, columns.classify(POS, true),
-                "bounced request retries with the stored timestamp on a later scan");
-        assertEquals(1, manager.getTotalRateLimited());
-    }
+    // trackedRateLimitedMarksRetryAndReleasesSlot is DELETED with the bounce reaction: a slot
+    // bounce no longer marks retry and no longer consumes the awaiting entry, because the next
+    // scan re-declares the position unconditionally. What survives of it — the bounce must not
+    // corrupt column state — is pinned on the stub in dispatchRoutesEachTypeAndUnknownType-
+    // SkipsOnlyThatEntry and duplicatePositionInOneBatchFrameResolvesConsistently.
 
     // ---- column data: self-heal when untracked, discard cross-dimension ----
 
@@ -303,7 +317,7 @@ class LodRequestManagerTest {
     void trackedColumnDataReleasesInFlightSlot() {
         manager.setLastDimensionForTest(dim("overworld"));
         var tracker = manager.trackerForTest();
-        tracker.markPending(POS, System.nanoTime(), false);
+        tracker.replaceWith(new long[]{POS}, 1);
 
         manager.onColumnReceived(POS, 5000L, dim("overworld"));
 
@@ -333,140 +347,121 @@ class LodRequestManagerTest {
                 "no dimension is known yet, so data must not be dropped");
     }
 
-    // ---- drainQueue: per-type concurrency without cross-type starvation ----
+    // ---- the want-set scan: re-declaration, mark survival, convergence ----
+    //
+    // The per-type concurrency drain tests (fullGenLimiterDoesNotStarveQueuedSyncRequests,
+    // fullSyncLimiterDoesNotStarveQueuedGenerationRequests, generationSlotsDoNotCountAgainst-
+    // SyncCapacity, drainStopsAtMaxToSendAndKeepsRemainder) are DELETED with the drip-feed: the
+    // client no longer mirrors the server's slot caps and no longer holds a queue, so there is no
+    // client-side limiter to head-of-line block and no remainder to drip. The head-of-line
+    // invariant itself moved SERVER-side, where a full slot now retains a backlog entry in order
+    // instead of bouncing it (Task 3/4's BacklogReplaceTest). sweepTimeoutsEvictsStaleRequests-
+    // AndMarksThemForRetry is DELETED with the 10s timeout sweep: its orphan-rescue job is now
+    // done structurally by re-declaration — every unsatisfied position is re-declared every scan,
+    // which is exactly what anyChaosInterleavingLeavesNoPositionPermanentlyOrphaned pins.
 
     @Test
-    void fullGenLimiterDoesNotStarveQueuedSyncRequests() {
-        manager.onSessionConfig(config(64, 8, 1, true), "lss-test");
-        var tracker = manager.trackerForTest();
-        tracker.markPending(PositionUtil.packPosition(50, 50), System.nanoTime(), true); // gen limit (1) full
-
-        long gen1 = PositionUtil.packPosition(1, 0);
-        long gen2 = PositionUtil.packPosition(2, 0);
-        long sync1 = PositionUtil.packPosition(3, 0);
-        long sync2 = PositionUtil.packPosition(4, 0);
-        // drainQueue re-derives the send ts from classify, so a gen request (ts=0) must have a
-        // not-generated column state; sync requests (ts=-1) stay unstamped.
-        manager.columnsForTest().onNotGenerated(gen1);
-        manager.columnsForTest().onNotGenerated(gen2);
-        seedQueue(gen1, 0L, gen2, 0L, sync1, -1L, sync2, -1L); // gen requests head the queue
-
-        int sent = manager.drainQueue(16);
-
-        assertEquals(2, sent, "sync requests behind the bounced gen head must still send");
-        assertTrue(tracker.isInFlight(sync1));
-        assertTrue(tracker.isInFlight(sync2));
-        assertFalse(tracker.isInFlight(gen1), "gen request bounced by the full gen limiter");
-        assertFalse(tracker.isInFlight(gen2));
-        assertEquals(1, tracker.generationCount(), "only the pre-existing generation slot is held");
-        assertEquals(0, manager.getQueueRemaining(), "bounced entries are consumed, not retained");
-    }
-
-    @Test
-    void fullSyncLimiterDoesNotStarveQueuedGenerationRequests() {
-        manager.onSessionConfig(config(64, 1, 8, true), "lss-test");
-        var tracker = manager.trackerForTest();
-        tracker.markPending(PositionUtil.packPosition(50, 50), System.nanoTime(), false); // sync limit (1) full
-
-        long sync1 = PositionUtil.packPosition(1, 0);
-        long gen1 = PositionUtil.packPosition(2, 0);
-        long gen2 = PositionUtil.packPosition(3, 0);
-        // Re-derived drain ts: gen requests need not-generated column state (ts=0).
-        manager.columnsForTest().onNotGenerated(gen1);
-        manager.columnsForTest().onNotGenerated(gen2);
-        seedQueue(sync1, -1L, gen1, 0L, gen2, 0L);
-
-        int sent = manager.drainQueue(16);
-
-        assertEquals(2, sent, "generation requests behind the bounced sync head must still send");
-        assertFalse(tracker.isInFlight(sync1));
-        assertTrue(tracker.isInFlight(gen1));
-        assertTrue(tracker.isInFlight(gen2));
-        assertEquals(2, tracker.generationCount(), "both sends must be accounted as generation slots");
-    }
-
-    @Test
-    void generationSlotsDoNotCountAgainstSyncCapacity() {
-        manager.onSessionConfig(config(64, 1, 8, true), "lss-test");
-        var tracker = manager.trackerForTest();
-        tracker.markPending(PositionUtil.packPosition(50, 50), System.nanoTime(), true); // size()==1, but a GEN slot
-
-        long sync1 = PositionUtil.packPosition(1, 0);
-        seedQueue(sync1, -1L);
-
-        assertEquals(1, manager.drainQueue(16),
-                "sync capacity is size() - generationCount(); a held gen slot must not consume it");
-        assertTrue(tracker.isInFlight(sync1));
-    }
-
-    @Test
-    void drainStopsAtMaxToSendAndKeepsRemainder() {
-        seedQueue(PositionUtil.packPosition(1, 0), -1L,
-                PositionUtil.packPosition(2, 0), -1L,
-                PositionUtil.packPosition(3, 0), -1L,
-                PositionUtil.packPosition(4, 0), -1L,
-                PositionUtil.packPosition(5, 0), -1L);
-
-        assertEquals(2, manager.drainQueue(2));
-        assertEquals(3, manager.getQueueRemaining(), "unsent entries drip-feed on later ticks");
-        assertEquals(2, manager.getPendingCount());
-
-        assertEquals(3, manager.drainQueue(16), "a later drain picks up exactly the remainder");
-        assertEquals(0, manager.getQueueRemaining());
-        assertEquals(5, manager.getPendingCount());
-    }
-
-    @Test
-    void drainSkipsInFlightAndSatisfiedEntriesWithoutResending() {
-        var tracker = manager.trackerForTest();
-        long inflight = PositionUtil.packPosition(1, 0);
-        long satisfied = PositionUtil.packPosition(2, 0);
-        long fresh = PositionUtil.packPosition(3, 0);
-        tracker.markPending(inflight, System.nanoTime(), false);
-        manager.columnsForTest().onReceived(satisfied, 5000L);
-
-        seedQueue(inflight, -1L, satisfied, 5000L, fresh, -1L);
-
-        assertEquals(1, manager.drainQueue(16), "only the fresh position needs a request");
-        assertTrue(tracker.isInFlight(fresh));
-        assertEquals(2, tracker.size(), "in-flight and satisfied entries were not (re)marked");
-    }
-
-    @Test
-    void drainConsumesRetryAndDirtyMarksOnSend() {
+    void scanReDeclaresAwaitedPositionsAndSkipsSatisfiedOnes() {
+        var ring = configureRing1Disc();
+        long awaited = ring[0];
+        long satisfied = ring[1];
         var columns = manager.columnsForTest();
-        columns.onReceived(POS, 5000L);
-        columns.markRetry(POS);
-        assertTrue(columns.markDirtyIfKnown(POS));
-        seedQueue(POS, 5000L);
+        columns.onReceived(satisfied, 5000L); // held + validated this session -> SATISFIED
+        for (int i = 2; i < ring.length; i++) columns.onReceived(ring[i], 5000L);
+        // awaited was declared by an earlier batch and has had no answer yet.
+        manager.trackerForTest().replaceWith(new long[]{awaited}, 1);
 
-        assertEquals(1, manager.drainQueue(16));
+        assertEquals(1, fireScanRing1(), "only the unsatisfied position belongs in the want-set");
 
-        assertEquals(SATISFIED, columns.classify(POS, true),
-                "the on-the-wire request consumed the retry/dirty marks — no double re-request later");
-        assertEquals(0, manager.getDirtyColumnCount());
-        assertTrue(manager.trackerForTest().isInFlight(POS));
+        assertEquals(List.of(awaited), lastBatch(),
+                "an AWAITED position must be re-declared, not suppressed: the server may silently"
+                        + " supersede any not-yet-admitted ask and the 1 Hz re-declare is the only heal");
+        assertFalse(lastBatch().contains(satisfied), "a satisfied position must never be declared");
     }
-
-    // ---- timeout sweep: the orphan-rescue wiring tick() runs on the scan cadence ----
 
     @Test
-    void sweepTimeoutsEvictsStaleRequestsAndMarksThemForRetry() {
-        var tracker = manager.trackerForTest();
-        long stale = PositionUtil.packPosition(1, 0);
-        long fresh = PositionUtil.packPosition(2, 0);
-        tracker.markPending(stale, System.nanoTime() - 11_000L * LSSConstants.NANOS_PER_MS, false);
-        tracker.markPending(fresh, System.nanoTime(), false);
+    void marksSurviveSendAndAreConsumedByAnswers() {
+        var ring = configureRing1Disc();
+        long target = ring[0];
+        var columns = manager.columnsForTest();
+        for (long p : ring) columns.onReceived(p, 5000L); // whole ring satisfied...
+        assertTrue(columns.markDirtyIfKnown(target));     // ...until the server says target changed
 
-        manager.sweepTimeouts();
+        assertEquals(1, fireScanRing1(), "scan 1 declares the dirty position");
+        assertEquals(1, fireScanRing1(), "scan 2 must RE-DECLARE it — the send consumed no mark");
+        assertEquals(2, sent.size());
+        assertEquals(target, sent.get(1).positions()[0]);
+        assertEquals(1, manager.getDirtyColumnCount(),
+                "the mark survived both sends: consuming it at send would classify SATISFIED while"
+                        + " the answer was still outstanding, so a supersession would lose the edit");
 
-        assertFalse(tracker.isInFlight(stale), "timed-out request must release its in-flight slot");
-        assertTrue(tracker.isInFlight(fresh), "fresh request must survive the sweep");
-        assertTrue(manager.columnsForTest().hasRetries(),
-                "eviction must mark retry: in-flight counts as satisfied for ring confirmation,"
-                        + " so an unmarked eviction inside a confirmed ring is never rescanned"
-                        + " (the bandwidth-throttle soak's 161 permanently orphaned columns)");
+        manager.onColumnReceived(target, 6000L, dim("overworld")); // the ANSWER is the only consumer
+
+        assertEquals(0, manager.getDirtyColumnCount(), "the terminal answer consumed the mark");
+        assertEquals(SATISFIED, columns.classify(target, true));
+        assertEquals(0, fireScanRing1(), "scan 3 omits it");
+        assertEquals(2, sent.size(), "...and sends nothing at all");
     }
+
+    // ---- the two hard want-set protocol invariants ----
+
+    @Test
+    void convergedScanSendsNothingAtAll() {
+        // HARD protocol invariant: at convergence the client is silent. A heartbeat batch would
+        // keep service.requests_received moving forever, which blinds the soak quiescence
+        // predicate and thereby silently disables EVERY soak conservation law.
+        assertEquals(0, fireScanAtOrigin(), "premise: the scan walked and wanted nothing");
+
+        assertTrue(sent.isEmpty(), "a walked-but-empty want-set must send NO batch");
+        assertEquals(0, manager.getPendingCount(),
+                "...but the awaiting set is still replaced, so phantom entries cannot linger");
+    }
+
+    @Test
+    void noWalkTickNeitherSendsNorReplacesTheAwaitingSet() {
+        // The -1 ("no walk") return is NOT convergence and must not be treated as one. A budget
+        // scaled to zero by vanilla load happens on a normal join; if it replaced the awaiting set
+        // it would drop the gating for every outstanding answer. (Successor to CL-005's
+        // zeroBudgetScanPreservesCommittedRemainder, whose drip-feed remainder no longer exists.)
+        manager.trackerForTest().replaceWith(new long[]{POS}, 1);
+
+        int walked = -1;
+        for (int i = 0; i < LSSConstants.TICKS_PER_SECOND + 1; i++) {
+            // viewDistance 2 -> exclusion area 25, all 25 missing -> vanilla scale 0 -> budget 0
+            walked = manager.tickScanPhase(0, 0, 2, 0, () -> 25);
+            if (walked >= 0) break;
+        }
+
+        assertEquals(-1, walked, "a budget-zeroed cadence fire must report NO walk, not an empty one");
+        assertTrue(sent.isEmpty(), "no walk, no batch");
+        assertTrue(manager.trackerForTest().isInFlight(POS),
+                "a no-walk tick must leave the awaiting set alone — replacing it would un-gate"
+                        + " the status responses for every outstanding declaration");
+    }
+
+    @Test
+    void enteringBackpressureHaltSendsExactlyOneEmptyClearBatch() {
+        manager.markCacheLoadedForTest();
+        var dim = dim("overworld");
+        int halt = LodRequestManager.haltThreshold();
+        // viewDistance 90 fully subsumes the lod-64 disc (corners included — see fireScanAtOrigin),
+        // so a recovered tick walks and wants nothing. Every batch this test sees is therefore a
+        // backpressure clear, never a want-set.
+        manager.tickWithContext(0, 0, dim, 90, halt, () -> 0);  // enters halt
+        manager.tickWithContext(0, 0, dim, 90, halt, () -> 0);  // still halted
+
+        assertEquals(1, sent.size(), "edge-triggered: exactly one clear per halt episode");
+        assertEquals(0, sent.get(0).count(),
+                "the clear is the EMPTY want-set — the explicit 'want nothing' that replaces the"
+                        + " server backlog with nothing (the only empty batch the protocol allows)");
+
+        manager.tickWithContext(0, 0, dim, 90, 0, () -> 0);     // recovered
+        manager.tickWithContext(0, 0, dim, 90, halt, () -> 0);  // re-enters halt
+
+        assertEquals(2, sent.size(), "a new halt episode re-arms the clear");
+        assertEquals(0, sent.get(1).count());
+    }
+
 
     // ---- batch-response dispatch routing ----
 
@@ -478,28 +473,34 @@ class LodRequestManagerTest {
         long pNotGen = PositionUtil.packPosition(3, 0);
         long pUnknown = PositionUtil.packPosition(4, 0);
         long pAfterUnknown = PositionUtil.packPosition(5, 0);
-        long now = System.nanoTime();
-        for (long p : new long[]{pRate, pUpToDate, pNotGen, pUnknown, pAfterUnknown}) {
-            tracker.markPending(p, now, false);
-        }
+        tracker.replaceWith(new long[]{pRate, pUpToDate, pNotGen, pUnknown, pAfterUnknown}, 5);
 
         LSSClientNetworking.dispatchBatchResponses(manager, new BatchResponseS2CPayload(
                 new byte[]{LSSConstants.RESPONSE_RATE_LIMITED, LSSConstants.RESPONSE_UP_TO_DATE,
                         LSSConstants.RESPONSE_NOT_GENERATED, (byte) 99, LSSConstants.RESPONSE_UP_TO_DATE},
                 new long[]{pRate, pUpToDate, pNotGen, pUnknown, pAfterUnknown}, 5));
 
-        assertEquals(1, manager.getTotalRateLimited());
         assertEquals(2, manager.getTotalUpToDate(), "the entry AFTER the unknown type must still dispatch");
         assertEquals(1, manager.getTotalNotGenerated());
         assertEquals(0, manager.getReceivedColumnCount(),
                 "up-to-date on never-seen positions is session-satisfied, not stamped");
         assertEquals(1, manager.getEmptyColumnCount(), "not-generated entry stamped");
-        assertFalse(tracker.isInFlight(pRate));
         assertFalse(tracker.isInFlight(pUpToDate));
         assertFalse(tracker.isInFlight(pNotGen));
         assertFalse(tracker.isInFlight(pAfterUnknown));
         assertTrue(tracker.isInFlight(pUnknown),
-                "an unknown response type must not consume the in-flight slot");
+                "an unknown response type must not consume the awaiting entry");
+
+        // Byte 0 is now the transitional onRateLimited STUB: a slot bounce needs no reaction,
+        // because the next scan re-declares the position anyway. It must move metrics and NOTHING
+        // else. (In the protocol-bump task the server stops sending it, byte 0 is retired and
+        // reserved, and this arm becomes an unknown-type-inert pin like pUnknown above.)
+        assertEquals(1, manager.getTotalRateLimited(), "the stub still counts the bounce");
+        assertEquals(-1L, manager.columnsForTest().classify(pRate, true),
+                "the stub must not stamp, satisfy, or retry-mark the bounced position");
+        assertFalse(manager.columnsForTest().hasRetries(), "a bounce marks no retry any more");
+        assertTrue(tracker.isInFlight(pRate),
+                "the stub consumes no awaiting entry — the next scan's replace clears it");
     }
 
     @Test
@@ -507,7 +508,7 @@ class LodRequestManagerTest {
         var tracker = manager.trackerForTest();
         long p1 = PositionUtil.packPosition(1, 0);
         long p2 = PositionUtil.packPosition(2, 0);
-        tracker.markPending(p2, System.nanoTime(), false);
+        tracker.replaceWith(new long[]{p2}, 1);
 
         // Arrays hold 2 entries but count says 1 — the count field is the batch boundary
         // (server-side send buffers are reused, so trailing slots can hold stale data).
@@ -586,54 +587,70 @@ class LodRequestManagerTest {
                         + " push the cadence back indefinitely; the retry mark alone re-reaches the position");
     }
 
-    // ---- send failure: marks restored so failed batches never strand positions (D1 fix) ----
+    // ---- send failure: every position stays re-declarable (D1 fix, re-derived for the want-set) ----
 
     @Test
-    void sendFailureRestoresRequestabilityForEveryPositionInTheFailedBatch() {
+    void sendFailureLeavesEveryPositionReDeclarableNextScan() {
+        var ring = configureRing1Disc();
         manager.setBatchSenderForTest(p -> { throw new IllegalStateException("transport down"); });
         var columns = manager.columnsForTest();
-        long unknownPos = PositionUtil.packPosition(7, 7);
-        columns.onReceived(POS, 5000L);            // validated this session
-        assertTrue(columns.markDirtyIfKnown(POS)); // server says it changed
-        seedQueue(POS, 5000L, unknownPos, -1L);
+        long held = ring[0];
+        columns.onReceived(held, 5000L);            // validated this session
+        assertTrue(columns.markDirtyIfKnown(held)); // server says it changed -> classify 5000
+        // ring[1..7] are unknown -> classify -1
 
-        assertEquals(2, manager.tickDrainPhase()); // drain consumes the marks, the send throws
+        assertEquals(8, fireScanRing1(), "the whole want-set is declared; the send throws");
 
         var tracker = manager.trackerForTest();
-        assertFalse(tracker.isInFlight(POS), "failed-batch slots must be released");
-        assertFalse(tracker.isInFlight(unknownPos));
-        assertEquals(5000L, columns.classify(POS, true),
-                "markSent consumed the dirty mark, so without restoration this validated position"
-                        + " classifies SATISFIED with its request lost in the dead batch — a permanent"
-                        + " hole; the restored mark re-asks with the stored timestamp");
-        assertEquals(-1L, columns.classify(unknownPos, true), "no invented timestamps");
-        assertTrue(columns.hasRetries(),
-                "restored marks must reset ring confirmation so the scanner re-reaches the positions");
-        assertEquals(2, manager.getTotalPositionsRequested(), "a failed batch still counts as attempted");
+        for (long p : ring) {
+            assertFalse(tracker.isInFlight(p),
+                    "a batch that never reached the wire must not be credited as awaiting, or a"
+                            + " late status would be gated in against a declaration that never happened");
+        }
+        assertEquals(5000L, columns.classify(held, true),
+                "the dirty mark survives the failed send (marks are answer-consumed now, so there"
+                        + " is nothing to restore) and re-asks with the STORED timestamp");
+        assertEquals(-1L, columns.classify(ring[1], true), "no invented timestamps");
+        assertEquals(8, manager.getTotalPositionsRequested(), "a failed batch still counts as attempted");
 
         recordSends(); // transport recovers
-        seedQueue(POS, 5000L);
-        assertEquals(1, manager.tickDrainPhase(), "the restored position re-sends once the transport recovers");
-        assertEquals(5000L, sent.get(0).timestamps()[0]);
+        assertEquals(8, fireScanRing1(), "every position in the dead batch reappears in the next want-set");
+
+        assertEquals(1, sent.size());
+        assertEquals(8, sent.get(0).count());
+        var batch = lastBatch();
+        for (long p : ring) assertTrue(batch.contains(p), "position " + p + " was stranded by the failed send");
+        for (int i = 0; i < 8; i++) {
+            if (sent.get(0).positions()[i] == held) {
+                assertEquals(5000L, sent.get(0).timestamps()[i],
+                        "the surviving dirty mark re-asks as a resync, not a first serve");
+            }
+        }
     }
 
     // ---- terminal up_to_date for an unknown ask (SP-078 client leg) ----
 
     @Test
     void unknownAskAnsweredUpToDateSatisfiesWithoutStampAndStopsReAsking() {
-        seedQueue(POS, -1L);
-        assertEquals(1, manager.drainQueue(16), "the ts=-1 ask goes out");
+        var ring = configureRing1Disc();
+        long target = ring[0];
+        var columns = manager.columnsForTest();
+        for (int i = 1; i < ring.length; i++) columns.onReceived(ring[i], 5000L);
 
-        manager.onColumnUpToDate(POS); // terminal server answer (e.g. oversized column dropped before send)
+        assertEquals(1, fireScanRing1(), "the ts=-1 ask goes out");
+        assertEquals(-1L, sent.get(0).timestamps()[0], "premise: declared as an unknown first serve");
 
-        assertEquals(-1L, manager.columnsForTest().timestampFor(POS),
+        manager.onColumnUpToDate(target); // terminal answer (e.g. oversized column dropped before send)
+
+        assertEquals(-1L, columns.timestampFor(target),
                 "an unknown (ts=-1) ask answered up_to_date is session-satisfied — no fabricated stamp");
-        assertTrue(manager.columnsForTest().isSessionSatisfied(POS));
-        assertEquals(SATISFIED, manager.columnsForTest().classify(POS, true));
-        assertFalse(manager.trackerForTest().isInFlight(POS));
-        seedQueue(POS, -1L);
-        assertEquals(0, manager.drainQueue(16),
+        assertTrue(columns.isSessionSatisfied(target));
+        assertEquals(SATISFIED, columns.classify(target, true));
+        assertFalse(manager.trackerForTest().isInFlight(target));
+
+        assertEquals(0, fireScanRing1(),
                 "the client must stop re-asking — the terminal answer converges, no loop");
+        assertEquals(1, sent.size(), "convergence sends nothing at all");
     }
 
     // ---- duplicate positions inside one batch frame resolve consistently ----
@@ -643,28 +660,32 @@ class LodRequestManagerTest {
         var tracker = manager.trackerForTest();
         long pA = PositionUtil.packPosition(1, 0);
         long pB = PositionUtil.packPosition(2, 0);
-        tracker.markPending(pA, System.nanoTime(), false);
-        tracker.markPending(pB, System.nanoTime(), false);
+        tracker.replaceWith(new long[]{pA, pB}, 2);
 
-        // Same position twice in one frame, both orders — server send buffers are reused,
-        // so duplicate entries are legal wire input. The first entry consumes the in-flight
-        // slot; the duplicate must hit the untracked gate and change nothing.
+        // Same position twice in one frame — server send buffers are reused, so duplicate entries
+        // are legal wire input. The FIRST entry consumes the awaiting entry; the duplicate must
+        // then hit the untracked gate and change nothing. That gate is the whole defence: without
+        // it the trailing up_to_date below would session-satisfy pB and erase its ts=0 generation
+        // retry — a permanent ungenerated hole.
         LSSClientNetworking.dispatchBatchResponses(manager, new BatchResponseS2CPayload(
                 new byte[]{LSSConstants.RESPONSE_UP_TO_DATE, LSSConstants.RESPONSE_RATE_LIMITED,
-                        LSSConstants.RESPONSE_RATE_LIMITED, LSSConstants.RESPONSE_UP_TO_DATE},
+                        LSSConstants.RESPONSE_NOT_GENERATED, LSSConstants.RESPONSE_UP_TO_DATE},
                 new long[]{pA, pA, pB, pB}, 4));
 
         assertEquals(SATISFIED, manager.columnsForTest().classify(pA, true),
-                "the trailing duplicate rate-limited must not un-satisfy the up-to-date position");
+                "the trailing duplicate (byte-0 stub) must not un-satisfy the up-to-date position");
         assertFalse(tracker.isInFlight(pA));
-        assertEquals(-1L, manager.columnsForTest().timestampFor(pB),
-                "the trailing duplicate up-to-date must not fabricate a stamp for the bounced request");
+        assertEquals(0L, manager.columnsForTest().timestampFor(pB));
+        assertEquals(0L, manager.columnsForTest().classify(pB, true),
+                "the trailing duplicate up-to-date arrives untracked and must not overwrite the"
+                        + " not-generated stamp — convergent, never half-applied");
+        assertFalse(manager.columnsForTest().isSessionSatisfied(pB));
         assertFalse(tracker.isInFlight(pB));
-        assertTrue(manager.columnsForTest().hasRetries(),
-                "the bounced position retries on a later scan — convergent, never half-applied");
         assertEquals(2, manager.getTotalUpToDate(), "every entry still counts in diagnostics");
-        assertEquals(2, manager.getTotalRateLimited());
+        assertEquals(1, manager.getTotalRateLimited());
+        assertEquals(1, manager.getTotalNotGenerated());
     }
+
 
     // ---- onDirtyColumns: debounce only for known positions, never poisons unknown state ----
 
@@ -712,7 +733,7 @@ class LodRequestManagerTest {
         advanceToOneCallBeforeScanFire();
         assertTrue(manager.getConfirmedRing() > 0, "precondition: ring confirmed past the hole");
 
-        manager.trackerForTest().markPending(POS, System.nanoTime(), false); // in-flight -> tracked path
+        manager.trackerForTest().replaceWith(new long[]{POS}, 1); // awaited -> tracked path
 
         manager.onColumnNotGenerated(POS);
 
@@ -786,29 +807,36 @@ class LodRequestManagerTest {
                 "an all-unknown late push must not debounce the fresh dimension's scan");
     }
 
-    // ---- drain RE-DERIVES the timestamp at send time (delivery-honesty #5) ----
+    // ---- the want-set carries CURRENT classifications, never a stale claim (delivery-honesty #5) ----
 
     @Test
-    void drainReDerivesTheTimestampFromClassifyAtSendTime() {
-        recordSends();
+    void wantSetCarriesTheClassifyDerivedTimestampNotAStaleClaim() {
+        // Pre-want-set this invariant needed an explicit re-derivation in drainQueue, because the
+        // scan accepted a position into a queue and the send happened ticks later — an ingest
+        // failure landing in that window would otherwise ship the stale scan-time claim. The
+        // want-set closes that window BY CONSTRUCTION (classify and send are the same tick), and
+        // this test pins that the construction actually holds: no path may reintroduce a stored,
+        // pre-classified timestamp.
+        var ring = configureRing1Disc();
+        long target = ring[0];
         manager.setLastDimensionForTest(dim("overworld"));
+        var columns = manager.columnsForTest();
+        for (int i = 1; i < ring.length; i++) columns.onReceived(ring[i], 5000L);
         var cached = new Long2LongOpenHashMap();
-        cached.put(POS, 5000L);
-        manager.columnsForTest().loadFrom(cached);      // cached, unvalidated -> classify 5000
-        seedQueue(POS, 5000L);                          // the scan queued the resync claim
-        manager.onIngestFailure(dim("overworld"), POS); // failure lands between scan and drain
+        cached.put(target, 5000L);
+        columns.loadFrom(cached);                          // cached, unvalidated -> classify 5000
+        manager.onIngestFailure(dim("overworld"), target); // the consumer never actually held it
 
-        assertEquals(-1L, manager.columnsForTest().classify(POS, true),
-                "premise: classification changed to unknown after the queue accept");
-        assertEquals(1, manager.tickDrainPhase());
+        assertEquals(-1L, columns.classify(target, true), "premise: classification is now unknown");
+        assertEquals(1, fireScanRing1());
 
         assertEquals(1, sent.size());
-        assertEquals(POS, sent.get(0).positions()[0]);
+        assertEquals(target, sent.get(0).positions()[0]);
         assertEquals(-1L, sent.get(0).timestamps()[0],
-                "the drain re-derives the send ts from classify (-1 now), NOT the stale scan-time"
-                        + " 5000L: a ts>0 claim for data the client no longer holds would be answered"
-                        + " up_to_date from the server's done-bit, sealing a hole. Sending -1 makes the"
-                        + " server re-resolve honestly.");
+                "the want-set carries the classify-derived ts (-1 now), NOT the cached 5000L: a"
+                        + " ts>0 claim for data the client no longer holds would be answered up_to_date"
+                        + " from the server's done-bit, sealing a hole. Sending -1 makes the server"
+                        + " re-resolve honestly.");
     }
 
     // ---- ingest failures racing a pending cache load ----

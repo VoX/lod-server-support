@@ -19,8 +19,6 @@ public class LodRequestManager {
     /** Backpressure threshold: halt sending when column processing queue exceeds this fraction. */
     private static final int BACKPRESSURE_NUMERATOR = 3;
     private static final int BACKPRESSURE_DENOMINATOR = 4;
-    private static final int MIN_SEND_PER_TICK = 16;
-    private static final long TIMEOUT_NANOS = 10_000L * LSSConstants.NANOS_PER_MS;
 
     private SessionConfigS2CPayload sessionConfig;
     private String serverAddress;
@@ -32,11 +30,8 @@ public class LodRequestManager {
     // Per-column state: timestamps + dirty/retry/validated marks (single owner)
     private final ColumnStateMap columns = new ColumnStateMap();
 
-    // In-flight request tracking (position → sendTime)
+    // Positions declared in the last want-set that have not yet been answered
     private final InFlightTracker tracker = new InFlightTracker();
-
-    // Request queue — written by the scanner, consumed by drainQueue()
-    private final RequestQueue queue = new RequestQueue();
 
     private boolean cacheLoaded = false;
     private volatile CompletableFuture<Long2LongOpenHashMap> pendingCacheLoad = null;
@@ -51,8 +46,8 @@ public class LodRequestManager {
     // Metrics tracking (counters + rolling rates)
     private final RequestMetrics metrics = new RequestMetrics();
 
-    // Derived per-tick send cap: 1/20th of last scan's queued count, floored at MIN_SEND_PER_TICK
-    private int maxSendPerTick = MIN_SEND_PER_TICK;
+    // Edge-trigger for the decode-backpressure clear: exactly one empty batch per halt episode.
+    private boolean backpressureClearSent = false;
 
     // Send buffers, sized once at the protocol's batch cap (~16 KB total)
     private final long[] sendPositionBuffer = new long[LSSConstants.MAX_BATCH_CHUNK_REQUESTS];
@@ -103,21 +98,41 @@ public class LodRequestManager {
 
     /**
      * Tick body behind the Minecraft-client guards, phases in fixed order: dimension/cache →
-     * movement prune → metrics → backpressure halt → cache gate → scan+sweep → drain+send.
-     * The backpressure halt deliberately precedes the cache poll, the timeout sweep, and the
-     * drain: while the decode queue is mostly full nothing new goes out, and recovery paths
-     * resume only once the queue drains. Package-private for direct test coverage — tick()
-     * needs a running Minecraft client.
+     * movement prune → metrics → backpressure halt → cache gate → scan+send. The backpressure
+     * halt deliberately precedes the cache poll and the scan: while the decode queue is mostly
+     * full nothing new is declared, and recovery resumes only once the queue drains.
+     * Package-private for direct test coverage — tick() needs a running Minecraft client.
      */
     void tickWithContext(int playerCx, int playerCz, ResourceKey<Level> currentDim,
                          int viewDistance, int columnQueueSize, IntSupplier missingVanilla) {
         tickDimensionAndCachePhase(currentDim);
         tickMovementPhase(playerCx, playerCz);
         this.metrics.updateRollingRates();
-        if (haltedByBackpressure(columnQueueSize)) return;
+        if (haltedByBackpressure(columnQueueSize)) {
+            // Entering the halt: silence would leave the server pumping the last want-set
+            // (up to 1024 backlogged asks). An EMPTY batch is the explicit "want nothing"
+            // declaration — it replaces the backlog with nothing; already-admitted work
+            // still completes (bounded by the server's slot caps). Edge-triggered: exactly
+            // one clear per halt episode. This is the ONLY producer of empty batches.
+            if (!this.backpressureClearSent) {
+                this.backpressureClearSent = true;
+                sendClearBatch();
+            }
+            return;
+        }
+        this.backpressureClearSent = false;
         if (!tickCacheGatePhase()) return;
         tickScanPhase(playerCx, playerCz, viewDistance, columnQueueSize, missingVanilla);
-        tickDrainPhase();
+    }
+
+    /** The explicit backpressure clear: an empty want-set replaces the server backlog with nothing. */
+    private void sendClearBatch() {
+        try {
+            this.batchSender.send(new BatchChunkRequestC2SPayload(new long[0], new long[0], 0));
+        } catch (Exception e) {
+            LSSLogger.error("Failed to send backpressure clear batch", e);
+            this.backpressureClearSent = false; // retry on the next halted tick
+        }
     }
 
     /** Dimension change: flush state, reload cache. First tick starts the initial load. */
@@ -137,7 +152,8 @@ public class LodRequestManager {
      * the (0,0) lastChunk init makes a player joining outside chunk (0,0) take this branch
      * on tick 1, losing the primed immediate first scan (~1 s join delay); and crossing a
      * chunk boundary more often than every 20 ticks restarts the cadence each time,
-     * starving both scans AND the timeout sweep that rides them until the player rests.
+     * starving the scan — and with it the want-set re-declaration that rides it — until
+     * the player rests.
      */
     void tickMovementPhase(int playerCx, int playerCz) {
         if (playerCx != this.lastChunkX || playerCz != this.lastChunkZ) {
@@ -158,7 +174,8 @@ public class LodRequestManager {
         return columnQueueSize >= haltThreshold();
     }
 
-    private static int haltThreshold() {
+    /** Package-private so the backpressure-clear tests can drive the exact halt edge. */
+    static int haltThreshold() {
         return ClientColumnProcessor.MAX_QUEUED_COLUMNS * BACKPRESSURE_NUMERATOR / BACKPRESSURE_DENOMINATOR;
     }
 
@@ -190,89 +207,25 @@ public class LodRequestManager {
     }
 
     /**
-     * Periodic scan (every 20 ticks): discover positions needing requests.
-     * @return the {@link SpiralScanner#maybeScan} result (-1 when the cadence did not fire)
+     * Periodic scan (every 20 ticks): build the complete want-set and send it as ONE batch in
+     * the same tick. A walked-but-empty scan (0) sends NOTHING — the convergence invariant that
+     * keeps the soak quiescence predicate alive (a heartbeat would keep requests_received moving
+     * forever and silently disable every law) — but still replaces the awaiting set so phantom
+     * entries cannot linger.
+     * @return the {@link SpiralScanner#maybeScan} result (-1 when no walk happened)
      */
     int tickScanPhase(int playerCx, int playerCz, int viewDistance, int columnQueueSize,
                       IntSupplier missingVanilla) {
         int scanned = this.scanner.maybeScan(playerCx, playerCz, viewDistance,
                 columnQueueSize, haltThreshold(), missingVanilla,
-                this.columns, this.tracker::isInFlight, this.queue);
+                this.columns, this.sendPositionBuffer, this.sendTimestampBuffer);
         if (scanned >= 0) {
+            this.tracker.replaceWith(this.sendPositionBuffer, scanned);
             if (scanned > 0) {
-                updateSendPerTick(scanned);
+                sendRequests(this.sendPositionBuffer, this.sendTimestampBuffer, scanned);
             }
-            // Timeout sweep: evict stale requests on the scan cadence (even if scan skipped).
-            sweepTimeouts();
         }
         return scanned;
-    }
-
-    /**
-     * Every tick: drain queue through concurrency limits and send.
-     * @return the number of positions sent
-     */
-    int tickDrainPhase() {
-        if (this.queue.hasNext()) {
-            int sent = drainQueue(this.maxSendPerTick);
-            if (sent > 0) sendRequests(this.sendPositionBuffer, this.sendTimestampBuffer, sent);
-            return sent;
-        }
-        return 0;
-    }
-
-    // --- Send rate adaptation ---
-
-    private void updateSendPerTick(int lastScanQueued) {
-        this.maxSendPerTick = Math.min(LSSConstants.MAX_BATCH_CHUNK_REQUESTS,
-                Math.max(MIN_SEND_PER_TICK, (lastScanQueued + LSSConstants.TICKS_PER_SECOND - 1) / LSSConstants.TICKS_PER_SECOND));
-    }
-
-    // --- Queue drain ---
-
-    /** Package-private for direct test coverage — tick() needs a running Minecraft client. */
-    int drainQueue(int maxToSend) {
-        long now = System.nanoTime();
-        boolean generationEnabled = this.sessionConfig.generationEnabled();
-        int maxGenConcurrency = this.sessionConfig.generationConcurrencyLimitPerPlayer();
-        int maxSyncConcurrency = this.sessionConfig.syncOnLoadConcurrencyLimitPerPlayer();
-        int count = 0;
-
-        while (count < maxToSend && this.queue.hasNext()) {
-            long pos = this.queue.peekPosition();
-            if (this.tracker.isInFlight(pos)) { this.queue.skip(); continue; }
-            // Re-derive the timestamp from classify at SEND time, not the scan-time value the
-            // queue buffered: a stamp forgotten between scan and drain (e.g. an ingest failure
-            // reset it to -1) would otherwise go out as a stale ts>0 claiming data the client
-            // no longer holds, defeating the server's ts<=0 honest re-resolution.
-            long ts = this.columns.classify(pos, generationEnabled);
-            if (ts == ColumnStateMap.SATISFIED) { this.queue.skip(); continue; }
-
-            // Per-type concurrency check — skip if this type is full, try next
-            boolean isGen = ts == 0;
-            if (isGen && this.tracker.generationCount() >= maxGenConcurrency) { this.queue.skip(); continue; }
-            if (!isGen && (this.tracker.size() - this.tracker.generationCount()) >= maxSyncConcurrency) { this.queue.skip(); continue; }
-
-            this.queue.skip();
-            this.sendPositionBuffer[count] = pos;
-            this.sendTimestampBuffer[count] = ts;
-            this.tracker.markPending(pos, now, isGen);
-            this.columns.markSent(pos);
-            count++;
-        }
-
-        return count;
-    }
-
-    /**
-     * Evict timed-out in-flight requests and mark each eviction for retry — in-flight
-     * counts as satisfied for ring confirmation, so an unmarked eviction inside a
-     * confirmed ring would never be rescanned (permanent hole; the bandwidth-throttle
-     * soak found 161 such orphans; see InFlightTracker.timeoutSweep).
-     * Package-private for direct test coverage — tick() needs a running Minecraft client.
-     */
-    void sweepTimeouts() {
-        this.tracker.timeoutSweep(TIMEOUT_NANOS, this.columns::markRetry);
     }
 
     // --- Request sending and callbacks ---
@@ -287,27 +240,23 @@ public class LodRequestManager {
     private void sendRequests(long[] positionBuffer, long[] timestampBuffer, int count) {
         // Snapshot to exact-length arrays: BatchChunkRequestC2SPayload's StreamCodec reads
         // these lazily when the connection encodes on the netty event loop, which races the
-        // next tick's drainQueue overwriting the reused sendPositionBuffer/sendTimestampBuffer.
-        // The payload must own its data so a request's positions can't be corrupted mid-encode.
+        // next scan overwriting the reused sendPositionBuffer/sendTimestampBuffer. The
+        // payload must own its data so a declaration's positions can't be corrupted mid-encode.
         long[] positions = java.util.Arrays.copyOf(positionBuffer, count);
         long[] timestamps = java.util.Arrays.copyOf(timestampBuffer, count);
         try {
             this.batchSender.send(new BatchChunkRequestC2SPayload(positions, timestamps, count));
             long nowMs = System.currentTimeMillis();
             for (int i = 0; i < count; i++) {
-                this.metrics.recordRequestSent(positions[i], nowMs); // RTT send stamp per position
+                this.metrics.recordRequestSent(positions[i], nowMs); // RTT: last-declare stamp
             }
         } catch (Exception e) {
-            LSSLogger.error("Failed to send batch chunk request", e);
-            for (int i = 0; i < count; i++) {
-                this.tracker.removeByPosition(positions[i]);
-                // drainQueue consumed the dirty/retry marks at markSent, so without
-                // restoration a validated position whose batch never reached the wire
-                // classifies SATISFIED forever — the same orphan class as a timeout
-                // eviction (see sweepTimeouts), without the 10 s grace. Re-mark retry:
-                // classify re-asks with the stored timestamp, no invented stamps.
-                this.columns.markRetry(positions[i]);
-            }
+            LSSLogger.error("Failed to send want-set batch", e);
+            // Nothing is consumed at send any more (marks are answer-consumed), and the next
+            // scan re-declares the identical set, so no mark restoration is needed. Just drop
+            // the awaiting entries so late-status gating doesn't credit a batch that never
+            // reached the wire.
+            this.tracker.replaceWith(positions, 0);
         }
         this.metrics.recordSendCycle(count); // counts attempts — a failed batch still counts
     }
@@ -402,13 +351,14 @@ public class LodRequestManager {
 
     public void onColumnNotGenerated(long packed) {
         // BatchResponse carries no dimension, so unlike onColumnReceived this cannot be
-        // dimension-guarded. Gate on tracking instead: the tracker is cleared on dimension
-        // change / timeout / prune, so a late status can never stamp the fresh map
-        // (matches the pre-v16 requestId gate).
+        // dimension-guarded. Gate on the awaiting set instead: it is cleared on dimension
+        // change, pruned on movement, and replaced wholesale by each scan, so a late status
+        // can never stamp the fresh map (matches the pre-v16 requestId gate).
         if (!this.tracker.isInFlight(packed)) {
-            // Untracked terminal answer (the tracker entry died to a timeout/prune): the RTT
-            // stamp is equally dead — orphans otherwise accumulate to the 4096-stamp cap and
-            // permanently silence RTT sampling for the session.
+            // Untracked terminal answer — its position left the last declared want-set
+            // (dimension change / movement prune / scan replace). The RTT stamp is equally
+            // dead: orphans otherwise accumulate to the 4096-stamp cap and permanently
+            // silence RTT sampling for the session.
             this.metrics.discardRttStamp(packed);
             this.metrics.recordNotGenerated();
             return;
@@ -417,12 +367,19 @@ public class LodRequestManager {
         this.metrics.discardRttStamp(packed); // terminal non-column answer: the RTT stamp is dead
         this.columns.onNotGenerated(packed);
         consumeStaleCrossing(packed); // a dirty that crossed this in-flight first serve forces a re-request
-        // The scanner skips in-flight positions without breaking ring confirmation, so the ring
-        // can confirm PAST this position while it was in-flight. With generation enabled the ts=0
-        // stamp is gen-retry-able (classify -> 0), but a below-ring position is never rescanned
-        // until the ring re-walks — force that re-walk so a stationary player does not keep an
-        // ungenerated hole (CL-014). Cadence-neutral and gen-disabled-safe (classify parks ts=0
-        // when generation is off, so the re-walk just skips it).
+        // Defence-in-depth, no longer a live fix. Under the declarative want-set an awaited
+        // position is an ordinary unsatisfied member that blocks its own ring's confirmation
+        // (pinned by awaitedPositionsAreReDeclaredAndBlockRingConfirmation), and to receive
+        // this answer at all the position must have been in the last declared want-set — so
+        // the ring cannot have confirmed past it, and there is nothing below the ring to
+        // re-reach. It predates that: the old scanner skipped in-flight positions WITHOUT
+        // breaking confirmation, so the ring could confirm past a position while it was
+        // in-flight, stranding the ts=0 hole below the ring for a stationary player (CL-014).
+        // Kept because it is cadence-neutral and gen-disabled-safe (classify parks ts=0 when
+        // generation is off, so a re-walk just skips it), and cheap insurance against the
+        // ring ever confirming past an awaited position again. resetConfirmedRing itself
+        // stays load-bearing on consumeStaleCrossing's path, which CAN park a position below
+        // a confirmed ring.
         this.scanner.resetConfirmedRing();
         this.metrics.recordNotGenerated();
     }
@@ -440,16 +397,13 @@ public class LodRequestManager {
         this.metrics.recordUpToDate();
     }
 
+    /**
+     * Transitional v16 stub: a slot bounce needs no reaction — the position stays unsatisfied
+     * and the next scan re-declares it. Deleted along with the byte-0 dispatch arm in the
+     * protocol-bump task, once the server stops sending bounces.
+     */
     public void onRateLimited(long packed) {
-        this.scanner.noteRateLimited(); // backoff regardless of tracking (pre-v16 set skipNextScan outside the gate)
-        if (!this.tracker.isInFlight(packed)) {
-            this.metrics.discardRttStamp(packed); // untracked terminal answer: stamp is dead (see onColumnNotGenerated)
-            this.metrics.recordRateLimited();
-            return;
-        }
-        this.tracker.removeByPosition(packed);
-        this.metrics.discardRttStamp(packed); // a bounce is terminal for THIS request; the retry re-stamps
-        this.columns.markRetry(packed);
+        this.metrics.discardRttStamp(packed);
         this.metrics.recordRateLimited();
     }
 
@@ -462,9 +416,7 @@ public class LodRequestManager {
         LSSClientNetworking.reportUndispatchedColumns(this);
         saveCache();
         resetRequestState();
-        this.queue.clear();
         this.scanner.resetScanCounter();
-        this.scanner.clearSkipNextScan();
         this.cacheLoaded = true;
         startAsyncCacheLoad(newDimension);
     }
@@ -497,7 +449,6 @@ public class LodRequestManager {
         this.pendingCacheLoad = null; // drop any in-flight load — its pre-clear result would resurrect flushed timestamps
         this.failuresDuringCacheLoad.clear();
         resetRequestState();
-        this.queue.clear();
         this.scanner.reset();
     }
 
@@ -507,7 +458,6 @@ public class LodRequestManager {
 
     ColumnStateMap columnsForTest() { return this.columns; }
     InFlightTracker trackerForTest() { return this.tracker; }
-    RequestQueue queueForTest() { return this.queue; }
     SpiralScanner scannerForTest() { return this.scanner; }
 
     /** tick() derives this from the client level; tests set it directly. */
@@ -577,7 +527,12 @@ public class LodRequestManager {
 
     // Concurrency
     public int getPendingCount() { return this.tracker.size(); }
-    public int getQueueRemaining() { return this.queue.remaining(); }
+    /**
+     * Transitional: the drip-feed queue is gone; always 0. LSSClientCommands drops its caller
+     * in the protocol-bump task and the exporter drops request_queue with the contract change,
+     * after which this stub is deleted.
+     */
+    public int getQueueRemaining() { return 0; }
 
     // Last scan budget
     public int getLastBudget() { return this.scanner.getLastBudget(); }

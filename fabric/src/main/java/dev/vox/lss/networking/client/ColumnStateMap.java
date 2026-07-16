@@ -152,12 +152,6 @@ class ColumnStateMap {
         this.retry.add(packed);
     }
 
-    /** A request for this position is going on the wire — its pending marks are consumed. */
-    void markSent(long packed) {
-        this.retry.remove(packed);
-        this.dirty.remove(packed);
-    }
-
     /** Column data arrived (authoritative for the position, even if no longer tracked). */
     void onReceived(long packed, long columnTimestamp) {
         this.dirty.remove(packed);
@@ -166,9 +160,10 @@ class ColumnStateMap {
         // the networking layer re-flags it via markAuthoritativeClear AFTER this call; a content
         // delivery (>=1 section) does not, so the flag stays cleared and a rejection re-asks ts=-1.
         this.clearedResync.remove(packed);
-        // An answer supersedes any pending retry. Rate-limit bounces (the original retry
-        // writer) guarantee no response is coming, but the timeout sweep retries positions
-        // whose response may still arrive late — leaving the mark would re-request every
+        // An answer supersedes any pending retry. The rate-limit bounce that originally wrote
+        // these marks guaranteed no response was coming; it is gone (byte 0 is a metrics-only
+        // stub) and the live writer is now onIngestFailed, whose position CAN still have a
+        // column in flight when the mark lands. Leaving the mark would re-request every such
         // late-delivered column once and keep confirmedRing pinned at 0 for an extra scan.
         this.retry.remove(packed);
         put(packed, columnTimestamp);

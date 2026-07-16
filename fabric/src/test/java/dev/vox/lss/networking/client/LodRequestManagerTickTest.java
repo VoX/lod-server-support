@@ -23,12 +23,13 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Contract tests for the tick phases ({@link LodRequestManager#tickWithContext}) — the fixed
- * phase order (dimension/cache → movement → metrics → backpressure → cache gate → scan+sweep →
- * drain+send), the derived per-tick send cap, and the lifecycle exits (movement prune,
- * dimension change, disconnect) that must never silently orphan a position. Also pins two
- * deliberate quirks of the movement phase (see its javadoc): the (0,0) lastChunk init cancels
- * the primed first scan for any player joining outside chunk (0,0), and boundary crossings
- * faster than the 20-tick cadence starve both scans and the timeout sweep that rides them.
+ * phase order (dimension/cache → movement → metrics → backpressure → cache gate → scan+send),
+ * the want-set batch cap, and the lifecycle exits (movement prune, dimension change, disconnect)
+ * that must never silently orphan a position. Also pins two deliberate quirks of the movement
+ * phase (see its javadoc): the (0,0) lastChunk init cancels the primed first scan for any player
+ * joining outside chunk (0,0), and boundary crossings faster than the 20-tick cadence starve
+ * scanning — which under the want-set means they starve RE-DECLARATION, the only healer of a
+ * server-side supersession. Both recover at rest, within one cadence window.
  */
 class LodRequestManagerTickTest {
 
@@ -75,17 +76,6 @@ class LodRequestManagerTickTest {
         return ResourceKey.create(Registries.DIMENSION, Identifier.parse("lss_test:" + name));
     }
 
-    /** Seed the manager's request queue with (position, clientTimestamp) pairs. */
-    private void seedQueue(long... posTsPairs) {
-        var queue = manager.queueForTest();
-        int n = posTsPairs.length / 2;
-        queue.ensureCapacity(n);
-        for (int i = 0; i < n; i++) {
-            queue.put(i, posTsPairs[2 * i], posTsPairs[2 * i + 1]);
-        }
-        queue.commit(n);
-    }
-
     /** Drive tickScanPhase until the 20-tick cadence fires; returns the scanned count. */
     private int fireScanPhase(int playerCx, int playerCz, int viewDistance) {
         for (int i = 0; i <= LSSConstants.TICKS_PER_SECOND; i++) {
@@ -102,8 +92,9 @@ class LodRequestManagerTickTest {
         manager.tickWithContext(0, 0, dim("overworld"), 0, 0, () -> 0);
 
         assertEquals(1, sent.size(), "a (0,0) join keeps the primed immediate first scan");
-        assertEquals(16, sent.get(0).count(), "lod 2 / vd 0 annulus (24) drains at the 16 floor");
-        assertEquals(8, manager.getQueueRemaining());
+        assertEquals(24, sent.get(0).count(),
+                "the whole lod-2 / vd-0 annulus ships as ONE want-set batch in the scan's own tick"
+                        + " — no drip-feed remainder trails it");
     }
 
     @Test
@@ -115,7 +106,6 @@ class LodRequestManagerTickTest {
 
         manager.tickWithContext(10, 0, overworld, 0, 0, () -> 0);
         assertEquals(0, sent.size(), "tick-1 scan cancelled by the first-tick movement branch");
-        assertEquals(0, manager.getQueueRemaining());
 
         for (int i = 0; i < LSSConstants.TICKS_PER_SECOND - 2; i++) {
             manager.tickWithContext(10, 0, overworld, 0, 0, () -> 0);
@@ -129,11 +119,8 @@ class LodRequestManagerTickTest {
     // ---- cadence starvation under boundary crossing (CL-003, pinned) ----
 
     @Test
-    void chunkBoundaryCrossingFasterThanTheCadenceStarvesScansAndSweepsUntilRest() {
+    void chunkBoundaryCrossingFasterThanTheCadenceStarvesScansUntilRest() {
         var overworld = dim("overworld");
-        var tracker = manager.trackerForTest();
-        long stale = PositionUtil.packPosition(5, 5);
-        tracker.markPending(stale, System.nanoTime() - 11_000L * LSSConstants.NANOS_PER_MS, false);
 
         // Cross a chunk boundary every 10 ticks for 60 ticks: each crossing restarts the cadence.
         for (int i = 0; i < 60; i++) {
@@ -141,76 +128,39 @@ class LodRequestManagerTickTest {
             manager.tickWithContext(cx, 0, overworld, 0, 0, () -> 0);
         }
         assertEquals(0, sent.size(),
-                "pinned coupling: scans starve while boundary crossings outpace the 20-tick cadence");
-        assertTrue(tracker.isInFlight(stale),
-                "pinned coupling: the timeout sweep rides the scan cadence, so it starves too");
+                "pinned coupling: scans starve while boundary crossings outpace the 20-tick cadence."
+                        + " Under the want-set that also starves RE-DECLARATION — nothing heals a"
+                        + " superseded ask while the player never rests. It is bounded by rest below.");
 
-        // Resting at the last position recovers both within one window.
+        // Resting at the last position recovers scanning within one window.
         for (int i = 0; i < LSSConstants.TICKS_PER_SECOND; i++) {
             manager.tickWithContext(0, 0, overworld, 0, 0, () -> 0);
         }
-        assertFalse(tracker.isInFlight(stale), "rest restores the timeout sweep");
-        assertTrue(manager.columnsForTest().hasRetries(), "the evicted request is marked for retry");
-        assertFalse(sent.isEmpty(), "rest restores scanning");
+        assertFalse(sent.isEmpty(), "rest restores scanning — and with it re-declaration");
     }
 
-    // ---- backoff-skipped scans still sweep; backoffs never compound (CL-004 tick leg) ----
+    // backoffSkippedScanStillSweepsTimeoutsAndBackoffsDoNotCompound is DELETED: there is no
+    // rate-limit backoff to compound and no timeout sweep to ride the cadence.
+    // sendPerTickDerivesFromScannedCountWithFloorSixteen is DELETED with the drip-feed: a scan's
+    // want-set is sent whole in the scan's own tick, so there is no per-tick send cap to derive.
+
+    // ---- the want-set cap (CL-021 successor) ----
 
     @Test
-    void backoffSkippedScanStillSweepsTimeoutsAndBackoffsDoNotCompound() {
-        var overworld = dim("overworld");
-        var tracker = manager.trackerForTest();
-        long stale = PositionUtil.packPosition(5, 5);
-        tracker.markPending(stale, System.nanoTime() - 11_000L * LSSConstants.NANOS_PER_MS, false);
-        manager.onRateLimited(PositionUtil.packPosition(40, 40)); // latch backoff...
-        manager.onRateLimited(PositionUtil.packPosition(41, 40)); // ...twice (must not compound)
+    void oneScanNeverDeclaresMoreThanTheProtocolBatchCap() {
+        // The surviving half of CL-021: the send buffers are sized at MAX_BATCH_CHUNK_REQUESTS, so
+        // a want-set larger than the cap would overflow them. The drip-feed used to enforce this at
+        // the drain; the scanner now enforces it as a budget clamp, before it writes a single entry.
+        setupManager(config(512, 10_000, 100, true)); // budget 10_000*4 = 40_000, far above the cap
 
-        manager.tickWithContext(0, 0, overworld, 0, 0, () -> 0); // primed cadence fires: skipped scan
-        assertEquals(0, sent.size(), "the backoff skipped the scan");
-        assertEquals(0, manager.getQueueRemaining());
-        assertFalse(tracker.isInFlight(stale), "a skipped scan must still run the timeout sweep");
-        assertTrue(manager.columnsForTest().hasRetries());
+        int scanned = fireScanPhase(0, 0, 0);
 
-        for (int i = 0; i < LSSConstants.TICKS_PER_SECOND; i++) {
-            manager.tickWithContext(0, 0, overworld, 0, 0, () -> 0);
-        }
-        assertFalse(sent.isEmpty(), "two rate-limited responses cost one skipped scan, not two");
-    }
-
-    // ---- per-tick send cap derivation (CL-021) ----
-
-    @Test
-    void sendPerTickDerivesFromScannedCountWithFloorSixteen() {
-        // Floor: 24 scanned -> ceil(24/20)=2, floored to MIN_SEND_PER_TICK.
-        manager.tickWithContext(0, 0, dim("overworld"), 0, 0, () -> 0);
-        assertEquals(1, sent.size());
-        assertEquals(16, sent.get(0).count(), "small scans drain at the 16 floor");
-        assertEquals(8, manager.getQueueRemaining(), "the remainder drip-feeds on later ticks");
-
-        // Boundary: 320 scanned -> ceil(320/20) = 16 exactly.
-        setupManager(config(10, 80, 100, true)); // budget 80*4 = 320, rings 1..10 hold 440
-        assertEquals(320, fireScanPhase(0, 0, 0), "premise: budget-capped scan count");
-        assertEquals(16, manager.tickDrainPhase());
-
-        // Above the floor: 324 scanned -> ceil(324/20) = 17.
-        setupManager(config(10, 81, 100, true)); // budget 324
-        assertEquals(324, fireScanPhase(0, 0, 0));
-        assertEquals(17, manager.tickDrainPhase(), "the derived cap is ceil(scanned/20) above the floor");
-        assertEquals(17, sent.get(0).count());
-    }
-
-    @Test
-    void oneTickNeverSendsMoreThanTheProtocolBatchCap() {
-        setupManager(config(512, 10_000, 100, true)); // budget 40000 — a huge backfill scan
-        assertEquals(40_000, fireScanPhase(0, 0, 0), "premise: scan filled the whole budget");
-
-        int sentCount = manager.tickDrainPhase();
-
-        assertEquals(LSSConstants.MAX_BATCH_CHUNK_REQUESTS, sentCount,
-                "the derived send rate is capped at the protocol batch limit — the fixed send"
-                        + " buffers are sized to it, so exceeding it would overflow them");
+        assertEquals(LSSConstants.MAX_BATCH_CHUNK_REQUESTS, scanned,
+                "the scan budget is clamped to the protocol batch cap, so the want-set always fits"
+                        + " one wire frame (replace semantics tear across frames) and the fixed send"
+                        + " buffers can never overflow");
+        assertEquals(1, sent.size(), "one scan, one batch — never a split");
         assertEquals(LSSConstants.MAX_BATCH_CHUNK_REQUESTS, sent.get(0).count());
-        assertEquals(40_000 - LSSConstants.MAX_BATCH_CHUNK_REQUESTS, manager.getQueueRemaining());
     }
 
     // ---- lifecycle exits inform the state map — no silent orphans (CL-025 matrix rows) ----
@@ -222,7 +172,7 @@ class LodRequestManagerTickTest {
         long near = PositionUtil.packPosition(1, 1);
         manager.onColumnReceived(far, 5000L, overworld);
         manager.onColumnReceived(near, 5000L, overworld);
-        manager.trackerForTest().markPending(far, System.nanoTime(), false);
+        manager.trackerForTest().replaceWith(new long[]{far}, 1);
 
         manager.tickWithContext(3, 0, overworld, 64, 0, () -> 0); // movement: prune at lod+32 = 34
 
@@ -243,13 +193,11 @@ class LodRequestManagerTickTest {
         long stamped = PositionUtil.packPosition(1, 1);
         long inFlightOnly = PositionUtil.packPosition(2, 1);
         manager.onColumnReceived(stamped, 5000L, overworld);
-        manager.trackerForTest().markPending(inFlightOnly, System.nanoTime(), false);
-        seedQueue(PositionUtil.packPosition(2, 2), -1L);
+        manager.trackerForTest().replaceWith(new long[]{inFlightOnly}, 1);
 
         manager.tickWithContext(0, 0, end, 64, 0, () -> 0); // the flip
 
-        assertEquals(0, manager.getPendingCount(), "no in-flight survivor can stamp the fresh dimension");
-        assertEquals(0, manager.getQueueRemaining(), "queued old-dimension asks die with the session state");
+        assertEquals(0, manager.getPendingCount(), "no awaited survivor can gate a status into the fresh dimension");
         assertEquals(0, manager.getReceivedColumnCount());
         assertEquals(-1L, manager.columnsForTest().timestampFor(stamped),
                 "wholesale reset: the old stamp lives on only in the saved cache");
@@ -268,15 +216,15 @@ class LodRequestManagerTickTest {
         long inFlightOnly = PositionUtil.packPosition(2, 1);
         manager.setLastDimensionForTest(overworld);
         manager.onColumnReceived(stamped, 5000L, overworld);
-        manager.trackerForTest().markPending(inFlightOnly, System.nanoTime(), false);
+        manager.trackerForTest().replaceWith(new long[]{inFlightOnly}, 1);
 
         manager.disconnect();
 
-        assertEquals(0, manager.getPendingCount(), "disconnect drops all in-flight tracking");
+        assertEquals(0, manager.getPendingCount(), "disconnect drops the whole awaiting set");
         assertEquals(5000L, manager.columnsForTest().timestampFor(stamped),
                 "stamps survive disconnect — the session-gate teardown saves them to the cache next");
         assertEquals(-1L, manager.columnsForTest().classify(inFlightOnly, true),
-                "an answer-less in-flight position stays unknown -> the next session re-requests it");
+                "an answer-less awaited position stays unknown -> the next session re-requests it");
         assertFalse(manager.columnsForTest().hasRetries(),
                 "no retry marks at disconnect: the session is over, nothing left to rescan");
     }
@@ -284,34 +232,34 @@ class LodRequestManagerTickTest {
     // ---- backpressure halt order (CL-070) ----
 
     @Test
-    void backpressureHaltsBeforeCachePollSweepAndDrain() {
+    void backpressureHaltsBeforeCachePollAndScanAndClearsTheServerBacklogOnce() {
         var overworld = dim("overworld");
-        var tracker = manager.trackerForTest();
-        long stale = PositionUtil.packPosition(5, 5);
         long cached = PositionUtil.packPosition(1, 1);
-        tracker.markPending(stale, System.nanoTime() - 11_000L * LSSConstants.NANOS_PER_MS, false);
         var loaded = new Long2LongOpenHashMap();
         loaded.put(cached, 5000L);
         manager.setPendingCacheLoadForTest(CompletableFuture.completedFuture(loaded));
-        seedQueue(PositionUtil.packPosition(2, 2), -1L);
 
         int halt = ClientColumnProcessor.MAX_QUEUED_COLUMNS * 3 / 4;
         assertEquals(6000, halt, "pinned threshold: 3/4 of the 8000-column decode queue");
-        manager.tickWithContext(0, 0, overworld, 64, halt, () -> 0); // exactly at threshold: halted
+        assertEquals(halt, LodRequestManager.haltThreshold());
+        manager.tickWithContext(0, 0, overworld, 0, halt, () -> 0); // exactly at threshold: halted
 
         assertEquals(-1L, manager.columnsForTest().timestampFor(cached),
                 "cache poll skipped while backpressured");
-        assertTrue(tracker.isInFlight(stale), "timeout sweep skipped while backpressured");
-        assertEquals(0, sent.size(), "drain skipped while backpressured");
-        assertEquals(1, manager.getQueueRemaining());
+        assertEquals(1, sent.size(),
+                "entering the halt sends the empty backpressure clear — silence would leave the"
+                        + " server pumping the last want-set (up to 1024 backlogged asks)");
+        assertEquals(0, sent.get(0).count(), "no want-set is declared while halted, only the clear");
 
-        manager.tickWithContext(0, 0, overworld, 64, halt - 1, () -> 0); // one below: all resume
+        manager.tickWithContext(0, 0, overworld, 0, halt - 1, () -> 0); // one below: all resume
 
         assertEquals(5000L, manager.columnsForTest().timestampFor(cached), "cache result applied");
-        assertFalse(tracker.isInFlight(stale), "sweep evicted the stale request");
-        assertTrue(manager.columnsForTest().hasRetries());
-        assertEquals(1, sent.size(), "the queued ask went out");
-        assertEquals(PositionUtil.packPosition(2, 2), sent.get(0).positions()[0]);
+        assertEquals(2, sent.size(), "the scan resumes");
+        assertEquals(1, sent.get(1).count(),
+                "one below the halt the queue-pressure scale floors the budget at 1. Under replace"
+                        + " semantics that shrunken want-set is an ACTIVE brake, not just a slower"
+                        + " ask rate: it REPLACES the server's whole backlog with a single entry,"
+                        + " so the decode queue gets to drain before the next full declaration.");
     }
 
     @Test
@@ -328,50 +276,51 @@ class LodRequestManagerTickTest {
                         + " just because the decode queue is full");
     }
 
-    // ---- queue is exempt from the movement prune (CL-071, pinned) ----
+    // ---- teleport drops stale wants outright (CL-071 successor) ----
 
     @Test
-    void stalePreTeleportQueueEntriesStillSendOnceAndAreAbsorbedByTheServerGuard() {
+    void teleportDropsStaleWantsFromTheNextBatch() {
+        // CL-071 pinned that a queue entry committed BEFORE a teleport was exempt from the movement
+        // prune, still went out once, and was absorbed by the server's distance guard (bounded by
+        // in-flight tracking to one ask). The want-set removes the exemption AND the ask: there is
+        // no committed queue to survive the teleport — every scan writes the window fresh from the
+        // player's current position, so a stale want simply never appears in a batch again. Any
+        // already-declared stale entry is destroyed server-side by the next batch's replace.
         var overworld = dim("overworld");
         long far = PositionUtil.packPosition(500, 500);
         manager.onColumnReceived(far, 5000L, overworld);
-        seedQueue(far, 5000L); // scanned before the teleport
 
-        manager.tickWithContext(300, 0, overworld, 64, 0, () -> 0); // teleport
+        manager.tickWithContext(300, 0, overworld, 0, 0, () -> 0); // teleport (restarts the cadence)
 
         assertEquals(-1L, manager.columnsForTest().timestampFor(far), "premise: column state pruned");
-        assertEquals(1, sent.size(),
-                "the committed queue entry is exempt from the prune and still goes out —"
-                        + " the server's distance guard absorbs it");
-        assertEquals(far, sent.get(0).positions()[0]);
-        assertEquals(-1L, sent.get(0).timestamps()[0],
-                "the drain re-derives the ts from classify at send time: the pruned position is now"
-                        + " unknown (-1), and the server distance guard absorbs it regardless — CL-071's"
-                        + " send-once + in-flight-churn-bound essence holds");
-        assertTrue(manager.trackerForTest().isInFlight(far));
+        assertEquals(0, sent.size(), "the teleport restarts the cadence: nothing goes out this tick");
 
-        seedQueue(far, 5000L);
-        manager.tickWithContext(300, 0, overworld, 64, 0, () -> 0);
-        assertEquals(1, sent.size(),
-                "churn bound: in-flight tracking stops a duplicate send — one ask per stale entry");
+        for (int i = 0; i < LSSConstants.TICKS_PER_SECOND; i++) {
+            manager.tickWithContext(300, 0, overworld, 0, 0, () -> 0);
+        }
+
+        assertEquals(1, sent.size(), "the next window declares the want-set at the NEW position");
+        var batch = sent.get(0);
+        for (int i = 0; i < batch.count(); i++) {
+            long p = batch.positions()[i];
+            assertNotEquals(far, p, "a pre-teleport want must never appear in a post-teleport batch");
+            int cheb = Math.max(Math.abs(PositionUtil.unpackX(p) - 300),
+                    Math.abs(PositionUtil.unpackZ(p)));
+            assertTrue(cheb <= 2, "every declared position is inside the NEW window; got cheb=" + cheb);
+        }
     }
 
-    // ---- generation toggle suppression at queue/drain level (CG-029) ----
+    // ---- generation toggle suppression at want-set level (CG-029) ----
 
     @Test
-    void generationDisabledQueuesAndSendsZeroGenRequestsAndReEnableResumes() {
+    void generationDisabledDeclaresZeroGenRequestsAndReEnableResumes() {
         setupManager(config(2, 100, 100, false)); // generation disabled
         long notGen = PositionUtil.packPosition(1, 1);
-        manager.trackerForTest().markPending(notGen, System.nanoTime(), false);
+        manager.trackerForTest().replaceWith(new long[]{notGen}, 1);
         manager.onColumnNotGenerated(notGen); // server said not-generated -> stored ts == 0
 
         assertEquals(23, fireScanPhase(0, 0, 0),
                 "the parked ts==0 position is excluded from the scan (24-position annulus minus it)");
-        while (manager.getQueueRemaining() > 0) {
-            manager.tickDrainPhase();
-        }
-        assertEquals(0, manager.trackerForTest().generationCount(),
-                "zero generation requests sent while disabled");
         for (var batch : sent) {
             for (int i = 0; i < batch.count(); i++) {
                 assertNotEquals(0L, batch.timestamps()[i],
@@ -387,12 +336,6 @@ class LodRequestManagerTickTest {
         manager.columnsForTest().loadFrom(restored);
         assertEquals(24, fireScanPhase(0, 0, 0),
                 "premise: the restored ts==0 stamp re-enters the scan once generation is enabled");
-        manager.tickDrainPhase();
-        while (manager.getQueueRemaining() > 0) {
-            manager.tickDrainPhase();
-        }
-        assertEquals(1, manager.trackerForTest().generationCount(),
-                "re-enabled: the restored not-generated stamp asks for generation");
         boolean genAskSent = false;
         for (var batch : sent) {
             for (int i = 0; i < batch.count(); i++) {
@@ -405,20 +348,26 @@ class LodRequestManagerTickTest {
         assertTrue(genAskSent, "the generation ask went on the wire with ts=0");
     }
 
-    // ---- requested total counts at send (HD-040 manager half) ----
+    // ---- requested total counts every DECLARED entry (HD-040 manager half) ----
 
     @Test
-    void totalPositionsRequestedCountsAtSendNotAtQueueAccept() {
-        seedQueue(PositionUtil.packPosition(1, 1), -1L,
-                PositionUtil.packPosition(2, 1), -1L,
-                PositionUtil.packPosition(3, 1), -1L);
-        assertEquals(0, manager.getTotalPositionsRequested(), "queue accept must not count");
+    void totalPositionsRequestedCountsEveryDeclaredEntry() {
+        // requested_total changes meaning with the want-set: it is now "want-set entries DECLARED",
+        // so an unanswered position is counted again on every 1 Hz re-declare. It inflates during
+        // activity, and that inflation is exactly what the re-derived soak law A1 balances against
+        // (the old law counted distinct first-asks). Do not "fix" this back to distinct positions.
+        assertEquals(0, manager.getTotalPositionsRequested());
         assertEquals(0, manager.getTotalSendCycles());
 
-        assertEquals(3, manager.tickDrainPhase());
-
-        assertEquals(3, manager.getTotalPositionsRequested(),
-                "totalPositionsRequested counts at send (recordSendCycle)");
+        assertEquals(24, fireScanPhase(0, 0, 0), "scan 1 declares the annulus");
+        assertEquals(24, manager.getTotalPositionsRequested());
         assertEquals(1, manager.getTotalSendCycles());
+
+        assertEquals(24, fireScanPhase(0, 0, 0), "scan 2 re-declares the same unanswered positions");
+
+        assertEquals(48, manager.getTotalPositionsRequested(),
+                "a re-declared position counts TWICE — requested_total counts declarations, not"
+                        + " distinct positions");
+        assertEquals(2, manager.getTotalSendCycles());
     }
 }
