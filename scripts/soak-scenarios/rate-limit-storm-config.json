@@ -1,6 +1,5 @@
 {
   "lodDistanceChunks": 12,
-  "syncOnLoadConcurrencyLimitPerPlayer": 4,
   "generationConcurrencyLimitPerPlayer": 40,
   "generationConcurrencyLimitGlobal": 64,
   "dirtyBroadcastIntervalSeconds": 5,

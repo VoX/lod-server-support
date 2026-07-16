@@ -133,7 +133,7 @@ SERVER_CONFIG_INT_KEYS = frozenset({
     "lodDistanceChunks", "bytesPerSecondLimitPerPlayer", "diskReaderThreads",
     "sendQueueLimitPerPlayer", "bytesPerSecondLimitGlobal",
     "generationConcurrencyLimitGlobal", "generationTimeoutSeconds",
-    "dirtyBroadcastIntervalSeconds", "syncOnLoadConcurrencyLimitPerPlayer",
+    "dirtyBroadcastIntervalSeconds",
     "generationConcurrencyLimitPerPlayer", "perDimensionTimestampCacheSizeMB",
 })
 SERVER_CONFIG_KEYS = SERVER_CONFIG_BOOL_KEYS | SERVER_CONFIG_INT_KEYS
@@ -1029,47 +1029,35 @@ def make_disc_completeness(scenario, run=1):
 
 @named_check("rate-limit-storm", ["server.service.superseded", "server.generation.completed"])
 def check_rate_limit_storm(ctx):
-    """Tiny sync slot cap (syncOnLoadConcurrencyLimitPerPlayer: 4) vs the client's want-set.
+    """Small fresh disc (lodDistance 12) declared at the FULL constant want-set budget.
 
-    HISTORICAL NAME: pre-v17 this scenario drove the bounce loop (router rateLimit -> wire
-    rate-limited -> onRateLimited -> retry mark -> scanner backoff) and asserted it fired.
-    v17 retired RESPONSE_RATE_LIMITED. The file name is kept (renaming it touches six keyed
-    tables).
+    HISTORICAL NAME, THIRD PREMISE. (1) Pre-v17 this drove the retired rate-limit bounce
+    loop. (2) Under early v17 its syncOnLoadConcurrencyLimitPerPlayer:4 shrank the whole
+    want-set to 16/scan (the scan budget derived from the cap), so it pinned the
+    want-set/gate coupling with a superseded<=50 ceiling — measured 0. (3) Server-owned
+    generation DELETED both the knob and the coupling: the client always declares the
+    constant WANT_SET_BUDGET (800), the server generates on any disk miss, and a miss that
+    cannot take a generation slot is a TRANSIENT silent drop counted superseded (never a
+    wire answer). The file name is kept (renaming touches six keyed tables).
 
-    PREMISE CORRECTED AT TASK 10 (measured, was derived). The v17 rewrite assumed this config
-    would now produce "a deep RETAINED backlog and heavy supersession — the contention is
-    identical, only its disposition changed", and asserted superseded >= 100. That is
-    UNSATISFIABLE BY CONSTRUCTION, and the first live run proved it (superseded == 0 exactly,
-    backlog high-water 12, tracker_in_flight ~0). The reason is a v17 coupling the derivation
-    missed: the client's scan budget IS the server's sync cap times four
-    (SpiralScanner.BUDGET_MULTIPLIER), so syncCap=4 caps the whole want-set at 16 positions
-    per scan. The old floor's own comment ("~800-entry want-sets") silently assumed the
-    DEFAULT syncCap of 200 (200*4=800) while the scenario config sets 4 — the two cannot
-    coexist. Four slots serving sixteen wants per second is abundance, not contention: this
-    config can never leave an entry undrained, so supersession here is impossible, not absent.
-    (The selftest missed it because it fed the check a synthetic superseded=4200 — it
-    validated the assumption instead of the mechanism.)
+    WHAT IT PINS NOW: a small fresh disc (~165 LSS positions behind vanilla's own square)
+    converges through default gates with BOUNDED transient-drop churn. Misses beyond the
+    generation caps (40/64) drop superseded and heal by re-declaration at 1 Hz, so
+    superseded is nonzero but must stay in the low hundreds and STOP at convergence —
+    unbounded growth means re-declaration is not converging (positions never satisfy).
+    On a gen-ENABLED server NOT_GENERATED must never fire (the permanence guarantee is
+    pinned in generation-capacity-stress where the bottleneck makes it interesting).
 
-    So the floor is INVERTED into the invariant this config can actually prove, and the
-    supersession floor moves to `disk-saturation`, where contention is real and measured
-    (superseded=420, backlog high-water 760 — see check_disk_saturation).
-
-    THE INVARIANT KEPT: a tiny gate must self-throttle, never stall. Because the want-set is
-    derived from the gate, the client provably cannot outrun it, so supersession must stay
-    near zero here. This ceiling pins that coupling: decouple the scan budget from syncCap
-    (or let the client flood a small gate) and supersession appears here immediately.
-    The strongest assertions remain the quiescent tail + disc completeness: convergence to a
-    complete disc through a 4-slot gate, with nothing orphaned and no bounces."""
+    PROVISIONAL CEILING (plan Task 7): 500, generous over the derived worst case
+    (~100 first-scan drops + re-declared stragglers); RE-BASELINE at Task 10 from the
+    first live run — measured value recorded here when it lands."""
     last = ctx.server_snaps[-1]
-    # Measured: 0 over a full run. The ceiling is generous (a replace racing a slow cycle
-    # could legitimately drop a handful) while still catching a want-set that outruns the gate
-    # by orders of magnitude — the pre-correction derivation expected hundreds here.
-    if last["service"]["superseded"] > 50:
+    if last["service"]["superseded"] > 500:
         yield Violation("rate-limit-storm", "final snapshot",
-                        "want-set supersession built up behind a 4-slot gate — the client "
-                        "outran the gate, so the scan budget is no longer derived from "
-                        "syncOnLoadConcurrencyLimitPerPlayer (want-set/gate coupling broken)",
-                        {"expected": "<= 50", "actual": last["service"]["superseded"]})
+                        "transient-drop churn did not converge: superseded kept growing, so "
+                        "re-declared positions are not being satisfied (the disk-miss "
+                        "escalation or the silent-drop healing loop is broken)",
+                        {"expected": "<= 500", "actual": last["service"]["superseded"]})
     fc = ctx.final_client(1)
     if fc is None:
         yield Violation("rate-limit-storm", "run1", "no client snapshots in run 1", {})
@@ -1077,7 +1065,7 @@ def check_rate_limit_storm(ctx):
     # Floor calibrated for lodDistance=12 / exclusion~8: vanilla's own loaded square covers
     # rings 9-10, so only the outer rings (~165 positions) route through LSS generation.
     # Disc-completeness separately proves nothing was orphaned; this floor only asserts
-    # generation kept making real progress through the contention.
+    # generation kept making real progress through the churn.
     if last["generation"]["completed"] <= 120:
         yield Violation("rate-limit-storm", "final snapshot",
                         "fresh-world backfill did not generate through the storm",
@@ -1176,11 +1164,25 @@ def check_generation_disabled(ctx):
 
 
 @named_check("generation-capacity-stress", ["server.generation.completed",
-                                            "client.responses.not_generated"])
+                                            "client.responses.not_generated",
+                                            "server.service.superseded"])
 def check_generation_capacity_stress(ctx):
     """Global generation cap pinned to 1 while the per-player pending cap admits 8: the
-    drainGenerationTicketRequests -> feedGenerationFailure -> slot-release bounce path runs
-    hot through the whole backfill, and it must still converge to a complete disc."""
+    R7 repeated-miss loop runs hot through the whole backfill — a miss that cannot take
+    the single generation slot is a TRANSIENT silent drop (counted superseded), the client
+    re-declares at 1 Hz, the disk re-misses, and the cycle repeats until the slot frees.
+    It must still converge to a complete disc.
+
+    THE PERMANENCE GUARANTEE, PINNED NEGATIVELY: under server-owned generation a
+    NOT_GENERATED answer is session-permanent on the client (only a dirty broadcast
+    revives it), so on a generation-ENABLED server it must NEVER fire — the pre-inversion
+    checker asserted not_generated >= 50 here (capacity bounces reached the wire); that is
+    now exactly the bug class this check exists to catch. One NOT_GENERATED through a
+    transient capacity bounce = one column blanked for the whole session.
+
+    PROVISIONAL SUPERSEDED FLOOR (plan Task 7): >= 100 — the churn IS the scenario's
+    subject now (R7's measured worst case); RE-BASELINE at Task 10 from the first live
+    run — measured value recorded here when it lands."""
     last = ctx.server_snaps[-1]
     # Calibrated for lodDistance=12 / exclusion~8 at the global=1 bottleneck's ~1 gen/s:
     # vanilla's loaded square covers rings 9-10, leaving ~165 LSS-generated positions.
@@ -1192,13 +1194,21 @@ def check_generation_capacity_stress(ctx):
     if fc is None:
         yield Violation("generation-capacity-stress", "run1", "no client snapshots in run 1", {})
         return
-    if fc["responses"]["not_generated"] < 50:
+    if fc["responses"]["not_generated"] != 0:
         yield Violation("generation-capacity-stress", "run1 final snapshot",
-                        "too few not-generated responses — capacity bouncing never happened",
-                        {"expected": ">= 50", "actual": fc["responses"]["not_generated"]})
+                        "NOT_GENERATED reached the wire on a generation-enabled server — a "
+                        "transient outcome (capacity/timeout) leaked as the session-permanent "
+                        "answer and blanked columns for the whole session",
+                        {"expected": "== 0", "actual": fc["responses"]["not_generated"]})
+    if last["service"]["superseded"] < 100:
+        yield Violation("generation-capacity-stress", "run1 final snapshot",
+                        "too little transient-drop churn — the capacity bottleneck never "
+                        "produced the silent-drop/re-declare loop this scenario exists to "
+                        "exercise (did the config stop creating contention?)",
+                        {"expected": ">= 100", "actual": last["service"]["superseded"]})
     if (len(ctx.server_snaps) - 1) not in ctx.quiescent_server:
         yield Violation("generation-capacity-stress", "final snapshot",
-                        "last server snapshot is not verified-quiescent (capacity bouncing "
+                        "last server snapshot is not verified-quiescent (capacity churn "
                         "never converged)", {"wallMs": last["wallMs"]})
 
 
@@ -2781,15 +2791,15 @@ def selftest():
             quiescent_server={1} if quiescent_last else set(),
             config=config or {})
 
-    # v17 + Task 10 correction: a 4-slot gate gives the client a 16-entry want-set (the scan
-    # budget IS 4*syncCap), so it cannot outrun the gate — supersession must stay near zero.
-    # (The pre-correction case asserted superseded=4200 here, which the live run showed is
-    # unreachable: it validated the derivation's assumption, not the mechanism.)
-    storm_srv = {"service.superseded": 0, "generation.completed": 165}
+    # Server-owned generation: the storm declares the full constant want-set (800); misses
+    # beyond the gen caps drop superseded (transient) and heal by re-declaration, so a small
+    # fresh disc converges with bounded churn. Unbounded superseded growth = the healing
+    # loop is broken. (Ceiling provisional at 500 — re-baselined at Task 10.)
+    storm_srv = {"service.superseded": 180, "generation.completed": 165}
     storm_cli = {}
     clean("rate-limit-storm clean", list(check_rate_limit_storm(
         stress_ctx(storm_srv, storm_cli))))
-    hits("rate-limit-storm want-set outran the gate", list(check_rate_limit_storm(
+    hits("rate-limit-storm churn never converged", list(check_rate_limit_storm(
         stress_ctx({**storm_srv, "service.superseded": 4200}, storm_cli))),
         "rate-limit-storm")
 
@@ -2825,12 +2835,21 @@ def selftest():
         stress_ctx({**gd_srv, "generation.completed": 5}, gd_cli))),
         "generation-disabled")
 
-    gcs_srv = {"generation.completed": 165}
-    gcs_cli = {"responses.not_generated": 800}
+    # Server-owned generation: on a gen-ENABLED server NOT_GENERATED must NEVER reach the
+    # wire (it is session-permanent on the client) — transient capacity pressure drops
+    # silently as superseded, which IS the scenario's churn subject now (R7).
+    gcs_srv = {"generation.completed": 165, "service.superseded": 950}
+    gcs_cli = {"responses.not_generated": 0}
     clean("generation-capacity-stress clean", list(check_generation_capacity_stress(
         stress_ctx(gcs_srv, gcs_cli))))
     hits("generation-capacity-stress stalled", list(check_generation_capacity_stress(
         stress_ctx({**gcs_srv, "generation.completed": 40}, gcs_cli, quiescent_last=False))),
+        "generation-capacity-stress")
+    hits("generation-capacity-stress permanence leak", list(check_generation_capacity_stress(
+        stress_ctx(gcs_srv, {"responses.not_generated": 3}))),
+        "generation-capacity-stress")
+    hits("generation-capacity-stress churn premise broke", list(check_generation_capacity_stress(
+        stress_ctx({**gcs_srv, "service.superseded": 2}, gcs_cli))),
         "generation-capacity-stress")
 
     # --- clearcache-mid-session: honest re-resolution = full re-download ---
