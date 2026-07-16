@@ -45,12 +45,22 @@ public abstract class AbstractChunkDiskReader {
 
     private final ExecutorService executor;
     private final ArrayBlockingQueue<Runnable> workQueue;
+    private final int threadCount;
     private final ConcurrentHashMap<UUID, ConcurrentLinkedQueue<ChunkReadResult>> playerResults = new ConcurrentHashMap<>();
     private final AtomicBoolean isShutdown = new AtomicBoolean(false);
+
+    // Adaptive read throttle (Approach B): null until a platform reader detects that its
+    // background-priority path is incompatible (a chunk-IO-overhaul mod replaced vanilla IO) and
+    // calls enableAdaptiveThrottleFallback(). Never set on a working-A server — A gives true
+    // priority, so throttling would only cost LSS throughput for no gameplay benefit. Volatile:
+    // enabled on the processing/submit thread, read by hasHeadroom() (submit thread) and fed by
+    // recordRealCompletion() (pool threads).
+    private volatile AdaptiveReadThrottle throttle;
 
     protected final DiskReaderDiagnostics diag = new DiskReaderDiagnostics();
 
     protected AbstractChunkDiskReader(int threadCount) {
+        this.threadCount = threadCount;
         int queueCapacity = threadCount * QUEUE_CAPACITY_PER_THREAD;
         var workQueue = new ArrayBlockingQueue<Runnable>(queueCapacity);
         this.workQueue = workQueue;
@@ -72,7 +82,49 @@ public abstract class AbstractChunkDiskReader {
      * full pool.
      */
     public boolean hasHeadroom() {
-        return this.workQueue.remainingCapacity() > 0;
+        if (this.workQueue.remainingCapacity() <= 0) return false;   // pool queue full (unchanged)
+        var t = this.throttle;                                       // null on the working-A path
+        if (t != null) {
+            // Approach B expressed as a headroom modifier: when the adaptive limit is reached the
+            // router leaves the read in the want-set backlog (NO_DISK_HEADROOM) and the client
+            // re-declares it — no bounce, no rate_limited (retired in v17). in-flight = submitted -
+            // completed, the same measure the pool bounds.
+            int inFlight = (int) Math.max(0, this.diag.getSubmittedCount() - this.diag.getCompletedCount());
+            if (!t.canSubmit(inFlight)) return false;
+        }
+        return true;
+    }
+
+    /**
+     * Idempotently enable the adaptive-throttle fallback (a platform reader's background-priority
+     * path reported itself incompatible — a chunk-IO-overhaul mod replaced vanilla IO). Safe from
+     * any thread; the first caller wins. The throttle starts at the pool's full depth (optimistic),
+     * so enabling it does not restrict until measured read latency actually rises.
+     */
+    protected final void enableAdaptiveThrottleFallback() {
+        if (this.throttle == null) {
+            synchronized (this) {
+                if (this.throttle == null) {
+                    this.throttle = AdaptiveReadThrottle.forPool(this.threadCount,
+                            QUEUE_CAPACITY_PER_THREAD, LSSConstants.ADAPTIVE_READ_TARGET_LATENCY_MS);
+                }
+            }
+        }
+    }
+
+    /** The adaptive throttle's current effective concurrency limit, or -1 when it is not engaged
+     *  (the normal working-A path). For {@code /lsslod diag}. */
+    public int adaptiveThrottleLimitOrDisabled() {
+        var t = this.throttle;
+        return t == null ? -1 : t.currentLimit();
+    }
+
+    /** Package-private test seam: the live throttle instance (null until engaged), so the
+     *  in-package wiring test can drive its AIMD limit with synthetic latency samples without
+     *  occupying a pool thread. Production reads throttle state via
+     *  {@link #adaptiveThrottleLimitOrDisabled()}. */
+    AdaptiveReadThrottle throttleForTest() {
+        return this.throttle;
     }
 
     protected boolean isShutdown() {
@@ -118,6 +170,15 @@ public abstract class AbstractChunkDiskReader {
         }
     }
 
+    /** Record a REAL read completion: the diagnostics count plus, when the adaptive throttle is
+     *  engaged, the measured submit->result latency (the 0-latency bounce/error-before-IO paths
+     *  are NOT fed — they measured no IO and would poison the EWMA). */
+    private void recordRealCompletion(long elapsedNanos) {
+        this.diag.recordCompleted(elapsedNanos);
+        var t = this.throttle;
+        if (t != null) t.recordLatency(elapsedNanos);
+    }
+
     private void readAndDeliver(UUID playerUuid, int chunkX, int chunkZ, String dimension,
                                  long submissionOrder, ReadOperation operation) {
         if (isShutdown()) return;
@@ -129,14 +190,14 @@ public abstract class AbstractChunkDiskReader {
         } catch (Exception e) {
             LSSLogger.error("Failed to read chunk NBT from disk at " + chunkX + ", " + chunkZ, e);
             this.diag.recordError();
-            this.diag.recordCompleted(System.nanoTime() - startNs);
+            recordRealCompletion(System.nanoTime() - startNs);
             addResult(playerUuid, ChunkReadResult.empty(playerUuid, chunkX, chunkZ, dimension, submissionOrder));
             return;
         }
 
         if (serializedSections == null) {
             this.diag.recordNotFound();
-            this.diag.recordCompleted(System.nanoTime() - startNs);
+            recordRealCompletion(System.nanoTime() - startNs);
             addResult(playerUuid, ChunkReadResult.empty(playerUuid, chunkX, chunkZ, dimension, submissionOrder));
             return;
         }
@@ -146,7 +207,7 @@ public abstract class AbstractChunkDiskReader {
         if (serializedSections.length == 0) {
             // Chunk exists on disk (FULL status) but is all air — resolve as found, not "not found"
             this.diag.recordAllAir();
-            this.diag.recordCompleted(System.nanoTime() - startNs);
+            recordRealCompletion(System.nanoTime() - startNs);
             addResult(playerUuid, new ChunkReadResult(playerUuid, chunkX, chunkZ,
                     null, dimension, 0, columnTimestamp, false, false, submissionOrder));
             return;
@@ -155,7 +216,7 @@ public abstract class AbstractChunkDiskReader {
         int estimatedBytes = serializedSections.length + LSSConstants.ESTIMATED_COLUMN_OVERHEAD_BYTES;
 
         this.diag.recordSuccess();
-        this.diag.recordCompleted(System.nanoTime() - startNs);
+        recordRealCompletion(System.nanoTime() - startNs);
         addResult(playerUuid, new ChunkReadResult(playerUuid, chunkX, chunkZ,
                 serializedSections, dimension, estimatedBytes, columnTimestamp,
                 false, false, submissionOrder));

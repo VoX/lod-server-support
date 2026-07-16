@@ -33,6 +33,10 @@ class AbstractChunkDiskReaderTest {
         void submit(UUID player, int cx, int cz, long order, ReadOperation op) {
             submitRead(player, cx, cz, DIM, order, op);
         }
+
+        void enableThrottle() {
+            enableAdaptiveThrottleFallback(); // protected in the base; exposed for the wiring test
+        }
     }
 
     private final UUID player = UUID.randomUUID();
@@ -200,6 +204,56 @@ class AbstractChunkDiskReaderTest {
         gate.countDown();
         awaitResults(34); // 33 gated reads + the saturated bounce already queued
         assertTrue(reader.hasHeadroom(), "a drained pool has headroom again");
+    }
+
+    @Test
+    void adaptiveThrottleNarrowsHasHeadroomWhenEngagedAndRecoversAtLowLatency() throws Exception {
+        // Default (working-A path): the throttle is null, so hasHeadroom() is purely the queue
+        // check — an idle pool with free slots always has headroom, and the diag reports "off".
+        assertEquals(-1, reader.adaptiveThrottleLimitOrDisabled(), "throttle is off until A is found incompatible");
+        assertTrue(reader.hasHeadroom(), "idle pool, no throttle: headroom");
+
+        // A-incompatibility engages the fallback. The throttle starts optimistic at the pool's full
+        // depth (1 thread * (1 + 32) = 33), so enabling it alone must NOT restrict admission — a
+        // fresh fallback is exactly as permissive as the pool it wraps.
+        reader.enableThrottle();
+        var throttle = reader.throttleForTest();
+        assertNotNull(throttle, "enable installs the throttle");
+        assertEquals(33, reader.adaptiveThrottleLimitOrDisabled(), "throttle starts at the pool ceiling");
+        assertTrue(reader.hasHeadroom(), "engaged but un-collapsed: still headroom on an idle pool");
+
+        // Sustained over-target latency (50ms >> the 20ms setpoint) is the shared-IO-busy signal.
+        // AIMD (*0.7 per sample) collapses the limit to its floor of 1 within a handful of samples.
+        // Fed synthetically so the assertion does not depend on real read timing.
+        for (int i = 0; i < 20; i++) throttle.recordLatency(50L * 1_000_000L);
+        assertEquals(1, reader.adaptiveThrottleLimitOrDisabled(), "sustained congestion collapses to the floor");
+
+        // With the limit at 1 and one read genuinely in flight, hasHeadroom() is false EVEN THOUGH the
+        // pool queue still has 32 free slots — the throttle, not the pool, is retaining the read (the
+        // want-set router's NO_DISK_HEADROOM path, healed by the client's 1 Hz re-declaration).
+        var started = new CountDownLatch(1);
+        var gate = new CountDownLatch(1);
+        reader.submit(player, 0, 0, 1L, () -> {
+            started.countDown();
+            if (!gate.await(10, TimeUnit.SECONDS)) throw new IllegalStateException("gate never opened");
+            return new byte[0];
+        });
+        assertTrue(started.await(5, TimeUnit.SECONDS), "the single read occupies the worker");
+        // Only one read was submitted and it is running on the single worker (not queued), so the
+        // 32-slot queue is provably not full — any headroom denial here is the throttle's doing.
+        assertFalse(reader.hasHeadroom(),
+                "throttle limit 1, one read in flight: admission narrowed despite free queue slots");
+
+        // Low-latency samples (1ms << 20ms) walk the smoothed signal back under target and the limit
+        // climbs additively; once it exceeds the one in-flight read, admission reopens — same in-flight
+        // count, only the limit changed. (The EWMA lag means several good samples are needed first.)
+        for (int i = 0; i < 10; i++) throttle.recordLatency(1L * 1_000_000L);
+        assertTrue(reader.adaptiveThrottleLimitOrDisabled() > 1, "low latency recovers the limit off the floor");
+        assertTrue(reader.hasHeadroom(),
+                "recovered limit now exceeds the one in-flight read: admission reopened");
+
+        gate.countDown();
+        awaitResults(1);
     }
 
     @Test
