@@ -212,6 +212,27 @@ class LodRequestManagerTest {
     }
 
     @Test
+    void dirtyCrossingAnInFlightFirstServeReRequestsOnNotGenerated() {
+        // The NOT_GENERATED terminal is the one whose park is PERMANENT, so the ordering in
+        // onColumnNotGenerated is load-bearing: columns.onNotGenerated parks FIRST, then
+        // consumeStaleCrossing's markDirtyIfKnown fires on the just-added session-satisfied
+        // mark and un-parks it. Swapped, a crossed edit would consume staleInFlight, fail
+        // markDirtyIfKnown (no disposition yet), and the park would hold for the session.
+        var tracker = manager.trackerForTest();
+        tracker.replaceWith(new long[]{POS}, 1); // first serve in flight (stored == -1)
+
+        manager.onDirtyColumns(new long[]{POS});            // dirty crosses the in-flight serve
+        manager.onColumnNotGenerated(POS);                  // the pre-edit answer lands
+
+        assertNotEquals(SATISFIED, manager.columnsForTest().classify(POS),
+                "a dirty that crossed the in-flight answer must outlive the permanent park");
+        assertFalse(manager.columnsForTest().isSessionSatisfied(POS),
+                "the crossing un-parks the position — the edit is not lost for the session");
+        assertEquals(0, manager.getConfirmedRing(),
+                "the stale-crossing path does its own confirmed-ring reset to re-reach the position");
+    }
+
+    @Test
     void dirtyCrossingAnInFlightFirstServeReRequestsOnReceived() {
         manager.setLastDimensionForTest(dim("overworld"));
         var tracker = manager.trackerForTest();
