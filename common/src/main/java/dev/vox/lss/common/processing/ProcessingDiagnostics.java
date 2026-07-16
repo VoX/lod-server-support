@@ -26,6 +26,10 @@ public class ProcessingDiagnostics {
     private volatile long totalDuplicateSkips;
     private volatile long totalRequestsRouted;
     private volatile long totalReResolved;
+    // Cumulative (single-writer: processing thread — cross-thread producers accumulate in
+    // per-player AtomicLongs and are drained here each cycle)
+    private volatile long totalSuperseded;
+    private volatile long totalRangeFiltered;
 
     public void resetTickCounters() {
         procTickDiskQueued = 0;
@@ -88,6 +92,15 @@ public class ProcessingDiagnostics {
         totalReResolved++;
     }
 
+    /** Requests dropped without a wire response (mailbox overwrite, backlog replace, Folia
+     *  held-batch loss, residual disk-saturation drop, dedup-primary-departure attached
+     *  drop). Recoverable by re-declaration; balanced in soak law A1. */
+    public void addSuperseded(long n) { if (n > 0) totalSuperseded += n; }
+
+    /** Ingress entries dropped by the Chebyshev range guard (counted client-side in
+     *  requested_total but never entering the backlog — the A1 term for the motion race). */
+    public void addRangeFiltered(long n) { if (n > 0) totalRangeFiltered += n; }
+
     // Per-tick getters (read by main thread)
     public int getLastDiskQueued() { return procTickDiskQueued; }
     public int getLastDiskDrained() { return procTickDiskDrained; }
@@ -105,4 +118,6 @@ public class ProcessingDiagnostics {
     public long getTotalDuplicateSkips() { return totalDuplicateSkips; }
     public long getTotalRequestsRouted() { return totalRequestsRouted; }
     public long getTotalReResolved() { return totalReResolved; }
+    public long getTotalSuperseded() { return totalSuperseded; }
+    public long getTotalRangeFiltered() { return totalRangeFiltered; }
 }

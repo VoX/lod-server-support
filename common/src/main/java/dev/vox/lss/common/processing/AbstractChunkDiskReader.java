@@ -42,6 +42,7 @@ public abstract class AbstractChunkDiskReader {
     private final LogThrottle saturationWarn = new LogThrottle(SATURATION_WARN_INTERVAL_MS);
 
     private final ExecutorService executor;
+    private final ArrayBlockingQueue<Runnable> workQueue;
     private final ConcurrentHashMap<UUID, ConcurrentLinkedQueue<ChunkReadResult>> playerResults = new ConcurrentHashMap<>();
     private final AtomicBoolean isShutdown = new AtomicBoolean(false);
 
@@ -49,13 +50,27 @@ public abstract class AbstractChunkDiskReader {
 
     protected AbstractChunkDiskReader(int threadCount) {
         int queueCapacity = threadCount * QUEUE_CAPACITY_PER_THREAD;
+        var workQueue = new ArrayBlockingQueue<Runnable>(queueCapacity);
+        this.workQueue = workQueue;
         this.executor = new ThreadPoolExecutor(threadCount, threadCount, 0L, TimeUnit.MILLISECONDS,
-                new ArrayBlockingQueue<>(queueCapacity), r -> {
+                workQueue, r -> {
             var thread = new Thread(r, "LSS Disk Reader #" + THREAD_COUNTER.incrementAndGet());
             thread.setDaemon(true);
             thread.setPriority(Thread.MIN_PRIORITY);
             return thread;
         });
+    }
+
+    /**
+     * True when a submit will not be rejected. Single-submitter contract: only the
+     * processing thread submits, and pool workers only DRAIN the queue, so a true result
+     * cannot turn into a rejection before the same thread's next submit (the race is
+     * pessimistic-only). This is what keeps disk saturation out of the client-visible
+     * protocol: the router leaves the entry in the backlog instead of submitting into a
+     * full pool.
+     */
+    public boolean hasHeadroom() {
+        return this.workQueue.remainingCapacity() > 0;
     }
 
     protected boolean isShutdown() {

@@ -161,6 +161,48 @@ class AbstractChunkDiskReaderTest {
     }
 
     @Test
+    void hasHeadroomIsFalseExactlyWhenTheNextSubmitWouldBeRejected() throws Exception {
+        // hasHeadroom() is the router's pre-submit gate (protocol v17): it keeps disk
+        // saturation out of the client-visible protocol by leaving the entry in the backlog
+        // instead of submitting into a full pool. Its whole worth is that it agrees with the
+        // pool's actual accept/reject decision — so assert against a REAL rejection, not the
+        // gauge alone.
+        assertTrue(reader.hasHeadroom(), "an idle pool has headroom");
+
+        var started = new CountDownLatch(1);
+        var gate = new CountDownLatch(1);
+        reader.submit(player, 0, 0, 1L, () -> {
+            started.countDown();
+            if (!gate.await(10, TimeUnit.SECONDS)) throw new IllegalStateException("gate never opened");
+            return new byte[0];
+        });
+        assertTrue(started.await(5, TimeUnit.SECONDS), "first read must occupy the worker");
+        for (int i = 1; i <= 31; i++) {
+            reader.submit(player, i, 0, 1L + i, () -> {
+                if (!gate.await(10, TimeUnit.SECONDS)) throw new IllegalStateException("gate never opened");
+                return new byte[0];
+            });
+        }
+        assertTrue(reader.hasHeadroom(), "31 of 32 queue slots used: one submit still fits");
+
+        reader.submit(player, 32, 0, 33L, () -> {
+            if (!gate.await(10, TimeUnit.SECONDS)) throw new IllegalStateException("gate never opened");
+            return new byte[0];
+        });
+        assertFalse(reader.hasHeadroom(), "queue exactly full: the router must not submit");
+        assertEquals(0, reader.getDiag().getSaturationCount(), "...and nothing has bounced yet");
+
+        // The gate is honest: a submit made anyway is genuinely rejected.
+        reader.submit(player, 99, 88, 999L, () -> new byte[0]);
+        assertEquals(1, reader.getDiag().getSaturationCount(),
+                "hasHeadroom()==false must mean the pool really would reject");
+
+        gate.countDown();
+        awaitResults(34); // 33 gated reads + the saturated bounce already queued
+        assertTrue(reader.hasHeadroom(), "a drained pool has headroom again");
+    }
+
+    @Test
     void poolSaturationBouncesTheSubmitWithASaturatedResult() throws Exception {
         // 1 reader thread, queue capacity 32 (threadCount * 32): with the worker pinned on
         // a gated read and the queue exactly full, the 34th submit must be rejected.

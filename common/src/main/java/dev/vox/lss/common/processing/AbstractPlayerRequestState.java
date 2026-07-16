@@ -9,12 +9,16 @@ import dev.vox.lss.common.LSSLogger;
 import dev.vox.lss.common.PositionUtil;
 import dev.vox.lss.common.SharedBandwidthLimiter;
 
+import java.util.ArrayDeque;
+import java.util.Collections;
+import java.util.List;
 import java.util.PriorityQueue;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Base class for per-player request state, generic on the queued payload type.
@@ -67,6 +71,35 @@ public abstract class AbstractPlayerRequestState<T> {
     private final AtomicLong totalIncomingDropped = new AtomicLong();
     // Single-writer (main thread) — volatile for cross-thread visibility to processing thread
     private volatile int sendQueueSizeSnapshot = 0;
+
+    // ---- Want-set mailbox + backlog (protocol v17) ----
+
+    // Network/region thread → processing thread, latest-wins: a batch overwritten before
+    // consumption is superseded wholesale — exactly the want-set replace semantics. This
+    // bounds ingress at ONE batch (≤ MAX_BATCH_CHUNK_REQUESTS entries) regardless of client
+    // behavior, replacing the old MAX_INCOMING_QUEUE flood bound.
+    private final AtomicReference<IncomingBatch> pendingBatch = new AtomicReference<>();
+    // Cross-thread superseded/range-filtered events accumulate here and are drained into
+    // ProcessingDiagnostics by the processing thread each cycle, preserving that class's
+    // single-writer design. Counts pending at player removal die with the state (same as
+    // the old incoming queue's contents — accepted, see the soak run-boundary handling).
+    private final AtomicLong pendingSuperseded = new AtomicLong();
+    private final AtomicLong pendingRangeFiltered = new AtomicLong();
+
+    // Processing-thread-owned want backlog: replaced wholesale by each taken batch,
+    // consumed in order (closest-first by construction — the client emits ring order).
+    private final ArrayDeque<IncomingRequest> backlog = new ArrayDeque<>();
+    // Single-writer (processing thread) — volatile for exporter/diagnostic reads.
+    private volatile int backlogSizeSnapshot = 0;
+
+    // The want-set the processing thread most recently applied to the backlog. The main-thread
+    // probe reads THIS, never the mailbox: takeIncomingBatch() nulls the mailbox within ~50ms of
+    // arrival (the processing loop polls at 20Hz) while batches arrive at only 1Hz, so a probe
+    // peeking the mailbox would see null on ~19 of every 20 ticks AND lose a coin-flip race on the
+    // 20th — collapsing in-memory probe coverage to roughly half. Published on apply, cleared when
+    // the backlog drains so a converged player is not probed forever. Single-writer (processing
+    // thread), volatile for the main thread's read; IncomingBatch is immutable.
+    private volatile IncomingBatch publishedWantSet;
 
     // Admission slots: caps are immutable; held counts are derived from the pending map
     // (single-writer: processing thread; volatile for /lsslod command reads).
@@ -122,6 +155,92 @@ public abstract class AbstractPlayerRequestState<T> {
         this.incomingRequestCount.incrementAndGet();
         this.totalRequestsReceived.incrementAndGet();
     }
+
+    // ---- Want-set mailbox (any thread) ----
+
+    /** Offer a decoded batch (any thread). Latest-wins; an overwritten batch is superseded. */
+    public void offerIncomingBatch(IncomingBatch batch) {
+        this.totalRequestsReceived.addAndGet(batch.size());
+        var previous = this.pendingBatch.getAndSet(batch);
+        if (previous != null) {
+            this.pendingSuperseded.addAndGet(previous.size());
+        }
+    }
+
+    /** Non-destructive read of the MAILBOX (tests + Folia hold-release only — NOT the probe;
+     *  see {@link #peekWantSet}). */
+    public IncomingBatch peekIncomingBatch() {
+        return this.pendingBatch.get();
+    }
+
+    /** Main-thread loaded-chunk probe source: the applied want-set, or null when nothing pends. */
+    public IncomingBatch peekWantSet() {
+        return this.publishedWantSet;
+    }
+
+    /** Processing thread: publish on apply, publish(null) when the backlog drains to empty. */
+    public void publishWantSet(IncomingBatch batch) {
+        this.publishedWantSet = batch;
+    }
+
+    /** Consume the pending batch (processing thread; Folia pump during hold-release). */
+    public IncomingBatch takeIncomingBatch() {
+        return this.pendingBatch.getAndSet(null);
+    }
+
+    /**
+     * Folia hold-release republish: put a held batch back ONLY if no newer batch arrived
+     * during the hold — a newer batch supersedes the held one (never resurrect a
+     * superseded want). Returns true if republished.
+     */
+    public boolean republishHeldBatch(IncomingBatch held) {
+        if (this.pendingBatch.compareAndSet(null, held)) return true;
+        this.pendingSuperseded.addAndGet(held.size());
+        return false;
+    }
+
+    /** Record ingress entries dropped by the Chebyshev range guard (any thread). */
+    public void recordRangeFiltered(int n) {
+        if (n > 0) this.pendingRangeFiltered.addAndGet(n);
+    }
+
+    public long drainPendingSuperseded() { return this.pendingSuperseded.getAndSet(0); }
+    public long drainPendingRangeFiltered() { return this.pendingRangeFiltered.getAndSet(0); }
+
+    // ---- Backlog (processing thread only) ----
+
+    /** Replace the backlog with a taken batch. Returns the number of dropped (superseded)
+     *  entries. An empty batch is the explicit clear. Also publishes the want-set for the
+     *  main-thread probe (an empty batch publishes null — nothing left to probe). */
+    public int replaceBacklogWith(IncomingBatch batch) {
+        int dropped = this.backlog.size();
+        this.backlog.clear();
+        Collections.addAll(this.backlog, batch.requests());
+        this.backlogSizeSnapshot = this.backlog.size();
+        publishWantSet(batch.size() == 0 ? null : batch);
+        return dropped;
+    }
+
+    public IncomingRequest pollBacklog() {
+        var r = this.backlog.pollFirst();
+        this.backlogSizeSnapshot = this.backlog.size();
+        // Backlog fully consumed: stop the main thread probing a want-set with nothing left
+        // to route (a converged player must cost zero probes — today's empty CLQ does the same).
+        if (this.backlog.isEmpty()) publishWantSet(null);
+        return r;
+    }
+
+    /** Restore entries the router pass retained (slot full / pool full / queue full),
+     *  in their original order, ahead of whatever remains. */
+    public void restoreBacklog(List<IncomingRequest> retained) {
+        for (int i = retained.size() - 1; i >= 0; i--) {
+            this.backlog.addFirst(retained.get(i));
+        }
+        this.backlogSizeSnapshot = this.backlog.size();
+    }
+
+    /** Volatile snapshot for exporters and the soak quiescence gauge. */
+    public int getBacklogSize() { return this.backlogSizeSnapshot; }
 
     // ---- Queue management ----
 
