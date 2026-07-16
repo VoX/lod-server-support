@@ -126,8 +126,8 @@ class IncomingRequestRouter<PS extends AbstractPlayerRequestState<?>> {
                 case SLOT_FULL -> {
                     // Dequeue gate: the per-player cap now means "dequeue at most N
                     // concurrently", not "reject above N". Retain in order and KEEP
-                    // scanning — an entry blocked on one slot type must not starve
-                    // admissible entries behind it.
+                    // scanning — entries behind the full slot can still resolve without
+                    // one (timestamp ladder, done-bit duplicate, loaded-chunk probe).
                     if (retained == null) retained = new ArrayList<>();
                     retained.add(req);
                 }

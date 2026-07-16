@@ -30,7 +30,7 @@ class SpiralScannerTest {
     private static SpiralScanner scanner(int lodDistance, int syncLimit, int genLimit) {
         var s = new SpiralScanner();
         s.setConfig(new SessionConfigS2CPayload(LSSConstants.PROTOCOL_VERSION, true,
-                lodDistance, syncLimit, genLimit, true));
+                lodDistance, true));
         return s;
     }
 
@@ -865,7 +865,7 @@ class SpiralScannerTest {
     @Test
     void notGeneratedPositionStaysParkedThroughAConfirmedRingReset() {
         var s = new SpiralScanner();
-        s.setConfig(new SessionConfigS2CPayload(LSSConstants.PROTOCOL_VERSION, true, 1, 4, 4, false));
+        s.setConfig(new SessionConfigS2CPayload(LSSConstants.PROTOCOL_VERSION, true, 1, false));
         var columns = new ColumnStateMap();
         var queue = new Sink();
         long target = stageRing1Confirmed(s, columns, queue);

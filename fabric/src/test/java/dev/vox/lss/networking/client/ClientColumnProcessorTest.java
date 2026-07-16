@@ -166,7 +166,7 @@ class ClientColumnProcessorTest {
     private LodRequestManager managedManager() {
         var manager = new LodRequestManager();
         manager.onSessionConfig(new SessionConfigS2CPayload(LSSConstants.PROTOCOL_VERSION, true,
-                64, 100, 100, true), "lss-test");
+                64, true), "lss-test");
         manager.setLastDimensionForTest(dim);
         return manager;
     }
@@ -334,7 +334,7 @@ class ClientColumnProcessorTest {
         var dim = ResourceKey.create(Registries.DIMENSION, Identifier.parse("lss_test:processor"));
         var manager = new LodRequestManager();
         manager.onSessionConfig(new SessionConfigS2CPayload(LSSConstants.PROTOCOL_VERSION, true,
-                64, 100, 100, true), "lss-test");
+                64, true), "lss-test");
         manager.setLastDimensionForTest(dim);
         long packed = PositionUtil.packPosition(0, 0);
         manager.onColumnReceived(packed, 5000L, dim); // stamped at arrival, decode still pending
@@ -572,7 +572,7 @@ class ClientColumnProcessorTest {
         var events = new ArrayList<String>();
         var gate = new ClientSessionGate(processor, () -> {}, cfg -> new OrderRecordingManager(events));
         gate.onSessionConfig(new SessionConfigS2CPayload(LSSConstants.PROTOCOL_VERSION, true,
-                64, 100, 100, true), true);
+                64, true), true);
         processor.offer(new VoxelColumnS2CPayload(5, 5, dim, 1L, sectionWire(1, 1)), false);
 
         gate.onDisconnect();
@@ -641,7 +641,7 @@ class ClientColumnProcessorTest {
         String serverAddr = "lss-test-cl047-" + System.nanoTime();
         var manager = new LodRequestManager();
         manager.onSessionConfig(new SessionConfigS2CPayload(LSSConstants.PROTOCOL_VERSION, true,
-                64, 100, 100, true), serverAddr);
+                64, true), serverAddr);
         manager.setLastDimensionForTest(dim);
         manager.onColumnReceived(PositionUtil.packPosition(10, 10), 5000L, dim);
         manager.onColumnReceived(PositionUtil.packPosition(11, 11), 6000L, dim);
@@ -653,7 +653,7 @@ class ClientColumnProcessorTest {
                 () -> null);
         var gate = new ClientSessionGate(proc, () -> {}, cfg -> manager);
         gate.onSessionConfig(new SessionConfigS2CPayload(LSSConstants.PROTOCOL_VERSION, true,
-                64, 100, 100, true), true);
+                64, true), true);
         try {
             proc.offer(new VoxelColumnS2CPayload(11, 11, dim, 6000L, truncatedColumnWire()), false);
             proc.drainColumnQueue(dim, LEVEL_SECTIONS, MIN_SECTION_Y, FACTORY, (d, cx, cz, data) -> {},

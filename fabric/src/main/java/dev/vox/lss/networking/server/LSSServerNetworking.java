@@ -90,8 +90,6 @@ public class LSSServerNetworking {
                 LSSConstants.PROTOCOL_VERSION,
                 decision.effectiveEnabled(),
                 config.lodDistanceChunks,
-                config.syncOnLoadConcurrencyLimitPerPlayer,
-                config.generationConcurrencyLimitPerPlayer,
                 config.enableChunkGeneration
         ));
 

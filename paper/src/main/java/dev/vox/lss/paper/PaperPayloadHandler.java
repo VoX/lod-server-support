@@ -33,17 +33,15 @@ public final class PaperPayloadHandler {
 
     // ---- S2C Encoding ----
 
+    /** Four fields since the server-owned-generation fold into v17: both per-player
+     *  concurrency caps left the wire (server-internal admission limiters only). */
     public static byte[] encodeSessionConfig(int protocolVersion, boolean enabled,
                                              int lodDistanceChunks,
-                                             int syncOnLoadConcurrencyLimitPerPlayer,
-                                             int generationConcurrencyLimitPerPlayer,
                                              boolean generationEnabled) {
         return encodeToBytes(buf -> {
             buf.writeVarInt(protocolVersion);
             buf.writeBoolean(enabled);
             buf.writeVarInt(lodDistanceChunks);
-            buf.writeVarInt(syncOnLoadConcurrencyLimitPerPlayer);
-            buf.writeVarInt(generationConcurrencyLimitPerPlayer);
             buf.writeBoolean(generationEnabled);
         });
     }
@@ -51,13 +49,9 @@ public final class PaperPayloadHandler {
     public static void sendSessionConfig(Player player,
                                           int protocolVersion, boolean enabled,
                                           int lodDistanceChunks,
-                                          int syncOnLoadConcurrencyLimitPerPlayer,
-                                          int generationConcurrencyLimitPerPlayer,
                                           boolean generationEnabled) {
         sendRawNmsPayload(player, ID_SESSION_CONFIG, encodeSessionConfig(
-                protocolVersion, enabled, lodDistanceChunks,
-                syncOnLoadConcurrencyLimitPerPlayer, generationConcurrencyLimitPerPlayer,
-                generationEnabled));
+                protocolVersion, enabled, lodDistanceChunks, generationEnabled));
     }
 
     public static byte[] encodeBatchResponse(byte[] responseTypes, long[] packedPositions, int count) {

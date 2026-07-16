@@ -734,14 +734,10 @@ public class ServiceLifecycleGameTests {
         helper.assertTrue(config.enabled, "premise: gametest config runs enabled");
 
         int prevLod = config.lodDistanceChunks;
-        int prevSync = config.syncOnLoadConcurrencyLimitPerPlayer;
-        int prevGen = config.generationConcurrencyLimitPerPlayer;
         boolean prevGenEnabled = config.enableChunkGeneration;
         var replies = new ArrayList<SessionConfigS2CPayload>();
         try {
             config.lodDistanceChunks = 251;
-            config.syncOnLoadConcurrencyLimitPerPlayer = 252;
-            config.generationConcurrencyLimitPerPlayer = 253;
             config.enableChunkGeneration = false;
 
             LSSServerNetworking.handleHandshake(
@@ -750,8 +746,6 @@ public class ServiceLifecycleGameTests {
                     mock, service, replies::add);
         } finally {
             config.lodDistanceChunks = prevLod;
-            config.syncOnLoadConcurrencyLimitPerPlayer = prevSync;
-            config.generationConcurrencyLimitPerPlayer = prevGen;
             config.enableChunkGeneration = prevGenEnabled;
         }
         try {
@@ -762,15 +756,9 @@ public class ServiceLifecycleGameTests {
             helper.assertTrue(reply.lodDistanceChunks() == 251,
                     "lodDistanceChunks must wire from CONFIG.lodDistanceChunks, got "
                             + reply.lodDistanceChunks());
-            helper.assertTrue(reply.syncOnLoadConcurrencyLimitPerPlayer() == 252,
-                    "syncOnLoadConcurrencyLimitPerPlayer must wire from its own CONFIG field "
-                            + "(transposition with the adjacent generation limit compiles), got "
-                            + reply.syncOnLoadConcurrencyLimitPerPlayer());
-            helper.assertTrue(reply.generationConcurrencyLimitPerPlayer() == 253,
-                    "generationConcurrencyLimitPerPlayer must wire from its own CONFIG field, got "
-                            + reply.generationConcurrencyLimitPerPlayer());
             helper.assertTrue(!reply.generationEnabled(),
-                    "generationEnabled must wire from CONFIG.enableChunkGeneration");
+                    "generationEnabled must wire from CONFIG.enableChunkGeneration"
+                            + " (the concurrency caps left the 4-field wire payload)");
         } finally {
             service.shutdown();
             playerList.remove(mock);

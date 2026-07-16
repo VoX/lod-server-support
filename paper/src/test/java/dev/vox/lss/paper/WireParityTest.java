@@ -110,37 +110,28 @@ class WireParityTest {
             b.writeVarInt(3);
             b.writeBoolean(true);
             b.writeVarInt(8);
-            b.writeVarInt(300);
-            b.writeVarInt(16);
             b.writeBoolean(false);
         });
         assertArrayEquals(expected, PaperPayloadHandler.encodeSessionConfig(
-                3, true, 8, 300, 16, false));
+                3, true, 8, false));
     }
 
     @Test
     void sessionConfigVarIntBoundaries() {
         // lodDistance crossing the 1->2 byte VarInt boundary (127/128) and the 2048 config
-        // max; concurrency at the 1000 clamp max. Values within each frame are pairwise
-        // distinct so a field transposition in either platform's codec cannot cancel out.
-        // Identical reference ops to the Fabric twin's #sessionConfigVarIntBoundaries.
-        int[][] cases = {
-                {127, 1000, 128},
-                {128, 127, 1000},
-                {2048, 1000, 127},
-        };
-        for (int[] c : cases) {
+        // max — the one variable-width field left in the 4-field frame. Identical reference
+        // ops to the Fabric twin's #sessionConfigVarIntBoundaries.
+        int[] cases = {127, 128, 2048};
+        for (int lod : cases) {
             byte[] expected = ref(b -> {
                 b.writeVarInt(LSSConstants.PROTOCOL_VERSION);
                 b.writeBoolean(true);
-                b.writeVarInt(c[0]);
-                b.writeVarInt(c[1]);
-                b.writeVarInt(c[2]);
+                b.writeVarInt(lod);
                 b.writeBoolean(false);
             });
             assertArrayEquals(expected, PaperPayloadHandler.encodeSessionConfig(
-                    LSSConstants.PROTOCOL_VERSION, true, c[0], c[1], c[2], false),
-                    "sessionConfig lod=" + c[0]);
+                    LSSConstants.PROTOCOL_VERSION, true, lod, false),
+                    "sessionConfig lod=" + lod);
         }
     }
 

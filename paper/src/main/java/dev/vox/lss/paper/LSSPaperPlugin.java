@@ -224,8 +224,7 @@ public class LSSPaperPlugin extends JavaPlugin implements PluginMessageListener,
     @FunctionalInterface
     interface SessionConfigSender {
         void send(int protocolVersion, boolean enabled, int lodDistanceChunks,
-                  int syncOnLoadConcurrencyLimitPerPlayer,
-                  int generationConcurrencyLimitPerPlayer, boolean generationEnabled);
+                  boolean generationEnabled);
     }
 
     /**
@@ -244,9 +243,9 @@ public class LSSPaperPlugin extends JavaPlugin implements PluginMessageListener,
     private void handleHandshake(Player bukkitPlayer, ServerPlayer nmsPlayer, byte[] data) {
         var service = this.requestService;
         handleHandshake(data, nmsPlayer.getName().getString(), this.lssConfig, service != null,
-                (protocolVersion, enabled, lodDistanceChunks, syncLimit, genLimit, generationEnabled) ->
+                (protocolVersion, enabled, lodDistanceChunks, generationEnabled) ->
                         PaperPayloadHandler.sendSessionConfig(bukkitPlayer, protocolVersion, enabled,
-                                lodDistanceChunks, syncLimit, genLimit, generationEnabled),
+                                lodDistanceChunks, generationEnabled),
                 capabilities -> service.enqueueRegister(nmsPlayer, capabilities));
     }
 
@@ -282,8 +281,6 @@ public class LSSPaperPlugin extends JavaPlugin implements PluginMessageListener,
         configSender.send(LSSConstants.PROTOCOL_VERSION,
                 decision.effectiveEnabled(),
                 config.lodDistanceChunks,
-                config.syncOnLoadConcurrencyLimitPerPlayer,
-                config.generationConcurrencyLimitPerPlayer,
                 config.enableChunkGeneration);
 
         if (decision.outcome() == HandshakeGate.Outcome.NO_CONSUMER) {

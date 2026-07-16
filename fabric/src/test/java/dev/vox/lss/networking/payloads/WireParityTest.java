@@ -122,13 +122,11 @@ class WireParityTest {
 
     @Test
     void sessionConfig() {
-        var p = new SessionConfigS2CPayload(3, true, 8, 300, 16, false);
+        var p = new SessionConfigS2CPayload(3, true, 8, false);
         byte[] expected = ref(b -> {
             b.writeVarInt(3);
             b.writeBoolean(true);
             b.writeVarInt(8);
-            b.writeVarInt(300);
-            b.writeVarInt(16);
             b.writeBoolean(false);
         });
         assertArrayEquals(expected, encode(SessionConfigS2CPayload.CODEC, p));
@@ -162,30 +160,21 @@ class WireParityTest {
     @Test
     void sessionConfigVarIntBoundaries() {
         // lodDistance crossing the 1->2 byte VarInt boundary (127/128) and the 2048 config
-        // max; concurrency at the 1000 clamp max. Values within each frame are pairwise
-        // distinct so a field transposition in either platform's codec cannot cancel out.
-        int[][] cases = {
-                {127, 1000, 128},
-                {128, 127, 1000},
-                {2048, 1000, 127},
-        };
-        for (int[] c : cases) {
+        // max — the one variable-width field left in the 4-field frame.
+        int[] cases = {127, 128, 2048};
+        for (int lod : cases) {
             byte[] expected = ref(b -> {
                 b.writeVarInt(LSSConstants.PROTOCOL_VERSION);
                 b.writeBoolean(true);
-                b.writeVarInt(c[0]);
-                b.writeVarInt(c[1]);
-                b.writeVarInt(c[2]);
+                b.writeVarInt(lod);
                 b.writeBoolean(false);
             });
             var p = new SessionConfigS2CPayload(LSSConstants.PROTOCOL_VERSION, true,
-                    c[0], c[1], c[2], false);
+                    lod, false);
             assertArrayEquals(expected, encode(SessionConfigS2CPayload.CODEC, p),
-                    "sessionConfig lod=" + c[0]);
+                    "sessionConfig lod=" + lod);
             var d = decode(SessionConfigS2CPayload.CODEC, expected);
-            assertEquals(c[0], d.lodDistanceChunks());
-            assertEquals(c[1], d.syncOnLoadConcurrencyLimitPerPlayer());
-            assertEquals(c[2], d.generationConcurrencyLimitPerPlayer());
+            assertEquals(lod, d.lodDistanceChunks());
         }
     }
 

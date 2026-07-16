@@ -6,12 +6,15 @@ import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.Identifier;
 
+/**
+ * Four fields since the server-owned-generation fold into v17: both per-player concurrency
+ * caps left the wire — they are server-internal admission limiters, and no client budget
+ * derives from them (the scanner's want-set budget is the WANT_SET_BUDGET constant).
+ */
 public record SessionConfigS2CPayload(
         int protocolVersion,
         boolean enabled,
         int lodDistanceChunks,
-        int syncOnLoadConcurrencyLimitPerPlayer,
-        int generationConcurrencyLimitPerPlayer,
         boolean generationEnabled
 ) implements CustomPacketPayload {
     public static final CustomPacketPayload.Type<SessionConfigS2CPayload> TYPE =
@@ -23,8 +26,6 @@ public record SessionConfigS2CPayload(
                         buf.writeVarInt(payload.protocolVersion);
                         buf.writeBoolean(payload.enabled);
                         buf.writeVarInt(payload.lodDistanceChunks);
-                        buf.writeVarInt(payload.syncOnLoadConcurrencyLimitPerPlayer);
-                        buf.writeVarInt(payload.generationConcurrencyLimitPerPlayer);
                         buf.writeBoolean(payload.generationEnabled);
                     },
                     buf -> {
@@ -35,15 +36,12 @@ public record SessionConfigS2CPayload(
                             // avoid a trailing-bytes decoder kick and let the handler's version
                             // gate log the mismatch and disable LSS.
                             buf.skipBytes(buf.readableBytes());
-                            return new SessionConfigS2CPayload(version, false, 0, 0, 0, false);
+                            return new SessionConfigS2CPayload(version, false, 0, false);
                         }
                         boolean enabled = buf.readBoolean();
                         int lodDist = buf.readVarInt();
-                        int syncConc = buf.readVarInt();
-                        int genConc = buf.readVarInt();
                         boolean genEnabled = buf.readBoolean();
-                        return new SessionConfigS2CPayload(version, enabled, lodDist,
-                                syncConc, genConc, genEnabled);
+                        return new SessionConfigS2CPayload(version, enabled, lodDist, genEnabled);
                     }
             );
 

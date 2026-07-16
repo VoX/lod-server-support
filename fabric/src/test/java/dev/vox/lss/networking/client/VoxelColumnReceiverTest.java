@@ -65,7 +65,7 @@ class VoxelColumnReceiverTest {
     void setUp() {
         manager = new LodRequestManager();
         manager.onSessionConfig(new SessionConfigS2CPayload(
-                dev.vox.lss.common.LSSConstants.PROTOCOL_VERSION, true, 64, 100, 100, true), "recv-test");
+                dev.vox.lss.common.LSSConstants.PROTOCOL_VERSION, true, 64, true), "recv-test");
         dim = ResourceKey.create(Registries.DIMENSION, Identifier.parse("lss_test:receiver"));
         manager.setLastDimensionForTest(dim);
     }

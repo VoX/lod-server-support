@@ -153,8 +153,6 @@ final class ClientSessionGate {
                 p.protocolVersion(),
                 p.enabled(),
                 Math.clamp(p.lodDistanceChunks(), LSSConstants.MIN_LOD_DISTANCE, LSSConstants.MAX_LOD_DISTANCE),
-                Math.clamp(p.syncOnLoadConcurrencyLimitPerPlayer(), LSSConstants.MIN_CONCURRENCY_LIMIT, LSSConstants.MAX_CONCURRENCY_LIMIT),
-                Math.clamp(p.generationConcurrencyLimitPerPlayer(), LSSConstants.MIN_CONCURRENCY_LIMIT, LSSConstants.MAX_CONCURRENCY_LIMIT),
                 p.generationEnabled());
     }
 

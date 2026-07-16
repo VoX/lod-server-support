@@ -64,7 +64,7 @@ class LodRequestManagerTest {
     private static SessionConfigS2CPayload config(int lodDistance, int syncLimit, int genLimit,
                                                   boolean generationEnabled) {
         return new SessionConfigS2CPayload(LSSConstants.PROTOCOL_VERSION, true,
-                lodDistance, syncLimit, genLimit, generationEnabled);
+                lodDistance, generationEnabled);
     }
 
     private static ResourceKey<Level> dim(String name) {

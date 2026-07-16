@@ -85,18 +85,15 @@ class LSSPaperPluginGlueTest {
     }
 
     private record Reply(int protocolVersion, boolean enabled, int lodDistanceChunks,
-                         int syncLimit, int genLimit, boolean generationEnabled) {}
+                         boolean generationEnabled) {}
 
     private static final class RecordingSender implements LSSPaperPlugin.SessionConfigSender {
         final List<Reply> replies = new ArrayList<>();
 
         @Override
         public void send(int protocolVersion, boolean enabled, int lodDistanceChunks,
-                         int syncOnLoadConcurrencyLimitPerPlayer,
-                         int generationConcurrencyLimitPerPlayer, boolean generationEnabled) {
-            replies.add(new Reply(protocolVersion, enabled, lodDistanceChunks,
-                    syncOnLoadConcurrencyLimitPerPlayer, generationConcurrencyLimitPerPlayer,
-                    generationEnabled));
+                         boolean generationEnabled) {
+            replies.add(new Reply(protocolVersion, enabled, lodDistanceChunks, generationEnabled));
         }
     }
 
@@ -145,19 +142,17 @@ class LSSPaperPluginGlueTest {
 
     @Test
     void sessionConfigReplyWiresEachConfigFieldToItsWireSlot() {
-        // Pairwise-distinct ints and opposed booleans: any argument transposition at the call
-        // site (notably the adjacent sync/generation limits) produces a wire-valid frame that
-        // live runs survive, so this is the only place a swap can fail.
+        // Distinct values and opposed booleans: any argument transposition at the call site
+        // produces a wire-valid frame that live runs survive, so this is the only place a
+        // swap can fail. (4-field frame — the concurrency caps left the wire.)
         var config = config(true);
         config.lodDistanceChunks = 101;
-        config.syncOnLoadConcurrencyLimitPerPlayer = 102;
-        config.generationConcurrencyLimitPerPlayer = 103;
         config.enableChunkGeneration = false; // differs from effectiveEnabled=true
         var sender = new RecordingSender();
         LSSPaperPlugin.handleHandshake(handshakeFrame(V, VOXEL_CAPS),
                 "Steve", config, true, sender, caps -> {});
 
-        assertEquals(List.of(new Reply(V, true, 101, 102, 103, false)), sender.replies,
+        assertEquals(List.of(new Reply(V, true, 101, false)), sender.replies,
                 "each PaperConfig field must land in its own session-config slot");
     }
 

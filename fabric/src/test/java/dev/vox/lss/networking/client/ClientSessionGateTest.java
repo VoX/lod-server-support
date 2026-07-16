@@ -62,12 +62,12 @@ class ClientSessionGateTest {
     }
 
     private static SessionConfigS2CPayload config(int protocolVersion, boolean enabled) {
-        return new SessionConfigS2CPayload(protocolVersion, enabled, 64, 100, 100, true);
+        return new SessionConfigS2CPayload(protocolVersion, enabled, 64, true);
     }
 
     /** The synthetic disabled shape the codec's drain branch produces for a foreign version. */
     private static SessionConfigS2CPayload codecForeignShape(int protocolVersion) {
-        return new SessionConfigS2CPayload(protocolVersion, false, 0, 0, 0, false);
+        return new SessionConfigS2CPayload(protocolVersion, false, 0, false);
     }
 
     private static ResourceKey<Level> dim(String name) {
@@ -186,16 +186,13 @@ class ClientSessionGateTest {
                 cfg -> { captured.set(cfg); return new RecordingManager(events); });
 
         g.onSessionConfig(new SessionConfigS2CPayload(V, true,
-                Integer.MAX_VALUE, 200_000_000, 500_000_000, true), true);
+                Integer.MAX_VALUE, true), true);
 
         var used = captured.get();
         assertNotNull(used, "the manager must be built with the clamped config");
         assertEquals(LSSConstants.MAX_LOD_DISTANCE, used.lodDistanceChunks(),
-                "LOD distance clamped to the protocol max");
-        assertEquals(LSSConstants.MAX_CONCURRENCY_LIMIT, used.syncOnLoadConcurrencyLimitPerPlayer(),
-                "sync concurrency clamped to the protocol max — bounds the scan-budget allocation");
-        assertEquals(LSSConstants.MAX_CONCURRENCY_LIMIT, used.generationConcurrencyLimitPerPlayer(),
-                "generation concurrency clamped to the protocol max");
+                "LOD distance clamped to the protocol max — the one numeric field left on the "
+                        + "wire (the concurrency caps are server-internal now)");
         assertEquals(LSSConstants.MAX_LOD_DISTANCE, g.getServerLodDistance(),
                 "the stored server LOD distance is the clamped value");
     }
@@ -206,12 +203,10 @@ class ClientSessionGateTest {
         var g = new ClientSessionGate(processor, handshakesSent::incrementAndGet,
                 cfg -> { captured.set(cfg); return new RecordingManager(events); });
 
-        g.onSessionConfig(new SessionConfigS2CPayload(V, true, 0, 0, -5, true), true);
+        g.onSessionConfig(new SessionConfigS2CPayload(V, true, 0, true), true);
 
         var used = captured.get();
         assertEquals(LSSConstants.MIN_LOD_DISTANCE, used.lodDistanceChunks());
-        assertEquals(LSSConstants.MIN_CONCURRENCY_LIMIT, used.syncOnLoadConcurrencyLimitPerPlayer());
-        assertEquals(LSSConstants.MIN_CONCURRENCY_LIMIT, used.generationConcurrencyLimitPerPlayer());
     }
 
     @Test

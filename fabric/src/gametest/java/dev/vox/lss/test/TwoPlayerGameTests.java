@@ -148,7 +148,7 @@ public class TwoPlayerGameTests {
         var idle = new PlayerRequestState(idleMock, 200, 16);
         busy.markHandshakeComplete();
         idle.markHandshakeComplete();
-        var filler = new SessionConfigS2CPayload(LSSConstants.PROTOCOL_VERSION, true, 1, 1, 1, true);
+        var filler = new SessionConfigS2CPayload(LSSConstants.PROTOCOL_VERSION, true, 1, true);
         for (int i = 0; i < 40; i++) {
             busy.addReadyPayload(new QueuedPayload<>(filler, payloadBytes, i,
                     PositionUtil.packPosition(1_020_000 + i, 99)));
