@@ -71,9 +71,20 @@ public class PaperRequestProcessingService {
     // per-player cap bounds one player, but N backfilling players would otherwise cost up to
     // 512*N serializations on the pump. Counts serializations (the expensive work), not
     // examinations. Applies to the non-Folia pump probe below; the Folia region-probe path runs
-    // off-pump on owning region threads (distributed), so the per-player cap suffices there. Once
-    // spent, later players fall through to the disk-read path and the 1 Hz re-declaration heals it.
+    // off-pump on owning region threads, so the per-player cap suffices there — with one honest
+    // caveat: "distributed" assumes players in DIFFERENT regions. N players clustered in one
+    // region all probe on that region's single thread (up to 512*N there, uncapped globally);
+    // acceptable while Folia support is experimental, revisit if clustered-players soak shows
+    // region-tick pressure. Once spent, later players fall through to the disk-read path and
+    // the 1 Hz re-declaration heals it.
+    // Gen-disabled corner (accepted): with enableChunkGeneration=false, a LOADED but
+    // never-saved chunk whose probe this cap deferred falls through to a disk read, resolves
+    // not-found, and answers NOT_GENERATED — session-permanent on the client despite the
+    // chunk being live in memory. Heals on its first save (dirty broadcast) or reconnect;
+    // needs disabled generation + an exhausted budget + a never-saved chunk in one tick.
     private static final int MAX_PROBES_PER_TICK_GLOBAL = 2048;
+    /** Rotating start index for the lifecycle pass (pump thread only) — see the loop comment. */
+    private int probeRotation;
 
     /** Test seam: puts one encoded voxel-column frame on the wire. Production default is the
      *  raw NMS payload send; tests inject recording/throwing senders. */
@@ -381,7 +392,14 @@ public class PaperRequestProcessingService {
         int activeCount = 0;
         int globalProbeBudget = MAX_PROBES_PER_TICK_GLOBAL;
         List<UUID> toRemove = null;
-        for (var state : this.players.values()) {
+        // Rotate the iteration start each tick: ConcurrentHashMap's iteration order is
+        // stable, so when the global probe budget exhausts mid-pass the SAME trailing
+        // players would otherwise get zero probe coverage every tick.
+        var states = new ArrayList<>(this.players.values());
+        int playerCount = states.size();
+        int start = playerCount == 0 ? 0 : Math.floorMod(this.probeRotation++, playerCount);
+        for (int i = 0; i < playerCount; i++) {
+            var state = states.get((start + i) % playerCount);
             if (!state.hasCompletedHandshake())
                 continue;
             activeCount++;
@@ -522,6 +540,14 @@ public class PaperRequestProcessingService {
                 continue;
             if (skipPositions != null && skipPositions.contains(packed))
                 continue;
+            // Served-head filter: a payload already in the send pipeline means the router
+            // resolves this position as a duplicate — the probe is guaranteed-unused, and
+            // under backlog retention the published want-set re-lists it every tick until
+            // the next 1 Hz declaration, re-serializing the same head for a whole second.
+            // Only enqueuedColumns is checked: it is the one served-set structure safe off
+            // the processing thread (pendingByPosition/diskReadDone are single-threaded).
+            if (state.hasEnqueuedColumn(packed))
+                continue;
 
             var column = this.loadedColumnProbe.probe(level, req.cx(), req.cz());
             if (column != null) {
@@ -563,7 +589,16 @@ public class PaperRequestProcessingService {
      *  is {@code compareAndSet(null, held)}, so taking first would empty the mailbox and make
      *  the CAS unconditionally succeed — resurrecting a batch the client has already
      *  superseded while parking the newer one behind it. Returning on a successful release
-     *  keeps the pump from immediately stealing back the batch it just handed to routing. */
+     *  keeps the pump from immediately stealing back the batch it just handed to routing.
+     *
+     *  <p><b>Known limitation.</b> The release-then-return only protects the batch for ONE
+     *  pump tick: if the processing cycle overruns and has not taken the released batch by
+     *  the NEXT pump tick, this method finds nothing held and takes it back out of the
+     *  mailbox — re-holding it for another tick (with fresh probe results) instead of
+     *  letting routing have it. A persistently slow processing thread can ping-pong a batch
+     *  this way, each bounce adding a tick of routing delay until either the processing
+     *  thread wins the race or the next 1 Hz declaration supersedes the batch. Bounded and
+     *  self-healing, but worth knowing when reading Folia soak latencies. */
     private void holdAndScheduleRegionProbe(PaperPlayerRequestState state, ServerPlayer player,
                                             ServerLevel level, LongOpenHashSet skipPositions) {
         var released = this.heldForProbe.remove(player.getUUID());

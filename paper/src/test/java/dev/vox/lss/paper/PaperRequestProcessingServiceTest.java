@@ -693,6 +693,75 @@ class PaperRequestProcessingServiceTest {
                 "the generation outcome still reaches the snapshot post");
     }
 
+    /**
+     * Served-head filter: a position whose column payload already sits in the send pipeline
+     * (enqueuedColumns) is skipped by the probe without charging the budget. Under backlog
+     * retention the published want-set re-lists served positions every tick until the next
+     * 1 Hz declaration — without the filter the probe re-serializes that head 20×/s per
+     * player for a whole second.
+     */
+    @Test
+    void probeSkipsPositionsWithAPayloadAlreadyInTheSendPipeline() {
+        var uuid = UUID.randomUUID();
+        var player = playerIn(uuid, level(Level.OVERWORLD));
+        var state = service.registerPlayer(player, 1);
+
+        long served = PositionUtil.packPosition(5, 5);
+        publish(state, new IncomingRequest(5, 5, -1L), new IncomingRequest(6, 6, -1L));
+        // The served head: its payload is staged for send but not flushed yet (the probe
+        // runs before flushSendQueues within a tick).
+        state.addReadyPayload(new QueuedPayload<>(new byte[]{1}, 8, 1L, served));
+        assertTrue(state.hasEnqueuedColumn(served), "premise: payload is in the pipeline");
+
+        var probedPositions = new ArrayList<Long>();
+        service.setLoadedColumnProbe((lvl, cx, cz) -> {
+            probedPositions.add(PositionUtil.packPosition(cx, cz));
+            return null;
+        });
+
+        service.tick();
+
+        assertEquals(List.of(PositionUtil.packPosition(6, 6)), probedPositions,
+                "the in-pipeline position must be skipped (the router resolves it as a "
+                        + "duplicate — the probe is guaranteed-unused)");
+    }
+
+    /**
+     * The lifecycle pass rotates its starting player each tick. ConcurrentHashMap iteration
+     * order is stable, so without rotation the players unlucky enough to iterate last get
+     * zero probe coverage on EVERY tick once the global budget exhausts mid-pass — permanent
+     * starvation, not fair sharing.
+     */
+    @Test
+    void probePassRotatesItsStartingPlayerAcrossTicks() {
+        var uuidA = UUID.randomUUID();
+        var uuidB = UUID.randomUUID();
+        var stateA = service.registerPlayer(playerIn(uuidA, level(Level.OVERWORLD)), 1);
+        var stateB = service.registerPlayer(playerIn(uuidB, level(Level.OVERWORLD)), 1);
+        long pA = PositionUtil.packPosition(1, 1);
+        long pB = PositionUtil.packPosition(2, 2);
+        publish(stateA, new IncomingRequest(1, 1, -1L));
+        publish(stateB, new IncomingRequest(2, 2, -1L));
+
+        var probedPositions = new ArrayList<Long>();
+        service.setLoadedColumnProbe((lvl, cx, cz) -> {
+            probedPositions.add(PositionUtil.packPosition(cx, cz));
+            return null;
+        });
+
+        service.tick();
+        service.tick();
+
+        assertEquals(4, probedPositions.size(), "both players probed on both ticks");
+        long tick1First = probedPositions.get(0);
+        long tick1Second = probedPositions.get(1);
+        assertTrue((tick1First == pA && tick1Second == pB) || (tick1First == pB && tick1Second == pA),
+                "tick 1 probes each player once");
+        assertEquals(List.of(tick1Second, tick1First), probedPositions.subList(2, 4),
+                "tick 2 must start from the OTHER player — a fixed iteration order would "
+                        + "starve whoever trails once the global budget exhausts mid-pass");
+    }
+
     // ---- PP-038 (service leg): shutdown with queued work; late disk submits are inert ----
 
     @Test

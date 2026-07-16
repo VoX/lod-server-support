@@ -69,7 +69,14 @@ public class RequestProcessingService {
     // examinations (cheap getChunkNow lookups); a converged player costs zero either way. Once
     // spent, later players in the tick fall through to the disk-read path (or the next tick) and
     // the client's 1 Hz re-declaration heals the deferral. Hardcoded: a safety ceiling, not a knob.
+    // Gen-disabled corner (accepted): with enableChunkGeneration=false, a LOADED but
+    // never-saved chunk whose probe this cap deferred falls through to a disk read, resolves
+    // not-found, and answers NOT_GENERATED — session-permanent on the client despite the
+    // chunk being live in memory. Heals on its first save (dirty broadcast) or reconnect;
+    // needs disabled generation + an exhausted budget + a never-saved chunk in one tick.
     private static final int MAX_PROBES_PER_TICK_GLOBAL = 2048;
+    /** Rotating start index for the lifecycle pass (main thread only) — see the loop comment. */
+    private int probeRotation;
 
     // Send-drop fault seam state (see armSendDrops). Static so the soak driver and gametests
     // can arm it without a service reference; production code never arms it.
@@ -215,7 +222,14 @@ public class RequestProcessingService {
         int activeCount = 0;
         int globalProbeBudget = MAX_PROBES_PER_TICK_GLOBAL;
         List<UUID> toRemove = null;
-        for (var state : this.players.values()) {
+        // Rotate the iteration start each tick: ConcurrentHashMap's iteration order is
+        // stable, so when the global probe budget exhausts mid-pass the SAME trailing
+        // players would otherwise get zero probe coverage every tick.
+        var states = new ArrayList<>(this.players.values());
+        int playerCount = states.size();
+        int start = playerCount == 0 ? 0 : Math.floorMod(this.probeRotation++, playerCount);
+        for (int i = 0; i < playerCount; i++) {
+            var state = states.get((start + i) % playerCount);
             if (!state.hasCompletedHandshake()) continue;
             activeCount++;
             this.diag.updateQueuePeak(state.getSendQueueSize());
@@ -403,8 +417,10 @@ public class RequestProcessingService {
      * Both sources list positions that may already be routed; a probe for an already-routed
      * position is simply unused by the router, and the cost is bounded by
      * {@link #MAX_PROBES_PER_TICK_PER_PLAYER}, which the closest-first order spends on the
-     * head of the want-set. Re-probing the same positions on the arrival tick and the
-     * following tick costs one extra pass per second per player.
+     * head of the want-set. Positions whose payload already sits in the send pipeline are
+     * filtered below, so a retained backlog does not re-serialize its served head every
+     * tick; the residual waste is one re-probe of positions served-and-sent but not yet
+     * dropped by the next 1 Hz declaration.
      *
      * @param skipPositions packed positions already extracted by the generation service (may be null)
      */
@@ -425,6 +441,13 @@ public class RequestProcessingService {
             long packed = PositionUtil.packPosition(req.cx(), req.cz());
             if (probes.containsKey(packed)) continue;
             if (skipPositions != null && skipPositions.contains(packed)) continue;
+            // Served-head filter: a payload already in the send pipeline means the router
+            // resolves this position as a duplicate — the probe is guaranteed-unused, and
+            // under backlog retention the published want-set re-lists it every tick until
+            // the next 1 Hz declaration, re-serializing the same head for a whole second.
+            // Only enqueuedColumns is checked: it is the one served-set structure safe off
+            // the processing thread (pendingByPosition/diskReadDone are single-threaded).
+            if (state.hasEnqueuedColumn(packed)) continue;
 
             LevelChunk chunk = level.getChunkSource().getChunkNow(req.cx(), req.cz());
             if (chunk != null) {
