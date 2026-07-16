@@ -5,7 +5,6 @@ import dev.vox.lss.common.PositionUtil;
 import dev.vox.lss.common.SharedBandwidthLimiter;
 import dev.vox.lss.common.processing.PendingRequest;
 import dev.vox.lss.common.processing.QueuedPayload;
-import dev.vox.lss.common.processing.RequestType;
 import dev.vox.lss.common.processing.SlotType;
 import dev.vox.lss.common.processing.TickDiagnostics;
 import dev.vox.lss.config.LSSServerConfig;
@@ -577,7 +576,7 @@ public class ServiceLifecycleGameTests {
 
         // Seed live work: a held pending slot, a done-bit, and a declared want-set.
         helper.assertTrue(state.tryAdmit(new PendingRequest(pcx - 148, pcz - 12,
-                        RequestType.SYNC, SlotType.SYNC_ON_LOAD, false)),
+                        SlotType.SYNC_ON_LOAD, false)),
                 "premise: pending seeded");
         state.markDiskReadDone(pcx - 148, pcz - 13);
         GameTestSeeding.seedRequest(state, PositionUtil.packPosition(pcx - 149, pcz - 12), -1L);
@@ -862,7 +861,7 @@ public class ServiceLifecycleGameTests {
 
         var state = service.registerPlayer(mock, LSSConstants.CAPABILITY_VOXEL_COLUMNS);
         helper.assertTrue(state.tryAdmit(new PendingRequest(pcx - 144, pcz - 8,
-                        RequestType.SYNC, SlotType.SYNC_ON_LOAD, false)),
+                        SlotType.SYNC_ON_LOAD, false)),
                 "premise: pending seeded before the respawn");
         state.markDiskReadDone(pcx - 144, pcz - 9);
 

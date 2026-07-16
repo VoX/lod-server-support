@@ -196,20 +196,23 @@ class IncomingRequestRouterTest {
         seedTimestamps(tempDir, 1000L, packed(4, 0));
         var players = new ConcurrentHashMap<UUID, TestState>();
         var p1 = addPlayer(players, 2, 1);
-        var proc = new TestProcessor(players, null, true, tempDir);
+        var proc = new TestProcessor(players, new StubDiskReader(), true, tempDir);
         try {
             proc.start();
             // One 9-entry want-set, backlog order; every disposition the router can produce
-            // appears at least once. The two slot-full entries are RETAINED, not bounced —
-            // and the entries BEHIND them still route (SLOT_FULL retains-and-continues).
-            // The barrier is the last entry, which must resolve terminally.
+            // appears at least once (a generation ticket is no longer a ROUTER disposition —
+            // it is the delivery phase's disk-miss escalation, pinned in
+            // OffThreadProcessorDiskResultTest). The slot-full entries are RETAINED, not
+            // bounced — and the entries BEHIND them still route (SLOT_FULL
+            // retains-and-continues). The barrier is the last entry, which must resolve
+            // terminally.
             offer(p1,
                     new IncomingRequest(1, 0, -1),   // disk submit (sync slot 1/2)
                     new IncomingRequest(1, 0, -1),   // duplicate skip (pending), silent
-                    new IncomingRequest(2, 0, 0),    // generation ticket (gen slot 1/1)
-                    new IncomingRequest(3, 0, 0),    // gen slot full -> RETAINED, pass continues
+                    new IncomingRequest(2, 0, 0),    // retired-0 shape: disk submit (sync slot 2/2)
+                    new IncomingRequest(3, 0, 0),    // sync slot full -> RETAINED, pass continues
                     new IncomingRequest(5, 0, -1),   // in-memory probe payload, no slot
-                    new IncomingRequest(6, 0, -1),   // disk submit (sync slot 2/2)
+                    new IncomingRequest(6, 0, -1),   // sync slot full -> RETAINED, pass continues
                     new IncomingRequest(7, 0, -1),   // sync slot full -> RETAINED, pass continues
                     new IncomingRequest(4, 0, 2000), // up-to-date (cached 1000 <= 2000)
                     new IncomingRequest(4, 0, 3000));// ts>0 duplicate answered — batch marker
@@ -220,7 +223,7 @@ class IncomingRequestRouterTest {
             var delivered = drainUntil(proc,
                     d -> count(d, LSSConstants.RESPONSE_UP_TO_DATE, packed(4, 0)) == 2);
             // restoreBacklog runs after the pass: wait on it before reading the ledger.
-            waitFor(() -> p1.getBacklogSize() == 2, "both slot-full entries retained in order");
+            waitFor(() -> p1.getBacklogSize() == 3, "all three slot-full entries retained in order");
 
             // Answered now: only the two (4,0) up-to-dates. A full slot is NOT an answer.
             assertEquals(2, delivered.size(), "exactly two batched answers: " + delivered);
@@ -235,24 +238,19 @@ class IncomingRequestRouterTest {
             assertTrue(payload.columnTimestamp() > 0,
                     "probe-served columns must carry the cycle timestamp for up-to-date checks");
 
-            // In-flight: the slot IS the pending entry, one per submit/ticket
-            assertEquals(List.of(packed(1, 0), packed(6, 0)), submitPositions(proc),
-                    "the sync submit BEHIND the full gen slot still routes");
-            var ticket = proc.pollGenerationTicketRequest();
-            assertNotNull(ticket);
-            assertEquals(2, ticket.cx());
-            assertEquals(0, ticket.cz());
-            assertEquals(DIM, ticket.dimension());
-            assertEquals(p1.getPlayerUUID(), ticket.playerUuid());
-            assertNull(proc.pollGenerationTicketRequest());
+            // In-flight: the slot IS the pending entry, one per submit; entries behind the
+            // full slot (the probe hit and the two ladder answers) still routed.
+            assertEquals(List.of(packed(1, 0), packed(2, 0)), submitPositions(proc));
+            assertNull(proc.pollGenerationTicketRequest(),
+                    "no router path emits a generation ticket — that is the disk-miss escalation");
             assertEquals(2, p1.getHeldSyncSlots());
-            assertEquals(1, p1.getHeldGenSlots());
-            for (int cx : new int[]{1, 2, 6}) assertTrue(p1.hasPendingRequest(cx, 0), "in-flight " + cx);
-            for (int cx : new int[]{3, 4, 5, 7}) assertFalse(p1.hasPendingRequest(cx, 0), "resolved " + cx);
+            assertEquals(0, p1.getHeldGenSlots(), "no request shape takes a gen slot at admission");
+            for (int cx : new int[]{1, 2}) assertTrue(p1.hasPendingRequest(cx, 0), "in-flight " + cx);
+            for (int cx : new int[]{3, 4, 5, 6, 7}) assertFalse(p1.hasPendingRequest(cx, 0), "not in-flight " + cx);
 
             var diag = proc.getDiagnostics();
-            assertEquals(7, diag.getTotalRequestsRouted(),
-                    "routed counts DISPOSITIONS only — the two retained entries are still owed");
+            assertEquals(6, diag.getTotalRequestsRouted(),
+                    "routed counts DISPOSITIONS only — the three retained entries are still owed");
             assertEquals(1, diag.getTotalDuplicateSkips());
             assertEquals(1, diag.getTotalUpToDate());
             assertEquals(1, diag.getTotalInMemory());
@@ -272,7 +270,8 @@ class IncomingRequestRouterTest {
             // declared order. Safe to drain from the test thread — the processing thread is
             // parked waiting for a snapshot and no further one is posted.
             assertEquals(new IncomingRequest(3, 0, 0), p1.pollBacklog(), "first retained entry");
-            assertEquals(new IncomingRequest(7, 0, -1), p1.pollBacklog(), "second retained entry");
+            assertEquals(new IncomingRequest(6, 0, -1), p1.pollBacklog(), "second retained entry");
+            assertEquals(new IncomingRequest(7, 0, -1), p1.pollBacklog(), "third retained entry");
             assertNull(p1.pollBacklog(), "nothing else was retained");
         } finally {
             proc.shutdown();
@@ -286,7 +285,7 @@ class IncomingRequestRouterTest {
         noCaps.markHandshakeComplete(); // handshake done but CAPABILITY_VOXEL_COLUMNS unset
         players.put(noCaps.getPlayerUUID(), noCaps);
         var marker = addPlayer(players, 2, 1);
-        var proc = new TestProcessor(players, null, false, null);
+        var proc = new TestProcessor(players, new StubDiskReader(), false, null);
         try {
             proc.start();
             noCaps.enqueue(new IncomingRequest(1, 1, -1));
@@ -330,7 +329,7 @@ class IncomingRequestRouterTest {
         var state = addPlayer(players, 4, 4);
         state.setRegisteredDimension("minecraft:the_end"); // the session's real dimension
         var marker = addPlayer(players, 4, 4); // barrier: proves the stale cycle actually ran
-        var proc = new TestProcessor(players, null, false, null);
+        var proc = new TestProcessor(players, new StubDiskReader(), false, null);
         try {
             proc.start();
             state.enqueue(new IncomingRequest(3, 3, -1));
@@ -399,34 +398,34 @@ class IncomingRequestRouterTest {
     }
 
     @Test
-    void generationTimestampRoutesToGenerationSlotWithoutDiskReader(@TempDir Path tempDir) throws Exception {
-        // Seed the requested position: ts=0 must bypass the timestamp ladder entirely
+    void retiredZeroTimestampRoutesExactlyLikeMinusOne(@TempDir Path tempDir) throws Exception {
+        // ts=0 is the RETIRED client generation classification: it now means "no data",
+        // identical to -1 — disk-first, SYNC slot, no generation ticket (the server decides
+        // generation on the disk MISS, never on the request shape; the wire pin's twin is
+        // the retired byte 0 staying inert client-side). It must also bypass the timestamp
+        // ladder: a cached stamp must not answer up_to_date to a no-data declaration.
         seedTimestamps(tempDir, 1000L, packed(20, 0));
         var players = new ConcurrentHashMap<UUID, TestState>();
         var p1 = addPlayer(players, 2, 1);
-        var proc = new TestProcessor(players, null, true, tempDir);
+        var proc = new TestProcessor(players, new StubDiskReader(), true, tempDir);
         try {
             proc.start();
             // ONE want-set carries both: two back-to-back declarations would supersede each
             // other (latest-wins mailbox), which is the protocol, not a seeding accident.
             offer(p1,
-                    new IncomingRequest(20, 0, 0),   // generation request, no reader
-                    new IncomingRequest(21, 0, -1)); // SYNC takes the disk route even without a reader
+                    new IncomingRequest(20, 0, 0),   // retired-0 shape: "I have nothing"
+                    new IncomingRequest(21, 0, -1)); // -1 shape: "I have nothing"
             proc.postSnapshot(snapshot(p1), List.of());
-            waitFor(() -> submitPositions(proc).contains(packed(21, 0)), "sync request submitted");
+            waitFor(() -> submitPositions(proc).size() == 2, "both no-data shapes submitted");
 
-            var ticket = proc.pollGenerationTicketRequest();
-            assertNotNull(ticket, "ts=0 without a reader must queue a generation ticket");
-            assertEquals(20, ticket.cx());
-            assertEquals(0, ticket.cz());
-            assertEquals(DIM, ticket.dimension());
-            assertEquals(p1.getPlayerUUID(), ticket.playerUuid());
-            assertNull(proc.pollGenerationTicketRequest());
-            assertEquals(List.of(packed(21, 0)), submitPositions(proc),
-                    "the generation request must not reach the disk path");
-            assertEquals(1, p1.getHeldGenSlots());
-            assertEquals(1, p1.getHeldSyncSlots());
+            assertEquals(List.of(packed(20, 0), packed(21, 0)), submitPositions(proc),
+                    "ts=0 takes the identical disk-first route as ts=-1");
+            assertNull(proc.pollGenerationTicketRequest(),
+                    "no request shape can force a generation ticket anymore");
+            assertEquals(2, p1.getHeldSyncSlots());
+            assertEquals(0, p1.getHeldGenSlots());
             assertTrue(p1.hasPendingRequest(20, 0));
+            assertTrue(p1.hasPendingRequest(21, 0));
         } finally {
             proc.shutdown();
         }
@@ -436,7 +435,7 @@ class IncomingRequestRouterTest {
     void submitFailureUnwindsSlotAndDedupGroupAndDropsSilently() throws Exception {
         var players = new ConcurrentHashMap<UUID, TestState>();
         var p1 = addPlayer(players, 2, 1);
-        var proc = new TestProcessor(players, null, false, null);
+        var proc = new TestProcessor(players, new StubDiskReader(), false, null);
         try {
             proc.start();
             proc.failSubmits = true;
@@ -482,7 +481,7 @@ class IncomingRequestRouterTest {
     void servedPositionReRequestsFollowTheHonestReResolutionLadder(@TempDir Path tempDir) throws Exception {
         var players = new ConcurrentHashMap<UUID, TestState>();
         var p1 = addPlayer(players, 8, 2);
-        var proc = new TestProcessor(players, null, true, tempDir);
+        var proc = new TestProcessor(players, new StubDiskReader(), true, tempDir);
         try {
             proc.start();
             // Cycle 1: probe-serve (30,0) — resolution marks diskReadDone before delivery
@@ -553,7 +552,7 @@ class IncomingRequestRouterTest {
         assertEquals(1, p1.getSendQueueSize());
         p1.markDiskReadDone(5, 5); // makes the first queued request a known duplicate
 
-        var proc = new TestProcessor(players, null, false, null);
+        var proc = new TestProcessor(players, new StubDiskReader(), false, null);
         try {
             proc.start();
             offer(p1,
@@ -616,7 +615,7 @@ class IncomingRequestRouterTest {
         seedTimestamps(tempDir, 1000L, packed(90, 0));
         var players = new ConcurrentHashMap<UUID, TestState>();
         var p1 = addPlayer(players, 4, 4);
-        var proc = new TestProcessor(players, null, true, tempDir);
+        var proc = new TestProcessor(players, new StubDiskReader(), true, tempDir);
         try {
             proc.start();
             // Fresh cache entry AND a loaded probe for the same position: the timestamp
@@ -745,7 +744,7 @@ class IncomingRequestRouterTest {
         assertEquals(1, p1.getSendQueueSize());
         p1.markDiskReadDone(94, 0);
 
-        var proc = new TestProcessor(players, null, false, tempDir);
+        var proc = new TestProcessor(players, new StubDiskReader(), false, tempDir);
         try {
             proc.start();
             offer(p1,
@@ -788,7 +787,7 @@ class IncomingRequestRouterTest {
                 payload -> fail("zero allocation must not send"));
         assertEquals(1, p1.getSendQueueSize());
 
-        var proc = new TestProcessor(players, null, false, null);
+        var proc = new TestProcessor(players, new StubDiskReader(), false, null);
         try {
             proc.start();
             // maxSendQueueSize=0 is the "no limit" sentinel, not a literal capacity: a
@@ -836,7 +835,7 @@ class IncomingRequestRouterTest {
         seedTimestamps(tempDir, 1000L, packed(100, 0), packed(101, 0), packed(102, 0));
         var players = new ConcurrentHashMap<UUID, TestState>();
         var p1 = addPlayer(players, 4, 4);
-        var proc = new TestProcessor(players, null, true, tempDir);
+        var proc = new TestProcessor(players, new StubDiskReader(), true, tempDir);
         try {
             proc.start();
             offer(p1,
@@ -868,7 +867,7 @@ class IncomingRequestRouterTest {
     void twentyRemoveReRegisterCyclesWithInFlightWorkNeverErodeCapacity() throws Exception {
         var players = new ConcurrentHashMap<UUID, TestState>();
         var uuid = UUID.randomUUID();
-        var proc = new TestProcessor(players, null, true, null);
+        var proc = new TestProcessor(players, new StubDiskReader(), true, null);
         try {
             proc.start();
             for (int cycle = 1; cycle <= 20; cycle++) {
@@ -879,21 +878,23 @@ class IncomingRequestRouterTest {
                 assertEquals(0, state.getHeldSyncSlots(), "slot counts die with the removed state");
                 assertEquals(0, state.getHeldGenSlots());
 
-                // Fill both slot types to cap at the SAME positions every cycle; the disk
+                // Fill the sync slots to cap at the SAME positions every cycle; the disk
                 // reads never resolve, so each removal happens with work still in flight.
+                // (The third ask is SLOT_FULL-retained — its backlog entry dies with the
+                // state too; gen-escalation removal hygiene is pinned by the
+                // OffThreadProcessorDiskResultTest sweep tests.)
                 offer(state,
                         new IncomingRequest(1, 1, -1),
                         new IncomingRequest(1, 2, -1),
                         new IncomingRequest(1, 3, 0));
                 proc.postSnapshot(snapshot(state), List.of());
                 int expectedSubmits = cycle * 2;
-                waitFor(() -> state.getHeldSyncSlots() == 2 && state.getHeldGenSlots() == 1
+                waitFor(() -> state.getHeldSyncSlots() == 2
                                 && proc.submits.size() == expectedSubmits,
                         "cycle " + cycle + " re-admits to full capacity with fresh submits");
-
-                var ticket = awaitTicket(proc);
-                assertEquals(packed(1, 3), packed(ticket.cx(), ticket.cz()), "cycle " + cycle + " ticket");
-                assertNull(proc.pollGenerationTicketRequest(), "exactly one ticket per cycle");
+                assertEquals(0, state.getHeldGenSlots(),
+                        "no request shape takes a gen slot at admission anymore");
+                assertNull(proc.pollGenerationTicketRequest(), "no ticket without a disk miss");
 
                 // Disconnect with everything still in flight
                 players.remove(uuid);
@@ -1007,7 +1008,7 @@ class IncomingRequestRouterTest {
         seed.save(tempDir);
         var players = new ConcurrentHashMap<UUID, TestState>();
         var p1 = addPlayer(players, 4, 4);
-        var proc = new TestProcessor(players, null, false, tempDir);
+        var proc = new TestProcessor(players, new StubDiskReader(), false, tempDir);
         try {
             proc.start();
             // (110,0): claim equals the cached stamp. Epoch-SECOND granularity makes a
@@ -1045,7 +1046,7 @@ class IncomingRequestRouterTest {
     void terminalUpToDateAfterDropStaysConvergentUnderTsZeroReAsks() throws Exception {
         var players = new ConcurrentHashMap<UUID, TestState>();
         var p1 = addPlayer(players, 4, 4);
-        var proc = new TestProcessor(players, null, false, null);
+        var proc = new TestProcessor(players, new StubDiskReader(), false, null);
         proc.dropPayloads = true; // every serve attempt is an oversized-column drop
         try {
             proc.start();
@@ -1095,7 +1096,7 @@ class IncomingRequestRouterTest {
         var players = new ConcurrentHashMap<UUID, TestState>();
         var p1 = addPlayer(players, 1, 1); // sync cap 1: the second entry is retained
         var marker = addPlayer(players, 2, 1);
-        var proc = new TestProcessor(players, null, false, null);
+        var proc = new TestProcessor(players, new StubDiskReader(), false, null);
         try {
             proc.start();
             offer(p1,

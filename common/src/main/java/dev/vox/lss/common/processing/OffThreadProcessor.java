@@ -756,7 +756,7 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
             this.ctx.sendActions().add(new SendAction.ColumnNotGenerated(playerUuid, packed, state));
             return;
         }
-        if (state.tryAdmit(new PendingRequest(cx, cz, RequestType.GENERATION, SlotType.GENERATION, pending.claimsData()))) {
+        if (state.tryAdmit(new PendingRequest(cx, cz, SlotType.GENERATION, pending.claimsData()))) {
             addGenerationInFlight(playerUuid, dimension, packed);
             this.ctx.generationTicketRequests().add(new GenerationTicketRequest(
                     playerUuid, cx, cz, dimension, this.ctx.sequence().next()));

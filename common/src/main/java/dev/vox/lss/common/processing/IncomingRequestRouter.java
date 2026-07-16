@@ -118,15 +118,16 @@ class IncomingRequestRouter<PS extends AbstractPlayerRequestState<?>> {
                 continue;
             }
 
-            RequestType type = req.clientTimestamp() == 0 ? RequestType.GENERATION : RequestType.SYNC;
-            switch (tryAdmitAndSubmit(state, playerUuid, req, packed, dimension, type)) {
+            // Every request routes the same way — the client no longer classifies sync vs
+            // generation (server-owned generation: the disk miss is the generation trigger,
+            // and a ts of 0 is just another "no data" shape, as inert as the retired byte 0).
+            switch (tryAdmitAndSubmit(state, playerUuid, req, packed, dimension)) {
                 case SUBMITTED -> this.ctx.diagnostics().incrementRequestRouted();
                 case SLOT_FULL -> {
                     // Dequeue gate: the per-player cap now means "dequeue at most N
                     // concurrently", not "reject above N". Retain in order and KEEP
-                    // scanning — a full SYNC slot must not starve admissible GENERATION
-                    // entries behind it (and vice versa; the client-side per-type drain
-                    // gates this replaces made the same guarantee).
+                    // scanning — an entry blocked on one slot type must not starve
+                    // admissible entries behind it.
                     if (retained == null) retained = new ArrayList<>();
                     retained.add(req);
                 }
@@ -249,15 +250,16 @@ class IncomingRequestRouter<PS extends AbstractPlayerRequestState<?>> {
 
     private enum AdmitResult { SUBMITTED, SLOT_FULL, NO_DISK_HEADROOM }
 
-    /** Admit into the slot for the route and submit (disk-first for both SYNC and
-     *  GENERATION when disk is available). A full slot or a full disk pool is NOT an
-     *  answer — the entry stays in the backlog and the caller retains it. */
+    /** Admit into the slot for the route and submit — disk-first always: the disk-read
+     *  result is where the server decides generation (a miss escalates in
+     *  handleDiskNotFound). A full slot or a full disk pool is NOT an answer — the entry
+     *  stays in the backlog and the caller retains it. */
     private AdmitResult tryAdmitAndSubmit(PS state, UUID playerUuid, IncomingRequest req,
-                                           long packed, String dimension, RequestType type) {
-        if (type == RequestType.SYNC || this.diskReadingAvailable) {
+                                           long packed, String dimension) {
+        if (this.diskReadingAvailable) {
             // Route through disk reader (with cross-player dedup)
             boolean claimsData = req.clientTimestamp() > 0;
-            if (!state.tryAdmit(new PendingRequest(req.cx(), req.cz(), type, SlotType.SYNC_ON_LOAD, claimsData))) {
+            if (!state.tryAdmit(new PendingRequest(req.cx(), req.cz(), SlotType.SYNC_ON_LOAD, claimsData))) {
                 return AdmitResult.SLOT_FULL;
             }
             long order = this.ctx.sequence().next();
@@ -267,12 +269,7 @@ class IncomingRequestRouter<PS extends AbstractPlayerRequestState<?>> {
             // costs the pool nothing, so a full pool must not defer it — that would throttle
             // exactly the cross-player convergence dedup exists to accelerate. Unwind the slot
             // (and the group we just created) and retain the entry for the next cycle.
-            //
-            // Gated on diskReadingAvailable as well: with NO reader configured this branch is
-            // still entered for SYNC (to no-op the submit and answer not-generated), and
-            // hasDiskHeadroom() is false-for-lack-of-a-pool there. Retaining on that would
-            // park the entry forever with no answer instead of dispositioning it.
-            if (!attached && this.diskReadingAvailable && !this.processor.hasDiskHeadroom()) {
+            if (!attached && !this.processor.hasDiskHeadroom()) {
                 this.dedupTracker.removeGroup(packed, dimension);
                 state.removePendingByPosition(req.cx(), req.cz());
                 return AdmitResult.NO_DISK_HEADROOM;
@@ -291,8 +288,10 @@ class IncomingRequestRouter<PS extends AbstractPlayerRequestState<?>> {
             this.ctx.diagnostics().incrementDiskQueued();
             return AdmitResult.SUBMITTED;
         } else if (this.generationAvailable) {
-            // No disk reader — direct generation (type is GENERATION here by the branch above)
-            if (!state.tryAdmit(new PendingRequest(req.cx(), req.cz(), type, SlotType.GENERATION, req.clientTimestamp() > 0))) {
+            // No disk reader — direct generation for ANY request (unreachable in production:
+            // both platforms always construct a reader; the disk-first miss path is the live
+            // generation trigger)
+            if (!state.tryAdmit(new PendingRequest(req.cx(), req.cz(), SlotType.GENERATION, req.clientTimestamp() > 0))) {
                 return AdmitResult.SLOT_FULL;
             }
             // Register in-flight so an overtaking edit taints the outcome, same as the

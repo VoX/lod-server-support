@@ -45,6 +45,12 @@ class DirtyEventMailboxTest {
      * thread mid-cycle so the test can deterministically stack events and a replaced
      * snapshot in the mailbox before the next cycle begins.
      */
+    /** Real (but never-used) reader: flips diskReadingAvailable so requests take the
+     *  disk-first route; the submit override keeps results from ever being produced. */
+    private static final class StubDiskReader extends AbstractChunkDiskReader {
+        StubDiskReader() { super(1); }
+    }
+
     private static final class TestProcessor extends OffThreadProcessor<TestState> {
         final ConcurrentLinkedQueue<Long> deliveredPositions = new ConcurrentLinkedQueue<>();
         final ConcurrentLinkedQueue<Long> submittedReadPositions = new ConcurrentLinkedQueue<>();
@@ -52,7 +58,7 @@ class DirtyEventMailboxTest {
         final CountDownLatch deliveryGate = new CountDownLatch(1);
 
         TestProcessor(Map<UUID, TestState> players) {
-            super(players, null, false, null, 1);
+            super(players, new StubDiskReader(), false, null, 1);
         }
 
         @Override

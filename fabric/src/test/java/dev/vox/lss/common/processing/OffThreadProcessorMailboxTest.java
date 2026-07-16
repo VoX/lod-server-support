@@ -31,9 +31,15 @@ class OffThreadProcessorMailboxTest {
         void enqueue(IncomingRequest r) { offerIncomingBatch(new IncomingBatch(new IncomingRequest[]{r})); }
     }
 
+    /** Real (but never-used) reader: flips diskReadingAvailable so requests take the
+     *  disk-first route; the submit override keeps results from ever being produced. */
+    private static final class StubDiskReader extends AbstractChunkDiskReader {
+        StubDiskReader() { super(1); }
+    }
+
     private static class TestProcessor extends OffThreadProcessor<TestState> {
         TestProcessor(Map<UUID, TestState> players) {
-            super(players, null, false, null, 1);
+            super(players, new StubDiskReader(), false, null, 1);
         }
         @Override
         protected boolean submitDiskRead(UUID playerUuid, String dimension, int cx, int cz, long order) {

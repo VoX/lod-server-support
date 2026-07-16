@@ -10,4 +10,4 @@ package dev.vox.lss.common.processing;
  * whether an all-air resolution should send a clearing 0-section column (client claims data,
  * so clear its ghost terrain) or a cheap {@code up_to_date} (client has nothing to clear).
  */
-public record PendingRequest(int cx, int cz, RequestType type, SlotType heldSlot, boolean claimsData) {}
+public record PendingRequest(int cx, int cz, SlotType heldSlot, boolean claimsData) {}
