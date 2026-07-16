@@ -149,7 +149,6 @@ class JsonConfigLoadTest {
         assertEquals(32, c.generationConcurrencyLimitGlobal);
         assertEquals(60, c.generationTimeoutSeconds);
         assertEquals(10, c.dirtyBroadcastIntervalSeconds);
-        assertEquals(200, c.syncOnLoadConcurrencyLimitPerPlayer);
         assertEquals(16, c.generationConcurrencyLimitPerPlayer);
         assertEquals(32, c.perDimensionTimestampCacheSizeMB);
     }

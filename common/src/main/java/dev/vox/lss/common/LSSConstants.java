@@ -72,23 +72,20 @@ public final class LSSConstants {
     public static final int MAX_BATCH_CHUNK_REQUESTS = 1024;
     public static final int MAX_BATCH_RESPONSES = 4096;
 
-    // Want-set scan budget coupling (Global Constraint #28). The client's SpiralScanner derives
-    // its per-scan want-set budget as syncCap * SCAN_BUDGET_MULTIPLIER (and holds gen frontier to
-    // genCap * SCAN_BUDGET_MULTIPLIER). Because the want-set now re-declares every in-flight
-    // position each scan, those re-declarations (syncCap sync slots + genCap*MULT gen entries) can
-    // fill the whole MAX_BATCH_CHUNK_REQUESTS batch and starve frontier discovery. ServerConfigBase
-    // .validate() reserves WANT_SET_FRONTIER_RESERVE positions for the frontier by clamping the slot
-    // caps against these constants, so the two derivations MUST share one source of truth —
-    // SpiralScanner.BUDGET_MULTIPLIER reads SCAN_BUDGET_MULTIPLIER for exactly that reason.
-    public static final int SCAN_BUDGET_MULTIPLIER = 4;
+    // Want-set frontier headroom (the Global Constraint #28 successor). The client
+    // re-declares every unanswered position each scan, so the worst-case per-player
+    // in-flight set (SYNC_ON_LOAD_SLOT_CAP disk slots + at most MAX_CONCURRENT_GENERATIONS
+    // escalated generations — per-player gen can never exceed the global ceiling) competes
+    // for the same WANT_SET_BUDGET as newly discovered frontier positions. The reserve is
+    // the guaranteed frontier share; WantSetBudgetInvariantTest pins the inequality
+    // (slot cap + gen ceiling + reserve <= budget <= one wire batch) so any constant drift
+    // re-derives the boundary at build time instead of starving discovery at runtime.
     public static final int WANT_SET_FRONTIER_RESERVE = 64;
 
     // The client's single want-set budget: max positions the scanner declares per scan.
     // A fixed constant — under server-owned generation NO client budget derives from any
     // server cap (the concurrency caps left the wire). 800 preserves the historic effective
-    // volume (old syncCap 200 x SCAN_BUDGET_MULTIPLIER). Invariant pinned by
-    // WantSetBudgetInvariantTest: SYNC_ON_LOAD_SLOT_CAP + MAX_CONCURRENT_GENERATIONS
-    //   + WANT_SET_FRONTIER_RESERVE <= WANT_SET_BUDGET <= MAX_BATCH_CHUNK_REQUESTS.
+    // volume (old syncCap 200 x the old scan-budget multiplier).
     public static final int WANT_SET_BUDGET = 800;
 
     // Server per-player SYNC (disk-read) slot cap. Formerly the config field

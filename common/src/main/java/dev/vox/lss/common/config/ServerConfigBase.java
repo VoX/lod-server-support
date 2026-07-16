@@ -20,7 +20,11 @@ public abstract class ServerConfigBase extends JsonConfig {
     public int generationConcurrencyLimitGlobal = 32;
     public int generationTimeoutSeconds = 60;
     public int dirtyBroadcastIntervalSeconds = 10;
-    public int syncOnLoadConcurrencyLimitPerPlayer = 200;
+    // The per-player SYNC (disk-read) slot cap is NOT config anymore: it was never an
+    // operator-meaningful knob (shadowed by the shared disk-pool headroom gate) — see
+    // LSSConstants.SYNC_ON_LOAD_SLOT_CAP. The generation caps stay config: they are the
+    // real worldgen limiters, but they are server-internal (off the wire since the
+    // server-owned-generation fold into v17).
     public int generationConcurrencyLimitPerPlayer = 16;
     public int perDimensionTimestampCacheSizeMB = 32;
     /**
@@ -46,27 +50,13 @@ public abstract class ServerConfigBase extends JsonConfig {
         generationConcurrencyLimitGlobal = Math.clamp(generationConcurrencyLimitGlobal, LSSConstants.MIN_CONCURRENT_GENERATIONS, LSSConstants.MAX_CONCURRENT_GENERATIONS);
         generationTimeoutSeconds = Math.clamp(generationTimeoutSeconds, LSSConstants.MIN_GENERATION_TIMEOUT, LSSConstants.MAX_GENERATION_TIMEOUT);
         dirtyBroadcastIntervalSeconds = Math.clamp(dirtyBroadcastIntervalSeconds, LSSConstants.MIN_DIRTY_BROADCAST_INTERVAL, LSSConstants.MAX_DIRTY_BROADCAST_INTERVAL);
-        syncOnLoadConcurrencyLimitPerPlayer = Math.clamp(syncOnLoadConcurrencyLimitPerPlayer, LSSConstants.MIN_CONCURRENCY_LIMIT, LSSConstants.MAX_CONCURRENCY_LIMIT);
         generationConcurrencyLimitPerPlayer = Math.clamp(generationConcurrencyLimitPerPlayer, LSSConstants.MIN_CONCURRENCY_LIMIT, LSSConstants.MAX_CONCURRENCY_LIMIT);
         perDimensionTimestampCacheSizeMB = Math.clamp(perDimensionTimestampCacheSizeMB, LSSConstants.MIN_TIMESTAMP_CACHE_SIZE_MB, LSSConstants.MAX_TIMESTAMP_CACHE_SIZE_MB);
 
-        // Global Constraint #28: the want-set cap must dominate the slot caps, or frontier discovery
-        // starves. The client re-declares every in-flight position each scan, so the in-flight set
-        // (syncCap sync slots + genCap * SCAN_BUDGET_MULTIPLIER gen entries) competes for the same
-        // per-batch budget (MAX_BATCH_CHUNK_REQUESTS) as newly discovered frontier positions. Left
-        // unclamped, the legal per-field maxima (syncCap=1000 alone → budget clamps to 1024 with
-        // ~1000 in-flight) collapse frontier headroom below zero and the server drains the batch
-        // then starves for the rest of the second. Reserve WANT_SET_FRONTIER_RESERVE positions for
-        // the frontier, sync (the primary discovery path) taking priority over the gen hold-back.
-        int mult = LSSConstants.SCAN_BUDGET_MULTIPLIER;
-        int reserve = LSSConstants.WANT_SET_FRONTIER_RESERVE;
-        // Sync alone must leave room for the minimum gen hold-back (MIN_CONCURRENCY_LIMIT * mult)
-        // plus the frontier reserve — a fixed ceiling independent of the configured gen cap.
-        int maxSync = LSSConstants.MAX_BATCH_CHUNK_REQUESTS - reserve - LSSConstants.MIN_CONCURRENCY_LIMIT * mult;
-        syncOnLoadConcurrencyLimitPerPlayer = Math.min(syncOnLoadConcurrencyLimitPerPlayer, maxSync);
-        // Gen frontier gets whatever budget remains after sync + reserve.
-        int maxGen = Math.max(LSSConstants.MIN_CONCURRENCY_LIMIT,
-                (LSSConstants.MAX_BATCH_CHUNK_REQUESTS - syncOnLoadConcurrencyLimitPerPlayer - reserve) / mult);
-        generationConcurrencyLimitPerPlayer = Math.min(generationConcurrencyLimitPerPlayer, maxGen);
+        // Global Constraint #28 is GONE: no client budget derives from any server cap under
+        // server-owned generation, so there is nothing to cross-clamp against the wire batch.
+        // Its successor is a static inequality between constants, pinned by
+        // WantSetBudgetInvariantTest: SYNC_ON_LOAD_SLOT_CAP + MAX_CONCURRENT_GENERATIONS
+        //   + WANT_SET_FRONTIER_RESERVE <= WANT_SET_BUDGET <= MAX_BATCH_CHUNK_REQUESTS.
     }
 }

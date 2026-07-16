@@ -718,11 +718,11 @@ public class ServiceLifecycleGameTests {
     }
 
     /**
-     * CG-028: the REGISTER reply's field wiring at the Fabric call site, with
-     * pairwise-distinct config values so any transposition of the adjacent same-typed
-     * concurrency ints (or a dropped generation flag) fails. The global config is mutated
-     * and restored within this single synchronous callback — gametest callbacks own the
-     * main thread, so no other test (or the live service tick) can observe the window.
+     * CG-028: the REGISTER reply's field wiring at the Fabric call site — lodDistance
+     * distinct from the protocol version (int transposition) and generationEnabled opposed
+     * to enabled (boolean transposition) across the 4-field frame. The global config is
+     * mutated and restored within this single synchronous callback — gametest callbacks own
+     * the main thread, so no other test (or the live service tick) can observe the window.
      */
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void sessionConfigReplyWiresConfigFieldsByNameNotPosition(GameTestHelper helper) {

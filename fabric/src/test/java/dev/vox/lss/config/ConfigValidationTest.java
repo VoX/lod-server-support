@@ -115,55 +115,17 @@ class ConfigValidationTest {
     }
 
     @Test
-    void syncOnLoadConcurrencyLimitPerPlayerClamped() {
-        var c = serverConfig();
-        c.syncOnLoadConcurrencyLimitPerPlayer = 0;
-        c.validate();
-        assertEquals(1, c.syncOnLoadConcurrencyLimitPerPlayer);
-
-        // The per-field bound is MAX_CONCURRENCY_LIMIT (1000), but Global Constraint #28's want-set
-        // budget clamp pulls it below that: sync must leave room for the minimum gen hold-back plus
-        // the frontier reserve. 1024 - 64 (reserve) - 1*4 (min gen hold-back) = 956.
-        c.syncOnLoadConcurrencyLimitPerPlayer = 9999;
-        c.validate();
-        assertEquals(956, c.syncOnLoadConcurrencyLimitPerPlayer);
-    }
-
-    @Test
     void generationConcurrencyLimitPerPlayerClamped() {
         var c = serverConfig();
         c.generationConcurrencyLimitPerPlayer = 0;
         c.validate();
         assertEquals(1, c.generationConcurrencyLimitPerPlayer);
 
-        // Per-field bound is MAX_CONCURRENCY_LIMIT (1000), but Global Constraint #28 clamps gen to
-        // whatever want-set budget remains after the (default 200) sync cap + frontier reserve:
-        // (1024 - 200 - 64) / 4 = 190.
+        // Plain per-field bound: the #28 cross-clamp is gone (no client budget derives
+        // from this cap anymore; the successor invariant lives in WantSetBudgetInvariantTest).
         c.generationConcurrencyLimitPerPlayer = 9999;
         c.validate();
-        assertEquals(190, c.generationConcurrencyLimitPerPlayer);
-    }
-
-    /**
-     * Global Constraint #28 boundary: at the MAX legal slot caps — the values nobody exercises but
-     * validate() must survive — the client's want-set can still carry every in-flight re-declaration
-     * plus at least the frontier reserve. Without the cross-clamp, syncCap=genCap=1000 would demand
-     * 1000 + 1000*4 = 5000 in-flight slots against a 1024-position batch and starve discovery.
-     */
-    @Test
-    void maxConfigLeavesFrontierHeadroomInTheWantSetBudget() {
-        var c = serverConfig();
-        c.syncOnLoadConcurrencyLimitPerPlayer = LSSConstants.MAX_CONCURRENCY_LIMIT;
-        c.generationConcurrencyLimitPerPlayer = LSSConstants.MAX_CONCURRENCY_LIMIT;
-        c.validate();
-
-        int inFlightWorstCase = c.syncOnLoadConcurrencyLimitPerPlayer
-                + c.generationConcurrencyLimitPerPlayer * LSSConstants.SCAN_BUDGET_MULTIPLIER;
-        assertTrue(inFlightWorstCase + LSSConstants.WANT_SET_FRONTIER_RESERVE
-                        <= LSSConstants.MAX_BATCH_CHUNK_REQUESTS,
-                "MAX config starves the want-set frontier: in-flight re-declarations "
-                        + inFlightWorstCase + " + reserve leave no headroom in the "
-                        + LSSConstants.MAX_BATCH_CHUNK_REQUESTS + "-position batch");
+        assertEquals(LSSConstants.MAX_CONCURRENCY_LIMIT, c.generationConcurrencyLimitPerPlayer);
     }
 
     @Test
@@ -186,7 +148,8 @@ class ConfigValidationTest {
                 .filter(f -> f.getType().isPrimitive() && f.getType() != boolean.class)
                 .toList();
         // Guard against the sweep going vacuous if fields get refactored to non-public.
-        assertTrue(fields.size() >= 11, "clamp sweep lost fields, found only: " + fields);
+        // (10 since the syncOnLoadConcurrencyLimitPerPlayer knob became a constant.)
+        assertTrue(fields.size() >= 10, "clamp sweep lost fields, found only: " + fields);
         assertTrue(fields.stream().anyMatch(f -> f.getName().equals("perDimensionTimestampCacheSizeMB")),
                 "clamp sweep no longer sees perDimensionTimestampCacheSizeMB");
         return fields;

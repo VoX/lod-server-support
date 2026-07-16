@@ -267,7 +267,7 @@ public class PaperRequestProcessingService {
     public PaperPlayerRequestState registerPlayer(ServerPlayer player, int capabilities) {
         var state = this.players.computeIfAbsent(player.getUUID(), uuid -> {
             var s = new PaperPlayerRequestState(player,
-                    this.config.syncOnLoadConcurrencyLimitPerPlayer,
+                    LSSConstants.SYNC_ON_LOAD_SLOT_CAP,
                     this.config.generationConcurrencyLimitPerPlayer);
             // Session identity for the router's stale-snapshot guard (set before the map
             // publish so the processing thread never sees it null on a live state).

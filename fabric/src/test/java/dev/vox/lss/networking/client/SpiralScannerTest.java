@@ -27,7 +27,7 @@ class SpiralScannerTest {
     private static final int CX = 0;
     private static final int CZ = 0;
 
-    private static SpiralScanner scanner(int lodDistance, int syncLimit, int genLimit) {
+    private static SpiralScanner scanner(int lodDistance) {
         var s = new SpiralScanner();
         s.setConfig(new SessionConfigS2CPayload(LSSConstants.PROTOCOL_VERSION, true,
                 lodDistance, true));
@@ -181,7 +181,7 @@ class SpiralScannerTest {
         // annulus beyond it, never an in-view chunk. Client side of the reload guard: in-view chunks
         // (which vanilla re-saves) are never LOD-requested, so they cannot drive a re-request loop.
         // (Server side — suppressing their metadata-only re-saves — is in DirtyContentFilterTest.)
-        var s = scanner(4, 100, 100);
+        var s = scanner(4);
         var queue = new Sink();
         int queued = fireScan(s, 2, new ColumnStateMap(), queue);
 
@@ -202,7 +202,7 @@ class SpiralScannerTest {
         // At vd=4: corner (4,4) -> buffered 3^2+3^2=18 >= 16 (requested); axis edge (4,0) -> 3^2=9
         // < 16 (in view, excluded); (4,3) -> 9+4=13 < 16 (in view, excluded). The old Chebyshev
         // exclusion (max(|dx|,|dz|) <= vd) left these corners blank until the player moved.
-        var s = scanner(6, 100, 100);
+        var s = scanner(6);
         var queue = new Sink();
         int queued = fireScan(s, 4, new ColumnStateMap(), queue);
         var drained = new java.util.HashSet<>(queue.positions(queued));
@@ -229,7 +229,7 @@ class SpiralScannerTest {
         // boundary ring shifts → edge over-request, reviving the step-1 re-save loop). vd well below
         // lod so the whole rounded boundary lies inside the scanned square.
         int vd = 8, lod = 12;
-        var s = scanner(lod, 1000, 1000); // budget large enough that nothing is dropped for capacity
+        var s = scanner(lod); // the 800 budget dwarfs this disc — nothing is dropped for capacity
         var queue = new Sink();
         int queued = fireScan(s, vd, new ColumnStateMap(), queue);
         var requested = new java.util.HashSet<>(queue.positions(queued));
@@ -259,7 +259,7 @@ class SpiralScannerTest {
         // out-of-view CORNER blocks it — so the ring confirms only once the corners are SERVED, and
         // the scan then settles (no spin re-walking the in-view edges).
         int vd = 4, lod = 5;
-        var s = scanner(lod, 100, 100);
+        var s = scanner(lod);
         var columns = new ColumnStateMap();
         var queue = new Sink();
 
@@ -297,7 +297,7 @@ class SpiralScannerTest {
             }
         }
 
-        var s = scanner(5, 100, 1);
+        var s = scanner(5);
         var queue = new Sink();
         int queued = fireScan(s, 2, 995, 1000, 0, columns, queue);
         assertEquals(4, queued, "queue pressure bounds the scan to 4 declared positions");
@@ -318,7 +318,7 @@ class SpiralScannerTest {
                 columns.onUpToDate(packed);
             }
         }
-        var s = scanner(4, 100, 100);
+        var s = scanner(4);
         var queue = new Sink();
         assertEquals(0, fireScan(s, 2, columns, queue));
         assertEquals(5, s.getConfirmedRing(), "fully satisfied disc confirms past lodDistance");
@@ -327,7 +327,7 @@ class SpiralScannerTest {
     @Test
     void budgetBoundsQueuedPositions() {
         // The constant want-set budget (800) with a larger annulus (rings 3..16 = 1064)
-        var s = scanner(16, 2, 100);
+        var s = scanner(16);
         var queue = new Sink();
         assertEquals(LSSConstants.WANT_SET_BUDGET, fireScan(s, 2, new ColumnStateMap(), queue));
     }
@@ -344,7 +344,7 @@ class SpiralScannerTest {
                 columns.onUpToDate(packed);
             }
         }
-        var s = scanner(4, 100, 100);
+        var s = scanner(4);
         var queue = new Sink();
         assertEquals(0, fireScan(s, 2, columns, queue));
         assertEquals(5, s.getConfirmedRing(), "precondition: disc confirmed past lodDistance");
@@ -367,13 +367,13 @@ class SpiralScannerTest {
     @Test
     void queuePressureShrinksBudgetLinearlyWithFloorOne() {
         // base budget = WANT_SET_BUDGET (800); rings 3..16 hold 1064 candidates, above it
-        var s = scanner(16, 25, 100);
+        var s = scanner(16);
         var queue = new Sink();
         assertEquals(600, fireScan(s, 2, 250, 1000, 0, new ColumnStateMap(), queue),
                 "column queue at 25% of halt threshold scales the budget linearly to 600");
 
         // At the halt threshold the linear scale reaches 0 but the budget floors at 1
-        s = scanner(16, 25, 100);
+        s = scanner(16);
         queue = new Sink();
         assertEquals(1, fireScan(s, 2, 1000, 1000, 0, new ColumnStateMap(), queue),
                 "queue pressure floors the budget at 1, never 0");
@@ -383,7 +383,7 @@ class SpiralScannerTest {
     void missingVanillaShrinksBudgetQuadraticallyToZero() {
         // base = 800; viewDistance 2 → exclusion area 25; 15 missing → fraction 0.6,
         // quadratic scale 1 - 0.36 = 0.64 → 512 (a linear scale would give 320)
-        var s = scanner(16, 25, 100);
+        var s = scanner(16);
         var queue = new Sink();
         assertEquals(512, fireScan(s, 2, 0, 1000, 15, new ColumnStateMap(), queue),
                 "vanilla-load scale is quadratic in the missing fraction");
@@ -391,7 +391,7 @@ class SpiralScannerTest {
         // All 25 exclusion chunks missing → scale 0 → no walk at all (no floor on this path).
         // A budget-0 cadence firing returns -1 forever, so it cannot be observed through fireScan
         // ("loop until >= 0"): normalize the cadence with a real scan, then step exactly one window.
-        s = scanner(16, 25, 100);
+        s = scanner(16);
         queue = new Sink();
         var columns = new ColumnStateMap();
         assertEquals(800, fireScan(s, 2, columns, queue), "premise: a normal scan zeroes the counter");
@@ -409,7 +409,7 @@ class SpiralScannerTest {
     void effectiveLodDistanceIsMinOfServerAndClientOverride() {
         int saved = LSSClientConfig.CONFIG.lodDistanceChunks;
         try {
-            var s = scanner(10, 100, 100);
+            var s = scanner(10);
             LSSClientConfig.CONFIG.lodDistanceChunks = 0; // 0 = override disabled, server wins
             assertEquals(10, s.getEffectiveLodDistance());
             LSSClientConfig.CONFIG.lodDistanceChunks = 6; // client below server clamps down
@@ -426,7 +426,7 @@ class SpiralScannerTest {
         int saved = LSSClientConfig.CONFIG.lodDistanceChunks;
         try {
             LSSClientConfig.CONFIG.lodDistanceChunks = 6;
-            var s = scanner(10, 100, 100);
+            var s = scanner(10);
             // Buffer applies to the client-clamped effective distance (6), not the server's 10
             assertEquals(6 + LSSConstants.LOD_DISTANCE_BUFFER, s.getPruneDistance());
         } finally {
@@ -454,7 +454,7 @@ class SpiralScannerTest {
 
     @Test
     void firstMaybeScanAfterResetFiresImmediately() {
-        var s = scanner(4, 100, 100);
+        var s = scanner(4);
         var queue = new Sink();
 
         // A fresh scanner is primed: the very FIRST cadence call must fire (join burst),
@@ -487,7 +487,7 @@ class SpiralScannerTest {
         // (NB at vd == lod the disc leaves the lod square's corners OUTSIDE the view; those are the
         // corner-fix annulus, pinned by renderSquareCornersBeyondVanillasRoundedViewAreRequested.
         // Here vd=5 > lod=4 so the corner (4,4) at buffered 3^2+3^2=18 < 5^2=25 is in view.)
-        var s = scanner(4, 100, 100);
+        var s = scanner(4);
         var queue = new Sink();
         assertEquals(0, fireScan(s, 5, new ColumnStateMap(), queue), "vanilla's rounded view covers the whole disc");
         assertEquals(5, s.getConfirmedRing(), "exclusion-skipped disc confirms to lodDistance+1");
@@ -495,7 +495,7 @@ class SpiralScannerTest {
         assertEquals(5, s.getConfirmedRing());
 
         // vd > lod: confirmation still caps at lod+1, never tracks the overshooting exclusion.
-        var s2 = scanner(4, 100, 100);
+        var s2 = scanner(4);
         assertEquals(0, fireScan(s2, 6, new ColumnStateMap(), queue));
         assertEquals(5, s2.getConfirmedRing(), "confirmation caps at lodDistance+1 when vd overshoots");
     }
@@ -506,7 +506,7 @@ class SpiralScannerTest {
     void movementResetZeroesConfirmedRingRestartsCadenceAndKeepsMarks() {
         var columns = new ColumnStateMap();
         seedSatisfied(columns, 3, 4);
-        var s = scanner(4, 100, 100);
+        var s = scanner(4);
         var queue = new Sink();
         assertEquals(0, fireScan(s, 2, columns, queue));
         assertEquals(5, s.getConfirmedRing(), "precondition: disc confirmed");
@@ -533,7 +533,7 @@ class SpiralScannerTest {
             columns.onNotGenerated(PositionUtil.packPosition(c[0], c[1]));
         }
         seedSatisfied(columns, 4, 4);
-        var s = scanner(4, 100, 1);
+        var s = scanner(4);
         var queue = new Sink();
         assertEquals(0, fireScan(s, 2, columns, queue),
                 "precondition: NOT_GENERATED parks permanently — the settled disc declares nothing");
@@ -559,7 +559,7 @@ class SpiralScannerTest {
     void disconnectRejoinFullResetPrimesImmediateScan() {
         var columns = new ColumnStateMap();
         seedSatisfied(columns, 3, 4);
-        var s = scanner(4, 100, 100);
+        var s = scanner(4);
         var queue = new Sink();
         assertEquals(0, fireScan(s, 2, columns, queue));
         assertEquals(5, s.getConfirmedRing(), "precondition: disc confirmed");
@@ -586,7 +586,7 @@ class SpiralScannerTest {
             LSSClientConfig.CONFIG.lodDistanceChunks = 0; // server distance (8) in effect
             var columns = new ColumnStateMap();
             seedSatisfied(columns, 3, 8);
-            var s = scanner(8, 100, 100);
+            var s = scanner(8);
             var queue = new Sink();
             assertEquals(0, fireScan(s, 2, columns, queue));
             assertEquals(9, s.getConfirmedRing(), "precondition: confirmed at d=8");
@@ -631,7 +631,7 @@ class SpiralScannerTest {
         long covered = ringPos(2, 0); // inside the viewDistance-2 exclusion square
         columns.onReceived(covered, 4321L);
         seedSatisfied(columns, 3, 4);
-        var s = scanner(4, 100, 100);
+        var s = scanner(4);
         var queue = new Sink();
         assertEquals(0, fireScan(s, 2, columns, queue));
 
@@ -681,7 +681,7 @@ class SpiralScannerTest {
             LSSClientConfig.CONFIG.lodDistanceChunks = 0;
             VoxyConfig.reset();
             VoxyConfig.CONFIG.sectionRenderDistance = 0.25f; // 8 chunks
-            var s = scanner(10, 100, 100);
+            var s = scanner(10);
             for (int call = 1; call < LSSConstants.TICKS_PER_SECOND; call++) {
                 assertEquals(10, s.getEffectiveLodDistance(),
                         "call " + call + " still serves the stale not-present cache");
@@ -708,7 +708,7 @@ class SpiralScannerTest {
         try {
             LSSClientConfig.CONFIG.lodDistanceChunks = 0;
             VoxyConfig.reset(); // sectionRenderDistance 0 → voxy distance 0
-            var s = scanner(10, 100, 100);
+            var s = scanner(10);
             assertEquals(10, refreshedEffectiveDistance(s), "voxy distance 0 is ignored (not-configured sentinel)");
 
             VoxyConfig.CONFIG.sectionRenderDistance = 0.25f; // 8 chunks
@@ -749,7 +749,7 @@ class SpiralScannerTest {
             var rng = new Random(seed);
             var columns = new ColumnStateMap();
             var queue = new Sink();
-            var s = scanner(lod, 10, 2); // budget 40, genCap 8
+            var s = scanner(lod); // the constant 800 budget covers the whole disc
             record Scheduled(long pos, int dueCycle) {}
             var scheduled = new ArrayList<Scheduled>();
             var awaitingLate = new LongOpenHashSet(); // positions with a late answer already booked
@@ -842,7 +842,7 @@ class SpiralScannerTest {
 
     @Test
     void dirtiedPositionBelowConfirmedRingIsRereachedByResetConfirmedRing() {
-        var s = scanner(1, 4, 4);
+        var s = scanner(1);
         var columns = new ColumnStateMap();
         var queue = new Sink();
         long target = stageRing1Confirmed(s, columns, queue);
@@ -887,7 +887,7 @@ class SpiralScannerTest {
         // unanswered position must appear in EVERY scan's want-set, and its ring must not confirm
         // past it until data actually arrives. (Suppressing it — the pre-want-set behaviour — plus
         // a server-side silent drop is a 10s-class stall, or with the sweep gone, permanent.)
-        var s = scanner(1, 100, 100);
+        var s = scanner(1);
         var columns = new ColumnStateMap();
         var queue = new Sink();
         int[] c = new int[2];

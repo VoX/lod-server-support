@@ -105,7 +105,7 @@ public class RequestProcessingService {
     public PlayerRequestState registerPlayer(ServerPlayer player, int capabilities) {
         var config = LSSServerConfig.CONFIG;
         var state = this.players.computeIfAbsent(player.getUUID(), uuid -> {
-            var s = new PlayerRequestState(player, config.syncOnLoadConcurrencyLimitPerPlayer,
+            var s = new PlayerRequestState(player, LSSConstants.SYNC_ON_LOAD_SLOT_CAP,
                     config.generationConcurrencyLimitPerPlayer);
             // Session identity for the router's stale-snapshot guard (set before the map
             // publish so the processing thread never sees it null on a live state).

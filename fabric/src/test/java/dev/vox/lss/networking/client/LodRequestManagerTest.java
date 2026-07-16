@@ -56,13 +56,12 @@ class LodRequestManagerTest {
     @BeforeEach
     void setUp() {
         manager = new LodRequestManager();
-        manager.onSessionConfig(config(64, 100, 100, true), "lss-test");
+        manager.onSessionConfig(config(64, true), "lss-test");
         sent.clear();
         recordSends(); // never let a scan reach the real ClientPlayNetworking transport
     }
 
-    private static SessionConfigS2CPayload config(int lodDistance, int syncLimit, int genLimit,
-                                                  boolean generationEnabled) {
+    private static SessionConfigS2CPayload config(int lodDistance, boolean generationEnabled) {
         return new SessionConfigS2CPayload(LSSConstants.PROTOCOL_VERSION, true,
                 lodDistance, generationEnabled);
     }
@@ -111,7 +110,7 @@ class LodRequestManagerTest {
      * ring's packed positions. Call BEFORE seeding: onSessionConfig resets all request state.
      */
     private long[] configureRing1Disc() {
-        manager.onSessionConfig(config(1, 100, 100, true), "lss-test");
+        manager.onSessionConfig(config(1, true), "lss-test");
         manager.markCacheLoadedForTest();
         recordSends();
         sent.clear();
@@ -581,7 +580,7 @@ class LodRequestManagerTest {
         var mgr = new LodRequestManager();
         final String server = "test-crossdim-" + System.nanoTime();
         var dimA = dim("overworld");
-        mgr.onSessionConfig(config(64, 100, 100, true), server); // sets serverAddress
+        mgr.onSessionConfig(config(64, true), server); // sets serverAddress
         try {
             // A false stamp is already persisted in dimA's cache (as saveCache wrote it on the
             // dimension change) — the report arrives after the player moved to dimB.
@@ -819,7 +818,7 @@ class LodRequestManagerTest {
     void dirtyPushAfterDimensionChangeNeitherDebouncesNorPoisonsTheFreshMap() {
         var overworld = dim("overworld");
         var end = dim("the_end");
-        manager.onSessionConfig(config(64, 100, 100, true), "lss-cl064-" + System.nanoTime());
+        manager.onSessionConfig(config(64, true), "lss-cl064-" + System.nanoTime());
         manager.markCacheLoadedForTest();
         manager.tickWithContext(0, 0, overworld, 64, 0, () -> 0); // establish dimension A
         manager.onColumnReceived(POS, 5000L, overworld);
@@ -896,7 +895,7 @@ class LodRequestManagerTest {
 
     @Test
     void flushCacheDropsAPendingCacheLoadResultThatCompletesAfterTheFlush() {
-        manager.onSessionConfig(config(64, 100, 100, true), "lss-cl051-" + System.nanoTime());
+        manager.onSessionConfig(config(64, true), "lss-cl051-" + System.nanoTime());
         manager.setLastDimensionForTest(dim("overworld"));
         var pending = new CompletableFuture<Long2LongOpenHashMap>();
         manager.setPendingCacheLoadForTest(pending);

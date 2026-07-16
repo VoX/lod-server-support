@@ -48,7 +48,7 @@ class LodRequestManagerTickTest {
 
     @BeforeEach
     void setUp() {
-        setupManager(config(2, 100, 100, true));
+        setupManager(config(2, true));
     }
 
     private void setupManager(SessionConfigS2CPayload cfg) {
@@ -66,8 +66,7 @@ class LodRequestManagerTickTest {
                 p.count())));
     }
 
-    private static SessionConfigS2CPayload config(int lodDistance, int syncLimit, int genLimit,
-                                                  boolean generationEnabled) {
+    private static SessionConfigS2CPayload config(int lodDistance, boolean generationEnabled) {
         return new SessionConfigS2CPayload(LSSConstants.PROTOCOL_VERSION, true,
                 lodDistance, generationEnabled);
     }
@@ -151,7 +150,7 @@ class LodRequestManagerTickTest {
         // The surviving half of CL-021: the send buffers are sized at MAX_BATCH_CHUNK_REQUESTS, so
         // a want-set larger than the cap would overflow them. The drip-feed used to enforce this at
         // the drain; the scanner now enforces it as a budget clamp, before it writes a single entry.
-        setupManager(config(512, 10_000, 100, true)); // lod 512: the disc dwarfs any budget
+        setupManager(config(512, true)); // lod 512: the disc dwarfs any budget
 
         int scanned = fireScanPhase(0, 0, 0);
 
@@ -189,7 +188,7 @@ class LodRequestManagerTickTest {
     void dimensionChangeResetsAllRequestStateWithoutSilentOrphans() {
         var overworld = dim("overworld");
         var end = dim("the_end");
-        setupManager(config(2, 100, 100, true), "lss-cl025-" + System.nanoTime());
+        setupManager(config(2, true), "lss-cl025-" + System.nanoTime());
         manager.tickWithContext(0, 0, overworld, 64, 0, () -> 0); // establish dimension A
         long stamped = PositionUtil.packPosition(1, 1);
         long inFlightOnly = PositionUtil.packPosition(2, 1);
@@ -318,7 +317,7 @@ class LodRequestManagerTickTest {
         // The client never classifies generation anymore (server-owned generation): a
         // NOT_GENERATED answer parks the position for the session regardless of the
         // generationEnabled flag, and NO ask ever leaves the client with ts==0.
-        setupManager(config(2, 100, 100, false));
+        setupManager(config(2, false));
         long notGen = PositionUtil.packPosition(1, 1);
         manager.trackerForTest().replaceWith(new long[]{notGen}, 1);
         manager.onColumnNotGenerated(notGen); // permanent session-satisfy
@@ -334,7 +333,7 @@ class LodRequestManagerTickTest {
 
         // A legacy cache 0-stamp (written by a released pre-server-owned-generation client)
         // re-declares as -1 next session — never as 0, and never silently SATISFIED (R5).
-        setupManager(config(2, 100, 100, true));
+        setupManager(config(2, true));
         var restored = new Long2LongOpenHashMap();
         restored.put(notGen, 0L);
         manager.columnsForTest().loadFrom(restored);
