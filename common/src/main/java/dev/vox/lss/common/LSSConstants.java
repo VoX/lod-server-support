@@ -83,6 +83,21 @@ public final class LSSConstants {
     public static final int SCAN_BUDGET_MULTIPLIER = 4;
     public static final int WANT_SET_FRONTIER_RESERVE = 64;
 
+    // The client's single want-set budget: max positions the scanner declares per scan.
+    // A fixed constant — under server-owned generation NO client budget derives from any
+    // server cap (the concurrency caps left the wire). 800 preserves the historic effective
+    // volume (old syncCap 200 x SCAN_BUDGET_MULTIPLIER). Invariant pinned by
+    // WantSetBudgetInvariantTest: SYNC_ON_LOAD_SLOT_CAP + MAX_CONCURRENT_GENERATIONS
+    //   + WANT_SET_FRONTIER_RESERVE <= WANT_SET_BUDGET <= MAX_BATCH_CHUNK_REQUESTS.
+    public static final int WANT_SET_BUDGET = 800;
+
+    // Server per-player SYNC (disk-read) slot cap. Formerly the config field
+    // syncOnLoadConcurrencyLimitPerPlayer; now a constant — its admission role was always
+    // shadowed by the shared disk-pool hasHeadroom() gate (pool depth ~165 < 200), so it
+    // was never an operator-meaningful knob. Router retain semantics unchanged
+    // (SLOT_FULL retain-keep-scanning vs NO_DISK_HEADROOM retain-stop).
+    public static final int SYNC_ON_LOAD_SLOT_CAP = 200;
+
     // Adaptive read-throttle (Approach B) target latency in ms: the EWMA submit->result setpoint
     // the AIMD controller steers toward. At or below it the read-concurrency limit grows; above it
     // (a proxy for the shared IO being busy) it shrinks. Engaged ONLY as the Fabric fallback when a
