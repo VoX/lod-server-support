@@ -45,8 +45,10 @@ The current design manages none of these; it runs 5 concurrent LSS reads on the 
 > piece described below: `enqueueIncomingRequest`, the per-player FIFO `ConcurrentLinkedQueue`,
 > `MAX_INCOMING_QUEUE = 16384`, and the rate-limited bounce (the response type is off the wire;
 > byte 0 is retired and reserved). The client now declares its **complete want-set** once per
-> second and the server **replaces** a per-player backlog with it; slot-full and pool-full both
-> retain the entry and stop the drain instead of bouncing. Read this section as history — it is
+> second and the server **replaces** a per-player backlog with it. Neither saturation bounces:
+> a full per-player slot retains the entry and the drain **continues** (so a full SYNC cap cannot
+> starve admissible GENERATION entries behind it), while an exhausted disk pool retains the entry
+> and **stops** the pass. Read this section as history — it is
 > accurate about v16 and about *why* the change happened, not about current code.
 
 - **Intake** (`handleBatchRequest`): distance-filters each position (`lodDistance + 32`) against the player's position *at arrival*, then `enqueueIncomingRequest` appends it to a per-player FIFO `ConcurrentLinkedQueue`, tail-dropping at `MAX_INCOMING_QUEUE = 16384`.

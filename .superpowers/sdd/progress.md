@@ -729,6 +729,21 @@ Plan: docs/superpowers/plans/2026-07-15-declarative-want-set-requests.md (1469 l
     repeating the scanner's inaccurate pointer. **Recommended follow-up for Task 10 or a later
     change: either add the cross-check to `validate()` or fix the javadoc pointer** — the doc is
     currently the only thing that knows the check is imaginary.
+
+  ### Task 9 FIX PASS (review finding, 2026-07-16)
+
+  - **D9-6 (D9-1's misconception survived in the one doc whose job is to prevent it).** A review
+    found `read-scheduler-design.md` §1's SUPERSEDED note still read "slot-full and pool-full both
+    retain the entry and stop the drain instead of bouncing" — the exact claim D9-1 identified as
+    wrong and corrected in all three CLAUDE.md places. Verified against
+    `IncomingRequestRouter:124-139` again: the finding is correct. The note now splits the two
+    dispositions — a full per-player slot retains and the drain **continues** (with the
+    starvation rationale stated inline, so a future reader knows it is deliberate rather than an
+    oversight to "fix"); an exhausted disk pool retains and **stops** the pass; neither bounces.
+    §3's Piece D note was checked and is accurate — it already scopes "retains and stops the
+    drain" to the pool only, so it was left alone. Root cause worth carrying to Task 10: the
+    retain-and-stop-for-both framing originates in the **plan's own** Task 9 bullet, so it will
+    keep re-importing itself into any doc written from the plan text.
 - Task 10: NOT STARTED — validation gauntlet + live soak.
 
 ## Standing reminders
