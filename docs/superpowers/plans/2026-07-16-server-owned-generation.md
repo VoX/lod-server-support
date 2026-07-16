@@ -167,7 +167,7 @@ sync key; `rate-limit-storm` re-premised; `generation-capacity-stress` expectati
 **Files:** Modify `common/…/LSSConstants.java`; New test
 `fabric/src/test/java/dev/vox/lss/common/WantSetBudgetInvariantTest.java`.
 
-- [ ] **Step 1: Write the failing invariant test:**
+- [x] **Step 1: Write the failing invariant test:**
 ```java
 package dev.vox.lss.common;
 
@@ -194,9 +194,9 @@ class WantSetBudgetInvariantTest {
     }
 }
 ```
-- [ ] **Step 2: Run — fails to compile.**
+- [x] **Step 2: Run — fails to compile.**
   `./gradlew :fabric:test --tests '*WantSetBudgetInvariantTest' -x runGameTest -x runClientGameTest`
-- [ ] **Step 3: Add to `LSSConstants.java`** (near the want-set block at :75–84; leave
+- [x] **Step 3: Add to `LSSConstants.java`** (near the want-set block at :75–84; leave
   `SCAN_BUDGET_MULTIPLIER`/`WANT_SET_FRONTIER_RESERVE` untouched for now — the multiplier is still
   read by `SpiralScanner:34` and `ServerConfigBase:61` until Tasks 3/6):
 ```java
@@ -214,8 +214,8 @@ class WantSetBudgetInvariantTest {
     // was never an operator-meaningful knob. Router retain semantics unchanged.
     public static final int SYNC_ON_LOAD_SLOT_CAP = 200;
 ```
-- [ ] **Step 4: Run — passes.** Same command → green. Also `./gradlew :paper:test` (untouched, sanity).
-- [ ] **Step 5: Commit.** `wantset: single-budget + sync-slot-cap constants + the #28 successor invariant`
+- [x] **Step 4: Run — passes.** Same command → green. Also `./gradlew :paper:test` (untouched, sanity).
+- [x] **Step 5: Commit.** `wantset: single-budget + sync-slot-cap constants + the #28 successor invariant`
 
 ### Task 2: Server generates on ANY disk miss; transient outcomes leave the wire
 
@@ -234,7 +234,7 @@ Task 4); Tests `OffThreadProcessorDiskResultTest`, `ServiceGlueTest`, `IncomingR
 (meaningful only when `columnData == null`); `OffThreadProcessor.feedGenerationFailure(...)` gains the
 same flag (or a `feedGenerationTransient` overload — implementer's choice, one drain path either way).
 
-- [ ] **Step 1: Write/adjust the failing tests first.**
+- [x] **Step 1: Write/adjust the failing tests first.**
   - `OffThreadProcessorDiskResultTest`: (a) disk not-found + gen available + gen slot FREE →
     generation ticket enqueued + `addGenerationInFlight` registered, **for a plain SYNC pending**
     (no GENERATION type required — the new gate); (b) not-found + gen available + gen slot FULL →
@@ -248,8 +248,8 @@ same flag (or a `feedGenerationTransient` overload — implementer's choice, one
   - Fabric `ChunkGenerationService`/Paper twin unit tests: timeout outcome carries
     `transientFailure = true`; extraction-error outcome carries `false`; `totalTimeouts` /
     `totalRemovedInFlight` books unchanged (law A4).
-- [ ] **Step 2: Run — red.** `./gradlew :fabric:test :paper:test -x runGameTest -x runClientGameTest`
-- [ ] **Step 3: Implement.**
+- [x] **Step 2: Run — red.** `./gradlew :fabric:test :paper:test -x runGameTest -x runClientGameTest`
+- [x] **Step 3: Implement.**
   - `TickSnapshot.GenerationReadyData` + record javadoc: add `transientFailure`.
   - `OffThreadProcessor.handleDiskNotFound` — the new ladder:
 ```java
@@ -279,8 +279,8 @@ same flag (or a `feedGenerationTransient` overload — implementer's choice, one
   - `IncomingRequestRouter:286`: replace the `ColumnNotGenerated` send with
     `this.ctx.diagnostics().addSuperseded(1)` (comment: transient — level not yet registered;
     the want-set re-declares). Still `return SUBMITTED` (dispositioned).
-- [ ] **Step 4: Run — Tier 1 + Paper green.** Same command.
-- [ ] **Step 5: Tier 2 sweep.** `./gradlew :fabric:runGameTest`. Expected touch points:
+- [x] **Step 4: Run — Tier 1 + Paper green.** Same command.
+- [x] **Step 5: Tier 2 sweep.** `./gradlew :fabric:runGameTest`. Expected touch points:
   `GenerationLifecycleGameTests` — the caps test: at-capacity asks now silently retry instead of
   answering NOT_GENERATED; assert eventual service (the piggyback/cap counters), not a
   NOT_GENERATED count. `RegionFaultGameTests` — the corrupt-region chunk now resolves not-found
@@ -288,7 +288,7 @@ same flag (or a `feedGenerationTransient` overload — implementer's choice, one
   (`errors=1`, reader survives), which holds; if it pinned "resolves as not_found on the client",
   relax to "resolves terminally (not_found consumed by a successful regeneration serve)" — the
   self-healing is correct new behavior. Adjust in the same commit with a comment.
-- [ ] **Step 6: Commit.** `server: generate on any disk miss; transient generation outcomes never reach the wire`
+- [x] **Step 6: Commit.** `server: generate on any disk miss; transient generation outcomes never reach the wire`
 
 ## Part 2 — Client inversion (Tasks 3–4)
 
@@ -298,7 +298,7 @@ same flag (or a `feedGenerationTransient` overload — implementer's choice, one
 `LodRequestManager.java`; Tests `ColumnStateMapTest`, `SpiralScannerTest`, `LodRequestManagerTest`,
 `LodRequestManagerTickTest`.
 
-- [ ] **Step 1: Flip the tests first** (exhaustive list from the 2026-07-16 sweep):
+- [x] **Step 1: Flip the tests first** (exhaustive list from the 2026-07-16 sweep):
   - `ColumnStateMapTest`: `notGeneratedRequestsGenerationOnlyWhenEnabled` → becomes
     `notGeneratedIsPermanentSessionSatisfy` (classify == SATISFIED regardless of the deleted flag;
     no 0-stamp written; a later `markDirtyIfKnown` revives → classify returns the stored ts / -1);
@@ -326,8 +326,8 @@ same flag (or a `feedGenerationTransient` overload — implementer's choice, one
     DELETED (no client gen requests exist in any state); verify the want-set pins (convergence
     sends nothing; backpressure clear batch; awaited re-declaration) still green — they must not
     change.
-- [ ] **Step 2: Run — red.**
-- [ ] **Step 3: Implement.**
+- [x] **Step 2: Run — red.**
+- [x] **Step 3: Implement.**
   - `ColumnStateMap.onNotGenerated` (:213–218) — the spec's 2-line inversion:
 ```java
     void onNotGenerated(long packed) {
@@ -353,10 +353,10 @@ same flag (or a `feedGenerationTransient` overload — implementer's choice, one
   - `LodRequestManager.onColumnNotGenerated` (:352–385): keep tracker removal, RTT discard,
     `columns.onNotGenerated`, `consumeStaleCrossing`; DELETE the trailing
     `scanner.resetConfirmedRing()` (:383) with a comment citing R9.
-- [ ] **Step 4: Run — Tier 1 green**; `./gradlew :fabric:runGameTest` (Tier 2 — two-player dedup,
+- [x] **Step 4: Run — Tier 1 green**; `./gradlew :fabric:runGameTest` (Tier 2 — two-player dedup,
   generation lifecycle, and probe tests must converge with the never-emits-0 client against the
   Task 2 server).
-- [ ] **Step 5: Commit.** `client: one want-set budget; NOT_GENERATED is a permanent session-satisfy (dirty-broadcast revival only)`
+- [x] **Step 5: Commit.** `client: one want-set budget; NOT_GENERATED is a permanent session-satisfy (dirty-broadcast revival only)`
 
 ### Task 4: Router — every request is SYNC
 
@@ -364,11 +364,11 @@ same flag (or a `feedGenerationTransient` overload — implementer's choice, one
 `RequestType` (fold decision), `common/…/SlotType.java` (javadoc); Tests `IncomingRequestRouterTest`,
 `SlotAdmissionTest`, `DedupFanoutTest`.
 
-- [ ] **Step 1: Tests first.** Router tests: a `ts==0` incoming request routes exactly like `ts==-1`
+- [x] **Step 1: Tests first.** Router tests: a `ts==0` incoming request routes exactly like `ts==-1`
   (disk-first, SYNC slot, `claimsData=false`) — the retired value must stay inert, mirroring the
   Tier-1 "retired byte 0" wire pin; the no-disk branches: gen available → direct-generation for ANY
   request; no gen → `ColumnNotGenerated`.
-- [ ] **Step 2: Implement.** Delete `:121` (`type = clientTimestamp()==0 ? GENERATION : SYNC`); the
+- [x] **Step 2: Implement.** Delete `:121` (`type = clientTimestamp()==0 ? GENERATION : SYNC`); the
   `tryAdmitAndSubmit` signature drops `type`; branch 1 condition `type == SYNC ||
   diskReadingAvailable` becomes `this.diskReadingAvailable`; branch 2 (`:291`, no-disk direct gen)
   loses its type comment; escalation in `handleDiskNotFound` keeps `SlotType.GENERATION`.
@@ -377,8 +377,8 @@ same flag (or a `feedGenerationTransient` overload — implementer's choice, one
   and the `PendingRequest` component, updating `SlotAdmissionTest`; if a reader remains, keep and
   note why in the commit. Update `SlotType` javadoc (:3–8 documents the dead disk-first-ts
   semantics).
-- [ ] **Step 3: Run — Tier 1 + `:paper:test` + Tier 2 green.**
-- [ ] **Step 4: Commit.** `router: every request is SYNC; generation is the server's disk-miss decision`
+- [x] **Step 3: Run — Tier 1 + `:paper:test` + Tier 2 green.**
+- [x] **Step 4: Commit.** `router: every request is SYNC; generation is the server's disk-miss decision`
 
 ## Part 3 — Wire + config (Tasks 5–6)
 
@@ -393,19 +393,19 @@ bytes), `PayloadCodecTest:56–64`, `VoxelSectionPayloadTest:132–137`, `Client
 `VoxelColumnReceiverTest:67`, gametest `TwoPlayerGameTests:151`; paper `WireParityTest:110–143`
 (new reference bytes), `LSSPaperPluginGlueTest:90–158`.
 
-- [ ] **Step 1: Update every test to the 4-field shape first** (`protocolVersion, enabled,
+- [x] **Step 1: Update every test to the 4-field shape first** (`protocolVersion, enabled,
   lodDistanceChunks, generationEnabled`) → red.
-- [ ] **Step 2: Fabric.** Record components (:13–14 deleted), codec write/read, version-mismatch
+- [x] **Step 2: Fabric.** Record components (:13–14 deleted), codec write/read, version-mismatch
   fallback ctor (:38) → 4-arg. `ClientSessionGate.clampToProtocolBounds` drops both concurrency
   clamps (:156–157), keeps the lodDistance clamp.
-- [ ] **Step 3: Paper.** `encodeSessionConfig`/`sendSessionConfig` drop both int params + writeVarInts;
+- [x] **Step 3: Paper.** `encodeSessionConfig`/`sendSessionConfig` drop both int params + writeVarInts;
   `SessionConfigSender.send` interface (:225–229) and both call sites → 4 params.
-- [ ] **Step 4: Delete the `ServiceLifecycleGameTests` 252/253 end-to-end wire test** (:738–772) —
+- [x] **Step 4: Delete the `ServiceLifecycleGameTests` 252/253 end-to-end wire test** (:738–772) —
   both fields it wires are gone (note in commit body); `LSSGameTests` bounds asserts (:133–137)
   drop the sync line, keep Global/PerPlayer as plain config-range asserts.
-- [ ] **Step 5: Run — Tier 1 + `:paper:test` + Tier 2 green.** Fabric/Paper wire parity must agree
+- [x] **Step 5: Run — Tier 1 + `:paper:test` + Tier 2 green.** Fabric/Paper wire parity must agree
   on the 4-field bytes.
-- [ ] **Step 6: Commit.** `wire: SessionConfig drops both concurrency caps (6 -> 4 fields, v17)`
+- [x] **Step 6: Commit.** `wire: SessionConfig drops both concurrency caps (6 -> 4 fields, v17)`
 
 ### Task 6: Config — delete the syncOnLoad knob and the #28 cross-clamp
 
@@ -414,7 +414,7 @@ bytes), `PayloadCodecTest:56–64`, `VoxelSectionPayloadTest:132–137`, `Client
 Tests `ConfigValidationTest`, `PaperConfigValidationTest`, `PaperConfigLoadTest`,
 `JsonConfigLoadTest`.
 
-- [ ] **Step 1: Tests first.** Fabric `ConfigValidationTest`: delete
+- [x] **Step 1: Tests first.** Fabric `ConfigValidationTest`: delete
   `syncOnLoadConcurrencyLimitPerPlayerClamped` and `maxConfigLeavesFrontierHeadroomInTheWantSetBudget`
   (the invariant lives in `WantSetBudgetInvariantTest` now);
   `generationConcurrencyLimitPerPlayerClamped` expects the plain `[1, 1000]` clamp (9999 → 1000, was
@@ -422,12 +422,12 @@ Tests `ConfigValidationTest`, `PaperConfigValidationTest`, `PaperConfigLoadTest`
   check forces it), delete the helper constants deriving from the deleted field, delete the #28
   boundary twin (`inFlightWorstCase` :125–141). `JsonConfigLoadTest:152` / `PaperConfigLoadTest:116`
   drop the default assert.
-- [ ] **Step 2: Implement.** `ServerConfigBase`: delete the field (:23), its clamp (:49), and the
+- [x] **Step 2: Implement.** `ServerConfigBase`: delete the field (:23), its clamp (:49), and the
   entire #28 block (:53–70). `LSSConstants`: delete `SCAN_BUDGET_MULTIPLIER` (now zero readers) and
   rewrite the :75–84 comment block around `WANT_SET_BUDGET`/`WANT_SET_FRONTIER_RESERVE` + the
   invariant. Both services construct player state with `LSSConstants.SYNC_ON_LOAD_SLOT_CAP`.
-- [ ] **Step 3: Run — Tier 1 + `:paper:test` + Tier 2 green.**
-- [ ] **Step 4: Commit.** `config: delete the syncOnLoad knob and the #28 cross-clamp (constants + static invariant)`
+- [x] **Step 3: Run — Tier 1 + `:paper:test` + Tier 2 green.**
+- [x] **Step 4: Commit.** `config: delete the syncOnLoad knob and the #28 cross-clamp (constants + static invariant)`
 
 ## Part 4 — Soak + Paper priority + docs (Tasks 7–10)
 
@@ -435,9 +435,9 @@ Tests `ConfigValidationTest`, `PaperConfigValidationTest`, `PaperConfigLoadTest`
 
 **Files:** Modify `scripts/soak-scenarios/{rate-limit-storm,bandwidth-throttle,disk-saturation,generation-capacity-stress,generation-disabled}-config.json`, `scripts/check_soak.py`, `scripts/soak_report.py` (only if its counter classification names the flipped checks).
 
-- [ ] **Step 1: Drop the dead `syncOnLoadConcurrencyLimitPerPlayer` key** from the four `=200`
+- [x] **Step 1: Drop the dead `syncOnLoadConcurrencyLimitPerPlayer` key** from the four `=200`
   configs (pure cleanup) and from `rate-limit-storm` (`=4` — premise dead).
-- [ ] **Step 2: Re-premise `rate-limit-storm`.** Its `syncCap:4` lever no longer exists in any form —
+- [x] **Step 2: Re-premise `rate-limit-storm`.** Its `syncCap:4` lever no longer exists in any form —
   under this model NO client budget derives from a cap, so the scenario becomes the
   **abundance-ceiling pin**: default caps, full 800-want-set declarations, assertion stays a
   *ceiling* (`service.superseded <= N`) proving that steady-state re-declaration against an
@@ -446,18 +446,18 @@ Tests `ConfigValidationTest`, `PaperConfigValidationTest`, `PaperConfigLoadTest`
   at quiescence; leave the committed threshold at 50 unless the measured run says otherwise).
   Rewrite the scenario comment + `check_soak.py:1030–1088` docstring: supersession under v17 comes
   from slow service, never a small cap — cite this plan.
-- [ ] **Step 3: Flip `generation-capacity-stress`** (`check_soak.py:1178–1202`): on a gen-ENABLED
+- [x] **Step 3: Flip `generation-capacity-stress`** (`check_soak.py:1178–1202`): on a gen-ENABLED
   server `NOT_GENERATED` never fires now — `responses.not_generated >= 50` becomes
   `not_generated == 0` (the permanence guarantee, negatively pinned) plus a transient-churn floor
   (`service.superseded >= N`, N measured — the R7 repeated-miss loop under global gen cap 1 IS this
   scenario's subject now). Keep `generation.completed >= 120` and quiescence.
-- [ ] **Step 4: Verify `generation-disabled` needs no threshold change** (each ungenerated position
+- [x] **Step 4: Verify `generation-disabled` needs no threshold change** (each ungenerated position
   is answered `NOT_GENERATED` exactly once TODAY too — the client already parks when gen is off;
   ≥1000 counts distinct positions). Confirm live; adjust only if the measured run disagrees.
-- [ ] **Step 5: `check_soak.py`** — remove the sync key from `SERVER_CONFIG_INT_KEYS:136`;
+- [x] **Step 5: `check_soak.py`** — remove the sync key from `SERVER_CONFIG_INT_KEYS:136`;
   `--selftest` green (update the named-check registry cases); `--validate` green on all edited
   scenarios.
-- [ ] **Step 6: Commit.** `soak: re-premise storm + capacity-stress for server-owned generation; drop the dead sync key`
+- [x] **Step 6: Commit.** `soak: re-premise storm + capacity-stress for server-owned generation; drop the dead sync key`
 
 ### Task 8: Paper — generate at Moonrise `Priority.LOW`
 
@@ -469,15 +469,15 @@ timeout self-heals via re-declaration instead of permanently blanking the column
 **Files:** Modify `paper/…/PaperChunkGenerationService.java`; Test `PaperChunkGenerationServiceTest`
 via the `launchAsyncLoad` override seam.
 
-- [ ] **Step 1: Seam test** — override `launchAsyncLoad` to record the `Priority` and complete
+- [x] **Step 1: Seam test** — override `launchAsyncLoad` to record the `Priority` and complete
   synchronously with a stub NMS chunk; assert `submitGeneration` drives `Priority.LOW` and completion
   routes through serialization + the monotonic-`token` stale guard. Red (still `getChunkAtAsync`).
-- [ ] **Step 2: Adapt the completion contract.** `whenComplete((Chunk, Throwable))` →
+- [x] **Step 2: Adapt the completion contract.** `whenComplete((Chunk, Throwable))` →
   `Consumer<ChunkAccess>` — **no throwable channel; a null chunk IS the failure outcome** (permanent,
   R3 boundary: null-chunk = failed load/extraction → `NOT_GENERATED`; only the tick-timeout is
   transient). `completeAsyncLoad` takes `net.minecraft.world.level.chunk.ChunkAccess`, drops the
   `Throwable` param + its branch; keep the token stale guard and both admission caps.
-- [ ] **Step 3: Production `launchAsyncLoad`:**
+- [x] **Step 3: Production `launchAsyncLoad`:**
 ```java
     ca.spottedleaf.moonrise.common.PlatformHooks.get().scheduleChunkLoad(
         level, cx, cz, /*gen=*/true,
@@ -488,30 +488,30 @@ via the `launchAsyncLoad` override seam.
   `addTicket=true` — Moonrise owns the ticket (no manual bookkeeping to remove; that is the Fabric
   service). Serialization stays in the completion on the owning thread (`PaperSectionSerializer`),
   exactly as today — Folia-critical (the chunk can unload before a hop to the global tick).
-- [ ] **Step 4: Run — `:paper:test` green; `./gradlew :paper:shadowJar`.**
-- [ ] **Step 5: Commit.** `paper: LOD generation at Moonrise Priority.LOW (defers to player generation; Folia experimental)`
+- [x] **Step 4: Run — `:paper:test` green; `./gradlew :paper:shadowJar`.**
+- [x] **Step 5: Commit.** `paper: LOD generation at Moonrise Priority.LOW (defers to player generation; Folia experimental)`
 
 ### Task 9: Docs
 
-- [ ] **Step 1: `CLAUDE.md`.** Rewrite the v17 protocol section: timestamp semantics (`>0` resync /
+- [x] **Step 1: `CLAUDE.md`.** Rewrite the v17 protocol section: timestamp semantics (`>0` resync /
   `≤0` no data — no `0=generate`), the 4-field SessionConfig, the single `WANT_SET_BUDGET`, the #28
   bullet → the successor invariant + `WantSetBudgetInvariantTest`, `NOT_GENERATED` permanence +
   dirty-only revival, the transient/permanent outcome rule, `ChunkGenerationService` /
   `PaperChunkGenerationService` bullets (Moonrise LOW; Fabric asymmetry), the `backpressure.superseded`
   interpretation (now also counts transient generation drops), the soak-scenario descriptions
   (storm/capacity-stress new premises).
-- [ ] **Step 2: `README.md`** — config table: remove `syncOnLoadConcurrencyLimitPerPlayer`; note
+- [x] **Step 2: `README.md`** — config table: remove `syncOnLoadConcurrencyLimitPerPlayer`; note
   generation caps are server-internal. **Release notes MUST carry an operator-facing line**: the
   option was removed (now a fixed internal value); a config file still carrying it loads fine but
   the key is dropped on the next save (Task 6 review finding — at `diskReaderThreads >= 7` the old
   knob WAS binding, so tuned configs see a silent cap change without this note).
-- [ ] **Step 3: `docs/planning/resource-management.md`** — generation section: Paper = Moonrise
+- [x] **Step 3: `docs/planning/resource-management.md`** — generation section: Paper = Moonrise
   `Priority.LOW` hand-off; Fabric = concurrency cap only (vanilla pins worldgen priority to ticket
   level 33; worldgen latency is a poor congestion signal — an absolute-latency throttle would
   collapse LSS generation on a fresh uncontended world; the correct future direction is a tick-health
   (MSPT)-gated backoff). Record R6 (Paper dirty-revival gap + the `ChunkPopulateEvent` opt-in) and
   R7 (repeated-miss churn + the negative-cache follow-up trigger).
-- [ ] **Step 4: Commit.** `docs: server-owned generation (protocol, asymmetries, soak premises)`
+- [x] **Step 4: Commit.** `docs: server-owned generation (protocol, asymmetries, soak premises)`
 
 ### Task 10: Validation gauntlet + measured re-baselines
 
