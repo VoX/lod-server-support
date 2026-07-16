@@ -501,7 +501,10 @@ via the `launchAsyncLoad` override seam.
   interpretation (now also counts transient generation drops), the soak-scenario descriptions
   (storm/capacity-stress new premises).
 - [ ] **Step 2: `README.md`** — config table: remove `syncOnLoadConcurrencyLimitPerPlayer`; note
-  generation caps are server-internal.
+  generation caps are server-internal. **Release notes MUST carry an operator-facing line**: the
+  option was removed (now a fixed internal value); a config file still carrying it loads fine but
+  the key is dropped on the next save (Task 6 review finding — at `diskReaderThreads >= 7` the old
+  knob WAS binding, so tuned configs see a silent cap change without this note).
 - [ ] **Step 3: `docs/planning/resource-management.md`** — generation section: Paper = Moonrise
   `Priority.LOW` hand-off; Fabric = concurrency cap only (vanilla pins worldgen priority to ticket
   level 33; worldgen latency is a poor congestion signal — an absolute-latency throttle would

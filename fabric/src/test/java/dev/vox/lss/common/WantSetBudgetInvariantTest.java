@@ -8,8 +8,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  *  (the caps left the wire under server-owned generation), so the old validate() cross-clamp is
  *  gone. What survives is the REASON it existed, now a static inequality between constants: the
  *  declared want-set must dominate the worst-case per-player in-flight (sync slots + the global
- *  generation ceiling — per-player gen can never exceed the global clamp) with frontier headroom
- *  left over, and must always fit one wire batch. If any constant changes, this test re-derives
+ *  generation ceiling — steady-state: transient over-admission churn recycles within a tick)
+ *  with frontier headroom left over, and must always fit one wire batch. If any constant changes, this test re-derives
  *  the boundary. */
 class WantSetBudgetInvariantTest {
 

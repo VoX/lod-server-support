@@ -89,9 +89,11 @@ public final class LSSConstants {
     public static final int WANT_SET_BUDGET = 800;
 
     // Server per-player SYNC (disk-read) slot cap. Formerly the config field
-    // syncOnLoadConcurrencyLimitPerPlayer; now a constant — its admission role was always
-    // shadowed by the shared disk-pool hasHeadroom() gate (pool depth ~165 < 200), so it
-    // was never an operator-meaningful knob. Router retain semantics unchanged
+    // syncOnLoadConcurrencyLimitPerPlayer; now a constant. At the DEFAULT pool size its
+    // admission role is shadowed by the shared disk-pool hasHeadroom() gate (5 threads ->
+    // ~165 depth < 200); a larger diskReaderThreads config makes this constant the binding
+    // per-player limiter — deliberate: one fixed fairness ceiling instead of a second
+    // coupled knob (the retired key is release-noted). Router retain semantics unchanged
     // (SLOT_FULL retain-keep-scanning vs NO_DISK_HEADROOM retain-stop).
     public static final int SYNC_ON_LOAD_SLOT_CAP = 200;
 

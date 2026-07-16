@@ -20,11 +20,11 @@ public abstract class ServerConfigBase extends JsonConfig {
     public int generationConcurrencyLimitGlobal = 32;
     public int generationTimeoutSeconds = 60;
     public int dirtyBroadcastIntervalSeconds = 10;
-    // The per-player SYNC (disk-read) slot cap is NOT config anymore: it was never an
-    // operator-meaningful knob (shadowed by the shared disk-pool headroom gate) — see
-    // LSSConstants.SYNC_ON_LOAD_SLOT_CAP. The generation caps stay config: they are the
-    // real worldgen limiters, but they are server-internal (off the wire since the
-    // server-owned-generation fold into v17).
+    // The per-player SYNC (disk-read) slot cap is NOT config anymore — see
+    // LSSConstants.SYNC_ON_LOAD_SLOT_CAP (shadowed by the disk-pool headroom gate at the
+    // default pool size; a fixed fairness ceiling above it). The generation caps stay
+    // config: they are the real worldgen limiters, but they are server-internal (off the
+    // wire since the server-owned-generation fold into v17).
     public int generationConcurrencyLimitPerPlayer = 16;
     public int perDimensionTimestampCacheSizeMB = 32;
     /**
