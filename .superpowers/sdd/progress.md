@@ -561,7 +561,106 @@ Plan: docs/superpowers/plans/2026-07-15-declarative-want-set-requests.md (1469 l
     submits=2`; budget gone → `in_memory=2, submits=0`. Both still discriminate exactly as before.
     Note these were only NON-vacuous because of D7-1 — with `peekWantSet()`-only they would have
     passed by never probing at all (FP-022 vacuously green, FP-024 red).
-- Task 8: NOT STARTED — soak harness (part of the change, not a gate) (~1259-1327).
+- Task 8: COMPLETE — 8c95856. Both gates green: `check_soak.py --selftest` 133 cases (was 127:
+  −6 deleted, +12 added), `soak_report.py --selftest` 20 cases. Additionally verified beyond the
+  plan's gate: all 18 scenarios still `--validate` clean, both scripts `py_compile`, and a
+  checker↔exporter lockstep cross-check (see D8-6). No Java touched; Tier 1 / `:paper:test` /
+  Tier 2 / Tier 3 unaffected by this commit.
+  DONE: A1 re-derived (5 terms); B1 + its invocation + its 2 selftests deleted; A7 opt-in pair
+  SPLIT (rate_limited member gone from all 19 entries, `saturated` kept); PLAYER_DRAINS += backlog;
+  SERVER_MONOTONIC −sync/gen_rate_limited +superseded/range_filtered; CLIENT_MONOTONIC
+  −responses.rate_limited; KNOWN_CLIENT_KEYS −request_queue; rate-limit-storm + disk-saturation
+  re-premised; `_srv`/`_cli` fixtures + virtual-window seed updated; soak_report SERVER_MECHANISM /
+  CLIENT_MECHANISM updated; design doc laws/tables/quiescence + new v17-counters section.
+  **generation-capacity-stress: NOT TOUCHED, and not re-investigated** — read the plan's note
+  (line ~1343) first; it is not a fourth RESPONSE_RATE_LIMITED producer and two reviewers have
+  already derived that false alarm independently.
+
+  ### Task 8 PLAN DEVIATIONS / FINDINGS
+
+  - **D8-1 (the two A6 selftests: RETARGETED, not deleted — plan Step 4 was wrong to delete).**
+    Plan says delete `"A6 sync_rate_limited decrement"`/`"A6 gen_rate_limited decrement"` because
+    "the counters are gone". True of the vehicles, false of the invariant — and deleting would
+    have left a NEW hole: this same task ADDS `service.superseded`/`service.range_filtered` to
+    SERVER_MONOTONIC, so a plain delete ships two new A6 whitelist members with ZERO
+    decrement coverage. Retargeted to `"A6 superseded decrement"`/`"A6 range_filtered decrement"`
+    (and the `"A6 server monotonic"` clean vehicle likewise). The invariant (a whitelisted server
+    counter must never decrement) survives; only its trigger moved. Mutation-checked as part of
+    the suite's own `hits()` contract (each asserts a violation IS produced).
+  - **D8-2 (plan's "update the final selftest count print" — there is no count to update).**
+    Plan Step 4 says update the count at 2829-2832. The print is `f"selftest OK: {cases[0]} cases"`
+    — dynamic since round 2. Only the prose law list needed editing (dropped B1, named the new
+    client-mirror coverage). No count literal exists in the script.
+  - **D8-3 (plan's KNOWN_SERVER_KEYS/KNOWN_CLIENT_KEYS bullet overreaches — only ONE edit real).**
+    Plan says mirror all Task-6 contract changes into both dicts ("superseded, range_filtered,
+    players[].backlog in; incoming_dropped out"). Those dicts hold TOP-LEVEL keys only:
+    superseded/range_filtered live under `service`, backlog/incoming_dropped under `players[]`,
+    and `responses` (top-level) is unchanged. The only genuine edit is `request_queue` leaving
+    KNOWN_CLIENT_KEYS. Everything else the plan lists is structurally not in these dicts.
+    Coverage for the nested keys is real but lives elsewhere: SERVER_MONOTONIC (superseded/
+    range_filtered, schema-verified via GLOBAL_SERVER_FIELDS) and PLAYER_DRAINS (backlog,
+    schema-verified via `check_global_schema`'s players[0] loop).
+  - **D8-4 (soak_report's ingest_failures selftest needed NO fixture retarget — plan misread it).**
+    Plan Step 5 says "preserve the intent by retargeting its scenario fixture off the removed
+    field". The fixture never referenced `responses.rate_limited`; it keys on the SCENARIO NAME
+    ("rate-limit-storm"), which still exists and still opts into `saturated`. So the guard's teeth
+    are undiminished by construction — the risk it protects against (a CONCERNING counter
+    inheriting an unrelated scenario opt-in via OPT_IN_NAMES) is identical with `saturated` as
+    the inherited flag. **Mutation-verified rather than assumed:** adding
+    `"ingest failures": "saturated"` to OPT_IN_NAMES fails exactly this case. Only its comment +
+    assertion message (both said "rate_limited-opted") were corrected.
+  - **D8-5 (closed the plan-named coverage gap, and PROVED each new pin fires).** The plan flags
+    that the quiescence CLIENT mirror (find_quiescent lines 409/420) has zero selftest coverage —
+    `server_pair_quiescent` was tested directly, but the client half and the whole join/skew path
+    were untested, so an inverted or dropped mirror would open windows mid-traffic while every law
+    stayed green. Added 6 cases via a `qpoints_for(...)` helper: the clean 1-window case,
+    tracker_in_flight disqualifies, queued disqualifies, **beyond-SKEW_MS disqualifies** (beyond
+    the plan — the join is the mirror's other half and was equally unpinned), player-backlog
+    disqualifies end-to-end, plus a direct `server_pair_quiescent` backlog case.
+    **Mutation-verified per the ledger's method, not assumed:** (a) deleting the client-mirror
+    `continue` in `find_quiescent` fails exactly the tracker_in_flight case; (b) reverting
+    PLAYER_DRAINS to the 3-tuple fails exactly the backlog case; (c) re-adding `queue_full` as an
+    A1 term fails exactly "A1 balanced". All three failed on the intended assertion and nothing
+    else — the suite went green first-run, which is the shape of a vacuous pass, so this was the
+    check that it wasn't one.
+  - **D8-6 (lockstep verified against the exporter, not against the plan — D6-5's hand-off).**
+    Task 6's ledger left the `server-snapshot.contract` header's declared lockstep (checker KNOWN
+    keys + design doc must move with the fixture) as Task 8's debt. Rather than trust that my key
+    edits matched, I diffed the checker's requirements against the CONTRACT FILES themselves (the
+    exporters' pinned ground truth, mutation-proved in D6-2): every `GLOBAL_SERVER_FIELDS` /
+    `GLOBAL_CLIENT_FIELDS` / `PLAYER_DRAINS` entry the checker requires IS emitted (0 missing),
+    and both retired keys (`responses.rate_limited`, `request_queue`) are confirmed absent. This
+    is the coupling that would otherwise fail only at the next live soak run, hours in.
+  - **D8-7 (`fc` in check_rate_limit_storm is now premise-only — kept deliberately).** After the
+    two `responses.rate_limited` checks were deleted, the storm check's `final_client(1)` binding
+    is only tested for None. Kept as an explicit run-1-produced-snapshots premise guard (its
+    remaining checks are all server-side). Rewrote disk-saturation's equivalent to
+    `if ctx.final_client(1) is None:` since it binds nothing else.
+  - **D8-8 (disk-saturation keeps its A7 `saturated` opt-in even though the named check now
+    demands 0 — per plan, and coverage is strictly stronger).** Post-flip the opt-in looks
+    contradictory (A7 suppressed for a counter the scenario now forbids). Plan Step 2 says keep
+    A7's gate "exactly as they are", and the result is not a hole: the named check asserts
+    `disk.saturated == 0`, which strictly dominates A7's suppressed-if-opted-in behaviour and
+    yields a better message ("headroom gate leaked"). Left as the plan specifies; recorded so a
+    future reader doesn't read the opt-in as an oversight.
+  - **D8-9 (stale-comment sweep — the Task 2/4/5/6/7 lesson, applied to prose this time).**
+    Swept every mechanism this task retires. Corrected in check_soak: the MIN_CLIENT_WINDOWS
+    comment ("A1/A2/A5/B1"), the module docstring's quiescence + law list, the A7 opt-in table's
+    rationale, `bandwidth-throttle`'s docstring (credited the **deleted 10 s in-flight timeout
+    sweep** with streaming the disc through the throttle — its invariant is intact, only the
+    recovery mechanism is now 1 Hz re-declaration). In the design doc, the plan correctly flags
+    `duplicate_skips`' rationale (L142-144) as **actively false, not merely stale** — it framed
+    the counter as a rare artifact of "10 s client retry vs up-to-60 s server gen pending"; under
+    1 Hz re-declaration it is the DOMINANT disposition for anything outstanding >1 s and the
+    retry it names is gone. Rewritten. Left as history (correctly framed): the B1 tombstone, the
+    A7 split note, the storm check's HISTORICAL NAME docstring.
+  - **D8-10 (Task 9 hand-off — one number I made stale and deliberately did not touch).**
+    `CLAUDE.md:278` states `--selftest` runs "127 in-memory pass/catch cases". It is now **133**
+    — use that literal, no re-derivation needed. Left to Task 9 solely because Task 9 owns
+    CLAUDE.md and edits the same neighbourhood (the soak law list); flagged rather than fixed to
+    avoid a collision, not because it is unknown. Task 9 should also drop B1 from that law list.
+    `docs/planning/soak-test-design.md`'s own count/law list WAS updated here (115 → 133, B1
+    struck), since that doc is this task's.
 - Task 9: NOT STARTED — docs (CLAUDE.md, README, read-scheduler-design.md supersession note).
 - Task 10: NOT STARTED — validation gauntlet + live soak.
 
@@ -579,4 +678,16 @@ Plan: docs/superpowers/plans/2026-07-15-declarative-want-set-requests.md (1469 l
   `probeServesLoadedChunkFromMemoryWithoutSeedingDirtyFilter` (Tier 2) and Paper's
   `freshMailboxBatchIsProbedOnItsArrivalTickWithNothingPublished` (Tier 1).
 - Folia 26.2 unpublished upstream → SOAK_PLATFORM=folia cannot run. Paper soak + RegionProbeSchedulingTest carry it.
+- **The soak harness is now v17-only** (Task 8). It will correctly REJECT any pre-v17 recording:
+  `players[].backlog` is a required schema field and `service.superseded`/`range_filtered` are
+  required + A6-monotonic. A red run against an old recording is the schema gate working, not a
+  regression — re-record.
+- **Task 10's live soak: two named checks now assert the OPPOSITE of what they did at v16.**
+  `disk-saturation` requires `disk.saturated == 0` (the hasHeadroom gate must PREVENT what used to
+  bounce) and `rate-limit-storm` requires `service.superseded >= 100`. Both floors are derived, not
+  measured — nothing has run live yet. If either fails at Task 10, check the premise before the
+  threshold: saturated > 0 means the headroom gate leaked (a real finding, issue #32's territory);
+  superseded < 100 means the 4-slot gate is NOT leaving entries undrained, i.e. the storm config
+  stopped creating contention (also a real finding). Only after clearing the premise should the
+  number be recalibrated — with a comment.
 - `:fabric:test` does NOT pull runGameTest into its graph — run `:fabric:runGameTest` explicitly for Tier 2.
