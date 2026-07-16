@@ -83,6 +83,14 @@ public final class LSSConstants {
     public static final int SCAN_BUDGET_MULTIPLIER = 4;
     public static final int WANT_SET_FRONTIER_RESERVE = 64;
 
+    // Adaptive read-throttle (Approach B) target latency in ms: the EWMA submit->result setpoint
+    // the AIMD controller steers toward. At or below it the read-concurrency limit grows; above it
+    // (a proxy for the shared IO being busy) it shrinks. Engaged ONLY as the Fabric fallback when a
+    // chunk-IO-overhaul mod (C2ME et al.) makes the IOWorker background-priority path unavailable —
+    // see AbstractChunkDiskReader.enableAdaptiveThrottleFallback + ChunkDiskReader. A constant, not
+    // a config field: the fallback is automatic and needs no user knob.
+    public static final int ADAPTIVE_READ_TARGET_LATENCY_MS = 20;
+
     // Batch response type tags. Byte 0 was RESPONSE_RATE_LIMITED through v16 — retired by
     // the v17 want-set model (a full slot retains the want in the server's backlog instead of
     // bouncing it) and RESERVED: never reuse 0, and keep 1/2 stable (wire-parity fixtures pin
