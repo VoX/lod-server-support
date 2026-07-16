@@ -369,6 +369,25 @@ class LodRequestManagerTest {
                 "no dimension is known yet, so data must not be dropped");
     }
 
+    @Test
+    void farOutOfRangeUnsolicitedColumnIsNeverStamped() {
+        manager.setLastDimensionForTest(dim("overworld"));
+
+        // The movement pruner only runs on chunk crossings, so a stationary client fed
+        // arbitrary far positions would otherwise grow the state map without bound.
+        long far = PositionUtil.packPosition(100_000, 100_000);
+        manager.onColumnReceived(far, 5000L, dim("overworld"));
+
+        assertEquals(0, manager.getReceivedColumnCount(),
+                "a column far outside the prune radius must not stamp");
+        assertEquals(-1L, manager.columnsForTest().timestampFor(far),
+                "no state map entry for an unbounded-growth vector");
+
+        // In-range unsolicited data is still authoritative and still applies.
+        manager.onColumnReceived(POS, 5000L, dim("overworld"));
+        assertEquals(1, manager.getReceivedColumnCount());
+    }
+
     // ---- the want-set scan: re-declaration, mark survival, convergence ----
     //
     // The per-type concurrency drain tests (fullGenLimiterDoesNotStarveQueuedSyncRequests,

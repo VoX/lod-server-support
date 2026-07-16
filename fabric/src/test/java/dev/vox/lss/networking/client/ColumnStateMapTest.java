@@ -420,6 +420,36 @@ class ColumnStateMapTest {
         assertEquals(SATISFIED, map.classify(POS),
                 "a permanently rejected clear must not drive an endless re-clear loop");
         assertTrue(map.isSessionSatisfied(POS), "parked via session-satisfied");
+        assertEquals(3000L, map.timestampFor(POS),
+                "parking a lost clear RETAINS the pre-clear stamp: the consumer still holds "
+                        + "the pre-clear content, and a -1 park would draw an all-air "
+                        + "up_to_date next session (clears are only sent for ts>0) — the "
+                        + "ghost terrain would be permanent instead of one-session");
+        assertEquals(1, map.receivedCount(),
+                "the park swaps one >0 stamp for another — counts net zero");
+    }
+
+    /**
+     * The park-time twin of {@link #cacheLoadedLegacyZeroStampDeclaresAsNoData}: a legacy
+     * 0-stamp that draws up_to_date parks session-satisfied, and the 0 itself must be
+     * PURGED — left in timestamps it persists to the cache file and resurrects every
+     * session, immortal. Purged, the position becomes -1/unknown, which declares the same
+     * thing on the wire (&le;0 = "I hold nothing") but finally lets the artifact die.
+     */
+    @Test
+    void upToDateOnLegacyZeroStampPurgesItAtPark() {
+        var loaded = new Long2LongOpenHashMap();
+        loaded.put(POS, 0L);
+        map.loadFrom(loaded);
+        assertEquals(1, map.emptyCount(), "premise: the legacy stamp loaded as an empty");
+
+        map.onUpToDate(POS);
+
+        assertEquals(SATISFIED, map.classify(POS), "parked for the session as before");
+        assertTrue(map.isSessionSatisfied(POS));
+        assertEquals(0, map.emptyCount(), "the 0-stamp is purged, not parked around");
+        assertEquals(-1L, map.timestampFor(POS),
+                "nothing persists to the cache — next session starts clean at unknown");
     }
 
     @Test

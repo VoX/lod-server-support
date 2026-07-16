@@ -210,6 +210,15 @@ class ColumnStateMap {
         long stored = this.timestamps.get(packed);
         if (stored == -1L || stored == 0L) {
             this.sessionSatisfied.add(packed);
+            if (stored == 0L) {
+                // Purge the legacy 0-stamp at park time: v17 clients never write 0 (asks are
+                // >0 resync or -1 no-data), so a stored 0 is a pre-v17 cache artifact — and
+                // left in place it persists to the cache file and resurrects every session,
+                // immortal. Removing it converts the position to -1/unknown, which asks the
+                // SAME thing on the wire (<=0 = "I hold nothing") but finally lets it die.
+                this.timestamps.remove(packed);
+                this.emptyCount--;
+            }
         } else {
             this.validated.add(packed);
         }
@@ -255,15 +264,28 @@ class ColumnStateMap {
 
         int priorFailures = this.ingestFailures.addTo(packed, 1);
         if (priorFailures + 1 > MAX_INGEST_FAILURES) {
-            // Park WITHOUT a fabricated or retained >0 stamp: the consumer never stored the
-            // data, so claiming ts>0 next session would be the same lie that causes a permanent
-            // hole. Drop the timestamp to -1 (honest "I hold nothing") and mark session-
-            // satisfied so it stops re-downloading THIS session. Next session it re-asks -1;
-            // a transient failure (storage briefly down) heals, a permanent one (incompatible
-            // consumer) costs one re-attempt per session, bounded by this cap.
-            this.timestamps.remove(packed);
-            if (old > 0) this.receivedCount--;
-            else if (old == 0) this.emptyCount--;
+            long parkPreStamp = this.clearedResync.getOrDefault(packed, -1L);
+            if (parkPreStamp > 0) {
+                // Parking a lost CLEAR: the consumer still HOLDS the pre-clear content (it
+                // rejected the 0-section clearing column), so "I hold nothing" (-1) would be
+                // the lie here — next session's -1 re-ask draws an all-air up_to_date without
+                // a clearing column (clears are only sent for claimsData/ts>0), stranding the
+                // ghost terrain PERMANENTLY instead of for one session. Retain the pre-clear
+                // stamp: it is a real server-issued value < the cached clear stamp, so next
+                // session's re-ask draws the clearing column again and a recovered consumer
+                // heals. Counts net zero: put swaps one >0 stamp for another.
+                put(packed, parkPreStamp);
+            } else {
+                // Park WITHOUT a fabricated or retained >0 stamp: the consumer never stored the
+                // data, so claiming ts>0 next session would be the same lie that causes a
+                // permanent hole. Drop the timestamp to -1 (honest "I hold nothing"). Next
+                // session it re-asks -1; a transient failure (storage briefly down) heals, a
+                // permanent one (incompatible consumer) costs one re-attempt per session.
+                this.timestamps.remove(packed);
+                if (old > 0) this.receivedCount--;
+                else if (old == 0) this.emptyCount--;
+            }
+            // Either way: session-satisfied so it stops re-downloading THIS session.
             this.sessionSatisfied.add(packed);
             this.validated.remove(packed);
             this.retry.remove(packed);
@@ -366,7 +388,8 @@ class ColumnStateMap {
         return this.timestamps;
     }
 
-    /** Raw stored timestamp for one position: -1 absent, 0 not-generated, &gt;0 received. */
+    /** Raw stored timestamp for one position: -1 absent, 0 a legacy pre-v17 cache artifact
+     *  (never written by v17 clients; purged at park — see onUpToDate), &gt;0 received. */
     long timestampFor(long packed) { return this.timestamps.get(packed); }
 
     boolean isEmptyMap() { return this.timestamps.isEmpty(); }

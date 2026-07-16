@@ -277,6 +277,17 @@ public class LodRequestManager {
         // (ClientColumnProcessor filters on level.dimension()), so stamping it here would
         // mark the position SATISFIED in the current dimension's map with no data delivered.
         if (this.lastDimension != null && !this.lastDimension.equals(dimension)) return;
+        // Range guard: an unsolicited column far outside the prune radius must not stamp —
+        // the movement pruner only runs on chunk crossings, so a stationary client fed
+        // arbitrary far positions (buggy or hostile server) would otherwise grow the state
+        // map without bound. In-range unsolicited columns still stamp (authoritative data).
+        if (PositionUtil.isOutOfRange(packed, this.lastChunkX, this.lastChunkZ,
+                this.scanner.getPruneDistance())) {
+            LSSLogger.debug("Dropping out-of-range column " + PositionUtil.unpackX(packed)
+                    + "," + PositionUtil.unpackZ(packed)
+                    + " (player chunk " + this.lastChunkX + "," + this.lastChunkZ + ")");
+            return;
+        }
         // Capture the pre-clear content stamp BEFORE onReceived overwrites it with the clear's
         // timestamp — a rejected clear re-requests with this value, not ts=-1.
         long preClearStamp = authoritativeClear ? this.columns.timestampFor(packed) : -1L;
@@ -465,8 +476,10 @@ public class LodRequestManager {
     }
 
     /**
-     * Stored timestamp for one column position (-1 absent, 0 not-generated, &gt;0 epoch
-     * seconds). Main client thread only — used by the soak harness per-position probes.
+     * Stored timestamp for one column position (-1 absent, 0 a legacy pre-v17 cache
+     * artifact — the client no longer writes 0, see ColumnStateMap#onUpToDate's park-time
+     * purge — &gt;0 epoch seconds). Main client thread only — used by the soak harness
+     * per-position probes.
      */
     public long getColumnTimestamp(int cx, int cz) {
         return this.columns.timestampFor(PositionUtil.packPosition(cx, cz));
