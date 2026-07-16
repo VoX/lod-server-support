@@ -21,11 +21,6 @@ public class ProcessingDiagnostics {
     private volatile long totalInMemory;
     private volatile long totalUpToDate;
     private volatile long totalGenDrained;
-    // Frozen at 0 since the v17 want-set model retired the rate-limit bounce: a full slot
-    // or a full disk pool now RETAINS the entry (see IncomingRequestRouter). Kept only
-    // because both metrics exporters still read them; deleted with those keys in Task 6.
-    private volatile long totalSyncRateLimited;
-    private volatile long totalGenRateLimited;
     private volatile long totalDuplicateSkips;
     private volatile long totalRequestsRouted;
     private volatile long totalReResolved;
@@ -101,8 +96,6 @@ public class ProcessingDiagnostics {
     public long getTotalInMemory() { return totalInMemory; }
     public long getTotalUpToDate() { return totalUpToDate; }
     public long getTotalGenDrained() { return totalGenDrained; }
-    public long getTotalSyncRateLimited() { return totalSyncRateLimited; }
-    public long getTotalGenRateLimited() { return totalGenRateLimited; }
     public long getTotalQueueFull() { return totalQueueFull; }
     public long getTotalDuplicateSkips() { return totalDuplicateSkips; }
     public long getTotalRequestsRouted() { return totalRequestsRouted; }

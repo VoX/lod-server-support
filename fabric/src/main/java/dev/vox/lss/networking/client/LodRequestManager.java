@@ -516,13 +516,6 @@ public class LodRequestManager {
 
     // Concurrency
     public int getPendingCount() { return this.tracker.size(); }
-    /**
-     * Transitional: the drip-feed queue is gone; always 0. LSSClientCommands drops its caller
-     * in the protocol-bump task and the exporter drops request_queue with the contract change,
-     * after which this stub is deleted.
-     */
-    public int getQueueRemaining() { return 0; }
-
     // Last scan budget
     public int getLastBudget() { return this.scanner.getLastBudget(); }
     public int getLastSyncQueued() { return this.scanner.getLastSyncQueued(); }

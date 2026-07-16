@@ -78,6 +78,7 @@ class PaperExporterContractTest {
             doReturn(4L).when(this.player).getTotalSectionsSent();
             doReturn(5L).when(this.player).getTotalBytesSent();
             doReturn(6L).when(this.player).getTotalRequestsReceived();
+            doReturn(7).when(this.player).getBacklogSize();
 
             var players = new LinkedHashMap<UUID, PaperPlayerRequestState>();
             players.put(this.playerUuid, this.player);
@@ -180,6 +181,8 @@ class PaperExporterContractTest {
         var fx = new Fixture();
         fx.diag.incrementReResolved();
         fx.diag.incrementReResolved();
+        fx.diag.addSuperseded(8);
+        fx.diag.addRangeFiltered(9);
         fx.tickDiag.recordSectionSent(100);
         fx.diskDiag.recordCompleted(3_000_000L);
         fx.diskDiag.recordSuccess();
@@ -191,6 +194,8 @@ class PaperExporterContractTest {
         var m = PaperSoakMetricsExporter.buildServerMetrics(fx.service);
 
         assertEquals(2L, section(m, "service").get("re_resolved"));
+        assertEquals(8L, section(m, "service").get("superseded"));
+        assertEquals(9L, section(m, "service").get("range_filtered"));
         assertEquals(1L, section(m, "service").get("columns_sent"));
         assertEquals(100L, section(m, "service").get("bytes_sent"));
         assertEquals(1L, section(m, "service").get("disk_resolved"));
@@ -222,9 +227,10 @@ class PaperExporterContractTest {
         assertEquals(4L, row.get("sent"));
         assertEquals(5L, row.get("bytes"));
         assertEquals(6L, row.get("requests"));
-        // The bounded incoming queue that could drop is gone (one latest-wins batch replaces it);
-        // the key is frozen at 0 here and leaves the schema with the contract in Task 6.
-        assertEquals(0L, row.get("incoming_dropped"));
+        // Want-set entries not yet routed by the processing thread — the successor gauge to the
+        // deleted incoming_dropped (the bounded drop-on-full queue is gone; a latest-wins batch
+        // replaces it, so there is nothing to drop, only a backlog left to work through).
+        assertEquals(7, row.get("backlog"));
 
         // Mark/drain conservation closes: marked_total == broadcast_positions + pending
         fx.dirtyTracker.drainDirty(DIM);

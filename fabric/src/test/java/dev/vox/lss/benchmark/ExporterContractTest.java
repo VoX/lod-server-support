@@ -295,7 +295,6 @@ class ExporterContractTest {
         assertEquals(0L, disabled.get("requested_total"));
         assertEquals(0L, disabled.get("send_cycles"));
         assertEquals(0, disabled.get("effective_lod"));
-        assertEquals(0, disabled.get("request_queue"));
         assertEquals(0, disabled.get("tracker_in_flight"));
         assertEquals(0, section(disabled, "scan").get("budget"));
         assertEquals(0, section(disabled, "columns").get("known"));

@@ -180,9 +180,9 @@ public final class PaperSoakMetricsExporter {
         serviceMap.put("gen_drained", diag.getTotalGenDrained());
         var diskReader = service.getDiskReader();
         serviceMap.put("disk_resolved", diskReader != null ? diskReader.getDiag().getSuccessfulReadCount() : 0L);
-        serviceMap.put("sync_rate_limited", diag.getTotalSyncRateLimited());
-        serviceMap.put("gen_rate_limited", diag.getTotalGenRateLimited());
         serviceMap.put("re_resolved", diag.getTotalReResolved());
+        serviceMap.put("superseded", diag.getTotalSuperseded());
+        serviceMap.put("range_filtered", diag.getTotalRangeFiltered());
         result.put("service", serviceMap);
 
         var diskMap = new LinkedHashMap<String, Object>();
@@ -280,8 +280,8 @@ public final class PaperSoakMetricsExporter {
             p.put("sent", state.getTotalSectionsSent());
             p.put("bytes", state.getTotalBytesSent());
             p.put("requests", state.getTotalRequestsReceived());
-            // removed in Task 6 with the contract (the incoming queue it counted is gone)
-            p.put("incoming_dropped", 0L);
+            // Want-set entries still awaiting a routing pass on the processing thread.
+            p.put("backlog", state.getBacklogSize());
             players.add(p);
         }
         result.put("players", players);

@@ -395,7 +395,71 @@ Plan: docs/superpowers/plans/2026-07-15-declarative-want-set-requests.md (1469 l
     deletes the two `responses.rate_limited` checks) — flagged here only so nobody runs
     `./scripts/soak.sh rate-limit-storm` between Tasks 5 and 8 and reads the red as a regression.
     Soak is not a gate for this commit; Tier 1 + `:paper:test` are.
-- Task 6: NOT STARTED — exporters, contracts, diagnostics (~1173-1214).
+- Task 6: COMPLETE — 0ed76a7. Both exporter families patched, contracts moved in lockstep, the
+  frozen counters and their last callers deleted. Tier 1 green (593 tests, 0 failures);
+  `:paper:test` green (246, 0 failures). Tier 2/3 remain EXPECTED RED (Task 7).
+  MAIN SOURCE:
+    - `BenchmarkMetricsExporter` — FAMILY 1 (soak snapshots): `service.sync_rate_limited`/
+      `gen_rate_limited` → `service.superseded`/`range_filtered`; `players[].incoming_dropped` →
+      `players[].backlog` (getBacklogSize); client `responses.rate_limited` + `request_queue`
+      deleted; `tracker_in_flight`/`queued`/`requested_total` kept with re-declaration comments.
+      FAMILY 2 (real benchmark, zero test coverage): `exportServer()`'s map and
+      `buildClientMetrics()`'s `total_rate_limited` — see D6-1.
+    - `PaperSoakMetricsExporter` — same service/players changes, verbatim lockstep.
+    - DELETED (last callers gone): `ProcessingDiagnostics.getTotalSyncRateLimited`/
+      `getTotalGenRateLimited` + both frozen fields; `RequestMetrics.recordRateLimited`/
+      `getTotalRateLimited` + `totalRateLimited`; `LodRequestManager.getQueueRemaining()`.
+  CONTRACTS: `server-snapshot.contract` −gen_rate_limited/−sync_rate_limited/−incoming_dropped,
+  +service.superseded/+service.range_filtered/+players[].backlog (re-sorted);
+  `client-snapshot.contract` −request_queue/−responses.rate_limited.
+  TESTS: `RequestMetricsTest` (both rate-limited legs incl. :55), `ExporterContractTest:298`,
+  `PaperExporterContractTest` (backlog + distinct superseded/range_filtered stubs).
+
+  ### Task 6 PLAN DEVIATIONS / FINDINGS
+
+  - **D6-1 (family 2's `rate_limiting` map — RENAMED, not dropped; plan offered both).** Plan Step 2
+    says "drop the whole map or just the two entries at :527-528". Neither is right as stated:
+    dropping the map loses `queue_full` (a live counter, its only other member), and keeping a map
+    literally named `rate_limiting` in a protocol with no rate limiting is exactly the stale-naming
+    trap Tasks 2/4/5 each had to clean up after. Renamed to `backpressure` and gave it the two v17
+    dispositions alongside `queue_full`: `{queue_full, superseded, range_filtered}`. This family has
+    ZERO Tier-1 coverage (only `-Dlss.benchmark=true` reaches it), so the rename is unpinned by
+    construction — verified it compiles as part of `:fabric:compileJava` and that no script/doc reads
+    the key (`grep` over scripts/ docs/ README/CLAUDE: only CLAUDE.md:235, which is Task 9's).
+    **→ TASK 9 HAND-OFF:** the plan's Task 9 bullet (line ~1382) says to DROP CLAUDE.md :235's
+    `rate_limiting.sync_rate_limited`/`gen_rate_limited` lines. Because of this rename it should
+    instead DOCUMENT `backpressure.{queue_full,superseded,range_filtered}` in the server.json
+    interpretation table. CLAUDE.md :203/:241's `total_rate_limited` (client.json) is a plain
+    deletion as planned — that key is gone with no successor.
+  - **D6-2 (the contract fixture is load-bearing on BOTH modules — mutation-proved, not assumed).**
+    The plan warns the `.contract` files are a cross-module coupling but specifies no proof. Both
+    suites went green on the first run, which is exactly the shape of a vacuous pass, so I mutated
+    the fixture (`players[].backlog=int` → `=long`) and confirmed it fails
+    `ExporterContractTest.serverSnapshotMatchesTheCheckedInContract` AND
+    `PaperExporterContractTest.serverSnapshotMatchesTheSharedFabricContractLiteral`, then restored
+    and re-ran both green. The new keys are genuinely emitted, at the right types, by both exporters.
+  - **D6-3 (`ExporterContractTest`'s "disabled zero-fill branch" is not a branch).** Plan Step 2 says
+    to "update the disabled-session zero-fill branch to the same key set". There is no separate
+    branch — `buildClientSnapshot` zero-fills inline via `manager != null ? … : 0`, so the key set
+    could not drift and the only edit needed was dropping the test's `request_queue` assertion.
+    The test's real invariant (enabled and disabled flatten to an IDENTICAL key+type map) is
+    untouched and still fires.
+  - **D6-4 (stale-comment sweep — one real find, per the Task 2/4/5 lesson).**
+    `FlushSendQueueTest:138` justified a live invariant with "re-requests bounce rate-limited, not
+    re-resolve" — a bounce Task 5 removed from the wire. The INVARIANT is intact and still correct
+    (a bandwidth-gated payload stays in the enqueued set); only its disposition changed, and the
+    replacement is real: `IncomingRequestRouter.resolvedAsDuplicate` skips a ts<=0 re-declaration of
+    an enqueued column SILENTLY and deliberately does not clear the done-bit. Comment re-pointed at
+    that method. Every other rate-limit hit in the sweep is correctly framed as history
+    (retired-and-reserved byte 0, deleted-test tombstones) — left alone.
+  - **D6-5 (soak-side lockstep debt — Task 8's, verified covered, NOT actioned).** The
+    `server-snapshot.contract` header declares editing it a schema change requiring `check_soak.py`
+    KNOWN keys + `docs/planning/soak-test-design.md` to move in lockstep. They are now out of step
+    (`check_soak.py:160,176,205-210`, `soak_report.py:57-58,67`, design doc L85/L101/L114/L121).
+    Checked the plan: Task 8 Step 1 covers every one of these lines by name (KNOWN_SERVER_KEYS/
+    KNOWN_CLIENT_KEYS, PLAYER_DRAINS + backlog, SERVER_MONOTONIC, SERVER_MECHANISM, the design-doc
+    tables). Nothing to do here — flagged only so nobody runs a soak between Tasks 6 and 8 and reads
+    the KNOWN-key rejection as a regression. Soak is not a gate for this commit.
 - Task 7: NOT STARTED — Tier 2 gametests + Tier 3 (~1215-1258).
 - Task 8: NOT STARTED — soak harness (part of the change, not a gate) (~1259-1327).
 - Task 9: NOT STARTED — docs (CLAUDE.md, README, read-scheduler-design.md supersession note).

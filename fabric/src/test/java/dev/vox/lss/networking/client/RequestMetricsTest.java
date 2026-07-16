@@ -19,7 +19,6 @@ class RequestMetricsTest {
         m.recordColumnReceived();
         m.recordUpToDate();
         m.recordNotGenerated();
-        m.recordRateLimited();
         m.recordIngestFailure();
         m.updateRollingRates(); // first update window: counts > 0 -> rates strictly > 0
         assertTrue(m.getReceiveRate() > 0, "premise: a live rolling receive rate");
@@ -33,7 +32,6 @@ class RequestMetricsTest {
         assertEquals(1, m.getTotalColumnsReceived());
         assertEquals(1, m.getTotalUpToDate());
         assertEquals(1, m.getTotalNotGenerated());
-        assertEquals(1, m.getTotalRateLimited());
         assertEquals(1, m.getTotalIngestFailures());
         assertEquals(0.0, m.getReceiveRate(), "rolling rates cleared");
         assertEquals(0.0, m.getRequestRate());
@@ -52,11 +50,10 @@ class RequestMetricsTest {
         m.recordColumnReceived();
         m.recordUpToDate();
         m.recordNotGenerated();
-        m.recordRateLimited();
         m.recordIngestFailure();
         m.updateRollingRates();
         assertEquals(0, m.getTotalPositionsRequested(),
-                "no response or rate path may count as a request");
+                "no response or ingest-failure path may count as a request");
         assertEquals(0, m.getTotalSendCycles());
 
         m.recordSendCycle(7);
