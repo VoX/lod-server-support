@@ -1025,4 +1025,125 @@ class OffThreadProcessorDiskResultTest {
             rig.proc.shutdown();
         }
     }
+
+    // ---- generation order-spread gate (the C2ME farthest-first incident, 2026-07-16) ----
+
+    /** Declare a want-set batch (closest-first, like the real client). */
+    private static void declare(TestState state, IncomingRequest... reqs) {
+        state.offerIncomingBatch(new IncomingBatch(reqs));
+    }
+
+    private static TickSnapshot.GenerationReadyData genSuccess(UUID uuid, int cx, int cz, long order) {
+        return new TickSnapshot.GenerationReadyData(uuid, cx, cz, DIM,
+                new LoadedColumnData(cx, cz, new byte[]{1},
+                        1 + LSSConstants.ESTIMATED_COLUMN_OVERHEAD_BYTES),
+                COLUMN_TS, order);
+    }
+
+    /** Poll issued generation tickets into a list until it holds {@code n} (or time out). */
+    private List<OffThreadProcessor.GenerationTicketRequest> collectTickets(
+            TestProcessor proc, List<OffThreadProcessor.GenerationTicketRequest> into, int n)
+            throws InterruptedException {
+        waitFor(() -> {
+            OffThreadProcessor.GenerationTicketRequest t;
+            while ((t = proc.pollGenerationTicketRequest()) != null) into.add(t);
+            return into.size() >= n;
+        }, "expected " + n + " generation tickets, got " + into);
+        return into;
+    }
+
+    /**
+     * The platform scheduler owns generation COMPLETION order, and chunk-system rewrites
+     * (C2ME) do not complete equal-priority tickets FIFO. LSS refills each freed generation
+     * slot with the next-nearest miss, so under a newest-first scheduler the oldest
+     * (nearest) ticket starves at the bottom while ever-farther tickets enter above it and
+     * complete first — the player sees gaps AT their feet while the frontier races outward
+     * (live incident on a Fabric+C2ME server, 2026-07-16; disk-read-only rejoin ordered
+     * correctly, isolating generation). The LSS-owned invariant pinned here: a NEW ticket
+     * may enter at most {@link LSSConstants#MAX_GENERATION_RING_SPREAD} Chebyshev rings
+     * (measured from the declared want-set center) beyond the OLDEST outstanding ticket.
+     * Beyond that the miss takes the standard transient drop (superseded + miss_dropped —
+     * law A5 balances) and the next 1 Hz re-declaration retries it once the head resolved.
+     */
+    @Test
+    void generationRefillMustNotRaceBeyondTheOldestOutstandingTicket() throws Exception {
+        var rig = new Rig(true, 8, 2); // 2 generation slots — the refill window under test
+        var tickets = new ArrayList<OffThreadProcessor.GenerationTicketRequest>();
+        try {
+            // Closest-first declaration along +x from center (0,0): ring == x.
+            declare(rig.state,
+                    new IncomingRequest(0, 0, -1L), new IncomingRequest(1, 0, -1L),
+                    new IncomingRequest(2, 0, -1L), new IncomingRequest(3, 0, -1L),
+                    new IncomingRequest(4, 0, -1L), new IncomingRequest(5, 0, -1L));
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
+            waitFor(() -> rig.proc.diskSubmits.size() == 6, "six disk reads");
+
+            // All six miss: the two NEAREST take the gen slots, the rest drop transiently.
+            for (int x = 0; x < 6; x++) rig.inject(ChunkReadResult.empty(rig.uuid, x, 0, DIM, x + 1));
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
+            collectTickets(rig.proc, tickets, 2);
+            assertEquals(List.of(0, 1), tickets.stream().map(t -> t.cx()).toList(),
+                    "the two nearest misses take the slots, in proximity order");
+
+            // Adversarial (newest-first) scheduler: ring 1 completes while ring 0 sits.
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid),
+                    new ArrayList<>(List.of(genSuccess(rig.uuid, 1, 0, 2L))));
+            waitFor(() -> rig.proc.enqueuedColumns.stream().anyMatch(c -> c.cx() == 1),
+                    "ring-1 column delivered");
+
+            // 1 Hz re-declaration of what's still unsatisfied — INCLUDING the awaited
+            // ring-0 head (awaited positions are re-declared; the router skips its live
+            // pending). Ring 2 refills the freed slot (2 <= 0 + MAX_GENERATION_RING_SPREAD).
+            declare(rig.state,
+                    new IncomingRequest(0, 0, -1L), new IncomingRequest(2, 0, -1L),
+                    new IncomingRequest(3, 0, -1L), new IncomingRequest(4, 0, -1L),
+                    new IncomingRequest(5, 0, -1L));
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
+            waitFor(() -> rig.proc.diskSubmits.size() == 10, "re-declared disk reads");
+            for (int x = 2; x < 6; x++) rig.inject(ChunkReadResult.empty(rig.uuid, x, 0, DIM, 10 + x));
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
+            collectTickets(rig.proc, tickets, 3);
+            assertEquals(2, tickets.get(2).cx(), "ring 2 refills within the spread window");
+
+            // Newest-first again: ring 2 completes; ring 0 STILL sits.
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid),
+                    new ArrayList<>(List.of(genSuccess(rig.uuid, 2, 0, 3L))));
+            waitFor(() -> rig.proc.enqueuedColumns.stream().anyMatch(c -> c.cx() == 2),
+                    "ring-2 column delivered");
+
+            // Re-declare ring 3..5. WITHOUT the spread gate this admits ring 3 (and later 4,
+            // 5, ... unbounded) while the ring-0 head starves — the runaway this test exists
+            // to forbid: ring 3 > ring 0 + MAX_GENERATION_RING_SPREAD(2) must NOT ticket.
+            long missDroppedBefore = rig.proc.getDiagnostics().getTotalMissDropped();
+            declare(rig.state,
+                    new IncomingRequest(0, 0, -1L), new IncomingRequest(3, 0, -1L),
+                    new IncomingRequest(4, 0, -1L), new IncomingRequest(5, 0, -1L));
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
+            waitFor(() -> rig.proc.diskSubmits.size() == 13, "third wave disk reads");
+            for (int x = 3; x < 6; x++) rig.inject(ChunkReadResult.empty(rig.uuid, x, 0, DIM, 20 + x));
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
+            waitFor(() -> rig.proc.getDiagnostics().getTotalMissDropped() >= missDroppedBefore + 2,
+                    "third-wave misses resolved");
+            assertNull(rig.proc.pollGenerationTicketRequest(),
+                    "no ticket may enter more than MAX_GENERATION_RING_SPREAD rings beyond "
+                            + "the oldest outstanding one — an unbounded refill window is what "
+                            + "lets a non-FIFO platform scheduler starve the nearest chunk");
+
+            // Liveness: the head resolves -> the gate opens and ring 3 tickets normally.
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid),
+                    new ArrayList<>(List.of(genSuccess(rig.uuid, 0, 0, 1L))));
+            waitFor(() -> rig.proc.enqueuedColumns.stream().anyMatch(c -> c.cx() == 0),
+                    "the starved head finally delivered");
+            declare(rig.state, new IncomingRequest(3, 0, -1L));
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
+            waitFor(() -> rig.proc.diskSubmits.size() == 14, "post-head re-declaration");
+            rig.inject(ChunkReadResult.empty(rig.uuid, 3, 0, DIM, 30L));
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
+            collectTickets(rig.proc, tickets, 4);
+            assertEquals(3, tickets.get(3).cx(),
+                    "once the head resolves, the gated position admits on its next re-declaration");
+        } finally {
+            rig.proc.shutdown();
+        }
+    }
 }

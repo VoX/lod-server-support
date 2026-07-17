@@ -26,6 +26,7 @@ public final class DiagnosticsFormatter {
             String tickDiagnostics,
             String diskReaderDiagnostics,
             String generationDiagnostics, boolean generationEnabled,
+            long genOrderGated, long genInversions,
             long bwTotal,
             long bwWindowRate,
             List<PlayerDiag> players
@@ -67,9 +68,13 @@ public final class DiagnosticsFormatter {
         // DiskReader
         lines.add("DiskReader: " + d.diskReaderDiagnostics);
 
-        // Generation
+        // Generation. order_gated = misses refused by the order-spread gate;
+        // inversions = completions that finished while a NEARER ticket was outstanding
+        // (the platform scheduler's far-before-near signature, e.g. C2ME).
         if (d.generationEnabled) {
-            lines.add("Generation: " + d.generationDiagnostics);
+            lines.add("Generation: " + d.generationDiagnostics
+                    + String.format(", order_gated=%d, inversions=%d",
+                            d.genOrderGated, d.genInversions));
         } else {
             lines.add("Generation: disabled");
         }
@@ -144,6 +149,7 @@ public final class DiagnosticsFormatter {
                 tickDiagnostics,
                 diskReader != null ? diskReader.getDiagnostics() : "disabled",
                 generationDiagnosticsOrNull, generationDiagnosticsOrNull != null,
+                diag.getTotalGenOrderGated(), diag.getTotalGenCompletionInversions(),
                 bwLimiter.getTotalBytesSent(),
                 windowBandwidthRate,
                 players

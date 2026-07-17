@@ -29,6 +29,8 @@ public class ProcessingDiagnostics {
     private volatile long totalSuperseded;
     private volatile long totalRangeFiltered;
     private volatile long totalMissDropped;
+    private volatile long totalGenOrderGated;
+    private volatile long totalGenCompletionInversions;
 
     public void resetTickCounters() {
         procTickDiskQueued = 0;
@@ -94,6 +96,17 @@ public class ProcessingDiagnostics {
      *  two would over-balance A5. */
     public void addMissDropped(long n) { if (n > 0) totalMissDropped += n; }
 
+    /** Misses refused by the generation order-spread gate (a subset of miss_dropped): the
+     *  candidate ring exceeded the oldest outstanding ticket's ring by more than
+     *  MAX_GENERATION_RING_SPREAD. Nonzero means the gate is actively bounding a refill
+     *  runaway — expect it on platforms whose scheduler completes non-FIFO (C2ME). */
+    public void addGenOrderGated(long n) { if (n > 0) totalGenOrderGated += n; }
+
+    /** Successful generation completions that arrived while a NEARER ticket was still
+     *  outstanding — direct evidence the platform scheduler completes far-before-near.
+     *  Diagnostics only; the order-spread gate bounds how bad this can look on screen. */
+    public void addGenCompletionInversion(long n) { if (n > 0) totalGenCompletionInversions += n; }
+
     // Per-tick getters (read by main thread)
     public int getLastDiskQueued() { return procTickDiskQueued; }
     public int getLastDiskDrained() { return procTickDiskDrained; }
@@ -112,4 +125,6 @@ public class ProcessingDiagnostics {
     public long getTotalSuperseded() { return totalSuperseded; }
     public long getTotalRangeFiltered() { return totalRangeFiltered; }
     public long getTotalMissDropped() { return totalMissDropped; }
+    public long getTotalGenOrderGated() { return totalGenOrderGated; }
+    public long getTotalGenCompletionInversions() { return totalGenCompletionInversions; }
 }

@@ -775,6 +775,17 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
             this.ctx.sendActions().add(new SendAction.ColumnNotGenerated(playerUuid, packed, state));
             return;
         }
+        if (state.generationOrderSpreadExceeded(cx, cz, LSSConstants.MAX_GENERATION_RING_SPREAD)) {
+            // Order-spread gate: the platform scheduler owns completion order (chunk-system
+            // rewrites like C2ME are not FIFO), so an unbounded per-slot refill lets far
+            // tickets pile in above a starving near one and the world fills far-before-near.
+            // Refusal is the standard transient drop — re-declared at 1 Hz, admitted once
+            // the head resolves (or its generation timeout clears it).
+            this.ctx.diagnostics().addSuperseded(1);
+            this.ctx.diagnostics().addMissDropped(1); // law A5: a miss with no submit, no answer
+            this.ctx.diagnostics().addGenOrderGated(1);
+            return;
+        }
         if (state.tryAdmit(new PendingRequest(cx, cz, SlotType.GENERATION, pending.claimsData()))) {
             addGenerationInFlight(playerUuid, dimension, packed);
             this.ctx.generationTicketRequests().add(new GenerationTicketRequest(
@@ -816,6 +827,13 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
             // cycle could still string-match, but registration takes multiple ticks.)
             String registered = state.registeredDimension();
             if (registered != null && !registered.equals(entry.dimension())) continue;
+            // Completion-order evidence (diagnostics only): a successful completion while a
+            // NEARER ticket is still outstanding means the platform scheduler finished
+            // far-before-near. A high rate here is the C2ME-style inversion signature that
+            // the order-spread gate in handleDiskNotFound exists to bound.
+            if (entry.columnData() != null && state.hasNearerOutstandingGeneration(cx, cz)) {
+                this.ctx.diagnostics().addGenCompletionInversion(1);
+            }
             var pending = state.removePendingByPosition(cx, cz);
 
             if (entry.columnData() == null) {

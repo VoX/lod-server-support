@@ -211,7 +211,68 @@ public abstract class AbstractPlayerRequestState<T> {
         this.backlogSizeSnapshot = this.backlog.size();
         this.appliedWantSet = batch.size() == 0 ? null : batch;
         publishWantSet(this.appliedWantSet);
+        if (batch.size() > 0) {
+            // The batch's first entry approximates the player's chunk (the client declares
+            // closest-first) — the ring origin for the generation order-spread gate. The
+            // empty clear batch keeps the previous center; it stays unset only on rigs
+            // that never declare (gate skipped, like the registeredDimension guard).
+            // Honest limit: the first entry is the nearest UNSATISFIED position, so as the
+            // disc fills the anchor drifts toward the frontier and away from any starving
+            // near ticket — the gate then LOOSENS (fails open toward pre-gate behavior).
+            // It is exact in the acute case it exists for: a fresh backfill around the
+            // player, where the anchor and the player chunk coincide.
+            var first = batch.requests()[0];
+            this.declaredCenterX = first.cx();
+            this.declaredCenterZ = first.cz();
+            this.hasDeclaredCenter = true;
+        }
         return dropped;
+    }
+
+    // Ring origin for the generation order-spread gate (processing thread only).
+    private int declaredCenterX;
+    private int declaredCenterZ;
+    private boolean hasDeclaredCenter;
+
+    /**
+     * Generation order-spread gate (processing thread only): true when admitting a
+     * generation ticket at {@code (cx, cz)} would place it more than {@code maxSpread}
+     * Chebyshev rings (from the declared want-set center) beyond this player's OLDEST
+     * outstanding generation ticket. False when no center was ever declared (bare rigs)
+     * or nothing is outstanding. Rings are recomputed against the CURRENT center, so a
+     * moving player's stale far tickets loosen the gate rather than jamming it.
+     */
+    public boolean generationOrderSpreadExceeded(int cx, int cz, int maxSpread) {
+        if (!this.hasDeclaredCenter) return false;
+        int minOutstanding = Integer.MAX_VALUE;
+        for (var pending : this.pendingByPosition.values()) {
+            if (pending.heldSlot() != SlotType.GENERATION) continue;
+            int ring = PositionUtil.chebyshevDistance(pending.cx(), pending.cz(),
+                    this.declaredCenterX, this.declaredCenterZ);
+            if (ring < minOutstanding) minOutstanding = ring;
+        }
+        if (minOutstanding == Integer.MAX_VALUE) return false;
+        int candidate = PositionUtil.chebyshevDistance(cx, cz,
+                this.declaredCenterX, this.declaredCenterZ);
+        return candidate > minOutstanding + maxSpread;
+    }
+
+    /** True when any outstanding generation ticket sits NEARER the declared center than
+     *  {@code (cx, cz)} — a completion arriving out of proximity order. Diagnostics only
+     *  (the platform scheduler's completion-order evidence); false without a center. */
+    public boolean hasNearerOutstandingGeneration(int cx, int cz) {
+        if (!this.hasDeclaredCenter) return false;
+        int completed = PositionUtil.chebyshevDistance(cx, cz,
+                this.declaredCenterX, this.declaredCenterZ);
+        long selfPacked = PositionUtil.packPosition(cx, cz);
+        for (var entry : this.pendingByPosition.long2ObjectEntrySet()) {
+            if (entry.getLongKey() == selfPacked) continue;
+            var pending = entry.getValue();
+            if (pending.heldSlot() != SlotType.GENERATION) continue;
+            if (PositionUtil.chebyshevDistance(pending.cx(), pending.cz(),
+                    this.declaredCenterX, this.declaredCenterZ) < completed) return true;
+        }
+        return false;
     }
 
     public IncomingRequest pollBacklog() {

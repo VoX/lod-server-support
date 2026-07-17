@@ -108,6 +108,7 @@ class DiagnosticsFormatterTest {
                 "sent=9, disk=1/2",
                 "submitted=5, completed=5",
                 "active=1/32", true,
+                7, 3,
                 2_097_152,
                 512,
                 List.of(new DiagnosticsFormatter.PlayerDiag("Steve", 3, 4000, 2, 1, 2000, 4096)));
@@ -119,7 +120,7 @@ class DiagnosticsFormatterTest {
                 "Sources (total): in_mem=11, disk=22, up_to_date=33, gen=44, re_resolved=55",
                 "Sources (tick): sent=9, disk=1/2",
                 "DiskReader: submitted=5, completed=5",
-                "Generation: active=1/32",
+                "Generation: active=1/32, order_gated=7, inversions=3",
                 "Bandwidth: 512 B/s / 1.0 MB/s global (2.0 MB total)",
                 "  Steve: sq=3/4000, psync=2, pgen=1, sent=2000 (4.0 KB), rate=20/s"
         ), DiagnosticsFormatter.formatDiagnostics(d));
@@ -139,6 +140,7 @@ class DiagnosticsFormatterTest {
                 "idle",
                 "idle",
                 null, false,
+                0, 0,
                 0,
                 0,
                 List.of());

@@ -61,6 +61,16 @@ public final class LSSConstants {
     public static final long MAX_BYTES_PER_SECOND_GLOBAL_LIMIT = 1_073_741_824;
     public static final int MIN_CONCURRENT_GENERATIONS = 1;
     public static final int MAX_CONCURRENT_GENERATIONS = 256;
+    /** Generation order-spread gate: a NEW generation ticket may enter at most this many
+     *  Chebyshev rings (measured from the player's declared want-set center) beyond that
+     *  player's OLDEST outstanding ticket. The platform scheduler owns completion order and
+     *  chunk-system rewrites (C2ME) do not complete equal-priority tickets FIFO — without
+     *  this bound the per-slot refill keeps feeding newer/farther tickets on top of a
+     *  starving near one, and the world fills in far-before-near (2026-07-16 live incident).
+     *  A gated miss takes the standard transient drop (superseded + miss_dropped) and heals
+     *  by re-declaration once the head resolves. 2 rings ≈ the per-player concurrency cap's
+     *  natural span near the player, so a FIFO-completing platform (vanilla) never hits it. */
+    public static final int MAX_GENERATION_RING_SPREAD = 2;
     public static final int MIN_GENERATION_TIMEOUT = 1;
     public static final int MAX_GENERATION_TIMEOUT = 600;
     public static final int MIN_DIRTY_BROADCAST_INTERVAL = 1;
