@@ -181,6 +181,73 @@ def check_voxy_paper_identity(jar, problems):
                         "— forking it breaks LSS/VSS interchangeability + the config folder")
 
 
+# fabric.mod.json fields the VSS rebrand MAY touch; everything else must be byte-equal to the
+# LSS jar's descriptor (the build comments in fabric/build.gradle claim this invariant — this
+# check enforces it, so a future voxyJar edit can't silently fork entrypoints/mixins/depends).
+VSS_FABRIC_ALLOWED_DIFF = {"name", "description", "icon", "contact"}
+
+
+def check_voxy_pair_fabric(lss_jar, voxy_jar, problems):
+    """Field-by-field diff of the two built descriptors: only branding fields may differ,
+    and `name` MUST differ (a silent un-rebranded copy is a build regression). Also pins
+    that the descriptor's icon path actually exists inside the voxy jar."""
+    vbase = os.path.basename(voxy_jar)
+    try:
+        lmeta = json.loads(_read(lss_jar, "fabric.mod.json"))
+        vmeta = json.loads(_read(voxy_jar, "fabric.mod.json"))
+    except (KeyError, json.JSONDecodeError):
+        return  # per-jar checks already flag a missing/invalid descriptor
+    for key in sorted(set(lmeta) | set(vmeta)):
+        if key in VSS_FABRIC_ALLOWED_DIFF:
+            continue
+        if lmeta.get(key) != vmeta.get(key):
+            problems.append(f"{vbase}: fabric.mod.json field {key!r} differs from the LSS jar "
+                            f"— the VSS rebrand may only touch {sorted(VSS_FABRIC_ALLOWED_DIFF)}")
+    if lmeta.get("name") == vmeta.get("name"):
+        problems.append(f"{vbase}: fabric.mod.json 'name' equals the LSS jar's — not rebranded")
+    icon = vmeta.get("icon")
+    if icon and icon not in _names(voxy_jar):
+        problems.append(f"{vbase}: fabric.mod.json icon {icon!r} is not an entry in the jar")
+
+
+def check_voxy_pair_paper(lss_jar, voxy_jar, problems):
+    """Line-diff of the two built plugin.yml files (stdlib-only — no YAML parser): exactly
+    one line may differ, it must be the top-level `description:` line in both, and it must
+    actually differ (the Paper rewrite is a replaceFirst that fails SILENT if the line shape
+    ever changes — this is the check that catches that no-op)."""
+    vbase = os.path.basename(voxy_jar)
+    try:
+        llines = _read(lss_jar, "plugin.yml").splitlines()
+        vlines = _read(voxy_jar, "plugin.yml").splitlines()
+    except KeyError:
+        return  # per-jar checks already flag a missing plugin.yml
+    if len(llines) != len(vlines):
+        problems.append(f"{vbase}: plugin.yml line count differs from the LSS jar "
+                        f"({len(llines)} vs {len(vlines)}) — the rebrand must only rewrite "
+                        "the top-level description line")
+        return
+    diffs = [i for i, (a, b) in enumerate(zip(llines, vlines)) if a != b]
+    if not diffs:
+        problems.append(f"{vbase}: plugin.yml is byte-identical to the LSS jar — the "
+                        "description rewrite silently no-opped (not rebranded)")
+    elif len(diffs) != 1 or not (llines[diffs[0]].startswith("description:")
+                                 and vlines[diffs[0]].startswith("description:")):
+        bad = diffs[:3]
+        problems.append(f"{vbase}: plugin.yml differs from the LSS jar beyond the top-level "
+                        f"description line (differing line indexes {bad}) — the VSS rebrand "
+                        "may only touch the description")
+
+
+def _voxy_counterpart(voxy_jar, lss_jars, voxy_prefix, lss_prefix):
+    """The LSS jar this voxy jar was repackaged from: same filename with the prefix swapped
+    (the version suffix, CI or local, is shared by construction in the voxyJar tasks)."""
+    want = os.path.basename(voxy_jar).replace(voxy_prefix, lss_prefix, 1)
+    for j in lss_jars:
+        if os.path.basename(j) == want:
+            return j
+    return None
+
+
 def check_glob_hygiene(problems, soak_jars):
     """The dev-only soak jar must never be picked up by a release glob; every CI-named release
     jar (all four brand/platform combinations) must be picked up by exactly one release glob (a
@@ -229,13 +296,28 @@ def discover(problems, expected_version=None):
     for jar in pap:
         check_paper_jar(jar, problems)
     # The voxy jars ship to real users → identical safety gate, plus the identity guardrail
-    # that pins them as branded byte-copies (mod id `lss` / plugin name LodServerSupport).
+    # that pins them as branded byte-copies (mod id `lss` / plugin name LodServerSupport),
+    # plus a descriptor pair-diff against the LSS jar they were repackaged from (only the
+    # branding fields may differ — and must). A voxy jar without its LSS counterpart cannot
+    # be pair-verified and is a failure: the repackage task guarantees the source jar exists.
     for jar in vfab:
         check_fabric_jar(jar, problems)
         check_voxy_fabric_identity(jar, problems)
+        src = _voxy_counterpart(jar, fab, "voxy-server-side-fabric", "lod-server-support-fabric")
+        if src is None:
+            problems.append(f"{os.path.basename(jar)}: no matching lod-server-support-fabric "
+                            "jar to pair-verify against (stale voxy jar?)")
+        else:
+            check_voxy_pair_fabric(src, jar, problems)
     for jar in vpap:
         check_paper_jar(jar, problems)
         check_voxy_paper_identity(jar, problems)
+        src = _voxy_counterpart(jar, pap, "voxy-server-side-paper", "lod-server-support-paper")
+        if src is None:
+            problems.append(f"{os.path.basename(jar)}: no matching lod-server-support-paper "
+                            "jar to pair-verify against (stale voxy jar?)")
+        else:
+            check_voxy_pair_paper(src, jar, problems)
     check_glob_hygiene(problems, soak)
     return fab, pap, vfab, vpap, soak
 
@@ -502,6 +584,99 @@ def _selftest():
         check_voxy_paper_identity(forked_vpap, p)
         check(any("must stay 'LodServerSupport'" in m for m in p),
               f"forked voxy plugin name not caught: {p}")
+
+        # ---- VSS≡LSS pair checks: only branding fields may differ, and must ----
+        pair_lss_fab = os.path.join(td, "pair-lss-fabric.jar")
+        _make_jar(pair_lss_fab, {
+            "fabric.mod.json": json.dumps({
+                "id": "lss", "name": "LOD Server Support", "description": "LSS.",
+                "version": "0.7.0", "entrypoints": {"main": ["dev.vox.lss.LSSMod"]},
+                "mixins": ["lss.mixins.json"], "icon": "assets/lss/icon.png"}),
+            "assets/lss/icon.png": "PNG",
+        })
+        pair_ok_vfab = os.path.join(td, "pair-ok-voxy-fabric.jar")
+        _make_jar(pair_ok_vfab, {
+            "fabric.mod.json": json.dumps({
+                "id": "lss", "name": "Voxy Server Side", "description": "VSS.",
+                "version": "0.7.0", "entrypoints": {"main": ["dev.vox.lss.LSSMod"]},
+                "mixins": ["lss.mixins.json"], "icon": "assets/lss/icon-vss.png"}),
+            "assets/lss/icon.png": "PNG",
+            "assets/lss/icon-vss.png": "PNG2",
+        })
+        p = []
+        check_voxy_pair_fabric(pair_lss_fab, pair_ok_vfab, p)
+        check(p == [], f"clean fabric pair flagged: {p}")
+
+        # a voxy descriptor whose NON-branding field drifted (entrypoints fork) MUST fail
+        pair_forked_vfab = os.path.join(td, "pair-forked-voxy-fabric.jar")
+        _make_jar(pair_forked_vfab, {
+            "fabric.mod.json": json.dumps({
+                "id": "lss", "name": "Voxy Server Side", "description": "VSS.",
+                "version": "0.7.0", "entrypoints": {"main": ["dev.vox.lss.OtherMod"]},
+                "mixins": ["lss.mixins.json"], "icon": "assets/lss/icon-vss.png"}),
+            "assets/lss/icon-vss.png": "PNG2",
+        })
+        p = []
+        check_voxy_pair_fabric(pair_lss_fab, pair_forked_vfab, p)
+        check(any("'entrypoints' differs" in m for m in p),
+              f"forked entrypoints not caught by pair check: {p}")
+
+        # an un-rebranded pair (name equal) MUST fail
+        pair_same_vfab = os.path.join(td, "pair-same-voxy-fabric.jar")
+        _make_jar(pair_same_vfab, {
+            "fabric.mod.json": json.dumps({
+                "id": "lss", "name": "LOD Server Support", "description": "LSS.",
+                "version": "0.7.0", "entrypoints": {"main": ["dev.vox.lss.LSSMod"]},
+                "mixins": ["lss.mixins.json"], "icon": "assets/lss/icon.png"}),
+            "assets/lss/icon.png": "PNG",
+        })
+        p = []
+        check_voxy_pair_fabric(pair_lss_fab, pair_same_vfab, p)
+        check(any("not rebranded" in m for m in p), f"pair name-equal not caught: {p}")
+
+        # a descriptor icon that points at a missing jar entry MUST fail
+        pair_noicon_vfab = os.path.join(td, "pair-noicon-voxy-fabric.jar")
+        _make_jar(pair_noicon_vfab, {
+            "fabric.mod.json": json.dumps({
+                "id": "lss", "name": "Voxy Server Side", "description": "VSS.",
+                "version": "0.7.0", "entrypoints": {"main": ["dev.vox.lss.LSSMod"]},
+                "mixins": ["lss.mixins.json"], "icon": "assets/lss/icon-vss.png"}),
+            "assets/lss/icon.png": "PNG",
+        })
+        p = []
+        check_voxy_pair_fabric(pair_lss_fab, pair_noicon_vfab, p)
+        check(any("not an entry in the jar" in m for m in p),
+              f"missing icon entry not caught: {p}")
+
+        LSS_PLUGIN_YML = ("name: LodServerSupport\nversion: '0.7.0'\n"
+                          "description: LSS plugin.\nfolia-supported: true\n"
+                          "commands:\n  lsslod:\n    description: cmd\n")
+        pair_lss_pap = os.path.join(td, "pair-lss-paper.jar")
+        _make_jar(pair_lss_pap, {"plugin.yml": LSS_PLUGIN_YML})
+        pair_ok_vpap = os.path.join(td, "pair-ok-voxy-paper.jar")
+        _make_jar(pair_ok_vpap, {"plugin.yml": LSS_PLUGIN_YML.replace(
+            "description: LSS plugin.", "description: VSS plugin.", 1)})
+        p = []
+        check_voxy_pair_paper(pair_lss_pap, pair_ok_vpap, p)
+        check(p == [], f"clean paper pair flagged: {p}")
+
+        # a byte-identical plugin.yml means the description rewrite silently no-opped
+        pair_same_vpap = os.path.join(td, "pair-same-voxy-paper.jar")
+        _make_jar(pair_same_vpap, {"plugin.yml": LSS_PLUGIN_YML})
+        p = []
+        check_voxy_pair_paper(pair_lss_pap, pair_same_vpap, p)
+        check(any("silently no-opped" in m for m in p),
+              f"paper no-op rewrite not caught: {p}")
+
+        # a rewrite that touched anything beyond the top-level description MUST fail
+        pair_wide_vpap = os.path.join(td, "pair-wide-voxy-paper.jar")
+        _make_jar(pair_wide_vpap, {"plugin.yml": LSS_PLUGIN_YML.replace(
+            "description: LSS plugin.", "description: VSS plugin.", 1).replace(
+            "    description: cmd", "    description: voxy cmd", 1)})
+        p = []
+        check_voxy_pair_paper(pair_lss_pap, pair_wide_vpap, p)
+        check(any("beyond the top-level description" in m for m in p),
+              f"paper over-wide rewrite not caught: {p}")
 
         # glob hygiene: a CI-named soak jar must not match any release glob
         p = []

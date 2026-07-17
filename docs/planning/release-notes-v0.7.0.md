@@ -11,6 +11,7 @@
 - **Old clients keep working** — Players still on v0.6.x keep receiving LODs from a v0.7.0 server: the server translates their old protocol on the fly (at the old client's slower pace). `/lsslod diag` shows a `V16Compat` line once a legacy client has connected; updating the client gets the full v0.7.0 experience.
 - **LODs behave on C2ME servers** — On Fabric servers running chunk-IO overhaul mods (C2ME), LSS detects that its background-priority reads are unavailable and switches to an adaptive throttle, so LOD streaming still yields to gameplay instead of competing with it.
 - **New diagnostics for admins** — `/lss trace` records a per-event log of the client's LOD activity (scans, movement, received columns with their serve source) for diagnosing issues; `/lsslod diag` now shows generation-ordering counters and the read-throttle state.
+- **Also available as "Voxy Server Side"** — Starting with this release, the mod is additionally published on Modrinth under the [Voxy Server Side](https://modrinth.com/plugin/voxy-server-side) name. Both listings ship the exact same mod from the same build (identical internals, config, and networking) — every client/server combination across the two listings is fully compatible, and the v0.6.x compatibility layer serves legacy clients from either listing the same way. Install either one, but not both; swapping between them keeps your config.
 
 ### Bug Fixes
 

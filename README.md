@@ -10,6 +10,25 @@ https://github.com/user-attachments/assets/721fb344-890e-4e03-ab36-539444427f7b
 
 All builds are on [Modrinth](https://modrinth.com/plugin/lod-server-support) — pick the file matching your Minecraft version: `lod-server-support-fabric` (the client/server Fabric mod) or `lod-server-support-paper` (the server plugin). GitHub Releases on this repository mirror every version.
 
+### Also published as "Voxy Server Side"
+
+Since v0.7.0, every release is additionally published to the
+[Voxy Server Side](https://modrinth.com/plugin/voxy-server-side) Modrinth page. Both listings
+ship the **same mod** from the same CI build — identical internals, networking protocol, and
+config paths; only the display name, description, and icon differ. Compatibility is total, in
+every direction:
+
+- A "Voxy Server Side" client on an "LOD Server Support" server (and every other
+  client/server combination) negotiates the identical session — the wire carries no branding,
+  so the server cannot even tell which listing a player installed from.
+- The v0.6.x compatibility layer (see below) serves legacy clients from **either** listing
+  the same way.
+- Swapping one jar for the other on an existing install keeps all config — same mod id, same
+  config files.
+
+Install one or the other, never both: the game rejects the duplicate (same mod id / plugin
+name), which is deliberate.
+
 ### Redistribution
 
 This mod is MIT-licensed — redistribution with attribution is welcome, and modpacks
