@@ -75,14 +75,24 @@ public final class PaperPayloadHandler {
      * Encode a column payload with serialized section bytes.
      * Writes the per-request header, then writes sectionBytes as a length-prefixed byte array.
      */
+    /** Source-less convenience (tests/legacy rigs): source -1 = "unknown", a legal wire
+     *  value. Production always passes a COLUMN_SOURCE_* tag. */
     public static byte[] encodeVoxelColumnPreEncoded(int chunkX, int chunkZ,
                                                       String dimensionStr, long columnTimestamp,
                                                       byte[] sectionBytes) {
+        return encodeVoxelColumnPreEncoded(chunkX, chunkZ, dimensionStr, columnTimestamp,
+                (byte) -1, sectionBytes);
+    }
+
+    public static byte[] encodeVoxelColumnPreEncoded(int chunkX, int chunkZ,
+                                                      String dimensionStr, long columnTimestamp,
+                                                      byte source, byte[] sectionBytes) {
         return encodeToBytes(sectionBytes.length + 64, buf -> {
             buf.writeInt(chunkX);
             buf.writeInt(chunkZ);
             buf.writeUtf(dimensionStr, LSSConstants.MAX_DIMENSION_STRING_LENGTH);
             buf.writeLong(columnTimestamp);
+            buf.writeByte(source);
             buf.writeByteArray(sectionBytes);
         });
     }

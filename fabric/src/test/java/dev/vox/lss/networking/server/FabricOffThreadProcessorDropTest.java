@@ -60,7 +60,8 @@ class FabricOffThreadProcessorDropTest {
 
         boolean sent = h.processor().buildAndEnqueueColumnPayload(h.state(), 1, 2,
                 LSSConstants.DIM_STR_OVERWORLD,
-                5L, 1L, oversized, oversized.length + LSSConstants.ESTIMATED_COLUMN_OVERHEAD_BYTES);
+                5L, 1L, oversized, oversized.length + LSSConstants.ESTIMATED_COLUMN_OVERHEAD_BYTES,
+                LSSConstants.COLUMN_SOURCE_DISK);
         assertFalse(sent, "the caller answers up-to-date on false so the position resolves terminally");
 
         // Bandwidth and tokens would admit a send — absence proves the drop, not a gate
@@ -79,7 +80,8 @@ class FabricOffThreadProcessorDropTest {
         String oversizedDim = "lss:" + "a".repeat(LSSConstants.MAX_DIMENSION_STRING_LENGTH - 3); // 257
 
         boolean sent = h.processor().buildAndEnqueueColumnPayload(h.state(), 1, 2, oversizedDim,
-                5L, 1L, sections, sections.length + LSSConstants.ESTIMATED_COLUMN_OVERHEAD_BYTES);
+                5L, 1L, sections, sections.length + LSSConstants.ESTIMATED_COLUMN_OVERHEAD_BYTES,
+                LSSConstants.COLUMN_SOURCE_DISK);
         assertFalse(sent, "an oversized dimension id drops the column (false), it must not throw");
         assertEquals(0, flush(h.state()).size(),
                 "a column with an oversized dimension must never reach the send queue");
@@ -93,7 +95,8 @@ class FabricOffThreadProcessorDropTest {
 
         boolean enqueued = h.processor().buildAndEnqueueColumnPayload(h.state(), 3, -4,
                 LSSConstants.DIM_STR_THE_END,
-                77L, 1L, atCap, atCap.length + LSSConstants.ESTIMATED_COLUMN_OVERHEAD_BYTES);
+                77L, 1L, atCap, atCap.length + LSSConstants.ESTIMATED_COLUMN_OVERHEAD_BYTES,
+                LSSConstants.COLUMN_SOURCE_DISK);
         assertTrue(enqueued);
 
         var sent = flush(h.state());

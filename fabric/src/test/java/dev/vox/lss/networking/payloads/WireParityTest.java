@@ -243,6 +243,7 @@ class WireParityTest {
                 b.writeInt(Integer.MAX_VALUE);
                 b.writeUtf(c.dim());
                 b.writeLong(-1L);
+                b.writeByte(-1); // serve-source: unknown (source-less convenience path)
                 b.writeByteArray(sections);
             });
             assertArrayEquals(expected, encode(VoxelColumnS2CPayload.CODEC,
@@ -260,6 +261,7 @@ class WireParityTest {
             b.writeInt(0);
             b.writeUtf("lsstest:custom");
             b.writeLong(42L);
+            b.writeByte(-1); // serve-source: unknown (source-less convenience path)
             b.writeByteArray(sections);
         });
         assertArrayEquals(expected, encode(VoxelColumnS2CPayload.CODEC,
@@ -276,6 +278,7 @@ class WireParityTest {
             b.writeInt(-7);
             b.writeUtf("minecraft:overworld");
             b.writeLong(5L);
+            b.writeByte(-1); // serve-source: unknown (source-less convenience path)
             b.writeByteArray(new byte[0]);
         });
         assertArrayEquals(expected, encode(VoxelColumnS2CPayload.CODEC,

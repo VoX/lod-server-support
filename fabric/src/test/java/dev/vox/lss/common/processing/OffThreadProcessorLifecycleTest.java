@@ -66,7 +66,7 @@ class OffThreadProcessorLifecycleTest {
         @Override
         protected boolean buildAndEnqueueColumnPayload(TestState state, int cx, int cz, String dimension,
                                                      long columnTimestamp, long submissionOrder,
-                                                     byte[] sectionBytes, int estimatedBytes) {
+                                                     byte[] sectionBytes, int estimatedBytes, byte source) {
             if (PositionUtil.packPosition(cx, cz) == poisonPacked) {
                 poisonFired.incrementAndGet();
                 // An Error, not an Exception: pins that processingLoop catches Throwable.

@@ -8,7 +8,17 @@ public final class LSSConstants {
 
     public static final String MOD_ID = "lss";
 
-    public static final int PROTOCOL_VERSION = 17;
+    // 18: VoxelColumn carries a one-byte serve-source tag (in_memory/disk/generation) —
+    // diagnostic attribution for the client trace. Still the "v17 want-set" design line;
+    // the bump makes a mismatched pair fail safe (silent no-session) instead of
+    // misaligning the column decode by one byte.
+    public static final int PROTOCOL_VERSION = 18;
+
+    // VoxelColumn serve-source tag values (one wire byte; unknown values are kept verbatim
+    // client-side — same forward-safety stance as the retired response byte 0)
+    public static final byte COLUMN_SOURCE_IN_MEMORY = 0;
+    public static final byte COLUMN_SOURCE_DISK = 1;
+    public static final byte COLUMN_SOURCE_GENERATION = 2;
 
     // Channel identifiers (used as Minecraft resource location strings)
     public static final String CHANNEL_HANDSHAKE = "lss:handshake_c2s";

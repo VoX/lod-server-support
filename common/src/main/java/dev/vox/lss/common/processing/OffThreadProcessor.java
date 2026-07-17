@@ -274,8 +274,9 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
     protected boolean enqueueLoadedColumn(PlayerState state, LoadedColumnData column,
                                           long columnTimestamp,
                                           long submissionOrder,
-                                          String dimension) {
-        return enqueueLoadedColumn(state, column, columnTimestamp, submissionOrder, dimension, false);
+                                          String dimension,
+                                          byte source) {
+        return enqueueLoadedColumn(state, column, columnTimestamp, submissionOrder, dimension, false, source);
     }
 
     /**
@@ -288,7 +289,8 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
                                           long columnTimestamp,
                                           long submissionOrder,
                                           String dimension,
-                                          boolean staleAgainstEdit) {
+                                          boolean staleAgainstEdit,
+                                          byte source) {
         if (column.serializedSections() == null || column.serializedSections().length == 0) {
             return false;
         }
@@ -303,7 +305,7 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
 
         return buildAndEnqueueColumnPayload(state, column.cx(), column.cz(), dimension,
                 columnTimestamp, submissionOrder,
-                column.serializedSections(), estimatedBytes);
+                column.serializedSections(), estimatedBytes, source);
     }
 
     /**
@@ -316,7 +318,8 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
     protected abstract boolean buildAndEnqueueColumnPayload(PlayerState state, int cx, int cz,
                                                              String dimension,
                                                              long columnTimestamp, long submissionOrder,
-                                                             byte[] sectionBytes, int estimatedBytes);
+                                                             byte[] sectionBytes, int estimatedBytes,
+                                                             byte source);
 
     // ---- Processing loop ----
 
@@ -710,7 +713,8 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
             boolean sent = !allAir
                     && buildAndEnqueueColumnPayload(state, cx, cz, result.dimension(),
                             result.columnTimestamp(), submissionOrder,
-                            result.sectionBytes(), result.estimatedBytes());
+                            result.sectionBytes(), result.estimatedBytes(),
+                            LSSConstants.COLUMN_SOURCE_DISK);
             if (!sent) {
                 // All-air chunk (no visible sections): a resync client (claimsData) may hold
                 // stale content here, so send an authoritative clearing 0-section column; a
@@ -721,7 +725,7 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
                 // up_to_date so the client keeps what it has.
                 boolean claimsData = pending != null && pending.claimsData();
                 if (!(allAir && claimsData && sendEmptiedColumn(state, cx, cz, result.dimension(),
-                        result.columnTimestamp(), submissionOrder))) {
+                        result.columnTimestamp(), submissionOrder, LSSConstants.COLUMN_SOURCE_DISK))) {
                     this.ctx.sendActions().add(new SendAction.ColumnUpToDate(playerUuid, packed, state));
                 }
             }
@@ -739,10 +743,10 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
      * could not be enqueued (caller falls back to up_to_date).
      */
     boolean sendEmptiedColumn(PlayerState state, int cx, int cz, String dimension,
-                              long columnTimestamp, long submissionOrder) {
+                              long columnTimestamp, long submissionOrder, byte source) {
         int est = ZERO_SECTION_COLUMN.length + LSSConstants.ESTIMATED_COLUMN_OVERHEAD_BYTES;
         return buildAndEnqueueColumnPayload(state, cx, cz, dimension, columnTimestamp,
-                submissionOrder, ZERO_SECTION_COLUMN, est);
+                submissionOrder, ZERO_SECTION_COLUMN, est, source);
     }
 
     /**
@@ -863,7 +867,8 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
                 byte[] genSections = entry.columnData().serializedSections();
                 boolean allAir = genSections == null || genSections.length == 0;
                 boolean sent = !allAir && this.enqueueLoadedColumn(state, entry.columnData(),
-                        entry.columnTimestamp(), entry.submissionOrder(), entry.dimension(), genStale);
+                        entry.columnTimestamp(), entry.submissionOrder(), entry.dimension(), genStale,
+                        LSSConstants.COLUMN_SOURCE_GENERATION);
                 if (!sent) {
                     if (allAir && !genStale) {
                         // Stamp so future resyncs at this timestamp converge to a cheap
@@ -879,7 +884,8 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
                     // deliverDiskResult: clearing would erase real terrain; answer up_to_date.
                     boolean claimsData = pending != null && pending.claimsData();
                     if (!(allAir && claimsData && sendEmptiedColumn(state, cx, cz, entry.dimension(),
-                            entry.columnTimestamp(), entry.submissionOrder()))) {
+                            entry.columnTimestamp(), entry.submissionOrder(),
+                            LSSConstants.COLUMN_SOURCE_GENERATION))) {
                         this.ctx.sendActions().add(new SendAction.ColumnUpToDate(entry.playerUuid(), packed, state));
                     }
                 }

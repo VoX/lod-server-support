@@ -59,7 +59,8 @@ public class PaperOffThreadProcessor extends OffThreadProcessor<PaperPlayerReque
     protected boolean buildAndEnqueueColumnPayload(PaperPlayerRequestState state, int cx, int cz,
                                                     String dimension,
                                                     long columnTimestamp, long submissionOrder,
-                                                    byte[] sectionBytes, int estimatedBytes) {
+                                                    byte[] sectionBytes, int estimatedBytes,
+                                                    byte source) {
         if (sectionBytes.length > LSSConstants.MAX_SEND_SECTIONS_SIZE) {
             LSSLogger.warn("Dropping oversized column [" + cx + ", " + cz + "] in " + dimension
                     + ": " + sectionBytes.length + " bytes exceeds send limit "
@@ -76,7 +77,7 @@ public class PaperOffThreadProcessor extends OffThreadProcessor<PaperPlayerReque
             return false;
         }
         byte[] encoded = PaperPayloadHandler.encodeVoxelColumnPreEncoded(
-                cx, cz, dimension, columnTimestamp, sectionBytes);
+                cx, cz, dimension, columnTimestamp, source, sectionBytes);
         state.addReadyPayload(new QueuedPayload<>(encoded, estimatedBytes, submissionOrder,
                 PositionUtil.packPosition(cx, cz)));
         return true;

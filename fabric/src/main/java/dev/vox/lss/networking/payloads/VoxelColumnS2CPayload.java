@@ -33,15 +33,26 @@ public final class VoxelColumnS2CPayload implements CustomPacketPayload {
     private final int chunkZ;
     private final ResourceKey<Level> dimension;
     private final long columnTimestamp;
+    private final byte source;
     private final byte[] sectionBytes;
 
+    /** Source-less convenience (tests/legacy rigs): tags the column with source -1
+     *  ("unknown"), a legal wire value the client passes through verbatim. Production
+     *  always uses the full constructor with a COLUMN_SOURCE_* tag. */
     public VoxelColumnS2CPayload(int chunkX, int chunkZ,
                                   ResourceKey<Level> dimension, long columnTimestamp,
                                   byte[] sectionBytes) {
+        this(chunkX, chunkZ, dimension, columnTimestamp, (byte) -1, sectionBytes);
+    }
+
+    public VoxelColumnS2CPayload(int chunkX, int chunkZ,
+                                  ResourceKey<Level> dimension, long columnTimestamp,
+                                  byte source, byte[] sectionBytes) {
         this.chunkX = chunkX;
         this.chunkZ = chunkZ;
         this.dimension = dimension;
         this.columnTimestamp = columnTimestamp;
+        this.source = source;
         this.sectionBytes = sectionBytes;
     }
 
@@ -49,6 +60,10 @@ public final class VoxelColumnS2CPayload implements CustomPacketPayload {
     public int chunkZ() { return chunkZ; }
     public ResourceKey<Level> dimension() { return dimension; }
     public long columnTimestamp() { return columnTimestamp; }
+
+    /** Serve-source tag (COLUMN_SOURCE_*): where the server got this column. Diagnostic
+     *  attribution only — unknown values pass through untouched (forward-safe). */
+    public byte source() { return source; }
 
     /** Returns the raw section bytes (used by client-side processing). */
     public byte[] decompressedSections() { return sectionBytes; }
@@ -62,6 +77,7 @@ public final class VoxelColumnS2CPayload implements CustomPacketPayload {
         buf.writeInt(payload.chunkZ);
         buf.writeUtf(payload.dimension.identifier().toString(), LSSConstants.MAX_DIMENSION_STRING_LENGTH);
         buf.writeLong(payload.columnTimestamp);
+        buf.writeByte(payload.source);
         buf.writeByteArray(payload.sectionBytes);
     }
 
@@ -71,9 +87,10 @@ public final class VoxelColumnS2CPayload implements CustomPacketPayload {
         ResourceKey<Level> dim = ResourceKey.create(Registries.DIMENSION,
                 Identifier.parse(buf.readUtf(LSSConstants.MAX_DIMENSION_STRING_LENGTH)));
         long columnTimestamp = buf.readLong();
+        byte source = buf.readByte();
         byte[] sectionBytes = buf.readByteArray(LSSConstants.MAX_SECTIONS_SIZE);
 
-        return new VoxelColumnS2CPayload(cx, cz, dim, columnTimestamp, sectionBytes);
+        return new VoxelColumnS2CPayload(cx, cz, dim, columnTimestamp, source, sectionBytes);
     }
 
     @Override

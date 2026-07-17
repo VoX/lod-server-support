@@ -38,14 +38,14 @@ class PaperOffThreadProcessorTest {
         String dim = "lss:" + "a".repeat(LSSConstants.MAX_DIMENSION_STRING_LENGTH - 3); // 257 chars
         byte[] sections = {1, 2, 3};
 
-        assertFalse(proc.buildAndEnqueueColumnPayload(state, 1, 2, dim, 42L, 7L, sections, 9),
+        assertFalse(proc.buildAndEnqueueColumnPayload(state, 1, 2, dim, 42L, 7L, sections, 9, (byte) 1),
                 "an oversized dimension id drops the column (false), it must not throw and "
                         + "abort the cycle");
         verify(state, never()).addReadyPayload(any());
 
         // A normal dimension still enqueues — the guard rejects only the pathological one.
         assertTrue(proc.buildAndEnqueueColumnPayload(
-                state, 1, 2, "minecraft:overworld", 42L, 8L, sections, 9));
+                state, 1, 2, "minecraft:overworld", 42L, 8L, sections, 9, (byte) 1));
         verify(state).addReadyPayload(any());
     }
 }

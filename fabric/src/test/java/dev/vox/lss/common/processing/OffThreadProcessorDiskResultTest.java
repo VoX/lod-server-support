@@ -82,7 +82,7 @@ class OffThreadProcessorDiskResultTest {
         @Override
         protected boolean buildAndEnqueueColumnPayload(TestState state, int cx, int cz, String dimension,
                                                      long columnTimestamp, long submissionOrder,
-                                                     byte[] sectionBytes, int estimatedBytes) {
+                                                     byte[] sectionBytes, int estimatedBytes, byte source) {
             if (rejectEnqueue) return false;
             if (rejectOversizedOnly && sectionBytes.length > LSSConstants.MAX_SEND_SECTIONS_SIZE) return false;
             enqueuedColumns.add(new EnqueuedColumn(state.getPlayerUUID(), cx, cz, dimension,

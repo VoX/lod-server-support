@@ -193,7 +193,7 @@ public class LSSClientNetworking {
         boolean clear = ClientColumnProcessor.isClearColumn(payload.decompressedSections());
         if (manager != null) {
             manager.onColumnReceived(packed, payload.columnTimestamp(),
-                    payload.dimension(), clear);
+                    payload.dimension(), clear, payload.source());
         }
         // A clear air-fills even when the held check missed (see above) — the consumer must
         // overwrite whatever it renders there with air.

@@ -299,6 +299,15 @@ public class LodRequestManager {
      */
     public void onColumnReceived(long packed, long columnTimestamp, ResourceKey<Level> dimension,
                                  boolean authoritativeClear) {
+        onColumnReceived(packed, columnTimestamp, dimension, authoritativeClear, (byte) -1);
+    }
+
+    /**
+     * @param source the server's serve-source tag (LSSConstants.COLUMN_SOURCE_*), -1 when
+     *        unknown (test rigs / legacy). Diagnostic attribution only — feeds the trace.
+     */
+    public void onColumnReceived(long packed, long columnTimestamp, ResourceKey<Level> dimension,
+                                 boolean authoritativeClear, byte source) {
         // A column from another dimension is discarded by the dispatch drain
         // (ClientColumnProcessor filters on level.dimension()), so stamping it here would
         // mark the position SATISFIED in the current dimension's map with no data delivered.
@@ -329,7 +338,8 @@ public class LodRequestManager {
             int cz = PositionUtil.unpackZ(packed);
             ClientTraceLog.event("col", "\"pos\":[" + cx + "," + cz
                     + "],\"ring\":" + Math.max(Math.abs(cx - this.lastChunkX), Math.abs(cz - this.lastChunkZ))
-                    + ",\"ts\":" + columnTimestamp + (authoritativeClear ? ",\"clear\":true" : ""));
+                    + ",\"ts\":" + columnTimestamp
+                    + ",\"src\":" + source + (authoritativeClear ? ",\"clear\":true" : ""));
         }
         this.tracker.removeByPosition(packed);
         this.columns.onReceived(packed, columnTimestamp);

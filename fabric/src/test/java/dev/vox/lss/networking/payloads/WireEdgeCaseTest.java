@@ -265,6 +265,7 @@ class WireEdgeCaseTest {
         b.writeInt(0);
         b.writeUtf(LSSConstants.DIM_STR_OVERWORLD, LSSConstants.MAX_DIMENSION_STRING_LENGTH);
         b.writeLong(0L);
+        b.writeByte(1); // serve-source
         b.writeVarInt(LSSConstants.MAX_SECTIONS_SIZE + 1);
         b.writeBytes(new byte[LSSConstants.MAX_SECTIONS_SIZE + 1]);
         try {

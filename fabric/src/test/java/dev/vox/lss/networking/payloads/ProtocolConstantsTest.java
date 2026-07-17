@@ -185,7 +185,7 @@ class ProtocolConstantsTest {
         // unsatisfied set every scan and the server replaces its backlog wholesale, so the
         // rate-limited bounce (response byte 0) is gone from the wire — a v16 client would
         // drip-feed against a server that no longer answers bounces. Byte 0 stays RESERVED.
-        assertEquals(17, LSSConstants.PROTOCOL_VERSION);
+        assertEquals(18, LSSConstants.PROTOCOL_VERSION); // 18: VoxelColumn serve-source byte
     }
 
     @Test

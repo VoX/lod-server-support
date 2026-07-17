@@ -198,6 +198,7 @@ class WireParityTest {
                 b.writeInt(Integer.MAX_VALUE);
                 b.writeUtf(dim);
                 b.writeLong(-1L);
+                b.writeByte(-1); // serve-source: unknown (source-less convenience path)
                 b.writeByteArray(sections);
             });
             assertArrayEquals(expected, PaperPayloadHandler.encodeVoxelColumnPreEncoded(
@@ -213,6 +214,7 @@ class WireParityTest {
             b.writeInt(0);
             b.writeUtf("lsstest:custom");
             b.writeLong(42L);
+            b.writeByte(-1); // serve-source: unknown (source-less convenience path)
             b.writeByteArray(sections);
         });
         assertArrayEquals(expected, PaperPayloadHandler.encodeVoxelColumnPreEncoded(
@@ -229,6 +231,7 @@ class WireParityTest {
             b.writeInt(-7);
             b.writeUtf("minecraft:overworld");
             b.writeLong(5L);
+            b.writeByte(-1); // serve-source: unknown (source-less convenience path)
             b.writeByteArray(new byte[0]);
         });
         byte[] encoded = PaperPayloadHandler.encodeVoxelColumnPreEncoded(
@@ -256,7 +259,7 @@ class WireParityTest {
         assertEquals(6, distinct.size(), "channel ids must be pairwise distinct");
         // Bump the literal only with a deliberate wire change reviewed on both platforms.
         // 16 -> 17: the declarative want-set model retires the rate-limited bounce (byte 0).
-        assertEquals(17, LSSConstants.PROTOCOL_VERSION);
+        assertEquals(18, LSSConstants.PROTOCOL_VERSION); // 18: VoxelColumn serve-source byte
     }
 
     // ---- Meta: the parity corpus must cover the whole v17 payload surface ----

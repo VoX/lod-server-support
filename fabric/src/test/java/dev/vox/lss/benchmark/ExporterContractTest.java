@@ -60,12 +60,13 @@ class ExporterContractTest {
         @Override
         protected boolean buildAndEnqueueColumnPayload(TestState state, int cx, int cz, String dimension,
                                                        long columnTimestamp, long submissionOrder,
-                                                       byte[] sectionBytes, int estimatedBytes) {
+                                                       byte[] sectionBytes, int estimatedBytes,
+                                                       byte source) {
             return true;
         }
         /** Routes one column through enqueueLoadedColumn so the real timestamp cache is fed. */
         void putColumn(TestState state, int cx, int cz, byte[] bytes, long ts, String dimension) {
-            enqueueLoadedColumn(state, new LoadedColumnData(cx, cz, bytes, bytes.length), ts, 1L, dimension);
+            enqueueLoadedColumn(state, new LoadedColumnData(cx, cz, bytes, bytes.length), ts, 1L, dimension, (byte) 2);
         }
     }
 

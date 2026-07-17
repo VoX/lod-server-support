@@ -221,7 +221,8 @@ class IncomingRequestRouter<PS extends AbstractPlayerRequestState<?>> {
         long order = this.ctx.sequence().next();
         boolean allAir = probe.serializedSections() == null || probe.serializedSections().length == 0;
         boolean sent = !allAir
-                && this.processor.enqueueLoadedColumn(state, probe, this.cycleNow, order, dimension);
+                && this.processor.enqueueLoadedColumn(state, probe, this.cycleNow, order, dimension,
+                        dev.vox.lss.common.LSSConstants.COLUMN_SOURCE_IN_MEMORY);
         if (!sent) {
             if (allAir) {
                 // Stamp the all-air resolution (the data path stamps inside enqueueLoadedColumn)
@@ -234,7 +235,8 @@ class IncomingRequestRouter<PS extends AbstractPlayerRequestState<?>> {
             // REJECTION (oversized column) is NOT all-air — clearing would erase the client's
             // stale-but-real terrain; the terminal answer is up_to_date.
             if (allAir && req.clientTimestamp() > 0
-                    && this.processor.sendEmptiedColumn(state, req.cx(), req.cz(), dimension, this.cycleNow, order)) {
+                    && this.processor.sendEmptiedColumn(state, req.cx(), req.cz(), dimension, this.cycleNow, order,
+                            dev.vox.lss.common.LSSConstants.COLUMN_SOURCE_IN_MEMORY)) {
                 // clearing column sent
             } else {
                 this.ctx.sendActions().add(new SendAction.ColumnUpToDate(playerUuid, packed, state));
