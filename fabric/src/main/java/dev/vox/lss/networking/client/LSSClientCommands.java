@@ -33,6 +33,19 @@ public class LSSClientCommands {
                                 return Command.SINGLE_SUCCESS;
                             })
                     )
+                    .then(ClientCommands.literal("trace")
+                            .executes(context -> {
+                                var path = ClientTraceLog.toggle();
+                                if (path != null) {
+                                    context.getSource().sendFeedback(Component.literal(
+                                            "LSS trace STARTED: " + path).withStyle(ChatFormatting.GOLD));
+                                } else {
+                                    context.getSource().sendFeedback(Component.literal(
+                                            "LSS trace stopped.").withStyle(ChatFormatting.GOLD));
+                                }
+                                return Command.SINGLE_SUCCESS;
+                            })
+                    )
             );
         });
     }

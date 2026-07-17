@@ -127,6 +127,7 @@ public class LodRequestManager {
 
     /** The explicit backpressure clear: an empty want-set replaces the server backlog with nothing. */
     private void sendClearBatch() {
+        if (ClientTraceLog.enabled()) ClientTraceLog.event("clear_batch", "");
         try {
             this.batchSender.send(new BatchChunkRequestC2SPayload(new long[0], new long[0], 0));
         } catch (Exception e) {
@@ -160,6 +161,11 @@ public class LodRequestManager {
      */
     void tickMovementPhase(int playerCx, int playerCz) {
         if (playerCx != this.lastChunkX || playerCz != this.lastChunkZ) {
+            if (ClientTraceLog.enabled()) {
+                ClientTraceLog.event("move", "\"from\":[" + this.lastChunkX + "," + this.lastChunkZ
+                        + "],\"to\":[" + playerCx + "," + playerCz
+                        + "],\"confirmed_before\":" + this.scanner.getConfirmedRing());
+            }
             int pruneDistance = this.scanner.getPruneDistance();
             this.columns.pruneOutOfRange(playerCx, playerCz, pruneDistance);
             this.tracker.pruneOutOfRange(playerCx, playerCz, pruneDistance);
@@ -222,6 +228,23 @@ public class LodRequestManager {
         int scanned = this.scanner.maybeScan(playerCx, playerCz, viewDistance,
                 columnQueueSize, haltThreshold(), missingVanilla,
                 this.columns, this.sendPositionBuffer, this.sendTimestampBuffer);
+        if (scanned >= 0 && ClientTraceLog.enabled()) {
+            int minRing = Integer.MAX_VALUE, maxRing = -1;
+            for (int i = 0; i < scanned; i++) {
+                long p = this.sendPositionBuffer[i];
+                int ring = Math.max(Math.abs(PositionUtil.unpackX(p) - playerCx),
+                        Math.abs(PositionUtil.unpackZ(p) - playerCz));
+                if (ring < minRing) minRing = ring;
+                if (ring > maxRing) maxRing = ring;
+            }
+            ClientTraceLog.event("scan", "\"center\":[" + playerCx + "," + playerCz
+                    + "],\"confirmed\":" + this.scanner.getConfirmedRing()
+                    + ",\"declared\":" + scanned
+                    + ",\"budget\":" + this.scanner.getLastBudget()
+                    + ",\"missing_vanilla\":" + this.scanner.getMissingVanillaChunks()
+                    + ",\"ring_min\":" + (maxRing < 0 ? -1 : minRing)
+                    + ",\"ring_max\":" + maxRing);
+        }
         if (scanned >= 0) {
             this.tracker.replaceWith(this.sendPositionBuffer, scanned);
             if (scanned > 0) {
@@ -289,6 +312,10 @@ public class LodRequestManager {
             LSSLogger.debug("Dropping out-of-range column " + PositionUtil.unpackX(packed)
                     + "," + PositionUtil.unpackZ(packed)
                     + " (player chunk " + this.lastChunkX + "," + this.lastChunkZ + ")");
+            if (ClientTraceLog.enabled()) {
+                ClientTraceLog.event("col_dropped_range", "\"pos\":[" + PositionUtil.unpackX(packed)
+                        + "," + PositionUtil.unpackZ(packed) + "]");
+            }
             return;
         }
         // Capture the pre-clear content stamp BEFORE onReceived overwrites it with the clear's
@@ -297,6 +324,13 @@ public class LodRequestManager {
         // Apply even if the position is no longer tracked (e.g. it timed out client-side):
         // the data is authoritative for the position, and stamping it prevents the
         // timeout → silent-duplicate → second-timeout stall.
+        if (ClientTraceLog.enabled()) {
+            int cx = PositionUtil.unpackX(packed);
+            int cz = PositionUtil.unpackZ(packed);
+            ClientTraceLog.event("col", "\"pos\":[" + cx + "," + cz
+                    + "],\"ring\":" + Math.max(Math.abs(cx - this.lastChunkX), Math.abs(cz - this.lastChunkZ))
+                    + ",\"ts\":" + columnTimestamp + (authoritativeClear ? ",\"clear\":true" : ""));
+        }
         this.tracker.removeByPosition(packed);
         this.columns.onReceived(packed, columnTimestamp);
         if (authoritativeClear) this.columns.markAuthoritativeClear(packed, preClearStamp);
@@ -305,6 +339,11 @@ public class LodRequestManager {
     }
 
     public void onDirtyColumns(long[] dirtyPositions) {
+        if (ClientTraceLog.enabled() && dirtyPositions.length > 0) {
+            ClientTraceLog.event("dirty", "\"n\":" + dirtyPositions.length
+                    + ",\"first\":[" + PositionUtil.unpackX(dirtyPositions[0]) + ","
+                    + PositionUtil.unpackZ(dirtyPositions[0]) + "]");
+        }
         boolean added = false;
         for (long packed : dirtyPositions) {
             added |= this.columns.markDirtyIfKnown(packed);
@@ -364,6 +403,10 @@ public class LodRequestManager {
     }
 
     public void onColumnNotGenerated(long packed) {
+        if (ClientTraceLog.enabled()) {
+            ClientTraceLog.event("ng", "\"pos\":[" + PositionUtil.unpackX(packed) + ","
+                    + PositionUtil.unpackZ(packed) + "],\"tracked\":" + this.tracker.isInFlight(packed));
+        }
         // BatchResponse carries no dimension, so unlike onColumnReceived this cannot be
         // dimension-guarded. Gate on the awaiting set instead: it is cleared on dimension
         // change, pruned on movement, and replaced wholesale by each scan, so a late status
@@ -391,6 +434,10 @@ public class LodRequestManager {
     }
 
     public void onColumnUpToDate(long packed) {
+        if (ClientTraceLog.enabled()) {
+            ClientTraceLog.event("utd", "\"pos\":[" + PositionUtil.unpackX(packed) + ","
+                    + PositionUtil.unpackZ(packed) + "],\"tracked\":" + this.tracker.isInFlight(packed));
+        }
         if (!this.tracker.isInFlight(packed)) {
             this.metrics.discardRttStamp(packed); // untracked terminal answer: stamp is dead (see onColumnNotGenerated)
             this.metrics.recordUpToDate();
@@ -404,6 +451,9 @@ public class LodRequestManager {
     }
 
     private void onDimensionChange(ResourceKey<Level> newDimension) {
+        if (ClientTraceLog.enabled()) {
+            ClientTraceLog.event("dim_change", "\"to\":\"" + newDimension.identifier() + "\"");
+        }
         // Unstamp columns still queued for decode BEFORE saveCache persists the old
         // dimension's map: their stamps describe data no consumer ever saw (the drain's
         // dimension filter will discard the payloads once the level switches). At this
