@@ -70,7 +70,10 @@ Since 2026-07 `build.yml` contains the flakes automatically: docs-only changes (
 ## Local Test Servers (manual play)
 
 ```bash
-./test-server.sh              # set up + run all three: Fabric :25565, Paper :25566, Folia :25567
+./test-server.sh              # set up + run all three: Fabric :25564, Paper :25566, Folia :25567
+                              # (:25565 stays free for the soak/benchmark harness — a test server
+                              #  there is indistinguishable in the server list and an accidental
+                              #  join contaminates a running soak)
 ./test-server.sh run-folia    # one platform only (also run-fabric, run-paper)
 ./test-server.sh run-fabric-no-c2me  # Fabric with c2me*.jar parked as .disabled (A/B vs C2ME; run-fabric re-enables)
 ./test-server.sh update       # rebuild + reinstall the LSS jars into all three (restart to apply)

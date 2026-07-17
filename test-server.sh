@@ -3,7 +3,10 @@ set -euo pipefail
 
 # Test server script for LOD Server Support (LSS)
 # Sets up Fabric/Paper/Folia servers and runs them on different ports.
-# Fabric: localhost:25565   Paper: localhost:25566   Folia: localhost:25567
+# Fabric: localhost:25564   Paper: localhost:25566   Folia: localhost:25567
+# (25565 is deliberately left free: the soak/benchmark harness binds it and a test
+#  server there shows up identically in the multiplayer list — accidental joins
+#  contaminate soak runs.)
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 FABRIC_DIR="$SCRIPT_DIR/test-server/fabric"
@@ -107,6 +110,12 @@ write_server_properties() {
     local dir="$1"
     local port="$2"
     local motd="$3"
+    # Enforce the port on EXISTING installs too (the Fabric port moved off the soak
+    # harness's 25565; a stale server.properties would silently keep colliding).
+    if [ -f "$dir/server.properties" ] && ! grep -q "^server-port=$port$" "$dir/server.properties"; then
+        echo "  Updating server-port to $port"
+        sed -i "s/^server-port=.*/server-port=$port/" "$dir/server.properties"
+    fi
     if [ ! -f "$dir/server.properties" ]; then
         echo "  Creating server.properties (port $port)"
         cat > "$dir/server.properties" << EOF
@@ -176,7 +185,7 @@ setup_fabric() {
         echo "eula=true" > "$FABRIC_DIR/eula.txt"
     fi
 
-    write_server_properties "$FABRIC_DIR" 25565 "LSS Test Server (Fabric)"
+    write_server_properties "$FABRIC_DIR" 25564 "LSS Test Server (Fabric)"
     write_ops_json "$FABRIC_DIR"
     write_lss_config "$FABRIC_DIR/config"
 
@@ -313,7 +322,7 @@ run_folia() {
 
 run_all() {
     echo "=== Starting all servers ==="
-    echo "  Fabric: localhost:25565"
+    echo "  Fabric: localhost:25564"
     echo "  Paper:  localhost:25566"
     echo "  Folia:  localhost:25567"
     echo "  Commands: /lsslod stats, /lsslod diag"
@@ -396,7 +405,7 @@ case "${1:-run}" in
         set_c2me_enabled true   # undo a previous run-fabric-no-c2me
         echo ""
         echo "=== Starting Fabric server ==="
-        echo "  Connect to: localhost:25565"
+        echo "  Connect to: localhost:25564"
         echo ""
         run_fabric
         ;;
@@ -407,7 +416,7 @@ case "${1:-run}" in
         set_c2me_enabled false
         echo ""
         echo "=== Starting Fabric server (C2ME disabled) ==="
-        echo "  Connect to: localhost:25565"
+        echo "  Connect to: localhost:25564"
         echo ""
         run_fabric
         ;;
@@ -437,7 +446,7 @@ case "${1:-run}" in
         echo ""
         echo "  setup      - Download and set up all servers"
         echo "  run        - Set up and start all servers (default)"
-        echo "  run-fabric - Set up and start Fabric server only (port 25565; re-enables C2ME)"
+        echo "  run-fabric - Set up and start Fabric server only (port 25564; re-enables C2ME)"
         echo "  run-fabric-no-c2me - Same, with any c2me*.jar in mods/ disabled (A/B testing)"
         echo "  run-paper  - Set up and start Paper server only (port 25566)"
         echo "  run-folia  - Set up and start Folia server only (port 25567)"
