@@ -80,15 +80,28 @@ jobs:
           if-no-files-found: ignore
           retention-days: 30
 
+      # Four shipped jars: the LSS pair and the branded Voxy Server Side pair (produced by the
+      # voxyJar repackage tasks — Fabric's runs as a `build` dependency, Paper's as a shadowJar
+      # finalizer). Explicit per-brand globs so each artifact holds only its own jar.
       - uses: actions/upload-artifact@v5
         with:
           name: lod-server-support-fabric
-          path: fabric/build/libs/*.jar
+          path: fabric/build/libs/lod-server-support-fabric*.jar
 
       - uses: actions/upload-artifact@v5
         with:
           name: lod-server-support-paper
-          path: paper/build/libs/*.jar
+          path: paper/build/libs/lod-server-support-paper*.jar
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: voxy-server-side-fabric
+          path: fabric/build/libs/voxy-server-side-fabric*.jar
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: voxy-server-side-paper
+          path: paper/build/libs/voxy-server-side-paper*.jar
 
   # Tier 3: the only end-to-end pins for the client-server flow, LSSApi consumer
   # dispatch, the ingest-failure recovery loop, and the IntegratedServerLanHook path.

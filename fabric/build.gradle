@@ -145,3 +145,85 @@ jar {
         rename { "${it}_${inputs.properties.archivesName}" }
     }
 }
+
+// ---- Voxy Server Side (VSS) branded variant -------------------------------------------
+//
+// Same mod, second Modrinth project (voxy-server-side). Produced by BYTE-COPYING the built,
+// remapped LSS jar and rewriting ONLY the branding fields of fabric.mod.json + injecting the
+// VSS icon — every class, mixin, refmap, the Loom-injected `jars` field, and the nested
+// META-INF/jars/common jar are copied verbatim. This guarantees the VSS jar is wire- and
+// behavior-identical to the LSS jar (same protocol, channels, mod id `lss`, config paths), so
+// an LSS server and a VSS client (and every other combination) are fully compatible. The
+// identity fields (id / entrypoints / mixins / depends / jars) are DELIBERATELY untouched —
+// release_check.py pins `id == lss`. See docs/planning/ci-dual-publish.md.
+import java.util.zip.ZipFile
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
+
+def voxyFabricJarName = "voxy-server-side-fabric" + (ciArchiveVersion ? "-${ciArchiveVersion}" : "") + ".jar"
+def lssFabricJarName = "lod-server-support-fabric" + (ciArchiveVersion ? "-${ciArchiveVersion}" : "") + ".jar"
+
+tasks.register('voxyJar') {
+    description = 'Repackages the LSS Fabric jar under the Voxy Server Side branding.'
+    // This Loom version (1.17) has no separate remapJar — the `jar` task produces the final
+    // remapped release jar directly (with the nested common JiJ + Fabric-Mapping-Namespace).
+    // String dependency so it resolves at graph-build time, not config time.
+    dependsOn 'jar'
+    def iconFile = rootProject.file('branding/voxy/icon.png')
+    def srcJar = layout.buildDirectory.file("libs/${lssFabricJarName}")
+    def outFile = layout.buildDirectory.file("libs/${voxyFabricJarName}")
+    inputs.file(srcJar)
+    inputs.file(iconFile)
+    outputs.file(outFile)
+    doLast {
+        def src = srcJar.get().asFile
+        def out = outFile.get().asFile
+        out.parentFile.mkdirs()
+        def zf = new ZipFile(src)
+        try {
+            new ZipOutputStream(new FileOutputStream(out)).withCloseable { zos ->
+                def entries = zf.entries()
+                while (entries.hasMoreElements()) {
+                    def e = entries.nextElement()
+                    if (e.name == 'fabric.mod.json') {
+                        // Read the BUILT descriptor (Loom already injected `version` + `jars`);
+                        // change ONLY the branding fields, preserving everything else.
+                        def json = new groovy.json.JsonSlurper().parse(zf.getInputStream(e))
+                        json.name = 'Voxy Server Side'
+                        json.description = 'Server-side backend for Voxy multiplayer LOD rendering. Identical to LOD Server Support (same mod, second distribution channel) — fully interchangeable.'
+                        json.icon = 'assets/lss/icon-vss.png'
+                        if (json.contact instanceof Map) {
+                            json.contact.homepage = 'https://modrinth.com/plugin/voxy-server-side'
+                        }
+                        byte[] bytes = groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(json)).getBytes('UTF-8')
+                        def ne = new ZipEntry('fabric.mod.json')
+                        zos.putNextEntry(ne)
+                        zos.write(bytes)
+                        zos.closeEntry()
+                    } else {
+                        // Byte-preserving copy: keep the original compression method, and for
+                        // STORED entries (e.g. the nested common jar) carry size/crc so the
+                        // nested Jar-in-Jar is bit-for-bit intact.
+                        def ne = new ZipEntry(e.name)
+                        ne.method = e.method
+                        if (e.method == ZipEntry.STORED) {
+                            ne.size = e.size
+                            ne.compressedSize = e.compressedSize
+                            ne.crc = e.crc
+                        }
+                        zos.putNextEntry(ne)
+                        zf.getInputStream(e).withCloseable { is -> zos << is }
+                        zos.closeEntry()
+                    }
+                }
+                zos.putNextEntry(new ZipEntry('assets/lss/icon-vss.png'))
+                zos.write(iconFile.bytes)
+                zos.closeEntry()
+            }
+        } finally {
+            zf.close()
+        }
+    }
+}
+
+tasks.named('build') { dependsOn 'voxyJar' }

@@ -42,7 +42,13 @@ PAPER_FORBIDDEN = "dev/vox/lss/paper/soak/"
 # Dev-only namespaces that would live in common/ (e.g. a deduped soak-driver twin): common
 # ships on BOTH platforms — nested in the Fabric jar, shaded into the Paper jar.
 COMMON_FORBIDDEN = ("dev/vox/lss/common/soak/", "dev/vox/lss/common/benchmark/")
-RELEASE_GLOBS = ("lod-server-support-fabric-*.jar", "lod-server-support-paper-*.jar")
+# All four shipped artifacts: the LSS pair (Modrinth lKiXKLvv) and the Voxy Server Side pair
+# (Modrinth voxy-server-side). The VSS jars are branded byte-copies of the LSS jars — same
+# classes, mod id `lss` / plugin name LodServerSupport, so they get the IDENTICAL safety
+# gate plus an identity guardrail (check_voxy_*_identity). See docs/planning/ci-dual-publish.md.
+RELEASE_GLOBS = ("lod-server-support-fabric-*.jar", "lod-server-support-paper-*.jar",
+                 "voxy-server-side-fabric-*.jar", "voxy-server-side-paper-*.jar")
+CI_NAME_SUFFIX = "0.4.0+26.1.2.jar"  # a representative CI filename for glob round-tripping
 SOAK_JAR_PREFIX = "lss-paper-soak"
 
 
@@ -143,43 +149,95 @@ def check_paper_jar(jar, problems):
                         "(server will refuse to load remapped NMS)")
 
 
-def check_glob_hygiene(problems, fabric_jars, paper_jars, soak_jars):
-    """The dev-only soak jar must never be picked up by the Paper release glob; the CI-named
-    release jars must be picked up by their globs (a publish that matches nothing fails CI)."""
+def check_voxy_fabric_identity(jar, problems):
+    """The VSS Fabric jar is a branded byte-copy of the LSS jar. Rebranding may touch ONLY
+    name/description/icon/contact — the mod `id` MUST stay `lss` (a forked id breaks
+    wire+config interchangeability, the whole point of the dual distribution), and the jar
+    MUST actually be rebranded (an un-rebranded LSS copy under the voxy name is a mistake)."""
+    base = os.path.basename(jar)
+    try:
+        meta = json.loads(_read(jar, "fabric.mod.json"))
+    except (KeyError, json.JSONDecodeError):
+        return  # check_fabric_jar already flags a missing/invalid descriptor
+    if meta.get("id") != "lss":
+        problems.append(f"{base}: voxy Fabric jar mod id is {meta.get('id')!r}, must stay "
+                        "'lss' — a forked id breaks LSS/VSS wire + config interchangeability")
+    if meta.get("name") == "LOD Server Support":
+        problems.append(f"{base}: voxy Fabric jar is not rebranded "
+                        "(name is still 'LOD Server Support')")
+
+
+def check_voxy_paper_identity(jar, problems):
+    """The VSS Paper jar is a branded byte-copy of the LSS shadowJar. `name: LodServerSupport`
+    IS the plugin identity + config-folder name and MUST stay verbatim — only the top-level
+    description is rebranded (Paper plugins carry no display name/icon distinct from `name`)."""
+    base = os.path.basename(jar)
+    try:
+        yml = _read(jar, "plugin.yml")
+    except KeyError:
+        return  # check_paper_jar already flags a missing plugin.yml
+    if not re.search(r"^name:\s*LodServerSupport\s*$", yml, re.MULTILINE):
+        problems.append(f"{base}: voxy Paper jar plugin name must stay 'LodServerSupport' "
+                        "— forking it breaks LSS/VSS interchangeability + the config folder")
+
+
+def check_glob_hygiene(problems, soak_jars):
+    """The dev-only soak jar must never be picked up by a release glob; every CI-named release
+    jar (all four brand/platform combinations) must be picked up by exactly one release glob (a
+    publish that matches nothing fails CI)."""
     for sj in soak_jars:
         base = os.path.basename(sj)
         for glob in RELEASE_GLOBS:
             if fnmatch.fnmatch(base, glob):
                 problems.append(f"{base}: dev soak jar MATCHES release glob {glob} — would be published")
-    # Round-trip the CI artifact name format against the globs (HD-043).
-    ci_fabric = "lod-server-support-fabric-0.4.0+26.1.2.jar"
-    ci_paper = "lod-server-support-paper-0.4.0+26.1.2.jar"
-    if not fnmatch.fnmatch(ci_fabric, RELEASE_GLOBS[0]):
-        problems.append(f"CI fabric name {ci_fabric} does not match release glob {RELEASE_GLOBS[0]}")
-    if not fnmatch.fnmatch(ci_paper, RELEASE_GLOBS[1]):
-        problems.append(f"CI paper name {ci_paper} does not match release glob {RELEASE_GLOBS[1]}")
-    if fnmatch.fnmatch(f"{SOAK_JAR_PREFIX}-0.4.0+26.1.2.jar", RELEASE_GLOBS[1]):
-        problems.append("CI-named soak jar matches the Paper release glob")
+    # Round-trip every CI artifact name format against the globs (HD-043). Each of the four
+    # shipped prefixes must match one release glob; the soak jar must match none.
+    for prefix in ("lod-server-support-fabric", "lod-server-support-paper",
+                   "voxy-server-side-fabric", "voxy-server-side-paper"):
+        ci_name = f"{prefix}-{CI_NAME_SUFFIX}"
+        if not any(fnmatch.fnmatch(ci_name, g) for g in RELEASE_GLOBS):
+            problems.append(f"CI name {ci_name} matches no release glob")
+    if any(fnmatch.fnmatch(f"{SOAK_JAR_PREFIX}-{CI_NAME_SUFFIX}", g) for g in RELEASE_GLOBS):
+        problems.append("CI-named soak jar matches a release glob")
 
 
 def discover(problems, expected_version=None):
-    fab = _jars_in(os.path.join(ROOT, "fabric", "build", "libs"), "lod-server-support-fabric")
-    pap = _jars_in(os.path.join(ROOT, "paper", "build", "libs"), "lod-server-support-paper")
-    soak = _jars_in(os.path.join(ROOT, "paper", "build", "libs"), SOAK_JAR_PREFIX)
+    fab_libs = os.path.join(ROOT, "fabric", "build", "libs")
+    pap_libs = os.path.join(ROOT, "paper", "build", "libs")
+    # `voxy-server-side-*` and `lod-server-support-*` are disjoint prefixes, so neither
+    # discovery list contaminates the other.
+    fab = _jars_in(fab_libs, "lod-server-support-fabric")
+    pap = _jars_in(pap_libs, "lod-server-support-paper")
+    vfab = _jars_in(fab_libs, "voxy-server-side-fabric")
+    vpap = _jars_in(pap_libs, "voxy-server-side-paper")
+    soak = _jars_in(pap_libs, SOAK_JAR_PREFIX)
     if not fab and not pap:
         problems.append("no release jars found under fabric/ or paper/ build/libs — run a build first")
     if expected_version:
-        fab = _require_version(fab, "fabric", expected_version, problems)
-        pap = _require_version(pap, "paper", expected_version, problems)
+        # A release ships all four; each must exist at the tag version.
+        fab = _require_version(fab, "lod-server-support-fabric", expected_version, problems)
+        pap = _require_version(pap, "lod-server-support-paper", expected_version, problems)
+        vfab = _require_version(vfab, "voxy-server-side-fabric", expected_version, problems)
+        vpap = _require_version(vpap, "voxy-server-side-paper", expected_version, problems)
     else:
-        _flag_ambiguous(fab, "fabric", problems)
-        _flag_ambiguous(pap, "paper", problems)
+        _flag_ambiguous(fab, "lod-server-support-fabric", problems)
+        _flag_ambiguous(pap, "lod-server-support-paper", problems)
+        _flag_ambiguous(vfab, "voxy-server-side-fabric", problems)
+        _flag_ambiguous(vpap, "voxy-server-side-paper", problems)
     for jar in fab:
         check_fabric_jar(jar, problems)
     for jar in pap:
         check_paper_jar(jar, problems)
-    check_glob_hygiene(problems, fab, pap, soak)
-    return fab, pap, soak
+    # The voxy jars ship to real users → identical safety gate, plus the identity guardrail
+    # that pins them as branded byte-copies (mod id `lss` / plugin name LodServerSupport).
+    for jar in vfab:
+        check_fabric_jar(jar, problems)
+        check_voxy_fabric_identity(jar, problems)
+    for jar in vpap:
+        check_paper_jar(jar, problems)
+        check_voxy_paper_identity(jar, problems)
+    check_glob_hygiene(problems, soak)
+    return fab, pap, vfab, vpap, soak
 
 
 def _jars_in(d, prefix):
@@ -189,17 +247,18 @@ def _jars_in(d, prefix):
             if n.startswith(prefix) and n.endswith(".jar")]
 
 
-def _require_version(jars, platform, version, problems):
+def _require_version(jars, prefix, version, problems):
     """Restrict checking to the exact release jar for `version`; a missing jar is a failure
     — otherwise a stale jar from an earlier build gets validated in its place and the
-    pre-flight green-lights code that was never built."""
-    want_prefix = f"lod-server-support-{platform}-{version}+"
-    want_exact = f"lod-server-support-{platform}-{version}.jar"
+    pre-flight green-lights code that was never built. `prefix` is the full jar base name
+    (e.g. `lod-server-support-fabric` or `voxy-server-side-paper`)."""
+    want_prefix = f"{prefix}-{version}+"
+    want_exact = f"{prefix}-{version}.jar"
     matched = [j for j in jars
                if os.path.basename(j).startswith(want_prefix)
                or os.path.basename(j) == want_exact]
     if not matched:
-        problems.append(f"{platform}: no jar for version {version} in build/libs "
+        problems.append(f"{prefix}: no jar for version {version} in build/libs "
                         f"(found: {[os.path.basename(j) for j in jars] or 'none'}) — "
                         f"build with CI=true and -Pmod_version={version} first")
     return matched
@@ -347,24 +406,115 @@ def _selftest():
         p = []
         got = _require_version(["a/lod-server-support-fabric-0.4.0+26.1.2.jar",
                                 "a/lod-server-support-fabric-0.5.0+26.1.2.jar"],
-                               "fabric", "0.5.0", p)
+                               "lod-server-support-fabric", "0.5.0", p)
         check(p == [] and [os.path.basename(j) for j in got]
               == ["lod-server-support-fabric-0.5.0+26.1.2.jar"],
               f"--version did not select exactly the requested jar: {got} {p}")
         p = []
         got = _require_version(["a/lod-server-support-fabric-0.4.0+26.1.2.jar"],
-                               "fabric", "0.5.0", p)
+                               "lod-server-support-fabric", "0.5.0", p)
         check(got == [] and any("no jar for version 0.5.0" in m for m in p),
               f"missing requested version not caught: {got} {p}")
-
-        # glob hygiene: a CI-named soak jar must not match the paper release glob
+        # the voxy prefix is version-pinned the same way, disjoint from the LSS prefix
         p = []
-        check_glob_hygiene(p, [], [], [os.path.join(td, "lss-paper-soak-0.4.0+26.1.2.jar")])
+        got = _require_version(["a/voxy-server-side-fabric-0.7.0+26.2.jar"],
+                               "voxy-server-side-fabric", "0.7.0", p)
+        check(p == [] and [os.path.basename(j) for j in got]
+              == ["voxy-server-side-fabric-0.7.0+26.2.jar"],
+              f"voxy --version did not select the voxy jar: {got} {p}")
+
+        # ---- Voxy Server Side branded jars: full LSS gate + identity guardrail ----
+        # A clean voxy Fabric jar: rebranded name, but mod id STILL `lss` → passes both gates.
+        good_vfab = os.path.join(td, "voxy-server-side-fabric.jar")
+        _make_jar(good_vfab, {
+            "fabric.mod.json": json.dumps({"id": "lss", "name": "Voxy Server Side",
+                                           "version": "0.7.0"}),
+            "dev/vox/lss/LSSMod.class": "x",
+            "dev/vox/lss/common/PositionUtil.class": "x",
+            "assets/lss/icon-vss.png": "PNG",
+            "LICENSE_lod-server-support-fabric": "MIT",
+        })
+        p = []
+        check_fabric_jar(good_vfab, p)
+        check_voxy_fabric_identity(good_vfab, p)
+        check(p == [], f"clean voxy fabric jar flagged: {p}")
+
+        # A voxy Fabric jar whose id was forked away from `lss` MUST fail — that silently
+        # breaks LSS/VSS wire + config interchangeability.
+        forked_vfab = os.path.join(td, "voxy-server-side-fabric-forked.jar")
+        _make_jar(forked_vfab, {
+            "fabric.mod.json": json.dumps({"id": "voxy", "name": "Voxy Server Side",
+                                           "version": "0.7.0"}),
+            "dev/vox/lss/LSSMod.class": "x",
+            "LICENSE_lod-server-support-fabric": "MIT",
+        })
+        p = []
+        check_voxy_fabric_identity(forked_vfab, p)
+        check(any("must stay 'lss'" in m for m in p), f"forked voxy id not caught: {p}")
+
+        # A voxy Fabric jar that was never actually rebranded MUST fail.
+        unbranded_vfab = os.path.join(td, "voxy-server-side-fabric-unbranded.jar")
+        _make_jar(unbranded_vfab, {
+            "fabric.mod.json": json.dumps({"id": "lss", "name": "LOD Server Support",
+                                           "version": "0.7.0"}),
+            "dev/vox/lss/LSSMod.class": "x",
+            "LICENSE_lod-server-support-fabric": "MIT",
+        })
+        p = []
+        check_voxy_fabric_identity(unbranded_vfab, p)
+        check(any("not rebranded" in m for m in p), f"un-rebranded voxy jar not caught: {p}")
+
+        # A voxy Fabric jar that leaked dev code MUST fail the shared gate too.
+        leaky_vfab = os.path.join(td, "voxy-server-side-fabric-leaky.jar")
+        _make_jar(leaky_vfab, {
+            "fabric.mod.json": json.dumps({"id": "lss", "name": "Voxy Server Side",
+                                           "version": "0.7.0"}),
+            "dev/vox/lss/benchmark/BenchmarkHook.class": "x",  # leaked dev code
+            "dev/vox/lss/LSSMod.class": "x",
+            "LICENSE_lod-server-support-fabric": "MIT",
+        })
+        p = []
+        check_fabric_jar(leaky_vfab, p)
+        check(any("benchmark" in m for m in p), "voxy jar dev-code leak not caught by shared gate")
+
+        # A clean voxy Paper jar: name STILL LodServerSupport → passes both gates.
+        good_vpap = os.path.join(td, "voxy-server-side-paper.jar")
+        _make_jar(good_vpap, {
+            "plugin.yml": ("name: LodServerSupport\nversion: 0.7.0\nfolia-supported: true\n"
+                           "description: Server-side backend for Voxy...\n"),
+            "dev/vox/lss/paper/LSSPaperPlugin.class": "x",
+            "dev/vox/lss/common/PositionUtil.class": "x",
+        }, manifest="Manifest-Version: 1.0\npaperweight-mappings-namespace: mojang\n")
+        p = []
+        check_paper_jar(good_vpap, p)
+        check_voxy_paper_identity(good_vpap, p)
+        check(p == [], f"clean voxy paper jar flagged: {p}")
+
+        # A voxy Paper jar whose plugin name was forked MUST fail — that IS the config-folder
+        # + plugin identity, and forking it breaks interchangeability.
+        forked_vpap = os.path.join(td, "voxy-server-side-paper-forked.jar")
+        _make_jar(forked_vpap, {
+            "plugin.yml": "name: VoxyServerSide\nversion: 0.7.0\nfolia-supported: true\n",
+            "dev/vox/lss/paper/LSSPaperPlugin.class": "x",
+            "dev/vox/lss/common/PositionUtil.class": "x",
+        }, manifest="Manifest-Version: 1.0\npaperweight-mappings-namespace: mojang\n")
+        p = []
+        check_voxy_paper_identity(forked_vpap, p)
+        check(any("must stay 'LodServerSupport'" in m for m in p),
+              f"forked voxy plugin name not caught: {p}")
+
+        # glob hygiene: a CI-named soak jar must not match any release glob
+        p = []
+        check_glob_hygiene(p, [os.path.join(td, "lss-paper-soak-0.4.0+26.1.2.jar")])
         check(p == [], f"clean glob hygiene flagged: {p}")
         p = []
         # a soak jar mis-named to look like a release artifact MUST be caught
-        check_glob_hygiene(p, [], [], [os.path.join(td, "lod-server-support-paper-soaky.jar")])
+        check_glob_hygiene(p, [os.path.join(td, "lod-server-support-paper-soaky.jar")])
         check(any("MATCHES release glob" in m for m in p), "mis-named soak jar not caught")
+        p = []
+        # a soak jar mis-named to look like the VOXY release artifact MUST also be caught
+        check_glob_hygiene(p, [os.path.join(td, "voxy-server-side-paper-soaky.jar")])
+        check(any("MATCHES release glob" in m for m in p), "mis-named voxy soak jar not caught")
 
     print(f"release_check selftest OK: {n} cases")
     return 0
@@ -383,8 +533,9 @@ def main(argv):
         return _selftest()
 
     problems = []
-    fab, pap, soak = discover(problems, expected_version=args.version)
-    print(f"release_check: fabric jars={len(fab)} paper jars={len(pap)} soak jars={len(soak)}")
+    fab, pap, vfab, vpap, soak = discover(problems, expected_version=args.version)
+    print(f"release_check: lss(fabric={len(fab)} paper={len(pap)}) "
+          f"voxy(fabric={len(vfab)} paper={len(vpap)}) soak={len(soak)}")
     if problems:
         print(f"FAIL: {len(problems)} release problem(s):")
         for m in problems:
