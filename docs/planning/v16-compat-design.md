@@ -456,3 +456,65 @@ findings were fixed in the follow-up commit:
 | I5 | nanoTime deadline comparisons were overflow-unsafe (TTL `lastSeen+TTL<now`, grace sentinel). Theoretical trigger; free fix. | Elapsed-difference form (`now - lastSeen > TTL`) + armed-flag grace. |
 | I6 | First-declare priming was consumed by the empty set — a fresh join's first batch still waited a full 20 ticks. | Empty declare ticks stay primed; the first merge after idle declares on the next tick (test-pinned). |
 | I7 | Accepted as-is: grace discards fold range-strays into `grace_discarded`; bounce frames bypass byte accounting (amplification <1, verified); Paper same-tick quit→rejoin can waste the rejoin's first second (window ~50 ms vs multi-second login — negligible); the cross-dialect shed and grace glue are 2-line platform lambdas without unit coverage (session-level behavior is pinned; glue is gametest/live territory). | — |
+
+## Five-lens release review (2026-07-17, pre-v0.7.0 tag) — deferred residuals
+
+A final 5-lens adversarial review (correctness, concurrency, wire/data-integrity,
+resource/DoS, operational) + a hostile-input pass ran over the whole `v0.6.2..HEAD`
+changeset. The confirmed low-risk findings were fixed in the release-review commit (see
+that commit's message: the Paper null-chunk atomic+diag, the client LOD-distance clamp,
+the cache-load file-size bound, README/docs). These residuals were **validated and
+deliberately DEFERRED** (fix-risk exceeds benefit for a validated release; none block the
+tag) — recorded so a future session doesn't re-derive them:
+
+- **Disk-read TIMEOUT parks NOT_GENERATED on a gen-DISABLED server (Lens 1) — a fix was
+  BUILT, then REVERTED before tag.** A read that times out (`TimeoutException` from
+  `future.get(DISK_READ_TIMEOUT_SECONDS)`) is caught as a generic exception and delivered
+  as `empty()` (not-found); on `enableChunkGeneration=false` that answers session-permanent
+  `NOT_GENERATED` for a chunk that exists on disk. REAL but NARROW: on the DEFAULT
+  gen-enabled config the miss escalates to a generation ticket that just loads the existing
+  chunk (self-heals), so it only bites gen-disabled servers under >10 s reader starvation,
+  and heals on reconnect. The reverted fix discriminated `TimeoutException` → a transient
+  `superseded` drop. It was pulled because the behavior is **deliberate and accounted-for in
+  the v17 conservation model** — `check_soak.py` law A5 explicitly folds `disk.errors` into
+  the not-found LHS *because* "an errored read (10 s timeout) delivers an EMPTY result [that]
+  lands on the right side (gen submit / miss_dropped)" (its own comment, line ~546). Routing
+  timeouts to `superseded` instead breaks that folded identity (live: A5 imbalance == the
+  timeout count). A CORRECT fix must split the disk **timeout** counter out of `disk.errors`
+  (so timeouts stop firing A7 and leave A5's fold to genuine errors only) across
+  `DiskReaderDiagnostics` + both metrics exporters + the A5/A5-second-identity terms in
+  `check_soak.py` + its `--selftest` — too large a blast radius for a validated pre-tag build.
+  **v0.7.1**: do it with that full accounting split and a fresh soak re-baseline. (Note for the
+  next session: on a loaded/WSL2 box the fresh-backfill soak can legitimately produce read
+  timeouts → `disk.errors>0` → environmental A7 + law-coverage violations even WITHOUT this
+  change; the earlier passing runs simply had `disk.errors=0`. Only A5 is this change's
+  signature — trust clean CI for the soak gate.)
+
+- **v16 kick→rejoin reset (Lens 2 / prior integration review).** A sub-50 ms same-UUID
+  rejoin whose handshake beats the pump can have its fresh v16 session's want-set reset +
+  grace-armed by the *stale* mailboxed `removePlayer` of the prior incarnation. Self-heals
+  in seconds via the old client's own retry; window is one pump tick. Fix (deferred): stamp
+  `V16CompatSession` with a creation sequence so `onServiceRemove` skips a session created
+  after the remove was enqueued — deferred because it adds cross-thread sequencing to a hot
+  lifecycle path, and routing v16 identity through the mailbox instead would re-open the
+  handshake-outruns-registration merge gap the immediate creation deliberately closes.
+- **Palette-corrupt chunk → all-air ghost-clear (Lens 1).** A structurally-valid FULL chunk
+  NBT whose *every* section's `block_states` fails to parse triages as all-air and can send
+  an authoritative 0-section clear, erasing a data-claiming client's real terrain. Requires
+  an exotic corruption shape (normal region corruption throws → contained not-found). Fix
+  (deferred): have `serializeChunkNbt` distinguish "section present but parse failed" from
+  "legitimately air" and return not-found (containment) — deferred because it touches the
+  golden-corpus-pinned serializer and the legitimate End-void all-air path; do it in v0.7.1
+  with a dedicated corrupt-palette fixture.
+- **Requeue phase-completion partiality under a mid-phase Error (Lens 1).** An OOME/linkage
+  Error thrown mid-`processGenerationReady` or between `removeGroup` and attached dispatch
+  can re-deliver a consumed prefix un-tainted or strand attached pendings (which then pin the
+  live frontier). PLAUSIBLE, Error-class only (dying JVM). Deferred: the fix (per-entry
+  consumption) touches the most delicate requeue/taint machinery; not worth the risk for an
+  already-degraded-JVM scenario.
+- **Invalidation taint single-bit vs an orphaned pre-dimension-trip read (Lens 1).**
+  PLAUSIBLE, "very low likelihood" (reviewer could not construct a plausible-frequency
+  input). A per-group taint mark would close it structurally. Deferred to v0.7.1.
+- **Folia clustered-region probe ceiling; release.yml Tier-2 no-retry (fails closed); config
+  downgrade discards customized retired/new keys.** All documented-accepted or fails-closed;
+  see CLAUDE.md.

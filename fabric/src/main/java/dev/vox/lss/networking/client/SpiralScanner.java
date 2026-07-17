@@ -237,7 +237,12 @@ class SpiralScanner {
         if (voxyDist > 0 && voxyDist < effective) {
             effective = voxyDist;
         }
-        return effective;
+        // Defensive clamp: a legitimate server clamps its advertised distance to
+        // [MIN,MAX]_LOD_DISTANCE, but the SessionConfig decoder does not, so a hostile or
+        // broken server could send a huge value that overflows getPruneDistance() negative
+        // (effective + LOD_DISTANCE_BUFFER) and makes isOutOfRange refuse every column,
+        // busy-looping the request loop. Clamp to the same ceiling the server enforces.
+        return Math.min(effective, LSSConstants.MAX_LOD_DISTANCE);
     }
 
     private int getCachedVoxyDistance() {

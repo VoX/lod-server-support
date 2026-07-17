@@ -125,7 +125,10 @@ class PaperChunkGenerationServiceTest {
     }
 
     private static String diag(long submitted, long completed, int active, long timeouts, long removed) {
-        return String.format("submitted=%d, completed=%d, active=%d, timeouts=%d, removed=%d",
+        // null_failures is 0 in every case here: the failure tests fire onChunkReady(null)
+        // directly, which books removed-in-flight — the null_failures counter is incremented
+        // only by completeAsyncLoad/extractColumnData's chunk-vanished paths, not exercised here.
+        return String.format("submitted=%d, completed=%d, active=%d, timeouts=%d, removed=%d, null_failures=0",
                 submitted, completed, active, timeouts, removed);
     }
 
@@ -289,8 +292,12 @@ class PaperChunkGenerationServiceTest {
         var ready = svc.tick();
         assertEquals(1, ready.size());
         assertNull(ready.get(0).columnData());
-        assertEquals(diag(1, 0, 0, 0, 1), svc.getDiagnostics(),
-                "not completed — the failure is counted as removed-in-flight so the books balance");
+        // This test uniquely drives the extractColumnData chunk-vanished branch, so it is the
+        // one place null_failures is nonzero (the generic diag() helper asserts null_failures=0).
+        assertEquals("submitted=1, completed=0, active=0, timeouts=0, removed=1, null_failures=1",
+                svc.getDiagnostics(),
+                "not completed — counted as removed-in-flight (books balance) and null_failures=1");
+        assertEquals(1L, svc.getNullChunkFailures(), "the vanished-chunk failure is counted");
         assertTrue(svc.submitGeneration(a, level, 5, 4, 2L));
     }
 

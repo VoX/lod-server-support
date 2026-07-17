@@ -83,6 +83,7 @@ The result: players see fully rendered terrain out to hundreds of chunks on mult
 
 - `/lss clearcache` - Clear the local column cache, forcing all chunks to be re-requested from the server
 - `/lss diag` - Show client-side diagnostics (connection, throughput, scan progress, request budget)
+- `/lss trace` - Toggle a per-event JSONL trace log (scans, movement, received columns and their serve source) under `logs/` for diagnosing LOD behavior; off by default
 
 ## Configuration
 
@@ -95,6 +96,7 @@ Server config is generated on first run:
 | Setting | Default | Description |
 |---------|---------|-------------|
 | `enabled` | `true` | Enable LOD distribution |
+| `enableV16Compat` | `true` | Serve legacy v0.6.x (protocol 16) clients through a built-in translation layer at their slower pace. Set `false` to require every client to match the server's protocol (a v0.6.x client then gets no LOD session, like any other version mismatch) |
 | `lodDistanceChunks` | `256` | Max LOD distance in chunks |
 | `bytesPerSecondLimitPerPlayer` | `20971520` | Per-player pre-compression bandwidth cap (20 MB/s) |
 | `bytesPerSecondLimitGlobal` | `104857600` | Total pre-compression bandwidth cap (100 MB/s) |

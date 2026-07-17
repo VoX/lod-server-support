@@ -20,6 +20,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Manages chunk generation requests for the Paper plugin.
@@ -91,11 +93,11 @@ public class PaperChunkGenerationService {
     private volatile long totalCompleted = 0;
     private volatile long totalTimeouts = 0;
     private volatile long totalRemovedInFlight = 0;
-    // Null-chunk completions (Moonrise's permanent-failure outcome). Warn-once + counted:
-    // completion runs on region threads on Folia, volatile increments suffice for a
-    // diagnostics-only counter (single writer per completion, monotonic-ish under race).
-    private volatile boolean nullChunkWarned = false;
-    private volatile long nullChunkFailures = 0;
+    // Null-chunk (Moonrise permanent-failure) completions. Multi-writer on Folia (two region
+    // threads can complete concurrently), so atomic: the boolean latches the one warning via CAS,
+    // the counter is exact. Exposed in getDiagnostics()/getNullChunkFailures() for operators.
+    private final AtomicBoolean nullChunkWarned = new AtomicBoolean(false);
+    private final AtomicLong nullChunkFailures = new AtomicLong(0);
 
     public PaperChunkGenerationService(PaperConfig config, Plugin plugin) {
         this.maxConcurrent = config.generationConcurrencyLimitGlobal;
@@ -174,12 +176,11 @@ public class PaperChunkGenerationService {
             // Moonrise's failure outcome — no throwable channel exists. Warn-once: each
             // null is a per-column permanent failure, and a regression that reintroduces
             // them at scale (the 6.9k-in-one-soak history) must not also be a WARN storm.
-            if (!this.nullChunkWarned) {
-                this.nullChunkWarned = true;
+            if (this.nullChunkWarned.compareAndSet(false, true)) {
                 LSSLogger.warn("Async chunk load failed (null chunk) at " + cx + "," + cz
                         + " — further null-chunk failures are logged silently (counted)");
             }
-            this.nullChunkFailures++;
+            this.nullChunkFailures.incrementAndGet();
         }
         LoadedColumnData extracted = null;
         Error rethrow = null;
@@ -221,7 +222,15 @@ public class PaperChunkGenerationService {
         try {
             LevelChunk nmsChunk = level.getChunkSource().getChunkNow(cx, cz);
             if (nmsChunk == null) {
-                LSSLogger.warn("Chunk at " + cx + "," + cz + " was null after async load completed");
+                // The re-fetch missed (the chunk unloaded in the same-thread window this
+                // completion-thread extraction exists to close). Same permanent-failure
+                // outcome as the null-completion path above — share its warn-once latch and
+                // counter so a regression that reintroduces the unload race can't WARN-storm.
+                if (this.nullChunkWarned.compareAndSet(false, true)) {
+                    LSSLogger.warn("Chunk at " + cx + "," + cz + " was null after async load completed"
+                            + " — further null-chunk failures are logged silently (counted)");
+                }
+                this.nullChunkFailures.incrementAndGet();
                 return null;
             }
             return PaperSectionSerializer.serializeColumn(level, nmsChunk, cx, cz);
@@ -344,14 +353,15 @@ public class PaperChunkGenerationService {
     }
 
     public String getDiagnostics() {
-        return String.format("submitted=%d, completed=%d, active=%d, timeouts=%d, removed=%d",
-                totalSubmitted, totalCompleted, active.size(), totalTimeouts, totalRemovedInFlight);
+        return String.format("submitted=%d, completed=%d, active=%d, timeouts=%d, removed=%d, null_failures=%d",
+                totalSubmitted, totalCompleted, active.size(), totalTimeouts, totalRemovedInFlight,
+                nullChunkFailures.get());
     }
 
     public long getTotalSubmitted() { return this.totalSubmitted; }
 
     /** Null-chunk (permanent-failure) completions — warn-once logged, counted here. */
-    public long getNullChunkFailures() { return this.nullChunkFailures; }
+    public long getNullChunkFailures() { return this.nullChunkFailures.get(); }
 
     public long getTotalCompleted() { return this.totalCompleted; }
 
