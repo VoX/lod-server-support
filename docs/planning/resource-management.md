@@ -116,8 +116,11 @@ LSS has **no CPU meter**. It protects the vanilla tick structurally:
 
 Two client-side real-measure throttles that also cut server demand:
 - **Scan-budget scaling** — the client's per-scan want-set (the constant `WANT_SET_BUDGET`, 800) is scaled down by its
-  own decode-queue pressure and by **vanilla load** (`1 − missingFraction²`): when the client's
-  own vanilla chunks aren't loaded, the budget can drop to zero.
+  own decode-queue pressure. (The vanilla-load scale — `1 − missingFraction²`, budget to zero
+  when the client's vanilla chunks lagged — is RETIRED as of v0.7.0: it was client-side triage
+  of server resources, which the server-side read/generation priorities now own; its only
+  observable effect was silently stopping LOD during fast travel. `missingVanillaChunks`
+  survives as a diagnostic counter only.)
 - The adaptive read throttle (§1 B) indirectly caps serialization CPU when engaged.
 
 ---
@@ -163,7 +166,7 @@ Two client-side real-measure throttles that also cut server demand:
 ## Cross-resource interaction chain (outbound path)
 
 ```
-client scans want-set @1Hz, budget scaled by ITS vanilla load  → CPU/net demand governor (client)
+client scans want-set @1Hz, budget scaled by decode-queue pressure → CPU/net demand governor (client)
 server range-filters at lodDist+32                             → volume bound
 router admits only while send queue < 4000                     → NETWORK backpressure → throttles disk
 slot cap (sync 200 / gen 16) gates concurrency                 → MEMORY/CPU bound; retain-don't-bounce

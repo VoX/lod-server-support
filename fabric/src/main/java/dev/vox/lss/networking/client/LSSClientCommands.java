@@ -35,10 +35,13 @@ public class LSSClientCommands {
                     )
                     .then(ClientCommands.literal("trace")
                             .executes(context -> {
-                                var path = ClientTraceLog.toggle();
-                                if (path != null) {
+                                var result = ClientTraceLog.toggle();
+                                if (result.path() != null) {
                                     context.getSource().sendFeedback(Component.literal(
-                                            "LSS trace STARTED: " + path).withStyle(ChatFormatting.GOLD));
+                                            "LSS trace STARTED: " + result.path()).withStyle(ChatFormatting.GOLD));
+                                } else if (result.failed()) {
+                                    context.getSource().sendFeedback(Component.literal(
+                                            "LSS trace FAILED to start — see the log.").withStyle(ChatFormatting.RED));
                                 } else {
                                     context.getSource().sendFeedback(Component.literal(
                                             "LSS trace stopped.").withStyle(ChatFormatting.GOLD));

@@ -29,8 +29,13 @@ final class ClientTraceLog {
         return enabled;
     }
 
-    /** Toggle the trace; returns the active file path when starting, null when stopping. */
-    static synchronized Path toggle() {
+    /** Toggle outcome: {@code path} non-null when a trace started; {@code failed} true when
+     *  a start was attempted and could not open its file (so the command can say so instead
+     *  of reporting a stop that never happened). */
+    record Toggle(Path path, boolean failed) {}
+
+    /** Toggle the trace; see {@link Toggle}. */
+    static synchronized Toggle toggle() {
         if (enabled) {
             enabled = false;
             try {
@@ -39,7 +44,17 @@ final class ClientTraceLog {
                 LSSLogger.error("Failed to close LSS trace", e);
             }
             writer = null;
-            return null;
+            return new Toggle(null, false);
+        }
+        // A previous trace that died on a write failure leaves its writer for us to close —
+        // the stop branch above is unreachable for it (enabled already false).
+        if (writer != null) {
+            try {
+                writer.close();
+            } catch (IOException e) {
+                LSSLogger.error("Failed to close leaked LSS trace writer", e);
+            }
+            writer = null;
         }
         var name = "lss-trace-" + LocalDateTime.now().format(
                 DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss")) + ".jsonl";
@@ -49,11 +64,11 @@ final class ClientTraceLog {
             writer = Files.newBufferedWriter(path, StandardCharsets.UTF_8);
             startMs = System.currentTimeMillis();
             enabled = true;
-            return path;
+            return new Toggle(path, false);
         } catch (IOException e) {
             LSSLogger.error("Failed to open LSS trace at " + path, e);
             writer = null;
-            return null;
+            return new Toggle(null, true);
         }
     }
 
@@ -68,6 +83,12 @@ final class ClientTraceLog {
             writer.flush();
         } catch (IOException e) {
             enabled = false;
+            try {
+                writer.close();
+            } catch (IOException closeFailure) {
+                // best effort — the handle must not outlive the dead trace
+            }
+            writer = null;
             LSSLogger.error("LSS trace write failed — trace stopped", e);
         }
     }

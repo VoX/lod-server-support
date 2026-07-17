@@ -40,7 +40,8 @@ exist).
 ## Load-bearing details (already verified — trust these)
 
 - **v17 is unreleased** (latest tag ships v16), so wire-format changes are free — no bump, no
-  back-compat. `PROTOCOL_VERSION` stays 17. Fabric and Paper encoders must stay byte-identical
+  back-compat. `PROTOCOL_VERSION` was 17 through the redesign (bumped to 18 later, post-review,
+  for the VoxelColumn serve-source byte — still the same unreleased v17 design line). Fabric and Paper encoders must stay byte-identical
   (`WireParityTest`).
 - **The `NOT_GENERATED` inversion is a 2-line change** in `ColumnStateMap.onNotGenerated` (currently
   `sessionSatisfied.remove` + `put(0L)` for the old gen-retry → becomes `sessionSatisfied.add`, drop

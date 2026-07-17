@@ -376,7 +376,10 @@ class LodRequestManagerTest {
         // The movement pruner only runs on chunk crossings, so a stationary client fed
         // arbitrary far positions would otherwise grow the state map without bound.
         long far = PositionUtil.packPosition(100_000, 100_000);
-        manager.onColumnReceived(far, 5000L, dim("overworld"));
+        assertFalse(manager.onColumnReceived(far, 5000L, dim("overworld")),
+                "the range drop must report false so the receive glue also skips consumer "
+                        + "dispatch — guarding only the state map leaves the consumer's LOD "
+                        + "store as the unbounded-growth vector");
 
         assertEquals(0, manager.getReceivedColumnCount(),
                 "a column far outside the prune radius must not stamp");
@@ -384,8 +387,12 @@ class LodRequestManagerTest {
                 "no state map entry for an unbounded-growth vector");
 
         // In-range unsolicited data is still authoritative and still applies.
-        manager.onColumnReceived(POS, 5000L, dim("overworld"));
+        assertTrue(manager.onColumnReceived(POS, 5000L, dim("overworld")));
         assertEquals(1, manager.getReceivedColumnCount());
+
+        // Cross-dimension columns return TRUE: the dispatch drain's dimension filter owns
+        // that discard (pre-existing, deliberate).
+        assertTrue(manager.onColumnReceived(PositionUtil.packPosition(11, -3), 5000L, dim("nether")));
     }
 
     // ---- the want-set scan: re-declaration, mark survival, convergence ----
@@ -755,7 +762,12 @@ class LodRequestManagerTest {
     }
 
     @Test
-    void dirtyBroadcastWithKnownPositionDefersExactlyOneScanAndResetsConfirmedRing() {
+    void dirtyBroadcastWithKnownPositionResetsConfirmedRingWithoutTouchingTheCadence() {
+        // The dirty path is cadence-NEUTRAL (the old resetScanCounter debounce here was the
+        // last survivor of the movement-starvation class: at the legal 1 s broadcast-interval
+        // floor a sustained edit stream could phase-lock scans off entirely, starving
+        // re-declaration — the want-set's only self-heal). The ring re-opens; the imminent
+        // scan still fires on schedule.
         manager.onColumnReceived(POS, 5000L, dim("overworld")); // lastDimension null -> applies
         advanceToOneCallBeforeScanFire();
         assertTrue(manager.getConfirmedRing() > 0);
@@ -765,12 +777,9 @@ class LodRequestManagerTest {
         assertEquals(1, manager.getDirtyColumnCount());
         assertEquals(0, manager.getConfirmedRing(),
                 "a known dirty mark must reset ring confirmation so the position is rescanned");
-        assertEquals(-1, maybeScanOnce(), "the imminent scan is deferred by the counter reset");
-        for (int i = 0; i < LSSConstants.TICKS_PER_SECOND - 2; i++) {
-            assertEquals(-1, maybeScanOnce(), "still inside the single deferred window");
-        }
         assertTrue(maybeScanOnce() >= 0,
-                "cadence resumes one full window after the broadcast — exactly one deferral");
+                "the imminent scan fires ON SCHEDULE — a broadcast must never defer the "
+                        + "cadence (re-declaration is the only self-heal it could starve)");
     }
 
     @Test
@@ -795,7 +804,7 @@ class LodRequestManagerTest {
     }
 
     @Test
-    void maxSizeDirtyFrameMarksKnownPositionsOnlyAndDebouncesOnce() {
+    void maxSizeDirtyFrameMarksKnownPositionsOnlyAndKeepsTheCadence() {
         long known1 = PositionUtil.packPosition(20, 20);
         long known2 = PositionUtil.packPosition(21, 20);
         long known3 = PositionUtil.packPosition(22, 20);
@@ -817,12 +826,8 @@ class LodRequestManagerTest {
         assertEquals(-1L, manager.columnsForTest().timestampFor(frame[3]),
                 "unknown positions stay unknown — the scan ladder requests those anyway");
         assertEquals(0, manager.getConfirmedRing());
-        assertEquals(-1, maybeScanOnce(), "deferred");
-        for (int i = 0; i < LSSConstants.TICKS_PER_SECOND - 2; i++) {
-            assertEquals(-1, maybeScanOnce());
-        }
         assertTrue(maybeScanOnce() >= 0,
-                "a max-size (10240) frame defers exactly one scan window, not one per position");
+                "even a wire-cap dirty frame must not defer the cadence (cadence-neutral path)");
     }
 
     @Test

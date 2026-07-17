@@ -631,7 +631,7 @@ class SpiralScannerTest {
         assertEquals(0, fireScan(s, 2, columns, queue));
 
         assertTrue(columns.markDirtyIfKnown(covered));
-        s.resetScanCounter(); // production dirty-broadcast path (LodRequestManager.onDirtyColumns)
+        s.resetConfirmedRing(); // production dirty-broadcast path (LodRequestManager.onDirtyColumns)
 
         assertEquals(0, fireScan(s, 2, columns, queue),
                 "a dirty column under vanilla coverage must not be re-requested (vanilla renders it live)");
@@ -641,7 +641,7 @@ class SpiralScannerTest {
 
         // The player moves +1 chunk: the exclusion square moves off the dirty column.
         columns.pruneOutOfRange(1, 0, 64); // production movement order: prune...
-        s.resetScanCounter();              // ...then resetScanCounter (LodRequestManager.tick)
+        s.resetConfirmedRing();            // ...then the dirty-path ring re-open (cadence-neutral)
         int queued = fireScanFull(s, 1, 0, 2, 0, 1000, 0, columns, queue);
         assertTrue(queued > 0, "the un-covered scan must declare something");
         boolean foundCovered = false;

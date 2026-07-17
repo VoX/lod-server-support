@@ -437,6 +437,24 @@ class ColumnStateMapTest {
      * thing on the wire (&le;0 = "I hold nothing") but finally lets the artifact die.
      */
     @Test
+    void notGeneratedOnLegacyZeroStampPurgesItAtPark() {
+        // The gen-disabled twin of the onUpToDate purge below: on such servers a legacy
+        // 0-stamp position parks via NOT_GENERATED every session, and before this purge the
+        // 0 persisted to the cache immortally (onUpToDate never fires for it there).
+        var loaded = new Long2LongOpenHashMap();
+        loaded.put(POS, 0L);
+        map.loadFrom(loaded);
+        assertEquals(1, map.emptyCount(), "premise: the legacy stamp loaded as an empty");
+
+        map.onNotGenerated(POS);
+
+        assertEquals(SATISFIED, map.classify(POS), "parked for the session as before");
+        assertEquals(0, map.emptyCount(), "the 0-stamp is purged, not parked around");
+        assertEquals(-1L, map.timestampFor(POS),
+                "nothing persists to the cache — next session starts clean at unknown");
+    }
+
+    @Test
     void upToDateOnLegacyZeroStampPurgesItAtPark() {
         var loaded = new Long2LongOpenHashMap();
         loaded.put(POS, 0L);

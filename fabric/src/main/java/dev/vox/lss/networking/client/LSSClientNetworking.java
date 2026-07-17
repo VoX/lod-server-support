@@ -191,9 +191,12 @@ public class LSSClientNetworking {
         long packed = PositionUtil.packPosition(payload.chunkX(), payload.chunkZ());
         boolean resync = manager != null && manager.heldContentBefore(packed);
         boolean clear = ClientColumnProcessor.isClearColumn(payload.decompressedSections());
-        if (manager != null) {
-            manager.onColumnReceived(packed, payload.columnTimestamp(),
-                    payload.dimension(), clear, payload.source());
+        if (manager != null && !manager.onColumnReceived(packed, payload.columnTimestamp(),
+                payload.dimension(), clear, payload.source())) {
+            // Out-of-range unsolicited drop: the state map refused the stamp, and the
+            // consumers must not ingest it either — a hostile/buggy server could otherwise
+            // grow the LOD store without bound while /lss diag shows nothing tracked.
+            return;
         }
         // A clear air-fills even when the held check missed (see above) — the consumer must
         // overwrite whatever it renders there with air.

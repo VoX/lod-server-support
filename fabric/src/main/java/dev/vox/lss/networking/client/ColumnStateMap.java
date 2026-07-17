@@ -237,6 +237,14 @@ class ColumnStateMap {
         this.dirty.remove(packed);  // answer-time consumption — see onUpToDate
         this.retry.remove(packed);
         this.sessionSatisfied.add(packed);
+        // Park-time purge of a legacy pre-v17 0-stamp, mirroring onUpToDate: retained, it
+        // persists to the cache and resurrects every session (on a gen-disabled server this
+        // was the immortal path — onUpToDate never fires for these). A real >0 stamp stays
+        // untouched as documented above.
+        if (this.timestamps.get(packed) == 0L) {
+            this.timestamps.remove(packed);
+            this.emptyCount--;
+        }
     }
 
     /** Re-serve attempts allowed per position per session before parking it. */

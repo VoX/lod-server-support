@@ -287,8 +287,8 @@ public class LodRequestManager {
         this.metrics.recordSendCycle(count); // counts attempts — a failed batch still counts
     }
 
-    public void onColumnReceived(long packed, long columnTimestamp, ResourceKey<Level> dimension) {
-        onColumnReceived(packed, columnTimestamp, dimension, false);
+    public boolean onColumnReceived(long packed, long columnTimestamp, ResourceKey<Level> dimension) {
+        return onColumnReceived(packed, columnTimestamp, dimension, false);
     }
 
     /**
@@ -297,21 +297,26 @@ public class LodRequestManager {
      *        re-request must carry the pre-clear content stamp so the server re-sends the clear;
      *        recorded via {@link ColumnStateMap#markAuthoritativeClear} inside the dimension guard.
      */
-    public void onColumnReceived(long packed, long columnTimestamp, ResourceKey<Level> dimension,
+    public boolean onColumnReceived(long packed, long columnTimestamp, ResourceKey<Level> dimension,
                                  boolean authoritativeClear) {
-        onColumnReceived(packed, columnTimestamp, dimension, authoritativeClear, (byte) -1);
+        return onColumnReceived(packed, columnTimestamp, dimension, authoritativeClear, (byte) -1);
     }
 
     /**
      * @param source the server's serve-source tag (LSSConstants.COLUMN_SOURCE_*), -1 when
      *        unknown (test rigs / legacy). Diagnostic attribution only — feeds the trace.
+     * @return false ONLY for the out-of-range unsolicited drop — the caller must then skip
+     *         consumer dispatch too, or a hostile/buggy server still grows the consumer's
+     *         LOD store without bound (the state map alone being guarded is half a fix).
+     *         Cross-dimension columns return true: the dispatch drain's dimension filter
+     *         owns that discard (deliberate — see the guard below).
      */
-    public void onColumnReceived(long packed, long columnTimestamp, ResourceKey<Level> dimension,
+    public boolean onColumnReceived(long packed, long columnTimestamp, ResourceKey<Level> dimension,
                                  boolean authoritativeClear, byte source) {
         // A column from another dimension is discarded by the dispatch drain
         // (ClientColumnProcessor filters on level.dimension()), so stamping it here would
         // mark the position SATISFIED in the current dimension's map with no data delivered.
-        if (this.lastDimension != null && !this.lastDimension.equals(dimension)) return;
+        if (this.lastDimension != null && !this.lastDimension.equals(dimension)) return true;
         // Range guard: an unsolicited column far outside the prune radius must not stamp —
         // the movement pruner only runs on chunk crossings, so a stationary client fed
         // arbitrary far positions (buggy or hostile server) would otherwise grow the state
@@ -325,7 +330,7 @@ public class LodRequestManager {
                 ClientTraceLog.event("col_dropped_range", "\"pos\":[" + PositionUtil.unpackX(packed)
                         + "," + PositionUtil.unpackZ(packed) + "]");
             }
-            return;
+            return false;
         }
         // Capture the pre-clear content stamp BEFORE onReceived overwrites it with the clear's
         // timestamp — a rejected clear re-requests with this value, not ts=-1.
@@ -346,6 +351,7 @@ public class LodRequestManager {
         if (authoritativeClear) this.columns.markAuthoritativeClear(packed, preClearStamp);
         consumeStaleCrossing(packed); // a dirty that crossed this in-flight first serve forces a re-request
         this.metrics.recordColumnReceived(packed, System.currentTimeMillis()); // RTT sample + counter
+        return true;
     }
 
     public void onDirtyColumns(long[] dirtyPositions) {
@@ -366,7 +372,14 @@ public class LodRequestManager {
             this.columns.noteStaleIfInFlight(packed, this.tracker.isInFlight(packed));
         }
         if (added) {
-            this.scanner.resetScanCounter();
+            // Cadence-NEUTRAL: only re-open the ring walk so the dirty position (which may
+            // sit below the confirmed ring) is reachable at the NEXT scheduled scan.
+            // resetScanCounter() here was the last survivor of the cadence-debounce class:
+            // it DELAYED the next scan 20 ticks per broadcast, and at the legal
+            // dirtyBroadcastIntervalSeconds floor (1 s) a sustained edit stream could
+            // phase-lock scans off entirely — starving re-declaration, the want-set's only
+            // self-heal (the same failure class as the removed movement debounce).
+            this.scanner.resetConfirmedRing();
         }
     }
 

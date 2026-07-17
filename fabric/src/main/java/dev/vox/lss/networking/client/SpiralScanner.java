@@ -62,7 +62,7 @@ class SpiralScanner {
 
         this.missingVanillaChunks = missingVanilla.getAsInt();
 
-        // Compute scan budget: base × queue-pressure-scale × vanilla-load-scale. The base is
+        // Compute scan budget: base × queue-pressure-scale. The base is
         // the ONE want-set budget — a constant; no client budget derives from any server cap
         // (server-owned generation). Raising it buys nothing: the window self-throttles to
         // the serve rate (as heads resolve they classify SATISFIED and drop out), so a bigger
