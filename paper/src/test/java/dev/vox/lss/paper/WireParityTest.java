@@ -281,4 +281,66 @@ class WireParityTest {
                 "every LSS channel must have a reference frame in this suite — a new payload"
                 + " requires frames in BOTH WireParityTests");
     }
+
+    // ---- v16 compat legacy shapes (docs/planning/v16-compat-design.md §2) ----
+    // Reference ops mirror the v0.6.2 encoders VERBATIM and are IDENTICAL to the Fabric
+    // twin's v16 tests — the cross-impl parity guard for the legacy dialect.
+
+    @Test
+    void sessionConfigV16EncodesTheSixFieldLayoutEchoingVersion16() {
+        byte[] expected = ref(b -> {
+            b.writeVarInt(16);     // MUST echo 16 — the v0.6.2 codec hard-gates on this VarInt
+            b.writeBoolean(true);  // enabled
+            b.writeVarInt(101);    // lodDistanceChunks
+            b.writeVarInt(200);    // syncOnLoadConcurrencyLimitPerPlayer (the client's pacing)
+            b.writeVarInt(7);      // generationConcurrencyLimitPerPlayer
+            b.writeBoolean(false); // generationEnabled
+        });
+        assertArrayEquals(expected, PaperPayloadHandler.encodeSessionConfigV16(
+                true, 101, 200, 7, false));
+    }
+
+    @Test
+    void rewriteColumnToV16DropsExactlyTheSourceByteForEveryProducerTag() {
+        // Dialect totality at the wire: whichever producer baked the frame, the splice must
+        // yield the IDENTICAL legacy frame — a leaked source byte is parsed by the old
+        // client as the section-array length VarInt and hard-kicks it.
+        byte[] sections = {9, 8, 7};
+        byte[] expectedLegacy = ref(b -> {
+            b.writeInt(3);
+            b.writeInt(-4);
+            b.writeUtf("minecraft:overworld");
+            b.writeLong(1234L);
+            b.writeByteArray(sections);
+        });
+        byte[] sources = {LSSConstants.COLUMN_SOURCE_IN_MEMORY, LSSConstants.COLUMN_SOURCE_DISK,
+                LSSConstants.COLUMN_SOURCE_GENERATION, (byte) -1};
+        for (byte source : sources) {
+            byte[] v18Frame = PaperPayloadHandler.encodeVoxelColumnPreEncoded(
+                    3, -4, "minecraft:overworld", 1234L, source, sections);
+            assertArrayEquals(expectedLegacy, PaperPayloadHandler.rewriteColumnToV16(v18Frame),
+                    "source tag " + source + " must vanish identically");
+            assertEquals(PositionUtil.packPosition(3, -4),
+                    PaperPayloadHandler.readColumnPackedPos(v18Frame),
+                    "the shim's prune key must come from the frame's leading coordinate ints");
+        }
+    }
+
+    @Test
+    void rewriteColumnToV16KeepsTheGhostClearAndLongDimensions() {
+        // The 0-section authoritative clear must survive the splice (the v0.6.2 client
+        // handles it: isClearColumn + air-fill), and a >127-char dimension string (2-byte
+        // VarInt UTF prefix) must not shift the computed source-byte offset.
+        String longDim = "lsstest:" + "d".repeat(120);
+        byte[] expected = ref(b -> {
+            b.writeInt(0);
+            b.writeInt(0);
+            b.writeUtf(longDim);
+            b.writeLong(42L);
+            b.writeByteArray(new byte[0]);
+        });
+        byte[] v18Frame = PaperPayloadHandler.encodeVoxelColumnPreEncoded(
+                0, 0, longDim, 42L, LSSConstants.COLUMN_SOURCE_IN_MEMORY, new byte[0]);
+        assertArrayEquals(expected, PaperPayloadHandler.rewriteColumnToV16(v18Frame));
+    }
 }

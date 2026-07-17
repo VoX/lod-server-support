@@ -1,6 +1,7 @@
 package dev.vox.lss.paper;
 
 import dev.vox.lss.common.SharedBandwidthLimiter;
+import dev.vox.lss.common.compat.V16CompatManager;
 import dev.vox.lss.common.processing.DiskReaderDiagnostics;
 import dev.vox.lss.common.processing.ProcessingDiagnostics;
 import org.bukkit.command.CommandSender;
@@ -107,6 +108,7 @@ class PaperCommandsTest {
         when(diskReader.getDiagnostics()).thenReturn("idle");
         when(service.getDiskReader()).thenReturn(diskReader);
         when(service.getBandwidthLimiter()).thenReturn(new SharedBandwidthLimiter(1024));
+        when(service.getV16CompatManager()).thenReturn(new V16CompatManager());
         when(service.getTickDiagnostics()).thenReturn("tick");
         when(service.getPlayers()).thenReturn(Map.of());
         // getGenerationService() returns null (generation disabled) — the path that must not NPE
@@ -133,6 +135,7 @@ class PaperCommandsTest {
         when(diskReader.getDiagnostics()).thenReturn("idle");
         when(service.getDiskReader()).thenReturn(diskReader);
         when(service.getBandwidthLimiter()).thenReturn(new SharedBandwidthLimiter(1024));
+        when(service.getV16CompatManager()).thenReturn(new V16CompatManager());
         when(service.getTickDiagnostics()).thenReturn("tick");
         when(service.getPlayers()).thenReturn(Map.of());
         var config = new PaperConfig();

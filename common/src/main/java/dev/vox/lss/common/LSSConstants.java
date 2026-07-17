@@ -131,6 +131,16 @@ public final class LSSConstants {
     // the bytes). The client skips unknown types inert, so a reserved byte is forward-safe.
     public static final byte RESPONSE_UP_TO_DATE = 1;
     public static final byte RESPONSE_NOT_GENERATED = 2;
+    /** v16-COMPAT ONLY (see docs/planning/v16-compat-design.md): the retired byte 0, spoken
+     *  exclusively to legacy protocol-16 sessions as the shim's overflow bounce — the old
+     *  client backs off ~1 s and retries. Never sent to a v17+ client (byte 0 stays reserved
+     *  there); never any other v16-session pressure signal (retention + re-declare cover those). */
+    public static final byte RESPONSE_RATE_LIMITED_V16 = 0;
+
+    /** The legacy protocol version the v16 compat shim serves. A client handshaking with this
+     *  version (and {@code enableV16Compat}) gets a translated session: 6-field SessionConfig
+     *  echoing 16, source-less VoxelColumn frames, and the synthetic want-set recordkeeping. */
+    public static final int V16_COMPAT_PROTOCOL_VERSION = 16;
 
     // Capabilities bitmask
     public static final int CAPABILITY_VOXEL_COLUMNS = 1;

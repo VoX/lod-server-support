@@ -127,6 +127,43 @@ class DiagnosticsFormatterTest {
     }
 
     @Test
+    void diagV16LineRendersBetweenGenerationAndBandwidthOnlyWhenPresent() {
+        var d = new DiagnosticsFormatter.DiagData(
+                true, 24,
+                2048, 1_048_576,
+                100, 5000, 10_485_760,
+                11, 33, 44, 55,
+                22,
+                "sent=9, disk=1/2",
+                "submitted=5, completed=5",
+                "active=1/32", true,
+                7, 3,
+                2_097_152,
+                512,
+                List.of());
+
+        var withoutShim = DiagnosticsFormatter.formatDiagnostics(d);
+        assertTrue(withoutShim.stream().noneMatch(l -> l.startsWith("V16Compat")),
+                "an untouched shim (null line) must add nothing");
+
+        var withShim = DiagnosticsFormatter.formatDiagnostics(d.withV16Line(
+                "V16Compat: clients=1, redeclares=9, overflow_bounced=0, grace_discarded=0"));
+        int genIdx = indexOfPrefix(withShim, "Generation:");
+        int v16Idx = indexOfPrefix(withShim, "V16Compat:");
+        int bwIdx = indexOfPrefix(withShim, "Bandwidth:");
+        assertTrue(genIdx < v16Idx && v16Idx < bwIdx,
+                "the v16 line sits between Generation and Bandwidth: " + withShim);
+        assertEquals(withoutShim.size() + 1, withShim.size());
+    }
+
+    private static int indexOfPrefix(List<String> lines, String prefix) {
+        for (int i = 0; i < lines.size(); i++) {
+            if (lines.get(i).startsWith(prefix)) return i;
+        }
+        throw new AssertionError("no line starts with '" + prefix + "': " + lines);
+    }
+
+    @Test
     void diagRendersEnabledFalseAndDisabledGenerationAndZeroUptime() {
         // enabled=false still renders the full ladder; generationEnabled=false (the
         // null-generation-service wiring) renders "Generation: disabled"; uptime=0 must

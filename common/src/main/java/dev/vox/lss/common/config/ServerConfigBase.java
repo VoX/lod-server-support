@@ -34,6 +34,13 @@ public abstract class ServerConfigBase extends JsonConfig {
      * rollback. No clamp: a boolean has no out-of-range value.
      */
     public boolean useBackgroundReadPriority = true;
+    /**
+     * When true (default), clients running the legacy protocol-16 mod (v0.6.x) get a
+     * translated LOD session through the v16 compat shim (docs/planning/v16-compat-design.md)
+     * instead of the silent version-mismatch no-session. Inert for current-protocol clients;
+     * set false as the kill switch to restore the strict version gate. No clamp: boolean.
+     */
+    public boolean enableV16Compat = true;
 
     @Override
     protected String getFileName() {

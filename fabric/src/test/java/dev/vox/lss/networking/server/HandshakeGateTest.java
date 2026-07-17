@@ -134,4 +134,52 @@ class HandshakeGateTest {
         assertEquals(Outcome.REGISTER, d.outcome());
         assertTrue(d.registerPlayer());
     }
+
+    // ---- v16 compat dialect rung (docs/planning/v16-compat-design.md §4.1) ----
+
+    @Test
+    void v16WithCompatEnabledTakesTheNormalLadderWithTheV16Dialect() {
+        // The dialect is decided by the version rung ONLY; the rest of the ladder is
+        // dialect-agnostic, so reply/registration policy cannot drift between dialects.
+        var register = HandshakeGate.evaluate(16, VOXEL_CAPS, true, true, true);
+        assertEquals(Outcome.REGISTER, register.outcome());
+        assertEquals(HandshakeGate.WireDialect.V16, register.dialect());
+        assertTrue(register.registerPlayer());
+
+        var noConsumer = HandshakeGate.evaluate(16, 0, true, true, true);
+        assertEquals(Outcome.NO_CONSUMER, noConsumer.outcome());
+        assertEquals(HandshakeGate.WireDialect.V16, noConsumer.dialect());
+        assertTrue(noConsumer.sendSessionConfig());
+        assertFalse(noConsumer.registerPlayer());
+
+        var disabled = HandshakeGate.evaluate(16, VOXEL_CAPS, false, true, true);
+        assertEquals(Outcome.DISABLED, disabled.outcome());
+        assertEquals(HandshakeGate.WireDialect.V16, disabled.dialect());
+        assertTrue(disabled.sendSessionConfig());
+        assertFalse(disabled.effectiveEnabled());
+    }
+
+    @Test
+    void v16WithCompatDisabledStaysTheSilentVersionMismatch() {
+        var d = HandshakeGate.evaluate(16, VOXEL_CAPS, true, true, false);
+        assertEquals(Outcome.VERSION_MISMATCH, d.outcome());
+        assertFalse(d.sendSessionConfig());
+        // The 4-arg overload (pre-compat call shape) is the compat-disabled ladder.
+        assertEquals(Outcome.VERSION_MISMATCH,
+                HandshakeGate.evaluate(16, VOXEL_CAPS, true, true).outcome());
+    }
+
+    @Test
+    void onlyExactly16GetsTheCompatRungAndV18KeepsItsDialect() {
+        // 15 and 17 are NOT compat candidates even with the flag on — the shim speaks
+        // exactly the v0.6.x wire, nothing else.
+        for (int version : new int[]{15, 17}) {
+            var d = HandshakeGate.evaluate(version, VOXEL_CAPS, true, true, true);
+            assertEquals(Outcome.VERSION_MISMATCH, d.outcome(), "version " + version);
+            assertFalse(d.sendSessionConfig());
+        }
+        var current = HandshakeGate.evaluate(V, VOXEL_CAPS, true, true, true);
+        assertEquals(Outcome.REGISTER, current.outcome());
+        assertEquals(HandshakeGate.WireDialect.V18, current.dialect());
+    }
 }

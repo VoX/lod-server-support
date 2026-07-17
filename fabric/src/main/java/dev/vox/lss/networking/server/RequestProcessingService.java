@@ -5,6 +5,7 @@ import dev.vox.lss.common.LSSConstants;
 import dev.vox.lss.common.LSSLogger;
 import dev.vox.lss.common.PositionUtil;
 import dev.vox.lss.common.SharedBandwidthLimiter;
+import dev.vox.lss.common.compat.V16CompatManager;
 import dev.vox.lss.common.processing.IncomingBatch;
 import dev.vox.lss.common.processing.IncomingRequest;
 import dev.vox.lss.common.processing.LoadedColumnData;
@@ -52,6 +53,10 @@ public class RequestProcessingService {
     private final long startTimeNanos = System.nanoTime();
 
     private final DirtyColumnBroadcaster dirtyBroadcaster;
+    // The v16 compat shim's per-player sessions (legacy protocol-16 clients). The pipeline
+    // never consults it: a v16 player is an ordinary registered player whose want-set is
+    // declared by the shim at 1 Hz. See docs/planning/v16-compat-design.md.
+    private final V16CompatManager v16Compat = new V16CompatManager();
     // Keyed by the lightweight ResourceKey (not ServerLevel): a ServerLevel key strongly
     // retains every world an LSS player ever visited — harmless for vanilla's permanent
     // dimensions, but a leak on world-cycling servers. The dimension string is derivable
@@ -129,6 +134,10 @@ public class RequestProcessingService {
         this.players.remove(uuid);
         this.offThreadProcessor.notifyPlayerRemoved(uuid);
         cleanupPlayerServices(uuid);
+        // Resets the v16 want-set + arms the ingress grace. Identity survives (dropped only
+        // by the network DISCONNECT hook), mirroring how capabilities ride the dim-change
+        // remove+register cycle. No-op for v18 players.
+        this.v16Compat.onServiceRemove(uuid);
     }
 
     private void cleanupPlayerServices(UUID uuid) {
@@ -137,12 +146,34 @@ public class RequestProcessingService {
     }
 
     public void handleBatchRequest(ServerPlayer player, BatchChunkRequestC2SPayload payload) {
-        var state = this.players.get(player.getUUID());
-        if (state == null || !state.hasCompletedHandshake()) return;
-
         int playerCx = player.getBlockX() >> 4;
         int playerCz = player.getBlockZ() >> 4;
         int maxDist = LSSServerConfig.CONFIG.lodDistanceChunks + LSSConstants.LOD_DISTANCE_BUFFER;
+
+        // v16 compat branch: legacy drip batches MERGE into the synthetic want-set (the 1 Hz
+        // tick is the sole declarer) instead of replacing the backlog. Placed before the
+        // state guard: merges are session-only and must not depend on registration timing.
+        var v16Merge = this.v16Compat.onClientBatch(player.getUUID(), payload.packedPositions(),
+                payload.clientTimestamps(), payload.count(), playerCx, playerCz, maxDist);
+        if (v16Merge != null) {
+            var state = this.players.get(player.getUUID());
+            if (state != null && v16Merge.rangeFiltered() > 0) {
+                state.recordRangeFiltered(v16Merge.rangeFiltered());
+            }
+            long[] bounced = v16Merge.overflowBounced();
+            if (bounced.length > 0) {
+                // Overflow valve: byte 0 comes back to life for exactly this — the old client
+                // backs off ~1 s and retries. Sent directly (MAIN thread), off the pipeline.
+                var types = new byte[bounced.length];
+                java.util.Arrays.fill(types, LSSConstants.RESPONSE_RATE_LIMITED_V16);
+                ServerPlayNetworking.send(player,
+                        new BatchResponseS2CPayload(types, bounced, bounced.length));
+            }
+            return;
+        }
+
+        var state = this.players.get(player.getUUID());
+        if (state == null || !state.hasCompletedHandshake()) return;
 
         var accepted = new ArrayList<IncomingRequest>(payload.count());
         for (int i = 0; i < payload.count(); i++) {
@@ -171,6 +202,7 @@ public class RequestProcessingService {
             for (UUID uuid : lifecycle.toRemove) this.removePlayer(uuid);
         }
 
+        tickV16Compat(config);
         postSnapshot(lifecycle, generationReady, config);
         this.drainSendActions();
         this.drainGenerationTicketRequests();
@@ -286,6 +318,18 @@ public class RequestProcessingService {
         return new LifecycleResult(buffers, activeCount, toRemove);
     }
 
+    /** The v16 shim's 1 Hz declare pass (MAIN): the SOLE declarer for legacy sessions. A
+     *  server without v16 clients pays one no-op map lookup per player per tick. */
+    private void tickV16Compat(LSSServerConfig config) {
+        int maxDist = config.lodDistanceChunks + LSSConstants.LOD_DISTANCE_BUFFER;
+        for (var state : this.players.values()) {
+            if (!state.hasCompletedHandshake()) continue;
+            var player = state.getPlayer();
+            this.v16Compat.tickPlayer(player.getUUID(), state,
+                    player.chunkPosition().x(), player.chunkPosition().z(), maxDist);
+        }
+    }
+
     private void postSnapshot(LifecycleResult lifecycle,
                                List<TickSnapshot.GenerationReadyData> generationReady,
                                LSSServerConfig config) {
@@ -304,8 +348,25 @@ public class RequestProcessingService {
         long perPlayerAllocation = this.bandwidthLimiter.getPerPlayerAllocation(activeCount);
         long perPlayerCap = Math.min(perPlayerAllocation, config.bytesPerSecondLimitPerPlayer);
         flushSendQueues(this.players.values(), perPlayerCap, this.bandwidthLimiter, this.diag,
-                (state, payload) -> ServerPlayNetworking.send(state.getPlayer(), payload),
-                this.offThreadProcessor);
+                this::sendColumnPayload, this.offThreadProcessor);
+    }
+
+    /** The per-player column egress (MAIN). For a v16 session, converts UNCONDITIONALLY to
+     *  the legacy source-less shape — every producer (probe/disk/generation/ghost-clear)
+     *  funnels through here, so no producer can leak a v18 frame that would hard-kick the
+     *  old client — and prunes the position from the synthetic want-set after the send
+     *  (satisfied-by-data; the prune is load-bearing, see the design §4.4). */
+    private void sendColumnPayload(PlayerRequestState state, CustomPacketPayload payload)
+            throws Exception {
+        var uuid = state.getPlayerUUID();
+        if (this.v16Compat.isV16(uuid)
+                && payload instanceof dev.vox.lss.networking.payloads.VoxelColumnS2CPayload col) {
+            ServerPlayNetworking.send(state.getPlayer(), col.asV16());
+            this.v16Compat.onColumnSent(uuid,
+                    PositionUtil.packPosition(col.chunkX(), col.chunkZ()));
+            return;
+        }
+        ServerPlayNetworking.send(state.getPlayer(), payload);
     }
 
     // Package-private static: ServiceGlueTest drives this glue with hand-rolled states and an
@@ -505,13 +566,21 @@ public class RequestProcessingService {
     }
 
     private void drainSendActions() {
-        this.offThreadProcessor.drainSendActions((state, types, positions, count) ->
-                ServerPlayNetworking.send(state.getPlayer(),
-                        new BatchResponseS2CPayload(types, positions, count)));
+        this.offThreadProcessor.drainSendActions((state, types, positions, count) -> {
+            // v16 observation: UP_TO_DATE / NOT_GENERATED terminally answer their positions —
+            // prune them from the synthetic want-set. The frame itself is wire-identical.
+            this.v16Compat.observeBatchResponse(state.getPlayerUUID(), types, positions, count);
+            ServerPlayNetworking.send(state.getPlayer(),
+                    new BatchResponseS2CPayload(types, positions, count));
+        });
     }
 
     public Map<UUID, PlayerRequestState> getPlayers() {
         return Collections.unmodifiableMap(this.players);
+    }
+
+    public V16CompatManager getV16CompatManager() {
+        return this.v16Compat;
     }
 
     public ChunkDiskReader getDiskReader() {

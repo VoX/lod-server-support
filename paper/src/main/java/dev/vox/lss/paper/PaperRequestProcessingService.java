@@ -5,6 +5,7 @@ import dev.vox.lss.common.LSSConstants;
 import dev.vox.lss.common.LSSLogger;
 import dev.vox.lss.common.PositionUtil;
 import dev.vox.lss.common.SharedBandwidthLimiter;
+import dev.vox.lss.common.compat.V16CompatManager;
 import dev.vox.lss.common.processing.IncomingBatch;
 import dev.vox.lss.common.processing.IncomingRequest;
 import dev.vox.lss.common.processing.LoadedColumnData;
@@ -49,6 +50,10 @@ public class PaperRequestProcessingService {
     private final PaperOffThreadProcessor offThreadProcessor;
     private final DirtyColumnTracker dirtyTracker;
     private final PaperDirtyColumnBroadcaster dirtyBroadcaster;
+    // The v16 compat shim's per-player sessions (legacy protocol-16 clients). The pipeline
+    // never consults it: a v16 player is an ordinary registered player whose want-set is
+    // declared by the shim at 1 Hz. See docs/planning/v16-compat-design.md.
+    private final V16CompatManager v16Compat = new V16CompatManager();
 
     private final long startTimeNanos = System.nanoTime();
     // Keyed by the lightweight ResourceKey (not ServerLevel): a ServerLevel key strongly
@@ -100,9 +105,23 @@ public class PaperRequestProcessingService {
         LoadedColumnData probe(ServerLevel level, int cx, int cz);
     }
 
-    private ColumnPayloadSender columnPayloadSender = (state, data) ->
+    /** The per-player column egress (PUMP). For a v16 session, splices the frame
+     *  UNCONDITIONALLY into the legacy source-less shape — every producer
+     *  (probe/disk/generation/ghost-clear) funnels through here, so no producer can leak a
+     *  v18 frame that would hard-kick the old client — and prunes the position from the
+     *  synthetic want-set after the send (satisfied-by-data; load-bearing, design §4.4). */
+    private ColumnPayloadSender columnPayloadSender = (state, data) -> {
+        var uuid = state.getPlayerUUID();
+        if (this.v16Compat.isV16(uuid)) {
             PaperPayloadHandler.sendRawNmsPayload(state.getPlayer().getBukkitEntity(),
-                    PaperPayloadHandler.ID_VOXEL_COLUMN, data);
+                    PaperPayloadHandler.ID_VOXEL_COLUMN,
+                    PaperPayloadHandler.rewriteColumnToV16(data));
+            this.v16Compat.onColumnSent(uuid, PaperPayloadHandler.readColumnPackedPos(data));
+            return;
+        }
+        PaperPayloadHandler.sendRawNmsPayload(state.getPlayer().getBukkitEntity(),
+                PaperPayloadHandler.ID_VOXEL_COLUMN, data);
+    };
 
     private LoadedColumnProbe loadedColumnProbe = (level, cx, cz) -> {
         LevelChunk chunk = level.getChunkSource().getChunkNow(cx, cz);
@@ -297,6 +316,10 @@ public class PaperRequestProcessingService {
         this.heldForProbe.remove(uuid);
         this.offThreadProcessor.notifyPlayerRemoved(uuid);
         cleanupPlayerServices(uuid);
+        // Resets the v16 want-set + arms the ingress grace. Identity survives (dropped only
+        // by the PlayerQuit hook), mirroring how capabilities ride the dim-change
+        // remove+register cycle. No-op for v18 players.
+        this.v16Compat.onServiceRemove(uuid);
     }
 
     private void cleanupPlayerServices(UUID uuid) {
@@ -306,12 +329,36 @@ public class PaperRequestProcessingService {
     }
 
     public void handleBatchRequest(ServerPlayer player, PaperPayloadHandler.DecodedBatchChunkRequest batch) {
-        var state = this.players.get(player.getUUID());
-        if (state == null || !state.hasCompletedHandshake()) return;
-
         int playerCx = player.getBlockX() >> 4;
         int playerCz = player.getBlockZ() >> 4;
         int maxDist = this.config.lodDistanceChunks + LSSConstants.LOD_DISTANCE_BUFFER;
+
+        // v16 compat branch: legacy drip batches MERGE into the synthetic want-set (the 1 Hz
+        // pump tick is the sole declarer) instead of replacing the backlog. Placed before the
+        // state guard: merges are session-only and must not depend on registration timing —
+        // on Paper the handshake reply outruns the mailboxed registration by up to a tick.
+        var v16Merge = this.v16Compat.onClientBatch(player.getUUID(), batch.packedPositions(),
+                batch.clientTimestamps(), batch.count(), playerCx, playerCz, maxDist);
+        if (v16Merge != null) {
+            var v16State = this.players.get(player.getUUID());
+            if (v16State != null && v16Merge.rangeFiltered() > 0) {
+                v16State.recordRangeFiltered(v16Merge.rangeFiltered());
+            }
+            long[] bounced = v16Merge.overflowBounced();
+            if (bounced.length > 0) {
+                // Overflow valve: byte 0 comes back to life for exactly this — the old client
+                // backs off ~1 s and retries. Sent directly (netty is any-thread safe), off
+                // the pipeline's SendActionBatcher.
+                var types = new byte[bounced.length];
+                java.util.Arrays.fill(types, LSSConstants.RESPONSE_RATE_LIMITED_V16);
+                PaperPayloadHandler.sendBatchResponse(player.getBukkitEntity(),
+                        types, bounced, bounced.length);
+            }
+            return;
+        }
+
+        var state = this.players.get(player.getUUID());
+        if (state == null || !state.hasCompletedHandshake()) return;
 
         var accepted = new ArrayList<IncomingRequest>(batch.count());
         for (int i = 0; i < batch.count(); i++) {
@@ -358,12 +405,27 @@ public class PaperRequestProcessingService {
             this.regionProbeResults.keySet().removeIf(uuid -> !this.players.containsKey(uuid));
         }
 
+        tickV16Compat();
         postSnapshot(lifecycle, generationReady);
         this.drainSendActions();
         this.drainGenerationTicketRequests();
         flushSendQueues(lifecycle.activeCount);
         this.dirtyBroadcaster.tick(this.config);
         tickDiagnosticsLog();
+    }
+
+    /** The v16 shim's 1 Hz declare pass (PUMP): the SOLE declarer for legacy sessions. A
+     *  server without v16 clients pays one no-op map lookup per player per tick. The offer
+     *  lands in the mailbox after this tick's hold-release ran, so on Folia it is taken —
+     *  and probed — on the next pump tick, exactly like a real 1 Hz client declaration. */
+    private void tickV16Compat() {
+        int maxDist = this.config.lodDistanceChunks + LSSConstants.LOD_DISTANCE_BUFFER;
+        for (var state : this.players.values()) {
+            if (!state.hasCompletedHandshake()) continue;
+            var player = state.getPlayer();
+            this.v16Compat.tickPlayer(player.getUUID(), state,
+                    player.chunkPosition().x(), player.chunkPosition().z(), maxDist);
+        }
     }
 
     private List<TickSnapshot.GenerationReadyData> tickGenerationService() {
@@ -663,9 +725,13 @@ public class PaperRequestProcessingService {
     }
 
     private void drainSendActions() {
-        this.offThreadProcessor.drainSendActions((state, types, positions, count) ->
-                PaperPayloadHandler.sendBatchResponse(state.getPlayer().getBukkitEntity(),
-                        types, positions, count));
+        this.offThreadProcessor.drainSendActions((state, types, positions, count) -> {
+            // v16 observation: UP_TO_DATE / NOT_GENERATED terminally answer their positions —
+            // prune them from the synthetic want-set. The frame itself is wire-identical.
+            this.v16Compat.observeBatchResponse(state.getPlayerUUID(), types, positions, count);
+            PaperPayloadHandler.sendBatchResponse(state.getPlayer().getBukkitEntity(),
+                    types, positions, count);
+        });
     }
 
     private void drainGenerationTicketRequests() {
@@ -704,6 +770,10 @@ public class PaperRequestProcessingService {
 
     public Map<UUID, PaperPlayerRequestState> getPlayers() {
         return Collections.unmodifiableMap(this.players);
+    }
+
+    public V16CompatManager getV16CompatManager() {
+        return this.v16Compat;
     }
 
     public PaperChunkDiskReader getDiskReader() {

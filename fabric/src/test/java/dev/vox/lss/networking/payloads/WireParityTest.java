@@ -289,6 +289,84 @@ class WireParityTest {
         assertEquals(0, d.decompressedSections().length);
     }
 
+    // ---- v16 compat legacy shapes (docs/planning/v16-compat-design.md §2) ----
+    // Reference ops mirror the v0.6.2 encoders VERBATIM (verified against the tag): the
+    // 6-field SessionConfig layout and the source-less VoxelColumn frame — the golden
+    // contract a legacy protocol-16 client decodes. The Paper twin asserts its encoders
+    // against these IDENTICAL ops.
+
+    @Test
+    void sessionConfigV16LegacyEncodesTheSixFieldLayoutEchoingVersion16() {
+        byte[] expected = ref(b -> {
+            b.writeVarInt(16);     // MUST echo 16 — the v0.6.2 codec hard-gates on this VarInt
+            b.writeBoolean(true);  // enabled
+            b.writeVarInt(101);    // lodDistanceChunks
+            b.writeVarInt(200);    // syncOnLoadConcurrencyLimitPerPlayer (the client's pacing)
+            b.writeVarInt(7);      // generationConcurrencyLimitPerPlayer
+            b.writeBoolean(false); // generationEnabled
+        });
+        assertArrayEquals(expected, encode(SessionConfigS2CPayload.CODEC,
+                SessionConfigS2CPayload.v16Legacy(true, 101, 200, 7, false)));
+    }
+
+    @Test
+    void v18SessionConfigEncodeIsByteIdenticalWithTheLegacyFieldsDormant() {
+        // Regression pin: the compat fields must not perturb the current 4-field frame.
+        byte[] expected = ref(b -> {
+            b.writeVarInt(LSSConstants.PROTOCOL_VERSION);
+            b.writeBoolean(true);
+            b.writeVarInt(256);
+            b.writeBoolean(true);
+        });
+        assertArrayEquals(expected, encode(SessionConfigS2CPayload.CODEC,
+                new SessionConfigS2CPayload(LSSConstants.PROTOCOL_VERSION, true, 256, true)));
+    }
+
+    @Test
+    void voxelColumnAsV16DropsExactlyTheSourceByteForEveryProducerTag() {
+        // Dialect totality at the wire: whichever producer served the column (probe, disk,
+        // generation, or the source-less rig path), asV16() must yield the IDENTICAL legacy
+        // frame — a leaked source byte is parsed by the old client as the section-array
+        // length VarInt and hard-kicks it.
+        byte[] sections = {9, 8, 7};
+        byte[] expectedLegacy = ref(b -> {
+            b.writeInt(3);
+            b.writeInt(-4);
+            b.writeUtf("minecraft:overworld");
+            b.writeLong(1234L);
+            b.writeByteArray(sections);
+        });
+        var dim = ResourceKey.create(Registries.DIMENSION, Identifier.parse("minecraft:overworld"));
+        byte[] sources = {LSSConstants.COLUMN_SOURCE_IN_MEMORY, LSSConstants.COLUMN_SOURCE_DISK,
+                LSSConstants.COLUMN_SOURCE_GENERATION, (byte) -1};
+        for (byte source : sources) {
+            var p = new VoxelColumnS2CPayload(3, -4, dim, 1234L, source, sections);
+            assertArrayEquals(expectedLegacy, encode(VoxelColumnS2CPayload.CODEC, p.asV16()),
+                    "source tag " + source + " must vanish identically");
+            assertArrayEquals(sections, p.asV16().decompressedSections(),
+                    "asV16 must not copy or alter the section bytes");
+        }
+    }
+
+    @Test
+    void voxelColumnAsV16KeepsTheGhostClearAndLongDimensions() {
+        // The 0-section authoritative clear must survive the legacy rewrite (the v0.6.2
+        // client handles it: isClearColumn + air-fill), and a >127-char dimension string
+        // (2-byte VarInt UTF prefix) must not shift the layout.
+        String longDim = "lsstest:" + "d".repeat(120);
+        byte[] expected = ref(b -> {
+            b.writeInt(0);
+            b.writeInt(0);
+            b.writeUtf(longDim);
+            b.writeLong(42L);
+            b.writeByteArray(new byte[0]);
+        });
+        var dim = ResourceKey.create(Registries.DIMENSION, Identifier.parse(longDim));
+        var p = new VoxelColumnS2CPayload(0, 0, dim, 42L,
+                LSSConstants.COLUMN_SOURCE_IN_MEMORY, new byte[0]);
+        assertArrayEquals(expected, encode(VoxelColumnS2CPayload.CODEC, p.asV16()));
+    }
+
     // ---- Meta: the parity corpus must cover the whole v17 payload surface ----
 
     @Test

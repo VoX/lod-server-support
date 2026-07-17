@@ -29,8 +29,33 @@ public final class DiagnosticsFormatter {
             long genOrderGated, long genInversions,
             long bwTotal,
             long bwWindowRate,
-            List<PlayerDiag> players
-    ) {}
+            List<PlayerDiag> players,
+            String v16Line
+    ) {
+        /** Pre-v16-compat shape (no shim line) — keeps existing constructions/tests intact. */
+        public DiagData(boolean enabled, int lodDist, long bwPerPlayer, long bwGlobal,
+                        long uptimeSec, long totalSent, long totalBytes,
+                        long cumInMem, long cumUtd, long cumGen, long cumReResolved,
+                        long diskCompleted, String tickDiagnostics, String diskReaderDiagnostics,
+                        String generationDiagnostics, boolean generationEnabled,
+                        long genOrderGated, long genInversions,
+                        long bwTotal, long bwWindowRate, List<PlayerDiag> players) {
+            this(enabled, lodDist, bwPerPlayer, bwGlobal, uptimeSec, totalSent, totalBytes,
+                    cumInMem, cumUtd, cumGen, cumReResolved, diskCompleted, tickDiagnostics,
+                    diskReaderDiagnostics, generationDiagnostics, generationEnabled,
+                    genOrderGated, genInversions, bwTotal, bwWindowRate, players, null);
+        }
+
+        /** Attach the v16 compat shim's one-line summary (null when the shim is untouched —
+         *  the line is omitted from the rendered diagnostics). */
+        public DiagData withV16Line(String line) {
+            return new DiagData(enabled, lodDist, bwPerPlayer, bwGlobal, uptimeSec, totalSent,
+                    totalBytes, cumInMem, cumUtd, cumGen, cumReResolved, diskCompleted,
+                    tickDiagnostics, diskReaderDiagnostics, generationDiagnostics,
+                    generationEnabled, genOrderGated, genInversions, bwTotal, bwWindowRate,
+                    players, line);
+        }
+    }
 
     private DiagnosticsFormatter() {}
 
@@ -77,6 +102,11 @@ public final class DiagnosticsFormatter {
                             d.genOrderGated, d.genInversions));
         } else {
             lines.add("Generation: disabled");
+        }
+
+        // v16 compat shim (omitted while untouched — most servers never see a legacy client)
+        if (d.v16Line != null) {
+            lines.add(d.v16Line);
         }
 
         // Bandwidth

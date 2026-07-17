@@ -64,7 +64,7 @@ class LSSServerCommands {
                 service.getBandwidthLimiter(),
                 genService != null ? genService.getDiagnostics() : null,
                 service.getPlayers().values()
-        );
+        ).withV16Line(service.getV16CompatManager().diagLineOrNull());
 
         for (var line : DiagnosticsFormatter.formatDiagnostics(data)) {
             source.sendSuccess(() -> Component.literal(line), false);
