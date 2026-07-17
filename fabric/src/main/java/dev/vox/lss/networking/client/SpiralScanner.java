@@ -204,8 +204,8 @@ class SpiralScanner {
      *  sustained creative flight stopped LOD generation entirely. Under latest-wins
      *  replace semantics a moving client declaring on schedule is the DESIGNED behavior
      *  (stale asks are superseded and re-declared); yielding to vanilla's own chunk
-     *  loading during fast travel is the vanilla-load budget scale's job, not the
-     *  cadence's. The confirmed-ring reset stays: the confirmed prefix was computed for
+     *  loading during fast travel is SERVER-SIDE read/generation priority's job (the
+     *  client-side vanilla-load budget scale is retired), not the cadence's. The confirmed-ring reset stays: the confirmed prefix was computed for
      *  the OLD center, and keeping it would skip never-scanned rings at the new one. */
     void recenter() {
         this.confirmedRing = 0;

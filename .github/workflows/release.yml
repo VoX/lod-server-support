@@ -116,7 +116,7 @@ jobs:
           version: ${{ github.ref_name }}+paper+mc26.2
           version-type: release
           # The jar still declares folia-supported: true, but Folia has not published a 26.2
-          # build yet, so v0.6.0 advertises only paper + purpur on Modrinth. Re-add `folia` here
+          # build yet, so releases advertise only paper + purpur on Modrinth. Re-add `folia` here
           # once Folia ships 26.2 and the soak passes (Folia support is experimental —
           # CLAUDE.md, Release Notes Format rules).
           loaders: |

@@ -38,7 +38,7 @@ Each Minecraft version has its own build; only the latest is listed. Older-MC bu
 
 | Minecraft | LSS Version | Fabric | Paper | Folia | Voxy | Java |
 |---|---|---|---|---|---|---|
-| **26.2** | v0.6.1 | ✅ | ✅ | — | 0.2.16-beta+ | 25+ |
+| **26.2** | v0.7.0 | ✅ | ✅ | — | 0.2.16-beta+ | 25+ |
 | **26.1.x** | v0.5.1 | ✅ | ✅ | ✅ | 0.2.16-beta+ | 25+ |
 | **1.21.11** | v0.5.0+mc1.21.11 | ✅ | ✅ | ✅ | 0.2.15-beta+ | 21+ |
 | **1.21.8** | v0.6.1+mc1.21.8 | ✅ | ✅ | ✅ | 0.2.5-alpha+ | 21+ |
@@ -46,7 +46,7 @@ Each Minecraft version has its own build; only the latest is listed. Older-MC bu
 Fabric builds are client + server; the Paper plugin is server-only and also runs on Purpur. Folia uses the same plugin JAR. 26.2 has no Folia build yet upstream.
 
 > [!IMPORTANT]
-> **Update the server and clients together.** LSS versions a networking protocol, and a client and server on different protocol versions simply establish no LOD session — you see vanilla render distance and no error. Release notes call out which updates carry a protocol bump.
+> **Update the server first.** LSS versions a networking protocol. A newer client on an older server establishes no LOD session — you see vanilla render distance and no error. A v0.7.0+ server keeps serving v0.6.x clients through a built-in compatibility layer (`enableV16Compat`, default on), so servers can update ahead of their players. Release notes call out which updates carry a protocol bump.
 
 On 1.21.8 the in-game config screen is unavailable (it requires Sodium 0.8+, and 1.21.8's newest Sodium is 0.7.3); the JSON config files still work as normal.
 

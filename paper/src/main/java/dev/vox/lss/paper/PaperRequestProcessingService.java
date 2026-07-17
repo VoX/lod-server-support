@@ -411,6 +411,11 @@ public class PaperRequestProcessingService {
         this.diag.reset(this.offThreadProcessor.getDiagnostics());
 
         var generationReady = tickGenerationService();
+        // v16 declares BEFORE the lifecycle pass: the sync probe reads the mailbox during
+        // processPlayerLifecycle, and on Folia holdAndScheduleRegionProbe reads ONLY the
+        // mailbox — a declare offered after that pass would lose the race to the processing
+        // thread's take and route with zero probe coverage (release-review finding 1).
+        tickV16Compat();
         var lifecycle = processPlayerLifecycle(generationReady);
 
         if (lifecycle.toRemove != null) {
@@ -424,7 +429,6 @@ public class PaperRequestProcessingService {
             this.regionProbeResults.keySet().removeIf(uuid -> !this.players.containsKey(uuid));
         }
 
-        tickV16Compat();
         postSnapshot(lifecycle, generationReady);
         this.drainSendActions();
         this.drainGenerationTicketRequests();
@@ -434,9 +438,10 @@ public class PaperRequestProcessingService {
     }
 
     /** The v16 shim's 1 Hz declare pass (PUMP): the SOLE declarer for legacy sessions. A
-     *  server without v16 clients pays one no-op map lookup per player per tick. The offer
-     *  lands in the mailbox after this tick's hold-release ran, so on Folia it is taken —
-     *  and probed — on the next pump tick, exactly like a real 1 Hz client declaration. */
+     *  server without v16 clients pays one no-op map lookup per player per tick. MUST run
+     *  before processPlayerLifecycle: the declare then sits in the mailbox when the sync
+     *  probe (or, on Folia, the hold-release take) reads it, giving shim batches the same
+     *  arrival-tick probe alignment a network-received client batch gets. */
     private void tickV16Compat() {
         int maxDist = this.config.lodDistanceChunks + LSSConstants.LOD_DISTANCE_BUFFER;
         for (var state : this.players.values()) {
@@ -697,7 +702,7 @@ public class PaperRequestProcessingService {
         if (fresh == null) return;
         this.heldForProbe.put(player.getUUID(), fresh);
 
-        long[] positions = snapshotProbePositions(fresh, skipPositions);
+        long[] positions = snapshotProbePositions(state, fresh, skipPositions);
         if (positions.length == 0) return;
         UUID uuid = player.getUUID();
         this.regionTaskScheduler.schedule(player, () -> runRegionProbe(uuid, level, positions));
@@ -705,13 +710,17 @@ public class PaperRequestProcessingService {
 
     private static final long[] NO_POSITIONS = new long[0];
 
-    /** Up to {@link #MAX_PROBES_PER_TICK_PER_PLAYER} distinct positions from the held batch. */
-    private long[] snapshotProbePositions(IncomingBatch held,
+    /** Up to {@link #MAX_PROBES_PER_TICK_PER_PLAYER} distinct positions from the held batch.
+     *  Served-head filter mirrors the sync probes: a payload already in the send pipeline
+     *  resolves as a duplicate, so probing it wastes a region-thread serialization
+     *  (enqueuedColumns is the one served-set structure safe off the processing thread). */
+    private long[] snapshotProbePositions(PaperPlayerRequestState state, IncomingBatch held,
                                           LongOpenHashSet skipPositions) {
         LongOpenHashSet positions = null;
         for (var req : held.requests()) {
             long packed = PositionUtil.packPosition(req.cx(), req.cz());
             if (skipPositions != null && skipPositions.contains(packed)) continue;
+            if (state.hasEnqueuedColumn(packed)) continue;
             if (positions == null) positions = new LongOpenHashSet();
             if (!positions.add(packed)) continue;
             if (positions.size() >= MAX_PROBES_PER_TICK_PER_PLAYER) break;

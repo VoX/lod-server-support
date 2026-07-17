@@ -196,13 +196,17 @@ public class RequestProcessingService {
 
         var config = LSSServerConfig.CONFIG;
         var generationReady = tickGenerationService();
+        // v16 declares BEFORE the lifecycle pass: the probe reads the mailbox during
+        // processPlayerLifecycle, and postSnapshot wakes the processing thread which takes
+        // the mailbox within milliseconds — a declare offered after the probe pass would
+        // route its first cycle with zero probe coverage (release-review finding 1).
+        tickV16Compat(config);
         var lifecycle = processPlayerLifecycle(config, generationReady);
 
         if (lifecycle.toRemove != null) {
             for (UUID uuid : lifecycle.toRemove) this.removePlayer(uuid);
         }
 
-        tickV16Compat(config);
         postSnapshot(lifecycle, generationReady, config);
         this.drainSendActions();
         this.drainGenerationTicketRequests();
@@ -319,7 +323,9 @@ public class RequestProcessingService {
     }
 
     /** The v16 shim's 1 Hz declare pass (MAIN): the SOLE declarer for legacy sessions. A
-     *  server without v16 clients pays one no-op map lookup per player per tick. */
+     *  server without v16 clients pays one no-op map lookup per player per tick. MUST run
+     *  before processPlayerLifecycle so the declare sits in the mailbox when the probe
+     *  pass reads it — the same arrival-tick alignment a network-received batch gets. */
     private void tickV16Compat(LSSServerConfig config) {
         int maxDist = config.lodDistanceChunks + LSSConstants.LOD_DISTANCE_BUFFER;
         for (var state : this.players.values()) {

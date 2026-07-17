@@ -1,7 +1,10 @@
 # v16 Legacy Client Compatibility Layer — Design
 
-**Status:** DESIGN ONLY — not implemented. Written 2026-07-17 against `feat/want-set-requests`
-(protocol 18) using a full study of the last v16 release (`v0.6.2`, MC 26.2).
+**Status:** IMPLEMENTED — commits `a5a3a29` (shim) + `96acb07` (implementation-review
+fixes) on `feat/want-set-requests`, shipping in v0.7.0. Live-validated by the user with a
+real v0.6.2 client against Fabric and Paper servers (cold-gen backfill, disk backfill,
+warm-cache resync). Written 2026-07-17 against protocol 18 using a full study of the last
+v16 release (`v0.6.2`, MC 26.2).
 Adversarially reviewed the same day (one reviewer vs the v0.6.2 client code, one vs the
 current server internals); all confirmed findings are folded in below — §11 maps each
 finding to its amendment so none get silently lost in a rewrite.

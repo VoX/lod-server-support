@@ -154,8 +154,9 @@ public class LodRequestManager {
      * with it re-declaration, the want-set's only self-heal — whenever crossings outpaced
      * the 20-tick window (sustained creative flight stopped LOD generation entirely). A
      * scan from a moving center is exactly what replace semantics absorb (superseded +
-     * re-declared), and yielding to vanilla's own chunk loading during fast travel is the
-     * scanner's vanilla-load budget scale's job, not the cadence's. Side benefit: the
+     * re-declared), and yielding to vanilla's own chunk loading during fast travel is
+     * server-side read/generation priority's job (the client-side vanilla-load budget
+     * scale is retired), not the cadence's. Side benefit: the
      * (0,0) lastChunk init no longer costs a player joining outside chunk (0,0) their
      * primed immediate first scan. Both pinned in LodRequestManagerTickTest.
      */

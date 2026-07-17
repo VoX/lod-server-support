@@ -91,6 +91,11 @@ public class PaperChunkGenerationService {
     private volatile long totalCompleted = 0;
     private volatile long totalTimeouts = 0;
     private volatile long totalRemovedInFlight = 0;
+    // Null-chunk completions (Moonrise's permanent-failure outcome). Warn-once + counted:
+    // completion runs on region threads on Folia, volatile increments suffice for a
+    // diagnostics-only counter (single writer per completion, monotonic-ish under race).
+    private volatile boolean nullChunkWarned = false;
+    private volatile long nullChunkFailures = 0;
 
     public PaperChunkGenerationService(PaperConfig config, Plugin plugin) {
         this.maxConcurrent = config.generationConcurrencyLimitGlobal;
@@ -166,8 +171,15 @@ public class PaperChunkGenerationService {
     void completeAsyncLoad(PendingGenerationKey key, ServerLevel level, ChunkAccess chunk,
                            int cx, int cz, long token) {
         if (chunk == null) {
-            // Moonrise's failure outcome — no throwable channel exists.
-            LSSLogger.warn("Async chunk load failed (null chunk) at " + cx + "," + cz);
+            // Moonrise's failure outcome — no throwable channel exists. Warn-once: each
+            // null is a per-column permanent failure, and a regression that reintroduces
+            // them at scale (the 6.9k-in-one-soak history) must not also be a WARN storm.
+            if (!this.nullChunkWarned) {
+                this.nullChunkWarned = true;
+                LSSLogger.warn("Async chunk load failed (null chunk) at " + cx + "," + cz
+                        + " — further null-chunk failures are logged silently (counted)");
+            }
+            this.nullChunkFailures++;
         }
         LoadedColumnData extracted = null;
         Error rethrow = null;
@@ -337,6 +349,9 @@ public class PaperChunkGenerationService {
     }
 
     public long getTotalSubmitted() { return this.totalSubmitted; }
+
+    /** Null-chunk (permanent-failure) completions — warn-once logged, counted here. */
+    public long getNullChunkFailures() { return this.nullChunkFailures; }
 
     public long getTotalCompleted() { return this.totalCompleted; }
 
