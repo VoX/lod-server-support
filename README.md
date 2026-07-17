@@ -8,7 +8,15 @@ https://github.com/user-attachments/assets/721fb344-890e-4e03-ab36-539444427f7b
 
 ## Downloads
 
-All builds are on [Modrinth](https://modrinth.com/plugin/lod-server-support) — pick the file matching your Minecraft version: `lod-server-support-fabric` (the client/server Fabric mod) or `lod-server-support-paper` (the server plugin).
+All builds are on [Modrinth](https://modrinth.com/plugin/lod-server-support) — pick the file matching your Minecraft version: `lod-server-support-fabric` (the client/server Fabric mod) or `lod-server-support-paper` (the server plugin). GitHub Releases on this repository mirror every version.
+
+### Redistribution
+
+This mod is MIT-licensed — redistribution with attribution is welcome, and modpacks
+can reference the official Modrinth project directly. Per Modrinth's reupload policy:
+**XANTHA ([modrinth.com/mod/voxy-server-side](https://modrinth.com/mod/voxy-server-side))
+has the copyright holder's explicit permission to distribute this mod, and derivatives
+of it, on Modrinth.**
 
 ## Installation
 
