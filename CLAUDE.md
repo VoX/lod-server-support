@@ -118,6 +118,38 @@ Requests are keyed by packed chunk position end-to-end (no request ids): every r
 
 Flow: client handshakes with capabilities bitmask (CAPABILITY_VOXEL_COLUMNS set if LSSApi has consumers) → server sends the 4-field session config → client scans in an expanding spiral every second (20 ticks) and ships its whole want-set with clientTimestamps (<=0 for "I have nothing", >0 for resync) → the batch lands in the player's latest-wins mailbox and, on the processing cycle, **replaces** the backlog (superseded entries counted, out-of-range ones range-filtered) → the router drains the backlog in declaration order (proximity-ordered by the client): up-to-date checks, loaded-chunk probe, then for a cold column `tryAdmitAndSubmit` — every entry takes a SYNC slot and reads disk; if the slot cap is full the entry is **retained and the drain continues**, and if the disk pool has no headroom it is retained and the pass **stops** → a disk miss escalates server-side (`handleDiskNotFound`): gen enabled + a GENERATION slot free swaps the entry into a generation ticket; gen slot full drops silently (`superseded` + `miss_dropped`, re-declared next scan); gen disabled answers `NOT_GENERATED` (session-permanent) → server batches lightweight responses (up-to-date, not-generated) per tick; column data payloads are sent individually. After the initial scan, the server periodically pushes `DirtyColumnsS2CPayload` listing changed columns; a dirty position re-enters the client's want-set on the next scan — for a `NOT_GENERATED`-parked position this is the ONE revival path (on Fabric a first-time vanilla chunk save fires it; on Paper walk-in generation does NOT mark dirty by default — `ChunkPopulateEvent` is an opt-in `updateEvents` entry — so a parked position there heals on reconnect). One accepted corner rides this: with generation disabled, a LOADED but never-saved chunk whose probe was deferred by the global probe cap disk-reads as not-found and parks `NOT_GENERATED` despite being live in memory — healed by its first save's dirty broadcast or reconnect (see the `MAX_PROBES_PER_TICK_GLOBAL` comments in both services).
 
+### Backfill visual ordering — settled model, do NOT re-investigate (2026-07-16/17)
+
+"LOD chunks load far-before-near / parts of rings missing" was root-caused across a full day of
+live traces (`/lss trace`, source-tagged columns) and is CLOSED. The observable is the sum of
+three layers — two irreducible, one platform-owned. Re-deriving this costs a day; read this first:
+
+1. **Arc-fill geometry (irreducible, all platforms, scales with confirmed ring).** Ring r has 8r
+   positions but only `generationConcurrencyLimitPerPlayer` tickets fly at once, so rings beyond
+   ~cap/8 fill as sequential arcs; missing-arc time ≈ ring_size/gen_rate. Platform completion
+   scramble (C2ME ≈ 8% stationary, measured via the `inversions` counter; Moonrise mild; vanilla
+   ≈ FIFO) makes the arcs non-contiguous. Bounded by the order-spread gate to ~2 rings.
+2. **Trailing view-edge crescents (irreducible, movement only).** Chunks inside the vanilla view
+   circle are LOD-excluded; the circle moves with the player, so positions exiting it become
+   LOD-needing for the first time and pop in NEAR (ring ≈ view distance, `src:0` probe serves)
+   while the eye watches the far frontier — reads as inversion, is correct first-time service.
+3. **The platform generating ahead of LSS (C2ME; the only tunable layer).** On a fresh world
+   ~10% of the C2ME stream arrives `src:1` (disk) — terrain C2ME completed and saved BEYOND
+   LSS's tickets (dependency pyramid / batch completion, notickvd where enabled), landing a
+   median 5 (max ~18) rings ahead of the frontier. LSS finds it on the next 1 Hz re-declaration
+   and serves it immediately — CORRECT (refusing to serve wanted, existing terrain is strictly
+   worse). The lever is C2ME's config, not LSS code.
+
+What WAS LSS's fault is already fixed and pinned — do not un-fix under performance pressure:
+the movement cadence debounce (starved all declarations during flight), the spread-gate anchor
+ladder (batch[0]-origin wedge → min-outstanding straggler leak → the shipped router-stamped
+LIVE frontier), the disconnect bulk ticket release (60 s C2ME distance-graph freeze; staggered
+via `DeferredTicketReleases`), and the vanilla-load scan budget scale (retired — server-side
+priority owns that protection). Diagnosis instruments if something NEW appears: `/lss trace`
+(client JSONL; `col` events carry `src` 0=probe/1=disk/2=generation) and `/lsslod diag`'s
+`order_gated`/`inversions`. A far `src:2` beyond frontier+2 on a fresh world is an LSS gate bug;
+far `src:1`/`src:0` is the platform — go tune C2ME, not the router.
+
 Chunk coordinates are packed as `((long)chunkX << 32) | (chunkZ & 0xFFFFFFFFL)`.
 
 ### Common Module (`common/`)
