@@ -14,7 +14,7 @@ All builds are on [Modrinth](https://modrinth.com/plugin/lod-server-support) —
 
 This mod is MIT-licensed — redistribution with attribution is welcome, and modpacks
 can reference the official Modrinth project directly. Per Modrinth's reupload policy:
-**XANTHA ([modrinth.com/mod/voxy-server-side](https://modrinth.com/mod/voxy-server-side))
+**[XANTHA](https://modrinth.com/user/XANTHA) on [Voxy Server Side](https://modrinth.com/plugin/voxy-server-side)
 has the copyright holder's explicit permission to distribute this mod, and derivatives
 of it, on Modrinth.**
 
