@@ -96,13 +96,17 @@ class IncomingRequestRouter<PS extends AbstractPlayerRequestState<?>> {
         boolean frontierStamped = false;
         while (!stopPass && (req = state.pollBacklog()) != null) {
             long packed = PositionUtil.packPosition(req.cx(), req.cz());
-            if (resolvedAsDuplicate(state, playerUuid, req, packed)) {
-                // In-flight (pending read/generation or enqueued payload) = UNSATISFIED:
-                // the first such entry pins the live frontier so the generation band can
-                // never walk away from a starving head. Satisfied resolutions (timestamp
-                // ladder, probe) deliberately do not stamp — the frontier advances through
-                // them at drain speed (20 Hz), not at the 1 Hz declaration cadence.
-                if (!frontierStamped) {
+            var duplicate = resolvedAsDuplicate(state, playerUuid, req, packed);
+            if (duplicate != Duplicate.NO) {
+                // In-flight duplicates (pending read/generation, enqueued payload) are
+                // UNSATISFIED: the first such entry pins the live frontier so the
+                // generation band can never walk away from a starving head. SATISFIED
+                // resolutions (the done-bit up_to_date answer here, and the timestamp/
+                // probe ladder below) deliberately do not stamp — the frontier advances
+                // through them at drain speed (20 Hz), and stamping a satisfied ring
+                // would over-gate the true frontier and tick gen_order_gated on
+                // FIFO-clean servers, diluting that counter's runaway meaning.
+                if (duplicate == Duplicate.IN_FLIGHT && !frontierStamped) {
                     state.stampLiveFrontier(req.cx(), req.cz());
                     frontierStamped = true;
                 }
@@ -110,6 +114,15 @@ class IncomingRequestRouter<PS extends AbstractPlayerRequestState<?>> {
                 continue;
             }
             if (sendQueueFull(state, snapshot)) {
+                // Stamp the retained head: it passed the duplicate ladder, so it is the
+                // nearest possibly-unsatisfied entry this pass. It has NOT passed the
+                // timestamp ladder yet, so this can under-estimate the frontier — the
+                // safe direction (transient over-gating while the send queue is already
+                // saturating delivery), unlike leaving a stale higher stamp in place.
+                if (!frontierStamped) {
+                    state.stampLiveFrontier(req.cx(), req.cz());
+                    frontierStamped = true;
+                }
                 // Retain (no disposition): the entry stays queued for the next cycle or is
                 // superseded by the next replace. queue_full stays a pure event counter,
                 // no longer a law A1 term. Stopping the pass keeps order: this entry is
@@ -177,11 +190,15 @@ class IncomingRequestRouter<PS extends AbstractPlayerRequestState<?>> {
      * decremented between the client's send and this check) re-resolves once redundantly —
      * one extra serve per crossed re-ask, after which the client holds ts&gt;0 and converges.
      */
-    private boolean resolvedAsDuplicate(PS state, UUID playerUuid, IncomingRequest req, long packed) {
+    /** Duplicate-resolution flavor: SATISFIED answered terminally (must not pin the live
+     *  frontier), IN_FLIGHT has work outstanding (pins it — the anti-starvation stamp). */
+    enum Duplicate { NO, SATISFIED, IN_FLIGHT }
+
+    private Duplicate resolvedAsDuplicate(PS state, UUID playerUuid, IncomingRequest req, long packed) {
         if (state.hasDiskReadDone(req.cx(), req.cz())) {
             if (req.clientTimestamp() > 0) {
                 this.ctx.sendActions().add(new SendAction.ColumnUpToDate(playerUuid, packed, state));
-                return true;
+                return Duplicate.SATISFIED;
             }
             if (state.hasEnqueuedColumn(packed)) {
                 // Delivery honesty, silent form: the column IS already in the send pipeline.
@@ -190,16 +207,16 @@ class IncomingRequestRouter<PS extends AbstractPlayerRequestState<?>> {
                 // client re-declares at 1 Hz until the payload lands or is dropped, and a
                 // post-drop re-ask falls through to the clearDiskReadDone re-resolution below.
                 this.ctx.diagnostics().incrementSkippedDuplicate();
-                return true;
+                return Duplicate.IN_FLIGHT;
             }
             state.clearDiskReadDone(packed);
             this.ctx.diagnostics().incrementReResolved();
         }
         if (state.hasPendingRequest(req.cx(), req.cz())) {
             this.ctx.diagnostics().incrementSkippedDuplicate();
-            return true;
+            return Duplicate.IN_FLIGHT;
         }
-        return false;
+        return Duplicate.NO;
     }
 
     /** Returns true if the send queue is full — caller should break the loop. */
