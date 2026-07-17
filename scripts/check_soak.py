@@ -543,6 +543,12 @@ def law_A5(ps, cs, pc, cc, window):
     d_to = delta(ps, cs, "generation.timeouts")
     if d_to == 0:  # stated precondition: valid only when timeouts == 0 in window
         d_nf = delta(ps, cs, "disk.not_found")
+        # An errored read (e.g. a 10 s IOWorker-starvation timeout) delivers an EMPTY
+        # result, which the processor resolves through the same not-found ladder — it
+        # lands on the right side (gen submit / miss_dropped) without ever counting
+        # disk.not_found. Fold errors into the left side or IO pressure breaks the
+        # identity by exactly the error count (seen live 2026-07-17, 20 timeouts).
+        d_nf += delta(ps, cs, "disk.errors")
         d_gen_sub = delta(ps, cs, "generation.submitted")
         d_ng = delta(pc, cc, "responses.not_generated")
         # Server-owned generation: a miss can also resolve into a TRANSIENT silent drop

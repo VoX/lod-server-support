@@ -224,29 +224,49 @@ public abstract class AbstractPlayerRequestState<T> {
         this.playerChunkPacked = PositionUtil.packPosition(cx, cz);
     }
 
+    // The LIVE frontier: ring (from the player chunk) of the first entry in declaration
+    // order that is not ACTUALLY satisfied — stamped by the router every drain pass
+    // (~20 Hz). In-flight positions (pending disk/generation, enqueued payloads) stamp it
+    // (they are unsatisfied — the anti-starvation pin, mirroring the client scanner's
+    // "awaited positions block ring confirmation"); timestamp/probe resolutions do not.
+    // -1 until the first stamp. Processing thread only.
+    private int liveFrontierRing = -1;
+
+    /** Router drain stamp: the first not-actually-satisfied entry of this pass defines the
+     *  live frontier. No-op without a stamped player chunk. */
+    public void stampLiveFrontier(int cx, int cz) {
+        long player = this.playerChunkPacked;
+        if (player == NO_PLAYER_CHUNK) return;
+        this.liveFrontierRing = PositionUtil.chebyshevDistance(cx, cz,
+                PositionUtil.unpackX(player), PositionUtil.unpackZ(player));
+    }
+
     /**
      * Generation order-spread gate (processing thread only): true when admitting a
      * generation ticket at {@code (cx, cz)} would place it more than {@code maxSpread}
-     * Chebyshev rings (from the player's chunk) beyond the CLIENT-DECLARED FRONTIER — the
-     * applied want-set's first entry, which the closest-first declaration makes the nearest
-     * unsatisfied position. Anchoring on the frontier, not on the oldest outstanding
-     * ticket, closes the straggler leak the 2026-07-16 fresh-server trace exposed: when
-     * the near band momentarily completed, the nearest OUTSTANDING ticket could be a far
-     * corridor straggler, and a min-outstanding law re-anchored the window on it —
-     * legally admitting positions many rings past the frontier. The frontier cannot be
-     * dragged outward by in-flight work; it only advances when near positions are
-     * actually satisfied. False (gate skipped) without a stamped player chunk or an
-     * applied want-set — a rig or a converged player, neither of which floods.
+     * Chebyshev rings (from the player's chunk) beyond the FRONTIER — the nearest
+     * unsatisfied declared position. Reference, in order: the router-stamped LIVE frontier
+     * (20 Hz — the client-declared frontier alone goes stale for a full second between
+     * 1 Hz declarations, which collapsed superflat backfill throughput 4x and starved the
+     * IOWorker into read timeouts, soak 2026-07-17); else the applied want-set's first
+     * entry (closest-first construction). Neither reference can be dragged outward by
+     * in-flight work — an in-flight position stamps the frontier AT its own ring, so the
+     * band cannot walk away from a starving head (the min-outstanding law's straggler
+     * leak, closed for good). False (gate skipped) without a stamped player chunk or any
+     * frontier basis — a rig or a converged player, neither of which floods.
      */
     public boolean generationOrderSpreadExceeded(int cx, int cz, int maxSpread) {
         long player = this.playerChunkPacked;
         if (player == NO_PLAYER_CHUNK) return false;
-        var wantSet = this.appliedWantSet;
-        if (wantSet == null || wantSet.size() == 0) return false;
         int px = PositionUtil.unpackX(player);
         int pz = PositionUtil.unpackZ(player);
-        var first = wantSet.requests()[0];
-        int frontier = PositionUtil.chebyshevDistance(first.cx(), first.cz(), px, pz);
+        int frontier = this.liveFrontierRing;
+        if (frontier < 0) {
+            var wantSet = this.appliedWantSet;
+            if (wantSet == null || wantSet.size() == 0) return false;
+            var first = wantSet.requests()[0];
+            frontier = PositionUtil.chebyshevDistance(first.cx(), first.cz(), px, pz);
+        }
         int candidate = PositionUtil.chebyshevDistance(cx, cz, px, pz);
         return candidate > frontier + maxSpread;
     }

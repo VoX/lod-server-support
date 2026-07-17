@@ -93,9 +93,19 @@ class IncomingRequestRouter<PS extends AbstractPlayerRequestState<?>> {
         boolean stopPass = false;
 
         IncomingRequest req;
+        boolean frontierStamped = false;
         while (!stopPass && (req = state.pollBacklog()) != null) {
             long packed = PositionUtil.packPosition(req.cx(), req.cz());
             if (resolvedAsDuplicate(state, playerUuid, req, packed)) {
+                // In-flight (pending read/generation or enqueued payload) = UNSATISFIED:
+                // the first such entry pins the live frontier so the generation band can
+                // never walk away from a starving head. Satisfied resolutions (timestamp
+                // ladder, probe) deliberately do not stamp — the frontier advances through
+                // them at drain speed (20 Hz), not at the 1 Hz declaration cadence.
+                if (!frontierStamped) {
+                    state.stampLiveFrontier(req.cx(), req.cz());
+                    frontierStamped = true;
+                }
                 this.ctx.diagnostics().incrementRequestRouted();
                 continue;
             }
@@ -118,6 +128,12 @@ class IncomingRequestRouter<PS extends AbstractPlayerRequestState<?>> {
                 continue;
             }
 
+            // First entry needing real work this pass: the live frontier (see the
+            // duplicate branch above — in-flight entries stamp it too).
+            if (!frontierStamped) {
+                state.stampLiveFrontier(req.cx(), req.cz());
+                frontierStamped = true;
+            }
             // Every request routes the same way — the client no longer classifies sync vs
             // generation (server-owned generation: the disk miss is the generation trigger,
             // and a ts of 0 is just another "no data" shape, as inert as the retired byte 0).
