@@ -380,29 +380,16 @@ class SpiralScannerTest {
     }
 
     @Test
-    void missingVanillaShrinksBudgetQuadraticallyToZero() {
-        // base = 800; viewDistance 2 → exclusion area 25; 15 missing → fraction 0.6,
-        // quadratic scale 1 - 0.36 = 0.64 → 512 (a linear scale would give 320)
+    void missingVanillaNoLongerTouchesTheBudget() {
+        // The vanilla-load scale is RETIRED (server-side priority/throttling owns that
+        // protection under v17; the scale's only observable effect was silently stopping
+        // LOD during fast travel). Even a fully missing vanilla disc must not shrink the
+        // budget or suppress the walk — the count survives as a diagnostic only.
         var s = scanner(16);
         var queue = new Sink();
-        assertEquals(512, fireScan(s, 2, 0, 1000, 15, new ColumnStateMap(), queue),
-                "vanilla-load scale is quadratic in the missing fraction");
-
-        // All 25 exclusion chunks missing → scale 0 → no walk at all (no floor on this path).
-        // A budget-0 cadence firing returns -1 forever, so it cannot be observed through fireScan
-        // ("loop until >= 0"): normalize the cadence with a real scan, then step exactly one window.
-        s = scanner(16);
-        queue = new Sink();
-        var columns = new ColumnStateMap();
-        assertEquals(800, fireScan(s, 2, columns, queue), "premise: a normal scan zeroes the counter");
-        int last = 0;
-        for (int i = 0; i < LSSConstants.TICKS_PER_SECOND; i++) {
-            last = s.maybeScan(CX, CZ, 2, 0, 1000, () -> 25, columns, queue.pos, queue.ts);
-        }
-        assertEquals(-1, last,
-                "fully missing vanilla disc zeroes the budget: NO walk happened (-1), which is"
-                        + " distinct from a walk that found nothing (0) — only the latter replaces"
-                        + " the awaiting set, and only the latter is convergence");
+        assertEquals(800, fireScan(s, 2, 0, 1000, 25, new ColumnStateMap(), queue),
+                "a fully missing vanilla disc declares the full want-set budget");
+        assertEquals(25, s.getMissingVanillaChunks(), "the diagnostic count still updates");
     }
 
     @Test
@@ -771,11 +758,9 @@ class SpiralScannerTest {
                     awaitingLate.remove(ev.pos());
                     columns.onReceived(ev.pos(), 1_000L + cycle); // late response
                 }
-                // missingVanilla is capped at 24 of the 25-chunk exclusion area: at 25 the budget
-                // zeroes and the scan reports "no walk" (-1) forever, which fireScanFull cannot
-                // observe. That path is pinned by missingVanillaShrinksBudgetQuadraticallyToZero
-                // and by the manager's noWalkTickNeitherSendsNorReplacesTheAwaitingSet; here we
-                // want heavy throttling (24/25 -> budget 3) without stopping the walk.
+                // missingVanilla no longer affects the budget (the vanilla-load scale is
+                // retired); the randomized value here now only exercises the diagnostic
+                // counter while queue pressure supplies the budget variation.
                 int n = fireScanFull(s, CX, CZ, vd, rng.nextInt(900), 1000, rng.nextInt(25),
                         columns, queue);
                 int cyc = cycle;

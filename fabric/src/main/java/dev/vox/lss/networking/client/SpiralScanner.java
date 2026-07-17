@@ -12,7 +12,8 @@ import java.util.function.IntSupplier;
  * Expanding Chebyshev ring scanner that produces the client's want-set: every position it
  * still wants, closest-first, written straight into {@link LodRequestManager}'s send buffers
  * and shipped whole in the same tick. Owns the scan policy — the 20-tick cadence and the
- * budget with its queue-pressure and vanilla-load scales.
+ * budget with its queue-pressure scale (the vanilla-load scale is retired: server-side
+ * priority/throttling owns that protection under v17).
  *
  * <p>The scan does NOT suppress in-flight positions: under want-set semantics the server may
  * silently supersede any not-yet-admitted ask, and the 1 Hz re-declare is the only thing that
@@ -45,9 +46,9 @@ class SpiralScanner {
      * Advance the scan cadence and, when it fires with a nonzero budget, walk the rings
      * and write the complete want-set (closest-first) into {@code posOut}/{@code tsOut}.
      *
-     * @param missingVanilla evaluated only when the cadence fires
-     * @return -1 when no walk happened this tick (cadence not fired, or budget scaled to
-     *         zero by vanilla load); otherwise the number of want-set entries written
+     * @param missingVanilla evaluated only when the cadence fires (diagnostics only)
+     * @return -1 when no walk happened this tick (cadence not fired); otherwise the
+     *         number of want-set entries written
      *         (0 = walked and found nothing — the converged case; the caller must then
      *         send NOTHING but still replace its awaiting set)
      */
@@ -71,13 +72,12 @@ class SpiralScanner {
         if (columnQueueSize > 0) {
             budget = Math.max(1, Math.round(budget * Math.max(0f, 1f - (float) columnQueueSize / columnQueueHaltThreshold)));
         }
-        if (this.missingVanillaChunks > 0) {
-            int exclusionArea = (2 * viewDistance + 1) * (2 * viewDistance + 1);
-            float missingFraction = (float) this.missingVanillaChunks / exclusionArea;
-            float vanillaScale = Math.max(0f, 1f - missingFraction * missingFraction);
-            if (vanillaScale <= 0f) budget = 0;
-            else budget = Math.max(1, Math.round(budget * vanillaScale));
-        }
+        // The vanilla-load budget scale is GONE (2026-07-17, user call): it was client-side
+        // triage of SERVER resources — v17 moved all of that server-side (BACKGROUND/LOW
+        // read+gen priority, the adaptive throttle, headroom gates), and its only observable
+        // effect was silently stopping LOD during fast travel, the same class of starvation
+        // as the removed movement cadence debounce. missingVanillaChunks is still counted
+        // for /lss diag and the trace — as a diagnostic, not a lever.
         // The want-set must fit one wire batch: replace semantics tear across frames.
         budget = Math.min(budget, Math.min(LSSConstants.MAX_BATCH_CHUNK_REQUESTS, posOut.length));
 

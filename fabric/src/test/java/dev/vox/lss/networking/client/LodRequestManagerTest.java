@@ -460,21 +460,26 @@ class LodRequestManagerTest {
 
     @Test
     void noWalkTickNeitherSendsNorReplacesTheAwaitingSet() {
-        // The -1 ("no walk") return is NOT convergence and must not be treated as one. A budget
-        // scaled to zero by vanilla load happens on a normal join; if it replaced the awaiting set
-        // it would drop the gating for every outstanding answer. (Successor to CL-005's
+        // The -1 ("no walk") return is NOT convergence and must not be treated as one: if a
+        // no-walk tick replaced the awaiting set it would drop the gating for every
+        // outstanding answer. The vehicle is a cadence-not-fired tick — the only remaining
+        // no-walk producer (the vanilla-load budget-zero path is retired; a fully missing
+        // vanilla disc now walks the full budget). (Successor to CL-005's
         // zeroBudgetScanPreservesCommittedRemainder, whose drip-feed remainder no longer exists.)
         manager.trackerForTest().replaceWith(new long[]{POS}, 1);
 
-        int walked = -1;
-        for (int i = 0; i < LSSConstants.TICKS_PER_SECOND + 1; i++) {
-            // viewDistance 2 -> exclusion area 25, all 25 missing -> vanilla scale 0 -> budget 0
-            walked = manager.tickScanPhase(0, 0, 2, 0, () -> 25);
-            if (walked >= 0) break;
+        // A fresh manager's cadence is primed: burn the primed fire (full missing-vanilla
+        // disc — must walk anyway under the retired scale), then step ONE mid-window tick.
+        int primed = -1;
+        for (int i = 0; i < LSSConstants.TICKS_PER_SECOND + 1 && primed < 0; i++) {
+            primed = manager.tickScanPhase(0, 0, 2, 0, () -> 25);
         }
+        assertTrue(primed >= 0, "premise: a fully missing vanilla disc still walks (scale retired)");
+        manager.trackerForTest().replaceWith(new long[]{POS}, 1);
 
-        assertEquals(-1, walked, "a budget-zeroed cadence fire must report NO walk, not an empty one");
-        assertTrue(sent.isEmpty(), "no walk, no batch");
+        int walked = manager.tickScanPhase(0, 0, 2, 0, () -> 25);
+
+        assertEquals(-1, walked, "a mid-window tick must report NO walk, not an empty one");
         assertTrue(manager.trackerForTest().isInFlight(POS),
                 "a no-walk tick must leave the awaiting set alone — replacing it would un-gate"
                         + " the status responses for every outstanding declaration");
