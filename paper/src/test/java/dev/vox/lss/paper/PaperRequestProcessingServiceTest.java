@@ -15,6 +15,7 @@ import net.minecraft.server.Bootstrap;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.server.players.PlayerList;
 import net.minecraft.world.level.Level;
 import org.junit.jupiter.api.AfterEach;
@@ -234,6 +235,9 @@ class PaperRequestProcessingServiceTest {
         var p = mock(ServerPlayer.class);
         when(p.getUUID()).thenReturn(uuid);
         when(p.level()).thenReturn(level);
+        // The lifecycle pass stamps the player chunk each tick (ring origin for the
+        // generation order-spread gate)
+        when(p.chunkPosition()).thenReturn(new ChunkPos(0, 0));
         // getPlayerName() is dereferenced by the flush-failure log path
         when(p.getName()).thenReturn(Component.literal("p-" + uuid.toString().substring(0, 8)));
         return p;

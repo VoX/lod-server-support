@@ -14,6 +14,7 @@ import net.minecraft.server.Bootstrap;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.server.players.PlayerList;
 import net.minecraft.world.level.Level;
 import org.junit.jupiter.api.AfterEach;
@@ -112,6 +113,7 @@ class RegionProbeSchedulingTest {
         var p = mock(ServerPlayer.class);
         when(p.getUUID()).thenReturn(uuid);
         when(p.level()).thenReturn(level);
+        when(p.chunkPosition()).thenReturn(new ChunkPos(0, 0)); // lifecycle stamps the gate's ring origin
         when(p.getName()).thenReturn(Component.literal("p-" + uuid.toString().substring(0, 8)));
         return p;
     }

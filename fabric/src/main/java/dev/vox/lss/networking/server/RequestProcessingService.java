@@ -263,6 +263,10 @@ public class RequestProcessingService {
 
             var player = state.getPlayer();
             var level = player.level();
+            // Ring origin for the generation order-spread gate — must be the REAL player
+            // chunk (the want-set's first entry sits at ~viewDistance on a ring perimeter,
+            // which wedged the gate — see AbstractPlayerRequestState.updatePlayerChunk).
+            state.updatePlayerChunk(player.chunkPosition().x(), player.chunkPosition().z());
             String dimension = this.dimensionStringCache.computeIfAbsent(level.dimension(),
                     k -> k.identifier().toString());
 

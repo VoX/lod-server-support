@@ -1053,6 +1053,39 @@ class OffThreadProcessorDiskResultTest {
     }
 
     /**
+     * The wedge regression (live 2026-07-16, vanilla AND C2ME: order_gated hit ~97% of all
+     * misses): the want-set's first entry is NOT the player's chunk — the scan excludes the
+     * vanilla view distance, so it sits ON a ring perimeter. Anchoring the spread gate there
+     * made same-ring positions on the OPPOSITE side of the ring measure ~2x-ring away and
+     * get refused, strangling admission into a wedge crawling around the ring. The gate must
+     * measure rings from the main-thread-stamped player chunk; the batch-first fallback
+     * exists only for rigs that never stamp one.
+     */
+    @Test
+    void spreadGateMeasuresRingsFromThePlayerChunkNotTheFirstDeclaredEntry() {
+        var state = newPlayer(UUID.randomUUID(), 8, 4);
+        // Production geometry: client view distance 12, ring walk starts at the (12,12)
+        // corner; an outstanding ticket sits there, and the candidate is the same player-ring
+        // 12 on the opposite side.
+        assertTrue(state.tryAdmit(new PendingRequest(12, 12, SlotType.GENERATION, false)));
+        state.replaceBacklogWith(new IncomingBatch(new IncomingRequest[]{
+                new IncomingRequest(12, 12, -1L), new IncomingRequest(-12, 0, -1L)}));
+
+        // Premise: the batch-first fallback alone wedges (corner-measured, the opposite
+        // side reads as ring 24 vs the corner ticket's ring 0).
+        assertTrue(state.generationOrderSpreadExceeded(-12, 0, LSSConstants.MAX_GENERATION_RING_SPREAD),
+                "premise: without a stamped player chunk the corner anchor refuses the far side");
+
+        // The main-thread stamp corrects the geometry: both positions are ring 12 from the
+        // player, spread 0 — the whole ring annulus must admit uniformly.
+        state.updatePlayerChunk(0, 0);
+        assertFalse(state.generationOrderSpreadExceeded(-12, 0, LSSConstants.MAX_GENERATION_RING_SPREAD),
+                "a same-ring candidate must admit regardless of where the ring walk started");
+        assertFalse(state.hasNearerOutstandingGeneration(-12, 0),
+                "the inversion evidence counter uses the same corrected origin");
+    }
+
+    /**
      * The platform scheduler owns generation COMPLETION order, and chunk-system rewrites
      * (C2ME) do not complete equal-priority tickets FIFO. LSS refills each freed generation
      * slot with the next-nearest miss, so under a newest-first scheduler the oldest
