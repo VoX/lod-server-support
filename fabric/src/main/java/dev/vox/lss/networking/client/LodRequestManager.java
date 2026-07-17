@@ -147,13 +147,16 @@ public class LodRequestManager {
     }
 
     /**
-     * Movement: prune out-of-range data + drop stale in-flight tracking, and restart the
-     * scan cadence at the new center. Two pinned consequences (LodRequestManagerTickTest):
-     * the (0,0) lastChunk init makes a player joining outside chunk (0,0) take this branch
-     * on tick 1, losing the primed immediate first scan (~1 s join delay); and crossing a
-     * chunk boundary more often than every 20 ticks restarts the cadence each time,
-     * starving the scan — and with it the want-set re-declaration that rides it — until
-     * the player rests.
+     * Movement: prune out-of-range data + drop stale in-flight tracking, and re-center the
+     * ring walk at the new position. Deliberately does NOT touch the scan cadence: the
+     * pre-v17 debounce here restarted it on every chunk crossing, starving scanning — and
+     * with it re-declaration, the want-set's only self-heal — whenever crossings outpaced
+     * the 20-tick window (sustained creative flight stopped LOD generation entirely). A
+     * scan from a moving center is exactly what replace semantics absorb (superseded +
+     * re-declared), and yielding to vanilla's own chunk loading during fast travel is the
+     * scanner's vanilla-load budget scale's job, not the cadence's. Side benefit: the
+     * (0,0) lastChunk init no longer costs a player joining outside chunk (0,0) their
+     * primed immediate first scan. Both pinned in LodRequestManagerTickTest.
      */
     void tickMovementPhase(int playerCx, int playerCz) {
         if (playerCx != this.lastChunkX || playerCz != this.lastChunkZ) {
@@ -165,7 +168,7 @@ public class LodRequestManager {
             this.metrics.pruneRttStampsOutOfRange(playerCx, playerCz, pruneDistance);
             this.lastChunkX = playerCx;
             this.lastChunkZ = playerCz;
-            this.scanner.resetScanCounter();
+            this.scanner.recenter();
         }
     }
 

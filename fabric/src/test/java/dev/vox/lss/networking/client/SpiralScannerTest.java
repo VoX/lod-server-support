@@ -503,7 +503,7 @@ class SpiralScannerTest {
     // ---- reset matrix: movement / dimension change / disconnect (CL-016) ----
 
     @Test
-    void movementResetZeroesConfirmedRingRestartsCadenceAndKeepsMarks() {
+    void movementRecenterZeroesConfirmedRingKeepsCadenceAndMarks() {
         var columns = new ColumnStateMap();
         seedSatisfied(columns, 3, 4);
         var s = scanner(4);
@@ -513,15 +513,23 @@ class SpiralScannerTest {
         long retried = ringPos(4, 0);
         columns.markRetry(retried);
 
-        s.resetScanCounter(); // the movement path (LodRequestManager.tick: prune + resetScanCounter)
+        // Burn 19 of the 20 cadence ticks, then take the movement path (LodRequestManager
+        // .tick: prune + recenter). The 20th tick must STILL fire: recenter leaves the
+        // cadence alone — the old debounce restarted it here, which starved scanning (and
+        // re-declaration with it) for as long as crossings outpaced the window.
+        for (int i = 0; i < LSSConstants.TICKS_PER_SECOND - 1; i++) {
+            assertEquals(-1, s.maybeScan(CX, CZ, 2, 0, 1000, () -> 0, columns, queue.pos, queue.ts));
+        }
+        s.recenter();
 
         assertEquals(0, s.getConfirmedRing(),
-                "movement reset must zero ring confirmation (SpiralScanner.resetScanCounter)");
-        assertEquals(-1, s.maybeScan(CX, CZ, 2, 0, 1000, () -> 0, columns, queue.pos, queue.ts),
-                "resetScanCounter restarts the full 20-tick cadence (a debounce, unlike reset())");
+                "movement must zero ring confirmation (the confirmed prefix belonged to the old center)");
         assertTrue(columns.hasRetries(), "movement preserves in-range retry marks");
-        assertEquals(1, fireScan(s, 2, columns, queue), "next scan re-walks the disc and declares the retry");
-        assertEquals(List.of(retried), queue.positions());
+        queue.clear();
+        int n = s.maybeScan(CX, CZ, 2, 0, 1000, () -> 0, columns, queue.pos, queue.ts);
+        assertEquals(1, n, "the in-progress cadence window completes ON SCHEDULE through a"
+                + " recenter and the scan re-walks the disc, declaring the retry");
+        assertEquals(List.of(retried), queue.positions(n));
     }
 
     @Test

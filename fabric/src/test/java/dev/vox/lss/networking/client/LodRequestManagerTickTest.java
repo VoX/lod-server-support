@@ -25,11 +25,12 @@ import static org.junit.jupiter.api.Assertions.*;
  * Contract tests for the tick phases ({@link LodRequestManager#tickWithContext}) — the fixed
  * phase order (dimension/cache → movement → metrics → backpressure → cache gate → scan+send),
  * the want-set batch cap, and the lifecycle exits (movement prune, dimension change, disconnect)
- * that must never silently orphan a position. Also pins two deliberate quirks of the movement
- * phase (see its javadoc): the (0,0) lastChunk init cancels the primed first scan for any player
- * joining outside chunk (0,0), and boundary crossings faster than the 20-tick cadence starve
- * scanning — which under the want-set means they starve RE-DECLARATION, the only healer of a
- * server-side supersession. Both recover at rest, within one cadence window.
+ * that must never silently orphan a position. Also pins the movement phase's cadence
+ * DECOUPLING (see its javadoc): a chunk crossing re-centers the ring walk but never touches
+ * the scan counter, so the primed first scan survives a join outside chunk (0,0) and
+ * sustained fast movement keeps declaring on schedule — the pre-v17 movement debounce
+ * starved re-declaration (the want-set's only self-heal) for as long as crossings outpaced
+ * the 20-tick window, which stopped LOD generation entirely during creative flight.
  */
 class LodRequestManagerTickTest {
 
@@ -97,45 +98,36 @@ class LodRequestManagerTickTest {
     }
 
     @Test
-    void firstTickOutsideChunkOriginCancelsThePrimedImmediateScan() {
-        // Pinned quirk (tickMovementPhase javadoc): lastChunkX/Z init to (0,0), so a player
-        // joining anywhere else takes the movement branch on tick 1, which restarts the primed
-        // join cadence — the first scan lands a full window after join instead of immediately.
+    void firstTickOutsideChunkOriginKeepsThePrimedImmediateScan() {
+        // The movement branch fires on tick 1 for a player joining outside chunk (0,0)
+        // (lastChunkX/Z init to (0,0)) — it must only prune + re-center, never cancel the
+        // primed join scan. The old debounce here cost every such join ~1 s of LOD delay.
         var overworld = dim("overworld");
 
         manager.tickWithContext(10, 0, overworld, 0, 0, () -> 0);
-        assertEquals(0, sent.size(), "tick-1 scan cancelled by the first-tick movement branch");
-
-        for (int i = 0; i < LSSConstants.TICKS_PER_SECOND - 2; i++) {
-            manager.tickWithContext(10, 0, overworld, 0, 0, () -> 0);
-        }
-        assertEquals(0, sent.size(), "still inside the restarted cadence window");
-
-        manager.tickWithContext(10, 0, overworld, 0, 0, () -> 0); // 20th tick after the reset
-        assertEquals(1, sent.size(), "the first scan fires one full window after join");
+        assertEquals(1, sent.size(),
+                "the primed first scan fires on tick 1 even through the movement branch");
     }
 
-    // ---- cadence starvation under boundary crossing (CL-003, pinned) ----
+    // ---- the cadence is decoupled from boundary crossings (CL-003 successor) ----
 
     @Test
-    void chunkBoundaryCrossingFasterThanTheCadenceStarvesScansUntilRest() {
+    void chunkBoundaryCrossingFasterThanTheCadenceDoesNotStarveScans() {
+        // Cross a chunk boundary every 10 ticks for 60 ticks — twice per cadence window.
+        // The old movement debounce restarted the counter on every crossing, so this loop
+        // used to produce ZERO scans (and with them zero re-declarations — the want-set's
+        // only self-heal): sustained creative flight stopped LOD generation entirely. The
+        // cadence is now free-running: the primed tick-1 scan plus one per full window,
+        // each declared from the CURRENT center (replace semantics absorb the churn).
         var overworld = dim("overworld");
 
-        // Cross a chunk boundary every 10 ticks for 60 ticks: each crossing restarts the cadence.
         for (int i = 0; i < 60; i++) {
             int cx = 1 - (i / 10) % 2;
             manager.tickWithContext(cx, 0, overworld, 0, 0, () -> 0);
         }
-        assertEquals(0, sent.size(),
-                "pinned coupling: scans starve while boundary crossings outpace the 20-tick cadence."
-                        + " Under the want-set that also starves RE-DECLARATION — nothing heals a"
-                        + " superseded ask while the player never rests. It is bounded by rest below.");
-
-        // Resting at the last position recovers scanning within one window.
-        for (int i = 0; i < LSSConstants.TICKS_PER_SECOND; i++) {
-            manager.tickWithContext(0, 0, overworld, 0, 0, () -> 0);
-        }
-        assertFalse(sent.isEmpty(), "rest restores scanning — and with it re-declaration");
+        assertEquals(3, sent.size(),
+                "scans fire on schedule while moving: the primed tick-1 scan + ticks 21 and 41"
+                        + " — a movement-restarted cadence would have produced zero");
     }
 
     // backoffSkippedScanStillSweepsTimeoutsAndBackoffsDoNotCompound is DELETED: there is no
@@ -290,16 +282,15 @@ class LodRequestManagerTickTest {
         long far = PositionUtil.packPosition(500, 500);
         manager.onColumnReceived(far, 5000L, overworld);
 
-        manager.tickWithContext(300, 0, overworld, 0, 0, () -> 0); // teleport (restarts the cadence)
+        // The teleport tick: movement phase (prune + recenter) runs BEFORE the scan phase,
+        // and the cadence is decoupled from movement, so the primed scan fires on this very
+        // tick — already from the NEW position, already without the pruned want.
+        manager.tickWithContext(300, 0, overworld, 0, 0, () -> 0);
 
         assertEquals(-1L, manager.columnsForTest().timestampFor(far), "premise: column state pruned");
-        assertEquals(0, sent.size(), "the teleport restarts the cadence: nothing goes out this tick");
-
-        for (int i = 0; i < LSSConstants.TICKS_PER_SECOND; i++) {
-            manager.tickWithContext(300, 0, overworld, 0, 0, () -> 0);
-        }
-
-        assertEquals(1, sent.size(), "the next window declares the want-set at the NEW position");
+        assertEquals(1, sent.size(),
+                "the teleport tick's own scan declares from the NEW position — the movement"
+                        + " phase pruned first, so nothing stale can ride the same tick");
         var batch = sent.get(0);
         for (int i = 0; i < batch.count(); i++) {
             long p = batch.positions()[i];

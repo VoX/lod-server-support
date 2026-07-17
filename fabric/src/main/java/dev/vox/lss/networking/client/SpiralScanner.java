@@ -197,6 +197,20 @@ class SpiralScanner {
         this.scanTickCounter = 0;
     }
 
+    /** Movement re-center: re-walk from ring 0 at the new center WITHOUT touching the
+     *  cadence. The pre-v17 movement path used {@link #resetScanCounter} (a debounce),
+     *  which starved scanning — and with it re-declaration, the want-set's only healer —
+     *  for as long as the player crossed a chunk boundary more often than every 20 ticks:
+     *  sustained creative flight stopped LOD generation entirely. Under latest-wins
+     *  replace semantics a moving client declaring on schedule is the DESIGNED behavior
+     *  (stale asks are superseded and re-declared); yielding to vanilla's own chunk
+     *  loading during fast travel is the vanilla-load budget scale's job, not the
+     *  cadence's. The confirmed-ring reset stays: the confirmed prefix was computed for
+     *  the OLD center, and keeping it would skip never-scanned rings at the new one. */
+    void recenter() {
+        this.confirmedRing = 0;
+    }
+
     /**
      * Force the next scan to re-walk from the innermost ring (cheaply skipping already-satisfied
      * positions) WITHOUT resetting the scan-tick cadence. Used when a position BELOW the confirmed
