@@ -254,6 +254,13 @@ public class LSSPaperPlugin extends JavaPlugin implements PluginMessageListener,
                         PaperPayloadHandler.sendSessionConfigV16(bukkitPlayer, enabled,
                                 lodDistanceChunks, syncCap, genCap, generationEnabled);
                     } else {
+                        // A current-protocol re-handshake sheds any stale v16 session —
+                        // otherwise columns keep shipping legacy-shaped and hard-kick the
+                        // now-v18 decoder. Placed on the sender seam because it fires for
+                        // every replying outcome (REGISTER and NO_CONSUMER/DISABLED alike).
+                        if (service != null) {
+                            service.getV16CompatManager().onNonV16Handshake(nmsPlayer.getUUID());
+                        }
                         PaperPayloadHandler.sendSessionConfig(bukkitPlayer,
                                 LSSConstants.PROTOCOL_VERSION, enabled, lodDistanceChunks,
                                 generationEnabled);

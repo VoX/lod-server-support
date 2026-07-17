@@ -437,3 +437,19 @@ platforms; send-drop honesty holds end-to-end; the lifecycle model has no
 remove-without-reregister-or-disconnect leak; vanilla `DiscardedPayload` is data-less
 in mapped 26.2 (the Fabric legacy-encode branch is genuinely forced); overflow-bounce
 livelock refuted (`skipNextScan` is one-shot).
+
+### Implementation review round (commit a5a3a29, 2026-07-17) — finding → fix map
+
+Two adversarial reviewers over the implementation (logic/concurrency; integration/wire).
+The wire was verified byte-exact against v0.6.2 and all §11 amendments present; these
+findings were fixed in the follow-up commit:
+
+| # | Finding | Fix |
+|---|---|---|
+| I1 | The S7 "build+offer inside the session lock" claim was FALSE — the offer ran after the monitor was released (mild Paper race: a duplicate-handshake reset could interleave; unbounded-staleness class unpinned). Both reviewers. | `V16CompatSession.declareInto` offers inside the monitor; pinned by a `Thread.holdsLock` assertion test. Residual (inherent, matches v17): an already-offered batch cannot be retracted by a later reset — superseded within 1 s. |
+| I2 | A declare that evicts the set to EMPTY offered nothing, leaving the previous declaration's backlog (≤800 stale entries) to grind at the old location after a teleport / TTL drain. | Edge-triggered `EMPTY_CLEAR` batch when the set drains with a declaration outstanding (`clearOwed`); the pipeline treats an empty batch as the explicit backlog clear. Convergence silence preserved (one clear, then nothing). |
+| I3 | The §5 warn-once+drop guard was unimplemented: Fabric fell through to a verbatim v18-shaped send (the hard-kick), and a Paper splice throw would drop the player's WHOLE send queue and re-enqueue the same frame forever. Unreachable today, but the chosen fallbacks were the worst ones. | Fabric: non-column payload in a v16 session → warn-once + drop. Paper: splice wrapped, failure → warn-once + skip that frame. |
+| I4 | Cross-dialect re-handshake leak: a v18 handshake never shed an existing v16 session → every column legacy-shaped to a v18 decoder (hostile/buggy clients only). | `onNonV16Handshake(uuid)` called from both platforms' replying non-V16 path (Fabric handler; Paper sender seam — it fires for every replying outcome). |
+| I5 | nanoTime deadline comparisons were overflow-unsafe (TTL `lastSeen+TTL<now`, grace sentinel). Theoretical trigger; free fix. | Elapsed-difference form (`now - lastSeen > TTL`) + armed-flag grace. |
+| I6 | First-declare priming was consumed by the empty set — a fresh join's first batch still waited a full 20 ticks. | Empty declare ticks stay primed; the first merge after idle declares on the next tick (test-pinned). |
+| I7 | Accepted as-is: grace discards fold range-strays into `grace_discarded`; bounce frames bypass byte accounting (amplification <1, verified); Paper same-tick quit→rejoin can waste the rejoin's first second (window ~50 ms vs multi-second login — negligible); the cross-dialect shed and grace glue are 2-line platform lambdas without unit coverage (session-level behavior is pinned; glue is gametest/live territory). | — |

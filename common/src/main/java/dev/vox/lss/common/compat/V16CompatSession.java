@@ -1,6 +1,7 @@
 package dev.vox.lss.common.compat;
 
 import dev.vox.lss.common.PositionUtil;
+import dev.vox.lss.common.processing.AbstractPlayerRequestState;
 import dev.vox.lss.common.processing.IncomingBatch;
 import dev.vox.lss.common.processing.IncomingRequest;
 
@@ -44,14 +45,25 @@ final class V16CompatSession {
      *  distance at declare time (insertion order goes stale the moment the player moves). */
     private final LinkedHashMap<Long, Entry> wantSet = new LinkedHashMap<>();
 
-    /** Ingress merges are discarded until this instant: batches already in netty flight
-     *  across a dimension change would otherwise merge old-dimension wants into the fresh
-     *  set (Nether↔Overworld coordinate overlap defeats the range filter near the origin). */
-    private long graceUntilNanos = Long.MIN_VALUE;
+    /** Ingress merges are discarded while the grace is armed: batches already in netty
+     *  flight across a dimension change would otherwise merge old-dimension wants into the
+     *  fresh set (Nether↔Overworld coordinate overlap defeats the range filter near the
+     *  origin). Armed-flag + elapsed-time form, NOT a deadline compare — nanoTime's origin
+     *  is arbitrary and only differences are overflow-safe. */
+    private long graceArmedNanos;
+    private boolean graceArmed;
 
-    /** Primed so the first service tick after creation declares immediately (a fresh v16
-     *  join should not wait a full declare interval for its first batch to route). */
+    /** Primed so the first declare tick after creation/reset — and, via the stay-primed
+     *  empty path in {@link #declareInto}, the first tick after the first MERGE — declares
+     *  immediately (a fresh v16 join should not wait a full interval for its first batch). */
     private int ticksSinceDeclare = V16CompatManager.DECLARE_INTERVAL_TICKS - 1;
+
+    /** True while the pipeline holds a declaration from this session that a later empty
+     *  declare must explicitly clear: without the one edge-triggered empty batch, a set
+     *  that drains by EVICTION (teleport range-evict, TTL on a gone-quiet client) leaves
+     *  the previous declaration's backlog — up to a full budget of stale positions — to
+     *  grind to completion at the old location (implementation-review finding A2). */
+    private boolean clearOwed;
 
     /** Merge one range-filtered client batch position. Returns false when the set is at
      *  capacity and the position is new (the caller bounces it RATE_LIMITED). */
@@ -75,8 +87,11 @@ final class V16CompatSession {
     synchronized V16CompatManager.MergeResult merge(long[] packedPositions, long[] clientTimestamps,
                                                     int count, int playerCx, int playerCz,
                                                     int maxDist, long nowNanos, int cap) {
-        if (nowNanos < this.graceUntilNanos) {
-            return new V16CompatManager.MergeResult(0, count, V16CompatManager.NO_POSITIONS);
+        if (this.graceArmed) {
+            if (nowNanos - this.graceArmedNanos < V16CompatManager.RESET_GRACE_NANOS) {
+                return new V16CompatManager.MergeResult(0, count, V16CompatManager.NO_POSITIONS);
+            }
+            this.graceArmed = false;
         }
         int rangeFiltered = 0;
         var bounced = (ArrayList<Long>) null;
@@ -101,24 +116,33 @@ final class V16CompatSession {
         return new V16CompatManager.MergeResult(rangeFiltered, 0, bouncedArr);
     }
 
+    private static final IncomingBatch EMPTY_CLEAR = new IncomingBatch(new IncomingRequest[0]);
+
     /**
      * The 1 Hz declare: TTL sweep, range re-filter against the player's CURRENT chunk
      * (the ingress-time filter cannot cover later movement), Chebyshev sort (restores the
      * closest-first precondition the router's live-frontier stamp, the spread gate, and
-     * the probe cap all assume), then build-and-offer under this lock. Returns null when
-     * it is not a declare tick or the set is empty (a converged v16 player costs nothing);
-     * the caller offers the batch and counts the range evictions.
+     * the probe cap all assume), then build AND OFFER under this monitor — the S7 lock
+     * coverage is real, not aspirational: a reset serialized behind this monitor can never
+     * interleave between the build and the publish. Returns null on a non-declare tick or
+     * a no-op empty tick.
+     *
+     * <p>An empty set stays PRIMED (the counter is not consumed) so the first merge after
+     * an idle stretch declares on the very next tick, and — once, edge-triggered — offers
+     * the {@link #EMPTY_CLEAR} batch when a previous declaration is still outstanding:
+     * the pipeline treats an empty batch as the explicit backlog clear, so a set drained
+     * by eviction cannot leave stale work grinding at the old location.
      */
-    synchronized DeclareResult tickAndBuildDeclaration(int playerCx, int playerCz, int maxDist,
-                                                       long nowNanos) {
+    synchronized DeclareOutcome declareInto(AbstractPlayerRequestState<?> state,
+                                            int playerCx, int playerCz, int maxDist,
+                                            long nowNanos) {
         if (++this.ticksSinceDeclare < V16CompatManager.DECLARE_INTERVAL_TICKS) return null;
-        this.ticksSinceDeclare = 0;
 
         int rangeEvicted = 0;
         Iterator<Map.Entry<Long, Entry>> it = this.wantSet.entrySet().iterator();
         while (it.hasNext()) {
             var e = it.next();
-            if (e.getValue().lastSeenNanos + V16CompatManager.ENTRY_TTL_NANOS < nowNanos) {
+            if (nowNanos - e.getValue().lastSeenNanos > V16CompatManager.ENTRY_TTL_NANOS) {
                 it.remove();
                 continue;
             }
@@ -130,8 +154,16 @@ final class V16CompatSession {
             }
         }
         if (this.wantSet.isEmpty()) {
-            return rangeEvicted == 0 ? null : new DeclareResult(null, rangeEvicted);
+            // Stay primed: an idle session must declare on the first tick after a merge.
+            this.ticksSinceDeclare = V16CompatManager.DECLARE_INTERVAL_TICKS - 1;
+            if (this.clearOwed) {
+                this.clearOwed = false;
+                state.offerIncomingBatch(EMPTY_CLEAR);
+                return new DeclareOutcome(false, true, rangeEvicted);
+            }
+            return rangeEvicted == 0 ? null : new DeclareOutcome(false, false, rangeEvicted);
         }
+        this.ticksSinceDeclare = 0;
 
         var requests = new ArrayList<IncomingRequest>(this.wantSet.size());
         for (var e : this.wantSet.entrySet()) {
@@ -141,11 +173,12 @@ final class V16CompatSession {
         }
         requests.sort(Comparator.comparingInt(r ->
                 PositionUtil.chebyshevDistance(r.cx(), r.cz(), playerCx, playerCz)));
-        return new DeclareResult(
-                new IncomingBatch(requests.toArray(new IncomingRequest[0])), rangeEvicted);
+        state.offerIncomingBatch(new IncomingBatch(requests.toArray(new IncomingRequest[0])));
+        this.clearOwed = true;
+        return new DeclareOutcome(true, false, rangeEvicted);
     }
 
-    record DeclareResult(IncomingBatch batch, int rangeEvicted) {}
+    record DeclareOutcome(boolean offered, boolean clearOffered, int rangeEvicted) {}
 
     /** Prune: the position was answered (column sent, up_to_date, or not_generated). The
      *  prune is LOAD-BEARING, not an optimization — a surviving ts&le;0 entry re-resolves
@@ -154,12 +187,19 @@ final class V16CompatSession {
         this.wantSet.remove(packed);
     }
 
-    /** Service-level reset (dimension change / duplicate registration): clear the set and
-     *  arm the ingress grace so old-dimension straggler batches in netty flight are
-     *  discarded instead of resurrected into the fresh set. */
+    /** Service-level reset (dimension change / duplicate handshake): clear the set and —
+     *  on the dim-change flavor — arm the ingress grace so old-dimension straggler batches
+     *  in netty flight are discarded instead of resurrected into the fresh set. The
+     *  clear-owed flag follows the state's fate: a service remove destroys the state (and
+     *  its backlog) so nothing is owed; a duplicate handshake keeps the state, so a still-
+     *  outstanding declaration must still be cleared by the next empty declare. */
     synchronized void resetWantSet(long nowNanos, boolean armGrace) {
         this.wantSet.clear();
-        if (armGrace) this.graceUntilNanos = nowNanos + V16CompatManager.RESET_GRACE_NANOS;
+        if (armGrace) {
+            this.graceArmedNanos = nowNanos;
+            this.graceArmed = true;
+            this.clearOwed = false;
+        }
         this.ticksSinceDeclare = V16CompatManager.DECLARE_INTERVAL_TICKS - 1;
     }
 

@@ -88,6 +88,12 @@ public class LSSServerNetworking {
         }
 
         boolean v16 = decision.dialect() == HandshakeGate.WireDialect.V16;
+        if (!v16 && service != null) {
+            // A current-protocol re-handshake on a connection that previously negotiated
+            // v16 must shed the stale compat session — otherwise every column keeps
+            // shipping legacy-shaped and hard-kicks the now-v18 decoder. No-op normally.
+            service.getV16CompatManager().onNonV16Handshake(player.getUUID());
+        }
         responder.send(v16
                 ? SessionConfigS2CPayload.v16Legacy(
                         decision.effectiveEnabled(),

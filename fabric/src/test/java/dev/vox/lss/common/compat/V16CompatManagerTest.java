@@ -34,8 +34,21 @@ class V16CompatManagerTest {
     private static final int MAX_DIST = 288;
 
     private static final class TestState extends AbstractPlayerRequestState<Object> {
+        /** When set, every offer asserts it runs under this monitor (the S7 pin). */
+        volatile Object monitorToAssert;
+        volatile boolean sawOfferUnderMonitor;
+
         TestState() { super(PLAYER, 4, 2); }
         @Override public String getPlayerName() { return "legacy"; }
+
+        @Override
+        public void offerIncomingBatch(dev.vox.lss.common.processing.IncomingBatch batch) {
+            var monitor = this.monitorToAssert;
+            if (monitor != null && Thread.holdsLock(monitor)) {
+                this.sawOfferUnderMonitor = true;
+            }
+            super.offerIncomingBatch(batch);
+        }
     }
 
     private final AtomicLong clock = new AtomicLong(1_000_000L);
@@ -208,7 +221,64 @@ class V16CompatManagerTest {
                 "74 s idle must survive: the old client's 10 s sweep is starved by sustained "
                         + "movement, so a 30 s-class TTL would evict positions it still wants");
         this.clock.addAndGet(2_000_000_000L);
-        assertNull(declareInterval(0, 0), "past 75 s with no client re-ask the entry is stale");
+        var afterTtl = declareInterval(0, 0);
+        assertNotNull(afterTtl, "draining to empty with a declaration outstanding owes ONE clear");
+        assertEquals(0, afterTtl.size(),
+                "past 75 s the entry is stale and the edge-triggered EMPTY batch clears the "
+                        + "previous declaration's backlog");
+        assertNull(declareInterval(0, 0), "the clear is edge-triggered — then silence");
+    }
+
+    @Test
+    void evictionToEmptyOffersOneClearBatchSoTheStaleBacklogCannotGrind() {
+        merge(0, 0, new long[]{packed(5, 0), -1L}, new long[]{packed(6, 0), -1L});
+        assertEquals(2, declareInterval(0, 0).size(), "declaration outstanding");
+
+        // Long-range teleport: everything range-evicts. Without the clear, the previous
+        // declaration's backlog would keep disk-reading/generating at the old location.
+        var cleared = declareInterval(10_000, 0);
+        assertNotNull(cleared);
+        assertEquals(0, cleared.size(), "the empty batch is the pipeline's explicit backlog clear");
+        assertEquals(2, this.state.drainPendingRangeFiltered());
+        assertNull(declareInterval(10_000, 0), "edge-triggered: no repeat clears");
+    }
+
+    @Test
+    void firstMergeAfterAnIdleStretchDeclaresOnTheVeryNextTick() {
+        // An empty set must not consume the declare cadence: idle ticks stay primed.
+        for (int i = 0; i < 3 * V16CompatManager.DECLARE_INTERVAL_TICKS; i++) {
+            this.mgr.tickPlayer(PLAYER, this.state, 0, 0, MAX_DIST);
+        }
+        assertNull(this.state.takeIncomingBatch(), "idle ticks offer nothing");
+
+        merge(0, 0, new long[]{packed(1, 0), -1L});
+        this.mgr.tickPlayer(PLAYER, this.state, 0, 0, MAX_DIST);
+        var declared = this.state.takeIncomingBatch();
+        assertNotNull(declared, "a fresh join's first batch must not wait a full interval");
+        assertArrayEquals(new long[]{packed(1, 0)}, orderedPositions(declared));
+    }
+
+    @Test
+    void declareOffersWhileHoldingTheSessionMonitor() {
+        // The S7 lock-coverage invariant, pinned directly: the mailbox offer must happen
+        // inside the session monitor so a reset can never interleave between build and
+        // publish (stale-membership resurrection).
+        this.state.monitorToAssert = this.mgr.sessionForTesting(PLAYER);
+        merge(0, 0, new long[]{packed(1, 0), -1L});
+        assertNotNull(declareInterval(0, 0));
+        assertTrue(this.state.sawOfferUnderMonitor,
+                "offerIncomingBatch must run while holding the session lock");
+    }
+
+    @Test
+    void nonV16HandshakeShedsAStaleSession() {
+        merge(0, 0, new long[]{packed(1, 0), -1L});
+        this.mgr.onNonV16Handshake(PLAYER);
+        assertFalse(this.mgr.isV16(PLAYER),
+                "a current-protocol re-handshake must shed the stale v16 session — otherwise "
+                        + "every column keeps shipping legacy-shaped and hard-kicks the v18 decoder");
+        assertNull(this.mgr.onClientBatch(PLAYER, new long[]{packed(2, 0)}, new long[]{-1L},
+                1, 0, 0, MAX_DIST));
     }
 
     @Test

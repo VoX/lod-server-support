@@ -96,6 +96,23 @@ public final class V16CompatManager {
         this.sessions.remove(uuid);
     }
 
+    /** A CURRENT-protocol handshake got past the version rung for this player: shed any
+     *  stale v16 session (a same-connection cross-dialect re-handshake — hostile or buggy
+     *  clients only). Without this, every column keeps shipping legacy-shaped to a decoder
+     *  that now expects the source byte, which hard-kicks it. No-op normally. */
+    public void onNonV16Handshake(UUID uuid) {
+        var removed = this.sessions.remove(uuid);
+        if (removed != null) {
+            LSSLogger.info("v16-compat: session for " + uuid
+                    + " shed by a current-protocol re-handshake");
+        }
+    }
+
+    /** Test seam (same package): the live session monitor, for lock-coverage assertions. */
+    V16CompatSession sessionForTesting(UUID uuid) {
+        return this.sessions.get(uuid);
+    }
+
     /** Service-level removal — fired by BOTH disconnect teardown and the dimension-change
      *  remove+register cycle. Resets the want-set and arms the ingress grace; identity
      *  survives (the disconnect hook is what drops it). No-op for v18 players. */
@@ -125,20 +142,18 @@ public final class V16CompatManager {
      * Per-player service tick (MAIN/PUMP), called for every registered player each tick —
      * cheap no-op for v18 players. On this session's declare tick, sweeps TTL, re-applies
      * the range filter against the player's current chunk, sorts closest-first, and offers
-     * the full synthetic want-set into the player's normal mailbox — the SOLE declarer.
+     * the full synthetic want-set into the player's normal mailbox — the SOLE declarer,
+     * with build and offer inside the session monitor (see {@code declareInto}).
      */
     public void tickPlayer(UUID uuid, AbstractPlayerRequestState<?> state,
                            int playerCx, int playerCz, int maxDist) {
         var session = this.sessions.get(uuid);
         if (session == null) return;
-        var declared = session.tickAndBuildDeclaration(playerCx, playerCz, maxDist,
+        var outcome = session.declareInto(state, playerCx, playerCz, maxDist,
                 this.nanoClock.getAsLong());
-        if (declared == null) return;
-        if (declared.rangeEvicted() > 0) state.recordRangeFiltered(declared.rangeEvicted());
-        if (declared.batch() != null) {
-            state.offerIncomingBatch(declared.batch());
-            this.redeclares.incrementAndGet();
-        }
+        if (outcome == null) return;
+        if (outcome.rangeEvicted() > 0) state.recordRangeFiltered(outcome.rangeEvicted());
+        if (outcome.offered()) this.redeclares.incrementAndGet();
     }
 
     /** Column send seam (MAIN/PUMP, after a successful wire send): the position is

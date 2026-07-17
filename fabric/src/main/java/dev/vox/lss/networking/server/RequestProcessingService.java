@@ -351,16 +351,30 @@ public class RequestProcessingService {
                 this::sendColumnPayload, this.offThreadProcessor);
     }
 
+    /** Warn-once latch for the v16 egress guard (MAIN thread only). */
+    private boolean v16UnconvertibleWarned;
+
     /** The per-player column egress (MAIN). For a v16 session, converts UNCONDITIONALLY to
      *  the legacy source-less shape — every producer (probe/disk/generation/ghost-clear)
      *  funnels through here, so no producer can leak a v18 frame that would hard-kick the
      *  old client — and prunes the position from the synthetic want-set after the send
-     *  (satisfied-by-data; the prune is load-bearing, see the design §4.4). */
+     *  (satisfied-by-data; the prune is load-bearing, see the design §4.4). A payload the
+     *  guard cannot convert is DROPPED with a warn-once (design §5): a dropped frame
+     *  self-heals by re-declaration, a wrong-shaped one kicks the client. Unreachable
+     *  today — only buildAndEnqueueColumnPayload feeds this queue. */
     private void sendColumnPayload(PlayerRequestState state, CustomPacketPayload payload)
             throws Exception {
         var uuid = state.getPlayerUUID();
-        if (this.v16Compat.isV16(uuid)
-                && payload instanceof dev.vox.lss.networking.payloads.VoxelColumnS2CPayload col) {
+        if (this.v16Compat.isV16(uuid)) {
+            if (!(payload instanceof dev.vox.lss.networking.payloads.VoxelColumnS2CPayload col)) {
+                if (!this.v16UnconvertibleWarned) {
+                    this.v16UnconvertibleWarned = true;
+                    LSSLogger.warn("v16-compat: dropping unconvertible column-queue payload "
+                            + payload.getClass().getName() + " for " + state.getPlayerName()
+                            + " (further drops are silent)");
+                }
+                return;
+            }
             ServerPlayNetworking.send(state.getPlayer(), col.asV16());
             this.v16Compat.onColumnSent(uuid,
                     PositionUtil.packPosition(col.chunkX(), col.chunkZ()));

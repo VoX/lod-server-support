@@ -105,18 +105,37 @@ public class PaperRequestProcessingService {
         LoadedColumnData probe(ServerLevel level, int cx, int cz);
     }
 
+    /** Warn-once latch for the v16 egress splice guard (pump thread only). */
+    private boolean v16SpliceWarned;
+
     /** The per-player column egress (PUMP). For a v16 session, splices the frame
      *  UNCONDITIONALLY into the legacy source-less shape — every producer
      *  (probe/disk/generation/ghost-clear) funnels through here, so no producer can leak a
      *  v18 frame that would hard-kick the old client — and prunes the position from the
-     *  synthetic want-set after the send (satisfied-by-data; load-bearing, design §4.4). */
+     *  synthetic want-set after the send (satisfied-by-data; load-bearing, design §4.4).
+     *  A frame the splice cannot parse is DROPPED with a warn-once (design §5): letting
+     *  the exception propagate would make flushSendQueue drop the player's WHOLE queue,
+     *  and honest re-resolution would re-enqueue the same frame forever. Unreachable
+     *  today — every frame comes from encodeVoxelColumnPreEncoded. */
     private ColumnPayloadSender columnPayloadSender = (state, data) -> {
         var uuid = state.getPlayerUUID();
         if (this.v16Compat.isV16(uuid)) {
+            byte[] legacy;
+            long packedPos;
+            try {
+                legacy = PaperPayloadHandler.rewriteColumnToV16(data);
+                packedPos = PaperPayloadHandler.readColumnPackedPos(data);
+            } catch (Exception e) {
+                if (!this.v16SpliceWarned) {
+                    this.v16SpliceWarned = true;
+                    LSSLogger.error("v16-compat: dropping unspliceable column frame for "
+                            + state.getPlayerName() + " (further drops are silent)", e);
+                }
+                return;
+            }
             PaperPayloadHandler.sendRawNmsPayload(state.getPlayer().getBukkitEntity(),
-                    PaperPayloadHandler.ID_VOXEL_COLUMN,
-                    PaperPayloadHandler.rewriteColumnToV16(data));
-            this.v16Compat.onColumnSent(uuid, PaperPayloadHandler.readColumnPackedPos(data));
+                    PaperPayloadHandler.ID_VOXEL_COLUMN, legacy);
+            this.v16Compat.onColumnSent(uuid, packedPos);
             return;
         }
         PaperPayloadHandler.sendRawNmsPayload(state.getPlayer().getBukkitEntity(),
