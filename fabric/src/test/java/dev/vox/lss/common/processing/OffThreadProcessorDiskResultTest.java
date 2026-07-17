@@ -1053,36 +1053,48 @@ class OffThreadProcessorDiskResultTest {
     }
 
     /**
-     * The wedge regression (live 2026-07-16, vanilla AND C2ME: order_gated hit ~97% of all
-     * misses): the want-set's first entry is NOT the player's chunk — the scan excludes the
-     * vanilla view distance, so it sits ON a ring perimeter. Anchoring the spread gate there
-     * made same-ring positions on the OPPOSITE side of the ring measure ~2x-ring away and
-     * get refused, strangling admission into a wedge crawling around the ring. The gate must
-     * measure rings from the main-thread-stamped player chunk; the batch-first fallback
-     * exists only for rigs that never stamp one.
+     * The gate anchors on the CLIENT-DECLARED FRONTIER (want-set first entry, measured
+     * from the stamped player chunk) — not on the oldest outstanding ticket. The
+     * min-outstanding law leaked on the 2026-07-16 fresh-server trace: when the near band
+     * momentarily completed, the nearest OUTSTANDING ticket could be a far corridor
+     * straggler, re-anchoring the window on it and legally admitting positions many rings
+     * past the frontier. The frontier cannot be dragged outward by in-flight work.
      */
     @Test
-    void spreadGateMeasuresRingsFromThePlayerChunkNotTheFirstDeclaredEntry() {
+    void spreadGateAnchorsOnTheDeclaredFrontierNotOutstandingTickets() {
         var state = newPlayer(UUID.randomUUID(), 8, 4);
-        // Production geometry: client view distance 12, ring walk starts at the (12,12)
-        // corner; an outstanding ticket sits there, and the candidate is the same player-ring
-        // 12 on the opposite side.
-        assertTrue(state.tryAdmit(new PendingRequest(12, 12, SlotType.GENERATION, false)));
-        state.replaceBacklogWith(new IncomingBatch(new IncomingRequest[]{
-                new IncomingRequest(12, 12, -1L), new IncomingRequest(-12, 0, -1L)}));
-
-        // Premise: the batch-first fallback alone wedges (corner-measured, the opposite
-        // side reads as ring 24 vs the corner ticket's ring 0).
-        assertTrue(state.generationOrderSpreadExceeded(-12, 0, LSSConstants.MAX_GENERATION_RING_SPREAD),
-                "premise: without a stamped player chunk the corner anchor refuses the far side");
-
-        // The main-thread stamp corrects the geometry: both positions are ring 12 from the
-        // player, spread 0 — the whole ring annulus must admit uniformly.
         state.updatePlayerChunk(0, 0);
-        assertFalse(state.generationOrderSpreadExceeded(-12, 0, LSSConstants.MAX_GENERATION_RING_SPREAD),
-                "a same-ring candidate must admit regardless of where the ring walk started");
-        assertFalse(state.hasNearerOutstandingGeneration(-12, 0),
-                "the inversion evidence counter uses the same corrected origin");
+        // A far corridor straggler is still in flight at ring 15.
+        assertTrue(state.tryAdmit(new PendingRequest(15, 0, SlotType.GENERATION, false)));
+        // The client's declaration says the frontier is ring 4.
+        state.replaceBacklogWith(new IncomingBatch(new IncomingRequest[]{
+                new IncomingRequest(4, 0, -1L), new IncomingRequest(5, 0, -1L),
+                new IncomingRequest(16, 0, -1L)}));
+
+        assertFalse(state.generationOrderSpreadExceeded(5, 0, LSSConstants.MAX_GENERATION_RING_SPREAD),
+                "candidates at the frontier always admit");
+        assertTrue(state.generationOrderSpreadExceeded(16, 0, LSSConstants.MAX_GENERATION_RING_SPREAD),
+                "the straggler at ring 15 must NOT drag the window out to ring 17 — under "
+                        + "the old min-outstanding law this candidate was legally admitted");
+
+        // Same-ring geometry stays sane regardless of where the ring walk starts: a batch
+        // whose first entry is the (12,12) corner puts the frontier at ring 12, so the
+        // opposite side of the same player-ring admits.
+        var state2 = newPlayer(UUID.randomUUID(), 8, 4);
+        state2.updatePlayerChunk(0, 0);
+        state2.replaceBacklogWith(new IncomingBatch(new IncomingRequest[]{
+                new IncomingRequest(12, 12, -1L), new IncomingRequest(-12, 0, -1L)}));
+        assertFalse(state2.generationOrderSpreadExceeded(-12, 0, LSSConstants.MAX_GENERATION_RING_SPREAD),
+                "a same-ring candidate admits regardless of ring-walk start corner");
+
+        // No stamped player chunk (bare rig) or no declaration -> gate skipped.
+        var bare = newPlayer(UUID.randomUUID(), 8, 4);
+        assertFalse(bare.generationOrderSpreadExceeded(30, 0, LSSConstants.MAX_GENERATION_RING_SPREAD),
+                "no player chunk stamped -> gate skipped");
+        var undeclared = newPlayer(UUID.randomUUID(), 8, 4);
+        undeclared.updatePlayerChunk(0, 0);
+        assertFalse(undeclared.generationOrderSpreadExceeded(30, 0, LSSConstants.MAX_GENERATION_RING_SPREAD),
+                "no applied want-set -> gate skipped (a converged player does not flood)");
     }
 
     /**
@@ -1103,6 +1115,7 @@ class OffThreadProcessorDiskResultTest {
         var rig = new Rig(true, 8, 2); // 2 generation slots — the refill window under test
         var tickets = new ArrayList<OffThreadProcessor.GenerationTicketRequest>();
         try {
+            rig.state.updatePlayerChunk(0, 0); // ring origin (production stamps every tick)
             // Closest-first declaration along +x from center (0,0): ring == x.
             declare(rig.state,
                     new IncomingRequest(0, 0, -1L), new IncomingRequest(1, 0, -1L),

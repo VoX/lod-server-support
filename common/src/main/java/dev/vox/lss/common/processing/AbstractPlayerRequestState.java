@@ -211,32 +211,12 @@ public abstract class AbstractPlayerRequestState<T> {
         this.backlogSizeSnapshot = this.backlog.size();
         this.appliedWantSet = batch.size() == 0 ? null : batch;
         publishWantSet(this.appliedWantSet);
-        if (batch.size() > 0) {
-            // FALLBACK ring origin for the order-spread gate, used only by bare rigs that
-            // never stamp a player chunk (see updatePlayerChunk — production always stamps).
-            // NOT a player-chunk approximation: the scan excludes the vanilla view distance,
-            // so this first entry sits on a ring perimeter in production geometry.
-            var first = batch.requests()[0];
-            this.declaredCenterX = first.cx();
-            this.declaredCenterZ = first.cz();
-            this.hasDeclaredCenter = true;
-        }
         return dropped;
     }
 
-    // Ring origin fallback for the generation order-spread gate (processing thread only).
-    private int declaredCenterX;
-    private int declaredCenterZ;
-    private boolean hasDeclaredCenter;
-
     /** The player's ACTUAL chunk, stamped by the platform's main/pump thread each lifecycle
-     *  tick — the primary ring origin for the order-spread gate. One packed volatile long so
-     *  the processing thread never sees a torn x/z pair. The batch-first-entry fallback below
-     *  is WRONG in production geometry: the scan excludes the vanilla view distance, so the
-     *  first declared entry sits ON the ring perimeter at ~viewDistance — measuring rings
-     *  from that corner made same-ring positions on the opposite side look 2x-ring away and
-     *  the gate strangled admission into a wedge (order_gated ~97% of misses, live 2026-07-16).
-     *  The fallback remains only for bare rigs that never stamp a player position. */
+     *  tick — the ring origin for the order-spread gate and the inversion evidence counter.
+     *  One packed volatile long so the processing thread never sees a torn x/z pair. */
     private static final long NO_PLAYER_CHUNK = Long.MIN_VALUE;
     private volatile long playerChunkPacked = NO_PLAYER_CHUNK;
 
@@ -244,57 +224,49 @@ public abstract class AbstractPlayerRequestState<T> {
         this.playerChunkPacked = PositionUtil.packPosition(cx, cz);
     }
 
-    /** Ring-origin selection: the stamped player chunk, else the declared-batch fallback.
-     *  Returns packed origin, or NO_PLAYER_CHUNK when neither exists (gate skipped). */
-    private long ringOrigin() {
-        long stamped = this.playerChunkPacked;
-        if (stamped != NO_PLAYER_CHUNK) return stamped;
-        if (this.hasDeclaredCenter) {
-            return PositionUtil.packPosition(this.declaredCenterX, this.declaredCenterZ);
-        }
-        return NO_PLAYER_CHUNK;
-    }
-
     /**
      * Generation order-spread gate (processing thread only): true when admitting a
      * generation ticket at {@code (cx, cz)} would place it more than {@code maxSpread}
-     * Chebyshev rings (from the player's chunk) beyond this player's OLDEST outstanding
-     * generation ticket. False when no ring origin exists (bare rigs) or nothing is
-     * outstanding. Rings are recomputed against the CURRENT origin, so a moving player's
-     * stale far tickets loosen the gate rather than jamming it.
+     * Chebyshev rings (from the player's chunk) beyond the CLIENT-DECLARED FRONTIER — the
+     * applied want-set's first entry, which the closest-first declaration makes the nearest
+     * unsatisfied position. Anchoring on the frontier, not on the oldest outstanding
+     * ticket, closes the straggler leak the 2026-07-16 fresh-server trace exposed: when
+     * the near band momentarily completed, the nearest OUTSTANDING ticket could be a far
+     * corridor straggler, and a min-outstanding law re-anchored the window on it —
+     * legally admitting positions many rings past the frontier. The frontier cannot be
+     * dragged outward by in-flight work; it only advances when near positions are
+     * actually satisfied. False (gate skipped) without a stamped player chunk or an
+     * applied want-set — a rig or a converged player, neither of which floods.
      */
     public boolean generationOrderSpreadExceeded(int cx, int cz, int maxSpread) {
-        long origin = ringOrigin();
-        if (origin == NO_PLAYER_CHUNK) return false;
-        int originX = PositionUtil.unpackX(origin);
-        int originZ = PositionUtil.unpackZ(origin);
-        int minOutstanding = Integer.MAX_VALUE;
-        for (var pending : this.pendingByPosition.values()) {
-            if (pending.heldSlot() != SlotType.GENERATION) continue;
-            int ring = PositionUtil.chebyshevDistance(pending.cx(), pending.cz(), originX, originZ);
-            if (ring < minOutstanding) minOutstanding = ring;
-        }
-        if (minOutstanding == Integer.MAX_VALUE) return false;
-        int candidate = PositionUtil.chebyshevDistance(cx, cz, originX, originZ);
-        return candidate > minOutstanding + maxSpread;
+        long player = this.playerChunkPacked;
+        if (player == NO_PLAYER_CHUNK) return false;
+        var wantSet = this.appliedWantSet;
+        if (wantSet == null || wantSet.size() == 0) return false;
+        int px = PositionUtil.unpackX(player);
+        int pz = PositionUtil.unpackZ(player);
+        var first = wantSet.requests()[0];
+        int frontier = PositionUtil.chebyshevDistance(first.cx(), first.cz(), px, pz);
+        int candidate = PositionUtil.chebyshevDistance(cx, cz, px, pz);
+        return candidate > frontier + maxSpread;
     }
 
     /** True when any outstanding generation ticket sits NEARER the player's chunk than
      *  {@code (cx, cz)} — a completion arriving out of proximity order. Diagnostics only
-     *  (the platform scheduler's completion-order evidence); false without a ring origin. */
+     *  (the platform scheduler's completion-order evidence); false without a player chunk. */
     public boolean hasNearerOutstandingGeneration(int cx, int cz) {
-        long origin = ringOrigin();
-        if (origin == NO_PLAYER_CHUNK) return false;
-        int originX = PositionUtil.unpackX(origin);
-        int originZ = PositionUtil.unpackZ(origin);
-        int completed = PositionUtil.chebyshevDistance(cx, cz, originX, originZ);
+        long player = this.playerChunkPacked;
+        if (player == NO_PLAYER_CHUNK) return false;
+        int px = PositionUtil.unpackX(player);
+        int pz = PositionUtil.unpackZ(player);
+        int completed = PositionUtil.chebyshevDistance(cx, cz, px, pz);
         long selfPacked = PositionUtil.packPosition(cx, cz);
         for (var entry : this.pendingByPosition.long2ObjectEntrySet()) {
             if (entry.getLongKey() == selfPacked) continue;
             var pending = entry.getValue();
             if (pending.heldSlot() != SlotType.GENERATION) continue;
             if (PositionUtil.chebyshevDistance(pending.cx(), pending.cz(),
-                    originX, originZ) < completed) return true;
+                    px, pz) < completed) return true;
         }
         return false;
     }
