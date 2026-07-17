@@ -182,7 +182,11 @@ setup_fabric() {
 
     echo "=== Installing Fabric mods ==="
     download "$FABRIC_API_URL" "$mods_dir/fabric-api.jar"
-    download "$C2ME_URL" "$mods_dir/c2me.jar"
+    # Skip the download while a no-c2me A/B run has it parked as .jar.disabled —
+    # otherwise every such run re-downloads a jar it is about to disable.
+    if [ ! -f "$mods_dir/c2me.jar.disabled" ]; then
+        download "$C2ME_URL" "$mods_dir/c2me.jar"
+    fi
 
     echo "  Installing LSS..."
     local lss_jar
@@ -195,6 +199,32 @@ setup_fabric() {
 run_fabric() {
     cd "$FABRIC_DIR"
     java -Xmx${SERVER_RAM} -Xms${SERVER_RAM} -jar fabric-server-launch.jar nogui
+}
+
+# Toggle c2me*.jar in the Fabric mods folder for A/B runs (LSS vs C2ME's chunk-system
+# rewrite — e.g. generation completion-order testing). Disabling renames to
+# .jar.disabled, which the Fabric loader ignores; run-fabric re-enables.
+set_c2me_enabled() {
+    local enabled="$1" f moved=false
+    mkdir -p "$FABRIC_DIR/mods"
+    if [ "$enabled" = true ]; then
+        for f in "$FABRIC_DIR/mods"/c2me*.jar.disabled; do
+            [ -e "$f" ] || continue
+            mv "$f" "${f%.disabled}"
+            echo "  Re-enabled: $(basename "${f%.disabled}")"
+            moved=true
+        done
+    else
+        for f in "$FABRIC_DIR/mods"/c2me*.jar; do
+            [ -e "$f" ] || continue
+            mv "$f" "$f.disabled"
+            echo "  Disabled: $(basename "$f")"
+            moved=true
+        done
+        if [ "$moved" = false ]; then
+            echo "  (no c2me*.jar in $FABRIC_DIR/mods — nothing to disable)"
+        fi
+    fi
 }
 
 # ============================================================
@@ -363,8 +393,20 @@ case "${1:-run}" in
         ;;
     run-fabric)
         setup_fabric
+        set_c2me_enabled true   # undo a previous run-fabric-no-c2me
         echo ""
         echo "=== Starting Fabric server ==="
+        echo "  Connect to: localhost:25565"
+        echo ""
+        run_fabric
+        ;;
+    run-fabric-no-c2me)
+        setup_fabric
+        echo ""
+        echo "=== Disabling C2ME for this run ==="
+        set_c2me_enabled false
+        echo ""
+        echo "=== Starting Fabric server (C2ME disabled) ==="
         echo "  Connect to: localhost:25565"
         echo ""
         run_fabric
@@ -391,11 +433,12 @@ case "${1:-run}" in
         echo "Done."
         ;;
     *)
-        echo "Usage: $0 {setup|run|run-fabric|run-paper|run-folia|update|clean}"
+        echo "Usage: $0 {setup|run|run-fabric|run-fabric-no-c2me|run-paper|run-folia|update|clean}"
         echo ""
         echo "  setup      - Download and set up all servers"
         echo "  run        - Set up and start all servers (default)"
-        echo "  run-fabric - Set up and start Fabric server only (port 25565)"
+        echo "  run-fabric - Set up and start Fabric server only (port 25565; re-enables C2ME)"
+        echo "  run-fabric-no-c2me - Same, with any c2me*.jar in mods/ disabled (A/B testing)"
         echo "  run-paper  - Set up and start Paper server only (port 25566)"
         echo "  run-folia  - Set up and start Folia server only (port 25567)"
         echo "  update     - Rebuild and install LSS JARs for all servers"

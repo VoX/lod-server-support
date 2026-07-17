@@ -72,6 +72,7 @@ Since 2026-07 `build.yml` contains the flakes automatically: docs-only changes (
 ```bash
 ./test-server.sh              # set up + run all three: Fabric :25565, Paper :25566, Folia :25567
 ./test-server.sh run-folia    # one platform only (also run-fabric, run-paper)
+./test-server.sh run-fabric-no-c2me  # Fabric with c2me*.jar parked as .disabled (A/B vs C2ME; run-fabric re-enables)
 ./test-server.sh update       # rebuild + reinstall the LSS jars into all three (restart to apply)
 ./test-server.sh clean        # delete test-server/
 ```
