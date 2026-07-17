@@ -289,22 +289,35 @@ public class GenerationLifecycleGameTests {
                     "removing B must drop only B's orphaned entry (R2), active=" + gen.getActiveCount());
             helper.assertTrue(lssTicketCount(tickets, bx, z) == 1,
                     "the shared entry's ticket must survive while another player still waits on it");
+            // Orphan releases are DEFERRED (the disconnect-sweep stagger — a one-call bulk
+            // release froze a C2ME server for 60 s inside the distance-graph fixpoint);
+            // one tick's drain releases it.
+            gen.tick();
             helper.assertTrue(lssTicketCount(tickets, bx + 2, z) == 0,
-                    "the orphaned entry's ticket must be released");
+                    "the orphaned entry's ticket must be released within one drain tick");
             helper.assertTrue(gen.getTotalRemovedInFlight() == 1,
                     "exactly the orphaned entry must book removedInFlight, got "
                             + gen.getTotalRemovedInFlight());
             helper.assertTrue(gen.getTotalSubmitted() == 3,
                     "removal must never un-book submissions");
 
-            // Removing A orphans R0 and R1 — both release and book.
+            // Removing A orphans R0 and R1 — both book immediately, release via the stagger.
             gen.removePlayer(playerA);
             helper.assertTrue(gen.getActiveCount() == 0, "removing the last waiter must clear the active set");
-            helper.assertTrue(lssTicketCount(tickets, bx, z) == 0 && lssTicketCount(tickets, bx + 1, z) == 0,
-                    "every orphaned ticket must be released after the last waiter leaves");
             helper.assertTrue(gen.getTotalRemovedInFlight() == 3,
                     "each orphan-removed ENTRY books removedInFlight once, got "
                             + gen.getTotalRemovedInFlight());
+
+            // Cancel-and-reuse: readmitting R0 while its release is still PENDING must
+            // reuse the held ticket (no second add — the completion path's single removal
+            // keeps the books 1:1) and the cancelled release must never fire.
+            helper.assertTrue(gen.submitGeneration(playerF, level, bx, z, 5L),
+                    "readmission against a pending deferred release must be accepted");
+            gen.tick(); // drains R1's release; R0's was cancelled by the readmission
+            helper.assertTrue(lssTicketCount(tickets, bx, z) == 1,
+                    "the readmitted entry reuses the still-held ticket — exactly one, not two");
+            helper.assertTrue(lssTicketCount(tickets, bx + 1, z) == 0,
+                    "the un-readmitted orphan's ticket drains within one tick");
 
             // Removal must free capacity: a fresh player fits again.
             helper.assertTrue(gen.submitGeneration(playerF, level, bx + 3, z, 5L),
@@ -320,6 +333,8 @@ public class GenerationLifecycleGameTests {
         }
         helper.assertTrue(lssTicketCount(tickets, bx + 3, z) == 0,
                 "shutdown must release the remaining entry's ticket");
+        helper.assertTrue(lssTicketCount(tickets, bx, z) == 0,
+                "shutdown must also release the readmitted entry's reused ticket");
         helper.succeed();
     }
 
@@ -457,6 +472,9 @@ public class GenerationLifecycleGameTests {
             helper.assertTrue(gen.getTotalRemovedInFlight() == 1,
                     "the dropped in-flight generation must be booked as removed (the A4 "
                             + "re-balancing term), got " + gen.getTotalRemovedInFlight());
+            // The dimension-change sweep defers its ticket release (disconnect-sweep
+            // stagger); the next service tick's generation drain executes it.
+            service.tick();
             helper.assertTrue(lssTicketCount(overworldTickets, gx, gz) == 0,
                     "the old dimension's generation ticket must be released, not leaked");
             var diskQueueAfter = service.getDiskReader().getPlayerQueue(uuid);
