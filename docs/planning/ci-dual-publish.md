@@ -187,13 +187,25 @@ The voxy jars ship to real users, so they get the **identical** safety gate:
 
 ## Sequencing & risk
 
-- **Land after v0.7.0 tags.** First dual-publish = the next release.
+- ~~**Land after v0.7.0 tags.** First dual-publish = the next release.~~ **Superseded — v0.7.0
+  IS the first dual-publish** (see the Status header and resolved decision #2).
 - **Risk is low and contained:** the Gradle change only *adds* repackaged branded copies (LSS
   jars untouched); `release_check.py`'s extension is the real safety net for the new
   user-facing artifacts.
-- **Smoke-test the publish path on a throwaway pre-release tag** (or `mc-publish` dry-run)
-  before the first real dual-publish — a misconfigured project id/token is the one thing that
-  can half-publish.
+- **Do NOT smoke-test with a throwaway pre-release tag** — `release.yml` triggers on every
+  `v*` tag, so an rc tag runs the FULL pipeline including the two irreversible LSS publishes
+  to the real `lKiXKLvv` project. The safe pre-tag verification is an **authenticated** API
+  check with the real token (proves the project id AND membership in one call):
+  `curl -H "Authorization: <MODRINTH_TOKEN>" https://api.modrinth.com/v2/project/84zcagOb`
+  must return 200. Unauthenticated checks are useless here: the project currently 404s
+  publicly (delisted/draft), which an authenticated member call sees through.
+- **Never `gh run rerun` a partially-published release.** A re-run rebuilds byte-different
+  jars, silently replaces the GitHub release assets, and creates DUPLICATE Modrinth versions
+  (nothing server-side rejects a second `v0.7.0+fabric+mc26.2`). Red before the gh-release
+  step = nothing published, full re-run is safe. Red after any publish step = recover by
+  hand-uploading the GitHub-attached jars to whatever channel missed (the deliberate
+  LSS-before-voxy step order means the usual partial state is "LSS live, voxy missing",
+  fixed by uploading the two attached voxy jars to `84zcagOb` manually).
 - **Interchangeability is the invariant to protect** — hence the `release_check.py` identity
   guardrail. If a future maintainer wants the voxy jar to be a *separate* mod (own id / config),
   that is a different, larger decision (breaks swap-compatibility) and should be made
@@ -204,5 +216,6 @@ The voxy jars ship to real users, so they get the **identical** safety gate:
 - Decision #3 above (GitHub release attaches all four vs. LSS-only + Modrinth-dual).
 - Exact voxy `description` / `contact` wording ("and everything" — how much to credit XANTHA
   in the voxy jar's `authors` / `contact`).
-- Whether v0.7.0 should retroactively dual-publish (vs. starting clean at the next release) —
-  depends on whether the `voxy-server-side` membership is live by then.
+- ~~Whether v0.7.0 should retroactively dual-publish (vs. starting clean at the next release)~~
+  — resolved: v0.7.0 dual-publishes. The remaining dependency is the `voxy-server-side`
+  membership being live before the tag (see Prerequisites).

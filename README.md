@@ -26,8 +26,9 @@ every direction:
 - Swapping one jar for the other on an existing install keeps all config — same mod id, same
   config files.
 
-Install one or the other, never both: the game rejects the duplicate (same mod id / plugin
-name), which is deliberate.
+Install one or the other, never both — the two jars declare the same mod identity, which is
+deliberate: on Fabric the game refuses to launch with both installed (duplicate mod id
+error), and on Paper only one of the two same-named plugins loads.
 
 ### Redistribution
 
@@ -129,7 +130,9 @@ Server config is generated on first run:
 | `perDimensionTimestampCacheSizeMB` | `32` | Max timestamp cache size per dimension in MB (used for up-to-date checks on reconnect) |
 | `dirtyBroadcastIntervalSeconds` | `10` | Interval for pushing dirty column notifications to clients |
 
-**Paper-specific:** The config also includes an `updateEvents` list of Bukkit event class names used for dirty chunk detection. `/lsslod` commands require the `lss.admin` permission (or op).
+**Paper-specific:** The config also includes an `updateEvents` list of Bukkit event class names used for dirty chunk detection.
+
+`/lsslod` commands require operator status on both platforms (Fabric: gamemaster permission level; Paper: the `lss.admin` permission, default op).
 
 ### Client
 

@@ -556,11 +556,15 @@ def law_A5(ps, cs, pc, cc, window):
         # counted in the dedicated service.miss_dropped (NOT service.superseded, whose
         # backlog-replace events never touch disk and would over-balance this identity).
         # Latent false-positive (documented, accepted): a PERMANENT generation failure
-        # (extraction error / null chunk) counts the miss at not_found and answers
-        # NOT_GENERATED only when the client is still connected to receive it — if the
-        # client disconnects between the miss and the answer, the response never lands in
-        # d_ng and the identity breaks by that count. No scenario currently produces
-        # permanent gen failures; if one appears, see CLAUDE.md's flake catalog first.
+        # (extraction error / null chunk) lands on BOTH right-hand terms for one miss —
+        # generation.submitted at submit AND responses.not_generated when the answer
+        # reaches a still-connected client — so the identity OVER-counts the RHS by one
+        # per failure while connected (a disconnect before the answer rebalances it).
+        # Same family: the two generation-ticket drop paths in drainGenerationTicketRequests
+        # (state gone / dimension mismatch, both platforms) skip miss_dropped, so a
+        # near-boundary drop on dimension-trip UNDER-counts the RHS by one. No scenario
+        # currently produces permanent gen failures; if A5 reds, check both counts against
+        # CLAUDE.md's flake catalog before chasing conservation.
         d_md = delta(ps, cs, "service.miss_dropped")
         if d_nf != d_gen_sub + d_ng + d_md:
             out.append(Violation("A5", window,

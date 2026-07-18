@@ -500,16 +500,16 @@ class LodRequestManagerTest {
         // viewDistance 90 fully subsumes the lod-64 disc (corners included — see fireScanAtOrigin),
         // so a recovered tick walks and wants nothing. Every batch this test sees is therefore a
         // backpressure clear, never a want-set.
-        manager.tickWithContext(0, 0, dim, 90, halt, () -> 0);  // enters halt
-        manager.tickWithContext(0, 0, dim, 90, halt, () -> 0);  // still halted
+        manager.tickWithContext(0, 0, dim, 90, halt, 0L, () -> 0);  // enters halt
+        manager.tickWithContext(0, 0, dim, 90, halt, 0L, () -> 0);  // still halted
 
         assertEquals(1, sent.size(), "edge-triggered: exactly one clear per halt episode");
         assertEquals(0, sent.get(0).count(),
                 "the clear is the EMPTY want-set — the explicit 'want nothing' that replaces the"
                         + " server backlog with nothing (the only empty batch the protocol allows)");
 
-        manager.tickWithContext(0, 0, dim, 90, 0, () -> 0);     // recovered
-        manager.tickWithContext(0, 0, dim, 90, halt, () -> 0);  // re-enters halt
+        manager.tickWithContext(0, 0, dim, 90, 0, 0L, () -> 0);     // recovered
+        manager.tickWithContext(0, 0, dim, 90, halt, 0L, () -> 0);  // re-enters halt
 
         assertEquals(2, sent.size(), "a new halt episode re-arms the clear");
         assertEquals(0, sent.get(1).count());
@@ -849,10 +849,10 @@ class LodRequestManagerTest {
         var end = dim("the_end");
         manager.onSessionConfig(config(64, true), "lss-cl064-" + System.nanoTime());
         manager.markCacheLoadedForTest();
-        manager.tickWithContext(0, 0, overworld, 64, 0, () -> 0); // establish dimension A
+        manager.tickWithContext(0, 0, overworld, 64, 0, 0L, () -> 0); // establish dimension A
         manager.onColumnReceived(POS, 5000L, overworld);
 
-        manager.tickWithContext(0, 0, end, 64, 0, () -> 0); // the flip resets all request state
+        manager.tickWithContext(0, 0, end, 64, 0, 0L, () -> 0); // the flip resets all request state
         assertEquals(0, manager.getReceivedColumnCount(), "premise: dimension flip reset the map");
 
         advanceToOneCallBeforeScanFire();

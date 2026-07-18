@@ -66,6 +66,10 @@ public class LSSClientNetworking {
         return columnProcessor.getQueuedCount();
     }
 
+    public static long getQueuedColumnBytes() {
+        return columnProcessor.getQueuedBytes();
+    }
+
     /**
      * Report a delivered-but-not-ingested column (decode failure or consumer rejection
      * via {@link LSSApi#reportIngestFailure}). Hops to the main thread, where the manager

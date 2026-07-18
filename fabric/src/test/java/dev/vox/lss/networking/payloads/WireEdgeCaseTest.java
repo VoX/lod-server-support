@@ -377,6 +377,7 @@ class WireEdgeCaseTest {
         b.writeInt(0);
         b.writeUtf("lss:Not A Valid Path!", LSSConstants.MAX_DIMENSION_STRING_LENGTH);
         b.writeLong(0L);
+        b.writeByte(LSSConstants.COLUMN_SOURCE_DISK); // v18 serve-source byte
         b.writeByteArray(emptyColumn());
         try {
             assertThrows(IdentifierException.class, () -> VoxelColumnS2CPayload.CODEC.decode(b));
@@ -395,11 +396,19 @@ class WireEdgeCaseTest {
         b.writeInt(4);
         b.writeUtf("overworld", LSSConstants.MAX_DIMENSION_STRING_LENGTH);
         b.writeLong(7L);
+        // An UNKNOWN serve-source value: the decode must carry it verbatim (forward-safe,
+        // same stance as unknown response types) — this doubles as the only decode-side pin
+        // of the source VALUE, so a regression that reads-and-discards the byte fails here.
+        b.writeByte(77);
         b.writeByteArray(emptyColumn());
         try {
             var decoded = VoxelColumnS2CPayload.CODEC.decode(b);
             assertEquals(Level.OVERWORLD, decoded.dimension());
             assertEquals("minecraft:overworld", decoded.dimension().identifier().toString());
+            assertEquals((byte) 77, decoded.source(),
+                    "unknown serve-source values must pass through untouched");
+            assertArrayEquals(emptyColumn(), decoded.decompressedSections(),
+                    "section bytes must decode intact after the source byte");
             assertEquals(0, b.readableBytes());
         } finally {
             b.release();

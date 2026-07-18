@@ -93,6 +93,7 @@ public class LodRequestManager {
         int viewDistance = mc.options.getEffectiveRenderDistance();
         tickWithContext(playerCx, playerCz, level.dimension(), viewDistance,
                 LSSClientNetworking.getQueuedColumnCount(),
+                LSSClientNetworking.getQueuedColumnBytes(),
                 () -> countMissingVanillaChunks(level, playerCx, playerCz, viewDistance));
     }
 
@@ -104,11 +105,12 @@ public class LodRequestManager {
      * Package-private for direct test coverage — tick() needs a running Minecraft client.
      */
     void tickWithContext(int playerCx, int playerCz, ResourceKey<Level> currentDim,
-                         int viewDistance, int columnQueueSize, IntSupplier missingVanilla) {
+                         int viewDistance, int columnQueueSize, long columnQueueBytes,
+                         IntSupplier missingVanilla) {
         tickDimensionAndCachePhase(currentDim);
         tickMovementPhase(playerCx, playerCz);
         this.metrics.updateRollingRates();
-        if (haltedByBackpressure(columnQueueSize)) {
+        if (haltedByBackpressure(columnQueueSize, columnQueueBytes)) {
             // Entering the halt: silence would leave the server pumping the last want-set
             // (up to 1024 backlogged asks). An EMPTY batch is the explicit "want nothing"
             // declaration — it replaces the backlog with nothing; already-admitted work
@@ -179,14 +181,24 @@ public class LodRequestManager {
         }
     }
 
-    /** Backpressure: halt when the column processing queue is mostly full. */
-    boolean haltedByBackpressure(int columnQueueSize) {
-        return columnQueueSize >= haltThreshold();
+    /** Backpressure: halt when the column processing queue is mostly full — by COUNT or by
+     *  BYTES. Admission ({@code ClientColumnProcessor.admits}) is bounded by both, and for
+     *  columns above ~44 KiB the byte cap binds first; a count-only halt would let arrivals
+     *  hit the byte-cap drop path instead (each drop burns an ingest-failure strike, and
+     *  four park the position for the session). Halting at 3/4 of EITHER cap keeps the
+     *  designed halt+clear ahead of the drop regime regardless of column size. */
+    boolean haltedByBackpressure(int columnQueueSize, long columnQueueBytes) {
+        return columnQueueSize >= haltThreshold() || columnQueueBytes >= byteHaltThreshold();
     }
 
     /** Package-private so the backpressure-clear tests can drive the exact halt edge. */
     static int haltThreshold() {
         return ClientColumnProcessor.MAX_QUEUED_COLUMNS * BACKPRESSURE_NUMERATOR / BACKPRESSURE_DENOMINATOR;
+    }
+
+    /** Package-private so the backpressure-clear tests can drive the exact byte-halt edge. */
+    static long byteHaltThreshold() {
+        return ClientColumnProcessor.MAX_QUEUED_BYTES * BACKPRESSURE_NUMERATOR / BACKPRESSURE_DENOMINATOR;
     }
 
     /**

@@ -1,5 +1,7 @@
 package dev.vox.lss.networking.server;
 
+import dev.vox.lss.common.LSSLogger;
+
 import java.util.LinkedHashMap;
 
 /**
@@ -38,14 +40,22 @@ final class DeferredTicketReleases {
         return this.pending.remove(key) != null;
     }
 
-    /** Run up to {@code max} queued releases in FIFO order. Returns how many ran. */
+    /** Run up to {@code max} queued releases in FIFO order. Returns how many ran. Each
+     *  release is containment-wrapped: this runs inside END_SERVER_TICK, and a throwing
+     *  {@code removeTicketWithRadius} (the C2ME distance graph is exactly the fragile
+     *  substrate this class exists for) must cost one leaked ticket, not the server. */
     int drain(int max) {
         int ran = 0;
         var iter = this.pending.entrySet().iterator();
         while (ran < max && iter.hasNext()) {
             var entry = iter.next();
             iter.remove();
-            entry.getValue().run();
+            try {
+                entry.getValue().run();
+            } catch (Exception e) {
+                LSSLogger.error("Deferred ticket release failed for " + entry.getKey()
+                        + " — ticket may remain held", e);
+            }
             ran++;
         }
         return ran;

@@ -189,6 +189,23 @@ class ProtocolConstantsTest {
     }
 
     @Test
+    void wireIdentityBytesArePinnedLiterally() {
+        // The parity fixtures build their reference frames FROM these constants, so a
+        // renumbering drifts encoder and expectation together and fails nothing else —
+        // while released clients hard-code the old values (v0.6.x reads 1/2/bit-1, and
+        // byte 0 is reserved wire history). Renumbering any of these is a silent
+        // protocol break; change them only with a protocol bump.
+        assertEquals(1, LSSConstants.RESPONSE_UP_TO_DATE);
+        assertEquals(2, LSSConstants.RESPONSE_NOT_GENERATED);
+        assertEquals(0, LSSConstants.RESPONSE_RATE_LIMITED_V16);
+        assertEquals(16, LSSConstants.V16_COMPAT_PROTOCOL_VERSION);
+        assertEquals(1, LSSConstants.CAPABILITY_VOXEL_COLUMNS);
+        assertEquals(0, LSSConstants.COLUMN_SOURCE_IN_MEMORY);
+        assertEquals(1, LSSConstants.COLUMN_SOURCE_DISK);
+        assertEquals(2, LSSConstants.COLUMN_SOURCE_GENERATION);
+    }
+
+    @Test
     void payloadTypesBindTheDeclaredChannels() {
         assertEquals(LSSConstants.CHANNEL_HANDSHAKE,
                 HandshakeC2SPayload.TYPE.id().toString());

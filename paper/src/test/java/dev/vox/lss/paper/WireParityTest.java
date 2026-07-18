@@ -262,6 +262,21 @@ class WireParityTest {
         assertEquals(18, LSSConstants.PROTOCOL_VERSION); // 18: VoxelColumn serve-source byte
     }
 
+    @Test
+    void wireIdentityBytesArePinnedLiterally() {
+        // Twin of the Fabric pin (ProtocolConstantsTest): the parity fixtures reference
+        // these constants symbolically, so renumbering fails nothing else — while released
+        // clients hard-code the values. Change only with a protocol bump.
+        assertEquals(1, LSSConstants.RESPONSE_UP_TO_DATE);
+        assertEquals(2, LSSConstants.RESPONSE_NOT_GENERATED);
+        assertEquals(0, LSSConstants.RESPONSE_RATE_LIMITED_V16);
+        assertEquals(16, LSSConstants.V16_COMPAT_PROTOCOL_VERSION);
+        assertEquals(1, LSSConstants.CAPABILITY_VOXEL_COLUMNS);
+        assertEquals(0, LSSConstants.COLUMN_SOURCE_IN_MEMORY);
+        assertEquals(1, LSSConstants.COLUMN_SOURCE_DISK);
+        assertEquals(2, LSSConstants.COLUMN_SOURCE_GENERATION);
+    }
+
     // ---- Meta: the parity corpus must cover the whole v17 payload surface ----
 
     @Test

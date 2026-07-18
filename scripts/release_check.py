@@ -127,6 +127,16 @@ def check_fabric_jar(jar, problems):
         problems.append(f"{base}: contains no dev/vox/lss classes (empty build?)")
     if not any(n.startswith("LICENSE") for n in names):
         problems.append(f"{base}: LICENSE not bundled")
+    # The Fabric jar ships common/ as nested Jar-in-Jar; a Loom include regression would
+    # otherwise ship a jar with no shared classes, green on every other check.
+    nested = _nested_jars(jar)
+    if not any("/common-" in label or label.startswith("META-INF/jars/common")
+               for label, _ in nested):
+        problems.append(f"{base}: no nested common jar (META-INF/jars/common-*.jar) — "
+                        "the Loom include of :common is broken")
+    elif not any(any(n.startswith("dev/vox/lss/common/") and n.endswith(".class") for n in ns)
+                 for _, ns in nested):
+        problems.append(f"{base}: nested common jar carries no dev/vox/lss/common classes")
 
 
 def check_paper_jar(jar, problems):
@@ -268,9 +278,9 @@ def check_glob_hygiene(problems, soak_jars):
         problems.append("CI-named soak jar matches a release glob")
 
 
-def discover(problems, expected_version=None):
-    fab_libs = os.path.join(ROOT, "fabric", "build", "libs")
-    pap_libs = os.path.join(ROOT, "paper", "build", "libs")
+def discover(problems, expected_version=None, root=ROOT):
+    fab_libs = os.path.join(root, "fabric", "build", "libs")
+    pap_libs = os.path.join(root, "paper", "build", "libs")
     # `voxy-server-side-*` and `lod-server-support-*` are disjoint prefixes, so neither
     # discovery list contaminates the other.
     fab = _jars_in(fab_libs, "lod-server-support-fabric")
@@ -278,8 +288,14 @@ def discover(problems, expected_version=None):
     vfab = _jars_in(fab_libs, "voxy-server-side-fabric")
     vpap = _jars_in(pap_libs, "voxy-server-side-paper")
     soak = _jars_in(pap_libs, SOAK_JAR_PREFIX)
-    if not fab and not pap:
-        problems.append("no release jars found under fabric/ or paper/ build/libs — run a build first")
+    # All four families must be present — a release ships all four, and a missing family
+    # (e.g. the voxyJar finalizer silently unwired) must fail the gate, not shrink it.
+    for jars, what, hint in ((fab, "lod-server-support-fabric", "run :fabric:build"),
+                             (pap, "lod-server-support-paper", "run :paper:shadowJar"),
+                             (vfab, "voxy-server-side-fabric", "the fabric voxyJar task did not run"),
+                             (vpap, "voxy-server-side-paper", "the paper voxyJar finalizer did not run")):
+        if not jars:
+            problems.append(f"no {what} jar found in build/libs — {hint}")
     if expected_version:
         # A release ships all four; each must exist at the tag version.
         fab = _require_version(fab, "lod-server-support-fabric", expected_version, problems)
@@ -373,17 +389,36 @@ def _selftest():
         assert cond, "selftest FAIL: " + msg
         n += 1
 
+    def _nested_common(version="0.4.0"):
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w") as z:
+            z.writestr("dev/vox/lss/common/PositionUtil.class", "x")
+        return buf.getvalue()
+
     with tempfile.TemporaryDirectory() as td:
         good_fab = os.path.join(td, "lod-server-support-fabric.jar")
         _make_jar(good_fab, {
             "fabric.mod.json": json.dumps({"version": "0.4.0"}),
             "dev/vox/lss/LSSMod.class": "x",
             "dev/vox/lss/common/PositionUtil.class": "x",
+            "META-INF/jars/common-0.4.0.jar": _nested_common(),
             "LICENSE_lod-server-support-fabric": "MIT",
         })
         p = []
         check_fabric_jar(good_fab, p)
         check(p == [], f"clean fabric jar flagged: {p}")
+
+        # a fabric jar with NO nested common jar means the Loom include of :common broke
+        no_common_fab = os.path.join(td, "no-common-fabric.jar")
+        _make_jar(no_common_fab, {
+            "fabric.mod.json": json.dumps({"version": "0.4.0"}),
+            "dev/vox/lss/LSSMod.class": "x",
+            "LICENSE_lod-server-support-fabric": "MIT",
+        })
+        p = []
+        check_fabric_jar(no_common_fab, p)
+        check(any("no nested common jar" in m for m in p),
+              f"missing nested common jar not caught: {p}")
 
         bad_fab = os.path.join(td, "bad-fabric.jar")
         _make_jar(bad_fab, {
@@ -513,6 +548,7 @@ def _selftest():
                                            "version": "0.7.0"}),
             "dev/vox/lss/LSSMod.class": "x",
             "dev/vox/lss/common/PositionUtil.class": "x",
+            "META-INF/jars/common-0.7.0.jar": _nested_common("0.7.0"),
             "assets/lss/icon-vss.png": "PNG",
             "LICENSE_lod-server-support-fabric": "MIT",
         })
@@ -690,6 +726,68 @@ def _selftest():
         # a soak jar mis-named to look like the VOXY release artifact MUST also be caught
         check_glob_hygiene(p, [os.path.join(td, "voxy-server-side-paper-soaky.jar")])
         check(any("MATCHES release glob" in m for m in p), "mis-named voxy soak jar not caught")
+
+        # ---- discover(): end-to-end wiring over a synthetic build tree ----
+        # The leaf checks above prove each check works; these prove discover() actually
+        # CALLS them (presence, pair wiring, identity) — a refactor that drops a call
+        # would otherwise leave the gate vacuously green.
+        droot = os.path.join(td, "tree")
+        dfab = os.path.join(droot, "fabric", "build", "libs")
+        dpap = os.path.join(droot, "paper", "build", "libs")
+        os.makedirs(dfab)
+        os.makedirs(dpap)
+        PY_LSS = ("name: LodServerSupport\nversion: '0.7.0'\n"
+                  "description: LSS plugin.\nfolia-supported: true\n")
+        pap_manifest = "Manifest-Version: 1.0\npaperweight-mappings-namespace: mojang\n"
+
+        def _write_tree_fabric(name, meta, extra=None):
+            entries = {
+                "fabric.mod.json": json.dumps(meta),
+                "dev/vox/lss/LSSMod.class": "x",
+                "META-INF/jars/common-0.7.0.jar": _nested_common("0.7.0"),
+                "LICENSE_lod-server-support-fabric": "MIT",
+            }
+            entries.update(extra or {})
+            _make_jar(os.path.join(dfab, name), entries)
+
+        def _write_tree_paper(name, yml):
+            _make_jar(os.path.join(dpap, name), {
+                "plugin.yml": yml,
+                "dev/vox/lss/paper/LSSPaperPlugin.class": "x",
+                "dev/vox/lss/common/PositionUtil.class": "x",
+            }, manifest=pap_manifest)
+
+        _write_tree_fabric("lod-server-support-fabric.jar",
+                           {"id": "lss", "name": "LOD Server Support", "version": "0.7.0"})
+        _write_tree_fabric("voxy-server-side-fabric.jar",
+                           {"id": "lss", "name": "Voxy Server Side", "version": "0.7.0",
+                            "icon": "assets/lss/icon-vss.png"},
+                           extra={"assets/lss/icon-vss.png": "PNG"})
+        _write_tree_paper("lod-server-support-paper.jar", PY_LSS)
+        _write_tree_paper("voxy-server-side-paper.jar",
+                          PY_LSS.replace("description: LSS plugin.",
+                                         "description: VSS plugin.", 1))
+        p = []
+        fab_d, pap_d, vfab_d, vpap_d, _ = discover(p, root=droot)
+        check(p == [] and len(fab_d) == len(pap_d) == len(vfab_d) == len(vpap_d) == 1,
+              f"clean synthetic tree flagged by discover: {p}")
+
+        # a missing voxy family must fail the gate (silently unwired repackage task)
+        os.remove(os.path.join(dfab, "voxy-server-side-fabric.jar"))
+        p = []
+        discover(p, root=droot)
+        check(any("no voxy-server-side-fabric jar" in m for m in p),
+              f"missing voxy fabric family not caught by discover: {p}")
+
+        # a forked voxy id must be caught THROUGH discover (identity wiring intact)
+        _write_tree_fabric("voxy-server-side-fabric.jar",
+                           {"id": "voxy", "name": "Voxy Server Side", "version": "0.7.0",
+                            "icon": "assets/lss/icon-vss.png"},
+                           extra={"assets/lss/icon-vss.png": "PNG"})
+        p = []
+        discover(p, root=droot)
+        check(any("must stay 'lss'" in m for m in p),
+              f"forked voxy id not caught through discover: {p}")
 
     print(f"release_check selftest OK: {n} cases")
     return 0

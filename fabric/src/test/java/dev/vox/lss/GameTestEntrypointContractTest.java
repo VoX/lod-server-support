@@ -40,10 +40,14 @@ class GameTestEntrypointContractTest {
 
         Set<String> foundServer = new TreeSet<>();
         Set<String> foundClient = new TreeSet<>();
-        try (Stream<Path> files = Files.list(sources)) {
+        // walk, not list: a gametest class added in a SUBPACKAGE (e.g. test/folia/) would
+        // otherwise compile, stay off the entrypoint, never run — with this contract green.
+        try (Stream<Path> files = Files.walk(sources)) {
             for (Path file : files.filter(f -> f.toString().endsWith(".java")).toList()) {
-                String name = file.getFileName().toString();
-                String fqcn = TEST_PACKAGE + "." + name.substring(0, name.length() - ".java".length());
+                String rel = sources.relativize(file).toString()
+                        .replace(java.io.File.separatorChar, '.');
+                String fqcn = TEST_PACKAGE + "."
+                        + rel.substring(0, rel.length() - ".java".length());
                 String source = Files.readString(file);
                 if (GAMETEST_ANNOTATION.matcher(source).find()) {
                     foundServer.add(fqcn);
