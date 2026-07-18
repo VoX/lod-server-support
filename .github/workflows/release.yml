@@ -141,7 +141,7 @@ jobs:
           modrinth-id: 84zcagOb
           modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
           files: fabric/build/libs/voxy-server-side-fabric-*.jar
-          name: ${{ github.ref_name }} - Fabric (MC 26.2)
+          name: Voxy Server Side ${{ github.ref_name }} - Fabric (MC 26.2)
           version: ${{ github.ref_name }}+fabric+mc26.2
           version-type: release
           loaders: fabric
@@ -155,7 +155,7 @@ jobs:
           modrinth-id: 84zcagOb
           modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
           files: paper/build/libs/voxy-server-side-paper-*.jar
-          name: ${{ github.ref_name }} - Paper/Purpur (MC 26.2)
+          name: Voxy Server Side ${{ github.ref_name }} - Paper/Purpur (MC 26.2)
           version: ${{ github.ref_name }}+paper+mc26.2
           version-type: release
           # Same as the LSS Paper step: advertise paper + purpur only until Folia ships 26.2.
