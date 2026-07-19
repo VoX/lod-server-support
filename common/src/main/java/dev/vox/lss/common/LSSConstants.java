@@ -104,6 +104,18 @@ public final class LSSConstants {
      *  refill pins the full generation cap in flight across the whole frontier+spread
      *  window and completions scramble across 3 rings (the inversion regression). */
     public static final int MAX_GENERATION_COHORT_SPAN = 1;
+
+    /** Frontier outward damping (movement inversion fix, 2026-07-19 admission-trace
+     *  diagnosis): the spread-gate's live-frontier reference follows INWARD observations
+     *  instantly but may only advance OUTWARD at one ring per this many milliseconds
+     *  (~3 rings/s). Under movement the honest frontier is non-monotonic — it jumps to
+     *  the far edge at instants when the near field is momentarily all-satisfied, then
+     *  collapses back as movement mints new near work; far waves admitted at those
+     *  instants complete AFTER the newly-minted near work and pop as far-then-near
+     *  "line inversions" when the player stops. Damping keeps the reference from
+     *  reaching the far edge between mints; a stationary frontier advances ring-by-ring
+     *  within the +2 spread window and never waits on it. 0 disables (test rigs). */
+    public static final long FRONTIER_OUTWARD_DAMP_MILLIS_PER_RING = 333;
     public static final int MAX_BATCH_CHUNK_REQUESTS = 1024;
     public static final int MAX_BATCH_RESPONSES = 4096;
 

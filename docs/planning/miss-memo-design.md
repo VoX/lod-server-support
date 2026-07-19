@@ -49,13 +49,13 @@ RESTRICTION, never the window's anchor — the straggler-leak lesson). `generati
 and `generation.inversions` are now soak-exported on both platforms (they were diag-only,
 which is why recordings couldn't see the regression). Measured A/B (same box, same timeline):
 
-| fresh-backfill      | memo OFF (pre-memo)* | memo unpaced | memo-rung pacing | unified pacing |
-|---------------------|---------------------|--------------|------------------|----------------|
-| inversions          | 179/1983 (9.0%)     | unmeasured, visually severe | 81/2012 (4.0%) | **46/1992 (2.3%)** |
-| miss re-reads       | 17,643              | ~2,130       | 2,134            | 2,144          |
-| quiescent snapshots | 25                  | 37-39        | 39               | 38             |
-| disk.errors (A7)    | 0                   | 12-15        | 10               | **5**          |
-| order_gated         | —                   | —            | ~14k             | 16,134         |
+| fresh-backfill      | memo OFF (pre-memo)* | memo unpaced | memo-rung pacing | unified pacing | + frontier damping |
+|---------------------|---------------------|--------------|------------------|----------------|--------------------|
+| inversions          | 179/1983 (9.0%)     | unmeasured, visually severe | 81/2012 (4.0%) | 46/1992 (2.3%) | **2/1993 (0.1%)** |
+| miss re-reads       | 17,643              | ~2,130       | 2,134            | 2,144          | 2,533              |
+| quiescent snapshots | 25                  | 37-39        | 39               | 38             | 34/34 (full PASS)  |
+| disk.errors (A7)    | 0                   | 12-15        | 10               | 5              | **0**              |
+| order_gated         | —                   | —            | ~14k             | 16,134         | 37,140             |
 
 \* the "memo OFF" column is a true pre-memo baseline only for this recording — after the
 unified pacing the rules are ttl-independent, so a fresh ttl=0 run restores the read churn
@@ -110,6 +110,37 @@ validated from scratch, fixes mutation-checked):**
   dropped deliberately (it would iterate the map cross-thread; `missCount()` is a test
   seam only); the plan's Tier-2 memo gametest, Paper twin tests, and a live
   requirement-2 ("already generated") pin are deferred to `v0.7.1-candidates.md`.
+
+**Movement "line inversions" — admission-trace verdict + frontier outward damping
+(2026-07-19, maintainer-reported: far ring-arcs popping after "move fast then stop"):**
+diagnosed with the new `-Dlss.admissionTrace=true` instrument (one `[lss-adm]` line per
+escalation decision; test-server.sh enables it on dev Fabric servers) against paired
+client traces. Verdict: the gates were HONEST — the far wave (40 tickets, the x=39/z=-36
+leading-edge bands) was admitted at `r=18-19, f=18, sync=18, gen=18`, i.e. candidate at
+the frontier with a clean window, because at that drain instant the near field was
+GENUINELY all-satisfied (crescents probe-served, rings 6-17 answered up_to_date/disk in
+the same second). One second later, continued movement minted ~120 brand-new near
+positions (frontier collapsed to 9, admitted `via=memo` at `r=9-11, f=9-10`); ~2 s
+generation latency then displayed the two waves in admission order — far line first,
+near bands after. So the frontier is NON-MONOTONIC under movement, and instantaneous
+gates cannot refuse work that is legitimately the frontier NOW on behalf of work that
+will only exist a second from now. Fix: **frontier outward damping** — the spread-gate
+reference (`liveFrontierRing`) follows inward observations instantly but climbs outward
+at one ring per `FRONTIER_OUTWARD_DAMP_MILLIS_PER_RING` (333 ms, ~3 rings/s), so a
+movement-minted oscillation can never drag the window to the far edge between mints;
+after stopping, the reference climbs to the true frontier in a few seconds and far fill
+resumes. Stationary cost ~zero: ring-by-ring advance stays inside the +2 spread window
+(candidates at old-frontier+1/+2 admit without waiting on the damper). A long-idle stamp
+gap accumulates outward budget, so teleport-into-explored-terrain and
+resume-after-convergence apply instantly. Alternatives rejected: movement-hold (binary
+cliff — a slow walker freezes far fill forever; rhymes with the retired client movement
+debounce), velocity prediction (fragile), smaller admission waves (softens the pop,
+keeps the order), client predictive declaration / ticket cancellation (protocol churn /
+vanilla can't cancel). Pins: `frontierOutwardDampingHoldsJumpsAndFollowsInwardInstantly`,
+`productionDefaultEnablesOutwardDamping` (wired nonzero default — rigs run damping OFF
+to keep the pre-damping gate pins calibrated), `dampingIntervalZeroRestoresInstant…`,
+and `movementMintedNearWorkOutrunsAFarFrontierObservation` (the live-trace scenario
+end-to-end: far held -> minted near admits instantly -> far follows after the climb).
 
 ## Goal
 

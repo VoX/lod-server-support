@@ -36,7 +36,12 @@ class OffThreadProcessorDiskResultTest {
     private static final long COLUMN_TS = 1_700_000_000L;
 
     private static final class TestState extends AbstractPlayerRequestState<Object> {
-        TestState(UUID uuid, int syncCap, int genCap) { super(uuid, syncCap, genCap); }
+        TestState(UUID uuid, int syncCap, int genCap) {
+            super(uuid, syncCap, genCap);
+            // Damping off: these rigs calibrate the gate pins against instant-outward
+            // frontier semantics; the damping tests re-enable it with an injected clock.
+            setFrontierDampingForTest(0, System::nanoTime);
+        }
         @Override public String getPlayerName() { return "test"; }
         /** Seeds one want-set batch carrying a single request (the pre-v17 per-request
          *  enqueue has no equivalent — each declaration REPLACES the backlog). Every call
@@ -1539,6 +1544,114 @@ class OffThreadProcessorDiskResultTest {
             assertTrue(rig.state.hasPendingRequest(6, 0), "the admitted ticket is ring 6");
             assertFalse(rig.state.hasPendingRequest(8, 0), "ring 8 holds no slot");
             assertEquals(4, rig.proc.diskSubmits.size(), "neither memoized position re-read disk");
+        } finally {
+            rig.proc.shutdown();
+        }
+    }
+
+    // ---- Frontier outward damping (movement inversions, 2026-07-19 admission-trace
+    // diagnosis): the spread-gate reference follows inward observations instantly but
+    // climbs outward at ~3 rings/s, so a movement-minted frontier oscillation (near
+    // field momentarily all-satisfied -> far edge observed -> movement mints new near
+    // work) cannot drag the admission window to the far edge between mints. ----
+
+    @Test
+    void frontierOutwardDampingHoldsJumpsAndFollowsInwardInstantly() {
+        var state = new TestState(UUID.randomUUID(), 4, 4);
+        long[] clock = {0};
+        state.setFrontierDampingForTest(333_000_000L, () -> clock[0]);
+        state.updatePlayerChunk(0, 0);
+        state.stampLiveFrontier(4, 0); // first stamp initializes instantly
+        assertFalse(state.generationOrderSpreadExceeded(6, 0, 2), "window covers frontier+2");
+        assertTrue(state.generationOrderSpreadExceeded(7, 0, 2));
+
+        state.stampLiveFrontier(18, 0); // far observation, zero elapsed time
+        assertTrue(state.generationOrderSpreadExceeded(18, 0, 2),
+                "an outward jump must NOT move the window instantly");
+        clock[0] += 1_000_000_000L; // 1 s -> at most +3 rings
+        state.stampLiveFrontier(18, 0);
+        assertTrue(state.generationOrderSpreadExceeded(10, 0, 2), "climbed to 7: 10 > 7+2");
+        assertFalse(state.generationOrderSpreadExceeded(9, 0, 2), "9 <= 7+2 admits");
+
+        state.stampLiveFrontier(5, 0); // movement mints near work: inward is instant
+        assertTrue(state.generationOrderSpreadExceeded(8, 0, 2),
+                "the inward pull applies immediately: 8 > 5+2");
+        assertFalse(state.generationOrderSpreadExceeded(7, 0, 2));
+    }
+
+    @Test
+    void productionDefaultEnablesOutwardDamping() {
+        // A bare state (no test seam) must damp: pins that the LSSConstants default is
+        // wired and nonzero — the rig off-switch would otherwise mask a dead constant.
+        // No sleeps: the hold is observable instantly (two stamps microseconds apart),
+        // and even a multi-second CI stall only lets the reference climb a few rings,
+        // nowhere near the far edge.
+        var state = new AbstractPlayerRequestState<Object>(UUID.randomUUID(), 4, 4) {
+            @Override public String getPlayerName() { return "default"; }
+        };
+        state.updatePlayerChunk(0, 0);
+        state.stampLiveFrontier(4, 0);
+        state.stampLiveFrontier(18, 0);
+        assertTrue(state.generationOrderSpreadExceeded(18, 0, 2),
+                "production default must hold an instant outward jump");
+    }
+
+    @Test
+    void dampingIntervalZeroRestoresInstantOutwardStamps() {
+        var state = new TestState(UUID.randomUUID(), 4, 4); // rig default: damping off
+        state.updatePlayerChunk(0, 0);
+        state.stampLiveFrontier(4, 0);
+        state.stampLiveFrontier(18, 0);
+        assertFalse(state.generationOrderSpreadExceeded(20, 0, 2),
+                "damping off: the outward stamp applies instantly (pre-damping semantics)");
+        assertTrue(state.generationOrderSpreadExceeded(21, 0, 2));
+    }
+
+    @Test
+    void movementMintedNearWorkOutrunsAFarFrontierObservation() throws Exception {
+        // The 18:55:44 live-trace scenario: with the near field momentarily all-satisfied
+        // the observed frontier jumps to the far edge band. Undamped, the far band admits
+        // that instant and completes AFTER the near work movement mints a moment later —
+        // the far-then-near "line inversion" at flight end. Damped: the far escalation
+        // holds (spread), the minted near work admits instantly, and the far band follows
+        // once the reference has had stationary time to climb.
+        var rig = new Rig(true, 8, 4, 30);
+        long[] clock = {0};
+        rig.state.setFrontierDampingForTest(333_000_000L, () -> clock[0]);
+        try {
+            rig.state.updatePlayerChunk(0, 0);
+            declare(rig, rig.state, new IncomingRequest(4, 0, -1));
+            waitFor(() -> rig.proc.diskSubmits.size() == 1, "near read");
+            rig.inject(dataResult(rig.uuid, 4, 0, DIM, new byte[]{1}, 5000L, 1L));
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
+            waitFor(() -> rig.proc.enqueuedColumns.size() == 1, "near served — field satisfied");
+
+            long gatedBefore = rig.proc.getDiagnostics().getTotalGenOrderGated();
+            declare(rig, rig.state, new IncomingRequest(18, 0, -1));
+            waitFor(() -> rig.proc.diskSubmits.size() == 2, "far read");
+            rig.inject(ChunkReadResult.notFoundAuthoritative(rig.uuid, 18, 0, DIM, 2L));
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
+            waitFor(() -> rig.proc.getDiagnostics().getTotalGenOrderGated() > gatedBefore,
+                    "the far miss is HELD — the damped reference has not chased the far edge");
+            assertEquals(0, rig.state.getHeldGenSlots());
+
+            // Movement mints new near work: the inward pull is instant, so it admits now.
+            declare(rig, rig.state, new IncomingRequest(5, 0, -1), new IncomingRequest(18, 0, -1));
+            waitFor(() -> rig.proc.diskSubmits.size() == 3, "minted near read");
+            rig.inject(ChunkReadResult.notFoundAuthoritative(rig.uuid, 5, 0, DIM, 3L));
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
+            waitFor(() -> rig.state.getHeldGenSlots() == 1, "near miss escalates immediately");
+            assertTrue(rig.state.hasPendingRequest(5, 0));
+
+            // Stop: the near outcome drains, the reference climbs, the far band follows.
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid),
+                    List.of(new TickSnapshot.GenerationReadyData(rig.uuid, 5, 0, DIM, null, 0L, 1L, true, false)));
+            waitFor(() -> rig.state.getHeldGenSlots() == 0, "near outcome drains");
+            clock[0] += 5_000_000_000L;
+            declare(rig, rig.state, new IncomingRequest(18, 0, -1));
+            waitFor(() -> rig.state.getHeldGenSlots() == 1, "far band admits after the climb");
+            assertTrue(rig.state.hasPendingRequest(18, 0));
+            assertEquals(3, rig.proc.diskSubmits.size(), "the far re-ask came via its memo, no re-read");
         } finally {
             rig.proc.shutdown();
         }

@@ -264,13 +264,48 @@ public abstract class AbstractPlayerRequestState<T> {
         return new int[]{sync, gen};
     }
 
+    // Frontier outward damping (see LSSConstants.FRONTIER_OUTWARD_DAMP_MILLIS_PER_RING):
+    // liveFrontierRing holds the DAMPED reference the spread gate consults. Inward
+    // observations apply instantly; outward ones advance at most one ring per interval,
+    // so a movement-minted oscillation (near field momentarily all-satisfied -> observed
+    // frontier jumps to the far edge -> movement mints new near work a moment later)
+    // cannot drag the admission window to the far edge between mints. Processing thread
+    // only. The clock is a seam so damping tests are deterministic; rigs pass 0 to
+    // disable (instant outward — the pre-damping gate semantics their pins calibrate).
+    private long frontierDampNanosPerRing =
+            LSSConstants.FRONTIER_OUTWARD_DAMP_MILLIS_PER_RING * 1_000_000L;
+    private java.util.function.LongSupplier frontierClock = System::nanoTime;
+    private long frontierAdvanceMarkNanos;
+
+    /** Test seam (protected — rigs subclass from other packages): outward-damping
+     *  interval (0 = instant/off, the pre-damping semantics existing gate pins calibrate
+     *  against) + clock, so damping tests are deterministic. */
+    protected void setFrontierDampingForTest(long nanosPerRing, java.util.function.LongSupplier clock) {
+        this.frontierDampNanosPerRing = nanosPerRing;
+        this.frontierClock = clock;
+    }
+
     /** Router drain stamp: the first not-actually-satisfied entry of this pass defines the
-     *  live frontier. No-op without a stamped player chunk. */
+     *  live frontier (outward-damped — see the field comment above). No-op without a
+     *  stamped player chunk. */
     public void stampLiveFrontier(int cx, int cz) {
         long player = this.playerChunkPacked;
         if (player == NO_PLAYER_CHUNK) return;
-        this.liveFrontierRing = PositionUtil.chebyshevDistance(cx, cz,
+        int observed = PositionUtil.chebyshevDistance(cx, cz,
                 PositionUtil.unpackX(player), PositionUtil.unpackZ(player));
+        int current = this.liveFrontierRing;
+        if (this.frontierDampNanosPerRing == 0 || current < 0 || observed <= current) {
+            // Off, first stamp, or inward: apply instantly and restart the outward budget.
+            this.liveFrontierRing = observed;
+            this.frontierAdvanceMarkNanos = this.frontierClock.getAsLong();
+            return;
+        }
+        long now = this.frontierClock.getAsLong();
+        long steps = (now - this.frontierAdvanceMarkNanos) / this.frontierDampNanosPerRing;
+        if (steps > 0) {
+            this.liveFrontierRing = (int) Math.min(observed, current + steps);
+            this.frontierAdvanceMarkNanos = now;
+        }
     }
 
     /**

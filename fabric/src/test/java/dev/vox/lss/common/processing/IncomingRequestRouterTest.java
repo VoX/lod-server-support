@@ -39,7 +39,12 @@ class IncomingRequestRouterTest {
     private static final String DIM = "minecraft:overworld";
 
     private static final class TestState extends AbstractPlayerRequestState<Object> {
-        TestState(UUID uuid, int syncCap, int genCap) { super(uuid, syncCap, genCap); }
+        TestState(UUID uuid, int syncCap, int genCap) {
+            super(uuid, syncCap, genCap);
+            // Damping off: these rigs calibrate the gate pins against instant-outward
+            // frontier semantics; the damping tests re-enable it with an injected clock.
+            setFrontierDampingForTest(0, System::nanoTime);
+        }
         @Override public String getPlayerName() { return "test"; }
         /** Seeds one want-set batch carrying a single request (the pre-v17 per-request
          *  enqueue has no equivalent — each declaration REPLACES the backlog). Every call
