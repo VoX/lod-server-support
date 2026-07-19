@@ -142,7 +142,7 @@ tasks.register('voxyJar') {
                         def text = zf.getInputStream(e).getText('UTF-8')
                         // Replace ONLY the top-level (column-0) description line; the indented
                         // command/permission descriptions are left untouched. name/main/version
-                        // /api-version/commands/permissions/folia-supported are all preserved.
+                        // /api-version/commands/permissions are all preserved.
                         text = text.replaceFirst(/(?m)^description:.*$/,
                                 'description: Server-side backend for Voxy multiplayer LOD rendering. Identical to LOD Server Support (same plugin, second distribution channel) — fully interchangeable.')
                         def ne = new ZipEntry('plugin.yml')

@@ -12,6 +12,7 @@ import java.util.Properties;
 import java.util.regex.Pattern;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -23,8 +24,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * is invisible until a real Paper server refuses to load — or silently mis-loads — the
  * plugin: an unresolvable {@code main} or wrong {@code api-version} aborts plugin load, a
  * renamed plugin moves the {@code plugins/LodServerSupport/} data folder the config and
- * soak staging rely on, and {@code folia-supported} must stay {@code true} now that the
- * pump runs on GlobalRegionScheduler — removing it silently drops Folia support.
+ * soak staging rely on, and {@code folia-supported} must stay ABSENT on the 26.2 line —
+ * declaring it would auto-load the plugin on a future Folia 26.2 with live-unvalidated
+ * Folia paths (the Folia soaks are pending upstream; re-add the flag with that validation).
  */
 class PluginYmlContractTest {
 
@@ -97,13 +99,17 @@ class PluginYmlContractTest {
     }
 
     @Test
-    void foliaSupportedIsDeclared() {
-        // Flipped 2026-07-02: the pump now runs on GlobalRegionScheduler and lifecycle
-        // ingress is mailboxed (FoliaWiringContractTest pins both), so the old reason for
-        // the absence pin — BukkitRunnable main-thread assumptions — is gone. Folia refuses
-        // to load plugins without this flag; removing it silently drops Folia support.
-        assertTrue(yml.getBoolean("folia-supported"),
-                "folia-supported: true is required for Folia to load the plugin");
+    void foliaSupportedIsAbsentOnThe262Line() {
+        // Flipped again 2026-07-19 (was declared-true since 2026-07-02): no Folia build
+        // exists for MC 26.2, so the Folia code paths (regionized probing, hold-release,
+        // lifecycle mailbox — FoliaWiringContractTest still pins their wiring) have never
+        // run against a real 26.2 Folia. Declaring the flag would auto-load v0.7.0 jars the
+        // day Folia ships 26.2, with a known deferred Folia-only race outstanding
+        // (docs/planning/v0.7.1-candidates.md #1). Re-add `folia-supported: true` together
+        // with the SOAK_PLATFORM=folia validation once Folia publishes a 26.2 build.
+        assertFalse(yml.contains("folia-supported"),
+                "folia-supported must stay absent until Folia 26.2 exists and the Folia soak"
+                        + " passes — declaring it ships live-unvalidated Folia paths");
     }
 
     @Test

@@ -149,9 +149,13 @@ def check_paper_jar(jar, problems):
         ymltext = _read(jar, "plugin.yml")
         if _looks_unexpanded(ymltext):
             problems.append(f"{base}: plugin.yml has an unexpanded ${{version}} placeholder")
-        if not re.search(r"^folia-supported:\s*true\s*$", ymltext, re.MULTILINE):
-            problems.append(f"{base}: plugin.yml must declare folia-supported: true "
-                            "(Folia refuses to load the plugin without it)")
+        # Inverted 2026-07-19 (was required-true): no Folia build exists for MC 26.2, so the
+        # flag must stay ABSENT — declaring it would auto-load release jars on a future Folia
+        # 26.2 with live-unvalidated Folia paths. Re-invert together with the Folia soak
+        # validation once Folia ships 26.2 (see docs/planning/v0.7.1-candidates.md).
+        if re.search(r"^folia-supported:\s*true\s*$", ymltext, re.MULTILINE):
+            problems.append(f"{base}: plugin.yml declares folia-supported: true — must stay "
+                            "absent until Folia 26.2 exists and the Folia soak passes")
     if not any(n.startswith("dev/vox/lss/common/") and n.endswith(".class") for n in names):
         problems.append(f"{base}: shaded jar missing the shared common/ classes")
     if "paperweight-mappings-namespace: mojang" not in _manifest(jar):
@@ -466,7 +470,7 @@ def _selftest():
 
         good_pap = os.path.join(td, "lod-server-support-paper.jar")
         _make_jar(good_pap, {
-            "plugin.yml": "name: LodServerSupport\nversion: 0.4.0\nfolia-supported: true\n",
+            "plugin.yml": "name: LodServerSupport\nversion: 0.4.0\n",
             "dev/vox/lss/paper/LSSPaperPlugin.class": "x",
             "dev/vox/lss/common/PositionUtil.class": "x",
         }, manifest="Manifest-Version: 1.0\npaperweight-mappings-namespace: mojang\n")
@@ -474,16 +478,18 @@ def _selftest():
         check_paper_jar(good_pap, p)
         check(p == [], f"clean paper jar flagged: {p}")
 
-        # a paper jar without the folia-supported flag must be caught (Folia refuses to load it)
-        noflag_pap = os.path.join(td, "noflag-paper.jar")
-        _make_jar(noflag_pap, {
-            "plugin.yml": "name: LodServerSupport\nversion: 0.4.0\n",
+        # a paper jar DECLARING folia-supported must be caught: no Folia build exists for MC
+        # 26.2, and the flag would auto-load release jars on a future Folia with
+        # live-unvalidated paths (inverted 2026-07-19; re-invert with the Folia validation)
+        foliaflag_pap = os.path.join(td, "foliaflag-paper.jar")
+        _make_jar(foliaflag_pap, {
+            "plugin.yml": "name: LodServerSupport\nversion: 0.4.0\nfolia-supported: true\n",
             "dev/vox/lss/paper/LSSPaperPlugin.class": "x",
             "dev/vox/lss/common/PositionUtil.class": "x",
         }, manifest="Manifest-Version: 1.0\npaperweight-mappings-namespace: mojang\n")
         p = []
-        check_paper_jar(noflag_pap, p)
-        check(any("folia-supported" in m for m in p), "missing folia-supported flag not caught")
+        check_paper_jar(foliaflag_pap, p)
+        check(any("folia-supported" in m for m in p), "declared folia-supported flag not caught")
 
         bad_pap = os.path.join(td, "bad-paper.jar")
         _make_jar(bad_pap, {
@@ -501,7 +507,7 @@ def _selftest():
         # Paper shades common/ at the top level: a dev-only common namespace must be caught.
         common_leak_pap = os.path.join(td, "common-leak-paper.jar")
         _make_jar(common_leak_pap, {
-            "plugin.yml": "name: LodServerSupport\nversion: 0.4.0\nfolia-supported: true\n",
+            "plugin.yml": "name: LodServerSupport\nversion: 0.4.0\n",
             "dev/vox/lss/paper/LSSPaperPlugin.class": "x",
             "dev/vox/lss/common/PositionUtil.class": "x",
             "dev/vox/lss/common/benchmark/SharedBenchHook.class": "x",  # leaked dev code
@@ -598,7 +604,7 @@ def _selftest():
         # A clean voxy Paper jar: name STILL LodServerSupport → passes both gates.
         good_vpap = os.path.join(td, "voxy-server-side-paper.jar")
         _make_jar(good_vpap, {
-            "plugin.yml": ("name: LodServerSupport\nversion: 0.7.0\nfolia-supported: true\n"
+            "plugin.yml": ("name: LodServerSupport\nversion: 0.7.0\n"
                            "description: Server-side backend for Voxy...\n"),
             "dev/vox/lss/paper/LSSPaperPlugin.class": "x",
             "dev/vox/lss/common/PositionUtil.class": "x",
@@ -612,7 +618,7 @@ def _selftest():
         # + plugin identity, and forking it breaks interchangeability.
         forked_vpap = os.path.join(td, "voxy-server-side-paper-forked.jar")
         _make_jar(forked_vpap, {
-            "plugin.yml": "name: VoxyServerSide\nversion: 0.7.0\nfolia-supported: true\n",
+            "plugin.yml": "name: VoxyServerSide\nversion: 0.7.0\n",
             "dev/vox/lss/paper/LSSPaperPlugin.class": "x",
             "dev/vox/lss/common/PositionUtil.class": "x",
         }, manifest="Manifest-Version: 1.0\npaperweight-mappings-namespace: mojang\n")
@@ -685,7 +691,7 @@ def _selftest():
               f"missing icon entry not caught: {p}")
 
         LSS_PLUGIN_YML = ("name: LodServerSupport\nversion: '0.7.0'\n"
-                          "description: LSS plugin.\nfolia-supported: true\n"
+                          "description: LSS plugin.\n"
                           "commands:\n  lsslod:\n    description: cmd\n")
         pair_lss_pap = os.path.join(td, "pair-lss-paper.jar")
         _make_jar(pair_lss_pap, {"plugin.yml": LSS_PLUGIN_YML})
@@ -737,7 +743,7 @@ def _selftest():
         os.makedirs(dfab)
         os.makedirs(dpap)
         PY_LSS = ("name: LodServerSupport\nversion: '0.7.0'\n"
-                  "description: LSS plugin.\nfolia-supported: true\n")
+                  "description: LSS plugin.\n")
         pap_manifest = "Manifest-Version: 1.0\npaperweight-mappings-namespace: mojang\n"
 
         def _write_tree_fabric(name, meta, extra=None):

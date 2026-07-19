@@ -71,7 +71,7 @@ Each Minecraft version has its own build; only the latest is listed. Older-MC bu
 | **1.21.11** | v0.5.0+mc1.21.11 | ✅ | ✅ | ✅ | 0.2.15-beta+ | 21+ |
 | **1.21.8** | v0.6.1+mc1.21.8 | ✅ | ✅ | ✅ | 0.2.5-alpha+ | 21+ |
 
-Fabric builds are client + server; the Paper plugin is server-only and also runs on Purpur. Folia uses the same plugin JAR. 26.2 has no Folia build yet upstream.
+Fabric builds are client + server; the Paper plugin is server-only and also runs on Purpur. On the older support lines Folia uses the same plugin JAR (experimental). The 26.2 plugin does **not** declare Folia support — no Folia build exists for MC 26.2, and support returns once Folia ships 26.2 and validation passes.
 
 > [!IMPORTANT]
 > **Update the server first.** LSS versions a networking protocol. A newer client on an older server establishes no LOD session — you see vanilla render distance and no error. A v0.7.0+ server keeps serving v0.6.x clients through a built-in compatibility layer (`enableV16Compat`, default on), so servers can update ahead of their players. Release notes call out which updates carry a protocol bump.

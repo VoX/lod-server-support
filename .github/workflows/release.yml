@@ -119,10 +119,11 @@ jobs:
           name: ${{ github.ref_name }} - Paper/Purpur (MC 26.2)
           version: ${{ github.ref_name }}+paper+mc26.2
           version-type: release
-          # The jar still declares folia-supported: true, but Folia has not published a 26.2
-          # build yet, so releases advertise only paper + purpur on Modrinth. Re-add `folia` here
-          # once Folia ships 26.2 and the soak passes (Folia support is experimental —
-          # CLAUDE.md, Release Notes Format rules).
+          # Since v0.7.0 the jar does NOT declare folia-supported (no Folia build exists for
+          # MC 26.2 — the flag would auto-load Folia-unvalidated jars the day Folia ships), so
+          # releases advertise only paper + purpur. Re-add `folia` here TOGETHER with the
+          # plugin.yml flag + PluginYmlContractTest + release_check inversions once Folia
+          # ships 26.2 and the SOAK_PLATFORM=folia validation passes.
           loaders: |
             paper
             purpur
