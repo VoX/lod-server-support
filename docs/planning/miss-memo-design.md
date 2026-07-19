@@ -10,6 +10,27 @@ erased every memo the instant it was written — split into `invalidateStamps()`
 stamps-only) vs `invalidate()` (edits, clears misses too), pinned by the churn-loop test.
 Supersedes the sketch at `v0.7.1-candidates.md` item 10a. Original plan below.
 
+**Soak A/B finding (2026-07-19, WSL2 + a live concurrent test server — read before judging
+an A7 red):** fresh-backfill with the memo ON red-flags A7 on constrained boxes with 12-15
+timeout-triaged `disk.errors` (decisive signature: error delta == TimeoutException count,
+zero non-timeout errors, **A5 exact** — the memo term closes the identity). The kill-switch
+A/B on identical code (`missMemoTtlSeconds: 0` scenario override, now allowlisted in
+check_soak) proved it is the MEMO's dynamics, not the environment: memo-off = PASS, zero
+timeouts, `disk.not_found` 17,378; memo-on = `not_found` 2,129 + ~20,800 memo hits,
+convergence ~2x faster (37 vs 17 of 54 snapshots verified-quiescent), fewer column sends —
+and 12-15 background reads starved past the 10 s timeout. Mechanism: pre-memo, the churn
+reads accidentally PACED generation admission (every gen escalation waited behind a fresh
+read); the memo removes that pacing, generation runs at its full caps continuously, and the
+resulting save traffic monopolizes the shared single-threaded vanilla IOWorker — on which
+LSS's `useBackgroundReadPriority` reads deliberately run BELOW foreground work — so the few
+remaining real data reads can queue past `DISK_READ_TIMEOUT_SECONDS` on slow IO. Every such
+timeout is transient and self-heals (error triage → not-found ladder → re-declaration), so
+this is log-noise + an A7 red on constrained boxes, not data loss. Accepted for now as the
+price of the speedup; candidate refinement (v0.7.2): gate memo escalation on a reader-latency
+signal (the `AdaptiveReadThrottle` pattern) so generation admission re-acquires pacing
+exactly when reads slow down. The fresh-backfill gen caps (40/64, above the 16/32 defaults)
+exaggerate the effect; default-config servers see proportionally less write pressure.
+
 ## Goal
 
 Under server-owned generation, a position waiting for a generation slot re-reads disk at

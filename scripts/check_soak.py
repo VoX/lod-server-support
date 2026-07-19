@@ -135,6 +135,9 @@ SERVER_CONFIG_INT_KEYS = frozenset({
     "generationConcurrencyLimitGlobal", "generationTimeoutSeconds",
     "dirtyBroadcastIntervalSeconds",
     "generationConcurrencyLimitPerPlayer", "perDimensionTimestampCacheSizeMB",
+    # Miss-memo TTL (0 = off): scenarios may pin the memo off for A/B against the
+    # pre-memo read-churn behavior, which remains a fully supported configuration.
+    "missMemoTtlSeconds",
 })
 SERVER_CONFIG_KEYS = SERVER_CONFIG_BOOL_KEYS | SERVER_CONFIG_INT_KEYS
 
