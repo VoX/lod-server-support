@@ -712,7 +712,7 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
             }
         } else if (result.notFound()) {
             handleDiskNotFound(playerUuid, state, packed, cx, cz, pending, dimension,
-                    result.authoritativeMiss());
+                    result.authoritativeMiss() && !staleAgainstEdit);
         } else {
             if (!staleAgainstEdit) {
                 state.markDiskReadDone(cx, cz);
@@ -767,6 +767,13 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
         this.timestampCache.put(dimension, packed, columnTimestamp, this.cycleNow);
     }
 
+    /** Package-private test seam: the internal timestamp cache, so in-package tests can pin
+     *  cache-coupled invariants that have no behavioral observable through the gated router
+     *  rung (e.g. that a gen-disabled server writes no memo entries at all). */
+    ColumnTimestampCache timestampCacheForTest() {
+        return this.timestampCache;
+    }
+
     /** Server-owned generation: a disk miss IS the generation trigger — no client
      *  classification is consulted. Gen available: take a GENERATION slot and queue a
      *  ticket; a full slot is TRANSIENT (silent drop, counted superseded — the next
@@ -785,11 +792,17 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
             this.ctx.diagnostics().addMissDropped(1); // law A5: a miss with no submit, no answer
             return;
         }
-        if (authoritativeMiss) {
+        if (authoritativeMiss && this.generationAvailable) {
             // Memoize the miss BEFORE the gen ladder runs — a gated or slot-full drop still
             // learned the chunk is absent, and the memo is what stops the next 1 Hz
             // re-declaration from re-reading disk to re-learn it. NEVER written for an
-            // error/timeout-triaged not-found (says nothing about existence) or a ghost.
+            // error/timeout-triaged not-found (says nothing about existence), a ghost, or an
+            // edit-overtaken delivery (the caller strips the flag: an invalidation consumed
+            // this cycle means a save happened while the read flew — re-asserting absence
+            // would undo the falsifying clear with its one falsification event already
+            // spent). Gen-disabled servers skip the write too: the rung that reads the memo
+            // is gated on generationAvailable, and entries only expire lazily on read — a
+            // write nothing reads would linger until wholesale eviction.
             this.timestampCache.putMiss(dimension, packed, System.nanoTime());
         }
         if (!this.generationAvailable) {

@@ -12,8 +12,9 @@ Supersedes the sketch at `v0.7.1-candidates.md` item 10a. Original plan below.
 
 **Soak A/B finding (2026-07-19, WSL2 + a live concurrent test server — read before judging
 an A7 red):** fresh-backfill with the memo ON red-flags A7 on constrained boxes with 12-15
-timeout-triaged `disk.errors` (decisive signature: error delta == TimeoutException count,
-zero non-timeout errors, **A5 exact** — the memo term closes the identity). The kill-switch
+timeout-triaged `disk.errors` (decisive signature — counter-based since the throttled-WARN
+change: `disk.errors` increased with zero `"Failed to read chunk"` log lines, **A5 exact**
+— the memo term closes the identity; see the CLAUDE.md A7 catalog entry). The kill-switch
 A/B on identical code (`missMemoTtlSeconds: 0` scenario override, now allowlisted in
 check_soak) proved it is the MEMO's dynamics, not the environment: memo-off = PASS, zero
 timeouts, `disk.not_found` 17,378; memo-on = `not_found` 2,129 + ~20,800 memo hits,
@@ -38,8 +39,9 @@ negative-feedback pacing the read pipeline provided implicitly (slot refills use
 admitted in ≈proximity order; instant memo refill pinned the full gen cap in flight across
 the whole frontier+2 window, and memo-fresh far positions leapfrogged near positions stuck
 behind the starved reads). Fixed by two explicit memo-path rules in
-`escalateMissToGeneration` (`paced=true`; the delivery path keeps its emergent pacing so
-ttl=0 dynamics are untouched): the **nearer-read hold** (refuse while any nearer SYNC read
+`escalateMissToGeneration` (`paced=true` — SUPERSEDED by the movement follow-up below:
+the flag is gone, both paths run the rules, and ttl=0 therefore no longer reproduces
+pre-memo ORDERING dynamics, only pre-memo read churn): the **nearer-read hold** (refuse while any nearer SYNC read
 is pending — kills the leapfrog and re-creates the read-latency feedback loop) and the
 **generation cohort span** (candidate ≤ nearest-outstanding-ticket ring +
 `MAX_GENERATION_COHORT_SPAN`(1) — restores ring-by-ring waves; the outstanding set is a
@@ -47,18 +49,24 @@ RESTRICTION, never the window's anchor — the straggler-leak lesson). `generati
 and `generation.inversions` are now soak-exported on both platforms (they were diag-only,
 which is why recordings couldn't see the regression). Measured A/B (same box, same timeline):
 
-| fresh-backfill      | memo OFF (pre-memo) | memo unpaced | memo + pacing |
-|---------------------|---------------------|--------------|---------------|
-| inversions          | 179/1983 (9.0%)     | unmeasured, visually severe | **81/2012 (4.0%)** |
-| miss re-reads       | 17,643              | ~2,130       | 2,134         |
-| quiescent snapshots | 25                  | 37-39        | **39**        |
-| disk.errors (A7)    | 0                   | 12-15        | 10            |
+| fresh-backfill      | memo OFF (pre-memo)* | memo unpaced | memo-rung pacing | unified pacing |
+|---------------------|---------------------|--------------|------------------|----------------|
+| inversions          | 179/1983 (9.0%)     | unmeasured, visually severe | 81/2012 (4.0%) | **46/1992 (2.3%)** |
+| miss re-reads       | 17,643              | ~2,130       | 2,134            | 2,144          |
+| quiescent snapshots | 25                  | 37-39        | 39               | 38             |
+| disk.errors (A7)    | 0                   | 12-15        | 10               | **5**          |
+| order_gated         | —                   | —            | ~14k             | 16,134         |
 
-The paced memo is ~2x BETTER ordered than pre-memo (explicit cohort rules order admission
-more strictly than emergent read-completion order ever did) while keeping the full ~8x read
-reduction and the convergence speedup. Residual: ~10 timeout-triaged disk.errors on
-constrained boxes (reduced from 12-15 by the feedback loop; the A7 catalog entry stands);
-the v0.7.2 reader-latency gate above remains the refinement if that needs to reach 0.
+\* the "memo OFF" column is a true pre-memo baseline only for this recording — after the
+unified pacing the rules are ttl-independent, so a fresh ttl=0 run restores the read churn
+but NOT this column's ordering dynamics.
+
+The paced memo is ~2x BETTER ordered than pre-memo, and unifying the rules onto the
+delivery path halved both residuals again (explicit cohort rules order admission more
+strictly than emergent read-completion order ever did) while keeping the full ~8x read
+reduction and the convergence speedup. Residual: ~5 timeout-triaged disk.errors on
+constrained boxes (down from 12-15 unpaced; the A7 catalog entry stands); the v0.7.2
+reader-latency gate above remains the refinement if that needs to reach 0.
 
 **Movement follow-up — pacing UNIFIED across both admission paths (2026-07-19,
 maintainer-reported: "chunks generating out in space ahead of me while flying"):** the
@@ -77,6 +85,31 @@ Ticket` re-calibrated: refill now holds at nearest-outstanding+1, tighter than t
 frontier+2 refill window). Read-timeout console noise also demoted: TimeoutException is a
 documented transient, now one throttled WARN line per minute with a count instead of a
 stack trace per chunk.
+
+**Review round (2026-07-19, three-agent subagent review of the full changeset — findings
+validated from scratch, fixes mutation-checked):**
+- **`submitRead`'s outer `Throwable` catch delivered an AUTHORITATIVE miss** (via the
+  `empty()` alias): an `Error` (SOE on corrupt NBT, OOM) during a read of an EXISTING
+  chunk would have memoized a false absence for the TTL. Now `notFoundFromError`; the
+  ambiguous `empty()` alias is deleted outright. Pinned in `AbstractChunkDiskReaderTest`.
+- **The memo write ignored the edit-overtake stale guard**: an invalidation consumed for a
+  not-found delivery meant a save raced the read — writing the memo after the falsifying
+  `invalidate()` re-asserted absence with the one falsification event already spent. The
+  delivery now strips the authoritative flag (`authoritativeMiss && !staleAgainstEdit`).
+  Pinned: `editOvertakenMissDeliveryNeverSeedsTheMemo`.
+- **Gen-disabled servers no longer write memo entries** (the rung that reads them is gated
+  on `generationAvailable`, and entries only expire lazily on read — dead weight until
+  wholesale eviction). Pinned: `genDisabledAuthoritativeMissWritesNoMemo`.
+- **New pins for gaps the review found**: the delivery-path nearer-read hold (the movement
+  bug's exact mechanism had no direct test — `aMissDeliveryHoldsEscalationWhileANearerRead
+  IsInFlight`), the delivered-data clear-matrix flavor, the cache-level `invalidateStamps`
+  memo-preservation split, and the nanoTime-wrap-safe TTL comparison.
+- **Known divergences from the plan below, accepted**: miss maps evict against their OWN
+  per-dimension cap, not the shared stamp budget (worst case ~1.5x the modeled memory,
+  bounded + kill-switchable — v0.7.1 candidate); the promised `memo_size` diag gauge was
+  dropped deliberately (it would iterate the map cross-thread; `missCount()` is a test
+  seam only); the plan's Tier-2 memo gametest, Paper twin tests, and a live
+  requirement-2 ("already generated") pin are deferred to `v0.7.1-candidates.md`.
 
 ## Goal
 
@@ -128,6 +161,8 @@ monotonic nanos`) as a sibling of the timestamp maps in
 - `invalidate(dim, positions)` — the dirty/edit path — clears misses too (a dirty mark
   means a save happened: the chunk exists; the memo is falsified).
 - Memory: miss entries count toward the same per-dimension entry budget
+  *(as-built divergence: the miss map checks its own equal-size cap independently —
+  see the review-round addendum above)*
   (`perDimensionTimestampCacheSizeMB` → `mbToEntries`) and are evicted by
   `evictIfOversized` FIRST (a miss is always cheaper to lose than a stamp — losing one
   costs a redundant read, losing a stamp costs a redundant serve).
@@ -235,6 +270,8 @@ keep the window's edges tight:
   cache, clears the memo, and releases the ticket/slot — no error, no `NOT_GENERATED`, no
   double-serve. (Fabric: gametest seam — write a chunk to the region file, seed a memo
   entry, declare; Paper: the generation-service twin via the `launchAsyncLoad` seam.)
+  *(NOT SHIPPED — deferred to `v0.7.1-candidates.md`; the fall-through behavior itself is
+  the platforms' pre-existing scheduleChunkLoad/ticket semantics, unchanged by the memo)*
 - **Window edges:** C2ME-ahead saves fire the first-save dirty mark on Fabric → rung 3
   clears the memo within a dirty-broadcast interval; loaded walk-in chunks are caught by
   the probe rung ahead of the memo on both platforms; everything else is bounded by the
@@ -273,6 +310,8 @@ mechanism counter (never concerning); `exporter-contract` golden schemas updated
 
 - `/lsslod diag`: DiskReader line gains `memo_hits=<n> memo_size=<n>`
   (`DiagnosticsFormatter` + golden-line tests, both platforms' command tests).
+  *(as-built: only `memo_hits` shipped — `memo_size` would iterate the miss map off the
+  processing thread; see the review-round addendum above)*
 - Benchmark `server.json`: `disk_reader.memo_hits`.
 - `/lss trace`: no client change (the client never sees the memo).
 
@@ -293,12 +332,16 @@ mechanism counter (never concerning); `exporter-contract` golden schemas updated
 4. **Generation outcomes** (the requirement-1 pins, Fabric + Paper twins): EVERY outcome
    flavor clears the memo — delivered, all-air, permanent failure, transient timeout,
    player-gone, dimension-change — including when the per-player `continue`s fire.
+   *(as-shipped: delivered/permanent/transient/player-gone pinned in the shared common
+   tests, Fabric-side; all-air + dimension-change flavors and literal Paper twins deferred
+   — the clear is one line before any per-player logic, placement pinned by player-gone)*
 5. **Already-generated fall-through** (the requirement-2 pins, both platforms): generation
    submitted for an on-disk chunk loads + serves + stamps + clears + releases; no
-   NOT_GENERATED, no error.
+   NOT_GENERATED, no error. *(NOT SHIPPED — deferred, see v0.7.1-candidates.md)*
 6. **`WantSetBudgetInvariantTest`**: unchanged (memo uses existing GENERATION slots) —
    verify it still re-derives.
-7. **Tier 2 gametest** (`GenerationLifecycleGameTests` + entrypoint listing already
+7. *(NOT SHIPPED — deferred, see v0.7.1-candidates.md)* **Tier 2 gametest**
+   (`GenerationLifecycleGameTests` + entrypoint listing already
    covered): one scenario — cold declare → miss (memo written) → immediate re-declare
    within TTL → no second read (assert read counters) → generation completes → served →
    re-declare → up-to-date. Plus the requirement-2 gametest from §5.

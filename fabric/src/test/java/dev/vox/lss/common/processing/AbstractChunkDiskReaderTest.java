@@ -127,6 +127,8 @@ class AbstractChunkDiskReaderTest {
         var r = runWithBarrier(3, 4, 9L, () -> null);
 
         assertTrue(r.notFound());
+        assertTrue(r.authoritativeMiss(),
+                "a null read is storage answering 'no such chunk' — the memo-seeding flavor");
         assertFalse(r.saturated());
         assertNull(r.sectionBytes());
         assertEquals(0L, r.columnTimestamp());
@@ -141,6 +143,8 @@ class AbstractChunkDiskReaderTest {
         });
 
         assertTrue(r.notFound(), "errored read must answer like a miss so the requester is not stranded");
+        assertFalse(r.authoritativeMiss(),
+                "an exception says nothing about existence — it must never seed the miss memo");
         assertFalse(r.saturated());
         assertEquals(1, reader.getDiag().getErrorCount());
         assertEquals(0, reader.getDiag().getNotFoundCount(),
@@ -158,6 +162,9 @@ class AbstractChunkDiskReaderTest {
         });
 
         assertTrue(r.notFound());
+        assertFalse(r.authoritativeMiss(),
+                "an Error (SOE on corrupt NBT, OOM) may hit a chunk that EXISTS — an"
+                        + " authoritative result here would memoize a false absence for the TTL");
         assertFalse(r.saturated());
         assertEquals(1, reader.getDiag().getErrorCount());
         assertEquals(2, reader.getDiag().getCompletedCount(),

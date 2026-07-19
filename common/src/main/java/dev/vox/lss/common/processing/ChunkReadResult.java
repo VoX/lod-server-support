@@ -39,11 +39,6 @@ public record ChunkReadResult(UUID playerUuid, int chunkX, int chunkZ,
                 true, false, false, submissionOrder);
     }
 
-    /** Alias for {@link #notFoundAuthoritative} — the plain "chunk absent" result. */
-    public static ChunkReadResult empty(UUID playerUuid, int chunkX, int chunkZ, String dimension, long submissionOrder) {
-        return notFoundAuthoritative(playerUuid, chunkX, chunkZ, dimension, submissionOrder);
-    }
-
     public static ChunkReadResult saturated(UUID playerUuid, int chunkX, int chunkZ, String dimension, long submissionOrder) {
         return new ChunkReadResult(playerUuid, chunkX, chunkZ, null, dimension, 0, 0L, false, true, false, submissionOrder);
     }

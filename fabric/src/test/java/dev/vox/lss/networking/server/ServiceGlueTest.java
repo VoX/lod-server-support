@@ -61,7 +61,7 @@ class ServiceGlueTest {
         final List<Cleared> cleared = new ArrayList<>();
 
         RecordingProcessor(Map<UUID, PlayerRequestState> players) {
-            super(players, null, false, null, 1, 0);  // memo off: these rigs pin the ttl=0 (pre-memo) read path
+            super(players, null, false, null, 1, 0);  // memo off (ttl=0): kills only the memo — the pacing rules are ttl-independent
         }
 
         @Override

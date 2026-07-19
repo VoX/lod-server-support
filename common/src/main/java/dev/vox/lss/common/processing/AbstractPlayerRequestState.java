@@ -272,14 +272,17 @@ public abstract class AbstractPlayerRequestState<T> {
     }
 
     /**
-     * Generation pacing for the miss-memo rung (docs/planning/miss-memo-design.md):
-     * "generation never overtakes nearer in-flight work". True when admitting a generation
-     * ticket at {@code (cx, cz)} would overtake either:
+     * Generation pacing for EVERY admission path — the router's memo rung and the
+     * miss-delivery escalation both run this via {@code escalateMissToGeneration}
+     * (docs/planning/miss-memo-design.md): "generation never overtakes nearer in-flight
+     * work". True when admitting a generation ticket at {@code (cx, cz)} would overtake
+     * either:
      * <ul>
      *   <li>a NEARER pending SYNC read — the pre-memo pipeline had this property
-     *       implicitly (escalations only happened at read completions, so a nearer
-     *       in-flight read's escalation always came first); a memo escalation that skips
-     *       ahead of it produces the far-generates-while-near-waits-on-disk leapfrog. As
+     *       implicitly for stationary players (escalations only happened at read
+     *       completions, so a nearer in-flight read's escalation usually came first); a
+     *       memo escalation or a stale far delivery under movement that skips ahead of it
+     *       produces the far-generates-while-near-waits-on-disk leapfrog. As
      *       a side effect this re-creates the read-latency feedback loop: when reads slow
      *       under generation save pressure, admission pauses and the IOWorker drains.</li>
      *   <li>the generation cohort: any candidate more than {@code cohortSpan} rings beyond

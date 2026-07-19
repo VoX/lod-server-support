@@ -103,10 +103,12 @@ public class ProcessingDiagnostics {
      *  real miss (gen submit or miss_dropped), so the identity balances by inspection. */
     public void addMemoHit(long n) { if (n > 0) totalMemoHits += n; }
 
-    /** Misses refused by the generation order-spread gate (a subset of miss_dropped): the
-     *  candidate ring exceeded the oldest outstanding ticket's ring by more than
-     *  MAX_GENERATION_RING_SPREAD. Nonzero means the gate is actively bounding a refill
-     *  runaway — expect it on platforms whose scheduler completes non-FIFO (C2ME). */
+    /** Generation-ordering refusals (a subset of miss_dropped), aggregated across all
+     *  three refusal sites in escalateMissToGeneration: the nearer-pending-SYNC hold, the
+     *  generation cohort span (candidate beyond nearest-outstanding + span), and the
+     *  frontier order-spread gate. Nonzero is the pacing actively converting admission
+     *  disorder into drain order — expect plenty during backfill, and more on platforms
+     *  whose scheduler completes non-FIFO (C2ME). */
     public void addGenOrderGated(long n) { if (n > 0) totalGenOrderGated += n; }
 
     /** Successful generation completions that arrived while a NEARER ticket was still

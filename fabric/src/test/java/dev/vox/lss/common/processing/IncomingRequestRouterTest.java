@@ -60,7 +60,7 @@ class IncomingRequestRouterTest {
 
         TestProcessor(Map<UUID, TestState> players, AbstractChunkDiskReader diskReader,
                       boolean generationAvailable, Path dataDir) {
-            this(players, diskReader, generationAvailable, dataDir, 0);  // memo off: these rigs pin the ttl=0 (pre-memo) read path
+            this(players, diskReader, generationAvailable, dataDir, 0);  // memo off (ttl=0): kills only the memo — the pacing rules are ttl-independent
         }
 
         TestProcessor(Map<UUID, TestState> players, AbstractChunkDiskReader diskReader,
@@ -940,9 +940,9 @@ class IncomingRequestRouterTest {
             // miss in delivery order (1,0) takes the single gen slot; the second (2,0) finds
             // the cap full — a TRANSIENT silent drop counted superseded, never a wire answer.
             reader.getPlayerQueue(p1.getPlayerUUID())
-                    .add(ChunkReadResult.empty(p1.getPlayerUUID(), 1, 0, DIM, 1L));
+                    .add(ChunkReadResult.notFoundAuthoritative(p1.getPlayerUUID(), 1, 0, DIM, 1L));
             reader.getPlayerQueue(p1.getPlayerUUID())
-                    .add(ChunkReadResult.empty(p1.getPlayerUUID(), 2, 0, DIM, 2L));
+                    .add(ChunkReadResult.notFoundAuthoritative(p1.getPlayerUUID(), 2, 0, DIM, 2L));
             offer(p1,
                     new IncomingRequest(3, 0, 2000), // timestamp-ladder up-to-date (cached 1000)
                     new IncomingRequest(3, 0, 3000), // done-bit duplicate up-to-date

@@ -111,7 +111,9 @@ public class ColumnTimestampCache {
         if (misses != null) misses.remove(packed);
     }
 
-    /** Total memo entries across all dimensions (diag gauge; includes not-yet-lazily-expired). */
+    /** Total memo entries across all dimensions, including not-yet-lazily-expired ones.
+     *  Test seam only — no production consumer: the diag line reports the volatile
+     *  memo_hits counter instead, deliberately avoiding cross-thread map iteration. */
     public int missCount() {
         int total = 0;
         for (var misses : missExpiryByPosition.values()) total += misses.size();

@@ -157,7 +157,11 @@ public abstract class AbstractChunkDiskReader {
                     LSSLogger.error("Failed to read chunk from disk at " + chunkX + ", " + chunkZ, t);
                     this.diag.recordError();
                     this.diag.recordCompleted(0);
-                    addResult(playerUuid, ChunkReadResult.empty(playerUuid, chunkX, chunkZ, dimension, submissionOrder));
+                    // notFoundFromError, NOT authoritative: an Error (SOE on corrupt NBT, OOM)
+                    // escaping readAndDeliver says nothing about the chunk's existence — an
+                    // authoritative result here would seed the miss memo and suppress reads
+                    // of a chunk that may exist for the memo TTL.
+                    addResult(playerUuid, ChunkReadResult.notFoundFromError(playerUuid, chunkX, chunkZ, dimension, submissionOrder));
                     if (t instanceof Error err) throw err;
                 }
             });
@@ -203,7 +207,9 @@ public abstract class AbstractChunkDiskReader {
                 long releases = this.timeoutWarn.recordAndTryAcquire(System.nanoTime() / 1_000_000);
                 if (releases > 0) {
                     LSSLogger.warn("Disk read timed out (>" + LSSConstants.DISK_READ_TIMEOUT_SECONDS
-                            + "s) at " + chunkX + ", " + chunkZ + " — transient, re-declared"
+                            + "s) at " + chunkX + ", " + chunkZ + " — triaged as not-found"
+                            + " (counted disk.errors; self-heals by re-declaration on"
+                            + " gen-enabled servers)"
                             + (releases > 1 ? " (+" + (releases - 1) + " more since last report)" : ""));
                 }
             } else {

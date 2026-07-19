@@ -436,6 +436,33 @@ class ColumnTimestampCacheTest {
     }
 
     @Test
+    void missDeadlineComparisonSurvivesNanoTimeWrap() {
+        // nanoTime is an arbitrary-origin long: a deadline computed near Long.MAX_VALUE
+        // wraps negative. The overflow-safe idiom (deadline - now > 0) keeps a wrapped
+        // deadline fresh; a regression to the naive (deadline > now) compares a wrapped
+        // negative deadline against a still-positive clock and expires it instantly.
+        var c = memoCache();
+        long now = Long.MAX_VALUE - TTL / 2; // deadline = now + TTL wraps negative
+        c.putMiss(OW, 5L, now);
+        assertTrue(c.isFreshMiss(OW, 5L, now + 1),
+                "fresh while the clock is pre-wrap and the deadline has wrapped");
+        assertFalse(c.isFreshMiss(OW, 5L, now + TTL), "expires exactly at the wrapped deadline");
+    }
+
+    @Test
+    void invalidateStampsPreservesTheMiss() {
+        // The disk-drain's not-found branch runs the STAMPS-ONLY invalidation in the same
+        // cycle that just memoized the miss — re-merging it into the full invalidate()
+        // erases every memo the instant it is written (the processor churn-loop test pins
+        // that end-to-end; this pins the cache-level split directly).
+        var c = memoCache();
+        c.put(OW, 5L, 100L, 0L);
+        c.putMiss(OW, 5L, 1_000L);
+        assertEquals(1, c.invalidateStamps(OW, new long[]{5L}), "the stamp is invalidated");
+        assertTrue(c.isFreshMiss(OW, 5L, 1_000L), "the miss survives the stamps-only path");
+    }
+
+    @Test
     void positiveStampIsTheMissClearChokePoint() {
         var c = memoCache();
         c.putMiss(OW, 5L, 1_000L);

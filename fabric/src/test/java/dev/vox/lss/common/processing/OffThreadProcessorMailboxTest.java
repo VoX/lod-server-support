@@ -39,7 +39,7 @@ class OffThreadProcessorMailboxTest {
 
     private static class TestProcessor extends OffThreadProcessor<TestState> {
         TestProcessor(Map<UUID, TestState> players) {
-            super(players, new StubDiskReader(), false, null, 1, 0);  // memo off: these rigs pin the ttl=0 (pre-memo) read path
+            super(players, new StubDiskReader(), false, null, 1, 0);  // memo off (ttl=0): kills only the memo — the pacing rules are ttl-independent
         }
         @Override
         protected boolean submitDiskRead(UUID playerUuid, String dimension, int cx, int cz, long order) {

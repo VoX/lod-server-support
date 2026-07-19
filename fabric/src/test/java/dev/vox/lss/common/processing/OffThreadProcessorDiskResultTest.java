@@ -66,7 +66,7 @@ class OffThreadProcessorDiskResultTest {
 
         TestProcessor(Map<UUID, TestState> players, AbstractChunkDiskReader reader,
                       boolean generationAvailable) {
-            this(players, reader, generationAvailable, 0);  // memo off: these rigs pin the ttl=0 (pre-memo) read path
+            this(players, reader, generationAvailable, 0);  // memo off (ttl=0): kills only the memo — the pacing rules are ttl-independent
         }
 
         TestProcessor(Map<UUID, TestState> players, AbstractChunkDiskReader reader,
@@ -511,7 +511,7 @@ class OffThreadProcessorDiskResultTest {
             rig.state.enqueue(new IncomingRequest(12, 12, COLUMN_TS - 1));
             rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
             waitFor(() -> rig.proc.diskSubmits.size() == 2, "re-read submitted");
-            rig.inject(ChunkReadResult.empty(rig.uuid, 12, 12, DIM, 2L));
+            rig.inject(ChunkReadResult.notFoundAuthoritative(rig.uuid, 12, 12, DIM, 2L));
             rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
             drainUntil(rig.proc, received(LSSConstants.RESPONSE_NOT_GENERATED, packed));
 
@@ -684,7 +684,7 @@ class OffThreadProcessorDiskResultTest {
         waitFor(() -> rig.proc.diskSubmits.stream().filter(s -> s.player().equals(uuid)).count() == before + 1,
                 "disk-first submit");
 
-        rig.inject(ChunkReadResult.empty(uuid, cx, cz, DIM, 1L));
+        rig.inject(ChunkReadResult.notFoundAuthoritative(uuid, cx, cz, DIM, 1L));
         rig.proc.postSnapshot(snapshot(DIM, uuid), List.of());
 
         var ref = new AtomicReference<OffThreadProcessor.GenerationTicketRequest>();
@@ -830,7 +830,7 @@ class OffThreadProcessorDiskResultTest {
             rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
             waitFor(() -> rig.proc.diskSubmits.size() == 1, "disk submit");
 
-            rig.inject(ChunkReadResult.empty(rig.uuid, 1, 9, DIM, 1L));
+            rig.inject(ChunkReadResult.notFoundAuthoritative(rig.uuid, 1, 9, DIM, 1L));
             rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
 
             var ref = new AtomicReference<OffThreadProcessor.GenerationTicketRequest>();
@@ -863,7 +863,7 @@ class OffThreadProcessorDiskResultTest {
             rig.state.enqueue(new IncomingRequest(2, 2, 0L));
             rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
             waitFor(() -> rig.proc.diskSubmits.size() == 2, "second disk-first submit");
-            rig.inject(ChunkReadResult.empty(rig.uuid, 2, 2, DIM, 2L));
+            rig.inject(ChunkReadResult.notFoundAuthoritative(rig.uuid, 2, 2, DIM, 2L));
             rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
 
             waitFor(() -> rig.proc.getDiagnostics().getTotalSuperseded() == 1,
@@ -891,7 +891,7 @@ class OffThreadProcessorDiskResultTest {
         // position the player may still want.
         var rig = new Rig(false);
         try {
-            rig.inject(ChunkReadResult.empty(rig.uuid, 3, 3, DIM, 1L));
+            rig.inject(ChunkReadResult.notFoundAuthoritative(rig.uuid, 3, 3, DIM, 1L));
             rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
 
             waitFor(() -> rig.proc.getDiagnostics().getTotalSuperseded() == 1,
@@ -1137,7 +1137,7 @@ class OffThreadProcessorDiskResultTest {
             waitFor(() -> rig.proc.diskSubmits.size() == 6, "six disk reads");
 
             // All six miss: the two NEAREST take the gen slots, the rest drop transiently.
-            for (int x = 0; x < 6; x++) rig.inject(ChunkReadResult.empty(rig.uuid, x, 0, DIM, x + 1));
+            for (int x = 0; x < 6; x++) rig.inject(ChunkReadResult.notFoundAuthoritative(rig.uuid, x, 0, DIM, x + 1));
             rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
             collectTickets(rig.proc, tickets, 2);
             assertEquals(List.of(0, 1), tickets.stream().map(t -> t.cx()).toList(),
@@ -1164,7 +1164,7 @@ class OffThreadProcessorDiskResultTest {
                     new IncomingRequest(5, 0, -1L));
             rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
             waitFor(() -> rig.proc.diskSubmits.size() == 10, "re-declared disk reads");
-            for (int x = 2; x < 6; x++) rig.inject(ChunkReadResult.empty(rig.uuid, x, 0, DIM, 10 + x));
+            for (int x = 2; x < 6; x++) rig.inject(ChunkReadResult.notFoundAuthoritative(rig.uuid, x, 0, DIM, 10 + x));
             rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
             waitFor(() -> rig.proc.getDiagnostics().getTotalMissDropped() >= missDroppedBefore + 4,
                     "all four re-declared misses resolved");
@@ -1185,7 +1185,7 @@ class OffThreadProcessorDiskResultTest {
                     new IncomingRequest(4, 0, -1L), new IncomingRequest(5, 0, -1L));
             rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
             waitFor(() -> rig.proc.diskSubmits.size() == 14, "post-head re-declaration reads");
-            for (int x = 2; x < 6; x++) rig.inject(ChunkReadResult.empty(rig.uuid, x, 0, DIM, 20 + x));
+            for (int x = 2; x < 6; x++) rig.inject(ChunkReadResult.notFoundAuthoritative(rig.uuid, x, 0, DIM, 20 + x));
             rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
             collectTickets(rig.proc, tickets, 4);
             assertEquals(List.of(0, 1, 2, 3), tickets.stream().map(t -> t.cx()).toList(),
@@ -1298,6 +1298,55 @@ class OffThreadProcessorDiskResultTest {
         }
     }
 
+    @Test
+    void editOvertakenMissDeliveryNeverSeedsTheMemo() throws Exception {
+        // A save races the in-flight read: applyEvents runs the full invalidate() (the
+        // memo's falsification event) and marks the read's dedup group stale. The read's
+        // not-found then delivers edit-overtaken — re-asserting absence AFTER the
+        // falsifying clear would suppress reads of the just-saved chunk for the TTL with
+        // the one falsification already consumed. The delivery strips the authoritative
+        // flag instead (review finding, 2026-07-19).
+        var rig = new Rig(true, 4, 0, 30); // zero gen slots: the miss drops either way
+        try {
+            rig.state.enqueue(new IncomingRequest(7, 0, -1));
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
+            waitFor(() -> rig.proc.diskSubmits.size() == 1, "cold read in flight");
+
+            rig.proc.invalidateTimestamps(DIM, new long[]{PositionUtil.packPosition(7, 0)});
+            rig.inject(ChunkReadResult.notFoundAuthoritative(rig.uuid, 7, 0, DIM, 1L));
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
+            waitFor(() -> rig.proc.getDiagnostics().getTotalMissDropped() == 1, "miss dropped");
+
+            rig.state.enqueue(new IncomingRequest(7, 0, -1));
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
+            waitFor(() -> rig.proc.diskSubmits.size() == 2,
+                    "the re-declaration READS — an edit-overtaken miss never seeds the memo");
+            assertEquals(0, rig.proc.getDiagnostics().getTotalMemoHits());
+        } finally {
+            rig.proc.shutdown();
+        }
+    }
+
+    @Test
+    void genDisabledAuthoritativeMissWritesNoMemo() throws Exception {
+        // With generation unavailable the rung that reads the memo is gated off, and
+        // entries only expire lazily on read — a write nothing reads would linger as dead
+        // weight until wholesale eviction. The write is gated on generationAvailable too.
+        var rig = new Rig(false, 4, 0, 30);
+        try {
+            rig.state.enqueue(new IncomingRequest(7, 0, -1));
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
+            waitFor(() -> rig.proc.diskSubmits.size() == 1, "cold read");
+            rig.inject(ChunkReadResult.notFoundAuthoritative(rig.uuid, 7, 0, DIM, 1L));
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
+            waitFor(() -> rig.state.getHeldSyncSlots() == 0, "miss delivered (NOT_GENERATED)");
+            assertEquals(0, rig.proc.timestampCacheForTest().missCount(),
+                    "no memo write on a gen-disabled server");
+        } finally {
+            rig.proc.shutdown();
+        }
+    }
+
     /** Requirement: generation FINISHING clears the memo in EVERY outcome flavor. Each case
      *  seeds the memo through the production miss path, delivers one outcome flavor, then
      *  proves the next declaration READS (submit) instead of memo-hitting. */
@@ -1354,6 +1403,21 @@ class OffThreadProcessorDiskResultTest {
                 true);
     }
 
+    @Test
+    void generationDeliveredDataClearsTheMemo() throws Exception {
+        // The serving flavor: a delivered column clears via BOTH the explicit world-fact
+        // clear and the put() choke point. Pins that a regression making the explicit
+        // clear conditional on failure flavors still cannot leave a live memo for a chunk
+        // that now exists.
+        byte[] bytes = {1, 2};
+        assertGenerationOutcomeClearsTheMemo(uuid ->
+                new TickSnapshot.GenerationReadyData(uuid, 7, 0, DIM,
+                        new LoadedColumnData(7, 0, bytes,
+                                bytes.length + LSSConstants.ESTIMATED_COLUMN_OVERHEAD_BYTES),
+                        COLUMN_TS, 1L),
+                false);
+    }
+
     // ---- Memo-path generation pacing: "generation never overtakes nearer in-flight work" ----
     // Restores the ordering the pre-memo read-pipeline pacing produced implicitly; without
     // these rules, instant memo refill pins the full gen cap in flight across 3 rings
@@ -1401,6 +1465,46 @@ class OffThreadProcessorDiskResultTest {
             waitFor(() -> rig.state.getHeldGenSlots() == 1,
                     "with the nearer read resolved, the memo escalation proceeds");
             assertEquals(3, rig.proc.diskSubmits.size(), "ring 4 still never re-read disk");
+        } finally {
+            rig.proc.shutdown();
+        }
+    }
+
+    @Test
+    void aMissDeliveryHoldsEscalationWhileANearerReadIsInFlight() throws Exception {
+        // The DELIVERY-path half of the nearer-read hold — the movement bug's exact
+        // mechanism. Under movement the read pipeline completes in submission-time
+        // proximity order, not current-proximity order: a stale far miss delivering while
+        // a nearer read is still in flight must NOT escalate unpaced ("isolated chunks
+        // generating out in space ahead of a moving player"). The held miss is memoized +
+        // dropped and re-enters through the closest-first drain once the nearer read
+        // resolves. Geometry: frontier 2 + spread 2 covers ring 4 and no generation is
+        // outstanding, so only the nearer-read hold can refuse — rule 1 in isolation.
+        var rig = new Rig(true, 4, 2, 30);
+        try {
+            rig.state.updatePlayerChunk(0, 0);
+            declare(rig, rig.state, new IncomingRequest(2, 0, -1), new IncomingRequest(4, 0, -1));
+            waitFor(() -> rig.proc.diskSubmits.size() == 2, "both cold reads in flight");
+
+            // Ring 4's miss arrives FIRST (ring 2 still out on disk).
+            long gatedBefore = rig.proc.getDiagnostics().getTotalGenOrderGated();
+            rig.inject(ChunkReadResult.notFoundAuthoritative(rig.uuid, 4, 0, DIM, 2L));
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
+            waitFor(() -> rig.proc.getDiagnostics().getTotalGenOrderGated() > gatedBefore,
+                    "the far miss DELIVERY is held behind the nearer in-flight read");
+            assertEquals(0, rig.state.getHeldGenSlots(), "no ticket while ring 2 waits on disk");
+
+            // The nearer read resolves (served); the re-declaration escalates ring 4 from
+            // its memo — the held delivery re-entered through the drain, no re-read.
+            rig.inject(dataResult(rig.uuid, 2, 0, DIM, new byte[]{1}, 5000L, 1L));
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
+            waitFor(() -> rig.proc.enqueuedColumns.size() == 1, "ring 2 served");
+            declare(rig, rig.state, new IncomingRequest(4, 0, -1));
+            waitFor(() -> rig.state.getHeldGenSlots() == 1,
+                    "with the nearer read resolved, the held miss escalates");
+            waitFor(() -> rig.proc.getDiagnostics().getTotalMemoHits() == 1,
+                    "…via the memo written at the held delivery");
+            assertEquals(2, rig.proc.diskSubmits.size(), "the held miss never re-read disk");
         } finally {
             rig.proc.shutdown();
         }

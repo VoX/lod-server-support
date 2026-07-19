@@ -135,8 +135,10 @@ SERVER_CONFIG_INT_KEYS = frozenset({
     "generationConcurrencyLimitGlobal", "generationTimeoutSeconds",
     "dirtyBroadcastIntervalSeconds",
     "generationConcurrencyLimitPerPlayer", "perDimensionTimestampCacheSizeMB",
-    # Miss-memo TTL (0 = off): scenarios may pin the memo off for A/B against the
-    # pre-memo read-churn behavior, which remains a fully supported configuration.
+    # Miss-memo TTL (0 = off): scenarios may pin the memo off for A/B of the read-churn
+    # dynamics. NOTE ttl=0 restores pre-memo READ CHURN only, not pre-memo ORDERING —
+    # the generation pacing rules are ttl-independent (unified 2026-07-19), so an
+    # inversion A/B against a pre-memo recording is no longer apples-to-apples.
     "missMemoTtlSeconds",
 })
 SERVER_CONFIG_KEYS = SERVER_CONFIG_BOOL_KEYS | SERVER_CONFIG_INT_KEYS
@@ -195,8 +197,8 @@ SERVER_MONOTONIC = (
     "generation.submitted", "generation.completed", "generation.timeouts",
     "generation.removed_in_flight",
     # Ordering observability (miss-memo pacing): gate/pacing refusals + far-before-near
-    # completion evidence. Monotonic counters; no law consumes them yet — soak_report and
-    # A/B comparisons read them directly.
+    # completion evidence. Monotonic counters; no law consumes them yet — read them from
+    # the raw JSONL for A/B comparisons (soak_report does not surface them).
     "generation.order_gated", "generation.inversions",
     "dirty.broadcast_positions", "dirty.suppressed_total",
     "bandwidth.total_bytes",
@@ -579,9 +581,15 @@ def law_A5(ps, cs, pc, cc, window):
         # per failure while connected (a disconnect before the answer rebalances it).
         # Same family: the two generation-ticket drop paths in drainGenerationTicketRequests
         # (state gone / dimension mismatch, both platforms) skip miss_dropped, so a
-        # near-boundary drop on dimension-trip UNDER-counts the RHS by one. No scenario
-        # currently produces permanent gen failures; if A5 reds, check both counts against
-        # CLAUDE.md's flake catalog before chasing conservation.
+        # near-boundary drop on dimension-trip UNDER-counts the RHS by one (a memo-hit-
+        # admitted ticket dropped there leaves the +1 on disk.memo_hits unbalanced, same
+        # window and magnitude). And with TWO LSS clients (no current scenario has them):
+        # a dedup fan-out miss counts disk.not_found ONCE but every attached player runs
+        # its own disposition — balanced only when all attachees admit (piggyback skips
+        # totalSubmitted); each pacing/spread/slot-full REFUSED attachee adds an extra
+        # miss_dropped, OVER-counting the RHS by one. No scenario currently produces
+        # permanent gen failures; if A5 reds, check both counts against CLAUDE.md's flake
+        # catalog before chasing conservation.
         d_md = delta(ps, cs, "service.miss_dropped")
         if d_nf != d_gen_sub + d_ng + d_md:
             out.append(Violation("A5", window,

@@ -76,7 +76,7 @@ class DedupFanoutTest {
 
         TestProcessor(Map<UUID, TestState> players, GatedDiskReader reader,
                       Map<String, byte[]> bytesByDimension, boolean generationAvailable) {
-            super(players, reader, generationAvailable, null, 1, 0);  // memo off: these rigs pin the ttl=0 (pre-memo) read path
+            super(players, reader, generationAvailable, null, 1, 0);  // memo off (ttl=0): kills only the memo — the pacing rules are ttl-independent
             this.reader = reader;
             this.bytesByDimension = bytesByDimension;
         }
@@ -583,7 +583,7 @@ class DedupFanoutTest {
             p2.enqueue(new IncomingRequest(7, 7, 0L)); // retired-0 ts, disk-first attach
             pumpUntil(proc, dims, () -> p2.getHeldSyncSlots() == 1, "second request attached");
 
-            reader.getPlayerQueue(u1).add(ChunkReadResult.empty(u1, 7, 7, OVERWORLD, 0L));
+            reader.getPlayerQueue(u1).add(ChunkReadResult.notFoundAuthoritative(u1, 7, 7, OVERWORLD, 0L));
             pumpUntil(proc, dims, () -> p1.getHeldGenSlots() == 1 && p2.getHeldGenSlots() == 1,
                     "both recipients escalate into their own generation slots");
 
