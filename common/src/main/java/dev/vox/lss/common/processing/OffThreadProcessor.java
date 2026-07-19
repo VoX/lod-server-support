@@ -796,18 +796,38 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
             this.ctx.sendActions().add(new SendAction.ColumnNotGenerated(playerUuid, packed, state));
             return;
         }
-        escalateMissToGeneration(playerUuid, state, packed, cx, cz, pending.claimsData(), dimension);
+        // paced=false: delivery-time escalation is already paced by the read round-trip
+        // itself — its cohort structure is emergent (escalations arrive in read-completion
+        // ≈ proximity order), and applying the explicit rules here would change the
+        // ttl=0 / pre-memo dynamics the gate pins were calibrated on.
+        escalateMissToGeneration(playerUuid, state, packed, cx, cz, pending.claimsData(),
+                dimension, false);
     }
 
     /**
-     * The gen-available half of the miss ladder, shared VERBATIM by the real disk-miss path
-     * ({@link #handleDiskNotFound}) and the router's miss-memo rung (a fresh memo hit skips
-     * the redundant read and lands here directly) so the two cannot drift. Order-spread
-     * gate, GENERATION slot admission + stale-guard registration + ticket enqueue, or the
-     * standard silent transient drop. Never a wire answer.
+     * The gen-available half of the miss ladder, shared by the real disk-miss path
+     * ({@link #handleDiskNotFound}, {@code paced=false}) and the router's miss-memo rung
+     * ({@code paced=true}) so the ladder cannot drift. Order-spread gate, then — memo path
+     * only — the explicit pacing rules ("generation never overtakes nearer in-flight
+     * work": nearer-pending-SYNC hold + generation cohort span), then GENERATION slot
+     * admission + stale-guard registration + ticket enqueue, or the standard silent
+     * transient drop. Never a wire answer. The memo path needs the explicit rules because
+     * it has no emergent pacing: without them, instant refill pins the full generation cap
+     * in flight across the whole admission window (completion scramble = inversions) and
+     * memo-fresh far positions leapfrog near positions stuck behind starved reads.
      */
     void escalateMissToGeneration(UUID playerUuid, PlayerState state, long packed,
-                                   int cx, int cz, boolean claimsData, String dimension) {
+                                   int cx, int cz, boolean claimsData, String dimension,
+                                   boolean paced) {
+        if (paced && state.generationOvertakesNearerInFlight(cx, cz,
+                LSSConstants.MAX_GENERATION_COHORT_SPAN)) {
+            // Ordering refusal, same disposition as the spread gate: the standard
+            // transient drop, re-declared at 1 Hz, admitted once the nearer work resolves.
+            this.ctx.diagnostics().addSuperseded(1);
+            this.ctx.diagnostics().addMissDropped(1); // law A5: a miss with no submit, no answer
+            this.ctx.diagnostics().addGenOrderGated(1);
+            return;
+        }
         if (state.generationOrderSpreadExceeded(cx, cz, LSSConstants.MAX_GENERATION_RING_SPREAD)) {
             // Order-spread gate: the platform scheduler owns completion order (chunk-system
             // rewrites like C2ME are not FIFO), so an unbounded per-slot refill lets far

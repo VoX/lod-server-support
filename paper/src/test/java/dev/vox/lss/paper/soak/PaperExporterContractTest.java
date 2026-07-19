@@ -255,7 +255,9 @@ class PaperExporterContractTest {
         assertEquals(0L, gen.get("removed_in_flight"));
         assertEquals(0, gen.get("active"));
         assertEquals(0, gen.get("active_hw"));
-        assertEquals(6, gen.size(), "zero-fill must mirror the live branch's exact key count");
+        assertEquals(0L, gen.get("order_gated"), "ordering counters present even when gen is disabled");
+        assertEquals(0L, gen.get("inversions"));
+        assertEquals(8, gen.size(), "zero-fill must mirror the live branch's exact key count");
     }
 
     @Test

@@ -1361,4 +1361,127 @@ class OffThreadProcessorDiskResultTest {
                 new TickSnapshot.GenerationReadyData(uuid, 7, 0, DIM, null, 0L, 1L, true, false),
                 true);
     }
+
+    // ---- Memo-path generation pacing: "generation never overtakes nearer in-flight work" ----
+    // Restores the ordering the pre-memo read-pipeline pacing produced implicitly; without
+    // these rules, instant memo refill pins the full gen cap in flight across 3 rings
+    // (completion-scramble inversions) and memo-fresh far positions leapfrog near positions
+    // stuck behind starved reads. Player chunk is (0,0) in the rig, so cx == ring.
+
+    /** Declares a batch, drives one processing pass. */
+    private static void declare(Rig rig, TestState state, IncomingRequest... reqs) {
+        state.offerIncomingBatch(new IncomingBatch(reqs));
+        rig.proc.postSnapshot(snapshot(DIM, rig.players.keySet().toArray(UUID[]::new)), List.of());
+    }
+
+    @Test
+    void memoEscalationHoldsWhileANearerReadIsInFlight() throws Exception {
+        var rig = new Rig(true, 4, 1, 30);
+        try {
+            rig.state.updatePlayerChunk(0, 0);
+            // Memoize ring 4 with the single gen slot taken by ring 3, then free the slot.
+            declare(rig, rig.state, new IncomingRequest(3, 0, -1), new IncomingRequest(4, 0, -1));
+            waitFor(() -> rig.proc.diskSubmits.size() == 2, "both cold reads");
+            rig.inject(ChunkReadResult.notFoundAuthoritative(rig.uuid, 3, 0, DIM, 1L));
+            rig.inject(ChunkReadResult.notFoundAuthoritative(rig.uuid, 4, 0, DIM, 2L));
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
+            waitFor(() -> rig.state.getHeldGenSlots() == 1, "ring 3 takes the slot; ring 4 memoized");
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid),
+                    List.of(new TickSnapshot.GenerationReadyData(rig.uuid, 3, 0, DIM, null, 0L, 1L, true, false)));
+            waitFor(() -> rig.state.getHeldGenSlots() == 0, "outcome frees the slot");
+
+            // Ring 2 cold (read in flight) + ring 4 memo-fresh, gen slot FREE. Ring 4 is
+            // WITHIN the spread window (frontier 2 + 2), so only the nearer-read hold can
+            // refuse it — this isolates rule 1 from the frontier gate. This is exactly the
+            // leapfrog: far generates while near waits on disk.
+            long gatedBefore = rig.proc.getDiagnostics().getTotalGenOrderGated();
+            declare(rig, rig.state, new IncomingRequest(2, 0, -1), new IncomingRequest(4, 0, -1));
+            waitFor(() -> rig.proc.diskSubmits.size() == 3, "ring 2 reads");
+            waitFor(() -> rig.proc.getDiagnostics().getTotalGenOrderGated() > gatedBefore,
+                    "the memo escalation is HELD behind the nearer in-flight read");
+            assertEquals(0, rig.state.getHeldGenSlots(), "no ticket for ring 4 while ring 2 waits on disk");
+
+            // The nearer read completes (served): the next declaration escalates ring 4.
+            rig.inject(dataResult(rig.uuid, 2, 0, DIM, new byte[]{1}, 5000L, 3L));
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
+            waitFor(() -> rig.proc.enqueuedColumns.size() == 1, "ring 2 served");
+            declare(rig, rig.state, new IncomingRequest(4, 0, -1));
+            waitFor(() -> rig.state.getHeldGenSlots() == 1,
+                    "with the nearer read resolved, the memo escalation proceeds");
+            assertEquals(3, rig.proc.diskSubmits.size(), "ring 4 still never re-read disk");
+        } finally {
+            rig.proc.shutdown();
+        }
+    }
+
+    @Test
+    void memoEscalationRespectsTheGenerationCohortSpan() throws Exception {
+        var rig = new Rig(true, 8, 2, 30);
+        try {
+            rig.state.updatePlayerChunk(0, 0);
+            // Slots: rings 5 and 5; memoized without slots: rings 6 and 8.
+            declare(rig, rig.state, new IncomingRequest(5, 0, -1), new IncomingRequest(5, 1, -1),
+                    new IncomingRequest(6, 0, -1), new IncomingRequest(8, 0, -1));
+            waitFor(() -> rig.proc.diskSubmits.size() == 4, "four cold reads");
+            for (int i = 0; i < 4; i++) {
+                var reqs = new int[][]{{5, 0}, {5, 1}, {6, 0}, {8, 0}};
+                rig.inject(ChunkReadResult.notFoundAuthoritative(rig.uuid, reqs[i][0], reqs[i][1], DIM, i + 1));
+            }
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
+            waitFor(() -> rig.state.getHeldGenSlots() == 2, "both ring-5 misses take the slots");
+            // Free ONE slot: outstanding = {ring 5}, one slot free.
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid),
+                    List.of(new TickSnapshot.GenerationReadyData(rig.uuid, 5, 1, DIM, null, 0L, 2L, true, false)));
+            waitFor(() -> rig.state.getHeldGenSlots() == 1, "one slot freed");
+
+            // Ring 6 = nearest-outstanding(5)+1 -> admitted; ring 8 > 5+1 -> cohort-held.
+            long gatedBefore = rig.proc.getDiagnostics().getTotalGenOrderGated();
+            declare(rig, rig.state, new IncomingRequest(6, 0, -1), new IncomingRequest(8, 0, -1));
+            waitFor(() -> rig.state.getHeldGenSlots() == 2, "ring 6 (within the cohort span) admits");
+            waitFor(() -> rig.proc.getDiagnostics().getTotalGenOrderGated() > gatedBefore,
+                    "ring 8 (beyond nearest-outstanding+1) is cohort-held");
+            assertTrue(rig.state.hasPendingRequest(6, 0), "the admitted ticket is ring 6");
+            assertFalse(rig.state.hasPendingRequest(8, 0), "ring 8 holds no slot");
+            assertEquals(4, rig.proc.diskSubmits.size(), "neither memoized position re-read disk");
+        } finally {
+            rig.proc.shutdown();
+        }
+    }
+
+    @Test
+    void aFarStragglerTightensButNeverBlocksNearMemoEscalation() throws Exception {
+        var rig = new Rig(true, 4, 2, 30);
+        try {
+            rig.state.updatePlayerChunk(0, 0);
+            // Two far tickets (ring 9) fill both slots; the NEAR miss (ring 3) then drops
+            // and is memoized WITHOUT ever holding a slot (so no generation outcome can
+            // clear its memo — outcomes clear memos by design).
+            declare(rig, rig.state, new IncomingRequest(9, 0, -1), new IncomingRequest(9, 1, -1));
+            waitFor(() -> rig.proc.diskSubmits.size() == 2, "far cold reads");
+            rig.inject(ChunkReadResult.notFoundAuthoritative(rig.uuid, 9, 0, DIM, 1L));
+            rig.inject(ChunkReadResult.notFoundAuthoritative(rig.uuid, 9, 1, DIM, 2L));
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
+            waitFor(() -> rig.state.getHeldGenSlots() == 2, "both far tickets outstanding");
+            declare(rig, rig.state, new IncomingRequest(3, 0, -1));
+            waitFor(() -> rig.proc.diskSubmits.size() == 3, "near cold read");
+            rig.inject(ChunkReadResult.notFoundAuthoritative(rig.uuid, 3, 0, DIM, 3L));
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
+            waitFor(() -> rig.proc.getDiagnostics().getTotalMissDropped() == 1,
+                    "near miss drops on the full cap — memoized, slotless");
+            // Free ONE far slot: outstanding = the lone far straggler at ring 9.
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid),
+                    List.of(new TickSnapshot.GenerationReadyData(rig.uuid, 9, 1, DIM, null, 0L, 2L, true, false)));
+            waitFor(() -> rig.state.getHeldGenSlots() == 1, "one far slot freed; straggler remains");
+
+            // The restriction can only TIGHTEN: the far straggler (min outstanding = 9)
+            // must never hold NEAR work — ring 3 admits immediately via its memo.
+            declare(rig, rig.state, new IncomingRequest(3, 0, -1));
+            waitFor(() -> rig.state.getHeldGenSlots() == 2,
+                    "near memo escalation proceeds despite the far straggler");
+            assertTrue(rig.state.hasPendingRequest(3, 0));
+            assertEquals(3, rig.proc.diskSubmits.size(), "ring 3 escalated from memo, no re-read");
+        } finally {
+            rig.proc.shutdown();
+        }
+    }
 }

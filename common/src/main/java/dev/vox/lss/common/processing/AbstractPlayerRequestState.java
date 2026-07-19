@@ -271,6 +271,48 @@ public abstract class AbstractPlayerRequestState<T> {
         return candidate > frontier + maxSpread;
     }
 
+    /**
+     * Generation pacing for the miss-memo rung (docs/planning/miss-memo-design.md):
+     * "generation never overtakes nearer in-flight work". True when admitting a generation
+     * ticket at {@code (cx, cz)} would overtake either:
+     * <ul>
+     *   <li>a NEARER pending SYNC read — the pre-memo pipeline had this property
+     *       implicitly (escalations only happened at read completions, so a nearer
+     *       in-flight read's escalation always came first); a memo escalation that skips
+     *       ahead of it produces the far-generates-while-near-waits-on-disk leapfrog. As
+     *       a side effect this re-creates the read-latency feedback loop: when reads slow
+     *       under generation save pressure, admission pauses and the IOWorker drains.</li>
+     *   <li>the generation cohort: any candidate more than {@code cohortSpan} rings beyond
+     *       the NEAREST outstanding generation ticket. Caps the live band's ring span so
+     *       completions stay ring-by-ring instead of scrambling across the whole
+     *       frontier+spread window (instant memo refill otherwise pins the full cap in
+     *       flight across 3 rings continuously).</li>
+     * </ul>
+     * The outstanding set is used as a RESTRICTION only, never as the admission window's
+     * anchor (the straggler-leak lesson: a lone far ticket can only TIGHTEN this rule —
+     * nearest-outstanding — never drag the window outward; the window anchor stays the
+     * declared frontier in {@link #generationOrderSpreadExceeded}). Per-player, like the
+     * spread gate. False without a player chunk (rig / converged player).
+     */
+    public boolean generationOvertakesNearerInFlight(int cx, int cz, int cohortSpan) {
+        long player = this.playerChunkPacked;
+        if (player == NO_PLAYER_CHUNK) return false;
+        int px = PositionUtil.unpackX(player);
+        int pz = PositionUtil.unpackZ(player);
+        int candidate = PositionUtil.chebyshevDistance(cx, cz, px, pz);
+        int minGenRing = Integer.MAX_VALUE;
+        for (var entry : this.pendingByPosition.long2ObjectEntrySet()) {
+            var pending = entry.getValue();
+            int ring = PositionUtil.chebyshevDistance(pending.cx(), pending.cz(), px, pz);
+            if (pending.heldSlot() == SlotType.SYNC_ON_LOAD) {
+                if (ring < candidate) return true; // nearer read in flight — hold
+            } else if (ring < minGenRing) {
+                minGenRing = ring;
+            }
+        }
+        return minGenRing != Integer.MAX_VALUE && candidate > minGenRing + cohortSpan;
+    }
+
     /** True when any outstanding generation ticket sits NEARER the player's chunk than
      *  {@code (cx, cz)} — a completion arriving out of proximity order. Diagnostics only
      *  (the platform scheduler's completion-order evidence); false without a player chunk. */

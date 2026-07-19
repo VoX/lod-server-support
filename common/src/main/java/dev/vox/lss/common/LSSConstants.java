@@ -96,6 +96,14 @@ public final class LSSConstants {
      *  up to the TTL. */
     public static final int MIN_MISS_MEMO_TTL_SECONDS = 0;
     public static final int MAX_MISS_MEMO_TTL_SECONDS = 60;
+
+    /** Generation cohort span for memo-path pacing ("generation never overtakes nearer
+     *  in-flight work"): a memo escalation may enter at most this many rings beyond the
+     *  NEAREST outstanding generation ticket. Restores the ring-by-ring completion wave
+     *  the pre-memo read-pipeline pacing produced implicitly — without it, instant memo
+     *  refill pins the full generation cap in flight across the whole frontier+spread
+     *  window and completions scramble across 3 rings (the inversion regression). */
+    public static final int MAX_GENERATION_COHORT_SPAN = 1;
     public static final int MAX_BATCH_CHUNK_REQUESTS = 1024;
     public static final int MAX_BATCH_RESPONSES = 4096;
 

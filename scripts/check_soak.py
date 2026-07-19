@@ -194,6 +194,10 @@ SERVER_MONOTONIC = (
     "disk.memo_hits",
     "generation.submitted", "generation.completed", "generation.timeouts",
     "generation.removed_in_flight",
+    # Ordering observability (miss-memo pacing): gate/pacing refusals + far-before-near
+    # completion evidence. Monotonic counters; no law consumes them yet — soak_report and
+    # A/B comparisons read them directly.
+    "generation.order_gated", "generation.inversions",
     "dirty.broadcast_positions", "dirty.suppressed_total",
     "bandwidth.total_bytes",
     # The flagship a9bee8d honest-re-resolution counter — emitted every snapshot, cumulative.
@@ -2277,7 +2281,8 @@ def _srv(wall=1000, seg=0, over=None):
                      "errors": 0, "saturated": 0, "successful": 0, "pending": 0,
                      "memo_hits": 0},
             "generation": {"submitted": 0, "completed": 0, "timeouts": 0,
-                           "removed_in_flight": 0, "active": 0},
+                           "removed_in_flight": 0, "active": 0,
+                           "order_gated": 0, "inversions": 0},
             "dirty": {"pending": 0, "broadcast_positions": 0, "suppressed_total": 0},
             "bandwidth": {"total_bytes": 0}, "players": []}
     for k, v in (over or {}).items():

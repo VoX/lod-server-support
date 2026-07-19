@@ -280,6 +280,12 @@ public final class BenchmarkMetricsExporter {
             genMap.put("active", 0);
             genMap.put("active_hw", 0);
         }
+        // Ordering observability (the miss-memo pacing rules' success metrics) — from
+        // ProcessingDiagnostics, so present even with generation disabled (schema-required):
+        // order_gated = ordering refusals (frontier window + pacing rules), inversions =
+        // completions that finished while a nearer ticket was outstanding.
+        genMap.put("order_gated", diag.getTotalGenOrderGated());
+        genMap.put("inversions", diag.getTotalGenCompletionInversions());
         result.put("generation", genMap);
 
         var dirtyMap = new LinkedHashMap<String, Object>();
