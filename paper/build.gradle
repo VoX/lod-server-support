@@ -140,11 +140,15 @@ tasks.register('voxyJar') {
                     def e = entries.nextElement()
                     if (e.name == 'plugin.yml') {
                         def text = zf.getInputStream(e).getText('UTF-8')
-                        // Replace ONLY the top-level (column-0) description line; the indented
-                        // command/permission descriptions are left untouched. name/main/version
-                        // /api-version/commands/permissions are all preserved.
+                        // Replace ONLY the top-level (column-0) description and website lines;
+                        // the indented command/permission descriptions are left untouched.
+                        // name/main/version/api-version/commands/permissions are all preserved.
+                        // release_check.py's pair check pins this exact scope (both lines must
+                        // differ, nothing else may).
                         text = text.replaceFirst(/(?m)^description:.*$/,
                                 'description: Server-side backend for Voxy multiplayer LOD rendering. Identical to LOD Server Support (same plugin, second distribution channel) — fully interchangeable.')
+                        text = text.replaceFirst(/(?m)^website:.*$/,
+                                'website: https://modrinth.com/plugin/voxy-server-side')
                         def ne = new ZipEntry('plugin.yml')
                         zos.putNextEntry(ne)
                         zos.write(text.getBytes('UTF-8'))

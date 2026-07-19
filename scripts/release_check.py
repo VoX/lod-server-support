@@ -224,11 +224,17 @@ def check_voxy_pair_fabric(lss_jar, voxy_jar, problems):
         problems.append(f"{vbase}: fabric.mod.json icon {icon!r} is not an entry in the jar")
 
 
+# plugin.yml top-level lines the VSS rebrand rewrites — every one of them MUST differ from
+# the LSS jar (each rewrite is a replaceFirst that fails SILENT if the line shape changes),
+# and no other line may.
+VSS_PAPER_REWRITTEN_LINES = ("description:", "website:")
+
+
 def check_voxy_pair_paper(lss_jar, voxy_jar, problems):
-    """Line-diff of the two built plugin.yml files (stdlib-only — no YAML parser): exactly
-    one line may differ, it must be the top-level `description:` line in both, and it must
-    actually differ (the Paper rewrite is a replaceFirst that fails SILENT if the line shape
-    ever changes — this is the check that catches that no-op)."""
+    """Line-diff of the two built plugin.yml files (stdlib-only — no YAML parser): the
+    differing lines must be exactly the top-level `description:` and `website:` lines
+    (both present, both actually different — catching a silent replaceFirst no-op on
+    either), and nothing else may differ."""
     vbase = os.path.basename(voxy_jar)
     try:
         llines = _read(lss_jar, "plugin.yml").splitlines()
@@ -238,18 +244,27 @@ def check_voxy_pair_paper(lss_jar, voxy_jar, problems):
     if len(llines) != len(vlines):
         problems.append(f"{vbase}: plugin.yml line count differs from the LSS jar "
                         f"({len(llines)} vs {len(vlines)}) — the rebrand must only rewrite "
-                        "the top-level description line")
+                        f"the top-level {VSS_PAPER_REWRITTEN_LINES} lines")
         return
     diffs = [i for i, (a, b) in enumerate(zip(llines, vlines)) if a != b]
     if not diffs:
         problems.append(f"{vbase}: plugin.yml is byte-identical to the LSS jar — the "
-                        "description rewrite silently no-opped (not rebranded)")
-    elif len(diffs) != 1 or not (llines[diffs[0]].startswith("description:")
-                                 and vlines[diffs[0]].startswith("description:")):
-        bad = diffs[:3]
-        problems.append(f"{vbase}: plugin.yml differs from the LSS jar beyond the top-level "
-                        f"description line (differing line indexes {bad}) — the VSS rebrand "
-                        "may only touch the description")
+                        "rebrand rewrites silently no-opped (not rebranded)")
+        return
+    diffed_prefixes = set()
+    for i in diffs:
+        prefix = next((p for p in VSS_PAPER_REWRITTEN_LINES
+                       if llines[i].startswith(p) and vlines[i].startswith(p)), None)
+        if prefix is None:
+            problems.append(f"{vbase}: plugin.yml differs from the LSS jar beyond the "
+                            f"top-level {VSS_PAPER_REWRITTEN_LINES} lines (line index {i}) "
+                            "— the VSS rebrand may not touch anything else")
+            return
+        diffed_prefixes.add(prefix)
+    for prefix in VSS_PAPER_REWRITTEN_LINES:
+        if prefix not in diffed_prefixes:
+            problems.append(f"{vbase}: plugin.yml {prefix!r} line is identical to the LSS "
+                            "jar — that rewrite silently no-opped (not rebranded)")
 
 
 def _voxy_counterpart(voxy_jar, lss_jars, voxy_prefix, lss_prefix):
@@ -692,17 +707,21 @@ def _selftest():
 
         LSS_PLUGIN_YML = ("name: LodServerSupport\nversion: '0.7.0'\n"
                           "description: LSS plugin.\n"
+                          "website: https://modrinth.com/plugin/lod-server-support\n"
                           "commands:\n  lsslod:\n    description: cmd\n")
+        VSS_PLUGIN_YML = LSS_PLUGIN_YML.replace(
+            "description: LSS plugin.", "description: VSS plugin.", 1).replace(
+            "website: https://modrinth.com/plugin/lod-server-support",
+            "website: https://modrinth.com/plugin/voxy-server-side", 1)
         pair_lss_pap = os.path.join(td, "pair-lss-paper.jar")
         _make_jar(pair_lss_pap, {"plugin.yml": LSS_PLUGIN_YML})
         pair_ok_vpap = os.path.join(td, "pair-ok-voxy-paper.jar")
-        _make_jar(pair_ok_vpap, {"plugin.yml": LSS_PLUGIN_YML.replace(
-            "description: LSS plugin.", "description: VSS plugin.", 1)})
+        _make_jar(pair_ok_vpap, {"plugin.yml": VSS_PLUGIN_YML})
         p = []
         check_voxy_pair_paper(pair_lss_pap, pair_ok_vpap, p)
         check(p == [], f"clean paper pair flagged: {p}")
 
-        # a byte-identical plugin.yml means the description rewrite silently no-opped
+        # a byte-identical plugin.yml means the rebrand rewrites silently no-opped
         pair_same_vpap = os.path.join(td, "pair-same-voxy-paper.jar")
         _make_jar(pair_same_vpap, {"plugin.yml": LSS_PLUGIN_YML})
         p = []
@@ -710,14 +729,22 @@ def _selftest():
         check(any("silently no-opped" in m for m in p),
               f"paper no-op rewrite not caught: {p}")
 
-        # a rewrite that touched anything beyond the top-level description MUST fail
+        # ONE rewrite no-opping (website unchanged) MUST fail — replaceFirst is silent
+        pair_noweb_vpap = os.path.join(td, "pair-noweb-voxy-paper.jar")
+        _make_jar(pair_noweb_vpap, {"plugin.yml": LSS_PLUGIN_YML.replace(
+            "description: LSS plugin.", "description: VSS plugin.", 1)})
+        p = []
+        check_voxy_pair_paper(pair_lss_pap, pair_noweb_vpap, p)
+        check(any("'website:' line is identical" in m for m in p),
+              f"paper website no-op not caught: {p}")
+
+        # a rewrite that touched anything beyond the description/website lines MUST fail
         pair_wide_vpap = os.path.join(td, "pair-wide-voxy-paper.jar")
-        _make_jar(pair_wide_vpap, {"plugin.yml": LSS_PLUGIN_YML.replace(
-            "description: LSS plugin.", "description: VSS plugin.", 1).replace(
+        _make_jar(pair_wide_vpap, {"plugin.yml": VSS_PLUGIN_YML.replace(
             "    description: cmd", "    description: voxy cmd", 1)})
         p = []
         check_voxy_pair_paper(pair_lss_pap, pair_wide_vpap, p)
-        check(any("beyond the top-level description" in m for m in p),
+        check(any("may not touch anything else" in m for m in p),
               f"paper over-wide rewrite not caught: {p}")
 
         # glob hygiene: a CI-named soak jar must not match any release glob
@@ -743,7 +770,8 @@ def _selftest():
         os.makedirs(dfab)
         os.makedirs(dpap)
         PY_LSS = ("name: LodServerSupport\nversion: '0.7.0'\n"
-                  "description: LSS plugin.\n")
+                  "description: LSS plugin.\n"
+                  "website: https://modrinth.com/plugin/lod-server-support\n")
         pap_manifest = "Manifest-Version: 1.0\npaperweight-mappings-namespace: mojang\n"
 
         def _write_tree_fabric(name, meta, extra=None):
@@ -772,7 +800,9 @@ def _selftest():
         _write_tree_paper("lod-server-support-paper.jar", PY_LSS)
         _write_tree_paper("voxy-server-side-paper.jar",
                           PY_LSS.replace("description: LSS plugin.",
-                                         "description: VSS plugin.", 1))
+                                         "description: VSS plugin.", 1)
+                                .replace("plugin/lod-server-support",
+                                         "plugin/voxy-server-side", 1))
         p = []
         fab_d, pap_d, vfab_d, vpap_d, _ = discover(p, root=droot)
         check(p == [] and len(fab_d) == len(pap_d) == len(vfab_d) == len(vpap_d) == 1,

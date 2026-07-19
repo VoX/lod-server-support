@@ -99,9 +99,12 @@ Result: LSS↔LSS, LSS↔VSS, VSS↔LSS, VSS↔VSS all negotiate the identical p
   drop-in file swap with zero config loss.
 
 **Invariants the branded build MUST preserve (the compatibility contract):** the metadata
-overlay may change ONLY `name` / `description` / `icon` / `contact`. It must leave `id` (`lss`),
-`entrypoints`, `mixins`, `depends`, and (Paper) `name: LodServerSupport` untouched — those are
-what keep the two jars wire-identical and config-interchangeable. The `release_check.py`
+overlay may change ONLY `name` / `description` / `icon` / `contact` (Fabric) and the top-level
+`description` / `website` lines (Paper). It must leave `id` (`lss`), `entrypoints`, `mixins`,
+`depends`, and (Paper) `name: LodServerSupport` untouched — those are what keep the two jars
+wire-identical and config-interchangeable. In-jar display surfaces derive branding from the
+descriptor at runtime (the Sodium config screen reads the metadata name/icon), so the overlay
+is the single branding source. The `release_check.py`
 identity guardrail (§2) pins `id`/plugin-`name`; the overlay's field scope pins the rest.
 Choosing **repackage-the-built-jar over a parameterized recompile** is itself a compatibility
 guarantee: identical compiled bytes can't let a brand flag leak into a protocol constant.

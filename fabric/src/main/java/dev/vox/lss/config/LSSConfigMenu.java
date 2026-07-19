@@ -7,8 +7,12 @@ import net.caffeinemc.mods.sodium.api.config.option.Range;
 import net.caffeinemc.mods.sodium.api.config.structure.ConfigBuilder;
 import dev.vox.lss.common.LSSConstants;
 import net.fabricmc.loader.api.FabricLoader;
+import net.fabricmc.loader.api.ModContainer;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
+
+import java.util.Objects;
+import java.util.Optional;
 
 public class LSSConfigMenu implements ConfigEntryPoint {
     @Override
@@ -16,11 +20,18 @@ public class LSSConfigMenu implements ConfigEntryPoint {
         var cfg = LSSClientConfig.CONFIG;
         StorageEventHandler save = cfg::save;
 
-        var version = FabricLoader.getInstance().getModContainer(LSSConstants.MOD_ID)
+        var container = FabricLoader.getInstance().getModContainer(LSSConstants.MOD_ID);
+        var version = container
                 .map(c -> c.getMetadata().getVersion().getFriendlyString())
                 .orElse("unknown");
-        var mod = builder.registerModOptions(LSSConstants.MOD_ID, "LOD Server Support", version)
-                .setIcon(Identifier.parse("lss:icon.png"));
+        // Display-only branding flows from the jar's OWN descriptor: the Voxy Server Side
+        // repackage rewrites fabric.mod.json name/icon (identity fields untouched), so the
+        // VSS jar brands this screen without a code fork. MOD_ID stays the registration key.
+        var displayName = container
+                .map(c -> c.getMetadata().getName())
+                .orElse("LOD Server Support");
+        var mod = builder.registerModOptions(LSSConstants.MOD_ID, displayName, version)
+                .setIcon(iconFromMetadata(container));
 
         var page = builder.createOptionPage();
         page.setName(Component.translatable("lss.config.page"));
@@ -56,5 +67,22 @@ public class LSSConfigMenu implements ConfigEntryPoint {
         page.addOptionGroup(distanceGroup);
 
         mod.addPage(page);
+    }
+
+    /** The descriptor's `icon` path as a resource Identifier ("assets/&lt;ns&gt;/&lt;path&gt;" →
+     *  "&lt;ns&gt;:&lt;path&gt;"), falling back to the LSS icon. Display-only — a malformed or
+     *  missing path must degrade, never throw. */
+    private static Identifier iconFromMetadata(Optional<ModContainer> container) {
+        return container.flatMap(c -> c.getMetadata().getIconPath(32))
+                .filter(p -> p.startsWith("assets/"))
+                .map(p -> p.substring("assets/".length()))
+                .map(p -> {
+                    int slash = p.indexOf('/');
+                    return slash > 0
+                            ? Identifier.tryParse(p.substring(0, slash) + ":" + p.substring(slash + 1))
+                            : null;
+                })
+                .filter(Objects::nonNull)
+                .orElse(Identifier.parse("lss:icon.png"));
     }
 }
