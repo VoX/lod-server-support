@@ -207,7 +207,9 @@ setup_fabric() {
 
 run_fabric() {
     cd "$FABRIC_DIR"
-    java -Xmx${SERVER_RAM} -Xms${SERVER_RAM} -jar fabric-server-launch.jar nogui
+    # admissionTrace: dev-only [lss-adm] lines (candidate ring vs frontier stamp per
+    # generation-admission decision) — the instrument for far-arc/inversion reports.
+    java -Xmx${SERVER_RAM} -Xms${SERVER_RAM} -Dlss.admissionTrace=true -jar fabric-server-launch.jar nogui
 }
 
 # Toggle c2me*.jar in the Fabric mods folder for A/B runs (LSS vs C2ME's chunk-system
@@ -335,7 +337,7 @@ run_all() {
     trap 'echo ""; echo "Stopping servers..."; kill "${SERVER_PIDS[@]}" 2>/dev/null; wait "${SERVER_PIDS[@]}" 2>/dev/null; echo "Done."' INT TERM EXIT
 
     cd "$FABRIC_DIR"
-    java -Xmx${SERVER_RAM} -Xms${SERVER_RAM} -jar fabric-server-launch.jar nogui &
+    java -Xmx${SERVER_RAM} -Xms${SERVER_RAM} -Dlss.admissionTrace=true -jar fabric-server-launch.jar nogui &
     SERVER_PIDS+=($!)
 
     sleep 2

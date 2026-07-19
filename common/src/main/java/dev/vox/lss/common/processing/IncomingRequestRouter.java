@@ -306,7 +306,7 @@ class IncomingRequestRouter<PS extends AbstractPlayerRequestState<?>> {
                     && this.timestampCache.isFreshMiss(dimension, packed, System.nanoTime())) {
                 this.ctx.diagnostics().addMemoHit(1);
                 this.processor.escalateMissToGeneration(playerUuid, state, packed,
-                        req.cx(), req.cz(), claimsData, dimension);
+                        req.cx(), req.cz(), claimsData, dimension, "memo");
                 return AdmitResult.SUBMITTED; // dispositioned (submitted or silent drop)
             }
             // Route through disk reader (with cross-player dedup)

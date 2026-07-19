@@ -810,7 +810,23 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
             return;
         }
         escalateMissToGeneration(playerUuid, state, packed, cx, cz, pending.claimsData(),
-                dimension);
+                dimension, "miss");
+    }
+
+    /** Admission-order diagnosis (-Dlss.admissionTrace=true, dev servers only — see
+     *  test-server.sh): one line per generation-admission decision with the candidate
+     *  ring, the live frontier stamp, and the nearest in-flight rings, so a live far-arc
+     *  report can be pinned to either a gate leak (candidate outside its window at
+     *  admission) or completion displacement (legal admission, moved player). */
+    private static final boolean ADMISSION_TRACE = Boolean.getBoolean("lss.admissionTrace");
+
+    private void traceAdmission(PlayerState state, int cx, int cz, String via, String verdict) {
+        int[] near = state.nearestPendingRingsForTrace();
+        LSSLogger.info("[lss-adm] c=" + cx + "," + cz
+                + " r=" + state.ringFromPlayerForTrace(cx, cz)
+                + " f=" + state.liveFrontierRingForTrace()
+                + " sync=" + near[0] + " gen=" + near[1]
+                + " via=" + via + " v=" + verdict);
     }
 
     /**
@@ -833,11 +849,13 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
      * the sole effective orderer of generation admission.)
      */
     void escalateMissToGeneration(UUID playerUuid, PlayerState state, long packed,
-                                   int cx, int cz, boolean claimsData, String dimension) {
+                                   int cx, int cz, boolean claimsData, String dimension,
+                                   String via) {
         if (state.generationOvertakesNearerInFlight(cx, cz,
                 LSSConstants.MAX_GENERATION_COHORT_SPAN)) {
             // Ordering refusal, same disposition as the spread gate: the standard
             // transient drop, re-declared at 1 Hz, admitted once the nearer work resolves.
+            if (ADMISSION_TRACE) traceAdmission(state, cx, cz, via, "hold_pacing");
             this.ctx.diagnostics().addSuperseded(1);
             this.ctx.diagnostics().addMissDropped(1); // law A5: a miss with no submit, no answer
             this.ctx.diagnostics().addGenOrderGated(1);
@@ -849,17 +867,20 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
             // tickets pile in above a starving near one and the world fills far-before-near.
             // Refusal is the standard transient drop — re-declared at 1 Hz, admitted once
             // the head resolves (or its generation timeout clears it).
+            if (ADMISSION_TRACE) traceAdmission(state, cx, cz, via, "hold_spread");
             this.ctx.diagnostics().addSuperseded(1);
             this.ctx.diagnostics().addMissDropped(1); // law A5: a miss with no submit, no answer
             this.ctx.diagnostics().addGenOrderGated(1);
             return;
         }
         if (state.tryAdmit(new PendingRequest(cx, cz, SlotType.GENERATION, claimsData))) {
+            if (ADMISSION_TRACE) traceAdmission(state, cx, cz, via, "admit");
             addGenerationInFlight(playerUuid, dimension, packed);
             this.ctx.generationTicketRequests().add(new GenerationTicketRequest(
                     playerUuid, cx, cz, dimension, this.ctx.sequence().next()));
         } else {
             // Transient: the gen slot cap is momentarily full — never a wire answer.
+            if (ADMISSION_TRACE) traceAdmission(state, cx, cz, via, "slot_full");
             this.ctx.diagnostics().addSuperseded(1);
             this.ctx.diagnostics().addMissDropped(1); // law A5: a miss with no submit, no answer
         }

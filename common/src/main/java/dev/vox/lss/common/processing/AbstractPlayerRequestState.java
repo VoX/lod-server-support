@@ -232,6 +232,38 @@ public abstract class AbstractPlayerRequestState<T> {
     // -1 until the first stamp. Processing thread only.
     private int liveFrontierRing = -1;
 
+    /** Package-private admission-trace probes (flag-gated caller; processing thread only,
+     *  like all pending-map access): the live frontier stamp, the candidate's ring from
+     *  the player chunk, and the nearest pending SYNC / outstanding GENERATION rings
+     *  ({sync, gen}, -1 when absent). Diagnostic only — never consulted by the gates. */
+    int liveFrontierRingForTrace() {
+        return this.liveFrontierRing;
+    }
+
+    int ringFromPlayerForTrace(int cx, int cz) {
+        long player = this.playerChunkPacked;
+        if (player == NO_PLAYER_CHUNK) return -1;
+        return PositionUtil.chebyshevDistance(cx, cz,
+                PositionUtil.unpackX(player), PositionUtil.unpackZ(player));
+    }
+
+    int[] nearestPendingRingsForTrace() {
+        long player = this.playerChunkPacked;
+        if (player == NO_PLAYER_CHUNK) return new int[]{-1, -1};
+        int px = PositionUtil.unpackX(player);
+        int pz = PositionUtil.unpackZ(player);
+        int sync = -1, gen = -1;
+        for (var e : this.pendingByPosition.values()) {
+            int ring = PositionUtil.chebyshevDistance(e.cx(), e.cz(), px, pz);
+            if (e.heldSlot() == SlotType.SYNC_ON_LOAD) {
+                if (sync < 0 || ring < sync) sync = ring;
+            } else if (gen < 0 || ring < gen) {
+                gen = ring;
+            }
+        }
+        return new int[]{sync, gen};
+    }
+
     /** Router drain stamp: the first not-actually-satisfied entry of this pass defines the
      *  live frontier. No-op without a stamped player chunk. */
     public void stampLiveFrontier(int cx, int cz) {
