@@ -31,6 +31,35 @@ signal (the `AdaptiveReadThrottle` pattern) so generation admission re-acquires 
 exactly when reads slow down. The fresh-backfill gen caps (40/64, above the 16/32 defaults)
 exaggerate the effect; default-config servers see proportionally less write pressure.
 
+**Ordering regression + the pacing fix (2026-07-19, maintainer-reported live):** the memo
+also regressed backfill ORDERING badly, even on vanilla Fabric — it deleted the
+negative-feedback pacing the read pipeline provided implicitly (slot refills used to cost a
+~1 s re-declare→read→miss round trip, keeping the outstanding set small, co-ring, and
+admitted in ≈proximity order; instant memo refill pinned the full gen cap in flight across
+the whole frontier+2 window, and memo-fresh far positions leapfrogged near positions stuck
+behind the starved reads). Fixed by two explicit memo-path rules in
+`escalateMissToGeneration` (`paced=true`; the delivery path keeps its emergent pacing so
+ttl=0 dynamics are untouched): the **nearer-read hold** (refuse while any nearer SYNC read
+is pending — kills the leapfrog and re-creates the read-latency feedback loop) and the
+**generation cohort span** (candidate ≤ nearest-outstanding-ticket ring +
+`MAX_GENERATION_COHORT_SPAN`(1) — restores ring-by-ring waves; the outstanding set is a
+RESTRICTION, never the window's anchor — the straggler-leak lesson). `generation.order_gated`
+and `generation.inversions` are now soak-exported on both platforms (they were diag-only,
+which is why recordings couldn't see the regression). Measured A/B (same box, same timeline):
+
+| fresh-backfill      | memo OFF (pre-memo) | memo unpaced | memo + pacing |
+|---------------------|---------------------|--------------|---------------|
+| inversions          | 179/1983 (9.0%)     | unmeasured, visually severe | **81/2012 (4.0%)** |
+| miss re-reads       | 17,643              | ~2,130       | 2,134         |
+| quiescent snapshots | 25                  | 37-39        | **39**        |
+| disk.errors (A7)    | 0                   | 12-15        | 10            |
+
+The paced memo is ~2x BETTER ordered than pre-memo (explicit cohort rules order admission
+more strictly than emergent read-completion order ever did) while keeping the full ~8x read
+reduction and the convergence speedup. Residual: ~10 timeout-triaged disk.errors on
+constrained boxes (reduced from 12-15 by the feedback loop; the A7 catalog entry stands);
+the v0.7.2 reader-latency gate above remains the refinement if that needs to reach 0.
+
 ## Goal
 
 Under server-owned generation, a position waiting for a generation slot re-reads disk at
