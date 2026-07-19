@@ -796,30 +796,32 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
             this.ctx.sendActions().add(new SendAction.ColumnNotGenerated(playerUuid, packed, state));
             return;
         }
-        // paced=false: delivery-time escalation is already paced by the read round-trip
-        // itself — its cohort structure is emergent (escalations arrive in read-completion
-        // ≈ proximity order), and applying the explicit rules here would change the
-        // ttl=0 / pre-memo dynamics the gate pins were calibrated on.
         escalateMissToGeneration(playerUuid, state, packed, cx, cz, pending.claimsData(),
-                dimension, false);
+                dimension);
     }
 
     /**
      * The gen-available half of the miss ladder, shared by the real disk-miss path
-     * ({@link #handleDiskNotFound}, {@code paced=false}) and the router's miss-memo rung
-     * ({@code paced=true}) so the ladder cannot drift. Order-spread gate, then — memo path
-     * only — the explicit pacing rules ("generation never overtakes nearer in-flight
-     * work": nearer-pending-SYNC hold + generation cohort span), then GENERATION slot
-     * admission + stale-guard registration + ticket enqueue, or the standard silent
-     * transient drop. Never a wire answer. The memo path needs the explicit rules because
-     * it has no emergent pacing: without them, instant refill pins the full generation cap
-     * in flight across the whole admission window (completion scramble = inversions) and
-     * memo-fresh far positions leapfrog near positions stuck behind starved reads.
+     * ({@link #handleDiskNotFound}) and the router's miss-memo rung so the ladder cannot
+     * drift. Order-spread gate, the pacing rules ("generation never overtakes nearer
+     * in-flight work": nearer-pending-SYNC hold + generation cohort span), then GENERATION
+     * slot admission + stale-guard registration + ticket enqueue, or the standard silent
+     * transient drop. Never a wire answer.
+     *
+     * <p>The pacing rules apply to BOTH paths deliberately (they were briefly memo-only,
+     * justified by the delivery path's "emergent pacing" — escalations arrive in
+     * read-completion ≈ proximity order. That justification only holds for a STATIONARY
+     * player with fast reads: under movement, read completions are proximity-ordered
+     * relative to the SUBMISSION-time position, and with memo-accelerated generation
+     * starving reads by seconds, a stale far delivery escalated unpaced was the
+     * "isolated chunks generating out in space ahead of a moving player" bug. A held
+     * delivery is memoized + dropped and re-enters through the closest-first drain, so
+     * pacing everywhere converts delivery disorder into drain order — the drain becomes
+     * the sole effective orderer of generation admission.)
      */
     void escalateMissToGeneration(UUID playerUuid, PlayerState state, long packed,
-                                   int cx, int cz, boolean claimsData, String dimension,
-                                   boolean paced) {
-        if (paced && state.generationOvertakesNearerInFlight(cx, cz,
+                                   int cx, int cz, boolean claimsData, String dimension) {
+        if (state.generationOvertakesNearerInFlight(cx, cz,
                 LSSConstants.MAX_GENERATION_COHORT_SPAN)) {
             // Ordering refusal, same disposition as the spread gate: the standard
             // transient drop, re-declared at 1 Hz, admitted once the nearer work resolves.

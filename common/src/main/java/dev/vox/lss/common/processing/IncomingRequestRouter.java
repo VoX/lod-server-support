@@ -305,10 +305,8 @@ class IncomingRequestRouter<PS extends AbstractPlayerRequestState<?>> {
             if (this.generationAvailable
                     && this.timestampCache.isFreshMiss(dimension, packed, System.nanoTime())) {
                 this.ctx.diagnostics().addMemoHit(1);
-                // paced=true: the memo rung has no emergent pacing (no read round-trip),
-                // so admission must explicitly refuse to overtake nearer in-flight work.
                 this.processor.escalateMissToGeneration(playerUuid, state, packed,
-                        req.cx(), req.cz(), claimsData, dimension, true);
+                        req.cx(), req.cz(), claimsData, dimension);
                 return AdmitResult.SUBMITTED; // dispositioned (submitted or silent drop)
             }
             // Route through disk reader (with cross-player dedup)

@@ -60,6 +60,24 @@ reduction and the convergence speedup. Residual: ~10 timeout-triaged disk.errors
 constrained boxes (reduced from 12-15 by the feedback loop; the A7 catalog entry stands);
 the v0.7.2 reader-latency gate above remains the refinement if that needs to reach 0.
 
+**Movement follow-up — pacing UNIFIED across both admission paths (2026-07-19,
+maintainer-reported: "chunks generating out in space ahead of me while flying"):** the
+rules were initially memo-rung-only, justified by the delivery path's emergent pacing
+(read completions arrive ≈ proximity-ordered). That justification only holds for a
+STATIONARY player with fast reads: under movement, completions are proximity-ordered
+relative to the SUBMISSION-time position, and with generation save pressure starving reads
+by seconds, a stale far miss delivering late escalated UNPACED — only frontier-gated, with
+the frontier at the view-edge crescent (~ring 12), so isolated chunks admitted and popped
+at ring 13-14 ahead/flanking a moving player. Fix: the paced flag is gone; BOTH paths run
+the nearer-read hold + cohort span. A held delivery is memoized + dropped and re-enters
+through the closest-first drain — pacing everywhere converts delivery disorder into drain
+order, making the drain the sole effective orderer of generation admission. This
+strengthens the historical gate pin (`generationRefillMustNotRaceBeyondTheOldestOutstanding
+Ticket` re-calibrated: refill now holds at nearest-outstanding+1, tighter than the old
+frontier+2 refill window). Read-timeout console noise also demoted: TimeoutException is a
+documented transient, now one throttled WARN line per minute with a count instead of a
+stack trace per chunk.
+
 ## Goal
 
 Under server-owned generation, a position waiting for a generation slot re-reads disk at

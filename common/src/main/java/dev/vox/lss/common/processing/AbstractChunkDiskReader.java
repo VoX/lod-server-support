@@ -42,6 +42,8 @@ public abstract class AbstractChunkDiskReader {
     // the debug path in OffThreadProcessor.
     private static final long SATURATION_WARN_INTERVAL_MS = 60_000;
     private final LogThrottle saturationWarn = new LogThrottle(SATURATION_WARN_INTERVAL_MS);
+    // Read timeouts are documented transients (miss-memo A/B finding) — same aggregation.
+    private final LogThrottle timeoutWarn = new LogThrottle(SATURATION_WARN_INTERVAL_MS);
 
     private final ExecutorService executor;
     private final ArrayBlockingQueue<Runnable> workQueue;
@@ -192,7 +194,21 @@ public abstract class AbstractChunkDiskReader {
         try {
             serializedSections = operation.read();
         } catch (Exception e) {
-            LSSLogger.error("Failed to read chunk NBT from disk at " + chunkX + ", " + chunkZ, e);
+            if (e instanceof java.util.concurrent.TimeoutException) {
+                // A read exceeding DISK_READ_TIMEOUT_SECONDS is a documented TRANSIENT on
+                // slow IO under generation save pressure (miss-memo-design.md A/B finding):
+                // it triages down the not-found ladder and self-heals via re-declaration.
+                // One throttled line, no stack — a storm of these is diagnosable from
+                // disk.errors, and per-chunk stack traces were pure console flooding.
+                long releases = this.timeoutWarn.recordAndTryAcquire(System.nanoTime() / 1_000_000);
+                if (releases > 0) {
+                    LSSLogger.warn("Disk read timed out (>" + LSSConstants.DISK_READ_TIMEOUT_SECONDS
+                            + "s) at " + chunkX + ", " + chunkZ + " — transient, re-declared"
+                            + (releases > 1 ? " (+" + (releases - 1) + " more since last report)" : ""));
+                }
+            } else {
+                LSSLogger.error("Failed to read chunk NBT from disk at " + chunkX + ", " + chunkZ, e);
+            }
             this.diag.recordError();
             recordRealCompletion(System.nanoTime() - startNs);
             // Error/timeout TRIAGED as not-found (law A5's disk.errors fold) — says nothing
