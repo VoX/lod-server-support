@@ -184,6 +184,11 @@ SERVER_MONOTONIC = (
     "service.miss_dropped",
     "disk.submitted", "disk.completed", "disk.not_found", "disk.all_air",
     "disk.errors", "disk.saturated", "disk.successful",
+    # Miss-memo rung hits (v0.7.1 miss memo): a fresh memoized absence skipped the redundant
+    # disk re-read and escalated straight to the generation ladder. Law A5 counts these as
+    # VIRTUAL not-founds on its left side — each hit is dispositioned exactly like a real
+    # miss (gen submit or miss_dropped), so the identity stays exact.
+    "disk.memo_hits",
     "generation.submitted", "generation.completed", "generation.timeouts",
     "generation.removed_in_flight",
     "dirty.broadcast_positions", "dirty.suppressed_total",
@@ -549,6 +554,11 @@ def law_A5(ps, cs, pc, cc, window):
         # disk.not_found. Fold errors into the left side or IO pressure breaks the
         # identity by exactly the error count (seen live 2026-07-17, 20 timeouts).
         d_nf += delta(ps, cs, "disk.errors")
+        # Miss-memo rung hits are VIRTUAL not-founds: the read was skipped (no disk.not_found
+        # increment) but the hit was dispositioned exactly like a real miss — a gen submit or
+        # a miss_dropped. Fold them into the left side; both memo dispositions then balance
+        # by inspection (hit->submit: +1/+1 submitted; hit->drop: +1/+1 miss_dropped).
+        d_nf += delta(ps, cs, "disk.memo_hits")
         d_gen_sub = delta(ps, cs, "generation.submitted")
         d_ng = delta(pc, cc, "responses.not_generated")
         # Server-owned generation: a miss can also resolve into a TRANSIENT silent drop
@@ -2261,7 +2271,8 @@ def _srv(wall=1000, seg=0, over=None):
                         "superseded": 0, "range_filtered": 0, "re_resolved": 0,
                         "miss_dropped": 0},
             "disk": {"submitted": 0, "completed": 0, "not_found": 0, "all_air": 0,
-                     "errors": 0, "saturated": 0, "successful": 0, "pending": 0},
+                     "errors": 0, "saturated": 0, "successful": 0, "pending": 0,
+                     "memo_hits": 0},
             "generation": {"submitted": 0, "completed": 0, "timeouts": 0,
                            "removed_in_flight": 0, "active": 0},
             "dirty": {"pending": 0, "broadcast_positions": 0, "suppressed_total": 0},
@@ -2390,6 +2401,20 @@ def selftest():
                               "disk.completed": 10, "disk.all_air": 1, "disk.saturated": 1,
                               "disk.successful": 4})
     hits("A5 partition leg", law_A5(ps, cs_bad, pc, cc, "selftest"), "A5")
+    # Miss-memo rung: hits are virtual not-founds. 4 hits -> 3 more gen submits + 1 more
+    # miss_dropped, with disk.not_found unchanged — the identity must stay exact.
+    cs_memo = _srv(6000, over={"disk.not_found": 5, "disk.memo_hits": 4,
+                               "generation.submitted": 6, "service.miss_dropped": 1,
+                               "disk.completed": 10, "disk.all_air": 1, "disk.saturated": 1,
+                               "disk.successful": 3})
+    clean("A5 balanced with memo hits", law_A5(ps, cs_memo, pc, cc, "selftest"))
+    # A memo hit that vanished without a disposition (neither submit nor miss_dropped) is
+    # exactly the accounting hole the virtual-not-found fold must catch.
+    cs_memo_bad = _srv(6000, over={"disk.not_found": 5, "disk.memo_hits": 4,
+                                   "generation.submitted": 5, "service.miss_dropped": 1,
+                                   "disk.completed": 10, "disk.all_air": 1, "disk.saturated": 1,
+                                   "disk.successful": 3})
+    hits("A5 memo-hit leg", law_A5(ps, cs_memo_bad, pc, cc, "selftest"), "A5")
 
     # --- A6 server: monotonic whitelist, including the v17 want-set counters ---
     clean("A6 server monotonic", law_A6_server([

@@ -51,7 +51,7 @@ class DirtyColumnBroadcasterTest {
         private final List<Object> events;
 
         RecordingProcessor(Map<UUID, PlayerRequestState> players, List<Object> events) {
-            super(players, null, false, null, 1);
+            super(players, null, false, null, 1, 0);  // memo off: these rigs pin the ttl=0 (pre-memo) read path
             this.events = events;
         }
 

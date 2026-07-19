@@ -28,6 +28,14 @@ public abstract class ServerConfigBase extends JsonConfig {
     public int generationConcurrencyLimitPerPlayer = 16;
     public int perDimensionTimestampCacheSizeMB = 32;
     /**
+     * Miss-memo TTL (docs/planning/miss-memo-design.md): an authoritative disk miss is
+     * remembered for this many seconds, so a position waiting for a generation slot skips
+     * the redundant ~1 Hz not-found re-reads and falls through to the generation decision
+     * directly. 0 disables the memo (the kill switch — restores the pre-memo re-read
+     * churn, which remains fully correct behavior).
+     */
+    public int missMemoTtlSeconds = 30;
+    /**
      * When true (default), LSS disk reads yield to vanilla/gameplay chunk loading: Fabric
      * schedules them at IOWorker BACKGROUND priority; Paper/Folia route them through Moonrise
      * at Priority.LOW. Set false to restore FOREGROUND reads (the pre-0.7 behavior) as a
@@ -59,6 +67,7 @@ public abstract class ServerConfigBase extends JsonConfig {
         dirtyBroadcastIntervalSeconds = Math.clamp(dirtyBroadcastIntervalSeconds, LSSConstants.MIN_DIRTY_BROADCAST_INTERVAL, LSSConstants.MAX_DIRTY_BROADCAST_INTERVAL);
         generationConcurrencyLimitPerPlayer = Math.clamp(generationConcurrencyLimitPerPlayer, LSSConstants.MIN_CONCURRENCY_LIMIT, LSSConstants.MAX_CONCURRENCY_LIMIT);
         perDimensionTimestampCacheSizeMB = Math.clamp(perDimensionTimestampCacheSizeMB, LSSConstants.MIN_TIMESTAMP_CACHE_SIZE_MB, LSSConstants.MAX_TIMESTAMP_CACHE_SIZE_MB);
+        missMemoTtlSeconds = Math.clamp(missMemoTtlSeconds, LSSConstants.MIN_MISS_MEMO_TTL_SECONDS, LSSConstants.MAX_MISS_MEMO_TTL_SECONDS);
 
         // Global Constraint #28 is GONE: no client budget derives from any server cap under
         // server-owned generation, so there is nothing to cross-clamp against the wire batch.

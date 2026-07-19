@@ -33,7 +33,7 @@ class PaperOffThreadProcessorTest {
     @Test
     void over256CharDimensionIsDroppedBeforeEncodeInsteadOfThrowing() {
         // Thread created but never start()ed (PaperPayloadEdgeTest harness pattern).
-        var proc = new PaperOffThreadProcessor(new ConcurrentHashMap<>(), null, false, null, 1);
+        var proc = new PaperOffThreadProcessor(new ConcurrentHashMap<>(), null, false, null, 1, 0);
         var state = mock(PaperPlayerRequestState.class);
         String dim = "lss:" + "a".repeat(LSSConstants.MAX_DIMENSION_STRING_LENGTH - 3); // 257 chars
         byte[] sections = {1, 2, 3};

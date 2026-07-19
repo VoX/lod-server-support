@@ -15,6 +15,7 @@ dirty.suppressed_total=long
 disk.all_air=long
 disk.completed=long
 disk.errors=long
+disk.memo_hits=long
 disk.not_found=long
 disk.pending=int
 disk.pending_hw=int

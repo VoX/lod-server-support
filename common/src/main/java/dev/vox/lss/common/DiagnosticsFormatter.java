@@ -177,7 +177,12 @@ public final class DiagnosticsFormatter {
                 diag.getTotalReResolved(),
                 diskReader != null ? diskReader.getDiag().getSuccessfulReadCount() : 0,
                 tickDiagnostics,
-                diskReader != null ? diskReader.getDiagnostics() : "disabled",
+                // memo_hits: miss-memo rung hits (fresh memoized absence skipped the redundant
+                // re-read and escalated straight to generation) — law A5's virtual not-founds.
+                diskReader != null
+                        ? diskReader.getDiagnostics()
+                                + String.format(", memo_hits=%d", diag.getTotalMemoHits())
+                        : "disabled",
                 generationDiagnosticsOrNull, generationDiagnosticsOrNull != null,
                 diag.getTotalGenOrderGated(), diag.getTotalGenCompletionInversions(),
                 bwLimiter.getTotalBytesSent(),

@@ -21,7 +21,7 @@ class ColumnTimestampCacheTest {
 
     @BeforeEach
     void setUp() {
-        cache = new ColumnTimestampCache(DEFAULT_MAX);
+        cache = new ColumnTimestampCache(DEFAULT_MAX, 0);
         now = LSSConstants.epochSeconds();
     }
 
@@ -105,7 +105,7 @@ class ColumnTimestampCacheTest {
     @Test
     void evictIfOversizedRemovesOldestEntries() {
         // Use a small cache to actually test eviction
-        var smallCache = new ColumnTimestampCache(5);
+        var smallCache = new ColumnTimestampCache(5, 0);
         for (int i = 0; i < 8; i++) {
             smallCache.put(LSSConstants.DIM_STR_OVERWORLD, i, i * 100L, now + i);
         }
@@ -138,7 +138,7 @@ class ColumnTimestampCacheTest {
 
         cache.save(tempDir);
 
-        var loaded = new ColumnTimestampCache(DEFAULT_MAX);
+        var loaded = new ColumnTimestampCache(DEFAULT_MAX, 0);
         loaded.load(tempDir);
 
         assertEquals(3, loaded.size());
@@ -149,14 +149,14 @@ class ColumnTimestampCacheTest {
 
     @Test
     void loadFromNonexistentDirDoesNothing(@TempDir Path tempDir) {
-        var loaded = new ColumnTimestampCache(DEFAULT_MAX);
+        var loaded = new ColumnTimestampCache(DEFAULT_MAX, 0);
         loaded.load(tempDir.resolve("nonexistent"));
         assertEquals(0, loaded.size());
     }
 
     @Test
     void loadFromEmptyDirDoesNothing(@TempDir Path tempDir) {
-        var loaded = new ColumnTimestampCache(DEFAULT_MAX);
+        var loaded = new ColumnTimestampCache(DEFAULT_MAX, 0);
         loaded.load(tempDir);
         assertEquals(0, loaded.size());
     }
@@ -174,12 +174,12 @@ class ColumnTimestampCacheTest {
         cache.save(tempDir);
 
         // Overwrite with different data
-        var cache2 = new ColumnTimestampCache(DEFAULT_MAX);
+        var cache2 = new ColumnTimestampCache(DEFAULT_MAX, 0);
         cache2.put(LSSConstants.DIM_STR_OVERWORLD, 1L, 999L, now);
         cache2.put(LSSConstants.DIM_STR_OVERWORLD, 5L, 500L, now);
         cache2.save(tempDir);
 
-        var loaded = new ColumnTimestampCache(DEFAULT_MAX);
+        var loaded = new ColumnTimestampCache(DEFAULT_MAX, 0);
         loaded.load(tempDir);
         assertEquals(2, loaded.size());
         assertEquals(999L, loaded.get(LSSConstants.DIM_STR_OVERWORLD, 1L));
@@ -206,7 +206,7 @@ class ColumnTimestampCacheTest {
         cache.save(tempDir);
 
         // Load into a cache that already has a different entry
-        var loaded = new ColumnTimestampCache(DEFAULT_MAX);
+        var loaded = new ColumnTimestampCache(DEFAULT_MAX, 0);
         loaded.put(LSSConstants.DIM_STR_OVERWORLD, 99L, 999L, now);
         loaded.load(tempDir);
 
@@ -236,7 +236,7 @@ class ColumnTimestampCacheTest {
             out.writeLong(33L); // ...but power loss truncated mid-entry
         }
 
-        var loaded = new ColumnTimestampCache(DEFAULT_MAX);
+        var loaded = new ColumnTimestampCache(DEFAULT_MAX, 0);
         assertDoesNotThrow(() -> loaded.load(tempDir));
         assertEquals(100L, loaded.get(LSSConstants.DIM_STR_OVERWORLD, 11L));
         assertEquals(200L, loaded.get(LSSConstants.DIM_STR_OVERWORLD, 22L));
@@ -252,7 +252,7 @@ class ColumnTimestampCacheTest {
         Files.write(tempDir.resolve("lss-timestamps.bin"),
                 new byte[]{(byte) 0xDE, (byte) 0xAD, (byte) 0xBE}); // EOF inside the version int
 
-        var loaded = new ColumnTimestampCache(DEFAULT_MAX);
+        var loaded = new ColumnTimestampCache(DEFAULT_MAX, 0);
         assertDoesNotThrow(() -> loaded.load(tempDir));
         assertEquals(0, loaded.size());
         loaded.put(LSSConstants.DIM_STR_OVERWORLD, 1L, 100L, now);
@@ -269,7 +269,7 @@ class ColumnTimestampCacheTest {
             out.writeLong(1L); out.writeLong(100L);
         }
 
-        var loaded = new ColumnTimestampCache(DEFAULT_MAX);
+        var loaded = new ColumnTimestampCache(DEFAULT_MAX, 0);
         assertDoesNotThrow(() -> loaded.load(tempDir));
         assertEquals(0, loaded.size(), "a foreign format version must not be interpreted");
     }
@@ -283,7 +283,7 @@ class ColumnTimestampCacheTest {
             out.writeInt(-5); // corrupt count: stream can no longer be positioned
         }
 
-        var loaded = new ColumnTimestampCache(DEFAULT_MAX);
+        var loaded = new ColumnTimestampCache(DEFAULT_MAX, 0);
         assertDoesNotThrow(() -> loaded.load(tempDir));
         assertEquals(0, loaded.size());
     }
@@ -303,7 +303,7 @@ class ColumnTimestampCacheTest {
             }
         }
 
-        var small = new ColumnTimestampCache(5);
+        var small = new ColumnTimestampCache(5, 0);
         assertDoesNotThrow(() -> small.load(tempDir));
         assertEquals(6, small.size(), "a valid over-cap count must load, not be discarded");
         assertEquals(1, small.evictIfOversized(), "the next eviction pass trims the overshoot");
@@ -322,7 +322,7 @@ class ColumnTimestampCacheTest {
             out.writeLong(1L); out.writeLong(100L);
         }
 
-        var loaded = new ColumnTimestampCache(DEFAULT_MAX);
+        var loaded = new ColumnTimestampCache(DEFAULT_MAX, 0);
         assertDoesNotThrow(() -> loaded.load(tempDir));
         assertEquals(0, loaded.size(), "an impossible count must not allocate/load");
     }
@@ -339,7 +339,7 @@ class ColumnTimestampCacheTest {
             out.writeInt(-1); // corrupt second dimension: discard the rest, keep what loaded
         }
 
-        var loaded = new ColumnTimestampCache(DEFAULT_MAX);
+        var loaded = new ColumnTimestampCache(DEFAULT_MAX, 0);
         assertDoesNotThrow(() -> loaded.load(tempDir));
         assertEquals(70L, loaded.get(LSSConstants.DIM_STR_OVERWORLD, 7L));
         assertEquals(1, loaded.size());
@@ -365,7 +365,7 @@ class ColumnTimestampCacheTest {
 
     @Test
     void rePutRefreshesInsertionAgeSoTheReputEntrySurvivesEviction() {
-        var small = new ColumnTimestampCache(3);
+        var small = new ColumnTimestampCache(3, 0);
         small.put(LSSConstants.DIM_STR_OVERWORLD, 1L, 10L, 1L);
         small.put(LSSConstants.DIM_STR_OVERWORLD, 2L, 20L, 2L);
         small.put(LSSConstants.DIM_STR_OVERWORLD, 3L, 30L, 3L);
@@ -380,7 +380,7 @@ class ColumnTimestampCacheTest {
 
     @Test
     void evictionIsScopedToTheOversizedDimension() {
-        var small = new ColumnTimestampCache(2);
+        var small = new ColumnTimestampCache(2, 0);
         small.put(LSSConstants.DIM_STR_OVERWORLD, 1L, 10L, 1L);
         small.put(LSSConstants.DIM_STR_OVERWORLD, 2L, 20L, 2L);
         small.put(LSSConstants.DIM_STR_OVERWORLD, 3L, 30L, 3L); // overworld over its cap
@@ -414,5 +414,90 @@ class ColumnTimestampCacheTest {
                 "the snapshot keeps the entry the original invalidated");
         assertEquals(0L, snap.get(LSSConstants.DIM_STR_OVERWORLD, 2L),
                 "the snapshot excludes a put made after it was taken");
+    }
+
+    // ---- Miss memo (docs/planning/miss-memo-design.md) ----
+
+    private static final long TTL = 30_000_000_000L; // 30 s in nanos
+    private static final String OW = LSSConstants.DIM_STR_OVERWORLD;
+
+    private static ColumnTimestampCache memoCache() {
+        return new ColumnTimestampCache(1000, TTL);
+    }
+
+    @Test
+    void missIsFreshUntilExactlyTheTtlBoundary() {
+        var c = memoCache();
+        c.putMiss(OW, 5L, 1_000L);
+        assertTrue(c.isFreshMiss(OW, 5L, 1_000L), "fresh immediately");
+        assertTrue(c.isFreshMiss(OW, 5L, 1_000L + TTL - 1), "fresh one nano before the deadline");
+        assertFalse(c.isFreshMiss(OW, 5L, 1_000L + TTL), "expired AT the deadline");
+        assertEquals(0, c.missCount(), "the expired entry was lazily removed");
+    }
+
+    @Test
+    void positiveStampIsTheMissClearChokePoint() {
+        var c = memoCache();
+        c.putMiss(OW, 5L, 1_000L);
+        c.put(OW, 5L, 100L, 0L); // any serve path lands here
+        assertFalse(c.isFreshMiss(OW, 5L, 1_000L),
+                "a served column can never stay memoized absent");
+    }
+
+    @Test
+    void invalidateClearsTheMissEvenWithNoStampPresent() {
+        var c = memoCache();
+        c.putMiss(OW, 5L, 1_000L);
+        assertEquals(0, c.invalidate(OW, new long[]{5L}),
+                "no timestamp entry existed — invalidate still returns the stamp count");
+        assertFalse(c.isFreshMiss(OW, 5L, 1_000L),
+                "an invalidation means a save happened: the memoized absence is falsified");
+    }
+
+    @Test
+    void clearMissDropsExactlyThatPositionAndDimensionsAreIsolated() {
+        var c = memoCache();
+        c.putMiss(OW, 5L, 1_000L);
+        c.putMiss(OW, 6L, 1_000L);
+        c.putMiss(LSSConstants.DIM_STR_THE_NETHER, 5L, 1_000L);
+        c.clearMiss(OW, 5L);
+        assertFalse(c.isFreshMiss(OW, 5L, 1_000L));
+        assertTrue(c.isFreshMiss(OW, 6L, 1_000L), "sibling position untouched");
+        assertTrue(c.isFreshMiss(LSSConstants.DIM_STR_THE_NETHER, 5L, 1_000L),
+                "same packed position in another dimension untouched");
+    }
+
+    @Test
+    void ttlZeroDisablesTheMemoWholesale() {
+        var c = new ColumnTimestampCache(1000, 0);
+        c.putMiss(OW, 5L, 1_000L);
+        assertFalse(c.isFreshMiss(OW, 5L, 1_000L), "ttl 0 is the config kill switch");
+        assertEquals(0, c.missCount(), "nothing is even stored");
+    }
+
+    @Test
+    void missesNeverSurviveSaveLoadOrSnapshot(@TempDir Path tempDir) {
+        var c = memoCache();
+        c.put(OW, 1L, 100L, now);
+        c.putMiss(OW, 5L, 1_000L);
+        c.save(tempDir);
+        var reloaded = memoCache();
+        reloaded.load(tempDir);
+        assertEquals(100L, reloaded.get(OW, 1L), "stamps persist");
+        assertFalse(reloaded.isFreshMiss(OW, 5L, 1_000L),
+                "misses are seconds-fresh info and must not survive a process boundary");
+        assertFalse(c.snapshotForSave().isFreshMiss(OW, 5L, 1_000L),
+                "the save snapshot excludes misses too");
+    }
+
+    @Test
+    void oversizedMissMemoIsEvictedWholesaleBeforeStampEviction() {
+        var c = new ColumnTimestampCache(3, TTL);
+        for (long p = 0; p < 5; p++) c.putMiss(OW, p, 1_000L);
+        c.put(OW, 100L, 1L, now); // within the stamp cap
+        c.evictIfOversized();
+        assertEquals(0, c.missCount(),
+                "an over-cap miss map clears wholesale — a miss is always cheaper to lose than a stamp");
+        assertEquals(1L, c.get(OW, 100L), "the within-cap stamp survives");
     }
 }

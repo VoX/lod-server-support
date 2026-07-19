@@ -268,7 +268,7 @@ public class PaperRequestProcessingService {
         var dataDir = server.getWorldPath(LevelResource.ROOT).resolve("data");
         var offThreadProcessor = new PaperOffThreadProcessor(
                 players, diskReader, generationService != null, dataDir,
-                config.perDimensionTimestampCacheSizeMB);
+                config.perDimensionTimestampCacheSizeMB, config.missMemoTtlSeconds);
         offThreadProcessor.start();
 
         var dirtyTracker = new DirtyColumnTracker();

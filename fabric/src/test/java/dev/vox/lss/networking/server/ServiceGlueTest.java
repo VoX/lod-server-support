@@ -61,7 +61,7 @@ class ServiceGlueTest {
         final List<Cleared> cleared = new ArrayList<>();
 
         RecordingProcessor(Map<UUID, PlayerRequestState> players) {
-            super(players, null, false, null, 1);
+            super(players, null, false, null, 1, 0);  // memo off: these rigs pin the ttl=0 (pre-memo) read path
         }
 
         @Override
@@ -172,7 +172,7 @@ class ServiceGlueTest {
         var b = handshakenState();
         var c = handshakenState();
         var players = playersOf(a, b, c);
-        var proc = new FabricOffThreadProcessor(players, null, false, null, 1);
+        var proc = new FabricOffThreadProcessor(players, null, false, null, 1, 0);
         try {
             proc.start();
             // One ColumnNotGenerated response per player, produced by the real processing

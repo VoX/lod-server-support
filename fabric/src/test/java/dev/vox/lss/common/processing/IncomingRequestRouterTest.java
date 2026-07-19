@@ -60,7 +60,12 @@ class IncomingRequestRouterTest {
 
         TestProcessor(Map<UUID, TestState> players, AbstractChunkDiskReader diskReader,
                       boolean generationAvailable, Path dataDir) {
-            super(players, diskReader, generationAvailable, dataDir, 1);
+            this(players, diskReader, generationAvailable, dataDir, 0);  // memo off: these rigs pin the ttl=0 (pre-memo) read path
+        }
+
+        TestProcessor(Map<UUID, TestState> players, AbstractChunkDiskReader diskReader,
+                      boolean generationAvailable, Path dataDir, int missMemoTtlSeconds) {
+            super(players, diskReader, generationAvailable, dataDir, 1, missMemoTtlSeconds);
         }
 
         @Override
@@ -110,7 +115,7 @@ class IncomingRequestRouterTest {
 
     /** Pre-populate the processor's timestamp cache through its production load path. */
     private static void seedTimestamps(Path dataDir, long timestamp, long... positions) {
-        var seed = new ColumnTimestampCache(ColumnTimestampCache.mbToEntries(1));
+        var seed = new ColumnTimestampCache(ColumnTimestampCache.mbToEntries(1), 0);
         for (long pos : positions) seed.put(DIM, pos, timestamp, 0);
         seed.save(dataDir);
     }
@@ -118,7 +123,7 @@ class IncomingRequestRouterTest {
     /** A successful disk read result, injected straight into the stub reader's queue. */
     private static ChunkReadResult dataResult(UUID u, int cx, int cz, byte[] bytes, long ts, long order) {
         return new ChunkReadResult(u, cx, cz, bytes, DIM,
-                bytes.length + LSSConstants.ESTIMATED_COLUMN_OVERHEAD_BYTES, ts, false, false, order);
+                bytes.length + LSSConstants.ESTIMATED_COLUMN_OVERHEAD_BYTES, ts, false, false, false, order);
     }
 
     /** Poll until the processing thread publishes a generation ticket (race-free consume). */
@@ -1001,7 +1006,7 @@ class IncomingRequestRouterTest {
     @Test
     void epochSecondGranularityAndSkewedStampsFollowTheCacheVsClaimLadder(@TempDir Path tempDir) throws Exception {
         long future = LSSConstants.epochSeconds() + 7200;
-        var seed = new ColumnTimestampCache(ColumnTimestampCache.mbToEntries(1));
+        var seed = new ColumnTimestampCache(ColumnTimestampCache.mbToEntries(1), 0);
         seed.put(DIM, packed(110, 0), 1000L, 0);
         seed.put(DIM, packed(111, 0), future, 0);
         seed.put(DIM, packed(112, 0), future, 0);
@@ -1186,6 +1191,77 @@ class IncomingRequestRouterTest {
             proc.postSnapshot(snapshot(p1), List.of());
             waitFor(() -> submitPositions(proc).contains(packed(72, 0)),
                     "the still-declared want routes once the slot frees");
+        } finally {
+            proc.shutdown();
+            reader.shutdown();
+        }
+    }
+
+    // ---- Miss memo: ladder-ordering pins (docs/planning/miss-memo-design.md) ----
+
+    @Test
+    void loadedProbeBeatsAFreshMissMemo() throws Exception {
+        // The probe rung runs BEFORE the memo rung by drain order, so a chunk loaded by
+        // walk-in play serves from memory even while a stale memo entry exists — this is
+        // what closes the default-config Paper walk-in case (no dirty mark fires there).
+        var players = new ConcurrentHashMap<UUID, TestState>();
+        var p1 = addPlayer(players, 4, 0); // gen cap 0: the miss drops, leaving no pending
+        var reader = new StubDiskReader();
+        reader.registerPlayer(p1.getPlayerUUID());
+        var proc = new TestProcessor(players, reader, true, null, 30);
+        try {
+            proc.start();
+            p1.enqueue(new IncomingRequest(9, 0, -1));
+            proc.postSnapshot(snapshot(p1), List.of());
+            waitFor(() -> proc.submits.size() == 1, "cold read");
+            reader.getPlayerQueue(p1.getPlayerUUID())
+                    .add(ChunkReadResult.notFoundAuthoritative(p1.getPlayerUUID(), 9, 0, DIM, 1L));
+            proc.postSnapshot(snapshot(p1), List.of());
+            waitFor(() -> proc.getDiagnostics().getTotalMissDropped() == 1,
+                    "miss drops on the zero gen cap (memo written)");
+
+            // The chunk is now LOADED (walk-in): the probe must serve it, memo notwithstanding.
+            var probes = new Long2ObjectOpenHashMap<LoadedColumnData>();
+            probes.put(packed(9, 0), new LoadedColumnData(9, 0, new byte[]{4, 2}, 32));
+            p1.enqueue(new IncomingRequest(9, 0, -1));
+            proc.postSnapshot(snapshot(Map.of(p1.getPlayerUUID(), probes), 0, p1), List.of());
+            waitFor(() -> proc.payloads.size() == 1, "probe serve");
+            assertArrayEquals(new byte[]{4, 2}, proc.payloads.peek().sectionBytes());
+            assertEquals(0, proc.getDiagnostics().getTotalMemoHits(),
+                    "the probe rung resolved the entry before the memo rung could");
+            assertEquals(1, proc.submits.size(), "and no re-read either");
+        } finally {
+            proc.shutdown();
+            reader.shutdown();
+        }
+    }
+
+    @Test
+    void generationDisabledNeverConsultsTheMemo() throws Exception {
+        // With generation unavailable a memo hit could only produce NOT_GENERATED — a
+        // session-permanent wire answer off cached knowledge. The rung is gated on
+        // generationAvailable, so a gen-disabled server always re-reads (and there is no
+        // churn to save there anyway: the first miss's NOT_GENERATED parks the client).
+        var players = new ConcurrentHashMap<UUID, TestState>();
+        var p1 = addPlayer(players, 4, 4);
+        var reader = new StubDiskReader();
+        reader.registerPlayer(p1.getPlayerUUID());
+        var proc = new TestProcessor(players, reader, false, null, 30);
+        try {
+            proc.start();
+            p1.enqueue(new IncomingRequest(9, 0, -1));
+            proc.postSnapshot(snapshot(p1), List.of());
+            waitFor(() -> proc.submits.size() == 1, "first read");
+            reader.getPlayerQueue(p1.getPlayerUUID())
+                    .add(ChunkReadResult.notFoundAuthoritative(p1.getPlayerUUID(), 9, 0, DIM, 1L));
+            proc.postSnapshot(snapshot(p1), List.of());
+            drainUntil(proc, contains(LSSConstants.RESPONSE_NOT_GENERATED, packed(9, 0)));
+
+            p1.enqueue(new IncomingRequest(9, 0, -1)); // an untracked re-ask (rig client never parks)
+            proc.postSnapshot(snapshot(p1), List.of());
+            waitFor(() -> proc.submits.size() == 2,
+                    "gen-disabled re-ask READS — the memo rung never fires without generation");
+            assertEquals(0, proc.getDiagnostics().getTotalMemoHits());
         } finally {
             proc.shutdown();
             reader.shutdown();

@@ -195,14 +195,16 @@ public abstract class AbstractChunkDiskReader {
             LSSLogger.error("Failed to read chunk NBT from disk at " + chunkX + ", " + chunkZ, e);
             this.diag.recordError();
             recordRealCompletion(System.nanoTime() - startNs);
-            addResult(playerUuid, ChunkReadResult.empty(playerUuid, chunkX, chunkZ, dimension, submissionOrder));
+            // Error/timeout TRIAGED as not-found (law A5's disk.errors fold) — says nothing
+            // about existence, so it must never seed the miss memo.
+            addResult(playerUuid, ChunkReadResult.notFoundFromError(playerUuid, chunkX, chunkZ, dimension, submissionOrder));
             return;
         }
 
         if (serializedSections == null) {
             this.diag.recordNotFound();
             recordRealCompletion(System.nanoTime() - startNs);
-            addResult(playerUuid, ChunkReadResult.empty(playerUuid, chunkX, chunkZ, dimension, submissionOrder));
+            addResult(playerUuid, ChunkReadResult.notFoundAuthoritative(playerUuid, chunkX, chunkZ, dimension, submissionOrder));
             return;
         }
 
@@ -213,7 +215,7 @@ public abstract class AbstractChunkDiskReader {
             this.diag.recordAllAir();
             recordRealCompletion(System.nanoTime() - startNs);
             addResult(playerUuid, new ChunkReadResult(playerUuid, chunkX, chunkZ,
-                    null, dimension, 0, columnTimestamp, false, false, submissionOrder));
+                    null, dimension, 0, columnTimestamp, false, false, false, submissionOrder));
             return;
         }
 
@@ -223,7 +225,7 @@ public abstract class AbstractChunkDiskReader {
         recordRealCompletion(System.nanoTime() - startNs);
         addResult(playerUuid, new ChunkReadResult(playerUuid, chunkX, chunkZ,
                 serializedSections, dimension, estimatedBytes, columnTimestamp,
-                false, false, submissionOrder));
+                false, false, false, submissionOrder));
     }
 
     public void registerPlayer(UUID playerUuid) {

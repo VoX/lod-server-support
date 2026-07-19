@@ -199,6 +199,10 @@ public final class PaperSoakMetricsExporter {
             diskMap.put("pending", diskReader.getPendingResultCount());
             diskMap.put("pending_hw", DISK_PENDING_HW.get());
             diskMap.put("read_ms_total", dd.getTotalReadTimeNanos() / LSSConstants.NANOS_PER_MS);
+            // Miss-memo rung hits (law A5's virtual not-founds) — sourced from the
+            // processing diagnostics; the rung requires a reader, so the no-reader
+            // disk-map-empty contract is preserved.
+            diskMap.put("memo_hits", diag.getTotalMemoHits());
         }
         result.put("disk", diskMap);
 

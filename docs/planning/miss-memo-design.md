@@ -1,8 +1,14 @@
 # Server-side negative miss memo — design & implementation plan
 
-**Status:** PLAN — not implemented. Target: **v0.7.1** (post-v0.7.0-tag; touches law A5's
-algebra and the router's admission path — never a release-week change). Written 2026-07-19.
-Supersedes the sketch at `v0.7.1-candidates.md` item 10a.
+**Status:** IMPLEMENTED on `feat/miss-memo` (branched off the v0.7.0 release branch,
+2026-07-19) with maintainer decisions: **TTL 30 s** (`missMemoTtlSeconds`, clamp [0,60],
+0 = kill switch), region-granular variant stays deferred, diag naming `disk.memo_hits`.
+All Tier 1 (both platforms) + Tier 2 (memo live under default config) green; check_soak
+selftest 140 cases with the A5 memo term. One implementation discovery beyond this plan:
+the disk-drain's not-found stamp guard called the full `invalidate()`, which would have
+erased every memo the instant it was written — split into `invalidateStamps()` (drain,
+stamps-only) vs `invalidate()` (edits, clears misses too), pinned by the churn-loop test.
+Supersedes the sketch at `v0.7.1-candidates.md` item 10a. Original plan below.
 
 ## Goal
 

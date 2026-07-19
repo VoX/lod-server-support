@@ -41,7 +41,7 @@ class FabricOffThreadProcessorDropTest {
         players.put(state.getPlayerUUID(), state);
         // Processing thread is never started: buildAndEnqueueColumnPayload is exercised
         // directly, same single-thread model as the processing loop.
-        return new Harness(new FabricOffThreadProcessor(players, null, false, null, 1), state);
+        return new Harness(new FabricOffThreadProcessor(players, null, false, null, 1, 0), state);
     }
 
     /** Flush whatever was enqueued for the player (FlushSendQueueTest token-bucket pattern). */

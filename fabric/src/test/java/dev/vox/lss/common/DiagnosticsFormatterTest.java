@@ -256,7 +256,8 @@ class DiagnosticsFormatterTest {
         assertEquals(1, data.cumGen());
         assertEquals(4, data.cumReResolved());
         assertEquals(3, data.diskCompleted(), "wired from getDiag().getSuccessfulReadCount()");
-        assertEquals(reader.getDiagnostics(), data.diskReaderDiagnostics());
+        assertEquals(reader.getDiagnostics() + ", memo_hits=0", data.diskReaderDiagnostics(),
+                "the DiskReader line carries the miss-memo hit counter (A5's virtual not-founds)");
         assertEquals("tick-string", data.tickDiagnostics());
         assertEquals(444, data.bwWindowRate());
         assertEquals(777, data.bwTotal(), "wired from the limiter's total, not the state sums");

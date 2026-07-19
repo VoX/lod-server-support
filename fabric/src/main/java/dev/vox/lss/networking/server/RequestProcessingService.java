@@ -107,7 +107,7 @@ public class RequestProcessingService {
         this.offThreadProcessor = new FabricOffThreadProcessor(
                 this.players,
                 this.diskReader, this.generationService != null, dataDir,
-                config.perDimensionTimestampCacheSizeMB);
+                config.perDimensionTimestampCacheSizeMB, config.missMemoTtlSeconds);
         this.offThreadProcessor.start();
 
         this.dirtyBroadcaster = new DirtyColumnBroadcaster(

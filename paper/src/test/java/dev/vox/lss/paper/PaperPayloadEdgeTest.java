@@ -301,7 +301,7 @@ class PaperPayloadEdgeTest {
     private static PaperOffThreadProcessor newProcessor() {
         // Thread is created but never start()ed; null diskReader/dataDir follow the
         // OffThreadProcessorMailboxTest harness pattern.
-        return new PaperOffThreadProcessor(new ConcurrentHashMap<>(), null, false, null, 1);
+        return new PaperOffThreadProcessor(new ConcurrentHashMap<>(), null, false, null, 1, 0);
     }
 
     @Test

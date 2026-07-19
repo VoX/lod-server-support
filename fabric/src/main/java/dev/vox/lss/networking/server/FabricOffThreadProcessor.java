@@ -34,8 +34,10 @@ public class FabricOffThreadProcessor extends OffThreadProcessor<PlayerRequestSt
     public FabricOffThreadProcessor(Map<UUID, PlayerRequestState> players,
                                      ChunkDiskReader diskReader,
                                      boolean generationAvailable,
-                                     Path dataDir, int perDimensionTimestampCacheSizeMB) {
-        super(players, diskReader, generationAvailable, dataDir, perDimensionTimestampCacheSizeMB);
+                                     Path dataDir, int perDimensionTimestampCacheSizeMB,
+                                     int missMemoTtlSeconds) {
+        super(players, diskReader, generationAvailable, dataDir, perDimensionTimestampCacheSizeMB,
+                missMemoTtlSeconds);
         this.diskReader = diskReader;
     }
 

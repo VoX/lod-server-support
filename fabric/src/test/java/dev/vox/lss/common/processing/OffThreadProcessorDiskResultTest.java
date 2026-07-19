@@ -66,7 +66,12 @@ class OffThreadProcessorDiskResultTest {
 
         TestProcessor(Map<UUID, TestState> players, AbstractChunkDiskReader reader,
                       boolean generationAvailable) {
-            super(players, reader, generationAvailable, null, 1);
+            this(players, reader, generationAvailable, 0);  // memo off: these rigs pin the ttl=0 (pre-memo) read path
+        }
+
+        TestProcessor(Map<UUID, TestState> players, AbstractChunkDiskReader reader,
+                      boolean generationAvailable, int missMemoTtlSeconds) {
+            super(players, reader, generationAvailable, null, 1, missMemoTtlSeconds);
         }
 
         @Override
@@ -102,10 +107,15 @@ class OffThreadProcessorDiskResultTest {
         Rig(boolean generationAvailable) { this(generationAvailable, 4, 4); }
 
         Rig(boolean generationAvailable, int syncCap, int genCap) {
+            this(generationAvailable, syncCap, genCap, 0);
+        }
+
+        /** Memo-enabled variant (ttlSeconds > 0) for the miss-memo tests. */
+        Rig(boolean generationAvailable, int syncCap, int genCap, int ttlSeconds) {
             this.state = newPlayer(uuid, syncCap, genCap);
             this.players.put(uuid, state);
             this.reader.registerPlayer(uuid);
-            this.proc = new TestProcessor(players, reader, generationAvailable);
+            this.proc = new TestProcessor(players, reader, generationAvailable, ttlSeconds);
             this.proc.start();
         }
 
@@ -137,12 +147,12 @@ class OffThreadProcessorDiskResultTest {
     private static ChunkReadResult dataResult(UUID u, int cx, int cz, String dim,
                                               byte[] bytes, long ts, long order) {
         return new ChunkReadResult(u, cx, cz, bytes, dim,
-                bytes.length + LSSConstants.ESTIMATED_COLUMN_OVERHEAD_BYTES, ts, false, false, order);
+                bytes.length + LSSConstants.ESTIMATED_COLUMN_OVERHEAD_BYTES, ts, false, false, false, order);
     }
 
     /** Mirrors AbstractChunkDiskReader's all-air triage: found on disk, no bytes to send. */
     private static ChunkReadResult allAirResult(UUID u, int cx, int cz, String dim, long ts, long order) {
-        return new ChunkReadResult(u, cx, cz, null, dim, 0, ts, false, false, order);
+        return new ChunkReadResult(u, cx, cz, null, dim, 0, ts, false, false, false, order);
     }
 
     private record Response(UUID player, byte type, long packed) {}
@@ -1191,5 +1201,164 @@ class OffThreadProcessorDiskResultTest {
         } finally {
             rig.proc.shutdown();
         }
+    }
+
+    // ---- Miss memo (docs/planning/miss-memo-design.md) ----
+    // All assertions are EFFECT-based through production surfaces (submit counts, gen
+    // tickets, the volatile memo_hits counter) — the cache itself is processing-thread-only.
+
+    /** The churn loop with the memo on: a miss that can't take the single gen slot used to
+     *  re-read disk on every 1 Hz re-declaration; with a fresh memo the re-declaration
+     *  escalates directly (memo_hits + the standard superseded+miss_dropped drop) and the
+     *  reader is never touched again. */
+    @Test
+    void memoHitSkipsTheReReadWhileWaitingForAGenSlot() throws Exception {
+        var rig = new Rig(true, 4, 0, 30); // gen available, but ZERO gen slots: every miss drops
+        try {
+            rig.state.enqueue(new IncomingRequest(7, 0, -1));
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
+            waitFor(() -> rig.proc.diskSubmits.size() == 1, "the cold position reads disk once");
+
+            rig.inject(ChunkReadResult.notFoundAuthoritative(rig.uuid, 7, 0, DIM, 1L));
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
+            waitFor(() -> rig.proc.getDiagnostics().getTotalMissDropped() == 1,
+                    "the authoritative miss drops on the full gen slot (memo written)");
+
+            rig.state.enqueue(new IncomingRequest(7, 0, -1)); // the 1 Hz re-declaration
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
+            waitFor(() -> rig.proc.getDiagnostics().getTotalMemoHits() == 1,
+                    "the re-declaration hits the memo instead of the reader");
+            waitFor(() -> rig.proc.getDiagnostics().getTotalMissDropped() == 2,
+                    "the memo hit is dispositioned exactly like a real miss (A5 balance)");
+            assertEquals(1, rig.proc.diskSubmits.size(),
+                    "the whole churn round trip touched disk exactly once");
+            assertEquals(0, rig.state.getHeldSyncSlots(), "no SYNC slot for a memo hit");
+        } finally {
+            rig.proc.shutdown();
+        }
+    }
+
+    @Test
+    void memoHitWithAFreeGenSlotSubmitsTheTicketWithoutARead() throws Exception {
+        var rig = new Rig(true, 4, 4, 30);
+        var other = UUID.randomUUID();
+        var stateB = rig.addPlayer(other);
+        try {
+            rig.state.enqueue(new IncomingRequest(7, 0, -1));
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid, other), List.of());
+            waitFor(() -> rig.proc.diskSubmits.size() == 1, "player A's cold read");
+            rig.inject(ChunkReadResult.notFoundAuthoritative(rig.uuid, 7, 0, DIM, 1L));
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid, other), List.of());
+            waitFor(() -> rig.proc.pollGenerationTicketRequest() != null, "A's miss escalates");
+
+            // The memo is a fact about the WORLD: player B's ask for the same position
+            // escalates straight to generation without ever touching the reader.
+            stateB.enqueue(new IncomingRequest(7, 0, -1));
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid, other), List.of());
+            waitFor(() -> rig.proc.getDiagnostics().getTotalMemoHits() == 1, "B hits A's memo");
+            waitFor(() -> stateB.getHeldGenSlots() == 1, "B holds a GENERATION slot directly");
+            assertEquals(1, rig.proc.diskSubmits.size(), "B never read disk");
+            assertEquals(0, stateB.getHeldSyncSlots());
+        } finally {
+            rig.proc.shutdown();
+        }
+    }
+
+    @Test
+    void errorTriagedNotFoundNeverSeedsTheMemo() throws Exception {
+        var rig = new Rig(true, 4, 0, 30);
+        try {
+            rig.state.enqueue(new IncomingRequest(7, 0, -1));
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
+            waitFor(() -> rig.proc.diskSubmits.size() == 1, "first read");
+            // A timeout/IO error triages down the not-found ladder — but says NOTHING about
+            // existence: memoizing it would suppress reads of an existing chunk for the TTL.
+            rig.inject(ChunkReadResult.notFoundFromError(rig.uuid, 7, 0, DIM, 1L));
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
+            waitFor(() -> rig.proc.getDiagnostics().getTotalMissDropped() == 1, "triage drop");
+
+            rig.state.enqueue(new IncomingRequest(7, 0, -1));
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
+            waitFor(() -> rig.proc.diskSubmits.size() == 2,
+                    "the re-declaration READS again — no memo was written for the triage");
+            assertEquals(0, rig.proc.getDiagnostics().getTotalMemoHits());
+        } finally {
+            rig.proc.shutdown();
+        }
+    }
+
+    @Test
+    void ghostDeliveryNeverSeedsTheMemo() throws Exception {
+        var rig = new Rig(true, 4, 0, 30);
+        try {
+            // A raced/duplicate result with no live pending behind it — a stale observation.
+            rig.inject(ChunkReadResult.notFoundAuthoritative(rig.uuid, 7, 0, DIM, 1L));
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
+            waitFor(() -> rig.proc.getDiagnostics().getTotalMissDropped() == 1, "ghost drop");
+
+            rig.state.enqueue(new IncomingRequest(7, 0, -1));
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
+            waitFor(() -> rig.proc.diskSubmits.size() == 1,
+                    "the declaration READS — a ghost never seeds the memo");
+            assertEquals(0, rig.proc.getDiagnostics().getTotalMemoHits());
+        } finally {
+            rig.proc.shutdown();
+        }
+    }
+
+    /** Requirement: generation FINISHING clears the memo in EVERY outcome flavor. Each case
+     *  seeds the memo through the production miss path, delivers one outcome flavor, then
+     *  proves the next declaration READS (submit) instead of memo-hitting. */
+    private void assertGenerationOutcomeClearsTheMemo(
+            java.util.function.Function<UUID, TickSnapshot.GenerationReadyData> outcomeFor,
+            boolean removePlayerFirst) throws Exception {
+        var rig = new Rig(true, 4, 4, 30);
+        var other = UUID.randomUUID();
+        var stateB = rig.addPlayer(other);
+        try {
+            rig.state.enqueue(new IncomingRequest(7, 0, -1));
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid, other), List.of());
+            waitFor(() -> rig.proc.diskSubmits.size() == 1, "cold read");
+            rig.inject(ChunkReadResult.notFoundAuthoritative(rig.uuid, 7, 0, DIM, 1L));
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid, other), List.of());
+            waitFor(() -> rig.state.getHeldGenSlots() == 1, "miss escalates (memo written)");
+
+            if (removePlayerFirst) rig.players.remove(rig.uuid);
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid, other),
+                    List.of(outcomeFor.apply(rig.uuid)));
+            // The generation outcome drained — the memo MUST be gone: player B's fresh ask
+            // for the same position must READ, not memo-hit.
+            stateB.enqueue(new IncomingRequest(7, 0, -1));
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid, other), List.of());
+            waitFor(() -> rig.proc.diskSubmits.stream().anyMatch(s -> s.player().equals(other)),
+                    "post-outcome declaration reads disk (memo cleared by the drained outcome)");
+            assertEquals(0, rig.proc.getDiagnostics().getTotalMemoHits(),
+                    "no memo hit after the generation outcome cleared the entry");
+        } finally {
+            rig.proc.shutdown();
+        }
+    }
+
+    @Test
+    void generationTransientTimeoutClearsTheMemo() throws Exception {
+        assertGenerationOutcomeClearsTheMemo(uuid ->
+                new TickSnapshot.GenerationReadyData(uuid, 7, 0, DIM, null, 0L, 1L, true, false),
+                false);
+    }
+
+    @Test
+    void generationPermanentFailureClearsTheMemo() throws Exception {
+        assertGenerationOutcomeClearsTheMemo(uuid ->
+                new TickSnapshot.GenerationReadyData(uuid, 7, 0, DIM, null, 0L, 1L, false, false),
+                false);
+    }
+
+    @Test
+    void generationOutcomeForADepartedPlayerStillClearsTheMemo() throws Exception {
+        // The clear sits BEFORE the state==null continue: the miss is a fact about the
+        // world, not about a player — a departed player's outcome still falsifies it.
+        assertGenerationOutcomeClearsTheMemo(uuid ->
+                new TickSnapshot.GenerationReadyData(uuid, 7, 0, DIM, null, 0L, 1L, true, false),
+                true);
     }
 }

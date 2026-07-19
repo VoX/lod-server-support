@@ -30,6 +30,7 @@ public class ProcessingDiagnostics {
     private volatile long totalRangeFiltered;
     private volatile long totalMissDropped;
     private volatile long totalGenOrderGated;
+    private volatile long totalMemoHits;
     private volatile long totalGenCompletionInversions;
 
     public void resetTickCounters() {
@@ -96,6 +97,12 @@ public class ProcessingDiagnostics {
      *  two would over-balance A5. */
     public void addMissDropped(long n) { if (n > 0) totalMissDropped += n; }
 
+    /** Miss-memo rung hits (disk.memo_hits): a fresh memoized miss skipped the redundant
+     *  disk re-read and went straight to the generation ladder. Law A5 counts these as
+     *  VIRTUAL not-founds on its left-hand side — each hit is dispositioned exactly like a
+     *  real miss (gen submit or miss_dropped), so the identity balances by inspection. */
+    public void addMemoHit(long n) { if (n > 0) totalMemoHits += n; }
+
     /** Misses refused by the generation order-spread gate (a subset of miss_dropped): the
      *  candidate ring exceeded the oldest outstanding ticket's ring by more than
      *  MAX_GENERATION_RING_SPREAD. Nonzero means the gate is actively bounding a refill
@@ -125,6 +132,7 @@ public class ProcessingDiagnostics {
     public long getTotalSuperseded() { return totalSuperseded; }
     public long getTotalRangeFiltered() { return totalRangeFiltered; }
     public long getTotalMissDropped() { return totalMissDropped; }
+    public long getTotalMemoHits() { return totalMemoHits; }
     public long getTotalGenOrderGated() { return totalGenOrderGated; }
     public long getTotalGenCompletionInversions() { return totalGenCompletionInversions; }
 }

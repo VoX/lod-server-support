@@ -89,6 +89,13 @@ public final class LSSConstants {
     public static final int MAX_CONCURRENCY_LIMIT = 1000;
     public static final int MIN_TIMESTAMP_CACHE_SIZE_MB = 1;
     public static final int MAX_TIMESTAMP_CACHE_SIZE_MB = 256;
+
+    /** Miss-memo TTL clamp (docs/planning/miss-memo-design.md): 0 disables the memo
+     *  wholesale (the config kill switch). The ceiling bounds the staleness window — the
+     *  memo's falsifying hooks are known incomplete, so a stale entry may delay service by
+     *  up to the TTL. */
+    public static final int MIN_MISS_MEMO_TTL_SECONDS = 0;
+    public static final int MAX_MISS_MEMO_TTL_SECONDS = 60;
     public static final int MAX_BATCH_CHUNK_REQUESTS = 1024;
     public static final int MAX_BATCH_RESPONSES = 4096;
 

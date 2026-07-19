@@ -51,7 +51,7 @@ class ExporterContractTest {
 
     private static final class TestProcessor extends OffThreadProcessor<TestState> {
         TestProcessor(Map<UUID, TestState> players) {
-            super(players, null, false, null, 1);
+            super(players, null, false, null, 1, 0);  // memo off: these rigs pin the ttl=0 (pre-memo) read path
         }
         @Override
         protected boolean submitDiskRead(UUID playerUuid, String dimension, int cx, int cz, long order) {
@@ -420,7 +420,7 @@ class ExporterContractTest {
 
     @Test
     void timestampCacheEvictionCounterAndPerDimensionSizesTrackMutations() {
-        var cache = new ColumnTimestampCache(2);
+        var cache = new ColumnTimestampCache(2, 0);
         cache.put("d", 100L, 10L, 1L);
         cache.put("d", 200L, 20L, 2L);
         cache.put("d", 300L, 30L, 3L);

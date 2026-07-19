@@ -129,6 +129,7 @@ Server config is generated on first run:
 | `generationTimeoutSeconds` | `60` | Timeout for pending chunk generation |
 | `perDimensionTimestampCacheSizeMB` | `32` | Max timestamp cache size per dimension in MB (used for up-to-date checks on reconnect) |
 | `dirtyBroadcastIntervalSeconds` | `10` | Interval for pushing dirty column notifications to clients |
+| `missMemoTtlSeconds` | `30` | How long the server remembers "this chunk isn't generated yet" after a disk miss, so chunks waiting for generation don't re-check disk every second. Any serve, world edit, or finished generation forgets the entry immediately; `0` disables the memo |
 
 **Paper-specific:** The config also includes an `updateEvents` list of Bukkit event class names used for dirty chunk detection.
 

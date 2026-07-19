@@ -122,7 +122,8 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
     @SuppressWarnings("this-escape")
     protected OffThreadProcessor(Map<UUID, PlayerState> players,
                                   AbstractChunkDiskReader diskReader, boolean generationAvailable,
-                                  Path dataDir, int perDimensionTimestampCacheSizeMB) {
+                                  Path dataDir, int perDimensionTimestampCacheSizeMB,
+                                  int missMemoTtlSeconds) {
         this.players = players;
         this.diskReader = diskReader;
         this.generationAvailable = generationAvailable;
@@ -130,7 +131,9 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
         // ends in "/." and otherwise prints as "./world/./data/..." in every cache log line (#32)
         this.dataDir = dataDir == null ? null : dataDir.normalize();
         this.timestampCache = new ColumnTimestampCache(
-                ColumnTimestampCache.mbToEntries(perDimensionTimestampCacheSizeMB));
+                ColumnTimestampCache.mbToEntries(perDimensionTimestampCacheSizeMB),
+                java.util.concurrent.TimeUnit.SECONDS.toNanos(
+                        Math.max(0, missMemoTtlSeconds)));
         if (this.dataDir != null) {
             this.timestampCache.load(this.dataDir);
         }
@@ -653,7 +656,11 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
                     // Disk says the chunk no longer exists (region trimmed/deleted outside
                     // MC). A stale cached stamp would answer up_to_date to data-claiming
                     // clients forever — ghost terrain for a chunk the server cannot serve.
-                    int removed = this.timestampCache.invalidate(result.dimension(), new long[]{packed});
+                    // Stamps ONLY: the full invalidate() also clears miss-memo entries, and
+                    // this not-found is the very observation the memo write in
+                    // handleDiskNotFound just recorded — full invalidation here would erase
+                    // every memo the instant it was written.
+                    int removed = this.timestampCache.invalidateStamps(result.dimension(), new long[]{packed});
                     if (removed > 0 && !this.invalidationDirty) {
                         this.invalidationDirty = true;
                         this.invalidationCountdown = INVALIDATE_SAVE_MAX_CYCLES;
@@ -704,7 +711,8 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
                         + playerUuid + ": chunk [" + cx + ", " + cz + "]");
             }
         } else if (result.notFound()) {
-            handleDiskNotFound(playerUuid, state, packed, cx, cz, pending, dimension);
+            handleDiskNotFound(playerUuid, state, packed, cx, cz, pending, dimension,
+                    result.authoritativeMiss());
         } else {
             if (!staleAgainstEdit) {
                 state.markDiskReadDone(cx, cz);
@@ -766,19 +774,40 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
      *  position for the whole session). Gen unavailable: ColumnNotGenerated — the one
      *  permanent disposition, the client stops asking until a dirty broadcast revives it. */
     private void handleDiskNotFound(UUID playerUuid, PlayerState state, long packed,
-                                     int cx, int cz, PendingRequest pending, String dimension) {
+                                     int cx, int cz, PendingRequest pending, String dimension,
+                                     boolean authoritativeMiss) {
         if (pending == null) {
             // No live pending backs this delivery (duplicate/raced result). Under permanent
             // NOT_GENERATED semantics a wire answer here could session-satisfy a position off
-            // a ghost delivery — drop silently; a still-wanted position is re-declared.
+            // a ghost delivery — drop silently; a still-wanted position is re-declared. Also
+            // no memo write: a raced observation is stale by construction.
             this.ctx.diagnostics().addSuperseded(1);
             this.ctx.diagnostics().addMissDropped(1); // law A5: a miss with no submit, no answer
             return;
+        }
+        if (authoritativeMiss) {
+            // Memoize the miss BEFORE the gen ladder runs — a gated or slot-full drop still
+            // learned the chunk is absent, and the memo is what stops the next 1 Hz
+            // re-declaration from re-reading disk to re-learn it. NEVER written for an
+            // error/timeout-triaged not-found (says nothing about existence) or a ghost.
+            this.timestampCache.putMiss(dimension, packed, System.nanoTime());
         }
         if (!this.generationAvailable) {
             this.ctx.sendActions().add(new SendAction.ColumnNotGenerated(playerUuid, packed, state));
             return;
         }
+        escalateMissToGeneration(playerUuid, state, packed, cx, cz, pending.claimsData(), dimension);
+    }
+
+    /**
+     * The gen-available half of the miss ladder, shared VERBATIM by the real disk-miss path
+     * ({@link #handleDiskNotFound}) and the router's miss-memo rung (a fresh memo hit skips
+     * the redundant read and lands here directly) so the two cannot drift. Order-spread
+     * gate, GENERATION slot admission + stale-guard registration + ticket enqueue, or the
+     * standard silent transient drop. Never a wire answer.
+     */
+    void escalateMissToGeneration(UUID playerUuid, PlayerState state, long packed,
+                                   int cx, int cz, boolean claimsData, String dimension) {
         if (state.generationOrderSpreadExceeded(cx, cz, LSSConstants.MAX_GENERATION_RING_SPREAD)) {
             // Order-spread gate: the platform scheduler owns completion order (chunk-system
             // rewrites like C2ME are not FIFO), so an unbounded per-slot refill lets far
@@ -790,7 +819,7 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
             this.ctx.diagnostics().addGenOrderGated(1);
             return;
         }
-        if (state.tryAdmit(new PendingRequest(cx, cz, SlotType.GENERATION, pending.claimsData()))) {
+        if (state.tryAdmit(new PendingRequest(cx, cz, SlotType.GENERATION, claimsData))) {
             addGenerationInFlight(playerUuid, dimension, packed);
             this.ctx.generationTicketRequests().add(new GenerationTicketRequest(
                     playerUuid, cx, cz, dimension, this.ctx.sequence().next()));
@@ -809,6 +838,13 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
             int cx = entry.cx();
             int cz = entry.cz();
             long packed = PositionUtil.packPosition(cx, cz);
+            // Miss memo: generation FINISHING — in every outcome flavor (delivered, all-air,
+            // permanent failure, transient timeout, player gone, dimension changed) — clears
+            // the memoized absence BEFORE any per-player continue below: the miss is a fact
+            // about the world, not about a player, and the world just changed (or the claim
+            // must be re-derived). Successful deliveries also clear via the put() choke
+            // point; this explicit clear covers the non-serving outcomes.
+            this.timestampCache.clearMiss(entry.dimension(), packed);
             // Retire the in-flight generation record for EVERY drained outcome (delivered,
             // all-air, not-generated, player gone, dimension changed); an outcome that never
             // drains because the player left is retired by removeGenerationTracking on the

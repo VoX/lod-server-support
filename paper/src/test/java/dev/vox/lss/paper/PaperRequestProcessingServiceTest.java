@@ -86,7 +86,7 @@ class PaperRequestProcessingServiceTest {
 
         RecordingProcessor(Map<UUID, PaperPlayerRequestState> players, PaperChunkDiskReader diskReader) {
             // Never start()ed: the recording overrides observe the main-thread glue only.
-            super(players, diskReader, true, null, 32);
+            super(players, diskReader, true, null, 32, 0);  // memo off: pins the ttl=0 read path
         }
 
         @Override

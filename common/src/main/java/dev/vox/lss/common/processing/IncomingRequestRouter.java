@@ -292,8 +292,24 @@ class IncomingRequestRouter<PS extends AbstractPlayerRequestState<?>> {
     private AdmitResult tryAdmitAndSubmit(PS state, UUID playerUuid, IncomingRequest req,
                                            long packed, String dimension) {
         if (this.diskReadingAvailable) {
-            // Route through disk reader (with cross-player dedup)
             boolean claimsData = req.clientTimestamp() > 0;
+            // Miss-memo rung (docs/planning/miss-memo-design.md): a fresh authoritative
+            // miss skips the redundant re-read and falls through to the generation ladder
+            // directly — taking a GENERATION slot only, no SYNC slot, no reader-pool cost.
+            // Gated on generationAvailable: with generation off, the memo must never speak
+            // (NOT_GENERATED from cached info would be a wire answer off stale knowledge;
+            // there is no read churn to save there anyway — the first miss parks the
+            // client). Placed AFTER the duplicate/timestamp/probe rungs by drain order, so
+            // a stamped or loaded chunk always beats a stale memo entry. A memoized drop is
+            // the standard transient drop, healed by the next 1 Hz declaration.
+            if (this.generationAvailable
+                    && this.timestampCache.isFreshMiss(dimension, packed, System.nanoTime())) {
+                this.ctx.diagnostics().addMemoHit(1);
+                this.processor.escalateMissToGeneration(playerUuid, state, packed,
+                        req.cx(), req.cz(), claimsData, dimension);
+                return AdmitResult.SUBMITTED; // dispositioned (submitted or silent drop)
+            }
+            // Route through disk reader (with cross-player dedup)
             if (!state.tryAdmit(new PendingRequest(req.cx(), req.cz(), SlotType.SYNC_ON_LOAD, claimsData))) {
                 return AdmitResult.SLOT_FULL;
             }

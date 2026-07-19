@@ -64,6 +64,8 @@ class PaperConfigValidationTest {
                     new Bounds(LSSConstants.MIN_CONCURRENT_GENERATIONS, LSSConstants.MAX_CONCURRENT_GENERATIONS)),
             Map.entry("generationTimeoutSeconds",
                     new Bounds(LSSConstants.MIN_GENERATION_TIMEOUT, LSSConstants.MAX_GENERATION_TIMEOUT)),
+            Map.entry("missMemoTtlSeconds",
+                    new Bounds(LSSConstants.MIN_MISS_MEMO_TTL_SECONDS, LSSConstants.MAX_MISS_MEMO_TTL_SECONDS)),
             Map.entry("dirtyBroadcastIntervalSeconds",
                     new Bounds(LSSConstants.MIN_DIRTY_BROADCAST_INTERVAL, LSSConstants.MAX_DIRTY_BROADCAST_INTERVAL)),
             Map.entry("generationConcurrencyLimitPerPlayer",

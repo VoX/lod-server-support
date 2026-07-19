@@ -45,14 +45,27 @@ public class ColumnTimestampCache {
     private final Map<String, DimensionCache> caches = new HashMap<>();
     private final int maxEntriesPerDimension;
 
+    // ---- Miss memo (docs/planning/miss-memo-design.md) ----
+    // packedXZ -> expiry deadline (monotonic nanos), per dimension: "this chunk was
+    // AUTHORITATIVELY absent on disk as of <deadline - ttl>". Deliberately a SIBLING
+    // structure, never a sentinel in the timestamp value space (the 0-stamp ghost history
+    // forbids overloading it). TTL-bounded because the falsifying hooks are known
+    // incomplete (Paper walk-in generation unmarked by default, chunk-IO overhauls may
+    // bypass the save hook): staleness must cost seconds of delay, never a session.
+    // Excluded from save()/load()/snapshotForSave() — seconds-fresh info must not survive
+    // a process boundary. ttl 0 disables the memo wholesale (config kill switch).
+    private final Map<String, Long2LongOpenHashMap> missExpiryByPosition = new HashMap<>();
+    private final long missTtlNanos;
+
     // Cross-thread observability for the soak/benchmark exporters (the cache itself is
     // processing-thread-only): liveSizes mirrors each dimension's current entry count
     // after every mutation, evictionCount accumulates evictIfOversized removals.
     private final Map<String, Integer> liveSizes = new ConcurrentHashMap<>();
     private final AtomicLong evictionCount = new AtomicLong();
 
-    public ColumnTimestampCache(int maxEntriesPerDimension) {
+    public ColumnTimestampCache(int maxEntriesPerDimension, long missTtlNanos) {
         this.maxEntriesPerDimension = maxEntriesPerDimension;
+        this.missTtlNanos = Math.max(0, missTtlNanos);
     }
 
     /** Converts an approximate MB size (of live heap, not disk) to an entry count. */
@@ -65,6 +78,44 @@ public class ColumnTimestampCache {
         cache.timestamps.put(packed, timestamp);
         cache.insertionTimes.put(packed, now);
         liveSizes.put(dimension, cache.timestamps.size());
+        // A positive stamp IS the miss-clear choke point: every serve path (probe, disk
+        // success, generation delivery, resync) lands here, so a served column can never
+        // stay memoized absent.
+        clearMiss(dimension, packed);
+    }
+
+    // ---- Miss memo API (processing thread only, like everything else here) ----
+
+    /** Record an AUTHORITATIVE disk miss (storage answered "no such chunk" — never an
+     *  error/timeout triage). No-op when the memo is disabled (ttl 0). */
+    public void putMiss(String dimension, long packed, long nowNanos) {
+        if (this.missTtlNanos <= 0) return;
+        missExpiryByPosition.computeIfAbsent(dimension, k -> new Long2LongOpenHashMap())
+                .put(packed, nowNanos + this.missTtlNanos);
+    }
+
+    /** True while a recorded miss is still fresh; lazily removes an expired entry.
+     *  Overflow-safe deadline comparison (nanoTime wraps). */
+    public boolean isFreshMiss(String dimension, long packed, long nowNanos) {
+        if (this.missTtlNanos <= 0) return false;
+        var misses = missExpiryByPosition.get(dimension);
+        if (misses == null || !misses.containsKey(packed)) return false;
+        if (misses.get(packed) - nowNanos > 0) return true;
+        misses.remove(packed);
+        return false;
+    }
+
+    /** Drop the memo entry for one position (generation outcome drained, serve, etc.). */
+    public void clearMiss(String dimension, long packed) {
+        var misses = missExpiryByPosition.get(dimension);
+        if (misses != null) misses.remove(packed);
+    }
+
+    /** Total memo entries across all dimensions (diag gauge; includes not-yet-lazily-expired). */
+    public int missCount() {
+        int total = 0;
+        for (var misses : missExpiryByPosition.values()) total += misses.size();
+        return total;
     }
 
     /**
@@ -76,8 +127,22 @@ public class ColumnTimestampCache {
         return cache.timestamps.getOrDefault(packed, 0L);
     }
 
-    /** Removes cached timestamps for the given positions. Returns the count actually removed. */
+    /** Removes cached timestamps for the given positions. Returns the count actually removed.
+     *  Also drops any miss-memo entries: an EDIT invalidation means a save happened, so the
+     *  chunk exists and a memoized absence is falsified. The disk-drain's not-found stamp
+     *  guard must use {@link #invalidateStamps} instead — that path's observation is the
+     *  same one that just WROTE the memo, and clearing it here would erase every memo write. */
     public int invalidate(String dimension, long[] positions) {
+        var misses = missExpiryByPosition.get(dimension);
+        if (misses != null) {
+            for (long pos : positions) misses.remove(pos);
+        }
+        return invalidateStamps(dimension, positions);
+    }
+
+    /** Stamp-only invalidation (ghost-terrain guard on a not-found delivery): removes cached
+     *  timestamps but PRESERVES miss-memo entries — a not-found is the memo's own evidence. */
+    public int invalidateStamps(String dimension, long[] positions) {
         var cache = caches.get(dimension);
         if (cache == null) return 0;
         int removed = 0;
@@ -97,6 +162,12 @@ public class ColumnTimestampCache {
      * Returns the total number of entries evicted across all dimensions.
      */
     public int evictIfOversized() {
+        // Miss-memo maps evict FIRST and wholesale when over-cap: a miss is always cheaper
+        // to lose than a stamp (losing one costs a redundant not-found read; losing a stamp
+        // costs a redundant serve), and the memo repopulates within one declaration cycle.
+        for (var misses : missExpiryByPosition.values()) {
+            if (misses.size() > this.maxEntriesPerDimension) misses.clear();
+        }
         int evicted = 0;
         for (var entry : caches.entrySet()) {
             var cache = entry.getValue();
@@ -290,7 +361,8 @@ public class ColumnTimestampCache {
      * The returned cache contains only timestamps (no insertion times) and should only be used for {@link #save}.
      */
     public ColumnTimestampCache snapshotForSave() {
-        var snapshot = new ColumnTimestampCache(this.maxEntriesPerDimension);
+        // Miss memo deliberately NOT copied (ttl 0): misses never persist across a save.
+        var snapshot = new ColumnTimestampCache(this.maxEntriesPerDimension, 0);
         for (var entry : caches.entrySet()) {
             var dimCache = entry.getValue();
             var copy = new DimensionCache(

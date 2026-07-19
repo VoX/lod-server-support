@@ -169,7 +169,10 @@ class ConfigValidationTest {
             var c = serverConfig();
             f.setInt(c, Integer.MIN_VALUE);
             c.validate();
-            assertTrue(f.getInt(c) >= 1,
+            // missMemoTtlSeconds is the one field whose legal floor is 0 (the memo kill
+            // switch, MIN_MISS_MEMO_TTL_SECONDS) — every other numeric floor is >= 1.
+            int floor = f.getName().equals("missMemoTtlSeconds") ? 0 : 1;
+            assertTrue(f.getInt(c) >= floor,
                     f.getName() + " not clamped up from Integer.MIN_VALUE, still " + f.getInt(c));
 
             f.setInt(c, Integer.MAX_VALUE);
