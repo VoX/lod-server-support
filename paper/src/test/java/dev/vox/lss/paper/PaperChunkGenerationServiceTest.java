@@ -279,7 +279,7 @@ class PaperChunkGenerationServiceTest {
     // ---- completion outcome paths ----
 
     @Test
-    void nullChunkAfterAsyncLoadEmitsFailureAndFreesSlot() {
+    void chunkVanishedInTheCompletionWindowIsTRANSIENT() {
         var svc = new CapturingGenService(config(32, 1, 60));
         var level = overworldLevel();
         // getChunkNow returns null (mock default): "was null after async load completed" branch
@@ -292,6 +292,14 @@ class PaperChunkGenerationServiceTest {
         var ready = svc.tick();
         assertEquals(1, ready.size());
         assertNull(ready.get(0).columnData());
+        // The chunk GENERATED fine and merely unloaded before the re-fetch — a transient
+        // outcome, so it must drop silently and be healed by the next want-set declaration.
+        // Answering the session-permanent NOT_GENERATED here blanks the column until
+        // reconnect: on Paper walk-in generation does not mark dirty by default, so the
+        // dirty-broadcast revival never fires. (Harmless pre-v17, when NOT_GENERATED
+        // re-opened the position client-side; v17's permanence inverted that contract.)
+        assertTrue(ready.get(0).transientFailure(),
+                "a chunk that unloaded in the completion window must never answer NOT_GENERATED");
         // This test uniquely drives the extractColumnData chunk-vanished branch, so it is the
         // one place null_failures is nonzero (the generic diag() helper asserts null_failures=0).
         assertEquals("submitted=1, completed=0, active=0, timeouts=0, removed=1, null_failures=1",
@@ -314,6 +322,8 @@ class PaperChunkGenerationServiceTest {
         var ready = svc.tick();
         assertEquals(1, ready.size());
         assertNull(ready.get(0).columnData());
+        assertFalse(ready.get(0).transientFailure(),
+                "an extraction exception stays PERMANENT — a corrupt chunk must not be hammered");
         assertEquals(diag(1, 0, 0, 0, 1), svc.getDiagnostics(),
                 "extraction failure counts as removed-in-flight, never as completed");
         assertTrue(svc.submitGeneration(a, level, 1, 0, 2L), "slot freed despite the exception");

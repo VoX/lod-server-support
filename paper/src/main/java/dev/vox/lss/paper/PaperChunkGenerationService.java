@@ -182,7 +182,7 @@ public class PaperChunkGenerationService {
             }
             this.nullChunkFailures.incrementAndGet();
         }
-        LoadedColumnData extracted = null;
+        ExtractionOutcome extracted = null;
         Error rethrow = null;
         if (chunk != null) {
             try {
@@ -194,9 +194,12 @@ public class PaperChunkGenerationService {
                 rethrow = e;
             }
         }
-        var columnData = extracted;
+        var columnData = extracted == null ? null : extracted.data();
+        // Only the chunk-vanished flavor is transient; a null chunk from Moonrise, an
+        // extraction exception, and the Error path above are all permanent.
+        var chunkVanished = extracted != null && extracted.chunkVanished();
         try {
-            this.mainThreadScheduler.schedule(() -> onChunkReady(key, columnData, cx, cz, token));
+            this.mainThreadScheduler.schedule(() -> onChunkReady(key, columnData, cx, cz, token, chunkVanished));
         } catch (Exception scheduleEx) {
             // Plugin disabled during shutdown — do not call onChunkReady inline
             // because we're not on the pump and the active map is not thread-safe.
@@ -213,30 +216,46 @@ public class PaperChunkGenerationService {
     }
 
     /**
-     * Serializes the just-loaded chunk on the completion thread; null on any failure —
-     * the failure books happen on the pump when {@link #onChunkReady} sees the null.
+     * The completion-thread extraction outcome. {@code data == null} is a failure;
+     * {@code chunkVanished} splits its disposition — see {@link #extractColumnData}.
+     */
+    record ExtractionOutcome(LoadedColumnData data, boolean chunkVanished) {}
+
+    /**
+     * Serializes the just-loaded chunk on the completion thread; a null {@code data} on any
+     * failure — the failure books happen on the pump when {@link #onChunkReady} sees it.
      * Errors propagate to {@link #completeAsyncLoad}, which schedules the failure outcome
      * before rethrowing.
+     *
+     * <p>{@code chunkVanished} marks the ONE transient flavor: the re-fetch missed because
+     * the chunk unloaded in the completion window. An extraction exception stays permanent
+     * (a corrupt chunk must not be hammered), as does Moonrise's null chunk.
      */
-    LoadedColumnData extractColumnData(ServerLevel level, int cx, int cz) {
+    ExtractionOutcome extractColumnData(ServerLevel level, int cx, int cz) {
         try {
             LevelChunk nmsChunk = level.getChunkSource().getChunkNow(cx, cz);
             if (nmsChunk == null) {
                 // The re-fetch missed (the chunk unloaded in the same-thread window this
-                // completion-thread extraction exists to close). Same permanent-failure
-                // outcome as the null-completion path above — share its warn-once latch and
-                // counter so a regression that reintroduces the unload race can't WARN-storm.
+                // completion-thread extraction exists to close). TRANSIENT: the chunk was
+                // generated, it simply unloaded before we could read it, so the next
+                // want-set declaration re-resolves it. Answering the session-permanent
+                // NOT_GENERATED here would blank the column until reconnect — and on Paper
+                // walk-in generation does not mark dirty by default, so the dirty-broadcast
+                // revival never fires. (Harmless before v17, when NOT_GENERATED re-opened
+                // the position client-side; the v17 permanence inverted that contract.)
+                // Shares the warn-once latch and counter with the null-completion path so a
+                // regression that reintroduces the unload race at scale can't WARN-storm.
                 if (this.nullChunkWarned.compareAndSet(false, true)) {
                     LSSLogger.warn("Chunk at " + cx + "," + cz + " was null after async load completed"
                             + " — further null-chunk failures are logged silently (counted)");
                 }
                 this.nullChunkFailures.incrementAndGet();
-                return null;
+                return new ExtractionOutcome(null, true);
             }
-            return PaperSectionSerializer.serializeColumn(level, nmsChunk, cx, cz);
+            return new ExtractionOutcome(PaperSectionSerializer.serializeColumn(level, nmsChunk, cx, cz), false);
         } catch (Exception e) {
             LSSLogger.error("Failed to extract primitives for generated chunk at " + cx + ", " + cz, e);
-            return null;
+            return new ExtractionOutcome(null, false);
         }
     }
 
@@ -247,6 +266,14 @@ public class PaperChunkGenerationService {
      */
     void onChunkReady(PendingGenerationKey key, LoadedColumnData columnData,
                       int cx, int cz, long token) {
+        onChunkReady(key, columnData, cx, cz, token, false);
+    }
+
+    /** @param transientFailure a null {@code columnData} that must NOT answer the
+     *  session-permanent NOT_GENERATED (today: the chunk unloaded in the completion
+     *  window — it generated fine and the next declaration re-resolves it). */
+    void onChunkReady(PendingGenerationKey key, LoadedColumnData columnData,
+                      int cx, int cz, long token, boolean transientFailure) {
         var gen = this.active.get(key);
         // Reject a stale completion: the entry that launched this load already timed out and a
         // new entry was resubmitted under the same key (different token). Leaving the current
@@ -266,9 +293,11 @@ public class PaperChunkGenerationService {
             }
             this.totalCompleted++;
         } else {
-            // PERMANENT: the load failed, the chunk vanished, or extraction threw — a
-            // corrupt chunk must not be hammered. NOT_GENERATED; dirty broadcast revives.
-            addFailures(gen.callbacks, key, cx, cz, false);
+            // PERMANENT (the load failed or extraction threw — a corrupt chunk must not be
+            // hammered): NOT_GENERATED, dirty broadcast revives. TRANSIENT (the chunk
+            // unloaded in the completion window): silent drop + superseded, healed by the
+            // next want-set declaration. The books are identical either way.
+            addFailures(gen.callbacks, key, cx, cz, transientFailure);
             this.totalRemovedInFlight++;
         }
     }
