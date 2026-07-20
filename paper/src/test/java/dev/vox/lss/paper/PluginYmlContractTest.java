@@ -77,6 +77,15 @@ class PluginYmlContractTest {
     }
 
     @Test
+    void exactlyOneCommandIsDeclared() {
+        // registerCommands() resolves the command name as getCommands().keySet().first(), so a
+        // single declared command is what makes that deterministic (and lets the VSS repackage
+        // rename the key without a code fork). A second command would make the pick ambiguous.
+        assertEquals(1, yml.getConfigurationSection("commands").getKeys(false).size(),
+                "the plugin must declare exactly one command (registerCommands picks the first)");
+    }
+
+    @Test
     void adminPermissionDefaultsToOp() {
         assertEquals("op", yml.getString("permissions/lss.admin/default"),
                 "stats/diag expose server internals; the permission must not default to everyone");

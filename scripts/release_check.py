@@ -266,6 +266,18 @@ def check_voxy_pair_paper(lss_jar, voxy_jar, problems):
             problems.append(f"{vbase}: plugin.yml identity line {a.strip()!r} was rebranded "
                             "— name/main/api-version/folia are the identity + wire contract "
                             "and must stay verbatim")
+    # The two top-level (column-0) display lines must each actually differ — their rewrites
+    # are replaceFirst calls that fail SILENT on source-shape drift, and the token checks
+    # below don't cover them (the website URL is in neither token list, and "Voxy Server
+    # Side" is satisfied by the command description). A no-op here ships a VSS jar linking to
+    # / described as the LSS project.
+    for prefix in ("description:", "website:"):
+        lln = next((ln for ln in llines if ln.startswith(prefix)), None)
+        vln = next((ln for ln in vlines if ln.startswith(prefix)), None)
+        if lln is not None and vln is not None and lln == vln:
+            problems.append(f"{vbase}: plugin.yml top-level {prefix!r} line was not rebranded "
+                            "(replaceFirst silently no-opped) — VSS would show the LSS "
+                            "description / Modrinth link")
     # The rebrand must have swapped every LSS token for its VSS counterpart.
     for tok in ("lsslod", "lss.admin", "LOD Server Support admin", "Access to LSS admin"):
         if tok not in ltext:
@@ -331,6 +343,35 @@ def check_wire_identity_fabric(lss_jar, voxy_jar, problems):
         problems.append(f"{vbase}: nested common jar differs from the LSS jar (sha {vsha[:12]} "
                         f"vs {lsha[:12]}) — branding must NEVER touch common (it carries the "
                         "wire: channels, protocol, payloads); LSS<->VSS compatibility is broken")
+
+
+def _class_digest(jar):
+    """sha256 over the sorted (name, bytes) of every dev/vox/lss/**.class entry — the code
+    that determines wire behavior. Order-independent, content-exact."""
+    h = hashlib.sha256()
+    with zipfile.ZipFile(jar) as z:
+        for name in sorted(n for n in z.namelist()
+                           if n.startswith("dev/vox/lss/") and n.endswith(".class")):
+            h.update(name.encode("utf-8"))
+            h.update(b"\0")
+            h.update(z.read(name))
+    return h.hexdigest()
+
+
+def check_wire_identity_paper(lss_jar, voxy_jar, problems):
+    """The Paper twin of check_wire_identity_fabric. Paper shades common FLAT (top-level
+    dev/vox/lss/common/*.class), so there is no nested jar to hash — instead compare the
+    class bytes of the whole dev/vox/lss/** tree between the LSS and VSS Paper jars. The VSS
+    repackage rewrites only plugin.yml + lss-brand.properties; every class (common + paper,
+    incl. the wire codecs) must be byte-identical, or branding leaked into behavior."""
+    vbase = os.path.basename(voxy_jar)
+    ldig = _class_digest(lss_jar)
+    vdig = _class_digest(voxy_jar)
+    if ldig != vdig:
+        problems.append(f"{vbase}: dev/vox/lss/**.class bytes differ from the LSS jar "
+                        f"(digest {vdig[:12]} vs {ldig[:12]}) — the VSS Paper repackage must "
+                        "rewrite ONLY plugin.yml + lss-brand.properties; a changed class means "
+                        "branding touched behavior (wire compat / identity at risk)")
 
 
 def _voxy_counterpart(voxy_jar, lss_jars, voxy_prefix, lss_prefix):
@@ -425,6 +466,7 @@ def discover(problems, expected_version=None, root=ROOT):
                             "jar to pair-verify against (stale voxy jar?)")
         else:
             check_voxy_pair_paper(src, jar, problems)
+            check_wire_identity_paper(src, jar, problems)
     check_glob_hygiene(problems, soak)
     return fab, pap, vfab, vpap, soak
 
@@ -832,6 +874,32 @@ def _selftest():
         check(any("identity line" in m for m in p),
               f"paper identity-line rebrand not caught: {p}")
 
+        # the top-level website/description rewrites failing SILENT (command surface rebranded,
+        # display lines left as LSS) MUST fail — the VSS jar would link to the LSS project
+        pair_noweb_vpap = os.path.join(td, "pair-noweb-voxy-paper.jar")
+        _make_jar(pair_noweb_vpap, {"plugin.yml": VSS_PLUGIN_YML.replace(
+            "website: https://modrinth.com/plugin/voxy-server-side",
+            "website: https://modrinth.com/plugin/lod-server-support", 1)})
+        p = []
+        check_voxy_pair_paper(pair_lss_pap, pair_noweb_vpap, p)
+        check(any("'website:' line was not rebranded" in m for m in p),
+              f"paper website no-op not caught: {p}")
+        pair_nodesc_vpap = os.path.join(td, "pair-nodesc-voxy-paper.jar")
+        _make_jar(pair_nodesc_vpap, {"plugin.yml": VSS_PLUGIN_YML.replace(
+            "description: VSS plugin.", "description: LSS plugin.", 1)})
+        p = []
+        check_voxy_pair_paper(pair_lss_pap, pair_nodesc_vpap, p)
+        check(any("'description:' line was not rebranded" in m for m in p),
+              f"paper description no-op not caught: {p}")
+
+        # a line-count change (a rewrite that added/removed a line) MUST fail (F4 branch)
+        pair_linecount_vpap = os.path.join(td, "pair-linecount-voxy-paper.jar")
+        _make_jar(pair_linecount_vpap, {"plugin.yml": VSS_PLUGIN_YML + "extra: line\n"})
+        p = []
+        check_voxy_pair_paper(pair_lss_pap, pair_linecount_vpap, p)
+        check(any("line count differs" in m for m in p),
+              f"paper line-count change not caught: {p}")
+
         # ---- brand.properties (both platforms) ----
         BRAND_LSS_TXT = ("shortName=LSS\ndisplayName=LOD Server Support\n"
                          "clientCommand=lss\nserverCommand=lsslod\n")
@@ -875,6 +943,29 @@ def _selftest():
         check_wire_identity_fabric(wire_lss_fab, wire_vss_bad, p)
         check(any("nested common jar differs" in m for m in p),
               f"wire-identity divergence not caught: {p}")
+
+        # ---- Paper wire identity: the flat-shaded class bytes must match across the pair ----
+        wire_lss_pap = os.path.join(td, "wire-lss-paper.jar")
+        _make_jar(wire_lss_pap, {"plugin.yml": "name: x\n",
+                                 "dev/vox/lss/common/LSSConstants.class": "lss:handshake",
+                                 "dev/vox/lss/paper/LSSPaperPlugin.class": "main"})
+        wire_vss_pap_ok = os.path.join(td, "wire-vss-ok-paper.jar")
+        # Same classes, different plugin.yml (the legitimate rebrand) → wire-identical.
+        _make_jar(wire_vss_pap_ok, {"plugin.yml": "name: y\n",
+                                    "dev/vox/lss/common/LSSConstants.class": "lss:handshake",
+                                    "dev/vox/lss/paper/LSSPaperPlugin.class": "main"})
+        p = []
+        check_wire_identity_paper(wire_lss_pap, wire_vss_pap_ok, p)
+        check(p == [], f"identical paper class bytes flagged: {p}")
+        # a changed class byte (branding leaked into behavior) MUST fail
+        wire_vss_pap_bad = os.path.join(td, "wire-vss-bad-paper.jar")
+        _make_jar(wire_vss_pap_bad, {"plugin.yml": "name: y\n",
+                                     "dev/vox/lss/common/LSSConstants.class": "vss:handshake",
+                                     "dev/vox/lss/paper/LSSPaperPlugin.class": "main"})
+        p = []
+        check_wire_identity_paper(wire_lss_pap, wire_vss_pap_bad, p)
+        check(any("class bytes differ" in m for m in p),
+              f"paper wire-identity divergence not caught: {p}")
 
         # glob hygiene: a CI-named soak jar must not match any release glob
         p = []

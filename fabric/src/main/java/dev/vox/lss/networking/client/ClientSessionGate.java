@@ -95,7 +95,7 @@ final class ClientSessionGate {
         try {
             this.handshakeSender.run();
         } catch (Exception e) {
-            LSSLogger.debug("Handshake send failed (server likely doesn't have LSS): " + e.getMessage());
+            LSSLogger.debug("Handshake send failed (server likely doesn't have " + Brand.shortName() + "): " + e.getMessage());
         }
     }
 
