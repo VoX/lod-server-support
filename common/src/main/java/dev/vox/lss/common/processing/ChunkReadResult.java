@@ -12,8 +12,11 @@ import java.util.UUID;
  * == null} with {@code !notFound} is an all-air chunk (exists on disk, nothing visible).
  *
  * <p>{@code authoritativeMiss} distinguishes WHY {@code notFound} is set: {@code true}
- * means the storage layer answered "no such chunk" (the region lookup returned empty) —
- * a positive fact about the world that may seed the miss memo; {@code false} with
+ * means storage positively answered "no SERVABLE chunk" — the region lookup returned
+ * empty, or the chunk exists but cannot serve LOD data (non-FULL proto-chunk, FULL with
+ * no sections, a corrupt chunk MC's own read resolves null). All of these may seed the
+ * miss memo: generation is the correct disposition for each (it completes/regenerates
+ * the chunk, and every generation outcome clears the memo); {@code false} with
  * {@code notFound} means an error/timeout was TRIAGED down the not-found ladder (law A5's
  * {@code disk.errors} fold) — it says nothing about existence and must never be memoized,
  * or an existing chunk's reads would be suppressed for the memo TTL.

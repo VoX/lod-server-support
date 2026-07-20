@@ -138,7 +138,12 @@ resume-after-convergence apply instantly. Alternatives rejected: movement-hold (
 cliff — a slow walker freezes far fill forever; rhymes with the retired client movement
 debounce), velocity prediction (fragile), smaller admission waves (softens the pop,
 keeps the order), client predictive declaration / ticket cancellation (protocol churn /
-vanilla can't cancel). Pins: `frontierOutwardDampingHoldsJumpsAndFollowsInwardInstantly`,
+vanilla can't cancel). Known accepted consequences (review round 2): flying AWAY from an
+ungenerated band faster than ~3 rings/s defers that band's generation for the whole
+flight (its ring recedes faster than the climb; near-first by design, heals on stop —
+a future "the band behind me never fills while I fly" report is THIS, not a gate leak),
+and a hold outliving the 30 s memo TTL costs one redundant re-read per held position
+per TTL (the pre-memo churn baseline, headroom-gated). Pins: `frontierOutwardDampingHoldsJumpsAndFollowsInwardInstantly`,
 `productionDefaultEnablesOutwardDamping` (wired nonzero default — rigs run damping OFF
 to keep the pre-damping gate pins calibrated), `dampingIntervalZeroRestoresInstant…`,
 and `movementMintedNearWorkOutrunsAFarFrontierObservation` (the live-trace scenario
