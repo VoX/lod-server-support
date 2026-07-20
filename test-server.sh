@@ -38,6 +38,18 @@ fi
 # --- Settings ---
 SERVER_RAM="${SERVER_RAM:-2G}"
 
+# Dev-only [lss-adm] admission trace: one line per generation-admission decision
+# (candidate ring, damped frontier, nearest in-flight rings, verdict) — the instrument for
+# diagnosing far-arc / inversion reports. On by default for Fabric dev servers; it is
+# VERBOSE (hundreds of lines/sec during backfill, since every held position re-logs on each
+# 1 Hz re-declaration), so set LSS_ADMISSION_TRACE=0 for quiet console play or when reading
+# the log for anything else. Never enabled in release jars — the flag is read only here.
+LSS_ADMISSION_TRACE="${LSS_ADMISSION_TRACE:-1}"
+case "$LSS_ADMISSION_TRACE" in
+    0|false|no|off) ADMISSION_TRACE_FLAG="-Dlss.admissionTrace=false" ;;
+    *)              ADMISSION_TRACE_FLAG="-Dlss.admissionTrace=true" ;;
+esac
+
 # ============================================================
 # Helpers
 # ============================================================
@@ -209,7 +221,8 @@ run_fabric() {
     cd "$FABRIC_DIR"
     # admissionTrace: dev-only [lss-adm] lines (candidate ring vs frontier stamp per
     # generation-admission decision) — the instrument for far-arc/inversion reports.
-    java -Xmx${SERVER_RAM} -Xms${SERVER_RAM} -Dlss.admissionTrace=true -jar fabric-server-launch.jar nogui
+    # Disable with LSS_ADMISSION_TRACE=0 (see the flag's definition near SERVER_RAM).
+    java -Xmx${SERVER_RAM} -Xms${SERVER_RAM} "$ADMISSION_TRACE_FLAG" -jar fabric-server-launch.jar nogui
 }
 
 # Toggle c2me*.jar in the Fabric mods folder for A/B runs (LSS vs C2ME's chunk-system
@@ -337,7 +350,7 @@ run_all() {
     trap 'echo ""; echo "Stopping servers..."; kill "${SERVER_PIDS[@]}" 2>/dev/null; wait "${SERVER_PIDS[@]}" 2>/dev/null; echo "Done."' INT TERM EXIT
 
     cd "$FABRIC_DIR"
-    java -Xmx${SERVER_RAM} -Xms${SERVER_RAM} -Dlss.admissionTrace=true -jar fabric-server-launch.jar nogui &
+    java -Xmx${SERVER_RAM} -Xms${SERVER_RAM} "$ADMISSION_TRACE_FLAG" -jar fabric-server-launch.jar nogui &
     SERVER_PIDS+=($!)
 
     sleep 2
@@ -457,6 +470,8 @@ case "${1:-run}" in
         echo ""
         echo "Environment variables:"
         echo "  SERVER_RAM  - Server memory allocation per server (default: 2G)"
+        echo "  LSS_ADMISSION_TRACE - Fabric [lss-adm] generation-admission trace (default: 1)."
+        echo "                        Set to 0 to silence it — it is verbose during backfill."
         exit 1
         ;;
 esac
