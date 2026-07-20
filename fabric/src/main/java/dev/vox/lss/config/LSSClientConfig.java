@@ -12,6 +12,11 @@ public class LSSClientConfig extends JsonConfig {
 
     public boolean receiveServerLods = true;
     public int lodDistanceChunks = 0;
+    // Backward compat with pre-v0.7.0 (protocol 16, v0.4.x–v0.6.2) SERVERS: if a server does
+    // not answer the v18 handshake, re-handshake announcing version 16 and decode the legacy
+    // wire. Default true (mirrors the server's enableV16Compat). Set false for a strict-v18
+    // client (no discovery fallback). See docs/planning/v16-client-compat-design.md.
+    public boolean enableV16ServerCompat = true;
 
     @Override
     protected String getFileName() {

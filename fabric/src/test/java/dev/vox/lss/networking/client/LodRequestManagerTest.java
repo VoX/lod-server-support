@@ -528,8 +528,11 @@ class LodRequestManagerTest {
         long pAfterUnknown = PositionUtil.packPosition(5, 0);
         tracker.replaceWith(new long[]{pReserved, pUpToDate, pNotGen, pUnknown, pAfterUnknown}, 5);
 
-        // Byte 0 (v16's retired rate-limited tag) and byte 99 (a hypothetical future type) are
-        // both unknown to a v17 client and must behave identically: inert.
+        // Byte 0 (v16's retired rate-limited tag) and byte 99 (a hypothetical future type)
+        // must behave identically as far as STATE goes: inert — neither stamps, satisfies, nor
+        // retry-marks its position. (Since client v16 compat, byte 0 is recognized on a legacy
+        // session and logged at debug rather than warn — a log-level nuance only; the want-set
+        // re-declares the position next scan either way, which is exactly this inertness.)
         LSSClientNetworking.dispatchBatchResponses(manager, new BatchResponseS2CPayload(
                 new byte[]{(byte) 0, LSSConstants.RESPONSE_UP_TO_DATE,
                         LSSConstants.RESPONSE_NOT_GENERATED, (byte) 99, LSSConstants.RESPONSE_UP_TO_DATE},

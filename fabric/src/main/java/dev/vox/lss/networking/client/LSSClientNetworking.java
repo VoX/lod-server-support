@@ -26,8 +26,8 @@ public class LSSClientNetworking {
     // and manager construction with live server-address resolution.
     private static final ClientSessionGate sessionGate = new ClientSessionGate(
             columnProcessor,
-            () -> ClientPlayNetworking.send(new HandshakeC2SPayload(
-                    LSSConstants.PROTOCOL_VERSION, LSSConstants.CAPABILITY_VOXEL_COLUMNS)),
+            version -> ClientPlayNetworking.send(new HandshakeC2SPayload(
+                    version, LSSConstants.CAPABILITY_VOXEL_COLUMNS)),
             LSSClientNetworking::createRequestManager);
 
     public static boolean isServerEnabled() {
@@ -142,7 +142,8 @@ public class LSSClientNetworking {
         ClientPlayNetworking.registerGlobalReceiver(
                 SessionConfigS2CPayload.TYPE,
                 (payload, context) -> context.client().execute(
-                        () -> sessionGate.onSessionConfig(payload, LSSApi.hasVoxelConsumers()))
+                        () -> sessionGate.onSessionConfig(payload, LSSApi.hasVoxelConsumers(),
+                                LSSClientConfig.CONFIG.enableV16ServerCompat))
         );
 
         ClientPlayNetworking.registerGlobalReceiver(
@@ -222,6 +223,12 @@ public class LSSClientNetworking {
             switch (type) {
                 case LSSConstants.RESPONSE_UP_TO_DATE -> manager.onColumnUpToDate(packed);
                 case LSSConstants.RESPONSE_NOT_GENERATED -> manager.onColumnNotGenerated(packed);
+                case LSSConstants.RESPONSE_RATE_LIMITED_V16 ->
+                        // A v16 server's soft back-off bounce (retired byte 0). The position
+                        // stays unsatisfied and is re-declared on the next scan — the v18
+                        // self-heal that approximates v16's ~1 s retry. Debug, not warn: on a
+                        // v16 session this is routine, and a v18 server never sends it.
+                        LSSLogger.debug("v16 rate-limited position " + packed + " (re-declared next scan)");
                 default -> LSSLogger.warn("Unknown batch response type: " + type);
             }
         }
@@ -233,7 +240,7 @@ public class LSSClientNetworking {
             boolean localIntegratedServer = Minecraft.getInstance().hasSingleplayerServer()
                     && !Boolean.getBoolean("lss.test.integratedServer");
             sessionGate.onJoin(LSSClientConfig.CONFIG.receiveServerLods, localIntegratedServer,
-                    LSSApi.hasVoxelConsumers());
+                    LSSApi.hasVoxelConsumers(), LSSClientConfig.CONFIG.enableV16ServerCompat);
         });
 
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> sessionGate.onDisconnect());
@@ -241,6 +248,9 @@ public class LSSClientNetworking {
 
     private static void registerTickHandler() {
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
+            // Runs even before a session: the v16-server discovery fallback (no-op on the v18
+            // happy path, which disarms it before the delay elapses).
+            sessionGate.tickV16Discovery();
             var manager = sessionGate.getRequestManager();
             if (manager != null && sessionGate.isServerEnabled()) {
                 manager.tick();
