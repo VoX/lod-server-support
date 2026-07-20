@@ -34,7 +34,10 @@ class DirtyEventMailboxTest {
     private static final class TestState extends AbstractPlayerRequestState<Object> {
         TestState(UUID uuid) { super(uuid, 4, 4); }
         @Override public String getPlayerName() { return "test"; }
-        void enqueue(IncomingRequest r) { enqueueIncomingRequest(r); }
+        /** Seeds one want-set batch carrying a single request (the pre-v17 per-request
+         *  enqueue has no equivalent — each declaration REPLACES the backlog). Every call
+         *  site here is separated from the next by a routing cycle, so nothing is superseded. */
+        void enqueue(IncomingRequest r) { offerIncomingBatch(new IncomingBatch(new IncomingRequest[]{r})); }
     }
 
     /**
@@ -42,6 +45,12 @@ class DirtyEventMailboxTest {
      * thread mid-cycle so the test can deterministically stack events and a replaced
      * snapshot in the mailbox before the next cycle begins.
      */
+    /** Real (but never-used) reader: flips diskReadingAvailable so requests take the
+     *  disk-first route; the submit override keeps results from ever being produced. */
+    private static final class StubDiskReader extends AbstractChunkDiskReader {
+        StubDiskReader() { super(1); }
+    }
+
     private static final class TestProcessor extends OffThreadProcessor<TestState> {
         final ConcurrentLinkedQueue<Long> deliveredPositions = new ConcurrentLinkedQueue<>();
         final ConcurrentLinkedQueue<Long> submittedReadPositions = new ConcurrentLinkedQueue<>();
@@ -49,7 +58,7 @@ class DirtyEventMailboxTest {
         final CountDownLatch deliveryGate = new CountDownLatch(1);
 
         TestProcessor(Map<UUID, TestState> players) {
-            super(players, null, false, null, 1);
+            super(players, new StubDiskReader(), false, null, 1, 0);  // memo off (ttl=0): kills only the memo — the pacing rules are ttl-independent
         }
 
         @Override
@@ -61,7 +70,7 @@ class DirtyEventMailboxTest {
         @Override
         protected boolean buildAndEnqueueColumnPayload(TestState state, int cx, int cz, String dimension,
                                                      long columnTimestamp, long submissionOrder,
-                                                     byte[] sectionBytes, int estimatedBytes) {
+                                                     byte[] sectionBytes, int estimatedBytes, byte source) {
             this.deliveredPositions.add(PositionUtil.packPosition(cx, cz));
             this.deliveryStarted.countDown();
             try {

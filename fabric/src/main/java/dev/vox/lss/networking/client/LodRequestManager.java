@@ -19,8 +19,6 @@ public class LodRequestManager {
     /** Backpressure threshold: halt sending when column processing queue exceeds this fraction. */
     private static final int BACKPRESSURE_NUMERATOR = 3;
     private static final int BACKPRESSURE_DENOMINATOR = 4;
-    private static final int MIN_SEND_PER_TICK = 16;
-    private static final long TIMEOUT_NANOS = 10_000L * LSSConstants.NANOS_PER_MS;
 
     private SessionConfigS2CPayload sessionConfig;
     private String serverAddress;
@@ -32,11 +30,8 @@ public class LodRequestManager {
     // Per-column state: timestamps + dirty/retry/validated marks (single owner)
     private final ColumnStateMap columns = new ColumnStateMap();
 
-    // In-flight request tracking (position → sendTime)
+    // Positions declared in the last want-set that have not yet been answered
     private final InFlightTracker tracker = new InFlightTracker();
-
-    // Request queue — written by the scanner, consumed by drainQueue()
-    private final RequestQueue queue = new RequestQueue();
 
     private boolean cacheLoaded = false;
     private volatile CompletableFuture<Long2LongOpenHashMap> pendingCacheLoad = null;
@@ -51,8 +46,8 @@ public class LodRequestManager {
     // Metrics tracking (counters + rolling rates)
     private final RequestMetrics metrics = new RequestMetrics();
 
-    // Derived per-tick send cap: 1/20th of last scan's queued count, floored at MIN_SEND_PER_TICK
-    private int maxSendPerTick = MIN_SEND_PER_TICK;
+    // Edge-trigger for the decode-backpressure clear: exactly one empty batch per halt episode.
+    private boolean backpressureClearSent = false;
 
     // Send buffers, sized once at the protocol's batch cap (~16 KB total)
     private final long[] sendPositionBuffer = new long[LSSConstants.MAX_BATCH_CHUNK_REQUESTS];
@@ -98,26 +93,49 @@ public class LodRequestManager {
         int viewDistance = mc.options.getEffectiveRenderDistance();
         tickWithContext(playerCx, playerCz, level.dimension(), viewDistance,
                 LSSClientNetworking.getQueuedColumnCount(),
+                LSSClientNetworking.getQueuedColumnBytes(),
                 () -> countMissingVanillaChunks(level, playerCx, playerCz, viewDistance));
     }
 
     /**
      * Tick body behind the Minecraft-client guards, phases in fixed order: dimension/cache →
-     * movement prune → metrics → backpressure halt → cache gate → scan+sweep → drain+send.
-     * The backpressure halt deliberately precedes the cache poll, the timeout sweep, and the
-     * drain: while the decode queue is mostly full nothing new goes out, and recovery paths
-     * resume only once the queue drains. Package-private for direct test coverage — tick()
-     * needs a running Minecraft client.
+     * movement prune → metrics → backpressure halt → cache gate → scan+send. The backpressure
+     * halt deliberately precedes the cache poll and the scan: while the decode queue is mostly
+     * full nothing new is declared, and recovery resumes only once the queue drains.
+     * Package-private for direct test coverage — tick() needs a running Minecraft client.
      */
     void tickWithContext(int playerCx, int playerCz, ResourceKey<Level> currentDim,
-                         int viewDistance, int columnQueueSize, IntSupplier missingVanilla) {
+                         int viewDistance, int columnQueueSize, long columnQueueBytes,
+                         IntSupplier missingVanilla) {
         tickDimensionAndCachePhase(currentDim);
         tickMovementPhase(playerCx, playerCz);
         this.metrics.updateRollingRates();
-        if (haltedByBackpressure(columnQueueSize)) return;
+        if (haltedByBackpressure(columnQueueSize, columnQueueBytes)) {
+            // Entering the halt: silence would leave the server pumping the last want-set
+            // (up to 1024 backlogged asks). An EMPTY batch is the explicit "want nothing"
+            // declaration — it replaces the backlog with nothing; already-admitted work
+            // still completes (bounded by the server's slot caps). Edge-triggered: exactly
+            // one clear per halt episode. This is the ONLY producer of empty batches.
+            if (!this.backpressureClearSent) {
+                this.backpressureClearSent = true;
+                sendClearBatch();
+            }
+            return;
+        }
+        this.backpressureClearSent = false;
         if (!tickCacheGatePhase()) return;
         tickScanPhase(playerCx, playerCz, viewDistance, columnQueueSize, missingVanilla);
-        tickDrainPhase();
+    }
+
+    /** The explicit backpressure clear: an empty want-set replaces the server backlog with nothing. */
+    private void sendClearBatch() {
+        if (ClientTraceLog.enabled()) ClientTraceLog.event("clear_batch", "");
+        try {
+            this.batchSender.send(new BatchChunkRequestC2SPayload(new long[0], new long[0], 0));
+        } catch (Exception e) {
+            LSSLogger.error("Failed to send backpressure clear batch", e);
+            this.backpressureClearSent = false; // retry on the next halted tick
+        }
     }
 
     /** Dimension change: flush state, reload cache. First tick starts the initial load. */
@@ -132,15 +150,25 @@ public class LodRequestManager {
     }
 
     /**
-     * Movement: prune out-of-range data + drop stale in-flight tracking, and restart the
-     * scan cadence at the new center. Two pinned consequences (LodRequestManagerTickTest):
-     * the (0,0) lastChunk init makes a player joining outside chunk (0,0) take this branch
-     * on tick 1, losing the primed immediate first scan (~1 s join delay); and crossing a
-     * chunk boundary more often than every 20 ticks restarts the cadence each time,
-     * starving both scans AND the timeout sweep that rides them until the player rests.
+     * Movement: prune out-of-range data + drop stale in-flight tracking, and re-center the
+     * ring walk at the new position. Deliberately does NOT touch the scan cadence: the
+     * pre-v17 debounce here restarted it on every chunk crossing, starving scanning — and
+     * with it re-declaration, the want-set's only self-heal — whenever crossings outpaced
+     * the 20-tick window (sustained creative flight stopped LOD generation entirely). A
+     * scan from a moving center is exactly what replace semantics absorb (superseded +
+     * re-declared), and yielding to vanilla's own chunk loading during fast travel is
+     * server-side read/generation priority's job (the client-side vanilla-load budget
+     * scale is retired), not the cadence's. Side benefit: the
+     * (0,0) lastChunk init no longer costs a player joining outside chunk (0,0) their
+     * primed immediate first scan. Both pinned in LodRequestManagerTickTest.
      */
     void tickMovementPhase(int playerCx, int playerCz) {
         if (playerCx != this.lastChunkX || playerCz != this.lastChunkZ) {
+            if (ClientTraceLog.enabled()) {
+                ClientTraceLog.event("move", "\"from\":[" + this.lastChunkX + "," + this.lastChunkZ
+                        + "],\"to\":[" + playerCx + "," + playerCz
+                        + "],\"confirmed_before\":" + this.scanner.getConfirmedRing());
+            }
             int pruneDistance = this.scanner.getPruneDistance();
             this.columns.pruneOutOfRange(playerCx, playerCz, pruneDistance);
             this.tracker.pruneOutOfRange(playerCx, playerCz, pruneDistance);
@@ -149,17 +177,28 @@ public class LodRequestManager {
             this.metrics.pruneRttStampsOutOfRange(playerCx, playerCz, pruneDistance);
             this.lastChunkX = playerCx;
             this.lastChunkZ = playerCz;
-            this.scanner.resetScanCounter();
+            this.scanner.recenter();
         }
     }
 
-    /** Backpressure: halt when the column processing queue is mostly full. */
-    boolean haltedByBackpressure(int columnQueueSize) {
-        return columnQueueSize >= haltThreshold();
+    /** Backpressure: halt when the column processing queue is mostly full — by COUNT or by
+     *  BYTES. Admission ({@code ClientColumnProcessor.admits}) is bounded by both, and for
+     *  columns above ~44 KiB the byte cap binds first; a count-only halt would let arrivals
+     *  hit the byte-cap drop path instead (each drop burns an ingest-failure strike, and
+     *  four park the position for the session). Halting at 3/4 of EITHER cap keeps the
+     *  designed halt+clear ahead of the drop regime regardless of column size. */
+    boolean haltedByBackpressure(int columnQueueSize, long columnQueueBytes) {
+        return columnQueueSize >= haltThreshold() || columnQueueBytes >= byteHaltThreshold();
     }
 
-    private static int haltThreshold() {
+    /** Package-private so the backpressure-clear tests can drive the exact halt edge. */
+    static int haltThreshold() {
         return ClientColumnProcessor.MAX_QUEUED_COLUMNS * BACKPRESSURE_NUMERATOR / BACKPRESSURE_DENOMINATOR;
+    }
+
+    /** Package-private so the backpressure-clear tests can drive the exact byte-halt edge. */
+    static long byteHaltThreshold() {
+        return ClientColumnProcessor.MAX_QUEUED_BYTES * BACKPRESSURE_NUMERATOR / BACKPRESSURE_DENOMINATOR;
     }
 
     /**
@@ -190,89 +229,42 @@ public class LodRequestManager {
     }
 
     /**
-     * Periodic scan (every 20 ticks): discover positions needing requests.
-     * @return the {@link SpiralScanner#maybeScan} result (-1 when the cadence did not fire)
+     * Periodic scan (every 20 ticks): build the complete want-set and send it as ONE batch in
+     * the same tick. A walked-but-empty scan (0) sends NOTHING — the convergence invariant that
+     * keeps the soak quiescence predicate alive (a heartbeat would keep requests_received moving
+     * forever and silently disable every law) — but still replaces the awaiting set so phantom
+     * entries cannot linger.
+     * @return the {@link SpiralScanner#maybeScan} result (-1 when no walk happened)
      */
     int tickScanPhase(int playerCx, int playerCz, int viewDistance, int columnQueueSize,
                       IntSupplier missingVanilla) {
         int scanned = this.scanner.maybeScan(playerCx, playerCz, viewDistance,
                 columnQueueSize, haltThreshold(), missingVanilla,
-                this.columns, this.tracker::isInFlight, this.queue);
-        if (scanned >= 0) {
-            if (scanned > 0) {
-                updateSendPerTick(scanned);
+                this.columns, this.sendPositionBuffer, this.sendTimestampBuffer);
+        if (scanned >= 0 && ClientTraceLog.enabled()) {
+            int minRing = Integer.MAX_VALUE, maxRing = -1;
+            for (int i = 0; i < scanned; i++) {
+                long p = this.sendPositionBuffer[i];
+                int ring = Math.max(Math.abs(PositionUtil.unpackX(p) - playerCx),
+                        Math.abs(PositionUtil.unpackZ(p) - playerCz));
+                if (ring < minRing) minRing = ring;
+                if (ring > maxRing) maxRing = ring;
             }
-            // Timeout sweep: evict stale requests on the scan cadence (even if scan skipped).
-            sweepTimeouts();
+            ClientTraceLog.event("scan", "\"center\":[" + playerCx + "," + playerCz
+                    + "],\"confirmed\":" + this.scanner.getConfirmedRing()
+                    + ",\"declared\":" + scanned
+                    + ",\"budget\":" + this.scanner.getLastBudget()
+                    + ",\"missing_vanilla\":" + this.scanner.getMissingVanillaChunks()
+                    + ",\"ring_min\":" + (maxRing < 0 ? -1 : minRing)
+                    + ",\"ring_max\":" + maxRing);
+        }
+        if (scanned >= 0) {
+            this.tracker.replaceWith(this.sendPositionBuffer, scanned);
+            if (scanned > 0) {
+                sendRequests(this.sendPositionBuffer, this.sendTimestampBuffer, scanned);
+            }
         }
         return scanned;
-    }
-
-    /**
-     * Every tick: drain queue through concurrency limits and send.
-     * @return the number of positions sent
-     */
-    int tickDrainPhase() {
-        if (this.queue.hasNext()) {
-            int sent = drainQueue(this.maxSendPerTick);
-            if (sent > 0) sendRequests(this.sendPositionBuffer, this.sendTimestampBuffer, sent);
-            return sent;
-        }
-        return 0;
-    }
-
-    // --- Send rate adaptation ---
-
-    private void updateSendPerTick(int lastScanQueued) {
-        this.maxSendPerTick = Math.min(LSSConstants.MAX_BATCH_CHUNK_REQUESTS,
-                Math.max(MIN_SEND_PER_TICK, (lastScanQueued + LSSConstants.TICKS_PER_SECOND - 1) / LSSConstants.TICKS_PER_SECOND));
-    }
-
-    // --- Queue drain ---
-
-    /** Package-private for direct test coverage — tick() needs a running Minecraft client. */
-    int drainQueue(int maxToSend) {
-        long now = System.nanoTime();
-        boolean generationEnabled = this.sessionConfig.generationEnabled();
-        int maxGenConcurrency = this.sessionConfig.generationConcurrencyLimitPerPlayer();
-        int maxSyncConcurrency = this.sessionConfig.syncOnLoadConcurrencyLimitPerPlayer();
-        int count = 0;
-
-        while (count < maxToSend && this.queue.hasNext()) {
-            long pos = this.queue.peekPosition();
-            if (this.tracker.isInFlight(pos)) { this.queue.skip(); continue; }
-            // Re-derive the timestamp from classify at SEND time, not the scan-time value the
-            // queue buffered: a stamp forgotten between scan and drain (e.g. an ingest failure
-            // reset it to -1) would otherwise go out as a stale ts>0 claiming data the client
-            // no longer holds, defeating the server's ts<=0 honest re-resolution.
-            long ts = this.columns.classify(pos, generationEnabled);
-            if (ts == ColumnStateMap.SATISFIED) { this.queue.skip(); continue; }
-
-            // Per-type concurrency check — skip if this type is full, try next
-            boolean isGen = ts == 0;
-            if (isGen && this.tracker.generationCount() >= maxGenConcurrency) { this.queue.skip(); continue; }
-            if (!isGen && (this.tracker.size() - this.tracker.generationCount()) >= maxSyncConcurrency) { this.queue.skip(); continue; }
-
-            this.queue.skip();
-            this.sendPositionBuffer[count] = pos;
-            this.sendTimestampBuffer[count] = ts;
-            this.tracker.markPending(pos, now, isGen);
-            this.columns.markSent(pos);
-            count++;
-        }
-
-        return count;
-    }
-
-    /**
-     * Evict timed-out in-flight requests and mark each eviction for retry — in-flight
-     * counts as satisfied for ring confirmation, so an unmarked eviction inside a
-     * confirmed ring would never be rescanned (permanent hole; the bandwidth-throttle
-     * soak found 161 such orphans; see InFlightTracker.timeoutSweep).
-     * Package-private for direct test coverage — tick() needs a running Minecraft client.
-     */
-    void sweepTimeouts() {
-        this.tracker.timeoutSweep(TIMEOUT_NANOS, this.columns::markRetry);
     }
 
     // --- Request sending and callbacks ---
@@ -287,33 +279,29 @@ public class LodRequestManager {
     private void sendRequests(long[] positionBuffer, long[] timestampBuffer, int count) {
         // Snapshot to exact-length arrays: BatchChunkRequestC2SPayload's StreamCodec reads
         // these lazily when the connection encodes on the netty event loop, which races the
-        // next tick's drainQueue overwriting the reused sendPositionBuffer/sendTimestampBuffer.
-        // The payload must own its data so a request's positions can't be corrupted mid-encode.
+        // next scan overwriting the reused sendPositionBuffer/sendTimestampBuffer. The
+        // payload must own its data so a declaration's positions can't be corrupted mid-encode.
         long[] positions = java.util.Arrays.copyOf(positionBuffer, count);
         long[] timestamps = java.util.Arrays.copyOf(timestampBuffer, count);
         try {
             this.batchSender.send(new BatchChunkRequestC2SPayload(positions, timestamps, count));
             long nowMs = System.currentTimeMillis();
             for (int i = 0; i < count; i++) {
-                this.metrics.recordRequestSent(positions[i], nowMs); // RTT send stamp per position
+                this.metrics.recordRequestSent(positions[i], nowMs); // RTT: last-declare stamp
             }
         } catch (Exception e) {
-            LSSLogger.error("Failed to send batch chunk request", e);
-            for (int i = 0; i < count; i++) {
-                this.tracker.removeByPosition(positions[i]);
-                // drainQueue consumed the dirty/retry marks at markSent, so without
-                // restoration a validated position whose batch never reached the wire
-                // classifies SATISFIED forever — the same orphan class as a timeout
-                // eviction (see sweepTimeouts), without the 10 s grace. Re-mark retry:
-                // classify re-asks with the stored timestamp, no invented stamps.
-                this.columns.markRetry(positions[i]);
-            }
+            LSSLogger.error("Failed to send want-set batch", e);
+            // Nothing is consumed at send any more (marks are answer-consumed), and the next
+            // scan re-declares the identical set, so no mark restoration is needed. Just drop
+            // the awaiting entries so late-status gating doesn't credit a batch that never
+            // reached the wire.
+            this.tracker.replaceWith(positions, 0);
         }
         this.metrics.recordSendCycle(count); // counts attempts — a failed batch still counts
     }
 
-    public void onColumnReceived(long packed, long columnTimestamp, ResourceKey<Level> dimension) {
-        onColumnReceived(packed, columnTimestamp, dimension, false);
+    public boolean onColumnReceived(long packed, long columnTimestamp, ResourceKey<Level> dimension) {
+        return onColumnReceived(packed, columnTimestamp, dimension, false);
     }
 
     /**
@@ -322,26 +310,69 @@ public class LodRequestManager {
      *        re-request must carry the pre-clear content stamp so the server re-sends the clear;
      *        recorded via {@link ColumnStateMap#markAuthoritativeClear} inside the dimension guard.
      */
-    public void onColumnReceived(long packed, long columnTimestamp, ResourceKey<Level> dimension,
+    public boolean onColumnReceived(long packed, long columnTimestamp, ResourceKey<Level> dimension,
                                  boolean authoritativeClear) {
+        return onColumnReceived(packed, columnTimestamp, dimension, authoritativeClear, (byte) -1);
+    }
+
+    /**
+     * @param source the server's serve-source tag (LSSConstants.COLUMN_SOURCE_*), -1 when
+     *        unknown (test rigs / legacy). Diagnostic attribution only — feeds the trace.
+     * @return false ONLY for the out-of-range unsolicited drop — the caller must then skip
+     *         consumer dispatch too, or a hostile/buggy server still grows the consumer's
+     *         LOD store without bound (the state map alone being guarded is half a fix).
+     *         Cross-dimension columns return true: the dispatch drain's dimension filter
+     *         owns that discard (deliberate — see the guard below).
+     */
+    public boolean onColumnReceived(long packed, long columnTimestamp, ResourceKey<Level> dimension,
+                                 boolean authoritativeClear, byte source) {
         // A column from another dimension is discarded by the dispatch drain
         // (ClientColumnProcessor filters on level.dimension()), so stamping it here would
         // mark the position SATISFIED in the current dimension's map with no data delivered.
-        if (this.lastDimension != null && !this.lastDimension.equals(dimension)) return;
+        if (this.lastDimension != null && !this.lastDimension.equals(dimension)) return true;
+        // Range guard: an unsolicited column far outside the prune radius must not stamp —
+        // the movement pruner only runs on chunk crossings, so a stationary client fed
+        // arbitrary far positions (buggy or hostile server) would otherwise grow the state
+        // map without bound. In-range unsolicited columns still stamp (authoritative data).
+        if (PositionUtil.isOutOfRange(packed, this.lastChunkX, this.lastChunkZ,
+                this.scanner.getPruneDistance())) {
+            LSSLogger.debug("Dropping out-of-range column " + PositionUtil.unpackX(packed)
+                    + "," + PositionUtil.unpackZ(packed)
+                    + " (player chunk " + this.lastChunkX + "," + this.lastChunkZ + ")");
+            if (ClientTraceLog.enabled()) {
+                ClientTraceLog.event("col_dropped_range", "\"pos\":[" + PositionUtil.unpackX(packed)
+                        + "," + PositionUtil.unpackZ(packed) + "]");
+            }
+            return false;
+        }
         // Capture the pre-clear content stamp BEFORE onReceived overwrites it with the clear's
         // timestamp — a rejected clear re-requests with this value, not ts=-1.
         long preClearStamp = authoritativeClear ? this.columns.timestampFor(packed) : -1L;
         // Apply even if the position is no longer tracked (e.g. it timed out client-side):
         // the data is authoritative for the position, and stamping it prevents the
         // timeout → silent-duplicate → second-timeout stall.
+        if (ClientTraceLog.enabled()) {
+            int cx = PositionUtil.unpackX(packed);
+            int cz = PositionUtil.unpackZ(packed);
+            ClientTraceLog.event("col", "\"pos\":[" + cx + "," + cz
+                    + "],\"ring\":" + Math.max(Math.abs(cx - this.lastChunkX), Math.abs(cz - this.lastChunkZ))
+                    + ",\"ts\":" + columnTimestamp
+                    + ",\"src\":" + source + (authoritativeClear ? ",\"clear\":true" : ""));
+        }
         this.tracker.removeByPosition(packed);
         this.columns.onReceived(packed, columnTimestamp);
         if (authoritativeClear) this.columns.markAuthoritativeClear(packed, preClearStamp);
         consumeStaleCrossing(packed); // a dirty that crossed this in-flight first serve forces a re-request
         this.metrics.recordColumnReceived(packed, System.currentTimeMillis()); // RTT sample + counter
+        return true;
     }
 
     public void onDirtyColumns(long[] dirtyPositions) {
+        if (ClientTraceLog.enabled() && dirtyPositions.length > 0) {
+            ClientTraceLog.event("dirty", "\"n\":" + dirtyPositions.length
+                    + ",\"first\":[" + PositionUtil.unpackX(dirtyPositions[0]) + ","
+                    + PositionUtil.unpackZ(dirtyPositions[0]) + "]");
+        }
         boolean added = false;
         for (long packed : dirtyPositions) {
             added |= this.columns.markDirtyIfKnown(packed);
@@ -354,7 +385,14 @@ public class LodRequestManager {
             this.columns.noteStaleIfInFlight(packed, this.tracker.isInFlight(packed));
         }
         if (added) {
-            this.scanner.resetScanCounter();
+            // Cadence-NEUTRAL: only re-open the ring walk so the dirty position (which may
+            // sit below the confirmed ring) is reachable at the NEXT scheduled scan.
+            // resetScanCounter() here was the last survivor of the cadence-debounce class:
+            // it DELAYED the next scan 20 ticks per broadcast, and at the legal
+            // dirtyBroadcastIntervalSeconds floor (1 s) a sustained edit stream could
+            // phase-lock scans off entirely — starving re-declaration, the want-set's only
+            // self-heal (the same failure class as the removed movement debounce).
+            this.scanner.resetConfirmedRing();
         }
     }
 
@@ -401,14 +439,19 @@ public class LodRequestManager {
     }
 
     public void onColumnNotGenerated(long packed) {
+        if (ClientTraceLog.enabled()) {
+            ClientTraceLog.event("ng", "\"pos\":[" + PositionUtil.unpackX(packed) + ","
+                    + PositionUtil.unpackZ(packed) + "],\"tracked\":" + this.tracker.isInFlight(packed));
+        }
         // BatchResponse carries no dimension, so unlike onColumnReceived this cannot be
-        // dimension-guarded. Gate on tracking instead: the tracker is cleared on dimension
-        // change / timeout / prune, so a late status can never stamp the fresh map
-        // (matches the pre-v16 requestId gate).
+        // dimension-guarded. Gate on the awaiting set instead: it is cleared on dimension
+        // change, pruned on movement, and replaced wholesale by each scan, so a late status
+        // can never stamp the fresh map (matches the pre-v16 requestId gate).
         if (!this.tracker.isInFlight(packed)) {
-            // Untracked terminal answer (the tracker entry died to a timeout/prune): the RTT
-            // stamp is equally dead — orphans otherwise accumulate to the 4096-stamp cap and
-            // permanently silence RTT sampling for the session.
+            // Untracked terminal answer — its position left the last declared want-set
+            // (dimension change / movement prune / scan replace). The RTT stamp is equally
+            // dead: orphans otherwise accumulate to the 4096-stamp cap and permanently
+            // silence RTT sampling for the session.
             this.metrics.discardRttStamp(packed);
             this.metrics.recordNotGenerated();
             return;
@@ -417,17 +460,20 @@ public class LodRequestManager {
         this.metrics.discardRttStamp(packed); // terminal non-column answer: the RTT stamp is dead
         this.columns.onNotGenerated(packed);
         consumeStaleCrossing(packed); // a dirty that crossed this in-flight first serve forces a re-request
-        // The scanner skips in-flight positions without breaking ring confirmation, so the ring
-        // can confirm PAST this position while it was in-flight. With generation enabled the ts=0
-        // stamp is gen-retry-able (classify -> 0), but a below-ring position is never rescanned
-        // until the ring re-walks — force that re-walk so a stationary player does not keep an
-        // ungenerated hole (CL-014). Cadence-neutral and gen-disabled-safe (classify parks ts=0
-        // when generation is off, so the re-walk just skips it).
-        this.scanner.resetConfirmedRing();
+        // No resetConfirmedRing here (the old ts=0 gen-retry needed one — CL-014): a
+        // NOT_GENERATED position is now PERMANENTLY session-satisfied, so there is no hole
+        // below the ring to re-reach, and during a gen-disabled backfill the answer stream
+        // would force a full re-walk per answer for nothing. The one path that CAN park a
+        // re-requestable position below a confirmed ring — a dirty crossing the in-flight
+        // answer — is consumeStaleCrossing above, which does its own confirmed-ring reset.
         this.metrics.recordNotGenerated();
     }
 
     public void onColumnUpToDate(long packed) {
+        if (ClientTraceLog.enabled()) {
+            ClientTraceLog.event("utd", "\"pos\":[" + PositionUtil.unpackX(packed) + ","
+                    + PositionUtil.unpackZ(packed) + "],\"tracked\":" + this.tracker.isInFlight(packed));
+        }
         if (!this.tracker.isInFlight(packed)) {
             this.metrics.discardRttStamp(packed); // untracked terminal answer: stamp is dead (see onColumnNotGenerated)
             this.metrics.recordUpToDate();
@@ -440,20 +486,10 @@ public class LodRequestManager {
         this.metrics.recordUpToDate();
     }
 
-    public void onRateLimited(long packed) {
-        this.scanner.noteRateLimited(); // backoff regardless of tracking (pre-v16 set skipNextScan outside the gate)
-        if (!this.tracker.isInFlight(packed)) {
-            this.metrics.discardRttStamp(packed); // untracked terminal answer: stamp is dead (see onColumnNotGenerated)
-            this.metrics.recordRateLimited();
-            return;
-        }
-        this.tracker.removeByPosition(packed);
-        this.metrics.discardRttStamp(packed); // a bounce is terminal for THIS request; the retry re-stamps
-        this.columns.markRetry(packed);
-        this.metrics.recordRateLimited();
-    }
-
     private void onDimensionChange(ResourceKey<Level> newDimension) {
+        if (ClientTraceLog.enabled()) {
+            ClientTraceLog.event("dim_change", "\"to\":\"" + newDimension.identifier() + "\"");
+        }
         // Unstamp columns still queued for decode BEFORE saveCache persists the old
         // dimension's map: their stamps describe data no consumer ever saw (the drain's
         // dimension filter will discard the payloads once the level switches). At this
@@ -462,9 +498,7 @@ public class LodRequestManager {
         LSSClientNetworking.reportUndispatchedColumns(this);
         saveCache();
         resetRequestState();
-        this.queue.clear();
         this.scanner.resetScanCounter();
-        this.scanner.clearSkipNextScan();
         this.cacheLoaded = true;
         startAsyncCacheLoad(newDimension);
     }
@@ -497,7 +531,6 @@ public class LodRequestManager {
         this.pendingCacheLoad = null; // drop any in-flight load — its pre-clear result would resurrect flushed timestamps
         this.failuresDuringCacheLoad.clear();
         resetRequestState();
-        this.queue.clear();
         this.scanner.reset();
     }
 
@@ -507,7 +540,6 @@ public class LodRequestManager {
 
     ColumnStateMap columnsForTest() { return this.columns; }
     InFlightTracker trackerForTest() { return this.tracker; }
-    RequestQueue queueForTest() { return this.queue; }
     SpiralScanner scannerForTest() { return this.scanner; }
 
     /** tick() derives this from the client level; tests set it directly. */
@@ -533,8 +565,10 @@ public class LodRequestManager {
     }
 
     /**
-     * Stored timestamp for one column position (-1 absent, 0 not-generated, &gt;0 epoch
-     * seconds). Main client thread only — used by the soak harness per-position probes.
+     * Stored timestamp for one column position (-1 absent, 0 a legacy pre-v17 cache
+     * artifact — the client no longer writes 0, see ColumnStateMap#onUpToDate's park-time
+     * purge — &gt;0 epoch seconds). Main client thread only — used by the soak harness
+     * per-position probes.
      */
     public long getColumnTimestamp(int cx, int cz) {
         return this.columns.timestampFor(PositionUtil.packPosition(cx, cz));
@@ -564,7 +598,6 @@ public class LodRequestManager {
     public long getTotalColumnsReceived() { return this.metrics.getTotalColumnsReceived(); }
     public long getTotalUpToDate() { return this.metrics.getTotalUpToDate(); }
     public long getTotalNotGenerated() { return this.metrics.getTotalNotGenerated(); }
-    public long getTotalRateLimited() { return this.metrics.getTotalRateLimited(); }
     public long getTotalIngestFailures() { return this.metrics.getTotalIngestFailures(); }
 
     // Rolling rates
@@ -577,10 +610,7 @@ public class LodRequestManager {
 
     // Concurrency
     public int getPendingCount() { return this.tracker.size(); }
-    public int getQueueRemaining() { return this.queue.remaining(); }
-
     // Last scan budget
     public int getLastBudget() { return this.scanner.getLastBudget(); }
-    public int getLastSyncQueued() { return this.scanner.getLastSyncQueued(); }
-    public int getLastGenQueued() { return this.scanner.getLastGenQueued(); }
+    public int getLastQueued() { return this.scanner.getLastQueued(); }
 }

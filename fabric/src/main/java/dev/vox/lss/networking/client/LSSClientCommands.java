@@ -33,6 +33,22 @@ public class LSSClientCommands {
                                 return Command.SINGLE_SUCCESS;
                             })
                     )
+                    .then(ClientCommands.literal("trace")
+                            .executes(context -> {
+                                var result = ClientTraceLog.toggle();
+                                if (result.path() != null) {
+                                    context.getSource().sendFeedback(Component.literal(
+                                            "LSS trace STARTED: " + result.path()).withStyle(ChatFormatting.GOLD));
+                                } else if (result.failed()) {
+                                    context.getSource().sendFeedback(Component.literal(
+                                            "LSS trace FAILED to start — see the log.").withStyle(ChatFormatting.RED));
+                                } else {
+                                    context.getSource().sendFeedback(Component.literal(
+                                            "LSS trace stopped.").withStyle(ChatFormatting.GOLD));
+                                }
+                                return Command.SINGLE_SUCCESS;
+                            })
+                    )
             );
         });
     }
@@ -85,9 +101,9 @@ public class LSSClientCommands {
 
         // Responses line
         source.sendFeedback(Component.literal(String.format(
-                "Responses: columns=%d, up_to_date=%d, not_generated=%d, rate_limited=%d",
+                "Responses: columns=%d, up_to_date=%d, not_generated=%d",
                 manager.getTotalColumnsReceived(), manager.getTotalUpToDate(),
-                manager.getTotalNotGenerated(), manager.getTotalRateLimited()
+                manager.getTotalNotGenerated()
         )).withStyle(ChatFormatting.GRAY));
 
         // Requests line
@@ -107,12 +123,10 @@ public class LSSClientCommands {
 
         // Budget line
         int budget = manager.getLastBudget();
-        int syncQueued = manager.getLastSyncQueued();
-        int genQueued = manager.getLastGenQueued();
+        int lastQueued = manager.getLastQueued();
         source.sendFeedback(Component.literal(String.format(
-                "Budget: used=%d/%d (sync=%d, gen=%d), queue=%d",
-                syncQueued + genQueued, budget, syncQueued, genQueued,
-                manager.getQueueRemaining()
+                "Budget: used=%d/%d",
+                lastQueued, budget
         )).withStyle(ChatFormatting.GRAY));
     }
 }

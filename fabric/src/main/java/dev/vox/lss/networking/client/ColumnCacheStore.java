@@ -55,7 +55,12 @@ public class ColumnCacheStore {
                 LSSLogger.warn("Column cache " + file + " has invalid entry count " + count + ", discarding");
                 return map;
             }
-            map.ensureCapacity(count);
+            // Bound the pre-allocation by what the file can actually hold (8-byte header +
+            // 16 bytes/entry), matching ColumnTimestampCache.load: a corrupt/crafted count
+            // field must not force a ~64 MB ensureCapacity for entries that aren't there. A
+            // short read past this hits EOF and returns the partial map, same as truncation.
+            long maxPlausible = Math.max(0, (Files.size(file) - 8) / 16);
+            map.ensureCapacity((int) Math.min(count, maxPlausible));
             for (int i = 0; i < count; i++) {
                 long pos = in.readLong();
                 map.put(pos, in.readLong()); // raw server timestamp

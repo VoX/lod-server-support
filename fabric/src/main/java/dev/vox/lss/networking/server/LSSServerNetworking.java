@@ -76,7 +76,8 @@ public class LSSServerNetworking {
 
         var config = LSSServerConfig.CONFIG;
         var decision = HandshakeGate.evaluate(payload.protocolVersion(),
-                payload.capabilities(), config.enabled, service != null);
+                payload.capabilities(), config.enabled, service != null,
+                config.enableV16Compat);
 
         if (!decision.sendSessionConfig()) {
             // See HandshakeGate.Outcome.VERSION_MISMATCH: replying would kick the player.
@@ -86,14 +87,27 @@ public class LSSServerNetworking {
             return;
         }
 
-        responder.send(new SessionConfigS2CPayload(
-                LSSConstants.PROTOCOL_VERSION,
-                decision.effectiveEnabled(),
-                config.lodDistanceChunks,
-                config.syncOnLoadConcurrencyLimitPerPlayer,
-                config.generationConcurrencyLimitPerPlayer,
-                config.enableChunkGeneration
-        ));
+        boolean v16 = decision.dialect() == HandshakeGate.WireDialect.V16;
+        if (!v16 && service != null) {
+            // A current-protocol re-handshake on a connection that previously negotiated
+            // v16 must shed the stale compat session — otherwise every column keeps
+            // shipping legacy-shaped and hard-kicks the now-v18 decoder. No-op normally.
+            service.getV16CompatManager().onNonV16Handshake(player.getUUID());
+        }
+        responder.send(v16
+                ? SessionConfigS2CPayload.v16Legacy(
+                        decision.effectiveEnabled(),
+                        config.lodDistanceChunks,
+                        // The caps ARE the old client's pacing — advertise the server's real
+                        // admission values (see the v16 compat design §4.1).
+                        LSSConstants.SYNC_ON_LOAD_SLOT_CAP,
+                        config.generationConcurrencyLimitPerPlayer,
+                        config.enableChunkGeneration)
+                : new SessionConfigS2CPayload(
+                        LSSConstants.PROTOCOL_VERSION,
+                        decision.effectiveEnabled(),
+                        config.lodDistanceChunks,
+                        config.enableChunkGeneration));
 
         if (decision.outcome() == HandshakeGate.Outcome.NO_CONSUMER) {
             // Visible to admins via this log.
@@ -104,10 +118,14 @@ public class LSSServerNetworking {
         }
 
         if (decision.registerPlayer()) {
+            if (v16) {
+                // Session identity first, so drip batches merge from the first frame.
+                service.getV16CompatManager().onHandshake(player.getUUID());
+            }
             service.registerPlayer(player, payload.capabilities());
             LSSLogger.info("Player " + player.getName().getString()
                     + " registered for LSS LOD request processing (caps="
-                    + payload.capabilities() + ")");
+                    + payload.capabilities() + (v16 ? ", v16-compat" : "") + ")");
         }
     }
 
@@ -159,6 +177,9 @@ public class LSSServerNetworking {
             var service = requestService;
             if (service != null) {
                 service.removePlayer(handler.getPlayer().getUUID());
+                // Network-level: the disconnect drops the v16 session identity (removePlayer
+                // above only reset its want-set — dim changes reuse that path).
+                service.getV16CompatManager().onDisconnect(handler.getPlayer().getUUID());
             }
         });
     }

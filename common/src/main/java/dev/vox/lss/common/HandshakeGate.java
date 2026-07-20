@@ -35,10 +35,28 @@ public final class HandshakeGate {
     }
 
     /**
+     * Which wire shapes the reply (and the whole session) must use. Decided by the version
+     * rung ONLY — the rest of the ladder is dialect-agnostic, so reply/registration policy
+     * stays identical for legacy and current clients.
+     */
+    public enum WireDialect {
+        /** Current protocol ({@link LSSConstants#PROTOCOL_VERSION}) — canonical shapes. */
+        V18,
+        /**
+         * Legacy protocol 16 under {@code enableV16Compat}: the reply must be the 6-field
+         * SessionConfig ECHOING VERSION 16 (the old client's codec hard-gates on that leading
+         * VarInt and disables itself otherwise), columns must ship source-less, and the
+         * session is tracked by the v16 compat shim (docs/planning/v16-compat-design.md).
+         */
+        V16
+    }
+
+    /**
      * @param outcome          classification driving call-site logging
      * @param effectiveEnabled the enabled flag to advertise in the session config
+     * @param dialect          wire shapes the reply/session must use (version rung's choice)
      */
-    public record Decision(Outcome outcome, boolean effectiveEnabled) {
+    public record Decision(Outcome outcome, boolean effectiveEnabled, WireDialect dialect) {
         /** Whether any reply may be sent at all (false only on version skew). */
         public boolean sendSessionConfig() {
             return outcome != Outcome.VERSION_MISMATCH;
@@ -51,25 +69,43 @@ public final class HandshakeGate {
     }
 
     /**
-     * Evaluates the handshake against {@link LSSConstants#PROTOCOL_VERSION}.
+     * Evaluates the handshake against {@link LSSConstants#PROTOCOL_VERSION}, with the v16
+     * compat rung: a protocol-16 handshake under {@code v16CompatEnabled} takes the SAME
+     * ladder with the {@link WireDialect#V16} dialect instead of the silent mismatch.
      *
      * @param clientProtocolVersion protocol version the client handshook with
      * @param clientCapabilities    client capabilities bitmask
      * @param configEnabled         server config {@code enabled} flag
      * @param servicePresent        whether the request processing service is running
+     * @param v16CompatEnabled      server config {@code enableV16Compat} flag
      */
     public static Decision evaluate(int clientProtocolVersion, int clientCapabilities,
-                                    boolean configEnabled, boolean servicePresent) {
-        if (clientProtocolVersion != LSSConstants.PROTOCOL_VERSION) {
-            return new Decision(Outcome.VERSION_MISMATCH, false);
+                                    boolean configEnabled, boolean servicePresent,
+                                    boolean v16CompatEnabled) {
+        WireDialect dialect;
+        if (clientProtocolVersion == LSSConstants.PROTOCOL_VERSION) {
+            dialect = WireDialect.V18;
+        } else if (clientProtocolVersion == LSSConstants.V16_COMPAT_PROTOCOL_VERSION
+                && v16CompatEnabled) {
+            dialect = WireDialect.V16;
+        } else {
+            return new Decision(Outcome.VERSION_MISMATCH, false, WireDialect.V18);
         }
         boolean effectiveEnabled = configEnabled && servicePresent;
         if ((clientCapabilities & LSSConstants.CAPABILITY_VOXEL_COLUMNS) == 0) {
-            return new Decision(Outcome.NO_CONSUMER, effectiveEnabled);
+            return new Decision(Outcome.NO_CONSUMER, effectiveEnabled, dialect);
         }
         if (!effectiveEnabled) {
-            return new Decision(Outcome.DISABLED, false);
+            return new Decision(Outcome.DISABLED, false, dialect);
         }
-        return new Decision(Outcome.REGISTER, true);
+        return new Decision(Outcome.REGISTER, true, dialect);
+    }
+
+    /** Pre-v16-compat overload (compat disabled): kept so existing gate tests keep pinning
+     *  the strict ladder unchanged. */
+    public static Decision evaluate(int clientProtocolVersion, int clientCapabilities,
+                                    boolean configEnabled, boolean servicePresent) {
+        return evaluate(clientProtocolVersion, clientCapabilities, configEnabled,
+                servicePresent, false);
     }
 }

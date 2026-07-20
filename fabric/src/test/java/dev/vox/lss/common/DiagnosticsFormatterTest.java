@@ -108,6 +108,7 @@ class DiagnosticsFormatterTest {
                 "sent=9, disk=1/2",
                 "submitted=5, completed=5",
                 "active=1/32", true,
+                7, 3,
                 2_097_152,
                 512,
                 List.of(new DiagnosticsFormatter.PlayerDiag("Steve", 3, 4000, 2, 1, 2000, 4096)));
@@ -119,10 +120,47 @@ class DiagnosticsFormatterTest {
                 "Sources (total): in_mem=11, disk=22, up_to_date=33, gen=44, re_resolved=55",
                 "Sources (tick): sent=9, disk=1/2",
                 "DiskReader: submitted=5, completed=5",
-                "Generation: active=1/32",
+                "Generation: active=1/32, order_gated=7, inversions=3",
                 "Bandwidth: 512 B/s / 1.0 MB/s global (2.0 MB total)",
                 "  Steve: sq=3/4000, psync=2, pgen=1, sent=2000 (4.0 KB), rate=20/s"
         ), DiagnosticsFormatter.formatDiagnostics(d));
+    }
+
+    @Test
+    void diagV16LineRendersBetweenGenerationAndBandwidthOnlyWhenPresent() {
+        var d = new DiagnosticsFormatter.DiagData(
+                true, 24,
+                2048, 1_048_576,
+                100, 5000, 10_485_760,
+                11, 33, 44, 55,
+                22,
+                "sent=9, disk=1/2",
+                "submitted=5, completed=5",
+                "active=1/32", true,
+                7, 3,
+                2_097_152,
+                512,
+                List.of());
+
+        var withoutShim = DiagnosticsFormatter.formatDiagnostics(d);
+        assertTrue(withoutShim.stream().noneMatch(l -> l.startsWith("V16Compat")),
+                "an untouched shim (null line) must add nothing");
+
+        var withShim = DiagnosticsFormatter.formatDiagnostics(d.withV16Line(
+                "V16Compat: clients=1, redeclares=9, overflow_bounced=0, grace_discarded=0"));
+        int genIdx = indexOfPrefix(withShim, "Generation:");
+        int v16Idx = indexOfPrefix(withShim, "V16Compat:");
+        int bwIdx = indexOfPrefix(withShim, "Bandwidth:");
+        assertTrue(genIdx < v16Idx && v16Idx < bwIdx,
+                "the v16 line sits between Generation and Bandwidth: " + withShim);
+        assertEquals(withoutShim.size() + 1, withShim.size());
+    }
+
+    private static int indexOfPrefix(List<String> lines, String prefix) {
+        for (int i = 0; i < lines.size(); i++) {
+            if (lines.get(i).startsWith(prefix)) return i;
+        }
+        throw new AssertionError("no line starts with '" + prefix + "': " + lines);
     }
 
     @Test
@@ -139,6 +177,7 @@ class DiagnosticsFormatterTest {
                 "idle",
                 "idle",
                 null, false,
+                0, 0,
                 0,
                 0,
                 List.of());
@@ -217,7 +256,8 @@ class DiagnosticsFormatterTest {
         assertEquals(1, data.cumGen());
         assertEquals(4, data.cumReResolved());
         assertEquals(3, data.diskCompleted(), "wired from getDiag().getSuccessfulReadCount()");
-        assertEquals(reader.getDiagnostics(), data.diskReaderDiagnostics());
+        assertEquals(reader.getDiagnostics() + ", memo_hits=0", data.diskReaderDiagnostics(),
+                "the DiskReader line carries the miss-memo hit counter (A5's virtual not-founds)");
         assertEquals("tick-string", data.tickDiagnostics());
         assertEquals(444, data.bwWindowRate());
         assertEquals(777, data.bwTotal(), "wired from the limiter's total, not the state sums");

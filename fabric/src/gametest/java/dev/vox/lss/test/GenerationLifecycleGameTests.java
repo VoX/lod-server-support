@@ -289,22 +289,35 @@ public class GenerationLifecycleGameTests {
                     "removing B must drop only B's orphaned entry (R2), active=" + gen.getActiveCount());
             helper.assertTrue(lssTicketCount(tickets, bx, z) == 1,
                     "the shared entry's ticket must survive while another player still waits on it");
+            // Orphan releases are DEFERRED (the disconnect-sweep stagger — a one-call bulk
+            // release froze a C2ME server for 60 s inside the distance-graph fixpoint);
+            // one tick's drain releases it.
+            gen.tick();
             helper.assertTrue(lssTicketCount(tickets, bx + 2, z) == 0,
-                    "the orphaned entry's ticket must be released");
+                    "the orphaned entry's ticket must be released within one drain tick");
             helper.assertTrue(gen.getTotalRemovedInFlight() == 1,
                     "exactly the orphaned entry must book removedInFlight, got "
                             + gen.getTotalRemovedInFlight());
             helper.assertTrue(gen.getTotalSubmitted() == 3,
                     "removal must never un-book submissions");
 
-            // Removing A orphans R0 and R1 — both release and book.
+            // Removing A orphans R0 and R1 — both book immediately, release via the stagger.
             gen.removePlayer(playerA);
             helper.assertTrue(gen.getActiveCount() == 0, "removing the last waiter must clear the active set");
-            helper.assertTrue(lssTicketCount(tickets, bx, z) == 0 && lssTicketCount(tickets, bx + 1, z) == 0,
-                    "every orphaned ticket must be released after the last waiter leaves");
             helper.assertTrue(gen.getTotalRemovedInFlight() == 3,
                     "each orphan-removed ENTRY books removedInFlight once, got "
                             + gen.getTotalRemovedInFlight());
+
+            // Cancel-and-reuse: readmitting R0 while its release is still PENDING must
+            // reuse the held ticket (no second add — the completion path's single removal
+            // keeps the books 1:1) and the cancelled release must never fire.
+            helper.assertTrue(gen.submitGeneration(playerF, level, bx, z, 5L),
+                    "readmission against a pending deferred release must be accepted");
+            gen.tick(); // drains R1's release; R0's was cancelled by the readmission
+            helper.assertTrue(lssTicketCount(tickets, bx, z) == 1,
+                    "the readmitted entry reuses the still-held ticket — exactly one, not two");
+            helper.assertTrue(lssTicketCount(tickets, bx + 1, z) == 0,
+                    "the un-readmitted orphan's ticket drains within one tick");
 
             // Removal must free capacity: a fresh player fits again.
             helper.assertTrue(gen.submitGeneration(playerF, level, bx + 3, z, 5L),
@@ -320,6 +333,8 @@ public class GenerationLifecycleGameTests {
         }
         helper.assertTrue(lssTicketCount(tickets, bx + 3, z) == 0,
                 "shutdown must release the remaining entry's ticket");
+        helper.assertTrue(lssTicketCount(tickets, bx, z) == 0,
+                "shutdown must also release the readmitted entry's reused ticket");
         helper.succeed();
     }
 
@@ -405,10 +420,13 @@ public class GenerationLifecycleGameTests {
 
             // Stale work of all three kinds: queued incoming requests, an in-flight generation
             // entry (with its MC ticket), and the per-player disk-reader queue.
-            oldState.addRequest(PositionUtil.packPosition(gx, gz + 1), -1L);
-            oldState.addRequest(PositionUtil.packPosition(gx, gz + 2), 12345L);
-            helper.assertTrue(oldState.getTotalRequestsReceived() == 2,
-                    "premise: stale requests queued on the old state");
+            GameTestSeeding.seedRequests(oldState,
+                    new long[]{PositionUtil.packPosition(gx, gz + 1),
+                            PositionUtil.packPosition(gx, gz + 2)},
+                    new long[]{-1L, 12345L});
+            helper.assertTrue(oldState.getTotalRequestsReceived() == 2
+                            && oldState.peekIncomingBatch() != null,
+                    "premise: a stale want-set is declared on the old state");
 
             var gen = service.getGenerationService();
             helper.assertTrue(gen != null,
@@ -445,13 +463,18 @@ public class GenerationLifecycleGameTests {
             helper.assertTrue(newState.getLastDimension().equals(Level.END),
                     "the fresh state must adopt the new dimension as its baseline");
             helper.assertTrue(newState.getTotalRequestsReceived() == 0
-                            && !newState.getIncomingRequests().iterator().hasNext(),
-                    "requests queued before the dimension change must die with the old state");
+                            && newState.getBacklogSize() == 0
+                            && newState.peekIncomingBatch() == null,
+                    "the want-set declared before the dimension change must die with the old "
+                            + "state — neither its mailbox batch nor a backlog may carry over");
             helper.assertTrue(gen.getActiveCount() == 0,
                     "the in-flight generation entry must be dropped on dimension change");
             helper.assertTrue(gen.getTotalRemovedInFlight() == 1,
                     "the dropped in-flight generation must be booked as removed (the A4 "
                             + "re-balancing term), got " + gen.getTotalRemovedInFlight());
+            // The dimension-change sweep defers its ticket release (disconnect-sweep
+            // stagger); the next service tick's generation drain executes it.
+            service.tick();
             helper.assertTrue(lssTicketCount(overworldTickets, gx, gz) == 0,
                     "the old dimension's generation ticket must be released, not leaked");
             var diskQueueAfter = service.getDiskReader().getPlayerQueue(uuid);
@@ -505,7 +528,7 @@ public class GenerationLifecycleGameTests {
         helper.assertTrue(level.getChunkSource().getChunkNow(cx, cz) == null,
                 "premise: the requested chunk must not be loaded (a probe serve would bypass "
                         + "the disk-notfound path)");
-        oldState.addRequest(PositionUtil.packPosition(cx, cz), 0L); // clientTimestamp 0 = generation
+        GameTestSeeding.seedRequest(oldState, PositionUtil.packPosition(cx, cz), 0L); // ts 0 = generation
 
         // Tick 1 registers the dimension context and posts the routing snapshot. Its drain
         // cannot submit anything: the disk-notfound -> generation conversion needs a second
@@ -584,7 +607,7 @@ public class GenerationLifecycleGameTests {
         var state = service.registerPlayer(mock, LSSConstants.CAPABILITY_VOXEL_COLUMNS);
         helper.assertTrue(level.getChunkSource().getChunkNow(cx, cz) == null,
                 "premise: the requested chunk must not be loaded");
-        state.addRequest(PositionUtil.packPosition(cx, cz), 0L); // clientTimestamp 0 = generation
+        GameTestSeeding.seedRequest(state, PositionUtil.packPosition(cx, cz), 0L); // ts 0 = generation
 
         // Tick 1 registers the dimension context; the disk-notfound -> generation conversion
         // needs further processing cycles driven by manual snapshots (no drain in between).
@@ -654,7 +677,7 @@ public class GenerationLifecycleGameTests {
         helper.assertTrue(level.getChunkSource().getChunkNow(cx, cz) == null,
                 "premise: the chunk must not be loaded (the request must take the "
                         + "disk-notfound -> generation route)");
-        state.addRequest(packed, 0L);
+        GameTestSeeding.seedRequest(state, packed, 0L);
 
         var diag = service.getOffThreadProcessor().getDiagnostics();
         var phase = new AtomicInteger();
@@ -673,7 +696,10 @@ public class GenerationLifecycleGameTests {
                         "waiting for the ticketed chunk to load");
                 // ts>0 keeps the duplicate answer independent of the concurrent flush
                 // (a ts<=0 re-ask could legally re-resolve if the payload already left).
-                state.addRequest(packed, 5L);
+                // A fresh single-entry want-set: the first declaration was consumed by a
+                // routing cycle long ago (its generation is in flight), so this re-declaration
+                // supersedes nothing.
+                GameTestSeeding.seedRequest(state, packed, 5L);
                 service.tick(); // harvests the completion AND routes the re-request
                 phase.set(2);
                 helper.assertTrue(false, "completion tick executed, awaiting the outcome");

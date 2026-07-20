@@ -1,5 +1,6 @@
 package dev.vox.lss.config;
 
+import dev.vox.lss.common.LSSConstants;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Field;
@@ -114,27 +115,17 @@ class ConfigValidationTest {
     }
 
     @Test
-    void syncOnLoadConcurrencyLimitPerPlayerClamped() {
-        var c = serverConfig();
-        c.syncOnLoadConcurrencyLimitPerPlayer = 0;
-        c.validate();
-        assertEquals(1, c.syncOnLoadConcurrencyLimitPerPlayer);
-
-        c.syncOnLoadConcurrencyLimitPerPlayer = 9999;
-        c.validate();
-        assertEquals(1000, c.syncOnLoadConcurrencyLimitPerPlayer);
-    }
-
-    @Test
     void generationConcurrencyLimitPerPlayerClamped() {
         var c = serverConfig();
         c.generationConcurrencyLimitPerPlayer = 0;
         c.validate();
         assertEquals(1, c.generationConcurrencyLimitPerPlayer);
 
+        // Plain per-field bound: the #28 cross-clamp is gone (no client budget derives
+        // from this cap anymore; the successor invariant lives in WantSetBudgetInvariantTest).
         c.generationConcurrencyLimitPerPlayer = 9999;
         c.validate();
-        assertEquals(1000, c.generationConcurrencyLimitPerPlayer);
+        assertEquals(LSSConstants.MAX_CONCURRENCY_LIMIT, c.generationConcurrencyLimitPerPlayer);
     }
 
     @Test
@@ -157,7 +148,8 @@ class ConfigValidationTest {
                 .filter(f -> f.getType().isPrimitive() && f.getType() != boolean.class)
                 .toList();
         // Guard against the sweep going vacuous if fields get refactored to non-public.
-        assertTrue(fields.size() >= 11, "clamp sweep lost fields, found only: " + fields);
+        // (10 since the syncOnLoadConcurrencyLimitPerPlayer knob became a constant.)
+        assertTrue(fields.size() >= 10, "clamp sweep lost fields, found only: " + fields);
         assertTrue(fields.stream().anyMatch(f -> f.getName().equals("perDimensionTimestampCacheSizeMB")),
                 "clamp sweep no longer sees perDimensionTimestampCacheSizeMB");
         return fields;
@@ -177,7 +169,10 @@ class ConfigValidationTest {
             var c = serverConfig();
             f.setInt(c, Integer.MIN_VALUE);
             c.validate();
-            assertTrue(f.getInt(c) >= 1,
+            // missMemoTtlSeconds is the one field whose legal floor is 0 (the memo kill
+            // switch, MIN_MISS_MEMO_TTL_SECONDS) — every other numeric floor is >= 1.
+            int floor = f.getName().equals("missMemoTtlSeconds") ? 0 : 1;
+            assertTrue(f.getInt(c) >= floor,
                     f.getName() + " not clamped up from Integer.MIN_VALUE, still " + f.getInt(c));
 
             f.setInt(c, Integer.MAX_VALUE);
@@ -198,6 +193,13 @@ class ConfigValidationTest {
             assertEquals(f.get(pristine), f.get(validated),
                     "default for " + f.getName() + " is outside its clamp range");
         }
+    }
+
+    /** LOD reads yield to gameplay out of the box; false is the documented rollback. */
+    @Test
+    void backgroundReadPriorityDefaultsOn() {
+        assertTrue(serverConfig().useBackgroundReadPriority,
+                "background read priority must default on");
     }
 
     // --- LSSClientConfig ---

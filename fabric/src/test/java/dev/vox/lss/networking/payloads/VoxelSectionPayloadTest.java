@@ -129,12 +129,11 @@ class VoxelSectionPayloadTest {
     void sessionConfigRoundtrip() {
         // Must use the live protocol version: the decoder treats any other version as a
         // foreign layout and drains the frame instead of reading the fields.
-        var original = new SessionConfigS2CPayload(LSSConstants.PROTOCOL_VERSION, true, 128, 100, 40, true);
+        var original = new SessionConfigS2CPayload(LSSConstants.PROTOCOL_VERSION, true, 128, true);
         var b = buf();
         SessionConfigS2CPayload.CODEC.encode(b, original);
         var decoded = SessionConfigS2CPayload.CODEC.decode(b);
-        assertEquals(100, decoded.syncOnLoadConcurrencyLimitPerPlayer());
-        assertEquals(40, decoded.generationConcurrencyLimitPerPlayer());
+        assertEquals(128, decoded.lodDistanceChunks());
         assertTrue(decoded.generationEnabled());
         b.release();
     }

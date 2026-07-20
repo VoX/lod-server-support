@@ -62,12 +62,12 @@ class ClientSessionGateTest {
     }
 
     private static SessionConfigS2CPayload config(int protocolVersion, boolean enabled) {
-        return new SessionConfigS2CPayload(protocolVersion, enabled, 64, 100, 100, true);
+        return new SessionConfigS2CPayload(protocolVersion, enabled, 64, true);
     }
 
     /** The synthetic disabled shape the codec's drain branch produces for a foreign version. */
     private static SessionConfigS2CPayload codecForeignShape(int protocolVersion) {
-        return new SessionConfigS2CPayload(protocolVersion, false, 0, 0, 0, false);
+        return new SessionConfigS2CPayload(protocolVersion, false, 0, false);
     }
 
     private static ResourceKey<Level> dim(String name) {
@@ -173,26 +173,26 @@ class ClientSessionGateTest {
     @Test
     void hostileServerConfigIsClampedToProtocolBoundsBeforeUse() {
         // A hostile/compromised server is untrusted input: its syncOnLoad concurrency limit
-        // becomes the client's scan budget (RequestQueue.ensureCapacity allocation) and its
-        // LOD distance bounds the scan-ring loop. Without a client-side clamp a single
-        // SessionConfig packet forces a multi-gigabyte allocation (OOM crash). The gate must
-        // clamp every numeric field to the same bounds the server enforces on itself, and
-        // hand the CLAMPED config to the manager it builds.
+        // becomes the client's scan budget and its LOD distance bounds the scan-ring loop.
+        // Historically the budget also sized a heap allocation (RequestQueue.ensureCapacity), so an
+        // unclamped SessionConfig forced a multi-gigabyte OOM; the want-set closed that particular
+        // vector by construction (fixed send buffers + a budget clamped to MAX_BATCH_CHUNK_REQUESTS).
+        // The clamp is still load-bearing — an unclamped lodDistance still bounds the ring walk, and
+        // clamping untrusted numerics at the boundary is not a defence to relax on a technicality.
+        // The gate must clamp every numeric field to the same bounds the server enforces on itself,
+        // and hand the CLAMPED config to the manager it builds.
         var captured = new java.util.concurrent.atomic.AtomicReference<SessionConfigS2CPayload>();
         var g = new ClientSessionGate(processor, handshakesSent::incrementAndGet,
                 cfg -> { captured.set(cfg); return new RecordingManager(events); });
 
         g.onSessionConfig(new SessionConfigS2CPayload(V, true,
-                Integer.MAX_VALUE, 200_000_000, 500_000_000, true), true);
+                Integer.MAX_VALUE, true), true);
 
         var used = captured.get();
         assertNotNull(used, "the manager must be built with the clamped config");
         assertEquals(LSSConstants.MAX_LOD_DISTANCE, used.lodDistanceChunks(),
-                "LOD distance clamped to the protocol max");
-        assertEquals(LSSConstants.MAX_CONCURRENCY_LIMIT, used.syncOnLoadConcurrencyLimitPerPlayer(),
-                "sync concurrency clamped to the protocol max — bounds the scan-budget allocation");
-        assertEquals(LSSConstants.MAX_CONCURRENCY_LIMIT, used.generationConcurrencyLimitPerPlayer(),
-                "generation concurrency clamped to the protocol max");
+                "LOD distance clamped to the protocol max — the one numeric field left on the "
+                        + "wire (the concurrency caps are server-internal now)");
         assertEquals(LSSConstants.MAX_LOD_DISTANCE, g.getServerLodDistance(),
                 "the stored server LOD distance is the clamped value");
     }
@@ -203,12 +203,10 @@ class ClientSessionGateTest {
         var g = new ClientSessionGate(processor, handshakesSent::incrementAndGet,
                 cfg -> { captured.set(cfg); return new RecordingManager(events); });
 
-        g.onSessionConfig(new SessionConfigS2CPayload(V, true, 0, 0, -5, true), true);
+        g.onSessionConfig(new SessionConfigS2CPayload(V, true, 0, true), true);
 
         var used = captured.get();
         assertEquals(LSSConstants.MIN_LOD_DISTANCE, used.lodDistanceChunks());
-        assertEquals(LSSConstants.MIN_CONCURRENCY_LIMIT, used.syncOnLoadConcurrencyLimitPerPlayer());
-        assertEquals(LSSConstants.MIN_CONCURRENCY_LIMIT, used.generationConcurrencyLimitPerPlayer());
     }
 
     @Test

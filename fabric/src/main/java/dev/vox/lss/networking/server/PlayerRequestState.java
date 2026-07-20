@@ -1,8 +1,6 @@
 package dev.vox.lss.networking.server;
 
-import dev.vox.lss.common.PositionUtil;
 import dev.vox.lss.common.processing.AbstractPlayerRequestState;
-import dev.vox.lss.common.processing.IncomingRequest;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerPlayer;
@@ -24,12 +22,6 @@ public class PlayerRequestState extends AbstractPlayerRequestState<CustomPacketP
      *  unit tests. Player-derived accessors (name, dimension) must not be called on it. */
     PlayerRequestState(UUID playerUuid, int syncConcurrency, int genConcurrency) {
         super(playerUuid, syncConcurrency, genConcurrency);
-    }
-
-    public void addRequest(long packedPosition, long clientTimestamp) {
-        int cx = PositionUtil.unpackX(packedPosition);
-        int cz = PositionUtil.unpackZ(packedPosition);
-        enqueueIncomingRequest(new IncomingRequest(cx, cz, clientTimestamp));
     }
 
     public void updatePlayer(ServerPlayer newPlayer) {

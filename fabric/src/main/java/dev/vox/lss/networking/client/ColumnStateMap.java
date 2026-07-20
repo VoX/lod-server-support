@@ -7,12 +7,14 @@ import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 
 /**
  * The single owner of per-column client state: known column timestamps plus the dirty /
- * rate-limit-retry / validated-this-session marks, with derived received/empty counts.
- * {@link #classify} is the one request-need ladder consulted by both the scanner and the
- * queue drain.
+ * ingest-failure-retry / validated-this-session marks, with derived received/empty counts.
+ * {@link #classify} is the one request-need ladder consulted by the scanner when it builds
+ * each want-set.
  *
- * <p>Timestamp semantics: absent (-1) = never seen; 0 = server said not-generated;
- * &gt;0 = received/validated at that epoch-second.
+ * <p>Timestamp semantics: absent (-1) = never seen; &gt;0 = received/validated at that
+ * epoch-second. A stored 0 is a LEGACY value only (pre-server-owned-generation caches
+ * persisted 0 for not-generated answers) and classifies as "no data" — the client never
+ * writes one anymore: a NOT_GENERATED answer is a permanent session-satisfy instead.
  *
  * <p><b>Thread safety:</b> Not thread-safe. Main client thread only.
  */
@@ -28,7 +30,11 @@ class ColumnStateMap {
 
     // Positions flagged by the server's dirty broadcast that need re-requesting.
     private final LongOpenHashSet dirty = new LongOpenHashSet();
-    // Positions bounced with rate-limited that need retry on a later scan.
+    // Positions whose delivery was lost after being stamped (ingest failure) and that must be
+    // re-reachable by a later scan. The name is historical: through v16 the rate-limit bounce
+    // was the other writer, but v17 retired the bounce, so onIngestFailed is now the only one.
+    // The mark's live job is hasRetries() -> the scanner's confirmed-ring reset, without which
+    // an unstamped position inside an already-confirmed ring is never rescanned.
     private final LongOpenHashSet retry = new LongOpenHashSet();
     // Positions confirmed current (data or up-to-date) in this session; cleared on
     // reconnect/dimension change so cached-but-stale positions get revalidated.
@@ -58,25 +64,33 @@ class ColumnStateMap {
 
     /**
      * Decide whether a position needs a request and which clientTimestamp to send.
-     * Priority: unknown &gt; generation retry &gt; dirty &gt; rate-limit retry &gt; revalidation.
+     * Priority, highest first: dirty &gt; session-satisfied &gt; unknown &gt; ingest-failure
+     * retry &gt; revalidation. There is no generation rung: the client never classifies
+     * generation — the server decides it on the disk miss (server-owned generation).
      *
-     * @return the timestamp to send (-1 unknown, 0 generation, &gt;0 resync),
+     * @return the timestamp to send (-1 no data, &gt;0 resync),
      *         or {@link #SATISFIED} when nothing should be sent
      */
-    long classify(long packed, boolean generationEnabled) {
+    long classify(long packed) {
         // Dirty outranks EVERYTHING (incl. sessionSatisfied): a server-pushed change must
         // re-request even a settled all-air/parked position, or an air->content edit becomes a
-        // permanent hole. An unknown-but-dirty position re-asks as a first serve (-1).
+        // permanent hole. An unknown-but-dirty position re-asks as a first serve (-1); a legacy
+        // 0-stamp (pre-server-owned-generation cache) normalizes to -1 the same way.
         if (this.dirty.contains(packed)) {
             long dirtyStored = this.timestamps.get(packed);
-            return dirtyStored == -1L ? -1L : dirtyStored;
+            return dirtyStored <= 0L ? -1L : dirtyStored;
         }
         if (this.sessionSatisfied.contains(packed)) return SATISFIED; // resolved this session, no server data
         long stored = this.timestamps.get(packed);
-        if (stored == -1L) return -1L; // Unknown — sync-on-load first; server generates only on explicit retry
-        if (stored == 0L && generationEnabled) return 0L; // Not generated — generation retry
-        if (this.retry.contains(packed)) return stored; // Rate-limit retry
-        if (stored > 0 && !this.validated.contains(packed)) return stored; // Cached but not validated this session
+        // No data: absent (-1) or a LEGACY not-generated 0-stamp loaded from a released
+        // client's cache — both declare -1 ("I have nothing"); the client never emits 0.
+        if (stored <= 0L) return -1L;
+        // Ingest-failure retry. Defence-in-depth: onIngestFailed always clears `validated`
+        // alongside the mark, so the revalidation rung below would return the same stored
+        // value — this rung keeps the request flowing even if a future path ever leaves a
+        // retry-marked position validated.
+        if (this.retry.contains(packed)) return stored;
+        if (!this.validated.contains(packed)) return stored; // Cached but not validated this session
         return SATISFIED;
     }
 
@@ -123,13 +137,14 @@ class ColumnStateMap {
     }
 
     /**
-     * Mark dirty if the client has any recorded disposition for the column (data OR a
-     * not-generated stamp). A dirty broadcast means the server just SAVED content there,
-     * so a ts==0 stamp is stale — without this rescue, a not-generated answer under
-     * enableChunkGeneration=false (or any probe-miss race on a fresh world) parks the
-     * position permanently even after the chunk exists on disk. The re-request goes out
-     * with ts=0, which the server routes disk-first and can now serve. Unknown (-1)
-     * positions stay unmarked — the scan ladder requests those anyway.
+     * Mark dirty if the client has any recorded disposition for the column (data or a
+     * session-satisfied mark). A dirty broadcast means the server just SAVED content
+     * there — this is the ONE revival path for a NOT_GENERATED position (which sits in
+     * sessionSatisfied with no stamp): without this rescue, a not-generated answer under
+     * enableChunkGeneration=false parks the position permanently even after the chunk
+     * exists on disk. The re-request goes out with the stored stamp (or -1), which the
+     * server routes disk-first and can now serve. Unknown (-1) positions stay unmarked —
+     * the scan ladder requests those anyway.
      */
     boolean markDirtyIfKnown(long packed) {
         // Fire if the client has ANY disposition for the column: a stored timestamp (data or
@@ -148,14 +163,15 @@ class ColumnStateMap {
         return false;
     }
 
+    /**
+     * Test seam: seed a retry mark in isolation. Production writes the mark only inside
+     * {@link #onIngestFailed} (v17 retired the rate-limit bounce that was the other writer),
+     * and that path necessarily rewrites the timestamp too — so tests that pin the retry
+     * mark's OWN lifecycle (prune, clear, confirmed-ring reset) need it without the
+     * accompanying stamp change. Not called from production; do not add a production caller.
+     */
     void markRetry(long packed) {
         this.retry.add(packed);
-    }
-
-    /** A request for this position is going on the wire — its pending marks are consumed. */
-    void markSent(long packed) {
-        this.retry.remove(packed);
-        this.dirty.remove(packed);
     }
 
     /** Column data arrived (authoritative for the position, even if no longer tracked). */
@@ -166,9 +182,10 @@ class ColumnStateMap {
         // the networking layer re-flags it via markAuthoritativeClear AFTER this call; a content
         // delivery (>=1 section) does not, so the flag stays cleared and a rejection re-asks ts=-1.
         this.clearedResync.remove(packed);
-        // An answer supersedes any pending retry. Rate-limit bounces (the original retry
-        // writer) guarantee no response is coming, but the timeout sweep retries positions
-        // whose response may still arrive late — leaving the mark would re-request every
+        // An answer supersedes any pending retry. The rate-limit bounce that originally wrote
+        // these marks guaranteed no response was coming; it is gone (byte 0 is a metrics-only
+        // stub) and the live writer is now onIngestFailed, whose position CAN still have a
+        // column in flight when the mark lands. Leaving the mark would re-request every such
         // late-delivered column once and keep confirmedRing pinned at 0 for an extra scan.
         this.retry.remove(packed);
         put(packed, columnTimestamp);
@@ -178,6 +195,12 @@ class ColumnStateMap {
     /** Server confirmed the column is current. */
     void onUpToDate(long packed) {
         this.retry.remove(packed); // an up-to-date answer supersedes a pending retry (see onReceived)
+        // Answer-time mark consumption: under want-set re-declaration marks are no longer consumed
+        // at send (markSent is gone) — the terminal answer is their only consumer. A mark consumed
+        // at send would classify SATISFIED while the answer was still in flight, so a server-side
+        // supersession would lose the edit until the next session. The dirty-crossed-an-in-flight-
+        // serve race stays covered by staleInFlight, which re-marks dirty at the terminal outcome.
+        this.dirty.remove(packed);
         // Up-to-date must satisfy BOTH unsatisfied states, or classify re-requests forever:
         // -1 (all-air columns never get a VoxelColumn response) and 0 (a not-generated stamp
         // whose chunk resolved as all-air on the server) — in the End this looped ~50 req/s
@@ -187,15 +210,41 @@ class ColumnStateMap {
         long stored = this.timestamps.get(packed);
         if (stored == -1L || stored == 0L) {
             this.sessionSatisfied.add(packed);
+            if (stored == 0L) {
+                // Purge the legacy 0-stamp at park time: v17 clients never write 0 (asks are
+                // >0 resync or -1 no-data), so a stored 0 is a pre-v17 cache artifact — and
+                // left in place it persists to the cache file and resurrects every session,
+                // immortal. Removing it converts the position to -1/unknown, which asks the
+                // SAME thing on the wire (<=0 = "I hold nothing") but finally lets it die.
+                this.timestamps.remove(packed);
+                this.emptyCount--;
+            }
         } else {
             this.validated.add(packed);
         }
     }
 
-    /** Server cannot serve the column (not generated / not servable). */
+    /**
+     * Server cannot serve the column — PERMANENT for the session: the position joins
+     * {@code sessionSatisfied} and the spiral never re-asks, regardless of movement. The
+     * only revival is a dirty broadcast ({@link #markDirtyIfKnown} fires on the
+     * session-satisfied mark and outranks it in classify) — if the chunk later exists,
+     * the server's dirty detection pushes it. Any existing stamp stays untouched: a
+     * data-claiming client keeps its stale-but-real terrain (mirrors {@link #onUpToDate}'s
+     * no-data handling; no fabricated or zeroed stamps).
+     */
     void onNotGenerated(long packed) {
-        this.sessionSatisfied.remove(packed); // a not-generated answer re-opens a satisfied position
-        put(packed, 0L);
+        this.dirty.remove(packed);  // answer-time consumption — see onUpToDate
+        this.retry.remove(packed);
+        this.sessionSatisfied.add(packed);
+        // Park-time purge of a legacy pre-v17 0-stamp, mirroring onUpToDate: retained, it
+        // persists to the cache and resurrects every session (on a gen-disabled server this
+        // was the immortal path — onUpToDate never fires for these). A real >0 stamp stays
+        // untouched as documented above.
+        if (this.timestamps.get(packed) == 0L) {
+            this.timestamps.remove(packed);
+            this.emptyCount--;
+        }
     }
 
     /** Re-serve attempts allowed per position per session before parking it. */
@@ -223,15 +272,28 @@ class ColumnStateMap {
 
         int priorFailures = this.ingestFailures.addTo(packed, 1);
         if (priorFailures + 1 > MAX_INGEST_FAILURES) {
-            // Park WITHOUT a fabricated or retained >0 stamp: the consumer never stored the
-            // data, so claiming ts>0 next session would be the same lie that causes a permanent
-            // hole. Drop the timestamp to -1 (honest "I hold nothing") and mark session-
-            // satisfied so it stops re-downloading THIS session. Next session it re-asks -1;
-            // a transient failure (storage briefly down) heals, a permanent one (incompatible
-            // consumer) costs one re-attempt per session, bounded by this cap.
-            this.timestamps.remove(packed);
-            if (old > 0) this.receivedCount--;
-            else if (old == 0) this.emptyCount--;
+            long parkPreStamp = this.clearedResync.getOrDefault(packed, -1L);
+            if (parkPreStamp > 0) {
+                // Parking a lost CLEAR: the consumer still HOLDS the pre-clear content (it
+                // rejected the 0-section clearing column), so "I hold nothing" (-1) would be
+                // the lie here — next session's -1 re-ask draws an all-air up_to_date without
+                // a clearing column (clears are only sent for claimsData/ts>0), stranding the
+                // ghost terrain PERMANENTLY instead of for one session. Retain the pre-clear
+                // stamp: it is a real server-issued value < the cached clear stamp, so next
+                // session's re-ask draws the clearing column again and a recovered consumer
+                // heals. Counts net zero: put swaps one >0 stamp for another.
+                put(packed, parkPreStamp);
+            } else {
+                // Park WITHOUT a fabricated or retained >0 stamp: the consumer never stored the
+                // data, so claiming ts>0 next session would be the same lie that causes a
+                // permanent hole. Drop the timestamp to -1 (honest "I hold nothing"). Next
+                // session it re-asks -1; a transient failure (storage briefly down) heals, a
+                // permanent one (incompatible consumer) costs one re-attempt per session.
+                this.timestamps.remove(packed);
+                if (old > 0) this.receivedCount--;
+                else if (old == 0) this.emptyCount--;
+            }
+            // Either way: session-satisfied so it stops re-downloading THIS session.
             this.sessionSatisfied.add(packed);
             this.validated.remove(packed);
             this.retry.remove(packed);
@@ -334,7 +396,8 @@ class ColumnStateMap {
         return this.timestamps;
     }
 
-    /** Raw stored timestamp for one position: -1 absent, 0 not-generated, &gt;0 received. */
+    /** Raw stored timestamp for one position: -1 absent, 0 a legacy pre-v17 cache artifact
+     *  (never written by v17 clients; purged at park — see onUpToDate), &gt;0 received. */
     long timestampFor(long packed) { return this.timestamps.get(packed); }
 
     boolean isEmptyMap() { return this.timestamps.isEmpty(); }

@@ -60,7 +60,7 @@ class PaperDirtyColumnBroadcasterTest {
         final List<String> sequence; // shared clear/send ordering log
 
         RecordingProcessor(Map<UUID, PaperPlayerRequestState> players, List<String> sequence) {
-            super(players, null, false, null, 32); // never start()ed
+            super(players, null, false, null, 32, 0); // never start()ed; memo off
             this.sequence = sequence;
         }
 

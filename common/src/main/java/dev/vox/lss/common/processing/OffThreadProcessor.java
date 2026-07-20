@@ -122,7 +122,8 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
     @SuppressWarnings("this-escape")
     protected OffThreadProcessor(Map<UUID, PlayerState> players,
                                   AbstractChunkDiskReader diskReader, boolean generationAvailable,
-                                  Path dataDir, int perDimensionTimestampCacheSizeMB) {
+                                  Path dataDir, int perDimensionTimestampCacheSizeMB,
+                                  int missMemoTtlSeconds) {
         this.players = players;
         this.diskReader = diskReader;
         this.generationAvailable = generationAvailable;
@@ -130,7 +131,9 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
         // ends in "/." and otherwise prints as "./world/./data/..." in every cache log line (#32)
         this.dataDir = dataDir == null ? null : dataDir.normalize();
         this.timestampCache = new ColumnTimestampCache(
-                ColumnTimestampCache.mbToEntries(perDimensionTimestampCacheSizeMB));
+                ColumnTimestampCache.mbToEntries(perDimensionTimestampCacheSizeMB),
+                java.util.concurrent.TimeUnit.SECONDS.toNanos(
+                        Math.max(0, missMemoTtlSeconds)));
         if (this.dataDir != null) {
             this.timestampCache.load(this.dataDir);
         }
@@ -187,13 +190,23 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
     }
 
     /**
-     * Feed a generation failure for a request whose ticket could not be submitted
-     * (e.g. generation capacity rejection). Delivered like any other generation outcome.
+     * Feed a generation failure for a request whose ticket could not be submitted.
+     * Delivered like any other generation outcome. {@code transientFailure = true} for
+     * transient pressure (capacity rejection, removed player) — dropped silently and
+     * counted superseded, so the client's re-declaration retries it; {@code false} only
+     * for permanent unservability, which answers ColumnNotGenerated (a session-permanent
+     * "stop asking" on the client).
      */
-    public void feedGenerationFailure(UUID playerUuid, int cx, int cz, String dimension, long submissionOrder) {
+    public void feedGenerationFailure(UUID playerUuid, int cx, int cz, String dimension,
+                                      long submissionOrder, boolean transientFailure) {
         synchronized (this.mailboxLock) {
+            // A transient feed is always a capacity/removed-player reject: the generation was
+            // never submitted, so the disk miss behind it counts into law A5's miss_dropped
+            // term (stamped on the outcome; the counter increments on the processing thread,
+            // which is the diagnostics class's single writer).
             this.pendingGenerationReady.add(new TickSnapshot.GenerationReadyData(
-                    playerUuid, cx, cz, dimension, null, 0L, submissionOrder));
+                    playerUuid, cx, cz, dimension, null, 0L, submissionOrder,
+                    transientFailure, transientFailure));
         }
     }
 
@@ -252,14 +265,21 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
                                             int cx, int cz,
                                             long submissionOrder);
 
+    /** True when the reader pool can accept a submit (see AbstractChunkDiskReader#hasHeadroom).
+     *  False when no reader is configured. */
+    boolean hasDiskHeadroom() {
+        return this.diskReader != null && this.diskReader.hasHeadroom();
+    }
+
     /**
      * Store timestamp and enqueue pre-serialized column data as a payload.
      */
     protected boolean enqueueLoadedColumn(PlayerState state, LoadedColumnData column,
                                           long columnTimestamp,
                                           long submissionOrder,
-                                          String dimension) {
-        return enqueueLoadedColumn(state, column, columnTimestamp, submissionOrder, dimension, false);
+                                          String dimension,
+                                          byte source) {
+        return enqueueLoadedColumn(state, column, columnTimestamp, submissionOrder, dimension, false, source);
     }
 
     /**
@@ -272,7 +292,8 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
                                           long columnTimestamp,
                                           long submissionOrder,
                                           String dimension,
-                                          boolean staleAgainstEdit) {
+                                          boolean staleAgainstEdit,
+                                          byte source) {
         if (column.serializedSections() == null || column.serializedSections().length == 0) {
             return false;
         }
@@ -287,7 +308,7 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
 
         return buildAndEnqueueColumnPayload(state, column.cx(), column.cz(), dimension,
                 columnTimestamp, submissionOrder,
-                column.serializedSections(), estimatedBytes);
+                column.serializedSections(), estimatedBytes, source);
     }
 
     /**
@@ -300,7 +321,8 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
     protected abstract boolean buildAndEnqueueColumnPayload(PlayerState state, int cx, int cz,
                                                              String dimension,
                                                              long columnTimestamp, long submissionOrder,
-                                                             byte[] sectionBytes, int estimatedBytes);
+                                                             byte[] sectionBytes, int estimatedBytes,
+                                                             byte source);
 
     // ---- Processing loop ----
 
@@ -476,7 +498,12 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
             for (var attachment : rg.group().attached()) {
                 var attachedState = this.players.get(attachment.playerUuid());
                 if (attachedState != null) {
-                    attachedState.removePendingByPosition(cx, cz);
+                    if (attachedState.removePendingByPosition(cx, cz) != null) {
+                        // The read backing this pending will never deliver and no message is
+                        // sent (pre-existing silent-drop path) — book it as superseded so the
+                        // request-conservation ledger closes.
+                        this.ctx.diagnostics().addSuperseded(1);
+                    }
                 }
             }
             // The read backing this group will never deliver — drop its stale-guard entry.
@@ -601,6 +628,14 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
                     // tear down a live new-dimension dedup group at the same packed position.
                     continue;
                 }
+                // Stale-snapshot session guard (the phase-2 twin of the router's): a dimension
+                // change can replace the state MID-CYCLE, after this snapshot was built. The
+                // snapshot-dimension check above then passes (both are the OLD dimension) while
+                // `state` is already the NEW session — delivering would mark an unearned
+                // done-bit on it (a stale up_to_date seal), worst on an A->B->A trip where the
+                // dimension strings match trivially. (Null = bare test rig, guard skipped.)
+                String registered = state.registeredDimension();
+                if (registered != null && !registered.equals(result.dimension())) continue;
                 int cx = result.chunkX();
                 int cz = result.chunkZ();
                 long packed = PositionUtil.packPosition(cx, cz);
@@ -621,7 +656,11 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
                     // Disk says the chunk no longer exists (region trimmed/deleted outside
                     // MC). A stale cached stamp would answer up_to_date to data-claiming
                     // clients forever — ghost terrain for a chunk the server cannot serve.
-                    int removed = this.timestampCache.invalidate(result.dimension(), new long[]{packed});
+                    // Stamps ONLY: the full invalidate() also clears miss-memo entries, and
+                    // this not-found is the very observation the memo write in
+                    // handleDiskNotFound just recorded — full invalidation here would erase
+                    // every memo the instant it was written.
+                    int removed = this.timestampCache.invalidateStamps(result.dimension(), new long[]{packed});
                     if (removed > 0 && !this.invalidationDirty) {
                         this.invalidationDirty = true;
                         this.invalidationCountdown = INVALIDATE_SAVE_MAX_CYCLES;
@@ -634,6 +673,11 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
                     for (var attachment : group.attached()) {
                         var attachedState = this.players.get(attachment.playerUuid());
                         if (attachedState == null) continue;
+                        // Same stale-snapshot session guard as the primary: an attached
+                        // player's state can also be swapped mid-cycle by a dimension change.
+                        String attachedRegistered = attachedState.registeredDimension();
+                        if (attachedRegistered != null
+                                && !attachedRegistered.equals(result.dimension())) continue;
                         deliverDiskResult(attachment.playerUuid(), attachedState, result,
                                 attachment.submissionOrder(), dimension, staleAgainstEdit);
                     }
@@ -644,7 +688,8 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
 
     /**
      * Deliver one disk read result to one recipient: resolve the pending entry (freeing its
-     * slot), then answer with RateLimited / not-found fallback / column data / up-to-date.
+     * slot), then answer with not-found fallback / column data / up-to-date — or, for a
+     * residual saturated result, drop it silently (counted superseded; the client re-declares).
      * Shared by the primary requester and every dedup-attached player.
      */
     private void deliverDiskResult(UUID playerUuid, PlayerState state, ChunkReadResult result,
@@ -656,12 +701,18 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
         var pending = state.removePendingByPosition(cx, cz);
 
         if (result.saturated()) {
-            this.ctx.sendActions().add(new SendAction.RateLimited(playerUuid, packed, state));
+            // Residual only: the router's headroom gate prevents submits into a full pool,
+            // so this fires only on races/shutdown. Silent drop — the pending slot was
+            // already freed above, no dedup/stale-guard teardown is needed for a result
+            // that already drained, and the client's next want-set re-declares the position.
+            this.ctx.diagnostics().addSuperseded(1);
             if (LSSLogger.isDebugEnabled()) {
-                LSSLogger.debug("Rate-limited " + playerUuid + " (disk saturated): chunk [" + cx + ", " + cz + "]");
+                LSSLogger.debug("Disk-saturated result dropped silently (superseded) for "
+                        + playerUuid + ": chunk [" + cx + ", " + cz + "]");
             }
         } else if (result.notFound()) {
-            handleDiskNotFound(playerUuid, state, packed, cx, cz, pending, dimension);
+            handleDiskNotFound(playerUuid, state, packed, cx, cz, pending, dimension,
+                    result.authoritativeMiss() && !staleAgainstEdit);
         } else {
             if (!staleAgainstEdit) {
                 state.markDiskReadDone(cx, cz);
@@ -670,7 +721,8 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
             boolean sent = !allAir
                     && buildAndEnqueueColumnPayload(state, cx, cz, result.dimension(),
                             result.columnTimestamp(), submissionOrder,
-                            result.sectionBytes(), result.estimatedBytes());
+                            result.sectionBytes(), result.estimatedBytes(),
+                            LSSConstants.COLUMN_SOURCE_DISK);
             if (!sent) {
                 // All-air chunk (no visible sections): a resync client (claimsData) may hold
                 // stale content here, so send an authoritative clearing 0-section column; a
@@ -681,7 +733,7 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
                 // up_to_date so the client keeps what it has.
                 boolean claimsData = pending != null && pending.claimsData();
                 if (!(allAir && claimsData && sendEmptiedColumn(state, cx, cz, result.dimension(),
-                        result.columnTimestamp(), submissionOrder))) {
+                        result.columnTimestamp(), submissionOrder, LSSConstants.COLUMN_SOURCE_DISK))) {
                     this.ctx.sendActions().add(new SendAction.ColumnUpToDate(playerUuid, packed, state));
                 }
             }
@@ -699,10 +751,10 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
      * could not be enqueued (caller falls back to up_to_date).
      */
     boolean sendEmptiedColumn(PlayerState state, int cx, int cz, String dimension,
-                              long columnTimestamp, long submissionOrder) {
+                              long columnTimestamp, long submissionOrder, byte source) {
         int est = ZERO_SECTION_COLUMN.length + LSSConstants.ESTIMATED_COLUMN_OVERHEAD_BYTES;
         return buildAndEnqueueColumnPayload(state, cx, cz, dimension, columnTimestamp,
-                submissionOrder, ZERO_SECTION_COLUMN, est);
+                submissionOrder, ZERO_SECTION_COLUMN, est, source);
     }
 
     /**
@@ -715,20 +767,122 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
         this.timestampCache.put(dimension, packed, columnTimestamp, this.cycleNow);
     }
 
-    /** Disk-first fallback: if the original request was GENERATION and generation is available,
-     *  queue a generation ticket; otherwise send ColumnNotGenerated. */
+    /** Package-private test seam: the internal timestamp cache, so in-package tests can pin
+     *  cache-coupled invariants that have no behavioral observable through the gated router
+     *  rung (e.g. that a gen-disabled server writes no memo entries at all). */
+    ColumnTimestampCache timestampCacheForTest() {
+        return this.timestampCache;
+    }
+
+    /** Server-owned generation: a disk miss IS the generation trigger — no client
+     *  classification is consulted. Gen available: take a GENERATION slot and queue a
+     *  ticket; a full slot is TRANSIENT (silent drop, counted superseded — the next
+     *  want-set declaration retries the miss; a NOT_GENERATED here would blank the
+     *  position for the whole session). Gen unavailable: ColumnNotGenerated — the one
+     *  permanent disposition, the client stops asking until a dirty broadcast revives it. */
     private void handleDiskNotFound(UUID playerUuid, PlayerState state, long packed,
-                                     int cx, int cz, PendingRequest pending, String dimension) {
-        if (pending != null && pending.type() == RequestType.GENERATION && this.generationAvailable) {
-            if (state.tryAdmit(new PendingRequest(cx, cz, RequestType.GENERATION, SlotType.GENERATION, pending.claimsData()))) {
-                addGenerationInFlight(playerUuid, dimension, packed);
-                this.ctx.generationTicketRequests().add(new GenerationTicketRequest(
-                        playerUuid, cx, cz, dimension, this.ctx.sequence().next()));
-            } else {
-                this.ctx.sendActions().add(new SendAction.ColumnNotGenerated(playerUuid, packed, state));
-            }
-        } else {
+                                     int cx, int cz, PendingRequest pending, String dimension,
+                                     boolean authoritativeMiss) {
+        if (pending == null) {
+            // No live pending backs this delivery (duplicate/raced result). Under permanent
+            // NOT_GENERATED semantics a wire answer here could session-satisfy a position off
+            // a ghost delivery — drop silently; a still-wanted position is re-declared. Also
+            // no memo write: a raced observation is stale by construction.
+            this.ctx.diagnostics().addSuperseded(1);
+            this.ctx.diagnostics().addMissDropped(1); // law A5: a miss with no submit, no answer
+            return;
+        }
+        if (authoritativeMiss && this.generationAvailable) {
+            // Memoize the miss BEFORE the gen ladder runs — a gated or slot-full drop still
+            // learned the chunk is absent, and the memo is what stops the next 1 Hz
+            // re-declaration from re-reading disk to re-learn it. NEVER written for an
+            // error/timeout-triaged not-found (says nothing about existence), a ghost, or an
+            // edit-overtaken delivery (the caller strips the flag: an invalidation consumed
+            // this cycle means a save happened while the read flew — re-asserting absence
+            // would undo the falsifying clear with its one falsification event already
+            // spent). Gen-disabled servers skip the write too: the rung that reads the memo
+            // is gated on generationAvailable, and entries only expire lazily on read — a
+            // write nothing reads would linger until wholesale eviction.
+            this.timestampCache.putMiss(dimension, packed, System.nanoTime());
+        }
+        if (!this.generationAvailable) {
             this.ctx.sendActions().add(new SendAction.ColumnNotGenerated(playerUuid, packed, state));
+            return;
+        }
+        escalateMissToGeneration(playerUuid, state, packed, cx, cz, pending.claimsData(),
+                dimension, "miss");
+    }
+
+    /** Admission-order diagnosis (-Dlss.admissionTrace=true, dev servers only — see
+     *  test-server.sh): one line per generation-admission decision with the candidate
+     *  ring, the live frontier stamp, and the nearest in-flight rings, so a live far-arc
+     *  report can be pinned to either a gate leak (candidate outside its window at
+     *  admission) or completion displacement (legal admission, moved player). */
+    private static final boolean ADMISSION_TRACE = Boolean.getBoolean("lss.admissionTrace");
+
+    private void traceAdmission(PlayerState state, int cx, int cz, String via, String verdict) {
+        int[] near = state.nearestPendingRingsForTrace();
+        LSSLogger.info("[lss-adm] c=" + cx + "," + cz
+                + " r=" + state.ringFromPlayerForTrace(cx, cz)
+                + " f=" + state.liveFrontierRingForTrace()
+                + " sync=" + near[0] + " gen=" + near[1]
+                + " via=" + via + " v=" + verdict);
+    }
+
+    /**
+     * The gen-available half of the miss ladder, shared by the real disk-miss path
+     * ({@link #handleDiskNotFound}) and the router's miss-memo rung so the ladder cannot
+     * drift. Order-spread gate, the pacing rules ("generation never overtakes nearer
+     * in-flight work": nearer-pending-SYNC hold + generation cohort span), then GENERATION
+     * slot admission + stale-guard registration + ticket enqueue, or the standard silent
+     * transient drop. Never a wire answer.
+     *
+     * <p>The pacing rules apply to BOTH paths deliberately (they were briefly memo-only,
+     * justified by the delivery path's "emergent pacing" — escalations arrive in
+     * read-completion ≈ proximity order. That justification only holds for a STATIONARY
+     * player with fast reads: under movement, read completions are proximity-ordered
+     * relative to the SUBMISSION-time position, and with memo-accelerated generation
+     * starving reads by seconds, a stale far delivery escalated unpaced was the
+     * "isolated chunks generating out in space ahead of a moving player" bug. A held
+     * delivery is memoized + dropped and re-enters through the closest-first drain, so
+     * pacing everywhere converts delivery disorder into drain order — the drain becomes
+     * the sole effective orderer of generation admission.)
+     */
+    void escalateMissToGeneration(UUID playerUuid, PlayerState state, long packed,
+                                   int cx, int cz, boolean claimsData, String dimension,
+                                   String via) {
+        if (state.generationOvertakesNearerInFlight(cx, cz,
+                LSSConstants.MAX_GENERATION_COHORT_SPAN)) {
+            // Ordering refusal, same disposition as the spread gate: the standard
+            // transient drop, re-declared at 1 Hz, admitted once the nearer work resolves.
+            if (ADMISSION_TRACE) traceAdmission(state, cx, cz, via, "hold_pacing");
+            this.ctx.diagnostics().addSuperseded(1);
+            this.ctx.diagnostics().addMissDropped(1); // law A5: a miss with no submit, no answer
+            this.ctx.diagnostics().addGenOrderGated(1);
+            return;
+        }
+        if (state.generationOrderSpreadExceeded(cx, cz, LSSConstants.MAX_GENERATION_RING_SPREAD)) {
+            // Order-spread gate: the platform scheduler owns completion order (chunk-system
+            // rewrites like C2ME are not FIFO), so an unbounded per-slot refill lets far
+            // tickets pile in above a starving near one and the world fills far-before-near.
+            // Refusal is the standard transient drop — re-declared at 1 Hz, admitted once
+            // the head resolves (or its generation timeout clears it).
+            if (ADMISSION_TRACE) traceAdmission(state, cx, cz, via, "hold_spread");
+            this.ctx.diagnostics().addSuperseded(1);
+            this.ctx.diagnostics().addMissDropped(1); // law A5: a miss with no submit, no answer
+            this.ctx.diagnostics().addGenOrderGated(1);
+            return;
+        }
+        if (state.tryAdmit(new PendingRequest(cx, cz, SlotType.GENERATION, claimsData))) {
+            if (ADMISSION_TRACE) traceAdmission(state, cx, cz, via, "admit");
+            addGenerationInFlight(playerUuid, dimension, packed);
+            this.ctx.generationTicketRequests().add(new GenerationTicketRequest(
+                    playerUuid, cx, cz, dimension, this.ctx.sequence().next()));
+        } else {
+            // Transient: the gen slot cap is momentarily full — never a wire answer.
+            if (ADMISSION_TRACE) traceAdmission(state, cx, cz, via, "slot_full");
+            this.ctx.diagnostics().addSuperseded(1);
+            this.ctx.diagnostics().addMissDropped(1); // law A5: a miss with no submit, no answer
         }
     }
 
@@ -740,6 +894,13 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
             int cx = entry.cx();
             int cz = entry.cz();
             long packed = PositionUtil.packPosition(cx, cz);
+            // Miss memo: generation FINISHING — in every outcome flavor (delivered, all-air,
+            // permanent failure, transient timeout, player gone, dimension changed) — clears
+            // the memoized absence BEFORE any per-player continue below: the miss is a fact
+            // about the world, not about a player, and the world just changed (or the claim
+            // must be re-derived). Successful deliveries also clear via the put() choke
+            // point; this explicit clear covers the non-serving outcomes.
+            this.timestampCache.clearMiss(entry.dimension(), packed);
             // Retire the in-flight generation record for EVERY drained outcome (delivered,
             // all-air, not-generated, player gone, dimension changed); an outcome that never
             // drains because the player left is retired by removeGenerationTracking on the
@@ -753,10 +914,39 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
             // skip them instead of poisoning the fresh state (their pending died with it).
             String current = snapshot.playerDimensions().get(entry.playerUuid());
             if (current == null || !current.equals(entry.dimension())) continue;
+            // Stale-snapshot session guard (the phase-3 twin of the router's): when a
+            // dimension change swaps the state MID-CYCLE, the snapshot check above compares
+            // OLD-vs-OLD and passes while `state` is already the fresh session. Gate on the
+            // STATE's own registered dimension so an old-session outcome cannot mark a
+            // done-bit — or, worse, answer a session-permanent NOT_GENERATED — on the fresh
+            // session. (Null = bare test rig, guard skipped. A double swap within one ~50ms
+            // cycle could still string-match, but registration takes multiple ticks.)
+            String registered = state.registeredDimension();
+            if (registered != null && !registered.equals(entry.dimension())) continue;
+            // Completion-order evidence (diagnostics only): a successful completion while a
+            // NEARER ticket is still outstanding means the platform scheduler finished
+            // far-before-near. A high rate here is the C2ME-style inversion signature that
+            // the order-spread gate in handleDiskNotFound exists to bound.
+            if (entry.columnData() != null && state.hasNearerOutstandingGeneration(cx, cz)) {
+                this.ctx.diagnostics().addGenCompletionInversion(1);
+            }
             var pending = state.removePendingByPosition(cx, cz);
 
             if (entry.columnData() == null) {
-                this.ctx.sendActions().add(new SendAction.ColumnNotGenerated(entry.playerUuid(), packed, state));
+                if (entry.transientFailure()) {
+                    // Transient outcome (timeout / capacity reject): never a wire answer —
+                    // NOT_GENERATED is session-permanent on the client, so transient pressure
+                    // must drop silently (counted superseded) and heal by re-declaration.
+                    this.ctx.diagnostics().addSuperseded(1);
+                    if (entry.missDropped()) {
+                        // Capacity/removed-player reject: the miss produced neither a
+                        // generation submission nor a wire answer (law A5's miss_dropped term;
+                        // a timeout outcome skips this — its submission balanced the miss).
+                        this.ctx.diagnostics().addMissDropped(1);
+                    }
+                } else {
+                    this.ctx.sendActions().add(new SendAction.ColumnNotGenerated(entry.playerUuid(), packed, state));
+                }
             } else {
                 // A dirty invalidation overtook this generation while its outcome was buffered:
                 // the serialized bytes predate the edit. Deliver the column (better than
@@ -769,7 +959,8 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
                 byte[] genSections = entry.columnData().serializedSections();
                 boolean allAir = genSections == null || genSections.length == 0;
                 boolean sent = !allAir && this.enqueueLoadedColumn(state, entry.columnData(),
-                        entry.columnTimestamp(), entry.submissionOrder(), entry.dimension(), genStale);
+                        entry.columnTimestamp(), entry.submissionOrder(), entry.dimension(), genStale,
+                        LSSConstants.COLUMN_SOURCE_GENERATION);
                 if (!sent) {
                     if (allAir && !genStale) {
                         // Stamp so future resyncs at this timestamp converge to a cheap
@@ -785,8 +976,9 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
                     // deliverDiskResult: clearing would erase real terrain; answer up_to_date.
                     boolean claimsData = pending != null && pending.claimsData();
                     if (!(allAir && claimsData && sendEmptiedColumn(state, cx, cz, entry.dimension(),
-                            entry.columnTimestamp(), entry.submissionOrder()))) {
-                        this.sendActions.add(new SendAction.ColumnUpToDate(entry.playerUuid(), packed, state));
+                            entry.columnTimestamp(), entry.submissionOrder(),
+                            LSSConstants.COLUMN_SOURCE_GENERATION))) {
+                        this.ctx.sendActions().add(new SendAction.ColumnUpToDate(entry.playerUuid(), packed, state));
                     }
                 }
             }

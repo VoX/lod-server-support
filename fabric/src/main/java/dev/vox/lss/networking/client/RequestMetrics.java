@@ -23,7 +23,6 @@ class RequestMetrics {
     private long totalColumnsReceived = 0;
     private long totalUpToDate = 0;
     private long totalNotGenerated = 0;
-    private long totalRateLimited = 0;
     private long totalIngestFailures = 0;
 
     // Rolling rate tracking (EWMA, updated every second)
@@ -110,10 +109,6 @@ class RequestMetrics {
         this.totalNotGenerated++;
     }
 
-    void recordRateLimited() {
-        this.totalRateLimited++;
-    }
-
     void recordIngestFailure() {
         this.totalIngestFailures++;
     }
@@ -163,7 +158,6 @@ class RequestMetrics {
     long getTotalColumnsReceived() { return this.totalColumnsReceived; }
     long getTotalUpToDate() { return this.totalUpToDate; }
     long getTotalNotGenerated() { return this.totalNotGenerated; }
-    long getTotalRateLimited() { return this.totalRateLimited; }
     long getTotalIngestFailures() { return this.totalIngestFailures; }
     double getReceiveRate() { return this.receiveRate; }
     double getRequestRate() { return this.requestRate; }

@@ -1,5 +1,6 @@
 package dev.vox.lss.paper;
 
+import dev.vox.lss.common.HandshakeGate;
 import dev.vox.lss.common.LSSConstants;
 import dev.vox.lss.common.PositionUtil;
 import io.netty.buffer.Unpooled;
@@ -84,19 +85,29 @@ class LSSPaperPluginGlueTest {
         return c;
     }
 
-    private record Reply(int protocolVersion, boolean enabled, int lodDistanceChunks,
-                         int syncLimit, int genLimit, boolean generationEnabled) {}
+    private record Reply(HandshakeGate.WireDialect dialect, boolean enabled, int lodDistanceChunks,
+                         int syncCap, int genCap, boolean generationEnabled) {}
 
     private static final class RecordingSender implements LSSPaperPlugin.SessionConfigSender {
         final List<Reply> replies = new ArrayList<>();
 
         @Override
-        public void send(int protocolVersion, boolean enabled, int lodDistanceChunks,
-                         int syncOnLoadConcurrencyLimitPerPlayer,
-                         int generationConcurrencyLimitPerPlayer, boolean generationEnabled) {
-            replies.add(new Reply(protocolVersion, enabled, lodDistanceChunks,
-                    syncOnLoadConcurrencyLimitPerPlayer, generationConcurrencyLimitPerPlayer,
+        public void send(HandshakeGate.WireDialect dialect, boolean enabled, int lodDistanceChunks,
+                         int syncCap, int genCap, boolean generationEnabled) {
+            replies.add(new Reply(dialect, enabled, lodDistanceChunks, syncCap, genCap,
                     generationEnabled));
+        }
+    }
+
+    /** Registrar recorder: capabilities + the dialect the glue handed over. */
+    private static final class RecordingRegistrar implements LSSPaperPlugin.HandshakeRegistrar {
+        final List<Integer> caps = new ArrayList<>();
+        final List<HandshakeGate.WireDialect> dialects = new ArrayList<>();
+
+        @Override
+        public void register(int capabilities, HandshakeGate.WireDialect dialect) {
+            caps.add(capabilities);
+            dialects.add(dialect);
         }
     }
 
@@ -105,15 +116,15 @@ class LSSPaperPluginGlueTest {
     @Test
     void versionMismatchSendsZeroFramesAndRegistersNobody() {
         var sender = new RecordingSender();
-        var registered = new ArrayList<Integer>();
+        var registrar = new RecordingRegistrar();
         for (int version : new int[]{V + 1, V - 1}) {
             LSSPaperPlugin.handleHandshake(handshakeFrame(version, VOXEL_CAPS),
-                    "Steve", config(true), true, sender, registered::add);
+                    "Steve", config(true), true, sender, registrar);
         }
         assertEquals(List.of(), sender.replies,
                 "VERSION_MISMATCH must send NOTHING: the sender seam is the glue's only path to "
                         + "sendRawNmsPayload, and any reply decodes as garbage on the skewed client and kicks it");
-        assertEquals(List.of(), registered, "a version-skewed client must never be registered");
+        assertEquals(List.of(), registrar.caps, "a version-skewed client must never be registered");
     }
 
     @Test
@@ -121,67 +132,102 @@ class LSSPaperPluginGlueTest {
         // Pre-capabilities clients send only the protocol VarInt; the decoder defaults caps=0,
         // which must classify NO_CONSUMER: reply with the session config, never register.
         var sender = new RecordingSender();
-        var registered = new ArrayList<Integer>();
+        var registrar = new RecordingRegistrar();
         LSSPaperPlugin.handleHandshake(frame(b -> b.writeVarInt(V)),
-                "Steve", config(true), true, sender, registered::add);
+                "Steve", config(true), true, sender, registrar);
         assertEquals(1, sender.replies.size(), "NO_CONSUMER still receives the session config");
         assertTrue(sender.replies.get(0).enabled(),
                 "enabled config + present service advertise effectiveEnabled=true even to a consumer-less client");
-        assertEquals(List.of(), registered,
+        assertEquals(List.of(), registrar.caps,
                 "caps=0 must never register: a registered consumer-less client is a zombie state that ignores every request");
     }
 
     @Test
     void happyPathRegistersWithTheExactCapabilitiesBitmask() {
         var sender = new RecordingSender();
-        var registered = new ArrayList<Integer>();
+        var registrar = new RecordingRegistrar();
         int caps = VOXEL_CAPS | 0x40; // future bit must pass through untouched
         LSSPaperPlugin.handleHandshake(handshakeFrame(V, caps),
-                "Steve", config(true), true, sender, registered::add);
+                "Steve", config(true), true, sender, registrar);
         assertEquals(1, sender.replies.size());
-        assertEquals(List.of(caps), registered,
+        assertEquals(List.of(caps), registrar.caps,
                 "registration receives the client's full capabilities bitmask, not a normalized one");
+        assertEquals(List.of(HandshakeGate.WireDialect.V18), registrar.dialects);
     }
 
     @Test
     void sessionConfigReplyWiresEachConfigFieldToItsWireSlot() {
-        // Pairwise-distinct ints and opposed booleans: any argument transposition at the call
-        // site (notably the adjacent sync/generation limits) produces a wire-valid frame that
-        // live runs survive, so this is the only place a swap can fail.
+        // Distinct values and opposed booleans: any argument transposition at the call site
+        // produces a wire-valid frame that live runs survive, so this is the only place a
+        // swap can fail. (4-field frame — the concurrency caps left the wire.)
         var config = config(true);
         config.lodDistanceChunks = 101;
-        config.syncOnLoadConcurrencyLimitPerPlayer = 102;
-        config.generationConcurrencyLimitPerPlayer = 103;
+        config.generationConcurrencyLimitPerPlayer = 7; // pairwise-distinct from the 200 sync cap
         config.enableChunkGeneration = false; // differs from effectiveEnabled=true
         var sender = new RecordingSender();
         LSSPaperPlugin.handleHandshake(handshakeFrame(V, VOXEL_CAPS),
-                "Steve", config, true, sender, caps -> {});
+                "Steve", config, true, sender, (caps, dialect) -> {});
 
-        assertEquals(List.of(new Reply(V, true, 101, 102, 103, false)), sender.replies,
+        assertEquals(List.of(new Reply(HandshakeGate.WireDialect.V18, true, 101,
+                        LSSConstants.SYNC_ON_LOAD_SLOT_CAP, 7, false)), sender.replies,
                 "each PaperConfig field must land in its own session-config slot");
+    }
+
+    @Test
+    void v16HandshakeGetsTheV16DialectReplyAndRegistration() {
+        // A legacy protocol-16 client under enableV16Compat (default true) must take the
+        // SAME ladder with the V16 dialect: the sender gets the dialect + the real admission
+        // caps (they are the old client's pacing), and the registrar learns the dialect so
+        // it can create the compat session before the mailboxed registration.
+        var config = config(true);
+        config.lodDistanceChunks = 101;
+        config.generationConcurrencyLimitPerPlayer = 7;
+        config.enableChunkGeneration = false; // opposed to effectiveEnabled=true (swap guard)
+        var sender = new RecordingSender();
+        var registrar = new RecordingRegistrar();
+        LSSPaperPlugin.handleHandshake(handshakeFrame(16, VOXEL_CAPS),
+                "Herobrine", config, true, sender, registrar);
+
+        assertEquals(List.of(new Reply(HandshakeGate.WireDialect.V16, true, 101,
+                        LSSConstants.SYNC_ON_LOAD_SLOT_CAP, 7, false)), sender.replies);
+        assertEquals(List.of(VOXEL_CAPS), registrar.caps);
+        assertEquals(List.of(HandshakeGate.WireDialect.V16), registrar.dialects);
+    }
+
+    @Test
+    void v16HandshakeWithCompatDisabledSendsNothing() {
+        var config = config(true);
+        config.enableV16Compat = false;
+        var sender = new RecordingSender();
+        var registrar = new RecordingRegistrar();
+        LSSPaperPlugin.handleHandshake(handshakeFrame(16, VOXEL_CAPS),
+                "Herobrine", config, true, sender, registrar);
+        assertEquals(List.of(), sender.replies,
+                "the kill switch restores the strict silent version gate");
+        assertEquals(List.of(), registrar.caps);
     }
 
     @Test
     void disabledConfigOrAbsentServiceAdvertisesDisabledWithoutRegistering() {
         var sender = new RecordingSender();
-        var registered = new ArrayList<Integer>();
+        var registrar = new RecordingRegistrar();
         LSSPaperPlugin.handleHandshake(handshakeFrame(V, VOXEL_CAPS),
-                "Steve", config(false), true, sender, registered::add);
+                "Steve", config(false), true, sender, registrar);
         LSSPaperPlugin.handleHandshake(handshakeFrame(V, VOXEL_CAPS),
-                "Steve", config(true), false, sender, registered::add);
+                "Steve", config(true), false, sender, registrar);
         assertEquals(2, sender.replies.size(), "DISABLED still replies (advertises disabled)");
         assertFalse(sender.replies.get(0).enabled(), "enabled=false config advertises disabled");
         assertFalse(sender.replies.get(1).enabled(), "absent service advertises disabled");
-        assertEquals(List.of(), registered);
+        assertEquals(List.of(), registrar.caps);
     }
 
     @Test
     void emptyFrameNeverRepliesNorRegisters() {
         var sender = new RecordingSender();
-        var registered = new ArrayList<Integer>();
-        LSSPaperPlugin.handleHandshake(new byte[0], "Steve", config(true), true, sender, registered::add);
+        var registrar = new RecordingRegistrar();
+        LSSPaperPlugin.handleHandshake(new byte[0], "Steve", config(true), true, sender, registrar);
         assertEquals(List.of(), sender.replies, "undecodable handshake must not produce a reply");
-        assertEquals(List.of(), registered);
+        assertEquals(List.of(), registrar.caps);
     }
 
     // ---- plugin-message dispatch containment ----
@@ -195,7 +241,7 @@ class LSSPaperPluginGlueTest {
         try (var capture = new LssLogCapture()) {
             assertDoesNotThrow(() -> LSSPaperPlugin.dispatchPluginMessage(
                     LSSConstants.CHANNEL_HANDSHAKE, "Steve", garbage,
-                    data -> LSSPaperPlugin.handleHandshake(data, "Steve", config(true), true, sender, caps -> {}),
+                    data -> LSSPaperPlugin.handleHandshake(data, "Steve", config(true), true, sender, (caps, dialect) -> {}),
                     data -> { throw new AssertionError("handshake frame must not reach the chunk-request handler"); }),
                     "a malformed frame must never propagate into Bukkit's messenger");
             assertEquals(List.of(), sender.replies, "no partial handshake handling");
@@ -210,7 +256,7 @@ class LSSPaperPluginGlueTest {
             // The channel survives: the next (valid) message dispatches normally.
             LSSPaperPlugin.dispatchPluginMessage(
                     LSSConstants.CHANNEL_HANDSHAKE, "Steve", handshakeFrame(V, VOXEL_CAPS),
-                    data -> LSSPaperPlugin.handleHandshake(data, "Steve", config(true), true, sender, caps -> {}),
+                    data -> LSSPaperPlugin.handleHandshake(data, "Steve", config(true), true, sender, (caps, dialect) -> {}),
                     data -> { throw new AssertionError("handshake frame must not reach the chunk-request handler"); });
             assertEquals(1, sender.replies.size(), "subsequent messages still dispatch after a contained failure");
             assertEquals(1, capture.rows().stream().filter(r -> r.level() == Level.ERROR).count());

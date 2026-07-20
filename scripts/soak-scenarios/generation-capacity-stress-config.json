@@ -2,7 +2,6 @@
   "lodDistanceChunks": 12,
   "generationConcurrencyLimitPerPlayer": 8,
   "generationConcurrencyLimitGlobal": 1,
-  "syncOnLoadConcurrencyLimitPerPlayer": 200,
   "dirtyBroadcastIntervalSeconds": 5,
   "diskReaderThreads": 5
 }

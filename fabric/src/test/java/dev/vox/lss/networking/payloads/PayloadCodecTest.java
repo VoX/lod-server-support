@@ -53,15 +53,13 @@ class PayloadCodecTest {
     void sessionConfigRoundtrip() {
         // Must use the live protocol version: the decoder treats any other version as a
         // foreign layout and drains the frame instead of reading the fields.
-        var original = new SessionConfigS2CPayload(LSSConstants.PROTOCOL_VERSION, true, 128, 100, 40, true);
+        var original = new SessionConfigS2CPayload(LSSConstants.PROTOCOL_VERSION, true, 128, true);
         var b = buf();
         SessionConfigS2CPayload.CODEC.encode(b, original);
         var decoded = SessionConfigS2CPayload.CODEC.decode(b);
         assertEquals(original.protocolVersion(), decoded.protocolVersion());
         assertEquals(original.enabled(), decoded.enabled());
         assertEquals(original.lodDistanceChunks(), decoded.lodDistanceChunks());
-        assertEquals(original.syncOnLoadConcurrencyLimitPerPlayer(), decoded.syncOnLoadConcurrencyLimitPerPlayer());
-        assertEquals(original.generationConcurrencyLimitPerPlayer(), decoded.generationConcurrencyLimitPerPlayer());
         assertEquals(original.generationEnabled(), decoded.generationEnabled());
         b.release();
     }
@@ -71,7 +69,8 @@ class PayloadCodecTest {
     @Test
     void batchResponseRoundtrip() {
         byte[] types = {
-                LSSConstants.RESPONSE_RATE_LIMITED,
+                (byte) 0, // the retired-and-reserved v16 rate-limited tag: the codec is
+                          // type-agnostic and must still round-trip it unaltered
                 LSSConstants.RESPONSE_UP_TO_DATE,
                 LSSConstants.RESPONSE_NOT_GENERATED
         };

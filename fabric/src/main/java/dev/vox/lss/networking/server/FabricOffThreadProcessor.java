@@ -34,8 +34,10 @@ public class FabricOffThreadProcessor extends OffThreadProcessor<PlayerRequestSt
     public FabricOffThreadProcessor(Map<UUID, PlayerRequestState> players,
                                      ChunkDiskReader diskReader,
                                      boolean generationAvailable,
-                                     Path dataDir, int perDimensionTimestampCacheSizeMB) {
-        super(players, diskReader, generationAvailable, dataDir, perDimensionTimestampCacheSizeMB);
+                                     Path dataDir, int perDimensionTimestampCacheSizeMB,
+                                     int missMemoTtlSeconds) {
+        super(players, diskReader, generationAvailable, dataDir, perDimensionTimestampCacheSizeMB,
+                missMemoTtlSeconds);
         this.diskReader = diskReader;
     }
 
@@ -66,7 +68,8 @@ public class FabricOffThreadProcessor extends OffThreadProcessor<PlayerRequestSt
     protected boolean buildAndEnqueueColumnPayload(PlayerRequestState state, int cx, int cz,
                                                     String dimension,
                                                     long columnTimestamp, long submissionOrder,
-                                                    byte[] sectionBytes, int estimatedBytes) {
+                                                    byte[] sectionBytes, int estimatedBytes,
+                                                    byte source) {
         if (sectionBytes.length > LSSConstants.MAX_SEND_SECTIONS_SIZE) {
             LSSLogger.warn("Dropping oversized column [" + cx + ", " + cz + "] in " + dimension
                     + ": " + sectionBytes.length + " bytes exceeds send limit "
@@ -84,7 +87,7 @@ public class FabricOffThreadProcessor extends OffThreadProcessor<PlayerRequestSt
         var dimensionKey = this.dimensionKeyCache.computeIfAbsent(dimension,
                 d -> ResourceKey.create(Registries.DIMENSION, Identifier.parse(d)));
         var payload = new VoxelColumnS2CPayload(cx, cz, dimensionKey, columnTimestamp,
-                sectionBytes);
+                source, sectionBytes);
         state.addReadyPayload(new QueuedPayload<>(payload, estimatedBytes, submissionOrder,
                 PositionUtil.packPosition(cx, cz)));
         return true;

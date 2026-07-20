@@ -9,12 +9,15 @@ import dev.vox.lss.common.LSSLogger;
 import dev.vox.lss.common.PositionUtil;
 import dev.vox.lss.common.SharedBandwidthLimiter;
 
+import java.util.ArrayDeque;
+import java.util.Collections;
+import java.util.List;
 import java.util.PriorityQueue;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Base class for per-player request state, generic on the queued payload type.
@@ -40,14 +43,6 @@ public abstract class AbstractPlayerRequestState<T> {
     // Null in bare test rigs (guard is skipped) — both platform services always set it.
     private volatile String registeredDimension;
 
-    // Bound on the per-player incoming queue: a flooding client must not grow it without
-    // limit (heap OOM / main-thread DoS). Dropped entries are harmless — the client re-requests
-    // un-acked positions on its next scan. Counts are approximate (best-effort under races).
-    private static final int MAX_INCOMING_QUEUE = 16384;
-
-    // Network handler → processing thread (thread-safe intermediaries)
-    private final ConcurrentLinkedQueue<IncomingRequest> incomingRequests = new ConcurrentLinkedQueue<>();
-    private final AtomicInteger incomingRequestCount = new AtomicInteger();
     // Processing thread → main thread (thread-safe output)
     private final ConcurrentLinkedQueue<QueuedPayload<T>> readyPayloads = new ConcurrentLinkedQueue<>();
 
@@ -64,9 +59,48 @@ public abstract class AbstractPlayerRequestState<T> {
     private final ConcurrentHashMap<Long, Integer> enqueuedColumns = new ConcurrentHashMap<>();
     private final PlayerBandwidthTracker bandwidth = new PlayerBandwidthTracker();
     private final AtomicLong totalRequestsReceived = new AtomicLong();
-    private final AtomicLong totalIncomingDropped = new AtomicLong();
     // Single-writer (main thread) — volatile for cross-thread visibility to processing thread
     private volatile int sendQueueSizeSnapshot = 0;
+
+    // ---- Want-set mailbox + backlog (protocol v17) ----
+
+    // Network/region thread → processing thread, latest-wins: a batch overwritten before
+    // consumption is superseded wholesale — exactly the want-set replace semantics. This
+    // bounds ingress at ONE batch (≤ MAX_BATCH_CHUNK_REQUESTS entries) regardless of client
+    // behavior, replacing the old MAX_INCOMING_QUEUE flood bound.
+    private final AtomicReference<IncomingBatch> pendingBatch = new AtomicReference<>();
+    // Cross-thread superseded/range-filtered events accumulate here and are drained into
+    // ProcessingDiagnostics by the processing thread each cycle, preserving that class's
+    // single-writer design. Counts pending at player removal die with the state (same as
+    // the old incoming queue's contents — accepted, see the soak run-boundary handling).
+    private final AtomicLong pendingSuperseded = new AtomicLong();
+    private final AtomicLong pendingRangeFiltered = new AtomicLong();
+
+    // Processing-thread-owned want backlog: replaced wholesale by each taken batch,
+    // consumed in order (closest-first by construction — the client emits ring order).
+    private final ArrayDeque<IncomingRequest> backlog = new ArrayDeque<>();
+    // Single-writer (processing thread) — volatile for exporter/diagnostic reads.
+    private volatile int backlogSizeSnapshot = 0;
+
+    // The want-set the processing thread most recently applied to the backlog. This is the
+    // main-thread probe's FALLBACK source, read when the mailbox is empty — which is almost
+    // always: takeIncomingBatch() nulls the mailbox within ~50ms of arrival (the processing loop
+    // polls at 20Hz) while batches arrive at only 1Hz, so a probe reading the mailbox ALONE would
+    // see null on ~19 of every 20 ticks. This carries a want-set too large for the per-player slot
+    // cap across the cycles that work it off. (The mailbox arm is not redundant with it: it is the
+    // only thing that probes a batch on its ARRIVAL tick, before this field is even written — see
+    // the probeLoadedChunks javadoc on either platform.) Published on apply, cleared when the
+    // backlog drains so a converged player is not probed forever. Single-writer (processing
+    // thread), volatile for the main thread's read; IncomingBatch is immutable.
+    //
+    // INVARIANT: published iff the backlog is non-empty — i.e. exactly while work is still owed.
+    // Maintained in three places: replaceBacklogWith (apply), pollBacklog (null on drain-to-empty)
+    // and restoreBacklog (republish, because the steady-state pass drains before it restores).
+    private volatile IncomingBatch publishedWantSet;
+
+    // The want-set most recently applied to the backlog, retained so restoreBacklog can republish
+    // on a cycle where no new batch arrived (batches land at 1Hz; the pass runs at 20Hz).
+    private IncomingBatch appliedWantSet;
 
     // Admission slots: caps are immutable; held counts are derived from the pending map
     // (single-writer: processing thread; volatile for /lsslod command reads).
@@ -111,17 +145,299 @@ public abstract class AbstractPlayerRequestState<T> {
         return this.hasHandshake;
     }
 
-    // ---- Incoming request helpers (subclasses call these from addRequest) ----
+    // ---- Want-set mailbox (any thread) ----
 
-    protected void enqueueIncomingRequest(IncomingRequest request) {
-        if (this.incomingRequestCount.get() >= MAX_INCOMING_QUEUE) {
-            this.totalIncomingDropped.incrementAndGet();
+    /** Offer a decoded batch (any thread). Latest-wins; an overwritten batch is superseded. */
+    public void offerIncomingBatch(IncomingBatch batch) {
+        this.totalRequestsReceived.addAndGet(batch.size());
+        var previous = this.pendingBatch.getAndSet(batch);
+        if (previous != null) {
+            this.pendingSuperseded.addAndGet(previous.size());
+        }
+    }
+
+    /** Non-destructive read of the MAILBOX. Read by the main-thread probe (its first source:
+     *  this is a batch that has not been applied yet, so it is probed on its arrival tick),
+     *  the Folia hold-release, and tests. See also {@link #peekWantSet}, the fallback source
+     *  for the ~19 ticks per second on which no batch arrives. */
+    public IncomingBatch peekIncomingBatch() {
+        return this.pendingBatch.get();
+    }
+
+    /** Main-thread loaded-chunk probe FALLBACK source (after {@link #peekIncomingBatch}): the
+     *  applied want-set, or null when nothing pends. */
+    public IncomingBatch peekWantSet() {
+        return this.publishedWantSet;
+    }
+
+    /** Processing thread: publish on apply, publish(null) when the backlog drains to empty. */
+    public void publishWantSet(IncomingBatch batch) {
+        this.publishedWantSet = batch;
+    }
+
+    /** Consume the pending batch (processing thread; Folia pump during hold-release). */
+    public IncomingBatch takeIncomingBatch() {
+        return this.pendingBatch.getAndSet(null);
+    }
+
+    /**
+     * Folia hold-release republish: put a held batch back ONLY if no newer batch arrived
+     * during the hold — a newer batch supersedes the held one (never resurrect a
+     * superseded want). Returns true if republished.
+     */
+    public boolean republishHeldBatch(IncomingBatch held) {
+        if (this.pendingBatch.compareAndSet(null, held)) return true;
+        this.pendingSuperseded.addAndGet(held.size());
+        return false;
+    }
+
+    /** Record ingress entries dropped by the Chebyshev range guard (any thread). */
+    public void recordRangeFiltered(int n) {
+        if (n > 0) this.pendingRangeFiltered.addAndGet(n);
+    }
+
+    public long drainPendingSuperseded() { return this.pendingSuperseded.getAndSet(0); }
+    public long drainPendingRangeFiltered() { return this.pendingRangeFiltered.getAndSet(0); }
+
+    // ---- Backlog (processing thread only) ----
+
+    /** Replace the backlog with a taken batch. Returns the number of dropped (superseded)
+     *  entries. An empty batch is the explicit clear. Also publishes the want-set for the
+     *  main-thread probe (an empty batch publishes null — nothing left to probe). */
+    public int replaceBacklogWith(IncomingBatch batch) {
+        int dropped = this.backlog.size();
+        this.backlog.clear();
+        Collections.addAll(this.backlog, batch.requests());
+        this.backlogSizeSnapshot = this.backlog.size();
+        this.appliedWantSet = batch.size() == 0 ? null : batch;
+        publishWantSet(this.appliedWantSet);
+        return dropped;
+    }
+
+    /** The player's ACTUAL chunk, stamped by the platform's main/pump thread each lifecycle
+     *  tick — the ring origin for the order-spread gate and the inversion evidence counter.
+     *  One packed volatile long so the processing thread never sees a torn x/z pair. */
+    private static final long NO_PLAYER_CHUNK = Long.MIN_VALUE;
+    private volatile long playerChunkPacked = NO_PLAYER_CHUNK;
+
+    public void updatePlayerChunk(int cx, int cz) {
+        this.playerChunkPacked = PositionUtil.packPosition(cx, cz);
+    }
+
+    // The LIVE frontier: ring (from the player chunk) of the first entry in declaration
+    // order that is not ACTUALLY satisfied — stamped by the router every drain pass
+    // (~20 Hz). In-flight positions (pending disk/generation, enqueued payloads) stamp it
+    // (they are unsatisfied — the anti-starvation pin, mirroring the client scanner's
+    // "awaited positions block ring confirmation"); timestamp/probe resolutions do not.
+    // -1 until the first stamp. Processing thread only.
+    private int liveFrontierRing = -1;
+
+    /** Package-private admission-trace probes (flag-gated caller; processing thread only,
+     *  like all pending-map access): the live frontier stamp, the candidate's ring from
+     *  the player chunk, and the nearest pending SYNC / outstanding GENERATION rings
+     *  ({sync, gen}, -1 when absent). Diagnostic only — never consulted by the gates. */
+    int liveFrontierRingForTrace() {
+        return this.liveFrontierRing;
+    }
+
+    int ringFromPlayerForTrace(int cx, int cz) {
+        long player = this.playerChunkPacked;
+        if (player == NO_PLAYER_CHUNK) return -1;
+        return PositionUtil.chebyshevDistance(cx, cz,
+                PositionUtil.unpackX(player), PositionUtil.unpackZ(player));
+    }
+
+    int[] nearestPendingRingsForTrace() {
+        long player = this.playerChunkPacked;
+        if (player == NO_PLAYER_CHUNK) return new int[]{-1, -1};
+        int px = PositionUtil.unpackX(player);
+        int pz = PositionUtil.unpackZ(player);
+        int sync = -1, gen = -1;
+        for (var e : this.pendingByPosition.values()) {
+            int ring = PositionUtil.chebyshevDistance(e.cx(), e.cz(), px, pz);
+            if (e.heldSlot() == SlotType.SYNC_ON_LOAD) {
+                if (sync < 0 || ring < sync) sync = ring;
+            } else if (gen < 0 || ring < gen) {
+                gen = ring;
+            }
+        }
+        return new int[]{sync, gen};
+    }
+
+    // Frontier outward damping (see LSSConstants.FRONTIER_OUTWARD_DAMP_MILLIS_PER_RING):
+    // liveFrontierRing holds the DAMPED reference the spread gate consults. Inward
+    // observations apply instantly; outward ones advance at most one ring per interval,
+    // so a movement-minted oscillation (near field momentarily all-satisfied -> observed
+    // frontier jumps to the far edge -> movement mints new near work a moment later)
+    // cannot drag the admission window to the far edge between mints. Processing thread
+    // only. The clock is a seam so damping tests are deterministic; rigs pass 0 to
+    // disable (instant outward — the pre-damping gate semantics their pins calibrate).
+    private long frontierDampNanosPerRing =
+            LSSConstants.FRONTIER_OUTWARD_DAMP_MILLIS_PER_RING * 1_000_000L;
+    private java.util.function.LongSupplier frontierClock = System::nanoTime;
+    private long frontierAdvanceMarkNanos;
+
+    /** Package-private test probe: the wired damping interval, so the production default
+     *  (constant × nanos conversion) is pinned and cannot silently die. */
+    long frontierDampNanosPerRingForTest() {
+        return this.frontierDampNanosPerRing;
+    }
+
+    /** Test seam (protected — rigs subclass from other packages): outward-damping
+     *  interval (0 = instant/off, the pre-damping semantics existing gate pins calibrate
+     *  against) + clock, so damping tests are deterministic. */
+    protected void setFrontierDampingForTest(long nanosPerRing, java.util.function.LongSupplier clock) {
+        this.frontierDampNanosPerRing = nanosPerRing;
+        this.frontierClock = clock;
+    }
+
+    /** Router drain stamp: the first not-actually-satisfied entry of this pass defines the
+     *  live frontier (outward-damped — see the field comment above). No-op without a
+     *  stamped player chunk. */
+    public void stampLiveFrontier(int cx, int cz) {
+        long player = this.playerChunkPacked;
+        if (player == NO_PLAYER_CHUNK) return;
+        int observed = PositionUtil.chebyshevDistance(cx, cz,
+                PositionUtil.unpackX(player), PositionUtil.unpackZ(player));
+        int current = this.liveFrontierRing;
+        if (this.frontierDampNanosPerRing == 0 || current < 0 || observed <= current) {
+            // Off, first stamp, or inward: apply instantly and restart the outward budget.
+            this.liveFrontierRing = observed;
+            this.frontierAdvanceMarkNanos = this.frontierClock.getAsLong();
             return;
         }
-        this.incomingRequests.add(request);
-        this.incomingRequestCount.incrementAndGet();
-        this.totalRequestsReceived.incrementAndGet();
+        long now = this.frontierClock.getAsLong();
+        long steps = (now - this.frontierAdvanceMarkNanos) / this.frontierDampNanosPerRing;
+        if (steps > 0) {
+            this.liveFrontierRing = (int) Math.min(observed, current + steps);
+            this.frontierAdvanceMarkNanos = now;
+        }
     }
+
+    /**
+     * Generation order-spread gate (processing thread only): true when admitting a
+     * generation ticket at {@code (cx, cz)} would place it more than {@code maxSpread}
+     * Chebyshev rings (from the player's chunk) beyond the FRONTIER — the nearest
+     * unsatisfied declared position. Reference, in order: the router-stamped LIVE frontier
+     * (20 Hz — the client-declared frontier alone goes stale for a full second between
+     * 1 Hz declarations, which collapsed superflat backfill throughput 4x and starved the
+     * IOWorker into read timeouts, soak 2026-07-17); else the applied want-set's first
+     * entry (closest-first construction). Neither reference can be dragged outward by
+     * in-flight work — an in-flight position stamps the frontier AT its own ring, so the
+     * band cannot walk away from a starving head (the min-outstanding law's straggler
+     * leak, closed for good). False (gate skipped) without a stamped player chunk or any
+     * frontier basis — a rig or a converged player, neither of which floods.
+     */
+    public boolean generationOrderSpreadExceeded(int cx, int cz, int maxSpread) {
+        long player = this.playerChunkPacked;
+        if (player == NO_PLAYER_CHUNK) return false;
+        int px = PositionUtil.unpackX(player);
+        int pz = PositionUtil.unpackZ(player);
+        int frontier = this.liveFrontierRing;
+        if (frontier < 0) {
+            var wantSet = this.appliedWantSet;
+            if (wantSet == null || wantSet.size() == 0) return false;
+            var first = wantSet.requests()[0];
+            frontier = PositionUtil.chebyshevDistance(first.cx(), first.cz(), px, pz);
+        }
+        int candidate = PositionUtil.chebyshevDistance(cx, cz, px, pz);
+        return candidate > frontier + maxSpread;
+    }
+
+    /**
+     * Generation pacing for EVERY admission path — the router's memo rung and the
+     * miss-delivery escalation both run this via {@code escalateMissToGeneration}
+     * (docs/planning/miss-memo-design.md): "generation never overtakes nearer in-flight
+     * work". True when admitting a generation ticket at {@code (cx, cz)} would overtake
+     * either:
+     * <ul>
+     *   <li>a NEARER pending SYNC read — the pre-memo pipeline had this property
+     *       implicitly for stationary players (escalations only happened at read
+     *       completions, so a nearer in-flight read's escalation usually came first); a
+     *       memo escalation or a stale far delivery under movement that skips ahead of it
+     *       produces the far-generates-while-near-waits-on-disk leapfrog. As
+     *       a side effect this re-creates the read-latency feedback loop: when reads slow
+     *       under generation save pressure, admission pauses and the IOWorker drains.</li>
+     *   <li>the generation cohort: any candidate more than {@code cohortSpan} rings beyond
+     *       the NEAREST outstanding generation ticket. Caps the live band's ring span so
+     *       completions stay ring-by-ring instead of scrambling across the whole
+     *       frontier+spread window (instant memo refill otherwise pins the full cap in
+     *       flight across 3 rings continuously).</li>
+     * </ul>
+     * The outstanding set is used as a RESTRICTION only, never as the admission window's
+     * anchor (the straggler-leak lesson: a lone far ticket can only TIGHTEN this rule —
+     * nearest-outstanding — never drag the window outward; the window anchor stays the
+     * declared frontier in {@link #generationOrderSpreadExceeded}). Per-player, like the
+     * spread gate. False without a player chunk (rig / converged player).
+     */
+    public boolean generationOvertakesNearerInFlight(int cx, int cz, int cohortSpan) {
+        long player = this.playerChunkPacked;
+        if (player == NO_PLAYER_CHUNK) return false;
+        int px = PositionUtil.unpackX(player);
+        int pz = PositionUtil.unpackZ(player);
+        int candidate = PositionUtil.chebyshevDistance(cx, cz, px, pz);
+        int minGenRing = Integer.MAX_VALUE;
+        for (var entry : this.pendingByPosition.long2ObjectEntrySet()) {
+            var pending = entry.getValue();
+            int ring = PositionUtil.chebyshevDistance(pending.cx(), pending.cz(), px, pz);
+            if (pending.heldSlot() == SlotType.SYNC_ON_LOAD) {
+                if (ring < candidate) return true; // nearer read in flight — hold
+            } else if (ring < minGenRing) {
+                minGenRing = ring;
+            }
+        }
+        return minGenRing != Integer.MAX_VALUE && candidate > minGenRing + cohortSpan;
+    }
+
+    /** True when any outstanding generation ticket sits NEARER the player's chunk than
+     *  {@code (cx, cz)} — a completion arriving out of proximity order. Diagnostics only
+     *  (the platform scheduler's completion-order evidence); false without a player chunk. */
+    public boolean hasNearerOutstandingGeneration(int cx, int cz) {
+        long player = this.playerChunkPacked;
+        if (player == NO_PLAYER_CHUNK) return false;
+        int px = PositionUtil.unpackX(player);
+        int pz = PositionUtil.unpackZ(player);
+        int completed = PositionUtil.chebyshevDistance(cx, cz, px, pz);
+        long selfPacked = PositionUtil.packPosition(cx, cz);
+        for (var entry : this.pendingByPosition.long2ObjectEntrySet()) {
+            if (entry.getLongKey() == selfPacked) continue;
+            var pending = entry.getValue();
+            if (pending.heldSlot() != SlotType.GENERATION) continue;
+            if (PositionUtil.chebyshevDistance(pending.cx(), pending.cz(),
+                    px, pz) < completed) return true;
+        }
+        return false;
+    }
+
+    public IncomingRequest pollBacklog() {
+        var r = this.backlog.pollFirst();
+        this.backlogSizeSnapshot = this.backlog.size();
+        // Backlog fully consumed: stop the main thread probing a want-set with nothing left
+        // to route (a converged player must cost zero probes).
+        if (this.backlog.isEmpty()) publishWantSet(null);
+        return r;
+    }
+
+    /**
+     * Restore entries the router pass retained (slot full / pool full / queue full),
+     * in their original order, ahead of whatever remains.
+     *
+     * <p>Republishes the applied want-set: a pass that retains has work still owed, but
+     * {@link #pollBacklog} has already published null if the pass drained the deque before
+     * restoring — which the steady state ALWAYS does, since SLOT_FULL retains and continues.
+     * Without this the probe source would be null on every tick outside saturation, which is
+     * exactly backwards (see the {@link #publishedWantSet} note).
+     */
+    public void restoreBacklog(List<IncomingRequest> retained) {
+        for (int i = retained.size() - 1; i >= 0; i--) {
+            this.backlog.addFirst(retained.get(i));
+        }
+        this.backlogSizeSnapshot = this.backlog.size();
+        if (!this.backlog.isEmpty()) publishWantSet(this.appliedWantSet);
+    }
+
+    /** Volatile snapshot for exporters and the soak quiescence gauge. */
+    public int getBacklogSize() { return this.backlogSizeSnapshot; }
 
     // ---- Queue management ----
 
@@ -185,24 +501,6 @@ public abstract class AbstractPlayerRequestState<T> {
     }
 
     // ---- Processing-thread-facing per-request API ----
-
-    public IncomingRequest pollIncomingRequest() {
-        var r = this.incomingRequests.poll();
-        if (r != null) this.incomingRequestCount.decrementAndGet();
-        return r;
-    }
-
-    /**
-     * Re-queues a request previously drained via {@link #pollIncomingRequest} without
-     * re-counting it as received (it was counted at arrival) and without the queue-full
-     * drop guard (re-injection never grows the queue beyond what was drained). Used by
-     * Folia's regionized probing, which holds fresh arrivals for one tick so they route
-     * in the same snapshot their region-probe results land in.
-     */
-    public void reinjectIncomingRequest(IncomingRequest request) {
-        this.incomingRequests.add(request);
-        this.incomingRequestCount.incrementAndGet();
-    }
 
     public boolean tryAdmit(PendingRequest pending) {
         int cap = pending.heldSlot() == SlotType.SYNC_ON_LOAD ? this.syncSlotCap : this.genSlotCap;
@@ -270,15 +568,6 @@ public abstract class AbstractPlayerRequestState<T> {
 
     // ---- Accessors for concurrent queues (used by sibling classes) ----
 
-    public Iterable<IncomingRequest> getIncomingRequests() {
-        return this.incomingRequests;
-    }
-
-    /** Number of requests currently queued for routing (not yet polled). */
-    public int getIncomingRequestCount() {
-        return this.incomingRequestCount.get();
-    }
-
     public void addReadyPayload(QueuedPayload<T> payload) {
         this.enqueuedColumns.merge(payload.packedPos(), 1, Integer::sum);
         this.readyPayloads.add(payload);
@@ -296,5 +585,4 @@ public abstract class AbstractPlayerRequestState<T> {
     public long getTotalSectionsSent() { return this.bandwidth.getTotalSectionsSent(); }
     public long getTotalBytesSent() { return this.bandwidth.getTotalBytesSent(); }
     public long getTotalRequestsReceived() { return this.totalRequestsReceived.get(); }
-    public long getTotalIncomingDropped() { return this.totalIncomingDropped.get(); }
 }

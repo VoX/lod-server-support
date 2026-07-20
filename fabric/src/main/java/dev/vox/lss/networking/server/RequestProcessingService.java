@@ -5,6 +5,9 @@ import dev.vox.lss.common.LSSConstants;
 import dev.vox.lss.common.LSSLogger;
 import dev.vox.lss.common.PositionUtil;
 import dev.vox.lss.common.SharedBandwidthLimiter;
+import dev.vox.lss.common.compat.V16CompatManager;
+import dev.vox.lss.common.processing.IncomingBatch;
+import dev.vox.lss.common.processing.IncomingRequest;
 import dev.vox.lss.common.processing.LoadedColumnData;
 import dev.vox.lss.common.processing.OffThreadProcessor;
 import dev.vox.lss.common.processing.TickDiagnostics;
@@ -50,6 +53,10 @@ public class RequestProcessingService {
     private final long startTimeNanos = System.nanoTime();
 
     private final DirtyColumnBroadcaster dirtyBroadcaster;
+    // The v16 compat shim's per-player sessions (legacy protocol-16 clients). The pipeline
+    // never consults it: a v16 player is an ordinary registered player whose want-set is
+    // declared by the shim at 1 Hz. See docs/planning/v16-compat-design.md.
+    private final V16CompatManager v16Compat = new V16CompatManager();
     // Keyed by the lightweight ResourceKey (not ServerLevel): a ServerLevel key strongly
     // retains every world an LSS player ever visited — harmless for vanilla's permanent
     // dimensions, but a leak on world-cycling servers. The dimension string is derivable
@@ -61,6 +68,20 @@ public class RequestProcessingService {
 
     private static final int DIAG_LOG_INTERVAL_TICKS = 100;
     private static final int MAX_PROBES_PER_TICK_PER_PLAYER = 512;
+    // Global ceiling on in-memory column SERIALIZATIONS across ALL players in one tick — the
+    // per-player cap bounds one player, but N backfilling players would otherwise cost up to
+    // 512*N serializations on the main thread. Counts serializations (the expensive work), not
+    // examinations (cheap getChunkNow lookups); a converged player costs zero either way. Once
+    // spent, later players in the tick fall through to the disk-read path (or the next tick) and
+    // the client's 1 Hz re-declaration heals the deferral. Hardcoded: a safety ceiling, not a knob.
+    // Gen-disabled corner (accepted): with enableChunkGeneration=false, a LOADED but
+    // never-saved chunk whose probe this cap deferred falls through to a disk read, resolves
+    // not-found, and answers NOT_GENERATED — session-permanent on the client despite the
+    // chunk being live in memory. Heals on its first save (dirty broadcast) or reconnect;
+    // needs disabled generation + an exhausted budget + a never-saved chunk in one tick.
+    private static final int MAX_PROBES_PER_TICK_GLOBAL = 2048;
+    /** Rotating start index for the lifecycle pass (main thread only) — see the loop comment. */
+    private int probeRotation;
 
     // Send-drop fault seam state (see armSendDrops). Static so the soak driver and gametests
     // can arm it without a service reference; production code never arms it.
@@ -73,7 +94,7 @@ public class RequestProcessingService {
 
         this.dirtyTracker = new DirtyColumnTracker();
 
-        this.diskReader = new ChunkDiskReader(config.diskReaderThreads);
+        this.diskReader = new ChunkDiskReader(config.diskReaderThreads, config.useBackgroundReadPriority);
         if (config.enableChunkGeneration) {
             this.generationService = new ChunkGenerationService(config);
             this.generationService.setDirtyContentFilter(this.dirtyContentFilter);
@@ -86,7 +107,7 @@ public class RequestProcessingService {
         this.offThreadProcessor = new FabricOffThreadProcessor(
                 this.players,
                 this.diskReader, this.generationService != null, dataDir,
-                config.perDimensionTimestampCacheSizeMB);
+                config.perDimensionTimestampCacheSizeMB, config.missMemoTtlSeconds);
         this.offThreadProcessor.start();
 
         this.dirtyBroadcaster = new DirtyColumnBroadcaster(
@@ -96,7 +117,7 @@ public class RequestProcessingService {
     public PlayerRequestState registerPlayer(ServerPlayer player, int capabilities) {
         var config = LSSServerConfig.CONFIG;
         var state = this.players.computeIfAbsent(player.getUUID(), uuid -> {
-            var s = new PlayerRequestState(player, config.syncOnLoadConcurrencyLimitPerPlayer,
+            var s = new PlayerRequestState(player, LSSConstants.SYNC_ON_LOAD_SLOT_CAP,
                     config.generationConcurrencyLimitPerPlayer);
             // Session identity for the router's stale-snapshot guard (set before the map
             // publish so the processing thread never sees it null on a live state).
@@ -113,6 +134,10 @@ public class RequestProcessingService {
         this.players.remove(uuid);
         this.offThreadProcessor.notifyPlayerRemoved(uuid);
         cleanupPlayerServices(uuid);
+        // Resets the v16 want-set + arms the ingress grace. Identity survives (dropped only
+        // by the network DISCONNECT hook), mirroring how capabilities ride the dim-change
+        // remove+register cycle. No-op for v18 players.
+        this.v16Compat.onServiceRemove(uuid);
     }
 
     private void cleanupPlayerServices(UUID uuid) {
@@ -121,20 +146,47 @@ public class RequestProcessingService {
     }
 
     public void handleBatchRequest(ServerPlayer player, BatchChunkRequestC2SPayload payload) {
-        var state = this.players.get(player.getUUID());
-        if (state == null || !state.hasCompletedHandshake()) return;
-
         int playerCx = player.getBlockX() >> 4;
         int playerCz = player.getBlockZ() >> 4;
         int maxDist = LSSServerConfig.CONFIG.lodDistanceChunks + LSSConstants.LOD_DISTANCE_BUFFER;
 
+        // v16 compat branch: legacy drip batches MERGE into the synthetic want-set (the 1 Hz
+        // tick is the sole declarer) instead of replacing the backlog. Placed before the
+        // state guard: merges are session-only and must not depend on registration timing.
+        var v16Merge = this.v16Compat.onClientBatch(player.getUUID(), payload.packedPositions(),
+                payload.clientTimestamps(), payload.count(), playerCx, playerCz, maxDist);
+        if (v16Merge != null) {
+            var state = this.players.get(player.getUUID());
+            if (state != null && v16Merge.rangeFiltered() > 0) {
+                state.recordRangeFiltered(v16Merge.rangeFiltered());
+            }
+            long[] bounced = v16Merge.overflowBounced();
+            if (bounced.length > 0) {
+                // Overflow valve: byte 0 comes back to life for exactly this — the old client
+                // backs off ~1 s and retries. Sent directly (MAIN thread), off the pipeline.
+                var types = new byte[bounced.length];
+                java.util.Arrays.fill(types, LSSConstants.RESPONSE_RATE_LIMITED_V16);
+                ServerPlayNetworking.send(player,
+                        new BatchResponseS2CPayload(types, bounced, bounced.length));
+            }
+            return;
+        }
+
+        var state = this.players.get(player.getUUID());
+        if (state == null || !state.hasCompletedHandshake()) return;
+
+        var accepted = new ArrayList<IncomingRequest>(payload.count());
         for (int i = 0; i < payload.count(); i++) {
             long packedPosition = payload.packedPositions()[i];
             int cx = PositionUtil.unpackX(packedPosition);
             int cz = PositionUtil.unpackZ(packedPosition);
             if (PositionUtil.chebyshevDistance(cx, cz, playerCx, playerCz) > maxDist) continue;
-            state.addRequest(packedPosition, payload.clientTimestamps()[i]);
+            accepted.add(new IncomingRequest(cx, cz, payload.clientTimestamps()[i]));
         }
+        state.recordRangeFiltered(payload.count() - accepted.size());
+        // Offer even when empty: an empty batch is the client's explicit backpressure
+        // clear and must replace the backlog with nothing.
+        state.offerIncomingBatch(new IncomingBatch(accepted.toArray(new IncomingRequest[0])));
     }
 
     public void tick() {
@@ -144,6 +196,11 @@ public class RequestProcessingService {
 
         var config = LSSServerConfig.CONFIG;
         var generationReady = tickGenerationService();
+        // v16 declares BEFORE the lifecycle pass: the probe reads the mailbox during
+        // processPlayerLifecycle, and postSnapshot wakes the processing thread which takes
+        // the mailbox within milliseconds — a declare offered after the probe pass would
+        // route its first cycle with zero probe coverage (release-review finding 1).
+        tickV16Compat(config);
         var lifecycle = processPlayerLifecycle(config, generationReady);
 
         if (lifecycle.toRemove != null) {
@@ -199,8 +256,16 @@ public class RequestProcessingService {
         Map<UUID, LongOpenHashSet> genReadyPositions = TickSnapshot.groupPositionsByPlayer(generationReady);
 
         int activeCount = 0;
+        int globalProbeBudget = MAX_PROBES_PER_TICK_GLOBAL;
         List<UUID> toRemove = null;
-        for (var state : this.players.values()) {
+        // Rotate the iteration start each tick: ConcurrentHashMap's iteration order is
+        // stable, so when the global probe budget exhausts mid-pass the SAME trailing
+        // players would otherwise get zero probe coverage every tick.
+        var states = new ArrayList<>(this.players.values());
+        int playerCount = states.size();
+        int start = playerCount == 0 ? 0 : Math.floorMod(this.probeRotation++, playerCount);
+        for (int i = 0; i < playerCount; i++) {
+            var state = states.get((start + i) % playerCount);
             if (!state.hasCompletedHandshake()) continue;
             activeCount++;
             this.diag.updateQueuePeak(state.getSendQueueSize());
@@ -234,6 +299,10 @@ public class RequestProcessingService {
 
             var player = state.getPlayer();
             var level = player.level();
+            // Ring origin for the generation order-spread gate — must be the REAL player
+            // chunk (the want-set's first entry sits at ~viewDistance on a ring perimeter,
+            // which wedged the gate — see AbstractPlayerRequestState.updatePlayerChunk).
+            state.updatePlayerChunk(player.chunkPosition().x(), player.chunkPosition().z());
             String dimension = this.dimensionStringCache.computeIfAbsent(level.dimension(),
                     k -> k.identifier().toString());
 
@@ -243,13 +312,28 @@ public class RequestProcessingService {
 
             var skipPositions = genReadyPositions != null
                     ? genReadyPositions.get(player.getUUID()) : null;
-            var probes = this.probeLoadedChunks(state, level, skipPositions);
+            var probes = this.probeLoadedChunks(state, level, skipPositions, globalProbeBudget);
+            globalProbeBudget -= probes.size();   // charge only actual serializations
             if (!probes.isEmpty()) {
                 buffers.loadedChunkProbes().put(player.getUUID(), probes);
             }
         }
 
         return new LifecycleResult(buffers, activeCount, toRemove);
+    }
+
+    /** The v16 shim's 1 Hz declare pass (MAIN): the SOLE declarer for legacy sessions. A
+     *  server without v16 clients pays one no-op map lookup per player per tick. MUST run
+     *  before processPlayerLifecycle so the declare sits in the mailbox when the probe
+     *  pass reads it — the same arrival-tick alignment a network-received batch gets. */
+    private void tickV16Compat(LSSServerConfig config) {
+        int maxDist = config.lodDistanceChunks + LSSConstants.LOD_DISTANCE_BUFFER;
+        for (var state : this.players.values()) {
+            if (!state.hasCompletedHandshake()) continue;
+            var player = state.getPlayer();
+            this.v16Compat.tickPlayer(player.getUUID(), state,
+                    player.chunkPosition().x(), player.chunkPosition().z(), maxDist);
+        }
     }
 
     private void postSnapshot(LifecycleResult lifecycle,
@@ -270,8 +354,39 @@ public class RequestProcessingService {
         long perPlayerAllocation = this.bandwidthLimiter.getPerPlayerAllocation(activeCount);
         long perPlayerCap = Math.min(perPlayerAllocation, config.bytesPerSecondLimitPerPlayer);
         flushSendQueues(this.players.values(), perPlayerCap, this.bandwidthLimiter, this.diag,
-                (state, payload) -> ServerPlayNetworking.send(state.getPlayer(), payload),
-                this.offThreadProcessor);
+                this::sendColumnPayload, this.offThreadProcessor);
+    }
+
+    /** Warn-once latch for the v16 egress guard (MAIN thread only). */
+    private boolean v16UnconvertibleWarned;
+
+    /** The per-player column egress (MAIN). For a v16 session, converts UNCONDITIONALLY to
+     *  the legacy source-less shape — every producer (probe/disk/generation/ghost-clear)
+     *  funnels through here, so no producer can leak a v18 frame that would hard-kick the
+     *  old client — and prunes the position from the synthetic want-set after the send
+     *  (satisfied-by-data; the prune is load-bearing, see the design §4.4). A payload the
+     *  guard cannot convert is DROPPED with a warn-once (design §5): a dropped frame
+     *  self-heals by re-declaration, a wrong-shaped one kicks the client. Unreachable
+     *  today — only buildAndEnqueueColumnPayload feeds this queue. */
+    private void sendColumnPayload(PlayerRequestState state, CustomPacketPayload payload)
+            throws Exception {
+        var uuid = state.getPlayerUUID();
+        if (this.v16Compat.isV16(uuid)) {
+            if (!(payload instanceof dev.vox.lss.networking.payloads.VoxelColumnS2CPayload col)) {
+                if (!this.v16UnconvertibleWarned) {
+                    this.v16UnconvertibleWarned = true;
+                    LSSLogger.warn("v16-compat: dropping unconvertible column-queue payload "
+                            + payload.getClass().getName() + " for " + state.getPlayerName()
+                            + " (further drops are silent)");
+                }
+                return;
+            }
+            ServerPlayNetworking.send(state.getPlayer(), col.asV16());
+            this.v16Compat.onColumnSent(uuid,
+                    PositionUtil.packPosition(col.chunkX(), col.chunkZ()));
+            return;
+        }
+        ServerPlayNetworking.send(state.getPlayer(), payload);
     }
 
     // Package-private static: ServiceGlueTest drives this glue with hand-rolled states and an
@@ -356,23 +471,68 @@ public class RequestProcessingService {
     }
 
     /**
-     * Probe loaded chunks for positions in the player's incoming requests.
-     * Called on the main thread. Serializes loaded chunks so the processing thread
-     * can compress and send without touching MC world state.
+     * Probe loaded chunks for positions the player still wants. Called on the main thread.
+     * Serializes loaded chunks so the processing thread can compress and send without
+     * touching MC world state.
+     *
+     * <p><b>Source: the mailbox first, then the published want-set.</b> Both are needed and
+     * neither alone suffices:
+     * <ul>
+     *   <li>The MAILBOX holds a batch that arrived since the last routing cycle. It is
+     *       probed on its ARRIVAL tick, before the processing thread applies it, so the
+     *       snapshot the router routes it against already carries its probes. Without this a
+     *       freshly declared position is never probed on its first routing cycle, and for a
+     *       want-set that fits under the per-player slot cap — the converged steady state,
+     *       and every single-position dirty-broadcast re-request — there IS no second cycle:
+     *       it admits everything at once, the backlog drains, the want-set unpublishes, and
+     *       the position disk-reads. That is not merely slower: with
+     *       {@code useBackgroundReadPriority} the reader bypasses IOWorker's pendingWrites,
+     *       so a just-edited column read from disk yields PRE-edit bytes until the save
+     *       lands. The edited-chunk re-request is exactly the case that must serve live.
+     *       (Folia's regionized path makes the same alignment deterministic by holding the
+     *       fresh batch one tick — see {@code holdAndScheduleRegionProbe}; this is the sync
+     *       path's equivalent.)</li>
+     *   <li>The PUBLISHED want-set covers the other ~19 ticks of each second:
+     *       {@code takeIncomingBatch()} nulls the mailbox within ~50 ms of arrival while
+     *       batches arrive at only 1 Hz, so the mailbox alone would see null on almost every
+     *       tick. It stays published exactly while the backlog is non-empty (cleared on
+     *       drain-to-empty, republished by {@code restoreBacklog}), which is what carries a
+     *       want-set too large for the slot cap across the cycles that work it off.</li>
+     * </ul>
+     * Both sources list positions that may already be routed; a probe for an already-routed
+     * position is simply unused by the router, and the cost is bounded by
+     * {@link #MAX_PROBES_PER_TICK_PER_PLAYER}, which the closest-first order spends on the
+     * head of the want-set. Positions whose payload already sits in the send pipeline are
+     * filtered below, so a retained backlog does not re-serialize its served head every
+     * tick; the residual waste is one re-probe of positions served-and-sent but not yet
+     * dropped by the next 1 Hz declaration.
      *
      * @param skipPositions packed positions already extracted by the generation service (may be null)
      */
     private Long2ObjectMap<LoadedColumnData> probeLoadedChunks(
             PlayerRequestState state, ServerLevel level,
-            LongOpenHashSet skipPositions) {
+            LongOpenHashSet skipPositions, int globalBudgetRemaining) {
         var probes = new Long2ObjectOpenHashMap<LoadedColumnData>();
         int probed = 0;
 
-        for (var req : state.getIncomingRequests()) {
-            if (probed >= MAX_PROBES_PER_TICK_PER_PLAYER) break;
+        var batch = state.peekIncomingBatch();
+        if (batch == null) batch = state.peekWantSet();
+        if (batch == null) return probes;   // nothing pending — converged player, no probe cost
+        for (var req : batch.requests()) {
+            if (probed >= MAX_PROBES_PER_TICK_PER_PLAYER) break;   // per-player examination cap
+            // Global serialization ceiling: probes.size() counts columns actually serialized this
+            // call, so this stops the moment this player would exceed the tick's remaining budget.
+            if (probes.size() >= globalBudgetRemaining) break;
             long packed = PositionUtil.packPosition(req.cx(), req.cz());
             if (probes.containsKey(packed)) continue;
             if (skipPositions != null && skipPositions.contains(packed)) continue;
+            // Served-head filter: a payload already in the send pipeline means the router
+            // resolves this position as a duplicate — the probe is guaranteed-unused, and
+            // under backlog retention the published want-set re-lists it every tick until
+            // the next 1 Hz declaration, re-serializing the same head for a whole second.
+            // Only enqueuedColumns is checked: it is the one served-set structure safe off
+            // the processing thread (pendingByPosition/diskReadDone are single-threaded).
+            if (state.hasEnqueuedColumn(packed)) continue;
 
             LevelChunk chunk = level.getChunkSource().getChunkNow(req.cx(), req.cz());
             if (chunk != null) {
@@ -416,22 +576,31 @@ public class RequestProcessingService {
                     req.playerUuid(), level, req.cx(), req.cz(),
                     req.submissionOrder());
             if (!accepted) {
-                // Capacity rejection or removed player: feed a failure outcome so the
-                // processing thread frees the pending slot and tells the client ColumnNotGenerated.
+                // Capacity rejection or removed player — TRANSIENT: feed a transient outcome
+                // so the processing thread frees the pending slot silently (superseded); the
+                // client's re-declaration retries. Never NOT_GENERATED (session-permanent).
                 this.offThreadProcessor.feedGenerationFailure(
-                        req.playerUuid(), req.cx(), req.cz(), dimension, req.submissionOrder());
+                        req.playerUuid(), req.cx(), req.cz(), dimension, req.submissionOrder(), true);
             }
         }
     }
 
     private void drainSendActions() {
-        this.offThreadProcessor.drainSendActions((state, types, positions, count) ->
-                ServerPlayNetworking.send(state.getPlayer(),
-                        new BatchResponseS2CPayload(types, positions, count)));
+        this.offThreadProcessor.drainSendActions((state, types, positions, count) -> {
+            // v16 observation: UP_TO_DATE / NOT_GENERATED terminally answer their positions —
+            // prune them from the synthetic want-set. The frame itself is wire-identical.
+            this.v16Compat.observeBatchResponse(state.getPlayerUUID(), types, positions, count);
+            ServerPlayNetworking.send(state.getPlayer(),
+                    new BatchResponseS2CPayload(types, positions, count));
+        });
     }
 
     public Map<UUID, PlayerRequestState> getPlayers() {
         return Collections.unmodifiableMap(this.players);
+    }
+
+    public V16CompatManager getV16CompatManager() {
+        return this.v16Compat;
     }
 
     public ChunkDiskReader getDiskReader() {

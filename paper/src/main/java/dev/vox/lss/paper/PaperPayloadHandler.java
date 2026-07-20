@@ -2,6 +2,7 @@ package dev.vox.lss.paper;
 
 import dev.vox.lss.common.LSSConstants;
 import dev.vox.lss.common.LSSLogger;
+import dev.vox.lss.common.PositionUtil;
 import io.netty.buffer.Unpooled;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket;
@@ -33,17 +34,15 @@ public final class PaperPayloadHandler {
 
     // ---- S2C Encoding ----
 
+    /** Four fields since the server-owned-generation fold into v17: both per-player
+     *  concurrency caps left the wire (server-internal admission limiters only). */
     public static byte[] encodeSessionConfig(int protocolVersion, boolean enabled,
                                              int lodDistanceChunks,
-                                             int syncOnLoadConcurrencyLimitPerPlayer,
-                                             int generationConcurrencyLimitPerPlayer,
                                              boolean generationEnabled) {
         return encodeToBytes(buf -> {
             buf.writeVarInt(protocolVersion);
             buf.writeBoolean(enabled);
             buf.writeVarInt(lodDistanceChunks);
-            buf.writeVarInt(syncOnLoadConcurrencyLimitPerPlayer);
-            buf.writeVarInt(generationConcurrencyLimitPerPlayer);
             buf.writeBoolean(generationEnabled);
         });
     }
@@ -51,13 +50,33 @@ public final class PaperPayloadHandler {
     public static void sendSessionConfig(Player player,
                                           int protocolVersion, boolean enabled,
                                           int lodDistanceChunks,
-                                          int syncOnLoadConcurrencyLimitPerPlayer,
-                                          int generationConcurrencyLimitPerPlayer,
                                           boolean generationEnabled) {
         sendRawNmsPayload(player, ID_SESSION_CONFIG, encodeSessionConfig(
-                protocolVersion, enabled, lodDistanceChunks,
-                syncOnLoadConcurrencyLimitPerPlayer, generationConcurrencyLimitPerPlayer,
-                generationEnabled));
+                protocolVersion, enabled, lodDistanceChunks, generationEnabled));
+    }
+
+    /** v16 compat reply: the OLD 6-field layout echoing protocol version 16 — the v0.6.2
+     *  client's codec hard-gates on that leading VarInt and disables itself otherwise. The
+     *  two cap VarInts sit between lodDistance and generationEnabled (v0.6.2 field order)
+     *  and ARE the old client's pacing, so callers pass the server's real admission values. */
+    public static byte[] encodeSessionConfigV16(boolean enabled, int lodDistanceChunks,
+                                                int syncCap, int genCap,
+                                                boolean generationEnabled) {
+        return encodeToBytes(buf -> {
+            buf.writeVarInt(LSSConstants.V16_COMPAT_PROTOCOL_VERSION);
+            buf.writeBoolean(enabled);
+            buf.writeVarInt(lodDistanceChunks);
+            buf.writeVarInt(syncCap);
+            buf.writeVarInt(genCap);
+            buf.writeBoolean(generationEnabled);
+        });
+    }
+
+    public static void sendSessionConfigV16(Player player, boolean enabled,
+                                            int lodDistanceChunks, int syncCap, int genCap,
+                                            boolean generationEnabled) {
+        sendRawNmsPayload(player, ID_SESSION_CONFIG, encodeSessionConfigV16(
+                enabled, lodDistanceChunks, syncCap, genCap, generationEnabled));
     }
 
     public static byte[] encodeBatchResponse(byte[] responseTypes, long[] packedPositions, int count) {
@@ -81,16 +100,55 @@ public final class PaperPayloadHandler {
      * Encode a column payload with serialized section bytes.
      * Writes the per-request header, then writes sectionBytes as a length-prefixed byte array.
      */
+    /** Source-less convenience (tests/legacy rigs): source -1 = "unknown", a legal wire
+     *  value. Production always passes a COLUMN_SOURCE_* tag. */
     public static byte[] encodeVoxelColumnPreEncoded(int chunkX, int chunkZ,
                                                       String dimensionStr, long columnTimestamp,
                                                       byte[] sectionBytes) {
+        return encodeVoxelColumnPreEncoded(chunkX, chunkZ, dimensionStr, columnTimestamp,
+                (byte) -1, sectionBytes);
+    }
+
+    public static byte[] encodeVoxelColumnPreEncoded(int chunkX, int chunkZ,
+                                                      String dimensionStr, long columnTimestamp,
+                                                      byte source, byte[] sectionBytes) {
         return encodeToBytes(sectionBytes.length + 64, buf -> {
             buf.writeInt(chunkX);
             buf.writeInt(chunkZ);
             buf.writeUtf(dimensionStr, LSSConstants.MAX_DIMENSION_STRING_LENGTH);
             buf.writeLong(columnTimestamp);
+            buf.writeByte(source);
             buf.writeByteArray(sectionBytes);
         });
+    }
+
+    /**
+     * v16 compat: splice a v18 column frame (with the one-byte serve-source tag between
+     * columnTimestamp and sectionBytes) into the legacy pre-18 layout by removing exactly
+     * that byte. Parses only the fixed header to find the offset — the section bytes are
+     * copied, never re-encoded. A v18-shaped frame reaching a v16 client hard-kicks it (the
+     * old decode reads the source byte as the section-array length VarInt), so the per-player
+     * column egress converts UNCONDITIONALLY for v16 sessions.
+     */
+    public static byte[] rewriteColumnToV16(byte[] v18Frame) {
+        return withReadBuffer(v18Frame, buf -> {
+            buf.readInt();                                            // chunkX
+            buf.readInt();                                            // chunkZ
+            buf.readUtf(LSSConstants.MAX_DIMENSION_STRING_LENGTH);    // dimension
+            buf.readLong();                                           // columnTimestamp
+            int sourceIndex = buf.readerIndex();
+            byte[] out = new byte[v18Frame.length - 1];
+            System.arraycopy(v18Frame, 0, out, 0, sourceIndex);
+            System.arraycopy(v18Frame, sourceIndex + 1, out, sourceIndex,
+                    v18Frame.length - sourceIndex - 1);
+            return out;
+        });
+    }
+
+    /** The packed chunk position of an encoded column frame (its first 8 bytes are the two
+     *  big-endian coordinate ints) — the v16 shim's prune key at the column egress. */
+    public static long readColumnPackedPos(byte[] frame) {
+        return withReadBuffer(frame, buf -> PositionUtil.packPosition(buf.readInt(), buf.readInt()));
     }
 
     /**

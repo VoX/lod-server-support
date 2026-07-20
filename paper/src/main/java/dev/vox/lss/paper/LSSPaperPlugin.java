@@ -219,35 +219,59 @@ public class LSSPaperPlugin extends JavaPlugin implements PluginMessageListener,
 
     /**
      * Test seam: the session-config reply send, production-wired to
-     * {@link PaperPayloadHandler#sendSessionConfig} for the handshaking player.
+     * {@link PaperPayloadHandler#sendSessionConfig} (V18) or
+     * {@link PaperPayloadHandler#sendSessionConfigV16} (V16 dialect — the legacy 6-field
+     * layout echoing protocol 16; the caps are the old client's pacing) for the handshaking
+     * player.
      */
     @FunctionalInterface
     interface SessionConfigSender {
-        void send(int protocolVersion, boolean enabled, int lodDistanceChunks,
-                  int syncOnLoadConcurrencyLimitPerPlayer,
-                  int generationConcurrencyLimitPerPlayer, boolean generationEnabled);
+        void send(HandshakeGate.WireDialect dialect, boolean enabled, int lodDistanceChunks,
+                  int syncCap, int genCap, boolean generationEnabled);
     }
 
     /**
      * Test seam: player registration, production-wired to
      * {@link PaperRequestProcessingService#enqueueRegister} — on Folia the handshake message
      * arrives on the player's region thread, so registration is mailboxed and the pump
-     * applies it next tick. Only invoked when the {@link HandshakeGate} decision says to
-     * register, so the production lambda may capture a service reference that is non-null
-     * whenever servicePresent was true.
+     * applies it next tick. A V16 dialect additionally creates the compat session identity
+     * FIRST (directly, not mailboxed — the session map is any-thread safe and early drip
+     * batches must merge from the first frame, before the mailboxed registration lands).
+     * Only invoked when the {@link HandshakeGate} decision says to register, so the
+     * production lambda may capture a service reference that is non-null whenever
+     * servicePresent was true.
      */
     @FunctionalInterface
     interface HandshakeRegistrar {
-        void register(int capabilities);
+        void register(int capabilities, HandshakeGate.WireDialect dialect);
     }
 
     private void handleHandshake(Player bukkitPlayer, ServerPlayer nmsPlayer, byte[] data) {
         var service = this.requestService;
         handleHandshake(data, nmsPlayer.getName().getString(), this.lssConfig, service != null,
-                (protocolVersion, enabled, lodDistanceChunks, syncLimit, genLimit, generationEnabled) ->
-                        PaperPayloadHandler.sendSessionConfig(bukkitPlayer, protocolVersion, enabled,
-                                lodDistanceChunks, syncLimit, genLimit, generationEnabled),
-                capabilities -> service.enqueueRegister(nmsPlayer, capabilities));
+                (dialect, enabled, lodDistanceChunks, syncCap, genCap, generationEnabled) -> {
+                    if (dialect == HandshakeGate.WireDialect.V16) {
+                        PaperPayloadHandler.sendSessionConfigV16(bukkitPlayer, enabled,
+                                lodDistanceChunks, syncCap, genCap, generationEnabled);
+                    } else {
+                        // A current-protocol re-handshake sheds any stale v16 session —
+                        // otherwise columns keep shipping legacy-shaped and hard-kick the
+                        // now-v18 decoder. Placed on the sender seam because it fires for
+                        // every replying outcome (REGISTER and NO_CONSUMER/DISABLED alike).
+                        if (service != null) {
+                            service.getV16CompatManager().onNonV16Handshake(nmsPlayer.getUUID());
+                        }
+                        PaperPayloadHandler.sendSessionConfig(bukkitPlayer,
+                                LSSConstants.PROTOCOL_VERSION, enabled, lodDistanceChunks,
+                                generationEnabled);
+                    }
+                },
+                (capabilities, dialect) -> {
+                    if (dialect == HandshakeGate.WireDialect.V16) {
+                        service.getV16CompatManager().onHandshake(nmsPlayer.getUUID());
+                    }
+                    service.enqueueRegister(nmsPlayer, capabilities);
+                });
     }
 
     /**
@@ -269,7 +293,8 @@ public class LSSPaperPlugin extends JavaPlugin implements PluginMessageListener,
                 + ", capabilities=" + handshake.capabilities() + ")");
 
         var decision = HandshakeGate.evaluate(handshake.protocolVersion(),
-                handshake.capabilities(), config.enabled, servicePresent);
+                handshake.capabilities(), config.enabled, servicePresent,
+                config.enableV16Compat);
 
         if (!decision.sendSessionConfig()) {
             // See HandshakeGate.Outcome.VERSION_MISMATCH: replying would kick the player.
@@ -279,10 +304,13 @@ public class LSSPaperPlugin extends JavaPlugin implements PluginMessageListener,
             return;
         }
 
-        configSender.send(LSSConstants.PROTOCOL_VERSION,
+        boolean v16 = decision.dialect() == HandshakeGate.WireDialect.V16;
+        configSender.send(decision.dialect(),
                 decision.effectiveEnabled(),
                 config.lodDistanceChunks,
-                config.syncOnLoadConcurrencyLimitPerPlayer,
+                // The caps ARE the old client's pacing — the server's real admission values
+                // (ignored by the V18 sender branch; see the v16 compat design §4.1).
+                LSSConstants.SYNC_ON_LOAD_SLOT_CAP,
                 config.generationConcurrencyLimitPerPlayer,
                 config.enableChunkGeneration);
 
@@ -295,10 +323,10 @@ public class LSSPaperPlugin extends JavaPlugin implements PluginMessageListener,
         }
 
         if (decision.registerPlayer()) {
-            registrar.register(handshake.capabilities());
+            registrar.register(handshake.capabilities(), decision.dialect());
             LSSLogger.info("Player " + playerName
                     + " registered for LSS LOD request processing (caps="
-                    + handshake.capabilities() + ")");
+                    + handshake.capabilities() + (v16 ? ", v16-compat" : "") + ")");
         }
     }
 
@@ -318,6 +346,10 @@ public class LSSPaperPlugin extends JavaPlugin implements PluginMessageListener,
             // Mailboxed: on Folia this event fires on the quitting player's region thread,
             // and removal mutates pump-owned state (generation service maps among others).
             service.enqueueRemove(event.getPlayer().getUniqueId());
+            // Network-level and immediate (the session map is any-thread safe): the quit
+            // drops the v16 session identity; the mailboxed removePlayer above only resets
+            // a want-set that no longer exists — a no-op.
+            service.getV16CompatManager().onDisconnect(event.getPlayer().getUniqueId());
         }
     }
 

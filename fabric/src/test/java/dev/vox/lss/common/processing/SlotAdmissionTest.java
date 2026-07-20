@@ -26,12 +26,11 @@ class SlotAdmissionTest {
         @Override
         public String getPlayerName() { return "test"; }
 
-        void enqueue(IncomingRequest r) { enqueueIncomingRequest(r); }
+        /** Seeds one want-set batch carrying a single request (the pre-v17 per-request
+         *  enqueue has no equivalent — each declaration REPLACES the backlog). Every call
+         *  site here is separated from the next by a routing cycle, so nothing is superseded. */
+        void enqueue(IncomingRequest r) { offerIncomingBatch(new IncomingBatch(new IncomingRequest[]{r})); }
     }
-
-    // Mirrors AbstractPlayerRequestState.MAX_INCOMING_QUEUE — the OOM-DoS bound on a
-    // flooding client. A deliberate bound change must update this test.
-    private static final int MAX_INCOMING_QUEUE = 16384;
 
     private TestState state;
 
@@ -41,18 +40,21 @@ class SlotAdmissionTest {
     }
 
     private static PendingRequest sync(int cx, int cz) {
-        return new PendingRequest(cx, cz, RequestType.SYNC, SlotType.SYNC_ON_LOAD, false);
+        return new PendingRequest(cx, cz, SlotType.SYNC_ON_LOAD, false);
     }
 
     private static PendingRequest gen(int cx, int cz) {
-        return new PendingRequest(cx, cz, RequestType.GENERATION, SlotType.GENERATION, false);
+        return new PendingRequest(cx, cz, SlotType.GENERATION, false);
     }
 
     @Test
-    void admitsUpToCapThenBounces() {
+    void admitsUpToCapThenRejectsAdmission() {
         assertTrue(state.tryAdmit(sync(0, 0)));
         assertTrue(state.tryAdmit(sync(0, 1)));
-        assertFalse(state.tryAdmit(sync(0, 2)), "third sync admission must bounce at cap 2");
+        // Under v17 a refused admission is not an answer to the client: the router RETAINS the
+        // entry in the backlog (SLOT_FULL) and re-tries it on a later cycle. The cap arithmetic
+        // is unchanged — it now means "dequeue at most N concurrently", not "reject above N".
+        assertFalse(state.tryAdmit(sync(0, 2)), "third sync admission must be refused at cap 2");
         assertEquals(2, state.getHeldSyncSlots());
     }
 
@@ -143,43 +145,9 @@ class SlotAdmissionTest {
         assertFalse(state.hasPendingRequest(0, 0));
     }
 
-    // ---- Incoming-queue flood bound ----
-
-    @Test
-    void incomingFloodDropsAtTheBoundAndRecoversAfterDraining() {
-        for (int i = 0; i < MAX_INCOMING_QUEUE + 100; i++) {
-            state.enqueue(new IncomingRequest(i, 0, -1L));
-        }
-        assertEquals(MAX_INCOMING_QUEUE, state.getTotalRequestsReceived(),
-                "accepted requests stop exactly at the bound");
-        assertEquals(100, state.getTotalIncomingDropped(), "overflow must be dropped, not queued");
-
-        // The bound holds structurally: exactly MAX entries are pollable
-        int drained = 0;
-        while (state.pollIncomingRequest() != null) drained++;
-        assertEquals(MAX_INCOMING_QUEUE, drained);
-
-        // Recovery: draining must reopen the queue (a wedged-closed queue kills LOD for good)
-        state.enqueue(new IncomingRequest(99999, 0, -1L));
-        assertEquals(MAX_INCOMING_QUEUE + 1, state.getTotalRequestsReceived());
-        assertEquals(100, state.getTotalIncomingDropped(), "post-recovery enqueue must not drop");
-        assertNotNull(state.pollIncomingRequest());
-    }
-
-    @Test
-    void incomingQueueReopensExactlyByDrainedCapacity() {
-        // Catches counter desync between poll and enqueue (either direction wedges the gate)
-        for (int i = 0; i < MAX_INCOMING_QUEUE; i++) {
-            state.enqueue(new IncomingRequest(i, 1, -1L));
-        }
-        for (int i = 0; i < 50; i++) {
-            assertNotNull(state.pollIncomingRequest());
-        }
-        for (int i = 0; i < 60; i++) {
-            state.enqueue(new IncomingRequest(i, 2, -1L));
-        }
-        assertEquals(MAX_INCOMING_QUEUE + 50, state.getTotalRequestsReceived(),
-                "exactly the drained capacity reopens");
-        assertEquals(10, state.getTotalIncomingDropped(), "the rest must bounce off the bound");
-    }
+    // The pre-v17 incoming-queue flood bound (incomingFloodDropsAtTheBoundAndRecoversAfterDraining,
+    // incomingQueueReopensExactlyByDrainedCapacity) is deleted: ingress is now bounded
+    // STRUCTURALLY at one batch of <= MAX_BATCH_CHUNK_REQUESTS, so there is no counter to
+    // desync and no gate to wedge closed. The replacement coverage for a flooding client is
+    // BacklogReplaceTest.offerCountsReceivedAndOverwriteCountsSuperseded.
 }

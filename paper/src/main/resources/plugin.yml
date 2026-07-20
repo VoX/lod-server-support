@@ -2,7 +2,10 @@ name: LodServerSupport
 version: '${version}'
 main: dev.vox.lss.paper.LSSPaperPlugin
 api-version: '26.2'
-folia-supported: true
+# folia-supported is deliberately ABSENT on the 26.2 line: no Folia build exists for MC 26.2,
+# so the Folia code paths (regionized probing, lifecycle mailbox) are live-unvalidated here.
+# Re-add `folia-supported: true` together with the Folia soak validation once Folia ships 26.2
+# (PluginYmlContractTest + release_check.py pin the absence until then).
 description: Paper Plugin that provides unofficial multiplayer support for Voxy.
 author: VoX
 website: https://modrinth.com/plugin/lod-server-support

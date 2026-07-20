@@ -111,12 +111,13 @@ final class ClientSessionGate {
             return;
         }
 
-        // Clamp every server-supplied numeric field to the same bounds the server enforces
-        // on itself (ServerConfigBase.validate). A hostile or compromised server is fully
-        // untrusted input here: without this clamp its syncOnLoad concurrency limit becomes
-        // the client's scan budget and drives RequestQueue.ensureCapacity, and its LOD
-        // distance bounds the scan-ring loop — either lets a single SessionConfig packet
-        // force a multi-gigabyte client allocation (OOM crash).
+        // Clamp the server-supplied LOD distance to the same bounds the server enforces on
+        // itself (ServerConfigBase.validate) — the one numeric field left on the wire. A
+        // hostile or compromised server is fully untrusted input here: the LOD distance
+        // bounds the scan-ring loop. The unbounded-allocation vector that first motivated
+        // this clamp is closed by construction (the send buffers are fixed-size and the
+        // scan budget is the WANT_SET_BUDGET constant), but the clamp still bounds the ring
+        // walk itself — an unclamped LOD distance is a CPU-stall vector, so it stays.
         var config = clampToProtocolBounds(payload);
 
         this.serverEnabled = config.enabled();
@@ -151,8 +152,6 @@ final class ClientSessionGate {
                 p.protocolVersion(),
                 p.enabled(),
                 Math.clamp(p.lodDistanceChunks(), LSSConstants.MIN_LOD_DISTANCE, LSSConstants.MAX_LOD_DISTANCE),
-                Math.clamp(p.syncOnLoadConcurrencyLimitPerPlayer(), LSSConstants.MIN_CONCURRENCY_LIMIT, LSSConstants.MAX_CONCURRENCY_LIMIT),
-                Math.clamp(p.generationConcurrencyLimitPerPlayer(), LSSConstants.MIN_CONCURRENCY_LIMIT, LSSConstants.MAX_CONCURRENCY_LIMIT),
                 p.generationEnabled());
     }
 

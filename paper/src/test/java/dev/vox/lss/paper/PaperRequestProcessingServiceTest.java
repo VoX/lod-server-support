@@ -1,6 +1,8 @@
 package dev.vox.lss.paper;
 
 import dev.vox.lss.common.PositionUtil;
+import dev.vox.lss.common.processing.IncomingBatch;
+import dev.vox.lss.common.processing.IncomingRequest;
 import dev.vox.lss.common.processing.LoadedColumnData;
 import dev.vox.lss.common.processing.OffThreadProcessor;
 import dev.vox.lss.common.processing.QueuedPayload;
@@ -13,6 +15,7 @@ import net.minecraft.server.Bootstrap;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.server.players.PlayerList;
 import net.minecraft.world.level.Level;
 import org.junit.jupiter.api.AfterEach;
@@ -70,7 +73,8 @@ class PaperRequestProcessingServiceTest {
         final List<UUID> removals = new ArrayList<>();
         record DirtyClear(UUID playerUuid, long[] positions) {}
         final List<DirtyClear> dirtyClears = new ArrayList<>();
-        record GenFailure(UUID playerUuid, int cx, int cz, String dimension, long submissionOrder) {}
+        record GenFailure(UUID playerUuid, int cx, int cz, String dimension, long submissionOrder,
+                          boolean transientFailure) {}
         final List<GenFailure> genFailures = new ArrayList<>();
         final ArrayDeque<OffThreadProcessor.GenerationTicketRequest> ticketQueue = new ArrayDeque<>();
         final AtomicInteger sendActionDrains = new AtomicInteger();
@@ -82,7 +86,7 @@ class PaperRequestProcessingServiceTest {
 
         RecordingProcessor(Map<UUID, PaperPlayerRequestState> players, PaperChunkDiskReader diskReader) {
             // Never start()ed: the recording overrides observe the main-thread glue only.
-            super(players, diskReader, true, null, 32);
+            super(players, diskReader, true, null, 32, 0);  // memo off: pins the ttl=0 read path
         }
 
         @Override
@@ -102,8 +106,9 @@ class PaperRequestProcessingServiceTest {
         }
 
         @Override
-        public void feedGenerationFailure(UUID playerUuid, int cx, int cz, String dimension, long submissionOrder) {
-            genFailures.add(new GenFailure(playerUuid, cx, cz, dimension, submissionOrder));
+        public void feedGenerationFailure(UUID playerUuid, int cx, int cz, String dimension,
+                                          long submissionOrder, boolean transientFailure) {
+            genFailures.add(new GenFailure(playerUuid, cx, cz, dimension, submissionOrder, transientFailure));
         }
 
         @Override
@@ -198,7 +203,7 @@ class PaperRequestProcessingServiceTest {
         config = new PaperConfig();
         config.validate();
         players = new ConcurrentHashMap<>();
-        diskReader = new PaperChunkDiskReader(1);
+        diskReader = new PaperChunkDiskReader(1, false);
         processor = new RecordingProcessor(players, diskReader);
         genService = new RecordingGenService(config);
         server = mock(MinecraftServer.class);
@@ -230,6 +235,9 @@ class PaperRequestProcessingServiceTest {
         var p = mock(ServerPlayer.class);
         when(p.getUUID()).thenReturn(uuid);
         when(p.level()).thenReturn(level);
+        // The lifecycle pass stamps the player chunk each tick (ring origin for the
+        // generation order-spread gate)
+        when(p.chunkPosition()).thenReturn(new ChunkPos(0, 0));
         // getPlayerName() is dereferenced by the flush-failure log path
         when(p.getName()).thenReturn(Component.literal("p-" + uuid.toString().substring(0, 8)));
         return p;
@@ -237,6 +245,29 @@ class PaperRequestProcessingServiceTest {
 
     private static PaperPayloadHandler.DecodedBatchChunkRequest batchOf(long[] positions, long[] timestamps) {
         return new PaperPayloadHandler.DecodedBatchChunkRequest(positions, timestamps, positions.length);
+    }
+
+    /** Declare a complete want-set batch straight into a state's mailbox (v17 ingress shape).
+     *  Each call REPLACES the previous declaration — that is the protocol, not a test shortcut. */
+    private static void offer(PaperPlayerRequestState state, IncomingRequest... reqs) {
+        state.offerIncomingBatch(new IncomingBatch(reqs));
+    }
+
+    /** The un-taken mailbox contents (empty once the processing thread has taken the batch). */
+    private static List<IncomingRequest> pendingBatch(PaperPlayerRequestState state) {
+        var b = state.peekIncomingBatch();
+        return b == null ? List.of() : List.of(b.requests());
+    }
+
+    /** Stand in for the processing thread having APPLIED a want-set to the backlog — that is
+     *  what publishes it. The main-thread probe reads the mailbox FIRST and falls back to the
+     *  published set; publishing (with an empty mailbox) is how these tests exercise the
+     *  fallback arm, which is the one that carries a want-set across the ~19 ticks per second
+     *  on which no batch arrives. These tests drive the pump directly with no processing
+     *  thread behind it, so they publish the same way replaceBacklogWith does.
+     *  {@link #freshMailboxBatchIsProbedOnItsArrivalTickWithNothingPublished} pins the other arm. */
+    private static void publish(PaperPlayerRequestState state, IncomingRequest... reqs) {
+        state.publishWantSet(new IncomingBatch(reqs));
     }
 
     /** PlayerBandwidthTracker refills only after >=1ms elapsed; give the fresh bucket a window. */
@@ -259,12 +290,19 @@ class PaperRequestProcessingServiceTest {
                         PositionUtil.packPosition(0, -49)},  // negative side: dropped
                 new long[]{77L, 1L, 2L}));
 
-        assertEquals(1, state.getTotalRequestsReceived(), "out-of-range positions are never enqueued");
-        var accepted = state.pollIncomingRequest();
-        assertEquals(48, accepted.cx());
-        assertEquals(-48, accepted.cz());
-        assertEquals(77L, accepted.clientTimestamp(), "the accepted request carries ITS OWN clientTimestamp");
-        assertNull(state.pollIncomingRequest());
+        assertEquals(1, state.getTotalRequestsReceived(), "out-of-range positions never reach the mailbox");
+        var accepted = pendingBatch(state);
+        assertEquals(1, accepted.size(), "only the in-range position is declared: " + accepted);
+        assertEquals(48, accepted.get(0).cx());
+        assertEquals(-48, accepted.get(0).cz());
+        assertEquals(77L, accepted.get(0).clientTimestamp(),
+                "the accepted request carries ITS OWN clientTimestamp");
+        // The two gated entries were RECEIVED on the wire but never routed. Nothing answers
+        // them, so they must be booked as range_filtered or the request-conservation law
+        // cannot close over the batch.
+        assertEquals(2, state.drainPendingRangeFiltered(),
+                "both out-of-range entries are counted range_filtered exactly once");
+        assertEquals(0, state.drainPendingRangeFiltered(), "the drain is destructive");
     }
 
     // ---- PP-002: unregistered / pre-handshake batch requests are silent no-ops ----
@@ -286,7 +324,7 @@ class PaperRequestProcessingServiceTest {
         players.put(uuid, bare);
         service.handleBatchRequest(p, batch);
         assertEquals(0, bare.getTotalRequestsReceived());
-        assertNull(bare.pollIncomingRequest());
+        assertNull(bare.peekIncomingBatch(), "no batch is offered before the handshake completes");
     }
 
     // ---- PP-003: re-handshake reuses the state ----
@@ -297,7 +335,7 @@ class PaperRequestProcessingServiceTest {
         var player = playerIn(uuid, level(Level.OVERWORLD));
 
         var first = service.registerPlayer(player, 1);
-        first.addRequest(3, 4, -1L);
+        offer(first, new IncomingRequest(3, 4, -1L));
         var queueBefore = diskReader.getPlayerQueue(uuid);
         assertNotNull(queueBefore, "registration creates the disk-reader result queue");
 
@@ -306,9 +344,9 @@ class PaperRequestProcessingServiceTest {
         assertEquals(0, second.getCapabilities(), "capabilities are updated by the re-handshake");
         assertTrue(second.hasCompletedHandshake());
         assertEquals(1, second.getTotalRequestsReceived(), "counters survive the re-handshake");
-        var pending = second.pollIncomingRequest();
-        assertNotNull(pending, "queued work survives the re-handshake");
-        assertEquals(3, pending.cx());
+        var pending = pendingBatch(second);
+        assertEquals(1, pending.size(), "the declared want-set survives the re-handshake");
+        assertEquals(3, pending.get(0).cx());
         assertSame(queueBefore, diskReader.getPlayerQueue(uuid),
                 "disk-reader registration is idempotent (results are not torn down)");
     }
@@ -337,7 +375,7 @@ class PaperRequestProcessingServiceTest {
         var overworld = level(Level.OVERWORLD);
         var player = playerIn(uuid, overworld);
         var old = service.registerPlayer(player, 1);
-        old.addRequest(1, 1, -1L);
+        offer(old, new IncomingRequest(1, 1, -1L));
         long packed = PositionUtil.packPosition(1, 1);
         old.addReadyPayload(new QueuedPayload<>(new byte[]{1}, 1, 1L, packed));
 
@@ -352,7 +390,12 @@ class PaperRequestProcessingServiceTest {
         assertTrue(fresh.hasCompletedHandshake());
         assertEquals(List.of(uuid), processor.removals,
                 "the processing thread is told exactly once (dedup-group teardown)");
-        assertNull(fresh.pollIncomingRequest(), "fresh pending queue");
+        // Every carrier of cross-dimension work must be empty on the fresh state: the mailbox
+        // (declared but un-taken), the backlog (taken but un-admitted), and the send pipeline.
+        // A want declared for the OLD dimension must never route under the new one.
+        assertNull(fresh.peekIncomingBatch(), "fresh mailbox");
+        assertNull(fresh.peekWantSet(), "nothing published for the probe");
+        assertEquals(0, fresh.getBacklogSize(), "fresh backlog");
         assertFalse(fresh.hasEnqueuedColumn(packed), "fresh send pipeline");
         assertEquals(0, fresh.getSendQueueSize());
 
@@ -370,7 +413,7 @@ class PaperRequestProcessingServiceTest {
         var overworld = level(Level.OVERWORLD);
         var player = playerIn(uuid, overworld);
         var state = service.registerPlayer(player, 1);
-        state.addRequest(2, 2, -1L);
+        offer(state, new IncomingRequest(2, 2, -1L));
 
         when(player.isRemoved()).thenReturn(true);
         var respawned = playerIn(uuid, overworld); // genuinely different instance, same UUID
@@ -379,7 +422,7 @@ class PaperRequestProcessingServiceTest {
 
         assertSame(state, service.getPlayers().get(uuid), "respawn keeps the state");
         assertSame(respawned, state.getPlayer(), "the player handle is swapped to the new instance");
-        assertNotNull(state.pollIncomingRequest(), "pending work survives the respawn swap");
+        assertEquals(1, pendingBatch(state).size(), "pending work survives the respawn swap");
         assertTrue(processor.removals.isEmpty(), "no teardown for a respawn");
     }
 
@@ -474,9 +517,11 @@ class PaperRequestProcessingServiceTest {
         service.tick();
 
         assertEquals(List.of(new RecordingGenService.Submitted(uuid, 5, 5, 9L)), genService.submitted);
-        assertEquals(List.of(new RecordingProcessor.GenFailure(uuid, 5, 5, "minecraft:overworld", 9L)),
+        assertEquals(List.of(new RecordingProcessor.GenFailure(uuid, 5, 5, "minecraft:overworld", 9L, true)),
                 processor.genFailures,
-                "a bounced submit must feed a failure or the pending slot leaks forever");
+                "a bounced submit must feed a TRANSIENT failure (capacity is momentary — a "
+                        + "permanent NOT_GENERATED would blank the position for the session) "
+                        + "or the pending slot leaks forever");
     }
 
     @Test
@@ -492,7 +537,7 @@ class PaperRequestProcessingServiceTest {
         service.tick();
 
         assertTrue(genService.submitted.isEmpty(), "isRemoved short-circuits before submitGeneration");
-        assertEquals(List.of(new RecordingProcessor.GenFailure(uuid, 6, 6, "minecraft:overworld", 11L)),
+        assertEquals(List.of(new RecordingProcessor.GenFailure(uuid, 6, 6, "minecraft:overworld", 11L, true)),
                 processor.genFailures);
     }
 
@@ -504,7 +549,10 @@ class PaperRequestProcessingServiceTest {
         var uuid = UUID.randomUUID();
         var player = playerIn(uuid, level(Level.OVERWORLD));
         var state = service.registerPlayer(player, 1);
-        state.addRequest(1, 1, -1L); // there WOULD be work
+        // There WOULD be work at BOTH ingress stages: a declared want-set in the mailbox and
+        // an applied one the probe would walk.
+        offer(state, new IncomingRequest(1, 1, -1L));
+        publish(state, new IncomingRequest(1, 1, -1L));
         processor.ticketQueue.add(new OffThreadProcessor.GenerationTicketRequest(
                 uuid, 5, 5, "minecraft:overworld", 9L));
 
@@ -542,18 +590,65 @@ class PaperRequestProcessingServiceTest {
 
     // ---- PP-010: probe budget, dedupe, generation-ready skip ----
 
+    /**
+     * The probe reads the MAILBOX before the published want-set. A batch that arrived since
+     * the last routing cycle must be probed on its ARRIVAL tick — nothing is published yet,
+     * because publishing is what the processing thread does when it APPLIES the batch, which
+     * happens after this snapshot is built.
+     *
+     * <p>Without the mailbox arm a freshly declared position is never probed on its first
+     * routing cycle, and a want-set that fits under the per-player slot cap has no second
+     * cycle: it admits everything at once, the backlog drains, the want-set unpublishes.
+     * That is the converged steady state and every single-position dirty-broadcast
+     * re-request — i.e. the edited-loaded-column case, which would then disk-read
+     * pre-edit bytes instead of serving live. Folia's hold-release makes the same alignment
+     * deterministic; this is the sync path's equivalent, and only this test fails if it is
+     * "simplified" back to peekWantSet() alone.
+     */
+    @Test
+    void freshMailboxBatchIsProbedOnItsArrivalTickWithNothingPublished() {
+        var uuid = UUID.randomUUID();
+        var player = playerIn(uuid, level(Level.OVERWORLD));
+        var state = service.registerPlayer(player, 1);
+
+        long packed = PositionUtil.packPosition(1000, 0);
+        // Ingress only — exactly what handleBatchRequest does. Nothing applied, nothing published.
+        state.offerIncomingBatch(new IncomingBatch(
+                new IncomingRequest[]{new IncomingRequest(1000, 0, -1L)}));
+        assertNull(state.peekWantSet(),
+                "premise: the processing thread has not applied the batch, so nothing is published");
+
+        var probedPositions = new ArrayList<Long>();
+        service.setLoadedColumnProbe((lvl, cx, cz) -> {
+            probedPositions.add(PositionUtil.packPosition(cx, cz));
+            return new LoadedColumnData(cx, cz, new byte[]{1}, 10);
+        });
+
+        service.tick();
+
+        assertEquals(List.of(packed), probedPositions,
+                "the freshly arrived batch must be probed on its arrival tick");
+        var probes = processor.snapshots.get(0).loadedChunkProbes().get(uuid);
+        assertNotNull(probes, "the arrival tick's snapshot must carry the probe the router "
+                + "needs to resolve this very batch in-memory");
+        assertNotNull(probes.get(packed));
+    }
+
     @Test
     void probeBudgetCountsNullChunkAttemptsButNotDuplicateSkips() {
         var uuid = UUID.randomUUID();
         var player = playerIn(uuid, level(Level.OVERWORLD));
         var state = service.registerPlayer(player, 1);
 
-        // Order matters (FIFO queue): success A, duplicate of A, 511 unloaded, one overflow.
+        // Order matters (the want-set is declared closest-first and probed in that order):
+        // success A, duplicate of A, 511 unloaded, one overflow.
         long packedA = PositionUtil.packPosition(1000, 0);
-        state.addRequest(1000, 0, -1L);
-        state.addRequest(1000, 0, 50L); // duplicate: containsKey skip, must NOT charge the budget
-        for (int i = 0; i < 511; i++) state.addRequest(i, 1, -1L); // unloaded: null probes DO charge it
-        state.addRequest(2000, 0, -1L); // past the 512 budget: never probed
+        var wants = new ArrayList<IncomingRequest>();
+        wants.add(new IncomingRequest(1000, 0, -1L));
+        wants.add(new IncomingRequest(1000, 0, 50L)); // duplicate: containsKey skip, must NOT charge the budget
+        for (int i = 0; i < 511; i++) wants.add(new IncomingRequest(i, 1, -1L)); // unloaded: null probes DO charge it
+        wants.add(new IncomingRequest(2000, 0, -1L)); // past the 512 budget: never probed
+        publish(state, wants.toArray(new IncomingRequest[0]));
 
         var probedPositions = new ArrayList<Long>();
         service.setLoadedColumnProbe((lvl, cx, cz) -> {
@@ -584,8 +679,7 @@ class PaperRequestProcessingServiceTest {
         var uuid = UUID.randomUUID();
         var player = playerIn(uuid, level(Level.OVERWORLD));
         var state = service.registerPlayer(player, 1);
-        state.addRequest(7, 7, 0L);
-        state.addRequest(8, 8, -1L);
+        publish(state, new IncomingRequest(7, 7, 0L), new IncomingRequest(8, 8, -1L));
         genService.nextTick = List.of(new TickSnapshot.GenerationReadyData(
                 uuid, 7, 7, "minecraft:overworld", null, 0L, 1L));
 
@@ -603,6 +697,75 @@ class PaperRequestProcessingServiceTest {
                 "the generation outcome still reaches the snapshot post");
     }
 
+    /**
+     * Served-head filter: a position whose column payload already sits in the send pipeline
+     * (enqueuedColumns) is skipped by the probe without charging the budget. Under backlog
+     * retention the published want-set re-lists served positions every tick until the next
+     * 1 Hz declaration — without the filter the probe re-serializes that head 20×/s per
+     * player for a whole second.
+     */
+    @Test
+    void probeSkipsPositionsWithAPayloadAlreadyInTheSendPipeline() {
+        var uuid = UUID.randomUUID();
+        var player = playerIn(uuid, level(Level.OVERWORLD));
+        var state = service.registerPlayer(player, 1);
+
+        long served = PositionUtil.packPosition(5, 5);
+        publish(state, new IncomingRequest(5, 5, -1L), new IncomingRequest(6, 6, -1L));
+        // The served head: its payload is staged for send but not flushed yet (the probe
+        // runs before flushSendQueues within a tick).
+        state.addReadyPayload(new QueuedPayload<>(new byte[]{1}, 8, 1L, served));
+        assertTrue(state.hasEnqueuedColumn(served), "premise: payload is in the pipeline");
+
+        var probedPositions = new ArrayList<Long>();
+        service.setLoadedColumnProbe((lvl, cx, cz) -> {
+            probedPositions.add(PositionUtil.packPosition(cx, cz));
+            return null;
+        });
+
+        service.tick();
+
+        assertEquals(List.of(PositionUtil.packPosition(6, 6)), probedPositions,
+                "the in-pipeline position must be skipped (the router resolves it as a "
+                        + "duplicate — the probe is guaranteed-unused)");
+    }
+
+    /**
+     * The lifecycle pass rotates its starting player each tick. ConcurrentHashMap iteration
+     * order is stable, so without rotation the players unlucky enough to iterate last get
+     * zero probe coverage on EVERY tick once the global budget exhausts mid-pass — permanent
+     * starvation, not fair sharing.
+     */
+    @Test
+    void probePassRotatesItsStartingPlayerAcrossTicks() {
+        var uuidA = UUID.randomUUID();
+        var uuidB = UUID.randomUUID();
+        var stateA = service.registerPlayer(playerIn(uuidA, level(Level.OVERWORLD)), 1);
+        var stateB = service.registerPlayer(playerIn(uuidB, level(Level.OVERWORLD)), 1);
+        long pA = PositionUtil.packPosition(1, 1);
+        long pB = PositionUtil.packPosition(2, 2);
+        publish(stateA, new IncomingRequest(1, 1, -1L));
+        publish(stateB, new IncomingRequest(2, 2, -1L));
+
+        var probedPositions = new ArrayList<Long>();
+        service.setLoadedColumnProbe((lvl, cx, cz) -> {
+            probedPositions.add(PositionUtil.packPosition(cx, cz));
+            return null;
+        });
+
+        service.tick();
+        service.tick();
+
+        assertEquals(4, probedPositions.size(), "both players probed on both ticks");
+        long tick1First = probedPositions.get(0);
+        long tick1Second = probedPositions.get(1);
+        assertTrue((tick1First == pA && tick1Second == pB) || (tick1First == pB && tick1Second == pA),
+                "tick 1 probes each player once");
+        assertEquals(List.of(tick1Second, tick1First), probedPositions.subList(2, 4),
+                "tick 2 must start from the OTHER player — a fixed iteration order would "
+                        + "starve whoever trails once the global budget exhausts mid-pass");
+    }
+
     // ---- PP-038 (service leg): shutdown with queued work; late disk submits are inert ----
 
     @Test
@@ -611,7 +774,7 @@ class PaperRequestProcessingServiceTest {
         var level = level(Level.OVERWORLD);
         var player = playerIn(uuid, level);
         var state = service.registerPlayer(player, 1);
-        state.addRequest(1, 1, -1L);
+        offer(state, new IncomingRequest(1, 1, -1L));
         processor.ticketQueue.add(new OffThreadProcessor.GenerationTicketRequest(
                 uuid, 5, 5, "minecraft:overworld", 9L));
 

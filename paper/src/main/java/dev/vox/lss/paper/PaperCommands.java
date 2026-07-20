@@ -83,7 +83,7 @@ public class PaperCommands implements CommandExecutor, TabCompleter {
                 service.getBandwidthLimiter(),
                 genService != null ? genService.getDiagnostics() : null,
                 service.getPlayers().values()
-        );
+        ).withV16Line(service.getV16CompatManager().diagLineOrNull());
 
         for (var line : DiagnosticsFormatter.formatDiagnostics(data)) {
             sender.sendMessage(line);

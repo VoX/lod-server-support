@@ -65,7 +65,7 @@ class VoxelColumnReceiverTest {
     void setUp() {
         manager = new LodRequestManager();
         manager.onSessionConfig(new SessionConfigS2CPayload(
-                dev.vox.lss.common.LSSConstants.PROTOCOL_VERSION, true, 64, 100, 100, true), "recv-test");
+                dev.vox.lss.common.LSSConstants.PROTOCOL_VERSION, true, 64, true), "recv-test");
         dim = ResourceKey.create(Registries.DIMENSION, Identifier.parse("lss_test:receiver"));
         manager.setLastDimensionForTest(dim);
     }
@@ -131,7 +131,7 @@ class VoxelColumnReceiverTest {
         manager.onIngestFailure(dim, packed); // consumer rejects the clear
         assertEquals(500L, manager.columnsForTest().timestampFor(packed),
                 "a rejected clear re-requests with the pre-clear stamp (WS6)");
-        assertTrue(manager.columnsForTest().classify(packed, true) > 0,
+        assertTrue(manager.columnsForTest().classify(packed) > 0,
                 "the position must re-request, not park");
     }
 

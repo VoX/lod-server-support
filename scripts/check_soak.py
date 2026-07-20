@@ -4,7 +4,8 @@ docs/planning/soak-test-design.md
 
 Laws (evaluated as deltas between consecutive VERIFIED-QUIESCENT snapshots within
 same-client-run, same-dimension windows; dimension/join boundaries get anomaly checks only):
-  A1 requests:    d(client.requested_total) == d(responses.columns+up_to_date+not_generated+rate_limited) + d(server.service.duplicate_skips) + d(server.service.queue_full)
+  A1 requests:    d(client.requested_total) == d(responses.columns+up_to_date+not_generated) + d(server.service.duplicate_skips) + d(server.service.superseded) + d(server.service.range_filtered)
+                  [v17 want-set: requested_total counts every DECLARED entry, re-declares included]
   A2 delivery:    d(server.service.columns_sent) == d(client.received_columns); d(server.service.bytes_sent) == d(client.received_bytes); d(client.dropped) == 0
   A3 sources:     d(service.columns_sent) <= d(service.in_memory + disk.successful + generation.completed)  [sanity bound, not exact]
   A4 generation:  d(generation.submitted) == d(generation.completed + generation.timeouts + generation.removed_in_flight)
@@ -12,14 +13,12 @@ same-client-run, same-dimension windows; dimension/join boundaries get anomaly c
                   d(disk.successful) == d(disk.completed - not_found - all_air - errors - saturated)
   A6 monotonic:   server cumulative whitelist (disk totals, generation totals, service.*, bandwidth.total_bytes) over process lifetime;
                   client cumulative counters within one run AND one dimension segment only; server per-player rows are never checked
-  A7 anomalies:   disk.errors / generation.timeouts / client.dropped > 0 always fail; disk.saturated / responses.rate_limited fail unless the scenario opts in
-  B1 rate-limit:  d(client.responses.rate_limited) == d(service.sync_rate_limited + service.gen_rate_limited + disk.saturated)
-                  [single-client; disk saturation surfaces to the client as rate-limited BY DESIGN]
+  A7 anomalies:   disk.errors / generation.timeouts / client.dropped > 0 always fail; disk.saturated fails unless the scenario opts in
   B2 pacing:      d(bandwidth.total_bytes) <= bytesPerSecondLimitGlobal * dt * 1.3 over every consecutive
                   server snapshot pair — armed only when the scenario config sets the global cap
 
 Vacuous-pass guards: every scenario declares per-(run, dimension-segment) floors on the number
-of client-laws windows actually evaluated (MIN_CLIENT_WINDOWS) — a run where A1/A2/A5/B1 never
+of client-laws windows actually evaluated (MIN_CLIENT_WINDOWS) — a run where A1/A2/A5 never
 fired fails loudly instead of passing on zero evidence. --validate additionally rejects scenario
 config overrides whose keys are not real lss-server-config.json fields (GSON silently ignores
 typos, which would de-fang a scenario's whole premise).
@@ -27,15 +26,22 @@ typos, which would de-fang a scenario's whole premise).
 Quiescence predicate: across >=2 consecutive server snapshots in the same join segment,
 service.requests_received, service.columns_sent, disk.submitted, generation.submitted and
 generation.completed are unchanged AND (at both endpoints) every players[] row has
-held_sync == held_gen == send_queue == 0, disk.pending == 0, generation.active == 0,
+held_sync == held_gen == send_queue == backlog == 0, disk.pending == 0, generation.active == 0,
 dirty.pending == 0; joined to the nearest-in-wallMs client snapshot of the matching run
 (<= 3 s skew) which must have tracker_in_flight == 0 and queued == 0.
+
+v17 want-set note: service.requests_received going still IS convergence — a converged client
+sends NOTHING (no heartbeat batch), so the stillness of that counter is load-bearing for every
+law below. players[].backlog is the v17 addition: a retained (slot-gated) want entry is real
+outstanding work with no other gauge, and it must drain before a window may open.
+tracker_in_flight keeps its meaning (declared-and-unanswered — the client's awaiting-answer
+set) and queued is still the client decode-queue depth; neither field changed shape.
 
 Modes:
   check_soak.py --validate <scenario-name>      pre-flight scenario/config/registry validation
   check_soak.py <results-dir> <scenario-name>   evaluate laws + named checks, write verdict.json
   check_soak.py --selftest                      in-memory pass/catch self-test of every law
-                                                (A1-A7, B1, B2), quiescence, disc completeness,
+                                                (A1-A7, B2), quiescence, disc completeness,
                                                 window floors, and all named checks
 """
 
@@ -52,34 +58,38 @@ DEFAULT_DIRTY_BROADCAST_SECONDS = 5  # used when the scenario -config.json omits
 # Scenarios with more than one client run (kick → rejoin); everything else has exactly 1.
 EXPECTED_RUNS = {"warm-rejoin": 2, "dirty-while-offline": 2, "dimension-rejoin-warm": 2}
 
-# A7 opt-ins. The spec treats saturated/rate_limited as one opt-in pair (disk saturation
-# surfaces to the client as rate_limited BY DESIGN), so opting in suppresses both flags.
-# errors / timeouts / dropped can never be opted out.
+# A7 opt-ins. Historically saturated/rate_limited were ONE opt-in pair (disk saturation
+# surfaced to the client as rate_limited BY DESIGN). v17 retires the rate-limited response
+# from the wire, so the pair is SPLIT and only "saturated" survives — deliberately kept
+# rather than deleted with its twin: disk.saturated is still a real counter, and v17's
+# hasHeadroom() gate should now hold it at 0, which makes an A7 hit here a STRONGER signal
+# than before (the gate leaked), not a vacuous one. errors / timeouts / dropped can never
+# be opted out.
 ANOMALY_OPT_INS = {
-    "fresh-backfill": frozenset({"rate_limited", "saturated"}),
-    "warm-rejoin": frozenset({"rate_limited", "saturated"}),
-    "dimension-trip": frozenset({"rate_limited", "saturated"}),
+    "fresh-backfill": frozenset({"saturated"}),
+    "warm-rejoin": frozenset({"saturated"}),
+    "dimension-trip": frozenset({"saturated"}),
     "dirty-broadcast": frozenset(),
-    "rate-limit-storm": frozenset({"rate_limited", "saturated"}),
-    "disk-saturation": frozenset({"rate_limited", "saturated"}),
-    "generation-disabled": frozenset({"rate_limited", "saturated"}),
-    "generation-capacity-stress": frozenset({"rate_limited", "saturated"}),
-    "bandwidth-throttle": frozenset({"rate_limited", "saturated"}),
-    "cold-restart-resync": frozenset({"rate_limited", "saturated"}),
+    "rate-limit-storm": frozenset({"saturated"}),
+    "disk-saturation": frozenset({"saturated"}),
+    "generation-disabled": frozenset({"saturated"}),
+    "generation-capacity-stress": frozenset({"saturated"}),
+    "bandwidth-throttle": frozenset({"saturated"}),
+    "cold-restart-resync": frozenset({"saturated"}),
     "enabled-false": frozenset(),
-    "teleport-prune": frozenset({"rate_limited", "saturated"}),
-    "dirty-range-filter": frozenset({"rate_limited", "saturated"}),
-    "dirty-during-backfill": frozenset({"rate_limited", "saturated"}),
-    "dirty-while-offline": frozenset({"rate_limited", "saturated"}),
-    "clearcache-mid-session": frozenset({"rate_limited", "saturated"}),
-    "dimension-rejoin-warm": frozenset({"rate_limited", "saturated"}),
+    "teleport-prune": frozenset({"saturated"}),
+    "dirty-range-filter": frozenset({"saturated"}),
+    "dirty-during-backfill": frozenset({"saturated"}),
+    "dirty-while-offline": frozenset({"saturated"}),
+    "clearcache-mid-session": frozenset({"saturated"}),
+    "dimension-rejoin-warm": frozenset({"saturated"}),
     # Paper/Folia (SOAK_PLATFORM=paper|folia): cold-cache disc resync from the base world, like
     # warm-rejoin run 1, so the same load-shaped opt-ins apply.
-    "paper-dirty-falling-block": frozenset({"rate_limited", "saturated"}),
+    "paper-dirty-falling-block": frozenset({"saturated"}),
 }
 
 # Vacuous-pass floors: minimum number of client-laws windows (the quiescent pairs where
-# A1/A2/A5/B1 actually evaluated) per (client run, dimension segment). Calibrated against
+# A1/A2/A5 actually evaluated) per (client run, dimension segment). Calibrated against
 # recorded green runs at roughly one third of observed counts: fresh-backfill 31, warm-rejoin
 # 27/17, dimension-trip 6/22/16, dirty-broadcast 16. New scenarios get a conservative 3
 # (their converged tails run 40+ s at 5 s snapshot cadence).
@@ -118,13 +128,18 @@ EXCLUSION_RADIUS = 8
 # reads exactly these). GSON silently ignores unknown keys, so a typo in a scenario's
 # -config.json would silently fall back to defaults and de-fang the scenario; --validate
 # rejects unknown keys and wrong JSON types instead.
-SERVER_CONFIG_BOOL_KEYS = frozenset({"enabled", "enableChunkGeneration"})
+SERVER_CONFIG_BOOL_KEYS = frozenset({"enabled", "enableChunkGeneration", "useBackgroundReadPriority"})
 SERVER_CONFIG_INT_KEYS = frozenset({
     "lodDistanceChunks", "bytesPerSecondLimitPerPlayer", "diskReaderThreads",
     "sendQueueLimitPerPlayer", "bytesPerSecondLimitGlobal",
     "generationConcurrencyLimitGlobal", "generationTimeoutSeconds",
-    "dirtyBroadcastIntervalSeconds", "syncOnLoadConcurrencyLimitPerPlayer",
+    "dirtyBroadcastIntervalSeconds",
     "generationConcurrencyLimitPerPlayer", "perDimensionTimestampCacheSizeMB",
+    # Miss-memo TTL (0 = off): scenarios may pin the memo off for A/B of the read-churn
+    # dynamics. NOTE ttl=0 restores pre-memo READ CHURN only, not pre-memo ORDERING —
+    # the generation pacing rules are ttl-independent (unified 2026-07-19), so an
+    # inversion A/B against a pre-memo recording is no longer apples-to-apples.
+    "missMemoTtlSeconds",
 })
 SERVER_CONFIG_KEYS = SERVER_CONFIG_BOOL_KEYS | SERVER_CONFIG_INT_KEYS
 
@@ -142,7 +157,12 @@ SERVER_MOVING = (
 )
 # Quiescence: gauges that must be ZERO at both endpoints of the pair.
 SERVER_DRAINS = ("disk.pending", "generation.active", "dirty.pending")
-PLAYER_DRAINS = ("held_sync", "held_gen", "send_queue")
+PLAYER_DRAINS = ("held_sync", "held_gen", "send_queue", "backlog")
+# backlog (v17) is a strict drain: a want entry retained by a full slot / exhausted disk pool is
+# real outstanding work that no other gauge reports (held_sync/held_gen count ADMITTED work only).
+# A nonzero backlog at either endpoint means the router still owes the client answers, so the
+# window must not open. It reaches 0 both by draining and by the next replace superseding it —
+# either way the client has stopped re-declaring, which is what convergence means.
 # dirty.pending tolerates a small benign light-settle trickle in the quiescence predicate: loaded
 # chunks re-light and re-mark dirty across save cycles (esp. after a dimension re-load), so it
 # oscillates 0-N and rarely sits exactly at 0 — the same drift the dirty-resave check tolerates.
@@ -157,11 +177,29 @@ SERVER_MONOTONIC = (
     "service.requests_received", "service.columns_sent", "service.bytes_sent",
     "service.duplicate_skips", "service.queue_full", "service.up_to_date",
     "service.in_memory", "service.disk_resolved", "service.gen_drained",
-    "service.sync_rate_limited", "service.gen_rate_limited",
+    # v17 want-set dispositions (replaced sync_rate_limited/gen_rate_limited, which left the
+    # wire with RESPONSE_RATE_LIMITED). Both are load-bearing terms of law A1: superseded =
+    # received-then-silently-dropped (mailbox overwrite, backlog replace, residual saturation
+    # drop, dedup-primary departure), healed by the client's 1 Hz re-declaration;
+    # range_filtered = dropped by the Chebyshev ingress guard (the movement race).
+    "service.superseded", "service.range_filtered",
+    # Server-owned generation: disk misses resolved into transient silent drops (law A5's
+    # dedicated term — a subset of superseded events, counted separately because
+    # backlog-replace supersession never touches disk).
+    "service.miss_dropped",
     "disk.submitted", "disk.completed", "disk.not_found", "disk.all_air",
     "disk.errors", "disk.saturated", "disk.successful",
+    # Miss-memo rung hits (v0.7.1 miss memo): a fresh memoized absence skipped the redundant
+    # disk re-read and escalated straight to the generation ladder. Law A5 counts these as
+    # VIRTUAL not-founds on its left side — each hit is dispositioned exactly like a real
+    # miss (gen submit or miss_dropped), so the identity stays exact.
+    "disk.memo_hits",
     "generation.submitted", "generation.completed", "generation.timeouts",
     "generation.removed_in_flight",
+    # Ordering observability (miss-memo pacing): gate/pacing refusals + far-before-near
+    # completion evidence. Monotonic counters; no law consumes them yet — read them from
+    # the raw JSONL for A/B comparisons (soak_report does not surface them).
+    "generation.order_gated", "generation.inversions",
     "dirty.broadcast_positions", "dirty.suppressed_total",
     "bandwidth.total_bytes",
     # The flagship a9bee8d honest-re-resolution counter — emitted every snapshot, cumulative.
@@ -173,7 +211,6 @@ SERVER_MONOTONIC = (
 CLIENT_MONOTONIC = (
     "received_columns", "received_bytes", "dropped",
     "responses.columns", "responses.up_to_date", "responses.not_generated",
-    "responses.rate_limited",
     "requested_total", "send_cycles",
 )
 
@@ -202,12 +239,13 @@ KNOWN_CLIENT_KEYS = {
     # server_enabled and probes are optional additions (older recordings predate them):
     # server_enabled = the session-config enabled flag; probes = per-position timestamps
     # emitted only when the client runs with -Dlss.soak.probes.
-    # effective_lod/request_queue/rtt/ingest_failures are the round-2 client data-capture
-    # additions; like probes they are presence-optional (older recordings predate them).
+    # effective_lod/rtt/ingest_failures are the round-2 client data-capture additions; like
+    # probes they are presence-optional (older recordings predate them). request_queue left
+    # with v17's drip-feed queue; rtt now measures last-declare->answer, not first-ask->answer.
     "snapshot": {"event", "wallMs", "dimension", "received_columns", "received_bytes",
                  "dropped", "responses", "requested_total", "send_cycles", "columns",
                  "scan", "tracker_in_flight", "queued", "server_enabled", "probes",
-                 "effective_lod", "request_queue", "rtt", "ingest_failures"},
+                 "effective_lod", "rtt", "ingest_failures"},
     # One scripted client-side action (-Dlss.soak.clientActionAt); resets the request
     # metrics, so the loader treats it as a client segment boundary.
     "action": {"event", "wallMs", "action", "atSeconds"},
@@ -439,17 +477,33 @@ def window_label(ps, cs, run=None, dim=None):
 # ------------------------------------------------------------------------------- laws
 
 def law_A1(ps, cs, pc, cc, window):
+    """v17 request conservation. requested_total counts every DECLARED entry (re-declares
+    included — a position unanswered for N scans is declared N times). Each server-received
+    entry ends exactly one way by the time both endpoints are quiescent (backlog == 0):
+    answered on the wire (columns / up_to_date / not_generated), duplicate-skipped (a
+    re-declaration of a still-pending position — the DOMINANT disposition under 1 Hz
+    re-declaration), superseded (silent drop, healed by re-declaration), or range-filtered
+    at ingress (the movement race).
+
+    queue_full is NOT a term: a send-queue-full break RETAINS its entries with no
+    disposition at all, and backlog == 0 at both quiescent endpoints guarantees each
+    retained entry later resolved or was superseded inside the window. It stays a pure
+    diagnostic counter."""
     d_req = delta(pc, cc, "requested_total")
     d_resp = sum(delta(pc, cc, f"responses.{k}")
-                 for k in ("columns", "up_to_date", "not_generated", "rate_limited"))
+                 for k in ("columns", "up_to_date", "not_generated"))
     d_dup = delta(ps, cs, "service.duplicate_skips")
-    d_qf = delta(ps, cs, "service.queue_full")
-    if d_req != d_resp + d_dup + d_qf:
+    d_sup = delta(ps, cs, "service.superseded")
+    d_rf = delta(ps, cs, "service.range_filtered")
+    expected = d_resp + d_dup + d_sup + d_rf
+    if d_req != expected:
         return [Violation("A1", window,
-                          "requested_total delta != responses + duplicate_skips + queue_full",
+                          "requested_total delta != responses + duplicate_skips + "
+                          "superseded + range_filtered",
                           {"d_requested_total": d_req, "d_responses": d_resp,
-                           "d_duplicate_skips": d_dup, "d_queue_full": d_qf,
-                           "expected": d_resp + d_dup + d_qf, "actual": d_req})]
+                           "d_duplicate_skips": d_dup, "d_superseded": d_sup,
+                           "d_range_filtered": d_rf,
+                           "expected": expected, "actual": d_req})]
     return []
 
 
@@ -503,13 +557,47 @@ def law_A5(ps, cs, pc, cc, window):
     d_to = delta(ps, cs, "generation.timeouts")
     if d_to == 0:  # stated precondition: valid only when timeouts == 0 in window
         d_nf = delta(ps, cs, "disk.not_found")
+        # An errored read (e.g. a 10 s IOWorker-starvation timeout) delivers an EMPTY
+        # result, which the processor resolves through the same not-found ladder — it
+        # lands on the right side (gen submit / miss_dropped) without ever counting
+        # disk.not_found. Fold errors into the left side or IO pressure breaks the
+        # identity by exactly the error count (seen live 2026-07-17, 20 timeouts).
+        d_nf += delta(ps, cs, "disk.errors")
+        # Miss-memo rung hits are VIRTUAL not-founds: the read was skipped (no disk.not_found
+        # increment) but the hit was dispositioned exactly like a real miss — a gen submit or
+        # a miss_dropped. Fold them into the left side; both memo dispositions then balance
+        # by inspection (hit->submit: +1/+1 submitted; hit->drop: +1/+1 miss_dropped).
+        d_nf += delta(ps, cs, "disk.memo_hits")
         d_gen_sub = delta(ps, cs, "generation.submitted")
         d_ng = delta(pc, cc, "responses.not_generated")
-        if d_nf != d_gen_sub + d_ng:
+        # Server-owned generation: a miss can also resolve into a TRANSIENT silent drop
+        # (gen slot full at the miss, capacity/removed-player reject, ghost delivery) —
+        # counted in the dedicated service.miss_dropped (NOT service.superseded, whose
+        # backlog-replace events never touch disk and would over-balance this identity).
+        # Latent false-positive (documented, accepted): a PERMANENT generation failure
+        # (extraction error / null chunk) lands on BOTH right-hand terms for one miss —
+        # generation.submitted at submit AND responses.not_generated when the answer
+        # reaches a still-connected client — so the identity OVER-counts the RHS by one
+        # per failure while connected (a disconnect before the answer rebalances it).
+        # Same family: the two generation-ticket drop paths in drainGenerationTicketRequests
+        # (state gone / dimension mismatch, both platforms) skip miss_dropped, so a
+        # near-boundary drop on dimension-trip UNDER-counts the RHS by one (a memo-hit-
+        # admitted ticket dropped there leaves the +1 on disk.memo_hits unbalanced, same
+        # window and magnitude). And with TWO LSS clients (no current scenario has them):
+        # a dedup fan-out miss counts disk.not_found ONCE but every attached player runs
+        # its own disposition — balanced only when all attachees admit (piggyback skips
+        # totalSubmitted); each pacing/spread/slot-full REFUSED attachee adds an extra
+        # miss_dropped, OVER-counting the RHS by one. No scenario currently produces
+        # permanent gen failures; if A5 reds, check both counts against CLAUDE.md's flake
+        # catalog before chasing conservation.
+        d_md = delta(ps, cs, "service.miss_dropped")
+        if d_nf != d_gen_sub + d_ng + d_md:
             out.append(Violation("A5", window,
-                                 "disk.not_found != generation.submitted + not_generated responses",
+                                 "disk.not_found != generation.submitted + not_generated "
+                                 "responses + miss_dropped",
                                  {"d_not_found": d_nf, "d_gen_submitted": d_gen_sub,
-                                  "d_not_generated": d_ng, "expected": d_gen_sub + d_ng,
+                                  "d_not_generated": d_ng, "d_miss_dropped": d_md,
+                                  "expected": d_gen_sub + d_ng + d_md,
                                   "actual": d_nf}))
     d_ok = delta(ps, cs, "disk.successful")
     d_part = (delta(ps, cs, "disk.completed") - delta(ps, cs, "disk.not_found")
@@ -576,31 +664,20 @@ def law_A7_client(prev, cur, window, opt_ins):
     """prev may be None: the run-head window (counters are exactly 0 at process start).
     Later segment heads anchor at the last pre-boundary row instead — counters are
     run-cumulative, so pv=0 there would re-bill earlier segments' anomalies."""
+    # v17: the client's only A7-relevant anomaly is `dropped` (never optable). The
+    # responses.rate_limited arm left with RESPONSE_RATE_LIMITED — a slot bounce is no
+    # longer observable at the client at all; it is a retained backlog entry server-side.
     out = []
     _anomaly(prev, cur, "dropped", window, "client dropped", opt_ins, None, out)
-    _anomaly(prev, cur, "responses.rate_limited", window, "responses.rate_limited",
-             opt_ins, "rate_limited", out)
     return out
 
 
-def law_B1(ps, cs, pc, cc, window):
-    """Rate-limit conservation (single client): every client rate-limited response has
-    exactly one server-side cause — a sync slot bounce, a gen slot bounce, or a saturated
-    disk read (which surfaces as rate-limited BY DESIGN). Vacuous (0 == 0) in scenarios
-    without contention; live in the storm scenarios."""
-    d_rl = delta(pc, cc, "responses.rate_limited")
-    d_src = (delta(ps, cs, "service.sync_rate_limited")
-             + delta(ps, cs, "service.gen_rate_limited")
-             + delta(ps, cs, "disk.saturated"))
-    if d_rl != d_src:
-        return [Violation("B1", window,
-                          "client rate_limited != sync_rate_limited + gen_rate_limited + saturated",
-                          {"d_client_rate_limited": d_rl,
-                           "d_sync_rate_limited": delta(ps, cs, "service.sync_rate_limited"),
-                           "d_gen_rate_limited": delta(ps, cs, "service.gen_rate_limited"),
-                           "d_saturated": delta(ps, cs, "disk.saturated"),
-                           "expected": d_src, "actual": d_rl})]
-    return []
+# law_B1 (rate-limit conservation: client rate_limited == sync + gen bounces + saturated)
+# was DELETED with protocol v17. Its subject — the RESPONSE_RATE_LIMITED wire response —
+# no longer exists: a full slot retains the want entry silently and the client's 1 Hz
+# re-declaration heals it. The conservation it provided is not lost, it MOVED: the silent
+# drops it used to make observable are now counted in service.superseded, which is a term
+# of law A1. Do not resurrect B1 without a wire response to conserve.
 
 
 def law_B2(snaps, cap_bytes_per_sec):
@@ -655,7 +732,7 @@ def check_window_floors(floors, client_windows):
 
 def evaluate_laws(ctx):
     """Returns (violations, windows_evaluated, client_windows_evaluated). Window kinds:
-    - in-window quiescent pairs (same run + same dimension segment): A1-A5 + B1 + A7
+    - in-window quiescent pairs (same run + same dimension segment): A1-A5 + A7
     - boundary-spanning quiescent pairs (join/dimension boundary between them): A7 only
       (the spec: boundaries get drain+anomaly checks only)
     - head/tail anomaly coverage: process-start -> first qpoint and last qpoint -> final
@@ -698,7 +775,6 @@ def evaluate_laws(ctx):
         v += law_A2(ps, cs, pc, cc, win)
         if not skip_a5:
             v += law_A5(ps, cs, pc, cc, win)
-        v += law_B1(ps, cs, pc, cc, win)
         client_windows[key] = client_windows.get(key, 0) + 1
         if get_path(cc, "requested_total") - get_path(pc, "requested_total") > 0:
             traffic_windows += 1
@@ -723,8 +799,7 @@ def evaluate_laws(ctx):
         cc = csnaps[first_q.cib]
         pc = {"wallMs": join["wallMs"], "requested_total": 0, "received_columns": 0,
               "received_bytes": 0, "dropped": 0,
-              "responses": {"columns": 0, "up_to_date": 0, "not_generated": 0,
-                            "rate_limited": 0}}
+              "responses": {"columns": 0, "up_to_date": 0, "not_generated": 0}}
         win = window_label(ps, cs, run=run, dim=cc.get("dimension")) + " run-start"
         violations += run_client_laws(ps, cs, pc, cc, win, (run, first_q.cseg))
         windows += 1
@@ -1004,31 +1079,47 @@ def make_disc_completeness(scenario, run=1):
     return check
 
 
-@named_check("rate-limit-storm", ["server.service.gen_rate_limited", "server.generation.completed",
-                                  "client.responses.rate_limited"])
+@named_check("rate-limit-storm", ["server.service.superseded", "server.generation.completed"])
 def check_rate_limit_storm(ctx):
-    """Tiny sync slot cap vs the client's generation-request flood: the whole bounce loop
-    (router rateLimit -> wire rate-limited -> onRateLimited -> retry mark -> scanner backoff)
-    must actually fire, and the system must still reconverge to a complete disc."""
+    """Small fresh disc (lodDistance 12) declared at the FULL constant want-set budget.
+
+    HISTORICAL NAME, THIRD PREMISE. (1) Pre-v17 this drove the retired rate-limit bounce
+    loop. (2) Under early v17 its syncOnLoadConcurrencyLimitPerPlayer:4 shrank the whole
+    want-set to 16/scan (the scan budget derived from the cap), so it pinned the
+    want-set/gate coupling with a superseded<=50 ceiling — measured 0. (3) Server-owned
+    generation DELETED both the knob and the coupling: the client always declares the
+    constant WANT_SET_BUDGET (800), the server generates on any disk miss, and a miss that
+    cannot take a generation slot is a TRANSIENT silent drop counted superseded (never a
+    wire answer). The file name is kept (renaming touches six keyed tables).
+
+    WHAT IT PINS NOW: a small fresh disc (~165 LSS positions behind vanilla's own square)
+    converges through default gates with BOUNDED transient-drop churn. Misses beyond the
+    generation caps (40/64) drop superseded and heal by re-declaration at 1 Hz, so
+    superseded is nonzero but must stay in the low hundreds and STOP at convergence —
+    unbounded growth means re-declaration is not converging (positions never satisfy).
+    On a gen-ENABLED server NOT_GENERATED must never fire (the permanence guarantee is
+    pinned in generation-capacity-stress where the bottleneck makes it interesting).
+
+    MEASURED (Task 10 live run): superseded == 370, all of it miss-drop churn
+    (miss_dropped == 370 exactly; not_found 579 == gen_submitted 209 + 370 — law A5 exact),
+    fully quiescent tail. Ceiling set to ~2x measured: convergent churn is bounded by the
+    disc (165 positions retrying until the 40/64 gen caps drain them), while a broken
+    healing loop grows superseded by ~150/scan for the whole run (thousands)."""
     last = ctx.server_snaps[-1]
-    if last["service"]["gen_rate_limited"] < 1:
+    if last["service"]["superseded"] > 800:
         yield Violation("rate-limit-storm", "final snapshot",
-                        "router slot bounce (gen_rate_limited) never fired — the storm "
-                        "premise did not hold",
-                        {"expected": ">= 1", "actual": last["service"]["gen_rate_limited"]})
+                        "transient-drop churn did not converge: superseded kept growing, so "
+                        "re-declared positions are not being satisfied (the disk-miss "
+                        "escalation or the silent-drop healing loop is broken)",
+                        {"expected": "<= 800", "actual": last["service"]["superseded"]})
     fc = ctx.final_client(1)
     if fc is None:
         yield Violation("rate-limit-storm", "run1", "no client snapshots in run 1", {})
         return
-    rl = fc["responses"]["rate_limited"]
-    if rl < 50:
-        yield Violation("rate-limit-storm", "run1 final snapshot",
-                        "client saw too few rate-limited responses for a storm",
-                        {"expected": ">= 50", "actual": rl})
     # Floor calibrated for lodDistance=12 / exclusion~8: vanilla's own loaded square covers
     # rings 9-10, so only the outer rings (~165 positions) route through LSS generation.
     # Disc-completeness separately proves nothing was orphaned; this floor only asserts
-    # generation kept making real progress through the bounce storm.
+    # generation kept making real progress through the churn.
     if last["generation"]["completed"] <= 120:
         yield Violation("rate-limit-storm", "final snapshot",
                         "fresh-world backfill did not generate through the storm",
@@ -1039,27 +1130,54 @@ def check_rate_limit_storm(ctx):
                         {"wallMs": last["wallMs"]})
 
 
-@named_check("disk-saturation", ["server.disk.saturated", "client.responses.rate_limited"])
+@named_check("disk-saturation", ["server.disk.saturated", "server.service.superseded"])
 def check_disk_saturation(ctx):
-    """One reader thread (queue capacity 33) vs a 200-slot sync flood: the saturated leg of
-    A5/B1 must go nonzero, surface to the client as rate-limited, and still converge."""
+    """One reader thread (queue capacity 33) vs a 200-slot sync flood — PREMISE FLIPPED at v17.
+
+    Pre-v17 this asserted saturation MUST occur (disk.saturated >= 1) and surface to the
+    client as rate-limited: the router submitted blindly into a full pool and the overflow
+    bounced onto the wire. That was issue #32's client-visible failure mode.
+
+    v17 puts an AbstractChunkDiskReader.hasHeadroom() gate in front of every submit: the
+    router stops submitting into a full pool and RETAINS the want entry in the backlog
+    instead. So the same threads:1-vs-200-slot flood must now produce ZERO saturation —
+    the backlog absorbs exactly what used to bounce. This scenario is now the proof that
+    the headroom gate holds under the harshest disk contention the harness can create, and
+    that absorbing it still converges (the quiescent tail).
+
+    A nonzero disk.saturated here means the gate leaked (a race, or a submit path that
+    skipped the check) — the residual saturation drop is silent and counted `superseded`,
+    so nothing is lost, but the gate is not doing its job.
+
+    THIS IS ALSO THE HARNESS'S SUPERSESSION PROOF. Contention needs a want-set that outruns
+    SERVICE, which is what threads:1 creates: the client declares the constant WANT_SET_BUDGET
+    (800) each scan while one reader thread drains it slowly, so the retained backlog deepens
+    and every 1 Hz replace drops what is still undrained. The number below is MEASURED, not
+    derived (superseded=420, backlog high-water 760, pre-server-owned-generation baseline)."""
     last = ctx.server_snaps[-1]
-    if last["disk"]["saturated"] < 1:
+    if last["disk"]["saturated"] != 0:
         yield Violation("disk-saturation", "final snapshot",
-                        "disk.saturated never fired — the flood did not overrun the reader queue",
-                        {"expected": ">= 1", "actual": last["disk"]["saturated"]})
-    fc = ctx.final_client(1)
-    if fc is None:
+                        "disk.saturated fired despite the v17 headroom gate — the router "
+                        "submitted into a full pool (gate leaked)",
+                        {"expected": "== 0", "actual": last["disk"]["saturated"]})
+    # Measured: superseded=420 with backlog high-water 760 on the first live v17 run.
+    # 100 is a conservative floor, not a target: it asserts the retained backlog really did
+    # build and get replaced (i.e. the absorption this scenario claims to prove actually
+    # happened) rather than the flood being served comfortably.
+    if last["service"]["superseded"] < 100:
+        yield Violation("disk-saturation", "final snapshot",
+                        "want-set supersession never built up — the saturation premise did "
+                        "not hold (a 1-thread pool under an 800-entry want-set must leave "
+                        "entries undrained at each replace), so the headroom gate's zero "
+                        "saturation proves nothing here",
+                        {"expected": ">= 100", "actual": last["service"]["superseded"]})
+    if ctx.final_client(1) is None:
         yield Violation("disk-saturation", "run1", "no client snapshots in run 1", {})
         return
-    if fc["responses"]["rate_limited"] < 1:
-        yield Violation("disk-saturation", "run1 final snapshot",
-                        "saturation never surfaced to the client as rate-limited",
-                        {"expected": ">= 1", "actual": fc["responses"]["rate_limited"]})
     if (len(ctx.server_snaps) - 1) not in ctx.quiescent_server:
         yield Violation("disk-saturation", "final snapshot",
-                        "last server snapshot is not verified-quiescent (saturation retry "
-                        "loop never converged)", {"wallMs": last["wallMs"]})
+                        "last server snapshot is not verified-quiescent (the retained "
+                        "backlog never drained)", {"wallMs": last["wallMs"]})
 
 
 @named_check("generation-disabled", ["server.generation.submitted", "server.disk.not_found",
@@ -1098,11 +1216,28 @@ def check_generation_disabled(ctx):
 
 
 @named_check("generation-capacity-stress", ["server.generation.completed",
-                                            "client.responses.not_generated"])
+                                            "client.responses.not_generated",
+                                            "server.service.superseded"])
 def check_generation_capacity_stress(ctx):
     """Global generation cap pinned to 1 while the per-player pending cap admits 8: the
-    drainGenerationTicketRequests -> feedGenerationFailure -> slot-release bounce path runs
-    hot through the whole backfill, and it must still converge to a complete disc."""
+    R7 repeated-miss loop runs hot through the whole backfill — a miss that cannot take
+    the single generation slot is a TRANSIENT silent drop (counted superseded), the client
+    re-declares at 1 Hz, the disk re-misses, and the cycle repeats until the slot frees.
+    It must still converge to a complete disc.
+
+    THE PERMANENCE GUARANTEE, PINNED NEGATIVELY: under server-owned generation a
+    NOT_GENERATED answer is session-permanent on the client (only a dirty broadcast
+    revives it), so on a generation-ENABLED server it must NEVER fire — the pre-inversion
+    checker asserted not_generated >= 50 here (capacity bounces reached the wire); that is
+    now exactly the bug class this check exists to catch. One NOT_GENERATED through a
+    transient capacity bounce = one column blanked for the whole session.
+
+    MEASURED (Task 10 live run): superseded == miss_dropped == 10276 for 143 completed
+    generations at the global-cap-1 bottleneck (not_found 10419 == 143 + 10276 — law A5
+    exact), not_generated == 0, fully quiescent. That is R7's worst case quantified:
+    ~30 cheap region-miss re-reads/s while the single slot drains the disc. The >= 100
+    floor stays far below the measurement on purpose — it only needs to prove the churn
+    loop ran at all; the negative-cache revisit trigger is IO pathology, not this count."""
     last = ctx.server_snaps[-1]
     # Calibrated for lodDistance=12 / exclusion~8 at the global=1 bottleneck's ~1 gen/s:
     # vanilla's loaded square covers rings 9-10, leaving ~165 LSS-generated positions.
@@ -1114,21 +1249,32 @@ def check_generation_capacity_stress(ctx):
     if fc is None:
         yield Violation("generation-capacity-stress", "run1", "no client snapshots in run 1", {})
         return
-    if fc["responses"]["not_generated"] < 50:
+    if fc["responses"]["not_generated"] != 0:
         yield Violation("generation-capacity-stress", "run1 final snapshot",
-                        "too few not-generated responses — capacity bouncing never happened",
-                        {"expected": ">= 50", "actual": fc["responses"]["not_generated"]})
+                        "NOT_GENERATED reached the wire on a generation-enabled server — a "
+                        "transient outcome (capacity/timeout) leaked as the session-permanent "
+                        "answer and blanked columns for the whole session",
+                        {"expected": "== 0", "actual": fc["responses"]["not_generated"]})
+    if last["service"]["superseded"] < 100:
+        yield Violation("generation-capacity-stress", "run1 final snapshot",
+                        "too little transient-drop churn — the capacity bottleneck never "
+                        "produced the silent-drop/re-declare loop this scenario exists to "
+                        "exercise (did the config stop creating contention?)",
+                        {"expected": ">= 100", "actual": last["service"]["superseded"]})
     if (len(ctx.server_snaps) - 1) not in ctx.quiescent_server:
         yield Violation("generation-capacity-stress", "final snapshot",
-                        "last server snapshot is not verified-quiescent (capacity bouncing "
+                        "last server snapshot is not verified-quiescent (capacity churn "
                         "never converged)", {"wallMs": last["wallMs"]})
 
 
 @named_check("bandwidth-throttle", ["server.service.queue_full", "client.received_bytes"])
 def check_bandwidth_throttle(ctx):
     """256 KB/s global cap + 64-deep send queue: queue_full must fire (first-ever nonzero),
-    the full disc must still stream through (client 10 s in-flight timeout sweep + late-column
-    self-heal), and B2 (armed by the config cap) bounds the pacing."""
+    the full disc must still stream through, and B2 (armed by the config cap) bounds the
+    pacing. Unaffected by v17 (B2 is bandwidth-only and queue_full still fires as a
+    send-queue breaker); only the recovery mechanism changed — a want dropped by a
+    queue-full break is re-declared by the client's 1 Hz want-set, not rescued by the
+    deleted 10 s in-flight timeout sweep."""
     if "bytesPerSecondLimitGlobal" not in ctx.config:
         yield Violation("bandwidth-throttle", "config",
                         "scenario config must set bytesPerSecondLimitGlobal or B2 stays unarmed", {})
@@ -2137,11 +2283,14 @@ def _srv(wall=1000, seg=0, over=None):
             "service": {"requests_received": 0, "columns_sent": 0, "bytes_sent": 0,
                         "duplicate_skips": 0, "queue_full": 0, "up_to_date": 0,
                         "in_memory": 0, "disk_resolved": 0, "gen_drained": 0,
-                        "sync_rate_limited": 0, "gen_rate_limited": 0, "re_resolved": 0},
+                        "superseded": 0, "range_filtered": 0, "re_resolved": 0,
+                        "miss_dropped": 0},
             "disk": {"submitted": 0, "completed": 0, "not_found": 0, "all_air": 0,
-                     "errors": 0, "saturated": 0, "successful": 0, "pending": 0},
+                     "errors": 0, "saturated": 0, "successful": 0, "pending": 0,
+                     "memo_hits": 0},
             "generation": {"submitted": 0, "completed": 0, "timeouts": 0,
-                           "removed_in_flight": 0, "active": 0},
+                           "removed_in_flight": 0, "active": 0,
+                           "order_gated": 0, "inversions": 0},
             "dirty": {"pending": 0, "broadcast_positions": 0, "suppressed_total": 0},
             "bandwidth": {"total_bytes": 0}, "players": []}
     for k, v in (over or {}).items():
@@ -2153,8 +2302,7 @@ def _cli(wall=1000, seg=0, over=None):
     """Schema-complete client snapshot fixture (all GLOBAL_CLIENT_FIELDS present, zeros)."""
     snap = {"event": "snapshot", "wallMs": wall, "dimension": "minecraft:overworld",
             "_seg": seg, "received_columns": 0, "received_bytes": 0, "dropped": 0,
-            "responses": {"columns": 0, "up_to_date": 0, "not_generated": 0,
-                          "rate_limited": 0},
+            "responses": {"columns": 0, "up_to_date": 0, "not_generated": 0},
             "requested_total": 0, "send_cycles": 0,
             "columns": {"known": 0, "empty": 0, "dirty": 0},
             "scan": {"confirmed": 0, "ring": 0, "missing_vanilla": 0},
@@ -2180,17 +2328,38 @@ def selftest():
         assert all(v.law == law for v in vs), \
             f"{label}: expected only {law}, got {[v.line() for v in vs]}"
 
-    # --- A1: requests == responses + duplicate_skips + queue_full ---
-    ps, cs = _srv(1000), _srv(6000, over={"service.duplicate_skips": 1, "service.queue_full": 1})
+    # --- A1 (v17): requests == responses + duplicate_skips + superseded + range_filtered ---
+    # queue_full is deliberately NONZERO in the clean fixture: it must NOT be a term (a
+    # queue-full break retains its entries, it does not dispose of them). If someone
+    # re-adds it to the law, "A1 balanced" fails — that is the pin.
+    ps, cs = _srv(1000), _srv(6000, over={"service.duplicate_skips": 2,
+                                          "service.superseded": 3,
+                                          "service.range_filtered": 1,
+                                          "service.queue_full": 5})
     pc = _cli(1000)
-    cc = _cli(6000, over={"requested_total": 10, "responses.columns": 4,
-                          "responses.up_to_date": 2, "responses.not_generated": 1,
-                          "responses.rate_limited": 1})
+    cc = _cli(6000, over={"requested_total": 13, "responses.columns": 4,
+                          "responses.up_to_date": 2, "responses.not_generated": 1})
     clean("A1 balanced", law_A1(ps, cs, pc, cc, "selftest"))
-    cc_bad = _cli(6000, over={"requested_total": 11, "responses.columns": 4,
-                              "responses.up_to_date": 2, "responses.not_generated": 1,
-                              "responses.rate_limited": 1})
+    cc_bad = _cli(6000, over={"requested_total": 14, "responses.columns": 4,
+                              "responses.up_to_date": 2, "responses.not_generated": 1})
     hits("A1 lost request", law_A1(ps, cs, pc, cc_bad, "selftest"), "A1")
+
+    # A silent server-side drop (mailbox overwrite / backlog replace) is conserved ONLY by
+    # service.superseded — with no wire response, an uncounted drop is an invisible hole.
+    ps2, pc2 = _srv(1000), _cli(1000)
+    cc_drop = _cli(6000, over={"requested_total": 8, "responses.columns": 3})
+    hits("A1 uncounted silent drop", law_A1(
+        ps2, _srv(6000), pc2, cc_drop, "selftest"), "A1")
+    clean("A1 superseded balances a silent drop", law_A1(
+        ps2, _srv(6000, over={"service.superseded": 5}), pc2, cc_drop, "selftest"))
+
+    # The ingress Chebyshev guard drops out-of-range declarations (the movement race):
+    # counted range_filtered, never answered.
+    cc_rf = _cli(6000, over={"requested_total": 6, "responses.columns": 2})
+    hits("A1 uncounted range filter", law_A1(
+        ps2, _srv(6000), pc2, cc_rf, "selftest"), "A1")
+    clean("A1 range_filtered balances the motion race", law_A1(
+        ps2, _srv(6000, over={"service.range_filtered": 4}), pc2, cc_rf, "selftest"))
 
     # --- A2: delivery (columns, bytes, dropped) ---
     ps, cs = _srv(1000), _srv(6000, over={"service.columns_sent": 5, "service.bytes_sent": 100})
@@ -2228,6 +2397,18 @@ def selftest():
                           "disk.successful": 3})
     cc = _cli(6000, over={"responses.not_generated": 2})
     clean("A5 balanced", law_A5(ps, cs, pc, cc, "selftest"))
+    # Server-owned generation: transient miss-drops (cap-full / capacity-reject / ghost)
+    # balance the escalation leg through the dedicated miss_dropped term.
+    cs_md = _srv(6000, over={"disk.not_found": 7, "generation.submitted": 3,
+                             "service.miss_dropped": 2,
+                             "disk.completed": 12, "disk.all_air": 1, "disk.saturated": 1,
+                             "disk.successful": 3})
+    clean("A5 balanced with miss-drops", law_A5(ps, cs_md, pc, cc, "selftest"))
+    cs_bad_md = _srv(6000, over={"disk.not_found": 7, "generation.submitted": 3,
+                                 "service.miss_dropped": 1,
+                                 "disk.completed": 12, "disk.all_air": 1, "disk.saturated": 1,
+                                 "disk.successful": 3})
+    hits("A5 miss-drop leg", law_A5(ps, cs_bad_md, pc, cc, "selftest"), "A5")
     cs_bad = _srv(6000, over={"disk.not_found": 5, "generation.submitted": 2,
                               "disk.completed": 10, "disk.all_air": 1, "disk.saturated": 1,
                               "disk.successful": 3})
@@ -2236,17 +2417,31 @@ def selftest():
                               "disk.completed": 10, "disk.all_air": 1, "disk.saturated": 1,
                               "disk.successful": 4})
     hits("A5 partition leg", law_A5(ps, cs_bad, pc, cc, "selftest"), "A5")
+    # Miss-memo rung: hits are virtual not-founds. 4 hits -> 3 more gen submits + 1 more
+    # miss_dropped, with disk.not_found unchanged — the identity must stay exact.
+    cs_memo = _srv(6000, over={"disk.not_found": 5, "disk.memo_hits": 4,
+                               "generation.submitted": 6, "service.miss_dropped": 1,
+                               "disk.completed": 10, "disk.all_air": 1, "disk.saturated": 1,
+                               "disk.successful": 3})
+    clean("A5 balanced with memo hits", law_A5(ps, cs_memo, pc, cc, "selftest"))
+    # A memo hit that vanished without a disposition (neither submit nor miss_dropped) is
+    # exactly the accounting hole the virtual-not-found fold must catch.
+    cs_memo_bad = _srv(6000, over={"disk.not_found": 5, "disk.memo_hits": 4,
+                                   "generation.submitted": 5, "service.miss_dropped": 1,
+                                   "disk.completed": 10, "disk.all_air": 1, "disk.saturated": 1,
+                                   "disk.successful": 3})
+    hits("A5 memo-hit leg", law_A5(ps, cs_memo_bad, pc, cc, "selftest"), "A5")
 
-    # --- A6 server: monotonic whitelist, including the storm counters ---
+    # --- A6 server: monotonic whitelist, including the v17 want-set counters ---
     clean("A6 server monotonic", law_A6_server([
-        _srv(1000, over={"service.sync_rate_limited": 5, "dirty.broadcast_positions": 7}),
-        _srv(6000, over={"service.sync_rate_limited": 6, "dirty.broadcast_positions": 7})]))
-    hits("A6 sync_rate_limited decrement", law_A6_server([
-        _srv(1000, over={"service.sync_rate_limited": 5}),
-        _srv(6000, over={"service.sync_rate_limited": 4})]), "A6")
-    hits("A6 gen_rate_limited decrement", law_A6_server([
-        _srv(1000, over={"service.gen_rate_limited": 3}),
-        _srv(6000, over={"service.gen_rate_limited": 2})]), "A6")
+        _srv(1000, over={"service.superseded": 5, "dirty.broadcast_positions": 7}),
+        _srv(6000, over={"service.superseded": 6, "dirty.broadcast_positions": 7})]))
+    hits("A6 superseded decrement", law_A6_server([
+        _srv(1000, over={"service.superseded": 5}),
+        _srv(6000, over={"service.superseded": 4})]), "A6")
+    hits("A6 range_filtered decrement", law_A6_server([
+        _srv(1000, over={"service.range_filtered": 3}),
+        _srv(6000, over={"service.range_filtered": 2})]), "A6")
     hits("A6 broadcast_positions decrement", law_A6_server([
         _srv(1000, over={"dirty.broadcast_positions": 7}),
         _srv(6000, over={"dirty.broadcast_positions": 6})]), "A6")
@@ -2260,48 +2455,33 @@ def selftest():
     # --- A6 client: monotonic for the whole run (counters are run-cumulative; a
     # dimension/action boundary does NOT excuse a decrement) ---
     hits("A6 client in-segment decrement", law_A6_client(1, [
-        _cli(1000, over={"responses.rate_limited": 5}),
-        _cli(6000, over={"responses.rate_limited": 4})]), "A6")
+        _cli(1000, over={"responses.up_to_date": 5}),
+        _cli(6000, over={"responses.up_to_date": 4})]), "A6")
     hits("A6 client cross-segment decrement", law_A6_client(1, [
-        _cli(1000, seg=0, over={"responses.rate_limited": 5}),
-        _cli(6000, seg=1, over={"responses.rate_limited": 0})]), "A6")
+        _cli(1000, seg=0, over={"responses.up_to_date": 5}),
+        _cli(6000, seg=1, over={"responses.up_to_date": 0})]), "A6")
     clean("A6 client cross-segment growth", law_A6_client(1, [
-        _cli(1000, seg=0, over={"responses.rate_limited": 5}),
-        _cli(6000, seg=1, over={"responses.rate_limited": 5})]))
+        _cli(1000, seg=0, over={"responses.up_to_date": 5}),
+        _cli(6000, seg=1, over={"responses.up_to_date": 5})]))
 
     # --- A7 server: errors/timeouts always fail; saturated honors the opt-in ---
     hits("A7 disk.errors", law_A7_server(
         _srv(1000), _srv(6000, over={"disk.errors": 1}), "selftest",
-        frozenset({"rate_limited", "saturated"})), "A7")
+        frozenset({"saturated"})), "A7")
     hits("A7 generation.timeouts", law_A7_server(
         _srv(1000), _srv(6000, over={"generation.timeouts": 1}), "selftest",
-        frozenset({"rate_limited", "saturated"})), "A7")
+        frozenset({"saturated"})), "A7")
     hits("A7 saturated w/o opt-in", law_A7_server(
         _srv(1000), _srv(6000, over={"disk.saturated": 1}), "selftest", frozenset()), "A7")
     clean("A7 saturated with opt-in", law_A7_server(
         _srv(1000), _srv(6000, over={"disk.saturated": 1}), "selftest",
         frozenset({"saturated"})))
 
-    # --- A7 client: dropped never optable; rate_limited honors the opt-in ---
+    # --- A7 client: dropped is the only client anomaly at v17, and is never optable
+    # (the responses.rate_limited arm left with the wire response; law B1 is deleted) ---
     hits("A7 client dropped", law_A7_client(
         _cli(1000), _cli(6000, over={"dropped": 1}), "selftest",
-        frozenset({"rate_limited", "saturated"})), "A7")
-    hits("A7 rate_limited w/o opt-in", law_A7_client(
-        _cli(1000), _cli(6000, over={"responses.rate_limited": 1}), "selftest",
-        frozenset()), "A7")
-    clean("A7 rate_limited with opt-in", law_A7_client(
-        _cli(1000), _cli(6000, over={"responses.rate_limited": 1}), "selftest",
-        frozenset({"rate_limited"})))
-
-    # --- B1: client rate_limited == sync + gen + saturated ---
-    ps, pc = _srv(1000), _cli(1000)
-    cs = _srv(6000, over={"service.sync_rate_limited": 2, "service.gen_rate_limited": 1,
-                          "disk.saturated": 2})
-    cc = _cli(6000, over={"responses.rate_limited": 5})
-    clean("B1 balanced", law_B1(ps, cs, pc, cc, "selftest"))
-    hits("B1 lost bounce", law_B1(ps, cs, pc,
-                                  _cli(6000, over={"responses.rate_limited": 4}),
-                                  "selftest"), "B1")
+        frozenset({"saturated"})), "A7")
 
     # --- B2: bandwidth pacing against the configured cap ---
     cap = 262144
@@ -2326,7 +2506,8 @@ def selftest():
         f"{[v.line() for v in sustained]}"
 
     # --- Quiescence predicate ---
-    quiet_player = {"name": "p", "held_sync": 0, "held_gen": 0, "send_queue": 0}
+    quiet_player = {"name": "p", "held_sync": 0, "held_gen": 0, "send_queue": 0,
+                    "backlog": 0}
     q1 = _srv(1000)
     q1["players"] = [dict(quiet_player)]
     q2 = _srv(6000)
@@ -2342,7 +2523,8 @@ def selftest():
     cases[0] += 1
     assert not server_pair_quiescent(q1, draining), "quiescence: nonzero drain must disqualify"
     held = _srv(6000)
-    held["players"] = [{"name": "p", "held_sync": 0, "held_gen": 1, "send_queue": 0}]
+    held["players"] = [{"name": "p", "held_sync": 0, "held_gen": 1, "send_queue": 0,
+                        "backlog": 0}]
     cases[0] += 1
     assert not server_pair_quiescent(q1, held), "quiescence: held player slot must disqualify"
     dirty_ok = _srv(6000, over={"dirty.pending": QUIESCENCE_DIRTY_PENDING_TOLERANCE})
@@ -2355,6 +2537,48 @@ def selftest():
     cases[0] += 1
     assert not server_pair_quiescent(q1, dirty_over), \
         "quiescence: dirty.pending beyond tolerance (storm/backlog) must still disqualify"
+    # v17: a retained want entry is real outstanding work no other gauge reports.
+    backlogged = _srv(6000)
+    backlogged["players"] = [{"name": "p", "held_sync": 0, "held_gen": 0, "send_queue": 0,
+                              "backlog": 1}]
+    cases[0] += 1
+    assert not server_pair_quiescent(q1, backlogged), \
+        "quiescence: a nonzero player backlog (want entries the router still owes) must " \
+        "disqualify — held_sync/held_gen count ADMITTED work only"
+
+    # --- Quiescence CLIENT MIRROR (find_quiescent) ---
+    # Pre-existing coverage gap: server_pair_quiescent was directly tested above, but the
+    # client-side half of the predicate (tracker_in_flight / queued, joined on the nearest
+    # in-skew client row) had NO selftest at all — an inverted or dropped client mirror
+    # would have opened windows mid-traffic while every law stayed green.
+    def qpoints_for(cli_over=None, srv_players=None, skew=0):
+        players = srv_players if srv_players is not None else [dict(quiet_player)]
+        s1, s2 = _srv(1000, seg=1), _srv(6000, seg=1)
+        s1["players"], s2["players"] = players, [dict(p) for p in players]
+        return find_quiescent([s1, s2],
+                              {1: [_cli(6000 + skew, seg=0, over=cli_over or {})]})
+
+    cases[0] += 1
+    assert len(qpoints_for()) == 1, \
+        "quiescence client mirror: a still server pair joined to an idle client row must " \
+        "produce exactly one window"
+    cases[0] += 1
+    assert qpoints_for({"tracker_in_flight": 1}) == [], \
+        "quiescence client mirror: tracker_in_flight != 0 (a declared-and-unanswered " \
+        "want) must disqualify the window"
+    cases[0] += 1
+    assert qpoints_for({"queued": 1}) == [], \
+        "quiescence client mirror: queued != 0 (undecoded columns still in the ingest " \
+        "queue) must disqualify the window"
+    cases[0] += 1
+    assert qpoints_for(skew=SKEW_MS + 1) == [], \
+        "quiescence client mirror: a client row beyond SKEW_MS proves nothing about the " \
+        "server instant and must not open a window"
+    cases[0] += 1
+    assert qpoints_for(srv_players=[{"name": "p", "held_sync": 0, "held_gen": 0,
+                                     "send_queue": 0, "backlog": 1}]) == [], \
+        "quiescence: a player backlog must disqualify the whole window even when the " \
+        "server pair is otherwise stable and the client looks idle"
 
     # --- Disc completeness named check ---
     disc = make_disc_completeness("fresh-backfill")
@@ -2651,21 +2875,31 @@ def selftest():
             quiescent_server={1} if quiescent_last else set(),
             config=config or {})
 
-    storm_srv = {"service.gen_rate_limited": 40, "service.sync_rate_limited": 200,
-                 "generation.completed": 165}
-    storm_cli = {"responses.rate_limited": 240}
+    # Server-owned generation: the storm declares the full constant want-set (800); misses
+    # beyond the gen caps drop superseded (transient) and heal by re-declaration, so a small
+    # fresh disc converges with bounded churn. Unbounded superseded growth = the healing
+    # loop is broken. (Ceiling provisional at 500 — re-baselined at Task 10.)
+    storm_srv = {"service.superseded": 180, "generation.completed": 165}
+    storm_cli = {}
     clean("rate-limit-storm clean", list(check_rate_limit_storm(
         stress_ctx(storm_srv, storm_cli))))
-    hits("rate-limit-storm no bounces", list(check_rate_limit_storm(
-        stress_ctx({**storm_srv, "service.gen_rate_limited": 0},
-                   {**storm_cli, "responses.rate_limited": 0}))), "rate-limit-storm")
+    hits("rate-limit-storm churn never converged", list(check_rate_limit_storm(
+        stress_ctx({**storm_srv, "service.superseded": 4200}, storm_cli))),
+        "rate-limit-storm")
 
-    sat_srv = {"disk.saturated": 12, "disk.submitted": 2000, "disk.completed": 2000}
-    sat_cli = {"responses.rate_limited": 12}
+    # v17: the headroom gate must PREVENT saturation under the threads:1 flood; the backlog
+    # absorbs what used to bounce. Premise flipped — saturated > 0 is the failure. This is
+    # also where supersession is proven (moved from rate-limit-storm at Task 10): the flood
+    # must actually leave entries undrained, or zero saturation proves nothing.
+    sat_srv = {"disk.saturated": 0, "disk.submitted": 2000, "disk.completed": 2000,
+               "service.superseded": 420}
+    sat_cli = {}
     clean("disk-saturation clean", list(check_disk_saturation(
         stress_ctx(sat_srv, sat_cli))))
-    hits("disk-saturation never saturated", list(check_disk_saturation(
-        stress_ctx({**sat_srv, "disk.saturated": 0}, sat_cli))), "disk-saturation")
+    hits("disk-saturation headroom gate leaked", list(check_disk_saturation(
+        stress_ctx({**sat_srv, "disk.saturated": 12}, sat_cli))), "disk-saturation")
+    hits("disk-saturation no supersession (flood premise broke)", list(check_disk_saturation(
+        stress_ctx({**sat_srv, "service.superseded": 0}, sat_cli))), "disk-saturation")
 
     bw_cfg = {"bytesPerSecondLimitGlobal": 262144}
     bw_srv = {"service.queue_full": 30}
@@ -2685,12 +2919,21 @@ def selftest():
         stress_ctx({**gd_srv, "generation.completed": 5}, gd_cli))),
         "generation-disabled")
 
-    gcs_srv = {"generation.completed": 165}
-    gcs_cli = {"responses.not_generated": 800}
+    # Server-owned generation: on a gen-ENABLED server NOT_GENERATED must NEVER reach the
+    # wire (it is session-permanent on the client) — transient capacity pressure drops
+    # silently as superseded, which IS the scenario's churn subject now (R7).
+    gcs_srv = {"generation.completed": 165, "service.superseded": 950}
+    gcs_cli = {"responses.not_generated": 0}
     clean("generation-capacity-stress clean", list(check_generation_capacity_stress(
         stress_ctx(gcs_srv, gcs_cli))))
     hits("generation-capacity-stress stalled", list(check_generation_capacity_stress(
         stress_ctx({**gcs_srv, "generation.completed": 40}, gcs_cli, quiescent_last=False))),
+        "generation-capacity-stress")
+    hits("generation-capacity-stress permanence leak", list(check_generation_capacity_stress(
+        stress_ctx(gcs_srv, {"responses.not_generated": 3}))),
+        "generation-capacity-stress")
+    hits("generation-capacity-stress churn premise broke", list(check_generation_capacity_stress(
+        stress_ctx({**gcs_srv, "service.superseded": 2}, gcs_cli))),
         "generation-capacity-stress")
 
     # --- clearcache-mid-session: honest re-resolution = full re-download ---
@@ -2826,8 +3069,9 @@ def selftest():
     assert validate_config_overrides({"lodDistanceChunks": True}), \
         "config allowlist: bool-for-int must be rejected"
 
-    print(f"selftest OK: {cases[0]} cases — every law (A1-A7, B1, B2), the quiescence "
-          f"predicate, disc completeness, window floors, the config allowlist, action "
+    print(f"selftest OK: {cases[0]} cases — every law (A1-A7, B2), the quiescence "
+          f"predicate (server pair AND client mirror), disc completeness, window floors, "
+          f"the config allowlist, action "
           f"segmentation, and every session/movement/dirty-pipeline named check each "
           f"pass consistent data and catch a doctored inconsistency")
     return 0

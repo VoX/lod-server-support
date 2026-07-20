@@ -66,6 +66,10 @@ public class LSSClientNetworking {
         return columnProcessor.getQueuedCount();
     }
 
+    public static long getQueuedColumnBytes() {
+        return columnProcessor.getQueuedBytes();
+    }
+
     /**
      * Report a delivered-but-not-ingested column (decode failure or consumer rejection
      * via {@link LSSApi#reportIngestFailure}). Hops to the main thread, where the manager
@@ -191,9 +195,12 @@ public class LSSClientNetworking {
         long packed = PositionUtil.packPosition(payload.chunkX(), payload.chunkZ());
         boolean resync = manager != null && manager.heldContentBefore(packed);
         boolean clear = ClientColumnProcessor.isClearColumn(payload.decompressedSections());
-        if (manager != null) {
-            manager.onColumnReceived(packed, payload.columnTimestamp(),
-                    payload.dimension(), clear);
+        if (manager != null && !manager.onColumnReceived(packed, payload.columnTimestamp(),
+                payload.dimension(), clear, payload.source())) {
+            // Out-of-range unsolicited drop: the state map refused the stamp, and the
+            // consumers must not ingest it either — a hostile/buggy server could otherwise
+            // grow the LOD store without bound while /lss diag shows nothing tracked.
+            return;
         }
         // A clear air-fills even when the held check missed (see above) — the consumer must
         // overwrite whatever it renders there with air.
@@ -203,14 +210,16 @@ public class LSSClientNetworking {
     /**
      * Routes each batch entry to its per-type manager callback. An unknown responseType
      * skips that entry only, never the rest of the batch (forward compat with newer
-     * servers). Package-private so tests can exercise it without a network receiver.
+     * servers). That same skip covers the RETIRED byte 0 (v16's rate-limited bounce): a
+     * pre-v17 server never gets this far (the handshake gate rejects the version mismatch),
+     * but the inert skip is what makes byte 0 safe to leave reserved forever.
+     * Package-private so tests can exercise it without a network receiver.
      */
     static void dispatchBatchResponses(LodRequestManager manager, BatchResponseS2CPayload payload) {
         for (int i = 0; i < payload.count(); i++) {
             long packed = payload.packedPositions()[i];
             byte type = payload.responseTypes()[i];
             switch (type) {
-                case LSSConstants.RESPONSE_RATE_LIMITED -> manager.onRateLimited(packed);
                 case LSSConstants.RESPONSE_UP_TO_DATE -> manager.onColumnUpToDate(packed);
                 case LSSConstants.RESPONSE_NOT_GENERATED -> manager.onColumnNotGenerated(packed);
                 default -> LSSLogger.warn("Unknown batch response type: " + type);

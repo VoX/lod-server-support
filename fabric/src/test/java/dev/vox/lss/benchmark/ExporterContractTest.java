@@ -51,7 +51,7 @@ class ExporterContractTest {
 
     private static final class TestProcessor extends OffThreadProcessor<TestState> {
         TestProcessor(Map<UUID, TestState> players) {
-            super(players, null, false, null, 1);
+            super(players, null, false, null, 1, 0);  // memo off (ttl=0): kills only the memo — the pacing rules are ttl-independent
         }
         @Override
         protected boolean submitDiskRead(UUID playerUuid, String dimension, int cx, int cz, long order) {
@@ -60,12 +60,13 @@ class ExporterContractTest {
         @Override
         protected boolean buildAndEnqueueColumnPayload(TestState state, int cx, int cz, String dimension,
                                                        long columnTimestamp, long submissionOrder,
-                                                       byte[] sectionBytes, int estimatedBytes) {
+                                                       byte[] sectionBytes, int estimatedBytes,
+                                                       byte source) {
             return true;
         }
         /** Routes one column through enqueueLoadedColumn so the real timestamp cache is fed. */
         void putColumn(TestState state, int cx, int cz, byte[] bytes, long ts, String dimension) {
-            enqueueLoadedColumn(state, new LoadedColumnData(cx, cz, bytes, bytes.length), ts, 1L, dimension);
+            enqueueLoadedColumn(state, new LoadedColumnData(cx, cz, bytes, bytes.length), ts, 1L, dimension, (byte) 2);
         }
     }
 
@@ -267,7 +268,9 @@ class ExporterContractTest {
         assertEquals(0L, gen.get("removed_in_flight"));
         assertEquals(0, gen.get("active"));
         assertEquals(0, gen.get("active_hw"));
-        assertEquals(6, gen.size(), "zero-fill must mirror the live branch's exact key count");
+        assertEquals(0L, gen.get("order_gated"), "ordering counters present even when gen is disabled");
+        assertEquals(0L, gen.get("inversions"));
+        assertEquals(8, gen.size(), "zero-fill must mirror the live branch's exact key count");
     }
 
     // ---- HD-024: disabled session (no manager) zero-fills with the identical key set ----
@@ -295,7 +298,6 @@ class ExporterContractTest {
         assertEquals(0L, disabled.get("requested_total"));
         assertEquals(0L, disabled.get("send_cycles"));
         assertEquals(0, disabled.get("effective_lod"));
-        assertEquals(0, disabled.get("request_queue"));
         assertEquals(0, disabled.get("tracker_in_flight"));
         assertEquals(0, section(disabled, "scan").get("budget"));
         assertEquals(0, section(disabled, "columns").get("known"));
@@ -420,7 +422,7 @@ class ExporterContractTest {
 
     @Test
     void timestampCacheEvictionCounterAndPerDimensionSizesTrackMutations() {
-        var cache = new ColumnTimestampCache(2);
+        var cache = new ColumnTimestampCache(2, 0);
         cache.put("d", 100L, 10L, 1L);
         cache.put("d", 200L, 20L, 2L);
         cache.put("d", 300L, 30L, 3L);

@@ -61,7 +61,7 @@ class ServiceGlueTest {
         final List<Cleared> cleared = new ArrayList<>();
 
         RecordingProcessor(Map<UUID, PlayerRequestState> players) {
-            super(players, null, false, null, 1);
+            super(players, null, false, null, 1, 0);  // memo off (ttl=0): kills only the memo — the pacing rules are ttl-independent
         }
 
         @Override
@@ -172,14 +172,14 @@ class ServiceGlueTest {
         var b = handshakenState();
         var c = handshakenState();
         var players = playersOf(a, b, c);
-        var proc = new FabricOffThreadProcessor(players, null, false, null, 1);
+        var proc = new FabricOffThreadProcessor(players, null, false, null, 1, 0);
         try {
             proc.start();
             // One ColumnNotGenerated response per player, produced by the real processing
             // cycle (feedGenerationFailure is the public lossless-event entry point).
-            proc.feedGenerationFailure(a.getPlayerUUID(), 3, 4, DIM, 1L);
-            proc.feedGenerationFailure(b.getPlayerUUID(), 5, 6, DIM, 2L);
-            proc.feedGenerationFailure(c.getPlayerUUID(), 7, 8, DIM, 3L);
+            proc.feedGenerationFailure(a.getPlayerUUID(), 3, 4, DIM, 1L, false);
+            proc.feedGenerationFailure(b.getPlayerUUID(), 5, 6, DIM, 2L, false);
+            proc.feedGenerationFailure(c.getPlayerUUID(), 7, 8, DIM, 3L, false);
             var dims = new HashMap<UUID, String>();
             for (var uuid : players.keySet()) dims.put(uuid, DIM);
             proc.postSnapshot(new TickSnapshot(dims, Map.of(), 0, false), List.of());

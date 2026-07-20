@@ -16,21 +16,19 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.LevelChunkSection;
 import net.minecraft.world.level.chunk.PalettedContainerFactory;
 import net.minecraft.world.level.lighting.LayerLightEventListener;
 import net.minecraft.world.level.lighting.LevelLightEngine;
-import org.bukkit.Chunk;
-import org.bukkit.craftbukkit.CraftWorld;
+import ca.spottedleaf.concurrentutil.util.Priority;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.RejectedExecutionException;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -50,7 +48,7 @@ import static org.mockito.Mockito.when;
  * async-callback based (unlike Fabric's ticket polling), so Fabric tests cannot cover it:
  * a leaked perPlayerActiveCount entry starves that player's generation until disconnect.
  * The launchAsyncLoad seam captures the launch instead of touching Bukkit's scheduler;
- * tests then fire completeAsyncLoad exactly as getChunkAtAsync's completion would (the
+ * tests then fire completeAsyncLoad exactly as the Moonrise consumer would (the
  * extraction runs on that completion thread — the owning region thread on Folia — and only
  * the immutable result hops to the pump's onChunkReady), or drive onChunkReady directly for
  * pump-side books. Every outcome path (success, null chunk, extraction Throwable, timeout,
@@ -81,7 +79,7 @@ class PaperChunkGenerationServiceTest {
     // ---- harness ----
 
     record CapturedLaunch(PaperChunkGenerationService.PendingGenerationKey key,
-                          ServerLevel level, int cx, int cz, long token) {}
+                          ServerLevel level, int cx, int cz, long token, Priority priority) {}
 
     static class CapturingGenService extends PaperChunkGenerationService {
         final List<CapturedLaunch> launches = new ArrayList<>();
@@ -94,8 +92,9 @@ class PaperChunkGenerationServiceTest {
         }
 
         @Override
-        void launchAsyncLoad(PendingGenerationKey key, ServerLevel level, int cx, int cz, long token) {
-            launches.add(new CapturedLaunch(key, level, cx, cz, token));
+        void launchAsyncLoad(PendingGenerationKey key, ServerLevel level, int cx, int cz, long token,
+                             Priority priority) {
+            launches.add(new CapturedLaunch(key, level, cx, cz, token, priority));
         }
     }
 
@@ -114,10 +113,9 @@ class PaperChunkGenerationServiceTest {
         return level;
     }
 
-    /** Bukkit Chunk stand-in — completeAsyncLoad only null-checks it, never calls methods. */
-    private static Chunk bukkitChunk() {
-        return (Chunk) Proxy.newProxyInstance(Chunk.class.getClassLoader(),
-                new Class<?>[]{Chunk.class}, (p, m, a) -> null);
+    /** NMS ChunkAccess stand-in — completeAsyncLoad only null-checks it, never calls methods. */
+    private static ChunkAccess nmsChunk() {
+        return mock(ChunkAccess.class);
     }
 
     /** Pre-serialized column stand-in for pump-side books tests — onChunkReady never
@@ -127,7 +125,10 @@ class PaperChunkGenerationServiceTest {
     }
 
     private static String diag(long submitted, long completed, int active, long timeouts, long removed) {
-        return String.format("submitted=%d, completed=%d, active=%d, timeouts=%d, removed=%d",
+        // null_failures is 0 in every case here: the failure tests fire onChunkReady(null)
+        // directly, which books removed-in-flight — the null_failures counter is incremented
+        // only by completeAsyncLoad/extractColumnData's chunk-vanished paths, not exercised here.
+        return String.format("submitted=%d, completed=%d, active=%d, timeouts=%d, removed=%d, null_failures=0",
                 submitted, completed, active, timeouts, removed);
     }
 
@@ -278,7 +279,7 @@ class PaperChunkGenerationServiceTest {
     // ---- completion outcome paths ----
 
     @Test
-    void nullChunkAfterAsyncLoadEmitsFailureAndFreesSlot() {
+    void chunkVanishedInTheCompletionWindowIsTRANSIENT() {
         var svc = new CapturingGenService(config(32, 1, 60));
         var level = overworldLevel();
         // getChunkNow returns null (mock default): "was null after async load completed" branch
@@ -286,13 +287,25 @@ class PaperChunkGenerationServiceTest {
         UUID a = UUID.randomUUID();
 
         assertTrue(svc.submitGeneration(a, level, 4, 4, 1L));
-        svc.completeAsyncLoad(svc.launches.get(0).key(), level, bukkitChunk(), null, 4, 4, svc.launches.get(0).token());
+        svc.completeAsyncLoad(svc.launches.get(0).key(), level, nmsChunk(), 4, 4, svc.launches.get(0).token());
 
         var ready = svc.tick();
         assertEquals(1, ready.size());
         assertNull(ready.get(0).columnData());
-        assertEquals(diag(1, 0, 0, 0, 1), svc.getDiagnostics(),
-                "not completed — the failure is counted as removed-in-flight so the books balance");
+        // The chunk GENERATED fine and merely unloaded before the re-fetch — a transient
+        // outcome, so it must drop silently and be healed by the next want-set declaration.
+        // Answering the session-permanent NOT_GENERATED here blanks the column until
+        // reconnect: on Paper walk-in generation does not mark dirty by default, so the
+        // dirty-broadcast revival never fires. (Harmless pre-v17, when NOT_GENERATED
+        // re-opened the position client-side; v17's permanence inverted that contract.)
+        assertTrue(ready.get(0).transientFailure(),
+                "a chunk that unloaded in the completion window must never answer NOT_GENERATED");
+        // This test uniquely drives the extractColumnData chunk-vanished branch, so it is the
+        // one place null_failures is nonzero (the generic diag() helper asserts null_failures=0).
+        assertEquals("submitted=1, completed=0, active=0, timeouts=0, removed=1, null_failures=1",
+                svc.getDiagnostics(),
+                "not completed — counted as removed-in-flight (books balance) and null_failures=1");
+        assertEquals(1L, svc.getNullChunkFailures(), "the vanished-chunk failure is counted");
         assertTrue(svc.submitGeneration(a, level, 5, 4, 2L));
     }
 
@@ -304,11 +317,13 @@ class PaperChunkGenerationServiceTest {
         UUID a = UUID.randomUUID();
 
         assertTrue(svc.submitGeneration(a, level, 0, 0, 1L));
-        svc.completeAsyncLoad(svc.launches.get(0).key(), level, bukkitChunk(), null, 0, 0, svc.launches.get(0).token()); // must not throw
+        svc.completeAsyncLoad(svc.launches.get(0).key(), level, nmsChunk(), 0, 0, svc.launches.get(0).token()); // must not throw
 
         var ready = svc.tick();
         assertEquals(1, ready.size());
         assertNull(ready.get(0).columnData());
+        assertFalse(ready.get(0).transientFailure(),
+                "an extraction exception stays PERMANENT — a corrupt chunk must not be hammered");
         assertEquals(diag(1, 0, 0, 0, 1), svc.getDiagnostics(),
                 "extraction failure counts as removed-in-flight, never as completed");
         assertTrue(svc.submitGeneration(a, level, 1, 0, 2L), "slot freed despite the exception");
@@ -321,15 +336,15 @@ class PaperChunkGenerationServiceTest {
         when(level.getChunkSource()).thenThrow(new LinkageError("boom"));
         UUID a = UUID.randomUUID();
 
-        // A rethrow inside whenComplete would vanish into an unobserved dependent future, so
-        // completeAsyncLoad hands Errors to the thread's uncaught handler instead — capture it.
+        // A rethrow would vanish into Moonrise's completion plumbing, so completeAsyncLoad
+        // hands Errors to the thread's uncaught handler instead — capture it.
         var surfaced = new ArrayList<Throwable>();
         var thread = Thread.currentThread();
         var previous = thread.getUncaughtExceptionHandler();
         thread.setUncaughtExceptionHandler((t, e) -> surfaced.add(e));
         try {
             assertTrue(svc.submitGeneration(a, level, 0, 0, 1L));
-            svc.completeAsyncLoad(svc.launches.get(0).key(), level, bukkitChunk(), null, 0, 0,
+            svc.completeAsyncLoad(svc.launches.get(0).key(), level, nmsChunk(), 0, 0,
                     svc.launches.get(0).token());
         } finally {
             thread.setUncaughtExceptionHandler(previous);
@@ -370,7 +385,7 @@ class PaperChunkGenerationServiceTest {
 
         assertTrue(svc.submitGeneration(a, level, 6, -9, 100L));
         assertTrue(svc.submitGeneration(b, level, 6, -9, 200L));
-        svc.completeAsyncLoad(svc.launches.get(0).key(), level, bukkitChunk(), null, 6, -9, svc.launches.get(0).token());
+        svc.completeAsyncLoad(svc.launches.get(0).key(), level, nmsChunk(), 6, -9, svc.launches.get(0).token());
 
         var ready = svc.tick();
         assertEquals(2, ready.size());
@@ -432,7 +447,7 @@ class PaperChunkGenerationServiceTest {
         assertEquals(3, svc.getActiveCount());
 
         // (0,0) completes successfully -> completed only
-        svc.completeAsyncLoad(svc.launches.get(0).key(), level, bukkitChunk(), null, 0, 0, svc.launches.get(0).token());
+        svc.completeAsyncLoad(svc.launches.get(0).key(), level, nmsChunk(), 0, 0, svc.launches.get(0).token());
         assertEquals(2, svc.tick().size(), "both piggybacked callbacks drain");
         assertEquals(1L, svc.getTotalCompleted());
         assertEquals(2, svc.getActiveCount());
@@ -538,7 +553,7 @@ class PaperChunkGenerationServiceTest {
         assertEquals(1, svc.getActiveCount(), "entry B survives the stale completion");
 
         // B is served by ITS OWN completion with real data — the spurious not_generated is gone.
-        svc.completeAsyncLoad(svc.launches.get(1).key(), level, bukkitChunk(), null, 0, 0, svc.launches.get(1).token());
+        svc.completeAsyncLoad(svc.launches.get(1).key(), level, nmsChunk(), 0, 0, svc.launches.get(1).token());
         var ready = svc.tick();
         assertEquals(1, ready.size());
         assertNotNull(ready.get(0).columnData(), "B's waiter gets its real column, not a stale failure");
@@ -563,12 +578,12 @@ class PaperChunkGenerationServiceTest {
         assertTrue(svc.submitGeneration(a, level, 0, 0, 2L)); // entry B
 
         // The token is identity-strict: even a stale SUCCESS is rejected, never cross-applied to B.
-        svc.completeAsyncLoad(svc.launches.get(0).key(), level, bukkitChunk(), null, 0, 0, svc.launches.get(0).token());
+        svc.completeAsyncLoad(svc.launches.get(0).key(), level, nmsChunk(), 0, 0, svc.launches.get(0).token());
         assertTrue(svc.tick().isEmpty(), "a stale success is rejected — B is not served from another launch");
         assertEquals(1, svc.getActiveCount(), "entry B survives");
 
         // B is served by its own completion.
-        svc.completeAsyncLoad(svc.launches.get(1).key(), level, bukkitChunk(), null, 0, 0, svc.launches.get(1).token());
+        svc.completeAsyncLoad(svc.launches.get(1).key(), level, nmsChunk(), 0, 0, svc.launches.get(1).token());
         var ready = svc.tick();
         assertEquals(1, ready.size());
         assertNotNull(ready.get(0).columnData());
@@ -578,27 +593,42 @@ class PaperChunkGenerationServiceTest {
                 "A4 books balance (2 == 1 + 1 + 0)");
     }
 
-    // ---- scheduler-rejection containment through the REAL launchAsyncLoad (PP-030) ----
+    // ---- Moonrise launch: priority pin + completion routing (PP-030 successors) ----
+
+    @Test
+    void submitGenerationLaunchesAtMoonrisePriorityLow() {
+        // The load-bearing half of "server owns limiting via real priority": LOD generation
+        // must defer to player-driven NORMAL generation. Anything but LOW here silently
+        // reverts the deference and competes with gameplay worldgen.
+        var svc = new CapturingGenService(config(32, 4, 60));
+        var level = overworldLevel();
+
+        assertTrue(svc.submitGeneration(UUID.randomUUID(), level, 7, -3, 1L));
+
+        assertEquals(1, svc.launches.size());
+        assertSame(Priority.LOW, svc.launches.get(0).priority(),
+                "LOD generation must launch at Moonrise Priority.LOW");
+    }
 
     @Test
     void schedulerRejectionAfterAsyncCompletionNeverRunsTheCallbackInline() {
-        var svc = new PaperChunkGenerationService(config(32, 4, 60), null); // real launchAsyncLoad
-        var future = new CompletableFuture<Chunk>();
+        // The completion (the Moonrise consumer) fires while the plugin is shutting down:
+        // schedule() throws. The rejection must be contained inside completeAsyncLoad — the
+        // active map is pump-thread-only, so onChunkReady must NOT run inline off-thread.
+        var svc = new CapturingGenService(config(32, 4, 60));
         var level = overworldLevel();
-        var world = mock(CraftWorld.class);
-        when(level.getWorld()).thenReturn(world);
-        when(world.getChunkAtAsync(7, -3, true, false)).thenReturn(future);
+        when(level.getChunkSource()).thenReturn(mock(ServerChunkCache.class));
         svc.setMainThreadScheduler(task -> { throw new RejectedExecutionException("plugin disabled"); });
 
         UUID a = UUID.randomUUID();
         assertTrue(svc.submitGeneration(a, level, 7, -3, 1L));
         assertEquals(1, svc.getActiveCount());
 
-        // The async load completes while the plugin is shutting down: schedule() throws.
-        assertDoesNotThrow(() -> future.complete(bukkitChunk()),
+        assertDoesNotThrow(() -> svc.completeAsyncLoad(svc.launches.get(0).key(), level,
+                        nmsChunk(), 7, -3, svc.launches.get(0).token()),
                 "the rejection must be contained inside the completion callback");
         assertEquals(1, svc.getActiveCount(),
-                "onChunkReady must NOT run inline on the async thread (active map is main-thread-only)");
+                "onChunkReady must NOT run inline on the async thread (active map is pump-thread-only)");
         assertTrue(svc.tick().isEmpty(), "no outcome was fabricated off-thread");
 
         svc.shutdown(); // shutdown() owns the cleanup the skipped callback would have raced
@@ -606,13 +636,9 @@ class PaperChunkGenerationServiceTest {
     }
 
     @Test
-    void realLaunchRoutesTheCompletionThroughTheMainThreadScheduler() {
-        var svc = new PaperChunkGenerationService(config(32, 4, 60), null); // real launchAsyncLoad
-        var future = new CompletableFuture<Chunk>();
+    void completionRoutesThroughTheMainThreadSchedulerExactlyOnce() {
+        var svc = new CapturingGenService(config(32, 4, 60));
         var level = overworldLevel();
-        var world = mock(CraftWorld.class);
-        when(level.getWorld()).thenReturn(world);
-        when(world.getChunkAtAsync(2, 2, true, false)).thenReturn(future);
         var scheduled = new ArrayList<Runnable>();
         svc.setMainThreadScheduler(scheduled::add);
 
@@ -620,14 +646,16 @@ class PaperChunkGenerationServiceTest {
         assertTrue(svc.submitGeneration(a, level, 2, 2, 5L));
         assertTrue(scheduled.isEmpty(), "nothing is scheduled until the async load completes");
 
-        future.completeExceptionally(new RuntimeException("load failed"));
-        assertEquals(1, scheduled.size(), "completion hands exactly one task to the main thread");
+        // Moonrise surfaces a failed load as a NULL chunk — no throwable channel exists.
+        svc.completeAsyncLoad(svc.launches.get(0).key(), level, null, 2, 2,
+                svc.launches.get(0).token());
+        assertEquals(1, scheduled.size(), "completion hands exactly one task to the pump");
         assertEquals(1, svc.getActiveCount(), "the entry is consumed by the TASK, not the completion");
 
-        scheduled.get(0).run(); // main-thread tick runs the callback
+        scheduled.get(0).run(); // pump tick runs the callback
         var ready = svc.tick();
         assertEquals(1, ready.size());
-        assertNull(ready.get(0).columnData(), "an exceptionally-completed load is a failure outcome");
+        assertNull(ready.get(0).columnData(), "a null-chunk completion is a failure outcome");
         assertEquals(a, ready.get(0).playerUuid());
         assertEquals(0, svc.getActiveCount());
         assertEquals(1L, svc.getTotalRemovedInFlight());

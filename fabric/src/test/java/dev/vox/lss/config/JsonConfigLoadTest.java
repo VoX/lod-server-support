@@ -149,7 +149,6 @@ class JsonConfigLoadTest {
         assertEquals(32, c.generationConcurrencyLimitGlobal);
         assertEquals(60, c.generationTimeoutSeconds);
         assertEquals(10, c.dirtyBroadcastIntervalSeconds);
-        assertEquals(200, c.syncOnLoadConcurrencyLimitPerPlayer);
         assertEquals(16, c.generationConcurrencyLimitPerPlayer);
         assertEquals(32, c.perDimensionTimestampCacheSizeMB);
     }
@@ -176,6 +175,25 @@ class JsonConfigLoadTest {
 
         assertEquals(2048, c.lodDistanceChunks); // LSSConstants.MAX_LOD_DISTANCE
         assertEquals(2048, savedJson(configDir).get("lodDistanceChunks").getAsInt());
+    }
+
+    @Test
+    void retiredSyncOnLoadKnobInOldConfigLoadsCleanlyAndDropsOnSave(@TempDir Path configDir) throws Exception {
+        // v0.6.x config files carry syncOnLoadConcurrencyLimitPerPlayer (retired to the
+        // SYNC_ON_LOAD_SLOT_CAP constant in v0.7.0). Loading one must neither crash nor
+        // preserve the dead key: GSON ignores unknown fields and the load-time re-save
+        // rewrites the file from live fields only — the release-noted "dropped on next
+        // save" contract, pinned here against an actual old-shaped file.
+        Files.writeString(configDir.resolve(FILE),
+                "{\"syncOnLoadConcurrencyLimitPerPlayer\": 400, \"lodDistanceChunks\": 96}");
+
+        TestServerConfig c = TestServerConfig.load(configDir);
+
+        assertEquals(96, c.lodDistanceChunks, "live keys from the old file still apply");
+        var saved = savedJson(configDir);
+        assertTrue(!saved.has("syncOnLoadConcurrencyLimitPerPlayer"),
+                "the retired knob must be dropped from the re-saved file");
+        assertEquals(96, saved.get("lodDistanceChunks").getAsInt());
     }
 
     @Test

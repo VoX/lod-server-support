@@ -133,7 +133,6 @@ public class LSSGameTests {
         helper.assertTrue(c.generationConcurrencyLimitGlobal >= LSSConstants.MIN_CONCURRENT_GENERATIONS && c.generationConcurrencyLimitGlobal <= LSSConstants.MAX_CONCURRENT_GENERATIONS, "generationConcurrencyLimitGlobal");
         helper.assertTrue(c.generationTimeoutSeconds >= LSSConstants.MIN_GENERATION_TIMEOUT && c.generationTimeoutSeconds <= LSSConstants.MAX_GENERATION_TIMEOUT, "generationTimeoutSeconds");
         helper.assertTrue(c.dirtyBroadcastIntervalSeconds >= LSSConstants.MIN_DIRTY_BROADCAST_INTERVAL && c.dirtyBroadcastIntervalSeconds <= LSSConstants.MAX_DIRTY_BROADCAST_INTERVAL, "dirtyBroadcastIntervalSeconds");
-        helper.assertTrue(c.syncOnLoadConcurrencyLimitPerPlayer >= LSSConstants.MIN_CONCURRENCY_LIMIT && c.syncOnLoadConcurrencyLimitPerPlayer <= LSSConstants.MAX_CONCURRENCY_LIMIT, "syncOnLoadConcurrencyLimitPerPlayer");
         helper.assertTrue(c.generationConcurrencyLimitPerPlayer >= LSSConstants.MIN_CONCURRENCY_LIMIT && c.generationConcurrencyLimitPerPlayer <= LSSConstants.MAX_CONCURRENCY_LIMIT, "generationConcurrencyLimitPerPlayer");
         helper.succeed();
     }

@@ -341,7 +341,7 @@ class ColumnCacheStoreTest {
 
         var states = new ColumnStateMap();
         states.loadFrom(loaded);
-        assertEquals(-1L, states.classify(100L, true), "a roundtripped -1 stays unknown — re-requested, never satisfied");
+        assertEquals(-1L, states.classify(100L), "a roundtripped -1 stays unknown — re-requested, never satisfied");
         assertEquals(1, states.receivedCount(), "only the positive entry counts as received");
         assertEquals(0, states.emptyCount(), "-1 is not a not-generated stamp");
     }

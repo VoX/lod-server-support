@@ -135,7 +135,9 @@ class FlushSendQueueTest {
         assertEquals(2, state.getSendQueueSize(),
                 "snapshot must reflect drained-but-unsent payloads for cross-thread readers");
         assertTrue(state.hasEnqueuedColumn(POS_1) && state.hasEnqueuedColumn(POS_2),
-                "gated payloads remain enqueued — re-requests bounce rate-limited, not re-resolve");
+                "gated payloads remain enqueued — a ts<=0 re-declaration of a column still in the "
+                        + "send pipeline is skipped silently, never re-resolved "
+                        + "(IncomingRequestRouter.resolvedAsDuplicate)");
     }
 
     @Test

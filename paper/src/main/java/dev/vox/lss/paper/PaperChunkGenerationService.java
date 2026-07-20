@@ -4,12 +4,14 @@ import dev.vox.lss.common.LSSConstants;
 import dev.vox.lss.common.LSSLogger;
 import dev.vox.lss.common.processing.LoadedColumnData;
 import dev.vox.lss.common.processing.TickSnapshot;
+import ca.spottedleaf.concurrentutil.util.Priority;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.chunk.LevelChunk;
+import net.minecraft.world.level.chunk.status.ChunkStatus;
 
-import org.bukkit.Chunk;
 import org.bukkit.plugin.Plugin;
 
 import java.util.ArrayList;
@@ -18,11 +20,18 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Manages chunk generation requests for the Paper plugin.
- * Uses Paper's async chunk API ({@code World.getChunkAtAsync}) which guarantees
- * {@code ChunkStatus.FULL} before the callback fires and manages tickets automatically.
+ * Loads/generates via Moonrise's priority-aware scheduler
+ * ({@code PlatformHooks.get().scheduleChunkLoad(..., Priority.LOW, ...)}) so LOD generation
+ * DEFERS to player-driven NORMAL generation — the generation analogue of the Moonrise
+ * {@code Priority.LOW} disk-read path. {@code addTicket=true} lets Moonrise own the load
+ * ticket, and {@code ChunkStatus.FULL} is guaranteed before the completion fires (on the
+ * chunk's owning thread — the region thread on Folia). Failure surfaces as a NULL chunk:
+ * there is no throwable channel.
  */
 public class PaperChunkGenerationService {
 
@@ -84,6 +93,11 @@ public class PaperChunkGenerationService {
     private volatile long totalCompleted = 0;
     private volatile long totalTimeouts = 0;
     private volatile long totalRemovedInFlight = 0;
+    // Null-chunk (Moonrise permanent-failure) completions. Multi-writer on Folia (two region
+    // threads can complete concurrently), so atomic: the boolean latches the one warning via CAS,
+    // the counter is exact. Exposed in getDiagnostics()/getNullChunkFailures() for operators.
+    private final AtomicBoolean nullChunkWarned = new AtomicBoolean(false);
+    private final AtomicLong nullChunkFailures = new AtomicLong(0);
 
     public PaperChunkGenerationService(PaperConfig config, Plugin plugin) {
         this.maxConcurrent = config.generationConcurrencyLimitGlobal;
@@ -117,7 +131,10 @@ public class PaperChunkGenerationService {
             incrementCount(this.perPlayerActiveCount, playerUuid);
             this.totalSubmitted++;
 
-            launchAsyncLoad(key, level, cx, cz, gen.token);
+            // Priority.LOW: LOD generation yields to player-driven (NORMAL) generation. Safe
+            // against starvation-shaped timeouts because a timeout is a TRANSIENT outcome —
+            // the client re-declares and the load is retried, never blanked NOT_GENERATED.
+            launchAsyncLoad(key, level, cx, cz, gen.token, Priority.LOW);
             return true;
         }
 
@@ -126,13 +143,17 @@ public class PaperChunkGenerationService {
     }
 
     /**
-     * Launches Paper's async chunk load. The completion fires {@link #completeAsyncLoad} on
-     * the load's completion thread. Package-visible seam: tests override this to capture the
-     * launch.
+     * Launches the Moonrise priority-aware chunk load. The completion fires
+     * {@link #completeAsyncLoad} on the load's completion thread (the chunk's owning region
+     * thread on Folia) with an NMS {@code ChunkAccess} — null is the failure outcome, there
+     * is no throwable channel. Package-visible seam: tests override this to capture the
+     * launch (and the priority, pinned to {@code Priority.LOW}).
      */
-    void launchAsyncLoad(PendingGenerationKey key, ServerLevel level, int cx, int cz, long token) {
-        level.getWorld().getChunkAtAsync(cx, cz, true, false).whenComplete((chunk, ex) ->
-                completeAsyncLoad(key, level, chunk, ex, cx, cz, token));
+    void launchAsyncLoad(PendingGenerationKey key, ServerLevel level, int cx, int cz, long token,
+                         Priority priority) {
+        ca.spottedleaf.moonrise.common.PlatformHooks.get().scheduleChunkLoad(
+                level, cx, cz, /*gen=*/true, ChunkStatus.FULL, /*addTicket=*/true, priority,
+                chunk -> completeAsyncLoad(key, level, chunk, cx, cz, token));
     }
 
     /**
@@ -145,17 +166,25 @@ public class PaperChunkGenerationService {
      * fresh-backfill). On Paper this is the main thread — where the old post-hop extraction
      * ran anyway. The reads are region-legal and tear-free off-pump (getChunkNow is a
      * concurrent-map lookup; light reads clone SWMR state; PalettedContainer.write is
-     * synchronized). Package-visible so tests can drive the completion exactly as
-     * getChunkAtAsync would.
+     * synchronized). Package-visible so tests can drive the completion exactly as the
+     * Moonrise consumer would. A null {@code chunk} is the failure outcome (permanent:
+     * NOT_GENERATED downstream — a failed load/vanished chunk must not be hammered).
      */
-    void completeAsyncLoad(PendingGenerationKey key, ServerLevel level, Chunk chunk,
-                           Throwable ex, int cx, int cz, long token) {
-        if (ex != null) {
-            LSSLogger.error("Async chunk load failed at " + cx + "," + cz, ex);
+    void completeAsyncLoad(PendingGenerationKey key, ServerLevel level, ChunkAccess chunk,
+                           int cx, int cz, long token) {
+        if (chunk == null) {
+            // Moonrise's failure outcome — no throwable channel exists. Warn-once: each
+            // null is a per-column permanent failure, and a regression that reintroduces
+            // them at scale (the 6.9k-in-one-soak history) must not also be a WARN storm.
+            if (this.nullChunkWarned.compareAndSet(false, true)) {
+                LSSLogger.warn("Async chunk load failed (null chunk) at " + cx + "," + cz
+                        + " — further null-chunk failures are logged silently (counted)");
+            }
+            this.nullChunkFailures.incrementAndGet();
         }
-        LoadedColumnData extracted = null;
+        ExtractionOutcome extracted = null;
         Error rethrow = null;
-        if (ex == null && chunk != null) {
+        if (chunk != null) {
             try {
                 extracted = extractColumnData(level, cx, cz);
             } catch (Error e) {
@@ -165,9 +194,12 @@ public class PaperChunkGenerationService {
                 rethrow = e;
             }
         }
-        var columnData = extracted;
+        var columnData = extracted == null ? null : extracted.data();
+        // Only the chunk-vanished flavor is transient; a null chunk from Moonrise, an
+        // extraction exception, and the Error path above are all permanent.
+        var chunkVanished = extracted != null && extracted.chunkVanished();
         try {
-            this.mainThreadScheduler.schedule(() -> onChunkReady(key, columnData, cx, cz, token));
+            this.mainThreadScheduler.schedule(() -> onChunkReady(key, columnData, cx, cz, token, chunkVanished));
         } catch (Exception scheduleEx) {
             // Plugin disabled during shutdown — do not call onChunkReady inline
             // because we're not on the pump and the active map is not thread-safe.
@@ -175,31 +207,55 @@ public class PaperChunkGenerationService {
             LSSLogger.warn("Could not schedule generation callback (plugin shutting down) at " + cx + "," + cz);
         }
         if (rethrow != null) {
-            // A plain rethrow would vanish: whenComplete captures it into an unobserved
-            // dependent future. Hand it to the thread's uncaught handler instead, so an
-            // Error (OOME, linkage) stays as loud as the old scheduled-task rethrow was.
+            // A plain rethrow would vanish into Moonrise's completion plumbing. Hand it to
+            // the thread's uncaught handler instead, so an Error (OOME, linkage) stays as
+            // loud as the old scheduled-task rethrow was.
             Thread.currentThread().getUncaughtExceptionHandler()
                     .uncaughtException(Thread.currentThread(), rethrow);
         }
     }
 
     /**
-     * Serializes the just-loaded chunk on the completion thread; null on any failure —
-     * the failure books happen on the pump when {@link #onChunkReady} sees the null.
+     * The completion-thread extraction outcome. {@code data == null} is a failure;
+     * {@code chunkVanished} splits its disposition — see {@link #extractColumnData}.
+     */
+    record ExtractionOutcome(LoadedColumnData data, boolean chunkVanished) {}
+
+    /**
+     * Serializes the just-loaded chunk on the completion thread; a null {@code data} on any
+     * failure — the failure books happen on the pump when {@link #onChunkReady} sees it.
      * Errors propagate to {@link #completeAsyncLoad}, which schedules the failure outcome
      * before rethrowing.
+     *
+     * <p>{@code chunkVanished} marks the ONE transient flavor: the re-fetch missed because
+     * the chunk unloaded in the completion window. An extraction exception stays permanent
+     * (a corrupt chunk must not be hammered), as does Moonrise's null chunk.
      */
-    LoadedColumnData extractColumnData(ServerLevel level, int cx, int cz) {
+    ExtractionOutcome extractColumnData(ServerLevel level, int cx, int cz) {
         try {
             LevelChunk nmsChunk = level.getChunkSource().getChunkNow(cx, cz);
             if (nmsChunk == null) {
-                LSSLogger.warn("Chunk at " + cx + "," + cz + " was null after async load completed");
-                return null;
+                // The re-fetch missed (the chunk unloaded in the same-thread window this
+                // completion-thread extraction exists to close). TRANSIENT: the chunk was
+                // generated, it simply unloaded before we could read it, so the next
+                // want-set declaration re-resolves it. Answering the session-permanent
+                // NOT_GENERATED here would blank the column until reconnect — and on Paper
+                // walk-in generation does not mark dirty by default, so the dirty-broadcast
+                // revival never fires. (Harmless before v17, when NOT_GENERATED re-opened
+                // the position client-side; the v17 permanence inverted that contract.)
+                // Shares the warn-once latch and counter with the null-completion path so a
+                // regression that reintroduces the unload race at scale can't WARN-storm.
+                if (this.nullChunkWarned.compareAndSet(false, true)) {
+                    LSSLogger.warn("Chunk at " + cx + "," + cz + " was null after async load completed"
+                            + " — further null-chunk failures are logged silently (counted)");
+                }
+                this.nullChunkFailures.incrementAndGet();
+                return new ExtractionOutcome(null, true);
             }
-            return PaperSectionSerializer.serializeColumn(level, nmsChunk, cx, cz);
+            return new ExtractionOutcome(PaperSectionSerializer.serializeColumn(level, nmsChunk, cx, cz), false);
         } catch (Exception e) {
             LSSLogger.error("Failed to extract primitives for generated chunk at " + cx + ", " + cz, e);
-            return null;
+            return new ExtractionOutcome(null, false);
         }
     }
 
@@ -210,6 +266,14 @@ public class PaperChunkGenerationService {
      */
     void onChunkReady(PendingGenerationKey key, LoadedColumnData columnData,
                       int cx, int cz, long token) {
+        onChunkReady(key, columnData, cx, cz, token, false);
+    }
+
+    /** @param transientFailure a null {@code columnData} that must NOT answer the
+     *  session-permanent NOT_GENERATED (today: the chunk unloaded in the completion
+     *  window — it generated fine and the next declaration re-resolves it). */
+    void onChunkReady(PendingGenerationKey key, LoadedColumnData columnData,
+                      int cx, int cz, long token, boolean transientFailure) {
         var gen = this.active.get(key);
         // Reject a stale completion: the entry that launched this load already timed out and a
         // new entry was resubmitted under the same key (different token). Leaving the current
@@ -229,7 +293,11 @@ public class PaperChunkGenerationService {
             }
             this.totalCompleted++;
         } else {
-            addFailures(gen.callbacks, key, cx, cz);
+            // PERMANENT (the load failed or extraction threw — a corrupt chunk must not be
+            // hammered): NOT_GENERATED, dirty broadcast revives. TRANSIENT (the chunk
+            // unloaded in the completion window): silent drop + superseded, healed by the
+            // next want-set declaration. The books are identical either way.
+            addFailures(gen.callbacks, key, cx, cz, transientFailure);
             this.totalRemovedInFlight++;
         }
     }
@@ -239,13 +307,16 @@ public class PaperChunkGenerationService {
      * Callers that removed the active entry must also count it exactly once — totalTimeouts
      * on the timeout path, totalRemovedInFlight on the failure paths (mirrors the Fabric
      * twin) — so the generation books (submitted == completed + timeouts + removed) balance
-     * (soak law A4).
+     * (soak law A4). {@code transientFailure} picks the wire disposition downstream: true =
+     * silent drop + superseded (timeout), false = ColumnNotGenerated (permanent — failed
+     * load / extraction). The books are identical either way.
      */
-    private void addFailures(List<GenerationCallback> callbacks, PendingGenerationKey key, int cx, int cz) {
+    private void addFailures(List<GenerationCallback> callbacks, PendingGenerationKey key,
+                             int cx, int cz, boolean transientFailure) {
         String dimension = key.dimension().identifier().toString();
         for (var cb : callbacks) {
             this.mainReady.add(new TickSnapshot.GenerationReadyData(
-                    cb.playerUuid, cx, cz, dimension, null, 0L, cb.submissionOrder));
+                    cb.playerUuid, cx, cz, dimension, null, 0L, cb.submissionOrder, transientFailure));
             decrementCount(this.perPlayerActiveCount, cb.playerUuid);
         }
     }
@@ -275,7 +346,9 @@ public class PaperChunkGenerationService {
             gen.ticksWaiting++;
 
             if (gen.ticksWaiting > this.timeoutTicks) {
-                addFailures(gen.callbacks, entry.getKey(), entry.getKey().cx, entry.getKey().cz);
+                // Timeout is TRANSIENT (under Priority.LOW a starved load is routine on a
+                // busy server): silent drop downstream, the client's re-declaration retries.
+                addFailures(gen.callbacks, entry.getKey(), entry.getKey().cx, entry.getKey().cz, true);
                 iter.remove();
                 this.totalTimeouts++;
             }
@@ -301,19 +374,23 @@ public class PaperChunkGenerationService {
     }
 
     public void shutdown() {
-        // No manual ticket cleanup needed — Paper manages tickets via getChunkAtAsync.
-        // Active async futures will complete but onChunkReady will find empty active map.
+        // No manual ticket cleanup needed — Moonrise owns the load ticket (addTicket=true).
+        // Active async loads will complete but onChunkReady will find an empty active map.
         this.active.clear();
         this.perPlayerActiveCount.clear();
         this.mainReady.clear();
     }
 
     public String getDiagnostics() {
-        return String.format("submitted=%d, completed=%d, active=%d, timeouts=%d, removed=%d",
-                totalSubmitted, totalCompleted, active.size(), totalTimeouts, totalRemovedInFlight);
+        return String.format("submitted=%d, completed=%d, active=%d, timeouts=%d, removed=%d, null_failures=%d",
+                totalSubmitted, totalCompleted, active.size(), totalTimeouts, totalRemovedInFlight,
+                nullChunkFailures.get());
     }
 
     public long getTotalSubmitted() { return this.totalSubmitted; }
+
+    /** Null-chunk (permanent-failure) completions — warn-once logged, counted here. */
+    public long getNullChunkFailures() { return this.nullChunkFailures.get(); }
 
     public long getTotalCompleted() { return this.totalCompleted; }
 

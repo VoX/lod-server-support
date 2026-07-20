@@ -1,7 +1,6 @@
 {
   "lodDistanceChunks": 24,
   "enableChunkGeneration": false,
-  "syncOnLoadConcurrencyLimitPerPlayer": 200,
   "dirtyBroadcastIntervalSeconds": 5,
   "diskReaderThreads": 5
 }

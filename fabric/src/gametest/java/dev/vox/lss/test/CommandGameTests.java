@@ -131,8 +131,10 @@ public class CommandGameTests {
             var state = liveService.registerPlayer(mock, LSSConstants.CAPABILITY_VOXEL_COLUMNS);
             int pcx = mock.getBlockX() >> 4;
             int pcz = mock.getBlockZ() >> 4;
-            state.addRequest(PositionUtil.packPosition(pcx + 1, pcz), -1L);
-            state.addRequest(PositionUtil.packPosition(pcx + 2, pcz), -1L);
+            GameTestSeeding.seedRequests(state,
+                    new long[]{PositionUtil.packPosition(pcx + 1, pcz),
+                            PositionUtil.packPosition(pcx + 2, pcz)},
+                    new long[]{-1L, -1L});
 
             var source = server.createCommandSourceStack().withSource(recorder(lines));
             server.getCommands().performPrefixedCommand(source, "lsslod stats");
@@ -224,8 +226,9 @@ public class CommandGameTests {
 
         var service = new RequestProcessingService(server);
         var state = service.registerPlayer(mock, LSSConstants.CAPABILITY_VOXEL_COLUMNS);
-        state.addRequest(packed1, -1L);
-        state.addRequest(PositionUtil.packPosition(pos2.x(), pos2.z()), -1L);
+        GameTestSeeding.seedRequests(state,
+                new long[]{packed1, PositionUtil.packPosition(pos2.x(), pos2.z())},
+                new long[]{-1L, -1L});
         var step = new AtomicInteger();
 
         helper.succeedWhen(() -> {
@@ -236,7 +239,7 @@ public class CommandGameTests {
                 // Third request: done-bit cleared but the probe-serve timestamp stamp kept,
                 // so the ts>0 re-ask resolves through the timestamp ladder (up_to_date=1).
                 service.getOffThreadProcessor().clearDiskReadDone(uuid, new long[]{packed1});
-                state.addRequest(packed1, LSSConstants.epochSeconds() + 10_000);
+                GameTestSeeding.seedRequest(state, packed1, LSSConstants.epochSeconds() + 10_000);
                 step.set(1);
                 helper.assertTrue(false, "served workload staged, awaiting the up-to-date leg");
             }

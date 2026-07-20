@@ -1,99 +1,64 @@
 package dev.vox.lss.networking.client;
 
 import dev.vox.lss.common.PositionUtil;
-import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 
 /**
- * Tracks in-flight chunk requests by packed position (the protocol's request key):
- * position → send timestamp, plus which positions are generation requests
- * (clientTimestamp == 0) so callers don't need a parallel data structure.
+ * The awaiting-answer set: positions of the most recent want-set batch, minus answers
+ * received since. This is NOT a send-suppression structure — the scanner re-declares
+ * every unsatisfied position each scan regardless. It exists for exactly two consumers:
+ * status-response gating (BatchResponse carries no dimension, so up_to_date /
+ * not_generated gate on membership here — cleared on dimension change, matching the
+ * pre-v16 requestId gate) and dirty-crossing detection (a dirty broadcast landing while
+ * a position awaits an answer must survive that answer's mark-clear; see
+ * ColumnStateMap.noteStaleIfInFlight).
  *
- * <p><b>Thread safety:</b> Not thread-safe. All methods must be called from
- * the main client thread (render/tick loop).
+ * <p>Replaced wholesale on every fired scan ({@link #replaceWith}), so a position that
+ * left the scan window (superseded + excluded) cannot linger past the next scan.
+ *
+ * <p><b>Thread safety:</b> Not thread-safe. All methods must be called from the main
+ * client thread (render/tick loop).
  */
 class InFlightTracker {
 
-    // Key: packed position, Value: send time (System.nanoTime())
-    // defaultReturnValue(0L) -> 0 means "not in map"
-    private final Long2LongOpenHashMap pendingRequests = new Long2LongOpenHashMap();
-    {
-        pendingRequests.defaultReturnValue(0L);
-    }
+    private final LongOpenHashSet awaiting = new LongOpenHashSet();
 
-    // Positions that are generation requests (clientTimestamp == 0)
-    private final LongOpenHashSet generationPositions = new LongOpenHashSet();
-
-    /**
-     * Record that a position is now pending and whether it is a generation request.
-     */
-    void markPending(long position, long sendTimeNanos, boolean isGeneration) {
-        this.pendingRequests.put(position, sendTimeNanos);
-        if (isGeneration) {
-            this.generationPositions.add(position);
+    /** Replace the set with the positions of the batch just sent (count may be 0). */
+    void replaceWith(long[] positions, int count) {
+        this.awaiting.clear();
+        for (int i = 0; i < count; i++) {
+            this.awaiting.add(positions[i]);
         }
     }
 
-    /** Complete an in-flight request. No-op if the position was not tracked. */
+    /** An answer arrived for this position. No-op if the position was not tracked. */
     void removeByPosition(long position) {
-        this.pendingRequests.remove(position);
-        this.generationPositions.remove(position);
+        this.awaiting.remove(position);
     }
 
     boolean isInFlight(long position) {
-        return this.pendingRequests.containsKey(position);
+        return this.awaiting.contains(position);
     }
 
     int size() {
-        return this.pendingRequests.size();
-    }
-
-    int generationCount() {
-        return this.generationPositions.size();
+        return this.awaiting.size();
     }
 
     /**
-     * Sweep all timed-out requests, removing them from tracking and reporting each evicted
-     * position. Callers MUST mark evictions for retry: while a position is in flight the
-     * scanner counts it as satisfied, so ring confirmation can advance past it — if the
-     * response then never lands (send-queue drop under bandwidth pressure), the position
-     * returns to unknown inside an already-confirmed ring and is never rescanned. The
-     * retry mark resets ring confirmation and re-requests it (bandwidth-throttle soak
-     * found 161 such permanently orphaned positions).
-     */
-    void timeoutSweep(long thresholdNanos, java.util.function.LongConsumer onTimeout) {
-        long now = System.nanoTime();
-        var iter = this.pendingRequests.long2LongEntrySet().iterator();
-        while (iter.hasNext()) {
-            var entry = iter.next();
-            if (now - entry.getLongValue() > thresholdNanos) {
-                this.generationPositions.remove(entry.getLongKey());
-                long pos = entry.getLongKey();
-                iter.remove();
-                onTimeout.accept(pos);
-            }
-        }
-    }
-
-    /**
-     * Remove all pending requests outside the given Chebyshev distance from the player.
-     * The server resolves the abandoned requests on its own; the client simply stops
-     * tracking them (any late response for an untracked position is still applied).
+     * Remove all awaited positions outside the given Chebyshev distance from the player.
+     * Answers for pruned positions fall to the untracked (metrics-only) path; column DATA
+     * still applies untracked, so nothing is lost.
      */
     void pruneOutOfRange(int playerCx, int playerCz, int pruneDistance) {
-        var iter = this.pendingRequests.long2LongEntrySet().iterator();
+        var iter = this.awaiting.iterator();
         while (iter.hasNext()) {
-            var entry = iter.next();
-            long pos = entry.getLongKey();
-            if (PositionUtil.isOutOfRange(pos, playerCx, playerCz, pruneDistance)) {
-                this.generationPositions.remove(pos);
+            if (PositionUtil.isOutOfRange(iter.nextLong(), playerCx, playerCz, pruneDistance)) {
                 iter.remove();
             }
         }
     }
 
     void clear() {
-        this.pendingRequests.clear();
-        this.generationPositions.clear();
+        this.awaiting.clear();
     }
 }

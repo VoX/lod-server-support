@@ -25,12 +25,21 @@ class OffThreadProcessorMailboxTest {
     private static final class TestState extends AbstractPlayerRequestState<Object> {
         TestState(UUID uuid) { super(uuid, 4, 4); }
         @Override public String getPlayerName() { return "test"; }
-        void enqueue(IncomingRequest r) { enqueueIncomingRequest(r); }
+        /** Seeds one want-set batch carrying a single request (the pre-v17 per-request
+         *  enqueue has no equivalent — each declaration REPLACES the backlog). Every call
+         *  site here is separated from the next by a routing cycle, so nothing is superseded. */
+        void enqueue(IncomingRequest r) { offerIncomingBatch(new IncomingBatch(new IncomingRequest[]{r})); }
+    }
+
+    /** Real (but never-used) reader: flips diskReadingAvailable so requests take the
+     *  disk-first route; the submit override keeps results from ever being produced. */
+    private static final class StubDiskReader extends AbstractChunkDiskReader {
+        StubDiskReader() { super(1); }
     }
 
     private static class TestProcessor extends OffThreadProcessor<TestState> {
         TestProcessor(Map<UUID, TestState> players) {
-            super(players, null, false, null, 1);
+            super(players, new StubDiskReader(), false, null, 1, 0);  // memo off (ttl=0): kills only the memo — the pacing rules are ttl-independent
         }
         @Override
         protected boolean submitDiskRead(UUID playerUuid, String dimension, int cx, int cz, long order) {
@@ -39,7 +48,7 @@ class OffThreadProcessorMailboxTest {
         @Override
         protected boolean buildAndEnqueueColumnPayload(TestState state, int cx, int cz, String dimension,
                                                      long columnTimestamp, long submissionOrder,
-                                                     byte[] sectionBytes, int estimatedBytes) {
+                                                     byte[] sectionBytes, int estimatedBytes, byte source) {
             // no-op: tests only observe send actions and slot counts
             return true;
         }
@@ -82,7 +91,7 @@ class OffThreadProcessorMailboxTest {
             // All posted BEFORE start(): the second snapshot replaces the first (latest-wins),
             // but every generation outcome must survive (lossless events).
             proc.postSnapshot(snapshot(uuid), new ArrayList<>(List.of(failure(uuid, 1, 0, 1L))));
-            proc.feedGenerationFailure(uuid, 2, 0, DIM, 2L);
+            proc.feedGenerationFailure(uuid, 2, 0, DIM, 2L, false);
             proc.postSnapshot(snapshot(uuid), new ArrayList<>(List.of(failure(uuid, 3, 0, 3L))));
             proc.start();
 
@@ -190,7 +199,8 @@ class OffThreadProcessorMailboxTest {
         var proc = new TestProcessor(players) {
             @Override
             protected boolean buildAndEnqueueColumnPayload(TestState s, int cx, int cz, String dim,
-                                                           long ts, long order, byte[] bytes, int est) {
+                                                           long ts, long order, byte[] bytes, int est,
+                                                           byte source) {
                 if (throwsLeft.getAndDecrement() > 0) {
                     throw new RuntimeException("injected cycle failure");
                 }

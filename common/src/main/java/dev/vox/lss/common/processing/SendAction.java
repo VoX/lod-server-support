@@ -21,11 +21,6 @@ public sealed interface SendAction {
 
     byte responseType();
 
-    record RateLimited(UUID playerUuid, long packedPosition,
-                       AbstractPlayerRequestState<?> producerState) implements SendAction {
-        @Override public byte responseType() { return LSSConstants.RESPONSE_RATE_LIMITED; }
-    }
-
     record ColumnUpToDate(UUID playerUuid, long packedPosition,
                           AbstractPlayerRequestState<?> producerState) implements SendAction {
         @Override public byte responseType() { return LSSConstants.RESPONSE_UP_TO_DATE; }

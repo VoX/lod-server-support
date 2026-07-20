@@ -235,9 +235,10 @@ public final class BenchmarkMetricsExporter {
         serviceMap.put("gen_drained", diag.getTotalGenDrained());
         var diskReader = src.diskReader();
         serviceMap.put("disk_resolved", diskReader != null ? diskReader.getDiag().getSuccessfulReadCount() : 0L);
-        serviceMap.put("sync_rate_limited", diag.getTotalSyncRateLimited());
-        serviceMap.put("gen_rate_limited", diag.getTotalGenRateLimited());
         serviceMap.put("re_resolved", diag.getTotalReResolved());
+        serviceMap.put("superseded", diag.getTotalSuperseded());
+        serviceMap.put("range_filtered", diag.getTotalRangeFiltered());
+        serviceMap.put("miss_dropped", diag.getTotalMissDropped());
         result.put("service", serviceMap);
 
         var diskMap = new LinkedHashMap<String, Object>();
@@ -253,6 +254,10 @@ public final class BenchmarkMetricsExporter {
             diskMap.put("pending", diskReader.getPendingResultCount());
             diskMap.put("pending_hw", DISK_PENDING_HW.get());
             diskMap.put("read_ms_total", dd.getTotalReadTimeNanos() / LSSConstants.NANOS_PER_MS);
+            // Miss-memo rung hits (law A5's virtual not-founds) — sourced from the
+            // processing diagnostics; the rung requires a reader, so the no-reader
+            // disk-map-empty contract is preserved.
+            diskMap.put("memo_hits", diag.getTotalMemoHits());
         }
         result.put("disk", diskMap);
 
@@ -275,6 +280,12 @@ public final class BenchmarkMetricsExporter {
             genMap.put("active", 0);
             genMap.put("active_hw", 0);
         }
+        // Ordering observability (the miss-memo pacing rules' success metrics) — from
+        // ProcessingDiagnostics, so present even with generation disabled (schema-required):
+        // order_gated = ordering refusals (frontier window + pacing rules), inversions =
+        // completions that finished while a nearer ticket was outstanding.
+        genMap.put("order_gated", diag.getTotalGenOrderGated());
+        genMap.put("inversions", diag.getTotalGenCompletionInversions());
         result.put("generation", genMap);
 
         var dirtyMap = new LinkedHashMap<String, Object>();
@@ -334,7 +345,8 @@ public final class BenchmarkMetricsExporter {
             p.put("sent", state.getTotalSectionsSent());
             p.put("bytes", state.getTotalBytesSent());
             p.put("requests", state.getTotalRequestsReceived());
-            p.put("incoming_dropped", state.getTotalIncomingDropped());
+            // Want-set entries still awaiting a routing pass on the processing thread.
+            p.put("backlog", state.getBacklogSize());
             players.add(p);
         }
         result.put("players", players);
@@ -385,6 +397,8 @@ public final class BenchmarkMetricsExporter {
         result.put("received_columns", receivedColumns);
         result.put("received_bytes", receivedBytes);
         result.put("dropped", dropped);
+        // The decode/ingest queue (ClientColumnProcessor) — unrelated to the request loop, which
+        // no longer queues anything (the want-set is scanned and sent in the same tick).
         result.put("queued", queued);
 
         result.put("dimension", manager != null ? manager.getCurrentDimensionId() : "none");
@@ -394,10 +408,12 @@ public final class BenchmarkMetricsExporter {
         responses.put("columns", manager != null ? manager.getTotalColumnsReceived() : 0L);
         responses.put("up_to_date", manager != null ? manager.getTotalUpToDate() : 0L);
         responses.put("not_generated", manager != null ? manager.getTotalNotGenerated() : 0L);
-        responses.put("rate_limited", manager != null ? manager.getTotalRateLimited() : 0L);
         result.put("responses", responses);
 
         result.put("ingest_failures", manager != null ? manager.getTotalIngestFailures() : 0L);
+        // Want-set semantics: every scan RE-DECLARES every unsatisfied position, so this counts
+        // declarations, not distinct positions — one slow column contributes once per scan.
+        // It is a send-side volume gauge, not a distinct-work measure.
         result.put("requested_total", manager != null ? manager.getTotalPositionsRequested() : 0L);
         result.put("send_cycles", manager != null ? manager.getTotalSendCycles() : 0L);
 
@@ -415,13 +431,11 @@ public final class BenchmarkMetricsExporter {
         scan.put("ring", manager != null ? manager.getScanRing() : 0);
         scan.put("missing_vanilla", manager != null ? manager.getMissingVanillaChunks() : 0);
         scan.put("budget", manager != null ? manager.getLastBudget() : 0);
-        scan.put("sync_queued", manager != null ? manager.getLastSyncQueued() : 0);
-        scan.put("gen_queued", manager != null ? manager.getLastGenQueued() : 0);
+        scan.put("queued", manager != null ? manager.getLastQueued() : 0);
         result.put("scan", scan);
 
+        // Declared-and-unanswered (the awaiting-answer set), replaced per scan.
         result.put("tracker_in_flight", manager != null ? manager.getPendingCount() : 0);
-        // Positions parked in the RequestQueue between scanner accept and send drip
-        result.put("request_queue", manager != null ? manager.getQueueRemaining() : 0);
 
         // Request→receive round-trip latency distribution (-1.0 doubles when no samples yet)
         var rtt = new LinkedHashMap<String, Object>();
@@ -509,6 +523,7 @@ public final class BenchmarkMetricsExporter {
             double avgMs = completed > 0 ? (dd.getTotalReadTimeNanos() / (double) completed) / LSSConstants.NANOS_PER_MS : 0;
             diskReaderMap.put("avg_read_time_ms", avgMs);
             diskReaderMap.put("saturation_events", dd.getSaturationCount());
+            diskReaderMap.put("memo_hits", diag.getTotalMemoHits());
         }
         result.put("disk_reader", diskReaderMap);
 
@@ -522,12 +537,13 @@ public final class BenchmarkMetricsExporter {
         }
         result.put("generation", genMap);
 
-        // Rate limiting
-        var rateLimiting = new LinkedHashMap<String, Object>();
-        rateLimiting.put("sync_rate_limited", diag.getTotalSyncRateLimited());
-        rateLimiting.put("gen_rate_limited", diag.getTotalGenRateLimited());
-        rateLimiting.put("queue_full", diag.getTotalQueueFull());
-        result.put("rate_limiting", rateLimiting);
+        // Backpressure — v17 has no rate-limited bounce; a want that cannot be served this pass is
+        // dropped silently (superseded) or filtered out of range, and the client re-declares it.
+        var backpressure = new LinkedHashMap<String, Object>();
+        backpressure.put("queue_full", diag.getTotalQueueFull());
+        backpressure.put("superseded", diag.getTotalSuperseded());
+        backpressure.put("range_filtered", diag.getTotalRangeFiltered());
+        result.put("backpressure", backpressure);
 
         // Bandwidth
         var bandwidth = new LinkedHashMap<String, Object>();
@@ -567,7 +583,6 @@ public final class BenchmarkMetricsExporter {
         if (manager != null) {
             result.put("total_up_to_date", manager.getTotalUpToDate());
             result.put("total_not_generated", manager.getTotalNotGenerated());
-            result.put("total_rate_limited", manager.getTotalRateLimited());
             result.put("send_cycles", manager.getTotalSendCycles());
             result.put("positions_requested", manager.getTotalPositionsRequested());
         }

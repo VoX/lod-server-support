@@ -5,6 +5,8 @@ import dev.vox.lss.common.LSSConstants;
 import dev.vox.lss.common.LSSLogger;
 import dev.vox.lss.common.PositionUtil;
 import dev.vox.lss.common.SharedBandwidthLimiter;
+import dev.vox.lss.common.compat.V16CompatManager;
+import dev.vox.lss.common.processing.IncomingBatch;
 import dev.vox.lss.common.processing.IncomingRequest;
 import dev.vox.lss.common.processing.LoadedColumnData;
 import dev.vox.lss.common.processing.OffThreadProcessor;
@@ -48,6 +50,10 @@ public class PaperRequestProcessingService {
     private final PaperOffThreadProcessor offThreadProcessor;
     private final DirtyColumnTracker dirtyTracker;
     private final PaperDirtyColumnBroadcaster dirtyBroadcaster;
+    // The v16 compat shim's per-player sessions (legacy protocol-16 clients). The pipeline
+    // never consults it: a v16 player is an ordinary registered player whose want-set is
+    // declared by the shim at 1 Hz. See docs/planning/v16-compat-design.md.
+    private final V16CompatManager v16Compat = new V16CompatManager();
 
     private final long startTimeNanos = System.nanoTime();
     // Keyed by the lightweight ResourceKey (not ServerLevel): a ServerLevel key strongly
@@ -66,6 +72,24 @@ public class PaperRequestProcessingService {
 
     private static final int DIAG_LOG_INTERVAL_TICKS = 100;
     private static final int MAX_PROBES_PER_TICK_PER_PLAYER = 512;
+    // Global ceiling on in-memory column SERIALIZATIONS across ALL players in one pump tick — the
+    // per-player cap bounds one player, but N backfilling players would otherwise cost up to
+    // 512*N serializations on the pump. Counts serializations (the expensive work), not
+    // examinations. Applies to the non-Folia pump probe below; the Folia region-probe path runs
+    // off-pump on owning region threads, so the per-player cap suffices there — with one honest
+    // caveat: "distributed" assumes players in DIFFERENT regions. N players clustered in one
+    // region all probe on that region's single thread (up to 512*N there, uncapped globally);
+    // acceptable while Folia support is experimental, revisit if clustered-players soak shows
+    // region-tick pressure. Once spent, later players fall through to the disk-read path and
+    // the 1 Hz re-declaration heals it.
+    // Gen-disabled corner (accepted): with enableChunkGeneration=false, a LOADED but
+    // never-saved chunk whose probe this cap deferred falls through to a disk read, resolves
+    // not-found, and answers NOT_GENERATED — session-permanent on the client despite the
+    // chunk being live in memory. Heals on its first save (dirty broadcast) or reconnect;
+    // needs disabled generation + an exhausted budget + a never-saved chunk in one tick.
+    private static final int MAX_PROBES_PER_TICK_GLOBAL = 2048;
+    /** Rotating start index for the lifecycle pass (pump thread only) — see the loop comment. */
+    private int probeRotation;
 
     /** Test seam: puts one encoded voxel-column frame on the wire. Production default is the
      *  raw NMS payload send; tests inject recording/throwing senders. */
@@ -81,9 +105,42 @@ public class PaperRequestProcessingService {
         LoadedColumnData probe(ServerLevel level, int cx, int cz);
     }
 
-    private ColumnPayloadSender columnPayloadSender = (state, data) ->
+    /** Warn-once latch for the v16 egress splice guard (pump thread only). */
+    private boolean v16SpliceWarned;
+
+    /** The per-player column egress (PUMP). For a v16 session, splices the frame
+     *  UNCONDITIONALLY into the legacy source-less shape — every producer
+     *  (probe/disk/generation/ghost-clear) funnels through here, so no producer can leak a
+     *  v18 frame that would hard-kick the old client — and prunes the position from the
+     *  synthetic want-set after the send (satisfied-by-data; load-bearing, design §4.4).
+     *  A frame the splice cannot parse is DROPPED with a warn-once (design §5): letting
+     *  the exception propagate would make flushSendQueue drop the player's WHOLE queue,
+     *  and honest re-resolution would re-enqueue the same frame forever. Unreachable
+     *  today — every frame comes from encodeVoxelColumnPreEncoded. */
+    private ColumnPayloadSender columnPayloadSender = (state, data) -> {
+        var uuid = state.getPlayerUUID();
+        if (this.v16Compat.isV16(uuid)) {
+            byte[] legacy;
+            long packedPos;
+            try {
+                legacy = PaperPayloadHandler.rewriteColumnToV16(data);
+                packedPos = PaperPayloadHandler.readColumnPackedPos(data);
+            } catch (Exception e) {
+                if (!this.v16SpliceWarned) {
+                    this.v16SpliceWarned = true;
+                    LSSLogger.error("v16-compat: dropping unspliceable column frame for "
+                            + state.getPlayerName() + " (further drops are silent)", e);
+                }
+                return;
+            }
             PaperPayloadHandler.sendRawNmsPayload(state.getPlayer().getBukkitEntity(),
-                    PaperPayloadHandler.ID_VOXEL_COLUMN, data);
+                    PaperPayloadHandler.ID_VOXEL_COLUMN, legacy);
+            this.v16Compat.onColumnSent(uuid, packedPos);
+            return;
+        }
+        PaperPayloadHandler.sendRawNmsPayload(state.getPlayer().getBukkitEntity(),
+                PaperPayloadHandler.ID_VOXEL_COLUMN, data);
+    };
 
     private LoadedColumnProbe loadedColumnProbe = (level, cx, cz) -> {
         LevelChunk chunk = level.getChunkSource().getChunkNow(cx, cz);
@@ -167,9 +224,9 @@ public class PaperRequestProcessingService {
 
     private final ConcurrentHashMap<UUID, RegionProbeBatch> regionProbeResults = new ConcurrentHashMap<>();
 
-    /** Pump-only. Requests drained at tick T, released into the routing queue at T+1 once
-     *  their probe task has had a region tick to publish. */
-    private final Map<UUID, List<IncomingRequest>> heldForProbe = new HashMap<>();
+    /** Pump-only. The batch taken at tick T, released back into the mailbox at T+1 once its
+     *  probe task has had a region tick to publish. */
+    private final Map<UUID, IncomingBatch> heldForProbe = new HashMap<>();
 
     /** Collaborator set for the package-private constructor. Tests build it over recording
      *  collaborators; production wiring lives in {@link #productionWiring} only. */
@@ -204,14 +261,14 @@ public class PaperRequestProcessingService {
 
     private static Wiring productionWiring(MinecraftServer server, Plugin plugin, PaperConfig config) {
         Map<UUID, PaperPlayerRequestState> players = new ConcurrentHashMap<>();
-        var diskReader = new PaperChunkDiskReader(config.diskReaderThreads);
+        var diskReader = new PaperChunkDiskReader(config.diskReaderThreads, config.useBackgroundReadPriority);
         PaperChunkGenerationService generationService = config.enableChunkGeneration
                 ? new PaperChunkGenerationService(config, plugin) : null;
 
         var dataDir = server.getWorldPath(LevelResource.ROOT).resolve("data");
         var offThreadProcessor = new PaperOffThreadProcessor(
                 players, diskReader, generationService != null, dataDir,
-                config.perDimensionTimestampCacheSizeMB);
+                config.perDimensionTimestampCacheSizeMB, config.missMemoTtlSeconds);
         offThreadProcessor.start();
 
         var dirtyTracker = new DirtyColumnTracker();
@@ -259,7 +316,7 @@ public class PaperRequestProcessingService {
     public PaperPlayerRequestState registerPlayer(ServerPlayer player, int capabilities) {
         var state = this.players.computeIfAbsent(player.getUUID(), uuid -> {
             var s = new PaperPlayerRequestState(player,
-                    this.config.syncOnLoadConcurrencyLimitPerPlayer,
+                    LSSConstants.SYNC_ON_LOAD_SLOT_CAP,
                     this.config.generationConcurrencyLimitPerPlayer);
             // Session identity for the router's stale-snapshot guard (set before the map
             // publish so the processing thread never sees it null on a live state).
@@ -278,6 +335,10 @@ public class PaperRequestProcessingService {
         this.heldForProbe.remove(uuid);
         this.offThreadProcessor.notifyPlayerRemoved(uuid);
         cleanupPlayerServices(uuid);
+        // Resets the v16 want-set + arms the ingress grace. Identity survives (dropped only
+        // by the PlayerQuit hook), mirroring how capabilities ride the dim-change
+        // remove+register cycle. No-op for v18 players.
+        this.v16Compat.onServiceRemove(uuid);
     }
 
     private void cleanupPlayerServices(UUID uuid) {
@@ -287,20 +348,49 @@ public class PaperRequestProcessingService {
     }
 
     public void handleBatchRequest(ServerPlayer player, PaperPayloadHandler.DecodedBatchChunkRequest batch) {
-        var state = this.players.get(player.getUUID());
-        if (state == null || !state.hasCompletedHandshake()) return;
-
         int playerCx = player.getBlockX() >> 4;
         int playerCz = player.getBlockZ() >> 4;
         int maxDist = this.config.lodDistanceChunks + LSSConstants.LOD_DISTANCE_BUFFER;
 
+        // v16 compat branch: legacy drip batches MERGE into the synthetic want-set (the 1 Hz
+        // pump tick is the sole declarer) instead of replacing the backlog. Placed before the
+        // state guard: merges are session-only and must not depend on registration timing —
+        // on Paper the handshake reply outruns the mailboxed registration by up to a tick.
+        var v16Merge = this.v16Compat.onClientBatch(player.getUUID(), batch.packedPositions(),
+                batch.clientTimestamps(), batch.count(), playerCx, playerCz, maxDist);
+        if (v16Merge != null) {
+            var v16State = this.players.get(player.getUUID());
+            if (v16State != null && v16Merge.rangeFiltered() > 0) {
+                v16State.recordRangeFiltered(v16Merge.rangeFiltered());
+            }
+            long[] bounced = v16Merge.overflowBounced();
+            if (bounced.length > 0) {
+                // Overflow valve: byte 0 comes back to life for exactly this — the old client
+                // backs off ~1 s and retries. Sent directly (netty is any-thread safe), off
+                // the pipeline's SendActionBatcher.
+                var types = new byte[bounced.length];
+                java.util.Arrays.fill(types, LSSConstants.RESPONSE_RATE_LIMITED_V16);
+                PaperPayloadHandler.sendBatchResponse(player.getBukkitEntity(),
+                        types, bounced, bounced.length);
+            }
+            return;
+        }
+
+        var state = this.players.get(player.getUUID());
+        if (state == null || !state.hasCompletedHandshake()) return;
+
+        var accepted = new ArrayList<IncomingRequest>(batch.count());
         for (int i = 0; i < batch.count(); i++) {
             long packedPosition = batch.packedPositions()[i];
             int cx = PositionUtil.unpackX(packedPosition);
             int cz = PositionUtil.unpackZ(packedPosition);
             if (PositionUtil.chebyshevDistance(cx, cz, playerCx, playerCz) > maxDist) continue;
-            state.addRequest(cx, cz, batch.clientTimestamps()[i]);
+            accepted.add(new IncomingRequest(cx, cz, batch.clientTimestamps()[i]));
         }
+        state.recordRangeFiltered(batch.count() - accepted.size());
+        // Offer even when empty: an empty batch is the client's explicit backpressure
+        // clear and must replace the backlog with nothing.
+        state.offerIncomingBatch(new IncomingBatch(accepted.toArray(new IncomingRequest[0])));
     }
 
     public void tick() {
@@ -321,6 +411,11 @@ public class PaperRequestProcessingService {
         this.diag.reset(this.offThreadProcessor.getDiagnostics());
 
         var generationReady = tickGenerationService();
+        // v16 declares BEFORE the lifecycle pass: the sync probe reads the mailbox during
+        // processPlayerLifecycle, and on Folia holdAndScheduleRegionProbe reads ONLY the
+        // mailbox — a declare offered after that pass would lose the race to the processing
+        // thread's take and route with zero probe coverage (release-review finding 1).
+        tickV16Compat();
         var lifecycle = processPlayerLifecycle(generationReady);
 
         if (lifecycle.toRemove != null) {
@@ -340,6 +435,21 @@ public class PaperRequestProcessingService {
         flushSendQueues(lifecycle.activeCount);
         this.dirtyBroadcaster.tick(this.config);
         tickDiagnosticsLog();
+    }
+
+    /** The v16 shim's 1 Hz declare pass (PUMP): the SOLE declarer for legacy sessions. A
+     *  server without v16 clients pays one no-op map lookup per player per tick. MUST run
+     *  before processPlayerLifecycle: the declare then sits in the mailbox when the sync
+     *  probe (or, on Folia, the hold-release take) reads it, giving shim batches the same
+     *  arrival-tick probe alignment a network-received client batch gets. */
+    private void tickV16Compat() {
+        int maxDist = this.config.lodDistanceChunks + LSSConstants.LOD_DISTANCE_BUFFER;
+        for (var state : this.players.values()) {
+            if (!state.hasCompletedHandshake()) continue;
+            var player = state.getPlayer();
+            this.v16Compat.tickPlayer(player.getUUID(), state,
+                    player.chunkPosition().x(), player.chunkPosition().z(), maxDist);
+        }
     }
 
     private List<TickSnapshot.GenerationReadyData> tickGenerationService() {
@@ -366,8 +476,16 @@ public class PaperRequestProcessingService {
         Map<UUID, LongOpenHashSet> genReadyPositions = TickSnapshot.groupPositionsByPlayer(generationReady);
 
         int activeCount = 0;
+        int globalProbeBudget = MAX_PROBES_PER_TICK_GLOBAL;
         List<UUID> toRemove = null;
-        for (var state : this.players.values()) {
+        // Rotate the iteration start each tick: ConcurrentHashMap's iteration order is
+        // stable, so when the global probe budget exhausts mid-pass the SAME trailing
+        // players would otherwise get zero probe coverage every tick.
+        var states = new ArrayList<>(this.players.values());
+        int playerCount = states.size();
+        int start = playerCount == 0 ? 0 : Math.floorMod(this.probeRotation++, playerCount);
+        for (int i = 0; i < playerCount; i++) {
+            var state = states.get((start + i) % playerCount);
             if (!state.hasCompletedHandshake())
                 continue;
             activeCount++;
@@ -404,6 +522,10 @@ public class PaperRequestProcessingService {
 
             var player = state.getPlayer();
             var level = player.level();
+            // Ring origin for the generation order-spread gate — must be the REAL player
+            // chunk (the want-set's first entry sits at ~viewDistance on a ring perimeter,
+            // which wedged the gate — see AbstractPlayerRequestState.updatePlayerChunk).
+            state.updatePlayerChunk(player.chunkPosition().x(), player.chunkPosition().z());
             String dimension = this.dimensionStringCache.computeIfAbsent(level.dimension(),
                     k -> k.identifier().toString());
 
@@ -421,7 +543,8 @@ public class PaperRequestProcessingService {
                 probes = consumeRegionProbes(player.getUUID(), dimension, skipPositions);
                 holdAndScheduleRegionProbe(state, player, level, skipPositions);
             } else {
-                probes = this.probeLoadedChunks(state, level, skipPositions);
+                probes = this.probeLoadedChunks(state, level, skipPositions, globalProbeBudget);
+                globalProbeBudget -= probes.size();   // charge only actual serializations (pump path)
             }
             if (probes != null && !probes.isEmpty()) {
                 loadedChunkProbes.put(player.getUUID(), probes);
@@ -465,19 +588,55 @@ public class PaperRequestProcessingService {
         }
     }
 
+    /**
+     * Probe loaded chunks for positions the player still wants (Paper's sync path — Folia
+     * uses the regionized hold-release instead).
+     *
+     * <p><b>Source: the mailbox first, then the published want-set.</b> The MAILBOX holds a
+     * batch that arrived since the last routing cycle; probing it on its ARRIVAL tick is what
+     * puts its probes in the snapshot the router routes it against. Without that a freshly
+     * declared position is never probed on its first routing cycle, and a want-set that fits
+     * under the per-player slot cap — the converged steady state, and every single-position
+     * dirty-broadcast re-request — has no second cycle, so it disk-reads. Folia's one-tick
+     * hold-release makes the same alignment deterministic; this is the sync path's
+     * equivalent. The PUBLISHED want-set then covers the other ~19 ticks of each second
+     * ({@code takeIncomingBatch()} nulls the mailbox within ~50 ms of arrival while batches
+     * arrive at only 1 Hz) and carries a want-set too large for the slot cap across the
+     * cycles that work it off (published exactly while the backlog is non-empty).
+     *
+     * <p>Both sources may list already-routed positions; such a probe is simply unused by the
+     * router, bounded by {@link #MAX_PROBES_PER_TICK_PER_PLAYER}.
+     */
     private Long2ObjectMap<LoadedColumnData> probeLoadedChunks(
             PaperPlayerRequestState state, ServerLevel level,
-            LongOpenHashSet skipPositions) {
+            LongOpenHashSet skipPositions, int globalBudgetRemaining) {
         var probes = new Long2ObjectOpenHashMap<LoadedColumnData>();
         int probed = 0;
 
-        for (var req : state.getIncomingRequests()) {
+        var wantSet = state.peekIncomingBatch();
+        if (wantSet == null)
+            wantSet = state.peekWantSet();
+        if (wantSet == null)
+            return probes;   // nothing pending — converged player, no probe cost
+        for (var req : wantSet.requests()) {
             if (probed >= MAX_PROBES_PER_TICK_PER_PLAYER)
+                break;   // per-player examination cap
+            // Global serialization ceiling: probes.size() counts columns actually serialized, so
+            // this stops the moment this player would exceed the tick's remaining pump budget.
+            if (probes.size() >= globalBudgetRemaining)
                 break;
             long packed = PositionUtil.packPosition(req.cx(), req.cz());
             if (probes.containsKey(packed))
                 continue;
             if (skipPositions != null && skipPositions.contains(packed))
+                continue;
+            // Served-head filter: a payload already in the send pipeline means the router
+            // resolves this position as a duplicate — the probe is guaranteed-unused, and
+            // under backlog retention the published want-set re-lists it every tick until
+            // the next 1 Hz declaration, re-serializing the same head for a whole second.
+            // Only enqueuedColumns is checked: it is the one served-set structure safe off
+            // the processing thread (pendingByPosition/diskReadDone are single-threaded).
+            if (state.hasEnqueuedColumn(packed))
                 continue;
 
             var column = this.loadedColumnProbe.probe(level, req.cx(), req.cz());
@@ -508,33 +667,42 @@ public class PaperRequestProcessingService {
         return batch.probes();
     }
 
-    /** Pump only. Advances the one-tick hold-release pipeline: drains this tick's fresh
-     *  arrivals, releases the previous tick's held batch back into the routing queue (its
-     *  probe results were consumed just above), then parks the fresh batch and hands its
-     *  positions to the player's owning region. The processing thread may concurrently
-     *  poll the same queue for an in-flight routing cycle — either consumer owning a given
-     *  request is correct (a stolen request routes without probe results, exactly as a
-     *  non-regionized request would). */
+    /** Pump only. One-tick hold-release at BATCH granularity: release last tick's held batch
+     *  back into the mailbox — but only if no newer batch arrived during the hold
+     *  (republishHeldBatch CAS; a lost CAS means the held batch was superseded, is counted,
+     *  and is dropped, never resurrected) — otherwise take whatever is pending now, park it,
+     *  and hand its positions to the player's owning region. The processing thread takes
+     *  batches only from the mailbox, so a held batch is invisible to routing until released
+     *  with its probe results already published, and no batch is ever both held and pending.
+     *
+     *  <p>Release strictly precedes the take, and a successful release ends the tick: the CAS
+     *  is {@code compareAndSet(null, held)}, so taking first would empty the mailbox and make
+     *  the CAS unconditionally succeed — resurrecting a batch the client has already
+     *  superseded while parking the newer one behind it. Returning on a successful release
+     *  keeps the pump from immediately stealing back the batch it just handed to routing.
+     *
+     *  <p><b>Known limitation.</b> The release-then-return only protects the batch for ONE
+     *  pump tick: if the processing cycle overruns and has not taken the released batch by
+     *  the NEXT pump tick, this method finds nothing held and takes it back out of the
+     *  mailbox — re-holding it for another tick (with fresh probe results) instead of
+     *  letting routing have it. A persistently slow processing thread can ping-pong a batch
+     *  this way, each bounce adding a tick of routing delay until either the processing
+     *  thread wins the race or the next 1 Hz declaration supersedes the batch. Bounded and
+     *  self-healing, but worth knowing when reading Folia soak latencies. */
     private void holdAndScheduleRegionProbe(PaperPlayerRequestState state, ServerPlayer player,
                                             ServerLevel level, LongOpenHashSet skipPositions) {
-        List<IncomingRequest> fresh = null;
-        IncomingRequest req;
-        while ((req = state.pollIncomingRequest()) != null) {
-            if (fresh == null) fresh = new ArrayList<>();
-            fresh.add(req);
-        }
-
         var released = this.heldForProbe.remove(player.getUUID());
-        if (released != null) {
-            for (var r : released) {
-                state.reinjectIncomingRequest(r);
-            }
+        if (released != null && state.republishHeldBatch(released)) {
+            return;
         }
 
+        // Either nothing was held, or the held batch lost the CAS to a newer arrival (dropped
+        // and counted superseded). Whatever is pending now is the newest declaration.
+        var fresh = state.takeIncomingBatch();
         if (fresh == null) return;
         this.heldForProbe.put(player.getUUID(), fresh);
 
-        long[] positions = snapshotProbePositions(fresh, skipPositions);
+        long[] positions = snapshotProbePositions(state, fresh, skipPositions);
         if (positions.length == 0) return;
         UUID uuid = player.getUUID();
         this.regionTaskScheduler.schedule(player, () -> runRegionProbe(uuid, level, positions));
@@ -542,13 +710,17 @@ public class PaperRequestProcessingService {
 
     private static final long[] NO_POSITIONS = new long[0];
 
-    /** Up to {@link #MAX_PROBES_PER_TICK_PER_PLAYER} distinct positions from the held batch. */
-    private long[] snapshotProbePositions(List<IncomingRequest> held,
+    /** Up to {@link #MAX_PROBES_PER_TICK_PER_PLAYER} distinct positions from the held batch.
+     *  Served-head filter mirrors the sync probes: a payload already in the send pipeline
+     *  resolves as a duplicate, so probing it wastes a region-thread serialization
+     *  (enqueuedColumns is the one served-set structure safe off the processing thread). */
+    private long[] snapshotProbePositions(PaperPlayerRequestState state, IncomingBatch held,
                                           LongOpenHashSet skipPositions) {
         LongOpenHashSet positions = null;
-        for (var req : held) {
+        for (var req : held.requests()) {
             long packed = PositionUtil.packPosition(req.cx(), req.cz());
             if (skipPositions != null && skipPositions.contains(packed)) continue;
+            if (state.hasEnqueuedColumn(packed)) continue;
             if (positions == null) positions = new LongOpenHashSet();
             if (!positions.add(packed)) continue;
             if (positions.size() >= MAX_PROBES_PER_TICK_PER_PLAYER) break;
@@ -581,9 +753,13 @@ public class PaperRequestProcessingService {
     }
 
     private void drainSendActions() {
-        this.offThreadProcessor.drainSendActions((state, types, positions, count) ->
-                PaperPayloadHandler.sendBatchResponse(state.getPlayer().getBukkitEntity(),
-                        types, positions, count));
+        this.offThreadProcessor.drainSendActions((state, types, positions, count) -> {
+            // v16 observation: UP_TO_DATE / NOT_GENERATED terminally answer their positions —
+            // prune them from the synthetic want-set. The frame itself is wire-identical.
+            this.v16Compat.observeBatchResponse(state.getPlayerUUID(), types, positions, count);
+            PaperPayloadHandler.sendBatchResponse(state.getPlayer().getBukkitEntity(),
+                    types, positions, count);
+        });
     }
 
     private void drainGenerationTicketRequests() {
@@ -611,16 +787,21 @@ public class PaperRequestProcessingService {
                     req.playerUuid(), level, req.cx(), req.cz(),
                     req.submissionOrder());
             if (!accepted) {
-                // Capacity rejection or removed player: feed a failure outcome so the
-                // processing thread frees the pending slot and tells the client ColumnNotGenerated.
+                // Capacity rejection or removed player — TRANSIENT: feed a transient outcome
+                // so the processing thread frees the pending slot silently (superseded); the
+                // client's re-declaration retries. Never NOT_GENERATED (session-permanent).
                 this.offThreadProcessor.feedGenerationFailure(
-                        req.playerUuid(), req.cx(), req.cz(), dimension, req.submissionOrder());
+                        req.playerUuid(), req.cx(), req.cz(), dimension, req.submissionOrder(), true);
             }
         }
     }
 
     public Map<UUID, PaperPlayerRequestState> getPlayers() {
         return Collections.unmodifiableMap(this.players);
+    }
+
+    public V16CompatManager getV16CompatManager() {
+        return this.v16Compat;
     }
 
     public PaperChunkDiskReader getDiskReader() {

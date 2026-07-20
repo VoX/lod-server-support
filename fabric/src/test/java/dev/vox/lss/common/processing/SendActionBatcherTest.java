@@ -39,12 +39,14 @@ class SendActionBatcherTest {
     /** One emitted frame with arrays trimmed to count (the consumer contract is count-bounded). */
     private record Frame(UUID player, byte[] types, long[] positions, int count) {}
 
+    /**
+     * Alternates the two response types production can actually batch (v17 retired the
+     * rate-limited byte 0, so the batcher only ever sees 1 and 2). Two values still fully
+     * discriminate the type<->position pairing across a frame split, because
+     * {@link #positionFor} is injective — the pairing check at index i compares both.
+     */
     private static byte typeFor(int i) {
-        return switch (i % 3) {
-            case 0 -> LSSConstants.RESPONSE_RATE_LIMITED;
-            case 1 -> LSSConstants.RESPONSE_UP_TO_DATE;
-            default -> LSSConstants.RESPONSE_NOT_GENERATED;
-        };
+        return (i % 2 == 0) ? LSSConstants.RESPONSE_UP_TO_DATE : LSSConstants.RESPONSE_NOT_GENERATED;
     }
 
     private static long positionFor(int i) {

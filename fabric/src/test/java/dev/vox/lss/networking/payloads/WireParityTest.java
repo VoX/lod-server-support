@@ -122,13 +122,11 @@ class WireParityTest {
 
     @Test
     void sessionConfig() {
-        var p = new SessionConfigS2CPayload(3, true, 8, 300, 16, false);
+        var p = new SessionConfigS2CPayload(3, true, 8, false);
         byte[] expected = ref(b -> {
             b.writeVarInt(3);
             b.writeBoolean(true);
             b.writeVarInt(8);
-            b.writeVarInt(300);
-            b.writeVarInt(16);
             b.writeBoolean(false);
         });
         assertArrayEquals(expected, encode(SessionConfigS2CPayload.CODEC, p));
@@ -136,7 +134,7 @@ class WireParityTest {
 
     @Test
     void sessionConfigToleratesForeignVersionLayout() {
-        // A v15 server's 10-field SessionConfig frame. The v16 decoder must consume the whole
+        // A v15 server's 10-field SessionConfig frame. The current decoder must consume the whole
         // frame (no trailing bytes -> no decoder kick) and surface the version so the
         // client-side protocol gate can fire.
         byte[] v15Frame = ref(b -> {
@@ -162,36 +160,31 @@ class WireParityTest {
     @Test
     void sessionConfigVarIntBoundaries() {
         // lodDistance crossing the 1->2 byte VarInt boundary (127/128) and the 2048 config
-        // max; concurrency at the 1000 clamp max. Values within each frame are pairwise
-        // distinct so a field transposition in either platform's codec cannot cancel out.
-        int[][] cases = {
-                {127, 1000, 128},
-                {128, 127, 1000},
-                {2048, 1000, 127},
-        };
-        for (int[] c : cases) {
+        // max — the one variable-width field left in the 4-field frame.
+        int[] cases = {127, 128, 2048};
+        for (int lod : cases) {
             byte[] expected = ref(b -> {
                 b.writeVarInt(LSSConstants.PROTOCOL_VERSION);
                 b.writeBoolean(true);
-                b.writeVarInt(c[0]);
-                b.writeVarInt(c[1]);
-                b.writeVarInt(c[2]);
+                b.writeVarInt(lod);
                 b.writeBoolean(false);
             });
             var p = new SessionConfigS2CPayload(LSSConstants.PROTOCOL_VERSION, true,
-                    c[0], c[1], c[2], false);
+                    lod, false);
             assertArrayEquals(expected, encode(SessionConfigS2CPayload.CODEC, p),
-                    "sessionConfig lod=" + c[0]);
+                    "sessionConfig lod=" + lod);
             var d = decode(SessionConfigS2CPayload.CODEC, expected);
-            assertEquals(c[0], d.lodDistanceChunks());
-            assertEquals(c[1], d.syncOnLoadConcurrencyLimitPerPlayer());
-            assertEquals(c[2], d.generationConcurrencyLimitPerPlayer());
+            assertEquals(lod, d.lodDistanceChunks());
         }
     }
 
     @Test
     void batchResponse() {
-        byte[] types = {LSSConstants.RESPONSE_RATE_LIMITED, LSSConstants.RESPONSE_UP_TO_DATE,
+        // Type 0 is the RETIRED-and-RESERVED v16 rate-limited tag and 200 is a hypothetical
+        // future tag: neither has a constant, and both are here on purpose. The codec is
+        // type-agnostic by contract — it must ship any byte through unaltered, or a future
+        // response type could not be added without a second wire break. Keep both.
+        byte[] types = {(byte) 0, LSSConstants.RESPONSE_UP_TO_DATE,
                 LSSConstants.RESPONSE_NOT_GENERATED, (byte) 200};
         long[] positions = {0L, PositionUtil.packPosition(10, 20), -1L,
                 PositionUtil.packPosition(Integer.MIN_VALUE, Integer.MAX_VALUE)};
@@ -250,6 +243,7 @@ class WireParityTest {
                 b.writeInt(Integer.MAX_VALUE);
                 b.writeUtf(c.dim());
                 b.writeLong(-1L);
+                b.writeByte(-1); // serve-source: unknown (source-less convenience path)
                 b.writeByteArray(sections);
             });
             assertArrayEquals(expected, encode(VoxelColumnS2CPayload.CODEC,
@@ -267,6 +261,7 @@ class WireParityTest {
             b.writeInt(0);
             b.writeUtf("lsstest:custom");
             b.writeLong(42L);
+            b.writeByte(-1); // serve-source: unknown (source-less convenience path)
             b.writeByteArray(sections);
         });
         assertArrayEquals(expected, encode(VoxelColumnS2CPayload.CODEC,
@@ -283,6 +278,7 @@ class WireParityTest {
             b.writeInt(-7);
             b.writeUtf("minecraft:overworld");
             b.writeLong(5L);
+            b.writeByte(-1); // serve-source: unknown (source-less convenience path)
             b.writeByteArray(new byte[0]);
         });
         assertArrayEquals(expected, encode(VoxelColumnS2CPayload.CODEC,
@@ -293,7 +289,85 @@ class WireParityTest {
         assertEquals(0, d.decompressedSections().length);
     }
 
-    // ---- Meta: the parity corpus must cover the whole v16 payload surface ----
+    // ---- v16 compat legacy shapes (docs/planning/v16-compat-design.md §2) ----
+    // Reference ops mirror the v0.6.2 encoders VERBATIM (verified against the tag): the
+    // 6-field SessionConfig layout and the source-less VoxelColumn frame — the golden
+    // contract a legacy protocol-16 client decodes. The Paper twin asserts its encoders
+    // against these IDENTICAL ops.
+
+    @Test
+    void sessionConfigV16LegacyEncodesTheSixFieldLayoutEchoingVersion16() {
+        byte[] expected = ref(b -> {
+            b.writeVarInt(16);     // MUST echo 16 — the v0.6.2 codec hard-gates on this VarInt
+            b.writeBoolean(true);  // enabled
+            b.writeVarInt(101);    // lodDistanceChunks
+            b.writeVarInt(200);    // syncOnLoadConcurrencyLimitPerPlayer (the client's pacing)
+            b.writeVarInt(7);      // generationConcurrencyLimitPerPlayer
+            b.writeBoolean(false); // generationEnabled
+        });
+        assertArrayEquals(expected, encode(SessionConfigS2CPayload.CODEC,
+                SessionConfigS2CPayload.v16Legacy(true, 101, 200, 7, false)));
+    }
+
+    @Test
+    void v18SessionConfigEncodeIsByteIdenticalWithTheLegacyFieldsDormant() {
+        // Regression pin: the compat fields must not perturb the current 4-field frame.
+        byte[] expected = ref(b -> {
+            b.writeVarInt(LSSConstants.PROTOCOL_VERSION);
+            b.writeBoolean(true);
+            b.writeVarInt(256);
+            b.writeBoolean(true);
+        });
+        assertArrayEquals(expected, encode(SessionConfigS2CPayload.CODEC,
+                new SessionConfigS2CPayload(LSSConstants.PROTOCOL_VERSION, true, 256, true)));
+    }
+
+    @Test
+    void voxelColumnAsV16DropsExactlyTheSourceByteForEveryProducerTag() {
+        // Dialect totality at the wire: whichever producer served the column (probe, disk,
+        // generation, or the source-less rig path), asV16() must yield the IDENTICAL legacy
+        // frame — a leaked source byte is parsed by the old client as the section-array
+        // length VarInt and hard-kicks it.
+        byte[] sections = {9, 8, 7};
+        byte[] expectedLegacy = ref(b -> {
+            b.writeInt(3);
+            b.writeInt(-4);
+            b.writeUtf("minecraft:overworld");
+            b.writeLong(1234L);
+            b.writeByteArray(sections);
+        });
+        var dim = ResourceKey.create(Registries.DIMENSION, Identifier.parse("minecraft:overworld"));
+        byte[] sources = {LSSConstants.COLUMN_SOURCE_IN_MEMORY, LSSConstants.COLUMN_SOURCE_DISK,
+                LSSConstants.COLUMN_SOURCE_GENERATION, (byte) -1};
+        for (byte source : sources) {
+            var p = new VoxelColumnS2CPayload(3, -4, dim, 1234L, source, sections);
+            assertArrayEquals(expectedLegacy, encode(VoxelColumnS2CPayload.CODEC, p.asV16()),
+                    "source tag " + source + " must vanish identically");
+            assertArrayEquals(sections, p.asV16().decompressedSections(),
+                    "asV16 must not copy or alter the section bytes");
+        }
+    }
+
+    @Test
+    void voxelColumnAsV16KeepsTheGhostClearAndLongDimensions() {
+        // The 0-section authoritative clear must survive the legacy rewrite (the v0.6.2
+        // client handles it: isClearColumn + air-fill), and a >127-char dimension string
+        // (2-byte VarInt UTF prefix) must not shift the layout.
+        String longDim = "lsstest:" + "d".repeat(120);
+        byte[] expected = ref(b -> {
+            b.writeInt(0);
+            b.writeInt(0);
+            b.writeUtf(longDim);
+            b.writeLong(42L);
+            b.writeByteArray(new byte[0]);
+        });
+        var dim = ResourceKey.create(Registries.DIMENSION, Identifier.parse(longDim));
+        var p = new VoxelColumnS2CPayload(0, 0, dim, 42L,
+                LSSConstants.COLUMN_SOURCE_IN_MEMORY, new byte[0]);
+        assertArrayEquals(expected, encode(VoxelColumnS2CPayload.CODEC, p.asV16()));
+    }
+
+    // ---- Meta: the parity corpus must cover the whole v17 payload surface ----
 
     @Test
     void referenceFramesCoverEveryDeclaredChannel() throws IllegalAccessException {

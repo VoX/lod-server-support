@@ -15,9 +15,10 @@ import static dev.vox.lss.networking.client.ColumnStateMap.SATISFIED;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Characterization tests for the per-column request-need ladder (the priority order
- * mirrors the original scanner ladder bit-for-bit: unknown &gt; generation &gt; dirty &gt;
- * rate-limit retry &gt; revalidation &gt; satisfied) and the state transitions.
+ * Characterization tests for the per-column request-need ladder (dirty &gt; session-satisfied
+ * &gt; unknown &gt; generation &gt; ingest-failure retry &gt; revalidation &gt; satisfied) and
+ * the state transitions. The retry rung is named for its only surviving writer: v17 retired
+ * the rate-limit bounce that originally wrote it.
  */
 class ColumnStateMapTest {
 
@@ -44,28 +45,35 @@ class ColumnStateMapTest {
             map.onReceived(packed, 5000L + i);
             map.onIngestFailed(packed);
         }
-        assertEquals(SATISFIED, map.classify(packed, true), "precondition: parked");
+        assertEquals(SATISFIED, map.classify(packed), "precondition: parked");
     }
 
     // ---- classify ladder ----
 
     @Test
     void unknownPositionRequestsSyncOnLoad() {
-        assertEquals(-1L, map.classify(POS, true));
-        assertEquals(-1L, map.classify(POS, false), "unknown outranks generation availability");
+        assertEquals(-1L, map.classify(POS));
+        assertEquals(-1L, map.classify(POS), "unknown outranks generation availability");
     }
 
     @Test
-    void notGeneratedRequestsGenerationOnlyWhenEnabled() {
+    void notGeneratedIsPermanentSessionSatisfy() {
         map.onNotGenerated(POS);
-        assertEquals(0L, map.classify(POS, true));
-        assertEquals(SATISFIED, map.classify(POS, false), "no gen retry when generation disabled");
+        assertEquals(SATISFIED, map.classify(POS),
+                "NOT_GENERATED parks the position for the whole session — no client gen retry exists");
+        assertTrue(map.isSessionSatisfied(POS));
+        assertEquals(-1L, map.timestampFor(POS), "no 0-stamp is written — the mark is the state");
+
+        // The ONE revival path: a dirty broadcast (the server saved content there).
+        assertTrue(map.markDirtyIfKnown(POS), "dirty fires on the session-satisfied mark");
+        assertFalse(map.isSessionSatisfied(POS), "the dirty un-parks it");
+        assertEquals(-1L, map.classify(POS), "revived with -1 — the client holds nothing");
     }
 
     @Test
     void receivedAndValidatedIsSatisfied() {
         map.onReceived(POS, 5000L);
-        assertEquals(SATISFIED, map.classify(POS, true));
+        assertEquals(SATISFIED, map.classify(POS));
     }
 
     // ---- sessionSatisfied: satisfied-without-a-stamp, dirty always wins (delivery-honesty) ----
@@ -73,13 +81,13 @@ class ColumnStateMapTest {
     @Test
     void sessionSatisfiedClassifiesSatisfiedButDirtyStillWins() {
         map.markSessionSatisfied(POS);
-        assertEquals(SATISFIED, map.classify(POS, true), "a session-satisfied position needs no request");
+        assertEquals(SATISFIED, map.classify(POS), "a session-satisfied position needs no request");
         assertEquals(-1L, map.timestampFor(POS), "no timestamp is fabricated for a satisfied position");
 
         // A dirty broadcast must outrank sessionSatisfied so an air->content edit re-requests.
         assertTrue(map.markDirtyIfKnown(POS), "dirty fires for a session-satisfied position");
         assertFalse(map.isSessionSatisfied(POS), "the dirty un-parks it");
-        assertEquals(-1L, map.classify(POS, true), "dirty outranks sessionSatisfied — re-request as first serve");
+        assertEquals(-1L, map.classify(POS), "dirty outranks sessionSatisfied — re-request as first serve");
     }
 
     @Test
@@ -112,14 +120,14 @@ class ColumnStateMapTest {
     void dirtyOutranksValidation() {
         map.onReceived(POS, 5000L);
         assertTrue(map.markDirtyIfKnown(POS));
-        assertEquals(5000L, map.classify(POS, true), "dirty re-requests with the stored timestamp");
+        assertEquals(5000L, map.classify(POS), "dirty re-requests with the stored timestamp");
     }
 
     @Test
     void retryOutranksValidation() {
         map.onReceived(POS, 5000L);
         map.markRetry(POS);
-        assertEquals(5000L, map.classify(POS, true));
+        assertEquals(5000L, map.classify(POS));
     }
 
     @Test
@@ -127,7 +135,7 @@ class ColumnStateMapTest {
         var loaded = new Long2LongOpenHashMap();
         loaded.put(POS, 7000L);
         map.loadFrom(loaded);
-        assertEquals(7000L, map.classify(POS, true), "cache-loaded position revalidates once per session");
+        assertEquals(7000L, map.classify(POS), "cache-loaded position revalidates once per session");
     }
 
     @Test
@@ -136,53 +144,51 @@ class ColumnStateMapTest {
     }
 
     @Test
-    void dirtyRescuesParkedNotGeneratedStamp() {
-        // generation-disabled soak finding: a not-generated stamp parks the position, but a
-        // dirty broadcast proves the server SAVED content there — the stamp is stale and the
-        // position must become requestable again (ts=0 routes disk-first server-side).
+    void dirtyRescuesParkedNotGeneratedPosition() {
+        // generation-disabled soak finding, inverted for server-owned generation: a
+        // NOT_GENERATED answer parks the position permanently (sessionSatisfied, no stamp),
+        // and a dirty broadcast proves the server SAVED content there — the ONE revival.
         map.onNotGenerated(POS);
-        assertEquals(SATISFIED, map.classify(POS, false), "parked while gen disabled");
-        assertTrue(map.markDirtyIfKnown(POS), "dirty broadcast rescues the parked stamp");
-        assertEquals(0L, map.classify(POS, false), "re-requestable with ts=0 (disk-first)");
-        map.markSent(POS);
+        assertEquals(SATISFIED, map.classify(POS), "parked for the session");
+        assertTrue(map.markDirtyIfKnown(POS), "dirty broadcast rescues the parked position");
+        assertEquals(-1L, map.classify(POS), "re-requestable as a first serve (disk-first)");
         map.onReceived(POS, 9000L);
-        assertEquals(SATISFIED, map.classify(POS, false), "healed after the disk serve");
+        assertEquals(SATISFIED, map.classify(POS), "healed after the disk serve");
     }
 
     // ---- transitions ----
 
-    @Test
-    void markSentConsumesDirtyAndRetry() {
-        map.onReceived(POS, 5000L);
-        map.markDirtyIfKnown(POS);
-        map.markRetry(POS);
-        map.markSent(POS);
-        assertEquals(SATISFIED, map.classify(POS, true), "sent request consumed the pending marks");
-    }
+    // markSentConsumesDirtyAndRetry is DELETED with markSent itself. Its exact premise — a SEND
+    // consumes the dirty/retry marks — is the bug the want-set had to remove: under re-declaration
+    // a mark consumed at send classifies the position SATISFIED while its answer is still
+    // outstanding, so a server-side supersession loses the edit for the whole session. The marks'
+    // consumption is now pinned on the ANSWERS that replaced it (onReceivedConsumesDirty below,
+    // and the onUpToDate / onNotGenerated answer-time tests).
 
     @Test
     void onReceivedConsumesDirty() {
         map.onReceived(POS, 5000L);
         map.markDirtyIfKnown(POS);
         map.onReceived(POS, 6000L);
-        assertEquals(SATISFIED, map.classify(POS, true),
+        assertEquals(SATISFIED, map.classify(POS),
                 "data arriving while a dirty re-request is in flight consumes the dirty mark");
         assertEquals(0, map.dirtyCount());
     }
 
-    // Contract change: retry marks used to survive onReceived deliberately, because their
-    // only writer was a rate-limit bounce — a guarantee that no response was coming, so a
-    // late receipt could only belong to an OLDER request and the retry still had to fire.
-    // The timeout sweep (LodRequestManager.sweepTimeouts) broke that premise: it marks
-    // retry for positions whose response can still arrive late, and an answer supersedes
-    // the pending retry — keeping the mark re-requested every late-delivered column once
-    // and reset ring confirmation for nothing.
+    // Contract history: retry marks used to survive onReceived deliberately, because their only
+    // writer was a rate-limit bounce — a guarantee that no response was coming, so a late receipt
+    // could only belong to an OLDER request and the retry still had to fire. The timeout sweep
+    // broke that premise (it retry-marked positions whose response could still arrive late), and
+    // an answer must supersede the pending retry or every late-delivered column re-requests once
+    // and resets ring confirmation for nothing. The want-set deleted BOTH original writers — the
+    // bounce and the sweep — leaving onIngestFailed as the only one. The conclusion is unchanged
+    // and now uniform: an answer is authoritative for the position, so it clears the retry.
     @Test
     void onReceivedClearsRetry() {
         map.onReceived(POS, 5000L);
         map.markRetry(POS);
         map.onReceived(POS, 6000L);
-        assertEquals(SATISFIED, map.classify(POS, true),
+        assertEquals(SATISFIED, map.classify(POS),
                 "a data answer supersedes the pending retry — no redundant re-request");
         assertFalse(map.hasRetries(), "lingering retry would pin confirmedRing to 0 for an extra scan");
     }
@@ -192,7 +198,7 @@ class ColumnStateMapTest {
         map.onReceived(POS, 5000L);
         map.markRetry(POS);
         map.onUpToDate(POS);
-        assertEquals(SATISFIED, map.classify(POS, true),
+        assertEquals(SATISFIED, map.classify(POS),
                 "an up-to-date answer supersedes the pending retry exactly like data");
         assertFalse(map.hasRetries());
     }
@@ -200,7 +206,7 @@ class ColumnStateMapTest {
     @Test
     void onUpToDateSatisfiesAbsentPositionsWithoutFabricatingAStamp() {
         map.onUpToDate(POS);
-        assertEquals(SATISFIED, map.classify(POS, true),
+        assertEquals(SATISFIED, map.classify(POS),
                 "empty column (never sent data) must not be re-requested every scan");
         assertEquals(0, map.receivedCount(),
                 "no client-clock timestamp is fabricated — the position is session-satisfied");
@@ -216,12 +222,13 @@ class ColumnStateMapTest {
     }
 
     @Test
-    void onUpToDateResolvesNotGeneratedStamp() {
+    void onUpToDateAfterNotGeneratedStaysSatisfied() {
         map.onNotGenerated(POS);
-        assertEquals(0L, map.classify(POS, true), "not-generated stamp retries as generation");
-        map.onUpToDate(POS);
-        assertEquals(SATISFIED, map.classify(POS, true),
-                "server affirming up-to-date must end the generation retry loop (End void storm)");
+        assertEquals(SATISFIED, map.classify(POS), "parked by the NOT_GENERATED answer");
+        map.onUpToDate(POS); // late/duplicate answer for the same position
+        assertEquals(SATISFIED, map.classify(POS),
+                "a crossing up-to-date answer must not un-park the position");
+        assertTrue(map.isSessionSatisfied(POS), "still satisfied without a fabricated stamp");
     }
 
     // ---- derived counts ----
@@ -232,13 +239,16 @@ class ColumnStateMapTest {
         assertEquals(1, map.receivedCount());
         assertEquals(0, map.emptyCount());
 
-        map.onNotGenerated(POS); // received -> empty
-        assertEquals(0, map.receivedCount());
-        assertEquals(1, map.emptyCount());
+        map.onNotGenerated(POS); // stamps are untouched: the mark is the state now
+        assertEquals(1, map.receivedCount(),
+                "NOT_GENERATED keeps the stale-but-real stamp (no received->empty transition)");
+        assertEquals(0, map.emptyCount());
+        assertTrue(map.isSessionSatisfied(POS));
 
-        map.onReceived(POS, 6000L); // empty -> received
+        map.onReceived(POS, 6000L); // real data supersedes the session-satisfied mark
         assertEquals(1, map.receivedCount());
         assertEquals(0, map.emptyCount());
+        assertFalse(map.isSessionSatisfied(POS));
     }
 
     @Test
@@ -264,8 +274,8 @@ class ColumnStateMapTest {
         map.pruneOutOfRange(0, 0, 64);
 
         assertEquals(1, map.receivedCount());
-        assertEquals(SATISFIED, map.classify(near, true));
-        assertEquals(-1L, map.classify(far, true), "pruned position is unknown again");
+        assertEquals(SATISFIED, map.classify(near));
+        assertEquals(-1L, map.classify(far), "pruned position is unknown again");
         assertEquals(0, map.dirtyCount());
         assertFalse(map.hasRetries());
     }
@@ -282,12 +292,16 @@ class ColumnStateMapTest {
         assertEquals(-1L, map.timestampFor(POS), "stamp must be forgotten so the re-ask carries ts=-1");
         assertEquals(0, map.receivedCount(), "received count must not leak");
         assertTrue(map.hasRetries(), "retry mark forces the confirmed-ring reset");
-        assertEquals(-1L, map.classify(POS, true), "position must re-request as unknown");
+        assertEquals(-1L, map.classify(POS), "position must re-request as unknown");
     }
 
     @Test
-    void ingestFailedOnNotGeneratedStampKeepsEmptyCountConsistent() {
-        map.onNotGenerated(POS);
+    void ingestFailedOnLegacyZeroStampKeepsEmptyCountConsistent() {
+        // A legacy 0-stamp can only arrive via a pre-server-owned-generation cache load;
+        // onNotGenerated no longer writes one. The count bookkeeping must still hold.
+        var loaded = new Long2LongOpenHashMap();
+        loaded.put(POS, 0L);
+        map.loadFrom(loaded);
         assertEquals(1, map.emptyCount());
 
         map.onIngestFailed(POS);
@@ -302,7 +316,7 @@ class ColumnStateMapTest {
 
         assertEquals(0, map.receivedCount(), "no counter underflow for an unknown position");
         assertEquals(0, map.emptyCount());
-        assertEquals(-1L, map.classify(POS, true));
+        assertEquals(-1L, map.classify(POS));
         assertFalse(map.hasRetries(),
                 "an unknown position must not gain a retry mark nothing can consume");
     }
@@ -312,12 +326,12 @@ class ColumnStateMapTest {
         for (int i = 0; i < ColumnStateMap.MAX_INGEST_FAILURES; i++) {
             map.onReceived(POS, 5000L + i);
             map.onIngestFailed(POS);
-            assertEquals(-1L, map.classify(POS, true), "failure " + (i + 1) + " must re-request");
+            assertEquals(-1L, map.classify(POS), "failure " + (i + 1) + " must re-request");
         }
         map.onReceived(POS, 9000L);
         map.onIngestFailed(POS); // cap exceeded: park
 
-        assertEquals(SATISFIED, map.classify(POS, true),
+        assertEquals(SATISFIED, map.classify(POS),
                 "a permanently failing consumer must not drive an endless re-serve loop");
         assertFalse(map.hasRetries(), "parking must not leave an unconsumable retry mark");
         assertEquals(-1L, map.timestampFor(POS),
@@ -332,13 +346,13 @@ class ColumnStateMapTest {
             map.onReceived(POS, 5000L);
             map.onIngestFailed(POS);
         }
-        assertEquals(SATISFIED, map.classify(POS, true), "parked");
+        assertEquals(SATISFIED, map.classify(POS), "parked");
 
         map.clear(); // clearcache / dimension change / reconnect
         map.onReceived(POS, 6000L);
         map.onIngestFailed(POS);
 
-        assertEquals(-1L, map.classify(POS, true), "the cap must reset with the session state");
+        assertEquals(-1L, map.classify(POS), "the cap must reset with the session state");
     }
 
     @Test
@@ -350,9 +364,8 @@ class ColumnStateMapTest {
         assertEquals(0, map.dirtyCount());
 
         // normal lifecycle resumes: re-request then receive again
-        map.markSent(POS);
         map.onReceived(POS, 6000L);
-        assertEquals(SATISFIED, map.classify(POS, true));
+        assertEquals(SATISFIED, map.classify(POS));
         assertEquals(1, map.receivedCount());
         assertFalse(map.hasRetries(),
                 "a stuck retry mark would pin confirmedRing at 0 for the whole session");
@@ -374,7 +387,7 @@ class ColumnStateMapTest {
 
         map.onIngestFailed(POS);                 // consumer rejects the clear
 
-        assertEquals(3000L, map.classify(POS, true),
+        assertEquals(3000L, map.classify(POS),
                 "a rejected clear re-requests with the pre-clear content stamp, not ts=-1");
         assertTrue(map.hasRetries(), "retry mark forces the confirmed-ring reset so it is rescanned");
     }
@@ -387,7 +400,7 @@ class ColumnStateMapTest {
 
         map.onIngestFailed(POS);      // now this is a plain content rejection
 
-        assertEquals(-1L, map.classify(POS, true),
+        assertEquals(-1L, map.classify(POS),
                 "once real content supersedes the clear flag, a rejection re-requests as content (ts=-1)");
     }
 
@@ -397,16 +410,64 @@ class ColumnStateMapTest {
             map.onReceived(POS, 5000L + i);          // server re-sends the clear
             map.markAuthoritativeClear(POS, 3000L);
             map.onIngestFailed(POS);
-            assertEquals(3000L, map.classify(POS, true),
+            assertEquals(3000L, map.classify(POS),
                     "clear failure " + (i + 1) + " re-requests with the pre-clear stamp");
         }
         map.onReceived(POS, 9000L);
         map.markAuthoritativeClear(POS, 3000L);
         map.onIngestFailed(POS); // cap exceeded
 
-        assertEquals(SATISFIED, map.classify(POS, true),
+        assertEquals(SATISFIED, map.classify(POS),
                 "a permanently rejected clear must not drive an endless re-clear loop");
         assertTrue(map.isSessionSatisfied(POS), "parked via session-satisfied");
+        assertEquals(3000L, map.timestampFor(POS),
+                "parking a lost clear RETAINS the pre-clear stamp: the consumer still holds "
+                        + "the pre-clear content, and a -1 park would draw an all-air "
+                        + "up_to_date next session (clears are only sent for ts>0) — the "
+                        + "ghost terrain would be permanent instead of one-session");
+        assertEquals(1, map.receivedCount(),
+                "the park swaps one >0 stamp for another — counts net zero");
+    }
+
+    /**
+     * The park-time twin of {@link #cacheLoadedLegacyZeroStampDeclaresAsNoData}: a legacy
+     * 0-stamp that draws up_to_date parks session-satisfied, and the 0 itself must be
+     * PURGED — left in timestamps it persists to the cache file and resurrects every
+     * session, immortal. Purged, the position becomes -1/unknown, which declares the same
+     * thing on the wire (&le;0 = "I hold nothing") but finally lets the artifact die.
+     */
+    @Test
+    void notGeneratedOnLegacyZeroStampPurgesItAtPark() {
+        // The gen-disabled twin of the onUpToDate purge below: on such servers a legacy
+        // 0-stamp position parks via NOT_GENERATED every session, and before this purge the
+        // 0 persisted to the cache immortally (onUpToDate never fires for it there).
+        var loaded = new Long2LongOpenHashMap();
+        loaded.put(POS, 0L);
+        map.loadFrom(loaded);
+        assertEquals(1, map.emptyCount(), "premise: the legacy stamp loaded as an empty");
+
+        map.onNotGenerated(POS);
+
+        assertEquals(SATISFIED, map.classify(POS), "parked for the session as before");
+        assertEquals(0, map.emptyCount(), "the 0-stamp is purged, not parked around");
+        assertEquals(-1L, map.timestampFor(POS),
+                "nothing persists to the cache — next session starts clean at unknown");
+    }
+
+    @Test
+    void upToDateOnLegacyZeroStampPurgesItAtPark() {
+        var loaded = new Long2LongOpenHashMap();
+        loaded.put(POS, 0L);
+        map.loadFrom(loaded);
+        assertEquals(1, map.emptyCount(), "premise: the legacy stamp loaded as an empty");
+
+        map.onUpToDate(POS);
+
+        assertEquals(SATISFIED, map.classify(POS), "parked for the session as before");
+        assertTrue(map.isSessionSatisfied(POS));
+        assertEquals(0, map.emptyCount(), "the 0-stamp is purged, not parked around");
+        assertEquals(-1L, map.timestampFor(POS),
+                "nothing persists to the cache — next session starts clean at unknown");
     }
 
     @Test
@@ -418,22 +479,24 @@ class ColumnStateMapTest {
         assertEquals(0, map.receivedCount());
         assertEquals(0, map.emptyCount());
         assertFalse(map.hasRetries());
-        assertEquals(-1L, map.classify(POS, true));
+        assertEquals(-1L, map.classify(POS));
         assertTrue(map.isEmptyMap());
     }
 
     // ---- cache-loaded stamps (CL-027, CL-028) ----
 
     @Test
-    void cacheLoadedZeroStampRetriesGenerationOnlyWhenEnabled() {
+    void cacheLoadedLegacyZeroStampDeclaresAsNoData() {
+        // Released clients (pre-server-owned-generation) persisted 0-stamps for
+        // NOT_GENERATED answers. Loaded today they mean "no data": declare -1 — a
+        // 0-stamp silently classifying SATISFIED would seal a permanent hole (R5).
         var loaded = new Long2LongOpenHashMap();
         loaded.put(POS, 0L);
         map.loadFrom(loaded);
 
-        assertEquals(1, map.emptyCount(), "a cache-loaded 0 counts as a not-generated stamp");
-        assertEquals(0L, map.classify(POS, true),
-                "next session re-asks generation for a cached not-generated stamp");
-        assertEquals(SATISFIED, map.classify(POS, false), "generation disabled parks the cached stamp");
+        assertEquals(1, map.emptyCount(), "a cache-loaded legacy 0 still counts as an empty stamp");
+        assertEquals(-1L, map.classify(POS),
+                "next session re-declares a legacy 0-stamp as no-data (the client never emits 0)");
     }
 
     /**
@@ -451,15 +514,14 @@ class ColumnStateMapTest {
 
         assertEquals(0, map.receivedCount(), "a sub--1 value must not count as received");
         assertEquals(0, map.emptyCount(), "...nor as a not-generated stamp");
-        assertEquals(-1L, map.classify(POS, true),
+        assertEquals(-1L, map.classify(POS),
                 "a corrupt negative stamp clamps to unknown and re-requests (no silent SATISFIED park)");
 
         // It is now -1 (unknown); the scan ladder requests -1 positions anyway, so the dirty
         // rescue (which only fires for a KNOWN disposition) correctly does not apply.
         assertFalse(map.markDirtyIfKnown(POS), "a clamped-to-unknown stamp is not a known disposition");
-        map.markSent(POS);
         map.onReceived(POS, 8000L);
-        assertEquals(SATISFIED, map.classify(POS, true));
+        assertEquals(SATISFIED, map.classify(POS));
         assertEquals(1, map.receivedCount(), "the heal restores consistent counts");
     }
 
@@ -479,15 +541,15 @@ class ColumnStateMapTest {
             map.onReceived(POS, 5000L + delivery);
             map.onIngestFailed(POS);
             map.onIngestFailed(POS); // sibling consumer rejecting the same delivery — absorbed
-            assertEquals(-1L, map.classify(POS, true), "delivery " + delivery
+            assertEquals(-1L, map.classify(POS), "delivery " + delivery
                     + " still re-requests — per-report counting would already park here");
         }
         map.onReceived(POS, 5003L);
         map.onIngestFailed(POS);
-        assertEquals(-1L, map.classify(POS, true), "third failed delivery still re-requests");
+        assertEquals(-1L, map.classify(POS), "third failed delivery still re-requests");
         map.onReceived(POS, 5004L);
         map.onIngestFailed(POS);
-        assertEquals(SATISFIED, map.classify(POS, true),
+        assertEquals(SATISFIED, map.classify(POS),
                 "park trips at the 4th failed delivery (MAX_INGEST_FAILURES + 1), independent of consumer count");
     }
 
@@ -500,12 +562,11 @@ class ColumnStateMapTest {
         // first serve — not stay SATISFIED forever (the air->content permanent hole).
         assertTrue(map.markDirtyIfKnown(POS), "dirty reaches a session-satisfied parked position");
         assertFalse(map.isSessionSatisfied(POS), "un-parked");
-        assertEquals(-1L, map.classify(POS, true), "re-requests as a first serve (no fabricated stamp)");
+        assertEquals(-1L, map.classify(POS), "re-requests as a first serve (no fabricated stamp)");
 
         // The re-served content resolves it honestly with the real server stamp.
-        map.markSent(POS);
         map.onReceived(POS, 9000L);
-        assertEquals(SATISFIED, map.classify(POS, true), "resolved with the server stamp");
+        assertEquals(SATISFIED, map.classify(POS), "resolved with the server stamp");
         assertEquals(9000L, map.timestampFor(POS));
         assertFalse(map.hasRetries(), "no unconsumable retry mark left behind");
     }
@@ -525,13 +586,12 @@ class ColumnStateMapTest {
             var next = new ColumnStateMap(); // fresh session
             next.loadFrom(ColumnCacheStore.load(server, dim));
             assertEquals(-1L, next.timestampFor(POS), "next session holds nothing for the parked position");
-            assertEquals(-1L, next.classify(POS, true),
+            assertEquals(-1L, next.classify(POS),
                     "next session re-asks honestly (-1), never a false up-to-date");
 
             // The re-serve gives the consumer a fresh chance; a transient failure heals.
-            next.markSent(POS);
             next.onReceived(POS, 6000L);
-            assertEquals(SATISFIED, next.classify(POS, true), "transient failure heals next session");
+            assertEquals(SATISFIED, next.classify(POS), "transient failure heals next session");
         } finally {
             ColumnCacheStore.clearForServer(server);
         }
@@ -548,82 +608,93 @@ class ColumnStateMapTest {
         map.onReceived(POS, 9000L);         // returned: served again
         map.onIngestFailed(POS);
 
-        assertEquals(-1L, map.classify(POS, true),
+        assertEquals(-1L, map.classify(POS),
                 "a pruned-and-returned position gets a fresh failure cap — a stale count would park here");
     }
 
-    // ---- classify ladder: gen-enabled dirty arm (CL-034) ----
+    // ---- classify ladder: dirty on a legacy 0-stamp (CL-034, inverted) ----
 
     @Test
-    void zeroStampWithDirtyEmitsGenerationRequestWhenGenerationEnabled() {
-        map.onNotGenerated(POS);
-        assertTrue(map.markDirtyIfKnown(POS), "a dirty broadcast lands on the not-generated stamp");
-        assertEquals(0L, map.classify(POS, true),
-                "gen-enabled arm: the re-request must go out as ts=0 (disk-first), never a >0 claim");
+    void legacyZeroStampWithDirtyDeclaresAsNoData() {
+        var loaded = new Long2LongOpenHashMap();
+        loaded.put(POS, 0L); // legacy cache stamp — the client never writes 0 anymore
+        map.loadFrom(loaded);
+        assertTrue(map.markDirtyIfKnown(POS), "a dirty broadcast lands on the legacy stamp");
+        assertEquals(-1L, map.classify(POS),
+                "the dirty arm normalizes a legacy 0 to -1 (no data) — never a >0 claim, never a 0");
     }
 
     // ---- response × prior-state matrix, unpinned cells (CL-035) ----
 
     @Test
-    void rateLimitRetryMarkAcrossDirtyZeroAndParkedPriorStates() {
-        // retry × dirty: both marks coexist; one stored-ts request consumes both at send.
+    void retryMarkAcrossDirtyZeroAndParkedPriorStates() {
+        // retry × dirty: both marks coexist; one stored-ts request collapses them, and the
+        // request's ANSWER consumes both (pre-want-set the SEND did — see markSentConsumes-
+        // DirtyAndRetry's deletion note above; the collapse invariant is unchanged).
         long dirtyPos = PositionUtil.packPosition(1, 1);
         map.onReceived(dirtyPos, 5000L);
         map.markDirtyIfKnown(dirtyPos);
         map.markRetry(dirtyPos);
-        assertEquals(5000L, map.classify(dirtyPos, true), "dirty+retry collapse into one stored-ts request");
-        map.markSent(dirtyPos);
-        assertEquals(SATISFIED, map.classify(dirtyPos, true), "one send consumes both marks");
+        assertEquals(5000L, map.classify(dirtyPos), "dirty+retry collapse into one stored-ts request");
+        map.onUpToDate(dirtyPos); // the terminal answer: server says the held content is current
+        assertEquals(SATISFIED, map.classify(dirtyPos), "one answer consumes both marks");
 
-        // retry × ts==0: the bounced gen request retries once even after generation flips off.
+        // retry × not-generated: the session-satisfied mark outranks a stray retry mark —
+        // a NOT_GENERATED position is parked for the session, and no mark resurrects it.
         long genPos = PositionUtil.packPosition(2, 2);
         map.onNotGenerated(genPos);
         map.markRetry(genPos);
-        assertEquals(0L, map.classify(genPos, true), "the gen rung outranks the retry mark");
-        assertEquals(0L, map.classify(genPos, false),
-                "a rate-limit-bounced gen request stays requestable once with generation disabled");
-        map.markSent(genPos);
-        assertEquals(SATISFIED, map.classify(genPos, false), "the consumed retry re-parks the gen-disabled stamp");
+        assertEquals(SATISFIED, map.classify(genPos),
+                "sessionSatisfied outranks a retry mark on a NOT_GENERATED position");
 
-        // retry × parked: a parked position is session-satisfied (never in-flight), so a stray
-        // retry mark cannot resurrect it — it heals via dirty or next session, not a bounce.
+        // retry × parked: a parked position is session-satisfied (never declared), so a stray
+        // retry mark cannot resurrect it — it heals via dirty or next session.
         long parked = PositionUtil.packPosition(3, 3);
         parkViaIngestFailures(parked);
         map.markRetry(parked);
-        assertEquals(SATISFIED, map.classify(parked, true),
+        assertEquals(SATISFIED, map.classify(parked),
                 "sessionSatisfied outranks a spurious retry mark on a parked position");
     }
 
     @Test
     void notGeneratedAnswerAcrossDirtyRetryAndParkedPriorStates() {
-        // notGenerated × dirty: the dirty mark survives (unlike onReceived/onUpToDate),
-        // keeping the position requestable as ts=0 even with generation disabled.
+        // Marks are consumed by ANSWERS, not by sends (want-set model — markSent is gone; under
+        // re-declaration a send-time consumption would classify SATISFIED while the answer was
+        // still in flight, losing the edit to any server-side supersession).
+        //
+        // A dirty that CROSSED the in-flight ask is not lost by this: LodRequestManager records
+        // every crossing in staleInFlight (onDirtyColumns calls noteStaleIfInFlight regardless of
+        // markDirtyIfKnown's result, covering stored>0 as well as stored==-1) and re-marks it at
+        // the terminal outcome via consumeStaleCrossing. That protection belongs at the manager
+        // layer, which is the layer that knows what is in flight — the map deliberately does not.
+        //
+        // notGenerated × dirty: the answer consumes the mark and parks the position;
+        // the stale-but-real stamp survives untouched.
         long dirtyPos = PositionUtil.packPosition(1, 1);
         map.onReceived(dirtyPos, 5000L);
         map.markDirtyIfKnown(dirtyPos);
         map.onNotGenerated(dirtyPos);
-        assertEquals(1, map.dirtyCount(), "a not-generated answer must not consume the dirty mark");
-        assertEquals(0L, map.classify(dirtyPos, true));
-        assertEquals(0L, map.classify(dirtyPos, false),
-                "dirty keeps the ts=0 stamp requestable (disk-first) without generation");
+        assertEquals(0, map.dirtyCount(), "a not-generated answer consumes the dirty mark");
+        assertEquals(SATISFIED, map.classify(dirtyPos),
+                "the answered position parks for the session — a surviving mark would re-declare it forever");
+        assertEquals(5000L, map.timestampFor(dirtyPos), "the stale-but-real stamp is kept, never zeroed");
 
-        // notGenerated × retry: the pending retry also survives.
+        // notGenerated × retry: the pending retry is consumed too.
         long retryPos = PositionUtil.packPosition(2, 2);
         map.onReceived(retryPos, 6000L);
         map.markRetry(retryPos);
         map.onNotGenerated(retryPos);
-        assertTrue(map.hasRetries(), "a not-generated answer leaves the pending retry in place");
-        assertEquals(0L, map.classify(retryPos, false), "the retry keeps the stamp requestable until consumed");
+        assertFalse(map.hasRetries(), "a not-generated answer consumes the pending retry");
+        assertEquals(SATISFIED, map.classify(retryPos), "the consumed retry leaves the position parked");
 
-        // notGenerated × parked: the answer overwrites the park stamp with 0 — re-opened as
-        // a generation retry (gen on) or silently re-parked (gen off).
+        // notGenerated × parked: already session-satisfied — the answer is a no-op that
+        // keeps it parked (no stamp is written, no state is re-opened).
         long parked = PositionUtil.packPosition(3, 3);
         parkViaIngestFailures(parked);
         map.onNotGenerated(parked);
-        assertEquals(0L, map.classify(parked, true), "not-generated re-opens a parked position as a gen retry");
-        assertEquals(SATISFIED, map.classify(parked, false));
-        assertEquals(3, map.emptyCount(), "all three cells ended as not-generated stamps — counts consistent");
-        assertEquals(0, map.receivedCount());
+        assertEquals(SATISFIED, map.classify(parked), "a parked position stays parked");
+        assertEquals(0, map.emptyCount(), "no 0-stamps are ever written — counts consistent");
+        assertEquals(2, map.receivedCount(), "the two kept stale stamps still count as received");
     }
 
     @Test
@@ -634,12 +705,46 @@ class ColumnStateMapTest {
         map.onReceived(POS, parkStamp + 777); // a late response lands on the parked position
 
         assertEquals(parkStamp + 777, map.timestampFor(POS), "late data refreshes the parked stamp");
-        assertEquals(SATISFIED, map.classify(POS, true), "still satisfied — no re-request storm");
+        assertEquals(SATISFIED, map.classify(POS), "still satisfied — no re-request storm");
         assertFalse(map.hasRetries(), "no retry resurrection");
         assertEquals(1, map.receivedCount());
 
         map.onIngestFailed(POS);
-        assertEquals(SATISFIED, map.classify(POS, true),
+        assertEquals(SATISFIED, map.classify(POS),
                 "the surviving failure count re-parks immediately on the next rejection");
+    }
+
+    // ---- Answer-time mark consumption (want-set groundwork) ----
+    // Under want-set re-declaration the client re-declares every unsatisfied position each scan
+    // and markSent() is gone, so the terminal ANSWER is the only thing that may consume a
+    // dirty/retry mark. A mark consumed at send would classify SATISFIED while the answer is
+    // still in flight — and if the server superseded that ask, the edit is lost until next session.
+
+    @Test
+    void upToDateAnswerConsumesDirtyAndRetryMarks() {
+        var map = new ColumnStateMap();
+        long pos = PositionUtil.packPosition(3, 4);
+        map.onReceived(pos, 100L);
+        map.markDirtyIfKnown(pos);
+        map.markRetry(pos);
+        map.onUpToDate(pos);
+        assertEquals(SATISFIED, map.classify(pos),
+                "an up-to-date answer must consume the dirty and retry marks — under "
+                + "re-declaration nothing else ever consumes them");
+    }
+
+    @Test
+    void notGeneratedAnswerConsumesDirtyAndRetryMarksAndParks() {
+        var map = new ColumnStateMap();
+        long pos = PositionUtil.packPosition(5, 6);
+        map.onReceived(pos, 100L);
+        map.markDirtyIfKnown(pos);
+        map.markRetry(pos);
+        map.onNotGenerated(pos);
+        assertEquals(SATISFIED, map.classify(pos),
+                "the answer consumes the dirty and retry marks and parks the position for the "
+                + "session — a surviving mark would re-declare it forever");
+        assertFalse(map.hasRetries());
+        assertEquals(0, map.dirtyCount());
     }
 }

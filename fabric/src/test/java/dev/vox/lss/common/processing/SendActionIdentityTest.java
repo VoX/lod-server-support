@@ -31,7 +31,7 @@ class SendActionIdentityTest {
 
     private static final class TestProcessor extends OffThreadProcessor<TestState> {
         TestProcessor(Map<UUID, TestState> players) {
-            super(players, null, false, null, 1);
+            super(players, null, false, null, 1, 0);  // memo off (ttl=0): kills only the memo — the pacing rules are ttl-independent
         }
 
         @Override
@@ -42,7 +42,7 @@ class SendActionIdentityTest {
         @Override
         protected boolean buildAndEnqueueColumnPayload(TestState state, int cx, int cz, String dimension,
                                                      long columnTimestamp, long submissionOrder,
-                                                     byte[] sectionBytes, int estimatedBytes) {
+                                                     byte[] sectionBytes, int estimatedBytes, byte source) {
             // not exercised: generation failures only produce batched send actions
             return true;
         }
@@ -73,7 +73,7 @@ class SendActionIdentityTest {
      */
     private static void produceNotGenerated(TestProcessor proc, UUID uuid, int cx, int cz,
                                             long expectedTotalGenDrained) throws InterruptedException {
-        proc.feedGenerationFailure(uuid, cx, cz, DIM, expectedTotalGenDrained);
+        proc.feedGenerationFailure(uuid, cx, cz, DIM, expectedTotalGenDrained, false);
         proc.postSnapshot(snapshot(uuid), List.of());
         waitFor(() -> proc.getDiagnostics().getTotalGenDrained() == expectedTotalGenDrained,
                 "generation outcome " + expectedTotalGenDrained + " processed");

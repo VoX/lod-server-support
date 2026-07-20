@@ -20,9 +20,35 @@ public abstract class ServerConfigBase extends JsonConfig {
     public int generationConcurrencyLimitGlobal = 32;
     public int generationTimeoutSeconds = 60;
     public int dirtyBroadcastIntervalSeconds = 10;
-    public int syncOnLoadConcurrencyLimitPerPlayer = 200;
+    // The per-player SYNC (disk-read) slot cap is NOT config anymore — see
+    // LSSConstants.SYNC_ON_LOAD_SLOT_CAP (shadowed by the disk-pool headroom gate at the
+    // default pool size; a fixed fairness ceiling above it). The generation caps stay
+    // config: they are the real worldgen limiters, but they are server-internal (off the
+    // wire since the server-owned-generation fold into v17).
     public int generationConcurrencyLimitPerPlayer = 16;
     public int perDimensionTimestampCacheSizeMB = 32;
+    /**
+     * Miss-memo TTL (docs/planning/miss-memo-design.md): an authoritative disk miss is
+     * remembered for this many seconds, so a position waiting for a generation slot skips
+     * the redundant ~1 Hz not-found re-reads and falls through to the generation decision
+     * directly. 0 disables the memo (the kill switch — restores the pre-memo re-read
+     * churn, which remains fully correct behavior).
+     */
+    public int missMemoTtlSeconds = 30;
+    /**
+     * When true (default), LSS disk reads yield to vanilla/gameplay chunk loading: Fabric
+     * schedules them at IOWorker BACKGROUND priority; Paper/Folia route them through Moonrise
+     * at Priority.LOW. Set false to restore FOREGROUND reads (the pre-0.7 behavior) as a
+     * rollback. No clamp: a boolean has no out-of-range value.
+     */
+    public boolean useBackgroundReadPriority = true;
+    /**
+     * When true (default), clients running the legacy protocol-16 mod (v0.6.x) get a
+     * translated LOD session through the v16 compat shim (docs/planning/v16-compat-design.md)
+     * instead of the silent version-mismatch no-session. Inert for current-protocol clients;
+     * set false as the kill switch to restore the strict version gate. No clamp: boolean.
+     */
+    public boolean enableV16Compat = true;
 
     @Override
     protected String getFileName() {
@@ -39,8 +65,14 @@ public abstract class ServerConfigBase extends JsonConfig {
         generationConcurrencyLimitGlobal = Math.clamp(generationConcurrencyLimitGlobal, LSSConstants.MIN_CONCURRENT_GENERATIONS, LSSConstants.MAX_CONCURRENT_GENERATIONS);
         generationTimeoutSeconds = Math.clamp(generationTimeoutSeconds, LSSConstants.MIN_GENERATION_TIMEOUT, LSSConstants.MAX_GENERATION_TIMEOUT);
         dirtyBroadcastIntervalSeconds = Math.clamp(dirtyBroadcastIntervalSeconds, LSSConstants.MIN_DIRTY_BROADCAST_INTERVAL, LSSConstants.MAX_DIRTY_BROADCAST_INTERVAL);
-        syncOnLoadConcurrencyLimitPerPlayer = Math.clamp(syncOnLoadConcurrencyLimitPerPlayer, LSSConstants.MIN_CONCURRENCY_LIMIT, LSSConstants.MAX_CONCURRENCY_LIMIT);
         generationConcurrencyLimitPerPlayer = Math.clamp(generationConcurrencyLimitPerPlayer, LSSConstants.MIN_CONCURRENCY_LIMIT, LSSConstants.MAX_CONCURRENCY_LIMIT);
         perDimensionTimestampCacheSizeMB = Math.clamp(perDimensionTimestampCacheSizeMB, LSSConstants.MIN_TIMESTAMP_CACHE_SIZE_MB, LSSConstants.MAX_TIMESTAMP_CACHE_SIZE_MB);
+        missMemoTtlSeconds = Math.clamp(missMemoTtlSeconds, LSSConstants.MIN_MISS_MEMO_TTL_SECONDS, LSSConstants.MAX_MISS_MEMO_TTL_SECONDS);
+
+        // Global Constraint #28 is GONE: no client budget derives from any server cap under
+        // server-owned generation, so there is nothing to cross-clamp against the wire batch.
+        // Its successor is a static inequality between constants, pinned by
+        // WantSetBudgetInvariantTest: SYNC_ON_LOAD_SLOT_CAP + MAX_CONCURRENT_GENERATIONS
+        //   + WANT_SET_FRONTIER_RESERVE <= WANT_SET_BUDGET <= MAX_BATCH_CHUNK_REQUESTS.
     }
 }

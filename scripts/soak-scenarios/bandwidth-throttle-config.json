@@ -2,7 +2,6 @@
   "lodDistanceChunks": 24,
   "bytesPerSecondLimitGlobal": 262144,
   "sendQueueLimitPerPlayer": 64,
-  "syncOnLoadConcurrencyLimitPerPlayer": 200,
   "generationConcurrencyLimitPerPlayer": 40,
   "generationConcurrencyLimitGlobal": 64,
   "dirtyBroadcastIntervalSeconds": 5,

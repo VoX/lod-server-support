@@ -104,6 +104,79 @@ runPaper.folia.registerTask {
     maxHeapSize = '2G'
 }
 
+// ---- Voxy Server Side (VSS) branded variant -------------------------------------------
+//
+// Same plugin, second Modrinth project (voxy-server-side). Byte-copies the built release
+// shadowJar and rewrites ONLY the plugin.yml `description` — every class and the manifest
+// (incl. paperweight's mappings-namespace stamp) are copied verbatim, and `name:
+// LodServerSupport` is DELIBERATELY kept so the plugin identity / config folder are shared
+// and an LSS server and a VSS client (and vice versa) stay fully compatible. Paper plugins
+// have no embedded icon; the VSS icon lives on the Modrinth project page.
+// See docs/planning/ci-dual-publish.md. release_check.py pins `name: LodServerSupport`.
+import java.util.zip.ZipFile
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
+
+def voxyPaperVersion = providers.environmentVariable('CI').map { it == 'true' }.getOrElse(false)
+        ? "${project.mod_version}+${project.minecraft_version}" : ''
+def voxyPaperJarName = "voxy-server-side-paper" + (voxyPaperVersion ? "-${voxyPaperVersion}" : "") + ".jar"
+
+tasks.register('voxyJar') {
+    description = 'Repackages the LSS Paper jar under the Voxy Server Side branding.'
+    dependsOn tasks.named('shadowJar')
+    def srcJar = tasks.named('shadowJar').flatMap { it.archiveFile }
+    def outFile = layout.buildDirectory.file("libs/${voxyPaperJarName}")
+    inputs.file(srcJar)
+    outputs.file(outFile)
+    doLast {
+        def src = srcJar.get().asFile
+        def out = outFile.get().asFile
+        out.parentFile.mkdirs()
+        def zf = new ZipFile(src)
+        try {
+            new ZipOutputStream(new FileOutputStream(out)).withCloseable { zos ->
+                def entries = zf.entries()
+                while (entries.hasMoreElements()) {
+                    def e = entries.nextElement()
+                    if (e.name == 'plugin.yml') {
+                        def text = zf.getInputStream(e).getText('UTF-8')
+                        // Replace ONLY the top-level (column-0) description and website lines;
+                        // the indented command/permission descriptions are left untouched.
+                        // name/main/version/api-version/commands/permissions are all preserved.
+                        // release_check.py's pair check pins this exact scope (both lines must
+                        // differ, nothing else may).
+                        text = text.replaceFirst(/(?m)^description:.*$/,
+                                'description: Server-side backend for Voxy multiplayer LOD rendering. Identical to LOD Server Support (same plugin, second distribution channel) — fully interchangeable.')
+                        text = text.replaceFirst(/(?m)^website:.*$/,
+                                'website: https://modrinth.com/plugin/voxy-server-side')
+                        def ne = new ZipEntry('plugin.yml')
+                        zos.putNextEntry(ne)
+                        zos.write(text.getBytes('UTF-8'))
+                        zos.closeEntry()
+                    } else {
+                        def ne = new ZipEntry(e.name)
+                        ne.method = e.method
+                        if (e.method == ZipEntry.STORED) {
+                            ne.size = e.size
+                            ne.compressedSize = e.compressedSize
+                            ne.crc = e.crc
+                        }
+                        zos.putNextEntry(ne)
+                        zf.getInputStream(e).withCloseable { is -> zos << is }
+                        zos.closeEntry()
+                    }
+                }
+            }
+        } finally {
+            zf.close()
+        }
+    }
+}
+
+// shadowJar is what CI/release build; hang the VSS repackage off it so both jars always
+// appear together (build.yml/release.yml call :paper:shadowJar).
+tasks.named('shadowJar') { finalizedBy tasks.named('voxyJar') }
+
 tasks.withType(JavaCompile).configureEach {
     it.options.release = 25
 }

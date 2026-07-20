@@ -5,7 +5,6 @@ import dev.vox.lss.common.PositionUtil;
 import dev.vox.lss.common.SharedBandwidthLimiter;
 import dev.vox.lss.common.processing.PendingRequest;
 import dev.vox.lss.common.processing.QueuedPayload;
-import dev.vox.lss.common.processing.RequestType;
 import dev.vox.lss.common.processing.SlotType;
 import dev.vox.lss.common.processing.TickDiagnostics;
 import dev.vox.lss.config.LSSServerConfig;
@@ -104,26 +103,31 @@ public class ServiceLifecycleGameTests {
                     new long[]{beyondX, boundary, negBeyond, negBoundary, beyondZ},
                     new long[]{11L, -1L, 11L, 12345L, 11L}, 5));
 
-            // The service is never ticked, so the incoming queue is exactly what the guard let through.
+            // The service is never ticked, so the declared want-set in the mailbox is exactly
+            // what the guard let through.
             helper.assertTrue(state.getTotalRequestsReceived() == 2,
                     "only the two boundary positions must pass the distance guard, got "
                             + state.getTotalRequestsReceived());
-            var it = state.getIncomingRequests().iterator();
-            helper.assertTrue(it.hasNext(), "boundary request must be queued");
-            var first = it.next();
+            var batch = state.peekIncomingBatch();
+            helper.assertTrue(batch != null && batch.size() == 2,
+                    "the declared want-set must hold exactly the two boundary positions, got "
+                            + (batch == null ? "no batch" : batch.size() + " entries"));
+            var first = batch.requests()[0];
             helper.assertTrue(first.cx() == pcx + maxDist && first.cz() == pcz,
                     "request at exactly lodDistance+buffer must be accepted, got ["
                             + first.cx() + ", " + first.cz() + "]");
             helper.assertTrue(first.clientTimestamp() == -1L,
                     "client timestamp must survive intact, got " + first.clientTimestamp());
-            helper.assertTrue(it.hasNext(), "negative-quadrant boundary request must be queued");
-            var second = it.next();
+            var second = batch.requests()[1];
             helper.assertTrue(second.cx() == pcx - maxDist && second.cz() == pcz - maxDist,
                     "negative-quadrant boundary coords must round-trip exactly (sign bug in "
                             + "packing or distance), got [" + second.cx() + ", " + second.cz() + "]");
             helper.assertTrue(second.clientTimestamp() == 12345L,
                     "negative-quadrant timestamp must survive intact, got " + second.clientTimestamp());
-            helper.assertTrue(!it.hasNext(), "beyond-distance requests must be dropped, not queued");
+            // v17: the three beyond-distance entries are dropped AT INGRESS and counted, not
+            // silently vanished — the range_filtered counter is the only record they existed.
+            helper.assertTrue(state.drainPendingRangeFiltered() == 3,
+                    "the three beyond-distance entries must be counted range_filtered at ingress");
 
             // Unregistered player: silent no-op — no state created, nothing queued anywhere.
             service.handleBatchRequest(stranger, new BatchChunkRequestC2SPayload(
@@ -170,13 +174,17 @@ public class ServiceLifecycleGameTests {
             helper.assertTrue(state.getTotalRequestsReceived() == 1,
                     "only the in-range position passes; the four extremes are gated without "
                             + "overflow, got " + state.getTotalRequestsReceived());
-            var it = state.getIncomingRequests().iterator();
-            helper.assertTrue(it.hasNext(), "the in-range request must be queued");
-            var req = it.next();
+            var batch = state.peekIncomingBatch();
+            helper.assertTrue(batch != null && batch.size() == 1,
+                    "the declared want-set must hold only the in-range request, got "
+                            + (batch == null ? "no batch" : batch.size() + " entries"));
+            var req = batch.requests()[0];
             helper.assertTrue(req.cx() == pcx && req.cz() == pcz,
                     "the surviving request must be the player's own chunk, got ["
                             + req.cx() + ", " + req.cz() + "]");
-            helper.assertTrue(!it.hasNext(), "no extreme-coord request may slip under the gate");
+            helper.assertTrue(state.drainPendingRangeFiltered() == 4,
+                    "the four extreme coords must be counted range_filtered at ingress, not "
+                            + "slip under the gate");
 
             // No tick has run, so the gate alone must not have submitted any disk/gen work.
             helper.assertTrue(service.getDiskReader().getPendingResultCount() == 0,
@@ -566,13 +574,14 @@ public class ServiceLifecycleGameTests {
         helper.assertTrue(state != null && replies.size() == 1,
                 "premise: first handshake must register and reply");
 
-        // Seed live work: a held pending slot, a done-bit, and a queued incoming request.
+        // Seed live work: a held pending slot, a done-bit, and a declared want-set.
         helper.assertTrue(state.tryAdmit(new PendingRequest(pcx - 148, pcz - 12,
-                        RequestType.SYNC, SlotType.SYNC_ON_LOAD, false)),
+                        SlotType.SYNC_ON_LOAD, false)),
                 "premise: pending seeded");
         state.markDiskReadDone(pcx - 148, pcz - 13);
-        state.addRequest(PositionUtil.packPosition(pcx - 149, pcz - 12), -1L);
-        helper.assertTrue(state.getTotalRequestsReceived() == 1, "premise: request queued");
+        GameTestSeeding.seedRequest(state, PositionUtil.packPosition(pcx - 149, pcz - 12), -1L);
+        helper.assertTrue(state.getTotalRequestsReceived() == 1 && state.peekIncomingBatch() != null,
+                "premise: want-set declared");
 
         // Duplicate handshake: same instance, work survives, config re-sent.
         LSSServerNetworking.handleHandshake(
@@ -585,8 +594,11 @@ public class ServiceLifecycleGameTests {
         helper.assertTrue(state.getHeldSyncSlots() == 1
                         && state.hasPendingRequest(pcx - 148, pcz - 12)
                         && state.hasDiskReadDone(pcx - 148, pcz - 13)
-                        && state.getTotalRequestsReceived() == 1,
-                "pendings, done-bits, and queued requests must survive a duplicate handshake");
+                        && state.peekIncomingBatch() != null
+                        && state.peekIncomingBatch().size() == 1
+                        && state.getBacklogSize() == 0,
+                "pendings, done-bits, and the undelivered want-set must survive a duplicate "
+                        + "handshake (no cycle has run, so the batch is still in the mailbox)");
 
         // caps=0 through the receiver: reply-no-register leaves the registration untouched.
         LSSServerNetworking.handleHandshake(
@@ -607,16 +619,17 @@ public class ServiceLifecycleGameTests {
         level.getChunkSource().addTicketWithRadius(TicketType.PLAYER_LOADING, chunkPos, 0);
         level.getChunk(chunkPos.x(), chunkPos.z());
         var stateB = service.registerPlayer(mockB, LSSConstants.CAPABILITY_VOXEL_COLUMNS);
-        stateB.addRequest(PositionUtil.packPosition(chunkPos.x(), chunkPos.z()), -1L);
+        GameTestSeeding.seedRequest(stateB, PositionUtil.packPosition(chunkPos.x(), chunkPos.z()), -1L);
 
         helper.succeedWhen(() -> {
             service.tick();
             helper.assertTrue(
                     service.getOffThreadProcessor().getDiagnostics().getTotalInMemory() >= 1,
                     "waiting for the control player's probe serve (proves routing cycles ran)");
-            helper.assertTrue(state.getIncomingRequests().iterator().hasNext(),
-                    "a caps=0 player's queued request must stay unconsumed (router skips the "
-                            + "player wholesale)");
+            helper.assertTrue(state.peekIncomingBatch() != null && state.getBacklogSize() == 0,
+                    "a caps=0 player's declared want-set must stay unconsumed — the router "
+                            + "skips the player wholesale, so the batch is never even taken "
+                            + "from the mailbox into the backlog");
             helper.assertTrue(state.getHeldSyncSlots() == 1
                             && state.hasPendingRequest(pcx - 148, pcz - 12),
                     "a caps=0 player's pending slot must be neither leaked nor torn down "
@@ -705,11 +718,11 @@ public class ServiceLifecycleGameTests {
     }
 
     /**
-     * CG-028: the REGISTER reply's field wiring at the Fabric call site, with
-     * pairwise-distinct config values so any transposition of the adjacent same-typed
-     * concurrency ints (or a dropped generation flag) fails. The global config is mutated
-     * and restored within this single synchronous callback — gametest callbacks own the
-     * main thread, so no other test (or the live service tick) can observe the window.
+     * CG-028: the REGISTER reply's field wiring at the Fabric call site — lodDistance
+     * distinct from the protocol version (int transposition) and generationEnabled opposed
+     * to enabled (boolean transposition) across the 4-field frame. The global config is
+     * mutated and restored within this single synchronous callback — gametest callbacks own
+     * the main thread, so no other test (or the live service tick) can observe the window.
      */
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void sessionConfigReplyWiresConfigFieldsByNameNotPosition(GameTestHelper helper) {
@@ -721,14 +734,10 @@ public class ServiceLifecycleGameTests {
         helper.assertTrue(config.enabled, "premise: gametest config runs enabled");
 
         int prevLod = config.lodDistanceChunks;
-        int prevSync = config.syncOnLoadConcurrencyLimitPerPlayer;
-        int prevGen = config.generationConcurrencyLimitPerPlayer;
         boolean prevGenEnabled = config.enableChunkGeneration;
         var replies = new ArrayList<SessionConfigS2CPayload>();
         try {
             config.lodDistanceChunks = 251;
-            config.syncOnLoadConcurrencyLimitPerPlayer = 252;
-            config.generationConcurrencyLimitPerPlayer = 253;
             config.enableChunkGeneration = false;
 
             LSSServerNetworking.handleHandshake(
@@ -737,8 +746,6 @@ public class ServiceLifecycleGameTests {
                     mock, service, replies::add);
         } finally {
             config.lodDistanceChunks = prevLod;
-            config.syncOnLoadConcurrencyLimitPerPlayer = prevSync;
-            config.generationConcurrencyLimitPerPlayer = prevGen;
             config.enableChunkGeneration = prevGenEnabled;
         }
         try {
@@ -749,15 +756,9 @@ public class ServiceLifecycleGameTests {
             helper.assertTrue(reply.lodDistanceChunks() == 251,
                     "lodDistanceChunks must wire from CONFIG.lodDistanceChunks, got "
                             + reply.lodDistanceChunks());
-            helper.assertTrue(reply.syncOnLoadConcurrencyLimitPerPlayer() == 252,
-                    "syncOnLoadConcurrencyLimitPerPlayer must wire from its own CONFIG field "
-                            + "(transposition with the adjacent generation limit compiles), got "
-                            + reply.syncOnLoadConcurrencyLimitPerPlayer());
-            helper.assertTrue(reply.generationConcurrencyLimitPerPlayer() == 253,
-                    "generationConcurrencyLimitPerPlayer must wire from its own CONFIG field, got "
-                            + reply.generationConcurrencyLimitPerPlayer());
             helper.assertTrue(!reply.generationEnabled(),
-                    "generationEnabled must wire from CONFIG.enableChunkGeneration");
+                    "generationEnabled must wire from CONFIG.enableChunkGeneration"
+                            + " (the concurrency caps left the 4-field wire payload)");
         } finally {
             service.shutdown();
             playerList.remove(mock);
@@ -794,7 +795,7 @@ public class ServiceLifecycleGameTests {
         var state = service.registerPlayer(mock, LSSConstants.CAPABILITY_VOXEL_COLUMNS);
         // Stale done-bit + a ts>0 request: only the frozen-queued clear makes it re-serve.
         state.markDiskReadDone(chunkPos.x(), chunkPos.z());
-        state.addRequest(packed, 5L);
+        GameTestSeeding.seedRequest(state, packed, 5L);
 
         var diag = service.getOffThreadProcessor().getDiagnostics();
         var config = LSSServerConfig.CONFIG;
@@ -805,8 +806,10 @@ public class ServiceLifecycleGameTests {
             }
             helper.assertTrue(diag.getTotalRequestsRouted() == 0,
                     "a disabled tick must post no snapshot — nothing can route while frozen");
-            helper.assertTrue(state.getIncomingRequests().iterator().hasNext(),
-                    "the queued request must sit untouched while frozen");
+            helper.assertTrue(state.peekIncomingBatch() != null && state.getBacklogSize() == 0,
+                    "the declared want-set must sit un-taken in the mailbox while frozen — a "
+                            + "frozen tick posts no snapshot, so the processing thread never "
+                            + "reaches takeIncomingBatch()");
             // Event posted while frozen: lossless, must apply before the first resumed routing.
             service.getOffThreadProcessor().clearDiskReadDone(uuid, new long[]{packed});
         } finally {
@@ -846,7 +849,7 @@ public class ServiceLifecycleGameTests {
 
         var state = service.registerPlayer(mock, LSSConstants.CAPABILITY_VOXEL_COLUMNS);
         helper.assertTrue(state.tryAdmit(new PendingRequest(pcx - 144, pcz - 8,
-                        RequestType.SYNC, SlotType.SYNC_ON_LOAD, false)),
+                        SlotType.SYNC_ON_LOAD, false)),
                 "premise: pending seeded before the respawn");
         state.markDiskReadDone(pcx - 144, pcz - 9);
 
@@ -873,7 +876,7 @@ public class ServiceLifecycleGameTests {
         var chunkSource = level.getChunkSource();
         chunkSource.addTicketWithRadius(TicketType.PLAYER_LOADING, chunkPos, 0);
         level.getChunk(chunkPos.x(), chunkPos.z());
-        state.addRequest(PositionUtil.packPosition(chunkPos.x(), chunkPos.z()), -1L);
+        GameTestSeeding.seedRequest(state, PositionUtil.packPosition(chunkPos.x(), chunkPos.z()), -1L);
 
         helper.succeedWhen(() -> {
             service.tick();
@@ -917,14 +920,21 @@ public class ServiceLifecycleGameTests {
 
         var service = new RequestProcessingService(server);
         var state = service.registerPlayer(mock, LSSConstants.CAPABILITY_VOXEL_COLUMNS);
+        // ONE declared want-set: 512 filler entries AHEAD of the loaded pair. Far synthetic
+        // coords: never loaded (probe miss), pre-seeded done-bit + ts>0 resolves them
+        // up-to-date before slot admission.
+        var packed = new long[514];
+        var stamps = new long[514];
         for (int i = 0; i < 512; i++) {
-            // Far synthetic coords: never loaded (probe miss), pre-seeded done-bit + ts>0
-            // resolves them up-to-date before slot admission.
             state.markDiskReadDone(1_000_000 + i, 77);
-            state.addRequest(PositionUtil.packPosition(1_000_000 + i, 77), 5L);
+            packed[i] = PositionUtil.packPosition(1_000_000 + i, 77);
+            stamps[i] = 5L;
         }
-        state.addRequest(PositionUtil.packPosition(posK1.x(), posK1.z()), -1L);
-        state.addRequest(PositionUtil.packPosition(posK2.x(), posK2.z()), -1L);
+        packed[512] = PositionUtil.packPosition(posK1.x(), posK1.z());
+        stamps[512] = -1L;
+        packed[513] = PositionUtil.packPosition(posK2.x(), posK2.z());
+        stamps[513] = -1L;
+        GameTestSeeding.seedRequests(state, packed, stamps);
 
         var diag = service.getOffThreadProcessor().getDiagnostics();
         var diskDiag = service.getDiskReader().getDiag();
@@ -975,17 +985,26 @@ public class ServiceLifecycleGameTests {
         var service = new RequestProcessingService(server);
         var state = service.registerPlayer(mock, LSSConstants.CAPABILITY_VOXEL_COLUMNS);
         long packedC = PositionUtil.packPosition(posC.x(), posC.z());
-        state.addRequest(packedC, -1L);
-        // Duplicate re-asks carry ts>0 so their routing outcome (up-to-date off the fresh
-        // done-bit) is independent of whether the main-thread flush already sent C's payload.
-        for (int i = 0; i < 4; i++) {
-            state.addRequest(packedC, 5L);
+        // ONE declared want-set, in probe order: C, four duplicate re-asks of C, 510 misses,
+        // then loaded D. The duplicate re-asks carry ts>0 so their routing outcome
+        // (up-to-date off the fresh done-bit) is independent of whether the main-thread flush
+        // already sent C's payload.
+        var packed = new long[516];
+        var stamps = new long[516];
+        packed[0] = packedC;
+        stamps[0] = -1L;
+        for (int i = 1; i <= 4; i++) {
+            packed[i] = packedC;
+            stamps[i] = 5L;
         }
         for (int i = 0; i < 510; i++) {
             state.markDiskReadDone(1_010_000 + i, 88);
-            state.addRequest(PositionUtil.packPosition(1_010_000 + i, 88), 5L);
+            packed[5 + i] = PositionUtil.packPosition(1_010_000 + i, 88);
+            stamps[5 + i] = 5L;
         }
-        state.addRequest(PositionUtil.packPosition(posD.x(), posD.z()), -1L);
+        packed[515] = PositionUtil.packPosition(posD.x(), posD.z());
+        stamps[515] = -1L;
+        GameTestSeeding.seedRequests(state, packed, stamps);
 
         var diag = service.getOffThreadProcessor().getDiagnostics();
         var diskDiag = service.getDiskReader().getDiag();

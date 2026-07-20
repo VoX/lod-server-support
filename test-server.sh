@@ -3,7 +3,10 @@ set -euo pipefail
 
 # Test server script for LOD Server Support (LSS)
 # Sets up Fabric/Paper/Folia servers and runs them on different ports.
-# Fabric: localhost:25565   Paper: localhost:25566   Folia: localhost:25567
+# Fabric: localhost:25564   Paper: localhost:25566   Folia: localhost:25567
+# (25565 is deliberately left free: the soak/benchmark harness binds it and a test
+#  server there shows up identically in the multiplayer list — accidental joins
+#  contaminate soak runs.)
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 FABRIC_DIR="$SCRIPT_DIR/test-server/fabric"
@@ -34,6 +37,18 @@ fi
 
 # --- Settings ---
 SERVER_RAM="${SERVER_RAM:-2G}"
+
+# Dev-only [lss-adm] admission trace: one line per generation-admission decision
+# (candidate ring, damped frontier, nearest in-flight rings, verdict) — the instrument for
+# diagnosing far-arc / inversion reports. On by default for Fabric dev servers; it is
+# VERBOSE (hundreds of lines/sec during backfill, since every held position re-logs on each
+# 1 Hz re-declaration), so set LSS_ADMISSION_TRACE=0 for quiet console play or when reading
+# the log for anything else. Never enabled in release jars — the flag is read only here.
+LSS_ADMISSION_TRACE="${LSS_ADMISSION_TRACE:-1}"
+case "$LSS_ADMISSION_TRACE" in
+    0|false|no|off) ADMISSION_TRACE_FLAG="-Dlss.admissionTrace=false" ;;
+    *)              ADMISSION_TRACE_FLAG="-Dlss.admissionTrace=true" ;;
+esac
 
 # ============================================================
 # Helpers
@@ -107,6 +122,12 @@ write_server_properties() {
     local dir="$1"
     local port="$2"
     local motd="$3"
+    # Enforce the port on EXISTING installs too (the Fabric port moved off the soak
+    # harness's 25565; a stale server.properties would silently keep colliding).
+    if [ -f "$dir/server.properties" ] && ! grep -q "^server-port=$port$" "$dir/server.properties"; then
+        echo "  Updating server-port to $port"
+        sed -i "s/^server-port=.*/server-port=$port/" "$dir/server.properties"
+    fi
     if [ ! -f "$dir/server.properties" ]; then
         echo "  Creating server.properties (port $port)"
         cat > "$dir/server.properties" << EOF
@@ -176,13 +197,17 @@ setup_fabric() {
         echo "eula=true" > "$FABRIC_DIR/eula.txt"
     fi
 
-    write_server_properties "$FABRIC_DIR" 25565 "LSS Test Server (Fabric)"
+    write_server_properties "$FABRIC_DIR" 25564 "LSS Test Server (Fabric)"
     write_ops_json "$FABRIC_DIR"
     write_lss_config "$FABRIC_DIR/config"
 
     echo "=== Installing Fabric mods ==="
     download "$FABRIC_API_URL" "$mods_dir/fabric-api.jar"
-    download "$C2ME_URL" "$mods_dir/c2me.jar"
+    # Skip the download while a no-c2me A/B run has it parked as .jar.disabled —
+    # otherwise every such run re-downloads a jar it is about to disable.
+    if [ ! -f "$mods_dir/c2me.jar.disabled" ]; then
+        download "$C2ME_URL" "$mods_dir/c2me.jar"
+    fi
 
     echo "  Installing LSS..."
     local lss_jar
@@ -194,7 +219,36 @@ setup_fabric() {
 
 run_fabric() {
     cd "$FABRIC_DIR"
-    java -Xmx${SERVER_RAM} -Xms${SERVER_RAM} -jar fabric-server-launch.jar nogui
+    # admissionTrace: dev-only [lss-adm] lines (candidate ring vs frontier stamp per
+    # generation-admission decision) — the instrument for far-arc/inversion reports.
+    # Disable with LSS_ADMISSION_TRACE=0 (see the flag's definition near SERVER_RAM).
+    java -Xmx${SERVER_RAM} -Xms${SERVER_RAM} "$ADMISSION_TRACE_FLAG" -jar fabric-server-launch.jar nogui
+}
+
+# Toggle c2me*.jar in the Fabric mods folder for A/B runs (LSS vs C2ME's chunk-system
+# rewrite — e.g. generation completion-order testing). Disabling renames to
+# .jar.disabled, which the Fabric loader ignores; run-fabric re-enables.
+set_c2me_enabled() {
+    local enabled="$1" f moved=false
+    mkdir -p "$FABRIC_DIR/mods"
+    if [ "$enabled" = true ]; then
+        for f in "$FABRIC_DIR/mods"/c2me*.jar.disabled; do
+            [ -e "$f" ] || continue
+            mv "$f" "${f%.disabled}"
+            echo "  Re-enabled: $(basename "${f%.disabled}")"
+            moved=true
+        done
+    else
+        for f in "$FABRIC_DIR/mods"/c2me*.jar; do
+            [ -e "$f" ] || continue
+            mv "$f" "$f.disabled"
+            echo "  Disabled: $(basename "$f")"
+            moved=true
+        done
+        if [ "$moved" = false ]; then
+            echo "  (no c2me*.jar in $FABRIC_DIR/mods — nothing to disable)"
+        fi
+    fi
 }
 
 # ============================================================
@@ -283,7 +337,7 @@ run_folia() {
 
 run_all() {
     echo "=== Starting all servers ==="
-    echo "  Fabric: localhost:25565"
+    echo "  Fabric: localhost:25564"
     echo "  Paper:  localhost:25566"
     echo "  Folia:  localhost:25567"
     echo "  Commands: /lsslod stats, /lsslod diag"
@@ -296,7 +350,7 @@ run_all() {
     trap 'echo ""; echo "Stopping servers..."; kill "${SERVER_PIDS[@]}" 2>/dev/null; wait "${SERVER_PIDS[@]}" 2>/dev/null; echo "Done."' INT TERM EXIT
 
     cd "$FABRIC_DIR"
-    java -Xmx${SERVER_RAM} -Xms${SERVER_RAM} -jar fabric-server-launch.jar nogui &
+    java -Xmx${SERVER_RAM} -Xms${SERVER_RAM} "$ADMISSION_TRACE_FLAG" -jar fabric-server-launch.jar nogui &
     SERVER_PIDS+=($!)
 
     sleep 2
@@ -363,9 +417,21 @@ case "${1:-run}" in
         ;;
     run-fabric)
         setup_fabric
+        set_c2me_enabled true   # undo a previous run-fabric-no-c2me
         echo ""
         echo "=== Starting Fabric server ==="
-        echo "  Connect to: localhost:25565"
+        echo "  Connect to: localhost:25564"
+        echo ""
+        run_fabric
+        ;;
+    run-fabric-no-c2me)
+        setup_fabric
+        echo ""
+        echo "=== Disabling C2ME for this run ==="
+        set_c2me_enabled false
+        echo ""
+        echo "=== Starting Fabric server (C2ME disabled) ==="
+        echo "  Connect to: localhost:25564"
         echo ""
         run_fabric
         ;;
@@ -391,11 +457,12 @@ case "${1:-run}" in
         echo "Done."
         ;;
     *)
-        echo "Usage: $0 {setup|run|run-fabric|run-paper|run-folia|update|clean}"
+        echo "Usage: $0 {setup|run|run-fabric|run-fabric-no-c2me|run-paper|run-folia|update|clean}"
         echo ""
         echo "  setup      - Download and set up all servers"
         echo "  run        - Set up and start all servers (default)"
-        echo "  run-fabric - Set up and start Fabric server only (port 25565)"
+        echo "  run-fabric - Set up and start Fabric server only (port 25564; re-enables C2ME)"
+        echo "  run-fabric-no-c2me - Same, with any c2me*.jar in mods/ disabled (A/B testing)"
         echo "  run-paper  - Set up and start Paper server only (port 25566)"
         echo "  run-folia  - Set up and start Folia server only (port 25567)"
         echo "  update     - Rebuild and install LSS JARs for all servers"
@@ -403,6 +470,8 @@ case "${1:-run}" in
         echo ""
         echo "Environment variables:"
         echo "  SERVER_RAM  - Server memory allocation per server (default: 2G)"
+        echo "  LSS_ADMISSION_TRACE - Fabric [lss-adm] generation-admission trace (default: 1)."
+        echo "                        Set to 0 to silence it — it is verbose during backfill."
         exit 1
         ;;
 esac

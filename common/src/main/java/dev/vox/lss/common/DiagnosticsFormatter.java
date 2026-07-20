@@ -26,10 +26,36 @@ public final class DiagnosticsFormatter {
             String tickDiagnostics,
             String diskReaderDiagnostics,
             String generationDiagnostics, boolean generationEnabled,
+            long genOrderGated, long genInversions,
             long bwTotal,
             long bwWindowRate,
-            List<PlayerDiag> players
-    ) {}
+            List<PlayerDiag> players,
+            String v16Line
+    ) {
+        /** Pre-v16-compat shape (no shim line) — keeps existing constructions/tests intact. */
+        public DiagData(boolean enabled, int lodDist, long bwPerPlayer, long bwGlobal,
+                        long uptimeSec, long totalSent, long totalBytes,
+                        long cumInMem, long cumUtd, long cumGen, long cumReResolved,
+                        long diskCompleted, String tickDiagnostics, String diskReaderDiagnostics,
+                        String generationDiagnostics, boolean generationEnabled,
+                        long genOrderGated, long genInversions,
+                        long bwTotal, long bwWindowRate, List<PlayerDiag> players) {
+            this(enabled, lodDist, bwPerPlayer, bwGlobal, uptimeSec, totalSent, totalBytes,
+                    cumInMem, cumUtd, cumGen, cumReResolved, diskCompleted, tickDiagnostics,
+                    diskReaderDiagnostics, generationDiagnostics, generationEnabled,
+                    genOrderGated, genInversions, bwTotal, bwWindowRate, players, null);
+        }
+
+        /** Attach the v16 compat shim's one-line summary (null when the shim is untouched —
+         *  the line is omitted from the rendered diagnostics). */
+        public DiagData withV16Line(String line) {
+            return new DiagData(enabled, lodDist, bwPerPlayer, bwGlobal, uptimeSec, totalSent,
+                    totalBytes, cumInMem, cumUtd, cumGen, cumReResolved, diskCompleted,
+                    tickDiagnostics, diskReaderDiagnostics, generationDiagnostics,
+                    generationEnabled, genOrderGated, genInversions, bwTotal, bwWindowRate,
+                    players, line);
+        }
+    }
 
     private DiagnosticsFormatter() {}
 
@@ -67,11 +93,21 @@ public final class DiagnosticsFormatter {
         // DiskReader
         lines.add("DiskReader: " + d.diskReaderDiagnostics);
 
-        // Generation
+        // Generation. order_gated = generation-ordering refusals, aggregated across the
+        // nearer-read hold, the cohort span, and the (damped) frontier spread gate;
+        // inversions = completions that finished while a NEARER ticket was outstanding
+        // (the platform scheduler's far-before-near signature, e.g. C2ME).
         if (d.generationEnabled) {
-            lines.add("Generation: " + d.generationDiagnostics);
+            lines.add("Generation: " + d.generationDiagnostics
+                    + String.format(", order_gated=%d, inversions=%d",
+                            d.genOrderGated, d.genInversions));
         } else {
             lines.add("Generation: disabled");
+        }
+
+        // v16 compat shim (omitted while untouched — most servers never see a legacy client)
+        if (d.v16Line != null) {
+            lines.add(d.v16Line);
         }
 
         // Bandwidth
@@ -142,8 +178,14 @@ public final class DiagnosticsFormatter {
                 diag.getTotalReResolved(),
                 diskReader != null ? diskReader.getDiag().getSuccessfulReadCount() : 0,
                 tickDiagnostics,
-                diskReader != null ? diskReader.getDiagnostics() : "disabled",
+                // memo_hits: miss-memo rung hits (fresh memoized absence skipped the redundant
+                // re-read and escalated straight to generation) — law A5's virtual not-founds.
+                diskReader != null
+                        ? diskReader.getDiagnostics()
+                                + String.format(", memo_hits=%d", diag.getTotalMemoHits())
+                        : "disabled",
                 generationDiagnosticsOrNull, generationDiagnosticsOrNull != null,
+                diag.getTotalGenOrderGated(), diag.getTotalGenCompletionInversions(),
                 bwLimiter.getTotalBytesSent(),
                 windowBandwidthRate,
                 players

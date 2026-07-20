@@ -180,9 +180,10 @@ public final class PaperSoakMetricsExporter {
         serviceMap.put("gen_drained", diag.getTotalGenDrained());
         var diskReader = service.getDiskReader();
         serviceMap.put("disk_resolved", diskReader != null ? diskReader.getDiag().getSuccessfulReadCount() : 0L);
-        serviceMap.put("sync_rate_limited", diag.getTotalSyncRateLimited());
-        serviceMap.put("gen_rate_limited", diag.getTotalGenRateLimited());
         serviceMap.put("re_resolved", diag.getTotalReResolved());
+        serviceMap.put("superseded", diag.getTotalSuperseded());
+        serviceMap.put("range_filtered", diag.getTotalRangeFiltered());
+        serviceMap.put("miss_dropped", diag.getTotalMissDropped());
         result.put("service", serviceMap);
 
         var diskMap = new LinkedHashMap<String, Object>();
@@ -198,6 +199,10 @@ public final class PaperSoakMetricsExporter {
             diskMap.put("pending", diskReader.getPendingResultCount());
             diskMap.put("pending_hw", DISK_PENDING_HW.get());
             diskMap.put("read_ms_total", dd.getTotalReadTimeNanos() / LSSConstants.NANOS_PER_MS);
+            // Miss-memo rung hits (law A5's virtual not-founds) — sourced from the
+            // processing diagnostics; the rung requires a reader, so the no-reader
+            // disk-map-empty contract is preserved.
+            diskMap.put("memo_hits", diag.getTotalMemoHits());
         }
         result.put("disk", diskMap);
 
@@ -220,6 +225,12 @@ public final class PaperSoakMetricsExporter {
             genMap.put("active", 0);
             genMap.put("active_hw", 0);
         }
+        // Ordering observability (the miss-memo pacing rules' success metrics) — from
+        // ProcessingDiagnostics, so present even with generation disabled (schema-required):
+        // order_gated = ordering refusals (frontier window + pacing rules), inversions =
+        // completions that finished while a nearer ticket was outstanding.
+        genMap.put("order_gated", diag.getTotalGenOrderGated());
+        genMap.put("inversions", diag.getTotalGenCompletionInversions());
         result.put("generation", genMap);
 
         var dirtyMap = new LinkedHashMap<String, Object>();
@@ -280,7 +291,8 @@ public final class PaperSoakMetricsExporter {
             p.put("sent", state.getTotalSectionsSent());
             p.put("bytes", state.getTotalBytesSent());
             p.put("requests", state.getTotalRequestsReceived());
-            p.put("incoming_dropped", state.getTotalIncomingDropped());
+            // Want-set entries still awaiting a routing pass on the processing thread.
+            p.put("backlog", state.getBacklogSize());
             players.add(p);
         }
         result.put("players", players);

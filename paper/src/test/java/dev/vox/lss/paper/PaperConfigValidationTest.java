@@ -11,6 +11,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Pins PaperConfig.validate(): the shared ServerConfigBase clamps must run through the Paper
@@ -24,19 +25,29 @@ class PaperConfigValidationTest {
     void validateClampsInheritedFieldsAndGuardsUpdateEvents() {
         PaperConfig c = new PaperConfig();
         c.lodDistanceChunks = 99999;
-        c.syncOnLoadConcurrencyLimitPerPlayer = 0;
+        c.generationConcurrencyLimitPerPlayer = 0;
         c.updateEvents = null;
         c.validate();
         assertEquals(2048, c.lodDistanceChunks);                 // LSSConstants.MAX_LOD_DISTANCE via super.validate()
-        assertEquals(1, c.syncOnLoadConcurrencyLimitPerPlayer);  // LSSConstants.MIN_CONCURRENCY_LIMIT via super.validate()
+        assertEquals(1, c.generationConcurrencyLimitPerPlayer);  // LSSConstants.MIN_CONCURRENCY_LIMIT via super.validate()
         assertEquals(List.of(), c.updateEvents);                 // Paper-only null guard
+    }
+
+    /** Paper inherits the shared read-priority default: LOD reads yield to gameplay out of the box. */
+    @Test
+    void backgroundReadPriorityDefaultsOn() {
+        assertTrue(new PaperConfig().useBackgroundReadPriority,
+                "background read priority must default on (Paper)");
     }
 
     // ---- full both-ends clamp sweep: Paper twin of ConfigValidationTest's reflective sweep ----
 
     private record Bounds(int min, int max) {}
 
-    /** Expected clamp bounds per shared field — the same LSSConstants ServerConfigBase clamps with. */
+    /** Expected clamp bounds per shared field — the same LSSConstants ServerConfigBase clamps
+     *  with. Both per-player slot caps clamp to plain per-field bounds now: the #28 cross-clamp
+     *  is gone (no client budget derives from any cap; the successor invariant is
+     *  WantSetBudgetInvariantTest), and the sync cap is a constant, not a field. */
     private static final Map<String, Bounds> SHARED_BOUNDS = Map.ofEntries(
             Map.entry("lodDistanceChunks",
                     new Bounds(LSSConstants.MIN_LOD_DISTANCE, LSSConstants.MAX_LOD_DISTANCE)),
@@ -53,10 +64,10 @@ class PaperConfigValidationTest {
                     new Bounds(LSSConstants.MIN_CONCURRENT_GENERATIONS, LSSConstants.MAX_CONCURRENT_GENERATIONS)),
             Map.entry("generationTimeoutSeconds",
                     new Bounds(LSSConstants.MIN_GENERATION_TIMEOUT, LSSConstants.MAX_GENERATION_TIMEOUT)),
+            Map.entry("missMemoTtlSeconds",
+                    new Bounds(LSSConstants.MIN_MISS_MEMO_TTL_SECONDS, LSSConstants.MAX_MISS_MEMO_TTL_SECONDS)),
             Map.entry("dirtyBroadcastIntervalSeconds",
                     new Bounds(LSSConstants.MIN_DIRTY_BROADCAST_INTERVAL, LSSConstants.MAX_DIRTY_BROADCAST_INTERVAL)),
-            Map.entry("syncOnLoadConcurrencyLimitPerPlayer",
-                    new Bounds(LSSConstants.MIN_CONCURRENCY_LIMIT, LSSConstants.MAX_CONCURRENCY_LIMIT)),
             Map.entry("generationConcurrencyLimitPerPlayer",
                     new Bounds(LSSConstants.MIN_CONCURRENCY_LIMIT, LSSConstants.MAX_CONCURRENCY_LIMIT)),
             Map.entry("perDimensionTimestampCacheSizeMB",
@@ -100,6 +111,7 @@ class PaperConfigValidationTest {
             assertEquals(bounds.max(), f.getInt(c), f.getName() + " at the exact maximum must be kept");
         }
     }
+
 
     /** Compiled Paper defaults must already sit inside the clamp ranges: validate() may not move them. */
     @Test
