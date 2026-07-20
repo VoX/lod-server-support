@@ -2,6 +2,7 @@ package dev.vox.lss.networking.client;
 
 import dev.vox.lss.common.LSSConstants;
 import dev.vox.lss.networking.payloads.SessionConfigS2CPayload;
+import dev.vox.lss.networking.payloads.V16ClientWire;
 import dev.vox.lss.networking.payloads.VoxelColumnS2CPayload;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.registries.Registries;
@@ -60,6 +61,13 @@ class ClientSessionGateTest {
                     events.add("rebuild");
                     return new RecordingManager(events);
                 });
+    }
+
+    // V16ClientWire.columnSourceless is a process-global static; the gate resets it as part of
+    // its lifecycle. Clear it after each test so an armed flag never leaks to another suite.
+    @org.junit.jupiter.api.AfterEach
+    void clearStaticSourcelessFlag() {
+        V16ClientWire.reset();
     }
 
     private static SessionConfigS2CPayload config(int protocolVersion, boolean enabled) {
@@ -431,5 +439,97 @@ class ClientSessionGateTest {
         assertTrue(gate.isV16Server());
         gate.onDisconnect();
         assertFalse(gate.isV16Server(), "DISCONNECT clears the legacy flag");
+    }
+
+    // ---- The process-global column-decode flag: the design's stated primary stability risk.
+    // The gate's onJoin/onDisconnect are the ONLY production callers of V16ClientWire.reset();
+    // these pin that wiring directly (isV16Server is a separate instance field — clearing it is
+    // not evidence the static flag cleared, which is what actually misaligns a v18 column decode).
+
+    @Test
+    void onJoinClearsTheStaticSourcelessDecodeFlag() {
+        V16ClientWire.observeSessionConfigVersion(V16); // a prior v16 session left it armed
+        assertTrue(V16ClientWire.isColumnSourceless());
+
+        gate.onJoin(true, false, true, true);
+
+        assertFalse(V16ClientWire.isColumnSourceless(),
+                "JOIN must clear the source-less flag — otherwise a v16 server's state leaks into "
+                        + "the next v18 connection, whose columns would decode with the source byte "
+                        + "skipped (array misalignment → decoder kick)");
+    }
+
+    @Test
+    void onDisconnectClearsTheStaticSourcelessDecodeFlag() {
+        V16ClientWire.observeSessionConfigVersion(V16);
+        assertTrue(V16ClientWire.isColumnSourceless());
+
+        gate.onDisconnect();
+
+        assertFalse(V16ClientWire.isColumnSourceless(),
+                "DISCONNECT must clear the source-less flag so no v16 decode state survives the session");
+    }
+
+    @Test
+    void aThrownJoinHandshakeLeavesDiscoveryDisarmed() {
+        // On a vanilla / no-LSS server the v18 handshake send throws (swallowed at debug). The
+        // arm sits INSIDE the try after the send, so a throw leaves discovery disarmed — there
+        // is no server to re-discover, and firing a second doomed v16 handshake from the client
+        // tick would be pointless. Ticking past the delay must produce no further send and never
+        // propagate out of the END_CLIENT_TICK handler.
+        var sends = new AtomicInteger();
+        var throwingGate = new ClientSessionGate(processor,
+                v -> { sends.incrementAndGet(); throw new IllegalStateException("no LSS channel"); },
+                cfg -> { events.add("rebuild"); return new RecordingManager(events); });
+
+        throwingGate.onJoin(true, false, true, true);
+        assertEquals(1, sends.get(), "one v18 join send attempt (thrown, swallowed)");
+
+        assertDoesNotThrow(() -> {
+            for (int i = 0; i < ClientSessionGate.V16_DISCOVERY_DELAY_TICKS + 5; i++) {
+                throwingGate.tickV16Discovery();
+            }
+        }, "ticking a disarmed discovery must never crash the client tick");
+        assertEquals(1, sends.get(),
+                "a thrown v18 handshake leaves discovery disarmed — no v16 fallback attempt");
+    }
+
+    @Test
+    void lateV16ConfigDoesNotDowngradeALiveV18SessionAndReassertsV18() {
+        // The reviewers' headline scenario: a healthy v18 server whose SessionConfig was slow
+        // enough that the client already fired the v16 discovery fallback, then the (compat-on)
+        // server answered it with a v16 config. The client must NOT downgrade its working v18
+        // session; it re-announces v18 so the server sheds the spurious compat session.
+        gate.onJoin(true, false, true, true);
+        assertEquals(List.of(V), handshakeVersions);
+        gate.onSessionConfig(config(V, true), true, true); // the (late) v18 config lands first
+        var v18Manager = gate.getRequestManager();
+        assertNotNull(v18Manager);
+        assertFalse(gate.isV16Server());
+        events.clear();
+
+        // The spurious v16 reply arrives after the v18 session is live.
+        gate.onSessionConfig(SessionConfigS2CPayload.v16Legacy(true, 64, 200, 7, true), true, true);
+
+        assertFalse(gate.isV16Server(), "a live v18 session must never downgrade to v16");
+        assertSame(v18Manager, gate.getRequestManager(),
+                "the v18 manager is kept — no teardown/rebuild on the spurious v16 config");
+        assertTrue(gate.isServerEnabled(), "the v18 session stays enabled");
+        assertEquals(List.of(), events, "no teardown, no rebuild fired");
+        assertEquals(List.of(V, V), handshakeVersions,
+                "the client re-announces v18 to shed the server's spurious compat session");
+    }
+
+    @Test
+    void genuineV16ConfigWithoutAPriorV18SessionStillBuildsTheLegacySession() {
+        // The guard must fire ONLY on a downgrade of a live v18 session — a real v16 server
+        // (no prior v18 config) must still activate normally.
+        gate.onJoin(true, false, true, true); // v18 handshake sent; no v18 config ever arrives
+        gate.onSessionConfig(SessionConfigS2CPayload.v16Legacy(true, 64, 200, 7, true), true, true);
+
+        assertTrue(gate.isV16Server(), "a first-and-only v16 config builds the legacy session");
+        assertNotNull(gate.getRequestManager());
+        assertEquals(List.of("rebuild"), events);
+        assertEquals(List.of(V), handshakeVersions, "no v18 re-assert — this was not a downgrade");
     }
 }

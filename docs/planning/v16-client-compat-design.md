@@ -1,14 +1,53 @@
 # Client-side v16 backward compat — design spike (v0.7.0 client ⇄ v0.4.x server)
 
-**Status:** RESEARCH SPIKE / PLAN ONLY (2026-07-20). Not implemented. Mirrors the existing
-SERVER-side shim (`docs/planning/v16-compat-design.md`, `common/compat/V16CompatManager`),
-inverted.
+**Status:** IMPLEMENTED — Tier A (load-only), 2026-07-20, branch `feat/v16-client-compat`.
+Mirrors the existing SERVER-side shim (`docs/planning/v16-compat-design.md`,
+`common/compat/V16CompatManager`), inverted. Sections 2–8 below are the ORIGINAL plan; read
+the "As-built deltas" box first — a few things landed differently, and one review-driven
+addition (the downgrade guard) is not in the plan at all.
 
 **Goal.** Let a v0.7.0 Fabric **client** (protocol 18) render LODs from an **old server**
 running protocol 16 (releases **v0.4.0 … v0.6.2**), the exact reciprocal of the shipped
 server shim (which lets old *clients* talk to a v0.7.0 server). Hard requirement from the
 maintainer: **isolate every compat path so the normal v18 client behavior is byte-for-byte
 unchanged and unrisked.** Prefer a wire-edge adapter; do not touch the core request loop.
+
+---
+
+## As-built deltas (implementation vs. this plan)
+
+The core loop was indeed untouched (Tier A pass-through — `LodRequestManager` has zero
+production changes), and the isolation held. Where the code diverges from §§2–8:
+
+- **No `ClientV16CompatManager` class.** The §5 diagram shows one manager holding everything;
+  the implementation splits it into `ClientSessionGate` (discovery timer + `isV16Server` + the
+  version-acceptance ladder) and `V16ClientWire` (the one static column-decode flag).
+  Functionally equivalent, arguably cleaner — but the §5 diagram names a class that does not exist.
+- **Discovery delay is 100 ticks (5 s), not 60/3 s** (`V16_DISCOVERY_DELAY_TICKS`). Widened for
+  margin against a healthy v18 server whose SessionConfig is briefly delayed by a join-time stall.
+- **NEW — downgrade guard + v18 re-assert (not in the plan; closes the review's headline finding).**
+  Two independent review agents found that a slow-join v18 server (SessionConfig later than the
+  discovery delay) makes the client fire the v16 fallback, which a compat-on v18 server *answers*,
+  silently downgrading a healthy session to v16 load-only for its whole duration. Fix in
+  `ClientSessionGate.onSessionConfig`: a v16 config arriving once a v18 session already exists is
+  never a real legacy server (a server is one dialect); the client ignores the downgrade and
+  re-announces v18, which the server's existing shed-on-v18-handshake path turns into a full v18
+  restore. Bounded (the reply is a v18 config, which never re-enters the branch — no ping-pong).
+- **Byte-0 debug demotion is UNCONDITIONAL** (`LSSClientNetworking.dispatchBatchResponses`), not
+  gated on `isV16Server` as §3c suggested. A v18 server never emits byte 0, so gating would be
+  unobservable; unconditional keeps `dispatchBatchResponses` a static with no gate dependency.
+- **The 6-field caps are decoded but UNUSED.** §2/§5 say "read the caps as pacing hints" — that
+  describes the *legacy* client. On this v18 client no budget derives from server caps (the
+  scanner uses the `WANT_SET_BUDGET` constant); the two cap VarInts are consumed purely for wire
+  alignment (`legacySyncCap`/`legacyGenCap`, pinned by the decode tests) and then dropped by
+  `clampToProtocolBounds`.
+- **The §2 "give-up timer" was unnecessary.** A single `v16FallbackSent` one-shot suffices — after
+  the one fallback there is nothing to give up on.
+- **Tier B (drive generation via `ts -1→0`) is NOT implemented** — Tier A only, as recommended.
+- **Live v0.6.2 smoke (the §7 "real validation") is still PENDING.** CI has no old-protocol server
+  jar, so no automated tier can prove the end-to-end handshake→6-field-config→source-less-column→
+  decode→consumer chain against a real v0.4.x–v0.6.2 server. Tier 1 pins every decode/ladder unit;
+  the live join remains a manual gate to run before this is advertised as working.
 
 ---
 

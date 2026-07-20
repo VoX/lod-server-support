@@ -34,7 +34,16 @@ public final class V16ClientWire {
 
     /** Netty decode thread: called from {@code SessionConfigS2CPayload}'s decoder with the
      *  frame's protocol version, establishing (before any column decodes on the same thread)
-     *  whether subsequent VoxelColumn frames omit the source byte. */
+     *  whether subsequent VoxelColumn frames omit the source byte.
+     *
+     *  <p>This arms on the RAW version alone — it does not consult {@code enableV16ServerCompat}
+     *  (which lives at the session layer, {@code ClientSessionGate}, the authority on whether a
+     *  v16 session is accepted). For any honest server the two agree: a real v16 server only
+     *  ever replies to a client that announced 16 (which requires compat on), and a real v18
+     *  server never sends a version-16 config. Only an inconsistent/hostile server (v16 config
+     *  then a v18-shaped column) can arm this against a compat-off client, and the blast radius
+     *  is a self-inflicted, {@code MAX_SECTIONS_SIZE}-bounded decode error on that one
+     *  connection — no different from any other malformed-frame DoS the caps already contain. */
     public static void observeSessionConfigVersion(int protocolVersion) {
         columnSourceless = (protocolVersion == LSSConstants.V16_COMPAT_PROTOCOL_VERSION);
     }

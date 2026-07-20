@@ -38,9 +38,11 @@ final class ClientSessionGate {
 
     /** Ticks (client tick = 1/20 s) to wait for a SessionConfig after the v18 handshake
      *  before re-handshaking as v16 — the discovery fallback for an old server that silently
-     *  drops a version-18 handshake. Generous, so a healthy v18 server (config in well under
-     *  a second) never triggers it. */
-    static final int V16_DISCOVERY_DELAY_TICKS = 60;
+     *  drops a version-18 handshake. Generous (5 s): a healthy v18 server replies in well under
+     *  a second, and the extra margin keeps a briefly-stalled v18 server (a join-time freeze on
+     *  a heavy modded server) from tripping the fallback. Should one slip through anyway, the
+     *  downgrade guard in {@link #onSessionConfig} re-asserts v18 rather than degrading. */
+    static final int V16_DISCOVERY_DELAY_TICKS = 100;
 
     private final ClientColumnProcessor columnProcessor;
     // Sends the C2S handshake announcing the given protocol version; injected so tests can
@@ -118,12 +120,14 @@ final class ClientSessionGate {
 
         try {
             this.handshakeSender.accept(LSSConstants.PROTOCOL_VERSION);
+            // Arm the discovery fallback only after the v18 handshake actually went out. On a
+            // send throw (vanilla / no-LSS server) there is nothing to re-discover, so leave it
+            // disarmed — otherwise tickV16Discovery() would fire a second, equally-doomed v16
+            // handshake from the client tick.
+            this.v16DiscoveryArmed = enableV16ServerCompat;
         } catch (Exception e) {
             LSSLogger.debug("Handshake send failed (server likely doesn't have LSS): " + e.getMessage());
         }
-        // Arm the discovery fallback only after a real v18 handshake attempt: if no
-        // SessionConfig arrives, tickV16Discovery() re-handshakes as v16 exactly once.
-        this.v16DiscoveryArmed = enableV16ServerCompat;
     }
 
     /**
@@ -166,6 +170,25 @@ final class ClientSessionGate {
             this.serverEnabled = false;
             return;
         }
+
+        // Downgrade guard. A v16 config arriving once a v18 session already exists on this
+        // connection is never a real legacy server (a server is one dialect or the other) — it
+        // is the reply to a discovery fallback that raced a slow v18 SessionConfig (a healthy
+        // v18 server briefly stalled past V16_DISCOVERY_DELAY_TICKS). Do NOT downgrade the
+        // working v18 session; re-announce v18 so the server sheds the spurious compat session
+        // it just opened and restores full (generation-capable) v18 egress. Bounded: the reply
+        // to this is a v18 config, which never re-enters this branch, so no handshake ping-pong.
+        if (v16 && this.sessionConfigReceived && !this.isV16Server) {
+            LSSLogger.warn("Ignoring a late protocol-16 session config: a v18 session is already "
+                    + "established (a discovery fallback raced a slow v18 reply). Re-announcing v18.");
+            try {
+                this.handshakeSender.accept(LSSConstants.PROTOCOL_VERSION);
+            } catch (Exception e) {
+                LSSLogger.debug("v18 re-assert handshake send failed: " + e.getMessage());
+            }
+            return;
+        }
+
         this.isV16Server = v16;
         if (v16) {
             LSSLogger.info("Connected to a legacy (protocol " + version + ") server — using "
