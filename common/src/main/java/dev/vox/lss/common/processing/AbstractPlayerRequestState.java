@@ -277,6 +277,12 @@ public abstract class AbstractPlayerRequestState<T> {
     private java.util.function.LongSupplier frontierClock = System::nanoTime;
     private long frontierAdvanceMarkNanos;
 
+    /** Package-private test probe: the wired damping interval, so the production default
+     *  (constant × nanos conversion) is pinned and cannot silently die. */
+    long frontierDampNanosPerRingForTest() {
+        return this.frontierDampNanosPerRing;
+    }
+
     /** Test seam (protected — rigs subclass from other packages): outward-damping
      *  interval (0 = instant/off, the pre-damping semantics existing gate pins calibrate
      *  against) + clock, so damping tests are deterministic. */

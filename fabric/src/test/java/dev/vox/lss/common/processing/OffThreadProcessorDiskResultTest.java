@@ -1344,7 +1344,11 @@ class OffThreadProcessorDiskResultTest {
             waitFor(() -> rig.proc.diskSubmits.size() == 1, "cold read");
             rig.inject(ChunkReadResult.notFoundAuthoritative(rig.uuid, 7, 0, DIM, 1L));
             rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
-            waitFor(() -> rig.state.getHeldSyncSlots() == 0, "miss delivered (NOT_GENERATED)");
+            // Barrier on the NOT_GENERATED answer, which is enqueued AFTER the memo-write
+            // point in handleDiskNotFound — a slot-release barrier could read the cache
+            // before a regressed write landed.
+            drainUntil(rig.proc, received(LSSConstants.RESPONSE_NOT_GENERATED,
+                    PositionUtil.packPosition(7, 0)));
             assertEquals(0, rig.proc.timestampCacheForTest().missCount(),
                     "no memo write on a gen-disabled server");
         } finally {
@@ -1559,7 +1563,7 @@ class OffThreadProcessorDiskResultTest {
     void frontierOutwardDampingHoldsJumpsAndFollowsInwardInstantly() {
         var state = new TestState(UUID.randomUUID(), 4, 4);
         long[] clock = {0};
-        state.setFrontierDampingForTest(333_000_000L, () -> clock[0]);
+        state.setFrontierDampingForTest(LSSConstants.FRONTIER_OUTWARD_DAMP_MILLIS_PER_RING * 1_000_000L, () -> clock[0]);
         state.updatePlayerChunk(0, 0);
         state.stampLiveFrontier(4, 0); // first stamp initializes instantly
         assertFalse(state.generationOrderSpreadExceeded(6, 0, 2), "window covers frontier+2");
@@ -1594,6 +1598,41 @@ class OffThreadProcessorDiskResultTest {
         state.stampLiveFrontier(18, 0);
         assertTrue(state.generationOrderSpreadExceeded(18, 0, 2),
                 "production default must hold an instant outward jump");
+        // Pin the wired interval exactly: 333 ns instead of 333 ms (a dropped *1_000_000L)
+        // would be de-facto instant, and a changed constant re-derives the rate on purpose.
+        assertEquals(333, LSSConstants.FRONTIER_OUTWARD_DAMP_MILLIS_PER_RING,
+                "rate drift must be a deliberate, test-touching change");
+        assertEquals(LSSConstants.FRONTIER_OUTWARD_DAMP_MILLIS_PER_RING * 1_000_000L,
+                state.frontierDampNanosPerRingForTest(),
+                "the default interval is the constant converted to NANOS");
+    }
+
+    @Test
+    void dampingBudgetAccumulatesAcrossHeldStampsAndResetsOnInwardPulls() {
+        // The mark bookkeeping IS the damper: held sub-interval stamps must NOT reset the
+        // budget mark (the router re-stamps at ~20 Hz — a reset per held stamp freezes the
+        // reference forever and stalls stationary backfill at initial-frontier+2), while
+        // an inward pull MUST reset it (stale banked budget would let a far observation
+        // moments after a mint jump instantly — the exact oscillation the damper stops).
+        var state = new TestState(UUID.randomUUID(), 4, 4);
+        long[] clock = {0};
+        long interval = LSSConstants.FRONTIER_OUTWARD_DAMP_MILLIS_PER_RING * 1_000_000L;
+        state.setFrontierDampingForTest(interval, () -> clock[0]);
+        state.updatePlayerChunk(0, 0);
+        state.stampLiveFrontier(4, 0); // init: mark = 0
+
+        clock[0] = interval / 3;       state.stampLiveFrontier(18, 0); // held, mark kept
+        clock[0] = (interval * 3) / 4; state.stampLiveFrontier(18, 0); // held, mark kept
+        assertTrue(state.generationOrderSpreadExceeded(7, 0, 2), "still 4: 7 > 4+2");
+        clock[0] = interval + interval / 5; state.stampLiveFrontier(18, 0); // one interval banked
+        assertFalse(state.generationOrderSpreadExceeded(7, 0, 2),
+                "held stamps accumulated budget: climbed to exactly 5");
+        assertTrue(state.generationOrderSpreadExceeded(8, 0, 2), "…and no further");
+
+        clock[0] = 15 * interval;               state.stampLiveFrontier(3, 0); // inward: reset
+        clock[0] = 15 * interval + interval / 6; state.stampLiveFrontier(18, 0);
+        assertTrue(state.generationOrderSpreadExceeded(6, 0, 2),
+                "the inward pull discarded the banked budget: held at 3, 6 > 3+2");
     }
 
     @Test
@@ -1617,7 +1656,7 @@ class OffThreadProcessorDiskResultTest {
         // once the reference has had stationary time to climb.
         var rig = new Rig(true, 8, 4, 30);
         long[] clock = {0};
-        rig.state.setFrontierDampingForTest(333_000_000L, () -> clock[0]);
+        rig.state.setFrontierDampingForTest(LSSConstants.FRONTIER_OUTWARD_DAMP_MILLIS_PER_RING * 1_000_000L, () -> clock[0]);
         try {
             rig.state.updatePlayerChunk(0, 0);
             declare(rig, rig.state, new IncomingRequest(4, 0, -1));

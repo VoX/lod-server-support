@@ -93,7 +93,8 @@ public final class DiagnosticsFormatter {
         // DiskReader
         lines.add("DiskReader: " + d.diskReaderDiagnostics);
 
-        // Generation. order_gated = misses refused by the order-spread gate;
+        // Generation. order_gated = generation-ordering refusals, aggregated across the
+        // nearer-read hold, the cohort span, and the (damped) frontier spread gate;
         // inversions = completions that finished while a NEARER ticket was outstanding
         // (the platform scheduler's far-before-near signature, e.g. C2ME).
         if (d.generationEnabled) {
