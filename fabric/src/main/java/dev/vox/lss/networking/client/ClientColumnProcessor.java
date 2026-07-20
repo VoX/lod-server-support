@@ -2,6 +2,7 @@ package dev.vox.lss.networking.client;
 
 import dev.vox.lss.api.LSSApi;
 import dev.vox.lss.api.VoxelColumnData;
+import dev.vox.lss.common.Brand;
 import dev.vox.lss.common.LSSLogger;
 import dev.vox.lss.common.PositionUtil;
 import dev.vox.lss.config.LSSClientConfig;
@@ -77,7 +78,7 @@ class ClientColumnProcessor {
     // epoch (bumped on disconnect) makes any in-flight drain self-terminate instead of
     // dispatching a stale session's payloads — no executor teardown/recreation needed.
     private final ExecutorService executor = Executors.newSingleThreadExecutor(r -> {
-        var t = new Thread(r, "LSS-ColumnProcessor");
+        var t = new Thread(r, Brand.shortName() + "-ColumnProcessor");
         t.setDaemon(true);
         return t;
     });

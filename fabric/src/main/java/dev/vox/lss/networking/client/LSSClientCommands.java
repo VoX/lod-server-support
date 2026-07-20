@@ -1,6 +1,7 @@
 package dev.vox.lss.networking.client;
 
 import com.mojang.brigadier.Command;
+import dev.vox.lss.common.Brand;
 import dev.vox.lss.common.DiagnosticsFormatter;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommands;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
@@ -11,18 +12,20 @@ import net.minecraft.network.chat.Component;
 public class LSSClientCommands {
     public static void init() {
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> {
-            dispatcher.register(ClientCommands.literal("lss")
+            // Command literal is branded (lss / vss); it is a LOCAL client command and
+            // never crosses the wire, so it does not affect LSS<->VSS compatibility.
+            dispatcher.register(ClientCommands.literal(Brand.clientCommand())
                     .then(ClientCommands.literal("clearcache")
                             .executes(context -> {
                                 var manager = LSSClientNetworking.getRequestManager();
                                 if (manager != null) {
                                     manager.flushCache();
                                     context.getSource().sendFeedback(Component.literal(
-                                            "LSS column cache cleared for current server. Chunks will be re-requested."));
+                                            Brand.shortName() + " column cache cleared for current server. Chunks will be re-requested."));
                                 } else {
                                     ColumnCacheStore.clearAll();
                                     context.getSource().sendFeedback(Component.literal(
-                                            "LSS column cache cleared for all servers."));
+                                            Brand.shortName() + " column cache cleared for all servers."));
                                 }
                                 return Command.SINGLE_SUCCESS;
                             })
@@ -38,13 +41,13 @@ public class LSSClientCommands {
                                 var result = ClientTraceLog.toggle();
                                 if (result.path() != null) {
                                     context.getSource().sendFeedback(Component.literal(
-                                            "LSS trace STARTED: " + result.path()).withStyle(ChatFormatting.GOLD));
+                                            Brand.shortName() + " trace STARTED: " + result.path()).withStyle(ChatFormatting.GOLD));
                                 } else if (result.failed()) {
                                     context.getSource().sendFeedback(Component.literal(
-                                            "LSS trace FAILED to start — see the log.").withStyle(ChatFormatting.RED));
+                                            Brand.shortName() + " trace FAILED to start — see the log.").withStyle(ChatFormatting.RED));
                                 } else {
                                     context.getSource().sendFeedback(Component.literal(
-                                            "LSS trace stopped.").withStyle(ChatFormatting.GOLD));
+                                            Brand.shortName() + " trace stopped.").withStyle(ChatFormatting.GOLD));
                                 }
                                 return Command.SINGLE_SUCCESS;
                             })
@@ -56,11 +59,11 @@ public class LSSClientCommands {
     private static void showDiagnostics(FabricClientCommandSource source) {
         var manager = LSSClientNetworking.getRequestManager();
         if (manager == null || !LSSClientNetworking.isServerEnabled()) {
-            source.sendFeedback(Component.literal("LSS is not active on this server").withStyle(ChatFormatting.RED));
+            source.sendFeedback(Component.literal(Brand.shortName() + " is not active on this server").withStyle(ChatFormatting.RED));
             return;
         }
 
-        source.sendFeedback(Component.literal("=== LSS Client Diagnostics ===").withStyle(ChatFormatting.GOLD));
+        source.sendFeedback(Component.literal("=== " + Brand.shortName() + " Client Diagnostics ===").withStyle(ChatFormatting.GOLD));
 
         // Connection line
         int serverDist = LSSClientNetworking.getServerLodDistance();

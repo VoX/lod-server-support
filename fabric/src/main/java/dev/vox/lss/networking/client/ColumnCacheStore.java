@@ -1,5 +1,6 @@
 package dev.vox.lss.networking.client;
 
+import dev.vox.lss.common.Brand;
 import dev.vox.lss.common.LSSLogger;
 import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
 import net.fabricmc.loader.api.FabricLoader;
@@ -29,7 +30,7 @@ public class ColumnCacheStore {
     // Daemon thread — saves use atomic rename so JVM shutdown mid-write won't corrupt,
     // but the save may be lost. Acceptable for a rebuildable client cache.
     private static final ExecutorService IO_EXECUTOR = Executors.newSingleThreadExecutor(r -> {
-        Thread t = new Thread(r, "LSS-CacheIO");
+        Thread t = new Thread(r, Brand.shortName() + "-CacheIO");
         t.setDaemon(true);
         return t;
     });

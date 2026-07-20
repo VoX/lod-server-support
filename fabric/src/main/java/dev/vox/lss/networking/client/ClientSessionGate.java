@@ -1,5 +1,6 @@
 package dev.vox.lss.networking.client;
 
+import dev.vox.lss.common.Brand;
 import dev.vox.lss.common.LSSConstants;
 import dev.vox.lss.common.LSSLogger;
 import dev.vox.lss.networking.payloads.SessionConfigS2CPayload;
@@ -105,7 +106,7 @@ final class ClientSessionGate {
                 + ", enabled: " + payload.enabled() + ")");
 
         if (payload.protocolVersion() != LSSConstants.PROTOCOL_VERSION) {
-            LSSLogger.warn("Server has incompatible LSS protocol version " + payload.protocolVersion()
+            LSSLogger.warn("Server has incompatible " + Brand.shortName() + " protocol version " + payload.protocolVersion()
                     + " (client: " + LSSConstants.PROTOCOL_VERSION + "), LOD distribution disabled");
             this.serverEnabled = false;
             return;

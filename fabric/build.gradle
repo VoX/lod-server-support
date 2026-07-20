@@ -200,6 +200,16 @@ tasks.register('voxyJar') {
                         zos.putNextEntry(ne)
                         zos.write(bytes)
                         zos.closeEntry()
+                    } else if (e.name == 'lss-brand.properties') {
+                        // Runtime display branding (Brand.java reads this at startup). Rewrite
+                        // the DISPLAY values only — the mod id, channels, protocol and payloads
+                        // are untouched, so LSS and VSS stay wire-compatible. Command literals
+                        // here are LOCAL (client /vss, server /vsslod), never on the wire.
+                        def props = 'shortName=VSS\ndisplayName=Voxy Server Side\nclientCommand=vss\nserverCommand=vsslod\n'
+                        def ne = new ZipEntry('lss-brand.properties')
+                        zos.putNextEntry(ne)
+                        zos.write(props.getBytes('UTF-8'))
+                        zos.closeEntry()
                     } else {
                         // Byte-preserving copy: keep the original compression method, and for
                         // STORED entries (e.g. the nested common jar) carry size/crc so the

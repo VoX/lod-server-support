@@ -2,6 +2,7 @@ package dev.vox.lss.networking.server;
 
 import dev.vox.lss.common.HandshakeGate;
 import dev.vox.lss.common.LSSConstants;
+import dev.vox.lss.common.Brand;
 import dev.vox.lss.common.LSSLogger;
 import dev.vox.lss.config.LSSServerConfig;
 import dev.vox.lss.networking.payloads.BatchChunkRequestC2SPayload;
@@ -48,7 +49,7 @@ public class LSSServerNetworking {
 
     public static synchronized void startServiceForLan(MinecraftServer server) {
         if (requestService != null) return;
-        LSSLogger.info("Starting LSS LOD request processing service (LAN server)");
+        LSSLogger.info(Brand.shortName() + " LOD request processing service starting (LAN server)");
         requestService = new RequestProcessingService(server);
         LSSClientNetworking.triggerHostHandshake();
     }
@@ -70,7 +71,7 @@ public class LSSServerNetworking {
     public static void handleHandshake(HandshakeC2SPayload payload, ServerPlayer player,
                                        RequestProcessingService service,
                                        SessionConfigResponder responder) {
-        LSSLogger.info("LSS handshake received from " + player.getName().getString()
+        LSSLogger.info(Brand.shortName() + " handshake received from " + player.getName().getString()
                 + " (protocol v" + payload.protocolVersion()
                 + ", capabilities=" + payload.capabilities() + ")");
 
@@ -82,7 +83,7 @@ public class LSSServerNetworking {
         if (!decision.sendSessionConfig()) {
             // See HandshakeGate.Outcome.VERSION_MISMATCH: replying would kick the player.
             LSSLogger.warn("Player " + player.getName().getString()
-                    + " has incompatible LSS protocol version " + payload.protocolVersion()
+                    + " has incompatible " + Brand.shortName() + " protocol version " + payload.protocolVersion()
                     + " (server: " + LSSConstants.PROTOCOL_VERSION + "), skipping LOD distribution");
             return;
         }
@@ -124,7 +125,7 @@ public class LSSServerNetworking {
             }
             service.registerPlayer(player, payload.capabilities());
             LSSLogger.info("Player " + player.getName().getString()
-                    + " registered for LSS LOD request processing (caps="
+                    + " registered for " + Brand.shortName() + " LOD request processing (caps="
                     + payload.capabilities() + (v16 ? ", v16-compat" : "") + ")");
         }
     }
@@ -148,17 +149,17 @@ public class LSSServerNetworking {
 
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
             if (!server.isDedicatedServer() && !Boolean.getBoolean("lss.test.integratedServer")) {
-                LSSLogger.info("LSS LOD request processing deferred until LAN");
+                LSSLogger.info(Brand.shortName() + " LOD request processing deferred until LAN");
                 return;
             }
-            LSSLogger.info("Starting LSS LOD request processing service");
+            LSSLogger.info("Starting " + Brand.shortName() + " LOD request processing service");
             requestService = new RequestProcessingService(server);
         });
 
         ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
             var service = requestService;
             if (service != null) {
-                LSSLogger.info("Stopping LSS LOD request processing service");
+                LSSLogger.info("Stopping " + Brand.shortName() + " LOD request processing service");
                 service.shutdown();
                 requestService = null;
             }

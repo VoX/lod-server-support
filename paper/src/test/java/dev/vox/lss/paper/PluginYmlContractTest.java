@@ -71,7 +71,8 @@ class PluginYmlContractTest {
     @Test
     void lsslodCommandIsDeclaredBehindTheAdminPermission() {
         assertNotNull(yml.getConfigurationSection("commands/lsslod"),
-                "PaperCommands is wired to getCommand(\"lsslod\"); without this section the command vanishes");
+                "registerCommands() reads the declared command name from plugin.yml; without this "
+                        + "section the command vanishes (the VSS repackage rewrites the key to vsslod)");
         assertEquals("lss.admin", yml.getString("commands/lsslod/permission"));
     }
 

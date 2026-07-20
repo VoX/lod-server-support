@@ -1,6 +1,7 @@
 package dev.vox.lss.common.processing;
 
 import dev.vox.lss.common.LSSConstants;
+import dev.vox.lss.common.Brand;
 import dev.vox.lss.common.LSSLogger;
 import dev.vox.lss.common.LogThrottle;
 
@@ -68,7 +69,7 @@ public abstract class AbstractChunkDiskReader {
         this.workQueue = workQueue;
         this.executor = new ThreadPoolExecutor(threadCount, threadCount, 0L, TimeUnit.MILLISECONDS,
                 workQueue, r -> {
-            var thread = new Thread(r, "LSS Disk Reader #" + THREAD_COUNTER.incrementAndGet());
+            var thread = new Thread(r, Brand.shortName() + " Disk Reader #" + THREAD_COUNTER.incrementAndGet());
             thread.setDaemon(true);
             thread.setPriority(Thread.MIN_PRIORITY);
             return thread;

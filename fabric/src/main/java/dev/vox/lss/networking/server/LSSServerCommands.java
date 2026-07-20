@@ -1,5 +1,6 @@
 package dev.vox.lss.networking.server;
 
+import dev.vox.lss.common.Brand;
 import dev.vox.lss.common.DiagnosticsFormatter;
 import dev.vox.lss.config.LSSServerConfig;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
@@ -13,7 +14,7 @@ class LSSServerCommands {
     public static void init() {
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
             dispatcher.register(
-                    Commands.literal("lsslod")
+                    Commands.literal(Brand.serverCommand())
                             .requires(source -> source.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER))
                             .then(Commands.literal("stats")
                                     .executes(ctx -> showStats(ctx.getSource()))
@@ -28,17 +29,17 @@ class LSSServerCommands {
     private static int showStats(CommandSourceStack source) {
         var service = LSSServerNetworking.getRequestService();
         if (service == null) {
-            source.sendFailure(Component.literal("LSS LOD request processing is not active"));
+            source.sendFailure(Component.literal(Brand.shortName() + " LOD request processing is not active"));
             return 0;
         }
 
         var players = service.getPlayers();
         if (players.isEmpty()) {
-            source.sendSuccess(() -> Component.literal("No players connected with LSS"), false);
+            source.sendSuccess(() -> Component.literal("No players connected with " + Brand.shortName()), false);
             return 1;
         }
 
-        source.sendSuccess(() -> Component.literal("=== LSS LOD Request Stats ==="), false);
+        source.sendSuccess(() -> Component.literal("=== " + Brand.shortName() + " LOD Request Stats ==="), false);
         for (var state : players.values()) {
             String line = DiagnosticsFormatter.formatStatsLine(state);
             source.sendSuccess(() -> Component.literal(line), false);
@@ -49,7 +50,7 @@ class LSSServerCommands {
     private static int showDiagnostics(CommandSourceStack source) {
         var service = LSSServerNetworking.getRequestService();
         if (service == null) {
-            source.sendFailure(Component.literal("LSS LOD request processing is not active"));
+            source.sendFailure(Component.literal(Brand.shortName() + " LOD request processing is not active"));
             return 0;
         }
 

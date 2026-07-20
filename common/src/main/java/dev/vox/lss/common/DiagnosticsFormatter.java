@@ -61,7 +61,7 @@ public final class DiagnosticsFormatter {
 
     public static List<String> formatDiagnostics(DiagData d) {
         var lines = new ArrayList<String>();
-        lines.add("=== LSS LOD Diagnostics ===");
+        lines.add("=== " + Brand.shortName() + " LOD Diagnostics ===");
 
         // Config
         lines.add(String.format(

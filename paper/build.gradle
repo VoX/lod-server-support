@@ -140,18 +140,34 @@ tasks.register('voxyJar') {
                     def e = entries.nextElement()
                     if (e.name == 'plugin.yml') {
                         def text = zf.getInputStream(e).getText('UTF-8')
-                        // Replace ONLY the top-level (column-0) description and website lines;
-                        // the indented command/permission descriptions are left untouched.
-                        // name/main/version/api-version/commands/permissions are all preserved.
-                        // release_check.py's pair check pins this exact scope (both lines must
-                        // differ, nothing else may).
+                        // Rewrite the top-level description/website AND the LOCAL command +
+                        // permission branding. name/main/version/api-version and the
+                        // folia-supported ABSENCE are all preserved — those are the
+                        // interchangeability/identity contract. The command name and
+                        // permission node are LOCAL (an admin types /vsslod on their own
+                        // server), never on the wire, so LSS and VSS stay wire-compatible.
+                        // release_check.py's pair check pins this exact scope.
                         text = text.replaceFirst(/(?m)^description:.*$/,
                                 'description: Server-side backend for Voxy multiplayer LOD rendering. Identical to LOD Server Support (same plugin, second distribution channel) — fully interchangeable.')
                         text = text.replaceFirst(/(?m)^website:.*$/,
                                 'website: https://modrinth.com/plugin/voxy-server-side')
+                        // Command key + usage: lsslod -> vsslod (both occurrences).
+                        text = text.replace('lsslod', 'vsslod')
+                        // Command + permission descriptions and the permission node.
+                        text = text.replace('LOD Server Support admin commands', 'Voxy Server Side admin commands')
+                        text = text.replace('Access to LSS admin commands', 'Access to VSS admin commands')
+                        text = text.replace('lss.admin', 'vss.admin')
                         def ne = new ZipEntry('plugin.yml')
                         zos.putNextEntry(ne)
                         zos.write(text.getBytes('UTF-8'))
+                        zos.closeEntry()
+                    } else if (e.name == 'lss-brand.properties') {
+                        // Runtime display branding (Brand.java). Display values only — the
+                        // wire surface (channels, protocol, payloads) is untouched.
+                        def props = 'shortName=VSS\ndisplayName=Voxy Server Side\nclientCommand=vss\nserverCommand=vsslod\n'
+                        def ne = new ZipEntry('lss-brand.properties')
+                        zos.putNextEntry(ne)
+                        zos.write(props.getBytes('UTF-8'))
                         zos.closeEntry()
                     } else {
                         def ne = new ZipEntry(e.name)

@@ -1,5 +1,6 @@
 package dev.vox.lss.paper;
 
+import dev.vox.lss.common.Brand;
 import dev.vox.lss.common.DiagnosticsFormatter;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
@@ -39,20 +40,20 @@ public class PaperCommands implements CommandExecutor, TabCompleter {
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (args.length == 0) {
-            sender.sendMessage("Usage: /lsslod <stats|diag>");
+            sender.sendMessage("Usage: /" + label + " <stats|diag>");
             return true;
         }
 
         var service = this.serviceSupplier.get();
         if (service == null) {
-            sender.sendMessage("LSS LOD request processing is not active");
+            sender.sendMessage(Brand.shortName() + " LOD request processing is not active");
             return true;
         }
 
         switch (args[0].toLowerCase()) {
             case "stats" -> showStats(sender, service);
             case "diag" -> showDiagnostics(sender, service);
-            default -> sender.sendMessage("Usage: /lsslod <stats|diag>");
+            default -> sender.sendMessage("Usage: /" + label + " <stats|diag>");
         }
 
         return true;
@@ -61,11 +62,11 @@ public class PaperCommands implements CommandExecutor, TabCompleter {
     private void showStats(CommandSender sender, PaperRequestProcessingService service) {
         var players = service.getPlayers();
         if (players.isEmpty()) {
-            sender.sendMessage("No players connected with LSS");
+            sender.sendMessage("No players connected with " + Brand.shortName());
             return;
         }
 
-        sender.sendMessage("=== LSS LOD Request Stats ===");
+        sender.sendMessage("=== " + Brand.shortName() + " LOD Request Stats ===");
         for (var state : players.values()) {
             sender.sendMessage(DiagnosticsFormatter.formatStatsLine(state));
         }

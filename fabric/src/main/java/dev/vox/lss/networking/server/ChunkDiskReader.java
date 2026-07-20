@@ -1,5 +1,6 @@
 package dev.vox.lss.networking.server;
 
+import dev.vox.lss.common.Brand;
 import dev.vox.lss.common.LSSLogger;
 import dev.vox.lss.common.processing.AbstractChunkDiskReader;
 import dev.vox.lss.mixin.AccessorIOWorker;
@@ -136,7 +137,7 @@ public class ChunkDiskReader extends AbstractChunkDiskReader {
     void warnBackgroundUnavailable() {
         LSSLogger.warn("Background-priority disk reads unavailable — vanilla's IOWorker executor is"
                 + " absent, which a chunk-IO-overhaul mod (e.g. C2ME) causes by replacing vanilla"
-                + " chunk IO. LSS switched to adaptive read throttling so LOD reads still yield to"
+                + " chunk IO. " + Brand.shortName() + " switched to adaptive read throttling so LOD reads still yield to"
                 + " gameplay. Set useBackgroundReadPriority=false to disable read protection entirely.");
     }
 

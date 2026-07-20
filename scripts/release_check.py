@@ -26,6 +26,7 @@ Exit nonzero if any violation is found. Stdlib only.
 
 import argparse
 import fnmatch
+import hashlib
 import io
 import json
 import os
@@ -93,6 +94,11 @@ def _scan_forbidden(jar, base, prefixes, problems):
 def _read(jar, entry):
     with zipfile.ZipFile(jar) as z:
         return z.read(entry).decode("utf-8", "replace")
+
+
+def _read_raw(jar, entry):
+    with zipfile.ZipFile(jar) as z:
+        return z.read(entry)
 
 
 def _manifest(jar):
@@ -224,47 +230,107 @@ def check_voxy_pair_fabric(lss_jar, voxy_jar, problems):
         problems.append(f"{vbase}: fabric.mod.json icon {icon!r} is not an entry in the jar")
 
 
-# plugin.yml top-level lines the VSS rebrand rewrites — every one of them MUST differ from
-# the LSS jar (each rewrite is a replaceFirst that fails SILENT if the line shape changes),
-# and no other line may.
-VSS_PAPER_REWRITTEN_LINES = ("description:", "website:")
+# plugin.yml lines that are the identity + wire contract: the VSS rebrand must leave every
+# one of them byte-identical to the LSS jar (rebranding them would break interchangeability,
+# the config-folder name, or — for a client on the other brand — nothing on the wire, but the
+# plugin identity a server operator depends on). `main:` also pins the package/class names.
+VSS_PAPER_IDENTITY_PREFIXES = ("name:", "main:", "api-version:", "folia-supported:")
 
 
 def check_voxy_pair_paper(lss_jar, voxy_jar, problems):
-    """Line-diff of the two built plugin.yml files (stdlib-only — no YAML parser): the
-    differing lines must be exactly the top-level `description:` and `website:` lines
-    (both present, both actually different — catching a silent replaceFirst no-op on
-    either), and nothing else may differ."""
+    """The VSS Paper jar rebrands plugin.yml's DISPLAY + LOCAL-command surface only. Line
+    count must be unchanged (every rewrite is in-place). The identity/wire lines
+    (name/main/api-version/folia) must be byte-identical. And the rebrand must actually have
+    happened: the VSS jar carries vsslod / vss.admin / the Voxy description and NONE of the
+    LSS tokens; the LSS jar carries the LSS tokens. The command name + permission node are
+    LOCAL (never on the wire), so this rebrand does not affect LSS<->VSS compatibility."""
     vbase = os.path.basename(voxy_jar)
     try:
-        llines = _read(lss_jar, "plugin.yml").splitlines()
-        vlines = _read(voxy_jar, "plugin.yml").splitlines()
+        ltext = _read(lss_jar, "plugin.yml")
+        vtext = _read(voxy_jar, "plugin.yml")
     except KeyError:
         return  # per-jar checks already flag a missing plugin.yml
+    llines, vlines = ltext.splitlines(), vtext.splitlines()
     if len(llines) != len(vlines):
         problems.append(f"{vbase}: plugin.yml line count differs from the LSS jar "
-                        f"({len(llines)} vs {len(vlines)}) — the rebrand must only rewrite "
-                        f"the top-level {VSS_PAPER_REWRITTEN_LINES} lines")
+                        f"({len(llines)} vs {len(vlines)}) — the rebrand must rewrite lines "
+                        "in place, never add or remove them")
         return
-    diffs = [i for i, (a, b) in enumerate(zip(llines, vlines)) if a != b]
-    if not diffs:
-        problems.append(f"{vbase}: plugin.yml is byte-identical to the LSS jar — the "
-                        "rebrand rewrites silently no-opped (not rebranded)")
+    if ltext == vtext:
+        problems.append(f"{vbase}: plugin.yml is byte-identical to the LSS jar — the rebrand "
+                        "silently no-opped (not rebranded)")
         return
-    diffed_prefixes = set()
-    for i in diffs:
-        prefix = next((p for p in VSS_PAPER_REWRITTEN_LINES
-                       if llines[i].startswith(p) and vlines[i].startswith(p)), None)
-        if prefix is None:
-            problems.append(f"{vbase}: plugin.yml differs from the LSS jar beyond the "
-                            f"top-level {VSS_PAPER_REWRITTEN_LINES} lines (line index {i}) "
-                            "— the VSS rebrand may not touch anything else")
-            return
-        diffed_prefixes.add(prefix)
-    for prefix in VSS_PAPER_REWRITTEN_LINES:
-        if prefix not in diffed_prefixes:
-            problems.append(f"{vbase}: plugin.yml {prefix!r} line is identical to the LSS "
-                            "jar — that rewrite silently no-opped (not rebranded)")
+    # Identity/wire lines must be untouched.
+    for i, (a, b) in enumerate(zip(llines, vlines)):
+        if any(a.lstrip().startswith(p) for p in VSS_PAPER_IDENTITY_PREFIXES) and a != b:
+            problems.append(f"{vbase}: plugin.yml identity line {a.strip()!r} was rebranded "
+                            "— name/main/api-version/folia are the identity + wire contract "
+                            "and must stay verbatim")
+    # The rebrand must have swapped every LSS token for its VSS counterpart.
+    for tok in ("lsslod", "lss.admin", "LOD Server Support admin", "Access to LSS admin"):
+        if tok not in ltext:
+            problems.append(f"{vbase}: LSS plugin.yml is missing expected token {tok!r} "
+                            "(source shape changed — the VSS rewrite may silently no-op)")
+        if tok in vtext:
+            problems.append(f"{vbase}: VSS plugin.yml still contains LSS token {tok!r} "
+                            "— the rebrand rewrite no-opped")
+    for tok in ("vsslod", "vss.admin", "Voxy Server Side"):
+        if tok not in vtext:
+            problems.append(f"{vbase}: VSS plugin.yml is missing expected VSS token {tok!r} "
+                            "— the rebrand did not fully apply")
+
+
+# ---------------------------------------------------------------- brand.properties + wire
+
+# Expected runtime-branding values per jar brand. The VSS repackage rewrites lss-brand.properties
+# (the ONLY thing Brand.java reads); everything it changes is display + LOCAL command text.
+_BRAND_LSS = {"shortName": "LSS", "displayName": "LOD Server Support",
+              "clientCommand": "lss", "serverCommand": "lsslod"}
+_BRAND_VSS = {"shortName": "VSS", "displayName": "Voxy Server Side",
+              "clientCommand": "vss", "serverCommand": "vsslod"}
+
+
+def _brand_props(jar):
+    props = {}
+    for line in _read(jar, "lss-brand.properties").splitlines():
+        line = line.strip()
+        if line and not line.startswith("#") and "=" in line:
+            k, v = line.split("=", 1)
+            props[k.strip()] = v.strip()
+    return props
+
+
+def check_brand_properties(jar, expected, problems):
+    """lss-brand.properties (both platforms) must carry exactly this brand's values — a
+    mismatch means the repackage's rewrite drifted or no-opped."""
+    base = os.path.basename(jar)
+    try:
+        props = _brand_props(jar)
+    except KeyError:
+        problems.append(f"{base}: no lss-brand.properties (Brand.java would fall back to LSS defaults)")
+        return
+    for key, want in expected.items():
+        if props.get(key) != want:
+            problems.append(f"{base}: lss-brand.properties {key}={props.get(key)!r}, expected {want!r}")
+
+
+def check_wire_identity_fabric(lss_jar, voxy_jar, problems):
+    """The strongest LSS<->VSS wire-compat pin: the nested common jar (which holds every
+    channel id, the protocol version, and all payload codecs) must be byte-for-byte identical
+    between the LSS and VSS Fabric jars. If they match, the two brands are provably wire-equal."""
+    vbase = os.path.basename(voxy_jar)
+    lname = next((n for n in _names(lss_jar) if re.search(r"META-INF/jars/common-.*\.jar$", n)), None)
+    vname = next((n for n in _names(voxy_jar) if re.search(r"META-INF/jars/common-.*\.jar$", n)), None)
+    if lname is None or vname is None:
+        problems.append(f"{vbase}: cannot locate the nested common jar in the LSS/VSS pair "
+                        "— wire-identity unverifiable")
+        return
+    lsha = hashlib.sha256(_read_raw(lss_jar, lname)).hexdigest()
+    vsha = hashlib.sha256(_read_raw(voxy_jar, vname)).hexdigest()
+    if lsha != vsha:
+        problems.append(f"{vbase}: nested common jar differs from the LSS jar (sha {vsha[:12]} "
+                        f"vs {lsha[:12]}) — branding must NEVER touch common (it carries the "
+                        "wire: channels, protocol, payloads); LSS<->VSS compatibility is broken")
 
 
 def _voxy_counterpart(voxy_jar, lss_jars, voxy_prefix, lss_prefix):
@@ -335,18 +401,24 @@ def discover(problems, expected_version=None, root=ROOT):
     # plus a descriptor pair-diff against the LSS jar they were repackaged from (only the
     # branding fields may differ — and must). A voxy jar without its LSS counterpart cannot
     # be pair-verified and is a failure: the repackage task guarantees the source jar exists.
+    # LSS jars must carry the LSS branding values (a rewrite regression could flip them).
+    for jar in fab + pap:
+        check_brand_properties(jar, _BRAND_LSS, problems)
     for jar in vfab:
         check_fabric_jar(jar, problems)
         check_voxy_fabric_identity(jar, problems)
+        check_brand_properties(jar, _BRAND_VSS, problems)
         src = _voxy_counterpart(jar, fab, "voxy-server-side-fabric", "lod-server-support-fabric")
         if src is None:
             problems.append(f"{os.path.basename(jar)}: no matching lod-server-support-fabric "
                             "jar to pair-verify against (stale voxy jar?)")
         else:
             check_voxy_pair_fabric(src, jar, problems)
+            check_wire_identity_fabric(src, jar, problems)
     for jar in vpap:
         check_paper_jar(jar, problems)
         check_voxy_paper_identity(jar, problems)
+        check_brand_properties(jar, _BRAND_VSS, problems)
         src = _voxy_counterpart(jar, pap, "voxy-server-side-paper", "lod-server-support-paper")
         if src is None:
             problems.append(f"{os.path.basename(jar)}: no matching lod-server-support-paper "
@@ -706,13 +778,26 @@ def _selftest():
               f"missing icon entry not caught: {p}")
 
         LSS_PLUGIN_YML = ("name: LodServerSupport\nversion: '0.7.0'\n"
+                          "main: dev.vox.lss.paper.LSSPaperPlugin\n"
+                          "api-version: '26.2'\n"
                           "description: LSS plugin.\n"
                           "website: https://modrinth.com/plugin/lod-server-support\n"
-                          "commands:\n  lsslod:\n    description: cmd\n")
-        VSS_PLUGIN_YML = LSS_PLUGIN_YML.replace(
-            "description: LSS plugin.", "description: VSS plugin.", 1).replace(
-            "website: https://modrinth.com/plugin/lod-server-support",
-            "website: https://modrinth.com/plugin/voxy-server-side", 1)
+                          "commands:\n  lsslod:\n"
+                          "    description: LOD Server Support admin commands\n"
+                          "    usage: /lsslod <stats|diag>\n"
+                          "    permission: lss.admin\n"
+                          "permissions:\n  lss.admin:\n"
+                          "    description: Access to LSS admin commands\n"
+                          "    default: op\n")
+        # Mirror voxyJar's exact rewrites.
+        VSS_PLUGIN_YML = (LSS_PLUGIN_YML
+            .replace("description: LSS plugin.", "description: VSS plugin.", 1)
+            .replace("website: https://modrinth.com/plugin/lod-server-support",
+                     "website: https://modrinth.com/plugin/voxy-server-side", 1)
+            .replace("lsslod", "vsslod")
+            .replace("LOD Server Support admin commands", "Voxy Server Side admin commands")
+            .replace("Access to LSS admin commands", "Access to VSS admin commands")
+            .replace("lss.admin", "vss.admin"))
         pair_lss_pap = os.path.join(td, "pair-lss-paper.jar")
         _make_jar(pair_lss_pap, {"plugin.yml": LSS_PLUGIN_YML})
         pair_ok_vpap = os.path.join(td, "pair-ok-voxy-paper.jar")
@@ -729,23 +814,67 @@ def _selftest():
         check(any("silently no-opped" in m for m in p),
               f"paper no-op rewrite not caught: {p}")
 
-        # ONE rewrite no-opping (website unchanged) MUST fail — replaceFirst is silent
-        pair_noweb_vpap = os.path.join(td, "pair-noweb-voxy-paper.jar")
-        _make_jar(pair_noweb_vpap, {"plugin.yml": LSS_PLUGIN_YML.replace(
-            "description: LSS plugin.", "description: VSS plugin.", 1)})
+        # an incomplete rebrand (command key left as lsslod) MUST fail both directions
+        pair_partial_vpap = os.path.join(td, "pair-partial-voxy-paper.jar")
+        _make_jar(pair_partial_vpap, {"plugin.yml": VSS_PLUGIN_YML.replace("vsslod", "lsslod")})
         p = []
-        check_voxy_pair_paper(pair_lss_pap, pair_noweb_vpap, p)
-        check(any("'website:' line is identical" in m for m in p),
-              f"paper website no-op not caught: {p}")
+        check_voxy_pair_paper(pair_lss_pap, pair_partial_vpap, p)
+        check(any("still contains LSS token 'lsslod'" in m for m in p)
+              and any("missing expected VSS token 'vsslod'" in m for m in p),
+              f"paper partial rebrand not caught: {p}")
 
-        # a rewrite that touched anything beyond the description/website lines MUST fail
-        pair_wide_vpap = os.path.join(td, "pair-wide-voxy-paper.jar")
-        _make_jar(pair_wide_vpap, {"plugin.yml": VSS_PLUGIN_YML.replace(
-            "    description: cmd", "    description: voxy cmd", 1)})
+        # rebranding an IDENTITY line (plugin name / config-folder name) MUST fail
+        pair_idname_vpap = os.path.join(td, "pair-idname-voxy-paper.jar")
+        _make_jar(pair_idname_vpap, {"plugin.yml": VSS_PLUGIN_YML.replace(
+            "name: LodServerSupport", "name: VoxyServerSide", 1)})
         p = []
-        check_voxy_pair_paper(pair_lss_pap, pair_wide_vpap, p)
-        check(any("may not touch anything else" in m for m in p),
-              f"paper over-wide rewrite not caught: {p}")
+        check_voxy_pair_paper(pair_lss_pap, pair_idname_vpap, p)
+        check(any("identity line" in m for m in p),
+              f"paper identity-line rebrand not caught: {p}")
+
+        # ---- brand.properties (both platforms) ----
+        BRAND_LSS_TXT = ("shortName=LSS\ndisplayName=LOD Server Support\n"
+                         "clientCommand=lss\nserverCommand=lsslod\n")
+        BRAND_VSS_TXT = ("shortName=VSS\ndisplayName=Voxy Server Side\n"
+                         "clientCommand=vss\nserverCommand=vsslod\n")
+        brand_lss = os.path.join(td, "brand-lss.jar")
+        _make_jar(brand_lss, {"lss-brand.properties": BRAND_LSS_TXT})
+        brand_vss = os.path.join(td, "brand-vss.jar")
+        _make_jar(brand_vss, {"lss-brand.properties": BRAND_VSS_TXT})
+        p = []
+        check_brand_properties(brand_lss, _BRAND_LSS, p)
+        check_brand_properties(brand_vss, _BRAND_VSS, p)
+        check(p == [], f"clean brand.properties flagged: {p}")
+        # a VSS jar that still carries LSS branding (rewrite no-opped) MUST fail
+        p = []
+        check_brand_properties(brand_lss, _BRAND_VSS, p)
+        check(any("lss-brand.properties" in m for m in p), "VSS brand no-op not caught")
+        # a jar with NO brand.properties MUST fail (Brand would fall back to LSS defaults)
+        p = []
+        check_brand_properties(pair_lss_pap, _BRAND_LSS, p)
+        check(any("no lss-brand.properties" in m for m in p), "missing brand.properties not caught")
+
+        # ---- wire identity: nested common jar must be byte-identical across the pair ----
+        nested_common = io.BytesIO()
+        with zipfile.ZipFile(nested_common, "w") as z:
+            z.writestr("dev/vox/lss/common/LSSConstants.class", "lss:handshake_c2s")
+        wire_lss_fab = os.path.join(td, "wire-lss-fabric.jar")
+        _make_jar(wire_lss_fab, {"META-INF/jars/common-0.7.0.jar": nested_common.getvalue()})
+        wire_vss_ok = os.path.join(td, "wire-vss-ok-fabric.jar")
+        _make_jar(wire_vss_ok, {"META-INF/jars/common-0.7.0.jar": nested_common.getvalue()})
+        p = []
+        check_wire_identity_fabric(wire_lss_fab, wire_vss_ok, p)
+        check(p == [], f"identical nested common jar flagged: {p}")
+        # a common jar that DIFFERS (branding leaked into the wire) MUST fail
+        nested_forked = io.BytesIO()
+        with zipfile.ZipFile(nested_forked, "w") as z:
+            z.writestr("dev/vox/lss/common/LSSConstants.class", "vss:handshake_c2s")
+        wire_vss_bad = os.path.join(td, "wire-vss-bad-fabric.jar")
+        _make_jar(wire_vss_bad, {"META-INF/jars/common-0.7.0.jar": nested_forked.getvalue()})
+        p = []
+        check_wire_identity_fabric(wire_lss_fab, wire_vss_bad, p)
+        check(any("nested common jar differs" in m for m in p),
+              f"wire-identity divergence not caught: {p}")
 
         # glob hygiene: a CI-named soak jar must not match any release glob
         p = []
@@ -770,39 +899,56 @@ def _selftest():
         os.makedirs(dfab)
         os.makedirs(dpap)
         PY_LSS = ("name: LodServerSupport\nversion: '0.7.0'\n"
+                  "main: dev.vox.lss.paper.LSSPaperPlugin\napi-version: '26.2'\n"
                   "description: LSS plugin.\n"
-                  "website: https://modrinth.com/plugin/lod-server-support\n")
+                  "website: https://modrinth.com/plugin/lod-server-support\n"
+                  "commands:\n  lsslod:\n"
+                  "    description: LOD Server Support admin commands\n"
+                  "    usage: /lsslod <stats|diag>\n    permission: lss.admin\n"
+                  "permissions:\n  lss.admin:\n"
+                  "    description: Access to LSS admin commands\n    default: op\n")
+        PY_VSS = (PY_LSS
+                  .replace("description: LSS plugin.", "description: VSS plugin.", 1)
+                  .replace("plugin/lod-server-support", "plugin/voxy-server-side", 1)
+                  .replace("lsslod", "vsslod")
+                  .replace("LOD Server Support admin commands", "Voxy Server Side admin commands")
+                  .replace("Access to LSS admin commands", "Access to VSS admin commands")
+                  .replace("lss.admin", "vss.admin"))
+        BRAND_LSS = ("shortName=LSS\ndisplayName=LOD Server Support\n"
+                     "clientCommand=lss\nserverCommand=lsslod\n")
+        BRAND_VSS = ("shortName=VSS\ndisplayName=Voxy Server Side\n"
+                     "clientCommand=vss\nserverCommand=vsslod\n")
         pap_manifest = "Manifest-Version: 1.0\npaperweight-mappings-namespace: mojang\n"
 
-        def _write_tree_fabric(name, meta, extra=None):
+        def _write_tree_fabric(name, meta, brand, extra=None):
             entries = {
                 "fabric.mod.json": json.dumps(meta),
                 "dev/vox/lss/LSSMod.class": "x",
                 "META-INF/jars/common-0.7.0.jar": _nested_common("0.7.0"),
+                "lss-brand.properties": brand,
                 "LICENSE_lod-server-support-fabric": "MIT",
             }
             entries.update(extra or {})
             _make_jar(os.path.join(dfab, name), entries)
 
-        def _write_tree_paper(name, yml):
+        def _write_tree_paper(name, yml, brand):
             _make_jar(os.path.join(dpap, name), {
                 "plugin.yml": yml,
+                "lss-brand.properties": brand,
                 "dev/vox/lss/paper/LSSPaperPlugin.class": "x",
                 "dev/vox/lss/common/PositionUtil.class": "x",
             }, manifest=pap_manifest)
 
         _write_tree_fabric("lod-server-support-fabric.jar",
-                           {"id": "lss", "name": "LOD Server Support", "version": "0.7.0"})
+                           {"id": "lss", "name": "LOD Server Support", "version": "0.7.0"},
+                           BRAND_LSS)
         _write_tree_fabric("voxy-server-side-fabric.jar",
                            {"id": "lss", "name": "Voxy Server Side", "version": "0.7.0",
                             "icon": "assets/lss/icon-vss.png"},
+                           BRAND_VSS,
                            extra={"assets/lss/icon-vss.png": "PNG"})
-        _write_tree_paper("lod-server-support-paper.jar", PY_LSS)
-        _write_tree_paper("voxy-server-side-paper.jar",
-                          PY_LSS.replace("description: LSS plugin.",
-                                         "description: VSS plugin.", 1)
-                                .replace("plugin/lod-server-support",
-                                         "plugin/voxy-server-side", 1))
+        _write_tree_paper("lod-server-support-paper.jar", PY_LSS, BRAND_LSS)
+        _write_tree_paper("voxy-server-side-paper.jar", PY_VSS, BRAND_VSS)
         p = []
         fab_d, pap_d, vfab_d, vpap_d, _ = discover(p, root=droot)
         check(p == [] and len(fab_d) == len(pap_d) == len(vfab_d) == len(vpap_d) == 1,
@@ -819,6 +965,7 @@ def _selftest():
         _write_tree_fabric("voxy-server-side-fabric.jar",
                            {"id": "voxy", "name": "Voxy Server Side", "version": "0.7.0",
                             "icon": "assets/lss/icon-vss.png"},
+                           BRAND_VSS,
                            extra={"assets/lss/icon-vss.png": "PNG"})
         p = []
         discover(p, root=droot)
