@@ -1,7 +1,9 @@
 # Server-side negative miss memo — design & implementation plan
 
 **Status:** IMPLEMENTED on `feat/miss-memo` (branched off the v0.7.0 release branch,
-2026-07-19) with maintainer decisions: **TTL 30 s** (`missMemoTtlSeconds`, clamp [0,60],
+2026-07-19), and SHIPS WITH v0.7.0 by explicit maintainer decision (2026-07-19) — a
+deliberate reversal of this doc's original "target v0.7.1, never a release-week change"
+guardrail, taken after the full review/gauntlet cycle below. Maintainer decisions: **TTL 30 s** (`missMemoTtlSeconds`, clamp [0,60],
 0 = kill switch), region-granular variant stays deferred, diag naming `disk.memo_hits`.
 All Tier 1 (both platforms) + Tier 2 (memo live under default config) green; check_soak
 selftest 140 cases with the A5 memo term. One implementation discovery beyond this plan:
