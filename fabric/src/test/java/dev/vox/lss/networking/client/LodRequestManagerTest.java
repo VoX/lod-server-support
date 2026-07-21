@@ -1051,6 +1051,27 @@ class LodRequestManagerTest {
     }
 
     @Test
+    void tierBParksNotGeneratedForACachedResyncEvenOnAGenEnabledLegacyServer() {
+        manager.onSessionConfig(config(64, true), "lss-test"); // gen enabled, Tier B
+        manager.setV16GenerationDrive(true);
+        // A cross-session cached stamp (>0, unvalidated) classifies as a RESYNC — which Tier B
+        // does NOT rewrite to a generate trigger. A NOT_GENERATED for it means the server's copy
+        // is gone and it won't regenerate a ts>0 disk miss, so it must PARK: the heal is
+        // first-serve only, or a deleted-region resync would re-declare the same ts>0 forever.
+        var loaded = new Long2LongOpenHashMap();
+        loaded.put(POS, 5000L);
+        manager.columnsForTest().loadFrom(loaded);
+        assertEquals(5000L, manager.columnsForTest().classify(POS), "premise: POS is a resync (ts>0)");
+        manager.trackerForTest().replaceWith(new long[]{POS}, 1);
+
+        manager.onColumnNotGenerated(POS);
+
+        assertTrue(manager.columnsForTest().isSessionSatisfied(POS),
+                "a resync NOT_GENERATED (the server's cached copy is gone) parks — the transient "
+                        + "heal applies only to first-serve positions Tier B actually drove");
+    }
+
+    @Test
     void shouldDriveV16GenerationTruthTable() {
         int v16 = LSSConstants.V16_COMPAT_PROTOCOL_VERSION;
         int v18 = LSSConstants.PROTOCOL_VERSION;

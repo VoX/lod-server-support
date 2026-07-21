@@ -220,4 +220,14 @@ class ConfigValidationTest {
         assertEquals(2048, c.lodDistanceChunks);
     }
 
+    @Test
+    void v16CompatFlagsDefaultOn() {
+        // The whole point of the branch: a v0.7.0 client talks to a pre-v0.7.0 server out of the
+        // box (compat), and drives generation on it (Tier B). A silent revert of either default
+        // to false would otherwise pass CI green — this pins the shipped behavior.
+        var c = clientConfig();
+        assertTrue(c.enableV16ServerCompat, "v16 server backward-compat must default ON");
+        assertTrue(c.enableV16Generation, "Tier B generation-drive must default ON");
+    }
+
 }

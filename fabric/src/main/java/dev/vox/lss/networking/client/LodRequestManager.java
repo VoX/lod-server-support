@@ -506,14 +506,22 @@ public class LodRequestManager {
         }
         this.tracker.removeByPosition(packed);
         this.metrics.discardRttStamp(packed); // terminal non-column answer: the RTT stamp is dead
-        if (v16TransientNotGenerated()) {
-            // Legacy-server transient miss (gen slot full): leave the position first-serve so the
-            // next 1 Hz scan re-declares it (Tier B rewrites it to a fresh generate trigger) —
-            // the client-side mirror of the silent-drop-and-heal loop v18 runs server-side. No
-            // permanent park, so cold terrain fills at the old server's generation throughput
-            // instead of being abandoned. A rare permanent gen failure persists as one
-            // re-declared position (negligible want-set budget), never a backfill stall.
-            this.metrics.recordNotGenerated();
+        if (v16TransientNotGenerated() && this.columns.timestampFor(packed) <= 0) {
+            // Legacy-server transient miss on a FIRST-SERVE position (stamp <=0, which Tier B
+            // rewrote to a generate trigger and the old server bounced on a full gen slot): leave
+            // it first-serve so the next 1 Hz scan re-declares and re-drives generation — the
+            // client-side mirror of the silent-drop-and-heal loop v18 runs server-side. Cold
+            // terrain then fills at the old server's generation throughput instead of being
+            // abandoned; a rare permanent gen failure persists as one re-declared position
+            // (negligible budget), never a backfill stall. Deliberately NOT counted as
+            // not_generated — that counter means "permanently unservable", which a transient
+            // bounce is not (and on a gen-enabled server it would climb into the thousands).
+            //
+            // A RESYNC position (cached ts>0, which Tier B does NOT rewrite) is excluded by the
+            // stamp check: a NOT_GENERATED for it means the server's copy is gone and it will not
+            // regenerate a ts>0 disk miss, so healing would re-declare the identical ts>0 forever
+            // without ever regenerating. That IS permanent — fall through and park it (a later
+            // dirty broadcast revives it if the region is regenerated).
             return;
         }
         this.columns.onNotGenerated(packed);

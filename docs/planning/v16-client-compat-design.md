@@ -70,13 +70,18 @@ production changes), and the isolation held. Where the code diverges from §§2�
   server-side silent drop). A gen-DISABLED v16 server keeps the permanent park (its `NOT_GENERATED`
   is genuinely permanent; re-declaring would starve the want-set); a rare permanent gen failure on
   a gen-enabled server persists as one re-declared position, never a backfill stall. Tier A and
-  every v18 session are unaffected (the heal is behind the Tier B gate).
-- **Live v0.6.2 smoke (the §7 "real validation") is still PENDING** — and now has TWO distinct
-  gates. (1) *Tier A:* the end-to-end handshake→6-field-config→source-less-column→decode→consumer
-  chain (already run by the maintainer 2026-07-21). (2) *Tier B:* that cold terrain actually FILLS
-  (the heal works) AND disk-resident terrain is served, not regenerated, against a real v0.6.2 —
-  the riskier claim and the reason the flag defaults off. CI has no old-protocol server jar, so
-  both are manual; Tier 1 pins every decode/ladder/heal unit but cannot substitute for the join.
+  every v18 session are unaffected (the heal is behind the Tier B gate). The heal is also scoped to
+  FIRST-SERVE positions (stamp `<=0`, the ones Tier B rewrote to a generate trigger): a cross-session
+  RESYNC (cached `ts>0`, not rewritten) whose region the server has since deleted comes back
+  NOT_GENERATED and is PARKED, not healed — the old server won't regenerate a `ts>0` disk miss, so
+  re-declaring the same `ts>0` would loop forever; a later dirty broadcast revives it if regenerated.
+- **Live v0.6.2 smoke (the §7 "real validation") — BOTH gates PASSED (maintainer, 2026-07-21).**
+  (1) *Tier A:* the end-to-end handshake→6-field-config→source-less-column→decode→consumer chain.
+  (2) *Tier B:* cold terrain actually FILLS (the heal works) against a real v0.6.2 server. CI has
+  no old-protocol server jar, so both were manual (`./test-server.sh run-legacy`); Tier 1 pins
+  every decode/ladder/heal unit but could not substitute for the join — hence the live run was the
+  gate, and it is now green. (Default-on rides on this: it is the shipped behavior, not a pending
+  bet.)
 
 ---
 
