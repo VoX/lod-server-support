@@ -169,7 +169,7 @@ tasks.register('voxyJar') {
     // remapped release jar directly (with the nested common JiJ + Fabric-Mapping-Namespace).
     // String dependency so it resolves at graph-build time, not config time.
     dependsOn 'jar'
-    def iconFile = rootProject.file('branding/voxy/icon.png')
+    def iconFile = rootProject.file('branding/vss/icon.png')
     def srcJar = layout.buildDirectory.file("libs/${lssFabricJarName}")
     def outFile = layout.buildDirectory.file("libs/${voxyFabricJarName}")
     inputs.file(srcJar)
