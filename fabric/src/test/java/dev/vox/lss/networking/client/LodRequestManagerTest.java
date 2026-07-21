@@ -943,4 +943,66 @@ class LodRequestManagerTest {
                 "a pre-flush load result must not resurrect flushed timestamps");
         assertEquals(0, manager.getReceivedColumnCount());
     }
+
+    // ---- Tier B v16 backward-compat: drive generation on a legacy server ----
+    // (docs/planning/v16-client-compat-design.md §4). The egress rewrites first-serve stamps to
+    // v16's generate trigger; the CORE state stays honest -1 (the rewrite is wire-only).
+
+    @Test
+    void v16GenerationDriveRewritesFirstServeStampsToTheGenerateTrigger() {
+        var ring = configureRing1Disc();
+        manager.setV16GenerationDrive(true);
+        // ring[0] is a resync (received then dirtied → re-declares its known timestamp > 0); the
+        // other seven are first-serve (never received → -1).
+        var columns = manager.columnsForTest();
+        columns.onReceived(ring[0], 5000L);
+        assertTrue(columns.markDirtyIfKnown(ring[0]), "premise: ring[0] re-declares as a resync");
+
+        fireScanRing1();
+
+        assertEquals(1, sent.size(), "one batch on the wire");
+        var batch = sent.get(0);
+        int rewritten = 0;
+        for (int i = 0; i < batch.count(); i++) {
+            long ts = batch.timestamps()[i];
+            if (batch.positions()[i] == ring[0]) {
+                assertEquals(5000L, ts, "a resync stamp (>0) must NOT be rewritten");
+            } else {
+                assertEquals(0L, ts, "a first-serve stamp (-1) becomes 0, v16's generate trigger");
+                rewritten++;
+            }
+            assertNotEquals(-1L, ts, "no first-serve -1 may reach a v16 server under Tier B");
+        }
+        assertEquals(batch.count() - 1, rewritten, "every first-serve entry was rewritten");
+    }
+
+    @Test
+    void withoutV16GenerationDriveFirstServeStampsStayMinusOne() {
+        // The v18 default (Tier B off): the egress is byte-identical — first-serve stays -1.
+        configureRing1Disc(); // v16GenerationDrive defaults false
+        fireScanRing1();
+
+        var batch = sent.get(0);
+        for (int i = 0; i < batch.count(); i++) {
+            assertEquals(-1L, batch.timestamps()[i],
+                    "without Tier B a first-serve stamp stays -1 (v18 byte-identical egress)");
+        }
+    }
+
+    @Test
+    void v16GenerationDriveIsWireOnlyAndLeavesCoreFirstServeStateHonest() {
+        var ring = configureRing1Disc();
+        manager.setV16GenerationDrive(true);
+
+        fireScanRing1();
+
+        // The wire carried 0, but the send buffer / column state still hold the honest -1, so a
+        // later up-to-date or not-generated answer resolves against real first-serve state.
+        for (long p : ring) {
+            assertEquals(-1L, manager.columnsForTest().classify(p),
+                    "the rewrite is wire-only — core classify must still read first-serve (-1)");
+            assertTrue(manager.trackerForTest().isInFlight(p),
+                    "the declared position is still awaiting an answer");
+        }
+    }
 }

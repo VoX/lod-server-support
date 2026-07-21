@@ -135,6 +135,13 @@ public class LSSClientNetworking {
             serverAddr = "unknown";
         }
         manager.onSessionConfig(payload, serverAddr);
+        // Tier B v16 backward-compat: only a v16 session reaches here with protocolVersion() == 16
+        // (the gate rejects a v16 config outright when enableV16ServerCompat is off, before the
+        // factory runs), so this is the single place that combines "v16 session" with the client
+        // opt-in. A v18 session leaves it false and the egress byte-identical.
+        manager.setV16GenerationDrive(
+                payload.protocolVersion() == LSSConstants.V16_COMPAT_PROTOCOL_VERSION
+                        && LSSClientConfig.CONFIG.enableV16Generation);
         return manager;
     }
 
