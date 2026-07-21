@@ -26,8 +26,8 @@ public class LSSClientNetworking {
     // and manager construction with live server-address resolution.
     private static final ClientSessionGate sessionGate = new ClientSessionGate(
             columnProcessor,
-            () -> ClientPlayNetworking.send(new HandshakeC2SPayload(
-                    LSSConstants.PROTOCOL_VERSION, LSSConstants.CAPABILITY_VOXEL_COLUMNS)),
+            version -> ClientPlayNetworking.send(new HandshakeC2SPayload(
+                    version, LSSConstants.CAPABILITY_VOXEL_COLUMNS)),
             LSSClientNetworking::createRequestManager);
 
     public static boolean isServerEnabled() {
@@ -135,14 +135,30 @@ public class LSSClientNetworking {
             serverAddr = "unknown";
         }
         manager.onSessionConfig(payload, serverAddr);
+        // Tier B v16 backward-compat: only a v16 session reaches here with protocolVersion() == 16
+        // (the gate rejects a v16 config outright when enableV16ServerCompat is off, before the
+        // factory runs), so this is the single place that combines "v16 session" with the client
+        // opt-in. A v18 session leaves it false and the egress byte-identical.
+        manager.setV16GenerationDrive(shouldDriveV16Generation(
+                payload.protocolVersion(), LSSClientConfig.CONFIG.enableV16Generation));
         return manager;
+    }
+
+    /**
+     * Tier B decision: drive on-demand generation on the server only for a genuine v16 session
+     * AND when the client has opted in. Pure so the truth table is unit-testable
+     * (v18 → false regardless of the opt-in; v16 → the opt-in).
+     */
+    static boolean shouldDriveV16Generation(int protocolVersion, boolean generationOptIn) {
+        return protocolVersion == LSSConstants.V16_COMPAT_PROTOCOL_VERSION && generationOptIn;
     }
 
     private static void registerPacketHandlers() {
         ClientPlayNetworking.registerGlobalReceiver(
                 SessionConfigS2CPayload.TYPE,
                 (payload, context) -> context.client().execute(
-                        () -> sessionGate.onSessionConfig(payload, LSSApi.hasVoxelConsumers()))
+                        () -> sessionGate.onSessionConfig(payload, LSSApi.hasVoxelConsumers(),
+                                LSSClientConfig.CONFIG.enableV16ServerCompat))
         );
 
         ClientPlayNetworking.registerGlobalReceiver(
@@ -222,6 +238,12 @@ public class LSSClientNetworking {
             switch (type) {
                 case LSSConstants.RESPONSE_UP_TO_DATE -> manager.onColumnUpToDate(packed);
                 case LSSConstants.RESPONSE_NOT_GENERATED -> manager.onColumnNotGenerated(packed);
+                case LSSConstants.RESPONSE_RATE_LIMITED_V16 ->
+                        // A v16 server's soft back-off bounce (retired byte 0). The position
+                        // stays unsatisfied and is re-declared on the next scan — the v18
+                        // self-heal that approximates v16's ~1 s retry. Debug, not warn: on a
+                        // v16 session this is routine, and a v18 server never sends it.
+                        LSSLogger.debug("v16 rate-limited position " + packed + " (re-declared next scan)");
                 default -> LSSLogger.warn("Unknown batch response type: " + type);
             }
         }
@@ -233,7 +255,7 @@ public class LSSClientNetworking {
             boolean localIntegratedServer = Minecraft.getInstance().hasSingleplayerServer()
                     && !Boolean.getBoolean("lss.test.integratedServer");
             sessionGate.onJoin(LSSClientConfig.CONFIG.receiveServerLods, localIntegratedServer,
-                    LSSApi.hasVoxelConsumers());
+                    LSSApi.hasVoxelConsumers(), LSSClientConfig.CONFIG.enableV16ServerCompat);
         });
 
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> sessionGate.onDisconnect());
@@ -241,6 +263,9 @@ public class LSSClientNetworking {
 
     private static void registerTickHandler() {
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
+            // Runs even before a session: the v16-server discovery fallback (no-op on the v18
+            // happy path, which disarms it before the delay elapses).
+            sessionGate.tickV16Discovery();
             var manager = sessionGate.getRequestManager();
             if (manager != null && sessionGate.isServerEnabled()) {
                 manager.tick();

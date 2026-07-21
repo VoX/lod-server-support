@@ -49,6 +49,15 @@ public class LodRequestManager {
     // Edge-trigger for the decode-backpressure clear: exactly one empty batch per halt episode.
     private boolean backpressureClearSent = false;
 
+    // Tier B v16 backward-compat (docs/planning/v16-client-compat-design.md §4). When true, the
+    // egress rewrites a first-serve request stamp (<=0) to 0 — v16's generate-on-miss trigger —
+    // so a legacy protocol-16 server generates cold columns instead of serving load-only. The
+    // final decision (client opt-in AND a v16 session) is computed by the production factory and
+    // set via setV16GenerationDrive; a v18 session always leaves it false, so the egress is
+    // byte-identical there. The CORE keeps emitting -1 (the send buffer is untouched) — only the
+    // outgoing wire copy is translated, so classify/tracker/cache state is unchanged.
+    private boolean v16GenerationDrive = false;
+
     // Send buffers, sized once at the protocol's batch cap (~16 KB total)
     private final long[] sendPositionBuffer = new long[LSSConstants.MAX_BATCH_CHUNK_REQUESTS];
     private final long[] sendTimestampBuffer = new long[LSSConstants.MAX_BATCH_CHUNK_REQUESTS];
@@ -59,11 +68,39 @@ public class LodRequestManager {
     public void onSessionConfig(SessionConfigS2CPayload config, String serverAddress) {
         this.sessionConfig = config;
         this.serverAddress = serverAddress;
+        // Safe default until the factory wires the Tier B decision for this session (a v18
+        // session never re-enables it).
+        this.v16GenerationDrive = false;
         resetRequestState();
         this.lastDimension = null;
         this.cacheLoaded = false;
         this.scanner.setConfig(config);
         this.scanner.reset();
+    }
+
+    /**
+     * Tier B v16 backward-compat: enable driving on-demand generation on a legacy (protocol-16)
+     * server by rewriting first-serve request stamps to v16's generate trigger. The caller
+     * (production factory / tests) is responsible for only enabling this on a genuine v16
+     * session with the client opt-in set — a v18 session must always pass false.
+     */
+    void setV16GenerationDrive(boolean enabled) {
+        this.v16GenerationDrive = enabled;
+    }
+
+    /**
+     * Tier B only: a legacy (protocol-16) gen-ENABLED server answers a TRANSIENT gen-slot-full
+     * miss with NOT_GENERATED (v0.6.2 `handleDiskNotFound` sends it when the GENERATION slot
+     * cap is hit), unlike a v18 server which drops that silently and reserves NOT_GENERATED for
+     * permanent unservability. So on such a session NOT_GENERATED must be treated as a
+     * re-declarable drop, not v18's session-permanent park — otherwise a cold backfill parks the
+     * bulk of every wave after one gen-slot bounce. A gen-DISABLED v16 server (generationEnabled
+     * false) is excluded: its NOT_GENERATED IS permanent, and re-declaring would starve the
+     * want-set. Guarded by Tier B so Tier A and every v18 session keep the permanent park.
+     */
+    private boolean v16TransientNotGenerated() {
+        return this.v16GenerationDrive && this.sessionConfig != null
+                && this.sessionConfig.generationEnabled();
     }
 
     private static int countMissingVanillaChunks(ClientLevel level, int playerCx, int playerCz, int radius) {
@@ -283,6 +320,17 @@ public class LodRequestManager {
         // payload must own its data so a declaration's positions can't be corrupted mid-encode.
         long[] positions = java.util.Arrays.copyOf(positionBuffer, count);
         long[] timestamps = java.util.Arrays.copyOf(timestampBuffer, count);
+        if (this.v16GenerationDrive) {
+            // Tier B: ask a legacy protocol-16 server to GENERATE cold columns. A first-serve
+            // stamp (<=0 — the client has no data) becomes 0, v16's generate-on-miss trigger; a
+            // resync stamp (>0) is left untouched so existing terrain still up-to-date-checks.
+            // Only the wire copy is rewritten — the send buffer (and thus classify/tracker/cache)
+            // still holds the honest -1. The v0.6.2 server reads disk-FIRST for ts==0, so this
+            // serves disk-resident columns and generates only true misses (no regeneration).
+            for (int i = 0; i < count; i++) {
+                if (timestamps[i] <= 0) timestamps[i] = 0;
+            }
+        }
         try {
             this.batchSender.send(new BatchChunkRequestC2SPayload(positions, timestamps, count));
             long nowMs = System.currentTimeMillis();
@@ -458,6 +506,24 @@ public class LodRequestManager {
         }
         this.tracker.removeByPosition(packed);
         this.metrics.discardRttStamp(packed); // terminal non-column answer: the RTT stamp is dead
+        if (v16TransientNotGenerated() && this.columns.timestampFor(packed) <= 0) {
+            // Legacy-server transient miss on a FIRST-SERVE position (stamp <=0, which Tier B
+            // rewrote to a generate trigger and the old server bounced on a full gen slot): leave
+            // it first-serve so the next 1 Hz scan re-declares and re-drives generation — the
+            // client-side mirror of the silent-drop-and-heal loop v18 runs server-side. Cold
+            // terrain then fills at the old server's generation throughput instead of being
+            // abandoned; a rare permanent gen failure persists as one re-declared position
+            // (negligible budget), never a backfill stall. Deliberately NOT counted as
+            // not_generated — that counter means "permanently unservable", which a transient
+            // bounce is not (and on a gen-enabled server it would climb into the thousands).
+            //
+            // A RESYNC position (cached ts>0, which Tier B does NOT rewrite) is excluded by the
+            // stamp check: a NOT_GENERATED for it means the server's copy is gone and it will not
+            // regenerate a ts>0 disk miss, so healing would re-declare the identical ts>0 forever
+            // without ever regenerating. That IS permanent — fall through and park it (a later
+            // dirty broadcast revives it if the region is regenerated).
+            return;
+        }
         this.columns.onNotGenerated(packed);
         consumeStaleCrossing(packed); // a dirty that crossed this in-flight first serve forces a re-request
         // No resetConfirmedRing here (the old ts=0 gen-retry needed one — CL-014): a
