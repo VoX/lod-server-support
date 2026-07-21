@@ -81,7 +81,7 @@ jobs:
           retention-days: 30
 
       # Four shipped jars: the LSS pair and the branded Voxy Server Side pair (produced by the
-      # voxyJar repackage tasks — Fabric's runs as a `build` dependency, Paper's as a shadowJar
+      # vssJar repackage tasks — Fabric's runs as a `build` dependency, Paper's as a shadowJar
       # finalizer). Explicit per-brand globs so each artifact holds only its own jar.
       - uses: actions/upload-artifact@v5
         with:

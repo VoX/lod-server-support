@@ -28,7 +28,7 @@ lod-server-support/
 Output JARs:
 - `fabric/build/libs/lod-server-support-fabric.jar` — Fabric mod (client + server)
 - `paper/build/libs/lod-server-support-paper.jar` — Paper plugin (server only, shadow JAR; serves Paper and Purpur — `folia-supported` is absent on the 26.2 line, so Folia refuses this jar until the flag returns with the Folia 26.2 validation)
-- `fabric/build/libs/voxy-server-side-fabric*.jar` / `paper/build/libs/voxy-server-side-paper*.jar` — the **Voxy Server Side** branded pair (`voxyJar` tasks: byte-copies of the LSS jars with only fabric.mod.json branding / plugin.yml description rewritten; mod id `lss` and plugin name `LodServerSupport` preserved — the LSS/VSS interchangeability contract, pinned by `release_check.py`'s pair checks). Published to Modrinth project `84zcagOb` (voxy-server-side) by releases since v0.7.0.
+- `fabric/build/libs/voxy-server-side-fabric*.jar` / `paper/build/libs/voxy-server-side-paper*.jar` — the **Voxy Server Side** branded pair (`vssJar` tasks: byte-copies of the LSS jars with only fabric.mod.json branding / plugin.yml description rewritten; mod id `lss` and plugin name `LodServerSupport` preserved — the LSS/VSS interchangeability contract, pinned by `release_check.py`'s pair checks). Published to Modrinth project `84zcagOb` (voxy-server-side) by releases since v0.7.0.
 
 CI builds (env `CI=true`) name the jars `lod-server-support-<platform>-<mod_version>+<minecraft_version>.jar` (e.g. `lod-server-support-fabric-0.6.0+26.2.jar`); the release workflow feeds `mod_version` from the tag. Local dev builds keep the stable unversioned names.
 

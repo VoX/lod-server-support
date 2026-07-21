@@ -160,10 +160,10 @@ import java.util.zip.ZipFile
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
-def voxyFabricJarName = "voxy-server-side-fabric" + (ciArchiveVersion ? "-${ciArchiveVersion}" : "") + ".jar"
+def vssFabricJarName = "voxy-server-side-fabric" + (ciArchiveVersion ? "-${ciArchiveVersion}" : "") + ".jar"
 def lssFabricJarName = "lod-server-support-fabric" + (ciArchiveVersion ? "-${ciArchiveVersion}" : "") + ".jar"
 
-tasks.register('voxyJar') {
+tasks.register('vssJar') {
     description = 'Repackages the LSS Fabric jar under the Voxy Server Side branding.'
     // This Loom version (1.17) has no separate remapJar — the `jar` task produces the final
     // remapped release jar directly (with the nested common JiJ + Fabric-Mapping-Namespace).
@@ -171,7 +171,7 @@ tasks.register('voxyJar') {
     dependsOn 'jar'
     def iconFile = rootProject.file('branding/vss/icon.png')
     def srcJar = layout.buildDirectory.file("libs/${lssFabricJarName}")
-    def outFile = layout.buildDirectory.file("libs/${voxyFabricJarName}")
+    def outFile = layout.buildDirectory.file("libs/${vssFabricJarName}")
     inputs.file(srcJar)
     inputs.file(iconFile)
     outputs.file(outFile)
@@ -226,4 +226,4 @@ tasks.register('voxyJar') {
     }
 }
 
-tasks.named('build') { dependsOn 'voxyJar' }
+tasks.named('build') { dependsOn 'vssJar' }

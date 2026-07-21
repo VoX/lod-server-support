@@ -132,7 +132,7 @@ jobs:
           changelog: ${{ steps.release_notes.outputs.notes }}
 
       # ---- Voxy Server Side (second distribution channel, Modrinth project 84zcagOb) --------
-      # The branded byte-copies (voxy-server-side-*.jar from the voxyJar tasks) publish to the
+      # The branded byte-copies (voxy-server-side-*.jar from the vssJar tasks) publish to the
       # voxy-server-side project. Same loaders / game-versions / changelog as the LSS steps —
       # this is the same mod, so the two channels stay in lock-step. Requires the MODRINTH_TOKEN
       # account to be a member of project 84zcagOb with version-upload permission, or these 403.
