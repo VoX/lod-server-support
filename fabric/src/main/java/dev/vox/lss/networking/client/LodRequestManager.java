@@ -88,6 +88,21 @@ public class LodRequestManager {
         this.v16GenerationDrive = enabled;
     }
 
+    /**
+     * Tier B only: a legacy (protocol-16) gen-ENABLED server answers a TRANSIENT gen-slot-full
+     * miss with NOT_GENERATED (v0.6.2 `handleDiskNotFound` sends it when the GENERATION slot
+     * cap is hit), unlike a v18 server which drops that silently and reserves NOT_GENERATED for
+     * permanent unservability. So on such a session NOT_GENERATED must be treated as a
+     * re-declarable drop, not v18's session-permanent park — otherwise a cold backfill parks the
+     * bulk of every wave after one gen-slot bounce. A gen-DISABLED v16 server (generationEnabled
+     * false) is excluded: its NOT_GENERATED IS permanent, and re-declaring would starve the
+     * want-set. Guarded by Tier B so Tier A and every v18 session keep the permanent park.
+     */
+    private boolean v16TransientNotGenerated() {
+        return this.v16GenerationDrive && this.sessionConfig != null
+                && this.sessionConfig.generationEnabled();
+    }
+
     private static int countMissingVanillaChunks(ClientLevel level, int playerCx, int playerCz, int radius) {
         var chunkSource = level.getChunkSource();
         int missing = 0;
@@ -491,6 +506,16 @@ public class LodRequestManager {
         }
         this.tracker.removeByPosition(packed);
         this.metrics.discardRttStamp(packed); // terminal non-column answer: the RTT stamp is dead
+        if (v16TransientNotGenerated()) {
+            // Legacy-server transient miss (gen slot full): leave the position first-serve so the
+            // next 1 Hz scan re-declares it (Tier B rewrites it to a fresh generate trigger) —
+            // the client-side mirror of the silent-drop-and-heal loop v18 runs server-side. No
+            // permanent park, so cold terrain fills at the old server's generation throughput
+            // instead of being abandoned. A rare permanent gen failure persists as one
+            // re-declared position (negligible want-set budget), never a backfill stall.
+            this.metrics.recordNotGenerated();
+            return;
+        }
         this.columns.onNotGenerated(packed);
         consumeStaleCrossing(packed); // a dirty that crossed this in-flight first serve forces a re-request
         // No resetConfirmedRing here (the old ts=0 gen-retry needed one — CL-014): a

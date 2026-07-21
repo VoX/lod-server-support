@@ -75,7 +75,11 @@ download() {
         return 0
     fi
     echo "  Downloading: $(basename "$dest")"
-    curl -fsSL -o "$dest" "$url"
+    # --remove-on-error: on a 404/failure, curl has already truncated/created $dest; without
+    # this it leaves a 0-byte file that the "already exists" check above would skip on the NEXT
+    # run, silently installing a broken jar. Most likely to bite the legacy jar (its URL is the
+    # one edited when LEGACY_LSS_VERSION is bumped).
+    curl -fsSL --remove-on-error -o "$dest" "$url"
 }
 
 # Downloads the latest stable build of a PaperMC-family server (paper|folia) via

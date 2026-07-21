@@ -428,6 +428,31 @@ class ClientSessionGateTest {
     }
 
     @Test
+    void aSecondV16ConfigOnALiveV16SessionRebuildsWithoutReAssertingV18() {
+        // A legacy server legitimately re-sending its config (its own reload) must rebuild the
+        // v16 manager like the v18 re-send path — NOT trip the downgrade guard's v18 re-assert.
+        // The guard's `!isV16Server` term is exactly what distinguishes this legitimate v16→v16
+        // re-send from a spurious v18→v16 downgrade.
+        gate.onSessionConfig(SessionConfigS2CPayload.v16Legacy(true, 64, 200, 7, true), true, true);
+        var first = gate.getRequestManager();
+        assertTrue(gate.isV16Server());
+        // A queued column so the teardown has something to report (proves the rebuild path ran).
+        processor.offer(new VoxelColumnS2CPayload(3, -4, dim("overworld"), 1L, new byte[0]), false);
+        events.clear();
+        handshakeVersions.clear();
+
+        gate.onSessionConfig(SessionConfigS2CPayload.v16Legacy(true, 64, 200, 7, true), true, true);
+
+        assertTrue(gate.isV16Server(), "still a v16 session — no downgrade");
+        assertNotSame(first, gate.getRequestManager(),
+                "a re-sent v16 config rebuilds the manager (guard did NOT early-return with the same one)");
+        assertEquals(List.of("report", "disconnect", "save", "rebuild"), events,
+                "the re-sent v16 config runs the disconnect teardown then rebuilds, like a v18 re-send");
+        assertEquals(List.of(), handshakeVersions,
+                "no v18 re-assert handshake — a v16→v16 re-send is not a downgrade");
+    }
+
+    @Test
     void isV16ServerResetsOnJoinAndDisconnect() {
         gate.onSessionConfig(SessionConfigS2CPayload.v16Legacy(true, 64, 200, 7, true), true, true);
         assertTrue(gate.isV16Server());

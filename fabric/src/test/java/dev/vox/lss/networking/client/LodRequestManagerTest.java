@@ -1005,4 +1005,61 @@ class LodRequestManagerTest {
                     "the declared position is still awaiting an answer");
         }
     }
+
+    // ---- Tier B: transient NOT_GENERATED heal (a legacy server's gen-slot-full is not permanent) ----
+    // v0.6.2 answers a transient gen-slot-full miss with NOT_GENERATED, which v18 parks forever;
+    // on a gen-ENABLED Tier B session that must instead re-declare so cold terrain actually fills.
+
+    @Test
+    void tierBTreatsNotGeneratedAsReDeclarableOnAGenEnabledLegacyServer() {
+        manager.onSessionConfig(config(64, true), "lss-test"); // generation ENABLED
+        manager.setV16GenerationDrive(true);
+        manager.trackerForTest().replaceWith(new long[]{POS}, 1); // POS is an in-flight first serve
+
+        manager.onColumnNotGenerated(POS);
+
+        assertFalse(manager.columnsForTest().isSessionSatisfied(POS),
+                "Tier B on a gen-enabled legacy server must NOT permanently park NOT_GENERATED — "
+                        + "it is a transient gen-slot-full miss that heals by re-declaration");
+        assertEquals(-1L, manager.columnsForTest().classify(POS),
+                "the position stays first-serve (-1) so the next scan re-declares it");
+    }
+
+    @Test
+    void tierBStillPermanentlyParksNotGeneratedOnAGenDisabledLegacyServer() {
+        manager.onSessionConfig(config(64, false), "lss-test"); // generation DISABLED
+        manager.setV16GenerationDrive(true);
+        manager.trackerForTest().replaceWith(new long[]{POS}, 1);
+
+        manager.onColumnNotGenerated(POS);
+
+        assertTrue(manager.columnsForTest().isSessionSatisfied(POS),
+                "a gen-DISABLED legacy server's NOT_GENERATED is genuinely permanent — park it; "
+                        + "re-declaring would starve the want-set forever");
+    }
+
+    @Test
+    void withoutTierBNotGeneratedParksPermanentlyEvenOnAGenEnabledSession() {
+        manager.onSessionConfig(config(64, true), "lss-test"); // gen enabled, but Tier B OFF (default)
+        manager.trackerForTest().replaceWith(new long[]{POS}, 1);
+
+        manager.onColumnNotGenerated(POS);
+
+        assertTrue(manager.columnsForTest().isSessionSatisfied(POS),
+                "the transient treatment is Tier-B-only — the v18 / Tier-A default keeps the "
+                        + "session-permanent park (the want-set model's NOT_GENERATED contract)");
+    }
+
+    @Test
+    void shouldDriveV16GenerationTruthTable() {
+        int v16 = LSSConstants.V16_COMPAT_PROTOCOL_VERSION;
+        int v18 = LSSConstants.PROTOCOL_VERSION;
+        assertTrue(LSSClientNetworking.shouldDriveV16Generation(v16, true),
+                "v16 session + opt-in → drive generation");
+        assertFalse(LSSClientNetworking.shouldDriveV16Generation(v16, false),
+                "v16 session without opt-in → load-only (Tier A)");
+        assertFalse(LSSClientNetworking.shouldDriveV16Generation(v18, true),
+                "a v18 session must NEVER drive the v16 rewrite, even with the opt-in on");
+        assertFalse(LSSClientNetworking.shouldDriveV16Generation(v18, false), "v18 + off → off");
+    }
 }
