@@ -12,6 +12,10 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 FABRIC_DIR="$SCRIPT_DIR/test-server/fabric"
 PAPER_DIR="$SCRIPT_DIR/test-server/paper"
 FOLIA_DIR="$SCRIPT_DIR/test-server/folia"
+# Legacy = an OLD LSS release (protocol 16) on the SAME Minecraft version, for eyeballing the
+# client-side v16 backward-compat path (a current v0.7.0+ client joining a pre-v0.7.0 server).
+# See docs/planning/v16-client-compat-design.md.
+LEGACY_DIR="$SCRIPT_DIR/test-server/fabric-legacy"
 
 # --- Fabric versions ---
 FABRIC_MC_VERSION="26.2"
@@ -26,6 +30,15 @@ FOLIA_MC_VERSION="26.2"
 FABRIC_SERVER_URL="https://meta.fabricmc.net/v2/versions/loader/${FABRIC_MC_VERSION}/${FABRIC_LOADER_VERSION}/${FABRIC_INSTALLER_VERSION}/server/jar"
 FABRIC_API_URL="https://cdn.modrinth.com/data/P7dR8mSH/versions/Cpy2Px2f/fabric-api-0.154.0%2B26.2.jar"
 C2ME_URL="https://cdn.modrinth.com/data/VSNURh3q/versions/nvOkOiyi/c2me-fabric-mc26.2-0.4.2-alpha.0.9.jar"
+
+# --- Legacy (protocol-16) LSS server ---
+# The last pre-v0.7.0 release on this Minecraft line (26.2), pulled straight from GitHub
+# Releases (a real protocol-16 server, not a rebuild). MC 26.2 == the current line, so a
+# current client CAN join it — only the LSS protocol differs (16 vs 18), which is exactly
+# what the v16 client-compat path bridges. Bump this when a newer pre-v0.7.0 tag is preferred.
+LEGACY_LSS_VERSION="0.6.2"
+LEGACY_LSS_MC="26.2"
+LEGACY_LSS_FABRIC_URL="https://github.com/VoX/lod-server-support/releases/download/v${LEGACY_LSS_VERSION}/lod-server-support-fabric-${LEGACY_LSS_VERSION}%2B${LEGACY_LSS_MC}.jar"
 
 # --- Java version check ---
 JAVA_MAJOR=$(java -version 2>&1 | head -1 | sed 's/.*"\([0-9]\+\).*/\1/')
@@ -332,6 +345,47 @@ run_folia() {
 }
 
 # ============================================================
+# Legacy (protocol-16 LSS server, for v16 client-compat eyeballing)
+# ============================================================
+
+setup_legacy() {
+    echo "=== Setting up legacy (LSS v${LEGACY_LSS_VERSION}, protocol 16) Fabric server ==="
+    local mods_dir="$LEGACY_DIR/mods"
+    mkdir -p "$LEGACY_DIR" "$mods_dir"
+
+    # Same MC 26.2 Fabric server launcher + Fabric API as the current Fabric server — only the
+    # LSS jar differs (an old release instead of the local build). No C2ME: keep the legacy
+    # server a clean vanilla-IO protocol-16 baseline so nothing confounds the compat eyeball.
+    download "$FABRIC_SERVER_URL" "$LEGACY_DIR/fabric-server-launch.jar"
+
+    if [ ! -f "$LEGACY_DIR/eula.txt" ]; then
+        echo "eula=true" > "$LEGACY_DIR/eula.txt"
+    fi
+
+    write_server_properties "$LEGACY_DIR" 25568 "LSS LEGACY v${LEGACY_LSS_VERSION} (protocol 16)"
+    write_ops_json "$LEGACY_DIR"
+    write_lss_config "$LEGACY_DIR/config"
+
+    echo "=== Installing legacy mods ==="
+    download "$FABRIC_API_URL" "$mods_dir/fabric-api.jar"
+
+    echo "  Installing LSS v${LEGACY_LSS_VERSION} (downloaded release — NOT the local build)..."
+    local legacy_jar="$mods_dir/lod-server-support-fabric-${LEGACY_LSS_VERSION}.jar"
+    download "$LEGACY_LSS_FABRIC_URL" "$legacy_jar"
+    # Guard against a stale current-build jar left behind by an earlier copy/paste.
+    find "$mods_dir" -maxdepth 1 -name 'lod-server-support-fabric*.jar' \
+        ! -name "$(basename "$legacy_jar")" -delete 2>/dev/null || true
+    echo "  Installed: $(basename "$legacy_jar")"
+}
+
+run_legacy() {
+    cd "$LEGACY_DIR"
+    # No admissionTrace flag — that is a dev-build-only system property the v${LEGACY_LSS_VERSION}
+    # release jar never reads.
+    java -Xmx${SERVER_RAM} -Xms${SERVER_RAM} -jar fabric-server-launch.jar nogui
+}
+
+# ============================================================
 # Combined
 # ============================================================
 
@@ -451,13 +505,31 @@ case "${1:-run}" in
         echo ""
         run_folia
         ;;
+    run-legacy)
+        setup_legacy
+        echo ""
+        echo "=== Starting legacy LSS v${LEGACY_LSS_VERSION} server (protocol 16) ==="
+        echo "  Connect to: localhost:25568  (join with a CURRENT v0.7.0+ client)"
+        echo ""
+        echo "  What to look for (client-side v16 backward compat):"
+        echo "   - Client log: 'Connected to a legacy (protocol 16) server — using v16"
+        echo "     backward-compat wire' (after a ~5 s discovery delay: the client announces 18,"
+        echo "     this old server drops it silently, then the client re-handshakes as 16)."
+        echo "   - LODs render for terrain the server ALREADY generated. It is LOAD-ONLY:"
+        echo "     cold/never-visited terrain will NOT fill (an old server only generates for"
+        echo "     v16 clients). So: walk/fly around near spawn first to generate terrain, THEN"
+        echo "     move out and watch the already-generated area appear as LODs behind you."
+        echo "   - Old-server command is '/lsslod' (this jar predates any /vss rebrand)."
+        echo ""
+        run_legacy
+        ;;
     clean)
         echo "Removing test servers..."
         rm -rf "$SCRIPT_DIR/test-server"
         echo "Done."
         ;;
     *)
-        echo "Usage: $0 {setup|run|run-fabric|run-fabric-no-c2me|run-paper|run-folia|update|clean}"
+        echo "Usage: $0 {setup|run|run-fabric|run-fabric-no-c2me|run-paper|run-folia|run-legacy|update|clean}"
         echo ""
         echo "  setup      - Download and set up all servers"
         echo "  run        - Set up and start all servers (default)"
@@ -465,7 +537,9 @@ case "${1:-run}" in
         echo "  run-fabric-no-c2me - Same, with any c2me*.jar in mods/ disabled (A/B testing)"
         echo "  run-paper  - Set up and start Paper server only (port 25566)"
         echo "  run-folia  - Set up and start Folia server only (port 25567)"
-        echo "  update     - Rebuild and install LSS JARs for all servers"
+        echo "  run-legacy - Set up and start an OLD LSS v${LEGACY_LSS_VERSION} (protocol 16) server (port 25568),"
+        echo "               for eyeballing the client-side v16 backward-compat path"
+        echo "  update     - Rebuild and install LSS JARs for all servers (NOT the legacy one)"
         echo "  clean      - Delete all test server directories"
         echo ""
         echo "Environment variables:"
