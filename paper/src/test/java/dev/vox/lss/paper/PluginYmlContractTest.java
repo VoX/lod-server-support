@@ -71,8 +71,18 @@ class PluginYmlContractTest {
     @Test
     void lsslodCommandIsDeclaredBehindTheAdminPermission() {
         assertNotNull(yml.getConfigurationSection("commands/lsslod"),
-                "PaperCommands is wired to getCommand(\"lsslod\"); without this section the command vanishes");
+                "registerCommands() reads the declared command name from plugin.yml; without this "
+                        + "section the command vanishes (the VSS repackage rewrites the key to vsslod)");
         assertEquals("lss.admin", yml.getString("commands/lsslod/permission"));
+    }
+
+    @Test
+    void exactlyOneCommandIsDeclared() {
+        // registerCommands() resolves the command name as getCommands().keySet().first(), so a
+        // single declared command is what makes that deterministic (and lets the VSS repackage
+        // rename the key without a code fork). A second command would make the pick ambiguous.
+        assertEquals(1, yml.getConfigurationSection("commands").getKeys(false).size(),
+                "the plugin must declare exactly one command (registerCommands picks the first)");
     }
 
     @Test

@@ -329,6 +329,11 @@ class LSSPaperPluginGlueTest {
         }
 
         @Override
+        public void loadBranding() {
+            order.add("loadBranding");
+        }
+
+        @Override
         public PaperConfig loadConfig() {
             order.add("loadConfig");
             return config;
@@ -378,7 +383,7 @@ class LSSPaperPluginGlueTest {
     void enablePlanRunsEveryStepInProductionOrderWhenEnabled() {
         var steps = new RecordingSteps(true);
         LSSPaperPlugin.runEnablePlan(steps);
-        assertEquals(List.of("loadConfig", "registerChannels", "registerQuitListener", "startService",
+        assertEquals(List.of("loadBranding", "loadConfig", "registerChannels", "registerQuitListener", "startService",
                         "registerWorldHandler", "registerCommands", "scheduleServiceTick", "initSoakBridge"),
                 steps.order,
                 "/reload re-runs onEnable, so this order is the re-enable contract; the soak bridge "
@@ -398,7 +403,7 @@ class LSSPaperPluginGlueTest {
         LSSPaperPlugin.runEnablePlan(steps);
         assertFalse(steps.order.contains("registerWorldHandler"),
                 "enabled=false must never construct PaperWorldHandler (tracker would grow unbounded)");
-        assertEquals(List.of("loadConfig", "registerChannels", "registerQuitListener", "startService",
+        assertEquals(List.of("loadBranding", "loadConfig", "registerChannels", "registerQuitListener", "startService",
                         "registerCommands", "scheduleServiceTick", "initSoakBridge"),
                 steps.order, "every other enable step still runs, in the same order");
     }

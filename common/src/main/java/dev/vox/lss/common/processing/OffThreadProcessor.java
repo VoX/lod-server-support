@@ -1,6 +1,7 @@
 package dev.vox.lss.common.processing;
 
 import dev.vox.lss.common.LSSConstants;
+import dev.vox.lss.common.Brand;
 import dev.vox.lss.common.LSSLogger;
 import dev.vox.lss.common.PositionUtil;
 import dev.vox.lss.common.voxel.ColumnTimestampCache;
@@ -110,7 +111,7 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
     // and stopping it in shutdown() ties its lifetime to the server run. The factory captures
     // no instance state, so initializing it in the field initializer is this-escape-safe.
     private final ExecutorService saveExecutor = Executors.newSingleThreadExecutor(r -> {
-        Thread t = new Thread(r, "LSS-TimestampSave");
+        Thread t = new Thread(r, Brand.shortName() + "-TimestampSave");
         t.setDaemon(true);
         return t;
     });
@@ -141,11 +142,11 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
                 new ProcessingDiagnostics(), new SequenceCounter());
         this.requestRouter = new IncomingRequestRouter<>(this, this.players, this.timestampCache,
                 this.dedupTracker, diskReader != null, generationAvailable, this.ctx);
-        this.processingThread = new Thread(this::processingLoop, "LSS Processing Thread");
+        this.processingThread = new Thread(this::processingLoop, Brand.shortName() + " Processing Thread");
         this.processingThread.setDaemon(true);
         this.processingThread.setPriority(Thread.NORM_PRIORITY - 1);
         this.processingThread.setUncaughtExceptionHandler((th, ex) ->
-                LSSLogger.error("LSS processing thread died unexpectedly", ex));
+                LSSLogger.error(Brand.shortName() + " processing thread died unexpectedly", ex));
     }
 
     public void start() {

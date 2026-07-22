@@ -107,12 +107,16 @@ runPaper.folia.registerTask {
 // ---- Voxy Server Side (VSS) branded variant -------------------------------------------
 //
 // Same plugin, second Modrinth project (voxy-server-side). Byte-copies the built release
-// shadowJar and rewrites ONLY the plugin.yml `description` — every class and the manifest
-// (incl. paperweight's mappings-namespace stamp) are copied verbatim, and `name:
-// LodServerSupport` is DELIBERATELY kept so the plugin identity / config folder are shared
-// and an LSS server and a VSS client (and vice versa) stay fully compatible. Paper plugins
-// have no embedded icon; the VSS icon lives on the Modrinth project page.
-// See docs/planning/ci-dual-publish.md. release_check.py pins `name: LodServerSupport`.
+// shadowJar and rewrites only USER-FACING + LOCAL surfaces in plugin.yml (description,
+// website, the command key lsslod->vsslod, the command/permission descriptions, and the
+// permission node lss.admin->vss.admin) plus the lss-brand.properties display resource.
+// Every class and the manifest (incl. paperweight's mappings-namespace stamp) are copied
+// verbatim, and `name: LodServerSupport` / `main:` / `api-version:` are DELIBERATELY kept
+// so the plugin identity / config folder are shared and an LSS server and a VSS client (and
+// vice versa) stay fully wire-compatible (the command name + permission are local, never on
+// the wire). Paper plugins have no embedded icon; the VSS icon lives on the Modrinth page.
+// See docs/planning/ci-dual-publish.md. release_check.py pins the identity lines verbatim
+// and the command/permission/brand rewrites present.
 import java.util.zip.ZipFile
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
@@ -140,18 +144,34 @@ tasks.register('vssJar') {
                     def e = entries.nextElement()
                     if (e.name == 'plugin.yml') {
                         def text = zf.getInputStream(e).getText('UTF-8')
-                        // Replace ONLY the top-level (column-0) description and website lines;
-                        // the indented command/permission descriptions are left untouched.
-                        // name/main/version/api-version/commands/permissions are all preserved.
-                        // release_check.py's pair check pins this exact scope (both lines must
-                        // differ, nothing else may).
+                        // Rewrite the top-level description/website AND the LOCAL command +
+                        // permission branding. name/main/version/api-version and the
+                        // folia-supported ABSENCE are all preserved — those are the
+                        // interchangeability/identity contract. The command name and
+                        // permission node are LOCAL (an admin types /vsslod on their own
+                        // server), never on the wire, so LSS and VSS stay wire-compatible.
+                        // release_check.py's pair check pins this exact scope.
                         text = text.replaceFirst(/(?m)^description:.*$/,
                                 'description: Server-side backend for Voxy multiplayer LOD rendering. Identical to LOD Server Support (same plugin, second distribution channel) — fully interchangeable.')
                         text = text.replaceFirst(/(?m)^website:.*$/,
                                 'website: https://modrinth.com/plugin/voxy-server-side')
+                        // Command key + usage: lsslod -> vsslod (both occurrences).
+                        text = text.replace('lsslod', 'vsslod')
+                        // Command + permission descriptions and the permission node.
+                        text = text.replace('LOD Server Support admin commands', 'Voxy Server Side admin commands')
+                        text = text.replace('Access to LSS admin commands', 'Access to VSS admin commands')
+                        text = text.replace('lss.admin', 'vss.admin')
                         def ne = new ZipEntry('plugin.yml')
                         zos.putNextEntry(ne)
                         zos.write(text.getBytes('UTF-8'))
+                        zos.closeEntry()
+                    } else if (e.name == 'lss-brand.properties') {
+                        // Runtime display branding (Brand.java). Display values only — the
+                        // wire surface (channels, protocol, payloads) is untouched.
+                        def props = 'shortName=VSS\ndisplayName=Voxy Server Side\nclientCommand=vss\nserverCommand=vsslod\n'
+                        def ne = new ZipEntry('lss-brand.properties')
+                        zos.putNextEntry(ne)
+                        zos.write(props.getBytes('UTF-8'))
                         zos.closeEntry()
                     } else {
                         def ne = new ZipEntry(e.name)

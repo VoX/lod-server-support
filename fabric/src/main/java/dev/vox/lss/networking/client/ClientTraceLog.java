@@ -1,5 +1,6 @@
 package dev.vox.lss.networking.client;
 
+import dev.vox.lss.common.Brand;
 import dev.vox.lss.common.LSSLogger;
 import net.minecraft.client.Minecraft;
 
@@ -13,8 +14,9 @@ import java.time.format.DateTimeFormatter;
 
 /**
  * Opt-in client-side event trace for diagnosing request-loop behavior live (scan order,
- * movement recentering, receive order). Toggled by {@code /lss trace}; writes compact
- * JSONL to {@code logs/lss-trace-<timestamp>.jsonl} in the game directory. Disabled it
+ * movement recentering, receive order). Toggled by {@code /<brand> trace} ({@code /lss} or
+ * {@code /vss}); writes compact JSONL to {@code logs/<brand>-trace-<timestamp>.jsonl} in the
+ * game directory (the filename prefix follows {@link dev.vox.lss.common.Brand}). Disabled it
  * costs one volatile read per hook — every formatting happens behind the gate. Main
  * client thread only (every hook site lives on it); the writer flushes per line so a
  * crash or force-quit loses nothing.
@@ -41,7 +43,7 @@ final class ClientTraceLog {
             try {
                 writer.close();
             } catch (IOException e) {
-                LSSLogger.error("Failed to close LSS trace", e);
+                LSSLogger.error("Failed to close " + Brand.shortName() + " trace", e);
             }
             writer = null;
             return new Toggle(null, false);
@@ -52,11 +54,11 @@ final class ClientTraceLog {
             try {
                 writer.close();
             } catch (IOException e) {
-                LSSLogger.error("Failed to close leaked LSS trace writer", e);
+                LSSLogger.error("Failed to close leaked " + Brand.shortName() + " trace writer", e);
             }
             writer = null;
         }
-        var name = "lss-trace-" + LocalDateTime.now().format(
+        var name = Brand.clientCommand() + "-trace-" + LocalDateTime.now().format(
                 DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss")) + ".jsonl";
         var path = Minecraft.getInstance().gameDirectory.toPath().resolve("logs").resolve(name);
         try {
@@ -66,7 +68,7 @@ final class ClientTraceLog {
             enabled = true;
             return new Toggle(path, false);
         } catch (IOException e) {
-            LSSLogger.error("Failed to open LSS trace at " + path, e);
+            LSSLogger.error("Failed to open " + Brand.shortName() + " trace at " + path, e);
             writer = null;
             return new Toggle(null, true);
         }
@@ -89,7 +91,7 @@ final class ClientTraceLog {
                 // best effort — the handle must not outlive the dead trace
             }
             writer = null;
-            LSSLogger.error("LSS trace write failed — trace stopped", e);
+            LSSLogger.error(Brand.shortName() + " trace write failed — trace stopped", e);
         }
     }
 }

@@ -1,5 +1,6 @@
 package dev.vox.lss.paper;
 
+import dev.vox.lss.common.Brand;
 import dev.vox.lss.common.HandshakeGate;
 import dev.vox.lss.common.LSSConstants;
 import dev.vox.lss.common.LSSLogger;
@@ -36,6 +37,8 @@ public class LSSPaperPlugin extends JavaPlugin implements PluginMessageListener,
      * and /reload re-runs the identical sequence).
      */
     interface EnableSteps {
+        void loadBranding();
+
         PaperConfig loadConfig();
 
         void registerChannels();
@@ -61,6 +64,8 @@ public class LSSPaperPlugin extends JavaPlugin implements PluginMessageListener,
      * contract.
      */
     static void runEnablePlan(EnableSteps steps) {
+        // FIRST: resolve display branding before any service/thread/log line is created.
+        steps.loadBranding();
         var config = steps.loadConfig();
 
         // Register incoming channels (C2S)
@@ -72,7 +77,7 @@ public class LSSPaperPlugin extends JavaPlugin implements PluginMessageListener,
 
         // Start processing service
         var service = steps.startService(config);
-        LSSLogger.info("Starting LSS LOD request processing service");
+        LSSLogger.info("Starting " + Brand.shortName() + " LOD request processing service");
 
         // Register dirty chunk event listeners. enabled=false gates here (mirrors Fabric's
         // ChunkMapSaveHook gate): the service tick — and so the dirty-broadcast drain — is
@@ -91,12 +96,17 @@ public class LSSPaperPlugin extends JavaPlugin implements PluginMessageListener,
         // Dev-only soak harness (no-op unless -Dlss.soak.scenario is set)
         steps.initSoakBridge();
 
-        LSSLogger.info("LOD Server Support (Paper) enabled");
+        LSSLogger.info(Brand.displayName() + " (Paper) enabled");
     }
 
     @Override
     public void onEnable() {
         runEnablePlan(new EnableSteps() {
+            @Override
+            public void loadBranding() {
+                Brand.load(getClassLoader());
+            }
+
             @Override
             public PaperConfig loadConfig() {
                 lssConfig = PaperConfig.load(getDataFolder().toPath());
@@ -131,7 +141,12 @@ public class LSSPaperPlugin extends JavaPlugin implements PluginMessageListener,
 
             @Override
             public void registerCommands() {
-                var cmd = getCommand("lsslod");
+                // Read the declared command name from plugin.yml rather than hardcoding it,
+                // so the Voxy Server Side repackage (which rewrites plugin.yml's command key
+                // lsslod -> vsslod) registers its executor without a code fork. The plugin
+                // declares exactly one command.
+                var cmdName = getDescription().getCommands().keySet().stream().findFirst().orElse(null);
+                var cmd = cmdName == null ? null : getCommand(cmdName);
                 if (cmd != null) {
                     var executor = new PaperCommands(LSSPaperPlugin.this);
                     cmd.setExecutor(executor);
@@ -170,13 +185,13 @@ public class LSSPaperPlugin extends JavaPlugin implements PluginMessageListener,
         var service = this.requestService;
         this.requestService = null;
         if (service != null) {
-            LSSLogger.info("Stopping LSS LOD request processing service");
+            LSSLogger.info("Stopping " + Brand.shortName() + " LOD request processing service");
             service.shutdown();
         }
 
         getServer().getMessenger().unregisterIncomingPluginChannel(this);
 
-        LSSLogger.info("LOD Server Support (Paper) disabled");
+        LSSLogger.info(Brand.displayName() + " (Paper) disabled");
     }
 
     @Override
@@ -288,7 +303,7 @@ public class LSSPaperPlugin extends JavaPlugin implements PluginMessageListener,
         var handshake = PaperPayloadHandler.decodeHandshake(data);
         if (handshake == null) return;
 
-        LSSLogger.info("LSS handshake received from " + playerName
+        LSSLogger.info(Brand.shortName() + " handshake received from " + playerName
                 + " (protocol v" + handshake.protocolVersion()
                 + ", capabilities=" + handshake.capabilities() + ")");
 
@@ -299,7 +314,7 @@ public class LSSPaperPlugin extends JavaPlugin implements PluginMessageListener,
         if (!decision.sendSessionConfig()) {
             // See HandshakeGate.Outcome.VERSION_MISMATCH: replying would kick the player.
             LSSLogger.warn("Player " + playerName
-                    + " has incompatible LSS protocol version " + handshake.protocolVersion()
+                    + " has incompatible " + Brand.shortName() + " protocol version " + handshake.protocolVersion()
                     + " (server: " + LSSConstants.PROTOCOL_VERSION + "), skipping LOD distribution");
             return;
         }
@@ -325,7 +340,7 @@ public class LSSPaperPlugin extends JavaPlugin implements PluginMessageListener,
         if (decision.registerPlayer()) {
             registrar.register(handshake.capabilities(), decision.dialect());
             LSSLogger.info("Player " + playerName
-                    + " registered for LSS LOD request processing (caps="
+                    + " registered for " + Brand.shortName() + " LOD request processing (caps="
                     + handshake.capabilities() + (v16 ? ", v16-compat" : "") + ")");
         }
     }

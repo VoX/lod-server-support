@@ -1,5 +1,6 @@
 package dev.vox.lss.networking.client;
 
+import dev.vox.lss.common.Brand;
 import dev.vox.lss.common.LSSConstants;
 import dev.vox.lss.common.LSSLogger;
 import dev.vox.lss.networking.payloads.SessionConfigS2CPayload;
@@ -126,7 +127,7 @@ final class ClientSessionGate {
             // handshake from the client tick.
             this.v16DiscoveryArmed = enableV16ServerCompat;
         } catch (Exception e) {
-            LSSLogger.debug("Handshake send failed (server likely doesn't have LSS): " + e.getMessage());
+            LSSLogger.debug("Handshake send failed (server likely doesn't have " + Brand.shortName() + "): " + e.getMessage());
         }
     }
 
@@ -165,7 +166,7 @@ final class ClientSessionGate {
         int version = payload.protocolVersion();
         boolean v16 = version == LSSConstants.V16_COMPAT_PROTOCOL_VERSION && enableV16ServerCompat;
         if (version != LSSConstants.PROTOCOL_VERSION && !v16) {
-            LSSLogger.warn("Server has incompatible LSS protocol version " + version
+            LSSLogger.warn("Server has incompatible " + Brand.shortName() + " protocol version " + version
                     + " (client: " + LSSConstants.PROTOCOL_VERSION + "), LOD distribution disabled");
             this.serverEnabled = false;
             return;

@@ -149,13 +149,15 @@ jar {
 // ---- Voxy Server Side (VSS) branded variant -------------------------------------------
 //
 // Same mod, second Modrinth project (voxy-server-side). Produced by BYTE-COPYING the built,
-// remapped LSS jar and rewriting ONLY the branding fields of fabric.mod.json + injecting the
-// VSS icon — every class, mixin, refmap, the Loom-injected `jars` field, and the nested
-// META-INF/jars/common jar are copied verbatim. This guarantees the VSS jar is wire- and
-// behavior-identical to the LSS jar (same protocol, channels, mod id `lss`, config paths), so
-// an LSS server and a VSS client (and every other combination) are fully compatible. The
-// identity fields (id / entrypoints / mixins / depends / jars) are DELIBERATELY untouched —
-// release_check.py pins `id == lss`. See docs/planning/ci-dual-publish.md.
+// remapped LSS jar and rewriting only the fabric.mod.json branding fields + the
+// lss-brand.properties display resource (which drives the LOCAL /vss command + all VSS
+// display text via common/Brand) + injecting the VSS icon — every class, mixin, refmap, the
+// Loom-injected `jars` field, and the nested META-INF/jars/common jar are copied verbatim.
+// This guarantees the VSS jar is wire-identical to the LSS jar (same protocol, channels, mod
+// id `lss`, config paths — the nested common jar is byte-identical, release_check.py pins the
+// SHA), so an LSS server and a VSS client (and every other combination) are fully compatible.
+// The identity fields (id / entrypoints / mixins / depends / jars) are DELIBERATELY untouched
+// — release_check.py pins `id == lss`. See docs/planning/ci-dual-publish.md.
 import java.util.zip.ZipFile
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
@@ -199,6 +201,16 @@ tasks.register('vssJar') {
                         def ne = new ZipEntry('fabric.mod.json')
                         zos.putNextEntry(ne)
                         zos.write(bytes)
+                        zos.closeEntry()
+                    } else if (e.name == 'lss-brand.properties') {
+                        // Runtime display branding (Brand.java reads this at startup). Rewrite
+                        // the DISPLAY values only — the mod id, channels, protocol and payloads
+                        // are untouched, so LSS and VSS stay wire-compatible. Command literals
+                        // here are LOCAL (client /vss, server /vsslod), never on the wire.
+                        def props = 'shortName=VSS\ndisplayName=Voxy Server Side\nclientCommand=vss\nserverCommand=vsslod\n'
+                        def ne = new ZipEntry('lss-brand.properties')
+                        zos.putNextEntry(ne)
+                        zos.write(props.getBytes('UTF-8'))
                         zos.closeEntry()
                     } else {
                         // Byte-preserving copy: keep the original compression method, and for
