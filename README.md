@@ -16,24 +16,9 @@ All builds are on [Modrinth](https://modrinth.com/plugin/lod-server-support) —
 
 Since v0.7.0, every release is additionally published to the
 [Voxy Server Side](https://modrinth.com/plugin/voxy-server-side) Modrinth page. Both listings
-ship the **same mod** from the same CI build — identical internals and networking protocol;
-only the display name, description, icon, and the client config filename differ. Compatibility
-is total, in every direction:
-
-- A "Voxy Server Side" client on an "LOD Server Support" server (and every other
-  client/server combination) negotiates the identical session — the wire carries no branding,
-  so the server cannot even tell which listing a player installed from.
-- The v0.6.x compatibility layer (see below) serves legacy clients from **either** listing
-  the same way.
-- Swapping one jar for the other on an existing install keeps all config — same mod id, and
-  each jar adopts the other's client config file when that's the one already present (Voxy
-  Server Side prefers `config/vss-client-config.json`, LOD Server Support prefers
-  `config/lss-client-config.json`; the server config file is shared). Only a fresh install
-  creates the brand's own file.
-
-Install one or the other, never both — the two jars declare the same mod identity, which is
-deliberate: on Fabric the game refuses to launch with both installed (duplicate mod id
-error), and on Paper only one of the two same-named plugins loads.
+ship the **same mod** identical internals, networking protocol, and
+config paths; only the display name, description, and icon differ. Compatibility is total, you
+can join LSS servers with a VSS client and vice versa. 
 
 ### Redistribution
 
