@@ -6,6 +6,8 @@ Supports **Fabric** clients and **Fabric**, **Paper**, **Purpur**, **Folia** ser
 
 https://github.com/user-attachments/assets/721fb344-890e-4e03-ab36-539444427f7b
 
+**Try it live:** join our Minecraft 26.2 test server at **`lod-server-support.modrinth.gg`** with [Voxy](https://modrinth.com/mod/voxy) and this mod installed to watch the LOD terrain stream in.
+
 ## Downloads
 
 All builds are on [Modrinth](https://modrinth.com/plugin/lod-server-support) — pick the file matching your Minecraft version: `lod-server-support-fabric` (the client/server Fabric mod) or `lod-server-support-paper` (the server plugin). GitHub Releases on this repository mirror every version.

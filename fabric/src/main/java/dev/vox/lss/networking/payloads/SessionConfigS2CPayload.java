@@ -64,18 +64,37 @@ public record SessionConfigS2CPayload(
                     },
                     buf -> {
                         int version = buf.readVarInt();
-                        if (version != LSSConstants.PROTOCOL_VERSION) {
-                            // Foreign layout (e.g. a v15 server's 10-field config). The version
-                            // VarInt is the first field in every layout, so drain the rest to
-                            // avoid a trailing-bytes decoder kick and let the handler's version
-                            // gate log the mismatch and disable LSS.
-                            buf.skipBytes(buf.readableBytes());
-                            return new SessionConfigS2CPayload(version, false, 0, false);
+                        // Establish (on the netty decode thread, before any column decodes)
+                        // whether the SUBSEQUENT VoxelColumn frames omit the source byte —
+                        // true only for a v16 server. See V16ClientWire.
+                        V16ClientWire.observeSessionConfigVersion(version);
+                        if (version == LSSConstants.PROTOCOL_VERSION) {
+                            boolean enabled = buf.readBoolean();
+                            int lodDist = buf.readVarInt();
+                            boolean genEnabled = buf.readBoolean();
+                            return new SessionConfigS2CPayload(version, enabled, lodDist, genEnabled);
                         }
-                        boolean enabled = buf.readBoolean();
-                        int lodDist = buf.readVarInt();
-                        boolean genEnabled = buf.readBoolean();
-                        return new SessionConfigS2CPayload(version, enabled, lodDist, genEnabled);
+                        if (version == LSSConstants.V16_COMPAT_PROTOCOL_VERSION) {
+                            // Client v16 backward compat: an old server's 6-field layout — the
+                            // two concurrency-cap VarInts sit between lodDistance and
+                            // generationEnabled (the exact mirror of the v16Legacy ENCODE
+                            // above). The gate accepts version 16 only when
+                            // enableV16ServerCompat is on; we only ever RECEIVE this by having
+                            // announced 16 ourselves, so a v18-only client never reaches here.
+                            boolean enabled = buf.readBoolean();
+                            int lodDist = buf.readVarInt();
+                            int syncCap = buf.readVarInt();
+                            int genCap = buf.readVarInt();
+                            boolean genEnabled = buf.readBoolean();
+                            return SessionConfigS2CPayload.v16Legacy(enabled, lodDist, syncCap,
+                                    genCap, genEnabled);
+                        }
+                        // Foreign layout (e.g. a v15 server's 10-field config). The version
+                        // VarInt is the first field in every layout, so drain the rest to
+                        // avoid a trailing-bytes decoder kick and let the handler's version
+                        // gate log the mismatch and disable LSS.
+                        buf.skipBytes(buf.readableBytes());
+                        return new SessionConfigS2CPayload(version, false, 0, false);
                     }
             );
 

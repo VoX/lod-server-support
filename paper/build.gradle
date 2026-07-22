@@ -121,15 +121,15 @@ import java.util.zip.ZipFile
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
-def voxyPaperVersion = providers.environmentVariable('CI').map { it == 'true' }.getOrElse(false)
+def vssPaperVersion = providers.environmentVariable('CI').map { it == 'true' }.getOrElse(false)
         ? "${project.mod_version}+${project.minecraft_version}" : ''
-def voxyPaperJarName = "voxy-server-side-paper" + (voxyPaperVersion ? "-${voxyPaperVersion}" : "") + ".jar"
+def vssPaperJarName = "voxy-server-side-paper" + (vssPaperVersion ? "-${vssPaperVersion}" : "") + ".jar"
 
-tasks.register('voxyJar') {
+tasks.register('vssJar') {
     description = 'Repackages the LSS Paper jar under the Voxy Server Side branding.'
     dependsOn tasks.named('shadowJar')
     def srcJar = tasks.named('shadowJar').flatMap { it.archiveFile }
-    def outFile = layout.buildDirectory.file("libs/${voxyPaperJarName}")
+    def outFile = layout.buildDirectory.file("libs/${vssPaperJarName}")
     inputs.file(srcJar)
     outputs.file(outFile)
     doLast {
@@ -195,7 +195,7 @@ tasks.register('voxyJar') {
 
 // shadowJar is what CI/release build; hang the VSS repackage off it so both jars always
 // appear together (build.yml/release.yml call :paper:shadowJar).
-tasks.named('shadowJar') { finalizedBy tasks.named('voxyJar') }
+tasks.named('shadowJar') { finalizedBy tasks.named('vssJar') }
 
 tasks.withType(JavaCompile).configureEach {
     it.options.release = 25

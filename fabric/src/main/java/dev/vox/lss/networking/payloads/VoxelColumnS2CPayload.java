@@ -108,7 +108,13 @@ public final class VoxelColumnS2CPayload implements CustomPacketPayload {
         ResourceKey<Level> dim = ResourceKey.create(Registries.DIMENSION,
                 Identifier.parse(buf.readUtf(LSSConstants.MAX_DIMENSION_STRING_LENGTH)));
         long columnTimestamp = buf.readLong();
-        byte source = buf.readByte();
+        // Client v16 backward compat: a protocol-16 server's column frame has NO source byte
+        // (added in protocol 18). The frame carries no version marker, so the flag set by the
+        // preceding SessionConfig decode (same netty thread, frame order) is the only signal;
+        // default it to -1 ("unknown", passed through verbatim). When the flag is false —
+        // every v18 session, and every client that never announced 16 — this reads the source
+        // byte exactly as before, so v18 decode is byte-identical.
+        byte source = V16ClientWire.isColumnSourceless() ? (byte) -1 : buf.readByte();
         byte[] sectionBytes = buf.readByteArray(LSSConstants.MAX_SECTIONS_SIZE);
 
         return new VoxelColumnS2CPayload(cx, cz, dim, columnTimestamp, source, sectionBytes);

@@ -528,8 +528,12 @@ class LodRequestManagerTest {
         long pAfterUnknown = PositionUtil.packPosition(5, 0);
         tracker.replaceWith(new long[]{pReserved, pUpToDate, pNotGen, pUnknown, pAfterUnknown}, 5);
 
-        // Byte 0 (v16's retired rate-limited tag) and byte 99 (a hypothetical future type) are
-        // both unknown to a v17 client and must behave identically: inert.
+        // Byte 0 (v16's retired rate-limited tag) and byte 99 (a hypothetical future type)
+        // must behave identically as far as STATE goes: inert — neither stamps, satisfies, nor
+        // retry-marks its position. (Since client v16 compat, byte 0 is recognized as the v16
+        // rate-limited tag and logged at debug rather than warn — unconditionally, since a v18
+        // server never emits it; a log-level nuance only. The want-set re-declares the position
+        // next scan either way, which is exactly this inertness.)
         LSSClientNetworking.dispatchBatchResponses(manager, new BatchResponseS2CPayload(
                 new byte[]{(byte) 0, LSSConstants.RESPONSE_UP_TO_DATE,
                         LSSConstants.RESPONSE_NOT_GENERATED, (byte) 99, LSSConstants.RESPONSE_UP_TO_DATE},
@@ -938,5 +942,145 @@ class LodRequestManagerTest {
         assertEquals(-1L, manager.columnsForTest().timestampFor(POS),
                 "a pre-flush load result must not resurrect flushed timestamps");
         assertEquals(0, manager.getReceivedColumnCount());
+    }
+
+    // ---- Tier B v16 backward-compat: drive generation on a legacy server ----
+    // (docs/planning/v16-client-compat-design.md §4). The egress rewrites first-serve stamps to
+    // v16's generate trigger; the CORE state stays honest -1 (the rewrite is wire-only).
+
+    @Test
+    void v16GenerationDriveRewritesFirstServeStampsToTheGenerateTrigger() {
+        var ring = configureRing1Disc();
+        manager.setV16GenerationDrive(true);
+        // ring[0] is a resync (received then dirtied → re-declares its known timestamp > 0); the
+        // other seven are first-serve (never received → -1).
+        var columns = manager.columnsForTest();
+        columns.onReceived(ring[0], 5000L);
+        assertTrue(columns.markDirtyIfKnown(ring[0]), "premise: ring[0] re-declares as a resync");
+
+        fireScanRing1();
+
+        assertEquals(1, sent.size(), "one batch on the wire");
+        var batch = sent.get(0);
+        int rewritten = 0;
+        for (int i = 0; i < batch.count(); i++) {
+            long ts = batch.timestamps()[i];
+            if (batch.positions()[i] == ring[0]) {
+                assertEquals(5000L, ts, "a resync stamp (>0) must NOT be rewritten");
+            } else {
+                assertEquals(0L, ts, "a first-serve stamp (-1) becomes 0, v16's generate trigger");
+                rewritten++;
+            }
+            assertNotEquals(-1L, ts, "no first-serve -1 may reach a v16 server under Tier B");
+        }
+        assertEquals(batch.count() - 1, rewritten, "every first-serve entry was rewritten");
+    }
+
+    @Test
+    void withoutV16GenerationDriveFirstServeStampsStayMinusOne() {
+        // The v18 default (Tier B off): the egress is byte-identical — first-serve stays -1.
+        configureRing1Disc(); // v16GenerationDrive defaults false
+        fireScanRing1();
+
+        var batch = sent.get(0);
+        for (int i = 0; i < batch.count(); i++) {
+            assertEquals(-1L, batch.timestamps()[i],
+                    "without Tier B a first-serve stamp stays -1 (v18 byte-identical egress)");
+        }
+    }
+
+    @Test
+    void v16GenerationDriveIsWireOnlyAndLeavesCoreFirstServeStateHonest() {
+        var ring = configureRing1Disc();
+        manager.setV16GenerationDrive(true);
+
+        fireScanRing1();
+
+        // The wire carried 0, but the send buffer / column state still hold the honest -1, so a
+        // later up-to-date or not-generated answer resolves against real first-serve state.
+        for (long p : ring) {
+            assertEquals(-1L, manager.columnsForTest().classify(p),
+                    "the rewrite is wire-only — core classify must still read first-serve (-1)");
+            assertTrue(manager.trackerForTest().isInFlight(p),
+                    "the declared position is still awaiting an answer");
+        }
+    }
+
+    // ---- Tier B: transient NOT_GENERATED heal (a legacy server's gen-slot-full is not permanent) ----
+    // v0.6.2 answers a transient gen-slot-full miss with NOT_GENERATED, which v18 parks forever;
+    // on a gen-ENABLED Tier B session that must instead re-declare so cold terrain actually fills.
+
+    @Test
+    void tierBTreatsNotGeneratedAsReDeclarableOnAGenEnabledLegacyServer() {
+        manager.onSessionConfig(config(64, true), "lss-test"); // generation ENABLED
+        manager.setV16GenerationDrive(true);
+        manager.trackerForTest().replaceWith(new long[]{POS}, 1); // POS is an in-flight first serve
+
+        manager.onColumnNotGenerated(POS);
+
+        assertFalse(manager.columnsForTest().isSessionSatisfied(POS),
+                "Tier B on a gen-enabled legacy server must NOT permanently park NOT_GENERATED — "
+                        + "it is a transient gen-slot-full miss that heals by re-declaration");
+        assertEquals(-1L, manager.columnsForTest().classify(POS),
+                "the position stays first-serve (-1) so the next scan re-declares it");
+    }
+
+    @Test
+    void tierBStillPermanentlyParksNotGeneratedOnAGenDisabledLegacyServer() {
+        manager.onSessionConfig(config(64, false), "lss-test"); // generation DISABLED
+        manager.setV16GenerationDrive(true);
+        manager.trackerForTest().replaceWith(new long[]{POS}, 1);
+
+        manager.onColumnNotGenerated(POS);
+
+        assertTrue(manager.columnsForTest().isSessionSatisfied(POS),
+                "a gen-DISABLED legacy server's NOT_GENERATED is genuinely permanent — park it; "
+                        + "re-declaring would starve the want-set forever");
+    }
+
+    @Test
+    void withoutTierBNotGeneratedParksPermanentlyEvenOnAGenEnabledSession() {
+        manager.onSessionConfig(config(64, true), "lss-test"); // gen enabled, but Tier B OFF (default)
+        manager.trackerForTest().replaceWith(new long[]{POS}, 1);
+
+        manager.onColumnNotGenerated(POS);
+
+        assertTrue(manager.columnsForTest().isSessionSatisfied(POS),
+                "the transient treatment is Tier-B-only — the v18 / Tier-A default keeps the "
+                        + "session-permanent park (the want-set model's NOT_GENERATED contract)");
+    }
+
+    @Test
+    void tierBParksNotGeneratedForACachedResyncEvenOnAGenEnabledLegacyServer() {
+        manager.onSessionConfig(config(64, true), "lss-test"); // gen enabled, Tier B
+        manager.setV16GenerationDrive(true);
+        // A cross-session cached stamp (>0, unvalidated) classifies as a RESYNC — which Tier B
+        // does NOT rewrite to a generate trigger. A NOT_GENERATED for it means the server's copy
+        // is gone and it won't regenerate a ts>0 disk miss, so it must PARK: the heal is
+        // first-serve only, or a deleted-region resync would re-declare the same ts>0 forever.
+        var loaded = new Long2LongOpenHashMap();
+        loaded.put(POS, 5000L);
+        manager.columnsForTest().loadFrom(loaded);
+        assertEquals(5000L, manager.columnsForTest().classify(POS), "premise: POS is a resync (ts>0)");
+        manager.trackerForTest().replaceWith(new long[]{POS}, 1);
+
+        manager.onColumnNotGenerated(POS);
+
+        assertTrue(manager.columnsForTest().isSessionSatisfied(POS),
+                "a resync NOT_GENERATED (the server's cached copy is gone) parks — the transient "
+                        + "heal applies only to first-serve positions Tier B actually drove");
+    }
+
+    @Test
+    void shouldDriveV16GenerationTruthTable() {
+        int v16 = LSSConstants.V16_COMPAT_PROTOCOL_VERSION;
+        int v18 = LSSConstants.PROTOCOL_VERSION;
+        assertTrue(LSSClientNetworking.shouldDriveV16Generation(v16, true),
+                "v16 session + opt-in → drive generation");
+        assertFalse(LSSClientNetworking.shouldDriveV16Generation(v16, false),
+                "v16 session without opt-in → load-only (Tier A)");
+        assertFalse(LSSClientNetworking.shouldDriveV16Generation(v18, true),
+                "a v18 session must NEVER drive the v16 rewrite, even with the opt-in on");
+        assertFalse(LSSClientNetworking.shouldDriveV16Generation(v18, false), "v18 + off → off");
     }
 }

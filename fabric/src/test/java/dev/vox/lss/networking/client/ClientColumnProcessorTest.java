@@ -570,9 +570,9 @@ class ClientColumnProcessorTest {
     @Test
     void disconnectTeardownReportsUndispatchedBeforeSavingCache() {
         var events = new ArrayList<String>();
-        var gate = new ClientSessionGate(processor, () -> {}, cfg -> new OrderRecordingManager(events));
+        var gate = new ClientSessionGate(processor, version -> {}, cfg -> new OrderRecordingManager(events));
         gate.onSessionConfig(new SessionConfigS2CPayload(LSSConstants.PROTOCOL_VERSION, true,
-                64, true), true);
+                64, true), true, true);
         processor.offer(new VoxelColumnS2CPayload(5, 5, dim, 1L, sectionWire(1, 1)), false);
 
         gate.onDisconnect();
@@ -651,9 +651,9 @@ class ClientColumnProcessorTest {
         var proc = new ClientColumnProcessor(
                 (d, cx, cz) -> manager.onIngestFailure(d, PositionUtil.packPosition(cx, cz)),
                 () -> null);
-        var gate = new ClientSessionGate(proc, () -> {}, cfg -> manager);
+        var gate = new ClientSessionGate(proc, version -> {}, cfg -> manager);
         gate.onSessionConfig(new SessionConfigS2CPayload(LSSConstants.PROTOCOL_VERSION, true,
-                64, true), true);
+                64, true), true, true);
         try {
             proc.offer(new VoxelColumnS2CPayload(11, 11, dim, 6000L, truncatedColumnWire()), false);
             proc.drainColumnQueue(dim, LEVEL_SECTIONS, MIN_SECTION_Y, FACTORY, (d, cx, cz, data) -> {},
