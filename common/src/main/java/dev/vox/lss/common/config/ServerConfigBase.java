@@ -52,6 +52,11 @@ public abstract class ServerConfigBase extends JsonConfig {
 
     @Override
     protected String getFileName() {
+        // Deliberately brand-INVARIANT: both LSS and VSS servers use lss-server-config.json.
+        // Unlike the client config (LSSClientConfig, which is brand-driven via
+        // brandedConfigCandidates), the server config was never brand-specific, so keeping one
+        // shared name is what makes an LSS<->VSS server jar swap trivially keep its config. Do
+        // NOT route this through brandedConfigCandidates("server") without a migration story.
         return FILE_NAME;
     }
 

@@ -5,10 +5,15 @@ import dev.vox.lss.common.config.JsonConfig;
 import net.fabricmc.loader.api.FabricLoader;
 
 public class LSSClientConfig extends JsonConfig {
-    private static final String FILE_NAME = "lss-client-config.json";
+    // Brand-primary first, other brand as fallback: the VSS jar (Brand.shortName()=="VSS") prefers
+    // vss-client-config.json but adopts an existing lss-client-config.json; the LSS jar is the
+    // mirror. So a fresh install gets the brand's own file, and an LSS<->VSS jar swap keeps its
+    // config. Brand is loaded by the entrypoint before this class is first touched, so it reads
+    // the correct brand for the running jar. See JsonConfig.brandedConfigCandidates.
+    private static final String[] CANDIDATES = brandedConfigCandidates("client");
 
     public static LSSClientConfig CONFIG =
-            load(LSSClientConfig.class, FILE_NAME, FabricLoader.getInstance().getConfigDir());
+            load(LSSClientConfig.class, CANDIDATES, FabricLoader.getInstance().getConfigDir());
 
     public boolean receiveServerLods = true;
     public int lodDistanceChunks = 0;
@@ -31,7 +36,7 @@ public class LSSClientConfig extends JsonConfig {
 
     @Override
     protected String getFileName() {
-        return FILE_NAME;
+        return CANDIDATES[0]; // brand-primary (creation target / default when not loaded via load())
     }
 
     @Override

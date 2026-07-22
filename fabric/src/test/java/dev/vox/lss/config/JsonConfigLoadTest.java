@@ -38,6 +38,11 @@ class JsonConfigLoadTest {
         static TestServerConfig load(Path configDir) {
             return load(TestServerConfig.class, FILE_NAME, configDir);
         }
+
+        /** Exposes the array-candidate overload (brand-primary first, other brand as fallback). */
+        static TestServerConfig load(String[] candidates, Path configDir) {
+            return load(TestServerConfig.class, candidates, configDir);
+        }
     }
 
     /**
@@ -395,5 +400,104 @@ class JsonConfigLoadTest {
         TestClientConfig second = TestClientConfig.load(configDir); // reload the write-back
         assertEquals(0, second.lodDistanceChunks);
         assertFalse(second.receiveServerLods);
+    }
+
+    // ---- brand-fallback candidate resolution: JsonConfig.load(String[], ...) ----
+    // A branded config resolves its filename from an ordered candidate list — the running brand's
+    // OWN file first, the other brand's file as a fallback — so an LSS<->VSS jar swap keeps the same
+    // config file instead of forking a fresh one. These pin the resolution/adopt/create mechanism
+    // with explicit arrays (independent of which brand is running; the brand-driven ORDERING itself
+    // is pinned in dev.vox.lss.common.ConfigBrandCandidatesTest). "vss"/"lss" here are just two test
+    // filenames — position in the array is what matters, not the names.
+    private static final String[] VSS_FIRST = {"vss-server-config.json", "lss-server-config.json"};
+
+    @Test
+    void candidateLoadPrefersTheFirstExistingCandidate(@TempDir Path configDir) throws Exception {
+        Files.writeString(configDir.resolve("vss-server-config.json"), "{\"lodDistanceChunks\": 111}");
+        Files.writeString(configDir.resolve("lss-server-config.json"), "{\"lodDistanceChunks\": 222}");
+
+        TestServerConfig c = TestServerConfig.load(VSS_FIRST, configDir);
+
+        assertEquals(111, c.lodDistanceChunks, "the primary (first candidate) wins when both exist");
+        // primary re-saved in place (write-back); the fallback is left exactly as authored
+        assertEquals(111, savedJson(configDir, "vss-server-config.json").get("lodDistanceChunks").getAsInt());
+        assertEquals("{\"lodDistanceChunks\": 222}",
+                Files.readString(configDir.resolve("lss-server-config.json")), "the unused fallback is untouched");
+    }
+
+    @Test
+    void candidateLoadFallsBackToSecondAndAdoptsItForWrites(@TempDir Path configDir) throws Exception {
+        // Only the fallback (the OTHER brand's file) exists — a VSS jar dropped onto an LSS install.
+        Files.writeString(configDir.resolve("lss-server-config.json"), "{\"lodDistanceChunks\": 222}");
+
+        TestServerConfig c = TestServerConfig.load(VSS_FIRST, configDir);
+
+        assertEquals(222, c.lodDistanceChunks, "falls back to the other brand's existing file");
+        // adopt-and-write-the-SAME-file: the fallback is migrated in place, NO second primary forked
+        assertTrue(savedJson(configDir, "lss-server-config.json").has("bytesPerSecondLimitPerPlayer"),
+                "the adopted fallback is written back (migrated), not abandoned");
+        assertFalse(Files.exists(configDir.resolve("vss-server-config.json")),
+                "adopting the fallback must NOT fork a fresh primary that would shadow it");
+    }
+
+    @Test
+    void candidateLoadCreatesThePrimaryWhenNoCandidateExists(@TempDir Path configDir) throws Exception {
+        TestServerConfig c = TestServerConfig.load(VSS_FIRST, configDir);
+
+        assertEquals(256, c.lodDistanceChunks); // defaults
+        // This is the assertion that distinguishes activeFileName (candidates[0]) from getFileName()
+        // (which is "lss-..." here): a genuinely fresh install creates the brand-PRIMARY, not getFileName.
+        assertTrue(Files.isRegularFile(configDir.resolve("vss-server-config.json")),
+                "a fresh install creates the brand-primary (first candidate)");
+        assertFalse(Files.exists(configDir.resolve("lss-server-config.json")),
+                "the fallback file is never created from scratch");
+    }
+
+    @Test
+    void adoptedFallbackStaysTheWriteTargetAcrossReloads(@TempDir Path configDir) throws Exception {
+        // The swap-keeps-config guarantee across restarts: once adopted, the fallback stays the write
+        // target — an admin editing it after the swap keeps seeing their edits, and no primary is ever
+        // spawned to shadow it.
+        Files.writeString(configDir.resolve("lss-server-config.json"), "{\"lodDistanceChunks\": 96}");
+
+        TestServerConfig.load(VSS_FIRST, configDir);                                       // adopt lss-*
+        Files.writeString(configDir.resolve("lss-server-config.json"), "{\"lodDistanceChunks\": 128}"); // admin re-edits it
+        TestServerConfig c = TestServerConfig.load(VSS_FIRST, configDir);                  // still resolves lss-*
+
+        assertEquals(128, c.lodDistanceChunks, "the adopted file's later edits still take effect");
+        assertFalse(Files.exists(configDir.resolve("vss-server-config.json")),
+                "no primary is ever spawned to shadow the adopted fallback");
+    }
+
+    @Test
+    void corruptPrimaryIsLeftUntouchedAndDoesNotPromoteTheFallback(@TempDir Path configDir) throws Exception {
+        // The primary EXISTS but is corrupt; the fallback is valid. Resolution stops at the first
+        // existing candidate (the corrupt primary), which is left for the admin to fix — the valid
+        // fallback is NOT silently promoted (that would hide the corruption). Defaults in memory.
+        String brokenPrimary = "{\"lodDistanceChunks\": 111"; // interrupted write: no closing brace
+        Files.writeString(configDir.resolve("vss-server-config.json"), brokenPrimary);
+        Files.writeString(configDir.resolve("lss-server-config.json"), "{\"lodDistanceChunks\": 222}");
+
+        TestServerConfig c = assertDoesNotThrow(() -> TestServerConfig.load(VSS_FIRST, configDir));
+
+        assertEquals(256, c.lodDistanceChunks, "defaults — not the fallback's 222 nor the corrupt 111");
+        assertEquals(brokenPrimary, Files.readString(configDir.resolve("vss-server-config.json")),
+                "the corrupt primary is preserved for the admin to fix, never overwritten");
+        assertEquals("{\"lodDistanceChunks\": 222}",
+                Files.readString(configDir.resolve("lss-server-config.json")),
+                "the fallback stays untouched — resolution stopped at the existing (corrupt) primary");
+    }
+
+    @Test
+    void transientBookkeepingFieldsAreNeverSerialized(@TempDir Path configDir) throws Exception {
+        // activeFileName (the adopted save target) and configDir are transient bookkeeping. GSON must
+        // never write them into the config file — otherwise an admin sees bogus keys and a re-load
+        // would bind them. serializedFieldNames() only reflects PUBLIC fields, so it can't catch a
+        // private transient regressing to non-transient; this asserts their ABSENCE on disk directly.
+        TestServerConfig.load(VSS_FIRST, configDir); // fresh create -> writes candidates[0]
+        JsonObject saved = savedJson(configDir, "vss-server-config.json");
+        assertFalse(saved.has("activeFileName"), "activeFileName must stay transient (not serialized)");
+        assertFalse(saved.has("configDir"), "configDir must stay transient (not serialized)");
+        assertTrue(saved.has("lodDistanceChunks"), "sanity: real fields ARE serialized");
     }
 }
