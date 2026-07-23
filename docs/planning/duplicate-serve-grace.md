@@ -1,11 +1,37 @@
-# Duplicate-Serve Grace — future optimization, deliberately NOT implemented
+# Duplicate-Serve Grace
 
-**Status:** documented finding + fix shape, 2026-07-23. No implementation planned until
-real-server telemetry shows the duplicate rate mattering. Source investigation:
-`docs/planning/benchmark-cpu-compare-design.md` (results addendum) and the instrumented
-diagnostic in `benchmark-compare-results/diag-dupes/` (gitignored; regenerate by pairing
-`runBenchmarkServer` with `runSoakClient` — the soak client exports `dropped`/`queued`/
-`columns.known` at 5 s cadence, which the benchmark client does not).
+**Status:** IMPLEMENTED 2026-07-23 (feat/duplicate-serve-grace) — ahead of the telemetry
+trigger originally set below, as a deliberate call. The finding and fix shape date from
+the same day's investigation: `docs/planning/benchmark-cpu-compare-design.md` (results
+addendum) and the instrumented diagnostic in `benchmark-compare-results/diag-dupes/`
+(gitignored; regenerate by pairing `runBenchmarkServer` with `runSoakClient` — the soak
+client exports `dropped`/`queued`/`columns.known` at 5 s cadence, which the benchmark
+client does not).
+
+## What shipped (see §Implementation notes below for the deltas from the plan)
+
+- `LSSConstants.SEND_DEPARTURE_GRACE_MILLIS` = 500 (0 disables — no stamps written).
+- `AbstractPlayerRequestState`: `departedColumns` stamp map + `isWithinDepartureGrace`,
+  stamped ONLY at the send-success decrement in `flushSendQueue`; expired entries removed
+  on read AND swept once per grace interval from the flush path (most stamps are never
+  re-asked — without the sweep the map grows with every column ever sent).
+- `IncomingRequestRouter.resolvedAsDuplicate`: the grace rung sits between the
+  `hasEnqueuedColumn` rung and the clear-and-re-resolve, returns `Duplicate.IN_FLIGHT`
+  (same silent-skip disposition and frontier-pinning as the enqueued rung), and counts
+  `duplicate_skips` (law A1's disposition term) + `grace_skipped` (the observability
+  subset) — never `re_resolved`, never an answer. The subset accounting is load-bearing:
+  the first live fresh-backfill run imbalanced A1 by exactly the grace count when the
+  rung counted only its own counter.
+- Observability: `service.grace_skipped` in both exporters + the shared contract file,
+  `grace_skipped=` on the `/lsslod diag` Sources line, `check_soak.py` SERVER_MONOTONIC
+  (A6; no law consumes it — the skip answers nothing and touches no disk, so no identity
+  moves), `soak_report.py` mechanism digest ("grace-absorbed re-asks").
+- Pins: `FlushSendQueueTest` (stamp-on-success-only, expiry + sweep, grace-0 off,
+  production default nonzero) and `IncomingRequestRouterTest.
+  crossingReAskWithinTheDepartureGraceIsAbsorbedThenHealsAfterExpiry` (absorb inside the
+  grace, ts>0 unaffected, honest re-resolve after expiry). The pre-existing crossing-race
+  pin (`crossingReAskCostsExactlyOneRedundantServeThenConverges`) now documents itself as
+  the POST-grace behavior — its rig bypasses the send queue, so no stamp exists there.
 
 ## The finding
 
@@ -41,6 +67,34 @@ A second, smaller component rides the idle tail (~300/run): probe-served view-ar
 do not seed `DirtyContentFilter` (deliberate — see the seeding rules), so their first
 vanilla re-save hashes as changed and broadcasts, re-serving them once. Separate mechanism,
 separate (lower) priority; noted here so the two aren't conflated again.
+
+## Implementation notes (deltas from the plan as written)
+
+1. **Trap #4 dissolved by placement.** The stamp map lives inside
+   `AbstractPlayerRequestState` (next to `enqueuedColumns`), and the state object is
+   replaced via removePlayer+registerPlayer on BOTH player removal and dimension change
+   on BOTH platforms — so the lifecycle sweeps are automatic, and the gen-guard leak
+   shape (a UUID-keyed map in the processor) cannot occur. Cross-thread: stamped on the
+   main/pump thread (`flushSendQueue`), read on the processing thread — ConcurrentHashMap
+   + the frontier-damping clock-seam pattern (wrap-safe `now - stamp` compares).
+2. **The plan omitted steady-state pruning.** ~92% of stamps are never re-asked, so
+   read-time removal alone leaks one entry per column ever sent. Added: an opportunistic
+   sweep in `flushSendQueue`, rate-limited to once per grace interval.
+3. **Send-failure drops were already double-protected.** The failure path not only must
+   not stamp (the plan's trap #2) — its dropped positions get their done-bits proactively
+   cleared via `OffThreadProcessor.clearDiskReadDone`, so the grace rung is structurally
+   unreachable for that loss class. Only losses the server cannot distinguish from a
+   delivered send see the bounded ~1-scan heal delay: client decode failure, consumer
+   rejection, and the `armSendDrops` fault seam's injected drops (which return normally
+   from the sender and therefore stamp — a future `fault send-drop` soak scenario must
+   budget the extra scan).
+4. **Test-surface fallout was smaller than budgeted.** The unit-pin rigs deliver through
+   a payload capture that bypasses the send queue — no stamps, so every existing honesty
+   pin held unmodified. The one live interaction: `TwoPlayerGameTests` step 1's ts≤0
+   re-ask of a really-flushed position is now grace-absorbed for ~10 ticks before its
+   retry loop (already present from the flake hardening) re-resolves — well inside the
+   1200-tick budget, exactly-once counts unchanged. Tier 3's ingest-failure loop budget
+   (600 ticks vs ≤ ~1.5 s added latency) needed no change.
 
 ## The fix shape: a "recently departed" grace
 
@@ -89,10 +143,11 @@ Halves the duplicate's cost (the disk read), touches no pinned semantics, but ad
 and still performs the redundant send. Worth considering if the grace's test-surface churn
 (#1/#5) is judged too expensive for the win.
 
-## Why it was left alone (2026-07-23)
+## Why it was originally left alone (2026-07-23, superseded the same day)
 
 Duplicates exist only during cold-backfill bursts (a converged client sends nothing), are
 bounded at one extra serve per crossed position, and the reads are cheap and typically
 page-cache-warm. The v16→v17 CPU benchmark charged v17 for them and still measured a wash
-per distinct terrain column at a ~20% faster convergence — there is no current performance
-case, only a latent one on high-RTT/high-throughput servers.
+per distinct terrain column at a ~20% faster convergence — there was no current
+performance case, only a latent one on high-RTT/high-throughput servers. Implemented
+anyway (same day) as a deliberate call to close the latent case ahead of telemetry.

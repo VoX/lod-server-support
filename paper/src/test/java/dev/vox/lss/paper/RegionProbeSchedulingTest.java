@@ -334,6 +334,39 @@ class RegionProbeSchedulingTest {
     }
 
     @Test
+    void heldBatchDiesWhenANewerBatchPassesThroughTheMailboxDuringTheHold() {
+        // The pass-through pin (the resurrection bug the offer-generation guard closes —
+        // docs/planning/v0.7.1-candidates.md #1): a newer batch that is offered AND taken
+        // by the processing thread during the hold leaves the mailbox EMPTY, so the plain
+        // CAS(null, held) found nothing and republished the STALE batch over the newer
+        // declaration's already-applied backlog — resurrecting wants the client had
+        // already dropped. The offer-generation guard (recorded before the hold's take)
+        // refuses the republish.
+        service.setLoadedColumnProbe((level, cx, cz) -> column(cx, cz));
+        var uuid = UUID.randomUUID();
+        var player = playerIn(uuid, level(Level.OVERWORLD));
+        var state = service.registerPlayer(player, 1);
+        offer(state, new IncomingRequest(1, 1, -1), new IncomingRequest(2, 2, -1));
+
+        service.tick();                    // batch A held for probing
+        assertFalse(hasPendingBatch(state));
+
+        // Batch B passes THROUGH during the hold: offered, then taken — takeIncomingBatch
+        // is exactly the routing-side consume the processing thread performs.
+        offer(state, new IncomingRequest(9, 9, -1));
+        assertEquals(9, state.takeIncomingBatch().requests()[0].cx());
+        assertFalse(hasPendingBatch(state), "premise: the pass-through left the mailbox empty");
+
+        service.tick();                    // the release tick
+
+        assertFalse(hasPendingBatch(state),
+                "the stale held batch must NOT be republished over B's already-applied "
+                        + "backlog — latest-wins survives the pass-through shape");
+        assertEquals(2, state.drainPendingSuperseded(),
+                "the killed held batch is counted superseded (law A1)");
+    }
+
+    @Test
     void heldBatchDiesWithTheRemovedPlayer() {
         var uuid = UUID.randomUUID();
         var overworld = level(Level.OVERWORLD);

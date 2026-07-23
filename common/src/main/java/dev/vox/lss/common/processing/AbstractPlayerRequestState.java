@@ -57,6 +57,20 @@ public abstract class AbstractPlayerRequestState<T> {
     // "is this position's data still on its way?" — counted, not a set, because a dirty
     // re-serve can put a second payload for the same position in flight.
     private final ConcurrentHashMap<Long, Integer> enqueuedColumns = new ConcurrentHashMap<>();
+    // Duplicate-serve grace (docs/planning/duplicate-serve-grace.md): packed position →
+    // send-queue departure stamp (nanos), written ONLY on the send-SUCCESS path — the
+    // send-failure bulk drop must never stamp (those columns never reached the wire; their
+    // done-bits are proactively cleared via OffThreadProcessor.clearDiskReadDone and the
+    // honesty rung exists for exactly that loss class). Read by the router (processing
+    // thread) to absorb the accepted crossing race: a ts<=0 re-declaration built before
+    // its own payload departed. Dies with the state on player removal AND dimension change
+    // (both replace the state via removePlayer+registerPlayer on both platforms). Most
+    // stamps are never re-asked, so flushSendQueue sweeps expired entries once per grace
+    // interval — without that the map would grow with every column ever sent.
+    private final ConcurrentHashMap<Long, Long> departedColumns = new ConcurrentHashMap<>();
+    private long departureGraceNanos = LSSConstants.SEND_DEPARTURE_GRACE_MILLIS * 1_000_000L;
+    private java.util.function.LongSupplier departureClock = System::nanoTime;
+    private long departedSweepMarkNanos; // main thread only (flushSendQueue)
     private final PlayerBandwidthTracker bandwidth = new PlayerBandwidthTracker();
     private final AtomicLong totalRequestsReceived = new AtomicLong();
     // Single-writer (main thread) — volatile for cross-thread visibility to processing thread
@@ -69,6 +83,15 @@ public abstract class AbstractPlayerRequestState<T> {
     // bounds ingress at ONE batch (≤ MAX_BATCH_CHUNK_REQUESTS entries) regardless of client
     // behavior, replacing the old MAX_INCOMING_QUEUE flood bound.
     private final AtomicReference<IncomingBatch> pendingBatch = new AtomicReference<>();
+    // Offer generation: bumped BEFORE every mailbox write so the Folia pump can detect a
+    // batch that passed THROUGH the mailbox (offered AND taken by the processing thread)
+    // during its one-tick probe hold. The republish CAS alone cannot see that — it finds
+    // the mailbox empty again and would resurrect the held (stale) batch over the newer
+    // declaration's already-applied backlog, breaking latest-wins. Bumping before the
+    // write means an in-progress offer is never mistaken for quiet: the guard errs toward
+    // dropping the held batch (a counted supersession, healed by the next 1 Hz
+    // declaration), never toward resurrection.
+    private final AtomicLong offerGeneration = new AtomicLong();
     // Cross-thread superseded/range-filtered events accumulate here and are drained into
     // ProcessingDiagnostics by the processing thread each cycle, preserving that class's
     // single-writer design. Counts pending at player removal die with the state (same as
@@ -149,11 +172,20 @@ public abstract class AbstractPlayerRequestState<T> {
 
     /** Offer a decoded batch (any thread). Latest-wins; an overwritten batch is superseded. */
     public void offerIncomingBatch(IncomingBatch batch) {
+        this.offerGeneration.incrementAndGet(); // BEFORE the write — see the field comment
         this.totalRequestsReceived.addAndGet(batch.size());
         var previous = this.pendingBatch.getAndSet(batch);
         if (previous != null) {
             this.pendingSuperseded.addAndGet(previous.size());
         }
+    }
+
+    /** The current offer generation. The Folia pump records this BEFORE taking a batch to
+     *  hold (read-then-take: an offer slipping between the two can only make the eventual
+     *  republish refuse spuriously — a counted, re-declaration-healed drop — never let a
+     *  stale batch resurrect). */
+    public long offerGeneration() {
+        return this.offerGeneration.get();
     }
 
     /** Non-destructive read of the MAILBOX. Read by the main-thread probe (its first source:
@@ -184,11 +216,32 @@ public abstract class AbstractPlayerRequestState<T> {
      * Folia hold-release republish: put a held batch back ONLY if no newer batch arrived
      * during the hold — a newer batch supersedes the held one (never resurrect a
      * superseded want). Returns true if republished.
+     *
+     * <p>Two guards, both needed. The mailbox CAS catches a newer batch still SITTING in
+     * the mailbox; the offer-generation guard catches one that passed THROUGH it (offered
+     * and taken by the processing thread during the hold) — the CAS alone finds the
+     * mailbox empty again and would republish the stale batch over the newer
+     * declaration's already-applied backlog. {@code heldAtGeneration} is the value of
+     * {@link #offerGeneration()} the pump recorded before taking the batch to hold.
      */
-    public boolean republishHeldBatch(IncomingBatch held) {
-        if (this.pendingBatch.compareAndSet(null, held)) return true;
-        this.pendingSuperseded.addAndGet(held.size());
-        return false;
+    public boolean republishHeldBatch(IncomingBatch held, long heldAtGeneration) {
+        if (this.offerGeneration.get() != heldAtGeneration
+                || !this.pendingBatch.compareAndSet(null, held)) {
+            this.pendingSuperseded.addAndGet(held.size());
+            return false;
+        }
+        // Close the check-then-CAS window: a full offer+take pass-through between the
+        // generation check and the CAS leaves the mailbox empty, so the CAS succeeded on
+        // stale data. Re-check and retract. A failed retract means the republished batch
+        // already left the mailbox again — overwritten by a newer offer (whose getAndSet
+        // counted it superseded) or taken by routing (its entries then get ordinary
+        // dispositions, and the pass-through's backlog replace supersedes them).
+        if (this.offerGeneration.get() != heldAtGeneration
+                && this.pendingBatch.compareAndSet(held, null)) {
+            this.pendingSuperseded.addAndGet(held.size());
+            return false;
+        }
+        return true;
     }
 
     /** Record ingress entries dropped by the Chebyshev range guard (any thread). */
@@ -479,6 +532,11 @@ public abstract class AbstractPlayerRequestState<T> {
             try {
                 sender.send(queued.payload());
                 this.sendQueue.poll();
+                // Stamp BEFORE the decrement: the router checks the enqueued rung first,
+                // so a stamp while still enqueued is inert — but decrement-then-stamp
+                // would leave a nanosecond window (enqueued gone, stamp not yet visible)
+                // where a crossing re-ask slips past both rungs to a redundant re-serve.
+                stampDeparted(queued.packedPos());
                 decrementEnqueued(queued.packedPos());
                 this.bandwidth.recordSend(queued.estimatedBytes());
                 globalLimiter.recordSend(queued.estimatedBytes());
@@ -497,7 +555,58 @@ public abstract class AbstractPlayerRequestState<T> {
             }
         }
         this.sendQueueSizeSnapshot = this.sendQueue.size();
+        sweepDepartedColumns();
         return dropped;
+    }
+
+    // ---- Duplicate-serve grace (see the departedColumns field comment) ----
+
+    /**
+     * True while a ts&le;0 re-ask for this position falls inside the departure grace: its
+     * column payload left the send queue (send success) within the last
+     * {@link LSSConstants#SEND_DEPARTURE_GRACE_MILLIS}, so the re-ask almost certainly
+     * crossed its own delivery in flight. Any thread; expired entries are removed on read.
+     */
+    public boolean isWithinDepartureGrace(long packed) {
+        var departed = this.departedColumns.get(packed);
+        if (departed == null) return false;
+        if (this.departureClock.getAsLong() - departed <= this.departureGraceNanos) return true;
+        this.departedColumns.remove(packed, departed);
+        return false;
+    }
+
+    private void stampDeparted(long packed) {
+        if (this.departureGraceNanos <= 0) return;
+        this.departedColumns.put(packed, this.departureClock.getAsLong());
+    }
+
+    /** Expire stale departure stamps, at most once per grace interval (main thread, from
+     *  {@code flushSendQueue}). Most stamps are never re-asked, so read-time removal alone
+     *  would leak one entry per column ever sent. */
+    private void sweepDepartedColumns() {
+        if (this.departedColumns.isEmpty()) return;
+        long now = this.departureClock.getAsLong();
+        if (this.departedSweepMarkNanos != 0
+                && now - this.departedSweepMarkNanos <= this.departureGraceNanos) return;
+        this.departedSweepMarkNanos = now;
+        this.departedColumns.values().removeIf(stamp -> now - stamp > this.departureGraceNanos);
+    }
+
+    /** Package-private test probes: the wired grace (pins the production default) and the
+     *  map's size (pins the sweep — a leaked map is invisible to behavior tests). */
+    long departureGraceNanosForTest() {
+        return this.departureGraceNanos;
+    }
+
+    int departedColumnCountForTest() {
+        return this.departedColumns.size();
+    }
+
+    /** Test seam (protected — rigs subclass from other packages): grace window
+     *  (0 = off, no stamps written) + clock, so grace tests are deterministic. */
+    protected void setDepartureGraceForTest(long graceNanos, java.util.function.LongSupplier clock) {
+        this.departureGraceNanos = graceNanos;
+        this.departureClock = clock;
     }
 
     // ---- Processing-thread-facing per-request API ----

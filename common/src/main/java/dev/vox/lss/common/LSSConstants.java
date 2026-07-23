@@ -122,6 +122,19 @@ public final class LSSConstants {
      *  reaching the far edge between mints; a stationary frontier advances ring-by-ring
      *  within the +2 spread window and never waits on it. 0 disables (test rigs). */
     public static final long FRONTIER_OUTWARD_DAMP_MILLIS_PER_RING = 333;
+
+    /** Duplicate-serve grace (docs/planning/duplicate-serve-grace.md): a ts&le;0
+     *  re-declaration arriving within this window of its column payload leaving the send
+     *  queue (send success only) is silently skipped instead of honestly re-resolved —
+     *  during cold backfill ~7-8% of asks cross their own payload's delivery in flight
+     *  (crossings &asymp; departure_rate &times; client&rarr;server latency per 1 Hz scan)
+     *  and each such re-resolve costs a redundant disk read + send. The skip keeps the
+     *  done-bit and answers NOTHING (never up_to_date — the client claims no data), so a
+     *  genuinely lost payload heals at most one scan later, when the grace has expired
+     *  and the clear-and-re-resolve ladder applies unchanged. Tuning is asymmetric:
+     *  shorter than the RTT+tick window buys nothing; longer only stretches that bounded
+     *  heal delay. 0 disables (no stamps are written). */
+    public static final long SEND_DEPARTURE_GRACE_MILLIS = 500;
     public static final int MAX_BATCH_CHUNK_REQUESTS = 1024;
     public static final int MAX_BATCH_RESPONSES = 4096;
 

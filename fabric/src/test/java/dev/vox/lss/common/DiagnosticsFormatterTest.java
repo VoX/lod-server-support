@@ -103,7 +103,7 @@ class DiagnosticsFormatterTest {
                 true, 24,
                 2048, 1_048_576,
                 100, 5000, 10_485_760,
-                11, 33, 44, 55,
+                11, 33, 44, 55, 66,
                 22,
                 "sent=9, disk=1/2",
                 "submitted=5, completed=5",
@@ -117,7 +117,7 @@ class DiagnosticsFormatterTest {
                 "=== LSS LOD Diagnostics ===",
                 "Config: enabled=true, lodDist=24, bw/player=2.0 KB/s, bw/global=1.0 MB/s",
                 "Throughput: sent=5000 (10.0 MB), rate=50 sections/s (102.4 KB/s), uptime=1m 40s",
-                "Sources (total): in_mem=11, disk=22, up_to_date=33, gen=44, re_resolved=55",
+                "Sources (total): in_mem=11, disk=22, up_to_date=33, gen=44, re_resolved=55, grace_skipped=66",
                 "Sources (tick): sent=9, disk=1/2",
                 "DiskReader: submitted=5, completed=5",
                 "Generation: active=1/32, order_gated=7, inversions=3",
@@ -132,7 +132,7 @@ class DiagnosticsFormatterTest {
                 true, 24,
                 2048, 1_048_576,
                 100, 5000, 10_485_760,
-                11, 33, 44, 55,
+                11, 33, 44, 55, 66,
                 22,
                 "sent=9, disk=1/2",
                 "submitted=5, completed=5",
@@ -148,6 +148,9 @@ class DiagnosticsFormatterTest {
 
         var withShim = DiagnosticsFormatter.formatDiagnostics(d.withV16Line(
                 "V16Compat: clients=1, redeclares=9, overflow_bounced=0, grace_discarded=0"));
+        assertTrue(withShim.contains(
+                "Sources (total): in_mem=11, disk=22, up_to_date=33, gen=44, re_resolved=55, grace_skipped=66"),
+                "the withV16Line copy constructor must preserve every counter: " + withShim);
         int genIdx = indexOfPrefix(withShim, "Generation:");
         int v16Idx = indexOfPrefix(withShim, "V16Compat:");
         int bwIdx = indexOfPrefix(withShim, "Bandwidth:");
@@ -162,7 +165,7 @@ class DiagnosticsFormatterTest {
                 true, 24,
                 2048, 1_048_576,
                 100, 5000, 10_485_760,
-                11, 33, 44, 55,
+                11, 33, 44, 55, 66,
                 22,
                 "sent=9, disk=1/2",
                 "submitted=5, completed=5",
@@ -178,6 +181,9 @@ class DiagnosticsFormatterTest {
 
         var with = DiagnosticsFormatter.formatDiagnostics(
                 d.withXrayLine("Xray: active=antixray-mod, masked_sections=42"));
+        assertTrue(with.contains(
+                "Sources (total): in_mem=11, disk=22, up_to_date=33, gen=44, re_resolved=55, grace_skipped=66"),
+                "the withXrayLine copy constructor must preserve every counter: " + with);
         int genIdx = indexOfPrefix(with, "Generation:");
         int xrayIdx = indexOfPrefix(with, "Xray:");
         int bwIdx = indexOfPrefix(with, "Bandwidth:");
@@ -209,7 +215,7 @@ class DiagnosticsFormatterTest {
                 false, 4,
                 1024, 1024,
                 0, 0, 0,
-                0, 0, 0, 0,
+                0, 0, 0, 0, 0,
                 0,
                 "idle",
                 "idle",
@@ -223,7 +229,7 @@ class DiagnosticsFormatterTest {
                 "=== LSS LOD Diagnostics ===",
                 "Config: enabled=false, lodDist=4, bw/player=1.0 KB/s, bw/global=1.0 KB/s",
                 "Throughput: sent=0 (0 B), rate=0 sections/s (0 B/s), uptime=0s",
-                "Sources (total): in_mem=0, disk=0, up_to_date=0, gen=0, re_resolved=0",
+                "Sources (total): in_mem=0, disk=0, up_to_date=0, gen=0, re_resolved=0, grace_skipped=0",
                 "Sources (tick): idle",
                 "DiskReader: idle",
                 "Generation: disabled",
@@ -252,7 +258,7 @@ class DiagnosticsFormatterTest {
 
         var lines = DiagnosticsFormatter.formatDiagnostics(data);
         assertTrue(lines.contains("DiskReader: disabled"), "null reader renders as disabled: " + lines);
-        assertTrue(lines.contains("Sources (total): in_mem=0, disk=0, up_to_date=0, gen=0, re_resolved=0"),
+        assertTrue(lines.contains("Sources (total): in_mem=0, disk=0, up_to_date=0, gen=0, re_resolved=0, grace_skipped=0"),
                 "null reader contributes zero disk reads: " + lines);
     }
 
@@ -272,6 +278,11 @@ class DiagnosticsFormatterTest {
         pd.incrementReResolved();
         pd.incrementReResolved();
         pd.incrementReResolved();
+        pd.incrementGraceSkipped();
+        pd.incrementGraceSkipped();
+        pd.incrementGraceSkipped();
+        pd.incrementGraceSkipped();
+        pd.incrementGraceSkipped();
 
         var limiter = new SharedBandwidthLimiter(1 << 20);
         limiter.recordSend(777);
@@ -292,6 +303,7 @@ class DiagnosticsFormatterTest {
         assertEquals(1, data.cumUtd());
         assertEquals(1, data.cumGen());
         assertEquals(4, data.cumReResolved());
+        assertEquals(5, data.cumGraceSkipped());
         assertEquals(3, data.diskCompleted(), "wired from getDiag().getSuccessfulReadCount()");
         assertEquals(reader.getDiagnostics() + ", memo_hits=0", data.diskReaderDiagnostics(),
                 "the DiskReader line carries the miss-memo hit counter (A5's virtual not-founds)");

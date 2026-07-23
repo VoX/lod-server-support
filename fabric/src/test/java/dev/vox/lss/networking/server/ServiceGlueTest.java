@@ -287,7 +287,9 @@ class ServiceGlueTest {
                     "dropped sends complete the flush exactly like delivered ones");
             assertEquals(List.of(), proc.cleared,
                     "an injected drop must NOT clear done-bits: the server honestly believes it "
-                    + "delivered; recovery is the client's ts<=0 re-request re-resolving");
+                    + "delivered; recovery is the client's ts<=0 re-request re-resolving "
+                    + "(grace-delayed by up to one scan — the injected 'success' stamps the "
+                    + "departure grace like a real send)");
             assertTrue(state.hasDiskReadDone(10, 0) && state.hasDiskReadDone(11, 0)
                     && state.hasDiskReadDone(12, 0), "diskReadDone survives the injected loss");
             assertFalse(state.hasEnqueuedColumn(POS_1) || state.hasEnqueuedColumn(POS_2)

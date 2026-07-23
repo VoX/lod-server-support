@@ -21,7 +21,7 @@ public final class DiagnosticsFormatter {
             boolean enabled, int lodDist,
             long bwPerPlayer, long bwGlobal,
             long uptimeSec, long totalSent, long totalBytes,
-            long cumInMem, long cumUtd, long cumGen, long cumReResolved,
+            long cumInMem, long cumUtd, long cumGen, long cumReResolved, long cumGraceSkipped,
             long diskCompleted,
             String tickDiagnostics,
             String diskReaderDiagnostics,
@@ -37,22 +37,24 @@ public final class DiagnosticsFormatter {
         public DiagData(boolean enabled, int lodDist, long bwPerPlayer, long bwGlobal,
                         long uptimeSec, long totalSent, long totalBytes,
                         long cumInMem, long cumUtd, long cumGen, long cumReResolved,
+                        long cumGraceSkipped,
                         long diskCompleted, String tickDiagnostics, String diskReaderDiagnostics,
                         String generationDiagnostics, boolean generationEnabled,
                         long genOrderGated, long genInversions,
                         long bwTotal, long bwWindowRate, List<PlayerDiag> players) {
             this(enabled, lodDist, bwPerPlayer, bwGlobal, uptimeSec, totalSent, totalBytes,
-                    cumInMem, cumUtd, cumGen, cumReResolved, diskCompleted, tickDiagnostics,
-                    diskReaderDiagnostics, generationDiagnostics, generationEnabled,
-                    genOrderGated, genInversions, bwTotal, bwWindowRate, players, null, null);
+                    cumInMem, cumUtd, cumGen, cumReResolved, cumGraceSkipped, diskCompleted,
+                    tickDiagnostics, diskReaderDiagnostics, generationDiagnostics,
+                    generationEnabled, genOrderGated, genInversions, bwTotal, bwWindowRate,
+                    players, null, null);
         }
 
         /** Attach the v16 compat shim's one-line summary (null when the shim is untouched —
          *  the line is omitted from the rendered diagnostics). */
         public DiagData withV16Line(String line) {
             return new DiagData(enabled, lodDist, bwPerPlayer, bwGlobal, uptimeSec, totalSent,
-                    totalBytes, cumInMem, cumUtd, cumGen, cumReResolved, diskCompleted,
-                    tickDiagnostics, diskReaderDiagnostics, generationDiagnostics,
+                    totalBytes, cumInMem, cumUtd, cumGen, cumReResolved, cumGraceSkipped,
+                    diskCompleted, tickDiagnostics, diskReaderDiagnostics, generationDiagnostics,
                     generationEnabled, genOrderGated, genInversions, bwTotal, bwWindowRate,
                     players, line, xrayLine);
         }
@@ -61,10 +63,10 @@ public final class DiagnosticsFormatter {
          *  state is what an admin testing masking needs to see). */
         public DiagData withXrayLine(String line) {
             return new DiagData(enabled, lodDist, bwPerPlayer, bwGlobal, uptimeSec, totalSent,
-                    totalBytes, cumInMem, cumUtd, cumGen, cumReResolved, diskCompleted,
-                    tickDiagnostics, diskReaderDiagnostics, generationDiagnostics,
-                    generationEnabled, genOrderGated, genInversions, bwTotal, bwWindowRate,
-                    players, v16Line, line);
+                    totalBytes, cumInMem, cumUtd, cumGen, cumReResolved, cumGraceSkipped,
+                    diskCompleted, tickDiagnostics, diskReaderDiagnostics,
+                    generationDiagnostics, generationEnabled, genOrderGated, genInversions,
+                    bwTotal, bwWindowRate, players, v16Line, line);
         }
     }
 
@@ -92,10 +94,13 @@ public final class DiagnosticsFormatter {
                 formatUptime(d.uptimeSec)
         ));
 
-        // Sources (total)
+        // Sources (total). grace_skipped = crossing re-asks absorbed by the departure
+        // grace — each would otherwise have re-resolved (a redundant disk read + send)
+        // and counted re_resolved instead.
         lines.add(String.format(
-                "Sources (total): in_mem=%d, disk=%d, up_to_date=%d, gen=%d, re_resolved=%d",
-                d.cumInMem, Math.max(0, d.diskCompleted), d.cumUtd, d.cumGen, d.cumReResolved
+                "Sources (total): in_mem=%d, disk=%d, up_to_date=%d, gen=%d, re_resolved=%d, grace_skipped=%d",
+                d.cumInMem, Math.max(0, d.diskCompleted), d.cumUtd, d.cumGen, d.cumReResolved,
+                d.cumGraceSkipped
         ));
 
         // Sources (tick)
@@ -191,7 +196,7 @@ public final class DiagnosticsFormatter {
                 bwPerPlayer, bwGlobal,
                 uptimeSec, totalSent, totalBytes,
                 diag.getTotalInMemory(), diag.getTotalUpToDate(), diag.getTotalGenDrained(),
-                diag.getTotalReResolved(),
+                diag.getTotalReResolved(), diag.getTotalGraceSkipped(),
                 diskReader != null ? diskReader.getDiag().getSuccessfulReadCount() : 0,
                 tickDiagnostics,
                 // memo_hits: miss-memo rung hits (fresh memoized absence skipped the redundant

@@ -225,8 +225,12 @@ public class PaperRequestProcessingService {
     private final ConcurrentHashMap<UUID, RegionProbeBatch> regionProbeResults = new ConcurrentHashMap<>();
 
     /** Pump-only. The batch taken at tick T, released back into the mailbox at T+1 once its
-     *  probe task has had a region tick to publish. */
-    private final Map<UUID, IncomingBatch> heldForProbe = new HashMap<>();
+     *  probe task has had a region tick to publish — carrying the offer generation recorded
+     *  BEFORE the take, so the release can refuse a batch that was passed-through during the
+     *  hold (see {@code AbstractPlayerRequestState.republishHeldBatch}). */
+    private record HeldBatch(IncomingBatch batch, long offerGeneration) {}
+
+    private final Map<UUID, HeldBatch> heldForProbe = new HashMap<>();
 
     /** Collaborator set for the package-private constructor. Tests build it over recording
      *  collaborators; production wiring lives in {@link #productionWiring} only. */
@@ -676,17 +680,23 @@ public class PaperRequestProcessingService {
 
     /** Pump only. One-tick hold-release at BATCH granularity: release last tick's held batch
      *  back into the mailbox — but only if no newer batch arrived during the hold
-     *  (republishHeldBatch CAS; a lost CAS means the held batch was superseded, is counted,
-     *  and is dropped, never resurrected) — otherwise take whatever is pending now, park it,
-     *  and hand its positions to the player's owning region. The processing thread takes
-     *  batches only from the mailbox, so a held batch is invisible to routing until released
-     *  with its probe results already published, and no batch is ever both held and pending.
+     *  (republishHeldBatch: the mailbox CAS catches a newer batch still sitting there; the
+     *  offer-generation guard catches one that passed THROUGH the mailbox — offered and
+     *  taken by the processing thread — during the hold. A lost republish means the held
+     *  batch was superseded, is counted, and is dropped, never resurrected) — otherwise
+     *  take whatever is pending now, park it with the pre-take offer generation, and hand
+     *  its positions to the player's owning region. The processing thread takes batches
+     *  only from the mailbox, so a held batch is invisible to routing until released with
+     *  its probe results already published, and no batch is ever both held and pending.
      *
      *  <p>Release strictly precedes the take, and a successful release ends the tick: the CAS
      *  is {@code compareAndSet(null, held)}, so taking first would empty the mailbox and make
      *  the CAS unconditionally succeed — resurrecting a batch the client has already
-     *  superseded while parking the newer one behind it. Returning on a successful release
-     *  keeps the pump from immediately stealing back the batch it just handed to routing.
+     *  superseded while parking the newer one behind it. (The offer-generation guard now
+     *  also catches that shape, but the release-then-take order stays: it is what keeps the
+     *  pump from re-holding a batch routing is about to take.) Returning on a successful
+     *  release keeps the pump from immediately stealing back the batch it just handed to
+     *  routing.
      *
      *  <p><b>Known limitation.</b> The release-then-return only protects the batch for ONE
      *  pump tick: if the processing cycle overruns and has not taken the released batch by
@@ -699,15 +709,21 @@ public class PaperRequestProcessingService {
     private void holdAndScheduleRegionProbe(PaperPlayerRequestState state, ServerPlayer player,
                                             ServerLevel level, LongOpenHashSet skipPositions) {
         var released = this.heldForProbe.remove(player.getUUID());
-        if (released != null && state.republishHeldBatch(released)) {
+        if (released != null
+                && state.republishHeldBatch(released.batch(), released.offerGeneration())) {
             return;
         }
 
-        // Either nothing was held, or the held batch lost the CAS to a newer arrival (dropped
-        // and counted superseded). Whatever is pending now is the newest declaration.
+        // Either nothing was held, or the held batch lost the republish (a newer arrival in
+        // the mailbox, or a pass-through the offer-generation guard caught — dropped and
+        // counted superseded either way). Whatever is pending now is the newest declaration.
+        // The generation is recorded BEFORE the take: an offer slipping between the two can
+        // only make the eventual republish refuse spuriously (a healed drop), never let a
+        // stale batch resurrect.
+        long heldAtGeneration = state.offerGeneration();
         var fresh = state.takeIncomingBatch();
         if (fresh == null) return;
-        this.heldForProbe.put(player.getUUID(), fresh);
+        this.heldForProbe.put(player.getUUID(), new HeldBatch(fresh, heldAtGeneration));
 
         long[] positions = snapshotProbePositions(state, fresh, skipPositions);
         if (positions.length == 0) return;

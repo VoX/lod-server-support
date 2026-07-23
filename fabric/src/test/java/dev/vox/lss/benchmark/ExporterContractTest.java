@@ -209,6 +209,9 @@ class ExporterContractTest {
         var diag = src.processor.getDiagnostics();
         diag.incrementReResolved();
         diag.incrementReResolved();
+        diag.incrementGraceSkipped();
+        diag.incrementGraceSkipped();
+        diag.incrementGraceSkipped();
         for (int i = 0; i < 5; i++) diag.incrementRequestRouted();
         src.tickDiag.recordSectionSent(100);
         src.diskReader.getDiag().recordCompleted(3_000_000L);
@@ -220,6 +223,7 @@ class ExporterContractTest {
 
         var m = BenchmarkMetricsExporter.buildServerMetrics(src);
         assertEquals(2L, section(m, "service").get("re_resolved"));
+        assertEquals(3L, section(m, "service").get("grace_skipped"));
         assertEquals(5L, section(m, "service").get("requests_received"));
         assertEquals(1L, section(m, "service").get("columns_sent"));
         assertEquals(100L, section(m, "service").get("bytes_sent"));

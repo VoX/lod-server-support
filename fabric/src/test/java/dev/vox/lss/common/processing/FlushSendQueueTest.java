@@ -1,5 +1,6 @@
 package dev.vox.lss.common.processing;
 
+import dev.vox.lss.common.LSSConstants;
 import dev.vox.lss.common.PositionUtil;
 import dev.vox.lss.common.SharedBandwidthLimiter;
 
@@ -8,6 +9,7 @@ import org.junit.jupiter.api.Test;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicLong;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -153,6 +155,103 @@ class FlushSendQueueTest {
 
         assertEquals(List.of("first"), sent, "one token admits exactly one send");
         assertEquals(2, state.getSendQueueSize(), "gated payloads must stay queued for the next tick");
+    }
+
+    // ---- Duplicate-serve grace: departure stamps (docs/planning/duplicate-serve-grace.md) ----
+
+    @Test
+    void departureGraceStampsOnSendSuccessOnly() throws Exception {
+        // Fixed injected clock: the asserts must not race the real 500 ms window on a
+        // starved runner (the token-bucket sleeps stay wall-clock — that is a different,
+        // pre-existing dependency).
+        state.setDepartureGraceForTest(500_000_000L, () -> 1_000_000_000L);
+        state.addReadyPayload(new QueuedPayload<>("first", 0, 0, POS_1));
+        state.addReadyPayload(new QueuedPayload<>("second", 0, 1, POS_2));
+        state.addReadyPayload(new QueuedPayload<>("third", 0, 2, POS_3));
+        Thread.sleep(50);
+
+        state.flushSendQueue(BIG_ALLOCATION, limiter, diag, p -> {
+            if (!sent.isEmpty()) throw new Exception("broken connection");
+            sent.add(p);
+        });
+
+        assertTrue(state.isWithinDepartureGrace(POS_1),
+                "a successful send stamps the payload's departure");
+        assertFalse(state.isWithinDepartureGrace(POS_2),
+                "failure-dropped payloads never stamp — they never reached the wire, and "
+                        + "suppressing their re-asks would delay exactly the loss class the "
+                        + "honesty rung exists for");
+        assertFalse(state.isWithinDepartureGrace(POS_3),
+                "everything behind the failed send is dropped unstamped too");
+    }
+
+    @Test
+    void departureGraceExpiresOnReadAndTheSweepPrunesUnaskedStamps() throws Exception {
+        var clock = new AtomicLong(1_000_000_000L);
+        state.setDepartureGraceForTest(500_000_000L, clock::get);
+        state.addReadyPayload(new QueuedPayload<>("a", 0, 0, POS_1));
+        state.addReadyPayload(new QueuedPayload<>("b", 0, 1, POS_2));
+        Thread.sleep(50);
+        state.flushSendQueue(BIG_ALLOCATION, limiter, diag, sent::add);
+
+        assertEquals(2, state.departedColumnCountForTest(), "both sends stamped");
+        assertTrue(state.isWithinDepartureGrace(POS_1));
+
+        clock.addAndGet(500_000_001L);
+        assertFalse(state.isWithinDepartureGrace(POS_1), "the grace has expired");
+        assertEquals(1, state.departedColumnCountForTest(),
+                "the expired read removes its own entry");
+
+        // POS_2 is never re-asked (the common case — most sends are never crossed):
+        // only the periodic flush-path sweep can prune it, or the map grows with every
+        // column ever sent.
+        state.flushSendQueue(BIG_ALLOCATION, limiter, diag, sent::add);
+        assertEquals(0, state.departedColumnCountForTest(),
+                "the idle flush sweep prunes stamps nobody ever re-asked");
+    }
+
+    @Test
+    void zeroGraceDisablesStampingEntirely() throws Exception {
+        state.setDepartureGraceForTest(0, System::nanoTime);
+        state.addReadyPayload(new QueuedPayload<>("a", 0, 0, POS_1));
+        Thread.sleep(50);
+        state.flushSendQueue(BIG_ALLOCATION, limiter, diag, sent::add);
+
+        assertEquals(List.of("a"), sent);
+        assertFalse(state.isWithinDepartureGrace(POS_1));
+        assertEquals(0, state.departedColumnCountForTest(), "grace 0 writes no stamps at all");
+    }
+
+    @Test
+    void productionDefaultEnablesTheDepartureGrace() {
+        // Pin the constant's VALUE, not just the wiring: wiring-only would stay green if
+        // the constant were zeroed, silently turning the feature off (the same reason
+        // productionDefaultEnablesOutwardDamping pins 333).
+        assertEquals(500, LSSConstants.SEND_DEPARTURE_GRACE_MILLIS,
+                "the production grace must stay nonzero — a silent zero would quietly "
+                        + "revert every crossing re-ask to a redundant re-serve");
+        assertEquals(LSSConstants.SEND_DEPARTURE_GRACE_MILLIS * 1_000_000L,
+                new TestState().departureGraceNanosForTest(),
+                "and the state must wire it (constant × nanos conversion)");
+    }
+
+    @Test
+    void aSecondSendOfTheSamePositionRefreshesTheDepartureStamp() throws Exception {
+        var clock = new AtomicLong(1_000_000_000L);
+        state.setDepartureGraceForTest(500_000_000L, clock::get);
+        state.addReadyPayload(new QueuedPayload<>("first", 0, 0, POS_1));
+        Thread.sleep(50);
+        state.flushSendQueue(BIG_ALLOCATION, limiter, diag, sent::add);
+        clock.addAndGet(500_000_001L);
+        assertFalse(state.isWithinDepartureGrace(POS_1), "premise: the first stamp expired");
+
+        // A dirty re-serve departs a SECOND payload for the same position: the stamp must
+        // REFRESH (put, not putIfAbsent) — the new delivery opens its own crossing window.
+        state.addReadyPayload(new QueuedPayload<>("again", 0, 1, POS_1));
+        Thread.sleep(50);
+        state.flushSendQueue(BIG_ALLOCATION, limiter, diag, sent::add);
+        assertTrue(state.isWithinDepartureGrace(POS_1),
+                "the re-send re-opens the grace for its own crossing window");
     }
 
     private static boolean contains(long[] arr, long value) {
