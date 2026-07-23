@@ -114,9 +114,15 @@ running — constant, affects all arms equally, recorded by the noise gauge.
 converged tails 219–260 s, foreign load ≤ 0.14 cores). Medians, idle-corrected server
 CPU-s per 1000 delivered columns: v16 **2.25**, v17 **2.08**, v17-fg **2.00**; delivery
 rate v16 **473** col/s, v17 **563**, v17-fg **594**. Per distinct terrain column (charging
-v17 for its ~7% duplicate re-serves under client decode backpressure — the ts<=0
-re-declaration self-heal, absent in v16's slower drip-feed) it is an exact wash: 2.25 vs
-2.25 vs 2.16. Total CPU to converge the same 16.5 k-column terrain: ~37 CPU-s in both
+v17 for its ~7% duplicate re-serves) it is an exact wash: 2.25 vs 2.25 vs 2.16. The
+duplicates are NOT client decode drops (an instrumented rerun measured queue peak 52 of
+8000, zero drops): ~1300/run are the documented accepted race in
+`IncomingRequestRouter.resolvedAsDuplicate` — a 1 Hz re-declaration of a still-awaited
+position crossing its own payload's send-queue departure re-resolves once redundantly —
+plus ~300/run of dirty-broadcast tail serves (probe serves don't seed DirtyContentFilter).
+v16 had zero duplicates because its client suppressed in-flight positions at send time,
+the mechanism v17 deliberately deleted (10 s-stall / permanent-hole failure modes).
+Total CPU to converge the same 16.5 k-column terrain: ~37 CPU-s in both
 protocols, with v17 ~20% faster wall-clock. Background-read priority costs ~4% CPU and
 ~0.6 ms median read latency vs foreground (within noise) — the deliberate
 gameplay-protection tradeoff. Full interpretation in the matrix dir's `report.md` addendum.
