@@ -425,10 +425,13 @@ public class RequestProcessingService {
     /**
      * Fault seam: arms the flush path to silently discard the next {@code count}
      * column-payload sends. A dropped payload vanishes after resolution — the flush treats
-     * it as delivered (queue advances, diskReadDone stays set, no clearDiskReadDone) — so
-     * the honest re-resolution ladder (a ts&le;0 re-request of a served position re-resolves)
-     * can be exercised live by the soak {@code fault send-drop N} command and the client
-     * gametests. Inert in production: no production code path calls this, and arming is
+     * it as delivered (queue advances, diskReadDone stays set, no clearDiskReadDone, and it
+     * STAMPS the departure grace like any send success) — so the honest re-resolution
+     * ladder (a ts&le;0 re-request of a served position re-resolves) can be exercised live
+     * by the soak {@code fault send-drop N} command and the client gametests. Since the
+     * duplicate-serve grace, that recovery includes up to one extra 1 Hz scan: the first
+     * re-ask inside {@code SEND_DEPARTURE_GRACE_MILLIS} of the injected "success" is
+     * absorbed silently; a scenario asserting on the re-resolve must budget for it. Inert in production: no production code path calls this, and arming is
      * refused unless the JVM carries {@code -Dlss.soak.scenario} (soak server) or
      * {@code -Dlss.test.integratedServer} (gametest JVMs). Disarming ({@code count <= 0})
      * is always allowed.

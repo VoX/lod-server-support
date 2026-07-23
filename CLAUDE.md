@@ -327,7 +327,7 @@ Scenarios needing a base world auto-run `fresh-backfill` first. warm-rejoin, dir
 
 ### Output Files
 
-- `soak-results/<scenario>-<timestamp>/server.jsonl` — server snapshot/command/join/end event rows. Snapshots carry the data-capture fields: `service.{superseded,range_filtered,re_resolved,miss_dropped}`, `disk.memo_hits` (miss-memo rung hits — law A5's virtual not-founds), `players[].backlog`, `*_hw` high-water gauges (per-tick sampled), `dedup.groups`, `jvm.*`, `tscache.*`, `dirty.{marked,suppressed}_total`, `mspt_avg_window`; command rows carry `ok`.
+- `soak-results/<scenario>-<timestamp>/server.jsonl` — server snapshot/command/join/end event rows. Snapshots carry the data-capture fields: `service.{superseded,range_filtered,re_resolved,grace_skipped,miss_dropped}`, `disk.memo_hits` (miss-memo rung hits — law A5's virtual not-founds), `players[].backlog`, `*_hw` high-water gauges (per-tick sampled), `dedup.groups`, `jvm.*`, `tscache.*`, `dirty.{marked,suppressed}_total`, `mspt_avg_window`; command rows carry `ok`.
 - `soak-results/<scenario>-<timestamp>/client-run<N>.jsonl` — client snapshot/disconnect rows per run (incl. `ingest_failures`, `effective_lod`, `rtt.{p50,p95}_ms`)
 - `soak-results/<scenario>-<timestamp>/verdict.json` — checker verdict (conservation laws + named checks)
 - `soak-results/<scenario>-<timestamp>/report.md` — `soak_report.py` anomaly digest (auto-written; a lens, not a gate)

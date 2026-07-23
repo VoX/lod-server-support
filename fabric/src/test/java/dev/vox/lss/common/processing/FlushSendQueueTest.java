@@ -161,6 +161,10 @@ class FlushSendQueueTest {
 
     @Test
     void departureGraceStampsOnSendSuccessOnly() throws Exception {
+        // Fixed injected clock: the asserts must not race the real 500 ms window on a
+        // starved runner (the token-bucket sleeps stay wall-clock — that is a different,
+        // pre-existing dependency).
+        state.setDepartureGraceForTest(500_000_000L, () -> 1_000_000_000L);
         state.addReadyPayload(new QueuedPayload<>("first", 0, 0, POS_1));
         state.addReadyPayload(new QueuedPayload<>("second", 0, 1, POS_2));
         state.addReadyPayload(new QueuedPayload<>("third", 0, 2, POS_3));
@@ -220,10 +224,34 @@ class FlushSendQueueTest {
 
     @Test
     void productionDefaultEnablesTheDepartureGrace() {
+        // Pin the constant's VALUE, not just the wiring: wiring-only would stay green if
+        // the constant were zeroed, silently turning the feature off (the same reason
+        // productionDefaultEnablesOutwardDamping pins 333).
+        assertEquals(500, LSSConstants.SEND_DEPARTURE_GRACE_MILLIS,
+                "the production grace must stay nonzero — a silent zero would quietly "
+                        + "revert every crossing re-ask to a redundant re-serve");
         assertEquals(LSSConstants.SEND_DEPARTURE_GRACE_MILLIS * 1_000_000L,
                 new TestState().departureGraceNanosForTest(),
-                "the wired production default must stay nonzero — a silent zero would "
-                        + "quietly revert every crossing re-ask to a redundant re-serve");
+                "and the state must wire it (constant × nanos conversion)");
+    }
+
+    @Test
+    void aSecondSendOfTheSamePositionRefreshesTheDepartureStamp() throws Exception {
+        var clock = new AtomicLong(1_000_000_000L);
+        state.setDepartureGraceForTest(500_000_000L, clock::get);
+        state.addReadyPayload(new QueuedPayload<>("first", 0, 0, POS_1));
+        Thread.sleep(50);
+        state.flushSendQueue(BIG_ALLOCATION, limiter, diag, sent::add);
+        clock.addAndGet(500_000_001L);
+        assertFalse(state.isWithinDepartureGrace(POS_1), "premise: the first stamp expired");
+
+        // A dirty re-serve departs a SECOND payload for the same position: the stamp must
+        // REFRESH (put, not putIfAbsent) — the new delivery opens its own crossing window.
+        state.addReadyPayload(new QueuedPayload<>("again", 0, 1, POS_1));
+        Thread.sleep(50);
+        state.flushSendQueue(BIG_ALLOCATION, limiter, diag, sent::add);
+        assertTrue(state.isWithinDepartureGrace(POS_1),
+                "the re-send re-opens the grace for its own crossing window");
     }
 
     private static boolean contains(long[] arr, long value) {

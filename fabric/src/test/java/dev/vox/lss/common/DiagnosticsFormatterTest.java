@@ -148,6 +148,9 @@ class DiagnosticsFormatterTest {
 
         var withShim = DiagnosticsFormatter.formatDiagnostics(d.withV16Line(
                 "V16Compat: clients=1, redeclares=9, overflow_bounced=0, grace_discarded=0"));
+        assertTrue(withShim.contains(
+                "Sources (total): in_mem=11, disk=22, up_to_date=33, gen=44, re_resolved=55, grace_skipped=66"),
+                "the withV16Line copy constructor must preserve every counter: " + withShim);
         int genIdx = indexOfPrefix(withShim, "Generation:");
         int v16Idx = indexOfPrefix(withShim, "V16Compat:");
         int bwIdx = indexOfPrefix(withShim, "Bandwidth:");
@@ -178,6 +181,9 @@ class DiagnosticsFormatterTest {
 
         var with = DiagnosticsFormatter.formatDiagnostics(
                 d.withXrayLine("Xray: active=antixray-mod, masked_sections=42"));
+        assertTrue(with.contains(
+                "Sources (total): in_mem=11, disk=22, up_to_date=33, gen=44, re_resolved=55, grace_skipped=66"),
+                "the withXrayLine copy constructor must preserve every counter: " + with);
         int genIdx = indexOfPrefix(with, "Generation:");
         int xrayIdx = indexOfPrefix(with, "Xray:");
         int bwIdx = indexOfPrefix(with, "Bandwidth:");

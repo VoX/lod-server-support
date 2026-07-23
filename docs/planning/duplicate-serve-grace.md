@@ -83,8 +83,11 @@ separate (lower) priority; noted here so the two aren't conflated again.
 3. **Send-failure drops were already double-protected.** The failure path not only must
    not stamp (the plan's trap #2) — its dropped positions get their done-bits proactively
    cleared via `OffThreadProcessor.clearDiskReadDone`, so the grace rung is structurally
-   unreachable for that loss class. Only post-send losses (decode failure, consumer
-   rejection) see the bounded ~1-scan heal delay.
+   unreachable for that loss class. Only losses the server cannot distinguish from a
+   delivered send see the bounded ~1-scan heal delay: client decode failure, consumer
+   rejection, and the `armSendDrops` fault seam's injected drops (which return normally
+   from the sender and therefore stamp — a future `fault send-drop` soak scenario must
+   budget the extra scan).
 4. **Test-surface fallout was smaller than budgeted.** The unit-pin rigs deliver through
    a payload capture that bypasses the send queue — no stamps, so every existing honesty
    pin held unmodified. The one live interaction: `TwoPlayerGameTests` step 1's ts≤0

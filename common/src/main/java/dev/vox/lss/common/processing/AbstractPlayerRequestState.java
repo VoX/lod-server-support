@@ -532,8 +532,12 @@ public abstract class AbstractPlayerRequestState<T> {
             try {
                 sender.send(queued.payload());
                 this.sendQueue.poll();
-                decrementEnqueued(queued.packedPos());
+                // Stamp BEFORE the decrement: the router checks the enqueued rung first,
+                // so a stamp while still enqueued is inert — but decrement-then-stamp
+                // would leave a nanosecond window (enqueued gone, stamp not yet visible)
+                // where a crossing re-ask slips past both rungs to a redundant re-serve.
                 stampDeparted(queued.packedPos());
+                decrementEnqueued(queued.packedPos());
                 this.bandwidth.recordSend(queued.estimatedBytes());
                 globalLimiter.recordSend(queued.estimatedBytes());
                 diag.recordSectionSent(queued.estimatedBytes());
