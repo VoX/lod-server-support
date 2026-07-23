@@ -65,11 +65,17 @@ class LSSServerCommands {
                 service.getBandwidthLimiter(),
                 genService != null ? genService.getDiagnostics() : null,
                 service.getPlayers().values()
-        ).withV16Line(service.getV16CompatManager().diagLineOrNull());
+        ).withV16Line(service.getV16CompatManager().diagLineOrNull())
+                .withXrayLine(xrayDiagLine());
 
         for (var line : DiagnosticsFormatter.formatDiagnostics(data)) {
             source.sendSuccess(() -> Component.literal(line), false);
         }
         return 1;
+    }
+
+    private static String xrayDiagLine() {
+        var manager = XrayMaskManager.current();
+        return manager != null ? manager.diagLine() : "Xray: active=off, masked_sections=0";
     }
 }

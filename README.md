@@ -120,6 +120,11 @@ Server config is generated on first run:
 | `perDimensionTimestampCacheSizeMB` | `32` | Max timestamp cache size per dimension in MB (used for up-to-date checks on reconnect) |
 | `dirtyBroadcastIntervalSeconds` | `10` | Interval for pushing dirty column notifications to clients |
 | `missMemoTtlSeconds` | `30` | How long the server remembers "this chunk isn't generated yet" after a disk miss, so chunks waiting for generation don't re-check disk every second. Any serve, world edit, or finished generation forgets the entry immediately; `0` disables the memo (values are clamped to 0-60) |
+| `xrayObfuscation` | `"auto"` | Anti-xray masking for LOD data. `"auto"` masks hidden ores in served LOD columns whenever an anti-xray engine is detected — Paper's built-in anti-xray (per world) or the DrexHD AntiXray mod on Fabric — mirroring that engine's exact hidden-block list and height cutoff. `"on"` forces masking everywhere; `"off"` disables it (LOD data then carries real ore locations even on anti-xray servers) |
+| `xrayHiddenBlocks` | Paper's default ore list | Fallback hidden-block list, used only when no engine settings can be adopted (mode `"on"` with no engine, or a detection failure). Unknown ids are skipped with a warning |
+| `xrayMaxBlockHeight` | `64` | Fallback masking cutoff: only blocks below this world Y are masked. Blocks at or above it already ship unobfuscated in vanilla chunk packets, so masking them would hide nothing |
+
+**Anti-xray masking notes:** masking applies to columns served after it activates — columns already in client caches are not recalled (true of any anti-xray retrofit). Cave shapes and light data are not hidden (same as the packet-level anti-xray systems), and the `/lsslod diag` command shows an `Xray:` status line (active source + masked section count). On Fabric, LSS also ships a compatibility shim so the AntiXray mod no longer crashes servers running LSS.
 
 **Paper-specific:** The config also includes an `updateEvents` list of Bukkit event class names used for dirty chunk detection.
 

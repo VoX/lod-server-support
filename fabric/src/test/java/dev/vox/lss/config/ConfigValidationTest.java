@@ -140,6 +140,54 @@ class ConfigValidationTest {
         assertEquals(256, c.perDimensionTimestampCacheSizeMB);
     }
 
+    // --- X-ray masking keys (docs/planning/antixray-compat-design.md §3) ---
+
+    @Test
+    void xrayObfuscationNormalizedToCanonicalTriState() {
+        var c = serverConfig();
+        c.xrayObfuscation = "ON";
+        c.validate();
+        assertEquals("on", c.xrayObfuscation);
+
+        c.xrayObfuscation = " Off ";
+        c.validate();
+        assertEquals("off", c.xrayObfuscation);
+
+        c.xrayObfuscation = "garbage";
+        c.validate();
+        assertEquals("auto", c.xrayObfuscation, "unknown values must normalize to auto");
+
+        c.xrayObfuscation = null;
+        c.validate();
+        assertEquals("auto", c.xrayObfuscation);
+    }
+
+    @Test
+    void xrayMaxBlockHeightClamped() {
+        var c = serverConfig();
+        c.xrayMaxBlockHeight = -99999;
+        c.validate();
+        assertEquals(LSSConstants.MIN_XRAY_MAX_BLOCK_HEIGHT, c.xrayMaxBlockHeight);
+
+        c.xrayMaxBlockHeight = 99999;
+        c.validate();
+        assertEquals(LSSConstants.MAX_XRAY_MAX_BLOCK_HEIGHT, c.xrayMaxBlockHeight);
+    }
+
+    @Test
+    void xrayHiddenBlocksNullRestoresDefaultButEmptyIsRespected() {
+        var c = serverConfig();
+        c.xrayHiddenBlocks = null;
+        c.validate();
+        assertEquals(dev.vox.lss.common.config.ServerConfigBase.defaultXrayHiddenBlocks(),
+                c.xrayHiddenBlocks, "malformed null must fail safe to the default list");
+
+        c.xrayHiddenBlocks = List.of();
+        c.validate();
+        assertEquals(List.of(), c.xrayHiddenBlocks,
+                "an explicit empty list means 'hide nothing' and must be respected");
+    }
+
     // --- Reflective clamp sweep ---
 
     private static List<Field> numericServerConfigFields() {
@@ -170,8 +218,13 @@ class ConfigValidationTest {
             f.setInt(c, Integer.MIN_VALUE);
             c.validate();
             // missMemoTtlSeconds is the one field whose legal floor is 0 (the memo kill
-            // switch, MIN_MISS_MEMO_TTL_SECONDS) — every other numeric floor is >= 1.
-            int floor = f.getName().equals("missMemoTtlSeconds") ? 0 : 1;
+            // switch, MIN_MISS_MEMO_TTL_SECONDS); xrayMaxBlockHeight's floor is a world Y
+            // and deliberately negative — every other numeric floor is >= 1.
+            int floor = switch (f.getName()) {
+                case "missMemoTtlSeconds" -> 0;
+                case "xrayMaxBlockHeight" -> LSSConstants.MIN_XRAY_MAX_BLOCK_HEIGHT;
+                default -> 1;
+            };
             assertTrue(f.getInt(c) >= floor,
                     f.getName() + " not clamped up from Integer.MIN_VALUE, still " + f.getInt(c));
 

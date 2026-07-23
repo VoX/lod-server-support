@@ -3,6 +3,7 @@ package dev.vox.lss.networking.server;
 import dev.vox.lss.common.DiagnosticsFormatter;
 import dev.vox.lss.common.LSSConstants;
 import dev.vox.lss.common.LSSLogger;
+import dev.vox.lss.common.LogThrottle;
 import dev.vox.lss.common.PositionUtil;
 import dev.vox.lss.common.SharedBandwidthLimiter;
 import dev.vox.lss.common.compat.V16CompatManager;
@@ -52,6 +53,7 @@ public class RequestProcessingService {
 
     private final long startTimeNanos = System.nanoTime();
 
+    private final XrayMaskManager xrayMasks;
     private final DirtyColumnBroadcaster dirtyBroadcaster;
     // The v16 compat shim's per-player sessions (legacy protocol-16 clients). The pipeline
     // never consults it: a v16 player is an ordinary registered player whose want-set is
@@ -82,6 +84,10 @@ public class RequestProcessingService {
     private static final int MAX_PROBES_PER_TICK_GLOBAL = 2048;
     /** Rotating start index for the lifecycle pass (main thread only) — see the loop comment. */
     private int probeRotation;
+    /** Throttle for {@link #serializeProbeContained}'s warn — same 60 s aggregation style as
+     *  the disk-timeout warn (a broken foreign mixin fails EVERY probe; per-column lines
+     *  would flood the console). */
+    private final LogThrottle probeFailureWarn = new LogThrottle(60_000);
 
     // Send-drop fault seam state (see armSendDrops). Static so the soak driver and gametests
     // can arm it without a service reference; production code never arms it.
@@ -91,6 +97,11 @@ public class RequestProcessingService {
     public RequestProcessingService(MinecraftServer server) {
         this.server = server;
         var config = LSSServerConfig.CONFIG;
+
+        // Publishes the per-world x-ray mask decisions the (static) serializer choke
+        // points consult — before any serve can run. The reference is kept so shutdown's
+        // retract is guarded (a stale shutdown must not null a successor's masking).
+        this.xrayMasks = XrayMaskManager.activate(config);
 
         this.dirtyTracker = new DirtyColumnTracker();
 
@@ -541,12 +552,52 @@ public class RequestProcessingService {
                 // would make that save hash equal — silencing the dirty broadcast every OTHER
                 // client holding the old column needs. Only generation serves seed (freshly
                 // generated content cannot be stale-held by anyone).
-                probes.put(packed, SectionSerializer.serializeColumn(level, chunk, req.cx(), req.cz()));
+                var data = serializeProbeContained(SectionSerializer::serializeColumn,
+                        level, chunk, req.cx(), req.cz(), this.probeFailureWarn);
+                if (data != null) {
+                    probes.put(packed, data);
+                }
             }
             probed++;
         }
 
         return probes;
+    }
+
+    /** Serializer seam for {@link #serializeProbeContained} — production passes
+     *  {@link SectionSerializer#serializeColumn}. */
+    @FunctionalInterface
+    interface ProbeColumnSerializer {
+        LoadedColumnData serialize(ServerLevel level, LevelChunk chunk, int cx, int cz);
+    }
+
+    /**
+     * Probe-path containment: the in-memory probe is the ONE serve path with no catch
+     * between {@code section.write} and the server tick loop ({@code probeLoadedChunks} →
+     * {@code tick()} → END_SERVER_TICK), so a foreign mixin that breaks out-of-band
+     * serialization — the AntiXray class of conflict, docs/planning/antixray-compat-design.md
+     * §2 — would crash the server here while every other path merely degrades. A throwing
+     * serialize resolves as "no probe": the column falls through the existing disk →
+     * generation → NOT_GENERATED ladder, i.e. blank LODs plus a throttled warning, never a
+     * crash. The contained set — {@link Exception}, {@link LinkageError},
+     * {@link AssertionError} — matches VoxyCompat's ingest policy (a foreign {@code assert}
+     * under {@code -ea} is a mixin-failure shape, not a VM failure); VirtualMachineErrors
+     * still propagate.
+     */
+    static LoadedColumnData serializeProbeContained(ProbeColumnSerializer serializer,
+            ServerLevel level, LevelChunk chunk, int cx, int cz, LogThrottle warnThrottle) {
+        try {
+            return serializer.serialize(level, chunk, cx, cz);
+        } catch (Exception | LinkageError | AssertionError e) {
+            long releases = warnThrottle.recordAndTryAcquire(System.nanoTime() / 1_000_000);
+            if (releases > 0) {
+                LSSLogger.warn("In-memory probe serialization failed at " + cx + ", " + cz
+                        + " — column skipped, falls through to the disk/generation ladder"
+                        + (releases > 1 ? " (+" + (releases - 1) + " more since last report)" : ""),
+                        e);
+            }
+            return null;
+        }
     }
 
     /**
@@ -669,5 +720,6 @@ public class RequestProcessingService {
         } catch (Exception e) {
             LSSLogger.error("Error shutting down generation service", e);
         }
+        XrayMaskManager.deactivate(this.xrayMasks);
     }
 }

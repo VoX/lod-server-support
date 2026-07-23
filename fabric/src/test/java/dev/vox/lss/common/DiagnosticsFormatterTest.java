@@ -156,6 +156,43 @@ class DiagnosticsFormatterTest {
         assertEquals(withoutShim.size() + 1, withShim.size());
     }
 
+    @Test
+    void diagXrayLineRendersAfterV16SlotOnlyWhenPresent() {
+        var d = new DiagnosticsFormatter.DiagData(
+                true, 24,
+                2048, 1_048_576,
+                100, 5000, 10_485_760,
+                11, 33, 44, 55,
+                22,
+                "sent=9, disk=1/2",
+                "submitted=5, completed=5",
+                "active=1/32", true,
+                7, 3,
+                2_097_152,
+                512,
+                List.of());
+
+        var without = DiagnosticsFormatter.formatDiagnostics(d);
+        assertTrue(without.stream().noneMatch(l -> l.startsWith("Xray")),
+                "a null xray line must add nothing (old constructions/tests keep their shape)");
+
+        var with = DiagnosticsFormatter.formatDiagnostics(
+                d.withXrayLine("Xray: active=antixray-mod, masked_sections=42"));
+        int genIdx = indexOfPrefix(with, "Generation:");
+        int xrayIdx = indexOfPrefix(with, "Xray:");
+        int bwIdx = indexOfPrefix(with, "Bandwidth:");
+        assertTrue(genIdx < xrayIdx && xrayIdx < bwIdx,
+                "the xray line sits between Generation and Bandwidth: " + with);
+        assertEquals(without.size() + 1, with.size());
+        assertEquals("Xray: active=antixray-mod, masked_sections=42", with.get(xrayIdx));
+
+        // Both optional lines together: v16 first (its historical slot), then xray.
+        var both = DiagnosticsFormatter.formatDiagnostics(
+                d.withV16Line("V16Compat: clients=1").withXrayLine("Xray: active=config, masked_sections=0"));
+        assertTrue(indexOfPrefix(both, "V16Compat:") < indexOfPrefix(both, "Xray:"),
+                "line order must stay v16 then xray: " + both);
+    }
+
     private static int indexOfPrefix(List<String> lines, String prefix) {
         for (int i = 0; i < lines.size(); i++) {
             if (lines.get(i).startsWith(prefix)) return i;

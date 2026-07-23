@@ -140,8 +140,15 @@ SERVER_CONFIG_INT_KEYS = frozenset({
     # the generation pacing rules are ttl-independent (unified 2026-07-19), so an
     # inversion A/B against a pre-memo recording is no longer apples-to-apples.
     "missMemoTtlSeconds",
+    # X-ray masking cutoff (docs/planning/antixray-compat-design.md §3).
+    "xrayMaxBlockHeight",
 })
-SERVER_CONFIG_KEYS = SERVER_CONFIG_BOOL_KEYS | SERVER_CONFIG_INT_KEYS
+# X-ray masking tri-state ("auto"/"on"/"off") + hidden-block id list — the only non-bool
+# non-int server config keys; validated loosely (any string / any list of strings).
+SERVER_CONFIG_STRING_KEYS = frozenset({"xrayObfuscation"})
+SERVER_CONFIG_STRING_LIST_KEYS = frozenset({"xrayHiddenBlocks"})
+SERVER_CONFIG_KEYS = (SERVER_CONFIG_BOOL_KEYS | SERVER_CONFIG_INT_KEYS
+                      | SERVER_CONFIG_STRING_KEYS | SERVER_CONFIG_STRING_LIST_KEYS)
 
 # Headroom for B2: per-tick allocation jitter across a 5 s wall window (ticks can lag and
 # repay within the same wall budget, never sustainably exceed it).
@@ -1978,6 +1985,11 @@ def validate_config_overrides(cfg):
             errors.append(f"config key '{key}' must be a JSON boolean, got {value!r}")
         elif key in SERVER_CONFIG_INT_KEYS and (not isinstance(value, int) or isinstance(value, bool)):
             errors.append(f"config key '{key}' must be a JSON integer, got {value!r}")
+        elif key in SERVER_CONFIG_STRING_KEYS and not isinstance(value, str):
+            errors.append(f"config key '{key}' must be a JSON string, got {value!r}")
+        elif key in SERVER_CONFIG_STRING_LIST_KEYS and (
+                not isinstance(value, list) or not all(isinstance(v, str) for v in value)):
+            errors.append(f"config key '{key}' must be a JSON list of strings, got {value!r}")
     return errors
 
 
@@ -3068,6 +3080,17 @@ def selftest():
     cases[0] += 1
     assert validate_config_overrides({"lodDistanceChunks": True}), \
         "config allowlist: bool-for-int must be rejected"
+    cases[0] += 1
+    assert validate_config_overrides({"xrayObfuscation": "on",
+                                      "xrayHiddenBlocks": ["diamond_ore"],
+                                      "xrayMaxBlockHeight": 64}) == [], \
+        "config allowlist: legal xray overrides must validate"
+    cases[0] += 1
+    assert validate_config_overrides({"xrayObfuscation": True}), \
+        "config allowlist: non-string for the xray tri-state must be rejected"
+    cases[0] += 1
+    assert validate_config_overrides({"xrayHiddenBlocks": [1, 2]}), \
+        "config allowlist: non-string list entries must be rejected"
 
     print(f"selftest OK: {cases[0]} cases — every law (A1-A7, B2), the quiescence "
           f"predicate (server pair AND client mirror), disc completeness, window floors, "

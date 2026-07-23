@@ -1,6 +1,9 @@
 package dev.vox.lss.common.config;
 
 import dev.vox.lss.common.LSSConstants;
+import dev.vox.lss.common.XrayMaskPolicy;
+
+import java.util.List;
 
 /**
  * The server config shared verbatim by Fabric and Paper: same fields, same defaults,
@@ -49,6 +52,45 @@ public abstract class ServerConfigBase extends JsonConfig {
      * set false as the kill switch to restore the strict version gate. No clamp: boolean.
      */
     public boolean enableV16Compat = true;
+    /**
+     * LOD x-ray masking (docs/planning/antixray-compat-design.md §3). "auto" (default)
+     * masks iff an anti-xray engine is detected — Paper's built-in anti-xray config, or the
+     * AntiXray mod on Fabric — adopting its per-world hidden list + max-block-height
+     * ("mask exactly what the packet engine masks"). "on" forces masking everywhere; "off"
+     * is the explicit kill switch (re-opens the LOD ore leak knowingly — the AntiXray crash
+     * shim stays active regardless). Unknown values normalize to "auto".
+     */
+    public String xrayObfuscation = "auto";
+    /**
+     * FALLBACK hidden-block list — used when no engine values are adoptable (mode "on"
+     * without a detected engine, or a detection/reflection failure). Verbatim copy of
+     * Paper's default engine-mode-1 {@code hidden-blocks}. All states of each block are
+     * hidden; unknown ids warn and are skipped at resolve time. An explicit empty list
+     * means "hide nothing"; a malformed null restores this default.
+     */
+    public List<String> xrayHiddenBlocks = defaultXrayHiddenBlocks();
+    /**
+     * FALLBACK mask cutoff: only blocks below this world Y are masked (Paper's default 64).
+     * At/above it the data already ships unobfuscated in vanilla chunk packets, so masking
+     * there would over-hide while protecting nothing.
+     */
+    public int xrayMaxBlockHeight = 64;
+
+    /** Paper's default engine-mode-1 hidden-blocks, copied verbatim (2026-07-23 build). */
+    public static List<String> defaultXrayHiddenBlocks() {
+        return List.of(
+                "copper_ore", "deepslate_copper_ore", "raw_copper_block",
+                "gold_ore", "deepslate_gold_ore",
+                "iron_ore", "deepslate_iron_ore", "raw_iron_block",
+                "coal_ore", "deepslate_coal_ore",
+                "lapis_ore", "deepslate_lapis_ore",
+                "mossy_cobblestone", "obsidian", "chest",
+                "diamond_ore", "deepslate_diamond_ore",
+                "redstone_ore", "deepslate_redstone_ore",
+                "clay",
+                "emerald_ore", "deepslate_emerald_ore",
+                "ender_chest");
+    }
 
     @Override
     protected String getFileName() {
@@ -73,6 +115,9 @@ public abstract class ServerConfigBase extends JsonConfig {
         generationConcurrencyLimitPerPlayer = Math.clamp(generationConcurrencyLimitPerPlayer, LSSConstants.MIN_CONCURRENCY_LIMIT, LSSConstants.MAX_CONCURRENCY_LIMIT);
         perDimensionTimestampCacheSizeMB = Math.clamp(perDimensionTimestampCacheSizeMB, LSSConstants.MIN_TIMESTAMP_CACHE_SIZE_MB, LSSConstants.MAX_TIMESTAMP_CACHE_SIZE_MB);
         missMemoTtlSeconds = Math.clamp(missMemoTtlSeconds, LSSConstants.MIN_MISS_MEMO_TTL_SECONDS, LSSConstants.MAX_MISS_MEMO_TTL_SECONDS);
+        xrayObfuscation = XrayMaskPolicy.normalizeMode(xrayObfuscation);
+        if (xrayHiddenBlocks == null) xrayHiddenBlocks = defaultXrayHiddenBlocks();
+        xrayMaxBlockHeight = Math.clamp(xrayMaxBlockHeight, LSSConstants.MIN_XRAY_MAX_BLOCK_HEIGHT, LSSConstants.MAX_XRAY_MAX_BLOCK_HEIGHT);
 
         // Global Constraint #28 is GONE: no client budget derives from any server cap under
         // server-owned generation, so there is nothing to cross-clamp against the wire batch.

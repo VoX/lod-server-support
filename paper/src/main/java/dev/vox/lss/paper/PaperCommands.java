@@ -84,11 +84,17 @@ public class PaperCommands implements CommandExecutor, TabCompleter {
                 service.getBandwidthLimiter(),
                 genService != null ? genService.getDiagnostics() : null,
                 service.getPlayers().values()
-        ).withV16Line(service.getV16CompatManager().diagLineOrNull());
+        ).withV16Line(service.getV16CompatManager().diagLineOrNull())
+                .withXrayLine(xrayDiagLine());
 
         for (var line : DiagnosticsFormatter.formatDiagnostics(data)) {
             sender.sendMessage(line);
         }
+    }
+
+    private static String xrayDiagLine() {
+        var manager = PaperXrayMaskManager.current();
+        return manager != null ? manager.diagLine() : "Xray: active=off, masked_sections=0";
     }
 
     @Override

@@ -30,6 +30,15 @@ FOLIA_MC_VERSION="26.2"
 FABRIC_SERVER_URL="https://meta.fabricmc.net/v2/versions/loader/${FABRIC_MC_VERSION}/${FABRIC_LOADER_VERSION}/${FABRIC_INSTALLER_VERSION}/server/jar"
 FABRIC_API_URL="https://cdn.modrinth.com/data/P7dR8mSH/versions/Cpy2Px2f/fabric-api-0.154.0%2B26.2.jar"
 C2ME_URL="https://cdn.modrinth.com/data/VSNURh3q/versions/nvOkOiyi/c2me-fabric-mc26.2-0.4.2-alpha.0.9.jar"
+# DrexHD AntiXray (Modrinth sml2FMaA), fabric-1.4.16+26.1 — listed compatible with MC 26.2.
+# `run-fabric-antixray` enables it as the live gate for LSS's AntiXray compat
+# (docs/planning/antixray-compat-design.md): a current LSS build must SURVIVE an LSS client
+# join — the crash shim binds AntiXray's ScopedValue context around LSS serialization, and
+# masking adopts the mod's hidden list (watch for the shim + 'LOD x-ray masking active'
+# lines and the /lsslod diag Xray line). Only a pre-shim LSS build still crashes (unbound
+# ScopedValue NoSuchElementException in the probe serve — the stack-trace source for the
+# upstream issue draft). Every other run command parks the jar as .jar.disabled.
+ANTIXRAY_URL="https://cdn.modrinth.com/data/sml2FMaA/versions/AK313N9m/antixray-fabric-1.4.16%2B26.1.jar"
 
 # --- Legacy (protocol-16) LSS server ---
 # The last pre-v0.7.0 release on this Minecraft line (26.2), pulled straight from GitHub
@@ -242,35 +251,73 @@ run_fabric() {
     java -Xmx${SERVER_RAM} -Xms${SERVER_RAM} "$ADMISSION_TRACE_FLAG" -jar fabric-server-launch.jar nogui
 }
 
-# Toggle c2me*.jar in the Fabric mods folder for A/B runs (LSS vs C2ME's chunk-system
-# rewrite — e.g. generation completion-order testing). Disabling renames to
-# .jar.disabled, which the Fabric loader ignores; run-fabric re-enables.
-set_c2me_enabled() {
-    local enabled="$1" f moved=false
+# Toggle <prefix>*.jar in the Fabric mods folder for A/B runs (c2me: LSS vs C2ME's
+# chunk-system rewrite; antixray: the DrexHD AntiXray incompatibility repro). Disabling
+# renames to .jar.disabled, which the Fabric loader ignores.
+set_mod_enabled() {
+    local prefix="$1" enabled="$2" f
     mkdir -p "$FABRIC_DIR/mods"
     if [ "$enabled" = true ]; then
-        for f in "$FABRIC_DIR/mods"/c2me*.jar.disabled; do
+        for f in "$FABRIC_DIR/mods/$prefix"*.jar.disabled; do
             [ -e "$f" ] || continue
             mv "$f" "${f%.disabled}"
             echo "  Re-enabled: $(basename "${f%.disabled}")"
-            moved=true
         done
     else
-        for f in "$FABRIC_DIR/mods"/c2me*.jar; do
+        for f in "$FABRIC_DIR/mods/$prefix"*.jar; do
             [ -e "$f" ] || continue
             mv "$f" "$f.disabled"
             echo "  Disabled: $(basename "$f")"
-            moved=true
         done
-        if [ "$moved" = false ]; then
-            echo "  (no c2me*.jar in $FABRIC_DIR/mods — nothing to disable)"
-        fi
     fi
 }
 
 # ============================================================
 # Paper
 # ============================================================
+
+# Enable Paper's built-in anti-xray (config/paper-world-defaults.yml) so LSS's LOD channel
+# can be tested against packet-level ore obfuscation. Paper's ChunkPacketBlockController
+# rewrites only vanilla chunk-packet buffers and never touches LSS's out-of-band
+# LevelChunkSection.write serves — the historical bypass (real ores in LODs). Since the
+# antixray-compat work (docs/planning/antixray-compat-design.md §3) LSS closes it: in the
+# default "auto" mode it detects this per-world config and masks LOD columns with the SAME
+# hidden list + max-block-height, so the eyeball with an xray resource pack should show
+# ores hidden in BOTH near terrain and LOD rings (a pre-masking LSS jar shows the bypass).
+enable_paper_antixray() {
+    local cfg="$PAPER_DIR/config/paper-world-defaults.yml"
+    if [ ! -f "$cfg" ]; then
+        # First boot merges this partial file with Paper's full defaults.
+        mkdir -p "$PAPER_DIR/config"
+        echo "  Creating paper-world-defaults.yml (anti-xray enabled, engine-mode 1)"
+        cat > "$cfg" << 'EOF'
+anticheat:
+  anti-xray:
+    enabled: true
+    engine-mode: 1
+EOF
+        return 0
+    fi
+    python3 - "$cfg" << 'EOF'
+import re, sys
+path = sys.argv[1]
+src = open(path).read()
+m = re.search(r'(?m)^([ \t]*)anti-xray:[^\n]*\n((?:\1[ \t]+[^\n]*\n?)*)', src)
+if not m:
+    print("  WARNING: no anti-xray block in paper-world-defaults.yml — enable it by hand")
+    sys.exit(0)
+block = m.group(0)
+new_block, n = re.subn(r'(?m)^([ \t]+enabled:[ \t]*)false[ \t]*$', r'\1true', block, count=1)
+if n:
+    src = src.replace(block, new_block, 1)
+    open(path, 'w').write(src)
+    print("  Enabled anti-xray in paper-world-defaults.yml")
+elif re.search(r'(?m)^[ \t]+enabled:[ \t]*true', block):
+    print("  anti-xray already enabled in paper-world-defaults.yml")
+else:
+    print("  WARNING: anti-xray block has no recognisable enabled key — check it by hand")
+EOF
+}
 
 setup_paper() {
     echo "=== Setting up Paper server ==="
@@ -286,6 +333,7 @@ setup_paper() {
     write_server_properties "$PAPER_DIR" 25566 "LSS Test Server (Paper)"
     write_ops_json "$PAPER_DIR"
     write_lss_config "$PAPER_DIR/plugins/LodServerSupport"
+    enable_paper_antixray
 
     echo "=== Installing Paper plugins ==="
     echo "  Installing LSS..."
@@ -466,6 +514,7 @@ case "${1:-run}" in
         ;;
     run)
         setup_fabric
+        set_mod_enabled antixray false  # the all-servers run stays AntiXray-free (baseline)
         echo ""
         setup_paper
         echo ""
@@ -475,7 +524,8 @@ case "${1:-run}" in
         ;;
     run-fabric)
         setup_fabric
-        set_c2me_enabled true   # undo a previous run-fabric-no-c2me
+        set_mod_enabled c2me true       # undo a previous run-fabric-no-c2me
+        set_mod_enabled antixray false  # undo a previous run-fabric-antixray
         echo ""
         echo "=== Starting Fabric server ==="
         echo "  Connect to: localhost:25564"
@@ -484,11 +534,28 @@ case "${1:-run}" in
         ;;
     run-fabric-no-c2me)
         setup_fabric
+        set_mod_enabled antixray false  # undo a previous run-fabric-antixray
         echo ""
         echo "=== Disabling C2ME for this run ==="
-        set_c2me_enabled false
+        set_mod_enabled c2me false
         echo ""
         echo "=== Starting Fabric server (C2ME disabled) ==="
+        echo "  Connect to: localhost:25564"
+        echo ""
+        run_fabric
+        ;;
+    run-fabric-antixray)
+        setup_fabric
+        set_mod_enabled c2me true       # same baseline as run-fabric, only AntiXray differs
+        echo ""
+        echo "=== Enabling AntiXray (DrexHD) for this run ==="
+        # Skip the download while a previous run has it parked as .jar.disabled.
+        if [ ! -f "$FABRIC_DIR/mods/antixray.jar.disabled" ]; then
+            download "$ANTIXRAY_URL" "$FABRIC_DIR/mods/antixray.jar"
+        fi
+        set_mod_enabled antixray true
+        echo ""
+        echo "=== Starting Fabric server (AntiXray enabled) ==="
         echo "  Connect to: localhost:25564"
         echo ""
         run_fabric
@@ -498,6 +565,7 @@ case "${1:-run}" in
         echo ""
         echo "=== Starting Paper server ==="
         echo "  Connect to: localhost:25566"
+        echo "  Paper native anti-xray is ENABLED (config/paper-world-defaults.yml)."
         echo ""
         run_paper
         ;;
@@ -535,13 +603,17 @@ case "${1:-run}" in
         echo "Done."
         ;;
     *)
-        echo "Usage: $0 {setup|run|run-fabric|run-fabric-no-c2me|run-paper|run-folia|run-legacy|update|clean}"
+        echo "Usage: $0 {setup|run|run-fabric|run-fabric-no-c2me|run-fabric-antixray|run-paper|run-folia|run-legacy|update|clean}"
         echo ""
         echo "  setup      - Download and set up all servers"
         echo "  run        - Set up and start all servers (default)"
-        echo "  run-fabric - Set up and start Fabric server only (port 25564; re-enables C2ME)"
+        echo "  run-fabric - Set up and start Fabric server only (port 25564; re-enables C2ME,"
+        echo "               parks AntiXray)"
         echo "  run-fabric-no-c2me - Same, with any c2me*.jar in mods/ disabled (A/B testing)"
-        echo "  run-paper  - Set up and start Paper server only (port 25566)"
+        echo "  run-fabric-antixray - Same as run-fabric plus DrexHD AntiXray — the live gate"
+        echo "               for the AntiXray compat shim + masking (current builds must"
+        echo "               survive a client join and serve masked; only pre-shim builds crash)"
+        echo "  run-paper  - Set up and start Paper server only (port 25566; native anti-xray on)"
         echo "  run-folia  - Set up and start Folia server only (port 25567)"
         echo "  run-legacy - Set up and start an OLD LSS v${LEGACY_LSS_VERSION} (protocol 16) server (port 25568),"
         echo "               for eyeballing the client-side v16 backward-compat path"

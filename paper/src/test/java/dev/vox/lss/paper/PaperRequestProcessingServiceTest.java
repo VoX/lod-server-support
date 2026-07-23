@@ -801,6 +801,21 @@ class PaperRequestProcessingServiceTest {
     }
 
     @Test
+    void testWiredShutdownDoesNotRetractAForeignMaskManager() {
+        // The test-wiring ctor never publishes the x-ray mask manager (xrayMasks stays
+        // null), so its shutdown's guarded retract must leave a live production manager
+        // alone — the invariant behind PaperXrayMaskManager.deactivate(owner).
+        var foreign = PaperXrayMaskManager.activate(new PaperConfig());
+        try {
+            service.shutdown();
+            assertSame(foreign, PaperXrayMaskManager.current(),
+                    "a service that never published must not retract the live manager");
+        } finally {
+            PaperXrayMaskManager.deactivate(foreign);
+        }
+    }
+
+    @Test
     void mailboxEventsAfterShutdownAreNotApplied() {
         // The overlapped-disable tick must not register into mid-teardown collaborators
         // (players.clear() vs registerPlayer, a shut-down disk reader): shuttingDown is

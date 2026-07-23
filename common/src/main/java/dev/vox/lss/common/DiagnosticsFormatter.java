@@ -30,9 +30,10 @@ public final class DiagnosticsFormatter {
             long bwTotal,
             long bwWindowRate,
             List<PlayerDiag> players,
-            String v16Line
+            String v16Line,
+            String xrayLine
     ) {
-        /** Pre-v16-compat shape (no shim line) — keeps existing constructions/tests intact. */
+        /** Pre-v16-compat shape (no shim/xray lines) — keeps existing constructions/tests intact. */
         public DiagData(boolean enabled, int lodDist, long bwPerPlayer, long bwGlobal,
                         long uptimeSec, long totalSent, long totalBytes,
                         long cumInMem, long cumUtd, long cumGen, long cumReResolved,
@@ -43,7 +44,7 @@ public final class DiagnosticsFormatter {
             this(enabled, lodDist, bwPerPlayer, bwGlobal, uptimeSec, totalSent, totalBytes,
                     cumInMem, cumUtd, cumGen, cumReResolved, diskCompleted, tickDiagnostics,
                     diskReaderDiagnostics, generationDiagnostics, generationEnabled,
-                    genOrderGated, genInversions, bwTotal, bwWindowRate, players, null);
+                    genOrderGated, genInversions, bwTotal, bwWindowRate, players, null, null);
         }
 
         /** Attach the v16 compat shim's one-line summary (null when the shim is untouched —
@@ -53,7 +54,17 @@ public final class DiagnosticsFormatter {
                     totalBytes, cumInMem, cumUtd, cumGen, cumReResolved, diskCompleted,
                     tickDiagnostics, diskReaderDiagnostics, generationDiagnostics,
                     generationEnabled, genOrderGated, genInversions, bwTotal, bwWindowRate,
-                    players, line);
+                    players, line, xrayLine);
+        }
+
+        /** Attach the x-ray masking one-line summary (always shown when non-null — the off
+         *  state is what an admin testing masking needs to see). */
+        public DiagData withXrayLine(String line) {
+            return new DiagData(enabled, lodDist, bwPerPlayer, bwGlobal, uptimeSec, totalSent,
+                    totalBytes, cumInMem, cumUtd, cumGen, cumReResolved, diskCompleted,
+                    tickDiagnostics, diskReaderDiagnostics, generationDiagnostics,
+                    generationEnabled, genOrderGated, genInversions, bwTotal, bwWindowRate,
+                    players, v16Line, line);
         }
     }
 
@@ -108,6 +119,11 @@ public final class DiagnosticsFormatter {
         // v16 compat shim (omitted while untouched — most servers never see a legacy client)
         if (d.v16Line != null) {
             lines.add(d.v16Line);
+        }
+
+        // X-ray masking (docs/planning/antixray-compat-design.md §3 Diagnostics)
+        if (d.xrayLine != null) {
+            lines.add(d.xrayLine);
         }
 
         // Bandwidth

@@ -195,6 +195,9 @@ public class CommandGameTests {
                         + "surfaces as a missing header), got: " + lines);
         helper.assertTrue(anyLineContains(lines, "Generation: disabled"),
                 "the null generation service must render as 'Generation: disabled', got: " + lines);
+        helper.assertTrue(anyLineContains(lines, "Xray: active="),
+                "the diag ladder must carry the always-present xray masking line "
+                        + "(pins LSSServerCommands' withXrayLine attach), got: " + lines);
         helper.succeed();
     }
 

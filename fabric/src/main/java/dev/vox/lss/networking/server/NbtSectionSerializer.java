@@ -2,6 +2,7 @@ package dev.vox.lss.networking.server;
 
 import com.mojang.serialization.Codec;
 import dev.vox.lss.common.LSSConstants;
+import dev.vox.lss.compat.AntiXrayCompat;
 import io.netty.buffer.Unpooled;
 import net.minecraft.core.Holder;
 import net.minecraft.core.RegistryAccess;
@@ -43,15 +44,25 @@ final class NbtSectionSerializer {
 
     /**
      * Read chunk NBT from disk, verify FULL status, and serialize sections
-     * into MC-native wire format.
+     * into MC-native wire format. {@code maskEntry} (nullable) is the dimension's x-ray
+     * mask, captured by the caller at submit time.
      * Returns the serialized byte array, or null if the chunk is missing/not FULL/empty.
      */
     static byte[] readAndSerializeSections(ChunkNbtRead read, RegistryAccess registryAccess,
-                                            int cx, int cz) throws Exception {
+                                            int cx, int cz,
+                                            XrayMaskManager.MaskEntry maskEntry) throws Exception {
         var future = read.read(cx, cz);
         var optionalTag = future.get(LSSConstants.DISK_READ_TIMEOUT_SECONDS, TimeUnit.SECONDS);
         if (optionalTag.isEmpty()) return null;
-        return serializeChunkNbt(optionalTag.get(), registryAccess);
+        var chunkNbt = optionalTag.get();
+        // The shim scope covers the codec parse AND the section writes (both carry AntiXray
+        // mixin injections); it deliberately excludes the blocking read above.
+        return AntiXrayCompat.callSerializing(() -> serializeChunkNbt(chunkNbt, registryAccess, maskEntry));
+    }
+
+    /** Unmasked flavor — the shape the pre-masking tests and corpus pin. */
+    static byte[] serializeChunkNbt(CompoundTag chunkNbt, RegistryAccess registryAccess) {
+        return serializeChunkNbt(chunkNbt, registryAccess, null);
     }
 
     /**
@@ -59,7 +70,8 @@ final class NbtSectionSerializer {
      * Returns {@code null} if the chunk is not FULL or has no sections, an empty array if every
      * section is empty, or the serialized section bytes. Package-visible for testing.
      */
-    static byte[] serializeChunkNbt(CompoundTag chunkNbt, RegistryAccess registryAccess) {
+    static byte[] serializeChunkNbt(CompoundTag chunkNbt, RegistryAccess registryAccess,
+                                    XrayMaskManager.MaskEntry maskEntry) {
         var statusStr = chunkNbt.getStringOr("Status", null);
         if (statusStr == null || ChunkStatus.byName(statusStr) != ChunkStatus.FULL) return null;
 
@@ -94,6 +106,21 @@ final class NbtSectionSerializer {
         }
 
         if (parsed.isEmpty()) return new byte[0];
+
+        if (maskEntry != null) {
+            // Parsed sections are throwaway — mask in place, inside the same choke point
+            // the live path masks in, so disk and live serves stay byte-identical. The
+            // counter attributes to whatever manager is current at COMPLETION time (a read
+            // straddling a service restart credits the successor) — diag-only cosmetics;
+            // the mask itself always comes from the immutable submit-time entry.
+            for (var p : parsed) {
+                if (XrayMaskFilter.maskInPlace(p.section, p.sectionY,
+                        maskEntry.mask(), maskEntry.kind())) {
+                    var manager = XrayMaskManager.current();
+                    if (manager != null) manager.countMaskedSection();
+                }
+            }
+        }
 
         // Second pass: serialize to wire format
         var buf = new FriendlyByteBuf(Unpooled.buffer(parsed.size() * 1024));
