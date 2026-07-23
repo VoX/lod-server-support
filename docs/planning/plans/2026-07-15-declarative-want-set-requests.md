@@ -1,6 +1,5 @@
 # Declarative Want-Set Requests (protocol v17) — Both Platforms — Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Replace the request-slice + bounce/backoff protocol with a declarative want-set: once per second the client sends its COMPLETE current want-set (every unsatisfied position, closest-first, capped at 1024), and the server REPLACES its per-player backlog with each arriving batch. A full concurrency slot leaves a request queued instead of bouncing it; stale queued work is dropped by the next replace and self-heals through re-declaration. `RESPONSE_RATE_LIMITED` leaves the wire. Movement/teleport staleness disappears, proximity ordering falls out of arrival order, and issue #32's root cause (per-player allowance 200 > shared disk pool 165) stops being client-visible.
 

@@ -1,6 +1,5 @@
 # Server Disk-Read Priority (yield LOD reads to gameplay) — Both Platforms — Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Make LSS disk reads yield to vanilla/gameplay chunk loading at the read-scheduler level, on both platforms, so streaming LOD terrain never delays the reads players are waiting on.
 
