@@ -236,6 +236,7 @@ public final class BenchmarkMetricsExporter {
         var diskReader = src.diskReader();
         serviceMap.put("disk_resolved", diskReader != null ? diskReader.getDiag().getSuccessfulReadCount() : 0L);
         serviceMap.put("re_resolved", diag.getTotalReResolved());
+        serviceMap.put("grace_skipped", diag.getTotalGraceSkipped());
         serviceMap.put("superseded", diag.getTotalSuperseded());
         serviceMap.put("range_filtered", diag.getTotalRangeFiltered());
         serviceMap.put("miss_dropped", diag.getTotalMissDropped());

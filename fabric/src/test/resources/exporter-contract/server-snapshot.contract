@@ -51,6 +51,7 @@ service.columns_sent=long
 service.disk_resolved=long
 service.duplicate_skips=long
 service.gen_drained=long
+service.grace_skipped=long
 service.in_memory=long
 service.miss_dropped=long
 service.queue_full=long

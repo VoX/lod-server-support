@@ -24,6 +24,7 @@ public class ProcessingDiagnostics {
     private volatile long totalDuplicateSkips;
     private volatile long totalRequestsRouted;
     private volatile long totalReResolved;
+    private volatile long totalGraceSkipped;
     // Cumulative (single-writer: processing thread — cross-thread producers accumulate in
     // per-player AtomicLongs and are drained here each cycle)
     private volatile long totalSuperseded;
@@ -80,6 +81,14 @@ public class ProcessingDiagnostics {
         totalReResolved++;
     }
 
+    /** A ts&le;0 re-request landed within the departure grace of its own payload's
+     *  send-success and was silently skipped — the crossing race absorbed instead of
+     *  honestly re-resolved (would otherwise have counted {@code re_resolved} and cost a
+     *  redundant disk read + send). See docs/planning/duplicate-serve-grace.md. */
+    public void incrementGraceSkipped() {
+        totalGraceSkipped++;
+    }
+
     /** Requests dropped without a wire response (mailbox overwrite, backlog replace, Folia
      *  held-batch loss, residual disk-saturation drop, dedup-primary-departure attached
      *  drop). Recoverable by re-declaration; balanced in soak law A1. */
@@ -131,6 +140,7 @@ public class ProcessingDiagnostics {
     public long getTotalDuplicateSkips() { return totalDuplicateSkips; }
     public long getTotalRequestsRouted() { return totalRequestsRouted; }
     public long getTotalReResolved() { return totalReResolved; }
+    public long getTotalGraceSkipped() { return totalGraceSkipped; }
     public long getTotalSuperseded() { return totalSuperseded; }
     public long getTotalRangeFiltered() { return totalRangeFiltered; }
     public long getTotalMissDropped() { return totalMissDropped; }

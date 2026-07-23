@@ -214,6 +214,11 @@ SERVER_MONOTONIC = (
     # mechanism digest. No scenario floor-checks it yet (no ingest-failure soak scenario exists),
     # so A6 on it is correct-but-quiescent until such a scenario is authored.
     "service.re_resolved",
+    # Duplicate-serve grace (docs/planning/duplicate-serve-grace.md): crossing ts<=0
+    # re-asks absorbed by the departure grace — each would otherwise have counted
+    # re_resolved and cost a redundant disk read + send. Mechanism, not anomaly; no law
+    # consumes it (the skip answers nothing and touches no disk, so no identity moves).
+    "service.grace_skipped",
 )
 CLIENT_MONOTONIC = (
     "received_columns", "received_bytes", "dropped",
@@ -2296,7 +2301,7 @@ def _srv(wall=1000, seg=0, over=None):
                         "duplicate_skips": 0, "queue_full": 0, "up_to_date": 0,
                         "in_memory": 0, "disk_resolved": 0, "gen_drained": 0,
                         "superseded": 0, "range_filtered": 0, "re_resolved": 0,
-                        "miss_dropped": 0},
+                        "grace_skipped": 0, "miss_dropped": 0},
             "disk": {"submitted": 0, "completed": 0, "not_found": 0, "all_air": 0,
                      "errors": 0, "saturated": 0, "successful": 0, "pending": 0,
                      "memo_hits": 0},

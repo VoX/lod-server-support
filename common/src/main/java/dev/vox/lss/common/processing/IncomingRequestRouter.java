@@ -186,9 +186,15 @@ class IncomingRequestRouter<PS extends AbstractPlayerRequestState<?>> {
      * while the payload is still in the send pipeline (it IS coming — the client's next
      * declaration asks again), or clear the done-bit and re-resolve once it isn't.
      *
-     * <p>Accepted race: a re-declaration that crosses its own payload's delivery (sent and
-     * decremented between the client's send and this check) re-resolves once redundantly —
-     * one extra serve per crossed re-ask, after which the client holds ts&gt;0 and converges.
+     * <p>Accepted race, grace-absorbed: a re-declaration that crosses its own payload's
+     * delivery (sent and decremented between the client's send and this check) used to
+     * re-resolve once redundantly — ~7-8% of columns during cold backfill (one extra
+     * disk read + send per crossed re-ask, scaling with client&rarr;server latency). The
+     * departure grace absorbs it: a ts&le;0 re-ask within
+     * {@code SEND_DEPARTURE_GRACE_MILLIS} of the payload's send-success departure takes
+     * the same silent-skip disposition as the enqueued rung (docs/planning/
+     * duplicate-serve-grace.md). Past the grace, the clear-and-re-resolve applies
+     * unchanged, so a genuinely lost payload heals at most one scan later.
      */
     /** Duplicate-resolution flavor: SATISFIED answered terminally (must not pin the live
      *  frontier), IN_FLIGHT has work outstanding (pins it — the anti-starvation stamp). */
@@ -207,6 +213,17 @@ class IncomingRequestRouter<PS extends AbstractPlayerRequestState<?>> {
                 // client re-declares at 1 Hz until the payload lands or is dropped, and a
                 // post-drop re-ask falls through to the clearDiskReadDone re-resolution below.
                 this.ctx.diagnostics().incrementSkippedDuplicate();
+                return Duplicate.IN_FLIGHT;
+            }
+            if (state.isWithinDepartureGrace(packed)) {
+                // Duplicate-serve grace: the payload left the send queue (send SUCCESS —
+                // failure drops never stamp) within the grace window, so this ts<=0
+                // re-ask almost certainly crossed its own delivery in flight. Same
+                // disposition as the enqueued rung: silent skip, done-bit KEPT, and
+                // never up_to_date — the client claims nothing. Termination is
+                // guaranteed: the stamp is written only at departure, so the next 1 Hz
+                // re-declaration outlives the grace and re-resolves honestly below.
+                this.ctx.diagnostics().incrementGraceSkipped();
                 return Duplicate.IN_FLIGHT;
             }
             state.clearDiskReadDone(packed);

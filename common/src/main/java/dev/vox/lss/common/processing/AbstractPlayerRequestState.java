@@ -57,6 +57,20 @@ public abstract class AbstractPlayerRequestState<T> {
     // "is this position's data still on its way?" — counted, not a set, because a dirty
     // re-serve can put a second payload for the same position in flight.
     private final ConcurrentHashMap<Long, Integer> enqueuedColumns = new ConcurrentHashMap<>();
+    // Duplicate-serve grace (docs/planning/duplicate-serve-grace.md): packed position →
+    // send-queue departure stamp (nanos), written ONLY on the send-SUCCESS path — the
+    // send-failure bulk drop must never stamp (those columns never reached the wire; their
+    // done-bits are proactively cleared via OffThreadProcessor.clearDiskReadDone and the
+    // honesty rung exists for exactly that loss class). Read by the router (processing
+    // thread) to absorb the accepted crossing race: a ts<=0 re-declaration built before
+    // its own payload departed. Dies with the state on player removal AND dimension change
+    // (both replace the state via removePlayer+registerPlayer on both platforms). Most
+    // stamps are never re-asked, so flushSendQueue sweeps expired entries once per grace
+    // interval — without that the map would grow with every column ever sent.
+    private final ConcurrentHashMap<Long, Long> departedColumns = new ConcurrentHashMap<>();
+    private long departureGraceNanos = LSSConstants.SEND_DEPARTURE_GRACE_MILLIS * 1_000_000L;
+    private java.util.function.LongSupplier departureClock = System::nanoTime;
+    private long departedSweepMarkNanos; // main thread only (flushSendQueue)
     private final PlayerBandwidthTracker bandwidth = new PlayerBandwidthTracker();
     private final AtomicLong totalRequestsReceived = new AtomicLong();
     // Single-writer (main thread) — volatile for cross-thread visibility to processing thread
@@ -480,6 +494,7 @@ public abstract class AbstractPlayerRequestState<T> {
                 sender.send(queued.payload());
                 this.sendQueue.poll();
                 decrementEnqueued(queued.packedPos());
+                stampDeparted(queued.packedPos());
                 this.bandwidth.recordSend(queued.estimatedBytes());
                 globalLimiter.recordSend(queued.estimatedBytes());
                 diag.recordSectionSent(queued.estimatedBytes());
@@ -497,7 +512,58 @@ public abstract class AbstractPlayerRequestState<T> {
             }
         }
         this.sendQueueSizeSnapshot = this.sendQueue.size();
+        sweepDepartedColumns();
         return dropped;
+    }
+
+    // ---- Duplicate-serve grace (see the departedColumns field comment) ----
+
+    /**
+     * True while a ts&le;0 re-ask for this position falls inside the departure grace: its
+     * column payload left the send queue (send success) within the last
+     * {@link LSSConstants#SEND_DEPARTURE_GRACE_MILLIS}, so the re-ask almost certainly
+     * crossed its own delivery in flight. Any thread; expired entries are removed on read.
+     */
+    public boolean isWithinDepartureGrace(long packed) {
+        var departed = this.departedColumns.get(packed);
+        if (departed == null) return false;
+        if (this.departureClock.getAsLong() - departed <= this.departureGraceNanos) return true;
+        this.departedColumns.remove(packed, departed);
+        return false;
+    }
+
+    private void stampDeparted(long packed) {
+        if (this.departureGraceNanos <= 0) return;
+        this.departedColumns.put(packed, this.departureClock.getAsLong());
+    }
+
+    /** Expire stale departure stamps, at most once per grace interval (main thread, from
+     *  {@code flushSendQueue}). Most stamps are never re-asked, so read-time removal alone
+     *  would leak one entry per column ever sent. */
+    private void sweepDepartedColumns() {
+        if (this.departedColumns.isEmpty()) return;
+        long now = this.departureClock.getAsLong();
+        if (this.departedSweepMarkNanos != 0
+                && now - this.departedSweepMarkNanos <= this.departureGraceNanos) return;
+        this.departedSweepMarkNanos = now;
+        this.departedColumns.values().removeIf(stamp -> now - stamp > this.departureGraceNanos);
+    }
+
+    /** Package-private test probes: the wired grace (pins the production default) and the
+     *  map's size (pins the sweep — a leaked map is invisible to behavior tests). */
+    long departureGraceNanosForTest() {
+        return this.departureGraceNanos;
+    }
+
+    int departedColumnCountForTest() {
+        return this.departedColumns.size();
+    }
+
+    /** Test seam (protected — rigs subclass from other packages): grace window
+     *  (0 = off, no stamps written) + clock, so grace tests are deterministic. */
+    protected void setDepartureGraceForTest(long graceNanos, java.util.function.LongSupplier clock) {
+        this.departureGraceNanos = graceNanos;
+        this.departureClock = clock;
     }
 
     // ---- Processing-thread-facing per-request API ----

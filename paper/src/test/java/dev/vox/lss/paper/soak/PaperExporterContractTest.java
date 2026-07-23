@@ -181,6 +181,9 @@ class PaperExporterContractTest {
         var fx = new Fixture();
         fx.diag.incrementReResolved();
         fx.diag.incrementReResolved();
+        fx.diag.incrementGraceSkipped();
+        fx.diag.incrementGraceSkipped();
+        fx.diag.incrementGraceSkipped();
         fx.diag.addSuperseded(8);
         fx.diag.addRangeFiltered(9);
         fx.tickDiag.recordSectionSent(100);
@@ -194,6 +197,7 @@ class PaperExporterContractTest {
         var m = PaperSoakMetricsExporter.buildServerMetrics(fx.service);
 
         assertEquals(2L, section(m, "service").get("re_resolved"));
+        assertEquals(3L, section(m, "service").get("grace_skipped"));
         assertEquals(8L, section(m, "service").get("superseded"));
         assertEquals(9L, section(m, "service").get("range_filtered"));
         assertEquals(1L, section(m, "service").get("columns_sent"));

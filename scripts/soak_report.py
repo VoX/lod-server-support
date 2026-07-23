@@ -68,6 +68,10 @@ SERVER_MECHANISM = {
     # supersession. Persistent growth means a config mismatch, not data loss.
     "range filtered": "service.range_filtered",
     "honest re-resolutions": "service.re_resolved",
+    # Duplicate-serve grace: crossing re-asks absorbed silently instead of re-resolved
+    # (each avoided a redundant disk read + send). Expect these to replace most
+    # re_resolved growth during backfill bursts.
+    "grace-absorbed re-asks": "service.grace_skipped",
     "dirty re-saves suppressed": "dirty.suppressed_total",
 }
 CLIENT_CONCERNING = {

@@ -674,7 +674,11 @@ class IncomingRequestRouterTest {
 
             // The client's timeout re-ask crossed its own payload's delivery: it still
             // claims nothing (ts<=0) for a position the server resolved AND sent. The
-            // documented race bound: this costs exactly one redundant re-serve.
+            // documented race bound: this costs exactly one redundant re-serve. (This rig
+            // delivers through the TestProcessor's payload capture, which bypasses the
+            // send queue — no departure stamp exists, so this pins the POST-GRACE
+            // behavior; the grace-window absorption is pinned separately in
+            // crossingReAskWithinTheDepartureGraceIsAbsorbedThenHealsAfterExpiry.)
             p1.enqueue(new IncomingRequest(70, 0, -1));
             proc.postSnapshot(snapshot(p1), List.of());
             waitFor(() -> proc.submits.size() == 2, "honest re-resolution re-reads the disk");
@@ -697,6 +701,72 @@ class IncomingRequestRouterTest {
             assertEquals(2, proc.payloads.size(), "no serve beyond the single redundant one");
             assertEquals(2, proc.submits.size());
             assertEquals(1, proc.getDiagnostics().getTotalReResolved());
+        } finally {
+            proc.shutdown();
+            reader.shutdown();
+        }
+    }
+
+    @Test
+    void crossingReAskWithinTheDepartureGraceIsAbsorbedThenHealsAfterExpiry() throws Exception {
+        var players = new ConcurrentHashMap<UUID, TestState>();
+        var p1 = addPlayer(players, 4, 4);
+        var clock = new java.util.concurrent.atomic.AtomicLong(1_000_000_000L);
+        p1.setDepartureGraceForTest(500_000_000L, clock::get);
+        var reader = new StubDiskReader();
+        reader.registerPlayer(p1.getPlayerUUID());
+        var proc = new TestProcessor(players, reader, false, null);
+        try {
+            proc.start();
+            // Serve (70,0) through the real pipeline...
+            p1.enqueue(new IncomingRequest(70, 0, -1));
+            proc.postSnapshot(snapshot(p1), List.of());
+            waitFor(() -> proc.submits.size() == 1, "initial disk submit");
+            reader.getPlayerQueue(p1.getPlayerUUID())
+                    .add(dataResult(p1.getPlayerUUID(), 70, 0, new byte[]{1}, 5000L, 1L));
+            proc.postSnapshot(snapshot(p1), List.of());
+            waitFor(() -> proc.payloads.size() == 1, "first serve delivered");
+            assertTrue(p1.hasDiskReadDone(70, 0));
+            // ...then push a payload through the REAL send queue so the send-success path
+            // stamps the departure (the TestProcessor's payload capture bypasses it).
+            p1.addReadyPayload(new QueuedPayload<>(new Object(), 10, 1, packed(70, 0)));
+            Thread.sleep(50); // token bucket refill (see FlushSendQueueTest header)
+            p1.flushSendQueue(1_000_000_000L, new SharedBandwidthLimiter(1_000_000_000L),
+                    new TickDiagnostics(), payload -> {});
+            assertFalse(p1.hasEnqueuedColumn(packed(70, 0)), "payload fully departed");
+            assertTrue(p1.isWithinDepartureGrace(packed(70, 0)));
+
+            // The crossing re-ask (ts<=0, inside the grace): absorbed SILENTLY — done-bit
+            // kept, no redundant re-read, no answer (up_to_date to a client claiming
+            // nothing would seal the permanent-invisible-hole class the honesty rung
+            // exists for), counted grace_skipped and NOT re_resolved.
+            p1.enqueue(new IncomingRequest(70, 0, -1));
+            proc.postSnapshot(snapshot(p1), List.of());
+            waitFor(() -> proc.getDiagnostics().getTotalGraceSkipped() == 1, "grace skip counted");
+            assertTrue(p1.hasDiskReadDone(70, 0), "the grace skip keeps the done-bit");
+            assertEquals(1, proc.submits.size(), "no redundant re-read inside the grace");
+            assertEquals(0, proc.getDiagnostics().getTotalReResolved());
+            assertFalse(p1.hasPendingRequest(70, 0));
+            assertTrue(drainSendActions(proc).isEmpty(),
+                    "the grace answers nothing — silent skip, like the enqueued rung");
+
+            // A ts>0 re-ask inside the grace is untouched: the client claims data, so the
+            // done-bit up-to-date answer is honest (the grace guards only the ts<=0 path).
+            p1.enqueue(new IncomingRequest(70, 0, 5000L));
+            proc.postSnapshot(snapshot(p1), List.of());
+            var delivered = drainUntil(proc, contains(LSSConstants.RESPONSE_UP_TO_DATE, packed(70, 0)));
+            assertEquals(1, count(delivered, LSSConstants.RESPONSE_UP_TO_DATE, packed(70, 0)));
+
+            // Past the grace the honest re-resolution applies unchanged — a genuinely
+            // lost payload heals at most one 1 Hz scan later than before the grace.
+            clock.addAndGet(500_000_001L);
+            p1.enqueue(new IncomingRequest(70, 0, -1));
+            proc.postSnapshot(snapshot(p1), List.of());
+            waitFor(() -> proc.submits.size() == 2, "post-grace re-ask re-resolves to disk");
+            assertEquals(1, proc.getDiagnostics().getTotalReResolved());
+            assertFalse(p1.hasDiskReadDone(70, 0), "re-resolution forgets the stale done-bit");
+            assertEquals(1, proc.getDiagnostics().getTotalGraceSkipped(),
+                    "the expired stamp absorbs nothing further");
         } finally {
             proc.shutdown();
             reader.shutdown();
