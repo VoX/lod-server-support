@@ -121,7 +121,9 @@ duplicates are NOT client decode drops (an instrumented rerun measured queue pea
 position crossing its own payload's send-queue departure re-resolves once redundantly —
 plus ~300/run of dirty-broadcast tail serves (probe serves don't seed DirtyContentFilter).
 v16 had zero duplicates because its client suppressed in-flight positions at send time,
-the mechanism v17 deliberately deleted (10 s-stall / permanent-hole failure modes).
+the mechanism v17 deliberately deleted (10 s-stall / permanent-hole failure modes). A
+server-side mitigation (departure-stamp grace) is documented as future work in
+`docs/planning/duplicate-serve-grace.md`.
 Total CPU to converge the same 16.5 k-column terrain: ~37 CPU-s in both
 protocols, with v17 ~20% faster wall-clock. Background-read priority costs ~4% CPU and
 ~0.6 ms median read latency vs foreground (within noise) — the deliberate
