@@ -216,8 +216,11 @@ SERVER_MONOTONIC = (
     "service.re_resolved",
     # Duplicate-serve grace (docs/planning/duplicate-serve-grace.md): crossing ts<=0
     # re-asks absorbed by the departure grace — each would otherwise have counted
-    # re_resolved and cost a redundant disk read + send. Mechanism, not anomaly; no law
-    # consumes it (the skip answers nothing and touches no disk, so no identity moves).
+    # re_resolved and cost a redundant disk read + send. Mechanism, not anomaly. A grace
+    # skip is ALSO counted in service.duplicate_skips (law A1's disposition term — a
+    # first fresh-backfill run imbalanced A1 by exactly the grace count until the subset
+    # accounting landed); this counter is the observability subset, so no law reads it
+    # directly.
     "service.grace_skipped",
 )
 CLIENT_MONOTONIC = (

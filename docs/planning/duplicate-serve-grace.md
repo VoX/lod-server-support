@@ -18,7 +18,10 @@ client does not).
 - `IncomingRequestRouter.resolvedAsDuplicate`: the grace rung sits between the
   `hasEnqueuedColumn` rung and the clear-and-re-resolve, returns `Duplicate.IN_FLIGHT`
   (same silent-skip disposition and frontier-pinning as the enqueued rung), and counts
-  `grace_skipped` — never `re_resolved`, never an answer.
+  `duplicate_skips` (law A1's disposition term) + `grace_skipped` (the observability
+  subset) — never `re_resolved`, never an answer. The subset accounting is load-bearing:
+  the first live fresh-backfill run imbalanced A1 by exactly the grace count when the
+  rung counted only its own counter.
 - Observability: `service.grace_skipped` in both exporters + the shared contract file,
   `grace_skipped=` on the `/lsslod diag` Sources line, `check_soak.py` SERVER_MONOTONIC
   (A6; no law consumes it — the skip answers nothing and touches no disk, so no identity

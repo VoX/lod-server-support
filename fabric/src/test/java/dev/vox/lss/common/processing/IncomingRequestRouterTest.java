@@ -746,6 +746,9 @@ class IncomingRequestRouterTest {
             assertTrue(p1.hasDiskReadDone(70, 0), "the grace skip keeps the done-bit");
             assertEquals(1, proc.submits.size(), "no redundant re-read inside the grace");
             assertEquals(0, proc.getDiagnostics().getTotalReResolved());
+            assertEquals(1, proc.getDiagnostics().getTotalDuplicateSkips(),
+                    "a grace skip IS a duplicate skip (soak law A1's disposition term) — "
+                            + "grace_skipped is the observability subset");
             assertFalse(p1.hasPendingRequest(70, 0));
             assertTrue(drainSendActions(proc).isEmpty(),
                     "the grace answers nothing — silent skip, like the enqueued rung");

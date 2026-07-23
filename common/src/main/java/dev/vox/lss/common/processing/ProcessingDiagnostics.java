@@ -84,8 +84,13 @@ public class ProcessingDiagnostics {
     /** A ts&le;0 re-request landed within the departure grace of its own payload's
      *  send-success and was silently skipped — the crossing race absorbed instead of
      *  honestly re-resolved (would otherwise have counted {@code re_resolved} and cost a
-     *  redundant disk read + send). See docs/planning/duplicate-serve-grace.md. */
+     *  redundant disk read + send). A grace skip IS a duplicate skip (soak law A1's
+     *  disposition term — the fresh-backfill A1 imbalance of exactly the grace count
+     *  proved it, 2026-07-23); {@code grace_skipped} is the observability SUBSET, the
+     *  same pattern as {@code gen_order_gated} under {@code miss_dropped}. See
+     *  docs/planning/duplicate-serve-grace.md. */
     public void incrementGraceSkipped() {
+        incrementSkippedDuplicate();
         totalGraceSkipped++;
     }
 
