@@ -16,9 +16,9 @@ All builds are on [Modrinth](https://modrinth.com/plugin/lod-server-support) —
 
 Since v0.7.0, every release is additionally published to the
 [Voxy Server Side](https://modrinth.com/plugin/voxy-server-side) Modrinth page. Both listings
-ship the **same mod** identical internals, networking protocol, and
-config paths; only the display name, description, and icon differ. Compatibility is total, you
-can join LSS servers with a VSS client and vice versa. 
+ship the **same mod** — identical internals and networking protocol; only the display name,
+description, and icon differ. Compatibility is total, you can join LSS servers with a VSS
+client and vice versa.
 
 ### Redistribution
 
