@@ -65,8 +65,11 @@ public class ChunkDiskReader extends AbstractChunkDiskReader {
         } else {
             read = backgroundReaderOrFallback(chunkMap);
         }
+        // The mask entry is captured at submit time (the level is in hand here); the read
+        // itself runs on the reader pool where only the dimension string survives.
+        var maskEntry = XrayMaskManager.entryForActive(level);
         submitRead(playerUuid, chunkX, chunkZ, dimension, submissionOrder,
-                () -> NbtSectionSerializer.readAndSerializeSections(read, registryAccess, chunkX, chunkZ));
+                () -> NbtSectionSerializer.readAndSerializeSections(read, registryAccess, chunkX, chunkZ, maskEntry));
     }
 
     /**

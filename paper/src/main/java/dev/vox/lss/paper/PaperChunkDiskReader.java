@@ -46,8 +46,11 @@ public class PaperChunkDiskReader extends AbstractChunkDiskReader {
             var chunkMap = level.getChunkSource().chunkMap;
             read = (cx, cz) -> chunkMap.read(new ChunkPos(cx, cz));
         }
+        // The mask entry is captured at submit time (the level is in hand here); the read
+        // itself runs on the reader pool where only the dimension string survives.
+        var maskEntry = PaperXrayMaskManager.entryForActive(level);
         submitRead(playerUuid, chunkX, chunkZ, dimension, submissionOrder,
-                () -> PaperNbtSectionSerializer.readAndSerializeSections(read, registryAccess, chunkX, chunkZ));
+                () -> PaperNbtSectionSerializer.readAndSerializeSections(read, registryAccess, chunkX, chunkZ, maskEntry));
     }
 
     /**

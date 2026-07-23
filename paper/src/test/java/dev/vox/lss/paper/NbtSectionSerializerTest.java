@@ -158,6 +158,43 @@ class NbtSectionSerializerTest {
         assertEquals(Blocks.STONE.defaultBlockState(), sections.get(0).section().getBlockState(0, 0, 0));
     }
 
+    /**
+     * The masked disk-path wiring pin (the Paper twin of the Fabric masked parity
+     * gametest's disk leg — Paper has no gametest tier): a non-null MaskEntry through the
+     * 3-arg {@code serializeChunkNbt} must actually mask (hidden states replaced on the
+     * wire, bytes differing from the unmasked 2-arg call). Deleting the maskInPlace block
+     * or null-ing the entry silently leaks real ores on Paper disk serves — this is the
+     * failing-test path for that mutation.
+     */
+    @Test
+    void maskEntryMasksHiddenStatesOnTheDiskPath() {
+        var sec = new LevelChunkSection(FACTORY);
+        for (int x = 0; x < 16; x++)
+            for (int z = 0; z < 16; z++)
+                sec.setBlockState(x, 0, z, Blocks.STONE.defaultBlockState());
+        sec.setBlockState(3, 0, 3, Blocks.DIAMOND_ORE.defaultBlockState());
+        var s = new CompoundTag();
+        s.putInt("Y", 0);
+        s.put("block_states", FACTORY.blockStatesContainerCodec()
+                .encodeStart(NbtOps.INSTANCE, sec.getStates()).getOrThrow());
+        s.put("biomes", FACTORY.biomeContainerCodec()
+                .encodeStart(NbtOps.INSTANCE, sec.getBiomes()).getOrThrow());
+        var nbt = chunkNbt("minecraft:full", s);
+
+        byte[] unmasked = PaperNbtSectionSerializer.serializeChunkNbt(nbt, REGISTRY_ACCESS);
+        var entry = new PaperXrayMaskManager.MaskEntry(
+                PaperXrayMaskFilter.MaskSet.resolve(java.util.List.of("diamond_ore"), 2048),
+                dev.vox.lss.common.XrayMaskPolicy.FallbackKind.OVERWORLD, "config");
+        byte[] masked = PaperNbtSectionSerializer.serializeChunkNbt(nbt, REGISTRY_ACCESS, entry);
+
+        assertFalse(java.util.Arrays.equals(unmasked, masked),
+                "a non-null mask entry must change the ore chunk's wire bytes");
+        var sections = decode(masked);
+        assertEquals(1, sections.size());
+        assertEquals(Blocks.STONE.defaultBlockState(), sections.get(0).section().getBlockState(3, 0, 3),
+                "the hidden state must be replaced by the dominant state on the wire");
+    }
+
     @Test
     void lightBytesPreserved() {
         byte[] bl = light(0, (byte) 0x10);

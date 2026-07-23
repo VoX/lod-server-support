@@ -1,6 +1,7 @@
 package dev.vox.lss.networking.server;
 
 import dev.vox.lss.common.processing.LoadedColumnData;
+import dev.vox.lss.compat.AntiXrayCompat;
 import io.netty.buffer.Unpooled;
 import net.minecraft.core.SectionPos;
 import net.minecraft.network.FriendlyByteBuf;
@@ -27,6 +28,12 @@ public final class SectionSerializer {
     private record SectionInfo(int index, int sectionY, SectionPos sectionPos, DataLayer blLayer, boolean hasBlockLight) {}
 
     public static LoadedColumnData serializeColumn(ServerLevel level, LevelChunk chunk, int cx, int cz) {
+        // One AntiXray-shim scope per COLUMN (not per section): section.write crashes under
+        // the AntiXray mod's mixins outside this binding — see AntiXrayCompat.
+        return AntiXrayCompat.callSerializing(() -> serializeColumnInner(level, chunk, cx, cz));
+    }
+
+    private static LoadedColumnData serializeColumnInner(ServerLevel level, LevelChunk chunk, int cx, int cz) {
         int minSectionY = level.getMinSectionY();
         var sections = chunk.getSections();
         var lightEngine = level.getLightEngine();
@@ -52,6 +59,7 @@ public final class SectionSerializer {
         }
 
         // Second pass: serialize using cached results
+        var maskEntry = XrayMaskManager.entryForActive(level);
         var buf = new FriendlyByteBuf(Unpooled.buffer(sections.length * 1024));
         try {
             buf.writeVarInt(includedSections.size());
@@ -59,6 +67,17 @@ public final class SectionSerializer {
 
             for (var info : includedSections) {
                 var section = sections[info.index];
+                if (maskEntry != null) {
+                    // Masking INSIDE the choke point: probe, generation, and the
+                    // DirtyContentFilter hash all see identical masked bytes by construction.
+                    var masked = XrayMaskFilter.maskCopy(section, info.sectionY,
+                            maskEntry.mask(), maskEntry.kind());
+                    if (masked != section) {
+                        section = masked;
+                        var manager = XrayMaskManager.current();
+                        if (manager != null) manager.countMaskedSection();
+                    }
+                }
 
                 buf.writeByte(info.sectionY);
                 section.write(buf);

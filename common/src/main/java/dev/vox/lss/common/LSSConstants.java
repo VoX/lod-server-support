@@ -97,6 +97,12 @@ public final class LSSConstants {
     public static final int MIN_MISS_MEMO_TTL_SECONDS = 0;
     public static final int MAX_MISS_MEMO_TTL_SECONDS = 60;
 
+    /** X-ray mask height clamp (docs/planning/antixray-compat-design.md §3): comfortably
+     *  outside any MC build height so any real world Y is expressible, while bounding
+     *  config nonsense. */
+    public static final int MIN_XRAY_MAX_BLOCK_HEIGHT = -2048;
+    public static final int MAX_XRAY_MAX_BLOCK_HEIGHT = 2048;
+
     /** Generation cohort span for memo-path pacing ("generation never overtakes nearer
      *  in-flight work"): a memo escalation may enter at most this many rings beyond the
      *  NEAREST outstanding generation ticket. Restores the ring-by-ring completion wave

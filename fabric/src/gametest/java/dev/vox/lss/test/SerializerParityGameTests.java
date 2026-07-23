@@ -13,6 +13,7 @@ import dev.vox.lss.networking.server.DirtyContentFilter;
 import dev.vox.lss.networking.server.FabricOffThreadProcessor;
 import dev.vox.lss.networking.server.RequestProcessingService;
 import dev.vox.lss.networking.server.SectionSerializer;
+import dev.vox.lss.networking.server.XrayMaskManager;
 import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
@@ -144,6 +145,120 @@ public class SerializerParityGameTests {
                             describeMismatch(diskBytes.get(), live));
                 }
                 default -> helper.fail("unexpected parity test step " + step.get());
+            }
+        });
+    }
+
+    private static final int XRAY_PARITY_CHUNK_OFFSET = 160;
+
+    /**
+     * Masked disk/live parity (docs/planning/antixray-compat-design.md §3): with
+     * {@code xrayObfuscation: "on"}, an ore-bearing chunk must serialize byte-identically
+     * from disk (NbtSectionSerializer + maskInPlace) and from memory (SectionSerializer +
+     * maskCopy) — the same parity contract the unmasked test above pins, now through the
+     * full masking wiring (manager activation, submit-time entry capture, choke-point
+     * hooks). Also pins engagement: masked bytes must differ from unmasked bytes of the
+     * same chunk, and the manager's section counter must move.
+     *
+     * <p>Static-manager discipline: OTHER gametests construct RequestProcessingServices
+     * concurrently, and every service ctor re-publishes the manager with the real (auto,
+     * inactive) config — so the masked manager cannot be assumed to survive across ticks.
+     * Everything runs on the single server thread, so each case re-activates the masked
+     * manager at its top and does all mask-dependent work synchronously in that same tick
+     * (the disk submit captures its entry at submit time). The stomping is also why a
+     * failed run cannot leave masking stuck on. The live-side counter is asserted
+     * same-tick; the disk side's masking is proven by byte-equality to the masked live
+     * bytes plus the engagement check.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 1200)
+    public void xrayMaskedDiskReadBytesMatchMaskedLiveBytes(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        var origin = ChunkPos.containing(helper.absolutePos(BlockPos.ZERO));
+        int cx = origin.x() + XRAY_PARITY_CHUNK_OFFSET;
+        int cz = origin.z() + 7;
+        var chunkPos = new ChunkPos(cx, cz);
+        var chunkSource = level.getChunkSource();
+
+        var maskedConfig = new LSSServerConfig();
+        maskedConfig.xrayObfuscation = "on";
+
+        // Ore cluster below the default cutoff (superflat surface sits at -60): diamond +
+        // a lit redstone state, so the all-states rule is on the wire too.
+        chunkSource.addTicketWithRadius(TicketType.PLAYER_LOADING, chunkPos, 0);
+        level.getChunk(cx, cz);
+        for (int i = 0; i < 6; i++) {
+            level.setBlock(new BlockPos(cx * 16 + 4 + i, -61, cz * 16 + 5),
+                    Blocks.DIAMOND_ORE.defaultBlockState(), 3);
+        }
+        level.setBlock(new BlockPos(cx * 16 + 4, -62, cz * 16 + 5),
+                Blocks.REDSTONE_ORE.defaultBlockState(), 3);
+        helper.runAfterDelay(8, () -> chunkSource.removeTicketWithRadius(TicketType.PLAYER_LOADING, chunkPos, 0));
+
+        var reader = new ChunkDiskReader(1, false);
+        var readerId = UUID.randomUUID();
+        reader.registerPlayer(readerId);
+        var step = new AtomicInteger();
+        var diskBytes = new AtomicReference<byte[]>();
+        var maskedLive = new AtomicReference<byte[]>();
+
+        helper.succeedWhen(() -> {
+            helper.assertTrue(helper.getTick() >= 10, "waiting for the ore placement to settle");
+            switch (step.get()) {
+                case 0 -> {
+                    helper.assertTrue(chunkSource.getChunkNow(cx, cz) == null,
+                            "waiting for the ore chunk to unload");
+                    level.save(null, true, false);
+                    // Same tick as the submit: the entry is captured synchronously inside
+                    // submitReadDirect, immune to later manager stomps. finally-restored so
+                    // a throwing submit cannot leave "on" published across ticks.
+                    XrayMaskManager.activate(maskedConfig);
+                    try {
+                        reader.submitReadDirect(readerId, LSSConstants.DIM_STR_OVERWORLD, level, cx, cz, 0);
+                    } finally {
+                        XrayMaskManager.activate(LSSServerConfig.CONFIG);
+                    }
+                    step.set(1);
+                    helper.assertTrue(false, "masked disk read submitted, awaiting result");
+                }
+                case 1 -> {
+                    var result = reader.getPlayerQueue(readerId).poll();
+                    helper.assertTrue(result != null, "waiting for the masked disk read result");
+                    reader.shutdown();
+                    helper.assertTrue(!result.notFound(), "ore chunk must exist on disk after unload");
+                    helper.assertTrue(result.sectionBytes() != null, "ore chunk must have content on disk");
+                    diskBytes.set(result.sectionBytes());
+                    step.set(2);
+                    helper.assertTrue(false, "masked disk bytes captured, reloading chunk");
+                }
+                case 2 -> {
+                    var chunk = level.getChunk(cx, cz);
+                    // Same-tick window: activate → serialize → restore (finally: a throwing
+                    // serialize must not leave "on" published across ticks) → assert.
+                    var manager = XrayMaskManager.activate(maskedConfig);
+                    byte[] live;
+                    try {
+                        live = SectionSerializer.serializeColumn(level, chunk, cx, cz).serializedSections();
+                    } finally {
+                        XrayMaskManager.activate(LSSServerConfig.CONFIG);
+                    }
+                    long counted = manager.maskedSections();
+                    helper.assertTrue(live != null, "reloaded ore chunk must serialize live content");
+                    helper.assertTrue(Arrays.equals(diskBytes.get(), live),
+                            "masked parity: " + describeMismatch(diskBytes.get(), live));
+                    helper.assertTrue(counted > 0,
+                            "the live masking hook must count masked sections, saw " + counted);
+                    maskedLive.set(live);
+                    step.set(3);
+                    helper.assertTrue(false, "masked parity verified, checking engagement");
+                }
+                case 3 -> {
+                    var chunk = level.getChunk(cx, cz);
+                    var unmasked = SectionSerializer.serializeColumn(level, chunk, cx, cz).serializedSections();
+                    helper.assertTrue(unmasked != null, "unmasked serialize must produce content");
+                    helper.assertTrue(!Arrays.equals(maskedLive.get(), unmasked),
+                            "masking must actually change the ore chunk's bytes (engagement)");
+                }
+                default -> helper.fail("unexpected masked parity step " + step.get());
             }
         });
     }

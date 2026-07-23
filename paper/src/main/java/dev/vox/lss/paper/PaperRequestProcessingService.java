@@ -240,10 +240,17 @@ public class PaperRequestProcessingService {
     // Null in test wiring — only the production-default regionTaskScheduler dereferences it,
     // and probe tests always inject a recording scheduler.
     private Plugin plugin;
+    // Null in test wiring (the test ctor never publishes the static mask manager, so its
+    // shutdown must retract nothing) — set by the production ctor only.
+    private PaperXrayMaskManager xrayMasks;
 
     public PaperRequestProcessingService(MinecraftServer server, Plugin plugin, PaperConfig config) {
         this(server, config, productionWiring(server, plugin, config));
         this.plugin = plugin;
+        // Production only (the test-wiring ctor must not publish statics): the per-world
+        // x-ray mask decisions the serializer choke points consult. The reference makes
+        // shutdown's retract guarded — a test-wired service (null here) retracts nothing.
+        this.xrayMasks = PaperXrayMaskManager.activate(config);
     }
 
     /** Test seam: same field wiring as production, collaborators injected. */
@@ -871,5 +878,6 @@ public class PaperRequestProcessingService {
         } catch (Exception e) {
             LSSLogger.error("Error shutting down generation service", e);
         }
+        PaperXrayMaskManager.deactivate(this.xrayMasks);
     }
 }

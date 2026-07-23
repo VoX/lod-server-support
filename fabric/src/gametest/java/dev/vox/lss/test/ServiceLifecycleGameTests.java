@@ -512,6 +512,11 @@ public class ServiceLifecycleGameTests {
         var mock = placeMockServerPlayer(helper);
         var uuid = mock.getUUID();
         var service = new RequestProcessingService(server);
+        // Same-tick (synchronous body, nothing can interleave on the server thread): the
+        // ctor must publish the x-ray mask manager BEFORE any serve can run — the one
+        // production wiring the masked parity gametest's self-activation does not cover.
+        helper.assertTrue(dev.vox.lss.networking.server.XrayMaskManager.current() != null,
+                "service construction must publish the x-ray mask manager");
         try {
             service.registerPlayer(mock, LSSConstants.CAPABILITY_VOXEL_COLUMNS);
             var gen = service.getGenerationService();
@@ -523,6 +528,8 @@ public class ServiceLifecycleGameTests {
             helper.assertTrue(gen.getActiveCount() == 1, "premise: entry tracked as active");
 
             service.shutdown();
+            helper.assertTrue(dev.vox.lss.networking.server.XrayMaskManager.current() == null,
+                    "shutdown must retract the x-ray mask manager");
             helper.assertTrue(service.getPlayers().isEmpty(),
                     "the first shutdown must clear the players map");
             helper.assertTrue(gen.getActiveCount() == 0,
