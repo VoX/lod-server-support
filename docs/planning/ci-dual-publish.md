@@ -5,9 +5,10 @@ plan proposed landing after v0.7.0; the maintainer chose to debut dual-publish o
 release). Written 2026-07-17. The Gradle repackage tasks, the extended `release_check.py`
 gate + identity guardrail, and the four-jar build/release workflows are all in the tree and
 validated (four jars build at 0.7.0, `release_check --version 0.7.0` clean, the voxy jars are
-CRC-proven branded byte-copies of the LSS jars). **The one live prerequisite before the tag:
-the `MODRINTH_TOKEN` account must be a member of the `voxy-server-side` project (id `84zcagOb`)
-with version-upload permission, or the two voxy `mc-publish` steps 403 mid-release.**
+CRC-proven branded byte-copies of the LSS jars). The one live prerequisite before the tag —
+`MODRINTH_TOKEN` membership on the `voxy-server-side` project (id `84zcagOb`) with
+version-upload permission — was **RESOLVED at v0.7.1** (2026-07-22): the dual-publish ran
+end-to-end in CI, both Modrinth projects received the release, no manual upload needed.
 
 ## Goal
 

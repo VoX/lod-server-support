@@ -1,8 +1,7 @@
 # Server-Owned Generation + Undifferentiated Want-Set — Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax.
 
-**Source of truth:** `docs/superpowers/specs/2026-07-16-server-owned-generation-design.md`. This plan
+**Source of truth:** `docs/planning/specs/2026-07-16-server-owned-generation-design.md`. This plan
 implements it, folding in the corrections from the 2026-07-16 adversarial review (below). It replaces
 the superseded sync-only decouple plan (deleted in the same change that adds this file); that plan's
 verified reference material (Moonrise API signature, file-touch lists, G1–G7 findings) is folded in

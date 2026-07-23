@@ -4,7 +4,7 @@ Branch: `feat/want-set-requests`, STACKED on `feat/read-io-priority` (PR #36, op
 User chose: branch off #36 rather than merging it first; rebase onto main after #36 merges.
 User chose: implement INLINE (not subagent-driven), task by task.
 
-Plan: docs/superpowers/plans/2026-07-15-declarative-want-set-requests.md (1469 lines, 10 tasks)
+Plan: docs/planning/plans/2026-07-15-declarative-want-set-requests.md (1469 lines, 10 tasks)
   - Authored by a Fable design agent, then hardened by 4 review passes (adversarial claim
     refutation, completeness sweep, vestige audit, + a competing design discarded in its favour).
   - Base commit: 049fdbd (plan doc).
@@ -931,7 +931,7 @@ Plan: docs/superpowers/plans/2026-07-15-declarative-want-set-requests.md (1469 l
 
 ---
 
-## A+B adaptive-throttle fallback (docs/superpowers/plans/2026-07-16-adaptive-throttle-fallback.md)
+## A+B adaptive-throttle fallback (docs/planning/plans/2026-07-16-adaptive-throttle-fallback.md)
 
 Inline execution (not subagent-driven), on feat/want-set-requests, building on f65a447 (C2ME fail-safe).
 

@@ -1,9 +1,8 @@
 # Server-Owned Generation + Undifferentiated Want-Set — Design
 
-**Status:** design spec, awaiting review. Supersedes the sync-only decouple plan
-(`docs/superpowers/plans/2026-07-16-decouple-wantset-and-generation-priority.md`) — that plan's goal
-is a strict subset of this one, so it will be replaced by a plan built from this spec. Single
-protocol-breaking change, folded into the still-unreleased v17.
+**Status:** IMPLEMENTED — shipped in v0.7.0 (the v17 protocol line); kept as the design record.
+Superseded the narrower sync-only decouple plan (never committed). Single protocol-breaking
+change, folded into the then-unreleased v17.
 
 ## Goal
 

@@ -1,6 +1,6 @@
 # Design: Region-Bucketed Read Scheduler
 
-**Status:** partly realized, partly superseded — see the notes in §1, §3 and §7 before acting on this doc. Originally a concrete design for replacing the server's dispatch-or-bounce request handling with a real, reprioritizable, disk-aware read scheduler, within the existing client-pull, full-resolution-section model. Since written: **Phase 0 shipped** (PR #36's `useBackgroundReadPriority`, §10.2/§10.3), and **protocol v17's declarative want-set** (`docs/superpowers/plans/2026-07-15-declarative-want-set-requests.md`) deleted the dispatch-or-bounce baseline §1 describes and realized the hold-don't-bounce backlog + reprioritization goals of §3/§7 — by client-declared replace semantics rather than a server-side scheduler. **Still unbuilt:** region bucketing, the nearest-region-first budgeted scheduler, and adaptive concurrency.
+**Status:** partly realized, partly superseded — see the notes in §1, §3 and §7 before acting on this doc. Originally a concrete design for replacing the server's dispatch-or-bounce request handling with a real, reprioritizable, disk-aware read scheduler, within the existing client-pull, full-resolution-section model. Since written: **Phase 0 shipped** (PR #36's `useBackgroundReadPriority`, §10.2/§10.3), and **protocol v17's declarative want-set** (`docs/planning/plans/2026-07-15-declarative-want-set-requests.md`) deleted the dispatch-or-bounce baseline §1 describes and realized the hold-don't-bounce backlog + reprioritization goals of §3/§7 — by client-declared replace semantics rather than a server-side scheduler. **Still unbuilt:** region bucketing, the nearest-region-first budgeted scheduler, and adaptive concurrency.
 
 **Constraints (fixed):**
 - Client-pull model stays: client scans in a spiral and sends batched (packed position + clientTimestamp) requests; server serves from disk/memory and responds.
@@ -41,7 +41,7 @@ The current design manages none of these; it runs 5 concurrent LSS reads on the 
 ## 1. The current pipeline, piece by piece (baseline)
 
 > **SUPERSEDED (2026-07-15) — this baseline no longer exists.** Protocol v17's declarative
-> want-set (`docs/superpowers/plans/2026-07-15-declarative-want-set-requests.md`) deleted every
+> want-set (`docs/planning/plans/2026-07-15-declarative-want-set-requests.md`) deleted every
 > piece described below: `enqueueIncomingRequest`, the per-player FIFO `ConcurrentLinkedQueue`,
 > `MAX_INCOMING_QUEUE = 16384`, and the rate-limited bounce (the response type is off the wire;
 > byte 0 is retired and reserved). The client now declares its **complete want-set** once per
@@ -88,7 +88,7 @@ client batch ─▶ INTAKE ─▶ per-player backlog:  region ─▶ {pending co
 ## 3. Piece-by-piece: current → proposed → why → tradeoff
 
 > **PARTLY REALIZED / PARTLY SUPERSEDED (2026-07-15).** Protocol v17's declarative want-set
-> (`docs/superpowers/plans/2026-07-15-declarative-want-set-requests.md`) shipped this section's
+> (`docs/planning/plans/2026-07-15-declarative-want-set-requests.md`) shipped this section's
 > *goals* by a different mechanism — **client-declared replace semantics, not a server-side
 > region-bucketed scheduler.** Concretely:
 > - **Piece A** (populate a backlog, don't dispatch-or-bounce) and **Piece D** (hold, never
@@ -178,7 +178,7 @@ client batch ─▶ INTAKE ─▶ per-player backlog:  region ─▶ {pending co
 > - **Phase 0** landed as PR #36 (`useBackgroundReadPriority`, §10.2/§10.3): IOWorker `BACKGROUND`
 >   submission on Fabric, Moonrise `Priority.LOW` on Paper/Folia.
 > - **Phase 1's "hold-don't-bounce backlog" is DONE**, but *not* as this doc stages it — protocol
->   v17 (`docs/superpowers/plans/2026-07-15-declarative-want-set-requests.md`) put the
+>   v17 (`docs/planning/plans/2026-07-15-declarative-want-set-requests.md`) put the
 >   reprioritization on the **client** (a complete want-set re-declared closest-first each second,
 >   replacing the server's per-player backlog) instead of building server-side ring/distance
 >   priority. So Phase 1's bounce-churn kill and its sub-second-reprioritization goal are both

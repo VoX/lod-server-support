@@ -1,6 +1,5 @@
 # A + B Disk-Read Protection: Adaptive-Throttle Fallback — Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax.
 
 **Goal:** Keep Approach A (background-priority reads) as the default protection against LOD reads drowning out gameplay, and — when A is detected incompatible at runtime because a chunk-IO-overhaul mod (C2ME et al.) replaced vanilla's `IOWorker` — fall back *once, quietly* to Approach B (a portable adaptive read throttle) so LOD reads still yield to gameplay via self-restraint instead of losing all protection.
 

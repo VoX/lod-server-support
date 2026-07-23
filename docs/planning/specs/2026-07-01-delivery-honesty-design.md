@@ -1,7 +1,7 @@
 # Delivery-Honesty Hardening — Design
 
 **Date:** 2026-07-01
-**Status:** Approved (design, revised after adversarial spec review), pending implementation plan
+**Status:** IMPLEMENTED — shipped post-v0.4.1 (see `docs/planning/plans/2026-07-01-delivery-honesty.md`); kept as the design record
 **Scope:** The full delivery-honesty finding cluster from the 2026-07-01 code review:
 #2, #4, #5, #11, #13, #21, #36, #43 (#3/#14 are documented tradeoffs, unchanged).
 

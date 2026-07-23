@@ -50,9 +50,9 @@ empirical probes against a real folia-26.1.2-8 server). Load-bearing verified fa
 
 ### Stage 2 — Design spec + implementation plan (DONE 2026-07-02)
 
-- Spec: `docs/planning/superpowers/specs/2026-07-02-folia-support-design.md` (architecture: single jar,
+- Spec: `docs/planning/specs/2026-07-02-folia-support-design.md` (architecture: single jar,
   GlobalRegionScheduler pump, lifecycle mailbox, save-all mapping, soak-on-Folia test strategy).
-- Plan: `docs/planning/superpowers/plans/2026-07-02-folia-support.md` — 14 TDD tasks. Notable: the repo has
+- Plan: `docs/planning/plans/2026-07-02-folia-support.md` — 14 TDD tasks. Notable: the repo has
   a PINNED test (`PluginYmlContractTest.foliaSupportedIsAbsent`) deliberately guarding against
   declaring Folia support while the plugin was BukkitRunnable-based; the plan flips it in Task 7
   only after Tasks 2–5 remove its reason (pinned-decision migration, not a test deletion).
