@@ -68,14 +68,41 @@ class BacklogReplaceTest {
         var s = new TestState();
         var held = batch(1, 2);
         s.offerIncomingBatch(held);
+        long gen = s.offerGeneration(); // the pump records this BEFORE its take
         assertSame(held, s.takeIncomingBatch());
         s.offerIncomingBatch(batch(9)); // newer batch arrives during the Folia hold
-        assertFalse(s.republishHeldBatch(held), "a newer batch supersedes the held one");
+        assertFalse(s.republishHeldBatch(held, gen), "a newer batch supersedes the held one");
         assertEquals(2, s.drainPendingSuperseded());
         assertEquals(9, s.takeIncomingBatch().requests()[0].cx());
-        // and the CAS succeeds when the mailbox is empty
-        assertTrue(s.republishHeldBatch(held));
+        // and the republish succeeds when the mailbox is empty AND the generation is quiet
+        assertTrue(s.republishHeldBatch(held, s.offerGeneration()));
         assertSame(held, s.peekIncomingBatch());
+    }
+
+    @Test
+    void republishHeldBatchDetectsAPassThroughDuringTheHold() {
+        var s = new TestState();
+        var held = batch(1, 2);
+        s.offerIncomingBatch(held);
+        long gen = s.offerGeneration();
+        assertSame(held, s.takeIncomingBatch());
+
+        // During the hold a newer batch passes THROUGH the mailbox: offered AND taken by
+        // the processing thread (which replaces the backlog with it). The mailbox is empty
+        // again — the plain CAS(null, held) would succeed and resurrect the stale held
+        // batch OVER the newer declaration's backlog. The offer-generation guard is what
+        // catches this shape.
+        var newer = batch(9);
+        s.offerIncomingBatch(newer);
+        assertSame(newer, s.takeIncomingBatch());
+        assertNull(s.peekIncomingBatch(), "premise: the pass-through left the mailbox empty");
+
+        assertFalse(s.republishHeldBatch(held, gen),
+                "a batch that passed through the mailbox during the hold must kill the "
+                        + "held batch — latest-wins, never resurrect");
+        assertNull(s.peekIncomingBatch(), "the stale batch is not put back");
+        assertEquals(2, s.drainPendingSuperseded(),
+                "the killed held batch is counted superseded (law A1)");
     }
 
     @Test

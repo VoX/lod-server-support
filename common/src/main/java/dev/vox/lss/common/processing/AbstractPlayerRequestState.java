@@ -83,6 +83,15 @@ public abstract class AbstractPlayerRequestState<T> {
     // bounds ingress at ONE batch (≤ MAX_BATCH_CHUNK_REQUESTS entries) regardless of client
     // behavior, replacing the old MAX_INCOMING_QUEUE flood bound.
     private final AtomicReference<IncomingBatch> pendingBatch = new AtomicReference<>();
+    // Offer generation: bumped BEFORE every mailbox write so the Folia pump can detect a
+    // batch that passed THROUGH the mailbox (offered AND taken by the processing thread)
+    // during its one-tick probe hold. The republish CAS alone cannot see that — it finds
+    // the mailbox empty again and would resurrect the held (stale) batch over the newer
+    // declaration's already-applied backlog, breaking latest-wins. Bumping before the
+    // write means an in-progress offer is never mistaken for quiet: the guard errs toward
+    // dropping the held batch (a counted supersession, healed by the next 1 Hz
+    // declaration), never toward resurrection.
+    private final AtomicLong offerGeneration = new AtomicLong();
     // Cross-thread superseded/range-filtered events accumulate here and are drained into
     // ProcessingDiagnostics by the processing thread each cycle, preserving that class's
     // single-writer design. Counts pending at player removal die with the state (same as
@@ -163,11 +172,20 @@ public abstract class AbstractPlayerRequestState<T> {
 
     /** Offer a decoded batch (any thread). Latest-wins; an overwritten batch is superseded. */
     public void offerIncomingBatch(IncomingBatch batch) {
+        this.offerGeneration.incrementAndGet(); // BEFORE the write — see the field comment
         this.totalRequestsReceived.addAndGet(batch.size());
         var previous = this.pendingBatch.getAndSet(batch);
         if (previous != null) {
             this.pendingSuperseded.addAndGet(previous.size());
         }
+    }
+
+    /** The current offer generation. The Folia pump records this BEFORE taking a batch to
+     *  hold (read-then-take: an offer slipping between the two can only make the eventual
+     *  republish refuse spuriously — a counted, re-declaration-healed drop — never let a
+     *  stale batch resurrect). */
+    public long offerGeneration() {
+        return this.offerGeneration.get();
     }
 
     /** Non-destructive read of the MAILBOX. Read by the main-thread probe (its first source:
@@ -198,11 +216,32 @@ public abstract class AbstractPlayerRequestState<T> {
      * Folia hold-release republish: put a held batch back ONLY if no newer batch arrived
      * during the hold — a newer batch supersedes the held one (never resurrect a
      * superseded want). Returns true if republished.
+     *
+     * <p>Two guards, both needed. The mailbox CAS catches a newer batch still SITTING in
+     * the mailbox; the offer-generation guard catches one that passed THROUGH it (offered
+     * and taken by the processing thread during the hold) — the CAS alone finds the
+     * mailbox empty again and would republish the stale batch over the newer
+     * declaration's already-applied backlog. {@code heldAtGeneration} is the value of
+     * {@link #offerGeneration()} the pump recorded before taking the batch to hold.
      */
-    public boolean republishHeldBatch(IncomingBatch held) {
-        if (this.pendingBatch.compareAndSet(null, held)) return true;
-        this.pendingSuperseded.addAndGet(held.size());
-        return false;
+    public boolean republishHeldBatch(IncomingBatch held, long heldAtGeneration) {
+        if (this.offerGeneration.get() != heldAtGeneration
+                || !this.pendingBatch.compareAndSet(null, held)) {
+            this.pendingSuperseded.addAndGet(held.size());
+            return false;
+        }
+        // Close the check-then-CAS window: a full offer+take pass-through between the
+        // generation check and the CAS leaves the mailbox empty, so the CAS succeeded on
+        // stale data. Re-check and retract. A failed retract means the republished batch
+        // already left the mailbox again — overwritten by a newer offer (whose getAndSet
+        // counted it superseded) or taken by routing (its entries then get ordinary
+        // dispositions, and the pass-through's backlog replace supersedes them).
+        if (this.offerGeneration.get() != heldAtGeneration
+                && this.pendingBatch.compareAndSet(held, null)) {
+            this.pendingSuperseded.addAndGet(held.size());
+            return false;
+        }
+        return true;
     }
 
     /** Record ingress entries dropped by the Chebyshev range guard (any thread). */
