@@ -24,6 +24,7 @@ bin/
 
 benchmark-results/
 benchmark-worlds/
+benchmark-compare-results/
 soak-results/
 soak-worlds/
 
