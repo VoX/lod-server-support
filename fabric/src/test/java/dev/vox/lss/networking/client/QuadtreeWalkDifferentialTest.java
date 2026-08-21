@@ -76,8 +76,8 @@ class QuadtreeWalkDifferentialTest {
                     this.quadArm.recenteredSinceLastFireForTest(), "movement window " + at);
             assertEquals(this.legacyArm.truncatedBelowPrefixForTest(),
                     this.quadArm.truncatedBelowPrefixForTest(), "truncatedBelowPrefix " + at);
-            assertEquals(this.legacyArm.lastWalkTruncatedForTest(),
-                    this.quadArm.lastWalkTruncatedForTest(), "lastWalkTruncated " + at);
+            assertEquals(this.legacyArm.wasLastWalkTruncated(),
+                    this.quadArm.wasLastWalkTruncated(), "lastWalkTruncated " + at);
             assertEquals(this.legacyArm.getValveTrips(), this.quadArm.getValveTrips(),
                     "valveTrips " + at);
         }

@@ -2491,4 +2491,75 @@ class SpiralScannerTest {
                 "the collect applies the SAME parking ladder as hasActionableRetries — a"
                         + " vanilla-rendered (unconsumable) mark must not reopen its ring");
     }
+
+    // ---- Window-limited latch provenance (ramp-window-limited-credit-plan.md §3.2) ----
+
+    @Test
+    void burstCapClampFlagTrueWhenTheGovernedCapBindsAndTheWalkTruncates() {
+        var s = scanner(8); // lod-8 disc: hundreds of wanted positions
+        s.columnBurstCap = () -> 10;
+        var sink = new Sink();
+        int n = fireScan(s, 0, new ColumnStateMap(), sink);
+        assertEquals(10, n, "the burst cap is the binding budget");
+        assertTrue(s.wasLastWalkTruncated(), "demand beyond the window truncates");
+        assertTrue(s.wasLastBudgetCapClamped(),
+                "the cap set the final budget — the provenance half reads true");
+    }
+
+    @Test
+    void taperReducedBudgetClearsTheCapClampFlag() {
+        // 1-Fable fold MAJOR-1(c): the CPU-weak client between 25% and halt gets a
+        // taper-reduced budget — truncation there must NOT read as governed-window-
+        // limited (the latch would walk an unproven pipe to OPEN on 1-column windows).
+        var s = scanner(8);
+        s.columnBurstCap = () -> 100;
+        var sink = new Sink();
+        // Queue at half of halt → scale 0.5 → budget 50 < the 100 cap.
+        int n = fireScan(s, 0, 500, 1000, 0, new ColumnStateMap(), sink);
+        assertEquals(50, n, "the taper reduced the budget below the cap");
+        assertTrue(s.wasLastWalkTruncated(), "still truncated (demand > 50)");
+        assertFalse(s.wasLastBudgetCapClamped(),
+                "a taper-reduced budget is not the governed cap's doing");
+    }
+
+    @Test
+    void marginalPressureKeepsTheCapClampFlag() {
+        // Dynamics review MAJOR-1: exact equality disarmed the latch at ~9 queued
+        // columns near the rig's ~350 cap — the fix would have been dead at exactly
+        // its park point. The 25%-tolerance predicate must survive marginal pressure.
+        var s = scanner(64);
+        s.columnBurstCap = () -> 350;
+        var sink = new Sink();
+        int n = fireScan(s, 0, 9, 6000, 0, new ColumnStateMap(), sink);
+        assertEquals(349, n, "round(350 x 0.9985) — the taper shaved one column");
+        assertTrue(s.wasLastWalkTruncated());
+        assertTrue(s.wasLastBudgetCapClamped(),
+                "a one-column taper shave near the cap is still the cap's clamp");
+    }
+
+    @Test
+    void constantBudgetBinderClearsTheCapClampFlag() {
+        // A burst cap at/above WANT_SET_BUDGET never actually clamps — truncation
+        // against the constant budget is the pre-governor shape and must not latch.
+        var s = scanner(64); // > 800 wanted positions so the constant budget truncates
+        s.columnBurstCap = () -> LSSConstants.WANT_SET_BUDGET + 100;
+        var sink = new Sink();
+        int n = fireScan(s, 0, new ColumnStateMap(), sink);
+        assertEquals(LSSConstants.WANT_SET_BUDGET, n, "the constant budget binds");
+        assertTrue(s.wasLastWalkTruncated());
+        assertFalse(s.wasLastBudgetCapClamped(),
+                "the constant WANT_SET_BUDGET was the binder, not the governed cap");
+    }
+
+    @Test
+    void untruncatedCapClampedWalkReportsNoTruncation() {
+        // Cap-clamped but the demand FIT the window (the converged/trickle shape):
+        // the truncation half reads false, so the latch's conjunction cannot fire.
+        var s = scanner(2); // 24-position annulus at vd 0
+        s.columnBurstCap = () -> 100;
+        var sink = new Sink();
+        int n = fireScan(s, 0, new ColumnStateMap(), sink);
+        assertEquals(24, n, "the whole annulus fits the capped budget");
+        assertFalse(s.wasLastWalkTruncated(), "no demand beyond the window");
+    }
 }

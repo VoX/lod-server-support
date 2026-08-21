@@ -156,6 +156,13 @@ final class TransferRateGovernor {
     private boolean awaitingSeenThisInterval;
     private boolean haltSeenThisInterval;
     private boolean movementSeenThisInterval;
+    /** Latched by {@link #noteWindowLimited()} (the manager's post-send hook,
+     *  ramp-window-limited-credit-plan.md §3.1/§3.2): at least one successfully-sent
+     *  scan this interval was truncated by the GOVERNED burst cap with the taper
+     *  inactive and the governed rate the binding half of the min-compose — i.e. the
+     *  walk had more demand than the governor's window admitted. RAMP-only consumer
+     *  (the Row-4 bypass); interval-scoped like the movement latch. */
+    private boolean windowLimitedSeenThisInterval;
     private int lastMissingVanilla = -1;   // newest sample (<0 = none yet)
     private int minMissingVanilla = -1;    // session floor (the permanent edge ring)
 
@@ -182,8 +189,16 @@ final class TransferRateGovernor {
     private long restartHintBytesPerSec;
     /** Consecutive CREDITED ramp intervals above the engage threshold — the
      *  RAMP→OPEN confirmation (reuses DISENGAGE_RATE_INTERVALS as the constant,
-     *  not the code path). Any non-credited interval resets it. */
+     *  not the code path). A single qualifying uncredited interval is FORGIVEN
+     *  (held, not reset — plan §3.4: the 2 s interval aliases against the
+     *  stop-and-wait cycle, failing answeredAllAsked ~1-in-6 on the measured rig,
+     *  and a single-miss reset made the 10-streak unreachable there); the SECOND
+     *  consecutive uncredited interval resets. Non-qualifying intervals stay
+     *  no-observations. */
     private int rampOpenStreak;
+    /** Consecutive qualifying UNCREDITED ramp intervals — the forgiveness counter
+     *  (plan §3.4). */
+    private int rampUncreditedRun;
 
     // ---- Size estimator (runs from session start, pre-engagement) ----
     private double sizeEwmaBytes = -1;     // -1 = no sample yet (division guarded)
@@ -445,7 +460,20 @@ final class TransferRateGovernor {
             // earning with demand. The warm rejoin is unaffected: its actuator-
             // clamped declarations put offered ≈ desired through the seed
             // conversion, so the byte-free rung still fires past this row.)
-            if (offered * 2L < this.desiredBytesPerSec) {
+            if (offered * 2L < this.desiredBytesPerSec
+                    && !this.windowLimitedSeenThisInterval) {
+                // Demand-limited: HOLD (unchanged). The window-limited bypass
+                // (ramp-window-limited-credit-plan.md): when the interval's walks
+                // FILLED the governed burst budget and were truncated with demand
+                // left over, the offer shortfall is the stop-and-wait actuator's
+                // arithmetic — offered = desired/4 × cadence, and the completion-
+                // clocked cadence (the 95%-outstanding fast gate) sits at the
+                // SERVE rate, below the 2 Hz this threshold implies whenever the
+                // server's per-player allocation drains a window slower than
+                // 500 ms. The trickle (round-3 MAJOR) cannot CREDIT through the
+                // bypass: the latch requires the governed cap as the binding
+                // clamp, a tiny-budget trickle self-arrests within a few
+                // doublings, and credits still require desired > ENGAGE_BELOW.
                 return;
             }
             boolean keptUp = measured * 4L >= this.desiredBytesPerSec * 3L;
@@ -484,10 +512,39 @@ final class TransferRateGovernor {
             if (measured <= 0) {
                 return;
             }
+            // A window-limited UNDER-OFFERED interval whose growth rungs did not
+            // fire is not offer-backed evidence — the ENGAGED path's freeze rule
+            // (MAJOR-1): HOLD, never snap. Unreachable while the latch is false
+            // (the un-latched under-offer case returned at Row 4 above), so the
+            // un-latched ladder is bit-identical.
+            if (offered * 2L < this.desiredBytesPerSec) {
+                return;
+            }
             this.desiredBytesPerSec = Math.max(SLOW_START_INITIAL_BYTES_PER_SEC,
                     Math.min(this.desiredBytesPerSec, measured * 5L / 4L));
         } finally {
-            if (qualifying && !credited) this.rampOpenStreak = 0;
+            if (qualifying) {
+                if (credited) {
+                    this.rampUncreditedRun = 0;
+                } else if (this.windowLimitedSeenThisInterval
+                        && this.rampUncreditedRun == 0) {
+                    // Forgiven ONCE, and only for a WINDOW-LIMITED interval (the
+                    // implementation panel's MAJOR: unscoped forgiveness loosened
+                    // the OPEN confirmation for every ramp session — alternating
+                    // credited/uncredited demand could confirm at ~3/8 average
+                    // answered where main required 10 consecutive). The scoped
+                    // case is exactly plan §3.4's aliasing shape: in the stop-and-
+                    // wait steady state every interval latches, and the ~1-in-6
+                    // window whose 4th batch drains into the next interval fails
+                    // answeredAllAsked without being degradation.
+                    this.rampUncreditedRun = 1;
+                } else {
+                    // Un-latched uncredited (main's semantics, restored) or the
+                    // second consecutive miss (real degradation): reset.
+                    this.rampUncreditedRun = 1;
+                    this.rampOpenStreak = 0;
+                }
+            }
         }
     }
 
@@ -504,6 +561,7 @@ final class TransferRateGovernor {
             this.desiredBytesPerSec = 0;
         }
         this.rampOpenStreak = 0;
+        this.rampUncreditedRun = 0;
         this.keptUpStreak = 0;
         this.rateDisengageStreak = 0;
         this.engagePendingStreak = 0;
@@ -513,6 +571,7 @@ final class TransferRateGovernor {
         this.phase = Phase.OPEN;
         this.desiredBytesPerSec = 0;
         this.rampOpenStreak = 0;
+        this.rampUncreditedRun = 0;
         if (!this.slowStartNoted) {
             this.slowStartNoted = true;
             LSSLogger.info("LOD slow start complete — the connection kept up through the"
@@ -607,6 +666,7 @@ final class TransferRateGovernor {
         this.haltSeenThisInterval = false;
         this.movementSeenThisInterval = false;
         this.awaitingSeenThisInterval = awaitingSize > 0;
+        this.windowLimitedSeenThisInterval = false;
     }
 
     private void hardReset() {
@@ -623,6 +683,8 @@ final class TransferRateGovernor {
         this.haltSeenThisInterval = false;
         this.movementSeenThisInterval = false;
         this.awaitingSeenThisInterval = false;
+        this.windowLimitedSeenThisInterval = false;
+        this.rampUncreditedRun = 0;
         // The size estimator and ping baseline survive a config-toggle reset (they are
         // measurements, not control state) but die with the session in reset().
     }
@@ -631,6 +693,15 @@ final class TransferRateGovernor {
      *  measurement interval — see the kept-up branch. Main client thread. */
     void noteMovement() {
         this.movementSeenThisInterval = true;
+    }
+
+    /** Window-limited hook (ramp-window-limited-credit-plan.md §3.2): the manager
+     *  calls this after a successfully-sent scan that was truncated by the governed
+     *  burst cap (provenance-checked on the wiring side — taper-clamped, manual-
+     *  capped, and untruncated walks never reach here). Latches the Row-4 bypass
+     *  for the current measurement interval. Main client thread. */
+    void noteWindowLimited() {
+        this.windowLimitedSeenThisInterval = true;
     }
 
     /** Missing-vanilla-chunks sample (live round 5) — the scanner's 1 Hz periodic
@@ -680,6 +751,7 @@ final class TransferRateGovernor {
         this.slowStartEnabled = other.slowStartEnabled;
         this.restartHintBytesPerSec = other.restartHintBytesPerSec;
         this.rampOpenStreak = other.rampOpenStreak;
+        this.rampUncreditedRun = other.rampUncreditedRun;
         this.engageNoted = other.engageNoted;
         this.disengageNoted = other.disengageNoted;
         this.slowStartNoted = other.slowStartNoted;
@@ -687,6 +759,7 @@ final class TransferRateGovernor {
         this.haltSeenThisInterval = false;
         this.movementSeenThisInterval = false;
         this.awaitingSeenThisInterval = false;
+        this.windowLimitedSeenThisInterval = false;
     }
 
     void onDimensionChange() {
@@ -734,6 +807,15 @@ final class TransferRateGovernor {
 
     /** Test accessor: the asymmetric size estimator's current value (-1 = no sample). */
     double getSizeEstimateForTest() { return this.sizeEwmaBytes; }
+
+    /** The window-limited latch's current-interval state — the diag receipt
+     *  (dynamics review minor-2: a "still parked" field report must be able to
+     *  answer "did the latch arm?" without a code read) and the wiring tests'
+     *  observable. */
+    boolean windowLimitedLatched() { return this.windowLimitedSeenThisInterval; }
+
+    /** RAMP→OPEN confirmation progress for the diag line (credits=N/10). */
+    int rampOpenStreakForDiag() { return this.rampOpenStreak; }
 
     /** Desired rate in bytes/s while ENGAGED or RAMP, 0 otherwise — diag only. */
     long getDesiredBytesPerSec() {

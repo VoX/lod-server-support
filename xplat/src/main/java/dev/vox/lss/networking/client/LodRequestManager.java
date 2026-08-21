@@ -225,6 +225,18 @@ public class LodRequestManager {
         return Math.min(manual, governed);
     }
 
+    /** The GOVERNED half of the budget-clamp min-compose — the ONE composition both
+     *  the scanner's columnBurstCap supplier and the window-limited latch read (the
+     *  implementation panel's MAJOR-1: with the adaptive cadence off the governed
+     *  half is the FULL sustained rate, and a latch re-reading burst = sustained/4
+     *  mis-attributed manually-capped walks in the band [ceil(sustained/4),
+     *  sustained/2) to the governor). */
+    private int governedBurstCap() {
+        return this.scanner.adaptiveCadenceEnabled.getAsBoolean()
+                ? this.governor.burstColumnsPerSecond()
+                : this.governor.sustainedColumnsPerSecond();
+    }
+
     public LodRequestManager() {
         // Adaptive cadence: the scanner's fast trigger reads the awaiting-set size each
         // tick. Same main-client-thread contract as every other tracker consumer — every
@@ -244,9 +256,7 @@ public class LodRequestManager {
                 this.governor.sustainedColumnsPerSecond());
         this.scanner.columnBurstCap = () -> composeRateCaps(
                 LSSClientConfig.CONFIG.lodColumnsPerSecondLimit,
-                this.scanner.adaptiveCadenceEnabled.getAsBoolean()
-                        ? this.governor.burstColumnsPerSecond()
-                        : this.governor.sustainedColumnsPerSecond());
+                governedBurstCap());
     }
 
     public void onSessionConfig(SessionConfigS2CPayload config, String serverAddress) {
@@ -626,8 +636,31 @@ public class LodRequestManager {
             // (a 0-count converged walk disarms; sendRequests' catch re-disarms a
             // failed send before the next tick's predicate can read it).
             this.scanner.noteDeclared(scanned);
-            if (scanned > 0) {
-                sendRequests(this.sendPositionBuffer, this.sendTimestampBuffer, scanned);
+            if (scanned > 0 && sendRequests(this.sendPositionBuffer,
+                    this.sendTimestampBuffer, scanned)) {
+                // The governor's window-limited latch (ramp-window-limited-credit-
+                // plan.md §3.2): a SUCCESSFULLY-SENT, COMPLETION-CLOCKED (fast-
+                // fired) walk that the GOVERNED burst cap truncated — the cap was
+                // the binding, near-taper-free clamp (scanner provenance) AND the
+                // governed rate is the binding half of the min-compose (a manually-
+                // capped loop must not claim to be governor-window-limited). The
+                // fast conjunct is the dynamics-review MAJOR-2 fold: a backlogged
+                // slow link runs FALLBACK-clocked (the outstanding gate refuses
+                // fast fires while >5% is unanswered) and its 1 Hz full-budget
+                // re-declares would otherwise satisfy answeredAllAsked up to
+                // ~5.3x the link rate — fallback fires never latch, so slow links
+                // keep (approximately) main's Row-4 park. Tick order puts
+                // governor.tick() before this phase, so the latch lands in the
+                // interval this declaration counts toward.
+                int governedBurst = governedBurstCap();
+                int manual = LSSClientConfig.CONFIG.lodColumnsPerSecondLimit;
+                if (this.scanner.wasLastScanFast()
+                        && this.scanner.wasLastWalkTruncated()
+                        && this.scanner.wasLastBudgetCapClamped()
+                        && governedBurst > 0
+                        && (manual <= 0 || governedBurst <= manual)) {
+                    this.governor.noteWindowLimited();
+                }
             }
         }
         return scanned;
@@ -642,7 +675,10 @@ public class LodRequestManager {
 
     private BatchSender batchSender = payload -> dev.vox.lss.platform.LoaderServices.get().sendToServer(payload);
 
-    private void sendRequests(long[] positionBuffer, long[] timestampBuffer, int count) {
+    /** @return true iff the batch reached the transport (the same condition that
+     *          bumps {@code declaredColumnsCumulative}) — the window-limited latch's
+     *          send-success conjunct. */
+    private boolean sendRequests(long[] positionBuffer, long[] timestampBuffer, int count) {
         // Snapshot to exact-length arrays: BatchChunkRequestC2SPayload's StreamCodec reads
         // these lazily when the connection encodes on the netty event loop, which races the
         // next scan overwriting the reused sendPositionBuffer/sendTimestampBuffer. The
@@ -660,8 +696,10 @@ public class LodRequestManager {
                 if (timestamps[i] <= 0) timestamps[i] = 0;
             }
         }
+        boolean sent = false;
         try {
             this.batchSender.send(new BatchChunkRequestC2SPayload(positions, timestamps, count));
+            sent = true;
             this.declaredColumnsCumulative += count; // the governor's offer-backing input
             long nowMs = System.currentTimeMillis();
             for (int i = 0; i < count; i++) {
@@ -683,6 +721,7 @@ public class LodRequestManager {
             this.scanner.noteDeclared(0);
         }
         this.metrics.recordSendCycle(count); // counts attempts — a failed batch still counts
+        return sent;
     }
 
     public boolean onColumnReceived(long packed, long columnTimestamp, ResourceKey<Level> dimension) {
@@ -1239,7 +1278,10 @@ public class LodRequestManager {
             case ENGAGED -> this.governor.sustainedColumnsPerSecond() + "/s ("
                     + (this.governor.getDesiredBytesPerSec() / 1024) + " KB/s)";
             case RAMP -> "ramp@" + (this.governor.getDesiredBytesPerSec() / 1024)
-                    + " KB/s (" + this.governor.sustainedColumnsPerSecond() + "/s)";
+                    + " KB/s (" + this.governor.sustainedColumnsPerSecond() + "/s, credits="
+                    + this.governor.rampOpenStreakForDiag() + "/"
+                    + TransferRateGovernor.DISENGAGE_RATE_INTERVALS
+                    + (this.governor.windowLimitedLatched() ? ", wl" : "") + ")";
             case OPEN -> "open";
             case DISABLED -> "off";
         };

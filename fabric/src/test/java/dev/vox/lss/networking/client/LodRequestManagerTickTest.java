@@ -922,4 +922,99 @@ class LodRequestManagerTickTest {
         assertEquals(5, manager.getConfirmedRing(),
                 "a d=3 crossing decrements by 3 — the REAL delta reaches the scanner");
     }
+
+    // ---- Window-limited latch wiring (ramp-window-limited-credit-plan.md §3.2) ----
+
+    @Test
+    void truncatedGovernedWalkLatchesOnFastFiresOnly() {
+        // A RAMP-fresh governor's burst budget is 1 (64 KB/s over the 32 KB seed,
+        // quartered) — the lod-8 disc truncates against it and the send succeeds.
+        // The PRIMED first scan is a FALLBACK fire and must NOT latch (dynamics
+        // review MAJOR-2: fallback-clocked full-budget re-declares on a backlogged
+        // slow link would satisfy answeredAllAsked to ~5.3x the link rate — only
+        // COMPLETION-CLOCKED fast fires may claim window-limited). Answering the
+        // batch arms the fast path; the fast fire latches.
+        setupManager(config(8, true));
+        manager.joinSlowStartEnabled = () -> true;
+        manager.transferGovernorEnabled = () -> true;
+        enableAdaptiveSeam();
+        var overworld = dim("overworld");
+        plainTick(overworld);
+        assertEquals(1, sent.size(), "the primed first scan shipped");
+        assertEquals(1, sent.get(0).count(), "the governed burst budget clamped the walk to 1");
+        assertFalse(manager.governor.windowLimitedLatched(),
+                "the primed scan is a FALLBACK fire — fallback fires never latch");
+        answer(sent.get(0), overworld, 1); // outstanding 0 → fast eligible
+        // The spacing gate (sustained 2/s, lastSent 1) spaces the fast fire to
+        // tick 10 — before the 20-tick fallback, so the fire is the FAST path.
+        int ticks = ticksToNextBatch(overworld, 1);
+        assertTrue(ticks < LSSConstants.TICKS_PER_SECOND,
+                "premise: fired before the fallback window (tick " + ticks + ")");
+        assertTrue(manager.scannerForTest().wasLastScanFast(),
+                "premise: the follow-up fire is the FAST path");
+        assertTrue(manager.governor.windowLimitedLatched(),
+                "a successfully-sent, fast-fired, governed-cap-truncated walk latches");
+    }
+
+    @Test
+    void failedSendNeverLatchesTheWindowLimit() {
+        setupManager(config(8, true));
+        manager.joinSlowStartEnabled = () -> true;
+        manager.transferGovernorEnabled = () -> true;
+        enableAdaptiveSeam();
+        manager.setBatchSenderForTest(payload -> {
+            throw new RuntimeException("transport down");
+        });
+        plainTick(dim("overworld"));
+        assertFalse(manager.governor.windowLimitedLatched(),
+                "nothing was offered — a failed send must not latch");
+    }
+
+    @Test
+    void manualBelowTheGovernedHalfNeverLatches() {
+        // The implementation panel's MAJOR-1 pin: with the adaptive cadence OFF the
+        // scan's governed half is the FULL sustained rate (2 at a fresh RAMP), so a
+        // manual knob of 1 is the binding clamp — and the latch must compare against
+        // the SAME composed governed half. The pre-fix code re-read burst =
+        // ceil(sustained/4) = 1 <= manual and latched a manually-capped walk.
+        int prior = LSSClientConfig.CONFIG.lodColumnsPerSecondLimit;
+        LSSClientConfig.CONFIG.lodColumnsPerSecondLimit = 1;
+        try {
+            setupManager(config(8, true));
+            manager.joinSlowStartEnabled = () -> true; // live RAMP: governed half = 2
+            manager.transferGovernorEnabled = () -> true;
+            // Adaptive cadence forced OFF (the CONFIG default is on): the governed
+            // half of the min-compose is sustainedColumnsPerSecond() = 2.
+            manager.scannerForTest().adaptiveCadenceEnabled = () -> false;
+            plainTick(dim("overworld"));
+            assertEquals(1, sent.size());
+            assertEquals(1, sent.get(0).count(), "the manual knob (1) clamped the walk");
+            assertFalse(manager.governor.windowLimitedLatched(),
+                    "manual (1) < the governed half (2): the manual knob was the binder");
+        } finally {
+            LSSClientConfig.CONFIG.lodColumnsPerSecondLimit = prior;
+        }
+    }
+
+    @Test
+    void manualCapBindingNeverLatchesTheWindowLimit() {
+        // The min-compose's manual half as the binder (governed burst 0 — slow start
+        // off): the walk truncates against the MANUAL knob, and the latch's
+        // governed-binding conjunct must refuse (a manually-capped loop never claims
+        // to be governor-window-limited).
+        int prior = LSSClientConfig.CONFIG.lodColumnsPerSecondLimit;
+        LSSClientConfig.CONFIG.lodColumnsPerSecondLimit = 10;
+        try {
+            setupManager(config(8, true)); // joinSlowStartEnabled=false in setupManager
+            manager.transferGovernorEnabled = () -> true;
+            enableAdaptiveSeam();
+            plainTick(dim("overworld"));
+            assertEquals(1, sent.size());
+            assertTrue(sent.get(0).count() <= 10, "the manual cap clamped the walk");
+            assertFalse(manager.governor.windowLimitedLatched(),
+                    "the manual knob was the binder — no governed window-limit claim");
+        } finally {
+            LSSClientConfig.CONFIG.lodColumnsPerSecondLimit = prior;
+        }
+    }
 }

@@ -218,6 +218,10 @@ class SpiralScanner {
     // Last scan budget tracking
     private int lastBudget;
     private int lastQueued;
+    /** Did the burst-cap clamp SET the last walk's final budget (below the constant,
+     *  un-reduced by the taper)? The governed window-limit's provenance half —
+     *  see the maybeScan recording site (ramp-window-limited-credit-plan.md §3.2). */
+    private boolean lastBudgetCapClamped;
 
     // Cached Voxy view distance — refreshed every 20th getEffectiveLodDistance()
     // INVOCATION, and the walk is not the dominant caller: getPruneDistance() reads it per
@@ -433,6 +437,28 @@ class SpiralScanner {
         // for /lss diag and the trace — as a diagnostic, not a lever.
         // The want-set must fit one wire batch: replace semantics tear across frames.
         budget = Math.min(budget, Math.min(LSSConstants.MAX_BATCH_CHUNK_REQUESTS, posOut.length));
+
+        // Latch provenance for the governor's window-limited bypass
+        // (ramp-window-limited-credit-plan.md §3.2, 1-Fable fold MAJOR-1): true iff
+        // the burst-cap clamp SET the final budget — the cap actually clamped below
+        // the constant AND neither the pressure taper nor the wire-batch min reduced
+        // it further. A taper-reduced budget (the CPU-weak client between 25% and
+        // halt) must never read as governor-window-limited.
+        // MARGINAL-pressure tolerance (dynamics review MAJOR-1): exact equality
+        // disarmed the latch at ~9 queued columns when the cap sits near the rig's
+        // ~350 (round(347×0.9985) = 346 != 347) — ordinary Voxy ingest counts would
+        // have killed the fix at exactly the park point it targets. The cap counts
+        // as the binding clamp while the tapered budget stays within 25% of it
+        // (budget×4 >= cap×3): mild pressure tolerated, deep pressure (scale <
+        // ~0.75) attributes to the taper and refuses — preserving MAJOR-1(c)'s
+        // CPU-weak exclusion (the 500-of-1000 taper test still reads false).
+        // Accepted corner: at burstCap == 1 the max(1,·) floor keeps budget == cap
+        // under any pressure — bounded by the self-arrest geometry (a wrongly
+        // latched doubling doubles the budget past the pressure point, and credits
+        // still require desired > ENGAGE_BELOW).
+        this.lastBudgetCapClamped = burstCap > 0
+                && burstCap < LSSConstants.WANT_SET_BUDGET
+                && budget * 4 >= burstCap * 3;
 
         if (budget <= 0) return -1;
 
@@ -872,7 +898,8 @@ class SpiralScanner {
         this.scanRing = 0;
         this.lastExclusionRadius = -1; // next session re-anchors; no spurious shrink reset
         this.lastLodDistance = -1;     // ...same for the lod-shrink rung
-        this.lastWalkTruncated = false; // fresh session predicts the full disc — fail closed
+        this.lastWalkTruncated = false;
+        this.lastBudgetCapClamped = false; // fresh session predicts the full disc — fail closed
         this.scanTickCounter = LSSConstants.TICKS_PER_SECOND - 1;
         this.missingVanillaChunks = Integer.MAX_VALUE;
         this.cachedVoxyDistance = -1;
@@ -1009,10 +1036,14 @@ class SpiralScanner {
     boolean truncatedBelowPrefixForTest() { return this.truncatedBelowPrefix; }
     /** predictedWalkCost's truncation input — the walk differential asserts arm parity
      *  on it directly (review round 2 MINOR: only count trajectories implied it). */
-    boolean lastWalkTruncatedForTest() { return this.lastWalkTruncated; }
+    boolean wasLastWalkTruncated() { return this.lastWalkTruncated; }
     int getScanRing() { return this.scanRing; }
     int getMissingVanillaChunks() { return this.missingVanillaChunks; }
     int getLastBudget() { return this.lastBudget; }
+
+    /** Was the burst cap the binding, taper-free clamp on the last walk's budget?
+     *  (The provenance half — see the maybeScan recording site.) */
+    boolean wasLastBudgetCapClamped() { return this.lastBudgetCapClamped; }
     int getLastQueued() { return this.lastQueued; }
     boolean wasLastScanFast() { return this.lastScanWasFast; }
     long getFastScans() { return this.fastScans; }

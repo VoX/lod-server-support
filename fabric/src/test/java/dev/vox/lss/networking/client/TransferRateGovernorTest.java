@@ -380,7 +380,7 @@ class TransferRateGovernorTest {
                 "intervalSeeded", "intervalStartMillis", "intervalStartWireBytes",
                 "intervalStartColumns", "intervalStartDeclared", "intervalStartAnswered",
                 "awaitingAtStart", "haltSeenThisInterval", "movementSeenThisInterval",
-                "awaitingSeenThisInterval", "clock");
+                "awaitingSeenThisInterval", "windowLimitedSeenThisInterval", "clock");
         var src = new TransferRateGovernor();
         var dstProbe = new TransferRateGovernor();
         int seed = 7;
@@ -1163,5 +1163,232 @@ class TransferRateGovernorTest {
                 false, NORMAL_PING, true);
         assertEquals(desired, g.getDesiredBytesPerSec(),
                 "zero bytes moved is not link evidence — hold, never a snap to INITIAL");
+    }
+
+    // ---- Window-limited Row-4 bypass (ramp-window-limited-credit-plan.md) ----
+
+    /** Climbs an armed governor to the ceiling via 7 kept-up doublings (the existing
+     *  keptUp test's feed shape; the resulting size EWMA is 32K — desired×2s bytes
+     *  over desired/16K columns). Returns {time, bytes, cols} cursors;
+     *  rampOpenStreak is 1 afterward (the 4M→8M doubling credited once). */
+    private long[] climbToCeiling(TransferRateGovernor g) {
+        long t = 0, bytes = 0, cols = 0;
+        tick(g, t, 0, 0, 1, false, NORMAL_PING);
+        for (int i = 0; i < 7; i++) {
+            long desired = g.getDesiredBytesPerSec();
+            t += INTERVAL;
+            bytes += desired * (INTERVAL / 1000);
+            cols += Math.max(1, desired / (16 * KB));
+            tick(g, t, bytes, cols, 1, false, NORMAL_PING);
+        }
+        assertEquals(SS_CEILING, g.getDesiredBytesPerSec(), "climb premise: at the ceiling");
+        return new long[]{t, bytes, cols};
+    }
+
+    /** One stuck-rig stop-and-wait interval at the ceiling (the measured live shape,
+     *  rescaled to the climb's ACTUAL EWMA of 32K — the climb feeds desired×2s bytes
+     *  over desired/16K columns, so each sample is 32K/column): declared 200 →
+     *  offered ≈ 200×32K/2s = 3.2 MB/s < desired/2 = 4.19 MB/s (under-offered),
+     *  measured = answered×16K/2s (16K samples slide the EWMA down only slowly at
+     *  the 0.05 down-alpha, keeping offered < desired/2 throughout), answered/declared
+     *  ratio per the {@code answered} arg. Latches first when {@code latched}.
+     *  Returns the advanced cursors; declared rides its own cursor (index 3). */
+    private long[] stuckInterval(TransferRateGovernor g, long[] cur, boolean latched,
+                                 int declared, int answered) {
+        long t = cur[0] + INTERVAL;
+        long bytes = cur[1] + answered * 16 * KB;
+        long cols = cur[2] + answered;
+        long declCursor = (cur.length > 3 ? cur[3] : cur[2] * 100) + declared;
+        long ansCursor = (cur.length > 4 ? cur[4] : cur[2] * 100) + answered;
+        if (latched) g.noteWindowLimited();
+        g.tick(t, bytes, cols, declCursor, ansCursor, 1, false, NORMAL_PING, true);
+        return new long[]{t, bytes, cols, declCursor, ansCursor};
+    }
+
+    @Test
+    void windowLimitedStopAndWaitCompletesTheRamp() {
+        // The headline repro (plan §1): at the ceiling the stop-and-wait loop offers
+        // desired/4 × cadence ≈ 3.2 MB/s < desired/2, so Row 4 held every interval
+        // and the exit never fired. With the window-limited latch, answeredAllAsked
+        // (190/200 = 95% ≥ 3/4) credits each interval; 9 more credits after the
+        // climb's one complete the 10-streak.
+        var g = armed();
+        long[] cur = climbToCeiling(g);
+        for (int i = 0; i < 9; i++) {
+            assertEquals(TransferRateGovernor.Phase.RAMP, g.getPhase(),
+                    "still confirming at credit " + (1 + i));
+            cur = stuckInterval(g, cur, true, 200, 190);
+        }
+        assertEquals(TransferRateGovernor.Phase.OPEN, g.getPhase(),
+                "nine window-limited credited intervals + the climb's one = ten → OPEN");
+        assertEquals(0, g.sustainedColumnsPerSecond(), "OPEN is capless");
+
+        // Control arm — the same ten intervals WITHOUT the latch stay parked (the
+        // pre-fix stuck shape, byte-identical Row-4 hold).
+        var stuck = armed();
+        long[] c2 = climbToCeiling(stuck);
+        for (int i = 0; i < 10; i++) {
+            c2 = stuckInterval(stuck, c2, false, 200, 190);
+        }
+        assertEquals(TransferRateGovernor.Phase.RAMP, stuck.getPhase(),
+                "unlatched under-offer holds exactly as before the fix");
+        assertEquals(SS_CEILING, stuck.getDesiredBytesPerSec(),
+                "no growth, no snap — the bit-identical hold");
+    }
+
+    @Test
+    void windowLimitedSingleAliasedMissIsForgiven() {
+        // Plan §3.4: the 2 s interval aliases against the ~630 ms cycle, failing
+        // answeredAllAsked ~1-in-6. One uncredited qualifying interval must not wipe
+        // the streak — the exit completes at the same total credit count.
+        var g = armed();
+        long[] cur = climbToCeiling(g); // streak 1
+        for (int i = 0; i < 4; i++) cur = stuckInterval(g, cur, true, 200, 190); // 5
+        cur = stuckInterval(g, cur, true, 200, 50); // aliased miss: forgiven
+        assertEquals(TransferRateGovernor.Phase.RAMP, g.getPhase());
+        assertEquals(SS_CEILING, g.getDesiredBytesPerSec(),
+                "the miss neither credits nor snaps");
+        for (int i = 0; i < 4; i++) cur = stuckInterval(g, cur, true, 200, 190); // 9
+        assertEquals(TransferRateGovernor.Phase.RAMP, g.getPhase());
+        cur = stuckInterval(g, cur, true, 200, 190); // 10
+        assertEquals(TransferRateGovernor.Phase.OPEN, g.getPhase(),
+                "one forgiven miss: ten credits still open the ramp");
+    }
+
+    @Test
+    void windowLimitedTwoConsecutiveMissesResetTheStreak() {
+        var g = armed();
+        long[] cur = climbToCeiling(g); // streak 1
+        for (int i = 0; i < 8; i++) cur = stuckInterval(g, cur, true, 200, 190); // 9
+        cur = stuckInterval(g, cur, true, 200, 50); // miss 1: forgiven
+        cur = stuckInterval(g, cur, true, 200, 50); // miss 2: RESET
+        // If the reset fired, one credit is streak 1, not 10 — no OPEN.
+        cur = stuckInterval(g, cur, true, 200, 190);
+        assertEquals(TransferRateGovernor.Phase.RAMP, g.getPhase(),
+                "two consecutive misses are real degradation: the streak restarted");
+        for (int i = 0; i < 8; i++) cur = stuckInterval(g, cur, true, 200, 190); // 9
+        assertEquals(TransferRateGovernor.Phase.RAMP, g.getPhase());
+        cur = stuckInterval(g, cur, true, 200, 190); // 10
+        assertEquals(TransferRateGovernor.Phase.OPEN, g.getPhase());
+    }
+
+    @Test
+    void windowLimitedUnderOfferNeverSnaps() {
+        // The pre-snap guard (plan §3.3): a window-limited UNDER-OFFERED interval
+        // whose growth rungs fail is not offer-backed evidence — HOLD (the ENGAGED
+        // freeze rule), never a snap toward measured (which would wipe the earned
+        // ceiling to ~0.5 MB/s here).
+        var g = armed();
+        long[] cur = climbToCeiling(g);
+        cur = stuckInterval(g, cur, true, 200, 50); // bytes>0, growth fails
+        assertEquals(SS_CEILING, g.getDesiredBytesPerSec(),
+                "under-offered + latched + growth-failed = HOLD, never the plateau snap");
+        assertEquals(TransferRateGovernor.Phase.RAMP, g.getPhase());
+    }
+
+    @Test
+    void windowLimitedOfferBackedPlateauStillSnaps() {
+        // 1-Fable fold minor-2: the bypass is a ROW-4 bypass, not a blanket pre-snap
+        // return. A latched interval that IS offer-backed (offered×2 ≥ desired) with
+        // growth failed and bytes moved must still take the containment snap — the
+        // exact numbers of underOfferedIntervalHoldsAndPlateauSnapsWithoutRaising's
+        // plateau arm, plus the latch.
+        var g = armed();
+        g.tick(0, 0, 0, 0, 0, 1, false, NORMAL_PING, true);
+        g.tick(INTERVAL, 128 * KB, 8, 8, 8, 1, false, NORMAL_PING, true);   // EWMA 16K
+        g.tick(2 * INTERVAL, 256 * KB, 16, 16, 16, 1, false, NORMAL_PING, true); // 256K
+        assertEquals(4 * SS_INITIAL, g.getDesiredBytesPerSec());
+        g.noteWindowLimited();
+        g.tick(3 * INTERVAL, 256 * KB + 200 * KB, 36, 36, 26, 1, false, NORMAL_PING, true);
+        assertEquals(100 * KB * 5 / 4, g.getDesiredBytesPerSec(),
+                "an offer-backed latched plateau still snaps — the latch only bypasses Row 4");
+    }
+
+    @Test
+    void windowLimitedLatchIsIntervalScopedAndClearedByResets() {
+        var g = armed();
+        long[] cur = climbToCeiling(g);
+        cur = stuckInterval(g, cur, true, 200, 190); // credited, latch consumed at seed
+        assertFalse(g.windowLimitedLatched(),
+                "seedInterval clears the latch — it never leaks into the next interval");
+        long desired = g.getDesiredBytesPerSec();
+        cur = stuckInterval(g, cur, false, 200, 190); // same shape, NO latch
+        assertEquals(desired, g.getDesiredBytesPerSec(),
+                "the unlatched twin interval holds at Row 4 (no leaked credit)");
+        // minor-3 (panel): desired can't move at the ceiling, so pin the no-leak
+        // claim on the PHASE — nine more unlatched twins would open a leaked latch.
+        for (int i = 0; i < 9; i++) {
+            cur = stuckInterval(g, cur, false, 200, 190);
+        }
+        assertEquals(TransferRateGovernor.Phase.RAMP, g.getPhase(),
+                "unlatched intervals never credit — the latch does not leak");
+        // hardReset (an active=false tick) clears a pending latch.
+        g.noteWindowLimited();
+        assertTrue(g.windowLimitedLatched());
+        g.tick(cur[0] + 1, cur[1], cur[2], cur[3], cur[4], 1, false, NORMAL_PING, false);
+        assertFalse(g.windowLimitedLatched(), "hardReset clears the latch");
+        // adoptFrom never carries a pending latch (interval state reseeds).
+        var donor = armed();
+        climbToCeiling(donor);
+        donor.noteWindowLimited();
+        var heir = new TransferRateGovernor();
+        heir.adoptFrom(donor);
+        assertFalse(heir.windowLimitedLatched(), "adoptFrom reseeds the interval");
+    }
+
+    @Test
+    void unlatchedUncreditedIntervalStillResetsTheStreak() {
+        // The panel's forgiveness-scoping MAJOR: forgiveness is for WINDOW-LIMITED
+        // aliasing only. An un-latched uncredited qualifying interval keeps main's
+        // semantics — immediate reset — so alternating credited/uncredited demand
+        // (~3/8 average answered) can never walk to OPEN.
+        var g = armed();
+        long[] cur = climbToCeiling(g); // streak 1
+        for (int i = 0; i < 8; i++) cur = stuckInterval(g, cur, true, 200, 190); // 9
+        cur = stuckInterval(g, cur, false, 200, 50); // UN-latched miss: hard reset
+        cur = stuckInterval(g, cur, true, 200, 190); // one credit = streak 1, not 10
+        assertEquals(TransferRateGovernor.Phase.RAMP, g.getPhase(),
+                "an un-latched miss resets exactly as before the fix");
+        for (int i = 0; i < 8; i++) cur = stuckInterval(g, cur, true, 200, 190);
+        assertEquals(TransferRateGovernor.Phase.RAMP, g.getPhase());
+        cur = stuckInterval(g, cur, true, 200, 190);
+        assertEquals(TransferRateGovernor.Phase.OPEN, g.getPhase(),
+                "ten fresh consecutive credits confirm after the reset");
+    }
+
+    @Test
+    void trickleThroughTinyBudgetSelfArrestsAndNeverCredits() {
+        // 1-Fable fold MAJOR-1(b): near INITIAL the governed burst budget is 1-3
+        // columns, so a small fixed trickle CAN truncate and latch. The escape is
+        // self-arresting at the WIRING level — each doubling doubles the budget, and
+        // once burst > demand the walk stops truncating and the latch stops. This
+        // test replays that geometry against the governor (latch only while the
+        // implied burst = desired/(4·EWMA) < the 3-column demand) and pins the
+        // bound: desired parks a few doublings up, far below the engage threshold,
+        // with zero credits and no OPEN.
+        var g = armed();
+        long t = 0, bytes = 0, cols = 0, decl = 0, ans = 0;
+        g.tick(t, 0, 0, 0, 0, 1, false, NORMAL_PING, true);
+        for (int i = 0; i < 12; i++) {
+            long desired = g.getDesiredBytesPerSec();
+            double ewma = g.getSizeEstimateForTest() > 0
+                    ? g.getSizeEstimateForTest() : 16 * KB;
+            long impliedBurst = Math.max(1, (long) (desired / ewma) / 4);
+            boolean latch = impliedBurst < 3; // the scanner's truncation geometry
+            t += INTERVAL;
+            bytes += 3 * 16 * KB;
+            cols += 3;
+            decl += 3;
+            ans += 3;
+            if (latch) g.noteWindowLimited();
+            g.tick(t, bytes, cols, decl, ans, 1, false, NORMAL_PING, true);
+        }
+        assertEquals(TransferRateGovernor.Phase.RAMP, g.getPhase(),
+                "a self-arrested trickle never opens the ramp");
+        assertEquals(4 * SS_INITIAL, g.getDesiredBytesPerSec(),
+                "the escape is bounded: two latched doublings (64K→256K), then the "
+                        + "budget outgrows the demand and Row 4 holds forever");
+        assertTrue(g.getDesiredBytesPerSec() < ENGAGE_BELOW,
+                "parked far below the credit threshold — no OPEN confirmation can start");
     }
 }
