@@ -1025,4 +1025,85 @@ class LodRequestManagerTickTest {
             LSSClientConfig.CONFIG.lodColumnsPerSecondLimit = prior;
         }
     }
+
+    // ---- the same four latch pins on the LEGACY arm (region-scan-plan.md §10: the
+    // window-limited latch runs against BOTH scanner arms — the legacy arm is the
+    // advertised rollback lever and must keep its own latch coverage; review fold) ----
+
+    private void setupLegacyArmManager(SessionConfigS2CPayload cfg) {
+        setupManager(cfg, "lss-tick-test", new LodRequestManager(new SpiralScanner()));
+    }
+
+    @Test
+    void truncatedGovernedWalkLatchesOnFastFiresOnlyOnTheLegacyArm() {
+        setupLegacyArmManager(config(8, true));
+        manager.joinSlowStartEnabled = () -> true;
+        manager.transferGovernorEnabled = () -> true;
+        enableAdaptiveSeam();
+        var overworld = dim("overworld");
+        plainTick(overworld);
+        assertEquals(1, sent.size(), "the primed first scan shipped");
+        assertEquals(1, sent.get(0).count(), "the governed burst budget clamped the walk to 1");
+        assertFalse(manager.governor.windowLimitedLatched(),
+                "the primed scan is a FALLBACK fire — fallback fires never latch");
+        answer(sent.get(0), overworld, 1);
+        int ticks = ticksToNextBatch(overworld, 1);
+        assertTrue(ticks < LSSConstants.TICKS_PER_SECOND,
+                "premise: fired before the fallback window (tick " + ticks + ")");
+        assertTrue(manager.scannerForTest().wasLastScanFast(),
+                "premise: the follow-up fire is the FAST path");
+        assertTrue(manager.governor.windowLimitedLatched(),
+                "a successfully-sent, fast-fired, governed-cap-truncated walk latches");
+    }
+
+    @Test
+    void failedSendNeverLatchesTheWindowLimitOnTheLegacyArm() {
+        setupLegacyArmManager(config(8, true));
+        manager.joinSlowStartEnabled = () -> true;
+        manager.transferGovernorEnabled = () -> true;
+        enableAdaptiveSeam();
+        manager.setBatchSenderForTest(payload -> {
+            throw new RuntimeException("transport down");
+        });
+        plainTick(dim("overworld"));
+        assertFalse(manager.governor.windowLimitedLatched(),
+                "nothing was offered — a failed send must not latch");
+    }
+
+    @Test
+    void manualBelowTheGovernedHalfNeverLatchesOnTheLegacyArm() {
+        int prior = LSSClientConfig.CONFIG.lodColumnsPerSecondLimit;
+        LSSClientConfig.CONFIG.lodColumnsPerSecondLimit = 1;
+        try {
+            setupLegacyArmManager(config(8, true));
+            manager.joinSlowStartEnabled = () -> true;
+            manager.transferGovernorEnabled = () -> true;
+            manager.scannerForTest().adaptiveCadenceEnabled = () -> false;
+            plainTick(dim("overworld"));
+            assertEquals(1, sent.size());
+            assertEquals(1, sent.get(0).count(), "the manual knob (1) clamped the walk");
+            assertFalse(manager.governor.windowLimitedLatched(),
+                    "manual (1) < the governed half (2): the manual knob was the binder");
+        } finally {
+            LSSClientConfig.CONFIG.lodColumnsPerSecondLimit = prior;
+        }
+    }
+
+    @Test
+    void manualCapBindingNeverLatchesTheWindowLimitOnTheLegacyArm() {
+        int prior = LSSClientConfig.CONFIG.lodColumnsPerSecondLimit;
+        LSSClientConfig.CONFIG.lodColumnsPerSecondLimit = 10;
+        try {
+            setupLegacyArmManager(config(8, true));
+            manager.transferGovernorEnabled = () -> true;
+            enableAdaptiveSeam();
+            plainTick(dim("overworld"));
+            assertEquals(1, sent.size());
+            assertTrue(sent.get(0).count() <= 10, "the manual cap clamped the walk");
+            assertFalse(manager.governor.windowLimitedLatched(),
+                    "the manual knob was the binder — no governed window-limit claim");
+        } finally {
+            LSSClientConfig.CONFIG.lodColumnsPerSecondLimit = prior;
+        }
+    }
 }

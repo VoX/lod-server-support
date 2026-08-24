@@ -157,7 +157,10 @@ public abstract class AbstractPlayerRequestState<T> {
     private final AtomicLong pendingRangeFiltered = new AtomicLong();
 
     // Processing-thread-owned want backlog: replaced wholesale by each taken batch,
-    // consumed in order (closest-first by construction — the client emits ring order).
+    // consumed in DECLARATION order. Ring-major clients emit closest-first; region-major
+    // clients (the v0.13 region walk) emit region-locally ring-ascending — globally
+    // NON-monotonic, but the property the pacing gates actually rely on holds on both:
+    // the first unsatisfied entry is the nearest outstanding work of its active region.
     private final ArrayDeque<IncomingRequest> backlog = new ArrayDeque<>();
     // Single-writer (processing thread) — volatile for exporter/diagnostic reads.
     private volatile int backlogSizeSnapshot = 0;
@@ -521,7 +524,8 @@ public abstract class AbstractPlayerRequestState<T> {
      * (20 Hz — the client-declared frontier alone goes stale for a full second between
      * 1 Hz declarations, which collapsed superflat backfill throughput 4x and starved the
      * IOWorker into read timeouts, soak 2026-07-17); else the applied want-set's first
-     * entry (closest-first construction — deliberately NOT acquisition-filtered: it only
+     * entry (the declaration head — the nearest work under ring-major emission, the
+     * active region's nearest under region-major; deliberately NOT acquisition-filtered: it only
      * applies before a session's first stamp, and the frontier never returns to -1).
      * Neither reference can be dragged outward by in-flight work — a ts&lt;=0 in-flight
      * position stamps the frontier AT its own ring, so the band cannot walk away from a
@@ -533,7 +537,7 @@ public abstract class AbstractPlayerRequestState<T> {
      * hold: a nearer pending SYNC blocks outright, a nearer gen ticket collapses the band
      * to cohort span 1). Worst case for an inner ts&gt;0 ask that genuinely needs
      * generation while an outer cohort holds every slot: ~one generation-slot turnover of
-     * added latency (the closest-first drain gives it first refusal on the next freed
+     * added latency (the declaration-order drain gives it first refusal on the next freed
      * slot, and once outstanding it gates the outer cohort). False (gate skipped) without
      * a stamped player chunk or any frontier basis — a rig or a converged player, neither
      * of which floods.

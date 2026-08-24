@@ -28,12 +28,18 @@ import dev.vox.lss.common.PositionUtil;
  * governor's window-limited latch, diag, and the exporter work unchanged.
  *
  * <p>Fast-cadence policy (AS-BUILT, superseding plan §8's region-count rung — see
- * {@link #predictedWalkCost} for the full derivation): the inherited cost gate runs
- * over an overridden cost — the MOVEMENT WINDOW prices the whole disc with legacy's
- * from-zero formula (flight keeps the legacy 1 Hz policy above lod 127), stationary
- * prices 0 (the stateless walk genuinely is cheap at any frontier depth). The
- * POST-pressure retry rung is dropped: retry marks are ordinary needs here,
- * declared and therefore covered by the outstanding gate.
+ * {@link #predictedWalkCost} for the full derivation and the review-panel record in
+ * plan §14): the inherited cost gate runs over an overridden cost — the MOVEMENT
+ * WINDOW prices legacy's from-zero formula over the TRUNCATED FRONTIER
+ * (4·s(s+1), s = scanRing when truncated else lod — preserving the pinned elytra
+ * unlock below ring ~128 and the 1 Hz flight policy above it), and STATIONARY
+ * prices the LAST walk's measured observe work (the region-probe floor + the
+ * clamped emit passes) — dense fill and deep warm backfill stay far under the cap
+ * at any frontier depth, while a mass dirty scatter across dozens of regions
+ * (WorldEdit-scale broadcasts, revocation residue) prices past it and holds 1 Hz,
+ * the §8 behavior row restored. The POST-pressure retry rung is dropped: retry
+ * marks are ordinary needs here, declared and therefore covered by the outstanding
+ * gate.
  *
  * <p>Main client thread only, like the base.
  */
@@ -50,6 +56,16 @@ class RegionScanner extends SpiralScanner {
     // Audit round-robin cursor over the region spiral (main thread only).
     private int auditRing;
     private int auditIdx;
+    /** Consecutive fast fires since the audit last ran — the rung must not starve
+     *  under sustained 4 Hz (review fold: it used to run on periodic fires only,
+     *  which a stationary deep backfill never produces). */
+    private int fastFiresSinceAudit;
+    /** Test seam: the differential suite disables the audit so a genuine needs-mask
+     *  divergence in its shared fixture cannot be silently healed mid-compare. */
+    boolean auditEnabled = true;
+    /** The last walk's measured observe work (region-probe floor + clamped emit-pass
+     *  areas) — the stationary fast-fire price (see {@link #predictedWalkCost}). */
+    private int lastWalkObserveCost;
 
     // Walk scratch (main client thread only; ~26 KB total).
     private final long[] scratchPos = new long[1024];
@@ -80,32 +96,48 @@ class RegionScanner extends SpiralScanner {
     // ---- the cadence path rungs ----
 
     /**
-     * AS-BUILT deviation from plan §8's region-count rung, forced by two facts the
-     * review round did not surface: a small LOD disc INHERENTLY spans up to 4 regions
-     * (the 2×2 around any player near a region corner), so an active-region-count rung
-     * refuses fast fires FOREVER at lod ≤ 32 (the cadence suites caught it); and the
-     * inherited legacy cost formula over the v1.1 confirmed/scanRing fields prices a
-     * dense far-frontier fill at ~8·c·31 — refusing the 4 Hz warm backfill past ring
-     * ~260, the feature's own headline case. The honest region translation of the
-     * legacy gate's POLICY is therefore: in the MOVEMENT WINDOW (a crossing with no
-     * fire since — {@code recenter} opens it, the base's fire path closes it) price
-     * the whole disc exactly as legacy's from-zero formula does — flight keeps the
-     * legacy 1 Hz policy above lod 127, the elytra-wall line — and STATIONARY price 0:
-     * the stateless region walk genuinely costs O(regions×16 + emitted) at any
-     * frontier depth, so the cost gate has nothing to refuse (legacy also admits
-     * stationary deep fills — its span c..s is narrow there; this extends the same
-     * admission to the movement-free deep-fill case the region walk makes cheap).
-     * The 5-agent implementation review adjudicates this deviation; plan §14 records it.
+     * AS-BUILT deviation from plan §8's region-count rung, ADJUDICATED AND REPRICED by
+     * the implementation review panel (plan §14). The §8 rung was refuted: a small LOD
+     * disc inherently spans up to a 3×3 region block around a region corner, so an
+     * active-region-count rung inverts the legacy policy at small lod (where legacy
+     * admits freely) — and §2.3's mandate that the cost rung become constant-permissive
+     * was unachievable by inheritance, because the region walk's v1.1
+     * confirmed/scanRing semantics make the inherited formula price a dense
+     * far-frontier fill at 256c+3968 (one-region span — refusal from frontier ring
+     * ~241) to 520c+16640 (two-region span — refusal from ~95), killing the 4 Hz warm
+     * backfill. As repriced:
+     *
+     * <p><b>Movement window</b> ({@code recenter} opens it, the base fire path closes
+     * it on every fired walk): legacy's from-zero formula over the TRUNCATED FRONTIER —
+     * {@code 4·s(s+1)} with {@code s = lastWalkTruncated ? scanRing : lod}. This is the
+     * exact legacy branch (SpiralScanner's movement pricing), preserving the pinned
+     * elytra unlock: a moving client fast-fires while the fill frontier is below ring
+     * ~96-128 (region-major scanRing runs up to one region span past the ring-major
+     * frontier, so the cliff lands slightly EARLIER — the conservative direction) and
+     * rides 1 Hz above it. An untruncated walk prices the whole disc, so sustained
+     * flight over warm terrain at lod ≥ 128 stays 1 Hz — the elytra-wall line.
+     *
+     * <p><b>Stationary</b>: the LAST walk's measured observe cost (region-probe floor
+     * + clamped emit-pass areas, metered in {@link #scan}) — a MEMORY, deviating from
+     * the legacy gate's prediction doctrine, which exists because a crossing
+     * invalidates last-walk knowledge; here every crossing is priced by the window
+     * branch instead, and stationary state evolves incrementally, so the last walk is
+     * an honest predictor of the next. Dense fill (~2 emitting regions + the
+     * never-skippable near-player/boundary floor) prices ~10-45k — under the 65,536
+     * cap at every shipped lod, so 4 Hz warm backfill survives at ANY frontier depth.
+     * A mass dirty scatter across dozens of regions prices past the cap and holds
+     * 1 Hz — the §8 "sparse scatter → 1 Hz" row, restored (integration-review MAJOR:
+     * each needy region costs an emit pass, so the walk is NOT free in that regime).
      */
     @Override
     int predictedWalkCost() {
         if (this.sessionConfig == null) return Integer.MAX_VALUE; // fail closed, like base
         if (this.recenteredSinceLastFire) {
-            long lod = getEffectiveLodDistance();
-            long cost = 4L * lod * (lod + 1);
+            long s = this.lastWalkTruncated ? this.scanRing : getEffectiveLodDistance();
+            long cost = 4L * s * (s + 1);
             return (int) Math.min(cost, Integer.MAX_VALUE);
         }
-        return 0;
+        return this.lastWalkObserveCost;
     }
 
     @Override
@@ -120,6 +152,8 @@ class RegionScanner extends SpiralScanner {
     void reset() {
         super.reset();
         this.lastRegionSpan = 0;
+        this.lastWalkObserveCost = 0;
+        this.fastFiresSinceAudit = 0;
         this.regionSkips = 0;
         this.auditHeals = 0;
         this.auditRing = 0;
@@ -148,6 +182,7 @@ class RegionScanner extends SpiralScanner {
         int emittedSpan = 0;
         int maxEmittedRing = -1;
         boolean truncated = false;
+        long observeCost = 0;
 
         outer:
         for (int rr = 0; rr <= maxRegionRing; rr++) {
@@ -168,6 +203,7 @@ class RegionScanner extends SpiralScanner {
                         || cz0 > playerCz + lodDistance || cz0 + 31 < playerCz - lodDistance) {
                     continue;
                 }
+                observeCost += 16; // the leaf-probe floor, paid by every in-lod region
                 if (columns.regionNeedsFree(rx, rz, playerCx, playerCz, lodDistance)) {
                     this.regionSkips++;
                     continue;
@@ -177,14 +213,19 @@ class RegionScanner extends SpiralScanner {
                 // regions over-cover, and their beyond-lod absent leaves must not emit.
                 int n = 0;
                 int minRing = Integer.MAX_VALUE;
-                for (int lz = 0; lz < 32; lz++) {
-                    int cz = cz0 + lz;
+                // Clamped loop bounds ARE the per-position lod clamp (plan v1.1 A-7),
+                // and they keep a boundary sliver's observe cost proportional to its
+                // in-lod AREA — the never-skippable lod-edge/near-player regions used
+                // to pay full 32×32 sweeps every scan (server-lens review finding).
+                int zLo = Math.max(cz0, playerCz - lodDistance);
+                int zHi = Math.min(cz0 + 31, playerCz + lodDistance);
+                int xLo = Math.max(cx0, playerCx - lodDistance);
+                int xHi = Math.min(cx0 + 31, playerCx + lodDistance);
+                observeCost += (long) (zHi - zLo + 1) * (xHi - xLo + 1);
+                for (int cz = zLo; cz <= zHi; cz++) {
                     int dz = Math.abs(cz - playerCz);
-                    if (dz > lodDistance) continue;
-                    for (int lx = 0; lx < 32; lx++) {
-                        int cx = cx0 + lx;
+                    for (int cx = xLo; cx <= xHi; cx++) {
                         int dx = Math.abs(cx - playerCx);
-                        if (dx > lodDistance) continue;
                         if (dx == 0 && dz == 0) continue; // legacy parity: ring 0 is
                         // structurally EMPTY in the ring enumeration (8·0 positions), so the
                         // legacy walk never declares the player's own chunk. Production-
@@ -241,8 +282,14 @@ class RegionScanner extends SpiralScanner {
             }
         }
 
-        // Audit rung (plan §2.2 v1.1 A-6): one region per PERIODIC fire, round-robin.
-        if (!wasLastScanFast()) {
+        // Audit rung (plan §2.2 v1.1 A-6): one region per periodic fire — OR per four
+        // consecutive fast fires, so sustained 4 Hz backfill (now the stationary norm)
+        // still audits at the designed ~1 Hz instead of starving (review fold). Full
+        // round-robin latency is accepted for an expected-0 belt: ~1225 stops ≈ 20 min
+        // at lod 512 — the player's own region is always the cursor's first stop.
+        if (this.auditEnabled
+                && (!wasLastScanFast() || ++this.fastFiresSinceAudit >= 4)) {
+            this.fastFiresSinceAudit = 0;
             auditOneRegion(columns, playerRx, playerRz, playerCx, playerCz,
                     lodDistance, maxRegionRing);
         }
@@ -258,6 +305,7 @@ class RegionScanner extends SpiralScanner {
         this.lastBudget = budget;
         this.lastQueued = count;
         this.lastRegionSpan = emittedSpan;
+        this.lastWalkObserveCost = (int) Math.min(observeCost, Integer.MAX_VALUE);
         return count;
     }
 

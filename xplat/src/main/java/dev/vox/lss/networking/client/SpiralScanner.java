@@ -557,13 +557,14 @@ class SpiralScanner {
         return true;
     }
 
-    /**
-     * Path-specific fast-fire refusal, PRE-pressure slot (region-scan-plan.md §2.4):
-     * the legacy walk-cost gate + the F1 shrink rung, verbatim. {@code RegionScanner}
-     * overrides with the region-count rung (§8). Sits exactly where the two rungs sat
-     * so the ladder's evaluation order — and rateGated's "cap was the binding refusal"
-     * counting — is unchanged on the legacy arm.
-     */
+        /** The two legacy pre-pressure fast-fire rungs at their exact ladder slot: the
+     *  predicted-walk-cost cap and the F1 view-shrink guard. {@code RegionScanner}
+     *  inherits this rung unchanged — its policy lives in an overridden
+     *  {@link #predictedWalkCost} (movement window = from-zero over the truncated
+     *  frontier; stationary = the last walk's measured observe cost), and the F1
+     *  shrink half is structurally inert there ({@code lastExclusionRadius} is
+     *  written only by the legacy walk, so it stays -1 — safe: the region walk has
+     *  no prefix to protect and re-classifies exiting positions live). */
     protected boolean prePressureFastRefusal(int viewDistance) {
         if (predictedWalkCost() > FAST_RESCAN_MAX_WALK_COST) return true;
         // The F1 shrink reset is an IN-WALK prefix invalidation like hasActionableRetries
