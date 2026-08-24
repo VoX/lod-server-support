@@ -1,4 +1,4 @@
-# Hybrid scan: ring-major near, region-major far (v3 — panel-folded + Xaero backpressure)
+# Hybrid scan: ring-major near, region-major far (v3.1 — backpressure panel folded)
 
 **Status: PLANNED, NOT EXECUTED** (user directive 2026-08-24: write + review only).
 Follow-up to `region-scan-plan.md` (§14/§14.1 = the region round's as-built + review
@@ -11,8 +11,13 @@ survive adversarial checking). The WALK design is SETTLED; execution stays gated
 §0. **v3 (user-directed, same day, after the live region-build session): §12 adds
 the Xaero ingestion BACKPRESSURE mechanism (want-set taper off the bridge queue)
 and §12.1 records the §18 heal's REMOVAL — §12 is SEPARABLE from the hybrid walk
-and may ship ahead of it (§0); a 3-Opus focused review of §12/§12.1 is the
-amendment's gate.**
+and may ship ahead of it (§0). **v3.1 folds §12's own 3-Opus review** (15 MAJORs
+across mechanism/dynamics/consistency lenses — headline folds: the drainable-latch
+-1 rule with watchdog + hysteresis + halt time-box, the 75% protective mapping,
+the heal removal RE-SCOPED to ledger-only with the immediate reporter KEPT, the
+cave-layer class corrected to refusal-while-paused, the two-regime dynamics, and
+§12.5's v0.12.1 re-cut recommendation). §12 is now build-ready pending two USER
+decisions recorded in §12.5.**
 
 ## §0 Sequencing (panel-settled — the fold-in option is DELETED)
 
@@ -138,7 +143,10 @@ neighbor). Recorded consequences:
 - **Sustained flight**: each crossed chunk makes 2N+1 near positions declarable
   (+2vd+1 view-exit re-asks) — at N=64 ≈ 400 col/s ≈ 55% of a 725 col/s stream
   reserved for near. The far crescent falls behind — the documented elytra wall,
-  unchanged in kind. This reservation is THE ceiling argument against raising N
+  unchanged in kind. Under §12's taper the effect compounds: a governed budget
+  below ~50% is consumed entirely by near demand during sustained flight, so the
+  far phase starves for the flight's duration — named here so §9's live round
+  attributes the slowdown to the taper, not the walk. This reservation is THE ceiling argument against raising N
   (§10). A far-fairness budget reserve is structurally incompatible with the
   complete-prefix invariant and is rejected (panel-settled).
 - Complete-prefix, hybrid form (STRONGER than v1's wording): at most ONE partial
@@ -214,7 +222,10 @@ Near: ~r/4+4 regions per ring, ≤ ~21 per batch at the boundary — but the pan
 sharper frame: Xaero's constraint is region ACTIVATION RATE (~3.1 regions/s at
 3,200 col/s, independent of N) vs ~10/s capacity, so Xaero does not constrain N
 until N ≳ 250; the binding constraints are walk cost (∝N²) and the §2.3 flight
-reservation. Far: unchanged. `nativelyWritable` near tiles are Xaero's own writer
+reservation. For BRIDGE USERS the true binding constraint is neither: it is the
+§17-frame-budgeted WRITER THROUGHPUT (~680 col/s measured), which §12's taper
+makes the whole fill's ceiling — this section's activation-rate arithmetic
+governs only bridge-off sessions. Far: unchanged. `nativelyWritable` near tiles are Xaero's own writer
 anyway. Steady near working set ≈ 25-36 resident regions with legacy-style graze
 churn INSIDE N (the region plan's §1 churn complaint applies there again — bounded,
 accepted, named).
@@ -238,11 +249,13 @@ window; the anchoring events are only ts≤0 acquisitions (view-exit crossings
 under movement, ingest-failure re-asks, prune holes, dirty-revived
 NOT_GENERATED). Near-zone damp never binds (full 8r rings). The far ceiling
 itself (~96 col/s/player where gen is faster than ~417 ms) is unchanged; the
-live gate re-measures it under the hybrid.
+live gate re-measures it under the hybrid. During a §12-GOVERNED fill a
+near-heavy tapered stream keeps the anchor near and the far spread gate clamped
+— expected, not a hybrid regression (the §9 mis-attribution guard).
 
 ## §7 Config / diag / trace (v1's "add nothing" REVERSED by the panel)
 
-- No new config key for the walk; `HYBRID_NEAR_RADIUS` constant + seam.
+- No new config key for the WALK (`HYBRID_NEAR_RADIUS` constant + seam); §12 adds `enableXaeroMapBackpressure` and the `bp=` diag token — see §12.2/§12.4 for that inventory.
 - **`near_rings=` is REQUIRED** — defined as phase-1 rings that EMITTED (or
   observed needy work) last scan, NOT merely walked (the never-skippable band
   walks forever, which would make §9's "then ~0" signature unsatisfiable — final
@@ -332,9 +345,11 @@ New pins:
 visually concentric at a region corner (the artifact §0's precondition observed,
 now absent); `near_rings=` active during near fill then ~0; far fill
 `region_span ≤ 2` (past the first clipped-sliver batches, §2.2); Xaero dropped
-flat; fill rate ≥ the region round's LIVE numbers (aggregate) with the §2.3
-far-first-column latency expected; the §6 generation-bound fill-rate measurement
-RE-RUN. Docs task: CLAUDE.md's three scanner sites (want-set paragraph
+flat; fill rate ≥ the region round's LIVE numbers (aggregate, measured with the
+bridge OFF — §12's governed rate is ~10-15% lower BY DESIGN, so three baselines
+now exist: legacy ~725 / region ~777 / governed ~650-700, and the comparison
+must name its regime) with the §2.3 far-first-column latency expected; the §6
+generation-bound fill-rate measurement RE-RUN. Docs task: CLAUDE.md's three scanner sites (want-set paragraph
 "REGION-MAJOR by default", the RegionScanner bullet, the config-key note), the
 §14.1 coverage-policy amendment, and a release-notes item for the visible
 fill-pattern change. Backports follow the region round's user-deferred schedule.
@@ -388,108 +403,235 @@ remains gated on §0's live-artifact precondition.
 **v3 (user-directed):** §12 Xaero want-set backpressure + §12.1 heal removal —
 separable from the walk, reviewable by its own 3-Opus panel, may ship ahead.
 
-## §12 Xaero ingestion backpressure (v3 — the want-set taper; user-directed)
+**v3.1 (§12's 3-Opus panel fold, same day; 3+7+5 MAJORs, convergent):** the -1
+rule rebuilt on a pump drainable LATCH (set false at every pumpLadder early
+return — enumeration forbidden; ~11 of ~13 undrainable states were unlisted, each
+a permanent whole-client halt) + staleness watchdog + flap hysteresis + a halt
+TIME-BOX (the bridge may pace, never stop — the #71 halt was designed for Voxy's
+unbounded-queue OOM emergency, not a bounded cosmetic queue); the report remapped
+to 75% occupancy so the halt fires AHEAD of the first drop (decode-queue
+doctrine) with ~750 columns of landing room; the heal removal RE-SCOPED to
+LEDGER-ONLY — the immediate reporter (reportStaleDropped/DropReporter) is KEPT,
+because all three reviewers proved §12.1(c)'s self-healing claim depends on it
+(per-dimension stamps survive a clear; only reportIngestFailure un-stamps);
+structurally-paused classes now REFUSE offers (no extraction cost, no churny
+reports) with the honest release-note; dynamics re-derived as two regimes (the
+95%-answered gate, not the ¼ gate, holds the rig at 1 Hz / fast-capable sessions
+ride the ¼ boundary bang-bang, stable, mean ~25%); the governor burst-cap and
+window-limited-latch couplings pinned; the lambda-consumer trap (must be an
+anonymous class); the full deletion inventory (ingestParked family, census, ctor
+arity, SUPERSEDED marks) and §12.5's sequencing/release mechanics incl. the
+v0.12.1 re-cut recommendation.
 
-**Problem (measured live on the region build, 2026-08-24):** arrival 777 col/s vs
-the §17-frame-budgeted bridge writer ~680 col/s. The deficit fills the bridge queue
-(byte-capped at 48 MB ≈ ~3k columns) in under a minute and the surplus becomes
-`dropped_overflow` for the rest of the fill (5,632 / 252k = 2.2%, landing wherever
-the walk is when saturation starts — ~944 blocks in the session). Any arrival above
-writer throughput saturates eventually; a repair mechanism (the §18 heal) can only
-act after the fill ends. The fix is the one the architecture already owns for Voxy
-(issue #71): the consumer REPORTS, the want-set TAPERS, arrival self-paces to what
-the consumer can commit.
+## §12 Xaero ingestion backpressure (v3.1 — the want-set taper; panel-folded)
 
-### §12.1 The §18 heal is REMOVED (user decision 2026-08-24)
+**Problem (measured live on the region build, 2026-08-24):** peak arrival 777
+col/s vs the §17-frame-budgeted bridge writer ~680 col/s (a PEAK pair — the
+session's 5,632 drops / 252k imply ~58 s of sustained surplus, so the deficit is
+episodic; the equilibrium below uses the measured writer). The deficit fills the
+bridge queue (byte-capped at 48 MB ≈ ~3k columns) and the surplus becomes
+`dropped_overflow` (2.2%, landing wherever the walk is when saturation starts).
+Any arrival above writer throughput saturates eventually; a repair mechanism can
+only act after the fill ends. The fix is the one the architecture already owns
+for Voxy (issue #71): the consumer REPORTS, the want-set TAPERS, arrival
+self-paces to what the consumer can commit.
 
-The heal held correctly by design mid-fill (its headroom gate refuses to re-request
-into a saturated queue — healing there displaces fresh columns 1:1), but that is
-exactly the indictment: under a steady rate mismatch the heal's operating window
-only opens after convergence, so the user watches holes for the whole fill. With
-backpressure the mismatch never produces drops, and the heal is redundant mass
-(~121 reference sites: DroppedLedger, healPhase, the heal_* counters,
-`enableXaeroMapBridgeHeal`, the §18 test suites — all deleted; the
-`dropped_overflow`/`dropped_expired` counters STAY as observability). **Named
-residual classes, accepted:** (a) governor-lag transients (bounded by one scan
-cycle; the queue's 48 MB absorbs ~4 s of full-rate arrival — §12.3); (b)
-DEFER_CAP expiry while the map is structurally unwritable (cave layer — see the
--1 rule: the fill deliberately does NOT stall for an unwritable map, so long cave
-sessions can still expire deferred writes ⇒ map holes healed only by revisit or
-`/lss clearcache`); (c) dimension-switch queue clears (self-healing — re-entry
-re-declares, re-serves, re-offers through the ordinary path). The old far-radius
-expiry class is already gone under region-major (`dropped_expired=0` live).
+### §12.1 Heal removal — RE-SCOPED to ledger-only (user decision + panel fold)
 
-### §12.2 Mechanism
+The user's decision (2026-08-24) to drop the §18 heal stands for the LEDGER
+machinery: `DroppedLedger`, `healPhase`, `flushLedgerRegion`,
+`probeRegionForHeal`, `reportedHistory`, `rotateLedgerToTail`, the five `heal_*`
+gauges, `enableXaeroMapBridgeHeal` + its ConfigValidationTest round-trip pin, the
+§18 test suites, the ctor's two heal args, and the `clearQueue(boolean)` arity
+(the keepLedger distinction dies with the ledger). **KEPT — the immediate
+reporter**: `reportStaleDropped`, the `DropReporter` seam,
+`reportDroppedProduction`, and their pins. All three reviewers independently
+proved the original "(c) dimension-switch clears are self-healing" claim DEPENDS
+on it: client stamps persist PER DIMENSION (`ColumnCacheStore`), so a cleared
+column stays classify-SATISFIED forever unless `reportIngestFailure` →
+`removeAsync` un-stamps it — without the reporter, every portal taken mid-fill
+permanently holes ~450-700 queued columns. The reporter carries none of the
+heal's indictment (its re-serves land in another dimension/session — never
+displacing fresh columns 1:1 — and cannot churn: a foreign-dimension un-stamp
+re-declares only when the player returns, when that dimension's map is active).
+The world-id bulk clear reports through the same path (it used to count
+`heal_abandoned`).
 
-The bridge is ALREADY a registered `VoxelColumnConsumer` (XaeroMapCompat.java:255,
-via `LSSApi::registerColumnConsumer`). It overrides `pendingIngestBacklog()` — the
-exact VoxyCompat pattern (VoxyCompat.java:102) — so ZERO new plumbing: `LSSApi`
-already polls max across consumers, `LodRequestManager`/`SpiralScanner` already
-taper the budget against `INGEST_BACKLOG_HALT_SECTIONS` (6144), halt at the
-threshold with the edge-triggered empty batch, and gate fast fires above ¼ of
-halt.
+**Decision-record evidence** (discipline): live session at 6 min mid-fill —
+`heal_pending=5632, heal_reported=0, heal_redropped=0` (the headroom gate held
+by design; the sweep window never opened). Counter-argument recorded (mechanism
+lens): §12's own equilibrium (queue ~11-30%) sits permanently INSIDE the heal's
+operating window, so backpressure is exactly the change that would have made the
+ledger heal functional — the fold's answer: prevention plus the kept reporter
+make repair-BY-LEDGER redundant; the decision deletes the ledger, not repair.
+Revert lever: the removal has no runtime switch — the revert point is the git
+history of this file and `XaeroMapCompat` (named here per the decision
+discipline).
 
-- **The reported value is a governor signal dressed in the halt domain, not a
-  section count** (documented as such): `report = round(6144 × fillFraction)`
-  with `fillFraction = max(queuedBytes / MAX_QUEUE_BYTES, queueSize / maxQueue)`.
-  A FULL bridge queue reports exactly the halt threshold — the #71 doctrine ("no
-  work for a client that cannot ingest") applied verbatim; a raw section count
-  (queue ≈ 72k sections) would hard-halt at 8% fill and a raw column count would
-  make the taper an accident of MAX_QUEUE's value.
-- **The -1 rule (no-signal): report -1 unless the queue is actually DRAINING.**
-  -1 whenever: the bridge is disabled (`enableXaeroMapBridge` off), inactive (no
-  Xaero / not ready), the kill switch (below) is off, OR writes are structurally
-  paused (cave-layer wait, dimension not ready). Governing a queue that cannot
-  drain would halt the whole LOD fill — Voxy included — for a map that is not
-  even writing. When undraining, the existing defer/DEFER_CAP machinery runs
-  unchanged (the §12.1(b) residual). Empty-and-draining reports 0 (a real "no
-  backlog" signal; identical to -1 under the max-composition, pinned anyway).
-- **Thread safety:** the poll runs up to 20 Hz on the client tick; the report
-  reads a `volatile` fillFraction mirror maintained under `queueLock` at
-  offer/drain/clear (the `backlogSizeSnapshot` pattern) — no lock on the poll.
-- **Composition:** automatic — `LSSApi` takes the MAX across consumers, so the
-  worse of Voxy's real backlog and the bridge's scaled one governs; the ¼-halt
-  fast-path gate then also suspends 4 Hz once the bridge is >25% full (desired:
-  fast cadence only while arrival ≈ writer).
-- **Kill switch:** `enableXaeroMapBackpressure` (client config, default true;
-  inert while the bridge is off), composing UNDER the global
-  `enableIngestBackpressure` (#71's switch owns the whole signal path).
-- **Wire/server:** none. The taper is entirely client-owned want-set sizing.
+**Residual classes, restated (panel-corrected):**
+- (a) governor-lag transients: with the 75% mapping (§12.2) the halt fires
+  BEFORE the first drop; a TOTAL writer stall drains into taper-stretched
+  headroom (closed form Q' = B·(1 − Q/Q₇₅): ~8 s to 90%, ~10.6 s to 95%) —
+  transient overflow requires a stall longer than that.
+- (b) STRUCTURALLY-PAUSED states (the drainable latch's full set: cave layer,
+  map locked, cache-only mode, ignored world, crash latch, writing toggled off,
+  multiworld unwritable, …): the -1 rule keeps the FILL running for Voxy;
+  `offerColumn` REFUSES new offers while undrainable (counted in its own class;
+  the refusal also skips the 256-pixel extraction the old count-only pre-gate
+  paid before evicting) and does NOT report (immediate reporting there would
+  churn: un-stamp → re-declare → re-refuse at full server rate). Terrain served
+  during a pause is not mapped and not retried — healed by revisit or
+  `/lss clearcache`, and NAMED in the release notes ("fills while the map shows
+  a cave layer are not written to the map").
+- (c) dimension-switch clears: SELF-HEALING via the kept reporter.
+- The old far-radius expiry class is already gone under region-major
+  (`dropped_expired=0` live). DEFER_CAP still burns for tile-busy/region-saving
+  deferrals in the fully-drainable regime (n=1 live evidence at zero) — the
+  reporter covers genuine drops there too.
 
-### §12.3 Control dynamics
+### §12.2 Mechanism (v3.1)
 
-Linear taper, 1 Hz scan feedback (4 Hz while below ¼ of halt): budget ≈
-800·(1 − f), f = fillFraction. Equilibrium at arrival ≈ writer: f* ≈ 1 −
-writer/(800·scanHz) ≈ **15-20% queue fill at 1 Hz** — the queue rides at ~500-700
-columns of its ~3k byte-capped ceiling, 5-6× headroom above the operating point,
-`dropped_overflow` structurally 0. Transients (writer stall spikes, region-load
-waits) are absorbed by the remaining ~80% of the queue ≈ 3-4 s of full-rate
-arrival before the halt threshold even approaches. Full-halt is reachable only if
-the writer stops while draining-eligible (a Xaero-internal wedge) — and then
-halting the fill is correct. Cost: fill rate converges to writer throughput
-(~650-700 col/s, a ~10-15% slowdown vs 777) — the map completes on the FIRST pass
-with zero holes. Interaction with the hybrid walk: the taper shrinks the BUDGET,
-phases keep their order — under heavy taper the whole batch can be phase-1
-(near-first is exactly right while the map catches up); no §2/§3 machinery
-changes.
+The bridge is a registered `VoxelColumnConsumer` (built in `buildConsumer`,
+registered in `maybeRegister`; the single cached instance is the
+register/deregister identity). **The lambda must become an anonymous class** — a
+lambda cannot override the default `pendingIngestBacklog()`; VoxyCompat documents
+this exact trap in its own comment. That conversion is the "plumbing", ~3 lines;
+everything downstream (the `LSSApi` max-across-consumers poll, the
+`SpiralScanner` linear taper with floor 1, the halt + edge-triggered empty
+batch, the ¼-halt fast-path gate) is existing #71 machinery, verified.
 
-### §12.4 Tests + live signatures (§8 additions)
+- **The report — protective, not punitive (panel MAJOR):**
+  `report = round(6144 × min(1, occupancy / 0.75))` with
+  `occupancy = max(queuedBytes / maxQueueBytes, queueSize / maxQueue)` (the SEAM
+  fields, not the constants; fraction clamped — the eviction loop can leave
+  bytes momentarily above cap). The 75% denominator puts the halt AHEAD of the
+  first drop — the decode-queue halt's own doctrine (it sits at ¾ "to keep the
+  designed halt+clear ahead of the drop regime") — leaving ~750 columns of
+  landing room for the in-flight tail (already-admitted server work + the LSS
+  decode queue keep landing ~1 s past a halt). Equilibrium is set by
+  arrival = writer, so the remap costs nothing in throughput; the operating
+  point just moves to ~11% occupancy.
+- **The -1 rule — DERIVED, never enumerated (panel MAJOR):** a `volatile
+  drainable` latch set FALSE at EVERY `pumpLadder` early return and TRUE only
+  where `drainEntries` actually runs — the pump's ~13 undrainable states
+  (crash latch, map locked, cache-only, ignored world, session teardown,
+  region-detection, writing-paused, cave layer, dimension mismatch, …) are
+  covered by construction, and a future gate cannot silently re-open the hole.
+  Plus a STALENESS WATCHDOG: report -1 unless the pump ran within the last N
+  ticks (a frozen mirror must never read as live backlog). Plus FLAP
+  HYSTERESIS: M consecutive undraining pumps before the switch to -1, and
+  resume re-enters through the taper from the live fraction (never a -1 → halt
+  step); transitions counted in diag.
+- **The halt TIME-BOX (panel MAJOR — the doctrine):** the bridge may PACE the
+  stream, never STOP it. The #71 halt was designed for Voxy's UNBOUNDED ingest
+  queue (an OOM emergency); the bridge's queue is bounded and self-shedding —
+  saturation there is cosmetic loss. At halt with no net drain for ~5-10 s the
+  report degrades to -1 (warn once, diag flag) and re-arms below ~50%
+  occupancy — a wedged Xaero saver can therefore cost the map, never the
+  terrain.
+- Empty-and-draining reports 0; disabled / kill-switch / dead / unregistered
+  report -1. Thread safety: the poll (≤20 Hz, client tick) reads the volatile
+  occupancy mirror maintained under `queueLock` at offer/drain/clear INCLUDING
+  the byte-cap eviction branch. Composition: `LSSApi` max() across consumers —
+  the worse of Voxy's real backlog and the bridge's scaled signal governs (the
+  unit divergence — a governor signal dressed in section units — is recorded at
+  the `VoxelColumnConsumer` javadoc as the sanctioned pattern).
+- **Kill switch:** `enableXaeroMapBackpressure` (client, default true; inert
+  while the bridge is off), under the global `enableIngestBackpressure`. The
+  second key is NOT the discoverability story: the Sodium map toggle's tooltip
+  gains "the map paces LOD downloads to what it can draw", and `bp=` is
+  tri-state (`-1(reason)` / `0` / fraction) so a governed fill is self-evident
+  in diag.
+- **Wire/server:** none.
 
-- fillFraction mirror: offer/drain/clear/dimension-switch transitions, lock-free
-  read, byte- vs count-cap max.
-- Report mapping pins: full ⇒ exactly 6144; empty+draining ⇒ 0; disabled /
-  inactive / kill-switch / cave-layer(undraining) ⇒ -1; the -1 rule's cave-layer
-  transition both directions.
-- Taper integration: budget shrinks at fractions through the REAL manager tick
-  (the existing #71 test pattern); halt at full queue fires the edge-triggered
-  empty batch; recovery when the queue drains; fast-path suspension above ¼.
-- Composition: bridge report vs a larger/smaller Voxy consumer backlog (max
-  wins); global #71 switch off ⇒ bit-identical to pre-amendment.
-- Heal removal: the §18 suites deleted; `dropped_overflow`/`dropped_expired`
-  counters keep their pins; diag line census updated (heal_* tokens gone, `bp=`
-  fraction token added to the XaeroMap line); exporter/contract rows updated;
-  `enableXaeroMapBridgeHeal` round-trip pin deleted with the key.
-- Live acceptance: a full lod-512 fill with `dropped=0`, queue riding ~15-25%,
-  fill rate ≈ writer rate (the ~10-15% slowdown NAMED so it is not misread), map
-  complete on first pass; bridge off ⇒ fill rate back to uncapped; Voxy alone
-  unaffected.
+### §12.3 Control dynamics (v3.1 — two regimes, panel-rederived)
+
+- **Rig regime (measured: serve 777, writer ~680):** what holds cadence at 1 Hz
+  is the ≥95%-ANSWERED gate, not the ¼ gate — a fast fire needs ~95% of the
+  batch answered in 250 ms ≈ 2.6k col/s serve rate, unreachable at 777.
+  Equilibrium occupancy ≈ 0.75 × (1 − 680/800) ≈ **11%**, stable (per-scan gain
+  800/Q₇₅ ≈ 0.36, damped even with two intervals of dead time).
+- **Fast-capable regime (store-warm/LAN, serve ≥ ~2.6k):** the system rides the
+  ¼-gate boundary as a stable bang-bang — ~250 ms at 4 Hz, ~2-3 s draining at
+  1 Hz; mean ~25%, peak ~35% occupancy — far from the drop point, and average
+  throughput still converges to the writer rate. Named UX cost: map-on fills
+  lose most of the 4 Hz duty (~10%). Warm rejoins are unaffected (up_to_date
+  answers move no columns; occupancy stays ~0).
+- **Governor couplings (pinned in §12.4):** the taper multiplies the transfer
+  governor's burst cap, and at report ≥ ¼ the window-limited credit latch
+  disarms (`budget×4 ≥ burstCap×3` fails) — a slow-start join during a governed
+  fill holds RAMP longer. A taper below 712 puts the want-set under the
+  server's worst-case in-flight bound — harmless (position-keyed, idempotent;
+  the #71 Voxy taper already does it), noted against
+  `WantSetBudgetInvariantTest`.
+- **Cost:** fill converges to writer throughput (~650-700 col/s, ~10-15% below
+  the ungoverned 777) — the map completes on the FIRST pass with
+  `dropped_overflow` structurally 0. Hybrid couplings: under heavy taper the
+  whole batch can be phase-1 (near-first is right while the map catches up);
+  the sustained-flight far-starvation and the near-pinned-anchor effects are
+  recorded at §2.3/§6.
+
+### §12.4 Tests + live signatures
+
+- Mechanism pins: the END-TO-END WIRING pin (register the real bridge consumer,
+  assert the `LSSApi` aggregate returns its scaled report — the lambda-trap
+  catcher; TickTest's productionBacklogSupplier pattern); occupancy mirror
+  under offer/drain/clear + the byte-eviction branch; clamp; count-dominant
+  case (needs a `maxQueueBytes` test seam beside the existing `maxQueue` one);
+  full ⇒ report ≥ halt only at ≥75% occupancy (the halt PRECEDES the first
+  drop — pinned as an ordering, not a constant).
+- -1 rule pins: table-driven — EVERY `pumpLadder` early return ⇒ latch false ⇒
+  -1 (so a new early return fails the table, not the field); the watchdog; the
+  hysteresis count; resume-through-taper (never -1 → halt in one poll); the
+  halt time-box degrade + re-arm; a NEGATIVE pin that a -1 state can never fire
+  the edge-triggered empty batch.
+- Refusal-while-paused pins: offer refused (own counter), extraction skipped,
+  NOT reported; reporter-kept pins: dimension-switch un-stamps via
+  `reportStaleDropped`, the world-id bulk clear reports.
+- Composition pins: vs a larger/smaller Voxy backlog AND vs a Voxy -1
+  (unresolvable probe); global #71 switch off ⇒ bit-identical;
+  bridge-on + `enableXaeroMapBackpressure=false` ⇒ pre-amendment behavior;
+  the ¼-gate/window-latch coupling both directions.
+- Config/diag: `enableXaeroMapBackpressure` round-trip pin (the discipline the
+  heal key loses); `bp=` tri-state in the diag census; the census keeps
+  `dropped_stale`/`cave_layer_waits`/`skipped_settings`/`dropped_updates`/
+  `dropped_unloaded` as the residual-class evidence; `ingest_parked` family
+  (ColumnStateMap.ingestParked, the manager getter, the Columns diag token, the
+  MAX_INGEST_FAILURES javadoc) resolved keep-and-reword vs delete — nothing may
+  be left orphaned; `xaero-map-bridge-plan.md` §18/§18.1 get SUPERSEDED marks;
+  `region-scan-plan.md`'s `heal_pending ≈ 0` live signature amended in the same
+  change.
+- No automated end-to-end gate is POSSIBLE (Xaero is absent from soaks and
+  gametests) — stated: unit + the live round IS the whole gate.
+- Live acceptance: a full lod-512 SURFACE fill with `dropped_overflow=0` and
+  occupancy riding ≤~30%; a cave-layer phase: fill CONTINUES (Voxy unaffected),
+  refusals counted, no overflow; the one-region-stall discriminator:
+  `regions_waiting`/`load_requests` climbing while dropped stays 0 (the
+  region-major far phase concentrates the queue in 1-2 regions — a parked
+  region stalls ~100% of the drain, which the §18-era ring-major masked);
+  fill rate ≈ writer rate, the ~10-15% slowdown NAMED; bridge off ⇒ ungoverned
+  rate restored; Voxy alone unaffected.
+
+### §12.5 Sequencing + release mechanics (panel; two USER decisions)
+
+1. **v0.12.1 (USER DECISION — the panel's release-mechanics MAJOR):** all five
+   `v0.12.1+mc*` tags exist LOCALLY ONLY (never pushed), and their notes
+   headline the heal ("dropped tiles are now re-requested automatically …
+   disable with `enableXaeroMapBridgeHeal`"). RECOMMENDED: fold §12 (this
+   round) before pushing, and RE-CUT the five tags with pacing-based notes —
+   the same user symptom, the stronger fix, no retraction. Publishing as-cut
+   instead requires an explicit retraction record (removed-key note + the
+   five-line backport of the removal).
+2. **Scope of the heal deletion (USER DECISION, §12.1):** the fold re-scopes
+   "drop it entirely" to LEDGER-ONLY, keeping the ~15-line immediate reporter —
+   the correctness of residual (c) depends on it. If the user insists on
+   deleting the reporter too, residual (c) must be re-classified as a
+   permanent-hole class beside (b).
+3. §12 ships as its own small round on a branch off `feat/region-scan` —
+   separate from the walk (rollback attribution) and after the region round's
+   live gate, OR amending `region-scan-plan.md`'s §14.1 signature list in the
+   same change. Backports carry §12 + the heal removal as ONE unit across the
+   lines (never main heal-less while the ports carry it — those branches
+   cherry-pick this file).
+4. The hybrid walk ships LAST, per §0 unchanged, with §9's rate gate qualified
+   bridge-off.
