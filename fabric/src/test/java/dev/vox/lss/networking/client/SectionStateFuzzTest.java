@@ -322,6 +322,35 @@ class SectionStateFuzzTest {
         assertEquals(refMap, impl.mapForSave(), "save-map content" + at);
         assertEquals(refMap.isEmpty(), impl.isEmptyMap(), "isEmptyMap (present-entry form)" + at);
 
+        // regionNeedsFree (region-scan-plan.md §2.2): the region walk's skip probe vs a
+        // brute-force classify sweep of the REFERENCE over each pool region. Sampled —
+        // the sweep is 1024 classifies per region.
+        if (op % 50 == 0) {
+            var regions = new it.unimi.dsi.fastutil.longs.LongOpenHashSet();
+            for (long p : pool) {
+                regions.add(PositionUtil.packPosition(
+                        PositionUtil.unpackX(p) >> 5, PositionUtil.unpackZ(p) >> 5));
+            }
+            int lod = 4096; // whole pool in-lod around (0,0) — the lod-clamp arm is pinned in ColumnStateMapTest
+            for (long r : regions) {
+                int rx = PositionUtil.unpackX(r), rz = PositionUtil.unpackZ(r);
+                boolean brute = true;
+                for (int lz = 0; lz < 32 && brute; lz++) {
+                    for (int lx = 0; lx < 32; lx++) {
+                        int cx = (rx << 5) + lx, cz = (rz << 5) + lz;
+                        if (Math.abs(cx) > lod || Math.abs(cz) > lod) continue;
+                        if (ref.classify(PositionUtil.packPosition(cx, cz)) != ColumnStateMap.SATISFIED) {
+                            brute = false;
+                            break;
+                        }
+                    }
+                }
+                assertEquals(brute, impl.regionNeedsFree(rx, rz, 0, 0, lod),
+                        "regionNeedsFree diverges from the reference sweep at region "
+                                + rx + "," + rz + at);
+            }
+        }
+
         // The actionable-retry ladder with a random view: boolean + visited-ring multiset.
         int px = rng.nextInt(21) - 10, pz = rng.nextInt(21) - 10, excl = 2 + rng.nextInt(10);
         assertEquals(ref.hasActionableRetries(px, pz, excl), impl.hasActionableRetries(px, pz, excl),

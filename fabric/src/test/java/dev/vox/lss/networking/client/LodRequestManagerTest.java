@@ -61,6 +61,17 @@ class LodRequestManagerTest {
         recordSends(); // never let a scan reach the real ClientPlayNetworking transport
     }
 
+    /** Rebuild the suite manager on the LEGACY spiral arm — for the ring-REOPEN /
+     *  prefix mechanics pins that exist only on that arm (region-scan-plan.md §10
+     *  policy (a): the region walk is stateless and re-declares via needs bits, so
+     *  reopened-ring assertions are meaningless there). */
+    private void useLegacyScannerArm() {
+        manager = new LodRequestManager(new SpiralScanner());
+        manager.onSessionConfig(config(64, true), "lss-test");
+        sent.clear();
+        recordSends();
+    }
+
     private static SessionConfigS2CPayload config(int lodDistance, boolean generationEnabled) {
         return new SessionConfigS2CPayload(LSSConstants.PROTOCOL_VERSION, true,
                 lodDistance, generationEnabled);
@@ -851,6 +862,7 @@ class LodRequestManagerTest {
 
     @Test
     void dirtyBroadcastWithKnownPositionReopensItsRingWithoutTouchingTheCadence() {
+        useLegacyScannerArm(); // reopened-ring mechanics pin — legacy arm only
         // The dirty path is cadence-NEUTRAL (the old resetScanCounter debounce here was the
         // last survivor of the movement-starvation class: at the legal 1 s broadcast-interval
         // floor a sustained edit stream could phase-lock scans off entirely, starving
@@ -897,6 +909,7 @@ class LodRequestManagerTest {
 
     @Test
     void maxSizeDirtyFrameMarksKnownPositionsOnlyAndKeepsTheCadence() {
+        useLegacyScannerArm(); // reopened-ring mechanics pin — legacy arm only
         long known1 = PositionUtil.packPosition(20, 20);
         long known2 = PositionUtil.packPosition(21, 20);
         long known3 = PositionUtil.packPosition(22, 20);
