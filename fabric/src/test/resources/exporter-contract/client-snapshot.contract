@@ -28,6 +28,7 @@ scan.budget=int
 scan.confirmed=int
 scan.fast=long
 scan.missing_vanilla=int
+scan.near_rings=int
 scan.quad_ring_skips=long
 scan.queued=int
 scan.rate_gated=long

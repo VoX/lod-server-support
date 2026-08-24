@@ -66,6 +66,22 @@ class RegionScannerTest {
         return !SpiralScanner.isVanillaRendered(x, z, CX, CZ, vd);
     }
 
+    /** True when the position is phase-2 (far) universe: wanted AND beyond the near square. */
+    private static boolean wantedFar(int x, int z, int lod, int vd, int near) {
+        return wanted(x, z, lod, vd) && Math.max(Math.abs(x - CX), Math.abs(z - CZ)) > near;
+    }
+
+    /** Satisfy the whole near disc (radius {@code near}) so phase 2 is the walk. */
+    private static void satisfyNear(ColumnStateMap columns, int near) {
+        for (int x = -near; x <= near; x++) {
+            for (int z = -near; z <= near; z++) {
+                long pk = PositionUtil.packPosition(x, z);
+                columns.onReceived(pk, 1000L);
+                columns.onUpToDate(pk);
+            }
+        }
+    }
+
     /** Region-major order: each region a single contiguous block, blocks in
      *  non-decreasing region-ring order, positions ring-ascending within a block. */
     private static void assertRegionMajorOrder(long[] pos, int n) {
@@ -97,10 +113,11 @@ class RegionScannerTest {
     }
 
     @Test
-    void firstWalkDeclaresTheWholeAnnulusInRegionMajorOrder() {
-        int lod = 24; // one 2x2 region block around the origin, fits the 800 budget? no:
-        // (49^2 - excluded) > 800 — use the count check against the brute universe under
-        // budget, and the order property on what WAS emitted.
+    void smallLodFirstWalkDegeneratesToLegacyRingOrderWithZeroPhase2() {
+        // The hybrid degeneracy pin (plan §2.2/§8.4/§8.9): at lod ≤ 64 the whole
+        // walk is phase 1 — legacy ring-ASCENDING order, and phase 2 performs
+        // literally nothing (the probe-count seam, not a counter reading).
+        int lod = 24;
         var s = scanner(lod);
         var columns = new ColumnStateMap();
         long[] pos = buf(), ts = buf();
@@ -115,25 +132,86 @@ class RegionScannerTest {
         }
         assertEquals(Math.min(universe, LSSConstants.WANT_SET_BUDGET), n,
                 "the walk fills the budget from the annulus (universe=" + universe + ")");
-        assertRegionMajorOrder(pos, n);
+        int lastRing = 0;
         for (int i = 0; i < n; i++) {
-            assertTrue(wanted(PositionUtil.unpackX(pos[i]), PositionUtil.unpackZ(pos[i]), lod, vd),
-                    "emitted position outside the want universe at " + i);
+            int x = PositionUtil.unpackX(pos[i]);
+            int z = PositionUtil.unpackZ(pos[i]);
+            assertTrue(wanted(x, z, lod, vd), "emitted position outside the want universe at " + i);
             assertEquals(-1L, ts[i], "a never-seen position declares -1");
+            int ring = Math.max(Math.abs(x - CX), Math.abs(z - CZ));
+            assertTrue(ring >= lastRing, "ring order regressed at index " + i);
+            lastRing = ring;
         }
+        assertEquals(0, s.phase2Probes,
+                "lod ≤ 64: phase 2 performs ZERO probes and zero emit passes");
+        assertEquals(0, s.getRegionSpan());
     }
 
     @Test
-    void emissionIsACompletePrefixPlusAtMostOnePartialTail() {
-        int lod = 24; // review fold (tests-lens MAJOR-1): at lod 40 region (0,0) alone
-        // holds 1000 needy vs the 800 budget, so the walk emits ONE group and the
-        // complete-prefix branch below was dead code. At lod 24 the walk provably
-        // spans two groups (601 + 199) and the non-tail completeness assertion runs.
+    void farFillDeclaresTheResidueInRegionMajorOrder() {
+        // The far half's order property, isolated: near pre-satisfied so every
+        // emission is phase 2 — region-major blocks over the residue.
+        int lod = 96;
         var s = scanner(lod);
         var columns = new ColumnStateMap();
         long[] pos = buf(), ts = buf();
         int vd = 4;
+        satisfyNear(columns, 64);
         int n = fireScan(s, CX, CZ, vd, columns, pos, ts);
+        assertEquals(LSSConstants.WANT_SET_BUDGET, n, "the far annulus out-holds the budget");
+        assertRegionMajorOrder(pos, n);
+        for (int i = 0; i < n; i++) {
+            assertTrue(wantedFar(PositionUtil.unpackX(pos[i]), PositionUtil.unpackZ(pos[i]),
+                            lod, vd, 64),
+                    "phase 2 emitted inside the near square at " + i);
+        }
+        assertTrue(s.phase2Probes > 0);
+        assertEquals(0, s.getNearRings(), "a satisfied near disc emits no near rings");
+    }
+
+    @Test
+    void hybridEmitsPhase1RingsBeforeAnyPhase2Region() {
+        // The two-phase ORDER seam: with needy work in BOTH zones, every phase-1
+        // (ring ≤ 64) emission precedes every phase-2 one.
+        int lod = 96;
+        var s = scanner(lod);
+        var columns = new ColumnStateMap();
+        long[] pos = buf(), ts = buf();
+        satisfyNear(columns, 64);
+        long nearHole = PositionUtil.packPosition(40, 12); // ring 40 — phase 1
+        columns.markDirtyIfKnown(nearHole);
+        int n = fireScan(s, CX, CZ, 4, columns, pos, ts);
+        assertTrue(n > 1);
+        assertEquals(nearHole, pos[0], "the near hole emits FIRST (phase 1 before phase 2)");
+        for (int i = 1; i < n; i++) {
+            assertTrue(Math.max(Math.abs(PositionUtil.unpackX(pos[i])),
+                            Math.abs(PositionUtil.unpackZ(pos[i]))) > 64,
+                    "everything after phase 1 is far");
+        }
+        assertEquals(1, s.getNearRings(), "one needy near ring observed");
+    }
+
+    @Test
+    void emissionIsACompletePrefixPlusAtMostOnePartialTail() {
+        // Hybrid re-home (plan §8): the far walk's complete-prefix property needs
+        // BOTH phases live — near pre-satisfied (or phase 1 alone eats the budget
+        // and phase 2 never emits on a first walk), needy far spanning ≥ 2 groups.
+        // The player sits OFF-center (16,16): an origin-centered player's first far
+        // sliver is 992 cells ≥ the 800 budget (one group — the dead-branch trap);
+        // off-center the slivers are 480-512 and the walk provably spans groups.
+        int lod = 96, px = 16, pz = 16;
+        var s = scanner(lod);
+        var columns = new ColumnStateMap();
+        long[] pos = buf(), ts = buf();
+        int vd = 4;
+        for (int x = px - 64; x <= px + 64; x++) {
+            for (int z = pz - 64; z <= pz + 64; z++) {
+                long pk = PositionUtil.packPosition(x, z);
+                columns.onReceived(pk, 1000L);
+                columns.onUpToDate(pk);
+            }
+        }
+        int n = fireScan(s, px, pz, vd, columns, pos, ts);
         assertEquals(LSSConstants.WANT_SET_BUDGET, n, "premise: the budget truncates");
         assertTrue(s.wasLastWalkTruncated(), "truncation is flagged");
 
@@ -155,7 +233,11 @@ class RegionScannerTest {
             int brute = 0;
             for (int x = rx << 5; x < (rx << 5) + 32; x++) {
                 for (int z = rz << 5; z < (rz << 5) + 32; z++) {
-                    if (wanted(x, z, lod, vd)) brute++;
+                    if (Math.abs(x - px) <= lod && Math.abs(z - pz) <= lod
+                            && Math.max(Math.abs(x - px), Math.abs(z - pz)) > 64
+                            && !SpiralScanner.isVanillaRendered(x, z, px, pz, vd)) {
+                        brute++;
+                    }
                 }
             }
             if (gi < groups.size()) {
@@ -270,22 +352,24 @@ class RegionScannerTest {
 
     @Test
     void needsFreeRegionsSkipWithoutAnEmitPass() {
-        int lod = 40;
+        // Hybrid re-home (plan §8/§7): at a lod > 64 geometry the far phase's probe
+        // skips are pinned STRUCTURALLY (probe-skip-only counting; residue-empty
+        // regions are silently ignored and never counted) — the exact census is an
+        // alignment artifact of TWO boundaries now (near AND lod) and is not the pin.
+        int lod = 96;
         var s = scanner(lod);
         var columns = new ColumnStateMap();
         long[] pos = buf(), ts = buf();
         satisfySquare(columns, lod);
         assertEquals(0, fireScan(s, CX, CZ, 4, columns, pos, ts));
-        // NINE regions skip ([-2..0]^2): the satisfied square's NEGATIVE edge (-40)
-        // is 8-chunk-leaf-ALIGNED, so the rx/rz=-2 boundary regions' intersecting
-        // leaves are exactly the satisfied ones — while the POSITIVE edge (+40) sits
-        // inside leaf 40..47, whose beyond-edge holes read needs (the leaf-granular
-        // conservative direction), so rx/rz=+1 regions take the emit pass (finding
-        // nothing) instead of skipping.
-        assertEquals(9, s.getRegionSkips(), "the nine leaf-aligned satisfied regions skip");
-        assertEquals(0, fireScan(s, CX, CZ, 4, columns, pos, ts));
-        assertEquals(18, s.getRegionSkips(), "the skip counter is cumulative per walk");
+        long skips = s.getRegionSkips();
+        int probes = s.phase2Probes;
+        assertTrue(skips > 0, "a satisfied far annulus probe-skips (got " + skips + ")");
+        assertTrue(probes >= skips, "skips are a subset of probed regions");
         assertEquals(0, s.getRegionSpan(), "nothing emitted = zero span");
+        assertEquals(0, fireScan(s, CX, CZ, 4, columns, pos, ts));
+        assertEquals(skips * 2, s.getRegionSkips(), "the skip counter is cumulative per walk");
+        assertEquals(probes * 2, s.phase2Probes, "and so is the probe seam");
     }
 
     @Test
@@ -412,7 +496,9 @@ class RegionScannerTest {
         // Integration-lens MAJOR end to end: each needy region costs an emit pass, so
         // a WorldEdit-scale scatter is NOT a cheap walk and must fall back to 1 Hz;
         // the dense fill's 1-2 emitting regions stay far under the cap.
-        int lod = 128;
+        int lod = 160; // hybrid re-derivation (plan §8): phase 1 absorbs the near
+        // regions into cheaper ring walks, so the scatter needs the wider far field
+        // ([-5..4]^2 at lod 160, ~84+ far regions x ~1040 cells) to price past the cap.
         var s = scanner(lod);
         var columns = new ColumnStateMap();
         long[] pos = buf(), ts = buf();
@@ -427,13 +513,11 @@ class RegionScannerTest {
                 columns.onReceived(pos[i], 1000L);
                 columns.onUpToDate(pos[i]);
             }
-            assertTrue(++guard < 200, "fill never converged");
+            assertTrue(++guard < 300, "fill never converged");
         }
-        // Scatter dirty marks across the 81 interior regions ([-4..4]^2 at lod 128):
-        // 81 x (16 probe floor + 1024 emit area) ≈ 84k — decisively past the 65,536 cap.
         int marked = 0;
-        for (int rx = -4; rx <= 4; rx++) {
-            for (int rz = -4; rz <= 4; rz++) {
+        for (int rx = -5; rx <= 4; rx++) {
+            for (int rz = -5; rz <= 4; rz++) {
                 for (int k = 0; k < 2; k++) {
                     long pk = PositionUtil.packPosition((rx << 5) + 12 + k, (rz << 5) + 15);
                     if (columns.markDirtyIfKnown(pk)) marked++;
@@ -521,6 +605,133 @@ class RegionScannerTest {
             }
         }
         assertEquals(lod + 1, s.getConfirmedRing());
+    }
+
+    @Test
+    void phase1MatchesTheFreshLegacyWalkOrderUnderBothQuadVariants() {
+        // §8 pin 1 (the near-order pin): the hybrid's first emissions are EXACTLY
+        // the fresh legacy walk's ring order up to N — pinned against BOTH legacy
+        // quad variants (the local-config hazard class: the control arm must not
+        // depend on a gitignored file).
+        int lod = 96;
+        var columns = new ColumnStateMap();
+        var rng = new java.util.Random(11L);
+        for (int i = 0; i < 500; i++) { // sparse random satisfaction for a mixed near field
+            long pk = PositionUtil.packPosition(rng.nextInt(129) - 64, rng.nextInt(129) - 64);
+            columns.onReceived(pk, 1 + rng.nextInt(3000));
+            columns.onUpToDate(pk);
+        }
+        var h = scanner(lod);
+        long[] hPos = buf(), hTs = buf();
+        int hn = h.scan(CX, CZ, 4, columns, hPos, hTs, LSSConstants.WANT_SET_BUDGET);
+        assertEquals(LSSConstants.WANT_SET_BUDGET, hn, "premise: the near disc out-holds the budget");
+        for (boolean quad : new boolean[]{true, false}) {
+            var l = new SpiralScanner();
+            l.setConfig(new SessionConfigS2CPayload(LSSConstants.PROTOCOL_VERSION, true, lod, true));
+            l.quadtreeScanEnabled = () -> quad;
+            long[] lPos = buf(), lTs = buf();
+            int ln = l.scan(CX, CZ, 4, columns, lPos, lTs, LSSConstants.WANT_SET_BUDGET);
+            assertEquals(hn, ln, "same emission count (quad=" + quad + ")");
+            for (int i = 0; i < hn; i++) {
+                assertEquals(lPos[i], hPos[i], "position[" + i + "] (quad=" + quad + ")");
+                assertEquals(lTs[i], hTs[i], "timestamp[" + i + "] (quad=" + quad + ")");
+            }
+        }
+    }
+
+    @Test
+    void aPhase1BudgetBreakSetsTruncatedAndPhase2NeverRuns() {
+        // §8 pin 6 (the §2.3 truncation convention + the hybrid complete-prefix
+        // form): a mid-phase-1 break is honest truncation, scanRing stays ≤ N
+        // (the movement gate then prices ≤ 16,640 — fast fires during near fill),
+        // and phase 2 contributes NOTHING.
+        int lod = 96;
+        var s = scanner(lod);
+        var columns = new ColumnStateMap();
+        long[] pos = buf(), ts = buf();
+        int n = s.scan(CX, CZ, 4, columns, pos, ts, 100);
+        assertEquals(100, n);
+        assertTrue(s.wasLastWalkTruncated(), "a mid-emission break is needy by definition");
+        assertTrue(s.getScanRing() <= 64, "phase-1 truncation caps scanRing at N");
+        assertEquals(0, s.phase2Probes, "a phase-1 break means phase 2 contributes nothing");
+        s.recenter(1);
+        assertTrue(s.predictedWalkCost() <= SpiralScanner.FAST_RESCAN_MAX_WALK_COST,
+                "moving near fill stays fast-admissible (the plan's stated consequence)");
+    }
+
+    @Test
+    void observeCostMetersAtLeastTheEmittedWork() {
+        // §8 pin 7 (the under-metering hazard): a near-only walk's meter covers at
+        // least its emitted cells — phase 1 charges into the SAME meter.
+        int lod = 40; // pure phase 1
+        var s = scanner(lod);
+        var columns = new ColumnStateMap();
+        long[] pos = buf(), ts = buf();
+        int n = fireScan(s, CX, CZ, 4, columns, pos, ts);
+        assertTrue(n > 0);
+        assertTrue(s.predictedWalkCost() >= n, // stationary read = lastWalkObserveCost
+                "the stationary price must cover the walked cells (cost="
+                        + s.predictedWalkCost() + ", emitted=" + n + ")");
+    }
+
+    @Test
+    void wholeExcludedRingsMatchesTheRealExclusionShape() {
+        // The r₀ formula's brute pin (the walk MISSES rings ≤ r₀ — an overshoot
+        // would silently hole the near field): for every vd, every position of
+        // every ring ≤ r₀ is vanilla-rendered, and ring r₀+1 has an unrendered cell.
+        int[] c = new int[2];
+        for (int vd = 0; vd <= 40; vd++) {
+            int r0 = RegionScanner.wholeExcludedRings(vd);
+            for (int r = 1; r <= r0; r++) {
+                for (int i = 0; i < 8 * r; i++) {
+                    SpiralScanner.ringIndexToCoord(r, i, 0, 0, c);
+                    assertTrue(SpiralScanner.isVanillaRendered(c[0], c[1], 0, 0, vd),
+                            "vd " + vd + ": ring " + r + " ≤ r₀=" + r0 + " must be wholly rendered");
+                }
+            }
+            boolean anyUnrendered = false;
+            int rNext = r0 + 1;
+            for (int i = 0; i < 8 * rNext && !anyUnrendered; i++) {
+                SpiralScanner.ringIndexToCoord(rNext, i, 0, 0, c);
+                anyUnrendered = !SpiralScanner.isVanillaRendered(c[0], c[1], 0, 0, vd);
+            }
+            assertTrue(anyUnrendered, "vd " + vd + ": ring r₀+1=" + rNext + " must have an unrendered cell");
+        }
+    }
+
+    @Test
+    void residueRectsDecomposeExactlyAndDisjointly() {
+        // The §2.1 residue decomposition brute: union == (clipped \\ near), rects
+        // pairwise disjoint, ≤4 — over randomized geometries incl. containment,
+        // disjointness, and every straddle shape.
+        var rng = new java.util.Random(7L);
+        int[][] out = new int[4][4];
+        for (int trial = 0; trial < 2000; trial++) {
+            int ax0 = rng.nextInt(100) - 50, az0 = rng.nextInt(100) - 50;
+            int ax1 = ax0 + rng.nextInt(40), az1 = az0 + rng.nextInt(40);
+            int nx0 = rng.nextInt(100) - 50, nz0 = rng.nextInt(100) - 50;
+            int nx1 = nx0 + rng.nextInt(60), nz1 = nz0 + rng.nextInt(60);
+            int nRects = RegionScanner.residueRects(ax0, az0, ax1, az1, nx0, nz0, nx1, nz1, out);
+            assertTrue(nRects <= 4);
+            var seen = new HashSet<Long>();
+            for (int k = 0; k < nRects; k++) {
+                int[] r = out[k];
+                assertTrue(r[0] <= r[2] && r[1] <= r[3], "degenerate rect emitted");
+                for (int x = r[0]; x <= r[2]; x++) {
+                    for (int z = r[1]; z <= r[3]; z++) {
+                        assertTrue(seen.add(PositionUtil.packPosition(x, z)),
+                                "rects overlap at " + x + "," + z + " (trial " + trial + ")");
+                    }
+                }
+            }
+            for (int x = ax0; x <= ax1; x++) {
+                for (int z = az0; z <= az1; z++) {
+                    boolean inNear = x >= nx0 && x <= nx1 && z >= nz0 && z <= nz1;
+                    assertEquals(!inNear, seen.contains(PositionUtil.packPosition(x, z)),
+                            "coverage mismatch at " + x + "," + z + " (trial " + trial + ")");
+                }
+            }
+        }
     }
 
     // ---- the chaos/orphan ports (plan §10 — 'the load-bearing pins') ----
@@ -620,8 +831,15 @@ class RegionScannerTest {
         // the emit windows shift and the movement window gates cadence), dirty marks
         // via the production shape (markDirtyIfKnown + the no-op reopenRing), retries,
         // supersessions — then convergence at the final center.
-        final int vd = 16, lod = 24;
-        for (long seed : new long[]{3L, 11L, 77L}) {
+        final int vd = 16;
+        // lod 24 = pure phase 1; lod 96 = BOTH phases + the region-corner boundary
+        // (the §8 chaos seed: the interleave must cross the N=64 seam).
+        int[] lods = {24, 24, 24, 96};
+        long[] seeds = {3L, 11L, 77L, 5L};
+        for (int si = 0; si < seeds.length; si++) {
+            long seed = seeds[si];
+            int lod = lods[si];
+        {
             var rng = new java.util.Random(seed);
             var columns = new ColumnStateMap();
             long[] pos = buf(), ts = buf();
@@ -658,7 +876,7 @@ class RegionScannerTest {
             }
 
             boolean converged = false;
-            for (int i = 0; i < 60 && !converged; i++) {
+            for (int i = 0; i < 90 && !converged; i++) {
                 int n = fireScanP(s, cx, cz, vd, 0, 1000, columns, pos, ts);
                 for (int j = 0; j < n; j++) {
                     columns.onReceived(pos[j], 50_000L + i);
@@ -670,6 +888,7 @@ class RegionScannerTest {
                     + " (confirmedRing=" + s.getConfirmedRing() + ")");
             assertTrue(allSatisfiedAround(columns, cx, cz, vd, lod),
                     "seed " + seed + ": a position near the final center was orphaned");
+        }
         }
     }
 
@@ -701,7 +920,7 @@ class RegionScannerTest {
 
     @Test
     void resetClearsTheRegionCountersAndSurvivesReuse() {
-        int lod = 40; // the leaf-aligned negative edge gives real skips (see the census test)
+        int lod = 96; // > 64: the far phase produces real probe-skips (see the census test)
         var s = scanner(lod);
         var columns = new ColumnStateMap();
         long[] pos = buf(), ts = buf();
