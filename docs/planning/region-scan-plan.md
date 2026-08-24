@@ -580,3 +580,108 @@ Implemented per §2-§10 with the following as-built facts, deviations, and find
   surface a no-op) + the scanner-level dirty twin; the four legacy mechanics pins
   construct `new LodRequestManager(new SpiralScanner())` per §10 policy (a).
   Full T1: 2051/0 green.
+
+## §14.1 Implementation-review fold (2026-08-24, 2-Fable + 3-Opus panel)
+
+Panel: walk-correctness (Fable, 0 MAJOR), integration/lifecycle (Fable, 1 MAJOR),
+cadence adjudication (Opus, 1 MAJOR — deviation ACCEPTED conditional), server
+interaction (Opus, 1 MAJOR), tests+docs (Opus, 4 MAJOR). All seven MAJORs folded:
+
+- **Cadence repriced (the two client MAJORs, superseding §14's first policy).**
+  Movement window: `4·s(s+1)` with `s = lastWalkTruncated ? scanRing : lod` — the
+  as-built lod-only price silently reverted the test-pinned elytra unlock at every
+  shipped lod ≥ 128 (the pins live in `SpiralScannerTest` and no longer covered the
+  default arm; region pins added). Stationary: the LAST walk's measured observe cost
+  (16/region probe floor + clamped emit-pass areas — metered in `scan()`), never a
+  flat 0 — the walk is NOT free in the sparse-scatter regime (each needy region
+  costs an emit pass; a WorldEdit-scale broadcast at lod 512 walked 300-800k probes),
+  so §8's "sparse scatter → 1 Hz" row is restored while dense fill/deep warm
+  backfill (~10-45k) keeps 4 Hz. This stationary price is a MEMORY, deviating from
+  the legacy prediction doctrine — sound because the doctrine's motivation (a
+  crossing invalidates last-walk knowledge) is priced by the window branch, and
+  stationary state evolves incrementally. One inherent lag: the first post-scatter
+  fire may still be fast (the meter prices the PREVIOUS walk); the walk it admits
+  meters the scatter and the cadence drops from the next decision on.
+- **§14's refutation write-ups corrected** (cadence lens): the small-disc block is
+  3×3 = 9 regions (not 2×2 = 4), and it breaks the SPARSE/TAIL regime at small lod
+  (dense fills keep span ≤ 2 and the §8 rung would have admitted them); the
+  inherited-formula figures are 256c+3968 (one-region span, refusal from c ≈ 241)
+  to 520c+16640 (two-region span, c ≈ 95) — and what it refutes is "inherit the
+  rung unchanged" (§2.3 mandated a constant-permissive override regardless of §8).
+  Movement parity holds at HIGH crossing rates (elytra: window open at every
+  decision point); at sprint/walk rates the window is closed at most decision
+  points and the stationary price rules — which now matches legacy's truncated
+  narrow-span admission.
+- **Emit-pass loops clamped to the lod intersection** (server lens): the
+  never-skippable lod-edge/near-player regions used to pay full 32×32 sweeps every
+  scan (the soak's `region_skips: 0` is real: at lod ≤ 24 NO region is ever
+  skippable — edge leaves straddle the square and exclusion positions are
+  leaf-less); clamped bounds make a sliver cost its in-lod AREA and double as the
+  per-position lod clamp.
+- **Audit rung decoupled from periodic-only fires** (it starved under sustained
+  4 Hz — now also fires every 4th consecutive fast fire); full round-robin latency
+  (~1225 stops ≈ 20 min at lod 512) accepted for an expected-0 belt and now
+  documented. `auditEnabled` test seam added: the differential disables it so a
+  needs divergence in the shared fixture cannot be healed mid-compare.
+- **SERVER MAJOR, recorded accepted-open (no code change this round): the outward
+  frontier damp becomes the BINDING generation limiter under region-major.**
+  `FRONTIER_OUTWARD_DAMP_MILLIS_PER_RING` (333 ms) × ~32 admissible positions per
+  ring-within-one-region ≈ **96 col/s/player generation ceiling at far radius**,
+  independent of config; legacy's ceiling was cap/latency (40/L). Break-even
+  L ≈ 417 ms: slow-gen worlds never notice; superflat/pregenerated-with-holes/
+  C2ME-accelerated worlds take up to ~4× slower far-radius generation backfill.
+  §5's "does not bind at default caps" divided by the wrong quantity (a concurrency
+  cap is not a rate) and §12's "config-raised caps" trigger is wrong — it needs no
+  config change. UNOBSERVABLE by the soaks (all lod ≤ 24 — quadrant rings still
+  carry 25-48 positions; the fresh-backfill run measured cap-saturated
+  `active_hw=40`, latency-bound). The live dev-jar gate MUST include a
+  generation-bound fill-rate comparison; if the ceiling bites in practice, the
+  candidate server-side fix is a region-aware damp (advance keyed to completed
+  band occupancy rather than a flat ms/ring) — a separate decision, deliberately
+  not bundled into this client round.
+- **Test MAJORs folded**: the complete-prefix assertion was dead code at lod 40
+  (region (0,0) alone out-holds the budget — moved to lod 24 with a ≥2-group
+  premise); both chaos/orphan pins ported (fixed-center at a cross-region lod 40
+  with budget-truncated fires + the movement-chaos twin); the production arm
+  selection pinned against the gitignored-local-config hazard
+  (`productionDefaultCtorSelectsTheArmFromTheConfigKey`); the governor
+  window-limited latch pinned on BOTH arms (four legacy twins); the F1
+  shrink→grow blank-annulus differential added (prune → absent leaves → full
+  re-declaration); region twins for the agnostic halves of the moved dirty pins;
+  the exact-fill `lastWalkTruncated` divergence pinned as deliberate (region says
+  false when only satisfied work remains — the correct-er reading for the
+  governor latch; legacy says true; the unbounded differential deliberately does
+  not compare the flag).
+- **Coverage policy as settled** (deviation from §10's blanket "parameterize both
+  arms"): the legacy arm retains `SpiralScannerTest` (full scanner-level),
+  `QuadtreeWalkDifferentialTest`, the differential control (both quad variants,
+  seams pinned), the four mechanics pins, the four latch twins, and the
+  arm-selection pin; the region arm owns every default-ctor manager suite plus its
+  own suites. Full both-arm parameterization of ~100 manager tests was judged not
+  worth doubling the suite for the fallback arm; this record is the deviation note.
+- **§9 surface, as settled**: `region_span` added to the client trace `scan` event
+  (the §10 live signature needs its time series); `regions_done` and
+  `region_active=` CUT — span/skips/audit_heals cover the diagnosis need.
+  `region_skips` stays a session-cumulative counter (NIT noted: read it as a rate).
+- **Misc corrections**: `maxRegionRing = ((lod+31)>>5)+1` = ceil(lod/32)+1 is a
+  deliberate tightening of §2.1's ceil(lod/32)+2 (proven sufficient by
+  brute-force); the stale `prePressureFastRefusal` javadoc (still citing the
+  deleted §8 rung) rewritten; `closest-first` server comments reworded to the
+  property actually relied on (declaration-order / nearest-within-active-region);
+  CLAUDE.md's soak-law and ring-128 phrasings corrected; the fuzz probe's
+  lod-4096 shape VERIFIED sound by construction (position-granular brute ≡
+  leaf-granular impl exactly when no leaf is clipped; the partial-leaf arm is
+  example-pinned in ColumnStateMapTest).
+- **Xaero coupling recorded** (server lens, verified): drainEntries buckets by the
+  same 32-chunk grid, so the collapsed span maps 1:1; §18 heal reports re-mark
+  needs BEHIND the walk head and the stateless spiral re-emits them FIRST —
+  `region_span` spikes correlated with heal activity are the designed behavior,
+  not the invariant breaking.
+- **Gate status at fold time**: T1 full green; T2 green; `fresh-backfill` soak
+  PASS (region arm live: confirmed=25, fast=2, audit_heals=0; the §5 churn regime
+  visible — order_gated 33k, miss_dropped 40k — with all laws green at default
+  caps). HONEST CAVEAT (server lens): every fabric scenario runs lod ≤ 24, where
+  no region is ever skippable and region-major degenerates to quadrant-major —
+  `soak.sh all` is a regression gate here, NOT evidence for §5/§6; the live
+  dev-jar round is. The WSLg display wedge (client hangs in glfwShowWindow) is an
+  environment fact of this box: soaks run under Xvfb (`DISPLAY=:99`).
