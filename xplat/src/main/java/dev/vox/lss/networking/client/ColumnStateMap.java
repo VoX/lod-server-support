@@ -302,6 +302,25 @@ class ColumnStateMap {
         return true;
     }
 
+    /**
+     * The hybrid walk's residue probe (hybrid-scan-plan.md §2.1): true when every
+     * leaf INTERSECTING the chunk rectangle [x0..x1]×[z0..z1] has a clear needs
+     * mask. Same conservative partial-leaf convention as {@link #regionNeedsFree}:
+     * a leaf straddling the rectangle with needs anywhere — even outside the
+     * rectangle — returns false (a needless emit pass, never a wrong skip; the
+     * emit pass's own bounds are the clamp), and an ABSENT leaf is all-needs.
+     */
+    boolean rectNeedsFree(int x0, int z0, int x1, int z1) {
+        int sx0 = x0 >> 3, sx1 = x1 >> 3;
+        int sz0 = z0 >> 3, sz1 = z1 >> 3;
+        for (int sx = sx0; sx <= sx1; sx++) {
+            for (int sz = sz0; sz <= sz1; sz++) {
+                if (leafHasNeeds(sx, sz)) return false;
+            }
+        }
+        return true;
+    }
+
     private boolean leafHasNeeds(int sx, int sz) {
         Leaf leaf = this.leaves.get(PositionUtil.packPosition(sx, sz));
         return leaf == null || leaf.needs != 0;

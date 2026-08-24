@@ -1217,4 +1217,39 @@ class ColumnStateMapTest {
         assertTrue(m.needsBitForTest(pk), "the recompute restored the bit");
         assertEquals(0, m.auditRegionNeeds(0, 0), "and the region is healthy again");
     }
+
+    @Test
+    void rectNeedsFreeIsLeafGranularAndConservative() {
+        // The hybrid walk's residue probe (hybrid-scan-plan.md §2.1/§8 pin 12):
+        // leaf-granular over the rectangle, same conventions as regionNeedsFree —
+        // absent leaf = needs, partial leaf conservative toward walking.
+        var m = new ColumnStateMap();
+        assertFalse(m.rectNeedsFree(0, 0, 7, 7), "an empty map's rect reads as needing");
+        for (int cx = 0; cx < 8; cx++) {
+            for (int cz = 0; cz < 8; cz++) {
+                long pk = PositionUtil.packPosition(cx, cz);
+                m.onReceived(pk, 1000L);
+                m.onUpToDate(pk);
+            }
+        }
+        assertTrue(m.rectNeedsFree(0, 0, 7, 7), "a fully satisfied leaf-aligned rect is free");
+        // A rect INTERSECTING a leaf with needs elsewhere in the leaf: conservative.
+        assertFalse(m.rectNeedsFree(4, 4, 12, 12),
+                "a straddling rect touching the absent leaf (8..15) reads needs");
+        assertTrue(m.markDirtyIfKnown(PositionUtil.packPosition(0, 0)));
+        assertFalse(m.rectNeedsFree(2, 2, 7, 7),
+                "needs ANYWHERE in an intersecting leaf refuses the skip — even outside"
+                        + " the rect (the conservative partial-leaf convention)");
+        // Negative coordinates floor-shift clean.
+        var neg = new ColumnStateMap();
+        for (int cx = -8; cx < 0; cx++) {
+            for (int cz = -8; cz < 0; cz++) {
+                long pk = PositionUtil.packPosition(cx, cz);
+                neg.onReceived(pk, 1000L);
+                neg.onUpToDate(pk);
+            }
+        }
+        assertTrue(neg.rectNeedsFree(-8, -8, -1, -1), "negative leaf-aligned rect is free");
+        assertFalse(neg.rectNeedsFree(-9, -8, -1, -1), "one column into the absent leaf = needs");
+    }
 }
