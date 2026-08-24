@@ -301,15 +301,19 @@ Under region-major, ring-ascending-within-region declarations:
   concurrently active regions' worth queued vs the ≤2-region working set —
   v1.1: not "impossible"; generation stragglers completing 10-30 s late land
   as single tiles ~7-21 regions behind the stream head and re-activate a
-  parked region — one extra load and occasional §18 heal traffic is the
-  expected residual, recorded so live `heal_pending` noise is not chased).
+  parked region — one extra load and occasional drop-report traffic is the
+  expected residual, recorded so live drop-counter noise is not chased).
+  [AMENDED by the §12 backpressure round, hybrid-scan-plan.md §12.1: the §18
+  ledger heal is DELETED — `heal_pending` no longer exists; the taper prevents
+  the drops and the kept immediate reporter covers the residuals.]
 - Xaero needs ~0.7 region loads/s at the observed 725 col/s serve rate vs its
   ~10/s capacity — 14× headroom (vs 95-region demand spikes today).
 - Deferral expiries (DEFER_CAP) vanish: a region's load (~100-200 ms) races a
   1.4 s stream, not a 10 s backlog.
 - Load churn → ~1.0×; recolor coalescing → ~16 tiles/rebuild (halving recolor
-  count); §18's heal becomes a pure backstop (dimension flips, parked-region
-  races); `heal_pending` ≈ 0 in steady state is the live signature.
+  count); [AMENDED, §12 round: the §18 heal is deleted — the live signature is
+  now `dropped_overflow` flat + `bp=` governing + `refused_paused`/`drops_reported`
+  small; hybrid-scan-plan.md §12.4 is the signature list.]
 - NO bridge changes in this round — it benefits passively. Bridge-side
   simplifications (deterministic flush on region completion) are a possible
   LATER round once region scan is field-proven.
@@ -463,7 +467,7 @@ unchanged. Pinned by carrying the existing latch tests over the interface.
 - Live: dev jar on lss-test-26.2 — the user's approval gate. Signatures:
   `region_span <= 2` DURING FILL PHASES (span spikes correlating with
   dirty/revocation events are expected and harmless — v1.1), XaeroMap
-  `dropped` ≈ flat at any radius, `heal_pending` ≈ 0 modulo the
+  `dropped` ≈ flat at any radius, [AMENDED §12: `bp=` governing, no heal gauges] modulo the
   gen-straggler residual, fill rate ≥ today's ~725/s, and on a fresh-world
   test `gen_order_gated` judged against the §5 v1.1 regime numbers (NOT
   against ring-major baselines).
