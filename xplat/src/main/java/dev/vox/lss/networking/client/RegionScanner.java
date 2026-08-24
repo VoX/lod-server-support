@@ -72,9 +72,15 @@ class RegionScanner extends SpiralScanner {
      *  exclusion band walks forever and would make the "then ~0" live signature
      *  unsatisfiable). */
     private int lastNearRings;
-    /** Phase-2 probe/emit-pass entries last scan — the §8 degeneracy pin's seam
-     *  (at lod ≤ near, phase 2 performs literally nothing). */
+    /** Phase-2 probe/emit-pass entries, SESSION-CUMULATIVE (test seam — a
+     *  package-private field, no getter; reset with the session/dimension
+     *  counters, never per walk — the census pin doubles it across two walks). */
     int phase2Probes;
+    /** Walks that ENTERED phase 2, session-cumulative (test seam): the lod ≤ N
+     *  degeneracy pin proves the phase never RAN — {@code phase2Probes} alone
+     *  cannot (every in-near region residue is empty, so a wrongly-entered
+     *  phase 2 would still probe nothing). */
+    int phase2Rounds;
     /** Needs-free region skips, session (diag {@code region_skips=}). */
     private long regionSkips;
     /** Audit-rung heals, session (diag {@code audit_heals=} — expected 0; nonzero
@@ -181,6 +187,7 @@ class RegionScanner extends SpiralScanner {
         this.lastRegionSpan = 0;
         this.lastNearRings = 0;
         this.phase2Probes = 0;
+        this.phase2Rounds = 0;
         this.lastWalkObserveCost = 0;
         this.fastFiresSinceAudit = 0;
         this.regionSkips = 0;
@@ -194,6 +201,8 @@ class RegionScanner extends SpiralScanner {
         super.resetScanCounter(); // keeps the deliberate post-dimension 20-tick wait + disarm
         this.lastRegionSpan = 0;
         this.lastNearRings = 0;
+        this.phase2Probes = 0;
+        this.phase2Rounds = 0;
     }
 
     // ---- the walk (hybrid-scan-plan.md §2.1: phase 1 near rings, phase 2 far residue) ----
@@ -255,17 +264,21 @@ class RegionScanner extends SpiralScanner {
 
         // ---- PHASE 1: near rings r₀+1..N, legacy ring-major order, stateless ----
         // Per ring: the leaf probe FIRST (gate-independent — enableQuadtreeScan
-        // gates the LEGACY arm only); needy rings pay the 8r pass. Past-budget
-        // rings still run emit-free OBSERVATION (the §2.3 truncation convention:
-        // truncated ⟺ needy work provably remains — never a probe verdict, the
-        // exclusion band always fails probes). Ring 0 is never enumerated (r₀ ≥ 0).
+        // gates the LEGACY arm only); needy rings pay the 8r pass. The first
+        // past-budget UNRESOLVED position breaks the whole walk (§2.3: truncated
+        // ⟺ needy work provably remains — a per-position classify observation,
+        // never a probe verdict). There is deliberately NO emit-free observation
+        // sweep of the remaining rings: §3's O(8r·remaining) post-budget charge
+        // does not exist as-built (plan §13), which is what keeps a cold-fill
+        // phase-1 break inside the 4 Hz meter — do not "restore" it.
+        // Ring 0 is never enumerated (r₀ ≥ 0).
         int r0 = wholeExcludedRings(viewDistance);
         boolean phase1Broke = false;
         phase1:
         for (int r = r0 + 1; r <= near; r++) {
             if (columns.ringNeedsFree(playerCx, playerCz, r)) {
                 this.quadRingSkips++; // phase-1 skips feed the legacy counter (§7)
-                observeCost += r / 4L + 4;
+                observeCost += r + 4L; // ringNeedsFree's perimeter is ~r+4 lookups (§3: charge = actual)
                 continue;
             }
             observeCost += 8L * r;
@@ -299,6 +312,7 @@ class RegionScanner extends SpiralScanner {
         // A phase-1 budget break means phase 2 contributes nothing (the hybrid
         // complete-prefix form: at most ONE partial group across BOTH phases).
         if (!phase1Broke && near < lodDistance) {
+            this.phase2Rounds++;
             int playerRx = playerCx >> 5;
             int playerRz = playerCz >> 5;
             int maxRegionRing = ((lodDistance + 31) >> 5) + 1;
@@ -329,10 +343,13 @@ class RegionScanner extends SpiralScanner {
                             this.residueScratch);
                     if (nRects == 0) continue; // phase 1 owns it: nothing, not even a counter
                     this.phase2Probes++;
-                    observeCost += 16;
                     boolean free = true;
                     for (int k = 0; k < nRects && free; k++) {
                         int[] rect = this.residueScratch[k];
+                        // Charge the rect's leaf-bbox (§3: charge = actual lookups —
+                        // straddling rects legitimately re-visit shared leaves).
+                        observeCost += (long) ((rect[2] >> 3) - (rect[0] >> 3) + 1)
+                                * ((rect[3] >> 3) - (rect[1] >> 3) + 1);
                         free = columns.rectNeedsFree(rect[0], rect[1], rect[2], rect[3]);
                     }
                     if (free) {
@@ -369,7 +386,12 @@ class RegionScanner extends SpiralScanner {
                     }
                     if (n == 0) continue; // complete under observation (excluded/satisfied)
                     if (count >= budget) {
-                        truncated = true; // a needy region past a full budget
+                        // A needy region past a full budget. Pricing note (§13): this
+                        // shape leaves maxEmittedRing ≤ N, so the MOVEMENT window
+                        // prices the near frontier while the next walk re-sweeps the
+                        // region spiral — accepted: the sweep is ~1 ms of leaf probes
+                        // and the STATIONARY branch meters it honestly.
+                        truncated = true;
                         break outer;
                     }
                     emittedSpan++;

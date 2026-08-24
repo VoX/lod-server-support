@@ -305,10 +305,12 @@ class ColumnStateMap {
     /**
      * The hybrid walk's residue probe (hybrid-scan-plan.md §2.1): true when every
      * leaf INTERSECTING the chunk rectangle [x0..x1]×[z0..z1] has a clear needs
-     * mask. Same conservative partial-leaf convention as {@link #regionNeedsFree}:
+     * mask. Same conservative partial-leaf convention as {@link #ringNeedsFree}:
      * a leaf straddling the rectangle with needs anywhere — even outside the
      * rectangle — returns false (a needless emit pass, never a wrong skip; the
      * emit pass's own bounds are the clamp), and an ABSENT leaf is all-needs.
+     * (This retired {@code regionNeedsFree} — the hybrid residue bounds already
+     * carry the lod clamp that method computed itself.)
      */
     boolean rectNeedsFree(int x0, int z0, int x1, int z1) {
         int sx0 = x0 >> 3, sx1 = x1 >> 3;
@@ -324,32 +326,6 @@ class ColumnStateMap {
     private boolean leafHasNeeds(int sx, int sz) {
         Leaf leaf = this.leaves.get(PositionUtil.packPosition(sx, sz));
         return leaf == null || leaf.needs != 0;
-    }
-
-    /**
-     * The region walk's skip probe (region-scan-plan.md §2.2): true when every leaf of
-     * the 32×32-chunk region at ({@code rx}, {@code rz}) that INTERSECTS the lod square
-     * has a clear needs mask. The lod intersection is load-bearing (plan v1.1 A-7/§2.2):
-     * a boundary region's beyond-lod leaves are absent — absent = all-needs — and
-     * counting them would force an O(1024) emit pass over every satisfied boundary
-     * region on every scan. In-lod absent leaves (never-visited areas) legitimately
-     * read as needs. Same absent-leaf convention as {@link #ringNeedsFree}.
-     */
-    boolean regionNeedsFree(int rx, int rz, int playerCx, int playerCz, int lodDistance) {
-        int baseLeafX = rx << 2; // region = 4×4 leaves; leaf = 8×8 chunks
-        int baseLeafZ = rz << 2;
-        for (int lx = 0; lx < 4; lx++) {
-            int leafX = baseLeafX + lx;
-            int cx0 = leafX << 3;
-            if (cx0 + 7 < playerCx - lodDistance || cx0 > playerCx + lodDistance) continue;
-            for (int lz = 0; lz < 4; lz++) {
-                int leafZ = baseLeafZ + lz;
-                int cz0 = leafZ << 3;
-                if (cz0 + 7 < playerCz - lodDistance || cz0 > playerCz + lodDistance) continue;
-                if (leafHasNeeds(leafX, leafZ)) return false;
-            }
-        }
-        return true;
     }
 
     /**
