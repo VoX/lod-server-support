@@ -82,7 +82,7 @@ class XaeroMapCompatTest {
     private final Set<Long> loadedChunks = new HashSet<>();
     private boolean enabled = true;
     private boolean sessionActive = true;
-    private boolean healEnabled = true;
+    private boolean backpressureEnabled = true;
     private final List<Object[]> reports = new ArrayList<>();
     private final List<dev.vox.lss.api.VoxelColumnConsumer> registered = new ArrayList<>();
     private XaeroMapCompat bridge;
@@ -121,7 +121,7 @@ class XaeroMapCompatTest {
         this.enabled = true;
         this.sessionActive = true;
         this.registered.clear();
-        this.healEnabled = true;
+        this.backpressureEnabled = true;
         this.reports.clear();
         this.bridge = new XaeroMapCompat(
                 XaeroMapCompat.Handles.resolve(Class::forName),
@@ -130,7 +130,7 @@ class XaeroMapCompatTest {
                 () -> this.sessionActive,
                 this.registered::add,
                 this.registered::remove,
-                () -> this.healEnabled,
+                () -> this.backpressureEnabled,
                 (dimension, chunkX, chunkZ) ->
                         this.reports.add(new Object[]{dimension, chunkX, chunkZ}));
         this.bridge.pumpNanosBudget = Long.MAX_VALUE; // neutralize MethodHandle warmup
@@ -945,138 +945,254 @@ class XaeroMapCompatTest {
         assertEquals(0, this.bridge.counterForTest("commit_failures"), "gates defer, never fail");
     }
 
-    // ---- the §18 dropped-tile heal (+ the §18.1 review fold) ----
+    // ---- §12 ingest backpressure (hybrid-scan-plan.md §12; replaces the §18
+    // ledger heal — the immediate reporter is KEPT and pinned below) ----
 
-    @Test
-    void anEvictedTileIsHealedOnceItsRegionCommits() {
-        this.bridge.maxQueue = 2;
-        offer(64, 64);
-        offer(65, 64);
-        offer(66, 64); // over the cap: (64,64) — the oldest — is evicted into the ledger
-        assertEquals(1, this.bridge.counterForTest("dropped_overflow"));
-        assertEquals(1, this.bridge.counterForTest("heal_pending"));
-        assertEquals(1, this.bridge.counterForTest("heal_regions"));
-        assertTrue(this.reports.isEmpty(), "no report at drop time — retries must not burn"
-                + " while the region bottleneck persists");
-        this.bridge.pump(); // the survivors commit; queue drained + region committable → flush
-        assertEquals(2, this.bridge.counterForTest("written"));
-        assertEquals(0, this.bridge.counterForTest("heal_pending"));
-        assertEquals(1, this.bridge.counterForTest("heal_reported"));
-        assertEquals(1, this.reports.size());
-        org.junit.jupiter.api.Assertions.assertSame(OVERWORLD, this.reports.get(0)[0]);
-        assertEquals(64, this.reports.get(0)[1]);
-        assertEquals(64, this.reports.get(0)[2]);
+    private int halt() {
+        return dev.vox.lss.networking.client.LodRequestManager.INGEST_BACKLOG_HALT_SECTIONS;
     }
 
-    @Test
-    void theHealHoldsWhileSaturatedAndFlushesOnceItsRegionCommits() {
-        this.processor.createdRegionLoadState = 0; // detection creates unloaded regions
-        this.bridge.maxQueue = 1;
-        offer(64, 64);
-        offer(70, 64); // same region (2,2): (64,64) is evicted into the ledger
-        this.bridge.pump(); // the survivor awaits its region load; the QUEUE is saturated
-        assertEquals(0, this.bridge.counterForTest("written"));
-        assertTrue(this.bridge.counterForTest("load_requests") >= 1);
-        assertEquals(1, this.bridge.counterForTest("heal_pending"),
-                "§18.1 A-M1: no heal work while the queue is shedding — a re-delivery"
-                        + " would be re-dropped");
-        assertTrue(this.reports.isEmpty());
-        theRegion().loadState = 2; // the load lands
-        this.bridge.pump(); // the survivor commits, the queue drains: flush on the proof
-        assertEquals(1, this.bridge.counterForTest("written"));
-        assertEquals(0, this.bridge.counterForTest("heal_pending"));
-        assertEquals(1, this.reports.size());
-        assertEquals(64, this.reports.get(0)[1]);
-    }
-
-    @Test
-    void anIdleBridgeStillDrainsItsLedgerThroughTheGrantWindow() {
-        this.processor.createdRegionLoadState = 0;
-        this.bridge.updateIdlePumps = 1;
-        this.bridge.maxQueue = 1;
-        offer(64, 64);  // region (2,2) — evicted into the ledger
-        offer(96, 64);  // region (3,2) — survives
-        this.bridge.pump(); // (3,2) awaits its load; heal held (queue saturated)
-        this.processor.regions.get((3L << 32) | 2L).loadState = 2;
-        this.bridge.pump(); // (96,64) commits; probe grants the LEDGER region's load
-        assertEquals(1, this.bridge.counterForTest("written"));
-        long loads = this.bridge.counterForTest("load_requests");
-        assertTrue(loads >= 2, "idle heal must load-request the ledger region, got " + loads);
-        this.bridge.pump(); // rebuild flushes; ledger region still loading
-        assertEquals(0, this.bridge.counterForTest("pending_updates"));
-        assertEquals(1, this.bridge.counterForTest("heal_pending"));
-        this.processor.regions.get((2L << 32) | 2L).loadState = 2; // the granted load lands
-        this.bridge.pump(); // fully idle except the ledger — the pump must still heal
-        assertEquals(0, this.bridge.counterForTest("heal_pending"),
-                "an idle bridge (empty queue, no owed rebuilds) must still drain its ledger");
-        assertEquals(1, this.reports.size());
-    }
-
-    @Test
-    void theKillSwitchAndSessionTeardownEmptyTheHealCounted() {
-        this.healEnabled = false;
-        this.bridge.maxQueue = 1;
-        offer(64, 64);
-        offer(70, 64);
-        assertEquals(1, this.bridge.counterForTest("dropped_overflow"));
-        assertEquals(0, this.bridge.counterForTest("heal_pending"), "switch off: no ledger");
-        this.healEnabled = true;
-        offer(75, 64); // evicts (70,64) into the ledger
-        assertEquals(1, this.bridge.counterForTest("heal_pending"));
-        this.bridge.onSessionEnd();
+    /** Drive the pump into a drainable state once so the latch/watchdog are live. */
+    private void primeDrainablePump() {
         this.bridge.pump();
-        assertEquals(0, this.bridge.counterForTest("heal_pending"),
-                "the ledger dies with the session");
-        assertEquals(1, this.bridge.counterForTest("heal_abandoned"),
-                "abandoned heal debt must be visible (§18.1 A-m6)");
-        assertTrue(this.reports.isEmpty(), "teardown never reports");
     }
 
     @Test
-    void aMidSessionKillSwitchFlipAbandonsTheLedgerCounted() {
+    void theConsumerOverridesThePendingIngestBacklogDefault() {
+        // The lambda trap (review MAJOR): a lambda cannot override the default
+        // method, silently keeping -1 forever — the whole taper then never engages.
+        assertEquals(1, this.registered.size());
+        offer(64, 64); // a non-empty queue forces the ladder to actually run
+        primeDrainablePump();
+        assertTrue(this.registered.get(0).pendingIngestBacklog() >= 0,
+                "a live bridge reports a REAL value, not the -1 interface default"
+                        + " — proving the anonymous-class override exists");
+    }
+
+    @Test
+    void theReportScalesOccupancyIntoTheHaltDomainAheadOfTheDropPoint() {
+        this.bridge.maxQueue = 8;
+        this.bridge.maxQueueBytes = Long.MAX_VALUE; // count-dominant for exact fractions
+        offer(64, 64);
+        primeDrainablePump(); // committed: queue empty again, latch live
+        assertEquals(0, this.bridge.reportBackpressure(), "empty + draining = a real 0");
+        this.processor.createdRegionLoadState = 0; // stop commits: entries await loads
+        offer(64, 65);
+        offer(65, 65);
+        offer(66, 65); // 3/8 = 37.5% occupancy -> 6144 * (0.375/0.75) = 3072
+        assertEquals(3072, this.bridge.reportBackpressure(),
+                "the report is the occupancy scaled into the halt domain");
+        offer(67, 65);
+        offer(68, 65);
+        offer(69, 65); // 6/8 = 75% — the halt fires HERE, ahead of the 100% drop point
+        assertEquals(halt(), this.bridge.reportBackpressure(),
+                "75% occupancy = the full halt (the decode-queue doctrine: halt"
+                        + " BEFORE the first drop, ~25% landing room)");
+        offer(70, 65);
+        offer(71, 65); // 8/8 — clamped, still exactly the halt
+        assertEquals(halt(), this.bridge.reportBackpressure());
+        assertEquals(0, this.bridge.counterForTest("dropped_overflow"),
+                "the halt PRECEDED the first drop — the ordering pin");
+    }
+
+    @Test
+    void byteOccupancyDominatesWhenItIsTheBindingCap() {
+        offer(64, 64);
+        primeDrainablePump();
+        this.bridge.maxQueue = 8192; // count fraction ~0
+        this.bridge.maxQueueBytes = XaeroMapCompat.approxBytes(tile(64, 64)) * 2L;
+        this.processor.createdRegionLoadState = 0;
+        offer(64, 65); // bytes ~half the cap
+        int report = this.bridge.reportBackpressure();
+        assertTrue(report >= halt() / 2 && report < halt(),
+                "the byte fraction (~50% -> ~2/3 of halt) governs when it binds: " + report);
+    }
+
+    @Test
+    void pausedLatchRefusesOffersAfterHysteresisAndReportsNoSignal() {
+        this.bridge.bpPausePumps = 3;
+        offer(64, 64);
+        primeDrainablePump();
+        offer(64, 65);
+        this.processor.writingPaused = true; // any pumpLadder early return — the latch
+        this.bridge.pump();
+        this.bridge.pump();
+        assertTrue(this.bridge.reportBackpressure() >= 0,
+                "below the hysteresis threshold the report still governs (flap armor)");
+        this.bridge.pump(); // third consecutive undrainable pump: the latch flips
+        assertEquals(-1, this.bridge.reportBackpressure(),
+                "a paused pump = no signal, NEVER a backlog claim");
+        // Offers are now REFUSED pre-extraction, counted, unreported.
+        int before = this.bridge.queuedForTest();
+        int reportsBefore = this.reports.size();
+        this.bridge.offerColumn(OVERWORLD, 90, 90, -64, 320,
+                new dev.vox.lss.api.VoxelColumnData(
+                        new dev.vox.lss.api.VoxelColumnData.SectionData[0], 1L));
+        assertEquals(before, this.bridge.queuedForTest(), "refused: the queue must not grow");
+        assertEquals(1, this.bridge.counterForTest("refused_paused"));
+        assertEquals(reportsBefore, this.reports.size(),
+                "a refusal is NEVER reported — an un-stamp would churn re-serves into"
+                        + " the same refusal");
+    }
+
+    @Test
+    void aPausedStateWithAFullQueueNeverContributesAHalt() {
+        // The negative pin (review): -1 must win over occupancy — a paused bridge
+        // must never stop the LOD fill via a stale full-queue reading.
+        this.bridge.maxQueue = 2;
+        this.bridge.bpPausePumps = 1;
+        offer(64, 64);
+        primeDrainablePump();
+        this.processor.createdRegionLoadState = 0;
+        offer(64, 65);
+        offer(65, 65); // full
+        this.processor.writingPaused = true;
+        this.bridge.pump();
+        assertEquals(-1, this.bridge.reportBackpressure(),
+                "paused + full queue = -1, never the halt");
+    }
+
+    @Test
+    void resumeThroughTheLadderClearsThePauseEvenWithAnEmptyQueue() {
+        // The deadlock guard (review MAJOR-adjacent): refusals keep the queue empty,
+        // and an empty-queue fast-out that skipped the ladder would leave the pause
+        // latched FOREVER — the pump must keep running the ladder while paused.
+        this.bridge.bpPausePumps = 1;
+        offer(64, 64);
+        primeDrainablePump();
+        this.processor.writingPaused = true;
+        this.bridge.pump(); // latch (queue empty — nothing else forces the ladder)
+        assertEquals(-1, this.bridge.reportBackpressure());
+        this.processor.writingPaused = false;
+        this.bridge.pump(); // the ladder MUST run despite the empty queue
+        assertEquals(0, this.bridge.reportBackpressure(),
+                "drainable again: the pause clears through the ladder, resuming at the"
+                        + " live occupancy (the taper, not a step)");
+        offer(64, 66);
+        this.bridge.pump();
+        assertEquals(2, this.bridge.counterForTest("written"), "offers flow again");
+    }
+
+    @Test
+    void theWatchdogReportsNoSignalWhenThePumpGoesStale() {
+        long[] now = {1_000_000L};
+        this.bridge.bpClock = () -> now[0];
+        offer(64, 64);
+        primeDrainablePump();
+        assertEquals(0, this.bridge.reportBackpressure());
+        now[0] += this.bridge.bpPumpStaleMillis + 1; // no pump inside the window
+        assertEquals(-1, this.bridge.reportBackpressure(),
+                "a frozen mirror must never read as live backlog (the watchdog)");
+        this.bridge.pump();
+        assertEquals(0, this.bridge.reportBackpressure(), "a fresh pump re-arms it");
+    }
+
+    @Test
+    void theHaltTimeBoxDegradesAWedgedWriterAndReArmsOnDrain() {
+        long[] now = {1_000_000L};
+        this.bridge.bpClock = () -> now[0];
+        this.bridge.maxQueue = 2;
+        this.bridge.maxQueueBytes = Long.MAX_VALUE;
+        offer(64, 64);
+        primeDrainablePump(); // latch live, one commit (region (2,2) now loaded)
+        this.processor.createdRegionLoadState = 0; // loads never land: commits impossible
+        offer(128, 64);
+        offer(129, 64); // region (4,2), unloadable — 100% count occupancy -> halt
+        this.bridge.pump(); // still drainable (reaches drainEntries; entries AWAIT their load)
+        assertEquals(halt(), this.bridge.reportBackpressure(), "halt starts the time-box");
+        now[0] += this.bridge.bpHaltWedgeMillis + 1;
+        this.bridge.pump();
+        assertEquals(-1, this.bridge.reportBackpressure(),
+                "zero commits through the whole window: the bridge may PACE the"
+                        + " stream, never STOP it — degrade to no-signal");
+        // The wedge re-arms only below the re-arm occupancy.
+        this.bridge.clearQueue();
+        this.bridge.pump();
+        assertTrue(this.bridge.reportBackpressure() >= 0,
+                "drained below the re-arm point: governance resumes");
+    }
+
+    @Test
+    void governedEvictionsReportAndUngovernedStaySilent() {
         this.bridge.maxQueue = 1;
         offer(64, 64);
-        offer(70, 64); // (64,64) into the ledger
-        assertEquals(1, this.bridge.counterForTest("heal_pending"));
-        this.healEnabled = false;
-        this.bridge.pump(); // §18.1 A-m1: the phase must stop cleanly, counted
-        assertEquals(0, this.bridge.counterForTest("heal_pending"));
-        assertEquals(1, this.bridge.counterForTest("heal_abandoned"));
-        assertTrue(this.reports.isEmpty());
+        this.bridge.pump();
+        this.processor.createdRegionLoadState = 0;
+        offer(64, 65);
+        offer(70, 65); // evicts (64,65) — governed: reported for its bounded re-serve
+        assertEquals(1, this.bridge.counterForTest("dropped_overflow"));
+        assertEquals(1, this.reports.size(), "a governed drop self-heals via the reporter");
+        assertEquals(64, this.reports.get(0)[1]);
+        assertEquals(65, this.reports.get(0)[2]);
+        this.backpressureEnabled = false;
+        offer(75, 65); // evicts (70,65) — ungoverned: silent (the pre-amendment behavior)
+        assertEquals(2, this.bridge.counterForTest("dropped_overflow"));
+        assertEquals(1, this.reports.size(),
+                "kill switch off = pre-amendment behavior: drops stay silent");
     }
 
     @Test
-    void aStaleDimensionDropReportsImmediately() {
+    void negativeCoordinatesRoundTripThroughTheEvictionReport() {
+        this.bridge.maxQueue = 1;
+        this.processor.createdRegionLoadState = 0;
+        offer(-33, -1);
+        offer(-34, -1); // evicts (-33,-1) — reported immediately (governed)
+        assertEquals(1, this.reports.size());
+        assertEquals(-33, this.reports.get(0)[1], "chunkX must round-trip for negatives");
+        assertEquals(-1, this.reports.get(0)[2], "chunkZ must round-trip for negatives");
+    }
+
+    @Test
+    void aStaleDimensionDropReportsRegardlessOfTheSwitch() {
+        this.backpressureEnabled = false; // the reporter is CORRECTNESS, not governance
         offer(64, 64);
         this.bridge.offerPrepared(net.minecraft.world.level.Level.NETHER, tile(70, 64));
         this.bridge.pump(); // (70,64) belongs to another dimension: dropped stale + reported now
         assertEquals(1, this.bridge.counterForTest("dropped_stale"));
-        assertEquals(1, this.bridge.counterForTest("heal_reported"));
+        assertEquals(1, this.bridge.counterForTest("drops_reported"));
         assertEquals(1, this.reports.size());
         org.junit.jupiter.api.Assertions.assertSame(
                 net.minecraft.world.level.Level.NETHER, this.reports.get(0)[0]);
-        assertEquals(0, this.bridge.counterForTest("heal_pending"), "stale never enters the ledger");
         assertEquals(1, this.bridge.counterForTest("written"), "the current dimension's tile commits");
     }
 
     @Test
-    void aCrossDimensionConflictAbandonsTheOldSetCounted() {
-        this.bridge.maxQueue = 1;
+    void theWorldIdChangeClearReportsEveryEntry() {
+        // §12.1(c): the queued tiles belong to a previous world and the player may
+        // return — the stamps must be forgotten or the return never re-declares.
         offer(64, 64);
-        offer(70, 64); // (64,64) → ledger[(2,2)] as OVERWORLD
-        this.bridge.offerPrepared(net.minecraft.world.level.Level.NETHER, tile(65, 64));
-        // evicted (70,64) is OVERWORLD too — count 2 under the OVERWORLD set
-        assertEquals(2, this.bridge.counterForTest("heal_pending"));
-        this.bridge.offerPrepared(net.minecraft.world.level.Level.NETHER, tile(66, 64));
-        // evicts the NETHER (65,64): same region key, other dimension → the OVERWORLD
-        // set is DISCARDED counted, never reported (§18.1 A-MAJOR-2)
-        assertEquals(2, this.bridge.counterForTest("heal_abandoned"));
-        assertEquals(1, this.bridge.counterForTest("heal_pending"));
-        assertTrue(this.reports.isEmpty());
+        this.bridge.pump(); // records lastWorldId ("stub-world"), commits (64,64)
+        this.processor.createdRegionLoadState = 0;
+        offer(65, 64);
+        offer(66, 64);
+        this.processor.currentWorldId = "another-world";
+        this.bridge.pump();
+        assertEquals(2, this.bridge.counterForTest("dropped_stale"),
+                "the old world's tiles are cleared");
+        assertEquals(2, this.reports.size(),
+                "world-id clears REPORT (dimension-switch self-heal, §12.1(c))");
     }
 
     @Test
-    void aDeferralExpiryEntersTheLedgerAndForeignEntriesReportStale() {
+    void theSettingsOffClearDoesNotReport() {
+        // §12.1(b): a paused-state clear must not report — the un-stamp would churn
+        // re-serves straight into the refusal that follows.
+        try {
+            xaero.map.common.config.option.WorldMapProfiledConfigOptions.LOAD_NEW_CHUNKS.value = false;
+            xaero.map.common.config.option.WorldMapProfiledConfigOptions.UPDATE_CHUNKS.value = false;
+            offer(64, 64);
+            offer(65, 64);
+            this.bridge.pump();
+            assertEquals(2, this.bridge.counterForTest("skipped_settings"));
+            assertTrue(this.reports.isEmpty(), "a settings-off clear never reports");
+        } finally {
+            xaero.map.common.config.option.WorldMapProfiledConfigOptions.LOAD_NEW_CHUNKS.value = true;
+            xaero.map.common.config.option.WorldMapProfiledConfigOptions.UPDATE_CHUNKS.value = true;
+        }
+    }
+
+    @Test
+    void aDeferralExpiryReportsGovernedAndForeignReportsStale() {
         this.bridge.deferCap = 1;
         var region = new MapRegion();
         region.resting = false; // region-scoped busy: the whole bucket defers
@@ -1084,56 +1200,25 @@ class XaeroMapCompatTest {
         offer(64, 64);
         this.bridge.offerPrepared(net.minecraft.world.level.Level.NETHER, tile(68, 64));
         this.bridge.pump(); // burn 1 — under the cap
-        this.bridge.pump(); // burn 2 — both expire: ours to the ledger, the foreign one stale
+        this.bridge.pump(); // burn 2 — both expire: ours GOVERNED-reported, theirs stale
         assertEquals(2, this.bridge.counterForTest("dropped_expired"));
-        assertEquals(1, this.bridge.counterForTest("heal_pending"));
-        assertEquals(1, this.reports.size());
-        org.junit.jupiter.api.Assertions.assertSame(
-                net.minecraft.world.level.Level.NETHER, this.reports.get(0)[0]);
-        region.resting = true; // the saver finishes
-        this.bridge.pump(); // the idle probe finds the region committable → flush
-        assertEquals(0, this.bridge.counterForTest("heal_pending"));
-        assertEquals(2, this.reports.size());
-        assertEquals(64, this.reports.get(1)[1]);
+        assertEquals(2, this.reports.size(),
+                "both report immediately — no ledger, no deferred repair");
     }
 
     @Test
-    void negativeCoordinatesRoundTripThroughTheLedger() {
-        this.bridge.maxQueue = 1;
-        offer(-33, -1);
-        offer(-34, -1); // same region (-2,-1): (-33,-1) is evicted
-        this.bridge.pump(); // the survivor commits → flush
-        assertEquals(1, this.bridge.counterForTest("written"));
-        assertEquals(1, this.reports.size());
-        assertEquals(-33, this.reports.get(0)[1], "chunkX must round-trip for negatives");
-        assertEquals(-1, this.reports.get(0)[2], "chunkZ must round-trip for negatives");
-    }
-
-    @Test
-    void theLedgerCapEvictsTheNewestRegionCounted() {
-        this.bridge.ledgerMaxRegions = 2;
-        this.bridge.maxQueue = 1;
+    void sessionTeardownResetsTheBackpressureState() {
+        this.bridge.bpPausePumps = 1;
         offer(64, 64);
-        offer(96, 64);  // ledger [A=(2,2)]
-        offer(128, 64); // ledger [A, B=(3,2)]
-        offer(160, 64); // C=(4,2) drop: the cap evicts the NEWEST (B), never the head (§18.1 B-m6)
-        assertEquals(1, this.bridge.counterForTest("heal_abandoned"));
-        assertEquals(2, this.bridge.counterForTest("heal_pending"));
-        assertEquals(2, this.bridge.counterForTest("heal_regions"));
-    }
-
-    @Test
-    void aReDropAfterAReportCountsOnTheRedropMeter() {
-        this.bridge.maxQueue = 1;
-        offer(64, 64);
-        offer(70, 64); // (64,64) → ledger
-        this.bridge.pump(); // survivor commits → (64,64) reported (history marked)
-        assertEquals(1, this.bridge.counterForTest("heal_reported"));
-        assertEquals(0, this.bridge.counterForTest("heal_redropped"));
-        offer(64, 64); // the re-serve arrives...
-        offer(70, 64); // ...and is dropped AGAIN
-        assertEquals(1, this.bridge.counterForTest("heal_redropped"),
-                "the re-drop meter is the field's p estimate (§18.1 B-M2)");
+        primeDrainablePump();
+        this.processor.writingPaused = true;
+        this.bridge.pump(); // latch the pause
+        assertEquals(-1, this.bridge.reportBackpressure());
+        this.processor.writingPaused = false;
+        this.bridge.onSessionEnd();
+        this.bridge.pump();
+        assertTrue(this.bridge.reportBackpressure() >= 0,
+                "backpressure state is session-scoped: the next session starts clean");
     }
 
     private MapRegion theRegion() {
@@ -2141,7 +2226,7 @@ class XaeroMapCompatTest {
         assertEquals("crash-gate settings-gate", handles.optionalMissing);
         var reduced = new XaeroMapCompat(handles, this.fakeLevelOps, () -> this.enabled,
                 () -> this.sessionActive, this.registered::add, this.registered::remove,
-                () -> this.healEnabled, (d, x, z) -> this.reports.add(new Object[]{d, x, z}));
+                () -> this.backpressureEnabled, (d, x, z) -> this.reports.add(new Object[]{d, x, z}));
         reduced.pumpNanosBudget = Long.MAX_VALUE;
         reduced.updateNanosBudget = Long.MAX_VALUE;
         reduced.maybeRegister();
@@ -2163,7 +2248,7 @@ class XaeroMapCompatTest {
         assertEquals(7, handles.interpretationVersion);
         var bridge7 = new XaeroMapCompat(handles, this.fakeLevelOps, () -> this.enabled,
                 () -> this.sessionActive, this.registered::add, this.registered::remove,
-                () -> this.healEnabled, (d, x, z) -> this.reports.add(new Object[]{d, x, z}));
+                () -> this.backpressureEnabled, (d, x, z) -> this.reports.add(new Object[]{d, x, z}));
         bridge7.pumpNanosBudget = Long.MAX_VALUE;
         bridge7.updateNanosBudget = Long.MAX_VALUE;
         bridge7.maybeRegister();
@@ -2185,9 +2270,9 @@ class XaeroMapCompatTest {
                 && line.contains(", cave_layer_waits=") && line.contains(", frame_flushes=")
                 && line.contains(", rebuild_ms=") && line.contains(", rebuild_max_us=")
                 && line.contains(", dropped_overflow=") && line.contains(", dropped_expired=")
-                && line.contains(", heal_pending=") && line.contains(", heal_regions=")
-                && line.contains(", heal_reported=") && line.contains(", heal_redropped=")
-                && line.contains(", heal_abandoned="), line);
+                && line.contains(", refused_paused=") && line.contains(", drops_reported=")
+                && line.contains(", bp="), line);
+        assertFalse(line.contains("heal_"), "the §18 heal tokens die with the ledger (§12.1)");
         assertFalse(line.contains("xaero_crashed"), "the crash token appears only while latched");
         assertFalse(line.contains("optional_unbound"), "every optional group binds against the stubs");
         this.enabled = false;
