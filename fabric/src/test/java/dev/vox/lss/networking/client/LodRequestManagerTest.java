@@ -40,6 +40,11 @@ import static org.junit.jupiter.api.Assertions.*;
  * Plus the two hard protocol invariants of the want-set: a converged scan sends NOTHING (a
  * heartbeat would blind the soak quiescence predicate), and entering the decode-backpressure
  * halt sends exactly ONE empty clear batch.
+ *
+ * <p>Hybrid-walk note (hybrid-scan-plan.md §13): the suite's session lod of 64 equals N
+ * exactly, so on the default hybrid arm every walk here is PHASE 1 (legacy ring order) —
+ * these are recorded as phase-1 pins; the phase-2/seam mechanics are pinned in
+ * RegionScannerTest and the hybrid-boundary soak.</p>
  */
 class LodRequestManagerTest {
 

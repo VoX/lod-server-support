@@ -10,13 +10,15 @@ import java.util.HashSet;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Direct coverage of the region-major walk (region-scan-plan.md): region-spiral
- * emission order with within-region ring ascent, the complete-prefix + one-partial-tail
- * invariant, the per-position lod clamp on over-covering boundary regions, the v1.1
- * confirmed semantics (min observed unresolved ring; lod+1 converged), the needs-free
- * region skip, the audit rung's stranded-orphan heal, and the as-built cadence cost
- * policy (movement window prices the disc, stationary prices zero). Set-level parity
- * with the legacy walk is {@link RegionScanDifferentialTest}'s job.
+ * Direct coverage of the HYBRID walk (region-scan-plan.md + hybrid-scan-plan.md):
+ * phase-1 legacy ring order out to N=min(64,lod) with gate-independent ring probes,
+ * phase-2 region-spiral residue emission with within-region ring ascent, the
+ * complete-prefix + at-most-one-partial-group invariant across BOTH phases, the §2.3
+ * truncation convention (phase-1 break skips phase 2), the residue-rect geometry
+ * brutes, the v1.1 confirmed semantics (min observed unresolved ring; lod+1
+ * converged), the needs-free skips, the audit rung's stranded-orphan heal, and the
+ * §3 cadence cost policy. Set-level parity with the legacy walk is
+ * {@link RegionScanDifferentialTest}'s job.
  */
 class RegionScannerTest {
 
@@ -142,6 +144,9 @@ class RegionScannerTest {
             assertTrue(ring >= lastRing, "ring order regressed at index " + i);
             lastRing = ring;
         }
+        assertEquals(0, s.phase2Rounds,
+                "lod ≤ 64: phase 2 must never RUN (the near < lod gate — probes alone"
+                        + " cannot see a wrongly-entered empty-residue spiral)");
         assertEquals(0, s.phase2Probes,
                 "lod ≤ 64: phase 2 performs ZERO probes and zero emit passes");
         assertEquals(0, s.getRegionSpan());
@@ -256,40 +261,50 @@ class RegionScannerTest {
 
     @Test
     void steadyFillKeepsSpanAtMostTwoAsTheFrontierAdvances() {
-        int lod = 40;
+        int lod = 128; // > 2*N: full-residue regions exist (re-homed, impl-review M3)
         var s = scanner(lod);
         var columns = new ColumnStateMap();
         long[] pos = buf(), ts = buf();
+        int near = 64;
         int fires = 0;
+        boolean sawFullSpanFire = false;
         while (true) {
             int n = fireScan(s, CX, CZ, 4, columns, pos, ts);
             if (n == 0) break;
-            // span <= 2 whenever the fire stays in FULL-size regions (>= 1024-position
-            // budget geometry); once the frontier reaches the lod-boundary CLIPPED
-            // regions (an 81-288-position sliver each at this lod), one 800-budget
-            // fire legitimately spans several — the complete-prefix invariant, not a
-            // fixed span, is the real pin there (asserted in its own test).
-            boolean allFull = true;
+            // span <= 2 whenever the fire stays in FULL-RESIDUE regions: wholly
+            // inside the lod square AND wholly outside the near square (impl-review
+            // M3 re-home — a near-straddling region's residue is a clipped sliver,
+            // span-exempt like the lod-edge ones; the +lod edge clips to 1-wide
+            // slivers because 2*lod+1 is not 32-aligned, so a sliver-band fire
+            // legitimately spans many). The complete-prefix invariant, not a fixed
+            // span, is the real pin on clipped fires (asserted in its own test);
+            // this pin's teeth are the allFull arm.
+            boolean allFull = n > 0;
             for (int i = 0; i < n; i++) {
                 int rx = PositionUtil.unpackX(pos[i]) >> 5;
                 int rz = PositionUtil.unpackZ(pos[i]) >> 5;
-                if ((rx << 5) < -lod || (rx << 5) + 31 > lod
-                        || (rz << 5) < -lod || (rz << 5) + 31 > lod) {
+                int x0 = rx << 5, z0 = rz << 5;
+                boolean inLod = x0 >= -lod && x0 + 31 <= lod && z0 >= -lod && z0 + 31 <= lod;
+                boolean outsideNear = x0 > near || x0 + 31 < -near
+                        || z0 > near || z0 + 31 < -near;
+                if (!inLod || !outsideNear) {
                     allFull = false;
                     break;
                 }
             }
-            // Clipped-tail slack: at lod 40 the 12 boundary slivers average ~200 needy,
-            // so a real fire spans ~4-6 of them; 8 = one-third headroom (review NIT).
-            assertTrue(s.getRegionSpan() <= (allFull ? 2 : 8),
+            if (allFull && s.getRegionSpan() >= 1) sawFullSpanFire = true;
+            assertTrue(s.getRegionSpan() <= (allFull ? 2 : 32),
                     "fire " + fires + ": span " + s.getRegionSpan()
                             + " (allFull=" + allFull + ")");
             for (int i = 0; i < n; i++) {
                 columns.onReceived(pos[i], 1000L);
                 columns.onUpToDate(pos[i]);
             }
-            assertTrue(++fires < 40, "fill never converged");
+            assertTrue(++fires < 100, "fill never converged");
         }
+        assertTrue(sawFullSpanFire,
+                "vacuity guard (impl-review M3): at least one fire must emit purely "
+                        + "from full-residue regions and exercise the <= 2 arm");
         assertEquals(lod + 1, s.getConfirmedRing(), "converged disc confirms to lod+1");
         assertFalse(s.wasLastWalkTruncated());
     }
@@ -345,8 +360,9 @@ class RegionScannerTest {
         int n = fireScan(s, CX, CZ, 4, columns, pos, ts);
         assertEquals(2, n);
         assertEquals(6, s.getConfirmedRing(), "the INNER hole bounds confirmation");
-        // Within-region ring ascent puts the inner hole first (both region (0,0) —
-        // a cross-region pair would order by the REGION spiral instead).
+        // Ring ascent puts the inner hole first (lod 12 is pure phase 1 on the
+        // hybrid arm — legacy ring order; the phase-2 within-region ascent has its
+        // own ordering pins at lod > 64).
         assertEquals(inner, pos[0]);
     }
 
@@ -375,9 +391,10 @@ class RegionScannerTest {
     @Test
     void auditRungHealsAStrandedOrphanWithinTwoFires() {
         // The A-6 hazard end to end: a needy position whose needs bit is corrupted OFF
-        // inside an otherwise-clear region is invisible to the walk (the region skips)
-        // — a PERMANENT orphan but for the audit rung, which re-derives one region per
-        // periodic fire starting at the player's own region.
+        // inside an otherwise-clear region is invisible to the walk (at this lod it is
+        // phase 1's RING probe that skips it; the far phase's rect probe is the same
+        // hazard) — a PERMANENT orphan but for the audit rung, which re-derives one
+        // region per periodic fire starting at the player's own region.
         int lod = 40;
         var s = scanner(lod);
         var columns = new ColumnStateMap();
@@ -388,7 +405,7 @@ class RegionScannerTest {
         columns.corruptNeedsBitForTest(orphan);
 
         int n1 = fireScan(s, CX, CZ, 4, columns, pos, ts);
-        assertEquals(0, n1, "premise: the corrupted region skips — the orphan is invisible");
+        assertEquals(0, n1, "premise: the corrupted ring probe-skips — the orphan is invisible");
         assertEquals(lod + 1, s.getConfirmedRing(), "premise: FALSE convergence");
         assertEquals(1, s.getAuditHeals(), "the same fire's audit healed the leaf");
         assertTrue(columns.needsBitForTest(orphan), "the bit is restored");
@@ -496,9 +513,12 @@ class RegionScannerTest {
         // Integration-lens MAJOR end to end: each needy region costs an emit pass, so
         // a WorldEdit-scale scatter is NOT a cheap walk and must fall back to 1 Hz;
         // the dense fill's 1-2 emitting regions stay far under the cap.
-        int lod = 160; // hybrid re-derivation (plan §8): phase 1 absorbs the near
-        // regions into cheaper ring walks, so the scatter needs the wider far field
-        // ([-5..4]^2 at lod 160, ~84+ far regions x ~1040 cells) to price past the cap.
+        int lod = 160; // hybrid re-derivation (plan §8 said 128; re-derived to 160 as
+        // built): phase 1 absorbs the near regions into cheaper ring walks, so the
+        // scatter needs the wider far field ([-5..4]^2 at lod 160, ~84+ far regions x
+        // ~1040 cells) to price past the cap. N-COUPLED: raising HYBRID_NEAR_RADIUS
+        // past ~96 absorbs more of the scatter band into phase-1 ring passes and this
+        // premise re-prices BELOW the cap — re-derive the field on any N change.
         var s = scanner(lod);
         var columns = new ColumnStateMap();
         long[] pos = buf(), ts = buf();
@@ -622,9 +642,22 @@ class RegionScannerTest {
             columns.onUpToDate(pk);
         }
         var h = scanner(lod);
+        h.auditEnabled = false; // never heal the shared fixture mid-compare
         long[] hPos = buf(), hTs = buf();
         int hn = h.scan(CX, CZ, 4, columns, hPos, hTs, LSSConstants.WANT_SET_BUDGET);
         assertEquals(LSSConstants.WANT_SET_BUDGET, hn, "premise: the near disc out-holds the budget");
+        // The gate-independence pin (impl-review n4): the HYBRID arm's phase-1 probe
+        // must not grow an enableQuadtreeScan check — quad-off hybrid is order-identical.
+        var hOff = scanner(lod);
+        hOff.auditEnabled = false;
+        hOff.quadtreeScanEnabled = () -> false;
+        long[] oPos = buf(), oTs = buf();
+        int on = hOff.scan(CX, CZ, 4, columns, oPos, oTs, LSSConstants.WANT_SET_BUDGET);
+        assertEquals(hn, on, "hybrid quad-off emission count");
+        for (int i = 0; i < hn; i++) {
+            assertEquals(hPos[i], oPos[i], "hybrid quad-off position[" + i + "]");
+            assertEquals(hTs[i], oTs[i], "hybrid quad-off timestamp[" + i + "]");
+        }
         for (boolean quad : new boolean[]{true, false}) {
             var l = new SpiralScanner();
             l.setConfig(new SessionConfigS2CPayload(LSSConstants.PROTOCOL_VERSION, true, lod, true));
@@ -653,6 +686,7 @@ class RegionScannerTest {
         assertEquals(100, n);
         assertTrue(s.wasLastWalkTruncated(), "a mid-emission break is needy by definition");
         assertTrue(s.getScanRing() <= 64, "phase-1 truncation caps scanRing at N");
+        assertEquals(0, s.phase2Rounds, "a phase-1 break means phase 2 never runs");
         assertEquals(0, s.phase2Probes, "a phase-1 break means phase 2 contributes nothing");
         s.recenter(1);
         assertTrue(s.predictedWalkCost() <= SpiralScanner.FAST_RESCAN_MAX_WALK_COST,
@@ -661,17 +695,114 @@ class RegionScannerTest {
 
     @Test
     void observeCostMetersAtLeastTheEmittedWork() {
-        // §8 pin 7 (the under-metering hazard): a near-only walk's meter covers at
-        // least its emitted cells — phase 1 charges into the SAME meter.
+        // §8 pin 7 (the under-metering hazard): the meter covers the WALKED ring
+        // cells, not merely the emitted ones (impl-review m5 — an implementation
+        // charging `count` instead of 8r passed the old emitted-only form). A
+        // sparse-needy scatter keeps walked >> emitted: satisfy everything except
+        // every-5th-cell holes, then require the stationary price to cover the full
+        // 8r pass of every needy (non-probe-skipped) ring.
         int lod = 40; // pure phase 1
         var s = scanner(lod);
         var columns = new ColumnStateMap();
         long[] pos = buf(), ts = buf();
+        for (int x = -lod; x <= lod; x++) {
+            for (int z = -lod; z <= lod; z++) {
+                if (x % 5 == 0 && z % 5 == 0) continue; // the needy holes
+                long pk = PositionUtil.packPosition(x, z);
+                columns.onReceived(pk, 1000L);
+                columns.onUpToDate(pk);
+            }
+        }
+        int[] c = new int[2];
+        long walked = 0;
+        for (int r = RegionScanner.wholeExcludedRings(4) + 1; r <= lod; r++) {
+            boolean needy = false;
+            for (int i = 0; i < 8 * r && !needy; i++) {
+                SpiralScanner.ringIndexToCoord(r, i, CX, CZ, c);
+                if (SpiralScanner.isVanillaRendered(c[0], c[1], CX, CZ, 4)) continue;
+                needy = columns.classify(PositionUtil.packPosition(c[0], c[1]))
+                        != ColumnStateMap.SATISFIED;
+            }
+            if (needy) walked += 8L * r;
+        }
         int n = fireScan(s, CX, CZ, 4, columns, pos, ts);
-        assertTrue(n > 0);
-        assertTrue(s.predictedWalkCost() >= n, // stationary read = lastWalkObserveCost
-                "the stationary price must cover the walked cells (cost="
-                        + s.predictedWalkCost() + ", emitted=" + n + ")");
+        assertTrue(n > 0 && n < LSSConstants.WANT_SET_BUDGET,
+                "premise: a full, untruncated walk (emitted=" + n + ")");
+        assertTrue(walked > 4L * n, "premise: walked dominates emitted (walked="
+                + walked + ", emitted=" + n + ")");
+        assertTrue(s.predictedWalkCost() >= walked, // stationary read = lastWalkObserveCost
+                "the stationary price must cover the walked ring cells (cost="
+                        + s.predictedWalkCost() + ", walked=" + walked
+                        + ", emitted=" + n + ")");
+    }
+
+    @Test
+    void movingTruncatedAtADeepPhase2FrontierRefusesFast() {
+        // §8 pin 8 arm 2 (impl-review m2): truncation at a DEEP phase-2 frontier
+        // must REFUSE the movement-window fast path — only the shallow (near)
+        // truncation keeps the elytra unlock; a bug pricing every truncated walk
+        // at the near frontier would hold a deep-frontier flyer at 4 Hz forever.
+        int lod = 200;
+        var s = scanner(lod);
+        var columns = new ColumnStateMap();
+        long[] pos = buf(), ts = buf();
+        satisfySquare(columns, 150); // frontier at ring 151 — deep in phase 2
+        int n = fireScan(s, CX, CZ, 4, columns, pos, ts);
+        assertEquals(LSSConstants.WANT_SET_BUDGET, n, "premise: the far fill truncates");
+        assertTrue(s.wasLastWalkTruncated());
+        assertTrue(s.getScanRing() > 64, "premise: the frontier is past N (scanRing="
+                + s.getScanRing() + ")");
+        s.recenter(1);
+        assertTrue(s.predictedWalkCost() > SpiralScanner.FAST_RESCAN_MAX_WALK_COST,
+                "a deep-frontier moving truncation must refuse fast (cost="
+                        + s.predictedWalkCost() + ")");
+    }
+
+    @Test
+    void convergedBigLodMovementPricesPastTheCapOnBothArms() {
+        // §8 pin 8 arm 3 (impl-review m2): converged big-lod movement prices the
+        // whole disc identically on BOTH arms — the delta pin against the legacy
+        // scanner (untruncated + recentered ⇒ 4·lod·(lod+1) either way).
+        var h = scanner(512);
+        var l = new SpiralScanner();
+        l.setConfig(new SessionConfigS2CPayload(LSSConstants.PROTOCOL_VERSION, true,
+                512, true));
+        h.recenter(1);
+        l.recenter(1);
+        assertEquals(l.predictedWalkCost(), h.predictedWalkCost(),
+                "delta pin: both arms price the moving converged disc identically");
+        assertTrue(h.predictedWalkCost() > SpiralScanner.FAST_RESCAN_MAX_WALK_COST,
+                "and both refuse fast at lod 512");
+    }
+
+    @Test
+    void exactFillEndingInSatisfiedPhase2RegionsIsNotTruncated() {
+        // The §2.3 carry into PHASE 2 (impl-review m8 — the lod-40 twin above now
+        // exercises the phase-1 break only): trailing conservatively-probed but
+        // observation-complete residue regions after an exactly-consumed budget are
+        // NOT truncation (the n == 0 continue precedes the budget check). The +lod
+        // edge slivers at lod 96 supply the shape naturally: their straddling
+        // leaves' beyond-lod cells keep needs bits (probe false), while the 1-wide
+        // in-lod residue itself is fully satisfied (emit pass observes nothing).
+        int lod = 96;
+        var s = scanner(lod);
+        var columns = new ColumnStateMap();
+        long[] pos = new long[4096], ts = new long[4096];
+        satisfySquare(columns, lod);
+        int reopened = 0;
+        for (int x = 65; x <= 80; x++) {
+            for (int z = 0; z <= 15; z++) { // region (2,0)'s residue, region-ring 2
+                if (columns.markDirtyIfKnown(PositionUtil.packPosition(x, z))) reopened++;
+            }
+        }
+        assertEquals(256, reopened, "premise: exactly one region's worth of needy work");
+        int n = s.scan(CX, CZ, 4, columns, pos, ts, 256); // budget == the needy work
+        assertEquals(256, n, "the walk emits exactly the reopened residue");
+        assertFalse(s.wasLastWalkTruncated(),
+                "satisfied/observation-complete regions past an exactly-consumed "
+                        + "budget are not truncation");
+        assertEquals(1, s.getRegionSpan(), "one emitting region");
+        assertEquals(1, s.phase2Rounds);
     }
 
     @Test
@@ -680,7 +811,7 @@ class RegionScannerTest {
         // would silently hole the near field): for every vd, every position of
         // every ring ≤ r₀ is vanilla-rendered, and ring r₀+1 has an unrendered cell.
         int[] c = new int[2];
-        for (int vd = 0; vd <= 40; vd++) {
+        for (int vd = 0; vd <= 80; vd++) { // past any realistic render-distance-mod vd
             int r0 = RegionScanner.wholeExcludedRings(vd);
             for (int r = 1; r <= r0; r++) {
                 for (int i = 0; i < 8 * r; i++) {
@@ -765,13 +896,19 @@ class RegionScannerTest {
 
     @Test
     void anyChaosInterleavingLeavesNoPositionPermanentlyOrphaned() {
-        // The region port of the legacy load-bearing pin, at a CROSS-REGION lod with
-        // budget-truncated fires (tests-lens MAJOR-2: the differential's single-shot
-        // unbounded compares cannot see prefix-advance failures under truncation).
+        // The region port of the legacy load-bearing pin, with budget-truncated
+        // fires (tests-lens MAJOR-2: the differential's single-shot unbounded
+        // compares cannot see prefix-advance failures under truncation). Lod 40 is
+        // single-phase (phase 1) on the hybrid arm; the lod-96 seed crosses the
+        // N=64 seam so truncation interleaves BOTH phases (§8 chaos requirement).
         // Alphabet: answers, retry marks, not-generated, up-to-date, LATE answers,
         // and silent supersession — no answer, ever; only re-declaration saves it.
-        final int vd = 2, lod = 40;
-        for (long seed : new long[]{1L, 7L, 42L}) {
+        final int vd = 2;
+        long[] seeds = {1L, 7L, 42L, 5L};
+        int[] lods = {40, 40, 40, 96};
+        for (int si = 0; si < seeds.length; si++) {
+            long seed = seeds[si];
+            int lod = lods[si];
             var rng = new java.util.Random(seed);
             var columns = new ColumnStateMap();
             long[] pos = buf(), ts = buf();
@@ -810,7 +947,7 @@ class RegionScannerTest {
             awaitingLate.clear(); // the booked late answers are dropped too
 
             boolean converged = false;
-            for (int i = 0; i < 60 && !converged; i++) {
+            for (int i = 0; i < 90 && !converged; i++) {
                 int n = fireScanP(s, CX, CZ, vd, 0, 1000, columns, pos, ts);
                 for (int j = 0; j < n; j++) {
                     columns.onReceived(pos[j], 5_000L + i);
