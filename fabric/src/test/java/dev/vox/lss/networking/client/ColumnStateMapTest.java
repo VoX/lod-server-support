@@ -1207,6 +1207,8 @@ class ColumnStateMapTest {
     void auditRegionNeedsHealsACorruptedBitAndCountsIt() {
         var m = new ColumnStateMap();
         long pk = PositionUtil.packPosition(3, 3); // never received -> genuinely needy
+        m.onReceived(PositionUtil.packPosition(3, 4), 1000L); // materialize the leaf,
+        // so the premise below reads a REAL bit, not the absent-leaf default (review NIT)
         assertTrue(m.needsBitForTest(pk));
         assertEquals(0, m.auditRegionNeeds(0, 0), "a healthy region audits to zero");
         m.corruptNeedsBitForTest(pk);
