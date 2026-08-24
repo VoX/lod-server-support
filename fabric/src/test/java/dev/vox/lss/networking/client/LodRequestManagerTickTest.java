@@ -58,7 +58,14 @@ class LodRequestManagerTickTest {
     }
 
     private void setupManager(SessionConfigS2CPayload cfg, String serverAddress) {
-        manager = new LodRequestManager();
+        setupManager(cfg, serverAddress, new LodRequestManager());
+    }
+
+    /** Arm-explicit variant — the crossing-delta prefix pin is legacy-arm mechanics
+     *  (region-scan-plan.md §10 policy (a): the region walk has no prefix to decrement). */
+    private void setupManager(SessionConfigS2CPayload cfg, String serverAddress,
+                              LodRequestManager m) {
+        manager = m;
         // Slow start off for this suite (join-slow-start-plan.md §1.4 — the frontier-
         // damping test pattern): these pins assert UNCAPPED first walks and cadence
         // shapes; productionDefaultEnablesSlowStart pins the real default wiring.
@@ -908,7 +915,8 @@ class LodRequestManagerTickTest {
         // walk looks perfectly healthy; the entire scanner suite calls recenter(d)
         // directly and could not see it).
         var overworld = dim("overworld");
-        setupManager(config(8, true));
+        setupManager(config(8, true), "lss-tick-test",
+                new LodRequestManager(new SpiralScanner())); // legacy-arm mechanics pin
 
         manager.tickWithContext(0, 0, overworld, 16, 0, 0L, -1, () -> 0);
         assertEquals(9, manager.getConfirmedRing(),

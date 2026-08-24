@@ -516,3 +516,67 @@ router's declaration-order drain (the server-leverage foundation), harness/
 v16/governor/InFlightTracker neutrality, and the governor-latch provenance
 argument.
 
+
+## §14 As-built record (2026-08-24, main @ feat/region-scan)
+
+Implemented per §2-§10 with the following as-built facts, deviations, and findings:
+
+- **Shape**: `RegionScanner extends SpiralScanner` — the §2.4 "shared base" latitude
+  exercised as subclassing. `scan()` went private→protected; the fast-path ladder
+  gained two hook points at the exact legacy rung slots (`prePressureFastRefusal`
+  base behavior retained / `postPressureFastRefusal` — the region arm drops only the
+  retry rung, per §2.3); `sessionConfig` and `recenteredSinceLastFire` went
+  protected. All cadence/budget/latch machinery, getters, the governor latch, diag
+  and exporter plumbing are inherited untouched. Selection at
+  `LodRequestManager` construction per §2.4 (`enableRegionScan`, default true;
+  package-private test ctor `LodRequestManager(SpiralScanner)` = the §10 arm seam).
+- **Ring-0 parity** (found by the manager suites): the legacy ring enumeration is
+  structurally EMPTY at ring 0 (8·0 positions) — the legacy walk never declares the
+  player's own chunk. The region emit pass skips `dx==0 && dz==0` to match
+  (production-irrelevant — always vanilla-rendered at real view distances; load-
+  bearing for the differential and the annulus-count pins).
+- **DEVIATION — the §8 region-count cadence rung is replaced** (adjudicated by the
+  implementation review): two facts refuted it in test. (1) A small LOD disc
+  inherently spans up to 4 regions (the 2×2 around any player near a region
+  corner), so `activeRegions > 2` refuses fast fires FOREVER at lod ≤ 32 — the
+  cadence suites caught it. (2) The inherited legacy cost formula over the v1.1
+  confirmed/scanRing fields prices a dense far-frontier fill at ~8·c·31, refusing
+  the 4 Hz warm backfill past ring ~260 — the feature's own headline case. As
+  built: `predictedWalkCost` is overridden — the MOVEMENT WINDOW (`recenter` opens
+  it, the base fire path closes it) prices the whole disc with legacy's from-zero
+  formula (flight keeps the legacy 1 Hz policy above lod 127, the elytra-wall
+  line); STATIONARY prices 0 (the stateless walk genuinely costs
+  O(regions×16 + emitted) at any frontier depth — this extends legacy's
+  stationary-deep-fill admission to every depth, deliberately better than the
+  ring-128 cliff). `postPressureFastRefusal` returns false per §2.3 (retry marks
+  are ordinary declared needs). `FAST_RESCAN_MAX_ACTIVE_REGIONS` was deleted.
+- **Span at the lod boundary** (found by the steady-fill pin): `region_span ≤ 2`
+  holds exactly while fires stay in FULL-thickness regions; once the frontier
+  reaches the lod-edge CLIPPED regions (an 81-288-position sliver each at lod 40;
+  as little as ~33-65 at lod 512) one 800-budget fire legitimately spans several.
+  The normative invariant is complete-prefix + one-partial-tail — a `region_span`
+  above 2 during the final boundary ring of a fill is CORRECT, not a regression.
+  Diag/monitoring must not alarm on it.
+- **Skip census is leaf-granular**: `regionNeedsFree` intersects the lod square at
+  8-chunk LEAF granularity — a partially-intersecting leaf with beyond-lod holes
+  reads needs (conservative: a needless emit pass, never a wrong skip; the emit
+  pass's per-position clamp keeps beyond-lod positions out of the want-set). Edge
+  alignment therefore matters: a satisfied square whose edge is leaf-aligned skips
+  its boundary regions, an unaligned edge walks them (pinned in
+  `regionNeedsFreeSkipsLeavesWhollyBeyondLod…` + the RegionScannerTest census).
+- **Audit rung**: one region per PERIODIC fire, round-robin over the region spiral,
+  `ColumnStateMap.auditRegionNeeds` recompute; heals counted (`scan.audit_heals`,
+  expected 0). The stranded-orphan class is demonstrated end to end in
+  `auditRungHealsAStrandedOrphanWithinTwoFires` via the `corruptNeedsBitForTest`
+  seam: a corrupted-OFF needs bit inside an otherwise-clear region produces FALSE
+  convergence (confirmed = lod+1 with an unserved position) until the audit heals
+  it on the very next fire (the player's own region is the cursor's first stop).
+- **Test inventory**: `RegionScannerTest` (14 — order/prefix/clamp/confirmed/skip/
+  audit/cadence/reset pins), `RegionScanDifferentialTest` (3 — want-SET equality vs
+  the legacy fresh walk: geometries × centers, 4-seed chaos, moved centers),
+  `SectionStateFuzzTest` regionNeedsFree brute-force probe (sampled per 50 ops),
+  `ColumnStateMapTest` 3 region pins, `ConfigValidationTest` round-trip,
+  the summary suite's region twin (revocation re-declares via needs bits, reopen
+  surface a no-op) + the scanner-level dirty twin; the four legacy mechanics pins
+  construct `new LodRequestManager(new SpiralScanner())` per §10 policy (a).
+  Full T1: 2051/0 green.
