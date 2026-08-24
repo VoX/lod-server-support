@@ -39,9 +39,17 @@ collapse WITHOUT a hard gate, because the existing budget already provides it:
 - The walk visits regions in region-spiral order and emits, for each region,
   its still-wanted positions; the want-set budget (WANT_SET_BUDGET = 800,
   UNCHANGED) truncates the emission.
-- Since 800 < 1024 (one region's positions), a scan's declared set spans AT
-  MOST TWO regions (the tail of the active region + the head of the next) —
-  and typically one. That is the entire working-set collapse.
+- The walk's structural invariant (v1.1, both reviewers): COMPLETE-PREFIX +
+  AT-MOST-ONE-PARTIAL-TAIL — regions are visited in fixed order and left only
+  when exhausted, so every emitted-from region before the truncation point is
+  fully drained and at most ONE region is partially emitted. In the DENSE
+  fill regime (each region ≥ ~budget needy positions) this makes the declared
+  span ≤ 2 regions (800 < 1024); in SPARSE states (scattered dirty marks,
+  summary-revocation residue, warm-rejoin stragglers) the span legitimately
+  reaches the count of marked regions while total VOLUME stays ≤ budget. The
+  Xaero working-set argument rests on the VOLUME bound, not the span bound:
+  per-scan tile arrival ≤ 800 columns regardless of span, and sparse
+  multi-region scans are inherently low-volume per region.
 - A hard "region complete before advancing" gate would add pipeline bubbles
   (the server idles while the last stragglers of region N resolve at 1 Hz
   re-declare cadence, unable to prefetch region N+1) and needs a wedge rule
@@ -80,7 +88,10 @@ still classifies as needed", the same ladder the ring walk uses today.
   accepted coarseness, same class as the ring-major model's arc scrambling).
 - The per-position skips are UNCHANGED: `isVanillaRendered` exclusion
   (positions vanilla renders are skipped without breaking region completion),
-  `classify == SATISFIED` skip.
+  `classify == SATISFIED` skip — PLUS a per-position `ring <= effectiveLod`
+  clamp (v1.1 A-7: the region bound over-covers by ~1-2 region rings whose
+  beyond-lod positions have absent, all-needs leaves; without the clamp the
+  walk would emit them forever and the server would churn `range_filtered`).
 
 ### 2.2 The region-skip fast path (replaces prefix + reopened rings + valve)
 
@@ -111,6 +122,15 @@ the new path:
   enough to be stateless.
 - The 30-90 ms full-walk hitch class (the reason prefix retention exists)
   cannot occur: the walk is O(regions × 16 + emitted).
+- AUDIT RUNG (v1.1 A-6): the region path's one structural regression risk vs
+  legacy is a needs-mask/classify divergence — legacy heals a stuck-CLEAR
+  needs bit incidentally on any per-position walk; the region walk never
+  re-classifies inside a mask-clear region, so such a bit would strand its
+  position FOREVER. The needs invariant is fuzz-pinned, but as runtime belt
+  each 1 Hz fallback scan additionally classify-walks ONE skipped
+  (needs-free) region round-robin (O(1024) ≈ µs), heals any divergence it
+  finds, and counts `scan.audit_heals` — expected 0; nonzero is the tripwire.
+  SectionStateFuzzTest gains per-op `regionNeedsFree` soundness probes.
 
 ### 2.3 What survives unchanged
 
@@ -135,28 +155,46 @@ the new path:
   wiring, prune (position-radius-based, order-free): unchanged.
 - The SERVER: zero changes required (§4, §5). The wire: zero changes.
 
-### 2.4 Scanner selection (the kill switch)
+### 2.4 Scanner selection and the ScanPolicy cut (v1.1: full table, B-1/B-2)
 
-`ScanPolicy` interface extracted over the manager's scanner surface
-(maybeScan, reopenRing→`noteInvalidated(ring)` no-op on the region path,
-recenter, noteDeclared, reset/resetScanCounter, the diag getters,
-getEffectiveLodDistance/getPruneDistance). `SpiralScanner` implements it
-verbatim (its tests untouched); new `RegionScanner` is selected by client
-config `enableRegionScan` (default TRUE on main — the user is live-testing
-this line), read at session start (reset()): a mid-session flip applies at
-the next join/dimension change (documented; hot-swap of scan state is
-complexity without a user story). `enableScanPrefixRetention` and
+`ScanPolicy` interface (or a shared abstract base — implementer's choice; the
+three supplier SEAMS are fields today and become setter/getter methods either
+way). The COMPLETE manager-facing surface, from the inventory:
+
+| Member | Legacy | Region path |
+|---|---|---|
+| `maybeScan(...)` | verbatim | region walk |
+| `setConfig`, `reset()`, `resetScanCounter()` | verbatim | reset clears cadence+diag; resetScanCounter KEEPS the deliberate post-dimension 20-tick wait + cadence disarm (its prefix-zero half is n/a) |
+| `recenter(d)` | verbatim | no-op (stateless walk; the movement-window cadence flag is replaced by the region-count rung, §8) |
+| `reopenRing(ring)` AND `reopenRing(ring, lod)` + `currentReopenLod()` | verbatim | no-ops (needs bits carry the information; currentReopenLod returns the effective lod for the caller's hoist, harmless) |
+| `noteDeclared(n)`, `setOutstandingSupplier` | verbatim | verbatim (cadence shared) |
+| `columnRateCap` / `columnBurstCap` / `adaptiveCadenceEnabled` seams | fields | interface `setColumnRateCap/setColumnBurstCap/setAdaptiveCadenceeEnabled`-style setters + the `governedBurstCap()` read path; tests that poke the fields pin the LEGACY arm |
+| `wasLastScanFast/wasLastWalkTruncated/wasLastBudgetCapClamped` (governor latch) | verbatim | same semantics — truncated = budget ended the walk (§8) |
+| `getEffectiveLodDistance/getPruneDistance` | verbatim | shared implementation (hoisted) |
+| diag getters (`getConfirmedRing/getReopenedRingCount/getScanRing/getMissingVanillaChunks/getLastBudget/getLastQueued/getFastScans/getRateGated/getQuadRingSkips/getValveTrips`) | verbatim | §9 mapping (confirmed-radius; reopened/quad/valve = 0) + region getters |
+| `scannerForTest()` | returns the interface; a legacy-typed accessor remains for scanner-mechanics tests |
+
+SELECTION POINT (v1.1 B-2 — the draft's "reset()" was wrong in both
+directions: reset() fires mid-session via /lss clearcache and /lss reset,
+and dimension changes call resetScanCounter, never reset): the scanner is
+chosen at MANAGER CONSTRUCTION (`ClientNetGlue.createRequestManager` — the
+session gate rebuilds the manager on every SessionConfig). A config flip
+therefore applies at the next SessionConfig (join, server `/lsslod set`
+re-push, `/reload`) — NOT at dimension change, NOT mid-session via
+clearcache. `reset()` stays selection-free. `enableScanPrefixRetention` and
 `enableQuadtreeScan` gate the LEGACY path only and are untouched.
+`enableRegionScan` deliberately gets NO ClientOptionCatalog row (an A/B
+lever, not a user preference — recorded so the options-page review does not
+re-litigate it).
 
 ## 3. Region walk details
 
 - Emission buffers, budget computation (incl. taper/burst/wire-batch min):
   reuse the exact `maybeScan` head logic (shared or duplicated-with-pin).
-- Within-region bucketing: `int[64] bucketHeads` over a 1024-entry scratch
-  (region ring span ≤ 63 for any region intersecting the disc when the
-  player is inside it... the region containing the player spans rings 0..~45;
-  a far region spans ~2×32 √. Bound: max ring within a region minus min ring
-  ≤ 62 — assert + fall back to a plain sort if ever exceeded).
+- Within-region bucketing: Chebyshev distance is 1-Lipschitz in the Chebyshev
+  metric, so a 32×32 region's ring span is ≤ 31 EXACTLY (v1.1 A-4 — the
+  draft's ~46 was a Euclidean-diagonal error). A 32-slot bucket array over a
+  1024-entry scratch suffices (+1 slack asserted).
 - Region completion diagnostics: `regions_done` (regions before the walk
   head), `region_active=(rx,rz)`, `region_span` (regions the last declaration
   touched — the ≤2 invariant's live gauge), `region_skips` (needs-free skips
@@ -228,11 +266,28 @@ Under region-major, ring-ascending-within-region declarations:
   actually RELIES on is "the first unsatisfied acquisition entry is the
   nearest outstanding work", which region-major preserves.
 - Region transitions move the frontier INWARD (next region's near corner) —
-  instant by design. The outward damp then paces the new region's advance at
-  ≤3 rings/s; a region spans ≤ ~46 rings → ≥ ~15 s/region damping floor,
-  vs 1024 positions / 40 gen/s = 25.6 s/region gen time — the damp does NOT
-  bind at default caps. It binds only above ~68 generated columns/s/player
-  (config-raised caps); recorded as a known ceiling, not changed here.
+  instant by design (exactly at the moment N completes; while N's tail and
+  N+1's head coexist in the two-region window, the COHORT rule (nearest
+  outstanding + 1) briefly holds N's tail candidates behind N+1's nearer
+  head — a bounded, self-resolving cross-region ring interleave, worth one
+  test). The outward damp paces the new region's advance at ≤3 rings/s; a
+  region spans ≤ 31 rings (A-4) → ≥ ~10.3 s/region damping floor vs 1024/40
+  = 25.6 s/region gen time — the damp does NOT bind at default caps; it
+  binds only above ~99 generated columns/s/player (config-raised caps);
+  recorded as a known ceiling, not changed here.
+- CHURN REGIME CHANGE (v1.1 A-5, must anchor the soak baselines): a
+  region-major declaration is always up to ~31 rings deep, so on a GEN-bound
+  cold frontier ~600-700 of each 800-batch sit beyond frontier+2 and every
+  escalation attempt for them is REFUSED — `gen_order_gated`/`superseded`/
+  `miss_dropped` run at ~hundreds/s/player through a cold backfill (legacy's
+  compact 1-2-ring window kept them near zero), plus ~one memo-expiry disk
+  re-read per waiting position per 30 s (miss-memo TTL vs ~26 s/region gen
+  time ≈ ~20-25 extra reads/s — mild). No wedge — the admission band always
+  holds ≥ the gen cap — but the fresh-backfill soak's counter expectations
+  MUST be re-derived against this regime, not judged against ring-major
+  baselines. NOTE: fresh-backfill runs at lod 24 (a ≤2×2-region disc) and
+  barely exercises the region machinery — the far-radius weight rests on the
+  dev-jar live gate, stated plainly.
 - No server change. The live gates: the `fresh-backfill` and
   `generation-capacity-stress` soaks (which exercise the REAL client scanner)
   must stay green, including their `not_generated == 0` and superseded-churn
@@ -241,8 +296,13 @@ Under region-major, ring-ascending-within-region declarations:
 
 ## 6. Why this fixes the Xaero map issue (and what it obsoletes)
 
-- Working set ≤ 2 regions (≤ ~2048 queued tiles worst case, vs MAX_QUEUE
-  8192): overflow drops are impossible by construction at any radius.
+- Per-scan arrival volume ≤ the 800 budget and dense-fill span ≤ 2 regions:
+  bridge-queue overflow becomes STRUCTURALLY RARE (it would need ~8
+  concurrently active regions' worth queued vs the ≤2-region working set —
+  v1.1: not "impossible"; generation stragglers completing 10-30 s late land
+  as single tiles ~7-21 regions behind the stream head and re-activate a
+  parked region — one extra load and occasional §18 heal traffic is the
+  expected residual, recorded so live `heal_pending` noise is not chased).
 - Xaero needs ~0.7 region loads/s at the observed 725 col/s serve rate vs its
   ~10/s capacity — 14× headroom (vs 95-region demand spikes today).
 - Deferral expiries (DEFER_CAP) vanish: a region's load (~100-200 ms) races a
@@ -278,18 +338,29 @@ Under region-major, ring-ascending-within-region declarations:
   accepted the tradeoff conceptually; the dev-jar live test is the real
   acceptance gate).
 
-## 8. Cadence policy note (for the review to attack)
+## 8. Cadence: the region-count rung (v1.1 — the draft's equivalence claim was REFUTED)
 
-Dropping the walk-cost gate removes the mechanism that today keeps a MOVING
-client's fast cadence off past ring 128 (the elytra-wall partial fix). The
-claim: the outstanding gate replaces it — sustained movement continuously
-mints leading-edge needs, keeping outstanding > 5% of the last batch, which
-already holds the cadence at 1 Hz in exactly the regimes the elytra analysis
-worried about (50-75 MB/s at 2-3 Hz). A stationary converged client fast-
-fires only when a re-scan has almost nothing outstanding — the cheap-walk
-sparkle case the cadence exists for. Reviewers: attack this equivalence; the
-fallback position is a region-count-based cost rung (refuse fast fires when >
-N regions have needs), which restores a conservative gate at trivial cost.
+The draft claimed the outstanding gate alone holds flight at 1 Hz. Reviewer A
+refuted it with the elytra trace's own numbers: `inflight` = 0 at 18 of 26
+samples during sustained 33 b/s flight (the server answered each batch inside
+the 1 s gap at ~920 col/s) — legacy stays at 1 Hz there ONLY because of the
+walk-cost rung's movement window, which this plan deletes. Without a
+replacement, a raised-cap store-armed server (the user's own rig, 50/100
+MB/s) would let flight intake climb from ~26 MB/s toward cap-bound 50-100
+MB/s — the elytra investigation's warned-against regime.
+
+THEREFORE, from day one: `fastRescanDue` on the region path carries a
+REGION-COUNT rung — refuse fast fires while the last walk OBSERVED needy
+positions in more than `FAST_RESCAN_MAX_ACTIVE_REGIONS` (2) regions
+(maintained free from the walk's own bookkeeping; test seam like the other
+cadence knobs). Behavior audit: dense warm backfill (the 4 Hz feature case)
+observes ≤ 2 active regions → fast admitted; sustained flight mints
+leading-edge + crescent needs across > 2 regions → 1 Hz (legacy-equivalent);
+sparse dirty scatter across > 2 regions → 1 Hz (legacy also refuses via the
+reopened-bit cost); a truncated DENSE walk still reads span ≤ 2 → fast
+admitted (matching legacy's compact-frontier fast fills). The rung is
+deliberately NOT `lastWalkTruncated` (that would kill the warm-backfill 4 Hz
+— truncation is the NORMAL dense state at 800 < 1024).
 
 Governor window-limited latch (`wasLastScanFast && wasLastWalkTruncated &&
 wasLastBudgetCapClamped` → noteWindowLimited): `lastWalkTruncated` keeps its
@@ -307,12 +378,23 @@ unchanged. Pinned by carrying the existing latch tests over the interface.
 - Exporter/diag continuity (inventory audit): `check_soak.py`'s
   `check_fresh_backfill` HARD-READS `client.scan.confirmed > 24`, and the
   `Scan:` diag line + `scan.*` exporter fields are consumed by tools. The
-  region scanner therefore keeps `scan.confirmed` MEANINGFUL, redefined as
-  the CONFIRMED RADIUS IN CHUNKS: the largest R such that every region
-  intersecting the Chebyshev disc of radius R is needs-free — computed during
-  the walk at no extra cost (the walk already probes regions in ring order).
-  A completed fresh-backfill yields ≥ 32 (region ring ≤1 complete), so the
-  checker's `> 24` law holds without a checker change on the region path;
+  region scanner therefore keeps `scan.confirmed` MEANINGFUL — but v1.1
+  replaces the draft definition, which reviewer A proved is IDENTICALLY 0
+  (vanilla-excluded positions never get leaves; an absent leaf is all-needs;
+  the player's own region is therefore never needs-free — the draft's
+  "needs-free disc radius" can never cover it). Definition v1.1: `confirmed`
+  = the minimum chunk ring of any position the walk OBSERVED as unresolved
+  (in-lod AND not vanilla-excluded AND classify ≠ SATISFIED), or
+  `effectiveLod + 1` when the walk observed none — exactly legacy's
+  confirmedRing meaning ("everything below the nearest outstanding work is
+  complete"; legacy also reports lod+1 on a converged disc). Computed free in
+  the emit pass (needs-free skipped regions contribute nothing by
+  construction — that is what needs-free means). NOT capped at effectiveLod
+  (B-6: a lod-24 converged disc must read 25 > 24 for the fresh-backfill
+  law) and approximate only under budget truncation (unwalked farther
+  regions; ≤ one region-ring quantum, exact at convergence — the checker
+  reads the final converged snapshot). Pinned: converged lod-24 disc reads
+  exactly 25;
   `scan.ring` maps to the last walk's max emitted ring; `scan.reopened`,
   `scan.quad_ring_skips`, `scan.valve_trips` report 0 on the region path
   (legacy-path-only mechanics — 0 is their true value there); ADDITIVE fields
@@ -328,10 +410,13 @@ unchanged. Pinned by carrying the existing latch tests over the interface.
 
 ## 10. Test plan
 
-- `RegionScannerTest` (new, ~25-35 tests): region-spiral order + bounds
+- `RegionScannerTest` (new, ~30-40 tests): region-spiral order + bounds
   (incl. negative coords, player at region corners); within-region ring
-  bucketing order; budget truncation + resumption; the ≤2-REGION SPAN
-  invariant under budget < 1024 (the core pin, asserted on emitted sets);
+  bucketing order; budget truncation + resumption; the COMPLETE-PREFIX +
+  ONE-PARTIAL-TAIL invariant asserted on emitted sets in ALL states, with
+  span ≤ 2 asserted under DENSE fixtures only (v1.1 A-1 — the draft's
+  universal span pin is falsified by a 3-scattered-dirty state); the
+  per-position lod clamp; the audit rung; the region-count cadence rung;
   vanilla-exclusion skip not breaking completion; needs-driven re-emission
   for dirty / retry / summary-revocation / adoptLoaded / shrink-grow
   scenarios (the F1-class holes); cadence arm/disarm + fast-fire parity
@@ -339,10 +424,24 @@ unchanged. Pinned by carrying the existing latch tests over the interface.
   movement/teleport behavior; converged silence (0-count walks send nothing).
 - `RegionScanDifferentialTest`: randomized ColumnStateMap states + exclusion
   radii → the region walk's emitted SET equals the legacy walk's emitted SET
-  (order aside, budget=∞) — the semantic-equivalence pin that makes the
-  switch safe by construction.
-- Manager wiring: interface routing (no-op invalidations on the region path),
-  scanner selection at session start, diag/trace field presence both modes.
+  (order aside, budget=∞) — the semantic-equivalence pin. Two conditions
+  v1.1 A-7 makes explicit: the legacy arm runs FRESH-PREFIX (a mid-session
+  retained prefix deliberately omits below-prefix positions), and the region
+  arm's per-position lod clamp is in force (the over-covered boundary
+  regions' beyond-lod absent leaves would otherwise over-emit).
+- Manager suites policy (v1.1 B-3 — three-way, budgeted as comparable in
+  size to RegionScannerTest itself): (a) scanner-MECHANICS-coupled manager
+  tests (confirmed/reopened asserts, cadence-field pokes, direct maybeScan
+  drives — LodRequestManagerTest:124/:238/:840-938, TickTest:904-922/:514/
+  :988, SummaryTest:355) pin the LEGACY arm explicitly via the construction
+  seam; (b) scanner-AGNOSTIC behavior pins (self-heal, dirty re-request,
+  backpressure clear/disarm, tracker replace, stale crossing) run
+  parameterized over BOTH arms; (c) the summary-revocation and dirty-reopen
+  behaviors get REGION-path twins asserting needs-bit re-declaration (the
+  §7 claims' actual pins). Manager wiring: interface routing, construction-
+  time selection, diag/trace field presence both modes. The exporter
+  contract FILE (fabric/src/test/resources/exporter-contract/
+  client-snapshot.contract) gains the region keys (B-5).
 - Existing suites: SpiralScannerTest + QuadtreeWalkDifferentialTest untouched
   (legacy path pinned as the control arm); ColumnStateMapTest gains
   `regionNeedsFree` gridding pins (incl. negatives); SectionStateFuzzTest
@@ -362,9 +461,12 @@ unchanged. Pinned by carrying the existing latch tests over the interface.
   is adjusted only with a derivation note (per the soak discipline), expected
   candidates: warm-rejoin suppression timing legs, storm superseded ceilings.
 - Live: dev jar on lss-test-26.2 — the user's approval gate. Signatures:
-  `region_span<=2` steady, XaeroMap `dropped` ≈ flat at any radius,
-  `heal_pending` ≈ 0, fill rate ≥ today's ~725/s, `gen_order_gated`
-  proportionate on a fresh-world test.
+  `region_span <= 2` DURING FILL PHASES (span spikes correlating with
+  dirty/revocation events are expected and harmless — v1.1), XaeroMap
+  `dropped` ≈ flat at any radius, `heal_pending` ≈ 0 modulo the
+  gen-straggler residual, fill rate ≥ today's ~725/s, and on a fresh-world
+  test `gen_order_gated` judged against the §5 v1.1 regime numbers (NOT
+  against ring-major baselines).
 
 ## 11. Rollout
 
@@ -384,4 +486,33 @@ v0.12.1 staged tags are NOT touched by this round.
 | Hidden ring-field consumers (tools/scripts) | Inventory audit (§10); legacy fields stay on legacy path |
 | Two scanners to maintain | Deliberate: control arm + instant rollback; retirement is a later, user-approved decision |
 | Server "closest-first by construction" comments go stale | §5: reword to the property actually relied on (first unsatisfied entry = nearest outstanding), same PR |
-| `scan.confirmed` semantics shift breaks tooling | §9 confirmed-radius redefinition keeps the checker law green; pinned in exporter tests |
+| `scan.confirmed` semantics shift breaks tooling | §9 v1.1 definition keeps the checker law green; pinned in exporter tests |
+| Docs drift | Same-PR task: CLAUDE.md want-set/architecture/config-key sites, README key, release-notes item incl. the visible 512-block fill-pattern change (B-7) |
+
+## 13. Plan review fold (2-Fable, 2026-08-24)
+
+Reviewer A (design lens, 3 MAJOR / 4 minor) and reviewer B (integration lens,
+4 MAJOR / 4 minor). Every finding folded in place above; the headline
+reshapes: the span claim restated as complete-prefix + one-partial-tail with
+the Xaero argument re-derived from the VOLUME bound (A-1/B-4); the
+confirmed-radius definition replaced after A proved the draft's was
+identically 0 via the absent-leaf/exclusion interplay, reconciled with B's
+no-lod-clamp law requirement into the min-observed-unresolved definition
+(A-2/B-6); the cadence-equivalence claim WITHDRAWN as refuted by the elytra
+trace's inflight=0 samples and replaced by the day-one region-count rung
+(A-3); the ScanPolicy cut expanded to the full signature table incl. the
+three field seams, and the selection point corrected to manager construction
+(B-1/B-2); the manager-suite three-way test policy added (B-3); ring-span
+arithmetic corrected to ≤31 with the damp floor/ceiling recomputed and the
+cohort cross-region interleave recorded (A-4); the gen-churn regime change
+quantified and anchored for soak baselines, with fresh-backfill's lod-24
+non-coverage stated (A-5); the audit rung added for the needs-divergence
+stranding class (A-6); the differential's two validity conditions and the
+region walk's production lod clamp made explicit (A-7); exporter contract
+file, docs tasks, and the no-options-row decision recorded (B-5/B-7/B-8).
+Verified-sound by both reviewers: the ordering-not-gating core, the §5
+server-gate facts and the non-reintroduction of the historical wedge, the
+router's declaration-order drain (the server-leverage foundation), harness/
+v16/governor/InFlightTracker neutrality, and the governor-latch provenance
+argument.
+
