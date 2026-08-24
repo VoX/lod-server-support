@@ -151,9 +151,14 @@ public final class ClientCommandActions {
         int maxRing = manager.getEffectiveLodDistanceChunks();
         // ring_skips: rings the leaf fast path confirmed without a per-position walk
         // (the legacy arm's quadtree path, gated by enableQuadtreeScan — AND the
-        // hybrid walk's phase-1 skips, which are gate-independent, §7).
-        // (the quadtree plan's phase-0 B1 field measurement — nonzero on a busy server
-        // means dirty broadcasts genuinely disperse past 64 rings).
+        // hybrid walk's phase-1 skips, which are gate-independent and make this
+        // unconditionally large on the hybrid arm: NOT a dirty-dispersion signal
+        // there, §7). valve: reopened-ring valve overflows this session (the
+        // quadtree plan's phase-0 B1 field measurement — on the LEGACY arm nonzero
+        // on a busy server means dirty broadcasts genuinely disperse past 64 rings).
+        // near_rings: hybrid phase-1 rings that emitted/observed needy work last
+        // walk — the §7/§9 in-band instrument: active during near fill, ~0 at
+        // convergence (always 0 on the legacy arm).
         feedback.accept(Component.literal(String.format(
                 "Scan: confirmed=%d, reopened=%d, scanning=%d/%d, missing_vanilla=%d, fast=%d, ring_skips=%d, valve=%d, region_span=%d, region_skips=%d, audit_heals=%d, near_rings=%d",
                 confirmedRing, manager.getReopenedRingCount(), scanRing, maxRing,

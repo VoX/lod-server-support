@@ -29,7 +29,10 @@ class RegionScanDifferentialTest {
 
     private static final int BUDGET = 1_000_000;
 
-    /** Buffers sized to the geometry (the far-lod cases exceed a fixed 16384). */
+    /** Buffers sized to the geometry (the far-lod cases exceed a fixed 16384).
+     *  Slack note (impl-review n9): a duplicate-emission bug of > 64 positions
+     *  surfaces as an ArrayIndexOutOfBoundsException here rather than the named
+     *  duplicate assert — accepted, either way the test reds. */
     private static int bufSize(int lod) {
         return (2 * lod + 1) * (2 * lod + 1) + 64;
     }
@@ -90,7 +93,7 @@ class RegionScanDifferentialTest {
     void emptyAndConvergedStatesAgreeAcrossGeometries() {
         // 80/96/130 are the §8 far-coverage lods (all v1 lods ≤ 43 degenerate to
         // phase 1 under the hybrid — without these the region walk ships unverified).
-        for (int lod : new int[]{2, 8, 24, 33, 40, 80, 96, 130}) {
+        for (int lod : new int[]{2, 8, 24, 33, 40, 63, 64, 65, 68, 80, 96, 130}) {
             for (int[] c : new int[][]{{0, 0}, {31, 31}, {32, 32}, {-1, -17}, {100, -256}}) {
                 var empty = new ColumnStateMap();
                 assertSameWantSet(empty, lod, c[0], c[1], 4,

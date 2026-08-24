@@ -1158,52 +1158,6 @@ class ColumnStateMapTest {
     // ---- the region walk's probes (region-scan-plan.md §2.2) ----
 
     @Test
-    void regionNeedsFreeIsLeafGranularAndLodIntersected() {
-        var m = new ColumnStateMap();
-        // Absent leaves in-lod = needs (never-visited terrain is a first ask).
-        assertFalse(m.regionNeedsFree(0, 0, 0, 0, 100),
-                "an empty map's in-lod region must read as needing");
-        // Fully satisfied region -> free.
-        for (int cx = 0; cx < 32; cx++) {
-            for (int cz = 0; cz < 32; cz++) {
-                long pk = PositionUtil.packPosition(cx, cz);
-                m.onReceived(pk, 1000L);
-                m.onUpToDate(pk);
-            }
-        }
-        assertTrue(m.regionNeedsFree(0, 0, 0, 0, 100), "a fully satisfied region is free");
-        // One dirty mark flips it back.
-        assertTrue(m.markDirtyIfKnown(PositionUtil.packPosition(5, 5)));
-        assertFalse(m.regionNeedsFree(0, 0, 0, 0, 100), "one dirty mark = needs");
-        // A region fully OUTSIDE the lod square is vacuously free (the walk pre-skips
-        // it, but the method's contract must be defined — every leaf is skipped).
-        assertTrue(new ColumnStateMap().regionNeedsFree(10, 10, 0, 0, 40),
-                "a fully beyond-lod region is vacuously free");
-    }
-
-    @Test
-    void regionNeedsFreeSkipsLeavesWhollyBeyondLodButKeepsPartialLeavesConservative() {
-        var m = new ColumnStateMap();
-        // lod 15 around (0,0): region (0,0)'s leaves at 16..31 are WHOLLY beyond the
-        // square and must be ignored even though they are absent (= all-needs).
-        for (int cx = 0; cx <= 15; cx++) {
-            for (int cz = 0; cz <= 15; cz++) {
-                long pk = PositionUtil.packPosition(cx, cz);
-                m.onReceived(pk, 1000L);
-                m.onUpToDate(pk);
-            }
-        }
-        assertTrue(m.regionNeedsFree(0, 0, 0, 0, 15),
-                "leaves wholly beyond the lod square are ignored");
-        // lod 20: leaf (16..23) now INTERSECTS; its beyond-lod positions (21..23) are
-        // unvisited, so the leaf-granular probe reads needs — the CONSERVATIVE
-        // direction (a needless emit pass, never a wrong skip); the emit pass's
-        // per-position clamp keeps those positions out of the want-set.
-        assertFalse(m.regionNeedsFree(0, 0, 0, 0, 20),
-                "a partially-intersecting leaf with beyond-lod holes reads needs");
-    }
-
-    @Test
     void auditRegionNeedsHealsACorruptedBitAndCountsIt() {
         var m = new ColumnStateMap();
         long pk = PositionUtil.packPosition(3, 3); // never received -> genuinely needy
@@ -1221,8 +1175,9 @@ class ColumnStateMapTest {
     @Test
     void rectNeedsFreeIsLeafGranularAndConservative() {
         // The hybrid walk's residue probe (hybrid-scan-plan.md §2.1/§8 pin 12):
-        // leaf-granular over the rectangle, same conventions as regionNeedsFree —
-        // absent leaf = needs, partial leaf conservative toward walking.
+        // leaf-granular over the rectangle — absent leaf = needs, partial leaf
+        // conservative toward walking (the UNALIGNED-rect arm; the leaf-aligned
+        // exactness rides the SectionStateFuzzTest differential).
         var m = new ColumnStateMap();
         assertFalse(m.rectNeedsFree(0, 0, 7, 7), "an empty map's rect reads as needing");
         for (int cx = 0; cx < 8; cx++) {

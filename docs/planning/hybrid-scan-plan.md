@@ -807,12 +807,21 @@ override of §0's ship-§12-first gate ("do the entire plan").
   (test seam `hybridNearRadius`); `lod` and `N = min(seam, lod)` hoisted once
   per scan. Phase 1: labeled loop over rings r₀+1..N in legacy
   `ringIndexToCoord` order — `ringNeedsFree` probe first (gate-independent,
-  counts `quadRingSkips`, observe cost r/4+4), needy rings pay 8r + per-position
-  emit; a budget break sets `truncated`, `phase1Broke`, counts the ring into
-  `nearRings`, and phase 2 never runs (§2.3's convention: past-budget
-  observation sets are truncated, never emit-free-completed). Phase 2 gated on
-  `!phase1Broke && N < lodDistance`: the region spiral emits per-region residue
-  only.
+  counts `quadRingSkips`, observe cost r+4 = the probe's actual perimeter
+  lookups), needy rings pay 8r + per-position emit; a budget break sets
+  `truncated`, `phase1Broke`, counts the ring into `nearRings`, and phase 2
+  never runs. **§2.3/§3 deviation (fold-recorded):** the first past-budget
+  UNRESOLVED position breaks the WHOLE walk — there is no emit-free observation
+  sweep of the remaining rings, so §3's O(8r·remaining) post-budget charge does
+  not exist as-built (this is what keeps a cold-fill phase-1 break inside the
+  4 Hz meter — the opposite of §3's prediction; do not "restore" the sweep).
+  Phase 2 gated on `!phase1Broke && N < lodDistance`: the region spiral emits
+  per-region residue only; per-rect probe charge = the rect's leaf-bbox count.
+  One recorded pricing corner: a walk whose budget is consumed exactly at the
+  seam and then truncates at its FIRST needy phase-2 region leaves
+  maxEmittedRing ≤ N, so the movement window prices the near frontier while the
+  next walk re-sweeps the region spiral (~1 ms of leaf probes; the stationary
+  branch meters it honestly) — accepted, comment at the break site.
 - **`wholeExcludedRings(vd)`** — seeded at `vd/√2 + 1`, stepped to the largest
   r with `2(r−1)² < vd²` (the corner test against the 1-buffered Euclidean
   exclusion `adx²+adz² < vd²`); brute-pinned for vd 0..40 against the real
@@ -823,8 +832,12 @@ override of §0's ship-§12-first gate ("do the entire plan").
   no allocation. 2000-trial brute pin: exact cover, pairwise disjoint.
 - **`ColumnStateMap.rectNeedsFree(x0,z0,x1,z1)`** — leaf-granular over the
   rect; absent leaf = needs; partial-leaf overlap answered conservatively
-  (needs-anywhere-in-leaf → walk). Phase-2 probes metered via the
-  `phase2Probes` counter (test-only getter).
+  (needs-anywhere-in-leaf → walk). `regionNeedsFree` is DELETED (fold — its
+  lod-intersection job lives in the residue rect bounds; the SectionStateFuzz
+  differential now sweeps `rectNeedsFree` over leaf-aligned region rects).
+  Phase-2 entry/probes tracked via the package-private session-cumulative
+  fields `phase2Rounds`/`phase2Probes` (test seams, no getters; both reset at
+  session AND dimension resets).
 - **`near_rings`** (§7 REQUIRED) — phase-1 rings that emitted or observed needy
   work; wired through diag Scan line, trace `scan` event, exporter
   `scan.near_rings` (+ contract row — NOTE the contract file is
@@ -837,20 +850,80 @@ override of §0's ship-§12-first gate ("do the entire plan").
   90-iteration convergence), new pins (phase-1-order-equals-fresh-legacy under
   both quad variants; budget-break-skips-phase-2 with `phase2Probes == 0`;
   observe-cost-meters-emitted-work; the two brute pins above).
-  RegionScanDifferentialTest 3/0 — dynamic `bufSize(lod)`, far lods
-  {2,8,24,33,40,80,96,130}, chaos alternating 24..43/70..109 by seed parity,
-  and the lod ≤ 64 ORDERED-sequence arm. `ColumnStateMapTest` gains the
-  rectNeedsFree granularity/conservatism pin. Full T1 2083/0, T2 green.
+  RegionScanDifferentialTest 3/0 — dynamic `bufSize(lod)`, lods
+  {2,8,24,33,40,63,64,65,68,80,96,130} (63-68 = the N=64 phase-flip band,
+  fold-added), chaos alternating 24..43/70..109 by seed parity, and the
+  lod ≤ 64 ORDERED-sequence arm (covers 63/64 — the seam order itself).
+  `ColumnStateMapTest` gains the rectNeedsFree granularity/conservatism pin.
+  Full T1 green, T2 green.
   **Complete-prefix re-home deviation:** the ≥2-group premise fails for an
   origin-centered player (the first far sliver is 992 cells ≥ the 800 budget)
   — the pin now runs off-center at (16,16) with a local brute over
-  |x−16|/|z−16|.
-- **Boundary soak** (§8.10): NEW scenario `hybrid-boundary` (lod 88, tp to
-  (500,150,500) mid-run, save-all@480, end@540) + `check_hybrid_boundary`
-  (gen.completed > 2000, quiescent tail, scan.confirmed > 88) registered in
+  |x−16|/|z−16|. **Movement chaos** runs a 4-element (seed, lod) ZIP —
+  {(3,24),(11,24),(77,24),(5,96)} — not a cross product; the ring-order chaos
+  gains its own lod-96 seed (fold).
+- **Boundary soak** (§8 item 10, resized by the fold — M1/M2): scenario
+  `hybrid-boundary` — lod 72 fresh fill, tp to (500,150,500) at t+4 s (the fill
+  ORIGIN sits at region (0,0)'s far corner, the §1 artifact geometry — NOT a
+  mid-run re-center), save-all@1020, end@1080. Sizing: the annulus is
+  (2·72+1)² − 17² = 20,736 columns at the measured ~30 gen/s admission pace
+  ≈ 690 s, leaving a ~390 s settle tail (§8 item 10's prebuilt/disk-served
+  premise was inverted to fresh-generation as built — recorded; the original
+  540 s/lod 88 cut was red-by-construction at ~1,015 s of fill).
+  `check_hybrid_boundary` (gen.completed > 15000 as the fill PREMISE, quiescent
+  tail, scan.confirmed > 72) + `make_disc_completeness` — the area floor is the
+  SEAM-HOLE discriminator (an unobserved ring-65 hole FALSE-CONVERGES
+  scan.confirmed; only disc completeness reds). Registered in
   CHECKS/MIN_CLIENT_WINDOWS/ANOMALY_OPT_INS ({"saturated"}), 5 selftest cases
-  (270 total), soak.sh FRESH_WORLD_SCENARIOS. First live run pending — the
-  540 s end and both thresholds may need tuning against observed timings.
+  (270 total), soak.sh FRESH_WORLD_SCENARIOS **and ALL_SCENARIOS** (M1 — the
+  gate runs in `soak.sh all`; CLAUDE.md's count is 23). First live run still
+  pending.
 - **Docs:** CLAUDE.md's three scanner sites (want-set paragraph, the
   RegionScanner bullet, the `enableRegionScan` key note) now describe the
   hybrid walk; `ring_skips=` legend covers both arms.
+
+### §13.1 Implementation-review fold (2026-08-24, 3-agent panel: geometry / integration-cadence / tests-docs)
+
+Verdicts: geometry 0 MAJORs (1 MINOR, 5 NITs); integration 0 MAJORs (6 MINORs,
+2 NITs); tests/docs 3 MAJORs (9 MINORs, 10 NITs). Every finding folded or
+recorded; the walk itself survived both adversarial lenses untouched — all
+three MAJORs were gate/test defects.
+
+- **M1 (gate never runs)** — `hybrid-boundary` added to `ALL_SCENARIOS`
+  (was FRESH_WORLD_SCENARIOS only); CLAUDE.md scenario count 22→23 + the
+  scenario named in the "Further scenarios" enumeration.
+- **M2 (gate red-by-construction)** — resized lod 88→72, end 540→1080 s,
+  save-all 480→1020 s; thresholds re-derived (gen > 15000, confirmed > 72);
+  the §8-item-10 prebuilt→fresh deviation and the disc-completeness-is-the-
+  discriminator doctrine recorded in the check's docstring and §13.
+- **M3 (vacuous span pin)** — `steadyFillKeepsSpanAtMostTwo…` re-homed to
+  lod 128 with the near-square-containment `allFull` predicate, a
+  `sawFullSpanFire` vacuity guard, and 32-slack on sliver fires (the +lod edge
+  clips to 1-wide slivers — 2·lod+1 is never 32-aligned).
+- Meters made honest (geometry-MINOR/integration-n8/n9): phase-1 probe charge
+  r/4+4 → r+4; phase-2 flat 16 → per-rect leaf-bbox count.
+- New pins: `phase2Rounds` degeneracy/break seams (m1), the deep-phase-2
+  movement REFUSAL + the converged-lod-512 both-arms delta pin (m2 — §8 pin
+  8's missing arms), the walked-cells meter pin (m5 — sparse-needy scatter,
+  walked > 4×emitted premise), the phase-2 satisfied-tail §2.3 carry twin at
+  lod 96 (m8 — rides the natural +edge-sliver conservative-probe shape), the
+  hybrid quad-off order arm (n4) with audit-off fixture hygiene (n10),
+  `wholeExcludedRings` brute extended to vd 80 (geometry NIT), differential
+  lods += {63,64,65,68} (m3/n5 — the phase-flip band).
+- `regionNeedsFree` DELETED (dead since the rewrite; CLAUDE.md's stale credit
+  fixed both sites); the SectionStateFuzz differential retargeted to
+  `rectNeedsFree` over leaf-aligned region rects; the two direct pins dropped
+  in favor of the live-probe granularity pin.
+- Diag legend repaired (integration-m3/tests-n7): the orphaned `valve`
+  parenthetical restored to its token, `near_rings` given its legend with the
+  hybrid-arm ring_skips caveat (unconditionally large there — NOT a
+  dirty-dispersion signal).
+- Records: LodRequestManagerTest's lod-64 twins marked phase-1 pins (m6);
+  region-scan-plan.md §14.2 supersession note (m6); massDirtyScatter's
+  N-coupling comment (n2); §13 corrected in place (t+4 s tp, seam-pricing
+  corner, field-not-getter, ZIP-not-cross-product, §8-item-10 numbering, the
+  §2.3/§3 no-observation-sweep deviation) (n1/n3, geometry-2/5).
+- Accepted as-is: the differential's 64-entry buffer slack (n9 — AIOOBE still
+  reds), `wholeExcludedRings` analytically exact beyond the brute bound
+  (geometry-6), phase-1's stronger-than-plan short-circuit at lod ≤ N
+  (geometry-4 — now discriminated by `phase2Rounds`).
