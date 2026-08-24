@@ -635,3 +635,75 @@ batch, the ¼-halt fast-path gate) is existing #71 machinery, verified.
    cherry-pick this file).
 4. The hybrid walk ships LAST, per §0 unchanged, with §9's rate gate qualified
    bridge-off.
+
+### §12.6 As-built record (2026-08-24, branch feat/xaero-backpressure off feat/region-scan)
+
+Implemented per §12.1-§12.4 (v3.1). As-built facts:
+
+- **Consumer**: `buildConsumer()` returns an anonymous class overriding
+  `pendingIngestBacklog()` → `reportBackpressure()` (the lambda trap closed;
+  wiring pin `theConsumerOverridesThePendingIngestBacklogDefault`).
+- **Report**: `round(INGEST_BACKLOG_HALT_SECTIONS × min(1, occupancy/0.75))`;
+  the halt constant went PUBLIC on `LodRequestManager` (single source of truth).
+  Occupancy = `max(bytes/maxQueueBytes, count/maxQueue)` over the SEAM fields,
+  clamped, mirrored volatile under `queueLock` at every mutation
+  (`updateOccupancyLocked` — offer replace/insert/evict, removeIfCurrent,
+  clearQueue). `maxQueueBytes` became a seam beside `maxQueue`.
+- **Drainable latch**: `pumpLadder()` is now a wrapper — `pumpLadderInner()`
+  returns true ONLY on the path that reaches `drainEntries` (14 early returns
+  retargeted mechanically; a throwing ladder counts as undrainable). Hysteresis:
+  `BP_PAUSE_PUMPS = 20` consecutive undrainable pumps before
+  `pausedForOffers`/`pumpDrainable` flip; one drainable pump clears both.
+  Watchdog: `BP_PUMP_STALE_MILLIS = 1000` on a `lastPumpMillis` stamped at the
+  top of every live pump; clock seam `bpClock` (LongSupplier field — the class
+  is final, an override seam was impossible).
+- **The idle-fast-out deadlock guard** (found in design): refusals keep the
+  queue empty, and the empty-queue pump fast-out would then skip the ladder
+  forever — the fast-out now yields while `pausedForOffers` holds, so the
+  ladder run (~10 reflective reads) is what clears the pause.
+- **Halt time-box**: at a full report with `written` unchanged for
+  `BP_HALT_WEDGE_MILLIS = 7000`, `haltWedged` latches (warn once) → report -1;
+  re-arms below `BP_WEDGE_REARM_OCCUPANCY = 0.5`. Wedged drops are SILENT
+  (reporting would churn re-serves into a wedged writer).
+- **Refusal-while-paused**: `offerColumn` refuses pre-extraction when
+  `pausedForOffers && backpressureEnabled` (counter `refused_paused`, no
+  report). `offerPrepared` (the test seam / post-extraction path) is not
+  re-gated — the race window is one extraction, bounded.
+- **Reporting split as specified**: stale-dimension + world-id-change drops
+  report UNCONDITIONALLY (`reportDropped` — correctness); overflow/eviction/
+  defer-expiry drops report under `reportDroppedIfGoverned`
+  (backpressureEnabled && !haltWedged — kill-switch off = pre-amendment
+  silence); settings-off and teardown clears never report. The world-id clear
+  uses `clearQueueReporting()` (collect under lock, report outside — the §18.1
+  lock discipline); reports carry counter `drops_reported`.
+- **Deleted**: `DroppedLedger`, `recordDropped(Locked)`, `abandonLedgerLocked`,
+  `healPhase`, `rotateLedgerToTail`, `flushLedgerRegion`, `probeRegionForHeal`,
+  `reportedHistory`, `ledgerTotal`, `LEDGER_MAX_REGIONS`,
+  `LEDGER_FLUSH_PER_PUMP`, `ledgerMaxRegions`, the five heal counters/gauges,
+  `clearQueue(boolean)` (arity collapsed), the pump's idle-ledger clause,
+  `enableXaeroMapBridgeHeal` + its round-trip pin, ~11 §18 tests. The
+  `committedRegions` set in `drainEntries` went with the heal phase.
+- **Diag**: `heal_*` tokens replaced by `refused_paused=`, `drops_reported=`,
+  and the tri-state `bp=` (`off` / `-1(inactive|paused|wedged|stale)` /
+  occupancy fraction); census updated + a negative heal-token pin.
+- **Config**: `enableXaeroMapBackpressure` (default true) replaces the heal key
+  in `LSSClientConfig`; round-trip pin swapped (incl. a deleted-key
+  no-resurface assert); no options-page row (the bridge toggle's TOOLTIP gained
+  the pacing clause instead, per the panel's discoverability fold).
+- **ingest_parked family**: KEPT, javadocs reworded to the §12 framing
+  (`MAX_INGEST_FAILURES` is the report-loop belt; small again under the taper).
+- **Tests**: 14 §12 suites in XaeroMapCompatTest (wiring, halt-domain scaling +
+  the halt-precedes-drop ordering pin, byte-dominance, hysteresis + refusal,
+  the negative paused-never-halts pin, the empty-queue resume/deadlock guard,
+  watchdog, wedge + re-arm, governed-vs-silent reporting, stale-dimension
+  unconditional, world-id reporting, settings-off non-reporting, defer-expiry
+  both flavors, session-teardown reset). Full T1 green; T2 green.
+- **Docs**: xaero-map-bridge-plan §18 SUPERSEDED banner;
+  region-scan-plan §14.1's three heal signatures AMENDED in the same change
+  (the M7 condition for shipping before the region live gate);
+  the Sodium tooltip clause; README untouched (its Xaero paragraph describes
+  behavior, not the heal).
+- **NOT done, deliberate**: no exporter/soak contract rows (no automated
+  harness reaches Xaero — unit + live IS the whole gate, per §12.4); the
+  v0.12.1 re-cut decision stays with the user (§12.5.1); backports deferred
+  (§12.5.3 — as one unit with the lines' heal removal).

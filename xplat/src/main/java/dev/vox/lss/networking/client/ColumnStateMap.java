@@ -108,9 +108,10 @@ class ColumnStateMap {
     // failing consumer would otherwise drive forever (see onIngestFailed).
     private final Long2IntOpenHashMap ingestFailures = new Long2IntOpenHashMap();
     /** Positions parked at {@link #MAX_INGEST_FAILURES} this session — the definitive
-     *  "this hole is now permanent" signal (the §18 Xaero heal's success criterion:
-     *  a completed heal and a total failure are otherwise indistinguishable from the
-     *  report/failure counters alone). */
+     *  "this hole is now permanent" signal (kept through the §18→§12 transition:
+     *  under §12 backpressure a nonzero value means drop REPORTS looped to the cap —
+     *  the runaway-loop belt fired — distinguishable from ordinary rejections only
+     *  here). */
     private long ingestParked;
 
     long ingestParkedCount() {
@@ -692,10 +693,11 @@ class ColumnStateMap {
         leaf.recomputeNeeds();
     }
 
-    /** Re-serve attempts allowed per position per session before parking it. Note
-     *  (§18.1): under the Xaero dropped-tile heal, {@code ingestFailures} can reach
-     *  disc scale (~150k entries ≈ 3 MB) in a heavy far-radius session — bounded by
-     *  the disc, no longer only by rare failures. */
+    /** Re-serve attempts allowed per position per session before parking it. Under
+     *  §12 backpressure (hybrid-scan-plan.md) drop reports are structurally rare
+     *  (the taper prevents the drops), so this map stays small again; it remains
+     *  the belt that bounds any report loop (defer-expiry churn, a permanently
+     *  rejecting consumer) at ~3 re-serves per position. */
     static final int MAX_INGEST_FAILURES = 3;
 
     /**

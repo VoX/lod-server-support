@@ -1386,6 +1386,12 @@ Recorded, not changed:
 - **Iris shadow-pass double-fire** can run the frame slice twice per frame —
   each invocation is capped and allowance-metered, so the ceiling holds.
 
+> **SUPERSEDED (2026-08-24, hybrid-scan-plan.md §12/§12.1):** the §18/§18.1
+> ledger heal below is REMOVED — §12's want-set backpressure prevents the drops
+> at the source (the taper), and the immediate `DropReporter` path (the one
+> §18 piece that is KEPT) covers the dimension-switch/world-change residuals.
+> These sections remain as the historical design record only.
+
 ## 18. The dropped-tile heal (2026-08-24, field-test round 4 — far-radius drops)
 
 Field report (26.2 and expected on all lines, 91-minute 34 GB fill session):

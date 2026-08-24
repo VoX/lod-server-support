@@ -34,7 +34,7 @@ public class LodRequestManager {
      * at equilibrium the budget settles where arrivals match the consumer's drain rate.
      * Deliberately derives from no server cap (the retired Global Constraint #28 class).
      */
-    static final int INGEST_BACKLOG_HALT_SECTIONS = 6144;
+    public static final int INGEST_BACKLOG_HALT_SECTIONS = 6144; // public: the §12 Xaero backpressure report is scaled into this halt domain
 
     private SessionConfigS2CPayload sessionConfig;
     private String serverAddress;
@@ -1027,8 +1027,9 @@ public class LodRequestManager {
      * it with ts=-1 — the server's honest re-resolution then re-serves it instead of
      * answering up-to-date. Main client thread only.
      */
-    /** Positions parked at the ingest-failure cap this session (§18.1 — the heal's
-     *  definitive permanent-hole count, diag {@code ingest_parked=}). */
+    /** Positions parked at the ingest-failure cap this session (the definitive
+     *  permanent-hole count, diag {@code ingest_parked=}; under §12 backpressure a
+     *  nonzero value means the report belt fired — see MAX_INGEST_FAILURES). */
     public long getIngestParkedCount() {
         return this.columns.ingestParkedCount();
     }
