@@ -66,8 +66,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  *   <li>registration lifecycle: add-only while live, deregistration only at
  *       session end (mid-session deregistration would put every column through
  *       the no-consumer ingest-failure re-serve path);</li>
- *   <li>the consumer contract: a throwing extraction NEVER escapes and the
- *       default {@code pendingIngestBacklog} is not overridden.</li>
+ *   <li>the consumer contract: a throwing extraction NEVER escapes, and
+ *       {@code pendingIngestBacklog} IS overridden with the §12 backpressure
+ *       report (the anonymous-class requirement — a lambda keeps the -1
+ *       default and the taper never engages).</li>
  * </ul>
  */
 class XaeroMapCompatTest {
@@ -83,6 +85,7 @@ class XaeroMapCompatTest {
     private boolean enabled = true;
     private boolean sessionActive = true;
     private boolean backpressureEnabled = true;
+    private long clockMillis = 1_000_000L;
     private final List<Object[]> reports = new ArrayList<>();
     private final List<dev.vox.lss.api.VoxelColumnConsumer> registered = new ArrayList<>();
     private XaeroMapCompat bridge;
@@ -135,6 +138,8 @@ class XaeroMapCompatTest {
                         this.reports.add(new Object[]{dimension, chunkX, chunkZ}));
         this.bridge.pumpNanosBudget = Long.MAX_VALUE; // neutralize MethodHandle warmup
         this.bridge.updateNanosBudget = Long.MAX_VALUE;
+        this.clockMillis = 1_000_000L;                // deterministic: the 1 s watchdog
+        this.bridge.bpClock = () -> this.clockMillis; // must never race a slow test JVM
         this.bridge.maybeRegister();
     }
 
@@ -344,7 +349,9 @@ class XaeroMapCompatTest {
         this.bridge.pump();
         assertEquals(1, this.bridge.counterForTest("written"),
                 "the replacement (current-dimension) entry must commit");
-        assertEquals(0, this.bridge.counterForTest("dropped_stale"));
+        assertEquals(1, this.bridge.counterForTest("dropped_stale"),
+                "§12 review m1: the replaced foreign entry is COUNTED (it used to"
+                        + " vanish silently) — and reported (the stale route)");
     }
 
     // ---- the gate ladder (each not-ready gate defers: entry retained, no events) ----
@@ -1011,6 +1018,7 @@ class XaeroMapCompatTest {
     @Test
     void pausedLatchRefusesOffersAfterHysteresisAndReportsNoSignal() {
         this.bridge.bpPausePumps = 3;
+        this.bridge.bpRefusePumps = 3; // both thresholds together for this pin
         offer(64, 64);
         primeDrainablePump();
         offer(64, 65);
@@ -1041,6 +1049,7 @@ class XaeroMapCompatTest {
         // must never stop the LOD fill via a stale full-queue reading.
         this.bridge.maxQueue = 2;
         this.bridge.bpPausePumps = 1;
+        this.bridge.bpRefusePumps = 1;
         offer(64, 64);
         primeDrainablePump();
         this.processor.createdRegionLoadState = 0;
@@ -1058,6 +1067,7 @@ class XaeroMapCompatTest {
         // and an empty-queue fast-out that skipped the ladder would leave the pause
         // latched FOREVER — the pump must keep running the ladder while paused.
         this.bridge.bpPausePumps = 1;
+        this.bridge.bpRefusePumps = 1;
         offer(64, 64);
         primeDrainablePump();
         this.processor.writingPaused = true;
@@ -1075,12 +1085,10 @@ class XaeroMapCompatTest {
 
     @Test
     void theWatchdogReportsNoSignalWhenThePumpGoesStale() {
-        long[] now = {1_000_000L};
-        this.bridge.bpClock = () -> now[0];
         offer(64, 64);
         primeDrainablePump();
         assertEquals(0, this.bridge.reportBackpressure());
-        now[0] += this.bridge.bpPumpStaleMillis + 1; // no pump inside the window
+        this.clockMillis += this.bridge.bpPumpStaleMillis + 1; // no pump inside the window
         assertEquals(-1, this.bridge.reportBackpressure(),
                 "a frozen mirror must never read as live backlog (the watchdog)");
         this.bridge.pump();
@@ -1089,8 +1097,6 @@ class XaeroMapCompatTest {
 
     @Test
     void theHaltTimeBoxDegradesAWedgedWriterAndReArmsOnDrain() {
-        long[] now = {1_000_000L};
-        this.bridge.bpClock = () -> now[0];
         this.bridge.maxQueue = 2;
         this.bridge.maxQueueBytes = Long.MAX_VALUE;
         offer(64, 64);
@@ -1100,7 +1106,7 @@ class XaeroMapCompatTest {
         offer(129, 64); // region (4,2), unloadable — 100% count occupancy -> halt
         this.bridge.pump(); // still drainable (reaches drainEntries; entries AWAIT their load)
         assertEquals(halt(), this.bridge.reportBackpressure(), "halt starts the time-box");
-        now[0] += this.bridge.bpHaltWedgeMillis + 1;
+        this.clockMillis += this.bridge.bpHaltWedgeMillis + 1;
         this.bridge.pump();
         assertEquals(-1, this.bridge.reportBackpressure(),
                 "zero commits through the whole window: the bridge may PACE the"
@@ -1192,33 +1198,243 @@ class XaeroMapCompatTest {
     }
 
     @Test
-    void aDeferralExpiryReportsGovernedAndForeignReportsStale() {
+    void regionDeferralsAreCapExemptAndCommitWhenTheRegionRests() {
+        // §12 review MAJOR: region-scoped DEFERRED is retained like AWAITING_* —
+        // the ledger's hold-until-committable semantic via the queue itself; a
+        // stuck region flows into the wedge machinery instead of burning ingest
+        // strikes at one per DEFER_CAP interval.
         this.bridge.deferCap = 1;
         var region = new MapRegion();
         region.resting = false; // region-scoped busy: the whole bucket defers
         this.processor.regions.put((2L << 32) | 2L, region);
         offer(64, 64);
+        this.bridge.pump();
+        this.bridge.pump();
+        this.bridge.pump(); // far past the old cap
+        assertEquals(0, this.bridge.counterForTest("dropped_expired"),
+                "region deferrals never expire — retained until the region rests");
+        assertEquals(1, this.bridge.queuedForTest());
+        assertTrue(this.reports.isEmpty(), "and never report");
+        region.resting = true;
+        this.bridge.pump();
+        assertEquals(1, this.bridge.counterForTest("written"),
+                "the retained entry commits when the region rests");
+    }
+
+    @Test
+    void aForeignEntryBehindADeferredSiblingExitsWhenTheRegionRests() {
+        // The DEFERRED continue skips the rest of the bucket, so a foreign entry
+        // BEHIND the deferred sibling is retained with it (deferral, not deletion)
+        // and exits via the stale filter once the region rests.
+        this.bridge.deferCap = 1;
+        var region = new MapRegion();
+        region.resting = false;
+        this.processor.regions.put((2L << 32) | 2L, region);
+        offer(64, 64);
         this.bridge.offerPrepared(net.minecraft.world.level.Level.NETHER, tile(68, 64));
-        this.bridge.pump(); // burn 1 — under the cap
-        this.bridge.pump(); // burn 2 — both expire: ours GOVERNED-reported, theirs stale
-        assertEquals(2, this.bridge.counterForTest("dropped_expired"));
-        assertEquals(2, this.reports.size(),
-                "both report immediately — no ledger, no deferred repair");
+        this.bridge.pump();
+        assertEquals(2, this.bridge.queuedForTest(), "both retained while the region is busy");
+        assertTrue(this.reports.isEmpty());
+        region.resting = true;
+        this.bridge.pump(); // ours commits; the foreign one hits the stale filter
+        assertEquals(1, this.bridge.counterForTest("written"));
+        assertEquals(1, this.bridge.counterForTest("dropped_stale"));
+        assertEquals(1, this.reports.size(), "the foreign entry reports (deferred drain)");
+        org.junit.jupiter.api.Assertions.assertSame(
+                net.minecraft.world.level.Level.NETHER, this.reports.get(0)[0]);
+    }
+
+    @Test
+    void aTileDeferralExpiryDropsSilently() {
+        // DEFERRED_TILE keeps the cap (a tile-scoped wedge must not pin its entry
+        // forever) but the expiry is SILENT — counted, never reported (§12 review:
+        // a report would burn ingest strikes against a stalled resource).
+        this.bridge.deferCap = 1;
+        offer(64, 64);
+        this.bridge.pump(); // creates region+tileChunk, commits
+        var region = theRegion();
+        var tileChunk = region.getChunk(0, 0);
+        tileChunk.loadState = 0; // tile-scoped busy: DEFERRED_TILE
+        offer(64, 64);
+        this.bridge.pump(); // burn 1
+        this.bridge.pump(); // burn 2 — past the cap: silent drop
+        assertEquals(1, this.bridge.counterForTest("dropped_expired"));
+        assertTrue(this.reports.isEmpty(), "tile expiry never reports");
+    }
+
+    @Test
+    void theKillSwitchDisablesReportRefusalAndToken() {
+        // §12.4: bridge-on + switch off ⇒ pre-amendment behavior — report -1, NO
+        // refusal, silent drops, bp=off (review MAJOR: deleting the switch check
+        // silently re-enables the taper for a user who turned it off; the
+        // production supplier composes the GLOBAL #71 switch into this same
+        // boolean, so this pin covers both keys' off states).
+        this.bridge.bpPausePumps = 1;
+        this.bridge.bpRefusePumps = 1;
+        offer(64, 64);
+        primeDrainablePump();
+        this.backpressureEnabled = false;
+        assertEquals(-1, this.bridge.reportBackpressure(), "switch off = no signal, always");
+        this.processor.writingPaused = true;
+        this.bridge.pump(); // would latch the pause...
+        int before = this.bridge.queuedForTest();
+        this.bridge.offerColumn(OVERWORLD, 91, 91, -64, 320,
+                new dev.vox.lss.api.VoxelColumnData(
+                        new dev.vox.lss.api.VoxelColumnData.SectionData[0], 1L));
+        assertEquals(before + 1, this.bridge.queuedForTest(),
+                "switch off: offers are ACCEPTED even while paused (no refusal arm)");
+        assertEquals(0, this.bridge.counterForTest("refused_paused"));
+        assertTrue(this.bridge.describe().contains(", bp=off"), this.bridge.describe());
+    }
+
+    @Test
+    void transientPausesAbsorbIntoTheQueueBeforeTheRefusalThreshold() {
+        // The two-threshold split (review MAJOR: refusing during Xaero's startup
+        // gates permanently holed the join window): governance goes -1 fast, but
+        // offers keep landing in the queue until the SLOW threshold.
+        this.bridge.bpPausePumps = 2;
+        this.bridge.bpRefusePumps = 6;
+        primeDrainablePump();
+        this.processor.createdRegionLoadState = 0;
+        offer(64, 64); // keeps the queue non-empty so the ladder runs while paused
+        this.processor.writingPaused = true;
+        this.bridge.pump();
+        this.bridge.pump(); // governance latched (-1)...
+        assertEquals(-1, this.bridge.reportBackpressure());
+        offer(70, 64);
+        assertEquals(2, this.bridge.queuedForTest(),
+                "...but offers are still ABSORBED (transient-gate window)");
+        assertEquals(0, this.bridge.counterForTest("refused_paused"));
+        this.bridge.pump();
+        this.bridge.pump();
+        this.bridge.pump();
+        this.bridge.pump(); // past the refusal threshold
+        int before = this.bridge.queuedForTest();
+        this.bridge.offerColumn(OVERWORLD, 92, 92, -64, 320,
+                new dev.vox.lss.api.VoxelColumnData(
+                        new dev.vox.lss.api.VoxelColumnData.SectionData[0], 1L));
+        assertEquals(before, this.bridge.queuedForTest(), "structural pause: refused now");
+        assertEquals(1, this.bridge.counterForTest("refused_paused"));
+    }
+
+    @Test
+    void progressReBasesTheHaltWindowAndAWedgeAfterProgressStillFires() {
+        // Review MAJOR ×3: one commit inside the halt window must RESTART the
+        // time-box, not permanently disarm it — and a writer that commits once
+        // then wedges must still be released.
+        this.bridge.maxQueue = 4;
+        this.bridge.maxQueueBytes = Long.MAX_VALUE;
+        offer(64, 64);
+        primeDrainablePump(); // region (2,2) loaded
+        this.processor.createdRegionLoadState = 0;
+        offer(128, 64);
+        offer(129, 64);
+        offer(130, 64); // region (4,2): unloadable — 3/4 = 75% -> halt
+        this.bridge.pump();
+        assertEquals(halt(), this.bridge.reportBackpressure(), "the time-box opens");
+        this.clockMillis += this.bridge.bpHaltWedgeMillis - 1000;
+        offer(70, 64); // region (2,2), loaded: commits — PROGRESS inside the window
+        this.bridge.pump();
+        assertEquals(2, this.bridge.counterForTest("written"));
+        assertEquals(halt(), this.bridge.reportBackpressure(),
+                "progress re-bases the window — still halted, not wedged");
+        this.clockMillis += this.bridge.bpHaltWedgeMillis - 1000;
+        this.bridge.pump(); // keep the watchdog fed (nothing commits — region unloadable)
+        assertEquals(halt(), this.bridge.reportBackpressure(),
+                "inside the re-based window: still no wedge (the false-positive arm)");
+        this.clockMillis += 2001; // now past the re-based window with no progress
+        this.bridge.pump();
+        assertEquals(-1, this.bridge.reportBackpressure(),
+                "no progress across the re-based window: the wedge fires");
+    }
+
+    @Test
+    void aPauseInterruptionClearsTheHaltWindow() {
+        // Review MAJOR: the timer surviving a -1 interval fired a FALSE wedge on
+        // the first governing poll after a cave-layer browse.
+        this.bridge.bpPausePumps = 1;
+        this.bridge.maxQueue = 2;
+        this.bridge.maxQueueBytes = Long.MAX_VALUE;
+        offer(64, 64);
+        primeDrainablePump();
+        this.processor.createdRegionLoadState = 0;
+        offer(128, 64);
+        offer(129, 64); // region (4,2): unloadable — halt
+        this.bridge.pump();
+        assertEquals(halt(), this.bridge.reportBackpressure(), "the time-box opens");
+        this.processor.writingPaused = true;
+        this.bridge.pump(); // pause latches
+        assertEquals(-1, this.bridge.reportBackpressure()); // the -1 exit CLEARS the timer
+        this.clockMillis += this.bridge.bpHaltWedgeMillis * 4; // a long browse
+        this.processor.writingPaused = false;
+        this.bridge.pump(); // drainable again
+        assertEquals(halt(), this.bridge.reportBackpressure(),
+                "the first governing poll RE-OPENS the window — never a false wedge");
+    }
+
+    @Test
+    void bpTokenIsTriState() {
+        this.bridge.bpPausePumps = 1;
+        this.bridge.bpRefusePumps = 1;
+        offer(64, 64);
+        primeDrainablePump();
+        assertTrue(this.bridge.describe().contains(", bp=0.00"),
+                "governing at empty queue: the fraction — " + this.bridge.describe());
+        this.processor.createdRegionLoadState = 0;
+        offer(65, 64); // keep the ladder running while paused
+        this.processor.writingPaused = true;
+        this.bridge.pump();
+        assertTrue(this.bridge.describe().contains(", bp=-1(paused)"), this.bridge.describe());
+        this.backpressureEnabled = false;
+        assertTrue(this.bridge.describe().contains(", bp=off"), this.bridge.describe());
+    }
+
+    @Test
+    void theOfferColumnPreGateOverflowReportsTheArrivingPosition() {
+        // The pre-gate drops the ARRIVING position (the evict loop drops the
+        // OLDEST — the recorded asymmetry); governed, so it reports.
+        this.bridge.maxQueue = 1;
+        this.processor.createdRegionLoadState = 0;
+        offer(64, 64); // fills the 1-slot queue
+        this.bridge.offerColumn(OVERWORLD, 93, 93, -64, 320,
+                new dev.vox.lss.api.VoxelColumnData(
+                        new dev.vox.lss.api.VoxelColumnData.SectionData[0], 1L));
+        assertEquals(1, this.bridge.counterForTest("dropped_overflow"));
+        assertEquals(1, this.reports.size());
+        assertEquals(93, this.reports.get(0)[1]);
+        assertEquals(93, this.reports.get(0)[2]);
+    }
+
+    @Test
+    void aStaleDimensionReplacementCountsAndReports() {
+        // Review m1: the in-place foreign-dimension replacement was a silent,
+        // uncounted drop — it now takes the stale route like every other one.
+        offer(64, 64); // OVERWORLD queued
+        this.bridge.offerPrepared(net.minecraft.world.level.Level.NETHER, tile(64, 64));
+        assertEquals(1, this.bridge.counterForTest("dropped_stale"));
+        assertEquals(1, this.reports.size());
+        org.junit.jupiter.api.Assertions.assertSame(OVERWORLD, this.reports.get(0)[0],
+                "the REPLACED (overworld) entry is the reported one");
     }
 
     @Test
     void sessionTeardownResetsTheBackpressureState() {
         this.bridge.bpPausePumps = 1;
+        this.bridge.bpRefusePumps = 1;
         offer(64, 64);
         primeDrainablePump();
         this.processor.writingPaused = true;
         this.bridge.pump(); // latch the pause
         assertEquals(-1, this.bridge.reportBackpressure());
-        this.processor.writingPaused = false;
+        // The gate STAYS armed across the teardown (review m9: clearing it first
+        // made this pin vacuous — the next pump would clear the pause through the
+        // ladder anyway; the reset itself is what is under test).
         this.bridge.onSessionEnd();
-        this.bridge.pump();
-        assertTrue(this.bridge.reportBackpressure() >= 0,
-                "backpressure state is session-scoped: the next session starts clean");
+        assertFalse(this.bridge.pausedOffersForTest(),
+                "the off-thread half clears the refusal latch immediately");
+        this.bridge.pump(); // the main-thread half settles; the ladder still returns early
+        assertFalse(this.bridge.pausedOffersForTest(),
+                "one closed-gate pump after the reset must not re-latch (counter cleared)");
     }
 
     private MapRegion theRegion() {
@@ -1320,7 +1536,7 @@ class XaeroMapCompatTest {
         offer(76, 64);
         this.bridge.pendingUpdatesSoftCap = 100;
         this.bridge.pump(); // commits (19,16)
-        this.bridge.queueLockedClearForTest();
+        this.bridge.clearQueue();
         this.bridge.pump(); // queue EMPTY: the whole borrow → everything due rebuilds
         assertEquals(0, this.bridge.counterForTest("pending_updates"));
     }
@@ -1846,23 +2062,6 @@ class XaeroMapCompatTest {
                 "…counted exactly once (removal-guarded counting)");
     }
 
-    @Test
-    void busyRegionDefersAndTheCapEventuallyDrops() {
-        offer(8, 8);
-        var region = new MapRegion();
-        region.resting = false; // ladder-ready but the region is busy
-        this.processor.regions.put(0L, region);
-        this.bridge.pump();
-        assertEquals(1, this.bridge.queuedForTest());
-        assertTrue(this.bridge.counterForTest("defer_events") >= 1);
-        for (int i = 0; i < XaeroMapCompat.DEFER_CAP + 2; i++) {
-            this.bridge.pump();
-        }
-        assertEquals(0, this.bridge.queuedForTest(),
-                "a permanently-busy LOADED region eventually drops the entry (bounded deferral)");
-        assertTrue(this.bridge.counterForTest("dropped_expired") >= 1);
-    }
-
     // ---- failure containment ----
 
     /** Queue THROW_LATCH+3 entries whose commits all throw, and pump until dead. */
@@ -1957,12 +2156,6 @@ class XaeroMapCompatTest {
         }
         assertTrue(this.bridge.deadForTest(),
                 "a permanently-throwing extractor must not burn the decode thread forever");
-    }
-
-    @Test
-    void theConsumerDoesNotOverrideThePacingGauge() {
-        assertEquals(-1, this.registered.get(0).pendingIngestBacklog(),
-                "the map must drop instead of pacing the LOD stream (plan §2.8)");
     }
 
     // ---- diag ----

@@ -468,7 +468,9 @@ unchanged. Pinned by carrying the existing latch tests over the interface.
   `region_span <= 2` DURING FILL PHASES (span spikes correlating with
   dirty/revocation events are expected and harmless — v1.1), XaeroMap
   `dropped` ≈ flat at any radius, [AMENDED §12: `bp=` governing, no heal gauges] modulo the
-  gen-straggler residual, fill rate ≥ today's ~725/s, and on a fresh-world
+  gen-straggler residual, fill rate ≥ today's ~725/s MEASURED BRIDGE-OFF (the
+  §12 governed rate is ~650-700 by design — a bridge-on comparison must use the
+  governed baseline, hybrid-scan-plan.md §12.3), and on a fresh-world
   test `gen_order_gated` judged against the §5 v1.1 regime numbers (NOT
   against ring-major baselines).
 
@@ -677,10 +679,11 @@ interaction (Opus, 1 MAJOR), tests+docs (Opus, 4 MAJOR). All seven MAJORs folded
   leaf-granular impl exactly when no leaf is clipped; the partial-leaf arm is
   example-pinned in ColumnStateMapTest).
 - **Xaero coupling recorded** (server lens, verified): drainEntries buckets by the
-  same 32-chunk grid, so the collapsed span maps 1:1; §18 heal reports re-mark
-  needs BEHIND the walk head and the stateless spiral re-emits them FIRST —
-  `region_span` spikes correlated with heal activity are the designed behavior,
-  not the invariant breaking.
+  same 32-chunk grid, so the collapsed span maps 1:1. [AMENDED by the §12
+  backpressure round: the §18 heal is deleted — the re-mark-behind-the-head
+  traffic is now the kept immediate reporter's (dimension/world-change drops),
+  far rarer; `region_span` spikes correlated with `drops_reported` remain the
+  designed behavior, not the invariant breaking.]
 - **Gate status at fold time**: T1 full green; T2 green; `fresh-backfill` soak
   PASS (region arm live: confirmed=25, fast=2, audit_heals=0; the §5 churn regime
   visible — order_gated 33k, miss_dropped 40k — with all laws green at default

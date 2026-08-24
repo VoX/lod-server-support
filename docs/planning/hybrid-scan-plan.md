@@ -707,3 +707,92 @@ Implemented per §12.1-§12.4 (v3.1). As-built facts:
   harness reaches Xaero — unit + live IS the whole gate, per §12.4); the
   v0.12.1 re-cut decision stays with the user (§12.5.1); backports deferred
   (§12.5.3 — as one unit with the lines' heal removal).
+
+### §12.7 Implementation-review fold (2026-08-24, 4-Opus panel)
+
+Panel: mechanism (2 MAJOR), heal-removal/reporting (2 MAJOR), integration/dynamics
+(4 MAJOR), tests+docs (6 MAJOR) — 14 MAJORs, heavily convergent (the halt
+time-box's two disarm bugs found by three lenses; the global-switch composition by
+three; the stale inverted test by two). All folded:
+
+- **Halt time-box rebuilt**: progress RE-BASES the window (the
+  equality-against-opening-value check was permanently disarmed by the first
+  commit inside the window — a commit-once-then-wedge writer halted LOD for the
+  session); every -1 exit CLEARS the timer via `noSignal()` (a timer surviving a
+  cave-layer pause fired a FALSE wedge + user-facing warn on the first governing
+  poll back). Pinned both directions (`progressReBasesTheHaltWindow…`,
+  `aPauseInterruptionClearsTheHaltWindow`).
+- **Two-threshold pause** (the transient-gate MAJOR): governance goes -1 at
+  `BP_PAUSE_PUMPS` = 20 (~1 s, unchanged — a paused queue must not halt the
+  fill), offer REFUSAL now engages only at `BP_REFUSE_PUMPS` = 200 (~10 s):
+  Xaero's startup gates (region detection, multiworld resolution, the join
+  window, portal transit) clear within seconds and ABSORB into the queue
+  instead of shedding ~500/s unreported permanent holes around spawn; only the
+  structural pauses (cave layer, map locked, writing off) outlive the
+  threshold. The two latch fields are now genuinely distinct (closing the
+  redundancy NIT).
+- **Global-switch composition wired** (three lenses): the production supplier is
+  `enableIngestBackpressure && enableXaeroMapBackpressure` — with the global
+  #71 switch off the refusal/report halves go dark WITH the taper (an armed
+  reporter with no taper behind it restored the §18.1 churn regime in the one
+  config with no governance). `reportDroppedIfGoverned` additionally requires
+  `pumpDrainable` (pause-window evictions are silent — reporting into a closed
+  gate churns). The kill-switch pin covers report/-1, refusal-off, and bp=off.
+- **DEFERRED (region-scoped) is DEFER_CAP-EXEMPT** (integration MAJOR): retained
+  like AWAITING_* — the ledger's hold-until-committable semantic via the queue
+  itself; a genuinely stuck region freezes occupancy and flows into the wedge
+  machinery, which is designed for it. DEFERRED_TILE keeps the cap but its
+  expiry is SILENT (counted `dropped_expired`, never reported — a report burned
+  the client's 3 ingest strikes at one per cap interval against a stalled
+  resource and PARKED the position: the deleted §18 header's own indictment,
+  restored by the first cut). A foreign entry behind a deferred sibling is
+  retained with the bucket and exits via the stale filter when the region rests
+  (pinned).
+- **Pump-side reports deferred out of Xaero's monitors** (two lenses): the stale
+  filter and the world-id clear COLLECT into `deferredReports`; `pump()` drains
+  after the ladder returns — an un-stamp burst (≤ a queue's worth) never runs
+  under `renderThreadPauseSync`. The world-id same-dimension churn (~3 k
+  re-serves ≈ 4 s, rare) is recorded accepted: the new map needs those tiles.
+- **The silent uncounted stale-replacement drop** (offerPrepared's in-place
+  foreign-dimension replace) now counts `dropped_stale` + reports — it broke the
+  §12.1(c) claim at portals. `dropped_stale=` gains a diag token + census.
+- **Session-end race**: `settleSessionEnd` (main-thread half) re-clears
+  `pausedForOffers`/`pumpDrainable`/`haltWedged` + drops `deferredReports` — an
+  in-flight ladder's finally could re-latch after the off-thread clear.
+  `undrainablePumps` also resets on the ladder-skipping pump exits (dead, idle)
+  so "consecutive" means consecutive.
+- **The stale doctrine-inverted test deleted** (two lenses):
+  `theConsumerDoesNotOverrideThePacingGauge` asserted the pre-§12 doctrine and
+  passed VACUOUSLY via the new watchdog (setUp never pumps); the class javadoc's
+  matching bullet rewritten. The old `busyRegionDefersAndTheCapEventuallyDrops`
+  (the reversed DEFERRED-cap doctrine) replaced by the retention pins;
+  `aCrossDimensionServeReplacesTheStaleEntry` updated to the counted semantics.
+- **Test hardening**: `bpClock` is set deterministically in `@BeforeEach` (12 of
+  14 suites raced the 1 s watchdog against wall time — this repo's catalogued
+  flake family); the teardown pin keeps its gate armed across the reset (it was
+  vacuous); the pre-gate overflow path has its own pin (the arriving-vs-oldest
+  asymmetry recorded); bp= is tri-state-pinned; suite count now 20.
+- **Docs corrected** (tests+docs lens): bridge-plan design item 8 (the normative
+  "never overrides pendingIngestBacklog" contract) AMENDED — the SUPERSEDED
+  banner at §18 did not reach it; README's cave-layer sentence rewritten (writes
+  are DISCARDED, not "waited", + the pacing note); region-plan §14.1's own
+  Xaero-heal bullet amended and §10's fill-rate gate qualified BRIDGE-OFF;
+  the tooltip's "completes without gaps" softened + the pause class named; the
+  VoxelColumnConsumer javadoc records the sanctioned scaled-signal pattern;
+  ingestParked's javadoc un-narrowed (provenance-free); CLAUDE.md's bridge
+  paragraph gains the §12 facts; the five v0.12.1 release-tag files carry
+  SUPERSEDED headers (the tags themselves stay the user's §12.5.1 decision).
+- **Recorded deviations** (tests+docs m16): resume-from-pause reports the LIVE
+  fraction — which IS the halt when the queue latched full; deliberate (a full
+  queue warrants one halt cycle; refusal-freeze keeps occupancy honest).
+  `drops_reported` counts ATTEMPTS (correlate with `ingest_parked=` to detect a
+  saturated reporter). The wedge's silent-drop class added to the §12.1
+  taxonomy: (d) wedge-degraded drops are silent by design — the map wears the
+  loss of a wedged writer.
+- Verified-clean by the panel: the 75% mapping edge arithmetic, the 14+1 return
+  rewrite, mirror coverage, sign-correct unpacking, deletion completeness
+  (zero surviving ledger references in code/tests/resources), the reporting
+  split site census, the full self-heal chain incl. the foreign-dimension
+  `removeAsync` route, LSSApi composition (LSSApiBacklogTest owns it), zero
+  wire/server change, and §12.3's equilibrium arithmetic (¼ gate = 18.75%
+  occupancy under the 75% mapping — the cycle-mean ~25% claim is consistent).
