@@ -14,6 +14,15 @@ public class LSSClientConfig extends JsonConfig {
     public static LSSClientConfig CONFIG =
             load(LSSClientConfig.class, CANDIDATES, dev.vox.lss.platform.LoaderServices.get().configDir());
 
+    // Region-major want-set scanning (docs/planning/region-scan-plan.md): the scanner
+    // walks 32x32-chunk REGIONS in a spiral, completing each region before advancing, so
+    // every downstream consumer (Xaero map regions, server region files, the timestamp
+    // cache's tiles, region-summary tiles) sees one or two active regions instead of ~95
+    // at far radius — the structural fix for far-distance Xaero map tile drops. False =
+    // the legacy chunk-ring scanner, verbatim (the field A/B lever and instant rollback).
+    // Applied at manager construction: a flip takes effect at the next join/SessionConfig.
+    public boolean enableRegionScan = true;
+
     public boolean receiveServerLods = true;
     public int lodDistanceChunks = 0;
     // The §3 unknown-identity fallback ladder's TERMINAL default (protocol 20,

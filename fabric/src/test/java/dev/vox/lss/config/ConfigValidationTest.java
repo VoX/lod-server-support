@@ -770,6 +770,27 @@ class ConfigValidationTest {
     }
 
     @Test
+    void regionScanDefaultsOnAndRoundTripsThroughJson() {
+        // The region-major want-set walk's arm selector (region-scan-plan.md §2.4;
+        // selection happens at LodRequestManager CONSTRUCTION, so this key decides
+        // the arm for the next join/config re-push). Same hazard as its scan-family
+        // siblings: a silent default-off revert would pass CI green while quietly
+        // restoring the ~95-region working set the walk exists to collapse.
+        var c = clientConfig();
+        assertTrue(c.enableRegionScan, "region scan must default ON");
+        c.validate();
+        assertTrue(c.enableRegionScan, "validate() must not touch the boolean");
+        var gson = new com.google.gson.Gson();
+        String saved = gson.toJson(clientConfig());
+        assertTrue(saved.contains("\"enableRegionScan\":true"),
+                "a fresh config must persist the default under the exact key: " + saved);
+        var loaded = gson.fromJson(saved.replace(
+                "\"enableRegionScan\":true", "\"enableRegionScan\":false"),
+                dev.vox.lss.config.LSSClientConfig.class);
+        assertFalse(loaded.enableRegionScan, "a saved false must bind back as false");
+    }
+
+    @Test
     void xaeroMapBridgeDefaultsOffAndRoundTripsThroughJson() {
         // The Xaero bridge toggle (xaero-map-bridge-plan.md §2.9) ships OFF for
         // v0.12.0 (user decision 2026-08-23: opt-in while the feature is new — map
