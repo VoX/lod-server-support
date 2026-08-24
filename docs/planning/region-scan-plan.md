@@ -705,3 +705,15 @@ interaction (Opus, 1 MAJOR), tests+docs (Opus, 4 MAJOR). All seven MAJORs folded
   `soak-results/dirty-during-backfill-20260824T210715Z`); every other scenario
   in the batch green. A WSL restart clears the clock steps (user's call — it
   kills the working session).
+
+**§14.2 Hybrid supersession note (2026-08-24, feat/hybrid-scan).** The walk this
+plan specifies is superseded as the DEFAULT by the hybrid two-phase walk
+(hybrid-scan-plan.md §2/§13): rings ≤ N=64 now run in legacy ring order and the
+region spiral covers only the far RESIDUE (`(region ∩ lodSquare) \ nearSquare`),
+probed via `rectNeedsFree` — `regionNeedsFree` is DELETED (its lod-intersection
+job moved into the residue rect bounds). The §10 coverage policy carries: the
+manager mechanics pins stay legacy-arm constructed; the steadyFill span pin is
+re-homed to lod 128 with near-square containment in its allFull predicate
+(hybrid impl-review M3), and the manager suites' lod-64 twins are recorded as
+phase-1 pins. Cadence (§6) carries with hybrid amendments recorded in
+hybrid-scan-plan.md §13/§13.1.

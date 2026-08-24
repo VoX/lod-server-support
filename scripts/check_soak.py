@@ -69,7 +69,7 @@ EXPECTED_RUNS = {"warm-rejoin": 2, "dirty-while-offline": 2, "dimension-rejoin-w
 # be opted out.
 ANOMALY_OPT_INS = {
     "fresh-backfill": frozenset({"saturated"}),
-    "hybrid-boundary": frozenset({"saturated"}),  # same fresh-fill mechanics at 3.5x the disc
+    "hybrid-boundary": frozenset({"saturated"}),  # same fresh-fill mechanics at 3x the radius (~8.6x the AREA: 145^2 vs 49^2 columns)
     "warm-rejoin": frozenset({"saturated"}),
     "dimension-trip": frozenset({"saturated"}),
     "dirty-broadcast": frozenset(),
@@ -127,7 +127,8 @@ TRAFFIC_FLOOR_EXEMPT = frozenset({"enabled-false", "store-offline-mutate"})
 
 MIN_CLIENT_WINDOWS = {
     "fresh-backfill": {(1, 0): 10},
-    # hybrid-boundary: a ~9-min lod-88 fill — plenty of settled windows by the tail.
+    # hybrid-boundary: an 18-min run whose lod-72 fill measures ~690 s at the
+    # observed ~30 gen/s admission pace — the ~390 s tail holds >> 10 settled windows.
     "hybrid-boundary": {(1, 0): 10},
     "warm-rejoin": {(1, 0): 8, (2, 0): 5},
     "dimension-trip": {(1, 0): 2, (1, 1): 6, (1, 2): 4},
@@ -1308,16 +1309,23 @@ def check_fresh_backfill(ctx):
 
 @named_check("hybrid-boundary", ["server.generation.completed", "client.scan.confirmed"])
 def check_hybrid_boundary(ctx):
-    # The hybrid walk's ONE automated end-to-end gate (hybrid-scan-plan.md §8.10):
-    # a lod-88 fresh fill crosses the N=64 phase boundary (phase 1 rings + phase 2
-    # residue regions), so convergence here proves the partition/handoff live —
-    # everything else in the fleet runs lod <= 24 and degenerates to phase 1.
+    # The hybrid walk's ONE automated end-to-end gate (hybrid-scan-plan.md §8 item
+    # 10): a lod-72 fresh fill crosses the N=64 phase boundary (phase 1 rings +
+    # phase 2 residue regions), so convergence here proves the partition/handoff
+    # live — everything else in the fleet runs lod <= 24 and degenerates to phase 1.
+    # Sizing (impl-review M2): the annulus is (2*72+1)^2 - 17^2 = 20,736 columns at
+    # the measured ~30 gen/s admission pace ≈ 690 s, inside the 1080 s end with a
+    # ~390 s settle tail. The SEAM-HOLE discriminator is make_disc_completeness's
+    # area floor, NOT scan.confirmed — an unobserved ring-65 hole FALSE-CONVERGES
+    # confirmed to lod+1 (it never feeds minUnresolved); the gen floor below is a
+    # fill PREMISE (near-full generation), not the discriminator.
     last = ctx.server_snaps[-1]
     completed = last["generation"]["completed"]
-    if completed <= 2000:
+    if completed <= 15000:
         yield Violation("hybrid-boundary", "final snapshot",
-                        "generation.completed must exceed 2000 on a fresh lod-88 world",
-                        {"expected": "> 2000", "actual": completed})
+                        "generation.completed must exceed 15000 on a fresh lod-72 world "
+                        "(the ~20.7k-column annulus generated near-fully)",
+                        {"expected": "> 15000", "actual": completed})
     if (len(ctx.server_snaps) - 1) not in ctx.quiescent_server:
         yield Violation("hybrid-boundary", "final snapshot",
                         "last server snapshot is not verified-quiescent (the boundary fill did not converge)",
@@ -1327,11 +1335,11 @@ def check_hybrid_boundary(ctx):
         yield Violation("hybrid-boundary", "run1", "no client snapshots in run 1", {})
     else:
         confirmed = fc["scan"]["confirmed"]
-        if confirmed <= 88:
+        if confirmed <= 72:
             yield Violation("hybrid-boundary", "run1 final snapshot",
-                            "client scan.confirmed must exceed the LOD distance (88) — "
+                            "client scan.confirmed must exceed the LOD distance (72) — "
                             "the walk crossed the phase boundary and converged",
-                            {"expected": "> 88", "actual": confirmed})
+                            {"expected": "> 72", "actual": confirmed})
 
 
 @named_check("warm-rejoin", ["client.responses.up_to_date", "client.responses.columns",
@@ -4386,18 +4394,18 @@ def selftest():
     hits("fresh-backfill no client", list(check_fresh_backfill(_ctx(
         server_snaps=fb_srv, runs={}, quiescent_server={1}))), "fresh-backfill")
 
-    # --- hybrid-boundary named check: gen>2000, quiescent tail, confirmed>88 ---
-    hb_srv = [_srv(1000), _srv(6000, over={"generation.completed": 2500})]
-    hb_cli = _cli(6000, over={"scan.confirmed": 89})
+    # --- hybrid-boundary named check: gen>15000, quiescent tail, confirmed>72 ---
+    hb_srv = [_srv(1000), _srv(6000, over={"generation.completed": 19000})]
+    hb_cli = _cli(6000, over={"scan.confirmed": 73})
     clean("hybrid-boundary healthy", list(check_hybrid_boundary(_ctx(
         server_snaps=hb_srv, runs={1: [hb_cli]}, quiescent_server={1}))))
     hits("hybrid-boundary too little generation", list(check_hybrid_boundary(_ctx(
-        server_snaps=[_srv(1000), _srv(6000, over={"generation.completed": 1500})],
+        server_snaps=[_srv(1000), _srv(6000, over={"generation.completed": 12000})],
         runs={1: [hb_cli]}, quiescent_server={1}))), "hybrid-boundary")
     hits("hybrid-boundary non-quiescent tail", list(check_hybrid_boundary(_ctx(
         server_snaps=hb_srv, runs={1: [hb_cli]}, quiescent_server=set()))), "hybrid-boundary")
     hits("hybrid-boundary below the phase boundary", list(check_hybrid_boundary(_ctx(
-        server_snaps=hb_srv, runs={1: [_cli(6000, over={"scan.confirmed": 70})]},
+        server_snaps=hb_srv, runs={1: [_cli(6000, over={"scan.confirmed": 64})]},
         quiescent_server={1}))), "hybrid-boundary")
     hits("hybrid-boundary no client", list(check_hybrid_boundary(_ctx(
         server_snaps=hb_srv, runs={}, quiescent_server={1}))), "hybrid-boundary")

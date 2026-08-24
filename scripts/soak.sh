@@ -41,7 +41,8 @@ ALL_SCENARIOS=(fresh-backfill warm-rejoin dimension-trip dirty-broadcast
                cold-restart-resync enabled-false teleport-prune
                dirty-range-filter dirty-during-backfill dirty-while-offline
                clearcache-mid-session dimension-rejoin-warm store-second-join
-               store-save-storm warm-rejoin-summary dirty-while-offline-summary)
+               store-save-storm warm-rejoin-summary dirty-while-offline-summary
+               hybrid-boundary)
 # Scenarios ported to Paper. The remaining ones are Fabric-specific for now: the dirty-*
 # family leans on the save-hook + DirtyContentFilter (Paper's dirty detection is
 # event-driven — paper-dirty-falling-block is the Paper-native dirty scenario),
