@@ -691,6 +691,10 @@ interaction (Opus, 1 MAJOR), tests+docs (Opus, 4 MAJOR). All seven MAJORs folded
   test — both B2 windows recompute to tick_dt 5.00 s vs wall_dt 2.52 s with traffic
   UNDER the cap on the tick clock (258,956 / 222,323 B/s vs 262,144) and byte deltas
   at/below the neighbors' steady 5 s quantum (1,301,096); artifact dir
-  `soak-results/bandwidth-throttle-20260824T200445Z`. The remaining scenarios run
-  as a follow-on batch (the suite stops at first red); a WSL restart clears the
-  clock steps (user's call — it kills the working session).
+  `soak-results/bandwidth-throttle-20260824T200445Z`. The remaining scenarios ran
+  as a follow-on batch: `dirty-during-backfill` redded with the IDENTICAL
+  clock-step shape (one B2 window, wall 2.52 s vs tick 5.00 s, 523 KB/s on the
+  tick clock vs ~682 allowed — accepted-with-record,
+  `soak-results/dirty-during-backfill-20260824T210715Z`); every other scenario
+  in the batch green. A WSL restart clears the clock steps (user's call — it
+  kills the working session).
