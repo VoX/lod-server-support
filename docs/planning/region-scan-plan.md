@@ -204,11 +204,29 @@ ring (inward instant).
 
 Under region-major, ring-ascending-within-region declarations:
 
-- The frontier = the active region's nearest unresolved ring. The admission
-  band (frontier..frontier+2) intersected with one region is an arc ≤ 32
-  chunks wide × 3 rings ≈ 64-96 candidates — comfortably above the default
-  per-player generation cap (40). Generation rolls ring-band by ring-band
-  through the region exactly as it rolls through global rings today.
+- HISTORY: this gate has been wedged ONCE ALREADY by a first-entry geometry
+  change (the `updatePlayerChunk` call-site comment records "the want-set's
+  first entry sits at ~viewDistance on a ring perimeter, which wedged the
+  gate") — treat every claim in this section as review-mandatory.
+- The frontier = the FIRST unsatisfied ts≤0 entry in declaration order = the
+  active region's nearest unresolved ring (within-region ring-ascending makes
+  this the minimum of the declared set's ring values for the active region;
+  the player-region's excluded interior means the first entry sits at
+  ~viewDistance, exactly as today). The admission band (frontier..frontier+2)
+  intersected with one region is an arc ≤ 32 chunks wide × 3 rings ≈ 64-96
+  candidates — comfortably above the default per-player generation cap (40).
+  Generation rolls ring-band by ring-band through the region exactly as it
+  rolls through global rings today.
+- The declaration is deliberately NOT globally ring-monotonic: when the budget
+  spans two regions, region N+1's near-corner entries carry lower rings than
+  region N's tail. Harmless to the gate (the frontier is the first
+  UNSATISFIED entry — region N's — and candidates are judged individually
+  against it; N+1's near corner sits within ~0-2 rings of N's near corner in
+  the same region-ring), but the non-monotonicity must be stated in the
+  server-side comment that today says "closest-first by construction"
+  (AbstractPlayerRequestState's backlog javadoc) — the property the server
+  actually RELIES on is "the first unsatisfied acquisition entry is the
+  nearest outstanding work", which region-major preserves.
 - Region transitions move the frontier INWARD (next region's near corner) —
   instant by design. The outward damp then paces the new region's advance at
   ≤3 rings/s; a region spans ≤ ~46 rings → ≥ ~15 s/region damping floor,
@@ -273,14 +291,40 @@ sparkle case the cadence exists for. Reviewers: attack this equivalence; the
 fallback position is a region-count-based cost rung (refuse fast fires when >
 N regions have needs), which restores a conservative gate at trivial cost.
 
+Governor window-limited latch (`wasLastScanFast && wasLastWalkTruncated &&
+wasLastBudgetCapClamped` → noteWindowLimited): `lastWalkTruncated` keeps its
+exact meaning — the BUDGET ended the walk before the order was exhausted —
+and under region scan a mid-fill full region (1024 > 800) truncates most
+walks. That is the same provenance the latch already tolerates on legacy
+mid-fill walks; the latch's discriminating conjuncts remain the FAST fire
+(rare mid-fill: outstanding > 5%) and the burst-cap-was-binding flag, both
+unchanged. Pinned by carrying the existing latch tests over the interface.
+
 ## 9. Config & diag surface
 
 - NEW client key `enableRegionScan` (default true on main), applied at
   session start. Config round-trip + default pins per house style.
-- Diag `Scan:` line, exporter, and `scan` trace event gain region fields on
-  the region path (§3). The soak checker's and soak_report's consumption of
-  scan fields is audited in §10 (schema-required fields must keep appearing;
-  region fields are ADDITIVE).
+- Exporter/diag continuity (inventory audit): `check_soak.py`'s
+  `check_fresh_backfill` HARD-READS `client.scan.confirmed > 24`, and the
+  `Scan:` diag line + `scan.*` exporter fields are consumed by tools. The
+  region scanner therefore keeps `scan.confirmed` MEANINGFUL, redefined as
+  the CONFIRMED RADIUS IN CHUNKS: the largest R such that every region
+  intersecting the Chebyshev disc of radius R is needs-free — computed during
+  the walk at no extra cost (the walk already probes regions in ring order).
+  A completed fresh-backfill yields ≥ 32 (region ring ≤1 complete), so the
+  checker's `> 24` law holds without a checker change on the region path;
+  `scan.ring` maps to the last walk's max emitted ring; `scan.reopened`,
+  `scan.quad_ring_skips`, `scan.valve_trips` report 0 on the region path
+  (legacy-path-only mechanics — 0 is their true value there); ADDITIVE fields
+  `scan.region_span`, `scan.region_skips`, `scan.regions_done`. The `Scan:`
+  diag line mirrors the same mapping plus `region_active=`. The trace `scan`
+  event keeps its keys and adds the region ones. `soak_report.py` reads no
+  scan fields (inventory); the 35-scenario `disc-completeness` area law is
+  ORDER-BLIND and stays the primary safety net, unchanged.
+- The v16-SERVER client fallback (old servers) has no spread gate and rate-
+  limits regardless of order; the server-side v16 shim re-sorts its own
+  synthetic sets — both unaffected. `TransferRateGovernor.minMissingVanilla`
+  measures the vanilla view edge, not scan order — unaffected (recorded).
 
 ## 10. Test plan
 
@@ -301,7 +345,17 @@ N regions have needs), which restores a conservative gate at trivial cost.
   scanner selection at session start, diag/trace field presence both modes.
 - Existing suites: SpiralScannerTest + QuadtreeWalkDifferentialTest untouched
   (legacy path pinned as the control arm); ColumnStateMapTest gains
-  `regionNeedsFree` gridding pins (incl. negatives).
+  `regionNeedsFree` gridding pins (incl. negatives); SectionStateFuzzTest
+  gains a `regionNeedsFree` soundness probe beside its `ringNeedsFree` one
+  (a needs-free verdict must imply every contained position classifies
+  SATISFIED).
+- The two chaos/orphan properties are PORTED in spirit to RegionScannerTest
+  (`anyChaosInterleavingLeavesNoPositionPermanentlyOrphaned` /
+  `movementChaos...` — the inventory ranks them the load-bearing pins): any
+  interleaving of moves/dirties/revocations/answers/prunes must leave no
+  position permanently undeclared while it still classifies as needed.
+- The governor window-limited latch tests (LodRequestManagerTickTest ~:929+)
+  run against BOTH scanner arms via the interface.
 - Gates: full T1, T2; the FABRIC SOAK SUITE (`soak.sh all`) on this branch —
   the scan-order change is client-behavioral, and the soaks are the only
   harness that runs the real client loop. Any order-sensitive premise redding
@@ -329,3 +383,5 @@ v0.12.1 staged tags are NOT touched by this round.
 | Region-block visual fill unacceptable | User live gate; fallback = enableRegionScan=false |
 | Hidden ring-field consumers (tools/scripts) | Inventory audit (§10); legacy fields stay on legacy path |
 | Two scanners to maintain | Deliberate: control arm + instant rollback; retirement is a later, user-approved decision |
+| Server "closest-first by construction" comments go stale | §5: reword to the property actually relied on (first unsatisfied entry = nearest outstanding), same PR |
+| `scan.confirmed` semantics shift breaks tooling | §9 confirmed-radius redefinition keeps the checker law green; pinned in exporter tests |
