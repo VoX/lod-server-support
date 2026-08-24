@@ -17,44 +17,59 @@ import static org.junit.jupiter.api.Assertions.*;
  * Emission ORDER is the deliberate difference (region-major vs global ring-major),
  * so the comparison is set-level; order properties live in {@link RegionScannerTest}.
  * The legacy arm is a FRESH scanner per comparison (no prefix retention), i.e. the
- * from-scratch walk both arms must agree on.
+ * from-scratch walk both arms must agree on — pinned to BOTH quadtree variants so the
+ * control arm cannot silently depend on a gitignored local config (review fold).
+ * TRUNCATED emission is deliberately out of scope: under a binding budget the
+ * per-fire SETS differ by design (region-major prefix vs ring-major prefix) — the
+ * cross-fire contract there is the union, pinned by the chaos convergence tests in
+ * {@link RegionScannerTest}. The region arm's audit rung is disabled here so a
+ * genuine needs-mask divergence in the shared fixture cannot be healed mid-compare.
  */
 class RegionScanDifferentialTest {
 
     private static final int BUF = 16384;
     private static final int BUDGET = 1_000_000;
 
-    private static SpiralScanner legacy(int lod) {
+    private static SpiralScanner legacy(int lod, boolean quad) {
         var s = new SpiralScanner();
         s.setConfig(new SessionConfigS2CPayload(LSSConstants.PROTOCOL_VERSION, true, lod, true));
+        s.quadtreeScanEnabled = () -> quad;     // pin the control arm explicitly
+        s.prefixRetentionEnabled = () -> true;  // (fresh per compare — prefix-free anyway)
         return s;
     }
 
     private static RegionScanner region(int lod) {
         var s = new RegionScanner();
         s.setConfig(new SessionConfigS2CPayload(LSSConstants.PROTOCOL_VERSION, true, lod, true));
+        s.auditEnabled = false; // never heal the shared fixture mid-compare
         return s;
     }
 
     private static void assertSameWantSet(ColumnStateMap columns, int lod, int cx, int cz,
                                           int vd, String at) {
-        var l = legacy(lod);
         var r = region(lod);
-        long[] lPos = new long[BUF], lTs = new long[BUF];
         long[] rPos = new long[BUF], rTs = new long[BUF];
-        int ln = l.scan(cx, cz, vd, columns, lPos, lTs, BUDGET);
         int rn = r.scan(cx, cz, vd, columns, rPos, rTs, BUDGET);
-        assertEquals(ln, rn, "want-set size " + at);
-
-        var lSet = new TreeMap<Long, Long>();
         var rSet = new TreeMap<Long, Long>();
-        for (int i = 0; i < ln; i++) {
-            assertNull(lSet.put(lPos[i], lTs[i]), "legacy duplicate emission " + at);
+        for (int i = 0; i < rn; i++) {
             assertNull(rSet.put(rPos[i], rTs[i]), "region duplicate emission " + at);
         }
-        assertEquals(lSet, rSet, "want-set content (positions+timestamps) " + at);
-        assertEquals(l.getConfirmedRing(), r.getConfirmedRing(), "confirmedRing " + at);
-        assertEquals(l.wasLastWalkTruncated(), r.wasLastWalkTruncated(), "truncated " + at);
+        for (boolean quad : new boolean[]{true, false}) {
+            var l = legacy(lod, quad);
+            long[] lPos = new long[BUF], lTs = new long[BUF];
+            int ln = l.scan(cx, cz, vd, columns, lPos, lTs, BUDGET);
+            String lat = at + " (legacy quad=" + quad + ")";
+            assertEquals(ln, rn, "want-set size " + lat);
+            var lSet = new TreeMap<Long, Long>();
+            for (int i = 0; i < ln; i++) {
+                assertNull(lSet.put(lPos[i], lTs[i]), "legacy duplicate emission " + lat);
+            }
+            assertEquals(lSet, rSet, "want-set content (positions+timestamps) " + lat);
+            assertEquals(l.getConfirmedRing(), r.getConfirmedRing(), "confirmedRing " + lat);
+            // NOTE deliberately NOT compared: wasLastWalkTruncated — trivially false on
+            // both at this budget, and the arms genuinely diverge in the exact-fill
+            // corner (pinned in RegionScannerTest.exactFillEndingInSatisfiedTail...).
+        }
     }
 
     @Test

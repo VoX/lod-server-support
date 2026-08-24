@@ -637,7 +637,8 @@ public class LodRequestManager {
                     + ",\"ingest_backlog\":" + ingestBacklogSections
                     + ",\"missing_vanilla\":" + this.scanner.getMissingVanillaChunks()
                     + ",\"ring_min\":" + (maxRing < 0 ? -1 : minRing)
-                    + ",\"ring_max\":" + maxRing);
+                    + ",\"ring_max\":" + maxRing
+                    + ",\"region_span\":" + this.scanner.getRegionSpan());
         }
         if (scanned >= 0) {
             this.tracker.replaceWith(this.sendPositionBuffer, scanned);

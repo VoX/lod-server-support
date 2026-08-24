@@ -61,6 +61,85 @@ class LodRequestManagerTest {
         recordSends(); // never let a scan reach the real ClientPlayNetworking transport
     }
 
+    @Test
+    void productionDefaultCtorSelectsTheArmFromTheConfigKey() {
+        // Tests-lens review MAJOR: the default ctor reads the GITIGNORED local config,
+        // so without this pin a dev's enableRegionScan:false would silently run every
+        // default-ctor suite on the legacy arm with a green board proving nothing
+        // about the shipped arm.
+        boolean prior = dev.vox.lss.config.LSSClientConfig.CONFIG.enableRegionScan;
+        try {
+            dev.vox.lss.config.LSSClientConfig.CONFIG.enableRegionScan = true;
+            assertTrue(new LodRequestManager().scannerForTest() instanceof RegionScanner,
+                    "enableRegionScan=true must select the region arm");
+            dev.vox.lss.config.LSSClientConfig.CONFIG.enableRegionScan = false;
+            assertFalse(new LodRequestManager().scannerForTest() instanceof RegionScanner,
+                    "enableRegionScan=false must select the legacy arm");
+        } finally {
+            dev.vox.lss.config.LSSClientConfig.CONFIG.enableRegionScan = prior;
+        }
+    }
+
+    /** Rebuild the suite manager on the REGION arm explicitly (immune to the local
+     *  config file) — the region twins of the legacy-pinned dirty mechanics tests
+     *  (region-scan-plan.md §10 policy (c); tests-lens review: the agnostic halves
+     *  of those tests must not lose their shipped-arm coverage). */
+    private void useRegionScannerArm() {
+        manager = new LodRequestManager(new RegionScanner());
+        manager.onSessionConfig(config(64, true), "lss-test");
+        sent.clear();
+        recordSends();
+    }
+
+    @Test
+    void maxSizeDirtyFrameOnTheRegionArmMarksKnownOnlyAndKeepsTheCadence() {
+        // Region twin of the legacy-pinned test below: same hostile wire-cap frame,
+        // same known-only/no-allocation/cadence-neutral assertions — the reopen-count
+        // assertions are replaced by the needs-bit re-declaration marks.
+        useRegionScannerArm();
+        long known1 = PositionUtil.packPosition(20, 20);
+        long known2 = PositionUtil.packPosition(21, 20);
+        long known3 = PositionUtil.packPosition(22, 20);
+        manager.onColumnReceived(known1, 5000L, dim("overworld"));
+        manager.onColumnReceived(known2, 5000L, dim("overworld"));
+        manager.onColumnReceived(known3, 5000L, dim("overworld"));
+        advanceToOneCallBeforeScanFire();
+
+        var frame = new long[LSSConstants.MAX_DIRTY_COLUMN_POSITIONS];
+        frame[0] = known1;
+        frame[1] = known2;
+        frame[2] = known3;
+        for (int i = 3; i < frame.length; i++) {
+            frame[i] = PositionUtil.packPosition(100_000 + i, 200_000);
+        }
+        manager.onDirtyColumns(frame);
+
+        assertEquals(3, manager.getDirtyColumnCount(), "only known positions take dirty marks");
+        assertEquals(-1L, manager.columnsForTest().timestampFor(frame[3]),
+                "unknown positions stay unknown — hostile frames must not allocate leaves");
+        assertTrue(manager.columnsForTest().needsBitForTest(known1)
+                        && manager.columnsForTest().needsBitForTest(known2)
+                        && manager.columnsForTest().needsBitForTest(known3),
+                "the marks set needs bits — the region walk's whole re-declaration path");
+        assertTrue(maybeScanOnce() >= 0,
+                "even a wire-cap dirty frame must not defer the cadence (cadence-neutral path)");
+    }
+
+    @Test
+    void dirtyBroadcastOnTheRegionArmIsCadenceNeutralAndMarks() {
+        useRegionScannerArm();
+        manager.onColumnReceived(POS, 5000L, dim("overworld"));
+        advanceToOneCallBeforeScanFire();
+
+        manager.onDirtyColumns(new long[]{POS});
+
+        assertEquals(1, manager.getDirtyColumnCount());
+        assertTrue(manager.columnsForTest().needsBitForTest(POS),
+                "the dirty mark's needs bit re-declares on the next walk");
+        assertTrue(maybeScanOnce() >= 0,
+                "a broadcast must never defer the cadence — re-declaration is the only self-heal");
+    }
+
     /** Rebuild the suite manager on the LEGACY spiral arm — for the ring-REOPEN /
      *  prefix mechanics pins that exist only on that arm (region-scan-plan.md §10
      *  policy (a): the region walk is stateless and re-declares via needs bits, so

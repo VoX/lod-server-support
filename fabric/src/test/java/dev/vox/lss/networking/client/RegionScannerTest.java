@@ -125,7 +125,10 @@ class RegionScannerTest {
 
     @Test
     void emissionIsACompletePrefixPlusAtMostOnePartialTail() {
-        int lod = 40; // spans regions [-2..1]^2 — budget 800 must truncate
+        int lod = 24; // review fold (tests-lens MAJOR-1): at lod 40 region (0,0) alone
+        // holds 1000 needy vs the 800 budget, so the walk emits ONE group and the
+        // complete-prefix branch below was dead code. At lod 24 the walk provably
+        // spans two groups (601 + 199) and the non-tail completeness assertion runs.
         var s = scanner(lod);
         var columns = new ColumnStateMap();
         long[] pos = buf(), ts = buf();
@@ -142,6 +145,8 @@ class RegionScannerTest {
                     PositionUtil.unpackX(pos[i]) >> 5, PositionUtil.unpackZ(pos[i]) >> 5);
             groups.merge(rk, 1, Integer::sum);
         }
+        assertTrue(groups.size() >= 2,
+                "premise: the walk must span >= 2 regions or the completeness branch is dead");
         int gi = 0;
         for (var e : groups.entrySet()) {
             gi++;
@@ -192,7 +197,9 @@ class RegionScannerTest {
                     break;
                 }
             }
-            assertTrue(s.getRegionSpan() <= (allFull ? 2 : 12),
+            // Clipped-tail slack: at lod 40 the 12 boundary slivers average ~200 needy,
+            // so a real fire spans ~4-6 of them; 8 = one-third headroom (review NIT).
+            assertTrue(s.getRegionSpan() <= (allFull ? 2 : 8),
                     "fire " + fires + ": span " + s.getRegionSpan()
                             + " (allFull=" + allFull + ")");
             for (int i = 0; i < n; i++) {
@@ -354,19 +361,19 @@ class RegionScannerTest {
     }
 
     @Test
-    void movementWindowPricesTheDiscAndStationaryPricesZero() {
-        // The AS-BUILT cadence policy (superseding plan §8's region-count rung — see
-        // RegionScanner.predictedWalkCost): stationary the stateless walk is free at
-        // ANY frontier depth (4 Hz warm backfill survives past ring 260, where the
-        // inherited span formula would have refused); in the movement window the
-        // whole disc is priced with legacy's from-zero formula, keeping the elytra
-        // 1 Hz policy above lod 127.
-        var deep = scanner(512);
-        assertEquals(0, deep.predictedWalkCost(), "stationary: free at any depth");
-        deep.recenter(1);
-        assertTrue(deep.recenteredSinceLastFireForTest(), "recenter opens the window");
-        assertEquals(4 * 512 * 513, deep.predictedWalkCost(),
-                "movement window: the legacy from-zero disc price");
+    void movementWindowPricesTheTruncatedFrontierAndStationaryPricesObservedWork() {
+        // The REPRICED cadence policy (review-panel fold — cadence-lens MAJOR +
+        // integration-lens MAJOR; see RegionScanner.predictedWalkCost): the movement
+        // window prices legacy's from-zero formula over the TRUNCATED FRONTIER
+        // (s = scanRing when the last walk truncated, else the whole disc), and
+        // stationary prices the LAST walk's measured observe work — never a flat 0.
+        var fresh = scanner(512);
+        assertEquals(0, fresh.predictedWalkCost(),
+                "no walk yet: nothing observed, nothing to refuse");
+        fresh.recenter(1); // no walk happened -> untruncated -> whole-disc price
+        assertTrue(fresh.recenteredSinceLastFireForTest(), "recenter opens the window");
+        assertEquals(4 * 512 * 513, fresh.predictedWalkCost(),
+                "movement + untruncated: the whole disc is priced (1 Hz flight at big lod)");
 
         var small = scanner(100);
         small.recenter(3);
@@ -378,6 +385,295 @@ class RegionScannerTest {
     }
 
     @Test
+    void movingTruncatedFillPricesTheFrontierNotTheLod() {
+        // The elytra unlock, region-arm edition (cadence-lens MAJOR: pricing the LOD
+        // here reverts the pinned legacy behavior at every shipped lod >= 128): a
+        // truncated fill walk prices 4*scanRing*(scanRing+1), so a moving client
+        // keeps fast fires while the frontier is shallow even at lod 200.
+        int lod = 200;
+        var s = scanner(lod);
+        var columns = new ColumnStateMap();
+        long[] pos = buf(), ts = buf();
+        satisfySquare(columns, 63); // frontier at ring 64
+        int n = fireScan(s, CX, CZ, 4, columns, pos, ts);
+        assertEquals(LSSConstants.WANT_SET_BUDGET, n, "premise: the fill truncates");
+        assertTrue(s.wasLastWalkTruncated());
+        s.recenter(1);
+        int cost = s.predictedWalkCost();
+        assertEquals(4 * s.getScanRing() * (s.getScanRing() + 1), cost,
+                "movement + truncated: the frontier is priced, not the lod");
+        assertTrue(cost <= SpiralScanner.FAST_RESCAN_MAX_WALK_COST,
+                "the shallow-frontier moving fill MUST stay fast-admissible (cost="
+                        + cost + ", scanRing=" + s.getScanRing() + ")");
+    }
+
+    @Test
+    void massDirtyScatterPricesPastTheCapAndDenseFillDoesNot() {
+        // Integration-lens MAJOR end to end: each needy region costs an emit pass, so
+        // a WorldEdit-scale scatter is NOT a cheap walk and must fall back to 1 Hz;
+        // the dense fill's 1-2 emitting regions stay far under the cap.
+        int lod = 128;
+        var s = scanner(lod);
+        var columns = new ColumnStateMap();
+        long[] pos = buf(), ts = buf();
+        // Converge the disc (drive fills to completion).
+        int guard = 0;
+        while (true) {
+            int n = fireScan(s, CX, CZ, 4, columns, pos, ts);
+            assertTrue(s.predictedWalkCost() < SpiralScanner.FAST_RESCAN_MAX_WALK_COST,
+                    "dense fill walks stay fast-admissible (cost=" + s.predictedWalkCost() + ")");
+            if (n == 0) break;
+            for (int i = 0; i < n; i++) {
+                columns.onReceived(pos[i], 1000L);
+                columns.onUpToDate(pos[i]);
+            }
+            assertTrue(++guard < 200, "fill never converged");
+        }
+        // Scatter dirty marks across the 81 interior regions ([-4..4]^2 at lod 128):
+        // 81 x (16 probe floor + 1024 emit area) ≈ 84k — decisively past the 65,536 cap.
+        int marked = 0;
+        for (int rx = -4; rx <= 4; rx++) {
+            for (int rz = -4; rz <= 4; rz++) {
+                for (int k = 0; k < 2; k++) {
+                    long pk = PositionUtil.packPosition((rx << 5) + 12 + k, (rz << 5) + 15);
+                    if (columns.markDirtyIfKnown(pk)) marked++;
+                }
+            }
+        }
+        assertTrue(marked >= 120, "premise: a broad scatter marked (" + marked + ")");
+        // The next walk pays the scatter's observe passes and meters them...
+        fireScan(s, CX, CZ, 4, columns, pos, ts);
+        assertTrue(s.predictedWalkCost() > SpiralScanner.FAST_RESCAN_MAX_WALK_COST,
+                "a mass scatter walk must price past the fast cap (cost="
+                        + s.predictedWalkCost() + ") — the plan §8 1 Hz row");
+    }
+
+    @Test
+    void exactFillEndingInSatisfiedTailIsNotTruncatedOnThisArm() {
+        // Deliberate divergence from legacy, pinned (walk-lens review): legacy flags
+        // truncated whenever budget fills with ANY rings left, even fully satisfied
+        // ones; the region arm flags it only when NEEDY work remains — the stricter,
+        // correct-er reading for the governor's window-limited latch. Recorded §14.
+        int lod = 40;
+        var s = scanner(lod);
+        var columns = new ColumnStateMap();
+        long[] pos = new long[2048], ts = new long[2048];
+        satisfySquare(columns, lod);
+        // Re-open exactly 768 cells, all inside region (0,0), outside the exclusion.
+        int reopened = 0;
+        for (int x = 8; x < 32; x++) {
+            for (int z = 0; z < 32; z++) {
+                if (columns.markDirtyIfKnown(PositionUtil.packPosition(x, z))) reopened++;
+            }
+        }
+        assertEquals(768, reopened);
+        int n = s.scan(CX, CZ, 4, columns, pos, ts, 768);
+        assertEquals(768, n, "the budget exactly fills on the last needy cell");
+        assertFalse(s.wasLastWalkTruncated(),
+                "no needy region remained — not truncated on this arm (legacy says true)");
+    }
+
+    @Test
+    void lodShrinkPruneThenGrowRedeclaresTheAnnulusThroughAbsentLeaves() {
+        // The F1-class differential (plan §7): shrink prunes the outer annulus's
+        // STATE; on the region arm the re-grown annulus is absent leaves = all-needs,
+        // so the stateless walk re-declares every position — the "permanently blank
+        // annulus" class is structurally impossible. No prefix rung involved.
+        int lod = 24;
+        var s = scanner(lod);
+        var columns = new ColumnStateMap();
+        long[] pos = buf(), ts = buf();
+        int guard = 0;
+        while (true) {
+            int n = fireScan(s, CX, CZ, 4, columns, pos, ts);
+            if (n == 0) break;
+            for (int i = 0; i < n; i++) {
+                columns.onReceived(pos[i], 1000L);
+                columns.onUpToDate(pos[i]);
+            }
+            assertTrue(++guard < 40, "fill never converged");
+        }
+        // The manager's shrink flow: new session distance + the range prune.
+        s.setConfig(new SessionConfigS2CPayload(LSSConstants.PROTOCOL_VERSION, true, 8, true));
+        columns.pruneOutOfRange(CX, CZ, 8);
+        assertEquals(0, fireScan(s, CX, CZ, 4, columns, pos, ts),
+                "the shrunk disc is still satisfied");
+        // Grow back: the pruned annulus (rings 9..24) must fully re-declare.
+        s.setConfig(new SessionConfigS2CPayload(LSSConstants.PROTOCOL_VERSION, true, lod, true));
+        var redeclared = new HashSet<Long>();
+        guard = 0;
+        while (true) {
+            int n = fireScan(s, CX, CZ, 4, columns, pos, ts);
+            if (n == 0) break;
+            for (int i = 0; i < n; i++) {
+                redeclared.add(pos[i]);
+                columns.onReceived(pos[i], 2000L);
+                columns.onUpToDate(pos[i]);
+            }
+            assertTrue(++guard < 40, "re-grow never converged");
+        }
+        for (int dx = -lod; dx <= lod; dx++) {
+            for (int dz = -lod; dz <= lod; dz++) {
+                if (Math.max(Math.abs(dx), Math.abs(dz)) < 9) continue; // kept by the prune
+                if (!wanted(dx, dz, lod, 4)) continue;
+                assertTrue(redeclared.contains(PositionUtil.packPosition(dx, dz)),
+                        "pruned annulus position (" + dx + "," + dz + ") never re-declared");
+            }
+        }
+        assertEquals(lod + 1, s.getConfirmedRing());
+    }
+
+    // ---- the chaos/orphan ports (plan §10 — 'the load-bearing pins') ----
+
+    /** fireScan with queue-pressure inputs, for the chaos loops. */
+    private static int fireScanP(RegionScanner s, int cx, int cz, int viewDistance,
+                                 int queueSize, int queueHalt,
+                                 ColumnStateMap columns, long[] pos, long[] ts) {
+        for (int i = 0; i < LSSConstants.TICKS_PER_SECOND + 1; i++) {
+            int n = s.maybeScan(cx, cz, viewDistance, queueSize, queueHalt, 0L, Long.MAX_VALUE,
+                    -1, 1000, () -> 0, columns, pos, ts);
+            if (n >= 0) return n;
+        }
+        throw new AssertionError("scan cadence never fired");
+    }
+
+    private static boolean allSatisfiedAround(ColumnStateMap columns, int cx, int cz,
+                                              int vd, int lod) {
+        for (int dx = -lod; dx <= lod; dx++) {
+            for (int dz = -lod; dz <= lod; dz++) {
+                if (dx == 0 && dz == 0) continue; // ring-0 parity: never declared
+                if (SpiralScanner.isVanillaRendered(cx + dx, cz + dz, cx, cz, vd)) continue;
+                if (columns.classify(PositionUtil.packPosition(cx + dx, cz + dz))
+                        != ColumnStateMap.SATISFIED) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    @Test
+    void anyChaosInterleavingLeavesNoPositionPermanentlyOrphaned() {
+        // The region port of the legacy load-bearing pin, at a CROSS-REGION lod with
+        // budget-truncated fires (tests-lens MAJOR-2: the differential's single-shot
+        // unbounded compares cannot see prefix-advance failures under truncation).
+        // Alphabet: answers, retry marks, not-generated, up-to-date, LATE answers,
+        // and silent supersession — no answer, ever; only re-declaration saves it.
+        final int vd = 2, lod = 40;
+        for (long seed : new long[]{1L, 7L, 42L}) {
+            var rng = new java.util.Random(seed);
+            var columns = new ColumnStateMap();
+            long[] pos = buf(), ts = buf();
+            var s = scanner(lod);
+            record Scheduled(long pos, int dueCycle) {}
+            var scheduled = new java.util.ArrayList<Scheduled>();
+            var awaitingLate = new java.util.HashSet<Long>();
+            int supersededCount = 0;
+
+            for (int cycle = 0; cycle < 30; cycle++) {
+                for (var iter = scheduled.iterator(); iter.hasNext(); ) {
+                    var ev = iter.next();
+                    if (ev.dueCycle() > cycle) continue;
+                    iter.remove();
+                    awaitingLate.remove(ev.pos());
+                    columns.onReceived(ev.pos(), 1_000L + cycle);
+                }
+                int n = fireScanP(s, CX, CZ, vd, rng.nextInt(900), 1000, columns, pos, ts);
+                for (int i = 0; i < n; i++) {
+                    long pk = pos[i];
+                    if (awaitingLate.contains(pk)) continue;
+                    int roll = rng.nextInt(100);
+                    if (roll < 30) columns.onReceived(pk, 1_000L + cycle);
+                    else if (roll < 45) columns.markRetry(pk);
+                    else if (roll < 60) columns.onNotGenerated(pk);
+                    else if (roll < 70) columns.onUpToDate(pk);
+                    else if (roll < 85) {
+                        scheduled.add(new Scheduled(pk, cycle + 1 + rng.nextInt(3)));
+                        awaitingLate.add(pk);
+                    } else supersededCount++;
+                }
+            }
+            assertTrue(supersededCount > 0,
+                    "seed " + seed + ": the chaos never exercised a supersession");
+            scheduled.clear();
+            awaitingLate.clear(); // the booked late answers are dropped too
+
+            boolean converged = false;
+            for (int i = 0; i < 60 && !converged; i++) {
+                int n = fireScanP(s, CX, CZ, vd, 0, 1000, columns, pos, ts);
+                for (int j = 0; j < n; j++) {
+                    columns.onReceived(pos[j], 5_000L + i);
+                    columns.onUpToDate(pos[j]);
+                }
+                converged = n == 0 && s.getConfirmedRing() == lod + 1
+                        && allSatisfiedAround(columns, CX, CZ, vd, lod);
+            }
+            assertTrue(converged, "seed " + seed + ": chaos interleaving permanently "
+                    + "orphaned a position (confirmedRing=" + s.getConfirmedRing() + ")");
+        }
+    }
+
+    @Test
+    void movementChaosLeavesNoPositionPermanentlyOrphaned() {
+        // The movement half of the orphan property on the stateless walk: random
+        // crossings (the region arm has no prefix/crescent geometry to corrupt, but
+        // the emit windows shift and the movement window gates cadence), dirty marks
+        // via the production shape (markDirtyIfKnown + the no-op reopenRing), retries,
+        // supersessions — then convergence at the final center.
+        final int vd = 16, lod = 24;
+        for (long seed : new long[]{3L, 11L, 77L}) {
+            var rng = new java.util.Random(seed);
+            var columns = new ColumnStateMap();
+            long[] pos = buf(), ts = buf();
+            var s = scanner(lod);
+            int cx = 0, cz = 0;
+
+            for (int cycle = 0; cycle < 25; cycle++) {
+                if (rng.nextInt(100) < 60) {
+                    int d = 1 + rng.nextInt(6);
+                    int dir = rng.nextBoolean() ? 1 : -1;
+                    switch (rng.nextInt(3)) {
+                        case 0 -> cx += dir * d;
+                        case 1 -> cz += dir * d;
+                        default -> { cx += dir * d; cz += (rng.nextBoolean() ? 1 : -1) * d; }
+                    }
+                    s.recenter(d);
+                }
+                int n = fireScanP(s, cx, cz, vd, 0, 1000, columns, pos, ts);
+                for (int i = 0; i < n; i++) {
+                    long pk = pos[i];
+                    int roll = rng.nextInt(100);
+                    if (roll < 40) { columns.onReceived(pk, 1_000L + cycle); columns.onUpToDate(pk); }
+                    else if (roll < 50) columns.markRetry(pk);
+                    else if (roll < 60) columns.onUpToDate(pk);
+                    // else superseded: no answer, ever
+                }
+                if (rng.nextInt(100) < 40 && columns.receivedCount() > 0) {
+                    int dx = rng.nextInt(2 * lod + 1) - lod, dz = rng.nextInt(2 * lod + 1) - lod;
+                    long dirtyPos = PositionUtil.packPosition(cx + dx, cz + dz);
+                    if (columns.markDirtyIfKnown(dirtyPos)) {
+                        s.reopenRing(Math.max(Math.abs(dx), Math.abs(dz)), lod); // no-op arm
+                    }
+                }
+            }
+
+            boolean converged = false;
+            for (int i = 0; i < 60 && !converged; i++) {
+                int n = fireScanP(s, cx, cz, vd, 0, 1000, columns, pos, ts);
+                for (int j = 0; j < n; j++) {
+                    columns.onReceived(pos[j], 50_000L + i);
+                    columns.onUpToDate(pos[j]);
+                }
+                converged = n == 0 && s.getConfirmedRing() == lod + 1;
+            }
+            assertTrue(converged, "seed " + seed + ": movement chaos never converged"
+                    + " (confirmedRing=" + s.getConfirmedRing() + ")");
+            assertTrue(allSatisfiedAround(columns, cx, cz, vd, lod),
+                    "seed " + seed + ": a position near the final center was orphaned");
+        }
+    }
+
+    @Test
     void aFiredScanClosesTheMovementWindow() {
         var s = scanner(512);
         var columns = new ColumnStateMap();
@@ -386,7 +682,10 @@ class RegionScannerTest {
         assertTrue(s.recenteredSinceLastFireForTest());
         fireScan(s, CX, CZ, 4, columns, pos, ts);
         assertFalse(s.recenteredSinceLastFireForTest(), "the fire path closes the window");
-        assertEquals(0, s.predictedWalkCost(), "stationary again: free");
+        int cost = s.predictedWalkCost();
+        assertTrue(cost > 0 && cost < SpiralScanner.FAST_RESCAN_MAX_WALK_COST,
+                "stationary again: the OBSERVE METER prices the last walk (got " + cost
+                        + ") — cheap, fast-admissible, never a flat 0");
     }
 
     @Test
