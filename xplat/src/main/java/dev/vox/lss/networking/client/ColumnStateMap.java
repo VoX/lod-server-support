@@ -108,10 +108,10 @@ class ColumnStateMap {
     // failing consumer would otherwise drive forever (see onIngestFailed).
     private final Long2IntOpenHashMap ingestFailures = new Long2IntOpenHashMap();
     /** Positions parked at {@link #MAX_INGEST_FAILURES} this session — the definitive
-     *  "this hole is now permanent" signal (kept through the §18→§12 transition:
-     *  under §12 backpressure a nonzero value means drop REPORTS looped to the cap —
-     *  the runaway-loop belt fired — distinguishable from ordinary rejections only
-     *  here). */
+     *  "this hole is now permanent" signal. Provenance-free: ANY failure source
+     *  (a consumer rejection, a decode drop, a §12 bridge drop report) counts
+     *  toward the cap — a nonzero value says the re-serve belt exhausted
+     *  somewhere, not which consumer drove it. */
     private long ingestParked;
 
     long ingestParkedCount() {

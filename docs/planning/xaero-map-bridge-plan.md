@@ -256,10 +256,13 @@ CFR decompile output in `cfr-out262/`, XaeroPlus clone). Key findings:
 8. **Failure containment — the map must never cost LOD correctness.** The
    consumer callback catches ALL its own throwables (nothing escapes to
    `dispatchColumn` — an escape would trigger `reportIngestFailure` and put the
-   column into the re-serve loop for a map problem). The bridge NEVER calls
-   `reportIngestFailure` and does not override `pendingIngestBacklog` (the
-   backpressure gauge is for LOD renderers; the map drops instead of pacing the
-   stream). Commit-time throws: LogThrottle'd warn + drop the tile; a
+   column into the re-serve loop for a map problem). [AMENDED 2026-08-24, hybrid-scan-plan.md §12 — this item's second half is
+   REVERSED: the bridge now DOES override `pendingIngestBacklog` (the §12
+   want-set backpressure — the map paces the stream to its writer's rate) and
+   DOES call `reportIngestFailure`, through the kept immediate `DropReporter`
+   only (stale-dimension/world-change drops always; governed drops under the
+   composed kill switches). The first half stands: a throwing extraction still
+   never escapes to `dispatchColumn`.] Commit-time throws: LogThrottle'd warn + drop the tile; a
    consecutive-failure latch (5 in a row) kills the bridge for the session
    (`state=dead` in diag), FarPlayerRenderer-crash-latch style.
 9. **Config + Sodium toggle.** New client config key `enableXaeroMapBridge`
