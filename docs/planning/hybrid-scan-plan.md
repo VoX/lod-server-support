@@ -796,3 +796,61 @@ three; the stale inverted test by two). All folded:
   `removeAsync` route, LSSApi composition (LSSApiBacklogTest owns it), zero
   wire/server change, and §12.3's equilibrium arithmetic (¼ gate = 18.75%
   occupancy under the 75% mapping — the cycle-mean ~25% claim is consistent).
+
+## §13 Walk as-built record (2026-08-24, branch feat/hybrid-scan off feat/xaero-backpressure)
+
+§2-§10 implemented as specified; deviations and concretions below. One jar now
+carries the full plan (hybrid walk + §12 backpressure), per the user's explicit
+override of §0's ship-§12-first gate ("do the entire plan").
+
+- **`RegionScanner.scan()` two-phase rewrite.** `HYBRID_NEAR_RADIUS = 64`
+  (test seam `hybridNearRadius`); `lod` and `N = min(seam, lod)` hoisted once
+  per scan. Phase 1: labeled loop over rings r₀+1..N in legacy
+  `ringIndexToCoord` order — `ringNeedsFree` probe first (gate-independent,
+  counts `quadRingSkips`, observe cost r/4+4), needy rings pay 8r + per-position
+  emit; a budget break sets `truncated`, `phase1Broke`, counts the ring into
+  `nearRings`, and phase 2 never runs (§2.3's convention: past-budget
+  observation sets are truncated, never emit-free-completed). Phase 2 gated on
+  `!phase1Broke && N < lodDistance`: the region spiral emits per-region residue
+  only.
+- **`wholeExcludedRings(vd)`** — seeded at `vd/√2 + 1`, stepped to the largest
+  r with `2(r−1)² < vd²` (the corner test against the 1-buffered Euclidean
+  exclusion `adx²+adz² < vd²`); brute-pinned for vd 0..40 against the real
+  `isVanillaRendered` shape.
+- **`residueRects(area, near, out)`** — left/right full-height strips + middle
+  top/bottom strips; disjoint → the whole rect; contained → 0 (region skipped
+  outright — the lod ≤ 64 degeneracy is exact). Scratch `int[4][4]` reused,
+  no allocation. 2000-trial brute pin: exact cover, pairwise disjoint.
+- **`ColumnStateMap.rectNeedsFree(x0,z0,x1,z1)`** — leaf-granular over the
+  rect; absent leaf = needs; partial-leaf overlap answered conservatively
+  (needs-anywhere-in-leaf → walk). Phase-2 probes metered via the
+  `phase2Probes` counter (test-only getter).
+- **`near_rings`** (§7 REQUIRED) — phase-1 rings that emitted or observed needy
+  work; wired through diag Scan line, trace `scan` event, exporter
+  `scan.near_rings` (+ contract row — NOTE the contract file is
+  ALPHABETICALLY sorted; the row sits between `scan.missing_vanilla` and
+  `scan.quad_ring_skips`, and an out-of-order insert fails
+  ExporterContractTest).
+- **Tests** (§8): RegionScannerTest 27/0 — re-homes as predicted (small-lod
+  legacy-order degeneracy at lod 24; far-fill residue order at lod 96; census
+  structural pins; movement chaos extended to mixed lods {24,96} × 4 seeds,
+  90-iteration convergence), new pins (phase-1-order-equals-fresh-legacy under
+  both quad variants; budget-break-skips-phase-2 with `phase2Probes == 0`;
+  observe-cost-meters-emitted-work; the two brute pins above).
+  RegionScanDifferentialTest 3/0 — dynamic `bufSize(lod)`, far lods
+  {2,8,24,33,40,80,96,130}, chaos alternating 24..43/70..109 by seed parity,
+  and the lod ≤ 64 ORDERED-sequence arm. `ColumnStateMapTest` gains the
+  rectNeedsFree granularity/conservatism pin. Full T1 2083/0, T2 green.
+  **Complete-prefix re-home deviation:** the ≥2-group premise fails for an
+  origin-centered player (the first far sliver is 992 cells ≥ the 800 budget)
+  — the pin now runs off-center at (16,16) with a local brute over
+  |x−16|/|z−16|.
+- **Boundary soak** (§8.10): NEW scenario `hybrid-boundary` (lod 88, tp to
+  (500,150,500) mid-run, save-all@480, end@540) + `check_hybrid_boundary`
+  (gen.completed > 2000, quiescent tail, scan.confirmed > 88) registered in
+  CHECKS/MIN_CLIENT_WINDOWS/ANOMALY_OPT_INS ({"saturated"}), 5 selftest cases
+  (270 total), soak.sh FRESH_WORLD_SCENARIOS. First live run pending — the
+  540 s end and both thresholds may need tuning against observed timings.
+- **Docs:** CLAUDE.md's three scanner sites (want-set paragraph, the
+  RegionScanner bullet, the `enableRegionScan` key note) now describe the
+  hybrid walk; `ring_skips=` legend covers both arms.

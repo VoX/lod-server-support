@@ -85,7 +85,7 @@ FABRIC_PHASE_SCENARIOS=(evicted-tscache-rejoin stamp-heal-rejoin stamp-heal-prim
 # staleness-bound gate (lod-store-implementation-plan.md Phase 2).
 PAPER_SCENARIOS+=(paper-store-unfired-event)
 # Scenarios that run on a fresh (deleted) world; everything else copies the base world.
-FRESH_WORLD_SCENARIOS="fresh-backfill rate-limit-storm generation-disabled generation-capacity-stress"
+FRESH_WORLD_SCENARIOS="fresh-backfill rate-limit-storm generation-disabled generation-capacity-stress hybrid-boundary"
 LOG_PREFIX="soak"
 
 # Exported so 'all' recursion and auto-run fresh-backfill inherit the platform.

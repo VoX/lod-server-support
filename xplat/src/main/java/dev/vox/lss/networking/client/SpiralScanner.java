@@ -157,7 +157,7 @@ class SpiralScanner {
             () -> LSSClientConfig.CONFIG.enableQuadtreeScan;
     /** Rings the fast path confirmed without a position walk — session diagnostic
      *  (diag {@code ring_skips=}, exporter {@code scan.quad_ring_skips}). */
-    private long quadRingSkips;
+    long quadRingSkips; // package-private: the hybrid walk's phase-1 ring skips feed it too (§7)
     /** REOPENED_RING_VALVE overflow firings — session diagnostic (plan §6 phase 0: the
      *  B1 "is the valve pathological-only?" measurement; diag {@code valve=}, exporter
      *  {@code scan.valve_trips}). Counted in BOTH walk modes — the reopen bookkeeping
@@ -1077,4 +1077,5 @@ class SpiralScanner {
     int getRegionSpan() { return 0; }
     long getRegionSkips() { return 0; }
     long getAuditHeals() { return 0; }
+    int getNearRings() { return 0; }
 }
