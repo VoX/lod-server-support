@@ -177,9 +177,16 @@ final class XaeroMapCompat {
      *  landing room for the in-flight tail (already-admitted server work + the
      *  LSS decode queue keep landing ~1 s past a halt). */
     static final double BP_HALT_OCCUPANCY = 0.75;
-    /** Consecutive undrainable pumps (~1 s) before the paused latch flips —
+    /** Consecutive undrainable pumps (~1 s) before GOVERNANCE goes -1 —
      *  flap hysteresis for per-pump reflective gates that can oscillate. */
     static final int BP_PAUSE_PUMPS = 20;
+    /** Consecutive undrainable pumps (~10 s) before offers are REFUSED (review
+     *  MAJOR: the transient startup gates — Xaero's region-detection scan,
+     *  multiworld resolution, the join window — clear within seconds and must be
+     *  ABSORBED by the queue, not refused into permanent unreported holes; only
+     *  the structural pauses — cave layer, map locked, writing off — outlive
+     *  this). Governance already went -1 at {@link #BP_PAUSE_PUMPS}. */
+    static final int BP_REFUSE_PUMPS = 200;
     /** The staleness watchdog: without a pump inside this window the report is -1
      *  (a frozen mirror must never read as live backlog). */
     static final int BP_PUMP_STALE_MILLIS = 1000;
@@ -262,7 +269,13 @@ final class XaeroMapCompat {
                     () -> LSSClientConfig.CONFIG.enableXaeroMapBridge,
                     LSSApi::isServerEnabled,
                     LSSApi::registerColumnConsumer, LSSApi::removeColumnConsumer,
-                    () -> LSSClientConfig.CONFIG.enableXaeroMapBackpressure,
+                    // §12.2: the bridge switch COMPOSES UNDER the global #71 switch —
+                    // with enableIngestBackpressure off the manager never polls the
+                    // report, so the refusal/report halves must go dark too (review
+                    // MAJOR: an armed reporter with no taper behind it restores the
+                    // §18.1 churn regime).
+                    () -> LSSClientConfig.CONFIG.enableIngestBackpressure
+                            && LSSClientConfig.CONFIG.enableXaeroMapBackpressure,
                     XaeroMapCompat::reportDroppedProduction);
             bridge.maybeRegister();
             instance = bridge;
@@ -385,6 +398,7 @@ final class XaeroMapCompat {
     int deferCap = DEFER_CAP;
     long maxQueueBytes = MAX_QUEUE_BYTES;
     int bpPausePumps = BP_PAUSE_PUMPS;
+    int bpRefusePumps = BP_REFUSE_PUMPS;
     int bpPumpStaleMillis = BP_PUMP_STALE_MILLIS;
     long bpHaltWedgeMillis = BP_HALT_WEDGE_MILLIS;
     /** Tile chunks committed but not yet texture-rebuilt, keyed by tile-chunk
@@ -430,17 +444,26 @@ final class XaeroMapCompat {
      *  cannot drain, so the extraction is skipped and NOTHING is reported: an
      *  un-stamp would churn re-serves into the same refusal). */
     private final AtomicLong refusedPaused = new AtomicLong();
+    /** Pump-side reports collected INSIDE the ladder (which runs under Xaero's
+     *  renderThreadPauseSync monitor) and drained by {@link #pump} AFTER the
+     *  ladder returns — up to a whole queue's worth on a world-id change, and an
+     *  un-stamp burst must not run under a Xaero monitor (review ×2). Main
+     *  thread only. Object[]{dimension, chunkX, chunkZ}. */
+    private final java.util.ArrayList<Object[]> deferredReports = new java.util.ArrayList<>();
     /** Drops reported back to LSS for their bounded re-serve (the kept reporter
      *  path — stale-dimension drops always, governed drops under §12). */
     private final AtomicLong dropsReported = new AtomicLong();
     // §12 backpressure state. The drainable latch is DERIVED, never enumerated:
     // pumpLadder's outcome sets it, so every early return — present and future —
-    // reads as not-draining by construction (review MAJOR).
+    // reads as not-draining by construction (review MAJOR). TWO thresholds over
+    // one counter: governance goes -1 fast (~1 s — a paused queue must not halt
+    // the fill), refusal engages slow (~10 s — transient startup gates absorb
+    // into the queue instead of shedding unreported holes).
     private volatile boolean pumpDrainable = true;
     private volatile long lastPumpMillis;
     private int undrainablePumps; // main thread only (hysteresis counter)
-    /** Hysteresis-latched paused state: offers refused, report -1. Volatile —
-     *  the decode thread reads it in {@link #offerColumn}. */
+    /** The SLOW latch (~10 s): offers refused pre-extraction. Volatile — the
+     *  decode thread reads it in {@link #offerColumn}. */
     private volatile boolean pausedForOffers;
     // Halt time-box (main thread only — the poll runs on the client tick).
     private long haltSinceMillis;
@@ -593,8 +616,15 @@ final class XaeroMapCompat {
         this.framesSinceLastPump = 0;
         this.rebuildNanosMax = 0; // session-scoped worst recolor; the total stays lifetime
         this.lastWorldId = null;
+        // §12 (review m5): the main-thread half re-clears the latches — an
+        // in-flight ladder's finally can re-latch AFTER onSessionEnd's off-thread
+        // clear; this half runs at the next pump top, after any such ladder.
         this.undrainablePumps = 0;
         this.haltSinceMillis = 0;
+        this.pausedForOffers = false;
+        this.pumpDrainable = true;
+        this.haltWedged = false;
+        this.deferredReports.clear(); // stale un-stamps must not cross sessions
         if (this.registered && !this.enabled.getAsBoolean()) {
             this.deregistrar.accept(this.consumer);
             this.registered = false;
@@ -657,33 +687,38 @@ final class XaeroMapCompat {
      * wedge-degraded halt. Main client thread (the LSSApi poll).
      */
     int reportBackpressure() {
-        if (!this.backpressureEnabled.getAsBoolean()) return -1;
+        if (!this.backpressureEnabled.getAsBoolean()) return noSignal();
         if (this.dead || !this.enabled.getAsBoolean() || !this.sessionActive.getAsBoolean()) {
-            return -1;
+            return noSignal();
         }
         if (this.haltWedged) {
             // The wedge re-arms only once the queue has actually drained back down.
             if (this.occupancy < BP_WEDGE_REARM_OCCUPANCY) {
                 this.haltWedged = false;
             } else {
-                return -1;
+                return noSignal();
             }
         }
-        if (this.pausedForOffers || !this.pumpDrainable) return -1;
-        if (nowMillis() - this.lastPumpMillis > this.bpPumpStaleMillis) return -1;
+        if (!this.pumpDrainable) return noSignal();
+        if (nowMillis() - this.lastPumpMillis > this.bpPumpStaleMillis) return noSignal();
         int halt = dev.vox.lss.networking.client.LodRequestManager.INGEST_BACKLOG_HALT_SECTIONS;
         int report = (int) Math.round(halt * Math.min(1.0, this.occupancy / BP_HALT_OCCUPANCY));
         if (report >= halt) {
             // The halt TIME-BOX: pacing is the bridge's right, stopping is not. A
-            // full report with ZERO commits for the whole window means the writer
+            // full report with no commits ACROSS the whole window means the writer
             // is wedged while claiming drainability — degrade to -1 (warn once)
-            // and let the fill continue; the map wears the loss.
+            // and let the fill continue; the map wears the loss. PROGRESS RE-BASES
+            // the window (review MAJOR ×3: an equality-against-the-opening-value
+            // check was permanently disarmed by the first commit inside the
+            // window), and every -1 exit CLEARS it (review MAJOR: a timer
+            // surviving a cave-layer pause fired a false wedge on the first
+            // governing poll back).
             long now = nowMillis();
-            if (this.haltSinceMillis == 0) {
+            long w = this.written.get();
+            if (this.haltSinceMillis == 0 || w != this.writtenAtHaltStart) {
                 this.haltSinceMillis = now;
-                this.writtenAtHaltStart = this.written.get();
-            } else if (now - this.haltSinceMillis > this.bpHaltWedgeMillis
-                    && this.written.get() == this.writtenAtHaltStart) {
+                this.writtenAtHaltStart = w;
+            } else if (now - this.haltSinceMillis > this.bpHaltWedgeMillis) {
                 this.haltWedged = true;
                 this.haltSinceMillis = 0;
                 LSSLogger.warn("Xaero map bridge: the map writer made no progress through a "
@@ -695,6 +730,13 @@ final class XaeroMapCompat {
             this.haltSinceMillis = 0;
         }
         return report;
+    }
+
+    /** Every no-signal exit clears the halt time-box — the halt is "not currently
+     *  in effect" in a -1 state, and a stale window fires false wedges. */
+    private int noSignal() {
+        this.haltSinceMillis = 0;
+        return -1;
     }
 
     /** Clock seam (tests drive the watchdog + time-box without sleeping — the
@@ -760,6 +802,7 @@ final class XaeroMapCompat {
         int bytes = approxBytes(tile);
         java.util.ArrayList<Object[]> evictedOut = null;
         synchronized (this.queueLock) {
+
             // Re-check under the lock (sweep C MAJOR): a decode-thread tile that passed
             // offerColumn's gate before the session ended must not land in the queue AFTER
             // onSessionEnd's clear — it would wait through the title screen and commit one
@@ -781,8 +824,14 @@ final class XaeroMapCompat {
                 }
                 // Stale-dimension entry: the new serve replaces it (fresh Entry, so
                 // an in-flight pump pass's compare-and-remove cannot delete it).
+                // Counted + reported (§12 review: an uncounted silent foreign-dim
+                // drop broke the §12.1(c) self-heal claim at portals) — collected
+                // for the outside-the-lock report like the evictions.
                 this.queuedBytes -= existing.bytes;
                 this.queue.remove(key);
+                this.droppedStale.incrementAndGet();
+                if (evictedOut == null) evictedOut = new java.util.ArrayList<>();
+                evictedOut.add(new Object[]{existing.dimension, key, Boolean.TRUE});
             }
             while (!this.queue.isEmpty()
                     && (this.queue.size() >= this.maxQueue
@@ -804,7 +853,12 @@ final class XaeroMapCompat {
         if (evictedOut != null) {
             for (var e : evictedOut) {
                 long k = (Long) e[1];
-                reportDroppedIfGoverned(e[0], (int) (k >> 32), (int) k);
+                if (e.length > 2) {
+                    // stale-dimension replacement: unconditional (correctness)
+                    reportDropped(e[0], (int) (k >> 32), (int) k);
+                } else {
+                    reportDroppedIfGoverned(e[0], (int) (k >> 32), (int) k);
+                }
             }
         }
     }
@@ -819,10 +873,15 @@ final class XaeroMapCompat {
     }
 
     /** A same-dimension drop's report, gated on §12 governance: with backpressure
-     *  OFF (or wedge-degraded) drops stay silent — the pre-amendment behavior the
-     *  kill-switch pin holds; governed drops self-heal via the reporter. */
+     *  OFF (the COMPOSED switch — global #71 and the bridge key), wedge-degraded,
+     *  or the pump undrainable, drops stay silent — reporting into a closed gate
+     *  churns re-serves into the same drop (review MAJOR); governed drops
+     *  self-heal via the reporter. */
     private void reportDroppedIfGoverned(Object dimension, int chunkX, int chunkZ) {
-        if (!this.backpressureEnabled.getAsBoolean() || this.haltWedged) return;
+        if (!this.backpressureEnabled.getAsBoolean() || this.haltWedged
+                || !this.pumpDrainable) {
+            return;
+        }
         reportDropped(dimension, chunkX, chunkZ);
     }
 
@@ -840,24 +899,25 @@ final class XaeroMapCompat {
     }
 
     /** The WORLD-ID-change clear (§12.1(c)): the queued tiles belong to a previous
-     *  world, and the player may return — report each position (outside the lock)
-     *  so its stamp is forgotten and a return re-declares it. */
-    int clearQueueReporting() {
-        java.util.ArrayList<Object[]> cleared;
+     *  world, and the player may return — each position's report is COLLECTED into
+     *  {@link #deferredReports} (the caller sits inside Xaero's renderPause
+     *  monitor; the pump drains outside it) so its stamp is forgotten and a
+     *  return re-declares it. Accepted churn: a same-dimension world change
+     *  un-stamps up to a queue's worth (~3k) and re-downloads it — the new map
+     *  needs those tiles; ~4 s of re-serves, rare event (recorded §12.6). */
+    int clearQueueCollectingReports() {
         synchronized (this.queueLock) {
-            cleared = new java.util.ArrayList<>(this.queue.size());
+            int n = this.queue.size();
             for (var e : this.queue.entrySet()) {
-                cleared.add(new Object[]{e.getValue().dimension, e.getKey()});
+                long k = e.getKey();
+                this.deferredReports.add(new Object[]{e.getValue().dimension,
+                        (int) (k >> 32), (int) k});
             }
             this.queue.clear();
             this.queuedBytes = 0;
             updateOccupancyLocked();
+            return n;
         }
-        for (var e : cleared) {
-            long k = (Long) e[1];
-            reportDropped(e[0], (int) (k >> 32), (int) k);
-        }
-        return cleared.size();
     }
 
     /**
@@ -881,10 +941,6 @@ final class XaeroMapCompat {
         }
     }
 
-    void queueLockedClearForTest() {
-        clearQueue();
-    }
-
     int queuedForTest() {
         synchronized (this.queueLock) {
             return this.queue.size();
@@ -905,6 +961,10 @@ final class XaeroMapCompat {
 
     boolean deadForTest() {
         return this.dead;
+    }
+
+    boolean pausedOffersForTest() {
+        return this.pausedForOffers;
     }
 
     int regionsWaitingForTest() {
@@ -965,6 +1025,7 @@ final class XaeroMapCompat {
                 + ", defer_events=" + this.deferEvents.get()
                 + ", dropped=" + dropped
                 + ", dropped_overflow=" + this.droppedOverflow.get()
+                + ", dropped_stale=" + this.droppedStale.get()
                 + ", dropped_expired=" + this.droppedExpired.get()
                 + ", commit_failures=" + this.commitFailures.get()
                 + ", load_requests=" + this.loadRequests.get()
@@ -998,6 +1059,7 @@ final class XaeroMapCompat {
                 this.pendingUpdates.clear();
                 this.pendingUpdatesGauge = 0;
             }
+            this.undrainablePumps = 0; // no ladder ran: the consecutive chain breaks
             return;
         }
         this.pumpCount++;
@@ -1021,6 +1083,7 @@ final class XaeroMapCompat {
             synchronized (this.queueLock) {
                 if (this.queue.isEmpty() && this.pendingUpdates.isEmpty()) {
                     this.regionsWaiting = 0;
+                    this.undrainablePumps = 0; // idle: gate flaps here are meaningless
                     return;
                 }
             }
@@ -1033,7 +1096,18 @@ final class XaeroMapCompat {
         } catch (Throwable t) {
             if (t instanceof Error err && !(t instanceof AssertionError)) throw err;
             noteFailure(t);
+        } finally {
+            drainDeferredReports(); // outside every Xaero monitor
         }
+    }
+
+    /** Drain the ladder-collected reports (main thread, no monitors held). */
+    private void drainDeferredReports() {
+        if (this.deferredReports.isEmpty()) return;
+        for (var e : this.deferredReports) {
+            reportDropped(e[0], (Integer) e[1], (Integer) e[2]);
+        }
+        this.deferredReports.clear();
     }
 
     /**
@@ -1050,14 +1124,16 @@ final class XaeroMapCompat {
         } finally {
             // §12: the drainable latch is DERIVED from the outcome — every early
             // return (and any future one) reads as not-draining by construction; a
-            // throwing ladder too. Hysteresis absorbs per-pump gate flaps.
+            // throwing ladder too. Hysteresis absorbs per-pump gate flaps; the two
+            // thresholds separate governance (-1 fast) from refusal (slow).
             if (reached) {
                 this.undrainablePumps = 0;
                 this.pumpDrainable = true;
                 this.pausedForOffers = false;
-            } else if (++this.undrainablePumps >= this.bpPausePumps) {
-                this.pumpDrainable = false;
-                this.pausedForOffers = true;
+            } else {
+                int n = ++this.undrainablePumps;
+                if (n >= this.bpPausePumps) this.pumpDrainable = false;
+                if (n >= this.bpRefusePumps) this.pausedForOffers = true;
             }
         }
     }
@@ -1099,7 +1175,7 @@ final class XaeroMapCompat {
                 // reconfiguration residual): the queued tiles are the OLD world's.
                 // §12.1(c): reported — the stamps must be forgotten or a return to
                 // that world never re-declares them.
-                this.droppedStale.addAndGet(clearQueueReporting());
+                this.droppedStale.addAndGet(clearQueueCollectingReports());
             }
             this.lastWorldId = worldId;
             Object dimensionId;
@@ -1345,11 +1421,10 @@ final class XaeroMapCompat {
                     // Can never become valid — the pump-side stale-dimension drop (§2.5).
                     if (removeIfCurrent(pending.key(), pending.entry(), pending.tile())) {
                         this.droppedStale.incrementAndGet();
-                        // §18: report NOW — its region is only ever probed under the
-                        // CURRENT map dimension, so a ledger entry would rot; the
+                        // §12.1(c): report (deferred out of the monitor) — the
                         // re-serve lands after the player returns to that dimension.
-                        reportDropped(pending.entry().dimension,
-                                pending.tile().chunkX(), pending.tile().chunkZ());
+                        this.deferredReports.add(new Object[]{pending.entry().dimension,
+                                pending.tile().chunkX(), pending.tile().chunkZ()});
                     }
                     progressed = true;
                     continue;
@@ -1375,43 +1450,28 @@ final class XaeroMapCompat {
                     case DEFERRED_TILE -> {
                         // TILE-CHUNK-scoped busy (its 4×4 loadState / PBO download):
                         // the region is fine, so siblings keep committing and only
-                        // THIS entry's patience burns (3-Opus fold MAJOR: the
-                        // region-wide burn expired whole buckets over one busy
-                        // tile chunk).
+                        // THIS entry's patience burns. Expiry is SILENT (counted —
+                        // §12 review MAJOR: reporting a defer expiry burns the
+                        // client's 3 ingest strikes at ~one per DEFER_CAP interval
+                        // against a stalled resource and parks the position — the
+                        // deleted §18 header's own indictment; the silent hole
+                        // heals by revisit or clearcache).
                         this.deferEvents.incrementAndGet();
                         if (++pending.entry().ladderReadyDeferrals > this.deferCap
                                 && removeIfCurrent(pending.key(), pending.entry(), pending.tile())) {
                             this.droppedExpired.incrementAndGet();
-                            // Dimension-safe: this entry passed the per-entry stale
-                            // filter above (unlike the bulk burn below). Governed
-                            // report — the ingest-failure cap bounds a defer loop.
-                            reportDroppedIfGoverned(pending.entry().dimension,
-                                    pending.tile().chunkX(), pending.tile().chunkZ());
                         }
                     }
                     case DEFERRED -> {
-                        // REGION-scoped busy (being saved / not resting): the whole
-                        // bucket shares the state — burn each entry's counter once
-                        // (cap semantics preserved) and move on.
+                        // REGION-scoped busy (being saved / not resting): CAP-EXEMPT
+                        // like the AWAITING_* flavors (§12 review MAJOR — the
+                        // ledger's hold-until-committable semantic, via the queue
+                        // itself): the bucket is RETAINED until the region rests;
+                        // a genuinely stuck region freezes occupancy and flows
+                        // into the halt time-box's wedge machinery, which is
+                        // DESIGNED for it. Foreign-dimension entries still exit
+                        // via the per-entry stale filter above each pump.
                         this.deferEvents.incrementAndGet();
-                        for (var p : bucket) {
-                            if (++p.entry().ladderReadyDeferrals > this.deferCap
-                                    && removeIfCurrent(p.key(), p.entry(), p.tile())) {
-                                this.droppedExpired.incrementAndGet();
-                                // §18.1 fold (reviewer A MAJOR-2a): the bulk burn reaches
-                                // entries the per-entry stale filter has not seen — a
-                                // foreign dimension must never enter this dimension's
-                                // ledger (it would conflict-thrash it); it takes the
-                                // stale route instead.
-                                if (p.entry().dimension == dimensionId) {
-                                    reportDroppedIfGoverned(p.entry().dimension,
-                                            p.tile().chunkX(), p.tile().chunkZ());
-                                } else {
-                                    reportDropped(p.entry().dimension,
-                                            p.tile().chunkX(), p.tile().chunkZ());
-                                }
-                            }
-                        }
                         continue bucketLoop;
                     }
                     case AWAITING_REQUESTABLE, AWAITING_PARKED, AWAITING_IN_FLIGHT -> {
