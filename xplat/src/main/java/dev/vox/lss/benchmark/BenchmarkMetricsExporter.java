@@ -554,6 +554,7 @@ public final class BenchmarkMetricsExporter {
         scan.put("valve_trips", manager != null ? manager.getValveTrips() : 0L);
         // Region-major scan (region-scan-plan.md §9): additive keys, 0 on the legacy arm.
         scan.put("region_span", manager != null ? manager.getRegionSpan() : 0);
+        scan.put("near_rings", manager != null ? manager.getNearRings() : 0);
         scan.put("region_skips", manager != null ? manager.getRegionSkips() : 0L);
         scan.put("audit_heals", manager != null ? manager.getAuditHeals() : 0L);
         result.put("scan", scan);

@@ -27,8 +27,12 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 class RegionScanDifferentialTest {
 
-    private static final int BUF = 16384;
     private static final int BUDGET = 1_000_000;
+
+    /** Buffers sized to the geometry (the far-lod cases exceed a fixed 16384). */
+    private static int bufSize(int lod) {
+        return (2 * lod + 1) * (2 * lod + 1) + 64;
+    }
 
     private static SpiralScanner legacy(int lod, boolean quad) {
         var s = new SpiralScanner();
@@ -47,8 +51,9 @@ class RegionScanDifferentialTest {
 
     private static void assertSameWantSet(ColumnStateMap columns, int lod, int cx, int cz,
                                           int vd, String at) {
+        int buf = bufSize(lod);
         var r = region(lod);
-        long[] rPos = new long[BUF], rTs = new long[BUF];
+        long[] rPos = new long[buf], rTs = new long[buf];
         int rn = r.scan(cx, cz, vd, columns, rPos, rTs, BUDGET);
         var rSet = new TreeMap<Long, Long>();
         for (int i = 0; i < rn; i++) {
@@ -56,7 +61,7 @@ class RegionScanDifferentialTest {
         }
         for (boolean quad : new boolean[]{true, false}) {
             var l = legacy(lod, quad);
-            long[] lPos = new long[BUF], lTs = new long[BUF];
+            long[] lPos = new long[buf], lTs = new long[buf];
             int ln = l.scan(cx, cz, vd, columns, lPos, lTs, BUDGET);
             String lat = at + " (legacy quad=" + quad + ")";
             assertEquals(ln, rn, "want-set size " + lat);
@@ -69,12 +74,23 @@ class RegionScanDifferentialTest {
             // NOTE deliberately NOT compared: wasLastWalkTruncated — trivially false on
             // both at this budget, and the arms genuinely diverge in the exact-fill
             // corner (pinned in RegionScannerTest.exactFillEndingInSatisfiedTail...).
+            if (lod <= 64) {
+                // The hybrid DEGENERACY arm (plan §8 pin 2): at lod ≤ N the walk is
+                // pure phase 1 — ORDERED-sequence equality with the fresh legacy
+                // walk, not just set equality.
+                for (int i = 0; i < rn; i++) {
+                    assertEquals(lPos[i], rPos[i], "ORDER position[" + i + "] " + lat);
+                    assertEquals(lTs[i], rTs[i], "ORDER timestamp[" + i + "] " + lat);
+                }
+            }
         }
     }
 
     @Test
     void emptyAndConvergedStatesAgreeAcrossGeometries() {
-        for (int lod : new int[]{2, 8, 24, 33, 40}) {
+        // 80/96/130 are the §8 far-coverage lods (all v1 lods ≤ 43 degenerate to
+        // phase 1 under the hybrid — without these the region walk ships unverified).
+        for (int lod : new int[]{2, 8, 24, 33, 40, 80, 96, 130}) {
             for (int[] c : new int[][]{{0, 0}, {31, 31}, {32, 32}, {-1, -17}, {100, -256}}) {
                 var empty = new ColumnStateMap();
                 assertSameWantSet(empty, lod, c[0], c[1], 4,
@@ -98,7 +114,8 @@ class RegionScanDifferentialTest {
         for (long seed : new long[]{1L, 42L, 20260824L, -13L}) {
             var rng = new Random(seed);
             var columns = new ColumnStateMap();
-            int lod = 24 + rng.nextInt(20); // always crosses region boundaries
+            int lod = (seed & 1L) == 0 ? 24 + rng.nextInt(20)
+                    : 70 + rng.nextInt(40); // alternate seeds exercise BOTH phases
             int cx = rng.nextInt(80) - 40;
             int cz = rng.nextInt(80) - 40;
             for (int round = 0; round < 12; round++) {

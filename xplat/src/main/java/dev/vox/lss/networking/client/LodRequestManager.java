@@ -638,7 +638,8 @@ public class LodRequestManager {
                     + ",\"missing_vanilla\":" + this.scanner.getMissingVanillaChunks()
                     + ",\"ring_min\":" + (maxRing < 0 ? -1 : minRing)
                     + ",\"ring_max\":" + maxRing
-                    + ",\"region_span\":" + this.scanner.getRegionSpan());
+                    + ",\"region_span\":" + this.scanner.getRegionSpan()
+                    + ",\"near_rings\":" + this.scanner.getNearRings());
         }
         if (scanned >= 0) {
             this.tracker.replaceWith(this.sendPositionBuffer, scanned);
@@ -1289,6 +1290,10 @@ public class LodRequestManager {
 
     /** Region-path diagnostics (region-scan-plan.md §9); 0 on the legacy arm. */
     public int getRegionSpan() { return this.scanner.getRegionSpan(); }
+
+    /** Phase-1 rings that emitted/observed needy work last scan (diag {@code near_rings=}
+     *  — the hybrid round's one in-band instrument, §7). */
+    public int getNearRings() { return this.scanner.getNearRings(); }
     public long getRegionSkips() { return this.scanner.getRegionSkips(); }
     public long getAuditHeals() { return this.scanner.getAuditHeals(); }
 

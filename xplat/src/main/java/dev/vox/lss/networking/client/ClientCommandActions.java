@@ -149,16 +149,18 @@ public final class ClientCommandActions {
         int confirmedRing = manager.getConfirmedRing();
         int scanRing = manager.getScanRing();
         int maxRing = manager.getEffectiveLodDistanceChunks();
-        // ring_skips: rings the section-store fast path confirmed leaf-wise (0 with
-        // enableQuadtreeScan=false); valve: reopened-ring valve overflows this session
+        // ring_skips: rings the leaf fast path confirmed without a per-position walk
+        // (the legacy arm's quadtree path, gated by enableQuadtreeScan — AND the
+        // hybrid walk's phase-1 skips, which are gate-independent, §7).
         // (the quadtree plan's phase-0 B1 field measurement — nonzero on a busy server
         // means dirty broadcasts genuinely disperse past 64 rings).
         feedback.accept(Component.literal(String.format(
-                "Scan: confirmed=%d, reopened=%d, scanning=%d/%d, missing_vanilla=%d, fast=%d, ring_skips=%d, valve=%d, region_span=%d, region_skips=%d, audit_heals=%d",
+                "Scan: confirmed=%d, reopened=%d, scanning=%d/%d, missing_vanilla=%d, fast=%d, ring_skips=%d, valve=%d, region_span=%d, region_skips=%d, audit_heals=%d, near_rings=%d",
                 confirmedRing, manager.getReopenedRingCount(), scanRing, maxRing,
                 manager.getMissingVanillaChunks(), manager.getFastScans(),
                 manager.getQuadRingSkips(), manager.getValveTrips(),
-                manager.getRegionSpan(), manager.getRegionSkips(), manager.getAuditHeals()
+                manager.getRegionSpan(), manager.getRegionSkips(), manager.getAuditHeals(),
+                manager.getNearRings()
         )).withStyle(ChatFormatting.GRAY));
 
         // Region summaries (§6 attributability): rendered once any summary applied —
