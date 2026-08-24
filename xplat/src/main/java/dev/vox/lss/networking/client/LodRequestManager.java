@@ -135,8 +135,11 @@ public class LodRequestManager {
     private final long[] sendPositionBuffer = new long[LSSConstants.MAX_BATCH_CHUNK_REQUESTS];
     private final long[] sendTimestampBuffer = new long[LSSConstants.MAX_BATCH_CHUNK_REQUESTS];
 
-    // Expanding ring scanner (owns scan cadence + budget policy)
-    private final SpiralScanner scanner = new SpiralScanner();
+    // The scan policy (owns scan cadence + budget policy). Selected at MANAGER
+    // CONSTRUCTION (region-scan-plan.md §2.4 v1.1): the session gate rebuilds the
+    // manager on every SessionConfig, so an enableRegionScan flip applies at the next
+    // join / server re-push / reload — never mid-session (reset() is selection-free).
+    private final SpiralScanner scanner;
 
     /**
      * Ingest-backlog poll (issue #71): the largest consumer-reported pending-ingest depth
@@ -238,6 +241,13 @@ public class LodRequestManager {
     }
 
     public LodRequestManager() {
+        this(LSSClientConfig.CONFIG.enableRegionScan ? new RegionScanner() : new SpiralScanner());
+    }
+
+    /** Test ctor (region-scan-plan.md §10 arm policy): scanner-mechanics tests pin the
+     *  legacy arm explicitly; parameterized suites pass each arm. */
+    LodRequestManager(SpiralScanner scanner) {
+        this.scanner = scanner;
         // Adaptive cadence: the scanner's fast trigger reads the awaiting-set size each
         // tick. Same main-client-thread contract as every other tracker consumer — every
         // mutation arrives via client.execute tasks on the thread that ticks maybeScan.
@@ -1274,6 +1284,11 @@ public class LodRequestManager {
     /** Reopened-ring valve overflows this session (quadtree-client-state-plan.md phase 0
      *  — the B1 "does the valve trip in the wild?" measurement). */
     public long getValveTrips() { return this.scanner.getValveTrips(); }
+
+    /** Region-path diagnostics (region-scan-plan.md §9); 0 on the legacy arm. */
+    public int getRegionSpan() { return this.scanner.getRegionSpan(); }
+    public long getRegionSkips() { return this.scanner.getRegionSkips(); }
+    public long getAuditHeals() { return this.scanner.getAuditHeals(); }
 
     /** Governor receipt for /lss diag (review n14: rate_gated conflates manual and
      *  governed refusals — this label disambiguates). Four shapes since the slow

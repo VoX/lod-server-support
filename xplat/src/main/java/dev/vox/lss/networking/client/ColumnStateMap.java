@@ -306,6 +306,55 @@ class ColumnStateMap {
         return leaf == null || leaf.needs != 0;
     }
 
+    /**
+     * The region walk's skip probe (region-scan-plan.md §2.2): true when every leaf of
+     * the 32×32-chunk region at ({@code rx}, {@code rz}) that INTERSECTS the lod square
+     * has a clear needs mask. The lod intersection is load-bearing (plan v1.1 A-7/§2.2):
+     * a boundary region's beyond-lod leaves are absent — absent = all-needs — and
+     * counting them would force an O(1024) emit pass over every satisfied boundary
+     * region on every scan. In-lod absent leaves (never-visited areas) legitimately
+     * read as needs. Same absent-leaf convention as {@link #ringNeedsFree}.
+     */
+    boolean regionNeedsFree(int rx, int rz, int playerCx, int playerCz, int lodDistance) {
+        int baseLeafX = rx << 2; // region = 4×4 leaves; leaf = 8×8 chunks
+        int baseLeafZ = rz << 2;
+        for (int lx = 0; lx < 4; lx++) {
+            int leafX = baseLeafX + lx;
+            int cx0 = leafX << 3;
+            if (cx0 + 7 < playerCx - lodDistance || cx0 > playerCx + lodDistance) continue;
+            for (int lz = 0; lz < 4; lz++) {
+                int leafZ = baseLeafZ + lz;
+                int cz0 = leafZ << 3;
+                if (cz0 + 7 < playerCz - lodDistance || cz0 > playerCz + lodDistance) continue;
+                if (leafHasNeeds(leafX, leafZ)) return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * The region walk's audit rung (region-scan-plan.md §2.2, v1.1 A-6): re-derive the
+     * needs mask of every present leaf in the region and report how many CHANGED — a
+     * nonzero return means a mutation path forgot {@code recomputeNeeds} (the
+     * stranded-forever class the region walk, unlike the legacy per-position walk,
+     * cannot heal incidentally). Healing IS the recompute; the caller counts.
+     */
+    int auditRegionNeeds(int rx, int rz) {
+        int healed = 0;
+        int baseLeafX = rx << 2;
+        int baseLeafZ = rz << 2;
+        for (int lx = 0; lx < 4; lx++) {
+            for (int lz = 0; lz < 4; lz++) {
+                Leaf leaf = this.leaves.get(PositionUtil.packPosition(baseLeafX + lx, baseLeafZ + lz));
+                if (leaf == null) continue;
+                long before = leaf.needs;
+                leaf.recomputeNeeds();
+                if (leaf.needs != before) healed++;
+            }
+        }
+        return healed;
+    }
+
     /** One tile's validation outcome (region-summary-sync-plan.md §6): how many stamps
      *  were newly validated, and whether ANY stamped position in the tile ends
      *  UN-validated (the tile is then "stale" — its residue re-declares per column; a
@@ -456,6 +505,14 @@ class ColumnStateMap {
         Leaf leaf = leafFor(packed);
         if (leaf == null) return true;
         return (leaf.needs & (1L << bitIndexFor(packed))) != 0;
+    }
+
+    /** Test seam: force the position's needs bit OFF against its true state — the
+     *  stranded-orphan corruption the region walk's audit rung exists to heal
+     *  (region-scan-plan.md §2.2 v1.1 A-6). Creates the leaf if absent. Tests only. */
+    void corruptNeedsBitForTest(long packed) {
+        Leaf leaf = leafForCreate(packed);
+        leaf.needs &= ~(1L << bitIndexFor(packed));
     }
 
     void markSessionSatisfied(long packed) {

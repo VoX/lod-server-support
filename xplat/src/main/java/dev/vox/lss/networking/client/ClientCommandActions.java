@@ -154,10 +154,11 @@ public final class ClientCommandActions {
         // (the quadtree plan's phase-0 B1 field measurement — nonzero on a busy server
         // means dirty broadcasts genuinely disperse past 64 rings).
         feedback.accept(Component.literal(String.format(
-                "Scan: confirmed=%d, reopened=%d, scanning=%d/%d, missing_vanilla=%d, fast=%d, ring_skips=%d, valve=%d",
+                "Scan: confirmed=%d, reopened=%d, scanning=%d/%d, missing_vanilla=%d, fast=%d, ring_skips=%d, valve=%d, region_span=%d, region_skips=%d, audit_heals=%d",
                 confirmedRing, manager.getReopenedRingCount(), scanRing, maxRing,
                 manager.getMissingVanillaChunks(), manager.getFastScans(),
-                manager.getQuadRingSkips(), manager.getValveTrips()
+                manager.getQuadRingSkips(), manager.getValveTrips(),
+                manager.getRegionSpan(), manager.getRegionSkips(), manager.getAuditHeals()
         )).withStyle(ChatFormatting.GRAY));
 
         // Region summaries (§6 attributability): rendered once any summary applied —
