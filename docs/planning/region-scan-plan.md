@@ -685,3 +685,12 @@ interaction (Opus, 1 MAJOR), tests+docs (Opus, 4 MAJOR). All seven MAJORs folded
   `soak.sh all` is a regression gate here, NOT evidence for §5/§6; the live
   dev-jar round is. The WSLg display wedge (client hangs in glfwShowWindow) is an
   environment fact of this box: soaks run under Xvfb (`DISPLAY=:99`).
+  `soak.sh all` run 2026-08-24: nine scenarios green through
+  generation-capacity-stress, then `bandwidth-throttle` redded with the CATALOGUED
+  WSL2 clock-step artifact and was accepted-with-record per the catalog's decisive
+  test — both B2 windows recompute to tick_dt 5.00 s vs wall_dt 2.52 s with traffic
+  UNDER the cap on the tick clock (258,956 / 222,323 B/s vs 262,144) and byte deltas
+  at/below the neighbors' steady 5 s quantum (1,301,096); artifact dir
+  `soak-results/bandwidth-throttle-20260824T200445Z`. The remaining scenarios run
+  as a follow-on batch (the suite stops at first red); a WSL restart clears the
+  clock steps (user's call — it kills the working session).
