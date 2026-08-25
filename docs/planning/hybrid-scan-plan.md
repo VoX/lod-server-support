@@ -1,4 +1,4 @@
-# Hybrid scan: ring-major near, region-major far (v3.1 — backpressure panel folded)
+# Hybrid scan: ring-major near, region-major far (v3.2 — §12.8/§12.9 supersede the §12 -1-on-blocked/refusal doctrine)
 
 **Status: PLANNED, NOT EXECUTED** (user directive 2026-08-24: write + review only).
 Follow-up to `region-scan-plan.md` (§14/§14.1 = the region round's as-built + review
@@ -17,7 +17,10 @@ across mechanism/dynamics/consistency lenses — headline folds: the drainable-l
 the heal removal RE-SCOPED to ledger-only with the immediate reporter KEPT, the
 cave-layer class corrected to refusal-while-paused, the two-regime dynamics, and
 §12.5's v0.12.1 re-cut recommendation). §12 is now build-ready pending two USER
-decisions recorded in §12.5.**
+decisions recorded in §12.5.** **v3.2 (2026-08-24, after the first live session
+refuted the doctrine): §12.8/§12.9 INVERT the -1-on-blocked rule and DELETE the
+refusal latch — read §12.8 before treating anything in §12.1(b)/§12.2's -1
+rule/§12.4's refusal pins as current.**
 
 ## §0 Sequencing (panel-settled — the fold-in option is DELETED)
 
@@ -473,7 +476,10 @@ discipline).
   BEFORE the first drop; a TOTAL writer stall drains into taper-stretched
   headroom (closed form Q' = B·(1 − Q/Q₇₅): ~8 s to 90%, ~10.6 s to 95%) —
   transient overflow requires a stall longer than that.
-- (b) STRUCTURALLY-PAUSED states (the drainable latch's full set: cave layer,
+- (b) **[SUPERSEDED by §12.8 — the first live session measured this class at
+  56k silent offers in 8.5 min: offers are no longer refused, the blocked pump
+  keeps reporting, and the surviving residual class (b') is wedge-window sheds
+  only — see §12.9's taxonomy.]** STRUCTURALLY-PAUSED states (the drainable latch's full set: cave layer,
   map locked, cache-only mode, ignored world, crash latch, writing toggled off,
   multiworld unwritable, …): the -1 rule keeps the FILL running for Voxy;
   `offerColumn` REFUSES new offers while undrainable (counted in its own class;
@@ -511,7 +517,10 @@ batch, the ¼-halt fast-path gate) is existing #71 machinery, verified.
   decode queue keep landing ~1 s past a halt). Equilibrium is set by
   arrival = writer, so the remap costs nothing in throughput; the operating
   point just moves to ~11% occupancy.
-- **The -1 rule — DERIVED, never enumerated (panel MAJOR):** a `volatile
+- **The -1 rule — DERIVED, never enumerated (panel MAJOR): [SUPERSEDED by
+  §12.8 — the latch no longer produces -1 anywhere; it survives as diagnostics
+  (`(blocked)` suffix) + the idle-guard key. -1 remains only for kill-switch /
+  inactive / watchdog-stale / wedged.]** a `volatile
   drainable` latch set FALSE at EVERY `pumpLadder` early return and TRUE only
   where `drainEntries` actually runs — the pump's ~13 undrainable states
   (crash latch, map locked, cache-only, ignored world, session teardown,
@@ -585,8 +594,10 @@ batch, the ¼-halt fast-path gate) is existing #71 machinery, verified.
   hysteresis count; resume-through-taper (never -1 → halt in one poll); the
   halt time-box degrade + re-arm; a NEGATIVE pin that a -1 state can never fire
   the edge-triggered empty batch.
-- Refusal-while-paused pins: offer refused (own counter), extraction skipped,
-  NOT reported; reporter-kept pins: dimension-switch un-stamps via
+- Refusal-while-paused pins **[SUPERSEDED by §12.8 — the refusal is deleted;
+  the replacement pins are §12.9's: blocked-keeps-governing, offers-absorbed,
+  blocked-overflow-reports, the settings-off pre-extraction drop]**; reporter-kept
+  pins: dimension-switch un-stamps via
   `reportStaleDropped`, the world-id bulk clear reports.
 - Composition pins: vs a larger/smaller Voxy backlog AND vs a Voxy -1
   (unresolvable probe); global #71 switch off ⇒ bit-identical;
@@ -603,9 +614,12 @@ batch, the ¼-halt fast-path gate) is existing #71 machinery, verified.
   change.
 - No automated end-to-end gate is POSSIBLE (Xaero is absent from soaks and
   gametests) — stated: unit + the live round IS the whole gate.
-- Live acceptance: a full lod-512 SURFACE fill with `dropped_overflow=0` and
-  occupancy riding ≤~30%; a cave-layer phase: fill CONTINUES (Voxy unaffected),
-  refusals counted, no overflow; the one-region-stall discriminator:
+- Live acceptance **(cave-layer arm INVERTED by §12.8 — judge against this
+  corrected form)**: a full lod-512 SURFACE fill with `dropped_overflow≈0` and
+  occupancy riding ≤~30%; a cave-layer phase: the fill HALTS (≤7 s per window,
+  then the wedge duty cycle — brief pauses ARE the mechanism working; Voxy's
+  columns pause with it, nothing is lost), `bp=` shows a fraction, possibly
+  `(blocked)`; the one-region-stall discriminator:
   `regions_waiting`/`load_requests` climbing while dropped stays 0 (the
   region-major far phase concentrates the queue in 1-2 regions — a parked
   region stalls ~100% of the drain, which the §18-era ring-major masked);
@@ -809,8 +823,11 @@ signal** — the brake released exactly during contention, and the diag's
 `bp=0.01` sampled only the calm between bursts (the aliasing hole); (2) at 200
 pumps §12.1(b) **refused offers pre-extraction, silently** — `refused_paused=
 56,139`, 4.3× the visible overflow drops, all permanent map holes by design;
-(3) `reportDroppedIfGoverned`'s `pumpDrainable` conjunct silenced 11.8k of the
-12.9k overflow drops too. The old review pin "paused + full queue = -1, never
+(3) `reportDroppedIfGoverned`'s `pumpDrainable` conjunct silenced ~11.8k of the
+12.9k overflow drops too (12,932 − 1,156 reported = 11,776 — a conservative
+floor, since stale-dimension reports also count into `drops_reported`). The
+headline "68k tiles missing" = 56,139 refused + 12,932 dropped − 1,156
+reported-and-re-served = 67,915. The old review pin "paused + full queue = -1, never
 the halt" was load-bearing for the failure.
 
 **The amendment (all client-side, XaeroMapCompat only):**
@@ -841,9 +858,85 @@ the halt" was load-bearing for the failure.
   burst-escalation-to-halt, blocked-overflow-reports, wedged-drops-silent, and
   the `drainableForTest` seam replacing `pausedOffersForTest`.
 - Expected live signatures: `bp=` shows a real fraction (often `(blocked)`)
-  during movement; `dropped_overflow` near zero; `drops_reported` ≈ every drop;
-  no `refused_paused` token (deleted); brief LOD-fill pauses (≤7 s) during
-  heavy map contention are the mechanism working, not a stall.
+  during movement; `dropped_overflow` near zero; `drops_reported` covers every
+  same-dimension governed drop (the by-design silent classes remain: expiry,
+  settings-off, teardown clears, wedge-window sheds — so `drops_reported` <
+  `dropped` totals is expected, §12.9); no `refused_paused` token (deleted);
+  brief LOD-fill pauses (≤7 s per window, then the §12.9 duty cycle) during
+  heavy map contention are the mechanism working, not a stall — and the
+  fast-rescan cadence legitimately drops to 1 Hz during those episodes (the
+  ¼-halt gate closes on real reports now).
+
+### §12.9 §12.8 implementation-review fold (2026-08-24, 3-Opus panel: control-loop / deletion-surface / tests-docs)
+
+Verdicts: control-loop 2 MAJORs; deletion-surface 2 MAJORs (one shared);
+tests/docs 1 MAJOR (shared) — 3 unique. The §12.8 inversion itself, the no-churn
+ordering (drop points sit ABOVE the halt point, so every reported drop lands on
+an already-halted client), signal composition (≤0 uniformly no-signal at all
+three manager rungs), thread safety (the cross-thread surface SHRANK), and the
+deletion (zero surviving symbols, complete lifecycle resets, the empty-queue
+ladder provably reaches drainable) all verified clean.
+
+- **MAJOR A (one-way wedge)** — the occupancy-0.5 re-arm was unreachable under
+  sustained arrival ≥ drain (731/s in vs ~680/s out pins occupancy at 1.0): one
+  >7 s pause cost the whole session's governance with every subsequent drop
+  silenced. FIX: `BP_WEDGE_REARM_MILLIS` (10 s) — the wedge re-arms on the
+  clock OR the occupancy floor, turning a persistent pause into a bounded duty
+  cycle (≤7 s halted / 10 s released); the halt re-engages on a still-full
+  queue and the writer out-drains a silenced stream. The wedge warn is
+  60 s-rate-limited (it is cyclical now). Pinned:
+  `theWedgeReArmsOnTheDutyCycleClockUnderSustainedArrival`.
+- **MAJOR B (trickle-writer hold; both panels independently, R2 with the
+  sharper trigger — a parked DEFERRED region is cap-EXEMPT and the drain
+  rotation's strays tick `written`)** — the written-delta re-base held the fill
+  at a DEAD STOP indefinitely ("may pace, never stop" violated with the sign
+  flipped). FIX: the window re-bases only on an occupancy RECESSION ≥
+  `BP_HALT_PROGRESS_EPS` (0.05) from the in-window PEAK (the landing tail
+  raising occupancy only raises the peak); a commit offset by an arrival is NOT
+  progress. §12.7's fix is preserved (a genuinely draining writer re-bases /
+  exits through the report-below-halt branch). The old
+  `progressReBasesTheHaltWindow…` pin — which encoded the forbidden behavior —
+  is REWRITTEN as `aRecedingQueueReBasesTheHaltWindowAndATrickleCommitDoesNot`
+  with the trickle-commit-then-wedge arm.
+- **MAJOR C (stale doctrine records)** — CLAUDE.md's bridge paragraph rewritten
+  to the §12.8/§12.9 facts (it still published the -1-on-blocked + 10 s-refusal
+  doctrine — the backport hazard); region-scan-plan.md's live-signature list
+  drops `refused_paused`; this plan's §12.1(b)/§12.2 -1 rule/§12.4 refusal pins
+  carry SUPERSEDED markers, the §12.4 cave-layer acceptance arm is INVERTED in
+  place, and the header is v3.2.
+- **Settings-off extraction tax** (all three panels): the deleted refusal's one
+  legitimate job restored as a targeted flag — the ladder's settings-both-off
+  branch sets `settingsWritesOff`, `offerColumn` drops pre-extraction (counted
+  `skipped_settings`, silent — the user turned the map's writes off), cleared
+  when the switches return / at session settle. Pinned in the extended
+  settings-off test.
+- **De-vacuumed pins** (tests lens): the deadlock-guard pin now actually
+  reaches the blocked+idle fast-out (flush the owed rebuild, clearQueue) and
+  additionally pins the §12.9 ~1 Hz blocked-idle ladder throttle (each run
+  takes Xaero's renderPause/mainStuff monitors — R1 NIT); the teardown pin
+  asserts `undrainablePumpsForTest()==0` after settle (deleting the m5 reset
+  reds it); the flap hysteresis got its own pin
+  (`theLatchWaitsOutTheFlapHysteresis`); the bp token pins are exact-string
+  (`", bp=0.00(blocked)"`) with a no-suffix negative on the drainable path; the
+  census gains the `refused_paused` ABSENCE assert.
+- **Residual drop taxonomy (b')** — the by-design silent classes after §12.8:
+  wedge-window sheds (doctrine (d)), tile-deferral expiry, settings-off clears,
+  teardown/world-going-away clears, `dropped_updates`/`dropped_unloaded`, and
+  a throwing drop-reporter (contained). `drops_reported < dropped` totals is
+  therefore the EXPECTED live shape; the strike-burn correlate
+  (`drops_reported` vs `ingest_parked` — 4 drops of one position parks it for
+  the session) is a live-gate leg, not a failure.
+- **Recorded, not changed**: the byte-regime landing room is ~185 tiles (48 MiB
+  / ~68 KB ocean tiles at 25% headroom) vs a worst-case ~1,700-column in-flight
+  tail — overlay-heavy halts CAN overshoot into reported (healing) drops; the
+  count regime absorbs ~2,048 vs the same tail. Raising `MAX_QUEUE_BYTES` is a
+  memory trade deferred to live evidence. `bpToken`'s wedged-before-stale order
+  deliberately mirrors `reportBackpressure` (R2's consistency argument beats
+  R1's triage preference). The disabled-mid-session ladder-skip exit now resets
+  the hysteresis chain (R2 NIT). The kill-switch offer-acceptance arm is
+  vacuous-by-universality and kept as a comment-noted tautology.
+- Suite: XaeroMapCompatTest 109/0 (was 107 — +wedge-duty-cycle, +hysteresis;
+  the recession rewrite replaced the progress-rebase pin 1:1).
 
 ## §13 Walk as-built record (2026-08-24, branch feat/hybrid-scan off feat/xaero-backpressure)
 
