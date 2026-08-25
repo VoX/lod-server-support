@@ -1076,27 +1076,57 @@ class XaeroMapCompatTest {
 
     @Test
     void resumeThroughTheLadderClearsTheBlockEvenWithAnEmptyQueue() {
-        // The deadlock guard (review MAJOR-adjacent, rekeyed by §12.8 on the
-        // drainable latch): an empty-queue fast-out that skipped the ladder would
-        // leave the latch down FOREVER — the pump must keep running the ladder
-        // while blocked.
+        // The deadlock guard (review MAJOR-adjacent, rekeyed by §12.8; §12.9
+        // de-vacuumed it — the old shape's pendingUpdates were never empty, so
+        // the guarded fast-out was unreachable and deleting the guard passed):
+        // flush the owed rebuild FIRST, then reach the genuinely-idle blocked
+        // state and prove (a) the recovery ladder still runs — at the §12.9
+        // ~1 Hz throttle, not 20 Hz — and (b) it clears the latch.
         this.bridge.bpPausePumps = 1;
+        this.bridge.updateIdlePumps = 0;
         offer(64, 64);
         primeDrainablePump();
+        this.bridge.frameFlush(); // the owed rebuild flushes: pendingUpdates empty
         this.processor.writingPaused = true;
-        this.bridge.pump(); // latch (queue empty — nothing else forces the ladder)
+        offer(64, 65);
+        this.bridge.pump(); // the queued entry forces the ladder: latch
         assertFalse(this.bridge.drainableForTest(), "premise: the latch is down");
+        this.bridge.clearQueue(); // now blocked + genuinely idle
         assertEquals(0, this.bridge.reportBackpressure(),
                 "§12.8: blocked + empty queue reports the honest occupancy (0 — which"
                         + " the manager reads as no signal, but it is never a lie)");
+        int chain = this.bridge.undrainablePumpsForTest();
+        for (int i = 0; i < 10; i++) this.bridge.pump();
+        assertTrue(this.bridge.undrainablePumpsForTest() - chain <= 1,
+                "§12.9: the blocked-idle recovery ladder runs ~1-in-20 pumps, not 20 Hz"
+                        + " (each run takes Xaero's renderPause/mainStuff monitors)");
         this.processor.writingPaused = false;
-        this.bridge.pump(); // the ladder MUST run despite the empty queue
+        for (int i = 0; i < 25 && !this.bridge.drainableForTest(); i++) {
+            this.bridge.pump(); // the throttled recovery ladder MUST still run
+        }
         assertTrue(this.bridge.drainableForTest(),
-                "drainable again: the block clears through the ladder");
+                "drainable again: the block clears through the (throttled) ladder");
         assertEquals(0, this.bridge.reportBackpressure());
         offer(64, 66);
         this.bridge.pump();
         assertEquals(2, this.bridge.counterForTest("written"), "offers flow again");
+    }
+
+    @Test
+    void theLatchWaitsOutTheFlapHysteresis() {
+        // §12.9 (tests-lens MINOR: unpinned after the rewrite): the latch must NOT
+        // flip before bpPausePumps consecutive undrainable pumps — flap armor for
+        // per-pump reflective gates.
+        this.bridge.bpPausePumps = 3;
+        offer(64, 64);
+        primeDrainablePump();
+        this.processor.writingPaused = true;
+        this.bridge.pump();
+        this.bridge.pump();
+        assertTrue(this.bridge.drainableForTest(),
+                "two undrainable pumps under a 3-threshold: the latch holds");
+        this.bridge.pump();
+        assertFalse(this.bridge.drainableForTest(), "the third flips it");
     }
 
     @Test
@@ -1196,9 +1226,12 @@ class XaeroMapCompatTest {
     }
 
     @Test
-    void theSettingsOffClearDoesNotReport() {
-        // §12.1(b): a paused-state clear must not report — the un-stamp would churn
-        // re-serves straight into the refusal that follows.
+    void theSettingsOffClearDoesNotReportAndDropsOffersPreExtraction() {
+        // A settings-off clear must not report (the map is off by the USER's
+        // choice, not dropped work) — and §12.9 restores the deleted refusal's
+        // one legitimate job for exactly this state: once the ladder observes both
+        // switches off, offers drop PRE-extraction (no 256-pixel tax per column
+        // for tiles the next pump's clear would discard), counted skipped_settings.
         try {
             xaero.map.common.config.option.WorldMapProfiledConfigOptions.LOAD_NEW_CHUNKS.value = false;
             xaero.map.common.config.option.WorldMapProfiledConfigOptions.UPDATE_CHUNKS.value = false;
@@ -1207,6 +1240,21 @@ class XaeroMapCompatTest {
             this.bridge.pump();
             assertEquals(2, this.bridge.counterForTest("skipped_settings"));
             assertTrue(this.reports.isEmpty(), "a settings-off clear never reports");
+            this.bridge.offerColumn(OVERWORLD, 66, 64, -64, 320,
+                    new dev.vox.lss.api.VoxelColumnData(
+                            new dev.vox.lss.api.VoxelColumnData.SectionData[0], 1L));
+            assertEquals(0, this.bridge.queuedForTest(),
+                    "the flagged offer drops pre-extraction — the queue never grows");
+            assertEquals(3, this.bridge.counterForTest("skipped_settings"));
+            xaero.map.common.config.option.WorldMapProfiledConfigOptions.LOAD_NEW_CHUNKS.value = true;
+            xaero.map.common.config.option.WorldMapProfiledConfigOptions.UPDATE_CHUNKS.value = true;
+            offer(67, 64); // pre-flag-clear offers still route through the queue path?
+            this.bridge.pump(); // the ladder re-observes the switches and clears the flag
+            this.bridge.offerColumn(OVERWORLD, 68, 64, -64, 320,
+                    new dev.vox.lss.api.VoxelColumnData(
+                            new dev.vox.lss.api.VoxelColumnData.SectionData[0], 1L));
+            assertEquals(1, this.bridge.queuedForTest(),
+                    "switches back on: the flag clears through the ladder and offers land");
         } finally {
             xaero.map.common.config.option.WorldMapProfiledConfigOptions.LOAD_NEW_CHUNKS.value = true;
             xaero.map.common.config.option.WorldMapProfiledConfigOptions.UPDATE_CHUNKS.value = true;
@@ -1302,7 +1350,7 @@ class XaeroMapCompatTest {
     }
 
     @Test
-    void aBlockedPumpsReportScalesWithTheAbsorbedBurst() {
+    void aBlockedPumpReportScalesWithTheAbsorbedBurst() {
         // §12.8's engine: during a movement-burst block the queue absorbs the
         // arrivals and the report ESCALATES with the occupancy — taper first,
         // the halt at 75% — so the stream throttles exactly while the writer is
@@ -1323,40 +1371,75 @@ class XaeroMapCompatTest {
                 "1/4 occupancy while blocked: the taper fraction, not -1");
         offer(70, 64);
         offer(71, 64); // 3/4 = the halt occupancy
-        assertEquals(3, this.bridge.queuedForTest(), "offers absorbed, never refused");
+        assertEquals(3, this.bridge.queuedForTest(), "offers absorbed into the queue");
         assertEquals(halt(), this.bridge.reportBackpressure(),
                 "the burst escalates to the HALT while still blocked");
     }
 
     @Test
-    void progressReBasesTheHaltWindowAndAWedgeAfterProgressStillFires() {
-        // Review MAJOR ×3: one commit inside the halt window must RESTART the
-        // time-box, not permanently disarm it — and a writer that commits once
-        // then wedges must still be released.
-        this.bridge.maxQueue = 4;
+    void aRecedingQueueReBasesTheHaltWindowAndATrickleCommitDoesNot() {
+        // §12.9 (both panels' trickle MAJOR): "progress" = the queue RECEDING from
+        // its in-window peak by >= BP_HALT_PROGRESS_EPS — never a `written` delta.
+        // The old predicate let a 1-commit-per-<7s trickle (a parked DEFERRED
+        // region + the drain rotation's strays) hold the LOD fill at a dead stop
+        // for hours; a commit offset by an arrival is NOT progress.
+        this.bridge.maxQueue = 20;
         this.bridge.maxQueueBytes = Long.MAX_VALUE;
         offer(64, 64);
         primeDrainablePump(); // region (2,2) loaded
         this.processor.createdRegionLoadState = 0;
-        offer(128, 64);
-        offer(129, 64);
-        offer(130, 64); // region (4,2): unloadable — 3/4 = 75% -> halt
-        this.bridge.pump();
-        assertEquals(halt(), this.bridge.reportBackpressure(), "the time-box opens");
+        for (int i = 0; i < 15; i++) offer(128 + i, 64); // region (4,2): unloadable
+        offer(65, 64);
+        offer(66, 64);
+        offer(67, 64); // region (2,2), loaded: drainable backlog — 18/20 = 0.9
+        assertEquals(halt(), this.bridge.reportBackpressure(), "the time-box opens at 0.9");
         this.clockMillis += this.bridge.bpHaltWedgeMillis - 1000;
-        offer(70, 64); // region (2,2), loaded: commits — PROGRESS inside the window
-        this.bridge.pump();
-        assertEquals(2, this.bridge.counterForTest("written"));
+        this.bridge.pump(); // drains the 3 loaded entries: 18/20 -> 15/20 (recession 0.15)
+        assertEquals(4, this.bridge.counterForTest("written"));
         assertEquals(halt(), this.bridge.reportBackpressure(),
-                "progress re-bases the window — still halted, not wedged");
+                "a RECEDING queue re-bases the window — still halted, not wedged");
         this.clockMillis += this.bridge.bpHaltWedgeMillis - 1000;
-        this.bridge.pump(); // keep the watchdog fed (nothing commits — region unloadable)
+        this.bridge.pump(); // nothing drains (only the unloadable region remains)
         assertEquals(halt(), this.bridge.reportBackpressure(),
                 "inside the re-based window: still no wedge (the false-positive arm)");
-        this.clockMillis += 2001; // now past the re-based window with no progress
+        // The trickle arm: a commit whose slot an arrival refills — written ticks,
+        // occupancy does not recede — must NOT re-base.
+        offer(70, 64); // loaded region: 16/20 transiently
+        this.bridge.pump(); // commits it: back to 15/20 — zero net recession
+        assertEquals(5, this.bridge.counterForTest("written"));
+        this.clockMillis += 2001; // past the re-based window with no recession
         this.bridge.pump();
         assertEquals(-1, this.bridge.reportBackpressure(),
-                "no progress across the re-based window: the wedge fires");
+                "a trickle commit offset by an arrival is NOT progress: the wedge fires");
+    }
+
+    @Test
+    void theWedgeReArmsOnTheDutyCycleClockUnderSustainedArrival() {
+        // §12.9 (control-loop MAJOR: the one-way exit): with arrival >= drain the
+        // occupancy re-arm floor (0.5) is unreachable — the wedge must ALSO re-arm
+        // on the clock, turning a persistent structural pause into a bounded duty
+        // cycle instead of a session-long ungoverned latch.
+        this.bridge.maxQueue = 2;
+        this.bridge.bpPausePumps = 1;
+        offer(64, 64);
+        primeDrainablePump();
+        this.processor.createdRegionLoadState = 0;
+        offer(64, 65);
+        offer(65, 65); // full — occupancy pinned at 1.0
+        this.processor.writingPaused = true;
+        this.bridge.pump();
+        assertEquals(halt(), this.bridge.reportBackpressure(), "the window opens");
+        this.clockMillis += this.bridge.bpHaltWedgeMillis + 1;
+        this.bridge.pump();
+        assertEquals(-1, this.bridge.reportBackpressure(), "the wedge fires");
+        this.clockMillis += 5000; // inside the re-arm window, occupancy still 1.0
+        this.bridge.pump();
+        assertEquals(-1, this.bridge.reportBackpressure(), "still wedged inside the cycle");
+        this.clockMillis += XaeroMapCompat.BP_WEDGE_REARM_MILLIS - 5000 + 1;
+        this.bridge.pump();
+        assertEquals(halt(), this.bridge.reportBackpressure(),
+                "the clock re-arms governance at occupancy 1.0 — the halt re-engages"
+                        + " and the writer gets a silenced stream to drain against");
     }
 
     @Test
@@ -1392,13 +1475,15 @@ class XaeroMapCompatTest {
         primeDrainablePump();
         assertTrue(this.bridge.describe().contains(", bp=0.00"),
                 "governing at empty queue: the fraction — " + this.bridge.describe());
+        assertFalse(this.bridge.describe().contains("(blocked)"),
+                "drainable: no suffix — " + this.bridge.describe());
         this.processor.createdRegionLoadState = 0;
         offer(65, 64); // keep the ladder running while blocked
         this.processor.writingPaused = true;
         this.bridge.pump();
-        assertTrue(this.bridge.describe().contains("(blocked)"),
-                "§12.8: blocked shows the governing fraction + suffix — "
-                        + this.bridge.describe());
+        assertTrue(this.bridge.describe().contains(", bp=0.00(blocked)"),
+                "§12.8: blocked shows the governing FRACTION + suffix (exact — the"
+                        + " render is the live instrument) — " + this.bridge.describe());
         this.backpressureEnabled = false;
         assertTrue(this.bridge.describe().contains(", bp=off"), this.bridge.describe());
     }
@@ -1459,21 +1544,26 @@ class XaeroMapCompatTest {
 
     @Test
     void sessionTeardownResetsTheBackpressureState() {
-        this.bridge.bpPausePumps = 1;
+        // §12.9 de-vacuumed (tests-lens MINOR: the old final leg's pump took the
+        // idle fast-out, so nothing proved the main-thread counter reset): the
+        // hysteresis chain is built to 3 under a 5-threshold, then the settle
+        // pump must zero it — deleting settleSessionEnd's undrainablePumps reset
+        // reds the last assert directly.
+        this.bridge.bpPausePumps = 5;
         offer(64, 64);
         primeDrainablePump();
         this.processor.writingPaused = true;
-        this.bridge.pump(); // latch the block
-        assertFalse(this.bridge.drainableForTest(), "premise: blocked");
-        // The gate STAYS armed across the teardown (review m9: clearing it first
-        // made this pin vacuous — the next pump would clear the block through the
-        // ladder anyway; the reset itself is what is under test).
+        this.bridge.pump();
+        this.bridge.pump();
+        this.bridge.pump();
+        assertEquals(3, this.bridge.undrainablePumpsForTest(), "premise: a standing chain");
+        assertTrue(this.bridge.drainableForTest(), "below the threshold: not yet latched");
         this.bridge.onSessionEnd();
-        assertTrue(this.bridge.drainableForTest(),
-                "the teardown restores the drainable latch immediately");
-        this.bridge.pump(); // the main-thread half settles; the ladder still returns early
-        assertTrue(this.bridge.drainableForTest(),
-                "one closed-gate pump after the reset must not re-latch (counter cleared)");
+        this.bridge.pump(); // the main-thread half settles at the pump top
+        assertEquals(0, this.bridge.undrainablePumpsForTest(),
+                "the settle half zeroes the consecutive chain — a new session cannot"
+                        + " inherit the old one's count");
+        assertTrue(this.bridge.drainableForTest());
     }
 
     private MapRegion theRegion() {
@@ -2502,7 +2592,7 @@ class XaeroMapCompatTest {
                 && line.contains(", cave_layer_waits=") && line.contains(", frame_flushes=")
                 && line.contains(", rebuild_ms=") && line.contains(", rebuild_max_us=")
                 && line.contains(", dropped_overflow=") && line.contains(", dropped_expired=")
-                && line.contains(", drops_reported=")
+                && !line.contains(", refused_paused=") && line.contains(", drops_reported=")
                 && line.contains(", bp="), line);
         assertFalse(line.contains("heal_"), "the §18 heal tokens die with the ledger (§12.1)");
         assertFalse(line.contains("xaero_crashed"), "the crash token appears only while latched");
