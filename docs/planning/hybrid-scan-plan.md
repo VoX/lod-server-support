@@ -927,3 +927,27 @@ three MAJORs were gate/test defects.
   reds), `wholeExcludedRings` analytically exact beyond the brute bound
   (geometry-6), phase-1's stronger-than-plan short-circuit at lod ≤ N
   (geometry-4 — now discriminated by `phase2Rounds`).
+
+**§13.1 addendum — soak gates run (2026-08-24).** Two soak.sh registration
+points the M1 fold missed (neither I nor the panel knew the dispatch shape):
+the scenario-validity `case` at soak.sh:171 and the CLIENT_RUNS/EXPECTED_SECONDS
+table at :220 are SEPARATE from ALL_SCENARIOS — both now carry hybrid-boundary
+(a new-scenario checklist fact: FOUR registration points in soak.sh + three in
+check_soak.py). fresh-backfill: first run redded the catalogued A7 environmental
+shape (disk.errors +10, zero log lines, A5 silent), re-run PASSED clean.
+hybrid-boundary run 1 (end 1080, 5/5 pool): red at 62% fill — the lod-24 burst
+rate does not hold at scale (20.8/s → ~12/s sustained under a 289-timeout A7
+storm wedging >half the 5-thread reader pool while generation slots idled);
+resized to end 1800 s + an 8/8 reader pool. hybrid-boundary run 2: **every
+hybrid leg GREEN** — 88 quiescent snapshots, 81 client-law windows, disc
+completeness 20,768 ≥ 20,736, confirmed 73 = lod+1, gen 20,221 (19k at
+t+1173 s, 12.1/s avg), and the §7 live signatures exact (near_rings 3 mid-fill
+→ 0 converged, audit_heals 0, region_skips 4,258, quad_ring_skips 68,558 —
+unconditionally large on the hybrid arm as documented). One violation:
+**A7, accepted-with-record** (disk.errors 556, ZERO "Failed to read chunk" log
+lines = all timeouts — the catalogued environmental storm on this degraded
+WSL2 box, same day as the two accepted B2 clock-step artifacts; the fill
+converged through it, which is what the resize bought). Artifact dir
+`soak-results/hybrid-boundary-20260824T233947Z`. On a healthy box A7 here
+should not fire — a recurring healthy-box A7 in this scenario is a real
+question, not this record.
