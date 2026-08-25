@@ -177,23 +177,25 @@ final class XaeroMapCompat {
      *  landing room for the in-flight tail (already-admitted server work + the
      *  LSS decode queue keep landing ~1 s past a halt). */
     static final double BP_HALT_OCCUPANCY = 0.75;
-    /** Consecutive undrainable pumps (~1 s) before GOVERNANCE goes -1 —
-     *  flap hysteresis for per-pump reflective gates that can oscillate. */
+    /** Consecutive undrainable pumps (~1 s) before the pump reads as gate-BLOCKED
+     *  (the {@code (blocked)} diag suffix) — flap hysteresis for per-pump
+     *  reflective gates that can oscillate. §12.8: a blocked pump no longer
+     *  silences the report OR refuses offers — the queue absorbs the burst and
+     *  its occupancy IS the pressure signal (live 2026-08-24: movement-driven
+     *  Xaero contention held the old refusal latch for 56k offers while the -1
+     *  report let the server stream 731/s into them; the halt time-box below is
+     *  the anti-stall protection the old -1 doctrine tried to be). */
     static final int BP_PAUSE_PUMPS = 20;
-    /** Consecutive undrainable pumps (~10 s) before offers are REFUSED (review
-     *  MAJOR: the transient startup gates — Xaero's region-detection scan,
-     *  multiworld resolution, the join window — clear within seconds and must be
-     *  ABSORBED by the queue, not refused into permanent unreported holes; only
-     *  the structural pauses — cave layer, map locked, writing off — outlive
-     *  this). Governance already went -1 at {@link #BP_PAUSE_PUMPS}. */
-    static final int BP_REFUSE_PUMPS = 200;
     /** The staleness watchdog: without a pump inside this window the report is -1
      *  (a frozen mirror must never read as live backlog). */
     static final int BP_PUMP_STALE_MILLIS = 1000;
     /** The halt TIME-BOX: at a full report with zero commits for this long, the
      *  report degrades to -1 (warn once) — the bridge may PACE the stream, never
      *  STOP it (the #71 halt was designed for Voxy's unbounded-queue OOM
-     *  emergency; this queue is bounded and self-shedding). */
+     *  emergency; this queue is bounded and self-shedding). §12.8: this window
+     *  now also bounds STRUCTURAL pauses (cave layer, map locked, long gate
+     *  blocks) — a movement burst holds the halt up to this long, then the fill
+     *  resumes and the map wears the loss (doctrine (d)). */
     static final long BP_HALT_WEDGE_MILLIS = 7000;
     /** A wedge-degraded report re-arms once the queue drains below this. */
     static final double BP_WEDGE_REARM_OCCUPANCY = 0.5;
@@ -398,7 +400,6 @@ final class XaeroMapCompat {
     int deferCap = DEFER_CAP;
     long maxQueueBytes = MAX_QUEUE_BYTES;
     int bpPausePumps = BP_PAUSE_PUMPS;
-    int bpRefusePumps = BP_REFUSE_PUMPS;
     int bpPumpStaleMillis = BP_PUMP_STALE_MILLIS;
     long bpHaltWedgeMillis = BP_HALT_WEDGE_MILLIS;
     /** Tile chunks committed but not yet texture-rebuilt, keyed by tile-chunk
@@ -440,10 +441,6 @@ final class XaeroMapCompat {
     private final AtomicLong skippedSettings = new AtomicLong();
     /** Pumps that waited because Xaero was rendering a cave layer (diag). */
     private final AtomicLong caveLayerWaits = new AtomicLong();
-    /** Offers refused while the pump is structurally paused (§12.1(b) — the map
-     *  cannot drain, so the extraction is skipped and NOTHING is reported: an
-     *  un-stamp would churn re-serves into the same refusal). */
-    private final AtomicLong refusedPaused = new AtomicLong();
     /** Pump-side reports collected INSIDE the ladder (which runs under Xaero's
      *  renderThreadPauseSync monitor) and drained by {@link #pump} AFTER the
      *  ladder returns — up to a whole queue's worth on a world-id change, and an
@@ -455,16 +452,13 @@ final class XaeroMapCompat {
     private final AtomicLong dropsReported = new AtomicLong();
     // §12 backpressure state. The drainable latch is DERIVED, never enumerated:
     // pumpLadder's outcome sets it, so every early return — present and future —
-    // reads as not-draining by construction (review MAJOR). TWO thresholds over
-    // one counter: governance goes -1 fast (~1 s — a paused queue must not halt
-    // the fill), refusal engages slow (~10 s — transient startup gates absorb
-    // into the queue instead of shedding unreported holes).
+    // reads as not-draining by construction (review MAJOR). §12.8: the latch is
+    // now DIAGNOSTIC + hysteresis only — a blocked pump keeps reporting off the
+    // queue's occupancy (and keeps accepting offers), so the taper/halt engages
+    // exactly during the contention the old -1-on-paused doctrine went silent for.
     private volatile boolean pumpDrainable = true;
     private volatile long lastPumpMillis;
     private int undrainablePumps; // main thread only (hysteresis counter)
-    /** The SLOW latch (~10 s): offers refused pre-extraction. Volatile — the
-     *  decode thread reads it in {@link #offerColumn}. */
-    private volatile boolean pausedForOffers;
     // Halt time-box (main thread only — the poll runs on the client tick).
     private long haltSinceMillis;
     private long writtenAtHaltStart;
@@ -592,7 +586,6 @@ final class XaeroMapCompat {
         this.settingsGateBroken = false;
         this.xaeroCrashed = false;
         // §12: session-scoped backpressure state re-arms with the session.
-        this.pausedForOffers = false;
         this.pumpDrainable = true;
         this.haltWedged = false;
         this.sessionEndPending = true;
@@ -621,7 +614,6 @@ final class XaeroMapCompat {
         // clear; this half runs at the next pump top, after any such ladder.
         this.undrainablePumps = 0;
         this.haltSinceMillis = 0;
-        this.pausedForOffers = false;
         this.pumpDrainable = true;
         this.haltWedged = false;
         this.deferredReports.clear(); // stale un-stamps must not cross sessions
@@ -681,10 +673,14 @@ final class XaeroMapCompat {
      * The §12 backpressure report (hybrid-scan-plan.md §12.2): a governor signal
      * dressed in the halt domain — {@code round(HALT × min(1, occupancy/0.75))} —
      * NOT a section count (the queue holds ~72k sections; a raw count would
-     * hard-halt at 8% fill). -1 (no signal) whenever the queue is not provably
-     * DRAINING: kill switch off, bridge disabled/dead/no session, the pump's
-     * drainable latch down past the hysteresis, the staleness watchdog, or a
-     * wedge-degraded halt. Main client thread (the LSSApi poll).
+     * hard-halt at 8% fill). -1 (no signal) only when the signal would be a LIE:
+     * kill switch off, bridge disabled/dead/no session, the staleness watchdog
+     * (a frozen pump = frozen mirror), or a wedge-degraded halt. §12.8: a
+     * gate-BLOCKED pump with a live watchdog REPORTS — the queue is the pressure
+     * gauge during exactly the contention episodes the old -1-on-blocked
+     * doctrine went silent for; the halt time-box below (progress-rebased) is
+     * what keeps a long structural block from stopping the fill for good.
+     * Main client thread (the LSSApi poll).
      */
     int reportBackpressure() {
         if (!this.backpressureEnabled.getAsBoolean()) return noSignal();
@@ -699,15 +695,15 @@ final class XaeroMapCompat {
                 return noSignal();
             }
         }
-        if (!this.pumpDrainable) return noSignal();
         if (nowMillis() - this.lastPumpMillis > this.bpPumpStaleMillis) return noSignal();
         int halt = dev.vox.lss.networking.client.LodRequestManager.INGEST_BACKLOG_HALT_SECTIONS;
         int report = (int) Math.round(halt * Math.min(1.0, this.occupancy / BP_HALT_OCCUPANCY));
         if (report >= halt) {
             // The halt TIME-BOX: pacing is the bridge's right, stopping is not. A
             // full report with no commits ACROSS the whole window means the writer
-            // is wedged while claiming drainability — degrade to -1 (warn once)
-            // and let the fill continue; the map wears the loss. PROGRESS RE-BASES
+            // is stuck — truly wedged, or gate-blocked past any movement-burst
+            // length (§12.8) — degrade to -1 (warn once) and let the fill
+            // continue; the map wears the loss. PROGRESS RE-BASES
             // the window (review MAJOR ×3: an equality-against-the-opening-value
             // check was permanently disarmed by the first commit inside the
             // window), and every -1 exit CLEARS it (review MAJOR: a timer
@@ -753,15 +749,13 @@ final class XaeroMapCompat {
         if (this.dead || !this.enabled.getAsBoolean() || !this.sessionActive.getAsBoolean()) {
             return;
         }
-        // §12.1(b): while the pump is structurally paused the queue cannot drain —
-        // REFUSE the offer before paying the 256-pixel extraction, counted, and do
-        // NOT report (an un-stamp would churn re-serves into the same refusal).
-        // Governed by the backpressure switch: with it off, behavior is
-        // pre-amendment (accept + evict).
-        if (this.pausedForOffers && this.backpressureEnabled.getAsBoolean()) {
-            this.refusedPaused.incrementAndGet();
-            return;
-        }
+        // §12.8: offers are ACCEPTED during pump pauses — the queue is the
+        // movement-burst buffer AND the pressure gauge (the deleted §12.1(b)
+        // refusal shed 56k tiles into silent permanent holes on the first live
+        // session while the -1 report kept the stream at full rate). The cap
+        // check below is the only shed point, and it reports (blocked-not-wedged
+        // drops re-serve after the burst — the halt defers the re-declaration,
+        // so there is no churn loop).
         long key = ((long) chunkX << 32) | (chunkZ & 0xFFFFFFFFL);
         boolean overflowed = false;
         synchronized (this.queueLock) {
@@ -873,13 +867,14 @@ final class XaeroMapCompat {
     }
 
     /** A same-dimension drop's report, gated on §12 governance: with backpressure
-     *  OFF (the COMPOSED switch — global #71 and the bridge key), wedge-degraded,
-     *  or the pump undrainable, drops stay silent — reporting into a closed gate
-     *  churns re-serves into the same drop (review MAJOR); governed drops
-     *  self-heal via the reporter. */
+     *  OFF (the COMPOSED switch — global #71 and the bridge key) or WEDGE-degraded
+     *  (stream flowing, writer stuck — a report would churn re-serves into the
+     *  same drop), drops stay silent. §12.8 dropped the old {@code pumpDrainable}
+     *  conjunct: a blocked-not-wedged overflow IS reported — the halt the blocked
+     *  pump is now reporting defers the re-declaration until after the burst, so
+     *  the re-serve lands in a draining queue instead of a churn loop. */
     private void reportDroppedIfGoverned(Object dimension, int chunkX, int chunkZ) {
-        if (!this.backpressureEnabled.getAsBoolean() || this.haltWedged
-                || !this.pumpDrainable) {
+        if (!this.backpressureEnabled.getAsBoolean() || this.haltWedged) {
             return;
         }
         reportDropped(dimension, chunkX, chunkZ);
@@ -963,8 +958,8 @@ final class XaeroMapCompat {
         return this.dead;
     }
 
-    boolean pausedOffersForTest() {
-        return this.pausedForOffers;
+    boolean drainableForTest() {
+        return this.pumpDrainable;
     }
 
     int regionsWaitingForTest() {
@@ -989,7 +984,6 @@ final class XaeroMapCompat {
             case "frame_flushes" -> this.frameFlushes.get();
             case "rebuild_nanos_total" -> this.rebuildNanos.get();
             case "rebuild_nanos_max" -> this.rebuildNanosMax;
-            case "refused_paused" -> this.refusedPaused.get();
             case "drops_reported" -> this.dropsReported.get();
             case "dropped_updates" -> this.droppedUpdates.get();
             case "dropped_unloaded" -> this.droppedUnloaded.get();
@@ -1010,9 +1004,9 @@ final class XaeroMapCompat {
             return "-1(inactive)";
         }
         if (this.haltWedged) return "-1(wedged)";
-        if (this.pausedForOffers || !this.pumpDrainable) return "-1(paused)";
         if (nowMillis() - this.lastPumpMillis > this.bpPumpStaleMillis) return "-1(stale)";
-        return String.format(java.util.Locale.ROOT, "%.2f", this.occupancy);
+        String f = String.format(java.util.Locale.ROOT, "%.2f", this.occupancy);
+        return this.pumpDrainable ? f : f + "(blocked)"; // §12.8: blocked still governs
     }
 
     String describe() {
@@ -1039,7 +1033,6 @@ final class XaeroMapCompat {
                 + ", dropped_unloaded=" + this.droppedUnloaded.get()
                 + ", skipped_settings=" + this.skippedSettings.get()
                 + ", cave_layer_waits=" + this.caveLayerWaits.get()
-                + ", refused_paused=" + this.refusedPaused.get()
                 + ", drops_reported=" + this.dropsReported.get()
                 + ", bp=" + bpToken()
                 + (this.xaeroCrashed ? ", xaero_crashed=true" : "")
@@ -1075,11 +1068,11 @@ final class XaeroMapCompat {
             // ...but rebuilds already OWED to committed tile chunks still flush —
             // dropping them would leave written tiles invisible until a reload.
             if (this.pendingUpdates.isEmpty()) return;
-        } else if (!this.pausedForOffers) {
-            // §12 deadlock guard: while the paused latch holds, refusals keep the
-            // queue empty — the LADDER run is the only thing that can observe
-            // "drainable again" and clear the pause, so the idle fast-out must not
-            // bypass it (the ladder is ~10 reflective reads; cheap at 20 Hz).
+        } else if (this.pumpDrainable) {
+            // §12 deadlock guard (rekeyed by §12.8 on the drainable latch): while
+            // the latch is down, the LADDER run is the only thing that can observe
+            // "drainable again" and clear it — the idle fast-out must not bypass
+            // it (the ladder is ~10 reflective reads; cheap at 20 Hz).
             synchronized (this.queueLock) {
                 if (this.queue.isEmpty() && this.pendingUpdates.isEmpty()) {
                     this.regionsWaiting = 0;
@@ -1129,11 +1122,9 @@ final class XaeroMapCompat {
             if (reached) {
                 this.undrainablePumps = 0;
                 this.pumpDrainable = true;
-                this.pausedForOffers = false;
             } else {
                 int n = ++this.undrainablePumps;
                 if (n >= this.bpPausePumps) this.pumpDrainable = false;
-                if (n >= this.bpRefusePumps) this.pausedForOffers = true;
             }
         }
     }
