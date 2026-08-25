@@ -1016,9 +1016,12 @@ class XaeroMapCompatTest {
     }
 
     @Test
-    void pausedLatchRefusesOffersAfterHysteresisAndReportsNoSignal() {
+    void aBlockedPumpKeepsGoverningOffTheQueueAndAcceptsOffers() {
+        // §12.8 (the live 56k-refusal finding): a gate-blocked pump neither goes
+        // -1 nor refuses — the report stays occupancy-driven and offers keep
+        // landing in the queue (which is what makes the occupancy signal REAL
+        // during exactly the contention episodes the old doctrine went dark for).
         this.bridge.bpPausePumps = 3;
-        this.bridge.bpRefusePumps = 3; // both thresholds together for this pin
         offer(64, 64);
         primeDrainablePump();
         offer(64, 65);
@@ -1028,28 +1031,26 @@ class XaeroMapCompatTest {
         assertTrue(this.bridge.reportBackpressure() >= 0,
                 "below the hysteresis threshold the report still governs (flap armor)");
         this.bridge.pump(); // third consecutive undrainable pump: the latch flips
-        assertEquals(-1, this.bridge.reportBackpressure(),
-                "a paused pump = no signal, NEVER a backlog claim");
-        // Offers are now REFUSED pre-extraction, counted, unreported.
+        assertTrue(this.bridge.reportBackpressure() >= 0,
+                "§12.8: a blocked pump with a live watchdog still GOVERNS off the queue");
+        assertFalse(this.bridge.drainableForTest(), "premise: the latch is down");
         int before = this.bridge.queuedForTest();
-        int reportsBefore = this.reports.size();
         this.bridge.offerColumn(OVERWORLD, 90, 90, -64, 320,
                 new dev.vox.lss.api.VoxelColumnData(
                         new dev.vox.lss.api.VoxelColumnData.SectionData[0], 1L));
-        assertEquals(before, this.bridge.queuedForTest(), "refused: the queue must not grow");
-        assertEquals(1, this.bridge.counterForTest("refused_paused"));
-        assertEquals(reportsBefore, this.reports.size(),
-                "a refusal is NEVER reported — an un-stamp would churn re-serves into"
-                        + " the same refusal");
+        assertEquals(before + 1, this.bridge.queuedForTest(),
+                "§12.8: offers are ACCEPTED while blocked — the queue is the burst buffer");
     }
 
     @Test
-    void aPausedStateWithAFullQueueNeverContributesAHalt() {
-        // The negative pin (review): -1 must win over occupancy — a paused bridge
-        // must never stop the LOD fill via a stale full-queue reading.
+    void aBlockedPumpWithAFullQueueReportsTheHaltThenTheTimeBoxReleases() {
+        // §12.8 DELIBERATELY INVERTS the old negative pin ("paused + full queue =
+        // -1, never the halt") — that doctrine is what let the first live session
+        // stream 731/s into 56k silent refusals. Blocked + full queue now IS the
+        // halt; the wedge time-box (not the -1) bounds a long structural pause,
+        // and wedge-degraded drops stay silent (doctrine (d)).
         this.bridge.maxQueue = 2;
         this.bridge.bpPausePumps = 1;
-        this.bridge.bpRefusePumps = 1;
         offer(64, 64);
         primeDrainablePump();
         this.processor.createdRegionLoadState = 0;
@@ -1057,27 +1058,42 @@ class XaeroMapCompatTest {
         offer(65, 65); // full
         this.processor.writingPaused = true;
         this.bridge.pump();
+        assertEquals(halt(), this.bridge.reportBackpressure(),
+                "§12.8: blocked + full queue = the halt — the burst is throttled");
+        this.clockMillis += this.bridge.bpHaltWedgeMillis + 1;
+        this.bridge.pump(); // watchdog stays fresh; still no progress
         assertEquals(-1, this.bridge.reportBackpressure(),
-                "paused + full queue = -1, never the halt");
+                "no progress across the whole window: the time-box releases the fill");
+        assertTrue(this.bridge.describe().contains(", bp=-1(wedged)"), this.bridge.describe());
+        int reportsBefore = this.reports.size();
+        this.bridge.offerColumn(OVERWORLD, 96, 96, -64, 320,
+                new dev.vox.lss.api.VoxelColumnData(
+                        new dev.vox.lss.api.VoxelColumnData.SectionData[0], 1L));
+        assertEquals(reportsBefore, this.reports.size(),
+                "wedge-degraded overflow stays SILENT — reporting would churn re-serves"
+                        + " into the same drop (doctrine (d))");
     }
 
     @Test
-    void resumeThroughTheLadderClearsThePauseEvenWithAnEmptyQueue() {
-        // The deadlock guard (review MAJOR-adjacent): refusals keep the queue empty,
-        // and an empty-queue fast-out that skipped the ladder would leave the pause
-        // latched FOREVER — the pump must keep running the ladder while paused.
+    void resumeThroughTheLadderClearsTheBlockEvenWithAnEmptyQueue() {
+        // The deadlock guard (review MAJOR-adjacent, rekeyed by §12.8 on the
+        // drainable latch): an empty-queue fast-out that skipped the ladder would
+        // leave the latch down FOREVER — the pump must keep running the ladder
+        // while blocked.
         this.bridge.bpPausePumps = 1;
-        this.bridge.bpRefusePumps = 1;
         offer(64, 64);
         primeDrainablePump();
         this.processor.writingPaused = true;
         this.bridge.pump(); // latch (queue empty — nothing else forces the ladder)
-        assertEquals(-1, this.bridge.reportBackpressure());
+        assertFalse(this.bridge.drainableForTest(), "premise: the latch is down");
+        assertEquals(0, this.bridge.reportBackpressure(),
+                "§12.8: blocked + empty queue reports the honest occupancy (0 — which"
+                        + " the manager reads as no signal, but it is never a lie)");
         this.processor.writingPaused = false;
         this.bridge.pump(); // the ladder MUST run despite the empty queue
-        assertEquals(0, this.bridge.reportBackpressure(),
-                "drainable again: the pause clears through the ladder, resuming at the"
-                        + " live occupancy (the taper, not a step)");
+        assertTrue(this.bridge.drainableForTest(),
+                "drainable again: the block clears through the ladder");
+        assertEquals(0, this.bridge.reportBackpressure());
         offer(64, 66);
         this.bridge.pump();
         assertEquals(2, this.bridge.counterForTest("written"), "offers flow again");
@@ -1263,58 +1279,53 @@ class XaeroMapCompatTest {
     }
 
     @Test
-    void theKillSwitchDisablesReportRefusalAndToken() {
-        // §12.4: bridge-on + switch off ⇒ pre-amendment behavior — report -1, NO
-        // refusal, silent drops, bp=off (review MAJOR: deleting the switch check
-        // silently re-enables the taper for a user who turned it off; the
-        // production supplier composes the GLOBAL #71 switch into this same
-        // boolean, so this pin covers both keys' off states).
+    void theKillSwitchDisablesReportAndToken() {
+        // §12.4: bridge-on + switch off ⇒ pre-amendment behavior — report -1,
+        // silent drops, bp=off (review MAJOR: deleting the switch check silently
+        // re-enables the taper for a user who turned it off; the production
+        // supplier composes the GLOBAL #71 switch into this same boolean, so
+        // this pin covers both keys' off states).
         this.bridge.bpPausePumps = 1;
-        this.bridge.bpRefusePumps = 1;
         offer(64, 64);
         primeDrainablePump();
         this.backpressureEnabled = false;
         assertEquals(-1, this.bridge.reportBackpressure(), "switch off = no signal, always");
         this.processor.writingPaused = true;
-        this.bridge.pump(); // would latch the pause...
+        this.bridge.pump(); // blocked latch engages...
         int before = this.bridge.queuedForTest();
         this.bridge.offerColumn(OVERWORLD, 91, 91, -64, 320,
                 new dev.vox.lss.api.VoxelColumnData(
                         new dev.vox.lss.api.VoxelColumnData.SectionData[0], 1L));
         assertEquals(before + 1, this.bridge.queuedForTest(),
-                "switch off: offers are ACCEPTED even while paused (no refusal arm)");
-        assertEquals(0, this.bridge.counterForTest("refused_paused"));
+                "switch off: offers are accepted while blocked (as everywhere)");
         assertTrue(this.bridge.describe().contains(", bp=off"), this.bridge.describe());
     }
 
     @Test
-    void transientPausesAbsorbIntoTheQueueBeforeTheRefusalThreshold() {
-        // The two-threshold split (review MAJOR: refusing during Xaero's startup
-        // gates permanently holed the join window): governance goes -1 fast, but
-        // offers keep landing in the queue until the SLOW threshold.
+    void aBlockedPumpsReportScalesWithTheAbsorbedBurst() {
+        // §12.8's engine: during a movement-burst block the queue absorbs the
+        // arrivals and the report ESCALATES with the occupancy — taper first,
+        // the halt at 75% — so the stream throttles exactly while the writer is
+        // gate-blocked (the aliasing hole: the old -1 sampled only the calm
+        // between bursts).
         this.bridge.bpPausePumps = 2;
-        this.bridge.bpRefusePumps = 6;
+        this.bridge.maxQueue = 4;
+        this.bridge.maxQueueBytes = Long.MAX_VALUE;
+        offer(64, 64);
         primeDrainablePump();
         this.processor.createdRegionLoadState = 0;
-        offer(64, 64); // keeps the queue non-empty so the ladder runs while paused
+        offer(64, 65); // keeps the queue non-empty so the ladder runs while blocked
         this.processor.writingPaused = true;
         this.bridge.pump();
-        this.bridge.pump(); // governance latched (-1)...
-        assertEquals(-1, this.bridge.reportBackpressure());
+        this.bridge.pump(); // the latch flips
+        assertFalse(this.bridge.drainableForTest(), "premise: blocked");
+        assertEquals(Math.round(halt() * (0.25 / 0.75)), this.bridge.reportBackpressure(),
+                "1/4 occupancy while blocked: the taper fraction, not -1");
         offer(70, 64);
-        assertEquals(2, this.bridge.queuedForTest(),
-                "...but offers are still ABSORBED (transient-gate window)");
-        assertEquals(0, this.bridge.counterForTest("refused_paused"));
-        this.bridge.pump();
-        this.bridge.pump();
-        this.bridge.pump();
-        this.bridge.pump(); // past the refusal threshold
-        int before = this.bridge.queuedForTest();
-        this.bridge.offerColumn(OVERWORLD, 92, 92, -64, 320,
-                new dev.vox.lss.api.VoxelColumnData(
-                        new dev.vox.lss.api.VoxelColumnData.SectionData[0], 1L));
-        assertEquals(before, this.bridge.queuedForTest(), "structural pause: refused now");
-        assertEquals(1, this.bridge.counterForTest("refused_paused"));
+        offer(71, 64); // 3/4 = the halt occupancy
+        assertEquals(3, this.bridge.queuedForTest(), "offers absorbed, never refused");
+        assertEquals(halt(), this.bridge.reportBackpressure(),
+                "the burst escalates to the HALT while still blocked");
     }
 
     @Test
@@ -1349,9 +1360,13 @@ class XaeroMapCompatTest {
     }
 
     @Test
-    void aPauseInterruptionClearsTheHaltWindow() {
-        // Review MAJOR: the timer surviving a -1 interval fired a FALSE wedge on
-        // the first governing poll after a cave-layer browse.
+    void aNoSignalIntervalClearsTheHaltWindow() {
+        // Review MAJOR (rekeyed by §12.8): the timer surviving a -1 interval fired
+        // a FALSE wedge on the first governing poll back. Blocked no longer
+        // produces -1, so the surviving -1 interval class is the staleness
+        // watchdog (a frozen pump) — the window must re-open fresh on revival,
+        // never inherit the stale interval's age. (A long BLOCKED interval at a
+        // full report now WEDGES by design — that is the inverted pin above.)
         this.bridge.bpPausePumps = 1;
         this.bridge.maxQueue = 2;
         this.bridge.maxQueueBytes = Long.MAX_VALUE;
@@ -1362,12 +1377,10 @@ class XaeroMapCompatTest {
         offer(129, 64); // region (4,2): unloadable — halt
         this.bridge.pump();
         assertEquals(halt(), this.bridge.reportBackpressure(), "the time-box opens");
-        this.processor.writingPaused = true;
-        this.bridge.pump(); // pause latches
-        assertEquals(-1, this.bridge.reportBackpressure()); // the -1 exit CLEARS the timer
-        this.clockMillis += this.bridge.bpHaltWedgeMillis * 4; // a long browse
-        this.processor.writingPaused = false;
-        this.bridge.pump(); // drainable again
+        this.clockMillis += this.bridge.bpHaltWedgeMillis * 4; // the pump FREEZES (no pump calls)
+        assertEquals(-1, this.bridge.reportBackpressure(),
+                "stale watchdog = no signal — and the -1 exit CLEARS the timer");
+        this.bridge.pump(); // revival: watchdog fresh again
         assertEquals(halt(), this.bridge.reportBackpressure(),
                 "the first governing poll RE-OPENS the window — never a false wedge");
     }
@@ -1375,18 +1388,45 @@ class XaeroMapCompatTest {
     @Test
     void bpTokenIsTriState() {
         this.bridge.bpPausePumps = 1;
-        this.bridge.bpRefusePumps = 1;
         offer(64, 64);
         primeDrainablePump();
         assertTrue(this.bridge.describe().contains(", bp=0.00"),
                 "governing at empty queue: the fraction — " + this.bridge.describe());
         this.processor.createdRegionLoadState = 0;
-        offer(65, 64); // keep the ladder running while paused
+        offer(65, 64); // keep the ladder running while blocked
         this.processor.writingPaused = true;
         this.bridge.pump();
-        assertTrue(this.bridge.describe().contains(", bp=-1(paused)"), this.bridge.describe());
+        assertTrue(this.bridge.describe().contains("(blocked)"),
+                "§12.8: blocked shows the governing fraction + suffix — "
+                        + this.bridge.describe());
         this.backpressureEnabled = false;
         assertTrue(this.bridge.describe().contains(", bp=off"), this.bridge.describe());
+    }
+
+    @Test
+    void aBlockedNotWedgedOverflowIsReportedForReServe() {
+        // §12.8 dropped reportDroppedIfGoverned's pumpDrainable conjunct: a
+        // blocked-not-wedged overflow reports, and the halt the blocked pump is
+        // simultaneously reporting defers the re-declaration — the re-serve lands
+        // in a draining queue after the burst instead of a churn loop. (11.8k of
+        // the first live session's 12.9k overflow drops were silenced by the old
+        // conjunct and became permanent holes.)
+        this.bridge.maxQueue = 1;
+        this.bridge.bpPausePumps = 1;
+        offer(64, 64);
+        primeDrainablePump();
+        this.processor.createdRegionLoadState = 0;
+        offer(64, 65); // fills the 1-slot queue
+        this.processor.writingPaused = true;
+        this.bridge.pump(); // blocked
+        assertFalse(this.bridge.drainableForTest(), "premise: blocked, not wedged");
+        int before = this.reports.size();
+        this.bridge.offerColumn(OVERWORLD, 95, 95, -64, 320,
+                new dev.vox.lss.api.VoxelColumnData(
+                        new dev.vox.lss.api.VoxelColumnData.SectionData[0], 1L));
+        assertEquals(before + 1, this.reports.size(),
+                "a blocked-not-wedged overflow REPORTS — the drop heals after the burst");
+        assertEquals(95, this.reports.get(before)[1]);
     }
 
     @Test
@@ -1420,20 +1460,19 @@ class XaeroMapCompatTest {
     @Test
     void sessionTeardownResetsTheBackpressureState() {
         this.bridge.bpPausePumps = 1;
-        this.bridge.bpRefusePumps = 1;
         offer(64, 64);
         primeDrainablePump();
         this.processor.writingPaused = true;
-        this.bridge.pump(); // latch the pause
-        assertEquals(-1, this.bridge.reportBackpressure());
+        this.bridge.pump(); // latch the block
+        assertFalse(this.bridge.drainableForTest(), "premise: blocked");
         // The gate STAYS armed across the teardown (review m9: clearing it first
-        // made this pin vacuous — the next pump would clear the pause through the
+        // made this pin vacuous — the next pump would clear the block through the
         // ladder anyway; the reset itself is what is under test).
         this.bridge.onSessionEnd();
-        assertFalse(this.bridge.pausedOffersForTest(),
-                "the off-thread half clears the refusal latch immediately");
+        assertTrue(this.bridge.drainableForTest(),
+                "the teardown restores the drainable latch immediately");
         this.bridge.pump(); // the main-thread half settles; the ladder still returns early
-        assertFalse(this.bridge.pausedOffersForTest(),
+        assertTrue(this.bridge.drainableForTest(),
                 "one closed-gate pump after the reset must not re-latch (counter cleared)");
     }
 
@@ -2463,7 +2502,7 @@ class XaeroMapCompatTest {
                 && line.contains(", cave_layer_waits=") && line.contains(", frame_flushes=")
                 && line.contains(", rebuild_ms=") && line.contains(", rebuild_max_us=")
                 && line.contains(", dropped_overflow=") && line.contains(", dropped_expired=")
-                && line.contains(", refused_paused=") && line.contains(", drops_reported=")
+                && line.contains(", drops_reported=")
                 && line.contains(", bp="), line);
         assertFalse(line.contains("heal_"), "the §18 heal tokens die with the ledger (§12.1)");
         assertFalse(line.contains("xaero_crashed"), "the crash token appears only while latched");
