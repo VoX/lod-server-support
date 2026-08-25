@@ -179,6 +179,7 @@ case "$SCENARIO" in
     store-save-storm|store-save-storm-off) ;;
     warm-rejoin-summary|dirty-while-offline-summary|evicted-tscache-rejoin) ;;
     stamp-heal-prime|stamp-heal-rejoin) ;;
+    hybrid-boundary) ;;
     paper-dirty-falling-block|paper-store-unfired-event) ;;
     *)
         echo "[soak] ERROR: Unknown scenario '$SCENARIO'"
@@ -230,6 +231,7 @@ case "$SCENARIO" in
     disk-read-gate)             CLIENT_RUNS=1; EXPECTED_SECONDS=450 ;;
     generation-disabled)        CLIENT_RUNS=1; EXPECTED_SECONDS=230 ;;
     generation-capacity-stress) CLIENT_RUNS=1; EXPECTED_SECONDS=330 ;;
+    hybrid-boundary)            CLIENT_RUNS=1; EXPECTED_SECONDS=1800 ;;
     bandwidth-throttle)         CLIENT_RUNS=1; EXPECTED_SECONDS=290 ;;
     cold-restart-resync)        CLIENT_RUNS=1; EXPECTED_SECONDS=280 ;;
     enabled-false)              CLIENT_RUNS=1; EXPECTED_SECONDS=230 ;;
