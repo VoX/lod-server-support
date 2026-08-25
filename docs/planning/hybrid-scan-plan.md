@@ -797,6 +797,54 @@ three; the stale inverted test by two). All folded:
   wire/server change, and §12.3's equilibrium arithmetic (¼ gate = 18.75%
   occupancy under the 75% mapping — the cycle-mean ~25% claim is consistent).
 
+### §12.8 The blocked-pump amendment (2026-08-24, live-diagnosed + as-built)
+
+**The finding (first live session, 8m34s at 731 col/s):** the §12.6 taper never
+engaged while 68k tiles went missing. Movement-driven Xaero contention (native
+writes of vanilla chunks around the moving player + region loads holding the
+renderPause/busy-region/cave-layer gates) failed the pump ladder for
+multi-second episodes; §12.6's doctrine then made everything worse in three
+compounding ways: (1) at 20 undrainable pumps the report went **-1 = no
+signal** — the brake released exactly during contention, and the diag's
+`bp=0.01` sampled only the calm between bursts (the aliasing hole); (2) at 200
+pumps §12.1(b) **refused offers pre-extraction, silently** — `refused_paused=
+56,139`, 4.3× the visible overflow drops, all permanent map holes by design;
+(3) `reportDroppedIfGoverned`'s `pumpDrainable` conjunct silenced 11.8k of the
+12.9k overflow drops too. The old review pin "paused + full queue = -1, never
+the halt" was load-bearing for the failure.
+
+**The amendment (all client-side, XaeroMapCompat only):**
+- **A blocked pump with a live watchdog REPORTS.** `reportBackpressure` drops
+  the `pumpDrainable` silence; -1 remains only for the honest no-signal states
+  (kill switch, inactive/dead, watchdog-stale, wedge-degraded). The queue is
+  the pressure gauge: as a burst accumulates, the report escalates taper → halt
+  (75%), throttling the stream DURING the contention.
+- **Offers are never refused.** §12.1(b) is deleted (`BP_REFUSE_PUMPS`,
+  `pausedForOffers`, `refused_paused` all removed); the queue absorbs bursts —
+  which is also what makes the occupancy signal real — and the cap is the only
+  shed point. The pre-extraction cap check (CPU guard) is unchanged.
+- **Blocked-not-wedged drops report.** `reportDroppedIfGoverned` keeps only the
+  kill-switch and wedge conjuncts. No churn loop: the halt the blocked pump is
+  simultaneously reporting defers the re-declaration, so the re-serve lands in
+  a draining queue after the burst. Wedge-degraded drops stay silent
+  (doctrine (d) — there the stream IS flowing against a stuck writer).
+- **The halt time-box is the anti-stall protection** the -1 doctrine pretended
+  to be: a structural pause holds the halt at most `BP_HALT_WEDGE_MILLIS` (7 s,
+  progress-rebased), then degrades to -1 with the once-warn and the map wears
+  the loss. The wedge re-arms below 0.5 occupancy as before.
+- `pumpDrainable`/`BP_PAUSE_PUMPS` survive as the flap-hysteresis + diagnostics
+  latch only: the `bp=` token shows `<fraction>(blocked)` while down (replacing
+  `-1(paused)`), and the idle fast-out deadlock guard is rekeyed on it.
+- Tests: the three refusal-era pins rewritten to the new doctrine (the full-queue
+  negative pin deliberately INVERTED — recorded in-test), the interruption pin
+  rekeyed to the stale-watchdog interval (the surviving -1 class), new pins for
+  burst-escalation-to-halt, blocked-overflow-reports, wedged-drops-silent, and
+  the `drainableForTest` seam replacing `pausedOffersForTest`.
+- Expected live signatures: `bp=` shows a real fraction (often `(blocked)`)
+  during movement; `dropped_overflow` near zero; `drops_reported` ≈ every drop;
+  no `refused_paused` token (deleted); brief LOD-fill pauses (≤7 s) during
+  heavy map contention are the mechanism working, not a stall.
+
 ## §13 Walk as-built record (2026-08-24, branch feat/hybrid-scan off feat/xaero-backpressure)
 
 §2-§10 implemented as specified; deviations and concretions below. One jar now
