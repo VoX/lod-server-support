@@ -312,7 +312,7 @@ Under region-major, ring-ascending-within-region declarations:
   1.4 s stream, not a 10 s backlog.
 - Load churn → ~1.0×; recolor coalescing → ~16 tiles/rebuild (halving recolor
   count); [AMENDED, §12 round: the §18 heal is deleted — the live signature is
-  now `dropped_overflow` flat + `bp=` governing + `refused_paused`/`drops_reported`
+  now `dropped_overflow` ~0 + `bp=` a live fraction (`(blocked)` during map contention is governance working, §12.8; `refused_paused` is DELETED) + `drops_reported`
   small; hybrid-scan-plan.md §12.4 is the signature list.]
 - NO bridge changes in this round — it benefits passively. Bridge-side
   simplifications (deterministic flush on region completion) are a possible
