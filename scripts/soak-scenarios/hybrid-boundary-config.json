@@ -1,0 +1,10 @@
+{
+  "lodDistanceChunks": 72,
+  "generationConcurrencyLimitPerPlayer": 40,
+  "generationConcurrencyLimitGlobal": 64,
+  "dirtyBroadcastIntervalSeconds": 5,
+  "diskReaderThreads": 8,
+  "maxConcurrentDiskReads": 8,
+  "lodStore": "off",
+  "lodStoreBackfill": false
+}

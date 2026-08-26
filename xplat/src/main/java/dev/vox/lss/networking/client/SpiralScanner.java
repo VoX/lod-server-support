@@ -83,10 +83,10 @@ class SpiralScanner {
      */
     static final int FAST_RESCAN_MAX_WALK_COST = 65_536;
 
-    private SessionConfigS2CPayload sessionConfig;
+    protected SessionConfigS2CPayload sessionConfig;
 
-    private int confirmedRing = 0;
-    private int scanRing = 0;
+    protected int confirmedRing = 0;
+    protected int scanRing = 0;
     /**
      * The vanilla-view exclusion radius the last walk ran with, -1 = no walk yet. A SHRINK
      * (render distance lowered) turns positions inside the old exclusion — which confirmed
@@ -106,9 +106,9 @@ class SpiralScanner {
      * an untruncated one iterates every ring out to the LOD distance. Starts false so a
      * never-walked scanner predicts the full disc — fail-closed.
      */
-    private boolean lastWalkTruncated = false;
+    protected boolean lastWalkTruncated = false;
     private int scanTickCounter = LSSConstants.TICKS_PER_SECOND - 1; // starts at max so first scan fires immediately on join
-    private int missingVanillaChunks = Integer.MAX_VALUE;
+    protected int missingVanillaChunks = Integer.MAX_VALUE;
 
     // --- Reopened rings (docs/planning/scanner-reopened-rings-plan.md) ---
     // Rings BELOW the confirmed prefix that must be re-walked, so a chunk crossing or a
@@ -130,7 +130,7 @@ class SpiralScanner {
      *  it cannot stick). While set, {@link #predictedWalkCost()} uses the bare from-zero
      *  formula — the pre-retention movement semantics the elytra-wall calibration pin
      *  asserts exactly. */
-    private boolean recenteredSinceLastFire = false;
+    protected boolean recenteredSinceLastFire = false;
     /** Did the last walk budget-break at a ring BELOW the prefix? Then {@code scanRing}
      *  is the low reopened ring and the truncated-walk prediction branch would be blind
      *  to the frontier interval the next walk also iterates — predict the full span
@@ -157,7 +157,7 @@ class SpiralScanner {
             () -> LSSClientConfig.CONFIG.enableQuadtreeScan;
     /** Rings the fast path confirmed without a position walk — session diagnostic
      *  (diag {@code ring_skips=}, exporter {@code scan.quad_ring_skips}). */
-    private long quadRingSkips;
+    long quadRingSkips; // package-private: the hybrid walk's phase-1 ring skips feed it too (§7)
     /** REOPENED_RING_VALVE overflow firings — session diagnostic (plan §6 phase 0: the
      *  B1 "is the valve pathological-only?" measurement; diag {@code valve=}, exporter
      *  {@code scan.valve_trips}). Counted in BOTH walk modes — the reopen bookkeeping
@@ -216,8 +216,8 @@ class SpiralScanner {
     private long rateGated;
 
     // Last scan budget tracking
-    private int lastBudget;
-    private int lastQueued;
+    protected int lastBudget;
+    protected int lastQueued;
     /** Did the burst-cap clamp SET the last walk's final budget (below the constant,
      *  un-reduced by the taper)? The governed window-limit's provenance half —
      *  see the maybeScan recording site (ramp-window-limited-credit-plan.md §3.2). */
@@ -532,18 +532,11 @@ class SpiralScanner {
                 || this.sessionConfig.protocolVersion() == LSSConstants.V16_COMPAT_PROTOCOL_VERSION) {
             return false;
         }
-        if (predictedWalkCost() > FAST_RESCAN_MAX_WALK_COST) return false;
-        // The F1 shrink reset is an IN-WALK prefix invalidation like hasActionableRetries
-        // below: scan() zeroes the prefix AFTER this predicate evaluated predictedWalkCost
-        // off the still-high confirmedRing, so without this rung the shrink tick could ride
-        // a fast fire straight into the full from-ring-0 walk the cost gate exists to
-        // refuse (three-lens review, correctness MINOR — dynamic-view-distance servers
-        // shrink repeatedly under load).
-        if (this.lastExclusionRadius >= 0 && viewDistance < this.lastExclusionRadius) return false;
+        if (prePressureFastRefusal(viewDistance)) return false;
         if (columnQueueSize >= columnQueueHaltThreshold / FAST_RESCAN_PRESSURE_DIVISOR) return false;
         if (columnQueueBytes >= columnQueueByteHaltThreshold / FAST_RESCAN_PRESSURE_DIVISOR) return false;
         if (ingestBacklogSections >= ingestBacklogHaltThreshold / FAST_RESCAN_PRESSURE_DIVISOR) return false;
-        if (columns.hasActionableRetries(playerCx, playerCz, viewDistance)) return false;
+        if (postPressureFastRefusal(playerCx, playerCz, viewDistance, columns)) return false;
         if (this.outstandingSupplier.getAsInt()
                 > this.lastSentCount / FAST_RESCAN_OUTSTANDING_DIVISOR) {
             return false;
@@ -562,6 +555,33 @@ class SpiralScanner {
             return false;
         }
         return true;
+    }
+
+        /** The two legacy pre-pressure fast-fire rungs at their exact ladder slot: the
+     *  predicted-walk-cost cap and the F1 view-shrink guard. {@code RegionScanner}
+     *  inherits this rung unchanged — its policy lives in an overridden
+     *  {@link #predictedWalkCost} (movement window = from-zero over the truncated
+     *  frontier; stationary = the last walk's measured observe cost), and the F1
+     *  shrink half is structurally inert there ({@code lastExclusionRadius} is
+     *  written only by the legacy walk, so it stays -1 — safe: the region walk has
+     *  no prefix to protect and re-classifies exiting positions live). */
+    protected boolean prePressureFastRefusal(int viewDistance) {
+        if (predictedWalkCost() > FAST_RESCAN_MAX_WALK_COST) return true;
+        // The F1 shrink reset is an IN-WALK prefix invalidation like hasActionableRetries
+        // below: scan() zeroes the prefix AFTER this predicate evaluated predictedWalkCost
+        // off the still-high confirmedRing, so without this rung the shrink tick could ride
+        // a fast fire straight into the full from-ring-0 walk the cost gate exists to
+        // refuse (three-lens review, correctness MINOR — dynamic-view-distance servers
+        // shrink repeatedly under load).
+        return this.lastExclusionRadius >= 0 && viewDistance < this.lastExclusionRadius;
+    }
+
+    /** Path-specific fast-fire refusal, POST-pressure slot: legacy = the actionable-retry
+     *  rung (below-prefix marks invisible to the outstanding gate). The region path
+     *  declares retry marks as ordinary needs, so it overrides to false. */
+    protected boolean postPressureFastRefusal(int playerCx, int playerCz, int viewDistance,
+                                              ColumnStateMap columns) {
+        return columns.hasActionableRetries(playerCx, playerCz, viewDistance);
     }
 
     /**
@@ -673,9 +693,9 @@ class SpiralScanner {
      * Skips fully-confirmed rings (all positions satisfied) without spending budget,
      * and continues across multiple rings until budget is exhausted.
      */
-    private int scan(int playerCx, int playerCz, int viewDistance,
-                     ColumnStateMap columns,
-                     long[] posOut, long[] tsOut, int budget) {
+    protected int scan(int playerCx, int playerCz, int viewDistance,
+                       ColumnStateMap columns,
+                       long[] posOut, long[] tsOut, int budget) {
         int exclusionRadius = viewDistance;
         int lodDistance = getEffectiveLodDistance();
 
@@ -1052,4 +1072,10 @@ class SpiralScanner {
     long getQuadRingSkips() { return this.quadRingSkips; }
     /** REOPENED_RING_VALVE overflow firings (session) — the B1 field measurement. */
     long getValveTrips() { return this.valveTrips; }
+
+    // ---- region-path diagnostics (region-scan-plan.md §9): 0 on the legacy path ----
+    int getRegionSpan() { return 0; }
+    long getRegionSkips() { return 0; }
+    long getAuditHeals() { return 0; }
+    int getNearRings() { return 0; }
 }
