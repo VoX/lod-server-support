@@ -316,7 +316,8 @@ public class RequestProcessingService {
                     dev.vox.lss.common.store.LodStores.brandedStoreDir(worldRoot), server.getServerVersion(),
                     LSSConstants.PROTOCOL_VERSION, regionDirs::get, maskFingerprints::get,
                     config.lodStoreResweepSeconds, config.lodStoreMaxBytes(),
-                    storeRegistryFingerprint(server));
+                    storeRegistryFingerprint(server),
+                    storeRegistryContentFingerprint(server));
             this.lodStore = dev.vox.lss.common.store.LodStores.createOrNull(env);
             if (this.lodStore == null) {
                 // LodStores.createOrNull logged the per-cause warn (codec vs SQLite init —
@@ -1359,8 +1360,26 @@ public class RequestProcessingService {
      *  on the same state count — served every warm column as the wrong blocks with no
      *  self-heal; state iteration order of BLOCK_STATE_REGISTRY IS global-id order,
      *  and BlockState toString carries block id + property values). Textual twin in
-     *  PaperRequestProcessingService; format pinned by StoreEnvironmentWiringTest. */
+     *  PaperRequestProcessingService; format pinned by StoreEnvironmentContractTest. */
     static String storeRegistryFingerprint(MinecraftServer server) {
+        var ids = storeRegistryIdentity(server);
+        return dev.vox.lss.common.store.RegistryFingerprint.of(ids.states(), ids.biomes());
+    }
+
+    /** Order-INSENSITIVE twin (v0.13.1 permutation plan §3.2): the store's proof that
+     *  an ordered-fingerprint flip was a pure per-boot id permutation
+     *  (VisualWorkbench-class dynamic registration) and not real registry drift.
+     *  Same identity walk, sorted before hashing; textual twin in
+     *  PaperRequestProcessingService. */
+    static String storeRegistryContentFingerprint(MinecraftServer server) {
+        var ids = storeRegistryIdentity(server);
+        return dev.vox.lss.common.store.RegistryFingerprint.contentOf(ids.states(), ids.biomes());
+    }
+
+    private record RegistryIdentity(java.util.List<String> states,
+                                    java.util.List<String> biomes) {}
+
+    private static RegistryIdentity storeRegistryIdentity(MinecraftServer server) {
         var states = new java.util.ArrayList<String>();
         for (var state : net.minecraft.world.level.block.Block.BLOCK_STATE_REGISTRY) {
             states.add(String.valueOf(state));
@@ -1372,7 +1391,7 @@ public class RequestProcessingService {
             var key = biomes.getKey(biome);
             biomeKeys.add(key == null ? "?" : key.toString());
         }
-        return dev.vox.lss.common.store.RegistryFingerprint.of(states, biomeKeys);
+        return new RegistryIdentity(states, biomeKeys);
     }
 
     /** The live LOD store (null while lodStore=off OR after the codec-probe degrade). */

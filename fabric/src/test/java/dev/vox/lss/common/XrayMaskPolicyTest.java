@@ -95,4 +95,33 @@ class XrayMaskPolicyTest {
         assertEquals(FallbackKind.NETHER, FallbackKind.fromDimension("mymod:nether_mirror"));
         assertEquals(FallbackKind.END, FallbackKind.fromDimension("mymod:endless_sky"));
     }
+
+    // --- mask content fingerprint (v0.13.1 permutation tolerance, plan §3.5) ---
+
+    @Test
+    void maskContentFingerprintIgnoresOrderAndDuplicates() {
+        long a = XrayMaskPolicy.maskContentFingerprint(
+                java.util.List.of("s1", "s2", "s3"), 64);
+        assertEquals(a, XrayMaskPolicy.maskContentFingerprint(
+                java.util.List.of("s3", "s1", "s2"), 64),
+                "a registry permutation reorders the hidden-state walk — the mask"
+                        + " semantics are unchanged and the fingerprint must hold");
+        assertEquals(a, XrayMaskPolicy.maskContentFingerprint(
+                java.util.List.of("s1", "s1", "s2", "s3", "s3"), 64),
+                "a doubled config entry is the same mask");
+    }
+
+    @Test
+    void maskContentFingerprintSeesSemanticChanges() {
+        long base = XrayMaskPolicy.maskContentFingerprint(java.util.List.of("s1", "s2"), 64);
+        assertNotEquals(base,
+                XrayMaskPolicy.maskContentFingerprint(java.util.List.of("s1"), 64),
+                "a removed hidden state must flip the fingerprint");
+        assertNotEquals(base,
+                XrayMaskPolicy.maskContentFingerprint(java.util.List.of("s1", "s2x"), 64),
+                "a renamed hidden state must flip the fingerprint");
+        assertNotEquals(base,
+                XrayMaskPolicy.maskContentFingerprint(java.util.List.of("s1", "s2"), 128),
+                "a moved cutoff must flip the fingerprint");
+    }
 }
