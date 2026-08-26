@@ -1,8 +1,8 @@
 # LOD store: registry-permutation tolerance (v0.13.1)
 
-Status: reviewed (1-Fable, §7 — verdict NEEDS-REWORK, all findings folded below)
-→ implement on main → 1 Fable + 3 Opus fix review → backports to all four
-support lines → v0.13.1.
+Status: IMPLEMENTED on main (PR #255) with the 1-Fable plan review (§7) and the
+1-Fable + 3-Opus fix review (§8) folded → backports to all four support lines →
+v0.13.1.
 
 ## 1. Problem (diagnosed live, 2026-08-26)
 
@@ -154,7 +154,11 @@ corpus fixture is unaffected; only the staleness key changes). The per-boot
 `transient:` nonce for non-terminal mask states stays exactly as is (deliberate
 conservative drop while the mask is undetermined). Extract the string-list →
 long computation into a static seam so Tier 1 pins order-insensitivity and
-content-sensitivity without needing to permute a real registry.
+content-sensitivity without needing to permute a real registry. Accepted
+residual: `chooseReplacement` breaks exact filler ties on the global state id,
+so a KEPT masked row built under one boot's ordering can differ from a fresh
+serve's filler pick — cosmetic (both candidates are real non-hidden states),
+healed by the next re-serve.
 
 ## 4. Tests
 
@@ -236,3 +240,58 @@ refresh leaves `migrate_*` bookkeeping untouched; nothing re-reads the registry
 keys post-open; deposit path stamps wirefmt=20 literal (closes the TOCTOU);
 store-stamp/header-fresh rungs + backfill done-marks permutation-independent;
 old drop message unpinned repo-wide.
+
+## 8. Fix review fold (1 Fable + 3 Opus, 2026-08-26) + as-built deviations
+
+Verdicts: Fable FOLD-MINORS (one MAJOR mandatory), store-lens Opus NEEDS-REWORK
+(scoped to the same MAJOR), mask-lens Opus FOLD-MINORS, tests-lens Opus
+FOLD-MINORS. Everything below is folded on the PR branch:
+
+- **MAJOR (Fable + store Opus, independently): the `migrate_pending` proxy's
+  invariant did not hold.** (a) The admin drop-all's meta clear ran
+  unconditionally even when shutdown interrupted the drop loop — despite its own
+  m16 comment — leaving flagless wirefmt=19 rows; the clear is now gated on
+  actual completion, making the comment true. (b) The walk's documented
+  swallowed-delete-failure residual (a 19-row stuck behind the watermark)
+  outlived `finishMigration`'s clear; the finish now VERIFIES (one probe per
+  dim, once per store lifetime, batcher thread) and writes a permanent
+  `migrate_residual` marker that `legacyRowsPossible` also reads. End-to-end
+  pinned in `SqliteLodStoreMigrationTest.residualNineteenRowBehindTheWatermark…`.
+- **MAJOR (tests Opus): the of()/contentOf delegation was unpinned** — wiring
+  the content slot to `of` compiled and passed every suite while re-enabling
+  the every-boot rebuild. Folded together with the three-reviewer "walk runs
+  twice" MINOR: the services now derive BOTH fingerprints from ONE
+  `storeRegistryIdentity` walk at the Environment call, and both contract
+  regexes pin the `RegistryFingerprint.of(...)`/`.contentOf(...)` delegation at
+  that call plus the single-walk assignment.
+- KEEP hardening (three reviewers): `writeMeta` commits BEFORE the log line and
+  the row-count summary is contained — a cosmetic `count(*)` throw can no
+  longer fall into the catch-all rebuild of a store just proven keepable.
+- `MetaVerdict` test seam (`lastMetaVerdictForTest`) — every ladder test now
+  asserts WHICH rung fired and the drop details (incl. the named core key),
+  de-vacuuming `permutationWithPendingLegacyRowsStillDrops` (its planted CRC
+  19-row nulled `get()` regardless; the meta witness + verdict pin close it).
+- Mask fingerprint wiring pins in BOTH `XrayMaskFilterTest` twins (fingerprint
+  == the shared seam over the hidden states' identity strings; a one-sided
+  backport dropping the identity collection would flatten every fingerprint —
+  an x-ray leak — with all other suites green).
+- Test 4.6 landed as the both-directions
+  `emptyContentFingerprintOnEitherSideCannotProveAPermutation`.
+- Environment compact ctor null-normalizes both fingerprints; the mask seam
+  skips null elements (throw-free serve choke points); FQN style NITs; stale
+  `metaMatches` prose renamed; CLAUDE.md store bullet updated; §3.5 records the
+  tie-break residual.
+
+Accepted (recorded, not fixed):
+- **Legacy escaped stores**: a store that reached the flagless-19-row state
+  under a PRE-0.13.1 jar and upgrades via ADOPT carries no marker; a later
+  pure permutation on it would KEEP and mistranslate its residual 19-rows.
+  Requires a rare pre-0.13.1 double-fault/interrupted-drop history AND a
+  usually-stable-then-permuting registry; bounded to the residual rows;
+  self-heals via any content change, a manual `store invalidate all`, or the
+  rebuild any of those triggers. Closing it would cost a full blob-b-tree scan
+  at boot — the exact cost MAJOR-3 rejected.
+- `keptRowsSummary`'s per-boot O(rows) ts-index scan on permuted boots (never
+  blob leaves; ~100s of ms worst case) — the §6 live gate greps the counts.
+- Test-helper placement stays section-local beside the ladder tests (reads
+  better than hoisting into the generic plumbing block).

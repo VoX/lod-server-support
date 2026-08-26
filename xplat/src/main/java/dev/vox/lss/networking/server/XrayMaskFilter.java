@@ -41,7 +41,7 @@ public final class XrayMaskFilter {
         private final long fingerprint;
 
         private MaskSet(boolean[] hiddenByStateId, int maxBlockHeight, int resolvedBlocks,
-                        java.util.Collection<String> hiddenIdentities) {
+                        Collection<String> hiddenIdentities) {
             this.hiddenByStateId = hiddenByStateId;
             this.maxBlockHeight = maxBlockHeight;
             this.resolvedBlocks = resolvedBlocks;
@@ -134,7 +134,10 @@ public final class XrayMaskFilter {
          *  identity strings: permutation-STABLE (v0.13.1 — the old id-indexed array
          *  hash flipped on every VisualWorkbench-class registry shuffle and re-dropped
          *  every masked dimension each boot), while any real semantic change still
-         *  flips it. */
+         *  flips it. Accepted residual: {@code chooseReplacement} breaks exact ties
+         *  on the global state id, so a KEPT masked row built under one boot's
+         *  ordering can differ from a fresh serve's filler pick — cosmetic (both
+         *  candidates are real non-hidden states), healed by the next re-serve. */
         public long fingerprint() {
             return this.fingerprint;
         }
