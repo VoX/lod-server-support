@@ -72,7 +72,7 @@ the `sodium:config_api_user` entrypoint (`ClientMenuEntrypointContractTest`
 pins entrypoint ⇔ file, so both stay absent together) — and there is no
 `sodium_version` (no 0.8 artifact), so the resolves-test's modern golden arm is
 unresolvable-by-design here (`fabric/build.gradle` guards on the property).
-The v0.12.1 line release notes must say the page is back (legacy Sodium
+The v0.13.0 line release notes must say the page is back (legacy Sodium
 screen) rather than repeat the cut.
 
 ## Findings at first compile (the real 1.21.10↔1.21.11 API boundary)

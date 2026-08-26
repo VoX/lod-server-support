@@ -476,7 +476,7 @@ unchanged. Pinned by carrying the existing latch tests over the interface.
 
 ## 11. Rollout
 
-Main/26.2 only. Implementation lands behind `enableRegionScan=true` via PR
+Originally main/26.2 only [ported to 1.21.10 2026-08-26]. Implementation lands behind `enableRegionScan=true` via PR
 after the 2-Fable + 3-Opus implementation review; dev jar to lss-test-26.2;
 backports and any v0.13.0 packaging wait for the user's live approval. The
 v0.12.1 staged tags are NOT touched by this round.

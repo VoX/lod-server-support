@@ -16,10 +16,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 > 1.21.11), so `folia-supported: false` (PluginYmlContractTest + release_check
 > pin the FALSE form), LINE_PAPER_LOADERS=paper purpur, and the
 > SOAK_PLATFORM=folia lane + `test-server.sh run-folia` have no upstream jar to
-> run on this line; **the Sodium options page is CUT** (Sodium tops out at 0.7.3
-> on 1.21.10, predating the 0.8 structured config API the page binds — the
-> 1.21.8-line precedent; LSSConfigMenu + the sodium:config_api_user entrypoint
-> AND the ModMenu integration (a Sodium-0.8-screen deep-link) are deleted,
+> run on this line; **the Sodium 0.8 options WALKER + `sodium:config_api_user` entrypoint remain CUT, but the legacy 0.6/0.7 page + the ModMenu integration are LIVE since the options-page-generations port** (mc1.21.10-line-notes.md §, 2026-08-23) are deleted,
 > RateSliderStops stays, config via the JSON files is unaffected); fabric-api
 > floor 0.138.0 (0.138.4+1.21.10, vs the parent's 0.141.x). The line ALSO
 > carries the pre-1.21.11 mappings/API shapes (the 1.21.1 line's forms):
@@ -61,6 +58,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 > 2-Opus port review: no MAJORs. Still owed: one live check of the 1.21.10
 > Xaero 1.45.0 jar in the test instance (surface member-verified against
 > 26.2/1.21.1 jars only; resolve failure fails soft to `state=unavailable`).
+> **v0.13.0 port (2026-08-26):** the region-scan / hybrid-walk / Xaero-backpressure
+> stack (main `feat/hybrid-scan` 31cfefe6..de34c616, 18 picks + version scrub —
+> §18 heal DELETED with it) — **ZERO line adaptations** (2-Opus port review, 0
+> MAJORs; the consumer's `getMaxY()+1` verified against this line's EXCLUSIVE
+> worldTopY convention). Only pick deviation: the five release-tag-v0.12.1
+> files that never existed here. Gates: T1 2076/0, T2, selftest 270 + validate,
+> pre-flight + release_check 0.13.0 OK; hybrid-boundary's sizing is
+> MAIN-measured (a gen/quiescence red here is a sizing question first). OPEN
+> EYEBALL: the rewritten Xaero tooltip is ~767 chars on the legacy fixed-pane
+> renderer — check it renders on the in-game page.
 > **v0.12.0 port (2026-08-21):** the region-summary/stamped-up_to_date/quadtree stack (main 79e49951..e0cdf6f2, 20 picks + the #215 checker floor) — adaptations: playC2S/playS2C registration idiom, the split-dir resolver re-root + CraftWorld mock, panel-fold pin hardening (69e7ef75); full smoke set green.
 > **v0.11.1 port (2026-08-18):** the stutter-fix pair (scan prefix retention +
 > acquisition frontier, main PRs #203/#204 + folds) cherry-picked from main —
@@ -73,8 +80,7 @@ LOD Server Support (LSS) — distributes LOD chunk data from servers to clients 
 
 ## Support tiers (v0.11.0+; docs/planning/neoforge-support-plan.md is normative)
 
-**Full** — Fabric + Paper on main (26.2): complete gauntlets (T1/T2/T3), 22-scenario
-soaks ×3 platforms, live-rig burn-in, first-priority triage. **Correct, not
+**Full** — Fabric + Paper on main (26.2): complete gauntlets (T1/T2/T3), 23-scenario soaks ×3 platforms, live-rig burn-in, first-priority triage. **Correct, not
 perfect** — the 26.1/1.21.11/1.21.10 lines: full builds + T1/T2 and representative smoke
 soaks, no live rig, no exhaustive gauntlets. **Best-effort** — NeoForge and the
 whole MC 1.21.1 line: they track the mainline feature set, but feature cuts are
@@ -517,7 +523,7 @@ Scenarios needing a base world auto-run `fresh-backfill` first. warm-rejoin, dir
 
 - `scripts/soak.sh` — orchestrator (stage → validate → run → collect → check)
 - `scripts/soak-scenarios/<name>.json` + `<name>-config.json` — driver timeline + sparse server-config overrides
-- `scripts/check_soak.py` — stdlib Python invariant checker (`--validate` pre-flight, post-run laws, per-run completion gates — a missing server `end` row OR a missing client `disconnect` row means that JVM died mid-run, `client_run_completion_violations` — `--selftest` 265 in-memory pass/catch cases incl. all four oldest named checks, the disconnect gate, the quiescence client mirror, and the xray config-key type branches). **The harness is v17-only:** `players[].backlog` is a required schema field and `service.superseded`/`range_filtered` are required + monotonic, so it will correctly reject any pre-v17 recording — re-record rather than debug.
+- `scripts/check_soak.py` — stdlib Python invariant checker (`--validate` pre-flight, post-run laws, per-run completion gates — a missing server `end` row OR a missing client `disconnect` row means that JVM died mid-run, `client_run_completion_violations` — `--selftest` 270 in-memory pass/catch cases incl. all four oldest named checks, the disconnect gate, the quiescence client mirror, and the xray config-key type branches). **The harness is v17-only:** `players[].backlog` is a required schema field and `service.superseded`/`range_filtered` are required + monotonic, so it will correctly reject any pre-v17 recording — re-record rather than debug.
 - `scripts/soak_report.py` — stdlib post-run anomaly digest (spikes/stalls, concerning-vs-mechanism counters, high-water marks, cadence/TPS, law margins, cross-identity audits); a lens, never a gate (`--strict` to exit nonzero on any anomaly; `--compare`, `--selftest`)
 - `scripts/check_move_trace.py` — stdlib validator for the move-desync tracer's JSONL (`--validate FILE...`, `--selftest` — 36 pass/catch cases over the shared `scripts/testdata/move-trace-rows.jsonl` fixture the Tier 1 goldens write; run it on collected traces BEFORE analysis)
 - `scripts/release_check.py` — release-jar safety gate (no dev-only benchmark/soak packages ship, incl. inside nested Jar-in-Jar entries and dev/vox/lss/common namespaces; stale-jar ambiguity guard + `--version` pinning; version expansion; mappings-namespace manifest; glob hygiene). Wired into `.github/workflows/build.yml` alongside the three `--selftest` runs.
