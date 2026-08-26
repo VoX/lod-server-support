@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-> **Support branch: `support/mc26.1-v0.12`** (v0.12.0 port of the branch below)
+> **Support branch: `support/mc26.1-v0.13`** (v0.12.0 port of the branch below)
 > **Previous: `support/mc26.1-v0.11`** — the v0.11.0 delta-port of main
 > (@ 9cb32ade, the last pre-G merge) onto the v0.10.0 26.1 line, targeting
 > **Minecraft 26.1.2** on Fabric + Paper + NeoForge (the NeoForge module BUILDS
@@ -18,6 +18,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 > 26.1.2.95.
 > **v0.12.0 port (2026-08-21):** the region-summary/stamped-up_to_date/quadtree stack (main 79e49951..e0cdf6f2, 20 picks + the #215 checker floor) — clean re-application, zero line adaptations needed beyond the version bump; per-line 1-Fable+3-Opus panel found nothing; full smoke set green (wrs both platforms, stamp-heal chain, armed wrs accepted per doctrine, store-second-join).
 > **Xaero map bridge port (2026-08-23):** the issue #223 stack (main PRs #229/#230/#231 + the #232 default-OFF flip) — byte-clean re-application; only line adaptation: `BLUE_/RED_STAINED_GLASS` test constants (26.2's ColorCollection is 26.2-only). 2-Opus port review: no MAJORs. Still owed: one live check of the 26.1 Xaero 1.45.0 jar in the test instance (reflective surface member-verified against the 26.2/1.21.1 jars; resolve failure fails soft to `state=unavailable`).
+> **v0.13.0 port (2026-08-26):** the region-scan / hybrid-walk / Xaero-backpressure
+> stack (main `feat/hybrid-scan` 31cfefe6..de34c616, 18 picks + version scrub —
+> §18 heal DELETED with it) — **ZERO line adaptations**: every touched
+> xplat/common file was byte-identical to main before and after (2-Opus port
+> review, 0 MAJORs both lenses); the only pick deviation is the five
+> release-tag-v0.12.1 files that never existed here (keep-deleted). Gates: T1
+> 2086/0, T2, selftest 270 + validate, pre-flight + release_check 0.13.0 OK.
+> The still-owed 26.1 Xaero 1.45.0 live check now also covers the §12 pacing.
 > **v0.11.1 port (2026-08-18):** the stutter-fix pair (scan prefix retention +
 > acquisition frontier, main PRs #203/#204 + folds) cherry-picked from main —
 > pure xplat/common, no line flavor points; the body below is main's CLAUDE.md
@@ -29,7 +37,7 @@ LOD Server Support (LSS) — distributes LOD chunk data from servers to clients 
 
 ## Support tiers (v0.11.0+; docs/planning/neoforge-support-plan.md is normative)
 
-**Full** — Fabric + Paper on main (26.2): complete gauntlets (T1/T2/T3), 22-scenario
+**Full** — Fabric + Paper on main (26.2): complete gauntlets (T1/T2/T3), 23-scenario
 soaks ×3 platforms, live-rig burn-in, first-priority triage. **Correct, not
 perfect** — the 26.1/1.21.11 lines: full builds + T1/T2 and representative smoke
 soaks, no live rig, no exhaustive gauntlets. **Best-effort** — NeoForge and the
