@@ -512,12 +512,18 @@ public class PaperRequestProcessingService {
                         : maskEntry.sourceLabel() + ":"
                                 + Long.toHexString(maskEntry.mask().fingerprint()));
             }
+            // ONE registry walk feeds both fingerprints (plan §3.2) — the twin of
+            // the Fabric service's call, pinned the same way by the Paper contract
+            // test (of()/contentOf() delegation named at the call site).
+            var registryIds = storeRegistryIdentity(server);
             var env = new dev.vox.lss.common.store.SqliteLodStore.Environment(
                     dev.vox.lss.common.store.LodStores.brandedStoreDir(worldRoot), server.getServerVersion(),
                     LSSConstants.PROTOCOL_VERSION, regionDirs::get, maskFingerprints::get,
                     config.lodStoreResweepSeconds, config.lodStoreMaxBytes(),
-                    storeRegistryFingerprint(server),
-                    storeRegistryContentFingerprint(server));
+                    dev.vox.lss.common.store.RegistryFingerprint.of(
+                            registryIds.states(), registryIds.biomes()),
+                    dev.vox.lss.common.store.RegistryFingerprint.contentOf(
+                            registryIds.states(), registryIds.biomes()));
             lodStore = dev.vox.lss.common.store.LodStores.createOrNull(env);
             if (lodStore == null) {
                 // LodStores.createOrNull logged the per-cause warn (codec vs SQLite init —
@@ -604,31 +610,18 @@ public class PaperRequestProcessingService {
         return regionDirs;
     }
 
-    /** Registry identity for the LOD store meta guard (4-agent round R2-M3) — textual
-     *  twin of {@code RequestProcessingService.storeRegistryFingerprint}: BOTH halves
-     *  are id-ordered identity hashes (review A3 — the old block half was a bare
-     *  COUNT, so an id-permuting registry change of identical total size served every
-     *  warm column as the wrong blocks with no self-heal); a mod/datapack change
-     *  shifts the global ids the stored wire bytes embed while no freshness rule can
-     *  fire. */
-    static String storeRegistryFingerprint(MinecraftServer server) {
-        var ids = storeRegistryIdentity(server);
-        return dev.vox.lss.common.store.RegistryFingerprint.of(ids.states(), ids.biomes());
-    }
-
-    /** Order-INSENSITIVE twin (v0.13.1 permutation plan §3.2): the store's proof that
-     *  an ordered-fingerprint flip was a pure per-boot id permutation
-     *  (VisualWorkbench-class dynamic registration) and not real registry drift.
-     *  Same identity walk, sorted before hashing — textual twin of
-     *  {@code RequestProcessingService.storeRegistryContentFingerprint}. */
-    static String storeRegistryContentFingerprint(MinecraftServer server) {
-        var ids = storeRegistryIdentity(server);
-        return dev.vox.lss.common.store.RegistryFingerprint.contentOf(ids.states(), ids.biomes());
-    }
-
     private record RegistryIdentity(java.util.List<String> states,
                                     java.util.List<String> biomes) {}
 
+    /** Registry identity for the LOD store meta guard (4-agent round R2-M3) — textual
+     *  twin of {@code RequestProcessingService.storeRegistryIdentity}: both identity
+     *  lists are id-ordered (review A3 — the old block half was a bare COUNT, so an
+     *  id-permuting registry change of identical total size served every warm column
+     *  as the wrong blocks with no self-heal); a mod/datapack change shifts the
+     *  global ids the stored wire bytes embed while no freshness rule can fire. The
+     *  store construction derives the ordered {@code of} AND order-insensitive
+     *  {@code contentOf} fingerprints from this ONE walk (v0.13.1 permutation plan
+     *  §3.2). */
     private static RegistryIdentity storeRegistryIdentity(MinecraftServer server) {
         var states = new java.util.ArrayList<String>();
         for (var state : net.minecraft.world.level.block.Block.BLOCK_STATE_REGISTRY) {

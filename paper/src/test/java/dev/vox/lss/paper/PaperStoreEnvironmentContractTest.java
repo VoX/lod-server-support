@@ -28,13 +28,17 @@ class PaperStoreEnvironmentContractTest {
         String source = Files.readString(serviceSource());
         var call = Pattern.compile(
                 "new dev\\.vox\\.lss\\.common\\.store\\.SqliteLodStore\\.Environment\\("
-                        + "[^;]*storeRegistryFingerprint\\(server\\),\\s*"
-                        + "storeRegistryContentFingerprint\\(server\\)\\)",
+                        + "[^;]*RegistryFingerprint\\.of\\(\\s*"
+                        + "registryIds\\.states\\(\\),\\s*registryIds\\.biomes\\(\\)\\)\\s*,\\s*"
+                        + "[^;]*RegistryFingerprint\\.contentOf\\(\\s*"
+                        + "registryIds\\.states\\(\\),\\s*registryIds\\.biomes\\(\\)\\)\\s*\\)",
                 Pattern.DOTALL);
         assertTrue(call.matcher(source).find(),
-                "the production Environment must be built WITH storeRegistryFingerprint"
-                        + " AND storeRegistryContentFingerprint (dropping either"
-                        + " compiles — the ctors default them to \"\" — and disables"
-                        + " the registry guard / the permutation tolerance)");
+                "the production Environment must derive the ordered fingerprint via"
+                        + " RegistryFingerprint.of and the content one via .contentOf"
+                        + " (dropping, reordering, or swapping the delegations compiles"
+                        + " and disables the registry guard / permutation tolerance)");
+        assertTrue(source.contains("var registryIds = storeRegistryIdentity(server);"),
+                "both fingerprints must come from ONE registry walk (plan §3.2)");
     }
 }
