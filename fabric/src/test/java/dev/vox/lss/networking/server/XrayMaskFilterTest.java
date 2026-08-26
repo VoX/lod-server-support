@@ -71,6 +71,38 @@ class XrayMaskFilterTest {
         return new RegistryAccess.ImmutableRegistryAccess(List.of(biomes));
     }
 
+    /**
+     * The v0.13.1 wiring pin (fix-review fold): {@code MaskSet.fingerprint()} must be
+     * the {@code XrayMaskPolicy.maskContentFingerprint} of the hidden states'
+     * IDENTITY strings — permutation-stable (resolve-order independent here as the
+     * unit-testable proxy for registry-order independence) yet content-sensitive. A
+     * backport that drops the identity collection makes every mask fingerprint
+     * identical (empty list + cutoff), so a real mask change stops dropping the
+     * dimension's rows and the store serves under-masked columns — an x-ray leak.
+     */
+    @Test
+    void fingerprintIsTheContentHashOfTheHiddenIdentities() {
+        assertEquals(dev.vox.lss.common.XrayMaskPolicy.maskContentFingerprint(
+                        net.minecraft.world.level.block.Blocks.DIAMOND_ORE
+                                .getStateDefinition().getPossibleStates().stream()
+                                .map(String::valueOf).toList(), 64),
+                mask(64, "diamond_ore").fingerprint(),
+                "the fingerprint must hash the hidden-state identity strings through"
+                        + " the shared seam — not ids, not a constant");
+        assertEquals(mask(64, "diamond_ore", "gold_ore").fingerprint(),
+                mask(64, "gold_ore", "diamond_ore").fingerprint(),
+                "resolve order must not matter");
+        assertEquals(mask(64, "diamond_ore", "diamond_ore").fingerprint(),
+                mask(64, "diamond_ore").fingerprint(),
+                "a doubled config entry is the same mask");
+        assertNotEquals(mask(64, "diamond_ore").fingerprint(),
+                mask(64, "gold_ore").fingerprint(),
+                "different hidden blocks must fingerprint apart");
+        assertNotEquals(mask(64, "diamond_ore").fingerprint(),
+                mask(65, "diamond_ore").fingerprint(),
+                "a moved cutoff must fingerprint apart");
+    }
+
     // ---- helpers ----
 
     /** A mask from the production default list with a cutoff high enough to be inert. */

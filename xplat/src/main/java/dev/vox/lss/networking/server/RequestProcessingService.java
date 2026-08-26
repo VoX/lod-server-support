@@ -312,12 +312,19 @@ public class RequestProcessingService {
                 }
                 maskFingerprints.put(dim, maskFp);
             }
+            // ONE registry walk feeds both fingerprints (plan §3.2; ~84k
+            // BlockState.toString() calls on big packs — never doubled). The
+            // contract test pins the of()/contentOf() delegation AT this call so
+            // a swap or a dropped argument cannot compile green.
+            var registryIds = storeRegistryIdentity(server);
             var env = new dev.vox.lss.common.store.SqliteLodStore.Environment(
                     dev.vox.lss.common.store.LodStores.brandedStoreDir(worldRoot), server.getServerVersion(),
                     LSSConstants.PROTOCOL_VERSION, regionDirs::get, maskFingerprints::get,
                     config.lodStoreResweepSeconds, config.lodStoreMaxBytes(),
-                    storeRegistryFingerprint(server),
-                    storeRegistryContentFingerprint(server));
+                    dev.vox.lss.common.store.RegistryFingerprint.of(
+                            registryIds.states(), registryIds.biomes()),
+                    dev.vox.lss.common.store.RegistryFingerprint.contentOf(
+                            registryIds.states(), registryIds.biomes()));
             this.lodStore = dev.vox.lss.common.store.LodStores.createOrNull(env);
             if (this.lodStore == null) {
                 // LodStores.createOrNull logged the per-cause warn (codec vs SQLite init —
@@ -1352,34 +1359,22 @@ public class RequestProcessingService {
         return this.offThreadProcessor;
     }
 
-    /** Registry identity for the LOD store meta guard (4-agent round R2-M3): stored
-     *  wire bytes embed GLOBAL block-state ids and biome ids, both assignment-order
-     *  dependent — a mod or datapack change shifts them while region files stay
-     *  untouched, so only this fingerprint can trigger the rebuild. BOTH halves are
-     *  id-ordered identity hashes (review A3: the old block half was a bare COUNT, so
-     *  an id-permuting registry change of identical total size — a mod swap landing
-     *  on the same state count — served every warm column as the wrong blocks with no
-     *  self-heal; state iteration order of BLOCK_STATE_REGISTRY IS global-id order,
-     *  and BlockState toString carries block id + property values). Textual twin in
-     *  PaperRequestProcessingService; format pinned by StoreEnvironmentContractTest. */
-    static String storeRegistryFingerprint(MinecraftServer server) {
-        var ids = storeRegistryIdentity(server);
-        return dev.vox.lss.common.store.RegistryFingerprint.of(ids.states(), ids.biomes());
-    }
-
-    /** Order-INSENSITIVE twin (v0.13.1 permutation plan §3.2): the store's proof that
-     *  an ordered-fingerprint flip was a pure per-boot id permutation
-     *  (VisualWorkbench-class dynamic registration) and not real registry drift.
-     *  Same identity walk, sorted before hashing; textual twin in
-     *  PaperRequestProcessingService. */
-    static String storeRegistryContentFingerprint(MinecraftServer server) {
-        var ids = storeRegistryIdentity(server);
-        return dev.vox.lss.common.store.RegistryFingerprint.contentOf(ids.states(), ids.biomes());
-    }
-
     private record RegistryIdentity(java.util.List<String> states,
                                     java.util.List<String> biomes) {}
 
+    /** Registry identity for the LOD store meta guard (4-agent round R2-M3): stored
+     *  wire bytes embed GLOBAL block-state ids and biome ids, both assignment-order
+     *  dependent — a mod or datapack change shifts them while region files stay
+     *  untouched, so only the fingerprints derived from THIS walk can trigger the
+     *  rebuild. Both identity lists are id-ordered (review A3: the old block half was
+     *  a bare COUNT, so an id-permuting registry change of identical total size — a
+     *  mod swap landing on the same state count — served every warm column as the
+     *  wrong blocks with no self-heal; state iteration order of BLOCK_STATE_REGISTRY
+     *  IS global-id order, and BlockState toString carries block id + property
+     *  values); the store construction derives the ordered {@code of} AND
+     *  order-insensitive {@code contentOf} (v0.13.1 permutation plan §3.2)
+     *  fingerprints from ONE walk. Textual twin in PaperRequestProcessingService;
+     *  the call shape is pinned by StoreEnvironmentContractTest. */
     private static RegistryIdentity storeRegistryIdentity(MinecraftServer server) {
         var states = new java.util.ArrayList<String>();
         for (var state : net.minecraft.world.level.block.Block.BLOCK_STATE_REGISTRY) {

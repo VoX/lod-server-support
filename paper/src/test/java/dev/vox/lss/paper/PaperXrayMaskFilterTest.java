@@ -71,6 +71,27 @@ class PaperXrayMaskFilterTest {
         return new RegistryAccess.ImmutableRegistryAccess(List.of(biomes));
     }
 
+    /** Paper twin of the v0.13.1 fingerprint wiring pin — see
+     *  {@code XrayMaskFilterTest.fingerprintIsTheContentHashOfTheHiddenIdentities}:
+     *  a one-sided backport that drops the identity collection here would flatten
+     *  every mask fingerprint with all fabric suites green. */
+    @Test
+    void fingerprintIsTheContentHashOfTheHiddenIdentities() {
+        assertEquals(dev.vox.lss.common.XrayMaskPolicy.maskContentFingerprint(
+                        net.minecraft.world.level.block.Blocks.DIAMOND_ORE
+                                .getStateDefinition().getPossibleStates().stream()
+                                .map(String::valueOf).toList(), 64),
+                mask(64, "diamond_ore").fingerprint(),
+                "the fingerprint must hash the hidden-state identity strings through"
+                        + " the shared seam");
+        assertEquals(mask(64, "diamond_ore", "gold_ore").fingerprint(),
+                mask(64, "gold_ore", "diamond_ore").fingerprint(),
+                "resolve order must not matter");
+        assertNotEquals(mask(64, "diamond_ore").fingerprint(),
+                mask(64, "gold_ore").fingerprint(),
+                "different hidden blocks must fingerprint apart");
+    }
+
     // ---- helpers (twin-identical to the Fabric test) ----
 
     private static PaperXrayMaskFilter.MaskSet defaultMask() {

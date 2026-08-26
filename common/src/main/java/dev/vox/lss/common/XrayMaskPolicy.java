@@ -1,5 +1,8 @@
 package dev.vox.lss.common;
 
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.Locale;
 
 /**
@@ -103,10 +106,16 @@ public final class XrayMaskPolicy {
      * non-empty mask: masked servers pay a one-time per-dimension re-warm at the
      * first boot on this version.
      */
-    public static long maskContentFingerprint(java.util.Collection<String> hiddenStateIdentities,
+    public static long maskContentFingerprint(Collection<String> hiddenStateIdentities,
                                               int maxBlockHeight) {
-        String[] sorted = hiddenStateIdentities.toArray(new String[0]);
-        java.util.Arrays.sort(sorted);
+        // Null elements are skipped rather than thrown on (fix-review fold): MaskSet
+        // construction happens lazily inside serve choke points where throw-freedom
+        // is load-bearing, and this is a public common API.
+        var sorted = new ArrayList<String>(hiddenStateIdentities.size());
+        for (String s : hiddenStateIdentities) {
+            if (s != null) sorted.add(s);
+        }
+        Collections.sort(sorted);
         long hash = 0xcbf29ce484222325L;
         String prev = null;
         for (String s : sorted) {

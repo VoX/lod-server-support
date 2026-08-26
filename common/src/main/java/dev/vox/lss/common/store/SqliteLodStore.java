@@ -84,13 +84,14 @@ public final class SqliteLodStore implements LodStoreService {
     // 4: chash/fhash switch FNV-1a 64 -> CRC32C zero-extended (perf round Phase 2/R4 —
     // the byte loop was ~28% of the batcher thread; see LodStoreService.contentHash).
     // Old rows would fail every validation under the new function, so the bump
-    // drops-and-rebuilds; rollback is symmetric (metaMatches is an equality compare,
-    // an old jar against a v4 store also rebuilds).
+    // drops-and-rebuilds; rollback is symmetric (evaluateMeta's core gate is an
+    // equality compare, an old jar against a v4 store also rebuilds).
     // Interim (mega plan R-1): C4 re-specifies schema 4 (wirefmt column + per-row hash
     // dispatch against legacyContentHashFnv); a Phase-2-era store drops there via
-    // metaMatches (meta wire 19 != 20) — no shipped v0.9.x store ever sees this shape.
+    // evaluateMeta (meta wire 19 != 20, a core key) — no shipped v0.9.x store ever
+    // sees this shape.
     static final int SCHEMA_VERSION = 4;
-    /** The table-structure generation metaMatches pins (C4): "wirefmt" = every lods_*
+    /** The table-structure generation evaluateMeta pins (C4): "wirefmt" = every lods_*
      *  table carries the wirefmt column. */
     static final String STORE_LAYOUT = "wirefmt";
     /** The row body format constants (C4, XVER §5): 19 = native-layout (pre-migration
@@ -171,6 +172,15 @@ public final class SqliteLodStore implements LodStoreService {
                               int resweepSeconds, long maxDbBytes,
                               String registryFingerprint,
                               String registryContentFingerprint) {
+
+        /** Null fingerprints normalize to "" — the record's convention for "no
+         *  evidence" (a null would NPE inside evaluateMeta/writeMeta, and the
+         *  catch-all would rebuild a healthy store). */
+        public Environment {
+            registryFingerprint = registryFingerprint == null ? "" : registryFingerprint;
+            registryContentFingerprint =
+                    registryContentFingerprint == null ? "" : registryContentFingerprint;
+        }
 
         /** Pre-content-fingerprint shape (v0.13.1 permutation plan §3.2): an empty
          *  content fingerprint makes a permutation UNPROVABLE — the ladder drops,
@@ -348,11 +358,20 @@ public final class SqliteLodStore implements LodStoreService {
 
     // ---- lifecycle / meta ----
 
+    /** Test seam (permutation-plan fold): the last open's verdict, so the ladder
+     *  tests assert WHICH rung fired instead of inferring it from {@code get()}. */
+    private volatile MetaVerdict lastMetaVerdict;
+
+    MetaVerdict lastMetaVerdictForTest() {
+        return this.lastMetaVerdict;
+    }
+
     private void openOrRecreateWriter() throws Exception {
         try {
             openWriter();
             maybeLazyUpgradeFromV19();
             MetaVerdict verdict = evaluateMeta();
+            this.lastMetaVerdict = verdict;
             switch (verdict.kind()) {
                 case OPEN -> { }
                 case REFRESH ->
@@ -362,14 +381,24 @@ public final class SqliteLodStore implements LodStoreService {
                     // the migrate_* bookkeeping untouched.
                     writeMeta();
                 case KEEP_PERMUTED -> {
-                    LSSLogger.info("LOD store: registry ids permuted (same content) —"
-                            + " store kept (v20 rows are identity-addressed): "
-                            + keptRowsSummary());
                     // Refresh BOTH registry keys to this boot's values, committed
                     // before the batcher exists / any serve. A crash before the
                     // commit re-decides identically next boot — the content compare
                     // is order-insensitive.
                     writeMeta();
+                    // The log line is decoration and must never destroy the store the
+                    // ladder just decided to keep (fix-review fold: a keptRowsSummary
+                    // throw used to fall into the catch-all rebuild below) — a count
+                    // failure degrades to a bare line, and the INFO lands only after
+                    // the KEEP is durable.
+                    String summary;
+                    try {
+                        summary = keptRowsSummary();
+                    } catch (Exception e) {
+                        summary = "row count unavailable";
+                    }
+                    LSSLogger.info("LOD store: registry ids permuted (same content) —"
+                            + " store kept (v20 rows are identity-addressed): " + summary);
                 }
                 case DROP -> {
                     LSSLogger.info("LOD store: " + verdict.detail() + " — dropping and"
@@ -445,11 +474,11 @@ public final class SqliteLodStore implements LodStoreService {
      * native-layout), then stamp meta {@code 4 ∧ 20 ∧ store_layout} in the SAME
      * writer transaction (autocommit is off; {@code writeMeta}'s commit lands the
      * ALTERs and the stamp together). Stamping is IMMEDIATE (the §5.1 review MAJOR:
-     * {@code metaMatches} is an equality compare, so a stamp-on-completion scheme
-     * drops the multi-GB store on the first post-upgrade restart) — migration
+     * {@code evaluateMeta}'s core gate is an equality compare, so a stamp-on-completion
+     * scheme drops the multi-GB store on the first post-upgrade restart) — migration
      * COMPLETION is tracked by the rows' own {@code wirefmt} values, never the
      * version keys. Any OTHER from-state (dev-era metas, ≤18, foreign fingerprint)
-     * returns untouched and falls through to {@code metaMatches} → drop-and-rebuild;
+     * returns untouched and falls through to {@code evaluateMeta} → drop-and-rebuild;
      * any THROW here reaches {@code openOrRecreateWriter}'s catch → drop-and-rebuild
      * (the {@code pragma table_info} probe makes a half-applied ALTER re-entrant,
      * but the drop is the simpler contract and the fallback is always legal on
@@ -503,7 +532,7 @@ public final class SqliteLodStore implements LodStoreService {
     }
 
     /** The open-time meta verdict (store-registry-permutation-plan.md §3.3). */
-    private record MetaVerdict(Kind kind, String detail) {
+    record MetaVerdict(Kind kind, String detail) {
         enum Kind { OPEN, REFRESH, KEEP_PERMUTED, DROP }
 
         static MetaVerdict drop(String detail) {
@@ -576,11 +605,20 @@ public final class SqliteLodStore implements LodStoreService {
      *  every boot, on exactly the permuting-registry servers this path serves):
      *  19-rows are produced ONLY by the lazy 3→4 upgrade, which sets
      *  {@code migrate_pending=1} in the same transaction; deposits always stamp 20;
-     *  the key is deleted only by {@code finishMigration} after the walk exhausts
-     *  every dimension. Pending-but-actually-complete answers true → drop, the safe
-     *  direction for derived data. */
+     *  the pending key is deleted by the VERIFYING {@code finishMigration} (which
+     *  probes every dim once at completion and writes the permanent
+     *  {@code migrate_residual} marker if any 19-row survived — the fix-review
+     *  MAJOR: the walk's swallowed delete-failure residual used to outlive the
+     *  flag) or by a COMPLETED admin drop-all (a shutdown-interrupted drop keeps
+     *  the keys so the walk re-arms). Pending-but-actually-complete answers true →
+     *  drop, the safe direction for derived data. Accepted residual (fold record,
+     *  plan §8): a store that reached the flagless-19-row state under a PRE-0.13.1
+     *  jar and then ADOPTed carries no marker — bounded to rare double-fault /
+     *  interrupted-drop histories, self-healing via any content change or a manual
+     *  invalidate. */
     private static boolean legacyRowsPossible(Map<String, String> meta) {
-        return "1".equals(meta.get("migrate_pending"));
+        return "1".equals(meta.get("migrate_pending"))
+                || "1".equals(meta.get("migrate_residual"));
     }
 
     /** Row/dim counts for the permutation-KEEP line (the §6 live gate greps them).
@@ -607,7 +645,7 @@ public final class SqliteLodStore implements LodStoreService {
                     "wire_format_version", String.valueOf(this.env.wireVersion()),
                     "mc_version", this.env.mcVersion(),
                     "codec", StoreCodec.NAME,
-                    // Structural layout key (C4 mega-plan): metaMatches compares meta
+                    // Structural layout key (C4 mega-plan): evaluateMeta compares meta
                     // only, never table structure — a C1..C3-era dev store (meta 4∧20,
                     // NO wirefmt column) would otherwise open "valid" and latch dead at
                     // WRITE_FAILURE_LATCH on the first wirefmt INSERT.
@@ -1351,7 +1389,30 @@ public final class SqliteLodStore implements LodStoreService {
     }
 
     private void finishMigration() throws SQLException {
+        // VERIFY before clearing the marker (v0.13.1 fix-review fold): the walk's
+        // documented residual — a row whose translate anomaly'd AND whose fallback
+        // DELETE also failed stays tagged 19 BEHIND the watermark — used to outlive
+        // migrate_pending, and under the permutation ladder a flagless 19-row is a
+        // wrong-data KEEP (mistranslated legacy bytes). One probe per dim, ONCE per
+        // store lifetime, on the batcher thread; any hit writes the permanent
+        // migrate_residual marker (legacyRowsPossible's second term) so a permuted
+        // boot still drops. The walk bookkeeping clears either way — re-arming a
+        // walk that can never delete its stuck row would just re-fail each boot.
+        boolean residual = false;
         try (Statement st = this.writer.createStatement()) {
+            for (int dimId : this.dimIds.values()) {
+                try (ResultSet rs = st.executeQuery("SELECT 1 FROM lods_" + dimId
+                        + " WHERE wirefmt=" + WIREFMT_NATIVE_19 + " LIMIT 1")) {
+                    if (rs.next()) {
+                        residual = true;
+                        break;
+                    }
+                }
+            }
+            if (residual) {
+                st.executeUpdate("INSERT OR REPLACE INTO meta (k, v)"
+                        + " VALUES ('migrate_residual','1')");
+            }
             st.executeUpdate("DELETE FROM meta WHERE k IN ('migrate_pending',"
                     + " 'migrate_total', 'migrate_done')"
                     + " OR k LIKE 'migrate_progress_%'");
@@ -1365,6 +1426,10 @@ public final class SqliteLodStore implements LodStoreService {
         long anomalies = this.diag.getMigrateAnomalies();
         LSSLogger.info("LOD store: background migration complete — "
                 + this.diag.getMigratedRows() + " rows rewritten to v20"
+                + (residual
+                        ? " (RESIDUAL legacy rows remain — marked; registry"
+                                + " permutations will rebuild this store)"
+                        : "")
                 + (anomalies > 0
                         ? ", " + anomalies + " unreadable rows DELETED (re-warm from"
                                 + " serves/backfill — investigate if large)"
@@ -1611,22 +1676,28 @@ public final class SqliteLodStore implements LodStoreService {
                     // longer needs a tombstone per position.
                     dropDimensionRows(e.getKey(), e.getValue());
                 }
-                // C4 (review m16): the walk bookkeeping resets AFTER the drop loop —
-                // clearing it up front + a shutdown mid-drop left surviving 19-rows
-                // with no walk state (translated on every serve forever). If shutdown
-                // breaks the loop above, the surviving meta re-arms the walk next boot
-                // and it simply finds fewer rows.
-                try (Statement st = this.writer.createStatement()) {
-                    st.executeUpdate("DELETE FROM meta WHERE k IN ('migrate_pending',"
-                            + " 'migrate_total', 'migrate_done')"
-                            + " OR k LIKE 'migrate_progress_%'");
+                // C4 (review m16, hardened by the v0.13.1 fix-review fold): the walk
+                // bookkeeping resets AFTER the drop loop AND ONLY when the drop ran to
+                // completion — the clear used to run unconditionally, so a shutdown
+                // mid-drop left surviving 19-rows with the walk state DELETED (exactly
+                // what this comment claimed could not happen), and under the
+                // permutation ladder a flagless 19-row is a wrong-data KEEP. With the
+                // guard, an interrupted drop keeps the meta, the walk re-arms next
+                // boot, and it simply finds fewer rows. The completed clear also
+                // retires any migrate_residual marker — zero rows means zero 19-rows.
+                if (!this.shutdown.get()) {
+                    try (Statement st = this.writer.createStatement()) {
+                        st.executeUpdate("DELETE FROM meta WHERE k IN ('migrate_pending',"
+                                + " 'migrate_total', 'migrate_done', 'migrate_residual')"
+                                + " OR k LIKE 'migrate_progress_%'");
+                    }
+                    this.writer.commit();
+                    this.migratePending = false;
+                    this.migrateRemaining.set(0);
+                    this.migrateDims.clear();
+                    LSSLogger.info("LOD store: dropped all rows + backfill progress"
+                            + " (admin invalidate)");
                 }
-                this.writer.commit();
-                this.migratePending = false;
-                this.migrateRemaining.set(0);
-                this.migrateDims.clear();
-                LSSLogger.info("LOD store: dropped all rows + backfill progress"
-                        + " (admin invalidate)");
             }
             case Op.BackfillMark mark -> {
                 try (PreparedStatement ps = this.writer.prepareStatement(

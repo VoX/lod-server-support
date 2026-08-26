@@ -29,18 +29,29 @@ class StoreEnvironmentContractTest {
     @Test
     void environmentConstructionPassesTheRegistryFingerprint() throws Exception {
         String source = Files.readString(serviceSource());
+        // The delegation is pinned AT the call site — of() in the ordered slot,
+        // contentOf() in the content slot (fix-review MAJOR: with two adjacent
+        // one-word-different suppliers, wiring the content slot to of() compiled,
+        // passed every suite, and re-enabled the every-boot rebuild). The one-walk
+        // pin below keeps both derivations on a single registry walk (plan §3.2).
         var call = Pattern.compile(
                 "new dev\\.vox\\.lss\\.common\\.store\\.SqliteLodStore\\.Environment\\("
-                        + "[^;]*storeRegistryFingerprint\\(server\\),\\s*"
-                        + "storeRegistryContentFingerprint\\(server\\)\\)",
+                        + "[^;]*RegistryFingerprint\\.of\\(\\s*"
+                        + "registryIds\\.states\\(\\),\\s*registryIds\\.biomes\\(\\)\\)\\s*,\\s*"
+                        + "[^;]*RegistryFingerprint\\.contentOf\\(\\s*"
+                        + "registryIds\\.states\\(\\),\\s*registryIds\\.biomes\\(\\)\\)\\s*\\)",
                 Pattern.DOTALL);
         assertTrue(call.matcher(source).find(),
-                "the production Environment must be built WITH storeRegistryFingerprint"
-                        + " AND storeRegistryContentFingerprint (the convenience ctors"
-                        + " default them to \"\" — dropping either argument compiles and"
-                        + " silently disables the registry guard / the v0.13.1"
-                        + " permutation tolerance, which treats an empty content"
-                        + " fingerprint as unprovable and rebuilds every boot)");
+                "the production Environment must derive the ordered fingerprint via"
+                        + " RegistryFingerprint.of and the content fingerprint via"
+                        + " .contentOf, both from registryIds — dropping, reordering,"
+                        + " or swapping the delegations compiles and silently disables"
+                        + " the registry guard / the v0.13.1 permutation tolerance"
+                        + " (an empty or order-sensitive content fingerprint rebuilds"
+                        + " every boot)");
+        assertTrue(source.contains("var registryIds = storeRegistryIdentity(server);"),
+                "both fingerprints must come from ONE registry walk (plan §3.2 — the"
+                        + " ~84k-state identity walk must not run twice at boot)");
     }
 
     @Test
