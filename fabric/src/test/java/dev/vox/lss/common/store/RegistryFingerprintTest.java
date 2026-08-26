@@ -52,4 +52,47 @@ class RegistryFingerprintTest {
                 RegistryFingerprint.of(states, biomes),
                 "an unchanged registry must never trigger a rebuild");
     }
+
+    // ---- contentOf (v0.13.1 permutation tolerance — store-registry-permutation-plan.md) ----
+
+    @Test
+    void contentFormatIsADistinctHashPair() {
+        String fp = RegistryFingerprint.contentOf(
+                List.of("Block{minecraft:stone}", "Block{minecraft:dirt}"),
+                List.of("minecraft:plains"));
+        assertTrue(fp.matches("bsc:[0-9a-f]+/bioc:[0-9a-f]+"),
+                "content fingerprint must be the bsc:<hex>/bioc:<hex> pair, got: " + fp);
+    }
+
+    @Test
+    void contentFingerprintIgnoresOrder() {
+        assertEquals(
+                RegistryFingerprint.contentOf(List.of("state1", "state2"), List.of("a", "b")),
+                RegistryFingerprint.contentOf(List.of("state2", "state1"), List.of("b", "a")),
+                "a pure permutation (per-boot shuffled registration) must hash identically"
+                        + " — this is the whole permutation-tolerance proof");
+    }
+
+    @Test
+    void contentFingerprintSeesRealContentChanges() {
+        String base = RegistryFingerprint.contentOf(List.of("modA:ore"), List.of("bio"));
+        assertNotEquals(base,
+                RegistryFingerprint.contentOf(List.of("modB:ore"), List.of("bio")),
+                "an identity change must flip the block half");
+        assertNotEquals(base,
+                RegistryFingerprint.contentOf(List.of("modA:ore"), List.of("bio2")),
+                "a biome change must flip the biome half");
+        assertNotEquals(base,
+                RegistryFingerprint.contentOf(List.of("modA:ore", "modA:ore2"), List.of("bio")),
+                "an added identity must flip it — never a bare count");
+    }
+
+    @Test
+    void orderedAndContentFingerprintsAreUnconfusable() {
+        var states = List.of("s1", "s2");
+        var biomes = List.of("bio");
+        assertNotEquals(RegistryFingerprint.of(states, biomes),
+                RegistryFingerprint.contentOf(states, biomes),
+                "the bsc/bioc prefixes keep the two hash kinds apart even on sorted input");
+    }
 }

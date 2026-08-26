@@ -28,9 +28,13 @@ class PaperStoreEnvironmentContractTest {
         String source = Files.readString(serviceSource());
         var call = Pattern.compile(
                 "new dev\\.vox\\.lss\\.common\\.store\\.SqliteLodStore\\.Environment\\("
-                        + "[^;]*storeRegistryFingerprint\\(server\\)\\)",
+                        + "[^;]*storeRegistryFingerprint\\(server\\),\\s*"
+                        + "storeRegistryContentFingerprint\\(server\\)\\)",
                 Pattern.DOTALL);
         assertTrue(call.matcher(source).find(),
-                "the production Environment must be built WITH storeRegistryFingerprint");
+                "the production Environment must be built WITH storeRegistryFingerprint"
+                        + " AND storeRegistryContentFingerprint (dropping either"
+                        + " compiles — the ctors default them to \"\" — and disables"
+                        + " the registry guard / the permutation tolerance)");
     }
 }

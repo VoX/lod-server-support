@@ -39,16 +39,21 @@ final class PaperXrayMaskFilter {
         private final boolean[] hiddenByStateId;
         private final int maxBlockHeight;
         private final int resolvedBlocks;
+        private final long fingerprint;
 
-        private MaskSet(boolean[] hiddenByStateId, int maxBlockHeight, int resolvedBlocks) {
+        private MaskSet(boolean[] hiddenByStateId, int maxBlockHeight, int resolvedBlocks,
+                        java.util.Collection<String> hiddenIdentities) {
             this.hiddenByStateId = hiddenByStateId;
             this.maxBlockHeight = maxBlockHeight;
             this.resolvedBlocks = resolvedBlocks;
+            this.fingerprint = dev.vox.lss.common.XrayMaskPolicy
+                    .maskContentFingerprint(hiddenIdentities, maxBlockHeight);
         }
 
         /** Resolves block ids (bare or namespaced) to ALL their states. Unknown ids warn + skip. */
         static MaskSet resolve(Collection<String> blockIds, int maxBlockHeight) {
             boolean[] hidden = new boolean[Block.BLOCK_STATE_REGISTRY.size()];
+            var identities = new java.util.ArrayList<String>();
             int resolved = 0;
             for (String id : blockIds) {
                 if (id == null || id.isBlank()) {
@@ -73,11 +78,14 @@ final class PaperXrayMaskFilter {
                 }
                 for (BlockState state : block.getStateDefinition().getPossibleStates()) {
                     int sid = Block.BLOCK_STATE_REGISTRY.getId(state);
-                    if (sid >= 0 && sid < hidden.length) hidden[sid] = true;
+                    if (sid >= 0 && sid < hidden.length && !hidden[sid]) {
+                        hidden[sid] = true;
+                        identities.add(String.valueOf(state));
+                    }
                 }
                 resolved++;
             }
-            return new MaskSet(hidden, maxBlockHeight, resolved);
+            return new MaskSet(hidden, maxBlockHeight, resolved, identities);
         }
 
         /** Engine-adoption factory: the detected anti-xray engine's own hidden STATES
@@ -85,16 +93,18 @@ final class PaperXrayMaskFilter {
          *  dropped for the same never-air invariant as the id path. */
         static MaskSet fromStates(Collection<BlockState> states, int maxBlockHeight) {
             boolean[] hidden = new boolean[Block.BLOCK_STATE_REGISTRY.size()];
+            var identities = new java.util.ArrayList<String>();
             int resolved = 0;
             for (BlockState state : states) {
                 if (state == null || state.isAir()) continue;
                 int sid = Block.BLOCK_STATE_REGISTRY.getId(state);
                 if (sid >= 0 && sid < hidden.length && !hidden[sid]) {
                     hidden[sid] = true;
+                    identities.add(String.valueOf(state));
                     resolved++;
                 }
             }
-            return new MaskSet(hidden, maxBlockHeight, resolved);
+            return new MaskSet(hidden, maxBlockHeight, resolved, identities);
         }
 
         boolean contains(BlockState state) {
@@ -118,20 +128,16 @@ final class PaperXrayMaskFilter {
             return this.maxBlockHeight;
         }
 
-        /** Stable fingerprint of the mask SEMANTICS (hidden-state-id bits + cutoff) —
-         *  the LOD store's per-dimension staleness key (plan §1: deposited bytes are
-         *  post-mask; a mask change must drop the dimension's rows). Registry-order
-         *  drift across mod-set changes shifts state ids and therefore the fingerprint
-         *  — a conservative drop, never a stale serve. */
+        /** Stable fingerprint of the mask SEMANTICS (hidden-state IDENTITIES + cutoff)
+         *  — the LOD store's per-dimension staleness key (plan §1: deposited bytes are
+         *  post-mask; a mask change must drop the dimension's rows). Computed at
+         *  construction via {@code XrayMaskPolicy.maskContentFingerprint} over sorted
+         *  identity strings: permutation-STABLE (v0.13.1 — the old id-indexed array
+         *  hash flipped on every VisualWorkbench-class registry shuffle and re-dropped
+         *  every masked dimension each boot), while any real semantic change still
+         *  flips it. */
         long fingerprint() {
-            long hash = 0xcbf29ce484222325L;
-            for (boolean b : this.hiddenByStateId) {
-                hash ^= b ? 1 : 0;
-                hash *= 0x100000001b3L;
-            }
-            hash ^= this.maxBlockHeight;
-            hash *= 0x100000001b3L;
-            return hash;
+            return this.fingerprint;
         }
     }
 

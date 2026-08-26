@@ -296,6 +296,171 @@ class SqliteLodStoreTest {
         shifted.shutdown();
     }
 
+    // ---- v0.13.1 registry-permutation tolerance (store-registry-permutation-plan.md §3.3) ----
+
+    private SqliteLodStore.Environment fpEnv(String ordered, String content) {
+        return new SqliteLodStore.Environment(storeDir(), "26.2-test", WIRE,
+                this::regionDir, d -> "", 0, Long.MAX_VALUE, ordered, content);
+    }
+
+    /** Raw statements against the closed store's DB (meta/row surgery between opens). */
+    private void rawSql(String... statements) throws Exception {
+        var ds = new org.sqlite.SQLiteDataSource();
+        ds.setUrl("jdbc:sqlite:" + storeDir().resolve("store.db"));
+        try (Connection c = ds.getConnection(); Statement st = c.createStatement()) {
+            st.execute("PRAGMA busy_timeout=3000");
+            for (String s : statements) st.executeUpdate(s);
+        }
+    }
+
+    private String readMetaValue(String key) throws Exception {
+        var ds = new org.sqlite.SQLiteDataSource();
+        ds.setUrl("jdbc:sqlite:" + storeDir().resolve("store.db"));
+        try (Connection c = ds.getConnection(); Statement st = c.createStatement()) {
+            st.execute("PRAGMA busy_timeout=3000");
+            try (ResultSet rs = st.executeQuery(
+                    "SELECT v FROM meta WHERE k='" + key + "'")) {
+                return rs.next() ? rs.getString(1) : null;
+            }
+        }
+    }
+
+    private int dimId(String dim) throws Exception {
+        var ds = new org.sqlite.SQLiteDataSource();
+        ds.setUrl("jdbc:sqlite:" + storeDir().resolve("store.db"));
+        try (Connection c = ds.getConnection(); Statement st = c.createStatement()) {
+            st.execute("PRAGMA busy_timeout=3000");
+            try (ResultSet rs = st.executeQuery(
+                    "SELECT id FROM dims WHERE name='" + dim + "'")) {
+                assertTrue(rs.next(), "dim row for " + dim);
+                return rs.getInt(1);
+            }
+        }
+    }
+
+    /** A shut-down store carrying one served row under the given fingerprints. */
+    private long seedFingerprintedStore(String ordered, String content) throws Exception {
+        long p = PositionUtil.packPosition(0, 2);
+        writeRegion(OW, 0, 0, Map.of(p, (int) (nowSec() - 1000)));
+        SqliteLodStore store = open(fpEnv(ordered, content));
+        store.deposit(OW, p, bytes(7, 400), 100);
+        assertNotNull(awaitHit(store, OW, p));
+        store.shutdown();
+        return p;
+    }
+
+    @Test
+    void pureRegistryPermutationKeepsAV20OnlyStore() throws Exception {
+        long p = seedFingerprintedStore("bs:1000/bio:aa", "bsc:cc/bioc:aa");
+
+        // A per-boot id permutation (VisualWorkbench-class dynamic registration)
+        // flips the ORDERED fingerprint while the content fingerprint (sorted
+        // identities) stays fixed; every deposit is wirefmt=20 (identity-addressed),
+        // so the store must survive instead of rebuilding on every restart.
+        SqliteLodStore permuted = open(fpEnv("bs:1002/bio:aa", "bsc:cc/bioc:aa"));
+        assertNotNull(permuted.get(OW, p), "v20 rows must survive a pure permutation");
+        assertEquals(0, permuted.diagnostics().getErrors(), "the keep is not an error");
+        permuted.shutdown();
+
+        // The KEEP refreshed the meta to THIS boot's ordered value...
+        assertEquals("bs:1002/bio:aa", readMetaValue("registry_fingerprint"));
+        // ...so a third boot back at the FIRST ordering is just another permutation.
+        SqliteLodStore third = open(fpEnv("bs:1000/bio:aa", "bsc:cc/bioc:aa"));
+        assertNotNull(third.get(OW, p), "every later permutation keeps the store too");
+        third.shutdown();
+    }
+
+    @Test
+    void permutationWithPendingLegacyRowsStillDrops() throws Exception {
+        long p = seedFingerprintedStore("bs:1000/bio:aa", "bsc:cc/bioc:aa");
+        // Recreate the mid-migration state: rows tagged wirefmt=19 exist ONLY while
+        // the lazy 3→4 walk is pending, and the walk's meta marker is the ladder's
+        // O(1) legacy-row proxy (plan §3.3 — a per-dim WHERE wirefmt=19 probe would
+        // walk blob-leaf b-trees on the server thread every boot).
+        rawSql("UPDATE lods_" + dimId(OW) + " SET wirefmt=19",
+                "INSERT OR REPLACE INTO meta (k, v) VALUES ('migrate_pending','1'),"
+                        + " ('migrate_total','1'), ('migrate_done','0')");
+
+        SqliteLodStore permuted = open(fpEnv("bs:1002/bio:aa", "bsc:cc/bioc:aa"));
+        assertNull(permuted.get(OW, p),
+                "legacy native-id rows embed the permuted ids — the store must rebuild");
+        assertEquals(0, permuted.diagnostics().getErrors(), "drop-and-rebuild is not an error");
+        permuted.shutdown();
+    }
+
+    @Test
+    void registryContentDriftDropsRegardlessOfV20Rows() throws Exception {
+        long p = seedFingerprintedStore("bs:1000/bio:aa", "bsc:cc/bioc:aa");
+        // The identity SET changed (a real mod change): never tolerated.
+        SqliteLodStore drifted = open(fpEnv("bs:1002/bio:aa", "bsc:dd/bioc:aa"));
+        assertNull(drifted.get(OW, p),
+                "content drift must rebuild — only pure permutations are kept");
+        drifted.shutdown();
+    }
+
+    @Test
+    void preContentKeyStoreWithMatchingOrderAdoptsTheKeyWithoutDropping() throws Exception {
+        long p = seedFingerprintedStore("bs:1000/bio:aa", "bsc:cc/bioc:aa");
+        // Shape of a released pre-0.13.1 store: no content key at all.
+        rawSql("DELETE FROM meta WHERE k='registry_content_fingerprint'");
+
+        SqliteLodStore adopted = open(fpEnv("bs:1000/bio:aa", "bsc:cc/bioc:aa"));
+        assertNotNull(adopted.get(OW, p),
+                "a matching ordered fingerprint keeps the store — adoption never drops");
+        adopted.shutdown();
+        assertEquals("bsc:cc/bioc:aa", readMetaValue("registry_content_fingerprint"),
+                "the reopen must top up the content key so the NEXT permutation is provable");
+    }
+
+    @Test
+    void preContentKeyStoreUnderPermutationDropsOnceAsUnprovable() throws Exception {
+        long p = seedFingerprintedStore("bs:1000/bio:aa", "bsc:cc/bioc:aa");
+        rawSql("DELETE FROM meta WHERE k='registry_content_fingerprint'");
+
+        // Ordered mismatch with no stored content proof: exactly one final rebuild.
+        SqliteLodStore rebuilt = open(fpEnv("bs:1002/bio:aa", "bsc:cc/bioc:aa"));
+        assertNull(rebuilt.get(OW, p), "an unprovable permutation must rebuild");
+        rebuilt.deposit(OW, p, bytes(8, 400), 200);
+        assertNotNull(awaitHit(rebuilt, OW, p), "rebuilt store must accept deposits");
+        rebuilt.shutdown();
+
+        // The rebuild wrote the content key, so the NEXT permutation is provable.
+        SqliteLodStore kept = open(fpEnv("bs:1004/bio:aa", "bsc:cc/bioc:aa"));
+        assertNotNull(kept.get(OW, p), "after the one rebuild, permutations are tolerated");
+        kept.shutdown();
+    }
+
+    @Test
+    void emptyStoredContentFingerprintCannotProveAPermutation() throws Exception {
+        // A fresh store created by an OLD-shape caller writes content="" — a later
+        // boot supplying a real content fingerprint must still treat the permutation
+        // as unprovable ("" is not evidence; the plan review's MAJOR-1 guard).
+        long p = PositionUtil.packPosition(0, 2);
+        writeRegion(OW, 0, 0, Map.of(p, (int) (nowSec() - 1000)));
+        SqliteLodStore store = open(new SqliteLodStore.Environment(storeDir(), "26.2-test",
+                WIRE, this::regionDir, d -> "", 0, Long.MAX_VALUE, "bs:1000/bio:aa"));
+        store.deposit(OW, p, bytes(7, 400), 100);
+        assertNotNull(awaitHit(store, OW, p));
+        store.shutdown();
+
+        SqliteLodStore reopened = open(fpEnv("bs:1002/bio:aa", "bsc:cc/bioc:aa"));
+        assertNull(reopened.get(OW, p), "\"\" stored content is unprovable, never a match");
+        reopened.shutdown();
+    }
+
+    @Test
+    void coreKeyDriftDropsEvenWithMatchingContentFingerprint() throws Exception {
+        long p = seedFingerprintedStore("bs:1000/bio:aa", "bsc:cc/bioc:aa");
+        // Permutation tolerance never leaks past the core gate: same content, same
+        // order even — a different MC version still rebuilds.
+        SqliteLodStore bumped = open(new SqliteLodStore.Environment(storeDir(), "26.3-test",
+                WIRE, this::regionDir, d -> "", 0, Long.MAX_VALUE,
+                "bs:1000/bio:aa", "bsc:cc/bioc:aa"));
+        assertNull(bumped.get(OW, p),
+                "mc_version drift must rebuild regardless of fingerprints");
+        bumped.shutdown();
+    }
+
     /** The v3->v4 bump (R4: chash/fhash FNV-1a -> CRC32C): a store stamped with the
      *  PREVIOUS schema version must drop-and-rebuild exactly once — old rows' hashes
      *  would fail every validation under the new function. metaMatches is an equality
