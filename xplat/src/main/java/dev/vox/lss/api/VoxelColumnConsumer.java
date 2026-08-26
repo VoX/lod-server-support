@@ -31,6 +31,15 @@ public interface VoxelColumnConsumer {
      * decode queue, exactly as before this method existed. Any negative value means
      * "no signal"; 0 is a real report meaning "empty".
      *
+     * <p><b>Sanctioned divergence:</b> a consumer whose capacity is not naturally
+     * section-denominated may report a GOVERNOR SIGNAL scaled into this domain —
+     * a bounded-queue consumer maps its fill fraction onto {@code [0, HALT]} so
+     * that "queue effectively full" reports the halt threshold (the first-party
+     * Xaero map bridge does exactly this; hybrid-scan-plan.md §12.2). The
+     * aggregator takes the max across consumers, so scaled and literal reports
+     * compose: whichever consumer is proportionally closest to its own limit
+     * governs.
+     *
      * <p><b>Threading — note this differs from {@link #onVoxelColumnReceived}:</b> polled
      * from the MAIN CLIENT THREAD, up to 20 times per second. Implementations must be
      * fast, non-blocking, and thread-safe — return a cached or atomic gauge (a queue

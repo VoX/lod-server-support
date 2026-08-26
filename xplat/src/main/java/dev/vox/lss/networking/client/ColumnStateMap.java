@@ -108,9 +108,10 @@ class ColumnStateMap {
     // failing consumer would otherwise drive forever (see onIngestFailed).
     private final Long2IntOpenHashMap ingestFailures = new Long2IntOpenHashMap();
     /** Positions parked at {@link #MAX_INGEST_FAILURES} this session — the definitive
-     *  "this hole is now permanent" signal (the §18 Xaero heal's success criterion:
-     *  a completed heal and a total failure are otherwise indistinguishable from the
-     *  report/failure counters alone). */
+     *  "this hole is now permanent" signal. Provenance-free: ANY failure source
+     *  (a consumer rejection, a decode drop, a §12 bridge drop report) counts
+     *  toward the cap — a nonzero value says the re-serve belt exhausted
+     *  somewhere, not which consumer drove it. */
     private long ingestParked;
 
     long ingestParkedCount() {
@@ -301,9 +302,53 @@ class ColumnStateMap {
         return true;
     }
 
+    /**
+     * The hybrid walk's residue probe (hybrid-scan-plan.md §2.1): true when every
+     * leaf INTERSECTING the chunk rectangle [x0..x1]×[z0..z1] has a clear needs
+     * mask. Same conservative partial-leaf convention as {@link #ringNeedsFree}:
+     * a leaf straddling the rectangle with needs anywhere — even outside the
+     * rectangle — returns false (a needless emit pass, never a wrong skip; the
+     * emit pass's own bounds are the clamp), and an ABSENT leaf is all-needs.
+     * (This retired {@code regionNeedsFree} — the hybrid residue bounds already
+     * carry the lod clamp that method computed itself.)
+     */
+    boolean rectNeedsFree(int x0, int z0, int x1, int z1) {
+        int sx0 = x0 >> 3, sx1 = x1 >> 3;
+        int sz0 = z0 >> 3, sz1 = z1 >> 3;
+        for (int sx = sx0; sx <= sx1; sx++) {
+            for (int sz = sz0; sz <= sz1; sz++) {
+                if (leafHasNeeds(sx, sz)) return false;
+            }
+        }
+        return true;
+    }
+
     private boolean leafHasNeeds(int sx, int sz) {
         Leaf leaf = this.leaves.get(PositionUtil.packPosition(sx, sz));
         return leaf == null || leaf.needs != 0;
+    }
+
+    /**
+     * The region walk's audit rung (region-scan-plan.md §2.2, v1.1 A-6): re-derive the
+     * needs mask of every present leaf in the region and report how many CHANGED — a
+     * nonzero return means a mutation path forgot {@code recomputeNeeds} (the
+     * stranded-forever class the region walk, unlike the legacy per-position walk,
+     * cannot heal incidentally). Healing IS the recompute; the caller counts.
+     */
+    int auditRegionNeeds(int rx, int rz) {
+        int healed = 0;
+        int baseLeafX = rx << 2;
+        int baseLeafZ = rz << 2;
+        for (int lx = 0; lx < 4; lx++) {
+            for (int lz = 0; lz < 4; lz++) {
+                Leaf leaf = this.leaves.get(PositionUtil.packPosition(baseLeafX + lx, baseLeafZ + lz));
+                if (leaf == null) continue;
+                long before = leaf.needs;
+                leaf.recomputeNeeds();
+                if (leaf.needs != before) healed++;
+            }
+        }
+        return healed;
     }
 
     /** One tile's validation outcome (region-summary-sync-plan.md §6): how many stamps
@@ -456,6 +501,14 @@ class ColumnStateMap {
         Leaf leaf = leafFor(packed);
         if (leaf == null) return true;
         return (leaf.needs & (1L << bitIndexFor(packed))) != 0;
+    }
+
+    /** Test seam: force the position's needs bit OFF against its true state — the
+     *  stranded-orphan corruption the region walk's audit rung exists to heal
+     *  (region-scan-plan.md §2.2 v1.1 A-6). Creates the leaf if absent. Tests only. */
+    void corruptNeedsBitForTest(long packed) {
+        Leaf leaf = leafForCreate(packed);
+        leaf.needs &= ~(1L << bitIndexFor(packed));
     }
 
     void markSessionSatisfied(long packed) {
@@ -635,10 +688,11 @@ class ColumnStateMap {
         leaf.recomputeNeeds();
     }
 
-    /** Re-serve attempts allowed per position per session before parking it. Note
-     *  (§18.1): under the Xaero dropped-tile heal, {@code ingestFailures} can reach
-     *  disc scale (~150k entries ≈ 3 MB) in a heavy far-radius session — bounded by
-     *  the disc, no longer only by rare failures. */
+    /** Re-serve attempts allowed per position per session before parking it. Under
+     *  §12 backpressure (hybrid-scan-plan.md) drop reports are structurally rare
+     *  (the taper prevents the drops), so this map stays small again; it remains
+     *  the belt that bounds any report loop (defer-expiry churn, a permanently
+     *  rejecting consumer) at ~3 re-serves per position. */
     static final int MAX_INGEST_FAILURES = 3;
 
     /**
