@@ -1,6 +1,6 @@
 # Hybrid scan: ring-major near, region-major far (v3.2 — §12.8/§12.9 supersede the §12 -1-on-blocked/refusal doctrine)
 
-**Status: PLANNED, NOT EXECUTED** (user directive 2026-08-24: write + review only).
+**Status: EXECUTED on main (as-built §12.6-§12.9, §13-§13.1) and PORTED to this line 2026-08-26 (v0.13.0 round)** — the header below is the original planning framing.
 Follow-up to `region-scan-plan.md` (§14/§14.1 = the region round's as-built + review
 records). **v2 folds the 4-agent plan review** (3 Opus: design/geometry,
 cadence+server+boundary, tests+consistency; 1 Fable: holistic/premise — §11 is the
