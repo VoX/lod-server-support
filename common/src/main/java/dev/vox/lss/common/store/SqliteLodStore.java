@@ -169,7 +169,21 @@ public final class SqliteLodStore implements LodStoreService {
                               Function<String, Path> regionDirResolver,
                               Function<String, String> maskFingerprintResolver,
                               int resweepSeconds, long maxDbBytes,
-                              String registryFingerprint) {
+                              String registryFingerprint,
+                              String registryContentFingerprint) {
+
+        /** Pre-content-fingerprint shape (v0.13.1 permutation plan §3.2): an empty
+         *  content fingerprint makes a permutation UNPROVABLE — the ladder drops,
+         *  never vacuously matches ("" == "" was the plan review's MAJOR-1). */
+        public Environment(Path storeDir, String mcVersion, int wireVersion,
+                           Function<String, Path> regionDirResolver,
+                           Function<String, String> maskFingerprintResolver,
+                           int resweepSeconds, long maxDbBytes,
+                           String registryFingerprint) {
+            this(storeDir, mcVersion, wireVersion, regionDirResolver,
+                    maskFingerprintResolver, resweepSeconds, maxDbBytes,
+                    registryFingerprint, "");
+        }
 
         /** Pre-registry-fingerprint shape (tests without a platform registry). */
         public Environment(Path storeDir, String mcVersion, int wireVersion,
@@ -338,13 +352,33 @@ public final class SqliteLodStore implements LodStoreService {
         try {
             openWriter();
             maybeLazyUpgradeFromV19();
-            if (!metaMatches()) {
-                LSSLogger.info("LOD store: schema/wire/version drift — dropping and"
-                        + " rebuilding the store (derived data, never migrated)");
-                closeWriter();
-                deleteDbFiles();
-                openWriter();
-                writeMeta();
+            MetaVerdict verdict = evaluateMeta();
+            switch (verdict.kind()) {
+                case OPEN -> { }
+                case REFRESH ->
+                    // Same registry (ordered compare passed) — the meta is merely
+                    // missing/behind on the order-insensitive key (a pre-0.13.1
+                    // store): top it up in place, no drop. INSERT OR REPLACE leaves
+                    // the migrate_* bookkeeping untouched.
+                    writeMeta();
+                case KEEP_PERMUTED -> {
+                    LSSLogger.info("LOD store: registry ids permuted (same content) —"
+                            + " store kept (v20 rows are identity-addressed): "
+                            + keptRowsSummary());
+                    // Refresh BOTH registry keys to this boot's values, committed
+                    // before the batcher exists / any serve. A crash before the
+                    // commit re-decides identically next boot — the content compare
+                    // is order-insensitive.
+                    writeMeta();
+                }
+                case DROP -> {
+                    LSSLogger.info("LOD store: " + verdict.detail() + " — dropping and"
+                            + " rebuilding the store (derived data, never migrated)");
+                    closeWriter();
+                    deleteDbFiles();
+                    openWriter();
+                    writeMeta();
+                }
             }
         } catch (Exception first) {
             // Any failure here (corrupt DB, bad page) → drop and rebuild once.
@@ -468,23 +502,101 @@ public final class SqliteLodStore implements LodStoreService {
         return false;
     }
 
-    private boolean metaMatches() throws SQLException {
+    /** The open-time meta verdict (store-registry-permutation-plan.md §3.3). */
+    private record MetaVerdict(Kind kind, String detail) {
+        enum Kind { OPEN, REFRESH, KEEP_PERMUTED, DROP }
+
+        static MetaVerdict drop(String detail) {
+            return new MetaVerdict(Kind.DROP, detail);
+        }
+    }
+
+    private MetaVerdict evaluateMeta() throws SQLException {
         Map<String, String> meta = readMetaMap();
-        return String.valueOf(SCHEMA_VERSION).equals(meta.get("schema_version"))
-                // The structural guard (C4): a dev-window store with this schema+wire
-                // but no wirefmt column carries no store_layout key → drop-and-rebuild.
-                && STORE_LAYOUT.equals(meta.get("store_layout"))
-                && String.valueOf(this.env.wireVersion()).equals(meta.get("wire_format_version"))
-                && this.env.mcVersion().equals(meta.get("mc_version"))
-                && StoreCodec.NAME.equals(meta.get("codec"))
-                // Registry drift (4-agent round R2-M3): stored wire bytes embed GLOBAL
-                // block-state/biome registry ids, which are assignment-order dependent —
-                // a mod or datapack change shifts them while region files stay
-                // untouched, so no freshness rule fires and every warm column would
-                // decode as wrong blocks/biomes on the (registry-synced) client. The
-                // platform-supplied fingerprint makes that a drop-and-rebuild. A
-                // pre-fingerprint store has no key (null) and rebuilds once.
-                && this.env.registryFingerprint().equals(meta.get("registry_fingerprint"));
+        // Core identity keys — never relaxed, and named in the drop line (the old
+        // one-size message sent every report down the wrong path). store_layout is
+        // the C4 structural guard: a dev-window store with this schema+wire but no
+        // wirefmt column carries no store_layout key → drop-and-rebuild.
+        var core = new java.util.LinkedHashMap<String, String>();
+        core.put("schema_version", String.valueOf(SCHEMA_VERSION));
+        core.put("store_layout", STORE_LAYOUT);
+        core.put("wire_format_version", String.valueOf(this.env.wireVersion()));
+        core.put("mc_version", this.env.mcVersion());
+        core.put("codec", StoreCodec.NAME);
+        var drifted = new java.util.ArrayList<String>();
+        for (var e : core.entrySet()) {
+            if (!e.getValue().equals(meta.get(e.getKey()))) drifted.add(e.getKey());
+        }
+        if (!drifted.isEmpty()) {
+            // Neutral wording — a version bump is not registry drift.
+            return MetaVerdict.drop("store metadata drift " + drifted);
+        }
+        // Registry drift (4-agent round R2-M3): stored wire-v19 bytes embed GLOBAL
+        // block-state/biome registry ids, which are assignment-order dependent — a
+        // mod or datapack change shifts them while region files stay untouched, so
+        // no freshness rule fires and every warm column would decode as wrong
+        // blocks/biomes on the (registry-synced) client.
+        String storedOrdered = meta.get("registry_fingerprint");
+        if (storedOrdered == null) {
+            return MetaVerdict.drop("pre-fingerprint store");
+        }
+        String storedContent = meta.get("registry_content_fingerprint");
+        String envContent = this.env.registryContentFingerprint();
+        if (this.env.registryFingerprint().equals(storedOrdered)) {
+            // Registry unchanged. Top up / advance the order-insensitive key when
+            // the platform supplied one; an EMPTY env value is an old-shape caller —
+            // leave the meta alone rather than write a junk key.
+            boolean topUp = !envContent.isEmpty() && !envContent.equals(storedContent);
+            return new MetaVerdict(topUp ? MetaVerdict.Kind.REFRESH
+                    : MetaVerdict.Kind.OPEN, "");
+        }
+        // Ordered mismatch. A pure permutation (identical identity SET, shuffled
+        // global ids — VisualWorkbench-class per-boot dynamic registration) is
+        // harmless to wire-v20 rows (identity-dictionary addressed, no global ids)
+        // but only PROVABLY so: both sides must carry a real content fingerprint
+        // ("" == "" is a vacuous match — the plan review's MAJOR-1 guard), the two
+        // must agree, and no wirefmt=19 row may exist (legacy bytes embed the
+        // permuted ids and translate via the CURRENT boot's registries).
+        if (envContent.isEmpty() || storedContent == null || storedContent.isEmpty()) {
+            return MetaVerdict.drop(
+                    "registry drift (permutation unprovable — no content fingerprint)");
+        }
+        if (!envContent.equals(storedContent)) {
+            return MetaVerdict.drop("registry content drift");
+        }
+        if (legacyRowsPossible(meta)) {
+            return MetaVerdict.drop(
+                    "registry ids permuted with legacy (wirefmt=19) rows present");
+        }
+        return new MetaVerdict(MetaVerdict.Kind.KEEP_PERMUTED, "");
+    }
+
+    /** O(1) proxy for "any wirefmt=19 row exists" (plan §3.3 — the naive per-dim
+     *  {@code WHERE wirefmt=19 LIMIT 1} walks blob-leaf b-trees on the server thread,
+     *  every boot, on exactly the permuting-registry servers this path serves):
+     *  19-rows are produced ONLY by the lazy 3→4 upgrade, which sets
+     *  {@code migrate_pending=1} in the same transaction; deposits always stamp 20;
+     *  the key is deleted only by {@code finishMigration} after the walk exhausts
+     *  every dimension. Pending-but-actually-complete answers true → drop, the safe
+     *  direction for derived data. */
+    private static boolean legacyRowsPossible(Map<String, String> meta) {
+        return "1".equals(meta.get("migrate_pending"));
+    }
+
+    /** Row/dim counts for the permutation-KEEP line (the §6 live gate greps them).
+     *  {@code count(*)} rides the smallest index ({@code lods_<id>_ts}) — it never
+     *  touches the blob leaves. */
+    private String keptRowsSummary() throws SQLException {
+        long rows = 0;
+        try (Statement st = this.writer.createStatement()) {
+            for (int dimId : this.dimIds.values()) {
+                try (ResultSet rs = st.executeQuery("SELECT count(*) FROM lods_" + dimId)) {
+                    rs.next();
+                    rows += rs.getLong(1);
+                }
+            }
+        }
+        return rows + " row(s) across " + this.dimIds.size() + " dimension(s)";
     }
 
     private void writeMeta() throws SQLException {
@@ -500,7 +612,13 @@ public final class SqliteLodStore implements LodStoreService {
                     // NO wirefmt column) would otherwise open "valid" and latch dead at
                     // WRITE_FAILURE_LATCH on the first wirefmt INSERT.
                     "store_layout", STORE_LAYOUT,
-                    "registry_fingerprint", this.env.registryFingerprint()).entrySet()) {
+                    "registry_fingerprint", this.env.registryFingerprint(),
+                    // Order-insensitive twin (v0.13.1 permutation plan §3.1): the
+                    // proof that an ordered mismatch is a pure permutation. Written
+                    // even when the caller supplied "" (old-shape ctor) — the ladder
+                    // treats empty on EITHER side as unprovable, never as a match.
+                    "registry_content_fingerprint",
+                    this.env.registryContentFingerprint()).entrySet()) {
                 ps.setString(1, e.getKey());
                 ps.setString(2, e.getValue());
                 ps.executeUpdate();
