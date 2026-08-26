@@ -18,11 +18,11 @@ Clients use the Fabric mod on every version; on 1.21.1 a NeoForge client works a
 | 1.21.10 | ✅ | ✅ | - | - |
 | 1.21.1 | ✅ | ✅ | - | ✅ |
 
-On 1.21.10 there is no Folia build upstream. The in-game options page renders through Sodium 0.7.x's own settings screen from v0.12.1 (earlier 1.21.10 builds had no page) — every setting also remains in the JSON config files.
+On 1.21.10 there is no Folia build upstream. The in-game options page renders through Sodium 0.7.x's own settings screen from v0.13.0 (earlier 1.21.10 builds had no page) — every setting also remains in the JSON config files.
 
 On NeoForge (1.21.1) the recommended client path is the community [Voxy NeoForge port](https://github.com/j-shelfwood/voxy-neoforge) with [Forgified Fabric API](https://modrinth.com/mod/forgified-fabric-api) in place of Fabric API. Tested working with Forgified Fabric API 0.116.15, Sodium 0.6.13, and Voxy NeoForge port 0.2.9-alpha.
 
-The in-game settings page (Sodium's Video Settings → the LSS entry or tabs; on Fabric also ModMenu's Configure button) renders on both Sodium generations from v0.12.1: on Sodium 0.8+ it appears under LSS's own entry in the settings screen; on Sodium 0.6/0.7 (MC ≤1.21.10 and the 1.21.1 Voxy-fork pairing) it appears as LSS tabs beside Sodium's own. On NeoForge only the 0.6/0.7 tabs exist so far (without the far-player render options, which NeoForge does not render yet) — the 0.8.12/Connector path is configured through the JSON config files.
+The in-game settings page (Sodium's Video Settings → the LSS entry or tabs; on Fabric also ModMenu's Configure button) renders on both Sodium generations from v0.13.0: on Sodium 0.8+ it appears under LSS's own entry in the settings screen; on Sodium 0.6/0.7 (MC ≤1.21.10 and the 1.21.1 Voxy-fork pairing) it appears as LSS tabs beside Sodium's own. On NeoForge only the 0.6/0.7 tabs exist so far (without the far-player render options, which NeoForge does not render yet) — the 0.8.12/Connector path is configured through the JSON config files.
 
 Compatible with [AntiXray](https://modrinth.com/mod/anti-xray), [Moonrise](https://modrinth.com/mod/moonrise-opt), [C2ME](https://modrinth.com/mod/c2me-fabric), [ViaVersion](https://modrinth.com/plugin/viaversion)/[ViaBackwards](https://modrinth.com/plugin/viabackwards), and most other mods. Can be run alongside Distant Horizons on the same server to support DH clients and Voxy clients simultaneously. 
 
