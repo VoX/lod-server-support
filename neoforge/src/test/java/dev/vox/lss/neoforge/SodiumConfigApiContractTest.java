@@ -2,12 +2,11 @@ package dev.vox.lss.neoforge;
 
 import org.junit.jupiter.api.Test;
 
-import java.io.DataInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.List;
+import java.nio.file.Files;
+import java.nio.file.Path;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -15,13 +14,16 @@ import static org.junit.jupiter.api.Assertions.*;
  * Pins the Sodium 0.8+ options-page wiring on NeoForge (LSSConfigMenu's javadoc):
  * sodium-neoforge's ConfigLoaderForge discovers config users by reading the
  * {@code sodium:config_api_user} MODPROPERTY from neoforge.mods.toml and
- * reflectively instantiating the named class as a {@code ConfigEntryPoint}. Three
+ * reflectively instantiating the named class as a {@code ConfigEntryPoint}. Four
  * legs, each guarding a distinct silent-failure mode: a dropped TOML property
- * (page silently absent), a renamed walker class (ConfigLoaderForge crashes the
- * config harvest), and a walker that stops implementing the interface or loses
- * its no-arg constructor (instantiation fails at Sodium's feet). The stubs
+ * (page silently absent), a renamed walker class or one that stops implementing
+ * the interface / loses its no-arg constructor (Sodium warn-and-skips — no page,
+ * no crash), and a twin that stops WALKING THE CATALOG (hand-written options or a
+ * dropped visibility filter would drift from the Fabric page with every gate
+ * green — the fabric ClientMenuEntrypointContractTest twin leg). The stubs
  * themselves must never SHIP — release_check's NEOFORGE_FORBIDDEN pins
- * {@code net/caffeinemc/} out of the jars.
+ * {@code net/caffeinemc/} out of the jars — and their fidelity to the REAL
+ * sodium-neoforge artifact is {@link SodiumNeoGoldenParityTest}'s job.
  */
 class SodiumConfigApiContractTest {
 
@@ -46,17 +48,19 @@ class SodiumConfigApiContractTest {
         // The walker cannot be REFLECTED on here: any member access links the class,
         // and verification resolves the MC types (Component, ResourceLocation) its
         // method bodies reference — absent from this plain-JUnit classpath. So the
-        // two walker pins are read straight off the classfile (the repo's
-        // FoliaWiringContractTest pattern): the interfaces list and the ctor table
-        // need no linking and cannot drift from what ConfigLoaderForge will see.
-        ParsedClass walker = parse("/" + WALKER.replace('.', '/') + ".class");
+        // two walker pins are read straight off the classfile (ClassfileSurface):
+        // the interfaces list and the ctor table need no linking and cannot drift
+        // from what ConfigLoaderForge will see.
+        ClassfileSurface.Surface walker = parse("/" + WALKER.replace('.', '/') + ".class");
         assertTrue(walker.interfaces().contains(ENTRY_POINT_IFACE.replace('.', '/')),
                 "LSSConfigMenu must implement " + ENTRY_POINT_IFACE
                         + " (the stub mirrors the real interface; the runtime link is by name)");
         assertTrue(walker.methods().stream().anyMatch(m ->
                         m.name().equals("<init>") && m.descriptor().equals("()V")
-                                && (m.access() & 0x0001) != 0),
-                "ConfigLoaderForge instantiates reflectively — public no-arg ctor required");
+                                && (m.access() & ClassfileSurface.ACC_PUBLIC) != 0),
+                "a PUBLIC no-arg ctor — stricter than Sodium's getDeclaredConstructor+"
+                        + "setAccessible route strictly needs, kept strict so instantiation "
+                        + "never depends on setAccessible succeeding");
         // The stub interface must carry BOTH methods with the real shapes: the abstract
         // late hook (we implement it) and the default early hook (we inherit it). The
         // stubs reference only stub types, so reflection is safe on THEM.
@@ -67,60 +71,49 @@ class SodiumConfigApiContractTest {
                 .isDefault(), "registerConfigEarly stays a default method");
     }
 
-    private record ParsedMethod(int access, String name, String descriptor) {}
-    private record ParsedClass(List<String> interfaces, List<ParsedMethod> methods) {}
+    /**
+     * The fabric {@code ClientMenuEntrypointContractTest.theModernWalkerCarriesNoHandWrittenOptions}
+     * leg, twinned for the NeoForge walker source (that test is path-scoped to fabric/):
+     * the commit's whole premise is "catalog walk identical to Fabric's", so the twin must
+     * keep iterating the catalog, keep the MenuContext visibility filter, and carry no
+     * hand-written option keys or ids.
+     */
+    @Test
+    void theTwinKeepsWalkingTheCatalog() throws IOException {
+        String src = stripComments(Files.readString(
+                locate("neoforge/src/main/java/dev/vox/lss/config/LSSConfigMenu.java")));
+        assertTrue(src.contains("ClientOptionCatalog.pages()"), "the twin must iterate the catalog");
+        assertTrue(src.contains(".visibility().test("),
+                "the MenuContext visibility filter must stay — it is what hides the "
+                        + "far-player render options on NeoForge");
+        assertTrue(!src.contains("\"lss.config."),
+                "translation keys come from the catalog, never literals");
+        assertTrue(!src.replace("\"lss:icon.png\"", "").contains(".parse(\"lss:"),
+                "option ids come from the catalog (the icon fallback is the one literal)");
+    }
 
-    /** Minimal classfile read: constant pool, interface list, method table. */
-    private static ParsedClass parse(String resource) throws IOException {
+    private static ClassfileSurface.Surface parse(String resource) throws IOException {
         try (InputStream raw = SodiumConfigApiContractTest.class.getResourceAsStream(resource)) {
             assertNotNull(raw, resource + " on the test classpath");
-            var in = new DataInputStream(raw);
-            if (in.readInt() != 0xCAFEBABE) throw new IOException("not a class file: " + resource);
-            in.readInt(); // minor+major
-            int cpCount = in.readUnsignedShort();
-            String[] utf8 = new String[cpCount];
-            int[] classNameIdx = new int[cpCount];
-            for (int i = 1; i < cpCount; i++) {
-                int tag = in.readUnsignedByte();
-                switch (tag) {
-                    case 1 -> utf8[i] = in.readUTF();
-                    case 7 -> classNameIdx[i] = in.readUnsignedShort();
-                    case 8, 16, 19, 20 -> in.skipBytes(2);
-                    case 15 -> in.skipBytes(3);
-                    case 3, 4, 9, 10, 11, 12, 17, 18 -> in.skipBytes(4);
-                    case 5, 6 -> { in.skipBytes(8); i++; }
-                    default -> throw new IOException("unknown cp tag " + tag);
-                }
-            }
-            in.skipBytes(6); // access, this_class, super_class
-            int ifaceCount = in.readUnsignedShort();
-            var interfaces = new ArrayList<String>();
-            for (int i = 0; i < ifaceCount; i++) {
-                interfaces.add(utf8[classNameIdx[in.readUnsignedShort()]]);
-            }
-            int fieldCount = in.readUnsignedShort();
-            for (int i = 0; i < fieldCount; i++) {
-                in.skipBytes(6);
-                skipAttributes(in);
-            }
-            int methodCount = in.readUnsignedShort();
-            var methods = new ArrayList<ParsedMethod>();
-            for (int i = 0; i < methodCount; i++) {
-                int access = in.readUnsignedShort();
-                String name = utf8[in.readUnsignedShort()];
-                String descriptor = utf8[in.readUnsignedShort()];
-                skipAttributes(in);
-                methods.add(new ParsedMethod(access, name, descriptor));
-            }
-            return new ParsedClass(interfaces, methods);
+            return ClassfileSurface.parse(raw);
         }
     }
 
-    private static void skipAttributes(DataInputStream in) throws IOException {
-        int count = in.readUnsignedShort();
-        for (int i = 0; i < count; i++) {
-            in.skipBytes(2);
-            in.skipBytes(in.readInt());
+    /** Repo-root-relative locate: walk up from the working dir until the path exists. */
+    static Path locate(String repoRelative) {
+        Path dir = Path.of("").toAbsolutePath();
+        while (dir != null) {
+            Path candidate = dir.resolve(repoRelative);
+            if (Files.exists(candidate)) {
+                return candidate;
+            }
+            dir = dir.getParent();
         }
+        throw new AssertionError("cannot locate " + repoRelative
+                + " above " + Path.of("").toAbsolutePath());
+    }
+
+    static String stripComments(String src) {
+        return src.replaceAll("(?s)/\\*.*?\\*/", "").replaceAll("(?m)//.*$", "");
     }
 }

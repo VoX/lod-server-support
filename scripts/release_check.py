@@ -115,7 +115,7 @@ def _scan_forbidden(jar, base, prefixes, problems):
         leaked = [n for n in names if n.startswith(prefixes)]
         if leaked:
             where = base if label is None else f"{base}!{label}"
-            problems.append(f"{where}: ships dev-only code "
+            problems.append(f"{where}: ships forbidden entries "
                             f"({len(leaked)} entries, e.g. {leaked[0]})")
 
 
@@ -443,9 +443,12 @@ def check_neoforge_jar(jar, problems):
     # entrypoint-less jar with every other check green. Pin the wiring classes.
     for req in ("dev/vox/lss/neoforge/LSSNeoMod.class",
                 "dev/vox/lss/platform/NeoForgeLoaderServices.class",
-                "dev/vox/lss/platform/NeoForgeClientLoaderServices.class"):
+                "dev/vox/lss/platform/NeoForgeClientLoaderServices.class",
+                # the Sodium 0.8+ walker the TOML modproperties key names — its absence
+                # is the SILENT no-page failure (Sodium warn-and-skips a missing class)
+                "dev/vox/lss/config/LSSConfigMenu.class"):
         if req not in names:
-            problems.append(f"{base}: missing {req} — the NeoForge entrypoint/seam "
+            problems.append(f"{base}: missing {req} — the NeoForge entrypoint/seam/page "
                             "wiring was excluded from the shadow jar")
     if "META-INF/neoforge.mods.toml" not in names:
         problems.append(f"{base}: missing META-INF/neoforge.mods.toml")
@@ -490,10 +493,11 @@ def check_neoforge_jar(jar, problems):
 # NOT listed — their absence from the neoforge jar would be real drift).
 FABRIC_ONLY_CLASS_PREFIXES = (
     "dev/vox/lss/LSSMod", "dev/vox/lss/LSSClient",
-    # The 0.8+ Sodium config-API walker + the ModMenu switch stay fabric-only; the
-    # catalog, the probe, the legacy builder and RateSliderStops are shared/twinned
-    # (sodium-options-page-generations-plan.md §3) and ride the presence check.
-    "dev/vox/lss/config/LSSConfigMenu", "dev/vox/lss/config/LSSModMenuIntegration",
+    # The ModMenu switch stays fabric-only; the 0.8+ Sodium config-API walker is a
+    # same-FQN NeoForge TWIN since 2026-08-26 (modproperties discovery) and rides the
+    # presence check like the catalog, the probe, the legacy builder and RateSliderStops
+    # (sodium-options-page-generations-plan.md §3).
+    "dev/vox/lss/config/LSSModMenuIntegration",
     # The ModMenu "Configure" switch (fabric-only: NeoForge has no ModMenu; its
     # IConfigScreenFactory registration is the plan's Phase 4) — nested $1 rides the prefix.
     "dev/vox/lss/config/menu/SodiumConfigScreens",
@@ -1973,6 +1977,7 @@ def _selftest():
                 "dev/vox/lss/neoforge/LSSNeoMod.class": "x",
                 "dev/vox/lss/platform/NeoForgeLoaderServices.class": "x",
                 "dev/vox/lss/platform/NeoForgeClientLoaderServices.class": "x",
+                "dev/vox/lss/config/LSSConfigMenu.class": "x",
                 "dev/vox/lss/common/store/SqliteLodStore.class":
                     "ref org/sqlite/SQLiteDataSource ok",
                 "assets/lss/icon.png": "PNG",
@@ -2208,6 +2213,14 @@ def _selftest():
         discover(p, root=droot)
         check(any("benchmark" in m and "neoforge" in m for m in p),
               f"neoforge forbidden class not caught: {p}")
+
+        # a leaked compile-only Sodium stub must fail the forbidden scan (net/caffeinemc)
+        _write_tree_neoforge("lod-server-support-neoforge.jar", TOML_LSS, BRAND_LSS,
+                             extra={"net/caffeinemc/mods/sodium/api/config/ConfigEntryPoint.class": "x"})
+        p = []
+        discover(p, root=droot)
+        check(any("caffeinemc" in m and "neoforge" in m for m in p),
+              f"neoforge sodium-stub leak not caught: {p}")
 
         # a dropped mixin-config declaration must be caught (accessors silently dead)
         _write_tree_neoforge("lod-server-support-neoforge.jar",

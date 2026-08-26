@@ -22,6 +22,29 @@ tasks.withType(AbstractArchiveTask).configureEach {
 
 repositories {
     mavenCentral()
+    exclusiveContent {
+        forRepository {
+            maven {
+                name = "Modrinth"
+                url = "https://api.modrinth.com/maven"
+            }
+        }
+        filter {
+            includeGroup "maven.modrinth"
+        }
+    }
+}
+
+configurations {
+    // SodiumNeoGoldenParityTest's input: the REAL sodium-neoforge artifact for the
+    // line's pinned Sodium version — the compile-only net.caffeinemc stubs must stay
+    // a descriptor subset of it (the fabric module gets this pin for free from its
+    // modCompileOnly real jar; the stubs need an explicit golden).
+    sodiumNeoGolden {
+        canBeConsumed = false
+        canBeResolved = true
+        transitive = false
+    }
 }
 
 // The mods{} block below folds common's source set into the dev-run mod.
@@ -139,6 +162,8 @@ configurations.all {
 
 def sqliteJdbcVersion = '3.49.1.0'
 dependencies {
+    // the -fabric artifact id swapped for -neoforge: same version, the loader variant
+    sodiumNeoGolden "maven.modrinth:sodium:${project.sodium_version.replace('-fabric', '-neoforge')}"
     implementation project(':common')
     shade project(':common')
     implementation "org.xerial:sqlite-jdbc:${sqliteJdbcVersion}"
@@ -283,6 +308,16 @@ build.dependsOn shadowJar
 
 test {
     useJUnitPlatform()
+    // The golden resolves LENIENT at execution (the fabric test-block discipline):
+    // offline boxes yield nothing and the parity test skips with an assumption; under
+    // CI=true it FAILS instead — a mistyped coordinate must not void the golden arm.
+    def neoGolden = configurations.sodiumNeoGolden.incoming.artifactView { lenient = true }.files
+    inputs.property "sodium_version", project.sodium_version
+    inputs.files(neoGolden).optional()
+    doFirst {
+        systemProperty 'lss.sodiumNeoGoldenJar', neoGolden.find { it.name.endsWith('.jar') }?.absolutePath ?: ''
+        systemProperty 'lss.sodiumNeoGoldenExpected', 'true'
+    }
 }
 
 // ---- Voxy Server Side (VSS) branded variant (N-4; plan §0.5) --------------------------
