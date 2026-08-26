@@ -1146,7 +1146,7 @@ public class RequestProcessingService {
      * </ul>
      * Both sources list positions that may already be routed; a probe for an already-routed
      * position is simply unused by the router, and the cost is bounded by
-     * {@link #MAX_PROBES_PER_TICK_PER_PLAYER}, which the closest-first order spends on the
+     * {@link #MAX_PROBES_PER_TICK_PER_PLAYER}, which the declaration-order drain spends on the
      * head of the want-set. Positions whose payload sits in the send pipeline, left it
      * within the probe-suppress TTL (send success), or were answered up_to_date are
      * filtered below (review P1 — the enqueued-only filter used to re-serialize each

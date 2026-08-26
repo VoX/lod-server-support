@@ -328,7 +328,7 @@ class LodRequestManagerSummaryTest {
         // would otherwise never re-declare until a full scanner reset (demonstrated
         // orphan: a fully-quiesced client with hundreds of needy positions).
         var overworld = dim("overworld");
-        setupWithLod(12);
+        setupWithLod(12, new LodRequestManager(new SpiralScanner())); // legacy-arm mechanics pin
         long pos = PositionUtil.packPosition(10, 3); // ring 10 of the lod-12 disc
         manager.markCacheLoadedForTest();
         manager.setLastDimensionForTest(overworld);
@@ -362,9 +362,46 @@ class LodRequestManagerSummaryTest {
                 "the revoked position re-declares at the next scheduled scan");
     }
 
+    @Test
+    void aRevokedPositionRedeclaresOnTheRegionArmThroughNeedsBitsAlone() {
+        // Region twin of the legacy reopen pin above (region-scan-plan.md §10 policy
+        // (c)): the region walk has no prefix to reopen — the revocation's needs bit
+        // ALONE must re-declare, and the reopen surface stays a structural no-op.
+        var overworld = dim("overworld");
+        setupWithLod(12, new LodRequestManager(new RegionScanner()));
+        long pos = PositionUtil.packPosition(10, 3);
+        manager.markCacheLoadedForTest();
+        manager.setLastDimensionForTest(overworld);
+        var loaded = new Long2LongOpenHashMap();
+        for (int x = -12; x <= 12; x++) {
+            for (int z = -12; z <= 12; z++) {
+                loaded.put(PositionUtil.packPosition(x, z), 7000L);
+            }
+        }
+        manager.columnsForTest().loadFrom(loaded);
+        manager.onRegionSummaryFrame(frame9("lss_test:overworld", 1L));
+        driveScansUntilQuiet(overworld);
+        assertFalse(declared(pos), "premise: the validated position never declared");
+        sent.clear();
+
+        manager.onRegionSummaryFrame(frame9("lss_test:overworld", 9999L));
+        assertEquals(0, manager.getReopenedRingCount(),
+                "the region arm's reopen surface is a no-op — needs bits carry the revocation");
+        for (int i = 0; i <= 21 && !declared(pos); i++) {
+            manager.tickWithContext(0, 0, overworld, 0, 0, 0L, -1, () -> 0);
+        }
+        assertTrue(declared(pos), "the revoked position re-declares via its needs bit");
+    }
+
     /** Rig variant with a custom session distance + a batch recorder. */
     private void setupWithLod(int lod) {
-        manager = new LodRequestManager();
+        setupWithLod(lod, new LodRequestManager());
+    }
+
+    /** Arm-explicit variant — the revocation ring-REOPEN pin is legacy-arm mechanics
+     *  (region-scan-plan.md §10 policy (a)); its region twin asserts re-declaration. */
+    private void setupWithLod(int lod, LodRequestManager m) {
+        manager = m;
         manager.joinSlowStartEnabled = () -> false;
         manager.onSessionConfig(new SessionConfigS2CPayload(
                 LSSConstants.PROTOCOL_VERSION, true, lod, true),

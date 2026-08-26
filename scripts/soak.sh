@@ -41,7 +41,8 @@ ALL_SCENARIOS=(fresh-backfill warm-rejoin dimension-trip dirty-broadcast
                cold-restart-resync enabled-false teleport-prune
                dirty-range-filter dirty-during-backfill dirty-while-offline
                clearcache-mid-session dimension-rejoin-warm store-second-join
-               store-save-storm warm-rejoin-summary dirty-while-offline-summary)
+               store-save-storm warm-rejoin-summary dirty-while-offline-summary
+               hybrid-boundary)
 # Scenarios ported to Paper. The remaining ones are Fabric-specific for now: the dirty-*
 # family leans on the save-hook + DirtyContentFilter (Paper's dirty detection is
 # event-driven — paper-dirty-falling-block is the Paper-native dirty scenario),
@@ -85,7 +86,7 @@ FABRIC_PHASE_SCENARIOS=(evicted-tscache-rejoin stamp-heal-rejoin stamp-heal-prim
 # staleness-bound gate (lod-store-implementation-plan.md Phase 2).
 PAPER_SCENARIOS+=(paper-store-unfired-event)
 # Scenarios that run on a fresh (deleted) world; everything else copies the base world.
-FRESH_WORLD_SCENARIOS="fresh-backfill rate-limit-storm generation-disabled generation-capacity-stress"
+FRESH_WORLD_SCENARIOS="fresh-backfill rate-limit-storm generation-disabled generation-capacity-stress hybrid-boundary"
 LOG_PREFIX="soak"
 
 # Exported so 'all' recursion and auto-run fresh-backfill inherit the platform.
@@ -178,6 +179,7 @@ case "$SCENARIO" in
     store-save-storm|store-save-storm-off) ;;
     warm-rejoin-summary|dirty-while-offline-summary|evicted-tscache-rejoin) ;;
     stamp-heal-prime|stamp-heal-rejoin) ;;
+    hybrid-boundary) ;;
     paper-dirty-falling-block|paper-store-unfired-event) ;;
     *)
         echo "[soak] ERROR: Unknown scenario '$SCENARIO'"
@@ -229,6 +231,7 @@ case "$SCENARIO" in
     disk-read-gate)             CLIENT_RUNS=1; EXPECTED_SECONDS=450 ;;
     generation-disabled)        CLIENT_RUNS=1; EXPECTED_SECONDS=230 ;;
     generation-capacity-stress) CLIENT_RUNS=1; EXPECTED_SECONDS=330 ;;
+    hybrid-boundary)            CLIENT_RUNS=1; EXPECTED_SECONDS=1800 ;;
     bandwidth-throttle)         CLIENT_RUNS=1; EXPECTED_SECONDS=290 ;;
     cold-restart-resync)        CLIENT_RUNS=1; EXPECTED_SECONDS=280 ;;
     enabled-false)              CLIENT_RUNS=1; EXPECTED_SECONDS=230 ;;
