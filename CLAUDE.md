@@ -42,6 +42,23 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 > ProcessorMailbox/tell flavor; ChunkDiskReader's signatures are line-invariant)
 > and the gametest `TestPositions` (T2 — ctor/field/asLong/addRegionTicket
 > flavors concentrated in one file).
+> **v0.13.0 port (2026-08-26):** the region-scan / hybrid-walk / Xaero-backpressure
+> stack (main `feat/hybrid-scan` 31cfefe6..de34c616, 18 picks + version scrub —
+> §18 heal DELETED with it, `enableXaeroMapBackpressure` replaces the heal key).
+> **ONE line adaptation**: the §12 pick's buildConsumer keeps this line's
+> `getMinBuildHeight()/getMaxBuildHeight()` (max already EXCLUSIVE) inside the
+> incoming anonymous-consumer structure — contract-pinned by
+> `XaeroWiringContractTest.theConsumerPassesThisLinesWorldHeightExpression`.
+> Zero new MC-API surface otherwise; NeoForge needs no new wiring (xplat
+> singletons via the already-pinned ClientNetGlue seams; both new keys are
+> JSON-only). 2-Opus port review: code clean both lenses. Gates: T1 2081/0, T2,
+> :neoforge:build, selftest 270 + validate, pre-flight + release_check 0.13.0
+> OK, fresh-backfill smoke (hybrid-boundary itself runs on MAIN per the plan —
+> accepted under this line's best-effort tier; `./scripts/soak.sh
+> hybrid-boundary` is available here if the full 30-min gate is wanted, its
+> sizing is MAIN-measured). NOTE: §12 makes the still-owed NeoForge Xaero
+> 1.45.0 live check MORE load-bearing — an unverified NeoForge Xaero build now
+> governs the LOD download rate, not just the map.
 > **v0.12.0 port (2026-08-21):** the region-summary/stamped-up_to_date/quadtree stack (main 79e49951..e0cdf6f2, 20 picks + the #215 checker floor) — adaptations: ResourceLocation/location(), template=/timeoutTicks= gametest annotation, split-dir resolver re-root, panel folds (c2f4374b); wrs green both platforms; NeoForge gametest smoke repaired (was a silent no-op since the v0.11.0 cut — see neoforge/build.gradle).
 > **Options-page-generations port (2026-08-23, main PR #236 per sodium-options-page-generations-plan.md §12):** this is the DUAL line — Sodium 0.8.13-beta.2 (the m3t4f1v3/Create+ path, `LSSConfigMenu` + `sodium:config_api_user`, ModMenu 11.0.3) AND 0.6.13 (the NeoForge Voxy-fork pairing — `LegacySodiumPage` + the `@Pseudo` `SodiumLegacyOptionsHook`, both loaders) light up. Line adaptations: `Identifier` → `ResourceLocation` in `LSSConfigMenu`, `LSSConfigMenuTest` and the api/config recording stubs (the stubs must carry the REAL 0.8.13 descriptors, which use ResourceLocation here); JAVA_21 legacy mixin configs (both trees, twin-pinned); `suggests.sodium` `>=0.8.13-beta.2` → `*` (0.6.13 is a supported client now); surfaces row 15 (= main's row 18); `sodium_version=mc1.21.1-0.8.13-beta.2-fabric` feeds the modern golden arm only. The live gates matter most here (both generations × both loaders).
 > **Xaero map bridge port (2026-08-23):** the issue #223 stack (main PRs #229/#230/#231 + the #232 default-OFF flip) — line adaptations: `Identifier` → `ResourceLocation` (tests + menu id), `getMinY()/getMaxY()+1` → `getMinBuildHeight()/getMaxBuildHeight()` (max already EXCLUSIVE — the +1 drops), `getLightDampening()` → 2-arg `getLightBlock(EmptyBlockGetter.INSTANCE, BlockPos.ZERO)` (this line's only overload; constant-opacity approximation), the `Registry<Biome>` section family via the line's SectionConstruction seam, `BLUE_/RED_STAINED_GLASS`. 2-Opus port review: no MAJORs. The bridge is live on the NeoForge client too (the shared ClientNetGlue pump) — where the config key is the whole control surface (no Sodium page there). Still owed: one live check per LOADER of the 1.21.1 Xaero 1.45.0 jars in the test instances — the FABRIC jar was one of the two member-verified ones (lowest risk of the four), but the NEOFORGE Xaero build was never inspected.
@@ -56,8 +73,7 @@ LOD Server Support (LSS) — distributes LOD chunk data from servers to clients 
 
 ## Support tiers (v0.11.0+; docs/planning/neoforge-support-plan.md is normative)
 
-**Full** — Fabric + Paper on main (26.2): complete gauntlets (T1/T2/T3), 22-scenario
-soaks ×3 platforms, live-rig burn-in, first-priority triage. **Correct, not
+**Full** — Fabric + Paper on main (26.2): complete gauntlets (T1/T2/T3), 23-scenario soaks ×3 platforms, live-rig burn-in, first-priority triage. **Correct, not
 perfect** — the 26.1/1.21.11 lines: full builds + T1/T2 and representative smoke
 soaks, no live rig, no exhaustive gauntlets. **Best-effort** — NeoForge and the
 whole MC 1.21.1 line: they track the mainline feature set, but feature cuts are
@@ -503,7 +519,7 @@ Scenarios needing a base world auto-run `fresh-backfill` first. warm-rejoin, dir
 
 - `scripts/soak.sh` — orchestrator (stage → validate → run → collect → check)
 - `scripts/soak-scenarios/<name>.json` + `<name>-config.json` — driver timeline + sparse server-config overrides
-- `scripts/check_soak.py` — stdlib Python invariant checker (`--validate` pre-flight, post-run laws, per-run completion gates — a missing server `end` row OR a missing client `disconnect` row means that JVM died mid-run, `client_run_completion_violations` — `--selftest` 265 in-memory pass/catch cases incl. all four oldest named checks, the disconnect gate, the quiescence client mirror, and the xray config-key type branches). **The harness is v17-only:** `players[].backlog` is a required schema field and `service.superseded`/`range_filtered` are required + monotonic, so it will correctly reject any pre-v17 recording — re-record rather than debug.
+- `scripts/check_soak.py` — stdlib Python invariant checker (`--validate` pre-flight, post-run laws, per-run completion gates — a missing server `end` row OR a missing client `disconnect` row means that JVM died mid-run, `client_run_completion_violations` — `--selftest` 270 in-memory pass/catch cases incl. all four oldest named checks, the disconnect gate, the quiescence client mirror, and the xray config-key type branches). **The harness is v17-only:** `players[].backlog` is a required schema field and `service.superseded`/`range_filtered` are required + monotonic, so it will correctly reject any pre-v17 recording — re-record rather than debug.
 - `scripts/soak_report.py` — stdlib post-run anomaly digest (spikes/stalls, concerning-vs-mechanism counters, high-water marks, cadence/TPS, law margins, cross-identity audits); a lens, never a gate (`--strict` to exit nonzero on any anomaly; `--compare`, `--selftest`)
 - `scripts/check_move_trace.py` — stdlib validator for the move-desync tracer's JSONL (`--validate FILE...`, `--selftest` — 36 pass/catch cases over the shared `scripts/testdata/move-trace-rows.jsonl` fixture the Tier 1 goldens write; run it on collected traces BEFORE analysis)
 - `scripts/release_check.py` — release-jar safety gate (no dev-only benchmark/soak packages ship, incl. inside nested Jar-in-Jar entries and dev/vox/lss/common namespaces; stale-jar ambiguity guard + `--version` pinning; version expansion; mappings-namespace manifest; glob hygiene). Wired into `.github/workflows/build.yml` alongside the three `--selftest` runs.
