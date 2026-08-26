@@ -26,6 +26,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 > release-tag-v0.12.1 files that never existed here (keep-deleted). Gates: T1
 > 2086/0, T2, selftest 270 + validate, pre-flight + release_check 0.13.0 OK.
 > The still-owed 26.1 Xaero 1.45.0 live check now also covers the §12 pacing.
+> NOTE hybrid-boundary's sizing (gen > 15000 in 1800 s) is MAIN-measured — a
+> gen/quiescence-leg red on this line is a sizing question before a walk one.
 > **v0.11.1 port (2026-08-18):** the stutter-fix pair (scan prefix retention +
 > acquisition frontier, main PRs #203/#204 + folds) cherry-picked from main —
 > pure xplat/common, no line flavor points; the body below is main's CLAUDE.md
@@ -481,7 +483,7 @@ Scenarios needing a base world auto-run `fresh-backfill` first. warm-rejoin, dir
 
 - `scripts/soak.sh` — orchestrator (stage → validate → run → collect → check)
 - `scripts/soak-scenarios/<name>.json` + `<name>-config.json` — driver timeline + sparse server-config overrides
-- `scripts/check_soak.py` — stdlib Python invariant checker (`--validate` pre-flight, post-run laws, per-run completion gates — a missing server `end` row OR a missing client `disconnect` row means that JVM died mid-run, `client_run_completion_violations` — `--selftest` 265 in-memory pass/catch cases incl. all four oldest named checks, the disconnect gate, the quiescence client mirror, and the xray config-key type branches). **The harness is v17-only:** `players[].backlog` is a required schema field and `service.superseded`/`range_filtered` are required + monotonic, so it will correctly reject any pre-v17 recording — re-record rather than debug.
+- `scripts/check_soak.py` — stdlib Python invariant checker (`--validate` pre-flight, post-run laws, per-run completion gates — a missing server `end` row OR a missing client `disconnect` row means that JVM died mid-run, `client_run_completion_violations` — `--selftest` 270 in-memory pass/catch cases incl. all four oldest named checks, the disconnect gate, the quiescence client mirror, and the xray config-key type branches). **The harness is v17-only:** `players[].backlog` is a required schema field and `service.superseded`/`range_filtered` are required + monotonic, so it will correctly reject any pre-v17 recording — re-record rather than debug.
 - `scripts/soak_report.py` — stdlib post-run anomaly digest (spikes/stalls, concerning-vs-mechanism counters, high-water marks, cadence/TPS, law margins, cross-identity audits); a lens, never a gate (`--strict` to exit nonzero on any anomaly; `--compare`, `--selftest`)
 - `scripts/check_move_trace.py` — stdlib validator for the move-desync tracer's JSONL (`--validate FILE...`, `--selftest` — 36 pass/catch cases over the shared `scripts/testdata/move-trace-rows.jsonl` fixture the Tier 1 goldens write; run it on collected traces BEFORE analysis)
 - `scripts/release_check.py` — release-jar safety gate (no dev-only benchmark/soak packages ship, incl. inside nested Jar-in-Jar entries and dev/vox/lss/common namespaces; stale-jar ambiguity guard + `--version` pinning; version expansion; mappings-namespace manifest; glob hygiene). Wired into `.github/workflows/build.yml` alongside the three `--selftest` runs.
