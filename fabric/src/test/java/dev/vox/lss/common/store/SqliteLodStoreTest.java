@@ -30,7 +30,9 @@ import static org.junit.jupiter.api.Assertions.fail;
  * The SQLite LOD store tier (plan §2, Phase 2). Pins the parts a live server cannot
  * cheaply exercise: cross-restart round-trip, meta drop-and-rebuild (derived data is
  * never migrated), the tombstone protocol closing the async-delete window, latest-wins
- * by stored ts, and the whole freshness-sweep decision table — stale header drop,
+ * by stored ts, the v0.13.1 registry-permutation ladder (KEEP/ADOPT/named-drop over
+ * the order-insensitive content fingerprint + the legacy-row markers), and the whole
+ * freshness-sweep decision table — stale header drop,
  * unchanged-mtime skip, vanished region, absent chunk (loc==0), unresolvable region
  * dir, mask-fingerprint drift, the serving-gate before sweep completion, and the
  * periodic re-sweep (Paper's stale bound).
@@ -358,6 +360,8 @@ class SqliteLodStoreTest {
         // identities) stays fixed; every deposit is wirefmt=20 (identity-addressed),
         // so the store must survive instead of rebuilding on every restart.
         SqliteLodStore permuted = open(fpEnv("bs:1002/bio:aa", "bsc:cc/bioc:aa"));
+        assertEquals(SqliteLodStore.MetaVerdict.Kind.KEEP_PERMUTED,
+                permuted.lastMetaVerdictForTest().kind(), "the KEEP rung must fire");
         assertNotNull(permuted.get(OW, p), "v20 rows must survive a pure permutation");
         assertEquals(0, permuted.diagnostics().getErrors(), "the keep is not an error");
         permuted.shutdown();
@@ -382,10 +386,21 @@ class SqliteLodStoreTest {
                         + " ('migrate_total','1'), ('migrate_done','0')");
 
         SqliteLodStore permuted = open(fpEnv("bs:1002/bio:aa", "bsc:cc/bioc:aa"));
+        assertEquals(SqliteLodStore.MetaVerdict.Kind.DROP,
+                permuted.lastMetaVerdictForTest().kind(),
+                "the legacy rung must DROP — a KEEP would serve 19-rows mistranslated");
+        assertTrue(permuted.lastMetaVerdictForTest().detail().contains("legacy"),
+                "the drop must name the legacy-rows condition, got: "
+                        + permuted.lastMetaVerdictForTest().detail());
         assertNull(permuted.get(OW, p),
                 "legacy native-id rows embed the permuted ids — the store must rebuild");
         assertEquals(0, permuted.diagnostics().getErrors(), "drop-and-rebuild is not an error");
         permuted.shutdown();
+        // The rebuild's direct witness (fix-review fold: the planted 19-row's CRC
+        // hash would null the get() even without a rebuild): a fresh store carries
+        // no walk marker.
+        assertNull(readMetaValue("migrate_pending"),
+                "a rebuild wipes the meta — the walk marker must be gone");
     }
 
     @Test
@@ -393,6 +408,11 @@ class SqliteLodStoreTest {
         long p = seedFingerprintedStore("bs:1000/bio:aa", "bsc:cc/bioc:aa");
         // The identity SET changed (a real mod change): never tolerated.
         SqliteLodStore drifted = open(fpEnv("bs:1002/bio:aa", "bsc:dd/bioc:aa"));
+        assertEquals(SqliteLodStore.MetaVerdict.Kind.DROP,
+                drifted.lastMetaVerdictForTest().kind());
+        assertTrue(drifted.lastMetaVerdictForTest().detail().contains("content drift"),
+                "the drop must name content drift, got: "
+                        + drifted.lastMetaVerdictForTest().detail());
         assertNull(drifted.get(OW, p),
                 "content drift must rebuild — only pure permutations are kept");
         drifted.shutdown();
@@ -405,6 +425,8 @@ class SqliteLodStoreTest {
         rawSql("DELETE FROM meta WHERE k='registry_content_fingerprint'");
 
         SqliteLodStore adopted = open(fpEnv("bs:1000/bio:aa", "bsc:cc/bioc:aa"));
+        assertEquals(SqliteLodStore.MetaVerdict.Kind.REFRESH,
+                adopted.lastMetaVerdictForTest().kind(), "adoption is the REFRESH rung");
         assertNotNull(adopted.get(OW, p),
                 "a matching ordered fingerprint keeps the store — adoption never drops");
         adopted.shutdown();
@@ -419,6 +441,11 @@ class SqliteLodStoreTest {
 
         // Ordered mismatch with no stored content proof: exactly one final rebuild.
         SqliteLodStore rebuilt = open(fpEnv("bs:1002/bio:aa", "bsc:cc/bioc:aa"));
+        assertEquals(SqliteLodStore.MetaVerdict.Kind.DROP,
+                rebuilt.lastMetaVerdictForTest().kind());
+        assertTrue(rebuilt.lastMetaVerdictForTest().detail().contains("unprovable"),
+                "the drop must name unprovability, got: "
+                        + rebuilt.lastMetaVerdictForTest().detail());
         assertNull(rebuilt.get(OW, p), "an unprovable permutation must rebuild");
         rebuilt.deposit(OW, p, bytes(8, 400), 200);
         assertNotNull(awaitHit(rebuilt, OW, p), "rebuilt store must accept deposits");
@@ -431,10 +458,12 @@ class SqliteLodStoreTest {
     }
 
     @Test
-    void emptyStoredContentFingerprintCannotProveAPermutation() throws Exception {
-        // A fresh store created by an OLD-shape caller writes content="" — a later
-        // boot supplying a real content fingerprint must still treat the permutation
-        // as unprovable ("" is not evidence; the plan review's MAJOR-1 guard).
+    void emptyContentFingerprintOnEitherSideCannotProveAPermutation() throws Exception {
+        // Stored side empty: a fresh store created by an OLD-shape caller writes
+        // content="" — a later boot supplying a real content fingerprint must treat
+        // the permutation as unprovable (an empty fingerprint is not evidence; the
+        // plan review's MAJOR-1 guard — the both-empty "" == "" shape is pinned by
+        // registryFingerprintDriftDropsAndRebuildsTheStore above).
         long p = PositionUtil.packPosition(0, 2);
         writeRegion(OW, 0, 0, Map.of(p, (int) (nowSec() - 1000)));
         SqliteLodStore store = open(new SqliteLodStore.Environment(storeDir(), "26.2-test",
@@ -444,8 +473,22 @@ class SqliteLodStoreTest {
         store.shutdown();
 
         SqliteLodStore reopened = open(fpEnv("bs:1002/bio:aa", "bsc:cc/bioc:aa"));
-        assertNull(reopened.get(OW, p), "\"\" stored content is unprovable, never a match");
+        assertEquals(SqliteLodStore.MetaVerdict.Kind.DROP,
+                reopened.lastMetaVerdictForTest().kind());
+        assertTrue(reopened.lastMetaVerdictForTest().detail().contains("unprovable"));
+        assertNull(reopened.get(OW, p), "an empty STORED fingerprint is not evidence");
+        // ENV side empty (plan §4.6's literal case): rebuild fresh with a real
+        // content key, then reopen with an OLD-shape env under a further permutation
+        // — the store's real proof must not vacuously match the caller's "".
+        reopened.deposit(OW, p, bytes(8, 400), 200);
+        assertNotNull(awaitHit(reopened, OW, p));
         reopened.shutdown();
+        SqliteLodStore oldShape = open(new SqliteLodStore.Environment(storeDir(), "26.2-test",
+                WIRE, this::regionDir, d -> "", 0, Long.MAX_VALUE, "bs:1004/bio:aa"));
+        assertEquals(SqliteLodStore.MetaVerdict.Kind.DROP,
+                oldShape.lastMetaVerdictForTest().kind());
+        assertNull(oldShape.get(OW, p), "an empty ENV fingerprint is not evidence");
+        oldShape.shutdown();
     }
 
     @Test
@@ -456,6 +499,11 @@ class SqliteLodStoreTest {
         SqliteLodStore bumped = open(new SqliteLodStore.Environment(storeDir(), "26.3-test",
                 WIRE, this::regionDir, d -> "", 0, Long.MAX_VALUE,
                 "bs:1000/bio:aa", "bsc:cc/bioc:aa"));
+        assertEquals(SqliteLodStore.MetaVerdict.Kind.DROP,
+                bumped.lastMetaVerdictForTest().kind());
+        assertTrue(bumped.lastMetaVerdictForTest().detail().contains("mc_version"),
+                "the core-key drop must NAME the drifted key, got: "
+                        + bumped.lastMetaVerdictForTest().detail());
         assertNull(bumped.get(OW, p),
                 "mc_version drift must rebuild regardless of fingerprints");
         bumped.shutdown();
@@ -463,8 +511,8 @@ class SqliteLodStoreTest {
 
     /** The v3->v4 bump (R4: chash/fhash FNV-1a -> CRC32C): a store stamped with the
      *  PREVIOUS schema version must drop-and-rebuild exactly once — old rows' hashes
-     *  would fail every validation under the new function. metaMatches is an equality
-     *  compare, so this out-of-band downgrade is byte-for-byte the "old store under a
+     *  would fail every validation under the new function. evaluateMeta's core gate is
+     *  an equality compare, so this out-of-band downgrade is byte-for-byte the "old store under a
      *  new jar" upgrade case (and pins rollback symmetry: any mismatch rebuilds). */
     @Test
     void schemaVersionDriftDropsAndRebuildsTheStore() throws Exception {

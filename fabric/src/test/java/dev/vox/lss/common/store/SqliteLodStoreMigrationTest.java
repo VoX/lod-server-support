@@ -65,6 +65,11 @@ class SqliteLodStoreMigrationTest {
                 this::regionDir, d -> "", 0, Long.MAX_VALUE, FP);
     }
 
+    private SqliteLodStore.Environment env20Fp(String ordered, String content) {
+        return new SqliteLodStore.Environment(storeDir(), "26.2-test", WIRE_20,
+                this::regionDir, d -> "", 0, Long.MAX_VALUE, ordered, content);
+    }
+
     // ---- the schema-3 (released v0.9.x) fixture, built by hand ----
 
     private record FixtureRow(long pos, byte[] raw, boolean corruptBlob) {}
@@ -171,11 +176,26 @@ class SqliteLodStoreMigrationTest {
     }
 
     private SqliteLodStore open() throws Exception {
-        SqliteLodStore store = SqliteLodStore.createOrNull(LodStoreMode.FULL, env20(),
+        return openWith(env20());
+    }
+
+    private SqliteLodStore openWith(SqliteLodStore.Environment env) throws Exception {
+        SqliteLodStore store = SqliteLodStore.createOrNull(LodStoreMode.FULL, env,
                 new LodStoreDiagnostics());
         assertNotNull(store);
         assertTrue(store.awaitSweep(10_000), "startup sweep must complete");
         return store;
+    }
+
+    private String metaValue(String key) throws Exception {
+        var ds = new org.sqlite.SQLiteDataSource();
+        ds.setUrl("jdbc:sqlite:" + storeDir().resolve("store.db"));
+        try (Connection c = ds.getConnection(); Statement st = c.createStatement()) {
+            st.execute("PRAGMA busy_timeout=3000");
+            try (var rs = st.executeQuery("SELECT v FROM meta WHERE k='" + key + "'")) {
+                return rs.next() ? rs.getString(1) : null;
+            }
+        }
     }
 
     private static byte[] raw(int seed, int len) {
@@ -468,6 +488,63 @@ class SqliteLodStoreMigrationTest {
                     "DropAll drops the walk's subject rows — its bookkeeping resets with them");
         } finally {
             store.shutdown();
+        }
+    }
+
+    /**
+     * v0.13.1 fix-review fold (the residual escape): {@code finishMigration} must
+     * VERIFY no 19-row remains before retiring the walk marker. The walk's documented
+     * residual — a row whose translate anomaly'd AND whose fallback DELETE also
+     * failed stays tagged 19 BEHIND the watermark, never revisited — used to outlive
+     * {@code migrate_pending}, and under the permutation ladder a flagless 19-row is
+     * a wrong-data KEEP (legacy bytes mistranslated through the permuted registry).
+     * The verifying finish writes the permanent {@code migrate_residual} marker
+     * instead, and the ladder's legacy rung reads BOTH markers.
+     */
+    @Test
+    void residualNineteenRowBehindTheWatermarkBlocksThePermutationKeep() throws Exception {
+        long pos = PositionUtil.packPosition(1, 1);
+        buildSchema3Store(FP, List.of(new FixtureRow(pos, raw(1, 300), false)));
+        // Boot 1 upgrades in place (row tagged 19, migrate_pending=1); no translator,
+        // so the walk waits and the 19-row survives the boot.
+        open().shutdown();
+        // Hand-advance the watermark PAST the row: byte-for-byte the end-state of the
+        // swallowed delete-failure (the walk never looks behind its watermark).
+        var ds = new org.sqlite.SQLiteDataSource();
+        ds.setUrl("jdbc:sqlite:" + storeDir().resolve("store.db"));
+        try (Connection c = ds.getConnection(); Statement st = c.createStatement()) {
+            st.execute("PRAGMA busy_timeout=3000");
+            st.executeUpdate("INSERT OR REPLACE INTO meta (k, v) VALUES"
+                    + " ('migrate_progress_1','" + (pos + 1) + "')");
+        }
+
+        // Boot 2 with the translator wired AND a content-fingerprinted env: the walk
+        // finds nothing past the watermark, retires — and the verifying finish probes
+        // the table, finds the stuck 19-row, and writes migrate_residual.
+        SqliteLodStore resumed = openWith(env20Fp(FP, "bsc:cc/bioc:aa"));
+        try {
+            resumed.setLegacyMigrationTranslator(FAKE_TRANSLATOR);
+            awaitWalkDone(resumed);
+        } finally {
+            resumed.shutdown();
+        }
+        assertEquals("1", metaValue("migrate_residual"),
+                "the verifying finish must mark the surviving 19-row");
+        assertNull(metaValue("migrate_pending"),
+                "the walk bookkeeping still retires — re-arming cannot delete the row");
+
+        // A later pure permutation must DROP: the residual row would mistranslate.
+        SqliteLodStore permuted = openWith(env20Fp("fp-permuted", "bsc:cc/bioc:aa"));
+        try {
+            assertEquals(SqliteLodStore.MetaVerdict.Kind.DROP,
+                    permuted.lastMetaVerdictForTest().kind(),
+                    "a flagless KEEP here would serve the 19-row as wrong blocks");
+            assertTrue(permuted.lastMetaVerdictForTest().detail().contains("legacy"),
+                    "the drop must name the legacy condition, got: "
+                            + permuted.lastMetaVerdictForTest().detail());
+            assertNull(permuted.get(OW, pos));
+        } finally {
+            permuted.shutdown();
         }
     }
 }
