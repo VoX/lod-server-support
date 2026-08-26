@@ -29,6 +29,31 @@ public final class RegistryFingerprint {
                 + "/bio:" + Long.toHexString(fnvOver(biomeKeys));
     }
 
+    /**
+     * Order-INSENSITIVE twin of {@link #of} (v0.13.1 —
+     * docs/planning/store-registry-permutation-plan.md): the same FNV chain over a
+     * SORTED copy of each list. Some mods (VisualWorkbench-class dynamic registration)
+     * permute global ids every boot while the identity SET stays fixed; wire-v20 store
+     * rows are identity-addressed, so a store proven all-v20 may survive a pure
+     * permutation — this hash is that proof's content half. Distinct {@code bsc}/{@code
+     * bioc} prefixes keep the two hash kinds un-confusable with {@link #of}'s; the
+     * format stays load-bearing (a bare count must be un-representable).
+     *
+     * @return {@code bsc:<hex>/bioc:<hex>}
+     */
+    public static String contentOf(Iterable<String> blockStateIdentities,
+                                   Iterable<String> biomeKeys) {
+        return "bsc:" + Long.toHexString(fnvOver(sorted(blockStateIdentities)))
+                + "/bioc:" + Long.toHexString(fnvOver(sorted(biomeKeys)));
+    }
+
+    private static Iterable<String> sorted(Iterable<String> items) {
+        var copy = new java.util.ArrayList<String>();
+        for (String s : items) copy.add(s);
+        java.util.Collections.sort(copy);
+        return copy;
+    }
+
     private static long fnvOver(Iterable<String> items) {
         long hash = 0xcbf29ce484222325L;
         for (String s : items) {

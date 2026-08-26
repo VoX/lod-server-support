@@ -31,12 +31,16 @@ class StoreEnvironmentContractTest {
         String source = Files.readString(serviceSource());
         var call = Pattern.compile(
                 "new dev\\.vox\\.lss\\.common\\.store\\.SqliteLodStore\\.Environment\\("
-                        + "[^;]*storeRegistryFingerprint\\(server\\)\\)",
+                        + "[^;]*storeRegistryFingerprint\\(server\\),\\s*"
+                        + "storeRegistryContentFingerprint\\(server\\)\\)",
                 Pattern.DOTALL);
         assertTrue(call.matcher(source).find(),
                 "the production Environment must be built WITH storeRegistryFingerprint"
-                        + " (the convenience ctors default it to \"\" — dropping the"
-                        + " argument compiles and silently disables the registry guard)");
+                        + " AND storeRegistryContentFingerprint (the convenience ctors"
+                        + " default them to \"\" — dropping either argument compiles and"
+                        + " silently disables the registry guard / the v0.13.1"
+                        + " permutation tolerance, which treats an empty content"
+                        + " fingerprint as unprovable and rebuilds every boot)");
     }
 
     @Test
