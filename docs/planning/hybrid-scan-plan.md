@@ -938,6 +938,23 @@ ladder provably reaches drainable) all verified clean.
 - Suite: XaeroMapCompatTest 109/0 (was 107 — +wedge-duty-cycle, +hysteresis;
   the recession rewrite replaced the progress-rebase pin 1:1).
 
+**§12.9 addendum — live render-thread profile (2026-08-25, spark N9Vpz1sjA7, 51 s @ 4 ms sampling, mid-fill).**
+ALL of dev.vox.lss inclusive = **480 ms = 0.95%** of the Render thread (reflective
+Xaero work under our frames counted as ours). Split: the frame hook 268 ms
+(frameFlush→rebuildTileChunk — 264 ms of it is Xaero's own updateBuffers/
+getPixelColour/biome-tint recolor arithmetic the map would run for these tiles
+anyway; ≈0.09 ms/frame average, inside the 2 ms budget), the tick hook 208 ms
+(pump 176 ms — drainEntries/commitEntry/commitPixels ≈ 150-170 ms, again mostly
+Xaero setTile/RegionTexture work; ≈0.17 ms/tick), payload receive 4 ms (decode is
+off-thread). **The entire want-set machinery is 32 ms/51 s = 0.06%**: hybrid
+`RegionScanner.scan` 20 ms, `rectNeedsFree` 8 ms, movement/prune 8 ms, sends
+4 ms; `reportBackpressure` is below the sampling floor. Context: the thread is
+79% GpuSurface.present (GPU/vsync wait); Xaero's OWN minimap rendering is 9.17%
+(3.2 s handleRenderTick + 1.2 s MinimapPipRenderer) — 10× our whole footprint
+and present without LSS. Known residual: single-rebuild spikes to ~35 ms exist
+(the session diag's rebuild_max_us) — rare enough not to appear at 4 ms
+sampling; the budget bounds the sustained rate, not the single worst recolor.
+
 ## §13 Walk as-built record (2026-08-24, branch feat/hybrid-scan off feat/xaero-backpressure)
 
 §2-§10 implemented as specified; deviations and concretions below. One jar now
