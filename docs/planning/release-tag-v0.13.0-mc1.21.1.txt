@@ -1,0 +1,18 @@
+### New Features
+
+- **Smarter terrain scanning** — nearby terrain fills in clean rings around you while distant terrain streams in efficiently, region by region.
+- **Xaero's World Map keeps up** — map writing now paces the LOD download instead of dropping tiles during big fills; short download pauses while the map is busy are normal.
+
+### Bug Fixes
+
+- **Fixes a crash in Xaero's World Map saving** — map region saves no longer race the bridge's tile writes.
+- **Smoother frames while the map catches up** — map texture rebuilds are spread across frames instead of bunching into single-frame stutters.
+- **The in-game settings page now works on older Sodium versions** — the LSS options render on the Sodium 0.6/0.7 generation this line uses.
+
+### Configuration
+
+- **Two new client options, both on by default** — `enableRegionScan` (the new scanning order) and `enableXaeroMapBackpressure` (the map pacing); set either to false to get the previous behavior.
+
+### Compatibility
+
+- Mixed client/server versions remain fully compatible in both directions; this line (Fabric, Paper, and NeoForge) is supported best-effort.
