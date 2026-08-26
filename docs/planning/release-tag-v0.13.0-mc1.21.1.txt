@@ -7,7 +7,7 @@
 
 - **Fixes a crash in Xaero's World Map saving** — map region saves no longer race the bridge's tile writes.
 - **Smoother frames while the map catches up** — map texture rebuilds are spread across frames instead of bunching into single-frame stutters.
-- **The in-game settings page now works on older Sodium versions** — the LSS options render on the Sodium 0.6/0.7 generation this line uses.
+- **The in-game settings page now renders on both Sodium generations** — the Sodium 0.6/0.7 tabs this line's Voxy pairing uses, and on Sodium 0.8+ including the NeoForge client (previously config-file only there).
 
 ### Configuration
 

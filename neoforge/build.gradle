@@ -254,6 +254,11 @@ shadowJar {
     from(generateJarJarMetadata) { into 'META-INF/jarjar' }
     // Dev-only packages never ship (release_check pins this on every jar family).
     exclude 'dev/vox/lss/benchmark/**'
+    // The Sodium 0.8 config-API COMPILE-ONLY STUBS (LSSConfigMenu's javadoc):
+    // shipping them would collide with Sodium's own module at FML resolution.
+    // vssJar repackages this jar byte-preserving, so the exclude covers it too;
+    // release_check pins the absence.
+    exclude 'net/caffeinemc/**'
     // MC's game layer bundles slf4j (26.2 strictly pins 2.0.17) — shipping common's
     // transitive copy is dead weight at best, a provider-binding hazard at worst
     // (N-2 review; the paper shadowJar's exact excludes).

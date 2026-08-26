@@ -44,7 +44,10 @@ FABRIC_FORBIDDEN = "dev/vox/lss/benchmark/"        # benchmark + soak driver liv
 PAPER_FORBIDDEN = "dev/vox/lss/paper/soak/"
 # The NeoForge shadow jar flattens xplat+common; benchmark/ (excluded by shadowJar) and
 # the lsstest gametest companion (its own source set, never packed) must stay absent.
-NEOFORGE_FORBIDDEN = ("dev/vox/lss/benchmark/", "dev/vox/lss/neoforge/gametest/")
+NEOFORGE_FORBIDDEN = ("dev/vox/lss/benchmark/", "dev/vox/lss/neoforge/gametest/",
+                      # the Sodium 0.8 config-API compile-only stubs (LSSConfigMenu
+                      # NeoForge twin) — shipping them collides with Sodium's module
+                      "net/caffeinemc/")
 # Dev-only namespaces that would live in common/ (e.g. a deduped soak-driver twin): common
 # ships on BOTH platforms — nested in the Fabric jar, shaded into the Paper jar.
 COMMON_FORBIDDEN = ("dev/vox/lss/common/soak/", "dev/vox/lss/common/benchmark/")
