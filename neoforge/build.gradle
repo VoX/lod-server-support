@@ -23,6 +23,29 @@ tasks.withType(AbstractArchiveTask).configureEach {
 
 repositories {
     mavenCentral()
+    exclusiveContent {
+        forRepository {
+            maven {
+                name = "Modrinth"
+                url = "https://api.modrinth.com/maven"
+            }
+        }
+        filter {
+            includeGroup "maven.modrinth"
+        }
+    }
+}
+
+configurations {
+    // SodiumNeoGoldenParityTest's input: the REAL sodium-neoforge artifact for the
+    // line's pinned Sodium version — the compile-only net.caffeinemc stubs must stay
+    // a descriptor subset of it (the fabric module gets this pin for free from its
+    // modCompileOnly real jar; the stubs need an explicit golden).
+    sodiumNeoGolden {
+        canBeConsumed = false
+        canBeResolved = true
+        transitive = false
+    }
 }
 
 // The gametest smoke subset (plan §5.2) lives in its own source set — like the
@@ -125,6 +148,8 @@ configurations.all {
 
 def sqliteJdbcVersion = '3.49.1.0'
 dependencies {
+    // the -fabric artifact id swapped for -neoforge: same version, the loader variant
+    sodiumNeoGolden "maven.modrinth:sodium:${project.sodium_version.replace('-fabric', '-neoforge')}"
     implementation project(':common')
     shade project(':common')
     implementation "org.xerial:sqlite-jdbc:${sqliteJdbcVersion}"
@@ -231,6 +256,11 @@ shadowJar {
     from(generateJarJarMetadata) { into 'META-INF/jarjar' }
     // Dev-only packages never ship (release_check pins this on every jar family).
     exclude 'dev/vox/lss/benchmark/**'
+    // The Sodium 0.8 config-API COMPILE-ONLY STUBS (LSSConfigMenu's javadoc):
+    // shipping them would collide with Sodium's own module at FML resolution.
+    // vssJar repackages this jar byte-preserving, so the exclude covers it too;
+    // release_check pins the absence.
+    exclude 'net/caffeinemc/**'
     // MC's game layer bundles slf4j (26.2 strictly pins 2.0.17) — shipping common's
     // transitive copy is dead weight at best, a provider-binding hazard at worst
     // (N-2 review; the paper shadowJar's exact excludes).
@@ -255,6 +285,16 @@ build.dependsOn shadowJar
 
 test {
     useJUnitPlatform()
+    // The golden resolves LENIENT at execution (the fabric test-block discipline):
+    // offline boxes yield nothing and the parity test skips with an assumption; under
+    // CI=true it FAILS instead — a mistyped coordinate must not void the golden arm.
+    def neoGolden = configurations.sodiumNeoGolden.incoming.artifactView { lenient = true }.files
+    inputs.property "sodium_version", project.sodium_version
+    inputs.files(neoGolden).optional()
+    doFirst {
+        systemProperty 'lss.sodiumNeoGoldenJar', neoGolden.find { it.name.endsWith('.jar') }?.absolutePath ?: ''
+        systemProperty 'lss.sodiumNeoGoldenExpected', 'true'
+    }
 }
 
 // ---- Voxy Server Side (VSS) branded variant (N-4; plan §0.5) --------------------------

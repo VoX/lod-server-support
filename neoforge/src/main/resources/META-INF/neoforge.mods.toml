@@ -32,3 +32,10 @@ config="lss-sodium-legacy.mixins.json"
     versionRange="[${minecraft_version}]"
     ordering="NONE"
     side="BOTH"
+
+# Sodium 0.8+ options page (sodium-options-page-generations-plan.md, NeoForge
+# amendment): sodium-neoforge's ConfigLoaderForge reads this property from every
+# mod and instantiates the named ConfigEntryPoint — the same key Fabric declares
+# as an entrypoint. Harmless when Sodium is absent or pre-0.8.
+[modproperties.lss]
+"sodium:config_api_user"="dev.vox.lss.config.LSSConfigMenu"
