@@ -1,0 +1,118 @@
+name: Release NeoForge (backfill)
+
+# One-off publisher for the NeoForge artifact of an ALREADY-RELEASED tag. Built
+# for the 2026-08-27 decision to start shipping NeoForge on the 26.x lines (the
+# VoX/Foxy fork gives them a working Voxy client pairing) without re-running the
+# published v0.13.1 releases — a release.yml re-run rebuilds byte-different
+# fabric/paper jars, silently replaces the GitHub assets, and creates duplicate
+# Modrinth versions (the documented release pitfall). Future releases need none
+# of this: with LINE_SHIP_NEOFORGE=true, release.yml ships NeoForge normally.
+#
+# Dispatch it ON THE TAG'S OWN LINE BRANCH (main for v0.13.1,
+# support/mc26.1-v0.13 for v0.13.1+mc26.1): the workflow file + line.env are
+# read from the branch — which must already carry LINE_SHIP_NEOFORGE=true —
+# while the SOURCES are checked out from the tag. The guards make a duplicate
+# or wrong-line dispatch a loud no-op: suffix equality, the ship flag, the
+# release must exist, and it must not already carry a NeoForge asset.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing release tag to backfill (e.g. v0.13.1 or v0.13.1+mc26.1)'
+        required: true
+        type: string
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Load line identity (from the branch)
+        run: grep -vE '^\s*(#|$)' .github/line.env >> "$GITHUB_ENV"
+
+      - name: Guards
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          BASE="${TAG%%+*}"
+          SUFFIX="${TAG#"$BASE"}"
+          if [ "${SUFFIX}" != "${LINE_TAG_SUFFIX}" ]; then
+            echo "::error::tag ${TAG} carries suffix '${SUFFIX}' but this branch declares '${LINE_TAG_SUFFIX}' — dispatch on the tag's own line branch"
+            exit 1
+          fi
+          if [ "${LINE_SHIP_NEOFORGE}" != "true" ]; then
+            echo "::error::this line does not ship NeoForge (LINE_SHIP_NEOFORGE='${LINE_SHIP_NEOFORGE}')"
+            exit 1
+          fi
+          MV="${TAG#v}"; MV="${MV%%+*}"
+          case "$MV" in
+            [0-9]*) ;;
+            *) echo "::error::'${TAG}' does not derive a numeric mod version ('${MV}')"; exit 1 ;;
+          esac
+          echo "MOD_VERSION=${MV}" >> "$GITHUB_ENV"
+          # Backfill only: the release must exist (gh fails loudly otherwise) and
+          # must not already carry the artifact — Modrinth accepts duplicate
+          # version ids silently, so the asset check is the dedupe.
+          ASSETS=$(gh release view "${TAG}" --json assets --jq '.assets[].name')
+          if grep -q "neoforge" <<< "${ASSETS}"; then
+            echo "::error::release ${TAG} already carries a NeoForge asset — refusing the duplicate"
+            exit 1
+          fi
+
+      - name: Check out the tag's sources
+        run: git checkout "refs/tags/${{ inputs.tag }}"
+
+      - name: Read the release notes (Modrinth changelog)
+        id: release_notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo "notes<<RELEASE_NOTES_EOF"
+            gh release view "${{ inputs.tag }}" --json body --jq .body
+            echo "RELEASE_NOTES_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.LINE_JAVA_VERSION }}
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Build NeoForge + contract tests
+        run: ./gradlew :neoforge:build -Pmod_version=${MOD_VERSION}
+
+      - name: Expand game-version list
+        run: |
+          {
+            echo "GV_NEOFORGE<<LINE_LIST_EOF"
+            tr ' ' '\n' <<< "${LINE_GAME_VERSIONS_NEOFORGE}"
+            echo "LINE_LIST_EOF"
+          } >> "$GITHUB_ENV"
+
+      - name: Attach to the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ inputs.tag }}" neoforge/build/libs/lod-server-support-neoforge-*.jar
+
+      - name: Upload NeoForge to Modrinth
+        uses: Kir-Antipov/mc-publish@v3.3
+        with:
+          modrinth-id: lKiXKLvv
+          modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
+          files: neoforge/build/libs/lod-server-support-neoforge-*.jar
+          name: v${{ env.MOD_VERSION }} - ${{ env.LINE_NEOFORGE_NAME }}
+          version: v${{ env.MOD_VERSION }}+neoforge+mc${{ env.LINE_MC_NEOFORGE }}
+          version-type: release
+          loaders: neoforge
+          game-versions: ${{ env.GV_NEOFORGE }}
+          changelog: ${{ steps.release_notes.outputs.notes }}

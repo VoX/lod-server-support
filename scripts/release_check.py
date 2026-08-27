@@ -58,7 +58,7 @@ COMMON_FORBIDDEN = ("dev/vox/lss/common/soak/", "dev/vox/lss/common/benchmark/")
 # v0.11.0 release scope (user decision 2026-08-15): NeoForge SHIPS only on the
 # 1.21.1 line. Families gated on SHIP_NEOFORGE (found jars still get full jar
 # checks); mirrors .github/line.env LINE_SHIP_NEOFORGE — flip BOTH together.
-SHIP_NEOFORGE = False
+SHIP_NEOFORGE = True
 RELEASE_GLOBS = ("lod-server-support-fabric-*.jar", "lod-server-support-paper-*.jar",
                  "voxy-server-side-fabric-*.jar", "voxy-server-side-paper-*.jar") + ((
                  "lod-server-support-neoforge-*.jar",

@@ -274,13 +274,14 @@ class ReleaseWorkflowContractTest {
 
     @Test
     void neoforgeShippingIsGatedPerLine() {
-        // v0.11.0 scope (user decision 2026-08-15): NeoForge ships ONLY on the 1.21.1
-        // line. This 26.1 line does NOT ship it at v0.11.0 — the value pin makes re-enabling (or re-cutting)
-        // a conscious per-line decision, and the step gates keep release.yml
-        // branch-invariant (the V-1 principle: behavior from line.env data).
-        assertEquals("false", env("LINE_SHIP_NEOFORGE"),
-                "the line's NeoForge shipping flag drifted — flip line.env AND"
-                        + " release_check.py SHIP_NEOFORGE together, consciously");
+        // v0.13.1 scope (user decision 2026-08-27): NeoForge ships on this line too —
+        // the VoX/Foxy fork gives 26.x a working Voxy client pairing, retiring the
+        // v0.11.0 1.21.1-only scope. The value pin keeps any future flip a conscious
+        // per-line decision, and the step gates keep release.yml branch-invariant
+        // (the V-1 principle: behavior from line.env data).
+        assertEquals("true", env("LINE_SHIP_NEOFORGE"),
+                "this line ships NeoForge since v0.13.1 (Foxy-fork client pairing) —"
+                        + " flip line.env consciously (release_check derives from it)");
         assertTrue(stepBlock("- name: Build NeoForge + contract tests")
                         .contains("if: env.LINE_SHIP_NEOFORGE == 'true'"),
                 "the release-pipeline NeoForge build must be flag-gated");
