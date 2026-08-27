@@ -94,6 +94,27 @@ class RuntimeSettingsTest {
     }
 
     @Test
+    void requireServicePermissionRowIsAStrictBooleanWithTheReofferNote(@TempDir Path dir) {
+        // Row #12 (service-permission-gate-plan.md §2.5): strict true/false parse, no
+        // clamp (R-2 — boolean rows carry none), and the apply-note must tell the admin
+        // the recheck/re-offer story — arming or disarming without a restart is the
+        // feature's whole rollout path.
+        var c = loaded(dir);
+        assertFalse(c.requireServicePermission, "ships OFF");
+        assertEquals("true", apply(c, "requireServicePermission", "true"));
+        assertTrue(c.requireServicePermission);
+        assertEquals("false", apply(c, "requireServicePermission", "false"));
+        assertFalse(c.requireServicePermission);
+        var key = RuntimeSettings.byName("requireServicePermission");
+        assertThrows(IllegalArgumentException.class,
+                () -> RuntimeSettings.applyAndPersist(c, key, "yes"),
+                "strict parse: only true/false");
+        assertFalse(c.requireServicePermission, "a parse failure must assign nothing");
+        assertTrue(key.applyNote().contains("re-offered"),
+                "the note carries the recheck/re-offer contract: " + key.applyNote());
+    }
+
+    @Test
     void malformedValuesThrowWithoutAssigningAndUnknownKeysResolveNull(@TempDir Path dir) {
         var c = loaded(dir);
         int before = c.lodDistanceChunks;
@@ -167,7 +188,10 @@ class RuntimeSettingsTest {
                 "generationConcurrencyLimitPerPlayer", "mbPerSecondLimitPerPlayer",
                 "mbPerSecondLimitGlobal", "dirtyBroadcastIntervalSeconds",
                 "maxConcurrentDiskReads", "farPlayers", "farPlayersMaxDistanceBlocks",
-                "enablePingBackstop", "enableSendPacing")));
+                "enablePingBackstop", "enableSendPacing", "requireServicePermission")));
+        assertEquals(12, names.size(),
+                "row #12 (requireServicePermission) — a drifted count means a row was "
+                        + "added or dropped without updating this census");
         var c = new TestServerConfig();
         assertEquals(names.size(), RuntimeSettings.listLines(c).size());
     }

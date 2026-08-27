@@ -495,4 +495,72 @@ class FarPlayerBroadcastServiceTest {
                         .noneMatch(e -> e.name().equals("P" + (FarPlayerWire.MAX_UPDATE_ENTRIES + 49))),
                 "the farthest target is the one dropped");
     }
+
+    // ---- target-prefs retention (service-permission-gate implementation review) ----
+
+    @Test
+    void aShareSelfOptOutSurvivesTheViewerShed() {
+        // The E2 prefs-carrier rule, viewer-shed direction: the service gate's
+        // revocation composite (and a NO_CONSUMER re-handshake) calls removeViewer on
+        // an ONLINE player — their opt-out must keep binding the target filter, or the
+        // revocation makes them visible to everyone against their explicit preference.
+        var svc = subscribed();
+        svc.onPrefs(T1, prefs(true, false)); // T1 opted OUT of being shown
+        svc.removeViewer(T1);                // the revocation composite's shed
+
+        var world = List.of(snap(VIEWER, "Viewer", 0, 0), snap(T1, "Hidden", 500, 0));
+        svc.tick(10_000, world, settings("on"), sender());
+        assertTrue(rosters().stream().flatMap(r -> r.added().stream())
+                        .noneMatch(e -> e.uuid().equals(T1)),
+                "the retained opt-out must keep the shed player OFF every roster");
+    }
+
+    @Test
+    void aResubscriptionSeedsTheRetainedPrefsSoServingResumes() {
+        // The grant re-offer re-subscribes server-side with NO client re-handshake and
+        // no prefs re-send (the client's send-once latch holds): the fresh viewer
+        // state must seed from the retained prefs or tick() skips it forever.
+        var svc = new FarPlayerBroadcastService(null);
+        svc.subscribeViewer(VIEWER);
+        svc.onPrefs(VIEWER, prefs(true, true));
+        svc.removeViewer(VIEWER);            // revocation composite
+        svc.subscribeViewer(VIEWER);         // the grant sweep's replayed registration
+
+        var world = List.of(snap(VIEWER, "Viewer", 0, 0), snap(T1, "T", 500, 0));
+        svc.tick(10_000, world, settings("on"), sender());
+        assertFalse(sent.isEmpty(),
+                "the re-subscribed viewer serves again without a prefs re-send — "
+                        + "otherwise far players stay dead until rejoin after every re-offer");
+    }
+
+    @Test
+    void anUnsubscribedSendersPrefsAreRetainedForTheTargetFilter() {
+        // A gate-DENIED client never registers a viewer, but its client still delivers
+        // the shareSelf opt-out — the receipt binds the TARGET filter even without a
+        // viewer session.
+        var svc = subscribed();              // VIEWER subscribed; T1 never is
+        svc.onPrefs(T1, prefs(true, false)); // denied player's opt-out
+        var world = List.of(snap(VIEWER, "Viewer", 0, 0), snap(T1, "Denied", 500, 0));
+        svc.tick(10_000, world, settings("on"), sender());
+        assertTrue(rosters().stream().flatMap(r -> r.added().stream())
+                        .noneMatch(e -> e.uuid().equals(T1)),
+                "an unsubscribed sender's opt-out must still bind the target filter");
+    }
+
+    @Test
+    void disconnectForgetsTheRetainedPrefs() {
+        var svc = new FarPlayerBroadcastService(null);
+        svc.subscribeViewer(T1);
+        svc.onPrefs(T1, prefs(true, false));
+        svc.onDisconnect(T1);                // the connection died
+        svc.subscribeViewer(VIEWER);
+        svc.onPrefs(VIEWER, prefs(true, true));
+
+        var world = List.of(snap(VIEWER, "Viewer", 0, 0), snap(T1, "Back", 500, 0));
+        svc.tick(10_000, world, settings("on"), sender());
+        assertTrue(rosters().stream().flatMap(r -> r.added().stream())
+                        .anyMatch(e -> e.uuid().equals(T1)),
+                "retained prefs are CONNECTION-scoped: a rejoin (same UUID, fresh "
+                        + "session, no prefs yet) starts from the mode default again");
+    }
 }

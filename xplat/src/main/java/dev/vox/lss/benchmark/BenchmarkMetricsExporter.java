@@ -68,6 +68,8 @@ public final class BenchmarkMetricsExporter {
         dev.vox.lss.common.farplayers.FarPlayerBroadcastService farPlayerService();
         /** Null only in partial rigs; the summary group zero-fills then. */
         dev.vox.lss.common.region.RegionSummaryDiagnostics summaryDiagnostics();
+        /** Null only in partial rigs; {@code service.permission_denied} zero-fills then. */
+        dev.vox.lss.common.ServiceGateState serviceGateState();
     }
 
     static ServerSource asSource(RequestProcessingService service) {
@@ -85,6 +87,9 @@ public final class BenchmarkMetricsExporter {
             @Override public dev.vox.lss.common.region.RegionSummaryDiagnostics summaryDiagnostics() {
                 var rs = service.getRegionSummaries();
                 return rs == null ? null : rs.diagnostics();
+            }
+            @Override public dev.vox.lss.common.ServiceGateState serviceGateState() {
+                return service.getServiceGateState();
             }
             @Override public Collection<? extends AbstractPlayerRequestState<?>> players() {
                 return service.getPlayers().values();
@@ -259,6 +264,10 @@ public final class BenchmarkMetricsExporter {
         // send-pacing-plan.md v3: the pacer's soak-visible receipt — inertness on
         // loopback is EMPIRICAL, so a moved guard-soak baseline needs attribution.
         serviceMap.put("paced_ticks", src.tickDiag().getPacedTicksTotal());
+        // Service gate (plan §2.5): denial TRANSITIONS (handshake + revocation), never
+        // per-re-handshake or per-sweep re-counts — zero on every default install.
+        var gate = src.serviceGateState();
+        serviceMap.put("permission_denied", gate != null ? gate.permissionDeniedTotal() : 0L);
         result.put("service", serviceMap);
 
         var diskMap = new LinkedHashMap<String, Object>();

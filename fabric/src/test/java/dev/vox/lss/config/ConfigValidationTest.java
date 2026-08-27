@@ -23,6 +23,17 @@ class ConfigValidationTest {
      *  freshness there) while Paper overrides to 300 (its unfired-event staleness
      *  bound, pinned in PaperConfigValidationTest) — this half keeps the pair from
      *  drifting together silently. */
+    /** The service gate ships OFF on every platform (the shared-key move —
+     *  service-permission-gate-plan.md §2.1): an upgrading server keeps serving every
+     *  player with no node to grant first; validate() must not move it. */
+    @Test
+    void requireServicePermissionShipsOffOnTheSharedBase() {
+        var c = new dev.vox.lss.config.LSSServerConfig();
+        org.junit.jupiter.api.Assertions.assertFalse(c.requireServicePermission);
+        c.validate();
+        org.junit.jupiter.api.Assertions.assertFalse(c.requireServicePermission);
+    }
+
     @Test
     void fabricDefaultsTheLodStoreResweepToZero() {
         assertEquals(0, serverConfig().lodStoreResweepSeconds);

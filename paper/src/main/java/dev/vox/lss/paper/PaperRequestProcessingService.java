@@ -43,6 +43,37 @@ import java.util.concurrent.ConcurrentLinkedQueue;
  */
 public class PaperRequestProcessingService {
     private final Map<UUID, PaperPlayerRequestState> players;
+    // Service gate (service-permission-gate-plan.md §2.3): the denied-handshake memo,
+    // the once-per-episode denial-log latch, and the revocation streaks — dying with
+    // this service (onDisable's shutdown() is the C1-9 clear).
+    private final dev.vox.lss.common.ServiceGateState serviceGateState =
+            new dev.vox.lss.common.ServiceGateState();
+    /** The recheck cadence (plan §2.3): both sweeps run every 200 ticks (~10 s). */
+    static final int PERMISSION_RECHECK_TICKS = 200;
+    private int permissionRecheckCounter;
+    /** The sweep's permission read — pump-thread Bukkit permissible reads (the
+     *  PaperFarPlayerSnapshots Folia precedent); seam-injected for tests. A throwing
+     *  probe is contained at the sweep site (counts as HOLDING — fail-open). */
+    private java.util.function.BiPredicate<ServerPlayer, String> permissionProbe =
+            (p, node) -> p.getBukkitEntity().hasPermission(node);
+    /** The grant sweep's replay hook — wired to the plugin's production handshake body
+     *  by the production constructor (the full ladder re-runs; the reply lands via the
+     *  registrar's DEFERRED path, so the Folia pre-registration gap stays closed);
+     *  null in bare test wirings until injected. */
+    private java.util.function.BiConsumer<ServerPlayer,
+            dev.vox.lss.common.ServiceGateState.DeniedHandshake> handshakeReplayer;
+
+    /** Test seam. */
+    public void setPermissionProbeForTest(
+            java.util.function.BiPredicate<ServerPlayer, String> probe) {
+        this.permissionProbe = probe;
+    }
+
+    /** Test seam (production wiring: the constructor). */
+    public void setHandshakeReplayer(java.util.function.BiConsumer<ServerPlayer,
+            dev.vox.lss.common.ServiceGateState.DeniedHandshake> replayer) {
+        this.handshakeReplayer = replayer;
+    }
     private final MinecraftServer server;
     private final PaperChunkDiskReader diskReader;
     private final PaperChunkGenerationService generationService;
@@ -356,6 +387,11 @@ public class PaperRequestProcessingService {
     public PaperRequestProcessingService(MinecraftServer server, Plugin plugin, PaperConfig config) {
         this(server, config, productionWiring(server, plugin, config));
         this.plugin = plugin;
+        if (plugin instanceof LSSPaperPlugin lss) {
+            // The grant sweep's re-offer: the stored handshake replays through the
+            // plugin's PRODUCTION receiver body — full ladder, real gate, deferred reply.
+            this.handshakeReplayer = lss::replayServiceGateHandshake;
+        }
     }
 
     /** Test seam: same field wiring as production, collaborators injected. */
@@ -774,12 +810,15 @@ public class PaperRequestProcessingService {
      *  plugin-message send (the broadcaster's setDirtySender pattern). */
     @FunctionalInterface
     interface SessionConfigSender {
-        void send(ServerPlayer player, PaperConfig config) throws Exception;
+        /** {@code enabled} is passed explicitly (not read off the config): the service
+         *  gate's revocation push advertises {@code false} at a player on a server whose
+         *  config says {@code true}. */
+        void send(ServerPlayer player, PaperConfig config, boolean enabled) throws Exception;
     }
 
-    private SessionConfigSender sessionConfigSender = (player, cfg) ->
+    private SessionConfigSender sessionConfigSender = (player, cfg, enabled) ->
             PaperPayloadHandler.sendSessionConfig(player.getBukkitEntity(),
-                    LSSConstants.PROTOCOL_VERSION, cfg.enabled,
+                    LSSConstants.PROTOCOL_VERSION, enabled,
                     cfg.lodDistanceChunks, cfg.enableChunkGeneration);
 
     void setSessionConfigSender(SessionConfigSender sender) {
@@ -796,7 +835,7 @@ public class PaperRequestProcessingService {
                 continue;
             }
             try {
-                this.sessionConfigSender.send(state.getPlayer(), this.config);
+                this.sessionConfigSender.send(state.getPlayer(), this.config, this.config.enabled);
                 pushed++;
             } catch (Exception e) {
                 LSSLogger.error("Session-config re-push failed for "
@@ -804,6 +843,116 @@ public class PaperRequestProcessingService {
             }
         }
         return new int[]{pushed, legacy};
+    }
+
+    /**
+     * The two service-gate sweeps (service-permission-gate-plan.md §2.3) — the textual
+     * twin of {@code RequestProcessingService.runServiceGateSweeps}, with the Paper
+     * differences: Bukkit permissible reads on the pump, the widened
+     * {@link SessionConfigSender} for the enabled=false push, and the replay through
+     * the plugin's production receiver via {@link #setHandshakeReplayer} (deferred
+     * reply — the Folia pre-registration gap stays closed). Public so tests drive one
+     * sweep directly; the one production caller is the tick cadence. Pump thread only.
+     */
+    public void runServiceGateSweeps() {
+        var gateState = this.serviceGateState;
+        var config = this.config;
+        if (config.requireServicePermission) {
+            for (var state : this.players.values()) {
+                UUID uuid = state.getPlayerUUID();
+                if (this.dialects.dialectOf(uuid)
+                        != dev.vox.lss.common.HandshakeGate.WireDialect.CURRENT) {
+                    continue; // legacy sessions heal at rejoin — recorded accepted-open
+                }
+                var player = state.getPlayer();
+                boolean holds;
+                try {
+                    holds = this.permissionProbe.test(player,
+                                    dev.vox.lss.common.LSSPermissions.SERVICE_LSS)
+                            && this.permissionProbe.test(player,
+                                    dev.vox.lss.common.LSSPermissions.SERVICE_VSS);
+                } catch (Exception e) {
+                    holds = true; // contained: a throwing backend counts as HOLDING
+                }
+                if (holds) {
+                    gateState.resetRevocationStreak(uuid);
+                    continue;
+                }
+                if (!gateState.bumpRevocationStreak(uuid)) continue;
+                try {
+                    this.sessionConfigSender.send(player, config, false);
+                } catch (Exception e) {
+                    LSSLogger.error("Service-gate disable push failed for "
+                            + player.getName().getString(), e);
+                }
+                gateState.rememberDenied(uuid, player.getName().getString(),
+                        LSSConstants.PROTOCOL_VERSION, state.getCapabilities());
+                unregisterForServiceGate(uuid);
+                LSSLogger.info("LOD service revoked for " + player.getName().getString()
+                        + ": requireServicePermission is on and a permission recheck found "
+                        + "a negative grant on " + dev.vox.lss.common.LSSPermissions.SERVICE_LSS
+                        + " or " + dev.vox.lss.common.LSSPermissions.SERVICE_VSS
+                        + " (either spelling denies) — the session was told "
+                        + dev.vox.lss.common.Brand.shortName() + " is disabled; it is re-offered automatically "
+                        + "if the grant returns");
+            }
+        } else {
+            // Disarmed: no streak may survive into a later re-arm (the two-sweep
+            // hysteresis must start fresh).
+            gateState.clearRevocationStreaks();
+        }
+        if (gateState.hasDenied()) {
+            for (UUID uuid : gateState.deniedSnapshot()) {
+                if (this.players.containsKey(uuid)) {
+                    // SKIP, never clear (implementation review, 2026-08-27): a denied
+                    // re-handshake deposits the memo on a region thread while the
+                    // unregister composite is still queued behind the lifecycle drain —
+                    // clearing here would wipe the deposit and strand the player past
+                    // its own revocation. A stale entry is retained one sweep and
+                    // replays correctly on the next.
+                    continue;
+                }
+                var player = this.server.getPlayerList().getPlayer(uuid);
+                if (player == null) {
+                    // Offline: EVERYTHING gate-side is session-scoped — sweeping only
+                    // the memo would leak the log latch (a same-UUID rejoin would then
+                    // be denied silently) and any streak.
+                    gateState.onDisconnect(uuid);
+                    continue;
+                }
+                boolean cleared;
+                if (!config.requireServicePermission) {
+                    cleared = true; // a disarmed gate trivially clears everyone
+                } else {
+                    try {
+                        cleared = this.permissionProbe.test(player,
+                                        dev.vox.lss.common.LSSPermissions.SERVICE_LSS)
+                                && this.permissionProbe.test(player,
+                                        dev.vox.lss.common.LSSPermissions.SERVICE_VSS);
+                    } catch (Exception e) {
+                        cleared = true; // fail-open, the doctrine
+                    }
+                }
+                if (!cleared) continue;
+                if (this.handshakeReplayer == null) continue; // bare test wiring: RETAIN
+                var remembered = gateState.takeDenied(uuid);
+                if (remembered == null) continue;
+                LSSLogger.info("Re-offering " + dev.vox.lss.common.Brand.shortName() + " to "
+                        + remembered.playerName() + " (re-offer): "
+                        + (config.requireServicePermission
+                                ? "the service permission cleared"
+                                : "requireServicePermission was disarmed")
+                        + " — replaying the stored handshake");
+                try {
+                    this.handshakeReplayer.accept(player, remembered);
+                } catch (Exception e) {
+                    // Contained — twin of the Fabric sweep: a throwing replay must not
+                    // abort the remaining re-offers; the entry stays dropped (rejoin heals).
+                    LSSLogger.error("Service-gate re-offer failed for "
+                            + remembered.playerName(), e);
+                }
+            }
+        }
     }
 
     private void drainLifecycleMailbox() {
@@ -862,7 +1011,10 @@ public class PaperRequestProcessingService {
                         // the network-disconnect semantics and cannot break the
                         // identity-survives-dim-change contract.
                         this.dialects.onDisconnect(r.uuid());
-                        this.farPlayerService.removeViewer(r.uuid());
+                        this.farPlayerService.onDisconnect(r.uuid());
+                        // Service gate: same connection-scoped sweep (memo, log latch,
+                        // streak) — idempotent beside the quit hook's own call.
+                        this.serviceGateState.onDisconnect(r.uuid());
                         // Region summaries: quit-originated only, same as above —
                         // connection-scoped cleanup, never the dim-change cycle.
                         if (this.regionSummaries != null) this.regionSummaries.removePlayer(r.uuid());
@@ -898,6 +1050,9 @@ public class PaperRequestProcessingService {
                 && !this.dialects.isV16(player.getUUID())
                 && !this.dialects.isV18(player.getUUID()));
         state.markHandshakeComplete();
+        // Service gate: a successful registration by ANY path ends the denied episode
+        // (memo entry gone, log latch re-armed, streak reset).
+        this.serviceGateState.onRegistered(player.getUUID());
         return state;
     }
 
@@ -929,6 +1084,40 @@ public class PaperRequestProcessingService {
         this.diskReader.removePlayerResults(uuid);
         if (this.generationService != null)
             this.generationService.removePlayer(uuid);
+    }
+
+    /**
+     * The service-gate unregistration composite (service-permission-gate-plan.md
+     * §2.3): {@code removePlayer} + the far-player viewer shed + the region-summary
+     * cleanup — the departed-player sweep's trio, NEVER a modified removePlayer
+     * (that is the dimension-change reuse path on Folia; teaching it to shed viewers
+     * would break every dimension change). The dialect mark and v16 identity are
+     * deliberately KEPT — connection-lifecycle facts, and the mark is what any
+     * per-player disable push read. No-op for an unregistered uuid. Pump thread only.
+     */
+    void unregisterForServiceGate(UUID uuid) {
+        if (!this.players.containsKey(uuid)) return;
+        removePlayer(uuid);
+        this.farPlayerService.removeViewer(uuid);
+        if (this.regionSummaries != null) this.regionSummaries.removePlayer(uuid);
+    }
+
+    /** Any thread (the handshake's denial hook runs on a region thread on Folia):
+     *  marshals the composite onto the pump, where the registered-check happens at
+     *  drain time. A registration RACING the denial (two opposite-outcome handshakes
+     *  in one drain window) can still invert — the lifecycle Register applies before
+     *  this runtime task regardless of arrival order, so the composite may unregister
+     *  the newer granted registration; the client keeps declaring (its last config was
+     *  the deferred enabled=true), so the 60 s re-attach prompt forces a re-handshake
+     *  that settles the correct terminal state. Accepted: vanishingly rare and
+     *  self-healing. */
+    public void enqueueServiceGateUnregister(UUID uuid) {
+        enqueueRuntimeTask(() -> unregisterForServiceGate(uuid));
+    }
+
+    /** The service-gate bookkeeping — see {@link dev.vox.lss.common.ServiceGateState}. */
+    public dev.vox.lss.common.ServiceGateState getServiceGateState() {
+        return this.serviceGateState;
     }
 
     /** Minimum interval between re-attach prompts per player — also the post-removal grace
@@ -1098,6 +1287,14 @@ public class PaperRequestProcessingService {
         this.diag.reset(this.offThreadProcessor.getDiagnostics());
 
         applyRuntimeConfig();
+        // Service gate (plan §2.3): tick-cadenced permission rechecks, ordered AFTER
+        // drainLifecycleMailbox above — a registered-but-flip-pending player must have
+        // its dialect applied before the CURRENT-only revocation enumerates (the same
+        // ordering MAJOR the set re-push closed).
+        if (++this.permissionRecheckCounter >= PERMISSION_RECHECK_TICKS) {
+            this.permissionRecheckCounter = 0;
+            runServiceGateSweeps();
+        }
         var generationReady = tickGenerationService();
         // v16 declares BEFORE the lifecycle pass: the sync probe reads the mailbox during
         // processPlayerLifecycle, and on Folia holdAndScheduleRegionProbe reads ONLY the
@@ -1120,11 +1317,17 @@ public class PaperRequestProcessingService {
                 this.v16Compat.onDisconnect(uuid);
                 // E1 review M1: the sweep must shed the far-player subscription like
                 // the other two identities, or a swept viewer's roster state leaks and
-                // keeps charging the broadcast loop until a same-UUID rejoin.
-                this.farPlayerService.removeViewer(uuid);
+                // keeps charging the broadcast loop until a same-UUID rejoin. The
+                // onDisconnect flavor also drops the retained target prefs — the
+                // player's connection is gone.
+                this.farPlayerService.onDisconnect(uuid);
                 // Region summaries: same connection-scoped cleanup (pending request,
                 // queued job, re-sweep cooldown mark).
                 if (this.regionSummaries != null) this.regionSummaries.removePlayer(uuid);
+                // Service gate: the sweep IS a disconnect — without this a denied
+                // joiner whose quit event never fired leaks its log latch and streak
+                // for the service's life (implementation review, 2026-08-27).
+                this.serviceGateState.onDisconnect(uuid);
             }
         }
 
@@ -1771,6 +1974,7 @@ public class PaperRequestProcessingService {
         // region thread — this flag shrinks the tick-vs-shutdown overlap to at most the one
         // in-flight tick (runtime disables are documented best-effort on Folia).
         this.shuttingDown = true;
+        this.serviceGateState.clear();
         try {
             // Own containment, FIRST (P2 review I-m2): no ordering dependency on the
             // dirty drain, and a throw there must not leak the sweeper daemon across
