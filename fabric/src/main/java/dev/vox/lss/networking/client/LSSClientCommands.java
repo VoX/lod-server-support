@@ -22,17 +22,10 @@ public class LSSClientCommands {
                                 return Command.SINGLE_SUCCESS;
                             })
                     )
-                    .then(ClientCommands.literal("reset")
-                            .executes(context -> {
-                                ClientCommandActions.runReset(context.getSource()::sendFeedback, false);
-                                return Command.SINGLE_SUCCESS;
-                            })
-                            .then(ClientCommands.literal("confirm")
-                                    .executes(context -> {
-                                        ClientCommandActions.runReset(context.getSource()::sendFeedback, true);
-                                        return Command.SINGLE_SUCCESS;
-                                    }))
-                    )
+                    // Issue #4: the reset subtree (incl. `voxy-force`) is BUILT IN
+                    // xplat and shared with NeoForge — do not re-hand-roll it here.
+                    .then(ClientCommandActions.resetSubtree(
+                            ClientCommands::literal, source -> source::sendFeedback))
                     .then(ClientCommands.literal("diag")
                             .executes(context -> {
                                 ClientCommandActions.showDiagnostics(context.getSource()::sendFeedback);
