@@ -272,12 +272,24 @@ public class LSSServerCommands {
                 .withXrayLine(xrayDiagLine())
                 .withMoveTraceLine(moveTraceDiagLineOrNull())
                 .withYieldLine(DiagnosticsFormatter.yieldDiagLineOrNull(
-                        config.lodYieldsToVanillaTransport, service.getTickDiag()));
+                        config.lodYieldsToVanillaTransport, service.getTickDiag()))
+                .withGateLine(serviceGateDiagLineOrNull(config, service));
 
         for (var line : DiagnosticsFormatter.formatDiagnostics(data)) {
             source.sendSuccess(() -> Component.literal(line), false);
         }
         return 1;
+    }
+
+    /** The service-gate one-liner (plan §2.5): present only while the key is armed;
+     *  the provider token is the LOADER's fact (the LoaderServices seam — "none" when
+     *  no backend resolved, the armed-gate-serves-everyone shape an admin must see). */
+    private static String serviceGateDiagLineOrNull(LSSServerConfig config,
+                                                    RequestProcessingService service) {
+        if (!config.requireServicePermission) return null;
+        return "Gate: requireServicePermission=on denied="
+                + service.getServiceGateState().deniedCount()
+                + " provider=" + dev.vox.lss.platform.LoaderServices.get().permissionProviderToken();
     }
 
     private static String xrayDiagLine() {

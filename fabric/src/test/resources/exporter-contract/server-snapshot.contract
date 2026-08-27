@@ -66,6 +66,7 @@ service.grace_skipped=long
 service.in_memory=long
 service.miss_dropped=long
 service.paced_ticks=long
+service.permission_denied=long
 service.queue_full=long
 service.range_filtered=long
 service.re_resolved=long

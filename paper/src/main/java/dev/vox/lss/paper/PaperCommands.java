@@ -211,7 +211,11 @@ public class PaperCommands implements CommandExecutor, TabCompleter {
                         : service.getRegionSummaries().diagnostics().diagLineOrNull())
                 .withYieldLine(DiagnosticsFormatter.yieldDiagLineOrNull(
                         config.lodYieldsToVanillaTransport, service.getTickDiag()))
-                .withXrayLine(xrayDiagLine());
+                .withXrayLine(xrayDiagLine())
+                .withGateLine(!config.requireServicePermission ? null
+                        : "Gate: requireServicePermission=on denied="
+                                + service.getServiceGateState().deniedCount()
+                                + " provider=bukkit");
 
         for (var line : DiagnosticsFormatter.formatDiagnostics(data)) {
             sender.sendMessage(line);

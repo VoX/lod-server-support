@@ -200,6 +200,25 @@ def check_paper_jar(jar, problems):
         if not re.search(r"^folia-supported:\s*true\s*$", ymltext, re.MULTILINE):
             problems.append(f"{base}: plugin.yml lost folia-supported: true — Folia servers "
                             "will refuse this jar")
+        # Service-gate nodes (plan §2.6 / §8 O1-m13): UNCONDITIONAL — the dual-jar pair
+        # check below only runs when a VSS jar exists, and it pins token PRESENCE, not
+        # the declared default. Both spellings must be declared AND both must carry the
+        # `default: true` VALUE: an undeclared node falls back to Bukkit's op default,
+        # and a flipped default is the same non-op black-out the moment an operator
+        # arms requireServicePermission.
+        for node in ("lss.use", "vss.use"):
+            m = re.search(r"^  " + re.escape(node)
+                          + r":\s*\n(?:^    .*\n)*?^    default:\s*['\"]?(\w+)['\"]?\s*(?:#.*)?$",
+                          ymltext, re.MULTILINE)
+            if m is None:
+                problems.append(f"{base}: plugin.yml is missing the service-gate node "
+                                f"{node!r} with an explicit default (both brand "
+                                "spellings must be declared — Bukkit resolves an "
+                                "undeclared node to the op default)")
+            elif m.group(1) != "true":
+                problems.append(f"{base}: plugin.yml service-gate node {node!r} declares "
+                                f"default: {m.group(1)} — must be true (arming "
+                                "requireServicePermission alone must deny NOBODY)")
     if not any(n.startswith("dev/vox/lss/common/") and n.endswith(".class") for n in names):
         problems.append(f"{base}: shaded jar missing the shared common/ classes")
     if "paperweight-mappings-namespace: mojang" not in _manifest(jar):
@@ -505,6 +524,10 @@ FABRIC_ONLY_CLASS_PREFIXES = (
     "dev/vox/lss/trace/MoveTraceBootstrap",
     "dev/vox/lss/platform/FabricLoaderServices",
     "dev/vox/lss/platform/FabricClientLoaderServices",
+    # The service gate's Fabric permission rung (service-permission-gate-plan.md §2.1):
+    # the reflective fabric-permissions-api bridge is fabric-only BY DESIGN — NeoForge
+    # enforces through its native PermissionNode registration (LSSNeoPermissions).
+    "dev/vox/lss/compat/FabricPermissionsBridge",
     # Same-FQN TWIN classes: each loader implements its own body behind the shared
     # outer name xplat compiles against, so their NESTED members legitimately differ
     # (the fabric renderer's Proxy/MountInstance vs the neoforge cut; the fabric
@@ -758,7 +781,9 @@ def check_vss_pair_paper(lss_jar, vss_jar, problems):
     (main/api-version/folia; name rebrands since 2026-08-13) must be byte-identical. And the rebrand must actually have
     happened: the VSS jar carries vsslod / vss.admin / the Voxy description and NONE of the
     LSS tokens; the LSS jar carries the LSS tokens. The command name + permission node are
-    LOCAL (never on the wire), so this rebrand does not affect LSS<->VSS compatibility."""
+    LOCAL (never on the wire), so this rebrand does not affect LSS<->VSS compatibility.
+    The dual-spelling nodes (farplayers privacy, service gate) are the exception in the other
+    direction: both spellings must SURVIVE in both jars."""
     vbase = os.path.basename(vss_jar)
     try:
         ltext = _read(lss_jar, "plugin.yml")
@@ -797,6 +822,13 @@ def check_vss_pair_paper(lss_jar, vss_jar, problems):
     # lss.farplayers.hidden is deliberately NOT in this list: BOTH brand spellings ship
     # in BOTH jars since 2026-08-13 (Bukkit's undeclared-node op default made the rename
     # + cross-brand enforcement silently hide ops) — see plugin.yml + the vssJar comment.
+    # lss.use is exempt for the identical reason (the per-player service gate,
+    # requireServicePermission): the Java enforcement requires lss.use AND vss.use, so a
+    # rename here would leave the VSS jar declaring only vss.use while lss.use — declared
+    # `default: true`, i.e. held by everyone — resolves as an UNDECLARED node against
+    # Bukkit's op default, silently narrowing it to ops. The dual-spelling check below
+    # pins both nodes POSITIVELY in both jars, which is what actually fires if someone
+    # widens the rewrite to a generic `lss.` rule.
     for tok in ("lsslod", "lss.admin",
                 "LOD Server Support admin", "Access to LSS admin"):
         if tok not in ltext:
@@ -805,10 +837,24 @@ def check_vss_pair_paper(lss_jar, vss_jar, problems):
         if tok in vtext:
             problems.append(f"{vbase}: VSS plugin.yml still contains LSS token {tok!r} "
                             "— the rebrand rewrite no-opped")
-    for tok in ("vsslod", "vss.admin", "vss.farplayers.hidden", "Voxy Server Side"):
+    for tok in ("vsslod", "vss.admin", "vss.farplayers.hidden", "vss.use", "Voxy Server Side"):
         if tok not in vtext:
             problems.append(f"{vbase}: VSS plugin.yml is missing expected VSS token {tok!r} "
                             "— the rebrand did not fully apply")
+    # Dual-spelling service-gate nodes: BOTH must survive in BOTH jars. This is the factory
+    # guard the rename-exemption comment above only describes — a widened rewrite (a generic
+    # `lss.` -> `vss.` rule, or someone adding lss.use to the rename list) would silently
+    # ship a VSS jar whose lss.use declaration is gone. The node is declared `default: true`
+    # (everyone holds it); undeclared, it falls back to Bukkit's op default — so the first
+    # operator to arm requireServicePermission would black out every non-op at once.
+    for jar_text, jar_name in ((ltext, os.path.basename(lss_jar)), (vtext, vbase)):
+        for tok in ("lss.use", "vss.use"):
+            if tok not in jar_text:
+                problems.append(f"{jar_name}: plugin.yml is missing the service-gate node "
+                                f"{tok!r} — BOTH brand spellings must be declared in BOTH "
+                                "jars (the enforcement requires both, and Bukkit resolves an "
+                                "undeclared node to the op default, so a missing declaration "
+                                "denies every non-op)")
 
 
 # ---------------------------------------------------------------- brand.properties + wire
@@ -1318,15 +1364,46 @@ def _selftest():
         check(any("common/soak" in m and "META-INF/jars" in m for m in p),
               f"dev code inside a nested jar not caught: {p}")
 
+        GATE_NODES_YML = ("permissions:\n"
+                          "  lss.use:\n    description: receive LOD data\n    default: true\n"
+                          "  vss.use:\n    description: receive LOD data\n    default: true\n")
         good_pap = os.path.join(td, "lod-server-support-paper.jar")
         _make_jar(good_pap, {
-            "plugin.yml": "name: LodServerSupport\nversion: 0.4.0\nfolia-supported: true\n",
+            "plugin.yml": "name: LodServerSupport\nversion: 0.4.0\nfolia-supported: true\n"
+                          + GATE_NODES_YML,
             "dev/vox/lss/paper/LSSPaperPlugin.class": "x",
             "dev/vox/lss/common/PositionUtil.class": "x",
         }, manifest="Manifest-Version: 1.0\npaperweight-mappings-namespace: mojang\n")
         p = []
         check_paper_jar(good_pap, p)
         check(p == [], f"clean paper jar flagged: {p}")
+
+        # Service-gate node checks are UNCONDITIONAL (plan §2.6): a jar missing a node,
+        # and a jar whose declared default flipped, must both be caught here — the pair
+        # check only runs when a VSS jar exists.
+        nodeless_pap = os.path.join(td, "lod-server-support-paper-nodeless.jar")
+        _make_jar(nodeless_pap, {
+            "plugin.yml": "name: LodServerSupport\nversion: 0.4.0\nfolia-supported: true\n"
+                          "permissions:\n  lss.use:\n    default: true\n",
+            "dev/vox/lss/paper/LSSPaperPlugin.class": "x",
+            "dev/vox/lss/common/PositionUtil.class": "x",
+        }, manifest="Manifest-Version: 1.0\npaperweight-mappings-namespace: mojang\n")
+        p = []
+        check_paper_jar(nodeless_pap, p)
+        check(any("missing the service-gate node 'vss.use'" in m for m in p),
+              f"missing vss.use node not caught: {p}")
+        flipped_pap = os.path.join(td, "lod-server-support-paper-flipped.jar")
+        _make_jar(flipped_pap, {
+            "plugin.yml": "name: LodServerSupport\nversion: 0.4.0\nfolia-supported: true\n"
+                          + GATE_NODES_YML.replace("  vss.use:\n    description: receive LOD data\n    default: true\n",
+                                                   "  vss.use:\n    description: receive LOD data\n    default: op\n"),
+            "dev/vox/lss/paper/LSSPaperPlugin.class": "x",
+            "dev/vox/lss/common/PositionUtil.class": "x",
+        }, manifest="Manifest-Version: 1.0\npaperweight-mappings-namespace: mojang\n")
+        p = []
+        check_paper_jar(flipped_pap, p)
+        check(any("declares default: op" in m and "vss.use" in m for m in p),
+              f"flipped default not caught: {p}")
 
         # a paper jar LOSING folia-supported must be caught: Folia ships a 26.2 build since
         # 2026-07-28, so a jar without the flag silently stops loading on Folia servers
@@ -1482,7 +1559,8 @@ def _selftest():
         _make_jar(good_vpap, {
             "plugin.yml": ("name: VoxyServerSide\nversion: 0.7.0\n"
                            "folia-supported: true\n"
-                           "description: Render distant Voxy LODs on servers\n"),
+                           "description: Render distant Voxy LODs on servers\n"
+                           + GATE_NODES_YML),
             "dev/vox/lss/paper/LSSPaperPlugin.class": "x",
             "dev/vox/lss/common/PositionUtil.class": "x",
         }, manifest="Manifest-Version: 1.0\npaperweight-mappings-namespace: mojang\n")
@@ -1640,9 +1718,17 @@ def _selftest():
                           "    default: false\n"
                           "  vss.farplayers.hidden:\n"
                           "    description: hidden (VSS spelling)\n"
-                          "    default: false\n")
+                          "    default: false\n"
+                          # Service-gate nodes, same dual-spelling rule (default true).
+                          "  lss.use:\n"
+                          "    description: receive LOD data\n"
+                          "    default: true\n"
+                          "  vss.use:\n"
+                          "    description: receive LOD data (VSS spelling)\n"
+                          "    default: true\n")
         # Mirror vssJar's exact rewrites (2026-08-13 shape: name/author rebrand too; the
-        # farplayers node is deliberately NOT renamed — both spellings ship in both jars).
+        # farplayers + service-gate nodes are deliberately NOT renamed — both
+        # spellings ship in both jars).
         VSS_PLUGIN_YML = (LSS_PLUGIN_YML
             .replace("name: LodServerSupport", "name: VoxyServerSide", 1)
             .replace("description: LSS plugin.",
@@ -1886,8 +1972,11 @@ def _selftest():
                   "permissions:\n  lss.admin:\n"
                   "    description: Access to LSS admin commands\n    default: op\n"
                   "  lss.farplayers.hidden:\n    description: hidden\n    default: false\n"
-                  "  vss.farplayers.hidden:\n    description: hidden\n    default: false\n")
-        # The 2026-08-13 rewrite shape: name/author rebrand; farplayers nodes NOT renamed.
+                  "  vss.farplayers.hidden:\n    description: hidden\n    default: false\n"
+                  "  lss.use:\n    description: receive LOD data\n    default: true\n"
+                  "  vss.use:\n    description: receive LOD data\n    default: true\n")
+        # The 2026-08-13 rewrite shape: name/author rebrand; the dual-spelling
+        # farplayers + service-gate nodes are NOT renamed.
         PY_VSS = (PY_LSS
                   .replace("name: LodServerSupport", "name: VoxyServerSide", 1)
                   .replace("description: LSS plugin.",

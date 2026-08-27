@@ -108,6 +108,35 @@ class PluginYmlContractTest {
     }
 
     @Test
+    void bothServiceUseNodesAreDeclaredDefaultTrue() {
+        // The service gate (requireServicePermission) requires lss.use AND vss.use — the
+        // deny model's De Morgan mirror, so one negative grant on either spelling bites. Same
+        // load-bearing dual declaration as the far-player nodes above: Bukkit resolves an
+        // UNDECLARED node to the OP default, so deleting either declaration would leave the
+        // missing spelling silently op-only on the jar that lost it — and an LSS<->VSS jar
+        // swap would drop every grant.
+        //
+        // The VALUE is the user decision of 2026-08-25: `true`, not `op`. Everyone holds the
+        // node unless an admin says otherwise, so arming requireServicePermission on its own
+        // denies NOBODY — it is the original behavior, and the gate becomes a deny tool
+        // driven by explicit negative grants. Flipping this to `op` (or `false`) would black
+        // out every non-op on the day an operator first tries the switch.
+        assertEquals("true", yml.getString("permissions/lss.use/default"),
+                "lss.use must be declared default true — arming the gate alone must serve everyone as before");
+        assertEquals("true", yml.getString("permissions/vss.use/default"),
+                "vss.use must be declared default true — arming the gate alone must serve everyone as before");
+        assertEquals(LSSPaperPlugin.PERMISSION_SERVICE_LSS, "lss.use",
+                "the declared node and the enforced constant must be the same string");
+        assertEquals(LSSPaperPlugin.PERMISSION_SERVICE_VSS, "vss.use",
+                "the declared node and the enforced constant must be the same string");
+        // The constants' HOME moved to common (service-permission-gate-plan.md §2.1):
+        // xplat's gate and NeoForge's node registration enforce the same strings, and
+        // this is the one pin tying all three modules' spellings together.
+        assertEquals("lss.use", dev.vox.lss.common.LSSPermissions.SERVICE_LSS);
+        assertEquals("vss.use", dev.vox.lss.common.LSSPermissions.SERVICE_VSS);
+    }
+
+    @Test
     void apiVersionMatchesTheDevBundleMinecraftVersion() throws Exception {
         // V-1/P3: the SOURCE carries the template token; the value IS gradle.properties'
         // minecraft_version by construction (paper processResources), so the lockstep
