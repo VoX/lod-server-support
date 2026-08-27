@@ -340,6 +340,13 @@ final class XaeroMapCompat {
         if (bridge != null) bridge.onSessionEnd();
     }
 
+    /** ARMED = flag ∧ installed ∧ resolved (a live {@code instance} implies the
+     *  latter two) — the alias corroboration's gate input (cache-alias-keying plan
+     *  §2.2): while the bridge can write map tiles, the cache must stay per-address. */
+    static boolean isArmed() {
+        return instance != null && LSSClientConfig.CONFIG.enableXaeroMapBridge;
+    }
+
     /** The conditional {@code /lss diag} line, or null when Xaero was never detected. */
     static String diagLine() {
         var bridge = instance;

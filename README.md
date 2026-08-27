@@ -48,9 +48,12 @@ Install **LOD Server Support** on **both** the **server** (LOD Server Support Fa
 
 - `/lss clearcache` - Clear the local column cache, forcing all chunks to be re-requested from the server
 - `/lss reset` - Wipe this server's LODs (local cache and Voxy's stored data) and re-stream them fresh
+- `/lss reset voxy-force` - Same, but for the case where another mod has redirected Voxy's storage (a replay mod, or any other storage override) and the ordinary reset therefore left Voxy's disk data alone. Shows both storage paths first and deletes nothing until you run `/lss reset voxy-force confirm` within 60 seconds on the same connection
 - `/lss diag` - Show client-side diagnostics (connection, throughput, scan progress, request budget)
 
 ## Configuration
+
+**Client cache identity.** The client keeps its per-server download cache in per-world buckets automatically: each remote world is identified by the (already hashed) seed value every vanilla login carries, so a server that resets or rotates its map stops serving you stale "already downloaded" terrain, and your first session after upgrading adopts the existing cache warmly. `useWorldSubBuckets: false` in `lss-client-config.json` turns the per-world split off. For a server reachable at several addresses, `cacheAddressAliases` (for example `[["play.example.com", "alt.example.com"]]`) lets all of them share one cache so the world only downloads once — with Voxy installed this needs voxy-extra's LoD Mirror configured with the same list (first entries identical), and LSS applies the alias only when Voxy's own storage confirms it, falling back to the per-address cache otherwise. (voxy-extra is a Fabric mod, so on NeoForge with Voxy installed the alias never corroborates and each address keeps its own cache — the per-world split works on both loaders either way.) `/lss diag` shows the active cache key on its `Cache:` line.
 
 Config files are generated during first run at `config/lss-server-config.json` on Fabric and NeoForge or `plugins/LodServerSupport/lss-server-config.json` on Paper.
 

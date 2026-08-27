@@ -24,6 +24,25 @@ public final class SourcePaths {
     };
 
     /**
+     * Resolves a REPO-ROOT-relative file (e.g. {@code "neoforge/src/main/resources/..."}),
+     * surviving both the Gradle CWD (the module dir) and an IDE repo-root CWD by the same
+     * parent walk {@link #mainSource} uses. Contract tests that assert across MODULES —
+     * a Fabric test pinning a NeoForge resource, say — need this rather than a
+     * {@code Path.of(...)} that only works from one of the two CWDs.
+     *
+     * @throws AssertionError when the file exists under no reachable root
+     */
+    public static Path repoFile(String repoRelativePath) {
+        Path dir = Path.of("").toAbsolutePath();
+        for (int depth = 0; depth < 5 && dir != null; depth++, dir = dir.getParent()) {
+            Path candidate = dir.resolve(repoRelativePath);
+            if (Files.exists(candidate)) return candidate;
+        }
+        throw new AssertionError("cannot locate " + repoRelativePath
+                + " from cwd=" + Path.of("").toAbsolutePath());
+    }
+
+    /**
      * @param javaPath package-relative path, e.g. {@code "dev/vox/lss/trace/MoveDesyncHooks.java"}
      * @throws AssertionError when the file exists in neither tree — a moved-without-retarget signal
      */

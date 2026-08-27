@@ -173,6 +173,15 @@ final class ClientSessionGate {
         this.v16CompatEnabled = enableV16ServerCompat;
         this.v19CompatEnabled = enableV19ServerCompat;
         V16ClientWire.reset();
+        // The alias axis's per-session latch resets HERE and not at disconnect: a
+        // play→config reconfiguration fires neither loader's disconnect, and JOIN is
+        // the one event that reliably brackets a play session (plan §2.1, §9 M-B2).
+        AliasLatch.resetForJoin();
+        // The force grant gets the same JOIN bracket (panel fix): a reconfiguration
+        // fires no disconnect, and a grant armed with a live manager must not survive
+        // into a rejoined session where the no-session branch would do MORE than the
+        // armed prompt disclosed.
+        ResetCoordinator.clearForceGrant();
 
         if (!receiveServerLods) return;
         if (localIntegratedServer) return;
@@ -408,15 +417,21 @@ final class ClientSessionGate {
             // self-healing, engaged-sessions-only, needs an admin re-push to coincide
             // with a dimension trip inside one tick.
             TransferRateGovernor carried = null;
+            java.util.Optional<String> carriedSubKey = java.util.Optional.empty();
             if (previous != null) {
                 carried = new TransferRateGovernor();
                 carried.adoptFrom(previous.governor);
+                carriedSubKey = previous.worldSubKeySnapshot();
                 teardownManager(previous);
             }
             this.connectionStartMs = System.currentTimeMillis();
             this.requestManager = this.managerFactory.create(config);
             if (carried != null) {
                 this.requestManager.governor.adoptFrom(carried);
+                // The world axis's carry-forward must survive the rebuild too (panel
+                // fix): applied only when the NEW manager's own fresh read was
+                // unreadable — a readable answer always wins.
+                this.requestManager.adoptCarriedSubKey(carriedSubKey);
             }
         }
     }
@@ -486,6 +501,9 @@ final class ClientSessionGate {
         this.sessionVersion = 0;
         this.isV16Server = false;
         V16ClientWire.reset();
+        // A voxy-force grant never survives its connection (best-effort belt — the
+        // stage-2 samePath re-probe is the real invariant; plan §3.2).
+        ResetCoordinator.clearForceGrant();
         // A trace belongs to the session it was started in. It used to survive
         // disconnect, server switches and world reloads with no size cap and no
         // reminder — and its 1 Hz net event kept sending a ping packet to whatever
