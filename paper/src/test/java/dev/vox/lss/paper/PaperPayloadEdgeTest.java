@@ -364,4 +364,19 @@ class PaperPayloadEdgeTest {
         assertDoesNotThrow(() -> PaperPayloadHandler.sendRawNmsPayload(
                 craft, PaperPayloadHandler.ID_VOXEL_COLUMN, new byte[]{1, 2, 3}));
     }
+
+    @org.junit.jupiter.api.Test
+    void handshakeFrameEncodeDecodesRoundTrip() {
+        // The grant sweep's replay reconstructs the remembered handshake with
+        // encodeHandshakeFrame (service-permission-gate-plan.md §2.3) — it must be the
+        // exact byte inverse of decodeHandshake, for every dialect a memo can carry.
+        for (int[] c : new int[][]{{20, 7}, {16, 1}, {18, 3}, {19, 5}, {20, 0}}) {
+            byte[] frame = PaperPayloadHandler.encodeHandshakeFrame(c[0], c[1]);
+            var decoded = PaperPayloadHandler.decodeHandshake(frame);
+            org.junit.jupiter.api.Assertions.assertEquals(c[0], decoded.protocolVersion(),
+                    "version round-trip");
+            org.junit.jupiter.api.Assertions.assertEquals(c[1], decoded.capabilities(),
+                    "capabilities round-trip");
+        }
+    }
 }

@@ -29,6 +29,18 @@ public class NeoForgeLoaderServices implements LoaderServices {
     }
 
     @Override
+    public boolean checkPermission(net.minecraft.server.level.ServerPlayer player, String node,
+                                   boolean defaultValue) {
+        // The native PermissionAPI rung (service-permission-gate-plan.md §2.1).
+        return dev.vox.lss.neoforge.LSSNeoPermissions.check(player, node, defaultValue);
+    }
+
+    @Override
+    public String permissionProviderToken() {
+        return "neoforge";
+    }
+
+    @Override
     public boolean isModLoaded(String modId) {
         return ModList.get().isLoaded(modId);
     }

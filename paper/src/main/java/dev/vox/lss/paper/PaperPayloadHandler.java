@@ -263,6 +263,22 @@ public final class PaperPayloadHandler {
 
     public record DecodedHandshake(int protocolVersion, int capabilities) {}
 
+    /** The C2S handshake frame's ENCODE twin — the grant sweep's replay reconstructs
+     *  the remembered handshake with it (service-permission-gate-plan.md §2.3); pinned
+     *  round-trip-equal to {@link #decodeHandshake}. */
+    public static byte[] encodeHandshakeFrame(int protocolVersion, int capabilities) {
+        var buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
+        try {
+            buf.writeVarInt(protocolVersion);
+            buf.writeVarInt(capabilities);
+            byte[] out = new byte[buf.readableBytes()];
+            buf.readBytes(out);
+            return out;
+        } finally {
+            buf.release();
+        }
+    }
+
     public static DecodedHandshake decodeHandshake(byte[] data) {
         if (data == null || data.length == 0) {
             warnMalformed("Received empty handshake payload");

@@ -44,6 +44,26 @@ import java.util.concurrent.atomic.AtomicLong;
 
 public class RequestProcessingService {
     private final Map<UUID, PlayerRequestState> players = new ConcurrentHashMap<>();
+    // Service gate (service-permission-gate-plan.md §2.3): the denied-handshake memo,
+    // the once-per-episode denial-log latch, and the revocation streaks — dying with
+    // this service (the server-stop clear is shutdown()'s).
+    private final dev.vox.lss.common.ServiceGateState serviceGateState =
+            new dev.vox.lss.common.ServiceGateState();
+    /** The recheck cadence (plan §2.3): both sweeps run every 200 ticks (~10 s). */
+    static final int PERMISSION_RECHECK_TICKS = 200;
+    private int permissionRecheckCounter;
+    private boolean noProviderWarned;
+    /** The sweep's permission read — seam-injected for tests (no live permission
+     *  backend exists in any test JVM); production reads the LoaderServices seam with
+     *  the doctrine default TRUE. A throwing probe is contained at the sweep site. */
+    private java.util.function.BiPredicate<ServerPlayer, String> permissionProbe =
+            (p, node) -> dev.vox.lss.platform.LoaderServices.get().checkPermission(p, node, true);
+
+    /** Test seam. */
+    public void setPermissionProbeForTest(
+            java.util.function.BiPredicate<ServerPlayer, String> probe) {
+        this.permissionProbe = probe;
+    }
     private final MinecraftServer server;
     private final ChunkDiskReader diskReader;
     private final ChunkGenerationService generationService;
@@ -443,6 +463,9 @@ public class RequestProcessingService {
                 && !this.dialects.isV16(player.getUUID())
                 && !this.dialects.isV18(player.getUUID()));
         state.markHandshakeComplete();
+        // Service gate: a successful registration by ANY path ends the denied episode
+        // (memo entry gone, log latch re-armed, streak reset).
+        this.serviceGateState.onRegistered(player.getUUID());
         return state;
     }
 
@@ -454,6 +477,28 @@ public class RequestProcessingService {
         // by the network DISCONNECT hook), mirroring how capabilities ride the dim-change
         // remove+register cycle. No-op for v18 players.
         this.v16Compat.onServiceRemove(uuid);
+    }
+
+    /**
+     * The service-gate unregistration composite (service-permission-gate-plan.md
+     * §2.3): {@code removePlayer} + the far-player viewer shed + the region-summary
+     * cleanup — the departed-player sweep's trio, NEVER a modified removePlayer
+     * (that is the dimension-change reuse path; teaching it to shed viewers would
+     * break every dimension change). The dialect mark and v16 identity are
+     * deliberately KEPT — connection-lifecycle facts, and the mark is what any
+     * per-player disable push read. No-op for an unregistered uuid. Server thread.
+     */
+    public void unregisterForServiceGate(UUID uuid) {
+        if (!this.players.containsKey(uuid)) return;
+        removePlayer(uuid);
+        this.farPlayerService.removeViewer(uuid);
+        var summaries = getRegionSummaries();
+        if (summaries != null) summaries.removePlayer(uuid);
+    }
+
+    /** The service-gate bookkeeping — see {@link dev.vox.lss.common.ServiceGateState}. */
+    public dev.vox.lss.common.ServiceGateState getServiceGateState() {
+        return this.serviceGateState;
     }
 
     private void cleanupPlayerServices(UUID uuid) {
@@ -512,6 +557,12 @@ public class RequestProcessingService {
 
         var config = LSSServerConfig.CONFIG;
         applyRuntimeConfig(config);
+        // Service gate (plan §2.3): permission rechecks are tick-cadenced — the reads
+        // run on this thread only, every PERMISSION_RECHECK_TICKS.
+        if (++this.permissionRecheckCounter >= PERMISSION_RECHECK_TICKS) {
+            this.permissionRecheckCounter = 0;
+            runServiceGateSweeps(config);
+        }
         var generationReady = tickGenerationService();
         // v16 declares BEFORE the lifecycle pass: the probe reads the mailbox during
         // processPlayerLifecycle, and postSnapshot wakes the processing thread which takes
@@ -743,6 +794,157 @@ public class RequestProcessingService {
             }
         }
         return new int[]{pushed, legacy};
+    }
+
+    /**
+     * The two service-gate sweeps (service-permission-gate-plan.md §2.3). Public so the
+     * gametests can drive one sweep directly instead of burning 200 real ticks; the one
+     * production caller is the tick cadence above. Server thread only.
+     *
+     * <p><b>Revocation</b> (armed only, CURRENT-dialect sessions only — legacy clients'
+     * mid-session-config behavior is release-frozen and unverified, the same recorded
+     * decision {@link #repushSessionConfig} pins; they keep serving until rejoin, where
+     * the handshake gate denies in their own dialect): a registered player failing the
+     * gate on TWO consecutive sweeps (flap hysteresis — context-scoped grants
+     * oscillate) gets a per-player enabled=false SessionConfig (the CURRENT 4-field
+     * shape), the denied-handshake memo deposit (the live session's own
+     * version+capabilities — revoke-then-regrant must heal), and the unregistration
+     * composite. A per-player permission-read throw is contained and counts as HOLDING
+     * (fail-open) without stopping the sweep.
+     *
+     * <p><b>Grant</b> (whenever the memo is non-empty, REGARDLESS of arming — disarming
+     * the gate is the staged rollout's final step and must drain the map): each
+     * remembered, online, unregistered player now clearing the gate (trivially everyone
+     * with the gate off) gets its stored handshake REPLAYED through the full production
+     * ladder — version, Via, consumer, enabled all re-run, the reply lands in the
+     * client's own dialect via the verified handshake-reply construction (this is how
+     * legacy players heal too). A replay that terminates in any non-register terminal
+     * outcome leaves the entry dropped (no 0.1 Hz duplicate configs); a replay the gate
+     * denies AGAIN re-deposits through the denial hook.
+     */
+    public void runServiceGateSweeps(LSSServerConfig config) {
+        var gateState = this.serviceGateState;
+        if (config.requireServicePermission) {
+            // The armed-gate-without-provider warn (plan §2.1/§8 N-2, as-built at the
+            // sweep so ONE site covers boot AND a runtime set arm — it fires within
+            // one recheck interval of either). Only Fabric can lack a backend
+            // (NeoForge registers native nodes; Paper is Bukkit): the LoaderServices
+            // token is "none" exactly when no fabric-permissions-api resolved.
+            if (!this.noProviderWarned && "none".equals(
+                    dev.vox.lss.platform.LoaderServices.get().permissionProviderToken())) {
+                this.noProviderWarned = true;
+                LSSLogger.warn("requireServicePermission is on but no permission provider "
+                        + "(fabric-permissions-api) is installed — serving everyone");
+            }
+            for (var state : this.players.values()) {
+                UUID uuid = state.getPlayerUUID();
+                if (this.dialects.dialectOf(uuid)
+                        != dev.vox.lss.common.HandshakeGate.WireDialect.CURRENT) {
+                    continue;
+                }
+                var player = state.getPlayer();
+                boolean holds;
+                try {
+                    holds = this.permissionProbe.test(player,
+                                    dev.vox.lss.common.LSSPermissions.SERVICE_LSS)
+                            && this.permissionProbe.test(player,
+                                    dev.vox.lss.common.LSSPermissions.SERVICE_VSS);
+                } catch (Exception e) {
+                    holds = true; // contained: a throwing backend counts as HOLDING
+                }
+                if (holds) {
+                    gateState.resetRevocationStreak(uuid);
+                    continue;
+                }
+                if (!gateState.bumpRevocationStreak(uuid)) continue;
+                // Push the disarm FIRST (plan order: push, then unregister), then the
+                // memo deposit + composite. The push rides the existing send-failure
+                // containment — a failed send still revokes (the client re-handshake
+                // path heals the shape either way).
+                try {
+                    dev.vox.lss.platform.LoaderServices.get().sendToPlayer(player,
+                            new SessionConfigS2CPayload(
+                                    LSSConstants.PROTOCOL_VERSION, false,
+                                    config.lodDistanceChunks, config.enableChunkGeneration,
+                                    net.minecraft.SharedConstants.getCurrentVersion()
+                                            .dataVersion().version()));
+                } catch (Exception e) {
+                    LSSLogger.error("Service-gate disable push failed for "
+                            + state.getPlayerName(), e);
+                }
+                gateState.rememberDenied(uuid, state.getPlayerName(),
+                        LSSConstants.PROTOCOL_VERSION, state.getCapabilities());
+                unregisterForServiceGate(uuid);
+                LSSLogger.info("LOD service revoked for " + state.getPlayerName()
+                        + ": requireServicePermission is on and a permission recheck found "
+                        + "a negative grant on " + dev.vox.lss.common.LSSPermissions.SERVICE_LSS
+                        + " or " + dev.vox.lss.common.LSSPermissions.SERVICE_VSS
+                        + " (either spelling denies) — the session was told "
+                        + dev.vox.lss.common.Brand.shortName() + " is disabled; it is re-offered automatically "
+                        + "if the grant returns");
+            }
+        } else {
+            // Disarmed: no streak may survive into a later re-arm (the two-sweep
+            // hysteresis must start fresh).
+            gateState.clearRevocationStreaks();
+        }
+        if (gateState.hasDenied()) {
+            for (UUID uuid : gateState.deniedSnapshot()) {
+                if (this.players.containsKey(uuid)) {
+                    // SKIP, never clear (implementation review, 2026-08-27): on Folia a
+                    // denied re-handshake deposits the memo on a region thread while the
+                    // unregister composite is still queued — clearing here would wipe the
+                    // deposit and strand the player past its own revocation. A genuinely
+                    // stale entry is retained one sweep and replays correctly on the
+                    // next (registration removed it in every non-race case anyway).
+                    continue;
+                }
+                var player = this.server.getPlayerList().getPlayer(uuid);
+                if (player == null) {
+                    // Offline: EVERYTHING gate-side is session-scoped — sweeping only
+                    // the memo would leak the log latch (a same-UUID rejoin would then
+                    // be denied silently) and any streak.
+                    gateState.onDisconnect(uuid);
+                    continue;
+                }
+                boolean cleared;
+                if (!config.requireServicePermission) {
+                    cleared = true; // a disarmed gate trivially clears everyone
+                } else {
+                    try {
+                        cleared = this.permissionProbe.test(player,
+                                        dev.vox.lss.common.LSSPermissions.SERVICE_LSS)
+                                && this.permissionProbe.test(player,
+                                        dev.vox.lss.common.LSSPermissions.SERVICE_VSS);
+                    } catch (Exception e) {
+                        cleared = true; // fail-open, the doctrine
+                    }
+                }
+                if (!cleared) continue; // still denied: the entry stays for the next sweep
+                var remembered = gateState.takeDenied(uuid);
+                if (remembered == null) continue;
+                LSSLogger.info("Re-offering " + dev.vox.lss.common.Brand.shortName() + " to "
+                        + remembered.playerName() + " (re-offer): "
+                        + (config.requireServicePermission
+                                ? "the service permission cleared"
+                                : "requireServicePermission was disarmed")
+                        + " — replaying the stored handshake");
+                try {
+                    ServerReceiverGlue.handleHandshake(
+                            new dev.vox.lss.networking.payloads.HandshakeC2SPayload(
+                                    remembered.protocolVersion(), remembered.capabilities()),
+                            player, this,
+                            reply -> dev.vox.lss.platform.LoaderServices.get()
+                                    .sendToPlayer(player, reply));
+                } catch (Exception e) {
+                    // Contained: a throwing reply send (player vanishing mid-sweep) must
+                    // not abort the remaining re-offers; the entry stays dropped — the
+                    // client's own rejoin handshake is the heal, as for any lost config.
+                    LSSLogger.error("Service-gate re-offer failed for "
+                            + remembered.playerName(), e);
+                }
+            }
+        }
     }
 
     private List<TickSnapshot.GenerationReadyData> tickGenerationService() {
@@ -1468,6 +1670,7 @@ public class RequestProcessingService {
     }
 
     public void shutdown() {
+        this.serviceGateState.clear();
         try {
             // Own containment, FIRST (P2 review I-m2): no ordering dependency on the
             // dirty drain, and a throw there must not leak the sweeper daemon (which

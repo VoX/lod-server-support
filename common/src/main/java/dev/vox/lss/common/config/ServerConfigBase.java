@@ -26,6 +26,31 @@ public abstract class ServerConfigBase extends JsonConfig {
     }
 
     public boolean enabled = true;
+    /**
+     * Per-player service gate (service-permission-gate-plan.md; evolved from PR #244):
+     * when true, a handshaking player who does not hold BOTH {@code lss.use} and
+     * {@code vss.use} is told LOD is unavailable — the reply carries
+     * {@code enabled=false} in the client's own dialect and no session is registered —
+     * instead of being served, and registered CURRENT-dialect sessions are re-checked
+     * live (~10 s cadence; denied players are re-offered when granted or when the gate
+     * is disarmed).
+     *
+     * <p><b>The nodes default to TRUE everywhere</b> (user decision 2026-08-25 on the
+     * PR), so turning this key on denies NOBODY by itself — denial is always an
+     * explicit negative grant in the permission backend (LuckPerms:
+     * {@code group default permission set lss.use false}), and one negative grant on
+     * EITHER spelling denies (enforcement is the AND of both — the deny model's
+     * De Morgan mirror of the far-player privacy nodes).
+     *
+     * <p><b>Default false, and that default is load-bearing:</b> off, the handshake
+     * path is byte-for-byte what it was before the gate existed (no permission
+     * backend is even consulted). Per-platform enforcement: Paper/Folia = Bukkit
+     * permissions; Fabric = the fabric-permissions-api bridge (absent = everyone
+     * served, with a once-warn within one recheck interval of arming); NeoForge = the native PermissionAPI
+     * nodes. This is a fail-open ROLLOUT lever, not a security boundary — a dead
+     * permission backend serves everyone.
+     */
+    public boolean requireServicePermission = false;
     /** LOD radius in chunks. Back to 512 by user decision 2026-08-13 (reverting the
      *  2026-08-12 stage-A cut to 300 — history: 256 → 512 (2026-08-08 rework) → 300 →
      *  512). Note what scales with it — the timestamp cache (see

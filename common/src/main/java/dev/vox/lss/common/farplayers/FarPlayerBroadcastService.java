@@ -121,6 +121,16 @@ public final class FarPlayerBroadcastService {
     }
 
     private final Map<UUID, ViewerState> viewers = new HashMap<>();
+    // Target-privacy prefs retention (service-permission-gate implementation review,
+    // 2026-08-27): the TARGET side of the filter reads THIS map, not ViewerState —
+    // a viewer removal (the service gate's revocation composite, a NO_CONSUMER
+    // re-handshake shed) must never destroy an online player's shareSelf opt-out
+    // (the E2 prefs-carrier rule: prefs outrank subscription). Written on every
+    // prefs receipt (subscribed or not — a gate-DENIED client still delivers its
+    // opt-out), seeded back into a (re)subscribing viewer's state (the grant
+    // re-offer resumes serving without a client re-handshake), swept ONLY at
+    // {@link #onDisconnect} — the true connection end.
+    private final Map<UUID, FarPlayerWire.Prefs> retainedPrefs = new HashMap<>();
     private final VanishBridge vanishBridge;
 
     // Diag counters (FARP §3.2: far-player bytes get their OWN counters — never folded
@@ -137,20 +147,40 @@ public final class FarPlayerBroadcastService {
 
     // ---- lifecycle (single-threaded, see the class contract) ----
 
-    /** The viewer's session declared CAPABILITY_FAR_PLAYERS. Idempotent. */
+    /** The viewer's session declared CAPABILITY_FAR_PLAYERS. Idempotent. A
+     *  RE-subscription (the grant sweep's re-offer after a revocation composite)
+     *  seeds the fresh state from the retained prefs, so serving resumes without a
+     *  client re-handshake or prefs re-send. */
     public void subscribeViewer(UUID viewer) {
-        viewers.computeIfAbsent(viewer, u -> new ViewerState());
+        viewers.computeIfAbsent(viewer, u -> {
+            var s = new ViewerState();
+            s.prefs = retainedPrefs.get(u);
+            return s;
+        });
     }
 
-    /** Disconnect + Paper's quit-originated mailbox Remove (the quit-race guard). */
+    /** SAME-CONNECTION viewer shed (the service gate's revocation composite, a
+     *  NO_CONSUMER/legacy re-handshake): frame delivery stops, but the retained
+     *  TARGET prefs survive — the player is still online and their opt-out must
+     *  keep being honored. Connection ends call {@link #onDisconnect} instead. */
     public void removeViewer(UUID viewer) {
         viewers.remove(viewer);
     }
 
-    /** ANY prefs receipt — changed or byte-identical — queues a full roster (R-3). */
+    /** The connection died: subscription AND retained prefs go with it. */
+    public void onDisconnect(UUID viewer) {
+        viewers.remove(viewer);
+        retainedPrefs.remove(viewer);
+    }
+
+    /** ANY prefs receipt — changed or byte-identical — queues a full roster (R-3).
+     *  The receipt is RETAINED even for an unsubscribed sender (a service-gate-denied
+     *  client never registers a viewer, but its shareSelf opt-out must still bind the
+     *  target filter); only the viewer-state half needs a live subscription. */
     public void onPrefs(UUID viewer, FarPlayerWire.Prefs prefs) {
+        retainedPrefs.put(viewer, prefs);
         var state = viewers.get(viewer);
-        if (state == null) return; // never subscribed (capability bit absent) — ignore
+        if (state == null) return; // no viewer session (capability bit absent, or shed)
         state.prefs = prefs;
         state.fullRosterPending = true;
     }
@@ -484,8 +514,9 @@ public final class FarPlayerBroadcastService {
         // declared (stage-E1 review MAJOR).
         if (target.hidden()) return false;
         if (isExcluded(target, settings.exclude())) return false;
-        var targetState = viewers.get(target.uuid());
-        var targetPrefs = targetState == null ? null : targetState.prefs;
+        // The TARGET side reads the retained map — an opt-out survives viewer sheds
+        // (gate revocation, NO_CONSUMER downgrade) for as long as the player is online.
+        var targetPrefs = retainedPrefs.get(target.uuid());
         if ("opt-in".equals(settings.mode())) {
             // Only targets whose own client said shareSelf=true are served at all.
             if (targetPrefs == null || !targetPrefs.shareSelf()) return false;

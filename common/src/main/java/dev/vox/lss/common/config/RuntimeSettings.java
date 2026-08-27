@@ -173,7 +173,19 @@ public final class RuntimeSettings {
                         return null;
                     },
                     "applies at the next broadcast tick; each client's own preference"
-                            + " intersects it"));
+                            + " intersects it"),
+            // The service gate's rollout lever (service-permission-gate-plan.md §2.5) —
+            // strict boolean, no clamp (R-2: boolean rows carry none). Disarming leaves
+            // the grant sweep draining the denied-session memo, so no player stays dark.
+            new SettingKey("requireServicePermission",
+                    c -> String.valueOf(c.requireServicePermission),
+                    (c, raw) -> {
+                        c.requireServicePermission = parseBoolean(raw);
+                        return null;
+                    },
+                    "current-protocol sessions are re-checked within ~20 s (legacy"
+                            + " clients heal at rejoin); denied players are re-offered when"
+                            + " granted or when the gate is disarmed"));
 
     private static String parseFarPlayersMode(String raw) {
         String v = raw.trim().toLowerCase(java.util.Locale.ROOT);

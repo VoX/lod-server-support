@@ -429,6 +429,24 @@ class DiagnosticsFormatterTest {
                         .withV18Line("Dialects: v20=1, v19=0, v18=1"));
         assertEquals(sLine, reversed.get(indexOfPrefix(reversed, "Summary:")),
                 "summaryLine must survive every subsequent with-* copy: " + reversed);
+
+        // Service gate (plan §2.5): same conditional-line contract. Absent while null…
+        assertTrue(with.stream().noneMatch(l -> l.startsWith("Gate:")),
+                "an unarmed gate (null line) must add nothing — default-install diag "
+                        + "output stays byte-unchanged");
+        // …renders after the Summary slot when attached, and survives the with-chain.
+        String gLine = "Gate: requireServicePermission=on denied=2 provider=fabric-permissions-api";
+        var gated = DiagnosticsFormatter.formatDiagnostics(
+                d.withGateLine(gLine)
+                        .withSummaryLine(sLine)
+                        .withFarPlayersLine(fpLine)
+                        .withV18Line("Dialects: v20=1, v19=0, v18=1"));
+        int gIdx = indexOfPrefix(gated, "Gate:");
+        assertTrue(indexOfPrefix(gated, "Summary:") < gIdx
+                        && gIdx < indexOfPrefix(gated, "Bandwidth:"),
+                "the Gate line sits between Summary and Bandwidth: " + gated);
+        assertEquals(gLine, gated.get(gIdx),
+                "gateLine must survive every subsequent with-* copy");
     }
 
     @Test

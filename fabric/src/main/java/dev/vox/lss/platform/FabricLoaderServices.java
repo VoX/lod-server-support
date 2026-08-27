@@ -40,6 +40,18 @@ public class FabricLoaderServices implements LoaderServices {
     }
 
     @Override
+    public boolean checkPermission(ServerPlayer player, String node, boolean defaultValue) {
+        // The reflective fabric-permissions-api rung (service-permission-gate-plan.md
+        // §2.1) — absent/unresolvable/throwing all answer the default (fail-open).
+        return dev.vox.lss.compat.FabricPermissionsBridge.check(player, node, defaultValue);
+    }
+
+    @Override
+    public String permissionProviderToken() {
+        return dev.vox.lss.compat.FabricPermissionsBridge.providerToken();
+    }
+
+    @Override
     public void sendToServer(CustomPacketPayload payload) {
         throw new IllegalStateException("sendToServer on the dedicated-server LoaderServices impl"
                 + " — the client entrypoint installs the client-capable impl");

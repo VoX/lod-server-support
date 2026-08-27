@@ -48,6 +48,18 @@ class PaperConfigValidationTest {
         assertTrue(new PaperConfig().enableSendPacing);
     }
 
+    /** The service gate ships OFF (upstream kill-switch rule): a server that upgrades into
+     *  this build must keep serving every player exactly as before, with no permission node
+     *  to grant first. Flipping this default would black out every non-op on every install. */
+    @Test
+    void requireServicePermissionShipsOff() {
+        assertFalse(new PaperConfig().requireServicePermission,
+                "the per-player service gate is opt-in; on by default would deny every non-op");
+        var c = new PaperConfig();
+        c.validate();
+        assertFalse(c.requireServicePermission, "validate() must not move the default");
+    }
+
     @Test
     void validateClampsInheritedFieldsAndGuardsUpdateEvents() {
         PaperConfig c = new PaperConfig();
