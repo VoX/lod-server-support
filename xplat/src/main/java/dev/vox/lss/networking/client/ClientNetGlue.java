@@ -13,10 +13,14 @@ import dev.vox.lss.networking.payloads.SoakDialectOverride;
 import dev.vox.lss.networking.payloads.VoxelColumnS2CPayload;
 import dev.vox.lss.networking.payloads.ZstdWireSupport;
 import dev.vox.lss.platform.LoaderServices;
+import dev.vox.lss.seed.ClientWorldSeed;
 import net.minecraft.client.Minecraft;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.storage.LevelResource;
+
+import java.util.LinkedHashSet;
+import java.util.List;
 
 /**
  * The loader-neutral CLIENT session glue (N-3, neoforge-support-plan.md §1.1 —
@@ -169,24 +173,47 @@ public final class ClientNetGlue {
 
     /**
      * Production {@link ClientSessionGate.ManagerFactory}: builds the per-session manager
-     * and resolves the cache-keying server address from the live client (multiplayer ip →
-     * LAN/local world dir → unknown).
+     * and resolves the TWO-AXIS cache partition key from the live client
+     * (cache-alias-keying-and-reset-override-plan.md §2.1).
+     *
+     * <p>The ADDRESS axis (multiplayer ip → LAN/local world dir → unknown, aliased to a
+     * corroborated {@code cacheAddressAliases} canonical where one applies) is decided
+     * ONCE per play session ({@link AliasLatch} — reset at JOIN, reused across manager
+     * rebuilds). The WORLD axis (the {@code .world-<16 hex>} sub-bucket) is deliberately
+     * NOT decided here: the manager re-derives it from the live level at every build and
+     * dimension/cache-phase entry, because per-world seeds arrive via respawn packets and
+     * a latched sub-key would be COARSER than Voxy across backend switches and
+     * multi-world rotations (§9 M-A1/M-B1).
+     *
+     * <p>This stays the SINGLE assignment point for the key inputs: every one of the
+     * store's entries reads the manager's one composed bucket string, so the axes can
+     * never half-apply.
      */
     private static LodRequestManager createRequestManager(SessionConfigS2CPayload payload) {
         var manager = new LodRequestManager();
         var mc = Minecraft.getInstance();
         String serverAddr;
+        boolean remote = false;
         var serverData = mc.getCurrentServer();
         var spServer = mc.getSingleplayerServer();
         if (serverData != null && serverData.ip != null) {
             serverAddr = serverData.ip;
+            remote = true;
         } else if (spServer != null) {
             var worldDir = spServer.getWorldPath(LevelResource.ROOT).getFileName();
             serverAddr = "local:" + (worldDir != null ? worldDir : "world");
         } else {
             serverAddr = "unknown";
         }
-        manager.onSessionConfig(payload, serverAddr);
+        AliasLatch.Decision decision = remote
+                ? AliasLatch.forConnection(serverAddr,
+                        () -> computeAliasDecision(serverAddr))
+                : unaliasedDecision(serverAddr, "not-remote");
+        manager.onSessionConfig(payload, decision.addressComponent());
+        manager.configureCacheKeying(decision.addressComponent(), decision.sweepComponents(),
+                decision.aliased() ? "alias group" : "address", ClientWorldSeed::context);
+        LSSLogger.info("Column cache " + manager.describeCacheKey()
+                + " [alias: " + decision.token() + "]");
         // Tier B v16 backward-compat: only a v16 session reaches here with protocolVersion() == 16
         // (the gate rejects a v16 config outright when enableV16ServerCompat is off, before the
         // factory runs), so this is the single place that combines "v16 session" with the client
@@ -194,6 +221,52 @@ public final class ClientNetGlue {
         manager.setV16GenerationDrive(shouldDriveV16Generation(
                 payload.protocolVersion(), LSSClientConfig.CONFIG.enableV16Generation));
         return manager;
+    }
+
+    /** A latch-shaped decision for the shapes the alias axis never applies to. */
+    private static AliasLatch.Decision unaliasedDecision(String connectAddr, String token) {
+        String component = CacheKeyAliases.addressComponent(connectAddr);
+        return new AliasLatch.Decision(connectAddr, component, List.of(component), false, token);
+    }
+
+    /**
+     * The once-per-session alias decision (plan §2.2): match the validated config
+     * groups, then run the corroboration guard. A matched group defines the reset
+     * SWEEP either way ("wipe this server" means every spelling the user declared);
+     * only a corroborated match moves the BUCKET to the canonical.
+     */
+    private static AliasLatch.Decision computeAliasDecision(String connectAddr) {
+        // The field was validated (and rewritten to the survivors) at config load, so
+        // this re-parse is silent — a warn sink here would double-log every session.
+        var groups = CacheKeyAliases.validated(
+                LSSClientConfig.CONFIG.cacheAddressAliases, warn -> {});
+        var group = CacheKeyAliases.match(groups, connectAddr);
+        if (group == null) {
+            return unaliasedDecision(connectAddr, "no-group");
+        }
+        // The Xaero gate is evaluated first inside the ladder, so the Voxy probe (a
+        // reflective read with its own log line) is skipped when its answer would be
+        // discarded anyway.
+        boolean xaeroArmed = dev.vox.lss.compat.ModCompat.isXaeroBridgeArmed();
+        var result = AliasCorroboration.evaluate(
+                dev.vox.lss.compat.ModCompat.isVoxyBridgeActive(),
+                xaeroArmed,
+                xaeroArmed ? null : dev.vox.lss.compat.ModCompat.observeVoxyStorageDirName(),
+                connectAddr, group.canonicalRaw());
+        if (result.warn() != null) {
+            LSSLogger.warn(result.warn());
+        }
+        var sweep = new LinkedHashSet<String>();
+        for (String member : group.membersRaw()) {
+            sweep.add(CacheKeyAliases.addressComponent(member));
+        }
+        String connectComponent = CacheKeyAliases.addressComponent(connectAddr);
+        sweep.add(connectComponent);
+        boolean applied = result.outcome() == AliasCorroboration.Outcome.APPLY;
+        String component = applied
+                ? CacheKeyAliases.addressComponent(group.canonicalRaw()) : connectComponent;
+        return new AliasLatch.Decision(connectAddr, component,
+                List.copyOf(sweep), applied, result.token());
     }
 
     /**

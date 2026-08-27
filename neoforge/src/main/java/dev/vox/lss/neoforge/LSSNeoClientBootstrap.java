@@ -72,17 +72,10 @@ public final class LSSNeoClientBootstrap {
                             return Command.SINGLE_SUCCESS;
                         })
                 )
-                .then(Commands.literal("reset")
-                        .executes(context -> {
-                            ClientCommandActions.runReset(feedback(context.getSource()), false);
-                            return Command.SINGLE_SUCCESS;
-                        })
-                        .then(Commands.literal("confirm")
-                                .executes(context -> {
-                                    ClientCommandActions.runReset(feedback(context.getSource()), true);
-                                    return Command.SINGLE_SUCCESS;
-                                }))
-                )
+                // Issue #4: the reset subtree (incl. `voxy-force`) is BUILT IN
+                // xplat and shared with Fabric — do not re-hand-roll it here.
+                .then(ClientCommandActions.resetSubtree(
+                        Commands::literal, LSSNeoClientBootstrap::feedback))
                 .then(Commands.literal("diag")
                         .executes(context -> {
                             ClientCommandActions.showDiagnostics(feedback(context.getSource()));
