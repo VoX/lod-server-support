@@ -104,6 +104,14 @@ final class ClientSessionGate {
     private volatile long connectionStartMs = 0;
     private volatile LodRequestManager requestManager;
 
+    // Service-gate revocation park (service-permission-gate-plan.md §2.4): a valid
+    // enabled=false teardown snapshots the governor + world sub-key here so a later
+    // re-enable on the SAME connection (the grant sweep's re-offer) adopts them — the
+    // #243 carry must survive a revoke->grant cycle, or the client re-slow-starts
+    // into the BARE cache bucket on an unreadable re-read. Cleared at JOIN (new link).
+    private TransferRateGovernor parkedGovernor;
+    private java.util.Optional<String> parkedSubKey = java.util.Optional.empty();
+
     ClientSessionGate(ClientColumnProcessor columnProcessor, IntConsumer handshakeSender,
                       ManagerFactory managerFactory) {
         this.columnProcessor = columnProcessor;
@@ -162,6 +170,8 @@ final class ClientSessionGate {
         this.sessionConfigReceived = false;
         this.serverLodDistance = 0;
         this.requestManager = null;
+        this.parkedGovernor = null;
+        this.parkedSubKey = java.util.Optional.empty();
         // Clear ladder + decode state so nothing survives from a prior connection.
         this.discoveryArmed = false;
         this.ticksSinceHandshake = 0;
@@ -423,7 +433,14 @@ final class ClientSessionGate {
                 carried.adoptFrom(previous.governor);
                 carriedSubKey = previous.worldSubKeySnapshot();
                 teardownManager(previous);
+            } else if (this.parkedGovernor != null) {
+                // §2.4: the re-enable after a service-gate revocation on this same
+                // connection — adopt what the disable teardown parked.
+                carried = this.parkedGovernor;
+                carriedSubKey = this.parkedSubKey;
             }
+            this.parkedGovernor = null;
+            this.parkedSubKey = java.util.Optional.empty();
             this.connectionStartMs = System.currentTimeMillis();
             this.requestManager = this.managerFactory.create(config);
             if (carried != null) {
@@ -433,6 +450,30 @@ final class ClientSessionGate {
                 // unreadable — a readable answer always wins.
                 this.requestManager.adoptCarriedSubKey(carriedSubKey);
             }
+        } else if (!config.enabled() && this.requestManager != null) {
+            // §2.4 (service-permission-gate-plan.md): a VALID same-or-higher-rung
+            // enabled=false arriving on an established session — the server-wide
+            // disable push, or a per-player service-gate revocation, which this shape
+            // makes common. Retire the manager with the standard teardown (report
+            // undispatched -> disconnect -> saveCache: the session's stamps are
+            // reported and saved, never silently parked un-ticked in memory), null it,
+            // and end the far-player session — proxies must not freeze mid-air.
+            // Placement is BELOW the downgrade guard, load-bearing: Paper's /reload
+            // re-attach prompt is a v16-dialect config carrying enabled at a v20
+            // session and must keep taking the guard's early return above, never this
+            // teardown. The governor + world sub-key PARK for a re-enable on this
+            // connection (the grant sweep's re-offer).
+            var retiring = this.requestManager;
+            var parked = new TransferRateGovernor();
+            parked.adoptFrom(retiring.governor);
+            this.parkedGovernor = parked;
+            this.parkedSubKey = retiring.worldSubKeySnapshot();
+            this.requestManager = null;
+            teardownManager(retiring);
+            FarPlayerClientSupport.onSessionEnd();
+            LSSLogger.info(Brand.shortName() + " disabled by the server mid-session — "
+                    + "LOD session retired (cache saved); it re-arms automatically if the "
+                    + "server re-enables this session.");
         }
     }
 
@@ -473,6 +514,10 @@ final class ClientSessionGate {
 
     /** DISCONNECT: tear down the live manager, then zero all session state and counters. */
     void onDisconnect() {
+        // The service-gate park is same-connection state (the disconnect routine's
+        // zero-everything contract): onJoin clears it too, this keeps the claim true.
+        this.parkedGovernor = null;
+        this.parkedSubKey = java.util.Optional.empty();
         var manager = this.requestManager;
         if (manager != null) {
             // (A column the drain thread polled concurrently still dispatches; if its

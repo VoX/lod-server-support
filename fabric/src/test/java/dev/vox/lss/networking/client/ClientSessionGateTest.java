@@ -112,7 +112,7 @@ class ClientSessionGateTest {
     }
 
     /** Records the teardown-relevant manager calls; overrides keep the tests off disk. */
-    private static final class RecordingManager extends LodRequestManager {
+    private static class RecordingManager extends LodRequestManager {
         private final List<String> events;
 
         RecordingManager(List<String> events) {
@@ -914,5 +914,133 @@ class ClientSessionGateTest {
                 "no DOWNGRADE-guard re-assert (this was not a downgrade of a live session) — "
                         + "the second handshake is the establish heal re-announcing the "
                         + "accepted 16, because the last announce was 20");
+    }
+
+    // ---- the service-gate mid-session disable (plan §2.4) ----
+
+    @Test
+    void midSessionDisableRetiresTheManagerWithTheStandardTeardown() {
+        // The revocation push makes the valid enabled=false-on-established shape common:
+        // the manager must retire exactly like a disconnect (disconnect -> saveCache; the
+        // report leg is the processor's and has nothing queued here) — never sit parked
+        // un-ticked with its session stamps unsaved.
+        gate.onSessionConfig(config(V, true), true, true);
+        assertNotNull(gate.getRequestManager());
+        FarPlayerClientSupport.tracker().onRoster(new dev.vox.lss.common.farplayers.FarPlayerWire.Roster(
+                7, true, List.of(new dev.vox.lss.common.farplayers.FarPlayerWire.RosterEntry(
+                        0, java.util.UUID.randomUUID(), "afar")), new int[0]));
+        assertEquals(7, FarPlayerClientSupport.tracker().currentEpoch(),
+                "premise: a live far-player roster epoch");
+        events.clear();
+
+        gate.onSessionConfig(config(V, false), true, true);
+
+        assertNull(gate.getRequestManager(), "the manager is retired, not parked");
+        assertEquals(List.of("disconnect", "save"), events,
+                "the standard teardown order fires (report -> disconnect -> saveCache)");
+        assertFalse(gate.isServerEnabled());
+        assertTrue(gate.hasReceivedSessionConfig(), "'server said disabled' stays latched");
+        assertEquals(-1, FarPlayerClientSupport.tracker().currentEpoch(),
+                "the far-player session ends with the LOD session — proxies must not "
+                        + "freeze mid-air (§8 F1-m2; -1 = tracker cleared, roster forgotten)");
+    }
+
+    @Test
+    void reEnableAfterMidSessionDisableAdoptsTheParkedGovernorAndSubKey() {
+        // The #243 carry must survive a revoke->grant cycle: the disable teardown PARKS
+        // the governor (and world sub-key) and the next enable adopts it — otherwise a
+        // governed slow link is un-capped and the client re-slow-starts into the bare
+        // cache bucket.
+        gate.onSessionConfig(config(V, true), true, true);
+        var first = gate.getRequestManager();
+        first.governor.tick(1, 0, 0, 0, 0, 1, false, 50, true);
+        first.governor.tick(1 + TransferRateGovernor.INTERVAL_MILLIS,
+                800 * 1024, 100, 20_000, 20_000, 1, false, 2_000, true);
+        first.governor.tick(1 + 2 * TransferRateGovernor.INTERVAL_MILLIS,
+                1600 * 1024, 200, 40_000, 40_000, 1, false, 2_000, true);
+        assertTrue(first.governor.isEngaged(), "rig engagement");
+        long desired = first.governor.getDesiredBytesPerSec();
+
+        gate.onSessionConfig(config(V, false), true, true);   // revoke: teardown + park
+        assertNull(gate.getRequestManager());
+        gate.onSessionConfig(config(V, true), true, true);    // regrant: rebuild + adopt
+
+        var second = gate.getRequestManager();
+        assertNotNull(second);
+        assertNotSame(first, second);
+        assertTrue(second.governor.isEngaged(),
+                "the re-enabled manager's governor must stay engaged");
+        assertEquals(desired, second.governor.getDesiredBytesPerSec(),
+                "the governed rate survives the revoke->grant cycle via the park");
+    }
+
+    @Test
+    void theParkCarriesTheWorldSubKeyThroughARevokeGrantCycle() {
+        // The #243 world-axis half of the park (implementation review: the governor
+        // half alone was pinned): the disable teardown must snapshot the sub-key and
+        // the re-enable must hand it to the rebuilt manager — otherwise an unreadable
+        // re-read drops the client into the BARE cache bucket.
+        var subKeyed = new java.util.concurrent.atomic.AtomicReference<java.util.Optional<String>>();
+        var g = new ClientSessionGate(processor, v -> { }, cfg -> new RecordingManager(events) {
+            @Override
+            java.util.Optional<String> worldSubKeySnapshot() {
+                return java.util.Optional.of("world-abc");
+            }
+
+            @Override
+            void adoptCarriedSubKey(java.util.Optional<String> previousSubKey) {
+                subKeyed.set(previousSubKey);
+            }
+        });
+        g.onSessionConfig(config(V, true), true, true);
+        g.onSessionConfig(config(V, false), true, true); // revoke: park
+        g.onSessionConfig(config(V, true), true, true);  // regrant: adopt
+
+        assertEquals(java.util.Optional.of("world-abc"), subKeyed.get(),
+                "the parked world sub-key must reach the rebuilt manager's adopt hook");
+    }
+
+    @Test
+    void theParkDiesWithTheConnection() {
+        // A parked governor is same-connection state: JOIN (a new link) must clear it,
+        // or a stale slow-link cap from the previous server throttles the new session.
+        gate.onSessionConfig(config(V, true), true, true);
+        var first = gate.getRequestManager();
+        first.governor.tick(1, 0, 0, 0, 0, 1, false, 50, true);
+        first.governor.tick(1 + TransferRateGovernor.INTERVAL_MILLIS,
+                800 * 1024, 100, 20_000, 20_000, 1, false, 2_000, true);
+        first.governor.tick(1 + 2 * TransferRateGovernor.INTERVAL_MILLIS,
+                1600 * 1024, 200, 40_000, 40_000, 1, false, 2_000, true);
+        assertTrue(first.governor.isEngaged(), "rig engagement");
+
+        gate.onSessionConfig(config(V, false), true, true); // park
+        gate.onJoin(true, false, true, true);               // new connection
+        gate.onSessionConfig(config(V, true), true, true);
+
+        assertFalse(gate.getRequestManager().governor.isEngaged(),
+                "a fresh link starts with a fresh governor — the park never crosses joins");
+    }
+
+    @Test
+    void theDowngradeGuardOutranksTheDisableTeardown() {
+        // §8 O1-m12, pinned: Paper's /reload re-attach prompt is a v16-DIALECT config
+        // carrying an enabled flag at an established v20 session. It must keep taking
+        // the downgrade guard's early return (re-announce, keep the manager) — never
+        // the mid-session teardown, whatever its enabled flag says.
+        gate.onSessionConfig(config(V, true), true, true);
+        var manager = gate.getRequestManager();
+        int sent = handshakesSent.get();
+        events.clear();
+
+        gate.onSessionConfig(new SessionConfigS2CPayload(
+                        LSSConstants.V16_COMPAT_PROTOCOL_VERSION, false, 64, true,
+                        200, 40, true, 0),
+                true, true);
+
+        assertSame(manager, gate.getRequestManager(),
+                "the re-attach prompt must never tear down the working session");
+        assertEquals(List.of(), events, "no teardown, no rebuild");
+        assertEquals(sent + 1, handshakesSent.get(), "the guard re-announces instead");
+        assertTrue(gate.isServerEnabled(), "the established session's state is untouched");
     }
 }

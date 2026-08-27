@@ -37,6 +37,12 @@ public final class LSSNeoMod {
 
         modBus.addListener(RegisterPayloadHandlersEvent.class, LSSNetworking::register);
 
+        // Service-gate permission nodes (service-permission-gate-plan.md §2.1):
+        // registered UNCONDITIONALLY — an unregistered node throws at query time,
+        // and a runtime `set requireServicePermission true` must find them live.
+        NeoForge.EVENT_BUS.addListener(
+                net.neoforged.neoforge.server.permission.events.PermissionGatherEvent.Nodes.class,
+                LSSNeoPermissions::onGatherNodes);
         NeoForge.EVENT_BUS.addListener(ServerStartedEvent.class,
                 LSSServerNetworking::onServerStarted);
         NeoForge.EVENT_BUS.addListener(ServerStoppingEvent.class,

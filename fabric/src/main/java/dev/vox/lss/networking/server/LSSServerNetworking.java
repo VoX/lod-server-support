@@ -206,12 +206,16 @@ public class LSSServerNetworking {
                 // membership — dim changes reuse that path and must keep both).
                 service.getV16CompatManager().onDisconnect(handler.getPlayer().getUUID());
                 service.getDialectTracker().onDisconnect(handler.getPlayer().getUUID());
-                // Far players: the subscription dies with the CONNECTION, never with the
-                // dimension-change remove+register cycle (the v18-rung checklist).
-                service.getFarPlayerService().removeViewer(handler.getPlayer().getUUID());
+                // Far players: the subscription AND the retained target prefs die with
+                // the CONNECTION, never with the dimension-change remove+register cycle
+                // (the v18-rung checklist).
+                service.getFarPlayerService().onDisconnect(handler.getPlayer().getUUID());
                 // Region summaries: same connection-scoped cleanup (pending request,
                 // queued job, and the re-sweep cooldown mark die here).
                 service.getRegionSummaries().removePlayer(handler.getPlayer().getUUID());
+                // Service gate: the denied-handshake memo, the denial-log latch, and any
+                // revocation streak are session-scoped — swept beside the client-info fact.
+                service.getServiceGateState().onDisconnect(handler.getPlayer().getUUID());
             }
             // Service-independent: the sidecar fact is recorded at the network level
             // (possibly before any service exists) and must die with the connection.

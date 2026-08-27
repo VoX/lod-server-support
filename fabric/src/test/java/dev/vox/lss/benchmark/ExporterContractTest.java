@@ -108,6 +108,11 @@ class ExporterContractTest {
         @Override public dev.vox.lss.common.region.RegionSummaryDiagnostics summaryDiagnostics() {
             return new dev.vox.lss.common.region.RegionSummaryDiagnostics();
         }
+        final dev.vox.lss.common.ServiceGateState gateState =
+                new dev.vox.lss.common.ServiceGateState();
+        @Override public dev.vox.lss.common.ServiceGateState serviceGateState() {
+            return this.gateState;
+        }
         @Override public SharedBandwidthLimiter bandwidthLimiter() { return this.bandwidthLimiter; }
         @Override public Collection<? extends AbstractPlayerRequestState<?>> players() {
             return this.players.values();
@@ -253,6 +258,12 @@ class ExporterContractTest {
         assertEquals(2L, section(m2, "dirty").get("marked_total"));
         assertEquals(2L, section(m2, "dirty").get("broadcast_positions"));
         assertEquals(0, section(m2, "dirty").get("pending"));
+
+        // Service gate: the REAL transition counter flows onto its contract key
+        // (implementation review: a long-typed source swap must not pass silently).
+        src.gateState.rememberDenied(java.util.UUID.randomUUID(), "denied", 20, 1);
+        var m3 = BenchmarkMetricsExporter.buildServerMetrics(src);
+        assertEquals(1L, section(m3, "service").get("permission_denied"));
     }
 
     // ---- HD-021 leg: disk map stays empty (not zero-filled) when no reader exists ----

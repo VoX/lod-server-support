@@ -1304,7 +1304,7 @@ class PaperRequestProcessingServiceTest {
     @Test
     void repushRuntimeTaskSkipsARegisteredButFlipPendingLegacyPlayer() {
         var sent = new ArrayList<UUID>();
-        service.setSessionConfigSender((player, cfg) -> sent.add(player.getUUID()));
+        service.setSessionConfigSender((player, cfg, enabled) -> sent.add(player.getUUID()));
 
         var legacyUuid = UUID.randomUUID();
         var legacy = playerIn(legacyUuid, level(Level.OVERWORLD));
@@ -1328,7 +1328,7 @@ class PaperRequestProcessingServiceTest {
     @Test
     void repushSendsToCurrentDialectSessionsAndSkipsLegacyOnes() {
         var sent = new ArrayList<UUID>();
-        service.setSessionConfigSender((player, cfg) -> sent.add(player.getUUID()));
+        service.setSessionConfigSender((player, cfg, enabled) -> sent.add(player.getUUID()));
 
         var v20Uuid = UUID.randomUUID();
         service.registerPlayer(playerIn(v20Uuid, level(Level.OVERWORLD)),

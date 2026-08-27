@@ -192,6 +192,11 @@ public final class PaperSoakMetricsExporter {
         // send-pacing-plan.md v3: the pacer's soak-visible receipt — inertness on
         // loopback is EMPIRICAL, so a moved guard-soak baseline needs attribution.
         serviceMap.put("paced_ticks", service.getTickDiag().getPacedTicksTotal());
+        // Service gate (plan §2.5) — twin of the Fabric exporter's field. Null-guarded
+        // like the Fabric source: mocked-service rigs zero-fill.
+        var gateState = service.getServiceGateState();
+        serviceMap.put("permission_denied",
+                gateState != null ? gateState.permissionDeniedTotal() : 0L);
         result.put("service", serviceMap);
 
         var diskMap = new LinkedHashMap<String, Object>();

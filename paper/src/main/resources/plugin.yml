@@ -37,3 +37,28 @@ permissions:
   vss.farplayers.hidden:
     description: Players with this permission are never shown as far players (VSS spelling)
     default: false
+  # Service gate (requireServicePermission, default false): with the config key on, only
+  # holders are served LOD data — a handshake from anyone else is answered with an
+  # enabled=false SessionConfig and no session. BOTH brand spellings are declared for the
+  # reason spelled out on lss.farplayers.hidden above (Bukkit resolves an UNDECLARED node to
+  # the op default, so a single-brand declaration plus a cross-brand check goes silently
+  # wrong, and declaring both keeps grants alive across an LSS<->VSS jar swap).
+  #
+  # `default: true`, NOT op: everyone holds these unless an admin says otherwise, so arming
+  # the gate on its own changes nothing for anybody — the original behavior, preserved. The
+  # gate is a DENY tool: the only thing that takes LOD away is an explicit negative grant in
+  # the permission plugin (e.g. LuckPerms `group default permission set lss.use false`).
+  #
+  # Enforcement requires BOTH spellings, so a negative grant on EITHER one denies — the De
+  # Morgan mirror of the privacy nodes above (grant model: hold EITHER; deny model: lose
+  # EITHER). An OR here would be inert: the spelling the admin did NOT touch still resolves
+  # to its declared `true` and would out-vote the single negative grant.
+  #
+  # That direction is also why losing either declaration is dangerous: an undeclared node
+  # falls back to Bukkit's op default, silently turning "everyone" into "ops only".
+  lss.use:
+    description: Receive LOD data when requireServicePermission is enabled
+    default: true
+  vss.use:
+    description: Receive LOD data when requireServicePermission is enabled (VSS spelling)
+    default: true

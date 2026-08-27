@@ -2,6 +2,8 @@ package dev.vox.lss.networking.server;
 
 import dev.vox.lss.common.Brand;
 import dev.vox.lss.common.HandshakeGate;
+import dev.vox.lss.common.PlayerServiceGate;
+import dev.vox.lss.common.ServiceGateState;
 import dev.vox.lss.common.LSSConstants;
 import dev.vox.lss.common.LSSLogger;
 import dev.vox.lss.config.LSSServerConfig;
@@ -183,7 +185,49 @@ public final class ServerReceiverGlue {
                 ? dev.vox.lss.common.compat.ViaProbe.playerProtocol(player.getUUID())
                 : dev.vox.lss.common.compat.ViaProbe.NO_SIGNAL;
         handleHandshake(payload, player, service, responder,
-                viaProtocol, SharedConstants.getProtocolVersion());
+                viaProtocol, SharedConstants.getProtocolVersion(),
+                serviceGateFor(player, service));
+    }
+
+    /**
+     * The production {@link PlayerServiceGate} for the shared receivers
+     * (service-permission-gate-plan.md §2.2): the permission read goes through the
+     * {@code LoaderServices.checkPermission} seam (Fabric's reflective
+     * fabric-permissions-api bridge / NeoForge's native nodes — every failure shape
+     * answers the passed default TRUE: fail-open, serve), the log latch and the
+     * denied-handshake memo live on the service's {@link ServiceGateState}, and a
+     * denied re-handshake of an already-REGISTERED player unregisters inline (this
+     * runs on the server thread — the same thread registerPlayer runs on).
+     * Extracted static so it is source-pinnable — a hard-coded {@code true} here
+     * would make the whole feature inert on two loaders with every core test green.
+     */
+    static PlayerServiceGate serviceGateFor(ServerPlayer player,
+                                            RequestProcessingService service) {
+        return new PlayerServiceGate() {
+            @Override
+            public boolean hasPermission(String node) {
+                return dev.vox.lss.platform.LoaderServices.get()
+                        .checkPermission(player, node, true);
+            }
+
+            @Override
+            public boolean claimDenialLog() {
+                return service != null
+                        && service.getServiceGateState().claimDenialLog(player.getUUID());
+            }
+
+            @Override
+            public void onServiceDenied(int protocolVersion, int capabilities) {
+                if (service == null) return; // unreachable: the conjunction requires servicePresent
+                service.getServiceGateState().rememberDenied(player.getUUID(),
+                        player.getName().getString(), protocolVersion, capabilities);
+                // A live registration does not survive a permission denial (an ADMIN
+                // fact, unlike the protocol facts the keeps-registration rungs cover):
+                // the enabled=false reply just sent is the client's disarm, and the
+                // composite here is the same trio the departed-player sweep runs.
+                service.unregisterForServiceGate(player.getUUID());
+            }
+        };
     }
 
     /** The Via-signal seam (review MAJOR-2, mirroring the Paper overload pair): the
@@ -194,13 +238,35 @@ public final class ServerReceiverGlue {
                                        RequestProcessingService service,
                                        SessionConfigResponder responder,
                                        int viaProtocol, int nativeProtocol) {
+        handleHandshake(payload, player, service, responder, viaProtocol, nativeProtocol,
+                PlayerServiceGate.OPEN);
+    }
+
+    /** The full core: Via seam + the per-player service gate seam
+     *  (service-permission-gate-plan.md §2.2 — mirroring the Paper core's widest
+     *  overload). The 6-arg overload above rides {@link PlayerServiceGate#OPEN},
+     *  i.e. pre-gate behavior, for the existing crafted-frame tests; production
+     *  receivers reach this through the 4-arg entry, which builds the real gate. */
+    public static void handleHandshake(HandshakeC2SPayload payload, ServerPlayer player,
+                                       RequestProcessingService service,
+                                       SessionConfigResponder responder,
+                                       int viaProtocol, int nativeProtocol,
+                                       PlayerServiceGate serviceGate) {
         LSSLogger.info(Brand.shortName() + " handshake received from " + player.getName().getString()
                 + " (protocol v" + payload.protocolVersion()
                 + ", capabilities=" + payload.capabilities() + ")");
 
         var config = LSSServerConfig.CONFIG;
+        // Per-player service gate (plan §2.2): rides the SAME input the server-wide
+        // kill switch uses, so a denied player takes the already-pinned DISABLED path
+        // verbatim — a SessionConfig advertising enabled=false in the client's OWN
+        // dialect, no registration, never silence (silence is the version-skew signal
+        // and sends the discovery ladder into its retry rungs). Short-circuit order is
+        // load-bearing: at the shipped default the permission probe is never consulted.
+        boolean serviceDenied = config.requireServicePermission
+                && !PlayerServiceGate.holdsService(serviceGate);
         var decision = HandshakeGate.evaluate(payload.protocolVersion(),
-                payload.capabilities(), config.enabled, service != null,
+                payload.capabilities(), config.enabled && !serviceDenied, service != null,
                 config.enableV16Compat, config.enableV18Compat, config.enableV19Compat,
                 dev.vox.lss.common.compat.ViaProbe.isMismatch(viaProtocol, nativeProtocol));
 
@@ -234,6 +300,24 @@ public final class ServerReceiverGlue {
                     + " has incompatible " + Brand.shortName() + " protocol version " + payload.protocolVersion()
                     + " (server: " + LSSConstants.PROTOCOL_VERSION + "), skipping LOD distribution");
             return;
+        }
+
+        // Anchored on the DECISION, not merely on serviceDenied (the Paper core's
+        // twin carries the full rationale): outcome DISABLED — not NO_CONSUMER, whose
+        // rung outranks the enabled check, so logging there would double up AND burn
+        // the session's one line on a handshake the gate never decided; config.enabled
+        // + servicePresent — with LSS dark regardless, naming a permission would send
+        // the admin hunting a grant that changes nothing.
+        boolean deniedByServiceGate = serviceDenied && config.enabled && service != null
+                && decision.outcome() == HandshakeGate.Outcome.DISABLED;
+        if (deniedByServiceGate && serviceGate.claimDenialLog()) {
+            LSSLogger.info("LOD unavailable for " + player.getName().getString()
+                    + ": requireServicePermission is on and this player does not hold both "
+                    + dev.vox.lss.common.LSSPermissions.SERVICE_LSS + " and "
+                    + dev.vox.lss.common.LSSPermissions.SERVICE_VSS
+                    + " (a negative grant on either spelling denies) — the client was told"
+                    + " " + Brand.shortName() + " is disabled and will stop asking. Restore"
+                    + " both nodes to serve this player.");
         }
 
         boolean v16 = decision.dialect() == HandshakeGate.WireDialect.V16;
@@ -275,6 +359,13 @@ public final class ServerReceiverGlue {
                         // v20-only append (the encoder omits it for the echo versions).
                         net.minecraft.SharedConstants.getCurrentVersion()
                                 .getDataVersion().getVersion()));
+
+        if (deniedByServiceGate) {
+            // AFTER the reply: the enabled=false config is the client's disarm, and the
+            // hook's unregister composite must follow the push (plan §2.3's order). The
+            // memo deposit inside makes this session re-offerable on a later grant.
+            serviceGate.onServiceDenied(payload.protocolVersion(), payload.capabilities());
+        }
 
         if (decision.outcome() == HandshakeGate.Outcome.NO_CONSUMER) {
             // A re-handshake that no longer carries a consumer sheds any prior

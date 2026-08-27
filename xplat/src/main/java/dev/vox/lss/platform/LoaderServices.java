@@ -40,6 +40,29 @@ public interface LoaderServices {
     void sendToServer(CustomPacketPayload payload);
 
     /**
+     * Whether {@code player} holds {@code node}
+     * (service-permission-gate-plan.md §2.1). {@code defaultValue} is what an
+     * absent/unresolvable permission provider answers — the service gate always
+     * passes TRUE (its nodes are default-true everywhere), so no provider = serve
+     * everyone, the pre-gate behavior. Implementations NEVER throw; doubt answers
+     * the default. Fabric overrides via the reflective fabric-permissions-api
+     * bridge; NeoForge via its native PermissionAPI nodes; Paper does not route
+     * through this seam (Bukkit permissions, read in the paper module).
+     */
+    default boolean checkPermission(ServerPlayer player, String node, boolean defaultValue) {
+        return defaultValue;
+    }
+
+    /**
+     * The diag token naming this loader's permission backend for the {@code Gate:}
+     * line — a loader fact {@code DiagnosticsFormatter} (common) cannot compute.
+     * "none" = the default-only fallback above.
+     */
+    default String permissionProviderToken() {
+        return "none";
+    }
+
+    /**
      * The installed impl. When no entrypoint has installed one yet (Tier-1 JUnit
      * runs under fabric-loader-junit never run entrypoints), falls back to the
      * loader module's {@link java.util.ServiceLoader} registration

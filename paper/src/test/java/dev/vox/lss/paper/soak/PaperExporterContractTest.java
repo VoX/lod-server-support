@@ -58,9 +58,12 @@ class PaperExporterContractTest {
         final SharedBandwidthLimiter bandwidthLimiter = new SharedBandwidthLimiter(1_000_000);
         final PaperPlayerRequestState player = mock(PaperPlayerRequestState.class);
         final UUID playerUuid = UUID.randomUUID();
+        final dev.vox.lss.common.ServiceGateState gateState =
+                new dev.vox.lss.common.ServiceGateState();
 
         Fixture() {
             doReturn(this.diag).when(this.processor).getDiagnostics();
+            doReturn(this.gateState).when(this.service).getServiceGateState();
             // The store counter family is unconditional on the real processor; the mock
             // must supply it too or the exporter NPEs building the `store` group.
             doReturn(new dev.vox.lss.common.store.LodStoreDiagnostics())
@@ -192,6 +195,7 @@ class PaperExporterContractTest {
         fx.diag.incrementGraceSkipped();
         fx.diag.addSuperseded(8);
         fx.diag.addRangeFiltered(9);
+        fx.gateState.rememberDenied(UUID.randomUUID(), "denied", 20, 1);
         fx.tickDiag.recordSectionSent(100);
         fx.diskDiag.recordCompleted(3_000_000L);
         fx.diskDiag.recordSuccess();
@@ -205,6 +209,8 @@ class PaperExporterContractTest {
         assertEquals(2L, section(m, "service").get("re_resolved"));
         assertEquals(3L, section(m, "service").get("grace_skipped"));
         assertEquals(8L, section(m, "service").get("superseded"));
+        assertEquals(1L, section(m, "service").get("permission_denied"),
+                "the real gate-state transition counter flows onto its key");
         assertEquals(9L, section(m, "service").get("range_filtered"));
         assertEquals(1L, section(m, "service").get("columns_sent"));
         assertEquals(100L, section(m, "service").get("bytes_sent"));

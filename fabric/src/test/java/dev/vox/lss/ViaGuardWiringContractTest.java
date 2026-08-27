@@ -47,7 +47,9 @@ class ViaGuardWiringContractTest {
                 "Fabric must consult the Via probe ONLY behind enableViaMismatchGuard"
                         + " (ternary to NO_SIGNAL) — an unconditional consult makes the"
                         + " guard undisablable");
-        assertTrue(src.contains("viaProtocol, SharedConstants.getProtocolVersion())"),
+        assertTrue(src.contains("viaProtocol, SharedConstants.getProtocolVersion(),"),
+                // (trailing comma: the service-gate seam widened the call — the gate
+                // param rides after the native protocol)
                 "Fabric's production caller must pass the REAL MC native protocol into"
                         + " the seam — LSSConstants.PROTOCOL_VERSION there denies every"
                         + " legacy client (20 != any real Via protocol)");

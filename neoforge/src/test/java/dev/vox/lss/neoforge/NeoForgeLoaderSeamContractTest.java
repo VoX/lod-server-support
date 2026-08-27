@@ -63,8 +63,12 @@ class NeoForgeLoaderSeamContractTest {
     void neoForgeImplOverridesEveryLoaderServicesMethod() throws IOException {
         String iface = read("xplat/src/main/java/dev/vox/lss/platform/LoaderServices.java");
         String impl = read("neoforge/src/main/java/dev/vox/lss/platform/NeoForgeLoaderServices.java");
+        // (?:default\s+)? — panel MAJOR (service-gate plan §8 O1-M3): a DEFAULT method
+        // was invisible to this scan, so a loader impl forgetting to override
+        // checkPermission would ship the gate permanently inert with a green suite.
         Matcher m = Pattern.compile(
-                "^\\s{4}(?:boolean|void|Path|String|int|long)\\s+(\\w+)\\(", Pattern.MULTILINE)
+                "^\\s{4}(?:default\\s+)?(?:boolean|void|Path|String|int|long)\\s+(\\w+)\\(",
+                Pattern.MULTILINE)
                 .matcher(iface);
         int found = 0;
         while (m.find()) {
@@ -74,7 +78,7 @@ class NeoForgeLoaderSeamContractTest {
                             .matcher(impl).find(),
                     "NeoForgeLoaderServices must override LoaderServices." + method);
         }
-        assertTrue(found >= 5, "the interface-method scan went blind (found " + found
+        assertTrue(found >= 7, "the interface-method scan went blind (found " + found
                 + ") — fix this test's regex before trusting it");
     }
 
