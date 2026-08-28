@@ -3,6 +3,7 @@
 - **Optional permission gate.** Servers can now require the `lss.use` and `vss.use` permissions before serving LODs to a player. Off by default, so nothing changes unless you turn it on.
 - **Separate cache per world.** On proxy networks that put several worlds behind one address, your distant terrain no longer mixes between them.
 - **Safer /lss reset.** Reset now checks your Voxy setup before clearing anything and warns you if something looks wrong. Use `/lss reset voxy-force` for unusual setups.
+- **NeoForge: distant players now render.** Far-away players show up in your LOD terrain on the NeoForge build, the same as on Fabric. Best-effort on this line.
 
 ### Bug Fixes
 
