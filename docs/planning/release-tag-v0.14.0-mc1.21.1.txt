@@ -1,8 +1,12 @@
 ### New Features
 
-- **Optional player permission gate** — New `requireServicePermission` server setting: when enabled, LOD data is only served to players holding the `lss.use` permission. Every player has it by default, so enabling the gate alone denies nobody; revoke the permission per player or group to control access.
-- **World-aware client cache** — The client LOD cache now keys by world identity as well as server address, so proxy networks that move you between worlds behind one address no longer mix caches, and address changes keep your cache.
+- **Optional player permission gate** — New `requireServicePermission` server setting: when enabled, LOD data is only served to players holding the `lss.use` and `vss.use` permissions (revoking either is enough to deny). Every player has both by default, so enabling the gate alone denies nobody; revoke per player or group to control access.
+- **World-aware client cache** — The client LOD cache now keys by world identity as well as server address, so proxy networks that move you between worlds behind one address no longer mix caches; a new `cacheAddressAliases` client setting lets a server reachable at several addresses share one download cache.
 - **Smarter /lss reset** — The reset now cross-checks which storage Voxy is actually using before wiping, reports mismatches instead of guessing, and adds a `/lss reset voxy-force` escape hatch for unusual setups.
+
+### Bug Fixes
+
+- **Far-player privacy hardening (Paper)** — Privacy and vanish checks now fail toward hidden, and one broken permissions plugin no longer disrupts far-player updates for everyone.
 
 ### Compatibility
 

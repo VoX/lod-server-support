@@ -236,7 +236,8 @@ public final class ClientNetGlue {
      * only a corroborated match moves the BUCKET to the canonical.
      */
     private static AliasLatch.Decision computeAliasDecision(String connectAddr) {
-        // The field was validated (and rewritten to the survivors) at config load, so
+        // The field was validated at config load (the user's field is deliberately NEVER
+        // rewritten — the §11 fold: a re-save must not erase dropped groups), so
         // this re-parse is silent — a warn sink here would double-log every session.
         var groups = CacheKeyAliases.validated(
                 LSSClientConfig.CONFIG.cacheAddressAliases, warn -> {});

@@ -9,10 +9,11 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * {@code cacheAddressAliases} load validation (plan §2.2): a malformed group drops
- * WHOLE at {@code validate()} and the FIELD is rewritten to the survivors, so session
- * code re-reading it gets an already-clean shape — the {@code crossVersionBlockFallbacks}
- * fail-open convention. GSON-null shapes restore the empty default.
+ * {@code cacheAddressAliases} load validation (plan §2.2 as amended by the §11 fold):
+ * a malformed group drops WHOLE from the WORKING set at {@code validate()}, while the
+ * user's FIELD is deliberately NEVER rewritten — the load-time re-save must not erase
+ * the user's groups from their file; session code re-parses through {@code validated()}
+ * with a silent sink. GSON-null shapes restore the empty default.
  */
 class ClientAliasConfigValidationTest {
 

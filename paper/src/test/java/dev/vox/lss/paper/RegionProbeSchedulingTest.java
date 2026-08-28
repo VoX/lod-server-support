@@ -136,7 +136,7 @@ class RegionProbeSchedulingTest {
     }
 
     /** Stand in for the processing thread having APPLIED a want-set: what the SYNC (non-Folia)
-     *  probe walks. The regionized path reads the mailbox instead — see {@link #offer}. */
+     *  probe walks. The regionized path reads the mailbox first, falling back to the published want-set (the R1 arm) — see {@link #offer}. */
     private static void publish(PaperPlayerRequestState state, IncomingRequest... reqs) {
         state.publishWantSet(new IncomingBatch(reqs));
     }
