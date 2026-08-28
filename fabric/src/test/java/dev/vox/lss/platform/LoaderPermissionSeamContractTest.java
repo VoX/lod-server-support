@@ -155,9 +155,19 @@ class LoaderPermissionSeamContractTest {
         assertTrue(svc.contains("if (++this.permissionRecheckCounter >= PERMISSION_RECHECK_TICKS)"),
                 "Paper's tick cadence (its behavioral twin lives in PaperServiceGateSweepTest)");
         String plugin = source("paper/src/main/java/dev/vox/lss/paper/LSSPaperPlugin.java");
-        assertTrue(plugin.contains(".getServiceGateState().onDisconnect(event.getPlayer().getUniqueId());"),
-                "Paper's quit hook must sweep the gate state — the census's third loader "
-                        + "(§8 F2-M2: without it every denied joiner leaks for the server's life)");
+        // v0.14 M-1: Paper's quit hook routes removal through the mailbox and must NOT
+        // sweep the gate state directly — the un-guarded direct wipe could erase a
+        // fast-rejoiner's fresh denial memo on Folia (the R4 belt exists to skip the
+        // sweep when a newer connection handshaked since the quit). The gate sweep rides
+        // the EPOCH-GUARDED Remove drain instead; without it a denied joiner still leaks.
+        assertTrue(plugin.contains("service.enqueueRemove(event.getPlayer().getUniqueId());"),
+                "Paper's quit hook routes removal through the mailbox (Folia region-thread safety)");
+        assertFalse(plugin.contains(".getServiceGateState().onDisconnect(event.getPlayer().getUniqueId());"),
+                "Paper's quit hook must NOT sweep the gate state directly (v0.14 M-1 belt bypass)");
+        assertTrue(svc.contains("if (noNewerConnection) {")
+                        && svc.contains("this.serviceGateState.onDisconnect(r.uuid());"),
+                "the quit's gate sweep happens in the EPOCH-GUARDED Remove drain — swept "
+                        + "only when no newer connection handshaked since (the R4 belt)");
         assertTrue(svc.contains("this.serviceGateState.onDisconnect(uuid);"),
                 "…and the departed-player sweep (the quit event never fired for those) too");
     }

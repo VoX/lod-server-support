@@ -908,7 +908,8 @@ public class PaperRequestProcessingService {
                                     dev.vox.lss.common.LSSPermissions.SERVICE_LSS)
                             && this.permissionProbe.test(player,
                                     dev.vox.lss.common.LSSPermissions.SERVICE_VSS);
-                } catch (Exception e) {
+                } catch (Throwable e) {
+                    if (e instanceof VirtualMachineError vme) throw vme;
                     holds = true; // contained: a throwing backend counts as HOLDING
                 }
                 if (holds) {
@@ -966,7 +967,8 @@ public class PaperRequestProcessingService {
                                         dev.vox.lss.common.LSSPermissions.SERVICE_LSS)
                                 && this.permissionProbe.test(player,
                                         dev.vox.lss.common.LSSPermissions.SERVICE_VSS);
-                    } catch (Exception e) {
+                    } catch (Throwable e) {
+                        if (e instanceof VirtualMachineError vme) throw vme;
                         cleared = true; // fail-open, the doctrine
                     }
                 }

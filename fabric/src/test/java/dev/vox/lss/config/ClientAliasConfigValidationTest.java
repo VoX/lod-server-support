@@ -53,6 +53,23 @@ class ClientAliasConfigValidationTest {
     }
 
     @Test
+    void validationActuallyDropsTheMalformedGroupAndWarns() {
+        // F17 mutation pin: the user's FIELD is never rewritten (above), but the WORKING
+        // SET from validated() must still drop the bad group AND emit a diagnostic — else
+        // a malformed group silently never applies with zero trace, and deleting the
+        // validate() call (or the warn) is mutation-dead against every other test here.
+        var raw = List.of(
+                List.of("good.example.com", "alt.good.example.com"),
+                List.of("bad.example.com:25565", "alt.bad.example.com"));
+        var warns = new ArrayList<String>();
+        var working = dev.vox.lss.networking.client.CacheKeyAliases.validated(raw, warns::add);
+        assertEquals(1, working.size(),
+                "the port-bearing group is dropped from the working set; the clean one survives");
+        assertTrue(!warns.isEmpty(),
+                "the drop emits a load-time diagnostic (the only trace the user gets)");
+    }
+
+    @Test
     void validateIsIdempotentOnACleanField() {
         var c = new LSSClientConfig();
         c.cacheAddressAliases = new ArrayList<>(List.of(

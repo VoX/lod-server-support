@@ -86,7 +86,8 @@ public class LSSPaperPlugin extends JavaPlugin implements PluginMessageListener,
             public boolean hasPermission(String node) {
                 try {
                     return bukkitPlayer.hasPermission(node);
-                } catch (Exception e) {
+                } catch (Throwable e) {
+                    if (e instanceof VirtualMachineError vme) throw vme;
                     if (PERMISSIBLE_THROW_WARNED.compareAndSet(false, true)) {
                         LSSLogger.warn("Bukkit permission read threw for " + playerName
                                 + " on " + node + " — serving (fail-open; the gate is not"
@@ -725,12 +726,13 @@ public class LSSPaperPlugin extends JavaPlugin implements PluginMessageListener,
         // Service-independent: the sidecar fact is recorded at the network level
         // (possibly before any service exists) and must die with the connection.
         CLIENT_DATA_VERSIONS.remove(event.getPlayer().getUniqueId());
-        // Service gate: the denied-handshake memo, the denial-log latch, and any
-        // revocation streak are session-scoped — swept beside the client-info fact
-        // (the state lives on the service, so a serviceless quit has nothing to sweep).
-        if (service != null) {
-            service.getServiceGateState().onDisconnect(event.getPlayer().getUniqueId());
-        }
+        // Service gate: the denied-handshake memo, the denial-log latch, and the
+        // revocation streak are swept by the EPOCH-GUARDED mailbox Remove drain
+        // (enqueueRemove above), NOT here. On Folia this event can fire on a stalled
+        // region thread AFTER a same-UUID reconnection already deposited a fresh
+        // denial memo on its own region thread; an un-guarded sweep here would wipe
+        // the successor's memo and strand a disarmed rejoiner with no re-offer (the
+        // R4 belt exists precisely to skip the sweep when a newer connection exists).
     }
 
     public PaperRequestProcessingService getRequestService() {
