@@ -1,14 +1,14 @@
 ### New Features
 
-- **Optional player permission gate** — New `requireServicePermission` server setting: when enabled, LOD data is only served to players holding the `lss.use` and `vss.use` permissions (revoking either is enough to deny). Every player has both by default, so enabling the gate alone denies nobody; revoke per player or group to control access.
-- **World-aware client cache** — The client LOD cache now keys by world identity as well as server address, so proxy networks that move you between worlds behind one address no longer mix caches; a new `cacheAddressAliases` client setting lets a server reachable at several addresses share one download cache.
-- **Smarter /lss reset** — The reset now cross-checks which storage Voxy is actually using before wiping, reports mismatches instead of guessing, and adds a `/lss reset voxy-force` escape hatch for unusual setups.
+- **Optional permission gate.** Servers can now require the `lss.use` and `vss.use` permissions before serving LODs to a player. Off by default, so nothing changes unless you turn it on.
+- **Separate cache per world.** On proxy networks that put several worlds behind one address, your distant terrain no longer mixes between them.
+- **Safer /lss reset.** Reset now checks your Voxy setup before clearing anything and warns you if something looks wrong. Use `/lss reset voxy-force` for unusual setups.
 
 ### Bug Fixes
 
-- **NeoForge: LOD serving when opening a world to LAN** — Opening a singleplayer world to LAN on the NeoForge build now activates LOD serving for players who join; previously LODs were served only on dedicated servers.
-- **Far-player privacy hardening (Paper)** — Privacy and vanish checks now fail toward hidden, and one broken permissions plugin no longer disrupts far-player updates for everyone.
+- **NeoForge: LODs now work on LAN worlds.** Opening a world to LAN on the NeoForge build now serves LODs to players who join. Before, the NeoForge build only served them on dedicated servers.
+- **Far player privacy fixes (Paper).** Hidden and vanished players stay hidden, and one misbehaving permissions plugin no longer breaks far players for everyone.
 
 ### Compatibility
 
-- Mixed client/server versions remain fully compatible in both directions; this line (Fabric, Paper, and NeoForge) is supported best-effort.
+- Mixed client and server versions stay fully compatible in both directions. This line (Fabric, Paper, and NeoForge) is best-effort.
