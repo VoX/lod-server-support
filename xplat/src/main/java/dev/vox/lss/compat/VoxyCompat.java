@@ -747,7 +747,8 @@ class VoxyCompat {
             resetDomainState = -1;
             LSSLogger.warn("Voxy reset unavailable on this Voxy version — /"
                     + dev.vox.lss.common.Brand.clientCommand()
-                    + " reset will clear only the LSS half (" + e + ")");
+                    + " reset will clear only the " + dev.vox.lss.common.Brand.shortName()
+                    + " half (" + e + ")");
             return false;
         }
     }

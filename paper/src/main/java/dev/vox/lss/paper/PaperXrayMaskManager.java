@@ -96,7 +96,7 @@ final class PaperXrayMaskManager {
                 // routes to the LSS config-key mask — fail-safe, masking stays ON.
                 LSSLogger.warn("Paper anti-xray config unreadable for "
                         + level.dimension().identifier() + " — LOD masking falls back to the "
-                        + "LSS xrayHiddenBlocks config keys", t);
+                        + dev.vox.lss.common.Brand.shortName() + " xrayHiddenBlocks config keys", t);
                 return new EngineConfig(true, List.of(), 0);
             }
         });
@@ -150,7 +150,7 @@ final class PaperXrayMaskManager {
                 // would silently leak, so fall back to the LSS keys (design §3 Detection).
                 LSSLogger.warn("Paper anti-xray is enabled for " + dimension + " but its "
                         + "hidden-blocks list resolved empty — LOD masking falls back to "
-                        + "the LSS xrayHiddenBlocks config key for this world");
+                        + "the " + dev.vox.lss.common.Brand.shortName() + " xrayHiddenBlocks config key for this world");
                 engineMask = null;
             }
         }

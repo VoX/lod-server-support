@@ -140,7 +140,7 @@ public final class XrayMaskManager {
                         // once, guaranteed by the computeIfAbsent mapping.
                         LSSLogger.warn("AntiXray engine stayed unreadable (transient) for "
                                 + d + " after " + TRANSIENT_PROBE_LATCH + " probes — caching "
-                                + "the LSS-config fallback mask for this session");
+                                + "the " + dev.vox.lss.common.Brand.shortName() + "-config fallback mask for this session");
                     }
                     return Optional.ofNullable(evaluate(d, v, false));
                 })
@@ -208,7 +208,7 @@ public final class XrayMaskManager {
             if (!quiet) {
                 LSSLogger.info("AntiXray engine mode 2/3 detected for " + dimension
                         + " — its obfuscation list includes replacement terrain, so LOD masking "
-                        + "uses the LSS xrayHiddenBlocks list at the engine's height instead");
+                        + "uses the " + dev.vox.lss.common.Brand.shortName() + " xrayHiddenBlocks list at the engine's height instead");
             }
         } else {
             mask = fallbackMask();

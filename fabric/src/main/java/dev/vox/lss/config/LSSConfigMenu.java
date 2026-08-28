@@ -52,7 +52,7 @@ public class LSSConfigMenu implements ConfigEntryPoint {
         // VSS jar brands this screen without a code fork. MOD_ID stays the registration key.
         var displayName = container
                 .map(c -> c.getMetadata().getName())
-                .orElse("LOD Server Support");
+                .orElse(dev.vox.lss.common.Brand.displayName());
         var mod = builder.registerModOptions(LSSConstants.MOD_ID, displayName, version)
                 .setIcon(iconFromMetadata(container));
         // ONE handler per SaveHook, shared by every option that uses it: Sodium keeps the

@@ -91,11 +91,14 @@ public final class FarPlayerClientSupport {
                 config.farPlayersWithSeeU);
         if (!gate && config.farPlayersEnabled && isSeeuPresent() && !seeuInfoLogged) {
             seeuInfoLogged = true;
-            LSSLogger.info("SeeU detected — LSS stops drawing far players to avoid"
+            LSSLogger.info("SeeU detected — " + dev.vox.lss.common.Brand.shortName()
+                    + " stops drawing far players to avoid"
                     + " double proxies (your own Share My Position setting still"
-                    + " applies); set farPlayersWithSeeU=true in lss-client-config.json"
-                    + " (the 'Prefer LSS Far Players' option in the Sodium screen)"
-                    + " to use LSS instead");
+                    + " applies); set farPlayersWithSeeU=true in "
+                    + dev.vox.lss.common.Brand.lowerShortName() + "-client-config.json"
+                    + " (the 'Prefer " + dev.vox.lss.common.Brand.shortName()
+                    + " Far Players' option in the Sodium screen)"
+                    + " to use " + dev.vox.lss.common.Brand.shortName() + " instead");
         }
         return gate;
     }
