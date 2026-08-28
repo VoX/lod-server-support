@@ -2039,7 +2039,7 @@ public final class SqliteLodStore implements LodStoreService {
                                 + " oldest rows (live " + (liveBytes >> 20) + " MB > cap "
                                 + (this.env.maxDbBytes() >> 20) + " MB) — the store is at "
                                 + "its size cap and will keep evicting silently; running "
-                                + "totals in '/lsslod store status' (evicted=), raise or "
+                                + "totals in '/" + Brand.serverCommand() + " store status' (evicted=), raise or "
                                 + "zero lodStoreMaxMB (0 = uncapped) for full retention");
                     }
                     liveBytes = logicalDbBytes();

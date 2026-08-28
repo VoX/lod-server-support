@@ -71,7 +71,7 @@ public final class ViaProbe {
                 name -> Class.forName(name, false, ViaProbe.class.getClassLoader()),
                 (detail, cause) -> LSSLogger.warn("ViaVersion present but its API did not"
                         + " resolve (" + detail + ") — the cross-MC mismatch guard is"
-                        + " inactive; legacy LSS clients on other MC versions will not be"
+                        + " inactive; legacy " + dev.vox.lss.common.Brand.shortName() + " clients on other MC versions will not be"
                         + " detected", cause));
     }
 

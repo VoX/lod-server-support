@@ -858,6 +858,20 @@ def check_vss_pair_paper(lss_jar, vss_jar, problems):
                                 "jars (the enforcement requires both, and Bukkit resolves an "
                                 "undeclared node to the op default, so a missing declaration "
                                 "denies every non-op)")
+    # The far-player privacy nodes get the SAME dual-jar belt (Fable VSS branding review
+    # 2026-08-28): unlike the service gate, only vss.farplayers.hidden was positively pinned
+    # present (in the VSS jar) — lss.farplayers.hidden was never pinned in either jar. A widened
+    # rewrite that RENAMED lss.farplayers.hidden -> vss.farplayers.hidden (mirroring the
+    # lss.admin rename rule) would drop the lss. spelling from the VSS jar; undeclared, it
+    # resolves to Bukkit's OP default (TRUE), and hiddenFor's OR-check then hides every OP as a
+    # far player. Require BOTH spellings present in BOTH jars, symmetric with the service gate.
+    for jar_text, jar_name in ((ltext, os.path.basename(lss_jar)), (vtext, vbase)):
+        for tok in ("lss.farplayers.hidden", "vss.farplayers.hidden"):
+            if tok not in jar_text:
+                problems.append(f"{jar_name}: plugin.yml is missing the far-player privacy node "
+                                f"{tok!r} — BOTH brand spellings must be declared in BOTH jars "
+                                "(an undeclared node resolves to Bukkit's op default TRUE, so a "
+                                "dropped declaration silently hides every op as a far player)")
 
 
 # ---------------------------------------------------------------- brand.properties + wire

@@ -201,7 +201,7 @@ public final class AntiXrayCompat {
 
     private static void warnEngineUnreadable(Throwable t) {
         LSSLogger.warn("AntiXray is installed but its per-world obfuscation config could not "
-                + "be read — LOD masking falls back to the LSS xrayHiddenBlocks/"
+                + "be read — LOD masking falls back to the " + dev.vox.lss.common.Brand.shortName() + " xrayHiddenBlocks/"
                 + "xrayMaxBlockHeight config keys for every world.", t);
     }
 }
