@@ -47,6 +47,41 @@ public final class SourcePaths {
      * @throws AssertionError when the file exists in neither tree — a moved-without-retarget signal
      */
     public static Path mainSource(String javaPath) {
+        // Line-aware (single-branch consolidation): a non-default line's overlay of a
+        // production file WINS over the shared copy — resolve it FIRST. (Adding overlay
+        // trees to the shared half-move check below would false-fail, since shared↔overlay
+        // is the one LEGAL two-tree pair.) The default line has no overlays and skips this.
+        String line = System.getProperty("lss.line", "26.2");
+        if (!"26.2".equals(line)) {
+            String[] overlayTrees = {
+                    "src/line/" + line + "/java/",          // CWD = module dir
+                    "fabric/src/line/" + line + "/java/",   // CWD = repo root
+                    "xplat/src/line/" + line + "/java/",
+                    "paper/src/line/" + line + "/java/",
+                    "neoforge/src/line/" + line + "/java/",
+            };
+            java.util.Set<Path> overlayHits = new java.util.LinkedHashSet<>();
+            Path d = Path.of("").toAbsolutePath();
+            for (int depth = 0; depth < 5 && d != null; depth++, d = d.getParent()) {
+                for (String tree : overlayTrees) {
+                    Path candidate = d.resolve(tree + javaPath);
+                    if (Files.exists(candidate)) {
+                        try {
+                            overlayHits.add(candidate.toRealPath());
+                        } catch (java.io.IOException e) {
+                            throw new java.io.UncheckedIOException(e);
+                        }
+                    }
+                }
+            }
+            if (overlayHits.size() > 1) {
+                throw new AssertionError("line overlay of " + javaPath
+                        + " exists in more than one module's overlay tree: " + overlayHits);
+            }
+            if (overlayHits.size() == 1) {
+                return overlayHits.iterator().next();
+            }
+        }
         // Collect across the WHOLE walk before returning (review: an early depth-0
         // return from the module CWD would skip the repo-root xplat probe, so a
         // copy-instead-of-git-mv would silently prefer fabric's copy in exactly the

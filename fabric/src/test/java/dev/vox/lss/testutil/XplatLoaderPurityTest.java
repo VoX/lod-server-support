@@ -33,39 +33,53 @@ class XplatLoaderPurityTest {
 
     @Test
     void xplatSourcesReferenceNoLoaderApiAnywhere() throws IOException {
-        Path root = xplatRoot();
         List<String> offenders = new ArrayList<>();
-        try (Stream<Path> files = Files.walk(root)) {
-            files.filter(p -> p.toString().endsWith(".java")).forEach(p -> {
-                String text;
-                try {
-                    text = Files.readString(p);
-                } catch (IOException e) {
-                    throw new java.io.UncheckedIOException(e);
-                }
-                var rel = root.relativize(p).toString().replace('\\', '/');
-                if (LOADER_REFERENCE.matcher(text).find()) {
-                    offenders.add(rel + " (loader reference)");
-                }
-                if (!rel.startsWith("dev/vox/lss/mixin/") && MIXIN_LIBRARY.matcher(text).find()) {
-                    offenders.add(rel + " (mixin library outside the mixin package)");
-                }
-            });
+        // Whole-source scan of the SHARED xplat tree AND the active line's xplat overlay
+        // (single-branch consolidation): a line's overlaid xplat file must stay loader-neutral
+        // too, or it breaks the same-FQN twin contract on its own line.
+        for (Path root : xplatRoots()) {
+            try (Stream<Path> files = Files.walk(root)) {
+                final Path r = root;
+                files.filter(p -> p.toString().endsWith(".java")).forEach(p -> {
+                    String text;
+                    try {
+                        text = Files.readString(p);
+                    } catch (IOException e) {
+                        throw new java.io.UncheckedIOException(e);
+                    }
+                    var rel = r.relativize(p).toString().replace('\\', '/');
+                    if (LOADER_REFERENCE.matcher(text).find()) {
+                        offenders.add(rel + " (loader reference)");
+                    }
+                    if (!rel.startsWith("dev/vox/lss/mixin/") && MIXIN_LIBRARY.matcher(text).find()) {
+                        offenders.add(rel + " (mixin library outside the mixin package)");
+                    }
+                });
+            }
         }
         assertTrue(offenders.isEmpty(),
                 "xplat must stay loader-neutral (whole-source scan) — route these through"
                         + " LoaderServices or move them to a loader module: " + offenders);
     }
 
-    private static Path xplatRoot() {
+    /** The shared xplat source root plus the active line's xplat overlay root (if present). */
+    private static List<Path> xplatRoots() {
+        Path shared = null;
         Path dir = Path.of("").toAbsolutePath();
         for (int depth = 0; depth < 5 && dir != null; depth++, dir = dir.getParent()) {
             Path candidate = dir.resolve("xplat/src/main/java");
-            if (Files.isDirectory(candidate)) {
-                return candidate;
-            }
+            if (Files.isDirectory(candidate)) { shared = candidate; break; }
         }
-        throw new AssertionError("cannot locate xplat/src/main/java from "
-                + Path.of("").toAbsolutePath());
+        if (shared == null) {
+            throw new AssertionError("cannot locate xplat/src/main/java from " + Path.of("").toAbsolutePath());
+        }
+        List<Path> roots = new ArrayList<>();
+        roots.add(shared);
+        String line = System.getProperty("lss.line", "26.2");
+        if (!"26.2".equals(line)) {
+            Path overlay = shared.getParent().getParent().resolve("line").resolve(line).resolve("java");
+            if (Files.isDirectory(overlay)) roots.add(overlay);
+        }
+        return roots;
     }
 }
