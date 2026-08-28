@@ -49,21 +49,33 @@ class XplatJava21SurfaceTest {
 
     @Test
     void compiledXplatClassesReferenceNoPost21JdkApi() throws IOException {
+        // Line-aware (single-branch consolidation): non-default lines compile into
+        // fabric/build/<line>/ and their xplat source is shared + overlay. Scan the ACTIVE
+        // line's compiled classes (a hardcoded default path scans stale/absent classes on a
+        // per-line build dir — the exact CI red this fixes) and union the overlay's xplat FQNs.
+        String line = System.getProperty("lss.line", "26.2");
+        String buildSub = "26.2".equals(line) ? "" : line + "/";
         Path srcRoot = find("xplat/src/main/java");
-        Path classesRoot = find("fabric/build/classes/java/main");
+        Path classesRoot = find("fabric/build/" + buildSub + "classes/java/main");
+        // FQN list = shared xplat ∪ this line's xplat overlay (same FQNs win; new ones added).
+        java.util.LinkedHashMap<String, Boolean> fqcns = new java.util.LinkedHashMap<>();
+        collectFqcns(srcRoot, fqcns);
+        Path overlayRoot = Path.of(find("xplat/src/main/java").getParent().getParent().toString(),
+                "line", line, "java");
+        if (Files.isDirectory(overlayRoot)) {
+            collectFqcns(overlayRoot, fqcns);
+        }
         List<String> offenders = new ArrayList<>();
         List<String> missing = new ArrayList<>();
-        try (Stream<Path> files = Files.walk(srcRoot)) {
-            files.filter(p -> p.toString().endsWith(".java")).forEach(p -> {
-                String rel = srcRoot.relativize(p).toString().replace('\\', '/');
-                String fqcnPath = rel.substring(0, rel.length() - ".java".length());
+        {
+            for (String fqcnPath : fqcns.keySet()) {
                 if (KNOWN_25_ONLY.contains(fqcnPath)) {
-                    return;
+                    continue;
                 }
                 List<Path> classFiles = classFilesFor(classesRoot, fqcnPath);
                 if (classFiles.isEmpty()) {
                     missing.add(fqcnPath);
-                    return;
+                    continue;
                 }
                 for (Path cf : classFiles) {
                     byte[] bytes;
@@ -79,7 +91,7 @@ class XplatJava21SurfaceTest {
                         }
                     }
                 }
-            });
+            }
         }
         assertTrue(missing.isEmpty(),
                 "xplat sources with no compiled class under fabric — run compileJava, or fix"
@@ -88,6 +100,16 @@ class XplatJava21SurfaceTest {
                 "post-Java-21 JDK API leaked into xplat (breaks the Java-21 backport lines;"
                         + " seam it, avoid it, or add a documented KNOWN_25_ONLY entry): "
                         + offenders);
+    }
+
+    /** Collect the FQN paths of every .java under a root into the (insertion-ordered) set. */
+    private static void collectFqcns(Path root, java.util.Map<String, Boolean> out) throws IOException {
+        try (Stream<Path> files = Files.walk(root)) {
+            files.filter(p -> p.toString().endsWith(".java")).forEach(p -> {
+                String rel = root.relativize(p).toString().replace('\\', '/');
+                out.put(rel.substring(0, rel.length() - ".java".length()), Boolean.TRUE);
+            });
+        }
     }
 
     /** The class file plus any nested classes (Foo$Bar, Foo$1...). */
