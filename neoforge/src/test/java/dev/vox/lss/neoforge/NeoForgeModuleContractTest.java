@@ -100,16 +100,18 @@ class NeoForgeModuleContractTest {
                 "AccessorServerChunkCache", "AccessorSimpleRegionStorage", "AccessorIOWorker",
                 "AccessorRegionFileStorage", "AccessorRegionFile", "AccessorConnection",
                 "AccessorServerCommonPacketListener", "ChunkSaveDataHook",
-                "AccessorClientPacketListener"}) {
+                "AccessorClientPacketListener", "IntegratedServerLanHook"}) {
             assertTrue(config.contains("\"" + required + "\""),
                     required + " missing from lss.neoforge.mixins.json — an unlisted accessor"
                             + " compiles but never applies, so every use ClassCastExceptions"
                             + " at runtime (disk reads / channel pressure / dirty detection)");
         }
-        // Deliberately ABSENT: the fabric-only IntegratedServerLanHook (no LAN hook on
-        // NeoForge v1 — plan §5.4) and the trace mixins (tracer deferred).
-        assertFalse(config.contains("IntegratedServerLanHook"),
-                "the LAN hook is fabric-only; listing it here would hard-fail mixin apply");
+        // The LAN hook (issue #257) is a byte-identical twin of the fabric mixin
+        // (loaderSurfaceFreeTwinsAreByteIdentical pins it), so its @Inject descriptor is
+        // exactly the one LanHookContractTest resolves against the real publishServer
+        // overload. Deliberately ABSENT: the trace mixins (tracer deferred).
+        assertFalse(config.contains("MovementRejectHook"),
+                "the trace mixins are fabric-only here; listing them would hard-fail mixin apply");
     }
 
     @Test
@@ -206,12 +208,15 @@ class NeoForgeModuleContractTest {
      * Same-FQN twins with NO loader surface — byte-identical by contract (a fix landing
      * in one tree only is silent drift the compile cannot see; both compile fine alone):
      * ScopedCarrier (V-2/S5 — a version-volatile whole-file swap at port time, but on ONE
-     * line the same file) and the legacy-Sodium options stack
+     * line the same file), the LAN hook (issue #257 — publishServer @Inject, per-line
+     * descriptor but identical across the two loaders of one line), and the legacy-Sodium
+     * options stack
      * (sodium-options-page-generations-plan.md D4/D5 — the probe, the reflective
      * builder, the constructor hook, and the mixin config, whose compatibilityLevel is
      * per-LINE data but identical across the two loaders of one line).
      */
     private static final String[] BYTE_IDENTICAL_TWINS = {
+            "src/main/java/dev/vox/lss/mixin/IntegratedServerLanHook.java",
             "src/main/java/dev/vox/lss/compat/ScopedCarrier.java",
             "src/main/java/dev/vox/lss/config/menu/SodiumGeneration.java",
             "src/main/java/dev/vox/lss/config/menu/LegacySodiumPage.java",
