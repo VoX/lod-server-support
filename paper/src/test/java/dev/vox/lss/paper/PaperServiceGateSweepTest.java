@@ -425,4 +425,73 @@ class PaperServiceGateSweepTest {
         assertTrue(drain > 0 && sweep > drain,
                 "tick() must drain the lifecycle mailbox BEFORE the permission sweeps");
     }
+
+    // ---- Folia review 2026-08-27: R3/R4 differentials ----
+
+    @Test
+    void aDimensionChangeCycleKeepsTheDeniedMemo() {
+        // R3: registerPlayer is the dimension-change reuse path — it must NOT clear a
+        // denial memo a region-thread deposit just wrote (the deposit's own queued
+        // unregister composite would then strand the player past its revocation with
+        // nothing left to re-offer).
+        var uuid = UUID.randomUUID();
+        var p = registerCurrent(uuid, 1);
+        service.getServiceGateState().rememberDenied(uuid, "steve", 20, 1);
+
+        service.removePlayer(uuid);       // the dimension-change cycle…
+        service.registerPlayer(p, 1);     // …re-registers the same player
+
+        assertTrue(service.getServiceGateState().isDenied(uuid),
+                "the dim-change reuse path must keep the memo — only a HANDSHAKE "
+                        + "registration ends the denied episode");
+    }
+
+    @Test
+    void aHandshakeRegistrationClearsTheDeniedMemo() {
+        // R3's other half: the Register DRAIN (the path every handshake registration
+        // and the grant replay's deferred Register ride) ends the episode.
+        var uuid = UUID.randomUUID();
+        var p = playerIn(uuid);
+        service.getDialectTracker().onHandshake(uuid, HandshakeGate.WireDialect.CURRENT);
+        service.getServiceGateState().rememberDenied(uuid, "steve", 20, 1);
+
+        service.enqueueRegister(p, 1);
+        service.tick();
+
+        assertNotNull(players.get(uuid), "premise: the drain registered");
+        assertFalse(service.getServiceGateState().isDenied(uuid),
+                "a handshake registration ends the denied episode (memo gone)");
+    }
+
+    @Test
+    void aLateMailboxedRemoveSparesAFastRejoinersFreshState() {
+        // R4: the quit-race Remove drains a tick late; a fast rejoin's handshake has
+        // already stamped a NEWER connection epoch and written a fresh denial memo on
+        // its region thread — the Remove's connection-scoped belts must skip.
+        var uuid = UUID.randomUUID();
+        service.markConnection(uuid);          // the OLD connection's handshake
+        service.enqueueRemove(uuid);           // its quit captures the old epoch
+        service.markConnection(uuid);          // the fast REJOIN's handshake
+        service.getServiceGateState().rememberDenied(uuid, "steve", 20, 1); // its deposit
+
+        service.tick();                        // the late Remove drains
+
+        assertTrue(service.getServiceGateState().isDenied(uuid),
+                "the late Remove must not wipe the successor connection's memo");
+    }
+
+    @Test
+    void aMailboxedRemoveWithNoSuccessorStillSweeps() {
+        // R4's other half: with no newer connection, the Remove IS the connection's
+        // end — the belts must run (the pre-fix behavior, preserved).
+        var uuid = UUID.randomUUID();
+        service.markConnection(uuid);
+        service.getServiceGateState().rememberDenied(uuid, "steve", 20, 1);
+        service.enqueueRemove(uuid);
+
+        service.tick();
+
+        assertFalse(service.getServiceGateState().isDenied(uuid),
+                "no successor: the quit-race sweep must still clear the session state");
+    }
 }

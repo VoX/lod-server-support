@@ -73,50 +73,59 @@ final class PaperFarPlayerSnapshots {
                 pose,
                 delta.x * 20.0, delta.y * 20.0, delta.z * 20.0,
                 p.isSpectator(), p.isInvisible(), p.isAlive() && !p.isRemoved(),
-                // lss.farplayers.hidden (plugin.yml, default false): a permission-held
-                // player is dropped by the visibility ladder on every viewer — the
-                // per-player privacy lever the exclude LIST can't express for LuckPerms
-                // groups. Read on the pump via the Bukkit entity (thread-fine: Folia
-                // permission reads are region-safe for online players).
-                // OR the vanish bridge (E2, decisions log entry 5 — landed WITH the
-                // default flip): SuperVanish/PremiumVanish/EssentialsX all publish the
-                // "vanished" metadata key; a vanished staff member must not leak a
-                // position through the LOD view. Pair-wise Player#hideEntity remains
-                // uncovered (documented: per-viewer filtering would break the
-                // once-per-tick snapshot inversion) — target-level vanish is the
-                // staff-invisibility case.
-                // BOTH brand spellings are honored (2026-08-13, the VSS-restore
-                // round): plugin.yml declares both nodes default-false, so the
-                // dual check is safe — Bukkit resolves an UNDECLARED node to the
-                // op default, which is why a single-brand declaration plus a
-                // cross-brand check (or the old drift: vss declared, lss checked)
-                // would silently hide every op. A jar swap keeps the grant.
-                (p.getBukkitEntity().hasPermission("lss.farplayers.hidden")
-                        || p.getBukkitEntity().hasPermission("vss.farplayers.hidden"))
-                        || isVanished(p.getBukkitEntity()),
+                // The privacy ladder (permission nodes + vanish bridge) — contained,
+                // fail-hidden; the ladder's full rationale lives on hiddenFor. Pair-wise
+                // Player#hideEntity remains uncovered (documented: per-viewer filtering
+                // would break the once-per-tick snapshot inversion).
+                hiddenFor(p.getBukkitEntity()),
                 hash, equipmentIds, equipmentCounts, vehicle);
     }
 
-    private static volatile boolean vanishReadWarned;
+    private static volatile boolean hiddenReadWarned;
 
-    private static boolean isVanished(org.bukkit.entity.Player bukkit) {
+    /**
+     * The privacy ladder, CONTAINED per player and failing HIDDEN (Folia review
+     * 2026-08-27 R2/R7, reversing the E2 fail-open): on Folia the pump reads a
+     * cross-region {@code PermissibleBase} (a plain-HashMap check-then-act the
+     * target's own region thread can recalculate mid-read) and vanish metadata whose
+     * {@code LazyMetadataValue} callables can hit region-ownership checks that never
+     * fire on Paper's main thread. A raced/throwing read must never LEAK a hidden or
+     * vanished player's position — hiding too much for one interval is recoverable,
+     * a leaked vanished admin is not. The throw is contained HERE so one broken
+     * permissible cannot abort the snapshot pass for every other player (that was the
+     * old failure shape: the only catch was around the whole pass). Once-per-JVM warn.
+     */
+    static boolean hiddenFor(org.bukkit.entity.Player bukkit) {
         try {
+            // BOTH brand spellings are honored (2026-08-13, the VSS-restore round):
+            // plugin.yml declares both nodes default-false, so the dual check is safe —
+            // Bukkit resolves an UNDECLARED node to the op default, which is why a
+            // single-brand declaration plus a cross-brand check would silently hide
+            // every op. A jar swap keeps the grant.
+            if (bukkit.hasPermission("lss.farplayers.hidden")
+                    || bukkit.hasPermission("vss.farplayers.hidden")) {
+                return true;
+            }
             for (var meta : bukkit.getMetadata("vanished")) {
                 if (meta.asBoolean()) return true;
             }
+            return false;
         } catch (Exception e) {
-            // Fail OPEN (throw -> not-vanished): fail-closed would mass-hide players
-            // on any broken plugin. But a silently dead privacy lever violates the
-            // once-bounded-logging convention (E2 review m-4) — warn once per JVM.
-            if (!vanishReadWarned) {
-                vanishReadWarned = true;
+            if (!hiddenReadWarned) {
+                hiddenReadWarned = true;
                 dev.vox.lss.common.LSSLogger.warn(
-                        "Vanish metadata read failed — vanish detection degraded for this"
-                                + " session; the lss.farplayers.hidden permission and"
-                                + " farPlayersExclude still apply (" + e + ")");
+                        "Far-player privacy read (permission/vanish) threw — treating the"
+                                + " affected player as HIDDEN (fail-safe direction; a raced"
+                                + " read must never leak a hidden position). One warn per"
+                                + " session (" + e + ")");
             }
+            return true;
         }
-        return false;
+    }
+
+    /** Test seam. */
+    static void resetHiddenReadWarnedForTest() {
+        hiddenReadWarned = false;
     }
 
     private PaperFarPlayerSnapshots() {}

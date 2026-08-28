@@ -713,7 +713,9 @@ public class PaperRequestProcessingService {
         record Register(ServerPlayer player, int capabilities,
                         Runnable beforeRegister, Runnable replyAfterRegister)
                 implements LifecycleEvent {}
-        record Remove(UUID uuid) implements LifecycleEvent {}
+        /** {@code connectionEpoch} = the dying connection's epoch at quit time —
+         *  the R4 guard's comparator (Folia review 2026-08-27). */
+        record Remove(UUID uuid, long connectionEpoch) implements LifecycleEvent {}
     }
 
     private final ConcurrentLinkedQueue<LifecycleEvent> lifecycleMailbox = new ConcurrentLinkedQueue<>();
@@ -745,7 +747,33 @@ public class PaperRequestProcessingService {
 
     /** Any thread. Applied at the top of the next tick(). */
     public void enqueueRemove(UUID uuid) {
-        this.lifecycleMailbox.add(new LifecycleEvent.Remove(uuid));
+        this.lifecycleMailbox.add(new LifecycleEvent.Remove(uuid,
+                this.connectionEpochs.getOrDefault(uuid, 0L)));
+    }
+
+    // Connection epochs (Folia review 2026-08-27 R4): the mailboxed Remove drains up
+    // to a pump tick (or more, on a lagging Folia global thread) after the quit, and
+    // two structures are written SYNCHRONOUSLY on the successor session's region
+    // threads — the service gate's denial memo (at handshake) and the region-summary
+    // request + eligibility mark (at dimension entry). A fast rejoin landing between
+    // the old quit and the old Remove's drain would have that fresh state wiped by
+    // the Remove's connection-scoped belts: the gate case strands a disarmed rejoiner
+    // with no re-offer; the summary case leaves summaries + stamped up_to_date dark
+    // for the whole dimension visit (the client requests only at entry). Every
+    // handshake marks its connection's epoch (region thread, CHM); the Remove carries
+    // the epoch captured at quit; the two belts run only when no NEWER connection has
+    // handshaked since. Mailbox-FIFO-protected structures (dialects, far players —
+    // whose rejoin writes ride the mailbox or the runtime-task queue, both drained
+    // after this) need no guard. Known residual: a duplicate-login kick whose NEW
+    // handshake precedes the OLD quit event captures the new epoch and the belts run
+    // — the pre-fix window, now needing an ordering inversion as well.
+    private final ConcurrentHashMap<UUID, Long> connectionEpochs = new ConcurrentHashMap<>();
+    private final java.util.concurrent.atomic.AtomicLong connectionEpochCounter =
+            new java.util.concurrent.atomic.AtomicLong();
+
+    /** Any thread (the plugin's handshake ingress, region threads on Folia). */
+    public void markConnection(UUID uuid) {
+        this.connectionEpochs.put(uuid, this.connectionEpochCounter.incrementAndGet());
     }
 
     // Runtime /lsslod set marshaling (v0.11.0 stage C): commands may arrive on a REGION
@@ -987,6 +1015,11 @@ public class PaperRequestProcessingService {
                         r.beforeRegister().run();
                         try {
                             registerPlayer(r.player(), r.capabilities());
+                            // Service gate: a HANDSHAKE registration (the grant replay's deferred
+                            // Register rides this same drain) ends the denied episode — memo gone,
+                            // log latch re-armed. Not in registerPlayer: that is the dim-change
+                            // reuse path (R3).
+                            this.serviceGateState.onRegistered(r.player().getUUID());
                             // Far players: post-flip, so the CURRENT-dialect gate is
                             // reliable (legacy layouts predate the capability bit).
                             if ((r.capabilities() & LSSConstants.CAPABILITY_FAR_PLAYERS) != 0
@@ -1020,12 +1053,23 @@ public class PaperRequestProcessingService {
                         // identity-survives-dim-change contract.
                         this.dialects.onDisconnect(r.uuid());
                         this.farPlayerService.onDisconnect(r.uuid());
-                        // Service gate: same connection-scoped sweep (memo, log latch,
-                        // streak) — idempotent beside the quit hook's own call.
-                        this.serviceGateState.onDisconnect(r.uuid());
-                        // Region summaries: quit-originated only, same as above —
-                        // connection-scoped cleanup, never the dim-change cycle.
-                        if (this.regionSummaries != null) this.regionSummaries.removePlayer(r.uuid());
+                        // R4: the two belts over REGION-THREAD-WRITTEN state run only
+                        // when no newer connection handshaked since the quit — see the
+                        // connectionEpochs comment. A skipped sweep leaves at most the
+                        // OLD session's residue in UUID-keyed maps the successor session
+                        // overwrites/merges; the pump's anchor-less summary eligibility
+                        // sweep and the gate's grant sweep are the belts for true leaks.
+                        boolean noNewerConnection = r.connectionEpoch()
+                                >= this.connectionEpochs.getOrDefault(r.uuid(), 0L);
+                        if (noNewerConnection) {
+                            // Service gate: connection-scoped sweep (memo, log latch,
+                            // streak) — idempotent beside the quit hook's own call.
+                            this.serviceGateState.onDisconnect(r.uuid());
+                            // Region summaries: connection-scoped cleanup, never the
+                            // dim-change cycle.
+                            if (this.regionSummaries != null) this.regionSummaries.removePlayer(r.uuid());
+                            this.connectionEpochs.remove(r.uuid());
+                        }
                     }
                 }
             } catch (Exception e) {
@@ -1058,9 +1102,9 @@ public class PaperRequestProcessingService {
                 && !this.dialects.isV16(player.getUUID())
                 && !this.dialects.isV18(player.getUUID()));
         state.markHandshakeComplete();
-        // Service gate: a successful registration by ANY path ends the denied episode
-        // (memo entry gone, log latch re-armed, streak reset).
-        this.serviceGateState.onRegistered(player.getUUID());
+        // Service gate: deliberately NOT cleared here (Folia review 2026-08-27 R3) —
+        // registerPlayer is also the dimension-change reuse path (see the Register
+        // drain, which clears it for handshake registrations).
         return state;
     }
 
@@ -1336,6 +1380,7 @@ public class PaperRequestProcessingService {
                 // joiner whose quit event never fired leaks its log latch and streak
                 // for the service's life (implementation review, 2026-08-27).
                 this.serviceGateState.onDisconnect(uuid);
+                this.connectionEpochs.remove(uuid);
             }
         }
 
@@ -1622,8 +1667,10 @@ public class PaperRequestProcessingService {
      * declared position is never probed on its first routing cycle, and a want-set that fits
      * under the per-player slot cap — the converged steady state, and every single-position
      * dirty-broadcast re-request — has no second cycle, so it disk-reads. Folia's one-tick
-     * hold-release makes the same alignment deterministic; this is the sync path's
-     * equivalent. The PUBLISHED want-set then covers the other ~19 ticks of each second
+     * hold-release makes the same alignment deterministic for the ARRIVAL-tick arm, and
+     * since the 2026-08-27 review (R1) the regionized path carries the published-want-set
+     * arm too — before that it probed only on arrival ticks, collapsing coverage to the
+     * client's declaration cadence. The PUBLISHED want-set covers the other ~19 ticks of each second
      * ({@code takeIncomingBatch()} nulls the mailbox within ~50 ms of arrival while batches
      * arrive at only 1-4 Hz — the client's adaptive cadence) and carries a want-set too large for the slot cap across the
      * cycles that work it off (published exactly while the backlog is non-empty).
@@ -1740,13 +1787,49 @@ public class PaperRequestProcessingService {
         // stale batch resurrect.
         long heldAtGeneration = state.offerGeneration();
         var fresh = state.takeIncomingBatch();
-        if (fresh == null) return;
+        if (fresh == null) {
+            // The published-want-set arm (Folia review 2026-08-27 R1): before this arm
+            // existed, Folia probed ONLY on a declaration's arrival tick — the probe
+            // window advanced at the client's 1-4 Hz cadence instead of every tick, so
+            // any want-set larger than the 512-position window (or the sync slot cap)
+            // routed its later cycles with ZERO probe coverage: loaded chunks took
+            // disk reads, and on gen-disabled servers the loaded-but-never-saved
+            // NOT_GENERATED park became the steady state. This is the sync path's
+            // peekWantSet arm, regionized: same per-player cap, same served-head/
+            // suppress filters (probes are position-keyed, so results merge into the
+            // same consume path regardless of which arm scheduled them). Runs only on
+            // no-fresh-batch ticks, so the one-region-task-per-player-per-tick shape
+            // holds; a release-success tick returns above and the arm picks up next
+            // tick.
+            var published = state.peekWantSet();
+            if (published == null) return; // converged player, no probe cost
+            long[] positions = snapshotProbePositions(state, published, skipPositions);
+            if (positions.length == 0) return;
+            UUID uuid = player.getUUID();
+            try {
+                this.regionTaskScheduler.schedule(player,
+                        () -> runRegionProbe(uuid, level, positions));
+            } catch (Exception e) {
+                // R5 containment — see the sibling below.
+            }
+            return;
+        }
         this.heldForProbe.put(player.getUUID(), new HeldBatch(fresh, heldAtGeneration));
 
         long[] positions = snapshotProbePositions(state, fresh, skipPositions);
         if (positions.length == 0) return;
         UUID uuid = player.getUUID();
-        this.regionTaskScheduler.schedule(player, () -> runRegionProbe(uuid, level, positions));
+        try {
+            this.regionTaskScheduler.schedule(player,
+                    () -> runRegionProbe(uuid, level, positions));
+        } catch (Exception e) {
+            // A plugin-manager disable from a region thread can land between tick()'s
+            // shuttingDown check and this schedule: the EntityScheduler then throws
+            // IllegalPluginAccessException (Folia review R5 — the identical containment
+            // PaperChunkGenerationService's MainThreadScheduler documents). The probe is
+            // simply lost — the held batch still releases next tick (or dies with the
+            // service), and probe misses are the designed degrade.
+        }
     }
 
     private static final long[] NO_POSITIONS = new long[0];
@@ -1843,11 +1926,16 @@ public class PaperRequestProcessingService {
             String dimension = this.dimensionStringCache.computeIfAbsent(level.dimension(),
                     k -> k.location().toString());
             // Ticket queued before a dimension change targets the old dimension's coordinates.
-            // Dropping it leaks nothing: the admitting state was discarded by
-            // removePlayer+registerPlayer (its slot dies with it), AND that same removePlayer
+            // Dropping it leaks nothing: in the common shape the admitting state was discarded
+            // by removePlayer+registerPlayer (its slot dies with it), AND that same removePlayer
             // enqueues the removal event that sweeps the processing thread's UUID-keyed
             // generation in-flight tracking (removeGenerationTracking) — without that sweep the
             // dropped ticket's tracking would leak (do not add a drop path that skips it).
+            // Folia timing corner (review 2026-08-27 R17): a region-thread dimension flip
+            // landing BETWEEN this tick's lifecycle pass and this drain reaches the mismatch
+            // with the OLD state still admitting — its pending GENERATION entry then gets no
+            // outcome this tick and the slot is held until the NEXT tick's dimension-change
+            // cycle sweeps the whole state. Bounded to one tick, no leak.
             if (!dimension.equals(req.dimension())) continue;
             boolean accepted = !player.isRemoved() && this.generationService.submitGeneration(
                     req.playerUuid(), level, req.cx(), req.cz(),
@@ -1875,6 +1963,8 @@ public class PaperRequestProcessingService {
      *  before any snapshot work. Pump thread (Folia: cross-region position/equipment
      *  reads are stale-tolerant by design — accepted for display-only data, the
      *  experimental label covers it). */
+    private boolean farPlayerSnapshotWarned;
+
     private void tickFarPlayers() {
         if ("off".equals(this.config.farPlayers)
                 || this.farPlayerService.subscriberCount() == 0) {
@@ -1883,11 +1973,7 @@ public class PaperRequestProcessingService {
         if (++this.farPlayerTickCounter < this.config.farPlayersUpdateIntervalTicks) return;
         this.farPlayerTickCounter = 0;
         try {
-            var online = new java.util.ArrayList<dev.vox.lss.common.farplayers
-                    .FarPlayerBroadcastService.PlayerSnapshot>();
-            for (var p : this.server.getPlayerList().getPlayers()) {
-                online.add(PaperFarPlayerSnapshots.snapshot(p));
-            }
+            var online = buildFarPlayerSnapshots(this.server.getPlayerList().getPlayers());
             this.farPlayerService.tick(System.currentTimeMillis(), online,
                     new dev.vox.lss.common.farplayers.FarPlayerBroadcastService.Settings(
                             this.config.farPlayers, this.config.farPlayersMaxDistanceBlocks,
@@ -1907,6 +1993,33 @@ public class PaperRequestProcessingService {
     }
 
     private boolean farPlayerTickErrorWarned;
+
+    /** One snapshot per online player, CONTAINED per player (Folia review 2026-08-27
+     *  R2): one raced cross-region read (equipment, vehicle, a throwing permissible
+     *  the hiddenFor belt did not cover) must not abort the pass for every other
+     *  player — the pre-fix shape, where the only catch was around the whole pass.
+     *  The skipped player reads as absent this interval; the roster reconciles next
+     *  tick (stale-tolerant by the same doctrine as the reads themselves). The
+     *  pass-level catch in tickFarPlayers stays as the final belt. Package-private
+     *  for the R10 battery. */
+    java.util.List<dev.vox.lss.common.farplayers.FarPlayerBroadcastService.PlayerSnapshot>
+            buildFarPlayerSnapshots(java.util.List<ServerPlayer> players) {
+        var online = new java.util.ArrayList<dev.vox.lss.common.farplayers
+                .FarPlayerBroadcastService.PlayerSnapshot>(players.size());
+        for (var p : players) {
+            try {
+                online.add(PaperFarPlayerSnapshots.snapshot(p));
+            } catch (Exception e) {
+                if (!this.farPlayerSnapshotWarned) {
+                    this.farPlayerSnapshotWarned = true;
+                    LSSLogger.warn("Far-player snapshot failed for "
+                            + p.getName().getString()
+                            + " — skipped this interval (once per session): " + e);
+                }
+            }
+        }
+        return online;
+    }
 
     /** The dedicated far-player send lane — twin of the Fabric sender: writability
      *  consult (NOT_WRITABLE withholds) + bandwidth governor charge; NMS DiscardedPayload

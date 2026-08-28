@@ -320,8 +320,12 @@ public abstract class AbstractPlayerRequestState<T> {
      * {@link #offerGeneration()} the pump recorded before taking the batch to hold.
      */
     public boolean republishHeldBatch(IncomingBatch held, long heldAtGeneration) {
-        if (this.offerGeneration.get() != heldAtGeneration
-                || !this.pendingBatch.compareAndSet(null, held)) {
+        if (this.offerGeneration.get() != heldAtGeneration) {
+            this.pendingSuperseded.addAndGet(held.size());
+            return false;
+        }
+        beforeRepublishCas();
+        if (!this.pendingBatch.compareAndSet(null, held)) {
             this.pendingSuperseded.addAndGet(held.size());
             return false;
         }
@@ -344,6 +348,15 @@ public abstract class AbstractPlayerRequestState<T> {
             return false;
         }
         return true;
+    }
+
+    /** Test seam (Folia review 2026-08-27 R8): runs between the generation guard and
+     *  the mailbox CAS — a production no-op. The retract guard below exists for a
+     *  pass-through landing exactly here, a window no external call sequence can
+     *  reach; the race test injects the pass-through through this hook to pin the
+     *  retract deterministically. Splitting the former short-circuit {@code ||} into
+     *  two ifs is behavior-identical. */
+    void beforeRepublishCas() {
     }
 
     /** Record ingress entries dropped by the Chebyshev range guard (any thread). */

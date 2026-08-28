@@ -38,7 +38,8 @@ class FoliaWiringContractTest {
 
     private record MethodRef(String owner, String name) {}
 
-    private record ClassPool(String className, List<MethodRef> methodRefs, List<String> classConstants) {}
+    private record ClassPool(String className, List<MethodRef> methodRefs,
+                              List<String> classConstants, List<String> utf8Strings) {}
 
     /** Root of the production classes on the test classpath (build/classes/java/main). */
     private static Path mainClassesPackageDir() throws URISyntaxException {
@@ -98,7 +99,11 @@ class FoliaWiringContractTest {
         for (int idx : classNameIdx) {
             if (idx != 0 && utf8[idx] != null) classConstants.add(utf8[idx]);
         }
-        return new ClassPool(name, methodRefs, classConstants);
+        var utf8Strings = new ArrayList<String>();
+        for (String u : utf8) {
+            if (u != null) utf8Strings.add(u);
+        }
+        return new ClassPool(name, methodRefs, classConstants, utf8Strings);
     }
 
     @Test
@@ -146,5 +151,63 @@ class FoliaWiringContractTest {
         }
         assertTrue(sawEnqueueRegister, "handshake registrar must enqueue through the mailbox");
         assertTrue(sawEnqueueRemove, "quit listener must enqueue through the mailbox");
+    }
+
+    /** Folia review 2026-08-27 R12: the constant-pool scan is blind to REFLECTIVE use —
+     *  {@code Class.forName("org.bukkit.scheduler...")} compiles to a CONSTANT_String
+     *  the class/method-ref walks never see. This closes exactly that hole for the
+     *  scheduler family (dotted reflective form; the slashed form rides the class
+     *  constants above). REMAINING recorded blind spots (kept as notes, not scans:
+     *  each needs semantic analysis a pool walk cannot do): (a) other Folia-fatal API
+     *  families — off-region {@code Entity#teleport}, {@code World#save}, cross-region
+     *  {@code getChunkAt} — are not scanned, the thread a call runs ON is invisible
+     *  here; (b) the scan reads build/classes, not the shadowJar — shaded third-party
+     *  code is release_check's forbidden-scan domain; (c) a call wrapped in
+     *  enqueueRuntimeTask is indistinguishable from a direct call (see the census
+     *  allowlist below). */
+    @Test
+    void noReflectiveSchedulerUseAnywhereInThePlugin() throws Exception {
+        for (var pool : allProductionClassPools()) {
+            for (String u : pool.utf8Strings()) {
+                assertFalse(u.startsWith("org.bukkit.scheduler"),
+                        pool.className() + " carries the string constant \"" + u
+                                + "\" — reflective legacy-scheduler use is as Folia-fatal "
+                                + "as the compile-time reference");
+            }
+        }
+    }
+
+    /** Folia review 2026-08-27 R11: the mailbox pin above covers two methods on one
+     *  class-name prefix — a NEW listener/messenger class calling the pump-only
+     *  surface from a region thread (exactly the D3 bug the mailbox exists to
+     *  prevent) used to compile, pass :paper:test, and corrupt the pump-owned
+     *  non-concurrent maps on the first Folia quit. This census forbids the whole
+     *  pump-only method list to every class OUTSIDE the allowlist. The allowlist is
+     *  classes whose refs are pump-legal: the service itself (self-refs + lambdas),
+     *  and classes whose calls run inside enqueued runtime tasks or pump callbacks
+     *  (the pool walk cannot see the enqueueRuntimeTask wrapper — recorded
+     *  limitation). Growing the allowlist is a REVIEW decision, not a fix. */
+    @Test
+    void onlyAllowlistedClassesTouchThePumpOnlySurface() throws Exception {
+        String service = "dev/vox/lss/paper/PaperRequestProcessingService";
+        var pumpOnly = java.util.Set.of("registerPlayer", "removePlayer",
+                "repushSessionConfig", "runServiceGateSweeps", "unregisterForServiceGate",
+                "getFarPlayerService");
+        var allowPrefixes = List.of(
+                "PaperRequestProcessingService", // the pump itself (+ nested/lambdas)
+                "LSSPaperPlugin",   // enqueued runtime tasks (prefs, gate) + pump callbacks
+                "PaperCommands",    // /lsslod set + diag route through enqueueRuntimeTask
+                "PaperSoakMetricsExporter", // pump-driven snapshot exporter
+                "PaperSoakScenarioDriver",  // pump-hopped driver
+                "PaperSoakBridge");
+        for (var pool : allProductionClassPools()) {
+            if (allowPrefixes.stream().anyMatch(pool.className()::startsWith)) continue;
+            for (var ref : pool.methodRefs()) {
+                assertFalse(service.equals(ref.owner()) && pumpOnly.contains(ref.name()),
+                        pool.className() + " calls the pump-only " + ref.name()
+                                + " — region-thread-reachable classes must marshal through "
+                                + "the lifecycle mailbox or enqueueRuntimeTask");
+            }
+        }
     }
 }

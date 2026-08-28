@@ -710,4 +710,43 @@ class PaperChunkGenerationServiceTest {
         assertTrue(svc.tick().isEmpty(), "late callbacks emit nothing into a cleared service");
         assertEquals(0L, svc.getTotalCompleted());
     }
+
+    @org.junit.jupiter.api.Test
+    void concurrentRegionThreadCompletionsKeepTheCountersExact() throws Exception {
+        // Folia review 2026-08-27 R13: two region threads CAN complete simultaneously
+        // (the null-chunk counter's own comment names the multi-writer) — the atomics
+        // are correct by argument, but the contract had no concurrency exercise. N
+        // null-chunk completions from N concurrent threads must count exactly N with
+        // no throw escaping into Moonrise's completion plumbing.
+        var svc = new CapturingGenService(config(64, 64, 30));
+        var level = overworldLevel();
+        for (int i = 0; i < 16; i++) {
+            svc.submitGeneration(java.util.UUID.randomUUID(), level, i, 0, i);
+        }
+        org.junit.jupiter.api.Assertions.assertEquals(16, svc.launches.size(),
+                "premise: sixteen launches captured");
+
+        var pool = java.util.concurrent.Executors.newFixedThreadPool(8);
+        try {
+            var start = new java.util.concurrent.CountDownLatch(1);
+            var futures = new java.util.ArrayList<java.util.concurrent.Future<?>>();
+            for (var launch : svc.launches) {
+                futures.add(pool.submit(() -> {
+                    try {
+                        start.await();
+                    } catch (InterruptedException e) {
+                        throw new AssertionError(e);
+                    }
+                    svc.completeAsyncLoad(launch.key(), level, null,
+                            launch.cx(), launch.cz(), launch.token());
+                }));
+            }
+            start.countDown();
+            for (var f : futures) f.get(30, java.util.concurrent.TimeUnit.SECONDS);
+        } finally {
+            pool.shutdownNow();
+        }
+        org.junit.jupiter.api.Assertions.assertEquals(16, svc.getNullChunkFailures(),
+                "sixteen concurrent null completions count exactly sixteen");
+    }
 }
