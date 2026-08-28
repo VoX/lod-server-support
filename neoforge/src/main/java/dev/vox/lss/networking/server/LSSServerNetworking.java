@@ -2,11 +2,13 @@ package dev.vox.lss.networking.server;
 
 import dev.vox.lss.common.Brand;
 import dev.vox.lss.common.LSSLogger;
+import dev.vox.lss.networking.client.LSSClientNetworking;
 import dev.vox.lss.networking.payloads.BatchChunkRequestC2SPayload;
 import dev.vox.lss.networking.payloads.ClientInfoC2SPayload;
 import dev.vox.lss.networking.payloads.FarPlayerPrefsC2SPayload;
 import dev.vox.lss.networking.payloads.HandshakeC2SPayload;
 import dev.vox.lss.platform.LoaderServices;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.chunk.ChunkAccess;
@@ -24,8 +26,9 @@ import net.neoforged.neoforge.network.handling.IPayloadContext;
  * owns the static service holder, the NeoForge event handlers ({@code LSSNeoMod}
  * registers them), and the payload-handler adapters the registrar binds.
  *
- * <p>No LAN hook on NeoForge v1 (recorded feature gap, plan §5.4): a
- * LAN-published integrated server does not start the service.
+ * <p>LAN activation (issue #257): the client {@code IntegratedServerLanHook}
+ * mixin twin starts the service when an integrated server is published to LAN,
+ * the same path fabric uses.
  */
 public class LSSServerNetworking {
     private static volatile RequestProcessingService requestService;
@@ -49,13 +52,39 @@ public class LSSServerNetworking {
     public static void onServerStarted(ServerStartedEvent event) {
         var server = event.getServer();
         if (!server.isDedicatedServer() && !Boolean.getBoolean("lss.test.integratedServer")) {
-            // The fabric line defers to the LAN hook here; NeoForge v1 has none.
-            LSSLogger.info(Brand.shortName() + " LOD request processing inactive on integrated servers"
-                    + " (no LAN hook on NeoForge v1)");
+            // Integrated server: the service starts only if/when the host opens to LAN
+            // (startServiceForLan, driven by the IntegratedServerLanHook client mixin).
+            LSSLogger.info(Brand.shortName() + " LOD request processing deferred until LAN");
             return;
         }
         LSSLogger.info("Starting " + Brand.shortName() + " LOD request processing service");
         requestService = new RequestProcessingService(server);
+    }
+
+    /**
+     * LAN activation (issue #257) — the twin of the fabric path. The client
+     * {@code IntegratedServerLanHook} mixin calls this at {@code publishServer} RETURN
+     * once the LAN listener is up. Construction is heavy (processing/save/disk-reader
+     * threads + a blocking {@code ColumnTimestampCache.load}) and the mixin fires on the
+     * render thread, so hop to the server thread — the same context the dedicated-server
+     * start uses. From the server thread itself ({@code /publish}) execute() runs inline.
+     */
+    public static void startServiceForLan(MinecraftServer server) {
+        server.execute(() -> startServiceForLanOnServerThread(server));
+    }
+
+    private static synchronized void startServiceForLanOnServerThread(MinecraftServer server) {
+        // A hop task queued in the last tick before Save-and-Quit runs AFTER
+        // onServerStopping nulled requestService (the server drains pending tasks on
+        // stop) — starting here would leave a zombie service bound to a dead server for
+        // the rest of the client JVM.
+        if (!server.isRunning()) return;
+        if (requestService != null) return;
+        LSSLogger.info(Brand.shortName() + " LOD request processing service starting (LAN server)");
+        requestService = new RequestProcessingService(server);
+        // The host was already in its own world before the service existed; re-handshake
+        // so it registers and starts receiving its own LODs.
+        LSSClientNetworking.triggerHostHandshake();
     }
 
     public static void onServerStopping(ServerStoppingEvent event) {

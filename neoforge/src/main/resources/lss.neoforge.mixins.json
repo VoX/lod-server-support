@@ -16,6 +16,7 @@
     "ChunkSaveDataHook"
   ],
   "client": [
+    "IntegratedServerLanHook",
     "AccessorClientPacketListener",
     "AccessorBiomeManager"
   ]

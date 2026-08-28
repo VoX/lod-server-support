@@ -83,9 +83,11 @@ public class LSSClientNetworking {
         ClientNetGlue.reportUndispatchedColumns(manager);
     }
 
-    /** No LAN hook on NeoForge v1 (plan §5.4) — nothing ever calls this here; the
-     *  same-FQN surface keeps the twins aligned. */
+    /** LAN host re-handshake (issue #257): the {@code IntegratedServerLanHook} mixin's
+     *  activation path calls this so the host — already "joined" its own world before the
+     *  service existed — re-sends its handshake and gets registered (shared body). */
     public static void triggerHostHandshake() {
+        ClientNetGlue.triggerHostHandshake();
     }
 
     // ---- Payload handlers (bound by the registrar; executesOn(MAIN)) ----
