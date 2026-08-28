@@ -26,8 +26,11 @@ class ToolchainContractTest {
 
     @BeforeAll
     static void load() throws Exception {
-        lineEnv = loadProps(locate(".github/line.env"));
+        // Line-aware (single-branch consolidation): -Dlss.line names the active line.
+        String line = System.getProperty("lss.line", "26.2");
+        lineEnv = loadProps(locate("lines/" + line + "/line.env"));
         gradleProps = loadProps(locate("gradle.properties"));
+        gradleProps.putAll(loadProps(locate("lines/" + line + "/line.properties")));
         SharedConstants.tryDetectVersion();
     }
 

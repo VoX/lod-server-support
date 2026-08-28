@@ -2,6 +2,11 @@ plugins {
     id 'java-library'
 }
 
+// Line data plane: per-line build dir + (for non-default lines) source assembly. common's
+// toolchain stays Java 21 on every line — it is the loader-pure module. Its SOURCE can
+// still diverge per line (e.g. wire/NativeSectionShape), resolved via the assembly.
+apply from: "$rootDir/gradle/line.gradle"
+
 version = project.mod_version
 group = project.maven_group
 
@@ -11,6 +16,18 @@ repositories {
 
 tasks.withType(JavaCompile).configureEach {
     it.options.release = 21
+}
+
+// Non-default lines compile common from an assembled mirror (shared minus overlaid/cut +
+// overlay wins). common has no MC deps, so its only per-line divergence is line-fact
+// constants; overlays here are the transport, seams the eventual home.
+if (project.mcLine != '26.2') {
+    sourceSets.main.java.srcDirs = []
+    sourceSets.main.java.srcDir assembleLineTree('commonMainJava',
+            ['src/main/java'], ["src/line/${project.mcLine}/java"])
+    sourceSets.main.resources.srcDirs = []
+    sourceSets.main.resources.srcDir assembleLineTree('commonMainRes',
+            ['src/main/resources'], ["src/line/${project.mcLine}/resources"])
 }
 
 dependencies {

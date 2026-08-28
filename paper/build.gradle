@@ -7,6 +7,24 @@ plugins {
     id 'xyz.jpenilla.run-paper' version '3.0.2'
 }
 
+apply from: "$rootDir/gradle/line.gradle"
+
+// Non-default lines compile paper (standalone — no xplat) from an assembled mirror.
+if (project.mcLine != '26.2') {
+    sourceSets.main.java.srcDirs = []
+    sourceSets.main.java.srcDir assembleLineTree('paperMainJava',
+            ['src/main/java'], ["src/line/${project.mcLine}/java"])
+    sourceSets.main.resources.srcDirs = []
+    sourceSets.main.resources.srcDir assembleLineTree('paperMainRes',
+            ['src/main/resources'], ["src/line/${project.mcLine}/resources"])
+    sourceSets.test.java.srcDirs = []
+    sourceSets.test.java.srcDir assembleLineTree('paperTestJava',
+            ['src/test/java'], ["src/line/${project.mcLine}/test/java"])
+    sourceSets.test.resources.srcDirs = []
+    sourceSets.test.resources.srcDir assembleLineTree('paperTestRes',
+            ['src/test/resources'], ["src/line/${project.mcLine}/test/resources"])
+}
+
 version = project.mod_version
 group = project.maven_group
 
@@ -23,7 +41,7 @@ dependencies {
     // matrix by the exclude closure on the shadow tasks below.
     implementation 'org.xerial:sqlite-jdbc:3.49.1.0'
     implementation 'com.github.luben:zstd-jni:1.5.7-3'
-    paperweight.paperDevBundle('26.2.build.84-stable')
+    paperweight.paperDevBundle(project.paperweight_bundle)
     testImplementation 'org.junit.jupiter:junit-jupiter:5.11.4'
     testImplementation 'org.mockito:mockito-core:5.20.0'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
@@ -55,10 +73,10 @@ test {
             .withPathSensitivity(PathSensitivity.RELATIVE)
 }
 
-// R2-5: folia-supported derives from line.env (single per-line source; the same
-// datum release_check.py and PluginYmlContractTest read, so the three cannot drift).
+// R2-5: folia-supported derives from the ACTIVE line's line.env (single per-line source;
+// the same datum release_check.py and PluginYmlContractTest read, so the three cannot drift).
 def lineEnv = [:]
-rootProject.file('.github/line.env').eachLine { l ->
+new File(project.ext.lineDir, 'line.env').eachLine { l ->
     def t = l.trim()
     if (t && !t.startsWith('#') && t.contains('=')) {
         def i = t.indexOf('=')
@@ -273,6 +291,6 @@ tasks.register('vssJar') {
 tasks.named('shadowJar') { finalizedBy tasks.named('vssJar') }
 
 tasks.withType(JavaCompile).configureEach {
-    it.options.release = 25
+    it.options.release = project.line_java_version.toInteger()
 }
 

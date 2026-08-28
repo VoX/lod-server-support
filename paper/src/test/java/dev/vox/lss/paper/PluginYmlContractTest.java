@@ -143,16 +143,19 @@ class PluginYmlContractTest {
         assertEquals("${api_version}", yml.getString("api-version"),
                 "plugin.yml's api-version must stay templated from minecraft_version");
 
+        // Line-aware: minecraft_version and the paperweight dev-bundle are both line data
+        // (lines/<line>/line.properties); build.gradle reads the bundle via project.paperweight_bundle.
+        String line = System.getProperty("lss.line", "26.2");
         var props = new Properties();
         props.load(new StringReader(Files.readString(locate("gradle.properties"))));
+        props.load(new StringReader(Files.readString(locate("lines/" + line + "/line.properties"))));
         String apiVersion = props.getProperty("minecraft_version");
         assertNotNull(apiVersion);
 
-        var bundle = Pattern.compile("paperweight\\.paperDevBundle\\('([^']+)'\\)")
-                .matcher(Files.readString(locate("paper/build.gradle")));
-        assertTrue(bundle.find(), "paper/build.gradle must declare paperweight.paperDevBundle('...')");
-        assertTrue(bundle.group(1).startsWith(apiVersion + "."),
-                "dev bundle " + bundle.group(1) + " must be a build of api-version " + apiVersion);
+        String devBundle = props.getProperty("paperweight_bundle");
+        assertNotNull(devBundle, "lines/" + line + "/line.properties must declare paperweight_bundle");
+        assertTrue(devBundle.startsWith(apiVersion + "."),
+                "dev bundle " + devBundle + " must be a build of api-version " + apiVersion);
     }
 
     @Test
@@ -179,7 +182,8 @@ class PluginYmlContractTest {
     }
 
     private static String lineEnv(String key) throws java.io.IOException {
-        for (String line : Files.readAllLines(locate(".github/line.env"))) {
+        String activeLine = System.getProperty("lss.line", "26.2");
+        for (String line : Files.readAllLines(locate("lines/" + activeLine + "/line.env"))) {
             String t = line.trim();
             if (t.startsWith(key + "=")) return t.substring(key.length() + 1);
         }

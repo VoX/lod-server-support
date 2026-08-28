@@ -498,8 +498,8 @@ class PaperXrayMaskFilterTest {
     }
 
     private static void assertMatchesV20Golden(String name, byte[] wire) throws IOException {
-        Path golden = goldenPath(name).getParent().getParent()
-                .resolve("v20-corpus").resolve(name + ".bin");
+        // Line-aware override-resolution per corpus dir (single-branch consolidation).
+        Path golden = dev.vox.lss.paper.LineGoldens.resolve("v20-corpus", name + ".bin");
         if (regenGoldens()) {
             Files.createDirectories(golden.getParent());
             Files.write(golden, wire);
@@ -516,7 +516,7 @@ class PaperXrayMaskFilterTest {
     }
 
     private static void assertMatchesGolden(String name, byte[] wire) throws IOException {
-        Path golden = goldenPath(name);
+        Path golden = dev.vox.lss.paper.LineGoldens.resolve("nbt-corpus", name + ".bin");
         if (regenGoldens()) {
             Files.createDirectories(golden.getParent());
             Files.write(golden, wire);

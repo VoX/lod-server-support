@@ -78,7 +78,9 @@ class LegacyColumnEgressTest {
 
     private static byte[] readCorpus(String dirName, String name) {
         try {
-            return Files.readAllBytes(corpusDir(dirName).resolve(name));
+            // Line-aware override-resolution (single-branch consolidation): the active line's
+            // overlay copy of a golden wins over the shared corpus (e.g. 26.1's xray-masked.bin).
+            return Files.readAllBytes(dev.vox.lss.LineGoldens.resolve(dirName, name));
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }

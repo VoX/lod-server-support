@@ -53,8 +53,12 @@ class ReleaseWorkflowContractTest {
     static void load() throws Exception {
         releaseYml = stripComments(Files.readString(locate(".github/workflows/release.yml")));
         buildYml = stripComments(Files.readString(locate(".github/workflows/build.yml")));
+        // Line-aware (single-branch consolidation): the workflow body is line-invariant but
+        // its VALUES come from the active line's data (-Dlss.line, default 26.2).
+        String activeLine = System.getProperty("lss.line", "26.2");
+        Path lineEnvPath = locate("lines/" + activeLine + "/line.env");
         lineEnv = new HashMap<>();
-        for (String line : Files.readAllLines(locate(".github/line.env"))) {
+        for (String line : Files.readAllLines(lineEnvPath)) {
             String s = line.strip();
             if (s.isEmpty() || s.startsWith("#")) continue;
             int eq = s.indexOf('=');
@@ -65,11 +69,11 @@ class ReleaseWorkflowContractTest {
                             + line + "'");
             lineEnv.put(s.substring(0, eq), s.substring(eq + 1));
         }
-        assertFalse(Files.readString(locate(".github/line.env")).contains("\r"),
+        assertFalse(Files.readString(lineEnvPath).contains("\r"),
                 "line.env carries CR bytes (a CRLF conversion) — readAllLines hides them "
                         + "but the workflow's grep passes them into $GITHUB_ENV, and the "
                         + "guard then refuses this line's own tags (round-3 review MINOR)");
-        minecraftVersion = Files.readAllLines(locate("gradle.properties")).stream()
+        minecraftVersion = Files.readAllLines(locate("lines/" + activeLine + "/line.properties")).stream()
                 .filter(l -> l.startsWith("minecraft_version="))
                 .map(l -> l.substring("minecraft_version=".length()).strip())
                 .findFirst().orElseThrow();

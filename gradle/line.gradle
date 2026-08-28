@@ -1,0 +1,123 @@
+// gradle/line.gradle — the line data plane for the single-branch multi-line build.
+//
+// Applied at the TOP of every module build.gradle (right after its plugins {} block,
+// before any line-varying property is read). It loads lines/<mcLine>/line.properties
+// into this project's ext (so project.<key> resolves the active line's value), honours
+// CLI -P overrides, and isolates non-default lines into build/<line> build dirs.
+//
+// Design notes (empirically verified 2026-08-28, single-branch-consolidation-plan.md §3):
+//  - ext.set() OVERRIDES a gradle.properties-backed project property; project.<key>
+//    then reads the ext value. So gradle.properties keeps the DEFAULT (26.2) values
+//    (zero-churn + byte-identity for the production line) and lines/26.2/line.properties
+//    mirrors them (LineDataMirrorContractTest cross-pins the two). Non-default lines
+//    override via ext.
+//  - The loom marker (net.fabricmc.fabric-loom vs -remap) is applied by each fabric-ish
+//    module in its own body AFTER this script runs, keyed on ext.mapping_namespace —
+//    never inside a plugins {} block (which cannot see line data).
+
+def defaultLine = '26.2'
+def cliProps = project.gradle.startParameter.projectProperties
+def mcLine = (cliProps.get('mcLine') ?: project.findProperty('mcLine') ?: defaultLine).toString()
+
+def lineDir = project.rootProject.file("lines/${mcLine}")
+def lineFile = new File(lineDir, 'line.properties')
+if (!lineFile.exists()) {
+    throw new GradleException("Unknown MC line '${mcLine}': no ${lineFile} (choices: " +
+            (project.rootProject.file('lines').listFiles()?.findAll { it.isDirectory() }*.name?.sort()?.join(', ') ?: 'none') + ")")
+}
+def lp = new Properties()
+lineFile.withInputStream { lp.load(it) }
+
+project.ext.mcLine = mcLine
+project.ext.lineDir = lineDir
+lp.each { k, v ->
+    def key = k.toString()
+    // An explicit CLI -P<key> wins over line data (parity with the pre-consolidation
+    // "override any gradle.properties value on the command line" behaviour).
+    project.ext.set(key, cliProps.containsKey(key) ? cliProps.get(key).toString() : v.toString())
+}
+
+// Per-line build dir. The DEFAULT line keeps plain build/ (every existing script glob,
+// the release_check stale-jar guard, the local-rig dev jars, and IDE behaviour are
+// unchanged); non-default lines isolate so a multi-line loop never cross-clobbers.
+if (mcLine != defaultLine) {
+    project.layout.buildDirectory = project.layout.projectDirectory.dir("build/${mcLine}")
+}
+
+// ---------------------------------------------------------------------------------------
+// Source assembly (non-default lines only). The default line compiles from the plain src/
+// roots (byte-identity + IDE sanity); ported lines compile from an assembled mirror so a
+// bounded overlay set + a rename table + excludes.txt cuts can express version divergence
+// without the broken "exclude the shared path" trick (source-set excludes hit every srcDir).
+//
+//   assembleLineTree(name, sharedRoots, overlayRoots) -> File (the assembled dir), or the
+//   sole shared root unchanged on the default line. Shared files minus the overlaid rel-paths
+//   minus excludes.txt cuts (+ the optional rename table) are copied first; overlay files win.
+//   Because the shared copy EXCLUDES every overlaid/cut rel-path there are no duplicates, so
+//   Gradle 9's duplicate handling never fires and no line's resource can silently shadow another.
+ext.assembleLineTree = { String treeName, List<Object> sharedRoots, List<Object> overlayRoots ->
+    def line = project.ext.mcLine
+    def sharedDirs = sharedRoots.collect { project.file(it) }
+    // Default line: no assembly. (Callers pass a single shared root for the default arm.)
+    if (line == '26.2') {
+        return sharedDirs.size() == 1 ? sharedDirs[0] : sharedDirs
+    }
+    def overlayDirs = overlayRoots.collect { project.file(it) }.findAll { it.exists() }
+
+    // excludes.txt: rel-paths to DROP from the shared tree (cuts). Space/line separated.
+    def excludesFile = new File(project.ext.lineDir, 'excludes.txt')
+    def cutPaths = [] as Set
+    if (excludesFile.exists()) {
+        excludesFile.eachLine { ln ->
+            def t = ln.replaceAll('#.*', '').trim()
+            if (t) cutPaths << t
+        }
+    }
+    // rename-table.tsv: TAB-separated from<TAB>to token rewrites over shared file bodies
+    // (empty/absent on official-mapping lines). Word-bounded, applied to code+comments+strings.
+    def renameFile = new File(project.ext.lineDir, 'rename-table.tsv')
+    def renames = []
+    if (renameFile.exists()) {
+        renameFile.eachLine { ln ->
+            def t = ln.replaceAll('#.*', '').trim()
+            if (t && t.contains('\t')) { def p = t.split('\t', 2); renames << [p[0], p[1]] }
+        }
+    }
+
+    // Overlaid rel-paths (relative to any overlay root) — excluded from the shared copy.
+    def overlaidRel = [] as Set
+    overlayDirs.each { od ->
+        project.fileTree(od).files.each { f -> overlaidRel << od.toPath().relativize(f.toPath()).toString() }
+    }
+
+    def dest = project.layout.buildDirectory.dir("generated/lineSrc/${treeName}").get().asFile
+    def syncTask = project.tasks.register("assembleLineSrc_${treeName}", Sync) {
+        into dest
+        // Shared files, minus overlaid + cut rel-paths, with the rename table applied.
+        sharedDirs.each { sd ->
+            from(sd) {
+                (overlaidRel + cutPaths).each { rel -> exclude rel }
+                if (!renames.isEmpty()) {
+                    filter { String lineText ->
+                        def out = lineText
+                        renames.each { r -> out = out.replaceAll('\\b' + java.util.regex.Pattern.quote(r[0]) + '\\b', java.util.regex.Matcher.quoteReplacement(r[1])) }
+                        out
+                    }
+                }
+            }
+        }
+        // Overlay files win (they are already in the line's dialect — never rename-filtered).
+        overlayDirs.each { od -> from(od) }
+        // Determinism for the generated tree.
+        includeEmptyDirs = false
+    }
+    // Return a srcDir spec carrying its producing task, so compile/processResources auto-depend.
+    return project.files(dest).builtBy(syncTask)
+}
+
+// Every Test task learns the active line via -Dlss.line (contract tests read lines/<line>/
+// data through it; the SodiumLegacyGolden precedent). Harmless on the default line.
+project.tasks.withType(Test).configureEach {
+    systemProperty 'lss.line', project.ext.mcLine
+    inputs.property 'lss.line', project.ext.mcLine
+}

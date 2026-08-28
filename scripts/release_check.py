@@ -60,38 +60,67 @@ COMMON_FORBIDDEN = ("dev/vox/lss/common/soak/", "dev/vox/lss/common/benchmark/")
 # neoforge families ARE required release artifacts. The gate derives from
 # .github/line.env LINE_SHIP_NEOFORGE (R2-5); any neoforge jar FOUND in
 # build/libs gets the full jar checks either way.
-def _line_env():
-    """Parse .github/line.env (the single per-line data source, R2-5) — release_check
-    stops carrying hand-mirrored copies of line data; the contract tests pin the
-    line.env VALUES per line, and everything here derives."""
+DEFAULT_LINE = "26.2"
+# The active line + its per-line build subdir. Default line (26.2) keeps build/libs and reads
+# .github/line.env / gradle.properties; --line <other> reads lines/<line>/ and build/<line>/libs
+# (single-branch-consolidation-plan.md §5 — the import-time constants become a resolved config
+# reconfigured from --line before any check runs).
+LINE = DEFAULT_LINE
+BUILD_SUBDIR = ""
+
+
+def _line_env(line=None):
+    """Parse the active line's line.env. Default line reads .github/line.env (its live copy);
+    a folded line reads lines/<line>/line.env."""
     out = {}
     here = os.path.dirname(os.path.abspath(__file__))
-    with open(os.path.join(here, "..", ".github", "line.env")) as f:
-        for line in f:
-            line = line.strip()
-            if line and not line.startswith("#") and "=" in line:
-                k, _, v = line.partition("=")
+    if line and line != DEFAULT_LINE:
+        path = os.path.join(here, "..", "lines", line, "line.env")
+    else:
+        path = os.path.join(here, "..", ".github", "line.env")
+    with open(path) as f:
+        for raw in f:
+            s = raw.strip()
+            if s and not s.startswith("#") and "=" in s:
+                k, _, v = s.partition("=")
                 out[k] = v
     return out
 
 
 _LINE_ENV = _line_env()
-# Derived (R2-5, retiring the v1.1 hand mirror + its drift vector): NeoForge family
-# requirements follow the line's shipping decision directly.
+# Derived (R2-5): NeoForge family requirements follow the line's shipping decision directly.
 SHIP_NEOFORGE = _LINE_ENV.get("LINE_SHIP_NEOFORGE") == "true"
-# Derived: does this line declare folia support? (plugin.yml expands the same datum.)
 FOLIA_SUPPORTED = "folia" in _LINE_ENV.get("LINE_PAPER_LOADERS", "").split()
 RELEASE_GLOBS = ("lod-server-support-fabric-*.jar", "lod-server-support-paper-*.jar",
                  "voxy-server-side-fabric-*.jar", "voxy-server-side-paper-*.jar") + ((
                  "lod-server-support-neoforge-*.jar",
                  "voxy-server-side-neoforge-*.jar") if SHIP_NEOFORGE else ())
 CI_NAME_SUFFIX = "0.4.0+26.1.2.jar"  # a representative CI filename for glob round-tripping
-# The Fabric jar's mapping namespace for THIS line: 26.x fabric-loom ships official-mapped
-# jars; 1.21.x fabric-loom-remap ships intermediary. A forward merge swapping the loom
-# plugin produces a right-named, gate-green jar in the WRONG namespace — unloadable on any
-# real server of this line — so the manifest attribute is pinned like Paper's namespace.
 FABRIC_MAPPING_NAMESPACE = _LINE_ENV.get("LINE_FABRIC_MAPPING_NAMESPACE", "official")
 SOAK_JAR_PREFIX = "lss-paper-soak"
+
+
+def _reconfigure_for_line(line):
+    """Re-derive the line-dependent module globals for --line (§5). The default line leaves
+    them at their import-time values (byte-identical behaviour)."""
+    global LINE, BUILD_SUBDIR, _LINE_ENV, SHIP_NEOFORGE, FOLIA_SUPPORTED, RELEASE_GLOBS, FABRIC_MAPPING_NAMESPACE
+    LINE = line or DEFAULT_LINE
+    BUILD_SUBDIR = "" if LINE == DEFAULT_LINE else LINE
+    _LINE_ENV = _line_env(LINE)
+    SHIP_NEOFORGE = _LINE_ENV.get("LINE_SHIP_NEOFORGE") == "true"
+    FOLIA_SUPPORTED = "folia" in _LINE_ENV.get("LINE_PAPER_LOADERS", "").split()
+    RELEASE_GLOBS = ("lod-server-support-fabric-*.jar", "lod-server-support-paper-*.jar",
+                     "voxy-server-side-fabric-*.jar", "voxy-server-side-paper-*.jar") + ((
+                     "lod-server-support-neoforge-*.jar",
+                     "voxy-server-side-neoforge-*.jar") if SHIP_NEOFORGE else ())
+    FABRIC_MAPPING_NAMESPACE = _LINE_ENV.get("LINE_FABRIC_MAPPING_NAMESPACE", "official")
+
+
+def _libs(root, module):
+    """The line's libs dir for a module: build/libs (default) or build/<line>/libs (folded)."""
+    if BUILD_SUBDIR:
+        return os.path.join(root, module, "build", BUILD_SUBDIR, "libs")
+    return os.path.join(root, module, "build", "libs")
 
 
 def _names(jar):
@@ -997,9 +1026,9 @@ def check_glob_hygiene(problems, soak_jars):
 
 
 def discover(problems, expected_version=None, root=ROOT):
-    fab_libs = os.path.join(root, "fabric", "build", "libs")
-    pap_libs = os.path.join(root, "paper", "build", "libs")
-    neo_libs = os.path.join(root, "neoforge", "build", "libs")
+    fab_libs = _libs(root, "fabric")
+    pap_libs = _libs(root, "paper")
+    neo_libs = _libs(root, "neoforge")
     # `voxy-server-side-*` and `lod-server-support-*` are disjoint prefixes, so neither
     # discovery list contaminates the other.
     fab = _jars_in(fab_libs, "lod-server-support-fabric")
@@ -1138,16 +1167,22 @@ def _jars_in(d, prefix):
 
 
 def _minecraft_version(root=ROOT):
-    """The line's minecraft_version from gradle.properties, or None if unreadable. Used to
-    pin --version matching to the FULL CI jar name: support branches make the same
-    mod_version exist on several MC lines at once, so `-{version}+` alone is ambiguous."""
-    try:
-        with open(os.path.join(root, "gradle.properties"), encoding="utf-8") as fh:
-            for line in fh:
-                if line.strip().startswith("minecraft_version="):
-                    return line.split("=", 1)[1].strip()
-    except OSError:
-        pass
+    """The line's minecraft_version, or None if unreadable. Used to pin --version matching to
+    the FULL CI jar name: the same mod_version exists on several MC lines at once, so
+    `-{version}+` alone is ambiguous. The default line reads gradle.properties; a folded line
+    reads lines/<line>/line.properties (single-branch-consolidation-plan.md §5)."""
+    paths = []
+    if BUILD_SUBDIR:
+        paths.append(os.path.join(root, "lines", LINE, "line.properties"))
+    paths.append(os.path.join(root, "gradle.properties"))
+    for path in paths:
+        try:
+            with open(path, encoding="utf-8") as fh:
+                for line in fh:
+                    if line.strip().startswith("minecraft_version="):
+                        return line.split("=", 1)[1].strip()
+        except OSError:
+            continue
     return None
 
 
@@ -2396,9 +2431,14 @@ def main(argv):
     ap.add_argument("--version", metavar="X.Y.Z",
                     help="require and check exactly the release jars for this mod_version "
                          "(ignores stale artifacts from earlier builds)")
+    ap.add_argument("--line", metavar="LINE", default=DEFAULT_LINE,
+                    help="the MC line to check (single-branch consolidation): reads "
+                         "lines/<line>/ and <module>/build/<line>/libs; default 26.2 keeps "
+                         ".github/line.env + build/libs")
     args = ap.parse_args(argv)
     if args.selftest:
         return _selftest()
+    _reconfigure_for_line(args.line)
 
     problems = []
     fab, pap, vfab, vpap, neo, vneo, soak = discover(problems, expected_version=args.version)

@@ -4,6 +4,8 @@ plugins {
     id 'com.gradleup.shadow' version '9.4.2'
 }
 
+apply from: "$rootDir/gradle/line.gradle"
+
 version = project.mod_version
 group = project.maven_group
 
@@ -11,7 +13,7 @@ base {
     archivesName = 'lod-server-support-neoforge'
 }
 
-java.toolchain.languageVersion = JavaLanguageVersion.of(25)
+java.toolchain.languageVersion = JavaLanguageVersion.of(project.line_java_version.toInteger())
 
 // CI naming parity with the fabric module (release.yml feeds mod_version from the tag).
 def ciArchiveVersion = providers.environmentVariable('CI').map { it == 'true' }.getOrElse(false)
@@ -57,6 +59,22 @@ sourceSets {
         compileClasspath += sourceSets.main.output
         runtimeClasspath += sourceSets.main.output
     }
+}
+
+// Non-default lines: assemble the test + gametest sets too (line-aware, build-dir isolated).
+if (project.mcLine != '26.2') {
+    sourceSets.test.java.srcDirs = []
+    sourceSets.test.java.srcDir assembleLineTree('neoforgeTestJava',
+            ['src/test/java'], ["src/line/${project.mcLine}/test/java"])
+    sourceSets.test.resources.srcDirs = []
+    sourceSets.test.resources.srcDir assembleLineTree('neoforgeTestRes',
+            ['src/test/resources'], ["src/line/${project.mcLine}/test/resources"])
+    sourceSets.gametest.java.srcDirs = []
+    sourceSets.gametest.java.srcDir assembleLineTree('neoforgeGametestJava',
+            ['src/gametest/java'], ["src/line/${project.mcLine}/gametest/java"])
+    sourceSets.gametest.resources.srcDirs = []
+    sourceSets.gametest.resources.srcDir assembleLineTree('neoforgeGametestRes',
+            ['src/gametest/resources'], ["src/line/${project.mcLine}/gametest/resources"])
 }
 
 neoForge {
@@ -109,12 +127,23 @@ neoForge {
 // Stage N (neoforge-support-plan.md §1.1): the xplat shared source set — the same
 // loader-neutral sources the fabric module compiles. THIS compile is the enforcement
 // of xplat's loader purity and of the same-FQN twin contract.
-sourceSets {
-    main {
-        java {
-            srcDir '../xplat/src/main/java'
+// Default line: plain neoforge+xplat roots. Non-default: assembled mirror (overlay wins).
+if (project.mcLine == '26.2') {
+    sourceSets {
+        main {
+            java {
+                srcDir '../xplat/src/main/java'
+            }
         }
     }
+} else {
+    sourceSets.main.java.srcDirs = []
+    sourceSets.main.java.srcDir assembleLineTree('neoforgeMainJava',
+            ['src/main/java', '../xplat/src/main/java'],
+            ["src/line/${project.mcLine}/java", "../xplat/src/line/${project.mcLine}/java"])
+    sourceSets.main.resources.srcDirs = []
+    sourceSets.main.resources.srcDir assembleLineTree('neoforgeMainRes',
+            ['src/main/resources'], ["src/line/${project.mcLine}/resources"])
 }
 
 // N-2 packaging decision (plan §2), AMENDED by neoforge-jarjar-sqlite-plan.md

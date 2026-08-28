@@ -35,8 +35,13 @@ class ToolchainContractTest {
 
     @BeforeAll
     static void load() throws Exception {
-        lineEnv = loadProps(locate(".github/line.env"));
+        // Line-aware (single-branch consolidation): -Dlss.line names the active line
+        // (default 26.2); its identity lives in lines/<line>/line.env and its build inputs
+        // in lines/<line>/line.properties (overlaid onto gradle.properties' fleet-invariants).
+        String line = System.getProperty("lss.line", "26.2");
+        lineEnv = loadProps(locate("lines/" + line + "/line.env"));
         gradleProps = loadProps(locate("gradle.properties"));
+        gradleProps.putAll(loadProps(locate("lines/" + line + "/line.properties")));
         SharedConstants.tryDetectVersion();
     }
 

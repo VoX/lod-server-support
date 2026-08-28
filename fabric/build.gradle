@@ -1,6 +1,18 @@
 plugins {
-    id 'net.fabricmc.fabric-loom' version "${loom_version}"
+    // loom is declared apply-false at the root and applied conditionally below (the
+    // marker depends on line data, which a plugins {} block cannot read — see gradle/line.gradle).
 }
+
+// Load the active MC line's build inputs into ext BEFORE anything reads a line property.
+apply from: "$rootDir/gradle/line.gradle"
+
+// The loom axis: net.fabricmc.fabric-loom consumes Mojang-mapped jars directly (official
+// lines: 26.x); net.fabricmc.fabric-loom-remap + officialMojangMappings() is the classic
+// remap toolchain (intermediary lines: 1.21.x). Both markers live in the one loom jar
+// (root apply-false put it on the classpath). The release-jar task name flips with the arm.
+def mappingNamespace = project.mapping_namespace
+ext.releaseJarTask = (mappingNamespace == 'intermediary') ? 'remapJar' : 'jar'
+apply plugin: (mappingNamespace == 'intermediary') ? 'net.fabricmc.fabric-loom-remap' : 'net.fabricmc.fabric-loom'
 
 version = project.mod_version
 group = project.maven_group
@@ -148,12 +160,34 @@ test {
 // Stage N-1a (neoforge-support-plan.md §2): loader-neutral MC logic lives in the
 // xplat/ shared SOURCE SET (not a Gradle project — it has MC deps, so each loader
 // module compiles it against its own toolchain; packages unchanged).
-sourceSets {
-    main {
-        java {
-            srcDir '../xplat/src/main/java'
+// Default line: plain fabric+xplat roots (byte-identity + IDE). Non-default: assembled
+// mirror of both shared roots + both overlay roots (fabric/src/line/<line> and
+// xplat/src/line/<line>), overlay wins, excludes.txt cuts applied.
+if (project.mcLine == '26.2') {
+    sourceSets {
+        main {
+            java {
+                srcDir '../xplat/src/main/java'
+            }
         }
     }
+} else {
+    sourceSets.main.java.srcDirs = []
+    sourceSets.main.java.srcDir assembleLineTree('fabricMainJava',
+            ['src/main/java', '../xplat/src/main/java'],
+            ["src/line/${project.mcLine}/java", "../xplat/src/line/${project.mcLine}/java"])
+    sourceSets.main.resources.srcDirs = []
+    sourceSets.main.resources.srcDir assembleLineTree('fabricMainRes',
+            ['src/main/resources'], ["src/line/${project.mcLine}/resources"])
+
+    // Tier 1 test set (overlays: the per-line contract-test halves + version-divergent
+    // suites; the goldens ride the resources tree via override-resolution).
+    sourceSets.test.java.srcDirs = []
+    sourceSets.test.java.srcDir assembleLineTree('fabricTestJava',
+            ['src/test/java'], ["src/line/${project.mcLine}/test/java"])
+    sourceSets.test.resources.srcDirs = []
+    sourceSets.test.resources.srcDir assembleLineTree('fabricTestRes',
+            ['src/test/resources'], ["src/line/${project.mcLine}/test/resources"])
 }
 
 // LINE DATA (port-isolation-round-2-plan.md R2-1): Tier 3 (client gametests) per
@@ -167,7 +201,7 @@ sourceSets {
 // Tier 2 at entrypoint resolution). The source tree and source fabric.mod.json
 // stay IDENTICAL across lines — GameTestEntrypointContractTest compares source to
 // source, so it is line-neutral by construction.
-def tier3 = true
+def tier3 = project.tier3_client_gametests.toBoolean()
 
 fabricApi {
     configureTests {
@@ -200,6 +234,17 @@ if (!tier3) {
             }
         }
     }
+}
+
+// Tier 2/3 gametest set assembly (non-default lines) — the four hot suites + TestPositions
+// seam ride overlays; the gametest fabric.mod.json + structures ride the resources tree.
+if (project.mcLine != '26.2') {
+    sourceSets.gametest.java.srcDirs = []
+    sourceSets.gametest.java.srcDir assembleLineTree('fabricGametestJava',
+            ['src/gametest/java'], ["src/line/${project.mcLine}/gametest/java"])
+    sourceSets.gametest.resources.srcDirs = []
+    sourceSets.gametest.resources.srcDir assembleLineTree('fabricGametestRes',
+            ['src/gametest/resources'], ["src/line/${project.mcLine}/gametest/resources"])
 }
 
 loom {
@@ -321,7 +366,7 @@ processResources {
 }
 
 tasks.withType(JavaCompile).configureEach {
-    it.options.release = 25
+    it.options.release = project.line_java_version.toInteger()
 }
 
 // ---- LOD store nested dependency jars (plan §3 packaging) -----------------------------
@@ -440,10 +485,12 @@ def lssFabricJarName = "lod-server-support-fabric" + (ciArchiveVersion ? "-${ciA
 
 tasks.register('vssJar') {
     description = 'Repackages the LSS Fabric jar under the Voxy Server Side branding.'
-    // This Loom version (1.17) has no separate remapJar — the `jar` task produces the final
-    // remapped release jar directly (with the nested common JiJ + Fabric-Mapping-Namespace).
-    // String dependency so it resolves at graph-build time, not config time.
-    dependsOn 'jar'
+    // The release jar is produced by the arm's release-jar task: on official-mapping lines
+    // (26.x) `jar` writes the final Mojang-namespace jar directly (loom 1.17 has no separate
+    // remap step there); on intermediary lines (1.21.x) `remapJar` writes the final jar and
+    // `jar` writes only the -dev jar. releaseJarTask (from gradle/line.gradle) picks the right
+    // one. String dependency so it resolves at graph-build time, not config time.
+    dependsOn releaseJarTask
     def iconFile = rootProject.file('branding/vss/icon.png')
     def srcJar = layout.buildDirectory.file("libs/${lssFabricJarName}")
     def outFile = layout.buildDirectory.file("libs/${vssFabricJarName}")

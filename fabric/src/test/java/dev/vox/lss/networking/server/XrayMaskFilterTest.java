@@ -604,8 +604,9 @@ class XrayMaskFilterTest {
     }
 
     private static void assertMatchesV20Golden(String name, byte[] wire) throws IOException {
-        Path golden = goldenPath(name).getParent().getParent()
-                .resolve("v20-corpus").resolve(name + ".bin");
+        // Line-aware override-resolution per corpus dir (the v20 golden is line-invariant here,
+        // the nbt one is 26.1-overlaid — resolve each independently, never derive one from the other).
+        Path golden = dev.vox.lss.LineGoldens.resolve("v20-corpus", name + ".bin");
         if (regenGoldens()) {
             Files.createDirectories(golden.getParent());
             Files.write(golden, wire);
@@ -622,7 +623,7 @@ class XrayMaskFilterTest {
     }
 
     private static void assertMatchesGolden(String name, byte[] wire) throws IOException {
-        Path golden = goldenPath(name);
+        Path golden = dev.vox.lss.LineGoldens.resolve("nbt-corpus", name + ".bin");
         if (regenGoldens()) {
             Files.createDirectories(golden.getParent());
             Files.write(golden, wire);

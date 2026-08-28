@@ -70,7 +70,9 @@ class PaperLegacyEgressTest {
 
     static byte[] readCorpus(String dirName, String name) {
         try {
-            return Files.readAllBytes(corpusDir(dirName).resolve(name));
+            // Line-aware override-resolution (single-branch consolidation): the active line's
+            // overlay golden wins (e.g. 26.1's xray-masked.bin); others fall back to shared.
+            return Files.readAllBytes(dev.vox.lss.paper.LineGoldens.resolve(dirName, name));
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }

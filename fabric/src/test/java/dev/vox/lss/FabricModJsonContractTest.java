@@ -29,8 +29,9 @@ class FabricModJsonContractTest {
     // The trailing '-' makes the upper bound prerelease-EXCLUSIVE: Fabric semver sorts
     // 26.3-rc below 26.3, so a bare '<26.3' would admit 26.3 prereleases — where the required
     // mixins over MC internals hard-crash at apply (final compat review 2026-07-27).
-    private static final String EXPECTED_MINECRAFT_DEPENDS = ">=26.2 <26.3-";
-    private static final String EXPECTED_MINECRAFT_VERSION_PREFIX = "26.2";
+    // Line-aware (single-branch consolidation): the active line's NAME (lss.line, default
+    // 26.2) IS the MC-version prefix by construction (26.1 -> 26.1.2, 1.21.11 -> 1.21.11).
+    private static final String EXPECTED_MINECRAFT_VERSION_PREFIX = System.getProperty("lss.line", "26.2");
 
     private static JsonObject modJson;
     private static Properties gradleProps;
@@ -41,6 +42,11 @@ class FabricModJsonContractTest {
                 Files.readString(locate("fabric/src/main/resources/fabric.mod.json"))).getAsJsonObject();
         gradleProps = new Properties();
         gradleProps.load(new StringReader(Files.readString(locate("gradle.properties"))));
+        // Line-aware: overlay the active line's build inputs (single-branch consolidation —
+        // lines/<line>/line.properties holds the line-varying keys; -Dlss.line names the line,
+        // default 26.2). Loaded AFTER gradle.properties so the line's values win.
+        gradleProps.load(new StringReader(Files.readString(
+                locate("lines/" + System.getProperty("lss.line", "26.2") + "/line.properties"))));
     }
 
     /** Walks up from the working dir (fabric/ under Gradle, the repo root elsewhere). */
@@ -91,10 +97,15 @@ class FabricModJsonContractTest {
         assertEquals("${minecraft_dependency}",
                 modJson.getAsJsonObject("depends").get("minecraft").getAsString(),
                 "fabric.mod.json's minecraft depends must stay templated from the data key");
-        assertEquals(EXPECTED_MINECRAFT_DEPENDS,
-                gradleProps.getProperty("minecraft_dependency", ""),
-                "gradle.properties minecraft_dependency must pin the line's range exactly — "
-                        + "the upper bound is what keeps this jar off incompatible newer lines");
+        // The exact range is non-derivable per-line DATA (line.properties minecraft_dependency);
+        // the pin that survives the branch->line move is CONSISTENCY: the declared range must
+        // reference THIS line's version (a copied range from another line — the exact bug this
+        // guards — names the wrong version and reds here).
+        String depends = gradleProps.getProperty("minecraft_dependency", "");
+        assertTrue(depends.contains(EXPECTED_MINECRAFT_VERSION_PREFIX),
+                "minecraft_dependency (" + depends + ") must reference the " + EXPECTED_MINECRAFT_VERSION_PREFIX
+                        + " line — a range copied from another line ships a jar that loads on "
+                        + "wire-incompatible MC");
         // The G back-flow's sibling key: the fabric-api floor is per-line data too
         // (the 26.1 port found the literal floor naming a 26.2-family version no
         // 26.1 install can satisfy — silently unresolvable at mod load).

@@ -8,68 +8,81 @@ on:
     branches: [main, 'support/**']
     paths-ignore: ['**.md', 'docs/**', 'LICENSE', '.gitignore']
 
+# One in-flight run per ref (the matrix multiplies runner-minutes; cancel superseded pushes).
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  # The matrix is GENERATED from lines/ (never a literal list — keeps the no-hardcoded-MC
+  # pin in its strongest form). Cross-pinned to lines/* by LineMatrixContractTest.
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      build_matrix: ${{ steps.gen.outputs.build_matrix }}
+      tier3_matrix: ${{ steps.gen.outputs.tier3_matrix }}
+    steps:
+      - uses: actions/checkout@v5
+      - id: gen
+        run: python3 .github/workflows/gen_matrix.py >> "$GITHUB_OUTPUT"
+
   build:
-    name: Build + Unit Tests + Server GameTests
+    needs: setup
+    strategy:
+      fail-fast: false   # MANDATORY — the cross-line signal is the whole point.
+      matrix:
+        include: ${{ fromJson(needs.setup.outputs.build_matrix) }}
+    name: Build ${{ matrix.line }} (Java ${{ matrix.java }})
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v5
 
-      # Line identity comes from .github/line.env (R2-2 — build.yml used to hardcode
-      # the Java version and went red-by-construction on the Java-21 line).
       - name: Source line env
-        run: grep -vE '^\s*(#|$)' .github/line.env >> "$GITHUB_ENV"
+        run: grep -vE '^\s*(#|$)' lines/${{ matrix.line }}/line.env >> "$GITHUB_ENV"
 
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: ${{ env.LINE_JAVA_VERSION }}
+          java-version: ${{ matrix.java }}
 
       - uses: gradle/actions/setup-gradle@v5
 
       - name: Build Fabric + Tier 1 tests
-        run: ./gradlew :fabric:build -x runGameTest -x runClientGameTest
+        run: ./gradlew -PmcLine=${{ matrix.line }} :fabric:build -x runGameTest -x runClientGameTest
 
-      # Tier 2 runs a real dedicated server; on starved 2-core runners the documented
-      # flaky classes (CLAUDE.md "Known Test Flakes") can miss timing windows. One retry
-      # contains them; the ::warning:: keeps every retry visible in the run summary so a
-      # rising flake rate is never silently masked, and the first attempt's evidence is
-      # snapshotted before the retry clobbers the run dir.
       - name: Tier 2 server gametests (retry once on flake)
         run: |
-          ./gradlew :fabric:runGameTest || {
-            echo "::warning title=Tier 2 gametest flake::runGameTest failed once; retrying (first-attempt logs in the gametest-flake-evidence-server artifact)"
+          ./gradlew -PmcLine=${{ matrix.line }} :fabric:runGameTest || {
+            echo "::warning title=Tier 2 gametest flake (${{ matrix.line }})::runGameTest failed once; retrying"
             mkdir -p flake-evidence/tier2
-            cp -r fabric/build/run/gameTest/logs flake-evidence/tier2/logs 2>/dev/null || true
-            cp -r fabric/build/run/gameTest/crash-reports flake-evidence/tier2/crash-reports 2>/dev/null || true
-            ./gradlew :fabric:runGameTest
+            cp -r fabric/build/${{ matrix.build_subdir }}run/gameTest/logs flake-evidence/tier2/logs 2>/dev/null || true
+            cp -r fabric/build/${{ matrix.build_subdir }}run/gameTest/crash-reports flake-evidence/tier2/crash-reports 2>/dev/null || true
+            ./gradlew -PmcLine=${{ matrix.line }} :fabric:runGameTest
           }
 
       - name: Build Paper plugin
-        run: ./gradlew :paper:shadowJar
+        run: ./gradlew -PmcLine=${{ matrix.line }} :paper:shadowJar
 
       - name: Paper Tier 1 tests
-        run: ./gradlew :paper:test
+        run: ./gradlew -PmcLine=${{ matrix.line }} :paper:test
 
-      # Stage N: the NeoForge module (best-effort tier — CLAUDE.md "Support tiers").
-      # build = compile (xplat under MDG — the twin-contract enforcement) + the contract
-      # suite + shadowJar + the VSS repackage; the gametest smoke runs the 8-test subset
-      # with the same retry-once + evidence pattern as the fabric tiers.
+      # build.yml builds + tests the NeoForge module on EVERY line so the port stays
+      # maintained (whether the line SHIPS it is LINE_SHIP_NEOFORGE, a release-time fact).
       - name: Build NeoForge + contract tests
-        run: ./gradlew :neoforge:build
+        run: ./gradlew -PmcLine=${{ matrix.line }} :neoforge:build
 
       - name: NeoForge gametest smoke (retry once on flake)
         run: |
-          ./gradlew :neoforge:runGameTestServer || {
-            echo "::warning title=NeoForge gametest flake::runGameTestServer failed once; retrying (first-attempt logs in the gametest-flake-evidence-server artifact under neoforge/)"
+          ./gradlew -PmcLine=${{ matrix.line }} :neoforge:runGameTestServer || {
+            echo "::warning title=NeoForge gametest flake (${{ matrix.line }})::runGameTestServer failed once; retrying"
             mkdir -p flake-evidence/neoforge
             cp -r neoforge/run/logs flake-evidence/neoforge/logs 2>/dev/null || true
             cp -r neoforge/run/crash-reports flake-evidence/neoforge/crash-reports 2>/dev/null || true
-            ./gradlew :neoforge:runGameTestServer
+            ./gradlew -PmcLine=${{ matrix.line }} :neoforge:runGameTestServer
           }
 
-      - name: Soak checker + report selftests
+      - name: Script selftests
         run: |
           python3 scripts/check_soak.py --selftest
           python3 scripts/soak_report.py --selftest
@@ -78,13 +91,13 @@ jobs:
           python3 scripts/compare_profile.py --selftest
 
       - name: Release-jar safety gate
-        run: python3 scripts/release_check.py
+        run: python3 scripts/release_check.py --line ${{ matrix.line }}
 
-      - name: Upload flake evidence (first attempt of a retried gametest)
+      - name: Upload flake evidence
         if: always()
         uses: actions/upload-artifact@v5
         with:
-          name: gametest-flake-evidence-server
+          name: gametest-flake-evidence-server-${{ matrix.line }}
           path: flake-evidence/
           if-no-files-found: ignore
           retention-days: 30
@@ -93,107 +106,105 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v5
         with:
-          name: gametest-failure-evidence-server
+          name: gametest-failure-evidence-server-${{ matrix.line }}
           path: |
-            fabric/build/run/*/logs/
-            fabric/build/run/*/crash-reports/
-            fabric/build/reports/
-            fabric/build/test-results/
-            paper/build/reports/
-            paper/build/test-results/
-            neoforge/build/reports/
-            neoforge/build/test-results/
-            neoforge/run/logs/
-            neoforge/run/crash-reports/
+            fabric/build/${{ matrix.build_subdir }}run/*/logs/
+            fabric/build/${{ matrix.build_subdir }}run/*/crash-reports/
+            fabric/build/${{ matrix.build_subdir }}reports/
+            fabric/build/${{ matrix.build_subdir }}test-results/
+            paper/build/${{ matrix.build_subdir }}reports/
+            paper/build/${{ matrix.build_subdir }}test-results/
+            neoforge/build/${{ matrix.build_subdir }}reports/
+            neoforge/build/${{ matrix.build_subdir }}test-results/
           if-no-files-found: ignore
           retention-days: 30
 
-      # Four shipped jars: the LSS pair and the branded Voxy Server Side pair (produced by the
-      # vssJar repackage tasks — Fabric's runs as a `build` dependency, Paper's as a shadowJar
-      # finalizer). Explicit per-brand globs so each artifact holds only its own jar.
       - uses: actions/upload-artifact@v5
         with:
-          name: lod-server-support-fabric
-          path: fabric/build/libs/lod-server-support-fabric*.jar
-
+          name: lod-server-support-fabric-${{ matrix.line }}
+          path: fabric/build/${{ matrix.build_subdir }}libs/lod-server-support-fabric*.jar
       - uses: actions/upload-artifact@v5
         with:
-          name: lod-server-support-paper
-          path: paper/build/libs/lod-server-support-paper*.jar
-
+          name: lod-server-support-paper-${{ matrix.line }}
+          path: paper/build/${{ matrix.build_subdir }}libs/lod-server-support-paper*.jar
       - uses: actions/upload-artifact@v5
         with:
-          name: voxy-server-side-fabric
-          path: fabric/build/libs/voxy-server-side-fabric*.jar
-
+          name: voxy-server-side-fabric-${{ matrix.line }}
+          path: fabric/build/${{ matrix.build_subdir }}libs/voxy-server-side-fabric*.jar
       - uses: actions/upload-artifact@v5
         with:
-          name: voxy-server-side-paper
-          path: paper/build/libs/voxy-server-side-paper*.jar
-
+          name: voxy-server-side-paper-${{ matrix.line }}
+          path: paper/build/${{ matrix.build_subdir }}libs/voxy-server-side-paper*.jar
       - uses: actions/upload-artifact@v5
         with:
-          name: lod-server-support-neoforge
-          path: neoforge/build/libs/lod-server-support-neoforge*.jar
-
+          name: lod-server-support-neoforge-${{ matrix.line }}
+          path: neoforge/build/${{ matrix.build_subdir }}libs/lod-server-support-neoforge*.jar
       - uses: actions/upload-artifact@v5
         with:
-          name: voxy-server-side-neoforge
-          path: neoforge/build/libs/voxy-server-side-neoforge*.jar
+          name: voxy-server-side-neoforge-${{ matrix.line }}
+          path: neoforge/build/${{ matrix.build_subdir }}libs/voxy-server-side-neoforge*.jar
 
-  # Tier 3: the only end-to-end pins for the client-server flow, LSSApi consumer
-  # dispatch, the ingest-failure recovery loop, and the IntegratedServerLanHook path.
-  # Runs headless via llvmpipe (same env the original Tier-3 job used on these runners).
+  # Tier 3 runs only on lines whose data says they carry it (job EXISTENCE from the matrix,
+  # not a step-skip — best-effort/cut lines have no Tier 3 job at all).
   client-gametest:
-    name: Client GameTests
+    needs: setup
+    if: needs.setup.outputs.tier3_matrix != '[]'
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJson(needs.setup.outputs.tier3_matrix) }}
+    name: Client GameTests ${{ matrix.line }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-
-      # Line identity comes from .github/line.env (R2-2 — build.yml used to hardcode
-      # the Java version and went red-by-construction on the Java-21 line).
       - name: Source line env
-        run: grep -vE '^\s*(#|$)' .github/line.env >> "$GITHUB_ENV"
-
+        run: grep -vE '^\s*(#|$)' lines/${{ matrix.line }}/line.env >> "$GITHUB_ENV"
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: ${{ env.LINE_JAVA_VERSION }}
-
+          java-version: ${{ matrix.java }}
       - uses: gradle/actions/setup-gradle@v5
-
-      # Retry-once for the same reason as Tier 2 above — this tier additionally sees the
-      # vanilla 26.2 TicketStorage purge crash under ticket churn (CLAUDE.md flake catalog).
       - name: Tier 3 client gametests (retry once on flake)
         run: |
-          ./gradlew :fabric:runClientGameTest || {
-            echo "::warning title=Tier 3 gametest flake::runClientGameTest failed once; retrying (first-attempt logs in the gametest-flake-evidence-client artifact)"
+          ./gradlew -PmcLine=${{ matrix.line }} :fabric:runClientGameTest || {
+            echo "::warning title=Tier 3 gametest flake (${{ matrix.line }})::runClientGameTest failed once; retrying"
             mkdir -p flake-evidence/tier3
-            cp -r fabric/build/run/clientGameTest/logs flake-evidence/tier3/logs 2>/dev/null || true
-            cp -r fabric/build/run/clientGameTest/crash-reports flake-evidence/tier3/crash-reports 2>/dev/null || true
-            ./gradlew :fabric:runClientGameTest
+            cp -r fabric/build/${{ matrix.build_subdir }}run/clientGameTest/logs flake-evidence/tier3/logs 2>/dev/null || true
+            cp -r fabric/build/${{ matrix.build_subdir }}run/clientGameTest/crash-reports flake-evidence/tier3/crash-reports 2>/dev/null || true
+            ./gradlew -PmcLine=${{ matrix.line }} :fabric:runClientGameTest
           }
         timeout-minutes: 35
         env:
           MESA_GL_VERSION_OVERRIDE: "4.5"
           GALLIUM_DRIVER: llvmpipe
-
-      - name: Upload flake evidence (first attempt of a retried gametest)
-        if: always()
-        uses: actions/upload-artifact@v5
-        with:
-          name: gametest-flake-evidence-client
-          path: flake-evidence/
-          if-no-files-found: ignore
-          retention-days: 30
-
       - name: Upload failure evidence
         if: failure()
         uses: actions/upload-artifact@v5
         with:
-          name: gametest-failure-evidence-client
+          name: gametest-failure-evidence-client-${{ matrix.line }}
           path: |
-            fabric/build/run/clientGameTest/logs/
-            fabric/build/run/clientGameTest/crash-reports/
+            fabric/build/${{ matrix.build_subdir }}run/clientGameTest/logs/
+            fabric/build/${{ matrix.build_subdir }}run/clientGameTest/crash-reports/
           if-no-files-found: ignore
           retention-days: 30
+
+  # THE single required status check: green iff every matrix job (build + tier3) passed,
+  # OR the change was docs-only (needs.changes short-circuits setup). Never deadlocks a
+  # docs PR (this job always runs and reports).
+  required-checks:
+    needs: [build, client-gametest]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify all matrix jobs succeeded
+        run: |
+          build_res="${{ needs.build.result }}"
+          tier3_res="${{ needs.client-gametest.result }}"
+          echo "build=$build_res client-gametest=$tier3_res"
+          # tier3 may be 'skipped' when no line carries Tier 3; that is a pass.
+          [ "$build_res" = "success" ] || { echo "::error::build matrix failed"; exit 1; }
+          case "$tier3_res" in
+            success|skipped) ;;
+            *) echo "::error::client-gametest matrix failed"; exit 1;;
+          esac
+          echo "all required matrix jobs green."

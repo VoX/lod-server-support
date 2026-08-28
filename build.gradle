@@ -1,3 +1,11 @@
+plugins {
+    // The single-branch multi-line build applies loom per fabric-ish module in its own
+    // body (net.fabricmc.fabric-loom on official-mapping lines, net.fabricmc.fabric-loom-remap
+    // on intermediary lines) keyed on line data — a plugins {} block cannot see line data.
+    // Declaring it here (apply false) puts BOTH markers (one jar) on the plugin classpath.
+    id 'net.fabricmc.fabric-loom' version "${loom_version}" apply false
+}
+
 // Root project — no source code here.
 // Subprojects: common (pure Java), fabric (Fabric mod), paper (Paper plugin)
 
