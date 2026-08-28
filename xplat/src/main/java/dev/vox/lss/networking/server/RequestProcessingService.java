@@ -245,7 +245,7 @@ public class RequestProcessingService {
                 : dev.vox.lss.common.store.LodStoreMode.OFF;
         if (!config.enabled && !dev.vox.lss.common.store.LodStoreMode
                 .normalize(config.lodStore).equals(dev.vox.lss.common.store.LodStoreMode.OFF)) {
-            LSSLogger.info("LSS is disabled (enabled=false) — the LOD store and its "
+            LSSLogger.info(dev.vox.lss.common.Brand.shortName() + " is disabled (enabled=false) — the LOD store and its "
                     + "backfill stay off; no store is created and no regions are walked");
         }
         if (storeMode == dev.vox.lss.common.store.LodStoreMode.OFF) {

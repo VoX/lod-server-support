@@ -71,7 +71,7 @@ public final class MoveDesyncTracer {
         this.bootId = newBootId();
         this.queue = new ArrayBlockingQueue<>(queueCapacity);
         this.testSink = null;
-        this.writerThread = new Thread(this::writerLoop, "LSS-MoveTrace");
+        this.writerThread = new Thread(this::writerLoop, dev.vox.lss.common.Brand.shortName() + "-MoveTrace");
         this.writerThread.setDaemon(true);
         if (startWriter) {
             this.writerThread.start();

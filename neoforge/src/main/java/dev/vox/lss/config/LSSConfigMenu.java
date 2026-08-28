@@ -51,7 +51,7 @@ public class LSSConfigMenu implements ConfigEntryPoint {
         Optional<IModInfo> info = ModList.get().getModContainerById(LSSConstants.MOD_ID)
                 .map(c -> c.getModInfo());
         var version = info.map(i -> i.getVersion().toString()).orElse("unknown");
-        var displayName = info.map(IModInfo::getDisplayName).orElse("LOD Server Support");
+        var displayName = info.map(IModInfo::getDisplayName).orElse(dev.vox.lss.common.Brand.displayName());
         var mod = builder.registerModOptions(LSSConstants.MOD_ID, displayName, version)
                 .setIcon(iconFromMetadata(info));
         // ONE handler per SaveHook, shared by every option that uses it (see the Fabric
