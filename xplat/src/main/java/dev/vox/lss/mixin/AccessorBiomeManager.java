@@ -8,7 +8,7 @@ import org.spongepowered.asm.mixin.gen.Accessor;
  * The world axis (cache-alias-keying-and-reset-override-plan.md §1.3): the obfuscated
  * seed, client-side, without a protocol change.
  *
- * <p>The chain (bytecode-verified on 26.2): the server writes
+ * <p>The chain (bytecode-verified on 26.2; re-verified on 1.21.1 at the v0.14 port): the server writes
  * {@code BiomeManager.obfuscateSeed(level.getSeed())} into {@code CommonPlayerSpawnInfo},
  * the client's {@code handleLogin} passes {@code CommonPlayerSpawnInfo.seed()} to the
  * {@code ClientLevel} constructor, and {@code Level.<init>} hands that parameter
@@ -33,7 +33,7 @@ import org.spongepowered.asm.mixin.gen.Accessor;
 @Mixin(BiomeManager.class)
 public interface AccessorBiomeManager {
 
-    /** {@code private final long biomeZoomSeed} — javap-verified present on 26.2, and
+    /** {@code private final long biomeZoomSeed} — javap-verified present on 26.2 and 1.21.1, and
      *  pinned reflectively by {@code SeedAccessorContractTest}. */
     @Accessor("biomeZoomSeed")
     long lss$getBiomeZoomSeed();
