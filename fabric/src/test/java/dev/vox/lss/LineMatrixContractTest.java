@@ -130,6 +130,9 @@ class LineMatrixContractTest {
             }
             assertTrue(Set.of("tests", "namespaces").contains(p.getProperty("fml_gametest_filter")),
                     "lines/" + line + " fml_gametest_filter must be tests|namespaces");
+            assertTrue(Set.of("full", "build-only").contains(p.getProperty("fold_status")),
+                    "lines/" + line + " fold_status must be full|build-only (gates whether the "
+                            + "CI matrix runs the release gate suite or just compiles the line)");
             String ship = env(line).getProperty("LINE_SHIP_NEOFORGE");
             assertTrue("true".equals(ship) || "false".equals(ship),
                     "lines/" + line + " LINE_SHIP_NEOFORGE must be explicit true|false");

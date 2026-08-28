@@ -64,10 +64,20 @@ configurations {
     }
 }
 
+// Dependency scopes flip with the loom arm: 26.x fabric-loom consumes Mojang-mapped jars
+// with PLAIN scopes; 1.21.x fabric-loom-remap needs mod-aware scopes (+ explicit mappings)
+// so loom remaps the mod deps into the dev namespace. add(scope, dep) parameterizes it;
+// on the official arm these resolve to implementation/compileOnly byte-for-byte.
+def modImplScope = (project.mapping_namespace == 'intermediary') ? 'modImplementation' : 'implementation'
+def modCompileScope = (project.mapping_namespace == 'intermediary') ? 'modCompileOnly' : 'compileOnly'
+
 dependencies {
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
-    implementation "net.fabricmc:fabric-loader:${project.loader_version}"
-    implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+    if (project.mapping_namespace == 'intermediary') {
+        mappings loom.officialMojangMappings()
+    }
+    add(modImplScope, "net.fabricmc:fabric-loader:${project.loader_version}")
+    add(modImplScope, "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}")
     testImplementation "net.fabricmc:fabric-loader-junit:${project.loader_version}"
     // LOD-store Phase 0 experiment deps (docs/planning/lod-store-implementation-plan.md):
     // the codec/schema decision tool (LodStoreExperimentTool, gated on
@@ -87,8 +97,8 @@ dependencies {
     storeDeps "com.github.luben:zstd-jni:1.5.7-3"
     localRuntime "org.xerial:sqlite-jdbc:3.49.1.0"
     localRuntime "com.github.luben:zstd-jni:1.5.7-3"
-    compileOnly "maven.modrinth:sodium:${sodium_version}"
-    compileOnly "maven.modrinth:modmenu:${modmenu_version}"
+    add(modCompileScope, "maven.modrinth:sodium:${sodium_version}")
+    add(modCompileScope, "maven.modrinth:modmenu:${modmenu_version}")
     // The legacy (0.6/0.7) Sodium options surface SodiumLegacySurfaceResolvesTest checks
     // LegacySodiumPage.SURFACE against by NAME + ARITY (sodium-options-page-generations-
     // plan.md §4): a PLAIN configuration, resolved outside loom and never on any compile
@@ -248,7 +258,11 @@ if (project.mcLine != '26.2') {
 }
 
 loom {
-    accessWidenerPath = file("src/main/resources/lss.accesswidener")
+    // The accesswidener is a COMMITTED per-line file (official vs named namespace header);
+    // loom consumes it during jar provisioning, BEFORE any resource/assembly task runs, so
+    // it must point at the line's SOURCE overlay when one exists (never the assembled path).
+    def awOverlay = file("src/line/${project.mcLine}/resources/lss.accesswidener")
+    accessWidenerPath = awOverlay.exists() ? awOverlay : file("src/main/resources/lss.accesswidener")
     runs {
         register("benchmarkServer") {
             server()

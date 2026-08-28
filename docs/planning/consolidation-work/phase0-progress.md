@@ -42,3 +42,18 @@
 ## NEXT
 - Phase 1: fold 1.21.11 (Java-21 axis, loom-remap arm, remapJar release task).
 - Release rework: 4-stage matrix pipeline + v0.14.0 prep.
+
+## Phase 1 (1.21.11) — BUILD-ONLY proven (2026-08-28)
+- The loom-remap + Java-21 axis is proven: 1.21.11 compiles on ALL THREE loaders.
+- fabric/build.gradle arms added (all no-ops on the official arm — 26.2 stays byte-identical):
+  dep scopes via add(modImplScope/modCompileScope), conditional mappings
+  officialMojangMappings(), line-aware accessWidenerPath (named-namespace overlay).
+- 14 source overlays: 12 fabric-main (fabric+xplat), 1 paper (PaperRequestProcessingService
+  — m-3 rebase is a follow-up), 1 neoforge ScopedCarrier twin; + the named AW resource overlay.
+- Line data lines/1.21.11/ (fold_status=build-only). gen_matrix.py emits a compile_matrix;
+  build.yml has a compile-check job (main compile all loaders) so the axis stays exercised in CI.
+- REMAINING for a FULL 1.21.11 fold (release-ready): ~18 nbt + 3 v20 corpus golden overlays
+  (fabric+paper, mechanical — LineGoldens already routes them), ~20 test .java overlays
+  (compiler+test oracle), the mixins.json/fabric.mod.json resource resolution, T1/T2 green,
+  representative smoke soaks. Then flip fold_status=full.
+- 1.21.10 (Sodium cut) + 1.21.1 (NBT-accessor seams, multi-week) NOT started — GO/NO-GO pending.

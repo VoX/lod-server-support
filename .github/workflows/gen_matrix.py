@@ -29,7 +29,7 @@ def load_props(path):
 
 
 def main():
-    build, tier3 = [], []
+    build, tier3, compile_only = [], [], []
     for line in sorted(os.listdir(LINES)):
         ldir = os.path.join(LINES, line)
         if not os.path.isdir(ldir):
@@ -42,11 +42,20 @@ def main():
             sys.exit(1)
         entry = {"line": line, "java": java,
                  "build_subdir": "" if line == DEFAULT_LINE else f"{line}/"}
-        build.append(entry)
-        if props.get("tier3_client_gametests") == "true":
-            tier3.append(entry)
+        status = props.get("fold_status", "full")
+        if status == "full":
+            # Release-ready: full gate suite (T1/T2/paper/neoforge/release_check) + artifacts.
+            build.append(entry)
+            if props.get("tier3_client_gametests") == "true":
+                tier3.append(entry)
+        else:
+            # build-only: the fold's build arms are proven (compile all loaders) but its
+            # test tiers / goldens are not yet folded — CI compiles it so the axis stays
+            # exercised, without gating on tests it cannot yet pass.
+            compile_only.append(entry)
     print("build_matrix=" + json.dumps(build))
     print("tier3_matrix=" + json.dumps(tier3))
+    print("compile_matrix=" + json.dumps(compile_only))
 
 
 if __name__ == "__main__":

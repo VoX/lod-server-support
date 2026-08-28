@@ -21,6 +21,7 @@ jobs:
     outputs:
       build_matrix: ${{ steps.gen.outputs.build_matrix }}
       tier3_matrix: ${{ steps.gen.outputs.tier3_matrix }}
+      compile_matrix: ${{ steps.gen.outputs.compile_matrix }}
     steps:
       - uses: actions/checkout@v5
       - id: gen
@@ -188,11 +189,36 @@ jobs:
           if-no-files-found: ignore
           retention-days: 30
 
-  # THE single required status check: green iff every matrix job (build + tier3) passed,
+  # build-only lines (fold_status != full): compile every loader so the version-hot build
+  # arms stay exercised in CI, without gating on test tiers / goldens not yet folded.
+  compile-check:
+    needs: setup
+    if: needs.setup.outputs.compile_matrix != '[]'
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJson(needs.setup.outputs.compile_matrix) }}
+    name: Compile ${{ matrix.line }} (build-only, Java ${{ matrix.java }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+      - name: Source line env
+        run: grep -vE '^\s*(#|$)' lines/${{ matrix.line }}/line.env >> "$GITHUB_ENV"
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.java }}
+      - uses: gradle/actions/setup-gradle@v5
+      - name: Compile all loaders
+        run: ./gradlew -PmcLine=${{ matrix.line }} :fabric:compileJava :paper:compileJava :neoforge:compileJava
+
+  # THE single required status check
+  # required check: green iff every matrix job (build + tier3 + compile) passed,
   # OR the change was docs-only (needs.changes short-circuits setup). Never deadlocks a
   # docs PR (this job always runs and reports).
   required-checks:
-    needs: [build, client-gametest]
+    needs: [build, client-gametest, compile-check]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -200,11 +226,16 @@ jobs:
         run: |
           build_res="${{ needs.build.result }}"
           tier3_res="${{ needs.client-gametest.result }}"
-          echo "build=$build_res client-gametest=$tier3_res"
+          compile_res="${{ needs.compile-check.result }}"
+          echo "build=$build_res client-gametest=$tier3_res compile-check=$compile_res"
           # tier3 may be 'skipped' when no line carries Tier 3; that is a pass.
           [ "$build_res" = "success" ] || { echo "::error::build matrix failed"; exit 1; }
           case "$tier3_res" in
             success|skipped) ;;
             *) echo "::error::client-gametest matrix failed"; exit 1;;
+          esac
+          case "$compile_res" in
+            success|skipped) ;;
+            *) echo "::error::compile-check matrix failed"; exit 1;;
           esac
           echo "all required matrix jobs green."
