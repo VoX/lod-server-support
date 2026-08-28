@@ -73,8 +73,18 @@ class OverlayProvenanceContractTest {
                     checked++;
                     String sharedRel = m.group(1);
                     String recorded = m.group(2);
-                    if ("NEW".equals(recorded)) continue;  // overlay-only file, no shared original
                     Path shared = root.resolve(sharedRel);
+                    if ("NEW".equals(recorded)) {
+                        // NEW = overlay-only file (no shared original). Verify the named shared
+                        // path is genuinely ABSENT — a NEW stamp on a file that DOES shadow a
+                        // shared file would silently disable drift detection for it forever.
+                        if (Files.exists(shared)) {
+                            problems.add(root.relativize(f) + ": stamped NEW but the shared path EXISTS ("
+                                    + sharedRel + ") — NEW is only for overlay-only files; use the "
+                                    + "shared file's sha256 so drift is detected");
+                        }
+                        continue;
+                    }
                     if (!Files.exists(shared)) {
                         problems.add(root.relativize(f) + ": stamped shared path does not exist: " + sharedRel);
                         continue;

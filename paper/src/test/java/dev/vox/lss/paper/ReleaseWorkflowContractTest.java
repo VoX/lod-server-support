@@ -132,6 +132,25 @@ class ReleaseWorkflowContractTest {
     }
 
     @Test
+    void workflowsCarryNoHardcodedMcTokens() {
+        // The plan's "no hardcoded MC token in the workflow body" pin, in its strongest form:
+        // every MC-version value comes from lines/ via the matrix. A stray `26.2`/`1.21.11`
+        // literal would silently pin a line. Scan comment-stripped bodies of BOTH workflows.
+        var mc = Pattern.compile("\\b(26\\.\\d+|1\\.21\\.\\d+)\\b");
+        for (String wf : new String[] {"release.yml", "build.yml"}) {
+            String body = "release.yml".equals(wf) ? releaseYml : buildYml;
+            StringBuilder noComments = new StringBuilder();
+            for (String l : body.split("\n")) {
+                if (!l.strip().startsWith("#")) noComments.append(l).append('\n');
+            }
+            var matcher = mc.matcher(noComments.toString());
+            assertFalse(matcher.find(),
+                    wf + " carries a hardcoded MC-version token ('" + (matcher.reset().find() ? matcher.group() : "")
+                            + "') — every MC value must come from lines/ via the matrix");
+        }
+    }
+
+    @Test
     void buildYmlIsAMatrixGeneratedFromLines() {
         assertTrue(buildYml.contains("gen_matrix.py"),
                 "build.yml derives its matrix from lines/ via gen_matrix.py (no hardcoded MC list)");

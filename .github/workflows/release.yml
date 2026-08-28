@@ -27,6 +27,8 @@ jobs:
       is_dry: ${{ steps.mode.outputs.is_dry }}
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0   # notes fallback + PREV_TAG need the full tag/history graph
 
       - id: mode
         run: |
@@ -49,10 +51,16 @@ jobs:
           if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
             TAG="${GITHUB_REF_NAME}"
             MV="${TAG#v}"
-            case "$MV" in
-              [0-9]*.[0-9]*.[0-9]*) echo "mod_version=$MV" >> "$GITHUB_OUTPUT" ;;
-              *) echo "::error::tag '${TAG}' does not derive a numeric mod version ('$MV')"; exit 1 ;;
-            esac
+            # Single-branch: the ONLY valid release tag is a bare vX.Y.Z. An anchored regex
+            # (not a shell glob — `[0-9]*.[0-9]*.[0-9]*` also matches `0.14.0+mc26.1` and would
+            # publish ~15 junk-named artifacts from five-line muscle-memory tags).
+            if echo "$MV" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+              echo "mod_version=$MV" >> "$GITHUB_OUTPUT"
+            else
+              echo "::error::tag '${TAG}' is not a bare vX.Y.Z release tag (got mod version '$MV') — "
+              echo "::error::the single-branch pipeline publishes every line from one bare tag; no '+mc' suffix."
+              exit 1
+            fi
           else
             echo "mod_version=0.0.0-dry" >> "$GITHUB_OUTPUT"
           fi
@@ -93,6 +101,7 @@ jobs:
         include: ${{ fromJson(needs.setup.outputs.release_matrix) }}
     name: Build ${{ matrix.line }}
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     # 26.x (official) lines GATE; 1.21.x (intermediary) are continue-on-error so a
     # best-effort flake never blocks the 26.x release.
     continue-on-error: ${{ matrix.gates != 'true' }}
@@ -117,15 +126,28 @@ jobs:
       - name: Release-jar safety gate
         run: python3 scripts/release_check.py --line ${{ matrix.line }} --version "${MOD_VERSION}"
 
+      # Stage the LSS release jars FLAT (upload-artifact stores files relative to the least
+      # common ancestor of the paths — three module paths make that the repo root, so the
+      # downstream `dist/*.jar` glob would match nothing). Staging flat makes the artifact bare
+      # jars. VSS jars are built (release_check gates them) but stay OUT of the release — VSS
+      # publishes locally, never via CI.
+      - name: Stage release jars
+        run: |
+          set -euo pipefail
+          mkdir -p staging
+          sub='${{ matrix.build_subdir }}'
+          for m in fabric paper neoforge; do
+            d="$m/build/${sub}libs"
+            find "$d" -maxdepth 1 -name "lod-server-support-$m-*.jar" -exec cp -v {} staging/ \; 2>/dev/null || true
+          done
+          echo "staged:"; ls -1 staging/
+
       - name: Upload line artifacts
         uses: actions/upload-artifact@v5
         with:
           name: release-jars-${{ matrix.line }}
-          path: |
-            fabric/build/${{ matrix.build_subdir }}libs/lod-server-support-fabric-*.jar
-            paper/build/${{ matrix.build_subdir }}libs/lod-server-support-paper-*.jar
-            neoforge/build/${{ matrix.build_subdir }}libs/lod-server-support-neoforge-*.jar
-          if-no-files-found: ignore
+          path: staging/*.jar
+          if-no-files-found: error   # a gating line with no jar must fail, not silently vanish
           retention-days: 7
 
   # ---------------------------------------------------- Stage 2: github-release (DRAFT)
@@ -133,6 +155,8 @@ jobs:
     needs: [setup, build]
     if: needs.setup.outputs.is_dry == 'false' && github.ref_type == 'tag'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write   # the repo default token is READ — draft creation 403s without this
     steps:
       - name: Download all line artifacts
         uses: actions/download-artifact@v5
@@ -170,20 +194,46 @@ jobs:
           name: release-jars-${{ matrix.line }}
           path: dist
 
-      # Idempotency is OURS: Modrinth accepts duplicate version_numbers silently, so a
-      # rerun would create duplicates. Pre-check each version_number and skip if present.
+      # line.env carries loaders/game-versions as SPACE-separated single lines; mc-publish
+      # wants a newline (or comma) list — a raw space string is read as ONE loader named
+      # "paper purpur folia". Expand to newline lists, and derive the Paper display prose.
+      - id: lists
+        run: |
+          nl() { tr ' ' '\n' <<< "$1"; }
+          {
+            printf 'gv_fabric<<EOF\n%s\nEOF\n' "$(nl '${{ matrix.gv_fabric }}')"
+            printf 'gv_paper<<EOF\n%s\nEOF\n' "$(nl '${{ matrix.gv_paper }}')"
+            printf 'gv_neoforge<<EOF\n%s\nEOF\n' "$(nl '${{ matrix.gv_neoforge }}')"
+            printf 'paper_loaders<<EOF\n%s\nEOF\n' "$(nl '${{ matrix.paper_loaders }}')"
+          } >> "$GITHUB_OUTPUT"
+          disp=""
+          for l in ${{ matrix.paper_loaders }}; do
+            c="$(tr '[:lower:]' '[:upper:]' <<< "${l:0:1}")${l:1}"
+            disp="${disp:+$disp/}$c"
+          done
+          echo "paper_display=$disp" >> "$GITHUB_OUTPUT"
+
+      # Idempotency is OURS: Modrinth accepts duplicate version_numbers silently, so a rerun
+      # would create duplicates. Pre-check each version_number and FAIL CLOSED on an
+      # inconclusive probe (429/5xx/timeout) — only a genuine 404 proves absence; anything
+      # else must block the publish, never fall through to a duplicate.
       - id: precheck
         run: |
-          check() {
-            local vn="$1"
+          set -euo pipefail
+          probe() {  # $1=version_number -> present|absent, or exit 1 (inconclusive)
             local code
-            code=$(curl -s -o /dev/null -w '%{http_code}' \
-              "https://api.modrinth.com/v2/project/lKiXKLvv/version/$vn")
-            [ "$code" = "200" ] && echo "present" || echo "absent"
+            code=$(curl -s -m 30 -o /dev/null -w '%{http_code}' \
+              "https://api.modrinth.com/v2/project/lKiXKLvv/version/$1" || echo 000)
+            case "$code" in
+              200) echo present ;;
+              404) echo absent ;;
+              *) echo "::error::Modrinth precheck for $1 inconclusive (HTTP $code) — fail-closed, not publishing" >&2; return 1 ;;
+            esac
           }
-          echo "fabric=$(check "v${MOD_VERSION}+fabric+mc${{ matrix.mc_fabric }}")" >> "$GITHUB_OUTPUT"
-          echo "paper=$(check "v${MOD_VERSION}+paper+mc${{ matrix.mc_paper }}")" >> "$GITHUB_OUTPUT"
-          echo "neoforge=$(check "v${MOD_VERSION}+neoforge+mc${{ matrix.mc_neoforge }}")" >> "$GITHUB_OUTPUT"
+          f=$(probe "v${MOD_VERSION}+fabric+mc${{ matrix.mc_fabric }}")
+          p=$(probe "v${MOD_VERSION}+paper+mc${{ matrix.mc_paper }}")
+          n=$(probe "v${MOD_VERSION}+neoforge+mc${{ matrix.mc_neoforge }}")
+          { echo "fabric=$f"; echo "paper=$p"; echo "neoforge=$n"; } >> "$GITHUB_OUTPUT"
 
       - name: Publish Fabric
         if: steps.precheck.outputs.fabric == 'absent'
@@ -196,7 +246,7 @@ jobs:
           version: v${{ env.MOD_VERSION }}+fabric+mc${{ matrix.mc_fabric }}
           version-type: release
           loaders: fabric
-          game-versions: ${{ matrix.gv_fabric }}
+          game-versions: ${{ steps.lists.outputs.gv_fabric }}
           changelog: ${{ needs.setup.outputs.notes }}
 
       - name: Publish Paper
@@ -206,11 +256,11 @@ jobs:
           modrinth-id: lKiXKLvv
           modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
           files: dist/lod-server-support-paper-*.jar
-          name: v${{ env.MOD_VERSION }} - Paper (MC ${{ matrix.mc_paper }})
+          name: v${{ env.MOD_VERSION }} - ${{ steps.lists.outputs.paper_display }} (MC ${{ matrix.mc_paper }})
           version: v${{ env.MOD_VERSION }}+paper+mc${{ matrix.mc_paper }}
           version-type: release
-          loaders: ${{ matrix.paper_loaders }}
-          game-versions: ${{ matrix.gv_paper }}
+          loaders: ${{ steps.lists.outputs.paper_loaders }}
+          game-versions: ${{ steps.lists.outputs.gv_paper }}
           changelog: ${{ needs.setup.outputs.notes }}
 
       - name: Publish NeoForge
@@ -224,7 +274,7 @@ jobs:
           version: v${{ env.MOD_VERSION }}+neoforge+mc${{ matrix.mc_neoforge }}
           version-type: release
           loaders: neoforge
-          game-versions: ${{ matrix.gv_neoforge }}
+          game-versions: ${{ steps.lists.outputs.gv_neoforge }}
           changelog: ${{ needs.setup.outputs.notes }}
 
   # ------------------------------------------------------------------ Stage 4: finalize
@@ -232,8 +282,15 @@ jobs:
     needs: [setup, modrinth]
     if: needs.setup.outputs.is_dry == 'false' && github.ref_type == 'tag'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write   # gh release edit needs write
     steps:
       - uses: actions/checkout@v5
+      # NOTE (CLAUDE.md release discipline): do NOT `gh run rerun` a PARTIALLY-published
+      # release — a rerun rebuilds byte-different jars and can create duplicate Modrinth
+      # versions. The stage-3 precheck makes a rerun of a fully-published release idempotent,
+      # but a rerun mid-publish is still hand-recovery. `release-jars-*` artifacts retain 7
+      # days; a recovery later than that must re-tag.
       - name: Publish the GitHub release (draft -> live)
         env:
           GH_TOKEN: ${{ github.token }}

@@ -64,16 +64,17 @@ ext.assembleLineTree = { String treeName, List<Object> sharedRoots, List<Object>
     }
     def overlayDirs = overlayRoots.collect { project.file(it) }.findAll { it.exists() }
 
-    // excludes.txt: rel-paths to DROP from the shared tree (cuts). Space/line separated.
+    // excludes.txt: rel-paths to DROP from the shared tree (cuts). WHITESPACE/line separated
+    // (a whole line was one never-matching pattern before — the cut silently shipped).
     def excludesFile = new File(project.ext.lineDir, 'excludes.txt')
     def cutPaths = [] as Set
     if (excludesFile.exists()) {
         excludesFile.eachLine { ln ->
             def t = ln.replaceAll('#.*', '').trim()
-            if (t) cutPaths << t
+            if (t) t.split(/\s+/).each { cutPaths << it }
         }
     }
-    // rename-table.tsv: TAB-separated from<TAB>to token rewrites over shared file bodies
+    // rename-table.tsv: TAB-separated from<TAB>to token rewrites over shared JAVA file bodies
     // (empty/absent on official-mapping lines). Word-bounded, applied to code+comments+strings.
     def renameFile = new File(project.ext.lineDir, 'rename-table.tsv')
     def renames = []
@@ -89,19 +90,44 @@ ext.assembleLineTree = { String treeName, List<Object> sharedRoots, List<Object>
     overlayDirs.each { od ->
         project.fileTree(od).files.each { f -> overlaidRel << od.toPath().relativize(f.toPath()).toString() }
     }
+    // A cut that is also overlaid is a config error: cuts are DELETE, overlays REPLACE — the
+    // overlay would ship despite the cut. Fail loudly at configuration.
+    def cutAndOverlaid = cutPaths.intersect(overlaidRel)
+    if (!cutAndOverlaid.isEmpty()) {
+        throw new GradleException("lines/${project.ext.mcLine}: paths are BOTH cut (excludes.txt) and "
+                + "overlaid: ${cutAndOverlaid} — a cut deletes, an overlay replaces; pick one.")
+    }
 
     def dest = project.layout.buildDirectory.dir("generated/lineSrc/${treeName}").get().asFile
     def syncTask = project.tasks.register("assembleLineSrc_${treeName}", Sync) {
+        // The rename table + cut set are captured in the copy closure below but are NOT part
+        // of Gradle's source fingerprint — declare them as inputs so editing rename-table.tsv
+        // / excludes.txt re-runs the Sync instead of leaving a stale tree UP-TO-DATE.
+        inputs.property('lineRenames', renames.collect { it.join('\t') }.join('\n'))
+        inputs.property('lineCuts', cutPaths.sort().join('\n'))
         into dest
         // Shared files, minus overlaid + cut rel-paths, with the rename table applied.
         sharedDirs.each { sd ->
             from(sd) {
                 (overlaidRel + cutPaths).each { rel -> exclude rel }
+                // Rename table applies to JAVA SOURCE ONLY — a content filter decodes the
+                // stream as text, which corrupts binary resources (.bin goldens, .png icons)
+                // and normalises line endings. filesMatching scopes it to *.java.
                 if (!renames.isEmpty()) {
-                    filter { String lineText ->
-                        def out = lineText
-                        renames.each { r -> out = out.replaceAll('\\b' + java.util.regex.Pattern.quote(r[0]) + '\\b', java.util.regex.Matcher.quoteReplacement(r[1])) }
-                        out
+                    filesMatching('**/*.java') {
+                        filter { String lineText ->
+                            def out = lineText
+                            renames.each { r ->
+                                // Word-boundary the rewrite, but only where the token END is a
+                                // word char — a trailing \b after e.g. `.identifier()` would
+                                // match only before another word char and skip nearly every call.
+                                def head = r[0][0] ==~ /\w/ ? '\\b' : ''
+                                def tail = r[0][-1] ==~ /\w/ ? '\\b' : ''
+                                out = out.replaceAll(head + java.util.regex.Pattern.quote(r[0]) + tail,
+                                        java.util.regex.Matcher.quoteReplacement(r[1]))
+                            }
+                            out
+                        }
                     }
                 }
             }

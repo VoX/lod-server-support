@@ -139,6 +139,57 @@ class LineMatrixContractTest {
         }
     }
 
+    /**
+     * The recorded fleet VALUE table (plan §4(b)). Every conscious-flip literal is pinned per
+     * line here — a flip anywhere (e.g. {@code fold_status: full→build-only} on 26.2, which
+     * would silently drop it from the CI gate matrix AND the release) reds HERE, strictly
+     * STRONGER than the per-branch model. A NEW line dir with no row also reds (forcing a
+     * conscious registration). Columns: fold_status | line_java_version | mapping_namespace |
+     * tier3_client_gametests | has_modern_sodium | LINE_SHIP_NEOFORGE | LINE_MAKE_LATEST.
+     */
+    private static final java.util.Map<String, String[]> FLEET = java.util.Map.of(
+            "26.2",    new String[] {"full",       "25", "official",     "true",  "true",  "true",  "true"},
+            "26.1",    new String[] {"full",       "25", "official",     "true",  "true",  "true",  "false"},
+            "1.21.11", new String[] {"build-only", "21", "intermediary", "true",  "true",  "false", "false"});
+
+    @Test
+    void everyLineValueMatchesTheRecordedFleetTable() throws Exception {
+        for (String line : lineNames()) {
+            String[] want = FLEET.get(line);
+            assertTrue(want != null, "lines/" + line + " has no row in LineMatrixContractTest.FLEET — "
+                    + "a new line must be REGISTERED here (its conscious-flip values recorded) before it builds");
+            var p = props(line);
+            var e = env(line);
+            assertEquals(want[0], p.getProperty("fold_status"), line + " fold_status");
+            assertEquals(want[1], p.getProperty("line_java_version"), line + " line_java_version");
+            assertEquals(want[2], p.getProperty("mapping_namespace"), line + " mapping_namespace");
+            assertEquals(want[3], p.getProperty("tier3_client_gametests"), line + " tier3_client_gametests");
+            assertEquals(want[4], p.getProperty("has_modern_sodium"), line + " has_modern_sodium");
+            assertEquals(want[5], e.getProperty("LINE_SHIP_NEOFORGE"), line + " LINE_SHIP_NEOFORGE");
+            assertEquals(want[6], e.getProperty("LINE_MAKE_LATEST"), line + " LINE_MAKE_LATEST");
+        }
+        // The table must not name a line that no longer exists (a fold/decommission left it stale).
+        for (String tabled : FLEET.keySet()) {
+            assertTrue(lineNames().contains(tabled),
+                    "LineMatrixContractTest.FLEET names line '" + tabled + "' with no lines/ dir — remove the stale row");
+        }
+    }
+
+    @Test
+    void neoforgeModrinthVersionNameStaysUnderTheLabrinthCap() throws Exception {
+        // release.yml composes the NeoForge Modrinth version name as `v<MOD_VERSION> - <name>`
+        // from LINE_NEOFORGE_NAME; labrinth 400s MID-PUBLISH on a >64-char name. Check the
+        // RESOLVED length over a generous version placeholder for every ship_neoforge line.
+        for (String line : lineNames()) {
+            var e = env(line);
+            if (!"true".equals(e.getProperty("LINE_SHIP_NEOFORGE"))) continue;
+            String name = "v99.99.99 - " + e.getProperty("LINE_NEOFORGE_NAME", "");
+            assertTrue(name.length() <= 64,
+                    "lines/" + line + " NeoForge Modrinth version name resolves to " + name.length()
+                            + " chars (>64 labrinth cap → 400 mid-publish): '" + name + "'");
+        }
+    }
+
     @Test
     void defaultLineMirrorsGradleProperties() throws Exception {
         var gp = new Properties();

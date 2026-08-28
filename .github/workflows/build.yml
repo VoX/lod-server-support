@@ -1,12 +1,13 @@
 name: Build
 
 on:
+  # NB: no workflow-level paths-ignore — the docs-only decision lives in the `changes` JOB
+  # below so that `required-checks` (the single required status check) always RUNS and REPORTS,
+  # instead of deadlocking a docs-only PR in a permanent Pending state.
   push:
     branches: [main, 'support/**']
-    paths-ignore: ['**.md', 'docs/**', 'LICENSE', '.gitignore']
   pull_request:
     branches: [main, 'support/**']
-    paths-ignore: ['**.md', 'docs/**', 'LICENSE', '.gitignore']
 
 # One in-flight run per ref (the matrix multiplies runner-minutes; cancel superseded pushes).
 concurrency:
@@ -14,9 +15,34 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Docs-only detection as a JOB (not a workflow paths-ignore) so required-checks still reports.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.f.outputs.code }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - id: f
+        run: |
+          base="${{ github.event.pull_request.base.sha || github.event.before }}"
+          head="${{ github.sha }}"
+          if [ -z "$base" ] || ! git rev-parse -q --verify "${base}^{commit}" >/dev/null 2>&1; then
+            echo "code=true" >> "$GITHUB_OUTPUT"; exit 0   # can't diff (first push etc.) → run everything
+          fi
+          # code=true iff any changed path is NOT docs/markdown/license/gitignore.
+          if git diff --name-only "$base" "$head" | grep -qvE '^([^ ]*\.md|docs/|LICENSE$|\.gitignore$)'; then
+            echo "code=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "code=false" >> "$GITHUB_OUTPUT"
+          fi
+
   # The matrix is GENERATED from lines/ (never a literal list — keeps the no-hardcoded-MC
   # pin in its strongest form). Cross-pinned to lines/* by LineMatrixContractTest.
   setup:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     outputs:
       build_matrix: ${{ steps.gen.outputs.build_matrix }}
@@ -90,6 +116,7 @@ jobs:
           python3 scripts/release_check.py --selftest
           python3 scripts/check_move_trace.py --selftest
           python3 scripts/compare_profile.py --selftest
+          python3 .github/workflows/gen_matrix.py --selftest
 
       - name: Release-jar safety gate
         run: python3 scripts/release_check.py --line ${{ matrix.line }}
@@ -213,22 +240,27 @@ jobs:
       - name: Compile all loaders
         run: ./gradlew -PmcLine=${{ matrix.line }} :fabric:compileJava :paper:compileJava :neoforge:compileJava
 
-  # THE single required status check
-  # required check: green iff every matrix job (build + tier3 + compile) passed,
-  # OR the change was docs-only (needs.changes short-circuits setup). Never deadlocks a
-  # docs PR (this job always runs and reports).
+  # THE single required status check (make this the required context in branch protection).
+  # Green iff every matrix job passed, OR the change was docs-only (the `changes` job set
+  # code=false, so setup and everything downstream were skipped). Because this job runs on
+  # `if: always()` and always reports a conclusion, a docs-only PR is never deadlocked.
   required-checks:
-    needs: [build, client-gametest, compile-check]
+    needs: [changes, build, client-gametest, compile-check]
     if: always()
     runs-on: ubuntu-latest
     steps:
       - name: Verify all matrix jobs succeeded
         run: |
+          if [ "${{ needs.changes.outputs.code }}" != "true" ]; then
+            echo "docs-only change — matrix skipped; required check passes."
+            exit 0
+          fi
           build_res="${{ needs.build.result }}"
           tier3_res="${{ needs.client-gametest.result }}"
           compile_res="${{ needs.compile-check.result }}"
           echo "build=$build_res client-gametest=$tier3_res compile-check=$compile_res"
-          # tier3 may be 'skipped' when no line carries Tier 3; that is a pass.
+          # build must be exactly success (a setup failure skips it → red). tier3/compile may
+          # be 'skipped' when no line carries that lane; that is a legitimate pass.
           [ "$build_res" = "success" ] || { echo "::error::build matrix failed"; exit 1; }
           case "$tier3_res" in
             success|skipped) ;;

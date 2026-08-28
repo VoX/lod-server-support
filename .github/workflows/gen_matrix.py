@@ -60,7 +60,6 @@ def main():
                 # 26.x release (single-branch-consolidation-plan.md §5).
                 "gates": "true" if props.get("mapping_namespace") == "official" else "false",
                 "ship_neoforge": env.get("LINE_SHIP_NEOFORGE", "false"),
-                "make_latest": env.get("LINE_MAKE_LATEST", "false"),
                 "mc_fabric": env.get("LINE_MC_FABRIC", ""),
                 "mc_paper": env.get("LINE_MC_PAPER", ""),
                 "mc_neoforge": env.get("LINE_MC_NEOFORGE", ""),
@@ -75,11 +74,42 @@ def main():
             # test tiers / goldens are not yet folded — CI compiles it so the axis stays
             # exercised, without gating on tests it cannot yet pass.
             compile_only.append(entry)
+    return build, tier3, compile_only, release
+
+
+def emit():
+    build, tier3, compile_only, release = main()
     print("build_matrix=" + json.dumps(build))
     print("tier3_matrix=" + json.dumps(tier3))
     print("compile_matrix=" + json.dumps(compile_only))
     print("release_matrix=" + json.dumps(release))
 
 
+def selftest():
+    """Pin the invariants the release/CI depend on (this is the single point that decides
+    per-line gating and publishing)."""
+    build, tier3, compile_only, release = main()
+    names = lambda xs: {e["line"] for e in xs}
+    # A build-only line must NEVER enter the full-gate build or the release matrix.
+    assert names(compile_only).isdisjoint(names(build)), "build-only line leaked into build_matrix"
+    assert names(compile_only).isdisjoint(names(release)), "build-only line leaked into release_matrix"
+    # Every release entry's `gates` derives from the namespace (official → gates).
+    for e in release:
+        props = load_props(os.path.join(LINES, e["line"], "line.properties"))
+        want = "true" if props.get("mapping_namespace") == "official" else "false"
+        assert e["gates"] == want, f"{e['line']} gates={e['gates']} but namespace implies {want}"
+        # tier3 entries are a subset of build entries.
+    assert names(tier3).issubset(names(build)), "tier3 line not in build_matrix"
+    # The default line, if release-ready, has an empty build_subdir; others carry '<line>/'.
+    for e in build + release + compile_only:
+        want_sub = "" if e["line"] == DEFAULT_LINE else f"{e['line']}/"
+        assert e["build_subdir"] == want_sub, f"{e['line']} build_subdir wrong"
+    print(f"gen_matrix selftest OK: build={sorted(names(build))} "
+          f"compile-only={sorted(names(compile_only))} release={sorted(names(release))}")
+
+
 if __name__ == "__main__":
-    main()
+    if "--selftest" in sys.argv:
+        selftest()
+    else:
+        emit()

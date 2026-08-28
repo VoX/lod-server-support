@@ -106,6 +106,15 @@ class FabricModJsonContractTest {
                 "minecraft_dependency (" + depends + ") must reference the " + EXPECTED_MINECRAFT_VERSION_PREFIX
                         + " line — a range copied from another line ships a jar that loads on "
                         + "wire-incompatible MC");
+        // Structural guard retained across the branch->line move: any UPPER bound must be
+        // prerelease-EXCLUSIVE (end with '-'). A bare '<26.3' admits 26.3 prereleases, where
+        // the mixins over MC internals hard-crash at apply. Exact-pin lines (no '<') skip this.
+        if (depends.contains("<")) {
+            assertTrue(depends.trim().endsWith("-"),
+                    "minecraft_dependency (" + depends + ") has a '<' upper bound but is not "
+                            + "prerelease-exclusive (must end with '-') — a bare bound ships a jar "
+                            + "that loads on a wire-incompatible next-MC prerelease and hard-crashes");
+        }
         // The G back-flow's sibling key: the fabric-api floor is per-line data too
         // (the 26.1 port found the literal floor naming a 26.2-family version no
         // 26.1 install can satisfy — silently unresolvable at mod load).
