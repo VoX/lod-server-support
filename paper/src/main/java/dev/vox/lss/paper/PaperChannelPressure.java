@@ -46,7 +46,7 @@ public final class PaperChannelPressure {
                 connection = null;
                 channel = null;
                 LSSLogger.warn("Outbound-buffer gauge unavailable (" + t + ") —"
-                        + " /lsslod diag will show obuf=n/a and transport deference stays inert");
+                        + " /" + dev.vox.lss.common.Brand.serverCommand() + " diag will show obuf=n/a and transport deference stays inert");
             }
             CONNECTION = connection;
             CHANNEL = channel;

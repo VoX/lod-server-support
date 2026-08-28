@@ -135,7 +135,7 @@ public final class LegacySodiumPage {
         } catch (Throwable t) {
             if (!buildFailureLogged) {
                 buildFailureLogged = true;
-                LSSLogger.warn("LSS options page: could not build the Sodium settings pages — "
+                LSSLogger.warn(Brand.shortName() + " options page: could not build the Sodium settings pages — "
                         + "config files still work (" + t + ")");
             }
             return List.of();
@@ -164,7 +164,7 @@ public final class LegacySodiumPage {
             // modularized Sodium): latch, warn once, and let build() stay quiet about it.
             resolveFailed = true;
             buildFailureLogged = true;
-            LSSLogger.warn("LSS options page: this Sodium (" + prefix + ") has a different internal"
+            LSSLogger.warn(Brand.shortName() + " options page: this Sodium (" + prefix + ") has a different internal"
                     + " options API shape — settings page skipped, config files still work (" + e + ")");
             throw e;
         }
@@ -362,7 +362,7 @@ public final class LegacySodiumPage {
             return;
         }
         proxyFailureLogged = true;
-        LSSLogger.warn("LSS options page: " + what + (t == null ? "" : " (" + t + ")"));
+        LSSLogger.warn(Brand.shortName() + " options page: " + what + (t == null ? "" : " (" + t + ")"));
     }
 
     private static Component component(Label label) {

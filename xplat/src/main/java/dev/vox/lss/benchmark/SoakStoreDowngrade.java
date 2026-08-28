@@ -36,7 +36,7 @@ final class SoakStoreDowngrade {
 
     static void run(MinecraftServer server) {
         Path db = server.getWorldPath(LevelResource.ROOT).normalize()
-                .resolve("lss-lod").resolve("store.db");
+                .resolve(dev.vox.lss.common.Brand.lowerShortName() + "-lod").resolve("store.db");
         if (!Files.isRegularFile(db)) {
             throw new IllegalStateException("[Soak] downgradeStoreToV19: no store at " + db
                     + " — stage a warmed store (SOAK_WORLD_FROM) before arming the flag");

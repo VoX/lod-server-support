@@ -99,7 +99,7 @@ public final class FabricChannelPressure {
             if (!warned) {
                 warned = true;
                 LSSLogger.warn("Outbound-buffer gauge unavailable (" + t + ") —"
-                        + " /lsslod diag will show obuf=n/a and transport deference stays inert");
+                        + " /" + dev.vox.lss.common.Brand.serverCommand() + " diag will show obuf=n/a and transport deference stays inert");
             }
             return null;
         }
