@@ -132,8 +132,11 @@ public class PaperRequestProcessingService {
     // off-pump on owning region threads, so the per-player cap suffices there — with one honest
     // caveat: "distributed" assumes players in DIFFERENT regions. N players clustered in one
     // region all probe on that region's single thread (up to 512*N there, uncapped globally);
-    // acceptable while Folia support is experimental, revisit if clustered-players soak shows
-    // region-tick pressure. Once spent, later players fall through to the disk-read path and
+    // NOTE the R1 published-want-set arm (2026-08-27) widened this window: the regionized
+    // probe now fires on EVERY tick a player's backlog is non-empty (the whole backfill/
+    // retention phase), not just arrival ticks — the accepted ceiling is the same but its
+    // duty cycle is ~5-20x higher. Acceptable while Folia support is experimental, revisit
+    // if clustered-players soak shows region-tick pressure. Once spent, later players fall through to the disk-read path and
     // the 1 Hz re-declaration heals it.
     // Gen-disabled corner (accepted): with enableChunkGeneration=false, a LOADED but
     // never-saved chunk whose probe this cap deferred falls through to a disk read, resolves
@@ -1341,9 +1344,10 @@ public class PaperRequestProcessingService {
         }
         var generationReady = tickGenerationService();
         // v16 declares BEFORE the lifecycle pass: the sync probe reads the mailbox during
-        // processPlayerLifecycle, and on Folia holdAndScheduleRegionProbe reads ONLY the
-        // mailbox — a declare offered after that pass would lose the race to the processing
-        // thread's take and route with zero probe coverage (release-review finding 1).
+        // processPlayerLifecycle, and on Folia holdAndScheduleRegionProbe reads the mailbox
+        // first (falling back to the published want-set when it is empty — the R1 arm) — a
+        // declare offered after that pass would lose the race to the processing thread's
+        // take and route with reduced probe coverage (release-review finding 1).
         tickV16Compat();
         var lifecycle = processPlayerLifecycle(generationReady);
 
@@ -1950,13 +1954,13 @@ public class PaperRequestProcessingService {
         return this.v16Compat;
     }
 
+    private boolean farPlayerSnapshotWarned;
+
     /** Far players (E1): one broadcast pass every farPlayersUpdateIntervalTicks while
      *  armed and subscribed — mode "off" short-circuits
      *  before any snapshot work. Pump thread (Folia: cross-region position/equipment
      *  reads are stale-tolerant by design — accepted for display-only data, the
      *  experimental label covers it). */
-    private boolean farPlayerSnapshotWarned;
-
     private void tickFarPlayers() {
         if ("off".equals(this.config.farPlayers)
                 || this.farPlayerService.subscriberCount() == 0) {

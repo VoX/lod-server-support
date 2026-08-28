@@ -12,8 +12,8 @@ Clients use the Fabric mod on every version; on 1.21.1 a NeoForge client works a
 
 | Minecraft | Fabric | Paper / Purpur | Folia | NeoForge |
 |---|---|---|---|---|
-| 26.2 | ✅ | ✅ | ✅ (experimental) | - |
-| 26.1 | ✅ | ✅ | ✅ (experimental) | - |
+| 26.2 | ✅ | ✅ | ✅ (experimental) | ✅ |
+| 26.1 | ✅ | ✅ | ✅ (experimental) | ✅ |
 | 1.21.11 | ✅ | ✅ | ✅ (experimental) | - |
 | 1.21.1 | ✅ | ✅ | - | ✅ |
 
@@ -31,7 +31,7 @@ LOD Server Support is backwards and forwards compatible from v0.4.0 through the 
 
 ## Installation
 
-Install **LOD Server Support** on **both** the **server** (LOD Server Support Fabric mod, Paper plugin, or NeoForge mod on 1.21.1) and **every client** (LOD Server Support Fabric mod + Voxy). Without LOD Server Support on both the connecting client and on the server it will not function.
+Install **LOD Server Support** on **both** the **server** (LOD Server Support Fabric mod, Paper plugin, or NeoForge mod) and **every client** (LOD Server Support Fabric mod + Voxy). Without LOD Server Support on both the connecting client and on the server it will not function.
 
 ## Commands
 
