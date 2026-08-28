@@ -153,6 +153,7 @@ jobs:
   modrinth:
     needs: [setup, github-release]
     if: needs.setup.outputs.is_dry == 'false' && github.ref_type == 'tag'
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
