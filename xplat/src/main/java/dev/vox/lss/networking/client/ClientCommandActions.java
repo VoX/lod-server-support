@@ -102,7 +102,7 @@ public final class ClientCommandActions {
      * </pre>
      *
      * <p>Generic over the loader's command-source type; the caller supplies its own
-     * literal factory (Fabric's {@code ClientCommands::literal}, NeoForge's
+     * literal factory (Fabric's {@code ClientCommandManager::literal} on this line, NeoForge's
      * {@code Commands::literal}) and its own source-to-feedback adapter, and gets back a
      * builder to hang on its own root node.
      */
