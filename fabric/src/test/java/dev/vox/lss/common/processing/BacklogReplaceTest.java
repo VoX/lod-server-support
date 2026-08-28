@@ -10,7 +10,7 @@ import static org.junit.jupiter.api.Assertions.*;
 /** Mailbox latest-wins + backlog replace + superseded accounting (protocol v17 core). */
 class BacklogReplaceTest {
 
-    private static final class TestState extends AbstractPlayerRequestState<Object> {
+    private static class TestState extends AbstractPlayerRequestState<Object> {
         TestState() { super(UUID.randomUUID(), 4, 2); }
         @Override public String getPlayerName() { return "test"; }
     }
@@ -171,5 +171,135 @@ class BacklogReplaceTest {
         assertNotNull(s.peekWantSet());
         s.replaceBacklogWith(batch());
         assertNull(s.peekWantSet(), "the backpressure clear leaves nothing to probe");
+    }
+
+    /**
+     * Folia review 2026-08-27 R8: the retract guard's ONLY reachable coverage. The
+     * three-thread race (pump hold/republish x network offer x processing take) is the
+     * guard's whole reason to exist, and no single-threaded call sequence can interleave
+     * inside republishHeldBatch — deleting the retract block used to leave this suite
+     * green.
+     *
+     * <p>The deterministic invariant (derived from the two-guard ladder): with both
+     * guards, a STALE batch can never REST in the mailbox at quiescence — a pass-through
+     * completing before the first guard is refused there; one completing inside the
+     * check-then-CAS window is retracted; a failed retract means the batch already LEFT
+     * the mailbox (taken — the documented H1 residual — or overwritten). Without the
+     * retract, a pass-through inside the window leaves the stale batch RESTING, and the
+     * quiescent drain sees an id OLDER than one already consumed. The window is
+     * nanoseconds wide, so the harness maximizes shots: barrier-locked rounds where the
+     * offer/take pair hammers a pass-through while the pump republishes, with a
+     * quiescent rest-check every round. The accounting invariant (received == consumed +
+     * superseded, law A1's local form) is checked at the end and must balance exactly.
+     */
+    @Test
+    void theRetractGuardCleansAPassThroughInsideTheCasWindow() {
+        // The deterministic half of R8: the retract guard's window opens between the
+        // generation check and the mailbox CAS — unreachable by any external call
+        // sequence, injected here through the beforeRepublishCas seam. Without the
+        // retract block, the republish reports success and the STALE batch rests in
+        // the mailbox over the newer declaration's already-applied pass-through.
+        class WindowState extends TestState {
+            boolean armed;
+            @Override void beforeRepublishCas() {
+                if (!armed) return;
+                armed = false;
+                offerIncomingBatch(batch(99));                    // the newer declaration…
+                assertEquals(99, takeIncomingBatch().requests()[0].cx()); // …passes THROUGH
+            }
+        }
+        var s = new WindowState();
+        s.offerIncomingBatch(batch(1));
+        long gen = s.offerGeneration();
+        var held = s.takeIncomingBatch(); // the pump's hold
+        s.armed = true;
+
+        assertFalse(s.republishHeldBatch(held, gen),
+                "the retract must catch a pass-through inside the check-then-CAS window");
+        assertNull(s.takeIncomingBatch(),
+                "the stale batch must not REST in the mailbox after the retract");
+        assertEquals(2, s.getTotalRequestsReceived(), "two offers received");
+        assertEquals(1, s.drainPendingSuperseded(),
+                "the retracted stale batch is counted superseded exactly once");
+    }
+
+    @Test
+    void concurrentHoldReleaseNeverRestsAStaleBatchAndBalancesAccounting() throws Exception {
+        final int ROUNDS = 25_000;
+        final var s = new TestState();
+        final var barrier = new java.util.concurrent.CyclicBarrier(4);
+        final var consumedEntries = new java.util.concurrent.atomic.AtomicLong();
+        final var maxConsumedId = new java.util.concurrent.atomic.AtomicInteger(-1);
+        final var stop = new java.util.concurrent.atomic.AtomicBoolean(false);
+        Runnable sync = () -> {
+            try {
+                barrier.await(30, java.util.concurrent.TimeUnit.SECONDS);
+            } catch (Exception e) {
+                throw new AssertionError(e);
+            }
+        };
+
+        Thread offer = new Thread(() -> {
+            int id = 0;
+            while (!stop.get()) {
+                sync.run(); // round start
+                s.offerIncomingBatch(batch(id++));
+                s.offerIncomingBatch(batch(id++));
+                sync.run(); // round end
+            }
+        }, "r8-offer");
+        Thread take = new Thread(() -> {
+            while (!stop.get()) {
+                sync.run();
+                for (int k = 0; k < 6; k++) {
+                    var b = s.takeIncomingBatch();
+                    if (b != null) {
+                        consumedEntries.addAndGet(b.size());
+                        maxConsumedId.accumulateAndGet(b.requests()[0].cx(), Math::max);
+                    }
+                }
+                sync.run();
+            }
+        }, "r8-take");
+        Thread pump = new Thread(() -> {
+            while (!stop.get()) {
+                sync.run();
+                for (int k = 0; k < 3; k++) {
+                    long gen = s.offerGeneration();
+                    var held = s.takeIncomingBatch();
+                    if (held != null) s.republishHeldBatch(held, gen);
+                }
+                sync.run();
+            }
+        }, "r8-pump");
+        offer.start(); take.start(); pump.start();
+
+        try {
+            for (int round = 0; round < ROUNDS; round++) {
+                sync.run(); // release the workers
+                sync.run(); // wait for the round's work to finish
+                // Quiescence: the three workers are parked at the barrier. Whatever RESTS
+                // in the mailbox must not be older than the newest consumed id.
+                var resting = s.takeIncomingBatch();
+                if (resting != null) {
+                    int restingId = resting.requests()[0].cx();
+                    if (restingId < maxConsumedId.get()) {
+                        fail("round " + round + ": a STALE batch (id " + restingId
+                                + " < newest consumed " + maxConsumedId.get()
+                                + ") RESTED in the mailbox at quiescence — the retract "
+                                + "guard failed (AbstractPlayerRequestState.republishHeldBatch)");
+                    }
+                    consumedEntries.addAndGet(resting.size());
+                    maxConsumedId.accumulateAndGet(restingId, Math::max);
+                }
+            }
+        } finally {
+            stop.set(true);
+            barrier.reset(); // unpark anyone waiting; workers exit on stop/BrokenBarrier
+            offer.join(5000); take.join(5000); pump.join(5000);
+        }
+        assertEquals(s.getTotalRequestsReceived(),
+                consumedEntries.get() + s.drainPendingSuperseded(),
+                "received == consumed + superseded must balance exactly (law A1's local form)");
     }
 }

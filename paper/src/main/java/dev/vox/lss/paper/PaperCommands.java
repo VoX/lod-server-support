@@ -19,8 +19,10 @@ import java.util.function.Supplier;
  * (console), so these handlers read pump-owned state cross-thread. Every read on this path
  * is a concurrent structure (the players CHM) or a stale-tolerable primitive (volatile
  * counters, plain int/long gauges like the generation active-count and the
- * TickDiagnostics/SharedBandwidthLimiter fields) — audited 2026-07-02; nothing iterates a
- * non-concurrent collection off the pump.
+ * TickDiagnostics/SharedBandwidthLimiter fields, and the plain DOUBLE config fields
+ * mbPerSecondLimit* — JLS §17.7 permits a torn 64-bit read there, garbling at worst one
+ * diag number concurrent with a /lsslod set; accepted, Folia review 2026-08-27) —
+ * audited 2026-07-02; nothing iterates a non-concurrent collection off the pump.
  */
 public class PaperCommands implements CommandExecutor, TabCompleter {
     private final Supplier<PaperRequestProcessingService> serviceSupplier;

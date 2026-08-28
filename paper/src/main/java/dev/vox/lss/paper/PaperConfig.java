@@ -64,6 +64,7 @@ public class PaperConfig extends ServerConfigBase {
     // the Folia store warn must fire on TRANSITION, not per call. Transient — never
     // serialized, per-process state only.
     private transient String lastAdvisedFoliaStoreMode;
+    private transient boolean lastAdvisedBackfillInert;
 
     @Override
     public void validate() {
@@ -83,6 +84,20 @@ public class PaperConfig extends ServerConfigBase {
                     + " lodStore=off to disable it if you see store-related issues.");
         }
         this.lastAdvisedFoliaStoreMode = lodStore;
+        // R15 (Folia review 2026-08-27): the backfill keys are written into this
+        // platform's config file but are Fabric-only — an admin tuning them here gets
+        // no effect and, without this line, no explanation. INFO once per transition
+        // (same log-on-change discipline as the store warn above); fires only when the
+        // store is armed (backfill is doubly inert store-off).
+        boolean backfillAsk = lodStoreBackfill
+                && dev.vox.lss.common.store.LodStoreMode.normalize(lodStore)
+                        != dev.vox.lss.common.store.LodStoreMode.OFF;
+        if (backfillAsk && !this.lastAdvisedBackfillInert) {
+            LSSLogger.info("lodStoreBackfill is Fabric-only — on Paper/Folia the LOD"
+                    + " store warms from serves (the backfill keys in this file are"
+                    + " accepted but inert).");
+        }
+        this.lastAdvisedBackfillInert = backfillAsk;
     }
 
     public static PaperConfig load(Path dataFolder) {

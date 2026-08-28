@@ -53,19 +53,17 @@ ALL_SCENARIOS=(fresh-backfill warm-rejoin dimension-trip dirty-broadcast
 # like its namesake — its console setblock fires no Bukkit event, so the Paper tscache
 # would answer the probe stale (the documented unfired-event staleness bound).
 PAPER_SCENARIOS=(fresh-backfill warm-rejoin dimension-trip warm-rejoin-summary
-                 paper-dirty-falling-block)
+                 paper-dirty-falling-block store-second-join)
 # Folia runs the identical Paper scenario set: same plugin jar, same timelines, same checker.
 # save-all steps are mapped to acknowledged no-ops by the driver (Folia unregisters the
 # command); an aggressive bukkit.yml autosave keeps chunks flushing mid-run instead.
 FOLIA_SCENARIOS=("${PAPER_SCENARIOS[@]}")
-# Store scenarios that are portable to the Bukkit platforms but stay OUT of every 'all'
-# list. store-second-join is the only scenario that actually creates store DEMAND — it
-# clearcaches mid-session so the re-serve wave must come from the store — and its steps are
-# plain vanilla commands with a Paper twin for the probe recorder (PaperSoakProbeBridge), so
-# nothing in it was ever Fabric-specific; it simply was never added to the Bukkit lists.
-# That mattered once the Folia store question came up: warm-rejoin, the closest scenario in
-# the Folia set, keeps the client cache and so answers up_to_date instead of serving, which
-# means the Folia set could not exercise a store SERVE at all.
+# store-second-join joined the Bukkit 'all' lists 2026-08-28 (Folia review R14/R16 —
+# first Folia run PASSED 0/0): it is the only scenario that actually creates store
+# DEMAND (clearcache mid-session, so the re-serve wave must come from the store), and
+# without it the Bukkit sets could not exercise a store SERVE at all (warm-rejoin
+# keeps the client cache and answers up_to_date instead of serving). The standalone
+# allowance below is retained for direct invocation on lines whose lists lag.
 STORE_STANDALONE_SCENARIOS=(store-second-join)
 # Phases of scripts/store_offline_edit.sh (populate -> offline mutate -> verify, chained
 # via SOAK_WORLD_FROM). The store-offline trio is valid standalone on fabric AND
@@ -80,10 +78,11 @@ PHASE_SCENARIOS=(store-offline-populate store-offline-mutate store-offline-verif
 # is standalone-runnable — its own named check pins the UNHEALED before-state — but
 # stays out of 'all' with its chain.
 FABRIC_PHASE_SCENARIOS=(evicted-tscache-rejoin stamp-heal-rejoin stamp-heal-prime)
-# Paper-only, AFTER the Folia copy above so Folia does not inherit it (the store is
-# unvalidated on Folia): console setblock fires no Bukkit event, so only the store's
-# periodic resweep (lodStoreResweepSeconds) can catch the edit — the unfired-event
-# staleness-bound gate (lod-store-implementation-plan.md Phase 2).
+# Paper-only, AFTER the Folia copy above so Folia does not inherit it (the RESWEEP
+# gate has not been validated on Folia — store SERVE coverage there is
+# store-second-join since 2026-08-28): console setblock fires no Bukkit event, so only
+# the store's periodic resweep (lodStoreResweepSeconds) can catch the edit — the
+# unfired-event staleness-bound gate (lod-store-implementation-plan.md Phase 2).
 PAPER_SCENARIOS+=(paper-store-unfired-event)
 # Scenarios that run on a fresh (deleted) world; everything else copies the base world.
 FRESH_WORLD_SCENARIOS="fresh-backfill rate-limit-storm generation-disabled generation-capacity-stress hybrid-boundary"

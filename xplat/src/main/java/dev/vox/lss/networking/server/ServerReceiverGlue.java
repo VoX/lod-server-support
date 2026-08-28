@@ -394,6 +394,10 @@ public final class ServerReceiverGlue {
             // so this is also the cross-dialect shed for the tracker).
             service.getDialectTracker().onHandshake(player.getUUID(), decision.dialect());
             service.registerPlayer(player, payload.capabilities());
+            // Service gate: a successful HANDSHAKE registration ends the denied episode
+            // (memo gone, log latch re-armed). Deliberately here and not inside
+            // registerPlayer — that is also the dimension-change reuse path (R3).
+            service.getServiceGateState().onRegistered(player.getUUID());
             // Far players (E1): subscription identity lands at handshake, next to the
             // dialect mark — a CURRENT-dialect session only (legacy layouts predate the
             // bit, so a legacy handshake setting it is noise, not a subscription).
