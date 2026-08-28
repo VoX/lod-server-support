@@ -6,6 +6,7 @@
 
 ### Bug Fixes
 
+- **NeoForge: LOD serving when opening a world to LAN** — Opening a singleplayer world to LAN on the NeoForge build now activates LOD serving for players who join; previously LODs were served only on dedicated servers.
 - **Far-player privacy hardening (Paper)** — Privacy and vanish checks now fail toward hidden, and one broken permissions plugin no longer disrupts far-player updates for everyone.
 
 ### Compatibility
