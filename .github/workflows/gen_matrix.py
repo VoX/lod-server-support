@@ -29,7 +29,7 @@ def load_props(path):
 
 
 def main():
-    build, tier3, compile_only = [], [], []
+    build, tier3, compile_only, release = [], [], [], []
     for line in sorted(os.listdir(LINES)):
         ldir = os.path.join(LINES, line)
         if not os.path.isdir(ldir):
@@ -48,6 +48,28 @@ def main():
             build.append(entry)
             if props.get("tier3_client_gametests") == "true":
                 tier3.append(entry)
+            # Release-pipeline entry: the per-line publish facts inlined from line.env
+            # (full-tier lines GATE the publish; best-effort lines run continue-on-error —
+            # the tier fact rides `make_latest`/support decisions, kept out of this matrix
+            # so the ordering doctrine stays in release.yml).
+            release.append({
+                "line": line, "java": java,
+                "build_subdir": entry["build_subdir"],
+                # The 26.x (official-namespace) lines are the gating tier; 1.21.x
+                # (intermediary) are continue-on-error so their flakes never block the
+                # 26.x release (single-branch-consolidation-plan.md §5).
+                "gates": "true" if props.get("mapping_namespace") == "official" else "false",
+                "ship_neoforge": env.get("LINE_SHIP_NEOFORGE", "false"),
+                "make_latest": env.get("LINE_MAKE_LATEST", "false"),
+                "mc_fabric": env.get("LINE_MC_FABRIC", ""),
+                "mc_paper": env.get("LINE_MC_PAPER", ""),
+                "mc_neoforge": env.get("LINE_MC_NEOFORGE", ""),
+                "gv_fabric": env.get("LINE_GAME_VERSIONS_FABRIC", ""),
+                "gv_paper": env.get("LINE_GAME_VERSIONS_PAPER", ""),
+                "gv_neoforge": env.get("LINE_GAME_VERSIONS_NEOFORGE", ""),
+                "paper_loaders": env.get("LINE_PAPER_LOADERS", ""),
+                "neoforge_name": env.get("LINE_NEOFORGE_NAME", ""),
+            })
         else:
             # build-only: the fold's build arms are proven (compile all loaders) but its
             # test tiers / goldens are not yet folded — CI compiles it so the axis stays
@@ -56,6 +78,7 @@ def main():
     print("build_matrix=" + json.dumps(build))
     print("tier3_matrix=" + json.dumps(tier3))
     print("compile_matrix=" + json.dumps(compile_only))
+    print("release_matrix=" + json.dumps(release))
 
 
 if __name__ == "__main__":
