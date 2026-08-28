@@ -6,6 +6,7 @@
 
 ### Bug Fixes
 
+- **NeoForge: LOD serving when opening a world to LAN** — Opening a singleplayer world to LAN on the NeoForge build now activates LOD serving for players who join; previously LODs were served only on dedicated servers.
 - **Folia correctness hardening** — A batch of fixes for Folia servers from a full review of the regionized code paths: sturdier probe scheduling, safer player-lifecycle handling, and privacy checks that fail toward hidden.
 
 ### Compatibility
