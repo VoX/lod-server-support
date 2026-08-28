@@ -42,3 +42,22 @@ internals (VoxyCommon.getInstance / VoxyClientInstance.getStorageBasePath) and a
 byte-identical .voxy path munge, so corroboration genuinely WORKS with the fork
 pairing (stronger than the plan's fails-toward-off assumption).
 
+NeoForge far-player RENDER surface (v0.14.0, this line — a NEW per-line surface, the
+1.21.1 twin of main's far-player-render row). The NeoForge `FarPlayerRenderer` twin
+(`neoforge/.../networking/client/FarPlayerRenderer.java`, `RENDER_AVAILABLE = true`)
+renders far players immediate-mode, byte-verbatim with the Fabric twin except its
+loader plumbing: the render pass hangs off `RenderLevelStageEvent` at
+`Stage.AFTER_ENTITIES` (game bus, `getPoseStack()` is the identity `LevelRenderer`
+PoseStack — the same object Fabric's `WorldRenderContext.matrixStack()` yields; NO
+explicit buffer flush — vanilla's downstream `endBatch()` drains it), the crossfade
+kill hangs off `EntityJoinLevelEvent` (game bus, `isClientSide()` = dist AND
+integrated-server thread guard), and the unseated `dispatcher.render` carries an extra
+per-proxy `try/catch` because NeoForge fires third-party render events inside it. The
+buffer source is `minecraft.renderBuffers().bufferSource()`. Wired from
+`LSSNeoClientBootstrap.init()` → `FarPlayerRenderer.initRenderer()`. Pinned by
+`NeoForgeLoaderSeamContractTest.clientBootstrapExistsUnderTheReflectiveName` (present +
+wired + gate + containment). FOLLOW-UP (recorded, not done): NeoForge rendering on the
+26.1/26.2 lines needs the 26.x submit/extract pipeline (`dispatcher.extractEntity` +
+`submit` + `SubmitNodeCollector`, their Fabric twins' shape) against the Foxy fork
+client — a separate port, tracked here.
+

@@ -13,8 +13,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 > entry. **Cut actually TAKEN: Tier 3 client gametests only.** The other two
 > pre-authorized headline cuts were NOT needed: the Fabric far-player RENDER path
 > is LIVE (reworked to immediate-mode `dispatcher.render` on
-> `WorldRenderEvents.AFTER_ENTITIES` — only the NeoForge renderer is the no-op
-> stub, which is main's pre-existing state, not a line cut) and the Sodium config
+> `WorldRenderEvents.AFTER_ENTITIES`) and, since v0.14.0, the NeoForge renderer is
+> LIVE too (the same-FQN twin renders immediate-mode on
+> `RenderLevelStageEvent.AFTER_ENTITIES` + `EntityJoinLevelEvent`; it was a no-op
+> stub through v0.13.x — `RENDER_AVAILABLE` is now true on both loaders here) and the Sodium config
 > screen is LIVE (ported, registered under `sodium:config_api_user`; since the
 > options-page-generations port below it renders on BOTH Sodium generations). Release
 > notes must describe the shipped set, not the pre-authorization. **Folia does

@@ -28,9 +28,11 @@ import dev.vox.lss.platform.LoaderServices;
  * @param seeuPresent              SeeU is installed — the coexist gate overrides "Show Far
  *                                 Players" (its tooltip says so) and reveals the override
  * @param farPlayerRenderAvailable this loader's tree renders far players
- *                                 ({@link FarPlayerRenderer#RENDER_AVAILABLE} — false on
- *                                 NeoForge v1, where the renderer-only options are hidden;
- *                                 "Share My Position" is the prefs carrier and always shows)
+ *                                 ({@link FarPlayerRenderer#RENDER_AVAILABLE} — true on both
+ *                                 loaders on this line since v0.14.0; where a loader/line's
+ *                                 render path is a stub it is false and the renderer-only
+ *                                 options hide; "Share My Position" is the prefs carrier and
+ *                                 always shows)
  */
 public record MenuContext(boolean governorOn, boolean xaeroPresent, boolean seeuPresent,
                           boolean farPlayerRenderAvailable) {

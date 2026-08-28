@@ -143,9 +143,10 @@ public final class ClientOptionCatalog {
     // ---- Far players (E2, FARP §3.3): its own page — a distinct feature with its own
     //      privacy semantics, not another LOD slider. Every option here persists AND
     //      pushes the prefs NOW (E2 review M2/m4) — SaveHook.SAVE_AND_PUSH_FAR_PLAYER_PREFS.
-    //      The renderer-only options are RENDER_AVAILABLE-gated (hidden on NeoForge v1,
-    //      whose render path is a stub); "Share My Position" is the prefs carrier and is
-    //      never hidden — a NeoForge user's opt-out must stay deliverable.
+    //      The renderer-only options are RENDER_AVAILABLE-gated (hidden wherever a loader/line's
+    //      render path is a stub; on THIS line both loaders render since v0.14.0, so they show
+    //      on NeoForge too); "Share My Position" is the prefs carrier and is never hidden —
+    //      a client's opt-out must stay deliverable even where nothing renders.
     private static PageSpec farPlayersPage() {
         var push = SaveHook.SAVE_AND_PUSH_FAR_PLAYER_PREFS;
 

@@ -532,8 +532,9 @@ FABRIC_ONLY_CLASS_PREFIXES = (
     "dev/vox/lss/compat/FabricPermissionsBridge",
     # Same-FQN TWIN classes: each loader implements its own body behind the shared
     # outer name xplat compiles against, so their NESTED members legitimately differ
-    # (the fabric renderer's Proxy/MountInstance vs the neoforge cut; the fabric
-    # SessionConfigResponder alias). The OUTER class stays checked.
+    # (the fabric and — since v0.14.0 — the live neoforge FarPlayerRenderer each carry
+    # their own Proxy/MountInstance, near-identical source but distinct compiles; the
+    # fabric SessionConfigResponder alias). The OUTER class stays checked.
     "dev/vox/lss/networking/client/FarPlayerRenderer$",
     "dev/vox/lss/networking/client/LSSClientNetworking$",
     "dev/vox/lss/networking/server/LSSServerNetworking$",

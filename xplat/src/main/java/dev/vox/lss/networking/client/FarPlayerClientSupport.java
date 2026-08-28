@@ -190,8 +190,8 @@ public final class FarPlayerClientSupport {
      *  class this xplat file compiles against — a coupling XplatLoaderPurityTest cannot
      *  see (it scans loader-API packages, not module homes). Every loader module that
      *  compiles xplat must ship a same-FQN {@code FarPlayerRenderer} exposing
-     *  {@code clearInstance()} (the N-3 NeoForge renderer — or its render-path-cut
-     *  no-op variant — satisfies this). */
+     *  {@code clearInstance()} (both the Fabric and — since v0.14.0 — the live NeoForge
+     *  renderer satisfy this; a render-path-cut no-op variant would too). */
     static void onSessionEnd() {
         TRACKER.clear();
         lastSentPrefs = null;

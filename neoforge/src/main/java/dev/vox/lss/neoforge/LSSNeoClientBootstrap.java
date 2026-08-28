@@ -55,12 +55,12 @@ public final class LSSNeoClientBootstrap {
 
         ModCompat.init();
 
-        // Far players, the recorded N-3 render-path cut (plan §N-3 pre-authorized form;
-        // decisions log): the tracker, wire channels, and capability arm term are all
-        // live — ONLY rendering is absent on NeoForge v1. Announced once per launch so
-        // nobody chases the gap as a bug.
-        LSSLogger.info(Brand.shortName() + " far players on NeoForge v1: positions are"
-                + " tracked but the render path is not implemented (best-effort tier)");
+        // Far players: the render path is LIVE on NeoForge as of v0.14.0 (the twin of
+        // Fabric's LSSClient.initRenderer() call). Registers the AFTER_ENTITIES render pass
+        // + the EntityJoinLevelEvent crossfade trigger on the game bus. Best-effort tier.
+        dev.vox.lss.networking.client.FarPlayerRenderer.initRenderer();
+        LSSLogger.info(Brand.shortName() + " far players on NeoForge: rendering active"
+                + " (best-effort tier)");
     }
 
     private static void registerClientCommands(RegisterClientCommandsEvent event) {

@@ -108,9 +108,12 @@ class NeoForgeLoaderSeamContractTest {
     }
 
     /** N-3 wiring pins: the reflective bootstrap target exists under the exact name the
-     *  entrypoint loads, and the far-player RENDER-PATH cut keeps its precise form —
-     *  the capability arm term is shared xplat code the neoforge module must not
-     *  suppress (the bit is the PREFS CARRIER; plan §N-3/§6.2 wire-safety list). */
+     *  entrypoint loads, and the far-player render path is present, WIRED, and contained.
+     *  As of v0.14.0 the render-path cut is UNDONE on this line (the twin now renders); these
+     *  pins guard the un-cut shape — that the renderer is actually registered (the
+     *  compiles-but-never-runs trap), that the PREFS-CARRIER gate survives (a config-disabled
+     *  client renders nothing but still delivers its opt-out — E2 review M2), and that the
+     *  crash-containment ladder is intact (a 700-line twin must not silently regress safety). */
     @Test
     void clientBootstrapExistsUnderTheReflectiveName() throws IOException {
         String mod = read("neoforge/src/main/java/dev/vox/lss/neoforge/LSSNeoMod.java");
@@ -121,11 +124,35 @@ class NeoForgeLoaderSeamContractTest {
                         "neoforge/src/main/java/dev/vox/lss/neoforge/LSSNeoClientBootstrap.java"),
                 "the bootstrap class must exist (a rename strands the client half inert"
                         + " with only an INFO line)");
+        // WIRED, not merely present — a fully-formed renderer the bootstrap never calls
+        // renders nothing with every test green (the codebase's compiles-but-never-runs trap).
+        String boot = read("neoforge/src/main/java/dev/vox/lss/neoforge/LSSNeoClientBootstrap.java");
+        assertTrue(boot.contains("FarPlayerRenderer.initRenderer()"),
+                "the bootstrap must call FarPlayerRenderer.initRenderer() — else the render"
+                        + " path exists but never registers");
         String renderer = read(
                 "neoforge/src/main/java/dev/vox/lss/networking/client/FarPlayerRenderer.java");
-        assertTrue(!renderer.contains("capabilityBit") && !renderer.contains("FarPlayerClientSupport"),
-                "the render-path cut must stay RENDER-ONLY — arm/capability state is"
-                        + " shared xplat code this twin must never touch");
+        assertTrue(renderer.contains("RENDER_AVAILABLE = true"),
+                "the twin must advertise RENDER_AVAILABLE = true (the options catalog shows the"
+                        + " renderer-only options off it)");
+        assertTrue(renderer.contains("public static void initRenderer()")
+                        && renderer.contains("RenderLevelStageEvent.Stage.AFTER_ENTITIES")
+                        && renderer.contains("EntityJoinLevelEvent"),
+                "initRenderer must register the AFTER_ENTITIES render pass + the"
+                        + " EntityJoinLevelEvent crossfade trigger");
+        // The PREFS-CARRIER gate MUST survive: a config-disabled client renders nothing yet
+        // still delivers its shareSelf opt-out (the capability bit is the prefs carrier).
+        assertTrue(renderer.contains("capabilityBit() == 0")
+                        && renderer.contains("effectiveFarPlayersEnabled()"),
+                "renderContained must keep the capability/effective-enabled gate — a disabled"
+                        + " NeoForge client must render nothing but still carry its prefs");
+        // The crash-containment ladder MUST survive: the whole-pass Throwable latch + the
+        // session-end reset of the latch and the per-type mount latches.
+        assertTrue(renderer.contains("catch (Throwable") && renderer.contains("crashLatched"),
+                "the whole-pass crash latch must stay — a renderer bug degrades to no proxies,"
+                        + " never a render-thread crash loop");
+        assertTrue(renderer.contains("crashLatched = false") && renderer.contains("mountLadder.reset()"),
+                "clearInstance() must reset the crash latch + the mount-type latches at session end");
     }
 
     /**
