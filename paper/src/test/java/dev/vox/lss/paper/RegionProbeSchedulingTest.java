@@ -601,4 +601,125 @@ class RegionProbeSchedulingTest {
         assertEquals(512, checks.get(),
                 "the region task is bounded by the same 512-position cap as sync probing");
     }
+
+    // ---- Folia review 2026-08-27: R1 (the published-want-set arm) + R9 (races, N>1) ----
+
+    @Test
+    void thePublishedWantSetArmProbesBetweenDeclarations() {
+        // R1: before the second arm, an empty mailbox scheduled NOTHING — the probe
+        // window advanced only at the client's declaration cadence, and every routing
+        // cycle past the arrival tick ran with zero probe coverage (loaded chunks took
+        // disk reads; on gen-disabled servers the loaded-but-never-saved park became
+        // the steady state). The published want-set is exactly what the sync path's
+        // second arm walks.
+        service.setLoadedColumnProbe((level, cx, cz) -> column(cx, cz));
+        var uuid = UUID.randomUUID();
+        var player = playerIn(uuid, level(Level.OVERWORLD));
+        var state = service.registerPlayer(player, 1);
+        publish(state, new IncomingRequest(7, 8, -1)); // applied want-set, mailbox EMPTY
+
+        service.tick();
+        assertEquals(1, scheduledTasks.size(),
+                "an empty mailbox with a live published want-set must still schedule "
+                        + "the second-arm probe");
+        scheduledTasks.get(0).run(); // "region thread" probes and publishes
+        service.tick();
+        var probes = probesInLastSnapshot(uuid);
+        assertNotNull(probes, "the second arm's results flow through the same consume path");
+        assertTrue(probes.containsKey(PositionUtil.packPosition(7, 8)));
+    }
+
+    @Test
+    void anArrivalTickSchedulesExactlyOneTask() {
+        // The one-region-task-per-player-per-tick shape survives the second arm: a
+        // fresh mailbox batch takes the held arm, and the published arm must NOT also
+        // fire on the same tick.
+        var uuid = UUID.randomUUID();
+        var player = playerIn(uuid, level(Level.OVERWORLD));
+        var state = service.registerPlayer(player, 1);
+        publish(state, new IncomingRequest(1, 1, -1)); // an older applied set
+        offer(state, new IncomingRequest(2, 2, -1));   // the fresh declaration
+
+        service.tick();
+
+        assertEquals(1, scheduledTasks.size(),
+                "arrival tick: the held arm only — never a second task from the "
+                        + "published arm");
+    }
+
+    @Test
+    void aConvergedPlayerStillCostsNoRegionTask() {
+        // The second arm must not tax convergence: no mailbox, no published set.
+        var player = playerIn(UUID.randomUUID(), level(Level.OVERWORLD));
+        service.registerPlayer(player, 1);
+        service.tick();
+        assertTrue(scheduledTasks.isEmpty());
+    }
+
+    @Test
+    void aRegionTaskRacingTheTickNeverCorruptsTheHandoff() throws Exception {
+        // R9: all pre-review cases ran the region task on the JUnit thread with the
+        // pump idle — the one interleaving that cannot race. This runs the captured
+        // task on a REAL thread concurrent with tick(): the regionProbeResults
+        // compute-vs-remove handoff and the skipProbe reads must never throw or lose
+        // the rig's single-threaded invariants. (Content assertions stay soft — which
+        // tick consumes a racing publish is timing; the absence of exceptions and a
+        // final-state drain are the pins.)
+        service.setLoadedColumnProbe((level, cx, cz) -> column(cx, cz));
+        var uuid = UUID.randomUUID();
+        var lvl = level(Level.OVERWORLD);
+        var player = playerIn(uuid, lvl);
+        var state = service.registerPlayer(player, 1);
+        var pool = java.util.concurrent.Executors.newSingleThreadExecutor();
+        try {
+            for (int i = 0; i < 500; i++) {
+                offer(state, new IncomingRequest(i & 63, (i >> 6) & 63, -1));
+                service.tick(); // schedules (held arm) or republishes
+                if (!scheduledTasks.isEmpty()) {
+                    var task = scheduledTasks.remove(scheduledTasks.size() - 1);
+                    var f = pool.submit(task);   // the "region thread"
+                    service.tick();              // races the consume/sweep
+                    f.get(10, java.util.concurrent.TimeUnit.SECONDS);
+                }
+            }
+            service.tick(); // final drain — must not throw on any leftover publish
+        } finally {
+            pool.shutdownNow();
+        }
+    }
+
+    @Test
+    void multiPlayerHoldIsolationAndDepartedSweep() {
+        // R9: every pre-review case was single-player. Three players in mixed states:
+        // A declares (held arm), B has only a published set (second arm), C is
+        // converged. A departed B's late publish must be swept, never served.
+        service.setLoadedColumnProbe((level, cx, cz) -> column(cx, cz));
+        var lvl = level(Level.OVERWORLD);
+        var uuidA = UUID.randomUUID();
+        var uuidB = UUID.randomUUID();
+        var stateA = service.registerPlayer(playerIn(uuidA, lvl), 1);
+        var stateB = service.registerPlayer(playerIn(uuidB, lvl), 1);
+        service.registerPlayer(playerIn(UUID.randomUUID(), lvl), 1); // C: converged
+
+        offer(stateA, new IncomingRequest(1, 0, -1));
+        publish(stateB, new IncomingRequest(2, 0, -1));
+        service.tick();
+        assertEquals(2, scheduledTasks.size(),
+                "A's held arm + B's published arm; converged C costs nothing");
+
+        // B departs BEFORE its task runs; the late publish must be swept, not served.
+        service.removePlayer(uuidB);
+        scheduledTasks.get(0).run();
+        scheduledTasks.get(1).run();
+        service.tick();
+        for (var snap : processor.snapshots) {
+            assertFalse(snap.loadedChunkProbes().containsKey(uuidB),
+                    "a departed player's late region publish must never reach a snapshot");
+        }
+        boolean aServed = processor.snapshots.stream()
+                .anyMatch(sn -> sn.loadedChunkProbes().containsKey(uuidA)
+                        && sn.loadedChunkProbes().get(uuidA)
+                                .containsKey(PositionUtil.packPosition(1, 0)));
+        assertTrue(aServed, "the surviving player's probes still flow");
+    }
 }

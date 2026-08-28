@@ -464,9 +464,12 @@ public class RequestProcessingService {
                 && !this.dialects.isV16(player.getUUID())
                 && !this.dialects.isV18(player.getUUID()));
         state.markHandshakeComplete();
-        // Service gate: a successful registration by ANY path ends the denied episode
-        // (memo entry gone, log latch re-armed, streak reset).
-        this.serviceGateState.onRegistered(player.getUUID());
+        // Service gate: deliberately NOT cleared here (Folia review 2026-08-27 R3) —
+        // registerPlayer is also the dimension-change reuse path, and clearing the
+        // denied-handshake memo there raced a region-thread deposit against its own
+        // queued unregister composite (stranding the player past its revocation, no
+        // re-offer). The HANDSHAKE register paths clear it: the shared glue's register
+        // branch, and Paper's Register drain.
         return state;
     }
 

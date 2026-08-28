@@ -417,6 +417,11 @@ public class LSSPaperPlugin extends JavaPlugin implements PluginMessageListener,
 
     private void handleHandshake(Player bukkitPlayer, ServerPlayer nmsPlayer, byte[] data) {
         var service = this.requestService;
+        // R4 (Folia review 2026-08-27): every handshake stamps its connection's epoch
+        // BEFORE any gate/summary state can be written for it — the late mailboxed
+        // Remove of a PREVIOUS connection compares against this and skips its
+        // region-thread-state belts for a fast rejoiner.
+        if (service != null) service.markConnection(nmsPlayer.getUUID());
         // XVER §7: capture Via's answer once per handshake (the && keeps a disabled
         // guard from ever triggering probe resolution); the pure seam applies the rule.
         int viaProtocol = this.lssConfig.enableViaMismatchGuard
