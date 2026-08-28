@@ -166,4 +166,17 @@ class PaperFarPlayerSnapshotsTest {
         assertTrue(snap.hidden(), "the privacy ladder's verdict rides the snapshot");
         assertTrue(snap.alive());
     }
+
+    @Test
+    void aCleanPlayerSnapshotIsNotHidden() {
+        // F16 false-direction pin: the only snapshot.hidden() assertion elsewhere is
+        // TRUE, so hard-coding hidden=true (or inverting hiddenFor) would silently hide
+        // every far player for every viewer with the suite green. A clean player's
+        // snapshot must carry hidden=false.
+        var p = healthyNms(java.util.UUID.randomUUID(), "steve");
+        var snap = PaperFarPlayerSnapshots.snapshot(p);
+        org.junit.jupiter.api.Assertions.assertFalse(snap.hidden(),
+                "a clean player is NOT hidden — the false direction of the privacy verdict");
+        assertTrue(snap.alive());
+    }
 }
