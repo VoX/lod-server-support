@@ -66,12 +66,14 @@ public final class ServiceGateState {
         }
     }
 
-    /** A successful registration by ANY path: the episode is over — memo entry gone
-     *  (nothing to re-offer), log latch re-armed. The revocation streak deliberately
-     *  SURVIVES (implementation review, 2026-08-27): registerPlayer is also the
-     *  dimension-change reuse path, and a streak reset there would let a
-     *  frequently-portalling player outrun the two-sweep hysteresis forever; a
-     *  genuinely passing player's streak dies at its next passing sweep anyway. */
+    /** A successful HANDSHAKE registration: the episode is over — memo entry gone
+     *  (nothing to re-offer), log latch re-armed. Called from the handshake register
+     *  paths ONLY (the shared glue's register branch; Paper's Register drain), never
+     *  from registerPlayer itself — that is also the dimension-change reuse path, and
+     *  clearing there raced a region-thread memo deposit against its own queued
+     *  unregister composite (Folia review 2026-08-27 R3). The revocation streak
+     *  deliberately SURVIVES even here (#244 §9): a genuinely passing player's streak
+     *  dies at its next passing sweep anyway. */
     public void onRegistered(UUID uuid) {
         this.deniedHandshakes.remove(uuid);
         this.denialLogged.remove(uuid);
