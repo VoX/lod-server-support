@@ -72,7 +72,8 @@ public final class FarPlayerRenderer {
 
     /** Whether THIS loader's tree renders far players (the options catalog hides the
      *  renderer-only options where it does not — sodium-options-page-generations-plan.md
-     *  implementation review). The NeoForge twin's render path is a no-op stub. */
+     *  implementation review). On this 1.21.1 line the NeoForge twin also renders since
+     *  v0.14.0 (it was a no-op stub through v0.13.x). */
     public static final boolean RENDER_AVAILABLE = true;
 
     /** Proxy entity-id base: far above vanilla's server-assigned counter AND disjoint

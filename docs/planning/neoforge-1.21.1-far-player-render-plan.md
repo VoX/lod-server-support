@@ -230,3 +230,44 @@ cache) and the `neoforge-21.1.248` sources jar:
 - **Confirmed no gaps (all three):** issue-#160 mount containment carried verbatim (ladder is shared
   xplat — zero divergence), hostile-input caps preserved, session/dimension lifecycle resets correct,
   SeeU-coexist + prefs-carrier preserved, NeoForge registry semantics identical, scope call correct.
+
+## 11. Implementation review fold (1 Fable + 4 Opus, all on commit cad206b8)
+
+**Verdicts: ZERO MAJORs.** Fable (port fidelity) — faithful & correct, all 14 twin-diff
+hunks map to the 8 intended deltas, no unintended divergence. Opus (mount crash paths) —
+crash-safe, every issue-#160 containment block byte-identical to Fabric. Opus (render
+pipeline) — pipeline correct, the no-flush decision VERIFIED sound against the decompiled
+1.21.1 LevelRenderer (vanilla's arg-less catch-all endBatch drains our geometry; an explicit
+flush would have been wrong). Opus (lifecycle/threading/dist) — sound, thread-confinement and
+dist-safety (RENDER_AVAILABLE inlined, no server class-load) verified in sources/bytecode.
+Opus (hostile input/test/docs) — faithful, no MAJOR, hostile-input caps intact.
+
+**Folded (all minor/nit — a second commit):**
+- **Complete per-player containment** (Fable minor + mount-review minor + hostile-input #4):
+  every throw-capable statement on the non-mounted path — construction, `apply()`
+  (EntityEvent.Size), and `dispatcher.render` (RenderLivingEvent/RenderNameTagEvent) — now
+  drops THAT proxy for the frame via `dropProxyContained` (once-guarded warn) instead of the
+  whole-pass latch. NeoForge fires these third-party listeners inside the render pass where
+  Fabric fires nothing; the whole-pass latch stays the final backstop, and the seated/mount
+  paths keep their granular type-latching. This is the fold that most directly serves the
+  "won't error in unexpected conditions" bar.
+- **Test pins** (hostile-input #4/#5): the contract test now pins `dropProxyContained` and the
+  `isClientSide()` filter — both were removable while the test stayed green.
+- **Doc completeness** (hostile-input #1/#2/#3/#7): fixed the stale "NeoForge v1 stub" claims
+  the first sweep missed — the FABRIC twin's RENDER_AVAILABLE comment, `Visibility.java`,
+  `CLAUDE.md` options-page line, and the normative `neoforge-support-plan.md` /
+  `pre-authorized-cuts.md` (un-cut-on-1.21.1 addenda).
+
+**Accepted as-is (documented):** construction was already low-risk (a raw `new RemotePlayer`
+does not go through `EntityType.create`, so per-instance construction listeners largely don't
+fire — render-pipeline reviewer) but is contained anyway now; the seated path attributes a
+third-party render throw to the vehicle type (cosmetic mis-attribution, contained); the
+play→config reconfiguration path skips `onSessionEnd()` so the crash latch resets only at the
+next real disconnect (fail-safe, loader-equivalent to Fabric — a pre-existing residual, not a
+port defect); the dead `poseStack == null` guard (NeoForge never returns null there) is kept
+for Fabric-verbatim minimization.
+
+**Deferred to the live test (unverifiable statically):** the exact NeoForge-API firing points
+(EntityMountEvent/EntityEvent.Size/render events inside the pass), Iris/Oculus shadow-pass
+behavior, and in-game buffer-drain/translucency parity — the modded-mount + shader live smoke
+(§7) is their gate.

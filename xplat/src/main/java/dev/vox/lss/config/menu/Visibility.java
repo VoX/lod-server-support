@@ -10,8 +10,9 @@ public enum Visibility {
     /** Only with SeeU installed — the "Prefer LSS Far Players" coexist override (E3). */
     SEEU_ONLY,
     /** Only where this loader's tree actually renders far players — the renderer-only
-     *  options (show / name tags / render limit) are hidden on NeoForge v1, whose render
-     *  path is a stub; a shown-but-inert toggle would be a lie where the user is looking. */
+     *  options (show / name tags / render limit) are hidden wherever a loader/line's render
+     *  path is a stub; a shown-but-inert toggle would be a lie where the user is looking. (On
+     *  this 1.21.1 line both loaders render since v0.14.0, so they show on NeoForge too.) */
     RENDER_AVAILABLE;
 
     public boolean test(MenuContext ctx) {

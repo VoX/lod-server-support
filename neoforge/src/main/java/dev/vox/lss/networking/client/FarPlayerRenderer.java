@@ -122,6 +122,8 @@ public final class FarPlayerRenderer {
     private final Map<String, Item> itemCache = new ConcurrentHashMap<>();
     private int nextProxyId = PROXY_ID_BASE;
     private boolean crashLatched;
+    /** Once-per-session guard for the per-player containment warn ({@link #dropProxyContained}). */
+    private boolean loggedContainedDrop;
 
     private static final class MountInstance {
         final net.minecraft.world.entity.Entity entity;
@@ -151,7 +153,27 @@ public final class FarPlayerRenderer {
         if (r != null) {
             r.clear();
             r.crashLatched = false;
+            r.loggedContainedDrop = false;
             r.mountLadder.reset(); // m7: type latches are per-session, as documented
+        }
+    }
+
+    /** Per-player render-pass containment for NeoForge's wider throw surface: unlike Fabric,
+     *  NeoForge fires third-party listeners INSIDE the render pass — RenderLivingEvent/
+     *  RenderNameTagEvent inside dispatcher.render, EntityEvent.Size inside
+     *  apply()->setPose->refreshDimensions, and entity hooks at proxy construction. A throw
+     *  from any of them drops THIS proxy for the frame (rebuilt next frame) instead of latching
+     *  the whole feature off via the whole-pass crash latch. Once-guarded warn so a
+     *  persistently-throwing listener cannot spam the log. The mount and seated paths keep their
+     *  own granular type-latching containment; this is the backstop for the non-mounted path. */
+    private void dropProxyContained(UUID uuid, Set<UUID> active, String phase, Throwable t) {
+        proxies.remove(uuid);
+        active.remove(uuid);
+        if (!loggedContainedDrop) {
+            loggedContainedDrop = true;
+            LSSLogger.warn("Far-player proxy " + phase + " threw for one player — dropping it"
+                    + " this frame; the feature stays up (a third-party render/entity event"
+                    + " listener likely threw). Further occurrences are silent this session.", t);
         }
     }
 
@@ -281,10 +303,17 @@ public final class FarPlayerRenderer {
                 continue;
             }
 
-            Proxy proxy = proxies.compute(tracked.uuid(), (uuid, current) ->
-                    current == null || current.level() != level
-                            ? new Proxy(level, uuid, tracked.name(), nextEntityId(level))
-                            : current);
+            Proxy proxy;
+            try {
+                proxy = proxies.compute(tracked.uuid(), (uuid, current) ->
+                        current == null || current.level() != level
+                                ? new Proxy(level, uuid, tracked.name(), nextEntityId(level))
+                                : current);
+            } catch (Throwable t) {
+                // RemotePlayer construction can fire NeoForge entity hooks Fabric lacks.
+                dropProxyContained(tracked.uuid(), active, "construction", t);
+                continue;
+            }
             boolean allowWalk = config.farPlayersMaxAnimationDistanceBlocks > 0
                     && distance <= config.farPlayersMaxAnimationDistanceBlocks;
             // Rider-while-seated attribution (issue-#160 review MINOR-1): from frame 2
@@ -312,9 +341,16 @@ public final class FarPlayerRenderer {
                     }
                 }
             } else {
-                proxy.apply(tracked, sample, position, config.farPlayersNameTags,
-                        maxRender > 0 ? maxRender : 16384, allowWalk, animationTick,
-                        itemCache);
+                try {
+                    proxy.apply(tracked, sample, position, config.farPlayersNameTags,
+                            maxRender > 0 ? maxRender : 16384, allowWalk, animationTick,
+                            itemCache);
+                } catch (Throwable t) {
+                    // apply()->setPose->refreshDimensions fires EntityEvent.Size into other
+                    // mods on NeoForge (no Fabric analogue): drop this proxy, not the feature.
+                    dropProxyContained(tracked.uuid(), active, "apply", t);
+                    continue;
+                }
             }
             active.add(tracked.uuid());
 
@@ -371,12 +407,11 @@ public final class FarPlayerRenderer {
                     latchSeatedFailure(tracked, proxy, t);
                 }
             } else {
-                // NeoForge-specific containment (Opus crash-paths review): NeoForge fires
-                // third-party render events (RenderLivingEvent, RenderNameTagEvent) INSIDE
-                // dispatcher.render that Fabric does not. A throwing listener here must drop
-                // THIS proxy for the frame, not latch the whole feature — symmetric with the
-                // seated path's per-rider containment above. (Construction/apply throws still
-                // ride the whole-pass latch, as on Fabric.)
+                // NeoForge-specific containment: NeoForge fires third-party render events
+                // (RenderLivingEvent, RenderNameTagEvent) INSIDE dispatcher.render that Fabric
+                // does not. A throwing listener here drops THIS proxy for the frame, not the
+                // whole feature — symmetric with the seated path's per-rider containment above,
+                // and with the construction/apply containment (dropProxyContained) on this path.
                 try {
                     dispatcher.render(proxy,
                             position.x - cameraPosition.x,
@@ -386,8 +421,7 @@ public final class FarPlayerRenderer {
                             bufferSource,
                             packedLightFor(dispatcher, proxy, level, position, partialTick));
                 } catch (Throwable t) {
-                    proxies.remove(tracked.uuid());
-                    active.remove(tracked.uuid());
+                    dropProxyContained(tracked.uuid(), active, "render", t);
                 }
             }
         }

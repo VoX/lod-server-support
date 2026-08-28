@@ -137,9 +137,12 @@ class NeoForgeLoaderSeamContractTest {
                         + " renderer-only options off it)");
         assertTrue(renderer.contains("public static void initRenderer()")
                         && renderer.contains("RenderLevelStageEvent.Stage.AFTER_ENTITIES")
-                        && renderer.contains("EntityJoinLevelEvent"),
+                        && renderer.contains("EntityJoinLevelEvent")
+                        && renderer.contains("isClientSide()"),
                 "initRenderer must register the AFTER_ENTITIES render pass + the"
-                        + " EntityJoinLevelEvent crossfade trigger");
+                        + " EntityJoinLevelEvent crossfade trigger, and the crossfade trigger's"
+                        + " isClientSide() filter is load-bearing (dist safety AND the"
+                        + " integrated-server thread guard for the render-thread-only proxy map)");
         // The PREFS-CARRIER gate MUST survive: a config-disabled client renders nothing yet
         // still delivers its shareSelf opt-out (the capability bit is the prefs carrier).
         assertTrue(renderer.contains("capabilityBit() == 0")
@@ -153,6 +156,13 @@ class NeoForgeLoaderSeamContractTest {
                         + " never a render-thread crash loop");
         assertTrue(renderer.contains("crashLatched = false") && renderer.contains("mountLadder.reset()"),
                 "clearInstance() must reset the crash latch + the mount-type latches at session end");
+        // The NeoForge-specific per-player containment must stay: NeoForge fires third-party
+        // listeners INSIDE the render pass (dispatcher.render, apply()->EntityEvent.Size,
+        // construction) that Fabric does not — a throw must drop ONE proxy, not latch the whole
+        // feature. Removing it would keep every substring above present while regressing safety.
+        assertTrue(renderer.contains("dropProxyContained"),
+                "the per-player render-pass containment (dropProxyContained) must stay — a throwing"
+                        + " third-party render/entity listener must drop one proxy, not the feature");
     }
 
     /**

@@ -338,6 +338,13 @@ join smoke (the send-wrapper proof); (4) NeoForge-client→Fabric-server
 against the Modrinth rig (the #1913 assumption check). Renderer-level
 verification is deferred to a line where a renderer exists (§0.1).
 
+**UPDATE (v0.14.0, 1.21.1 line):** the render-path cut above was TAKEN at v0.11.0
+but is now REVERSED on the 1.21.1 line — the NeoForge `FarPlayerRenderer` twin renders
+immediate-mode on `RenderLevelStageEvent.AFTER_ENTITIES` + `EntityJoinLevelEvent`
+(`RENDER_AVAILABLE = true`; docs/planning/neoforge-1.21.1-far-player-render-plan.md,
+5-agent reviewed). 26.1/26.2 NeoForge stay render-cut (they need the 26.x submit/extract
+pipeline against the Foxy fork — a separate port, recorded in per-version-surfaces.md).
+
 ### N-4: CI + release + VSS + docs + F-gate re-arm
 
 Details §4/§6. CLAUDE.md support-tier section finalized, README rows, the

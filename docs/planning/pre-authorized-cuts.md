@@ -14,7 +14,7 @@ the cut (the Folia-experimental rule).
 | Sodium 0.8+ options WALKER absent (`LSSConfigMenu` + the `sodium:config_api_user` entrypoint) | lines with no 0.8+ Sodium artifact (0.7-only: 1.21.10; the frozen 1.21.8) | since sodium-options-page-generations-plan.md the in-game page is NOT cut on those lines — the line-invariant legacy builder renders the same catalog on Sodium 0.6/0.7; only the walker file + entrypoint are dropped (entrypoint ⇔ file, contract-pinned); config-file keys keep working regardless |
 | AntiXray crash shim → pass-through | Java-21 lines (ScopedValue is preview) | the 1.21.11 flavor; becomes a one-file swap after V-2/S5 |
 | Degraded `/lss reset` ladder | lines whose Voxy build lacks the holder surface | confirm-gated fallback ships; the full ladder needs a resolvable Voxy holder surface (0.2.18's static holder or the 0.2.11/dev instanceof-fallback rung) |
-| Far-player RENDER path | NeoForge v1 (no community Voxy build); per-line render reworks may lag | tracker/wire/prefs-carrier bit stay LIVE — the render path is the only cuttable half (the capability bit is never cut) |
+| Far-player RENDER path | NeoForge v1 (no community Voxy build); per-line render reworks may lag | tracker/wire/prefs-carrier bit stay LIVE — the render path is the only cuttable half (the capability bit is never cut). **UN-cut on the 1.21.1 line in v0.14.0** (the NeoForge renderer was implemented — `RenderLevelStageEvent.AFTER_ENTITIES`; only 26.1/26.2 NeoForge remain render-cut) |
 | `SOAK_PLATFORM=<line>` abbreviated or skipped | best-effort lines | the stage-N decision precedent; the §5.5-style manual checklist becomes the per-release floor, recorded once |
 
 Never cuttable, for the record: wire compatibility (every jar speaks the same protocol
