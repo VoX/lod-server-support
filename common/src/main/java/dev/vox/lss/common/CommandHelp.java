@@ -27,7 +27,9 @@ public final class CommandHelp {
         out.add("/" + rootLabel + " set — list runtime-settable config keys with current"
                 + " values");
         out.add("/" + rootLabel + " set <key> <value> — apply + persist a config change"
-                + " at runtime (values are clamped like the config file)");
+                + " at runtime (values are clamped like the config file). "
+                + "lodDistanceChunks also accepts `<world> <n>` for a per-world "
+                + "override and `<world> default` to clear it");
         out.add("/" + rootLabel + " help — this list");
         return out;
     }

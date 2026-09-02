@@ -357,4 +357,17 @@ class PaperCommandsTest {
                 "only lodDistanceChunks triggers the SessionConfig re-push: " + messages);
         org.mockito.Mockito.verify(service, org.mockito.Mockito.never()).repushSessionConfig();
     }
+
+    @Test
+    void setPerWorldLodDistanceMutatesMapAndTriggersRepush() {
+        var config = new PaperConfig();
+        config.validate();
+        var service = inlineTaskService(new int[]{1, 0});
+        assertTrue(run(commands(service, config), "set", "lodDistanceChunks", "creative", "128"));
+        assertEquals(512, config.lodDistanceChunks, "the default distance is unchanged");
+        assertEquals(128, config.lodDistanceChunksByWorld.get("creative"));
+        assertTrue(messages.get(0).contains("creative=128"),
+                "the reply names the per-world override: " + messages);
+        org.mockito.Mockito.verify(service).repushSessionConfig();
+    }
 }

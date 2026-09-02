@@ -323,6 +323,9 @@ public final class ServerReceiverGlue {
         boolean v16 = decision.dialect() == HandshakeGate.WireDialect.V16;
         boolean v18 = decision.dialect() == HandshakeGate.WireDialect.V18;
         boolean v19 = decision.dialect() == HandshakeGate.WireDialect.V19;
+        // The player's current world decides the advertised distance (the ONE xplat
+        // extraction helper — static, so this works even when service == null below).
+        int lod = ServerWorldLod.distance(config, player);
         if (service != null) {
             if (!v16) {
                 // A cross-dialect re-handshake must shed the stale v16 ingress-shim
@@ -340,7 +343,7 @@ public final class ServerReceiverGlue {
         responder.send(v16
                 ? SessionConfigS2CPayload.v16Legacy(
                         decision.effectiveEnabled(),
-                        config.lodDistanceChunks,
+                        lod,
                         // The caps ARE the old client's pacing — advertise the server's real
                         // admission values (see the v16 compat design §4.1).
                         LSSConstants.SYNC_ON_LOAD_SLOT_CAP,
@@ -354,7 +357,7 @@ public final class ServerReceiverGlue {
                             : v19 ? LSSConstants.V19_COMPAT_PROTOCOL_VERSION
                                   : LSSConstants.PROTOCOL_VERSION,
                         decision.effectiveEnabled(),
-                        config.lodDistanceChunks,
+                        lod,
                         config.enableChunkGeneration,
                         // v20-only append (the encoder omits it for the echo versions).
                         net.minecraft.SharedConstants.getCurrentVersion()

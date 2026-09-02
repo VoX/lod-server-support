@@ -101,23 +101,24 @@ public class PaperCommands implements CommandExecutor, TabCompleter {
         }
         String rawValue = String.join(" ", java.util.Arrays.copyOfRange(args, 2, args.length));
         service.enqueueRuntimeTask(() -> {
-            String before = key.current().apply(config);
-            String effective;
+            dev.vox.lss.common.config.RuntimeSettings.ApplyResult result;
             try {
-                effective = dev.vox.lss.common.config.RuntimeSettings
+                result = dev.vox.lss.common.config.RuntimeSettings
                         .applyAndPersist(config, key, rawValue);
             } catch (IllegalArgumentException e) {
                 sender.sendMessage(key.name() + ": " + e.getMessage());
                 return;
             }
             String repushNote = "";
-            if (key.name().equals("lodDistanceChunks") && !effective.equals(before)) {
+            // Re-push keyed on the MUTATION, not a reply-string diff (a per-world set
+            // leaves the scalar unchanged); the twin of the Fabric command surface.
+            if (result.repush()) {
                 int[] counts = service.repushSessionConfig();
                 repushNote = "; re-pushed to " + counts[0] + " client(s)"
                         + (counts[1] > 0 ? " (" + counts[1] + " legacy update on rejoin)" : "");
             }
-            sender.sendMessage(key.name() + " = " + effective
-                    + dev.vox.lss.common.config.RuntimeSettings.clampedSuffix(effective, rawValue)
+            sender.sendMessage(key.name() + " = "
+                    + dev.vox.lss.common.config.RuntimeSettings.renderReplyValue(key, result, rawValue)
                     + " — " + key.applyNote() + repushNote);
         });
     }

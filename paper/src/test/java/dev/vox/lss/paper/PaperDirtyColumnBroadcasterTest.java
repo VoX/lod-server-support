@@ -207,6 +207,33 @@ class PaperDirtyColumnBroadcasterTest {
     }
 
     @Test
+    void perWorldOverrideShrinksDirtyBroadcastRadiusForNetherPlayerOnly() {
+        config.lodDistanceChunks = 16;
+        config.lodDistanceChunksByWorld.put("minecraft:the_nether", 8);
+        var nether = level(Level.NETHER);
+        when(server.getAllLevels()).thenReturn(List.of(overworld, nether));
+        var netherUuid = UUID.randomUUID();
+        addPlayer(netherUuid, nether, true, false);
+        var overworldUuid = UUID.randomUUID();
+        addPlayer(overworldUuid, overworld, true, false);
+
+        tracker.markDirty("minecraft:the_nether", 8, 0);   // Chebyshev 8: in for override
+        tracker.markDirty("minecraft:the_nether", 9, 0);   // Chebyshev 9: out for override 8
+        tracker.markDirty(OVERWORLD, 9, 0);                // Chebyshev 9: in for default 16
+        fireBroadcast();
+
+        assertEquals(2, sent.size(), "nether player gets one frame; overworld player gets one");
+        var netherFrames = sent.stream().filter(s -> s.playerUuid().equals(netherUuid)).toList();
+        var overworldFrames = sent.stream().filter(s -> s.playerUuid().equals(overworldUuid)).toList();
+        assertEquals(1, netherFrames.size());
+        assertArrayEquals(new long[]{PositionUtil.packPosition(8, 0)}, netherFrames.get(0).positions(),
+                "the nether override uses 8, not the default 16");
+        assertEquals(1, overworldFrames.size());
+        assertArrayEquals(new long[]{PositionUtil.packPosition(9, 0)}, overworldFrames.get(0).positions(),
+                "overworld still uses the default lodDistance");
+    }
+
+    @Test
     void broadcastPaginatesBeyondMaxDirtyColumnPositionsCoveringEveryPosition() {
         var uuid = UUID.randomUUID();
         addPlayer(uuid, overworld, true, false);

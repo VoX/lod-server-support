@@ -188,6 +188,27 @@ class JsonConfigLoadTest {
         assertEquals(10, c.dirtyBroadcastIntervalSeconds);
         assertEquals(40, c.generationConcurrencyLimitPerPlayer);
         assertEquals(0, c.perDimensionTimestampCacheSizeMB); // 0 = AUTO (from lodDistance)
+        assertTrue(c.lodDistanceChunksByWorld.isEmpty(),
+                "absent lodDistanceChunksByWorld must bind the empty default, not null");
+    }
+
+    @Test
+    void lodDistanceChunksByWorldRoundTripsFromFile(@TempDir Path configDir) throws Exception {
+        Files.writeString(configDir.resolve(FILE),
+                "{\"lodDistanceChunks\": 256, \"lodDistanceChunksByWorld\": {"
+                        + "\"minecraft:the_nether\": 64, \"creative\": 128}}");
+
+        TestServerConfig c = TestServerConfig.load(configDir);
+
+        assertEquals(256, c.lodDistanceChunks);
+        assertEquals(64, c.lodDistanceForWorld("minecraft:the_nether"));
+        assertEquals(128, c.lodDistanceForWorld("creative", "minecraft:overworld"));
+        assertEquals(256, c.lodDistanceForWorld("minecraft:overworld"));
+
+        JsonObject saved = savedJson(configDir);
+        JsonObject byWorld = saved.getAsJsonObject("lodDistanceChunksByWorld");
+        assertEquals(64, byWorld.get("minecraft:the_nether").getAsInt());
+        assertEquals(128, byWorld.get("creative").getAsInt());
     }
 
     @Test

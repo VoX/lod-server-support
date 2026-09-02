@@ -190,7 +190,7 @@ public class RequestProcessingService {
                 this.players,
                 this.diskReader, this.generationService != null, dataDir,
                 config.effectiveTimestampCacheMB(), config.missMemoTtlSeconds,
-                config.lodDistanceChunks + LSSConstants.LOD_DISTANCE_BUFFER
+                config.maxConfiguredLodDistanceChunks() + LSSConstants.LOD_DISTANCE_BUFFER
                         + OffThreadProcessor.SWEEP_RADIUS_MARGIN_CHUNKS);
         // C2: the per-recipient enqueue consults the session dialect to translate
         // legacy (v19/v18/v16) column bodies to the native layout at build time.
@@ -287,7 +287,7 @@ public class RequestProcessingService {
         // handler (kill switch checked there).
         this.regionSummaries = new dev.vox.lss.common.region.RegionSummaryService(
                 this.regionStamps::tileStampSeconds,
-                () -> LSSServerConfig.CONFIG.lodDistanceChunks);
+                () -> LSSServerConfig.CONFIG.maxConfiguredLodDistanceChunks());
         // Every hash-confirmed change mark (the save hook) bumps the region's live save
         // mark, closing the save-submitted-but-write-pending mtime lag before the header
         // rung can claim freshness across it. May run off-main — the bump is atomic.
@@ -509,10 +509,14 @@ public class RequestProcessingService {
         if (this.generationService != null) this.generationService.removePlayer(uuid);
     }
 
+    int lodDistanceFor(ServerPlayer player) {
+        return ServerWorldLod.distance(LSSServerConfig.CONFIG, player);
+    }
+
     public void handleBatchRequest(ServerPlayer player, BatchChunkRequestC2SPayload payload) {
         int playerCx = player.getBlockX() >> 4;
         int playerCz = player.getBlockZ() >> 4;
-        int maxDist = LSSServerConfig.CONFIG.lodDistanceChunks + LSSConstants.LOD_DISTANCE_BUFFER;
+        int maxDist = lodDistanceFor(player) + LSSConstants.LOD_DISTANCE_BUFFER;
 
         // v16 compat branch: legacy drip batches MERGE into the synthetic want-set (the 1 Hz
         // tick is the sole declarer) instead of replacing the backlog. Placed before the
@@ -746,7 +750,7 @@ public class RequestProcessingService {
     private void applyRuntimeConfig(LSSServerConfig config) {
         this.bandwidthLimiter.reconfigure(config.bytesPerSecondGlobal());
         this.diskReader.reapplyGateCapacity(config);
-        this.offThreadProcessor.updateSweepRadius(config.lodDistanceChunks
+        this.offThreadProcessor.updateSweepRadius(config.maxConfiguredLodDistanceChunks()
                 + LSSConstants.LOD_DISTANCE_BUFFER + OffThreadProcessor.SWEEP_RADIUS_MARGIN_CHUNKS);
         int genGlobal = config.generationConcurrencyLimitGlobal;
         int genPerPlayer = config.generationConcurrencyLimitPerPlayer;
@@ -782,15 +786,16 @@ public class RequestProcessingService {
                 legacy++;
                 continue;
             }
+            var player = state.getPlayer();
             var payload = new SessionConfigS2CPayload(
                     LSSConstants.PROTOCOL_VERSION,
                     config.enabled,
-                    config.lodDistanceChunks,
+                    lodDistanceFor(player),
                     config.enableChunkGeneration,
                     net.minecraft.SharedConstants.getCurrentVersion()
                             .dataVersion().version());
             try {
-                dev.vox.lss.platform.LoaderServices.get().sendToPlayer(state.getPlayer(), payload);
+                dev.vox.lss.platform.LoaderServices.get().sendToPlayer(player, payload);
                 pushed++;
             } catch (Exception e) {
                 LSSLogger.error("Session-config re-push failed for " + state.getPlayerName(), e);
@@ -868,7 +873,9 @@ public class RequestProcessingService {
                     dev.vox.lss.platform.LoaderServices.get().sendToPlayer(player,
                             new SessionConfigS2CPayload(
                                     LSSConstants.PROTOCOL_VERSION, false,
-                                    config.lodDistanceChunks, config.enableChunkGeneration,
+                                    // Inert under enabled=false, but resolved per-world for
+                                    // consistency (no raw per-player lodDistanceChunks reads left).
+                                    lodDistanceFor(player), config.enableChunkGeneration,
                                     net.minecraft.SharedConstants.getCurrentVersion()
                                             .dataVersion().version()));
                 } catch (Exception e) {
@@ -1023,6 +1030,9 @@ public class RequestProcessingService {
             // players DO count — the pinned SP-062 dilution.
             activeCount++;
 
+            // Captured BEFORE checkDimensionChange() mutates the stored dimension, so
+            // the conditional re-push below can compare the OLD world's distance.
+            var prevDim = state.getLastDimension();
             if (state.checkDimensionChange()) {
                 // A dimension change abandons all in-flight work. Reuse the (well-tested)
                 // disconnect teardown + a fresh registration instead of a second, hand-rolled
@@ -1035,6 +1045,30 @@ public class RequestProcessingService {
                 // Far players: identity SURVIVES the remove+register cycle (the v18-rung
                 // checklist); the roster does not — a bumped-epoch full roster follows.
                 this.farPlayerService.onViewerDimensionChange(player.getUUID());
+                // Re-push ONLY when the new world's distance differs (load-bearing, not an
+                // optimization): the client rebuilds its whole request manager on ANY
+                // SessionConfig, so an unconditional push would tax every portal trip even
+                // with no overrides configured (empty map ⇒ both sides resolve the default
+                // ⇒ equal ⇒ no push ⇒ byte-identical to pre-feature behavior). Gated on
+                // CURRENT because dialectOf defaults untracked ids to CURRENT.
+                int newDist = lodDistanceFor(player);
+                int prevDist = LSSServerConfig.CONFIG.lodDistanceForWorld(
+                        prevDim == null ? null : prevDim.identifier().toString());
+                if (newDist != prevDist && this.dialects.isCurrent(player.getUUID())) {
+                    try {
+                        dev.vox.lss.platform.LoaderServices.get().sendToPlayer(player,
+                                new SessionConfigS2CPayload(
+                                        LSSConstants.PROTOCOL_VERSION,
+                                        config.enabled,
+                                        newDist,
+                                        config.enableChunkGeneration,
+                                        net.minecraft.SharedConstants.getCurrentVersion()
+                                                .dataVersion().version()));
+                    } catch (Exception e) {
+                        LSSLogger.error("Session-config dimension-change push failed for "
+                                + player.getName().getString(), e);
+                    }
+                }
                 continue;
             }
 
@@ -1068,10 +1102,10 @@ public class RequestProcessingService {
      *  before processPlayerLifecycle so the declare sits in the mailbox when the probe
      *  pass reads it — the same arrival-tick alignment a network-received batch gets. */
     private void tickV16Compat(LSSServerConfig config) {
-        int maxDist = config.lodDistanceChunks + LSSConstants.LOD_DISTANCE_BUFFER;
         for (var state : this.players.values()) {
             if (!state.hasCompletedHandshake()) continue;
             var player = state.getPlayer();
+            int maxDist = lodDistanceFor(player) + LSSConstants.LOD_DISTANCE_BUFFER;
             this.v16Compat.tickPlayer(player.getUUID(), state,
                     player.chunkPosition().x(), player.chunkPosition().z(), maxDist);
         }
@@ -1122,7 +1156,7 @@ public class RequestProcessingService {
                 // yield phenomenon) and must not ship armed under the default-FALSE
                 // posture (review B-2): radius 0 disables it while the gate is off.
                 config.lodYieldsToVanillaTransport
-                        ? config.lodDistanceChunks + LSSConstants.LOD_DISTANCE_BUFFER
+                        ? config.maxConfiguredLodDistanceChunks() + LSSConstants.LOD_DISTANCE_BUFFER
                                 + OffThreadProcessor.SWEEP_RADIUS_MARGIN_CHUNKS
                         : 0,
                 config.enableSendPacing);

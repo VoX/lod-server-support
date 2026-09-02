@@ -3,7 +3,9 @@ package dev.vox.lss.common.config;
 import dev.vox.lss.common.LSSConstants;
 import dev.vox.lss.common.XrayMaskPolicy;
 
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * The server config shared verbatim by Fabric and Paper: same fields, same defaults,
@@ -57,6 +59,37 @@ public abstract class ServerConfigBase extends JsonConfig {
      *  effectiveTimestampCacheMB, AUTO follows this automatically) and, with the
      *  store on (a fresh install's default), the warmed disk footprint. */
     public int lodDistanceChunks = 512;
+    /**
+     * Per-world LOD-distance overrides. {@link #lodDistanceChunks} remains the default
+     * for any world that is not named here. Keys are matched in the order callers
+     * pass them to {@link #lodDistanceForWorld}:
+     * <ul>
+     *   <li>Paper: Bukkit world name first ({@code world_nether}, a Multiverse world
+     *       like {@code creative}), then the dimension id
+     *       ({@code minecraft:the_nether}) as fallback so a vanilla-named nether
+     *       still matches when the admin keyed the dimension.</li>
+     *   <li>Fabric / NeoForge: the dimension resource location
+     *       ({@code minecraft:overworld}, {@code minecraft:the_nether},
+     *       {@code minecraft:the_end}, or a datapack/mod dimension).</li>
+     * </ul>
+     * Empty (the default) = every world uses {@link #lodDistanceChunks}. Unknown
+     * keys are ignored at lookup, never an error. Each value is clamped through
+     * {@link #clampLodDistance} on validate, the same band as the default.
+     *
+     * <p>This is a LOCAL config surface, not a wire change: SessionConfig still
+     * carries one distance, resolved for the player's current world at handshake
+     * and re-pushed on dimension change.
+     *
+     * <p><b>{@code volatile} + replace-never-mutate:</b> this is read on the handshake
+     * thread (a region thread on Folia), the processing thread, and the broadcaster
+     * thread, but reassigned by {@code /lsslod set}. Every writer builds a fresh
+     * {@link LinkedHashMap} and assigns it whole (never mutates the live map), so the
+     * volatile reference safely publishes a fully-built map with no torn reads — the
+     * same discipline as the volatile {@code genSlotCap} the processing thread reads
+     * cross-thread. (Scalar config fields need no volatile: an {@code int} write can't
+     * tear, and the tick-poll consumers re-read them live.)
+     */
+    public volatile Map<String, Integer> lodDistanceChunksByWorld = new LinkedHashMap<>();
     /**
      * Per-player bandwidth cap. Went 20 -> 50 -> 25 MiB on 2026-08-02, 25 -> 15 MiB on
      * 2026-08-05 (v0.9.1), then 15 -> 25 MiB on 2026-08-08 (all user decisions; the
@@ -552,7 +585,7 @@ public abstract class ServerConfigBase extends JsonConfig {
      */
     public int effectiveTimestampCacheMB() {
         if (perDimensionTimestampCacheSizeMB > 0) return perDimensionTimestampCacheSizeMB;
-        long side = 2L * (lodDistanceChunks + LSSConstants.LOD_DISTANCE_BUFFER) + 1L;
+        long side = 2L * (maxConfiguredLodDistanceChunks() + LSSConstants.LOD_DISTANCE_BUFFER) + 1L;
         long columns = (long) (side * side
                 * LSSConstants.TIMESTAMP_CACHE_AUTO_COVERAGE_FACTOR);
         long mb = columns * LSSConstants.TIMESTAMP_CACHE_HEAP_BYTES_PER_COLUMN
@@ -747,6 +780,71 @@ public abstract class ServerConfigBase extends JsonConfig {
         return Math.clamp(v, LSSConstants.MIN_LOD_DISTANCE, LSSConstants.MAX_LOD_DISTANCE);
     }
 
+    /**
+     * Rebuilds the per-world override map: drops blank/null and over-long keys, coerces
+     * any {@link Number} value (a defensive {@code intValue()} — Gson honors the field's
+     * {@code Map<String,Integer>} generic type and yields Integers, but a hand-edited file
+     * or a schema drift could present a Double), clamps each value through
+     * {@link #clampLodDistance}, restores an empty map from null. Insertion order is kept
+     * so a re-save does not reshuffle an admin's file. The over-long key drop mirrors the
+     * {@code /lsslod set} path's rejection (which throws) — a file just drops, never fails
+     * the whole load.
+     */
+    public static Map<String, Integer> clampLodDistanceByWorld(Map<?, ?> raw) {
+        if (raw == null || raw.isEmpty()) return new LinkedHashMap<>();
+        Map<String, Integer> cleaned = new LinkedHashMap<>();
+        for (var entry : raw.entrySet()) {
+            Object keyObj = entry.getKey();
+            if (!(keyObj instanceof String key)) continue;
+            key = key.trim();
+            if (key.isEmpty() || key.length() > LSSConstants.MAX_DIMENSION_STRING_LENGTH) continue;
+            Object value = entry.getValue();
+            if (!(value instanceof Number n)) continue;
+            cleaned.put(key, clampLodDistance(n.intValue()));
+        }
+        return cleaned;
+    }
+
+    /**
+     * The LOD distance that applies to {@code worldKeys} — first matching override
+     * in {@link #lodDistanceChunksByWorld} wins; otherwise {@link #lodDistanceChunks}.
+     * Null, blank, and unknown keys are skipped (fail toward the default). Callers
+     * pass Paper's Bukkit world name then the dimension id, or Fabric's dimension
+     * id alone; see the field javadoc for the key convention.
+     */
+    public int lodDistanceForWorld(String... worldKeys) {
+        // Snapshot the volatile once: it is only ever REPLACED whole (never mutated), so
+        // one read gives a stable, fully-built map for the whole lookup.
+        Map<String, Integer> byWorld = this.lodDistanceChunksByWorld;
+        if (byWorld != null) {
+            for (String key : worldKeys) {
+                if (key == null || key.isEmpty()) continue;
+                Integer override = byWorld.get(key);
+                if (override != null) return override;
+            }
+        }
+        return lodDistanceChunks;
+    }
+
+    /**
+     * The largest configured LOD distance (default plus every override). Used for
+     * GLOBAL sizing that cannot be per-player — the AUTO timestamp-cache budget,
+     * the diskReadDone sweep radius, the yield prune, the region-summary admission
+     * window. An under-sized global bound is the corrupting direction (a high
+     * override would get its still-declarable done-bits swept); over-size is only
+     * memory already bounded elsewhere.
+     */
+    public int maxConfiguredLodDistanceChunks() {
+        int max = lodDistanceChunks;
+        Map<String, Integer> byWorld = this.lodDistanceChunksByWorld; // snapshot the volatile once
+        if (byWorld != null) {
+            for (Integer v : byWorld.values()) {
+                if (v != null) max = Math.max(max, v);
+            }
+        }
+        return max;
+    }
+
     /** Negative = the file-absent sentinel → the compiled default; else the byte band. */
     public static double clampMbPerPlayer(double v) {
         if (v < 0) return DEFAULT_MB_PER_PLAYER;
@@ -817,6 +915,7 @@ public abstract class ServerConfigBase extends JsonConfig {
     @Override
     public void validate() {
         lodDistanceChunks = clampLodDistance(lodDistanceChunks);
+        lodDistanceChunksByWorld = clampLodDistanceByWorld(lodDistanceChunksByWorld);
         resolveBandwidthKeys();
         mbPerSecondLimitPerPlayer = clampMbPerPlayer(mbPerSecondLimitPerPlayer);
         // 0 = AUTO is a first-class value (the default); only a nonzero explicit override

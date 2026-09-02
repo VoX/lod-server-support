@@ -99,17 +99,18 @@ public class LSSServerCommands {
             return 0;
         }
         var config = LSSServerConfig.CONFIG;
-        String before = key.current().apply(config);
-        String effective;
+        dev.vox.lss.common.config.RuntimeSettings.ApplyResult result;
         try {
-            effective = dev.vox.lss.common.config.RuntimeSettings
+            result = dev.vox.lss.common.config.RuntimeSettings
                     .applyAndPersist(config, key, rawValue);
         } catch (IllegalArgumentException e) {
             source.sendFailure(Component.literal(keyName + ": " + e.getMessage()));
             return 0;
         }
         String repushNote = "";
-        if (key.name().equals("lodDistanceChunks") && !effective.equals(before)) {
+        // Re-push keyed on the MUTATION, not a reply-string diff: a per-world set leaves
+        // the scalar unchanged, so a string compare would miss it (and never re-push).
+        if (result.repush()) {
             var service = LSSServerNetworking.getRequestService();
             if (service != null) {
                 int[] counts = service.repushSessionConfig();
@@ -117,8 +118,8 @@ public class LSSServerCommands {
                         + (counts[1] > 0 ? " (" + counts[1] + " legacy update on rejoin)" : "");
             }
         }
-        String reply = keyName + " = " + effective
-                + dev.vox.lss.common.config.RuntimeSettings.clampedSuffix(effective, rawValue)
+        String reply = keyName + " = "
+                + dev.vox.lss.common.config.RuntimeSettings.renderReplyValue(key, result, rawValue)
                 + " — " + key.applyNote() + repushNote;
         source.sendSuccess(() -> Component.literal(reply), true);
         return 1;

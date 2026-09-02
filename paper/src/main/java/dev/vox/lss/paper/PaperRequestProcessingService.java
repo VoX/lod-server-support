@@ -416,7 +416,7 @@ public class PaperRequestProcessingService {
         this.regionSummaries = this.regionStamps == null ? null
                 : new dev.vox.lss.common.region.RegionSummaryService(
                         this.regionStamps::tileStampSeconds,
-                        () -> this.config.lodDistanceChunks);
+                        this.config::maxConfiguredLodDistanceChunks);
         // Null in test wiring: the guarded retract at shutdown must clear only a
         // manager this service actually published.
         this.xrayMasks = wiring.xrayMasks();
@@ -480,7 +480,7 @@ public class PaperRequestProcessingService {
         var offThreadProcessor = new PaperOffThreadProcessor(
                 players, diskReader, generationService != null, dataDir,
                 config.effectiveTimestampCacheMB(), config.missMemoTtlSeconds,
-                config.lodDistanceChunks + LSSConstants.LOD_DISTANCE_BUFFER
+                config.maxConfiguredLodDistanceChunks() + LSSConstants.LOD_DISTANCE_BUFFER
                         + OffThreadProcessor.SWEEP_RADIUS_MARGIN_CHUNKS);
 
         // Compressed-column shipping (protocol 19, plan §0.11) — twin of the Fabric
@@ -809,7 +809,7 @@ public class PaperRequestProcessingService {
     private void applyRuntimeConfig() {
         this.bandwidthLimiter.reconfigure(this.config.bytesPerSecondGlobal());
         this.diskReader.reapplyGateCapacity(this.config);
-        this.offThreadProcessor.updateSweepRadius(this.config.lodDistanceChunks
+        this.offThreadProcessor.updateSweepRadius(this.config.maxConfiguredLodDistanceChunks()
                 + LSSConstants.LOD_DISTANCE_BUFFER
                 + dev.vox.lss.common.processing.OffThreadProcessor.SWEEP_RADIUS_MARGIN_CHUNKS);
         int genGlobal = this.config.generationConcurrencyLimitGlobal;
@@ -850,7 +850,7 @@ public class PaperRequestProcessingService {
     private SessionConfigSender sessionConfigSender = (player, cfg, enabled) ->
             PaperPayloadHandler.sendSessionConfig(player.getBukkitEntity(),
                     LSSConstants.PROTOCOL_VERSION, enabled,
-                    cfg.lodDistanceChunks, cfg.enableChunkGeneration);
+                    PaperWorldLod.distance(cfg, player), cfg.enableChunkGeneration);
 
     void setSessionConfigSender(SessionConfigSender sender) {
         this.sessionConfigSender = sender;
@@ -1195,7 +1195,7 @@ public class PaperRequestProcessingService {
         // one prompt per REATTACH_PROMPT_INTERVAL, which the guard's INFO line makes
         // visible; a rejoin heals it.
         PaperPayloadHandler.sendSessionConfigV16(player.getBukkitEntity(),
-                this.config.enabled, this.config.lodDistanceChunks,
+                this.config.enabled, PaperWorldLod.distance(this.config, player),
                 LSSConstants.SYNC_ON_LOAD_SLOT_CAP,
                 this.config.generationConcurrencyLimitPerPlayer,
                 this.config.enableChunkGeneration);
@@ -1262,7 +1262,7 @@ public class PaperRequestProcessingService {
     public void handleBatchRequest(ServerPlayer player, PaperPayloadHandler.DecodedBatchChunkRequest batch) {
         int playerCx = player.getBlockX() >> 4;
         int playerCz = player.getBlockZ() >> 4;
-        int maxDist = this.config.lodDistanceChunks + LSSConstants.LOD_DISTANCE_BUFFER;
+        int maxDist = PaperWorldLod.distance(this.config, player) + LSSConstants.LOD_DISTANCE_BUFFER;
 
         // v16 compat branch: legacy drip batches MERGE into the synthetic want-set (the 1 Hz
         // pump tick is the sole declarer) instead of replacing the backlog. Placed before the
@@ -1478,10 +1478,10 @@ public class PaperRequestProcessingService {
      *  probe (or, on Folia, the hold-release take) reads it, giving shim batches the same
      *  arrival-tick probe alignment a network-received client batch gets. */
     private void tickV16Compat() {
-        int maxDist = this.config.lodDistanceChunks + LSSConstants.LOD_DISTANCE_BUFFER;
         for (var state : this.players.values()) {
             if (!state.hasCompletedHandshake()) continue;
             var player = state.getPlayer();
+            int maxDist = PaperWorldLod.distance(this.config, player) + LSSConstants.LOD_DISTANCE_BUFFER;
             this.v16Compat.tickPlayer(player.getUUID(), state,
                     player.chunkPosition().x(), player.chunkPosition().z(), maxDist);
         }
@@ -1544,6 +1544,8 @@ public class PaperRequestProcessingService {
             // Counted AFTER the removal check (R2-11) — see the Fabric twin.
             activeCount++;
 
+            // Captured BEFORE checkDimensionChange() mutates the stored dimension.
+            var prevDim = state.getLastDimension();
             if (state.checkDimensionChange()) {
                 // A dimension change abandons all in-flight work. Reuse the (well-tested)
                 // disconnect teardown + a fresh registration instead of a second, hand-rolled
@@ -1556,6 +1558,21 @@ public class PaperRequestProcessingService {
                 // Far players: identity SURVIVES the cycle (v18-rung checklist); the
                 // roster does not — a bumped-epoch full roster follows.
                 this.farPlayerService.onViewerDimensionChange(changed.getUUID());
+                // Re-push ONLY when the new world's distance differs — the client rebuilds
+                // its whole request manager on any SessionConfig, so an unconditional push
+                // would tax every portal even with no overrides (see the Fabric twin). The
+                // previous world's distance resolves from its ResourceKey via the loaded
+                // level so a Bukkit-name-keyed override still matches.
+                int newDist = PaperWorldLod.distance(this.config, changed);
+                int prevDist = PaperWorldLod.distanceForDimKey(this.config, this.server, prevDim);
+                if (newDist != prevDist && this.dialects.isCurrent(changed.getUUID())) {
+                    try {
+                        this.sessionConfigSender.send(changed, this.config, this.config.enabled);
+                    } catch (Exception e) {
+                        LSSLogger.error("Session-config dimension-change push failed for "
+                                + changed.getName().getString(), e);
+                    }
+                }
                 continue;
             }
 
@@ -1634,7 +1651,8 @@ public class PaperRequestProcessingService {
                     this.config.lodYieldsToVanillaTransport,
                     // Prune gated on the yield (review B-2) — the Fabric twin's comment.
                     this.config.lodYieldsToVanillaTransport
-                            ? this.config.lodDistanceChunks + LSSConstants.LOD_DISTANCE_BUFFER
+                            ? this.config.maxConfiguredLodDistanceChunks()
+                                    + LSSConstants.LOD_DISTANCE_BUFFER
                                     + OffThreadProcessor.SWEEP_RADIUS_MARGIN_CHUNKS
                             : 0,
                     this.config.enableSendPacing);

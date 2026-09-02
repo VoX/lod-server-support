@@ -25,8 +25,11 @@ class WireDialectTrackerTest {
     @Test
     void handshakeMarksAndDisconnectDrops() {
         assertEquals(WireDialect.CURRENT, tracker.dialectOf(uuid), "untracked defaults CURRENT");
+        assertFalse(tracker.isCurrent(uuid),
+                "untracked is CURRENT for egress, not a marked current session");
         tracker.onHandshake(uuid, WireDialect.V18);
         assertTrue(tracker.isV18(uuid));
+        assertFalse(tracker.isCurrent(uuid));
         assertEquals(WireDialect.V18, tracker.dialectOf(uuid));
         assertEquals(1, tracker.sessionCount(WireDialect.V18));
         tracker.onDisconnect(uuid);
@@ -44,6 +47,7 @@ class WireDialectTrackerTest {
         assertFalse(tracker.isV16(uuid), "the overwrite IS the cross-dialect shed");
         tracker.onHandshake(uuid, WireDialect.CURRENT);
         assertFalse(tracker.isV19(uuid));
+        assertTrue(tracker.isCurrent(uuid));
         assertEquals(WireDialect.CURRENT, tracker.dialectOf(uuid));
         assertEquals(1, tracker.sessionCount(WireDialect.CURRENT));
     }

@@ -257,6 +257,26 @@ class LSSPaperPluginGlueTest {
     }
 
     @Test
+    void handshakeReplyUsesPerWorldLodOverrideWhenPlayerIsKnown() {
+        var config = config(true);
+        config.lodDistanceChunks = 512;
+        config.lodDistanceChunksByWorld.put("minecraft:the_nether", 64);
+        var sender = new RecordingSender();
+        var registrar = new RecordingRegistrar();
+        var nmsPlayer = org.mockito.Mockito.mock(net.minecraft.server.level.ServerPlayer.class);
+        var nether = org.mockito.Mockito.mock(net.minecraft.server.level.ServerLevel.class);
+        when(nmsPlayer.level()).thenReturn(nether);
+        when(nether.dimension()).thenReturn(net.minecraft.world.level.Level.NETHER);
+
+        LSSPaperPlugin.handleHandshake(handshakeFrame(V, VOXEL_CAPS), "Steve", nmsPlayer, config,
+                true, sender, registrar);
+        registrar.runDeferredReplies();
+
+        assertEquals(64, sender.replies.get(0).lodDistanceChunks(),
+                "the handshake must advertise the dimension override when Bukkit is unavailable");
+    }
+
+    @Test
     void v16HandshakeGetsTheV16DialectReplyAndRegistration() {
         // A legacy protocol-16 client under enableV16Compat (default true) must take the
         // SAME ladder with the V16 dialect: the sender gets the dialect + the real admission
