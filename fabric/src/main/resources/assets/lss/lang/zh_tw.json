@@ -20,7 +20,7 @@
   "lss.config.far_players_share_self": "分享我的位置",
   "lss.config.far_players_share_self.tooltip": "允許遠處的玩家以遠景模型看到你。關閉後，你在正常渲染距離之外將不可見。",
   "lss.config.far_players_name_tags": "遠處玩家名牌",
-  "lss.config.far_players_name_tags.tooltip": "在遠處玩家模型上方顯示名牌，對處於正常範圍但超出遊戲自帶 64 格名牌距離的玩家也會顯示。名牌由本模組繪製，其他模組的名牌設定對其無效。",
+  "lss.config.far_players_name_tags.tooltip": "在遠處玩家模型上方顯示名牌，對處於正常範圍但超出遊戲自帶名牌距離的玩家也會顯示。名牌由本模組繪製，其他模組的名牌設定對其無效。",
   "lss.config.far_players_full_bright": "遠處玩家全亮",
   "lss.config.far_players_full_bright.tooltip": "以最大亮度繪製遠處玩家，使其在夜間更醒目。關閉時按周圍遠景地形的光照顯示。",
   "lss.config.far_players_render_distance": "遠處玩家渲染上限",

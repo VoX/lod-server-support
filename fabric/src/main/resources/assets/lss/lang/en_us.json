@@ -20,7 +20,7 @@
   "lss.config.far_players_share_self": "Share My Position",
   "lss.config.far_players_share_self.tooltip": "Let faraway players see you as a distant player model. Turn off to stay hidden beyond normal render distance.",
   "lss.config.far_players_name_tags": "Far Player Name Tags",
-  "lss.config.far_players_name_tags.tooltip": "Show name tags over far player models, and over players still in normal range once they are past the game's own 64-block tag distance. Drawn by this mod, so other mods' name tag settings do not apply to them.",
+  "lss.config.far_players_name_tags.tooltip": "Show name tags over far player models, and over players still in normal range once they are past the game's own name-tag distance. Drawn by this mod, so other mods' name tag settings do not apply to them.",
   "lss.config.far_players_full_bright": "Full Bright Far Players",
   "lss.config.far_players_full_bright.tooltip": "Draw far players at full brightness so they stand out at night. Off keeps them lit like the distant terrain around them.",
   "lss.config.far_players_render_distance": "Far Player Render Limit",

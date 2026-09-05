@@ -65,9 +65,19 @@ class FarPlayerRenderSourceContractTest {
         // (vanilla's distance term + Sable's injection).
         assertTrue(src.contains("Frustum frustum = cameraState.initialized ? cameraState.cullFrustum : null;"),
                 tree + ": the frustum comes from the extracted camera state, gated on initialized");
-        assertTrue(src.contains("if (!isInFrustum(frustum, proxy)) return false;")
+        assertTrue(src.contains("if (!isInFrustum(frustum, proxy)) return CULLED;")
                         && src.contains("if (!isInFrustum(frustum, mount.entity)) return -1;"),
                 tree + ": proxy and mount submits must be frustum-culled");
+        assertTrue(src.indexOf("if (!isInFrustum(frustum, proxy)) return CULLED;")
+                        < src.indexOf("var renderState = dispatcher.extractEntity(proxy, partialTick);"),
+                tree + ": the proxy's frustum test must run BEFORE its extraction (port review fold 1)");
+        assertTrue(src.contains("() -> light != CULLED ? light : packedLightFor(dispatcher, proxy, partialTick, fullBright)"),
+                tree + ": a culled proxy reads the light only if its tag survives (lazy supplier)");
+        // Port review fold 2: inside vanilla's tag range (tracking radius < 64) vanilla would draw
+        // its own tag + score plate over LSS's — both are cleared on the extracted state.
+        assertTrue(src.contains("renderState.nameTag = null;")
+                        && src.contains("if (renderState instanceof AvatarRenderState avatar) avatar.scoreText = null;"),
+                tree + ": vanilla's name tag and score text must be suppressed on the proxy's render state");
         assertTrue(src.contains("AABB box = entity.getBoundingBox().inflate(0.5);"),
                 tree + ": the cull box is the entity box (noCulling/getBoundingBoxForCulling are renderer-protected here)");
         assertFalse(src.contains("dispatcher.shouldRender("),
@@ -116,7 +126,7 @@ class FarPlayerRenderSourceContractTest {
                         && src.contains("if (!vanillaNameVisibleIgnoringDistance(realPlayer, localPlayer)) continue;")
                         && src.contains("Mth.lerp(partialTick, realPlayer.xOld, realPlayer.getX())"),
                 tree + ": tracked players past vanilla's tag range get the LSS tag under vanilla's ladder");
-        assertTrue(src.contains("queueProxyTag(pendingTags, frustum, nameTags, tracked, proxy, localPlayer, position, light);")
+        assertTrue(src.contains("queueProxyTag(pendingTags, frustum, nameTags, tracked, proxy, localPlayer, position,")
                         && src.contains("if (!vanillaNameVisibleIgnoringDistance(proxy, localPlayer)) return;"),
                 tree + ": proxy tags route through the option + sneak gate AND vanilla's team ladder (fold D3)");
         // Fold (c): this line's WalkAnimationState.stop() zeroes speedOld (verified) — the stop
@@ -142,8 +152,10 @@ class FarPlayerRenderSourceContractTest {
                         && src.contains("if (type == skinType) return -1;")
                         && src.contains("pose.pose().scaleLocal(f);")
                         && src.contains("Math.clamp(distance * distance * 6e-6, 0.02, 4.0)")
-                        && src.contains("OVERLAY_MAX_DISTANCE_BLOCKS = 80.0"),
-                tree + ": the skin submission is never lifted, the lift is a distance-scaled pose scale, overlays are gated");
+                        && src.contains("OVERLAY_MAX_DISTANCE_BLOCKS = 80.0")
+                        && src.contains("byte parts = cameraDistance <= OVERLAY_MAX_DISTANCE_BLOCKS")
+                        && src.contains("armorLiftBlocks(cameraDistance), cameraDistance, proxy.liftTiers));"),
+                tree + ": the skin submission is never lifted, the lift and the overlay gate use the CAMERA distance, overlays are gated");
         assertTrue(src.contains("                collector); // mounts are not lifted"),
                 tree + ": mounts submit through the raw collector");
         // Fold (e2): the lift is TIERED per render type from the proxy's own equipment — inner
@@ -158,6 +170,8 @@ class FarPlayerRenderSourceContractTest {
                 tree + ": overlapping armor pieces must sit on different lift tiers");
         assertTrue(src.contains("return root == null ? this : new LiftedSubmitCollector(root.order(order), this);"),
                 tree + ": ordered sub-collectors (the armor layer's) must be wrapped too");
+        assertTrue(src.contains("tierOf(ChunkSectionLayerHelper.getRenderType(translucent))"),
+                tree + ": the FRAPI block-model overload resolves its tier like the vanilla one");
         // Fold (D1): the pass runs above a sentinel pose and every containment restores to it.
         assertTrue(src.contains("passMark = poseStack == null ? null : markPose(poseStack);")
                         && src.contains("if (passMark != null) unwindPose(poseStack, passMark);"),
