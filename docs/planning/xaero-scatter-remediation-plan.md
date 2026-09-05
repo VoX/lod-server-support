@@ -1,7 +1,9 @@
 # Xaero map drops under multi-player far generation — remediation plan (v2, 2026-09-05)
 
 Status: v2 after the 1-Fable + 4-Opus panel (§7 is the record; every MAJOR is folded below).
-Nothing implemented. Line references are the `main` (26.2) tree unless a line is named.
+**EXECUTING since 2026-09-05 on `feat/xaero-scatter` (main): WI-1a, WI-1b Option L, WI-3 (with the old
+WI-4 folded in), WI-5 and WI-6 implemented — §8 is the as-built record; ports follow.** The user
+assumed WI-0 positive ("this is a real bug that has been in for a while") and asked for the rest. Line references are the `main` (26.2) tree unless a line is named.
 
 Provenance: the user's live observation (several players online, each triggering far-away chunk
 generation 5000+ blocks apart; the Xaero World Map bridge recorded "a lot of dropped map chunks"),
@@ -429,3 +431,36 @@ the client `XaeroMap:` tokens and `ingest_parked` before/after; Xaero's "Max loa
   WI-3 item 3; MINORs (header rung seals the restore hole — pre-existing; store-row wipe → WI-5 leg;
   three-way extractor variants; exact M1/M2/N1 texts) folded; `XaeroMapCompat.java:32` dropped from
   the paper cuts.
+
+## 8. As-built record (2026-09-05, branch feat/xaero-scatter off main)
+
+- **WI-1b = Option L, decided by the seam facts, not by measurement:** both loaders fire
+  their chunk-load event from the FULL status task with the light engine attached
+  (fabric-api 4.1.3 `ChunkGeneratingMixin` at the full-task tail; NeoForge 26.2.0.59's
+  `ChunkStatusTasks` patch posts `ChunkEvent.Load(levelChunk, …)`), so the load hash equals
+  the first save's by construction; the per-load cost is one `serializeColumn` (~30-60 µs)
+  on the main thread, the same call the save hook already pays per save. The live
+  measurement is `seeded_load=` in `/lsslod diag` (0 on a lively server = the chunk system
+  does not fire the event; the filter then behaves exactly as before). LINE FLAVOR: the
+  fabric-api 4.x callback takes a third `generated` flag (surfaces row 22). LRU replaces the
+  clear-all (`putAndMoveToLast` + `removeFirstLong`); entries are NOT dropped at unload
+  (Fabric's unload event fires before the unload save reaches the hook — verified in the
+  `ServerChunkLoadingManagerMixin` injection). Option P is not implemented.
+- **WI-1a:** `Dirty: marked=, suppressed=, seeded_load=, entries=` after the Gate slot
+  (`DiagData.withDirtyLine`, Paper null); exporter `dirty.seeded_load` (cumulative) +
+  `dirty.entries` (gauge) with the four lockstep edits (contract literal, `check_soak.py`
+  fixture, `soak-test-design.md`, Paper zero-fill).
+- **WI-3 as built:** hybrid-scan-plan.md §12.10 is the doctrine record. Two panel gaps
+  found at implementation: (1) a region-ready release of a deferral-EXPIRED tile would
+  re-serve into the same busy tile chunk (the §12 review's original strike-burn objection)
+  → tile-scoped debts (`OwedRegion.busyTiles`) release only once their tile chunk is ready;
+  (2) the pump's idle fast-out returned before the probe pass when the queue was empty →
+  an owed debt keeps the ladder running. Twelve pins in `XaeroMapCompatTest`; the stub's
+  `createdRegionLoadState` default flipped to the faithful 0.
+- **WI-5:** `check_cold_restart_resync` re-pinned (`marked_total ≤ 50`, suppression ratio
+  ≥ 0.9; docstring rewritten; three selftest cases). BEFORE proof: the re-pinned checker
+  against the recorded 2026-08-21 run reds exactly the two new legs (449 / 0). The store
+  hit-rate leg is NOT added: the scenario pins `lodStore: "off"`.
+- **WI-6:** the per-line comment/banner fixes ride each port (26.1 + 1.21.10 event
+  wording; the shared test comment on all five; the three banners; the two extractor
+  comments).

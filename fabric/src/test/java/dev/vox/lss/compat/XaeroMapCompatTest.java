@@ -114,6 +114,7 @@ class XaeroMapCompatTest {
     void setUp() throws Exception {
         XaeroStubEvents.clear();
         this.processor = new MapProcessor();
+        this.processor.createdRegionLoadState = 2; // plain commit tests: regions pre-loaded
         this.processor.world = this.worldToken;
         this.processor.mainWorld = this.worldToken;
         this.processor.mapWorld.currentDimensionId = OVERWORLD;
@@ -2593,11 +2594,268 @@ class XaeroMapCompatTest {
                 && line.contains(", rebuild_ms=") && line.contains(", rebuild_max_us=")
                 && line.contains(", dropped_overflow=") && line.contains(", dropped_expired=")
                 && !line.contains(", refused_paused=") && line.contains(", drops_reported=")
+                && line.contains(", owed=") && line.contains(", owed_regions=")
+                && line.contains(", owed_reported=")
                 && line.contains(", bp="), line);
         assertFalse(line.contains("heal_"), "the §18 heal tokens die with the ledger (§12.1)");
         assertFalse(line.contains("xaero_crashed"), "the crash token appears only while latched");
         assertFalse(line.contains("optional_unbound"), "every optional group binds against the stubs");
         this.enabled = false;
         assertTrue(this.bridge.describe().contains("state=disabled"));
+    }
+
+    // ---- WI-3: the owed set (xaero-scatter-remediation-plan.md; hybrid-scan-plan.md §12.10) ----
+
+    /** Region (4,2)'s bucket awaits its Xaero load: after one pump the evictor knows it,
+     *  and an eviction from it is OWED — no ingest strike — while a loaded region's
+     *  eviction keeps the immediate governed report (the §12.8 pin above). */
+    @Test
+    void anAwaitingRegionEvictionIsOwedNotReported() {
+        this.processor.createdRegionLoadState = 0;
+        this.bridge.maxQueue = 2;
+        offer(128, 64); // region (4,2), fresh-unloaded
+        offer(129, 64);
+        this.bridge.pump(); // both await their load → the pump publishes (4,2) as awaiting
+        assertTrue(this.bridge.awaitingRegionsForTest().contains(XaeroMapCompat.regionKeyOf(128, 64)),
+                "the last pump's awaiting regions are the evictor's classifier");
+        offer(130, 64); // evicts (128,64) — its region is awaiting: owed, silent
+        assertEquals(1, this.bridge.counterForTest("dropped_overflow"), "still counted as a drop");
+        assertTrue(this.reports.isEmpty(), "an awaiting-region eviction burns no ingest strike");
+        assertEquals(1, this.bridge.counterForTest("owed"));
+        assertEquals(1, this.bridge.counterForTest("owed_regions"));
+        assertTrue(this.bridge.describe().contains(", owed=1, owed_regions=1, owed_reported=0"));
+    }
+
+    /** An eviction from a region NOBODY has probed yet (no pump since) is UNKNOWN to
+     *  the classifier and takes today's governed report — fail toward reporting. */
+    @Test
+    void anUnknownRegionEvictionStillReports() {
+        this.processor.createdRegionLoadState = 0;
+        this.bridge.maxQueue = 1;
+        offer(128, 64);
+        offer(129, 64); // evicts (128,64) before any pump classified (4,2)
+        assertEquals(1, this.reports.size());
+        assertEquals(0, this.bridge.counterForTest("owed"));
+    }
+
+    /** The debt is released — reported for its re-serve — only once the region is
+     *  loaded AND resting, so the re-serve lands in a queue whose region can take it. */
+    @Test
+    void owedPositionsReportOnceTheRegionLoadsAndRests() {
+        this.processor.createdRegionLoadState = 0;
+        this.bridge.maxQueue = 2;
+        offer(128, 64);
+        offer(129, 64);
+        this.bridge.pump();
+        offer(130, 64); // (128,64) owed
+        this.bridge.pump(); // still unloaded: the debt waits
+        assertTrue(this.reports.isEmpty());
+        var region = this.processor.regions.get((4L << 32) | 2L);
+        region.loadState = 2; // Xaero finished the load
+        region.resting = true;
+        this.bridge.pump(); // the queued siblings commit; the owed one is released
+        assertEquals(2, this.bridge.counterForTest("written"));
+        assertEquals(1, this.reports.size(), "the owed position is reported for its re-serve");
+        assertEquals(128, this.reports.get(0)[1]);
+        assertEquals(64, this.reports.get(0)[2]);
+        assertEquals(1, this.bridge.counterForTest("owed_reported"));
+        assertEquals(0, this.bridge.counterForTest("owed"));
+        assertEquals(0, this.bridge.counterForTest("owed_regions"));
+    }
+
+    /** Releases are bounded per pump — each report is a main-thread task and a
+     *  want-set entry; a whole region at once would spike past the want-set budget. */
+    @Test
+    void owedReleaseIsBoundedPerPump() {
+        this.processor.createdRegionLoadState = 0;
+        this.bridge.maxQueue = 1;
+        this.bridge.owedReportsPerPump = 2;
+        offer(128, 64);
+        this.bridge.pump(); // (4,2) awaiting
+        offer(129, 64); // evicts (128,64)
+        offer(130, 64); // evicts (129,64)
+        offer(131, 64); // evicts (130,64)
+        assertEquals(3, this.bridge.counterForTest("owed"));
+        var region = this.processor.regions.get((4L << 32) | 2L);
+        region.loadState = 2;
+        region.resting = true;
+        this.bridge.pump();
+        assertEquals(2, this.reports.size(), "at most owedReportsPerPump per pump");
+        assertEquals(1, this.bridge.counterForTest("owed"));
+        this.bridge.pump();
+        assertEquals(3, this.reports.size());
+        assertEquals(0, this.bridge.counterForTest("owed"));
+    }
+
+    /** owed ∩ queue = ∅: a fresh offer of an owed position pays the debt, so a later
+     *  release can never un-stamp the column the client just re-received. */
+    @Test
+    void aFreshOfferPaysTheDebt() {
+        this.processor.createdRegionLoadState = 0;
+        this.bridge.maxQueue = 2;
+        offer(128, 64);
+        offer(129, 64);
+        this.bridge.pump();
+        offer(130, 64); // (128,64) owed
+        assertEquals(1, this.bridge.counterForTest("owed"));
+        this.bridge.maxQueue = 3;
+        offer(128, 64); // its bytes are back
+        assertEquals(0, this.bridge.counterForTest("owed"));
+        var region = this.processor.regions.get((4L << 32) | 2L);
+        region.loadState = 2;
+        region.resting = true;
+        this.bridge.pump();
+        assertEquals(3, this.bridge.counterForTest("written"));
+        assertTrue(this.reports.isEmpty(), "nothing left to report: the debt was paid in bytes");
+    }
+
+    /** An owed region has no queued bytes, so neither the drain nor the grant phase
+     *  would ever see it — the probe pass feeds it into the load window itself. */
+    @Test
+    void owedRegionsFeedTheLoadGrant() {
+        this.processor.createdRegionLoadState = 0;
+        this.bridge.maxQueue = 1;
+        offer(128, 64);
+        this.bridge.pump(); // (4,2) awaiting → load requested
+        assertEquals(1, this.bridge.counterForTest("load_requests"));
+        offer(160, 64); // region (5,2): evicts (128,64) → owed (4,2); the queue holds only (5,2)
+        // Model the loader's dead end: the (4,2) load failed and the region came back requestable.
+        this.processor.regions.get((4L << 32) | 2L).canRequestReload = true;
+        this.bridge.pump();
+        assertEquals(3, this.bridge.counterForTest("load_requests"),
+                "(5,2) from the queue AND (4,2) from the owed set were granted loads");
+    }
+
+    /** A region that never loads reports its debt ONCE at the TTL — bounded, and far
+     *  cheaper than four strikes and a park; the debt is then gone. */
+    @Test
+    void owedDebtExpiresWithOneReportAtTheTtl() {
+        this.processor.createdRegionLoadState = 0;
+        this.bridge.maxQueue = 2;
+        offer(128, 64);
+        offer(129, 64);
+        this.bridge.pump();
+        offer(130, 64); // (128,64) owed
+        this.bridge.pump();
+        assertTrue(this.reports.isEmpty());
+        this.clockMillis += this.bridge.owedTtlMillis + 1;
+        this.bridge.pump();
+        assertEquals(1, this.reports.size(), "one report at expiry");
+        assertEquals(0, this.bridge.counterForTest("owed"));
+        this.bridge.pump();
+        assertEquals(1, this.reports.size(), "…and never again");
+    }
+
+    /** While the halt is WEDGED (the writer stuck, the stream released at full rate)
+     *  owed reports are HELD — a re-declaration burst must not join that stream;
+     *  they release once governance re-arms. */
+    @Test
+    void theWedgeGateHoldsOwedReports() {
+        this.processor.createdRegionLoadState = 0;
+        this.bridge.maxQueue = 2;
+        offer(128, 64);
+        offer(129, 64);
+        this.bridge.pump();
+        offer(130, 64); // (128,64) owed; the queue is 100% full → halt
+        assertEquals(halt(), this.bridge.reportBackpressure(), "the halt starts the time-box");
+        this.clockMillis += this.bridge.bpHaltWedgeMillis + 1;
+        this.bridge.pump();
+        assertEquals(-1, this.bridge.reportBackpressure(), "no progress through the window: wedged");
+        var region = this.processor.regions.get((4L << 32) | 2L);
+        region.loadState = 2;
+        region.resting = true;
+        this.bridge.pump(); // the region is ready but the stream is wedge-released: HELD
+        assertEquals(2, this.bridge.counterForTest("written"));
+        assertTrue(this.reports.isEmpty(), "no owed report joins the wedge-released stream");
+        assertEquals(1, this.bridge.counterForTest("owed"));
+        assertTrue(this.bridge.reportBackpressure() >= 0, "drained below the re-arm point: governance resumes");
+        this.bridge.pump();
+        assertEquals(1, this.reports.size(), "released once governance is back");
+    }
+
+    /** A deferral-EXPIRED tile (its tile chunk stuck in a PBO download) used to be a
+     *  silent permanent hole; it is now a TILE-scoped debt — released only once its
+     *  own tile chunk is ready (a region-ready release would re-serve straight back
+     *  into the same busy tile and burn a strike per DEFER_CAP interval). */
+    @Test
+    void aDeferredTileExpiryIsOwedUntilItsTileChunkIsReady() {
+        this.bridge.deferCap = 1;
+        offer(0, 0);
+        var region = new MapRegion();
+        var busy = new MapTileChunk(region, 0, 0);
+        busy.loadState = 2;
+        busy.leafTexture.downloadFromPBO = true;
+        region.setChunk(0, 0, busy);
+        this.processor.regions.put(0L, region);
+        for (int i = 0; i < 4; i++) this.bridge.pump();
+        assertEquals(1, this.bridge.counterForTest("dropped_expired"));
+        assertEquals(1, this.bridge.counterForTest("owed"), "the expired tile is a debt, not a hole");
+        assertTrue(this.reports.isEmpty(), "the region is loaded+resting but the TILE is busy: held");
+        busy.leafTexture.downloadFromPBO = false; // the download finished
+        this.bridge.pump();
+        assertEquals(1, this.reports.size(), "released once the tile chunk can take a write");
+        assertEquals(0, this.reports.get(0)[1]);
+        assertEquals(0, this.reports.get(0)[2]);
+        assertEquals(0, this.bridge.counterForTest("owed"));
+    }
+
+    /** Another dimension's debt is never probed or reported there (a foreign report
+     *  is a cache deletion per position in the manager); it waits for a return
+     *  within the TTL and is discarded silently at it. */
+    @Test
+    void aForeignDimensionsDebtWaitsAndExpiresSilently() {
+        this.processor.createdRegionLoadState = 0;
+        this.bridge.maxQueue = 2;
+        offer(128, 64);
+        offer(129, 64);
+        this.bridge.pump();
+        offer(130, 64); // (128,64) owed in the Overworld
+        this.processor.mapWorld.currentDimensionId = NETHER;
+        this.clientDimension = NETHER;
+        this.bridge.pump();
+        assertEquals(1, this.bridge.counterForTest("owed"), "held for a return");
+        this.clockMillis += this.bridge.owedTtlMillis + 1;
+        this.bridge.pump();
+        assertEquals(0, this.bridge.counterForTest("owed"), "discarded at the TTL");
+        assertTrue(this.reports.stream().noneMatch(r -> r[0] == OVERWORLD && (int) r[1] == 128),
+                "never reported into the foreign dimension");
+    }
+
+    /** The owed set is bounded by REGIONS (a region's positions are bounded by
+     *  construction — 1024 tiles); the oldest debt goes first, unreported. */
+    @Test
+    void owedRegionsAreCappedOldestFirst() {
+        this.processor.createdRegionLoadState = 0;
+        this.bridge.maxQueue = 1;
+        this.bridge.maxOwedRegions = 2;
+        offer(128, 64);
+        this.bridge.pump(); // (4,2) awaiting
+        offer(160, 64); // evicts (128,64) → owed (4,2)
+        this.bridge.pump(); // (5,2) awaiting
+        offer(192, 64); // evicts (160,64) → owed (5,2)
+        this.bridge.pump(); // (6,2) awaiting
+        offer(224, 64); // evicts (192,64) → owed (6,2): past the cap, (4,2) — the oldest — goes
+        assertEquals(2, this.bridge.counterForTest("owed_regions"));
+        assertEquals(2, this.bridge.counterForTest("owed"));
+        var r42 = this.processor.regions.get((4L << 32) | 2L);
+        r42.loadState = 2;
+        r42.resting = true;
+        this.bridge.pump();
+        assertTrue(this.reports.isEmpty(), "the evicted debt is gone, unreported");
+    }
+
+    /** Session end drops every debt (the map those tiles belonged to is gone). */
+    @Test
+    void sessionEndClearsTheOwedSet() {
+        this.processor.createdRegionLoadState = 0;
+        this.bridge.maxQueue = 2;
+        offer(128, 64);
+        offer(129, 64);
+        this.bridge.pump();
+        offer(130, 64);
+        assertEquals(1, this.bridge.counterForTest("owed"));
+        this.bridge.onSessionEnd();
+        assertEquals(0, this.bridge.counterForTest("owed"));
+        assertEquals(0, this.bridge.counterForTest("owed_regions"));
     }
 }

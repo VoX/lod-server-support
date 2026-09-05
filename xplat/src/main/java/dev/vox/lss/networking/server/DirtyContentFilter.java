@@ -2,7 +2,7 @@ package dev.vox.lss.networking.server;
 
 import dev.vox.lss.common.LSSLogger;
 import dev.vox.lss.common.PositionUtil;
-import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
+import it.unimi.dsi.fastutil.longs.Long2LongLinkedOpenHashMap;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.chunk.LevelChunk;
 
@@ -38,9 +38,26 @@ import java.util.Map;
  * vanilla/C2ME. Known contention point, accepted for now: the whole column serialization
  * runs inside this monitor, so parallel-save systems funnel through one lock during
  * autosave storms — hoist the hash outside the lock if that ever measures hot.
+ *
+ * <p><b>Baselines (xaero-scatter-remediation-plan.md WI-1b, 2026-09-05).</b> An ABSENT hash
+ * always reads as changed, so every chunk's first observed save per server process used
+ * to mark dirty regardless of content — the first-observed-save storm: after a restart
+ * every chunk any player merely LOADS (the load pyramid's light step marks it unsaved,
+ * so it saves once within ~10 s) re-broadcast to every client holding it from an earlier
+ * session, and the whole loaded disc re-downloaded (cold-restart-resync recorded 449
+ * marked / 0 suppressed with nothing changed). Two seeders now establish the baseline
+ * BEFORE the first save: the generation serve ({@link #seed}) and the chunk-LOAD seam
+ * ({@link #seedLoaded} — each loader's chunk-load event, fired at FULL status when the
+ * light engine already holds the chunk's data, so the hash equals the first save's
+ * unless content or light genuinely changed). Eviction is LRU (coldest chunk first)
+ * instead of the old wholesale clear, so table pressure forgets long-unloaded chunks,
+ * never the loaded set. Entries are deliberately NOT dropped at chunk unload: the
+ * loaders' unload events fire BEFORE the unload save reaches the hook, so a drop there
+ * would turn every unload save into a first observation.
  */
 public class DirtyContentFilter {
-    /** Per-dimension cap; on overflow the map is cleared (chunks re-mark dirty once — self-heals).
+    /** Per-dimension cap; past it the LEAST-RECENTLY-touched entry is evicted (a chunk
+     *  whose baseline was evicted re-marks dirty once at its next save — self-heals).
      *  Package-visible so the eviction test can fill exactly to the cap. */
     static final int MAX_ENTRIES_PER_DIMENSION = 512 * 1024;
     private static final long FNV_OFFSET = 0xcbf29ce484222325L;
@@ -49,13 +66,17 @@ public class DirtyContentFilter {
      *  so air-to-air saves stay quiet and air-to-built transitions mark dirty. */
     private static final long ALL_AIR_HASH = 0x9E3779B97F4A7C15L;
 
-    private final Map<String, Long2LongOpenHashMap> hashesByDimension = new HashMap<>();
+    private final Map<String, Long2LongLinkedOpenHashMap> hashesByDimension = new HashMap<>();
     private final ColumnSerializer serializer;
 
     // Saves whose LOD-visible content matched the stored hash — the metadata-only re-saves this
     // filter exists to suppress (vanilla's ~10s inhabitedTime re-saves). Closes the dirty
     // conservation view: saves-observed == dirty.marked_total + dirty.suppressed_total.
     private long totalSuppressed;
+    // Baselines seeded at chunk LOAD (seedLoaded) — the live instrument for whether this
+    // server's chunk system fires the loaders' chunk-load event at all (Moonrise/C2ME
+    // replace the vanilla status tasks); a lively server reading 0 here has no load seam.
+    private long totalSeededLoads;
 
     /** Serializes a column to exactly the section bytes LSS serves (the hash input).
      *  Injectable for tests only — lets the exception fail-open path run without MC
@@ -82,6 +103,33 @@ public class DirtyContentFilter {
      */
     public synchronized void seed(String dimension, int cx, int cz, byte[] serializedSections) {
         storeHash(dimension, PositionUtil.packPosition(cx, cz), hashContent(serializedSections));
+    }
+
+    /**
+     * Record a just-LOADED chunk's content as its change baseline (WI-1b Option L): the
+     * chunk-load seam fires at FULL status with the light engine's data already attached,
+     * so the hash equals what the chunk's first save will hash unless content or light
+     * genuinely changed in between — the metadata-only first save is then suppressed
+     * like any later re-save. Fail-open by omission: a serialization error seeds nothing
+     * (the first save then reads absent → changed, today's behavior). Runs on the
+     * loaders' main thread inside the monitor (same contention point as the hook).
+     */
+    public synchronized void seedLoaded(ServerLevel level, LevelChunk chunk, String dimension) {
+        seedLoaded(level, chunk, chunk.getPos().x(), chunk.getPos().z(), dimension);
+    }
+
+    /** Position-explicit body (test seam, like contentChanged's). */
+    synchronized void seedLoaded(ServerLevel level, LevelChunk chunk, int cx, int cz,
+                                 String dimension) {
+        long hash;
+        try {
+            hash = hashContent(this.serializer.serializeSections(level, chunk, cx, cz));
+        } catch (Exception e) {
+            LSSLogger.debug("Dirty-content load seed failed for chunk " + cx + "," + cz + ": " + e);
+            return;
+        }
+        storeHash(dimension, PositionUtil.packPosition(cx, cz), hash);
+        this.totalSeededLoads++;
     }
 
     /**
@@ -169,20 +217,36 @@ public class DirtyContentFilter {
      *  public methods) so the seam keeps the class's entry-points-hold-the-lock insurance. */
     synchronized boolean storeHash(String dimension, long packed, long hash) {
         var hashes = this.hashesByDimension.computeIfAbsent(dimension, k -> {
-            var map = new Long2LongOpenHashMap();
+            var map = new Long2LongLinkedOpenHashMap();
             map.defaultReturnValue(0L);
             return map;
         });
-        if (hashes.size() >= MAX_ENTRIES_PER_DIMENSION) {
-            hashes.clear();
+        // LRU: a touched entry moves to the tail; past the cap the HEAD (least recently
+        // touched) goes. A plain put would keep INSERTION order and evict the hottest
+        // (oldest-inserted, most re-saved) chunks first (panel fold, Opus A M4).
+        if (hashes.size() >= MAX_ENTRIES_PER_DIMENSION && !hashes.containsKey(packed)) {
+            hashes.removeFirstLong();
         }
-        long previous = hashes.put(packed, hash);
+        long previous = hashes.putAndMoveToLast(packed, hash);
         return previous != hash;
     }
 
     /** Cumulative count of suppressed metadata-only re-saves (see {@link #totalSuppressed}). */
     public synchronized long getTotalSuppressed() {
         return this.totalSuppressed;
+    }
+
+    /** Cumulative count of chunk-load baselines (see {@link #totalSeededLoads}). */
+    public synchronized long getTotalSeededLoads() {
+        return this.totalSeededLoads;
+    }
+
+    /** Live baseline count across dimensions — a GAUGE (falls on eviction, zero after
+     *  a restart): never a monotonic exporter field. */
+    public synchronized int entryCount() {
+        int n = 0;
+        for (var hashes : this.hashesByDimension.values()) n += hashes.size();
+        return n;
     }
 
     private static long hashContent(byte[] bytes) {

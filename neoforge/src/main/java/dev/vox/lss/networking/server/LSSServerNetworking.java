@@ -47,6 +47,15 @@ public class LSSServerNetworking {
         ServerReceiverGlue.onChunkSaveData(level, chunk, requestService);
     }
 
+    /** The chunk-LOAD baseline seam (xaero-scatter-remediation-plan.md WI-1b): NeoForge
+     *  posts {@code ChunkEvent.Load} from the FULL status task for server AND client
+     *  levels — only the server side seeds. */
+    public static void onChunkLoad(net.neoforged.neoforge.event.level.ChunkEvent.Load event) {
+        if (event.getLevel() instanceof ServerLevel level) {
+            ServerReceiverGlue.onChunkLoaded(level, event.getChunk(), requestService);
+        }
+    }
+
     // ---- NeoForge event handlers (registered by LSSNeoMod) ----
 
     public static void onServerStarted(ServerStartedEvent event) {

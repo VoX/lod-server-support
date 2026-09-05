@@ -192,6 +192,15 @@ public class LSSServerNetworking {
             }
         });
 
+        // The dirty content filter's chunk-LOAD baseline (xaero-scatter-remediation-plan.md
+        // WI-1b): fired from the FULL status task — vanilla, and Moonrise/C2ME through their
+        // Fabric platform hooks; a chunk system that skips it leaves the filter as before.
+        // LINE FLAVOR: fabric-api 4.x (26.2) passes a third `generated` flag; the 2.x
+        // lifecycle module on the older lines takes (level, chunk) — surfaces row 20.
+        net.fabricmc.fabric.api.event.lifecycle.v1.ServerChunkEvents.CHUNK_LOAD.register(
+                (level, chunk, generated) ->
+                        ServerReceiverGlue.onChunkLoaded(level, chunk, requestService));
+
         // The shared /lsslod tree (xplat since N-2), registered through Fabric's event.
         net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback.EVENT.register(
                 (dispatcher, registryAccess, environment) ->

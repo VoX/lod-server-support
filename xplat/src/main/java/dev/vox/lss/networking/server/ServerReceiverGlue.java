@@ -118,6 +118,29 @@ public final class ServerReceiverGlue {
     }
 
     /**
+     * The chunk-LOAD seam body (xaero-scatter-remediation-plan.md WI-1b Option L; each
+     * loader's chunk-load event — Fabric {@code ServerChunkEvents.CHUNK_LOAD}, NeoForge
+     * {@code ChunkEvent.Load} — both fired from the FULL status task on the main thread,
+     * with the light engine already holding the chunk's data). Seeds the dirty content
+     * filter's baseline so the chunk's first metadata-only save no longer reads as a
+     * content change (the first-observed-save storm). Same gates as the save hook: FULL
+     * chunks only, service live + enabled, and the skip predicate below — a seed nobody
+     * will ever be broadcast to is wasted serialization. Under a chunk system that never
+     * fires the event the filter simply behaves as before (diag {@code seeded_load=}
+     * reads 0 on a lively server — that is the live instrument).
+     */
+    public static void onChunkLoaded(ServerLevel level, ChunkAccess chunk,
+                                     RequestProcessingService service) {
+        if (!(chunk instanceof LevelChunk levelChunk)) return;
+        if (service == null || !LSSServerConfig.CONFIG.enabled) return;
+        if (skipDirtyHash(service.hasEverRegisteredPlayer(), service.getLodStore() != null,
+                service.timestampCacheBootedEmpty())) return;
+        String dimension = DIMENSION_STRINGS.computeIfAbsent(level.dimension(),
+                key -> key.identifier().toString());
+        service.getDirtyContentFilter().seedLoaded(level, levelChunk, dimension);
+    }
+
+    /**
      * The review-P3 skip-gate predicate, pure so the truth table is pinnable (three-lens
      * review, test-adequacy MAJOR). Skip the dirty-content serialize+hash only while ALL
      * three hold:

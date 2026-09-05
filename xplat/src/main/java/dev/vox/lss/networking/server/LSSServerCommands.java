@@ -274,12 +274,25 @@ public class LSSServerCommands {
                 .withMoveTraceLine(moveTraceDiagLineOrNull())
                 .withYieldLine(DiagnosticsFormatter.yieldDiagLineOrNull(
                         config.lodYieldsToVanillaTransport, service.getTickDiag()))
-                .withGateLine(serviceGateDiagLineOrNull(config, service));
+                .withGateLine(serviceGateDiagLineOrNull(config, service))
+                .withDirtyLine(dirtyDiagLine(service));
 
         for (var line : DiagnosticsFormatter.formatDiagnostics(data)) {
             source.sendSuccess(() -> Component.literal(line), false);
         }
         return 1;
+    }
+
+    /** The dirty-broadcast one-liner (xaero-scatter-remediation-plan.md WI-1a): saves that
+     *  marked vs saves the content filter suppressed, chunk-LOAD baselines (0 on a lively
+     *  server = this chunk system never fires the load event — the WI-1b live instrument),
+     *  and the live baseline count. Fabric/NeoForge only: Paper's dirty detection is
+     *  event-driven and has no content filter. */
+    static String dirtyDiagLine(RequestProcessingService service) {
+        var filter = service.getDirtyContentFilter();
+        return String.format("Dirty: marked=%d, suppressed=%d, seeded_load=%d, entries=%d",
+                service.getDirtyTracker().getTotalMarked(), filter.getTotalSuppressed(),
+                filter.getTotalSeededLoads(), filter.entryCount());
     }
 
     /** The service-gate one-liner (plan §2.5): present only while the key is armed;
