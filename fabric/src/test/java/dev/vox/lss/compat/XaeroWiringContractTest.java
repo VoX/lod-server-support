@@ -81,8 +81,8 @@ class XaeroWiringContractTest {
                         + " rebuild slice");
         String fabricGlue = Files.readString(SourcePaths.mainSource(
                 "dev/vox/lss/networking/client/LSSClientNetworking.java"));
-        // The event CLASS is per-line flavor (26.2 = level.LevelRenderEvents.END_MAIN,
-        // the 1.21.x/26.1 lines = a WorldRenderEvents member) — the invariant is that a
+        // The event CLASS is per-line flavor (26.2/26.1 = level.LevelRenderEvents.END_MAIN,
+        // the 1.21.x lines = a WorldRenderEvents member) — the invariant is that a
         // RENDER event drives onRenderFrame (§17.1 review fold: a bare call-site match
         // would also pass on a tick registration, the exact regression this pin exists
         // to catch; the lambda parameter name is not pinned).

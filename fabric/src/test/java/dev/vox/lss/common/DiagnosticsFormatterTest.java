@@ -447,6 +447,23 @@ class DiagnosticsFormatterTest {
                 "the Gate line sits between Summary and Bandwidth: " + gated);
         assertEquals(gLine, gated.get(gIdx),
                 "gateLine must survive every subsequent with-* copy");
+
+        // Dirty instruments (xaero-scatter-remediation-plan.md WI-1a): same conditional-line
+        // contract — absent while null (Paper), after the Gate slot when attached.
+        assertTrue(gated.stream().noneMatch(l -> l.startsWith("Dirty:")),
+                "a null dirty line (Paper) must add nothing");
+        String dLine = "Dirty: marked=3, suppressed=800, seeded_load=441, entries=444";
+        var dirty = DiagnosticsFormatter.formatDiagnostics(
+                d.withDirtyLine(dLine)
+                        .withGateLine(gLine)
+                        .withSummaryLine(sLine)
+                        .withV18Line("Dialects: v20=1, v19=0, v18=1"));
+        int dIdx = indexOfPrefix(dirty, "Dirty:");
+        assertTrue(indexOfPrefix(dirty, "Gate:") < dIdx
+                        && dIdx < indexOfPrefix(dirty, "Bandwidth:"),
+                "the Dirty line sits between Gate and Bandwidth: " + dirty);
+        assertEquals(dLine, dirty.get(dIdx),
+                "dirtyLine must survive every subsequent with-* copy");
     }
 
     @Test

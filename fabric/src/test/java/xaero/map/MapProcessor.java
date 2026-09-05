@@ -32,10 +32,12 @@ public class MapProcessor {
     public MapRegionHighlightsPreparer highlightsPreparer = new MapRegionHighlightsPreparer();
     public final java.util.Map<Long, MapRegion> regions = new java.util.HashMap<>();
     public boolean leafMapRegionReturnsNull;
-    /** LoadState for regions getLeafMapRegion auto-creates. The stub default (2 =
-     *  loaded) keeps plain commit tests short; the real detection creates fresh
-     *  regions UNLOADED — tests of the removeMapRegion dead-end self-heal set 0. */
-    public byte createdRegionLoadState = 2;
+    /** LoadState for regions getLeafMapRegion auto-creates. FAITHFUL default 0: the
+     *  real detection creates fresh regions UNLOADED (panel fold, 2026-09-05 — a
+     *  loaded-by-default stub let tests pass while the real jar answers awaiting).
+     *  XaeroMapCompatTest's setUp sets 2 to keep plain commit tests short; tests of
+     *  the load dance and the owed set set 0 explicitly. */
+    public byte createdRegionLoadState = 0;
 
     public boolean isWritingPaused() {
         if (!Thread.holdsLock(this.renderThreadPauseSync)) {
