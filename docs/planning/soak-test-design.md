@@ -105,6 +105,9 @@ Round-2 data-capture additions (observational; the checker treats new keys as wa
 `service.re_resolved` (re_resolved + dirty.suppressed_total are A6-monotonic), the `*_hw` high-water gauges (per-tick sampled by the driver, reset each
 snapshot), `dedup.groups`, `jvm.*`, `tscache.*`, `mspt_avg_window`. `probe_hashes` appears only
 under `-Dlss.soak.probes`. `command` rows gain `ok` (the step did not throw).
+`dirty.seeded_load` (chunk-load baselines, cumulative) and `dirty.entries` (the live baseline count —
+a GAUGE that falls on eviction and reads 0 after a restart, deliberately NOT in `SERVER_MONOTONIC`)
+are the WI-1a dirty instruments (xaero-scatter-remediation-plan.md); Paper zero-fills both.
 
 `client.jsonl` events: `snapshot` (every 5 s), `action` (scripted client action — `action`,
 `atSeconds` fields; a counter-reset segment boundary like a dimension change), `disconnect`
