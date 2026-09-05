@@ -6,6 +6,8 @@
 
 ### Bug Fixes
 
+- **A server restart no longer re-sends every loaded chunk.** After a restart, chunks that players merely walked past were re-broadcast as changed and re-downloaded by everyone holding them, even though nothing had changed. That storm was also the main reason Xaero's World Map dropped tiles when several players explored far apart.
+- **Xaero's World Map no longer loses tiles for far-away regions.** Tiles for map regions Xaero has not loaded yet are now held and written once the region is ready, instead of being dropped or re-requested until the game gave up on them.
 - **Far players no longer render black.** Far players in some of the chunks your client has loaded could render fully dark in daylight. They are now lit as if under open sky.
 - **Far players show their skin overlay layers.** Hats, jackets, sleeves and pants now show on far player models within about 80 blocks (capes only with an elytra).
 - **Armor and held items on far players no longer flicker.** Far away, armor used to z-fight the body underneath it and neighbouring pieces.
@@ -21,5 +23,6 @@
 
 ### Compatibility
 
+- Server admins: `/lsslod diag` gains a `Dirty:` line on Fabric and NeoForge showing how many chunk saves were broadcast versus filtered.
 - Mixed client and server versions stay fully compatible in both directions. This line (Fabric, Paper, and NeoForge) is best-effort.
 - With Iris shaders, packs whose Voxy integration keeps LOD depth out of the vanilla depth buffer (Complementary, for one) draw far players on top of LOD terrain instead of behind it. Players beyond the game's far plane are not drawn at all.

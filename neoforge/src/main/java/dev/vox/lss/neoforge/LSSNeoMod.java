@@ -49,6 +49,9 @@ public final class LSSNeoMod {
                 LSSServerNetworking::onServerStopping);
         NeoForge.EVENT_BUS.addListener(ServerTickEvent.Post.class,
                 LSSServerNetworking::onServerTickPost);
+        NeoForge.EVENT_BUS.addListener(
+                net.neoforged.neoforge.event.level.ChunkEvent.Load.class,
+                LSSServerNetworking::onChunkLoad);
         NeoForge.EVENT_BUS.addListener(PlayerEvent.PlayerLoggedOutEvent.class,
                 LSSServerNetworking::onPlayerLoggedOut);
         NeoForge.EVENT_BUS.addListener(RegisterCommandsEvent.class,
