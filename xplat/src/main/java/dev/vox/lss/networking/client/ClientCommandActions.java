@@ -272,6 +272,13 @@ public final class ClientCommandActions {
         if (farTracker.rostersApplied() > 0 || farTracker.trackedCount() > 0) {
             feedback.accept(Component.literal(farTracker.diagLine())
                     .withStyle(ChatFormatting.GRAY));
+            // The renderer's own line (far-player-render-hardening-plan.md WI-10): drawn/
+            // culled/mount/tag counts of the last pass + the light mode — the live-gate
+            // instrument the black-proxy sighting lacked. Only where this loader renders.
+            if (FarPlayerRenderer.RENDER_AVAILABLE) {
+                feedback.accept(Component.literal(FarPlayerRenderer.diagLine())
+                        .withStyle(ChatFormatting.GRAY));
+            }
         }
 
         feedback.accept(Component.literal(String.format(

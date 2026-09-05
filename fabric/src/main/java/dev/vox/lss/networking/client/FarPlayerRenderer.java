@@ -1,32 +1,77 @@
 package dev.vox.lss.networking.client;
 
 import com.mojang.authlib.GameProfile;
+import com.mojang.blaze3d.vertex.PoseStack;
 import dev.vox.lss.common.LSSLogger;
 import dev.vox.lss.common.farplayers.FarPlayerClientTracker;
 import dev.vox.lss.common.farplayers.FarPlayerWire;
 import dev.vox.lss.config.LSSClientConfig;
+import dev.vox.lss.mixin.AccessorEntityRenderDispatcher;
+import dev.vox.lss.mixin.AccessorLivingEntity;
+import net.fabricmc.fabric.api.client.renderer.v1.mesh.Mesh;
+import net.fabricmc.fabric.api.client.renderer.v1.mesh.MeshView;
 import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderContext;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.Font;
+import net.minecraft.client.model.Model;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.multiplayer.PlayerInfo;
+import net.minecraft.client.player.AbstractClientPlayer;
+import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.player.RemotePlayer;
+import net.minecraft.client.renderer.OrderedSubmitNodeCollector;
+import net.minecraft.client.renderer.Sheets;
+import net.minecraft.client.renderer.SubmitNodeCollector;
+import net.minecraft.client.renderer.block.MovingBlockRenderState;
+import net.minecraft.client.model.geom.ModelPart;
+import net.minecraft.client.renderer.block.dispatch.BlockStateModel;
+import net.minecraft.client.renderer.block.dispatch.BlockStateModelPart;
+import net.minecraft.client.renderer.chunk.ChunkSectionLayer;
+import net.minecraft.client.renderer.culling.Frustum;
+import net.minecraft.client.renderer.entity.EntityRenderDispatcher;
+import net.minecraft.client.renderer.entity.LivingEntityRenderer;
+import net.minecraft.client.renderer.entity.state.EntityRenderState;
+import net.minecraft.client.renderer.feature.ModelFeatureRenderer;
+import net.minecraft.client.renderer.item.ItemStackRenderState;
+import net.minecraft.client.renderer.rendertype.RenderType;
+import net.minecraft.client.renderer.rendertype.RenderTypes;
+import net.minecraft.client.renderer.state.level.CameraRenderState;
+import net.minecraft.client.renderer.texture.TextureAtlasSprite;
+import net.minecraft.client.resources.model.EquipmentAssetManager;
+import net.minecraft.client.resources.model.EquipmentClientInfo;
+import net.minecraft.client.resources.model.geometry.BakedQuad;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
+import net.minecraft.util.FormattedCharSequence;
+import net.minecraft.util.LightCoordsUtil;
 import net.minecraft.util.Mth;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityAttachment;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.Pose;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.equipment.Equippable;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.scores.Team;
+import org.joml.Quaternionf;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Function;
 
 /**
  * The far-player proxy renderer (E2, FARP §3.3/§7-B — the SeeU
@@ -60,6 +105,17 @@ import java.util.concurrent.ConcurrentHashMap;
  *       standing at the mounted position — never a crash, never a floating sit.</li>
  *   <li><b>Containment</b>: the whole pass is latch-guarded — a renderer bug degrades
  *       to "no proxies" for the session, never a render-thread crash loop.</li>
+ *   <li><b>Light, culling, tags, lift (2026-09-04, far-player-render-hardening-plan.md; ported
+ *       to this line's render-state pipeline)</b>: proxies are lit with a sky-15 FLOOR (or
+ *       full-bright, {@code farPlayersFullBright}) written into the extracted render state —
+ *       never from the client's stored light data, which reads zero in the C2ME no-tick ring;
+ *       the SUBMIT calls (only) are frustum-culled; LSS draws its own depth-tested,
+ *       sneak-hidden, sqrt-scaled name tags through {@code submitText} (vanilla gates tags at
+ *       64 blocks on every line); armor/held items are depth-lifted through a
+ *       wrapping {@link LiftedSubmitCollector}; the model-parts byte is set so the overlay
+ *       skin layers render. See {@code packedLightFor}/{@code isInFrustum}/{@code submitFarNameTag}.
+ *       There is no batch to end on this line: the submit storage drains the frame's
+ *       geometry itself (the 1.21.1 twins' {@code endLastBatch()} has no analogue here).</li>
  * </ul>
  *
  * <p>Threading: every touchpoint runs on the client MAIN thread, which IS the render
@@ -81,6 +137,13 @@ public final class FarPlayerRenderer {
     private static final int PROXY_ID_BASE = 1_900_000_000;
 
     private static final float WALK_ANIMATION_SCALE = 0.4f;
+    /** Fold (e): the skin OVERLAY layers (jacket/sleeves/pants 1/64 block, hat 1/32 above the
+     *  body) share the body's render type, so they cannot be depth-lifted like armor; past
+     *  ~80 blocks their gap is under two depth steps and they z-fight the body — beyond this
+     *  the proxy shows the base skin only (the cape bit still rides with an elytra). */
+    private static final double OVERLAY_MAX_DISTANCE_BLOCKS = 80.0;
+    private static final EquipmentSlot[] ARMOR_EQUIPMENT_SLOTS = {EquipmentSlot.HEAD, EquipmentSlot.CHEST,
+            EquipmentSlot.LEGS, EquipmentSlot.FEET};
 
     private static volatile FarPlayerRenderer instance;
 
@@ -103,6 +166,10 @@ public final class FarPlayerRenderer {
     private final Map<String, Item> itemCache = new ConcurrentHashMap<>();
     private int nextProxyId = PROXY_ID_BASE;
     private boolean crashLatched;
+    /** The pass's sentinel pose (review fold D1) — see markPose/unwindPose. */
+    private PoseStack.Pose passMark;
+    /** Last pass's counters for the /lss diag line ({@link #diagLine()}). */
+    private int lastDrawn, lastCulled, lastMounts, lastTags;
 
     private static final class MountInstance {
         final net.minecraft.world.entity.Entity entity;
@@ -186,6 +253,9 @@ public final class FarPlayerRenderer {
     /** The COLLECT_SUBMITS pass. */
     public void render(LevelRenderContext context) {
         if (crashLatched) return;
+        // Review fold (D1): run above a sentinel pose that is ALWAYS unwound — see markPose.
+        PoseStack poseStack = context.poseStack();
+        passMark = poseStack == null ? null : markPose(poseStack);
         try {
             renderContained(context);
         } catch (Throwable t) {
@@ -193,6 +263,9 @@ public final class FarPlayerRenderer {
             clear();
             LSSLogger.error("Far-player renderer failed — proxies disabled for this session"
                     + " (a renderer bug must never take the render thread down)", t);
+        } finally {
+            if (passMark != null) unwindPose(poseStack, passMark);
+            passMark = null;
         }
     }
 
@@ -212,11 +285,16 @@ public final class FarPlayerRenderer {
         ClientLevel level = minecraft.level;
         var localPlayer = minecraft.player;
         var poseStack = context.poseStack();
-        if (level == null || localPlayer == null || poseStack == null
-                || context.submitNodeCollector() == null) {
+        SubmitNodeCollector collector = context.submitNodeCollector();
+        if (level == null || localPlayer == null || poseStack == null || collector == null) {
             clear();
             return;
         }
+        CameraRenderState cameraState = context.levelState().cameraRenderState;
+        // WI-3: the frame frustum — this line's context carries no accessor for it; the
+        // extracted camera state does (public, non-null-initialised, so gate on initialized:
+        // an uninitialised state = draw everything).
+        Frustum frustum = cameraState.initialized ? cameraState.cullFrustum : null;
 
         FarPlayerClientTracker tracker = FarPlayerClientSupport.tracker();
         String trackerDimension = tracker.dimension();
@@ -234,6 +312,13 @@ public final class FarPlayerRenderer {
         long now = FarPlayerClientSupport.monotonicMillis();
         int maxRender = config.farPlayersMaxRenderDistanceBlocks;
         int minRender = config.farPlayersMinDistanceBlocks;
+        boolean fullBright = config.farPlayersFullBright;
+        boolean nameTags = config.farPlayersNameTags && Minecraft.renderNames(); // F1/hide-GUI hides every tag (fold D3)
+        // Fold (e2): the equipment assets behind the armor layer's render-type identities
+        // (private on the dispatcher — the accessor mixin; null = no tiering, uniform lift).
+        EquipmentAssetManager equipmentAssets = ((AccessorEntityRenderDispatcher) dispatcher).lss$getEquipmentAssets();
+        int drawn = 0, culled = 0, mounts = 0;
+        List<PendingTag> pendingTags = new ArrayList<>();
 
         Set<UUID> active = new HashSet<>();
         for (var tracked : tracker.snapshot().values()) {
@@ -249,6 +334,11 @@ public final class FarPlayerRenderer {
             // predicate both directions, so the swap is frame-synchronized with
             // vanilla's entity pop — no band, no flicker, no diagonal double-render,
             // no high-render-distance invisibility annulus.
+            // NOTE (2026-09-04, far-player-render-hardening-plan.md F1/F3): ClientLevel
+            // .hasChunk is unconditionally true on this MC too, so the chunkLoaded conjunct
+            // below is inert — the live handoff is `real == null ||
+            // !real.shouldRenderAtSqrDistance(...)`, and RemotePlayer culls at ~640 blocks,
+            // so every TRACKED real player is vanilla's to draw. Kept for line parity.
             var real = level.getPlayerByUUID(tracked.uuid());
             if (real != null
                     && level.hasChunk(Mth.floor(position.x) >> 4,
@@ -273,9 +363,9 @@ public final class FarPlayerRenderer {
             // the feature for the session.
             if (proxy.isPassenger()) {
                 try {
-                    proxy.apply(tracked, sample, position, config.farPlayersNameTags,
+                    proxy.apply(tracked, sample, position, distance,
                             maxRender > 0 ? maxRender : 16384, allowWalk, animationTick,
-                            itemCache);
+                            itemCache, equipmentAssets);
                 } catch (Throwable t) {
                     latchSeatedFailure(tracked, proxy, t);
                     // Unmounted, the vehicle-state mixin path is inert — one retry.
@@ -283,15 +373,15 @@ public final class FarPlayerRenderer {
                     // the proxy), a still-seated retry would re-throw into the
                     // whole-pass latch — skip this rider this frame instead.
                     if (!proxy.isPassenger()) {
-                        proxy.apply(tracked, sample, position, config.farPlayersNameTags,
+                        proxy.apply(tracked, sample, position, distance,
                                 maxRender > 0 ? maxRender : 16384, allowWalk,
-                                animationTick, itemCache);
+                                animationTick, itemCache, equipmentAssets);
                     }
                 }
             } else {
-                proxy.apply(tracked, sample, position, config.farPlayersNameTags,
+                proxy.apply(tracked, sample, position, distance,
                         maxRender > 0 ? maxRender : 16384, allowWalk, animationTick,
-                        itemCache);
+                        itemCache, equipmentAssets);
             }
             active.add(tracked.uuid());
 
@@ -307,12 +397,15 @@ public final class FarPlayerRenderer {
                 // this rider falls through to unmounted — never the global crash latch
                 // (which would take the whole feature down for one bad mount type).
                 try {
-                    renderMount(wireVehicle, tracked, proxy, level, now, animationTick,
-                            dispatcher, partialTick, cameraPosition, poseStack, context);
+                    int mountResult = renderMount(wireVehicle, tracked, proxy, level, now, animationTick,
+                            dispatcher, partialTick, cameraPosition, poseStack, collector, cameraState,
+                            frustum, fullBright);
+                    if (mountResult > 0) mounts++; else if (mountResult < 0) culled++;
                 } catch (Throwable e) {
                     // Throwable, not Exception (MINOR-3): a LinkageError from a modded
                     // entity class init must latch the TYPE, not the whole feature.
                     mountLadder.latchRenderFailure(wireVehicle.typeIdentity(), e);
+                    restorePose(poseStack, passMark);
                     vehicles.remove(wireVehicle.uuid());
                     stopRidingContained(proxy); // MINOR-2: a throwing removePassenger
                     // here escaped this catch to the whole-pass latch — same frame,
@@ -334,28 +427,27 @@ public final class FarPlayerRenderer {
             // skip this rider this frame — it renders unmounted next frame.
             if (proxy.isPassenger()) {
                 try {
-                    var renderState = dispatcher.extractEntity(proxy, partialTick);
-                    dispatcher.submit(
-                            renderState,
-                            context.levelState().cameraRenderState,
-                            position.x - cameraPosition.x,
-                            position.y - cameraPosition.y,
-                            position.z - cameraPosition.z,
-                            poseStack,
-                            context.submitNodeCollector());
+                    int light = packedLightFor(dispatcher, proxy, partialTick, fullBright);
+                    if (submitProxy(dispatcher, proxy, position, light, partialTick, cameraPosition,
+                            poseStack, collector, cameraState, frustum)) {
+                        drawn++;
+                    } else {
+                        culled++;
+                    }
+                    queueProxyTag(pendingTags, frustum, nameTags, tracked, proxy, localPlayer, position, light);
                 } catch (Throwable t) {
+                    restorePose(poseStack, passMark);
                     latchSeatedFailure(tracked, proxy, t);
                 }
             } else {
-                var renderState = dispatcher.extractEntity(proxy, partialTick);
-                dispatcher.submit(
-                        renderState,
-                        context.levelState().cameraRenderState,
-                        position.x - cameraPosition.x,
-                        position.y - cameraPosition.y,
-                        position.z - cameraPosition.z,
-                        poseStack,
-                        context.submitNodeCollector());
+                int light = packedLightFor(dispatcher, proxy, partialTick, fullBright);
+                if (submitProxy(dispatcher, proxy, position, light, partialTick, cameraPosition,
+                        poseStack, collector, cameraState, frustum)) {
+                    drawn++;
+                } else {
+                    culled++;
+                }
+                queueProxyTag(pendingTags, frustum, nameTags, tracked, proxy, localPlayer, position, light);
             }
         }
         // Prune with the ride link BROKEN (E3 review m2): a proxy dropped while
@@ -375,6 +467,80 @@ public final class FarPlayerRenderer {
         vehicles.keySet().removeIf(uuid -> !activeVehicles.contains(uuid));
         activeVehicles.clear();
         submittedVehicles.clear();
+        // WI-6 gap fill (live rig 2026-09-04): between vanilla's own name-tag cap and the
+        // entity-tracking radius the REAL player entity is vanilla's to draw (the handoff
+        // above), yet vanilla draws no tag that far out — so the tag vanished in a band just
+        // inside the loaded chunks. Tag those players here under vanilla's own visibility
+        // ladder minus its distance clause; proxies never appear in level.players(), and a
+        // tracked far player whose proxy drew this frame is skipped via the active set.
+        // 26.1 line: vanilla's cap is the literal 64 blocks in EntityRenderer.extractRenderState
+        // (distanceToCameraSq < 4096.0) — no attribute on this MC.
+        // Accepted residuals (review F8): a nameplate-range-extending mod, and one frame at
+        // exactly 64 blocks (LSS lerps, vanilla compares the unlerped position). The
+        // camera/vehicle/hide-GUI clauses run BEFORE the team ladder here, where vanilla's
+        // team switch returns first — stricter only (F5).
+        if (nameTags) {
+            for (var realPlayer : level.players()) {
+                if (realPlayer == localPlayer || realPlayer == minecraft.getCameraEntity()) continue;
+                if (active.contains(realPlayer.getUUID())) continue;
+                if (realPlayer.isDiscrete() || realPlayer.isVehicle()) continue; // LSS sneak policy; vanilla's mount rule
+                Vec3 realPosition = new Vec3(Mth.lerp(partialTick, realPlayer.xOld, realPlayer.getX()),
+                        Mth.lerp(partialTick, realPlayer.yOld, realPlayer.getY()),
+                        Mth.lerp(partialTick, realPlayer.zOld, realPlayer.getZ()));
+                BlockPos realBlock = realPlayer.blockPosition();
+                // Vanilla draws no body there (F4) — this line's extraction gate, verbatim.
+                if (!level.isOutsideBuildHeight(realBlock.getY())
+                        && !minecraft.levelRenderer.isSectionCompiledAndVisible(realBlock)) continue;
+                double cameraDistanceSq = cameraPosition.distanceToSqr(realPosition);
+                if (cameraDistanceSq < 64.0 * 64.0) continue; // vanilla's own tag range (camera-based, as its cap is)
+                double realDistance = realPosition.distanceTo(localPlayer.position());
+                if (realDistance < minRender || (maxRender > 0 && realDistance > maxRender)) continue;
+                if (!vanillaNameVisibleIgnoringDistance(realPlayer, localPlayer)) continue;
+                queueNameTag(pendingTags, frustum, realPlayer, realPlayer.getDisplayName(), realPosition,
+                        packedLightFor(dispatcher, realPlayer, partialTick, fullBright));
+            }
+        }
+        // WI-6: the tags, submitted AFTER every model; the text phase draws them in
+        // submission order, so all first draws precede all second draws (one render-type
+        // switch per frame on the text lane, not one per tag).
+        int tagsDrawn = 0;
+        for (var tag : pendingTags) {
+            submitFarNameTag(collector, cameraState, tag, cameraPosition, poseStack,
+                    Font.DisplayMode.NORMAL, true);
+            tagsDrawn++;
+        }
+        for (var tag : pendingTags) {
+            submitFarNameTag(collector, cameraState, tag, cameraPosition, poseStack,
+                    Font.DisplayMode.POLYGON_OFFSET, false);
+        }
+        this.lastDrawn = drawn;
+        this.lastCulled = culled;
+        this.lastMounts = mounts;
+        this.lastTags = tagsDrawn;
+    }
+
+    /** Extracts the proxy's render state, writes the floored light into it (WI-1/WI-2), and
+     *  submits it through the lifting collector when its box is in the frustum (WI-3).
+     *  Returns whether it was submitted; the caller keeps its bookkeeping either way. */
+    private boolean submitProxy(EntityRenderDispatcher dispatcher, Proxy proxy, Vec3 position, int light,
+                                float partialTick, Vec3 cameraPosition, PoseStack poseStack,
+                                SubmitNodeCollector collector, CameraRenderState cameraState, Frustum frustum) {
+        var renderState = dispatcher.extractEntity(proxy, partialTick);
+        // WI-1/WI-2: the floor goes INTO the extracted state — LivingEntityRenderer.submit reads
+        // state.lightCoords for the body and every layer, so set-after-extract takes effect.
+        renderState.lightCoords = light;
+        if (!isInFrustum(frustum, proxy)) return false;
+        double cameraDistance = position.distanceTo(cameraPosition);
+        dispatcher.submit(
+                renderState,
+                cameraState,
+                position.x - cameraPosition.x,
+                position.y - cameraPosition.y,
+                position.z - cameraPosition.z,
+                poseStack,
+                new LiftedSubmitCollector(collector, skinModel(dispatcher, proxy), skinRenderType(dispatcher, proxy),
+                        armorLiftBlocks(cameraDistance), cameraDistance, proxy.liftTiers));
+        return true;
     }
 
     /** Contained dismount: modded removePassenger overrides can throw on the same
@@ -411,21 +577,23 @@ public final class FarPlayerRenderer {
         }
     }
 
-    /** The per-rider mount pass: resolve/create/link/submit. Throws propagate to the
-     *  per-type containment at the call site. */
-    private void renderMount(dev.vox.lss.common.farplayers.FarPlayerWire.Vehicle wireVehicle,
+    /** The per-rider mount pass: resolve/create/link/submit. Returns 1 = submitted, -1 = the
+     *  mount was frustum-culled (its link/bookkeeping still ran), 0 = ladder-degraded or
+     *  not this rider's turn. Throws propagate to the per-type containment at the call
+     *  site. */
+    private int renderMount(dev.vox.lss.common.farplayers.FarPlayerWire.Vehicle wireVehicle,
                              FarPlayerClientTracker.TrackedFarPlayer tracked, Proxy proxy,
                              ClientLevel level, long now, int animationTick,
-                             net.minecraft.client.renderer.entity.EntityRenderDispatcher dispatcher,
+                             EntityRenderDispatcher dispatcher,
                              float partialTick, Vec3 cameraPosition,
-                             com.mojang.blaze3d.vertex.PoseStack poseStack,
-                             LevelRenderContext context) {
+                             PoseStack poseStack, SubmitNodeCollector collector,
+                             CameraRenderState cameraState, Frustum frustum, boolean fullBright) {
         var mount = mountFor(wireVehicle, tracked, level, now);
         if (mount == null) {
             if (proxy.isPassenger()) {
                 proxy.stopRiding(); // ladder-degraded: render unmounted
             }
-            return;
+            return 0;
         }
         activeVehicles.add(wireVehicle.uuid());
         if (proxy.getVehicle() != mount.entity) {
@@ -438,19 +606,24 @@ public final class FarPlayerRenderer {
             // standing pose, never a floating sit.
             proxy.startRiding(mount.entity, true, true);
         }
-        if (submittedVehicles.add(wireVehicle.uuid())) {
-            var vSample = mount.motion.sample(now);
-            applyMountState(mount, vSample, animationTick);
-            var vState = dispatcher.extractEntity(mount.entity, partialTick);
-            dispatcher.submit(
-                    vState,
-                    context.levelState().cameraRenderState,
-                    vSample.x() - cameraPosition.x,
-                    vSample.y() - cameraPosition.y,
-                    vSample.z() - cameraPosition.z,
-                    poseStack,
-                    context.submitNodeCollector());
-        }
+        if (!submittedVehicles.add(wireVehicle.uuid())) return 0;
+        var vSample = mount.motion.sample(now);
+        applyMountState(mount, vSample, animationTick);
+        // WI-3: frustum-test the MOUNT itself right before its submit (after applyMountState);
+        // the ride link / activeVehicles / submittedVehicles bookkeeping above ran regardless,
+        // so a culled mount is never re-created or re-seated next frame.
+        if (!isInFrustum(frustum, mount.entity)) return -1;
+        var vState = dispatcher.extractEntity(mount.entity, partialTick);
+        vState.lightCoords = packedLightFor(dispatcher, mount.entity, partialTick, fullBright); // WI-1: mounts too
+        dispatcher.submit(
+                vState,
+                cameraState,
+                vSample.x() - cameraPosition.x,
+                vSample.y() - cameraPosition.y,
+                vSample.z() - cameraPosition.z,
+                poseStack,
+                collector); // mounts are not lifted (fold (e): thicker shells, own layers)
+        return 1;
     }
 
     /** Resolves/creates/updates the render-only mount instance for one rider's wire
@@ -556,6 +729,405 @@ public final class FarPlayerRenderer {
         }
     }
 
+    /**
+     * The proxy's packed light (far-player-render-hardening-plan.md WI-1/WI-2, user decision
+     * 2026-09-04: BRIGHTER than possibly correct beats dark). Sky is FLOORED to 15; the real
+     * block light is kept (a torch-lit far player at night still reads lit); {@code fullBright}
+     * (client {@code farPlayersFullBright}) short-circuits to vanilla's FULL_BRIGHT.
+     *
+     * <p>Why a floor: a proxy stands in for LOD terrain, which Voxy lights as sky-lit, but
+     * vanilla's lookup hands back whatever light data the client HOLDS at the proxy's eye
+     * ({@code EntityRenderer.extractRenderState} sets {@code lightCoords = getPackedLightCoords}
+     * on this line — the same engine read as 1.21.1's dispatcher call). Where the client holds
+     * a chunk with no real entity in it (C2ME's no-tick ring beyond the server's
+     * entity-tracking radius) the stored sky light is often ZERO — an unbaked send decodes as
+     * an all-zero layer — and the proxy went BLACK in daylight while the terrain there is
+     * never drawn (outside Sodium's circle, Voxy paints LOD over it); past the drop radius
+     * the engine has no data and answers 15, so the same player lit up again farther away.
+     * The floor makes the proxy immune to that data whatever its cause. The vanilla value
+     * still comes from {@code getPackedLightCoords}, so third-party return hooks on it
+     * (Sable's sub-level lighting) apply before the floor.
+     */
+    private static int packedLightFor(EntityRenderDispatcher dispatcher, Entity entity,
+                                      float partialTick, boolean fullBright) {
+        if (fullBright) return LightCoordsUtil.FULL_BRIGHT;
+        int vanilla = dispatcher.getPackedLightCoords(entity, partialTick);
+        return LightCoordsUtil.pack(LightCoordsUtil.block(vanilla), 15);
+    }
+
+    /** WI-3: vanilla's frustum predicate MINUS its distance term ({@code EntityRenderer
+     *  .shouldRender}'s box + NaN fallback; {@code noCulling}/{@code getBoundingBoxForCulling}
+     *  are protected renderer members on this line, so the entity box stands in). Deliberately
+     *  not {@code dispatcher.shouldRender}: that carries vanilla's distance cull (a far horse
+     *  would vanish) and Sable injects into {@code EntityRenderer.shouldRender}. Null frustum =
+     *  draw. Culls the SUBMIT only — every caller keeps its tracking/apply/mount bookkeeping
+     *  running regardless. */
+    private static boolean isInFrustum(Frustum frustum, Entity entity) {
+        if (frustum == null) return true;
+        AABB box = entity.getBoundingBox().inflate(0.5);
+        if (box.hasNaN() || box.getSize() == 0.0) {
+            box = new AABB(entity.getX() - 2.0, entity.getY() - 2.0, entity.getZ() - 2.0,
+                    entity.getX() + 2.0, entity.getY() + 2.0, entity.getZ() + 2.0);
+        }
+        return frustum.isVisible(box);
+    }
+
+    /** Fold (e): the lift for {@link LiftedSubmitCollector} — about five 24-bit depth steps at
+     *  distance {@code distance}, floored where steps are tiny and capped where the far plane
+     *  is near. */
+    private static float armorLiftBlocks(double distance) {
+        return (float) Math.clamp(distance * distance * 6e-6, 0.02, 4.0);
+    }
+
+    /** Fold (e): the proxy's OWN model — the one submission the lift must not touch. */
+    private static Model<?> skinModel(EntityRenderDispatcher dispatcher, Proxy proxy) {
+        return dispatcher.getRenderer(proxy) instanceof LivingEntityRenderer<?, ?, ?> living
+                ? living.getModel() : null;
+    }
+
+    /** Fold (e): the proxy's OWN skin render type — the belt beside {@link #skinModel}.
+     *  PlayerModel is built on {@code RenderTypes::entityTranslucent}; ask the live model so a
+     *  replaced renderer still answers, and fall back to vanilla's function. */
+    private static RenderType skinRenderType(EntityRenderDispatcher dispatcher, Proxy proxy) {
+        Identifier skin = proxy.getSkin().body().texturePath();
+        Model<?> model = skinModel(dispatcher, proxy);
+        return model != null ? model.renderType(skin) : RenderTypes.entityTranslucent(skin);
+    }
+
+    /** Review fold (D1): a throw inside {@code dispatcher.submit} or the tag submit leaves pushes
+     *  on VANILLA's pose stack, and {@code LevelRenderer.checkPoseStack} throws "Pose stack not
+     *  empty" AFTER this pass returns — outside every containment here, a hard client crash.
+     *  The pass therefore runs above a sentinel pose it always unwinds to, and the per-proxy /
+     *  per-mount containments restore to the same mark before continuing the frame. */
+    private static PoseStack.Pose markPose(PoseStack poseStack) {
+        poseStack.pushPose();
+        return poseStack.last();
+    }
+
+    /** Pops back to {@code mark} (which is left in place); bounded by the stack root. The
+     *  stack pools its Pose objects, so the mark's identity is stable across pops. */
+    private static void restorePose(PoseStack poseStack, PoseStack.Pose mark) {
+        if (mark == null) return;
+        while (!poseStack.isEmpty() && poseStack.last() != mark) poseStack.popPose();
+    }
+
+    /** {@link #restorePose} and then pops the mark itself. */
+    private static void unwindPose(PoseStack poseStack, PoseStack.Pose mark) {
+        restorePose(poseStack, mark);
+        if (poseStack.last() == mark && !poseStack.isEmpty()) poseStack.popPose();
+    }
+
+    /**
+     * Fold (e)/(e2) on the render-state pipeline (live rig 2026-09-04, SoakPlayer in armor):
+     * vanilla's armor is a 1/16-block shell around the body (leggings 1/32); a 24-bit depth
+     * buffer behind vanilla's 0.05 near plane resolves ≈ d²·1.2e-6 blocks per step, so past
+     * ~160-230 blocks armor and body land inside ONE step and z-fight — vanilla never draws
+     * players that far, proxies always are. On this line the geometry is generated in the
+     * submit-storage drain from the pose each submission CAPTURED, not from a buffer source we
+     * hand in, so the 1.21.1 twins' per-vertex consumer has no seat here. Instead this collector
+     * wraps every submission the proxy's renderer and layers make and, for every NON-skin
+     * submission, re-submits it with the captured pose PRE-MULTIPLIED by a uniform scale about
+     * the pose origin — the camera, since the pass's pose is camera-relative. The projection is
+     * radial about the camera, so the screen position is unchanged and every vertex at camera
+     * distance {@code r} is pulled toward the camera by {@code lift · r / L} (≈ {@code lift}:
+     * the model spans a couple of blocks at {@code L} hundreds of blocks out) — the same
+     * screen-exact pull along each vertex's view ray, at pose granularity. Normals are
+     * untouched (a uniform scale does not turn them). The skin's own submission (the
+     * renderer's model, and its render type as the belt) passes through untouched — body and
+     * overlay cubes share it — so the 1/64-block overlay layers are gated by
+     * {@link #OVERLAY_MAX_DISTANCE_BLOCKS} instead. Mounts are not wrapped: a uniform lift
+     * cannot separate a mount's own layers, and their shells are thicker.
+     *
+     * <p>TIERED (fold (e2)): the pieces that overlap each other (leggings under a chestplate,
+     * boots over leggings, a shield against the chest) are ~1/32 block apart and would still
+     * fight under one uniform lift; tier 0 = the inner armor model, 1 = outer armor + trims +
+     * glint, 2 = held items / elytra / anything else, ~4 depth steps apart
+     * ({@code lift × (1 + 0.8·tier)}). The tiers come from the proxy's own equipment
+     * ({@code Proxy.refreshLiftTiers}), keyed by the exact render-type identities the armor
+     * layer requests. Submissions without a render type (items) take tier 2; text, shadows,
+     * flames, leashes and the like pass through unchanged. {@code order(n)} sub-collectors
+     * (the armor layer submits through them) are wrapped the same way.
+     */
+    private static final class LiftedSubmitCollector implements SubmitNodeCollector {
+        private final SubmitNodeCollector root;
+        private final OrderedSubmitNodeCollector delegate;
+        private final Model<?> skinModel;
+        private final RenderType skinType;
+        private final float lift;
+        private final double cameraDistance;
+        private final Map<RenderType, Integer> tiers;
+        /** One scratch stack per wrapper: every delegate submission COPIES the pose it is
+         *  handed (verified per site in SubmitNodeCollection), so reuse is safe. */
+        private final PoseStack scratch = new PoseStack();
+
+        LiftedSubmitCollector(SubmitNodeCollector delegate, Model<?> skinModel, RenderType skinType,
+                              float lift, double cameraDistance, Map<RenderType, Integer> tiers) {
+            this.root = delegate;
+            this.delegate = delegate;
+            this.skinModel = skinModel;
+            this.skinType = skinType;
+            this.lift = lift;
+            this.cameraDistance = cameraDistance;
+            this.tiers = tiers;
+        }
+
+        private LiftedSubmitCollector(OrderedSubmitNodeCollector ordered, LiftedSubmitCollector parent) {
+            this.root = ordered instanceof SubmitNodeCollector nested ? nested : null;
+            this.delegate = ordered;
+            this.skinModel = parent.skinModel;
+            this.skinType = parent.skinType;
+            this.lift = parent.lift;
+            this.cameraDistance = parent.cameraDistance;
+            this.tiers = parent.tiers;
+        }
+
+        /** The lifted pose for a submission of {@code tier} ({@code < 0} = untouched). */
+        private PoseStack lifted(PoseStack poseStack, int tier) {
+            if (tier < 0 || lift <= 0.0f || cameraDistance <= 1.0) return poseStack;
+            float pull = lift * (1.0f + 0.8f * tier);
+            float f = (float) Math.max(0.5, (cameraDistance - pull) / cameraDistance);
+            PoseStack.Pose pose = scratch.last();
+            pose.set(poseStack.last());
+            pose.pose().scaleLocal(f);
+            return scratch;
+        }
+
+        private int tierOf(RenderType type) {
+            if (type == skinType) return -1;
+            return tiers.getOrDefault(type, 2);
+        }
+
+        @Override
+        public OrderedSubmitNodeCollector order(int order) {
+            return root == null ? this : new LiftedSubmitCollector(root.order(order), this);
+        }
+
+        @Override
+        public <S> void submitModel(Model<? super S> model, S state, PoseStack poseStack, RenderType renderType,
+                                    int lightCoords, int overlayCoords, int tintedColor,
+                                    TextureAtlasSprite sprite, int outlineColor,
+                                    ModelFeatureRenderer.CrumblingOverlay crumblingOverlay) {
+            int tier = model == skinModel ? -1 : tierOf(renderType);
+            delegate.submitModel(model, state, lifted(poseStack, tier), renderType, lightCoords, overlayCoords,
+                    tintedColor, sprite, outlineColor, crumblingOverlay);
+        }
+
+        @Override
+        public void submitCustomGeometry(PoseStack poseStack, RenderType renderType,
+                                         SubmitNodeCollector.CustomGeometryRenderer customGeometryRenderer) {
+            delegate.submitCustomGeometry(lifted(poseStack, tierOf(renderType)), renderType, customGeometryRenderer);
+        }
+
+        @Override
+        public void submitItem(PoseStack poseStack, ItemDisplayContext displayContext, int lightCoords,
+                               int overlayCoords, int outlineColor, int[] tintLayers, List<BakedQuad> quads,
+                               ItemStackRenderState.FoilType foilType) {
+            delegate.submitItem(lifted(poseStack, 2), displayContext, lightCoords, overlayCoords, outlineColor,
+                    tintLayers, quads, foilType);
+        }
+
+        // Fabric's renderer API injects mesh-carrying twins of the item/block submits (their
+        // defaults drop the mesh and fall back to the vanilla method); forward them WITH the
+        // mesh so an FRAPI-enhanced held item keeps its geometry.
+        @Override
+        public void submitItem(PoseStack poseStack, ItemDisplayContext displayContext, int lightCoords,
+                               int overlayCoords, int outlineColor, int[] tintLayers, List<BakedQuad> quads,
+                               MeshView mesh, ItemStackRenderState.FoilType foilType) {
+            delegate.submitItem(lifted(poseStack, 2), displayContext, lightCoords, overlayCoords, outlineColor,
+                    tintLayers, quads, mesh, foilType);
+        }
+
+        @Override
+        public void submitBlockModel(PoseStack poseStack, RenderType renderType, List<BlockStateModelPart> parts,
+                                     int[] tintLayers, int lightCoords, int overlayCoords, int outlineColor) {
+            delegate.submitBlockModel(lifted(poseStack, tierOf(renderType)), renderType, parts, tintLayers,
+                    lightCoords, overlayCoords, outlineColor);
+        }
+
+        @Override
+        public void submitBlockModel(PoseStack poseStack, Function<ChunkSectionLayer, RenderType> renderTypes,
+                                     boolean translucent, List<BlockStateModelPart> parts, Mesh mesh,
+                                     int[] tintLayers, int lightCoords, int overlayCoords, int outlineColor) {
+            delegate.submitBlockModel(lifted(poseStack, 2), renderTypes, translucent, parts, mesh, tintLayers,
+                    lightCoords, overlayCoords, outlineColor);
+        }
+
+        @Override
+        public void submitModelPart(ModelPart modelPart, PoseStack poseStack, RenderType renderType, int lightCoords,
+                                    int overlayCoords, TextureAtlasSprite sprite, boolean sheeted, boolean hasFoil,
+                                    int tintedColor, ModelFeatureRenderer.CrumblingOverlay crumblingOverlay,
+                                    int outlineColor) {
+            delegate.submitModelPart(modelPart, lifted(poseStack, tierOf(renderType)), renderType, lightCoords,
+                    overlayCoords, sprite, sheeted, hasFoil, tintedColor, crumblingOverlay, outlineColor);
+        }
+
+        @Override
+        public void submitBreakingBlockModel(PoseStack poseStack, BlockStateModel model, long seed, int progress) {
+            delegate.submitBreakingBlockModel(poseStack, model, seed, progress);
+        }
+
+        @Override
+        public void submitShadow(PoseStack poseStack, float radius, List<EntityRenderState.ShadowPiece> pieces) {
+            delegate.submitShadow(poseStack, radius, pieces);
+        }
+
+        @Override
+        public void submitNameTag(PoseStack poseStack, Vec3 nameTagAttachment, int offset, Component name,
+                                  boolean seeThrough, int lightCoords, double distanceToCameraSq,
+                                  CameraRenderState camera) {
+            delegate.submitNameTag(poseStack, nameTagAttachment, offset, name, seeThrough, lightCoords,
+                    distanceToCameraSq, camera);
+        }
+
+        @Override
+        public void submitText(PoseStack poseStack, float x, float y, FormattedCharSequence string,
+                               boolean dropShadow, Font.DisplayMode displayMode, int lightCoords, int color,
+                               int backgroundColor, int outlineColor) {
+            delegate.submitText(poseStack, x, y, string, dropShadow, displayMode, lightCoords, color,
+                    backgroundColor, outlineColor);
+        }
+
+        @Override
+        public void submitFlame(PoseStack poseStack, EntityRenderState renderState, Quaternionf rotation) {
+            delegate.submitFlame(poseStack, renderState, rotation);
+        }
+
+        @Override
+        public void submitLeash(PoseStack poseStack, EntityRenderState.LeashState leashState) {
+            delegate.submitLeash(poseStack, leashState);
+        }
+
+        @Override
+        public void submitMovingBlock(PoseStack poseStack, MovingBlockRenderState movingBlockRenderState) {
+            delegate.submitMovingBlock(poseStack, movingBlockRenderState);
+        }
+
+        @Override
+        public void submitParticleGroup(SubmitNodeCollector.ParticleGroupRenderer particles) {
+            delegate.submitParticleGroup(particles);
+        }
+    }
+
+    private record PendingTag(Entity entity, Component name, Vec3 anchor, int light) {}
+
+    /** The name-tag anchor in world space: vanilla's NAME_TAG attachment + 0.5 (the extracted
+     *  {@code nameTagAttachment} is null beyond vanilla's own tag range, so LSS resolves it). */
+    private static Vec3 tagAnchor(Entity entity, Vec3 position) {
+        Vec3 attachment = entity.getAttachments()
+                .getNullable(EntityAttachment.NAME_TAG, 0, entity.getYRot());
+        return attachment == null ? null : position.add(attachment.x, attachment.y + 0.5, attachment.z);
+    }
+
+    /** WI-6 proxy gate: the option (already folded with the hide-GUI key), the sneak rule (a
+     *  NEW LSS policy — "sneak = don't advertise me"; vanilla's own sneak cap lives in code
+     *  that never runs for a proxy) and — review fold D3 — vanilla's invisibility + team
+     *  name-tag rules, so a team set to "never" is honoured beyond the tracking radius exactly
+     *  as inside it (the proxy's team resolves through the scoreboard by name). */
+    private static void queueProxyTag(List<PendingTag> out, Frustum frustum, boolean nameTags,
+                                      FarPlayerClientTracker.TrackedFarPlayer tracked, Proxy proxy,
+                                      LocalPlayer localPlayer, Vec3 position, int light) {
+        if (!nameTags) return;
+        if ((tracked.latest().poseFlags() & FarPlayerWire.POSE_SNEAK) != 0) return;
+        if (!vanillaNameVisibleIgnoringDistance(proxy, localPlayer)) return;
+        queueNameTag(out, frustum, proxy, proxy.farName, position, light);
+    }
+
+    /** Resolves the anchor once, runs the tag's OWN frustum test (the body's box can be just
+     *  off screen while the tag is on it), then queues. */
+    private static void queueNameTag(List<PendingTag> out, Frustum frustum, Entity entity,
+                                     Component name, Vec3 position, int light) {
+        Vec3 a = tagAnchor(entity, position);
+        if (a == null) return;
+        if (frustum != null && !frustum.isVisible(new AABB(a.x - 0.5, a.y - 0.5, a.z - 0.5,
+                a.x + 0.5, a.y + 0.5, a.z + 0.5))) {
+            return;
+        }
+        out.add(new PendingTag(entity, name, a, light));
+    }
+
+    /**
+     * Vanilla's {@code LivingEntityRenderer.shouldShowName} ladder MINUS its distance clauses
+     * (those are exactly what the gap fill supplies): invisibility to the local player and
+     * the team name-tag visibility rules, verbatim. ({@code Player.shouldShowName()} is a
+     * constant true, so the avatar renderer's extra conjunct adds nothing for players.)
+     */
+    private static boolean vanillaNameVisibleIgnoringDistance(AbstractClientPlayer player,
+                                                              LocalPlayer localPlayer) {
+        boolean visible = !player.isInvisibleTo(localPlayer);
+        Team team = player.getTeam();
+        Team own = localPlayer.getTeam();
+        if (team == null) return visible;
+        return switch (team.getNameTagVisibility()) {
+            case ALWAYS -> visible;
+            case NEVER -> false;
+            case HIDE_FOR_OTHER_TEAMS -> own == null ? visible
+                    : team.isAlliedTo(own) && (team.canSeeFriendlyInvisibles() || visible);
+            case HIDE_FOR_OWN_TEAM -> own == null ? visible : !team.isAlliedTo(own) && visible;
+        };
+    }
+
+    /**
+     * WI-6: LSS draws the far-player name tag itself — vanilla gates entity name tags at 64
+     * blocks on every MC line and a proxy only exists beyond
+     * the tracking radius, so {@code setCustomNameVisible} could never produce one. Vanilla's
+     * {@code submitNameTag} math (attachment + 0.5, camera billboard, {@code (s, -s, s)}) laid
+     * onto {@code submitText} with OUR pose (it captures the pose matrix verbatim — never
+     * {@code submitNameTag}, which applies its own translate-then-scale and no-ops on a null
+     * attachment), with three deliberate deviations: NORMAL (depth-tested) display mode only —
+     * no see-through pass, the privacy stance that also rejects glow; vanilla's 25% background
+     * behind the depth-tested text (legibility at distance); and {@code s = 0.025 ×
+     * clamp(sqrt(d/64), 1, 8)} so the tag stays readable without turning a two-pixel body into
+     * a full-size plate (constant apparent size looked like an ESP HUD — panel Q4). {@code d}
+     * is the CAMERA distance (review fold F1: freecam/replay).
+     *
+     * <p>TWO submits, not one (live rig 2026-09-04 — the text flickered white/grey): the font
+     * draws its background plate as a glyph effect 0.01 text-units NEARER than the glyphs,
+     * which at far-tag range is a fraction of one depth-buffer step (24-bit depth, 0.05 near
+     * plane: one step ≈ d² × 1.2e-6 blocks — 0.03 blocks at 160), so plate and glyphs z-fight
+     * and the translucent plate tints the text wherever it wins. Vanilla escapes that only
+     * because its plate lives in the depth-test-free pass this tag deliberately lacks. So:
+     * submit 1 = plate + glyphs as vanilla lays them out; submit 2 = the glyphs alone in
+     * {@code POLYGON_OFFSET} display mode — vanilla's own outline idiom
+     * ({@code glPolygonOffset(-1, -10)}: at least ten depth units nearer, resolution-adaptive
+     * on every depth format, zero perspective shift, no see-through window — the review's
+     * replacement for a geometric lift). The pass runs all first submits, then all second
+     * ones, and the text phase draws them in that order. The push is unwound in a finally
+     * (fold D1).
+     */
+    private static void submitFarNameTag(SubmitNodeCollector collector, CameraRenderState cameraState,
+                                         PendingTag tag, Vec3 cameraPosition, PoseStack poseStack,
+                                         Font.DisplayMode mode, boolean withPlate) {
+        Vec3 anchor = tag.anchor();
+        double cameraDistance = anchor.distanceTo(cameraPosition);
+        float scale = 0.025f * (float) Math.clamp(Math.sqrt(cameraDistance / 64.0), 1.0, 8.0);
+        Minecraft minecraft = Minecraft.getInstance();
+        Font font = minecraft.font;
+        Component name = tag.name();
+        poseStack.pushPose();
+        try {
+            poseStack.translate(anchor.x - cameraPosition.x, anchor.y - cameraPosition.y,
+                    anchor.z - cameraPosition.z);
+            poseStack.mulPose(cameraState.orientation);
+            poseStack.scale(scale, -scale, scale);
+            float x = -font.width(name) / 2.0f;
+            int background = (int) (minecraft.options.getBackgroundOpacity(0.25f) * 255.0f) << 24;
+            collector.submitText(poseStack, x, 0.0f, name.getVisualOrderText(), false, mode, tag.light(), -1,
+                    withPlate ? background : 0, 0);
+        } finally {
+            poseStack.popPose();
+        }
+    }
+
+    /** The /lss diag line (WI-10): last pass's draw/cull/mount/tag counts + the light mode —
+     *  the live-gate instrument the original black-proxy sighting lacked. */
+    public static String diagLine() {
+        var r = instance;
+        if (r == null) return "FarPlayerRender: off";
+        return "FarPlayerRender: drawn=" + r.lastDrawn + ", culled=" + r.lastCulled
+                + ", mounts=" + r.lastMounts + ", tags=" + r.lastTags
+                + ", light=" + (LSSClientConfig.CONFIG.farPlayersFullBright ? "full" : "floor");
+    }
+
     /** Monotonic id from the LSS block, probed against the live level (a taken id —
      *  another mod's synthetic entity — is skipped, never reused). */
     private int nextEntityId(ClientLevel level) {
@@ -568,6 +1140,10 @@ public final class FarPlayerRenderer {
 
     private static final class Proxy extends RemotePlayer {
         private final UUID trackedUuid;
+        /** The cached tag text (WI-6) — never re-allocated per frame. */
+        final Component farName;
+        /** Fold (e2): render type -> lift tier for this proxy's equipment (refreshLiftTiers). */
+        final Map<RenderType, Integer> liftTiers = new IdentityHashMap<>();
         private int maxRenderDistanceBlocks = 16384;
         private Vec3 lastWalkPosition;
         private int lastWalkTick = Integer.MIN_VALUE;
@@ -575,6 +1151,9 @@ public final class FarPlayerRenderer {
         private Proxy(ClientLevel level, UUID trackedUuid, String name, int entityId) {
             super(level, new GameProfile(trackedUuid, name));
             this.trackedUuid = trackedUuid;
+            this.farName = Component.literal(name);
+            // WI-6: LSS draws the tag itself; vanilla's path can never fire for a proxy.
+            this.setCustomNameVisible(false);
             this.setId(entityId);
             this.noPhysics = true;
             this.setNoGravity(true);
@@ -584,14 +1163,16 @@ public final class FarPlayerRenderer {
 
         void apply(FarPlayerClientTracker.TrackedFarPlayer tracked,
                    dev.vox.lss.common.farplayers.FarPlayerMotion.Sample sample,
-                   Vec3 position, boolean nameTags, int maxRenderDistanceBlocks,
-                   boolean allowWalk, int animationTick, Map<String, Item> itemCache) {
+                   Vec3 position, double distance, int maxRenderDistanceBlocks,
+                   boolean allowWalk, int animationTick, Map<String, Item> itemCache,
+                   EquipmentAssetManager equipmentAssets) {
             byte pose = tracked.latest().poseFlags();
             boolean gliding = (pose & FarPlayerWire.POSE_GLIDE) != 0;
             boolean swimming = (pose & FarPlayerWire.POSE_SWIM) != 0;
             boolean sneaking = (pose & FarPlayerWire.POSE_SNEAK) != 0;
 
             this.maxRenderDistanceBlocks = maxRenderDistanceBlocks;
+            boolean newTick = this.tickCount != animationTick;
             this.tickCount = animationTick;
             this.setOldPosAndRot(position, sample.yaw(), sample.pitch());
             this.xo = position.x;
@@ -611,16 +1192,76 @@ public final class FarPlayerRenderer {
             this.yHeadRotO = sample.headYaw();
             this.setShiftKeyDown(sneaking);
             this.setSwimming(swimming);
+            this.wasTouchingWater = swimming; // F7: the swim pitch term + isVisuallyCrawling read it
             this.setPose(gliding ? Pose.FALL_FLYING
                     : swimming ? Pose.SWIMMING
                     : sneaking ? Pose.CROUCHING
                     : Pose.STANDING);
+            // Tick-only render inputs that vanilla advances in LivingEntity.tick(), which never
+            // runs for a render-only proxy (the walk cycle's family — hardening plan WI-6 fold
+            // (d), live rig 2026-09-04): the FALL_FLYING shared flag (the humanoid extraction
+            // reads isFallFlying(), NOT the pose — without it a glider stood upright with folded
+            // wings), the fall-fly tick count behind the -90° glide tilt (vanilla's fade: full
+            // at 10 ticks), the swim amount behind the swimming roll + stroke (vanilla's
+            // ±0.09/tick ramp, via AccessorLivingEntity — the fields are private), and — this
+            // line only — the elytra wing angles, which live in ElytraAnimationState and advance
+            // only in its tick() (it reads the flag; a zero delta movement ramps to the full
+            // spread), where 1.21.1's ElytraModel derived them from the flag + ticks itself.
+            this.setSharedFlag(FLAG_FALL_FLYING, gliding);
+            if (newTick) {
+                this.fallFlyTicks = gliding ? Math.min(this.fallFlyTicks + 1, 10) : 0;
+                var swim = (AccessorLivingEntity) (Object) this; // Proxy is final: cast via Object
+                float swimAmount = swim.lss$getSwimAmount();
+                swim.lss$setSwimAmountO(swimAmount);
+                swim.lss$setSwimAmount(swimming ? Math.min(1.0f, swimAmount + 0.09f)
+                        : Math.max(0.0f, swimAmount - 0.09f));
+                this.elytraAnimationState.tick();
+            }
             applyEquipment(tracked, itemCache);
-            this.setCustomName(Component.literal(tracked.name()));
-            this.setCustomNameVisible(nameTags);
+            refreshLiftTiers(equipmentAssets);
+            // WI-5: the model-parts byte (defaults to 0 = every overlay layer hidden — hat,
+            // jacket, sleeves, pants were invisible on every proxy). All layers EXCEPT the
+            // cape: the cape layer positions the cape from cloak fields only Player.tick's cloak
+            // physics update — never run on a render-only proxy — so an enabled cape renders
+            // relative to the origin. The wings layer selects the cape-textured elytra through
+            // the same CAPE bit and the cape layer bails on an elytra chest, so the full byte is
+            // safe exactly then. (Avatar owns the accessor on this line.)
+            boolean elytra = this.getItemBySlot(EquipmentSlot.CHEST).is(Items.ELYTRA);
+            byte parts = distance <= OVERLAY_MAX_DISTANCE_BLOCKS
+                    ? (byte) (elytra ? 0x7F : 0x7E)
+                    : (byte) (elytra ? 0x01 : 0x00); // fold (e): base skin only past the overlay range
+            this.getEntityData().set(DATA_PLAYER_MODE_CUSTOMISATION, parts);
             updateWalkAnimation(position, allowWalk,
                     gliding || swimming || tracked.latest().vehicle() != null,
                     animationTick);
+        }
+
+        /** Fold (e2): the lift TIER per render type for THIS proxy's equipment (see
+         *  LiftedSubmitCollector): the inner armor model (LEGS — HumanoidArmorLayer.usesInnerModel;
+         *  a 1/32-block shell) is tier 0, outer armor + trims + glint tier 1, everything else
+         *  (held items, the elytra) tier 2. Exact render-type identities, computed the way the
+         *  armor layer computes them on this line — the equipment asset's layers for the slot's
+         *  layer type, each layer's texture through {@code getTextureLocation} (the
+         *  {@code EquipmentLayerRenderer.layerTextureLookup} key with no player-texture
+         *  override), then the memoized {@code armorCutoutNoCull} — never string-sniffed.
+         *  Rebuilt per apply from the equipment the wire just set; identity-keyed. */
+        private void refreshLiftTiers(EquipmentAssetManager equipmentAssets) {
+            liftTiers.clear();
+            liftTiers.put(Sheets.armorTrimsSheet(true), 1);
+            liftTiers.put(Sheets.armorTrimsSheet(false), 1);
+            liftTiers.put(RenderTypes.armorEntityGlint(), 1);
+            if (equipmentAssets == null) return;
+            for (EquipmentSlot slot : ARMOR_EQUIPMENT_SLOTS) {
+                Equippable equippable = this.getItemBySlot(slot).get(DataComponents.EQUIPPABLE);
+                // HumanoidArmorLayer.shouldRender: an asset id AND the matching slot.
+                if (equippable == null || equippable.slot() != slot || equippable.assetId().isEmpty()) continue;
+                boolean inner = slot == EquipmentSlot.LEGS;
+                EquipmentClientInfo.LayerType layerType = inner
+                        ? EquipmentClientInfo.LayerType.HUMANOID_LEGGINGS : EquipmentClientInfo.LayerType.HUMANOID;
+                for (EquipmentClientInfo.Layer layer : equipmentAssets.get(equippable.assetId().get()).getLayers(layerType)) {
+                    liftTiers.put(RenderTypes.armorCutoutNoCull(layer.getTextureLocation(layerType)), inner ? 0 : 1);
+                }
+            }
         }
 
         private void applyEquipment(FarPlayerClientTracker.TrackedFarPlayer tracked,
@@ -661,6 +1302,9 @@ public final class FarPlayerRenderer {
 
         private void updateWalkAnimation(Vec3 position, boolean allowWalk,
                                          boolean nonWalkingPose, int animationTick) {
+            // This line's WalkAnimationState.stop() zeroes speedOld as well as speed and
+            // position (verified against the 26.1.2 bytecode) — the 1.21.1 twins' setSpeed(0)
+            // + update(0, 1) sawtooth fix is not needed here.
             if (lastWalkPosition == null || animationTick == lastWalkTick) {
                 if (lastWalkPosition == null) {
                     lastWalkPosition = position;
