@@ -74,6 +74,7 @@ public class LSSServerNetworking {
         if (requestService != null) return;
         LSSLogger.info(Brand.shortName() + " LOD request processing service starting (LAN server)");
         requestService = new RequestProcessingService(server);
+        ServerReceiverGlue.flushPendingLoadSeeds(server, requestService); // the pre-service spawn set
         LSSClientNetworking.triggerHostHandshake();
     }
 
@@ -171,6 +172,7 @@ public class LSSServerNetworking {
             }
             LSSLogger.info("Starting " + Brand.shortName() + " LOD request processing service");
             requestService = new RequestProcessingService(server);
+        ServerReceiverGlue.flushPendingLoadSeeds(server, requestService); // the pre-service spawn set
         });
 
         ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
@@ -191,6 +193,16 @@ public class LSSServerNetworking {
                 service.tick();
             }
         });
+
+        // The dirty content filter's chunk-LOAD baseline (xaero-scatter-remediation-plan.md
+        // WI-1b): fired from the FULL status task — vanilla, and Moonrise/C2ME through their
+        // Fabric platform hooks; a chunk system that skips it leaves the filter as before.
+        // LINE FLAVOR: TWO-arg on this line's lifecycle-events 2.6.15 (fabric-api 0.141.4+1.21.11,
+        // javap-verified 2026-09-05); fabric-api 4.x (26.2/26.1) passes a third `generated`
+        // flag — surfaces row 23.
+        net.fabricmc.fabric.api.event.lifecycle.v1.ServerChunkEvents.CHUNK_LOAD.register(
+                (level, chunk) ->
+                        ServerReceiverGlue.onChunkLoaded(level, chunk, requestService));
 
         // The shared /lsslod tree (xplat since N-2), registered through Fabric's event.
         net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback.EVENT.register(
