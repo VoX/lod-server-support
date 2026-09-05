@@ -72,12 +72,13 @@ public final class FarPlayerBroadcastService {
         boolean send(UUID viewer, String channel, byte[] body);
     }
 
-    /** Vanish bridge seam. Paper feeds the "vanished" metadata read (SuperVanish/
-     *  PremiumVanish/EssentialsX) through the snapshot instead; Fabric passes null —
-     *  there is no cross-mod vanish convention on Fabric (recorded descope,
-     *  v0.11.0-progress decisions log), so a Fabric vanish mod's players rely on the
-     *  exclude LIST only (Fabric has no permission node — FabricFarPlayerSnapshots
-     *  hardcodes hidden=false; the lss./vss.farplayers.hidden nodes are Paper). */
+    /** Vanish bridge seam, per (viewer, target). Paper feeds the "vanished" metadata read
+     *  (SuperVanish/PremiumVanish/EssentialsX) through the snapshot instead and passes null;
+     *  Fabric and NeoForge wire the reflective Melius Vanish bridge
+     *  ({@code dev.vox.lss.compat.MeliusVanishBridge}, far-player-render-hardening-plan.md
+     *  WI-7b — absent mod = visible, present-but-throwing = HIDDEN) since 2026-09-04, and
+     *  their snapshots read the lss./vss.farplayers.hidden nodes through the loader seam
+     *  (WI-7a), so the exclude LIST is no longer the only lever there. */
     @FunctionalInterface
     public interface VanishBridge {
         boolean canSee(UUID viewer, UUID target);

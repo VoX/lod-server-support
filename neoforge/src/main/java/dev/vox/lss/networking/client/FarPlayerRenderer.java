@@ -22,4 +22,11 @@ public final class FarPlayerRenderer {
     /** Session-end proxy teardown — nothing to clear while the render path is a no-op. */
     static void clearInstance() {
     }
+
+    /** The /lss diag line (far-player-render-hardening-plan.md WI-10) — the xplat command
+     *  gates the call on {@link #RENDER_AVAILABLE}, so this twin only satisfies the compile
+     *  coupling; it never prints on this loader. */
+    public static String diagLine() {
+        return "FarPlayerRender: off (no renderer on this loader)";
+    }
 }

@@ -37,6 +37,7 @@ public final class ClientOptionCatalog {
     public static final String ID_FAR_PLAYERS_ENABLED = "lss:far_players_enabled";
     public static final String ID_FAR_PLAYERS_SHARE_SELF = "lss:far_players_share_self";
     public static final String ID_FAR_PLAYERS_NAME_TAGS = "lss:far_players_name_tags";
+    public static final String ID_FAR_PLAYERS_FULL_BRIGHT = "lss:far_players_full_bright";
     public static final String ID_FAR_PLAYERS_RENDER_DISTANCE = "lss:far_players_render_distance";
     public static final String ID_FAR_PLAYERS_WITH_SEEU = "lss:far_players_with_seeu";
 
@@ -186,6 +187,20 @@ public final class ClientOptionCatalog {
                 .visibility(Visibility.RENDER_AVAILABLE)
                 .build();
 
+        // Full-bright proxies (far-player-render-hardening-plan.md WI-2): render-only, so it
+        // is NOT a capability-bit term — but it rides the page-uniform push hook like every
+        // far-players row (pinned; the prefs changed-guard makes the push a no-op).
+        var fullBright = BoolSpec.builder(ID_FAR_PLAYERS_FULL_BRIGHT)
+                .name("lss.config.far_players_full_bright")
+                .tooltip("lss.config.far_players_full_bright.tooltip")
+                .impact(Impact.LOW)
+                .defaultValue(false)
+                .bind(c -> c.farPlayersFullBright, (c, v) -> c.farPlayersFullBright = v)
+                .enabledBy(ID_FAR_PLAYERS_ENABLED)
+                .saveHook(push)
+                .visibility(Visibility.RENDER_AVAILABLE)
+                .build();
+
         var render = IntSpec.builder(ID_FAR_PLAYERS_RENDER_DISTANCE)
                 .name("lss.config.far_players_render_distance")
                 .tooltip("lss.config.far_players_render_distance.tooltip")
@@ -211,6 +226,6 @@ public final class ClientOptionCatalog {
                 .build();
 
         return PageSpec.of(PAGE_FAR_PLAYERS, "lss.config.far_players.page",
-                GroupSpec.of(enabled, share, tags, render, withSeeU));
+                GroupSpec.of(enabled, share, tags, fullBright, render, withSeeU));
     }
 }
