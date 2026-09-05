@@ -299,7 +299,7 @@ class XaeroTileExtractorTest {
 
     @Test
     void iceOverlaysLikeWater() {
-        // HalfTransparentBlock is the 26.2 translucent family root (ice/slime/honey);
+        // HalfTransparentBlock is the translucent family root (ice/slime/honey);
         // the narrower TransparentBlock check would silently floor every frozen ocean.
         var section = emptySection();
         section.setBlockState(5, 4, 5, Blocks.STONE.defaultBlockState()); // Y = -60

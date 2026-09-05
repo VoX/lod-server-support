@@ -87,12 +87,15 @@ class DirtyContentFilterTest {
     }
 
     /**
-     * Overflow eviction self-heals: clearing the map forgets baselines, so the next save of
-     * unchanged content re-marks dirty exactly once (one spurious re-send) and then filtering
-     * resumes — rather than the map leaking forever or post-clear saves staying silent.
+     * Overflow eviction is LRU and self-heals (xaero-scatter-remediation-plan.md WI-1b,
+     * panel fold): past the per-dimension cap the LEAST-RECENTLY-touched baseline goes —
+     * never the whole table (the old wholesale clear re-marked every loaded chunk once) and
+     * never a hot one (a plain insertion-ordered put would evict the most re-saved chunks
+     * first). The evicted chunk's next save reads as a first observation exactly once, then
+     * filtering resumes; other baselines and other dimensions are untouched.
      */
     @Test
-    void overflowEvictionTreatsNextSaveAsFirstObservation() {
+    void overflowEvictsTheColdestBaselineOnly() {
         var filter = new DirtyContentFilter();
         var dim = "minecraft:overworld";
         var otherDim = "minecraft:the_end";
@@ -103,20 +106,63 @@ class DirtyContentFilterTest {
         assertFalse(filter.storeHash(dim, pos, hash), "identical re-save is filtered");
         assertTrue(filter.storeHash(otherDim, pos, hash), "same position in another dimension is independent");
 
-        // Fill the dimension to one below the cap (pos already occupies one entry); z=1_000_000
-        // keeps fillers distinct from pos.
-        for (int i = 0; i < DirtyContentFilter.MAX_ENTRIES_PER_DIMENSION - 2; i++) {
+        // Fill the dimension exactly to the cap (pos already occupies one entry); z=1_000_000
+        // keeps fillers distinct from pos. Filler 0 is the OLDEST insertion after pos.
+        for (int i = 0; i < DirtyContentFilter.MAX_ENTRIES_PER_DIMENSION - 1; i++) {
             filter.storeHash(dim, PositionUtil.packPosition(i, 1_000_000), i + 1L);
         }
-        assertFalse(filter.storeHash(dim, pos, hash), "still filtering just below the cap (no early eviction)");
-
-        // Reach the cap; the next store clears the dimension wholesale before storing.
+        assertEquals(DirtyContentFilter.MAX_ENTRIES_PER_DIMENSION + 1, filter.entryCount(),
+                "at the cap (plus the other dimension's one entry) nothing is evicted yet");
+        // Touch pos: a re-save moves it to the recently-used end, so it must SURVIVE the
+        // eviction the next new insertion triggers — filler 0, the coldest, goes instead.
+        assertFalse(filter.storeHash(dim, pos, hash), "still filtering at the cap (no early eviction)");
         filter.storeHash(dim, PositionUtil.packPosition(-1, 1_000_000), 99L);
-        assertTrue(filter.storeHash(dim, pos, hash),
-                "post-eviction save of identical content is treated as a first observation");
-        assertFalse(filter.storeHash(dim, pos, hash), "filtering resumes after the single self-heal re-mark");
-
+        assertEquals(DirtyContentFilter.MAX_ENTRIES_PER_DIMENSION + 1, filter.entryCount(),
+                "one in, one out: the table stays at the cap");
+        assertFalse(filter.storeHash(dim, pos, hash),
+                "the recently-touched baseline survives eviction (LRU, not clear-all)");
+        assertFalse(filter.storeHash(dim, PositionUtil.packPosition(1, 1_000_000), 2L),
+                "filler 1 was not evicted: filtering continues for everything else");
+        assertTrue(filter.storeHash(dim, PositionUtil.packPosition(0, 1_000_000), 1L),
+                "the coldest baseline (filler 0) was the one evicted: its next save is a first observation");
         assertFalse(filter.storeHash(otherDim, pos, hash), "eviction is per-dimension; other baselines survive");
+    }
+
+    /**
+     * The chunk-load baseline (xaero-scatter-remediation-plan.md WI-1b Option L): a chunk
+     * seeded at LOAD has its first metadata-only save suppressed — the first-observed-save
+     * storm's fix — while a genuine content change after the load still marks. Also pins
+     * the observability pair the diag line and exporter read (seeded_load / entries).
+     */
+    @Test
+    void seedLoadedSuppressesTheFirstSaveUnlessContentChanged() {
+        var live = new java.util.concurrent.atomic.AtomicReference<byte[]>(new byte[]{1, 2, 3});
+        var filter = new DirtyContentFilter((level, chunk, cx, cz) -> live.get());
+        var dim = "minecraft:overworld";
+        filter.seedLoaded(null, null, 3, 4, dim);
+        assertEquals(1L, filter.getTotalSeededLoads(), "the load seam counts its baselines");
+        assertEquals(1, filter.entryCount(), "entries counts live baselines");
+        assertFalse(filter.contentChanged(null, null, 3, 4, dim),
+                "a loaded chunk's first save with unchanged content is suppressed");
+        assertEquals(1L, filter.getTotalSuppressed());
+        live.set(new byte[]{9, 9, 9});
+        assertTrue(filter.contentChanged(null, null, 3, 4, dim),
+                "a real change after the load still marks");
+        assertEquals(1, filter.entryCount(), "an update replaces the baseline, no new entry");
+    }
+
+    /** A throwing serializer seeds NOTHING (fail-open by omission): no entry, no count, and
+     *  the chunk's first save reads absent → changed — exactly the pre-fix behavior. */
+    @Test
+    void seedLoadedFailsOpenByOmission() {
+        var filter = new DirtyContentFilter((level, chunk, cx, cz) -> {
+            throw new IllegalStateException("light engine not ready");
+        });
+        assertDoesNotThrow(() -> filter.seedLoaded(null, null, 1, 1, "minecraft:overworld"));
+        assertEquals(0, filter.entryCount());
+        assertEquals(0L, filter.getTotalSeededLoads());
+        assertTrue(filter.contentChanged(null, null, 1, 1, "minecraft:overworld"),
+                "without a seed the first save is a first observation");
     }
 
     /**

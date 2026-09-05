@@ -358,7 +358,7 @@ final class XaeroTileExtractor {
     }
 
     /** Approximation of Xaero's model-alpha translucency (see class javadoc).
-     *  HalfTransparentBlock is the 26.2 family root: ice, slime, honey, and (via
+     *  HalfTransparentBlock is the family root: ice, slime, honey, and (via
      *  the TransparentBlock subclass) plain + stained glass. */
     private static boolean blockOverlayable(BlockState state) {
         Block b = state.getBlock();
