@@ -170,6 +170,13 @@ class XaeroMapCompatTest {
         this.bridge.offerPrepared(OVERWORLD, tile(chunkX, chunkZ));
     }
 
+    /** An owed-only pump (empty queue, debt present) runs the ladder every 4th tick
+     *  (§12.10: ~5 Hz — Xaero's loader drains one file per ≥100 ms pass); pump a full
+     *  stride so exactly one probe pass is guaranteed to have run. */
+    private void pumpOwedIdle() {
+        for (int i = 0; i < 4; i++) this.bridge.pump();
+    }
+
     // ---- resolve / facade ----
 
     @Test
@@ -2596,7 +2603,7 @@ class XaeroMapCompatTest {
                 && line.contains(", dropped_overflow=") && line.contains(", dropped_expired=")
                 && !line.contains(", refused_paused=") && line.contains(", drops_reported=")
                 && line.contains(", owed=") && line.contains(", owed_regions=")
-                && line.contains(", owed_reported=")
+                && line.contains(", owed_reported=") && line.contains(", owed_evicted=")
                 && line.contains(", bp="), line);
         assertFalse(line.contains("heal_"), "the §18 heal tokens die with the ledger (§12.1)");
         assertFalse(line.contains("xaero_crashed"), "the crash token appears only while latched");
@@ -2624,7 +2631,7 @@ class XaeroMapCompatTest {
         assertTrue(this.reports.isEmpty(), "an awaiting-region eviction burns no ingest strike");
         assertEquals(1, this.bridge.counterForTest("owed"));
         assertEquals(1, this.bridge.counterForTest("owed_regions"));
-        assertTrue(this.bridge.describe().contains(", owed=1, owed_regions=1, owed_reported=0"));
+        assertTrue(this.bridge.describe().contains(", owed=1, owed_regions=1, owed_reported=0, owed_evicted=0"));
     }
 
     /** A pump-CLASSIFIED loaded region keeps the §12.8 immediate report: with (4,2)
@@ -2701,13 +2708,19 @@ class XaeroMapCompatTest {
         offer(129, 64);
         this.bridge.pump();
         offer(130, 64); // (128,64) owed
+        this.bridge.maxQueue = 8;
+        offer(131, 64); // room in the queue (occupancy recomputes on the mutation): the
+                        // load state is now the ONLY thing holding the release
         this.bridge.pump(); // still unloaded: the debt waits
-        assertTrue(this.reports.isEmpty());
+        assertTrue(this.reports.isEmpty(), "unloaded region: held");
         var region = this.processor.regions.get((4L << 32) | 2L);
-        region.loadState = 2; // Xaero finished the load
+        region.loadState = 2; // Xaero finished the load…
+        region.resting = false; // …but the region is being saved / recached
+        this.bridge.pump();
+        assertTrue(this.reports.isEmpty(), "loaded but NOT resting: still held (the AND)");
         region.resting = true;
         this.bridge.pump(); // the queued siblings commit; the owed one is released
-        assertEquals(2, this.bridge.counterForTest("written"));
+        assertEquals(3, this.bridge.counterForTest("written"));
         assertEquals(1, this.reports.size(), "the owed position is reported for its re-serve");
         assertEquals(128, this.reports.get(0)[1]);
         assertEquals(64, this.reports.get(0)[2]);
@@ -2792,10 +2805,11 @@ class XaeroMapCompatTest {
         this.bridge.pump();
         assertTrue(this.reports.isEmpty());
         this.clockMillis += this.bridge.owedTtlMillis + 1;
-        this.bridge.maxQueue = 8; // room in the queue: releases also wait for that…
-        offer(131, 64);           // …and occupancy is recomputed on the next mutation
+        // The queue is still 100% full (the awaiting siblings): a READY release would be
+        // held for room, but the TTL release bypasses the occupancy hold — a permanently
+        // full queue must not turn the debt back into a silent hole.
         this.bridge.pump();
-        assertEquals(1, this.reports.size(), "one report at expiry");
+        assertEquals(1, this.reports.size(), "one report at expiry, even without queue room");
         assertEquals(0, this.bridge.counterForTest("owed"));
         this.bridge.pump();
         assertEquals(1, this.reports.size(), "…and never again");
@@ -2847,7 +2861,7 @@ class XaeroMapCompatTest {
         assertEquals(1, this.bridge.counterForTest("owed"), "the expired tile is a debt, not a hole");
         assertTrue(this.reports.isEmpty(), "the region is loaded+resting but the TILE is busy: held");
         busy.leafTexture.downloadFromPBO = false; // the download finished
-        this.bridge.pump();
+        pumpOwedIdle(); // the queue is empty: owed-only pumps probe at the ~5 Hz stride
         assertEquals(1, this.reports.size(), "released once the tile chunk can take a write");
         assertEquals(0, this.reports.get(0)[1]);
         assertEquals(0, this.reports.get(0)[2]);
@@ -2870,7 +2884,7 @@ class XaeroMapCompatTest {
         this.bridge.pump();
         assertEquals(1, this.bridge.counterForTest("owed"), "held for a return");
         this.clockMillis += this.bridge.owedTtlMillis + 1;
-        this.bridge.pump();
+        pumpOwedIdle(); // the stale queue drained: owed-only pumps probe at the ~5 Hz stride
         assertEquals(0, this.bridge.counterForTest("owed"), "discarded at the TTL");
         assertTrue(this.reports.stream().noneMatch(r -> r[0] == OVERWORLD && (int) r[1] == 128),
                 "never reported into the foreign dimension");
@@ -2892,11 +2906,122 @@ class XaeroMapCompatTest {
         offer(224, 64); // evicts (192,64) → owed (6,2): past the cap, (4,2) — the oldest — goes
         assertEquals(2, this.bridge.counterForTest("owed_regions"));
         assertEquals(2, this.bridge.counterForTest("owed"));
+        assertEquals(1, this.bridge.counterForTest("owed_evicted"), "the silent loss is METERED");
+        this.bridge.pump(); // (7,2) probed (created awaiting)
+        // Drain the queue (its region loads and commits) so a surviving (4,2) debt WOULD
+        // release — then the empty report list proves the eviction, not the room gate.
+        var r72 = this.processor.regions.get((7L << 32) | 2L);
+        r72.loadState = 2;
         var r42 = this.processor.regions.get((4L << 32) | 2L);
         r42.loadState = 2;
-        r42.resting = true;
         this.bridge.pump();
-        assertTrue(this.reports.isEmpty(), "the evicted debt is gone, unreported");
+        assertEquals(1, this.bridge.counterForTest("written"), "the queue drained: room for releases");
+        assertEquals(0, this.bridge.queuedForTest());
+        pumpOwedIdle(); // owed-only pumps probe at the ~5 Hz stride
+        assertTrue(this.reports.isEmpty(), "the evicted (oldest) debt is gone, unreported");
+        // …while the surviving (6,2) debt still releases when ITS region loads.
+        this.processor.regions.get((6L << 32) | 2L).loadState = 2;
+        pumpOwedIdle();
+        assertEquals(1, this.reports.size(), "the newest debts survived the cap");
+        assertEquals(192, this.reports.get(0)[1]);
+    }
+
+    /** Under the WEDGED stream every governed shed is owed — the class that used to be a
+     *  silent permanent hole — and releases once governance re-arms. */
+    @Test
+    void aWedgedStreamShedIsOwedNotLost() {
+        this.processor.createdRegionLoadState = 0;
+        this.bridge.maxQueue = 2;
+        offer(128, 64);
+        offer(129, 64);
+        this.bridge.pump(); // (4,2) awaiting, queue 100% full → halt
+        assertEquals(halt(), this.bridge.reportBackpressure());
+        this.clockMillis += this.bridge.bpHaltWedgeMillis + 1;
+        this.bridge.pump();
+        assertEquals(-1, this.bridge.reportBackpressure(), "wedged");
+        var loaded = new MapRegion(); // (2,2) is LOADED — pre-WI-3 a wedged shed here was silent
+        this.processor.regions.put((2L << 32) | 2L, loaded);
+        offer(64, 64); // evicts (128,64) [awaiting → owed anyway]
+        offer(65, 64); // evicts (129,64) [awaiting → owed]
+        offer(66, 64); // evicts (64,64) — LOADED region, but the stream is wedged: OWED, not lost
+        assertTrue(this.reports.isEmpty(), "nothing reported into the wedge-released stream");
+        assertEquals(3, this.bridge.counterForTest("owed"));
+        this.bridge.pump(); // (65),(66) commit into the loaded region → queue drains → re-arm
+        assertTrue(this.bridge.reportBackpressure() >= 0, "re-armed below the re-arm occupancy");
+        this.bridge.pump();
+        assertTrue(this.reports.stream().anyMatch(r -> (int) r[1] == 64 && (int) r[2] == 64),
+                "the wedged-stream shed of the loaded region was released, not lost");
+    }
+
+    /** Ungoverned (kill switch off) the §12.8 doctrine is "drops stay silent": a debt owed
+     *  while governed is DISCARDED, not reported, once its region is ready. */
+    @Test
+    void ungovernedDebtIsDiscardedSilently() {
+        this.processor.createdRegionLoadState = 0;
+        this.bridge.maxQueue = 2;
+        offer(128, 64);
+        offer(129, 64);
+        this.bridge.pump();
+        offer(130, 64); // (128,64) owed while governed
+        assertEquals(1, this.bridge.counterForTest("owed"));
+        this.backpressureEnabled = false;
+        var region = this.processor.regions.get((4L << 32) | 2L);
+        region.loadState = 2;
+        this.bridge.pump();
+        assertTrue(this.reports.isEmpty(), "ungoverned: no report");
+        assertEquals(0, this.bridge.counterForTest("owed"), "…the debt is discarded");
+    }
+
+    /** A world-id change reports the debt like the queue's tiles (§12.1(c)): the stamps are
+     *  set and the bytes gone — a return to that world would never re-declare them. */
+    @Test
+    void aWorldChangeReportsTheDebt() {
+        this.processor.createdRegionLoadState = 0;
+        this.bridge.maxQueue = 2;
+        offer(128, 64);
+        offer(129, 64);
+        this.bridge.pump();
+        offer(130, 64); // (128,64) owed
+        this.processor.currentWorldId = "another-world";
+        this.bridge.pump();
+        assertTrue(this.reports.stream().anyMatch(r -> (int) r[1] == 128 && (int) r[2] == 64),
+                "the owed position is reported at the world change");
+        assertEquals(0, this.bridge.counterForTest("owed"));
+        assertEquals(1, this.bridge.counterForTest("owed_reported"));
+    }
+
+    /** The live disable toggle drops the debt with the queue — a disabled bridge must not
+     *  un-stamp anything later. */
+    @Test
+    void theDisableToggleClearsTheDebt() {
+        this.processor.createdRegionLoadState = 0;
+        this.bridge.maxQueue = 2;
+        offer(128, 64);
+        offer(129, 64);
+        this.bridge.pump();
+        offer(130, 64);
+        assertEquals(1, this.bridge.counterForTest("owed"));
+        this.enabled = false;
+        this.bridge.pump();
+        assertEquals(0, this.bridge.counterForTest("owed"));
+        assertEquals(0, this.bridge.queuedForTest());
+    }
+
+    /** The byte-cap evict loop (the path that "binds first" on overlay-heavy tiles) sheds
+     *  into the owed set exactly like the count cap. */
+    @Test
+    void aByteCapShedIsOwedToo() {
+        this.processor.createdRegionLoadState = 0;
+        this.bridge.maxQueue = 8;
+        offer(128, 64);
+        offer(129, 64);
+        this.bridge.pump(); // (4,2) awaiting
+        this.bridge.maxQueueBytes = 2 * XaeroMapCompat.approxBytes(tile(0, 0)) - 1; // room for one
+        offer(130, 64); // the byte loop evicts (128,64) then (129,64) to make room
+        assertEquals(1, this.bridge.queuedForTest());
+        assertEquals(2, this.bridge.counterForTest("dropped_overflow"));
+        assertTrue(this.reports.isEmpty(), "awaiting region: owed, not reported");
+        assertEquals(2, this.bridge.counterForTest("owed"));
     }
 
     /** Session end drops every debt (the map those tiles belonged to is gone). */
