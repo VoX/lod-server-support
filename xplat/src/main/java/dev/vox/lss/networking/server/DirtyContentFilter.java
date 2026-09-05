@@ -114,13 +114,16 @@ public class DirtyContentFilter {
      * (the first save then reads absent → changed, today's behavior). Runs on the
      * loaders' main thread inside the monitor (same contention point as the hook).
      */
-    public synchronized void seedLoaded(ServerLevel level, LevelChunk chunk, String dimension) {
+    public void seedLoaded(ServerLevel level, LevelChunk chunk, String dimension) {
         seedLoaded(level, chunk, chunk.getPos().x(), chunk.getPos().z(), dimension);
     }
 
-    /** Position-explicit body (test seam, like contentChanged's). */
-    synchronized void seedLoaded(ServerLevel level, LevelChunk chunk, int cx, int cz,
-                                 String dimension) {
+    /** Position-explicit body (test seam, like contentChanged's). Deliberately NOT
+     *  synchronized around the serialization (review M2): this is the one path that
+     *  puts a whole-column serialization on the TICK thread, and the monitor may be
+     *  held by an off-main C2ME/Moonrise save worker mid-serialize — the monitor
+     *  protects the hash STATE, which only {@link #storeHash} touches. */
+    void seedLoaded(ServerLevel level, LevelChunk chunk, int cx, int cz, String dimension) {
         long hash;
         try {
             hash = hashContent(this.serializer.serializeSections(level, chunk, cx, cz));
@@ -128,8 +131,10 @@ public class DirtyContentFilter {
             LSSLogger.debug("Dirty-content load seed failed for chunk " + cx + "," + cz + ": " + e);
             return;
         }
-        storeHash(dimension, PositionUtil.packPosition(cx, cz), hash);
-        this.totalSeededLoads++;
+        synchronized (this) {
+            storeHash(dimension, PositionUtil.packPosition(cx, cz), hash);
+            this.totalSeededLoads++;
+        }
     }
 
     /**

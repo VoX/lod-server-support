@@ -938,6 +938,7 @@ final class XaeroMapCompat {
         long key = ((long) chunkX << 32) | (chunkZ & 0xFFFFFFFFL);
         int bytes = approxBytes(tile);
         java.util.ArrayList<Object[]> evictedOut = null;
+        boolean replaced = false;
         synchronized (this.queueLock) {
 
             // Re-check under the lock (sweep C MAJOR): a decode-thread tile that passed
@@ -949,7 +950,7 @@ final class XaeroMapCompat {
             if (this.dead || !this.enabled.getAsBoolean() || !this.sessionActive.getAsBoolean()) {
                 return;
             }
-                var existing = this.queue.get(key);
+            var existing = this.queue.get(key);
             if (existing != null) {
                 if (existing.dimension == dimension) {
                     this.queuedBytes += bytes - existing.bytes;
@@ -957,20 +958,22 @@ final class XaeroMapCompat {
                     existing.bytes = bytes;
                     existing.ladderReadyDeferrals = 0; // fresh serve = fresh patience
                     updateOccupancyLocked();
-                    return;
+                    replaced = true;
                 }
-                // Stale-dimension entry: the new serve replaces it (fresh Entry, so
-                // an in-flight pump pass's compare-and-remove cannot delete it).
-                // Counted + reported (§12 review: an uncounted silent foreign-dim
-                // drop broke the §12.1(c) self-heal claim at portals) — collected
-                // for the outside-the-lock report like the evictions.
-                this.queuedBytes -= existing.bytes;
-                this.queue.remove(key);
-                this.droppedStale.incrementAndGet();
-                if (evictedOut == null) evictedOut = new java.util.ArrayList<>();
-                evictedOut.add(new Object[]{existing.dimension, key, Boolean.TRUE});
+                if (!replaced) {
+                    // Stale-dimension entry: the new serve replaces it (fresh Entry, so
+                    // an in-flight pump pass's compare-and-remove cannot delete it).
+                    // Counted + reported (§12 review: an uncounted silent foreign-dim
+                    // drop broke the §12.1(c) self-heal claim at portals) — collected
+                    // for the outside-the-lock report like the evictions.
+                    this.queuedBytes -= existing.bytes;
+                    this.queue.remove(key);
+                    this.droppedStale.incrementAndGet();
+                    if (evictedOut == null) evictedOut = new java.util.ArrayList<>();
+                    evictedOut.add(new Object[]{existing.dimension, key, Boolean.TRUE});
+                }
             }
-            while (!this.queue.isEmpty()
+            while (!replaced && !this.queue.isEmpty()
                     && (this.queue.size() >= this.maxQueue
                         || this.queuedBytes + bytes > this.maxQueueBytes)) {
                 var it = this.queue.entrySet().iterator();
@@ -983,14 +986,20 @@ final class XaeroMapCompat {
                 if (evictedOut == null) evictedOut = new java.util.ArrayList<>();
                 evictedOut.add(new Object[]{evicted.getValue().dimension, evicted.getKey()});
             }
-            this.queuedBytes += bytes;
-            this.queue.put(key, new Entry(dimension, tile, bytes));
-            updateOccupancyLocked();
+            if (!replaced) {
+                this.queuedBytes += bytes;
+                this.queue.put(key, new Entry(dimension, tile, bytes));
+                updateOccupancyLocked();
+            }
         }
         // WI-3 invariant: owed ∩ queue = ∅ — a fresh offer of an owed position pays
         // the debt (its bytes are back), so a later release can never un-stamp the
-        // column the client just re-received. Outside queueLock (lock order).
+        // column the client just re-received. Both the insert and the latest-wins
+        // REPLACE path (a belt: the decode pipeline is one thread today, so a queued
+        // position is never owed — but the invariant must not rest on that). Outside
+        // queueLock (lock order).
         forgetOwed(dimension, key);
+        if (replaced) return;
         if (evictedOut != null) {
             for (var e : evictedOut) {
                 long k = (Long) e[1];
@@ -1057,7 +1066,9 @@ final class XaeroMapCompat {
         synchronized (this.owedLock) {
             var region = this.owed.get(key);
             if (region == null) return;
-            if (!region.positions.remove(packedChunk) && !region.busyTiles.remove(packedChunk)) return;
+            boolean a = region.positions.remove(packedChunk);
+            boolean b = region.busyTiles.remove(packedChunk); // both: never leave a tile-scoped twin
+            if (!a && !b) return;
             if (region.isEmpty()) this.owed.remove(key);
             updateOwedGaugesLocked();
         }
@@ -1072,6 +1083,9 @@ final class XaeroMapCompat {
         }
     }
 
+    /** Gauges recomputed from the set — O(regions), bounded by the region cap; called
+     *  once per mutation site OUTSIDE the hot per-offer path (forgetOwed returns
+     *  before touching the lock while no debt exists). */
     private void updateOwedGaugesLocked() {
         int n = 0;
         for (var r : this.owed.values()) n += r.size();
@@ -1158,7 +1172,10 @@ final class XaeroMapCompat {
                     discardOwed(key); // ungoverned: drops stay silent (§12.8 doctrine)
                     continue;
                 }
-                if (this.haltWedged) continue; // hold: never join the wedge-released stream
+                // Hold while the stream is wedge-released (a re-declaration burst must
+                // not join it) and while the queue is at its HALT occupancy (release
+                // means "the writer can take it" — the queue must have room too).
+                if (this.haltWedged || this.occupancy >= BP_HALT_OCCUPANCY) continue;
                 reportBudget -= releaseOwed(key, region, reportBudget, xaeroRegion, expired);
             } else if (awaitingVerdict != null && !waitingKeys.contains(key.regionKey())) {
                 waiting.add(new WaitingRegion(key.regionKey(), region.size(), awaitingVerdict));
@@ -1176,21 +1193,34 @@ final class XaeroMapCompat {
     private int releaseOwed(OwedKey key, OwedRegion region, int budget, Object xaeroRegion,
                             boolean expired) {
         var taken = new it.unimi.dsi.fastutil.longs.LongArrayList();
+        long[] busy;
         synchronized (this.owedLock) {
             var it = region.positions.iterator();
             while (it.hasNext() && taken.size() < budget) {
                 taken.add(it.nextLong());
                 it.remove();
             }
-            if (!region.busyTiles.isEmpty() && taken.size() < budget) {
-                var tiles = region.busyTiles.toLongArray();
-                for (long packed : tiles) {
-                    if (taken.size() >= budget) break;
-                    if (!expired && !tileChunkReady(xaeroRegion, packed)) continue;
-                    region.busyTiles.remove(packed);
-                    taken.add(packed);
+            busy = taken.size() < budget && !region.busyTiles.isEmpty()
+                    ? region.busyTiles.toLongArray() : null;
+        }
+        if (busy != null) {
+            // The tile-chunk probes take Xaero's REGION monitor — OUTSIDE owedLock
+            // (review M1: the decode thread takes owedLock per offer, and a region
+            // monitor is held across Xaero's own file IO). A tile re-offered between
+            // the snapshot and the re-take is simply no longer in the set.
+            var ready = new it.unimi.dsi.fastutil.longs.LongArrayList();
+            for (long packed : busy) {
+                if (ready.size() + taken.size() >= budget) break;
+                if (expired || tileChunkReady(xaeroRegion, packed)) ready.add(packed);
+            }
+            synchronized (this.owedLock) {
+                for (int i = 0; i < ready.size(); i++) {
+                    long packed = ready.getLong(i);
+                    if (region.busyTiles.remove(packed)) taken.add(packed);
                 }
             }
+        }
+        synchronized (this.owedLock) {
             if (region.isEmpty()) this.owed.remove(key);
             updateOwedGaugesLocked();
         }
@@ -1490,8 +1520,9 @@ final class XaeroMapCompat {
             // FIRST blocked-idle pump always runs (the deadlock-guard pin's shape);
             // any queued work re-forces every pump via the emptiness check.
             synchronized (this.queueLock) {
+                // (WI-3: an owed-only pump shares this ~1 Hz throttle — the debt cannot
+                // drain while blocked anyway, and §12.9's contention finding stands.)
                 if (this.queue.isEmpty() && this.pendingUpdates.isEmpty()
-                        && this.owedRegionsGauge == 0
                         && this.blockedIdleSkips++ % 20 != 0) {
                     return;
                 }
@@ -1916,14 +1947,19 @@ final class XaeroMapCompat {
                 }
             }
         }
-        if (!capped) {
-            this.regionsWaiting = waiting.size(); // a capped pass probed nothing: keep the last gauge
-            // WI-3: publish the evictor's classifier (a capped pass keeps the last set).
-            var awaiting = new java.util.HashSet<Long>();
-            for (var w : waiting) awaiting.add(w.regionKey());
-            this.awaitingRegions = awaiting;
-        }
         probeOwed(mp, dimensionId, waiting);
+        if (!capped) {
+            // A capped pass probed nothing: keep the last gauge + classifier. Published
+            // AFTER the owed feed so regions_waiting= reports the whole grant input.
+            this.regionsWaiting = waiting.size();
+            if (waiting.isEmpty()) {
+                this.awaitingRegions = java.util.Set.of();
+            } else {
+                var awaiting = new java.util.HashSet<Long>();
+                for (var w : waiting) awaiting.add(w.regionKey());
+                this.awaitingRegions = awaiting;
+            }
+        }
         grantLoads(mp, saveLoad, waiting);
     }
 

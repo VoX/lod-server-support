@@ -68,6 +68,7 @@ public class LSSServerNetworking {
         }
         LSSLogger.info("Starting " + Brand.shortName() + " LOD request processing service");
         requestService = new RequestProcessingService(server);
+        ServerReceiverGlue.flushPendingLoadSeeds(server, requestService); // the pre-service spawn set
     }
 
     /**
@@ -91,6 +92,7 @@ public class LSSServerNetworking {
         if (requestService != null) return;
         LSSLogger.info(Brand.shortName() + " LOD request processing service starting (LAN server)");
         requestService = new RequestProcessingService(server);
+        ServerReceiverGlue.flushPendingLoadSeeds(server, requestService); // the pre-service spawn set
         // The host was already in its own world before the service existed; re-handshake
         // so it registers and starts receiving its own LODs.
         LSSClientNetworking.triggerHostHandshake();

@@ -381,8 +381,12 @@ variant table (the accessor spelling in `DirtyContentFilter`, the `lodDistanceFo
   entries at unload.
 - Option P's stale-file classes are all self-healing at the chunk's next save (§2 WI-1b); the
   backup-restore hole is pre-existing and unchanged.
-- The owed set holds positions without bytes: ≤ 256 regions × 1024 × 8 B ≈ 2 MB worst case;
-  TTL-bounded in time.
+- The owed set holds positions without bytes: two `LongOpenHashSet`s per region (fastutil rounds
+  a full 1024-tile region to a 2048-slot table) → ≈ 4-8 MB at the 256-region cap; TTL-bounded in
+  time (the TTL is per REGION, from its first debt — a long-lived region expires its newest
+  debts with its oldest, accepted). The probe pass creates up to 8 Xaero regions per pump
+  (`getLeafMapRegion(create=true)`, the commit probe's own idiom); a full 256-region debt is
+  real pressure on Xaero's `MAX_LOADED_REGIONS` 300 limiter — the cap is sized under it.
 - Steady state under sustained scatter = silent shedding with `owed=` as the alarm (WI-3 item 9);
   a region set Xaero never loads costs one re-serve per owed position per 10 min.
 - A late report racing a fresh offer: closed by item 5 (offer clears owed); the residual is a
@@ -436,7 +440,7 @@ the client `XaeroMap:` tokens and `ingest_parked` before/after; Xaero's "Max loa
 
 - **WI-1b = Option L, decided by the seam facts, not by measurement:** both loaders fire
   their chunk-load event from the FULL status task with the light engine attached
-  (fabric-api 4.1.3 `ChunkGeneratingMixin` at the full-task tail; NeoForge 26.2.0.59's
+  (fabric-api 4.1.3 `ChunkStatusTasksMixin` at `lambda$full$0` TAIL; NeoForge 26.2.0.59's
   `ChunkStatusTasks` patch posts `ChunkEvent.Load(levelChunk, …)`), so the load hash equals
   the first save's by construction; the per-load cost is one `serializeColumn` (~30-60 µs)
   on the main thread, the same call the save hook already pays per save. The live
@@ -464,3 +468,17 @@ the client `XaeroMap:` tokens and `ingest_parked` before/after; Xaero's "Max loa
 - **WI-6:** the per-line comment/banner fixes ride each port (26.1 + 1.21.10 event
   wording; the shared test comment on all five; the three banners; the two extractor
   comments).
+- **Implementation review (2026-09-05, 2 Opus, folded):** server side — M1 chunks loaded before
+  the service exists (the spawn set in `prepareLevels`) or while the skip gate is shut were never
+  seeded (a ~25-chunk floor by default, unbounded under `/forceload`) → positions recorded
+  (≤ 8192) and flushed via `getChunkNow` at service construction and at the gate-opening
+  registration (`ServerReceiverGlue.flushPendingLoadSeeds`; Tier 1 + a Tier 2 pin against a
+  real chunk); M2 the load hash ran on the tick thread INSIDE the filter monitor → hash
+  outside, `storeHash` inside. Bridge — M1 `owedLock` was held across a Xaero region monitor
+  (`tileChunkReady`) while the decode thread takes it per offer → tile probes run outside the
+  lock; M2 the owed conjunct defeated §12.9's 1 Hz blocked-idle ladder throttle → restored;
+  minors: the latest-wins REPLACE path also pays the debt, `forgetOwed` clears both sets,
+  releases wait for queue room (`occupancy < 0.75`) besides the wedge, gauges published after
+  the owed feed, two more pins (a classified loaded region still reports; queue-room hold).
+  Fresh-backfill on the fixed jar (superflat generation): `dirty.marked_total` 41 /
+  `suppressed_total` 2325 / `seeded_load` 2325 — the old baseline read 674 / 1198.

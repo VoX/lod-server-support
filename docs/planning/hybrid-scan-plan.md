@@ -992,11 +992,17 @@ keeps the DEBT without the bytes:
   within the TTL and is discarded silently at it.
 - **Bounds.** `MAX_OWED_REGIONS` = 256 insertion-ordered regions (oldest debt evicted
   first, unreported — its positions were counted dropped at eviction; a region is 1024
-  tiles so the per-region axis never binds); `OWED_TTL_MILLIS` = 10 min → ONE governed
-  report at expiry (at most one re-serve per owed position per TTL — versus four strikes
-  and a park). While `haltWedged`, releases are HELD (a re-declaration burst must not
-  join the full-rate stream); occupancy is untouched by construction (the set lives
-  outside the queue).
+  tiles so the per-region axis never binds; ≈ 4-8 MB at the cap); `OWED_TTL_MILLIS` =
+  10 min per REGION from its first debt → ONE governed report at expiry (at most one
+  re-serve per owed position per TTL — versus four strikes and a park). Releases are HELD
+  while `haltWedged` (a re-declaration burst must not join the full-rate stream) AND while
+  the queue sits at its halt occupancy ("the writer can take it" includes room);
+  occupancy is untouched by construction (the set lives outside the queue). The decode
+  pipeline is ONE thread (`ClientColumnProcessor`), so a queued position is never owed;
+  the invariant does not rest on that — both the insert and the latest-wins REPLACE path
+  pay the debt, and the release re-checks the queue. `owedLock` is never held across a
+  Xaero monitor (the tile-chunk probes run outside it); an owed-only BLOCKED pump keeps
+  §12.9's ~1 Hz ladder throttle.
 - **Diag.** `XaeroMap:` gains `owed=`, `owed_regions=`, `owed_reported=`; `owed=`
   climbing with `owed_reported=` flat is the alarm that a region set never loads.
 - **Pins.** `XaeroMapCompatTest` (awaiting eviction owed / unknown reports / release on

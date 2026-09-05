@@ -1975,6 +1975,7 @@ class XaeroMapCompatTest {
         fresh.world = this.worldToken;
         fresh.mainWorld = this.worldToken;
         fresh.mapWorld.currentDimensionId = OVERWORLD;
+        fresh.createdRegionLoadState = 2; // this fixture's convention (never creates a region)
         WorldMapSession.current.processor = fresh;
         pumpIdleWindow();
         assertEquals(2, this.bridge.counterForTest("dropped_updates"),
@@ -2626,6 +2627,58 @@ class XaeroMapCompatTest {
         assertTrue(this.bridge.describe().contains(", owed=1, owed_regions=1, owed_reported=0"));
     }
 
+    /** A pump-CLASSIFIED loaded region keeps the §12.8 immediate report: with (4,2)
+     *  awaiting and (2,2) loaded in the same pump, only the awaiting region's
+     *  eviction is owed. */
+    @Test
+    void aClassifiedLoadedRegionEvictionStillReports() {
+        this.processor.createdRegionLoadState = 0;
+        var loaded = new MapRegion(); // (2,2) pre-loaded and resting
+        this.processor.regions.put((2L << 32) | 2L, loaded);
+        this.bridge.maxQueue = 3;
+        offer(128, 64); // (4,2) awaiting
+        offer(64, 64);  // (2,2) loaded → commits this pump
+        offer(65, 64);
+        this.bridge.pump();
+        assertTrue(this.bridge.awaitingRegionsForTest().contains(XaeroMapCompat.regionKeyOf(128, 64)));
+        assertFalse(this.bridge.awaitingRegionsForTest().contains(XaeroMapCompat.regionKeyOf(64, 64)));
+        this.bridge.maxQueue = 1;
+        offer(66, 64); // evicts (128,64) — awaiting: owed
+        assertEquals(1, this.bridge.counterForTest("owed"));
+        assertTrue(this.reports.isEmpty());
+        offer(67, 64); // evicts (66,64) — its region (2,2) is loaded: reported at once
+        assertEquals(1, this.reports.size(), "a loaded region's eviction keeps the immediate report");
+        assertEquals(66, this.reports.get(0)[1]);
+    }
+
+    /** Releases are also held while the queue sits at its halt occupancy — "the
+     *  writer can take it" includes room in the queue. */
+    @Test
+    void owedReleasesWaitForQueueRoom() {
+        this.processor.createdRegionLoadState = 0;
+        this.bridge.maxQueue = 2;
+        offer(128, 64);
+        offer(129, 64);
+        this.bridge.pump();
+        offer(130, 64); // (128,64) owed; the queue is 100% full
+        var region = this.processor.regions.get((4L << 32) | 2L);
+        region.loadState = 2; // loaded and resting…
+        region.resting = true;
+        var busy = new MapTileChunk(region, 32, 16); // …but the queued tiles' tile chunk is busy
+        busy.loadState = 2;
+        busy.leafTexture.downloadFromPBO = true;
+        region.setChunk(0, 0, busy);
+        this.bridge.pump(); // nothing commits: the queue stays at 100% → the release is HELD
+        assertEquals(2, this.bridge.queuedForTest());
+        assertTrue(this.reports.isEmpty(), "no release into a queue with no room");
+        assertEquals(1, this.bridge.counterForTest("owed"));
+        busy.leafTexture.downloadFromPBO = false;
+        this.bridge.pump(); // the commits drain the queue, then the release goes out
+        assertEquals(2, this.bridge.counterForTest("written"));
+        assertEquals(1, this.reports.size());
+        assertEquals(0, this.bridge.counterForTest("owed"));
+    }
+
     /** An eviction from a region NOBODY has probed yet (no pump since) is UNKNOWN to
      *  the classifier and takes today's governed report — fail toward reporting. */
     @Test
@@ -2739,6 +2792,8 @@ class XaeroMapCompatTest {
         this.bridge.pump();
         assertTrue(this.reports.isEmpty());
         this.clockMillis += this.bridge.owedTtlMillis + 1;
+        this.bridge.maxQueue = 8; // room in the queue: releases also wait for that…
+        offer(131, 64);           // …and occupancy is recomputed on the next mutation
         this.bridge.pump();
         assertEquals(1, this.reports.size(), "one report at expiry");
         assertEquals(0, this.bridge.counterForTest("owed"));
