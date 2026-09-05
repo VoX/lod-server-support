@@ -1,0 +1,22 @@
+### New Features
+
+- **Far player name tags now show.** Name tags over far players work, stay readable at distance, no longer vanish for players just inside your loaded chunks but past the game's own 64-block tag range, and are hidden while that player sneaks.
+- **Full Bright Far Players option.** A new client option (`farPlayersFullBright`, off by default) draws far players at full brightness so they stand out at night.
+- **Far player privacy on Fabric servers.** The `lss.farplayers.hidden` / `vss.farplayers.hidden` permission and Melius Vanish are now honored on Fabric servers, as they already were on Paper. Note that a wildcard permission grant counts as holding the hide permission.
+
+### Bug Fixes
+
+- **Far players no longer render black.** Far players in some of the chunks your client has loaded could render fully dark in daylight. They are now lit as if under open sky.
+- **Far players show their skin overlay layers.** Hats, jackets, sleeves and pants now show on far player models within about 80 blocks (capes only with an elytra).
+- **Armor and held items on far players no longer flicker.** Far away, armor used to z-fight the body underneath it and neighbouring pieces.
+- **Far players glide and swim properly.** Gliding far players now tilt with their wings spread and swimming ones swim instead of standing upright.
+
+### Configuration
+
+- **Far player walk animation reaches farther.** `farPlayersMaxAnimationDistanceBlocks` now defaults to 512 blocks (was 256).
+
+### Compatibility
+
+- Mixed client and server versions stay fully compatible in both directions.
+- With Iris shaders, packs whose Voxy integration keeps LOD depth out of the vanilla depth buffer (Complementary, for one) draw far players on top of LOD terrain instead of behind it. Players beyond the game's far plane are not drawn at all.
+- Far players outside the camera view are still drawn on this Minecraft version (its render path exposes no view frustum to mods); everything else in this release matches the 1.21.1 Fabric line.
