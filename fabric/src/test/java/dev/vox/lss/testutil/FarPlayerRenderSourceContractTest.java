@@ -97,14 +97,16 @@ class FarPlayerRenderSourceContractTest {
                 tree + ": every tag (proxy or real) must honour the hide-GUI key (fold D3)");
         assertTrue(src.contains("for (var realPlayer : level.players())")
                         && src.contains("if (active.contains(realPlayer.getUUID())) continue;")
-                        && src.contains("isSectionCompiled(realPlayer.blockPosition())) continue;")
+                        && src.contains("if (!level.isOutsideBuildHeight(realBlockPos.getY())")
+                        && src.contains("&& !minecraft.levelRenderer.isSectionCompiled(realBlockPos)) continue;")
                         && src.contains("double cameraDistanceSq = cameraPosition.distanceToSqr(realPosition);")
                         && src.contains("if (cameraDistanceSq < 64.0 * 64.0) continue;")
-                        && src.contains("if (!vanillaNameVisibleIgnoringDistance(realPlayer, localPlayer)) continue;")
+                        && src.contains("!realPlayer.isInvisibleTo(localPlayer))) continue;")
                         && src.contains("Mth.lerp(partialTick, realPlayer.xOld, realPlayer.getX())"),
                 tree + ": tracked players past vanilla's 64-block cap get the LSS tag under vanilla's ladder");
         assertTrue(src.contains("queueProxyTag(pendingTags, frustum, nameTags, tracked, proxy, localPlayer, position, light);")
-                        && src.contains("if (!vanillaNameVisibleIgnoringDistance(proxy, localPlayer)) return;"),
+                        && src.contains("if (!vanillaNameVisibleIgnoringDistance(proxy, localPlayer, true)) return;")
+                        && src.contains("public boolean isInvisibleTo(Player player) {"),
                 tree + ": proxy tags route through the option + sneak gate AND vanilla's team ladder (fold D3)");
         // Fold (c): the walk-cycle stop on this MC (no WalkAnimationState.stop()) — setSpeed(0)
         // alone leaves speedOld stale and the renderer sawtooths the limb swing at 20 Hz; the
@@ -124,6 +126,8 @@ class FarPlayerRenderSourceContractTest {
                 tree + ": glide flag/ticks, swim amount and the water flag must be faked per tick on the proxy");
         // Fold (e): armor/held items are depth-lifted through the wrapping buffer source (the
         // skin's own type passes through), the overlay layers are distance-gated.
+        assertEquals(2, count(src, "armorLiftBlocks(cameraDistance), proxy.liftTiers), light);"),
+                tree + ": the armor lift is sized from the CAMERA distance (port-review fold h)");
         assertEquals(2, count(src, "new LiftedBufferSource(bufferSource, skinRenderType(dispatcher, proxy),"),
                 tree + ": both proxy draws must go through the lifting buffer source");
         assertTrue(src.contains("if (type == skinType) return buffer;")

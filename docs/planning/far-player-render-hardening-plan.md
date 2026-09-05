@@ -320,6 +320,14 @@ enumerates the deltas; WI-3 adds one (the frustum source) — the row is updated
 > per real player per frame, `culled` mixing proxies and mounts, NeoForge's per-frame proxy rebuild
 > under a persistently-throwing listener, boat paddles/elytra banking, the proxy-tag/vanilla-tag
 > double at exactly 64 blocks or under a tag-range-extending mod.
+> (h) **Port-review folds shared back (2026-09-05, the 2-Opus reviews of the four port PRs):** the
+> gap fill's body gate is vanilla's full `isOutsideBuildHeight || isSectionCompiled` (a glider above
+> the build limit gets a body but got no tag); the armor lift and the overlay gate are CAMERA
+> distances like the tag math (freecam/replay); a proxy inside vanilla's 64-block tag range (tracking
+> radius under 64 — view-distance ≤ 3) got vanilla's own tag over ours — the 1.21.1 Proxy overrides
+> `isInvisibleTo` (the tag ladder's only per-entity switch; the body reads `isInvisible()`), the
+> submit-pipeline lines null `nameTag` + `scoreText` on the extracted state instead. Ports also
+> gained a behavioural `stop()` pin and the hoisted frustum test.
 
 - Why own-draw: F6(b) — vanilla can never draw a tag for a proxy on any line. There is no
   vanilla fallback to keep.
@@ -658,6 +666,8 @@ Rejected: the patrol rotation-history point (observers interpolate from movement
 Accepted-open: see fold (g).
 
 ## 9. Decisions log
+
+- 2026-09-05 (port reviews): three shared findings folded back to 1.21.1 — build-height body gate, camera-distance lift/overlay bases, Proxy.isInvisibleTo to keep vanilla's tag off proxies inside 64 blocks.
 
 - 2026-09-04 (v3 panel, after the live rig): POLYGON_OFFSET replaces the geometric tag lift; armor is depth-lifted per vertex ray, skin overlays gated at 80 blocks; a pose sentinel guards the pass (the panel's one MAJOR); proxy tags honour hide-GUI + team rules; NeoForge nameplate attribute both directions; Melius handles bind independently with a per-tick memo.
 
