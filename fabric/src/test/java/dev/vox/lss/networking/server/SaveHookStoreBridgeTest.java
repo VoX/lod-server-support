@@ -100,4 +100,25 @@ class SaveHookStoreBridgeTest {
         assertFalse(LSSServerNetworking.skipDirtyHash(true, true, false),
                 "all three observers present certainly hashes");
     }
+
+    /** The pending load-seed set (xaero-scatter-remediation-plan.md WI-1b, review M1):
+     *  positions loaded while nobody can seed them are recorded once each, bounded, and
+     *  cleared with the server's sidecar facts. */
+    @Test
+    void pendingLoadSeedsDedupeAndStayBounded() {
+        ServerReceiverGlue.clearPendingLoadSeeds();
+        var dim = net.minecraft.world.level.Level.OVERWORLD;
+        ServerReceiverGlue.recordPendingLoadSeed(dim, 1, 2);
+        ServerReceiverGlue.recordPendingLoadSeed(dim, 1, 2);
+        assertEquals(1, ServerReceiverGlue.pendingLoadSeedCount(), "a position records once");
+        ServerReceiverGlue.recordPendingLoadSeed(net.minecraft.world.level.Level.NETHER, 1, 2);
+        assertEquals(2, ServerReceiverGlue.pendingLoadSeedCount(), "per dimension");
+        for (int i = 0; i < ServerReceiverGlue.MAX_PENDING_LOAD_SEEDS + 10; i++) {
+            ServerReceiverGlue.recordPendingLoadSeed(dim, i, 1_000_000);
+        }
+        assertEquals(ServerReceiverGlue.MAX_PENDING_LOAD_SEEDS, ServerReceiverGlue.pendingLoadSeedCount(),
+                "bounded: the excess stays unseeded rather than growing forever");
+        ServerReceiverGlue.clearClientInfo();
+        assertEquals(0, ServerReceiverGlue.pendingLoadSeedCount(), "dies with the server's sidecar facts");
+    }
 }
