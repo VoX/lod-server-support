@@ -40,7 +40,10 @@ class LoaderPermissionSeamContractTest {
     void everyServiceGateCallSitePassesDefaultTrue() throws IOException {
         // A flipped default is a silent server-wide black-out on the two platforms with
         // no plugin.yml to catch it (plan §2.1). Scan every production checkPermission
-        // call site for the literal `true` default.
+        // call site for the literal `true` default. The ONE deliberate `false` default —
+        // the far-player hide nodes' grant-model read (far-player-render-hardening-plan.md
+        // WI-7a) — lives in FabricFarPlayerSnapshots, outside the two gate files scanned
+        // here, and is pinned by FabricFarPlayerSnapshotsHiddenTest instead.
         for (String repoPath : new String[] {
                 "xplat/src/main/java/dev/vox/lss/networking/server/ServerReceiverGlue.java",
                 "xplat/src/main/java/dev/vox/lss/networking/server/RequestProcessingService.java",
