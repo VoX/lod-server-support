@@ -482,3 +482,9 @@ the client `XaeroMap:` tokens and `ingest_parked` before/after; Xaero's "Max loa
   the owed feed, two more pins (a classified loaded region still reports; queue-room hold).
   Fresh-backfill on the fixed jar (superflat generation): `dirty.marked_total` 41 /
   `suppressed_total` 2325 / `seeded_load` 2325 — the old baseline read 674 / 1198.
+- **AFTER gate (2026-09-05, `soak-results/cold-restart-resync-20260905T202622Z`, PASS 0
+  violations):** `dirty.marked_total` 8 / `suppressed_total` 441 / `seeded_load` 441 (the
+  restarted server's whole 21×21 loaded disc seeded at load and suppressed at its first save);
+  `service.up_to_date` 2144 = the client's every resync ask, `columns_sent` 0 (BEFORE: 449 /
+  0, 184 re-sent). Gates on the final commit: T1 2321/0, T2 76/0, Paper 10/0 contract +
+  the rest, NeoForge 23/0, `check_soak --selftest` 273.
