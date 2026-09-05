@@ -19,6 +19,10 @@ import net.minecraft.client.multiplayer.ClientLevel;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
+import net.minecraft.client.renderer.Sheets;
+import net.minecraft.world.item.ArmorItem;
+import net.minecraft.world.item.ArmorMaterial;
+import java.util.IdentityHashMap;
 import net.minecraft.client.renderer.entity.LivingEntityRenderer;
 import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.client.player.AbstractClientPlayer;
@@ -135,6 +139,8 @@ public final class FarPlayerRenderer {
      *  ~80 blocks their gap is under two depth steps and they z-fight the body — beyond this
      *  the proxy shows the base skin only (the cape bit still rides with an elytra). */
     private static final double OVERLAY_MAX_DISTANCE_BLOCKS = 80.0;
+    private static final EquipmentSlot[] ARMOR_EQUIPMENT_SLOTS = {EquipmentSlot.HEAD, EquipmentSlot.CHEST,
+            EquipmentSlot.LEGS, EquipmentSlot.FEET};
 
     private static volatile FarPlayerRenderer instance;
 
@@ -463,7 +469,7 @@ public final class FarPlayerRenderer {
                                 position.y - cameraPosition.y,
                                 position.z - cameraPosition.z,
                                 sample.yaw(), partialTick, poseStack, new LiftedBufferSource(bufferSource, skinRenderType(dispatcher, proxy),
-                                        armorLiftBlocks(distance)), light);
+                                        armorLiftBlocks(distance), proxy.liftTiers), light);
                         drawn++;
                     } else {
                         culled++;
@@ -488,7 +494,7 @@ public final class FarPlayerRenderer {
                                 position.y - cameraPosition.y,
                                 position.z - cameraPosition.z,
                                 sample.yaw(), partialTick, poseStack, new LiftedBufferSource(bufferSource, skinRenderType(dispatcher, proxy),
-                                        armorLiftBlocks(distance)), light);
+                                        armorLiftBlocks(distance), proxy.liftTiers), light);
                         drawn++;
                     } else {
                         culled++;
@@ -864,20 +870,28 @@ public final class FarPlayerRenderer {
         private final MultiBufferSource delegate;
         private final RenderType skinType;
         private final float lift;
+        private final Map<RenderType, Integer> tiers;
 
-        LiftedBufferSource(MultiBufferSource delegate, RenderType skinType, float lift) {
+        LiftedBufferSource(MultiBufferSource delegate, RenderType skinType, float lift,
+                           Map<RenderType, Integer> tiers) {
             this.delegate = delegate;
             this.skinType = skinType;
             this.lift = lift;
+            this.tiers = tiers;
         }
 
         @Override
         public VertexConsumer getBuffer(RenderType type) {
             VertexConsumer buffer = delegate.getBuffer(type);
             if (type == skinType) return buffer;
+            // Fold (e2): TIERED lift — the pieces that overlap each other (leggings under a
+            // chestplate, boots over leggings, a shield against the chest) are ~1/32 block apart
+            // and would still fight under one uniform lift; tier 0 = inner armor model, 1 = outer
+            // armor + trims + glint, 2 = held items / elytra / anything else, ~4 depth steps apart.
+            int tier = tiers.getOrDefault(type, 2);
             // A fresh wrapper per request: a foil item holds TWO consumers at once
             // (VertexMultiConsumer), so a reused wrapper would cross their writes.
-            return new LiftingConsumer(buffer, lift);
+            return new LiftingConsumer(buffer, lift * (1.0f + 0.8f * tier));
         }
     }
 
@@ -1070,6 +1084,8 @@ public final class FarPlayerRenderer {
         private final UUID trackedUuid;
         /** The cached tag text (WI-6) — never re-allocated per frame. */
         final Component farName;
+        /** Fold (e2): render type -> lift tier for this proxy's equipment (refreshLiftTiers). */
+        final Map<RenderType, Integer> liftTiers = new IdentityHashMap<>();
         private int maxRenderDistanceBlocks = 16384;
         private Vec3 lastWalkPosition;
         private int lastWalkTick = Integer.MIN_VALUE;
@@ -1140,6 +1156,7 @@ public final class FarPlayerRenderer {
                         : Math.max(0.0f, swimAmount - 0.09f));
             }
             applyEquipment(tracked, itemCache);
+            refreshLiftTiers();
             // WI-5: the model-parts byte (defaults to 0 = every overlay layer hidden — hat,
             // jacket, sleeves, pants were invisible on every proxy). All layers EXCEPT the
             // cape: CapeLayer positions the cape from cloak fields only Player.tick's cloak
@@ -1155,6 +1172,27 @@ public final class FarPlayerRenderer {
             updateWalkAnimation(position, allowWalk,
                     gliding || swimming || tracked.latest().vehicle() != null,
                     animationTick);
+        }
+
+        /** Fold (e2): the lift TIER per render type for THIS proxy's equipment (see
+         *  LiftedBufferSource): the inner armor model (LEGS — HumanoidArmorLayer.usesInnerModel;
+         *  a 1/32-block shell) is tier 0, outer armor + trims + glint tier 1, everything else
+         *  (held items, the elytra) tier 2. Exact render-type identities, computed the way the
+         *  armor layer computes them (memoized per texture), never string-sniffed. Rebuilt per
+         *  apply from the equipment the wire just set; identity-keyed. */
+        private void refreshLiftTiers() {
+            liftTiers.clear();
+            liftTiers.put(Sheets.armorTrimsSheet(true), 1);
+            liftTiers.put(Sheets.armorTrimsSheet(false), 1);
+            liftTiers.put(RenderType.armorEntityGlint(), 1);
+            for (EquipmentSlot slot : ARMOR_EQUIPMENT_SLOTS) {
+                if (this.getItemBySlot(slot).getItem() instanceof ArmorItem armor) {
+                    boolean inner = slot == EquipmentSlot.LEGS;
+                    for (ArmorMaterial.Layer layer : armor.getMaterial().value().layers()) {
+                        liftTiers.put(RenderType.armorCutoutNoCull(layer.texture(inner)), inner ? 0 : 1);
+                    }
+                }
+            }
         }
 
         private void applyEquipment(FarPlayerClientTracker.TrackedFarPlayer tracked,

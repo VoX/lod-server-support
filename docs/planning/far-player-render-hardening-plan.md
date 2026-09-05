@@ -297,6 +297,14 @@ enumerates the deltas; WI-3 adds one (the frustum source) — the row is updated
 > `getBuffer` because a foil item holds two at once). The skin's own type (`model.renderType(skin)`)
 > passes through untouched, so the overlay layers are gated by `OVERLAY_MAX_DISTANCE_BLOCKS` = 80
 > (base skin only beyond; the cape bit still rides with an elytra). Mounts are not wrapped.
+> **(e2) Pieces fight each other too** (user, second look: iron leggings vs golden chestplate at the
+> belt, chestplate vs shield): the inner armor model is 1/32 block inside the outer one, so a uniform
+> lift leaves them inside one depth step. The lift is TIERED per render type from the proxy's OWN
+> equipment (`refreshLiftTiers` — the exact `armorCutoutNoCull(layer.texture(inner))` identities the
+> armor layer will request, plus the two trim sheets and the glint; identity map, no string sniffing):
+> tier 0 inner armor (LEGS), tier 1 outer armor + trims + glint, tier 2 items/elytra/everything else,
+> `lift × (1 + 0.8·tier)` ≈ 5/9/13 depth steps. A stable, sub-pixel wrong overlap replaces the flicker
+> (e.g. a trimmed leggings' trim over the chestplate at the belt; a shield over the chest from behind).
 > (f) **Pose-stack leak = client crash (v3 panel MAJOR).** A throw inside `dispatcher.render` or the
 > tag draw leaves pushes on vanilla's pose stack; `LevelRenderer.checkPoseStack` throws "Pose stack
 > not empty" AFTER the pass returns, outside every containment. Fix: the pass runs above a sentinel
@@ -625,7 +633,7 @@ the cluster work in §4.2** — the port is not done until each row is ticked pe
 | 6 | `farPlayersMaxAnimationDistanceBlocks` default 256 → 512 (user decision) | `LSSClientConfig` | Byte-identical change — the change-core applier |
 | 7 | Contract pins for 1-5, 10-12 | `FarPlayerRenderSourceContractTest` + `testutil/RepoPaths` + `WalkAnimationStopTest` + `AccessorLivingEntityContractTest` + the adapter pin in `FabricFarPlayerSnapshotsHiddenTest` | Mirror per line (the NeoForge half applies only where `RENDER_AVAILABLE = true`; the walk-stop pins are 1.21.1-only) |
 | 8 | Release-notes items: tags no longer vanish inside loaded chunks; glide/swim/stop fix; the 512 default | `docs/planning/release-tag-next-mc1.21.1.draft.txt` | Each line's own notes draft |
-| 10 | Fold (e) armor depth-lift (`LiftedBufferSource`/`LiftingConsumer`, `armorLiftBlocks`, `skinRenderType`) + `OVERLAY_MAX_DISTANCE_BLOCKS` overlay gate (the `apply` distance param) | `FarPlayerRenderer` twins | All four lines; 26.x `VertexConsumer` has the same six abstract methods — verify the 11-arg default still routes through them there |
+| 10 | Fold (e)/(e2) armor depth-lift (`LiftedBufferSource`/`LiftingConsumer`, `armorLiftBlocks`, `skinRenderType`, the per-proxy `liftTiers` from `refreshLiftTiers`) + `OVERLAY_MAX_DISTANCE_BLOCKS` overlay gate (the `apply` distance param) | `FarPlayerRenderer` twins | All four lines; 26.x `VertexConsumer` has the same six abstract methods — verify the 11-arg default still routes through them there; 26.x armor materials moved to `EquipmentAssets`/`EquipmentClientInfo` — re-derive the layer texture lookup |
 | 11 | Fold (f) pose sentinel (`passMark`, `markPose`/`restorePose`/`unwindPose`, the tag draw's finally, every containment restoring) | `FarPlayerRenderer` twins | All four lines — the crash class exists on every line (`checkPoseStack`) |
 | 12 | Fold (g) v3 panel folds: proxy tags honour hide-GUI + team ladder; gap fill `xOld` basis + `isSectionCompiled` + camera-distance 64²; `wasTouchingWater`; anchor resolved once; `MeliusVanishBridge` independent binding + `isVanished`; the service's per-tick `vanishMemo`; scoped NeoForge resolver pins; README provider caveat; lang tooltips | renderer twins, `MeliusVanishBridge`, `RequestProcessingService`, `LSSNeoPermissionsContractTest`, lang ×3, README | All four lines (the NeoForge nameplate clause only where a NeoForge renderer exists) |
 | 9 | (dev tooling, optional) `SoakPatrol` — `-Psoak.patrol="x,z;x,z"` walks the soak dummy between waypoints; the rig script/recipe in memory `far-player-live-rig` | `fabric/.../benchmark/SoakPatrol.java`, `BenchmarkHook`, `fabric/build.gradle` | Worth porting for each line's live gate; 1.21.2+ replaced `Input`/`KeyboardInput` with `ClientInput` — re-derive the driver there |

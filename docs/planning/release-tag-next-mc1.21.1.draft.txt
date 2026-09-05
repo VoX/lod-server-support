@@ -8,7 +8,7 @@
 
 - **Far players no longer render black.** Far players in some of the chunks your client has loaded could render fully dark in daylight. They are now lit as if under open sky.
 - **Far players show their skin overlay layers.** Hats, jackets, sleeves and pants now show on far player models within about 80 blocks (capes only with an elytra).
-- **Armor and held items on far players no longer flicker.** Far away, armor used to z-fight the body underneath it.
+- **Armor and held items on far players no longer flicker.** Far away, armor used to z-fight the body underneath it and neighbouring pieces.
 - **Far players glide, swim and stop walking properly.** Gliding far players now tilt with their wings spread and swimming ones swim instead of standing upright, and a far player past the animation distance now stands still instead of jittering.
 
 ### Performance

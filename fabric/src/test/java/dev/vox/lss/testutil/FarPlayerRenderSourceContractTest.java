@@ -131,6 +131,14 @@ class FarPlayerRenderSourceContractTest {
                         && src.contains("OVERLAY_MAX_DISTANCE_BLOCKS = 80.0")
                         && src.contains("(byte) (elytra ? 0x7F : 0x7E)"),
                 tree + ": the skin buffer is never lifted, the lift is distance-scaled, overlays are gated");
+        // Fold (e2): the lift is TIERED per render type from the proxy's own equipment — inner
+        // armor model lowest, outer armor + trims + glint above, everything else above that.
+        assertTrue(src.contains("refreshLiftTiers();")
+                        && src.contains("int tier = tiers.getOrDefault(type, 2);")
+                        && src.contains("lift * (1.0f + 0.8f * tier)")
+                        && src.contains("boolean inner = slot == EquipmentSlot.LEGS;")
+                        && src.contains("liftTiers.put(RenderType.armorCutoutNoCull(layer.texture(inner)), inner ? 0 : 1);"),
+                tree + ": overlapping armor pieces must sit on different lift tiers");
         // Fold (D1): the pass runs above a sentinel pose and every containment restores to it.
         assertTrue(src.contains("passMark = poseStack == null ? null : markPose(poseStack);")
                         && src.contains("if (passMark != null) unwindPose(poseStack, passMark);")
