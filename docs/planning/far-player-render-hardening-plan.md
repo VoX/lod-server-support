@@ -634,7 +634,7 @@ the cluster work in §4.2** — the port is not done until each row is ticked pe
 | 7 | Contract pins for 1-5, 10-12 | `FarPlayerRenderSourceContractTest` + `testutil/RepoPaths` + `WalkAnimationStopTest` + `AccessorLivingEntityContractTest` + the adapter pin in `FabricFarPlayerSnapshotsHiddenTest` | Mirror per line (the NeoForge half applies only where `RENDER_AVAILABLE = true`; the walk-stop pins are 1.21.1-only) |
 | 8 | Release-notes items: tags no longer vanish inside loaded chunks; glide/swim/stop fix; the 512 default | `docs/planning/release-tag-next-mc1.21.1.draft.txt` | Each line's own notes draft |
 | 10 | Fold (e)/(e2) armor depth-lift (`LiftedBufferSource`/`LiftingConsumer`, `armorLiftBlocks`, `skinRenderType`, the per-proxy `liftTiers` from `refreshLiftTiers`) + `OVERLAY_MAX_DISTANCE_BLOCKS` overlay gate (the `apply` distance param) | `FarPlayerRenderer` twins | All four lines; 26.x `VertexConsumer` has the same six abstract methods — verify the 11-arg default still routes through them there; 26.x armor materials moved to `EquipmentAssets`/`EquipmentClientInfo` — re-derive the layer texture lookup |
-| 11 | Fold (f) pose sentinel (`passMark`, `markPose`/`restorePose`/`unwindPose`, the tag draw's finally, every containment restoring) | `FarPlayerRenderer` twins | All four lines — the crash class exists on every line (`checkPoseStack`) |
+| 11 | Fold (f) pose sentinel (`passMark`, `markPose`/`restorePose`/`unwindPose`, the tag draw's finally, every containment restoring) | `FarPlayerRenderer` twins | All four lines — the crash class exists on every line (`checkPoseStack`) — 26.x port note: on 26.2 Fabric fires `COLLECT_SUBMITS` at `submitFeatures` RETURN, AFTER vanilla's `checkPoseStack` on that local stack, so the sentinel there is intra-pass consistency (later submits + later listeners see the right depth), not a crash guard; on 26.1 the event fires at the `renderSolidFeatures` profiler push, BEFORE `checkPoseStack` — the crash class is live there (§11) |
 | 12 | Fold (g) v3 panel folds: proxy tags honour hide-GUI + team ladder; gap fill `xOld` basis + `isSectionCompiled` + camera-distance 64²; `wasTouchingWater`; anchor resolved once; `MeliusVanishBridge` independent binding + `isVanished`; the service's per-tick `vanishMemo`; scoped NeoForge resolver pins; README provider caveat; lang tooltips | renderer twins, `MeliusVanishBridge`, `RequestProcessingService`, `LSSNeoPermissionsContractTest`, lang ×3, README | All four lines (the NeoForge nameplate clause only where a NeoForge renderer exists) |
 | 9 | (dev tooling, optional) `SoakPatrol` — `-Psoak.patrol="x,z;x,z"` walks the soak dummy between waypoints; the rig script/recipe in memory `far-player-live-rig` | `fabric/.../benchmark/SoakPatrol.java`, `BenchmarkHook`, `fabric/build.gradle` | Worth porting for each line's live gate; 1.21.2+ replaced `Input`/`KeyboardInput` with `ClientInput` — re-derive the driver there |
 
@@ -708,3 +708,32 @@ the 1.21.1 text (the reviewer's map):
 Not ported here: `SoakPatrol` (§10 row 9 — 1.21.2+ replaced `Input`/`KeyboardInput` with the
 record-based `ClientInput`, so it is a re-derivation, not a drop-in; the live rigs on these
 lines keep the standing dummy).
+
+### 11.1 Port-review folds (2-Opus, 2026-09-05; both 26.x branches)
+
+- `submitProxy` tests the frustum BEFORE `extractEntity` (the mount path already did); the light is
+  read only on the surviving path — a submitted body, or a culled body whose tag passed its own gates
+  (an `IntSupplier` into `queueNameTag`; the gap fill is lazy the same way).
+- The extracted `nameTag` AND the avatar `scoreText` are nulled: with an entity-tracking radius under
+  64 blocks (view-distance ≤ 4) a proxy sits inside vanilla's tag range, where `extractNameTags`
+  fills both (`Player.shouldShowName()` is a constant true) and vanilla would draw its tag + score
+  plate over LSS's.
+- Distance bases: the armor lift AND the overlay gate use the CAMERA distance (freecam/replay, like
+  the tag math); the render/animation caps stay on the player distance.
+- `WalkAnimationStopTest` exists on these lines too, as a behavioural pin of `stop()` zeroing
+  `speedOld` (an MC bump that weakens `stop()` reds Tier 1, not the live rig).
+- Pose sentinel re-scoped per line (see §10 row 11): 26.2 = intra-pass consistency after a
+  contained throw; 26.1 = the crash guard, as on 1.21.1.
+- 26.2 lang: the name-tags tooltip says "the game's own name-tag distance" (the cap is the
+  `NAME_TAG_DISTANCE` attribute there); 26.1 keeps the literal 64.
+- `LiftedSubmitCollector` javadoc records what is deliberately NOT lifted (shadow/flame/leash/tag/text
+  and the block/particle/gizmo submits) and that a nested `order()` on a sub-collector wrapper is a
+  no-op; the FRAPI `submitBlockModel` overload resolves its tier through
+  `ChunkSectionLayerHelper.getRenderType(translucent)` like the vanilla one. `PendingTag.entity`
+  dropped (unused).
+- Accepted-open: the per-proxy per-frame `refreshLiftTiers` rebuild (a handful of identity-map puts)
+  and the wrapper allocation per `order(n)` call (one per armor-layer submission) — memoize only if
+  profiling shows them.
+- Kept as-is on these lines: `Visibility.java`'s "hidden on NeoForge v1" wording (the twin IS a stub
+  here); `neoforge-1.21.1-far-player-render-plan.md` does not exist on these lines, so WI-4's
+  SUPERSEDED note has no home and no batch end exists to supersede.
