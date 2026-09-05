@@ -107,6 +107,8 @@ public final class BenchmarkHook {
      * action (currently {@code clearcache} = LodRequestManager.flushCache, the /lss
      * clearcache body) that many enabled-seconds into the session, appending an
      * {@code action} event row — the server driver can only run server commands.
+     * {@code -Dlss.soak.patrol=x,z;x,z[;...]} makes the dummy WALK between waypoints forever
+     * ({@link SoakPatrol} — the far-player live rigs' moving target).
      */
     private static void initSoakClient() {
         LSSLogger.info("[Soak] Client hook active");
@@ -129,6 +131,9 @@ public final class BenchmarkHook {
                         + actionSpec + "' (want SECONDS:ACTION)", e);
             }
         }
+
+        // Far-player live rigs: -Dlss.soak.patrol walks the dummy between waypoints (SoakPatrol).
+        SoakPatrol.install();
 
         // Snapshot every second (like the benchmark hook) but only WRITE every 5s — the
         // LSS disconnect handler clears all counters before ours runs, so the disconnect
