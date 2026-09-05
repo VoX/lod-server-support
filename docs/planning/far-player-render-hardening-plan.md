@@ -681,3 +681,29 @@ Accepted-open: see fold (g).
   Vanish (fail-hidden); Paper keeps fail-hidden for its Folia race.
 - 2026-09-04 — No SeeU code is reused (restricted licence since 0.8); "no fog mixin", "no glow",
   "no far-plane mixin" reaffirmed.
+
+## 11. Port record — 1.21.11 / 1.21.10 (2026-09-05; PRs #270 / #272, 2-Opus port review folded)
+
+Both lines carry every WI and every §10 row on the extract/submit pipeline (`per-version-surfaces.md`
+row 22 is the per-line shape). Line facts that differed from §2's notes: the armor lift has no buffer
+source to wrap (submits are deferred to `FeatureRenderDispatcher`), so `LiftedSubmitCollector` scales
+each non-skin submit's POSE about the camera by `(d−lift)/d` — screen-exact, the same radial pull as
+`LiftingConsumer`; the lift tiers come from `EquipmentClientInfo` layers through a new
+`AccessorEntityRenderDispatcher` (the asset manager is a private dispatcher field on these lines);
+`WalkAnimationState.stop()` zeroes `speedOld` there (fold (c) not needed, pinned behaviourally by
+`WalkAnimationStopTest`); the model-parts byte is `Avatar`'s. Named cuts: WI-3 (no frustum on the
+render path) and WI-4 (no batch of our own). Port-review folds: the gap fill uses vanilla's FULL body
+predicate (`isOutsideBuildHeight || isSectionCompiled[AndVisible]`); the proxy's extracted
+`nameTag` AND `scoreText` are nulled (no see-through score plate beside our tag inside 10 blocks);
+the armor lift and the overlay gate are camera-distance based; the real-player tag anchor uses the
+partial-tick yaw.
+
+**Accepted-open (port review):**
+- `refreshLiftTiers` rebuilds the per-proxy tier map every frame (a handful of memoized lookups per
+  equipped piece; equipment changes are edge-less on the wire, so there is no cheaper trigger).
+- `LiftedSubmitCollector.order()` allocates one wrapper per armor-layer submit per frame (the armor
+  layer calls `order(j++)` per piece; ~5 small objects per armored proxy per frame).
+- The tag light is the proxy's floor light as-is — vanilla's normal-pass tag adds
+  `lightCoordsWithEmission(light, 2)` only in its see-through/normal PAIR, which this tag
+  deliberately lacks; the sky-15 floor already lights the plate.
+- The nested-`order()` and not-lifted-submit rules are documented on the collector, not pinned.

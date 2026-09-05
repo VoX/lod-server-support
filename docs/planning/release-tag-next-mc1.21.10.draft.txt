@@ -19,4 +19,4 @@
 
 - Mixed client and server versions stay fully compatible in both directions.
 - With Iris shaders, packs whose Voxy integration keeps LOD depth out of the vanilla depth buffer (Complementary, for one) draw far players on top of LOD terrain instead of behind it. Players beyond the game's far plane are not drawn at all.
-- Far players outside the camera view are still drawn on this Minecraft version (its render path exposes no view frustum to mods); everything else in this release matches the 1.21.1 line.
+- Far players outside the camera view are still drawn on this Minecraft version (its render path exposes no view frustum to mods); everything else in this release matches the 1.21.1 Fabric line.
