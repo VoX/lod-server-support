@@ -446,7 +446,8 @@ the client `XaeroMap:` tokens and `ingest_parked` before/after; Xaero's "Max loa
   on the main thread, the same call the save hook already pays per save. The live
   measurement is `seeded_load=` in `/lsslod diag` (0 on a lively server = the chunk system
   does not fire the event; the filter then behaves exactly as before). LINE FLAVOR: the
-  fabric-api 4.x callback takes a third `generated` flag (surfaces row 22). LRU replaces the
+  fabric-api 4.x callback takes a third `generated` flag — on 26.2 AND 26.1 (the 26.1 port found
+  4.1.0 nested there); the 1.21.x lines' 2.x module is 2-arg (surfaces row 22). LRU replaces the
   clear-all (`putAndMoveToLast` + `removeFirstLong`); entries are NOT dropped at unload
   (Fabric's unload event fires before the unload save reaches the hook — verified in the
   `ServerChunkLoadingManagerMixin` injection). Option P is not implemented.
@@ -488,3 +489,4 @@ the client `XaeroMap:` tokens and `ingest_parked` before/after; Xaero's "Max loa
   `service.up_to_date` 2144 = the client's every resync ask, `columns_sent` 0 (BEFORE: 449 /
   0, 184 re-sent). Gates on the final commit: T1 2321/0, T2 76/0, Paper 10/0 contract +
   the rest, NeoForge 23/0, `check_soak --selftest` 273.
+- **Ported to 1.21.1 (2026-09-05, PR against the line's support branch):** fabric-api 0.116.15 nests lifecycle-events 2.6.0 → the 2-arg `(level, chunk)` callback; `getPos().x` field spelling; NeoForge 21.1.248 posts `ChunkEvent.Load` from `ChunkStatusTasks.lambda$full$2` with a `ChunkAccess` (the seam's `instanceof LevelChunk` gate covers it); the owed-set hunks apply around the contract-pinned `getMinBuildHeight()/getMaxBuildHeight()` hunk; NeoForge gametest smoke 8/8; WI-6: the shared test sentence + both extractor comments only. Gates per the port PR.
