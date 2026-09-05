@@ -104,6 +104,11 @@ class PluginYmlContractTest {
                 "lss.farplayers.hidden must be declared default false");
         assertEquals("false", yml.getString("permissions/vss.farplayers.hidden/default"),
                 "vss.farplayers.hidden must be declared default false");
+        // The constants' HOME is common since far-player-render-hardening-plan.md WI-7a (the
+        // Fabric/NeoForge snapshot reads and the NeoForge node registration enforce the same
+        // strings) — this is the one pin tying the declaration to all three modules.
+        assertEquals("lss.farplayers.hidden", dev.vox.lss.common.LSSPermissions.FARPLAYERS_HIDDEN_LSS);
+        assertEquals("vss.farplayers.hidden", dev.vox.lss.common.LSSPermissions.FARPLAYERS_HIDDEN_VSS);
     }
 
     @Test

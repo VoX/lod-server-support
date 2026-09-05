@@ -77,7 +77,7 @@ class LSSConfigMenuTest {
         new LSSConfigMenu().registerConfigLate(builder);
         List<RecordedOption<?>> built = new ArrayList<>();
         builder.mods.get(0).pages.forEach(p -> p.groups.forEach(g -> g.options.forEach(o -> built.add((RecordedOption<?>) o))));
-        assertEquals(9, built.size(), "10 catalog options minus the SeeU-only one");
+        assertEquals(10, built.size(), "11 catalog options minus the SeeU-only one");
 
         for (RecordedOption<?> o : built) {
             OptionSpec spec = ClientOptionCatalog.find(o.id.toString()).orElseThrow();

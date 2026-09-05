@@ -196,8 +196,16 @@ public class LSSClientConfig extends JsonConfig {
     /** Client-side visibility ring overrides in blocks (0 = server-controlled). */
     public int farPlayersMaxDistanceBlocks = 0;
     public int farPlayersMinDistanceBlocks = 0;
-    /** Render name tags over proxies (consumed by the E2 renderer). */
+    /** Render name tags over proxies. Since 2026-09-04 the renderer draws the tag ITSELF
+     *  (far-player-render-hardening-plan.md WI-6): vanilla gates entity name tags at 64
+     *  blocks on every MC line and proxies only exist beyond ~127, so the vanilla path could
+     *  never draw one — this key was inert until then. */
     public boolean farPlayersNameTags = true;
+    /** Light far players (and their mounts) full-bright instead of the sky-lit floor
+     *  (far-player-render-hardening-plan.md WI-2). Default OFF: the floor already keeps a
+     *  proxy from ever reading dark, and full-bright at night is a beacon. Render-only —
+     *  NOT a capability-bit term and NOT part of the prefs content. */
+    public boolean farPlayersFullBright = false;
     /** Share my position with other players' LOD view (target-side privacy — the
      *  server honors it in every mode; opt-in mode REQUIRES it). Default TRUE was
      *  consciously CONFIRMED at the E2 defaults flip (decisions log 2026-08-13):
@@ -216,9 +224,11 @@ public class LSSClientConfig extends JsonConfig {
      *  LSS ships NO fog mixin — align this with your fog if proxies fading at the
      *  horizon bothers you (FARP §3.3 fog stance). */
     public int farPlayersMaxRenderDistanceBlocks = 0;
-    /** Walk-animation distance cap in blocks (0 = never animate; animation beyond
-     *  ~a few hundred blocks is invisible sub-pixel work). */
-    public int farPlayersMaxAnimationDistanceBlocks = 256;
+    /** Walk-animation distance cap in blocks (0 = never animate; animation far out is
+     *  invisible sub-pixel work — 512 since 2026-09-04, user decision after the live rig:
+     *  256 cut the walk cycle while a proxy was still clearly a walking figure). Deliberately
+     *  NO options-page row — a config-file knob. */
+    public int farPlayersMaxAnimationDistanceBlocks = 512;
 
     @Override
     protected String getFileName() {

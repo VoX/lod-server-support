@@ -84,6 +84,13 @@ it flushes still-deferred batches (entityTranslucent skins, name-tag text, glint
 early, reordering geometry LSS doesn't own and changing proxy-vs-water blending, and it adds a new
 throw site — precisely the corruption the live test is meant to rule out. So: no flush.
 
+> **SUPERSEDED 2026-09-04 (far-player-render-hardening-plan.md WI-4, panel-reviewed):** the
+> hazard above is real for the ARG-LESS `endBatch()`, which stays forbidden. The pass now ends
+> the ONE shared-buffer batch it opened with `endLastBatch()` — exactly what vanilla does one
+> instruction before this event for its own entities — so on an Iris-free stack our last skin
+> batch no longer rides whichever block entity next requests a shared render type. Under
+> Iris's batched buffer source the call is inert by construction. Both twins carry it.
+
 `RENDER_AVAILABLE` flips **false → true**. `clearInstance()` becomes the real teardown (`clear()`
 + `crashLatched = false` + `mountLadder.reset()`), replacing the no-op stub.
 
@@ -211,7 +218,8 @@ cache) and the `neoforge-21.1.248` sources jar:
 
 - **Flush is wrong / hazardous (Fable MAJOR-1, Opus-1/Opus-2 MAJOR-1):** DROP the flush → §3. Also
   resolves both Opus "flush escapes the latch" concerns and Opus-2's "arg-less flush corrupts
-  shaders/other mods".
+  shaders/other mods". *(Partially superseded 2026-09-04: `endLastBatch()` only — see the
+  SUPERSEDED note under §3's flush paragraph.)*
 - **Preflight `-x runClientGameTest` fails on this line (Fable MAJOR-2):** removed → §7.
 - **Test must pin the wiring + gate + containment (Fable MAJOR-3, Opus-2 minor-1):** → §5.
 - **Per-proxy containment on the unseated render (Opus-1 minor-2):** added → §3 item 6, §6.2.
