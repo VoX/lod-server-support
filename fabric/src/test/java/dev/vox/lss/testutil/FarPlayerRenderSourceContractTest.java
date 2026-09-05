@@ -71,5 +71,19 @@ class FarPlayerRenderSourceContractTest {
                 tree + ": the tag scale rule is sqrt(d/64) clamped to [1, 8]");
         assertTrue(src.contains("this.setCustomNameVisible(false);") && !src.contains("setCustomName("),
                 tree + ": vanilla's tag path stays off and the name is cached, not re-set per frame");
+        // WI-6 live-rig folds (2026-09-04): the plate/glyph z-fight fix is a SECOND glyph-only
+        // draw on a plane lifted toward the camera by a distance-scaled margin, and the tag gap
+        // between vanilla's 64-block cap and the tracking radius is filled for tracked players.
+        assertTrue(src.contains("Math.clamp(tag.distance() * tag.distance() * 1.5e-5, 0.05, 24.0)")
+                        && src.contains("new Matrix4f(matrix).translate(0.0f, 0.0f, liftBlocks / scale)")
+                        && src.contains("Font.DisplayMode.NORMAL, 0, tag.light())"),
+                tree + ": the second, glyph-only tag draw must sit on the lifted plane");
+        assertTrue(src.contains("for (var realPlayer : level.players())")
+                        && src.contains("if (active.contains(realPlayer.getUUID())) continue;")
+                        && src.contains("< 64.0 * 64.0) continue;")
+                        && src.contains("if (!vanillaNameVisibleIgnoringDistance(realPlayer, localPlayer)) continue;"),
+                tree + ": tracked players past vanilla's 64-block cap get the LSS tag under vanilla's ladder");
+        assertTrue(src.contains("queueProxyTag(pendingTags, frustum, nameTags, tracked, proxy, position, distance, light);"),
+                tree + ": proxy tags still route through the option + sneak gate");
     }
 }

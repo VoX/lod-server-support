@@ -243,6 +243,26 @@ enumerates the deltas; WI-3 adds one (the frustum source) — the row is updated
 
 ### WI-6 Name tags that actually show (all lines — LSS draws its own)
 
+> **Live-rig folds (2026-09-04, NeoForge 1.21.1 + C2ME rig, both twins — port with the rest):**
+> (a) **Plate/glyph z-fight.** `Font.drawInBatch` draws a nonzero background as a glyph EFFECT
+> 0.01 text-units nearer than the glyphs; at far-tag range that is a fraction of one depth-buffer
+> step (24-bit depth, 0.05 near: one step ≈ d²·1.2e-6 blocks — 0.03 blocks at 160), so the
+> depth-tested plate and glyphs z-fight and the text flickers white/grey. Vanilla never hits it
+> because its plate lives in the see-through pass this WI deliberately dropped. Fix: TWO draws —
+> plate+glyphs as laid out, then the glyphs alone (background 0) on a plane lifted TOWARD the
+> camera (local +z after `mulPose(cameraOrientation)`; `Camera.FORWARDS` is −z) by
+> `clamp(d²·1.5e-5, 0.05, 24)` blocks (~12 steps; sub-pixel in perspective). 26.x ports carry the
+> same structure with `submitText` (background param on the first submit only).
+> (b) **The 64..tracking-radius tag gap.** Inside the entity-tracking radius the REAL player is
+> vanilla's to draw (the handoff), but vanilla caps its tag at 64 blocks — so with server vd 6 the
+> tag vanished between 64 and 96 blocks. Fix: after the proxy loop, tag every `level.players()`
+> entry past 64 blocks (camera distance, vanilla's clause) under vanilla's `shouldShowName` ladder
+> minus that clause (invisibility + team visibility), skipping the local/camera player, sneaking
+> (LSS policy) and mounted-vehicle players (vanilla), and any UUID whose proxy drew this frame;
+> lit with WI-1/WI-2; gated on `farPlayersNameTags` + `Minecraft.renderNames()`. NeoForge twin
+> additionally respects a server-SHORTENED `NeoForgeMod.NAMETAG_DISTANCE` (< 64 → no far tag).
+> Pinned by `FarPlayerRenderSourceContractTest`.
+
 - Why own-draw: F6(b) — vanilla can never draw a tag for a proxy on any line. There is no
   vanilla fallback to keep.
 - Design (all lines): content = the tracked name (cache the `Component`/`FormattedCharSequence`
@@ -539,6 +559,8 @@ per-line gate commands, port recipe per file, 1.21.10 landmines, Sable `shouldRe
 Iris live-check requirement, the instance's shader-pack mismatch.
 
 ## 9. Decisions log
+
+- 2026-09-04 (live rig): WI-6 tags become two draws (glyph-only second pass on a lifted plane) and also cover vanilla-tracked players past 64 blocks — the flicker and the 64..tracking-radius gap were both found on the first live look; NORMAL-only stays.
 
 - 2026-09-04 — Far-player proxies are lit with a sky-15 floor (real block light kept), optional
   full-bright; brighter-than-correct beats dark (user). Supersedes the 1.21.1 fresh cut's

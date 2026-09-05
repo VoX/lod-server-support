@@ -19,7 +19,10 @@ import net.minecraft.world.phys.AABB;
 import org.joml.Matrix4f;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.multiplayer.PlayerInfo;
+import net.minecraft.client.player.AbstractClientPlayer;
+import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.player.RemotePlayer;
+import net.minecraft.world.scores.Team;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
@@ -384,7 +387,7 @@ public final class FarPlayerRenderer {
                     } else {
                         culled++;
                     }
-                    queueNameTag(pendingTags, frustum, nameTags, tracked, proxy, position, distance, light);
+                    queueProxyTag(pendingTags, frustum, nameTags, tracked, proxy, position, distance, light);
                 } catch (Throwable t) {
                     latchSeatedFailure(tracked, proxy, t);
                 }
@@ -402,7 +405,7 @@ public final class FarPlayerRenderer {
                 } else {
                     culled++;
                 }
-                queueNameTag(pendingTags, frustum, nameTags, tracked, proxy, position, distance, light);
+                queueProxyTag(pendingTags, frustum, nameTags, tracked, proxy, position, distance, light);
             }
         }
         // Prune with the ride link BROKEN (E3 review m2): a proxy dropped while
@@ -422,6 +425,28 @@ public final class FarPlayerRenderer {
         vehicles.keySet().removeIf(uuid -> !activeVehicles.contains(uuid));
         activeVehicles.clear();
         submittedVehicles.clear();
+        // WI-6 gap fill (live rig 2026-09-04): between vanilla's own 64-block name-tag cap and
+        // the entity-tracking radius the REAL player entity is vanilla's to draw (the handoff
+        // above), yet vanilla draws no tag that far out — so the tag vanished in a band just
+        // inside the loaded chunks. Tag those players here under vanilla's own visibility
+        // ladder minus its distance clause; proxies never appear in level.players(), and a
+        // tracked far player whose proxy drew this frame is skipped via the active set.
+        if (nameTags && Minecraft.renderNames()) {
+            for (var realPlayer : level.players()) {
+                if (realPlayer == localPlayer || realPlayer == minecraft.getCameraEntity()) continue;
+                if (active.contains(realPlayer.getUUID())) continue;
+                if (realPlayer.isDiscrete() || realPlayer.isVehicle()) continue; // LSS sneak policy; vanilla's mount rule
+                Vec3 realPosition = new Vec3(Mth.lerp(partialTick, realPlayer.xo, realPlayer.getX()),
+                        Mth.lerp(partialTick, realPlayer.yo, realPlayer.getY()),
+                        Mth.lerp(partialTick, realPlayer.zo, realPlayer.getZ()));
+                if (cameraPosition.distanceToSqr(realPosition) < 64.0 * 64.0) continue; // vanilla's own tag range
+                double realDistance = realPosition.distanceTo(localPlayer.position());
+                if (realDistance < minRender || (maxRender > 0 && realDistance > maxRender)) continue;
+                if (!vanillaNameVisibleIgnoringDistance(realPlayer, localPlayer)) continue;
+                queueNameTag(pendingTags, frustum, realPlayer, realPlayer.getDisplayName(), realPosition,
+                        realDistance, packedLightFor(dispatcher, realPlayer, partialTick, fullBright));
+            }
+        }
         // WI-6: the tags, batched AFTER every model so the entity->text->entity render-type
         // switches happen once per frame, not once per proxy (on Iris-free stacks each switch
         // flushes the shared buffer).
@@ -669,32 +694,59 @@ public final class FarPlayerRenderer {
         return frustum.isVisible(box);
     }
 
-    /** A tag queued during the proxy loop and drawn after it (WI-6). */
-    private record PendingTag(Proxy proxy, Vec3 position, double distance, int light) {}
+    /** A tag queued during the pass and drawn after it (WI-6): over a Proxy, or over a
+     *  vanilla-tracked player past vanilla's own 64-block tag cap (the gap fill in the pass). */
+    private record PendingTag(Entity entity, Component name, Vec3 position, double distance, int light) {}
 
     /** The name-tag anchor in world space: vanilla's NAME_TAG attachment + 0.5. */
-    private static Vec3 tagAnchor(Proxy proxy, Vec3 position) {
-        Vec3 attachment = proxy.getAttachments()
-                .getNullable(EntityAttachment.NAME_TAG, 0, proxy.getYRot());
+    private static Vec3 tagAnchor(Entity entity, Vec3 position) {
+        Vec3 attachment = entity.getAttachments()
+                .getNullable(EntityAttachment.NAME_TAG, 0, entity.getYRot());
         return attachment == null ? null : position.add(attachment.x, attachment.y + 0.5, attachment.z);
     }
 
-    /** WI-6 gate: the option, the sneak rule (a NEW LSS policy — "sneak = don't advertise
-     *  me"; vanilla's own sneak cap lives in code that never runs for a proxy), and the tag's
-     *  OWN frustum test (the body's box can be just off screen while the tag is on it). */
-    private static void queueNameTag(List<PendingTag> out, Frustum frustum, boolean nameTags,
-                                     FarPlayerClientTracker.TrackedFarPlayer tracked, Proxy proxy,
-                                     Vec3 position, double distance, int light) {
+    /** WI-6 proxy gate: the option and the sneak rule (a NEW LSS policy — "sneak = don't
+     *  advertise me"; vanilla's own sneak cap lives in code that never runs for a proxy). */
+    private static void queueProxyTag(List<PendingTag> out, Frustum frustum, boolean nameTags,
+                                      FarPlayerClientTracker.TrackedFarPlayer tracked, Proxy proxy,
+                                      Vec3 position, double distance, int light) {
         if (!nameTags) return;
         if ((tracked.latest().poseFlags() & FarPlayerWire.POSE_SNEAK) != 0) return;
+        queueNameTag(out, frustum, proxy, proxy.farName, position, distance, light);
+    }
+
+    /** The tag's OWN frustum test (the body's box can be just off screen while the tag is on
+     *  it), then queue. */
+    private static void queueNameTag(List<PendingTag> out, Frustum frustum, Entity entity,
+                                     Component name, Vec3 position, double distance, int light) {
         if (frustum != null) {
-            Vec3 a = tagAnchor(proxy, position);
+            Vec3 a = tagAnchor(entity, position);
             if (a == null || !frustum.isVisible(new AABB(a.x - 0.5, a.y - 0.5, a.z - 0.5,
                     a.x + 0.5, a.y + 0.5, a.z + 0.5))) {
                 return;
             }
         }
-        out.add(new PendingTag(proxy, position, distance, light));
+        out.add(new PendingTag(entity, name, position, distance, light));
+    }
+
+    /**
+     * Vanilla's {@code LivingEntityRenderer.shouldShowName} ladder MINUS its distance clause
+     * (that clause is exactly what the gap fill supplies): invisibility to the local player
+     * and the team name-tag visibility rules, verbatim.
+     */
+    private static boolean vanillaNameVisibleIgnoringDistance(AbstractClientPlayer player,
+                                                              LocalPlayer localPlayer) {
+        boolean visible = !player.isInvisibleTo(localPlayer);
+        Team team = player.getTeam();
+        Team own = localPlayer.getTeam();
+        if (team == null) return visible;
+        return switch (team.getNameTagVisibility()) {
+            case ALWAYS -> visible;
+            case NEVER -> false;
+            case HIDE_FOR_OTHER_TEAMS -> own == null ? visible
+                    : team.isAlliedTo(own) && (team.canSeeFriendlyInvisibles() || visible);
+            case HIDE_FOR_OWN_TEAM -> own == null ? visible : !team.isAlliedTo(own) && visible;
+        };
     }
 
     /**
@@ -708,16 +760,27 @@ public final class FarPlayerRenderer {
      * stays readable without turning a two-pixel body into a full-size plate (constant
      * apparent size looked like an ESP HUD — panel Q4). The text batch is a shared-buffer
      * type, drained by the pass's {@code endLastBatch()}.
+     *
+     * <p>TWO draws, not one (live rig 2026-09-04 — the text flickered white/grey): the font
+     * draws its background plate as a glyph effect 0.01 text-units NEARER than the glyphs,
+     * which at far-tag range is a fraction of one depth-buffer step (24-bit depth, 0.05 near
+     * plane: one step ≈ d² × 1.2e-6 blocks — 0.03 blocks at 160), so plate and glyphs z-fight
+     * and the translucent plate tints the text wherever it wins. Vanilla escapes that only
+     * because its plate lives in the depth-test-free pass this tag deliberately lacks. So:
+     * draw 1 = plate + glyphs as vanilla lays them out; draw 2 = the glyphs alone on a plane
+     * lifted TOWARD the camera (local +z after the camera billboard — Camera.FORWARDS is -z)
+     * by ~12 depth steps, clamped to [0.05, 24] blocks: sub-pixel in perspective, decisive in
+     * depth.
      */
     private static void renderFarNameTag(EntityRenderDispatcher dispatcher, PendingTag tag,
                                          Vec3 cameraPosition, PoseStack poseStack,
                                          MultiBufferSource bufferSource) {
-        Vec3 anchor = tagAnchor(tag.proxy(), tag.position());
+        Vec3 anchor = tagAnchor(tag.entity(), tag.position());
         if (anchor == null) return;
         float scale = 0.025f * (float) Math.clamp(Math.sqrt(tag.distance() / 64.0), 1.0, 8.0);
         Minecraft minecraft = Minecraft.getInstance();
         Font font = minecraft.font;
-        Component name = tag.proxy().farName;
+        Component name = tag.name();
         poseStack.pushPose();
         poseStack.translate(anchor.x - cameraPosition.x, anchor.y - cameraPosition.y,
                 anchor.z - cameraPosition.z);
@@ -728,6 +791,10 @@ public final class FarPlayerRenderer {
         int background = (int) (minecraft.options.getBackgroundOpacity(0.25f) * 255.0f) << 24;
         font.drawInBatch(name, x, 0.0f, -1, false, matrix, bufferSource,
                 Font.DisplayMode.NORMAL, background, tag.light());
+        float liftBlocks = (float) Math.clamp(tag.distance() * tag.distance() * 1.5e-5, 0.05, 24.0);
+        Matrix4f lifted = new Matrix4f(matrix).translate(0.0f, 0.0f, liftBlocks / scale);
+        font.drawInBatch(name, x, 0.0f, -1, false, lifted, bufferSource,
+                Font.DisplayMode.NORMAL, 0, tag.light());
         poseStack.popPose();
     }
 
