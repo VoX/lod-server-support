@@ -246,6 +246,9 @@ loom {
             // client OFF requesting so no baseline shifts; the summary scenarios opt
             // back in with -Psoak.summary=true.
             vmArg "-Dlss.soak.summary=${findProperty('soak.summary') ?: 'false'}"
+            // Far-player live rigs: walk the dummy between waypoints (SoakPatrol) —
+            // -Psoak.patrol="0,50;0,220"; unset = the dummy stands still (harness runs).
+            vmArg "-Dlss.soak.patrol=${findProperty('soak.patrol') ?: ''}"
             programArg "--quickPlayMultiplayer"
             // Overridable so the same task doubles as the FARP live-gate dummy against
             // a test-server.sh instance (harness runs keep the default and are
