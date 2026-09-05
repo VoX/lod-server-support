@@ -6,6 +6,15 @@ import dev.vox.lss.common.farplayers.FarPlayerClientTracker;
 import dev.vox.lss.common.farplayers.FarPlayerWire;
 import dev.vox.lss.config.LSSClientConfig;
 import net.minecraft.client.Minecraft;
+import com.mojang.blaze3d.vertex.PoseStack;
+import net.minecraft.client.gui.Font;
+import net.minecraft.client.renderer.LightTexture;
+import net.minecraft.client.renderer.culling.Frustum;
+import net.minecraft.client.renderer.entity.EntityRenderDispatcher;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityAttachment;
+import net.minecraft.world.phys.AABB;
+import org.joml.Matrix4f;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.multiplayer.PlayerInfo;
@@ -25,8 +34,10 @@ import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -41,11 +52,12 @@ import java.util.concurrent.ConcurrentHashMap;
  * ({@link EntityJoinLevelEvent} in place of {@code ClientEntityEvents.ENTITY_LOAD}), and one
  * NeoForge-specific containment (the unseated {@code dispatcher.render} is wrapped — NeoForge
  * fires third-party render events inside it). The buffer source is
- * {@code minecraft.renderBuffers().bufferSource()} rendered into with NO explicit flush:
- * {@code AFTER_ENTITIES} fires at the same instruction boundary Fabric injects at, and
- * vanilla's downstream {@code endBatch()} drains our geometry — byte-identical to Fabric's
- * validated behaviour (an explicit flush here would reorder deferred translucent/name-tag/glint
- * batches). The E2, FARP §3.3/§7-B SeeU {@code RemotePlayer}-proxy immediate-render approach.
+ * {@code minecraft.renderBuffers().bufferSource()}; {@code AFTER_ENTITIES} fires at the same
+ * instruction boundary Fabric injects at (after vanilla's own post-entity flushes), and the pass
+ * ends the ONE shared batch it opened with {@code endLastBatch()} — never the arg-less
+ * {@code endBatch()}, which would drain the deferred glint/translucent buffers early (the
+ * 2026-09-04 hardening plan superseded the earlier "no explicit flush" decision on exactly
+ * this distinction). The E2, FARP §3.3/§7-B {@code RemotePlayer}-proxy immediate-render approach.
  * Differences from SeeU that are DECISIONS, not drift (all review-pinned in the FARP plan):
  *
  * <ul>
@@ -74,6 +86,14 @@ import java.util.concurrent.ConcurrentHashMap;
  *       standing at the mounted position — never a crash, never a floating sit.</li>
  *   <li><b>Containment</b>: the whole pass is latch-guarded — a renderer bug degrades
  *       to "no proxies" for the session, never a render-thread crash loop.</li>
+ *   <li><b>Light, culling, tags, batch end (2026-09-04, far-player-render-hardening-plan.md)</b>:
+ *       proxies are lit with a sky-15 FLOOR (or full-bright, {@code farPlayersFullBright}) —
+ *       never from the client's stored light data, which reads zero in the C2ME no-tick ring;
+ *       the DRAW calls (only) are frustum-culled; LSS draws its own depth-tested, sneak-hidden,
+ *       sqrt-scaled name tags (vanilla gates tags at 64 blocks on every line); the pass ends
+ *       its own shared batch with {@code endLastBatch()}; the model-parts byte is set so the
+ *       overlay skin layers render. See {@code packedLightFor}/{@code isInFrustum}/
+ *       {@code renderFarNameTag}.</li>
  * </ul>
  *
  * <p>Threading: every touchpoint runs on the client MAIN thread, which IS the render
@@ -122,6 +142,8 @@ public final class FarPlayerRenderer {
     private final Map<String, Item> itemCache = new ConcurrentHashMap<>();
     private int nextProxyId = PROXY_ID_BASE;
     private boolean crashLatched;
+    /** Last pass's counters for the /lss diag line ({@link #diagLine()}). */
+    private int lastDrawn, lastCulled, lastMounts, lastTags;
     /** Once-per-session guard for the per-player containment warn ({@link #dropProxyContained}). */
     private boolean loggedContainedDrop;
 
@@ -262,6 +284,8 @@ public final class FarPlayerRenderer {
             clear();
             return;
         }
+        // WI-3: the frame frustum from the event (NeoForge hands it over directly).
+        Frustum frustum = event.getFrustum();
 
         FarPlayerClientTracker tracker = FarPlayerClientSupport.tracker();
         String trackerDimension = tracker.dimension();
@@ -279,6 +303,10 @@ public final class FarPlayerRenderer {
         long now = FarPlayerClientSupport.monotonicMillis();
         int maxRender = config.farPlayersMaxRenderDistanceBlocks;
         int minRender = config.farPlayersMinDistanceBlocks;
+        boolean fullBright = config.farPlayersFullBright;
+        boolean nameTags = config.farPlayersNameTags;
+        int drawn = 0, culled = 0, mounts = 0;
+        List<PendingTag> pendingTags = new ArrayList<>();
 
         Set<UUID> active = new HashSet<>();
         for (var tracked : tracker.snapshot().values()) {
@@ -294,6 +322,11 @@ public final class FarPlayerRenderer {
             // predicate both directions, so the swap is frame-synchronized with
             // vanilla's entity pop — no band, no flicker, no diagonal double-render,
             // no high-render-distance invisibility annulus.
+            // NOTE (2026-09-04, far-player-render-hardening-plan.md F1/F3): ClientLevel
+            // .hasChunk is unconditionally true on this MC, so the chunkLoaded conjunct
+            // below is inert — the live handoff is `real == null ||
+            // !real.shouldRenderAtSqrDistance(...)`, and RemotePlayer culls at ~640 blocks,
+            // so every TRACKED real player is vanilla's to draw. Kept for line parity.
             var real = level.getPlayerByUUID(tracked.uuid());
             if (real != null
                     && level.hasChunk(Mth.floor(position.x) >> 4,
@@ -325,7 +358,7 @@ public final class FarPlayerRenderer {
             // the feature for the session.
             if (proxy.isPassenger()) {
                 try {
-                    proxy.apply(tracked, sample, position, config.farPlayersNameTags,
+                    proxy.apply(tracked, sample, position,
                             maxRender > 0 ? maxRender : 16384, allowWalk, animationTick,
                             itemCache);
                 } catch (Throwable t) {
@@ -335,14 +368,14 @@ public final class FarPlayerRenderer {
                     // the proxy), a still-seated retry would re-throw into the
                     // whole-pass latch — skip this rider this frame instead.
                     if (!proxy.isPassenger()) {
-                        proxy.apply(tracked, sample, position, config.farPlayersNameTags,
+                        proxy.apply(tracked, sample, position,
                                 maxRender > 0 ? maxRender : 16384, allowWalk,
                                 animationTick, itemCache);
                     }
                 }
             } else {
                 try {
-                    proxy.apply(tracked, sample, position, config.farPlayersNameTags,
+                    proxy.apply(tracked, sample, position,
                             maxRender > 0 ? maxRender : 16384, allowWalk, animationTick,
                             itemCache);
                 } catch (Throwable t) {
@@ -366,8 +399,10 @@ public final class FarPlayerRenderer {
                 // this rider falls through to unmounted — never the global crash latch
                 // (which would take the whole feature down for one bad mount type).
                 try {
-                    renderMount(wireVehicle, tracked, proxy, level, now, animationTick,
-                            dispatcher, partialTick, cameraPosition, poseStack, bufferSource);
+                    int mountResult = renderMount(wireVehicle, tracked, proxy, level, now, animationTick,
+                            dispatcher, partialTick, cameraPosition, poseStack, bufferSource,
+                            frustum, fullBright);
+                    if (mountResult > 0) mounts++; else if (mountResult < 0) culled++;
                 } catch (Throwable e) {
                     // Throwable, not Exception (MINOR-3): a LinkageError from a modded
                     // entity class init must latch the TYPE, not the whole feature.
@@ -393,16 +428,20 @@ public final class FarPlayerRenderer {
             // skip this rider this frame — it renders unmounted next frame.
             if (proxy.isPassenger()) {
                 try {
-                    // 1.21.1 line: no extract/submit phase on this MC — immediate
-                    // dispatcher.render (the standard fake-entity approach); yaw is
-                    // the sampled value (proxy yRot == yRotO by construction).
-                    dispatcher.render(proxy,
-                            position.x - cameraPosition.x,
-                            position.y - cameraPosition.y,
-                            position.z - cameraPosition.z,
-                            sample.yaw(), partialTick, poseStack,
-                            bufferSource,
-                            packedLightFor(dispatcher, proxy, level, position, partialTick));
+                    int light = packedLightFor(dispatcher, proxy, partialTick, fullBright);
+                    if (isInFrustum(frustum, proxy)) {
+                        // 1.21.1 line: immediate dispatcher.render (no extract/submit on this MC); yaw
+                        // is the sampled value (proxy yRot == yRotO by construction).
+                        dispatcher.render(proxy,
+                                position.x - cameraPosition.x,
+                                position.y - cameraPosition.y,
+                                position.z - cameraPosition.z,
+                                sample.yaw(), partialTick, poseStack, bufferSource, light);
+                        drawn++;
+                    } else {
+                        culled++;
+                    }
+                    queueNameTag(pendingTags, frustum, nameTags, tracked, proxy, position, distance, light);
                 } catch (Throwable t) {
                     latchSeatedFailure(tracked, proxy, t);
                 }
@@ -413,13 +452,20 @@ public final class FarPlayerRenderer {
                 // whole feature — symmetric with the seated path's per-rider containment above,
                 // and with the construction/apply containment (dropProxyContained) on this path.
                 try {
-                    dispatcher.render(proxy,
-                            position.x - cameraPosition.x,
-                            position.y - cameraPosition.y,
-                            position.z - cameraPosition.z,
-                            sample.yaw(), partialTick, poseStack,
-                            bufferSource,
-                            packedLightFor(dispatcher, proxy, level, position, partialTick));
+                    int light = packedLightFor(dispatcher, proxy, partialTick, fullBright);
+                    if (isInFrustum(frustum, proxy)) {
+                        // 1.21.1 line: immediate dispatcher.render (no extract/submit on this MC); yaw
+                        // is the sampled value (proxy yRot == yRotO by construction).
+                        dispatcher.render(proxy,
+                                position.x - cameraPosition.x,
+                                position.y - cameraPosition.y,
+                                position.z - cameraPosition.z,
+                                sample.yaw(), partialTick, poseStack, bufferSource, light);
+                        drawn++;
+                    } else {
+                        culled++;
+                    }
+                    queueNameTag(pendingTags, frustum, nameTags, tracked, proxy, position, distance, light);
                 } catch (Throwable t) {
                     dropProxyContained(tracked.uuid(), active, "render", t);
                 }
@@ -442,6 +488,25 @@ public final class FarPlayerRenderer {
         vehicles.keySet().removeIf(uuid -> !activeVehicles.contains(uuid));
         activeVehicles.clear();
         submittedVehicles.clear();
+        // WI-6: the tags, batched AFTER every model so the entity->text->entity render-type
+        // switches happen once per frame, not once per proxy (on Iris-free stacks each switch
+        // flushes the shared buffer).
+        int tagsDrawn = 0;
+        for (var tag : pendingTags) {
+            renderFarNameTag(dispatcher, tag, cameraPosition, poseStack, bufferSource);
+            tagsDrawn++;
+        }
+        // WI-4: end the shared batch OUR proxies opened, the way vanilla ended its own entity
+        // batch one instruction before this event fired (endLastBatch — NEVER the arg-less
+        // endBatch, which drains the deferred glint/translucent buffers early). Inert under
+        // Iris's batched buffer source (it never sets lastSharedType); on an Iris-free stack it
+        // stops our last skin batch from riding whichever block entity next requests a shared
+        // render type, i.e. from being drawn under that later GL state.
+        if (bufferSource instanceof MultiBufferSource.BufferSource bs) bs.endLastBatch();
+        this.lastDrawn = drawn;
+        this.lastCulled = culled;
+        this.lastMounts = mounts;
+        this.lastTags = tagsDrawn;
     }
 
     /** Contained dismount: modded removePassenger overrides can throw on the same
@@ -478,21 +543,24 @@ public final class FarPlayerRenderer {
         }
     }
 
-    /** The per-rider mount pass: resolve/create/link/submit. Throws propagate to the
-     *  per-type containment at the call site. */
-    private void renderMount(dev.vox.lss.common.farplayers.FarPlayerWire.Vehicle wireVehicle,
+    /** The per-rider mount pass: resolve/create/link/draw. Returns 1 = drawn, -1 = the
+     *  mount was frustum-culled (its link/bookkeeping still ran), 0 = ladder-degraded or
+     *  not this rider's turn. Throws propagate to the per-type containment at the call
+     *  site. */
+    private int renderMount(dev.vox.lss.common.farplayers.FarPlayerWire.Vehicle wireVehicle,
                              FarPlayerClientTracker.TrackedFarPlayer tracked, Proxy proxy,
                              ClientLevel level, long now, int animationTick,
                              net.minecraft.client.renderer.entity.EntityRenderDispatcher dispatcher,
                              float partialTick, Vec3 cameraPosition,
                              com.mojang.blaze3d.vertex.PoseStack poseStack,
-                             MultiBufferSource bufferSource) {
+                             MultiBufferSource bufferSource,
+                             Frustum frustum, boolean fullBright) {
         var mount = mountFor(wireVehicle, tracked, level, now);
         if (mount == null) {
             if (proxy.isPassenger()) {
                 proxy.stopRiding(); // ladder-degraded: render unmounted
             }
-            return;
+            return 0;
         }
         activeVehicles.add(wireVehicle.uuid());
         if (proxy.getVehicle() != mount.entity) {
@@ -503,19 +571,22 @@ public final class FarPlayerRenderer {
             // of the ladder — mounted-position standing pose, never a floating sit.
             proxy.startRiding(mount.entity, true);
         }
-        if (submittedVehicles.add(wireVehicle.uuid())) {
-            var vSample = mount.motion.sample(now);
-            applyMountState(mount, vSample, animationTick);
-            // 1.21.1 line: immediate dispatcher.render (no extract/submit on this MC).
-            var vPos = new Vec3(vSample.x(), vSample.y(), vSample.z());
-            dispatcher.render(mount.entity,
-                    vSample.x() - cameraPosition.x,
-                    vSample.y() - cameraPosition.y,
-                    vSample.z() - cameraPosition.z,
-                    vSample.yaw(), partialTick, poseStack,
-                    bufferSource,
-                    packedLightFor(dispatcher, mount.entity, level, vPos, partialTick));
-        }
+        if (!submittedVehicles.add(wireVehicle.uuid())) return 0;
+        var vSample = mount.motion.sample(now);
+        applyMountState(mount, vSample, animationTick);
+        // WI-3: frustum-test the MOUNT itself right before its draw (after applyMountState);
+        // the ride link / activeVehicles / submittedVehicles bookkeeping above ran regardless,
+        // so a culled mount is never re-created or re-seated next frame.
+        if (!isInFrustum(frustum, mount.entity)) return -1;
+        // 1.21.1 line: immediate dispatcher.render (no extract/submit on this MC).
+        dispatcher.render(mount.entity,
+                vSample.x() - cameraPosition.x,
+                vSample.y() - cameraPosition.y,
+                vSample.z() - cameraPosition.z,
+                vSample.yaw(), partialTick, poseStack,
+                bufferSource,
+                packedLightFor(dispatcher, mount.entity, partialTick, fullBright));
+        return 1;
     }
 
     /** Resolves/creates/updates the render-only mount instance for one rider's wire
@@ -623,21 +694,117 @@ public final class FarPlayerRenderer {
         }
     }
 
-    /** 1.21.1 line: the immediate render path needs a packed light value (26.x's
-     *  submit pipeline derived it during extraction). Proxies mostly stand in
-     *  UNLOADED chunks (the handoff predicate renders them exactly where the real
-     *  entity would not draw), where the light engine has no data and vanilla's
-     *  per-entity lookup reads dark — so loaded chunks use vanilla's own lookup and
-     *  unloaded ones fall back to full-bright sky (LOD-range players are outdoors
-     *  by construction; matches how the LOD terrain itself reads at distance). */
-    private static int packedLightFor(
-            net.minecraft.client.renderer.entity.EntityRenderDispatcher dispatcher,
-            net.minecraft.world.entity.Entity entity, ClientLevel level, Vec3 position,
-            float partialTick) {
-        if (level.hasChunk(Mth.floor(position.x) >> 4, Mth.floor(position.z) >> 4)) {
-            return dispatcher.getPackedLightCoords(entity, partialTick);
+    /**
+     * The proxy's packed light (far-player-render-hardening-plan.md WI-1/WI-2, user decision
+     * 2026-09-04: BRIGHTER than possibly correct beats dark). Sky is FLOORED to 15; the real
+     * block light is kept (a torch-lit far player at night still reads lit); {@code fullBright}
+     * (client {@code farPlayersFullBright}) short-circuits to vanilla's FULL_BRIGHT.
+     *
+     * <p>Why a floor: a proxy stands in for LOD terrain, which Voxy lights as sky-lit, but
+     * vanilla's lookup hands back whatever light data the client HOLDS at the proxy's eye. On
+     * this MC {@code ClientLevel.hasChunk} is unconditionally true, so the fresh cut's
+     * loaded/unloaded split never ran and every proxy read that data. Where the client holds
+     * a chunk with no real entity in it (C2ME's no-tick ring beyond the server's
+     * entity-tracking radius) the stored sky light is often ZERO — an unbaked send decodes as
+     * an all-zero layer — and the proxy went BLACK in daylight while the terrain there is
+     * never drawn (outside Sodium's circle, Voxy paints LOD over it); past the drop radius
+     * the engine has no data and answers 15, so the same player lit up again farther away.
+     * The floor makes the proxy immune to that data whatever its cause. We still call
+     * {@code getPackedLightCoords}, so third-party return hooks on it (Sable's sub-level
+     * lighting) apply before the floor.
+     */
+    private static int packedLightFor(EntityRenderDispatcher dispatcher, Entity entity,
+                                      float partialTick, boolean fullBright) {
+        if (fullBright) return LightTexture.FULL_BRIGHT;
+        int vanilla = dispatcher.getPackedLightCoords(entity, partialTick);
+        return LightTexture.pack(LightTexture.block(vanilla), 15);
+    }
+
+    /** WI-3: vanilla's frustum predicate MINUS its distance term ({@code EntityRenderer
+     *  .shouldRender}'s box + NaN fallback). Deliberately not {@code dispatcher.shouldRender}:
+     *  that carries vanilla's distance cull (a far horse would vanish) and Sable injects into
+     *  {@code EntityRenderer.shouldRender}. Null frustum = draw. Culls the DRAW only — every
+     *  caller keeps its tracking/apply/mount bookkeeping running regardless. */
+    private static boolean isInFrustum(Frustum frustum, Entity entity) {
+        if (frustum == null || entity.noCulling) return true;
+        AABB box = entity.getBoundingBoxForCulling().inflate(0.5);
+        if (box.hasNaN() || box.getSize() == 0.0) {
+            box = new AABB(entity.getX() - 2.0, entity.getY() - 2.0, entity.getZ() - 2.0,
+                    entity.getX() + 2.0, entity.getY() + 2.0, entity.getZ() + 2.0);
         }
-        return net.minecraft.client.renderer.LightTexture.pack(15, 15);
+        return frustum.isVisible(box);
+    }
+
+    /** A tag queued during the proxy loop and drawn after it (WI-6). */
+    private record PendingTag(Proxy proxy, Vec3 position, double distance, int light) {}
+
+    /** The name-tag anchor in world space: vanilla's NAME_TAG attachment + 0.5. */
+    private static Vec3 tagAnchor(Proxy proxy, Vec3 position) {
+        Vec3 attachment = proxy.getAttachments()
+                .getNullable(EntityAttachment.NAME_TAG, 0, proxy.getYRot());
+        return attachment == null ? null : position.add(attachment.x, attachment.y + 0.5, attachment.z);
+    }
+
+    /** WI-6 gate: the option, the sneak rule (a NEW LSS policy — "sneak = don't advertise
+     *  me"; vanilla's own sneak cap lives in code that never runs for a proxy), and the tag's
+     *  OWN frustum test (the body's box can be just off screen while the tag is on it). */
+    private static void queueNameTag(List<PendingTag> out, Frustum frustum, boolean nameTags,
+                                     FarPlayerClientTracker.TrackedFarPlayer tracked, Proxy proxy,
+                                     Vec3 position, double distance, int light) {
+        if (!nameTags) return;
+        if ((tracked.latest().poseFlags() & FarPlayerWire.POSE_SNEAK) != 0) return;
+        if (frustum != null) {
+            Vec3 a = tagAnchor(proxy, position);
+            if (a == null || !frustum.isVisible(new AABB(a.x - 0.5, a.y - 0.5, a.z - 0.5,
+                    a.x + 0.5, a.y + 0.5, a.z + 0.5))) {
+                return;
+            }
+        }
+        out.add(new PendingTag(proxy, position, distance, light));
+    }
+
+    /**
+     * WI-6: LSS draws the far-player name tag itself — vanilla gates entity name tags at 64
+     * blocks on every MC line and a proxy only exists beyond ~127, so
+     * {@code setCustomNameVisible} could never produce one. Vanilla's {@code renderNameTag}
+     * math (attachment + 0.5, camera billboard, {@code (s, -s, s)}), with three deliberate
+     * deviations: NORMAL (depth-tested) display mode only — no see-through pass, the privacy
+     * stance that also rejects glow; vanilla's 25% background behind the depth-tested text
+     * (legibility at distance); and {@code s = 0.025 × clamp(sqrt(d/64), 1, 8)} so the tag
+     * stays readable without turning a two-pixel body into a full-size plate (constant
+     * apparent size looked like an ESP HUD — panel Q4). The text batch is a shared-buffer
+     * type, drained by the pass's {@code endLastBatch()}.
+     */
+    private static void renderFarNameTag(EntityRenderDispatcher dispatcher, PendingTag tag,
+                                         Vec3 cameraPosition, PoseStack poseStack,
+                                         MultiBufferSource bufferSource) {
+        Vec3 anchor = tagAnchor(tag.proxy(), tag.position());
+        if (anchor == null) return;
+        float scale = 0.025f * (float) Math.clamp(Math.sqrt(tag.distance() / 64.0), 1.0, 8.0);
+        Minecraft minecraft = Minecraft.getInstance();
+        Font font = minecraft.font;
+        Component name = tag.proxy().farName;
+        poseStack.pushPose();
+        poseStack.translate(anchor.x - cameraPosition.x, anchor.y - cameraPosition.y,
+                anchor.z - cameraPosition.z);
+        poseStack.mulPose(dispatcher.cameraOrientation());
+        poseStack.scale(scale, -scale, scale);
+        Matrix4f matrix = poseStack.last().pose();
+        float x = -font.width(name) / 2.0f;
+        int background = (int) (minecraft.options.getBackgroundOpacity(0.25f) * 255.0f) << 24;
+        font.drawInBatch(name, x, 0.0f, -1, false, matrix, bufferSource,
+                Font.DisplayMode.NORMAL, background, tag.light());
+        poseStack.popPose();
+    }
+
+    /** The /lss diag line (WI-10): last pass's draw/cull/mount/tag counts + the light mode —
+     *  the live-gate instrument the original black-proxy sighting lacked. */
+    public static String diagLine() {
+        var r = instance;
+        if (r == null) return "FarPlayerRender: off";
+        return "FarPlayerRender: drawn=" + r.lastDrawn + ", culled=" + r.lastCulled
+                + ", mounts=" + r.lastMounts + ", tags=" + r.lastTags
+                + ", light=" + (LSSClientConfig.CONFIG.farPlayersFullBright ? "full" : "floor");
     }
 
     /** Monotonic id from the LSS block, probed against the live level (a taken id —
@@ -652,6 +819,8 @@ public final class FarPlayerRenderer {
 
     private static final class Proxy extends RemotePlayer {
         private final UUID trackedUuid;
+        /** The cached tag text (WI-6) — never re-allocated per frame. */
+        final Component farName;
         private int maxRenderDistanceBlocks = 16384;
         private Vec3 lastWalkPosition;
         private int lastWalkTick = Integer.MIN_VALUE;
@@ -659,6 +828,9 @@ public final class FarPlayerRenderer {
         private Proxy(ClientLevel level, UUID trackedUuid, String name, int entityId) {
             super(level, new GameProfile(trackedUuid, name));
             this.trackedUuid = trackedUuid;
+            this.farName = Component.literal(name);
+            // WI-6: LSS draws the tag itself; vanilla's path can never fire for a proxy.
+            this.setCustomNameVisible(false);
             this.setId(entityId);
             this.noPhysics = true;
             this.setNoGravity(true);
@@ -668,7 +840,7 @@ public final class FarPlayerRenderer {
 
         void apply(FarPlayerClientTracker.TrackedFarPlayer tracked,
                    dev.vox.lss.common.farplayers.FarPlayerMotion.Sample sample,
-                   Vec3 position, boolean nameTags, int maxRenderDistanceBlocks,
+                   Vec3 position, int maxRenderDistanceBlocks,
                    boolean allowWalk, int animationTick, Map<String, Item> itemCache) {
             byte pose = tracked.latest().poseFlags();
             boolean gliding = (pose & FarPlayerWire.POSE_GLIDE) != 0;
@@ -701,8 +873,15 @@ public final class FarPlayerRenderer {
                     : sneaking ? Pose.CROUCHING
                     : Pose.STANDING);
             applyEquipment(tracked, itemCache);
-            this.setCustomName(Component.literal(tracked.name()));
-            this.setCustomNameVisible(nameTags);
+            // WI-5: the model-parts byte (defaults to 0 = every overlay layer hidden — hat,
+            // jacket, sleeves, pants were invisible on every proxy). All layers EXCEPT the
+            // cape: CapeLayer positions the cape from cloak fields only Player.tick's cloak
+            // physics update — never run on a render-only proxy — so an enabled cape renders
+            // relative to the origin. ElytraLayer selects the cape-textured elytra through the
+            // same CAPE bit and CapeLayer bails on an elytra chest, so the full byte is safe
+            // exactly then.
+            boolean elytra = this.getItemBySlot(EquipmentSlot.CHEST).is(Items.ELYTRA);
+            this.getEntityData().set(DATA_PLAYER_MODE_CUSTOMISATION, (byte) (elytra ? 0x7F : 0x7E));
             updateWalkAnimation(position, allowWalk,
                     gliding || swimming || tracked.latest().vehicle() != null,
                     animationTick);
