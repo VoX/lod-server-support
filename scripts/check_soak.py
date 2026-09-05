@@ -2278,18 +2278,46 @@ def make_handshake_check(scenario, expect_enabled=True):
     return check
 
 
+# WI-5 (xaero-scatter-remediation-plan.md): the first-observed-save storm pins. BEFORE the
+# fix a restart re-marked 449 columns against 0 suppressed (the whole loaded disc, nothing
+# changed); with the chunk-load baseline the loaded disc's first saves are suppressed.
+COLD_RESTART_MAX_MARKED = 50
+COLD_RESTART_MIN_SUPPRESSION_RATIO = 0.9
+
+
 @named_check("cold-restart-resync", ["server.service.up_to_date", "client.responses.up_to_date",
-                                     "client.responses.columns", "client.requested_total"])
+                                     "client.responses.columns", "client.requested_total",
+                                     "server.dirty.marked_total", "server.dirty.suppressed_total"])
 def check_cold_restart_resync(ctx):
     """Brand-new server JVM + warm client cache (both restored from the fresh-backfill
     snapshot pair): the resync must be answered from the PERSISTED world/data/
     lss-timestamps.bin loaded at startup — warm-rejoin's run 2 is served by same-process
     RAM and never makes the file load-bearing. If the load regresses, every resync
     becomes a disk read + column re-send: up_to_date collapses toward 0 and columns
-    balloons to the full disc. A bounded re-send wave is expected (first-save content-
-    filter seeding in the new process), so the warm signal is up_to_date strictly
-    dominating columns, not columns == 0."""
+    balloons to the full disc, so the warm signal is up_to_date strictly dominating
+    columns. This scenario is ALSO the restart-storm gate (xaero-scatter-remediation-plan.md
+    WI-5): the dirty content filter's table is per process, and until 2026-09-05 every
+    chunk the new JVM merely loaded re-marked dirty at its first save (absent hash ==
+    changed — 449 marked / 0 suppressed recorded here with NOTHING changed; this
+    docstring used to bless that as "a bounded re-send wave"). With the chunk-load
+    baseline the loaded disc's first saves are suppressed: marked stays near zero and
+    the suppression ratio near one — both pinned below, absolute and in-phase."""
     last = ctx.server_snaps[-1]
+    dirty = last["dirty"]
+    marked, suppressed = dirty["marked_total"], dirty["suppressed_total"]
+    if marked > COLD_RESTART_MAX_MARKED:
+        yield Violation("cold-restart-resync", "final snapshot",
+                        "the content filter re-marked the restarted server's loaded disc — "
+                        "the first-observed-save storm (chunk-load baseline not seeding)",
+                        {"expected": f"marked_total <= {COLD_RESTART_MAX_MARKED}",
+                         "marked_total": marked, "suppressed_total": suppressed})
+    observed = marked + suppressed
+    if observed > 0 and suppressed / observed < COLD_RESTART_MIN_SUPPRESSION_RATIO:
+        yield Violation("cold-restart-resync", "final snapshot",
+                        "suppression ratio collapsed on a restart with nothing changed",
+                        {"expected": f">= {COLD_RESTART_MIN_SUPPRESSION_RATIO}",
+                         "actual": round(suppressed / observed, 3),
+                         "marked_total": marked, "suppressed_total": suppressed})
     if last["service"]["up_to_date"] < 500:
         yield Violation("cold-restart-resync", "final snapshot",
                         "server resolved too few up_to_date — persisted lss-timestamps.bin "
@@ -3900,7 +3928,7 @@ def _srv(wall=1000, seg=0, over=None):
                            "removed_in_flight": 0, "active": 0,
                            "order_gated": 0, "inversions": 0},
             "dirty": {"pending": 0, "broadcast_positions": 0, "marked_total": 0,
-                      "suppressed_total": 0},
+                      "suppressed_total": 0, "seeded_load": 0, "entries": 0},
             "far_players": {"subscribers": 0, "roster_frames": 0, "update_frames": 0,
                             "entries": 0, "suppressed": 0, "bytes": 0},
             "summary": {"requests": 0, "range_filtered": 0, "frames": 0,
@@ -4480,6 +4508,26 @@ def selftest():
         server_snaps=[_srv(1000, over={"service.up_to_date": 600})],
         runs={1: [_cli(1000, over={"responses.up_to_date": 600, "responses.columns": 2100,
                                    "requested_total": 2700})]},
+        quiescent_server={0}))), "cold-restart-resync")
+    # WI-5 (xaero-scatter-remediation-plan.md): the first-observed-save storm — the recorded
+    # BEFORE shape (449 marked / 0 suppressed) reds on BOTH legs; a seeded restart is clean.
+    clean("cold-restart seeded loads suppress the first saves", list(check_cold_restart_resync(_ctx(
+        server_snaps=[_srv(1000, over={"service.up_to_date": 2000, "dirty.marked_total": 5,
+                                       "dirty.suppressed_total": 800})],
+        runs={1: [_cli(1000, over={"responses.up_to_date": 2000, "responses.columns": 300,
+                                   "requested_total": 2400})]},
+        quiescent_server={0}))))
+    hits("cold-restart first-observed-save storm", list(check_cold_restart_resync(_ctx(
+        server_snaps=[_srv(1000, over={"service.up_to_date": 2000, "dirty.marked_total": 449,
+                                       "dirty.suppressed_total": 0})],
+        runs={1: [_cli(1000, over={"responses.up_to_date": 2000, "responses.columns": 300,
+                                   "requested_total": 2400})]},
+        quiescent_server={0}))), "cold-restart-resync")
+    hits("cold-restart suppression ratio collapsed", list(check_cold_restart_resync(_ctx(
+        server_snaps=[_srv(1000, over={"service.up_to_date": 2000, "dirty.marked_total": 40,
+                                       "dirty.suppressed_total": 100})],
+        runs={1: [_cli(1000, over={"responses.up_to_date": 2000, "responses.columns": 300,
+                                   "requested_total": 2400})]},
         quiescent_server={0}))), "cold-restart-resync")
 
     # --- teleport-prune: bounded map; double disc caught (lod 24 -> annulus 2112) ---

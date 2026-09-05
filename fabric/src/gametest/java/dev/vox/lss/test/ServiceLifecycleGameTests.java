@@ -9,6 +9,7 @@ import dev.vox.lss.common.processing.SlotType;
 import dev.vox.lss.common.processing.TickDiagnostics;
 import dev.vox.lss.config.LSSServerConfig;
 import dev.vox.lss.networking.payloads.BatchChunkRequestC2SPayload;
+import dev.vox.lss.networking.server.ServerReceiverGlue;
 import dev.vox.lss.networking.payloads.HandshakeC2SPayload;
 import dev.vox.lss.networking.payloads.SessionConfigS2CPayload;
 import dev.vox.lss.networking.payloads.VoxelColumnS2CPayload;
@@ -1801,5 +1802,44 @@ public class ServiceLifecycleGameTests {
             server.getPlayerList().remove(mock);
         }
         helper.succeed();
+    }
+    /**
+     * The chunk-load baseline's deferred path (xaero-scatter-remediation-plan.md WI-1b,
+     * review M1): a chunk loaded while nobody can seed it (no service yet — the spawn set
+     * loads before SERVER_STARTED — or the skip gate shut) is recorded by position and
+     * seeded from the REAL loaded chunk when the flush site opens, so its first save is
+     * suppressed instead of re-marking. Runs the real serializer against a real
+     * LevelChunk — the Tier 1 pins can only drive the position-explicit seam.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void pendingLoadSeedsFlushFromRealLoadedChunks(GameTestHelper helper) {
+        var level = helper.getLevel();
+        var server = level.getServer();
+        var pos = helper.absolutePos(new net.minecraft.core.BlockPos(0, 0, 0));
+        var chunk = level.getChunkSource().getChunkNow(pos.getX() >> 4, pos.getZ() >> 4);
+        Gt.assertTrue(helper, chunk != null,
+                    "premise: the structure's chunk is loaded");
+        var service = new RequestProcessingService(server);
+        try {
+            service.armSaveHookForTest();
+            ServerReceiverGlue.clearPendingLoadSeeds();
+            ServerReceiverGlue.onChunkLoaded(level, chunk, null); // no service: recorded, not seeded
+            Gt.assertTrue(helper, ServerReceiverGlue.pendingLoadSeedCount() == 1,
+                    "a load with no service records the position");
+            int seeded = ServerReceiverGlue.flushPendingLoadSeeds(server, service);
+            Gt.assertTrue(helper, seeded == 1,
+                    "the flush seeds the still-loaded chunk, got " + seeded);
+            Gt.assertTrue(helper, service.getDirtyContentFilter().getTotalSeededLoads() == 1,
+                    "seeded_load counts it");
+            String dimension = level.dimension().location().toString();
+            var obs = service.getDirtyContentFilter().observeSave(level, chunk, dimension);
+            Gt.assertTrue(helper, !(obs.changed()),
+                    "the chunk's first save after the load seed is suppressed (identical bytes)");
+            Gt.assertTrue(helper, ServerReceiverGlue.pendingLoadSeedCount() == 0,
+                    "flushed set is cleared");
+            helper.succeed();
+        } finally {
+            service.shutdown();
+        }
     }
 }
