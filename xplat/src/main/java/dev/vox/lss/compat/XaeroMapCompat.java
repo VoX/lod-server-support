@@ -214,6 +214,32 @@ final class XaeroMapCompat {
      *  never stop" violated with the sign flipped). 5% of the queue per 7 s ≈
      *  a ~59 col/s floor in the count regime / ~5/s in the ocean byte regime. */
     static final double BP_HALT_PROGRESS_EPS = 0.05;
+    // ---- the OWED set (xaero-scatter-remediation-plan.md WI-3, 2026-09-05; amends
+    // hybrid-scan-plan.md §12.8 bullet 3 as §12.10). Under a multi-region scatter
+    // (other players' far generation re-broadcast into this client's held columns)
+    // the queue fills with tiles whose Xaero REGION cannot take them yet — awaiting
+    // its file load, or not resting through the 60 s save/recache window — and the
+    // evictions that follow either burned ingest strikes (governed: four reports
+    // park the position for the session) or were SILENT permanent holes (wedged
+    // stream, deferred-tile expiry). The owed set keeps the DEBT without the bytes:
+    // an evicted position whose region the last pump saw awaiting is owed, and
+    // reported for its re-serve only when that region is loaded AND resting (or
+    // once at the TTL), so the re-serve lands when the writer can take it. ----
+
+    /** Owed REGIONS cap (insertion-ordered: the oldest debt — closest to its TTL —
+     *  goes first past the cap). A region is 32×32 chunks = 1024 tiles, so the
+     *  per-region axis never binds; the number of regions is the unbounded axis. */
+    static final int MAX_OWED_REGIONS = 256;
+    /** A region that never loads reports its debt ONCE at this age (bounded: at most
+     *  one re-serve per owed position per TTL — versus four strikes and a park). */
+    static final long OWED_TTL_MILLIS = 10 * 60_000L;
+    /** Owed positions RELEASED (reported) per pump — each report is one
+     *  {@code mc.execute} task and one want-set entry; an unbounded release of a
+     *  whole region (1024) would spike past {@code WANT_SET_BUDGET}. */
+    static final int OWED_REPORTS_PER_PUMP = 64;
+    /** Owed regions PROBED per pump (region monitor + three reflective reads each —
+     *  µs; the floor keeps a large owed set from walking every monitor per pump). */
+    static final int OWED_PROBES_PER_PUMP = FLUSH_PROBE_EXEMPT_FLOOR;
     /** Consecutive failures (commit-side or extraction-side) before the bridge
      *  latches dead for the SESSION (re-armed at disconnect). */
     static final int THROW_LATCH = 5;
@@ -519,6 +545,57 @@ final class XaeroMapCompat {
      *  commit loop never reached are unknown). */
     private volatile int regionsWaiting;
 
+    /** Owed-set key: dimension + region (the End/Nether reuse Overworld region
+     *  coords — the {@link PendingKey} lesson). ResourceKeys are interned. */
+    private record OwedKey(Object dimension, long regionKey) {}
+
+    /** One region's debt: positions shed without bytes, and the age of the oldest.
+     *  {@code positions} are REGION-scoped debts (released once the region is loaded
+     *  and resting); {@code busyTiles} are TILE-scoped ones (a deferral-expired tile
+     *  chunk — released only once ITS tile chunk is ready too, or a region-ready
+     *  release would re-serve straight back into the same busy tile and burn a
+     *  strike per DEFER_CAP interval, the §12 review's original objection). */
+    private static final class OwedRegion {
+        final long firstOwedMillis;
+        final it.unimi.dsi.fastutil.longs.LongOpenHashSet positions =
+                new it.unimi.dsi.fastutil.longs.LongOpenHashSet();
+        final it.unimi.dsi.fastutil.longs.LongOpenHashSet busyTiles =
+                new it.unimi.dsi.fastutil.longs.LongOpenHashSet();
+
+        OwedRegion(long firstOwedMillis) {
+            this.firstOwedMillis = firstOwedMillis;
+        }
+
+        int size() {
+            return this.positions.size() + this.busyTiles.size();
+        }
+
+        boolean isEmpty() {
+            return this.positions.isEmpty() && this.busyTiles.isEmpty();
+        }
+    }
+
+    /** Guards {@link #owed} and its gauges. Never nested inside {@link #queueLock}
+     *  or any Xaero monitor by the DECODE thread; the pump takes it inside Xaero's
+     *  renderPause monitor (as it does queueLock) — one order, no inversion. */
+    private final Object owedLock = new Object();
+    /** Insertion-ordered so the OLDEST debt is evicted first past the cap. */
+    private final LinkedHashMap<OwedKey, OwedRegion> owed = new LinkedHashMap<>();
+    /** The decode-thread evictor's classifier: region keys whose bucket the LAST pump
+     *  saw awaiting its Xaero load — published by the pump (Xaero state is main-
+     *  thread + region-monitor only; the evictor can read neither). A region absent
+     *  here is UNKNOWN and takes today's governed report — fail toward reporting. */
+    private volatile java.util.Set<Long> awaitingRegions = java.util.Set.of();
+    private final AtomicLong owedReported = new AtomicLong();
+    private volatile int owedGauge;        // positions, all regions
+    private volatile int owedRegionsGauge; // regions
+    private int owedRotation; // main thread only (the probe pass rotates like the drain)
+    // Test seams.
+    long owedTtlMillis = OWED_TTL_MILLIS;
+    int maxOwedRegions = MAX_OWED_REGIONS;
+    int owedReportsPerPump = OWED_REPORTS_PER_PUMP;
+    int owedProbesPerPump = OWED_PROBES_PER_PUMP;
+
     /** Owed-rebuild key: the DIMENSION is part of it (sweep B m2 — the End/Nether
      *  reuse the Overworld's tile-chunk coords around the origin; a coords-only key
      *  silently evicted the other dimension's entry). ResourceKeys are interned. */
@@ -613,6 +690,7 @@ final class XaeroMapCompat {
         // state (owed rebuilds, registration, the failure count) settles at the top of
         // the next pump, which runs on the title screen too.
         clearQueue();
+        clearOwed(); // WI-3: the session's debts die with it (a foreign report per position otherwise)
         this.consecutiveExtractFailures.set(0);
         this.dead = false;
         this.settingsGateBroken = false;
@@ -834,7 +912,10 @@ final class XaeroMapCompat {
         if (overflowed) {
             // Governed overflow is structurally ~0 (the halt fires at 75%); a stray
             // one self-heals via the reporter. OUTSIDE the lock (§18.1 discipline).
-            reportDroppedIfGoverned(dimension, chunkX, chunkZ);
+            // WI-3: a tile whose region the last pump saw awaiting is OWED instead —
+            // its re-serve lands once the region loads (an immediate report would
+            // re-serve into the same shed).
+            if (!shedToOwed(dimension, key)) reportDroppedIfGoverned(dimension, chunkX, chunkZ);
             return;
         }
         var tile = XaeroTileExtractor.extract(chunkX, chunkZ, worldBottomY, worldTopY, columnData);
@@ -857,6 +938,7 @@ final class XaeroMapCompat {
         long key = ((long) chunkX << 32) | (chunkZ & 0xFFFFFFFFL);
         int bytes = approxBytes(tile);
         java.util.ArrayList<Object[]> evictedOut = null;
+        boolean replaced = false;
         synchronized (this.queueLock) {
 
             // Re-check under the lock (sweep C MAJOR): a decode-thread tile that passed
@@ -868,7 +950,7 @@ final class XaeroMapCompat {
             if (this.dead || !this.enabled.getAsBoolean() || !this.sessionActive.getAsBoolean()) {
                 return;
             }
-                var existing = this.queue.get(key);
+            var existing = this.queue.get(key);
             if (existing != null) {
                 if (existing.dimension == dimension) {
                     this.queuedBytes += bytes - existing.bytes;
@@ -876,20 +958,22 @@ final class XaeroMapCompat {
                     existing.bytes = bytes;
                     existing.ladderReadyDeferrals = 0; // fresh serve = fresh patience
                     updateOccupancyLocked();
-                    return;
+                    replaced = true;
                 }
-                // Stale-dimension entry: the new serve replaces it (fresh Entry, so
-                // an in-flight pump pass's compare-and-remove cannot delete it).
-                // Counted + reported (§12 review: an uncounted silent foreign-dim
-                // drop broke the §12.1(c) self-heal claim at portals) — collected
-                // for the outside-the-lock report like the evictions.
-                this.queuedBytes -= existing.bytes;
-                this.queue.remove(key);
-                this.droppedStale.incrementAndGet();
-                if (evictedOut == null) evictedOut = new java.util.ArrayList<>();
-                evictedOut.add(new Object[]{existing.dimension, key, Boolean.TRUE});
+                if (!replaced) {
+                    // Stale-dimension entry: the new serve replaces it (fresh Entry, so
+                    // an in-flight pump pass's compare-and-remove cannot delete it).
+                    // Counted + reported (§12 review: an uncounted silent foreign-dim
+                    // drop broke the §12.1(c) self-heal claim at portals) — collected
+                    // for the outside-the-lock report like the evictions.
+                    this.queuedBytes -= existing.bytes;
+                    this.queue.remove(key);
+                    this.droppedStale.incrementAndGet();
+                    if (evictedOut == null) evictedOut = new java.util.ArrayList<>();
+                    evictedOut.add(new Object[]{existing.dimension, key, Boolean.TRUE});
+                }
             }
-            while (!this.queue.isEmpty()
+            while (!replaced && !this.queue.isEmpty()
                     && (this.queue.size() >= this.maxQueue
                         || this.queuedBytes + bytes > this.maxQueueBytes)) {
                 var it = this.queue.entrySet().iterator();
@@ -902,21 +986,289 @@ final class XaeroMapCompat {
                 if (evictedOut == null) evictedOut = new java.util.ArrayList<>();
                 evictedOut.add(new Object[]{evicted.getValue().dimension, evicted.getKey()});
             }
-            this.queuedBytes += bytes;
-            this.queue.put(key, new Entry(dimension, tile, bytes));
-            updateOccupancyLocked();
+            if (!replaced) {
+                this.queuedBytes += bytes;
+                this.queue.put(key, new Entry(dimension, tile, bytes));
+                updateOccupancyLocked();
+            }
         }
+        // WI-3 invariant: owed ∩ queue = ∅ — a fresh offer of an owed position pays
+        // the debt (its bytes are back), so a later release can never un-stamp the
+        // column the client just re-received. Both the insert and the latest-wins
+        // REPLACE path (a belt: the decode pipeline is one thread today, so a queued
+        // position is never owed — but the invariant must not rest on that). Outside
+        // queueLock (lock order).
+        forgetOwed(dimension, key);
+        if (replaced) return;
         if (evictedOut != null) {
             for (var e : evictedOut) {
                 long k = (Long) e[1];
                 if (e.length > 2) {
                     // stale-dimension replacement: unconditional (correctness)
                     reportDropped(e[0], (int) (k >> 32), (int) k);
-                } else {
+                } else if (!shedToOwed(e[0], k)) {
+                    // WI-3: an evicted tile whose region is awaiting its load, or
+                    // any eviction under the WEDGED full-rate stream (silent
+                    // permanent holes before), is OWED; the rest keep today's
+                    // governed report.
                     reportDroppedIfGoverned(e[0], (int) (k >> 32), (int) k);
                 }
             }
         }
+    }
+
+    // ---- WI-3: the owed set ----
+
+    static long regionKeyOf(int chunkX, int chunkZ) {
+        return (((long) (chunkX >> 5)) << 32) | ((chunkZ >> 5) & 0xFFFFFFFFL);
+    }
+
+    private static long regionKeyOfPacked(long packedChunk) {
+        return regionKeyOf((int) (packedChunk >> 32), (int) packedChunk);
+    }
+
+    /**
+     * Owe a shed position instead of reporting it, when the writer provably cannot
+     * take its bytes yet: its region was AWAITING its Xaero load at the last pump, or
+     * the stream is wedge-released (the writer is stuck; a report would re-serve into
+     * the same shed — silent holes until now). Governed only: with backpressure off
+     * the doctrine is "drops stay silent" and owing would hold debt nobody releases.
+     * Never under {@link #queueLock}. @return true if owed (caller must not report).
+     */
+    private boolean shedToOwed(Object dimension, long packedChunk) {
+        if (!this.backpressureEnabled.getAsBoolean()) return false;
+        long regionKey = regionKeyOfPacked(packedChunk);
+        if (!this.haltWedged && !this.awaitingRegions.contains(regionKey)) return false;
+        var key = new OwedKey(dimension, regionKey);
+        synchronized (this.owedLock) {
+            var region = this.owed.get(key);
+            if (region == null) {
+                while (this.owed.size() >= this.maxOwedRegions) {
+                    // Oldest debt first — closest to its TTL, and its positions were
+                    // already counted dropped at eviction; nothing to report here.
+                    var it = this.owed.entrySet().iterator();
+                    it.next();
+                    it.remove();
+                }
+                region = new OwedRegion(nowMillis());
+                this.owed.put(key, region);
+            }
+            region.positions.add(packedChunk);
+            updateOwedGaugesLocked();
+        }
+        return true;
+    }
+
+    /** Pay one position's debt (a fresh offer). Never under {@link #queueLock}. */
+    private void forgetOwed(Object dimension, long packedChunk) {
+        if (this.owedRegionsGauge == 0) return; // the common case: no debt at all
+        var key = new OwedKey(dimension, regionKeyOfPacked(packedChunk));
+        synchronized (this.owedLock) {
+            var region = this.owed.get(key);
+            if (region == null) return;
+            boolean a = region.positions.remove(packedChunk);
+            boolean b = region.busyTiles.remove(packedChunk); // both: never leave a tile-scoped twin
+            if (!a && !b) return;
+            if (region.isEmpty()) this.owed.remove(key);
+            updateOwedGaugesLocked();
+        }
+    }
+
+    /** Drop every debt, unreported (session end, world-id change — the map those
+     *  tiles belonged to is gone). Any thread. */
+    private void clearOwed() {
+        synchronized (this.owedLock) {
+            this.owed.clear();
+            updateOwedGaugesLocked();
+        }
+    }
+
+    /** Gauges recomputed from the set — O(regions), bounded by the region cap; called
+     *  once per mutation site OUTSIDE the hot per-offer path (forgetOwed returns
+     *  before touching the lock while no debt exists). */
+    private void updateOwedGaugesLocked() {
+        int n = 0;
+        for (var r : this.owed.values()) n += r.size();
+        this.owedGauge = n;
+        this.owedRegionsGauge = this.owed.size();
+    }
+
+    /**
+     * The owed-region PROBE pass (main thread, inside the ladder's renderPause
+     * monitor, right before the grant phase): owed regions have no queued bytes, so
+     * neither the bucket drain nor the grant phase would ever see them — this pass
+     * rotates through up to {@link #owedProbesPerPump} same-dimension owed regions
+     * and (a) RELEASES the debt of a region that is loaded AND resting — its
+     * positions are reported (≤ {@link #owedReportsPerPump} per pump, collected into
+     * {@link #deferredReports} so the un-stamps run outside every Xaero monitor)
+     * unless the stream is WEDGED (a burst of re-declarations must not join the
+     * full-rate release) — the client re-declares, the server re-serves, and the
+     * bytes land in a queue whose region can take them; (b) feeds an UNLOADED owed
+     * region into the grant phase's window (classified exactly like the commit
+     * probe) so a sparse scatter actually gets its regions loaded; (c) reports a
+     * region's debt ONCE at the TTL (governed) or discards it (ungoverned/foreign
+     * dimension). A position that is back in the queue by release time is simply
+     * forgotten — the invariant's belt for a multi-decode-thread race.
+     */
+    private void probeOwed(Object mp, Object dimensionId, List<WaitingRegion> waiting) {
+        List<OwedKey> keys;
+        synchronized (this.owedLock) {
+            if (this.owed.isEmpty()) return;
+            keys = new ArrayList<>(this.owed.keySet());
+        }
+        var waitingKeys = new java.util.HashSet<Long>();
+        for (var w : waiting) waitingKeys.add(w.regionKey());
+        long now = nowMillis();
+        boolean governed = this.backpressureEnabled.getAsBoolean();
+        int reportBudget = this.owedReportsPerPump;
+        int probes = 0;
+        int size = keys.size();
+        int start = Math.floorMod(this.owedRotation++, size);
+        for (int n = 0; n < size && probes < this.owedProbesPerPump && reportBudget > 0; n++) {
+            OwedKey key = keys.get((start + n) % size);
+            OwedRegion region;
+            synchronized (this.owedLock) {
+                region = this.owed.get(key);
+            }
+            if (region == null) continue;
+            boolean expired = now - region.firstOwedMillis > this.owedTtlMillis;
+            if (key.dimension() != dimensionId) {
+                // Foreign dimension: never probed (the map's region state is the
+                // CURRENT dimension's), never reported (a foreign report is a cache
+                // deletion per position in the manager); the debt waits for a return
+                // within the TTL and is discarded silently at it.
+                if (expired) discardOwed(key);
+                continue;
+            }
+            probes++;
+            boolean ready = false;
+            Outcome awaitingVerdict = null;
+            Object xaeroRegion = null;
+            try {
+                int regionX = (int) (key.regionKey() >> 32);
+                int regionZ = (int) key.regionKey();
+                xaeroRegion = this.h.getLeafMapRegion.invoke(mp, SURFACE_LAYER,
+                        regionX, regionZ, true);
+                if (xaeroRegion != null) {
+                    synchronized (xaeroRegion) {
+                        byte loadState = (byte) this.h.getLoadState.invoke(xaeroRegion);
+                        if (loadState == 2) {
+                            ready = (boolean) this.h.isResting.invoke(xaeroRegion);
+                        } else if ((boolean) this.h.canRequestReload.invoke(xaeroRegion)) {
+                            awaitingVerdict = Outcome.AWAITING_REQUESTABLE;
+                        } else {
+                            awaitingVerdict = loadState == 3 ? Outcome.AWAITING_PARKED
+                                    : Outcome.AWAITING_IN_FLIGHT;
+                        }
+                    }
+                }
+            } catch (Throwable t) {
+                if (t instanceof Error err && !(t instanceof AssertionError)) throw err;
+                noteFailure(t);
+                return;
+            }
+            if (ready || expired) {
+                if (!governed) {
+                    discardOwed(key); // ungoverned: drops stay silent (§12.8 doctrine)
+                    continue;
+                }
+                // Hold while the stream is wedge-released (a re-declaration burst must
+                // not join it) and while the queue is at its HALT occupancy (release
+                // means "the writer can take it" — the queue must have room too).
+                if (this.haltWedged || this.occupancy >= BP_HALT_OCCUPANCY) continue;
+                reportBudget -= releaseOwed(key, region, reportBudget, xaeroRegion, expired);
+            } else if (awaitingVerdict != null && !waitingKeys.contains(key.regionKey())) {
+                waiting.add(new WaitingRegion(key.regionKey(), region.size(), awaitingVerdict));
+            }
+        }
+    }
+
+    /**
+     * Report up to {@code budget} of one region's owed positions (collected for the
+     * outside-the-monitor drain); returns how many were taken. Region-scoped debts go
+     * first; tile-scoped ones only when their tile chunk is ready (loadState 2 and no
+     * PBO download pending — the commit's own DEFERRED_TILE predicate; a missing tile
+     * chunk is ready, the commit creates it) or at the TTL.
+     */
+    private int releaseOwed(OwedKey key, OwedRegion region, int budget, Object xaeroRegion,
+                            boolean expired) {
+        var taken = new it.unimi.dsi.fastutil.longs.LongArrayList();
+        long[] busy;
+        synchronized (this.owedLock) {
+            var it = region.positions.iterator();
+            while (it.hasNext() && taken.size() < budget) {
+                taken.add(it.nextLong());
+                it.remove();
+            }
+            busy = taken.size() < budget && !region.busyTiles.isEmpty()
+                    ? region.busyTiles.toLongArray() : null;
+        }
+        if (busy != null) {
+            // The tile-chunk probes take Xaero's REGION monitor — OUTSIDE owedLock
+            // (review M1: the decode thread takes owedLock per offer, and a region
+            // monitor is held across Xaero's own file IO). A tile re-offered between
+            // the snapshot and the re-take is simply no longer in the set.
+            var ready = new it.unimi.dsi.fastutil.longs.LongArrayList();
+            for (long packed : busy) {
+                if (ready.size() + taken.size() >= budget) break;
+                if (expired || tileChunkReady(xaeroRegion, packed)) ready.add(packed);
+            }
+            synchronized (this.owedLock) {
+                for (int i = 0; i < ready.size(); i++) {
+                    long packed = ready.getLong(i);
+                    if (region.busyTiles.remove(packed)) taken.add(packed);
+                }
+            }
+        }
+        synchronized (this.owedLock) {
+            if (region.isEmpty()) this.owed.remove(key);
+            updateOwedGaugesLocked();
+        }
+        int released = 0;
+        for (int i = 0; i < taken.size(); i++) {
+            long packed = taken.getLong(i);
+            synchronized (this.queueLock) {
+                if (this.queue.containsKey(packed)) continue; // its bytes are back: no debt
+            }
+            this.deferredReports.add(new Object[]{key.dimension(), (int) (packed >> 32), (int) packed});
+            released++;
+        }
+        this.owedReported.addAndGet(released);
+        return taken.size();
+    }
+
+    /** The commit's DEFERRED_TILE predicate, read for one owed position (region
+     *  monitor; a throw reads as not-ready — the debt simply waits). */
+    private boolean tileChunkReady(Object xaeroRegion, long packedChunk) {
+        if (xaeroRegion == null) return false;
+        int tileChunkX = ((int) (packedChunk >> 32)) >> 2;
+        int tileChunkZ = ((int) packedChunk) >> 2;
+        try {
+            synchronized (xaeroRegion) {
+                Object tileChunk = this.h.regionGetChunk.invoke(xaeroRegion, tileChunkX & 7, tileChunkZ & 7);
+                if (tileChunk == null) return true;
+                if ((int) this.h.tileChunkGetLoadState.invoke(tileChunk) != 2) return false;
+                return !(boolean) this.h.shouldDownloadFromPBO.invoke(
+                        this.h.getLeafTexture.invoke(tileChunk));
+            }
+        } catch (Throwable t) {
+            if (t instanceof Error err && !(t instanceof AssertionError)) throw err;
+            return false;
+        }
+    }
+
+    private void discardOwed(OwedKey key) {
+        synchronized (this.owedLock) {
+            if (this.owed.remove(key) != null) updateOwedGaugesLocked();
+        }
+    }
+
+    int owedForTest() {
+        return this.owedGauge;
+    }
+
+    java.util.Set<Long> awaitingRegionsForTest() {
+        return this.awaitingRegions;
     }
 
     /** Recompute the occupancy mirror. Caller holds {@link #queueLock}. */
@@ -1052,6 +1404,9 @@ final class XaeroMapCompat {
             case "rebuild_nanos_total" -> this.rebuildNanos.get();
             case "rebuild_nanos_max" -> this.rebuildNanosMax;
             case "drops_reported" -> this.dropsReported.get();
+            case "owed" -> this.owedGauge;
+            case "owed_regions" -> this.owedRegionsGauge;
+            case "owed_reported" -> this.owedReported.get();
             case "dropped_updates" -> this.droppedUpdates.get();
             case "dropped_unloaded" -> this.droppedUnloaded.get();
             case "skipped_settings" -> this.skippedSettings.get();
@@ -1103,6 +1458,9 @@ final class XaeroMapCompat {
                 + ", skipped_settings=" + this.skippedSettings.get()
                 + ", cave_layer_waits=" + this.caveLayerWaits.get()
                 + ", drops_reported=" + this.dropsReported.get()
+                + ", owed=" + this.owedGauge
+                + ", owed_regions=" + this.owedRegionsGauge
+                + ", owed_reported=" + this.owedReported.get()
                 + ", bp=" + bpToken()
                 + (this.xaeroCrashed ? ", xaero_crashed=true" : "")
                 + (this.settingsGateBroken ? ", settings_gate=broken" : "")
@@ -1146,7 +1504,10 @@ final class XaeroMapCompat {
             // "drainable again" and clear it — the idle fast-out must not bypass
             // it entirely.
             synchronized (this.queueLock) {
-                if (this.queue.isEmpty() && this.pendingUpdates.isEmpty()) {
+                // WI-3: an owed debt keeps the ladder running (its regions have no
+                // queued bytes — only the probe pass can observe them becoming ready).
+                if (this.queue.isEmpty() && this.pendingUpdates.isEmpty()
+                        && this.owedRegionsGauge == 0) {
                     this.regionsWaiting = 0;
                     this.undrainablePumps = 0; // idle: gate flaps here are meaningless
                     return;
@@ -1159,6 +1520,8 @@ final class XaeroMapCompat {
             // FIRST blocked-idle pump always runs (the deadlock-guard pin's shape);
             // any queued work re-forces every pump via the emptiness check.
             synchronized (this.queueLock) {
+                // (WI-3: an owed-only pump shares this ~1 Hz throttle — the debt cannot
+                // drain while blocked anyway, and §12.9's contention finding stands.)
                 if (this.queue.isEmpty() && this.pendingUpdates.isEmpty()
                         && this.blockedIdleSkips++ % 20 != 0) {
                     return;
@@ -1253,6 +1616,7 @@ final class XaeroMapCompat {
                 // §12.1(c): reported — the stamps must be forgotten or a return to
                 // that world never re-declares them.
                 this.droppedStale.addAndGet(clearQueueCollectingReports());
+                clearOwed(); // WI-3: the old world's debts are moot with it
             }
             this.lastWorldId = worldId;
             Object dimensionId;
@@ -1472,8 +1836,7 @@ final class XaeroMapCompat {
         }
         var buckets = new LinkedHashMap<Long, List<Pending>>(); // keeps spiral locality
         for (var pending : snapshot) {
-            long regionKey = (((long) (pending.tile().chunkX() >> 5)) << 32)
-                    | ((pending.tile().chunkZ() >> 5) & 0xFFFFFFFFL);
+            long regionKey = regionKeyOf(pending.tile().chunkX(), pending.tile().chunkZ());
             buckets.computeIfAbsent(regionKey, k -> new ArrayList<>()).add(pending);
         }
 
@@ -1542,6 +1905,10 @@ final class XaeroMapCompat {
                         if (++pending.entry().ladderReadyDeferrals > this.deferCap
                                 && removeIfCurrent(pending.key(), pending.entry(), pending.tile())) {
                             this.droppedExpired.incrementAndGet();
+                            // WI-3: the silent hole becomes a DEBT — released once the
+                            // region (whose tile chunk was busy) is loaded and resting,
+                            // never a strike against the stalled resource.
+                            oweExpired(pending.entry().dimension, pending.key(), regionKey);
                         }
                     }
                     case DEFERRED -> {
@@ -1580,10 +1947,41 @@ final class XaeroMapCompat {
                 }
             }
         }
+        probeOwed(mp, dimensionId, waiting);
         if (!capped) {
-            this.regionsWaiting = waiting.size(); // a capped pass probed nothing: keep the last gauge
+            // A capped pass probed nothing: keep the last gauge + classifier. Published
+            // AFTER the owed feed so regions_waiting= reports the whole grant input.
+            this.regionsWaiting = waiting.size();
+            if (waiting.isEmpty()) {
+                this.awaitingRegions = java.util.Set.of();
+            } else {
+                var awaiting = new java.util.HashSet<Long>();
+                for (var w : waiting) awaiting.add(w.regionKey());
+                this.awaitingRegions = awaiting;
+            }
         }
         grantLoads(mp, saveLoad, waiting);
+    }
+
+    /** Owe a deferral-expired tile (pump side; governed only, like every owe) — a
+     *  TILE-scoped debt: released once its own tile chunk is ready. */
+    private void oweExpired(Object dimension, long packedChunk, long regionKey) {
+        if (!this.backpressureEnabled.getAsBoolean()) return;
+        var key = new OwedKey(dimension, regionKey);
+        synchronized (this.owedLock) {
+            var region = this.owed.get(key);
+            if (region == null) {
+                while (this.owed.size() >= this.maxOwedRegions) {
+                    var it = this.owed.entrySet().iterator();
+                    it.next();
+                    it.remove();
+                }
+                region = new OwedRegion(nowMillis());
+                this.owed.put(key, region);
+            }
+            region.busyTiles.add(packedChunk);
+            updateOwedGaugesLocked();
+        }
     }
 
     /**
