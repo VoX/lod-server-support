@@ -94,6 +94,10 @@ public class RequestProcessingService {
     // players silently dead behind one log line). The vanish bridge is the reflective
     // Melius Vanish ladder (far-player-render-hardening-plan.md WI-7b); see the ctor.
     private final dev.vox.lss.common.farplayers.FarPlayerBroadcastService farPlayerService;
+    /** Per-tick vanish memo for the far-player visibility predicate (review fold B3);
+     *  the broadcast runs on the server tick thread. */
+    private final java.util.Map<java.util.UUID, Boolean> vanishMemo = new java.util.HashMap<>();
+    private int vanishMemoTick = -1;
     private int farPlayerTickCounter;
     // Compressed-column shipping is live: useCompressedColumns AND the server-side zstd
     // native probe succeeded (latched once in the ctor — plan §0.11). A term of every
@@ -158,6 +162,17 @@ public class RequestProcessingService {
         this.farPlayerService = new dev.vox.lss.common.farplayers.FarPlayerBroadcastService(
                 (viewer, target) -> {
                     if (!dev.vox.lss.compat.MeliusVanishBridge.present()) return true;
+                    // Review fold B3: one isVanished per TARGET per tick (the plan's memo),
+                    // not per viewer×target pair; the per-observer query only for the vanished.
+                    int tick = server.getTickCount();
+                    if (vanishMemoTick != tick) {
+                        vanishMemo.clear();
+                        vanishMemoTick = tick;
+                    }
+                    if (!vanishMemo.computeIfAbsent(target,
+                            t -> dev.vox.lss.compat.MeliusVanishBridge.isVanished(server, t))) {
+                        return true;
+                    }
                     var observer = server.getPlayerList().getPlayer(viewer);
                     return observer != null
                             && dev.vox.lss.compat.MeliusVanishBridge.canSee(server, observer, target);

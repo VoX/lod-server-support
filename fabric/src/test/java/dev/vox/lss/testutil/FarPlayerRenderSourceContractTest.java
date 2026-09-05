@@ -7,6 +7,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -37,6 +38,15 @@ class FarPlayerRenderSourceContractTest {
         String src = Files.readString(twin);
         if (!src.contains("RENDER_AVAILABLE = true")) return; // a stub line — nothing to pin
         pin(src, "neoforge");
+        // NeoForge-only clauses (review folds D2/C4): the nameplate-distance attribute both ways
+        // (a server-shortened range hides, a server-raised range defers to vanilla's own tag),
+        // and every per-proxy containment restores the pose sentinel.
+        assertTrue(src.contains("realPlayer.getAttribute(NeoForgeMod.NAMETAG_DISTANCE)")
+                        && src.contains("if (range < 64.0) continue;")
+                        && src.contains("if (range > 64.0 && cameraDistanceSq < range * range) continue;"),
+                "neoforge: the NAMETAG_DISTANCE attribute must be honoured in both directions");
+        assertEquals(4, count(src, "restorePose(poseStack, passMark);"),
+                "neoforge: three per-proxy drops + the mount catch must restore the pose sentinel");
     }
 
     private static void pin(String src, String tree) throws java.io.IOException {
@@ -62,47 +72,75 @@ class FarPlayerRenderSourceContractTest {
         // WI-5: the model-parts byte, all layers but the cape (cloak physics never run) unless elytra.
         assertTrue(src.contains("(byte) (elytra ? 0x7F : 0x7E)"),
                 tree + ": the model-parts byte must expose the overlay layers (cape only with an elytra)");
-        // WI-6: own name tag — depth-tested only, sneak-hidden, sqrt-scaled; vanilla's path off.
+        // WI-6: own name tag — depth-tested only, sneak-hidden, sqrt-scaled, camera-distance based
+        // (review fold F1); vanilla's path off.
         assertTrue(src.contains("Font.DisplayMode.NORMAL") && !src.contains("SEE_THROUGH"),
                 tree + ": the far name tag is depth-tested only (no see-through pass)");
         assertTrue(src.contains("FarPlayerWire.POSE_SNEAK) != 0) return;"),
                 tree + ": sneaking far players show no tag");
-        assertTrue(src.contains("Math.clamp(Math.sqrt(tag.distance() / 64.0), 1.0, 8.0)"),
-                tree + ": the tag scale rule is sqrt(d/64) clamped to [1, 8]");
+        assertTrue(src.contains("0.025f * (float) Math.clamp(Math.sqrt(cameraDistance / 64.0), 1.0, 8.0)"),
+                tree + ": the tag scale rule is 0.025 × sqrt(d/64) clamped to [1, 8], d = camera distance");
         assertTrue(src.contains("this.setCustomNameVisible(false);") && !src.contains("setCustomName("),
                 tree + ": vanilla's tag path stays off and the name is cached, not re-set per frame");
-        // WI-6 live-rig folds (2026-09-04): the plate/glyph z-fight fix is a SECOND glyph-only
-        // draw on a plane lifted toward the camera by a distance-scaled margin, and the tag gap
-        // between vanilla's 64-block cap and the tracking radius is filled for tracked players.
-        assertTrue(src.contains("Math.clamp(tag.distance() * tag.distance() * 1.5e-5, 0.05, 24.0)")
-                        && src.contains("new Matrix4f(matrix).translate(0.0f, 0.0f, liftBlocks / scale)")
-                        && src.contains("Font.DisplayMode.NORMAL, 0, tag.light())"),
-                tree + ": the second, glyph-only tag draw must sit on the lifted plane");
+        // Live-rig fold (a): the plate/glyph z-fight fix is a SECOND, glyph-only draw in
+        // POLYGON_OFFSET mode (vanilla's outline idiom), all first draws before all second ones.
+        assertTrue(src.contains("Font.DisplayMode.NORMAL, true);")
+                        && src.contains("Font.DisplayMode.POLYGON_OFFSET, false);")
+                        && src.contains("withPlate ? background : 0, tag.light());"),
+                tree + ": the second, glyph-only tag draw must use POLYGON_OFFSET and no plate");
+        assertTrue(src.contains("        poseStack.pushPose();\n        try {")
+                        && src.contains("        } finally {\n            poseStack.popPose();\n        }"),
+                tree + ": the tag draw's push must be unwound in a finally (fold D1)");
+        // Fold (b): the 64..tracking-radius gap — tracked players past vanilla's cap get the LSS
+        // tag under vanilla's ladder, camera-distance based, only where vanilla drew a body.
+        assertTrue(src.contains("boolean nameTags = config.farPlayersNameTags && Minecraft.renderNames();"),
+                tree + ": every tag (proxy or real) must honour the hide-GUI key (fold D3)");
         assertTrue(src.contains("for (var realPlayer : level.players())")
                         && src.contains("if (active.contains(realPlayer.getUUID())) continue;")
-                        && src.contains("< 64.0 * 64.0) continue;")
-                        && src.contains("if (!vanillaNameVisibleIgnoringDistance(realPlayer, localPlayer)) continue;"),
+                        && src.contains("isSectionCompiled(realPlayer.blockPosition())) continue;")
+                        && src.contains("double cameraDistanceSq = cameraPosition.distanceToSqr(realPosition);")
+                        && src.contains("if (cameraDistanceSq < 64.0 * 64.0) continue;")
+                        && src.contains("if (!vanillaNameVisibleIgnoringDistance(realPlayer, localPlayer)) continue;")
+                        && src.contains("Mth.lerp(partialTick, realPlayer.xOld, realPlayer.getX())"),
                 tree + ": tracked players past vanilla's 64-block cap get the LSS tag under vanilla's ladder");
-        assertTrue(src.contains("queueProxyTag(pendingTags, frustum, nameTags, tracked, proxy, position, distance, light);"),
-                tree + ": proxy tags still route through the option + sneak gate");
-        // Walk-cycle stop on this MC (no WalkAnimationState.stop()): setSpeed(0) alone leaves
-        // speedOld stale and the renderer sawtooths the limb swing at 20 Hz — the stop helper
-        // must also copy the zero into speedOld via update(0, 1) (live rig 2026-09-04).
-        assertTrue(src.contains("this.walkAnimation.setSpeed(0.0f);\n            this.walkAnimation.update(0.0f, 1.0f);")
-                        && !src.contains("this.walkAnimation.setSpeed(0.0f); //"),
-                tree + ": every walk-cycle stop must go through stopWalkAnimation() (setSpeed + update(0, 1))");
+        assertTrue(src.contains("queueProxyTag(pendingTags, frustum, nameTags, tracked, proxy, localPlayer, position, light);")
+                        && src.contains("if (!vanillaNameVisibleIgnoringDistance(proxy, localPlayer)) return;"),
+                tree + ": proxy tags route through the option + sneak gate AND vanilla's team ladder (fold D3)");
+        // Fold (c): the walk-cycle stop on this MC (no WalkAnimationState.stop()) — setSpeed(0)
+        // alone leaves speedOld stale and the renderer sawtooths the limb swing at 20 Hz; the
+        // ONE setSpeed(0) in the file must be the helper's, followed by update(0, 1)
+        // (WalkAnimationStopTest pins the mechanism behaviourally).
+        assertTrue(src.contains("this.walkAnimation.setSpeed(0.0f);\n            this.walkAnimation.update(0.0f, 1.0f);"),
+                tree + ": stopWalkAnimation() must be setSpeed(0) + update(0, 1)");
+        assertEquals(1, count(src, "setSpeed(0.0f)"),
+                tree + ": every walk-cycle stop must go through stopWalkAnimation() (one setSpeed(0) in the file)");
         // Fold (d): the other tick-only render inputs — the FALL_FLYING shared flag + fall-fly
-        // ticks (glide tilt, spread wings) and the swim amount (swimming roll + stroke) are
-        // advanced by the proxy itself, once per tick, since LivingEntity.tick() never runs.
+        // ticks (glide tilt, spread wings), the swim amount (swimming roll + stroke) and the
+        // water flag behind the swim pitch term — advanced by the proxy itself, once per tick.
         assertTrue(src.contains("this.setSharedFlag(SHARED_FLAG_FALL_FLYING, gliding);")
                         && src.contains("this.fallFlyTicks = gliding ? Math.min(this.fallFlyTicks + 1, 10) : 0;")
-                        && src.contains("swim.lss$setSwimAmountO(swimAmount);"),
-                tree + ": glide flag/ticks and swim amount must be faked per tick on the proxy");
-        for (String cfg : new String[] {"fabric/src/main/resources/lss.mixins.json",
-                "neoforge/src/main/resources/lss.neoforge.mixins.json"}) {
-            assertTrue(Files.readString(RepoPaths.locate(cfg)).contains("\"AccessorLivingEntity\""),
-                    cfg + ": AccessorLivingEntity must be listed (an unlisted accessor compiles but"
-                            + " ClassCastExceptions at the first swimming proxy)");
-        }
+                        && src.contains("swim.lss$setSwimAmountO(swimAmount);")
+                        && src.contains("this.wasTouchingWater = swimming;"),
+                tree + ": glide flag/ticks, swim amount and the water flag must be faked per tick on the proxy");
+        // Fold (e): armor/held items are depth-lifted through the wrapping buffer source (the
+        // skin's own type passes through), the overlay layers are distance-gated.
+        assertEquals(2, count(src, "new LiftedBufferSource(bufferSource, skinRenderType(dispatcher, proxy),"),
+                tree + ": both proxy draws must go through the lifting buffer source");
+        assertTrue(src.contains("if (type == skinType) return buffer;")
+                        && src.contains("Math.clamp(distance * distance * 6e-6, 0.02, 4.0)")
+                        && src.contains("OVERLAY_MAX_DISTANCE_BLOCKS = 80.0")
+                        && src.contains("(byte) (elytra ? 0x7F : 0x7E)"),
+                tree + ": the skin buffer is never lifted, the lift is distance-scaled, overlays are gated");
+        // Fold (D1): the pass runs above a sentinel pose and every containment restores to it.
+        assertTrue(src.contains("passMark = poseStack == null ? null : markPose(poseStack);")
+                        && src.contains("if (passMark != null) unwindPose(poseStack, passMark);")
+                        && src.contains("restorePose(poseStack, passMark);"),
+                tree + ": the pose-stack sentinel must guard the whole pass and its containments");
+    }
+
+    private static int count(String src, String needle) {
+        int n = 0;
+        for (int i = src.indexOf(needle); i >= 0; i = src.indexOf(needle, i + needle.length())) n++;
+        return n;
     }
 }

@@ -226,7 +226,8 @@ public class LSSClientConfig extends JsonConfig {
     public int farPlayersMaxRenderDistanceBlocks = 0;
     /** Walk-animation distance cap in blocks (0 = never animate; animation far out is
      *  invisible sub-pixel work — 512 since 2026-09-04, user decision after the live rig:
-     *  256 cut the walk cycle while a proxy was still clearly a walking figure). */
+     *  256 cut the walk cycle while a proxy was still clearly a walking figure). Deliberately
+     *  NO options-page row — a config-file knob. */
     public int farPlayersMaxAnimationDistanceBlocks = 512;
 
     @Override

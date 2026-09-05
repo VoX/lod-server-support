@@ -77,6 +77,8 @@ class ClientOptionCatalogTest {
         assertTrue(missing.isEmpty(), "catalog keys missing from en_us.json: " + missing);
     }
 
+    /** Pins the KEY SETS only — a value copied verbatim from English still passes; translation
+     *  coverage is a human job. */
     @Test
     void everyLangFileCarriesTheSameKeys() throws IOException {
         // The zh files are REAL translations, not English copies, and nothing else pins their

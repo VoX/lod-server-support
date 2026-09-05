@@ -33,8 +33,10 @@ class LSSNeoPermissionsContractTest {
                 "the LSS node must be minted from the shared constant");
         assertTrue(src.contains("node(LSSPermissions.SERVICE_VSS)"),
                 "the VSS node must be minted from the shared constant");
-        assertTrue(src.contains("(player, uuid, contexts) -> true"),
-                "the default resolver must answer TRUE — arming the gate alone denies nobody");
+        assertTrue(java.util.regex.Pattern.compile("node\\(String name\\)[\\s\\S]{0,400}?\\(player, uuid, contexts\\) -> true")
+                        .matcher(src).find(),
+                "node()'s resolver must answer TRUE — arming the gate alone denies nobody (scoped to the"
+                        + " helper — review fold B2: a swap with denyNode() must red)");
         assertTrue(src.contains("PermissionTypes.BOOLEAN"), "boolean-typed nodes");
     }
 
@@ -48,8 +50,10 @@ class LSSNeoPermissionsContractTest {
         assertTrue(src.contains("denyNode(LSSPermissions.FARPLAYERS_HIDDEN_LSS)")
                         && src.contains("denyNode(LSSPermissions.FARPLAYERS_HIDDEN_VSS)"),
                 "both hide spellings must be minted from the shared constants as deny nodes");
-        assertTrue(src.contains("(player, uuid, contexts) -> false"),
-                "the hide nodes' default resolver must answer FALSE (nobody is hidden by default)");
+        assertTrue(java.util.regex.Pattern.compile("denyNode\\(String name\\)[\\s\\S]{0,400}?\\(player, uuid, contexts\\) -> false")
+                        .matcher(src).find(),
+                "denyNode()'s resolver must answer FALSE (nobody is hidden by default; scoped to the"
+                        + " helper — review fold B2)");
     }
 
     @Test
@@ -68,7 +72,8 @@ class LSSNeoPermissionsContractTest {
     void theQueryUsesTheRegisteredInstancesAndTheSeamRoutesToIt() throws IOException {
         String perms = read("neoforge/src/main/java/dev/vox/lss/neoforge/LSSNeoPermissions.java");
         assertTrue(perms.contains("PermissionAPI.getPermission(player, node)"),
-                "the query is instance-keyed — an equal-named copy would throw unregistered");
+                "the query passes the REGISTERED node instances (PermissionNode equality is name+type,"
+                        + " so this pins the routing, not identity)");
         assertTrue(perms.contains("? SERVICE_LSS")
                         && perms.contains("? SERVICE_VSS")
                         && perms.contains("? FARPLAYERS_HIDDEN_LSS")

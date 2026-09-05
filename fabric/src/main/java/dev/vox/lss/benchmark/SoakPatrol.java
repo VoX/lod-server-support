@@ -28,6 +28,16 @@ final class SoakPatrol {
     static void install() {
         String spec = System.getProperty("lss.soak.patrol", "");
         if (spec.isBlank()) return;
+        try {
+            arm(spec);
+        } catch (RuntimeException e) {
+            // Review fold C6: a malformed spec must not kill the soak client's snapshot/disconnect
+            // hooks (registered after this call) — log loudly and run without a patrol.
+            LSSLogger.error("[Soak] Patrol NOT armed — " + e.getMessage(), e);
+        }
+    }
+
+    private static void arm(String spec) {
         List<double[]> waypoints = new ArrayList<>();
         try {
             for (String point : spec.split(";")) {

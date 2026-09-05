@@ -6,10 +6,14 @@
 
 ### Bug Fixes
 
-- **Far players no longer render black.** Far players standing between your server's simulation distance and your render distance could render fully dark in daylight. They are now lit like the distant terrain around them.
-- **Far players show every skin layer.** Hats, jackets, sleeves and pants layers were missing on far player models.
+- **Far players no longer render black.** Far players in some of the chunks your client has loaded could render fully dark in daylight. They are now lit as if under open sky.
+- **Far players show their skin overlay layers.** Hats, jackets, sleeves and pants now show on far player models within about 80 blocks (capes only with an elytra).
+- **Armor and held items on far players no longer flicker.** Far away, armor used to z-fight the body underneath it.
 - **Far players glide, swim and stop walking properly.** Gliding far players now tilt with their wings spread and swimming ones swim instead of standing upright, and a far player past the animation distance now stands still instead of jittering.
-- **Far players outside your view are skipped.** Far players behind the camera are no longer drawn.
+
+### Performance
+
+- **Far players outside your view are skipped.** Far players behind the camera no longer cost draw calls.
 
 ### Configuration
 

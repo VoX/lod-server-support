@@ -68,9 +68,30 @@ public final class MeliusVanishBridge {
     }
 
     /**
+     * Whether {@code target} is vanished under Melius. {@code false} when the API is absent;
+     * {@code true} (HIDDEN) when the surface drifted or the query throws. The broadcast service
+     * memoizes this per target per tick (review fold B3) — it is the cheap pre-filter before
+     * the per-observer {@link #canSee}.
+     */
+    public static boolean isVanished(MinecraftServer server, UUID target) {
+        resolve();
+        if (state == -1) return false;
+        if (state == -2) return true;
+        try {
+            return (boolean) isVanishedHandle.invoke(server, target);
+        } catch (Throwable t) {
+            if (t instanceof VirtualMachineError vme) throw vme;
+            warnInvoke(t);
+            return true;
+        }
+    }
+
+    /**
      * Whether {@code observer} may see {@code target} under Melius's rules. {@code true}
      * when the API is absent; {@code false} (HIDDEN) when it is present but unusable or
-     * the query throws.
+     * the query throws. Review fold B4: the two handles bind INDEPENDENTLY — when only
+     * {@code isVanished} resolves (a renamed {@code canSeePlayer}), vanished targets hide from
+     * everyone and nobody else does, instead of a whole-server blackout.
      */
     public static boolean canSee(MinecraftServer server, ServerPlayer observer, UUID target) {
         resolve();
@@ -78,16 +99,21 @@ public final class MeliusVanishBridge {
         if (state == -2) return false;
         try {
             if (!(boolean) isVanishedHandle.invoke(server, target)) return true;
+            if (canSeePlayerHandle == null) return false; // partial drift: vanished = hidden from all
             return (boolean) canSeePlayerHandle.invoke(server, target, observer);
         } catch (Throwable t) {
             if (t instanceof VirtualMachineError vme) throw vme;
-            if (!invokeWarned) {
-                invokeWarned = true;
-                LSSLogger.warn("Melius Vanish query threw — treating the target as HIDDEN from"
-                        + " far players (the fail-safe direction; a vanished player must never"
-                        + " leak). One warn per session (" + t + ")");
-            }
+            warnInvoke(t);
             return false;
+        }
+    }
+
+    private static void warnInvoke(Throwable t) {
+        if (!invokeWarned) {
+            invokeWarned = true;
+            LSSLogger.warn("Melius Vanish query threw — treating the target as HIDDEN from"
+                    + " far players (the fail-safe direction; a vanished player must never"
+                    + " leak). One warn per session (" + t + ")");
         }
     }
 
@@ -95,25 +121,56 @@ public final class MeliusVanishBridge {
         if (state != 0) return;
         synchronized (MeliusVanishBridge.class) {
             if (state != 0) return;
+            Class<?> api;
             try {
-                Class<?> api = classResolver.resolve(API_CLASS);
-                var lookup = MethodHandles.publicLookup();
-                isVanishedHandle = lookup.findStatic(api, "isVanished",
-                        MethodType.methodType(boolean.class, MinecraftServer.class, UUID.class));
-                canSeePlayerHandle = lookup.findStatic(api, "canSeePlayer",
-                        MethodType.methodType(boolean.class, MinecraftServer.class, UUID.class,
-                                ServerPlayer.class));
-                state = 1;
-                LSSLogger.info("Melius Vanish detected — vanished players are filtered from"
-                        + " far-player rendering");
+                api = classResolver.resolve(API_CLASS);
             } catch (ClassNotFoundException absent) {
                 state = -1; // the ordinary no-vanish-mod install — quiet
+                return;
             } catch (Throwable t) {
                 if (t instanceof VirtualMachineError vme) throw vme;
                 state = -2;
+                LSSLogger.warn("Melius Vanish is present but its VanishAPI class failed to load"
+                        + " — EVERY player is hidden from far-player rendering until LSS is"
+                        + " updated for this Melius version (fail-safe direction) (" + t + ")");
+                return;
+            }
+            var lookup = MethodHandles.publicLookup();
+            MethodHandle vanished = null;
+            MethodHandle canSee = null;
+            Throwable drift = null;
+            try {
+                vanished = lookup.findStatic(api, "isVanished",
+                        MethodType.methodType(boolean.class, MinecraftServer.class, UUID.class));
+            } catch (Throwable t) {
+                if (t instanceof VirtualMachineError vme) throw vme;
+                drift = t;
+            }
+            try {
+                canSee = lookup.findStatic(api, "canSeePlayer",
+                        MethodType.methodType(boolean.class, MinecraftServer.class, UUID.class,
+                                ServerPlayer.class));
+            } catch (Throwable t) {
+                if (t instanceof VirtualMachineError vme) throw vme;
+                drift = drift == null ? t : drift;
+            }
+            isVanishedHandle = vanished;
+            canSeePlayerHandle = canSee;
+            if (vanished == null) {
+                state = -2;
                 LSSLogger.warn("Melius Vanish is present but its VanishAPI surface was not found"
                         + " (API drift?) — EVERY player is hidden from far-player rendering until"
-                        + " LSS is updated for this Melius version (fail-safe direction) (" + t + ")");
+                        + " LSS is updated for this Melius version (fail-safe direction) (" + drift + ")");
+            } else {
+                state = 1;
+                if (canSee == null) {
+                    LSSLogger.warn("Melius Vanish detected, but canSeePlayer did not resolve (API"
+                            + " drift?) — vanished players are hidden from EVERY far-player viewer,"
+                            + " per-observer exemptions are unavailable (" + drift + ")");
+                } else {
+                    LSSLogger.info("Melius Vanish detected — vanished players are filtered from"
+                            + " far-player rendering");
+                }
             }
         }
     }

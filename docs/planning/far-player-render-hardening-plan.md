@@ -251,10 +251,13 @@ enumerates the deltas; WI-3 adds one (the frustum source) — the row is updated
 > step (24-bit depth, 0.05 near: one step ≈ d²·1.2e-6 blocks — 0.03 blocks at 160), so the
 > depth-tested plate and glyphs z-fight and the text flickers white/grey. Vanilla never hits it
 > because its plate lives in the see-through pass this WI deliberately dropped. Fix: TWO draws —
-> plate+glyphs as laid out, then the glyphs alone (background 0) on a plane lifted TOWARD the
-> camera (local +z after `mulPose(cameraOrientation)`; `Camera.FORWARDS` is −z) by
-> `clamp(d²·1.5e-5, 0.05, 24)` blocks (~12 steps; sub-pixel in perspective). 26.x ports carry the
-> same structure with `submitText` (background param on the first submit only).
+> plate+glyphs as laid out, then the glyphs alone (background 0) in `Font.DisplayMode.POLYGON_OFFSET`
+> (vanilla's outline idiom — `glPolygonOffset(-1, -10)`: ≥10 depth units nearer, resolution-adaptive on
+> every depth format, zero perspective shift, no see-through window; the v3 panel's replacement for the
+> geometric lift first shipped, which cheated up to 24 blocks toward the camera past ~1265 blocks). All
+> first draws, then all second draws (one shared-batch switch per frame). Scale and depth math use the
+> CAMERA distance (freecam/replay). 26.x ports carry the same structure with `submitText` (background
+> param on the first submit only; the display-mode enum exists there too).
 > (b) **The 64..tracking-radius tag gap.** Inside the entity-tracking radius the REAL player is
 > vanilla's to draw (the handoff), but vanilla caps its tag at 64 blocks — so with server vd 6 the
 > tag vanished between 64 and 96 blocks. Fix: after the proxy loop, tag every `level.players()`
@@ -285,6 +288,30 @@ enumerates the deltas; WI-3 adds one (the frustum source) — the row is updated
 > frozen oars on a rowing mount, cosmetic). The 26.x/1.21.11 ports must carry (d) too — their
 > render-state extraction reads the same entity fields.
 > Also: `farPlayersMaxAnimationDistanceBlocks` default 256 → **512** (user decision on the rig).
+> (e) **Armor z-fight (SoakPlayer in armor).** Vanilla's armor is a 1/16-block shell (leggings 1/32),
+> the skin overlays 1/64; one depth step ≈ d²·1.2e-6 blocks, so armor fights the body past ~160-230
+> blocks and overlays past ~80. Fix: `LiftedBufferSource` wraps the buffer source for the two proxy
+> draws and pulls every NON-skin render type (armor, trims, glint, elytra, held items) toward the
+> camera by `clamp(d²·6e-6, 0.02, 4)` blocks ALONG EACH VERTEX'S VIEW RAY (screen-exact — the
+> projection is radial about the camera, the origin of the camera-relative pose; a fresh consumer per
+> `getBuffer` because a foil item holds two at once). The skin's own type (`model.renderType(skin)`)
+> passes through untouched, so the overlay layers are gated by `OVERLAY_MAX_DISTANCE_BLOCKS` = 80
+> (base skin only beyond; the cape bit still rides with an elytra). Mounts are not wrapped.
+> (f) **Pose-stack leak = client crash (v3 panel MAJOR).** A throw inside `dispatcher.render` or the
+> tag draw leaves pushes on vanilla's pose stack; `LevelRenderer.checkPoseStack` throws "Pose stack
+> not empty" AFTER the pass returns, outside every containment. Fix: the pass runs above a sentinel
+> (`markPose`) unwound in a finally; every per-proxy/per-mount containment `restorePose`s to it before
+> continuing the frame; the tag draw pops in a finally.
+> (g) **v3 panel folds (2026-09-04, 1 Fable + 4 Opus, §8 round 2):** proxy tags honour the hide-GUI
+> key and vanilla's team/invisibility ladder like the gap fill; the gap fill lerps from `xOld` (the
+> render basis), skips players in uncompiled sections, uses the camera distance for the 64² clause;
+> NeoForge honours a server-RAISED `NAMETAG_DISTANCE` too (no double tag); `wasTouchingWater` follows
+> the swim flag (pitch term); the tag anchor is resolved once per tag; the Melius handles bind
+> independently (partial drift hides vanished players only) and `isVanished` is memoized per target
+> per tick; `SoakPatrol` never throws out of the soak hook. Accepted-open: display-name allocation
+> per real player per frame, `culled` mixing proxies and mounts, NeoForge's per-frame proxy rebuild
+> under a persistently-throwing listener, boat paddles/elytra banking, the proxy-tag/vanilla-tag
+> double at exactly 64 blocks or under a tag-range-extending mod.
 
 - Why own-draw: F6(b) — vanilla can never draw a tag for a proxy on any line. There is no
   vanilla fallback to keep.
@@ -590,21 +617,41 @@ the cluster work in §4.2** — the port is not done until each row is ticked pe
 
 | # | Fold | Files (1.21.1) | Port notes |
 |---|------|----------------|------------|
-| 1 | WI-6 (a) two-draw tag: glyph-only second draw on a plane lifted toward the camera by `clamp(d²·1.5e-5, 0.05, 24)` blocks | `FarPlayerRenderer` twins `renderFarNameTag` | 26.x: two `submitText` calls, background on the FIRST only; the lift is a `Matrix4f.translate` on the local +z (camera-billboarded frame) on every line |
+| 1 | WI-6 (a) two-draw tag: glyph-only second draw in `POLYGON_OFFSET` display mode, all first draws then all second draws, camera-distance scale | `FarPlayerRenderer` twins `renderFarNameTag` + the two tag loops | 26.x: two `submitText` calls, background on the FIRST only, the second in POLYGON_OFFSET mode |
 | 2 | WI-6 (b) tag gap fill: LSS tags vanilla-tracked players past 64 blocks under vanilla's `shouldShowName` ladder minus its distance clause; skip local/camera player, `active` proxies, sneaking, mounted (`isVehicle`); NeoForge respects a server-shortened `NAMETAG_DISTANCE` | `FarPlayerRenderer` twins (the loop before the tag draw + `vanillaNameVisibleIgnoringDistance`) | Fabric on all four lines; the NeoForge twins there are stubs (`RENDER_AVAILABLE=false`), so the NAMETAG_DISTANCE clause stays 1.21.1-only until a NeoForge renderer exists there. 26.x: position from the render-state / `getPosition(partialTick)`, tag anchor from the extracted `nameTagAttachment` where non-null |
 | 3 | WI-6 (c) walk-cycle stop = `setSpeed(0)` + `update(0, 1)` | `stopWalkAnimation()` in the twins | 1.21.1-ONLY defect (no `stop()` there). At port time VERIFY the line's `WalkAnimationState.stop()` zeroes `speedOld` before assuming; if it does, no change |
 | 4 | Fold (d) glide: `setSharedFlag(7, gliding)` + `fallFlyTicks` ramp 0→10 per tick | `Proxy.apply` in the twins, `SHARED_FLAG_FALL_FLYING` | All four lines (`isFallFlying()` is flag-based on every line; the 26.x render state extracts `fallFlyingTicks`/`isFallFlying` from the entity) |
 | 5 | Fold (d) swim: `AccessorLivingEntity` (`swimAmount`/`swimAmountO` @Accessor) + vanilla's ±0.09/tick ramp per tick | `xplat/.../mixin/AccessorLivingEntity.java`, BOTH mixin configs (`client` list), `Proxy.apply` | All four lines; list the accessor in both loaders' configs for parity (the contract test pins both files); the cast goes via `(Object)` — `Proxy` is final |
 | 6 | `farPlayersMaxAnimationDistanceBlocks` default 256 → 512 (user decision) | `LSSClientConfig` | Byte-identical change — the change-core applier |
-| 7 | Contract pins for 1-5 | `FarPlayerRenderSourceContractTest` | Mirror per line (the NeoForge half applies only where `RENDER_AVAILABLE = true`) |
+| 7 | Contract pins for 1-5, 10-12 | `FarPlayerRenderSourceContractTest` + `testutil/RepoPaths` + `WalkAnimationStopTest` + `AccessorLivingEntityContractTest` + the adapter pin in `FabricFarPlayerSnapshotsHiddenTest` | Mirror per line (the NeoForge half applies only where `RENDER_AVAILABLE = true`; the walk-stop pins are 1.21.1-only) |
 | 8 | Release-notes items: tags no longer vanish inside loaded chunks; glide/swim/stop fix; the 512 default | `docs/planning/release-tag-next-mc1.21.1.draft.txt` | Each line's own notes draft |
+| 10 | Fold (e) armor depth-lift (`LiftedBufferSource`/`LiftingConsumer`, `armorLiftBlocks`, `skinRenderType`) + `OVERLAY_MAX_DISTANCE_BLOCKS` overlay gate (the `apply` distance param) | `FarPlayerRenderer` twins | All four lines; 26.x `VertexConsumer` has the same six abstract methods — verify the 11-arg default still routes through them there |
+| 11 | Fold (f) pose sentinel (`passMark`, `markPose`/`restorePose`/`unwindPose`, the tag draw's finally, every containment restoring) | `FarPlayerRenderer` twins | All four lines — the crash class exists on every line (`checkPoseStack`) |
+| 12 | Fold (g) v3 panel folds: proxy tags honour hide-GUI + team ladder; gap fill `xOld` basis + `isSectionCompiled` + camera-distance 64²; `wasTouchingWater`; anchor resolved once; `MeliusVanishBridge` independent binding + `isVanished`; the service's per-tick `vanishMemo`; scoped NeoForge resolver pins; README provider caveat; lang tooltips | renderer twins, `MeliusVanishBridge`, `RequestProcessingService`, `LSSNeoPermissionsContractTest`, lang ×3, README | All four lines (the NeoForge nameplate clause only where a NeoForge renderer exists) |
 | 9 | (dev tooling, optional) `SoakPatrol` — `-Psoak.patrol="x,z;x,z"` walks the soak dummy between waypoints; the rig script/recipe in memory `far-player-live-rig` | `fabric/.../benchmark/SoakPatrol.java`, `BenchmarkHook`, `fabric/build.gradle` | Worth porting for each line's live gate; 1.21.2+ replaced `Input`/`KeyboardInput` with `ClientInput` — re-derive the driver there |
 
 Deliberately NOT done anywhere (cosmetic, recorded in §2 WI-6 fold (d)): elytra yaw banking (needs a
 velocity the motion sample does not carry) and boat paddle animation (`Boat.paddlePositions`,
 private, tick-advanced).
 
+### 8.1 Round 2 (2026-09-04, post-live-rig, 1 Fable + 4 Opus over `50b6c32f..a52cff22`)
+
+One MAJOR (Opus/regressions): the pose-stack leak (fold (f)). Folded MINORs: the tag lift's
+see-through window + player-vs-camera distance (Fable → POLYGON_OFFSET + camera distance), proxy
+tags skipping hide-GUI/team rules (D3), NeoForge NAMETAG_DISTANCE only guarded downward (D2), the
+gap fill's `xo` vs `xOld` basis, uncompiled-section bodies (F3/F4), `wasTouchingWater` (F7), the
+untested viewer/target adapter order (B1 → source pin), helper-unscoped resolver pins (B2), the
+plan's unimplemented vanish memo (B3), all-or-nothing Melius binding (B4), the hide node needing a
+provider (B5 → README), the walk-stop pin matching the helper body (C1 → occurrence count +
+`WalkAnimationStopTest`), the mixin-config loop inside the shared `pin()` (C2 → its own test), no
+reflective field pin for the accessor (C3 → `AccessorLivingEntityContractTest`), unpinned clauses
+(C4), a malformed patrol spec killing the soak hooks (C6), tooltip/README/notes wording (A1-A9).
+Rejected: the patrol rotation-history point (observers interpolate from movement packets).
+Accepted-open: see fold (g).
+
 ## 9. Decisions log
+
+- 2026-09-04 (v3 panel, after the live rig): POLYGON_OFFSET replaces the geometric tag lift; armor is depth-lifted per vertex ray, skin overlays gated at 80 blocks; a pose sentinel guards the pass (the panel's one MAJOR); proxy tags honour hide-GUI + team rules; NeoForge nameplate attribute both directions; Melius handles bind independently with a per-tick memo.
 
 - 2026-09-04 (live rig, later still): animation default 512; glide flag/ticks + swim amount faked on the proxy (fold (d)); elytra banking and boat paddles deliberately left unfaked (cosmetic, need velocity / a second accessor).
 

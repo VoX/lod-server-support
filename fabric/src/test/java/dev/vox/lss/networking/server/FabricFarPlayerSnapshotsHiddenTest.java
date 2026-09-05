@@ -32,6 +32,22 @@ class FabricFarPlayerSnapshotsHiddenTest {
     }
 
     @Test
+    void theVanishAdapterKeepsViewerAndTargetStraightAndMemoizesPerTick() throws java.io.IOException {
+        // Review fold B1: the seam is canSee(UUID viewer, UUID target) — both UUIDs, so a swap
+        // type-checks and would ask "is the VIEWER vanished". Pin the adapter's mapping (the
+        // observer entity is resolved from the VIEWER, the target travels as the UUID) and the
+        // per-tick memo (fold B3).
+        String src = java.nio.file.Files.readString(dev.vox.lss.testutil.RepoPaths
+                .locate("xplat/src/main/java/dev/vox/lss/networking/server/RequestProcessingService.java"));
+        assertTrue(src.contains("var observer = server.getPlayerList().getPlayer(viewer);")
+                        && src.contains("MeliusVanishBridge.canSee(server, observer, target);")
+                        && src.contains("vanishMemo.computeIfAbsent(target,")
+                        && src.contains("MeliusVanishBridge.isVanished(server, t)"),
+                "the vanish adapter must resolve the observer from the VIEWER, pass the TARGET uuid,"
+                        + " and memoize isVanished per target per tick");
+    }
+
+    @Test
     void theProductionReadPassesDefaultFalse() throws java.io.IOException {
         String src = java.nio.file.Files.readString(dev.vox.lss.testutil.RepoPaths
                 .locate("xplat/src/main/java/dev/vox/lss/networking/server/FabricFarPlayerSnapshots.java"));
