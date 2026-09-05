@@ -18,6 +18,8 @@
   "client": [
     "IntegratedServerLanHook",
     "AccessorClientPacketListener",
+    "AccessorLivingEntity",
+    "AccessorEntityRenderDispatcher",
     "AccessorBiomeManager"
   ]
 }

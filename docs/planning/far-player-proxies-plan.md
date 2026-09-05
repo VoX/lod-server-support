@@ -303,8 +303,10 @@ Proxy-entity rendering via `LevelRenderContext` + `EntityRenderDispatcher`;
 latest-wins generational tracker; same-dimension scope; min/max ring semantics with
 client∩server caps; spectator/invisible/vanish filter ladder (incl. the reflective
 vanish bridge pattern); TAB-based skin resolution; walk-animation distance cap;
-name-tag toggle. SeeU is MIT-licensed; we reimplement in LSS idiom rather than
-vendoring, and credit SeeU in the release notes as prior art.
+name-tag toggle. SeeU was MIT-licensed through 0.7.x and relicensed under a restricted
+all-rights-reserved license at 0.8 (2026-08; no derivative works, no source reuse) — LSS
+reimplements independently from vanilla APIs and observable behaviour, copies nothing,
+and credits SeeU in the release notes as prior art (far-player-render-hardening-plan.md F7).
 
 ## 6. Coexistence with SeeU
 
