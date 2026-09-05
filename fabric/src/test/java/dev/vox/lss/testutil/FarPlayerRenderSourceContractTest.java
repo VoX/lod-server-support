@@ -67,8 +67,10 @@ class FarPlayerRenderSourceContractTest {
         assertTrue(src.contains("renderState.lightCoords = floorLight(renderState.lightCoords, fullBright);")
                         && src.contains("vState.lightCoords = floorLight(vState.lightCoords, fullBright);"),
                 tree + ": the floor must land on the extracted render state of proxies AND mounts");
-        assertEquals(2, count(src, "submitProxy(dispatcher, proxy, partialTick, fullBright, distance,"),
+        assertEquals(2, count(src, "submitProxy(dispatcher, proxy, partialTick, fullBright, cameraDistance,"),
                 tree + ": both proxy draws (seated and unseated) must go through the one submit helper");
+        assertTrue(src.contains("renderState.nameTag = null;") && src.contains("avatar.scoreText = null;"),
+                tree + ": vanilla's own tag AND score plate must be nulled on the extracted proxy state");
         // WI-3 is a NAMED CUT on this line (no frustum on the render path — WorldRenderContext
         // carries commandQueue/matrices/worldState, CameraRenderState has none): no frustum
         // predicate at all, and never dispatcher.shouldRender (vanilla's distance term + Sable's
@@ -111,7 +113,9 @@ class FarPlayerRenderSourceContractTest {
                 tree + ": every tag (proxy or real) must honour the hide-GUI key (fold D3)");
         assertTrue(src.contains("for (var realPlayer : level.players())")
                         && src.contains("if (active.contains(realPlayer.getUUID())) continue;")
-                        && src.contains("isSectionCompiledAndVisible(realPlayer.blockPosition())) continue;")
+                        && src.contains("if (!level.isOutsideBuildHeight(pos.getY())")
+                        && src.contains("&& !minecraft.levelRenderer.isSectionCompiledAndVisible(pos)) continue;")
+                        && src.contains("realPlayer.getYRot(partialTick)")
                         && src.contains("double cameraDistanceSq = cameraPosition.distanceToSqr(realPosition);")
                         && src.contains("if (cameraDistanceSq < 64.0 * 64.0) continue;")
                         && src.contains("if (!vanillaNameVisibleIgnoringDistance(realPlayer, localPlayer)) continue;")
@@ -147,6 +151,8 @@ class FarPlayerRenderSourceContractTest {
                 tree + ": the lift is a uniform scale about the camera, and order() is wrapped (the armor layer submits through it)");
         assertTrue(src.contains("if (type == skinType) return poseStack;")
                         && src.contains("Math.clamp(distance * distance * 6e-6, 0.02, 4.0)")
+                        && src.contains("armorLiftBlocks(cameraDistance)")
+                        && src.contains("cameraDistance <= OVERLAY_MAX_DISTANCE_BLOCKS")
                         && src.contains("OVERLAY_MAX_DISTANCE_BLOCKS = 80.0")
                         && src.contains("(byte) (elytra ? 0x7F : 0x7E)"),
                 tree + ": the skin buffer is never lifted, the lift is distance-scaled, overlays are gated");
