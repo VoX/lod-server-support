@@ -77,6 +77,20 @@ class ClientOptionCatalogTest {
         assertTrue(missing.isEmpty(), "catalog keys missing from en_us.json: " + missing);
     }
 
+    /** Pins the KEY SETS only — a value copied verbatim from English still passes; translation
+     *  coverage is a human job. */
+    @Test
+    void everyLangFileCarriesTheSameKeys() throws IOException {
+        // The zh files are REAL translations, not English copies, and nothing else pins their
+        // parity (release_check compares LSS vs VSS within ONE locale) — a line port that
+        // drops a zh key would otherwise fall back to the raw key on screen.
+        for (String locale : new String[] {"zh_cn", "zh_tw"}) {
+            JsonObject other = JsonParser.parseString(Files.readString(
+                    locate("fabric/src/main/resources/assets/lss/lang/" + locale + ".json"))).getAsJsonObject();
+            assertEquals(lang.keySet(), other.keySet(), locale + ".json must carry exactly en_us.json's keys");
+        }
+    }
+
     @Test
     void declaredDefaultsEqualAFreshConfig() {
         var fresh = new LSSClientConfig();
@@ -149,8 +163,8 @@ class ClientOptionCatalogTest {
         assertEquals(List.of(ClientOptionCatalog.ID_FAR_PLAYERS_WITH_SEEU), seeuOnly);
         var renderOnly = allOptions().stream().filter(o -> o.visibility() == Visibility.RENDER_AVAILABLE).map(OptionSpec::id).toList();
         assertEquals(List.of(ClientOptionCatalog.ID_FAR_PLAYERS_ENABLED, ClientOptionCatalog.ID_FAR_PLAYERS_NAME_TAGS,
-                ClientOptionCatalog.ID_FAR_PLAYERS_RENDER_DISTANCE), renderOnly,
-                "the three renderer-only options hide where nothing renders (NeoForge v1)");
+                ClientOptionCatalog.ID_FAR_PLAYERS_FULL_BRIGHT, ClientOptionCatalog.ID_FAR_PLAYERS_RENDER_DISTANCE), renderOnly,
+                "the four renderer-only options hide where nothing renders (NeoForge v1)");
         assertEquals(Visibility.ALWAYS, ClientOptionCatalog.find(ClientOptionCatalog.ID_FAR_PLAYERS_SHARE_SELF).orElseThrow().visibility(),
                 "Share My Position is the prefs carrier — never hidden");
         assertTrue(Visibility.SEEU_ONLY.test(new MenuContext(true, false, true, true)));
@@ -165,11 +179,12 @@ class ClientOptionCatalogTest {
         assertEquals(List.of("lss:receive_server_lods", "lss:lod_distance", "lss:column_rate_limit",
                         "lss:join_slow_start", "lss:xaero_map_bridge", "lss:far_players_enabled",
                         "lss:far_players_share_self", "lss:far_players_name_tags",
-                        "lss:far_players_render_distance", "lss:far_players_with_seeu"),
+                        "lss:far_players_full_bright", "lss:far_players_render_distance",
+                        "lss:far_players_with_seeu"),
                 allOptions().stream().map(OptionSpec::id).toList());
         // group shape + titles
         assertEquals(List.of(1, 1, 2, 1), ClientOptionCatalog.pages().get(0).groups().stream().map(g -> g.options().size()).toList());
-        assertEquals(List.of(5), ClientOptionCatalog.pages().get(1).groups().stream().map(g -> g.options().size()).toList());
+        assertEquals(List.of(6), ClientOptionCatalog.pages().get(1).groups().stream().map(g -> g.options().size()).toList());
         assertEquals("lss.config.page", ClientOptionCatalog.pages().get(0).titleKey());
         assertEquals("lss.config.far_players.page", ClientOptionCatalog.pages().get(1).titleKey());
         // impacts: HIGH on the master toggle, none on the LOD-distance slider, LOW elsewhere
