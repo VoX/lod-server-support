@@ -1,7 +1,9 @@
 package dev.vox.lss.networking.server;
 
+import dev.vox.lss.common.LSSPermissions;
 import dev.vox.lss.common.farplayers.FarPlayerBroadcastService;
 import dev.vox.lss.common.farplayers.FarPlayerWire;
+import dev.vox.lss.platform.LoaderServices;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.EquipmentSlot;
@@ -73,10 +75,27 @@ final class FabricFarPlayerSnapshots {
                 pose,
                 delta.x * 20.0, delta.y * 20.0, delta.z * 20.0,
                 p.isSpectator(), p.isInvisible(), p.isAlive() && !p.isRemoved(),
-                // No permission system on plain Fabric — farPlayersExclude is the
-                // per-player privacy lever here (Paper wires lss.farplayers.hidden).
-                false,
+                // The hide permission, read through the loader seam (fabric-permissions-api
+                // by shape on Fabric, native PermissionNodes on NeoForge) — WI-7a.
+                hiddenFor(node -> LoaderServices.get().checkPermission(p, node, false)),
                 hash, equipmentIds, equipmentCounts, vehicle);
+    }
+
+    /**
+     * The hide-permission read (far-player-render-hardening-plan.md WI-7a): BOTH brand
+     * spellings, default FALSE — a grant-model "deny me" lever (undefined = visible, matching
+     * plugin.yml's {@code default: false} on Paper; a LuckPerms wildcard grant resolves it
+     * TRUE, so wildcard admins disappear from far-player rendering, as on Paper). Fail
+     * direction is VISIBLE on this seam BY CONTRACT: {@code LoaderServices.checkPermission}
+     * never throws and answers the caller's default on any failure, so {@code false} cannot
+     * express "the backend threw" — and a {@code true} default would hide every player on a
+     * provider-less server. Paper's twin fails HIDDEN only because Folia's cross-region
+     * {@code PermissibleBase} read can race; Fabric and NeoForge read on the single server
+     * tick thread. Pure over a node predicate so JUnit can drive it without a ServerPlayer.
+     */
+    static boolean hiddenFor(java.util.function.Predicate<String> check) {
+        return check.test(LSSPermissions.FARPLAYERS_HIDDEN_LSS)
+                || check.test(LSSPermissions.FARPLAYERS_HIDDEN_VSS);
     }
 
     private FabricFarPlayerSnapshots() {}
