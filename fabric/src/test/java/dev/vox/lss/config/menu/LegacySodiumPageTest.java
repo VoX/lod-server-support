@@ -119,7 +119,7 @@ class LegacySodiumPageTest {
         assertEquals(4, general.getGroups().size());
         assertEquals(List.of(1, 1, 2, 1), general.getGroups().stream().map(g -> g.getOptions().size()).toList());
         assertEquals(1, far.getGroups().size());
-        assertEquals(4, far.getGroups().get(0).getOptions().size(), "the SeeU override is hidden without SeeU");
+        assertEquals(5, far.getGroups().get(0).getOptions().size(), "the SeeU override is hidden without SeeU");
         // Names in catalog order.
         var expected = ClientOptionCatalog.pages().get(0).options().stream().map(OptionSpec::nameKey).toList();
         assertEquals(expected, general.getOptions().stream().map(o -> o.getName().getString()).toList());
@@ -130,7 +130,7 @@ class LegacySodiumPageTest {
         List<Object> pages = LegacySodiumPage.buildWith(handles, new LSSClientConfig(),
                 new MenuContext(true, false, true, true), "VSS", h -> { });
         OptionPage far = (OptionPage) pages.get(1);
-        assertEquals(5, far.getGroups().get(0).getOptions().size());
+        assertEquals(6, far.getGroups().get(0).getOptions().size());
         assertEquals("lss.config.far_players_enabled.tooltip.seeu",
                 far.getOptions().get(0).getTooltip().getString());
         assertEquals("VSS", ((OptionPage) pages.get(0)).getName().getString());

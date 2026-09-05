@@ -102,8 +102,8 @@ final class PaperFarPlayerSnapshots {
             // Bukkit resolves an UNDECLARED node to the op default, which is why a
             // single-brand declaration plus a cross-brand check would silently hide
             // every op. A jar swap keeps the grant.
-            if (bukkit.hasPermission("lss.farplayers.hidden")
-                    || bukkit.hasPermission("vss.farplayers.hidden")) {
+            if (bukkit.hasPermission(dev.vox.lss.common.LSSPermissions.FARPLAYERS_HIDDEN_LSS)
+                    || bukkit.hasPermission(dev.vox.lss.common.LSSPermissions.FARPLAYERS_HIDDEN_VSS)) {
                 return true;
             }
             for (var meta : bukkit.getMetadata("vanished")) {

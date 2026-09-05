@@ -27,6 +27,8 @@ With [Xaero's World Map](https://modrinth.com/mod/xaeros-world-map) 1.42.0 or ne
 
 LOD Server Support is backwards and forwards compatible from v0.4.0 through the current version. Server operators can freely update to take advantage of improvements without breaking clients on older versions, and clients can update without breaking compatibility with older servers.
 
+**Far players.** Players beyond your normal render distance are drawn as player models in the LOD terrain, lit as if under open sky (or at full brightness, mounts included, with the "Full Bright Far Players" option / `farPlayersFullBright` in `lss-client-config.json`), with their name tags (also drawn over players still in normal range once they are past the game's own 64-block tag distance) and, within about 80 blocks, their skin overlay layers (farther out the depth buffer cannot separate that thin shell from the body). Two limits worth knowing: players past the game's far plane (your render distance × 64 blocks; Iris shaders extend it) are not drawn at all, whatever the far-player render limit says; and with Iris shaders, packs whose Voxy integration keeps LOD depth out of the vanilla depth buffer (Complementary, for one) draw far players on top of LOD terrain instead of behind it.
+
 [Voxy Server Side](https://modrinth.com/plugin/voxy-server-side) is the same mod. Voxy Server Side clients are compatible with LOD Server Support servers and vice versa.
 
 ## Installation
@@ -69,7 +71,7 @@ Config files are generated during first run at `config/lss-server-config.json` o
 | `generationConcurrencyLimitPerPlayer` | `40` | Max concurrently generating chunks per player |
 | `maxConcurrentDiskReads` | `0` | Max LOD disk reads running at once. `0` = auto (half the reader threads while the LOD store is on, all of them otherwise). See **Server Performance Tuning** |
 | `dirtyBroadcastIntervalSeconds` | `10` | Interval for pushing dirty column notifications to clients. `0` disables the pushes entirely |
-| `farPlayers` | `"on"` | Show distant players as player models in the LOD terrain. `"opt-in"` shows only players who opted in, `"off"` disables. A per-player exclude list, a hide permission, and vanish plugins are honored |
+| `farPlayers` | `"on"` | Show distant players as player models in the LOD terrain. `"opt-in"` shows only players who opted in, `"off"` disables. A per-player exclude list is honored on every loader, as are the `lss.farplayers.hidden` / `vss.farplayers.hidden` permissions (players holding either are never shown; note a wildcard permission grant counts as holding them) and vanish: vanish plugins on Paper, [Melius Vanish](https://modrinth.com/mod/vanish) on Fabric. The hide permission only resolves through a permission provider (a fabric-permissions-api backend such as LuckPerms on Fabric); without one nobody is hidden |
 | `farPlayersMaxDistanceBlocks` | `2048` | Max distance in blocks at which far players are visible |
 | `lodYieldsToVanillaTransport` | `true` | Pause LOD sending to a player while their connection is backed up, so vanilla packets always go first |
 | `enablePingBackstop` | `true` | Cut a player's LOD rate when their ping spikes, keeping gameplay responsive on slow connections |
