@@ -1014,7 +1014,6 @@ keeps the DEBT without the bytes:
   `grantLoads` is already largest-cluster-first, and holding delays the only thing that
   lowers occupancy — under the target shape it would have wedged the halt time-box.
 
-
 ## §13 Walk as-built record (2026-08-24, branch feat/hybrid-scan off feat/xaero-backpressure)
 
 §2-§10 implemented as specified; deviations and concretions below. One jar now
