@@ -439,6 +439,12 @@ public class ColumnCacheStore {
         }
         try (DirectoryStream<Path> files = Files.newDirectoryStream(dir)) {
             for (Path file : files) {
+                // Iteration-order independent (2026-09-05: the GitHub runner image started
+                // listing a planted subdirectory FIRST, and the DirectoryNotEmptyException it
+                // threw here left the bucket's own files behind): a subdirectory is skipped
+                // here and refused by the final delete below, so the flat files always go and
+                // the subtree is still never walked. NOFOLLOW — a symlinked entry is a link.
+                if (Files.isDirectory(file, java.nio.file.LinkOption.NOFOLLOW_LINKS)) continue;
                 Files.deleteIfExists(file);
             }
         }
