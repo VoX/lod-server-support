@@ -39,7 +39,7 @@ class FarPlayerRenderSourceContractTest {
         pin(src, "neoforge");
     }
 
-    private static void pin(String src, String tree) {
+    private static void pin(String src, String tree) throws java.io.IOException {
         // WI-1/WI-2: the sky-15 floor with the real block light, the full-bright short-circuit,
         // and NO full-bright-by-chunk-state fallback (it was dead code: ClientLevel.hasChunk
         // is unconditionally true on this MC).
@@ -85,5 +85,24 @@ class FarPlayerRenderSourceContractTest {
                 tree + ": tracked players past vanilla's 64-block cap get the LSS tag under vanilla's ladder");
         assertTrue(src.contains("queueProxyTag(pendingTags, frustum, nameTags, tracked, proxy, position, distance, light);"),
                 tree + ": proxy tags still route through the option + sneak gate");
+        // Walk-cycle stop on this MC (no WalkAnimationState.stop()): setSpeed(0) alone leaves
+        // speedOld stale and the renderer sawtooths the limb swing at 20 Hz — the stop helper
+        // must also copy the zero into speedOld via update(0, 1) (live rig 2026-09-04).
+        assertTrue(src.contains("this.walkAnimation.setSpeed(0.0f);\n            this.walkAnimation.update(0.0f, 1.0f);")
+                        && !src.contains("this.walkAnimation.setSpeed(0.0f); //"),
+                tree + ": every walk-cycle stop must go through stopWalkAnimation() (setSpeed + update(0, 1))");
+        // Fold (d): the other tick-only render inputs — the FALL_FLYING shared flag + fall-fly
+        // ticks (glide tilt, spread wings) and the swim amount (swimming roll + stroke) are
+        // advanced by the proxy itself, once per tick, since LivingEntity.tick() never runs.
+        assertTrue(src.contains("this.setSharedFlag(SHARED_FLAG_FALL_FLYING, gliding);")
+                        && src.contains("this.fallFlyTicks = gliding ? Math.min(this.fallFlyTicks + 1, 10) : 0;")
+                        && src.contains("swim.lss$setSwimAmountO(swimAmount);"),
+                tree + ": glide flag/ticks and swim amount must be faked per tick on the proxy");
+        for (String cfg : new String[] {"fabric/src/main/resources/lss.mixins.json",
+                "neoforge/src/main/resources/lss.neoforge.mixins.json"}) {
+            assertTrue(Files.readString(RepoPaths.locate(cfg)).contains("\"AccessorLivingEntity\""),
+                    cfg + ": AccessorLivingEntity must be listed (an unlisted accessor compiles but"
+                            + " ClassCastExceptions at the first swimming proxy)");
+        }
     }
 }

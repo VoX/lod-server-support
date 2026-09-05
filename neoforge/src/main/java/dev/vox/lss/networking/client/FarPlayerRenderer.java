@@ -21,6 +21,7 @@ import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.player.RemotePlayer;
+import dev.vox.lss.mixin.AccessorLivingEntity;
 import net.minecraft.world.scores.Team;
 import net.neoforged.neoforge.common.NeoForgeMod;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -124,6 +125,8 @@ public final class FarPlayerRenderer {
     private static final int PROXY_ID_BASE = 1_900_000_000;
 
     private static final float WALK_ANIMATION_SCALE = 0.4f;
+    /** Entity.FLAG_FALL_FLYING (private there) — the bit isFallFlying() reads. */
+    private static final int SHARED_FLAG_FALL_FLYING = 7;
 
     private static volatile FarPlayerRenderer instance;
 
@@ -918,6 +921,7 @@ public final class FarPlayerRenderer {
             boolean sneaking = (pose & FarPlayerWire.POSE_SNEAK) != 0;
 
             this.maxRenderDistanceBlocks = maxRenderDistanceBlocks;
+            boolean newTick = this.tickCount != animationTick;
             this.tickCount = animationTick;
             // 1.21.1 line: no 3-arg setOldPosAndRot — explicit old-field writes below
             // (plus the rotation olds) cover it; snapTo is this line's moveTo.
@@ -942,6 +946,22 @@ public final class FarPlayerRenderer {
                     : swimming ? Pose.SWIMMING
                     : sneaking ? Pose.CROUCHING
                     : Pose.STANDING);
+            // Tick-only render inputs that vanilla advances in LivingEntity.tick(), which never
+            // runs for a render-only proxy (the walk cycle's family — hardening plan WI-6 fold
+            // (d), live rig 2026-09-04): the FALL_FLYING shared flag (PlayerRenderer, HumanoidModel
+            // and ElytraModel read isFallFlying(), NOT the pose — without it a glider stood
+            // upright with folded wings), the fall-fly tick count behind the -90° glide tilt
+            // (vanilla's fade: full at 10 ticks), and the swim amount behind the swimming roll +
+            // stroke (vanilla's ±0.09/tick ramp, via AccessorLivingEntity — the fields are private).
+            this.setSharedFlag(SHARED_FLAG_FALL_FLYING, gliding);
+            if (newTick) {
+                this.fallFlyTicks = gliding ? Math.min(this.fallFlyTicks + 1, 10) : 0;
+                var swim = (AccessorLivingEntity) (Object) this; // Proxy is final: cast via Object
+                float swimAmount = swim.lss$getSwimAmount();
+                swim.lss$setSwimAmountO(swimAmount);
+                swim.lss$setSwimAmount(swimming ? Math.min(1.0f, swimAmount + 0.09f)
+                        : Math.max(0.0f, swimAmount - 0.09f));
+            }
             applyEquipment(tracked, itemCache);
             // WI-5: the model-parts byte (defaults to 0 = every overlay layer hidden — hat,
             // jacket, sleeves, pants were invisible on every proxy). All layers EXCEPT the
@@ -994,19 +1014,31 @@ public final class FarPlayerRenderer {
             }
         }
 
+        /** 1.21.1 line: no {@code WalkAnimationState.stop()} on this MC. {@code setSpeed(0)}
+         *  alone leaves the PREVIOUS speed in {@code speedOld}, which the renderer lerps toward
+         *  zero across every tick's partial ticks — a 20 Hz amplitude sawtooth on the limb
+         *  swing that reads as a super-speed walk cycle (live rig 2026-09-04, seen past
+         *  {@code farPlayersMaxAnimationDistanceBlocks}). One {@code update(0, 1)} after it
+         *  copies the zero into {@code speedOld} and leaves the phase untouched, which is what
+         *  the newer lines' {@code stop()} does. */
+        private void stopWalkAnimation() {
+            this.walkAnimation.setSpeed(0.0f);
+            this.walkAnimation.update(0.0f, 1.0f);
+        }
+
         private void updateWalkAnimation(Vec3 position, boolean allowWalk,
                                          boolean nonWalkingPose, int animationTick) {
             if (lastWalkPosition == null || animationTick == lastWalkTick) {
                 if (lastWalkPosition == null) {
                     lastWalkPosition = position;
                     lastWalkTick = animationTick;
-                    this.walkAnimation.setSpeed(0.0f); // 1.21.1 line: no stop() on this MC
+                    stopWalkAnimation();
                 }
                 return;
             }
             lastWalkTick = animationTick;
             if (!allowWalk || nonWalkingPose) {
-                this.walkAnimation.setSpeed(0.0f); // 1.21.1 line: no stop() on this MC
+                stopWalkAnimation();
                 lastWalkPosition = position;
                 return;
             }

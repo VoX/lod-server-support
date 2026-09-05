@@ -8,7 +8,12 @@
 
 - **Far players no longer render black.** Far players standing between your server's simulation distance and your render distance could render fully dark in daylight. They are now lit like the distant terrain around them.
 - **Far players show every skin layer.** Hats, jackets, sleeves and pants layers were missing on far player models.
+- **Far players glide, swim and stop walking properly.** Gliding far players now tilt with their wings spread and swimming ones swim instead of standing upright, and a far player past the animation distance now stands still instead of jittering.
 - **Far players outside your view are skipped.** Far players behind the camera are no longer drawn.
+
+### Configuration
+
+- **Far player walk animation reaches farther.** `farPlayersMaxAnimationDistanceBlocks` now defaults to 512 blocks (was 256).
 
 ### Compatibility
 

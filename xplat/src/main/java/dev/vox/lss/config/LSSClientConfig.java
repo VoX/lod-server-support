@@ -224,9 +224,10 @@ public class LSSClientConfig extends JsonConfig {
      *  LSS ships NO fog mixin — align this with your fog if proxies fading at the
      *  horizon bothers you (FARP §3.3 fog stance). */
     public int farPlayersMaxRenderDistanceBlocks = 0;
-    /** Walk-animation distance cap in blocks (0 = never animate; animation beyond
-     *  ~a few hundred blocks is invisible sub-pixel work). */
-    public int farPlayersMaxAnimationDistanceBlocks = 256;
+    /** Walk-animation distance cap in blocks (0 = never animate; animation far out is
+     *  invisible sub-pixel work — 512 since 2026-09-04, user decision after the live rig:
+     *  256 cut the walk cycle while a proxy was still clearly a walking figure). */
+    public int farPlayersMaxAnimationDistanceBlocks = 512;
 
     @Override
     protected String getFileName() {

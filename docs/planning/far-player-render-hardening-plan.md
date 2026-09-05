@@ -11,7 +11,9 @@ server-side privacy items reach NeoForge users on three lines. Order: the 1.21.1
 the NeoForge render), then the four ports in two clusters.
 
 Status: v2 after the 1-Fable + 4-Opus panel (§8 records what changed). Phase 1 (the 1.21.1
-line) IMPLEMENTING on `fix/far-player-light-floor` since 2026-09-04.
+line) IMPLEMENTED on `fix/far-player-light-floor` 2026-09-04 and LIVE-VERIFIED the same night on
+the NeoForge 1.21.1 + C2ME rig (memory `far-player-live-rig`); the live look added the folds in
+**§10**, which — like every WI above — are OWED to the four port lines. Nothing has been ported yet.
 
 ## 0. What we know (2026-09-04 investigation, two-agent verified, panel re-verified)
 
@@ -262,6 +264,27 @@ enumerates the deltas; WI-3 adds one (the frustum source) — the row is updated
 > lit with WI-1/WI-2; gated on `farPlayersNameTags` + `Minecraft.renderNames()`. NeoForge twin
 > additionally respects a server-SHORTENED `NeoForgeMod.NAMETAG_DISTANCE` (< 64 → no far tag).
 > Pinned by `FarPlayerRenderSourceContractTest`.
+> (c) **Super-speed walk past the animation cap (1.21.1 twins only).** This MC has no
+> `WalkAnimationState.stop()`; the port's `setSpeed(0)` left `speedOld` at the last walking
+> speed, and `LivingEntityRenderer` reads `speed(partialTick)` = lerp(speedOld → 0) — a 20 Hz
+> amplitude sawtooth on the limb swing. Fix: `stopWalkAnimation()` = `setSpeed(0)` +
+> `update(0, 1)` (copies the zero into speedOld, phase untouched). The 26.x/1.21.11 `stop()`
+> lines are unaffected — check their `stop()` zeroes speedOld before assuming.
+> (d) **Audit of the same class — tick-only render inputs a render-only proxy never advances.**
+> Swept every per-frame input `LivingEntityRenderer`/`PlayerRenderer`/`HumanoidModel`/
+> `ElytraModel` read on 1.21.1: walk cycle (faked from deltas — (c) above), `tickCount`
+> (copied from the local player), body/head/rot olds (written), hurt/death/attack/spin/frozen
+> (never set — correct), `getScale` (attribute, fine). MISSES, fixed both twins: the
+> **FALL_FLYING shared flag** — `isFallFlying()` reads bit 7, NOT the pose, so a glider stood
+> upright with folded wings (now `setSharedFlag(7, gliding)`); the **fall-fly tick count**
+> behind the -90° glide tilt (now ramped 0→10 per tick on the proxy — vanilla's fade); the
+> **swim amount** behind the swimming roll + stroke (private fields, advanced only by the
+> private `updateSwimAmount` — now `AccessorLivingEntity` + vanilla's ±0.09/tick ramp).
+> NOT faked, recorded: elytra yaw banking (needs `getDeltaMovement`; the motion sample carries
+> no velocity — cosmetic), boat paddles (`Boat.paddlePositions`, private, tick-advanced —
+> frozen oars on a rowing mount, cosmetic). The 26.x/1.21.11 ports must carry (d) too — their
+> render-state extraction reads the same entity fields.
+> Also: `farPlayersMaxAnimationDistanceBlocks` default 256 → **512** (user decision on the rig).
 
 - Why own-draw: F6(b) — vanilla can never draw a tag for a proxy on any line. There is no
   vanilla fallback to keep.
@@ -458,7 +481,7 @@ enumerates the deltas; WI-3 adds one (the frustum source) — the row is updated
    LuckPerms negative/wildcard grant for WI-7a on both loaders. Merge: PR into `support/mc1.21.1`
    AFTER `fix/vss-branding-sweep` lands; `v0.14.1+mc1.21.1` or the next planned release — user's
    call.
-2. **Ports — two clusters, each written once and mirrored:** the 26.2/26.1 renderers differ by
+2. **Ports — two clusters, each written once and mirrored** (scope = WI-1..WI-7 + WI-10/11 **plus every §10 fold**): the 26.2/26.1 renderers differ by
    6 lines (`mainCamera()` vs `getMainCamera()`), the 1.21.11/1.21.10 renderers by 6 lines
    (`Identifier`/`ResourceLocation`); the clusters differ from each other by ~50 lines and from
    1.21.1 by ~120. So: write the 26.2 renderer (`main`), mirror to 26.1; write the 1.21.11
@@ -558,7 +581,34 @@ enumerations, zh translations + parity test, VSS lang rebrand caution, README ov
 per-line gate commands, port recipe per file, 1.21.10 landmines, Sable `shouldRender` note,
 Iris live-check requirement, the instance's shader-pack mismatch.
 
+## 10. Live-rig folds OWED to the port lines (added after plan v2, 2026-09-04)
+
+Everything below landed on `fix/far-player-light-floor` (1.21.1) AFTER the v2 panel, found on the
+first live look (NeoForge 1.21.1 + C2ME rig, SoakPlayer patrolling). None of it exists on `main`,
+`support/mc26.1-v0.14`, `support/mc1.21.11-v0.14` or `support/mc1.21.10`. **Port every row with
+the cluster work in §4.2** — the port is not done until each row is ticked per line.
+
+| # | Fold | Files (1.21.1) | Port notes |
+|---|------|----------------|------------|
+| 1 | WI-6 (a) two-draw tag: glyph-only second draw on a plane lifted toward the camera by `clamp(d²·1.5e-5, 0.05, 24)` blocks | `FarPlayerRenderer` twins `renderFarNameTag` | 26.x: two `submitText` calls, background on the FIRST only; the lift is a `Matrix4f.translate` on the local +z (camera-billboarded frame) on every line |
+| 2 | WI-6 (b) tag gap fill: LSS tags vanilla-tracked players past 64 blocks under vanilla's `shouldShowName` ladder minus its distance clause; skip local/camera player, `active` proxies, sneaking, mounted (`isVehicle`); NeoForge respects a server-shortened `NAMETAG_DISTANCE` | `FarPlayerRenderer` twins (the loop before the tag draw + `vanillaNameVisibleIgnoringDistance`) | Fabric on all four lines; the NeoForge twins there are stubs (`RENDER_AVAILABLE=false`), so the NAMETAG_DISTANCE clause stays 1.21.1-only until a NeoForge renderer exists there. 26.x: position from the render-state / `getPosition(partialTick)`, tag anchor from the extracted `nameTagAttachment` where non-null |
+| 3 | WI-6 (c) walk-cycle stop = `setSpeed(0)` + `update(0, 1)` | `stopWalkAnimation()` in the twins | 1.21.1-ONLY defect (no `stop()` there). At port time VERIFY the line's `WalkAnimationState.stop()` zeroes `speedOld` before assuming; if it does, no change |
+| 4 | Fold (d) glide: `setSharedFlag(7, gliding)` + `fallFlyTicks` ramp 0→10 per tick | `Proxy.apply` in the twins, `SHARED_FLAG_FALL_FLYING` | All four lines (`isFallFlying()` is flag-based on every line; the 26.x render state extracts `fallFlyingTicks`/`isFallFlying` from the entity) |
+| 5 | Fold (d) swim: `AccessorLivingEntity` (`swimAmount`/`swimAmountO` @Accessor) + vanilla's ±0.09/tick ramp per tick | `xplat/.../mixin/AccessorLivingEntity.java`, BOTH mixin configs (`client` list), `Proxy.apply` | All four lines; list the accessor in both loaders' configs for parity (the contract test pins both files); the cast goes via `(Object)` — `Proxy` is final |
+| 6 | `farPlayersMaxAnimationDistanceBlocks` default 256 → 512 (user decision) | `LSSClientConfig` | Byte-identical change — the change-core applier |
+| 7 | Contract pins for 1-5 | `FarPlayerRenderSourceContractTest` | Mirror per line (the NeoForge half applies only where `RENDER_AVAILABLE = true`) |
+| 8 | Release-notes items: tags no longer vanish inside loaded chunks; glide/swim/stop fix; the 512 default | `docs/planning/release-tag-next-mc1.21.1.draft.txt` | Each line's own notes draft |
+| 9 | (dev tooling, optional) `SoakPatrol` — `-Psoak.patrol="x,z;x,z"` walks the soak dummy between waypoints; the rig script/recipe in memory `far-player-live-rig` | `fabric/.../benchmark/SoakPatrol.java`, `BenchmarkHook`, `fabric/build.gradle` | Worth porting for each line's live gate; 1.21.2+ replaced `Input`/`KeyboardInput` with `ClientInput` — re-derive the driver there |
+
+Deliberately NOT done anywhere (cosmetic, recorded in §2 WI-6 fold (d)): elytra yaw banking (needs a
+velocity the motion sample does not carry) and boat paddle animation (`Boat.paddlePositions`,
+private, tick-advanced).
+
 ## 9. Decisions log
+
+- 2026-09-04 (live rig, later still): animation default 512; glide flag/ticks + swim amount faked on the proxy (fold (d)); elytra banking and boat paddles deliberately left unfaked (cosmetic, need velocity / a second accessor).
+
+- 2026-09-04 (live rig, later): the 1.21.1 walk-cycle stop must be setSpeed(0)+update(0,1) — setSpeed alone sawtooths the limb swing past the animation cap (found while SoakPlayer patrolled past 256).
 
 - 2026-09-04 (live rig): WI-6 tags become two draws (glyph-only second pass on a lifted plane) and also cover vanilla-tracked players past 64 blocks — the flicker and the 64..tracking-radius gap were both found on the first live look; NORMAL-only stays.
 
