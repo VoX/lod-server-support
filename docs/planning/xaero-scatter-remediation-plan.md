@@ -446,7 +446,8 @@ the client `XaeroMap:` tokens and `ingest_parked` before/after; Xaero's "Max loa
   on the main thread, the same call the save hook already pays per save. The live
   measurement is `seeded_load=` in `/lsslod diag` (0 on a lively server = the chunk system
   does not fire the event; the filter then behaves exactly as before). LINE FLAVOR: the
-  fabric-api 4.x callback takes a third `generated` flag (surfaces row 22). LRU replaces the
+  fabric-api 4.x callback takes a third `generated` flag — on 26.2 AND 26.1 (the 26.1 port found
+  4.1.0 nested there); the 1.21.x lines' 2.x module is 2-arg (surfaces row 22). LRU replaces the
   clear-all (`putAndMoveToLast` + `removeFirstLong`); entries are NOT dropped at unload
   (Fabric's unload event fires before the unload save reaches the hook — verified in the
   `ServerChunkLoadingManagerMixin` injection). Option P is not implemented.
