@@ -88,10 +88,12 @@ public class RequestProcessingService {
     private final DirtyContentFilter dirtyContentFilter = new DirtyContentFilter();
     // Far players (E1, FARP §3.2): subscription identity lives HERE (the dialect-tracker
     // precedent) — subscribed at handshake, dropped only at the network DISCONNECT, and
-    // the dimension-change re-registration path notifies instead of removing. The vanish
-    // bridge seam stays null until the reflective melius-vanish ladder lands (E2/E3).
-    private final dev.vox.lss.common.farplayers.FarPlayerBroadcastService farPlayerService =
-            new dev.vox.lss.common.farplayers.FarPlayerBroadcastService(null);
+    // the dimension-change re-registration path notifies instead of removing. Built in the
+    // CONSTRUCTOR (not a field initializer — that runs before `server` is assigned, and a
+    // null captured there would be swallowed by tickFarPlayers' once-warn containment: far
+    // players silently dead behind one log line). The vanish bridge is the reflective
+    // Melius Vanish ladder (far-player-render-hardening-plan.md WI-7b); see the ctor.
+    private final dev.vox.lss.common.farplayers.FarPlayerBroadcastService farPlayerService;
     private int farPlayerTickCounter;
     // Compressed-column shipping is live: useCompressedColumns AND the server-side zstd
     // native probe succeeded (latched once in the ctor — plan §0.11). A term of every
@@ -150,6 +152,16 @@ public class RequestProcessingService {
     public RequestProcessingService(MinecraftServer server) {
         this.server = server;
         var config = LSSServerConfig.CONFIG;
+        // The Melius Vanish bridge (WI-7b), per (viewer, target): resolved through the
+        // constructor's own `server` (non-null by construction). A departed viewer answers
+        // hidden — nothing is sendable to it anyway; absent mod = visible.
+        this.farPlayerService = new dev.vox.lss.common.farplayers.FarPlayerBroadcastService(
+                (viewer, target) -> {
+                    if (!dev.vox.lss.compat.MeliusVanishBridge.present()) return true;
+                    var observer = server.getPlayerList().getPlayer(viewer);
+                    return observer != null
+                            && dev.vox.lss.compat.MeliusVanishBridge.canSee(server, observer, target);
+                });
 
         // Publishes the per-world x-ray mask decisions the (static) serializer choke
         // points consult — before any serve can run. The reference is kept so shutdown's
