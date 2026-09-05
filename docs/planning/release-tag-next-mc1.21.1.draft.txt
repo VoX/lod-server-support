@@ -1,0 +1,16 @@
+### New Features
+
+- **Far player name tags now show.** Name tags over far players work on every loader, stay readable at distance, and are hidden while that player sneaks.
+- **Full Bright Far Players option.** A new client option (`farPlayersFullBright`, off by default) draws far players at full brightness so they stand out at night.
+- **Far player privacy on Fabric and NeoForge servers.** The `lss.farplayers.hidden` / `vss.farplayers.hidden` permission and Melius Vanish are now honored on Fabric and NeoForge servers, as they already were on Paper. Note that a wildcard permission grant counts as holding the hide permission.
+
+### Bug Fixes
+
+- **Far players no longer render black.** Far players standing between your server's simulation distance and your render distance could render fully dark in daylight. They are now lit like the distant terrain around them.
+- **Far players show every skin layer.** Hats, jackets, sleeves and pants layers were missing on far player models.
+- **Far players outside your view are skipped.** Far players behind the camera are no longer drawn.
+
+### Compatibility
+
+- Mixed client and server versions stay fully compatible in both directions. This line (Fabric, Paper, and NeoForge) is best-effort.
+- With Iris shaders, packs whose Voxy integration keeps LOD depth out of the vanilla depth buffer (Complementary, for one) draw far players on top of LOD terrain instead of behind it. Players beyond the game's far plane are not drawn at all.

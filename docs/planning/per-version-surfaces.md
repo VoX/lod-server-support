@@ -48,8 +48,12 @@ NeoForge far-player RENDER surface (v0.14.0, this line — a NEW per-line surfac
 renders far players immediate-mode, byte-verbatim with the Fabric twin except its
 loader plumbing: the render pass hangs off `RenderLevelStageEvent` at
 `Stage.AFTER_ENTITIES` (game bus, `getPoseStack()` is the identity `LevelRenderer`
-PoseStack — the same object Fabric's `WorldRenderContext.matrixStack()` yields; NO
-explicit buffer flush — vanilla's downstream `endBatch()` drains it), the crossfade
+PoseStack — the same object Fabric's `WorldRenderContext.matrixStack()` yields; the frame
+frustum is `event.getFrustum()` where Fabric reads `context.frustum()`; since the
+2026-09-04 hardening (far-player-render-hardening-plan.md WI-4) the pass ends the ONE shared
+batch it opened with `endLastBatch()` — the arg-less `endBatch()` stays forbidden — and both
+twins light proxies with the sky-15 floor, frustum-cull the draw calls only, and draw their
+own depth-tested name tags), the crossfade
 kill hangs off `EntityJoinLevelEvent` (game bus, `isClientSide()` = dist AND
 integrated-server thread guard), and the unseated `dispatcher.render` carries an extra
 per-proxy `try/catch` because NeoForge fires third-party render events inside it. The
