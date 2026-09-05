@@ -342,6 +342,9 @@ public final class FarPlayerRenderer {
             var sample = tracked.motion().sample(now);
             Vec3 position = new Vec3(sample.x(), sample.y(), sample.z());
             double distance = position.distanceTo(localPlayer.position());
+            // Port-review fold (h): the depth-buffer quantities (armor lift, overlay gate) are CAMERA
+            // distances, like the tag math — freecam/replay; the caps below stay player distances.
+            double cameraDistance = cameraPosition.distanceTo(position);
             if (distance < minRender || (maxRender > 0 && distance > maxRender)) {
                 continue;
             }
@@ -388,7 +391,7 @@ public final class FarPlayerRenderer {
             // the feature for the session.
             if (proxy.isPassenger()) {
                 try {
-                    proxy.apply(tracked, sample, position, distance,
+                    proxy.apply(tracked, sample, position, cameraDistance,
                             maxRender > 0 ? maxRender : 16384, allowWalk, animationTick,
                             itemCache);
                 } catch (Throwable t) {
@@ -398,14 +401,14 @@ public final class FarPlayerRenderer {
                     // the proxy), a still-seated retry would re-throw into the
                     // whole-pass latch — skip this rider this frame instead.
                     if (!proxy.isPassenger()) {
-                        proxy.apply(tracked, sample, position, distance,
+                        proxy.apply(tracked, sample, position, cameraDistance,
                                 maxRender > 0 ? maxRender : 16384, allowWalk,
                                 animationTick, itemCache);
                     }
                 }
             } else {
                 try {
-                    proxy.apply(tracked, sample, position, distance,
+                    proxy.apply(tracked, sample, position, cameraDistance,
                             maxRender > 0 ? maxRender : 16384, allowWalk, animationTick,
                             itemCache);
                 } catch (Throwable t) {
@@ -469,7 +472,7 @@ public final class FarPlayerRenderer {
                                 position.y - cameraPosition.y,
                                 position.z - cameraPosition.z,
                                 sample.yaw(), partialTick, poseStack, new LiftedBufferSource(bufferSource, skinRenderType(dispatcher, proxy),
-                                        armorLiftBlocks(distance), proxy.liftTiers), light);
+                                        armorLiftBlocks(cameraDistance), proxy.liftTiers), light);
                         drawn++;
                     } else {
                         culled++;
@@ -494,7 +497,7 @@ public final class FarPlayerRenderer {
                                 position.y - cameraPosition.y,
                                 position.z - cameraPosition.z,
                                 sample.yaw(), partialTick, poseStack, new LiftedBufferSource(bufferSource, skinRenderType(dispatcher, proxy),
-                                        armorLiftBlocks(distance), proxy.liftTiers), light);
+                                        armorLiftBlocks(cameraDistance), proxy.liftTiers), light);
                         drawn++;
                     } else {
                         culled++;
@@ -541,12 +544,15 @@ public final class FarPlayerRenderer {
                 Vec3 realPosition = new Vec3(Mth.lerp(partialTick, realPlayer.xOld, realPlayer.getX()),
                         Mth.lerp(partialTick, realPlayer.yOld, realPlayer.getY()),
                         Mth.lerp(partialTick, realPlayer.zOld, realPlayer.getZ()));
-                if (!minecraft.levelRenderer.isSectionCompiled(realPlayer.blockPosition())) continue; // vanilla draws no body there (F4)
+                var realBlockPos = realPlayer.blockPosition();
+                if (!level.isOutsideBuildHeight(realBlockPos.getY())
+                        && !minecraft.levelRenderer.isSectionCompiled(realBlockPos)) continue; // vanilla's own body gate (F4 + port review)
                 double cameraDistanceSq = cameraPosition.distanceToSqr(realPosition);
                 if (cameraDistanceSq < 64.0 * 64.0) continue; // vanilla's own tag range (camera-based, as its cap is)
                 double realDistance = realPosition.distanceTo(localPlayer.position());
                 if (realDistance < minRender || (maxRender > 0 && realDistance > maxRender)) continue;
-                if (!vanillaNameVisibleIgnoringDistance(realPlayer, localPlayer)) continue;
+                if (!vanillaNameVisibleIgnoringDistance(realPlayer, localPlayer,
+                        !realPlayer.isInvisibleTo(localPlayer))) continue;
                 var nameplateRange = realPlayer.getAttribute(NeoForgeMod.NAMETAG_DISTANCE);
                 if (nameplateRange != null) {
                     double range = nameplateRange.getValue();
@@ -970,7 +976,7 @@ public final class FarPlayerRenderer {
                                       LocalPlayer localPlayer, Vec3 position, int light) {
         if (!nameTags) return;
         if ((tracked.latest().poseFlags() & FarPlayerWire.POSE_SNEAK) != 0) return;
-        if (!vanillaNameVisibleIgnoringDistance(proxy, localPlayer)) return;
+        if (!vanillaNameVisibleIgnoringDistance(proxy, localPlayer, true)) return; // a proxy is never invisible; see Proxy.isInvisibleTo
         queueNameTag(out, frustum, proxy, proxy.farName, position, light);
     }
 
@@ -989,12 +995,13 @@ public final class FarPlayerRenderer {
 
     /**
      * Vanilla's {@code LivingEntityRenderer.shouldShowName} ladder MINUS its distance clause
-     * (that clause is exactly what the gap fill supplies): invisibility to the local player
-     * and the team name-tag visibility rules, verbatim.
+     * (that clause is exactly what the gap fill supplies): the caller's invisibility verdict
+     * ({@code !isInvisibleTo(localPlayer)} for a real player, {@code true} for a proxy — whose
+     * {@code isInvisibleTo} is overridden to keep VANILLA's tag off it) and the team name-tag
+     * visibility rules, verbatim.
      */
     private static boolean vanillaNameVisibleIgnoringDistance(AbstractClientPlayer player,
-                                                              LocalPlayer localPlayer) {
-        boolean visible = !player.isInvisibleTo(localPlayer);
+                                                              LocalPlayer localPlayer, boolean visible) {
         Team team = player.getTeam();
         Team own = localPlayer.getTeam();
         if (team == null) return visible;
@@ -1278,6 +1285,29 @@ public final class FarPlayerRenderer {
             }
             return super.getPlayerInfo();
         }
+
+        /** Port-review fold (h): with an entity-tracking radius under 64 blocks (view-distance ≤ 3)
+
+         *  a proxy exists INSIDE vanilla's 64-block tag range, and {@code dispatcher.render} would
+
+         *  then draw vanilla's own name tag over ours — {@code LivingEntityRenderer.shouldShowName}
+
+         *  has no per-entity switch except this invisibility verdict, which it reads for the TAG
+
+         *  only (the body reads {@code isInvisible()}, still false). Our own ladder is handed
+
+         *  {@code visible = true} for proxies. Residual: an allied team with
+
+         *  canSeeFriendlyInvisibles still gets vanilla's tag (accepted). */
+
+        @Override
+
+        public boolean isInvisibleTo(Player player) {
+
+            return true;
+
+        }
+
 
         @Override
         public boolean shouldRenderAtSqrDistance(double distanceSquared) {
