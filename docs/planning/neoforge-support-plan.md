@@ -307,7 +307,8 @@ path than Loom's `META-INF/jars/`, which is why §4.2's release_check walker
 must be generalized BEFORE the neoforge checks can mean anything) with
 **fallback pre-authorized: Paper-style shading** — known-good in-repo,
 (AMENDED 2026-08-15: sqlite-jdbc moved to a nested jarJar library — the flat
-shade collided with the community Voxy port's module; neoforge-jarjar-sqlite-plan.md)
+shade collided with the community Voxy port's module; neoforge-jarjar-sqlite-plan.md;
+AMENDED AGAIN 2026-09-06: zstd-jni nests too, issue #275 — issues-275-282-fix-plan.md)
 no-relocate-org.sqlite rule applies. Server parity gates: the neoforge
 contract suite (§5.1), the gametest smoke subset (§5.2), the §5.3/§5.5
 soak-or-floor.

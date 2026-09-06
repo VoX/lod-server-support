@@ -400,7 +400,10 @@ def _check_nested_lib(jar, base, names, jars_list, lib, problems):
     if not ver or path.rsplit("/", 1)[-1] != f"{artifact}-{ver}.jar":
         problems.append(f"{base}: jarjar artifactVersion {ver!r} disagrees with the "
                         f"nested jar filename {path!r}")
-    if ver:
+    if ver and not ver.split(".")[0].isdigit():
+        problems.append(f"{base}: jarjar artifactVersion {ver!r} has a non-numeric leading "
+                        "component — the [v,major+1.0.0.0) range cannot be derived")
+    elif ver:
         want_range = f"[{ver},{int(ver.split('.')[0]) + 1}.0.0.0)"
         got_range = str(ver_obj.get("range", "")) if isinstance(ver_obj, dict) else ""
         if got_range != want_range:
@@ -422,7 +425,9 @@ def _check_nested_lib(jar, base, names, jars_list, lib, problems):
     # artifact, every platform included — the same bytes other mods nest, so
     # jarjar's same-version tie-break can never land on a trimmed copy (the exact
     # inverse of the flat-jar rule). The pins below make "stock" an assertion,
-    # not a comment:
+    # not a comment — by PROXY (library class + module-info + one off-matrix
+    # native); the byte-identity proof against the Maven artifact stays the
+    # manual step of neoforge-jarjar-sqlite-plan.md §6.
     if lib["lib_class"] not in nested_names:
         problems.append(f"{base}: nested {label} jar carries no {lib['lib_class']} — "
                         "a classes-less artifact silently degrades the store to off")
@@ -2314,8 +2319,9 @@ def _selftest():
                   "missing nested license not caught", drop_license=True)
         _neo_case("undeclared in jarjar metadata",
                   "undeclared nested jar not caught", undeclared_extra=True)
-        _neo_case("looks TRIMMED", "trimmed nested jar not caught", stock=False)
-        _neo_case("lost its module-info", "module-info loss not caught", stock=False)
+        _neo_case("nested sqlite jar looks TRIMMED", "trimmed nested jar not caught", stock=False)
+        _neo_case("nested sqlite jar lost its module-info", "module-info loss not caught",
+                  stock=False)
         # issue #275: zstd-jni nests too — every zstd-specific branch pinned, plus the
         # two flat-leak shapes the old flat-shaded layout would have passed.
         _neo_case("flat com/github/luben entries",
