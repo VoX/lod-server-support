@@ -198,7 +198,6 @@ def storeNativeStrip = { el ->
     storeNativeRoots.any { p.startsWith(it) }
 }
 
-
 // The nested libraries' jarJar descriptor (neoforge-jarjar-sqlite-plan.md §3, one
 // entry per jarJarStore artifact since issue #275 added zstd-jni): generated from
 // the RESOLVED artifacts so a version bump cannot desync it. Range
@@ -217,7 +216,11 @@ def generateJarJarMetadata = tasks.register('generateJarJarMetadata') {
     inputs.files(cfg)
     outputs.file(outFile)
     doLast {
-        def entries = resolved.get().collect { art ->
+        def artifacts = resolved.get()
+        if (artifacts.isEmpty()) {
+            throw new GradleException("jarJarStore resolved no artifacts — nothing to nest")
+        }
+        def entries = artifacts.collect { art ->
             def id = art.variant.owner
             if (!(id instanceof org.gradle.api.artifacts.component.ModuleComponentIdentifier)) {
                 throw new GradleException("jarJarStore resolved a non-module artifact " +
@@ -231,13 +234,16 @@ def generateJarJarMetadata = tasks.register('generateJarJarMetadata') {
                 throw new GradleException("jarJarStore artifact '${art.file.name}' is not " +
                         "named '${expected}' — the jarJar path would not match the nested entry")
             }
-            def nextMajor = (id.version.tokenize('.')[0] as int) + 1
+            def major = id.version.tokenize('.')[0]
+            if (!major.isInteger()) {
+                throw new GradleException("jarJarStore artifact ${id.module}:${id.version} has a " +
+                        "non-numeric leading version component — the [v,major+1.0.0.0) range " +
+                        "cannot be derived")
+            }
+            def nextMajor = (major as int) + 1
             [group: id.group, artifact: id.module, version: id.version,
              range: "[${id.version},${nextMajor}.0.0.0)", path: "META-INF/jarjar/${art.file.name}"]
         }.sort { it.artifact }
-        if (entries.isEmpty()) {
-            throw new GradleException("jarJarStore resolved no artifacts — nothing to nest")
-        }
         def jars = entries.collect { e -> """\
     {
       "identifier": {
@@ -278,7 +284,8 @@ shadowJar {
     exclude 'org/slf4j/**'
     exclude 'META-INF/maven/org.slf4j/**'
     exclude storeNativeStrip
-    // zstd-jni's BSD-2 notice must accompany the natives we redistribute.
+    // zstd-jni's BSD-2 notice must accompany the natives we redistribute (they ride
+    // inside the nested stock jar now, which carries no license file of its own).
     from(rootProject.file("LICENSE")) {
         rename { "${it}_lod-server-support-neoforge" }
     }
