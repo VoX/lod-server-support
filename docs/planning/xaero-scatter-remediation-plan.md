@@ -510,4 +510,10 @@ the client `XaeroMap:` tokens and `ingest_parked` before/after; Xaero's "Max loa
   `service.up_to_date` 2144 = the client's every resync ask, `columns_sent` 0 (BEFORE: 449 /
   0, 184 re-sent). Gates on the final commit: T1 2321/0, T2 76/0, Paper 10/0 contract +
   the rest, NeoForge 23/0, `check_soak --selftest` 273.
-- **Ported to 1.21.11 (2026-09-05, PR against the line's support branch):** fabric-api 0.141.4+1.21.11 nests lifecycle-events 2.6.15 → the 2-arg `(level, chunk)` callback; `getPos().x` field spelling in `DirtyContentFilter.seedLoaded` / `ServerReceiverGlue.onChunkLoaded`; `identifier()` and `structure=` as on main; WI-6: the shared test sentence, banner, both extractor comments (`LSSClientNetworking` was already correct). Gates per the port PR.
+- **Port smokes (2026-09-05, `cold-restart-resync` on every line, all PASS 0 violations):**
+  `marked_total` / `suppressed_total` / `seeded_load` = 26.1 0/441/441, 1.21.11 16/441/441,
+  1.21.10 0/441/441 (its prerequisite fresh-backfill redded once on the catalogued A7
+  read-timeout storm — 0 "Failed to read chunk" lines — and the scenario passed on the direct
+  re-run), 1.21.1 0/441/441; every line answered all 2144 resync asks `up_to_date` with 0
+  columns re-sent. The §3 "smoke" cells are filled.
+- **Ported to 1.21.11 (2026-09-05, PR against the line's support branch):** fabric-api 0.141.4+1.21.11 nests lifecycle-events 2.6.15 → the 2-arg `(level, chunk)` callback; `getPos().x` field spelling in `DirtyContentFilter.seedLoaded` / `ServerReceiverGlue.onChunkLoaded`; `identifier()` and `structure=` as on main; WI-6: the shared test sentence, banner, both extractor comments (`LSSClientNetworking` was already correct). Gates per the port PR. Smoke (2026-09-05) `cold-restart-resync` PASS: marked 16 / suppressed 441 / seeded_load 441, 2144 up_to_date, 0 columns re-sent.
