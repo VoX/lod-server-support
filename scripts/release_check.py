@@ -55,9 +55,10 @@ COMMON_FORBIDDEN = ("dev/vox/lss/common/soak/", "dev/vox/lss/common/benchmark/")
 # (Modrinth voxy-server-side). The VSS jars are branded byte-copies of the LSS jars — same
 # classes, mod id `lss` / plugin name LodServerSupport, so they get the IDENTICAL safety
 # gate plus an identity guardrail (check_vss_*_identity). See docs/planning/ci-dual-publish.md.
-# v0.11.0 release scope (user decision 2026-08-15): NeoForge SHIPS only on the
-# 1.21.1 line. Families gated on SHIP_NEOFORGE (found jars still get full jar
-# checks); mirrors .github/line.env LINE_SHIP_NEOFORGE — flip BOTH together.
+# NeoForge SHIPS on this line (v0.11.0 scope, user decision 2026-08-15; since
+# v0.13.1 the 26.x lines ship it too). Families gated on SHIP_NEOFORGE (found jars
+# still get full jar checks); mirrors .github/line.env LINE_SHIP_NEOFORGE — flip
+# BOTH together.
 SHIP_NEOFORGE = True
 RELEASE_GLOBS = ("lod-server-support-fabric-*.jar", "lod-server-support-paper-*.jar",
                  "voxy-server-side-fabric-*.jar", "voxy-server-side-paper-*.jar") + ((
