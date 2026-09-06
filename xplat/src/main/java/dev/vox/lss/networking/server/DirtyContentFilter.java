@@ -112,7 +112,10 @@ public class DirtyContentFilter {
      * genuinely changed in between — the metadata-only first save is then suppressed
      * like any later re-save. Fail-open by omission: a serialization error seeds nothing
      * (the first save then reads absent → changed, today's behavior). Runs on the
-     * loaders' main thread inside the monitor (same contention point as the hook).
+     * loaders' main thread; the serialization runs OUTSIDE the monitor. A seed racing an
+     * off-main save of the same chunk is fail-open too: whichever hash lands last is a
+     * real observation of the chunk, and a stale one costs one spurious mark, never a
+     * missed one.
      */
     public void seedLoaded(ServerLevel level, LevelChunk chunk, String dimension) {
         seedLoaded(level, chunk, chunk.getPos().x, chunk.getPos().z, dimension);
@@ -239,6 +242,13 @@ public class DirtyContentFilter {
     /** Cumulative count of suppressed metadata-only re-saves (see {@link #totalSuppressed}). */
     public synchronized long getTotalSuppressed() {
         return this.totalSuppressed;
+    }
+
+    /** Forget a baseline (the 2.x lifecycle module's {@code CHUNK_GENERATE} twin of the
+     *  newly-generated skip): the chunk's next save reads absent → changed, as before. */
+    public synchronized void forget(String dimension, int cx, int cz) {
+        var hashes = this.hashesByDimension.get(dimension);
+        if (hashes != null) hashes.remove(PositionUtil.packPosition(cx, cz));
     }
 
     /** Cumulative count of chunk-load baselines (see {@link #totalSeededLoads}). */
