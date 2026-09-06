@@ -332,6 +332,11 @@ public final class BenchmarkMetricsExporter {
         dirtyMap.put("marked_total", dirtyTracker.getTotalMarked());
         var contentFilter = src.dirtyContentFilter();
         dirtyMap.put("suppressed_total", contentFilter != null ? contentFilter.getTotalSuppressed() : 0L);
+        // WI-1a (xaero-scatter-remediation-plan.md): chunk-load baselines (cumulative) and
+        // the live baseline count — a GAUGE (falls on eviction, zero after a restart), never
+        // a check_soak monotonic field. Paper zero-fills both (no content filter).
+        dirtyMap.put("seeded_load", contentFilter != null ? contentFilter.getTotalSeededLoads() : 0L);
+        dirtyMap.put("entries", contentFilter != null ? contentFilter.entryCount() : 0);
         result.put("dirty", dirtyMap);
 
         var bandwidthMap = new LinkedHashMap<String, Object>();

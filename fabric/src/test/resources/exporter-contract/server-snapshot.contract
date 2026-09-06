@@ -9,8 +9,10 @@
 bandwidth.total_bytes=long
 dedup.groups=int
 dirty.broadcast_positions=long
+dirty.entries=int
 dirty.marked_total=long
 dirty.pending=int
+dirty.seeded_load=long
 dirty.suppressed_total=long
 disk.all_air=long
 disk.completed=long

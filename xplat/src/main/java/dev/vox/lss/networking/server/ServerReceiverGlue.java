@@ -70,6 +70,7 @@ public final class ServerReceiverGlue {
      *  cycles would otherwise accrete entries across sessions — review C1-9). */
     public static void clearClientInfo() {
         CLIENT_DATA_VERSIONS.clear();
+        clearPendingLoadSeeds();
     }
 
     /**
@@ -115,6 +116,151 @@ public final class ServerReceiverGlue {
             applySaveObservationToStore(service.getLodStore(), dimension,
                     chunk.getPos().x(), chunk.getPos().z(), obs);
         }
+    }
+
+    /**
+     * The chunk-LOAD seam body (xaero-scatter-remediation-plan.md WI-1b Option L; each
+     * loader's chunk-load event — Fabric {@code ServerChunkEvents.CHUNK_LOAD}, NeoForge
+     * {@code ChunkEvent.Load} — both fired from the FULL status task on the main thread,
+     * with the light engine already holding the chunk's data). Seeds the dirty content
+     * filter's baseline so the chunk's first metadata-only save no longer reads as a
+     * content change (the first-observed-save storm). Same gates as the save hook: FULL
+     * chunks only, service live + enabled, and the skip predicate below — a seed nobody
+     * will ever be broadcast to is wasted serialization. Under a chunk system that never
+     * fires the event the filter simply behaves as before (diag {@code seeded_load=}
+     * reads 0 on a lively server — that is the live instrument).
+     *
+     * <p>{@code newlyGenerated} chunks are NOT seeded (panel fold, 2026-09-05): a
+     * chunk another player's walk-in just generated must keep marking dirty at its
+     * first save — that broadcast is the ONE revival path for a position a
+     * gen-disabled server parked as NOT_GENERATED (CLAUDE.md's dirty-tracker contract),
+     * and no client holds a never-served column, so the mark costs nothing. The flag
+     * is fabric-api 4.x's third callback argument / NeoForge's {@code isNewChunk()};
+     * the 2.x lifecycle module has no flag but fires {@code CHUNK_GENERATE} right after
+     * {@code CHUNK_LOAD} for generated chunks — {@link #onChunkGenerated} forgets the
+     * baseline the load just seeded.
+     */
+    public static void onChunkLoaded(ServerLevel level, ChunkAccess chunk,
+                                     RequestProcessingService service, boolean newlyGenerated) {
+        if (!(chunk instanceof LevelChunk levelChunk)) return;
+        if (newlyGenerated || !LSSServerConfig.CONFIG.enabled) return;
+        if (service == null || skipDirtyHash(service.hasEverRegisteredPlayer(),
+                service.getLodStore() != null, service.timestampCacheBootedEmpty())) {
+            // Nobody can seed yet: the persistent spawn set loads in prepareLevels BEFORE
+            // SERVER_STARTED creates the service, and a server with no LSS client yet keeps
+            // the skip gate shut — both would leave a storm FLOOR (review M1: ~25 spawn
+            // chunks by default, unbounded under /forceload). Record the POSITION (no
+            // serialization) and seed it when the flush site opens.
+            recordPendingLoadSeed(level.dimension(), chunk.getPos().x(), chunk.getPos().z());
+            return;
+        }
+        String dimension = DIMENSION_STRINGS.computeIfAbsent(level.dimension(),
+                key -> key.identifier().toString());
+        service.getDirtyContentFilter().seedLoaded(level, levelChunk, dimension);
+    }
+
+    /**
+     * The 2.x-lifecycle-module twin of the {@code newlyGenerated} flag: fabric-api 2.6.x
+     * fires {@code CHUNK_GENERATE} right after {@code CHUNK_LOAD} (same injection) for a
+     * freshly generated chunk, so the baseline the load seeded a moment ago is forgotten
+     * here and the chunk's first save marks dirty as it always did. A pending record is
+     * dropped too. The 4.x/NeoForge loaders never call this (they skip the seed up front).
+     */
+    public static void onChunkGenerated(ServerLevel level, ChunkAccess chunk,
+                                        RequestProcessingService service) {
+        if (!(chunk instanceof LevelChunk)) return;
+        int cx = chunk.getPos().x();
+        int cz = chunk.getPos().z();
+        synchronized (PENDING_LOAD_SEEDS) {
+            var set = PENDING_LOAD_SEEDS.get(level.dimension());
+            if (set != null && set.remove(dev.vox.lss.common.PositionUtil.packPosition(cx, cz))) {
+                pendingLoadSeedCount--;
+            }
+        }
+        if (service == null || !LSSServerConfig.CONFIG.enabled) return;
+        String dimension = DIMENSION_STRINGS.computeIfAbsent(level.dimension(),
+                key -> key.identifier().toString());
+        service.getDirtyContentFilter().forget(dimension, cx, cz);
+    }
+
+    /** Positions loaded while no one could seed them (see {@link #onChunkLoaded}); per
+     *  dimension, bounded. Main-thread by both loaders' event contracts, but guarded by
+     *  the map's own monitor anyway (review fold: an off-main chunk system must corrupt
+     *  nothing, and the cost is nil — these run only while the gate is shut). Cleared
+     *  with the server's other sidecar facts. */
+    private static final java.util.Map<ResourceKey<Level>, it.unimi.dsi.fastutil.longs.LongOpenHashSet>
+            PENDING_LOAD_SEEDS = new java.util.HashMap<>();
+    /** Past this many recorded positions the excess stays unseeded (one spurious mark
+     *  each at its first save — today's behavior) rather than growing without bound on
+     *  a server that never sees an LSS client. Sized so the one-time flush (a column
+     *  serialization each, ~30-60 µs) stays around 100 ms on the tick thread. */
+    static final int MAX_PENDING_LOAD_SEEDS = 2048;
+    private static int pendingLoadSeedCount; // under PENDING_LOAD_SEEDS
+
+    static void recordPendingLoadSeed(ResourceKey<Level> dimension, int cx, int cz) {
+        synchronized (PENDING_LOAD_SEEDS) {
+            if (pendingLoadSeedCount >= MAX_PENDING_LOAD_SEEDS) return;
+            var set = PENDING_LOAD_SEEDS.computeIfAbsent(dimension,
+                    k -> new it.unimi.dsi.fastutil.longs.LongOpenHashSet());
+            if (set.add(dev.vox.lss.common.PositionUtil.packPosition(cx, cz))) pendingLoadSeedCount++;
+        }
+    }
+
+    public static int pendingLoadSeedCount() {
+        synchronized (PENDING_LOAD_SEEDS) {
+            return pendingLoadSeedCount;
+        }
+    }
+
+    public static void clearPendingLoadSeeds() {
+        synchronized (PENDING_LOAD_SEEDS) {
+            PENDING_LOAD_SEEDS.clear();
+            pendingLoadSeedCount = 0;
+        }
+    }
+
+    /**
+     * Seed every recorded position that is STILL loaded (resolved through the public
+     * {@code getChunkNow} — chunk-system-proof, no holder enumeration) and forget the
+     * rest. Called where seeding becomes possible: right after the loaders construct the
+     * service (SERVER_STARTED / the LAN publish) and when the first registration opens
+     * the skip gate. Main thread. While the gate is still shut nothing is flushed — the
+     * set keeps recording. @return how many chunks were seeded.
+     */
+    public static int flushPendingLoadSeeds(net.minecraft.server.MinecraftServer server,
+                                            RequestProcessingService service) {
+        if (service == null || !LSSServerConfig.CONFIG.enabled) return 0;
+        if (skipDirtyHash(service.hasEverRegisteredPlayer(), service.getLodStore() != null,
+                service.timestampCacheBootedEmpty())) return 0;
+        java.util.Map<ResourceKey<Level>, it.unimi.dsi.fastutil.longs.LongOpenHashSet> pending;
+        synchronized (PENDING_LOAD_SEEDS) {
+            if (pendingLoadSeedCount == 0) return 0;
+            pending = new java.util.HashMap<>(PENDING_LOAD_SEEDS); // snapshot; seed outside the monitor
+            PENDING_LOAD_SEEDS.clear();
+            pendingLoadSeedCount = 0;
+        }
+        int seeded = 0;
+        var filter = service.getDirtyContentFilter();
+        for (var e : pending.entrySet()) {
+            ServerLevel level = server.getLevel(e.getKey());
+            if (level == null) continue;
+            String dimension = DIMENSION_STRINGS.computeIfAbsent(e.getKey(),
+                    key -> key.identifier().toString());
+            var it = e.getValue().iterator();
+            while (it.hasNext()) {
+                long packed = it.nextLong();
+                LevelChunk chunk = level.getChunkSource().getChunkNow(
+                        dev.vox.lss.common.PositionUtil.unpackX(packed),
+                        dev.vox.lss.common.PositionUtil.unpackZ(packed));
+                if (chunk == null) continue; // unloaded since: its reload records again
+                filter.seedLoaded(level, chunk, dimension);
+                seeded++;
+            }
+        }
+        if (seeded > 0) {
+            LSSLogger.info("Dirty content filter: seeded " + seeded + " already-loaded chunk(s)");
+        }
+        return seeded;
     }
 
     /**
