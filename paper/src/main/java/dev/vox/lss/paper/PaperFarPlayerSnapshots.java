@@ -109,13 +109,20 @@ final class PaperFarPlayerSnapshots {
             for (var meta : bukkit.getMetadata("vanished")) {
                 if (meta.asBoolean()) return true;
             }
+            // Issue #282: a LibsDisguises disguise replaces the player's spawn with a
+            // disguise-specific UUID, so the CLIENT handoff belt (no vanilla entity with
+            // the roster UUID → draw the proxy) reveals the disguised player through the
+            // LOD terrain. Only the server knows — a throwing read is wrapped by the
+            // bridge into an IllegalStateException and lands in the catch below (HIDDEN).
+            if (LibsDisguisesBridge.isDisguised(bukkit)) {
+                return true;
+            }
             return false;
         } catch (Exception e) {
             if (!hiddenReadWarned) {
                 hiddenReadWarned = true;
                 dev.vox.lss.common.LSSLogger.warn(
-                        "Far-player privacy read (permission/vanish) threw — treating the"
-                                + " affected player as HIDDEN (fail-safe direction; a raced"
+                        "Far-player privacy read (permission/vanish/disguise) threw — treating the"                                + " affected player as HIDDEN (fail-safe direction; a raced"
                                 + " read must never leak a hidden position). One warn per"
                                 + " session (" + e + ")");
             }
