@@ -259,7 +259,7 @@ tasks.register('vssJar') {
 tasks.named('shadowJar') { finalizedBy tasks.named('vssJar') }
 
 tasks.withType(JavaCompile).configureEach {
-    // 1.21.11 line: MC 1.21.x targets Java 21, and the dev bundle's codebook cannot parse
+    // 1.21.10 line: MC 1.21.x targets Java 21, and the dev bundle's codebook cannot parse
     // Java 25 class files — build this line on a Java 21 JVM (build.yml pins java-version 21).
     it.options.release = 21
 }

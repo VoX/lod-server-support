@@ -413,3 +413,23 @@ banner's stale `LINE_SHIP_NEOFORGE=false` / `support/mc26.1-v0.13` claim (pre-ex
 contradicted by line.env since v0.13.1) was refreshed in the same fold. Reviewer A also
 re-proved "stock" on 26.1's own jar: both nested jars sha256-identical to the Maven
 artifacts, in the LSS and the VSS jar alike.
+
+Port-review addendum (1.21.11, 1.21.10, 1.21.1 pairs, 2026-09-06 — all six ship, no
+MAJORs, no minors): every port's code diff is byte-identical to main's (the only
+diff-of-diffs residue is pre-existing line-flavor context — `dimension().location()`,
+the folia absence/false pins, the 1.21.1 `additionalRuntimeClasspath` rows, the 1.21.10
+fixture without `LSSConfigMenu`); the new classes compile and ship as Java 21 class files
+on the 1.21.x lines against each line's own paper-api (javap-verified members,
+`Bukkit.getServer()` a null-returning field read, so the plain-JUnit guard is real); the
+nested jars are sha256-identical to the Maven artifacts on every line; the NeoForge gate
+is live under `SHIP_NEOFORGE=False` too (build.yml builds the module before release_check,
+the jar loops are ungated — 7/7 positive-control mutations red on 1.21.10's real jar).
+Housekeeping folded from the reviews' pre-existing-nit lists: the 1.21.10 plugin.yml
+test's javadoc argued the WRONG folia polarity (a re-port trap — now states the line's
+own reason), `paper/build.gradle`'s "1.21.11 line" label on 1.21.10, the 1.21.1
+release_check `SHIP_NEOFORGE` comment ("only on the 1.21.1 line" — the 26.x lines ship it
+too since v0.13.1) and the "26.2 build" label on 1.21.1's `neoforge_version`. Left as
+recorded: the hot-reload null-handle race (fails HIDDEN — the safe direction), the
+`.gitignore` `org/` asymmetry (no `org/`-rooted stub exists), the LibsDisguises signature
+being verified against master only (drift degrades to the pre-fix visible verdict with one
+warn — the reporter's confirmation is the gate).

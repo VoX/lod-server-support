@@ -25,11 +25,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * plugin: an unresolvable {@code main} or wrong {@code api-version} aborts plugin load, a
  * renamed plugin moves the {@code plugins/LodServerSupport/} data folder the config and
  * soak staging rely on, and {@code folia-supported} must stay FALSE on the 1.21.10
- * line — Folia publishes real MC 1.21.11 builds (this line always had them; the frozen
- * v0.8.0-era support branch carried the same presence pin), so the guarded failure is a
- * jar that silently STOPS loading on Folia. (R-7 direction-flip note for future re-ports:
- * a fresh cut inherits main's PRESENCE pin and must actively re-derive the per-line
- * flavor — presence is only correct on lines Folia actually publishes for.)
+ * line — Folia publishes NO MC 1.21.10 build (its versions jump 1.21.8 -> 1.21.11), so
+ * presence would advertise a platform with no loadable host, and the guarded regression
+ * is a forward-merge resurrecting a sibling line's true flag (see the pin's own comment).
+ * (R-7 direction-flip note for future re-ports: a fresh cut inherits main's PRESENCE pin
+ * and must actively re-derive the per-line flavor — presence is only correct on lines
+ * Folia actually publishes for.)
  */
 class PluginYmlContractTest {
 
