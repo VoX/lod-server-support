@@ -41,7 +41,6 @@ class PaperFarPlayerSnapshotsTest {
         me.libraryaddict.disguise.DisguiseAPI.reset();
     }
 
-
     private static org.bukkit.entity.Player bukkit() {
         var p = mock(org.bukkit.entity.Player.class);
         when(p.getMetadata(anyString())).thenReturn(List.of());

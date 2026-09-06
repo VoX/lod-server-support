@@ -2,12 +2,14 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-> **Support branch: `support/mc26.1-v0.13`** (v0.12.0 port of the branch below)
+> **Support branch: `support/mc26.1-v0.14`** (the live v0.14.x line; `-v0.13` was
+> the v0.12.0/v0.13.x port of the branch below, `-v0.11` the one before it)
 > **Previous: `support/mc26.1-v0.11`** — the v0.11.0 delta-port of main
 > (@ 9cb32ade, the last pre-G merge) onto the v0.10.0 26.1 line, targeting
-> **Minecraft 26.1.2** on Fabric + Paper + NeoForge (the NeoForge module BUILDS
-> but does NOT SHIP at v0.11.0 — LINE_SHIP_NEOFORGE=false, user decision
-> 2026-08-15). Do NOT merge to `main`;
+> **Minecraft 26.1.2** on Fabric + Paper + NeoForge (the NeoForge module did NOT
+> SHIP at v0.11.0 — LINE_SHIP_NEOFORGE=false, user decision 2026-08-15 — and
+> SHIPS since v0.13.1: LINE_SHIP_NEOFORGE=true in `.github/line.env`, user
+> decision 2026-08-27, `release_check.py` mirrors it by hand). Do NOT merge to `main`;
 > releases tag `v<x.y.z>+mc26.1` (make_latest false). Per-line surfaces and
 > their verification live in **docs/planning/per-version-surfaces.md** (the
 > canonical table — this banner is a POINTER, never a second live copy) and the
