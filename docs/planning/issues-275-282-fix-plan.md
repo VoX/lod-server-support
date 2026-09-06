@@ -310,3 +310,50 @@ each line's live branch (`main`, `support/mc26.1-v0.14`, `support/mc1.21.11-v0.1
   static reset seam + INFO at resolve (the enable plan is order-pinned). MINORs folded: the
   per-viewer seam exists (hide-for-all is v1, not "ruled out"), Folia support stated, the
   `contains` pins, `hiddenFor` is byte-identical on all five, the reply wording.
+
+## 7. Execution record (2026-09-06)
+
+Executed on main (`fix/issues-275-282`, 6630bc3b) and ported literally to the four lines
+(the change-core applier; every replacement asserted exactly one old-core occurrence —
+nofind=0 on every line).
+
+| Tree | Branch | `:paper:test` | `:neoforge:build` | release_check selftest / jars | extra |
+|---|---|---|---|---|---|
+| 26.2 | `fix/issues-275-282` | 503/0 | ✔ | 104 / OK (all six families) | NeoForge gametest smoke 8/8 |
+| 26.1 | `fix/issues-275-282-mc26.1` | ✔ | ✔ | 104 / OK | |
+| 1.21.11 | `fix/issues-275-282-mc1.21.11` | ✔ | ✔ | 104 / OK | |
+| 1.21.10 | `fix/issues-275-282-mc1.21.10` | ✔ | ✔ | 104 / OK | |
+| 1.21.1 | `fix/issues-275-282-mc1.21.1` | ✔ | ✔ | 104 / OK | gametest smoke 8/8 + the LIVE gate below |
+
+Deviations from §2, all deliberate:
+- WI-B's bridge lives in the flat `dev.vox.lss.paper` package (`LibsDisguisesBridge.java`
+  beside `PaperFarPlayerSnapshots`), not a `compat` subpackage — the Paper module keeps
+  everything in one package (`PaperSoakBridge`, `FoliaSupport`), and the package-private
+  test seams need the tests beside it.
+- The class-INVISIBLE flavor (`ClassNotFoundException`) warns once as well: it is only
+  reachable with the plugin ENABLED (the gate runs before resolution), so an invisible API
+  is a softdepend/classloader problem worth one line — not `MeliusVanishBridge`'s quiet
+  "no mod installed" case, which here never resolves at all.
+- Every resolve-time failure flavor (invisible / load failure / drift) latches absent with
+  one warn; invoke throws never latch (WI-B.1 as written).
+- The release-notes NeoForge bullet appears only on the lines that SHIP NeoForge (26.2,
+  26.1, 1.21.1 — `LINE_SHIP_NEOFORGE`); the Paper bullet on all five.
+
+Live gate (1.21.1 rig `test-server/neoforge`: NeoForge 21.1.248 + C2ME 0.3.0+alpha.0.93;
+XMMP 0.3.2+1.21.1-neoforge + kotlinforforge 5.12.0 + YACL 3.8.2+1.21.1-neoforge staged):
+- BEFORE (the v0.14.0-shape flat jar — 39 flat `com/github/luben` entries): exits in ~4 s
+  with `ResolutionException: Modules com.github.luben.zstd_jni and lss export package
+  com.github.luben.zstd to module c2me_client_uncapvd` — the issue's exact shape.
+- AFTER (the fixed jar — 0 flat entries, 2 nested): RCON up in ~12 s; FML selects XMMP's
+  `zstd-jni-1.5.7-9.jar` (jarjar logs only the SELECTED candidate per identifier — our
+  1.5.7-3 loses on version, as §4 predicted); `store=full`, the store backfill deposited
+  13128 columns through the selected copy with 0 errors. The Fabric soak dummy CANNOT
+  join a server carrying XMMP ("You are trying to connect to a server that is running
+  NeoForge, but you are not" — the XMMP/KFF/YACL stack registers client-required
+  content), so the wire leg ran on the solo boot.
+- SOLO (the fixed jar, C2ME only): `Found library file "zstd-jni-1.5.7-3.jar" [parent:
+  lod-server-support-neoforge.jar, locator: jarinjar]` — our own nested copy is discovered
+  and used; the dummy joined in ~10 s and `cols zstd=` climbed 17116 → 17802 (raw=0) over
+  20 s with no zstd/store warnings.
+- WI-B has no live gate here (LibsDisguises is a paid plugin) — the reporter's
+  confirmation is the gate, and the reply says so.
