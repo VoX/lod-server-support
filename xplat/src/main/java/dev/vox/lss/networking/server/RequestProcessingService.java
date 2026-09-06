@@ -463,7 +463,13 @@ public class RequestProcessingService {
         // One-way latch for the save hook's skip gate (review P3): until the first LSS
         // client handshakes, no session state (timestamp cache, client-held columns)
         // exists for the dirty-content hash to protect.
+        boolean gateOpens = !this.everRegisteredPlayer;
         this.everRegisteredPlayer = true;
+        if (gateOpens) {
+            // The gate just opened: seed the chunks loaded while it was shut (WI-1b, the
+            // storm floor) — main thread (both loaders run the handshake receiver there).
+            ServerReceiverGlue.flushPendingLoadSeeds(this.server, this);
+        }
         var state = this.players.computeIfAbsent(player.getUUID(), uuid -> {
             var s = new PlayerRequestState(player, LSSConstants.SYNC_ON_LOAD_SLOT_CAP,
                     config.generationConcurrencyLimitPerPlayer);
