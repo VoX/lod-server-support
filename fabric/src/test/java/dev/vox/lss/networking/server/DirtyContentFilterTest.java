@@ -149,6 +149,11 @@ class DirtyContentFilterTest {
         assertTrue(filter.contentChanged(null, null, 3, 4, dim),
                 "a real change after the load still marks");
         assertEquals(1, filter.entryCount(), "an update replaces the baseline, no new entry");
+        // The 2.x-module twin of the newly-generated skip: forgetting the baseline makes the
+        // chunk's next save a first observation again (the gen-disabled revival broadcast).
+        filter.forget(dim, 3, 4);
+        assertEquals(0, filter.entryCount());
+        assertTrue(filter.contentChanged(null, null, 3, 4, dim), "forgotten: the next save marks");
     }
 
     /** A throwing serializer seeds NOTHING (fail-open by omission): no entry, no count, and

@@ -172,7 +172,7 @@ public class LSSServerNetworking {
             }
             LSSLogger.info("Starting " + Brand.shortName() + " LOD request processing service");
             requestService = new RequestProcessingService(server);
-        ServerReceiverGlue.flushPendingLoadSeeds(server, requestService); // the pre-service spawn set
+            ServerReceiverGlue.flushPendingLoadSeeds(server, requestService); // the pre-service spawn set
         });
 
         ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
@@ -202,7 +202,7 @@ public class LSSServerNetworking {
         // (level, chunk) — surfaces row 22.
         net.fabricmc.fabric.api.event.lifecycle.v1.ServerChunkEvents.CHUNK_LOAD.register(
                 (level, chunk, generated) ->
-                        ServerReceiverGlue.onChunkLoaded(level, chunk, requestService));
+                        ServerReceiverGlue.onChunkLoaded(level, chunk, requestService, generated));
 
         // The shared /lsslod tree (xplat since N-2), registered through Fabric's event.
         net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback.EVENT.register(

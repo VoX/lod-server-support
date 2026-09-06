@@ -400,6 +400,9 @@ SERVER_MONOTONIC = (
     # the raw JSONL for A/B comparisons (soak_report does not surface them).
     "generation.order_gated", "generation.inversions",
     "dirty.broadcast_positions", "dirty.suppressed_total",
+    # WI-1a chunk-load baselines — a counter, so monotonicity is free armor (dirty.entries is
+    # a GAUGE and deliberately absent).
+    "dirty.seeded_load",
     "bandwidth.total_bytes",
     # The flagship a9bee8d honest-re-resolution counter — emitted every snapshot, cumulative.
     # Was assertable by nothing before round 2; now A6-monotonic and surfaced in the soak_report
@@ -2283,6 +2286,10 @@ def make_handshake_check(scenario, expect_enabled=True):
 # changed); with the chunk-load baseline the loaded disc's first saves are suppressed.
 COLD_RESTART_MAX_MARKED = 50
 COLD_RESTART_MIN_SUPPRESSION_RATIO = 0.9
+# Premise floor: the restarted server's loaded disc (~441 chunks at the harness view
+# distance) saves once each, so the filter must have OBSERVED saves — an all-zero pair
+# means the hook/seam never ran, and both legs above would pass vacuously.
+COLD_RESTART_MIN_OBSERVED_SAVES = 100
 
 
 @named_check("cold-restart-resync", ["server.service.up_to_date", "client.responses.up_to_date",
@@ -2312,6 +2319,12 @@ def check_cold_restart_resync(ctx):
                         {"expected": f"marked_total <= {COLD_RESTART_MAX_MARKED}",
                          "marked_total": marked, "suppressed_total": suppressed})
     observed = marked + suppressed
+    if observed < COLD_RESTART_MIN_OBSERVED_SAVES:
+        yield Violation("cold-restart-resync", "final snapshot",
+                        "the content filter observed too few saves — the save hook or the "
+                        "load seam did not run (the suppression legs would pass vacuously)",
+                        {"expected": f"marked_total + suppressed_total >= {COLD_RESTART_MIN_OBSERVED_SAVES}",
+                         "marked_total": marked, "suppressed_total": suppressed})
     if observed > 0 and suppressed / observed < COLD_RESTART_MIN_SUPPRESSION_RATIO:
         yield Violation("cold-restart-resync", "final snapshot",
                         "suppression ratio collapsed on a restart with nothing changed",
@@ -4500,12 +4513,12 @@ def selftest():
 
     # --- cold-restart-resync: warm dominance; re-download caught ---
     clean("cold-restart warm", list(check_cold_restart_resync(_ctx(
-        server_snaps=[_srv(1000, over={"service.up_to_date": 2000})],
+        server_snaps=[_srv(1000, over={"service.up_to_date": 2000, "dirty.suppressed_total": 400})],
         runs={1: [_cli(1000, over={"responses.up_to_date": 2000, "responses.columns": 300,
                                    "requested_total": 2400})]},
         quiescent_server={0}))))
     hits("cold-restart re-download dominated", list(check_cold_restart_resync(_ctx(
-        server_snaps=[_srv(1000, over={"service.up_to_date": 600})],
+        server_snaps=[_srv(1000, over={"service.up_to_date": 600, "dirty.suppressed_total": 400})],
         runs={1: [_cli(1000, over={"responses.up_to_date": 600, "responses.columns": 2100,
                                    "requested_total": 2700})]},
         quiescent_server={0}))), "cold-restart-resync")
@@ -4526,6 +4539,12 @@ def selftest():
     hits("cold-restart suppression ratio collapsed", list(check_cold_restart_resync(_ctx(
         server_snaps=[_srv(1000, over={"service.up_to_date": 2000, "dirty.marked_total": 40,
                                        "dirty.suppressed_total": 100})],
+        runs={1: [_cli(1000, over={"responses.up_to_date": 2000, "responses.columns": 300,
+                                   "requested_total": 2400})]},
+        quiescent_server={0}))), "cold-restart-resync")
+    hits("cold-restart no saves observed (vacuous legs)", list(check_cold_restart_resync(_ctx(
+        server_snaps=[_srv(1000, over={"service.up_to_date": 2000, "dirty.marked_total": 0,
+                                       "dirty.suppressed_total": 0})],
         runs={1: [_cli(1000, over={"responses.up_to_date": 2000, "responses.columns": 300,
                                    "requested_total": 2400})]},
         quiescent_server={0}))), "cold-restart-resync")

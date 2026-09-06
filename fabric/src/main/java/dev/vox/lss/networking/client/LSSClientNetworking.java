@@ -165,8 +165,8 @@ public class LSSClientNetworking {
         // fires only while a world renders — exactly when map rebuilds matter; anywhere
         // it does not (loading screens, hidden window) the tick pump's fallback
         // rebuilds. PER-LINE: the event CLASS is line flavor (26.2 and this line =
-        // level.LevelRenderEvents.END_MAIN; the 1.21.x lines =
-        // world.WorldRenderEvents.END_MAIN) — any end-of-frame point works, the slice
+        // level.LevelRenderEvents.END_MAIN; 1.21.11/1.21.10 = world.WorldRenderEvents.END_MAIN;
+        // 1.21.1 = WorldRenderEvents.END) — any end-of-frame point works, the slice
         // renders nothing (unlike surfaces row 15 there is no ordering invariant to
         // verify on a port).
         net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderEvents

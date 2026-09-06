@@ -991,25 +991,41 @@ keeps the DEBT without the bytes:
   `ColumnCacheStore.removeAsync` per position in the manager) — it waits for a return
   within the TTL and is discarded silently at it.
 - **Bounds.** `MAX_OWED_REGIONS` = 256 insertion-ordered regions (oldest debt evicted
-  first, unreported — its positions were counted dropped at eviction; a region is 1024
-  tiles so the per-region axis never binds; ≈ 4-8 MB at the cap); `OWED_TTL_MILLIS` =
-  10 min per REGION from its first debt → ONE governed report at expiry (at most one
-  re-serve per owed position per TTL — versus four strikes and a park). Releases are HELD
-  while `haltWedged` (a re-declaration burst must not join the full-rate stream) AND while
-  the queue sits at its halt occupancy ("the writer can take it" includes room);
-  occupancy is untouched by construction (the set lives outside the queue). The decode
-  pipeline is ONE thread (`ClientColumnProcessor`), so a queued position is never owed;
-  the invariant does not rest on that — both the insert and the latest-wins REPLACE path
-  pay the debt, and the release re-checks the queue. `owedLock` is never held across a
-  Xaero monitor (the tile-chunk probes run outside it); an owed-only BLOCKED pump keeps
-  §12.9's ~1 Hz ladder throttle.
-- **Diag.** `XaeroMap:` gains `owed=`, `owed_regions=`, `owed_reported=`; `owed=`
-  climbing with `owed_reported=` flat is the alarm that a region set never loads.
+  first, unreported — its positions were counted dropped at eviction — but METERED as
+  `owed_evicted`; a region is 1024 tiles so the per-region axis never binds; ≈ 4-8 MB at
+  the cap); `OWED_TTL_MILLIS` = 10 min per REGION from its first debt, RE-BASED on every
+  expired release → ONE governed report per TTL (at most one re-serve per owed position
+  per TTL — versus four strikes and a park; a region that keeps accruing debt is never a
+  pass-through). READY releases are HELD while `haltWedged` (a re-declaration burst must
+  not join the full-rate stream) AND while the queue sits at its halt occupancy ("the
+  writer can take it" includes room); the TTL release bypasses the occupancy hold (a
+  permanently full queue must not turn the debt back into a silent hole) but not the
+  wedge hold. Occupancy is untouched by construction (the set lives outside the queue).
+  The decode pipeline is ONE thread (`ClientColumnProcessor`), so a queued position is
+  never owed; the invariant does not rest on that — both the insert and the latest-wins
+  REPLACE path pay the debt, the release re-checks the queue (same dimension), and the
+  region-record removals are identity-checked (`remove(key, region)`) so a record
+  re-created under the same key survives. The residual is a report already in
+  `deferredReports`/`mc.execute` racing a fresh arrival — the same window today's
+  governed report has. `owedLock` is never held across a Xaero monitor (the tile-chunk
+  probes run outside it) and never nested with `queueLock`; gauges are incremental
+  (O(1) per shed). An owed-only DRAINABLE pump (empty queue, debt present) runs the
+  ladder at ~5 Hz (every 4th tick — Xaero's loader drains one file per ≥100 ms pass;
+  §12.9's monitor-contention finding); an owed-only BLOCKED pump keeps §12.9's ~1 Hz
+  throttle. The live disable toggle clears the debt with the queue; a WORLD-ID change
+  REPORTS it like the queue's tiles (§12.1(c): the stamps are set and the bytes gone),
+  bounded to `MAX_QUEUE` reports (the rest `owed_evicted`); `regions_waiting=` now counts
+  owed regions too (the whole grant input).
+- **Diag.** `XaeroMap:` gains `owed=`, `owed_regions=`, `owed_reported=`, `owed_evicted=`;
+  `owed=` climbing with `owed_reported=` flat is the alarm that a region set never loads,
+  `owed_evicted=` climbing is the cap or a world change shedding debt.
 - **Pins.** `XaeroMapCompatTest` (awaiting eviction owed / unknown reports / release on
   load+rest / per-pump bound / fresh offer pays / owed feeds the grant / TTL once /
-  wedge gate / tile-scoped release / foreign dimension / region cap / session end). The
-  §12.8 pins stand unchanged. The stub `MapProcessor.createdRegionLoadState` now
-  defaults to the FAITHFUL 0 (the test fixture sets 2 for plain commit tests).
+  wedge gate / tile-scoped release / foreign dimension / region cap (oldest-first, metered)
+  / session end / wedged-stream shed / ungoverned discard / world-change report / disable
+  toggle / byte-cap shed / loaded-but-not-resting hold). The §12.8 pins stand unchanged.
+  The stub `MapProcessor.createdRegionLoadState` defaults to the faithful 0 — a
+  documentation change (both fixtures set it explicitly), not a hazard fix.
 - **Dropped from the plan.** Region-load coalescing (hold small buckets before a grant):
   `grantLoads` is already largest-cluster-first, and holding delays the only thing that
   lowers occupancy — under the target shape it would have wedged the halt time-box.
