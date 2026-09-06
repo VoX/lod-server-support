@@ -164,10 +164,11 @@ public class LSSClientNetworking {
         // The Xaero bridge's per-frame rebuild slice (plan §17). A level-render event
         // fires only while a world renders — exactly when map rebuilds matter; anywhere
         // it does not (loading screens, hidden window) the tick pump's fallback
-        // rebuilds. PER-LINE: the event CLASS is line flavor (26.2 = level.LevelRenderEvents;
-        // the 1.21.x/26.1 lines = WorldRenderEvents.END) — any end-of-frame point
-        // works, the slice renders nothing (unlike surfaces row 15 there is no
-        // ordering invariant to verify on a port).
+        // rebuilds. PER-LINE: the event CLASS is line flavor (this line =
+        // WorldRenderEvents.END; 1.21.11/1.21.10 = world.WorldRenderEvents.END_MAIN;
+        // 26.2/26.1 = level.LevelRenderEvents.END_MAIN) — any end-of-frame point works,
+        // the slice renders nothing (unlike surfaces row 15 there is no ordering
+        // invariant to verify on a port).
         net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents
                 .END.register(context -> ClientNetGlue.onRenderFrame());
     }

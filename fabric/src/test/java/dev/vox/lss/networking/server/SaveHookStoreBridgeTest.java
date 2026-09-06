@@ -118,7 +118,7 @@ class SaveHookStoreBridgeTest {
         }
         assertEquals(ServerReceiverGlue.MAX_PENDING_LOAD_SEEDS, ServerReceiverGlue.pendingLoadSeedCount(),
                 "bounded: the excess stays unseeded rather than growing forever");
-        ServerReceiverGlue.clearClientInfo();
-        assertEquals(0, ServerReceiverGlue.pendingLoadSeedCount(), "dies with the server's sidecar facts");
+        ServerReceiverGlue.clearPendingLoadSeeds();
+        assertEquals(0, ServerReceiverGlue.pendingLoadSeedCount(), "the clear is total");
     }
 }

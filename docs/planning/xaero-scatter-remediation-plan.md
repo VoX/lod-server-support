@@ -483,6 +483,27 @@ the client `XaeroMap:` tokens and `ingest_parked` before/after; Xaero's "Max loa
   the owed feed, two more pins (a classified loaded region still reports; queue-room hold).
   Fresh-backfill on the fixed jar (superflat generation): `dirty.marked_total` 41 /
   `suppressed_total` 2325 / `seeded_load` 2325 — the old baseline read 674 / 1198.
+- **Review round 3 (2026-09-05, 2 Opus per branch × 5 branches, all "merge as-is" or
+  test-only "needs fixes"; folded on main then re-ported):** SEMANTIC — the load event also
+  fires for freshly GENERATED chunks, so a gen-disabled server's walk-in generation was
+  seeded and its first save suppressed, silencing the NOT_GENERATED revival broadcast →
+  newly generated chunks are never seeded (4.x `generated` flag, NeoForge `isNewChunk()`,
+  2.x `CHUNK_GENERATE` → `onChunkGenerated` forgets the baseline; F1/F8-2's "no filter
+  change touches it" holds again). Server hardening: the pending set is monitor-guarded,
+  capped at 2048 (≈100 ms one-time flush), `check_cold_restart_resync` gains a premise
+  floor (≥ 100 saves observed — the two legs were vacuous on an all-zero pair),
+  `dirty.seeded_load` is monotonic/required, docs name the exact render-event members
+  per line and the mixin class per module generation. Bridge hardening: identity-checked
+  record removals, incremental gauges, `owed_evicted`, TTL release bypasses the occupancy
+  hold and re-bases the clock, the disable toggle clears the debt, a world-id change
+  REPORTS it (bounded), owed-only pumps probe at ~5 Hz, dimension-aware queue belt, zero-cap
+  guard; three confounded test pins repaired (cap ordering, load-readiness wait, resting
+  conjunct) and five coverage gaps pinned (wedged-stream shed, ungoverned discard, world
+  change, disable toggle, byte-cap shed). Verified by the reviewers: C2ME-NeoForge
+  0.3.0+alpha.0.93 DOES post `ChunkEvent.Load` (its `LifecycleEventInvoker`), so
+  `seeded_load=0` on that rig would be a real defect, not the documented degrade. Owed
+  after the round: the cold-restart SMOKE soaks on the four port lines (the plan's §3
+  "smoke" cells) — run and recorded below.
 - **AFTER gate (2026-09-05, `soak-results/cold-restart-resync-20260905T202622Z`, PASS 0
   violations):** `dirty.marked_total` 8 / `suppressed_total` 441 / `seeded_load` 441 (the
   restarted server's whole 21×21 loaded disc seeded at load and suppressed at its first save);
