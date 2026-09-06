@@ -98,9 +98,12 @@ class PaperFarPlayerSnapshotsTest {
 
     // ---- issue #282: the LibsDisguises rung (after permission and vanish) ----
 
+    /** The "running plugin" identity token the default gate would hand over. */
+    private static final Object DISGUISE_PLUGIN = new Object();
+
     @Test
     void aDisguisedPlayerIsHidden() {
-        LibsDisguisesBridge.enabledProbe = () -> true;
+        LibsDisguisesBridge.pluginProbe = () -> DISGUISE_PLUGIN;
         var p = bukkit();
         me.libraryaddict.disguise.DisguiseAPI.DISGUISED.add(p);
         assertTrue(PaperFarPlayerSnapshots.hiddenFor(p),
@@ -111,7 +114,7 @@ class PaperFarPlayerSnapshotsTest {
 
     @Test
     void aThrowingDisguiseReadFailsHIDDENNotOpen() {
-        LibsDisguisesBridge.enabledProbe = () -> true;
+        LibsDisguisesBridge.pluginProbe = () -> DISGUISE_PLUGIN;
         var p = bukkit();
         me.libraryaddict.disguise.DisguiseAPI.THROW = new IllegalStateException("raced");
         assertTrue(PaperFarPlayerSnapshots.hiddenFor(p),
@@ -135,7 +138,7 @@ class PaperFarPlayerSnapshotsTest {
 
     @Test
     void aDisabledLibsDisguisesIsIgnored() {
-        LibsDisguisesBridge.enabledProbe = () -> false;
+        LibsDisguisesBridge.pluginProbe = () -> null;
         var p = bukkit();
         me.libraryaddict.disguise.DisguiseAPI.DISGUISED.add(p);
         assertFalse(PaperFarPlayerSnapshots.hiddenFor(p),
@@ -145,7 +148,7 @@ class PaperFarPlayerSnapshotsTest {
 
     @Test
     void absentLibsDisguisesLeavesTheLadderUnchanged() {
-        LibsDisguisesBridge.enabledProbe = () -> true;
+        LibsDisguisesBridge.pluginProbe = () -> DISGUISE_PLUGIN;
         LibsDisguisesBridge.classResolver = name -> {
             throw new ClassNotFoundException(name);
         };
@@ -165,7 +168,7 @@ class PaperFarPlayerSnapshotsTest {
     void theLadderOrderIsPermissionThenVanishThenDisguise() {
         // A throwing disguise read is armed; the earlier rungs must answer HIDDEN without
         // ever consulting it (their verdict is final, and the stub's call count proves it).
-        LibsDisguisesBridge.enabledProbe = () -> true;
+        LibsDisguisesBridge.pluginProbe = () -> DISGUISE_PLUGIN;
         me.libraryaddict.disguise.DisguiseAPI.THROW = new IllegalStateException("must not be reached");
         var byNode = bukkit();
         when(byNode.hasPermission("lss.farplayers.hidden")).thenReturn(true);

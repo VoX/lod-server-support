@@ -12,9 +12,11 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 /**
  * The LibsDisguises bridge (issue #282): binds the verified upstream signature against the
@@ -26,11 +28,14 @@ import static org.mockito.Mockito.mock;
  */
 class LibsDisguisesBridgeTest {
 
+    /** The "running plugin" identity token the default gate would hand over. */
+    private static final Object PLUGIN = new Object();
+
     @BeforeEach
     void reset() {
         LibsDisguisesBridge.resetForTest();
         DisguiseAPI.reset();
-        LibsDisguisesBridge.enabledProbe = () -> true;
+        LibsDisguisesBridge.pluginProbe = () -> PLUGIN;
     }
 
     @AfterEach
@@ -57,8 +62,46 @@ class LibsDisguisesBridgeTest {
     }
 
     @Test
+    void thePluginNameIsPinnedExactly() {
+        // The default gate looks the plugin up BY NAME; a typo would make the whole rung
+        // silently inert with the suite green (every other test injects the probe).
+        var pm = mock(org.bukkit.plugin.PluginManager.class);
+        var plugin = mock(org.bukkit.plugin.Plugin.class);
+        when(plugin.isEnabled()).thenReturn(true);
+        when(pm.getPlugin("LibsDisguises")).thenReturn(plugin);
+        assertSame(plugin, LibsDisguisesBridge.enabledPlugin(pm),
+                "the exact upstream plugin name (plugin.yml `name: LibsDisguises`)");
+        when(plugin.isEnabled()).thenReturn(false);
+        assertNull(LibsDisguisesBridge.enabledPlugin(pm), "loaded but disabled: not consulted");
+        when(pm.getPlugin("LibsDisguises")).thenReturn(null);
+        assertNull(LibsDisguisesBridge.enabledPlugin(pm), "not loaded: not consulted");
+        assertNull(LibsDisguisesBridge.enabledPlugin(null), "no plugin manager: not consulted");
+    }
+
+    @Test
+    void aHotReloadedPluginInstanceReResolves() {
+        // A single-plugin reload (PlugMan-style) hands LibsDisguises a fresh classloader; a
+        // handle bound to the orphaned class would answer "not disguised" for everyone.
+        var e = entity();
+        DisguiseAPI.DISGUISED.add(e);
+        assertTrue(LibsDisguisesBridge.isDisguised(e));
+        assertTrue(LibsDisguisesBridge.present());
+        // The re-resolve is made observable by swapping the resolver: a NEW instance must
+        // resolve again (and hit the throwing resolver); the SAME instance must not.
+        LibsDisguisesBridge.classResolver = name -> {
+            throw new ClassNotFoundException(name);
+        };
+        assertTrue(LibsDisguisesBridge.isDisguised(e), "same instance: the bound handle stays");
+        assertEquals(0, LibsDisguisesBridge.resolveWarnsForTest());
+        LibsDisguisesBridge.pluginProbe = () -> new Object();
+        assertFalse(LibsDisguisesBridge.isDisguised(e), "new instance: resolved again");
+        assertFalse(LibsDisguisesBridge.present());
+        assertEquals(1, LibsDisguisesBridge.resolveWarnsForTest(), "the re-resolve ran");
+    }
+
+    @Test
     void aDisabledPluginSkipsTheReadEntirely() {
-        LibsDisguisesBridge.enabledProbe = () -> false;
+        LibsDisguisesBridge.pluginProbe = () -> null;
         var e = entity();
         DisguiseAPI.DISGUISED.add(e);
         assertFalse(LibsDisguisesBridge.isDisguised(e),

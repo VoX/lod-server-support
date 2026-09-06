@@ -357,3 +357,48 @@ XMMP 0.3.2+1.21.1-neoforge + kotlinforforge 5.12.0 + YACL 3.8.2+1.21.1-neoforge 
   20 s with no zstd/store warnings.
 - WI-B has no live gate here (LibsDisguises is a paid plugin) — the reporter's
   confirmation is the gate, and the reply says so.
+
+## 8. Implementation review fold (2026-09-06, 2 Opus — A packaging, B bridge)
+
+Both verdicts **ship, no MAJORs**. Reviewer A mutation-tested the NeoForge gate against
+the REAL built jar (nine regression shapes incl. the exact pre-fix flat layout and a
+deleted `jarJarStore` row — every one reds with its pinned message), reproduced the
+metadata task standalone (re-runs on a version bump, `UP-TO-DATE` otherwise), and
+confirmed the nested jars are byte-identical to the Maven artifacts and the vssJar
+carries `META-INF/jarjar/` verbatim. Reviewer B verified the bound signature and plugin
+name against upstream `master` (`plugin/src/main/java/.../DisguiseAPI.java:410`,
+`name: LibsDisguises`; `DisguiseUtilities.disguises` is a `ConcurrentHashMap`), traced
+`hidden()` to the wire gate in `FarPlayerBroadcastService.isVisible`, and confirmed the
+`Throwable`→`IllegalStateException` wrap is load-bearing against BOTH pump belts'
+`catch (Exception)`.
+
+Folded (all five trees, identical cores):
+- A-m1/B-m4: the README `farPlayers` row's missing sentence break ("hidden. On Paper, …").
+- A-m2 (+ the support-plan nit): the dated amendment brackets in `v0.11.0-progress.md`
+  and `neoforge-support-plan.md` now say shading stands for common ONLY.
+- A-n2: the two sqlite selftest expects tightened to the `nested sqlite jar …` messages
+  (they had become ambiguous between libraries).
+- A-n3/n4: `generateJarJarMetadata` guards the empty configuration BEFORE the collect and
+  rejects a non-numeric leading version component; release_check reports the same shape
+  as a problem line instead of a traceback.
+- A-n5/n6: "stock by PROXY" clause in `_check_nested_lib`; the notice comment above the
+  shadowJar license block; the port-only double blank line.
+- B-m1: `PLUGIN_NAME` is test-pinned — the exact-name lookup + enabled check is the
+  package-private `enabledPlugin(PluginManager)`, pinned with a Mockito plugin manager
+  (exact name / disabled / absent / null manager).
+- B-m2: hot-reload identity — the gate now hands over the running plugin INSTANCE and the
+  bridge remembers it at resolve time (`boundPlugin`); a different instance (a PlugMan-
+  style single-plugin reload with a fresh classloader) re-resolves from 0 instead of
+  answering "not disguised" for everyone off the orphaned handle. Pinned by
+  `aHotReloadedPluginInstanceReResolves`.
+- B-m3: CLAUDE.md wording — an ABSENT plugin is skipped silently (never resolved); only
+  enabled-but-invisible/unloadable/drifted warns once.
+- B nits: `present()` documented as a test seam; the seams' outside-monitor reads
+  commented; the drift reference carries the upstream path; a throwing plugin-manager
+  lookup documented (propagates, the ladder's catch answers HIDDEN).
+
+Not folded, deliberate: A-n7 (the "1 … entries" plural — the selftest pins the
+substring); B's optional `far_players.privacy_errors` counter (scope creep — the ladder's
+once-warn is a pre-existing decision, the far-player diag line going to zero is the
+admin's signal); the Folia label on the Paper release bullet (generic plugin logic, not
+Folia mechanics).
