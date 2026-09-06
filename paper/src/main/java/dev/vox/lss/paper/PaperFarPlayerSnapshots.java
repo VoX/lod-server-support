@@ -122,7 +122,8 @@ final class PaperFarPlayerSnapshots {
             if (!hiddenReadWarned) {
                 hiddenReadWarned = true;
                 dev.vox.lss.common.LSSLogger.warn(
-                        "Far-player privacy read (permission/vanish/disguise) threw — treating the"                                + " affected player as HIDDEN (fail-safe direction; a raced"
+                        "Far-player privacy read (permission/vanish/disguise) threw — treating the"
+                                + " affected player as HIDDEN (fail-safe direction; a raced"
                                 + " read must never leak a hidden position). One warn per"
                                 + " session (" + e + ")");
             }

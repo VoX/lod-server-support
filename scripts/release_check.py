@@ -1385,7 +1385,6 @@ def _selftest():
             out["META-INF/jarjar/metadata.json"] = json.dumps({"jars": jars})
         return out
 
-
     with tempfile.TemporaryDirectory() as td:
         fab_manifest = "Manifest-Version: 1.0\nFabric-Mapping-Namespace: intermediary\n"
         good_fab = os.path.join(td, "lod-server-support-fabric.jar")

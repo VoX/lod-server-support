@@ -264,7 +264,6 @@ def generateJarJarMetadata = tasks.register('generateJarJarMetadata') {
     }
 }
 
-
 shadowJar {
     configurations = [project.configurations.shade]
     archiveClassifier = ''

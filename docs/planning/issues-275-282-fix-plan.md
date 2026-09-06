@@ -402,3 +402,14 @@ substring); B's optional `far_players.privacy_errors` counter (scope creep — t
 once-warn is a pre-existing decision, the far-player diag line going to zero is the
 admin's signal); the Folia label on the Paper release bullet (generic plugin logic, not
 Folia mechanics).
+
+Port-review addendum (26.1 pair, 2026-09-06 — both ship, no MAJORs): the change-core
+applier had left FOUR whitespace-only residues on every port (a joined string-literal
+line in `PaperFarPlayerSnapshots.hiddenFor`, and stray double blank lines in the
+snapshots test, before `shadowJar {`, and before the selftest's `with tempfile`) — all
+removed; the four ports' code diffs (build.gradle, release_check, paper/) now carry ZERO
+residue against 26.2's beyond pre-existing line-flavor context. The 26.1 CLAUDE.md
+banner's stale `LINE_SHIP_NEOFORGE=false` / `support/mc26.1-v0.13` claim (pre-existing,
+contradicted by line.env since v0.13.1) was refreshed in the same fold. Reviewer A also
+re-proved "stock" on 26.1's own jar: both nested jars sha256-identical to the Maven
+artifacts, in the LSS and the VSS jar alike.
