@@ -52,7 +52,7 @@ public class LSSServerNetworking {
      *  levels — only the server side seeds. */
     public static void onChunkLoad(net.neoforged.neoforge.event.level.ChunkEvent.Load event) {
         if (event.getLevel() instanceof ServerLevel level) {
-            ServerReceiverGlue.onChunkLoaded(level, event.getChunk(), requestService);
+            ServerReceiverGlue.onChunkLoaded(level, event.getChunk(), requestService, event.isNewChunk());
         }
     }
 

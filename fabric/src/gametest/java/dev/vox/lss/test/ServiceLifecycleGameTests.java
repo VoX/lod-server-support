@@ -1823,7 +1823,10 @@ public class ServiceLifecycleGameTests {
         try {
             service.armSaveHookForTest();
             ServerReceiverGlue.clearPendingLoadSeeds();
-            ServerReceiverGlue.onChunkLoaded(level, chunk, null); // no service: recorded, not seeded
+            ServerReceiverGlue.onChunkLoaded(level, chunk, null, true); // a NEW chunk: never seeded, never recorded
+            Gt.assertTrue(helper, ServerReceiverGlue.pendingLoadSeedCount() == 0,
+                    "a freshly generated chunk is not recorded — its first save must still broadcast");
+            ServerReceiverGlue.onChunkLoaded(level, chunk, null, false); // no service: recorded, not seeded
             Gt.assertTrue(helper, ServerReceiverGlue.pendingLoadSeedCount() == 1,
                     "a load with no service records the position");
             int seeded = ServerReceiverGlue.flushPendingLoadSeeds(server, service);
@@ -1839,6 +1842,7 @@ public class ServiceLifecycleGameTests {
                     "flushed set is cleared");
             helper.succeed();
         } finally {
+            ServerReceiverGlue.clearPendingLoadSeeds(); // never leave static state for later tests
             service.shutdown();
         }
     }

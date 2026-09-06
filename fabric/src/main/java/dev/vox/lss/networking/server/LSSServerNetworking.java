@@ -172,7 +172,7 @@ public class LSSServerNetworking {
             }
             LSSLogger.info("Starting " + Brand.shortName() + " LOD request processing service");
             requestService = new RequestProcessingService(server);
-        ServerReceiverGlue.flushPendingLoadSeeds(server, requestService); // the pre-service spawn set
+            ServerReceiverGlue.flushPendingLoadSeeds(server, requestService); // the pre-service spawn set
         });
 
         ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
@@ -201,7 +201,12 @@ public class LSSServerNetworking {
         // fabric-api 4.x (26.2) passes a third `generated` flag — surfaces row 23.
         net.fabricmc.fabric.api.event.lifecycle.v1.ServerChunkEvents.CHUNK_LOAD.register(
                 (level, chunk) ->
-                        ServerReceiverGlue.onChunkLoaded(level, chunk, requestService));
+                        ServerReceiverGlue.onChunkLoaded(level, chunk, requestService, false));
+        // The 2.x lifecycle module has no `generated` flag: CHUNK_GENERATE fires right after
+        // CHUNK_LOAD for a freshly generated chunk and forgets the baseline the load just
+        // seeded — its first save must still broadcast (the NOT_GENERATED revival path).
+        net.fabricmc.fabric.api.event.lifecycle.v1.ServerChunkEvents.CHUNK_GENERATE.register(
+                (level, chunk) -> ServerReceiverGlue.onChunkGenerated(level, chunk, requestService));
 
         // The shared /lsslod tree (xplat since N-2), registered through Fabric's event.
         net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback.EVENT.register(
