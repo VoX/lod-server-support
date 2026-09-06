@@ -7,7 +7,6 @@ import org.bukkit.entity.Entity;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
-import java.util.function.BooleanSupplier;
 
 /**
  * The LibsDisguises bridge for far players (issue #282, issues-275-282-fix-plan.md WI-B): a
@@ -23,8 +22,9 @@ import java.util.function.BooleanSupplier;
  * ({@link PaperFarPlayerSnapshots#hiddenFor}) gains this rung after the vanish read.
  *
  * <p>The bound surface is {@code public static boolean isDisguised(Entity disguised)},
- * verified against LibsDisguises master {@code DisguiseAPI.java:410} (2026-09-05) — the
- * drift reference. The per-viewer overload {@code isDisguised(Player, Entity)} exists
+ * verified against LibsDisguises master
+ * {@code plugin/src/main/java/me/libraryaddict/disguise/DisguiseAPI.java:410} (2026-09-05)
+ * — the drift reference. The per-viewer overload {@code isDisguised(Player, Entity)} exists
  * upstream and is deliberately NOT bound in v1 (far-player frames are not per-viewer).
  *
  * <p>Presence is probed WITHOUT class initialization ({@code Class.forName(name, false,
@@ -33,7 +33,11 @@ import java.util.function.BooleanSupplier;
  * per call on the plugin being loaded AND enabled (a plain plugin-manager lookup, no
  * scheduler reference — {@code FoliaWiringContractTest}'s domain): a loaded-but-disabled
  * LibsDisguises rewrites no packets, so hiding anyone there protects nothing, and the gate
- * running BEFORE resolution means an absent plugin never resolves at all.
+ * running BEFORE resolution means an absent plugin never resolves at all. The gate's
+ * answer is the running plugin INSTANCE, remembered at resolve time: a single-plugin hot
+ * reload (PlugMan-style) gives LibsDisguises a fresh classloader, and a handle bound to
+ * the orphaned class would answer "not disguised" for everyone, silently — a different
+ * instance re-resolves instead.
  *
  * <p>Fail directions. Class absent or surface drifted with the plugin ENABLED = visible
  * (the pre-fix behavior) with ONE warn — the bridge never makes the ladder throw at
@@ -53,27 +57,44 @@ public final class LibsDisguisesBridge {
         Class<?> resolve(String name) throws ClassNotFoundException;
     }
 
+    /** The per-call gate — test seam: the running, ENABLED LibsDisguises plugin instance
+     *  (an identity token), or {@code null} when it is not loaded and enabled. */
+    @FunctionalInterface
+    interface PluginProbe {
+        Object enabledPlugin();
+    }
+
     private static final String API_CLASS = "me.libraryaddict.disguise.DisguiseAPI";
     private static final String PLUGIN_NAME = "LibsDisguises";
 
     private static final ClassResolver DEFAULT_RESOLVER =
             name -> Class.forName(name, false, LibsDisguisesBridge.class.getClassLoader());
-    /** Plugin loaded AND enabled — the per-call gate. Null-safe so a JVM without a Bukkit
-     *  server (the plain-JUnit suites) reads "not enabled" instead of throwing. */
-    private static final BooleanSupplier DEFAULT_ENABLED_PROBE = () -> {
-        if (Bukkit.getServer() == null) return false;
-        var plugin = Bukkit.getPluginManager().getPlugin(PLUGIN_NAME);
-        return plugin != null && plugin.isEnabled();
-    };
+    /** Null-safe so a JVM without a Bukkit server (the plain-JUnit suites) reads "not
+     *  enabled" instead of throwing ({@code Bukkit.getPluginManager()} NPEs there). */
+    private static final PluginProbe DEFAULT_PLUGIN_PROBE = () ->
+            Bukkit.getServer() == null ? null : enabledPlugin(Bukkit.getPluginManager());
 
+    // The two seams are plain statics written by resetForTest() inside the monitor and
+    // read outside it on the call path: test-only, single-threaded by construction —
+    // production never writes them. Do not "fix" with volatile.
     static ClassResolver classResolver = DEFAULT_RESOLVER;
-    static BooleanSupplier enabledProbe = DEFAULT_ENABLED_PROBE;
+    static PluginProbe pluginProbe = DEFAULT_PLUGIN_PROBE;
 
     // 0 = unresolved, 1 = bound, -1 = absent or drifted (visible; warned once when drifted
-    // or invisible with the plugin enabled).
+    // or invisible with the plugin enabled). Both latches are per PLUGIN INSTANCE
+    // (boundPlugin): a different instance — a hot reload — re-resolves from 0.
     private static volatile int state;
+    private static volatile Object boundPlugin;
     private static MethodHandle isDisguisedHandle; // (Entity) -> boolean
     private static int resolveWarns;
+
+    /** The exact-name lookup + enabled check behind the default gate (package-private so
+     *  the PLUGIN_NAME spelling is test-pinned — a typo would make the rung silently inert). */
+    static Object enabledPlugin(org.bukkit.plugin.PluginManager pluginManager) {
+        if (pluginManager == null) return null;
+        var plugin = pluginManager.getPlugin(PLUGIN_NAME);
+        return plugin != null && plugin.isEnabled() ? plugin : null;
+    }
 
     private LibsDisguisesBridge() {
     }
@@ -82,10 +103,11 @@ public final class LibsDisguisesBridge {
     static void resetForTest() {
         synchronized (LibsDisguisesBridge.class) {
             state = 0;
+            boundPlugin = null;
             isDisguisedHandle = null;
             resolveWarns = 0;
             classResolver = DEFAULT_RESOLVER;
-            enabledProbe = DEFAULT_ENABLED_PROBE;
+            pluginProbe = DEFAULT_PLUGIN_PROBE;
         }
     }
 
@@ -103,7 +125,8 @@ public final class LibsDisguisesBridge {
         }
     }
 
-    /** Whether the API resolved and bound (the gate has passed at least once). */
+    /** Test seam: whether the API resolved and bound (the gate has passed at least once).
+     *  No production caller — the call path reads {@code state} directly. */
     static boolean present() {
         return state == 1;
     }
@@ -113,10 +136,13 @@ public final class LibsDisguisesBridge {
      * plugin is not loaded-and-enabled, or its API is absent/drifted; a throwing read
      * surfaces as an {@link IllegalStateException} for the caller's contained catch (the
      * privacy ladder answers HIDDEN there) — never a silent {@code false}, never a latch.
+     * A throwing plugin-manager lookup propagates as-is (a {@link RuntimeException}, which
+     * the same contained catch answers HIDDEN).
      */
     public static boolean isDisguised(Entity entity) {
-        if (!enabledProbe.getAsBoolean()) return false;
-        resolve();
+        Object plugin = pluginProbe.enabledPlugin();
+        if (plugin == null) return false;
+        resolve(plugin);
         if (state != 1) return false;
         try {
             return (boolean) isDisguisedHandle.invoke(entity);
@@ -126,10 +152,18 @@ public final class LibsDisguisesBridge {
         }
     }
 
-    private static void resolve() {
-        if (state != 0) return;
+    private static void resolve(Object plugin) {
+        if (state != 0 && boundPlugin == plugin) return;
         synchronized (LibsDisguisesBridge.class) {
-            if (state != 0) return;
+            if (state != 0 && boundPlugin == plugin) return;
+            if (state != 0) {
+                // A different plugin instance than the one resolved against: a single-plugin
+                // hot reload gave LibsDisguises a fresh classloader — the old handle (or a
+                // stale absent/drift latch) must not outlive it.
+                state = 0;
+                isDisguisedHandle = null;
+            }
+            boundPlugin = plugin; // written BEFORE the state latch — readers see both
             Class<?> api;
             try {
                 api = classResolver.resolve(API_CLASS);
