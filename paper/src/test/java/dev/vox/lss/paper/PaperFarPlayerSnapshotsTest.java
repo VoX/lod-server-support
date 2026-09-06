@@ -31,6 +31,14 @@ class PaperFarPlayerSnapshotsTest {
     @BeforeEach
     void resetLatch() {
         PaperFarPlayerSnapshots.resetHiddenReadWarnedForTest();
+        LibsDisguisesBridge.resetForTest();
+        me.libraryaddict.disguise.DisguiseAPI.reset();
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void restoreBridge() {
+        LibsDisguisesBridge.resetForTest();
+        me.libraryaddict.disguise.DisguiseAPI.reset();
     }
 
     private static org.bukkit.entity.Player bukkit() {
@@ -85,6 +93,93 @@ class PaperFarPlayerSnapshotsTest {
         when(p.getMetadata("vanished")).thenThrow(new IllegalStateException("region-owned"));
         assertTrue(PaperFarPlayerSnapshots.hiddenFor(p),
                 "a throwing vanish read must HIDE the target, never leak the position");
+    }
+
+    // ---- issue #282: the LibsDisguises rung (after permission and vanish) ----
+
+    @Test
+    void aDisguisedPlayerIsHidden() {
+        LibsDisguisesBridge.enabledProbe = () -> true;
+        var p = bukkit();
+        me.libraryaddict.disguise.DisguiseAPI.DISGUISED.add(p);
+        assertTrue(PaperFarPlayerSnapshots.hiddenFor(p),
+                "a LibsDisguises-disguised player must never ride a far-player roster");
+        assertFalse(PaperFarPlayerSnapshots.hiddenFor(bukkit()),
+                "an undisguised player beside it stays visible");
+    }
+
+    @Test
+    void aThrowingDisguiseReadFailsHIDDENNotOpen() {
+        LibsDisguisesBridge.enabledProbe = () -> true;
+        var p = bukkit();
+        me.libraryaddict.disguise.DisguiseAPI.THROW = new IllegalStateException("raced");
+        assertTrue(PaperFarPlayerSnapshots.hiddenFor(p),
+                "a throwing disguise read must HIDE (the ladder's direction), never leak");
+        // The broken-install shape: an Error from inside LibsDisguises. The bridge wraps
+        // it, so the ladder's catch (Exception) contains it instead of aborting the pass.
+        me.libraryaddict.disguise.DisguiseAPI.THROW =
+                new NoClassDefFoundError("me/libraryaddict/disguise/DisguiseUtilities");
+        assertTrue(PaperFarPlayerSnapshots.hiddenFor(p),
+                "an Error out of the disguise read is contained as HIDDEN too");
+        // No latch-to-absent: once the plugin answers again, the next read consults it
+        // (the stub's call count climbs) and a clean player is visible again.
+        me.libraryaddict.disguise.DisguiseAPI.THROW = null;
+        int before = me.libraryaddict.disguise.DisguiseAPI.CALLS;
+        assertFalse(PaperFarPlayerSnapshots.hiddenFor(bukkit()),
+                "the next player's read is unaffected — no latch, no pass abort");
+        org.junit.jupiter.api.Assertions.assertEquals(before + 1,
+                me.libraryaddict.disguise.DisguiseAPI.CALLS,
+                "the plugin is still consulted after a throw — never latched absent");
+    }
+
+    @Test
+    void aDisabledLibsDisguisesIsIgnored() {
+        LibsDisguisesBridge.enabledProbe = () -> false;
+        var p = bukkit();
+        me.libraryaddict.disguise.DisguiseAPI.DISGUISED.add(p);
+        assertFalse(PaperFarPlayerSnapshots.hiddenFor(p),
+                "a loaded-but-disabled LibsDisguises rewrites no packets: not consulted");
+        org.junit.jupiter.api.Assertions.assertEquals(0, me.libraryaddict.disguise.DisguiseAPI.CALLS);
+    }
+
+    @Test
+    void absentLibsDisguisesLeavesTheLadderUnchanged() {
+        LibsDisguisesBridge.enabledProbe = () -> true;
+        LibsDisguisesBridge.classResolver = name -> {
+            throw new ClassNotFoundException(name);
+        };
+        var p = bukkit();
+        me.libraryaddict.disguise.DisguiseAPI.DISGUISED.add(p);
+        assertFalse(PaperFarPlayerSnapshots.hiddenFor(p),
+                "no API: the pre-fix ladder verdict, never a throw");
+        var vanished = bukkit();
+        var plugin = mock(org.bukkit.plugin.Plugin.class);
+        when(vanished.getMetadata("vanished"))
+                .thenReturn(List.<MetadataValue>of(new FixedMetadataValue(plugin, true)));
+        assertTrue(PaperFarPlayerSnapshots.hiddenFor(vanished),
+                "the earlier rungs still decide on their own");
+    }
+
+    @Test
+    void theLadderOrderIsPermissionThenVanishThenDisguise() {
+        // A throwing disguise read is armed; the earlier rungs must answer HIDDEN without
+        // ever consulting it (their verdict is final, and the stub's call count proves it).
+        LibsDisguisesBridge.enabledProbe = () -> true;
+        me.libraryaddict.disguise.DisguiseAPI.THROW = new IllegalStateException("must not be reached");
+        var byNode = bukkit();
+        when(byNode.hasPermission("lss.farplayers.hidden")).thenReturn(true);
+        assertTrue(PaperFarPlayerSnapshots.hiddenFor(byNode));
+        var byVanish = bukkit();
+        var plugin = mock(org.bukkit.plugin.Plugin.class);
+        when(byVanish.getMetadata("vanished"))
+                .thenReturn(List.<MetadataValue>of(new FixedMetadataValue(plugin, true)));
+        assertTrue(PaperFarPlayerSnapshots.hiddenFor(byVanish));
+        org.junit.jupiter.api.Assertions.assertEquals(0, me.libraryaddict.disguise.DisguiseAPI.CALLS,
+                "permission and vanish short-circuit BEFORE the disguise read");
+        assertTrue(PaperFarPlayerSnapshots.hiddenFor(bukkit()),
+                "a clean player reaches the (throwing) disguise rung: HIDDEN");
+        org.junit.jupiter.api.Assertions.assertEquals(1, me.libraryaddict.disguise.DisguiseAPI.CALLS);
+        me.libraryaddict.disguise.DisguiseAPI.THROW = null;
     }
 
     @Test

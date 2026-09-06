@@ -118,17 +118,20 @@ sourceSets {
 }
 
 // N-2 packaging decision (plan §2), AMENDED by neoforge-jarjar-sqlite-plan.md
-// (2026-08-15): Paper-style SHADING for common + zstd-jni — the no-relocate rule
-// applies (relocating org.sqlite / com.github.luben breaks their native loaders),
-// and the dedicated `shade` configuration keeps MDG's MC/NeoForge classpath out of
-// the jar. sqlite-jdbc is the exception: it rides as a STOCK jarJar nested library
-// (META-INF/jarjar/) so FML dedupes it against other sqlite-carrying mods — the
-// flat-shaded shape hard-failed module resolution beside the community Voxy
-// NeoForge port (ResolutionException: both modules export org.sqlite.*).
+// (2026-08-15) and again by issues-275-282-fix-plan.md (2026-09-06): Paper-style
+// SHADING for common ONLY — the dedicated `shade` configuration keeps MDG's
+// MC/NeoForge classpath out of the jar. BOTH native-carrying libraries ride as
+// STOCK jarJar nested libraries (META-INF/jarjar/) so FML dedupes them against
+// other mods nesting the same artifact: the no-relocate rule applies (relocating
+// org.sqlite / com.github.luben breaks their native loaders — zstd-jni's JNI
+// symbol names are derived from the package), and a flat-shaded copy hard-fails
+// module resolution beside any mod nesting the stock jar — sqlite beside the
+// community Voxy NeoForge port (ResolutionException: both modules export
+// org.sqlite.*), zstd-jni beside XMMP (issue #275: both export com.github.luben.zstd).
 configurations {
     shade
-    // Resolution-only carrier for the nested jarJar library (stock bytes; no
-    // transitives — the sqlite-jdbc POM has none at runtime).
+    // Resolution-only carrier for the nested jarJar libraries (stock bytes; no
+    // transitives — neither the sqlite-jdbc nor the zstd-jni POM has any at runtime).
     jarJarStore {
         transitive = false
     }
@@ -152,7 +155,9 @@ dependencies {
     implementation "org.xerial:sqlite-jdbc:${sqliteJdbcVersion}"
     jarJarStore "org.xerial:sqlite-jdbc:${sqliteJdbcVersion}"
     implementation 'com.github.luben:zstd-jni:1.5.7-3'
-    shade 'com.github.luben:zstd-jni:1.5.7-3'
+    // zstd-jni rides NESTED too (issue #275 — the XMMP clash); the version must
+    // match paper/build.gradle + fabric's slimStoreDepJars (the wire codec pair).
+    jarJarStore 'com.github.luben:zstd-jni:1.5.7-3'
 
     testImplementation platform('org.junit:junit-bom:5.11.3')
     testImplementation 'org.junit.jupiter:junit-jupiter'
@@ -186,24 +191,20 @@ processResources {
     }
 }
 
-// Native strip lists — zstd-jni only on this module (sqlite rides NESTED with all
-// of its stock natives, neoforge-jarjar-sqlite-plan.md). Keep the zstd rows in sync
-// with paper/build.gradle + fabric's slimStoreDepJars (linux/win/mac × x64/arm64).
-def storeNativeKeep = [
-    'linux/amd64/', 'linux/aarch64/', 'win/amd64/', 'win/aarch64/',
-    'darwin/x86_64/', 'darwin/aarch64/',
-]
-// org/sqlite/native/ stays listed with NO keep rows on purpose: flat sqlite must
-// not exist at all now, and if a shade regression brings it back, stripping its
-// natives makes the regression louder (release_check's flat-entry rule is the gate).
+// Native strip roots — NO keep rows on this module since issue #275: both
+// native-carrying libraries ride NESTED with all of their stock natives, so a
+// flat native under any of these roots is a shade regression, and stripping it
+// makes the regression louder (release_check's flat-entry rules are the gate —
+// flat org/sqlite/** and flat com/github/luben/** are both forbidden there).
 def storeNativeRoots = ['org/sqlite/native/', 'linux/', 'win/', 'darwin/', 'freebsd/', 'aix/']
 def storeNativeStrip = { el ->
     def p = el.relativePath.pathString
-    storeNativeRoots.any { p.startsWith(it) } && !storeNativeKeep.any { p.startsWith(it) }
+    storeNativeRoots.any { p.startsWith(it) }
 }
 
-// The nested library's jarJar descriptor (neoforge-jarjar-sqlite-plan.md §3):
-// generated from the RESOLVED artifact so a version bump cannot desync it. Range
+// The nested libraries' jarJar descriptor (neoforge-jarjar-sqlite-plan.md §3, one
+// entry per jarJarStore artifact since issue #275 added zstd-jni): generated from
+// the RESOLVED artifacts so a version bump cannot desync it. Range
 // [<version>,<major+1>.0.0.0) — a future-major copy nested by another mod then
 // fails as a hard jarjar version conflict at boot instead of silently winning
 // selection under our compiled-against API. This is LSS's OWN task — MDG also
@@ -212,38 +213,48 @@ def storeNativeStrip = { el ->
 // there (case-insensitive filesystems collapse the two), hence lss-jarjar.
 def generateJarJarMetadata = tasks.register('generateJarJarMetadata') {
     group = 'build'
-    description = 'Generates the jarJar metadata.json for the nested stock sqlite.'
+    description = 'Generates the jarJar metadata.json for the nested stock libraries (sqlite-jdbc, zstd-jni).'
     def cfg = configurations.jarJarStore
+    def resolved = cfg.incoming.artifacts.resolvedArtifacts
     def outFile = layout.buildDirectory.file('generated/lss-jarjar/metadata.json')
     inputs.files(cfg)
     outputs.file(outFile)
     doLast {
-        def artifact = cfg.singleFile
-        def m = (artifact.name =~ /^sqlite-jdbc-(.+)\.jar$/)
-        if (!m) {
-            throw new GradleException("jarJarStore resolved unexpected artifact " +
-                    "'${artifact.name}' — expected sqlite-jdbc-<version>.jar")
+        def entries = resolved.get().collect { art ->
+            def id = art.variant.owner
+            if (!(id instanceof org.gradle.api.artifacts.component.ModuleComponentIdentifier)) {
+                throw new GradleException("jarJarStore resolved a non-module artifact " +
+                        "'${art.file.name}' — every nested library must be a Maven module")
+            }
+            def expected = "${id.module}-${id.version}.jar".toString()
+            if (art.file.name != expected) {
+                // The metadata path must equal the entry shadowJar copies from the
+                // configuration (artifact file name) — a classifier or renamed
+                // artifact would nest a jar the descriptor cannot address.
+                throw new GradleException("jarJarStore artifact '${art.file.name}' is not " +
+                        "named '${expected}' — the jarJar path would not match the nested entry")
+            }
+            def nextMajor = (id.version.tokenize('.')[0] as int) + 1
+            [group: id.group, artifact: id.module, version: id.version,
+             range: "[${id.version},${nextMajor}.0.0.0)", path: "META-INF/jarjar/${art.file.name}"]
+        }.sort { it.artifact }
+        if (entries.isEmpty()) {
+            throw new GradleException("jarJarStore resolved no artifacts — nothing to nest")
         }
-        def version = m[0][1]
-        def nextMajor = (version.tokenize('.')[0] as int) + 1
-        outFile.get().asFile.text = """\
-{
-  "jars": [
+        def jars = entries.collect { e -> """\
     {
       "identifier": {
-        "group": "org.xerial",
-        "artifact": "sqlite-jdbc"
+        "group": "${e.group}",
+        "artifact": "${e.artifact}"
       },
       "version": {
-        "range": "[${version},${nextMajor}.0.0.0)",
-        "artifactVersion": "${version}"
+        "range": "${e.range}",
+        "artifactVersion": "${e.version}"
       },
-      "path": "META-INF/jarjar/${artifact.name}",
+      "path": "${e.path}",
       "isObfuscated": false
-    }
-  ]
-}
-"""
+    }""" }.join(',\n')
+        outFile.get().asFile.text = "{\n  \"jars\": [\n${jars}\n  ]\n}\n"
     }
 }
 
@@ -251,8 +262,9 @@ shadowJar {
     configurations = [project.configurations.shade]
     archiveClassifier = ''
     mergeServiceFiles()
-    // sqlite rides NESTED as a stock jarJar library (module-dedupe against other
-    // sqlite-carrying mods) — see the packaging comment at the configurations block.
+    // sqlite-jdbc AND zstd-jni ride NESTED as stock jarJar libraries (module-dedupe
+    // against other mods nesting them) — see the packaging comment at the
+    // configurations block.
     from(project.configurations.jarJarStore) { into 'META-INF/jarjar' }
     from(generateJarJarMetadata) { into 'META-INF/jarjar' }
     // Dev-only packages never ship (release_check pins this on every jar family).
