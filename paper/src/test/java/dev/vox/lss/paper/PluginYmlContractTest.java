@@ -215,6 +215,20 @@ class PluginYmlContractTest {
     }
 
     @Test
+    void libsDisguisesIsASoftdependForTheDisguiseBridge() {
+        // Issue #282: LibsDisguisesBridge resolves me.libraryaddict.disguise.DisguiseAPI
+        // reflectively from the far-player privacy ladder. softdepend orders LibsDisguises
+        // before LSS (the plugin is ENABLED when the first read runs) and keeps the
+        // classloader warning away; a HARD depend would be wrong — the rung is skipped
+        // without the plugin.
+        var softdepend = yml.getStringList("softdepend");
+        org.junit.jupiter.api.Assertions.assertTrue(softdepend.contains("LibsDisguises"),
+                "LibsDisguises must be a softdepend (never a depend)");
+        org.junit.jupiter.api.Assertions.assertNull(yml.get("depend"),
+                "no hard depends — the plugin loads standalone");
+    }
+
+    @Test
     void pluginYmlShipsOnTheClasspath() {
         assertNotNull(LSSPaperPlugin.class.getResource("/plugin.yml"),
                 "plugin.yml must be packaged at the jar root or Paper will not recognize the plugin");
