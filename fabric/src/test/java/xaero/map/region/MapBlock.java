@@ -21,9 +21,14 @@ public class MapBlock {
     public boolean cave;
     public final java.util.List<Overlay> overlays = new java.util.ArrayList<>();
 
+    public boolean slopeUnknown = true;
+
+    public void setSlopeUnknown(boolean unknown) { this.slopeUnknown = unknown; }
+
     public MapBlock() {}
 
     public void prepareForWriting(int defaultHeight) {
+        this.slopeUnknown = true;
         this.preparedBottomY = defaultHeight;
         this.overlays.clear();
         this.biome = null;
