@@ -19,6 +19,10 @@ public class MapTile {
         this.chunkZ = chunkZ;
     }
 
+    public MapBlock getBlock(int x, int z) { return this.blocks[x][z]; }
+
+    public boolean isLoaded() { return this.loaded; }
+
     public void setBlock(int x, int z, MapBlock block) { this.blocks[x][z] = block; }
 
     public void setWorldInterpretationVersion(int version) {

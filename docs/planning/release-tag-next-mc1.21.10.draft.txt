@@ -6,6 +6,7 @@
 
 ### Bug Fixes
 
+- **Paper: players disguised with LibsDisguises no longer appear as far players.** The server hides disguised players from far-player rosters, so a disguise is no longer given away through the distant terrain.
 - **A server restart no longer re-sends every loaded chunk.** After a restart, chunks that players merely walked past were re-broadcast as changed and re-downloaded by everyone holding them, even though nothing had changed. That storm was also the main reason Xaero's World Map dropped tiles when several players explored far apart.
 - **Xaero's World Map no longer loses tiles for far-away regions.** Tiles for map regions Xaero has not loaded yet are now held and written once the region is ready, instead of being dropped or re-requested until the game gave up on them.
 - **Far players no longer render black.** Far players in some of the chunks your client has loaded could render fully dark in daylight. They are now lit as if under open sky.
