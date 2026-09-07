@@ -1,5 +1,7 @@
 # NeoForge jarJar'd sqlite plan (the G-4 P-1 fix)
 
+> **Amended 2026-09-06 (issue #275, `issues-275-282-fix-plan.md`):** zstd-jni now rides NESTED as a second stock jarJar library — the same mechanism, the XMMP clash as the trigger. Every "zstd stays flat" statement below records the 2026-08-15 state; the NeoForge flat jar carries NO native library at all now, and `release_check` forbids flat `com/github/luben/**` beside flat `org/sqlite/**`.
+
 **Status: v1.1, 2026-08-15 — Fable review folded (verdict: sound, 0 MAJOR / 6 MINOR),
 executing.** User decision: fix the P-1 sqlite module collision via the jarJar route
 (option C of the G-4 decision), for the v0.11.0 release, superseding the recorded

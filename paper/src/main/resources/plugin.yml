@@ -11,8 +11,10 @@ folia-supported: true
 # plugin is present. softdepend keeps Spigot's classloader from logging the one-time
 # "loaded class ... which is not a depend/softdepend" warning on the first handshake —
 # noise that reads like an LSS bug. No hard dependency: without Via the probe is a
-# silent no-signal.
-softdepend: [ViaVersion]
+# silent no-signal. LibsDisguises (issue #282): the far-player privacy ladder reads
+# DisguiseAPI reflectively to hide disguised players — same precedent (load ORDER +
+# classloader visibility, never a hard depend; absent = the rung is skipped).
+softdepend: [ViaVersion, LibsDisguises]
 description: Voxy multiplayer support (unofficial). Enables players with Voxy to see fully rendered terrain out to hundreds of chunks on multiplayer servers without needing to explore the world first.
 author: VoX
 website: https://modrinth.com/plugin/lod-server-support
