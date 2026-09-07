@@ -1,5 +1,7 @@
 # Xaero's World Map bridge — implementation plan (issue #223)
 
+> 2026-09-06 amendment: [edge shading and queue accounting fixes](xaero-edge-queue-fix-plan.md) supersede the early slope-polish deferral. Commits invalidate existing region-local south/east/southeast dependency pixels and schedule their guarded redraws; byte admission also applies to replacements; debt gauges count successful set insertions.
+
 Status: IMPLEMENTED 2026-08-23 on feat/xaero-map-bridge (2-Fable plan review folded
 — §10; implementation notes in §11; the 1-Fable + 4-Opus implementation review
 folded — §12). Targets main (the staged v0.12.0 release), designed for cheap

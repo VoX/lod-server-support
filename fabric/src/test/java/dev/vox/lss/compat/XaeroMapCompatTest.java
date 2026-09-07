@@ -3038,4 +3038,270 @@ class XaeroMapCompatTest {
         assertEquals(0, this.bridge.counterForTest("owed"));
         assertEquals(0, this.bridge.counterForTest("owed_regions"));
     }
+
+    // ---- Edge shading + queue accounting (2026-09-06 review) ----
+
+    private MapTileChunk groupAt(int cx, int cz) {
+        var region = this.processor.regions.get(XaeroMapCompat.regionKeyOf(cx, cz));
+        return region == null ? null : region.getChunk((cx >> 2) & 7, (cz >> 2) & 7);
+    }
+
+    private xaero.map.region.MapTile mapTileAt(int cx, int cz) {
+        return groupAt(cx, cz).getTile(cx & 3, cz & 3);
+    }
+
+    private void knownSlopes(int cx, int cz) {
+        for (var row : mapTileAt(cx, cz).blocks) {
+            for (var block : row) block.slopeUnknown = false;
+        }
+    }
+
+    private void seedAndFlush(int... coords) {
+        this.bridge.updateIdlePumps = 1;
+        for (int i = 0; i < coords.length; i += 2) offer(coords[i], coords[i + 1]);
+        this.bridge.pump();
+        this.bridge.pump();
+        for (int i = 0; i < coords.length; i += 2) knownSlopes(coords[i], coords[i + 1]);
+    }
+
+    @Test
+    void edgeWritesInvalidateOnlyTheNativeDependentPixels() {
+        seedAndFlush(67, 67, 68, 67, 67, 68, 68, 68);
+        offer(67, 67);
+        this.bridge.pump();
+        for (int x = 0; x < 16; x++) {
+            for (int z = 0; z < 16; z++) {
+                assertEquals(z == 0, mapTileAt(67, 68).blocks[x][z].slopeUnknown, "south");
+                assertEquals(x == 0 && z > 0, mapTileAt(68, 67).blocks[x][z].slopeUnknown, "east");
+                assertEquals(x == 0 && z == 0, mapTileAt(68, 68).blocks[x][z].slopeUnknown, "diagonal");
+            }
+        }
+        assertEquals(4, this.bridge.counterForTest("pending_updates"));
+        this.bridge.pump();
+        assertEquals(0, this.bridge.counterForTest("pending_updates"));
+        for (int[] pos : new int[][]{{67,67}, {68,67}, {67,68}, {68,68}}) {
+            assertEquals(2, groupAt(pos[0], pos[1]).bufferUpdates);
+            assertFalse(groupAt(pos[0], pos[1]).toUpdateBuffers, "no unsafe native flag");
+        }
+    }
+
+    @Test
+    void sameGroupDependenciesCoalesceIntoOneRedraw() {
+        seedAndFlush(64, 64, 65, 64, 64, 65, 65, 65);
+        offer(64, 64);
+        this.bridge.pump();
+        assertEquals(1, this.bridge.counterForTest("pending_updates"));
+        assertTrue(mapTileAt(65,65).blocks[0][0].slopeUnknown);
+        this.bridge.pump();
+        assertEquals(2, groupAt(64,64).bufferUpdates);
+    }
+
+    @Test
+    void negativeCoordinatesInvalidateTheCorrectNeighborGroup() {
+        seedAndFlush(-29, -29, -28, -29);
+        offer(-29,-29);
+        this.bridge.pump();
+        assertTrue(mapTileAt(-28,-29).blocks[0][1].slopeUnknown);
+        assertFalse(mapTileAt(-28,-29).blocks[0][0].slopeUnknown);
+        this.bridge.pump();
+        assertEquals(2, groupAt(-28,-29).bufferUpdates);
+    }
+
+    @Test
+    void regionBoundaryKeepsNativeRegionLocalScope() {
+        seedAndFlush(95,95, 96,95, 95,96, 96,96);
+        offer(95,95);
+        this.bridge.pump();
+        assertEquals(1, this.bridge.counterForTest("pending_updates"));
+        assertEquals(4, this.processor.regions.size());
+        assertFalse(mapTileAt(96,95).blocks[0][1].slopeUnknown);
+        assertFalse(mapTileAt(95,96).blocks[0][0].slopeUnknown);
+        assertFalse(mapTileAt(96,96).blocks[0][0].slopeUnknown);
+    }
+
+    @Test
+    void missingOrUnloadedNeighborTilesAreNotCreatedOrChanged() {
+        seedAndFlush(68,64);
+        mapTileAt(68,64).loaded = false;
+        offer(67,64);
+        this.bridge.pump();
+        assertFalse(mapTileAt(68,64).blocks[0][1].slopeUnknown);
+        assertEquals(1, this.bridge.counterForTest("pending_updates"));
+        assertNull(groupAt(67,68));
+        assertEquals(1, this.processor.regions.size());
+    }
+
+    @Test
+    void busyLoadedNeighborDefersWithoutLosingTheSourceOrItsInvalidation() {
+        seedAndFlush(68,64);
+        groupAt(68,64).leafTexture.downloadFromPBO = true;
+        this.bridge.deferCap = 1;
+        offer(67,64);
+        for (int i = 0; i < 5; i++) this.bridge.pump();
+        assertTrue(this.bridge.hasQueuedForTest(67,64));
+        assertNull(groupAt(67,64), "new empty group rolled back");
+        assertFalse(mapTileAt(68,64).blocks[0][1].slopeUnknown);
+        assertEquals(0, this.bridge.counterForTest("dropped_expired"));
+        assertEquals(0, this.bridge.counterForTest("skipped_settings"));
+        groupAt(68,64).leafTexture.downloadFromPBO = false;
+        this.bridge.pump();
+        assertFalse(this.bridge.hasQueuedForTest(67,64));
+        assertTrue(mapTileAt(68,64).blocks[0][1].slopeUnknown);
+        this.bridge.pump();
+        assertEquals(2, groupAt(68,64).bufferUpdates);
+    }
+
+    @Test
+    void neighborLoadStateDefersAndThenProgressesWithoutAnotherOffer() {
+        seedAndFlush(68,64);
+        groupAt(68,64).loadState = 1;
+        offer(67,64);
+        this.bridge.pump();
+        assertTrue(this.bridge.hasQueuedForTest(67,64));
+        groupAt(68,64).loadState = 2;
+        this.bridge.pump();
+        assertFalse(this.bridge.hasQueuedForTest(67,64));
+        assertTrue(mapTileAt(68,64).blocks[0][1].slopeUnknown);
+    }
+
+    @Test
+    void multiGroupCapacityRefusalIsAtomicAndRetainsTheColumn() {
+        seedAndFlush(68,67, 67,68, 68,68);
+        this.bridge.pendingUpdatesHardCap = 4;
+        this.bridge.updateIdlePumps = 100;
+        offer(128,128); // unrelated group occupies one slot
+        this.bridge.pump();
+        offer(67,67); // would need FOUR further slots
+        this.bridge.pump();
+        assertTrue(this.bridge.hasQueuedForTest(67,67));
+        assertNull(groupAt(67,67), "new empty own group is rolled back");
+        assertFalse(mapTileAt(68,67).blocks[0][1].slopeUnknown);
+        assertEquals(1, this.bridge.counterForTest("pending_updates"));
+        assertEquals(0, this.bridge.counterForTest("skipped_settings"));
+        assertEquals(0, this.bridge.counterForTest("dropped_expired"));
+        this.bridge.updateIdlePumps = 1;
+        this.bridge.pump();
+        assertFalse(this.bridge.hasQueuedForTest(67,67));
+        assertEquals(4, this.bridge.counterForTest("pending_updates"));
+        this.bridge.pump();
+        assertEquals(0, this.bridge.counterForTest("pending_updates"));
+    }
+
+    private XaeroTileExtractor.PreparedTile overlayTile(int cx, int cz) {
+        var t = tile(cx,cz);
+        for (int i = 0; i < 256; i++) {
+            t.overlays()[i] = new XaeroTileExtractor.OverlayRun[]{
+                    new XaeroTileExtractor.OverlayRun(Blocks.WATER.defaultBlockState(), (byte) 0, false, 1)};
+        }
+        return t;
+    }
+
+    @Test
+    void growingReplacementEnforcesByteCapAndReportsOldestOtherTiles() {
+        this.bridge.maxQueueBytes = 30_000;
+        for (int x = 64; x < 70; x++) offer(x,64);
+        assertEquals(28_800, this.bridge.queuedBytesForTest());
+        var newer = overlayTile(64,64);
+        newer.floorState()[0] = Blocks.STONE.defaultBlockState();
+        this.bridge.offerPrepared(OVERWORLD, newer);
+        assertEquals(28_736, this.bridge.queuedBytesForTest());
+        assertEquals(3, this.reports.size());
+        for (int i = 0; i < 3; i++) assertEquals(65 + i, this.reports.get(i)[1]);
+        assertTrue(this.bridge.hasQueuedForTest(64,64), "retain latest replacement");
+        this.bridge.pump();
+        assertEquals(Blocks.STONE.defaultBlockState(), mapTileAt(64,64).blocks[0][0].state);
+    }
+
+    @Test
+    void shrinkingAndRepeatedReplacementKeepExactByteAccounting() {
+        var t = overlayTile(64,64);
+        this.bridge.maxQueueBytes = XaeroMapCompat.approxBytes(t);
+        for (int i = 0; i < 3; i++) {
+            this.bridge.offerPrepared(OVERWORLD, t);
+            assertEquals(this.bridge.maxQueueBytes, this.bridge.queuedBytesForTest());
+            offer(64,64);
+            assertEquals(4_800, this.bridge.queuedBytesForTest());
+        }
+        assertTrue(this.reports.isEmpty());
+        assertEquals(1, this.bridge.queuedForTest());
+    }
+
+    @Test
+    void oversizedInsertAndReplacementRefuseOnlyTheirOwnPosition() {
+        this.bridge.maxQueueBytes = 10_000;
+        offer(64,64);
+        this.bridge.offerPrepared(OVERWORLD, overlayTile(65,64));
+        assertTrue(this.bridge.hasQueuedForTest(64,64), "unrelated valid bytes survive");
+        assertFalse(this.bridge.hasQueuedForTest(65,64));
+        assertEquals(4_800, this.bridge.queuedBytesForTest());
+        this.bridge.offerPrepared(OVERWORLD, overlayTile(64,64));
+        assertEquals(0, this.bridge.queuedForTest(), "no old bytes coexist with an owed replacement");
+        assertEquals(0, this.bridge.queuedBytesForTest());
+        assertEquals(2, this.reports.size());
+    }
+
+    @Test
+    void growingReplacementEvictionsUseTheAwaitingRegionDebtPolicy() {
+        this.processor.createdRegionLoadState = 0;
+        this.bridge.maxQueueBytes = 30_000;
+        for (int x = 128; x < 134; x++) offer(x,64);
+        this.bridge.pump();
+        this.bridge.offerPrepared(OVERWORLD, overlayTile(128,64));
+        assertEquals(3, this.bridge.counterForTest("owed"));
+        assertTrue(this.reports.isEmpty());
+        assertTrue(this.bridge.hasQueuedForTest(128,64));
+    }
+
+    @Test
+    void duplicateShedsAndOversizeRefusalsDoNotInflateOrForgetDebt() {
+        this.processor.createdRegionLoadState = 0;
+        this.bridge.maxQueue = 1;
+        offer(128,64);
+        this.bridge.pump();
+        this.bridge.offerColumn(OVERWORLD,129,64,-64,320,null);
+        this.bridge.offerColumn(OVERWORLD,129,64,-64,320,null);
+        assertEquals(1, this.bridge.counterForTest("owed"));
+        this.bridge.maxQueueBytes = 10_000;
+        this.bridge.offerPrepared(OVERWORLD,overlayTile(129,64));
+        assertEquals(1, this.bridge.counterForTest("owed"));
+        this.bridge.maxQueue = 2;
+        offer(129,64);
+        assertEquals(0, this.bridge.counterForTest("owed"));
+        assertEquals(0, this.bridge.counterForTest("owed_regions"));
+    }
+
+    @Test
+    void duplicateBusyDebtAndDualCategoryPayoffMatchSetMembership() throws Exception {
+        this.processor.createdRegionLoadState = 0;
+        this.bridge.maxQueue = 1;
+        offer(128,64);
+        this.bridge.pump();
+        this.bridge.offerColumn(OVERWORLD,129,64,-64,320,null);
+        var oweBusy = XaeroMapCompat.class.getDeclaredMethod("oweExpired", Object.class, long.class, long.class);
+        oweBusy.setAccessible(true);
+        long packed = (129L << 32) | 64L;
+        for (int i = 0; i < 2; i++) {
+            oweBusy.invoke(this.bridge, OVERWORLD, packed, XaeroMapCompat.regionKeyOf(129,64));
+        }
+        assertEquals(2, this.bridge.counterForTest("owed"), "one entry in each category");
+        this.bridge.maxQueue = 2;
+        offer(129,64);
+        assertEquals(0, this.bridge.counterForTest("owed"));
+        assertEquals(0, this.bridge.counterForTest("owed_regions"));
+    }
+
+
+    @Test
+    void refusedExistingTileDoesNotBlockNewSiblingBehindBusyNeighbor() {
+        seedAndFlush(67,64,68,64);
+        xaero.map.common.config.option.WorldMapProfiledConfigOptions.UPDATE_CHUNKS.value = false;
+        groupAt(68,64).leafTexture.downloadFromPBO = true;
+        offer(67,64); // update switch refuses this, so its busy neighbor is irrelevant
+        offer(72,66); // new tile in the same region is allowed
+        this.bridge.pump();
+        assertFalse(this.bridge.hasQueuedForTest(67,64));
+        assertFalse(this.bridge.hasQueuedForTest(72,66));
+        assertNotNull(mapTileAt(72,66));
+        assertEquals(1, this.bridge.counterForTest("skipped_settings"));
+    }
 }
