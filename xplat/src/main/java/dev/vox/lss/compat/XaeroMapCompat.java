@@ -946,68 +946,65 @@ final class XaeroMapCompat {
         long key = ((long) chunkX << 32) | (chunkZ & 0xFFFFFFFFL);
         int bytes = approxBytes(tile);
         java.util.ArrayList<Object[]> evictedOut = null;
-        boolean replaced = false;
+        boolean accepted = false;
         synchronized (this.queueLock) {
-
-            // Re-check under the lock (sweep C MAJOR): a decode-thread tile that passed
-            // offerColumn's gate before the session ended must not land in the queue AFTER
-            // onSessionEnd's clear — it would wait through the title screen and commit one
-            // tile of the previous server into the next server's saved map (the dimension
-            // key is the same interned object on both). The gate flips before the clear
-            // and both serialize on this monitor, so this closes it.
+            // Teardown may have overtaken extraction; never enqueue into a dead session.
             if (this.dead || !this.enabled.getAsBoolean() || !this.sessionActive.getAsBoolean()) {
                 return;
             }
             var existing = this.queue.get(key);
-            if (existing != null) {
-                if (existing.dimension == dimension) {
+            if (bytes > this.maxQueueBytes || this.maxQueue <= 0) {
+                // A refused replacement must not leave older bytes queued while owing
+                // the same position. Remove only its own old entry, not unrelated work.
+                if (existing != null) {
+                    this.queue.remove(key);
+                    this.queuedBytes -= existing.bytes;
+                    if (existing.dimension != dimension) {
+                        this.droppedStale.incrementAndGet();
+                        evictedOut = new java.util.ArrayList<>();
+                        evictedOut.add(new Object[]{existing.dimension, key, Boolean.TRUE});
+                    }
+                }
+                this.droppedOverflow.incrementAndGet();
+                if (evictedOut == null) evictedOut = new java.util.ArrayList<>();
+                evictedOut.add(new Object[]{dimension, key});
+            } else {
+                boolean replaced = existing != null && existing.dimension == dimension;
+                if (replaced) {
+                    // Keep Entry identity: an in-flight commit's compare-and-remove
+                    // must see the replacement tile and retain these fresher bytes.
                     this.queuedBytes += bytes - existing.bytes;
                     existing.tile = tile;
                     existing.bytes = bytes;
-                    existing.ladderReadyDeferrals = 0; // fresh serve = fresh patience
-                    updateOccupancyLocked();
-                    replaced = true;
-                }
-                if (!replaced) {
-                    // Stale-dimension entry: the new serve replaces it (fresh Entry, so
-                    // an in-flight pump pass's compare-and-remove cannot delete it).
-                    // Counted + reported (§12 review: an uncounted silent foreign-dim
-                    // drop broke the §12.1(c) self-heal claim at portals) — collected
-                    // for the outside-the-lock report like the evictions.
+                    existing.ladderReadyDeferrals = 0;
+                } else if (existing != null) {
                     this.queuedBytes -= existing.bytes;
                     this.queue.remove(key);
                     this.droppedStale.incrementAndGet();
-                    if (evictedOut == null) evictedOut = new java.util.ArrayList<>();
+                    evictedOut = new java.util.ArrayList<>();
                     evictedOut.add(new Object[]{existing.dimension, key, Boolean.TRUE});
                 }
-            }
-            while (!replaced && !this.queue.isEmpty()
-                    && (this.queue.size() >= this.maxQueue
-                        || this.queuedBytes + bytes > this.maxQueueBytes)) {
                 var it = this.queue.entrySet().iterator();
-                var evicted = it.next();
-                this.queuedBytes -= evicted.getValue().bytes;
-                it.remove();
-                this.droppedOverflow.incrementAndGet();
-                // Collect for the OUTSIDE-the-lock report (§18.1 discipline: never
-                // report under queueLock).
-                if (evictedOut == null) evictedOut = new java.util.ArrayList<>();
-                evictedOut.add(new Object[]{evicted.getValue().dimension, evicted.getKey()});
+                while (it.hasNext() && (this.queue.size() + (replaced ? 0 : 1) > this.maxQueue
+                        || this.queuedBytes + (replaced ? 0 : bytes) > this.maxQueueBytes)) {
+                    var evicted = it.next();
+                    if (replaced && evicted.getKey().longValue() == key) continue;
+                    this.queuedBytes -= evicted.getValue().bytes;
+                    it.remove();
+                    this.droppedOverflow.incrementAndGet();
+                    if (evictedOut == null) evictedOut = new java.util.ArrayList<>();
+                    evictedOut.add(new Object[]{evicted.getValue().dimension, evicted.getKey()});
+                }
+                if (!replaced) {
+                    this.queuedBytes += bytes;
+                    this.queue.put(key, new Entry(dimension, tile, bytes));
+                }
+                accepted = true;
             }
-            if (!replaced) {
-                this.queuedBytes += bytes;
-                this.queue.put(key, new Entry(dimension, tile, bytes));
-                updateOccupancyLocked();
-            }
+            updateOccupancyLocked();
         }
-        // WI-3 invariant: owed ∩ queue = ∅ — a fresh offer of an owed position pays
-        // the debt (its bytes are back), so a later release can never un-stamp the
-        // column the client just re-received. Both the insert and the latest-wins
-        // REPLACE path (a belt: the decode pipeline is one thread today, so a queued
-        // position is never owed — but the invariant must not rest on that). Outside
-        // queueLock (lock order).
-        forgetOwed(dimension, key);
-        if (replaced) return;
+        // Only retained fresh bytes pay a debt. Refusals above keep it until recovery.
+        if (accepted) forgetOwed(dimension, key);
         if (evictedOut != null) {
             for (var e : evictedOut) {
                 long k = (Long) e[1];
@@ -1049,8 +1046,7 @@ final class XaeroMapCompat {
         if (!this.haltWedged && !this.awaitingRegions.contains(regionKey)) return false;
         var key = new OwedKey(dimension, regionKey);
         synchronized (this.owedLock) {
-            owedRegionLocked(key).positions.add(packedChunk);
-            this.owedGauge++;
+            if (owedRegionLocked(key).positions.add(packedChunk)) this.owedGauge++;
         }
         return true;
     }
@@ -2042,8 +2038,7 @@ final class XaeroMapCompat {
         if (!this.backpressureEnabled.getAsBoolean()) return;
         var key = new OwedKey(dimension, regionKey);
         synchronized (this.owedLock) {
-            owedRegionLocked(key).busyTiles.add(packedChunk);
-            this.owedGauge++;
+            if (owedRegionLocked(key).busyTiles.add(packedChunk)) this.owedGauge++;
         }
     }
 
@@ -2256,20 +2251,29 @@ final class XaeroMapCompat {
                     return Outcome.DEFERRED_TILE;
                 }
 
-                if (commitPixels(mp, dimensionId, region, tileChunk, createdTileChunk,
-                        localTcX, localTcZ, tile, loadNew, update)) {
-                    return Outcome.COMMITTED;
-                }
-                if (createdTileChunk) {
-                    // The native rollback (writeChunk pc 1526-1537): a tile chunk created
-                    // for a write the switches then refused must not stay installed empty
-                    // — it would be ~13 KB of texture state, never terrain-marked, and
-                    // poisoned for every later pump (sweep B m3).
-                    synchronized (region) {
-                        this.h.regionSetChunk.invoke(region, localTcX, localTcZ, null);
+                Object existingTile = this.h.getTile.invoke(tileChunk, chunkX & 3, chunkZ & 3);
+                if (existingTile == null ? !loadNew : !update) {
+                    if (createdTileChunk) {
+                        synchronized (region) {
+                            this.h.regionSetChunk.invoke(region, localTcX, localTcZ, null);
+                        }
                     }
+                    return Outcome.SKIPPED_SETTINGS;
                 }
-                return Outcome.SKIPPED_SETTINGS;
+                // Capture dependencies before any pixel mutation. A loaded neighbor
+                // temporarily busy with a PBO/load must not lose its one invalidation.
+                var neighbors = slopeNeighbors(region, tile);
+                if (neighbors == null || !hasRebuildCapacity(dimensionId, tile, neighbors)) {
+                    if (createdTileChunk) {
+                        synchronized (region) {
+                            this.h.regionSetChunk.invoke(region, localTcX, localTcZ, null);
+                        }
+                    }
+                    return Outcome.DEFERRED; // cap-exempt, queued bytes retained
+                }
+                commitPixels(mp, dimensionId, region, tileChunk, createdTileChunk,
+                        localTcX, localTcZ, tile, neighbors);
+                return Outcome.COMMITTED;
             }
         } catch (Throwable t) {
             if (t instanceof Error err && !(t instanceof AssertionError)) throw err;
@@ -2278,20 +2282,14 @@ final class XaeroMapCompat {
         }
     }
 
-    /** The decompiled per-tile commit sequence, verbatim order (plan §1); false when the
-     *  native per-chunk switches refuse the tile (writeChunk pc 577-604: a NEW tile needs
-     *  "Load New Chunks", an EXISTING one "Update Chunks" — the tile chunk creation before
-     *  this point mirrors the native order too). */
-    private boolean commitPixels(Object mp, Object dimensionId, Object region, Object tileChunk,
+    /** Per-tile commit sequence after the settings and dependency admission gates. */
+    private void commitPixels(Object mp, Object dimensionId, Object region, Object tileChunk,
                                  boolean createdTileChunk, int localTcX, int localTcZ,
                                  XaeroTileExtractor.PreparedTile tile,
-                                 boolean loadNew, boolean update) throws Throwable {
+                                 List<SlopeNeighbor> neighbors) throws Throwable {
         int insideX = tile.chunkX() & 3;
         int insideZ = tile.chunkZ() & 3;
         Object mapTile = this.h.getTile.invoke(tileChunk, insideX, insideZ);
-        if (mapTile == null ? !loadNew : !update) {
-            return false;
-        }
         if (mapTile == null) {
             Object pool = this.h.getTilePool.invoke(mp);
             String dimensionToken = (String) this.h.getCurrentDimension.invoke(mp);
@@ -2351,7 +2349,71 @@ final class XaeroMapCompat {
         // save cache for a region with cache not prepared", 3 crashes/hour live).
         notePendingUpdate(mp, dimensionId, region, tileChunk, localTcX, localTcZ,
                 tile.chunkX() >> 2, tile.chunkZ() >> 2);
-        return true;
+        for (var neighbor : neighbors) {
+            // Native slope dependencies: south row, east column excluding its
+            // first pixel, and the southeast corner (MapWriter.writeChunk).
+            if (neighbor.dx == 0) {
+                for (int x = 0; x < 16; x++) invalidateSlope(neighbor.mapTile, x, 0);
+            } else if (neighbor.dz == 0) {
+                for (int z = 1; z < 16; z++) invalidateSlope(neighbor.mapTile, 0, z);
+            } else {
+                invalidateSlope(neighbor.mapTile, 0, 0);
+            }
+            this.h.tileChunkSetChanged.invoke(neighbor.tileChunk, true);
+            notePendingUpdate(mp, dimensionId, region, neighbor.tileChunk,
+                    (neighbor.chunkX >> 2) & 7, (neighbor.chunkZ >> 2) & 7,
+                    neighbor.chunkX >> 2, neighbor.chunkZ >> 2);
+        }
+    }
+
+    private record SlopeNeighbor(Object tileChunk, Object mapTile, int chunkX, int chunkZ,
+                                 int dx, int dz) {}
+
+    /** Native dependencies are region-local: no foreign-region locks or loads.
+     *  Called under this region's writer-pause gate, like the native writer. */
+    private List<SlopeNeighbor> slopeNeighbors(Object region, XaeroTileExtractor.PreparedTile tile)
+            throws Throwable {
+        var neighbors = new ArrayList<SlopeNeighbor>(3);
+        for (int dx = 0; dx <= 1; dx++) {
+            for (int dz = 0; dz <= 1; dz++) {
+                if (dx == 0 && dz == 0) continue;
+                int cx = tile.chunkX() + dx;
+                int cz = tile.chunkZ() + dz;
+                if ((cx >> 5) != (tile.chunkX() >> 5) || (cz >> 5) != (tile.chunkZ() >> 5)) continue;
+                Object tc = this.h.regionGetChunk.invoke(region, (cx >> 2) & 7, (cz >> 2) & 7);
+                if (tc == null) continue;
+                Object mapTile = this.h.getTile.invoke(tc, cx & 3, cz & 3);
+                if (mapTile == null || !(boolean) this.h.tileIsLoaded.invoke(mapTile)) continue;
+                if ((int) this.h.tileChunkGetLoadState.invoke(tc) != 2
+                        || (boolean) this.h.shouldDownloadFromPBO.invoke(this.h.getLeafTexture.invoke(tc))) {
+                    return null;
+                }
+                neighbors.add(new SlopeNeighbor(tc, mapTile, cx, cz, dx, dz));
+            }
+        }
+        return neighbors;
+    }
+
+    /** Reserve all distinct groups before a multi-group commit; capacity refusal
+     *  must retain the column, never leave changed pixels with no owed redraw. */
+    private boolean hasRebuildCapacity(Object dimensionId, XaeroTileExtractor.PreparedTile tile,
+                                       List<SlopeNeighbor> neighbors) {
+        var keys = new java.util.HashSet<PendingKey>();
+        keys.add(pendingKey(dimensionId, tile.chunkX() >> 2, tile.chunkZ() >> 2));
+        for (var neighbor : neighbors) {
+            keys.add(pendingKey(dimensionId, neighbor.chunkX >> 2, neighbor.chunkZ >> 2));
+        }
+        keys.removeAll(this.pendingUpdates.keySet());
+        return this.pendingUpdates.size() + keys.size() <= this.pendingUpdatesHardCap;
+    }
+
+    private void invalidateSlope(Object tile, int x, int z) throws Throwable {
+        Object block = this.h.getBlock.invoke(tile, x, z);
+        if (block != null) this.h.setSlopeUnknown.invoke(block, true);
+    }
+
+    private static PendingKey pendingKey(Object dimension, int tileChunkX, int tileChunkZ) {
+        return new PendingKey(dimension, ((long) tileChunkX << 32) | (tileChunkZ & 0xFFFFFFFFL));
     }
 
     // ---- the rebuild phase (plan §15) ----
@@ -2359,7 +2421,7 @@ final class XaeroMapCompat {
     private void notePendingUpdate(Object mp, Object dimensionId, Object region, Object tileChunk,
                                    int localTcX, int localTcZ, int tileChunkX, int tileChunkZ)
             throws Throwable {
-        var key = new PendingKey(dimensionId, ((long) tileChunkX << 32) | (tileChunkZ & 0xFFFFFFFFL));
+        var key = pendingKey(dimensionId, tileChunkX, tileChunkZ);
         var existing = this.pendingUpdates.remove(key); // re-insert at the tail = last touch
         if (existing != null && existing.tileChunk == tileChunk) {
             existing.lastTouchPump = this.pumpCount;
@@ -2712,6 +2774,9 @@ final class XaeroMapCompat {
         final MethodHandle setTile;
         final MethodHandle poolGet;
         final MethodHandle setBlock;
+        final MethodHandle getBlock;
+        final MethodHandle tileIsLoaded;
+        final MethodHandle setSlopeUnknown;
         final MethodHandle setWorldInterpretationVersion;
         final MethodHandle setWrittenCave;
         final MethodHandle setWrittenOnce;
@@ -2881,6 +2946,14 @@ final class XaeroMapCompat {
                             MethodType.methodType(tileClass, String.class, int.class, int.class))
                     .asType(MethodType.methodType(Object.class, Object.class,
                             String.class, int.class, int.class));
+            this.getBlock = lookup.findVirtual(tileClass, "getBlock",
+                            MethodType.methodType(blockClass, int.class, int.class))
+                    .asType(MethodType.methodType(Object.class, Object.class, int.class, int.class));
+            this.tileIsLoaded = virtual(lookup, tileClass, "isLoaded",
+                    MethodType.methodType(boolean.class), boolean.class);
+            this.setSlopeUnknown = lookup.findVirtual(blockClass, "setSlopeUnknown",
+                            MethodType.methodType(void.class, boolean.class))
+                    .asType(MethodType.methodType(void.class, Object.class, boolean.class));
             this.setBlock = lookup.findVirtual(tileClass, "setBlock",
                             MethodType.methodType(void.class, int.class, int.class, blockClass))
                     .asType(MethodType.methodType(void.class, Object.class,
