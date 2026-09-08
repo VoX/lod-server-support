@@ -547,4 +547,47 @@ class SqliteLodStoreMigrationTest {
             permuted.shutdown();
         }
     }
+
+    @Test void migrationRejectsBadLegacyContentHashBeforeTranslation() throws Exception {
+        assertMigrationRejectsIntegrityChange("chash=chash+1");
+    }
+
+    @Test void migrationRejectsBadLegacyFrameHashBeforeTranslation() throws Exception {
+        assertMigrationRejectsIntegrityChange("fhash=fhash+1");
+    }
+
+    @Test void migrationRejectsWrongDeclaredSizeBeforeTranslation() throws Exception {
+        assertMigrationRejectsIntegrityChange("usize=usize+1");
+    }
+
+    private void assertMigrationRejectsIntegrityChange(String mutation) throws Exception {
+        buildSchema3Store(FP, List.of(new FixtureRow(0L, new byte[]{1, 2, 3, 4}, false)));
+        var ds = new org.sqlite.SQLiteDataSource();
+        ds.setUrl("jdbc:sqlite:" + storeDir().resolve("store.db"));
+        try (var c = ds.getConnection(); var st = c.createStatement()) {
+            st.executeUpdate("UPDATE lods_1 SET " + mutation);
+        }
+        var store = open();
+        var translated = new java.util.concurrent.atomic.AtomicInteger();
+        try {
+            store.setLegacyMigrationTranslator(raw -> {
+                translated.incrementAndGet();
+                return FAKE_TRANSLATOR.apply(raw);
+            });
+            awaitWalkDone(store);
+            assertEquals(0, translated.get(), "corrupt input must not reach the translator");
+            assertNull(store.get(OW, 0L), "migration must not certify a corrupt row with fresh hashes");
+        } finally { store.shutdown(); }
+    }
+
+    @Test void ordinaryReaderRejectsSameLegacyChecksumMismatch() throws Exception {
+        buildSchema3Store(FP, List.of(new FixtureRow(0L, new byte[]{1, 2, 3, 4}, false)));
+        var ds = new org.sqlite.SQLiteDataSource();
+        ds.setUrl("jdbc:sqlite:" + storeDir().resolve("store.db"));
+        try (var c = ds.getConnection(); var st = c.createStatement()) {
+            st.executeUpdate("UPDATE lods_1 SET chash=chash+1");
+        }
+        var store = open();
+        try { assertNull(store.get(OW, 0L)); } finally { store.shutdown(); }
+    }
 }
