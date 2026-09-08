@@ -448,7 +448,7 @@ class IncomingRequestRouter<PS extends AbstractPlayerRequestState<?>> {
                 return AdmitResult.SLOT_FULL;
             }
             long order = this.ctx.sequence().next();
-            boolean attached = this.dedupTracker.tryAttachOrCreate(packed, dimension, playerUuid, order);
+            boolean attached = this.dedupTracker.tryAttachOrCreate(packed, dimension, playerUuid, state.registration(), order);
             // Headroom gates FRESH SUBMISSIONS ONLY, and so must be checked AFTER the dedup
             // decision: an attached request rides another player's already-submitted read and
             // costs the pool nothing, so a full pool must not defer it — that would throttle
@@ -474,7 +474,7 @@ class IncomingRequestRouter<PS extends AbstractPlayerRequestState<?>> {
                 state.removePendingByPosition(req.cx(), req.cz());
                 return AdmitResult.GATE_SATURATED;
             }
-            if (!attached && !this.processor.submitDiskRead(playerUuid, dimension, req.cx(),
+            if (!attached && !this.processor.submitDiskRead(playerUuid, state.registration(), dimension, req.cx(),
                     req.cz(), order, req.clientTimestamp())) {
                 // Submit was a no-op (e.g. the dimension's level isn't registered yet) — a
                 // TRANSIENT condition. Unwind the pending entry (which frees the slot) and the
@@ -499,9 +499,9 @@ class IncomingRequestRouter<PS extends AbstractPlayerRequestState<?>> {
             // disk-not-found escalation path (handleDiskNotFound). Unreachable in production
             // today — both platforms always construct a disk reader — but the guard must cover
             // every gen-ticket producer or this path re-stamps pre-edit terrain as up_to_date.
-            this.processor.addGenerationInFlight(playerUuid, dimension, packed);
+            this.processor.addGenerationInFlight(state.registration(), dimension, packed);
             this.ctx.generationTicketRequests().add(
-                    new OffThreadProcessor.GenerationTicketRequest(playerUuid, req.cx(), req.cz(),
+                    new OffThreadProcessor.GenerationTicketRequest(playerUuid, state.registration(), req.cx(), req.cz(),
                             dimension, this.ctx.sequence().next()));
             return AdmitResult.SUBMITTED;
         } else {

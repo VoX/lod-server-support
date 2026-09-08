@@ -286,7 +286,7 @@ class ReadFreshnessRungTest {
         }
 
         @Override
-        protected boolean submitDiskRead(UUID playerUuid, String dimension, int cx, int cz,
+        protected boolean submitDiskRead(UUID playerUuid, RequestRegistration registration, String dimension, int cx, int cz,
                                          long order, long clientTimestamp) {
             return true; // tests inject results directly into the reader queue
         }
@@ -319,7 +319,7 @@ class ReadFreshnessRungTest {
         Rig() {
             this.state = newPlayer(this.uuid);
             this.players.put(this.uuid, this.state);
-            this.reader.registerPlayer(this.uuid);
+            this.reader.registerPlayer(this.uuid, this.state.registration());
             this.proc = new TestProcessor(this.players, this.reader);
             this.proc.attachStore(this.store);
             this.proc.start();
@@ -328,7 +328,7 @@ class ReadFreshnessRungTest {
         TestState addPlayer(UUID u) {
             var s = newPlayer(u);
             this.players.put(u, s);
-            this.reader.registerPlayer(u);
+            this.reader.registerPlayer(u, s.registration());
             return s;
         }
 

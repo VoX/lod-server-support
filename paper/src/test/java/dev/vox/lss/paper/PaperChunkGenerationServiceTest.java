@@ -1,5 +1,7 @@
 package dev.vox.lss.paper;
 
+import dev.vox.lss.common.processing.RequestRegistration;
+
 import com.mojang.serialization.Lifecycle;
 import dev.vox.lss.common.processing.LoadedColumnData;
 import dev.vox.lss.common.processing.TickSnapshot;
@@ -58,6 +60,12 @@ import static org.mockito.Mockito.when;
 // but is the canonical vanilla ctor; same suppression as NbtSectionSerializerTest.
 @SuppressWarnings("deprecation")
 class PaperChunkGenerationServiceTest {
+    private static final java.util.Map<UUID, RequestRegistration> TEST_REGISTRATIONS =
+            new java.util.concurrent.ConcurrentHashMap<>();
+    private static RequestRegistration registration(UUID uuid) {
+        return TEST_REGISTRATIONS.computeIfAbsent(uuid, ignored -> new RequestRegistration());
+    }
+
 
     private static PalettedContainerFactory FACTORY;
     private static RegistryAccess REGISTRY_ACCESS;
@@ -137,6 +145,52 @@ class PaperChunkGenerationServiceTest {
                 submitted, completed, active, timeouts, removed);
     }
 
+    @Test
+    void completedReadyListPreservesItsOwnerAcrossReplacement() {
+        var svc = new CapturingGenService(config(8,8,60));
+        var level = overworldLevel();
+        var id = UUID.randomUUID();
+        var old = new RequestRegistration();
+        var fresh = new RequestRegistration();
+        assertTrue(svc.submitGeneration(id, old, level, 0,0,1));
+        var first = svc.launches.get(0);
+        svc.onChunkReady(first.key(), columnData(),0,0,first.token());
+        old.retire();
+        svc.removePlayer(id, old);
+        assertTrue(svc.submitGeneration(id, fresh, level, 0,0,2));
+        svc.removePlayer(id, old); // delayed duplicate cleanup must not touch the fresh callback/cap
+        var ready = svc.tick();
+        assertEquals(1, ready.size());
+        assertSame(old, ready.get(0).registration(), "already-buffered outcome retains its origin");
+        assertEquals(1, svc.getActiveCount(), "fresh load survived old cleanup");
+        var second = svc.launches.get(1);
+        svc.onChunkReady(second.key(), columnData(),0,0,second.token());
+        assertSame(fresh, svc.tick().get(0).registration());
+        assertFalse(svc.submitGeneration(id, old, level,1,1,3), "retired owner cannot start new work");
+        assertEquals(0,svc.getActiveCount());
+    }
+
+    @Test
+    void sharedLoadRetiresOnlyTheMatchingRegistrationCallback() {
+        var svc = new CapturingGenService(config(8,1,60));
+        var level = overworldLevel();
+        var id = UUID.randomUUID();
+        var old = new RequestRegistration();
+        var fresh = new RequestRegistration();
+        assertTrue(svc.submitGeneration(id, old, level,0,0,1));
+        assertTrue(svc.submitGeneration(id, fresh, level,0,0,2));
+        old.retire();
+        svc.removePlayer(id, old);
+        assertEquals(1, svc.getActiveCount());
+        var load = svc.launches.get(0);
+        svc.onChunkReady(load.key(), null,0,0,load.token());
+        var ready = svc.tick();
+        assertEquals(1, ready.size(), "old callback removed, valid follower retained");
+        assertSame(fresh, ready.get(0).registration());
+        assertEquals(2,ready.get(0).submissionOrder());
+        assertTrue(svc.submitGeneration(id, fresh, level,1,0,3), "fresh callback released its own cap");
+    }
+
     // ---- piggyback + launch accounting ----
 
     @Test
@@ -145,8 +199,8 @@ class PaperChunkGenerationServiceTest {
         var level = overworldLevel();
         UUID a = UUID.randomUUID(), b = UUID.randomUUID();
 
-        assertTrue(svc.submitGeneration(a, level, 3, -2, 11L));
-        assertTrue(svc.submitGeneration(b, level, 3, -2, 22L));
+        assertTrue(svc.submitGeneration(a, registration(a), level, 3, -2, 11L));
+        assertTrue(svc.submitGeneration(b, registration(b), level, 3, -2, 22L));
         assertEquals(1, svc.launches.size(), "one async load serves both players");
         assertEquals(3, svc.launches.get(0).cx());
         assertEquals(-2, svc.launches.get(0).cz());
@@ -182,10 +236,10 @@ class PaperChunkGenerationServiceTest {
         var level = overworldLevel();
         UUID a = UUID.randomUUID(), b = UUID.randomUUID();
 
-        assertTrue(svc.submitGeneration(a, level, 0, 0, 1L));
-        assertTrue(svc.submitGeneration(a, level, 1, 0, 2L));
-        assertFalse(svc.submitGeneration(a, level, 2, 0, 3L), "third launch exceeds per-player cap");
-        assertTrue(svc.submitGeneration(b, level, 2, 0, 4L), "other players are unaffected");
+        assertTrue(svc.submitGeneration(a, registration(a), level, 0, 0, 1L));
+        assertTrue(svc.submitGeneration(a, registration(a), level, 1, 0, 2L));
+        assertFalse(svc.submitGeneration(a, registration(a), level, 2, 0, 3L), "third launch exceeds per-player cap");
+        assertTrue(svc.submitGeneration(b, registration(b), level, 2, 0, 4L), "other players are unaffected");
         assertEquals(3, svc.launches.size());
     }
 
@@ -196,16 +250,16 @@ class PaperChunkGenerationServiceTest {
         var svc = new CapturingGenService(config(2, 16, 60));
         var level = overworldLevel();
 
-        assertTrue(svc.submitGeneration(UUID.randomUUID(), level, 0, 0, 1L));
-        assertTrue(svc.submitGeneration(UUID.randomUUID(), level, 1, 0, 2L));
-        assertFalse(svc.submitGeneration(UUID.randomUUID(), level, 2, 0, 3L), "at the old cap");
+        assertTrue(svc.submitGeneration(UUID.randomUUID(), new RequestRegistration(), level, 0, 0, 1L));
+        assertTrue(svc.submitGeneration(UUID.randomUUID(), new RequestRegistration(), level, 1, 0, 2L));
+        assertFalse(svc.submitGeneration(UUID.randomUUID(), new RequestRegistration(), level, 2, 0, 3L), "at the old cap");
 
         svc.updateCaps(3, 16); // raise: the next admission fits
-        assertTrue(svc.submitGeneration(UUID.randomUUID(), level, 2, 0, 4L));
+        assertTrue(svc.submitGeneration(UUID.randomUUID(), new RequestRegistration(), level, 2, 0, 4L));
         assertEquals(3, svc.launches.size(), "raise admitted a third launch, none cancelled");
 
         svc.updateCaps(1, 16); // lower below in-flight: gates NEW, cancels nothing
-        assertFalse(svc.submitGeneration(UUID.randomUUID(), level, 3, 0, 5L));
+        assertFalse(svc.submitGeneration(UUID.randomUUID(), new RequestRegistration(), level, 3, 0, 5L));
         assertEquals(3, svc.launches.size(), "in-flight generations survive the lowering");
     }
 
@@ -214,9 +268,9 @@ class PaperChunkGenerationServiceTest {
         var svc = new CapturingGenService(config(2, 16, 60));
         var level = overworldLevel();
 
-        assertTrue(svc.submitGeneration(UUID.randomUUID(), level, 0, 0, 1L));
-        assertTrue(svc.submitGeneration(UUID.randomUUID(), level, 1, 0, 2L));
-        assertFalse(svc.submitGeneration(UUID.randomUUID(), level, 2, 0, 3L));
+        assertTrue(svc.submitGeneration(UUID.randomUUID(), new RequestRegistration(), level, 0, 0, 1L));
+        assertTrue(svc.submitGeneration(UUID.randomUUID(), new RequestRegistration(), level, 1, 0, 2L));
+        assertFalse(svc.submitGeneration(UUID.randomUUID(), new RequestRegistration(), level, 2, 0, 3L));
         assertEquals(2, svc.launches.size());
         assertEquals(diag(2, 0, 2, 0, 0), svc.getDiagnostics());
     }
@@ -227,12 +281,12 @@ class PaperChunkGenerationServiceTest {
         var level = overworldLevel();
         UUID a = UUID.randomUUID();
 
-        assertTrue(svc.submitGeneration(a, level, 0, 0, 1L));
-        assertFalse(svc.submitGeneration(a, level, 1, 0, 2L), "cap 1: second column bounces while first is active");
+        assertTrue(svc.submitGeneration(a, registration(a), level, 0, 0, 1L));
+        assertFalse(svc.submitGeneration(a, registration(a), level, 1, 0, 2L), "cap 1: second column bounces while first is active");
 
         svc.onChunkReady(svc.launches.get(0).key(), null, 0, 0, svc.launches.get(0).token());
         assertEquals(1, svc.tick().size());
-        assertTrue(svc.submitGeneration(a, level, 1, 0, 3L), "slot freed by the resolved load");
+        assertTrue(svc.submitGeneration(a, registration(a), level, 1, 0, 3L), "slot freed by the resolved load");
     }
 
     // ---- removePlayer pruning + late callbacks ----
@@ -243,8 +297,8 @@ class PaperChunkGenerationServiceTest {
         var level = overworldLevel();
         UUID a = UUID.randomUUID();
 
-        assertTrue(svc.submitGeneration(a, level, 0, 0, 1L));
-        svc.removePlayer(a);
+        assertTrue(svc.submitGeneration(a, registration(a), level, 0, 0, 1L));
+        svc.removePlayer(a, registration(a));
         assertEquals(diag(1, 0, 0, 0, 1), svc.getDiagnostics());
 
         // Async load completes after the player left: must not emit, must not count completed
@@ -252,7 +306,7 @@ class PaperChunkGenerationServiceTest {
         assertTrue(svc.tick().isEmpty());
         assertEquals(diag(1, 0, 0, 0, 1), svc.getDiagnostics());
 
-        assertTrue(svc.submitGeneration(a, level, 5, 5, 2L), "rejoining player starts with freed slots");
+        assertTrue(svc.submitGeneration(a, registration(a), level, 5, 5, 2L), "rejoining player starts with freed slots");
     }
 
     @Test
@@ -261,9 +315,9 @@ class PaperChunkGenerationServiceTest {
         var level = overworldLevel();
         UUID a = UUID.randomUUID(), b = UUID.randomUUID();
 
-        assertTrue(svc.submitGeneration(a, level, 0, 0, 1L));
-        assertTrue(svc.submitGeneration(b, level, 0, 0, 2L));
-        svc.removePlayer(a);
+        assertTrue(svc.submitGeneration(a, registration(a), level, 0, 0, 1L));
+        assertTrue(svc.submitGeneration(b, registration(b), level, 0, 0, 2L));
+        svc.removePlayer(a, registration(a));
         assertEquals(diag(1, 0, 1, 0, 0), svc.getDiagnostics(),
                 "launch survives (b still waits); removedInFlight only counts terminal removals"
                         + " (fully-orphaned or failed launches), not a launch with a surviving waiter");
@@ -283,18 +337,18 @@ class PaperChunkGenerationServiceTest {
         var level = overworldLevel();
         UUID a = UUID.randomUUID();
 
-        assertTrue(svc.submitGeneration(a, level, 0, 0, 1L));
+        assertTrue(svc.submitGeneration(a, registration(a), level, 0, 0, 1L));
         for (int tick = 1; tick <= 20; tick++) {
             assertTrue(svc.tick().isEmpty(), "no timeout before tick 21 (tick " + tick + ")");
         }
-        assertFalse(svc.submitGeneration(a, level, 1, 1, 2L), "slot still held right up to the timeout");
+        assertFalse(svc.submitGeneration(a, registration(a), level, 1, 1, 2L), "slot still held right up to the timeout");
 
         var ready = svc.tick(); // tick 21: ticksWaiting exceeds timeoutTicks
         assertEquals(1, ready.size());
         assertNull(ready.get(0).columnData());
         assertEquals(a, ready.get(0).playerUuid());
         assertEquals(diag(1, 0, 0, 1, 0), svc.getDiagnostics());
-        assertTrue(svc.submitGeneration(a, level, 1, 1, 3L), "timeout frees the per-player slot");
+        assertTrue(svc.submitGeneration(a, registration(a), level, 1, 1, 3L), "timeout frees the per-player slot");
 
         // The real async load finishing after the timeout must be a no-op for the expired key
         svc.onChunkReady(svc.launches.get(0).key(), columnData(), 0, 0, svc.launches.get(0).token());
@@ -311,7 +365,7 @@ class PaperChunkGenerationServiceTest {
         when(level.getChunkSource()).thenReturn(mock(ServerChunkCache.class));
         UUID a = UUID.randomUUID();
 
-        assertTrue(svc.submitGeneration(a, level, 4, 4, 1L));
+        assertTrue(svc.submitGeneration(a, registration(a), level, 4, 4, 1L));
         svc.completeAsyncLoad(svc.launches.get(0).key(), level, nmsChunk(), 4, 4, svc.launches.get(0).token());
 
         var ready = svc.tick();
@@ -334,7 +388,7 @@ class PaperChunkGenerationServiceTest {
                 "not completed — counted as removed-in-flight (books balance) and vanished=1");
         assertEquals(0L, svc.getNullChunkFailures(), "the Moonrise-null counter stays untouched");
         assertEquals(1L, svc.getVanishedFailures(), "the vanished-chunk failure is counted");
-        assertTrue(svc.submitGeneration(a, level, 5, 4, 2L));
+        assertTrue(svc.submitGeneration(a, registration(a), level, 5, 4, 2L));
     }
 
     @Test
@@ -344,7 +398,7 @@ class PaperChunkGenerationServiceTest {
         when(level.getChunkSource()).thenThrow(new IllegalStateException("boom"));
         UUID a = UUID.randomUUID();
 
-        assertTrue(svc.submitGeneration(a, level, 0, 0, 1L));
+        assertTrue(svc.submitGeneration(a, registration(a), level, 0, 0, 1L));
         svc.completeAsyncLoad(svc.launches.get(0).key(), level, nmsChunk(), 0, 0, svc.launches.get(0).token()); // must not throw
 
         var ready = svc.tick();
@@ -354,7 +408,7 @@ class PaperChunkGenerationServiceTest {
                 "an extraction exception stays PERMANENT — a corrupt chunk must not be hammered");
         assertEquals(diag(1, 0, 0, 0, 1), svc.getDiagnostics(),
                 "extraction failure counts as removed-in-flight, never as completed");
-        assertTrue(svc.submitGeneration(a, level, 1, 0, 2L), "slot freed despite the exception");
+        assertTrue(svc.submitGeneration(a, registration(a), level, 1, 0, 2L), "slot freed despite the exception");
     }
 
     @Test
@@ -371,7 +425,7 @@ class PaperChunkGenerationServiceTest {
         var previous = thread.getUncaughtExceptionHandler();
         thread.setUncaughtExceptionHandler((t, e) -> surfaced.add(e));
         try {
-            assertTrue(svc.submitGeneration(a, level, 0, 0, 1L));
+            assertTrue(svc.submitGeneration(a, registration(a), level, 0, 0, 1L));
             svc.completeAsyncLoad(svc.launches.get(0).key(), level, nmsChunk(), 0, 0,
                     svc.launches.get(0).token());
         } finally {
@@ -386,7 +440,7 @@ class PaperChunkGenerationServiceTest {
         assertNull(ready.get(0).columnData());
         assertEquals(1L, svc.getTotalRemovedInFlight(),
                 "the removal was counted before the Error surfaced");
-        assertTrue(svc.submitGeneration(a, level, 1, 0, 2L));
+        assertTrue(svc.submitGeneration(a, registration(a), level, 1, 0, 2L));
     }
 
     @Test
@@ -413,8 +467,8 @@ class PaperChunkGenerationServiceTest {
         when(level.getChunkSource()).thenReturn(chunkSource);
         when(level.getLightEngine()).thenReturn(lightEngine);
 
-        assertTrue(svc.submitGeneration(a, level, 6, -9, 100L));
-        assertTrue(svc.submitGeneration(b, level, 6, -9, 200L));
+        assertTrue(svc.submitGeneration(a, registration(a), level, 6, -9, 100L));
+        assertTrue(svc.submitGeneration(b, registration(b), level, 6, -9, 200L));
         svc.completeAsyncLoad(svc.launches.get(0).key(), level, nmsChunk, 6, -9, svc.launches.get(0).token());
 
         var ready = svc.tick();
@@ -431,8 +485,8 @@ class PaperChunkGenerationServiceTest {
         assertEquals(diag(1, 1, 0, 0, 0), svc.getDiagnostics());
 
         // Per-player slots freed for both piggybacked players (cap is 1)
-        assertTrue(svc.submitGeneration(a, level, 7, -9, 300L));
-        assertTrue(svc.submitGeneration(b, level, 8, -9, 400L));
+        assertTrue(svc.submitGeneration(a, registration(a), level, 7, -9, 300L));
+        assertTrue(svc.submitGeneration(b, registration(b), level, 8, -9, 400L));
     }
 
     // ---- counter getters (soak exporter contract) ----
@@ -464,15 +518,15 @@ class PaperChunkGenerationServiceTest {
         assertEquals(0L, svc.getTotalSubmitted());
         assertEquals(0, svc.getActiveCount());
 
-        assertTrue(svc.submitGeneration(a, level, 0, 0, 1L));
-        assertTrue(svc.submitGeneration(a, level, 1, 0, 2L));
-        assertTrue(svc.submitGeneration(b, level, 2, 0, 3L));
+        assertTrue(svc.submitGeneration(a, registration(a), level, 0, 0, 1L));
+        assertTrue(svc.submitGeneration(a, registration(a), level, 1, 0, 2L));
+        assertTrue(svc.submitGeneration(b, registration(b), level, 2, 0, 3L));
         assertEquals(3L, svc.getTotalSubmitted());
         assertEquals(3, svc.getActiveCount());
         assertEquals(0L, svc.getTotalCompleted());
 
         // Piggyback on an active launch must NOT count as a new submission
-        assertTrue(svc.submitGeneration(b, level, 0, 0, 4L));
+        assertTrue(svc.submitGeneration(b, registration(b), level, 0, 0, 4L));
         assertEquals(3L, svc.getTotalSubmitted());
         assertEquals(3, svc.getActiveCount());
 
@@ -485,7 +539,7 @@ class PaperChunkGenerationServiceTest {
         assertEquals(0L, svc.getTotalRemovedInFlight());
 
         // b leaves -> its now-orphaned launch (2,0) counts as removed-in-flight only
-        svc.removePlayer(b);
+        svc.removePlayer(b, registration(b));
         assertEquals(1L, svc.getTotalRemovedInFlight());
         assertEquals(1, svc.getActiveCount());
         assertEquals(1L, svc.getTotalCompleted());
@@ -497,7 +551,7 @@ class PaperChunkGenerationServiceTest {
 
         // A failed async load (null chunk) -> removed_in_flight only: the terminal counter
         // for removals that neither completed nor timed out, so A4 still balances.
-        assertTrue(svc.submitGeneration(a, level, 5, 5, 5L));
+        assertTrue(svc.submitGeneration(a, registration(a), level, 5, 5, 5L));
         svc.onChunkReady(svc.launches.get(3).key(), null, 5, 5, svc.launches.get(3).token());
         assertEquals(1, svc.tick().size());
         assertEquals(2L, svc.getTotalRemovedInFlight());
@@ -517,10 +571,10 @@ class PaperChunkGenerationServiceTest {
         var level = overworldLevel();
         UUID a = UUID.randomUUID(), b = UUID.randomUUID();
 
-        assertTrue(svc.submitGeneration(a, level, 0, 0, 1L));
-        assertTrue(svc.submitGeneration(b, level, 1, 0, 2L));
-        assertFalse(svc.submitGeneration(b, level, 2, 0, 3L), "b is at cap for fresh launches");
-        assertTrue(svc.submitGeneration(b, level, 0, 0, 4L),
+        assertTrue(svc.submitGeneration(a, registration(a), level, 0, 0, 1L));
+        assertTrue(svc.submitGeneration(b, registration(b), level, 1, 0, 2L));
+        assertFalse(svc.submitGeneration(b, registration(b), level, 2, 0, 3L), "b is at cap for fresh launches");
+        assertTrue(svc.submitGeneration(b, registration(b), level, 0, 0, 4L),
                 "the existingActive branch runs BEFORE the cap checks: an at-cap player still "
                         + "piggybacks (the column is being generated anyway — bouncing would only "
                         + "delay the answer)");
@@ -533,15 +587,15 @@ class PaperChunkGenerationServiceTest {
         var level = overworldLevel();
         UUID a = UUID.randomUUID(), b = UUID.randomUUID();
 
-        assertTrue(svc.submitGeneration(a, level, 0, 0, 1L)); // a: 1
-        assertTrue(svc.submitGeneration(b, level, 1, 0, 2L)); // b: 1
-        assertTrue(svc.submitGeneration(a, level, 1, 0, 3L)); // a piggybacks b's launch -> a: 2
-        assertFalse(svc.submitGeneration(a, level, 2, 0, 4L),
+        assertTrue(svc.submitGeneration(a, registration(a), level, 0, 0, 1L)); // a: 1
+        assertTrue(svc.submitGeneration(b, registration(b), level, 1, 0, 2L)); // b: 1
+        assertTrue(svc.submitGeneration(a, registration(a), level, 1, 0, 3L)); // a piggybacks b's launch -> a: 2
+        assertFalse(svc.submitGeneration(a, registration(a), level, 2, 0, 4L),
                 "the piggyback consumed a's second slot — fresh launches reject at cap");
 
         svc.onChunkReady(svc.launches.get(1).key(), null, 1, 0, svc.launches.get(1).token());
         assertEquals(2, svc.tick().size(), "completion fans out to b and the piggybacked a");
-        assertTrue(svc.submitGeneration(a, level, 2, 0, 5L), "completion freed the piggybacked slot");
+        assertTrue(svc.submitGeneration(a, registration(a), level, 2, 0, 5L), "completion freed the piggybacked slot");
     }
 
     // ---- #9 fix: timeout/resubmit stale-future race — the generation token rejects a stale completion ----
@@ -568,12 +622,12 @@ class PaperChunkGenerationServiceTest {
         var level = successWiredLevel();
         UUID a = UUID.randomUUID();
 
-        assertTrue(svc.submitGeneration(a, level, 0, 0, 1L)); // entry A
+        assertTrue(svc.submitGeneration(a, registration(a), level, 0, 0, 1L)); // entry A
         for (int t = 0; t < 21; t++) svc.tick();              // A times out; its failure drains
         assertEquals(1L, svc.getTotalTimeouts());
         assertEquals(0, svc.getActiveCount());
 
-        assertTrue(svc.submitGeneration(a, level, 0, 0, 2L)); // entry B: SAME key value, NEW token
+        assertTrue(svc.submitGeneration(a, registration(a), level, 0, 0, 2L)); // entry B: SAME key value, NEW token
         assertEquals(2, svc.launches.size());
 
         // #9 fix: A's stale (failed) completion carries A's token, so it is REJECTED — it does
@@ -593,7 +647,7 @@ class PaperChunkGenerationServiceTest {
         assertEquals(svc.getTotalSubmitted(),
                 svc.getTotalCompleted() + svc.getTotalTimeouts() + svc.getTotalRemovedInFlight(),
                 "A4 books balance (2 == 1 completed + 1 timeout + 0 removed)");
-        assertTrue(svc.submitGeneration(a, level, 9, 9, 3L),
+        assertTrue(svc.submitGeneration(a, registration(a), level, 9, 9, 3L),
                 "per-player counts intact: cap 1 admits a fresh launch (a leaked count would bounce it)");
     }
 
@@ -603,9 +657,9 @@ class PaperChunkGenerationServiceTest {
         var level = successWiredLevel();
         UUID a = UUID.randomUUID();
 
-        assertTrue(svc.submitGeneration(a, level, 0, 0, 1L)); // entry A
+        assertTrue(svc.submitGeneration(a, registration(a), level, 0, 0, 1L)); // entry A
         for (int t = 0; t < 21; t++) svc.tick();              // A times out
-        assertTrue(svc.submitGeneration(a, level, 0, 0, 2L)); // entry B
+        assertTrue(svc.submitGeneration(a, registration(a), level, 0, 0, 2L)); // entry B
 
         // The token is identity-strict: even a stale SUCCESS is rejected, never cross-applied to B.
         svc.completeAsyncLoad(svc.launches.get(0).key(), level, nmsChunk(), 0, 0, svc.launches.get(0).token());
@@ -633,7 +687,7 @@ class PaperChunkGenerationServiceTest {
         var svc = new CapturingGenService(config(32, 4, 60));
         var level = overworldLevel();
 
-        assertTrue(svc.submitGeneration(UUID.randomUUID(), level, 7, -3, 1L));
+        assertTrue(svc.submitGeneration(UUID.randomUUID(), new RequestRegistration(), level, 7, -3, 1L));
 
         assertEquals(1, svc.launches.size());
         assertSame(Priority.LOW, svc.launches.get(0).priority(),
@@ -651,7 +705,7 @@ class PaperChunkGenerationServiceTest {
         svc.setMainThreadScheduler(task -> { throw new RejectedExecutionException("plugin disabled"); });
 
         UUID a = UUID.randomUUID();
-        assertTrue(svc.submitGeneration(a, level, 7, -3, 1L));
+        assertTrue(svc.submitGeneration(a, registration(a), level, 7, -3, 1L));
         assertEquals(1, svc.getActiveCount());
 
         assertDoesNotThrow(() -> svc.completeAsyncLoad(svc.launches.get(0).key(), level,
@@ -673,7 +727,7 @@ class PaperChunkGenerationServiceTest {
         svc.setMainThreadScheduler(scheduled::add);
 
         UUID a = UUID.randomUUID();
-        assertTrue(svc.submitGeneration(a, level, 2, 2, 5L));
+        assertTrue(svc.submitGeneration(a, registration(a), level, 2, 2, 5L));
         assertTrue(scheduled.isEmpty(), "nothing is scheduled until the async load completes");
 
         // Moonrise surfaces a failed load as a NULL chunk — no throwable channel exists.
@@ -698,8 +752,8 @@ class PaperChunkGenerationServiceTest {
         var svc = new CapturingGenService(config(32, 4, 60));
         var level = overworldLevel();
         UUID a = UUID.randomUUID(), b = UUID.randomUUID();
-        assertTrue(svc.submitGeneration(a, level, 0, 0, 1L));
-        assertTrue(svc.submitGeneration(b, level, 1, 0, 2L));
+        assertTrue(svc.submitGeneration(a, registration(a), level, 0, 0, 1L));
+        assertTrue(svc.submitGeneration(b, registration(b), level, 1, 0, 2L));
 
         svc.shutdown();
         assertEquals(0, svc.getActiveCount());
@@ -721,7 +775,7 @@ class PaperChunkGenerationServiceTest {
         var svc = new CapturingGenService(config(64, 64, 30));
         var level = overworldLevel();
         for (int i = 0; i < 16; i++) {
-            svc.submitGeneration(java.util.UUID.randomUUID(), level, i, 0, i);
+            svc.submitGeneration(java.util.UUID.randomUUID(), new RequestRegistration(), level, i, 0, i);
         }
         org.junit.jupiter.api.Assertions.assertEquals(16, svc.launches.size(),
                 "premise: sixteen launches captured");

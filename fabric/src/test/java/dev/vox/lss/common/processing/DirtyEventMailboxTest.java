@@ -62,7 +62,7 @@ class DirtyEventMailboxTest {
         }
 
         @Override
-        protected boolean submitDiskRead(UUID playerUuid, String dimension, int cx, int cz, long order, long clientTimestamp) {
+        protected boolean submitDiskRead(UUID playerUuid, RequestRegistration registration, String dimension, int cx, int cz, long order, long clientTimestamp) {
             this.submittedReadPositions.add(PositionUtil.packPosition(cx, cz));
             return true;
         }

@@ -78,7 +78,7 @@ class OffThreadProcessorStoreTest {
         }
 
         @Override
-        protected boolean submitDiskRead(UUID playerUuid, String dimension, int cx, int cz, long order, long clientTimestamp) {
+        protected boolean submitDiskRead(UUID playerUuid, RequestRegistration registration, String dimension, int cx, int cz, long order, long clientTimestamp) {
             return true; // the tests inject results directly into the reader queue
         }
 
@@ -105,7 +105,7 @@ class OffThreadProcessorStoreTest {
             this.state.markHandshakeComplete();
             this.state.setCapabilities(LSSConstants.CAPABILITY_VOXEL_COLUMNS);
             this.players.put(this.uuid, this.state);
-            this.reader.registerPlayer(this.uuid);
+            this.reader.registerPlayer(this.uuid, this.state.registration());
             this.proc = new TestProcessor(this.players, this.reader, generationAvailable);
             this.proc.attachStore(this.store);
             this.proc.start();
@@ -261,8 +261,8 @@ class OffThreadProcessorStoreTest {
         long packed = PositionUtil.packPosition(20, 20);
         byte[] genBytes = {7, 7, 7, 7};
         rig.state.tryAdmit(new PendingRequest(20, 20, SlotType.GENERATION, 0L));
-        rig.proc.addGenerationInFlight(rig.uuid, DIM, packed);
-        rig.cycleWithGen(new TickSnapshot.GenerationReadyData(rig.uuid, 20, 20, DIM,
+        rig.proc.addGenerationInFlight(rig.state.registration(), DIM, packed);
+        rig.cycleWithGen(new TickSnapshot.GenerationReadyData(rig.uuid, rig.state.registration(), 20, 20, DIM,
                 new LoadedColumnData(20, 20, genBytes, genBytes.length), TS, 7, false, false));
         rig.await(() -> !rig.store.deposits.isEmpty(), "generation deposit");
         var dep = rig.store.deposits.poll();
@@ -276,11 +276,11 @@ class OffThreadProcessorStoreTest {
         var rig = new Rig(true);
         long packed = PositionUtil.packPosition(21, 21);
         rig.state.tryAdmit(new PendingRequest(21, 21, SlotType.GENERATION, 0L));
-        rig.proc.addGenerationInFlight(rig.uuid, DIM, packed);
+        rig.proc.addGenerationInFlight(rig.state.registration(), DIM, packed);
         // The edit overtakes the buffered outcome...
         rig.proc.invalidateTimestamps(DIM, new long[]{packed});
         rig.await(() -> !rig.store.invalidations.isEmpty(), "invalidation fan-out");
-        rig.cycleWithGen(new TickSnapshot.GenerationReadyData(rig.uuid, 21, 21, DIM,
+        rig.cycleWithGen(new TickSnapshot.GenerationReadyData(rig.uuid, rig.state.registration(), 21, 21, DIM,
                 new LoadedColumnData(21, 21, new byte[]{8, 8}, 2), TS, 8, false, false));
         rig.await(() -> !rig.proc.enqueued.isEmpty(), "stale gen delivery");
         assertTrue(rig.store.deposits.isEmpty(),

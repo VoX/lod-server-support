@@ -1,5 +1,7 @@
 package dev.vox.lss.paper;
 
+import dev.vox.lss.common.processing.RequestRegistration;
+
 import dev.vox.lss.common.processing.ChunkReadResult;
 import net.minecraft.SharedConstants;
 import net.minecraft.nbt.CompoundTag;
@@ -28,6 +30,12 @@ import static org.mockito.Mockito.mock;
  * harness on real Paper/Folia, per the Paper validation strategy in CLAUDE.md.
  */
 class PaperChunkDiskReaderPriorityTest {
+    private static final java.util.Map<UUID, RequestRegistration> TEST_REGISTRATIONS =
+            new java.util.concurrent.ConcurrentHashMap<>();
+    private static RequestRegistration registration(UUID uuid) {
+        return TEST_REGISTRATIONS.computeIfAbsent(uuid, ignored -> new RequestRegistration());
+    }
+
 
     @BeforeAll
     static void setup() {
@@ -39,13 +47,13 @@ class PaperChunkDiskReaderPriorityTest {
     void flagOnReaderKeepsTheReadOverrideAndStillDeliversThroughTheEnvelope() throws Exception {
         var reader = new PaperChunkDiskReader(1, /* useBackgroundReadPriority = */ true);
         var uuid = UUID.randomUUID();
-        reader.registerPlayer(uuid);
+        reader.registerPlayer(uuid, registration(uuid));
         try {
             // An empty tag short-circuits to notFound before registryAccess is ever read, so a bare
             // mock level suffices — and reaching the assertion at all proves the override, not the
             // Moonrise path, served this read (Moonrise would explode on a mock level).
             reader.setReadOverride((cx, cz) -> CompletableFuture.completedFuture(Optional.<CompoundTag>empty()));
-            reader.submitReadDirect(uuid, "minecraft:overworld", mock(ServerLevel.class), 10, 10, 0L, 0L);
+            reader.submitReadDirect(uuid, registration(uuid), "minecraft:overworld", mock(ServerLevel.class), 10, 10, 0L, 0L);
 
             ChunkReadResult result = awaitResult(reader, uuid);
             assertTrue(result.notFound(), "empty override tag resolves as not-found with the flag on");

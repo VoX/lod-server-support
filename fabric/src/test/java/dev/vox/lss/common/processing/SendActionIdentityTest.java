@@ -35,7 +35,7 @@ class SendActionIdentityTest {
         }
 
         @Override
-        protected boolean submitDiskRead(UUID playerUuid, String dimension, int cx, int cz, long order, long clientTimestamp) {
+        protected boolean submitDiskRead(UUID playerUuid, RequestRegistration registration, String dimension, int cx, int cz, long order, long clientTimestamp) {
             return true;
         }
 
@@ -71,10 +71,10 @@ class SendActionIdentityTest {
      * ColumnNotGenerated action (the gen-drained counter increments after the action is
      * queued, so observing it proves the action exists before the test interferes).
      */
-    private static void produceNotGenerated(TestProcessor proc, UUID uuid, int cx, int cz,
+    private static void produceNotGenerated(TestProcessor proc, TestState state, int cx, int cz,
                                             long expectedTotalGenDrained) throws InterruptedException {
-        proc.feedGenerationFailure(uuid, cx, cz, DIM, expectedTotalGenDrained, false);
-        proc.postSnapshot(snapshot(uuid), List.of());
+        proc.feedGenerationFailure(state.getPlayerUUID(), state.registration(), cx, cz, DIM, expectedTotalGenDrained, false);
+        proc.postSnapshot(snapshot(state.getPlayerUUID()), List.of());
         waitFor(() -> proc.getDiagnostics().getTotalGenDrained() == expectedTotalGenDrained,
                 "generation outcome " + expectedTotalGenDrained + " processed");
     }
@@ -98,7 +98,7 @@ class SendActionIdentityTest {
         var proc = new TestProcessor(players);
         try {
             proc.start();
-            produceNotGenerated(proc, u, 1, 0, 1);
+            produceNotGenerated(proc, old, 1, 0, 1);
 
             // Dimension change: same UUID re-registered with a fresh, fully handshaked state,
             // so a delivered action could only have passed the identity check by mistake.
@@ -110,7 +110,7 @@ class SendActionIdentityTest {
                     "action produced for the replaced session must not reach the fresh one");
 
             // The pipeline still serves the fresh session — only the stale action died.
-            produceNotGenerated(proc, u, 2, 0, 2);
+            produceNotGenerated(proc, fresh, 2, 0, 2);
             assertEquals(List.of(new Delivered(u, LSSConstants.RESPONSE_NOT_GENERATED,
                             PositionUtil.packPosition(2, 0))),
                     drainOnce(proc),
@@ -130,11 +130,11 @@ class SendActionIdentityTest {
         var proc = new TestProcessor(players);
         try {
             proc.start();
-            produceNotGenerated(proc, u, 3, 0, 1);
+            produceNotGenerated(proc, state, 3, 0, 1);
 
             // Disconnect (production removePlayer order: drop the map entry, then notify).
             players.remove(u);
-            proc.notifyPlayerRemoved(u);
+            proc.notifyPlayerRemoved(u, state.registration());
 
             assertEquals(List.of(), drainOnce(proc), "actions die with the disconnected session");
         } finally {
@@ -151,13 +151,13 @@ class SendActionIdentityTest {
         var proc = new TestProcessor(players);
         try {
             proc.start();
-            produceNotGenerated(proc, u, 1, 0, 1);
+            produceNotGenerated(proc, state, 1, 0, 1);
 
             assertEquals(List.of(), drainOnce(proc),
                     "no batched responses may reach a session before its handshake completes");
 
             state.markHandshakeComplete();
-            produceNotGenerated(proc, u, 2, 0, 2);
+            produceNotGenerated(proc, state, 2, 0, 2);
             assertEquals(List.of(new Delivered(u, LSSConstants.RESPONSE_NOT_GENERATED,
                             PositionUtil.packPosition(2, 0))),
                     drainOnce(proc),
