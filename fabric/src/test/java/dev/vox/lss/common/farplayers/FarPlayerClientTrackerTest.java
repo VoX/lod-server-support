@@ -115,4 +115,19 @@ class FarPlayerClientTrackerTest {
         t.onUpdates(new FarPlayerWire.Updates(9, "d", 10, List.of(entry(0, 1))), 3000);
         assertEquals(1, t.trackedCount());
     }
+
+    @Test void movingAnIdentityToAnotherIndexMakesOldRemovalHarmless() {
+        var t = new FarPlayerClientTracker();
+        t.onRoster(fullRoster(1, new FarPlayerWire.RosterEntry(0, A, "Alice")));
+        t.onUpdates(new FarPlayerWire.Updates(1, "d", 10, List.of(entry(0, 5))), 1000);
+        t.onRoster(new FarPlayerWire.Roster(1, false,
+                List.of(new FarPlayerWire.RosterEntry(1, A, "Alice")), new int[]{0}));
+        assertEquals(1, t.trackedCount());
+        t.onUpdates(new FarPlayerWire.Updates(1, "d", 10, List.of(entry(0, 99))), 2000);
+        assertEquals(5, t.snapshot().get(A).latest().quantX(), "old index is no longer bound");
+        t.onUpdates(new FarPlayerWire.Updates(1, "d", 10, List.of(entry(1, 7))), 3000);
+        assertEquals(7, t.snapshot().get(A).latest().quantX());
+        t.onRoster(new FarPlayerWire.Roster(1, false, List.of(), new int[]{1}));
+        assertEquals(0, t.trackedCount());
+    }
 }
