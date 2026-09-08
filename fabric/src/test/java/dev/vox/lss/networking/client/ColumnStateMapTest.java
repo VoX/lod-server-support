@@ -1065,6 +1065,40 @@ class ColumnStateMapTest {
     }
 
     @Test
+    void doubtRevokesOnlySummaryProofsAndPreservesOtherState() {
+        long received = PositionUtil.packPosition(11, -3);
+        long upToDate = PositionUtil.packPosition(12, -3);
+        long dirty = PositionUtil.packPosition(13, -3);
+        long retry = PositionUtil.packPosition(14, -3);
+        long outside = PositionUtil.packPosition(32, -3);
+        var loaded = new Long2LongOpenHashMap();
+        for (long p : new long[]{POS, received, upToDate, dirty, retry, outside}) loaded.put(p, 7000L);
+        map.loadFrom(loaded);
+        map.applyTileValidation(POS_TILE_X, POS_TILE_Z, 1L);
+        map.applyTileValidation(1, POS_TILE_Z, 1L);
+        map.onReceived(received, 8000L);
+        map.onUpToDate(upToDate);
+        map.markDirtyIfKnown(dirty);
+        map.markRetry(retry);
+        int leaves = map.leafCountForTest();
+        var revoked = new java.util.HashSet<Long>();
+        assertEquals(3, map.revokeTileSummaryProof(POS_TILE_X, POS_TILE_Z, revoked::add));
+        assertEquals(java.util.Set.of(POS, dirty, retry), revoked);
+        assertEquals(7000L, map.classify(POS));
+        assertEquals(7000L, map.classify(dirty));
+        assertEquals(7000L, map.classify(retry));
+        assertEquals(1, map.dirtyCount());
+        assertEquals(SATISFIED, map.classify(received));
+        assertEquals(SATISFIED, map.classify(upToDate));
+        assertEquals(SATISFIED, map.classify(outside), "adjacent tile is untouched");
+        assertEquals(0, map.revokeTileSummaryProof(POS_TILE_X, POS_TILE_Z, p -> fail("repeat revoked")));
+        assertEquals(0, map.revokeTileSummaryProof(10, 10, p -> fail("empty tile revoked")));
+        assertEquals(leaves, map.leafCountForTest(), "doubt never creates leaves");
+        assertEquals(8000L, map.timestampFor(received));
+        assertEquals(7000L, map.timestampFor(POS));
+    }
+
+    @Test
     void tileValidationReportsRevokedPositionsToTheCaller() {
         // The revocation consumer (final review, client lens MAJOR-1): a revoked
         // position may sit below the scanner's confirmed prefix, so the caller must

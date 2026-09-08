@@ -881,10 +881,12 @@ public class LodRequestManager {
                     // the harness honesty legs on tiles_unknown stay sharp — a summary
                     // window legitimately covers many never-generated regions.
                     this.summaryTilesNoRegion++;
+                    this.columns.revokeTileSummaryProof(tx, tz, revokedOut);
                     continue;
                 }
                 if (stamp == dev.vox.lss.common.region.RegionSummaryWire.STAMP_NEVER_CLEAN) {
                     this.summaryTilesUnknown++;
+                    this.columns.revokeTileSummaryProof(tx, tz, revokedOut);
                     continue;
                 }
                 var outcome = this.columns.applyTileValidation(tx, tz, stamp, revokedOut);
