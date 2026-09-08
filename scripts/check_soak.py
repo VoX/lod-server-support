@@ -462,7 +462,7 @@ KNOWN_SERVER_KEYS = {
                  "summary", "mailbox_depth_hw", "mspt_avg_window", "probe_hashes"},
     # mapped appears only on Folia runs, only when true: the driver acknowledged a timeline
     # command Folia unregisters (save-all) as a deliberate no-op instead of executing it.
-    "command": {"event", "wallMs", "tick", "cmd", "anchor", "at", "ok", "mapped"},
+    "command": {"event", "wallMs", "tick", "cmd", "anchor", "at", "ok", "mapped", "validation"},
     "join": {"event", "wallMs", "tick", "player", "joinIndex"},
     "end": {"event", "wallMs", "tick", "reason"},
 }
@@ -3779,6 +3779,19 @@ def check_global_schema(server_snaps, runs, violations):
     return ok
 
 
+def command_validation_violations(commands):
+    """Do not mistake the historical did-not-throw breadcrumb for setup proof."""
+    for row in commands:
+        command = row.get("cmd", "")
+        if row.get("ok") is not True:
+            yield Violation("command-validation", command,
+                            "scenario command failed validation or execution", {"ok": row.get("ok")})
+        elif command.lstrip("/").startswith("gamerule ") and row.get("validation") != "gamerule-readback":
+            yield Violation("command-validation", command,
+                            "gamerule setup lacks successful semantic readback (legacy dispatch-only rows are unverified)",
+                            {"validation": row.get("validation")})
+
+
 def run_checker(results_dir, scenario, expect_session_version=None, platform="fabric"):
     violations, warnings = [], []
     unknown_keys, unknown_events = set(), set()
@@ -3828,6 +3841,8 @@ def run_checker(results_dir, scenario, expect_session_version=None, platform="fa
         violations.append(Violation("run-completion", "end event",
                                     "run did not complete its timeline",
                                     {"reason": ends[-1]["reason"]}))
+
+    violations.extend(command_validation_violations(server["commands"]))
 
     cfg_path = SCENARIO_DIR / f"{scenario}-config.json"
     config = {}
@@ -4386,6 +4401,23 @@ def selftest():
             "disconnect gate: a crashed run (no disconnect row) must fire a run-completion violation"
     finally:
         tmp_path.unlink()
+
+    # Command result=0 is a valid gamerule setter/query success. Historical ok=true
+    # without strict proof must not re-accept a recording of a rejected gamerule.
+    clean("gamerule zero-valued success", list(command_validation_violations([
+        {"cmd": "gamerule minecraft:random_tick_speed 0", "ok": True,
+         "validation": "gamerule-readback"}])))
+    hits("gamerule explicit failure", list(command_validation_violations([
+        {"cmd": "gamerule unknown 0", "ok": False, "validation": "gamerule-readback"}])),
+         "command-validation")
+    hits("legacy false-green setup is unverified", list(command_validation_violations([
+        {"cmd": "gamerule unknown 0", "ok": True}])), "command-validation")
+    hits("failed generic command", list(command_validation_violations([
+        {"cmd": "unknown", "ok": False, "validation": "dispatch"}])), "command-validation")
+    clean("idempotent generic cleanup keeps dispatch semantics", list(command_validation_violations([
+        {"cmd": "kill @e[type=minecraft:pig]", "ok": True, "validation": "dispatch"}])))
+    clean("Folia acknowledged save mapping", list(command_validation_violations([
+        {"cmd": "save-all flush", "ok": True, "mapped": True, "validation": "folia-noop"}])))
 
     # --- Folia mapped command rows are schema-known (no unknown-key warning) ---
     with tempfile.NamedTemporaryFile("w", suffix=".jsonl", delete=False) as tf:

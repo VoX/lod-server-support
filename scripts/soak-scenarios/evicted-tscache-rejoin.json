@@ -5,7 +5,7 @@
     {
       "anchor": 1,
       "at": 2,
-      "cmd": "gamerule doDaylightCycle false"
+      "cmd": "gamerule minecraft:advance_time false"
     }
   ],
   "end": {

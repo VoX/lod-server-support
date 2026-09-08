@@ -158,25 +158,28 @@ public final class PaperSoakScenarioDriver implements Listener {
             step.fired = true;
             this.lastProgressTick = this.tickCount;
             LSSLogger.info("[Soak] Executing step (anchor " + step.anchor + " +" + step.at + "s): " + step.cmd);
-            boolean threw = false;
+            boolean ok = false;
             boolean mapped = mapsToFoliaNoOp(step.cmd, FoliaSupport.IS_FOLIA);
             if (mapped) {
+                ok = true; // Explicit acknowledged Folia save-all mapping.
                 LSSLogger.info("[Soak] Folia: mapping to no-op: " + step.cmd);
             } else {
                 try {
-                    executeStepCommand(step.cmd);
+                    ok = executeStepCommand(step.cmd);
+                    if (!ok) LSSLogger.error("[Soak] Step command did not complete successfully: " + step.cmd);
                 } catch (RuntimeException e) {
-                    threw = true;
                     LSSLogger.error("[Soak] Step command failed: " + step.cmd, e);
                 }
             }
-            // ok=did-not-throw breadcrumb (twin of the Fabric driver); no-effect commands are
-            // flagged by soak_report's snapshot-delta tag, not here.
+            // Gamerule semantic readback is distinct from generic dispatch acceptance.
             var row = baseRow("command");
             row.put("cmd", step.cmd);
             row.put("anchor", step.anchor);
             row.put("at", step.at);
-            row.put("ok", !threw);
+            row.put("ok", ok);
+            String bare = step.cmd.startsWith("/") ? step.cmd.substring(1) : step.cmd;
+            row.put("validation", mapped ? "folia-noop"
+                    : bare.startsWith("gamerule ") ? "gamerule-readback" : "dispatch");
             if (mapped) row.put("mapped", true); // only when true: Paper rows stay byte-identical
             PaperSoakMetricsExporter.appendJsonLine(OUTPUT, row);
         }
@@ -202,17 +205,18 @@ public final class PaperSoakScenarioDriver implements Listener {
      * dimension-trip's quiescence rules (randomTickSpeed 0, doMobSpawning false, ...) would
      * never reach the End — the shared Fabric timelines assume global gamerule semantics.
      */
-    private void executeStepCommand(String cmd) {
+    private boolean executeStepCommand(String cmd) {
         String bare = cmd.startsWith("/") ? cmd.substring(1) : cmd;
         if (bare.startsWith("gamerule ")) {
+            boolean ok = true;
             for (var level : this.server.getAllLevels()) {
                 String scoped = "execute in " + level.dimension().identifier() + " run " + bare;
-                this.server.getCommands().performPrefixedCommand(
+                ok &= SoakCommandExecutor.setGamerule(this.server.getCommands(),
                         this.server.createCommandSourceStack(), scoped);
             }
-            return;
+            return ok;
         }
-        this.server.getCommands().performPrefixedCommand(
+        return SoakCommandExecutor.dispatch(this.server.getCommands(),
                 this.server.createCommandSourceStack(), cmd);
     }
 
