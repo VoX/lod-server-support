@@ -34,6 +34,10 @@ public final class ModCompat {
     }
 
     /** Disconnect forwarder — a session's queued map tiles never outlive it. */
+    public static void retireClientAcquisition() {
+        XaeroMapCompat.retireClientAcquisition();
+    }
+
     public static void onDisconnect() {
         XaeroMapCompat.onDisconnect();
     }
