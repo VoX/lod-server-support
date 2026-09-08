@@ -143,4 +143,37 @@ class ColumnDeliveryLifecycleTest {
         assertEquals(7000L, manager.columnsForTest().classify(POS));
     }
 
+    @Test void dimensionCancelledClearCannotEraseItsSavedContentClaimLater() throws Exception {
+        assertDimensionCancelledClearSurvivesLateReport(false);
+    }
+
+    @Test void aPostedFailureEventCannotOutliveDimensionCancellation() throws Exception {
+        assertDimensionCancelledClearSurvivesLateReport(true);
+    }
+
+    private void assertDimensionCancelledClearSurvivesLateReport(boolean alreadyPosted) throws Exception {
+        String bucket = "receipt-dimension-clear-" + UUID.randomUUID();
+        var manager = manager(bucket);
+        try {
+            deliver(manager, 7000L, false).complete();
+            var clear = deliver(manager, 9000L, true);
+            var events = new ArrayList<Runnable>();
+            if (alreadyPosted) {
+                manager.deliveryExecutor = events::add;
+                clear.report();
+            }
+            manager.cancelOutstandingDeliveries(); // dimension transition keeps this manager active
+            manager.saveCache();
+            manager.setLastDimensionForTest(Level.NETHER);
+            clear.report(); // deferred Xaero old-dimension drop after the cache was saved
+            events.forEach(Runnable::run);
+            var loaded = ColumnCacheStore.loadStateAsync(bucket, DIM).get(30, TimeUnit.SECONDS);
+            var restored = new ColumnStateMap();
+            restored.adoptLoaded(loaded);
+            assertEquals(7000L, restored.classify(POS), "return must still claim data to request the clear again");
+            assertFalse(clear.isActive());
+            assertTrue(manager.isAcquisitionActive());
+        } finally { ColumnCacheStore.clearForServer(bucket); }
+    }
+
 }
