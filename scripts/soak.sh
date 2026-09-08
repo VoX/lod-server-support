@@ -30,6 +30,8 @@ set -euo pipefail
 
 SCENARIO="${1:-}"
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+source "$PROJECT_ROOT/scripts/lib/harness-lock.sh"
+harness_acquire
 SELF="$PROJECT_ROOT/scripts/soak.sh"
 CLIENT_RUN_DIR="$PROJECT_ROOT/fabric/build/run/soak-client"
 RESULTS_ROOT="$PROJECT_ROOT/soak-results"
@@ -152,15 +154,15 @@ fi
 if [[ "$SCENARIO" == "all" ]]; then
     if [[ "$SOAK_PLATFORM" == "paper" ]]; then
         for s in "${PAPER_SCENARIOS[@]}"; do
-            "$SELF" "$s"
+            harness_run_script "$SELF" "$s"
         done
     elif [[ "$SOAK_PLATFORM" == "folia" ]]; then
         for s in "${FOLIA_SCENARIOS[@]}"; do
-            "$SELF" "$s"
+            harness_run_script "$SELF" "$s"
         done
     else
         for s in "${ALL_SCENARIOS[@]}"; do
-            "$SELF" "$s"
+            harness_run_script "$SELF" "$s"
         done
     fi
     echo "[soak] All scenarios passed ($SOAK_PLATFORM)"
@@ -388,10 +390,10 @@ if [[ " $FRESH_WORLD_SCENARIOS " != *" $SCENARIO "* ]]; then
     fi
     if [[ ! -d "$BASE_WORLD_DIR/world" ]]; then
         echo "[soak] No base world at $BASE_WORLD_DIR/world — running fresh-backfill first"
-        "$SELF" fresh-backfill
+        harness_run_script "$SELF" fresh-backfill
     elif [[ "$SCENARIO" == "cold-restart-resync" && ! -d "$BASE_WORLD_DIR/client-cache" ]]; then
         echo "[soak] Base world has no client-cache snapshot — re-running fresh-backfill"
-        "$SELF" fresh-backfill
+        harness_run_script "$SELF" fresh-backfill
     fi
 fi
 
@@ -403,9 +405,9 @@ python3 "$PROJECT_ROOT/scripts/check_soak.py" --validate "$SCENARIO"
 # the dev plugin jar that retains the soak package)
 echo "[soak] Building mod..."
 cd "$PROJECT_ROOT"
-./gradlew :fabric:build -x test -x runGameTest -x runClientGameTest --quiet
+harness_gradle :fabric:build -x test -x runGameTest -x runClientGameTest --quiet
 if [[ "$SOAK_PLATFORM" == "paper" || "$SOAK_PLATFORM" == "folia" ]]; then
-    ./gradlew :paper:soakShadowJar --quiet
+    harness_gradle :paper:soakShadowJar --quiet
 fi
 
 # Step 4: Prepare run + results directories
@@ -414,7 +416,7 @@ RUN_RESULTS_DIR="$RESULTS_ROOT/$SCENARIO-$PLATFORM_TAG$(date -u +%Y%m%dT%H%M%SZ)
 mkdir -p "$RUN_RESULTS_DIR"
 
 # Step 5a: Stage world. Fresh-world scenarios start from nothing (generation paths);
-# only fresh-backfill SAVES its world as the reusable base afterwards (Step 13).
+# only fresh-backfill SAVES its world as the reusable base afterwards (Step 16).
 # 1.21.x line: Bukkit platforms (Paper/Folia) use the legacy split
 # world_nether/world_the_end layout; Fabric keeps a single world/ (dedicated-server
 # DIM-1/DIM1 nest inside it) — the world* glob covers both, so the End round-trips on
@@ -612,8 +614,8 @@ DEADLINE_EPOCH=$(( $(date +%s) + RUNTIME_BUDGET ))
 # sampler self-terminates when the server JVM disappears; the explicit kill at collect is
 # belt-and-braces. Analysis lives with the profile tooling (cpu.jsonl schema unchanged).
 PROC_SAMPLER_SRV_PATTERN='Dlss\.soak\.scenario' \
-    "$PROJECT_ROOT/scripts/lib/proc_sampler.sh" "$RUN_RESULTS_DIR/cpu.jsonl" $((RUNTIME_BUDGET + 300)) &
-SAMPLER_PID=$!
+    harness_start_observer "$PROJECT_ROOT/scripts/lib/proc_sampler.sh" "$RUN_RESULTS_DIR/cpu.jsonl" $((RUNTIME_BUDGET + 300))
+SAMPLER_PID=$HARNESS_OBSERVER_PID
 # Kill the sampler on ANY exit (review B14): a set -e exit between here and the
 # Step 12 kill left it alive for RUNTIME_BUDGET+300 s, and its pattern matches any
 # soak server — an orphan latched onto the NEXT scenario's JVM and appended to the
@@ -664,6 +666,8 @@ echo "[soak] Server exited"
 # Step 12: Collect results (gradle logs were written there directly)
 kill "$SAMPLER_PID" 2>/dev/null || true
 wait "$SAMPLER_PID" 2>/dev/null || true
+HARNESS_OBSERVER_PID=""
+SAMPLER_PID=""
 echo "[soak] Collecting results into $RUN_RESULTS_DIR"
 if [[ -f "$SERVER_RUN_DIR/soak-results/server.jsonl" ]]; then
     cp "$SERVER_RUN_DIR/soak-results/server.jsonl" "$RUN_RESULTS_DIR/server.jsonl"
@@ -673,37 +677,6 @@ fi
 cp "$CLIENT_RUN_DIR/soak-results/"client-run*.jsonl "$RUN_RESULTS_DIR/" 2>/dev/null \
     || echo "[soak] WARNING: No client jsonl files found"
 cp "$SCENARIO_JSON" "$RUN_RESULTS_DIR/"
-
-# Step 13: Save world for reuse (fresh-backfill only). The client column cache is
-# snapshotted alongside it: the world copy carries data/lss-timestamps.bin (final save
-# runs on server shutdown, before this copy), so world + client-cache form a mutually
-# consistent warm pair that cold-restart-resync restores into a brand-new server JVM.
-if [[ "$SCENARIO" == "fresh-backfill" && -d "$SERVER_RUN_DIR/world" ]]; then
-    echo "[soak] Saving world to $BASE_WORLD_DIR/ for reuse"
-    mkdir -p "$BASE_WORLD_DIR"
-    # Remove ALL prior world dirs before copying: leaving a stale world_nether/world_the_end
-    # in place would make the world* glob-copy nest world_nether/world_nether and silently
-    # keep the STALE End/Nether in the snapshot (the split-world handling's exact failure).
-    rm -rf "$BASE_WORLD_DIR"/world "$BASE_WORLD_DIR"/world_nether "$BASE_WORLD_DIR"/world_the_end
-    cp -r "$SERVER_RUN_DIR"/world* "$BASE_WORLD_DIR"/
-    printf '%s' "$MC_LINE_VERSION" > "$WORLD_VERSION_MARKER"
-    # Stage D: collect from whichever root the client actually used this run — a
-    # fresh run dir writes .lss/cache while a legacy dir adopts config/lss/cache;
-    # checking only the old path would silently turn every warm scenario cold.
-    COLLECT_CACHE_DIR=""
-    if [[ -d "$CLIENT_RUN_DIR/config/lss/cache" ]]; then
-        COLLECT_CACHE_DIR="$CLIENT_RUN_DIR/config/lss/cache"
-    elif [[ -d "$CLIENT_RUN_DIR/.lss/cache" ]]; then
-        COLLECT_CACHE_DIR="$CLIENT_RUN_DIR/.lss/cache"
-    fi
-    if [[ -n "$COLLECT_CACHE_DIR" ]]; then
-        echo "[soak] Saving client column cache snapshot from $COLLECT_CACHE_DIR"
-        rm -rf "$BASE_WORLD_DIR/client-cache"
-        cp -r "$COLLECT_CACHE_DIR" "$BASE_WORLD_DIR/client-cache"
-    else
-        echo "[soak] WARNING: No client cache to snapshot (cold-restart-resync will re-run fresh-backfill)"
-    fi
-fi
 
 # Step 14: Anomaly digest (a lens, not a gate — always written, never fails the run).
 # Lets a reviewer skim each run for spikes/stalls/unexpected counters beyond pass/fail.
@@ -733,4 +706,35 @@ else
     code=$?
     echo "[soak] FAIL: $SCENARIO (checker exit $code) — results in $RUN_RESULTS_DIR"
     exit "$code"
+fi
+
+# Step 16: Save world for reuse (fresh-backfill only). The client column cache is
+# snapshotted alongside it: the world copy carries data/lss-timestamps.bin (final save
+# runs on server shutdown, before this copy), so world + client-cache form a mutually
+# consistent warm pair that cold-restart-resync restores into a brand-new server JVM.
+if [[ "$SCENARIO" == "fresh-backfill" && -d "$SERVER_RUN_DIR/world" ]]; then
+    echo "[soak] Saving world to $BASE_WORLD_DIR/ for reuse"
+    mkdir -p "$BASE_WORLD_DIR"
+    # Remove ALL prior world dirs before copying: leaving a stale world_nether/world_the_end
+    # in place would make the world* glob-copy nest world_nether/world_nether and silently
+    # keep the STALE End/Nether in the snapshot (the split-world handling's exact failure).
+    rm -rf "$BASE_WORLD_DIR"/world "$BASE_WORLD_DIR"/world_nether "$BASE_WORLD_DIR"/world_the_end
+    cp -r "$SERVER_RUN_DIR"/world* "$BASE_WORLD_DIR"/
+    printf '%s' "$MC_LINE_VERSION" > "$WORLD_VERSION_MARKER"
+    # Stage D: collect from whichever root the client actually used this run — a
+    # fresh run dir writes .lss/cache while a legacy dir adopts config/lss/cache;
+    # checking only the old path would silently turn every warm scenario cold.
+    COLLECT_CACHE_DIR=""
+    if [[ -d "$CLIENT_RUN_DIR/config/lss/cache" ]]; then
+        COLLECT_CACHE_DIR="$CLIENT_RUN_DIR/config/lss/cache"
+    elif [[ -d "$CLIENT_RUN_DIR/.lss/cache" ]]; then
+        COLLECT_CACHE_DIR="$CLIENT_RUN_DIR/.lss/cache"
+    fi
+    if [[ -n "$COLLECT_CACHE_DIR" ]]; then
+        echo "[soak] Saving client column cache snapshot from $COLLECT_CACHE_DIR"
+        rm -rf "$BASE_WORLD_DIR/client-cache"
+        cp -r "$COLLECT_CACHE_DIR" "$BASE_WORLD_DIR/client-cache"
+    else
+        echo "[soak] WARNING: No client cache to snapshot (cold-restart-resync will re-run fresh-backfill)"
+    fi
 fi

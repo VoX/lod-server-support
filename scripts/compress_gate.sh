@@ -20,6 +20,8 @@ MODE="${1:?warm|cold}"
 REPS="${2:?reps}"
 DURATION="${3:?duration-seconds}"
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+source "$PROJECT_ROOT/scripts/lib/harness-lock.sh"
+harness_acquire
 OUT_ROOT="${OUT_ROOT:-$PROJECT_ROOT/compress-gate-results}"
 STAMP="${RUN_STAMP:-$(date +%Y%m%d-%H%M%S)}"
 SRV_CFG_DIR="$PROJECT_ROOT/fabric/build/run/benchmark-server/config"
@@ -76,10 +78,11 @@ collect() { # <run-out-dir>
 run_arm() { # <arm-label> <useCompressedColumns-value> <rep>
     local arm="$1" value="$2" rep="$3"
     local out="$OUT_ROOT/$STAMP/${arm}-rep${rep}"
+    python3 "$HARNESS_LIB_DIR/benchmark-results.py" prepare "$out"
     log "=== $SCENARIO $arm rep$rep (useCompressedColumns=$value, lodStore=$STORE_MODE, ${DURATION}s) ==="
     stage_config "$value"
     # Stale-artifact guard: a crashed run must yield MISSING files, not the last run's.
-    rm -f "$RESULTS"/server*.json "$RESULTS"/client*.json "$RESULTS"/cpu*.jsonl \
+    rm -f "$RESULTS/current.json" "$RESULTS"/server*.json "$RESULTS"/client*.json "$RESULTS"/cpu*.jsonl \
           "$RESULTS"/*.jfr "$RESULTS"/warm-join-meta.json
     local rc=0
     # BENCHMARK_CONFIG_STAGED: without it benchmark.sh's neutral-staging block (6856bcb,
@@ -87,9 +90,12 @@ run_arm() { # <arm-label> <useCompressedColumns-value> <rep>
     # arm variable is INERT — PERF Phase 0 item 1 (found by the post-review blast-radius
     # audit; this script's archived runs predate the block, so the recorded protocol-19
     # evidence is clean).
-    (export BENCHMARK_CONFIG_STAGED=1; cd "$PROJECT_ROOT" && ./scripts/benchmark.sh "$SCENARIO" "$DURATION") \
+    harness_run_script env BENCHMARK_CONFIG_STAGED=1 "$PROJECT_ROOT/scripts/benchmark.sh" "$SCENARIO" "$DURATION" \
         > "$OUT_ROOT/$STAMP/${arm}-rep${rep}.orchestrator.log" 2>&1 || rc=$?
     collect "$out"
+    if [[ $rc -eq 0 ]]; then
+        python3 "$HARNESS_LIB_DIR/benchmark-results.py" record "$PROJECT_ROOT" "$out" || rc=$?
+    fi
     # Effective-config assertion (Phase 0 item 1): the server ECHOES its effective knobs
     # at service start (ServerConfigBase.effectiveConfigEcho, format-pinned). An ignored
     # config key must FAIL the arm, not silently compare two identical arms. server.log
