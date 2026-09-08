@@ -720,12 +720,11 @@ public class RequestProcessingService {
      *  while the mode is armed and anyone subscribed. Mode "off" short-circuits
      *  before any snapshot work — a disabled server's path is free. */
     private void tickFarPlayers(LSSServerConfig config) {
-        if ("off".equals(config.farPlayers) || this.farPlayerService.subscriberCount() == 0) {
-            return;
-        }
-        if (++this.farPlayerTickCounter < config.farPlayersUpdateIntervalTicks) return;
-        this.farPlayerTickCounter = 0;
+        if (this.farPlayerService.subscriberCount() == 0) return;
         try {
+            if (!this.farPlayerService.applyMode(config.farPlayers, this::sendFarPlayerFrame)) return;
+            if (++this.farPlayerTickCounter < config.farPlayersUpdateIntervalTicks) return;
+            this.farPlayerTickCounter = 0;
             var online = new java.util.ArrayList<dev.vox.lss.common.farplayers
                     .FarPlayerBroadcastService.PlayerSnapshot>();
             for (var p : this.server.getPlayerList().getPlayers()) {
