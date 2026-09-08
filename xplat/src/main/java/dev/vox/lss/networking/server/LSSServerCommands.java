@@ -101,9 +101,11 @@ public class LSSServerCommands {
         var config = LSSServerConfig.CONFIG;
         String before = key.current().apply(config);
         String effective;
+        dev.vox.lss.common.config.RuntimeSettings.ApplyResult applied;
         try {
-            effective = dev.vox.lss.common.config.RuntimeSettings
-                    .applyAndPersist(config, key, rawValue);
+            applied = dev.vox.lss.common.config.RuntimeSettings
+                    .applyWithPersistenceOutcome(config, key, rawValue);
+            effective = applied.effectiveValue();
         } catch (IllegalArgumentException e) {
             source.sendFailure(Component.literal(keyName + ": " + e.getMessage()));
             return 0;
@@ -119,7 +121,7 @@ public class LSSServerCommands {
         }
         String reply = keyName + " = " + effective
                 + dev.vox.lss.common.config.RuntimeSettings.clampedSuffix(effective, rawValue)
-                + " — " + key.applyNote() + repushNote;
+                + " — " + key.applyNote() + repushNote + applied.persistenceNote();
         source.sendSuccess(() -> Component.literal(reply), true);
         return 1;
     }

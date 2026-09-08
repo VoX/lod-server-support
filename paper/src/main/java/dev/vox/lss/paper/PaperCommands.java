@@ -103,9 +103,11 @@ public class PaperCommands implements CommandExecutor, TabCompleter {
         service.enqueueRuntimeTask(() -> {
             String before = key.current().apply(config);
             String effective;
+            dev.vox.lss.common.config.RuntimeSettings.ApplyResult applied;
             try {
-                effective = dev.vox.lss.common.config.RuntimeSettings
-                        .applyAndPersist(config, key, rawValue);
+                applied = dev.vox.lss.common.config.RuntimeSettings
+                        .applyWithPersistenceOutcome(config, key, rawValue);
+                effective = applied.effectiveValue();
             } catch (IllegalArgumentException e) {
                 sender.sendMessage(key.name() + ": " + e.getMessage());
                 return;
@@ -118,7 +120,7 @@ public class PaperCommands implements CommandExecutor, TabCompleter {
             }
             sender.sendMessage(key.name() + " = " + effective
                     + dev.vox.lss.common.config.RuntimeSettings.clampedSuffix(effective, rawValue)
-                    + " — " + key.applyNote() + repushNote);
+                    + " — " + key.applyNote() + repushNote + applied.persistenceNote());
         });
     }
 
