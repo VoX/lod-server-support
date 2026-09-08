@@ -54,6 +54,8 @@ configurations {
     }
 }
 
+apply from: rootProject.file('gradle/c2me-dev-runtime.gradle')
+
 dependencies {
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
     // 1.21.11 line: loom-remap needs explicit mappings + mod-aware dependency scopes
@@ -124,7 +126,8 @@ dependencies {
     // silently never fired there. Runtime-only: release jars and normal builds are unaffected.
     if ((findProperty('benchmark.c2me') ?: 'false').toString() == 'true') {
         // 1.21.10 line: c2me-fabric 0.3.6+alpha.0.11+1.21.10
-        localRuntime "maven.modrinth:c2me-fabric:0.3.6+alpha.0.11+1.21.10"
+        def c2meArtifact = "maven.modrinth:c2me-fabric:0.3.6+alpha.0.11+1.21.10"
+        project.addC2meDevRuntime(c2meArtifact, 21)
     }
 }
 

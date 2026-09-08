@@ -1,0 +1,58 @@
+import groovy.json.JsonSlurper
+import java.util.zip.ZipFile
+
+// C2ME's Modrinth umbrella POM does not expose its nested modules. Loom strips
+// nesting when remapping, so feed compatible modules to modLocalRuntime explicitly.
+// Nested mods are optional in production: preserve their Java-floor/dependency
+// selection instead of turning a Java-25-only optimization into a Java-21 blocker.
+ext.addC2meDevRuntime = { String coordinate, int runtimeJava ->
+    def bundle = configurations.detachedConfiguration(dependencies.create(coordinate))
+    bundle.transitive = false
+    def readMetadata = { File jar ->
+        new ZipFile(jar).withCloseable { zip ->
+            def entry = zip.getEntry('fabric.mod.json')
+            entry == null ? [:] : zip.getInputStream(entry).withCloseable {
+                new JsonSlurper().parse(it, 'UTF-8')
+            }
+        }
+    }
+    def rootMetadata = readMetadata(bundle.singleFile)
+    def paths = (rootMetadata.jars ?: []).collect { it.file }
+    def modules = zipTree(bundle.singleFile).matching { include paths }.files.collect { jar ->
+        [file: jar, metadata: readMetadata(jar)]
+    }
+    def excluded = [:]
+    modules.each { module ->
+        def constraint = module.metadata.depends?.java
+        if (constraint != null) {
+            def minimum = constraint.toString() =~ /^>=\s*(\d+)$/
+            if (!minimum.matches()) {
+                throw new GradleException("Unsupported C2ME nested Java predicate: ${constraint}")
+            }
+            if (minimum.group(1).toInteger() > runtimeJava) {
+                excluded[module.metadata.id] = "requires Java ${constraint}; profile uses ${runtimeJava}"
+            }
+        }
+    }
+    boolean changed
+    do {
+        changed = false
+        modules.each { module ->
+            def id = module.metadata.id
+            if (!excluded.containsKey(id)) {
+                def missing = (module.metadata.depends ?: [:]).keySet().findAll { excluded.containsKey(it) }
+                if (!missing.empty) {
+                    excluded[id] = "requires omitted optional module(s): ${missing.sort()}"
+                    changed = true
+                }
+            }
+        }
+    } while (changed)
+    def requiredMissing = (rootMetadata.depends ?: [:]).keySet().findAll { excluded.containsKey(it) }
+    if (!requiredMissing.empty) {
+        throw new GradleException("C2ME requires incompatible module(s) on Java ${runtimeJava}: ${requiredMissing}")
+    }
+    excluded.each { id, reason -> logger.lifecycle("C2ME dev runtime: omit optional ${id}: ${reason}") }
+    dependencies.add('modLocalRuntime', coordinate)
+    dependencies.add('modLocalRuntime', files(modules.findAll { !excluded.containsKey(it.metadata.id) }*.file))
+}
