@@ -53,6 +53,8 @@ configurations {
     }
 }
 
+apply from: rootProject.file('gradle/c2me-dev-runtime.gradle')
+
 dependencies {
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
     mappings loom.officialMojangMappings()
@@ -108,7 +110,8 @@ dependencies {
     // silently never fired there. Runtime-only: release jars and normal builds are unaffected.
     if ((findProperty('benchmark.c2me') ?: 'false').toString() == 'true') {
         // 1.21.1 line: gRm1ZAvc = c2me-fabric 0.4.0-alpha.0.27+1.21.1 (matches test-server.sh)
-        localRuntime "maven.modrinth:c2me-fabric:gRm1ZAvc"
+        def c2meArtifact = "maven.modrinth:c2me-fabric:gRm1ZAvc"
+        project.addC2meDevRuntime(c2meArtifact, 21)
     }
 }
 
