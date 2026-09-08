@@ -95,3 +95,31 @@ status (docs/planning/mc1.21.10-line-notes.md is the dated record):
   (`SodiumConfigScreens`' legacy arm; ModMenu 16.0.1). The ecosystem cut of
   2026-08-22 is thereby narrowed to the 0.8 walker alone. fabric-api floor
   stays 0.138.0.
+
+### Soak setup command data (2026-09-08)
+
+The shared Fabric/Paper/Folia scenario JSON has a game-version seam. On **1.21.11,
+26.1 and 26.2**, use registered gamerule identifiers: `minecraft:random_tick_speed`,
+`minecraft:spawn_mobs`, `minecraft:mob_griefing`, `minecraft:advance_time`; legacy
+`doFireTick false` becomes `minecraft:fire_spread_radius_around_player 0`. Vanilla's
+`GameRuleRegistryFix` proves that last value transformation (minus one is unrestricted
+spread distance, not disabled). The same fix removes `spawnChunkRadius`; these engines
+have no `TicketType.START` constant or registered spawn-chunk-radius rule. Remove its
+obsolete timeline step on those three lines **and 1.21.10**: the real command-tree
+regression and cached 1.21.10 GameRules/TicketType prove that this removal predates
+the gamerule rename. This is not a promise that no chunk near
+spawn can be held: player, forced, portal and temporary spawn tickets still exist, and
+the summary scenarios retain their actual offline-window/probe/convergence assertions.
+**1.21.1 and 1.21.10 retain their other legacy gamerule names**. Only 1.21.1
+retains spawnChunkRadius (its real GameRules registration and TicketType.START remain).
+
+`CommandGameTests.soakScenarioGamerulesExecuteAndReadBack` reads the actual scenario
+JSON, executes each setup rule against this line's real command tree, checks its value,
+and restores the original value in the same test callback. The excluded dev-only
+`SoakCommandExecutor` twins distinguish generic parse/dispatch acceptance from strict
+gamerule setter-plus-readback success (zero-valued success is valid). Paper preserves
+its dimension fan-out and queries the same dimension prefix. Folia's explicitly
+acknowledged save-all no-op remains separate. `check_soak.py` rejects failed commands
+and gamerule rows without semantic-readback proof; historical `ok=true` alone meant
+only did-not-throw and is not acceptable setup evidence. See
+[the correction record](../reviews/2026-09-08-implementation/soak-command-validation.md).

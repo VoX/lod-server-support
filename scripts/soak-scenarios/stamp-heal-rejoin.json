@@ -29,11 +29,6 @@
     },
     {
       "anchor": 1,
-      "at": 3,
-      "cmd": "gamerule spawnChunkRadius 0"
-    },
-    {
-      "anchor": 1,
       "at": 4,
       "cmd": "tp @a 264 150 264"
     }
