@@ -1,5 +1,7 @@
 package dev.vox.lss.networking.server;
 
+import dev.vox.lss.common.processing.RequestRegistration;
+
 import dev.vox.lss.common.LSSConstants;
 import dev.vox.lss.common.LSSLogger;
 import dev.vox.lss.common.PositionUtil;
@@ -82,16 +84,16 @@ public class FabricOffThreadProcessor extends OffThreadProcessor<PlayerRequestSt
     }
 
     @Override
-    protected boolean submitDiskRead(UUID playerUuid, String dimension,
+    protected boolean submitDiskRead(UUID playerUuid, RequestRegistration registration, String dimension,
                                    int cx, int cz,
                                    long submissionOrder, long clientTimestamp) {
-        if (this.diskReader == null) return false;
+        if (this.diskReader == null || registration.isRetired()) return false;
         var level = this.dimensionLevelMap.get(dimension);
         if (level == null) {
             LSSLogger.debug("No dimension context for " + dimension + ", skipping disk read for " + cx + "," + cz);
             return false;
         }
-        this.diskReader.submitReadDirect(playerUuid, dimension, level,
+        this.diskReader.submitReadDirect(playerUuid, registration, dimension, level,
                 cx, cz, submissionOrder, clientTimestamp);
         return true;
     }

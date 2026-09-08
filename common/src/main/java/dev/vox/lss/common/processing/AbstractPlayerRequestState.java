@@ -33,6 +33,9 @@ import java.util.concurrent.atomic.AtomicReference;
 public abstract class AbstractPlayerRequestState<T> {
 
     private final UUID playerUuid;
+    private final RequestRegistration registration = new RequestRegistration();
+
+    public final RequestRegistration registration() { return this.registration; }
     private volatile boolean hasHandshake = false;
     private volatile int capabilities = 0;
     private volatile boolean wantsCompressedColumns;

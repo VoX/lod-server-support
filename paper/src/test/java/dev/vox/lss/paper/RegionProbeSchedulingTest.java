@@ -547,7 +547,7 @@ class RegionProbeSchedulingTest {
         var state = service.registerPlayer(player, 1);
         offer(state, new IncomingRequest(3, 3, 0), new IncomingRequest(4, 4, -1));
         genService.nextTick = List.of(new TickSnapshot.GenerationReadyData(
-                uuid, 3, 3, "minecraft:overworld", column(3, 3), 1L, 1L));
+                uuid, state.registration(), 3, 3, "minecraft:overworld", column(3, 3), 1L, 1L));
 
         service.tick();
         scheduledTasks.get(0).run();
@@ -568,7 +568,7 @@ class RegionProbeSchedulingTest {
         scheduledTasks.get(0).run();       // batch = {(3,3), (4,4)}
 
         genService.nextTick = List.of(new TickSnapshot.GenerationReadyData(
-                uuid, 3, 3, "minecraft:overworld", column(3, 3), 1L, 2L));
+                uuid, state.registration(), 3, 3, "minecraft:overworld", column(3, 3), 1L, 2L));
         service.tick();
 
         var probes = probesInLastSnapshot(uuid);

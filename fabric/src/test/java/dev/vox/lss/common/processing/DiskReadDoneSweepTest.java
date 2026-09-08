@@ -44,7 +44,7 @@ class DiskReadDoneSweepTest {
             super(players, new StubDiskReader(), false, null, 1, 0);
         }
         @Override
-        protected boolean submitDiskRead(UUID playerUuid, String dimension, int cx, int cz, long order, long clientTimestamp) {
+        protected boolean submitDiskRead(UUID playerUuid, RequestRegistration registration, String dimension, int cx, int cz, long order, long clientTimestamp) {
             this.submits.add(PositionUtil.packPosition(cx, cz));
             return true;
         }

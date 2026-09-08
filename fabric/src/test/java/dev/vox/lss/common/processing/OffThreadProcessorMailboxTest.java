@@ -57,7 +57,7 @@ class OffThreadProcessorMailboxTest {
             super(players, reader, false, null, 1, 0);  // memo off (ttl=0): kills only the memo — the pacing rules are ttl-independent
         }
         @Override
-        protected boolean submitDiskRead(UUID playerUuid, String dimension, int cx, int cz, long order, long clientTimestamp) {
+        protected boolean submitDiskRead(UUID playerUuid, RequestRegistration registration, String dimension, int cx, int cz, long order, long clientTimestamp) {
             return true; // returning false would unwind the dedup group test 2 depends on
         }
         @Override
@@ -77,8 +77,8 @@ class OffThreadProcessorMailboxTest {
         return new TickSnapshot(dims, Map.of(), 0, false);
     }
 
-    private static TickSnapshot.GenerationReadyData failure(UUID uuid, int cx, int cz, long order) {
-        return new TickSnapshot.GenerationReadyData(uuid, cx, cz, DIM, null, 0L, order);
+    private static TickSnapshot.GenerationReadyData failure(TestState state, int cx, int cz, long order) {
+        return new TickSnapshot.GenerationReadyData(state.getPlayerUUID(), state.registration(), cx, cz, DIM, null, 0L, order);
     }
 
     /** Poll drainSendActions until {@code expected} positions arrive or a deadline passes. */
@@ -105,9 +105,9 @@ class OffThreadProcessorMailboxTest {
         try {
             // All posted BEFORE start(): the second snapshot replaces the first (latest-wins),
             // but every generation outcome must survive (lossless events).
-            proc.postSnapshot(snapshot(uuid), new ArrayList<>(List.of(failure(uuid, 1, 0, 1L))));
-            proc.feedGenerationFailure(uuid, 2, 0, DIM, 2L, false);
-            proc.postSnapshot(snapshot(uuid), new ArrayList<>(List.of(failure(uuid, 3, 0, 3L))));
+            proc.postSnapshot(snapshot(uuid), new ArrayList<>(List.of(failure(state, 1, 0, 1L))));
+            proc.feedGenerationFailure(uuid, state.registration(), 2, 0, DIM, 2L, false);
+            proc.postSnapshot(snapshot(uuid), new ArrayList<>(List.of(failure(state, 3, 0, 3L))));
             proc.start();
 
             var positions = drainPositions(proc, 3);
@@ -149,7 +149,7 @@ class OffThreadProcessorMailboxTest {
 
             // Remove the primary: the buffered removal must survive the snapshot replacement
             // and cleanupDedupGroups must free the attached player's pending entry.
-            proc.notifyPlayerRemoved(u1);
+            proc.notifyPlayerRemoved(u1, p1.registration());
             players.remove(u1);
             proc.postSnapshot(snapshot(u2), List.of());
             waitFor(() -> p2.getHeldSyncSlots() == 0, "attached pending released on primary removal");
@@ -181,7 +181,7 @@ class OffThreadProcessorMailboxTest {
             // session with its own request. The phase-1 removal tears down the old UUID's dedup
             // groups; phase-4 routing then serves the fresh session — the removal must not reach
             // forward and clobber it.
-            proc.notifyPlayerRemoved(uuid);
+            proc.notifyPlayerRemoved(uuid, oldState.registration());
             var newState = new TestState(uuid);
             newState.markHandshakeComplete();
             newState.setCapabilities(LSSConstants.CAPABILITY_VOXEL_COLUMNS);
@@ -230,7 +230,7 @@ class OffThreadProcessorMailboxTest {
             proc.clearDiskReadDone(uuid, new long[]{PositionUtil.packPosition(1, 1)});
             var column = new LoadedColumnData(4, 2, new byte[]{1, 2, 3}, 3);
             proc.postSnapshot(snapshot(uuid), new ArrayList<>(List.of(
-                    new TickSnapshot.GenerationReadyData(uuid, 4, 2, DIM, column, 123L, 1L))));
+                    new TickSnapshot.GenerationReadyData(state.getPlayerUUID(), state.registration(), 4, 2, DIM, column, 123L, 1L))));
 
             long deadline = System.nanoTime() + 5_000_000_000L;
             while (!delivered.contains(PositionUtil.packPosition(4, 2)) && System.nanoTime() < deadline) {

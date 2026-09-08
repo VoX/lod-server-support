@@ -82,7 +82,7 @@ class DedupFanoutTest {
         }
 
         @Override
-        protected boolean submitDiskRead(UUID playerUuid, String dimension, int cx, int cz, long order, long clientTimestamp) {
+        protected boolean submitDiskRead(UUID playerUuid, RequestRegistration registration, String dimension, int cx, int cz, long order, long clientTimestamp) {
             this.diskSubmits.incrementAndGet();
             this.reader.submitGated(playerUuid, cx, cz, dimension, order,
                     this.bytesByDimension.get(dimension));
@@ -197,8 +197,8 @@ class DedupFanoutTest {
         players.put(u1, p1);
         players.put(u2, p2);
         var reader = new GatedDiskReader();
-        reader.registerPlayer(u1);
-        reader.registerPlayer(u2);
+        reader.registerPlayer(u1, p1.registration());
+        reader.registerPlayer(u2, p2.registration());
         var proc = new TestProcessor(players, reader, Map.of(OVERWORLD, new byte[]{1, 2, 3}));
         var dims = Map.of(u1, OVERWORLD, u2, OVERWORLD);
         try {
@@ -247,8 +247,8 @@ class DedupFanoutTest {
         players.put(u1, p1);
         players.put(u2, p2);
         var reader = new GatedDiskReader();
-        reader.registerPlayer(u1);
-        reader.registerPlayer(u2);
+        reader.registerPlayer(u1, p1.registration());
+        reader.registerPlayer(u2, p2.registration());
         var proc = new TestProcessor(players, reader,
                 Map.of(OVERWORLD, new byte[]{1}, END, new byte[]{2}));
         var dims = Map.of(u1, OVERWORLD, u2, END);
@@ -300,8 +300,8 @@ class DedupFanoutTest {
         players.put(u1, p1);
         players.put(u2, p2);
         var reader = new GatedDiskReader();
-        reader.registerPlayer(u1);
-        reader.registerPlayer(u2);
+        reader.registerPlayer(u1, p1.registration());
+        reader.registerPlayer(u2, p2.registration());
         var proc = new TestProcessor(players, reader, Map.of(OVERWORLD, new byte[]{1, 2, 3}));
         var dims = Map.of(u1, OVERWORLD, u2, OVERWORLD);
         try {
@@ -327,11 +327,11 @@ class DedupFanoutTest {
             // p2 disconnects and rejoins with a fresh state while the read is still in flight
             // (production removePlayer + registerPlayer: same UUID, new state object).
             players.remove(u2);
-            proc.notifyPlayerRemoved(u2);
+            proc.notifyPlayerRemoved(u2, p2.registration());
             reader.removePlayerResults(u2);
             var p2b = newPlayer(u2);
             players.put(u2, p2b);
-            reader.registerPlayer(u2);
+            reader.registerPlayer(u2, p2b.registration());
 
             // Barrier: the removal is only mailbox-buffered; a cycle whose take predates
             // notifyPlayerRemoved can still be mid-flight and would route a request enqueued
@@ -385,8 +385,8 @@ class DedupFanoutTest {
         players.put(u1, p1);
         players.put(u2, p2);
         var reader = new GatedDiskReader();
-        reader.registerPlayer(u1);
-        reader.registerPlayer(u2);
+        reader.registerPlayer(u1, p1.registration());
+        reader.registerPlayer(u2, p2.registration());
         var proc = new TestProcessor(players, reader, Map.of(OVERWORLD, new byte[]{1, 2, 3}));
         var dims = Map.of(u1, OVERWORLD, u2, OVERWORLD);
         try {
@@ -450,8 +450,8 @@ class DedupFanoutTest {
         players.put(u1, p1);
         players.put(u2, p2);
         var reader = new GatedDiskReader();
-        reader.registerPlayer(u1);
-        reader.registerPlayer(u2);
+        reader.registerPlayer(u1, p1.registration());
+        reader.registerPlayer(u2, p2.registration());
         var proc = new TestProcessor(players, reader, Map.of(OVERWORLD, new byte[]{1, 2, 3}));
         var dims = Map.of(u1, OVERWORLD, u2, OVERWORLD);
         try {
@@ -464,7 +464,7 @@ class DedupFanoutTest {
 
             // The PRIMARY disconnects while the read is still in flight
             players.remove(u1);
-            proc.notifyPlayerRemoved(u1);
+            proc.notifyPlayerRemoved(u1, p1.registration());
             reader.removePlayerResults(u1);
             pumpUntil(proc, dims, () -> p2.getHeldSyncSlots() == 0,
                     "primary removal frees the attached pending");
@@ -516,8 +516,8 @@ class DedupFanoutTest {
         players.put(u1, p1);
         players.put(u2, p2);
         var reader = new GatedDiskReader();
-        reader.registerPlayer(u1);
-        reader.registerPlayer(u2);
+        reader.registerPlayer(u1, p1.registration());
+        reader.registerPlayer(u2, p2.registration());
         var proc = new TestProcessor(players, reader, Map.of(OVERWORLD, new byte[]{9}));
         var dims = Map.of(u1, OVERWORLD, u2, OVERWORLD);
         try {
@@ -571,8 +571,8 @@ class DedupFanoutTest {
         players.put(u1, p1);
         players.put(u2, p2);
         var reader = new GatedDiskReader();
-        reader.registerPlayer(u1);
-        reader.registerPlayer(u2);
+        reader.registerPlayer(u1, p1.registration());
+        reader.registerPlayer(u2, p2.registration());
         var proc = new TestProcessor(players, reader, Map.of(OVERWORLD, new byte[]{9}), true);
         var dims = Map.of(u1, OVERWORLD, u2, OVERWORLD);
         try {
@@ -618,19 +618,44 @@ class DedupFanoutTest {
     // ---- DedupTracker map hygiene (direct, same package) ----
 
     @Test
+    void delayedRemovalCannotDetachAReplacementRegistrationsAdmission() {
+        var tracker = new DedupTracker();
+        var primary = UUID.randomUUID();
+        var follower = UUID.randomUUID();
+        var primaryRegistration = new RequestRegistration();
+        var old = new RequestRegistration();
+        var fresh = new RequestRegistration();
+        long pos = PositionUtil.packPosition(1,1);
+        assertFalse(tracker.tryAttachOrCreate(pos, OVERWORLD, primary, primaryRegistration,1));
+        assertTrue(tracker.tryAttachOrCreate(pos, OVERWORLD, follower, old,2));
+        assertTrue(tracker.tryAttachOrCreate(pos, OVERWORLD, follower, fresh,3));
+        tracker.removePlayer(follower, old);
+        var group = tracker.removeGroup(pos, OVERWORLD);
+        assertEquals(1, group.attached().size());
+        assertSame(fresh, group.attached().get(0).registration());
+        assertEquals(3, group.attached().get(0).submissionOrder());
+        // An old primary removal also cannot consume a fresh primary's group at this position.
+        assertFalse(tracker.tryAttachOrCreate(pos, OVERWORLD, primary, fresh,4));
+        assertTrue(tracker.removePlayer(primary, primaryRegistration).isEmpty());
+        assertNotNull(tracker.removeGroup(pos, OVERWORLD));
+    }
+
+    @Test
     void dedupTrackerPrunesEmptyDimensionMapsOnEveryRemovalPath() {
         var tracker = new DedupTracker();
         var u1 = UUID.randomUUID();
         var u2 = UUID.randomUUID();
+        var r1 = new RequestRegistration();
+        var r2 = new RequestRegistration();
         long pos1 = PositionUtil.packPosition(1, 1);
         long pos2 = PositionUtil.packPosition(2, 2);
         assertEquals(0, tracker.size());
         assertEquals(0, tracker.trackedDimensionCount());
 
-        assertFalse(tracker.tryAttachOrCreate(pos1, OVERWORLD, u1, 1L));
-        assertFalse(tracker.tryAttachOrCreate(pos2, OVERWORLD, u2, 2L));
-        assertFalse(tracker.tryAttachOrCreate(pos1, END, u1, 3L));
-        assertTrue(tracker.tryAttachOrCreate(pos1, END, u2, 4L), "second requester attaches");
+        assertFalse(tracker.tryAttachOrCreate(pos1, OVERWORLD, u1, r1, 1L));
+        assertFalse(tracker.tryAttachOrCreate(pos2, OVERWORLD, u2, r2, 2L));
+        assertFalse(tracker.tryAttachOrCreate(pos1, END, u1, r1, 3L));
+        assertTrue(tracker.tryAttachOrCreate(pos1, END, u2, r2, 4L), "second requester attaches");
         assertEquals(3, tracker.size(), "an attachment joins a group instead of adding one");
         assertEquals(2, tracker.trackedDimensionCount());
 
@@ -647,10 +672,10 @@ class DedupFanoutTest {
         assertEquals(1, tracker.trackedDimensionCount());
 
         // removePlayer of an attachment keeps the group; of the primary, removes + prunes
-        assertEquals(List.of(), tracker.removePlayer(u2),
+        assertEquals(List.of(), tracker.removePlayer(u2, r2),
                 "an attached player's removal removes no group");
         assertEquals(1, tracker.size());
-        var removedForU1 = tracker.removePlayer(u1);
+        var removedForU1 = tracker.removePlayer(u1, r1);
         assertEquals(1, removedForU1.size());
         assertEquals(pos1, removedForU1.get(0).packed());
         assertTrue(removedForU1.get(0).group().attached().isEmpty(),

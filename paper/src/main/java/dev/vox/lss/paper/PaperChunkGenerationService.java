@@ -1,5 +1,7 @@
 package dev.vox.lss.paper;
 
+import dev.vox.lss.common.processing.RequestRegistration;
+
 import dev.vox.lss.common.LSSConstants;
 import dev.vox.lss.common.LSSLogger;
 import dev.vox.lss.common.processing.LoadedColumnData;
@@ -35,7 +37,7 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public class PaperChunkGenerationService {
 
-    record GenerationCallback(UUID playerUuid, long submissionOrder) {}
+    record GenerationCallback(UUID playerUuid, RequestRegistration registration, long submissionOrder) {}
 
     // Package-visible (with launchAsyncLoad/onChunkReady) so T1 tests can drive the async
     // boundary directly instead of going through Bukkit's scheduler.
@@ -61,7 +63,7 @@ public class PaperChunkGenerationService {
     private long nextGenerationToken = 0;
 
     private final LinkedHashMap<PendingGenerationKey, ActiveGeneration> active = new LinkedHashMap<>();
-    private final Map<UUID, Integer> perPlayerActiveCount = new HashMap<>();
+    private final Map<RequestRegistration, Integer> perPlayerActiveCount = new HashMap<>();
     // Pump-thread-owned (onChunkReady is scheduled to the pump via the GlobalRegionScheduler;
     // tick() swaps it out on the same thread)
     private List<TickSnapshot.GenerationReadyData> mainReady = new ArrayList<>();
@@ -126,24 +128,25 @@ public class PaperChunkGenerationService {
      * Submit a generation request. Returns true if accepted (piggyback or new active slot),
      * false if at capacity (caller should feed back a rejection result).
      */
-    public boolean submitGeneration(UUID playerUuid, ServerLevel level, int cx, int cz, long submissionOrder) {
+    public boolean submitGeneration(UUID playerUuid, RequestRegistration registration, ServerLevel level, int cx, int cz, long submissionOrder) {
+        if (registration.isRetired()) return false;
         var key = new PendingGenerationKey(level.dimension(), cx, cz);
 
         // Already active — piggyback on existing async load
         var existingActive = this.active.get(key);
         if (existingActive != null) {
-            existingActive.callbacks.add(new GenerationCallback(playerUuid, submissionOrder));
-            incrementCount(this.perPlayerActiveCount, playerUuid);
+            existingActive.callbacks.add(new GenerationCallback(playerUuid, registration, submissionOrder));
+            incrementCount(this.perPlayerActiveCount, registration);
             return true;
         }
 
         // Try to add directly to active and launch async load
-        int playerActive = this.perPlayerActiveCount.getOrDefault(playerUuid, 0);
+        int playerActive = this.perPlayerActiveCount.getOrDefault(registration, 0);
         if (this.active.size() < this.maxConcurrent && playerActive < this.maxPerPlayerActive) {
             var gen = new ActiveGeneration(++this.nextGenerationToken);
-            gen.callbacks.add(new GenerationCallback(playerUuid, submissionOrder));
+            gen.callbacks.add(new GenerationCallback(playerUuid, registration, submissionOrder));
             this.active.put(key, gen);
-            incrementCount(this.perPlayerActiveCount, playerUuid);
+            incrementCount(this.perPlayerActiveCount, registration);
             this.totalSubmitted++;
 
             // Priority.LOW: LOD generation yields to player-driven (NORMAL) generation. Safe
@@ -308,9 +311,9 @@ public class PaperChunkGenerationService {
             String dimension = key.dimension().identifier().toString();
             for (var cb : gen.callbacks) {
                 this.mainReady.add(new TickSnapshot.GenerationReadyData(
-                        cb.playerUuid, cx, cz, dimension,
+                        cb.playerUuid, cb.registration, cx, cz, dimension,
                         columnData, columnTimestamp, cb.submissionOrder));
-                decrementCount(this.perPlayerActiveCount, cb.playerUuid);
+                decrementCount(this.perPlayerActiveCount, cb.registration);
             }
             this.totalCompleted++;
         } else {
@@ -337,8 +340,8 @@ public class PaperChunkGenerationService {
         String dimension = key.dimension().identifier().toString();
         for (var cb : callbacks) {
             this.mainReady.add(new TickSnapshot.GenerationReadyData(
-                    cb.playerUuid, cx, cz, dimension, null, 0L, cb.submissionOrder, transientFailure));
-            decrementCount(this.perPlayerActiveCount, cb.playerUuid);
+                    cb.playerUuid, cb.registration, cx, cz, dimension, null, 0L, cb.submissionOrder, transientFailure));
+            decrementCount(this.perPlayerActiveCount, cb.registration);
         }
     }
 
@@ -376,13 +379,13 @@ public class PaperChunkGenerationService {
         }
     }
 
-    public void removePlayer(UUID playerUuid) {
+    public void removePlayer(UUID playerUuid, RequestRegistration registration) {
         // Clean active callbacks first — if onChunkReady fires between these steps,
         // decrementCount needs perPlayerActiveCount to still exist
         var activeIter = this.active.entrySet().iterator();
         while (activeIter.hasNext()) {
             var gen = activeIter.next().getValue();
-            gen.callbacks.removeIf(cb -> cb.playerUuid.equals(playerUuid));
+            gen.callbacks.removeIf(cb -> cb.playerUuid.equals(playerUuid) && cb.registration == registration);
             if (gen.callbacks.isEmpty()) {
                 activeIter.remove();
                 // Submitted but neither completed nor timed out — without this counter the
@@ -391,7 +394,7 @@ public class PaperChunkGenerationService {
             }
         }
 
-        this.perPlayerActiveCount.remove(playerUuid);
+        this.perPlayerActiveCount.remove(registration);
     }
 
     public void shutdown() {
@@ -424,11 +427,11 @@ public class PaperChunkGenerationService {
      *  diagnostics — never iterate {@code active} off-pump, size() is a plain field read). */
     public int getActiveCount() { return this.active.size(); }
 
-    private static void incrementCount(Map<UUID, Integer> map, UUID uuid) {
+    private static void incrementCount(Map<RequestRegistration, Integer> map, RequestRegistration uuid) {
         map.merge(uuid, 1, Integer::sum);
     }
 
-    private static void decrementCount(Map<UUID, Integer> map, UUID uuid) {
+    private static void decrementCount(Map<RequestRegistration, Integer> map, RequestRegistration uuid) {
         var count = map.get(uuid);
         if (count != null) {
             if (count <= 1) map.remove(uuid);
