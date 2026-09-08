@@ -1,0 +1,1100 @@
+[
+  {
+    "instance": "/mnt/c/Users/Ian/AppData/Roaming/PrismLauncher/instances/lss-test-1.21.1",
+    "components": [
+      {
+        "cachedName": "LWJGL 3",
+        "cachedVersion": "3.3.3",
+        "cachedVolatile": true,
+        "dependencyOnly": true,
+        "uid": "org.lwjgl3",
+        "version": "3.3.3"
+      },
+      {
+        "cachedName": "Minecraft",
+        "cachedRequires": [
+          {
+            "suggests": "3.3.3",
+            "uid": "org.lwjgl3"
+          }
+        ],
+        "cachedVersion": "1.21.1",
+        "important": true,
+        "uid": "net.minecraft",
+        "version": "1.21.1"
+      },
+      {
+        "cachedName": "Intermediary Mappings",
+        "cachedRequires": [
+          {
+            "equals": "1.21.1",
+            "uid": "net.minecraft"
+          }
+        ],
+        "cachedVersion": "1.21.1",
+        "cachedVolatile": true,
+        "uid": "net.fabricmc.intermediary",
+        "version": "1.21.1"
+      },
+      {
+        "cachedName": "Fabric Loader",
+        "cachedRequires": [
+          {
+            "uid": "net.fabricmc.intermediary"
+          }
+        ],
+        "cachedVersion": "0.19.3",
+        "uid": "net.fabricmc.fabric-loader",
+        "version": "0.19.3"
+      }
+    ],
+    "artifacts": [
+      {
+        "file": "lod-server-support-fabric-0.14.0-dev-xaero-edge+mc1.21.1.jar",
+        "enabled": true,
+        "sha256": "358122fbe4250e0c4697837ad8425c59722ad0391ab85b83adf9a851b12edb86",
+        "fabric": {
+          "id": "lss",
+          "version": "0.14.0",
+          "depends": {
+            "minecraft": "1.21.1",
+            "fabricloader": ">=0.18.4",
+            "fabric-api": ">=0.100.0"
+          }
+        }
+      },
+      {
+        "file": "lss-fabric-1.21.1.jar.disabled",
+        "enabled": false,
+        "sha256": "c60b8350137f8d533cd0b45b2da85f79ce81bdb4feff4ac35735146d69a4c95e",
+        "fabric": {
+          "id": "lss",
+          "version": "0.9.1",
+          "depends": {
+            "minecraft": "1.21.1",
+            "fabricloader": ">=0.18.4",
+            "fabric-api": ">=0.100.0"
+          }
+        }
+      },
+      {
+        "file": "sodium-fabric-0.8.13-beta.2+mc1.21.1.jar",
+        "enabled": true,
+        "sha256": "90261fcdab301314acc94c24bba483c2db1b5d94f645d92c69b9585e3422a176",
+        "fabric": {
+          "id": "sodium",
+          "version": "0.8.13-beta.2+mc1.21.1",
+          "depends": {
+            "minecraft": [
+              "1.21",
+              "1.21.1"
+            ],
+            "fabricloader": ">=0.16.0",
+            "fabric-block-view-api-v2": "*",
+            "fabric-renderer-api-v1": "*",
+            "fabric-rendering-data-attachment-v1": "*",
+            "fabric-rendering-fluids-v1": ">=2.0.0",
+            "fabric-resource-loader-v0": "*"
+          }
+        }
+      },
+      {
+        "file": "xaeroworldmap-fabric-1.21.1-1.45.0.jar",
+        "enabled": true,
+        "sha256": "ea84c45cb1b994a7738515670b281bcd373a9d9cc3d8d3a24b84a4baf302b9d6",
+        "fabric": {
+          "id": "xaeroworldmap",
+          "version": "1.45.0",
+          "depends": {
+            "fabricloader": ">=0.13.0",
+            "fabric-api": ">=0.43.1",
+            "minecraft": ">1.20.6 <1.21.2",
+            "xaerolib": ">=1.0"
+          }
+        }
+      }
+    ],
+    "latest_log": "/mnt/c/Users/Ian/AppData/Roaming/PrismLauncher/instances/lss-test-1.21.1/minecraft/logs/latest.log",
+    "role": "unverified until corresponding live launch evidence recorded"
+  },
+  {
+    "instance": "/mnt/c/Users/Ian/AppData/Roaming/PrismLauncher/instances/lss-test-1.21.10",
+    "components": [
+      {
+        "cachedName": "LWJGL 3",
+        "cachedVersion": "3.3.3",
+        "cachedVolatile": true,
+        "dependencyOnly": true,
+        "uid": "org.lwjgl3",
+        "version": "3.3.3"
+      },
+      {
+        "cachedName": "Minecraft",
+        "cachedRequires": [
+          {
+            "suggests": "3.3.3",
+            "uid": "org.lwjgl3"
+          }
+        ],
+        "cachedVersion": "1.21.10",
+        "important": true,
+        "uid": "net.minecraft",
+        "version": "1.21.10"
+      },
+      {
+        "cachedName": "Intermediary Mappings",
+        "cachedRequires": [
+          {
+            "equals": "1.21.10",
+            "uid": "net.minecraft"
+          }
+        ],
+        "cachedVersion": "1.21.10",
+        "cachedVolatile": true,
+        "dependencyOnly": true,
+        "uid": "net.fabricmc.intermediary",
+        "version": "1.21.10"
+      },
+      {
+        "cachedName": "Fabric Loader",
+        "cachedRequires": [
+          {
+            "uid": "net.fabricmc.intermediary"
+          }
+        ],
+        "cachedVersion": "0.18.4",
+        "uid": "net.fabricmc.fabric-loader",
+        "version": "0.18.4"
+      }
+    ],
+    "artifacts": [
+      {
+        "file": "lod-server-support-fabric-0.14.0-dev-xaero-edge+mc1.21.10.jar",
+        "enabled": true,
+        "sha256": "8d5b1d7640f8028920972f80ed1af49d068397d67ff920ae25065fd3c373d6be",
+        "fabric": {
+          "id": "lss",
+          "version": "0.14.0",
+          "depends": {
+            "minecraft": "1.21.10",
+            "fabricloader": ">=0.18.4",
+            "fabric-api": ">=0.138.4"
+          }
+        }
+      },
+      {
+        "file": "sodium-fabric-0.7.3+mc1.21.10.jar",
+        "enabled": true,
+        "sha256": "b0bcfa324fa6acf8934b7bd5ad1946e5a003aab86f877d2a64af220fe284b683",
+        "fabric": {
+          "id": "sodium",
+          "version": "0.7.3+mc1.21.10",
+          "depends": {
+            "fabricloader": ">=0.16.0",
+            "fabric-block-view-api-v2": "*",
+            "fabric-renderer-api-v1": "*",
+            "fabric-rendering-fluids-v1": ">=2.0.0",
+            "fabric-resource-loader-v0": "*"
+          }
+        }
+      },
+      {
+        "file": "voxy-0.2.9-alpha-1.21.10.jar",
+        "enabled": true,
+        "sha256": "f52b817f44a4407d68d28243b1cfbac8c7ff29ae1bc0b342ced033959c56e984",
+        "fabric": {
+          "id": "voxy",
+          "version": "0.2.9-alpha",
+          "depends": {
+            "minecraft": [
+              "1.21.9",
+              "1.21.10"
+            ],
+            "fabricloader": ">=0.14.22",
+            "fabric-api": ">=0.91.1",
+            "sodium": "=0.7.3"
+          }
+        }
+      },
+      {
+        "file": "xaeroworldmap-fabric-1.21.10-1.45.0.jar",
+        "enabled": true,
+        "sha256": "b519907d562d5a4e4b6ca89983e6ca857e49fb6a06c6efa7e473761d39c6e6b1",
+        "fabric": {
+          "id": "xaeroworldmap",
+          "version": "1.45.0",
+          "depends": {
+            "fabricloader": ">=0.13.0",
+            "fabric-api": ">=0.43.1",
+            "minecraft": "1.21.10",
+            "xaerolib": ">=1.0"
+          }
+        }
+      }
+    ],
+    "latest_log": "/mnt/c/Users/Ian/AppData/Roaming/PrismLauncher/instances/lss-test-1.21.10/minecraft/logs/latest.log",
+    "role": "unverified until corresponding live launch evidence recorded"
+  },
+  {
+    "instance": "/mnt/c/Users/Ian/AppData/Roaming/PrismLauncher/instances/lss-test-1.21.11",
+    "components": [
+      {
+        "cachedName": "LWJGL 3",
+        "cachedVersion": "3.3.3",
+        "cachedVolatile": true,
+        "dependencyOnly": true,
+        "uid": "org.lwjgl3",
+        "version": "3.3.3"
+      },
+      {
+        "cachedName": "Minecraft",
+        "cachedRequires": [
+          {
+            "suggests": "3.3.3",
+            "uid": "org.lwjgl3"
+          }
+        ],
+        "cachedVersion": "1.21.11",
+        "important": true,
+        "uid": "net.minecraft",
+        "version": "1.21.11"
+      },
+      {
+        "cachedName": "Intermediary Mappings",
+        "cachedRequires": [
+          {
+            "equals": "1.21.11",
+            "uid": "net.minecraft"
+          }
+        ],
+        "cachedVersion": "1.21.11",
+        "dependencyOnly": true,
+        "uid": "net.fabricmc.intermediary",
+        "version": "1.21.11"
+      },
+      {
+        "cachedName": "Fabric Loader",
+        "cachedRequires": [
+          {
+            "uid": "net.fabricmc.intermediary"
+          }
+        ],
+        "cachedVersion": "0.18.4",
+        "uid": "net.fabricmc.fabric-loader",
+        "version": "0.18.4"
+      }
+    ],
+    "artifacts": [
+      {
+        "file": "lod-server-support-fabric-0.14.0-dev-xaero-edge+mc1.21.11.jar",
+        "enabled": true,
+        "sha256": "f38bd631947591d5b057b1cfd87904d30efa2aafe1078911528073eddbce1700",
+        "fabric": {
+          "id": "lss",
+          "version": "0.14.0",
+          "depends": {
+            "minecraft": "1.21.11",
+            "fabricloader": ">=0.18.4",
+            "fabric-api": ">=0.141.0"
+          }
+        }
+      },
+      {
+        "file": "lss-fabric-1.21.11.jar.disabled",
+        "enabled": false,
+        "sha256": "7e7d706d4ad1cab0c3bf990c4d992fcf3ca22bd296349b9e19db0b2f92fab8e4",
+        "fabric": {
+          "id": "lss",
+          "version": "0.9.1",
+          "depends": {
+            "minecraft": "1.21.11",
+            "fabricloader": ">=0.18.4",
+            "fabric-api": ">=0.141.0"
+          }
+        }
+      },
+      {
+        "file": "sodium-fabric-0.8.2+mc1.21.11.jar",
+        "enabled": true,
+        "sha256": "d89173494ac89676d43cc9c330607fc07cf44a145e84e8d07374c2b370f0b87c",
+        "fabric": {
+          "id": "sodium",
+          "version": "0.8.2+mc1.21.11",
+          "depends": {
+            "fabricloader": ">=0.16.0",
+            "fabric-block-view-api-v2": "*",
+            "fabric-rendering-fluids-v1": ">=2.0.0",
+            "fabric-resource-loader-v0": "*"
+          }
+        }
+      },
+      {
+        "file": "voxy-0.2.9-alpha-1.21.11.jar",
+        "enabled": true,
+        "sha256": "7a640f888c11f33d765dd6b7e6666538d04c1a5ea0e2160bd02acfa5ad6f6ef4",
+        "fabric": {
+          "id": "voxy",
+          "version": "0.2.9-alpha",
+          "depends": {
+            "minecraft": [
+              "1.21.11"
+            ],
+            "fabricloader": ">=0.14.22",
+            "fabric-api": ">=0.91.1",
+            "sodium": "=0.8.2"
+          }
+        }
+      },
+      {
+        "file": "xaeroworldmap-fabric-1.21.11-1.45.0.jar",
+        "enabled": true,
+        "sha256": "3271602ff218f4f0e854ca3f9fbce69fec509eeab5520a26ada585289d9ce756",
+        "fabric": {
+          "id": "xaeroworldmap",
+          "version": "1.45.0",
+          "depends": {
+            "fabricloader": ">=0.13.0",
+            "fabric-api": ">=0.43.1",
+            "minecraft": "1.21.11",
+            "xaerolib": ">=1.0"
+          }
+        }
+      }
+    ],
+    "latest_log": "/mnt/c/Users/Ian/AppData/Roaming/PrismLauncher/instances/lss-test-1.21.11/minecraft/logs/latest.log",
+    "role": "unverified until corresponding live launch evidence recorded"
+  },
+  {
+    "instance": "/mnt/c/Users/Ian/AppData/Roaming/PrismLauncher/instances/lss-test-26.1",
+    "components": [
+      {
+        "cachedName": "LWJGL 3",
+        "cachedVersion": "3.4.1",
+        "cachedVolatile": true,
+        "dependencyOnly": true,
+        "uid": "org.lwjgl3",
+        "version": "3.4.1"
+      },
+      {
+        "cachedName": "Minecraft",
+        "cachedRequires": [
+          {
+            "suggests": "3.4.1",
+            "uid": "org.lwjgl3"
+          }
+        ],
+        "cachedVersion": "26.1.2",
+        "important": true,
+        "uid": "net.minecraft",
+        "version": "26.1.2"
+      },
+      {
+        "cachedName": "Intermediary Mappings",
+        "cachedRequires": [
+          {
+            "equals": "26.1.2",
+            "uid": "net.minecraft"
+          }
+        ],
+        "cachedVersion": "26.1.2",
+        "cachedVolatile": true,
+        "dependencyOnly": true,
+        "uid": "net.fabricmc.intermediary",
+        "version": "26.1.2"
+      },
+      {
+        "cachedName": "Fabric Loader",
+        "cachedRequires": [
+          {
+            "uid": "net.fabricmc.intermediary"
+          }
+        ],
+        "cachedVersion": "0.19.3",
+        "uid": "net.fabricmc.fabric-loader",
+        "version": "0.19.3"
+      }
+    ],
+    "artifacts": [
+      {
+        "file": "lod-server-support-fabric-0.14.0-dev-xaero-edge+mc26.1.jar",
+        "enabled": true,
+        "sha256": "5a4889de170492d10ec01d0769ce3cb15c2a0050b66529b5a9142d0ef9422f1a",
+        "fabric": {
+          "id": "lss",
+          "version": "0.14.0",
+          "depends": {
+            "minecraft": ">=26.1 <26.2-",
+            "fabricloader": ">=0.18.4",
+            "fabric-api": ">=0.146.0"
+          }
+        }
+      },
+      {
+        "file": "lss-fabric-26.1.jar.disabled",
+        "enabled": false,
+        "sha256": "156f9d4cf2a63c2cef629ef5f548796d4236ef8a72473f5741b3f4a464db211f",
+        "fabric": {
+          "id": "lss",
+          "version": "0.9.1",
+          "depends": {
+            "minecraft": ">=26.1 <26.2-",
+            "fabricloader": ">=0.18.4",
+            "fabric-api": ">=0.146.0"
+          }
+        }
+      },
+      {
+        "file": "sodium-fabric-0.9.1+mc26.1.2.jar",
+        "enabled": true,
+        "sha256": "56d2eb7e8fb7f129286ab9cc89f460fe5a4cea340081ef3c50ac65bce9501b1d",
+        "fabric": {
+          "id": "sodium",
+          "version": "0.9.1+mc26.1.2",
+          "depends": {
+            "fabricloader": ">=0.16.0",
+            "fabric-block-getter-api-v2": "*",
+            "fabric-rendering-fluids-v1": ">=2.0.0",
+            "fabric-resource-loader-v0": "*"
+          }
+        }
+      },
+      {
+        "file": "voxy-0.2.18-beta-26.1.2.jar",
+        "enabled": true,
+        "sha256": "17ebb7ff9f311f66e9a53b6ff57c7ef4c10bb72627d5f7d6fb34b68f811ed7d5",
+        "fabric": {
+          "id": "voxy",
+          "version": "0.2.18-beta",
+          "depends": {
+            "minecraft": [
+              ">=26.1.2- <=26.1.2",
+              "~26.1.2"
+            ],
+            "fabricloader": ">=0.14.22",
+            "fabric-api": ">=0.91.1",
+            "java": ">=25",
+            "sodium": [
+              "=0.0.0",
+              ">=0.9.1- <=0.9.1"
+            ]
+          }
+        }
+      },
+      {
+        "file": "xaeroworldmap-fabric-26.1.2-1.45.0.jar",
+        "enabled": true,
+        "sha256": "504d19092e620bb037d5571908f87992d53188c4c2a5dfd80eeb82aaeb80c870",
+        "fabric": {
+          "id": "xaeroworldmap",
+          "version": "1.45.0",
+          "depends": {
+            "fabricloader": ">=0.13.0",
+            "fabric-api": ">=0.43.1",
+            "minecraft": ">=26.1 <26.2.0",
+            "xaerolib": ">=1.0"
+          }
+        }
+      }
+    ],
+    "latest_log": "/mnt/c/Users/Ian/AppData/Roaming/PrismLauncher/instances/lss-test-26.1/minecraft/logs/latest.log",
+    "role": "unverified until corresponding live launch evidence recorded"
+  },
+  {
+    "instance": "/mnt/c/Users/Ian/AppData/Roaming/PrismLauncher/instances/lss-test-26.2",
+    "components": [
+      {
+        "cachedName": "LWJGL 3",
+        "cachedVersion": "3.4.1",
+        "dependencyOnly": true,
+        "uid": "org.lwjgl3",
+        "version": "3.4.1"
+      },
+      {
+        "cachedName": "Minecraft",
+        "cachedRequires": [
+          {
+            "suggests": "3.4.1",
+            "uid": "org.lwjgl3"
+          }
+        ],
+        "cachedVersion": "26.2",
+        "important": true,
+        "uid": "net.minecraft",
+        "version": "26.2"
+      },
+      {
+        "cachedName": "Intermediary Mappings",
+        "cachedRequires": [
+          {
+            "equals": "26.2",
+            "uid": "net.minecraft"
+          }
+        ],
+        "cachedVersion": "26.2",
+        "dependencyOnly": true,
+        "uid": "net.fabricmc.intermediary",
+        "version": "26.2"
+      },
+      {
+        "cachedName": "Fabric Loader",
+        "cachedRequires": [
+          {
+            "uid": "net.fabricmc.intermediary"
+          }
+        ],
+        "cachedVersion": "0.19.3",
+        "uid": "net.fabricmc.fabric-loader",
+        "version": "0.19.3"
+      }
+    ],
+    "artifacts": [
+      {
+        "file": "lod-server-support-fabric-0.14.0-dev-xaero-edge+mc26.2.jar",
+        "enabled": true,
+        "sha256": "566fb25f140a168238aee1110187f341de59c1afbcac05cfe30f04051c8fba25",
+        "fabric": {
+          "id": "lss",
+          "version": "0.14.0",
+          "depends": {
+            "minecraft": ">=26.2 <26.3-",
+            "fabricloader": ">=0.18.4",
+            "fabric-api": ">=0.152.1"
+          }
+        }
+      },
+      {
+        "file": "lss-fabric-26.2.jar.disabled",
+        "enabled": false,
+        "sha256": "25f1519ab7e86278342b872fe7faf3b913f97717194eb3776d1e7e96ea2b69c1",
+        "fabric": {
+          "id": "lss",
+          "version": "0.9.1",
+          "depends": {
+            "minecraft": ">=26.2 <26.3-",
+            "fabricloader": ">=0.18.4",
+            "fabric-api": ">=0.152.1"
+          }
+        }
+      },
+      {
+        "file": "sodium-fabric-0.9.1+mc26.2.jar",
+        "enabled": true,
+        "sha256": "de406c7a0ca5e748dfbe44740278400882a44e3109e2584b243ec02d4003344b",
+        "fabric": {
+          "id": "sodium",
+          "version": "0.9.1+mc26.2",
+          "depends": {
+            "fabricloader": ">=0.16.0",
+            "fabric-block-getter-api-v2": "*",
+            "fabric-rendering-fluids-v1": ">=2.0.0",
+            "fabric-resource-loader-v0": "*"
+          }
+        }
+      },
+      {
+        "file": "voxy-0.2.18-beta.jar",
+        "enabled": true,
+        "sha256": "dd9e10d2110879f07c1ce9bdf1945f3470b32e83977f094005ee8c642e8128d5",
+        "fabric": {
+          "id": "voxy",
+          "version": "0.2.18-beta",
+          "depends": {
+            "minecraft": [
+              ">=26.2- <=26.2",
+              "~26.2"
+            ],
+            "fabricloader": ">=0.14.22",
+            "fabric-api": ">=0.91.1",
+            "sodium": [
+              "=0.0.0",
+              ">=0.9.1- <=0.9.1"
+            ]
+          }
+        }
+      },
+      {
+        "file": "xaerominimap-fabric-26.2-26.4.2.jar",
+        "enabled": true,
+        "sha256": "69284892d2eb853c9aefa85a4c9b74232c322da00207994c67ab8aeed8a64048",
+        "fabric": {
+          "id": "xaerominimap",
+          "version": "26.4.2",
+          "depends": {
+            "fabricloader": ">=0.13.0",
+            "fabric-api": ">=0.43.1",
+            "minecraft": ">=26.2 <26.3",
+            "xaerolib": ">=1.0"
+          }
+        }
+      },
+      {
+        "file": "xaeroworldmap-fabric-26.2-1.45.0.jar",
+        "enabled": true,
+        "sha256": "92f9719121e0e7dd0c286720f987af2ef82ece8786c55ca70f40a6cf02076267",
+        "fabric": {
+          "id": "xaeroworldmap",
+          "version": "1.45.0",
+          "depends": {
+            "fabricloader": ">=0.13.0",
+            "fabric-api": ">=0.43.1",
+            "minecraft": ">=26.2 <26.3.0",
+            "xaerolib": ">=1.0"
+          }
+        }
+      }
+    ],
+    "latest_log": "/mnt/c/Users/Ian/AppData/Roaming/PrismLauncher/instances/lss-test-26.2/minecraft/logs/latest.log",
+    "role": "unverified until corresponding live launch evidence recorded"
+  },
+  {
+    "instance": "/mnt/c/Users/Ian/AppData/Roaming/PrismLauncher/instances/lss-test-neo-1.21.1",
+    "components": [
+      {
+        "cachedName": "LWJGL 3",
+        "cachedVersion": "3.3.3",
+        "cachedVolatile": true,
+        "dependencyOnly": true,
+        "uid": "org.lwjgl3",
+        "version": "3.3.3"
+      },
+      {
+        "cachedName": "Minecraft",
+        "cachedRequires": [
+          {
+            "suggests": "3.3.3",
+            "uid": "org.lwjgl3"
+          }
+        ],
+        "cachedVersion": "1.21.1",
+        "important": true,
+        "uid": "net.minecraft",
+        "version": "1.21.1"
+      },
+      {
+        "cachedName": "NeoForge",
+        "cachedRequires": [
+          {
+            "equals": "1.21.1",
+            "uid": "net.minecraft"
+          }
+        ],
+        "cachedVersion": "21.1.248",
+        "uid": "net.neoforged",
+        "version": "21.1.248"
+      }
+    ],
+    "artifacts": [
+      {
+        "file": "lod-server-support-neoforge-0.14.0-dev-xaero-edge+mc1.21.1.jar",
+        "enabled": true,
+        "sha256": "53aacf243927cdeaaa0e2daa297ac58914cc0d39d9da4e6431dbe05f7c4d8b9e",
+        "META-INF/neoforge.mods.toml": "modLoader=\"javafml\"\nloaderVersion=\"[4,)\"\nlicense=\"MIT\"\nissueTrackerURL=\"https://github.com/VoX/lod-server-support/issues\"\n\n[[mods]]\nmodId=\"lss\"\nversion=\"0.14.0\"\ndisplayName=\"LOD Server Support\"\nauthors=\"VoX\"\nlogoFile=\"assets/lss/icon.png\"\ndescription='''Voxy multiplayer support (unofficial). Enables players with Voxy to see fully rendered terrain out to hundreds of chunks on multiplayer servers without needing to explore the world first. Server-side works with any LSS/VSS client; the client half needs a community Voxy build for NeoForge.'''\n\n[[mixins]]\nconfig=\"lss.neoforge.mixins.json\"\n\n[[mixins]]\nconfig=\"lss-sodium-legacy.mixins.json\"\n\n[[dependencies.lss]]\n    modId=\"neoforge\"\n    type=\"required\"\n    # LINE DATA: per-line NeoForge loader floor (round-3 review NIT \u2014 the MC dep\n    # above is templated from gradle.properties; this row is hand-edited per line)\n    versionRange=\"[21.1,)\"\n    ordering=\"NONE\"\n    side=\"BOTH\"\n\n[[dependencies.lss]]\n    modId=\"minecraft\"\n    type=\"required\"\n    versionRange=\"[1.21.1]\"\n    ordering=\"NONE\"\n    side=\"BOTH\"\n\n# Sodium 0.8+ options page (sodium-options-page-generations-plan.md, NeoForge\n# amendment): sodium-neoforge's ConfigLoaderForge reads this property from every\n# mod and instantiates the named ConfigEntryPoint \u2014 the same key Fabric declares\n# as an entrypoint. Harmless when Sodium is absent or pre-0.8.\n[modproperties.lss]\n\"sodium:config_api_user\"=\"dev.vox.lss.config.LSSConfigMenu\"\n"
+      },
+      {
+        "file": "sodium-neoforge-0.6.13+mc1.21.1.jar.disabled",
+        "enabled": false,
+        "sha256": "7acd7af2ef75ec883a6872c17494ead65e38025151eb08a1d60e36d34377f403",
+        "META-INF/neoforge.mods.toml": "modLoader = \"javafml\"\nloaderVersion = \"[4,)\"\nlicense = \"Polyform-Shield-1.0.0\"\n\n[[mods]]\nmodId = \"sodium\"\n\nversion = \"0.6.13+mc1.21.1\"\ndisplayName = \"Sodium\"\n\nlogoFile = \"sodium-icon.png\" #optional\n\nauthors = \"JellySquid (jellysquid3), IMS212\"\n\ncredits = \"bytzo, PepperCode1, FlashyReese, altrisi, Grayray75, Madis0, Johni0702, comp500, coderbot16, Moulberry, MCRcortex, Altirix, embeddedt, pajicadvance, Kroppeb, douira, burgerindividual, TwistedZero, Leo40Git, haykam821, muzikbike\"\n\ndescription = '''\nSodium is a powerful rendering engine for Minecraft which improves frame rates and reduces lag spikes.\n'''\n\nprovides = [\"indium\"]\n\n[modproperties.sodium]\n\"fabric-renderer-api-v1:contains_renderer\" = true\n\n[[dependencies.sodium]]\nmodId = \"minecraft\"\ntype = \"required\"\nversionRange = \"1.21.1\"\nordering = \"NONE\"\nside = \"CLIENT\"\n\n[[dependencies.sodium]]\nmodId = \"neoforge\"\ntype = \"required\"\nversionRange = \"[21.1.82,)\"\nordering = \"NONE\"\nside = \"CLIENT\"\n\n[[dependencies.sodium]]\nmodId = \"embeddium\"\ntype = \"incompatible\"\nreason = \"Sodium and Embeddium cannot be used together. Please remove Embeddium.\"\nversionRange = \"[0.0.1,)\"\nordering = \"NONE\"\nside = \"CLIENT\"\n\n[[mixins]]\nconfig = \"sodium-common.mixins.json\"\n\n[[mixins]]\nconfig = \"sodium-neoforge.mixins.json\""
+      },
+      {
+        "file": "sodium-neoforge-0.8.12-beta.1+mc1.21.1.jar",
+        "enabled": true,
+        "sha256": "dc2838d5538db39414171fe86586ab89d1a30d2fd97f59229cc44cf3777f569d",
+        "META-INF/neoforge.mods.toml": "modLoader = \"javafml\"\nloaderVersion = \"[4,)\"\nlicense = \"Polyform-Shield-1.0.0\"\n\n[[mods]]\nmodId = \"sodium\"\n\nversion = \"0.8.12-beta.1+mc1.21.1\"\ndisplayName = \"Sodium\"\n\nlogoFile = \"sodium-icon.png\" #optional\n\nauthors = \"JellySquid (jellysquid3), IMS212\"\n\ncredits = \"bytzo, PepperCode1, FlashyReese, altrisi, Grayray75, Madis0, Johni0702, comp500, coderbot16, Moulberry, MCRcortex, Altirix, embeddedt, pajicadvance, Kroppeb, douira, burgerindividual, TwistedZero, Leo40Git, haykam821, muzikbike\"\n\ndescription = '''\nSodium is a powerful rendering engine for Minecraft which improves frame rates and reduces lag spikes.\n'''\n\nprovides = [\"indium\"]\n\n[modproperties.sodium]\n\"fabric-renderer-api-v1:contains_renderer\" = true\n\n[[dependencies.sodium]]\nmodId = \"minecraft\"\ntype = \"required\"\nversionRange = \"1.21.1\"\nordering = \"NONE\"\nside = \"CLIENT\"\n\n[[dependencies.sodium]]\nmodId = \"neoforge\"\ntype = \"required\"\nversionRange = \"[21.1.82,)\"\nordering = \"NONE\"\nside = \"CLIENT\"\n\n[[dependencies.sodium]]\nmodId = \"embeddium\"\ntype = \"incompatible\"\nreason = \"Sodium and Embeddium cannot be used together. Please remove Embeddium.\"\nversionRange = \"[0.0.1,)\"\nordering = \"NONE\"\nside = \"CLIENT\"\n\n[[mixins]]\nconfig = \"sodium-common.mixins.json\"\n\n[[mixins]]\nconfig = \"sodium-neoforge.mixins.json\""
+      },
+      {
+        "file": "voxy-0.2.15-beta-sodium0.8.12.jar.disabled",
+        "enabled": false,
+        "sha256": "024d58076649dbd348ad75c3778f90916ec35b7b9a1196b0662823a72f071a49",
+        "fabric": {
+          "id": "voxy",
+          "version": "0.2.15-beta",
+          "depends": {
+            "minecraft": [
+              "1.21.1"
+            ],
+            "fabricloader": ">=0.14.22",
+            "fabric-api": ">=0.91.1",
+            "sodium": ">=0.8.12-alpha.2+mc1.21.1"
+          }
+        }
+      },
+      {
+        "file": "voxy-0.2.16-beta+1.21.11.jar",
+        "enabled": true,
+        "sha256": "7f8226cf64a4f5dc064e1075965714b718ac5f42fb28f826135a37c64e66e10b",
+        "fabric": {
+          "id": "voxy",
+          "version": "0.2.16-beta",
+          "depends": {
+            "minecraft": [
+              "1.21.11"
+            ],
+            "fabricloader": ">=0.14.22",
+            "fabric-api": ">=0.91.1",
+            "sodium": [
+              "=0.8.4",
+              "=0.8.6",
+              "=0.8.7",
+              "=0.8.11",
+              "=0.8.12"
+            ]
+          }
+        }
+      },
+      {
+        "file": "voxy-0.2.9-alpha-sodium08.jar.disabled",
+        "enabled": false,
+        "sha256": "98637a5c300d3fdb53cafa8fd8aab8dfb6a12a02e1ee9909097e4fe582a40891",
+        "META-INF/neoforge.mods.toml": "modLoader=\"javafml\"\nloaderVersion=\"[4,)\"\nlicense=\"All-Rights-Reserved\"\nissueTrackerURL=\"https://github.com/MCRcortex/voxy/issues\"\n\n[[mods]]\nmodId=\"voxy\"\nversion=\"0.2.9-alpha\"\ndisplayName=\"Voxy\"\ndescription=\"Far distance rendering mod utilising LoDs\"\nauthors=\"Cortex\"\nlogoFile=\"assets/voxy/icon.png\"\n\n[[dependencies.voxy]]\nmodId=\"neoforge\"\ntype=\"required\"\nversionRange=\"[21.1,)\"\nordering=\"NONE\"\nside=\"BOTH\"\n\n[[dependencies.voxy]]\nmodId=\"minecraft\"\ntype=\"required\"\nversionRange=\"[1.21.1]\"\nordering=\"NONE\"\nside=\"BOTH\"\n\n[[dependencies.voxy]]\nmodId=\"sodium\"\ntype=\"required\"\nversionRange=\"[0.6.13,)\"\nordering=\"AFTER\"\nside=\"CLIENT\"\n\n[[dependencies.voxy]]\nmodId=\"fabric_api\"\ntype=\"required\"\nversionRange=\"[0.102.0,)\"\nordering=\"BEFORE\"\nside=\"BOTH\"\n\n[[mixins]]\nconfig=\"client.voxy.mixins.json\"\n\n[[mixins]]\nconfig=\"common.voxy.mixins.json\"\n"
+      },
+      {
+        "file": "voxy-0.2.9-alpha.jar.disabled",
+        "enabled": false,
+        "sha256": "16144e178f592cb9ff3f062b16c215f9df6b036c66d0626fa2d8797d75317829",
+        "META-INF/neoforge.mods.toml": "modLoader=\"javafml\"\nloaderVersion=\"[4,)\"\nlicense=\"All-Rights-Reserved\"\nissueTrackerURL=\"https://github.com/MCRcortex/voxy/issues\"\n\n[[mods]]\nmodId=\"voxy\"\nversion=\"0.2.9-alpha\"\ndisplayName=\"Voxy\"\ndescription=\"Far distance rendering mod utilising LoDs\"\nauthors=\"Cortex\"\nlogoFile=\"assets/voxy/icon.png\"\n\n[[dependencies.voxy]]\nmodId=\"neoforge\"\ntype=\"required\"\nversionRange=\"[21.1,)\"\nordering=\"NONE\"\nside=\"BOTH\"\n\n[[dependencies.voxy]]\nmodId=\"minecraft\"\ntype=\"required\"\nversionRange=\"[1.21.1]\"\nordering=\"NONE\"\nside=\"BOTH\"\n\n[[dependencies.voxy]]\nmodId=\"sodium\"\ntype=\"required\"\nversionRange=\"[0.6.13,)\"\nordering=\"AFTER\"\nside=\"CLIENT\"\n\n[[dependencies.voxy]]\nmodId=\"fabric_api\"\ntype=\"required\"\nversionRange=\"[0.102.0,)\"\nordering=\"BEFORE\"\nside=\"BOTH\"\n\n[[mixins]]\nconfig=\"client.voxy.mixins.json\"\n\n[[mixins]]\nconfig=\"common.voxy.mixins.json\"\n"
+      },
+      {
+        "file": "xaeroworldmap-neoforge-1.21.1-1.45.0.jar",
+        "enabled": true,
+        "sha256": "d60899112e84616ba52a993c1722fd891872acc4779bfac34d9b170001451c6f",
+        "META-INF/neoforge.mods.toml": "modLoader = \"javafml\" #mandatory\nloaderVersion = \"[4,)\" #mandatory\nlicense = \"All Rights Reserved\" # Review your options at https://choosealicense.com/.\n#issueTrackerURL=\"https://change.me.to.your.issue.tracker.example.invalid/\" #optional\n[[mods]] #mandatory\nmodId = \"xaeroworldmap\" #mandatory\nversion = \"1.45.0\" #mandatory\ndisplayName = \"Xaero's World Map\" #mandatory\n#updateJSONURL=\"https://change.me.example.invalid/updates.json\" #optional (see https://docs.neoforged.net/docs/misc/updatechecker/)\n#displayURL=\"https://change.me.to.your.mods.homepage.example.invalid/\" #optional (displayed in the mod UI)\nlogoFile=\"xaeroworldmap.png\" #optional\ncredits=\"\" #optional\nauthors = \"xaero96\" #optional\ndescription = '''A self-writing fullscreen map which also works as an add-on to Xaero's Minimap.''' #mandatory (Supports multiline text)\n[[mixins]]\nconfig = \"xaeroworldmap.mixins.json\"\n[[mixins]]\nconfig = \"xaeroworldmap.neoforge.mixins.json\"\n[[dependencies.xaeroworldmap]] #optional\nmodId = \"neoforge\" #mandatory\ntype=\"required\" #mandatory (Can be one of \"required\", \"optional\", \"incompatible\" or \"discouraged\")\nversionRange = \"[21.0.110-beta, 21.2.0)\" #mandatory\nordering = \"NONE\" # The order that this dependency should load in relation to your mod, required to be either 'BEFORE' or 'AFTER' if the dependency is not mandatory\nside = \"BOTH\" # Side this dependency is applied on - 'BOTH', 'CLIENT' or 'SERVER'\n[[dependencies.xaeroworldmap]]\nmodId = \"minecraft\"\ntype=\"required\" #mandatory (Can be one of \"required\", \"optional\", \"incompatible\" or \"discouraged\")\nversionRange = \"[1.21, 1.21.2)\"\nordering = \"NONE\"\nside = \"BOTH\"\n[[dependencies.xaeroworldmap]]\nmodId = \"openpartiesandclaims\"\ntype=\"optional\"\nversionRange = \"[0.30.3,)\"\nordering = \"NONE\"\nside = \"BOTH\"\n[[dependencies.xaeroworldmap]]\nmodId = \"xaerominimap\"\ntype=\"optional\"\nversionRange = \"[26.4.0,)\"\nordering = \"NONE\"\nside = \"BOTH\"\n[[dependencies.xaeroworldmap]]\nmodId = \"xaerobetterpvp\"\ntype=\"optional\"\nversionRange = \"[26.4.0,)\"\nordering = \"NONE\"\nside = \"BOTH\"\n[[dependencies.xaeroworldmap]]\nmodId = \"xaerolib\"\ntype=\"required\"\nversionRange = \"[1.0,)\"\nordering = \"NONE\"\nside = \"BOTH\"\n\n# Features are specific properties of the game environment, that you may want to declare you require. This example declares\n# that your mod requires GL version 3.2 or higher. Other features will be added. They are side aware so declaring this won't\n# stop your mod loading on the server for example.\n#[features.xaeroworldmap]\n#openGLVersion=\"[3.2,)\""
+      },
+      {
+        "file": "ConnectorExtras-1.12.1+1.21.1.jar",
+        "enabled": true,
+        "sha256": "ee89c3425b9a4bff766aaff02ccf8110c06f5da6ef5d71974556885cf25d4880",
+        "META-INF/neoforge.mods.toml": "modLoader=\"javafml\"\nloaderVersion=\"*\"\nlicense=\"MIT\"\nissueTrackerURL=\"https://github.com/Sinytra/ConnectorExtras/issues\"\n\n[[mods]]\nmodId=\"connectorextras\"\nversion=\"${file.jarVersion}\"\ndisplayName=\"Connector Extras\"\nauthors=\"Su5eD\"\ndisplayURL=\"https://github.com/Sinytra/ConnectorExtras\"\ndescription='''\nIntegrating Connector with third-party APIs\n'''\ndisplayTest = 'IGNORE_ALL_VERSION'\n[[dependencies.connectorextras]]\n    modId=\"neoforge\"\n    type=\"required\"\n    versionRange=\"*\"\n    ordering=\"NONE\"\n    side=\"BOTH\"\n[[dependencies.connectorextras]]\n    modId=\"minecraft\"\n    type=\"required\"\n    versionRange=\"[1.21,1.22)\"\n    ordering=\"NONE\"\n    side=\"BOTH\"\n[[dependencies.connectorextras_kubejs_bridge]]\n    modId=\"connector\"\n    type=\"required\"\n    versionRange=\"*\"\n    ordering=\"NONE\"\n    side=\"BOTH\"\n"
+      },
+      {
+        "file": "connector-2.0.0-beta.14+1.21.1-full.jar",
+        "enabled": true,
+        "sha256": "a79817f1076e2e6499b0ab09c4e8c032d04b071341b66d036c3d96112804e51b"
+      },
+      {
+        "file": "forgified-fabric-api-0.116.15+2.3.3+1.21.1.jar",
+        "enabled": true,
+        "sha256": "6d5d81d3203bde3c72c4702193ae1667b0a3a2272b002ce0a1dda5561af12b2d",
+        "META-INF/neoforge.mods.toml": "modLoader = \"lowcodefml\"\nloaderVersion = \"[1,)\"\nlicense = \"Apache-2.0\"\nissueTrackerURL = \"https://github.com/Sinytra/ForgifiedFabricAPI/issues\"\n\n[[mods]]\nmodId = \"fabric_api\"\nversion = \"${file.jarVersion}\"\ndisplayName = \"Forgified Fabric API\"\nlogoFile = \"assets/fabric/icon.png\"\nauthors = \"Sinytra, FabricMC\"\ndescription = \"Core API module providing key hooks and intercompatibility features.\"\nprovides = [\"fabric\", \"fabric-api\"]\ndisplayURL = \"https://github.com/Sinytra/ForgifiedFabricAPI\"\n\n[[dependencies.fabric_api]]\nmodId = \"neoforge\"\ntype = \"required\"\nversionRange = \"[21.1.169,)\"\nordering = \"NONE\"\nside = \"BOTH\"\n\n[[dependencies.fabric_api]]\nmodId = \"minecraft\"\ntype = \"required\"\nversionRange = \"[1.21.1,1.22)\"\nordering = \"NONE\"\nside = \"BOTH\"\n\n[[mods]]\nmodId = \"forgified_fabric_api\"\nversion = \"${file.jarVersion}\"\ndisplayName = \"Forgified Fabric API (dummy)\"\nlogoFile = \"assets/fabric/icon.png\"\nauthors = \"Sinytra, FabricMC\"\ndescription = \"Dependency target for other mods\"\ndisplayURL = \"https://github.com/Sinytra/ForgifiedFabricAPI\"\n\n[[dependencies.forgified_fabric_api]]\nmodId = \"neoforge\"\ntype = \"required\"\nversionRange = \"[21.1.169,)\"\nordering = \"NONE\"\nside = \"BOTH\"\n\n[[dependencies.forgified_fabric_api]]\nmodId = \"minecraft\"\ntype = \"required\"\nversionRange = \"[1.21.1,1.22)\"\nordering = \"NONE\"\nside = \"BOTH\"\n"
+      }
+    ],
+    "latest_log": "/mnt/c/Users/Ian/AppData/Roaming/PrismLauncher/instances/lss-test-neo-1.21.1/minecraft/logs/latest.log",
+    "role": "unverified until corresponding live launch evidence recorded"
+  },
+  {
+    "instance": "/mnt/c/Users/Ian/AppData/Roaming/PrismLauncher/instances/lss-test-neo-1.21.11",
+    "components": [
+      {
+        "cachedName": "LWJGL 3",
+        "cachedVersion": "3.3.3",
+        "dependencyOnly": true,
+        "uid": "org.lwjgl3",
+        "version": "3.3.3"
+      },
+      {
+        "cachedName": "Minecraft",
+        "cachedRequires": [
+          {
+            "suggests": "3.3.3",
+            "uid": "org.lwjgl3"
+          }
+        ],
+        "cachedVersion": "1.21.11",
+        "important": true,
+        "uid": "net.minecraft",
+        "version": "1.21.11"
+      },
+      {
+        "cachedName": "NeoForge",
+        "cachedRequires": [
+          {
+            "equals": "1.21.11",
+            "uid": "net.minecraft"
+          }
+        ],
+        "cachedVersion": "21.11.45",
+        "uid": "net.neoforged",
+        "version": "21.11.45"
+      }
+    ],
+    "artifacts": [
+      {
+        "file": "lod-server-support-neoforge-0.14.0-dev-xaero-edge+mc1.21.11.jar",
+        "enabled": true,
+        "sha256": "ffa47ae6ea166dfd56d7643a5d67c76682d83c2abd9e02fe580fe35b319653bb",
+        "META-INF/neoforge.mods.toml": "modLoader=\"javafml\"\nloaderVersion=\"[4,)\"\nlicense=\"MIT\"\nissueTrackerURL=\"https://github.com/VoX/lod-server-support/issues\"\n\n[[mods]]\nmodId=\"lss\"\nversion=\"0.14.0\"\ndisplayName=\"LOD Server Support\"\nauthors=\"VoX\"\nlogoFile=\"assets/lss/icon.png\"\ndescription='''Voxy multiplayer support (unofficial). Enables players with Voxy to see fully rendered terrain out to hundreds of chunks on multiplayer servers without needing to explore the world first. Server-side works with any LSS/VSS client; the client half needs a community Voxy build for NeoForge.'''\n\n[[mixins]]\nconfig=\"lss.neoforge.mixins.json\"\n\n[[mixins]]\nconfig=\"lss-sodium-legacy.mixins.json\"\n\n[[dependencies.lss]]\n    modId=\"neoforge\"\n    type=\"required\"\n    # LINE DATA: per-line NeoForge loader floor (round-3 review NIT \u2014 the MC dep\n    # above is templated from gradle.properties; this row is hand-edited per line)\n    versionRange=\"[21.11,)\"\n    ordering=\"NONE\"\n    side=\"BOTH\"\n\n[[dependencies.lss]]\n    modId=\"minecraft\"\n    type=\"required\"\n    versionRange=\"[1.21.11]\"\n    ordering=\"NONE\"\n    side=\"BOTH\"\n\n# Sodium 0.8+ options page (sodium-options-page-generations-plan.md, NeoForge\n# amendment): sodium-neoforge's ConfigLoaderForge reads this property from every\n# mod and instantiates the named ConfigEntryPoint \u2014 the same key Fabric declares\n# as an entrypoint. Harmless when Sodium is absent or pre-0.8.\n[modproperties.lss]\n\"sodium:config_api_user\"=\"dev.vox.lss.config.LSSConfigMenu\"\n"
+      }
+    ],
+    "latest_log": "/mnt/c/Users/Ian/AppData/Roaming/PrismLauncher/instances/lss-test-neo-1.21.11/minecraft/logs/latest.log",
+    "role": "unverified until corresponding live launch evidence recorded"
+  },
+  {
+    "instance": "/mnt/c/Users/Ian/AppData/Roaming/PrismLauncher/instances/lss-test-neo-26.1",
+    "components": [
+      {
+        "cachedName": "LWJGL 3",
+        "cachedVersion": "3.4.1",
+        "cachedVolatile": true,
+        "dependencyOnly": true,
+        "uid": "org.lwjgl3",
+        "version": "3.4.1"
+      },
+      {
+        "cachedName": "Minecraft",
+        "cachedRequires": [
+          {
+            "suggests": "3.4.1",
+            "uid": "org.lwjgl3"
+          }
+        ],
+        "cachedVersion": "26.1.2",
+        "important": true,
+        "uid": "net.minecraft",
+        "version": "26.1.2"
+      },
+      {
+        "cachedName": "NeoForge",
+        "cachedRequires": [
+          {
+            "equals": "26.1.2",
+            "uid": "net.minecraft"
+          }
+        ],
+        "cachedVersion": "26.1.2.48-beta",
+        "uid": "net.neoforged",
+        "version": "26.1.2.48-beta"
+      }
+    ],
+    "artifacts": [
+      {
+        "file": "lod-server-support-neoforge-0.14.0-dev-xaero-edge+mc26.1.jar",
+        "enabled": true,
+        "sha256": "89018aa97031f8f4d0edeceee3f164fb75cf685b23e29717efa1965dbdd93ca4",
+        "META-INF/neoforge.mods.toml": "modLoader=\"javafml\"\nloaderVersion=\"[4,)\"\nlicense=\"MIT\"\nissueTrackerURL=\"https://github.com/VoX/lod-server-support/issues\"\n\n[[mods]]\nmodId=\"lss\"\nversion=\"0.14.0\"\ndisplayName=\"LOD Server Support\"\nauthors=\"VoX\"\nlogoFile=\"assets/lss/icon.png\"\ndescription='''Voxy multiplayer support (unofficial). Enables players with Voxy to see fully rendered terrain out to hundreds of chunks on multiplayer servers without needing to explore the world first. Server-side works with any LSS/VSS client; the client half needs a community Voxy build for NeoForge.'''\n\n[[mixins]]\nconfig=\"lss.neoforge.mixins.json\"\n\n[[mixins]]\nconfig=\"lss-sodium-legacy.mixins.json\"\n\n[[dependencies.lss]]\n    modId=\"neoforge\"\n    type=\"required\"\n    # LINE DATA: per-line NeoForge loader floor (round-3 review NIT \u2014 the MC dep\n    # above is templated from gradle.properties; this row is hand-edited per line)\n    versionRange=\"[26.1,)\"\n    ordering=\"NONE\"\n    side=\"BOTH\"\n\n[[dependencies.lss]]\n    modId=\"minecraft\"\n    type=\"required\"\n    versionRange=\"[26.1.2]\"\n    ordering=\"NONE\"\n    side=\"BOTH\"\n\n# Sodium 0.8+ options page (sodium-options-page-generations-plan.md, NeoForge\n# amendment): sodium-neoforge's ConfigLoaderForge reads this property from every\n# mod and instantiates the named ConfigEntryPoint \u2014 the same key Fabric declares\n# as an entrypoint. Harmless when Sodium is absent or pre-0.8.\n[modproperties.lss]\n\"sodium:config_api_user\"=\"dev.vox.lss.config.LSSConfigMenu\"\n"
+      },
+      {
+        "file": "sodium-neoforge-0.8.12+mc26.1.2.jar",
+        "enabled": true,
+        "sha256": "670df7ba4d4fcd3e0f2fde35fd967defa94f0b07376e4554126cc79afa44fec6",
+        "META-INF/neoforge.mods.toml": "modLoader = \"javafml\"\nloaderVersion = \"[4,)\"\nlicense = \"Polyform-Shield-1.0.0\"\n\n[[mods]]\nmodId = \"sodium\"\n\nversion = \"0.8.12+mc26.1.2\"\ndisplayName = \"Sodium\"\n\nlogoFile = \"sodium-icon.png\" #optional\n\nauthors = \"JellySquid (jellysquid3), IMS212\"\n\ncredits = \"bytzo, PepperCode1, FlashyReese, altrisi, Grayray75, Madis0, Johni0702, comp500, coderbot16, Moulberry, MCRcortex, Altirix, embeddedt, pajicadvance, Kroppeb, douira, burgerindividual, TwistedZero, Leo40Git, haykam821, muzikbike\"\n\ndescription = '''\nSodium is a powerful rendering engine for Minecraft which improves frame rates and reduces lag spikes.\n'''\n\nprovides = [\"indium\"]\n\n[modproperties.sodium]\n\"fabric-renderer-api-v1:contains_renderer\" = true\n\n[[mixins]]\nconfig = \"sodium-common.mixins.json\"\n\n[[mixins]]\nconfig = \"sodium-neoforge.mixins.json\"\n\n[[dependencies.sodium]]\nmodId = \"neoforge\"\ntype = \"required\"\nversionRange = \"[26.1.2.10-beta,)\"\nordering = \"NONE\"\nside = \"BOTH\"\n"
+      },
+      {
+        "file": "voxy-0.2.16-beta-26.1.2.jar",
+        "enabled": true,
+        "sha256": "0b90d266721142d7d5c4a69e0339dd7563b9e8faabb8cab2d72c2686d25bf959",
+        "fabric": {
+          "id": "voxy",
+          "version": "0.2.16-beta",
+          "depends": {
+            "minecraft": [
+              "~26.1.2"
+            ],
+            "fabricloader": ">=0.14.22",
+            "fabric-api": ">=0.91.1",
+            "sodium": [
+              "=0.8.9",
+              "=0.8.10",
+              "=0.8.11",
+              ">=0.8.12- <=0.8.12"
+            ]
+          }
+        }
+      }
+    ],
+    "latest_log": "/mnt/c/Users/Ian/AppData/Roaming/PrismLauncher/instances/lss-test-neo-26.1/minecraft/logs/latest.log",
+    "role": "unverified until corresponding live launch evidence recorded"
+  },
+  {
+    "instance": "/mnt/c/Users/Ian/AppData/Roaming/PrismLauncher/instances/lss-test-neo-26.2",
+    "components": [
+      {
+        "cachedName": "LWJGL 3",
+        "cachedVersion": "3.4.1",
+        "cachedVolatile": true,
+        "dependencyOnly": true,
+        "uid": "org.lwjgl3",
+        "version": "3.4.1"
+      },
+      {
+        "cachedName": "Minecraft",
+        "cachedRequires": [
+          {
+            "suggests": "3.4.1",
+            "uid": "org.lwjgl3"
+          }
+        ],
+        "cachedVersion": "26.2",
+        "important": true,
+        "uid": "net.minecraft",
+        "version": "26.2"
+      },
+      {
+        "cachedName": "NeoForge",
+        "cachedRequires": [
+          {
+            "equals": "26.2",
+            "uid": "net.minecraft"
+          }
+        ],
+        "cachedVersion": "26.2.0.59",
+        "uid": "net.neoforged",
+        "version": "26.2.0.59"
+      }
+    ],
+    "artifacts": [
+      {
+        "file": "lod-server-support-neoforge-0.14.0-dev-xaero-edge+mc26.2.jar",
+        "enabled": true,
+        "sha256": "978b52ef309f858b4068b0d3a8e21cfff50cff260dfffa53e203775e0a01b8fc",
+        "META-INF/neoforge.mods.toml": "modLoader=\"javafml\"\nloaderVersion=\"[4,)\"\nlicense=\"MIT\"\nissueTrackerURL=\"https://github.com/VoX/lod-server-support/issues\"\n\n[[mods]]\nmodId=\"lss\"\nversion=\"0.14.0\"\ndisplayName=\"LOD Server Support\"\nauthors=\"VoX\"\nlogoFile=\"assets/lss/icon.png\"\ndescription='''Voxy multiplayer support (unofficial). Enables players with Voxy to see fully rendered terrain out to hundreds of chunks on multiplayer servers without needing to explore the world first. Server-side works with any LSS/VSS client; the client half needs a community Voxy build for NeoForge.'''\n\n[[mixins]]\nconfig=\"lss.neoforge.mixins.json\"\n\n[[mixins]]\nconfig=\"lss-sodium-legacy.mixins.json\"\n\n[[dependencies.lss]]\n    modId=\"neoforge\"\n    type=\"required\"\n    # DERIVED (R2-6): the loader floor is neoforge_version's first two components\n    # (26.2.0.59 -> [26.2,)) \u2014 the hand row churned on all three v0.11 ports.\n    versionRange=\"[26.2,)\"\n    ordering=\"NONE\"\n    side=\"BOTH\"\n\n[[dependencies.lss]]\n    modId=\"minecraft\"\n    type=\"required\"\n    versionRange=\"[26.2]\"\n    ordering=\"NONE\"\n    side=\"BOTH\"\n\n# Sodium 0.8+ options page (sodium-options-page-generations-plan.md, NeoForge\n# amendment): sodium-neoforge's ConfigLoaderForge reads this property from every\n# mod and instantiates the named ConfigEntryPoint \u2014 the same key Fabric declares\n# as an entrypoint. Harmless when Sodium is absent or pre-0.8.\n[modproperties.lss]\n\"sodium:config_api_user\"=\"dev.vox.lss.config.LSSConfigMenu\"\n"
+      },
+      {
+        "file": "sodium-neoforge-0.9.1+mc26.2.jar",
+        "enabled": true,
+        "sha256": "99211fc2a1d91c9beaa569044d191c08c68a1dbf5eb9bf1f5ee8296b9f768c81",
+        "META-INF/neoforge.mods.toml": "modLoader = \"javafml\"\nloaderVersion = \"[4,)\"\nlicense = \"Polyform-Shield-1.0.0\"\n\n[[mods]]\nmodId = \"sodium\"\n\nversion = \"0.9.1+mc26.2\"\ndisplayName = \"Sodium\"\n\nlogoFile = \"sodium-icon.png\" #optional\n\nauthors = \"JellySquid (jellysquid3), IMS212\"\n\ncredits = \"bytzo, PepperCode1, FlashyReese, altrisi, Grayray75, Madis0, Johni0702, comp500, coderbot16, Moulberry, MCRcortex, Altirix, embeddedt, pajicadvance, Kroppeb, douira, burgerindividual, TwistedZero, Leo40Git, haykam821, muzikbike\"\n\ndescription = '''\nSodium is a powerful rendering engine for Minecraft which improves frame rates and reduces lag spikes.\n'''\n\nprovides = [\"indium\"]\n\n[modproperties.sodium]\n\"fabric-renderer-api-v1:contains_renderer\" = true\n\n[[mixins]]\nconfig = \"sodium-common.mixins.json\"\n\n[[mixins]]\nconfig = \"sodium-neoforge.mixins.json\"\n\n[[dependencies.sodium]]\nmodId = \"neoforge\"\ntype = \"required\"\nversionRange = \"[26.1.2.10-beta,)\"\nordering = \"NONE\"\nside = \"BOTH\"\n"
+      },
+      {
+        "file": "voxy-0.2.18-beta.jar",
+        "enabled": true,
+        "sha256": "dd9e10d2110879f07c1ce9bdf1945f3470b32e83977f094005ee8c642e8128d5",
+        "fabric": {
+          "id": "voxy",
+          "version": "0.2.18-beta",
+          "depends": {
+            "minecraft": [
+              ">=26.2- <=26.2",
+              "~26.2"
+            ],
+            "fabricloader": ">=0.14.22",
+            "fabric-api": ">=0.91.1",
+            "sodium": [
+              "=0.0.0",
+              ">=0.9.1- <=0.9.1"
+            ]
+          }
+        }
+      },
+      {
+        "file": "xaeroworldmap-neoforge-26.2-1.45.0.jar",
+        "enabled": true,
+        "sha256": "f91902407baa1e2b785223f49bbe4f3248704158b36e57f793e07e40b64421e0",
+        "META-INF/neoforge.mods.toml": "modLoader = \"javafml\" #mandatory\nloaderVersion = \"[4,)\" #mandatory\nlicense = \"All Rights Reserved\" # Review your options at https://choosealicense.com/.\n#issueTrackerURL=\"https://change.me.to.your.issue.tracker.example.invalid/\" #optional\n[[mods]] #mandatory\nmodId = \"xaeroworldmap\" #mandatory\nversion = \"1.45.0\" #mandatory\ndisplayName = \"Xaero's World Map\" #mandatory\n#updateJSONURL=\"https://change.me.example.invalid/updates.json\" #optional (see https://docs.neoforged.net/docs/misc/updatechecker/)\n#displayURL=\"https://change.me.to.your.mods.homepage.example.invalid/\" #optional (displayed in the mod UI)\nlogoFile=\"xaeroworldmap.png\" #optional\ncredits=\"\" #optional\nauthors = \"xaero96\" #optional\ndescription = '''A self-writing fullscreen map which also works as an add-on to Xaero's Minimap.''' #mandatory (Supports multiline text)\n[[mixins]]\nconfig = \"xaeroworldmap.mixins.json\"\n[[mixins]]\nconfig = \"xaeroworldmap.neoforge.mixins.json\"\n[[dependencies.xaeroworldmap]] #optional\nmodId = \"neoforge\" #mandatory\ntype=\"required\" #mandatory (Can be one of \"required\", \"optional\", \"incompatible\" or \"discouraged\")\nversionRange = \"[26.2.0.1-beta,)\" #mandatory\nordering = \"NONE\" # The order that this dependency should load in relation to your mod, required to be either 'BEFORE' or 'AFTER' if the dependency is not mandatory\nside = \"BOTH\" # Side this dependency is applied on - 'BOTH', 'CLIENT' or 'SERVER'\n[[dependencies.xaeroworldmap]]\nmodId = \"minecraft\"\ntype=\"required\" #mandatory (Can be one of \"required\", \"optional\", \"incompatible\" or \"discouraged\")\nversionRange = \"[26.2, 26.3.0)\"\nordering = \"NONE\"\nside = \"BOTH\"\n[[dependencies.xaeroworldmap]]\nmodId = \"openpartiesandclaims\"\ntype=\"optional\"\nversionRange = \"[0.30.3,)\"\nordering = \"NONE\"\nside = \"BOTH\"\n[[dependencies.xaeroworldmap]]\nmodId = \"xaerominimap\"\ntype=\"optional\"\nversionRange = \"[26.4.0,)\"\nordering = \"NONE\"\nside = \"BOTH\"\n[[dependencies.xaeroworldmap]]\nmodId = \"xaerobetterpvp\"\ntype=\"optional\"\nversionRange = \"[26.4.0,)\"\nordering = \"NONE\"\nside = \"BOTH\"\n[[dependencies.xaeroworldmap]]\nmodId = \"xaerolib\"\ntype=\"required\"\nversionRange = \"[1.0,)\"\nordering = \"NONE\"\nside = \"BOTH\"\n\n# Features are specific properties of the game environment, that you may want to declare you require. This example declares\n# that your mod requires GL version 3.2 or higher. Other features will be added. They are side aware so declaring this won't\n# stop your mod loading on the server for example.\n#[features.xaeroworldmap]\n#openGLVersion=\"[3.2,)\""
+      }
+    ],
+    "latest_log": "/mnt/c/Users/Ian/AppData/Roaming/PrismLauncher/instances/lss-test-neo-26.2/minecraft/logs/latest.log",
+    "role": "unverified until corresponding live launch evidence recorded"
+  },
+  {
+    "instance": "/mnt/c/Users/Ian/AppData/Roaming/PrismLauncher/instances/LSS dev \u2014 1.21.1 NeoForge - Copy For Far Testing",
+    "components": [
+      {
+        "cachedName": "LWJGL 3",
+        "cachedVersion": "3.3.3",
+        "cachedVolatile": true,
+        "dependencyOnly": true,
+        "uid": "org.lwjgl3",
+        "version": "3.3.3"
+      },
+      {
+        "cachedName": "Minecraft",
+        "cachedRequires": [
+          {
+            "suggests": "3.3.3",
+            "uid": "org.lwjgl3"
+          }
+        ],
+        "cachedVersion": "1.21.1",
+        "important": true,
+        "uid": "net.minecraft",
+        "version": "1.21.1"
+      },
+      {
+        "cachedName": "NeoForge",
+        "cachedRequires": [
+          {
+            "equals": "1.21.1",
+            "uid": "net.minecraft"
+          }
+        ],
+        "cachedVersion": "21.1.248",
+        "uid": "net.neoforged",
+        "version": "21.1.248"
+      }
+    ],
+    "artifacts": [
+      {
+        "file": "lod-server-support-neoforge-0.14.0+1.21.1.jar",
+        "enabled": true,
+        "sha256": "d819ac8d6f91c630f5a3b37a6d48265be91ab677002dc92ea66cb423c85aba28",
+        "META-INF/neoforge.mods.toml": "modLoader=\"javafml\"\nloaderVersion=\"[4,)\"\nlicense=\"MIT\"\nissueTrackerURL=\"https://github.com/VoX/lod-server-support/issues\"\n\n[[mods]]\nmodId=\"lss\"\nversion=\"0.14.0\"\ndisplayName=\"LOD Server Support\"\nauthors=\"VoX\"\nlogoFile=\"assets/lss/icon.png\"\ndescription='''Voxy multiplayer support (unofficial). Enables players with Voxy to see fully rendered terrain out to hundreds of chunks on multiplayer servers without needing to explore the world first. Server-side works with any LSS/VSS client; the client half needs a community Voxy build for NeoForge.'''\n\n[[mixins]]\nconfig=\"lss.neoforge.mixins.json\"\n\n[[mixins]]\nconfig=\"lss-sodium-legacy.mixins.json\"\n\n[[dependencies.lss]]\n    modId=\"neoforge\"\n    type=\"required\"\n    # LINE DATA: per-line NeoForge loader floor (round-3 review NIT \u2014 the MC dep\n    # above is templated from gradle.properties; this row is hand-edited per line)\n    versionRange=\"[21.1,)\"\n    ordering=\"NONE\"\n    side=\"BOTH\"\n\n[[dependencies.lss]]\n    modId=\"minecraft\"\n    type=\"required\"\n    versionRange=\"[1.21.1]\"\n    ordering=\"NONE\"\n    side=\"BOTH\"\n\n# Sodium 0.8+ options page (sodium-options-page-generations-plan.md, NeoForge\n# amendment): sodium-neoforge's ConfigLoaderForge reads this property from every\n# mod and instantiates the named ConfigEntryPoint \u2014 the same key Fabric declares\n# as an entrypoint. Harmless when Sodium is absent or pre-0.8.\n[modproperties.lss]\n\"sodium:config_api_user\"=\"dev.vox.lss.config.LSSConfigMenu\"\n"
+      },
+      {
+        "file": "sodium-neoforge-0.6.13+mc1.21.1.jar.disabled",
+        "enabled": false,
+        "sha256": "7acd7af2ef75ec883a6872c17494ead65e38025151eb08a1d60e36d34377f403",
+        "META-INF/neoforge.mods.toml": "modLoader = \"javafml\"\nloaderVersion = \"[4,)\"\nlicense = \"Polyform-Shield-1.0.0\"\n\n[[mods]]\nmodId = \"sodium\"\n\nversion = \"0.6.13+mc1.21.1\"\ndisplayName = \"Sodium\"\n\nlogoFile = \"sodium-icon.png\" #optional\n\nauthors = \"JellySquid (jellysquid3), IMS212\"\n\ncredits = \"bytzo, PepperCode1, FlashyReese, altrisi, Grayray75, Madis0, Johni0702, comp500, coderbot16, Moulberry, MCRcortex, Altirix, embeddedt, pajicadvance, Kroppeb, douira, burgerindividual, TwistedZero, Leo40Git, haykam821, muzikbike\"\n\ndescription = '''\nSodium is a powerful rendering engine for Minecraft which improves frame rates and reduces lag spikes.\n'''\n\nprovides = [\"indium\"]\n\n[modproperties.sodium]\n\"fabric-renderer-api-v1:contains_renderer\" = true\n\n[[dependencies.sodium]]\nmodId = \"minecraft\"\ntype = \"required\"\nversionRange = \"1.21.1\"\nordering = \"NONE\"\nside = \"CLIENT\"\n\n[[dependencies.sodium]]\nmodId = \"neoforge\"\ntype = \"required\"\nversionRange = \"[21.1.82,)\"\nordering = \"NONE\"\nside = \"CLIENT\"\n\n[[dependencies.sodium]]\nmodId = \"embeddium\"\ntype = \"incompatible\"\nreason = \"Sodium and Embeddium cannot be used together. Please remove Embeddium.\"\nversionRange = \"[0.0.1,)\"\nordering = \"NONE\"\nside = \"CLIENT\"\n\n[[mixins]]\nconfig = \"sodium-common.mixins.json\"\n\n[[mixins]]\nconfig = \"sodium-neoforge.mixins.json\""
+      },
+      {
+        "file": "sodium-neoforge-0.8.12-beta.1+mc1.21.1.jar",
+        "enabled": true,
+        "sha256": "dc2838d5538db39414171fe86586ab89d1a30d2fd97f59229cc44cf3777f569d",
+        "META-INF/neoforge.mods.toml": "modLoader = \"javafml\"\nloaderVersion = \"[4,)\"\nlicense = \"Polyform-Shield-1.0.0\"\n\n[[mods]]\nmodId = \"sodium\"\n\nversion = \"0.8.12-beta.1+mc1.21.1\"\ndisplayName = \"Sodium\"\n\nlogoFile = \"sodium-icon.png\" #optional\n\nauthors = \"JellySquid (jellysquid3), IMS212\"\n\ncredits = \"bytzo, PepperCode1, FlashyReese, altrisi, Grayray75, Madis0, Johni0702, comp500, coderbot16, Moulberry, MCRcortex, Altirix, embeddedt, pajicadvance, Kroppeb, douira, burgerindividual, TwistedZero, Leo40Git, haykam821, muzikbike\"\n\ndescription = '''\nSodium is a powerful rendering engine for Minecraft which improves frame rates and reduces lag spikes.\n'''\n\nprovides = [\"indium\"]\n\n[modproperties.sodium]\n\"fabric-renderer-api-v1:contains_renderer\" = true\n\n[[dependencies.sodium]]\nmodId = \"minecraft\"\ntype = \"required\"\nversionRange = \"1.21.1\"\nordering = \"NONE\"\nside = \"CLIENT\"\n\n[[dependencies.sodium]]\nmodId = \"neoforge\"\ntype = \"required\"\nversionRange = \"[21.1.82,)\"\nordering = \"NONE\"\nside = \"CLIENT\"\n\n[[dependencies.sodium]]\nmodId = \"embeddium\"\ntype = \"incompatible\"\nreason = \"Sodium and Embeddium cannot be used together. Please remove Embeddium.\"\nversionRange = \"[0.0.1,)\"\nordering = \"NONE\"\nside = \"CLIENT\"\n\n[[mixins]]\nconfig = \"sodium-common.mixins.json\"\n\n[[mixins]]\nconfig = \"sodium-neoforge.mixins.json\""
+      },
+      {
+        "file": "voxy-0.2.15-beta-sodium0.8.12.jar",
+        "enabled": true,
+        "sha256": "024d58076649dbd348ad75c3778f90916ec35b7b9a1196b0662823a72f071a49",
+        "fabric": {
+          "id": "voxy",
+          "version": "0.2.15-beta",
+          "depends": {
+            "minecraft": [
+              "1.21.1"
+            ],
+            "fabricloader": ">=0.14.22",
+            "fabric-api": ">=0.91.1",
+            "sodium": ">=0.8.12-alpha.2+mc1.21.1"
+          }
+        }
+      },
+      {
+        "file": "voxy-0.2.9-alpha-sodium08.jar.disabled",
+        "enabled": false,
+        "sha256": "98637a5c300d3fdb53cafa8fd8aab8dfb6a12a02e1ee9909097e4fe582a40891",
+        "META-INF/neoforge.mods.toml": "modLoader=\"javafml\"\nloaderVersion=\"[4,)\"\nlicense=\"All-Rights-Reserved\"\nissueTrackerURL=\"https://github.com/MCRcortex/voxy/issues\"\n\n[[mods]]\nmodId=\"voxy\"\nversion=\"0.2.9-alpha\"\ndisplayName=\"Voxy\"\ndescription=\"Far distance rendering mod utilising LoDs\"\nauthors=\"Cortex\"\nlogoFile=\"assets/voxy/icon.png\"\n\n[[dependencies.voxy]]\nmodId=\"neoforge\"\ntype=\"required\"\nversionRange=\"[21.1,)\"\nordering=\"NONE\"\nside=\"BOTH\"\n\n[[dependencies.voxy]]\nmodId=\"minecraft\"\ntype=\"required\"\nversionRange=\"[1.21.1]\"\nordering=\"NONE\"\nside=\"BOTH\"\n\n[[dependencies.voxy]]\nmodId=\"sodium\"\ntype=\"required\"\nversionRange=\"[0.6.13,)\"\nordering=\"AFTER\"\nside=\"CLIENT\"\n\n[[dependencies.voxy]]\nmodId=\"fabric_api\"\ntype=\"required\"\nversionRange=\"[0.102.0,)\"\nordering=\"BEFORE\"\nside=\"BOTH\"\n\n[[mixins]]\nconfig=\"client.voxy.mixins.json\"\n\n[[mixins]]\nconfig=\"common.voxy.mixins.json\"\n"
+      },
+      {
+        "file": "voxy-0.2.9-alpha.jar.disabled",
+        "enabled": false,
+        "sha256": "16144e178f592cb9ff3f062b16c215f9df6b036c66d0626fa2d8797d75317829",
+        "META-INF/neoforge.mods.toml": "modLoader=\"javafml\"\nloaderVersion=\"[4,)\"\nlicense=\"All-Rights-Reserved\"\nissueTrackerURL=\"https://github.com/MCRcortex/voxy/issues\"\n\n[[mods]]\nmodId=\"voxy\"\nversion=\"0.2.9-alpha\"\ndisplayName=\"Voxy\"\ndescription=\"Far distance rendering mod utilising LoDs\"\nauthors=\"Cortex\"\nlogoFile=\"assets/voxy/icon.png\"\n\n[[dependencies.voxy]]\nmodId=\"neoforge\"\ntype=\"required\"\nversionRange=\"[21.1,)\"\nordering=\"NONE\"\nside=\"BOTH\"\n\n[[dependencies.voxy]]\nmodId=\"minecraft\"\ntype=\"required\"\nversionRange=\"[1.21.1]\"\nordering=\"NONE\"\nside=\"BOTH\"\n\n[[dependencies.voxy]]\nmodId=\"sodium\"\ntype=\"required\"\nversionRange=\"[0.6.13,)\"\nordering=\"AFTER\"\nside=\"CLIENT\"\n\n[[dependencies.voxy]]\nmodId=\"fabric_api\"\ntype=\"required\"\nversionRange=\"[0.102.0,)\"\nordering=\"BEFORE\"\nside=\"BOTH\"\n\n[[mixins]]\nconfig=\"client.voxy.mixins.json\"\n\n[[mixins]]\nconfig=\"common.voxy.mixins.json\"\n"
+      },
+      {
+        "file": "xaeroworldmap-neoforge-1.21.1-1.45.0.jar",
+        "enabled": true,
+        "sha256": "d60899112e84616ba52a993c1722fd891872acc4779bfac34d9b170001451c6f",
+        "META-INF/neoforge.mods.toml": "modLoader = \"javafml\" #mandatory\nloaderVersion = \"[4,)\" #mandatory\nlicense = \"All Rights Reserved\" # Review your options at https://choosealicense.com/.\n#issueTrackerURL=\"https://change.me.to.your.issue.tracker.example.invalid/\" #optional\n[[mods]] #mandatory\nmodId = \"xaeroworldmap\" #mandatory\nversion = \"1.45.0\" #mandatory\ndisplayName = \"Xaero's World Map\" #mandatory\n#updateJSONURL=\"https://change.me.example.invalid/updates.json\" #optional (see https://docs.neoforged.net/docs/misc/updatechecker/)\n#displayURL=\"https://change.me.to.your.mods.homepage.example.invalid/\" #optional (displayed in the mod UI)\nlogoFile=\"xaeroworldmap.png\" #optional\ncredits=\"\" #optional\nauthors = \"xaero96\" #optional\ndescription = '''A self-writing fullscreen map which also works as an add-on to Xaero's Minimap.''' #mandatory (Supports multiline text)\n[[mixins]]\nconfig = \"xaeroworldmap.mixins.json\"\n[[mixins]]\nconfig = \"xaeroworldmap.neoforge.mixins.json\"\n[[dependencies.xaeroworldmap]] #optional\nmodId = \"neoforge\" #mandatory\ntype=\"required\" #mandatory (Can be one of \"required\", \"optional\", \"incompatible\" or \"discouraged\")\nversionRange = \"[21.0.110-beta, 21.2.0)\" #mandatory\nordering = \"NONE\" # The order that this dependency should load in relation to your mod, required to be either 'BEFORE' or 'AFTER' if the dependency is not mandatory\nside = \"BOTH\" # Side this dependency is applied on - 'BOTH', 'CLIENT' or 'SERVER'\n[[dependencies.xaeroworldmap]]\nmodId = \"minecraft\"\ntype=\"required\" #mandatory (Can be one of \"required\", \"optional\", \"incompatible\" or \"discouraged\")\nversionRange = \"[1.21, 1.21.2)\"\nordering = \"NONE\"\nside = \"BOTH\"\n[[dependencies.xaeroworldmap]]\nmodId = \"openpartiesandclaims\"\ntype=\"optional\"\nversionRange = \"[0.30.3,)\"\nordering = \"NONE\"\nside = \"BOTH\"\n[[dependencies.xaeroworldmap]]\nmodId = \"xaerominimap\"\ntype=\"optional\"\nversionRange = \"[26.4.0,)\"\nordering = \"NONE\"\nside = \"BOTH\"\n[[dependencies.xaeroworldmap]]\nmodId = \"xaerobetterpvp\"\ntype=\"optional\"\nversionRange = \"[26.4.0,)\"\nordering = \"NONE\"\nside = \"BOTH\"\n[[dependencies.xaeroworldmap]]\nmodId = \"xaerolib\"\ntype=\"required\"\nversionRange = \"[1.0,)\"\nordering = \"NONE\"\nside = \"BOTH\"\n\n# Features are specific properties of the game environment, that you may want to declare you require. This example declares\n# that your mod requires GL version 3.2 or higher. Other features will be added. They are side aware so declaring this won't\n# stop your mod loading on the server for example.\n#[features.xaeroworldmap]\n#openGLVersion=\"[3.2,)\""
+      },
+      {
+        "file": "ConnectorExtras-1.12.1+1.21.1.jar",
+        "enabled": true,
+        "sha256": "ee89c3425b9a4bff766aaff02ccf8110c06f5da6ef5d71974556885cf25d4880",
+        "META-INF/neoforge.mods.toml": "modLoader=\"javafml\"\nloaderVersion=\"*\"\nlicense=\"MIT\"\nissueTrackerURL=\"https://github.com/Sinytra/ConnectorExtras/issues\"\n\n[[mods]]\nmodId=\"connectorextras\"\nversion=\"${file.jarVersion}\"\ndisplayName=\"Connector Extras\"\nauthors=\"Su5eD\"\ndisplayURL=\"https://github.com/Sinytra/ConnectorExtras\"\ndescription='''\nIntegrating Connector with third-party APIs\n'''\ndisplayTest = 'IGNORE_ALL_VERSION'\n[[dependencies.connectorextras]]\n    modId=\"neoforge\"\n    type=\"required\"\n    versionRange=\"*\"\n    ordering=\"NONE\"\n    side=\"BOTH\"\n[[dependencies.connectorextras]]\n    modId=\"minecraft\"\n    type=\"required\"\n    versionRange=\"[1.21,1.22)\"\n    ordering=\"NONE\"\n    side=\"BOTH\"\n[[dependencies.connectorextras_kubejs_bridge]]\n    modId=\"connector\"\n    type=\"required\"\n    versionRange=\"*\"\n    ordering=\"NONE\"\n    side=\"BOTH\"\n"
+      },
+      {
+        "file": "connector-2.0.0-beta.14+1.21.1-full.jar",
+        "enabled": true,
+        "sha256": "a79817f1076e2e6499b0ab09c4e8c032d04b071341b66d036c3d96112804e51b"
+      },
+      {
+        "file": "forgified-fabric-api-0.116.15+2.3.3+1.21.1.jar",
+        "enabled": true,
+        "sha256": "6d5d81d3203bde3c72c4702193ae1667b0a3a2272b002ce0a1dda5561af12b2d",
+        "META-INF/neoforge.mods.toml": "modLoader = \"lowcodefml\"\nloaderVersion = \"[1,)\"\nlicense = \"Apache-2.0\"\nissueTrackerURL = \"https://github.com/Sinytra/ForgifiedFabricAPI/issues\"\n\n[[mods]]\nmodId = \"fabric_api\"\nversion = \"${file.jarVersion}\"\ndisplayName = \"Forgified Fabric API\"\nlogoFile = \"assets/fabric/icon.png\"\nauthors = \"Sinytra, FabricMC\"\ndescription = \"Core API module providing key hooks and intercompatibility features.\"\nprovides = [\"fabric\", \"fabric-api\"]\ndisplayURL = \"https://github.com/Sinytra/ForgifiedFabricAPI\"\n\n[[dependencies.fabric_api]]\nmodId = \"neoforge\"\ntype = \"required\"\nversionRange = \"[21.1.169,)\"\nordering = \"NONE\"\nside = \"BOTH\"\n\n[[dependencies.fabric_api]]\nmodId = \"minecraft\"\ntype = \"required\"\nversionRange = \"[1.21.1,1.22)\"\nordering = \"NONE\"\nside = \"BOTH\"\n\n[[mods]]\nmodId = \"forgified_fabric_api\"\nversion = \"${file.jarVersion}\"\ndisplayName = \"Forgified Fabric API (dummy)\"\nlogoFile = \"assets/fabric/icon.png\"\nauthors = \"Sinytra, FabricMC\"\ndescription = \"Dependency target for other mods\"\ndisplayURL = \"https://github.com/Sinytra/ForgifiedFabricAPI\"\n\n[[dependencies.forgified_fabric_api]]\nmodId = \"neoforge\"\ntype = \"required\"\nversionRange = \"[21.1.169,)\"\nordering = \"NONE\"\nside = \"BOTH\"\n\n[[dependencies.forgified_fabric_api]]\nmodId = \"minecraft\"\ntype = \"required\"\nversionRange = \"[1.21.1,1.22)\"\nordering = \"NONE\"\nside = \"BOTH\"\n"
+      }
+    ],
+    "latest_log": "/mnt/c/Users/Ian/AppData/Roaming/PrismLauncher/instances/LSS dev \u2014 1.21.1 NeoForge - Copy For Far Testing/minecraft/logs/latest.log",
+    "role": "unverified until corresponding live launch evidence recorded"
+  }
+]

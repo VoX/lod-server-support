@@ -98,6 +98,13 @@ module on EVERY line so the port stays maintained. **Wire compatibility is NEVER
 tiered** — every jar speaks the same protocol at full fidelity, and every
 never-tiered claim names a test that reds when violated (plan §1.2).
 
+**Current operational reference (2026-09-08):** use the
+[current loader/artifact matrix](docs/planning/per-version-surfaces.md#current-loader-and-artifact-surfaces-2026-09-08)
+and [live-profile inventory](docs/testing/astra-live-profiles.md) for shipping flags,
+consumer pairings and validation limits. The v0.11.0/port decisions above remain
+historical records. NeoForge currently nests both sqlite-jdbc and zstd-jni as stock
+jarJar libraries on every maintained line.
+
 ## Project Structure
 
 Multi-project Gradle build:
