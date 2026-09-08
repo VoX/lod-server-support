@@ -54,6 +54,8 @@ configurations {
     }
 }
 
+apply from: rootProject.file('gradle/c2me-dev-runtime.gradle')
+
 dependencies {
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
     // 1.21.11 line: loom-remap needs explicit mappings + mod-aware dependency scopes
@@ -117,7 +119,8 @@ dependencies {
         if (!c2mePins.containsKey(c2meProfile)) {
             throw new GradleException("Unknown benchmark.c2meProfile: ${c2meProfile}")
         }
-        localRuntime "maven.modrinth:c2me-fabric:${c2mePins[c2meProfile]}"
+        def c2meArtifact = "maven.modrinth:c2me-fabric:${c2mePins[c2meProfile]}"
+        project.addC2meDevRuntime(c2meArtifact, 21)
     }
 }
 
