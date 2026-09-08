@@ -74,7 +74,7 @@ class IncomingRequestRouterTest {
         }
 
         @Override
-        protected boolean submitDiskRead(UUID playerUuid, String dimension, int cx, int cz, long order, long clientTimestamp) {
+        protected boolean submitDiskRead(UUID playerUuid, RequestRegistration registration, String dimension, int cx, int cz, long order, long clientTimestamp) {
             this.submits.add(new CapturedSubmit(playerUuid, dimension, cx, cz));
             return !this.failSubmits;
         }
@@ -671,7 +671,7 @@ class IncomingRequestRouterTest {
         var players = new ConcurrentHashMap<UUID, TestState>();
         var p1 = addPlayer(players, 4, 4);
         var reader = new StubDiskReader();
-        reader.registerPlayer(p1.getPlayerUUID());
+        reader.registerPlayer(p1.getPlayerUUID(), p1.registration());
         var proc = new TestProcessor(players, reader, false, null);
         try {
             proc.start();
@@ -730,7 +730,7 @@ class IncomingRequestRouterTest {
         var clock = new java.util.concurrent.atomic.AtomicLong(1_000_000_000L);
         p1.setDepartureGraceForTest(500_000_000L, clock::get);
         var reader = new StubDiskReader();
-        reader.registerPlayer(p1.getPlayerUUID());
+        reader.registerPlayer(p1.getPlayerUUID(), p1.registration());
         var proc = new TestProcessor(players, reader, false, null);
         try {
             proc.start();
@@ -797,7 +797,7 @@ class IncomingRequestRouterTest {
         var players = new ConcurrentHashMap<UUID, TestState>();
         var p1 = addPlayer(players, 4, 4);
         var reader = new StubDiskReader();
-        reader.registerPlayer(p1.getPlayerUUID());
+        reader.registerPlayer(p1.getPlayerUUID(), p1.registration());
         var proc = new TestProcessor(players, reader, false, null);
         try {
             proc.start();
@@ -997,7 +997,7 @@ class IncomingRequestRouterTest {
 
                 // Disconnect with everything still in flight
                 players.remove(uuid);
-                proc.notifyPlayerRemoved(uuid);
+                proc.notifyPlayerRemoved(uuid, state.registration());
             }
             // Exact per-cycle submit counts already proved no erosion: a dedup group leaked
             // from any dead session would have swallowed a later cycle's request (attach,
@@ -1017,7 +1017,7 @@ class IncomingRequestRouterTest {
         var players = new ConcurrentHashMap<UUID, TestState>();
         var p1 = addPlayer(players, 4, 1);
         var reader = new StubDiskReader();
-        reader.registerPlayer(p1.getPlayerUUID());
+        reader.registerPlayer(p1.getPlayerUUID(), p1.registration());
         var proc = new TestProcessor(players, reader, true, tempDir);
         try {
             proc.start();
@@ -1262,7 +1262,7 @@ class IncomingRequestRouterTest {
         var players = new ConcurrentHashMap<UUID, TestState>();
         var p1 = addPlayer(players, 1, 1);
         var reader = new StubDiskReader();
-        reader.registerPlayer(p1.getPlayerUUID());
+        reader.registerPlayer(p1.getPlayerUUID(), p1.registration());
         var proc = new TestProcessor(players, reader, false, null);
         try {
             proc.start();
@@ -1313,7 +1313,7 @@ class IncomingRequestRouterTest {
         var players = new ConcurrentHashMap<UUID, TestState>();
         var p1 = addPlayer(players, 4, 0); // gen cap 0: the miss drops, leaving no pending
         var reader = new StubDiskReader();
-        reader.registerPlayer(p1.getPlayerUUID());
+        reader.registerPlayer(p1.getPlayerUUID(), p1.registration());
         var proc = new TestProcessor(players, reader, true, null, 30);
         try {
             proc.start();
@@ -1351,7 +1351,7 @@ class IncomingRequestRouterTest {
         var players = new ConcurrentHashMap<UUID, TestState>();
         var p1 = addPlayer(players, 4, 4);
         var reader = new StubDiskReader();
-        reader.registerPlayer(p1.getPlayerUUID());
+        reader.registerPlayer(p1.getPlayerUUID(), p1.registration());
         var proc = new TestProcessor(players, reader, false, null, 30);
         try {
             proc.start();

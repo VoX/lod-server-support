@@ -1,5 +1,7 @@
 package dev.vox.lss.paper;
 
+import dev.vox.lss.common.processing.RequestRegistration;
+
 import dev.vox.lss.common.DiagnosticsFormatter;
 import dev.vox.lss.common.LSSConstants;
 import dev.vox.lss.common.LSSLogger;
@@ -1094,7 +1096,7 @@ public class PaperRequestProcessingService {
             s.setChannelPressureProbe(PaperChannelPressure.forPlayer(player));
             return s;
         });
-        this.diskReader.registerPlayer(player.getUUID());
+        this.diskReader.registerPlayer(player.getUUID(), state.registration());
         state.setCapabilities(capabilities);
         // The five-term AND (plan §2 + v18-compat §2.5) — twin of the Fabric derivation.
         // Both dialect marks run in the drain's beforeRegister (the dialectFlip, pump
@@ -1112,7 +1114,8 @@ public class PaperRequestProcessingService {
     }
 
     public void removePlayer(UUID uuid) {
-        this.players.remove(uuid);
+        var removed = this.players.remove(uuid);
+        if (removed != null) removed.registration().retire();
         this.regionProbeResults.remove(uuid);
         this.heldForProbe.remove(uuid);
         // STAMP, don't clear: a removal (dimension change on Folia, quit) makes the very
@@ -1127,18 +1130,20 @@ public class PaperRequestProcessingService {
             long cutoff = System.nanoTime() / 1_000_000L - REATTACH_PROMPT_INTERVAL_MS;
             this.reattachPromptAt.values().removeIf(stamp -> stamp < cutoff);
         }
-        this.offThreadProcessor.notifyPlayerRemoved(uuid);
-        cleanupPlayerServices(uuid);
+        if (removed != null) {
+            this.offThreadProcessor.notifyPlayerRemoved(uuid, removed.registration());
+            cleanupPlayerServices(uuid, removed.registration());
+        }
         // Resets the v16 want-set + arms the ingress grace. Identity survives (dropped only
         // by the PlayerQuit hook), mirroring how capabilities ride the dim-change
         // remove+register cycle. No-op for v18 players.
         this.v16Compat.onServiceRemove(uuid);
     }
 
-    private void cleanupPlayerServices(UUID uuid) {
-        this.diskReader.removePlayerResults(uuid);
+    private void cleanupPlayerServices(UUID uuid, RequestRegistration registration) {
+        this.diskReader.removePlayerResults(uuid, registration);
         if (this.generationService != null)
-            this.generationService.removePlayer(uuid);
+            this.generationService.removePlayer(uuid, registration);
     }
 
     /**
@@ -1514,7 +1519,7 @@ public class PaperRequestProcessingService {
         Map<UUID, Long2ObjectMap<LoadedColumnData>> loadedChunkProbes = new HashMap<>();
 
         // Per-player set of generation-outcome positions to skip in probeLoadedChunks
-        Map<UUID, LongOpenHashSet> genReadyPositions = TickSnapshot.groupPositionsByPlayer(generationReady);
+        Map<RequestRegistration, LongOpenHashSet> genReadyPositions = TickSnapshot.groupPositionsByRegistration(generationReady);
 
         int activeCount = 0;
         int globalProbeBudget = MAX_PROBES_PER_TICK_GLOBAL;
@@ -1582,7 +1587,7 @@ public class PaperRequestProcessingService {
             playerDimensions.put(player.getUUID(), dimension);
 
             var skipPositions = genReadyPositions != null
-                    ? genReadyPositions.get(player.getUUID()) : null;
+                    ? genReadyPositions.get(state.registration()) : null;
             Long2ObjectMap<LoadedColumnData> probes;
             if (this.regionizedProbing) {
                 // Consume last tick's region-published batch, then advance the hold-release
@@ -1925,7 +1930,8 @@ public class PaperRequestProcessingService {
         OffThreadProcessor.GenerationTicketRequest req;
         while ((req = this.offThreadProcessor.pollGenerationTicketRequest()) != null) {
             var state = this.players.get(req.playerUuid());
-            if (state == null || !state.hasCompletedHandshake())
+            if (state == null || state.registration() != req.registration()
+                    || req.registration().isRetired() || !state.hasCompletedHandshake())
                 continue;
 
             var player = state.getPlayer();
@@ -1938,7 +1944,7 @@ public class PaperRequestProcessingService {
             // Ticket queued before a dimension change targets the old dimension's coordinates.
             // Dropping it leaks nothing: in the common shape the admitting state was discarded
             // by removePlayer+registerPlayer (its slot dies with it), AND that same removePlayer
-            // enqueues the removal event that sweeps the processing thread's UUID-keyed
+            // enqueues the removal event that sweeps the processing thread's registration-keyed
             // generation in-flight tracking (removeGenerationTracking) — without that sweep the
             // dropped ticket's tracking would leak (do not add a drop path that skips it).
             // Folia timing corner (review 2026-08-27 R17): a region-thread dimension flip
@@ -1948,14 +1954,14 @@ public class PaperRequestProcessingService {
             // cycle sweeps the whole state. Bounded to one tick, no leak.
             if (!dimension.equals(req.dimension())) continue;
             boolean accepted = !player.isRemoved() && this.generationService.submitGeneration(
-                    req.playerUuid(), level, req.cx(), req.cz(),
+                    req.playerUuid(), req.registration(), level, req.cx(), req.cz(),
                     req.submissionOrder());
             if (!accepted) {
                 // Capacity rejection or removed player — TRANSIENT: feed a transient outcome
                 // so the processing thread frees the pending slot silently (superseded); the
                 // client's re-declaration retries. Never NOT_GENERATED (session-permanent).
                 this.offThreadProcessor.feedGenerationFailure(
-                        req.playerUuid(), req.cx(), req.cz(), dimension, req.submissionOrder(), true);
+                        req.playerUuid(), req.registration(), req.cx(), req.cz(), dimension, req.submissionOrder(), true);
             }
         }
     }

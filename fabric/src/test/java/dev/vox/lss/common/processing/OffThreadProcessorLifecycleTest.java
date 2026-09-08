@@ -58,7 +58,7 @@ class OffThreadProcessorLifecycleTest {
         }
 
         @Override
-        protected boolean submitDiskRead(UUID playerUuid, String dimension, int cx, int cz, long order, long clientTimestamp) {
+        protected boolean submitDiskRead(UUID playerUuid, RequestRegistration registration, String dimension, int cx, int cz, long order, long clientTimestamp) {
             diskSubmits.add(PositionUtil.packPosition(cx, cz));
             return true;
         }
@@ -136,7 +136,7 @@ class OffThreadProcessorLifecycleTest {
         var players = new ConcurrentHashMap<UUID, TestState>();
         players.put(u, state);
         var reader = new StubDiskReader();
-        reader.registerPlayer(u);
+        reader.registerPlayer(u, state.registration());
         var proc = new TestProcessor(players, reader, null);
         proc.poisonPacked = PositionUtil.packPosition(9, 9);
         try {
@@ -172,7 +172,7 @@ class OffThreadProcessorLifecycleTest {
         var players1 = new ConcurrentHashMap<UUID, TestState>();
         players1.put(u, s1);
         var reader1 = new StubDiskReader();
-        reader1.registerPlayer(u);
+        reader1.registerPlayer(u, s1.registration());
         var proc1 = new TestProcessor(players1, reader1, dataDir);
         try {
             proc1.start();
@@ -194,7 +194,7 @@ class OffThreadProcessorLifecycleTest {
         var players2 = new ConcurrentHashMap<UUID, TestState>();
         players2.put(u, s2);
         var reader2 = new StubDiskReader();
-        reader2.registerPlayer(u);
+        reader2.registerPlayer(u, s2.registration());
         var proc2 = new TestProcessor(players2, reader2, dataDir);
         try {
             proc2.start();
@@ -224,7 +224,7 @@ class OffThreadProcessorLifecycleTest {
         var players1 = new ConcurrentHashMap<UUID, TestState>();
         players1.put(u, s1);
         var reader1 = new StubDiskReader();
-        reader1.registerPlayer(u);
+        reader1.registerPlayer(u, s1.registration());
         var proc1 = new TestProcessor(players1, reader1, dataDir);
         try {
             proc1.start();
@@ -244,7 +244,7 @@ class OffThreadProcessorLifecycleTest {
         var players2 = new ConcurrentHashMap<UUID, TestState>();
         players2.put(u, s2);
         var reader2 = new StubDiskReader();
-        reader2.registerPlayer(u);
+        reader2.registerPlayer(u, s2.registration());
         var proc2 = new TestProcessor(players2, reader2, dataDir);
         try {
             proc2.start();
@@ -265,7 +265,7 @@ class OffThreadProcessorLifecycleTest {
         var players = new ConcurrentHashMap<UUID, TestState>();
         players.put(u, s);
         var reader = new StubDiskReader();
-        reader.registerPlayer(u);
+        reader.registerPlayer(u, s.registration());
         var proc = new TestProcessor(players, reader, dataDir);
         var cacheFile = dataDir.resolve("lss-timestamps.bin");
         try {

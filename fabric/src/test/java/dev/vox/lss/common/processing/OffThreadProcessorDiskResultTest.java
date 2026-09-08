@@ -98,7 +98,7 @@ class OffThreadProcessorDiskResultTest {
         }
 
         @Override
-        protected boolean submitDiskRead(UUID playerUuid, String dimension, int cx, int cz, long order, long clientTimestamp) {
+        protected boolean submitDiskRead(UUID playerUuid, RequestRegistration registration, String dimension, int cx, int cz, long order, long clientTimestamp) {
             if (throwOnNextSubmit) {
                 throwOnNextSubmit = false;
                 throw new RuntimeException("injected phase-4 routing failure");
@@ -146,7 +146,7 @@ class OffThreadProcessorDiskResultTest {
         Rig(boolean generationAvailable, int syncCap, int genCap, int ttlSeconds) {
             this.state = newPlayer(uuid, syncCap, genCap);
             this.players.put(uuid, state);
-            this.reader.registerPlayer(uuid);
+            this.reader.registerPlayer(uuid, state.registration());
             this.proc = new TestProcessor(players, reader, generationAvailable, ttlSeconds);
             this.proc.start();
         }
@@ -154,7 +154,7 @@ class OffThreadProcessorDiskResultTest {
         TestState addPlayer(UUID u) {
             var s = newPlayer(u, 4, 4);
             players.put(u, s);
-            reader.registerPlayer(u);
+            reader.registerPlayer(u, s.registration());
             return s;
         }
 
@@ -399,7 +399,7 @@ class OffThreadProcessorDiskResultTest {
             var data = new LoadedColumnData(7, 7, bytes,
                     bytes.length + LSSConstants.ESTIMATED_COLUMN_OVERHEAD_BYTES);
             rig.proc.postSnapshot(snapshot(DIM, rig.uuid), new ArrayList<>(List.of(
-                    new TickSnapshot.GenerationReadyData(rig.uuid, 7, 7, DIM, data,
+                    new TickSnapshot.GenerationReadyData(rig.uuid, rig.state.registration(), 7, 7, DIM, data,
                             COLUMN_TS, ticket.submissionOrder()))));
 
             // ...the generated column is still delivered (better than nothing)...
@@ -422,32 +422,39 @@ class OffThreadProcessorDiskResultTest {
     void generationTrackingIsSweptWhenAPlayerLeavesMidGeneration() throws Exception {
         // A generation escalates and an edit taints it, then the player leaves before the
         // outcome drains (disconnect / dimension change), so nothing ever consumes the taint.
-        // The removal event must sweep the per-player generation tracking; otherwise the stale
-        // flag leaks and a later generation for the same player+position is spuriously
-        // suppressed forever (full-review finding: the guard had no removal-cleanup hook,
-        // unlike the disk path's dedup-group sweep in cleanupDedupGroups).
+        // The removal event must reclaim the abandoned registration's tracking, and a
+        // replacement registration must be able to generate the same position normally.
         var rig = new Rig(true);
         long packed = PositionUtil.packPosition(7, 7);
         try {
             escalateToGenTicket(rig, 7, 7);                       // in-flight for this player
             rig.proc.invalidateTimestamps(DIM, new long[]{packed});
             rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of()); // applyEvents taints it
+            waitFor(() -> rig.proc.routeCyclesForTest() >= 3, "taint cycle completed");
             // The player leaves mid-generation: the escalated ticket's outcome never drains.
-            rig.proc.notifyPlayerRemoved(rig.uuid);
-            rig.proc.postSnapshot(snapshot(DIM), List.of());          // applyEvents must sweep it
-
-            // Reconnect discards the old state's held gen slot; re-generate the SAME position
-            // with NO fresh edit. A leaked stale flag would resurface here.
-            rig.state.removePendingByPosition(7, 7);
-            var readmitted = escalateToGenTicket(rig, 7, 7);
+            int before = rig.proc.routeCyclesForTest();
+            rig.proc.notifyPlayerRemoved(rig.uuid, rig.state.registration());
+            rig.proc.postSnapshot(snapshot(DIM), List.of());
+            waitFor(() -> rig.proc.routeCyclesForTest() > before, "removal applied");
+            // The completed cycle is the publication fence; with no further snapshots the
+            // processing thread is idle, so these non-concurrent maps can be inspected safely.
+            for (String name : List.of("generationInFlight", "generationStale")) {
+                var field = OffThreadProcessor.class.getDeclaredField(name);
+                field.setAccessible(true);
+                assertFalse(((Map<?, ?>) field.get(rig.proc)).containsKey(rig.state.registration()),
+                        "removal must reclaim the abandoned registration's " + name);
+            }
+            // Reconnect creates a different state/registration, as both platform services do.
+            var fresh = rig.addPlayer(rig.uuid);
+            var readmitted = escalateToGenTicket(rig, fresh, rig.uuid, 7, 7);
             byte[] bytes = {1, 2};
             var data = new LoadedColumnData(7, 7, bytes,
                     bytes.length + LSSConstants.ESTIMATED_COLUMN_OVERHEAD_BYTES);
             rig.proc.postSnapshot(snapshot(DIM, rig.uuid), new ArrayList<>(List.of(
-                    new TickSnapshot.GenerationReadyData(rig.uuid, 7, 7, DIM, data,
+                    new TickSnapshot.GenerationReadyData(rig.uuid, fresh.registration(), 7, 7, DIM, data,
                             COLUMN_TS, readmitted.submissionOrder()))));
             waitFor(() -> !rig.proc.enqueuedColumns.isEmpty(), "re-generated column delivered");
-            assertTrue(rig.state.hasDiskReadDone(7, 7),
+            assertTrue(fresh.hasDiskReadDone(7, 7),
                     "the swept taint must not resurface — the fresh generation stamps + marks served");
         } finally {
             rig.proc.shutdown();
@@ -472,7 +479,7 @@ class OffThreadProcessorDiskResultTest {
             rig.state.enqueue(new IncomingRequest(6, 6, -1L));
             rig.proc.throwOnNextSubmit = true;
             rig.proc.postSnapshot(snapshot(DIM, rig.uuid), new ArrayList<>(List.of(
-                    new TickSnapshot.GenerationReadyData(rig.uuid, 5, 5, DIM, data,
+                    new TickSnapshot.GenerationReadyData(rig.uuid, rig.state.registration(), 5, 5, DIM, data,
                             COLUMN_TS, ticket.submissionOrder()))));
             waitFor(() -> rig.proc.enqueuedColumns.stream().anyMatch(c -> c.cx() == 5),
                     "generation outcome delivered in the failed cycle's phase 3");
@@ -569,9 +576,9 @@ class OffThreadProcessorDiskResultTest {
             rig.proc.throwOnPayloadBuildForPacked = PositionUtil.packPosition(5, 0);
             byte[] bytes = {1, 2};
             var outcomes = new ArrayList<>(List.of(
-                    outcome(rig.uuid, 5, 5, bytes, t1.submissionOrder()),
-                    outcome(rig.uuid, 5, 0, bytes, t2.submissionOrder()),
-                    outcome(rig.uuid, 0, 5, bytes, t3.submissionOrder())));
+                    outcome(rig.state, 5, 5, bytes, t1.submissionOrder()),
+                    outcome(rig.state, 5, 0, bytes, t2.submissionOrder()),
+                    outcome(rig.state, 0, 5, bytes, t3.submissionOrder())));
             long supersededBefore = rig.proc.getDiagnostics().getTotalSuperseded();
             rig.proc.postSnapshot(snapshot(DIM, rig.uuid), outcomes);
 
@@ -632,11 +639,11 @@ class OffThreadProcessorDiskResultTest {
         }
     }
 
-    private static TickSnapshot.GenerationReadyData outcome(UUID uuid, int cx, int cz,
+    private static TickSnapshot.GenerationReadyData outcome(TestState state, int cx, int cz,
                                                             byte[] bytes, long order) {
         var data = new LoadedColumnData(cx, cz, bytes,
                 bytes.length + LSSConstants.ESTIMATED_COLUMN_OVERHEAD_BYTES);
-        return new TickSnapshot.GenerationReadyData(uuid, cx, cz, DIM, data, COLUMN_TS, order);
+        return new TickSnapshot.GenerationReadyData(state.getPlayerUUID(), state.registration(), cx, cz, DIM, data, COLUMN_TS, order);
     }
 
     @Test
@@ -682,7 +689,7 @@ class OffThreadProcessorDiskResultTest {
             long supersededBefore = rig.proc.getDiagnostics().getTotalSuperseded();
             byte[] bytes = {1, 2};
             rig.proc.postSnapshot(snapshot(DIM, rig.uuid), new ArrayList<>(List.of(
-                    new TickSnapshot.GenerationReadyData(rig.uuid, 5, 5, DIM,
+                    new TickSnapshot.GenerationReadyData(rig.uuid, rig.state.registration(), 5, 5, DIM,
                             new LoadedColumnData(5, 5, bytes,
                                     bytes.length + LSSConstants.ESTIMATED_COLUMN_OVERHEAD_BYTES),
                             COLUMN_TS, ticket.submissionOrder()))));
@@ -804,9 +811,9 @@ class OffThreadProcessorDiskResultTest {
             var dataB = new LoadedColumnData(5, 5, new byte[]{1, 2},
                     2 + LSSConstants.ESTIMATED_COLUMN_OVERHEAD_BYTES);
             rig.proc.postSnapshot(snapshot(DIM, rig.uuid, bUuid), new ArrayList<>(List.of(
-                    new TickSnapshot.GenerationReadyData(rig.uuid, 5, 5, DIM, dataA, COLUMN_TS,
+                    new TickSnapshot.GenerationReadyData(rig.uuid, rig.state.registration(), 5, 5, DIM, dataA, COLUMN_TS,
                             ticketA.submissionOrder()),
-                    new TickSnapshot.GenerationReadyData(bUuid, 5, 5, DIM, dataB, COLUMN_TS,
+                    new TickSnapshot.GenerationReadyData(bUuid, rig.players.get(bUuid).registration(), 5, 5, DIM, dataB, COLUMN_TS,
                             ticketB.submissionOrder()))));
             waitFor(() -> rig.proc.enqueuedColumns.size() >= 2, "both generated columns delivered");
             assertFalse(rig.state.hasDiskReadDone(5, 5),
@@ -920,7 +927,7 @@ class OffThreadProcessorDiskResultTest {
             var data = new LoadedColumnData(4, 6, oversized,
                     oversized.length + LSSConstants.ESTIMATED_COLUMN_OVERHEAD_BYTES);
             rig.proc.postSnapshot(snapshot(DIM, rig.uuid), new ArrayList<>(List.of(
-                    new TickSnapshot.GenerationReadyData(rig.uuid, 4, 6, DIM, data,
+                    new TickSnapshot.GenerationReadyData(rig.uuid, rig.state.registration(), 4, 6, DIM, data,
                             COLUMN_TS, ticket.submissionOrder()))));
 
             long packed = PositionUtil.packPosition(4, 6);
@@ -944,7 +951,7 @@ class OffThreadProcessorDiskResultTest {
 
             var allAir = new LoadedColumnData(4, 6, null, 0);
             rig.proc.postSnapshot(snapshot(DIM, rig.uuid), new ArrayList<>(List.of(
-                    new TickSnapshot.GenerationReadyData(rig.uuid, 4, 6, DIM, allAir,
+                    new TickSnapshot.GenerationReadyData(rig.uuid, rig.state.registration(), 4, 6, DIM, allAir,
                             COLUMN_TS, ticket.submissionOrder()))));
 
             long packed = PositionUtil.packPosition(4, 6);
@@ -1051,7 +1058,7 @@ class OffThreadProcessorDiskResultTest {
             var data = new LoadedColumnData(4, 6, bytes,
                     bytes.length + LSSConstants.ESTIMATED_COLUMN_OVERHEAD_BYTES);
             rig.proc.postSnapshot(snapshot(DIM, rig.uuid), new ArrayList<>(List.of(
-                    new TickSnapshot.GenerationReadyData(rig.uuid, 4, 6, DIM, data,
+                    new TickSnapshot.GenerationReadyData(rig.uuid, rig.state.registration(), 4, 6, DIM, data,
                             COLUMN_TS, ticket.submissionOrder()))));
             waitFor(() -> !rig.proc.enqueuedColumns.isEmpty(), "generated column payload");
 
@@ -1076,7 +1083,7 @@ class OffThreadProcessorDiskResultTest {
 
             // Permanent unservability (extraction error / failed load) — the one disposition
             // that reaches the wire: the client session-satisfies and stops asking.
-            rig.proc.feedGenerationFailure(rig.uuid, 4, 6, DIM, ticket.submissionOrder(), false);
+            rig.proc.feedGenerationFailure(rig.uuid, rig.state.registration(), 4, 6, DIM, ticket.submissionOrder(), false);
             rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
 
             long packed = PositionUtil.packPosition(4, 6);
@@ -1098,7 +1105,7 @@ class OffThreadProcessorDiskResultTest {
         try {
             var ticket = escalateToGenTicket(rig, 4, 6);
 
-            rig.proc.feedGenerationFailure(rig.uuid, 4, 6, DIM, ticket.submissionOrder(), true);
+            rig.proc.feedGenerationFailure(rig.uuid, rig.state.registration(), 4, 6, DIM, ticket.submissionOrder(), true);
             rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
 
             waitFor(() -> rig.state.getHeldGenSlots() == 0,
@@ -1132,7 +1139,7 @@ class OffThreadProcessorDiskResultTest {
             var ticket = escalateToGenTicket(rig, 4, 6);
 
             rig.proc.postSnapshot(snapshot(DIM, rig.uuid), new ArrayList<>(List.of(
-                    new TickSnapshot.GenerationReadyData(rig.uuid, 4, 6, DIM, null,
+                    new TickSnapshot.GenerationReadyData(rig.uuid, rig.state.registration(), 4, 6, DIM, null,
                             0L, ticket.submissionOrder(), true))));
 
             waitFor(() -> rig.state.getHeldGenSlots() == 0,
@@ -1279,8 +1286,8 @@ class OffThreadProcessorDiskResultTest {
             var bUuid = UUID.randomUUID();
             rig.addPlayer(bUuid); // sentinel: no registered dimension, outcome delivers
             rig.proc.postSnapshot(snapshot(DIM, rig.uuid, bUuid), new ArrayList<>(List.of(
-                    new TickSnapshot.GenerationReadyData(rig.uuid, 4, 6, DIM, null, 0L, 1L),
-                    new TickSnapshot.GenerationReadyData(bUuid, 8, 8, DIM, null, 0L, 2L))));
+                    new TickSnapshot.GenerationReadyData(rig.uuid, rig.state.registration(), 4, 6, DIM, null, 0L, 1L),
+                    new TickSnapshot.GenerationReadyData(bUuid, rig.players.get(bUuid).registration(), 8, 8, DIM, null, 0L, 2L))));
 
             var delivered = drainUntil(rig.proc,
                     received(bUuid, LSSConstants.RESPONSE_NOT_GENERATED, PositionUtil.packPosition(8, 8)));
@@ -1348,8 +1355,8 @@ class OffThreadProcessorDiskResultTest {
             var staleData = new LoadedColumnData(6, 6, new byte[]{1},
                     1 + LSSConstants.ESTIMATED_COLUMN_OVERHEAD_BYTES);
             rig.proc.postSnapshot(snapshot(END, rig.uuid), new ArrayList<>(List.of(
-                    new TickSnapshot.GenerationReadyData(rig.uuid, 6, 6, DIM, staleData, COLUMN_TS, 5L),
-                    new TickSnapshot.GenerationReadyData(rig.uuid, 7, 7, END, null, 0L, 6L))));
+                    new TickSnapshot.GenerationReadyData(rig.uuid, rig.state.registration(), 6, 6, DIM, staleData, COLUMN_TS, 5L),
+                    new TickSnapshot.GenerationReadyData(rig.uuid, rig.state.registration(), 7, 7, END, null, 0L, 6L))));
 
             drainUntil(rig.proc, received(LSSConstants.RESPONSE_NOT_GENERATED,
                     PositionUtil.packPosition(7, 7)));
@@ -1371,8 +1378,8 @@ class OffThreadProcessorDiskResultTest {
         state.offerIncomingBatch(new IncomingBatch(reqs));
     }
 
-    private static TickSnapshot.GenerationReadyData genSuccess(UUID uuid, int cx, int cz, long order) {
-        return new TickSnapshot.GenerationReadyData(uuid, cx, cz, DIM,
+    private static TickSnapshot.GenerationReadyData genSuccess(TestState state, int cx, int cz, long order) {
+        return new TickSnapshot.GenerationReadyData(state.getPlayerUUID(), state.registration(), cx, cz, DIM,
                 new LoadedColumnData(cx, cz, new byte[]{1},
                         1 + LSSConstants.ESTIMATED_COLUMN_OVERHEAD_BYTES),
                 COLUMN_TS, order);
@@ -1473,7 +1480,7 @@ class OffThreadProcessorDiskResultTest {
 
             // Adversarial (newest-first) scheduler: ring 1 completes while ring 0 sits.
             rig.proc.postSnapshot(snapshot(DIM, rig.uuid),
-                    new ArrayList<>(List.of(genSuccess(rig.uuid, 1, 0, 2L))));
+                    new ArrayList<>(List.of(genSuccess(rig.state, 1, 0, 2L))));
             waitFor(() -> rig.proc.enqueuedColumns.stream().anyMatch(c -> c.cx() == 1),
                     "ring-1 column delivered");
 
@@ -1505,7 +1512,7 @@ class OffThreadProcessorDiskResultTest {
             // next re-declaration, with ring 3 admitted inside the new cohort (3 <= 2+1)
             // and rings 4-5 still held.
             rig.proc.postSnapshot(snapshot(DIM, rig.uuid),
-                    new ArrayList<>(List.of(genSuccess(rig.uuid, 0, 0, 1L))));
+                    new ArrayList<>(List.of(genSuccess(rig.state, 0, 0, 1L))));
             waitFor(() -> rig.proc.enqueuedColumns.stream().anyMatch(c -> c.cx() == 0),
                     "the starved head finally delivered");
             declare(rig.state,
@@ -1683,7 +1690,7 @@ class OffThreadProcessorDiskResultTest {
      *  seeds the memo through the production miss path, delivers one outcome flavor, then
      *  proves the next declaration READS (submit) instead of memo-hitting. */
     private void assertGenerationOutcomeClearsTheMemo(
-            java.util.function.Function<UUID, TickSnapshot.GenerationReadyData> outcomeFor,
+            java.util.function.Function<TestState, TickSnapshot.GenerationReadyData> outcomeFor,
             boolean removePlayerFirst) throws Exception {
         var rig = new Rig(true, 4, 4, 30);
         var other = UUID.randomUUID();
@@ -1696,9 +1703,15 @@ class OffThreadProcessorDiskResultTest {
             rig.proc.postSnapshot(snapshot(DIM, rig.uuid, other), List.of());
             waitFor(() -> rig.state.getHeldGenSlots() == 1, "miss escalates (memo written)");
 
+            // Wait for the miss-routing cycle itself, not its early slot increment. Otherwise
+            // B's declaration can enter that still-running cycle before the outcome drains.
+            waitFor(() -> rig.proc.routeCyclesForTest() >= 2, "miss-routing cycle completed");
             if (removePlayerFirst) rig.players.remove(rig.uuid);
+            int beforeOutcome = rig.proc.routeCyclesForTest();
             rig.proc.postSnapshot(snapshot(DIM, rig.uuid, other),
-                    List.of(outcomeFor.apply(rig.uuid)));
+                    List.of(outcomeFor.apply(rig.state)));
+            waitFor(() -> rig.proc.routeCyclesForTest() > beforeOutcome,
+                    "generation outcome cycle completed");
             // The generation outcome drained — the memo MUST be gone: player B's fresh ask
             // for the same position must READ, not memo-hit.
             stateB.enqueue(new IncomingRequest(7, 0, -1));
@@ -1714,15 +1727,15 @@ class OffThreadProcessorDiskResultTest {
 
     @Test
     void generationTransientTimeoutClearsTheMemo() throws Exception {
-        assertGenerationOutcomeClearsTheMemo(uuid ->
-                new TickSnapshot.GenerationReadyData(uuid, 7, 0, DIM, null, 0L, 1L, true, false),
+        assertGenerationOutcomeClearsTheMemo(state ->
+                new TickSnapshot.GenerationReadyData(state.getPlayerUUID(), state.registration(), 7, 0, DIM, null, 0L, 1L, true, false),
                 false);
     }
 
     @Test
     void generationPermanentFailureClearsTheMemo() throws Exception {
-        assertGenerationOutcomeClearsTheMemo(uuid ->
-                new TickSnapshot.GenerationReadyData(uuid, 7, 0, DIM, null, 0L, 1L, false, false),
+        assertGenerationOutcomeClearsTheMemo(state ->
+                new TickSnapshot.GenerationReadyData(state.getPlayerUUID(), state.registration(), 7, 0, DIM, null, 0L, 1L, false, false),
                 false);
     }
 
@@ -1730,8 +1743,8 @@ class OffThreadProcessorDiskResultTest {
     void generationOutcomeForADepartedPlayerStillClearsTheMemo() throws Exception {
         // The clear sits BEFORE the state==null continue: the miss is a fact about the
         // world, not about a player — a departed player's outcome still falsifies it.
-        assertGenerationOutcomeClearsTheMemo(uuid ->
-                new TickSnapshot.GenerationReadyData(uuid, 7, 0, DIM, null, 0L, 1L, true, false),
+        assertGenerationOutcomeClearsTheMemo(state ->
+                new TickSnapshot.GenerationReadyData(state.getPlayerUUID(), state.registration(), 7, 0, DIM, null, 0L, 1L, true, false),
                 true);
     }
 
@@ -1742,8 +1755,8 @@ class OffThreadProcessorDiskResultTest {
         // clear conditional on failure flavors still cannot leave a live memo for a chunk
         // that now exists.
         byte[] bytes = {1, 2};
-        assertGenerationOutcomeClearsTheMemo(uuid ->
-                new TickSnapshot.GenerationReadyData(uuid, 7, 0, DIM,
+        assertGenerationOutcomeClearsTheMemo(state ->
+                new TickSnapshot.GenerationReadyData(state.getPlayerUUID(), state.registration(), 7, 0, DIM,
                         new LoadedColumnData(7, 0, bytes,
                                 bytes.length + LSSConstants.ESTIMATED_COLUMN_OVERHEAD_BYTES),
                         COLUMN_TS, 1L),
@@ -1775,7 +1788,7 @@ class OffThreadProcessorDiskResultTest {
             rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
             waitFor(() -> rig.state.getHeldGenSlots() == 1, "ring 3 takes the slot; ring 4 memoized");
             rig.proc.postSnapshot(snapshot(DIM, rig.uuid),
-                    List.of(new TickSnapshot.GenerationReadyData(rig.uuid, 3, 0, DIM, null, 0L, 1L, true, false)));
+                    List.of(new TickSnapshot.GenerationReadyData(rig.uuid, rig.state.registration(), 3, 0, DIM, null, 0L, 1L, true, false)));
             waitFor(() -> rig.state.getHeldGenSlots() == 0, "outcome frees the slot");
 
             // Ring 2 cold (read in flight) + ring 4 memo-fresh, gen slot FREE. Ring 4 is
@@ -1859,7 +1872,7 @@ class OffThreadProcessorDiskResultTest {
             waitFor(() -> rig.state.getHeldGenSlots() == 2, "both ring-5 misses take the slots");
             // Free ONE slot: outstanding = {ring 5}, one slot free.
             rig.proc.postSnapshot(snapshot(DIM, rig.uuid),
-                    List.of(new TickSnapshot.GenerationReadyData(rig.uuid, 5, 1, DIM, null, 0L, 2L, true, false)));
+                    List.of(new TickSnapshot.GenerationReadyData(rig.uuid, rig.state.registration(), 5, 1, DIM, null, 0L, 2L, true, false)));
             waitFor(() -> rig.state.getHeldGenSlots() == 1, "one slot freed");
 
             // Ring 6 = nearest-outstanding(5)+1 -> admitted; ring 8 > 5+1 -> cohort-held.
@@ -2007,7 +2020,7 @@ class OffThreadProcessorDiskResultTest {
 
             // Stop: the near outcome drains, the reference climbs, the far band follows.
             rig.proc.postSnapshot(snapshot(DIM, rig.uuid),
-                    List.of(new TickSnapshot.GenerationReadyData(rig.uuid, 5, 0, DIM, null, 0L, 1L, true, false)));
+                    List.of(new TickSnapshot.GenerationReadyData(rig.uuid, rig.state.registration(), 5, 0, DIM, null, 0L, 1L, true, false)));
             waitFor(() -> rig.state.getHeldGenSlots() == 0, "near outcome drains");
             clock[0] += 5_000_000_000L;
             declare(rig, rig.state, new IncomingRequest(18, 0, -1));
@@ -2041,7 +2054,7 @@ class OffThreadProcessorDiskResultTest {
                     "near miss drops on the full cap — memoized, slotless");
             // Free ONE far slot: outstanding = the lone far straggler at ring 9.
             rig.proc.postSnapshot(snapshot(DIM, rig.uuid),
-                    List.of(new TickSnapshot.GenerationReadyData(rig.uuid, 9, 1, DIM, null, 0L, 2L, true, false)));
+                    List.of(new TickSnapshot.GenerationReadyData(rig.uuid, rig.state.registration(), 9, 1, DIM, null, 0L, 2L, true, false)));
             waitFor(() -> rig.state.getHeldGenSlots() == 1, "one far slot freed; straggler remains");
 
             // The restriction can only TIGHTEN: the far straggler (min outstanding = 9)

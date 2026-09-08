@@ -80,7 +80,7 @@ public abstract class AbstractChunkDiskReader {
     // the drop-heal pressure valve. Entries here are exactly as long-lived as pool-queue
     // entries (same staleness/dedup/shutdown story: pendings hold, late delivery is
     // idempotent, isShutdown() short-circuits).
-    private record ParkedRead(UUID playerUuid, int chunkX, int chunkZ, String dimension,
+    private record ParkedRead(UUID playerUuid, RequestRegistration registration, int chunkX, int chunkZ, String dimension,
                               long submissionOrder, ReadOperation operation) {}
     private final ConcurrentLinkedQueue<ParkedRead> gateParked = new ConcurrentLinkedQueue<>();
     private final AtomicInteger gateParkedCount = new AtomicInteger();
@@ -89,7 +89,7 @@ public abstract class AbstractChunkDiskReader {
     private final ExecutorService executor;
     private final ArrayBlockingQueue<Runnable> workQueue;
     private final int threadCount;
-    private final ConcurrentHashMap<UUID, ConcurrentLinkedQueue<ChunkReadResult>> playerResults = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<UUID, RequestRegistration> playerResults = new ConcurrentHashMap<>();
     private final AtomicBoolean isShutdown = new AtomicBoolean(false);
     // Pool tasks accepted but not yet finished — the adaptive throttle's in-flight input.
     // A dedicated counter (not submitted-completed): store hits occupy pool capacity like
@@ -343,24 +343,30 @@ public abstract class AbstractChunkDiskReader {
      * FutureTask captures it into a Future nobody inspects).
      */
     protected final void submitRead(UUID playerUuid, int chunkX, int chunkZ, String dimension,
-                                     long submissionOrder, ReadOperation operation) {
+                                    long submissionOrder, ReadOperation operation) {
         submitRead(playerUuid, chunkX, chunkZ, dimension, submissionOrder, 0L, operation);
     }
 
-    /** As above with the client's declared stamp (region-summary-sync-plan.md P1): a
-     *  ts&gt;0 submission consults the header freshness rung before any region IO. The
-     *  0-arg overload (ts unknown/none) keeps every rung-indifferent caller unchanged. */
+    /** Standalone reader admission: capture the registered sink before scheduling. */
     protected final void submitRead(UUID playerUuid, int chunkX, int chunkZ, String dimension,
-                                     long submissionOrder, long clientTimestamp,
-                                     ReadOperation operation) {
-        if (isShutdown()) return;
+                                    long submissionOrder, long clientTimestamp, ReadOperation operation) {
+        var registration = this.playerResults.get(playerUuid);
+        if (registration != null) submitRead(playerUuid, registration, chunkX, chunkZ,
+                dimension, submissionOrder, clientTimestamp, operation);
+    }
+
+    /** Platform admission carries the originating player state, never a completion-time UUID lookup. */
+    protected final void submitRead(UUID playerUuid, RequestRegistration registration,
+                                    int chunkX, int chunkZ, String dimension, long submissionOrder,
+                                    long clientTimestamp, ReadOperation operation) {
+        if (isShutdown() || registration.isRetired()) return;
 
         try {
             this.tasksInFlight.incrementAndGet();
             this.executor.submit(() -> {
                 try {
                     if (!isShutdown()) {
-                        readAndDeliver(playerUuid, chunkX, chunkZ, dimension, submissionOrder,
+                        readAndDeliver(playerUuid, registration, chunkX, chunkZ, dimension, submissionOrder,
                                 clientTimestamp, operation);
                     }
                 } catch (Throwable t) {
@@ -386,7 +392,7 @@ public abstract class AbstractChunkDiskReader {
                                 + chunkX + ", " + chunkZ + (fails > 1 ? " (+" + (fails - 1)
                                 + " more since last report)" : ""), t);
                     }
-                    addResult(playerUuid, ChunkReadResult.notFoundFromError(
+                    addResult(registration, ChunkReadResult.notFoundFromError(
                             playerUuid, chunkX, chunkZ, dimension, submissionOrder));
                 } finally {
                     this.tasksInFlight.decrementAndGet();
@@ -408,7 +414,7 @@ public abstract class AbstractChunkDiskReader {
             this.diag.recordSubmitted();
             this.diag.recordSaturation();
             this.diag.recordCompleted(0);
-            addResult(playerUuid, ChunkReadResult.saturated(playerUuid, chunkX, chunkZ, dimension, submissionOrder));
+            addResult(registration, ChunkReadResult.saturated(playerUuid, chunkX, chunkZ, dimension, submissionOrder));
         }
     }
 
@@ -433,7 +439,7 @@ public abstract class AbstractChunkDiskReader {
      * miss memo). {@link dev.vox.lss.common.store.LodStoreService#get} is contained by
      * contract (a store failure reads as a miss and counts {@code store.errors}).
      */
-    private boolean storeServedHit(UUID playerUuid, int chunkX, int chunkZ, String dimension,
+    private boolean storeServedHit(UUID playerUuid, RequestRegistration registration, int chunkX, int chunkZ, String dimension,
                                     long submissionOrder) {
         var s = this.store;
         if (s == null) return false;
@@ -470,7 +476,7 @@ public abstract class AbstractChunkDiskReader {
                 // All-air: same result shape as the raw rung (null section bytes,
                 // never not-found — a null read as an authoritative miss would seed
                 // the miss memo falsely).
-                addResult(playerUuid, new ChunkReadResult(playerUuid, chunkX, chunkZ, null,
+                addResult(registration, new ChunkReadResult(playerUuid, chunkX, chunkZ, null,
                         dimension, 0, hit.columnTimestamp(),
                         false, false, false, true, submissionOrder, 0L));
                 return true;
@@ -490,7 +496,7 @@ public abstract class AbstractChunkDiskReader {
                 // Hit recorded only on translation SUCCESS (review m17): a failed
                 // translation is an errored miss and must not also book a hit.
                 s.diagnostics().recordHit(System.nanoTime() - t0);
-                addResult(playerUuid, new ChunkReadResult(playerUuid, chunkX, chunkZ, v20,
+                addResult(registration, new ChunkReadResult(playerUuid, chunkX, chunkZ, v20,
                         dimension, v20.length + LSSConstants.ESTIMATED_COLUMN_OVERHEAD_BYTES,
                         hit.columnTimestamp(),
                         false, false, false, true, submissionOrder, 0L));
@@ -498,7 +504,7 @@ public abstract class AbstractChunkDiskReader {
             }
             s.diagnostics().recordHit(System.nanoTime() - t0);
             int estimatedBytes = hit.usize() + LSSConstants.ESTIMATED_COLUMN_OVERHEAD_BYTES;
-            addResult(playerUuid, new ChunkReadResult(playerUuid, chunkX, chunkZ, null,
+            addResult(registration, new ChunkReadResult(playerUuid, chunkX, chunkZ, null,
                     dimension, estimatedBytes, hit.columnTimestamp(),
                     false, false, false, true, submissionOrder, 0L,
                     hit.frame(), hit.usize()));
@@ -540,7 +546,7 @@ public abstract class AbstractChunkDiskReader {
         s.diagnostics().recordHit(System.nanoTime() - t0);
         int estimatedBytes = allAir ? 0
                 : bytes.length + LSSConstants.ESTIMATED_COLUMN_OVERHEAD_BYTES;
-        addResult(playerUuid, new ChunkReadResult(playerUuid, chunkX, chunkZ, bytes,
+        addResult(registration, new ChunkReadResult(playerUuid, chunkX, chunkZ, bytes,
                 dimension, estimatedBytes, hit.columnTimestamp(),
                 false, false, false, true, submissionOrder, 0L));
         return true;
@@ -593,7 +599,7 @@ public abstract class AbstractChunkDiskReader {
         return translator.apply(nativeRaw);
     }
 
-    private void readAndDeliver(UUID playerUuid, int chunkX, int chunkZ, String dimension,
+    private void readAndDeliver(UUID playerUuid, RequestRegistration registration, int chunkX, int chunkZ, String dimension,
                                  long submissionOrder, long clientTimestamp,
                                  ReadOperation operation) {
         if (isShutdown()) return;
@@ -628,14 +634,14 @@ public abstract class AbstractChunkDiskReader {
                     // The result carries the MARGINED bound, so the delivery-side
                     // per-recipient compare and the tscache refresh (stamp + 1)
                     // inherit the margin without a second constant.
-                    addResult(playerUuid, ChunkReadResult.headerFresh(playerUuid, chunkX,
+                    addResult(registration, ChunkReadResult.headerFresh(playerUuid, chunkX,
                             chunkZ, dimension, submissionOrder,
                             stamp + HEADER_FRESH_MARGIN_SECONDS));
                     return;
                 }
             }
         }
-        if (storeServedHit(playerUuid, chunkX, chunkZ, dimension, submissionOrder)) return;
+        if (storeServedHit(playerUuid, registration, chunkX, chunkZ, dimension, submissionOrder)) return;
 
         // The disk-read concurrency gate (disk-read-concurrency-gate-plan.md): the
         // expensive NBT phase starts here, so the permit check sits AFTER the store rung
@@ -659,10 +665,10 @@ public abstract class AbstractChunkDiskReader {
                 // `disk.gated` counter. The actionable capacity signal is the LATCHED
                 // gate-stop WARN on the router-retention path, not this race.
                 this.diag.recordGated();
-                addResult(playerUuid, ChunkReadResult.saturated(playerUuid, chunkX, chunkZ, dimension, submissionOrder));
+                addResult(registration, ChunkReadResult.saturated(playerUuid, chunkX, chunkZ, dimension, submissionOrder));
                 return;
             }
-            this.gateParked.add(new ParkedRead(playerUuid, chunkX, chunkZ, dimension,
+            this.gateParked.add(new ParkedRead(playerUuid, registration, chunkX, chunkZ, dimension,
                     submissionOrder, operation));
             // Missed-wakeup guard: a release between our failed acquire and the add
             // found an empty park list and drained nothing — re-check ourselves.
@@ -670,7 +676,7 @@ public abstract class AbstractChunkDiskReader {
             return;
         }
         try {
-            gatedReadAndDeliver(playerUuid, chunkX, chunkZ, dimension, submissionOrder, operation);
+            gatedReadAndDeliver(playerUuid, registration, chunkX, chunkZ, dimension, submissionOrder, operation);
         } finally {
             // Release on EVERY outcome — including the timeout triage, where future.get
             // throws at DISK_READ_TIMEOUT_SECONDS and the orphaned downstream fetch keeps
@@ -709,7 +715,7 @@ public abstract class AbstractChunkDiskReader {
             }
             this.gateParkedCount.decrementAndGet();
             try {
-                gatedReadAndDeliver(parked.playerUuid(), parked.chunkX(), parked.chunkZ(),
+                gatedReadAndDeliver(parked.playerUuid(), parked.registration(), parked.chunkX(), parked.chunkZ(),
                         parked.dimension(), parked.submissionOrder(), parked.operation());
             } finally {
                 this.readGate.release();
@@ -718,7 +724,7 @@ public abstract class AbstractChunkDiskReader {
     }
 
     /** The expensive phase — every path through here holds a gate permit. */
-    private void gatedReadAndDeliver(UUID playerUuid, int chunkX, int chunkZ, String dimension,
+    private void gatedReadAndDeliver(UUID playerUuid, RequestRegistration registration, int chunkX, int chunkZ, String dimension,
                                      long submissionOrder, ReadOperation operation) {
         long startNs = System.nanoTime();
         // Freshness stamp at READ START (R1-M2): the bytes the read produces reflect
@@ -763,7 +769,7 @@ public abstract class AbstractChunkDiskReader {
             recordRealCompletion(System.nanoTime() - startNs);
             // Error/timeout TRIAGED as not-found (law A5's disk.errors fold) — says nothing
             // about existence, so it must never seed the miss memo.
-            addResult(playerUuid, ChunkReadResult.notFoundFromError(playerUuid, chunkX, chunkZ, dimension, submissionOrder));
+            addResult(registration, ChunkReadResult.notFoundFromError(playerUuid, chunkX, chunkZ, dimension, submissionOrder));
             // Deliberately NO Error re-throw (the pre-Phase-1 shape re-threw best-effort
             // into a FutureTask nobody inspects — provably unobservable): the last-resort
             // catch in the submit lambda would now see it and deliver a SECOND result,
@@ -775,7 +781,7 @@ public abstract class AbstractChunkDiskReader {
         if (serializedSections == null) {
             this.diag.recordNotFound();
             recordRealCompletion(System.nanoTime() - startNs);
-            addResult(playerUuid, ChunkReadResult.notFoundAuthoritative(playerUuid, chunkX, chunkZ, dimension, submissionOrder));
+            addResult(registration, ChunkReadResult.notFoundAuthoritative(playerUuid, chunkX, chunkZ, dimension, submissionOrder));
             return;
         }
 
@@ -785,7 +791,7 @@ public abstract class AbstractChunkDiskReader {
             // Chunk exists on disk (FULL status) but is all air — resolve as found, not "not found"
             this.diag.recordAllAir();
             recordRealCompletion(System.nanoTime() - startNs);
-            addResult(playerUuid, new ChunkReadResult(playerUuid, chunkX, chunkZ,
+            addResult(registration, new ChunkReadResult(playerUuid, chunkX, chunkZ,
                     null, dimension, 0, columnTimestamp, false, false, false, false,
                     submissionOrder, srcStampSeconds));
             return;
@@ -795,28 +801,46 @@ public abstract class AbstractChunkDiskReader {
 
         this.diag.recordSuccess();
         recordRealCompletion(System.nanoTime() - startNs);
-        addResult(playerUuid, new ChunkReadResult(playerUuid, chunkX, chunkZ,
+        addResult(registration, new ChunkReadResult(playerUuid, chunkX, chunkZ,
                 serializedSections, dimension, estimatedBytes, columnTimestamp,
                 false, false, false, false, submissionOrder, srcStampSeconds));
     }
 
+    /** Standalone readers may own a registration without a platform player state. */
     public void registerPlayer(UUID playerUuid) {
-        this.playerResults.computeIfAbsent(playerUuid, k -> new ConcurrentLinkedQueue<>());
+        this.playerResults.computeIfAbsent(playerUuid, k -> new RequestRegistration());
     }
 
-    private void addResult(UUID playerUuid, ChunkReadResult result) {
-        var queue = this.playerResults.get(playerUuid);
-        if (queue != null) {
-            queue.add(result);
-        }
+    public void registerPlayer(UUID playerUuid, RequestRegistration registration) {
+        this.playerResults.compute(playerUuid, (uuid, old) -> {
+            if (old != null && old != registration) old.retire();
+            return registration;
+        });
+    }
+
+    private void addResult(RequestRegistration registration, ChunkReadResult result) {
+        registration.addResult(result);
     }
 
     public ConcurrentLinkedQueue<ChunkReadResult> getPlayerQueue(UUID playerUuid) {
-        return this.playerResults.get(playerUuid);
+        var registration = this.playerResults.get(playerUuid);
+        return registration == null ? null : registration.results();
+    }
+
+    public ConcurrentLinkedQueue<ChunkReadResult> getPlayerQueue(UUID playerUuid,
+                                                               RequestRegistration registration) {
+        return this.playerResults.get(playerUuid) == registration && !registration.isRetired()
+                ? registration.results() : null;
     }
 
     public void removePlayerResults(UUID playerUuid) {
-        this.playerResults.remove(playerUuid);
+        var removed = this.playerResults.remove(playerUuid);
+        if (removed != null) removed.retire();
+    }
+
+    public void removePlayerResults(UUID playerUuid, RequestRegistration registration) {
+        this.playerResults.remove(playerUuid, registration);
+        registration.retire();
     }
 
     /**
@@ -877,7 +901,7 @@ public abstract class AbstractChunkDiskReader {
     public int getPendingResultCount() {
         int pending = 0;
         for (var queue : this.playerResults.values()) {
-            pending += queue.size();
+            pending += queue.results().size();
         }
         return pending;
     }

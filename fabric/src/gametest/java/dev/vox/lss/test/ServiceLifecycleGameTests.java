@@ -310,7 +310,7 @@ public class ServiceLifecycleGameTests {
                     "generation service expected (gametest config has enableChunkGeneration=true)");
             int pcx = mock.getBlockX() >> 4;
             int pcz = mock.getBlockZ() >> 4;
-            helper.assertTrue(gen.submitGeneration(uuid, level, pcx - GEN_CHUNK_OFFSET, pcz + GEN_CHUNK_OFFSET, 1L),
+            helper.assertTrue(gen.submitGeneration(uuid, service.getPlayers().get(uuid).registration(), level, pcx - GEN_CHUNK_OFFSET, pcz + GEN_CHUNK_OFFSET, 1L),
                     "a fresh generation service must accept a submission");
             helper.assertTrue(gen.getActiveCount() == 1, "submission must be tracked as active");
 
@@ -571,7 +571,7 @@ public class ServiceLifecycleGameTests {
             helper.assertTrue(gen != null, "generation service expected (gametest config)");
             int pcx = mock.getBlockX() >> 4;
             int pcz = mock.getBlockZ() >> 4;
-            helper.assertTrue(gen.submitGeneration(uuid, level, pcx - 132, pcz + 132, 1L),
+            helper.assertTrue(gen.submitGeneration(uuid, service.getPlayers().get(uuid).registration(), level, pcx - 132, pcz + 132, 1L),
                     "premise: an in-flight generation entry must exist at shutdown");
             helper.assertTrue(gen.getActiveCount() == 1, "premise: entry tracked as active");
 
@@ -1474,7 +1474,7 @@ public class ServiceLifecycleGameTests {
         helper.assertTrue(state.tryAdmit(new PendingRequest(cx, cz,
                         SlotType.SYNC_ON_LOAD, clientTs)),
                 "premise: pending admitted (the router's admission shape)");
-        service.getDiskReader().submitReadDirect(mock.getUUID(), dim, level, cx, cz,
+        service.getDiskReader().submitReadDirect(mock.getUUID(), state.registration(), dim, level, cx, cz,
                 1L, clientTs);
 
         service.handleRegionSummaryRequest(mock,

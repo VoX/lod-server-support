@@ -1,5 +1,7 @@
 package dev.vox.lss.benchmark;
 
+import dev.vox.lss.common.processing.RequestRegistration;
+
 import dev.vox.lss.common.SharedBandwidthLimiter;
 import dev.vox.lss.common.processing.AbstractChunkDiskReader;
 import dev.vox.lss.common.processing.AbstractPlayerRequestState;
@@ -55,7 +57,7 @@ class ExporterContractTest {
             super(players, null, false, null, 1, 0);  // memo off (ttl=0): kills only the memo — the pacing rules are ttl-independent
         }
         @Override
-        protected boolean submitDiskRead(UUID playerUuid, String dimension, int cx, int cz, long order, long clientTimestamp) {
+        protected boolean submitDiskRead(UUID playerUuid, RequestRegistration registration, String dimension, int cx, int cz, long order, long clientTimestamp) {
             return true;
         }
         @Override
@@ -124,7 +126,7 @@ class ExporterContractTest {
     private static FakeSource fullShapeSource() {
         var src = new FakeSource(true);
         src.processor.putColumn(src.state, 5, 5, new byte[]{1, 2, 3}, 100L, "minecraft:overworld");
-        src.processor.notifyPlayerRemoved(UUID.randomUUID());
+        src.processor.notifyPlayerRemoved(UUID.randomUUID(), new RequestRegistration());
         src.processor.invalidateTimestamps("minecraft:overworld", new long[]{0L});
         return src;
     }
