@@ -1,0 +1,221 @@
+--- 26.1
+
++++ 26.2
+
+@@ -12,4 +12,5 @@
+
+ import net.fabricmc.fabric.api.client.renderer.v1.mesh.MeshView;
+ import net.fabricmc.fabric.api.client.renderer.v1.render.ChunkSectionLayerHelper;
++import net.fabricmc.fabric.api.client.rendering.v1.SubmitRenderPhase;
+ import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderContext;
+ import net.minecraft.client.Minecraft;
+@@ -25,6 +26,4 @@
+
+ import net.minecraft.client.renderer.SubmitNodeCollector;
+ import net.minecraft.client.renderer.block.MovingBlockRenderState;
+-import net.minecraft.client.model.geom.ModelPart;
+-import net.minecraft.client.renderer.block.dispatch.BlockStateModel;
+ import net.minecraft.client.renderer.block.dispatch.BlockStateModelPart;
+ import net.minecraft.client.renderer.chunk.ChunkSectionLayer;
+@@ -35,8 +34,11 @@
+
+ import net.minecraft.client.renderer.entity.state.EntityRenderState;
+ import net.minecraft.client.renderer.feature.ModelFeatureRenderer;
++import net.minecraft.client.renderer.feature.submit.SubmitNode;
++import net.minecraft.client.renderer.gizmos.DrawableGizmoPrimitives;
+ import net.minecraft.client.renderer.item.ItemStackRenderState;
+ import net.minecraft.client.renderer.rendertype.RenderType;
+ import net.minecraft.client.renderer.rendertype.RenderTypes;
+ import net.minecraft.client.renderer.state.level.CameraRenderState;
++import net.minecraft.client.renderer.state.level.QuadParticleRenderState;
+ import net.minecraft.client.renderer.texture.TextureAtlasSprite;
+ import net.minecraft.client.resources.model.EquipmentAssetManager;
+@@ -55,4 +57,5 @@
+
+ import net.minecraft.world.entity.EquipmentSlot;
+ import net.minecraft.world.entity.Pose;
++import net.minecraft.world.entity.ai.attributes.Attributes;
+ import net.minecraft.world.item.Item;
+ import net.minecraft.world.item.ItemDisplayContext;
+@@ -62,4 +65,5 @@
+
+ import net.minecraft.world.phys.AABB;
+ import net.minecraft.world.phys.Vec3;
++import net.minecraft.world.phys.shapes.VoxelShape;
+ import net.minecraft.world.scores.Team;
+ import org.joml.Quaternionf;
+@@ -115,5 +119,5 @@
+
+  *       the SUBMIT calls (only) are frustum-culled; LSS draws its own depth-tested,
+  *       sneak-hidden, sqrt-scaled name tags through {@code submitText} (vanilla gates tags at
+- *       64 blocks on every line); armor/held items are depth-lifted through a
++ *       its name-tag distance on every line); armor/held items are depth-lifted through a
+  *       wrapping {@link LiftedSubmitCollector}; the model-parts byte is set so the overlay
+  *       skin layers render. See {@code packedLightFor}/{@code isInFrustum}/{@code submitFarNameTag}.
+@@ -308,6 +312,5 @@
+
+         }
+ 
+-        // 26.1 line flavor: getMainCamera() (26.2 renamed it mainCamera()).
+-        Vec3 cameraPosition = minecraft.gameRenderer.getMainCamera().position();
++        Vec3 cameraPosition = minecraft.gameRenderer.mainCamera().position();
+         var dispatcher = minecraft.getEntityRenderDispatcher();
+         float partialTick = minecraft.getDeltaTracker().getGameTimeDeltaPartialTick(false);
+@@ -317,5 +320,6 @@
+
+         int minRender = config.farPlayersMinDistanceBlocks;
+         boolean fullBright = config.farPlayersFullBright;
+-        boolean nameTags = config.farPlayersNameTags && Minecraft.renderNames(); // F1/hide-GUI hides every tag (fold D3)
++        // F1/hide-GUI hides every tag (fold D3) — this line's hide-GUI flag lives on the HUD.
++        boolean nameTags = config.farPlayersNameTags && !minecraft.gui.hud.isHidden();
+         // Fold (e2): the equipment assets behind the armor layer's render-type identities
+         // (private on the dispatcher — the accessor mixin; null = no tiering, uniform lift).
+@@ -477,8 +481,9 @@
+
+         // ladder minus its distance clause; proxies never appear in level.players(), and a
+         // tracked far player whose proxy drew this frame is skipped via the active set.
+-        // 26.1 line: vanilla's cap is the literal 64 blocks in EntityRenderer.extractRenderState
+-        // (distanceToCameraSq < 4096.0) — no attribute on this MC.
++        // 26.2 line: vanilla's cap is the NAME_TAG_DISTANCE attribute (default 64) read per
++        // entity in LivingEntityRenderer.extractNameTags — honoured both ways here, so a
++        // server-raised range defers to vanilla's own tag and a shortened one hides sooner.
+         // Accepted residuals (review F8): a nameplate-range-extending mod, and one frame at
+-        // exactly 64 blocks (LSS lerps, vanilla compares the unlerped position). The
++        // exactly the cap (LSS lerps, vanilla compares the unlerped position). The
+         // camera/vehicle/hide-GUI clauses run BEFORE the team ladder here, where vanilla's
+         // team switch returns first — stricter only (F5).
+@@ -496,5 +501,6 @@
+
+                         && !minecraft.levelRenderer.isSectionCompiledAndVisible(realBlock)) continue;
+                 double cameraDistanceSq = cameraPosition.distanceToSqr(realPosition);
+-                if (cameraDistanceSq < 64.0 * 64.0) continue; // vanilla's own tag range (camera-based, as its cap is)
++                double range = realPlayer.getAttributeValue(Attributes.NAME_TAG_DISTANCE); // vanilla's own tag range (camera-based, as its cap is)
++                if (cameraDistanceSq < range * range) continue;
+                 double realDistance = realPosition.distanceTo(localPlayer.position());
+                 if (realDistance < minRender || (maxRender > 0 && realDistance > maxRender)) continue;
+@@ -808,13 +814,13 @@
+
+     }
+ 
+-    /** Review fold (D1): a throw inside {@code dispatcher.submit} or the tag submit leaves pushes
+-     *  on VANILLA's pose stack. On this 26.1 line Fabric fires {@code COLLECT_SUBMITS} at the
+-     *  {@code renderSolidFeatures} profiler push — after the submits, BEFORE
+-     *  {@code LevelRenderer.checkPoseStack} on the same stack (verified against
+-     *  fabric-rendering-v1 23.1.1 + the 26.1.2 bytecode) — so a leaked push throws "Pose stack
+-     *  not empty" AFTER this pass returns, outside every containment here: a hard client crash
+-     *  (unlike 26.2, where the event fires after that check). The pass therefore runs above a
+-     *  sentinel pose it always unwinds to, and the per-proxy / per-mount containments restore
+-     *  to the same mark before continuing the frame. */
++    /** Review fold (D1), re-scoped for this line (port review): a throw inside
++     *  {@code dispatcher.submit} or the tag submit leaves pushes on the pose stack Fabric hands
++     *  this pass. On 26.2 {@code COLLECT_SUBMITS} fires at {@code LevelRenderer.submitFeatures}
++     *  RETURN — AFTER vanilla's own {@code checkPoseStack} on that (local) stack, which is never
++     *  checked again — so a leaked push cannot crash here the way it does on 1.21.1/26.1. What the
++     *  sentinel buys on this line is intra-pass consistency: every proxy, mount and tag submitted
++     *  after a contained throw still sees the right stack depth, and so does every later
++     *  {@code COLLECT_SUBMITS} listener in the same event dispatch. The pass runs above a sentinel
++     *  pose it always unwinds to, and the per-proxy / per-mount containments restore to it. */
+     private static PoseStack.Pose markPose(PoseStack poseStack) {
+         poseStack.pushPose();
+@@ -978,15 +984,12 @@
+
+ 
+         @Override
+-        public void submitModelPart(ModelPart modelPart, PoseStack poseStack, RenderType renderType, int lightCoords,
+-                                    int overlayCoords, TextureAtlasSprite sprite, boolean sheeted, boolean hasFoil,
+-                                    int tintedColor, ModelFeatureRenderer.CrumblingOverlay crumblingOverlay,
+-                                    int outlineColor) {
+-            delegate.submitModelPart(modelPart, lifted(poseStack, tierOf(renderType)), renderType, lightCoords,
+-                    overlayCoords, sprite, sheeted, hasFoil, tintedColor, crumblingOverlay, outlineColor);
+-        }
+-
+-        @Override
+-        public void submitBreakingBlockModel(PoseStack poseStack, BlockStateModel model, long seed, int progress) {
+-            delegate.submitBreakingBlockModel(poseStack, model, seed, progress);
++        public void submitBreakingBlockModel(PoseStack poseStack, List<BlockStateModelPart> parts, int progress) {
++            delegate.submitBreakingBlockModel(poseStack, parts, progress);
++        }
++
++        @Override
++        public void submitBreakingBlockModel(PoseStack poseStack, List<BlockStateModelPart> parts, Mesh mesh,
++                                             int progress) {
++            delegate.submitBreakingBlockModel(poseStack, parts, mesh, progress);
+         }
+ 
+@@ -998,8 +1001,6 @@
+
+         @Override
+         public void submitNameTag(PoseStack poseStack, Vec3 nameTagAttachment, int offset, Component name,
+-                                  boolean seeThrough, int lightCoords, double distanceToCameraSq,
+-                                  CameraRenderState camera) {
+-            delegate.submitNameTag(poseStack, nameTagAttachment, offset, name, seeThrough, lightCoords,
+-                    distanceToCameraSq, camera);
++                                  boolean seeThrough, int lightCoords, CameraRenderState camera) {
++            delegate.submitNameTag(poseStack, nameTagAttachment, offset, name, seeThrough, lightCoords, camera);
+         }
+ 
+@@ -1023,11 +1024,29 @@
+
+ 
+         @Override
+-        public void submitMovingBlock(PoseStack poseStack, MovingBlockRenderState movingBlockRenderState) {
+-            delegate.submitMovingBlock(poseStack, movingBlockRenderState);
+-        }
+-
+-        @Override
+-        public void submitParticleGroup(SubmitNodeCollector.ParticleGroupRenderer particles) {
+-            delegate.submitParticleGroup(particles);
++        public void submitMovingBlock(PoseStack poseStack, MovingBlockRenderState movingBlockRenderState,
++                                      int outlineColor) {
++            delegate.submitMovingBlock(poseStack, movingBlockRenderState, outlineColor);
++        }
++
++        @Override
++        public void submitShapeOutline(PoseStack poseStack, VoxelShape shape, RenderType renderType, int color,
++                                       float width, boolean afterTerrain) {
++            delegate.submitShapeOutline(poseStack, shape, renderType, color, width, afterTerrain);
++        }
++
++        @Override
++        public void submitQuadParticleGroup(QuadParticleRenderState particles) {
++            delegate.submitQuadParticleGroup(particles);
++        }
++
++        @Override
++        public void submitGizmoPrimitives(DrawableGizmoPrimitives.Group group, CameraRenderState camera,
++                                          boolean onTop) {
++            delegate.submitGizmoPrimitives(group, camera, onTop);
++        }
++
++        @Override
++        public <T extends SubmitNode> void submitCustom(SubmitRenderPhase<T> phase, T node) {
++            delegate.submitCustom(phase, node);
+         }
+     }
+@@ -1093,6 +1112,6 @@
+
+ 
+     /**
+-     * WI-6: LSS draws the far-player name tag itself — vanilla gates entity name tags at 64
+-     * blocks on every MC line and a proxy only exists beyond
++     * WI-6: LSS draws the far-player name tag itself — vanilla gates entity name tags at its
++     * name-tag distance (64 blocks by default) on every MC line and a proxy only exists beyond
+      * the tracking radius, so {@code setCustomNameVisible} could never produce one. Vanilla's
+      * {@code submitNameTag} math (attachment + 0.5, camera billboard, {@code (s, -s, s)}) laid
+@@ -1329,5 +1348,5 @@
+
+                                          boolean nonWalkingPose, int animationTick) {
+             // This line's WalkAnimationState.stop() zeroes speedOld as well as speed and
+-            // position (verified against the 26.1.2 bytecode) — the 1.21.1 twins' setSpeed(0)
++            // position (verified against the 26.2 bytecode) — the 1.21.1 twins' setSpeed(0)
+             // + update(0, 1) sawtooth fix is not needed here.
+             if (lastWalkPosition == null || animationTick == lastWalkTick) {
+@@ -1381,4 +1400,7 @@
+
+         var renderer = new FarPlayerRenderer();
+         FarPlayerRenderer.install(renderer);
++        // PER-LINE INVARIANT (surfaces row 15): the event must fire BEFORE this
++        // line's submit-storage drain — verify against LevelRenderer bytecode on a
++        // port; the event NAME is not the invariant and flips meaning across lines.
+         net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderEvents
+                 .COLLECT_SUBMITS.register(renderer::render);

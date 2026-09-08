@@ -1,0 +1,79 @@
+Compiled from "MixinStorageIoWorker.java"
+public class com.ishland.c2me.rewrites.chunkio.mixin.MixinStorageIoWorker {
+  private java.util.Map<net.minecraft.class_1923, net.minecraft.class_4698$class_4699> field_21500;
+
+  private net.minecraft.class_2867 field_21499;
+
+  private java.util.concurrent.atomic.AtomicBoolean field_21497;
+
+  private net.minecraft.class_3846<net.minecraft.class_3847$class_3907> field_24468;
+
+  public com.ishland.c2me.rewrites.chunkio.mixin.MixinStorageIoWorker();
+    Code:
+         0: aload_0
+         1: invokespecial #35                 // Method java/lang/Object."<init>":()V
+         4: return
+
+  private void onInit(org.spongepowered.asm.mixin.injection.callback.CallbackInfo);
+    Code:
+         0: aload_0
+         1: instanceof    #47                 // class com/ishland/c2me/rewrites/chunkio/common/C2MEStorageVanillaInterface
+         4: ifeq          27
+         7: aload_0
+         8: aconst_null
+         9: putfield      #49                 // Field field_21500:Ljava/util/Map;
+        12: aload_0
+        13: aconst_null
+        14: putfield      #51                 // Field field_21499:Lnet/minecraft/class_2867;
+        17: aload_0
+        18: aconst_null
+        19: putfield      #53                 // Field field_21497:Ljava/util/concurrent/atomic/AtomicBoolean;
+        22: aload_0
+        23: aconst_null
+        24: putfield      #55                 // Field field_24468:Lnet/minecraft/class_3846;
+        27: return
+}
+Compiled from "MixinVersionedChunkStorage.java"
+public class com.ishland.c2me.rewrites.chunkio.mixin.MixinVersionedChunkStorage {
+  public com.ishland.c2me.rewrites.chunkio.mixin.MixinVersionedChunkStorage();
+    Code:
+         0: aload_0
+         1: invokespecial #17                 // Method java/lang/Object."<init>":()V
+         4: return
+
+  private net.minecraft.class_4698 redirectStorageIoWorker(net.minecraft.class_9240, java.nio.file.Path, boolean);
+    Code:
+         0: aload_0
+         1: astore        5
+         3: aload         5
+         5: instanceof    #32                 // class com/ishland/c2me/base/common/scheduler/IVanillaChunkManager
+         8: ifeq          36
+        11: aload         5
+        13: checkcast     #32                 // class com/ishland/c2me/base/common/scheduler/IVanillaChunkManager
+        16: astore        4
+        18: new           #34                 // class com/ishland/c2me/rewrites/chunkio/common/C2MEStorageVanillaInterface
+        21: dup
+        22: aload_1
+        23: aload_2
+        24: iload_3
+        25: aload         4
+        27: invokedynamic #54,  0             // InvokeDynamic #0:apply:(Lcom/ishland/c2me/base/common/scheduler/IVanillaChunkManager;)Ljava/util/function/LongFunction;
+        32: invokespecial #57                 // Method com/ishland/c2me/rewrites/chunkio/common/C2MEStorageVanillaInterface."<init>":(Lnet/minecraft/class_9240;Ljava/nio/file/Path;ZLjava/util/function/LongFunction;)V
+        35: areturn
+        36: new           #34                 // class com/ishland/c2me/rewrites/chunkio/common/C2MEStorageVanillaInterface
+        39: dup
+        40: aload_1
+        41: aload_2
+        42: iload_3
+        43: aconst_null
+        44: invokespecial #57                 // Method com/ishland/c2me/rewrites/chunkio/common/C2MEStorageVanillaInterface."<init>":(Lnet/minecraft/class_9240;Ljava/nio/file/Path;ZLjava/util/function/LongFunction;)V
+        47: areturn
+
+  private static java.util.concurrent.Executor lambda$redirectStorageIoWorker$0(com.ishland.c2me.base.common.scheduler.IVanillaChunkManager, long);
+    Code:
+         0: aload_0
+         1: invokeinterface #67,  1           // InterfaceMethod com/ishland/c2me/base/common/scheduler/IVanillaChunkManager.c2me$getSchedulingManager:()Lcom/ishland/c2me/base/common/scheduler/SchedulingManager;
+         6: lload_1
+         7: invokevirtual #72                 // Method com/ishland/c2me/base/common/scheduler/SchedulingManager.positionedExecutor:(J)Ljava/util/concurrent/Executor;
+        10: areturn
+}

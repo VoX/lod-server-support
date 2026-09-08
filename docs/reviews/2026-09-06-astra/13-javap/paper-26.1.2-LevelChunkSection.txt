@@ -1,0 +1,856 @@
+SOURCE /home/vox/.gradle/caches/paperweight-userdev/v2/work/applyPaperclipPatch_63ef5e3f61b163e3b45592acfde56156dca5739274b15d2bbb7782875c1f111a/output.jar
+Compiled from "LevelChunkSection.java"
+public class net.minecraft.world.level.chunk.LevelChunkSection implements ca.spottedleaf.moonrise.patches.block_counting.BlockCountingChunkSection {
+  public static final int SECTION_WIDTH;
+
+  public static final int SECTION_HEIGHT;
+
+  public static final int SECTION_SIZE;
+
+  public static final int BIOME_CONTAINER_BITS;
+
+  short nonEmptyBlockCount;
+
+  private short fluidCount;
+
+  private short tickingBlockCount;
+
+  private short tickingFluidCount;
+
+  public final net.minecraft.world.level.chunk.PalettedContainer<net.minecraft.world.level.block.state.BlockState> states;
+
+  private net.minecraft.world.level.chunk.PalettedContainer<net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome>> biomes;
+
+  private static final it.unimi.dsi.fastutil.shorts.ShortArrayList FULL_LIST;
+
+  private boolean isClient;
+
+  private static final short CLIENT_FORCED_SPECIAL_COLLIDING_BLOCKS;
+
+  private short specialCollidingBlocks;
+
+  private final ca.spottedleaf.moonrise.common.list.ShortList tickingBlocks;
+
+  public final boolean moonrise$hasSpecialCollidingBlocks();
+    Code:
+         0: aload_0
+         1: getfield      #1                  // Field specialCollidingBlocks:S
+         4: ifeq          11
+         7: iconst_1
+         8: goto          12
+        11: iconst_0
+        12: ireturn
+
+  public final ca.spottedleaf.moonrise.common.list.ShortList moonrise$getTickingBlockList();
+    Code:
+         0: aload_0
+         1: getfield      #7                  // Field tickingBlocks:Lca/spottedleaf/moonrise/common/list/ShortList;
+         4: areturn
+
+  private net.minecraft.world.level.chunk.LevelChunkSection(net.minecraft.world.level.chunk.LevelChunkSection);
+    Code:
+         0: aload_0
+         1: invokespecial #11                 // Method java/lang/Object."<init>":()V
+         4: aload_0
+         5: new           #17                 // class ca/spottedleaf/moonrise/common/list/ShortList
+         8: dup
+         9: invokespecial #19                 // Method ca/spottedleaf/moonrise/common/list/ShortList."<init>":()V
+        12: putfield      #7                  // Field tickingBlocks:Lca/spottedleaf/moonrise/common/list/ShortList;
+        15: aload_0
+        16: aload_1
+        17: getfield      #20                 // Field nonEmptyBlockCount:S
+        20: putfield      #20                 // Field nonEmptyBlockCount:S
+        23: aload_0
+        24: aload_1
+        25: getfield      #23                 // Field fluidCount:S
+        28: putfield      #23                 // Field fluidCount:S
+        31: aload_0
+        32: aload_1
+        33: getfield      #26                 // Field tickingBlockCount:S
+        36: putfield      #26                 // Field tickingBlockCount:S
+        39: aload_0
+        40: aload_1
+        41: getfield      #29                 // Field tickingFluidCount:S
+        44: putfield      #29                 // Field tickingFluidCount:S
+        47: aload_0
+        48: aload_1
+        49: getfield      #32                 // Field states:Lnet/minecraft/world/level/chunk/PalettedContainer;
+        52: invokevirtual #36                 // Method net/minecraft/world/level/chunk/PalettedContainer.copy:()Lnet/minecraft/world/level/chunk/PalettedContainer;
+        55: putfield      #32                 // Field states:Lnet/minecraft/world/level/chunk/PalettedContainer;
+        58: aload_0
+        59: aload_1
+        60: getfield      #42                 // Field biomes:Lnet/minecraft/world/level/chunk/PalettedContainer;
+        63: invokevirtual #36                 // Method net/minecraft/world/level/chunk/PalettedContainer.copy:()Lnet/minecraft/world/level/chunk/PalettedContainer;
+        66: putfield      #42                 // Field biomes:Lnet/minecraft/world/level/chunk/PalettedContainer;
+        69: return
+
+  public net.minecraft.world.level.chunk.LevelChunkSection(net.minecraft.world.level.chunk.PalettedContainer<net.minecraft.world.level.block.state.BlockState>, net.minecraft.world.level.chunk.PalettedContainer<net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome>>);
+    Code:
+         0: aload_0
+         1: invokespecial #11                 // Method java/lang/Object."<init>":()V
+         4: aload_0
+         5: new           #17                 // class ca/spottedleaf/moonrise/common/list/ShortList
+         8: dup
+         9: invokespecial #19                 // Method ca/spottedleaf/moonrise/common/list/ShortList."<init>":()V
+        12: putfield      #7                  // Field tickingBlocks:Lca/spottedleaf/moonrise/common/list/ShortList;
+        15: aload_0
+        16: aload_1
+        17: putfield      #32                 // Field states:Lnet/minecraft/world/level/chunk/PalettedContainer;
+        20: aload_0
+        21: aload_2
+        22: putfield      #42                 // Field biomes:Lnet/minecraft/world/level/chunk/PalettedContainer;
+        25: aload_0
+        26: invokevirtual #45                 // Method recalcBlockCounts:()V
+        29: return
+
+  public net.minecraft.world.level.chunk.LevelChunkSection(net.minecraft.world.level.chunk.PalettedContainerFactory);
+    Code:
+         0: aload_0
+         1: aload_1
+         2: aconst_null
+         3: aconst_null
+         4: iconst_0
+         5: invokespecial #48                 // Method "<init>":(Lnet/minecraft/world/level/chunk/PalettedContainerFactory;Lnet/minecraft/world/level/Level;Lnet/minecraft/world/level/ChunkPos;I)V
+         8: return
+
+  public net.minecraft.world.level.chunk.LevelChunkSection(net.minecraft.world.level.chunk.PalettedContainerFactory, net.minecraft.world.level.Level, net.minecraft.world.level.ChunkPos, int);
+    Code:
+         0: aload_0
+         1: invokespecial #11                 // Method java/lang/Object."<init>":()V
+         4: aload_0
+         5: new           #17                 // class ca/spottedleaf/moonrise/common/list/ShortList
+         8: dup
+         9: invokespecial #19                 // Method ca/spottedleaf/moonrise/common/list/ShortList."<init>":()V
+        12: putfield      #7                  // Field tickingBlocks:Lca/spottedleaf/moonrise/common/list/ShortList;
+        15: aload_0
+        16: aload_1
+        17: aload_2
+        18: aload_3
+        19: iload         4
+        21: invokevirtual #51                 // Method net/minecraft/world/level/chunk/PalettedContainerFactory.createForBlockStates:(Lnet/minecraft/world/level/Level;Lnet/minecraft/world/level/ChunkPos;I)Lnet/minecraft/world/level/chunk/PalettedContainer;
+        24: putfield      #32                 // Field states:Lnet/minecraft/world/level/chunk/PalettedContainer;
+        27: aload_0
+        28: aload_1
+        29: invokevirtual #57                 // Method net/minecraft/world/level/chunk/PalettedContainerFactory.createForBiomes:()Lnet/minecraft/world/level/chunk/PalettedContainer;
+        32: putfield      #42                 // Field biomes:Lnet/minecraft/world/level/chunk/PalettedContainer;
+        35: return
+
+  public net.minecraft.world.level.block.state.BlockState getBlockState(int, int, int);
+    Code:
+         0: aload_0
+         1: getfield      #32                 // Field states:Lnet/minecraft/world/level/chunk/PalettedContainer;
+         4: iload_1
+         5: iload_2
+         6: iload_3
+         7: invokevirtual #60                 // Method net/minecraft/world/level/chunk/PalettedContainer.get:(III)Ljava/lang/Object;
+        10: checkcast     #64                 // class net/minecraft/world/level/block/state/BlockState
+        13: areturn
+
+  public net.minecraft.world.level.material.FluidState getFluidState(int, int, int);
+    Code:
+         0: aload_0
+         1: getfield      #32                 // Field states:Lnet/minecraft/world/level/chunk/PalettedContainer;
+         4: iload_1
+         5: iload_2
+         6: iload_3
+         7: invokevirtual #60                 // Method net/minecraft/world/level/chunk/PalettedContainer.get:(III)Ljava/lang/Object;
+        10: checkcast     #64                 // class net/minecraft/world/level/block/state/BlockState
+        13: invokevirtual #66                 // Method net/minecraft/world/level/block/state/BlockState.getFluidState:()Lnet/minecraft/world/level/material/FluidState;
+        16: areturn
+
+  public void acquire();
+    Code:
+         0: aload_0
+         1: getfield      #32                 // Field states:Lnet/minecraft/world/level/chunk/PalettedContainer;
+         4: invokevirtual #70                 // Method net/minecraft/world/level/chunk/PalettedContainer.acquire:()V
+         7: return
+
+  public void release();
+    Code:
+         0: aload_0
+         1: getfield      #32                 // Field states:Lnet/minecraft/world/level/chunk/PalettedContainer;
+         4: invokevirtual #73                 // Method net/minecraft/world/level/chunk/PalettedContainer.release:()V
+         7: return
+
+  public net.minecraft.world.level.block.state.BlockState setBlockState(int, int, int, net.minecraft.world.level.block.state.BlockState);
+    Code:
+         0: aload_0
+         1: iload_1
+         2: iload_2
+         3: iload_3
+         4: aload         4
+         6: iconst_1
+         7: invokevirtual #76                 // Method setBlockState:(IIILnet/minecraft/world/level/block/state/BlockState;Z)Lnet/minecraft/world/level/block/state/BlockState;
+        10: areturn
+
+  private void updateBlockCallback(int, int, int, net.minecraft.world.level.block.state.BlockState, net.minecraft.world.level.block.state.BlockState);
+    Code:
+         0: aload         5
+         2: aload         4
+         4: if_acmpne     8
+         7: return
+         8: aload_0
+         9: getfield      #80                 // Field isClient:Z
+        12: ifeq          31
+        15: aload         4
+        17: invokestatic  #84                 // Method ca/spottedleaf/moonrise/patches/collisions/CollisionUtil.isSpecialCollidingBlock:(Lnet/minecraft/world/level/block/state/BlockBehaviour$BlockStateBase;)Z
+        20: ifeq          30
+        23: aload_0
+        24: sipush        9999
+        27: putfield      #1                  // Field specialCollidingBlocks:S
+        30: return
+        31: aload         5
+        33: invokestatic  #84                 // Method ca/spottedleaf/moonrise/patches/collisions/CollisionUtil.isSpecialCollidingBlock:(Lnet/minecraft/world/level/block/state/BlockBehaviour$BlockStateBase;)Z
+        36: istore        6
+        38: aload         4
+        40: invokestatic  #84                 // Method ca/spottedleaf/moonrise/patches/collisions/CollisionUtil.isSpecialCollidingBlock:(Lnet/minecraft/world/level/block/state/BlockBehaviour$BlockStateBase;)Z
+        43: istore        7
+        45: iload         6
+        47: iload         7
+        49: if_icmpeq     82
+        52: iload         6
+        54: ifeq          71
+        57: aload_0
+        58: dup
+        59: getfield      #1                  // Field specialCollidingBlocks:S
+        62: iconst_1
+        63: isub
+        64: i2s
+        65: putfield      #1                  // Field specialCollidingBlocks:S
+        68: goto          82
+        71: aload_0
+        72: dup
+        73: getfield      #1                  // Field specialCollidingBlocks:S
+        76: iconst_1
+        77: iadd
+        78: i2s
+        79: putfield      #1                  // Field specialCollidingBlocks:S
+        82: aload         5
+        84: invokevirtual #90                 // Method net/minecraft/world/level/block/state/BlockState.isRandomlyTicking:()Z
+        87: istore        8
+        89: aload         4
+        91: invokevirtual #90                 // Method net/minecraft/world/level/block/state/BlockState.isRandomlyTicking:()Z
+        94: istore        9
+        96: iload         8
+        98: iload         9
+       100: if_icmpeq     146
+       103: aload_0
+       104: getfield      #7                  // Field tickingBlocks:Lca/spottedleaf/moonrise/common/list/ShortList;
+       107: astore        10
+       109: iload_1
+       110: iload_3
+       111: iconst_4
+       112: ishl
+       113: ior
+       114: iload_2
+       115: bipush        8
+       117: ishl
+       118: ior
+       119: i2s
+       120: istore        11
+       122: iload         8
+       124: ifeq          138
+       127: aload         10
+       129: iload         11
+       131: invokevirtual #94                 // Method ca/spottedleaf/moonrise/common/list/ShortList.remove:(S)Z
+       134: pop
+       135: goto          146
+       138: aload         10
+       140: iload         11
+       142: invokevirtual #98                 // Method ca/spottedleaf/moonrise/common/list/ShortList.add:(S)Z
+       145: pop
+       146: return
+
+  public net.minecraft.world.level.block.state.BlockState setBlockState(int, int, int, net.minecraft.world.level.block.state.BlockState, boolean);
+    Code:
+         0: iload         5
+         2: ifeq          25
+         5: aload_0
+         6: getfield      #32                 // Field states:Lnet/minecraft/world/level/chunk/PalettedContainer;
+         9: iload_1
+        10: iload_2
+        11: iload_3
+        12: aload         4
+        14: invokevirtual #101                // Method net/minecraft/world/level/chunk/PalettedContainer.getAndSet:(IIILjava/lang/Object;)Ljava/lang/Object;
+        17: checkcast     #64                 // class net/minecraft/world/level/block/state/BlockState
+        20: astore        6
+        22: goto          42
+        25: aload_0
+        26: getfield      #32                 // Field states:Lnet/minecraft/world/level/chunk/PalettedContainer;
+        29: iload_1
+        30: iload_2
+        31: iload_3
+        32: aload         4
+        34: invokevirtual #105                // Method net/minecraft/world/level/chunk/PalettedContainer.getAndSetUnchecked:(IIILjava/lang/Object;)Ljava/lang/Object;
+        37: checkcast     #64                 // class net/minecraft/world/level/block/state/BlockState
+        40: astore        6
+        42: aload         6
+        44: invokevirtual #108                // Method net/minecraft/world/level/block/state/BlockState.isAir:()Z
+        47: ifne          125
+        50: aload_0
+        51: dup
+        52: getfield      #20                 // Field nonEmptyBlockCount:S
+        55: iconst_1
+        56: isub
+        57: i2s
+        58: putfield      #20                 // Field nonEmptyBlockCount:S
+        61: aload         6
+        63: invokevirtual #90                 // Method net/minecraft/world/level/block/state/BlockState.isRandomlyTicking:()Z
+        66: ifeq          80
+        69: aload_0
+        70: dup
+        71: getfield      #26                 // Field tickingBlockCount:S
+        74: iconst_1
+        75: isub
+        76: i2s
+        77: putfield      #26                 // Field tickingBlockCount:S
+        80: aload         6
+        82: invokevirtual #66                 // Method net/minecraft/world/level/block/state/BlockState.getFluidState:()Lnet/minecraft/world/level/material/FluidState;
+        85: astore        7
+        87: aload         7
+        89: invokevirtual #111                // Method net/minecraft/world/level/material/FluidState.isEmpty:()Z
+        92: ifne          125
+        95: aload_0
+        96: dup
+        97: getfield      #23                 // Field fluidCount:S
+       100: iconst_1
+       101: isub
+       102: i2s
+       103: putfield      #23                 // Field fluidCount:S
+       106: aload         7
+       108: invokevirtual #116                // Method net/minecraft/world/level/material/FluidState.isRandomlyTicking:()Z
+       111: ifeq          125
+       114: aload_0
+       115: dup
+       116: getfield      #29                 // Field tickingFluidCount:S
+       119: iconst_1
+       120: isub
+       121: i2s
+       122: putfield      #29                 // Field tickingFluidCount:S
+       125: aload         4
+       127: invokevirtual #108                // Method net/minecraft/world/level/block/state/BlockState.isAir:()Z
+       130: ifne          208
+       133: aload_0
+       134: dup
+       135: getfield      #20                 // Field nonEmptyBlockCount:S
+       138: iconst_1
+       139: iadd
+       140: i2s
+       141: putfield      #20                 // Field nonEmptyBlockCount:S
+       144: aload         4
+       146: invokevirtual #90                 // Method net/minecraft/world/level/block/state/BlockState.isRandomlyTicking:()Z
+       149: ifeq          163
+       152: aload_0
+       153: dup
+       154: getfield      #26                 // Field tickingBlockCount:S
+       157: iconst_1
+       158: iadd
+       159: i2s
+       160: putfield      #26                 // Field tickingBlockCount:S
+       163: aload         4
+       165: invokevirtual #66                 // Method net/minecraft/world/level/block/state/BlockState.getFluidState:()Lnet/minecraft/world/level/material/FluidState;
+       168: astore        7
+       170: aload         7
+       172: invokevirtual #111                // Method net/minecraft/world/level/material/FluidState.isEmpty:()Z
+       175: ifne          208
+       178: aload_0
+       179: dup
+       180: getfield      #23                 // Field fluidCount:S
+       183: iconst_1
+       184: iadd
+       185: i2s
+       186: putfield      #23                 // Field fluidCount:S
+       189: aload         7
+       191: invokevirtual #116                // Method net/minecraft/world/level/material/FluidState.isRandomlyTicking:()Z
+       194: ifeq          208
+       197: aload_0
+       198: dup
+       199: getfield      #29                 // Field tickingFluidCount:S
+       202: iconst_1
+       203: iadd
+       204: i2s
+       205: putfield      #29                 // Field tickingFluidCount:S
+       208: aload_0
+       209: iload_1
+       210: iload_2
+       211: iload_3
+       212: aload         4
+       214: aload         6
+       216: invokevirtual #117                // Method updateBlockCallback:(IIILnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/world/level/block/state/BlockState;)V
+       219: aload         6
+       221: areturn
+
+  public boolean hasOnlyAir();
+    Code:
+         0: aload_0
+         1: getfield      #20                 // Field nonEmptyBlockCount:S
+         4: ifne          11
+         7: iconst_1
+         8: goto          12
+        11: iconst_0
+        12: ireturn
+
+  public boolean hasFluid();
+    Code:
+         0: aload_0
+         1: getfield      #23                 // Field fluidCount:S
+         4: ifle          11
+         7: iconst_1
+         8: goto          12
+        11: iconst_0
+        12: ireturn
+
+  public boolean isRandomlyTicking();
+    Code:
+         0: aload_0
+         1: invokevirtual #121                // Method isRandomlyTickingBlocks:()Z
+         4: ifne          14
+         7: aload_0
+         8: invokevirtual #124                // Method isRandomlyTickingFluids:()Z
+        11: ifeq          18
+        14: iconst_1
+        15: goto          19
+        18: iconst_0
+        19: ireturn
+
+  public boolean isRandomlyTickingBlocks();
+    Code:
+         0: aload_0
+         1: getfield      #26                 // Field tickingBlockCount:S
+         4: ifle          11
+         7: iconst_1
+         8: goto          12
+        11: iconst_0
+        12: ireturn
+
+  public boolean isRandomlyTickingFluids();
+    Code:
+         0: aload_0
+         1: getfield      #29                 // Field tickingFluidCount:S
+         4: ifle          11
+         7: iconst_1
+         8: goto          12
+        11: iconst_0
+        12: ireturn
+
+  public void recalcBlockCounts();
+    Code:
+         0: aload_0
+         1: iconst_0
+         2: putfield      #20                 // Field nonEmptyBlockCount:S
+         5: aload_0
+         6: iconst_0
+         7: putfield      #23                 // Field fluidCount:S
+        10: aload_0
+        11: iconst_0
+        12: putfield      #26                 // Field tickingBlockCount:S
+        15: aload_0
+        16: iconst_0
+        17: putfield      #29                 // Field tickingFluidCount:S
+        20: aload_0
+        21: iconst_0
+        22: putfield      #1                  // Field specialCollidingBlocks:S
+        25: aload_0
+        26: getfield      #7                  // Field tickingBlocks:Lca/spottedleaf/moonrise/common/list/ShortList;
+        29: invokevirtual #127                // Method ca/spottedleaf/moonrise/common/list/ShortList.clear:()V
+        32: aload_0
+        33: invokedynamic #130,  0            // InvokeDynamic #0:test:()Ljava/util/function/Predicate;
+        38: invokevirtual #134                // Method maybeHas:(Ljava/util/function/Predicate;)Z
+        41: ifeq          378
+        44: aload_0
+        45: getfield      #32                 // Field states:Lnet/minecraft/world/level/chunk/PalettedContainer;
+        48: getfield      #138                // Field net/minecraft/world/level/chunk/PalettedContainer.data:Lnet/minecraft/world/level/chunk/PalettedContainer$Data;
+        51: astore_1
+        52: aload_1
+        53: invokevirtual #142                // Method net/minecraft/world/level/chunk/PalettedContainer$Data.palette:()Lnet/minecraft/world/level/chunk/Palette;
+        56: astore_2
+        57: aload_2
+        58: invokeinterface #148,  1          // InterfaceMethod net/minecraft/world/level/chunk/Palette.getSize:()I
+        63: istore_3
+        64: aload_1
+        65: invokevirtual #154                // Method net/minecraft/world/level/chunk/PalettedContainer$Data.storage:()Lnet/minecraft/util/BitStorage;
+        68: astore        4
+        70: iload_3
+        71: iconst_1
+        72: if_icmpne     98
+        75: new           #158                // class it/unimi/dsi/fastutil/ints/Int2ObjectOpenHashMap
+        78: dup
+        79: iconst_1
+        80: invokespecial #160                // Method it/unimi/dsi/fastutil/ints/Int2ObjectOpenHashMap."<init>":(I)V
+        83: astore        5
+        85: aload         5
+        87: iconst_0
+        88: getstatic     #163                // Field FULL_LIST:Lit/unimi/dsi/fastutil/shorts/ShortArrayList;
+        91: invokevirtual #167                // Method it/unimi/dsi/fastutil/ints/Int2ObjectOpenHashMap.put:(ILjava/lang/Object;)Ljava/lang/Object;
+        94: pop
+        95: goto          107
+        98: aload         4
+       100: invokeinterface #171,  1          // InterfaceMethod ca/spottedleaf/moonrise/patches/block_counting/BlockCountingBitStorage.moonrise$countEntries:()Lit/unimi/dsi/fastutil/ints/Int2ObjectOpenHashMap;
+       105: astore        5
+       107: aload         5
+       109: invokevirtual #177                // Method it/unimi/dsi/fastutil/ints/Int2ObjectOpenHashMap.int2ObjectEntrySet:()Lit/unimi/dsi/fastutil/ints/Int2ObjectMap$FastEntrySet;
+       112: invokeinterface #181,  1          // InterfaceMethod it/unimi/dsi/fastutil/ints/Int2ObjectMap$FastEntrySet.fastIterator:()Lit/unimi/dsi/fastutil/objects/ObjectIterator;
+       117: astore        6
+       119: aload         6
+       121: invokeinterface #187,  1          // InterfaceMethod java/util/Iterator.hasNext:()Z
+       126: ifeq          378
+       129: aload         6
+       131: invokeinterface #192,  1          // InterfaceMethod java/util/Iterator.next:()Ljava/lang/Object;
+       136: checkcast     #196                // class it/unimi/dsi/fastutil/ints/Int2ObjectMap$Entry
+       139: astore        7
+       141: aload         7
+       143: invokeinterface #198,  1          // InterfaceMethod it/unimi/dsi/fastutil/ints/Int2ObjectMap$Entry.getIntKey:()I
+       148: istore        8
+       150: aload         7
+       152: invokeinterface #201,  1          // InterfaceMethod it/unimi/dsi/fastutil/ints/Int2ObjectMap$Entry.getValue:()Ljava/lang/Object;
+       157: checkcast     #204                // class it/unimi/dsi/fastutil/shorts/ShortArrayList
+       160: astore        9
+       162: aload         9
+       164: invokevirtual #206                // Method it/unimi/dsi/fastutil/shorts/ShortArrayList.size:()I
+       167: istore        10
+       169: aload_2
+       170: iload         8
+       172: invokeinterface #209,  2          // InterfaceMethod net/minecraft/world/level/chunk/Palette.valueFor:(I)Ljava/lang/Object;
+       177: checkcast     #64                 // class net/minecraft/world/level/block/state/BlockState
+       180: astore        11
+       182: aload         11
+       184: invokevirtual #108                // Method net/minecraft/world/level/block/state/BlockState.isAir:()Z
+       187: ifeq          193
+       190: goto          119
+       193: aload         11
+       195: invokestatic  #84                 // Method ca/spottedleaf/moonrise/patches/collisions/CollisionUtil.isSpecialCollidingBlock:(Lnet/minecraft/world/level/block/state/BlockBehaviour$BlockStateBase;)Z
+       198: ifeq          214
+       201: aload_0
+       202: dup
+       203: getfield      #1                  // Field specialCollidingBlocks:S
+       206: iload         10
+       208: i2s
+       209: iadd
+       210: i2s
+       211: putfield      #1                  // Field specialCollidingBlocks:S
+       214: aload_0
+       215: dup
+       216: getfield      #20                 // Field nonEmptyBlockCount:S
+       219: iload         10
+       221: i2s
+       222: iadd
+       223: i2s
+       224: putfield      #20                 // Field nonEmptyBlockCount:S
+       227: aload         11
+       229: invokevirtual #90                 // Method net/minecraft/world/level/block/state/BlockState.isRandomlyTicking:()Z
+       232: ifeq          326
+       235: aload_0
+       236: dup
+       237: getfield      #26                 // Field tickingBlockCount:S
+       240: iload         10
+       242: i2s
+       243: iadd
+       244: i2s
+       245: putfield      #26                 // Field tickingBlockCount:S
+       248: aload         9
+       250: invokevirtual #213                // Method it/unimi/dsi/fastutil/shorts/ShortArrayList.elements:()[S
+       253: astore        12
+       255: aload         12
+       257: arraylength
+       258: istore        13
+       260: aload_0
+       261: getfield      #7                  // Field tickingBlocks:Lca/spottedleaf/moonrise/common/list/ShortList;
+       264: astore        14
+       266: aload         14
+       268: iload         13
+       270: aload         14
+       272: invokevirtual #217                // Method ca/spottedleaf/moonrise/common/list/ShortList.size:()I
+       275: iadd
+       276: iconst_3
+       277: imul
+       278: iconst_2
+       279: idiv
+       280: sipush        4096
+       283: invokestatic  #218                // Method java/lang/Math.min:(II)I
+       286: invokevirtual #224                // Method ca/spottedleaf/moonrise/common/list/ShortList.setMinCapacity:(I)V
+       289: iconst_0
+       290: iload         10
+       292: aload         12
+       294: arraylength
+       295: invokestatic  #227                // Method java/util/Objects.checkFromToIndex:(III)I
+       298: pop
+       299: iconst_0
+       300: istore        15
+       302: iload         15
+       304: iload         10
+       306: if_icmpge     326
+       309: aload         14
+       311: aload         12
+       313: iload         15
+       315: saload
+       316: invokevirtual #98                 // Method ca/spottedleaf/moonrise/common/list/ShortList.add:(S)Z
+       319: pop
+       320: iinc          15, 1
+       323: goto          302
+       326: aload         11
+       328: invokevirtual #66                 // Method net/minecraft/world/level/block/state/BlockState.getFluidState:()Lnet/minecraft/world/level/material/FluidState;
+       331: astore        12
+       333: aload         12
+       335: invokevirtual #111                // Method net/minecraft/world/level/material/FluidState.isEmpty:()Z
+       338: ifne          375
+       341: aload_0
+       342: dup
+       343: getfield      #23                 // Field fluidCount:S
+       346: iload         10
+       348: i2s
+       349: iadd
+       350: i2s
+       351: putfield      #23                 // Field fluidCount:S
+       354: aload         12
+       356: invokevirtual #116                // Method net/minecraft/world/level/material/FluidState.isRandomlyTicking:()Z
+       359: ifeq          375
+       362: aload_0
+       363: dup
+       364: getfield      #29                 // Field tickingFluidCount:S
+       367: iload         10
+       369: i2s
+       370: iadd
+       371: i2s
+       372: putfield      #29                 // Field tickingFluidCount:S
+       375: goto          119
+       378: return
+
+  public net.minecraft.world.level.chunk.PalettedContainer<net.minecraft.world.level.block.state.BlockState> getStates();
+    Code:
+         0: aload_0
+         1: getfield      #32                 // Field states:Lnet/minecraft/world/level/chunk/PalettedContainer;
+         4: areturn
+
+  public net.minecraft.world.level.chunk.PalettedContainerRO<net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome>> getBiomes();
+    Code:
+         0: aload_0
+         1: getfield      #42                 // Field biomes:Lnet/minecraft/world/level/chunk/PalettedContainer;
+         4: areturn
+
+  public void read(net.minecraft.network.FriendlyByteBuf);
+    Code:
+         0: aload_0
+         1: aload_1
+         2: invokevirtual #233                // Method net/minecraft/network/FriendlyByteBuf.readShort:()S
+         5: putfield      #20                 // Field nonEmptyBlockCount:S
+         8: aload_0
+         9: aload_1
+        10: invokevirtual #233                // Method net/minecraft/network/FriendlyByteBuf.readShort:()S
+        13: putfield      #23                 // Field fluidCount:S
+        16: aload_0
+        17: getfield      #32                 // Field states:Lnet/minecraft/world/level/chunk/PalettedContainer;
+        20: aload_1
+        21: invokevirtual #239                // Method net/minecraft/world/level/chunk/PalettedContainer.read:(Lnet/minecraft/network/FriendlyByteBuf;)V
+        24: aload_0
+        25: getfield      #42                 // Field biomes:Lnet/minecraft/world/level/chunk/PalettedContainer;
+        28: invokevirtual #243                // Method net/minecraft/world/level/chunk/PalettedContainer.recreate:()Lnet/minecraft/world/level/chunk/PalettedContainer;
+        31: astore_2
+        32: aload_2
+        33: aload_1
+        34: invokevirtual #239                // Method net/minecraft/world/level/chunk/PalettedContainer.read:(Lnet/minecraft/network/FriendlyByteBuf;)V
+        37: aload_0
+        38: aload_2
+        39: putfield      #42                 // Field biomes:Lnet/minecraft/world/level/chunk/PalettedContainer;
+        42: aload_0
+        43: iconst_1
+        44: putfield      #80                 // Field isClient:Z
+        47: aload_0
+        48: aload_0
+        49: getfield      #20                 // Field nonEmptyBlockCount:S
+        52: ifeq          73
+        55: aload_0
+        56: invokedynamic #246,  0            // InvokeDynamic #1:test:()Ljava/util/function/Predicate;
+        61: invokevirtual #134                // Method maybeHas:(Ljava/util/function/Predicate;)Z
+        64: ifeq          73
+        67: sipush        9999
+        70: goto          74
+        73: iconst_0
+        74: putfield      #1                  // Field specialCollidingBlocks:S
+        77: return
+
+  public void readBiomes(net.minecraft.network.FriendlyByteBuf);
+    Code:
+         0: aload_0
+         1: getfield      #42                 // Field biomes:Lnet/minecraft/world/level/chunk/PalettedContainer;
+         4: invokevirtual #243                // Method net/minecraft/world/level/chunk/PalettedContainer.recreate:()Lnet/minecraft/world/level/chunk/PalettedContainer;
+         7: astore_2
+         8: aload_2
+         9: aload_1
+        10: invokevirtual #239                // Method net/minecraft/world/level/chunk/PalettedContainer.read:(Lnet/minecraft/network/FriendlyByteBuf;)V
+        13: aload_0
+        14: aload_2
+        15: putfield      #42                 // Field biomes:Lnet/minecraft/world/level/chunk/PalettedContainer;
+        18: return
+
+  public void write(net.minecraft.network.FriendlyByteBuf);
+    Code:
+         0: aload_0
+         1: aload_1
+         2: aconst_null
+         3: iconst_0
+         4: invokevirtual #247                // Method write:(Lnet/minecraft/network/FriendlyByteBuf;Lio/papermc/paper/antixray/ChunkPacketInfo;I)V
+         7: return
+
+  public void write(net.minecraft.network.FriendlyByteBuf, io.papermc.paper.antixray.ChunkPacketInfo<net.minecraft.world.level.block.state.BlockState>, int);
+    Code:
+         0: aload_1
+         1: aload_0
+         2: getfield      #20                 // Field nonEmptyBlockCount:S
+         5: invokevirtual #251                // Method net/minecraft/network/FriendlyByteBuf.writeShort:(I)Lnet/minecraft/network/FriendlyByteBuf;
+         8: pop
+         9: aload_1
+        10: aload_0
+        11: getfield      #23                 // Field fluidCount:S
+        14: invokevirtual #251                // Method net/minecraft/network/FriendlyByteBuf.writeShort:(I)Lnet/minecraft/network/FriendlyByteBuf;
+        17: pop
+        18: aload_0
+        19: getfield      #32                 // Field states:Lnet/minecraft/world/level/chunk/PalettedContainer;
+        22: aload_1
+        23: aload_2
+        24: iload_3
+        25: invokevirtual #255                // Method net/minecraft/world/level/chunk/PalettedContainer.write:(Lnet/minecraft/network/FriendlyByteBuf;Lio/papermc/paper/antixray/ChunkPacketInfo;I)V
+        28: aload_0
+        29: getfield      #42                 // Field biomes:Lnet/minecraft/world/level/chunk/PalettedContainer;
+        32: aload_1
+        33: aconst_null
+        34: iload_3
+        35: invokevirtual #255                // Method net/minecraft/world/level/chunk/PalettedContainer.write:(Lnet/minecraft/network/FriendlyByteBuf;Lio/papermc/paper/antixray/ChunkPacketInfo;I)V
+        38: return
+
+  public int getSerializedSize();
+    Code:
+         0: iconst_4
+         1: aload_0
+         2: getfield      #32                 // Field states:Lnet/minecraft/world/level/chunk/PalettedContainer;
+         5: invokevirtual #256                // Method net/minecraft/world/level/chunk/PalettedContainer.getSerializedSize:()I
+         8: iadd
+         9: aload_0
+        10: getfield      #42                 // Field biomes:Lnet/minecraft/world/level/chunk/PalettedContainer;
+        13: invokevirtual #256                // Method net/minecraft/world/level/chunk/PalettedContainer.getSerializedSize:()I
+        16: iadd
+        17: ireturn
+
+  public boolean maybeHas(java.util.function.Predicate<net.minecraft.world.level.block.state.BlockState>);
+    Code:
+         0: aload_0
+         1: getfield      #32                 // Field states:Lnet/minecraft/world/level/chunk/PalettedContainer;
+         4: aload_1
+         5: invokevirtual #259                // Method net/minecraft/world/level/chunk/PalettedContainer.maybeHas:(Ljava/util/function/Predicate;)Z
+         8: ireturn
+
+  public net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome> getNoiseBiome(int, int, int);
+    Code:
+         0: aload_0
+         1: getfield      #42                 // Field biomes:Lnet/minecraft/world/level/chunk/PalettedContainer;
+         4: iload_1
+         5: iload_2
+         6: iload_3
+         7: invokevirtual #60                 // Method net/minecraft/world/level/chunk/PalettedContainer.get:(III)Ljava/lang/Object;
+        10: checkcast     #260                // class net/minecraft/core/Holder
+        13: areturn
+
+  public void setNoiseBiome(int, int, int, net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome>);
+    Code:
+         0: aload_0
+         1: getfield      #42                 // Field biomes:Lnet/minecraft/world/level/chunk/PalettedContainer;
+         4: iload_1
+         5: iload_2
+         6: iload_3
+         7: aload         4
+         9: invokevirtual #262                // Method net/minecraft/world/level/chunk/PalettedContainer.set:(IIILjava/lang/Object;)V
+        12: return
+
+  public void fillBiomesFromNoise(net.minecraft.world.level.biome.BiomeResolver, net.minecraft.world.level.biome.Climate$Sampler, int, int, int);
+    Code:
+         0: aload_0
+         1: getfield      #42                 // Field biomes:Lnet/minecraft/world/level/chunk/PalettedContainer;
+         4: invokevirtual #243                // Method net/minecraft/world/level/chunk/PalettedContainer.recreate:()Lnet/minecraft/world/level/chunk/PalettedContainer;
+         7: astore        6
+         9: iconst_4
+        10: istore        7
+        12: iconst_0
+        13: istore        8
+        15: iload         8
+        17: iconst_4
+        18: if_icmpge     90
+        21: iconst_0
+        22: istore        9
+        24: iload         9
+        26: iconst_4
+        27: if_icmpge     84
+        30: iconst_0
+        31: istore        10
+        33: iload         10
+        35: iconst_4
+        36: if_icmpge     78
+        39: aload         6
+        41: iload         8
+        43: iload         9
+        45: iload         10
+        47: aload_1
+        48: iload_3
+        49: iload         8
+        51: iadd
+        52: iload         4
+        54: iload         9
+        56: iadd
+        57: iload         5
+        59: iload         10
+        61: iadd
+        62: aload_2
+        63: invokeinterface #266,  5          // InterfaceMethod net/minecraft/world/level/biome/BiomeResolver.getNoiseBiome:(IIILnet/minecraft/world/level/biome/Climate$Sampler;)Lnet/minecraft/core/Holder;
+        68: invokevirtual #105                // Method net/minecraft/world/level/chunk/PalettedContainer.getAndSetUnchecked:(IIILjava/lang/Object;)Ljava/lang/Object;
+        71: pop
+        72: iinc          10, 1
+        75: goto          33
+        78: iinc          9, 1
+        81: goto          24
+        84: iinc          8, 1
+        87: goto          15
+        90: aload_0
+        91: aload         6
+        93: putfield      #42                 // Field biomes:Lnet/minecraft/world/level/chunk/PalettedContainer;
+        96: return
+
+  public net.minecraft.world.level.chunk.LevelChunkSection copy();
+    Code:
+         0: new           #2                  // class net/minecraft/world/level/chunk/LevelChunkSection
+         3: dup
+         4: aload_0
+         5: invokespecial #272                // Method "<init>":(Lnet/minecraft/world/level/chunk/LevelChunkSection;)V
+         8: areturn
+
+  private static boolean lambda$recalcBlockCounts$0(net.minecraft.world.level.block.state.BlockState);
+    Code:
+         0: aload_0
+         1: invokevirtual #108                // Method net/minecraft/world/level/block/state/BlockState.isAir:()Z
+         4: ifne          11
+         7: iconst_1
+         8: goto          12
+        11: iconst_0
+        12: ireturn
+
+  static {};
+    Code:
+         0: new           #204                // class it/unimi/dsi/fastutil/shorts/ShortArrayList
+         3: dup
+         4: sipush        4096
+         7: invokespecial #275                // Method it/unimi/dsi/fastutil/shorts/ShortArrayList."<init>":(I)V
+        10: putstatic     #163                // Field FULL_LIST:Lit/unimi/dsi/fastutil/shorts/ShortArrayList;
+        13: iconst_0
+        14: istore_0
+        15: iload_0
+        16: sipush        4096
+        19: if_icmpge     38
+        22: getstatic     #163                // Field FULL_LIST:Lit/unimi/dsi/fastutil/shorts/ShortArrayList;
+        25: iload_0
+        26: invokevirtual #276                // Method it/unimi/dsi/fastutil/shorts/ShortArrayList.add:(S)Z
+        29: pop
+        30: iload_0
+        31: iconst_1
+        32: iadd
+        33: i2s
+        34: istore_0
+        35: goto          15
+        38: return
+}

@@ -1,0 +1,766 @@
+Compiled from "IOWorker.java"
+public class net.minecraft.world.level.chunk.storage.IOWorker implements net.minecraft.world.level.chunk.storage.ChunkScanAccess,java.lang.AutoCloseable {
+  private static final org.slf4j.Logger LOGGER;
+
+  private final java.util.concurrent.atomic.AtomicBoolean shutdownRequested;
+
+  private final net.minecraft.util.thread.PriorityConsecutiveExecutor consecutiveExecutor;
+
+  private final net.minecraft.world.level.chunk.storage.RegionFileStorage storage;
+
+  private final java.util.SequencedMap<net.minecraft.world.level.ChunkPos, net.minecraft.world.level.chunk.storage.IOWorker$PendingStore> pendingWrites;
+
+  private final it.unimi.dsi.fastutil.longs.Long2ObjectLinkedOpenHashMap<java.util.concurrent.CompletableFuture<java.util.BitSet>> regionCacheForBlender;
+
+  private static final int REGION_CACHE_SIZE;
+
+  protected net.minecraft.world.level.chunk.storage.IOWorker(net.minecraft.world.level.chunk.storage.RegionStorageInfo, java.nio.file.Path, boolean);
+    Code:
+         0: aload_0
+         1: invokespecial #58                 // Method java/lang/Object."<init>":()V
+         4: aload_0
+         5: new           #60                 // class java/util/concurrent/atomic/AtomicBoolean
+         8: dup
+         9: invokespecial #61                 // Method java/util/concurrent/atomic/AtomicBoolean."<init>":()V
+        12: putfield      #63                 // Field shutdownRequested:Ljava/util/concurrent/atomic/AtomicBoolean;
+        15: aload_0
+        16: new           #65                 // class java/util/LinkedHashMap
+        19: dup
+        20: invokespecial #66                 // Method java/util/LinkedHashMap."<init>":()V
+        23: putfield      #68                 // Field pendingWrites:Ljava/util/SequencedMap;
+        26: aload_0
+        27: new           #70                 // class it/unimi/dsi/fastutil/longs/Long2ObjectLinkedOpenHashMap
+        30: dup
+        31: invokespecial #71                 // Method it/unimi/dsi/fastutil/longs/Long2ObjectLinkedOpenHashMap."<init>":()V
+        34: putfield      #73                 // Field regionCacheForBlender:Lit/unimi/dsi/fastutil/longs/Long2ObjectLinkedOpenHashMap;
+        37: aload_0
+        38: new           #75                 // class net/minecraft/world/level/chunk/storage/RegionFileStorage
+        41: dup
+        42: aload_1
+        43: aload_2
+        44: iload_3
+        45: invokespecial #77                 // Method net/minecraft/world/level/chunk/storage/RegionFileStorage."<init>":(Lnet/minecraft/world/level/chunk/storage/RegionStorageInfo;Ljava/nio/file/Path;Z)V
+        48: putfield      #79                 // Field storage:Lnet/minecraft/world/level/chunk/storage/RegionFileStorage;
+        51: aload_0
+        52: new           #81                 // class net/minecraft/util/thread/PriorityConsecutiveExecutor
+        55: dup
+        56: invokestatic  #85                 // Method net/minecraft/world/level/chunk/storage/IOWorker$Priority.values:()[Lnet/minecraft/world/level/chunk/storage/IOWorker$Priority;
+        59: arraylength
+        60: invokestatic  #91                 // Method net/minecraft/Util.ioPool:()Lnet/minecraft/TracingExecutor;
+        63: aload_1
+        64: invokevirtual #97                 // Method net/minecraft/world/level/chunk/storage/RegionStorageInfo.type:()Ljava/lang/String;
+        67: invokedynamic #109,  0            // InvokeDynamic #0:makeConcatWithConstants:(Ljava/lang/String;)Ljava/lang/String;
+        72: invokespecial #112                // Method net/minecraft/util/thread/PriorityConsecutiveExecutor."<init>":(ILjava/util/concurrent/Executor;Ljava/lang/String;)V
+        75: putfield      #114                // Field consecutiveExecutor:Lnet/minecraft/util/thread/PriorityConsecutiveExecutor;
+        78: return
+
+  public boolean isOldChunkAround(net.minecraft.world.level.ChunkPos, int);
+    Code:
+         0: new           #125                // class net/minecraft/world/level/ChunkPos
+         3: dup
+         4: aload_1
+         5: getfield      #128                // Field net/minecraft/world/level/ChunkPos.x:I
+         8: iload_2
+         9: isub
+        10: aload_1
+        11: getfield      #131                // Field net/minecraft/world/level/ChunkPos.z:I
+        14: iload_2
+        15: isub
+        16: invokespecial #134                // Method net/minecraft/world/level/ChunkPos."<init>":(II)V
+        19: astore_3
+        20: new           #125                // class net/minecraft/world/level/ChunkPos
+        23: dup
+        24: aload_1
+        25: getfield      #128                // Field net/minecraft/world/level/ChunkPos.x:I
+        28: iload_2
+        29: iadd
+        30: aload_1
+        31: getfield      #131                // Field net/minecraft/world/level/ChunkPos.z:I
+        34: iload_2
+        35: iadd
+        36: invokespecial #134                // Method net/minecraft/world/level/ChunkPos."<init>":(II)V
+        39: astore        4
+        41: aload_3
+        42: invokevirtual #138                // Method net/minecraft/world/level/ChunkPos.getRegionX:()I
+        45: istore        5
+        47: iload         5
+        49: aload         4
+        51: invokevirtual #138                // Method net/minecraft/world/level/ChunkPos.getRegionX:()I
+        54: if_icmpgt     245
+        57: aload_3
+        58: invokevirtual #141                // Method net/minecraft/world/level/ChunkPos.getRegionZ:()I
+        61: istore        6
+        63: iload         6
+        65: aload         4
+        67: invokevirtual #141                // Method net/minecraft/world/level/ChunkPos.getRegionZ:()I
+        70: if_icmpgt     239
+        73: aload_0
+        74: iload         5
+        76: iload         6
+        78: invokevirtual #145                // Method getOrCreateOldDataForRegion:(II)Ljava/util/concurrent/CompletableFuture;
+        81: invokevirtual #151                // Method java/util/concurrent/CompletableFuture.join:()Ljava/lang/Object;
+        84: checkcast     #153                // class java/util/BitSet
+        87: astore        7
+        89: aload         7
+        91: invokevirtual #157                // Method java/util/BitSet.isEmpty:()Z
+        94: ifeq          100
+        97: goto          233
+       100: iload         5
+       102: iload         6
+       104: invokestatic  #161                // Method net/minecraft/world/level/ChunkPos.minFromRegion:(II)Lnet/minecraft/world/level/ChunkPos;
+       107: astore        8
+       109: aload_3
+       110: getfield      #128                // Field net/minecraft/world/level/ChunkPos.x:I
+       113: aload         8
+       115: getfield      #128                // Field net/minecraft/world/level/ChunkPos.x:I
+       118: isub
+       119: iconst_0
+       120: invokestatic  #167                // Method java/lang/Math.max:(II)I
+       123: istore        9
+       125: aload_3
+       126: getfield      #131                // Field net/minecraft/world/level/ChunkPos.z:I
+       129: aload         8
+       131: getfield      #131                // Field net/minecraft/world/level/ChunkPos.z:I
+       134: isub
+       135: iconst_0
+       136: invokestatic  #167                // Method java/lang/Math.max:(II)I
+       139: istore        10
+       141: aload         4
+       143: getfield      #128                // Field net/minecraft/world/level/ChunkPos.x:I
+       146: aload         8
+       148: getfield      #128                // Field net/minecraft/world/level/ChunkPos.x:I
+       151: isub
+       152: bipush        31
+       154: invokestatic  #170                // Method java/lang/Math.min:(II)I
+       157: istore        11
+       159: aload         4
+       161: getfield      #131                // Field net/minecraft/world/level/ChunkPos.z:I
+       164: aload         8
+       166: getfield      #131                // Field net/minecraft/world/level/ChunkPos.z:I
+       169: isub
+       170: bipush        31
+       172: invokestatic  #170                // Method java/lang/Math.min:(II)I
+       175: istore        12
+       177: iload         9
+       179: istore        13
+       181: iload         13
+       183: iload         11
+       185: if_icmpgt     233
+       188: iload         10
+       190: istore        14
+       192: iload         14
+       194: iload         12
+       196: if_icmpgt     227
+       199: iload         14
+       201: bipush        32
+       203: imul
+       204: iload         13
+       206: iadd
+       207: istore        15
+       209: aload         7
+       211: iload         15
+       213: invokevirtual #174                // Method java/util/BitSet.get:(I)Z
+       216: ifeq          221
+       219: iconst_1
+       220: ireturn
+       221: iinc          14, 1
+       224: goto          192
+       227: iinc          13, 1
+       230: goto          181
+       233: iinc          6, 1
+       236: goto          63
+       239: iinc          5, 1
+       242: goto          47
+       245: iconst_0
+       246: ireturn
+
+  private java.util.concurrent.CompletableFuture<java.util.BitSet> getOrCreateOldDataForRegion(int, int);
+    Code:
+         0: iload_1
+         1: iload_2
+         2: invokestatic  #194                // Method net/minecraft/world/level/ChunkPos.asLong:(II)J
+         5: lstore_3
+         6: aload_0
+         7: getfield      #73                 // Field regionCacheForBlender:Lit/unimi/dsi/fastutil/longs/Long2ObjectLinkedOpenHashMap;
+        10: dup
+        11: astore        5
+        13: monitorenter
+        14: aload_0
+        15: getfield      #73                 // Field regionCacheForBlender:Lit/unimi/dsi/fastutil/longs/Long2ObjectLinkedOpenHashMap;
+        18: lload_3
+        19: invokevirtual #198                // Method it/unimi/dsi/fastutil/longs/Long2ObjectLinkedOpenHashMap.getAndMoveToFirst:(J)Ljava/lang/Object;
+        22: checkcast     #147                // class java/util/concurrent/CompletableFuture
+        25: astore        6
+        27: aload         6
+        29: ifnonnull     72
+        32: aload_0
+        33: iload_1
+        34: iload_2
+        35: invokevirtual #201                // Method createOldDataForRegion:(II)Ljava/util/concurrent/CompletableFuture;
+        38: astore        6
+        40: aload_0
+        41: getfield      #73                 // Field regionCacheForBlender:Lit/unimi/dsi/fastutil/longs/Long2ObjectLinkedOpenHashMap;
+        44: lload_3
+        45: aload         6
+        47: invokevirtual #205                // Method it/unimi/dsi/fastutil/longs/Long2ObjectLinkedOpenHashMap.putAndMoveToFirst:(JLjava/lang/Object;)Ljava/lang/Object;
+        50: pop
+        51: aload_0
+        52: getfield      #73                 // Field regionCacheForBlender:Lit/unimi/dsi/fastutil/longs/Long2ObjectLinkedOpenHashMap;
+        55: invokevirtual #208                // Method it/unimi/dsi/fastutil/longs/Long2ObjectLinkedOpenHashMap.size:()I
+        58: sipush        1024
+        61: if_icmple     72
+        64: aload_0
+        65: getfield      #73                 // Field regionCacheForBlender:Lit/unimi/dsi/fastutil/longs/Long2ObjectLinkedOpenHashMap;
+        68: invokevirtual #211                // Method it/unimi/dsi/fastutil/longs/Long2ObjectLinkedOpenHashMap.removeLast:()Ljava/lang/Object;
+        71: pop
+        72: aload         6
+        74: aload         5
+        76: monitorexit
+        77: areturn
+        78: astore        7
+        80: aload         5
+        82: monitorexit
+        83: aload         7
+        85: athrow
+      Exception table:
+         from    to  target type
+            14    77    78   any
+            78    83    78   any
+
+  private java.util.concurrent.CompletableFuture<java.util.BitSet> createOldDataForRegion(int, int);
+    Code:
+         0: aload_0
+         1: iload_1
+         2: iload_2
+         3: invokedynamic #235,  0            // InvokeDynamic #1:get:(Lnet/minecraft/world/level/chunk/storage/IOWorker;II)Ljava/util/function/Supplier;
+         8: invokestatic  #238                // Method net/minecraft/Util.backgroundExecutor:()Lnet/minecraft/TracingExecutor;
+        11: invokestatic  #242                // Method java/util/concurrent/CompletableFuture.supplyAsync:(Ljava/util/function/Supplier;Ljava/util/concurrent/Executor;)Ljava/util/concurrent/CompletableFuture;
+        14: areturn
+
+  private boolean isOldChunk(net.minecraft.nbt.CompoundTag);
+    Code:
+         0: aload_1
+         1: ldc           #247                // String DataVersion
+         3: iconst_0
+         4: invokevirtual #253                // Method net/minecraft/nbt/CompoundTag.getIntOr:(Ljava/lang/String;I)I
+         7: sipush        4295
+        10: if_icmpge     15
+        13: iconst_1
+        14: ireturn
+        15: aload_1
+        16: ldc           #255                // String blending_data
+        18: invokevirtual #259                // Method net/minecraft/nbt/CompoundTag.getCompound:(Ljava/lang/String;)Ljava/util/Optional;
+        21: invokevirtual #264                // Method java/util/Optional.isPresent:()Z
+        24: ireturn
+
+  public java.util.concurrent.CompletableFuture<java.lang.Void> store(net.minecraft.world.level.ChunkPos, net.minecraft.nbt.CompoundTag);
+    Code:
+         0: aload_0
+         1: aload_1
+         2: aload_2
+         3: invokedynamic #279,  0            // InvokeDynamic #2:get:(Lnet/minecraft/nbt/CompoundTag;)Ljava/util/function/Supplier;
+         8: invokevirtual #282                // Method store:(Lnet/minecraft/world/level/ChunkPos;Ljava/util/function/Supplier;)Ljava/util/concurrent/CompletableFuture;
+        11: areturn
+
+  public java.util.concurrent.CompletableFuture<java.lang.Void> store(net.minecraft.world.level.ChunkPos, java.util.function.Supplier<net.minecraft.nbt.CompoundTag>);
+    Code:
+         0: aload_0
+         1: aload_0
+         2: aload_2
+         3: aload_1
+         4: invokedynamic #294,  0            // InvokeDynamic #3:get:(Lnet/minecraft/world/level/chunk/storage/IOWorker;Ljava/util/function/Supplier;Lnet/minecraft/world/level/ChunkPos;)Ljava/util/function/Supplier;
+         9: invokevirtual #298                // Method submitTask:(Ljava/util/function/Supplier;)Ljava/util/concurrent/CompletableFuture;
+        12: invokestatic  #304                // InterfaceMethod java/util/function/Function.identity:()Ljava/util/function/Function;
+        15: invokevirtual #308                // Method java/util/concurrent/CompletableFuture.thenCompose:(Ljava/util/function/Function;)Ljava/util/concurrent/CompletableFuture;
+        18: areturn
+
+  public java.util.concurrent.CompletableFuture<java.util.Optional<net.minecraft.nbt.CompoundTag>> loadAsync(net.minecraft.world.level.ChunkPos);
+    Code:
+         0: aload_0
+         1: aload_0
+         2: aload_1
+         3: invokedynamic #323,  0            // InvokeDynamic #4:get:(Lnet/minecraft/world/level/chunk/storage/IOWorker;Lnet/minecraft/world/level/ChunkPos;)Lnet/minecraft/world/level/chunk/storage/IOWorker$ThrowingSupplier;
+         8: invokevirtual #327                // Method submitThrowingTask:(Lnet/minecraft/world/level/chunk/storage/IOWorker$ThrowingSupplier;)Ljava/util/concurrent/CompletableFuture;
+        11: areturn
+
+  public java.util.concurrent.CompletableFuture<java.lang.Void> synchronize(boolean);
+    Code:
+         0: aload_0
+         1: aload_0
+         2: invokedynamic #337,  0            // InvokeDynamic #5:get:(Lnet/minecraft/world/level/chunk/storage/IOWorker;)Ljava/util/function/Supplier;
+         7: invokevirtual #298                // Method submitTask:(Ljava/util/function/Supplier;)Ljava/util/concurrent/CompletableFuture;
+        10: invokestatic  #304                // InterfaceMethod java/util/function/Function.identity:()Ljava/util/function/Function;
+        13: invokevirtual #308                // Method java/util/concurrent/CompletableFuture.thenCompose:(Ljava/util/function/Function;)Ljava/util/concurrent/CompletableFuture;
+        16: astore_2
+        17: iload_1
+        18: ifeq          32
+        21: aload_2
+        22: aload_0
+        23: invokedynamic #349,  0            // InvokeDynamic #6:apply:(Lnet/minecraft/world/level/chunk/storage/IOWorker;)Ljava/util/function/Function;
+        28: invokevirtual #308                // Method java/util/concurrent/CompletableFuture.thenCompose:(Ljava/util/function/Function;)Ljava/util/concurrent/CompletableFuture;
+        31: areturn
+        32: aload_2
+        33: aload_0
+        34: invokedynamic #354,  0            // InvokeDynamic #7:apply:(Lnet/minecraft/world/level/chunk/storage/IOWorker;)Ljava/util/function/Function;
+        39: invokevirtual #308                // Method java/util/concurrent/CompletableFuture.thenCompose:(Ljava/util/function/Function;)Ljava/util/concurrent/CompletableFuture;
+        42: areturn
+
+  public java.util.concurrent.CompletableFuture<java.lang.Void> scanChunk(net.minecraft.world.level.ChunkPos, net.minecraft.nbt.StreamTagVisitor);
+    Code:
+         0: aload_0
+         1: aload_0
+         2: aload_1
+         3: aload_2
+         4: invokedynamic #369,  0            // InvokeDynamic #8:get:(Lnet/minecraft/world/level/chunk/storage/IOWorker;Lnet/minecraft/world/level/ChunkPos;Lnet/minecraft/nbt/StreamTagVisitor;)Lnet/minecraft/world/level/chunk/storage/IOWorker$ThrowingSupplier;
+         9: invokevirtual #327                // Method submitThrowingTask:(Lnet/minecraft/world/level/chunk/storage/IOWorker$ThrowingSupplier;)Ljava/util/concurrent/CompletableFuture;
+        12: areturn
+
+  private <T> java.util.concurrent.CompletableFuture<T> submitThrowingTask(net.minecraft.world.level.chunk.storage.IOWorker$ThrowingSupplier<T>);
+    Code:
+         0: aload_0
+         1: getfield      #114                // Field consecutiveExecutor:Lnet/minecraft/util/thread/PriorityConsecutiveExecutor;
+         4: getstatic     #376                // Field net/minecraft/world/level/chunk/storage/IOWorker$Priority.FOREGROUND:Lnet/minecraft/world/level/chunk/storage/IOWorker$Priority;
+         7: invokevirtual #379                // Method net/minecraft/world/level/chunk/storage/IOWorker$Priority.ordinal:()I
+        10: aload_0
+        11: aload_1
+        12: invokedynamic #392,  0            // InvokeDynamic #9:accept:(Lnet/minecraft/world/level/chunk/storage/IOWorker;Lnet/minecraft/world/level/chunk/storage/IOWorker$ThrowingSupplier;)Ljava/util/function/Consumer;
+        17: invokevirtual #396                // Method net/minecraft/util/thread/PriorityConsecutiveExecutor.scheduleWithResult:(ILjava/util/function/Consumer;)Ljava/util/concurrent/CompletableFuture;
+        20: areturn
+
+  private <T> java.util.concurrent.CompletableFuture<T> submitTask(java.util.function.Supplier<T>);
+    Code:
+         0: aload_0
+         1: getfield      #114                // Field consecutiveExecutor:Lnet/minecraft/util/thread/PriorityConsecutiveExecutor;
+         4: getstatic     #376                // Field net/minecraft/world/level/chunk/storage/IOWorker$Priority.FOREGROUND:Lnet/minecraft/world/level/chunk/storage/IOWorker$Priority;
+         7: invokevirtual #379                // Method net/minecraft/world/level/chunk/storage/IOWorker$Priority.ordinal:()I
+        10: aload_0
+        11: aload_1
+        12: invokedynamic #407,  0            // InvokeDynamic #10:accept:(Lnet/minecraft/world/level/chunk/storage/IOWorker;Ljava/util/function/Supplier;)Ljava/util/function/Consumer;
+        17: invokevirtual #396                // Method net/minecraft/util/thread/PriorityConsecutiveExecutor.scheduleWithResult:(ILjava/util/function/Consumer;)Ljava/util/concurrent/CompletableFuture;
+        20: areturn
+
+  private void storePendingChunk();
+    Code:
+         0: aload_0
+         1: getfield      #68                 // Field pendingWrites:Ljava/util/SequencedMap;
+         4: invokeinterface #415,  1          // InterfaceMethod java/util/SequencedMap.pollFirstEntry:()Ljava/util/Map$Entry;
+         9: astore_1
+        10: aload_1
+        11: ifnonnull     15
+        14: return
+        15: aload_0
+        16: aload_1
+        17: invokeinterface #418,  1          // InterfaceMethod java/util/Map$Entry.getKey:()Ljava/lang/Object;
+        22: checkcast     #125                // class net/minecraft/world/level/ChunkPos
+        25: aload_1
+        26: invokeinterface #421,  1          // InterfaceMethod java/util/Map$Entry.getValue:()Ljava/lang/Object;
+        31: checkcast     #13                 // class net/minecraft/world/level/chunk/storage/IOWorker$PendingStore
+        34: invokevirtual #425                // Method runStore:(Lnet/minecraft/world/level/ChunkPos;Lnet/minecraft/world/level/chunk/storage/IOWorker$PendingStore;)V
+        37: aload_0
+        38: invokevirtual #428                // Method tellStorePending:()V
+        41: return
+
+  private void tellStorePending();
+    Code:
+         0: aload_0
+         1: getfield      #114                // Field consecutiveExecutor:Lnet/minecraft/util/thread/PriorityConsecutiveExecutor;
+         4: new           #25                 // class net/minecraft/util/thread/StrictQueue$RunnableWithPriority
+         7: dup
+         8: getstatic     #434                // Field net/minecraft/world/level/chunk/storage/IOWorker$Priority.BACKGROUND:Lnet/minecraft/world/level/chunk/storage/IOWorker$Priority;
+        11: invokevirtual #379                // Method net/minecraft/world/level/chunk/storage/IOWorker$Priority.ordinal:()I
+        14: aload_0
+        15: invokedynamic #442,  0            // InvokeDynamic #11:run:(Lnet/minecraft/world/level/chunk/storage/IOWorker;)Ljava/lang/Runnable;
+        20: invokespecial #445                // Method net/minecraft/util/thread/StrictQueue$RunnableWithPriority."<init>":(ILjava/lang/Runnable;)V
+        23: invokevirtual #449                // Method net/minecraft/util/thread/PriorityConsecutiveExecutor.schedule:(Ljava/lang/Runnable;)V
+        26: return
+
+  private void runStore(net.minecraft.world.level.ChunkPos, net.minecraft.world.level.chunk.storage.IOWorker$PendingStore);
+    Code:
+         0: aload_0
+         1: getfield      #79                 // Field storage:Lnet/minecraft/world/level/chunk/storage/RegionFileStorage;
+         4: aload_1
+         5: aload_2
+         6: getfield      #455                // Field net/minecraft/world/level/chunk/storage/IOWorker$PendingStore.data:Lnet/minecraft/nbt/CompoundTag;
+         9: invokevirtual #459                // Method net/minecraft/world/level/chunk/storage/RegionFileStorage.write:(Lnet/minecraft/world/level/ChunkPos;Lnet/minecraft/nbt/CompoundTag;)V
+        12: aload_2
+        13: getfield      #462                // Field net/minecraft/world/level/chunk/storage/IOWorker$PendingStore.result:Ljava/util/concurrent/CompletableFuture;
+        16: aconst_null
+        17: invokevirtual #466                // Method java/util/concurrent/CompletableFuture.complete:(Ljava/lang/Object;)Z
+        20: pop
+        21: goto          47
+        24: astore_3
+        25: getstatic     #468                // Field LOGGER:Lorg/slf4j/Logger;
+        28: ldc_w         #470                // String Failed to store chunk {}
+        31: aload_1
+        32: aload_3
+        33: invokeinterface #476,  4          // InterfaceMethod org/slf4j/Logger.error:(Ljava/lang/String;Ljava/lang/Object;Ljava/lang/Object;)V
+        38: aload_2
+        39: getfield      #462                // Field net/minecraft/world/level/chunk/storage/IOWorker$PendingStore.result:Ljava/util/concurrent/CompletableFuture;
+        42: aload_3
+        43: invokevirtual #480                // Method java/util/concurrent/CompletableFuture.completeExceptionally:(Ljava/lang/Throwable;)Z
+        46: pop
+        47: return
+      Exception table:
+         from    to  target type
+             0    21    24   Class java/lang/Exception
+
+  public void close() throws java.io.IOException;
+    Code:
+         0: aload_0
+         1: getfield      #63                 // Field shutdownRequested:Ljava/util/concurrent/atomic/AtomicBoolean;
+         4: iconst_0
+         5: iconst_1
+         6: invokevirtual #490                // Method java/util/concurrent/atomic/AtomicBoolean.compareAndSet:(ZZ)Z
+         9: ifne          13
+        12: return
+        13: aload_0
+        14: invokevirtual #493                // Method waitForShutdown:()V
+        17: aload_0
+        18: getfield      #114                // Field consecutiveExecutor:Lnet/minecraft/util/thread/PriorityConsecutiveExecutor;
+        21: invokevirtual #495                // Method net/minecraft/util/thread/PriorityConsecutiveExecutor.close:()V
+        24: aload_0
+        25: getfield      #79                 // Field storage:Lnet/minecraft/world/level/chunk/storage/RegionFileStorage;
+        28: invokevirtual #496                // Method net/minecraft/world/level/chunk/storage/RegionFileStorage.close:()V
+        31: goto          47
+        34: astore_1
+        35: getstatic     #468                // Field LOGGER:Lorg/slf4j/Logger;
+        38: ldc_w         #498                // String Failed to close storage
+        41: aload_1
+        42: invokeinterface #501,  3          // InterfaceMethod org/slf4j/Logger.error:(Ljava/lang/String;Ljava/lang/Throwable;)V
+        47: return
+      Exception table:
+         from    to  target type
+            24    31    34   Class java/lang/Exception
+
+  private void waitForShutdown();
+    Code:
+         0: aload_0
+         1: getfield      #114                // Field consecutiveExecutor:Lnet/minecraft/util/thread/PriorityConsecutiveExecutor;
+         4: getstatic     #504                // Field net/minecraft/world/level/chunk/storage/IOWorker$Priority.SHUTDOWN:Lnet/minecraft/world/level/chunk/storage/IOWorker$Priority;
+         7: invokevirtual #379                // Method net/minecraft/world/level/chunk/storage/IOWorker$Priority.ordinal:()I
+        10: invokedynamic #511,  0            // InvokeDynamic #12:accept:()Ljava/util/function/Consumer;
+        15: invokevirtual #396                // Method net/minecraft/util/thread/PriorityConsecutiveExecutor.scheduleWithResult:(ILjava/util/function/Consumer;)Ljava/util/concurrent/CompletableFuture;
+        18: invokevirtual #151                // Method java/util/concurrent/CompletableFuture.join:()Ljava/lang/Object;
+        21: pop
+        22: return
+
+  public net.minecraft.world.level.chunk.storage.RegionStorageInfo storageInfo();
+    Code:
+         0: aload_0
+         1: getfield      #79                 // Field storage:Lnet/minecraft/world/level/chunk/storage/RegionFileStorage;
+         4: invokevirtual #516                // Method net/minecraft/world/level/chunk/storage/RegionFileStorage.info:()Lnet/minecraft/world/level/chunk/storage/RegionStorageInfo;
+         7: areturn
+
+  private static void method_64028(java.util.concurrent.CompletableFuture);
+    Code:
+         0: aload_0
+         1: getstatic     #522                // Field net/minecraft/util/Unit.INSTANCE:Lnet/minecraft/util/Unit;
+         4: invokevirtual #466                // Method java/util/concurrent/CompletableFuture.complete:(Ljava/lang/Object;)Z
+         7: pop
+         8: return
+
+  private void method_64029(java.util.function.Supplier, java.util.concurrent.CompletableFuture);
+    Code:
+         0: aload_0
+         1: getfield      #63                 // Field shutdownRequested:Ljava/util/concurrent/atomic/AtomicBoolean;
+         4: invokevirtual #524                // Method java/util/concurrent/atomic/AtomicBoolean.get:()Z
+         7: ifne          21
+        10: aload_2
+        11: aload_1
+        12: invokeinterface #528,  1          // InterfaceMethod java/util/function/Supplier.get:()Ljava/lang/Object;
+        17: invokevirtual #466                // Method java/util/concurrent/CompletableFuture.complete:(Ljava/lang/Object;)Z
+        20: pop
+        21: aload_0
+        22: invokevirtual #428                // Method tellStorePending:()V
+        25: return
+
+  private void method_64027(net.minecraft.world.level.chunk.storage.IOWorker$ThrowingSupplier, java.util.concurrent.CompletableFuture);
+    Code:
+         0: aload_0
+         1: getfield      #63                 // Field shutdownRequested:Ljava/util/concurrent/atomic/AtomicBoolean;
+         4: invokevirtual #524                // Method java/util/concurrent/atomic/AtomicBoolean.get:()Z
+         7: ifne          31
+        10: aload_2
+        11: aload_1
+        12: invokeinterface #529,  1          // InterfaceMethod net/minecraft/world/level/chunk/storage/IOWorker$ThrowingSupplier.get:()Ljava/lang/Object;
+        17: invokevirtual #466                // Method java/util/concurrent/CompletableFuture.complete:(Ljava/lang/Object;)Z
+        20: pop
+        21: goto          31
+        24: astore_3
+        25: aload_2
+        26: aload_3
+        27: invokevirtual #480                // Method java/util/concurrent/CompletableFuture.completeExceptionally:(Ljava/lang/Throwable;)Z
+        30: pop
+        31: aload_0
+        32: invokevirtual #428                // Method tellStorePending:()V
+        35: return
+      Exception table:
+         from    to  target type
+            10    21    24   Class java/lang/Exception
+
+  private java.lang.Void method_39801(net.minecraft.world.level.ChunkPos, net.minecraft.nbt.StreamTagVisitor) throws java.lang.Exception;
+    Code:
+         0: aload_0
+         1: getfield      #68                 // Field pendingWrites:Ljava/util/SequencedMap;
+         4: aload_1
+         5: invokeinterface #531,  2          // InterfaceMethod java/util/SequencedMap.get:(Ljava/lang/Object;)Ljava/lang/Object;
+        10: checkcast     #13                 // class net/minecraft/world/level/chunk/storage/IOWorker$PendingStore
+        13: astore_3
+        14: aload_3
+        15: ifnull        36
+        18: aload_3
+        19: getfield      #455                // Field net/minecraft/world/level/chunk/storage/IOWorker$PendingStore.data:Lnet/minecraft/nbt/CompoundTag;
+        22: ifnull        45
+        25: aload_3
+        26: getfield      #455                // Field net/minecraft/world/level/chunk/storage/IOWorker$PendingStore.data:Lnet/minecraft/nbt/CompoundTag;
+        29: aload_2
+        30: invokevirtual #535                // Method net/minecraft/nbt/CompoundTag.acceptAsRoot:(Lnet/minecraft/nbt/StreamTagVisitor;)V
+        33: goto          45
+        36: aload_0
+        37: getfield      #79                 // Field storage:Lnet/minecraft/world/level/chunk/storage/RegionFileStorage;
+        40: aload_1
+        41: aload_2
+        42: invokevirtual #538                // Method net/minecraft/world/level/chunk/storage/RegionFileStorage.scanChunk:(Lnet/minecraft/world/level/ChunkPos;Lnet/minecraft/nbt/StreamTagVisitor;)V
+        45: aconst_null
+        46: areturn
+        47: astore_3
+        48: getstatic     #468                // Field LOGGER:Lorg/slf4j/Logger;
+        51: ldc_w         #540                // String Failed to bulk scan chunk {}
+        54: aload_1
+        55: aload_3
+        56: invokeinterface #543,  4          // InterfaceMethod org/slf4j/Logger.warn:(Ljava/lang/String;Ljava/lang/Object;Ljava/lang/Object;)V
+        61: aload_3
+        62: athrow
+      Exception table:
+         from    to  target type
+             0    46    47   Class java/lang/Exception
+
+  private java.util.concurrent.CompletionStage method_37479(java.lang.Void);
+    Code:
+         0: aload_0
+         1: invokedynamic #551,  0            // InvokeDynamic #13:get:()Ljava/util/function/Supplier;
+         6: invokevirtual #298                // Method submitTask:(Ljava/util/function/Supplier;)Ljava/util/concurrent/CompletableFuture;
+         9: areturn
+
+  private static java.lang.Void method_64031();
+    Code:
+         0: aconst_null
+         1: areturn
+
+  private java.util.concurrent.CompletionStage method_27940(java.lang.Void);
+    Code:
+         0: aload_0
+         1: aload_0
+         2: invokedynamic #559,  0            // InvokeDynamic #14:get:(Lnet/minecraft/world/level/chunk/storage/IOWorker;)Lnet/minecraft/world/level/chunk/storage/IOWorker$ThrowingSupplier;
+         7: invokevirtual #327                // Method submitThrowingTask:(Lnet/minecraft/world/level/chunk/storage/IOWorker$ThrowingSupplier;)Ljava/util/concurrent/CompletableFuture;
+        10: areturn
+
+  private java.lang.Void method_27946() throws java.lang.Exception;
+    Code:
+         0: aload_0
+         1: getfield      #79                 // Field storage:Lnet/minecraft/world/level/chunk/storage/RegionFileStorage;
+         4: invokevirtual #562                // Method net/minecraft/world/level/chunk/storage/RegionFileStorage.flush:()V
+         7: aconst_null
+         8: areturn
+         9: astore_1
+        10: getstatic     #468                // Field LOGGER:Lorg/slf4j/Logger;
+        13: ldc_w         #564                // String Failed to synchronize chunks
+        16: aload_1
+        17: invokeinterface #566,  3          // InterfaceMethod org/slf4j/Logger.warn:(Ljava/lang/String;Ljava/lang/Throwable;)V
+        22: aload_1
+        23: athrow
+      Exception table:
+         from    to  target type
+             0     8     9   Class java/lang/Exception
+
+  private java.util.concurrent.CompletableFuture method_27947();
+    Code:
+         0: aload_0
+         1: getfield      #68                 // Field pendingWrites:Ljava/util/SequencedMap;
+         4: invokeinterface #569,  1          // InterfaceMethod java/util/SequencedMap.values:()Ljava/util/Collection;
+         9: invokeinterface #575,  1          // InterfaceMethod java/util/Collection.stream:()Ljava/util/stream/Stream;
+        14: invokedynamic #583,  0            // InvokeDynamic #15:apply:()Ljava/util/function/Function;
+        19: invokeinterface #589,  2          // InterfaceMethod java/util/stream/Stream.map:(Ljava/util/function/Function;)Ljava/util/stream/Stream;
+        24: invokedynamic #600,  0            // InvokeDynamic #16:apply:()Ljava/util/function/IntFunction;
+        29: invokeinterface #604,  2          // InterfaceMethod java/util/stream/Stream.toArray:(Ljava/util/function/IntFunction;)[Ljava/lang/Object;
+        34: checkcast     #606                // class "[Ljava/util/concurrent/CompletableFuture;"
+        37: invokestatic  #610                // Method java/util/concurrent/CompletableFuture.allOf:([Ljava/util/concurrent/CompletableFuture;)Ljava/util/concurrent/CompletableFuture;
+        40: areturn
+
+  private static java.util.concurrent.CompletableFuture[] method_23699(int);
+    Code:
+         0: iload_0
+         1: anewarray     #147                // class java/util/concurrent/CompletableFuture
+         4: areturn
+
+  private static java.util.concurrent.CompletableFuture method_23705(net.minecraft.world.level.chunk.storage.IOWorker$PendingStore);
+    Code:
+         0: aload_0
+         1: getfield      #462                // Field net/minecraft/world/level/chunk/storage/IOWorker$PendingStore.result:Ljava/util/concurrent/CompletableFuture;
+         4: areturn
+
+  private java.util.Optional method_27943(net.minecraft.world.level.ChunkPos) throws java.lang.Exception;
+    Code:
+         0: aload_0
+         1: getfield      #68                 // Field pendingWrites:Ljava/util/SequencedMap;
+         4: aload_1
+         5: invokeinterface #531,  2          // InterfaceMethod java/util/SequencedMap.get:(Ljava/lang/Object;)Ljava/lang/Object;
+        10: checkcast     #13                 // class net/minecraft/world/level/chunk/storage/IOWorker$PendingStore
+        13: astore_2
+        14: aload_2
+        15: ifnull        26
+        18: aload_2
+        19: invokevirtual #613                // Method net/minecraft/world/level/chunk/storage/IOWorker$PendingStore.copyData:()Lnet/minecraft/nbt/CompoundTag;
+        22: invokestatic  #617                // Method java/util/Optional.ofNullable:(Ljava/lang/Object;)Ljava/util/Optional;
+        25: areturn
+        26: aload_0
+        27: getfield      #79                 // Field storage:Lnet/minecraft/world/level/chunk/storage/RegionFileStorage;
+        30: aload_1
+        31: invokevirtual #621                // Method net/minecraft/world/level/chunk/storage/RegionFileStorage.read:(Lnet/minecraft/world/level/ChunkPos;)Lnet/minecraft/nbt/CompoundTag;
+        34: astore_3
+        35: aload_3
+        36: invokestatic  #617                // Method java/util/Optional.ofNullable:(Ljava/lang/Object;)Ljava/util/Optional;
+        39: areturn
+        40: astore_3
+        41: getstatic     #468                // Field LOGGER:Lorg/slf4j/Logger;
+        44: ldc_w         #623                // String Failed to read chunk {}
+        47: aload_1
+        48: aload_3
+        49: invokeinterface #543,  4          // InterfaceMethod org/slf4j/Logger.warn:(Ljava/lang/String;Ljava/lang/Object;Ljava/lang/Object;)V
+        54: aload_3
+        55: athrow
+      Exception table:
+         from    to  target type
+            26    39    40   Class java/lang/Exception
+
+  private java.util.concurrent.CompletableFuture method_61774(java.util.function.Supplier, net.minecraft.world.level.ChunkPos);
+    Code:
+         0: aload_1
+         1: invokeinterface #528,  1          // InterfaceMethod java/util/function/Supplier.get:()Ljava/lang/Object;
+         6: checkcast     #249                // class net/minecraft/nbt/CompoundTag
+         9: astore_3
+        10: aload_0
+        11: getfield      #68                 // Field pendingWrites:Ljava/util/SequencedMap;
+        14: aload_2
+        15: aload_3
+        16: invokedynamic #633,  0            // InvokeDynamic #17:apply:(Lnet/minecraft/nbt/CompoundTag;)Ljava/util/function/Function;
+        21: invokeinterface #637,  3          // InterfaceMethod java/util/SequencedMap.computeIfAbsent:(Ljava/lang/Object;Ljava/util/function/Function;)Ljava/lang/Object;
+        26: checkcast     #13                 // class net/minecraft/world/level/chunk/storage/IOWorker$PendingStore
+        29: astore        4
+        31: aload         4
+        33: aload_3
+        34: putfield      #455                // Field net/minecraft/world/level/chunk/storage/IOWorker$PendingStore.data:Lnet/minecraft/nbt/CompoundTag;
+        37: aload         4
+        39: getfield      #462                // Field net/minecraft/world/level/chunk/storage/IOWorker$PendingStore.result:Ljava/util/concurrent/CompletableFuture;
+        42: areturn
+
+  private static net.minecraft.world.level.chunk.storage.IOWorker$PendingStore method_23711(net.minecraft.nbt.CompoundTag, net.minecraft.world.level.ChunkPos);
+    Code:
+         0: new           #13                 // class net/minecraft/world/level/chunk/storage/IOWorker$PendingStore
+         3: dup
+         4: aload_0
+         5: invokespecial #640                // Method net/minecraft/world/level/chunk/storage/IOWorker$PendingStore."<init>":(Lnet/minecraft/nbt/CompoundTag;)V
+         8: areturn
+
+  private static net.minecraft.nbt.CompoundTag method_27944(net.minecraft.nbt.CompoundTag);
+    Code:
+         0: aload_0
+         1: areturn
+
+  private java.util.BitSet method_42334(int, int);
+    Code:
+         0: iload_1
+         1: iload_2
+         2: invokestatic  #161                // Method net/minecraft/world/level/ChunkPos.minFromRegion:(II)Lnet/minecraft/world/level/ChunkPos;
+         5: astore_3
+         6: iload_1
+         7: iload_2
+         8: invokestatic  #643                // Method net/minecraft/world/level/ChunkPos.maxFromRegion:(II)Lnet/minecraft/world/level/ChunkPos;
+        11: astore        4
+        13: new           #153                // class java/util/BitSet
+        16: dup
+        17: invokespecial #644                // Method java/util/BitSet."<init>":()V
+        20: astore        5
+        22: aload_3
+        23: aload         4
+        25: invokestatic  #648                // Method net/minecraft/world/level/ChunkPos.rangeClosed:(Lnet/minecraft/world/level/ChunkPos;Lnet/minecraft/world/level/ChunkPos;)Ljava/util/stream/Stream;
+        28: aload_0
+        29: aload         5
+        31: invokedynamic #658,  0            // InvokeDynamic #18:accept:(Lnet/minecraft/world/level/chunk/storage/IOWorker;Ljava/util/BitSet;)Ljava/util/function/Consumer;
+        36: invokeinterface #662,  2          // InterfaceMethod java/util/stream/Stream.forEach:(Ljava/util/function/Consumer;)V
+        41: aload         5
+        43: areturn
+
+  private void method_42331(java.util.BitSet, net.minecraft.world.level.ChunkPos);
+    Code:
+         0: new           #664                // class net/minecraft/nbt/visitors/CollectFields
+         3: dup
+         4: iconst_2
+         5: anewarray     #666                // class net/minecraft/nbt/visitors/FieldSelector
+         8: dup
+         9: iconst_0
+        10: new           #666                // class net/minecraft/nbt/visitors/FieldSelector
+        13: dup
+        14: getstatic     #672                // Field net/minecraft/nbt/IntTag.TYPE:Lnet/minecraft/nbt/TagType;
+        17: ldc           #247                // String DataVersion
+        19: invokespecial #675                // Method net/minecraft/nbt/visitors/FieldSelector."<init>":(Lnet/minecraft/nbt/TagType;Ljava/lang/String;)V
+        22: aastore
+        23: dup
+        24: iconst_1
+        25: new           #666                // class net/minecraft/nbt/visitors/FieldSelector
+        28: dup
+        29: getstatic     #676                // Field net/minecraft/nbt/CompoundTag.TYPE:Lnet/minecraft/nbt/TagType;
+        32: ldc           #255                // String blending_data
+        34: invokespecial #675                // Method net/minecraft/nbt/visitors/FieldSelector."<init>":(Lnet/minecraft/nbt/TagType;Ljava/lang/String;)V
+        37: aastore
+        38: invokespecial #679                // Method net/minecraft/nbt/visitors/CollectFields."<init>":([Lnet/minecraft/nbt/visitors/FieldSelector;)V
+        41: astore_3
+        42: aload_0
+        43: aload_2
+        44: aload_3
+        45: invokevirtual #681                // Method scanChunk:(Lnet/minecraft/world/level/ChunkPos;Lnet/minecraft/nbt/StreamTagVisitor;)Ljava/util/concurrent/CompletableFuture;
+        48: invokevirtual #151                // Method java/util/concurrent/CompletableFuture.join:()Ljava/lang/Object;
+        51: pop
+        52: goto          72
+        55: astore        4
+        57: getstatic     #468                // Field LOGGER:Lorg/slf4j/Logger;
+        60: ldc_w         #683                // String Failed to scan chunk {}
+        63: aload_2
+        64: aload         4
+        66: invokeinterface #543,  4          // InterfaceMethod org/slf4j/Logger.warn:(Ljava/lang/String;Ljava/lang/Object;Ljava/lang/Object;)V
+        71: return
+        72: aload_3
+        73: invokevirtual #687                // Method net/minecraft/nbt/visitors/CollectFields.getResult:()Lnet/minecraft/nbt/Tag;
+        76: astore        4
+        78: aload         4
+        80: instanceof    #249                // class net/minecraft/nbt/CompoundTag
+        83: ifeq          122
+        86: aload         4
+        88: checkcast     #249                // class net/minecraft/nbt/CompoundTag
+        91: astore        5
+        93: aload_0
+        94: aload         5
+        96: invokevirtual #689                // Method isOldChunk:(Lnet/minecraft/nbt/CompoundTag;)Z
+        99: ifeq          122
+       102: aload_2
+       103: invokevirtual #692                // Method net/minecraft/world/level/ChunkPos.getRegionLocalZ:()I
+       106: bipush        32
+       108: imul
+       109: aload_2
+       110: invokevirtual #695                // Method net/minecraft/world/level/ChunkPos.getRegionLocalX:()I
+       113: iadd
+       114: istore        6
+       116: aload_1
+       117: iload         6
+       119: invokevirtual #699                // Method java/util/BitSet.set:(I)V
+       122: return
+      Exception table:
+         from    to  target type
+            42    52    55   Class java/lang/Exception
+
+  static {};
+    Code:
+         0: invokestatic  #710                // Method com/mojang/logging/LogUtils.getLogger:()Lorg/slf4j/Logger;
+         3: putstatic     #468                // Field LOGGER:Lorg/slf4j/Logger;
+         6: return
+}

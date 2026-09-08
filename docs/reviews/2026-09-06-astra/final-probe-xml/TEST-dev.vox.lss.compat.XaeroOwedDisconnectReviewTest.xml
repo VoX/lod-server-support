@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="dev.vox.lss.compat.XaeroOwedDisconnectReviewTest" tests="2" skipped="0" failures="2" errors="0" timestamp="2026-09-07T02:54:28.685Z" hostname="DESKTOP-K93QJU0" time="3.191">
+  <properties/>
+  <testcase name="shedAfterDisconnectMustNotCarryOldDebtIntoTheNextServer()" classname="dev.vox.lss.compat.XaeroOwedDisconnectReviewTest" time="3.095">
+    <failure message="org.opentest4j.MultipleFailuresError: Multiple Failures (2 failures)&#10;&#9;org.opentest4j.AssertionFailedError: old debt recreated after teardown survived title screen ==&gt; expected: &lt;0&gt; but was: &lt;1&gt;&#10;&#9;org.opentest4j.AssertionFailedError: old-server position was reported in the new active session: [554050781248] ==&gt; expected: &lt;true&gt; but was: &lt;false&gt;" type="org.opentest4j.MultipleFailuresError">org.opentest4j.MultipleFailuresError: Multiple Failures (2 failures)
+	org.opentest4j.AssertionFailedError: old debt recreated after teardown survived title screen ==&gt; expected: &lt;0&gt; but was: &lt;1&gt;
+	org.opentest4j.AssertionFailedError: old-server position was reported in the new active session: [554050781248] ==&gt; expected: &lt;true&gt; but was: &lt;false&gt;
+	at org.junit.jupiter.api.AssertAll.assertAll(AssertAll.java:80)
+	at org.junit.jupiter.api.AssertAll.assertAll(AssertAll.java:44)
+	at org.junit.jupiter.api.AssertAll.assertAll(AssertAll.java:38)
+	at org.junit.jupiter.api.Assertions.assertAll(Assertions.java:2940)
+	at knot//dev.vox.lss.compat.XaeroOwedDisconnectReviewTest.shedAfterDisconnectMustNotCarryOldDebtIntoTheNextServer(XaeroOwedDisconnectReviewTest.java:105)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
+	Suppressed: org.opentest4j.AssertionFailedError: old debt recreated after teardown survived title screen ==&gt; expected: &lt;0&gt; but was: &lt;1&gt;
+		at org.junit.jupiter.api.AssertionFailureBuilder.build(AssertionFailureBuilder.java:151)
+		at org.junit.jupiter.api.AssertionFailureBuilder.buildAndThrow(AssertionFailureBuilder.java:132)
+		at org.junit.jupiter.api.AssertEquals.failNotEqual(AssertEquals.java:197)
+		at org.junit.jupiter.api.AssertEquals.assertEquals(AssertEquals.java:166)
+		at org.junit.jupiter.api.Assertions.assertEquals(Assertions.java:660)
+		at knot//dev.vox.lss.compat.XaeroOwedDisconnectReviewTest.lambda$shedAfterDisconnectMustNotCarryOldDebtIntoTheNextServer$8(XaeroOwedDisconnectReviewTest.java:106)
+		at org.junit.jupiter.api.AssertAll.lambda$assertAll$0(AssertAll.java:68)
+		at java.base/java.util.stream.ReferencePipeline$3$1.accept(ReferencePipeline.java:197)
+		at java.base/java.util.Spliterators$ArraySpliterator.forEachRemaining(Spliterators.java:1024)
+		at java.base/java.util.stream.AbstractPipeline.copyInto(AbstractPipeline.java:509)
+		at java.base/java.util.stream.AbstractPipeline.wrapAndCopyInto(AbstractPipeline.java:499)
+		at java.base/java.util.stream.ReduceOps$ReduceOp.evaluateSequential(ReduceOps.java:921)
+		at java.base/java.util.stream.AbstractPipeline.evaluate(AbstractPipeline.java:234)
+		at java.base/java.util.stream.ReferencePipeline.collect(ReferencePipeline.java:682)
+		at org.junit.jupiter.api.AssertAll.assertAll(AssertAll.java:77)
+		... 7 more
+	Suppressed: org.opentest4j.AssertionFailedError: old-server position was reported in the new active session: [554050781248] ==&gt; expected: &lt;true&gt; but was: &lt;false&gt;
+		at org.junit.jupiter.api.AssertionFailureBuilder.build(AssertionFailureBuilder.java:151)
+		at org.junit.jupiter.api.AssertionFailureBuilder.buildAndThrow(AssertionFailureBuilder.java:132)
+		at org.junit.jupiter.api.AssertTrue.failNotTrue(AssertTrue.java:63)
+		at org.junit.jupiter.api.AssertTrue.assertTrue(AssertTrue.java:36)
+		at org.junit.jupiter.api.Assertions.assertTrue(Assertions.java:210)
+		at knot//dev.vox.lss.compat.XaeroOwedDisconnectReviewTest.lambda$shedAfterDisconnectMustNotCarryOldDebtIntoTheNextServer$9(XaeroOwedDisconnectReviewTest.java:107)
+		at org.junit.jupiter.api.AssertAll.lambda$assertAll$0(AssertAll.java:68)
+		at java.base/java.util.stream.ReferencePipeline$3$1.accept(ReferencePipeline.java:197)
+		at java.base/java.util.Spliterators$ArraySpliterator.forEachRemaining(Spliterators.java:1024)
+		at java.base/java.util.stream.AbstractPipeline.copyInto(AbstractPipeline.java:509)
+		at java.base/java.util.stream.AbstractPipeline.wrapAndCopyInto(AbstractPipeline.java:499)
+		at java.base/java.util.stream.ReduceOps$ReduceOp.evaluateSequential(ReduceOps.java:921)
+		at java.base/java.util.stream.AbstractPipeline.evaluate(AbstractPipeline.java:234)
+		at java.base/java.util.stream.ReferencePipeline.collect(ReferencePipeline.java:682)
+		at org.junit.jupiter.api.AssertAll.assertAll(AssertAll.java:77)
+		... 7 more
+</failure>
+  </testcase>
+  <testcase name="abruptDisconnectDuringOwedReleaseCannotRepublishDebtOrNegativeGauge()" classname="dev.vox.lss.compat.XaeroOwedDisconnectReviewTest" time="0.008">
+    <failure message="org.opentest4j.MultipleFailuresError: Multiple Failures (2 failures)&#10;&#9;org.opentest4j.AssertionFailedError: release resumed against detached old record and decremented cleared gauge ==&gt; expected: &lt;0&gt; but was: &lt;-1&gt;&#10;&#9;org.opentest4j.AssertionFailedError: an old-session debt was republished after onSessionEnd cleared it ==&gt; expected: &lt;true&gt; but was: &lt;false&gt;" type="org.opentest4j.MultipleFailuresError">org.opentest4j.MultipleFailuresError: Multiple Failures (2 failures)
+	org.opentest4j.AssertionFailedError: release resumed against detached old record and decremented cleared gauge ==&gt; expected: &lt;0&gt; but was: &lt;-1&gt;
+	org.opentest4j.AssertionFailedError: an old-session debt was republished after onSessionEnd cleared it ==&gt; expected: &lt;true&gt; but was: &lt;false&gt;
+	at org.junit.jupiter.api.AssertAll.assertAll(AssertAll.java:80)
+	at org.junit.jupiter.api.AssertAll.assertAll(AssertAll.java:44)
+	at org.junit.jupiter.api.AssertAll.assertAll(AssertAll.java:38)
+	at org.junit.jupiter.api.Assertions.assertAll(Assertions.java:2940)
+	at knot//dev.vox.lss.compat.XaeroOwedDisconnectReviewTest.abruptDisconnectDuringOwedReleaseCannotRepublishDebtOrNegativeGauge(XaeroOwedDisconnectReviewTest.java:165)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
+	Suppressed: org.opentest4j.AssertionFailedError: release resumed against detached old record and decremented cleared gauge ==&gt; expected: &lt;0&gt; but was: &lt;-1&gt;
+		at org.junit.jupiter.api.AssertionFailureBuilder.build(AssertionFailureBuilder.java:151)
+		at org.junit.jupiter.api.AssertionFailureBuilder.buildAndThrow(AssertionFailureBuilder.java:132)
+		at org.junit.jupiter.api.AssertEquals.failNotEqual(AssertEquals.java:197)
+		at org.junit.jupiter.api.AssertEquals.assertEquals(AssertEquals.java:166)
+		at org.junit.jupiter.api.Assertions.assertEquals(Assertions.java:660)
+		at knot//dev.vox.lss.compat.XaeroOwedDisconnectReviewTest.lambda$abruptDisconnectDuringOwedReleaseCannotRepublishDebtOrNegativeGauge$18(XaeroOwedDisconnectReviewTest.java:166)
+		at org.junit.jupiter.api.AssertAll.lambda$assertAll$0(AssertAll.java:68)
+		at java.base/java.util.stream.ReferencePipeline$3$1.accept(ReferencePipeline.java:197)
+		at java.base/java.util.Spliterators$ArraySpliterator.forEachRemaining(Spliterators.java:1024)
+		at java.base/java.util.stream.AbstractPipeline.copyInto(AbstractPipeline.java:509)
+		at java.base/java.util.stream.AbstractPipeline.wrapAndCopyInto(AbstractPipeline.java:499)
+		at java.base/java.util.stream.ReduceOps$ReduceOp.evaluateSequential(ReduceOps.java:921)
+		at java.base/java.util.stream.AbstractPipeline.evaluate(AbstractPipeline.java:234)
+		at java.base/java.util.stream.ReferencePipeline.collect(ReferencePipeline.java:682)
+		at org.junit.jupiter.api.AssertAll.assertAll(AssertAll.java:77)
+		... 7 more
+	Suppressed: org.opentest4j.AssertionFailedError: an old-session debt was republished after onSessionEnd cleared it ==&gt; expected: &lt;true&gt; but was: &lt;false&gt;
+		at org.junit.jupiter.api.AssertionFailureBuilder.build(AssertionFailureBuilder.java:151)
+		at org.junit.jupiter.api.AssertionFailureBuilder.buildAndThrow(AssertionFailureBuilder.java:132)
+		at org.junit.jupiter.api.AssertTrue.failNotTrue(AssertTrue.java:63)
+		at org.junit.jupiter.api.AssertTrue.assertTrue(AssertTrue.java:36)
+		at org.junit.jupiter.api.Assertions.assertTrue(Assertions.java:210)
+		at knot//dev.vox.lss.compat.XaeroOwedDisconnectReviewTest.lambda$abruptDisconnectDuringOwedReleaseCannotRepublishDebtOrNegativeGauge$20(XaeroOwedDisconnectReviewTest.java:169)
+		at org.junit.jupiter.api.AssertAll.lambda$assertAll$0(AssertAll.java:68)
+		at java.base/java.util.stream.ReferencePipeline$3$1.accept(ReferencePipeline.java:197)
+		at java.base/java.util.Spliterators$ArraySpliterator.forEachRemaining(Spliterators.java:1024)
+		at java.base/java.util.stream.AbstractPipeline.copyInto(AbstractPipeline.java:509)
+		at java.base/java.util.stream.AbstractPipeline.wrapAndCopyInto(AbstractPipeline.java:499)
+		at java.base/java.util.stream.ReduceOps$ReduceOp.evaluateSequential(ReduceOps.java:921)
+		at java.base/java.util.stream.AbstractPipeline.evaluate(AbstractPipeline.java:234)
+		at java.base/java.util.stream.ReferencePipeline.collect(ReferencePipeline.java:682)
+		at org.junit.jupiter.api.AssertAll.assertAll(AssertAll.java:77)
+		... 7 more
+</failure>
+  </testcase>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

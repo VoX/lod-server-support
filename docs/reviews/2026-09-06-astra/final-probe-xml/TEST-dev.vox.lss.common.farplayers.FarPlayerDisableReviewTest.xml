@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="dev.vox.lss.common.farplayers.FarPlayerDisableReviewTest" tests="1" skipped="0" failures="1" errors="0" timestamp="2026-09-07T02:54:27.335Z" hostname="DESKTOP-K93QJU0" time="0.006">
+  <properties/>
+  <testcase name="runtimeOffMustWithdrawAlreadyPublishedPlayersInsteadOfFreezingThem()" classname="dev.vox.lss.common.farplayers.FarPlayerDisableReviewTest" time="0.005">
+    <failure message="org.opentest4j.AssertionFailedError: server off must explicitly revoke prior roster; silence leaves the target rendered indefinitely ==&gt; expected: &lt;0&gt; but was: &lt;1&gt;" type="org.opentest4j.AssertionFailedError">org.opentest4j.AssertionFailedError: server off must explicitly revoke prior roster; silence leaves the target rendered indefinitely ==&gt; expected: &lt;0&gt; but was: &lt;1&gt;
+	at org.junit.jupiter.api.AssertionFailureBuilder.build(AssertionFailureBuilder.java:151)
+	at org.junit.jupiter.api.AssertionFailureBuilder.buildAndThrow(AssertionFailureBuilder.java:132)
+	at org.junit.jupiter.api.AssertEquals.failNotEqual(AssertEquals.java:197)
+	at org.junit.jupiter.api.AssertEquals.assertEquals(AssertEquals.java:150)
+	at org.junit.jupiter.api.Assertions.assertEquals(Assertions.java:559)
+	at knot//dev.vox.lss.common.farplayers.FarPlayerDisableReviewTest.runtimeOffMustWithdrawAlreadyPublishedPlayersInsteadOfFreezingThem(FarPlayerDisableReviewTest.java:37)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
+</failure>
+  </testcase>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

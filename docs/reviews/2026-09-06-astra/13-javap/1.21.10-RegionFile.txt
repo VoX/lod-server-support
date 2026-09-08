@@ -1,0 +1,1121 @@
+Compiled from "RegionFile.java"
+public class net.minecraft.world.level.chunk.storage.RegionFile implements java.lang.AutoCloseable {
+  private static final org.slf4j.Logger LOGGER;
+
+  private static final int SECTOR_BYTES;
+
+  protected static final int SECTOR_INTS;
+
+  private static final int CHUNK_HEADER_SIZE;
+
+  private static final int HEADER_OFFSET;
+
+  private static final java.nio.ByteBuffer PADDING_BUFFER;
+
+  private static final java.lang.String EXTERNAL_FILE_EXTENSION;
+
+  private static final int EXTERNAL_STREAM_FLAG;
+
+  private static final int EXTERNAL_CHUNK_THRESHOLD;
+
+  private static final int CHUNK_NOT_PRESENT;
+
+  final net.minecraft.world.level.chunk.storage.RegionStorageInfo info;
+
+  private final java.nio.file.Path path;
+
+  private final java.nio.channels.FileChannel file;
+
+  private final java.nio.file.Path externalFileDir;
+
+  final net.minecraft.world.level.chunk.storage.RegionFileVersion version;
+
+  private final java.nio.ByteBuffer header;
+
+  private final java.nio.IntBuffer offsets;
+
+  private final java.nio.IntBuffer timestamps;
+
+  protected final net.minecraft.world.level.chunk.storage.RegionBitmap usedSectors;
+
+  public net.minecraft.world.level.chunk.storage.RegionFile(net.minecraft.world.level.chunk.storage.RegionStorageInfo, java.nio.file.Path, java.nio.file.Path, boolean) throws java.io.IOException;
+    Code:
+         0: aload_0
+         1: aload_1
+         2: aload_2
+         3: aload_3
+         4: invokestatic  #69                 // Method net/minecraft/world/level/chunk/storage/RegionFileVersion.getSelected:()Lnet/minecraft/world/level/chunk/storage/RegionFileVersion;
+         7: iload         4
+         9: invokespecial #72                 // Method "<init>":(Lnet/minecraft/world/level/chunk/storage/RegionStorageInfo;Ljava/nio/file/Path;Ljava/nio/file/Path;Lnet/minecraft/world/level/chunk/storage/RegionFileVersion;Z)V
+        12: return
+
+  public net.minecraft.world.level.chunk.storage.RegionFile(net.minecraft.world.level.chunk.storage.RegionStorageInfo, java.nio.file.Path, java.nio.file.Path, net.minecraft.world.level.chunk.storage.RegionFileVersion, boolean) throws java.io.IOException;
+    Code:
+         0: aload_0
+         1: invokespecial #79                 // Method java/lang/Object."<init>":()V
+         4: aload_0
+         5: sipush        8192
+         8: invokestatic  #85                 // Method java/nio/ByteBuffer.allocateDirect:(I)Ljava/nio/ByteBuffer;
+        11: putfield      #87                 // Field header:Ljava/nio/ByteBuffer;
+        14: aload_0
+        15: new           #89                 // class net/minecraft/world/level/chunk/storage/RegionBitmap
+        18: dup
+        19: invokespecial #90                 // Method net/minecraft/world/level/chunk/storage/RegionBitmap."<init>":()V
+        22: putfield      #92                 // Field usedSectors:Lnet/minecraft/world/level/chunk/storage/RegionBitmap;
+        25: aload_0
+        26: aload_1
+        27: putfield      #94                 // Field info:Lnet/minecraft/world/level/chunk/storage/RegionStorageInfo;
+        30: aload_0
+        31: aload_2
+        32: putfield      #96                 // Field path:Ljava/nio/file/Path;
+        35: aload_0
+        36: aload         4
+        38: putfield      #98                 // Field version:Lnet/minecraft/world/level/chunk/storage/RegionFileVersion;
+        41: aload_3
+        42: iconst_0
+        43: anewarray     #100                // class java/nio/file/LinkOption
+        46: invokestatic  #106                // Method java/nio/file/Files.isDirectory:(Ljava/nio/file/Path;[Ljava/nio/file/LinkOption;)Z
+        49: ifne          74
+        52: new           #108                // class java/lang/IllegalArgumentException
+        55: dup
+        56: aload_3
+        57: invokeinterface #114,  1          // InterfaceMethod java/nio/file/Path.toAbsolutePath:()Ljava/nio/file/Path;
+        62: invokestatic  #120                // Method java/lang/String.valueOf:(Ljava/lang/Object;)Ljava/lang/String;
+        65: invokedynamic #132,  0            // InvokeDynamic #0:makeConcatWithConstants:(Ljava/lang/String;)Ljava/lang/String;
+        70: invokespecial #135                // Method java/lang/IllegalArgumentException."<init>":(Ljava/lang/String;)V
+        73: athrow
+        74: aload_0
+        75: aload_3
+        76: putfield      #137                // Field externalFileDir:Ljava/nio/file/Path;
+        79: aload_0
+        80: aload_0
+        81: getfield      #87                 // Field header:Ljava/nio/ByteBuffer;
+        84: invokevirtual #141                // Method java/nio/ByteBuffer.asIntBuffer:()Ljava/nio/IntBuffer;
+        87: putfield      #143                // Field offsets:Ljava/nio/IntBuffer;
+        90: aload_0
+        91: getfield      #143                // Field offsets:Ljava/nio/IntBuffer;
+        94: sipush        1024
+        97: invokevirtual #149                // Method java/nio/IntBuffer.limit:(I)Ljava/nio/IntBuffer;
+       100: pop
+       101: aload_0
+       102: getfield      #87                 // Field header:Ljava/nio/ByteBuffer;
+       105: sipush        4096
+       108: invokevirtual #152                // Method java/nio/ByteBuffer.position:(I)Ljava/nio/ByteBuffer;
+       111: pop
+       112: aload_0
+       113: aload_0
+       114: getfield      #87                 // Field header:Ljava/nio/ByteBuffer;
+       117: invokevirtual #141                // Method java/nio/ByteBuffer.asIntBuffer:()Ljava/nio/IntBuffer;
+       120: putfield      #154                // Field timestamps:Ljava/nio/IntBuffer;
+       123: iload         5
+       125: ifeq          167
+       128: aload_0
+       129: aload_2
+       130: iconst_4
+       131: anewarray     #156                // class java/nio/file/OpenOption
+       134: dup
+       135: iconst_0
+       136: getstatic     #162                // Field java/nio/file/StandardOpenOption.CREATE:Ljava/nio/file/StandardOpenOption;
+       139: aastore
+       140: dup
+       141: iconst_1
+       142: getstatic     #165                // Field java/nio/file/StandardOpenOption.READ:Ljava/nio/file/StandardOpenOption;
+       145: aastore
+       146: dup
+       147: iconst_2
+       148: getstatic     #168                // Field java/nio/file/StandardOpenOption.WRITE:Ljava/nio/file/StandardOpenOption;
+       151: aastore
+       152: dup
+       153: iconst_3
+       154: getstatic     #171                // Field java/nio/file/StandardOpenOption.DSYNC:Ljava/nio/file/StandardOpenOption;
+       157: aastore
+       158: invokestatic  #177                // Method java/nio/channels/FileChannel.open:(Ljava/nio/file/Path;[Ljava/nio/file/OpenOption;)Ljava/nio/channels/FileChannel;
+       161: putfield      #179                // Field file:Ljava/nio/channels/FileChannel;
+       164: goto          197
+       167: aload_0
+       168: aload_2
+       169: iconst_3
+       170: anewarray     #156                // class java/nio/file/OpenOption
+       173: dup
+       174: iconst_0
+       175: getstatic     #162                // Field java/nio/file/StandardOpenOption.CREATE:Ljava/nio/file/StandardOpenOption;
+       178: aastore
+       179: dup
+       180: iconst_1
+       181: getstatic     #165                // Field java/nio/file/StandardOpenOption.READ:Ljava/nio/file/StandardOpenOption;
+       184: aastore
+       185: dup
+       186: iconst_2
+       187: getstatic     #168                // Field java/nio/file/StandardOpenOption.WRITE:Ljava/nio/file/StandardOpenOption;
+       190: aastore
+       191: invokestatic  #177                // Method java/nio/channels/FileChannel.open:(Ljava/nio/file/Path;[Ljava/nio/file/OpenOption;)Ljava/nio/channels/FileChannel;
+       194: putfield      #179                // Field file:Ljava/nio/channels/FileChannel;
+       197: aload_0
+       198: getfield      #92                 // Field usedSectors:Lnet/minecraft/world/level/chunk/storage/RegionBitmap;
+       201: iconst_0
+       202: iconst_2
+       203: invokevirtual #183                // Method net/minecraft/world/level/chunk/storage/RegionBitmap.force:(II)V
+       206: aload_0
+       207: getfield      #87                 // Field header:Ljava/nio/ByteBuffer;
+       210: iconst_0
+       211: invokevirtual #152                // Method java/nio/ByteBuffer.position:(I)Ljava/nio/ByteBuffer;
+       214: pop
+       215: aload_0
+       216: getfield      #179                // Field file:Ljava/nio/channels/FileChannel;
+       219: aload_0
+       220: getfield      #87                 // Field header:Ljava/nio/ByteBuffer;
+       223: lconst_0
+       224: invokevirtual #187                // Method java/nio/channels/FileChannel.read:(Ljava/nio/ByteBuffer;J)I
+       227: istore        6
+       229: iload         6
+       231: iconst_m1
+       232: if_icmpeq     473
+       235: iload         6
+       237: sipush        8192
+       240: if_icmpeq     259
+       243: getstatic     #189                // Field LOGGER:Lorg/slf4j/Logger;
+       246: ldc           #191                // String Region file {} has truncated header: {}
+       248: aload_2
+       249: iload         6
+       251: invokestatic  #196                // Method java/lang/Integer.valueOf:(I)Ljava/lang/Integer;
+       254: invokeinterface #202,  4          // InterfaceMethod org/slf4j/Logger.warn:(Ljava/lang/String;Ljava/lang/Object;Ljava/lang/Object;)V
+       259: aload_2
+       260: invokestatic  #206                // Method java/nio/file/Files.size:(Ljava/nio/file/Path;)J
+       263: lstore        7
+       265: iconst_0
+       266: istore        9
+       268: iload         9
+       270: sipush        1024
+       273: if_icmpge     473
+       276: aload_0
+       277: getfield      #143                // Field offsets:Ljava/nio/IntBuffer;
+       280: iload         9
+       282: invokevirtual #210                // Method java/nio/IntBuffer.get:(I)I
+       285: istore        10
+       287: iload         10
+       289: ifeq          467
+       292: iload         10
+       294: invokestatic  #213                // Method getSectorNumber:(I)I
+       297: istore        11
+       299: iload         10
+       301: invokestatic  #216                // Method getNumSectors:(I)I
+       304: istore        12
+       306: iload         11
+       308: iconst_2
+       309: if_icmpge     360
+       312: getstatic     #189                // Field LOGGER:Lorg/slf4j/Logger;
+       315: ldc           #218                // String Region file {} has invalid sector at index: {}; sector {} overlaps with header
+       317: iconst_3
+       318: anewarray     #4                  // class java/lang/Object
+       321: dup
+       322: iconst_0
+       323: aload_2
+       324: aastore
+       325: dup
+       326: iconst_1
+       327: iload         9
+       329: invokestatic  #196                // Method java/lang/Integer.valueOf:(I)Ljava/lang/Integer;
+       332: aastore
+       333: dup
+       334: iconst_2
+       335: iload         11
+       337: invokestatic  #196                // Method java/lang/Integer.valueOf:(I)Ljava/lang/Integer;
+       340: aastore
+       341: invokeinterface #221,  3          // InterfaceMethod org/slf4j/Logger.warn:(Ljava/lang/String;[Ljava/lang/Object;)V
+       346: aload_0
+       347: getfield      #143                // Field offsets:Ljava/nio/IntBuffer;
+       350: iload         9
+       352: iconst_0
+       353: invokevirtual #225                // Method java/nio/IntBuffer.put:(II)Ljava/nio/IntBuffer;
+       356: pop
+       357: goto          467
+       360: iload         12
+       362: ifne          395
+       365: getstatic     #189                // Field LOGGER:Lorg/slf4j/Logger;
+       368: ldc           #227                // String Region file {} has an invalid sector at index: {}; size has to be > 0
+       370: aload_2
+       371: iload         9
+       373: invokestatic  #196                // Method java/lang/Integer.valueOf:(I)Ljava/lang/Integer;
+       376: invokeinterface #202,  4          // InterfaceMethod org/slf4j/Logger.warn:(Ljava/lang/String;Ljava/lang/Object;Ljava/lang/Object;)V
+       381: aload_0
+       382: getfield      #143                // Field offsets:Ljava/nio/IntBuffer;
+       385: iload         9
+       387: iconst_0
+       388: invokevirtual #225                // Method java/nio/IntBuffer.put:(II)Ljava/nio/IntBuffer;
+       391: pop
+       392: goto          467
+       395: iload         11
+       397: i2l
+       398: ldc2_w        #228                // long 4096l
+       401: lmul
+       402: lload         7
+       404: lcmp
+       405: ifle          456
+       408: getstatic     #189                // Field LOGGER:Lorg/slf4j/Logger;
+       411: ldc           #231                // String Region file {} has an invalid sector at index: {}; sector {} is out of bounds
+       413: iconst_3
+       414: anewarray     #4                  // class java/lang/Object
+       417: dup
+       418: iconst_0
+       419: aload_2
+       420: aastore
+       421: dup
+       422: iconst_1
+       423: iload         9
+       425: invokestatic  #196                // Method java/lang/Integer.valueOf:(I)Ljava/lang/Integer;
+       428: aastore
+       429: dup
+       430: iconst_2
+       431: iload         11
+       433: invokestatic  #196                // Method java/lang/Integer.valueOf:(I)Ljava/lang/Integer;
+       436: aastore
+       437: invokeinterface #221,  3          // InterfaceMethod org/slf4j/Logger.warn:(Ljava/lang/String;[Ljava/lang/Object;)V
+       442: aload_0
+       443: getfield      #143                // Field offsets:Ljava/nio/IntBuffer;
+       446: iload         9
+       448: iconst_0
+       449: invokevirtual #225                // Method java/nio/IntBuffer.put:(II)Ljava/nio/IntBuffer;
+       452: pop
+       453: goto          467
+       456: aload_0
+       457: getfield      #92                 // Field usedSectors:Lnet/minecraft/world/level/chunk/storage/RegionBitmap;
+       460: iload         11
+       462: iload         12
+       464: invokevirtual #183                // Method net/minecraft/world/level/chunk/storage/RegionBitmap.force:(II)V
+       467: iinc          9, 1
+       470: goto          268
+       473: return
+
+  public java.nio.file.Path getPath();
+    Code:
+         0: aload_0
+         1: getfield      #96                 // Field path:Ljava/nio/file/Path;
+         4: areturn
+
+  private java.nio.file.Path getExternalChunkPath(net.minecraft.world.level.ChunkPos);
+    Code:
+         0: aload_1
+         1: getfield      #247                // Field net/minecraft/world/level/ChunkPos.x:I
+         4: aload_1
+         5: getfield      #250                // Field net/minecraft/world/level/ChunkPos.z:I
+         8: invokedynamic #255,  0            // InvokeDynamic #1:makeConcatWithConstants:(II)Ljava/lang/String;
+        13: astore_2
+        14: aload_0
+        15: getfield      #137                // Field externalFileDir:Ljava/nio/file/Path;
+        18: aload_2
+        19: invokeinterface #259,  2          // InterfaceMethod java/nio/file/Path.resolve:(Ljava/lang/String;)Ljava/nio/file/Path;
+        24: areturn
+
+  public synchronized java.io.DataInputStream getChunkDataInputStream(net.minecraft.world.level.ChunkPos) throws java.io.IOException;
+    Code:
+         0: aload_0
+         1: aload_1
+         2: invokevirtual #268                // Method getOffset:(Lnet/minecraft/world/level/ChunkPos;)I
+         5: istore_2
+         6: iload_2
+         7: ifne          12
+        10: aconst_null
+        11: areturn
+        12: iload_2
+        13: invokestatic  #213                // Method getSectorNumber:(I)I
+        16: istore_3
+        17: iload_2
+        18: invokestatic  #216                // Method getNumSectors:(I)I
+        21: istore        4
+        23: iload         4
+        25: sipush        4096
+        28: imul
+        29: istore        5
+        31: iload         5
+        33: invokestatic  #271                // Method java/nio/ByteBuffer.allocate:(I)Ljava/nio/ByteBuffer;
+        36: astore        6
+        38: aload_0
+        39: getfield      #179                // Field file:Ljava/nio/channels/FileChannel;
+        42: aload         6
+        44: iload_3
+        45: sipush        4096
+        48: imul
+        49: i2l
+        50: invokevirtual #187                // Method java/nio/channels/FileChannel.read:(Ljava/nio/ByteBuffer;J)I
+        53: pop
+        54: aload         6
+        56: invokevirtual #275                // Method java/nio/ByteBuffer.flip:()Ljava/nio/ByteBuffer;
+        59: pop
+        60: aload         6
+        62: invokevirtual #279                // Method java/nio/ByteBuffer.remaining:()I
+        65: iconst_5
+        66: if_icmpge     109
+        69: getstatic     #189                // Field LOGGER:Lorg/slf4j/Logger;
+        72: ldc_w         #281                // String Chunk {} header is truncated: expected {} but read {}
+        75: iconst_3
+        76: anewarray     #4                  // class java/lang/Object
+        79: dup
+        80: iconst_0
+        81: aload_1
+        82: aastore
+        83: dup
+        84: iconst_1
+        85: iload         5
+        87: invokestatic  #196                // Method java/lang/Integer.valueOf:(I)Ljava/lang/Integer;
+        90: aastore
+        91: dup
+        92: iconst_2
+        93: aload         6
+        95: invokevirtual #279                // Method java/nio/ByteBuffer.remaining:()I
+        98: invokestatic  #196                // Method java/lang/Integer.valueOf:(I)Ljava/lang/Integer;
+       101: aastore
+       102: invokeinterface #284,  3          // InterfaceMethod org/slf4j/Logger.error:(Ljava/lang/String;[Ljava/lang/Object;)V
+       107: aconst_null
+       108: areturn
+       109: aload         6
+       111: invokevirtual #287                // Method java/nio/ByteBuffer.getInt:()I
+       114: istore        7
+       116: aload         6
+       118: invokevirtual #290                // Method java/nio/ByteBuffer.get:()B
+       121: istore        8
+       123: iload         7
+       125: ifne          142
+       128: getstatic     #189                // Field LOGGER:Lorg/slf4j/Logger;
+       131: ldc_w         #292                // String Chunk {} is allocated, but stream is missing
+       134: aload_1
+       135: invokeinterface #295,  3          // InterfaceMethod org/slf4j/Logger.warn:(Ljava/lang/String;Ljava/lang/Object;)V
+       140: aconst_null
+       141: areturn
+       142: iload         7
+       144: iconst_1
+       145: isub
+       146: istore        9
+       148: iload         8
+       150: invokestatic  #299                // Method isExternalStreamChunk:(B)Z
+       153: ifeq          183
+       156: iload         9
+       158: ifeq          172
+       161: getstatic     #189                // Field LOGGER:Lorg/slf4j/Logger;
+       164: ldc_w         #301                // String Chunk has both internal and external streams
+       167: invokeinterface #303,  2          // InterfaceMethod org/slf4j/Logger.warn:(Ljava/lang/String;)V
+       172: aload_0
+       173: aload_1
+       174: iload         8
+       176: invokestatic  #307                // Method getExternalChunkVersion:(B)B
+       179: invokevirtual #311                // Method createExternalChunkInputStream:(Lnet/minecraft/world/level/ChunkPos;B)Ljava/io/DataInputStream;
+       182: areturn
+       183: iload         9
+       185: aload         6
+       187: invokevirtual #279                // Method java/nio/ByteBuffer.remaining:()I
+       190: if_icmple     233
+       193: getstatic     #189                // Field LOGGER:Lorg/slf4j/Logger;
+       196: ldc_w         #313                // String Chunk {} stream is truncated: expected {} but read {}
+       199: iconst_3
+       200: anewarray     #4                  // class java/lang/Object
+       203: dup
+       204: iconst_0
+       205: aload_1
+       206: aastore
+       207: dup
+       208: iconst_1
+       209: iload         9
+       211: invokestatic  #196                // Method java/lang/Integer.valueOf:(I)Ljava/lang/Integer;
+       214: aastore
+       215: dup
+       216: iconst_2
+       217: aload         6
+       219: invokevirtual #279                // Method java/nio/ByteBuffer.remaining:()I
+       222: invokestatic  #196                // Method java/lang/Integer.valueOf:(I)Ljava/lang/Integer;
+       225: aastore
+       226: invokeinterface #284,  3          // InterfaceMethod org/slf4j/Logger.error:(Ljava/lang/String;[Ljava/lang/Object;)V
+       231: aconst_null
+       232: areturn
+       233: iload         9
+       235: ifge          257
+       238: getstatic     #189                // Field LOGGER:Lorg/slf4j/Logger;
+       241: ldc_w         #315                // String Declared size {} of chunk {} is negative
+       244: iload         7
+       246: invokestatic  #196                // Method java/lang/Integer.valueOf:(I)Ljava/lang/Integer;
+       249: aload_1
+       250: invokeinterface #317,  4          // InterfaceMethod org/slf4j/Logger.error:(Ljava/lang/String;Ljava/lang/Object;Ljava/lang/Object;)V
+       255: aconst_null
+       256: areturn
+       257: getstatic     #323                // Field net/minecraft/util/profiling/jfr/JvmProfiler.INSTANCE:Lnet/minecraft/util/profiling/jfr/JvmProfiler;
+       260: aload_0
+       261: getfield      #94                 // Field info:Lnet/minecraft/world/level/chunk/storage/RegionStorageInfo;
+       264: aload_1
+       265: aload_0
+       266: getfield      #98                 // Field version:Lnet/minecraft/world/level/chunk/storage/RegionFileVersion;
+       269: iload         9
+       271: invokeinterface #327,  5          // InterfaceMethod net/minecraft/util/profiling/jfr/JvmProfiler.onRegionFileRead:(Lnet/minecraft/world/level/chunk/storage/RegionStorageInfo;Lnet/minecraft/world/level/ChunkPos;Lnet/minecraft/world/level/chunk/storage/RegionFileVersion;I)V
+       276: aload_0
+       277: aload_1
+       278: iload         8
+       280: aload         6
+       282: iload         9
+       284: invokestatic  #331                // Method createStream:(Ljava/nio/ByteBuffer;I)Ljava/io/ByteArrayInputStream;
+       287: invokevirtual #335                // Method createChunkInputStream:(Lnet/minecraft/world/level/ChunkPos;BLjava/io/InputStream;)Ljava/io/DataInputStream;
+       290: areturn
+
+  private static int getTimestamp();
+    Code:
+         0: invokestatic  #345                // Method net/minecraft/Util.getEpochMillis:()J
+         3: ldc2_w        #346                // long 1000l
+         6: ldiv
+         7: l2i
+         8: ireturn
+
+  private static boolean isExternalStreamChunk(byte);
+    Code:
+         0: iload_0
+         1: sipush        128
+         4: iand
+         5: ifeq          12
+         8: iconst_1
+         9: goto          13
+        12: iconst_0
+        13: ireturn
+
+  private static byte getExternalChunkVersion(byte);
+    Code:
+         0: iload_0
+         1: sipush        -129
+         4: iand
+         5: i2b
+         6: ireturn
+
+  private java.io.DataInputStream createChunkInputStream(net.minecraft.world.level.ChunkPos, byte, java.io.InputStream) throws java.io.IOException;
+    Code:
+         0: iload_2
+         1: invokestatic  #352                // Method net/minecraft/world/level/chunk/storage/RegionFileVersion.fromId:(I)Lnet/minecraft/world/level/chunk/storage/RegionFileVersion;
+         4: astore        4
+         6: aload         4
+         8: getstatic     #355                // Field net/minecraft/world/level/chunk/storage/RegionFileVersion.VERSION_CUSTOM:Lnet/minecraft/world/level/chunk/storage/RegionFileVersion;
+        11: if_acmpne     69
+        14: new           #357                // class java/io/DataInputStream
+        17: dup
+        18: aload_3
+        19: invokespecial #360                // Method java/io/DataInputStream."<init>":(Ljava/io/InputStream;)V
+        22: invokevirtual #364                // Method java/io/DataInputStream.readUTF:()Ljava/lang/String;
+        25: astore        5
+        27: aload         5
+        29: invokestatic  #370                // Method net/minecraft/resources/ResourceLocation.tryParse:(Ljava/lang/String;)Lnet/minecraft/resources/ResourceLocation;
+        32: astore        6
+        34: aload         6
+        36: ifnull        54
+        39: getstatic     #189                // Field LOGGER:Lorg/slf4j/Logger;
+        42: ldc_w         #372                // String Unrecognized custom compression {}
+        45: aload         6
+        47: invokeinterface #374,  3          // InterfaceMethod org/slf4j/Logger.error:(Ljava/lang/String;Ljava/lang/Object;)V
+        52: aconst_null
+        53: areturn
+        54: getstatic     #189                // Field LOGGER:Lorg/slf4j/Logger;
+        57: ldc_w         #376                // String Invalid custom compression id {}
+        60: aload         5
+        62: invokeinterface #374,  3          // InterfaceMethod org/slf4j/Logger.error:(Ljava/lang/String;Ljava/lang/Object;)V
+        67: aconst_null
+        68: areturn
+        69: aload         4
+        71: ifnonnull     92
+        74: getstatic     #189                // Field LOGGER:Lorg/slf4j/Logger;
+        77: ldc_w         #380                // String Chunk {} has invalid chunk stream version {}
+        80: aload_1
+        81: iload_2
+        82: invokestatic  #385                // Method java/lang/Byte.valueOf:(B)Ljava/lang/Byte;
+        85: invokeinterface #317,  4          // InterfaceMethod org/slf4j/Logger.error:(Ljava/lang/String;Ljava/lang/Object;Ljava/lang/Object;)V
+        90: aconst_null
+        91: areturn
+        92: new           #357                // class java/io/DataInputStream
+        95: dup
+        96: aload         4
+        98: aload_3
+        99: invokevirtual #389                // Method net/minecraft/world/level/chunk/storage/RegionFileVersion.wrap:(Ljava/io/InputStream;)Ljava/io/InputStream;
+       102: invokespecial #360                // Method java/io/DataInputStream."<init>":(Ljava/io/InputStream;)V
+       105: areturn
+
+  private java.io.DataInputStream createExternalChunkInputStream(net.minecraft.world.level.ChunkPos, byte) throws java.io.IOException;
+    Code:
+         0: aload_0
+         1: aload_1
+         2: invokevirtual #394                // Method getExternalChunkPath:(Lnet/minecraft/world/level/ChunkPos;)Ljava/nio/file/Path;
+         5: astore_3
+         6: aload_3
+         7: iconst_0
+         8: anewarray     #100                // class java/nio/file/LinkOption
+        11: invokestatic  #397                // Method java/nio/file/Files.isRegularFile:(Ljava/nio/file/Path;[Ljava/nio/file/LinkOption;)Z
+        14: ifne          31
+        17: getstatic     #189                // Field LOGGER:Lorg/slf4j/Logger;
+        20: ldc_w         #399                // String External chunk path {} is not file
+        23: aload_3
+        24: invokeinterface #374,  3          // InterfaceMethod org/slf4j/Logger.error:(Ljava/lang/String;Ljava/lang/Object;)V
+        29: aconst_null
+        30: areturn
+        31: aload_0
+        32: aload_1
+        33: iload_2
+        34: aload_3
+        35: iconst_0
+        36: anewarray     #156                // class java/nio/file/OpenOption
+        39: invokestatic  #403                // Method java/nio/file/Files.newInputStream:(Ljava/nio/file/Path;[Ljava/nio/file/OpenOption;)Ljava/io/InputStream;
+        42: invokevirtual #335                // Method createChunkInputStream:(Lnet/minecraft/world/level/ChunkPos;BLjava/io/InputStream;)Ljava/io/DataInputStream;
+        45: areturn
+
+  private static java.io.ByteArrayInputStream createStream(java.nio.ByteBuffer, int);
+    Code:
+         0: new           #405                // class java/io/ByteArrayInputStream
+         3: dup
+         4: aload_0
+         5: invokevirtual #409                // Method java/nio/ByteBuffer.array:()[B
+         8: aload_0
+         9: invokevirtual #411                // Method java/nio/ByteBuffer.position:()I
+        12: iload_1
+        13: invokespecial #414                // Method java/io/ByteArrayInputStream."<init>":([BII)V
+        16: areturn
+
+  private int packSectorOffset(int, int);
+    Code:
+         0: iload_1
+         1: bipush        8
+         3: ishl
+         4: iload_2
+         5: ior
+         6: ireturn
+
+  private static int getNumSectors(int);
+    Code:
+         0: iload_0
+         1: sipush        255
+         4: iand
+         5: ireturn
+
+  private static int getSectorNumber(int);
+    Code:
+         0: iload_0
+         1: bipush        8
+         3: ishr
+         4: ldc_w         #417                // int 16777215
+         7: iand
+         8: ireturn
+
+  private static int sizeToSectors(int);
+    Code:
+         0: iload_0
+         1: sipush        4096
+         4: iadd
+         5: iconst_1
+         6: isub
+         7: sipush        4096
+        10: idiv
+        11: ireturn
+
+  public boolean doesChunkExist(net.minecraft.world.level.ChunkPos);
+    Code:
+         0: aload_0
+         1: aload_1
+         2: invokevirtual #268                // Method getOffset:(Lnet/minecraft/world/level/ChunkPos;)I
+         5: istore_2
+         6: iload_2
+         7: ifne          12
+        10: iconst_0
+        11: ireturn
+        12: iload_2
+        13: invokestatic  #213                // Method getSectorNumber:(I)I
+        16: istore_3
+        17: iload_2
+        18: invokestatic  #216                // Method getNumSectors:(I)I
+        21: istore        4
+        23: iconst_5
+        24: invokestatic  #271                // Method java/nio/ByteBuffer.allocate:(I)Ljava/nio/ByteBuffer;
+        27: astore        5
+        29: aload_0
+        30: getfield      #179                // Field file:Ljava/nio/channels/FileChannel;
+        33: aload         5
+        35: iload_3
+        36: sipush        4096
+        39: imul
+        40: i2l
+        41: invokevirtual #187                // Method java/nio/channels/FileChannel.read:(Ljava/nio/ByteBuffer;J)I
+        44: pop
+        45: aload         5
+        47: invokevirtual #275                // Method java/nio/ByteBuffer.flip:()Ljava/nio/ByteBuffer;
+        50: pop
+        51: aload         5
+        53: invokevirtual #279                // Method java/nio/ByteBuffer.remaining:()I
+        56: iconst_5
+        57: if_icmpeq     62
+        60: iconst_0
+        61: ireturn
+        62: aload         5
+        64: invokevirtual #287                // Method java/nio/ByteBuffer.getInt:()I
+        67: istore        6
+        69: aload         5
+        71: invokevirtual #290                // Method java/nio/ByteBuffer.get:()B
+        74: istore        7
+        76: iload         7
+        78: invokestatic  #299                // Method isExternalStreamChunk:(B)Z
+        81: ifeq          114
+        84: iload         7
+        86: invokestatic  #307                // Method getExternalChunkVersion:(B)B
+        89: invokestatic  #424                // Method net/minecraft/world/level/chunk/storage/RegionFileVersion.isValidVersion:(I)Z
+        92: ifne          97
+        95: iconst_0
+        96: ireturn
+        97: aload_0
+        98: aload_1
+        99: invokevirtual #394                // Method getExternalChunkPath:(Lnet/minecraft/world/level/ChunkPos;)Ljava/nio/file/Path;
+       102: iconst_0
+       103: anewarray     #100                // class java/nio/file/LinkOption
+       106: invokestatic  #397                // Method java/nio/file/Files.isRegularFile:(Ljava/nio/file/Path;[Ljava/nio/file/LinkOption;)Z
+       109: ifne          155
+       112: iconst_0
+       113: ireturn
+       114: iload         7
+       116: invokestatic  #424                // Method net/minecraft/world/level/chunk/storage/RegionFileVersion.isValidVersion:(I)Z
+       119: ifne          124
+       122: iconst_0
+       123: ireturn
+       124: iload         6
+       126: ifne          131
+       129: iconst_0
+       130: ireturn
+       131: iload         6
+       133: iconst_1
+       134: isub
+       135: istore        8
+       137: iload         8
+       139: iflt          153
+       142: iload         8
+       144: sipush        4096
+       147: iload         4
+       149: imul
+       150: if_icmple     155
+       153: iconst_0
+       154: ireturn
+       155: goto          162
+       158: astore        6
+       160: iconst_0
+       161: ireturn
+       162: iconst_1
+       163: ireturn
+      Exception table:
+         from    to  target type
+            29    61   158   Class java/io/IOException
+            62    96   158   Class java/io/IOException
+            97   113   158   Class java/io/IOException
+           114   123   158   Class java/io/IOException
+           124   130   158   Class java/io/IOException
+           131   154   158   Class java/io/IOException
+
+  public java.io.DataOutputStream getChunkDataOutputStream(net.minecraft.world.level.ChunkPos) throws java.io.IOException;
+    Code:
+         0: new           #430                // class java/io/DataOutputStream
+         3: dup
+         4: aload_0
+         5: getfield      #98                 // Field version:Lnet/minecraft/world/level/chunk/storage/RegionFileVersion;
+         8: new           #11                 // class net/minecraft/world/level/chunk/storage/RegionFile$ChunkBuffer
+        11: dup
+        12: aload_0
+        13: aload_1
+        14: invokespecial #433                // Method net/minecraft/world/level/chunk/storage/RegionFile$ChunkBuffer."<init>":(Lnet/minecraft/world/level/chunk/storage/RegionFile;Lnet/minecraft/world/level/ChunkPos;)V
+        17: invokevirtual #436                // Method net/minecraft/world/level/chunk/storage/RegionFileVersion.wrap:(Ljava/io/OutputStream;)Ljava/io/OutputStream;
+        20: invokespecial #439                // Method java/io/DataOutputStream."<init>":(Ljava/io/OutputStream;)V
+        23: areturn
+
+  public void flush() throws java.io.IOException;
+    Code:
+         0: aload_0
+         1: getfield      #179                // Field file:Ljava/nio/channels/FileChannel;
+         4: iconst_1
+         5: invokevirtual #443                // Method java/nio/channels/FileChannel.force:(Z)V
+         8: return
+
+  public void clear(net.minecraft.world.level.ChunkPos) throws java.io.IOException;
+    Code:
+         0: aload_1
+         1: invokestatic  #448                // Method getOffsetIndex:(Lnet/minecraft/world/level/ChunkPos;)I
+         4: istore_2
+         5: aload_0
+         6: getfield      #143                // Field offsets:Ljava/nio/IntBuffer;
+         9: iload_2
+        10: invokevirtual #210                // Method java/nio/IntBuffer.get:(I)I
+        13: istore_3
+        14: iload_3
+        15: ifne          19
+        18: return
+        19: aload_0
+        20: getfield      #143                // Field offsets:Ljava/nio/IntBuffer;
+        23: iload_2
+        24: iconst_0
+        25: invokevirtual #225                // Method java/nio/IntBuffer.put:(II)Ljava/nio/IntBuffer;
+        28: pop
+        29: aload_0
+        30: getfield      #154                // Field timestamps:Ljava/nio/IntBuffer;
+        33: iload_2
+        34: invokestatic  #450                // Method getTimestamp:()I
+        37: invokevirtual #225                // Method java/nio/IntBuffer.put:(II)Ljava/nio/IntBuffer;
+        40: pop
+        41: aload_0
+        42: invokevirtual #453                // Method writeHeader:()V
+        45: aload_0
+        46: aload_1
+        47: invokevirtual #394                // Method getExternalChunkPath:(Lnet/minecraft/world/level/ChunkPos;)Ljava/nio/file/Path;
+        50: invokestatic  #457                // Method java/nio/file/Files.deleteIfExists:(Ljava/nio/file/Path;)Z
+        53: pop
+        54: aload_0
+        55: getfield      #92                 // Field usedSectors:Lnet/minecraft/world/level/chunk/storage/RegionBitmap;
+        58: iload_3
+        59: invokestatic  #213                // Method getSectorNumber:(I)I
+        62: iload_3
+        63: invokestatic  #216                // Method getNumSectors:(I)I
+        66: invokevirtual #460                // Method net/minecraft/world/level/chunk/storage/RegionBitmap.free:(II)V
+        69: return
+
+  protected synchronized void write(net.minecraft.world.level.ChunkPos, java.nio.ByteBuffer) throws java.io.IOException;
+    Code:
+         0: aload_1
+         1: invokestatic  #448                // Method getOffsetIndex:(Lnet/minecraft/world/level/ChunkPos;)I
+         4: istore_3
+         5: aload_0
+         6: getfield      #143                // Field offsets:Ljava/nio/IntBuffer;
+         9: iload_3
+        10: invokevirtual #210                // Method java/nio/IntBuffer.get:(I)I
+        13: istore        4
+        15: iload         4
+        17: invokestatic  #213                // Method getSectorNumber:(I)I
+        20: istore        5
+        22: iload         4
+        24: invokestatic  #216                // Method getNumSectors:(I)I
+        27: istore        6
+        29: aload_2
+        30: invokevirtual #279                // Method java/nio/ByteBuffer.remaining:()I
+        33: istore        7
+        35: iload         7
+        37: invokestatic  #464                // Method sizeToSectors:(I)I
+        40: istore        8
+        42: iload         8
+        44: sipush        256
+        47: if_icmplt     138
+        50: aload_0
+        51: aload_1
+        52: invokevirtual #394                // Method getExternalChunkPath:(Lnet/minecraft/world/level/ChunkPos;)Ljava/nio/file/Path;
+        55: astore        11
+        57: getstatic     #189                // Field LOGGER:Lorg/slf4j/Logger;
+        60: ldc_w         #466                // String Saving oversized chunk {} ({} bytes} to external file {}
+        63: iconst_3
+        64: anewarray     #4                  // class java/lang/Object
+        67: dup
+        68: iconst_0
+        69: aload_1
+        70: aastore
+        71: dup
+        72: iconst_1
+        73: iload         7
+        75: invokestatic  #196                // Method java/lang/Integer.valueOf:(I)Ljava/lang/Integer;
+        78: aastore
+        79: dup
+        80: iconst_2
+        81: aload         11
+        83: aastore
+        84: invokeinterface #221,  3          // InterfaceMethod org/slf4j/Logger.warn:(Ljava/lang/String;[Ljava/lang/Object;)V
+        89: iconst_1
+        90: istore        8
+        92: aload_0
+        93: getfield      #92                 // Field usedSectors:Lnet/minecraft/world/level/chunk/storage/RegionBitmap;
+        96: iload         8
+        98: invokevirtual #468                // Method net/minecraft/world/level/chunk/storage/RegionBitmap.allocate:(I)I
+       101: istore        9
+       103: aload_0
+       104: aload         11
+       106: aload_2
+       107: invokevirtual #472                // Method writeToExternalFile:(Ljava/nio/file/Path;Ljava/nio/ByteBuffer;)Lnet/minecraft/world/level/chunk/storage/RegionFile$CommitOp;
+       110: astore        10
+       112: aload_0
+       113: invokevirtual #475                // Method createExternalStub:()Ljava/nio/ByteBuffer;
+       116: astore        12
+       118: aload_0
+       119: getfield      #179                // Field file:Ljava/nio/channels/FileChannel;
+       122: aload         12
+       124: iload         9
+       126: sipush        4096
+       129: imul
+       130: i2l
+       131: invokevirtual #477                // Method java/nio/channels/FileChannel.write:(Ljava/nio/ByteBuffer;J)I
+       134: pop
+       135: goto          174
+       138: aload_0
+       139: getfield      #92                 // Field usedSectors:Lnet/minecraft/world/level/chunk/storage/RegionBitmap;
+       142: iload         8
+       144: invokevirtual #468                // Method net/minecraft/world/level/chunk/storage/RegionBitmap.allocate:(I)I
+       147: istore        9
+       149: aload_0
+       150: aload_1
+       151: invokedynamic #493,  0            // InvokeDynamic #2:run:(Lnet/minecraft/world/level/chunk/storage/RegionFile;Lnet/minecraft/world/level/ChunkPos;)Lnet/minecraft/world/level/chunk/storage/RegionFile$CommitOp;
+       156: astore        10
+       158: aload_0
+       159: getfield      #179                // Field file:Ljava/nio/channels/FileChannel;
+       162: aload_2
+       163: iload         9
+       165: sipush        4096
+       168: imul
+       169: i2l
+       170: invokevirtual #477                // Method java/nio/channels/FileChannel.write:(Ljava/nio/ByteBuffer;J)I
+       173: pop
+       174: aload_0
+       175: getfield      #143                // Field offsets:Ljava/nio/IntBuffer;
+       178: iload_3
+       179: aload_0
+       180: iload         9
+       182: iload         8
+       184: invokevirtual #495                // Method packSectorOffset:(II)I
+       187: invokevirtual #225                // Method java/nio/IntBuffer.put:(II)Ljava/nio/IntBuffer;
+       190: pop
+       191: aload_0
+       192: getfield      #154                // Field timestamps:Ljava/nio/IntBuffer;
+       195: iload_3
+       196: invokestatic  #450                // Method getTimestamp:()I
+       199: invokevirtual #225                // Method java/nio/IntBuffer.put:(II)Ljava/nio/IntBuffer;
+       202: pop
+       203: aload_0
+       204: invokevirtual #453                // Method writeHeader:()V
+       207: aload         10
+       209: invokeinterface #497,  1          // InterfaceMethod net/minecraft/world/level/chunk/storage/RegionFile$CommitOp.run:()V
+       214: iload         5
+       216: ifeq          230
+       219: aload_0
+       220: getfield      #92                 // Field usedSectors:Lnet/minecraft/world/level/chunk/storage/RegionBitmap;
+       223: iload         5
+       225: iload         6
+       227: invokevirtual #460                // Method net/minecraft/world/level/chunk/storage/RegionBitmap.free:(II)V
+       230: return
+
+  private java.nio.ByteBuffer createExternalStub();
+    Code:
+         0: iconst_5
+         1: invokestatic  #271                // Method java/nio/ByteBuffer.allocate:(I)Ljava/nio/ByteBuffer;
+         4: astore_1
+         5: aload_1
+         6: iconst_1
+         7: invokevirtual #504                // Method java/nio/ByteBuffer.putInt:(I)Ljava/nio/ByteBuffer;
+        10: pop
+        11: aload_1
+        12: aload_0
+        13: getfield      #98                 // Field version:Lnet/minecraft/world/level/chunk/storage/RegionFileVersion;
+        16: invokevirtual #507                // Method net/minecraft/world/level/chunk/storage/RegionFileVersion.getId:()I
+        19: sipush        128
+        22: ior
+        23: i2b
+        24: invokevirtual #510                // Method java/nio/ByteBuffer.put:(B)Ljava/nio/ByteBuffer;
+        27: pop
+        28: aload_1
+        29: invokevirtual #275                // Method java/nio/ByteBuffer.flip:()Ljava/nio/ByteBuffer;
+        32: pop
+        33: aload_1
+        34: areturn
+
+  private net.minecraft.world.level.chunk.storage.RegionFile$CommitOp writeToExternalFile(java.nio.file.Path, java.nio.ByteBuffer) throws java.io.IOException;
+    Code:
+         0: aload_0
+         1: getfield      #137                // Field externalFileDir:Ljava/nio/file/Path;
+         4: ldc_w         #514                // String tmp
+         7: aconst_null
+         8: iconst_0
+         9: anewarray     #516                // class java/nio/file/attribute/FileAttribute
+        12: invokestatic  #520                // Method java/nio/file/Files.createTempFile:(Ljava/nio/file/Path;Ljava/lang/String;Ljava/lang/String;[Ljava/nio/file/attribute/FileAttribute;)Ljava/nio/file/Path;
+        15: astore_3
+        16: aload_3
+        17: iconst_2
+        18: anewarray     #156                // class java/nio/file/OpenOption
+        21: dup
+        22: iconst_0
+        23: getstatic     #162                // Field java/nio/file/StandardOpenOption.CREATE:Ljava/nio/file/StandardOpenOption;
+        26: aastore
+        27: dup
+        28: iconst_1
+        29: getstatic     #168                // Field java/nio/file/StandardOpenOption.WRITE:Ljava/nio/file/StandardOpenOption;
+        32: aastore
+        33: invokestatic  #177                // Method java/nio/channels/FileChannel.open:(Ljava/nio/file/Path;[Ljava/nio/file/OpenOption;)Ljava/nio/channels/FileChannel;
+        36: astore        4
+        38: aload_2
+        39: iconst_5
+        40: invokevirtual #152                // Method java/nio/ByteBuffer.position:(I)Ljava/nio/ByteBuffer;
+        43: pop
+        44: aload         4
+        46: aload_2
+        47: invokevirtual #523                // Method java/nio/channels/FileChannel.write:(Ljava/nio/ByteBuffer;)I
+        50: pop
+        51: aload         4
+        53: ifnull        91
+        56: aload         4
+        58: invokevirtual #526                // Method java/nio/channels/FileChannel.close:()V
+        61: goto          91
+        64: astore        5
+        66: aload         4
+        68: ifnull        88
+        71: aload         4
+        73: invokevirtual #526                // Method java/nio/channels/FileChannel.close:()V
+        76: goto          88
+        79: astore        6
+        81: aload         5
+        83: aload         6
+        85: invokevirtual #530                // Method java/lang/Throwable.addSuppressed:(Ljava/lang/Throwable;)V
+        88: aload         5
+        90: athrow
+        91: aload_3
+        92: aload_1
+        93: invokedynamic #538,  0            // InvokeDynamic #3:run:(Ljava/nio/file/Path;Ljava/nio/file/Path;)Lnet/minecraft/world/level/chunk/storage/RegionFile$CommitOp;
+        98: areturn
+      Exception table:
+         from    to  target type
+            38    51    64   Class java/lang/Throwable
+            71    76    79   Class java/lang/Throwable
+
+  private void writeHeader() throws java.io.IOException;
+    Code:
+         0: aload_0
+         1: getfield      #87                 // Field header:Ljava/nio/ByteBuffer;
+         4: iconst_0
+         5: invokevirtual #152                // Method java/nio/ByteBuffer.position:(I)Ljava/nio/ByteBuffer;
+         8: pop
+         9: aload_0
+        10: getfield      #179                // Field file:Ljava/nio/channels/FileChannel;
+        13: aload_0
+        14: getfield      #87                 // Field header:Ljava/nio/ByteBuffer;
+        17: lconst_0
+        18: invokevirtual #477                // Method java/nio/channels/FileChannel.write:(Ljava/nio/ByteBuffer;J)I
+        21: pop
+        22: return
+
+  private int getOffset(net.minecraft.world.level.ChunkPos);
+    Code:
+         0: aload_0
+         1: getfield      #143                // Field offsets:Ljava/nio/IntBuffer;
+         4: aload_1
+         5: invokestatic  #448                // Method getOffsetIndex:(Lnet/minecraft/world/level/ChunkPos;)I
+         8: invokevirtual #210                // Method java/nio/IntBuffer.get:(I)I
+        11: ireturn
+
+  public boolean hasChunk(net.minecraft.world.level.ChunkPos);
+    Code:
+         0: aload_0
+         1: aload_1
+         2: invokevirtual #268                // Method getOffset:(Lnet/minecraft/world/level/ChunkPos;)I
+         5: ifeq          12
+         8: iconst_1
+         9: goto          13
+        12: iconst_0
+        13: ireturn
+
+  private static int getOffsetIndex(net.minecraft.world.level.ChunkPos);
+    Code:
+         0: aload_0
+         1: invokevirtual #543                // Method net/minecraft/world/level/ChunkPos.getRegionLocalX:()I
+         4: aload_0
+         5: invokevirtual #546                // Method net/minecraft/world/level/ChunkPos.getRegionLocalZ:()I
+         8: bipush        32
+        10: imul
+        11: iadd
+        12: ireturn
+
+  public void close() throws java.io.IOException;
+    Code:
+         0: aload_0
+         1: invokevirtual #549                // Method padToFullSector:()V
+         4: aload_0
+         5: getfield      #179                // Field file:Ljava/nio/channels/FileChannel;
+         8: iconst_1
+         9: invokevirtual #443                // Method java/nio/channels/FileChannel.force:(Z)V
+        12: aload_0
+        13: getfield      #179                // Field file:Ljava/nio/channels/FileChannel;
+        16: invokevirtual #526                // Method java/nio/channels/FileChannel.close:()V
+        19: goto          32
+        22: astore_1
+        23: aload_0
+        24: getfield      #179                // Field file:Ljava/nio/channels/FileChannel;
+        27: invokevirtual #526                // Method java/nio/channels/FileChannel.close:()V
+        30: aload_1
+        31: athrow
+        32: goto          66
+        35: astore_2
+        36: aload_0
+        37: getfield      #179                // Field file:Ljava/nio/channels/FileChannel;
+        40: iconst_1
+        41: invokevirtual #443                // Method java/nio/channels/FileChannel.force:(Z)V
+        44: aload_0
+        45: getfield      #179                // Field file:Ljava/nio/channels/FileChannel;
+        48: invokevirtual #526                // Method java/nio/channels/FileChannel.close:()V
+        51: goto          64
+        54: astore_3
+        55: aload_0
+        56: getfield      #179                // Field file:Ljava/nio/channels/FileChannel;
+        59: invokevirtual #526                // Method java/nio/channels/FileChannel.close:()V
+        62: aload_3
+        63: athrow
+        64: aload_2
+        65: athrow
+        66: return
+      Exception table:
+         from    to  target type
+             4    12    22   any
+             0     4    35   any
+            36    44    54   any
+
+  private void padToFullSector() throws java.io.IOException;
+    Code:
+         0: aload_0
+         1: getfield      #179                // Field file:Ljava/nio/channels/FileChannel;
+         4: invokevirtual #551                // Method java/nio/channels/FileChannel.size:()J
+         7: l2i
+         8: istore_1
+         9: iload_1
+        10: invokestatic  #464                // Method sizeToSectors:(I)I
+        13: sipush        4096
+        16: imul
+        17: istore_2
+        18: iload_1
+        19: iload_2
+        20: if_icmpeq     49
+        23: getstatic     #553                // Field PADDING_BUFFER:Ljava/nio/ByteBuffer;
+        26: invokevirtual #556                // Method java/nio/ByteBuffer.duplicate:()Ljava/nio/ByteBuffer;
+        29: astore_3
+        30: aload_3
+        31: iconst_0
+        32: invokevirtual #152                // Method java/nio/ByteBuffer.position:(I)Ljava/nio/ByteBuffer;
+        35: pop
+        36: aload_0
+        37: getfield      #179                // Field file:Ljava/nio/channels/FileChannel;
+        40: aload_3
+        41: iload_2
+        42: iconst_1
+        43: isub
+        44: i2l
+        45: invokevirtual #477                // Method java/nio/channels/FileChannel.write:(Ljava/nio/ByteBuffer;J)I
+        48: pop
+        49: return
+
+  private static void method_22411(java.nio.file.Path, java.nio.file.Path) throws java.io.IOException;
+    Code:
+         0: aload_0
+         1: aload_1
+         2: iconst_1
+         3: anewarray     #558                // class java/nio/file/CopyOption
+         6: dup
+         7: iconst_0
+         8: getstatic     #564                // Field java/nio/file/StandardCopyOption.REPLACE_EXISTING:Ljava/nio/file/StandardCopyOption;
+        11: aastore
+        12: invokestatic  #568                // Method java/nio/file/Files.move:(Ljava/nio/file/Path;Ljava/nio/file/Path;[Ljava/nio/file/CopyOption;)Ljava/nio/file/Path;
+        15: pop
+        16: return
+
+  private void method_22414(net.minecraft.world.level.ChunkPos) throws java.io.IOException;
+    Code:
+         0: aload_0
+         1: aload_1
+         2: invokevirtual #394                // Method getExternalChunkPath:(Lnet/minecraft/world/level/ChunkPos;)Ljava/nio/file/Path;
+         5: invokestatic  #457                // Method java/nio/file/Files.deleteIfExists:(Ljava/nio/file/Path;)Z
+         8: pop
+         9: return
+
+  static {};
+    Code:
+         0: invokestatic  #575                // Method com/mojang/logging/LogUtils.getLogger:()Lorg/slf4j/Logger;
+         3: putstatic     #189                // Field LOGGER:Lorg/slf4j/Logger;
+         6: iconst_1
+         7: invokestatic  #85                 // Method java/nio/ByteBuffer.allocateDirect:(I)Ljava/nio/ByteBuffer;
+        10: putstatic     #553                // Field PADDING_BUFFER:Ljava/nio/ByteBuffer;
+        13: return
+}

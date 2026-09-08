@@ -1,0 +1,2028 @@
+[
+  {
+    "path": "common/src/main/java/dev/vox/lss/common/CommandHelp.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "581e9258724dfe2488bacd78466c8e44212625ff0fa3aa4823bcbf108890a6a5",
+      "26.1": "3d876967f84e4c5d32669ac82f73192b136493fa8cc275df3e4adc9121037f46",
+      "1.21.11": "3d876967f84e4c5d32669ac82f73192b136493fa8cc275df3e4adc9121037f46",
+      "1.21.10": "3d876967f84e4c5d32669ac82f73192b136493fa8cc275df3e4adc9121037f46",
+      "1.21.1": "3d876967f84e4c5d32669ac82f73192b136493fa8cc275df3e4adc9121037f46"
+    }
+  },
+  {
+    "path": "common/src/main/java/dev/vox/lss/common/compat/WireDialectTracker.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "25ba05f8de811491dd4a053366e5fce65670c090de20fa1c984a23d5a91a77dc",
+      "26.1": "f1c5d9db2744c24345cfc5e8d15fe923704e879a7c2c1c6f1d29653845614793",
+      "1.21.11": "f1c5d9db2744c24345cfc5e8d15fe923704e879a7c2c1c6f1d29653845614793",
+      "1.21.10": "f1c5d9db2744c24345cfc5e8d15fe923704e879a7c2c1c6f1d29653845614793",
+      "1.21.1": "f1c5d9db2744c24345cfc5e8d15fe923704e879a7c2c1c6f1d29653845614793"
+    }
+  },
+  {
+    "path": "common/src/main/java/dev/vox/lss/common/config/RuntimeSettings.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "5902dfaf261e62ca09a7bfe42592c5ce6bb6317b34b4ad22a0d97cbcd9b13fe7",
+      "26.1": "e0fb08edd24c66931d00f3f5896e87a72fb36740c5571640bdc7ce95ed1fb17f",
+      "1.21.11": "e0fb08edd24c66931d00f3f5896e87a72fb36740c5571640bdc7ce95ed1fb17f",
+      "1.21.10": "e0fb08edd24c66931d00f3f5896e87a72fb36740c5571640bdc7ce95ed1fb17f",
+      "1.21.1": "e0fb08edd24c66931d00f3f5896e87a72fb36740c5571640bdc7ce95ed1fb17f"
+    }
+  },
+  {
+    "path": "common/src/main/java/dev/vox/lss/common/config/ServerConfigBase.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "f2750540a0d8f1897914f935ed4bc870a5d23c9d25a477a9448af3550ecc45ee",
+      "26.1": "6257b3add0ead36e3d18c35959ad7878c73253596bd4a4c3d171fb306809e7bf",
+      "1.21.11": "6257b3add0ead36e3d18c35959ad7878c73253596bd4a4c3d171fb306809e7bf",
+      "1.21.10": "6257b3add0ead36e3d18c35959ad7878c73253596bd4a4c3d171fb306809e7bf",
+      "1.21.1": "6257b3add0ead36e3d18c35959ad7878c73253596bd4a4c3d171fb306809e7bf"
+    }
+  },
+  {
+    "path": "common/src/main/java/dev/vox/lss/common/wire/NativeSectionShape.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "52e0c68541feb9fde2c29ed6d28b56a10b4afbc665e2f1b6795edeefd6357a61",
+      "26.1": "d8735511096cd72213262322f084f2b6a85049f70e81e08f48c7826ac0a73a36",
+      "1.21.11": "913b7a92e54295bc622c7ff0d4d587302cde4ce7d789ac2555a82a5e1a611d81",
+      "1.21.10": "913b7a92e54295bc622c7ff0d4d587302cde4ce7d789ac2555a82a5e1a611d81",
+      "1.21.1": "d19d82acea0e842a60539d9b9e5adf8c25cefa0b5bc0fa6fbaabc4e2e8c5ec35"
+    }
+  },
+  {
+    "path": "common/src/main/java/dev/vox/lss/common/wire/WireSectionCursor.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "24d69f7f1b293382cb77c18140c735fd72b6ab68e99fb3d2c974d046d6718def",
+      "26.1": "cb5a62132a03433356b94e011c53163ca8778b55c4b83b10e936307e36a94589",
+      "1.21.11": "cb5a62132a03433356b94e011c53163ca8778b55c4b83b10e936307e36a94589",
+      "1.21.10": "cb5a62132a03433356b94e011c53163ca8778b55c4b83b10e936307e36a94589",
+      "1.21.1": "90d0c407016a98eac09bb0a93a0c491104f4655b2287a8d09c0f82ade986fbcf"
+    }
+  },
+  {
+    "path": "fabric/src/main/java/dev/vox/lss/benchmark/BenchmarkHook.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "030f22f30a4b0a5e83c00c9b4d916fbc6f27bd1055e49423da07b43fde9d52d7",
+      "26.1": "030f22f30a4b0a5e83c00c9b4d916fbc6f27bd1055e49423da07b43fde9d52d7",
+      "1.21.11": "28cc923c5d2a6d1e874b9486eb3921b880efa1c1666a6f5d95bd5f98c821e4d8",
+      "1.21.10": "28cc923c5d2a6d1e874b9486eb3921b880efa1c1666a6f5d95bd5f98c821e4d8",
+      "1.21.1": "28cc923c5d2a6d1e874b9486eb3921b880efa1c1666a6f5d95bd5f98c821e4d8"
+    }
+  },
+  {
+    "path": "fabric/src/main/java/dev/vox/lss/benchmark/SoakPatrol.java",
+    "present": [
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": null,
+      "26.1": null,
+      "1.21.11": "a9642d01b421d50baac600f209588d1bbb7904955576e50245f1f7749d466ab0",
+      "1.21.10": "bdb0df88799df18bea8a011ed6dc53b0984d945c0b52d90a967781c585559be0",
+      "1.21.1": "9982068134c37f7fbd6d9d79c8b300ede07bffce3e9934fa11801980faa8f4c4"
+    }
+  },
+  {
+    "path": "fabric/src/main/java/dev/vox/lss/compat/ScopedCarrier.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "86e90303229b5b4b0d657952acef404262cf4c98c63b4116ccd38c256ac51d05",
+      "26.1": "86e90303229b5b4b0d657952acef404262cf4c98c63b4116ccd38c256ac51d05",
+      "1.21.11": "d375e22832908fd6d933f2474eb13da434446489052b3034b0bc83f3df501efa",
+      "1.21.10": "112ecc56f4a8e1832a3ea818273d1ec87066e1cb2ff067ff57bb9f271cb42e4a",
+      "1.21.1": "a13d897c025e5da3ab4180980e61af2e899bcce3d9a481c2ab672f5065f5eae9"
+    }
+  },
+  {
+    "path": "fabric/src/main/java/dev/vox/lss/config/LSSConfigMenu.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "b502a872eca22a5b2a8745d94dc05f5e005f98947c81827e98bd5281fc3627e8",
+      "26.1": "b502a872eca22a5b2a8745d94dc05f5e005f98947c81827e98bd5281fc3627e8",
+      "1.21.11": "b502a872eca22a5b2a8745d94dc05f5e005f98947c81827e98bd5281fc3627e8",
+      "1.21.10": null,
+      "1.21.1": "7a5169a445ea13ebc66deb7037c51e4e81cec1f60515e29fda8b066b1eefa7c5"
+    }
+  },
+  {
+    "path": "fabric/src/main/java/dev/vox/lss/mixin/ChunkSaveDataHook.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "d8db1c72838c5e033e0ba41b5ac25aadd020bc37f81cb71aac403f0cd295ce43",
+      "26.1": "d8db1c72838c5e033e0ba41b5ac25aadd020bc37f81cb71aac403f0cd295ce43",
+      "1.21.11": "d8db1c72838c5e033e0ba41b5ac25aadd020bc37f81cb71aac403f0cd295ce43",
+      "1.21.10": "d8db1c72838c5e033e0ba41b5ac25aadd020bc37f81cb71aac403f0cd295ce43",
+      "1.21.1": "b08e0befe7cfc523b9fd75693791bddba9589551aa20bd26a2ecad1df23a8d07"
+    }
+  },
+  {
+    "path": "fabric/src/main/java/dev/vox/lss/mixin/IntegratedServerLanHook.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "51661dee264d21242a253e702727f28d70d9c780760552ed5262b74aaf2cd9e6",
+      "26.1": "c0f15c6baacb85f0f4ad544880bbf20e4bea628149ecda67e733dd7e640b060b",
+      "1.21.11": "27aa39d9342918059e8849207e6b39ef6ed4de81fb71c306e0cf1be0453739bb",
+      "1.21.10": "27aa39d9342918059e8849207e6b39ef6ed4de81fb71c306e0cf1be0453739bb",
+      "1.21.1": "b15c1fdb26b840251348766afaef39af16d8dfc87f05af1ff3643c45afcc02a0"
+    }
+  },
+  {
+    "path": "fabric/src/main/java/dev/vox/lss/mixin/trace/MovementRejectHook.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "c675dfcbf9f17ee01fe2e46a0f23e544fbc28429e6bf890d35f679122572ef14",
+      "26.1": "464df1ad6216c5be070a58af9408f9cdcf52436fcbbb8b3a609bc42a35939a40",
+      "1.21.11": "c675dfcbf9f17ee01fe2e46a0f23e544fbc28429e6bf890d35f679122572ef14",
+      "1.21.10": "c675dfcbf9f17ee01fe2e46a0f23e544fbc28429e6bf890d35f679122572ef14",
+      "1.21.1": "c675dfcbf9f17ee01fe2e46a0f23e544fbc28429e6bf890d35f679122572ef14"
+    }
+  },
+  {
+    "path": "fabric/src/main/java/dev/vox/lss/networking/LSSNetworking.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "ea1c3dcbd2e11b7e1fb31823682b3719777527002d752ea6f9197b0888f06d5b",
+      "26.1": "ea1c3dcbd2e11b7e1fb31823682b3719777527002d752ea6f9197b0888f06d5b",
+      "1.21.11": "76c12eaf7eb3ab0f4530eaf22caf418f3886b4b786782398280e89c2e4fad9dc",
+      "1.21.10": "76c12eaf7eb3ab0f4530eaf22caf418f3886b4b786782398280e89c2e4fad9dc",
+      "1.21.1": "76c12eaf7eb3ab0f4530eaf22caf418f3886b4b786782398280e89c2e4fad9dc"
+    }
+  },
+  {
+    "path": "fabric/src/main/java/dev/vox/lss/networking/client/FarPlayerRenderer.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "c35949357d202d705bb582aa5053c0c19e863e0c0c4732425bac6bf15388cd24",
+      "26.1": "df1e7d18585e5868c603cdc7ccdae2eaa5c484e43e78afe1f648ea1d6de6ecf7",
+      "1.21.11": "44b4a21f89fbf21c2699ecba1140b259498a8314dd256fdbf0468e5396726407",
+      "1.21.10": "3f3436f25cf4d12fe6c0671fb5c8af676798b9075c57267f554a0b2055dd03d7",
+      "1.21.1": "4e52cfa14d5bdba595897d6b687472fbb3f6c90e77c6c4dcd0e7d45085d0c9b6"
+    }
+  },
+  {
+    "path": "fabric/src/main/java/dev/vox/lss/networking/client/LSSClientCommands.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "3c196e585122ebc2c7e7c35074bc0b29458e201c5fd555bc57152572f5c8f88e",
+      "26.1": "3c196e585122ebc2c7e7c35074bc0b29458e201c5fd555bc57152572f5c8f88e",
+      "1.21.11": "ffaadc6fa330f9d3c604d0290820a81e5fa2173fee0bfeabc233e00be6fd6dfd",
+      "1.21.10": "3229c94336d62222f6101146ad56cea55253842966047bdffd4ae604396d51c7",
+      "1.21.1": "6da91bf0140425314d522d52593cc192f24ebbacb44a4e4b7d1c7e5fba82a87d"
+    }
+  },
+  {
+    "path": "fabric/src/main/java/dev/vox/lss/networking/client/LSSClientNetworking.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "e12810677915ba907917b80ecb8ef96c8f7c941ab9f55091ba615d3f37d13645",
+      "26.1": "3ae1faf6ff573c4864b8d65c3144c2d9da183a20713696bad06c5cba18cd880e",
+      "1.21.11": "1a2ee221b2ddf892945907f1de32c128ba67fc18e695dd7927fc177b723fe27b",
+      "1.21.10": "50551c6167d4f04a8d887b945a6f41e5d6b11738c081f3ced6b70d1787d46be1",
+      "1.21.1": "bf7f5bd00d96d41c2c9e3f8a06cc16f112afbb8ab4a72ee5b2dbb8e84d106b03"
+    }
+  },
+  {
+    "path": "fabric/src/main/java/dev/vox/lss/networking/server/LSSServerNetworking.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "95789ed8a4de1a1527f82be5964ebe58cdddf51065de6f809900acd3eca6bc20",
+      "26.1": "15b3547117693c1db2755eab4552b3d38d631a4a90d2bf9194e59e67727a9374",
+      "1.21.11": "dda37fc820ae5d4b015aa9301c35bd30277b181d7d1c553e4be6c6c955effc49",
+      "1.21.10": "fe544f42d74206810d5090d43c74d8c36cb5cb1908431ca3705d67419575bace",
+      "1.21.1": "7c116ea46cc869f883e6a031b073f86ac627b016507c2bb5fd236e30140cc043"
+    }
+  },
+  {
+    "path": "fabric/src/main/resources/assets/lss/lang/en_us.json",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "bb318e393237dc8ea9146a1073f19856b4543f52544810cf3b33decf06cefab4",
+      "26.1": "6a6ba3621dc0b6b388f14e555a0d3c10c2a058b8cdfa8cf5ea550c21c00fa1e0",
+      "1.21.11": "6a6ba3621dc0b6b388f14e555a0d3c10c2a058b8cdfa8cf5ea550c21c00fa1e0",
+      "1.21.10": "6a6ba3621dc0b6b388f14e555a0d3c10c2a058b8cdfa8cf5ea550c21c00fa1e0",
+      "1.21.1": "6a6ba3621dc0b6b388f14e555a0d3c10c2a058b8cdfa8cf5ea550c21c00fa1e0"
+    }
+  },
+  {
+    "path": "fabric/src/main/resources/assets/lss/lang/zh_cn.json",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "f0b6dc1222e38540c5575e06630d2a63221989973d51333f8e26590d517818d4",
+      "26.1": "7e44aa4a08f3ed70be99a738e4a3c5ca7926d04edd0e3209db4b1330b74c76a5",
+      "1.21.11": "7e44aa4a08f3ed70be99a738e4a3c5ca7926d04edd0e3209db4b1330b74c76a5",
+      "1.21.10": "7e44aa4a08f3ed70be99a738e4a3c5ca7926d04edd0e3209db4b1330b74c76a5",
+      "1.21.1": "7e44aa4a08f3ed70be99a738e4a3c5ca7926d04edd0e3209db4b1330b74c76a5"
+    }
+  },
+  {
+    "path": "fabric/src/main/resources/assets/lss/lang/zh_tw.json",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "7ef7cf970d11aae1ee0709d04d810a392d7791ea58e039e65b4ebb3a0afe123c",
+      "26.1": "99f6c3aed9eed6db6a0dac1d2511491b80a2b24484f491dd8562e4db81599031",
+      "1.21.11": "99f6c3aed9eed6db6a0dac1d2511491b80a2b24484f491dd8562e4db81599031",
+      "1.21.10": "99f6c3aed9eed6db6a0dac1d2511491b80a2b24484f491dd8562e4db81599031",
+      "1.21.1": "99f6c3aed9eed6db6a0dac1d2511491b80a2b24484f491dd8562e4db81599031"
+    }
+  },
+  {
+    "path": "fabric/src/main/resources/fabric.mod.json",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "8741cb84b58319c958a97191579faf012f51dc85078aa2831d8cc8ba8be5925b",
+      "26.1": "f2d1668c4ef41eadef7dd8b382d629bf2649b92a096d562b1fa5d0f5e1bff386",
+      "1.21.11": "6fb9530b3ec68f9cee6fee0cf8114012b99880fa8168aafb6bcc4b79694457ce",
+      "1.21.10": "963bf13b85e70cade7d44b817857d33c4cb5ee18330a1f4d82c5e22fea9c076e",
+      "1.21.1": "7b822451b84c15e448527087bb2a17a668387ab5d11e4b2f5f1ed22431c49941"
+    }
+  },
+  {
+    "path": "fabric/src/main/resources/lss-sodium-legacy.mixins.json",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "5348b7f7ebb8091142968634d2f3607dc232b91dde2de1e1c1f3cd30daef1c75",
+      "26.1": "5348b7f7ebb8091142968634d2f3607dc232b91dde2de1e1c1f3cd30daef1c75",
+      "1.21.11": "8771e51d191ba3ba3d425e21bf13eaaf9580e2436cefdec08d199b4a2b754f2a",
+      "1.21.10": "8771e51d191ba3ba3d425e21bf13eaaf9580e2436cefdec08d199b4a2b754f2a",
+      "1.21.1": "8771e51d191ba3ba3d425e21bf13eaaf9580e2436cefdec08d199b4a2b754f2a"
+    }
+  },
+  {
+    "path": "fabric/src/main/resources/lss-trace.mixins.json",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "7e40c151734e8f47a0b158158092dd1e841b24a6c170b081b00c426157dcf116",
+      "26.1": "7e40c151734e8f47a0b158158092dd1e841b24a6c170b081b00c426157dcf116",
+      "1.21.11": "2f787ff1e05034916bf3312a5d41935adf9d870782d1a773a04b07e4ae935b1f",
+      "1.21.10": "2f787ff1e05034916bf3312a5d41935adf9d870782d1a773a04b07e4ae935b1f",
+      "1.21.1": "2f787ff1e05034916bf3312a5d41935adf9d870782d1a773a04b07e4ae935b1f"
+    }
+  },
+  {
+    "path": "fabric/src/main/resources/lss.accesswidener",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "961fe0752b485bf0801fb339b5507787641ae038bbdf81d290b37cbd1a949629",
+      "26.1": "961fe0752b485bf0801fb339b5507787641ae038bbdf81d290b37cbd1a949629",
+      "1.21.11": "dbaf37c56bcdff508289f91a1c87b448c70e2bf4408d1174772602ac9d70aeb9",
+      "1.21.10": "dbaf37c56bcdff508289f91a1c87b448c70e2bf4408d1174772602ac9d70aeb9",
+      "1.21.1": "dbaf37c56bcdff508289f91a1c87b448c70e2bf4408d1174772602ac9d70aeb9"
+    }
+  },
+  {
+    "path": "fabric/src/main/resources/lss.mixins.json",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "dd59d654e58c0b3b6a3feed143bc4893774731db4e1eead076939cd687f7d8bd",
+      "26.1": "dd59d654e58c0b3b6a3feed143bc4893774731db4e1eead076939cd687f7d8bd",
+      "1.21.11": "cb2540cc6ef0c08bd0455797bd84604a5e6917636e20eb4ea50b662ec0d2220c",
+      "1.21.10": "cb2540cc6ef0c08bd0455797bd84604a5e6917636e20eb4ea50b662ec0d2220c",
+      "1.21.1": "a9343061278dbe903326eddf1841f2e889306934eb1db1070a63392ed0115dbf"
+    }
+  },
+  {
+    "path": "neoforge/src/main/java/dev/vox/lss/compat/ScopedCarrier.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "86e90303229b5b4b0d657952acef404262cf4c98c63b4116ccd38c256ac51d05",
+      "26.1": "86e90303229b5b4b0d657952acef404262cf4c98c63b4116ccd38c256ac51d05",
+      "1.21.11": "d375e22832908fd6d933f2474eb13da434446489052b3034b0bc83f3df501efa",
+      "1.21.10": "112ecc56f4a8e1832a3ea818273d1ec87066e1cb2ff067ff57bb9f271cb42e4a",
+      "1.21.1": "a13d897c025e5da3ab4180980e61af2e899bcce3d9a481c2ab672f5065f5eae9"
+    }
+  },
+  {
+    "path": "neoforge/src/main/java/dev/vox/lss/config/LSSConfigMenu.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "fca1164e0bc4b442cb97db947bed264460fc41986686a11fc81fbb5c60ddf9a0",
+      "26.1": "fca1164e0bc4b442cb97db947bed264460fc41986686a11fc81fbb5c60ddf9a0",
+      "1.21.11": "fca1164e0bc4b442cb97db947bed264460fc41986686a11fc81fbb5c60ddf9a0",
+      "1.21.10": null,
+      "1.21.1": "3201dc3c4752476e8cbc1127e09725cf860e779272ad82f6bea1bd8328e409a4"
+    }
+  },
+  {
+    "path": "neoforge/src/main/java/dev/vox/lss/mixin/ChunkSaveDataHook.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "6a5143e60299cf42be35a739fa7503ed074e48e519e8504d89aad4bd6a23561a",
+      "26.1": "6a5143e60299cf42be35a739fa7503ed074e48e519e8504d89aad4bd6a23561a",
+      "1.21.11": "6a5143e60299cf42be35a739fa7503ed074e48e519e8504d89aad4bd6a23561a",
+      "1.21.10": "6a5143e60299cf42be35a739fa7503ed074e48e519e8504d89aad4bd6a23561a",
+      "1.21.1": "9152d2b1c4cc9473a2306884af71d511ad74ba61d82d0e8a73f55e09fca7cbaf"
+    }
+  },
+  {
+    "path": "neoforge/src/main/java/dev/vox/lss/mixin/IntegratedServerLanHook.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "51661dee264d21242a253e702727f28d70d9c780760552ed5262b74aaf2cd9e6",
+      "26.1": "c0f15c6baacb85f0f4ad544880bbf20e4bea628149ecda67e733dd7e640b060b",
+      "1.21.11": "27aa39d9342918059e8849207e6b39ef6ed4de81fb71c306e0cf1be0453739bb",
+      "1.21.10": "27aa39d9342918059e8849207e6b39ef6ed4de81fb71c306e0cf1be0453739bb",
+      "1.21.1": "b15c1fdb26b840251348766afaef39af16d8dfc87f05af1ff3643c45afcc02a0"
+    }
+  },
+  {
+    "path": "neoforge/src/main/java/dev/vox/lss/neoforge/LSSNeoClientBootstrap.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "c10995815053981aff98caab2e9adb7561ddac2127963e86b0404bdfdca3ee24",
+      "26.1": "c10995815053981aff98caab2e9adb7561ddac2127963e86b0404bdfdca3ee24",
+      "1.21.11": "c10995815053981aff98caab2e9adb7561ddac2127963e86b0404bdfdca3ee24",
+      "1.21.10": "c10995815053981aff98caab2e9adb7561ddac2127963e86b0404bdfdca3ee24",
+      "1.21.1": "40bde0ae37e6d7b1c87f838811701feb63104301c1fadb2cbd4c7bf3d628a938"
+    }
+  },
+  {
+    "path": "neoforge/src/main/java/dev/vox/lss/neoforge/LSSNeoMod.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "5b092061ed2b787e8c2e98ad126dd8fd76192e92d02eb457a049e4a17be9ef06",
+      "26.1": "5b092061ed2b787e8c2e98ad126dd8fd76192e92d02eb457a049e4a17be9ef06",
+      "1.21.11": "5b092061ed2b787e8c2e98ad126dd8fd76192e92d02eb457a049e4a17be9ef06",
+      "1.21.10": "5b092061ed2b787e8c2e98ad126dd8fd76192e92d02eb457a049e4a17be9ef06",
+      "1.21.1": "e9655f23a85fd286d71724857acbf3fd42926033aebe8b2e4776b4c03083df5c"
+    }
+  },
+  {
+    "path": "neoforge/src/main/java/dev/vox/lss/networking/client/FarPlayerRenderer.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "cfb3fba6f05d96f176390e15c477f014856d41cf5cf40ed4a6165e3a72385a35",
+      "26.1": "cfb3fba6f05d96f176390e15c477f014856d41cf5cf40ed4a6165e3a72385a35",
+      "1.21.11": "8ecf95bef750de5a12304e386ac4dc31392dee6e4bf0e9153b264d660f7fa958",
+      "1.21.10": "8ecf95bef750de5a12304e386ac4dc31392dee6e4bf0e9153b264d660f7fa958",
+      "1.21.1": "68ea0b83ded11b34f09a4167e9fc43c150552b831c530b7e60221981417c6192"
+    }
+  },
+  {
+    "path": "neoforge/src/main/java/dev/vox/lss/platform/NeoForgeClientLoaderServices.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "bc33197357e6da5c123dda37ec50671921263af9121c8cd5941b6658027b3adf",
+      "26.1": "bc33197357e6da5c123dda37ec50671921263af9121c8cd5941b6658027b3adf",
+      "1.21.11": "bc33197357e6da5c123dda37ec50671921263af9121c8cd5941b6658027b3adf",
+      "1.21.10": "bc33197357e6da5c123dda37ec50671921263af9121c8cd5941b6658027b3adf",
+      "1.21.1": "35ad8ac1c530016d03705b06ea3e007f7b2abcf2915fb5b8559ecdc67f8a23bc"
+    }
+  },
+  {
+    "path": "neoforge/src/main/java/net/caffeinemc/mods/sodium/api/config/ConfigEntryPoint.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "a7f40f3785755333ee04c9159dbf02f171575c5135a003a3153ab53da6c1198b",
+      "26.1": "a7f40f3785755333ee04c9159dbf02f171575c5135a003a3153ab53da6c1198b",
+      "1.21.11": "a7f40f3785755333ee04c9159dbf02f171575c5135a003a3153ab53da6c1198b",
+      "1.21.10": null,
+      "1.21.1": "a7f40f3785755333ee04c9159dbf02f171575c5135a003a3153ab53da6c1198b"
+    }
+  },
+  {
+    "path": "neoforge/src/main/java/net/caffeinemc/mods/sodium/api/config/ConfigState.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "d72f815df411bd8941b062f0e3af7d55095ee55074e2bb82d2baac82eb632ed0",
+      "26.1": "d72f815df411bd8941b062f0e3af7d55095ee55074e2bb82d2baac82eb632ed0",
+      "1.21.11": "d72f815df411bd8941b062f0e3af7d55095ee55074e2bb82d2baac82eb632ed0",
+      "1.21.10": null,
+      "1.21.1": "e7ab84906512c11a0dcade0e092c993f89e52d6cdd959f673a2a16b70a7cd548"
+    }
+  },
+  {
+    "path": "neoforge/src/main/java/net/caffeinemc/mods/sodium/api/config/StorageEventHandler.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "e307472702a5698eee87cff3c6e5af05ac875b6c16020123b5929599277bcc95",
+      "26.1": "e307472702a5698eee87cff3c6e5af05ac875b6c16020123b5929599277bcc95",
+      "1.21.11": "e307472702a5698eee87cff3c6e5af05ac875b6c16020123b5929599277bcc95",
+      "1.21.10": null,
+      "1.21.1": "e307472702a5698eee87cff3c6e5af05ac875b6c16020123b5929599277bcc95"
+    }
+  },
+  {
+    "path": "neoforge/src/main/java/net/caffeinemc/mods/sodium/api/config/option/ControlValueFormatter.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "411207d527ce1a3e216c714d6002a36bf1e4a4f3fb7d888529066a764de91373",
+      "26.1": "411207d527ce1a3e216c714d6002a36bf1e4a4f3fb7d888529066a764de91373",
+      "1.21.11": "411207d527ce1a3e216c714d6002a36bf1e4a4f3fb7d888529066a764de91373",
+      "1.21.10": null,
+      "1.21.1": "411207d527ce1a3e216c714d6002a36bf1e4a4f3fb7d888529066a764de91373"
+    }
+  },
+  {
+    "path": "neoforge/src/main/java/net/caffeinemc/mods/sodium/api/config/option/OptionImpact.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "f0dd3309ee6c9b5317a8095b5dd7fed0bc71833cdb3a1966077389a02baa2935",
+      "26.1": "f0dd3309ee6c9b5317a8095b5dd7fed0bc71833cdb3a1966077389a02baa2935",
+      "1.21.11": "f0dd3309ee6c9b5317a8095b5dd7fed0bc71833cdb3a1966077389a02baa2935",
+      "1.21.10": null,
+      "1.21.1": "f0dd3309ee6c9b5317a8095b5dd7fed0bc71833cdb3a1966077389a02baa2935"
+    }
+  },
+  {
+    "path": "neoforge/src/main/java/net/caffeinemc/mods/sodium/api/config/option/Range.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "f3a7a77cc2ece102d42119aca94312e371c8bfd8d6b3d96e3cda2d84a07f1eb1",
+      "26.1": "f3a7a77cc2ece102d42119aca94312e371c8bfd8d6b3d96e3cda2d84a07f1eb1",
+      "1.21.11": "f3a7a77cc2ece102d42119aca94312e371c8bfd8d6b3d96e3cda2d84a07f1eb1",
+      "1.21.10": null,
+      "1.21.1": "f3a7a77cc2ece102d42119aca94312e371c8bfd8d6b3d96e3cda2d84a07f1eb1"
+    }
+  },
+  {
+    "path": "neoforge/src/main/java/net/caffeinemc/mods/sodium/api/config/structure/BooleanOptionBuilder.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "173694f31703efc4665be66992e61f4761e56ec8b25877f7b2e1d9aa9b875b4d",
+      "26.1": "173694f31703efc4665be66992e61f4761e56ec8b25877f7b2e1d9aa9b875b4d",
+      "1.21.11": "173694f31703efc4665be66992e61f4761e56ec8b25877f7b2e1d9aa9b875b4d",
+      "1.21.10": null,
+      "1.21.1": "173694f31703efc4665be66992e61f4761e56ec8b25877f7b2e1d9aa9b875b4d"
+    }
+  },
+  {
+    "path": "neoforge/src/main/java/net/caffeinemc/mods/sodium/api/config/structure/ConfigBuilder.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "8c6055937b0646e24460916f231db181e8331d95f8f90b34d7bab6ba637542a0",
+      "26.1": "8c6055937b0646e24460916f231db181e8331d95f8f90b34d7bab6ba637542a0",
+      "1.21.11": "8c6055937b0646e24460916f231db181e8331d95f8f90b34d7bab6ba637542a0",
+      "1.21.10": null,
+      "1.21.1": "1150e0d32a8aababaf273fa10594b3f7411421c08a08257b11a4ae1e3cf28688"
+    }
+  },
+  {
+    "path": "neoforge/src/main/java/net/caffeinemc/mods/sodium/api/config/structure/IntegerOptionBuilder.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "9c71e8fcbc346c3d87f177642aa9d54ebf11a6f51faf7a07ceeff5ead186ac73",
+      "26.1": "9c71e8fcbc346c3d87f177642aa9d54ebf11a6f51faf7a07ceeff5ead186ac73",
+      "1.21.11": "9c71e8fcbc346c3d87f177642aa9d54ebf11a6f51faf7a07ceeff5ead186ac73",
+      "1.21.10": null,
+      "1.21.1": "9c71e8fcbc346c3d87f177642aa9d54ebf11a6f51faf7a07ceeff5ead186ac73"
+    }
+  },
+  {
+    "path": "neoforge/src/main/java/net/caffeinemc/mods/sodium/api/config/structure/ModOptionsBuilder.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "9e4b338bdaac602b29efb6d9383d6dda008c09b53d441d892b8ff735bbc454da",
+      "26.1": "9e4b338bdaac602b29efb6d9383d6dda008c09b53d441d892b8ff735bbc454da",
+      "1.21.11": "9e4b338bdaac602b29efb6d9383d6dda008c09b53d441d892b8ff735bbc454da",
+      "1.21.10": null,
+      "1.21.1": "52874d3784da2d612db3ca001c4d8ff4e2da7698127d353ee8a0eeb8302a1f6e"
+    }
+  },
+  {
+    "path": "neoforge/src/main/java/net/caffeinemc/mods/sodium/api/config/structure/OptionBuilder.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "29a67647fabae383830cf6261071d79e95f665008b4a62beee850bb6252e1c6d",
+      "26.1": "29a67647fabae383830cf6261071d79e95f665008b4a62beee850bb6252e1c6d",
+      "1.21.11": "29a67647fabae383830cf6261071d79e95f665008b4a62beee850bb6252e1c6d",
+      "1.21.10": null,
+      "1.21.1": "29a67647fabae383830cf6261071d79e95f665008b4a62beee850bb6252e1c6d"
+    }
+  },
+  {
+    "path": "neoforge/src/main/java/net/caffeinemc/mods/sodium/api/config/structure/OptionGroupBuilder.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "91a0bd1b84eff57d1dae81441e4ae8d407cff5430e9010c2ed7b228af9bb14dd",
+      "26.1": "91a0bd1b84eff57d1dae81441e4ae8d407cff5430e9010c2ed7b228af9bb14dd",
+      "1.21.11": "91a0bd1b84eff57d1dae81441e4ae8d407cff5430e9010c2ed7b228af9bb14dd",
+      "1.21.10": null,
+      "1.21.1": "91a0bd1b84eff57d1dae81441e4ae8d407cff5430e9010c2ed7b228af9bb14dd"
+    }
+  },
+  {
+    "path": "neoforge/src/main/java/net/caffeinemc/mods/sodium/api/config/structure/OptionPageBuilder.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "462fd5c3131d4b8dff7dcce81a716cfbff9663fea03cdc794b8efa6ea0f754e0",
+      "26.1": "462fd5c3131d4b8dff7dcce81a716cfbff9663fea03cdc794b8efa6ea0f754e0",
+      "1.21.11": "462fd5c3131d4b8dff7dcce81a716cfbff9663fea03cdc794b8efa6ea0f754e0",
+      "1.21.10": null,
+      "1.21.1": "462fd5c3131d4b8dff7dcce81a716cfbff9663fea03cdc794b8efa6ea0f754e0"
+    }
+  },
+  {
+    "path": "neoforge/src/main/java/net/caffeinemc/mods/sodium/api/config/structure/PageBuilder.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "2a711305dddc3c5bfbad414a7a97bdcebf7ce8c074e6264d4afdad1196bd61c3",
+      "26.1": "2a711305dddc3c5bfbad414a7a97bdcebf7ce8c074e6264d4afdad1196bd61c3",
+      "1.21.11": "2a711305dddc3c5bfbad414a7a97bdcebf7ce8c074e6264d4afdad1196bd61c3",
+      "1.21.10": null,
+      "1.21.1": "2a711305dddc3c5bfbad414a7a97bdcebf7ce8c074e6264d4afdad1196bd61c3"
+    }
+  },
+  {
+    "path": "neoforge/src/main/java/net/caffeinemc/mods/sodium/api/config/structure/StatefulOptionBuilder.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "e629e1e28795cb3eb90789cd3b0bf97dfe9e3cd73c815b80f17a641ac1c5ac71",
+      "26.1": "e629e1e28795cb3eb90789cd3b0bf97dfe9e3cd73c815b80f17a641ac1c5ac71",
+      "1.21.11": "e629e1e28795cb3eb90789cd3b0bf97dfe9e3cd73c815b80f17a641ac1c5ac71",
+      "1.21.10": null,
+      "1.21.1": "4b5a38f99fcf2534ce97a81d9fdaa5f0494a6cda7390ffa041c518d619a5cfdd"
+    }
+  },
+  {
+    "path": "neoforge/src/main/resources/META-INF/neoforge.mods.toml",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "83b66755c7ecb7c86feca089dff38aa0adf7876190eba890b2b057ceb46c1915",
+      "26.1": "914ef1b040af20b454249aff3a14e6406f5b0eadd7023012afd34fd856483e59",
+      "1.21.11": "e606777343590dce6092fa0d8356ba8a2c3e26d941f943847e94405895d75ecb",
+      "1.21.10": "530e4c966c02a46ede9a8b5e49a5047b0b49e48859bf8ed63231972a8ff546b9",
+      "1.21.1": "c12c5c5baea43cc13ec37511d527af6f9875e5b8dec7f546cf6cc084520d2d94"
+    }
+  },
+  {
+    "path": "neoforge/src/main/resources/lss-sodium-legacy.mixins.json",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "5348b7f7ebb8091142968634d2f3607dc232b91dde2de1e1c1f3cd30daef1c75",
+      "26.1": "5348b7f7ebb8091142968634d2f3607dc232b91dde2de1e1c1f3cd30daef1c75",
+      "1.21.11": "8771e51d191ba3ba3d425e21bf13eaaf9580e2436cefdec08d199b4a2b754f2a",
+      "1.21.10": "8771e51d191ba3ba3d425e21bf13eaaf9580e2436cefdec08d199b4a2b754f2a",
+      "1.21.1": "8771e51d191ba3ba3d425e21bf13eaaf9580e2436cefdec08d199b4a2b754f2a"
+    }
+  },
+  {
+    "path": "neoforge/src/main/resources/lss.neoforge.mixins.json",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "dd59d654e58c0b3b6a3feed143bc4893774731db4e1eead076939cd687f7d8bd",
+      "26.1": "dd59d654e58c0b3b6a3feed143bc4893774731db4e1eead076939cd687f7d8bd",
+      "1.21.11": "cb2540cc6ef0c08bd0455797bd84604a5e6917636e20eb4ea50b662ec0d2220c",
+      "1.21.10": "cb2540cc6ef0c08bd0455797bd84604a5e6917636e20eb4ea50b662ec0d2220c",
+      "1.21.1": "a9343061278dbe903326eddf1841f2e889306934eb1db1070a63392ed0115dbf"
+    }
+  },
+  {
+    "path": "paper/src/main/java/dev/vox/lss/paper/LSSPaperPlugin.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "57368b4206043ba0252a4f208df83858f142f8b24386b8db913b254cc4908dc9",
+      "26.1": "d412eb1e2649949920e8a16187a6eaa465b5d99798f78079db274ae74f394529",
+      "1.21.11": "d412eb1e2649949920e8a16187a6eaa465b5d99798f78079db274ae74f394529",
+      "1.21.10": "d412eb1e2649949920e8a16187a6eaa465b5d99798f78079db274ae74f394529",
+      "1.21.1": "d412eb1e2649949920e8a16187a6eaa465b5d99798f78079db274ae74f394529"
+    }
+  },
+  {
+    "path": "paper/src/main/java/dev/vox/lss/paper/PaperChunkDiskReader.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "3864577620138cf7d399b4e5efde44c5a5b3144241ee21b48b2e0281bfcbe3c4",
+      "26.1": "3864577620138cf7d399b4e5efde44c5a5b3144241ee21b48b2e0281bfcbe3c4",
+      "1.21.11": "3864577620138cf7d399b4e5efde44c5a5b3144241ee21b48b2e0281bfcbe3c4",
+      "1.21.10": "3864577620138cf7d399b4e5efde44c5a5b3144241ee21b48b2e0281bfcbe3c4",
+      "1.21.1": "7dae29f845609d8ae1319946f4ccf3576b25d941b470db9e5220ff853ce808f2"
+    }
+  },
+  {
+    "path": "paper/src/main/java/dev/vox/lss/paper/PaperChunkGenerationService.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "cdc0d2e2d781db3449439880d41540471ad0174fd27a4028619e787bb2941180",
+      "26.1": "cdc0d2e2d781db3449439880d41540471ad0174fd27a4028619e787bb2941180",
+      "1.21.11": "cdc0d2e2d781db3449439880d41540471ad0174fd27a4028619e787bb2941180",
+      "1.21.10": "92c23aac2cff3f1d8b243d2ac0917338e7377f6e5d5ed2cf80958d16937c3ad7",
+      "1.21.1": "fe49b587f439b94b873723a0f026a24cd499f85f02d1ae1a49f3ba0b13db7094"
+    }
+  },
+  {
+    "path": "paper/src/main/java/dev/vox/lss/paper/PaperCommands.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "afe93dccdaae82ae5a7c674c0b52c70f3c48da6586d189e2e0d3b5b62e32daf1",
+      "26.1": "71a90e4f31f689523c8ec0013cfd1d49cfaac6143cfeb9ae8b1c5c7502676c6d",
+      "1.21.11": "71a90e4f31f689523c8ec0013cfd1d49cfaac6143cfeb9ae8b1c5c7502676c6d",
+      "1.21.10": "71a90e4f31f689523c8ec0013cfd1d49cfaac6143cfeb9ae8b1c5c7502676c6d",
+      "1.21.1": "71a90e4f31f689523c8ec0013cfd1d49cfaac6143cfeb9ae8b1c5c7502676c6d"
+    }
+  },
+  {
+    "path": "paper/src/main/java/dev/vox/lss/paper/PaperDirtyColumnBroadcaster.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "96a624304e88452acd0f6239f5e6adfdf5a8bf80e4553cdb31d97719c5cc5a91",
+      "26.1": "e4aab3ec8bd969174a0955580b0089517e19e6e33375da3c980e76c65be09fa3",
+      "1.21.11": "e4aab3ec8bd969174a0955580b0089517e19e6e33375da3c980e76c65be09fa3",
+      "1.21.10": "8ac33bf31156a47f9de5148a319e447ce8f3ff2151984489dc87d721c702919d",
+      "1.21.1": "8ac33bf31156a47f9de5148a319e447ce8f3ff2151984489dc87d721c702919d"
+    }
+  },
+  {
+    "path": "paper/src/main/java/dev/vox/lss/paper/PaperFarPlayerSnapshots.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "9264257909910b1fab2288f3efd6b3f2901f9f8fda0cda3506cc4b922c624f29",
+      "26.1": "9264257909910b1fab2288f3efd6b3f2901f9f8fda0cda3506cc4b922c624f29",
+      "1.21.11": "9264257909910b1fab2288f3efd6b3f2901f9f8fda0cda3506cc4b922c624f29",
+      "1.21.10": "50a520ba88af34704c8fa0772883a12371ac6c3121e02b07c27e693bfdeb11c0",
+      "1.21.1": "50a520ba88af34704c8fa0772883a12371ac6c3121e02b07c27e693bfdeb11c0"
+    }
+  },
+  {
+    "path": "paper/src/main/java/dev/vox/lss/paper/PaperMemoizedNbtCodec.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "3b86994a5ca388aef48f3b96142cd409c3fbb330c13023849c83439938102821",
+      "26.1": "3b86994a5ca388aef48f3b96142cd409c3fbb330c13023849c83439938102821",
+      "1.21.11": "3b86994a5ca388aef48f3b96142cd409c3fbb330c13023849c83439938102821",
+      "1.21.10": "3b86994a5ca388aef48f3b96142cd409c3fbb330c13023849c83439938102821",
+      "1.21.1": "9cc92cea8784cfef0860b893ac728c2d9074985bb71e33a37bc2faf2a1d3a60f"
+    }
+  },
+  {
+    "path": "paper/src/main/java/dev/vox/lss/paper/PaperNbtSectionSerializer.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "ea110f918b0fb47536093084ed6654eb2cd618218531cdad7048c9c51ecf9a86",
+      "26.1": "ea110f918b0fb47536093084ed6654eb2cd618218531cdad7048c9c51ecf9a86",
+      "1.21.11": "ea110f918b0fb47536093084ed6654eb2cd618218531cdad7048c9c51ecf9a86",
+      "1.21.10": "6ce726e2524bc280841140942f301433ffc74894fcf493e2781f6efd5887bd44",
+      "1.21.1": "ef122909e0ca2e24f0bfc69cf208daee65d25efc35dbe787782939b853f75f59"
+    }
+  },
+  {
+    "path": "paper/src/main/java/dev/vox/lss/paper/PaperPayloadHandler.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "9d662a0f837301388cc2a0bd94586e9b506150c621149bbecf343df8df6ca521",
+      "26.1": "9d662a0f837301388cc2a0bd94586e9b506150c621149bbecf343df8df6ca521",
+      "1.21.11": "9d662a0f837301388cc2a0bd94586e9b506150c621149bbecf343df8df6ca521",
+      "1.21.10": "0ab7fe340edbddb5476b10fd75363104bd273b7183a7377c7451941877b5e6b3",
+      "1.21.1": "d83e9babe2bba50b17a971f5687e9ea2a12139b50bc2b977be62be84c20d0eab"
+    }
+  },
+  {
+    "path": "paper/src/main/java/dev/vox/lss/paper/PaperRequestProcessingService.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "c1a95d5ea8557b7d94b799e797955fe4f366fc94b3ec5239ffe42b8d5e7124e0",
+      "26.1": "7d166312aadb358b0d3d1101765d7f80eaf9a8fe2e9744c65d89a0205c4676b7",
+      "1.21.11": "4d5c5f7db49091d28aaf18ec67469bdde0d5084d4b1546ae3029d0b2773ed730",
+      "1.21.10": "7dadc336668dcf8bc3789a6e6f5b93a930673f0c6dcd71b421ef7ef27c6b979a",
+      "1.21.1": "0ba7f72697730370c32430980543095b9ba3819309c8c8231651e541179231ee"
+    }
+  },
+  {
+    "path": "paper/src/main/java/dev/vox/lss/paper/PaperSectionConstruction.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "bec503fbfe21d176820c00faa55abfb9dc055fef1c755e21a27cd2cf0d807d88",
+      "26.1": "bec503fbfe21d176820c00faa55abfb9dc055fef1c755e21a27cd2cf0d807d88",
+      "1.21.11": "bec503fbfe21d176820c00faa55abfb9dc055fef1c755e21a27cd2cf0d807d88",
+      "1.21.10": "bec503fbfe21d176820c00faa55abfb9dc055fef1c755e21a27cd2cf0d807d88",
+      "1.21.1": "4eeaea7976e33c88405db200904ba8bd6600ce3268ad9bec19e88da5b546dbff"
+    }
+  },
+  {
+    "path": "paper/src/main/java/dev/vox/lss/paper/PaperSectionSerializer.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "8d2fa5b08ceba6e0fa8aa8e83a8635dae6427e84c7bf4260ccb6134def62e6ae",
+      "26.1": "8d2fa5b08ceba6e0fa8aa8e83a8635dae6427e84c7bf4260ccb6134def62e6ae",
+      "1.21.11": "8d2fa5b08ceba6e0fa8aa8e83a8635dae6427e84c7bf4260ccb6134def62e6ae",
+      "1.21.10": "8d2fa5b08ceba6e0fa8aa8e83a8635dae6427e84c7bf4260ccb6134def62e6ae",
+      "1.21.1": "127cc8ae5d490f4637764b460f395eb0bf12097e0933c4284c0e3cdaa211998e"
+    }
+  },
+  {
+    "path": "paper/src/main/java/dev/vox/lss/paper/PaperWorldLod.java",
+    "present": [
+      "26.2"
+    ],
+    "hashes": {
+      "26.2": "645c98334ea3d980ac31e5f88d0d80793094ed37b5d633a858375f348b1e211c",
+      "26.1": null,
+      "1.21.11": null,
+      "1.21.10": null,
+      "1.21.1": null
+    }
+  },
+  {
+    "path": "paper/src/main/java/dev/vox/lss/paper/PaperXrayMaskFilter.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "48bc275dfee418f0fa46cf39dc7d2900341d843474e74ddeb8fc227ac74ad26b",
+      "26.1": "48bc275dfee418f0fa46cf39dc7d2900341d843474e74ddeb8fc227ac74ad26b",
+      "1.21.11": "48bc275dfee418f0fa46cf39dc7d2900341d843474e74ddeb8fc227ac74ad26b",
+      "1.21.10": "3ba2690d2b1ffaf5f66fee0aefb86365e211ff02fc3c7d5e161d12361dd91c0e",
+      "1.21.1": "b8450878ad4adf7aaf252e83d6d452db32d0e807c6ee3d1e68378d2cb5b0ab20"
+    }
+  },
+  {
+    "path": "paper/src/main/java/dev/vox/lss/paper/PaperXrayMaskManager.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "e278849b6246cf528aa61e5fe2dcbf7759cc6f34e092325a6019cce9b0c4653a",
+      "26.1": "e278849b6246cf528aa61e5fe2dcbf7759cc6f34e092325a6019cce9b0c4653a",
+      "1.21.11": "e278849b6246cf528aa61e5fe2dcbf7759cc6f34e092325a6019cce9b0c4653a",
+      "1.21.10": "66b6cb8cd148506667a351a57e512c040986a324408f989ce3294cd29045e2ea",
+      "1.21.1": "66b6cb8cd148506667a351a57e512c040986a324408f989ce3294cd29045e2ea"
+    }
+  },
+  {
+    "path": "paper/src/main/java/dev/vox/lss/paper/soak/PaperSoakScenarioDriver.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "c9f066c3c55a3c3001caa6b4934fe90dee630bd1cc38772240816bca92eb665f",
+      "26.1": "c9f066c3c55a3c3001caa6b4934fe90dee630bd1cc38772240816bca92eb665f",
+      "1.21.11": "c9f066c3c55a3c3001caa6b4934fe90dee630bd1cc38772240816bca92eb665f",
+      "1.21.10": "e9d4fe6affdb3b6721e2afacebc823b3e344e0cdbca2fd9c421a183cba45b208",
+      "1.21.1": "e9d4fe6affdb3b6721e2afacebc823b3e344e0cdbca2fd9c421a183cba45b208"
+    }
+  },
+  {
+    "path": "paper/src/main/resources/plugin.yml",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "0a27c59d0b4cb61ee141d5fe1fa515ca039488963504b3c7edafba4f853ae1b6",
+      "26.1": "ed547b5e36a7d3008b9ad18e5afd0b7571d5e15a8bbaa34c090698c53afc9f36",
+      "1.21.11": "7511346c4f831db3a8b2a76cca3099cf96f8d145cb9aadc1349631b26d8f79e6",
+      "1.21.10": "a0774ff2f71da5017729cd4ca26b240cc5e67cd0de3b23cf072f9d7f6e563b8a",
+      "1.21.1": "45d51fbf69b25e6266acca778a9c066449961427366212bbadf87d9369c50bbf"
+    }
+  },
+  {
+    "path": "xplat/src/main/java/dev/vox/lss/compat/MoonriseReadCompat.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "336b622407442aa4a7d8a4968179a2002b4f2795275b7b2c5f4f7570f038b1bf",
+      "26.1": "9976213fa9ecd2b59fadb7ccc0fc25e87c399f3e84279bdc6ab45163cb859b03",
+      "1.21.11": "eba67e3d9a18a1b525fcf5b82938298eac9c3a6eaa5f32a364c83c94864c5c49",
+      "1.21.10": "49bc5b2f7103895d172f1f970fe4169ad44f1c21043d55bb5a15e7e20a83eb2c",
+      "1.21.1": "02296f9e362cd9eaefd0d2ab507c855a44142deca7eadece6fb548d9784cc95c"
+    }
+  },
+  {
+    "path": "xplat/src/main/java/dev/vox/lss/compat/VoxyCompat.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "677cd05775b149d3eb53a6e4e38ff7725fdd97262e853f192a24045aa24f694a",
+      "26.1": "fded48a2f3fd981ffe930b6c4d9d630fb56064b63cd6644b9b23941dea51a5df",
+      "1.21.11": "9e3269ee062248e9b57401a8bbf4dc3a421f691ab7a7d097a2c81a75de8a7a2a",
+      "1.21.10": "9e3269ee062248e9b57401a8bbf4dc3a421f691ab7a7d097a2c81a75de8a7a2a",
+      "1.21.1": "a707e1bfec3110239349202a840a9292ae3cb30772af6647db78626682ff01ea"
+    }
+  },
+  {
+    "path": "xplat/src/main/java/dev/vox/lss/compat/XaeroMapCompat.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "58f8618da5fc24b2ea137296c1083b07df783d9249634a467cf6c34c2f8015f4",
+      "26.1": "58f8618da5fc24b2ea137296c1083b07df783d9249634a467cf6c34c2f8015f4",
+      "1.21.11": "58f8618da5fc24b2ea137296c1083b07df783d9249634a467cf6c34c2f8015f4",
+      "1.21.10": "58f8618da5fc24b2ea137296c1083b07df783d9249634a467cf6c34c2f8015f4",
+      "1.21.1": "7f62b40c941f910eb63494e184bc2b499092b2fdcbf89cddfe9aab97a8168192"
+    }
+  },
+  {
+    "path": "xplat/src/main/java/dev/vox/lss/compat/XaeroTileExtractor.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "3f4820ea208a4d5cc5838d88c5793fa44a597153ef6d4918eff021d6d47a2bec",
+      "26.1": "2651e5765daa9135ce17a14660dd4fd09c0458b262f64c4a03220df184b8692a",
+      "1.21.11": "2831ea5bfc820b0c34973e0f1ea2de52dbcaf5db1ae5012356a15cfdea2b3cfc",
+      "1.21.10": "701a27ac6bc05f4b0813f552439f70ab641bca921bffc2a89faa79d92cb34242",
+      "1.21.1": "34f68dd3256a800eebb2e3ddaf1fe7f74f1ebf6aee103bbca6a0ce4886ce88a7"
+    }
+  },
+  {
+    "path": "xplat/src/main/java/dev/vox/lss/config/menu/ClientOptionCatalog.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "ff45cf769e9d93a96917fa18da86ee9255ad330a9160baddb5b61b817ef6bd87",
+      "26.1": "ff45cf769e9d93a96917fa18da86ee9255ad330a9160baddb5b61b817ef6bd87",
+      "1.21.11": "6ec7ddc776a38aa4691e3b348d4b31aad2df5b3dd764f3105919b2f7a2184b05",
+      "1.21.10": "c1a47b7df84a50673e181eca8349120b8433c60dae5e081c3b1152047c5853d1",
+      "1.21.1": "370f9b75af296eb3f0756eea9af658a5c15036e83ca13fe0a54b579a64e8185b"
+    }
+  },
+  {
+    "path": "xplat/src/main/java/dev/vox/lss/config/menu/MenuContext.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "baba2cbddfabe919c533fdd0277e3835f966c86583c80429d63d25308fd89783",
+      "26.1": "baba2cbddfabe919c533fdd0277e3835f966c86583c80429d63d25308fd89783",
+      "1.21.11": "baba2cbddfabe919c533fdd0277e3835f966c86583c80429d63d25308fd89783",
+      "1.21.10": "baba2cbddfabe919c533fdd0277e3835f966c86583c80429d63d25308fd89783",
+      "1.21.1": "a067b8114f404403007349998ab573a0293f7a8c05937cb6ac48a53d6cb4568c"
+    }
+  },
+  {
+    "path": "xplat/src/main/java/dev/vox/lss/config/menu/Visibility.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "5ec0e1247f8af49c27233e2b428eae0004beebac3c57e319cd67be86e4fdbff8",
+      "26.1": "5ec0e1247f8af49c27233e2b428eae0004beebac3c57e319cd67be86e4fdbff8",
+      "1.21.11": "bf719304a0289aae79268a4ee431eeb3a95a48ec6024df7bd1b6adc4276ebf38",
+      "1.21.10": "42ae3aa32593c4dd708d8067f50de005389c09a61eec2d029697ed993d7ad2df",
+      "1.21.1": "8fd5ad3bd6d4a232ca65d48da096dd6de13fb38277c6716a028ffe01704440af"
+    }
+  },
+  {
+    "path": "xplat/src/main/java/dev/vox/lss/mixin/AccessorBiomeManager.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "fe0651fbdd6ee0b136928ea0d6330f726db114050832858ddf17183317e0d320",
+      "26.1": "912025c29e8d4c5c193f33a57a1141ff71008856521d86ebf9a6c216ecf57411",
+      "1.21.11": "5f915644c46e15615218736dc2acc24b902593e5fbdc961d32cff2a2590d0a78",
+      "1.21.10": "8f63784c8db5018de567afa6fb5487ae458535466a33d70eb80ee9569b6d59be",
+      "1.21.1": "b28d7bdadcd3bdd665126a56cbbb1c3ef59afaf9ac4fcbe139f5a1aedad3ee1e"
+    }
+  },
+  {
+    "path": "xplat/src/main/java/dev/vox/lss/mixin/AccessorEntityRenderDispatcher.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10"
+    ],
+    "hashes": {
+      "26.2": "df7fa2a6dabb207a1ffa9c4f002fd328ad4f33c5fe6b35173a866e2bac185ce1",
+      "26.1": "df7fa2a6dabb207a1ffa9c4f002fd328ad4f33c5fe6b35173a866e2bac185ce1",
+      "1.21.11": "b84a559ee43d2a27adc78c8e3c88fe7594500be5975fa1ad8ee8b12b92e31e3e",
+      "1.21.10": "b84a559ee43d2a27adc78c8e3c88fe7594500be5975fa1ad8ee8b12b92e31e3e",
+      "1.21.1": null
+    }
+  },
+  {
+    "path": "xplat/src/main/java/dev/vox/lss/mixin/AccessorIOWorker.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "66e6263d03c242a81a066826d7765fd30f6e782bca170a077c14bf1edc6db98c",
+      "26.1": "66e6263d03c242a81a066826d7765fd30f6e782bca170a077c14bf1edc6db98c",
+      "1.21.11": "66e6263d03c242a81a066826d7765fd30f6e782bca170a077c14bf1edc6db98c",
+      "1.21.10": "66e6263d03c242a81a066826d7765fd30f6e782bca170a077c14bf1edc6db98c",
+      "1.21.1": "82206e74d9a4e61efbad1e6dcddd8f9ef6005873dabc601bb2c294dd483371e9"
+    }
+  },
+  {
+    "path": "xplat/src/main/java/dev/vox/lss/mixin/AccessorSimpleRegionStorage.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "1ed0dcfbb5cc22e50fdab4812284330fff81735ef50dc5675ef85938b27fc4f3",
+      "26.1": "1ed0dcfbb5cc22e50fdab4812284330fff81735ef50dc5675ef85938b27fc4f3",
+      "1.21.11": "1ed0dcfbb5cc22e50fdab4812284330fff81735ef50dc5675ef85938b27fc4f3",
+      "1.21.10": "280ef8532ddf38f3d782024c9fcc199e9fe27126a3e6a759b82f82e548029eec",
+      "1.21.1": "453e99a6243d4a304d59aa27d8cb11c7c229c1a8f2525601868e4eac86c5aec8"
+    }
+  },
+  {
+    "path": "xplat/src/main/java/dev/vox/lss/networking/client/ClientColumnProcessor.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "41f7f14dc50d441691f8293e3a86350d5ab62af32863acf979d41b640881a040",
+      "26.1": "41f7f14dc50d441691f8293e3a86350d5ab62af32863acf979d41b640881a040",
+      "1.21.11": "41f7f14dc50d441691f8293e3a86350d5ab62af32863acf979d41b640881a040",
+      "1.21.10": "41f7f14dc50d441691f8293e3a86350d5ab62af32863acf979d41b640881a040",
+      "1.21.1": "0616d525b93dd22006314f93a5686683064e86162ba3f1720630380b18e954d0"
+    }
+  },
+  {
+    "path": "xplat/src/main/java/dev/vox/lss/networking/client/ClientCommandActions.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "26c43472790a15b8210267f1918178ead3e4c15b17cdfddea27f659173471cb8",
+      "26.1": "26c43472790a15b8210267f1918178ead3e4c15b17cdfddea27f659173471cb8",
+      "1.21.11": "9ec4a884a8663c2574b2cfeb05336d55c31163cb279833fbc505ea478547918b",
+      "1.21.10": "9ec4a884a8663c2574b2cfeb05336d55c31163cb279833fbc505ea478547918b",
+      "1.21.1": "4beeb6cd02a4ad2ab8fba5fef59c01ae1e2df74f12eb0d66e929ccf6b8555dc4"
+    }
+  },
+  {
+    "path": "xplat/src/main/java/dev/vox/lss/networking/client/ClientIdentityResolver.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "6761e935ed353803426ad0fe20a9055f7da9e61f4702794acabcc9eb91fdbd45",
+      "26.1": "6761e935ed353803426ad0fe20a9055f7da9e61f4702794acabcc9eb91fdbd45",
+      "1.21.11": "6761e935ed353803426ad0fe20a9055f7da9e61f4702794acabcc9eb91fdbd45",
+      "1.21.10": "6940479e6232ca07be749ebe811fe71b2dd4dfcda7560a5fb7d892017dceaee5",
+      "1.21.1": "c44c07a9f3b70dce3116a813ffd734e93efe329f2e7fff8b5de0e673ecbe98b7"
+    }
+  },
+  {
+    "path": "xplat/src/main/java/dev/vox/lss/networking/client/ClientNetGlue.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "91ee2e2e1cdeb45b3e15982dd50cc9ed00bfb28865ea237266049c9775ab754f",
+      "26.1": "91ee2e2e1cdeb45b3e15982dd50cc9ed00bfb28865ea237266049c9775ab754f",
+      "1.21.11": "91ee2e2e1cdeb45b3e15982dd50cc9ed00bfb28865ea237266049c9775ab754f",
+      "1.21.10": "91ee2e2e1cdeb45b3e15982dd50cc9ed00bfb28865ea237266049c9775ab754f",
+      "1.21.1": "82baa064c6842e068dc568c79c9c0bcb4d77b7126de34c0d811e0372c83fe099"
+    }
+  },
+  {
+    "path": "xplat/src/main/java/dev/vox/lss/networking/client/ClientNetTrace.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "accc03f79cacd9e3d91ee62db3784f7ae755bbd73aabbb598e9e78207c5eb10f",
+      "26.1": "accc03f79cacd9e3d91ee62db3784f7ae755bbd73aabbb598e9e78207c5eb10f",
+      "1.21.11": "accc03f79cacd9e3d91ee62db3784f7ae755bbd73aabbb598e9e78207c5eb10f",
+      "1.21.10": "dd378619b75ce56f848024d38b266b87ae474427f5be33425c42affe27a1a2da",
+      "1.21.1": "dd378619b75ce56f848024d38b266b87ae474427f5be33425c42affe27a1a2da"
+    }
+  },
+  {
+    "path": "xplat/src/main/java/dev/vox/lss/networking/client/ColumnCacheStore.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "a4774f08f9bbbcb1f179ed8d5dd37e9c1a75a730f6ac30283c6111108d9b1000",
+      "26.1": "a4774f08f9bbbcb1f179ed8d5dd37e9c1a75a730f6ac30283c6111108d9b1000",
+      "1.21.11": "a4774f08f9bbbcb1f179ed8d5dd37e9c1a75a730f6ac30283c6111108d9b1000",
+      "1.21.10": "7af47eb693b7bbfdd7b2e2cdd2b9f9194417471d583f4f123ad64ec828949e08",
+      "1.21.1": "7af47eb693b7bbfdd7b2e2cdd2b9f9194417471d583f4f123ad64ec828949e08"
+    }
+  },
+  {
+    "path": "xplat/src/main/java/dev/vox/lss/networking/client/FarPlayerClientSupport.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "2aa60f51ace4c1d9ac0997445d66c77728365308836e2dc15c4472f180873933",
+      "26.1": "2aa60f51ace4c1d9ac0997445d66c77728365308836e2dc15c4472f180873933",
+      "1.21.11": "2aa60f51ace4c1d9ac0997445d66c77728365308836e2dc15c4472f180873933",
+      "1.21.10": "2aa60f51ace4c1d9ac0997445d66c77728365308836e2dc15c4472f180873933",
+      "1.21.1": "dcc647d5a080a3f11640413d6f616462ae304865f38eab0a7019a721575627ef"
+    }
+  },
+  {
+    "path": "xplat/src/main/java/dev/vox/lss/networking/client/FarPlayerMountLadder.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "56a4fc1f815d54ac1d9a30b21e568f3d16d3920c12224f62a4b4c09e0802c7dc",
+      "26.1": "56a4fc1f815d54ac1d9a30b21e568f3d16d3920c12224f62a4b4c09e0802c7dc",
+      "1.21.11": "56a4fc1f815d54ac1d9a30b21e568f3d16d3920c12224f62a4b4c09e0802c7dc",
+      "1.21.10": "55b8908a74edfb4ef61845468847ce0ddb193d2f3a2aaf0fcb2dfb005b048564",
+      "1.21.1": "2820b0e525c8d0921dd5237cc34146a2d0072b29f97f223c7e0f8c93da159d95"
+    }
+  },
+  {
+    "path": "xplat/src/main/java/dev/vox/lss/networking/client/LodRequestManager.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "26218144326e582fde90809c90875d3e6b5510b18ca33a4f0c68bba551ab0b56",
+      "26.1": "26218144326e582fde90809c90875d3e6b5510b18ca33a4f0c68bba551ab0b56",
+      "1.21.11": "26218144326e582fde90809c90875d3e6b5510b18ca33a4f0c68bba551ab0b56",
+      "1.21.10": "115407b7ea33718d9c3e1da30ab565117dbb8fd21e25153bacf222f968f8860e",
+      "1.21.1": "115407b7ea33718d9c3e1da30ab565117dbb8fd21e25153bacf222f968f8860e"
+    }
+  },
+  {
+    "path": "xplat/src/main/java/dev/vox/lss/networking/payloads/BatchChunkRequestC2SPayload.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "d1434ea7012a396ca245c92c9d2746a25a06ff4034ccc6ca6667dbc88145486d",
+      "26.1": "d1434ea7012a396ca245c92c9d2746a25a06ff4034ccc6ca6667dbc88145486d",
+      "1.21.11": "d1434ea7012a396ca245c92c9d2746a25a06ff4034ccc6ca6667dbc88145486d",
+      "1.21.10": "f74e4adf076253b1a56933aa3a9f8d560feb59caf8ebd95f0543b088087bde74",
+      "1.21.1": "f74e4adf076253b1a56933aa3a9f8d560feb59caf8ebd95f0543b088087bde74"
+    }
+  },
+  {
+    "path": "xplat/src/main/java/dev/vox/lss/networking/payloads/BatchResponseS2CPayload.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "5a93ac49da1fa66bdb9ae3a630ea5f564b3967e5c0c661fe3e67b1b519461c97",
+      "26.1": "5a93ac49da1fa66bdb9ae3a630ea5f564b3967e5c0c661fe3e67b1b519461c97",
+      "1.21.11": "5a93ac49da1fa66bdb9ae3a630ea5f564b3967e5c0c661fe3e67b1b519461c97",
+      "1.21.10": "5e1d3c08258ca02bdfc984aa6b6aafc704bc62b42b06389ac9032f52bc8b8db7",
+      "1.21.1": "5e1d3c08258ca02bdfc984aa6b6aafc704bc62b42b06389ac9032f52bc8b8db7"
+    }
+  },
+  {
+    "path": "xplat/src/main/java/dev/vox/lss/networking/payloads/ClientInfoC2SPayload.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "f8ac82f423afd4bd3a5d0c90fdc62f6797bc876b938c1a3c4329fdcc3fc7cc89",
+      "26.1": "f8ac82f423afd4bd3a5d0c90fdc62f6797bc876b938c1a3c4329fdcc3fc7cc89",
+      "1.21.11": "f8ac82f423afd4bd3a5d0c90fdc62f6797bc876b938c1a3c4329fdcc3fc7cc89",
+      "1.21.10": "3a52efa3b6d52e89c33d93c1cb77c1861c9c6b05381fd788b57ce9895246378e",
+      "1.21.1": "3a52efa3b6d52e89c33d93c1cb77c1861c9c6b05381fd788b57ce9895246378e"
+    }
+  },
+  {
+    "path": "xplat/src/main/java/dev/vox/lss/networking/payloads/ColumnStampsS2CPayload.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "896426974cf26667276f435a9f00699ac0a319bb7e66ad7b9539fd18f76b1e74",
+      "26.1": "896426974cf26667276f435a9f00699ac0a319bb7e66ad7b9539fd18f76b1e74",
+      "1.21.11": "896426974cf26667276f435a9f00699ac0a319bb7e66ad7b9539fd18f76b1e74",
+      "1.21.10": "daa1a7471750ea2f38c0501a988d999851ef6063a5d512f057da33385aab853d",
+      "1.21.1": "daa1a7471750ea2f38c0501a988d999851ef6063a5d512f057da33385aab853d"
+    }
+  },
+  {
+    "path": "xplat/src/main/java/dev/vox/lss/networking/payloads/DirtyColumnsS2CPayload.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "32e38cfac3a43cb0f7cf0b640567be01ace141d5199330929ca7fc76fb0bfadd",
+      "26.1": "32e38cfac3a43cb0f7cf0b640567be01ace141d5199330929ca7fc76fb0bfadd",
+      "1.21.11": "32e38cfac3a43cb0f7cf0b640567be01ace141d5199330929ca7fc76fb0bfadd",
+      "1.21.10": "582a21bb87834f579bf02f1579d9b778cd95dd7a859b69b72634e2a9384df6d8",
+      "1.21.1": "582a21bb87834f579bf02f1579d9b778cd95dd7a859b69b72634e2a9384df6d8"
+    }
+  },
+  {
+    "path": "xplat/src/main/java/dev/vox/lss/networking/payloads/FarPlayerPrefsC2SPayload.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "2ad84c40d69ff9d09a05bc5f3d78c779702c2e5d5c1a789cc41abded278dcfe2",
+      "26.1": "2ad84c40d69ff9d09a05bc5f3d78c779702c2e5d5c1a789cc41abded278dcfe2",
+      "1.21.11": "2ad84c40d69ff9d09a05bc5f3d78c779702c2e5d5c1a789cc41abded278dcfe2",
+      "1.21.10": "32bb0c69ac34fc46c85425ee8a6e003c0bbe66ec2faa883613ff922bce6a30ce",
+      "1.21.1": "32bb0c69ac34fc46c85425ee8a6e003c0bbe66ec2faa883613ff922bce6a30ce"
+    }
+  },
+  {
+    "path": "xplat/src/main/java/dev/vox/lss/networking/payloads/FarPlayerRosterS2CPayload.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "6484743f90f8f139ebed74f4700fef12336da70bdd8a516b22b00eda992d5793",
+      "26.1": "6484743f90f8f139ebed74f4700fef12336da70bdd8a516b22b00eda992d5793",
+      "1.21.11": "6484743f90f8f139ebed74f4700fef12336da70bdd8a516b22b00eda992d5793",
+      "1.21.10": "7339fd23adff75df12362a141b22a039fadbfd02830a3d0ff885a0b9acdec5de",
+      "1.21.1": "7339fd23adff75df12362a141b22a039fadbfd02830a3d0ff885a0b9acdec5de"
+    }
+  },
+  {
+    "path": "xplat/src/main/java/dev/vox/lss/networking/payloads/FarPlayerUpdatesS2CPayload.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "7255c8bb003a3192401bda0db5a0959ee9794ac7aaa04b619e2928cf48c451e9",
+      "26.1": "7255c8bb003a3192401bda0db5a0959ee9794ac7aaa04b619e2928cf48c451e9",
+      "1.21.11": "7255c8bb003a3192401bda0db5a0959ee9794ac7aaa04b619e2928cf48c451e9",
+      "1.21.10": "60ed3e42a41751a823bc8a1a683ae64cebb132836534253636d9434b5c9d121b",
+      "1.21.1": "60ed3e42a41751a823bc8a1a683ae64cebb132836534253636d9434b5c9d121b"
+    }
+  },
+  {
+    "path": "xplat/src/main/java/dev/vox/lss/networking/payloads/HandshakeC2SPayload.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "bd3a28859f07c4aaf353ec8682c55b9d3ab0c6a112738af51618c19946cf6011",
+      "26.1": "bd3a28859f07c4aaf353ec8682c55b9d3ab0c6a112738af51618c19946cf6011",
+      "1.21.11": "bd3a28859f07c4aaf353ec8682c55b9d3ab0c6a112738af51618c19946cf6011",
+      "1.21.10": "156dacd27aee9b2f90cc2bc557c2bcbe4e70f19122d897e95f855e843139b8b9",
+      "1.21.1": "156dacd27aee9b2f90cc2bc557c2bcbe4e70f19122d897e95f855e843139b8b9"
+    }
+  },
+  {
+    "path": "xplat/src/main/java/dev/vox/lss/networking/payloads/RegionSummaryRequestC2SPayload.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "8303e469e036099d1981b699e73963ce3e67d5fdd5de227cc70a815ff2bea8ce",
+      "26.1": "8303e469e036099d1981b699e73963ce3e67d5fdd5de227cc70a815ff2bea8ce",
+      "1.21.11": "8303e469e036099d1981b699e73963ce3e67d5fdd5de227cc70a815ff2bea8ce",
+      "1.21.10": "39b743f9374d6743836c665c3dc77dd7955ba7942d232e8ccbac98b2012df092",
+      "1.21.1": "39b743f9374d6743836c665c3dc77dd7955ba7942d232e8ccbac98b2012df092"
+    }
+  },
+  {
+    "path": "xplat/src/main/java/dev/vox/lss/networking/payloads/RegionSummaryS2CPayload.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "5232ac774caa0ef565d8ebe91f295d0973f358ab8c4dfa1abc0e0f4f0c185777",
+      "26.1": "5232ac774caa0ef565d8ebe91f295d0973f358ab8c4dfa1abc0e0f4f0c185777",
+      "1.21.11": "5232ac774caa0ef565d8ebe91f295d0973f358ab8c4dfa1abc0e0f4f0c185777",
+      "1.21.10": "469479a5180bcd256981b7b342b589fa8268fdd9bab3ddf659297bdf82e5a770",
+      "1.21.1": "469479a5180bcd256981b7b342b589fa8268fdd9bab3ddf659297bdf82e5a770"
+    }
+  },
+  {
+    "path": "xplat/src/main/java/dev/vox/lss/networking/payloads/SessionConfigS2CPayload.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "a49719d6de957153b6427a7a71233a2e018aa37de3143e999626c94bd7d8af36",
+      "26.1": "a49719d6de957153b6427a7a71233a2e018aa37de3143e999626c94bd7d8af36",
+      "1.21.11": "a49719d6de957153b6427a7a71233a2e018aa37de3143e999626c94bd7d8af36",
+      "1.21.10": "c833b11652ce6b9e944544ee5ac2b8c2d21d2e5e2cbf53542ffdf1ea73d35696",
+      "1.21.1": "c833b11652ce6b9e944544ee5ac2b8c2d21d2e5e2cbf53542ffdf1ea73d35696"
+    }
+  },
+  {
+    "path": "xplat/src/main/java/dev/vox/lss/networking/payloads/VoxelColumnS2CPayload.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "fbecbb4766ccca6d1286b4b64520935d96b90a2853a4b83683d20b3341fb7486",
+      "26.1": "fbecbb4766ccca6d1286b4b64520935d96b90a2853a4b83683d20b3341fb7486",
+      "1.21.11": "fbecbb4766ccca6d1286b4b64520935d96b90a2853a4b83683d20b3341fb7486",
+      "1.21.10": "f28560a21b99873fa9df6af01f222700e54af492a14ac6381d4b656316fbb3ab",
+      "1.21.1": "f28560a21b99873fa9df6af01f222700e54af492a14ac6381d4b656316fbb3ab"
+    }
+  },
+  {
+    "path": "xplat/src/main/java/dev/vox/lss/networking/server/BackgroundIoSubmit.java",
+    "present": [
+      "26.2",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "a4dfc3c82e8a16c3a12eaf2a2a651d3ec6424808d050184e4379c7b96d07fafe",
+      "26.1": null,
+      "1.21.11": null,
+      "1.21.10": null,
+      "1.21.1": "524ec12f6a42944a76ffed4cccf45c67d4bb0a58475ab01edba89e397b9831b0"
+    }
+  },
+  {
+    "path": "xplat/src/main/java/dev/vox/lss/networking/server/ChunkDiskReader.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "82b9664dd8f9639a384442d0d419ca58d48dd3163a49a85cbe92a14ae9c9dc8b",
+      "26.1": "f333042e39491498a2e042a6ea8a539b47d65ddd1b5afc97ded77619c4b63c0d",
+      "1.21.11": "0ed73ffa88420695ab596b9b28786b1186b73c3212871f37861e918f4d07c451",
+      "1.21.10": "0ed73ffa88420695ab596b9b28786b1186b73c3212871f37861e918f4d07c451",
+      "1.21.1": "3cc65033b5788c5033630cfb032a4846122067cf05e23cf594a247dbbda9c2bf"
+    }
+  },
+  {
+    "path": "xplat/src/main/java/dev/vox/lss/networking/server/ChunkGenerationService.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "ade882cd35b9f3f0dc5894cd58180d31152d33c3e2f9b58933becfa193640ab4",
+      "26.1": "ade882cd35b9f3f0dc5894cd58180d31152d33c3e2f9b58933becfa193640ab4",
+      "1.21.11": "1afb37cf075c061a6588c6860728422387865776229060bff1f6756e3f4835c1",
+      "1.21.10": "be5ed4250df6ebc80964e19e89dba44ae5cb4a30c490168be9fec28610fca564",
+      "1.21.1": "9ea697af65f6d79b679d4dc469c4a2d160d681df8d57568281edb238b1f24041"
+    }
+  },
+  {
+    "path": "xplat/src/main/java/dev/vox/lss/networking/server/DirtyColumnBroadcaster.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "3b728d93614a822947a63a4f9f1b6f76010a57bad19550faf2751b2e067db30b",
+      "26.1": "a13b79760afed92a33d6e1da25ee6e13651a43c1b21cde884b6e2efe5bc8a46e",
+      "1.21.11": "a13b79760afed92a33d6e1da25ee6e13651a43c1b21cde884b6e2efe5bc8a46e",
+      "1.21.10": "7b154f2c286b2abd53280ce26186dafd93bd7b5a9c68370bc5c6f444877ba428",
+      "1.21.1": "7b154f2c286b2abd53280ce26186dafd93bd7b5a9c68370bc5c6f444877ba428"
+    }
+  },
+  {
+    "path": "xplat/src/main/java/dev/vox/lss/networking/server/DirtyContentFilter.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "7b3ff9b5d1136e4aafd031ac889a8677d3cd092cff8cdeee8e74df3338fecab9",
+      "26.1": "7b3ff9b5d1136e4aafd031ac889a8677d3cd092cff8cdeee8e74df3338fecab9",
+      "1.21.11": "34d54c8732ace0581d16bf58f0efe740f7705a6e8d22eeee73f6ac00fa3aff27",
+      "1.21.10": "34d54c8732ace0581d16bf58f0efe740f7705a6e8d22eeee73f6ac00fa3aff27",
+      "1.21.1": "34d54c8732ace0581d16bf58f0efe740f7705a6e8d22eeee73f6ac00fa3aff27"
+    }
+  },
+  {
+    "path": "xplat/src/main/java/dev/vox/lss/networking/server/FabricFarPlayerSnapshots.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "7537d0781dcb867e7d4516de66565cb5f41b33cbfaef1dd8e01b11baab1a5d39",
+      "26.1": "7537d0781dcb867e7d4516de66565cb5f41b33cbfaef1dd8e01b11baab1a5d39",
+      "1.21.11": "7537d0781dcb867e7d4516de66565cb5f41b33cbfaef1dd8e01b11baab1a5d39",
+      "1.21.10": "c0982de66e9daf5ae11485d21ce9b1a21af623cb8070bc4ed8b9f11b57a7ea74",
+      "1.21.1": "c0982de66e9daf5ae11485d21ce9b1a21af623cb8070bc4ed8b9f11b57a7ea74"
+    }
+  },
+  {
+    "path": "xplat/src/main/java/dev/vox/lss/networking/server/FabricOffThreadProcessor.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "0033be0efe51365e93ca1fff16303795a0533d35e69bbcf532558e818e1d99b1",
+      "26.1": "0033be0efe51365e93ca1fff16303795a0533d35e69bbcf532558e818e1d99b1",
+      "1.21.11": "0033be0efe51365e93ca1fff16303795a0533d35e69bbcf532558e818e1d99b1",
+      "1.21.10": "be7a57b37b3d598f64a3703375e6e5cabeefd31c64ed2c0a3f4a10aca78e9941",
+      "1.21.1": "be7a57b37b3d598f64a3703375e6e5cabeefd31c64ed2c0a3f4a10aca78e9941"
+    }
+  },
+  {
+    "path": "xplat/src/main/java/dev/vox/lss/networking/server/LSSServerCommands.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "5513d23de0557f3310404bea718b5e15b64ed79589e93d4f88eab3507d5320a5",
+      "26.1": "9596519149274316ccfd74a4158116942c2bf837b26b36df342d87266e10dd42",
+      "1.21.11": "9596519149274316ccfd74a4158116942c2bf837b26b36df342d87266e10dd42",
+      "1.21.10": "3fb903b1539084f248a9b03c4be3514618748041cbfe421a34479a0f8670538d",
+      "1.21.1": "8b68c4b8e9e8b5044143ad2e57219f2e800101bb18fb49f5e6c49368ac2cdc7f"
+    }
+  },
+  {
+    "path": "xplat/src/main/java/dev/vox/lss/networking/server/NbtSectionSerializer.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "1e552971c750b3c4f62937a709dc7d56990061669cb507c21e8accc361cc1492",
+      "26.1": "1e552971c750b3c4f62937a709dc7d56990061669cb507c21e8accc361cc1492",
+      "1.21.11": "1e552971c750b3c4f62937a709dc7d56990061669cb507c21e8accc361cc1492",
+      "1.21.10": "e115913e5f124754f73fba87e5e71b361c3603181120e02f8670b25bcbc40376",
+      "1.21.1": "9832b413e8ea9390315efdbcbf4cd94cd2e4357acb2db976b93898fc8b8316c1"
+    }
+  },
+  {
+    "path": "xplat/src/main/java/dev/vox/lss/networking/server/RegionFileRawRead.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "4789751af23fd38888b66f80d454d2a5785119d241cd25edab00c3a54b9ac5df",
+      "26.1": "b445a556c267292e8371b292561f67412bbc56bd1c71b70f38f96f666c579d79",
+      "1.21.11": "a2734abd651c81713523f4c1dfb5f88c0ff9d4009e4f756a1ccf4d33423386ad",
+      "1.21.10": "a2734abd651c81713523f4c1dfb5f88c0ff9d4009e4f756a1ccf4d33423386ad",
+      "1.21.1": "4789751af23fd38888b66f80d454d2a5785119d241cd25edab00c3a54b9ac5df"
+    }
+  },
+  {
+    "path": "xplat/src/main/java/dev/vox/lss/networking/server/RequestProcessingService.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "a8db6c5795bb944a339abc30467d55c064909064f6eff6bbe97f95db3500fdb9",
+      "26.1": "deb58a817849576e2c2b46be0923123d926d4d0d11ca10e5c50e169bbd5da8e0",
+      "1.21.11": "7e3e9245369c45dff3225766ede50960df057041c7c90f14120ba431c3e299c1",
+      "1.21.10": "aeba8d6b1a99098f45d05ffcc8abc5b9373ad037a82105b49a2e0af6b35f8391",
+      "1.21.1": "c6ee66672559dcd0227ecce576969f91d39c67b493af0fb27f68a996427685e1"
+    }
+  },
+  {
+    "path": "xplat/src/main/java/dev/vox/lss/networking/server/SectionSerializer.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "457952d6ce23891f7c946718f47161a6bd4ab572cf111ec25b4458317f01183f",
+      "26.1": "457952d6ce23891f7c946718f47161a6bd4ab572cf111ec25b4458317f01183f",
+      "1.21.11": "457952d6ce23891f7c946718f47161a6bd4ab572cf111ec25b4458317f01183f",
+      "1.21.10": "457952d6ce23891f7c946718f47161a6bd4ab572cf111ec25b4458317f01183f",
+      "1.21.1": "1624749736e22c7ae27da66c8301fb6ff7ebee39db978ea901370d2fc8b3bee5"
+    }
+  },
+  {
+    "path": "xplat/src/main/java/dev/vox/lss/networking/server/SelectiveChunkNbtLoader.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "780da17adf6cf427aecb130bff0c11e8b0aaded73ec079ca63318fe66d0027ff",
+      "26.1": "8f353bfd557b3512814b762f8906720f8c61e74643e6237653f73ef19330d9ee",
+      "1.21.11": "3249fe7d9b2856beb2a6f5471e412e90eecea910538a6535c47c95edc1412940",
+      "1.21.10": "3249fe7d9b2856beb2a6f5471e412e90eecea910538a6535c47c95edc1412940",
+      "1.21.1": "780da17adf6cf427aecb130bff0c11e8b0aaded73ec079ca63318fe66d0027ff"
+    }
+  },
+  {
+    "path": "xplat/src/main/java/dev/vox/lss/networking/server/ServerReceiverGlue.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "360700e286a6d8b715ee907022d2322ecec2a13e24fd217f2cfc96d56bb6e783",
+      "26.1": "8e6ba65adea8783769d12dbb5116139a5d5d2a3e7f076375e517a13e7e4cc406",
+      "1.21.11": "e7662d67c58b5a6120e1aa42d3f22d5836a000046507166ec8941e75e80b663d",
+      "1.21.10": "5e2b34bfc226fbee402f18e22fc433f616790ff7c34ec3bd870290971582c8ce",
+      "1.21.1": "7646681d3ac0eef4a68b2f540b3315822867775f06d3b8046d4c06a9f5d45619"
+    }
+  },
+  {
+    "path": "xplat/src/main/java/dev/vox/lss/networking/server/ServerWorldLod.java",
+    "present": [
+      "26.2"
+    ],
+    "hashes": {
+      "26.2": "76e68dad2cc99d5174f64f783fce7a70ec00f1d097e851cbe1557276dae2cfa5",
+      "26.1": null,
+      "1.21.11": null,
+      "1.21.10": null,
+      "1.21.1": null
+    }
+  },
+  {
+    "path": "xplat/src/main/java/dev/vox/lss/networking/server/XrayMaskFilter.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "9a35a28927c0e945cae9860bc965438f3fe3902fec0514c7471b5c4e3d46f561",
+      "26.1": "9a35a28927c0e945cae9860bc965438f3fe3902fec0514c7471b5c4e3d46f561",
+      "1.21.11": "9a35a28927c0e945cae9860bc965438f3fe3902fec0514c7471b5c4e3d46f561",
+      "1.21.10": "b4bb83f7e60ef0ad26ed7d239c7a0448712b5fe475c5458f94e2984d40a6a87d",
+      "1.21.1": "5b6d2a9a8dbdd97eadd7a2b7988426dac626236e522537bccdf9959a3d1d330e"
+    }
+  },
+  {
+    "path": "xplat/src/main/java/dev/vox/lss/networking/server/XrayMaskManager.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "ed4d0658ff08f444149d6a2896f1bd9e9b098aeb198dac62f5e9edfc8586e3ab",
+      "26.1": "ed4d0658ff08f444149d6a2896f1bd9e9b098aeb198dac62f5e9edfc8586e3ab",
+      "1.21.11": "ed4d0658ff08f444149d6a2896f1bd9e9b098aeb198dac62f5e9edfc8586e3ab",
+      "1.21.10": "704c3388804941b73b81b97b9a9fe234f8212876ad244bbcab36a77a882fadfd",
+      "1.21.1": "704c3388804941b73b81b97b9a9fe234f8212876ad244bbcab36a77a882fadfd"
+    }
+  },
+  {
+    "path": "xplat/src/main/java/dev/vox/lss/platform/SectionConstruction.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "1469364d726f51b47b60f548e161478cb57b14c6d8597347edd73a796149bcd3",
+      "26.1": "1469364d726f51b47b60f548e161478cb57b14c6d8597347edd73a796149bcd3",
+      "1.21.11": "1469364d726f51b47b60f548e161478cb57b14c6d8597347edd73a796149bcd3",
+      "1.21.10": "1469364d726f51b47b60f548e161478cb57b14c6d8597347edd73a796149bcd3",
+      "1.21.1": "79b587c14a5c1249101d28c52f76c9425c6add981668871c279b4d9659074077"
+    }
+  },
+  {
+    "path": "xplat/src/main/java/dev/vox/lss/trace/MoveTraceTelemetry.java",
+    "present": [
+      "26.2",
+      "26.1",
+      "1.21.11",
+      "1.21.10",
+      "1.21.1"
+    ],
+    "hashes": {
+      "26.2": "4cc4abfb04e55cb746772f8052c334d58208875fd42131fee3e24856f2272671",
+      "26.1": "4cc4abfb04e55cb746772f8052c334d58208875fd42131fee3e24856f2272671",
+      "1.21.11": "4cc4abfb04e55cb746772f8052c334d58208875fd42131fee3e24856f2272671",
+      "1.21.10": "d43bb8bd9fdb3e4dc6370203419b4caa7cf8780c3c11cc0aae643d39b23fe8e5",
+      "1.21.1": "d60528035a4661a240574753d6d193a96027d680fe57e857c3e7e711cc369b3f"
+    }
+  }
+]

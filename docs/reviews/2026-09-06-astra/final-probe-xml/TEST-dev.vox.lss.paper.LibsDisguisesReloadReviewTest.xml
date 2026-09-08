@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="dev.vox.lss.paper.LibsDisguisesReloadReviewTest" tests="1" skipped="0" failures="1" errors="0" timestamp="2026-09-07T02:54:32.849Z" hostname="DESKTOP-K93QJU0" time="1.246">
+  <properties/>
+  <testcase name="changingPluginInstanceMustReadTheNewPluginsDisguiseRegistry()" classname="dev.vox.lss.paper.LibsDisguisesReloadReviewTest" time="1.236">
+    <failure message="org.opentest4j.AssertionFailedError: enabled replacement plugin's disguise must be hidden; old registry is stale ==&gt; expected: &lt;true&gt; but was: &lt;false&gt;" type="org.opentest4j.AssertionFailedError">org.opentest4j.AssertionFailedError: enabled replacement plugin's disguise must be hidden; old registry is stale ==&gt; expected: &lt;true&gt; but was: &lt;false&gt;
+	at org.junit.jupiter.api.AssertionFailureBuilder.build(AssertionFailureBuilder.java:151)
+	at org.junit.jupiter.api.AssertionFailureBuilder.buildAndThrow(AssertionFailureBuilder.java:132)
+	at org.junit.jupiter.api.AssertEquals.failNotEqual(AssertEquals.java:197)
+	at org.junit.jupiter.api.AssertEquals.assertEquals(AssertEquals.java:182)
+	at org.junit.jupiter.api.Assertions.assertEquals(Assertions.java:1156)
+	at dev.vox.lss.paper.LibsDisguisesReloadReviewTest.changingPluginInstanceMustReadTheNewPluginsDisguiseRegistry(LibsDisguisesReloadReviewTest.java:79)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
+</failure>
+  </testcase>
+  <system-out><![CDATA[WARN StatusConsoleListener Advanced terminal features are not available in this environment
+[22:54:34 INFO]: [LSS] LibsDisguises detected — disguised players are hidden from far players
+[22:54:34 INFO]: [LSS] LibsDisguises detected — disguised players are hidden from far players
+]]></system-out>
+  <system-err><![CDATA[Mockito is currently self-attaching to enable the inline-mock-maker. This will no longer work in future releases of the JDK. Please add Mockito as an agent to your build as described in Mockito's documentation: https://javadoc.io/doc/org.mockito/mockito-core/latest/org.mockito/org/mockito/Mockito.html#0.3
+WARNING: A Java agent has been loaded dynamically (/home/vox/.gradle/caches/modules-2/files-2.1/net.bytebuddy/byte-buddy-agent/1.17.7/fbf3d6d649ed37fc9e9c59480a05be0a26e3c2da/byte-buddy-agent-1.17.7.jar)
+WARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning
+WARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information
+WARNING: Dynamic loading of agents will be disallowed by default in a future release
+]]></system-err>
+</testsuite>

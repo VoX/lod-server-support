@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="dev.vox.lss.compat.VoxyHolderCompatibilityReviewTest" tests="1" skipped="0" failures="1" errors="0" timestamp="2026-09-07T02:54:27.109Z" hostname="DESKTOP-K93QJU0" time="0.224">
+  <properties/>
+  <testcase name="resetMustResolveTheNamespacedMethodOnTheOldHolderInterface()" classname="dev.vox.lss.compat.VoxyHolderCompatibilityReviewTest" time="0.218">
+    <failure message="org.opentest4j.AssertionFailedError: 1.21.1 Voxy 0.2.15-beta exposes IGetVoxyRenderSystem.voxy$shutdownRenderer ==&gt; expected: &lt;true&gt; but was: &lt;false&gt;" type="org.opentest4j.AssertionFailedError">org.opentest4j.AssertionFailedError: 1.21.1 Voxy 0.2.15-beta exposes IGetVoxyRenderSystem.voxy$shutdownRenderer ==&gt; expected: &lt;true&gt; but was: &lt;false&gt;
+	at org.junit.jupiter.api.AssertionFailureBuilder.build(AssertionFailureBuilder.java:151)
+	at org.junit.jupiter.api.AssertionFailureBuilder.buildAndThrow(AssertionFailureBuilder.java:132)
+	at org.junit.jupiter.api.AssertTrue.failNotTrue(AssertTrue.java:63)
+	at org.junit.jupiter.api.AssertTrue.assertTrue(AssertTrue.java:36)
+	at org.junit.jupiter.api.Assertions.assertTrue(Assertions.java:210)
+	at knot//dev.vox.lss.compat.VoxyHolderCompatibilityReviewTest.resetMustResolveTheNamespacedMethodOnTheOldHolderInterface(VoxyHolderCompatibilityReviewTest.java:27)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
+</failure>
+  </testcase>
+  <system-out><![CDATA[[22:54:27] [Test worker/WARN]: Voxy reset unavailable on this Voxy version — /lss reset will clear only the LSS half (java.lang.NoSuchMethodException: no such method: dev.vox.lss.compat.VoxyHolderCompatibilityReviewTest$Ported1211Holder.shutdownRenderer()void/invokeInterface)
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>
