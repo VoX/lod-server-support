@@ -3304,4 +3304,103 @@ class XaeroMapCompatTest {
         assertNotNull(mapTileAt(72,66));
         assertEquals(1, this.bridge.counterForTest("skipped_settings"));
     }
+    @Test void acquisitionOffCancelsQueuedReceiptButPreservesCommittedNativeRebuild() {
+        this.bridge.updateIdlePumps = 3;
+        offer(64, 64);
+        this.bridge.pump();
+        assertEquals(1, this.bridge.counterForTest("written"));
+        assertTrue(this.bridge.counterForTest("pending_updates") > 0);
+        var owner = new dev.vox.lss.networking.client.ColumnDeliveryFixture(OVERWORLD, 128, 64);
+        owner.dispatch(7000L, () -> offer(128, 64)); // synchronous Voxy accepted; Xaero has queued bytes
+        assertEquals(1, this.bridge.queuedForTest());
+        owner.retire(); // same order as ClientNetGlue: cancel receipts before cache save/bridge retirement
+        this.bridge.onAcquisitionEnd();
+        assertEquals(-1L, owner.timestamp());
+        assertEquals(0, owner.failures());
+        assertEquals(0, this.bridge.queuedForTest());
+        assertTrue(this.bridge.counterForTest("pending_updates") > 0,
+                "the native world is still connected; do not discard committed rebuilds");
+        for (int i = 0; i < 5; i++) this.bridge.pump();
+        assertEquals(0, this.bridge.counterForTest("pending_updates"));
+        assertTrue(this.bridge.counterForTest("buffer_updates") > 0);
+        var resumed = new dev.vox.lss.networking.client.ColumnDeliveryFixture(OVERWORLD, 128, 64);
+        resumed.dispatch(7000L, () -> offer(128, 64));
+        this.bridge.pump();
+        resumed.retire();
+        assertEquals(7000L, resumed.timestamp(), "committed map work released the acceptance lease");
+        assertEquals(0, resumed.failures());
+    }
+
+    @Test void deferredReportUsesItsCapturedOwnerAndCannotAffectAReplacement() throws Exception {
+        var old = new dev.vox.lss.networking.client.ColumnDeliveryFixture(OVERWORLD, 128, 64);
+        old.dispatch(7000L, () -> offer(128, 64));
+        assertEquals(1, this.bridge.clearQueueCollectingReports());
+        old.retire();
+        var next = new dev.vox.lss.networking.client.ColumnDeliveryFixture(OVERWORLD, 128, 64);
+        next.dispatch(9000L, () -> {});
+        var drain = XaeroMapCompat.class.getDeclaredMethod("drainDeferredReports");
+        drain.setAccessible(true);
+        drain.invoke(this.bridge);
+        assertEquals(-1L, old.timestamp());
+        assertEquals(9000L, next.timestamp());
+        assertEquals(0, old.failures());
+        assertEquals(0, next.failures());
+        assertTrue(this.reports.isEmpty(), "captured reports never fall through to the current tokenless sink");
+    }
+
+    @Test void replacementAndGovernedEvictionResolveEachReceiptOnce() {
+        this.bridge.maxQueue = 1;
+        var first = new dev.vox.lss.networking.client.ColumnDeliveryFixture(OVERWORLD, 128, 64);
+        var second = new dev.vox.lss.networking.client.ColumnDeliveryFixture(OVERWORLD, 128, 64);
+        first.dispatch(7000L, () -> offer(128, 64));
+        second.dispatch(8000L, () -> offer(128, 64));
+        first.retire();
+        assertEquals(7000L, first.timestamp(), "latest replacement releases the superseded bounded lease");
+        offer(160, 64); // unknown-region governed eviction rejects second's original owner
+        assertEquals(-1L, second.timestamp());
+        assertEquals(1, second.failures());
+        this.bridge.onAcquisitionEnd();
+        assertEquals(1, second.failures(), "teardown does not report a receipt twice");
+    }
+
+    @Test void owedWorkRetainsTheReceiptUntilRecoveryOrRetirement() {
+        this.processor.createdRegionLoadState = 0;
+        this.bridge.maxQueue = 1;
+        var owner = new dev.vox.lss.networking.client.ColumnDeliveryFixture(OVERWORLD, 128, 64);
+        owner.dispatch(7000L, () -> offer(128, 64));
+        this.bridge.pump();
+        offer(129, 64); // move original bytes into owed debt
+        assertEquals(1, this.bridge.counterForTest("owed"));
+        assertEquals(0, owner.failures());
+        owner.retire();
+        this.bridge.onAcquisitionEnd();
+        assertEquals(-1L, owner.timestamp(), "owed map bytes were still uncommitted");
+        assertEquals(0, owner.failures());
+        assertEquals(0, this.bridge.counterForTest("owed"));
+        assertTrue(this.bridge.awaitingRegionsForTest().isEmpty());
+    }
+
+    @Test void activeDeferredReportRejectsItsOriginalReceipt() throws Exception {
+        var owner = new dev.vox.lss.networking.client.ColumnDeliveryFixture(OVERWORLD, 128, 64);
+        owner.dispatch(7000L, () -> offer(128, 64));
+        this.bridge.clearQueueCollectingReports();
+        var drain = XaeroMapCompat.class.getDeclaredMethod("drainDeferredReports");
+        drain.setAccessible(true);
+        drain.invoke(this.bridge);
+        drain.invoke(this.bridge);
+        assertEquals(-1L, owner.timestamp());
+        assertEquals(1, owner.failures());
+        assertTrue(this.reports.isEmpty(), "owned delivery uses its receipt, not the global sink");
+    }
+
+    @Test void aRetiredOwnerCannotLeaveUndrainableQueueOccupancy() {
+        var owner = new dev.vox.lss.networking.client.ColumnDeliveryFixture(OVERWORLD, 128, 64);
+        owner.dispatch(7000L, () -> offer(128, 64));
+        owner.retire();
+        this.bridge.pump();
+        assertEquals(0, this.bridge.queuedForTest());
+        assertEquals(0, this.bridge.counterForTest("written"));
+        assertEquals(0, owner.failures());
+    }
+
 }
