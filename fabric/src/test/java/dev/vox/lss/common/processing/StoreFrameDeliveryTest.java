@@ -85,7 +85,7 @@ class StoreFrameDeliveryTest {
         }
 
         @Override
-        protected boolean submitDiskRead(UUID playerUuid, String dimension, int cx, int cz, long order, long clientTimestamp) {
+        protected boolean submitDiskRead(UUID playerUuid, RequestRegistration registration, String dimension, int cx, int cz, long order, long clientTimestamp) {
             return true;
         }
 
@@ -115,7 +115,7 @@ class StoreFrameDeliveryTest {
             this.state.setCapabilities(LSSConstants.CAPABILITY_VOXEL_COLUMNS);
             this.state.setWantsCompressedColumns(capableSession);
             this.players.put(this.uuid, this.state);
-            this.reader.registerPlayer(this.uuid);
+            this.reader.registerPlayer(this.uuid, this.state.registration());
             this.proc = new TestProcessor(this.players, this.reader);
             this.proc.attachStore(this.store);
             this.proc.attachWireCodec(codec);

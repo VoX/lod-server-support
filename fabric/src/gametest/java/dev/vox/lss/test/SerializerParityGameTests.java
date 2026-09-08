@@ -1,5 +1,7 @@
 package dev.vox.lss.test;
 
+import dev.vox.lss.common.processing.RequestRegistration;
+
 import dev.vox.lss.common.LSSConstants;
 import dev.vox.lss.common.PositionUtil;
 import dev.vox.lss.common.SharedBandwidthLimiter;
@@ -52,6 +54,12 @@ import java.util.concurrent.atomic.AtomicReference;
  * </ul>
  */
 public class SerializerParityGameTests {
+    private static final java.util.Map<UUID, RequestRegistration> TEST_REGISTRATIONS =
+            new java.util.concurrent.ConcurrentHashMap<>();
+    private static RequestRegistration registration(UUID uuid) {
+        return TEST_REGISTRATIONS.computeIfAbsent(uuid, ignored -> new RequestRegistration());
+    }
+
 
     /** Distinct far-away chunk offsets per test so concurrently running batch tests never share state. */
     private static final int PARITY_CHUNK_OFFSET = 64;
@@ -126,7 +134,7 @@ public class SerializerParityGameTests {
 
         var reader = new ChunkDiskReader(1, false);
         var readerId = UUID.randomUUID();
-        reader.registerPlayer(readerId);
+        reader.registerPlayer(readerId, registration(readerId));
         var step = new AtomicInteger();
         var diskBytes = new AtomicReference<byte[]>();
 
@@ -141,7 +149,7 @@ public class SerializerParityGameTests {
                     // The unload save may still sit in the unload queue; saveAllChunks drains it
                     // and flushes storage so the region state is final before the read.
                     level.save(null, true, false);
-                    reader.submitReadDirect(readerId, LSSConstants.DIM_STR_OVERWORLD, level, cx, cz, 0, 0L);
+                    reader.submitReadDirect(readerId, registration(readerId), LSSConstants.DIM_STR_OVERWORLD, level, cx, cz, 0, 0L);
                     step.set(1);
                     helper.assertTrue(false, "disk read submitted, awaiting result");
                 }
@@ -218,7 +226,7 @@ public class SerializerParityGameTests {
 
         var reader = new ChunkDiskReader(1, false);
         var readerId = UUID.randomUUID();
-        reader.registerPlayer(readerId);
+        reader.registerPlayer(readerId, registration(readerId));
         var step = new AtomicInteger();
         var diskBytes = new AtomicReference<byte[]>();
         var maskedLive = new AtomicReference<byte[]>();
@@ -235,7 +243,7 @@ public class SerializerParityGameTests {
                     // a throwing submit cannot leave "on" published across ticks.
                     XrayMaskManager.activate(maskedConfig);
                     try {
-                        reader.submitReadDirect(readerId, LSSConstants.DIM_STR_OVERWORLD, level, cx, cz, 0, 0L);
+                        reader.submitReadDirect(readerId, registration(readerId), LSSConstants.DIM_STR_OVERWORLD, level, cx, cz, 0, 0L);
                     } finally {
                         XrayMaskManager.activate(LSSServerConfig.CONFIG);
                     }
@@ -310,8 +318,8 @@ public class SerializerParityGameTests {
         var background = new ChunkDiskReader(1, true);
         var fgId = UUID.randomUUID();
         var bgId = UUID.randomUUID();
-        foreground.registerPlayer(fgId);
-        background.registerPlayer(bgId);
+        foreground.registerPlayer(fgId, registration(fgId));
+        background.registerPlayer(bgId, registration(bgId));
         var step = new AtomicInteger();
         // Each result is polled exactly once and cached: succeedWhen re-runs this block on every
         // retry tick, and a reader's queue is gone once it is shut down, so re-polling would turn
@@ -326,8 +334,8 @@ public class SerializerParityGameTests {
                     helper.assertTrue(chunkSource.getChunkNow(cx, cz) == null,
                             "waiting for the chunk to unload");
                     level.save(null, true, false);
-                    foreground.submitReadDirect(fgId, LSSConstants.DIM_STR_OVERWORLD, level, cx, cz, 0, 0L);
-                    background.submitReadDirect(bgId, LSSConstants.DIM_STR_OVERWORLD, level, cx, cz, 0, 0L);
+                    foreground.submitReadDirect(fgId, registration(fgId), LSSConstants.DIM_STR_OVERWORLD, level, cx, cz, 0, 0L);
+                    background.submitReadDirect(bgId, registration(bgId), LSSConstants.DIM_STR_OVERWORLD, level, cx, cz, 0, 0L);
                     step.set(1);
                     helper.assertTrue(false, "foreground + background reads submitted");
                 }
@@ -505,8 +513,8 @@ public class SerializerParityGameTests {
 
         var reader = new ChunkDiskReader(1, false);
         var readerId = UUID.randomUUID();
-        reader.registerPlayer(readerId);
-        reader.submitReadDirect(readerId, LSSConstants.DIM_STR_THE_END, endLevel, cx, cz, 0, 0L);
+        reader.registerPlayer(readerId, registration(readerId));
+        reader.submitReadDirect(readerId, registration(readerId), LSSConstants.DIM_STR_THE_END, endLevel, cx, cz, 0, 0L);
 
         var result = new AtomicReference<dev.vox.lss.common.processing.ChunkReadResult>();
         helper.succeedWhen(() -> {
@@ -552,7 +560,7 @@ public class SerializerParityGameTests {
 
         var reader = new ChunkDiskReader(1, false);
         var readerId = UUID.randomUUID();
-        reader.registerPlayer(readerId);
+        reader.registerPlayer(readerId, registration(readerId));
         var step = new AtomicInteger();
         var baseline = new AtomicReference<byte[]>();
 
@@ -561,7 +569,7 @@ public class SerializerParityGameTests {
             switch (step.get()) {
                 case 0 -> {
                     level.save(null, true, false);
-                    reader.submitReadDirect(readerId, LSSConstants.DIM_STR_OVERWORLD, level, cx, cz, 0, 0L);
+                    reader.submitReadDirect(readerId, registration(readerId), LSSConstants.DIM_STR_OVERWORLD, level, cx, cz, 0, 0L);
                     step.set(1);
                     helper.assertTrue(false, "baseline read submitted");
                 }
@@ -577,7 +585,7 @@ public class SerializerParityGameTests {
                             ? Blocks.COBBLESTONE : Blocks.STONE;
                     level.setBlock(editPos, edit.defaultBlockState(), 3);
                     level.save(null, true, false);
-                    reader.submitReadDirect(readerId, LSSConstants.DIM_STR_OVERWORLD, level, cx, cz, 1, 0L);
+                    reader.submitReadDirect(readerId, registration(readerId), LSSConstants.DIM_STR_OVERWORLD, level, cx, cz, 1, 0L);
                     step.set(2);
                     helper.assertTrue(false, "post-edit read submitted");
                 }
@@ -859,7 +867,7 @@ public class SerializerParityGameTests {
         var reader = new ChunkDiskReader(1, false, true);
         reader.attachStore(store);
         var readerId = UUID.randomUUID();
-        reader.registerPlayer(readerId);
+        reader.registerPlayer(readerId, registration(readerId));
         var step = new AtomicInteger();
         var nbtBytes = new AtomicReference<byte[]>();
 
@@ -880,7 +888,7 @@ public class SerializerParityGameTests {
                     // First read: the store is empty, so this is the NBT path (the
                     // deposit source in production rides the delivery path; here the
                     // test deposits the same bytes directly).
-                    reader.submitReadDirect(readerId, dim, level, cx, cz, 0, 0L);
+                    reader.submitReadDirect(readerId, registration(readerId), dim, level, cx, cz, 0, 0L);
                     step.set(1);
                     helper.assertTrue(false, "NBT read submitted, awaiting result");
                 }
@@ -899,7 +907,7 @@ public class SerializerParityGameTests {
                 case 2 -> {
                     helper.assertTrue(store.get(dim, packed) != null,
                             "waiting for the deposit to commit (batcher)");
-                    reader.submitReadDirect(readerId, dim, level, cx, cz, 1, 0L);
+                    reader.submitReadDirect(readerId, registration(readerId), dim, level, cx, cz, 1, 0L);
                     step.set(3);
                     helper.assertTrue(false, "store-rung read submitted, awaiting result");
                 }
