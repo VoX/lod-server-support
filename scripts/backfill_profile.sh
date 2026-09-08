@@ -44,6 +44,8 @@ set -euo pipefail
 #          cpu.jsonl,orchestrator.log,server.log,meta.json}
 
 MAIN_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+source "$MAIN_ROOT/scripts/lib/harness-lock.sh"
+harness_acquire
 OUT_ROOT="${OUT_ROOT:-$MAIN_ROOT/profile-results}"
 PROJECT_ROOT="$MAIN_ROOT"   # for mc-run.sh (re-pointed per arm in cmd_run)
 LOG_PREFIX="backfill-profile"
@@ -85,7 +87,7 @@ root_for_arm() {
 
 prebuild() { # <root>
     log "Prebuilding $1 ..."
-    (cd "$1" && ./gradlew :fabric:build -x test -x runGameTest -x runClientGameTest --quiet)
+    harness_gradle_at "$1" :fabric:build -x test -x runGameTest -x runClientGameTest --quiet
 }
 
 ensure_base_worktree() {
@@ -136,7 +138,7 @@ cmd_run() {
     fi
 
     RUN_OUT="$OUT_ROOT/$RUN_STAMP/${arm}-rep${rep}"
-    mkdir -p "$RUN_OUT"
+    python3 "$HARNESS_LIB_DIR/benchmark-results.py" prepare "$RUN_OUT"
     log "=== RUN $arm rep$rep (root=$root, duration=${duration}s, cps=${PROFILE_BACKFILL_CPS:-1000}) ==="
 
     # Fresh world from base, FRESH store (the walk only visits unmarked regions — a
@@ -167,10 +169,10 @@ PROPS
           "$server_run_dir/logs/latest.log"
 
     log "Building mod ($root)..."
-    (cd "$root" && ./gradlew :fabric:build -x test -x runGameTest -x runClientGameTest --quiet)
+    harness_gradle_at "$root" :fabric:build -x test -x runGameTest -x runClientGameTest --quiet
 
-    "$MAIN_ROOT/scripts/lib/proc_sampler.sh" "$RUN_OUT/cpu.jsonl" $((duration + 300)) &
-    local sampler_pid=$!
+    harness_start_observer "$MAIN_ROOT/scripts/lib/proc_sampler.sh" "$RUN_OUT/cpu.jsonl" $((duration + 300))
+    local sampler_pid=$HARNESS_OBSERVER_PID
 
     local rc=0
     PROJECT_ROOT="$root"   # mc_start_server cd's here for the gradle invocation
@@ -199,6 +201,7 @@ PROPS
 
     kill "$sampler_pid" 2>/dev/null || true
     wait "$sampler_pid" 2>/dev/null || true
+    HARNESS_OBSERVER_PID=""
 
     [[ -f "$server_run_dir/benchmark-results/server.json" ]] \
         && cp "$server_run_dir/benchmark-results/server.json" "$RUN_OUT/"

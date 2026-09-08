@@ -28,6 +28,8 @@ set -euo pipefail
 #          client-benchmark.jfr,cpu.jsonl,orchestrator.log,server.log,meta.json}
 
 MAIN_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+source "$MAIN_ROOT/scripts/lib/harness-lock.sh"
+harness_acquire
 OUT_ROOT="${OUT_ROOT:-$MAIN_ROOT/profile-results}"
 
 # Ref-vs-ref arm mode (PERF Phase 0 item 2). PROFILE_BASE_WT default deliberately
@@ -93,7 +95,7 @@ root_for_arm() {
 
 prebuild() { # <root>
     log "Prebuilding $1 ..."
-    (cd "$1" && ./gradlew :fabric:build -x test -x runGameTest -x runClientGameTest --quiet)
+    harness_gradle_at "$1" :fabric:build -x test -x runGameTest -x runClientGameTest --quiet
 }
 
 ensure_base_worktree() {
@@ -156,7 +158,7 @@ cmd_run() {
     fi
 
     RUN_OUT="$OUT_ROOT/$RUN_STAMP/${arm}-rep${rep}"
-    mkdir -p "$RUN_OUT"
+    python3 "$HARNESS_LIB_DIR/benchmark-results.py" prepare "$RUN_OUT"
     log "=== RUN $arm rep$rep (root=$root, duration=${duration}s, R=$LOD_R) ==="
 
     # Cold client cache every run + staged configs (gen OFF: pure disk-read + serialization).
@@ -168,27 +170,32 @@ cmd_run() {
     stage_client_config "$cli_cfg_dir/lss-client-config.json"
 
     # Stale-artifact guard: a crashed run must yield MISSING files, not the previous run's.
-    rm -f "$root/benchmark-results/server.json" "$root/benchmark-results/client.json" \
+    rm -f "$root/benchmark-results/current.json" "$root/benchmark-results/server.json" "$root/benchmark-results/client.json" \
           "$root/benchmark-results/"*.jfr \
           "$root/fabric/build/run/benchmark-server/benchmark-results/server.json" \
           "$root/fabric/build/run/benchmark-client/benchmark-results/client.json" \
           "$root/fabric/build/run/benchmark-server/server-benchmark.jfr" \
           "$root/fabric/build/run/benchmark-client/client-benchmark.jfr"
 
-    "$MAIN_ROOT/scripts/lib/proc_sampler.sh" "$RUN_OUT/cpu.jsonl" $((duration + 420)) &
-    local sampler_pid=$!
+    harness_start_observer "$MAIN_ROOT/scripts/lib/proc_sampler.sh" "$RUN_OUT/cpu.jsonl" $((duration + 420))
+    local sampler_pid=$HARNESS_OBSERVER_PID
 
     local rc=0
     # BENCHMARK_CONFIG_STAGED: without it benchmark.sh's neutral-staging block (6856bcb,
     # 2026-08-02) silently replaces the config staged above and every PROFILE_* knob is
     # inert — found 2026-08-06 (this round's F1 ran shipped defaults; see the findings
     # doc's erratum). store_gate.sh/benchmark_compare.sh always exported it.
-    (export BENCHMARK_CONFIG_STAGED=1; cd "$root" && BENCHMARK_SERVER_GRADLE_ARGS="$extra_args" \
-        ./scripts/benchmark.sh no-cache "$duration") \
+    harness_run_script env BENCHMARK_CONFIG_STAGED=1 BENCHMARK_SERVER_GRADLE_ARGS="$extra_args" \
+        "$root/scripts/benchmark.sh" no-cache "$duration" \
         > "$RUN_OUT/orchestrator.log" 2>&1 || rc=$?
 
     kill "$sampler_pid" 2>/dev/null || true
     wait "$sampler_pid" 2>/dev/null || true
+    HARNESS_OBSERVER_PID=""
+
+    if [[ $rc -eq 0 ]]; then
+        python3 "$HARNESS_LIB_DIR/benchmark-results.py" record "$root" "$RUN_OUT" legacy || rc=$?
+    fi
 
     for f in server.json client.json server.log client.log \
              server-benchmark.jfr client-benchmark.jfr; do

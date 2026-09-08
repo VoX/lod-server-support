@@ -32,6 +32,8 @@ set -euo pipefail
 SCENARIO="${1:-fresh}"
 DURATION="${2:-60}"
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+source "$PROJECT_ROOT/scripts/lib/harness-lock.sh"
+harness_acquire
 SERVER_RUN_DIR="$PROJECT_ROOT/fabric/build/run/benchmark-server"
 CLIENT_RUN_DIR="$PROJECT_ROOT/fabric/build/run/benchmark-client"
 RESULTS_DIR="$PROJECT_ROOT/benchmark-results"
@@ -39,7 +41,19 @@ WORLDS_DIR="$PROJECT_ROOT/benchmark-worlds"
 LOG_PREFIX="benchmark"
 
 source "$PROJECT_ROOT/scripts/lib/mc-run.sh"
-trap mc_cleanup EXIT
+RUN_RESULTS_DIR=""
+benchmark_cleanup() {
+    local status=$?
+    mc_cleanup
+    if [[ $status -ne 0 && -n "$RUN_RESULTS_DIR" ]]; then
+        python3 "$HARNESS_LIB_DIR/benchmark-results.py" fail "$RUN_RESULTS_DIR" "$status" || true
+    fi
+}
+trap benchmark_cleanup EXIT
+case "$SCENARIO" in fresh|no-cache|warm-join) ;; *) echo "[benchmark] Unknown scenario: $SCENARIO" >&2; exit 1 ;; esac
+[[ "$DURATION" =~ ^[1-9][0-9]*$ ]] || { echo "[benchmark] Duration must be positive integer seconds" >&2; exit 1; }
+RUN_RESULTS_DIR="$(python3 "$HARNESS_LIB_DIR/benchmark-results.py" begin "$RESULTS_DIR" "$SCENARIO" "$DURATION")"
+echo "[benchmark] Run evidence: $RUN_RESULTS_DIR"
 
 echo "========================================="
 echo " LSS Benchmark: scenario=$SCENARIO, duration=${DURATION}s"
@@ -48,7 +62,7 @@ echo "========================================="
 # Step 1: Build
 echo "[benchmark] Building mod..."
 cd "$PROJECT_ROOT"
-./gradlew :fabric:build -x test -x runGameTest -x runClientGameTest --quiet
+harness_gradle :fabric:build -x test -x runGameTest -x runClientGameTest --quiet
 
 # Step 2: Prepare run directories
 mkdir -p "$SERVER_RUN_DIR" "$CLIENT_RUN_DIR" "$RESULTS_DIR"
@@ -169,9 +183,12 @@ fi
 echo "eula=true" > "$SERVER_RUN_DIR/eula.txt"
 
 # run_cycle <result-suffix>: one full server+client cycle. Collects
-# server{suffix}.json / client{suffix}.json / *.jfr into RESULTS_DIR.
+# server/client JSON and optional JFR into this run's separate cycle directory.
 run_cycle() {
-    local suffix="$1"
+    local suffix="$1" cycle=measure server_status=0 client_status=0
+    [[ -z "$suffix" ]] || cycle=populate
+    local cycle_dir="$RUN_RESULTS_DIR/$cycle"
+    python3 "$HARNESS_LIB_DIR/benchmark-results.py" cycle-start "$RUN_RESULTS_DIR" "$cycle"
 
     rm -f "$SERVER_RUN_DIR/logs/latest.log"
     rm -f "$SERVER_RUN_DIR/benchmark-results/server.json" \
@@ -181,19 +198,19 @@ run_cycle() {
     # Start server
     # BENCHMARK_SERVER_GRADLE_ARGS: optional extra gradle args for the SERVER invocation only
     # (e.g. -Pbenchmark.c2me=true for the C2ME A/B arm — the client stays unmodified).
-    mc_start_server "$RESULTS_DIR/server$suffix.log" :fabric:runBenchmarkServer -Pbenchmark.duration="$DURATION" ${BENCHMARK_SERVER_GRADLE_ARGS:-}
-    mc_wait_server_ready "$SERVER_RUN_DIR/logs/latest.log" "$RESULTS_DIR/server$suffix.log" 120
+    mc_start_server "$cycle_dir/server.log" :fabric:runBenchmarkServer -Pbenchmark.duration="$DURATION" ${BENCHMARK_SERVER_GRADLE_ARGS:-}
+    mc_wait_server_ready "$SERVER_RUN_DIR/logs/latest.log" "$cycle_dir/server.log" 120
 
     # 1 Hz CPU/RSS/wire sampler — cpu.jsonl is what analyze_profile_jfr.py derives the
     # active window from, and the idle-corrected CPU input to the store's §0 metric-2 gate.
-    "$PROJECT_ROOT/scripts/lib/proc_sampler.sh" "$RESULTS_DIR/cpu$suffix.jsonl" $((DURATION + 300)) &
-    local sampler_pid=$!
+    harness_start_observer "$PROJECT_ROOT/scripts/lib/proc_sampler.sh" "$cycle_dir/cpu.jsonl" $((DURATION + 300))
+    local sampler_pid=$HARNESS_OBSERVER_PID
 
     # BENCHMARK_CLIENT_GRADLE_ARGS: extra -P args for the client task (C6: the
     # legacy-dialect arm passes -Psoak.dialect=19 so the benchmark client emulates a
     # protocol-19 install and the server pays its egress translation per column).
     # shellcheck disable=SC2086
-    mc_start_client "$RESULTS_DIR/client$suffix.log" :fabric:runBenchmarkClient ${BENCHMARK_CLIENT_GRADLE_ARGS:-}
+    mc_start_client "$cycle_dir/client.log" :fabric:runBenchmarkClient ${BENCHMARK_CLIENT_GRADLE_ARGS:-}
 
     # Wait for server to exit (auto-stops after duration). Enforce the deadline: the
     # benchmark server only halts on tick count (max-tick-time=-1 disables the vanilla
@@ -204,44 +221,25 @@ run_cycle() {
     while kill -0 "$SERVER_PID" 2>/dev/null; do
         if [ "$elapsed" -ge "$total_timeout" ]; then
             echo "[benchmark] Deadline exceeded (${total_timeout}s) — killing stalled server" >&2
+            server_status=124
             kill "$SERVER_PID" 2>/dev/null || true
             break
         fi
         sleep 1
         elapsed=$((elapsed + 1))
     done
-    if wait "$SERVER_PID" 2>/dev/null; then
-        echo "[benchmark] Server exited normally"
-    else
-        echo "[benchmark] Server exited with code $?"
-    fi
+    local waited=0
+    wait "$SERVER_PID" 2>/dev/null || waited=$?
+    [[ $server_status -ne 0 ]] || server_status=$waited
     SERVER_PID=""
 
-    # Wait for client to exit (auto-stops on disconnect)
-    mc_wait_client_exit 30
+    mc_wait_client_exit 30 || client_status=$?
     kill "$sampler_pid" 2>/dev/null || true
     wait "$sampler_pid" 2>/dev/null || true
+    HARNESS_OBSERVER_PID=""
+    python3 "$HARNESS_LIB_DIR/benchmark-results.py" collect "$RUN_RESULTS_DIR" "$cycle" \
+        "$SERVER_RUN_DIR" "$CLIENT_RUN_DIR" "$server_status" "$client_status"
 
-    # Collect results
-    echo "[benchmark] Collecting results (suffix '$suffix')..."
-    if [[ -f "$SERVER_RUN_DIR/benchmark-results/server.json" ]]; then
-        cp "$SERVER_RUN_DIR/benchmark-results/server.json" "$RESULTS_DIR/server$suffix.json"
-        echo "[benchmark] Server metrics: $RESULTS_DIR/server$suffix.json"
-    else
-        echo "[benchmark] WARNING: No server metrics found"
-    fi
-    if [[ -f "$CLIENT_RUN_DIR/benchmark-results/client.json" ]]; then
-        cp "$CLIENT_RUN_DIR/benchmark-results/client.json" "$RESULTS_DIR/client$suffix.json"
-        echo "[benchmark] Client metrics: $RESULTS_DIR/client$suffix.json"
-    else
-        echo "[benchmark] WARNING: No client metrics found"
-    fi
-    if [[ -f "$SERVER_RUN_DIR/server-benchmark.jfr" ]]; then
-        cp "$SERVER_RUN_DIR/server-benchmark.jfr" "$RESULTS_DIR/server-benchmark$suffix.jfr"
-    fi
-    if [[ -f "$CLIENT_RUN_DIR/client-benchmark.jfr" ]]; then
-        cp "$CLIENT_RUN_DIR/client-benchmark.jfr" "$RESULTS_DIR/client-benchmark$suffix.jfr"
-    fi
 }
 
 # Step 5: Run the scenario's cycle(s)
@@ -257,7 +255,7 @@ if [[ "$SCENARIO" == "warm-join" ]]; then
     fi
     echo "[benchmark] warm-join cycle B (measure)..."
     run_cycle ""
-    cat > "$RESULTS_DIR/warm-join-meta.json" <<EOF
+    cat > "$RUN_RESULTS_DIR/warm-join-meta.json" <<EOF
 {"scenario":"warm-join","duration_s":$DURATION,"dropped_caches":"$DROPPED_CACHES","finished":"$(date -Is)"}
 EOF
 else
@@ -277,11 +275,12 @@ if [[ "${BENCHMARK_NO_BASE_SAVE:-0}" != "1" && "$SCENARIO" == "fresh" && -d "$SE
     cp -r "$SERVER_RUN_DIR/world" "$WORLDS_DIR/base/world"
 fi
 
-# Step 7: Print server results
+# Step 7: Publish aliases only after all required cycles validated.
+python3 "$HARNESS_LIB_DIR/benchmark-results.py" finish "$RUN_RESULTS_DIR"
+
+# Print only this validated run, never an old compatibility alias.
 echo ""
 echo "========================================="
 echo " Benchmark Complete"
 echo "========================================="
-if [[ -f "$RESULTS_DIR/server.json" ]]; then
-    cat "$RESULTS_DIR/server.json"
-fi
+python3 "$HARNESS_LIB_DIR/benchmark-results.py" current "$RUN_RESULTS_DIR"

@@ -26,6 +26,8 @@ set -euo pipefail
 
 PLATFORM="${SOAK_PLATFORM:-fabric}"
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+source "$PROJECT_ROOT/scripts/lib/harness-lock.sh"
+harness_acquire
 CARRY_DIR="$PROJECT_ROOT/soak-results/stamp-heal-carry.$$"
 
 case "$PLATFORM" in
@@ -34,11 +36,11 @@ case "$PLATFORM" in
 esac
 
 log() { echo "[stamp-heal] $*"; }
-cleanup() { rm -rf "$CARRY_DIR"; }
+cleanup() { harness_cleanup; rm -rf "$CARRY_DIR"; }
 trap cleanup EXIT
 
 log "=== phase 1: stamp-heal-prime (platform=$PLATFORM) ==="
-SOAK_PLATFORM="$PLATFORM" "$PROJECT_ROOT/scripts/soak.sh" stamp-heal-prime
+SOAK_PLATFORM="$PLATFORM" harness_run_script "$PROJECT_ROOT/scripts/soak.sh" stamp-heal-prime
 
 rm -rf "$CARRY_DIR"
 mkdir -p "$CARRY_DIR"
@@ -46,6 +48,6 @@ cp -r "$SERVER_RUN_DIR/world" "$CARRY_DIR/world"
 
 log "=== phase 2: stamp-heal-rejoin (platform=$PLATFORM, carried world + cache) ==="
 SOAK_PLATFORM="$PLATFORM" SOAK_WORLD_FROM="$CARRY_DIR" \
-    "$PROJECT_ROOT/scripts/soak.sh" stamp-heal-rejoin
+    harness_run_script "$PROJECT_ROOT/scripts/soak.sh" stamp-heal-rejoin
 
 log "both phases green — the stamped rejoin healed the stale set"
