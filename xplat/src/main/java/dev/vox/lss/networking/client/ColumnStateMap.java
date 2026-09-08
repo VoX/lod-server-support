@@ -444,6 +444,36 @@ class ColumnStateMap {
     }
 
     /**
+     * A newer summary has no clean proof for this tile. Retract only the summary's
+     * own validation; per-column proofs, timestamps and all other marks survive.
+     * Visits existing leaves only and reports every revoked position so a confirmed
+     * legacy ring can reopen. Returns the number of proofs revoked (not new claims).
+     */
+    int revokeTileSummaryProof(int tileX, int tileZ, java.util.function.LongConsumer revokedOut) {
+        int revoked = 0;
+        int lx0 = tileX << 2, lz0 = tileZ << 2;
+        for (int lz = lz0; lz < lz0 + 4; lz++) {
+            for (int lx = lx0; lx < lx0 + 4; lx++) {
+                long leafKey = PositionUtil.packPosition(lx, lz);
+                Leaf leaf = this.leaves.get(leafKey);
+                if (leaf == null) continue;
+                long clear = leaf.summaryValidated;
+                if (clear == 0) continue;
+                leaf.validated &= ~clear;
+                leaf.summaryValidated = 0;
+                leaf.recomputeNeeds();
+                revoked += Long.bitCount(clear);
+                if (revokedOut != null) {
+                    for (long remaining = clear; remaining != 0; remaining &= remaining - 1) {
+                        revokedOut.accept(positionFor(leafKey, Long.numberOfTrailingZeros(remaining)));
+                    }
+                }
+            }
+        }
+        return revoked;
+    }
+
+    /**
      * Stamped up_to_date (stamped-up-to-date-plan.md §4): ratchet a column's cached
      * acquisition stamp forward to the server's verification second — a PURE ts
      * write, monotonic, so the next summary tile compare validates a column a later

@@ -64,7 +64,17 @@ class SectionStateFuzzTest {
         boolean ratchetFired = false;
         for (int op = 0; op < 4_000; op++) {
             long p = pool[rng.nextInt(pool.length)];
-            int kind = rng.nextInt(101); // 100 = the ratchet op (3-Opus fold: added by WIDENING, not by halving prune)
+            int kind = rng.nextInt(102); // new operations widen the range, preserving prune coverage
+            if (kind == 101) {
+                int tx = PositionUtil.unpackX(p) >> 5, tz = PositionUtil.unpackZ(p) >> 5;
+                var actual = new LongOpenHashSet();
+                var expected = new LongOpenHashSet();
+                assertEquals(ref.revokeTileSummaryProof(tx, tz, expected::add),
+                        impl.revokeTileSummaryProof(tx, tz, actual::add));
+                assertEquals(expected, actual, "doubt revocation coordinates");
+                assertParity(ref, impl, pool, rng, seed, op);
+                continue;
+            }
             if (kind == 100) {
                 // Stamped-up_to_date ratchet (stamped-up-to-date-plan.md §4): a pure
                 // monotonic ts advance on an existing positive mark-free unsatisfied
