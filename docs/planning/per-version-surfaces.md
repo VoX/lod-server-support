@@ -9,6 +9,31 @@ never a second live copy (two copies drift within one port).
 Legend: "pin" = the contract test that reds on drift; "hand" = per-line manual
 verification recorded in the port PR (no automatable pin exists).
 
+## Current loader and artifact surfaces (2026-09-08)
+
+The checked-in build/release definitions give this matrix. Shipping, terrain-consumer
+compatibility and far-player rendering are separate checks.
+
+| MC line | `LINE_SHIP_NEOFORGE` | NeoForge far-player renderer |
+| --- | --- | --- |
+| 1.21.1 | true | Live, immediate mode |
+| 1.21.10 | false | Intentional stub; module remains built/tested |
+| 1.21.11 | false | Intentional stub; module remains built/tested |
+| 26.1 | true | Intentional stub |
+| 26.2 | true | Intentional stub |
+
+On every line, `neoforge/build.gradle` shades common code and nests **both
+sqlite-jdbc and zstd-jni as stock jarJar libraries** under `META-INF/jarjar/`.
+`scripts/release_check.py` checks both metadata entries and rejects flat
+`org/sqlite/`, `com/github/luben/` and native-library entries. Paper's flat native
+packaging and Fabric's stripped nested jars are different artifact contracts.
+
+Use [the current live-profile inventory](../testing/astra-live-profiles.md) for
+candidate Voxy/Connector/Sodium/Xaero stacks and their validation limits. A renderer
+stub or a disabled shipping flag does not establish that no terrain consumer can
+run; installed metadata alone does not establish a successful live integration.
+Dated port records below describe their original checkpoints.
+
 | # | Surface | What to verify per line | Pin / hand |
 |---|---|---|---|
 | 1 | `IOWorker` priority ordinal + `consecutiveExecutor`/`storage` handles | The package-private `IOWorker$Priority` ordinal LSS hardcodes still means BACKGROUND; the accessor targets still exist (1.21.1: the executor is still `ProcessorMailbox` — a different shape, see the spike) | `SerializerParityGameTests` byte-parity (behavioral); accessor resolution is loud-fail (`defaultRequire: 1`); since V-3/S4 the ordinal + executor type + submit shape + accessor resolution live in `BackgroundIoSubmit` — the port flavors THAT file, never `ChunkDiskReader`'s signatures |
