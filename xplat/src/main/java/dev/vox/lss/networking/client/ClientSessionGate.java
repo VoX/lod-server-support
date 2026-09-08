@@ -110,6 +110,9 @@ final class ClientSessionGate {
 
     boolean isReceptionEnabled() { return this.receiveEnabled; }
 
+    /** The server-side Open-to-LAN service has started; ordinary singleplayer stays silent. */
+    void onHostServiceReady() { this.localIntegratedServer = false; }
+
     /** Local acquisition changes leave the connection, wire dialect and privacy state intact. */
     boolean reconcileReception(boolean enabled, boolean hasConsumers) {
         if (!this.joined) return false;
@@ -571,11 +574,8 @@ final class ClientSessionGate {
         this.parkedSubKey = java.util.Optional.empty();
         var manager = this.requestManager;
         if (manager != null) {
-            // (A column the drain thread polled concurrently still dispatches; if its
-            // consumer then rejects, that single report lands after requestManager is
-            // nulled and is dropped — at most one stale stamp per disconnect, healed
-            // by the next session unless the server kept its timestamp cache. Accepted
-            // residual.)
+            // Retire queued and already-polled receipts before saving their proof.
+            // An old callback may finish, but it cannot report against a new owner.
             teardownManager(manager);
         }
         this.columnProcessor.shutdown();

@@ -55,7 +55,7 @@ public class LodRequestManager {
     }
 
     void onDeliveryFailed(ColumnDelivery receipt) {
-        if (!this.acquisitionActive) return;
+        if (!receipt.isActive()) return; // cancellation may overtake the posted report event
         if (currentDelivery(receipt)) {
             onIngestFailure(receipt.dimension, receipt.packed);
         } else if (!receipt.dimension.equals(this.lastDimension) && receipt.bucket != null) {
@@ -73,6 +73,7 @@ public class LodRequestManager {
     }
 
     void cancelDelivery(ColumnDelivery receipt) {
+        receipt.cancel(); // a dimension transition keeps the manager alive, not this receipt
         if (!currentDelivery(receipt)) return;
         this.deliveryVersions.remove(receipt.packed);
         if (receipt.accepted()) return;

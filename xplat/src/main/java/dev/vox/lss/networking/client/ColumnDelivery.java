@@ -17,6 +17,7 @@ final class ColumnDelivery implements LSSApi.IngestFailureHandle {
     final String bucket;
     private final AtomicBoolean failed = new AtomicBoolean();
     private volatile boolean completed;
+    private volatile boolean cancelled;
     private final java.util.concurrent.atomic.AtomicInteger leases = new java.util.concurrent.atomic.AtomicInteger();
 
     ColumnDelivery(LodRequestManager owner, ResourceKey<Level> dimension, long packed,
@@ -31,7 +32,7 @@ final class ColumnDelivery implements LSSApi.IngestFailureHandle {
     }
 
     @Override
-    public boolean isActive() { return this.owner.isAcquisitionActive(); }
+    public boolean isActive() { return !this.cancelled && this.owner.isAcquisitionActive(); }
 
     @Override
     public void report() {
@@ -52,6 +53,8 @@ final class ColumnDelivery implements LSSApi.IngestFailureHandle {
             }
         };
     }
+
+    void cancel() { this.cancelled = true; }
 
     void complete() {
         this.completed = true;
