@@ -1,0 +1,3348 @@
+[
+  {
+    "line": "1.21.1",
+    "minecraft": "1.21.1",
+    "version": "0.14.0",
+    "inspection_utc": "2026-09-08T21:18:27.500229+00:00",
+    "head_at_inspection": "3a0c61c296b729a7db8d64d83a7d35f511874c48",
+    "note": "HEAD records inspection context; exact jar hashes identify the built artifacts. No inference that later source/doc commits were compiled.",
+    "ship_neoforge": true,
+    "expected_java": 21,
+    "artifacts": [
+      {
+        "path": "/home/vox/projects/lss-lines/1.21.1/fabric/build/libs/lod-server-support-fabric-0.14.0+1.21.1.jar",
+        "filename": "lod-server-support-fabric-0.14.0+1.21.1.jar",
+        "brand": "LSS",
+        "loader": "fabric",
+        "size_bytes": 8208388,
+        "sha256": "65e2486eb725f64b88bbc1abc1597cc41e82e4dde06b550b5b4148af0751e5bf",
+        "mtime_utc": "2026-09-08T20:48:49.277624+00:00",
+        "manifest": {
+          "Manifest-Version": "1.0",
+          "Fabric-Jar-Type": "classes",
+          "Fabric-Loom-Mixin-Remap-Type": "static",
+          "Fabric-Gradle-Version": "9.5.1",
+          "Fabric-Loom-Version": "1.17.13",
+          "Fabric-Mixin-Compile-Extensions-Version": "0.6.0",
+          "Fabric-Minecraft-Version": "1.21.1",
+          "Fabric-Tiny-Remapper-Version": "0.14.0",
+          "Fabric-Loader-Version": "0.19.3",
+          "Fabric-Mixin-Version": "0.17.3+mixin.0.8.7",
+          "Fabric-Mixin-Group": "net.fabricmc",
+          "Fabric-Mapping-Namespace": "intermediary"
+        },
+        "nested": [
+          {
+            "path": "META-INF/jars/common-0.14.0.jar",
+            "size_bytes": 369757,
+            "sha256": "e6fc32332bf5946b91fe87811c57e471f210b0d4fcae2b96a6579b8f16c3746b",
+            "class_count": 179,
+            "all_class_majors": {
+              "65": 179
+            },
+            "lss_class_count": 179,
+            "native_count": 0
+          },
+          {
+            "path": "META-INF/jars/sqlite-jdbc-slim.jar",
+            "size_bytes": 4981674,
+            "sha256": "9732cd719b09a985e63d4e540ef7d962cba77768cd47043c4c8777a049bb4038",
+            "class_count": 129,
+            "all_class_majors": {
+              "52": 125,
+              "53": 4
+            },
+            "lss_class_count": 0,
+            "native_count": 8
+          },
+          {
+            "path": "META-INF/jars/zstd-jni-slim.jar",
+            "size_bytes": 2263169,
+            "sha256": "3ba198f387c2166e75cd2761e223c7d1ff0e17a8e062a21f37b9da157110e304",
+            "class_count": 37,
+            "all_class_majors": {
+              "52": 36,
+              "53": 1
+            },
+            "lss_class_count": 0,
+            "native_count": 6
+          }
+        ],
+        "metadata": {
+          "schemaVersion": 1,
+          "id": "lss",
+          "version": "0.14.0",
+          "name": "LOD Server Support",
+          "description": "Voxy multiplayer support (unofficial). Enables players with Voxy to see fully rendered terrain out to hundreds of chunks on multiplayer servers without needing to explore the world first.",
+          "authors": [
+            "VoX"
+          ],
+          "contact": {
+            "sources": "https://github.com/VoX/lod-server-support"
+          },
+          "license": "MIT",
+          "icon": "assets/lss/icon.png",
+          "accessWidener": "lss.accesswidener",
+          "environment": "*",
+          "entrypoints": {
+            "main": [
+              "dev.vox.lss.LSSMod"
+            ],
+            "client": [
+              "dev.vox.lss.LSSClient"
+            ],
+            "sodium:config_api_user": [
+              "dev.vox.lss.config.LSSConfigMenu"
+            ],
+            "modmenu": [
+              "dev.vox.lss.config.LSSModMenuIntegration"
+            ]
+          },
+          "mixins": [
+            "lss.mixins.json",
+            "lss-trace.mixins.json",
+            "lss-sodium-legacy.mixins.json"
+          ],
+          "jars": [
+            {
+              "file": "META-INF/jars/sqlite-jdbc-slim.jar"
+            },
+            {
+              "file": "META-INF/jars/zstd-jni-slim.jar"
+            },
+            {
+              "file": "META-INF/jars/common-0.14.0.jar"
+            }
+          ],
+          "depends": {
+            "minecraft": "1.21.1",
+            "fabricloader": ">=0.18.4",
+            "fabric-api": ">=0.100.0"
+          },
+          "suggests": {
+            "sodium": "*",
+            "modmenu": "*",
+            "xaeroworldmap": "*"
+          }
+        },
+        "mapping_namespace": "intermediary",
+        "access_widener_header": "accessWidener\tv2\tintermediary",
+        "lss_class_majors": {
+          "65": 448
+        },
+        "lss_class_count": 448,
+        "wi2_registration_present": true,
+        "wi3_delivery_present": true,
+        "receipt_cancellation_field_present": true,
+        "host_service_ready_hook_present": true,
+        "issues": []
+      },
+      {
+        "path": "/home/vox/projects/lss-lines/1.21.1/fabric/build/libs/voxy-server-side-fabric-0.14.0+1.21.1.jar",
+        "filename": "voxy-server-side-fabric-0.14.0+1.21.1.jar",
+        "brand": "VSS",
+        "loader": "fabric",
+        "size_bytes": 8214302,
+        "sha256": "7388e582e8485a5def70771567573c67092942d8998857b5ebb5d3816d3c797a",
+        "mtime_utc": "2026-09-08T20:56:42.207751+00:00",
+        "manifest": {
+          "Manifest-Version": "1.0",
+          "Fabric-Jar-Type": "classes",
+          "Fabric-Loom-Mixin-Remap-Type": "static",
+          "Fabric-Gradle-Version": "9.5.1",
+          "Fabric-Loom-Version": "1.17.13",
+          "Fabric-Mixin-Compile-Extensions-Version": "0.6.0",
+          "Fabric-Minecraft-Version": "1.21.1",
+          "Fabric-Tiny-Remapper-Version": "0.14.0",
+          "Fabric-Loader-Version": "0.19.3",
+          "Fabric-Mixin-Version": "0.17.3+mixin.0.8.7",
+          "Fabric-Mixin-Group": "net.fabricmc",
+          "Fabric-Mapping-Namespace": "intermediary"
+        },
+        "nested": [
+          {
+            "path": "META-INF/jars/common-0.14.0.jar",
+            "size_bytes": 369757,
+            "sha256": "e6fc32332bf5946b91fe87811c57e471f210b0d4fcae2b96a6579b8f16c3746b",
+            "class_count": 179,
+            "all_class_majors": {
+              "65": 179
+            },
+            "lss_class_count": 179,
+            "native_count": 0
+          },
+          {
+            "path": "META-INF/jars/sqlite-jdbc-slim.jar",
+            "size_bytes": 4981674,
+            "sha256": "9732cd719b09a985e63d4e540ef7d962cba77768cd47043c4c8777a049bb4038",
+            "class_count": 129,
+            "all_class_majors": {
+              "52": 125,
+              "53": 4
+            },
+            "lss_class_count": 0,
+            "native_count": 8
+          },
+          {
+            "path": "META-INF/jars/zstd-jni-slim.jar",
+            "size_bytes": 2263169,
+            "sha256": "3ba198f387c2166e75cd2761e223c7d1ff0e17a8e062a21f37b9da157110e304",
+            "class_count": 37,
+            "all_class_majors": {
+              "52": 36,
+              "53": 1
+            },
+            "lss_class_count": 0,
+            "native_count": 6
+          }
+        ],
+        "metadata": {
+          "schemaVersion": 1,
+          "id": "lss",
+          "version": "0.14.0",
+          "name": "Voxy Server Side",
+          "description": "Render distant Voxy LODs on servers",
+          "authors": [
+            "Xantha",
+            "VoX"
+          ],
+          "contact": {
+            "sources": "https://github.com/VoX/lod-server-support",
+            "homepage": "https://modrinth.com/plugin/voxy-server-side"
+          },
+          "license": "MIT",
+          "icon": "assets/lss/icon-vss.png",
+          "accessWidener": "lss.accesswidener",
+          "environment": "*",
+          "entrypoints": {
+            "main": [
+              "dev.vox.lss.LSSMod"
+            ],
+            "client": [
+              "dev.vox.lss.LSSClient"
+            ],
+            "sodium:config_api_user": [
+              "dev.vox.lss.config.LSSConfigMenu"
+            ],
+            "modmenu": [
+              "dev.vox.lss.config.LSSModMenuIntegration"
+            ]
+          },
+          "mixins": [
+            "lss.mixins.json",
+            "lss-trace.mixins.json",
+            "lss-sodium-legacy.mixins.json"
+          ],
+          "jars": [
+            {
+              "file": "META-INF/jars/sqlite-jdbc-slim.jar"
+            },
+            {
+              "file": "META-INF/jars/zstd-jni-slim.jar"
+            },
+            {
+              "file": "META-INF/jars/common-0.14.0.jar"
+            }
+          ],
+          "depends": {
+            "minecraft": "1.21.1",
+            "fabricloader": ">=0.18.4",
+            "fabric-api": ">=0.100.0"
+          },
+          "suggests": {
+            "sodium": "*",
+            "modmenu": "*",
+            "xaeroworldmap": "*"
+          }
+        },
+        "mapping_namespace": "intermediary",
+        "access_widener_header": "accessWidener\tv2\tintermediary",
+        "lss_class_majors": {
+          "65": 448
+        },
+        "lss_class_count": 448,
+        "wi2_registration_present": true,
+        "wi3_delivery_present": true,
+        "receipt_cancellation_field_present": true,
+        "host_service_ready_hook_present": true,
+        "issues": []
+      },
+      {
+        "path": "/home/vox/projects/lss-lines/1.21.1/paper/build/libs/lod-server-support-paper-0.14.0+1.21.1.jar",
+        "filename": "lod-server-support-paper-0.14.0+1.21.1.jar",
+        "brand": "LSS",
+        "loader": "paper",
+        "size_bytes": 7791918,
+        "sha256": "5399264a3b2d5b20babd36a6659861d45587932e07e4b9eef874c2130bbfd1d8",
+        "mtime_utc": "2026-09-08T20:56:43.224516+00:00",
+        "manifest": {
+          "Manifest-Version": "1.0",
+          "paperweight-mappings-namespace": "mojang",
+          "Multi-Release": "true"
+        },
+        "nested": [],
+        "metadata_raw": "name: LodServerSupport\nversion: '0.14.0'\nmain: dev.vox.lss.paper.LSSPaperPlugin\napi-version: '1.21.1'\n# 1.21.1 line: folia-supported is ABSENT \u2014 Folia never published a 1.21.1 build (its 1.21\n# family starts at 1.21.4; fill.papermc.io verified 2026-08-15), so declaring the flag\n# would claim support for a platform that does not exist (the pre-26.2 precedent).\n# PluginYmlContractTest + release_check.py pin the ABSENCE on this line (surfaces row 7 \u2014\n# the fresh cut re-derives the direction; the Folia code paths stay in the jar, inert).\n# C5 (XVER \u00a77): the Via mismatch guard reflectively reads ViaVersion's API when the\n# plugin is present. softdepend keeps Spigot's classloader from logging the one-time\n# \"loaded class ... which is not a depend/softdepend\" warning on the first handshake \u2014\n# noise that reads like an LSS bug. No hard dependency: without Via the probe is a\n# silent no-signal. LibsDisguises (issue #282): the far-player privacy ladder reads\n# DisguiseAPI reflectively to hide disguised players \u2014 same precedent (load ORDER +\n# classloader visibility, never a hard depend; absent = the rung is skipped).\nsoftdepend: [ViaVersion, LibsDisguises]\ndescription: Voxy multiplayer support (unofficial). Enables players with Voxy to see fully rendered terrain out to hundreds of chunks on multiplayer servers without needing to explore the world first.\nauthor: VoX\nwebsite: https://modrinth.com/plugin/lod-server-support\ncommands:\n  lsslod:\n    description: LOD Server Support admin commands\n    usage: /lsslod <stats|diag|store|set|help>\n    permission: lss.admin\npermissions:\n  lss.admin:\n    description: Access to LSS admin commands\n    default: op\n  # Far players (v0.11.0 E1): server-side privacy lever \u2014 holders are never served as\n  # far players regardless of the farPlayers mode (FARP \u00a73.2). BOTH brand spellings are\n  # declared (default false) and the enforcement honors either: Bukkit resolves an\n  # UNDECLARED node to the op default, so a single-brand declaration plus a cross-brand\n  # check would silently hide every op \u2014 and declaring both keeps the privacy grant\n  # working across an LSS<->VSS jar swap.\n  lss.farplayers.hidden:\n    description: Players with this permission are never shown as far players\n    default: false\n  vss.farplayers.hidden:\n    description: Players with this permission are never shown as far players (VSS spelling)\n    default: false\n  # Service gate (requireServicePermission, default false): with the config key on, only\n  # holders are served LOD data \u2014 a handshake from anyone else is answered with an\n  # enabled=false SessionConfig and no session. BOTH brand spellings are declared for the\n  # reason spelled out on lss.farplayers.hidden above (Bukkit resolves an UNDECLARED node to\n  # the op default, so a single-brand declaration plus a cross-brand check goes silently\n  # wrong, and declaring both keeps grants alive across an LSS<->VSS jar swap).\n  #\n  # `default: true`, NOT op: everyone holds these unless an admin says otherwise, so arming\n  # the gate on its own changes nothing for anybody \u2014 the original behavior, preserved. The\n  # gate is a DENY tool: the only thing that takes LOD away is an explicit negative grant in\n  # the permission plugin (e.g. LuckPerms `group default permission set lss.use false`).\n  #\n  # Enforcement requires BOTH spellings, so a negative grant on EITHER one denies \u2014 the De\n  # Morgan mirror of the privacy nodes above (grant model: hold EITHER; deny model: lose\n  # EITHER). An OR here would be inert: the spelling the admin did NOT touch still resolves\n  # to its declared `true` and would out-vote the single negative grant.\n  #\n  # That direction is also why losing either declaration is dangerous: an undeclared node\n  # falls back to Bukkit's op default, silently turning \"everyone\" into \"ops only\".\n  lss.use:\n    description: Receive LOD data when requireServicePermission is enabled\n    default: true\n  vss.use:\n    description: Receive LOD data when requireServicePermission is enabled (VSS spelling)\n    default: true\n",
+        "metadata": {
+          "name": "LodServerSupport",
+          "version": "0.14.0",
+          "main": "dev.vox.lss.paper.LSSPaperPlugin",
+          "api-version": "1.21.1"
+        },
+        "mapping_namespace": "mojang",
+        "lss_class_majors": {
+          "65": 255
+        },
+        "lss_class_count": 255,
+        "wi2_registration_present": true,
+        "issues": []
+      },
+      {
+        "path": "/home/vox/projects/lss-lines/1.21.1/paper/build/libs/voxy-server-side-paper-0.14.0+1.21.1.jar",
+        "filename": "voxy-server-side-paper-0.14.0+1.21.1.jar",
+        "brand": "VSS",
+        "loader": "paper",
+        "size_bytes": 7791855,
+        "sha256": "2c786bbad9763a69a6aebd624f8ed3c2c2715409586bb356fb6a709d81fb3a35",
+        "mtime_utc": "2026-09-08T20:56:44.000578+00:00",
+        "manifest": {
+          "Manifest-Version": "1.0",
+          "paperweight-mappings-namespace": "mojang",
+          "Multi-Release": "true"
+        },
+        "nested": [],
+        "metadata_raw": "name: VoxyServerSide\nversion: '0.14.0'\nmain: dev.vox.lss.paper.LSSPaperPlugin\napi-version: '1.21.1'\n# 1.21.1 line: folia-supported is ABSENT \u2014 Folia never published a 1.21.1 build (its 1.21\n# family starts at 1.21.4; fill.papermc.io verified 2026-08-15), so declaring the flag\n# would claim support for a platform that does not exist (the pre-26.2 precedent).\n# PluginYmlContractTest + release_check.py pin the ABSENCE on this line (surfaces row 7 \u2014\n# the fresh cut re-derives the direction; the Folia code paths stay in the jar, inert).\n# C5 (XVER \u00a77): the Via mismatch guard reflectively reads ViaVersion's API when the\n# plugin is present. softdepend keeps Spigot's classloader from logging the one-time\n# \"loaded class ... which is not a depend/softdepend\" warning on the first handshake \u2014\n# noise that reads like an LSS bug. No hard dependency: without Via the probe is a\n# silent no-signal. LibsDisguises (issue #282): the far-player privacy ladder reads\n# DisguiseAPI reflectively to hide disguised players \u2014 same precedent (load ORDER +\n# classloader visibility, never a hard depend; absent = the rung is skipped).\nsoftdepend: [ViaVersion, LibsDisguises]\ndescription: Render distant Voxy LODs on servers\nauthor: Xantha, VoX\nwebsite: https://modrinth.com/plugin/voxy-server-side\ncommands:\n  vsslod:\n    description: Voxy Server Side admin commands\n    usage: /vsslod <stats|diag|store|set|help>\n    permission: vss.admin\npermissions:\n  vss.admin:\n    description: Access to VSS admin commands\n    default: op\n  # Far players (v0.11.0 E1): server-side privacy lever \u2014 holders are never served as\n  # far players regardless of the farPlayers mode (FARP \u00a73.2). BOTH brand spellings are\n  # declared (default false) and the enforcement honors either: Bukkit resolves an\n  # UNDECLARED node to the op default, so a single-brand declaration plus a cross-brand\n  # check would silently hide every op \u2014 and declaring both keeps the privacy grant\n  # working across an LSS<->VSS jar swap.\n  lss.farplayers.hidden:\n    description: Players with this permission are never shown as far players\n    default: false\n  vss.farplayers.hidden:\n    description: Players with this permission are never shown as far players (VSS spelling)\n    default: false\n  # Service gate (requireServicePermission, default false): with the config key on, only\n  # holders are served LOD data \u2014 a handshake from anyone else is answered with an\n  # enabled=false SessionConfig and no session. BOTH brand spellings are declared for the\n  # reason spelled out on lss.farplayers.hidden above (Bukkit resolves an UNDECLARED node to\n  # the op default, so a single-brand declaration plus a cross-brand check goes silently\n  # wrong, and declaring both keeps grants alive across an LSS<->VSS jar swap).\n  #\n  # `default: true`, NOT op: everyone holds these unless an admin says otherwise, so arming\n  # the gate on its own changes nothing for anybody \u2014 the original behavior, preserved. The\n  # gate is a DENY tool: the only thing that takes LOD away is an explicit negative grant in\n  # the permission plugin (e.g. LuckPerms `group default permission set lss.use false`).\n  #\n  # Enforcement requires BOTH spellings, so a negative grant on EITHER one denies \u2014 the De\n  # Morgan mirror of the privacy nodes above (grant model: hold EITHER; deny model: lose\n  # EITHER). An OR here would be inert: the spelling the admin did NOT touch still resolves\n  # to its declared `true` and would out-vote the single negative grant.\n  #\n  # That direction is also why losing either declaration is dangerous: an undeclared node\n  # falls back to Bukkit's op default, silently turning \"everyone\" into \"ops only\".\n  lss.use:\n    description: Receive LOD data when requireServicePermission is enabled\n    default: true\n  vss.use:\n    description: Receive LOD data when requireServicePermission is enabled (VSS spelling)\n    default: true\n",
+        "metadata": {
+          "name": "VoxyServerSide",
+          "version": "0.14.0",
+          "main": "dev.vox.lss.paper.LSSPaperPlugin",
+          "api-version": "1.21.1"
+        },
+        "mapping_namespace": "mojang",
+        "lss_class_majors": {
+          "65": 255
+        },
+        "lss_class_count": 255,
+        "wi2_registration_present": true,
+        "issues": []
+      },
+      {
+        "path": "/home/vox/projects/lss-lines/1.21.1/neoforge/build/libs/lod-server-support-neoforge-0.14.0+1.21.1.jar",
+        "filename": "lod-server-support-neoforge-0.14.0+1.21.1.jar",
+        "brand": "LSS",
+        "loader": "neoforge",
+        "size_bytes": 22663777,
+        "sha256": "528e0ac5e50b437c594539e4935b42ce71661b6c993065d0e3fbad4ea6bd767e",
+        "mtime_utc": "2026-09-08T20:56:56.254839+00:00",
+        "manifest": {
+          "Manifest-Version": "1.0",
+          "Multi-Release": "true"
+        },
+        "nested": [
+          {
+            "path": "META-INF/jarjar/sqlite-jdbc-3.49.1.0.jar",
+            "size_bytes": 14317659,
+            "sha256": "5c8609d2ca341deb8c6f71778974b5ba4995c7d32d7c7c89d9392a3e72c39291",
+            "class_count": 129,
+            "all_class_majors": {
+              "52": 125,
+              "53": 4
+            },
+            "lss_class_count": 0,
+            "native_count": 24
+          },
+          {
+            "path": "META-INF/jarjar/zstd-jni-1.5.7-3.jar",
+            "size_bytes": 7408362,
+            "sha256": "a38a4a97f1b43b878c91e0dd7f1e3d17f0e70beec71d95bacaf56a2f207624a3",
+            "class_count": 37,
+            "all_class_majors": {
+              "52": 36,
+              "53": 1
+            },
+            "lss_class_count": 0,
+            "native_count": 18
+          }
+        ],
+        "metadata": {
+          "modLoader": "javafml",
+          "loaderVersion": "[4,)",
+          "license": "MIT",
+          "issueTrackerURL": "https://github.com/VoX/lod-server-support/issues",
+          "mods": [
+            {
+              "modId": "lss",
+              "version": "0.14.0",
+              "displayName": "LOD Server Support",
+              "authors": "VoX",
+              "logoFile": "assets/lss/icon.png",
+              "description": "Voxy multiplayer support (unofficial). Enables players with Voxy to see fully rendered terrain out to hundreds of chunks on multiplayer servers without needing to explore the world first. Server-side works with any LSS/VSS client; the client half needs a community Voxy build for NeoForge."
+            }
+          ],
+          "mixins": [
+            {
+              "config": "lss.neoforge.mixins.json"
+            },
+            {
+              "config": "lss-sodium-legacy.mixins.json"
+            }
+          ],
+          "dependencies": {
+            "lss": [
+              {
+                "modId": "neoforge",
+                "type": "required",
+                "versionRange": "[21.1,)",
+                "ordering": "NONE",
+                "side": "BOTH"
+              },
+              {
+                "modId": "minecraft",
+                "type": "required",
+                "versionRange": "[1.21.1]",
+                "ordering": "NONE",
+                "side": "BOTH"
+              }
+            ]
+          },
+          "modproperties": {
+            "lss": {
+              "sodium:config_api_user": "dev.vox.lss.config.LSSConfigMenu"
+            }
+          }
+        },
+        "jarjar_metadata": {
+          "jars": [
+            {
+              "identifier": {
+                "group": "org.xerial",
+                "artifact": "sqlite-jdbc"
+              },
+              "version": {
+                "range": "[3.49.1.0,4.0.0.0)",
+                "artifactVersion": "3.49.1.0"
+              },
+              "path": "META-INF/jarjar/sqlite-jdbc-3.49.1.0.jar",
+              "isObfuscated": false
+            },
+            {
+              "identifier": {
+                "group": "com.github.luben",
+                "artifact": "zstd-jni"
+              },
+              "version": {
+                "range": "[1.5.7-3,2.0.0.0)",
+                "artifactVersion": "1.5.7-3"
+              },
+              "path": "META-INF/jarjar/zstd-jni-1.5.7-3.jar",
+              "isObfuscated": false
+            }
+          ]
+        },
+        "mapping_namespace": "Mojang-named (no Fabric mapping manifest contract)",
+        "forbidden_flat_native_entries": [],
+        "stock_maven_matches": [
+          {
+            "coordinate": "org.xerial:sqlite-jdbc:3.49.1.0",
+            "nested_path": "META-INF/jarjar/sqlite-jdbc-3.49.1.0.jar",
+            "nested_sha256": "5c8609d2ca341deb8c6f71778974b5ba4995c7d32d7c7c89d9392a3e72c39291",
+            "matched_stock_files": [
+              "/home/vox/.gradle/caches/modules-2/files-2.1/org.xerial/sqlite-jdbc/3.49.1.0/145d3a6819b86f3618728273329392269104c8c7/sqlite-jdbc-3.49.1.0.jar"
+            ],
+            "candidate_count": 1,
+            "byte_identical": true
+          },
+          {
+            "coordinate": "com.github.luben:zstd-jni:1.5.7-3",
+            "nested_path": "META-INF/jarjar/zstd-jni-1.5.7-3.jar",
+            "nested_sha256": "a38a4a97f1b43b878c91e0dd7f1e3d17f0e70beec71d95bacaf56a2f207624a3",
+            "matched_stock_files": [
+              "/home/vox/.gradle/caches/modules-2/files-2.1/com.github.luben/zstd-jni/1.5.7-3/dc55c256583fb810f9fe3ede271843b68132fb7c/zstd-jni-1.5.7-3.jar"
+            ],
+            "candidate_count": 1,
+            "byte_identical": true
+          }
+        ],
+        "lss_class_majors": {
+          "65": 440
+        },
+        "lss_class_count": 440,
+        "wi2_registration_present": true,
+        "wi3_delivery_present": true,
+        "receipt_cancellation_field_present": true,
+        "host_service_ready_hook_present": true,
+        "issues": []
+      },
+      {
+        "path": "/home/vox/projects/lss-lines/1.21.1/neoforge/build/libs/voxy-server-side-neoforge-0.14.0+1.21.1.jar",
+        "filename": "voxy-server-side-neoforge-0.14.0+1.21.1.jar",
+        "brand": "VSS",
+        "loader": "neoforge",
+        "size_bytes": 22669618,
+        "sha256": "6a51fb3692f47339484078b440efb8061734085ed08280c90dcb25a097d33253",
+        "mtime_utc": "2026-09-08T20:56:57.487821+00:00",
+        "manifest": {
+          "Manifest-Version": "1.0",
+          "Multi-Release": "true"
+        },
+        "nested": [
+          {
+            "path": "META-INF/jarjar/sqlite-jdbc-3.49.1.0.jar",
+            "size_bytes": 14317659,
+            "sha256": "5c8609d2ca341deb8c6f71778974b5ba4995c7d32d7c7c89d9392a3e72c39291",
+            "class_count": 129,
+            "all_class_majors": {
+              "52": 125,
+              "53": 4
+            },
+            "lss_class_count": 0,
+            "native_count": 24
+          },
+          {
+            "path": "META-INF/jarjar/zstd-jni-1.5.7-3.jar",
+            "size_bytes": 7408362,
+            "sha256": "a38a4a97f1b43b878c91e0dd7f1e3d17f0e70beec71d95bacaf56a2f207624a3",
+            "class_count": 37,
+            "all_class_majors": {
+              "52": 36,
+              "53": 1
+            },
+            "lss_class_count": 0,
+            "native_count": 18
+          }
+        ],
+        "metadata": {
+          "modLoader": "javafml",
+          "loaderVersion": "[4,)",
+          "license": "MIT",
+          "issueTrackerURL": "https://modrinth.com/plugin/voxy-server-side",
+          "mods": [
+            {
+              "modId": "lss",
+              "version": "0.14.0",
+              "displayName": "Voxy Server Side",
+              "authors": "Xantha, VoX",
+              "logoFile": "assets/lss/icon-vss.png",
+              "description": "Render distant Voxy LODs on servers. Server-side works with any LSS/VSS client; the client half needs a community Voxy build for NeoForge."
+            }
+          ],
+          "mixins": [
+            {
+              "config": "lss.neoforge.mixins.json"
+            },
+            {
+              "config": "lss-sodium-legacy.mixins.json"
+            }
+          ],
+          "dependencies": {
+            "lss": [
+              {
+                "modId": "neoforge",
+                "type": "required",
+                "versionRange": "[21.1,)",
+                "ordering": "NONE",
+                "side": "BOTH"
+              },
+              {
+                "modId": "minecraft",
+                "type": "required",
+                "versionRange": "[1.21.1]",
+                "ordering": "NONE",
+                "side": "BOTH"
+              }
+            ]
+          },
+          "modproperties": {
+            "lss": {
+              "sodium:config_api_user": "dev.vox.lss.config.LSSConfigMenu"
+            }
+          }
+        },
+        "jarjar_metadata": {
+          "jars": [
+            {
+              "identifier": {
+                "group": "org.xerial",
+                "artifact": "sqlite-jdbc"
+              },
+              "version": {
+                "range": "[3.49.1.0,4.0.0.0)",
+                "artifactVersion": "3.49.1.0"
+              },
+              "path": "META-INF/jarjar/sqlite-jdbc-3.49.1.0.jar",
+              "isObfuscated": false
+            },
+            {
+              "identifier": {
+                "group": "com.github.luben",
+                "artifact": "zstd-jni"
+              },
+              "version": {
+                "range": "[1.5.7-3,2.0.0.0)",
+                "artifactVersion": "1.5.7-3"
+              },
+              "path": "META-INF/jarjar/zstd-jni-1.5.7-3.jar",
+              "isObfuscated": false
+            }
+          ]
+        },
+        "mapping_namespace": "Mojang-named (no Fabric mapping manifest contract)",
+        "forbidden_flat_native_entries": [],
+        "stock_maven_matches": [
+          {
+            "coordinate": "org.xerial:sqlite-jdbc:3.49.1.0",
+            "nested_path": "META-INF/jarjar/sqlite-jdbc-3.49.1.0.jar",
+            "nested_sha256": "5c8609d2ca341deb8c6f71778974b5ba4995c7d32d7c7c89d9392a3e72c39291",
+            "matched_stock_files": [
+              "/home/vox/.gradle/caches/modules-2/files-2.1/org.xerial/sqlite-jdbc/3.49.1.0/145d3a6819b86f3618728273329392269104c8c7/sqlite-jdbc-3.49.1.0.jar"
+            ],
+            "candidate_count": 1,
+            "byte_identical": true
+          },
+          {
+            "coordinate": "com.github.luben:zstd-jni:1.5.7-3",
+            "nested_path": "META-INF/jarjar/zstd-jni-1.5.7-3.jar",
+            "nested_sha256": "a38a4a97f1b43b878c91e0dd7f1e3d17f0e70beec71d95bacaf56a2f207624a3",
+            "matched_stock_files": [
+              "/home/vox/.gradle/caches/modules-2/files-2.1/com.github.luben/zstd-jni/1.5.7-3/dc55c256583fb810f9fe3ede271843b68132fb7c/zstd-jni-1.5.7-3.jar"
+            ],
+            "candidate_count": 1,
+            "byte_identical": true
+          }
+        ],
+        "lss_class_majors": {
+          "65": 440
+        },
+        "lss_class_count": 440,
+        "wi2_registration_present": true,
+        "wi3_delivery_present": true,
+        "receipt_cancellation_field_present": true,
+        "host_service_ready_hook_present": true,
+        "issues": []
+      }
+    ],
+    "brand_pairs": [
+      {
+        "loader": "fabric",
+        "all_lss_class_bytes_identical": true,
+        "class_count": 448,
+        "different_classes": [],
+        "nested_common_paths": [
+          "META-INF/jars/common-0.14.0.jar"
+        ],
+        "nested_common_bytes_identical": true,
+        "all_nested_library_bytes_identical": true
+      },
+      {
+        "loader": "paper",
+        "all_lss_class_bytes_identical": true,
+        "class_count": 255,
+        "different_classes": [],
+        "nested_common_paths": [],
+        "nested_common_bytes_identical": null,
+        "all_nested_library_bytes_identical": true
+      },
+      {
+        "loader": "neoforge",
+        "all_lss_class_bytes_identical": true,
+        "class_count": 440,
+        "different_classes": [],
+        "nested_common_paths": [],
+        "nested_common_bytes_identical": null,
+        "all_nested_library_bytes_identical": true
+      }
+    ],
+    "issues": []
+  },
+  {
+    "line": "1.21.10",
+    "minecraft": "1.21.10",
+    "version": "0.14.0",
+    "inspection_utc": "2026-09-08T21:18:27.938582+00:00",
+    "head_at_inspection": "89ac90c1d4c1402353c3f178dbdd2174bf3d51c0",
+    "note": "HEAD records inspection context; exact jar hashes identify the built artifacts. No inference that later source/doc commits were compiled.",
+    "ship_neoforge": false,
+    "expected_java": 21,
+    "artifacts": [
+      {
+        "path": "/home/vox/projects/lss-lines/1.21.10/fabric/build/libs/lod-server-support-fabric-0.14.0+1.21.10.jar",
+        "filename": "lod-server-support-fabric-0.14.0+1.21.10.jar",
+        "brand": "LSS",
+        "loader": "fabric",
+        "size_bytes": 8203087,
+        "sha256": "7c2c9c2516f923c5e3838e7ce49bcd4942674f45fa43d33d7bffaec1963b0e46",
+        "mtime_utc": "2026-09-08T20:58:03.293309+00:00",
+        "manifest": {
+          "Manifest-Version": "1.0",
+          "Fabric-Jar-Type": "classes",
+          "Fabric-Loom-Mixin-Remap-Type": "static",
+          "Fabric-Gradle-Version": "9.5.1",
+          "Fabric-Loom-Version": "1.17.13",
+          "Fabric-Mixin-Compile-Extensions-Version": "0.6.0",
+          "Fabric-Minecraft-Version": "1.21.10",
+          "Fabric-Tiny-Remapper-Version": "0.14.0",
+          "Fabric-Loader-Version": "0.19.3",
+          "Fabric-Mixin-Version": "0.17.3+mixin.0.8.7",
+          "Fabric-Mixin-Group": "net.fabricmc",
+          "Fabric-Mapping-Namespace": "intermediary"
+        },
+        "nested": [
+          {
+            "path": "META-INF/jars/common-0.14.0.jar",
+            "size_bytes": 369560,
+            "sha256": "1b57d9385378521045a1c794cb45aa981c52c43fd5b596be8b3b382d2e78e0de",
+            "class_count": 179,
+            "all_class_majors": {
+              "65": 179
+            },
+            "lss_class_count": 179,
+            "native_count": 0
+          },
+          {
+            "path": "META-INF/jars/sqlite-jdbc-slim.jar",
+            "size_bytes": 4981674,
+            "sha256": "05e7266da40cd8e114ee59c862032f5a39058f5a2b18e9bbc35b59d46dd75028",
+            "class_count": 129,
+            "all_class_majors": {
+              "52": 125,
+              "53": 4
+            },
+            "lss_class_count": 0,
+            "native_count": 8
+          },
+          {
+            "path": "META-INF/jars/zstd-jni-slim.jar",
+            "size_bytes": 2263169,
+            "sha256": "5996b0ca8043763a55c7207feedba19d4aeeb99ea974f48250b810de401518ba",
+            "class_count": 37,
+            "all_class_majors": {
+              "52": 36,
+              "53": 1
+            },
+            "lss_class_count": 0,
+            "native_count": 6
+          }
+        ],
+        "metadata": {
+          "schemaVersion": 1,
+          "id": "lss",
+          "version": "0.14.0",
+          "name": "LOD Server Support",
+          "description": "Voxy multiplayer support (unofficial). Enables players with Voxy to see fully rendered terrain out to hundreds of chunks on multiplayer servers without needing to explore the world first.",
+          "authors": [
+            "VoX"
+          ],
+          "contact": {
+            "sources": "https://github.com/VoX/lod-server-support"
+          },
+          "license": "MIT",
+          "icon": "assets/lss/icon.png",
+          "accessWidener": "lss.accesswidener",
+          "environment": "*",
+          "entrypoints": {
+            "main": [
+              "dev.vox.lss.LSSMod"
+            ],
+            "client": [
+              "dev.vox.lss.LSSClient"
+            ],
+            "modmenu": [
+              "dev.vox.lss.config.LSSModMenuIntegration"
+            ]
+          },
+          "mixins": [
+            "lss.mixins.json",
+            "lss-trace.mixins.json",
+            "lss-sodium-legacy.mixins.json"
+          ],
+          "jars": [
+            {
+              "file": "META-INF/jars/sqlite-jdbc-slim.jar"
+            },
+            {
+              "file": "META-INF/jars/zstd-jni-slim.jar"
+            },
+            {
+              "file": "META-INF/jars/common-0.14.0.jar"
+            }
+          ],
+          "depends": {
+            "minecraft": "1.21.10",
+            "fabricloader": ">=0.18.4",
+            "fabric-api": ">=0.138.4"
+          },
+          "suggests": {
+            "voxy": ">=0.2.15-beta",
+            "sodium": "*",
+            "modmenu": "*",
+            "xaeroworldmap": "*"
+          }
+        },
+        "mapping_namespace": "intermediary",
+        "access_widener_header": "accessWidener\tv2\tintermediary",
+        "lss_class_majors": {
+          "65": 447
+        },
+        "lss_class_count": 447,
+        "wi2_registration_present": true,
+        "wi3_delivery_present": true,
+        "receipt_cancellation_field_present": true,
+        "host_service_ready_hook_present": true,
+        "issues": []
+      },
+      {
+        "path": "/home/vox/projects/lss-lines/1.21.10/fabric/build/libs/voxy-server-side-fabric-0.14.0+1.21.10.jar",
+        "filename": "voxy-server-side-fabric-0.14.0+1.21.10.jar",
+        "brand": "VSS",
+        "loader": "fabric",
+        "size_bytes": 8208999,
+        "sha256": "0450d352e1a4b345727f5420128528f72d9e9371d38c782fd0e2bde510608dd2",
+        "mtime_utc": "2026-09-08T21:00:56.355047+00:00",
+        "manifest": {
+          "Manifest-Version": "1.0",
+          "Fabric-Jar-Type": "classes",
+          "Fabric-Loom-Mixin-Remap-Type": "static",
+          "Fabric-Gradle-Version": "9.5.1",
+          "Fabric-Loom-Version": "1.17.13",
+          "Fabric-Mixin-Compile-Extensions-Version": "0.6.0",
+          "Fabric-Minecraft-Version": "1.21.10",
+          "Fabric-Tiny-Remapper-Version": "0.14.0",
+          "Fabric-Loader-Version": "0.19.3",
+          "Fabric-Mixin-Version": "0.17.3+mixin.0.8.7",
+          "Fabric-Mixin-Group": "net.fabricmc",
+          "Fabric-Mapping-Namespace": "intermediary"
+        },
+        "nested": [
+          {
+            "path": "META-INF/jars/common-0.14.0.jar",
+            "size_bytes": 369560,
+            "sha256": "1b57d9385378521045a1c794cb45aa981c52c43fd5b596be8b3b382d2e78e0de",
+            "class_count": 179,
+            "all_class_majors": {
+              "65": 179
+            },
+            "lss_class_count": 179,
+            "native_count": 0
+          },
+          {
+            "path": "META-INF/jars/sqlite-jdbc-slim.jar",
+            "size_bytes": 4981674,
+            "sha256": "05e7266da40cd8e114ee59c862032f5a39058f5a2b18e9bbc35b59d46dd75028",
+            "class_count": 129,
+            "all_class_majors": {
+              "52": 125,
+              "53": 4
+            },
+            "lss_class_count": 0,
+            "native_count": 8
+          },
+          {
+            "path": "META-INF/jars/zstd-jni-slim.jar",
+            "size_bytes": 2263169,
+            "sha256": "5996b0ca8043763a55c7207feedba19d4aeeb99ea974f48250b810de401518ba",
+            "class_count": 37,
+            "all_class_majors": {
+              "52": 36,
+              "53": 1
+            },
+            "lss_class_count": 0,
+            "native_count": 6
+          }
+        ],
+        "metadata": {
+          "schemaVersion": 1,
+          "id": "lss",
+          "version": "0.14.0",
+          "name": "Voxy Server Side",
+          "description": "Render distant Voxy LODs on servers",
+          "authors": [
+            "Xantha",
+            "VoX"
+          ],
+          "contact": {
+            "sources": "https://github.com/VoX/lod-server-support",
+            "homepage": "https://modrinth.com/plugin/voxy-server-side"
+          },
+          "license": "MIT",
+          "icon": "assets/lss/icon-vss.png",
+          "accessWidener": "lss.accesswidener",
+          "environment": "*",
+          "entrypoints": {
+            "main": [
+              "dev.vox.lss.LSSMod"
+            ],
+            "client": [
+              "dev.vox.lss.LSSClient"
+            ],
+            "modmenu": [
+              "dev.vox.lss.config.LSSModMenuIntegration"
+            ]
+          },
+          "mixins": [
+            "lss.mixins.json",
+            "lss-trace.mixins.json",
+            "lss-sodium-legacy.mixins.json"
+          ],
+          "jars": [
+            {
+              "file": "META-INF/jars/sqlite-jdbc-slim.jar"
+            },
+            {
+              "file": "META-INF/jars/zstd-jni-slim.jar"
+            },
+            {
+              "file": "META-INF/jars/common-0.14.0.jar"
+            }
+          ],
+          "depends": {
+            "minecraft": "1.21.10",
+            "fabricloader": ">=0.18.4",
+            "fabric-api": ">=0.138.4"
+          },
+          "suggests": {
+            "voxy": ">=0.2.15-beta",
+            "sodium": "*",
+            "modmenu": "*",
+            "xaeroworldmap": "*"
+          }
+        },
+        "mapping_namespace": "intermediary",
+        "access_widener_header": "accessWidener\tv2\tintermediary",
+        "lss_class_majors": {
+          "65": 447
+        },
+        "lss_class_count": 447,
+        "wi2_registration_present": true,
+        "wi3_delivery_present": true,
+        "receipt_cancellation_field_present": true,
+        "host_service_ready_hook_present": true,
+        "issues": []
+      },
+      {
+        "path": "/home/vox/projects/lss-lines/1.21.10/paper/build/libs/lod-server-support-paper-0.14.0+1.21.10.jar",
+        "filename": "lod-server-support-paper-0.14.0+1.21.10.jar",
+        "brand": "LSS",
+        "loader": "paper",
+        "size_bytes": 7791480,
+        "sha256": "2c7a3647c8632ba1c18d3430063d326bd4e052a77073a444e7f0fd53ac685a3d",
+        "mtime_utc": "2026-09-08T21:01:00.147914+00:00",
+        "manifest": {
+          "Manifest-Version": "1.0",
+          "paperweight-mappings-namespace": "mojang",
+          "Multi-Release": "true"
+        },
+        "nested": [],
+        "metadata_raw": "name: LodServerSupport\nversion: '0.14.0'\nmain: dev.vox.lss.paper.LSSPaperPlugin\napi-version: '1.21.10'\n# 1.21.10 support line: Folia publishes NO MC 1.21.10 build (its versions jump\n# 1.21.8 -> 1.21.11), so the flag is FALSE here \u2014 the R-7 direction-flip doctrine:\n# presence would advertise a platform nobody can run this MC version on, and the\n# frozen 1.21.8-era precedent carried the same absence shape. PluginYmlContractTest\n# + release_check.py pin the FALSE form (a true flag reappearing on this line is\n# the guarded regression). The Folia code paths still ship in the jar (single\n# plugin jar across lines); they simply have no loadable host at 1.21.10.\nfolia-supported: false\n# C5 (XVER \u00a77): the Via mismatch guard reflectively reads ViaVersion's API when the\n# plugin is present. softdepend keeps Spigot's classloader from logging the one-time\n# \"loaded class ... which is not a depend/softdepend\" warning on the first handshake \u2014\n# noise that reads like an LSS bug. No hard dependency: without Via the probe is a\n# silent no-signal. LibsDisguises (issue #282): the far-player privacy ladder reads\n# DisguiseAPI reflectively to hide disguised players \u2014 same precedent (load ORDER +\n# classloader visibility, never a hard depend; absent = the rung is skipped).\nsoftdepend: [ViaVersion, LibsDisguises]\ndescription: Voxy multiplayer support (unofficial). Enables players with Voxy to see fully rendered terrain out to hundreds of chunks on multiplayer servers without needing to explore the world first.\nauthor: VoX\nwebsite: https://modrinth.com/plugin/lod-server-support\ncommands:\n  lsslod:\n    description: LOD Server Support admin commands\n    usage: /lsslod <stats|diag|store|set|help>\n    permission: lss.admin\npermissions:\n  lss.admin:\n    description: Access to LSS admin commands\n    default: op\n  # Far players (v0.11.0 E1): server-side privacy lever \u2014 holders are never served as\n  # far players regardless of the farPlayers mode (FARP \u00a73.2). BOTH brand spellings are\n  # declared (default false) and the enforcement honors either: Bukkit resolves an\n  # UNDECLARED node to the op default, so a single-brand declaration plus a cross-brand\n  # check would silently hide every op \u2014 and declaring both keeps the privacy grant\n  # working across an LSS<->VSS jar swap.\n  lss.farplayers.hidden:\n    description: Players with this permission are never shown as far players\n    default: false\n  vss.farplayers.hidden:\n    description: Players with this permission are never shown as far players (VSS spelling)\n    default: false\n  # Service gate (requireServicePermission, default false): with the config key on, only\n  # holders are served LOD data \u2014 a handshake from anyone else is answered with an\n  # enabled=false SessionConfig and no session. BOTH brand spellings are declared for the\n  # reason spelled out on lss.farplayers.hidden above (Bukkit resolves an UNDECLARED node to\n  # the op default, so a single-brand declaration plus a cross-brand check goes silently\n  # wrong, and declaring both keeps grants alive across an LSS<->VSS jar swap).\n  #\n  # `default: true`, NOT op: everyone holds these unless an admin says otherwise, so arming\n  # the gate on its own changes nothing for anybody \u2014 the original behavior, preserved. The\n  # gate is a DENY tool: the only thing that takes LOD away is an explicit negative grant in\n  # the permission plugin (e.g. LuckPerms `group default permission set lss.use false`).\n  #\n  # Enforcement requires BOTH spellings, so a negative grant on EITHER one denies \u2014 the De\n  # Morgan mirror of the privacy nodes above (grant model: hold EITHER; deny model: lose\n  # EITHER). An OR here would be inert: the spelling the admin did NOT touch still resolves\n  # to its declared `true` and would out-vote the single negative grant.\n  #\n  # That direction is also why losing either declaration is dangerous: an undeclared node\n  # falls back to Bukkit's op default, silently turning \"everyone\" into \"ops only\".\n  lss.use:\n    description: Receive LOD data when requireServicePermission is enabled\n    default: true\n  vss.use:\n    description: Receive LOD data when requireServicePermission is enabled (VSS spelling)\n    default: true\n",
+        "metadata": {
+          "name": "LodServerSupport",
+          "version": "0.14.0",
+          "main": "dev.vox.lss.paper.LSSPaperPlugin",
+          "api-version": "1.21.10",
+          "folia-supported": "false"
+        },
+        "mapping_namespace": "mojang",
+        "lss_class_majors": {
+          "65": 255
+        },
+        "lss_class_count": 255,
+        "wi2_registration_present": true,
+        "issues": []
+      },
+      {
+        "path": "/home/vox/projects/lss-lines/1.21.10/paper/build/libs/voxy-server-side-paper-0.14.0+1.21.10.jar",
+        "filename": "voxy-server-side-paper-0.14.0+1.21.10.jar",
+        "brand": "VSS",
+        "loader": "paper",
+        "size_bytes": 7791419,
+        "sha256": "4a85b874c4525a73b69eb983fbc5a1acc6094570c7b71389d070b9d3b77cd618",
+        "mtime_utc": "2026-09-08T21:01:00.968863+00:00",
+        "manifest": {
+          "Manifest-Version": "1.0",
+          "paperweight-mappings-namespace": "mojang",
+          "Multi-Release": "true"
+        },
+        "nested": [],
+        "metadata_raw": "name: VoxyServerSide\nversion: '0.14.0'\nmain: dev.vox.lss.paper.LSSPaperPlugin\napi-version: '1.21.10'\n# 1.21.10 support line: Folia publishes NO MC 1.21.10 build (its versions jump\n# 1.21.8 -> 1.21.11), so the flag is FALSE here \u2014 the R-7 direction-flip doctrine:\n# presence would advertise a platform nobody can run this MC version on, and the\n# frozen 1.21.8-era precedent carried the same absence shape. PluginYmlContractTest\n# + release_check.py pin the FALSE form (a true flag reappearing on this line is\n# the guarded regression). The Folia code paths still ship in the jar (single\n# plugin jar across lines); they simply have no loadable host at 1.21.10.\nfolia-supported: false\n# C5 (XVER \u00a77): the Via mismatch guard reflectively reads ViaVersion's API when the\n# plugin is present. softdepend keeps Spigot's classloader from logging the one-time\n# \"loaded class ... which is not a depend/softdepend\" warning on the first handshake \u2014\n# noise that reads like an LSS bug. No hard dependency: without Via the probe is a\n# silent no-signal. LibsDisguises (issue #282): the far-player privacy ladder reads\n# DisguiseAPI reflectively to hide disguised players \u2014 same precedent (load ORDER +\n# classloader visibility, never a hard depend; absent = the rung is skipped).\nsoftdepend: [ViaVersion, LibsDisguises]\ndescription: Render distant Voxy LODs on servers\nauthor: Xantha, VoX\nwebsite: https://modrinth.com/plugin/voxy-server-side\ncommands:\n  vsslod:\n    description: Voxy Server Side admin commands\n    usage: /vsslod <stats|diag|store|set|help>\n    permission: vss.admin\npermissions:\n  vss.admin:\n    description: Access to VSS admin commands\n    default: op\n  # Far players (v0.11.0 E1): server-side privacy lever \u2014 holders are never served as\n  # far players regardless of the farPlayers mode (FARP \u00a73.2). BOTH brand spellings are\n  # declared (default false) and the enforcement honors either: Bukkit resolves an\n  # UNDECLARED node to the op default, so a single-brand declaration plus a cross-brand\n  # check would silently hide every op \u2014 and declaring both keeps the privacy grant\n  # working across an LSS<->VSS jar swap.\n  lss.farplayers.hidden:\n    description: Players with this permission are never shown as far players\n    default: false\n  vss.farplayers.hidden:\n    description: Players with this permission are never shown as far players (VSS spelling)\n    default: false\n  # Service gate (requireServicePermission, default false): with the config key on, only\n  # holders are served LOD data \u2014 a handshake from anyone else is answered with an\n  # enabled=false SessionConfig and no session. BOTH brand spellings are declared for the\n  # reason spelled out on lss.farplayers.hidden above (Bukkit resolves an UNDECLARED node to\n  # the op default, so a single-brand declaration plus a cross-brand check goes silently\n  # wrong, and declaring both keeps grants alive across an LSS<->VSS jar swap).\n  #\n  # `default: true`, NOT op: everyone holds these unless an admin says otherwise, so arming\n  # the gate on its own changes nothing for anybody \u2014 the original behavior, preserved. The\n  # gate is a DENY tool: the only thing that takes LOD away is an explicit negative grant in\n  # the permission plugin (e.g. LuckPerms `group default permission set lss.use false`).\n  #\n  # Enforcement requires BOTH spellings, so a negative grant on EITHER one denies \u2014 the De\n  # Morgan mirror of the privacy nodes above (grant model: hold EITHER; deny model: lose\n  # EITHER). An OR here would be inert: the spelling the admin did NOT touch still resolves\n  # to its declared `true` and would out-vote the single negative grant.\n  #\n  # That direction is also why losing either declaration is dangerous: an undeclared node\n  # falls back to Bukkit's op default, silently turning \"everyone\" into \"ops only\".\n  lss.use:\n    description: Receive LOD data when requireServicePermission is enabled\n    default: true\n  vss.use:\n    description: Receive LOD data when requireServicePermission is enabled (VSS spelling)\n    default: true\n",
+        "metadata": {
+          "name": "VoxyServerSide",
+          "version": "0.14.0",
+          "main": "dev.vox.lss.paper.LSSPaperPlugin",
+          "api-version": "1.21.10",
+          "folia-supported": "false"
+        },
+        "mapping_namespace": "mojang",
+        "lss_class_majors": {
+          "65": 255
+        },
+        "lss_class_count": 255,
+        "wi2_registration_present": true,
+        "issues": []
+      },
+      {
+        "path": "/home/vox/projects/lss-lines/1.21.10/neoforge/build/libs/lod-server-support-neoforge-0.14.0+1.21.10.jar",
+        "filename": "lod-server-support-neoforge-0.14.0+1.21.10.jar",
+        "brand": "LSS",
+        "loader": "neoforge",
+        "size_bytes": 22630422,
+        "sha256": "3a100124e05ae000c2e984c59687edb8bf75ea422252f8479e70a535352054e4",
+        "mtime_utc": "2026-09-08T21:01:14.398117+00:00",
+        "manifest": {
+          "Manifest-Version": "1.0",
+          "Multi-Release": "true"
+        },
+        "nested": [
+          {
+            "path": "META-INF/jarjar/sqlite-jdbc-3.49.1.0.jar",
+            "size_bytes": 14317659,
+            "sha256": "5c8609d2ca341deb8c6f71778974b5ba4995c7d32d7c7c89d9392a3e72c39291",
+            "class_count": 129,
+            "all_class_majors": {
+              "52": 125,
+              "53": 4
+            },
+            "lss_class_count": 0,
+            "native_count": 24
+          },
+          {
+            "path": "META-INF/jarjar/zstd-jni-1.5.7-3.jar",
+            "size_bytes": 7408362,
+            "sha256": "a38a4a97f1b43b878c91e0dd7f1e3d17f0e70beec71d95bacaf56a2f207624a3",
+            "class_count": 37,
+            "all_class_majors": {
+              "52": 36,
+              "53": 1
+            },
+            "lss_class_count": 0,
+            "native_count": 18
+          }
+        ],
+        "metadata": {
+          "modLoader": "javafml",
+          "loaderVersion": "[4,)",
+          "license": "MIT",
+          "issueTrackerURL": "https://github.com/VoX/lod-server-support/issues",
+          "mods": [
+            {
+              "modId": "lss",
+              "version": "0.14.0",
+              "displayName": "LOD Server Support",
+              "authors": "VoX",
+              "logoFile": "assets/lss/icon.png",
+              "description": "Voxy multiplayer support (unofficial). Enables players with Voxy to see fully rendered terrain out to hundreds of chunks on multiplayer servers without needing to explore the world first. Server-side works with any LSS/VSS client; the client half needs a community Voxy build for NeoForge."
+            }
+          ],
+          "mixins": [
+            {
+              "config": "lss.neoforge.mixins.json"
+            },
+            {
+              "config": "lss-sodium-legacy.mixins.json"
+            }
+          ],
+          "dependencies": {
+            "lss": [
+              {
+                "modId": "neoforge",
+                "type": "required",
+                "versionRange": "[21.10,)",
+                "ordering": "NONE",
+                "side": "BOTH"
+              },
+              {
+                "modId": "minecraft",
+                "type": "required",
+                "versionRange": "[1.21.10]",
+                "ordering": "NONE",
+                "side": "BOTH"
+              }
+            ]
+          }
+        },
+        "jarjar_metadata": {
+          "jars": [
+            {
+              "identifier": {
+                "group": "org.xerial",
+                "artifact": "sqlite-jdbc"
+              },
+              "version": {
+                "range": "[3.49.1.0,4.0.0.0)",
+                "artifactVersion": "3.49.1.0"
+              },
+              "path": "META-INF/jarjar/sqlite-jdbc-3.49.1.0.jar",
+              "isObfuscated": false
+            },
+            {
+              "identifier": {
+                "group": "com.github.luben",
+                "artifact": "zstd-jni"
+              },
+              "version": {
+                "range": "[1.5.7-3,2.0.0.0)",
+                "artifactVersion": "1.5.7-3"
+              },
+              "path": "META-INF/jarjar/zstd-jni-1.5.7-3.jar",
+              "isObfuscated": false
+            }
+          ]
+        },
+        "mapping_namespace": "Mojang-named (no Fabric mapping manifest contract)",
+        "forbidden_flat_native_entries": [],
+        "stock_maven_matches": [
+          {
+            "coordinate": "org.xerial:sqlite-jdbc:3.49.1.0",
+            "nested_path": "META-INF/jarjar/sqlite-jdbc-3.49.1.0.jar",
+            "nested_sha256": "5c8609d2ca341deb8c6f71778974b5ba4995c7d32d7c7c89d9392a3e72c39291",
+            "matched_stock_files": [
+              "/home/vox/.gradle/caches/modules-2/files-2.1/org.xerial/sqlite-jdbc/3.49.1.0/145d3a6819b86f3618728273329392269104c8c7/sqlite-jdbc-3.49.1.0.jar"
+            ],
+            "candidate_count": 1,
+            "byte_identical": true
+          },
+          {
+            "coordinate": "com.github.luben:zstd-jni:1.5.7-3",
+            "nested_path": "META-INF/jarjar/zstd-jni-1.5.7-3.jar",
+            "nested_sha256": "a38a4a97f1b43b878c91e0dd7f1e3d17f0e70beec71d95bacaf56a2f207624a3",
+            "matched_stock_files": [
+              "/home/vox/.gradle/caches/modules-2/files-2.1/com.github.luben/zstd-jni/1.5.7-3/dc55c256583fb810f9fe3ede271843b68132fb7c/zstd-jni-1.5.7-3.jar"
+            ],
+            "candidate_count": 1,
+            "byte_identical": true
+          }
+        ],
+        "lss_class_majors": {
+          "65": 434
+        },
+        "lss_class_count": 434,
+        "wi2_registration_present": true,
+        "wi3_delivery_present": true,
+        "receipt_cancellation_field_present": true,
+        "host_service_ready_hook_present": true,
+        "issues": []
+      },
+      {
+        "path": "/home/vox/projects/lss-lines/1.21.10/neoforge/build/libs/voxy-server-side-neoforge-0.14.0+1.21.10.jar",
+        "filename": "voxy-server-side-neoforge-0.14.0+1.21.10.jar",
+        "brand": "VSS",
+        "loader": "neoforge",
+        "size_bytes": 22636266,
+        "sha256": "061267c76bc576663daa1699110567fb9287c2e6b4fa56e35121fcd2aa1110d9",
+        "mtime_utc": "2026-09-08T21:01:15.633018+00:00",
+        "manifest": {
+          "Manifest-Version": "1.0",
+          "Multi-Release": "true"
+        },
+        "nested": [
+          {
+            "path": "META-INF/jarjar/sqlite-jdbc-3.49.1.0.jar",
+            "size_bytes": 14317659,
+            "sha256": "5c8609d2ca341deb8c6f71778974b5ba4995c7d32d7c7c89d9392a3e72c39291",
+            "class_count": 129,
+            "all_class_majors": {
+              "52": 125,
+              "53": 4
+            },
+            "lss_class_count": 0,
+            "native_count": 24
+          },
+          {
+            "path": "META-INF/jarjar/zstd-jni-1.5.7-3.jar",
+            "size_bytes": 7408362,
+            "sha256": "a38a4a97f1b43b878c91e0dd7f1e3d17f0e70beec71d95bacaf56a2f207624a3",
+            "class_count": 37,
+            "all_class_majors": {
+              "52": 36,
+              "53": 1
+            },
+            "lss_class_count": 0,
+            "native_count": 18
+          }
+        ],
+        "metadata": {
+          "modLoader": "javafml",
+          "loaderVersion": "[4,)",
+          "license": "MIT",
+          "issueTrackerURL": "https://modrinth.com/plugin/voxy-server-side",
+          "mods": [
+            {
+              "modId": "lss",
+              "version": "0.14.0",
+              "displayName": "Voxy Server Side",
+              "authors": "Xantha, VoX",
+              "logoFile": "assets/lss/icon-vss.png",
+              "description": "Render distant Voxy LODs on servers. Server-side works with any LSS/VSS client; the client half needs a community Voxy build for NeoForge."
+            }
+          ],
+          "mixins": [
+            {
+              "config": "lss.neoforge.mixins.json"
+            },
+            {
+              "config": "lss-sodium-legacy.mixins.json"
+            }
+          ],
+          "dependencies": {
+            "lss": [
+              {
+                "modId": "neoforge",
+                "type": "required",
+                "versionRange": "[21.10,)",
+                "ordering": "NONE",
+                "side": "BOTH"
+              },
+              {
+                "modId": "minecraft",
+                "type": "required",
+                "versionRange": "[1.21.10]",
+                "ordering": "NONE",
+                "side": "BOTH"
+              }
+            ]
+          }
+        },
+        "jarjar_metadata": {
+          "jars": [
+            {
+              "identifier": {
+                "group": "org.xerial",
+                "artifact": "sqlite-jdbc"
+              },
+              "version": {
+                "range": "[3.49.1.0,4.0.0.0)",
+                "artifactVersion": "3.49.1.0"
+              },
+              "path": "META-INF/jarjar/sqlite-jdbc-3.49.1.0.jar",
+              "isObfuscated": false
+            },
+            {
+              "identifier": {
+                "group": "com.github.luben",
+                "artifact": "zstd-jni"
+              },
+              "version": {
+                "range": "[1.5.7-3,2.0.0.0)",
+                "artifactVersion": "1.5.7-3"
+              },
+              "path": "META-INF/jarjar/zstd-jni-1.5.7-3.jar",
+              "isObfuscated": false
+            }
+          ]
+        },
+        "mapping_namespace": "Mojang-named (no Fabric mapping manifest contract)",
+        "forbidden_flat_native_entries": [],
+        "stock_maven_matches": [
+          {
+            "coordinate": "org.xerial:sqlite-jdbc:3.49.1.0",
+            "nested_path": "META-INF/jarjar/sqlite-jdbc-3.49.1.0.jar",
+            "nested_sha256": "5c8609d2ca341deb8c6f71778974b5ba4995c7d32d7c7c89d9392a3e72c39291",
+            "matched_stock_files": [
+              "/home/vox/.gradle/caches/modules-2/files-2.1/org.xerial/sqlite-jdbc/3.49.1.0/145d3a6819b86f3618728273329392269104c8c7/sqlite-jdbc-3.49.1.0.jar"
+            ],
+            "candidate_count": 1,
+            "byte_identical": true
+          },
+          {
+            "coordinate": "com.github.luben:zstd-jni:1.5.7-3",
+            "nested_path": "META-INF/jarjar/zstd-jni-1.5.7-3.jar",
+            "nested_sha256": "a38a4a97f1b43b878c91e0dd7f1e3d17f0e70beec71d95bacaf56a2f207624a3",
+            "matched_stock_files": [
+              "/home/vox/.gradle/caches/modules-2/files-2.1/com.github.luben/zstd-jni/1.5.7-3/dc55c256583fb810f9fe3ede271843b68132fb7c/zstd-jni-1.5.7-3.jar"
+            ],
+            "candidate_count": 1,
+            "byte_identical": true
+          }
+        ],
+        "lss_class_majors": {
+          "65": 434
+        },
+        "lss_class_count": 434,
+        "wi2_registration_present": true,
+        "wi3_delivery_present": true,
+        "receipt_cancellation_field_present": true,
+        "host_service_ready_hook_present": true,
+        "issues": []
+      }
+    ],
+    "brand_pairs": [
+      {
+        "loader": "fabric",
+        "all_lss_class_bytes_identical": true,
+        "class_count": 447,
+        "different_classes": [],
+        "nested_common_paths": [
+          "META-INF/jars/common-0.14.0.jar"
+        ],
+        "nested_common_bytes_identical": true,
+        "all_nested_library_bytes_identical": true
+      },
+      {
+        "loader": "paper",
+        "all_lss_class_bytes_identical": true,
+        "class_count": 255,
+        "different_classes": [],
+        "nested_common_paths": [],
+        "nested_common_bytes_identical": null,
+        "all_nested_library_bytes_identical": true
+      },
+      {
+        "loader": "neoforge",
+        "all_lss_class_bytes_identical": true,
+        "class_count": 434,
+        "different_classes": [],
+        "nested_common_paths": [],
+        "nested_common_bytes_identical": null,
+        "all_nested_library_bytes_identical": true
+      }
+    ],
+    "issues": []
+  },
+  {
+    "line": "1.21.11",
+    "minecraft": "1.21.11",
+    "version": "0.14.0",
+    "inspection_utc": "2026-09-08T21:18:28.331807+00:00",
+    "head_at_inspection": "c64f67b8dd82d4fa6dfd195513cc471a8243603c",
+    "note": "HEAD records inspection context; exact jar hashes identify the built artifacts. No inference that later source/doc commits were compiled.",
+    "ship_neoforge": false,
+    "expected_java": 21,
+    "artifacts": [
+      {
+        "path": "/home/vox/projects/lss-lines/1.21.11/fabric/build/libs/lod-server-support-fabric-0.14.0+1.21.11.jar",
+        "filename": "lod-server-support-fabric-0.14.0+1.21.11.jar",
+        "brand": "LSS",
+        "loader": "fabric",
+        "size_bytes": 8209011,
+        "sha256": "262c559b17e56bdaef9ce430c3b20666e65dc389a06059aa7d66d469effef2b0",
+        "mtime_utc": "2026-09-08T21:03:25.686004+00:00",
+        "manifest": {
+          "Manifest-Version": "1.0",
+          "Fabric-Jar-Type": "classes",
+          "Fabric-Loom-Mixin-Remap-Type": "static",
+          "Fabric-Gradle-Version": "9.5.1",
+          "Fabric-Loom-Version": "1.17.13",
+          "Fabric-Mixin-Compile-Extensions-Version": "0.6.0",
+          "Fabric-Minecraft-Version": "1.21.11",
+          "Fabric-Tiny-Remapper-Version": "0.14.0",
+          "Fabric-Loader-Version": "0.19.3",
+          "Fabric-Mixin-Version": "0.17.3+mixin.0.8.7",
+          "Fabric-Mixin-Group": "net.fabricmc",
+          "Fabric-Mapping-Namespace": "intermediary"
+        },
+        "nested": [
+          {
+            "path": "META-INF/jars/common-0.14.0.jar",
+            "size_bytes": 369560,
+            "sha256": "1b57d9385378521045a1c794cb45aa981c52c43fd5b596be8b3b382d2e78e0de",
+            "class_count": 179,
+            "all_class_majors": {
+              "65": 179
+            },
+            "lss_class_count": 179,
+            "native_count": 0
+          },
+          {
+            "path": "META-INF/jars/sqlite-jdbc-slim.jar",
+            "size_bytes": 4981674,
+            "sha256": "879d378ab20e796033c18770575b7ac84cb66a6906ce8a551ffdcddced15b542",
+            "class_count": 129,
+            "all_class_majors": {
+              "52": 125,
+              "53": 4
+            },
+            "lss_class_count": 0,
+            "native_count": 8
+          },
+          {
+            "path": "META-INF/jars/zstd-jni-slim.jar",
+            "size_bytes": 2263169,
+            "sha256": "c123426e5bcd3dfd211f2f0becbfc3e772a428e709b9fa97ad1d206ac695a9e7",
+            "class_count": 37,
+            "all_class_majors": {
+              "52": 36,
+              "53": 1
+            },
+            "lss_class_count": 0,
+            "native_count": 6
+          }
+        ],
+        "metadata": {
+          "schemaVersion": 1,
+          "id": "lss",
+          "version": "0.14.0",
+          "name": "LOD Server Support",
+          "description": "Voxy multiplayer support (unofficial). Enables players with Voxy to see fully rendered terrain out to hundreds of chunks on multiplayer servers without needing to explore the world first.",
+          "authors": [
+            "VoX"
+          ],
+          "contact": {
+            "sources": "https://github.com/VoX/lod-server-support"
+          },
+          "license": "MIT",
+          "icon": "assets/lss/icon.png",
+          "accessWidener": "lss.accesswidener",
+          "environment": "*",
+          "entrypoints": {
+            "main": [
+              "dev.vox.lss.LSSMod"
+            ],
+            "client": [
+              "dev.vox.lss.LSSClient"
+            ],
+            "sodium:config_api_user": [
+              "dev.vox.lss.config.LSSConfigMenu"
+            ],
+            "modmenu": [
+              "dev.vox.lss.config.LSSModMenuIntegration"
+            ]
+          },
+          "mixins": [
+            "lss.mixins.json",
+            "lss-trace.mixins.json",
+            "lss-sodium-legacy.mixins.json"
+          ],
+          "jars": [
+            {
+              "file": "META-INF/jars/sqlite-jdbc-slim.jar"
+            },
+            {
+              "file": "META-INF/jars/zstd-jni-slim.jar"
+            },
+            {
+              "file": "META-INF/jars/common-0.14.0.jar"
+            }
+          ],
+          "depends": {
+            "minecraft": "1.21.11",
+            "fabricloader": ">=0.18.4",
+            "fabric-api": ">=0.141.0"
+          },
+          "suggests": {
+            "sodium": ">=0.8.12",
+            "modmenu": "*",
+            "voxy": ">=0.2.15-beta",
+            "xaeroworldmap": "*"
+          }
+        },
+        "mapping_namespace": "intermediary",
+        "access_widener_header": "accessWidener\tv2\tintermediary",
+        "lss_class_majors": {
+          "65": 448
+        },
+        "lss_class_count": 448,
+        "wi2_registration_present": true,
+        "wi3_delivery_present": true,
+        "receipt_cancellation_field_present": true,
+        "host_service_ready_hook_present": true,
+        "issues": []
+      },
+      {
+        "path": "/home/vox/projects/lss-lines/1.21.11/fabric/build/libs/voxy-server-side-fabric-0.14.0+1.21.11.jar",
+        "filename": "voxy-server-side-fabric-0.14.0+1.21.11.jar",
+        "brand": "VSS",
+        "loader": "fabric",
+        "size_bytes": 8214924,
+        "sha256": "a47afb700902a7283ad89a5363f276a8d37425b5c099cd587a91795178949a36",
+        "mtime_utc": "2026-09-08T21:06:20.451850+00:00",
+        "manifest": {
+          "Manifest-Version": "1.0",
+          "Fabric-Jar-Type": "classes",
+          "Fabric-Loom-Mixin-Remap-Type": "static",
+          "Fabric-Gradle-Version": "9.5.1",
+          "Fabric-Loom-Version": "1.17.13",
+          "Fabric-Mixin-Compile-Extensions-Version": "0.6.0",
+          "Fabric-Minecraft-Version": "1.21.11",
+          "Fabric-Tiny-Remapper-Version": "0.14.0",
+          "Fabric-Loader-Version": "0.19.3",
+          "Fabric-Mixin-Version": "0.17.3+mixin.0.8.7",
+          "Fabric-Mixin-Group": "net.fabricmc",
+          "Fabric-Mapping-Namespace": "intermediary"
+        },
+        "nested": [
+          {
+            "path": "META-INF/jars/common-0.14.0.jar",
+            "size_bytes": 369560,
+            "sha256": "1b57d9385378521045a1c794cb45aa981c52c43fd5b596be8b3b382d2e78e0de",
+            "class_count": 179,
+            "all_class_majors": {
+              "65": 179
+            },
+            "lss_class_count": 179,
+            "native_count": 0
+          },
+          {
+            "path": "META-INF/jars/sqlite-jdbc-slim.jar",
+            "size_bytes": 4981674,
+            "sha256": "879d378ab20e796033c18770575b7ac84cb66a6906ce8a551ffdcddced15b542",
+            "class_count": 129,
+            "all_class_majors": {
+              "52": 125,
+              "53": 4
+            },
+            "lss_class_count": 0,
+            "native_count": 8
+          },
+          {
+            "path": "META-INF/jars/zstd-jni-slim.jar",
+            "size_bytes": 2263169,
+            "sha256": "c123426e5bcd3dfd211f2f0becbfc3e772a428e709b9fa97ad1d206ac695a9e7",
+            "class_count": 37,
+            "all_class_majors": {
+              "52": 36,
+              "53": 1
+            },
+            "lss_class_count": 0,
+            "native_count": 6
+          }
+        ],
+        "metadata": {
+          "schemaVersion": 1,
+          "id": "lss",
+          "version": "0.14.0",
+          "name": "Voxy Server Side",
+          "description": "Render distant Voxy LODs on servers",
+          "authors": [
+            "Xantha",
+            "VoX"
+          ],
+          "contact": {
+            "sources": "https://github.com/VoX/lod-server-support",
+            "homepage": "https://modrinth.com/plugin/voxy-server-side"
+          },
+          "license": "MIT",
+          "icon": "assets/lss/icon-vss.png",
+          "accessWidener": "lss.accesswidener",
+          "environment": "*",
+          "entrypoints": {
+            "main": [
+              "dev.vox.lss.LSSMod"
+            ],
+            "client": [
+              "dev.vox.lss.LSSClient"
+            ],
+            "sodium:config_api_user": [
+              "dev.vox.lss.config.LSSConfigMenu"
+            ],
+            "modmenu": [
+              "dev.vox.lss.config.LSSModMenuIntegration"
+            ]
+          },
+          "mixins": [
+            "lss.mixins.json",
+            "lss-trace.mixins.json",
+            "lss-sodium-legacy.mixins.json"
+          ],
+          "jars": [
+            {
+              "file": "META-INF/jars/sqlite-jdbc-slim.jar"
+            },
+            {
+              "file": "META-INF/jars/zstd-jni-slim.jar"
+            },
+            {
+              "file": "META-INF/jars/common-0.14.0.jar"
+            }
+          ],
+          "depends": {
+            "minecraft": "1.21.11",
+            "fabricloader": ">=0.18.4",
+            "fabric-api": ">=0.141.0"
+          },
+          "suggests": {
+            "sodium": ">=0.8.12",
+            "modmenu": "*",
+            "voxy": ">=0.2.15-beta",
+            "xaeroworldmap": "*"
+          }
+        },
+        "mapping_namespace": "intermediary",
+        "access_widener_header": "accessWidener\tv2\tintermediary",
+        "lss_class_majors": {
+          "65": 448
+        },
+        "lss_class_count": 448,
+        "wi2_registration_present": true,
+        "wi3_delivery_present": true,
+        "receipt_cancellation_field_present": true,
+        "host_service_ready_hook_present": true,
+        "issues": []
+      },
+      {
+        "path": "/home/vox/projects/lss-lines/1.21.11/paper/build/libs/lod-server-support-paper-0.14.0+1.21.11.jar",
+        "filename": "lod-server-support-paper-0.14.0+1.21.11.jar",
+        "brand": "LSS",
+        "loader": "paper",
+        "size_bytes": 7791410,
+        "sha256": "1efe3d18a29b97ab7581bc99b4da9604731c61e83e7edb5433821833f79a09c4",
+        "mtime_utc": "2026-09-08T21:06:22.823717+00:00",
+        "manifest": {
+          "Manifest-Version": "1.0",
+          "paperweight-mappings-namespace": "mojang",
+          "Multi-Release": "true"
+        },
+        "nested": [],
+        "metadata_raw": "name: LodServerSupport\nversion: '0.14.0'\nmain: dev.vox.lss.paper.LSSPaperPlugin\napi-version: '1.21.11'\n# 1.21.11 support line: Folia publishes real 1.21.11 builds, so the flag is correct HERE \u2014\n# the guarded failure is a jar that silently stops loading on Folia (PluginYmlContractTest +\n# release_check.py pin its PRESENCE). Folia support remains EXPERIMENTAL on every line \u2014\n# single-player soak validated; concurrent multi-region ingress untested.\nfolia-supported: true\n# C5 (XVER \u00a77): the Via mismatch guard reflectively reads ViaVersion's API when the\n# plugin is present. softdepend keeps Spigot's classloader from logging the one-time\n# \"loaded class ... which is not a depend/softdepend\" warning on the first handshake \u2014\n# noise that reads like an LSS bug. No hard dependency: without Via the probe is a\n# silent no-signal. LibsDisguises (issue #282): the far-player privacy ladder reads\n# DisguiseAPI reflectively to hide disguised players \u2014 same precedent (load ORDER +\n# classloader visibility, never a hard depend; absent = the rung is skipped).\nsoftdepend: [ViaVersion, LibsDisguises]\ndescription: Voxy multiplayer support (unofficial). Enables players with Voxy to see fully rendered terrain out to hundreds of chunks on multiplayer servers without needing to explore the world first.\nauthor: VoX\nwebsite: https://modrinth.com/plugin/lod-server-support\ncommands:\n  lsslod:\n    description: LOD Server Support admin commands\n    usage: /lsslod <stats|diag|store|set|help>\n    permission: lss.admin\npermissions:\n  lss.admin:\n    description: Access to LSS admin commands\n    default: op\n  # Far players (v0.11.0 E1): server-side privacy lever \u2014 holders are never served as\n  # far players regardless of the farPlayers mode (FARP \u00a73.2). BOTH brand spellings are\n  # declared (default false) and the enforcement honors either: Bukkit resolves an\n  # UNDECLARED node to the op default, so a single-brand declaration plus a cross-brand\n  # check would silently hide every op \u2014 and declaring both keeps the privacy grant\n  # working across an LSS<->VSS jar swap.\n  lss.farplayers.hidden:\n    description: Players with this permission are never shown as far players\n    default: false\n  vss.farplayers.hidden:\n    description: Players with this permission are never shown as far players (VSS spelling)\n    default: false\n  # Service gate (requireServicePermission, default false): with the config key on, only\n  # holders are served LOD data \u2014 a handshake from anyone else is answered with an\n  # enabled=false SessionConfig and no session. BOTH brand spellings are declared for the\n  # reason spelled out on lss.farplayers.hidden above (Bukkit resolves an UNDECLARED node to\n  # the op default, so a single-brand declaration plus a cross-brand check goes silently\n  # wrong, and declaring both keeps grants alive across an LSS<->VSS jar swap).\n  #\n  # `default: true`, NOT op: everyone holds these unless an admin says otherwise, so arming\n  # the gate on its own changes nothing for anybody \u2014 the original behavior, preserved. The\n  # gate is a DENY tool: the only thing that takes LOD away is an explicit negative grant in\n  # the permission plugin (e.g. LuckPerms `group default permission set lss.use false`).\n  #\n  # Enforcement requires BOTH spellings, so a negative grant on EITHER one denies \u2014 the De\n  # Morgan mirror of the privacy nodes above (grant model: hold EITHER; deny model: lose\n  # EITHER). An OR here would be inert: the spelling the admin did NOT touch still resolves\n  # to its declared `true` and would out-vote the single negative grant.\n  #\n  # That direction is also why losing either declaration is dangerous: an undeclared node\n  # falls back to Bukkit's op default, silently turning \"everyone\" into \"ops only\".\n  lss.use:\n    description: Receive LOD data when requireServicePermission is enabled\n    default: true\n  vss.use:\n    description: Receive LOD data when requireServicePermission is enabled (VSS spelling)\n    default: true\n",
+        "metadata": {
+          "name": "LodServerSupport",
+          "version": "0.14.0",
+          "main": "dev.vox.lss.paper.LSSPaperPlugin",
+          "api-version": "1.21.11",
+          "folia-supported": "true"
+        },
+        "mapping_namespace": "mojang",
+        "lss_class_majors": {
+          "65": 255
+        },
+        "lss_class_count": 255,
+        "wi2_registration_present": true,
+        "issues": []
+      },
+      {
+        "path": "/home/vox/projects/lss-lines/1.21.11/paper/build/libs/voxy-server-side-paper-0.14.0+1.21.11.jar",
+        "filename": "voxy-server-side-paper-0.14.0+1.21.11.jar",
+        "brand": "VSS",
+        "loader": "paper",
+        "size_bytes": 7791349,
+        "sha256": "b397a5bd5a05a3ee495e1b52f03b710beb23afb5a3a474d9e64640a9cbdd313d",
+        "mtime_utc": "2026-09-08T21:06:23.611936+00:00",
+        "manifest": {
+          "Manifest-Version": "1.0",
+          "paperweight-mappings-namespace": "mojang",
+          "Multi-Release": "true"
+        },
+        "nested": [],
+        "metadata_raw": "name: VoxyServerSide\nversion: '0.14.0'\nmain: dev.vox.lss.paper.LSSPaperPlugin\napi-version: '1.21.11'\n# 1.21.11 support line: Folia publishes real 1.21.11 builds, so the flag is correct HERE \u2014\n# the guarded failure is a jar that silently stops loading on Folia (PluginYmlContractTest +\n# release_check.py pin its PRESENCE). Folia support remains EXPERIMENTAL on every line \u2014\n# single-player soak validated; concurrent multi-region ingress untested.\nfolia-supported: true\n# C5 (XVER \u00a77): the Via mismatch guard reflectively reads ViaVersion's API when the\n# plugin is present. softdepend keeps Spigot's classloader from logging the one-time\n# \"loaded class ... which is not a depend/softdepend\" warning on the first handshake \u2014\n# noise that reads like an LSS bug. No hard dependency: without Via the probe is a\n# silent no-signal. LibsDisguises (issue #282): the far-player privacy ladder reads\n# DisguiseAPI reflectively to hide disguised players \u2014 same precedent (load ORDER +\n# classloader visibility, never a hard depend; absent = the rung is skipped).\nsoftdepend: [ViaVersion, LibsDisguises]\ndescription: Render distant Voxy LODs on servers\nauthor: Xantha, VoX\nwebsite: https://modrinth.com/plugin/voxy-server-side\ncommands:\n  vsslod:\n    description: Voxy Server Side admin commands\n    usage: /vsslod <stats|diag|store|set|help>\n    permission: vss.admin\npermissions:\n  vss.admin:\n    description: Access to VSS admin commands\n    default: op\n  # Far players (v0.11.0 E1): server-side privacy lever \u2014 holders are never served as\n  # far players regardless of the farPlayers mode (FARP \u00a73.2). BOTH brand spellings are\n  # declared (default false) and the enforcement honors either: Bukkit resolves an\n  # UNDECLARED node to the op default, so a single-brand declaration plus a cross-brand\n  # check would silently hide every op \u2014 and declaring both keeps the privacy grant\n  # working across an LSS<->VSS jar swap.\n  lss.farplayers.hidden:\n    description: Players with this permission are never shown as far players\n    default: false\n  vss.farplayers.hidden:\n    description: Players with this permission are never shown as far players (VSS spelling)\n    default: false\n  # Service gate (requireServicePermission, default false): with the config key on, only\n  # holders are served LOD data \u2014 a handshake from anyone else is answered with an\n  # enabled=false SessionConfig and no session. BOTH brand spellings are declared for the\n  # reason spelled out on lss.farplayers.hidden above (Bukkit resolves an UNDECLARED node to\n  # the op default, so a single-brand declaration plus a cross-brand check goes silently\n  # wrong, and declaring both keeps grants alive across an LSS<->VSS jar swap).\n  #\n  # `default: true`, NOT op: everyone holds these unless an admin says otherwise, so arming\n  # the gate on its own changes nothing for anybody \u2014 the original behavior, preserved. The\n  # gate is a DENY tool: the only thing that takes LOD away is an explicit negative grant in\n  # the permission plugin (e.g. LuckPerms `group default permission set lss.use false`).\n  #\n  # Enforcement requires BOTH spellings, so a negative grant on EITHER one denies \u2014 the De\n  # Morgan mirror of the privacy nodes above (grant model: hold EITHER; deny model: lose\n  # EITHER). An OR here would be inert: the spelling the admin did NOT touch still resolves\n  # to its declared `true` and would out-vote the single negative grant.\n  #\n  # That direction is also why losing either declaration is dangerous: an undeclared node\n  # falls back to Bukkit's op default, silently turning \"everyone\" into \"ops only\".\n  lss.use:\n    description: Receive LOD data when requireServicePermission is enabled\n    default: true\n  vss.use:\n    description: Receive LOD data when requireServicePermission is enabled (VSS spelling)\n    default: true\n",
+        "metadata": {
+          "name": "VoxyServerSide",
+          "version": "0.14.0",
+          "main": "dev.vox.lss.paper.LSSPaperPlugin",
+          "api-version": "1.21.11",
+          "folia-supported": "true"
+        },
+        "mapping_namespace": "mojang",
+        "lss_class_majors": {
+          "65": 255
+        },
+        "lss_class_count": 255,
+        "wi2_registration_present": true,
+        "issues": []
+      },
+      {
+        "path": "/home/vox/projects/lss-lines/1.21.11/neoforge/build/libs/lod-server-support-neoforge-0.14.0+1.21.11.jar",
+        "filename": "lod-server-support-neoforge-0.14.0+1.21.11.jar",
+        "brand": "LSS",
+        "loader": "neoforge",
+        "size_bytes": 22636605,
+        "sha256": "1426d205dc42430c40f9a60e8086b481145915037b3f89b750d53760426602dd",
+        "mtime_utc": "2026-09-08T21:06:37.435205+00:00",
+        "manifest": {
+          "Manifest-Version": "1.0",
+          "Multi-Release": "true"
+        },
+        "nested": [
+          {
+            "path": "META-INF/jarjar/sqlite-jdbc-3.49.1.0.jar",
+            "size_bytes": 14317659,
+            "sha256": "5c8609d2ca341deb8c6f71778974b5ba4995c7d32d7c7c89d9392a3e72c39291",
+            "class_count": 129,
+            "all_class_majors": {
+              "52": 125,
+              "53": 4
+            },
+            "lss_class_count": 0,
+            "native_count": 24
+          },
+          {
+            "path": "META-INF/jarjar/zstd-jni-1.5.7-3.jar",
+            "size_bytes": 7408362,
+            "sha256": "a38a4a97f1b43b878c91e0dd7f1e3d17f0e70beec71d95bacaf56a2f207624a3",
+            "class_count": 37,
+            "all_class_majors": {
+              "52": 36,
+              "53": 1
+            },
+            "lss_class_count": 0,
+            "native_count": 18
+          }
+        ],
+        "metadata": {
+          "modLoader": "javafml",
+          "loaderVersion": "[4,)",
+          "license": "MIT",
+          "issueTrackerURL": "https://github.com/VoX/lod-server-support/issues",
+          "mods": [
+            {
+              "modId": "lss",
+              "version": "0.14.0",
+              "displayName": "LOD Server Support",
+              "authors": "VoX",
+              "logoFile": "assets/lss/icon.png",
+              "description": "Voxy multiplayer support (unofficial). Enables players with Voxy to see fully rendered terrain out to hundreds of chunks on multiplayer servers without needing to explore the world first. Server-side works with any LSS/VSS client; the client half needs a community Voxy build for NeoForge."
+            }
+          ],
+          "mixins": [
+            {
+              "config": "lss.neoforge.mixins.json"
+            },
+            {
+              "config": "lss-sodium-legacy.mixins.json"
+            }
+          ],
+          "dependencies": {
+            "lss": [
+              {
+                "modId": "neoforge",
+                "type": "required",
+                "versionRange": "[21.11,)",
+                "ordering": "NONE",
+                "side": "BOTH"
+              },
+              {
+                "modId": "minecraft",
+                "type": "required",
+                "versionRange": "[1.21.11]",
+                "ordering": "NONE",
+                "side": "BOTH"
+              }
+            ]
+          },
+          "modproperties": {
+            "lss": {
+              "sodium:config_api_user": "dev.vox.lss.config.LSSConfigMenu"
+            }
+          }
+        },
+        "jarjar_metadata": {
+          "jars": [
+            {
+              "identifier": {
+                "group": "org.xerial",
+                "artifact": "sqlite-jdbc"
+              },
+              "version": {
+                "range": "[3.49.1.0,4.0.0.0)",
+                "artifactVersion": "3.49.1.0"
+              },
+              "path": "META-INF/jarjar/sqlite-jdbc-3.49.1.0.jar",
+              "isObfuscated": false
+            },
+            {
+              "identifier": {
+                "group": "com.github.luben",
+                "artifact": "zstd-jni"
+              },
+              "version": {
+                "range": "[1.5.7-3,2.0.0.0)",
+                "artifactVersion": "1.5.7-3"
+              },
+              "path": "META-INF/jarjar/zstd-jni-1.5.7-3.jar",
+              "isObfuscated": false
+            }
+          ]
+        },
+        "mapping_namespace": "Mojang-named (no Fabric mapping manifest contract)",
+        "forbidden_flat_native_entries": [],
+        "stock_maven_matches": [
+          {
+            "coordinate": "org.xerial:sqlite-jdbc:3.49.1.0",
+            "nested_path": "META-INF/jarjar/sqlite-jdbc-3.49.1.0.jar",
+            "nested_sha256": "5c8609d2ca341deb8c6f71778974b5ba4995c7d32d7c7c89d9392a3e72c39291",
+            "matched_stock_files": [
+              "/home/vox/.gradle/caches/modules-2/files-2.1/org.xerial/sqlite-jdbc/3.49.1.0/145d3a6819b86f3618728273329392269104c8c7/sqlite-jdbc-3.49.1.0.jar"
+            ],
+            "candidate_count": 1,
+            "byte_identical": true
+          },
+          {
+            "coordinate": "com.github.luben:zstd-jni:1.5.7-3",
+            "nested_path": "META-INF/jarjar/zstd-jni-1.5.7-3.jar",
+            "nested_sha256": "a38a4a97f1b43b878c91e0dd7f1e3d17f0e70beec71d95bacaf56a2f207624a3",
+            "matched_stock_files": [
+              "/home/vox/.gradle/caches/modules-2/files-2.1/com.github.luben/zstd-jni/1.5.7-3/dc55c256583fb810f9fe3ede271843b68132fb7c/zstd-jni-1.5.7-3.jar"
+            ],
+            "candidate_count": 1,
+            "byte_identical": true
+          }
+        ],
+        "lss_class_majors": {
+          "65": 435
+        },
+        "lss_class_count": 435,
+        "wi2_registration_present": true,
+        "wi3_delivery_present": true,
+        "receipt_cancellation_field_present": true,
+        "host_service_ready_hook_present": true,
+        "issues": []
+      },
+      {
+        "path": "/home/vox/projects/lss-lines/1.21.11/neoforge/build/libs/voxy-server-side-neoforge-0.14.0+1.21.11.jar",
+        "filename": "voxy-server-side-neoforge-0.14.0+1.21.11.jar",
+        "brand": "VSS",
+        "loader": "neoforge",
+        "size_bytes": 22642446,
+        "sha256": "1aa02f527a82bf48fb46d339559da5ce23d770af5ba584ac692c8eaf2d4a2ff6",
+        "mtime_utc": "2026-09-08T21:06:38.666355+00:00",
+        "manifest": {
+          "Manifest-Version": "1.0",
+          "Multi-Release": "true"
+        },
+        "nested": [
+          {
+            "path": "META-INF/jarjar/sqlite-jdbc-3.49.1.0.jar",
+            "size_bytes": 14317659,
+            "sha256": "5c8609d2ca341deb8c6f71778974b5ba4995c7d32d7c7c89d9392a3e72c39291",
+            "class_count": 129,
+            "all_class_majors": {
+              "52": 125,
+              "53": 4
+            },
+            "lss_class_count": 0,
+            "native_count": 24
+          },
+          {
+            "path": "META-INF/jarjar/zstd-jni-1.5.7-3.jar",
+            "size_bytes": 7408362,
+            "sha256": "a38a4a97f1b43b878c91e0dd7f1e3d17f0e70beec71d95bacaf56a2f207624a3",
+            "class_count": 37,
+            "all_class_majors": {
+              "52": 36,
+              "53": 1
+            },
+            "lss_class_count": 0,
+            "native_count": 18
+          }
+        ],
+        "metadata": {
+          "modLoader": "javafml",
+          "loaderVersion": "[4,)",
+          "license": "MIT",
+          "issueTrackerURL": "https://modrinth.com/plugin/voxy-server-side",
+          "mods": [
+            {
+              "modId": "lss",
+              "version": "0.14.0",
+              "displayName": "Voxy Server Side",
+              "authors": "Xantha, VoX",
+              "logoFile": "assets/lss/icon-vss.png",
+              "description": "Render distant Voxy LODs on servers. Server-side works with any LSS/VSS client; the client half needs a community Voxy build for NeoForge."
+            }
+          ],
+          "mixins": [
+            {
+              "config": "lss.neoforge.mixins.json"
+            },
+            {
+              "config": "lss-sodium-legacy.mixins.json"
+            }
+          ],
+          "dependencies": {
+            "lss": [
+              {
+                "modId": "neoforge",
+                "type": "required",
+                "versionRange": "[21.11,)",
+                "ordering": "NONE",
+                "side": "BOTH"
+              },
+              {
+                "modId": "minecraft",
+                "type": "required",
+                "versionRange": "[1.21.11]",
+                "ordering": "NONE",
+                "side": "BOTH"
+              }
+            ]
+          },
+          "modproperties": {
+            "lss": {
+              "sodium:config_api_user": "dev.vox.lss.config.LSSConfigMenu"
+            }
+          }
+        },
+        "jarjar_metadata": {
+          "jars": [
+            {
+              "identifier": {
+                "group": "org.xerial",
+                "artifact": "sqlite-jdbc"
+              },
+              "version": {
+                "range": "[3.49.1.0,4.0.0.0)",
+                "artifactVersion": "3.49.1.0"
+              },
+              "path": "META-INF/jarjar/sqlite-jdbc-3.49.1.0.jar",
+              "isObfuscated": false
+            },
+            {
+              "identifier": {
+                "group": "com.github.luben",
+                "artifact": "zstd-jni"
+              },
+              "version": {
+                "range": "[1.5.7-3,2.0.0.0)",
+                "artifactVersion": "1.5.7-3"
+              },
+              "path": "META-INF/jarjar/zstd-jni-1.5.7-3.jar",
+              "isObfuscated": false
+            }
+          ]
+        },
+        "mapping_namespace": "Mojang-named (no Fabric mapping manifest contract)",
+        "forbidden_flat_native_entries": [],
+        "stock_maven_matches": [
+          {
+            "coordinate": "org.xerial:sqlite-jdbc:3.49.1.0",
+            "nested_path": "META-INF/jarjar/sqlite-jdbc-3.49.1.0.jar",
+            "nested_sha256": "5c8609d2ca341deb8c6f71778974b5ba4995c7d32d7c7c89d9392a3e72c39291",
+            "matched_stock_files": [
+              "/home/vox/.gradle/caches/modules-2/files-2.1/org.xerial/sqlite-jdbc/3.49.1.0/145d3a6819b86f3618728273329392269104c8c7/sqlite-jdbc-3.49.1.0.jar"
+            ],
+            "candidate_count": 1,
+            "byte_identical": true
+          },
+          {
+            "coordinate": "com.github.luben:zstd-jni:1.5.7-3",
+            "nested_path": "META-INF/jarjar/zstd-jni-1.5.7-3.jar",
+            "nested_sha256": "a38a4a97f1b43b878c91e0dd7f1e3d17f0e70beec71d95bacaf56a2f207624a3",
+            "matched_stock_files": [
+              "/home/vox/.gradle/caches/modules-2/files-2.1/com.github.luben/zstd-jni/1.5.7-3/dc55c256583fb810f9fe3ede271843b68132fb7c/zstd-jni-1.5.7-3.jar"
+            ],
+            "candidate_count": 1,
+            "byte_identical": true
+          }
+        ],
+        "lss_class_majors": {
+          "65": 435
+        },
+        "lss_class_count": 435,
+        "wi2_registration_present": true,
+        "wi3_delivery_present": true,
+        "receipt_cancellation_field_present": true,
+        "host_service_ready_hook_present": true,
+        "issues": []
+      }
+    ],
+    "brand_pairs": [
+      {
+        "loader": "fabric",
+        "all_lss_class_bytes_identical": true,
+        "class_count": 448,
+        "different_classes": [],
+        "nested_common_paths": [
+          "META-INF/jars/common-0.14.0.jar"
+        ],
+        "nested_common_bytes_identical": true,
+        "all_nested_library_bytes_identical": true
+      },
+      {
+        "loader": "paper",
+        "all_lss_class_bytes_identical": true,
+        "class_count": 255,
+        "different_classes": [],
+        "nested_common_paths": [],
+        "nested_common_bytes_identical": null,
+        "all_nested_library_bytes_identical": true
+      },
+      {
+        "loader": "neoforge",
+        "all_lss_class_bytes_identical": true,
+        "class_count": 435,
+        "different_classes": [],
+        "nested_common_paths": [],
+        "nested_common_bytes_identical": null,
+        "all_nested_library_bytes_identical": true
+      }
+    ],
+    "issues": []
+  },
+  {
+    "line": "26.1",
+    "minecraft": "26.1.2",
+    "version": "0.14.0",
+    "inspection_utc": "2026-09-08T21:35:58.537990+00:00",
+    "head_at_inspection": "41020c0fde83b2adee32cf0d156458ac3bb14f38",
+    "note": "HEAD records inspection context; exact jar hashes identify the built artifacts. No inference that later source/doc commits were compiled.",
+    "ship_neoforge": true,
+    "expected_java": 25,
+    "artifacts": [
+      {
+        "path": "/home/vox/projects/lss-lines/26.1/fabric/build/libs/lod-server-support-fabric-0.14.0+26.1.2.jar",
+        "filename": "lod-server-support-fabric-0.14.0+26.1.2.jar",
+        "brand": "LSS",
+        "loader": "fabric",
+        "size_bytes": 8212079,
+        "sha256": "47c2d09e5a599e2f0457cd2346b8fa0ef64ecb5f764d3c13346c6f901c296cee",
+        "mtime_utc": "2026-09-08T21:31:07.444321+00:00",
+        "manifest": {
+          "Manifest-Version": "1.0",
+          "Fabric-Mapping-Namespace": "official",
+          "Fabric-Gradle-Version": "9.5.1",
+          "Fabric-Loom-Version": "1.17.13",
+          "Fabric-Mixin-Compile-Extensions-Version": "0.6.0",
+          "Fabric-Minecraft-Version": "26.1.2",
+          "Fabric-Tiny-Remapper-Version": "0.14.0",
+          "Fabric-Loader-Version": "0.19.3",
+          "Fabric-Mixin-Version": "0.17.3+mixin.0.8.7",
+          "Fabric-Mixin-Group": "net.fabricmc"
+        },
+        "nested": [
+          {
+            "path": "META-INF/jars/common-0.14.0.jar",
+            "size_bytes": 369484,
+            "sha256": "3cd66619592af1be65d7771207324df57a7303acb3b139a0df8a0df75eaa980d",
+            "class_count": 179,
+            "all_class_majors": {
+              "65": 179
+            },
+            "lss_class_count": 179,
+            "native_count": 0
+          },
+          {
+            "path": "META-INF/jars/sqlite-jdbc-slim.jar",
+            "size_bytes": 4981674,
+            "sha256": "6d1d4918cad7d6cdefd2474a5cf47d0ed519d96c67b9779e4a85eca78d29112d",
+            "class_count": 129,
+            "all_class_majors": {
+              "52": 125,
+              "53": 4
+            },
+            "lss_class_count": 0,
+            "native_count": 8
+          },
+          {
+            "path": "META-INF/jars/zstd-jni-slim.jar",
+            "size_bytes": 2263169,
+            "sha256": "6ee92119be10f9f5aa819bd7ab0a7ba18ac17652529644c9efe2be7bec76a7f4",
+            "class_count": 37,
+            "all_class_majors": {
+              "52": 36,
+              "53": 1
+            },
+            "lss_class_count": 0,
+            "native_count": 6
+          }
+        ],
+        "metadata": {
+          "schemaVersion": 1,
+          "id": "lss",
+          "version": "0.14.0",
+          "name": "LOD Server Support",
+          "description": "Voxy multiplayer support (unofficial). Enables players with Voxy to see fully rendered terrain out to hundreds of chunks on multiplayer servers without needing to explore the world first.",
+          "authors": [
+            "VoX"
+          ],
+          "contact": {
+            "sources": "https://github.com/VoX/lod-server-support"
+          },
+          "license": "MIT",
+          "icon": "assets/lss/icon.png",
+          "accessWidener": "lss.accesswidener",
+          "environment": "*",
+          "entrypoints": {
+            "main": [
+              "dev.vox.lss.LSSMod"
+            ],
+            "client": [
+              "dev.vox.lss.LSSClient"
+            ],
+            "sodium:config_api_user": [
+              "dev.vox.lss.config.LSSConfigMenu"
+            ],
+            "modmenu": [
+              "dev.vox.lss.config.LSSModMenuIntegration"
+            ]
+          },
+          "mixins": [
+            "lss.mixins.json",
+            "lss-trace.mixins.json",
+            "lss-sodium-legacy.mixins.json"
+          ],
+          "jars": [
+            {
+              "file": "META-INF/jars/sqlite-jdbc-slim.jar"
+            },
+            {
+              "file": "META-INF/jars/zstd-jni-slim.jar"
+            },
+            {
+              "file": "META-INF/jars/common-0.14.0.jar"
+            }
+          ],
+          "depends": {
+            "minecraft": ">=26.1 <26.2-",
+            "fabricloader": ">=0.18.4",
+            "fabric-api": ">=0.146.0"
+          },
+          "suggests": {
+            "sodium": ">=0.8.12",
+            "modmenu": "*",
+            "voxy": ">=0.2.14-alpha",
+            "xaeroworldmap": "*"
+          }
+        },
+        "mapping_namespace": "official",
+        "access_widener_header": "accessWidener v2 official",
+        "lss_class_majors": {
+          "65": 179,
+          "69": 269
+        },
+        "lss_class_count": 448,
+        "common_class_majors": {
+          "65": 179
+        },
+        "platform_class_majors": {
+          "69": 269
+        },
+        "wi2_registration_present": true,
+        "wi3_delivery_present": true,
+        "receipt_cancellation_field_present": true,
+        "host_service_ready_hook_present": true,
+        "issues": []
+      },
+      {
+        "path": "/home/vox/projects/lss-lines/26.1/fabric/build/libs/voxy-server-side-fabric-0.14.0+26.1.2.jar",
+        "filename": "voxy-server-side-fabric-0.14.0+26.1.2.jar",
+        "brand": "VSS",
+        "loader": "fabric",
+        "size_bytes": 8217992,
+        "sha256": "752bc44b5bd03f668f97b65eaae3d977abaf99cfb047ce56380dcd1473596c56",
+        "mtime_utc": "2026-09-08T21:33:59.653766+00:00",
+        "manifest": {
+          "Manifest-Version": "1.0",
+          "Fabric-Mapping-Namespace": "official",
+          "Fabric-Gradle-Version": "9.5.1",
+          "Fabric-Loom-Version": "1.17.13",
+          "Fabric-Mixin-Compile-Extensions-Version": "0.6.0",
+          "Fabric-Minecraft-Version": "26.1.2",
+          "Fabric-Tiny-Remapper-Version": "0.14.0",
+          "Fabric-Loader-Version": "0.19.3",
+          "Fabric-Mixin-Version": "0.17.3+mixin.0.8.7",
+          "Fabric-Mixin-Group": "net.fabricmc"
+        },
+        "nested": [
+          {
+            "path": "META-INF/jars/common-0.14.0.jar",
+            "size_bytes": 369484,
+            "sha256": "3cd66619592af1be65d7771207324df57a7303acb3b139a0df8a0df75eaa980d",
+            "class_count": 179,
+            "all_class_majors": {
+              "65": 179
+            },
+            "lss_class_count": 179,
+            "native_count": 0
+          },
+          {
+            "path": "META-INF/jars/sqlite-jdbc-slim.jar",
+            "size_bytes": 4981674,
+            "sha256": "6d1d4918cad7d6cdefd2474a5cf47d0ed519d96c67b9779e4a85eca78d29112d",
+            "class_count": 129,
+            "all_class_majors": {
+              "52": 125,
+              "53": 4
+            },
+            "lss_class_count": 0,
+            "native_count": 8
+          },
+          {
+            "path": "META-INF/jars/zstd-jni-slim.jar",
+            "size_bytes": 2263169,
+            "sha256": "6ee92119be10f9f5aa819bd7ab0a7ba18ac17652529644c9efe2be7bec76a7f4",
+            "class_count": 37,
+            "all_class_majors": {
+              "52": 36,
+              "53": 1
+            },
+            "lss_class_count": 0,
+            "native_count": 6
+          }
+        ],
+        "metadata": {
+          "schemaVersion": 1,
+          "id": "lss",
+          "version": "0.14.0",
+          "name": "Voxy Server Side",
+          "description": "Render distant Voxy LODs on servers",
+          "authors": [
+            "Xantha",
+            "VoX"
+          ],
+          "contact": {
+            "sources": "https://github.com/VoX/lod-server-support",
+            "homepage": "https://modrinth.com/plugin/voxy-server-side"
+          },
+          "license": "MIT",
+          "icon": "assets/lss/icon-vss.png",
+          "accessWidener": "lss.accesswidener",
+          "environment": "*",
+          "entrypoints": {
+            "main": [
+              "dev.vox.lss.LSSMod"
+            ],
+            "client": [
+              "dev.vox.lss.LSSClient"
+            ],
+            "sodium:config_api_user": [
+              "dev.vox.lss.config.LSSConfigMenu"
+            ],
+            "modmenu": [
+              "dev.vox.lss.config.LSSModMenuIntegration"
+            ]
+          },
+          "mixins": [
+            "lss.mixins.json",
+            "lss-trace.mixins.json",
+            "lss-sodium-legacy.mixins.json"
+          ],
+          "jars": [
+            {
+              "file": "META-INF/jars/sqlite-jdbc-slim.jar"
+            },
+            {
+              "file": "META-INF/jars/zstd-jni-slim.jar"
+            },
+            {
+              "file": "META-INF/jars/common-0.14.0.jar"
+            }
+          ],
+          "depends": {
+            "minecraft": ">=26.1 <26.2-",
+            "fabricloader": ">=0.18.4",
+            "fabric-api": ">=0.146.0"
+          },
+          "suggests": {
+            "sodium": ">=0.8.12",
+            "modmenu": "*",
+            "voxy": ">=0.2.14-alpha",
+            "xaeroworldmap": "*"
+          }
+        },
+        "mapping_namespace": "official",
+        "access_widener_header": "accessWidener v2 official",
+        "lss_class_majors": {
+          "65": 179,
+          "69": 269
+        },
+        "lss_class_count": 448,
+        "common_class_majors": {
+          "65": 179
+        },
+        "platform_class_majors": {
+          "69": 269
+        },
+        "wi2_registration_present": true,
+        "wi3_delivery_present": true,
+        "receipt_cancellation_field_present": true,
+        "host_service_ready_hook_present": true,
+        "issues": []
+      },
+      {
+        "path": "/home/vox/projects/lss-lines/26.1/paper/build/libs/lod-server-support-paper-0.14.0+26.1.2.jar",
+        "filename": "lod-server-support-paper-0.14.0+26.1.2.jar",
+        "brand": "LSS",
+        "loader": "paper",
+        "size_bytes": 7791291,
+        "sha256": "a95279153b732fb97b75ef6313707c86da9cb69ba74b729d0bdfc9ab5fd9d9d8",
+        "mtime_utc": "2026-09-08T21:34:01.091089+00:00",
+        "manifest": {
+          "Manifest-Version": "1.0",
+          "paperweight-mappings-namespace": "mojang",
+          "Multi-Release": "true"
+        },
+        "nested": [],
+        "metadata_raw": "name: LodServerSupport\nversion: '0.14.0'\nmain: dev.vox.lss.paper.LSSPaperPlugin\napi-version: '26.1.2'\n# 26.1 support line: Folia publishes real MC 26.1.2 builds, so the flag is correct HERE for\n# the same reason it is correct on the 26.2 primary line \u2014 the guarded failure is a jar that\n# silently stops loading on Folia (PluginYmlContractTest + release_check.py pin its\n# PRESENCE). Folia support remains EXPERIMENTAL on every line \u2014 single-player soak\n# validated; concurrent multi-region ingress untested.\nfolia-supported: true\n# C5 (XVER \u00a77): the Via mismatch guard reflectively reads ViaVersion's API when the\n# plugin is present. softdepend keeps Spigot's classloader from logging the one-time\n# \"loaded class ... which is not a depend/softdepend\" warning on the first handshake \u2014\n# noise that reads like an LSS bug. No hard dependency: without Via the probe is a\n# silent no-signal. LibsDisguises (issue #282): the far-player privacy ladder reads\n# DisguiseAPI reflectively to hide disguised players \u2014 same precedent (load ORDER +\n# classloader visibility, never a hard depend; absent = the rung is skipped).\nsoftdepend: [ViaVersion, LibsDisguises]\ndescription: Voxy multiplayer support (unofficial). Enables players with Voxy to see fully rendered terrain out to hundreds of chunks on multiplayer servers without needing to explore the world first.\nauthor: VoX\nwebsite: https://modrinth.com/plugin/lod-server-support\ncommands:\n  lsslod:\n    description: LOD Server Support admin commands\n    usage: /lsslod <stats|diag|store|set|help>\n    permission: lss.admin\npermissions:\n  lss.admin:\n    description: Access to LSS admin commands\n    default: op\n  # Far players (v0.11.0 E1): server-side privacy lever \u2014 holders are never served as\n  # far players regardless of the farPlayers mode (FARP \u00a73.2). BOTH brand spellings are\n  # declared (default false) and the enforcement honors either: Bukkit resolves an\n  # UNDECLARED node to the op default, so a single-brand declaration plus a cross-brand\n  # check would silently hide every op \u2014 and declaring both keeps the privacy grant\n  # working across an LSS<->VSS jar swap.\n  lss.farplayers.hidden:\n    description: Players with this permission are never shown as far players\n    default: false\n  vss.farplayers.hidden:\n    description: Players with this permission are never shown as far players (VSS spelling)\n    default: false\n  # Service gate (requireServicePermission, default false): with the config key on, only\n  # holders are served LOD data \u2014 a handshake from anyone else is answered with an\n  # enabled=false SessionConfig and no session. BOTH brand spellings are declared for the\n  # reason spelled out on lss.farplayers.hidden above (Bukkit resolves an UNDECLARED node to\n  # the op default, so a single-brand declaration plus a cross-brand check goes silently\n  # wrong, and declaring both keeps grants alive across an LSS<->VSS jar swap).\n  #\n  # `default: true`, NOT op: everyone holds these unless an admin says otherwise, so arming\n  # the gate on its own changes nothing for anybody \u2014 the original behavior, preserved. The\n  # gate is a DENY tool: the only thing that takes LOD away is an explicit negative grant in\n  # the permission plugin (e.g. LuckPerms `group default permission set lss.use false`).\n  #\n  # Enforcement requires BOTH spellings, so a negative grant on EITHER one denies \u2014 the De\n  # Morgan mirror of the privacy nodes above (grant model: hold EITHER; deny model: lose\n  # EITHER). An OR here would be inert: the spelling the admin did NOT touch still resolves\n  # to its declared `true` and would out-vote the single negative grant.\n  #\n  # That direction is also why losing either declaration is dangerous: an undeclared node\n  # falls back to Bukkit's op default, silently turning \"everyone\" into \"ops only\".\n  lss.use:\n    description: Receive LOD data when requireServicePermission is enabled\n    default: true\n  vss.use:\n    description: Receive LOD data when requireServicePermission is enabled (VSS spelling)\n    default: true\n",
+        "metadata": {
+          "name": "LodServerSupport",
+          "version": "0.14.0",
+          "main": "dev.vox.lss.paper.LSSPaperPlugin",
+          "api-version": "26.1.2",
+          "folia-supported": "true"
+        },
+        "mapping_namespace": "mojang",
+        "lss_class_majors": {
+          "65": 179,
+          "69": 76
+        },
+        "lss_class_count": 255,
+        "common_class_majors": {
+          "65": 179
+        },
+        "platform_class_majors": {
+          "69": 76
+        },
+        "wi2_registration_present": true,
+        "issues": []
+      },
+      {
+        "path": "/home/vox/projects/lss-lines/26.1/paper/build/libs/voxy-server-side-paper-0.14.0+26.1.2.jar",
+        "filename": "voxy-server-side-paper-0.14.0+26.1.2.jar",
+        "brand": "VSS",
+        "loader": "paper",
+        "size_bytes": 7791229,
+        "sha256": "bf85b1e0738d1f3517177296babda3004fda1aa39804b2f1917513f24fbfaf6b",
+        "mtime_utc": "2026-09-08T21:34:01.896986+00:00",
+        "manifest": {
+          "Manifest-Version": "1.0",
+          "paperweight-mappings-namespace": "mojang",
+          "Multi-Release": "true"
+        },
+        "nested": [],
+        "metadata_raw": "name: VoxyServerSide\nversion: '0.14.0'\nmain: dev.vox.lss.paper.LSSPaperPlugin\napi-version: '26.1.2'\n# 26.1 support line: Folia publishes real MC 26.1.2 builds, so the flag is correct HERE for\n# the same reason it is correct on the 26.2 primary line \u2014 the guarded failure is a jar that\n# silently stops loading on Folia (PluginYmlContractTest + release_check.py pin its\n# PRESENCE). Folia support remains EXPERIMENTAL on every line \u2014 single-player soak\n# validated; concurrent multi-region ingress untested.\nfolia-supported: true\n# C5 (XVER \u00a77): the Via mismatch guard reflectively reads ViaVersion's API when the\n# plugin is present. softdepend keeps Spigot's classloader from logging the one-time\n# \"loaded class ... which is not a depend/softdepend\" warning on the first handshake \u2014\n# noise that reads like an LSS bug. No hard dependency: without Via the probe is a\n# silent no-signal. LibsDisguises (issue #282): the far-player privacy ladder reads\n# DisguiseAPI reflectively to hide disguised players \u2014 same precedent (load ORDER +\n# classloader visibility, never a hard depend; absent = the rung is skipped).\nsoftdepend: [ViaVersion, LibsDisguises]\ndescription: Render distant Voxy LODs on servers\nauthor: Xantha, VoX\nwebsite: https://modrinth.com/plugin/voxy-server-side\ncommands:\n  vsslod:\n    description: Voxy Server Side admin commands\n    usage: /vsslod <stats|diag|store|set|help>\n    permission: vss.admin\npermissions:\n  vss.admin:\n    description: Access to VSS admin commands\n    default: op\n  # Far players (v0.11.0 E1): server-side privacy lever \u2014 holders are never served as\n  # far players regardless of the farPlayers mode (FARP \u00a73.2). BOTH brand spellings are\n  # declared (default false) and the enforcement honors either: Bukkit resolves an\n  # UNDECLARED node to the op default, so a single-brand declaration plus a cross-brand\n  # check would silently hide every op \u2014 and declaring both keeps the privacy grant\n  # working across an LSS<->VSS jar swap.\n  lss.farplayers.hidden:\n    description: Players with this permission are never shown as far players\n    default: false\n  vss.farplayers.hidden:\n    description: Players with this permission are never shown as far players (VSS spelling)\n    default: false\n  # Service gate (requireServicePermission, default false): with the config key on, only\n  # holders are served LOD data \u2014 a handshake from anyone else is answered with an\n  # enabled=false SessionConfig and no session. BOTH brand spellings are declared for the\n  # reason spelled out on lss.farplayers.hidden above (Bukkit resolves an UNDECLARED node to\n  # the op default, so a single-brand declaration plus a cross-brand check goes silently\n  # wrong, and declaring both keeps grants alive across an LSS<->VSS jar swap).\n  #\n  # `default: true`, NOT op: everyone holds these unless an admin says otherwise, so arming\n  # the gate on its own changes nothing for anybody \u2014 the original behavior, preserved. The\n  # gate is a DENY tool: the only thing that takes LOD away is an explicit negative grant in\n  # the permission plugin (e.g. LuckPerms `group default permission set lss.use false`).\n  #\n  # Enforcement requires BOTH spellings, so a negative grant on EITHER one denies \u2014 the De\n  # Morgan mirror of the privacy nodes above (grant model: hold EITHER; deny model: lose\n  # EITHER). An OR here would be inert: the spelling the admin did NOT touch still resolves\n  # to its declared `true` and would out-vote the single negative grant.\n  #\n  # That direction is also why losing either declaration is dangerous: an undeclared node\n  # falls back to Bukkit's op default, silently turning \"everyone\" into \"ops only\".\n  lss.use:\n    description: Receive LOD data when requireServicePermission is enabled\n    default: true\n  vss.use:\n    description: Receive LOD data when requireServicePermission is enabled (VSS spelling)\n    default: true\n",
+        "metadata": {
+          "name": "VoxyServerSide",
+          "version": "0.14.0",
+          "main": "dev.vox.lss.paper.LSSPaperPlugin",
+          "api-version": "26.1.2",
+          "folia-supported": "true"
+        },
+        "mapping_namespace": "mojang",
+        "lss_class_majors": {
+          "65": 179,
+          "69": 76
+        },
+        "lss_class_count": 255,
+        "common_class_majors": {
+          "65": 179
+        },
+        "platform_class_majors": {
+          "69": 76
+        },
+        "wi2_registration_present": true,
+        "issues": []
+      },
+      {
+        "path": "/home/vox/projects/lss-lines/26.1/neoforge/build/libs/lod-server-support-neoforge-0.14.0+26.1.2.jar",
+        "filename": "lod-server-support-neoforge-0.14.0+26.1.2.jar",
+        "brand": "LSS",
+        "loader": "neoforge",
+        "size_bytes": 22638897,
+        "sha256": "42618345c56cfcd0dae60c38a947c5f2c1bfe18940fa6843bd4287d8ca507272",
+        "mtime_utc": "2026-09-08T21:34:14.828678+00:00",
+        "manifest": {
+          "Manifest-Version": "1.0",
+          "Multi-Release": "true"
+        },
+        "nested": [
+          {
+            "path": "META-INF/jarjar/sqlite-jdbc-3.49.1.0.jar",
+            "size_bytes": 14317659,
+            "sha256": "5c8609d2ca341deb8c6f71778974b5ba4995c7d32d7c7c89d9392a3e72c39291",
+            "class_count": 129,
+            "all_class_majors": {
+              "52": 125,
+              "53": 4
+            },
+            "lss_class_count": 0,
+            "native_count": 24
+          },
+          {
+            "path": "META-INF/jarjar/zstd-jni-1.5.7-3.jar",
+            "size_bytes": 7408362,
+            "sha256": "a38a4a97f1b43b878c91e0dd7f1e3d17f0e70beec71d95bacaf56a2f207624a3",
+            "class_count": 37,
+            "all_class_majors": {
+              "52": 36,
+              "53": 1
+            },
+            "lss_class_count": 0,
+            "native_count": 18
+          }
+        ],
+        "metadata": {
+          "modLoader": "javafml",
+          "loaderVersion": "[4,)",
+          "license": "MIT",
+          "issueTrackerURL": "https://github.com/VoX/lod-server-support/issues",
+          "mods": [
+            {
+              "modId": "lss",
+              "version": "0.14.0",
+              "displayName": "LOD Server Support",
+              "authors": "VoX",
+              "logoFile": "assets/lss/icon.png",
+              "description": "Voxy multiplayer support (unofficial). Enables players with Voxy to see fully rendered terrain out to hundreds of chunks on multiplayer servers without needing to explore the world first. Server-side works with any LSS/VSS client; the client half needs a community Voxy build for NeoForge."
+            }
+          ],
+          "mixins": [
+            {
+              "config": "lss.neoforge.mixins.json"
+            },
+            {
+              "config": "lss-sodium-legacy.mixins.json"
+            }
+          ],
+          "dependencies": {
+            "lss": [
+              {
+                "modId": "neoforge",
+                "type": "required",
+                "versionRange": "[26.1,)",
+                "ordering": "NONE",
+                "side": "BOTH"
+              },
+              {
+                "modId": "minecraft",
+                "type": "required",
+                "versionRange": "[26.1.2]",
+                "ordering": "NONE",
+                "side": "BOTH"
+              }
+            ]
+          },
+          "modproperties": {
+            "lss": {
+              "sodium:config_api_user": "dev.vox.lss.config.LSSConfigMenu"
+            }
+          }
+        },
+        "jarjar_metadata": {
+          "jars": [
+            {
+              "identifier": {
+                "group": "org.xerial",
+                "artifact": "sqlite-jdbc"
+              },
+              "version": {
+                "range": "[3.49.1.0,4.0.0.0)",
+                "artifactVersion": "3.49.1.0"
+              },
+              "path": "META-INF/jarjar/sqlite-jdbc-3.49.1.0.jar",
+              "isObfuscated": false
+            },
+            {
+              "identifier": {
+                "group": "com.github.luben",
+                "artifact": "zstd-jni"
+              },
+              "version": {
+                "range": "[1.5.7-3,2.0.0.0)",
+                "artifactVersion": "1.5.7-3"
+              },
+              "path": "META-INF/jarjar/zstd-jni-1.5.7-3.jar",
+              "isObfuscated": false
+            }
+          ]
+        },
+        "mapping_namespace": "Mojang-named (no Fabric mapping manifest contract)",
+        "forbidden_flat_native_entries": [],
+        "stock_maven_matches": [
+          {
+            "coordinate": "org.xerial:sqlite-jdbc:3.49.1.0",
+            "nested_path": "META-INF/jarjar/sqlite-jdbc-3.49.1.0.jar",
+            "nested_sha256": "5c8609d2ca341deb8c6f71778974b5ba4995c7d32d7c7c89d9392a3e72c39291",
+            "matched_stock_files": [
+              "/home/vox/.gradle/caches/modules-2/files-2.1/org.xerial/sqlite-jdbc/3.49.1.0/145d3a6819b86f3618728273329392269104c8c7/sqlite-jdbc-3.49.1.0.jar"
+            ],
+            "candidate_count": 1,
+            "byte_identical": true
+          },
+          {
+            "coordinate": "com.github.luben:zstd-jni:1.5.7-3",
+            "nested_path": "META-INF/jarjar/zstd-jni-1.5.7-3.jar",
+            "nested_sha256": "a38a4a97f1b43b878c91e0dd7f1e3d17f0e70beec71d95bacaf56a2f207624a3",
+            "matched_stock_files": [
+              "/home/vox/.gradle/caches/modules-2/files-2.1/com.github.luben/zstd-jni/1.5.7-3/dc55c256583fb810f9fe3ede271843b68132fb7c/zstd-jni-1.5.7-3.jar"
+            ],
+            "candidate_count": 1,
+            "byte_identical": true
+          }
+        ],
+        "lss_class_majors": {
+          "65": 179,
+          "69": 256
+        },
+        "lss_class_count": 435,
+        "common_class_majors": {
+          "65": 179
+        },
+        "platform_class_majors": {
+          "69": 256
+        },
+        "wi2_registration_present": true,
+        "wi3_delivery_present": true,
+        "receipt_cancellation_field_present": true,
+        "host_service_ready_hook_present": true,
+        "issues": []
+      },
+      {
+        "path": "/home/vox/projects/lss-lines/26.1/neoforge/build/libs/voxy-server-side-neoforge-0.14.0+26.1.2.jar",
+        "filename": "voxy-server-side-neoforge-0.14.0+26.1.2.jar",
+        "brand": "VSS",
+        "loader": "neoforge",
+        "size_bytes": 22644737,
+        "sha256": "e4b7a9381e0966df56383ae3b6da265ec5bd86bb205d4fac13ed2241777aa582",
+        "mtime_utc": "2026-09-08T21:34:16.079029+00:00",
+        "manifest": {
+          "Manifest-Version": "1.0",
+          "Multi-Release": "true"
+        },
+        "nested": [
+          {
+            "path": "META-INF/jarjar/sqlite-jdbc-3.49.1.0.jar",
+            "size_bytes": 14317659,
+            "sha256": "5c8609d2ca341deb8c6f71778974b5ba4995c7d32d7c7c89d9392a3e72c39291",
+            "class_count": 129,
+            "all_class_majors": {
+              "52": 125,
+              "53": 4
+            },
+            "lss_class_count": 0,
+            "native_count": 24
+          },
+          {
+            "path": "META-INF/jarjar/zstd-jni-1.5.7-3.jar",
+            "size_bytes": 7408362,
+            "sha256": "a38a4a97f1b43b878c91e0dd7f1e3d17f0e70beec71d95bacaf56a2f207624a3",
+            "class_count": 37,
+            "all_class_majors": {
+              "52": 36,
+              "53": 1
+            },
+            "lss_class_count": 0,
+            "native_count": 18
+          }
+        ],
+        "metadata": {
+          "modLoader": "javafml",
+          "loaderVersion": "[4,)",
+          "license": "MIT",
+          "issueTrackerURL": "https://modrinth.com/plugin/voxy-server-side",
+          "mods": [
+            {
+              "modId": "lss",
+              "version": "0.14.0",
+              "displayName": "Voxy Server Side",
+              "authors": "Xantha, VoX",
+              "logoFile": "assets/lss/icon-vss.png",
+              "description": "Render distant Voxy LODs on servers. Server-side works with any LSS/VSS client; the client half needs a community Voxy build for NeoForge."
+            }
+          ],
+          "mixins": [
+            {
+              "config": "lss.neoforge.mixins.json"
+            },
+            {
+              "config": "lss-sodium-legacy.mixins.json"
+            }
+          ],
+          "dependencies": {
+            "lss": [
+              {
+                "modId": "neoforge",
+                "type": "required",
+                "versionRange": "[26.1,)",
+                "ordering": "NONE",
+                "side": "BOTH"
+              },
+              {
+                "modId": "minecraft",
+                "type": "required",
+                "versionRange": "[26.1.2]",
+                "ordering": "NONE",
+                "side": "BOTH"
+              }
+            ]
+          },
+          "modproperties": {
+            "lss": {
+              "sodium:config_api_user": "dev.vox.lss.config.LSSConfigMenu"
+            }
+          }
+        },
+        "jarjar_metadata": {
+          "jars": [
+            {
+              "identifier": {
+                "group": "org.xerial",
+                "artifact": "sqlite-jdbc"
+              },
+              "version": {
+                "range": "[3.49.1.0,4.0.0.0)",
+                "artifactVersion": "3.49.1.0"
+              },
+              "path": "META-INF/jarjar/sqlite-jdbc-3.49.1.0.jar",
+              "isObfuscated": false
+            },
+            {
+              "identifier": {
+                "group": "com.github.luben",
+                "artifact": "zstd-jni"
+              },
+              "version": {
+                "range": "[1.5.7-3,2.0.0.0)",
+                "artifactVersion": "1.5.7-3"
+              },
+              "path": "META-INF/jarjar/zstd-jni-1.5.7-3.jar",
+              "isObfuscated": false
+            }
+          ]
+        },
+        "mapping_namespace": "Mojang-named (no Fabric mapping manifest contract)",
+        "forbidden_flat_native_entries": [],
+        "stock_maven_matches": [
+          {
+            "coordinate": "org.xerial:sqlite-jdbc:3.49.1.0",
+            "nested_path": "META-INF/jarjar/sqlite-jdbc-3.49.1.0.jar",
+            "nested_sha256": "5c8609d2ca341deb8c6f71778974b5ba4995c7d32d7c7c89d9392a3e72c39291",
+            "matched_stock_files": [
+              "/home/vox/.gradle/caches/modules-2/files-2.1/org.xerial/sqlite-jdbc/3.49.1.0/145d3a6819b86f3618728273329392269104c8c7/sqlite-jdbc-3.49.1.0.jar"
+            ],
+            "candidate_count": 1,
+            "byte_identical": true
+          },
+          {
+            "coordinate": "com.github.luben:zstd-jni:1.5.7-3",
+            "nested_path": "META-INF/jarjar/zstd-jni-1.5.7-3.jar",
+            "nested_sha256": "a38a4a97f1b43b878c91e0dd7f1e3d17f0e70beec71d95bacaf56a2f207624a3",
+            "matched_stock_files": [
+              "/home/vox/.gradle/caches/modules-2/files-2.1/com.github.luben/zstd-jni/1.5.7-3/dc55c256583fb810f9fe3ede271843b68132fb7c/zstd-jni-1.5.7-3.jar"
+            ],
+            "candidate_count": 1,
+            "byte_identical": true
+          }
+        ],
+        "lss_class_majors": {
+          "65": 179,
+          "69": 256
+        },
+        "lss_class_count": 435,
+        "common_class_majors": {
+          "65": 179
+        },
+        "platform_class_majors": {
+          "69": 256
+        },
+        "wi2_registration_present": true,
+        "wi3_delivery_present": true,
+        "receipt_cancellation_field_present": true,
+        "host_service_ready_hook_present": true,
+        "issues": []
+      }
+    ],
+    "brand_pairs": [
+      {
+        "loader": "fabric",
+        "all_lss_class_bytes_identical": true,
+        "class_count": 448,
+        "different_classes": [],
+        "nested_common_paths": [
+          "META-INF/jars/common-0.14.0.jar"
+        ],
+        "nested_common_bytes_identical": true,
+        "all_nested_library_bytes_identical": true
+      },
+      {
+        "loader": "paper",
+        "all_lss_class_bytes_identical": true,
+        "class_count": 255,
+        "different_classes": [],
+        "nested_common_paths": [],
+        "nested_common_bytes_identical": null,
+        "all_nested_library_bytes_identical": true
+      },
+      {
+        "loader": "neoforge",
+        "all_lss_class_bytes_identical": true,
+        "class_count": 435,
+        "different_classes": [],
+        "nested_common_paths": [],
+        "nested_common_bytes_identical": null,
+        "all_nested_library_bytes_identical": true
+      }
+    ],
+    "issues": []
+  },
+  {
+    "line": "26.2",
+    "minecraft": "26.2",
+    "version": "0.14.0",
+    "inspection_utc": "2026-09-08T21:48:49.171795+00:00",
+    "head_at_inspection": "9638042bb543382203a835aacd8f0f7444d2cb36",
+    "note": "HEAD records inspection context; exact jar hashes identify the built artifacts. No inference that later source/doc commits were compiled.",
+    "ship_neoforge": true,
+    "expected_java": 25,
+    "artifacts": [
+      {
+        "path": "/home/vox/projects/lss-lines/26.2/fabric/build/libs/lod-server-support-fabric-0.14.0+26.2.jar",
+        "filename": "lod-server-support-fabric-0.14.0+26.2.jar",
+        "brand": "LSS",
+        "loader": "fabric",
+        "size_bytes": 8217997,
+        "sha256": "e897526d91f3f084dc42fa6152b4c697d03925552244a6432fbc1bc0ec32a9ed",
+        "mtime_utc": "2026-09-08T21:43:17.061823+00:00",
+        "manifest": {
+          "Manifest-Version": "1.0",
+          "Fabric-Mapping-Namespace": "official",
+          "Fabric-Gradle-Version": "9.5.1",
+          "Fabric-Loom-Version": "1.17.13",
+          "Fabric-Mixin-Compile-Extensions-Version": "0.6.0",
+          "Fabric-Minecraft-Version": "26.2",
+          "Fabric-Tiny-Remapper-Version": "0.14.0",
+          "Fabric-Loader-Version": "0.19.3",
+          "Fabric-Mixin-Version": "0.17.3+mixin.0.8.7",
+          "Fabric-Mixin-Group": "net.fabricmc"
+        },
+        "nested": [
+          {
+            "path": "META-INF/jars/common-0.14.0.jar",
+            "size_bytes": 372730,
+            "sha256": "41aaa6809977c5088f60e3a1a39ddb237fce38c01946ea5160a36e50fdc194d8",
+            "class_count": 179,
+            "all_class_majors": {
+              "65": 179
+            },
+            "lss_class_count": 179,
+            "native_count": 0
+          },
+          {
+            "path": "META-INF/jars/sqlite-jdbc-slim.jar",
+            "size_bytes": 4981674,
+            "sha256": "d5adf3379521b94fe5e9e9e9d64cac141a410ad3dff74175ce5fdce7320d47a3",
+            "class_count": 129,
+            "all_class_majors": {
+              "52": 125,
+              "53": 4
+            },
+            "lss_class_count": 0,
+            "native_count": 8
+          },
+          {
+            "path": "META-INF/jars/zstd-jni-slim.jar",
+            "size_bytes": 2263169,
+            "sha256": "b18631b75106d5f3c60a7309d1942e7d0eb19951a5702a617dce9c0d748e47c8",
+            "class_count": 37,
+            "all_class_majors": {
+              "52": 36,
+              "53": 1
+            },
+            "lss_class_count": 0,
+            "native_count": 6
+          }
+        ],
+        "metadata": {
+          "schemaVersion": 1,
+          "id": "lss",
+          "version": "0.14.0",
+          "name": "LOD Server Support",
+          "description": "Voxy multiplayer support (unofficial). Enables players with Voxy to see fully rendered terrain out to hundreds of chunks on multiplayer servers without needing to explore the world first.",
+          "authors": [
+            "VoX"
+          ],
+          "contact": {
+            "sources": "https://github.com/VoX/lod-server-support"
+          },
+          "license": "MIT",
+          "icon": "assets/lss/icon.png",
+          "accessWidener": "lss.accesswidener",
+          "environment": "*",
+          "entrypoints": {
+            "main": [
+              "dev.vox.lss.LSSMod"
+            ],
+            "client": [
+              "dev.vox.lss.LSSClient"
+            ],
+            "sodium:config_api_user": [
+              "dev.vox.lss.config.LSSConfigMenu"
+            ],
+            "modmenu": [
+              "dev.vox.lss.config.LSSModMenuIntegration"
+            ]
+          },
+          "mixins": [
+            "lss.mixins.json",
+            "lss-trace.mixins.json",
+            "lss-sodium-legacy.mixins.json"
+          ],
+          "jars": [
+            {
+              "file": "META-INF/jars/sqlite-jdbc-slim.jar"
+            },
+            {
+              "file": "META-INF/jars/zstd-jni-slim.jar"
+            },
+            {
+              "file": "META-INF/jars/common-0.14.0.jar"
+            }
+          ],
+          "depends": {
+            "minecraft": ">=26.2 <26.3-",
+            "fabricloader": ">=0.18.4",
+            "fabric-api": ">=0.152.1"
+          },
+          "suggests": {
+            "sodium": ">=0.9.0",
+            "modmenu": "*",
+            "voxy": ">=0.2.17-alpha",
+            "xaeroworldmap": "*"
+          }
+        },
+        "mapping_namespace": "official",
+        "access_widener_header": "accessWidener v2 official",
+        "lss_class_majors": {
+          "65": 179,
+          "69": 271
+        },
+        "lss_class_count": 450,
+        "common_class_majors": {
+          "65": 179
+        },
+        "platform_class_majors": {
+          "69": 271
+        },
+        "wi2_registration_present": true,
+        "wi3_delivery_present": true,
+        "receipt_cancellation_field_present": true,
+        "host_service_ready_hook_present": true,
+        "issues": []
+      },
+      {
+        "path": "/home/vox/projects/lss-lines/26.2/fabric/build/libs/voxy-server-side-fabric-0.14.0+26.2.jar",
+        "filename": "voxy-server-side-fabric-0.14.0+26.2.jar",
+        "brand": "VSS",
+        "loader": "fabric",
+        "size_bytes": 8223915,
+        "sha256": "767b31e5741422b0e4d486eb381aab267f9c8e8e68ff429a0b1bbf570a5eb5c1",
+        "mtime_utc": "2026-09-08T21:46:09.501799+00:00",
+        "manifest": {
+          "Manifest-Version": "1.0",
+          "Fabric-Mapping-Namespace": "official",
+          "Fabric-Gradle-Version": "9.5.1",
+          "Fabric-Loom-Version": "1.17.13",
+          "Fabric-Mixin-Compile-Extensions-Version": "0.6.0",
+          "Fabric-Minecraft-Version": "26.2",
+          "Fabric-Tiny-Remapper-Version": "0.14.0",
+          "Fabric-Loader-Version": "0.19.3",
+          "Fabric-Mixin-Version": "0.17.3+mixin.0.8.7",
+          "Fabric-Mixin-Group": "net.fabricmc"
+        },
+        "nested": [
+          {
+            "path": "META-INF/jars/common-0.14.0.jar",
+            "size_bytes": 372730,
+            "sha256": "41aaa6809977c5088f60e3a1a39ddb237fce38c01946ea5160a36e50fdc194d8",
+            "class_count": 179,
+            "all_class_majors": {
+              "65": 179
+            },
+            "lss_class_count": 179,
+            "native_count": 0
+          },
+          {
+            "path": "META-INF/jars/sqlite-jdbc-slim.jar",
+            "size_bytes": 4981674,
+            "sha256": "d5adf3379521b94fe5e9e9e9d64cac141a410ad3dff74175ce5fdce7320d47a3",
+            "class_count": 129,
+            "all_class_majors": {
+              "52": 125,
+              "53": 4
+            },
+            "lss_class_count": 0,
+            "native_count": 8
+          },
+          {
+            "path": "META-INF/jars/zstd-jni-slim.jar",
+            "size_bytes": 2263169,
+            "sha256": "b18631b75106d5f3c60a7309d1942e7d0eb19951a5702a617dce9c0d748e47c8",
+            "class_count": 37,
+            "all_class_majors": {
+              "52": 36,
+              "53": 1
+            },
+            "lss_class_count": 0,
+            "native_count": 6
+          }
+        ],
+        "metadata": {
+          "schemaVersion": 1,
+          "id": "lss",
+          "version": "0.14.0",
+          "name": "Voxy Server Side",
+          "description": "Render distant Voxy LODs on servers",
+          "authors": [
+            "Xantha",
+            "VoX"
+          ],
+          "contact": {
+            "sources": "https://github.com/VoX/lod-server-support",
+            "homepage": "https://modrinth.com/plugin/voxy-server-side"
+          },
+          "license": "MIT",
+          "icon": "assets/lss/icon-vss.png",
+          "accessWidener": "lss.accesswidener",
+          "environment": "*",
+          "entrypoints": {
+            "main": [
+              "dev.vox.lss.LSSMod"
+            ],
+            "client": [
+              "dev.vox.lss.LSSClient"
+            ],
+            "sodium:config_api_user": [
+              "dev.vox.lss.config.LSSConfigMenu"
+            ],
+            "modmenu": [
+              "dev.vox.lss.config.LSSModMenuIntegration"
+            ]
+          },
+          "mixins": [
+            "lss.mixins.json",
+            "lss-trace.mixins.json",
+            "lss-sodium-legacy.mixins.json"
+          ],
+          "jars": [
+            {
+              "file": "META-INF/jars/sqlite-jdbc-slim.jar"
+            },
+            {
+              "file": "META-INF/jars/zstd-jni-slim.jar"
+            },
+            {
+              "file": "META-INF/jars/common-0.14.0.jar"
+            }
+          ],
+          "depends": {
+            "minecraft": ">=26.2 <26.3-",
+            "fabricloader": ">=0.18.4",
+            "fabric-api": ">=0.152.1"
+          },
+          "suggests": {
+            "sodium": ">=0.9.0",
+            "modmenu": "*",
+            "voxy": ">=0.2.17-alpha",
+            "xaeroworldmap": "*"
+          }
+        },
+        "mapping_namespace": "official",
+        "access_widener_header": "accessWidener v2 official",
+        "lss_class_majors": {
+          "65": 179,
+          "69": 271
+        },
+        "lss_class_count": 450,
+        "common_class_majors": {
+          "65": 179
+        },
+        "platform_class_majors": {
+          "69": 271
+        },
+        "wi2_registration_present": true,
+        "wi3_delivery_present": true,
+        "receipt_cancellation_field_present": true,
+        "host_service_ready_hook_present": true,
+        "issues": []
+      },
+      {
+        "path": "/home/vox/projects/lss-lines/26.2/paper/build/libs/lod-server-support-paper-0.14.0+26.2.jar",
+        "filename": "lod-server-support-paper-0.14.0+26.2.jar",
+        "brand": "LSS",
+        "loader": "paper",
+        "size_bytes": 7796547,
+        "sha256": "cd162864c725dca9995ab570c9a6f28b93a412dfb54afc914c71126e4e915049",
+        "mtime_utc": "2026-09-08T21:46:11.966383+00:00",
+        "manifest": {
+          "Manifest-Version": "1.0",
+          "paperweight-mappings-namespace": "mojang",
+          "Multi-Release": "true"
+        },
+        "nested": [],
+        "metadata_raw": "name: LodServerSupport\nversion: '0.14.0'\nmain: dev.vox.lss.paper.LSSPaperPlugin\napi-version: '26.2'\n# DERIVED (R2-5): the value expands from `folia` membership in line.env's\n# LINE_PAPER_LOADERS \u2014 the one per-line judgment (\"does Folia exist upstream for\n# THIS line?\") lives there, beside the other line identity rows a fresh cut must\n# touch anyway. Where true, Folia support is EXPERIMENTAL (single-player soak\n# validated; concurrent multi-region ingress untested) \u2014 the flag is a loads-at-all\n# statement, never a claim that SOAK_PLATFORM=folia has passed on this line.\nfolia-supported: true\n# C5 (XVER \u00a77): the Via mismatch guard reflectively reads ViaVersion's API when the\n# plugin is present. softdepend keeps Spigot's classloader from logging the one-time\n# \"loaded class ... which is not a depend/softdepend\" warning on the first handshake \u2014\n# noise that reads like an LSS bug. No hard dependency: without Via the probe is a\n# silent no-signal. LibsDisguises (issue #282): the far-player privacy ladder reads\n# DisguiseAPI reflectively to hide disguised players \u2014 same precedent (load ORDER +\n# classloader visibility, never a hard depend; absent = the rung is skipped).\nsoftdepend: [ViaVersion, LibsDisguises]\ndescription: Voxy multiplayer support (unofficial). Enables players with Voxy to see fully rendered terrain out to hundreds of chunks on multiplayer servers without needing to explore the world first.\nauthor: VoX\nwebsite: https://modrinth.com/plugin/lod-server-support\ncommands:\n  lsslod:\n    description: LOD Server Support admin commands\n    usage: /lsslod <stats|diag|store|set|help>\n    permission: lss.admin\npermissions:\n  lss.admin:\n    description: Access to LSS admin commands\n    default: op\n  # Far players (v0.11.0 E1): server-side privacy lever \u2014 holders are never served as\n  # far players regardless of the farPlayers mode (FARP \u00a73.2). BOTH brand spellings are\n  # declared (default false) and the enforcement honors either: Bukkit resolves an\n  # UNDECLARED node to the op default, so a single-brand declaration plus a cross-brand\n  # check would silently hide every op \u2014 and declaring both keeps the privacy grant\n  # working across an LSS<->VSS jar swap.\n  lss.farplayers.hidden:\n    description: Players with this permission are never shown as far players\n    default: false\n  vss.farplayers.hidden:\n    description: Players with this permission are never shown as far players (VSS spelling)\n    default: false\n  # Service gate (requireServicePermission, default false): with the config key on, only\n  # holders are served LOD data \u2014 a handshake from anyone else is answered with an\n  # enabled=false SessionConfig and no session. BOTH brand spellings are declared for the\n  # reason spelled out on lss.farplayers.hidden above (Bukkit resolves an UNDECLARED node to\n  # the op default, so a single-brand declaration plus a cross-brand check goes silently\n  # wrong, and declaring both keeps grants alive across an LSS<->VSS jar swap).\n  #\n  # `default: true`, NOT op: everyone holds these unless an admin says otherwise, so arming\n  # the gate on its own changes nothing for anybody \u2014 the original behavior, preserved. The\n  # gate is a DENY tool: the only thing that takes LOD away is an explicit negative grant in\n  # the permission plugin (e.g. LuckPerms `group default permission set lss.use false`).\n  #\n  # Enforcement requires BOTH spellings, so a negative grant on EITHER one denies \u2014 the De\n  # Morgan mirror of the privacy nodes above (grant model: hold EITHER; deny model: lose\n  # EITHER). An OR here would be inert: the spelling the admin did NOT touch still resolves\n  # to its declared `true` and would out-vote the single negative grant.\n  #\n  # That direction is also why losing either declaration is dangerous: an undeclared node\n  # falls back to Bukkit's op default, silently turning \"everyone\" into \"ops only\".\n  lss.use:\n    description: Receive LOD data when requireServicePermission is enabled\n    default: true\n  vss.use:\n    description: Receive LOD data when requireServicePermission is enabled (VSS spelling)\n    default: true\n",
+        "metadata": {
+          "name": "LodServerSupport",
+          "version": "0.14.0",
+          "main": "dev.vox.lss.paper.LSSPaperPlugin",
+          "api-version": "26.2",
+          "folia-supported": "true"
+        },
+        "mapping_namespace": "mojang",
+        "lss_class_majors": {
+          "65": 179,
+          "69": 77
+        },
+        "lss_class_count": 256,
+        "common_class_majors": {
+          "65": 179
+        },
+        "platform_class_majors": {
+          "69": 77
+        },
+        "wi2_registration_present": true,
+        "issues": []
+      },
+      {
+        "path": "/home/vox/projects/lss-lines/26.2/paper/build/libs/voxy-server-side-paper-0.14.0+26.2.jar",
+        "filename": "voxy-server-side-paper-0.14.0+26.2.jar",
+        "brand": "VSS",
+        "loader": "paper",
+        "size_bytes": 7796486,
+        "sha256": "31d1a5d5efb5d4c860a40620bdd94e439185a62539c4f5449f79c9df86119cdc",
+        "mtime_utc": "2026-09-08T21:46:11.521748+00:00",
+        "manifest": {
+          "Manifest-Version": "1.0",
+          "paperweight-mappings-namespace": "mojang",
+          "Multi-Release": "true"
+        },
+        "nested": [],
+        "metadata_raw": "name: VoxyServerSide\nversion: '0.14.0'\nmain: dev.vox.lss.paper.LSSPaperPlugin\napi-version: '26.2'\n# DERIVED (R2-5): the value expands from `folia` membership in line.env's\n# LINE_PAPER_LOADERS \u2014 the one per-line judgment (\"does Folia exist upstream for\n# THIS line?\") lives there, beside the other line identity rows a fresh cut must\n# touch anyway. Where true, Folia support is EXPERIMENTAL (single-player soak\n# validated; concurrent multi-region ingress untested) \u2014 the flag is a loads-at-all\n# statement, never a claim that SOAK_PLATFORM=folia has passed on this line.\nfolia-supported: true\n# C5 (XVER \u00a77): the Via mismatch guard reflectively reads ViaVersion's API when the\n# plugin is present. softdepend keeps Spigot's classloader from logging the one-time\n# \"loaded class ... which is not a depend/softdepend\" warning on the first handshake \u2014\n# noise that reads like an LSS bug. No hard dependency: without Via the probe is a\n# silent no-signal. LibsDisguises (issue #282): the far-player privacy ladder reads\n# DisguiseAPI reflectively to hide disguised players \u2014 same precedent (load ORDER +\n# classloader visibility, never a hard depend; absent = the rung is skipped).\nsoftdepend: [ViaVersion, LibsDisguises]\ndescription: Render distant Voxy LODs on servers\nauthor: Xantha, VoX\nwebsite: https://modrinth.com/plugin/voxy-server-side\ncommands:\n  vsslod:\n    description: Voxy Server Side admin commands\n    usage: /vsslod <stats|diag|store|set|help>\n    permission: vss.admin\npermissions:\n  vss.admin:\n    description: Access to VSS admin commands\n    default: op\n  # Far players (v0.11.0 E1): server-side privacy lever \u2014 holders are never served as\n  # far players regardless of the farPlayers mode (FARP \u00a73.2). BOTH brand spellings are\n  # declared (default false) and the enforcement honors either: Bukkit resolves an\n  # UNDECLARED node to the op default, so a single-brand declaration plus a cross-brand\n  # check would silently hide every op \u2014 and declaring both keeps the privacy grant\n  # working across an LSS<->VSS jar swap.\n  lss.farplayers.hidden:\n    description: Players with this permission are never shown as far players\n    default: false\n  vss.farplayers.hidden:\n    description: Players with this permission are never shown as far players (VSS spelling)\n    default: false\n  # Service gate (requireServicePermission, default false): with the config key on, only\n  # holders are served LOD data \u2014 a handshake from anyone else is answered with an\n  # enabled=false SessionConfig and no session. BOTH brand spellings are declared for the\n  # reason spelled out on lss.farplayers.hidden above (Bukkit resolves an UNDECLARED node to\n  # the op default, so a single-brand declaration plus a cross-brand check goes silently\n  # wrong, and declaring both keeps grants alive across an LSS<->VSS jar swap).\n  #\n  # `default: true`, NOT op: everyone holds these unless an admin says otherwise, so arming\n  # the gate on its own changes nothing for anybody \u2014 the original behavior, preserved. The\n  # gate is a DENY tool: the only thing that takes LOD away is an explicit negative grant in\n  # the permission plugin (e.g. LuckPerms `group default permission set lss.use false`).\n  #\n  # Enforcement requires BOTH spellings, so a negative grant on EITHER one denies \u2014 the De\n  # Morgan mirror of the privacy nodes above (grant model: hold EITHER; deny model: lose\n  # EITHER). An OR here would be inert: the spelling the admin did NOT touch still resolves\n  # to its declared `true` and would out-vote the single negative grant.\n  #\n  # That direction is also why losing either declaration is dangerous: an undeclared node\n  # falls back to Bukkit's op default, silently turning \"everyone\" into \"ops only\".\n  lss.use:\n    description: Receive LOD data when requireServicePermission is enabled\n    default: true\n  vss.use:\n    description: Receive LOD data when requireServicePermission is enabled (VSS spelling)\n    default: true\n",
+        "metadata": {
+          "name": "VoxyServerSide",
+          "version": "0.14.0",
+          "main": "dev.vox.lss.paper.LSSPaperPlugin",
+          "api-version": "26.2",
+          "folia-supported": "true"
+        },
+        "mapping_namespace": "mojang",
+        "lss_class_majors": {
+          "65": 179,
+          "69": 77
+        },
+        "lss_class_count": 256,
+        "common_class_majors": {
+          "65": 179
+        },
+        "platform_class_majors": {
+          "69": 77
+        },
+        "wi2_registration_present": true,
+        "issues": []
+      },
+      {
+        "path": "/home/vox/projects/lss-lines/26.2/neoforge/build/libs/lod-server-support-neoforge-0.14.0+26.2.jar",
+        "filename": "lod-server-support-neoforge-0.14.0+26.2.jar",
+        "brand": "LSS",
+        "loader": "neoforge",
+        "size_bytes": 22644337,
+        "sha256": "4da6511302a8aa2f64932b3681e1b244f2792a37910d07f409b439ffaa0160e9",
+        "mtime_utc": "2026-09-08T21:46:23.781870+00:00",
+        "manifest": {
+          "Manifest-Version": "1.0",
+          "Multi-Release": "true"
+        },
+        "nested": [
+          {
+            "path": "META-INF/jarjar/sqlite-jdbc-3.49.1.0.jar",
+            "size_bytes": 14317659,
+            "sha256": "5c8609d2ca341deb8c6f71778974b5ba4995c7d32d7c7c89d9392a3e72c39291",
+            "class_count": 129,
+            "all_class_majors": {
+              "52": 125,
+              "53": 4
+            },
+            "lss_class_count": 0,
+            "native_count": 24
+          },
+          {
+            "path": "META-INF/jarjar/zstd-jni-1.5.7-3.jar",
+            "size_bytes": 7408362,
+            "sha256": "a38a4a97f1b43b878c91e0dd7f1e3d17f0e70beec71d95bacaf56a2f207624a3",
+            "class_count": 37,
+            "all_class_majors": {
+              "52": 36,
+              "53": 1
+            },
+            "lss_class_count": 0,
+            "native_count": 18
+          }
+        ],
+        "metadata": {
+          "modLoader": "javafml",
+          "loaderVersion": "[4,)",
+          "license": "MIT",
+          "issueTrackerURL": "https://github.com/VoX/lod-server-support/issues",
+          "mods": [
+            {
+              "modId": "lss",
+              "version": "0.14.0",
+              "displayName": "LOD Server Support",
+              "authors": "VoX",
+              "logoFile": "assets/lss/icon.png",
+              "description": "Voxy multiplayer support (unofficial). Enables players with Voxy to see fully rendered terrain out to hundreds of chunks on multiplayer servers without needing to explore the world first. Server-side works with any LSS/VSS client; the client half needs a community Voxy build for NeoForge."
+            }
+          ],
+          "mixins": [
+            {
+              "config": "lss.neoforge.mixins.json"
+            },
+            {
+              "config": "lss-sodium-legacy.mixins.json"
+            }
+          ],
+          "dependencies": {
+            "lss": [
+              {
+                "modId": "neoforge",
+                "type": "required",
+                "versionRange": "[26.2,)",
+                "ordering": "NONE",
+                "side": "BOTH"
+              },
+              {
+                "modId": "minecraft",
+                "type": "required",
+                "versionRange": "[26.2]",
+                "ordering": "NONE",
+                "side": "BOTH"
+              }
+            ]
+          },
+          "modproperties": {
+            "lss": {
+              "sodium:config_api_user": "dev.vox.lss.config.LSSConfigMenu"
+            }
+          }
+        },
+        "jarjar_metadata": {
+          "jars": [
+            {
+              "identifier": {
+                "group": "org.xerial",
+                "artifact": "sqlite-jdbc"
+              },
+              "version": {
+                "range": "[3.49.1.0,4.0.0.0)",
+                "artifactVersion": "3.49.1.0"
+              },
+              "path": "META-INF/jarjar/sqlite-jdbc-3.49.1.0.jar",
+              "isObfuscated": false
+            },
+            {
+              "identifier": {
+                "group": "com.github.luben",
+                "artifact": "zstd-jni"
+              },
+              "version": {
+                "range": "[1.5.7-3,2.0.0.0)",
+                "artifactVersion": "1.5.7-3"
+              },
+              "path": "META-INF/jarjar/zstd-jni-1.5.7-3.jar",
+              "isObfuscated": false
+            }
+          ]
+        },
+        "mapping_namespace": "Mojang-named (no Fabric mapping manifest contract)",
+        "forbidden_flat_native_entries": [],
+        "stock_maven_matches": [
+          {
+            "coordinate": "org.xerial:sqlite-jdbc:3.49.1.0",
+            "nested_path": "META-INF/jarjar/sqlite-jdbc-3.49.1.0.jar",
+            "nested_sha256": "5c8609d2ca341deb8c6f71778974b5ba4995c7d32d7c7c89d9392a3e72c39291",
+            "matched_stock_files": [
+              "/home/vox/.gradle/caches/modules-2/files-2.1/org.xerial/sqlite-jdbc/3.49.1.0/145d3a6819b86f3618728273329392269104c8c7/sqlite-jdbc-3.49.1.0.jar"
+            ],
+            "candidate_count": 1,
+            "byte_identical": true
+          },
+          {
+            "coordinate": "com.github.luben:zstd-jni:1.5.7-3",
+            "nested_path": "META-INF/jarjar/zstd-jni-1.5.7-3.jar",
+            "nested_sha256": "a38a4a97f1b43b878c91e0dd7f1e3d17f0e70beec71d95bacaf56a2f207624a3",
+            "matched_stock_files": [
+              "/home/vox/.gradle/caches/modules-2/files-2.1/com.github.luben/zstd-jni/1.5.7-3/dc55c256583fb810f9fe3ede271843b68132fb7c/zstd-jni-1.5.7-3.jar"
+            ],
+            "candidate_count": 1,
+            "byte_identical": true
+          }
+        ],
+        "lss_class_majors": {
+          "65": 179,
+          "69": 258
+        },
+        "lss_class_count": 437,
+        "common_class_majors": {
+          "65": 179
+        },
+        "platform_class_majors": {
+          "69": 258
+        },
+        "wi2_registration_present": true,
+        "wi3_delivery_present": true,
+        "receipt_cancellation_field_present": true,
+        "host_service_ready_hook_present": true,
+        "issues": []
+      },
+      {
+        "path": "/home/vox/projects/lss-lines/26.2/neoforge/build/libs/voxy-server-side-neoforge-0.14.0+26.2.jar",
+        "filename": "voxy-server-side-neoforge-0.14.0+26.2.jar",
+        "brand": "VSS",
+        "loader": "neoforge",
+        "size_bytes": 22650180,
+        "sha256": "c515e34ac5d96cd2f175c190873ebe2583c925388d0793a847444e69de25ae75",
+        "mtime_utc": "2026-09-08T21:46:25.015278+00:00",
+        "manifest": {
+          "Manifest-Version": "1.0",
+          "Multi-Release": "true"
+        },
+        "nested": [
+          {
+            "path": "META-INF/jarjar/sqlite-jdbc-3.49.1.0.jar",
+            "size_bytes": 14317659,
+            "sha256": "5c8609d2ca341deb8c6f71778974b5ba4995c7d32d7c7c89d9392a3e72c39291",
+            "class_count": 129,
+            "all_class_majors": {
+              "52": 125,
+              "53": 4
+            },
+            "lss_class_count": 0,
+            "native_count": 24
+          },
+          {
+            "path": "META-INF/jarjar/zstd-jni-1.5.7-3.jar",
+            "size_bytes": 7408362,
+            "sha256": "a38a4a97f1b43b878c91e0dd7f1e3d17f0e70beec71d95bacaf56a2f207624a3",
+            "class_count": 37,
+            "all_class_majors": {
+              "52": 36,
+              "53": 1
+            },
+            "lss_class_count": 0,
+            "native_count": 18
+          }
+        ],
+        "metadata": {
+          "modLoader": "javafml",
+          "loaderVersion": "[4,)",
+          "license": "MIT",
+          "issueTrackerURL": "https://modrinth.com/plugin/voxy-server-side",
+          "mods": [
+            {
+              "modId": "lss",
+              "version": "0.14.0",
+              "displayName": "Voxy Server Side",
+              "authors": "Xantha, VoX",
+              "logoFile": "assets/lss/icon-vss.png",
+              "description": "Render distant Voxy LODs on servers. Server-side works with any LSS/VSS client; the client half needs a community Voxy build for NeoForge."
+            }
+          ],
+          "mixins": [
+            {
+              "config": "lss.neoforge.mixins.json"
+            },
+            {
+              "config": "lss-sodium-legacy.mixins.json"
+            }
+          ],
+          "dependencies": {
+            "lss": [
+              {
+                "modId": "neoforge",
+                "type": "required",
+                "versionRange": "[26.2,)",
+                "ordering": "NONE",
+                "side": "BOTH"
+              },
+              {
+                "modId": "minecraft",
+                "type": "required",
+                "versionRange": "[26.2]",
+                "ordering": "NONE",
+                "side": "BOTH"
+              }
+            ]
+          },
+          "modproperties": {
+            "lss": {
+              "sodium:config_api_user": "dev.vox.lss.config.LSSConfigMenu"
+            }
+          }
+        },
+        "jarjar_metadata": {
+          "jars": [
+            {
+              "identifier": {
+                "group": "org.xerial",
+                "artifact": "sqlite-jdbc"
+              },
+              "version": {
+                "range": "[3.49.1.0,4.0.0.0)",
+                "artifactVersion": "3.49.1.0"
+              },
+              "path": "META-INF/jarjar/sqlite-jdbc-3.49.1.0.jar",
+              "isObfuscated": false
+            },
+            {
+              "identifier": {
+                "group": "com.github.luben",
+                "artifact": "zstd-jni"
+              },
+              "version": {
+                "range": "[1.5.7-3,2.0.0.0)",
+                "artifactVersion": "1.5.7-3"
+              },
+              "path": "META-INF/jarjar/zstd-jni-1.5.7-3.jar",
+              "isObfuscated": false
+            }
+          ]
+        },
+        "mapping_namespace": "Mojang-named (no Fabric mapping manifest contract)",
+        "forbidden_flat_native_entries": [],
+        "stock_maven_matches": [
+          {
+            "coordinate": "org.xerial:sqlite-jdbc:3.49.1.0",
+            "nested_path": "META-INF/jarjar/sqlite-jdbc-3.49.1.0.jar",
+            "nested_sha256": "5c8609d2ca341deb8c6f71778974b5ba4995c7d32d7c7c89d9392a3e72c39291",
+            "matched_stock_files": [
+              "/home/vox/.gradle/caches/modules-2/files-2.1/org.xerial/sqlite-jdbc/3.49.1.0/145d3a6819b86f3618728273329392269104c8c7/sqlite-jdbc-3.49.1.0.jar"
+            ],
+            "candidate_count": 1,
+            "byte_identical": true
+          },
+          {
+            "coordinate": "com.github.luben:zstd-jni:1.5.7-3",
+            "nested_path": "META-INF/jarjar/zstd-jni-1.5.7-3.jar",
+            "nested_sha256": "a38a4a97f1b43b878c91e0dd7f1e3d17f0e70beec71d95bacaf56a2f207624a3",
+            "matched_stock_files": [
+              "/home/vox/.gradle/caches/modules-2/files-2.1/com.github.luben/zstd-jni/1.5.7-3/dc55c256583fb810f9fe3ede271843b68132fb7c/zstd-jni-1.5.7-3.jar"
+            ],
+            "candidate_count": 1,
+            "byte_identical": true
+          }
+        ],
+        "lss_class_majors": {
+          "65": 179,
+          "69": 258
+        },
+        "lss_class_count": 437,
+        "common_class_majors": {
+          "65": 179
+        },
+        "platform_class_majors": {
+          "69": 258
+        },
+        "wi2_registration_present": true,
+        "wi3_delivery_present": true,
+        "receipt_cancellation_field_present": true,
+        "host_service_ready_hook_present": true,
+        "issues": []
+      }
+    ],
+    "brand_pairs": [
+      {
+        "loader": "fabric",
+        "all_lss_class_bytes_identical": true,
+        "class_count": 450,
+        "different_classes": [],
+        "nested_common_paths": [
+          "META-INF/jars/common-0.14.0.jar"
+        ],
+        "nested_common_bytes_identical": true,
+        "all_nested_library_bytes_identical": true
+      },
+      {
+        "loader": "paper",
+        "all_lss_class_bytes_identical": true,
+        "class_count": 256,
+        "different_classes": [],
+        "nested_common_paths": [],
+        "nested_common_bytes_identical": null,
+        "all_nested_library_bytes_identical": true
+      },
+      {
+        "loader": "neoforge",
+        "all_lss_class_bytes_identical": true,
+        "class_count": 437,
+        "different_classes": [],
+        "nested_common_paths": [],
+        "nested_common_bytes_identical": null,
+        "all_nested_library_bytes_identical": true
+      }
+    ],
+    "issues": []
+  }
+]

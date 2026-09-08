@@ -1,0 +1,181 @@
+{
+  "api_url": "https://api.modrinth.com/v2/project/sodium/version?game_versions=%5B%221.21.1%22%5D&loaders=%5B%22fabric%22%5D",
+  "version": {
+    "game_versions": [
+      "1.21",
+      "1.21.1"
+    ],
+    "loaders": [
+      "fabric"
+    ],
+    "environment": "client_only",
+    "id": "u1OEbNKx",
+    "project_id": "AANobbMI",
+    "author_id": "TEZXhE2U",
+    "featured": false,
+    "name": "Sodium 0.6.13 for Fabric 1.21.1",
+    "version_number": "mc1.21.1-0.6.13-fabric",
+    "changelog": "- Improved compatibility with some NeoForge mods that use the Fabric Rendering API.\n- Improved compatibility with some Fabric mods when they're used on NeoForge with Sinytra Connector.\n- Fixed an incompatibility with _Snow Real Magic!_ and some other mods that would cause holes to appear in the world.\n- Fixed an issue with mods that use animated sprites in the user interface which was causing their sprites to not be animated.\n- Disabled the use of certain developer options in production which were being modified unnecessarily by other mods.\n- Marked PojavLauncher as incompatible due to multiple severe and unresolved issues.\n- Marked BetterEnd as incompatible due to it enabling code when Sodium is present that causes frequent and difficult to understand crashes.\n- Added a warning for when resource packs try to replace the shaders used by Sodium's improved cloud renderer.",
+    "changelog_url": null,
+    "date_published": "2025-04-04T00:07:37.476142Z",
+    "downloads": 18617730,
+    "version_type": "release",
+    "status": "listed",
+    "requested_status": null,
+    "files": [
+      {
+        "id": "zDdYa3IL",
+        "hashes": {
+          "sha1": "928a2598178c3a58b0638bab842f467d2e49251a",
+          "sha512": "13032e064c554fc8671573dadb07bc70e6ea2f68706c65c086c4feb1d2f664346a3414cbf9d1367b42b8d063a35e40f2f967ef9af31642e1f0093b852161fe91"
+        },
+        "url": "https://cdn.modrinth.com/data/AANobbMI/versions/u1OEbNKx/sodium-fabric-0.6.13%2Bmc1.21.1.jar",
+        "filename": "sodium-fabric-0.6.13+mc1.21.1.jar",
+        "primary": true,
+        "size": 1297761,
+        "file_type": null
+      }
+    ],
+    "dependencies": []
+  },
+  "verified_api_hashes": {
+    "sha1": "928a2598178c3a58b0638bab842f467d2e49251a",
+    "sha512": "13032e064c554fc8671573dadb07bc70e6ea2f68706c65c086c4feb1d2f664346a3414cbf9d1367b42b8d063a35e40f2f967ef9af31642e1f0093b852161fe91"
+  },
+  "download_sha256": "e04599514d88e41765f710eeba59e3814909833396bc11b977f48fc2e7e50353",
+  "embedded_metadata": {
+    "schemaVersion": 1,
+    "id": "sodium",
+    "version": "0.6.13+mc1.21.1",
+    "name": "Sodium",
+    "description": "Sodium is a powerful rendering engine for Minecraft which greatly improves frame rates and micro-stutter, while fixing many graphical issues",
+    "authors": [
+      {
+        "name": "JellySquid (jellysquid3)",
+        "contact": {
+          "email": "jellysquid@pm.me",
+          "homepage": "https://jellysquid.me"
+        }
+      }
+    ],
+    "contributors": [
+      "IMS212",
+      "bytzo",
+      "PepperCode1",
+      "FlashyReese",
+      "altrisi",
+      "Grayray75",
+      "Madis0",
+      "Johni0702",
+      "comp500",
+      "coderbot16",
+      "Moulberry",
+      "MCRcortex",
+      "Altirix",
+      "embeddedt",
+      "pajicadvance",
+      "Kroppeb",
+      "douira",
+      "burgerindividual",
+      "TwistedZero",
+      "Leo40Git",
+      "haykam821",
+      "muzikbike"
+    ],
+    "contact": {
+      "homepage": "https://github.com/CaffeineMC/sodium",
+      "sources": "https://github.com/CaffeineMC/sodium",
+      "issues": "https://github.com/CaffeineMC/sodium/issues"
+    },
+    "license": "Polyform-Shield-1.0.0",
+    "icon": "sodium-icon.png",
+    "environment": "client",
+    "entrypoints": {
+      "client": [
+        "net.caffeinemc.mods.sodium.fabric.SodiumFabricMod"
+      ],
+      "preLaunch": [
+        "net.caffeinemc.mods.sodium.fabric.SodiumPreLaunch"
+      ]
+    },
+    "custom": {
+      "fabric-renderer-api-v1:contains_renderer": true,
+      "modmenu": {
+        "links": {
+          "modmenu.donate": "https://caffeinemc.net/donate",
+          "modmenu.discord": "https://caffeinemc.net/discord",
+          "modmenu.github_releases": "https://github.com/CaffeineMC/sodium/releases",
+          "modmenu.kofi": "https://caffeinemc.net/donate",
+          "modmenu.modrinth": "https://modrinth.com/mod/sodium"
+        }
+      }
+    },
+    "accessWidener": "sodium-fabric.accesswidener",
+    "mixins": [
+      "sodium-common.mixins.json",
+      "sodium-fabric.mixins.json"
+    ],
+    "depends": {
+      "minecraft": [
+        "1.21",
+        "1.21.1"
+      ],
+      "fabricloader": ">=0.16.0",
+      "fabric-block-view-api-v2": "*",
+      "fabric-renderer-api-v1": "*",
+      "fabric-rendering-data-attachment-v1": "*",
+      "fabric-rendering-fluids-v1": ">=2.0.0",
+      "fabric-resource-loader-v0": "*"
+    },
+    "breaks": {
+      "embeddium": "*",
+      "optifabric": "*",
+      "canvas": "*",
+      "vulkanmod": "*",
+      "sodium-blendingregistry": "*",
+      "ocrenderfix_sodium": "*",
+      "betterfpsdist": "<=1.21-4.5",
+      "bobby": "<5.2.4",
+      "chunksfadein": "<2.0.2-1.21.2",
+      "cull-less-leaves": "<=1.3.0",
+      "cullleaves": "<=3.4.0-fabric",
+      "custom_hud": "<3.4.2",
+      "farsight": "<=1.21-4.3",
+      "iceberg": "<1.2.7",
+      "iris": "<1.8.7",
+      "movingelevators": "<=1.4.7",
+      "notenoughcrashes": "<4.4.8",
+      "noxesium": "<2.3.3",
+      "reeses-sodium-options": "<1.8.0",
+      "sodium-extra": "<0.6.0",
+      "sspb": "<4.0.0",
+      "moreculling": "<1.0.4",
+      "simply-no-shading": "<7.6.2",
+      "betterend": "<=21.0.11"
+    },
+    "provides": [
+      "indium"
+    ],
+    "jars": [
+      {
+        "file": "META-INF/jars/fabric-resource-loader-v0-1.3.1+5b5275af19.jar"
+      },
+      {
+        "file": "META-INF/jars/fabric-block-view-api-v2-1.0.10+6573ed8c19.jar"
+      },
+      {
+        "file": "META-INF/jars/fabric-rendering-data-attachment-v1-0.3.48+73761d2e19.jar"
+      },
+      {
+        "file": "META-INF/jars/fabric-rendering-fluids-v1-3.1.6+1daea21519.jar"
+      },
+      {
+        "file": "META-INF/jars/fabric-renderer-api-v1-3.4.0+c705a49c19.jar"
+      },
+      {
+        "file": "META-INF/jars/fabric-api-base-0.4.42+6573ed8c19.jar"
+      }
+    ]
+  },
+  "download_path": "/home/vox/.local/state/lss-review/20260908-implementation/downloads/sodium-fabric-0.6.13+mc1.21.1.jar"
+}

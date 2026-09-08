@@ -1,0 +1,1045 @@
+{
+  "fixtures": [
+    {
+      "fixture": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/gui-server-a",
+      "port": 25566,
+      "bind": "127.0.0.1",
+      "launched": false,
+      "world_source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base/world",
+      "dependency_source": "/home/vox/projects/lss-port-1.21.1/test-server/fabric",
+      "candidate_source": "/home/vox/projects/lss-lines/1.21.1/fabric/build/libs/lod-server-support-fabric-0.14.0+1.21.1.jar",
+      "candidate_sha256": "65e2486eb725f64b88bbc1abc1597cc41e82e4dde06b550b5b4148af0751e5bf",
+      "workspace_commit_at_preparation": "3a0c61c296b729a7db8d64d83a7d35f511874c48",
+      "files": [
+        {
+          "path": ".fabric/server/1.21.1-server.jar",
+          "size": 51627615,
+          "sha256": "e3bc55693e93cda0188f2e60aea28113fc647c5e85a15fa3d1b347349231b4bb"
+        },
+        {
+          "path": ".fabric/server/fabric-loader-server-0.19.3-minecraft-1.21.1.jar",
+          "size": 644,
+          "sha256": "e879b47213e121cfd7a269cd9a213bca4ab6963f23acdcbde71152106db3632e"
+        },
+        {
+          "path": "config/lss-server-config.json",
+          "size": 362,
+          "sha256": "fd57efd8d8c69b3955473301814bbd6b9eb9af9ba110d4b5bb9fd6df6f1c4b47"
+        },
+        {
+          "path": "eula.txt",
+          "size": 10,
+          "sha256": "ee27072e4a23e088522f740ddaab0c7c4145c186969e90a86254faa3a5ec5ce6"
+        },
+        {
+          "path": "fabric-server-launch.jar",
+          "size": 179053,
+          "sha256": "a9822390dd1df52e7de381ca3d0a1431d565a19f5c70c38eafb197944703cc71"
+        },
+        {
+          "path": "launch.sh",
+          "size": 261,
+          "sha256": "242265ebdbd8ef1ecb31fc95a54cedc836ab0f4514aad24fd3caa412333e1d33"
+        },
+        {
+          "path": "libraries/com/github/oshi/oshi-core/6.4.10/oshi-core-6.4.10.jar",
+          "size": 979212,
+          "sha256": "fef001a7a13515c273f30915915580782afbc45273cc07aa15994e51563ef310"
+        },
+        {
+          "path": "libraries/com/google/code/gson/gson/2.10.1/gson-2.10.1.jar",
+          "size": 283367,
+          "sha256": "4241c14a7727c34feea6507ec801318a3d4a90f070e4525681079fb94ee4c593"
+        },
+        {
+          "path": "libraries/com/google/guava/failureaccess/1.0.1/failureaccess-1.0.1.jar",
+          "size": 4617,
+          "sha256": "a171ee4c734dd2da837e4b16be9df4661afab72a41adaf31eb84dfdaf936ca26"
+        },
+        {
+          "path": "libraries/com/google/guava/guava/32.1.2-jre/guava-32.1.2-jre.jar",
+          "size": 3041591,
+          "sha256": "bc65dea7cfd9e4dacf8419d8af0e741655857d27885bb35d943d7187fc3a8fce"
+        },
+        {
+          "path": "libraries/com/mojang/authlib/6.0.54/authlib-6.0.54.jar",
+          "size": 115242,
+          "sha256": "319ea7b53b5e52f62ad3e2b81e9db7f0751240edac548bd74f5f19e35dc21a3b"
+        },
+        {
+          "path": "libraries/com/mojang/brigadier/1.3.10/brigadier-1.3.10.jar",
+          "size": 80082,
+          "sha256": "c8ee4136e474ac7723ca2b432ec8d1a2bc88ef7d1ec57c314ba9e33cdc83dd75"
+        },
+        {
+          "path": "libraries/com/mojang/datafixerupper/8.0.16/datafixerupper-8.0.16.jar",
+          "size": 724313,
+          "sha256": "ffc138bc2596c291781b0d5e211ccac51f0f2345f27fc2742f335cedf7e2870d"
+        },
+        {
+          "path": "libraries/com/mojang/logging/1.2.7/logging-1.2.7.jar",
+          "size": 15343,
+          "sha256": "3dc3190204bac5f4184d8405bfe1f724f73a6a15a0d3f36ec7f69e6872c1a76c"
+        },
+        {
+          "path": "libraries/commons-io/commons-io/2.15.1/commons-io-2.15.1.jar",
+          "size": 501218,
+          "sha256": "a58af12ee1b68cfd2ebb0c27caef164f084381a00ec81a48cc275fd7ea54e154"
+        },
+        {
+          "path": "libraries/io/netty/netty-buffer/4.1.97.Final/netty-buffer-4.1.97.Final.jar",
+          "size": 306590,
+          "sha256": "a4393f5b395486cc74d0325c9b41311abb9513ba0fd7ef8cf46e9345c3bffbea"
+        },
+        {
+          "path": "libraries/io/netty/netty-codec/4.1.97.Final/netty-codec-4.1.97.Final.jar",
+          "size": 345274,
+          "sha256": "bcc96737a0f912fcf031cf8c45ebda352a90a40437db0832caad3d5a63618b38"
+        },
+        {
+          "path": "libraries/io/netty/netty-common/4.1.97.Final/netty-common-4.1.97.Final.jar",
+          "size": 659930,
+          "sha256": "a8aca0c8e9347acc75c885ecc749195d9775369aa520b9276f2d1128210a6c17"
+        },
+        {
+          "path": "libraries/io/netty/netty-handler/4.1.97.Final/netty-handler-4.1.97.Final.jar",
+          "size": 560040,
+          "sha256": "bd4771d19149cbc9c7464ed2d58035d79cdfed7adb59d38718b0d8e7a3dcc2de"
+        },
+        {
+          "path": "libraries/io/netty/netty-resolver/4.1.97.Final/netty-resolver-4.1.97.Final.jar",
+          "size": 37792,
+          "sha256": "38a018c6d9fb2cb11b72881354782b45080bbd20b9a0ad6cde28b80d431ed0b1"
+        },
+        {
+          "path": "libraries/io/netty/netty-transport/4.1.97.Final/netty-transport-4.1.97.Final.jar",
+          "size": 489624,
+          "sha256": "197fd2d6c6b4afe677d9e95bf2e36b49a0bcabdfce0583683fb73f29a3f5a407"
+        },
+        {
+          "path": "libraries/io/netty/netty-transport-classes-epoll/4.1.97.Final/netty-transport-classes-epoll-4.1.97.Final.jar",
+          "size": 147139,
+          "sha256": "ee65fa17fe65f18fd22269f92bddad85bfb3a263cf65eba01e116a2f30b86ff5"
+        },
+        {
+          "path": "libraries/io/netty/netty-transport-native-epoll/4.1.97.Final/netty-transport-native-epoll-4.1.97.Final-linux-aarch_64.jar",
+          "size": 40427,
+          "sha256": "93b5fe8f3829dcb5e033d8d40d59159366ff4cf8266c903bbd6a4aeed9e59bac"
+        },
+        {
+          "path": "libraries/io/netty/netty-transport-native-epoll/4.1.97.Final/netty-transport-native-epoll-4.1.97.Final-linux-x86_64.jar",
+          "size": 38954,
+          "sha256": "1e83fc9f82e5415cdbb688c6a5c6bbbd7d198e9fdd6fdf64b3dc5d54dd1acfd0"
+        },
+        {
+          "path": "libraries/io/netty/netty-transport-native-unix-common/4.1.97.Final/netty-transport-native-unix-common-4.1.97.Final.jar",
+          "size": 43897,
+          "sha256": "412fe140257c2dda5a5e15bee911298bd61928d03ee6be4db588e82c196c5dc6"
+        },
+        {
+          "path": "libraries/it/unimi/dsi/fastutil/8.5.12/fastutil-8.5.12.jar",
+          "size": 23326598,
+          "sha256": "b5543ee08d062d551cf0a5c9bc0fb70588b0382079029ba48941fa9c9be8a5d4"
+        },
+        {
+          "path": "libraries/net/fabricmc/fabric-loader/0.19.3/fabric-loader-0.19.3.jar",
+          "size": 1976502,
+          "sha256": "73eed8c34bbad0320a2a3cba5346351e822f74f82b3f3c060574068474132958"
+        },
+        {
+          "path": "libraries/net/fabricmc/intermediary/1.21.1/intermediary-1.21.1.jar",
+          "size": 657725,
+          "sha256": "6059157dfb4a536ec151697004f74f6004b7d346b289c2f89849e0e585aa36fa"
+        },
+        {
+          "path": "libraries/net/fabricmc/sponge-mixin/0.17.3+mixin.0.8.7/sponge-mixin-0.17.3+mixin.0.8.7.jar",
+          "size": 1540060,
+          "sha256": "9e90efec71d2bad5b96c9089f019d14a8603227d3c5f408d12f53fae89d99d41"
+        },
+        {
+          "path": "libraries/net/java/dev/jna/jna/5.14.0/jna-5.14.0.jar",
+          "size": 1878533,
+          "sha256": "34ed1e1f27fa896bca50dbc4e99cf3732967cec387a7a0d5e3486c09673fe8c6"
+        },
+        {
+          "path": "libraries/net/java/dev/jna/jna-platform/5.14.0/jna-platform-5.14.0.jar",
+          "size": 1369287,
+          "sha256": "ae4caceb3840730c2537f9b7fb55a01baba580286b4122951488bcee558c2449"
+        },
+        {
+          "path": "libraries/net/sf/jopt-simple/jopt-simple/5.0.4/jopt-simple-5.0.4.jar",
+          "size": 78146,
+          "sha256": "df26cc58f235f477db07f753ba5a3ab243ebe5789d9f89ecf68dd62ea9a66c28"
+        },
+        {
+          "path": "libraries/org/apache/commons/commons-lang3/3.14.0/commons-lang3-3.14.0.jar",
+          "size": 657952,
+          "sha256": "7b96bf3ee68949abb5bc465559ac270e0551596fa34523fddf890ec418dde13c"
+        },
+        {
+          "path": "libraries/org/apache/logging/log4j/log4j-api/2.22.1/log4j-api-2.22.1.jar",
+          "size": 335001,
+          "sha256": "5d7beae7ff15d8516d6517121d7f12a79a6ac180df64b5fcec55d5be21056e53"
+        },
+        {
+          "path": "libraries/org/apache/logging/log4j/log4j-core/2.22.1/log4j-core-2.22.1.jar",
+          "size": 1900022,
+          "sha256": "46dccecac556623d8e2ce8648496824a82951d139062a4e61148aff1a25ed18d"
+        },
+        {
+          "path": "libraries/org/apache/logging/log4j/log4j-slf4j2-impl/2.22.1/log4j-slf4j2-impl-2.22.1.jar",
+          "size": 27364,
+          "sha256": "1920cd69d8682c7ef249bb407a3d0685723aa1785867cf4c53258da6bf14da97"
+        },
+        {
+          "path": "libraries/org/joml/joml/1.10.5/joml-1.10.5.jar",
+          "size": 712082,
+          "sha256": "cac9f22f83a7aa33eebda73c16ff5261e3cb4911b6bafcf4c79ea486099d0c9a"
+        },
+        {
+          "path": "libraries/org/lz4/lz4-java/1.8.0/lz4-java-1.8.0.jar",
+          "size": 682804,
+          "sha256": "d74a3334fb35195009b338a951f918203d6bbca3d1d359033dc33edd1cadc9ef"
+        },
+        {
+          "path": "libraries/org/ow2/asm/asm/9.10.1/asm-9.10.1.jar",
+          "size": 126151,
+          "sha256": "ed825d10ab1399c8c0cb669e688cf0c8c82629b4c8399b58352b68e92ca10fcb"
+        },
+        {
+          "path": "libraries/org/ow2/asm/asm-analysis/9.10.1/asm-analysis-9.10.1.jar",
+          "size": 35140,
+          "sha256": "dede75a21306b65974ecd8f87114ff6970f09fb794157a4ca09ab25c888c2bfc"
+        },
+        {
+          "path": "libraries/org/ow2/asm/asm-commons/9.10.1/asm-commons-9.10.1.jar",
+          "size": 74840,
+          "sha256": "6d0abefb7cbf972ea16edb37ec14835372505063a45f976ab7ea889ed9497895"
+        },
+        {
+          "path": "libraries/org/ow2/asm/asm-tree/9.10.1/asm-tree-9.10.1.jar",
+          "size": 51958,
+          "sha256": "3dfb0d5b6a106cd40b5b250e39935fbf2f927f4477546a5369a3ac609cf0506b"
+        },
+        {
+          "path": "libraries/org/ow2/asm/asm-util/9.10.1/asm-util-9.10.1.jar",
+          "size": 95628,
+          "sha256": "1bb99d091fba2597dc6d51193e9bbcf0d8447e7ed96bd8f0198b18152f09655c"
+        },
+        {
+          "path": "libraries/org/slf4j/slf4j-api/2.0.9/slf4j-api-2.0.9.jar",
+          "size": 64579,
+          "sha256": "0818930dc8d7debb403204611691da58e49d42c50b6ffcfdce02dadb7c3c2b6c"
+        },
+        {
+          "path": "mods/fabric-api.jar",
+          "size": 2452718,
+          "sha256": "a61a10f730ab8aa45ff42486ee65699e6e51c28a0c168deb161e7d4029473aa3"
+        },
+        {
+          "path": "mods/lod-server-support-fabric.jar",
+          "size": 8208388,
+          "sha256": "65e2486eb725f64b88bbc1abc1597cc41e82e4dde06b550b5b4148af0751e5bf"
+        },
+        {
+          "path": "ops.json",
+          "size": 3,
+          "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+        },
+        {
+          "path": "server.properties",
+          "size": 396,
+          "sha256": "6fef71f587b1b3db5f305f63928bdf71e4cb478aee5c87aa5b2a880f70481e0c"
+        },
+        {
+          "path": "versions/1.21.1/server-1.21.1.jar",
+          "size": 17635929,
+          "sha256": "c301de10f575027d13eac18c7f34409d60648cf56a35d566aa1f530ff617840a"
+        },
+        {
+          "path": "world/DIM-1/data/raids.dat",
+          "size": 90,
+          "sha256": "fa8b2805a697b5279ec5e1ee7404d2048c820f5242953266602e92b1fa87144b"
+        },
+        {
+          "path": "world/DIM1/data/raids_end.dat",
+          "size": 90,
+          "sha256": "fa8b2805a697b5279ec5e1ee7404d2048c820f5242953266602e92b1fa87144b"
+        },
+        {
+          "path": "world/data/lss-timestamps.bin",
+          "size": 16465,
+          "sha256": "fe3a788364d183d7317c362d60cab7e934ef79361e67210d82fc1246989dffcf"
+        },
+        {
+          "path": "world/data/raids.dat",
+          "size": 90,
+          "sha256": "fa8b2805a697b5279ec5e1ee7404d2048c820f5242953266602e92b1fa87144b"
+        },
+        {
+          "path": "world/entities/r.-1.-1.mca",
+          "size": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "world/entities/r.-1.0.mca",
+          "size": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "world/entities/r.0.-1.mca",
+          "size": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "world/entities/r.0.0.mca",
+          "size": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "world/level.dat",
+          "size": 1650,
+          "sha256": "9e3dbac062237444f26600f11bfbfda4c875206c1d938e24478de57b2b013b45"
+        },
+        {
+          "path": "world/level.dat_old",
+          "size": 1644,
+          "sha256": "18db103f514df72f2f9d4477c67036e2c6589b294f87aa7ca8efe5ccd9492924"
+        },
+        {
+          "path": "world/poi/r.-1.-1.mca",
+          "size": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "world/poi/r.-1.-2.mca",
+          "size": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "world/poi/r.-1.0.mca",
+          "size": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "world/poi/r.-1.1.mca",
+          "size": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "world/poi/r.-2.-1.mca",
+          "size": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "world/poi/r.-2.-2.mca",
+          "size": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "world/poi/r.-2.0.mca",
+          "size": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "world/poi/r.-2.1.mca",
+          "size": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "world/poi/r.0.-1.mca",
+          "size": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "world/poi/r.0.-2.mca",
+          "size": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "world/poi/r.0.0.mca",
+          "size": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "world/poi/r.0.1.mca",
+          "size": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "world/poi/r.1.-1.mca",
+          "size": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "world/poi/r.1.-2.mca",
+          "size": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "world/poi/r.1.0.mca",
+          "size": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "world/poi/r.1.1.mca",
+          "size": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "world/region/r.-1.-1.mca",
+          "size": 4206592,
+          "sha256": "d4d43e8fe8e5b872d5727890109824180403ab317eedd80f085583221eeae7ee"
+        },
+        {
+          "path": "world/region/r.-1.-2.mca",
+          "size": 405504,
+          "sha256": "143b619bef55302b29f1640b5a9c2458ac877ea7dd979b45af43b27ea92dc80a"
+        },
+        {
+          "path": "world/region/r.-1.0.mca",
+          "size": 4206592,
+          "sha256": "598e924697d90411dd916b05d85bc859b74709294675e15c1262063087c2965b"
+        },
+        {
+          "path": "world/region/r.-1.1.mca",
+          "size": 536576,
+          "sha256": "3f2ad70183d8f3e2c02eebda03487fab97ea83466148678944d16dc487f6a42c"
+        },
+        {
+          "path": "world/region/r.-2.-1.mca",
+          "size": 405504,
+          "sha256": "07b9437a3b851cbcc2baa7d06b12c79dd1d741fadabe3bba060eaf40dc7b233f"
+        },
+        {
+          "path": "world/region/r.-2.-2.mca",
+          "size": 49152,
+          "sha256": "198f7befe3ea0111d97c08bb74e4751c061612906f4ae1bc26ac4ab56f2b63ab"
+        },
+        {
+          "path": "world/region/r.-2.0.mca",
+          "size": 405504,
+          "sha256": "ee2e31efa307878f420ebb4b2f6d5fadff97d0598349f1dd9c074ff938b1559d"
+        },
+        {
+          "path": "world/region/r.-2.1.mca",
+          "size": 61440,
+          "sha256": "89abb61d7c68b092f25816c466955343c06d736dede69a00aa9fbe16b685aa0f"
+        },
+        {
+          "path": "world/region/r.0.-1.mca",
+          "size": 4206592,
+          "sha256": "17856d14649f833994b63e6bbd0aa82585e2f248f4773369474733633cf2ed84"
+        },
+        {
+          "path": "world/region/r.0.-2.mca",
+          "size": 401408,
+          "sha256": "3ad1e07f5bf5232de4aff841948246788183f4b688ecac9827feef674da11241"
+        },
+        {
+          "path": "world/region/r.0.0.mca",
+          "size": 4206592,
+          "sha256": "e99064dde8263909ef80ee8bc11deb2e8c50cf635fad6fae778195790504564b"
+        },
+        {
+          "path": "world/region/r.0.1.mca",
+          "size": 536576,
+          "sha256": "432fe27868a07fc1facd8cedae9b72abdb7f98c16a589568c9c6fb13292c4d42"
+        },
+        {
+          "path": "world/region/r.1.-1.mca",
+          "size": 536576,
+          "sha256": "2d0673cfd0dc09d93ea2f47bb58edd797d7ba3f829d80ac90482da3bd97520cd"
+        },
+        {
+          "path": "world/region/r.1.-2.mca",
+          "size": 61440,
+          "sha256": "3608b776463154c68cbf2e3dcf40930b467330a1137ee5506190fefdd838dc0c"
+        },
+        {
+          "path": "world/region/r.1.0.mca",
+          "size": 536576,
+          "sha256": "a3451fbb9cbccac605f820ecb0e6094ba10b80825f6419bb852cbb5d27edf98f"
+        },
+        {
+          "path": "world/region/r.1.1.mca",
+          "size": 77824,
+          "sha256": "2d2bbe552e9641a9a97ba30080c2fed9ab66c6b86564c56e0dd62c3457dbdf50"
+        }
+      ]
+    },
+    {
+      "fixture": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/gui-server-b",
+      "port": 25567,
+      "bind": "127.0.0.1",
+      "launched": false,
+      "world_source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base/world",
+      "dependency_source": "/home/vox/projects/lss-port-1.21.1/test-server/fabric",
+      "candidate_source": "/home/vox/projects/lss-lines/1.21.1/fabric/build/libs/lod-server-support-fabric-0.14.0+1.21.1.jar",
+      "candidate_sha256": "65e2486eb725f64b88bbc1abc1597cc41e82e4dde06b550b5b4148af0751e5bf",
+      "workspace_commit_at_preparation": "3a0c61c296b729a7db8d64d83a7d35f511874c48",
+      "files": [
+        {
+          "path": ".fabric/server/1.21.1-server.jar",
+          "size": 51627615,
+          "sha256": "e3bc55693e93cda0188f2e60aea28113fc647c5e85a15fa3d1b347349231b4bb"
+        },
+        {
+          "path": ".fabric/server/fabric-loader-server-0.19.3-minecraft-1.21.1.jar",
+          "size": 644,
+          "sha256": "e879b47213e121cfd7a269cd9a213bca4ab6963f23acdcbde71152106db3632e"
+        },
+        {
+          "path": "config/lss-server-config.json",
+          "size": 362,
+          "sha256": "fd57efd8d8c69b3955473301814bbd6b9eb9af9ba110d4b5bb9fd6df6f1c4b47"
+        },
+        {
+          "path": "eula.txt",
+          "size": 10,
+          "sha256": "ee27072e4a23e088522f740ddaab0c7c4145c186969e90a86254faa3a5ec5ce6"
+        },
+        {
+          "path": "fabric-server-launch.jar",
+          "size": 179053,
+          "sha256": "a9822390dd1df52e7de381ca3d0a1431d565a19f5c70c38eafb197944703cc71"
+        },
+        {
+          "path": "launch.sh",
+          "size": 261,
+          "sha256": "242265ebdbd8ef1ecb31fc95a54cedc836ab0f4514aad24fd3caa412333e1d33"
+        },
+        {
+          "path": "libraries/com/github/oshi/oshi-core/6.4.10/oshi-core-6.4.10.jar",
+          "size": 979212,
+          "sha256": "fef001a7a13515c273f30915915580782afbc45273cc07aa15994e51563ef310"
+        },
+        {
+          "path": "libraries/com/google/code/gson/gson/2.10.1/gson-2.10.1.jar",
+          "size": 283367,
+          "sha256": "4241c14a7727c34feea6507ec801318a3d4a90f070e4525681079fb94ee4c593"
+        },
+        {
+          "path": "libraries/com/google/guava/failureaccess/1.0.1/failureaccess-1.0.1.jar",
+          "size": 4617,
+          "sha256": "a171ee4c734dd2da837e4b16be9df4661afab72a41adaf31eb84dfdaf936ca26"
+        },
+        {
+          "path": "libraries/com/google/guava/guava/32.1.2-jre/guava-32.1.2-jre.jar",
+          "size": 3041591,
+          "sha256": "bc65dea7cfd9e4dacf8419d8af0e741655857d27885bb35d943d7187fc3a8fce"
+        },
+        {
+          "path": "libraries/com/mojang/authlib/6.0.54/authlib-6.0.54.jar",
+          "size": 115242,
+          "sha256": "319ea7b53b5e52f62ad3e2b81e9db7f0751240edac548bd74f5f19e35dc21a3b"
+        },
+        {
+          "path": "libraries/com/mojang/brigadier/1.3.10/brigadier-1.3.10.jar",
+          "size": 80082,
+          "sha256": "c8ee4136e474ac7723ca2b432ec8d1a2bc88ef7d1ec57c314ba9e33cdc83dd75"
+        },
+        {
+          "path": "libraries/com/mojang/datafixerupper/8.0.16/datafixerupper-8.0.16.jar",
+          "size": 724313,
+          "sha256": "ffc138bc2596c291781b0d5e211ccac51f0f2345f27fc2742f335cedf7e2870d"
+        },
+        {
+          "path": "libraries/com/mojang/logging/1.2.7/logging-1.2.7.jar",
+          "size": 15343,
+          "sha256": "3dc3190204bac5f4184d8405bfe1f724f73a6a15a0d3f36ec7f69e6872c1a76c"
+        },
+        {
+          "path": "libraries/commons-io/commons-io/2.15.1/commons-io-2.15.1.jar",
+          "size": 501218,
+          "sha256": "a58af12ee1b68cfd2ebb0c27caef164f084381a00ec81a48cc275fd7ea54e154"
+        },
+        {
+          "path": "libraries/io/netty/netty-buffer/4.1.97.Final/netty-buffer-4.1.97.Final.jar",
+          "size": 306590,
+          "sha256": "a4393f5b395486cc74d0325c9b41311abb9513ba0fd7ef8cf46e9345c3bffbea"
+        },
+        {
+          "path": "libraries/io/netty/netty-codec/4.1.97.Final/netty-codec-4.1.97.Final.jar",
+          "size": 345274,
+          "sha256": "bcc96737a0f912fcf031cf8c45ebda352a90a40437db0832caad3d5a63618b38"
+        },
+        {
+          "path": "libraries/io/netty/netty-common/4.1.97.Final/netty-common-4.1.97.Final.jar",
+          "size": 659930,
+          "sha256": "a8aca0c8e9347acc75c885ecc749195d9775369aa520b9276f2d1128210a6c17"
+        },
+        {
+          "path": "libraries/io/netty/netty-handler/4.1.97.Final/netty-handler-4.1.97.Final.jar",
+          "size": 560040,
+          "sha256": "bd4771d19149cbc9c7464ed2d58035d79cdfed7adb59d38718b0d8e7a3dcc2de"
+        },
+        {
+          "path": "libraries/io/netty/netty-resolver/4.1.97.Final/netty-resolver-4.1.97.Final.jar",
+          "size": 37792,
+          "sha256": "38a018c6d9fb2cb11b72881354782b45080bbd20b9a0ad6cde28b80d431ed0b1"
+        },
+        {
+          "path": "libraries/io/netty/netty-transport/4.1.97.Final/netty-transport-4.1.97.Final.jar",
+          "size": 489624,
+          "sha256": "197fd2d6c6b4afe677d9e95bf2e36b49a0bcabdfce0583683fb73f29a3f5a407"
+        },
+        {
+          "path": "libraries/io/netty/netty-transport-classes-epoll/4.1.97.Final/netty-transport-classes-epoll-4.1.97.Final.jar",
+          "size": 147139,
+          "sha256": "ee65fa17fe65f18fd22269f92bddad85bfb3a263cf65eba01e116a2f30b86ff5"
+        },
+        {
+          "path": "libraries/io/netty/netty-transport-native-epoll/4.1.97.Final/netty-transport-native-epoll-4.1.97.Final-linux-aarch_64.jar",
+          "size": 40427,
+          "sha256": "93b5fe8f3829dcb5e033d8d40d59159366ff4cf8266c903bbd6a4aeed9e59bac"
+        },
+        {
+          "path": "libraries/io/netty/netty-transport-native-epoll/4.1.97.Final/netty-transport-native-epoll-4.1.97.Final-linux-x86_64.jar",
+          "size": 38954,
+          "sha256": "1e83fc9f82e5415cdbb688c6a5c6bbbd7d198e9fdd6fdf64b3dc5d54dd1acfd0"
+        },
+        {
+          "path": "libraries/io/netty/netty-transport-native-unix-common/4.1.97.Final/netty-transport-native-unix-common-4.1.97.Final.jar",
+          "size": 43897,
+          "sha256": "412fe140257c2dda5a5e15bee911298bd61928d03ee6be4db588e82c196c5dc6"
+        },
+        {
+          "path": "libraries/it/unimi/dsi/fastutil/8.5.12/fastutil-8.5.12.jar",
+          "size": 23326598,
+          "sha256": "b5543ee08d062d551cf0a5c9bc0fb70588b0382079029ba48941fa9c9be8a5d4"
+        },
+        {
+          "path": "libraries/net/fabricmc/fabric-loader/0.19.3/fabric-loader-0.19.3.jar",
+          "size": 1976502,
+          "sha256": "73eed8c34bbad0320a2a3cba5346351e822f74f82b3f3c060574068474132958"
+        },
+        {
+          "path": "libraries/net/fabricmc/intermediary/1.21.1/intermediary-1.21.1.jar",
+          "size": 657725,
+          "sha256": "6059157dfb4a536ec151697004f74f6004b7d346b289c2f89849e0e585aa36fa"
+        },
+        {
+          "path": "libraries/net/fabricmc/sponge-mixin/0.17.3+mixin.0.8.7/sponge-mixin-0.17.3+mixin.0.8.7.jar",
+          "size": 1540060,
+          "sha256": "9e90efec71d2bad5b96c9089f019d14a8603227d3c5f408d12f53fae89d99d41"
+        },
+        {
+          "path": "libraries/net/java/dev/jna/jna/5.14.0/jna-5.14.0.jar",
+          "size": 1878533,
+          "sha256": "34ed1e1f27fa896bca50dbc4e99cf3732967cec387a7a0d5e3486c09673fe8c6"
+        },
+        {
+          "path": "libraries/net/java/dev/jna/jna-platform/5.14.0/jna-platform-5.14.0.jar",
+          "size": 1369287,
+          "sha256": "ae4caceb3840730c2537f9b7fb55a01baba580286b4122951488bcee558c2449"
+        },
+        {
+          "path": "libraries/net/sf/jopt-simple/jopt-simple/5.0.4/jopt-simple-5.0.4.jar",
+          "size": 78146,
+          "sha256": "df26cc58f235f477db07f753ba5a3ab243ebe5789d9f89ecf68dd62ea9a66c28"
+        },
+        {
+          "path": "libraries/org/apache/commons/commons-lang3/3.14.0/commons-lang3-3.14.0.jar",
+          "size": 657952,
+          "sha256": "7b96bf3ee68949abb5bc465559ac270e0551596fa34523fddf890ec418dde13c"
+        },
+        {
+          "path": "libraries/org/apache/logging/log4j/log4j-api/2.22.1/log4j-api-2.22.1.jar",
+          "size": 335001,
+          "sha256": "5d7beae7ff15d8516d6517121d7f12a79a6ac180df64b5fcec55d5be21056e53"
+        },
+        {
+          "path": "libraries/org/apache/logging/log4j/log4j-core/2.22.1/log4j-core-2.22.1.jar",
+          "size": 1900022,
+          "sha256": "46dccecac556623d8e2ce8648496824a82951d139062a4e61148aff1a25ed18d"
+        },
+        {
+          "path": "libraries/org/apache/logging/log4j/log4j-slf4j2-impl/2.22.1/log4j-slf4j2-impl-2.22.1.jar",
+          "size": 27364,
+          "sha256": "1920cd69d8682c7ef249bb407a3d0685723aa1785867cf4c53258da6bf14da97"
+        },
+        {
+          "path": "libraries/org/joml/joml/1.10.5/joml-1.10.5.jar",
+          "size": 712082,
+          "sha256": "cac9f22f83a7aa33eebda73c16ff5261e3cb4911b6bafcf4c79ea486099d0c9a"
+        },
+        {
+          "path": "libraries/org/lz4/lz4-java/1.8.0/lz4-java-1.8.0.jar",
+          "size": 682804,
+          "sha256": "d74a3334fb35195009b338a951f918203d6bbca3d1d359033dc33edd1cadc9ef"
+        },
+        {
+          "path": "libraries/org/ow2/asm/asm/9.10.1/asm-9.10.1.jar",
+          "size": 126151,
+          "sha256": "ed825d10ab1399c8c0cb669e688cf0c8c82629b4c8399b58352b68e92ca10fcb"
+        },
+        {
+          "path": "libraries/org/ow2/asm/asm-analysis/9.10.1/asm-analysis-9.10.1.jar",
+          "size": 35140,
+          "sha256": "dede75a21306b65974ecd8f87114ff6970f09fb794157a4ca09ab25c888c2bfc"
+        },
+        {
+          "path": "libraries/org/ow2/asm/asm-commons/9.10.1/asm-commons-9.10.1.jar",
+          "size": 74840,
+          "sha256": "6d0abefb7cbf972ea16edb37ec14835372505063a45f976ab7ea889ed9497895"
+        },
+        {
+          "path": "libraries/org/ow2/asm/asm-tree/9.10.1/asm-tree-9.10.1.jar",
+          "size": 51958,
+          "sha256": "3dfb0d5b6a106cd40b5b250e39935fbf2f927f4477546a5369a3ac609cf0506b"
+        },
+        {
+          "path": "libraries/org/ow2/asm/asm-util/9.10.1/asm-util-9.10.1.jar",
+          "size": 95628,
+          "sha256": "1bb99d091fba2597dc6d51193e9bbcf0d8447e7ed96bd8f0198b18152f09655c"
+        },
+        {
+          "path": "libraries/org/slf4j/slf4j-api/2.0.9/slf4j-api-2.0.9.jar",
+          "size": 64579,
+          "sha256": "0818930dc8d7debb403204611691da58e49d42c50b6ffcfdce02dadb7c3c2b6c"
+        },
+        {
+          "path": "mods/fabric-api.jar",
+          "size": 2452718,
+          "sha256": "a61a10f730ab8aa45ff42486ee65699e6e51c28a0c168deb161e7d4029473aa3"
+        },
+        {
+          "path": "mods/lod-server-support-fabric.jar",
+          "size": 8208388,
+          "sha256": "65e2486eb725f64b88bbc1abc1597cc41e82e4dde06b550b5b4148af0751e5bf"
+        },
+        {
+          "path": "ops.json",
+          "size": 3,
+          "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+        },
+        {
+          "path": "server.properties",
+          "size": 396,
+          "sha256": "4c62cb4508dffafd087fd7a39c5d427ff5e67d1d5230e1bc7624a90c00e2013f"
+        },
+        {
+          "path": "versions/1.21.1/server-1.21.1.jar",
+          "size": 17635929,
+          "sha256": "c301de10f575027d13eac18c7f34409d60648cf56a35d566aa1f530ff617840a"
+        },
+        {
+          "path": "world/DIM-1/data/raids.dat",
+          "size": 90,
+          "sha256": "fa8b2805a697b5279ec5e1ee7404d2048c820f5242953266602e92b1fa87144b"
+        },
+        {
+          "path": "world/DIM1/data/raids_end.dat",
+          "size": 90,
+          "sha256": "fa8b2805a697b5279ec5e1ee7404d2048c820f5242953266602e92b1fa87144b"
+        },
+        {
+          "path": "world/data/lss-timestamps.bin",
+          "size": 16465,
+          "sha256": "fe3a788364d183d7317c362d60cab7e934ef79361e67210d82fc1246989dffcf"
+        },
+        {
+          "path": "world/data/raids.dat",
+          "size": 90,
+          "sha256": "fa8b2805a697b5279ec5e1ee7404d2048c820f5242953266602e92b1fa87144b"
+        },
+        {
+          "path": "world/entities/r.-1.-1.mca",
+          "size": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "world/entities/r.-1.0.mca",
+          "size": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "world/entities/r.0.-1.mca",
+          "size": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "world/entities/r.0.0.mca",
+          "size": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "world/level.dat",
+          "size": 1650,
+          "sha256": "9e3dbac062237444f26600f11bfbfda4c875206c1d938e24478de57b2b013b45"
+        },
+        {
+          "path": "world/level.dat_old",
+          "size": 1644,
+          "sha256": "18db103f514df72f2f9d4477c67036e2c6589b294f87aa7ca8efe5ccd9492924"
+        },
+        {
+          "path": "world/poi/r.-1.-1.mca",
+          "size": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "world/poi/r.-1.-2.mca",
+          "size": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "world/poi/r.-1.0.mca",
+          "size": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "world/poi/r.-1.1.mca",
+          "size": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "world/poi/r.-2.-1.mca",
+          "size": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "world/poi/r.-2.-2.mca",
+          "size": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "world/poi/r.-2.0.mca",
+          "size": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "world/poi/r.-2.1.mca",
+          "size": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "world/poi/r.0.-1.mca",
+          "size": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "world/poi/r.0.-2.mca",
+          "size": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "world/poi/r.0.0.mca",
+          "size": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "world/poi/r.0.1.mca",
+          "size": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "world/poi/r.1.-1.mca",
+          "size": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "world/poi/r.1.-2.mca",
+          "size": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "world/poi/r.1.0.mca",
+          "size": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "world/poi/r.1.1.mca",
+          "size": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "world/region/r.-1.-1.mca",
+          "size": 4206592,
+          "sha256": "d4d43e8fe8e5b872d5727890109824180403ab317eedd80f085583221eeae7ee"
+        },
+        {
+          "path": "world/region/r.-1.-2.mca",
+          "size": 405504,
+          "sha256": "143b619bef55302b29f1640b5a9c2458ac877ea7dd979b45af43b27ea92dc80a"
+        },
+        {
+          "path": "world/region/r.-1.0.mca",
+          "size": 4206592,
+          "sha256": "598e924697d90411dd916b05d85bc859b74709294675e15c1262063087c2965b"
+        },
+        {
+          "path": "world/region/r.-1.1.mca",
+          "size": 536576,
+          "sha256": "3f2ad70183d8f3e2c02eebda03487fab97ea83466148678944d16dc487f6a42c"
+        },
+        {
+          "path": "world/region/r.-2.-1.mca",
+          "size": 405504,
+          "sha256": "07b9437a3b851cbcc2baa7d06b12c79dd1d741fadabe3bba060eaf40dc7b233f"
+        },
+        {
+          "path": "world/region/r.-2.-2.mca",
+          "size": 49152,
+          "sha256": "198f7befe3ea0111d97c08bb74e4751c061612906f4ae1bc26ac4ab56f2b63ab"
+        },
+        {
+          "path": "world/region/r.-2.0.mca",
+          "size": 405504,
+          "sha256": "ee2e31efa307878f420ebb4b2f6d5fadff97d0598349f1dd9c074ff938b1559d"
+        },
+        {
+          "path": "world/region/r.-2.1.mca",
+          "size": 61440,
+          "sha256": "89abb61d7c68b092f25816c466955343c06d736dede69a00aa9fbe16b685aa0f"
+        },
+        {
+          "path": "world/region/r.0.-1.mca",
+          "size": 4206592,
+          "sha256": "17856d14649f833994b63e6bbd0aa82585e2f248f4773369474733633cf2ed84"
+        },
+        {
+          "path": "world/region/r.0.-2.mca",
+          "size": 401408,
+          "sha256": "3ad1e07f5bf5232de4aff841948246788183f4b688ecac9827feef674da11241"
+        },
+        {
+          "path": "world/region/r.0.0.mca",
+          "size": 4206592,
+          "sha256": "e99064dde8263909ef80ee8bc11deb2e8c50cf635fad6fae778195790504564b"
+        },
+        {
+          "path": "world/region/r.0.1.mca",
+          "size": 536576,
+          "sha256": "432fe27868a07fc1facd8cedae9b72abdb7f98c16a589568c9c6fb13292c4d42"
+        },
+        {
+          "path": "world/region/r.1.-1.mca",
+          "size": 536576,
+          "sha256": "2d0673cfd0dc09d93ea2f47bb58edd797d7ba3f829d80ac90482da3bd97520cd"
+        },
+        {
+          "path": "world/region/r.1.-2.mca",
+          "size": 61440,
+          "sha256": "3608b776463154c68cbf2e3dcf40930b467330a1137ee5506190fefdd838dc0c"
+        },
+        {
+          "path": "world/region/r.1.0.mca",
+          "size": 536576,
+          "sha256": "a3451fbb9cbccac605f820ecb0e6094ba10b80825f6419bb852cbb5d27edf98f"
+        },
+        {
+          "path": "world/region/r.1.1.mca",
+          "size": 77824,
+          "sha256": "2d2bbe552e9641a9a97ba30080c2fed9ab66c6b86564c56e0dd62c3457dbdf50"
+        }
+      ]
+    }
+  ],
+  "source_hashes": {
+    "/home/vox/projects/lss-port-1.21.1/test-server/fabric/fabric-server-launch.jar": "a9822390dd1df52e7de381ca3d0a1431d565a19f5c70c38eafb197944703cc71",
+    "/home/vox/projects/lss-port-1.21.1/test-server/fabric/mods/fabric-api.jar": "a61a10f730ab8aa45ff42486ee65699e6e51c28a0c168deb161e7d4029473aa3",
+    "/home/vox/projects/lss-lines/1.21.1/fabric/build/libs/lod-server-support-fabric-0.14.0+1.21.1.jar": "65e2486eb725f64b88bbc1abc1597cc41e82e4dde06b550b5b4148af0751e5bf",
+    "/home/vox/projects/lss-port-1.21.1/test-server/fabric/libraries/com/github/oshi/oshi-core/6.4.10/oshi-core-6.4.10.jar": "fef001a7a13515c273f30915915580782afbc45273cc07aa15994e51563ef310",
+    "/home/vox/projects/lss-port-1.21.1/test-server/fabric/libraries/com/google/code/gson/gson/2.10.1/gson-2.10.1.jar": "4241c14a7727c34feea6507ec801318a3d4a90f070e4525681079fb94ee4c593",
+    "/home/vox/projects/lss-port-1.21.1/test-server/fabric/libraries/com/google/guava/failureaccess/1.0.1/failureaccess-1.0.1.jar": "a171ee4c734dd2da837e4b16be9df4661afab72a41adaf31eb84dfdaf936ca26",
+    "/home/vox/projects/lss-port-1.21.1/test-server/fabric/libraries/com/google/guava/guava/32.1.2-jre/guava-32.1.2-jre.jar": "bc65dea7cfd9e4dacf8419d8af0e741655857d27885bb35d943d7187fc3a8fce",
+    "/home/vox/projects/lss-port-1.21.1/test-server/fabric/libraries/com/mojang/authlib/6.0.54/authlib-6.0.54.jar": "319ea7b53b5e52f62ad3e2b81e9db7f0751240edac548bd74f5f19e35dc21a3b",
+    "/home/vox/projects/lss-port-1.21.1/test-server/fabric/libraries/com/mojang/brigadier/1.3.10/brigadier-1.3.10.jar": "c8ee4136e474ac7723ca2b432ec8d1a2bc88ef7d1ec57c314ba9e33cdc83dd75",
+    "/home/vox/projects/lss-port-1.21.1/test-server/fabric/libraries/com/mojang/datafixerupper/8.0.16/datafixerupper-8.0.16.jar": "ffc138bc2596c291781b0d5e211ccac51f0f2345f27fc2742f335cedf7e2870d",
+    "/home/vox/projects/lss-port-1.21.1/test-server/fabric/libraries/com/mojang/logging/1.2.7/logging-1.2.7.jar": "3dc3190204bac5f4184d8405bfe1f724f73a6a15a0d3f36ec7f69e6872c1a76c",
+    "/home/vox/projects/lss-port-1.21.1/test-server/fabric/libraries/commons-io/commons-io/2.15.1/commons-io-2.15.1.jar": "a58af12ee1b68cfd2ebb0c27caef164f084381a00ec81a48cc275fd7ea54e154",
+    "/home/vox/projects/lss-port-1.21.1/test-server/fabric/libraries/io/netty/netty-buffer/4.1.97.Final/netty-buffer-4.1.97.Final.jar": "a4393f5b395486cc74d0325c9b41311abb9513ba0fd7ef8cf46e9345c3bffbea",
+    "/home/vox/projects/lss-port-1.21.1/test-server/fabric/libraries/io/netty/netty-codec/4.1.97.Final/netty-codec-4.1.97.Final.jar": "bcc96737a0f912fcf031cf8c45ebda352a90a40437db0832caad3d5a63618b38",
+    "/home/vox/projects/lss-port-1.21.1/test-server/fabric/libraries/io/netty/netty-common/4.1.97.Final/netty-common-4.1.97.Final.jar": "a8aca0c8e9347acc75c885ecc749195d9775369aa520b9276f2d1128210a6c17",
+    "/home/vox/projects/lss-port-1.21.1/test-server/fabric/libraries/io/netty/netty-handler/4.1.97.Final/netty-handler-4.1.97.Final.jar": "bd4771d19149cbc9c7464ed2d58035d79cdfed7adb59d38718b0d8e7a3dcc2de",
+    "/home/vox/projects/lss-port-1.21.1/test-server/fabric/libraries/io/netty/netty-resolver/4.1.97.Final/netty-resolver-4.1.97.Final.jar": "38a018c6d9fb2cb11b72881354782b45080bbd20b9a0ad6cde28b80d431ed0b1",
+    "/home/vox/projects/lss-port-1.21.1/test-server/fabric/libraries/io/netty/netty-transport/4.1.97.Final/netty-transport-4.1.97.Final.jar": "197fd2d6c6b4afe677d9e95bf2e36b49a0bcabdfce0583683fb73f29a3f5a407",
+    "/home/vox/projects/lss-port-1.21.1/test-server/fabric/libraries/io/netty/netty-transport-classes-epoll/4.1.97.Final/netty-transport-classes-epoll-4.1.97.Final.jar": "ee65fa17fe65f18fd22269f92bddad85bfb3a263cf65eba01e116a2f30b86ff5",
+    "/home/vox/projects/lss-port-1.21.1/test-server/fabric/libraries/io/netty/netty-transport-native-epoll/4.1.97.Final/netty-transport-native-epoll-4.1.97.Final-linux-aarch_64.jar": "93b5fe8f3829dcb5e033d8d40d59159366ff4cf8266c903bbd6a4aeed9e59bac",
+    "/home/vox/projects/lss-port-1.21.1/test-server/fabric/libraries/io/netty/netty-transport-native-epoll/4.1.97.Final/netty-transport-native-epoll-4.1.97.Final-linux-x86_64.jar": "1e83fc9f82e5415cdbb688c6a5c6bbbd7d198e9fdd6fdf64b3dc5d54dd1acfd0",
+    "/home/vox/projects/lss-port-1.21.1/test-server/fabric/libraries/io/netty/netty-transport-native-unix-common/4.1.97.Final/netty-transport-native-unix-common-4.1.97.Final.jar": "412fe140257c2dda5a5e15bee911298bd61928d03ee6be4db588e82c196c5dc6",
+    "/home/vox/projects/lss-port-1.21.1/test-server/fabric/libraries/it/unimi/dsi/fastutil/8.5.12/fastutil-8.5.12.jar": "b5543ee08d062d551cf0a5c9bc0fb70588b0382079029ba48941fa9c9be8a5d4",
+    "/home/vox/projects/lss-port-1.21.1/test-server/fabric/libraries/net/fabricmc/fabric-loader/0.19.3/fabric-loader-0.19.3.jar": "73eed8c34bbad0320a2a3cba5346351e822f74f82b3f3c060574068474132958",
+    "/home/vox/projects/lss-port-1.21.1/test-server/fabric/libraries/net/fabricmc/intermediary/1.21.1/intermediary-1.21.1.jar": "6059157dfb4a536ec151697004f74f6004b7d346b289c2f89849e0e585aa36fa",
+    "/home/vox/projects/lss-port-1.21.1/test-server/fabric/libraries/net/fabricmc/sponge-mixin/0.17.3+mixin.0.8.7/sponge-mixin-0.17.3+mixin.0.8.7.jar": "9e90efec71d2bad5b96c9089f019d14a8603227d3c5f408d12f53fae89d99d41",
+    "/home/vox/projects/lss-port-1.21.1/test-server/fabric/libraries/net/java/dev/jna/jna/5.14.0/jna-5.14.0.jar": "34ed1e1f27fa896bca50dbc4e99cf3732967cec387a7a0d5e3486c09673fe8c6",
+    "/home/vox/projects/lss-port-1.21.1/test-server/fabric/libraries/net/java/dev/jna/jna-platform/5.14.0/jna-platform-5.14.0.jar": "ae4caceb3840730c2537f9b7fb55a01baba580286b4122951488bcee558c2449",
+    "/home/vox/projects/lss-port-1.21.1/test-server/fabric/libraries/net/sf/jopt-simple/jopt-simple/5.0.4/jopt-simple-5.0.4.jar": "df26cc58f235f477db07f753ba5a3ab243ebe5789d9f89ecf68dd62ea9a66c28",
+    "/home/vox/projects/lss-port-1.21.1/test-server/fabric/libraries/org/apache/commons/commons-lang3/3.14.0/commons-lang3-3.14.0.jar": "7b96bf3ee68949abb5bc465559ac270e0551596fa34523fddf890ec418dde13c",
+    "/home/vox/projects/lss-port-1.21.1/test-server/fabric/libraries/org/apache/logging/log4j/log4j-api/2.22.1/log4j-api-2.22.1.jar": "5d7beae7ff15d8516d6517121d7f12a79a6ac180df64b5fcec55d5be21056e53",
+    "/home/vox/projects/lss-port-1.21.1/test-server/fabric/libraries/org/apache/logging/log4j/log4j-core/2.22.1/log4j-core-2.22.1.jar": "46dccecac556623d8e2ce8648496824a82951d139062a4e61148aff1a25ed18d",
+    "/home/vox/projects/lss-port-1.21.1/test-server/fabric/libraries/org/apache/logging/log4j/log4j-slf4j2-impl/2.22.1/log4j-slf4j2-impl-2.22.1.jar": "1920cd69d8682c7ef249bb407a3d0685723aa1785867cf4c53258da6bf14da97",
+    "/home/vox/projects/lss-port-1.21.1/test-server/fabric/libraries/org/joml/joml/1.10.5/joml-1.10.5.jar": "cac9f22f83a7aa33eebda73c16ff5261e3cb4911b6bafcf4c79ea486099d0c9a",
+    "/home/vox/projects/lss-port-1.21.1/test-server/fabric/libraries/org/lz4/lz4-java/1.8.0/lz4-java-1.8.0.jar": "d74a3334fb35195009b338a951f918203d6bbca3d1d359033dc33edd1cadc9ef",
+    "/home/vox/projects/lss-port-1.21.1/test-server/fabric/libraries/org/ow2/asm/asm/9.10.1/asm-9.10.1.jar": "ed825d10ab1399c8c0cb669e688cf0c8c82629b4c8399b58352b68e92ca10fcb",
+    "/home/vox/projects/lss-port-1.21.1/test-server/fabric/libraries/org/ow2/asm/asm-analysis/9.10.1/asm-analysis-9.10.1.jar": "dede75a21306b65974ecd8f87114ff6970f09fb794157a4ca09ab25c888c2bfc",
+    "/home/vox/projects/lss-port-1.21.1/test-server/fabric/libraries/org/ow2/asm/asm-commons/9.10.1/asm-commons-9.10.1.jar": "6d0abefb7cbf972ea16edb37ec14835372505063a45f976ab7ea889ed9497895",
+    "/home/vox/projects/lss-port-1.21.1/test-server/fabric/libraries/org/ow2/asm/asm-tree/9.10.1/asm-tree-9.10.1.jar": "3dfb0d5b6a106cd40b5b250e39935fbf2f927f4477546a5369a3ac609cf0506b",
+    "/home/vox/projects/lss-port-1.21.1/test-server/fabric/libraries/org/ow2/asm/asm-util/9.10.1/asm-util-9.10.1.jar": "1bb99d091fba2597dc6d51193e9bbcf0d8447e7ed96bd8f0198b18152f09655c",
+    "/home/vox/projects/lss-port-1.21.1/test-server/fabric/libraries/org/slf4j/slf4j-api/2.0.9/slf4j-api-2.0.9.jar": "0818930dc8d7debb403204611691da58e49d42c50b6ffcfdce02dadb7c3c2b6c",
+    "/home/vox/projects/lss-port-1.21.1/test-server/fabric/versions/1.21.1/server-1.21.1.jar": "c301de10f575027d13eac18c7f34409d60648cf56a35d566aa1f530ff617840a",
+    "/home/vox/projects/lss-port-1.21.1/test-server/fabric/.fabric/server/1.21.1-server.jar": "e3bc55693e93cda0188f2e60aea28113fc647c5e85a15fa3d1b347349231b4bb",
+    "/home/vox/projects/lss-port-1.21.1/test-server/fabric/.fabric/server/fabric-loader-server-0.19.3-minecraft-1.21.1.jar": "e879b47213e121cfd7a269cd9a213bca4ab6963f23acdcbde71152106db3632e",
+    "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base/world/DIM-1/data/raids.dat": "fa8b2805a697b5279ec5e1ee7404d2048c820f5242953266602e92b1fa87144b",
+    "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base/world/DIM1/data/raids_end.dat": "fa8b2805a697b5279ec5e1ee7404d2048c820f5242953266602e92b1fa87144b",
+    "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base/world/data/lss-timestamps.bin": "fe3a788364d183d7317c362d60cab7e934ef79361e67210d82fc1246989dffcf",
+    "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base/world/data/raids.dat": "fa8b2805a697b5279ec5e1ee7404d2048c820f5242953266602e92b1fa87144b",
+    "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base/world/entities/r.-1.-1.mca": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base/world/entities/r.-1.0.mca": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base/world/entities/r.0.-1.mca": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base/world/entities/r.0.0.mca": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base/world/level.dat": "9e3dbac062237444f26600f11bfbfda4c875206c1d938e24478de57b2b013b45",
+    "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base/world/level.dat_old": "18db103f514df72f2f9d4477c67036e2c6589b294f87aa7ca8efe5ccd9492924",
+    "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base/world/poi/r.-1.-1.mca": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base/world/poi/r.-1.-2.mca": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base/world/poi/r.-1.0.mca": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base/world/poi/r.-1.1.mca": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base/world/poi/r.-2.-1.mca": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base/world/poi/r.-2.-2.mca": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base/world/poi/r.-2.0.mca": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base/world/poi/r.-2.1.mca": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base/world/poi/r.0.-1.mca": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base/world/poi/r.0.-2.mca": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base/world/poi/r.0.0.mca": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base/world/poi/r.0.1.mca": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base/world/poi/r.1.-1.mca": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base/world/poi/r.1.-2.mca": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base/world/poi/r.1.0.mca": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base/world/poi/r.1.1.mca": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base/world/region/r.-1.-1.mca": "d4d43e8fe8e5b872d5727890109824180403ab317eedd80f085583221eeae7ee",
+    "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base/world/region/r.-1.-2.mca": "143b619bef55302b29f1640b5a9c2458ac877ea7dd979b45af43b27ea92dc80a",
+    "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base/world/region/r.-1.0.mca": "598e924697d90411dd916b05d85bc859b74709294675e15c1262063087c2965b",
+    "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base/world/region/r.-1.1.mca": "3f2ad70183d8f3e2c02eebda03487fab97ea83466148678944d16dc487f6a42c",
+    "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base/world/region/r.-2.-1.mca": "07b9437a3b851cbcc2baa7d06b12c79dd1d741fadabe3bba060eaf40dc7b233f",
+    "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base/world/region/r.-2.-2.mca": "198f7befe3ea0111d97c08bb74e4751c061612906f4ae1bc26ac4ab56f2b63ab",
+    "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base/world/region/r.-2.0.mca": "ee2e31efa307878f420ebb4b2f6d5fadff97d0598349f1dd9c074ff938b1559d",
+    "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base/world/region/r.-2.1.mca": "89abb61d7c68b092f25816c466955343c06d736dede69a00aa9fbe16b685aa0f",
+    "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base/world/region/r.0.-1.mca": "17856d14649f833994b63e6bbd0aa82585e2f248f4773369474733633cf2ed84",
+    "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base/world/region/r.0.-2.mca": "3ad1e07f5bf5232de4aff841948246788183f4b688ecac9827feef674da11241",
+    "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base/world/region/r.0.0.mca": "e99064dde8263909ef80ee8bc11deb2e8c50cf635fad6fae778195790504564b",
+    "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base/world/region/r.0.1.mca": "432fe27868a07fc1facd8cedae9b72abdb7f98c16a589568c9c6fb13292c4d42",
+    "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base/world/region/r.1.-1.mca": "2d0673cfd0dc09d93ea2f47bb58edd797d7ba3f829d80ac90482da3bd97520cd",
+    "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base/world/region/r.1.-2.mca": "3608b776463154c68cbf2e3dcf40930b467330a1137ee5506190fefdd838dc0c",
+    "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base/world/region/r.1.0.mca": "a3451fbb9cbccac605f820ecb0e6094ba10b80825f6419bb852cbb5d27edf98f",
+    "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base/world/region/r.1.1.mca": "2d2bbe552e9641a9a97ba30080c2fed9ab66c6b86564c56e0dd62c3457dbdf50"
+  },
+  "source_hashes_unchanged_after_copy": true,
+  "world_exclusions": [
+    "playerdata",
+    "advancements",
+    "stats",
+    "session.lock"
+  ],
+  "cache_inclusions": [
+    "libraries",
+    "versions",
+    ".fabric/server"
+  ],
+  "cache_exclusions": [
+    ".fabric/processedMods",
+    ".fabric/remappedJars",
+    "cache/c2me-dfc"
+  ]
+}

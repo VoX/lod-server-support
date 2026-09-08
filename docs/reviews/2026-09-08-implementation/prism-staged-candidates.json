@@ -1,0 +1,22 @@
+[
+  {
+    "source": "/home/vox/projects/lss-lines/1.21.1/fabric/build/libs/lod-server-support-fabric-0.14.0+1.21.1.jar",
+    "destination": "/mnt/c/Users/Ian/AppData/Roaming/PrismLauncher/instances/lss-astra-validation-fabric-1.21.1/minecraft/mods/lod-server-support-fabric.jar",
+    "sha256": "65e2486eb725f64b88bbc1abc1597cc41e82e4dde06b550b5b4148af0751e5bf",
+    "size": 8208388,
+    "workspace_commit_at_staging": "3a0c61c296b729a7db8d64d83a7d35f511874c48",
+    "staged_utc": "2026-09-08T20:59:26.094322+00:00",
+    "build_validation": "Parent reported final all-module build and release_check green; exact CI-style0.14.0+1.21.1 artifact selected.",
+    "launched": false
+  },
+  {
+    "source": "/home/vox/projects/lss-lines/1.21.1/neoforge/build/libs/lod-server-support-neoforge-0.14.0+1.21.1.jar",
+    "destination": "/mnt/c/Users/Ian/AppData/Roaming/PrismLauncher/instances/lss-astra-validation-neoforge-1.21.1/minecraft/mods/lod-server-support-neoforge.jar",
+    "sha256": "528e0ac5e50b437c594539e4935b42ce71661b6c993065d0e3fbad4ea6bd767e",
+    "size": 22663777,
+    "workspace_commit_at_staging": "3a0c61c296b729a7db8d64d83a7d35f511874c48",
+    "staged_utc": "2026-09-08T20:59:26.587748+00:00",
+    "build_validation": "Parent reported final all-module build and release_check green; exact CI-style0.14.0+1.21.1 artifact selected.",
+    "launched": false
+  }
+]
