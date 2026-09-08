@@ -365,11 +365,25 @@ public class SerializerParityGameTests {
                     // the SPLIT path from a silently-inert dispatcher falling back to the
                     // full-read closure — the identical bytes are the point. The counter
                     // proves the raw fetch actually served this read.
-                    Gt.assertTrue(helper, background.rawServesForTest() > 0,
-                            "the split raw path must have served the background read"
-                                    + " (raw_serves=0 means the dispatcher went inert)");
-                    Gt.assertTrue(helper, background.getDiagnostics().contains("read_path=bg-split"),
-                            "the split's diag receipt must be visible");
+                    if (net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("c2me")) {
+                        // The C2ME runtime profiles replace IOWorker: its vanilla executor
+                        // is absent, so the intended protected route is adaptive fallback.
+                        // Do not select this arm merely because the raw dispatcher is idle:
+                        // vanilla must retain the raw-path liveness receipt below.
+                        Gt.assertTrue(helper, background.adaptiveThrottleLimitOrDisabled() > 0,
+                                "C2ME's replacement IO must engage adaptive read protection: "
+                                        + background.getDiagnostics());
+                        Gt.assertTrue(helper, background.getDiagnostics().contains("read_throttle=ENGAGED")
+                                        && !background.getDiagnostics().contains("read_path=bg-split")
+                                        && background.rawServesForTest() == 0,
+                                "C2ME fallback must report its actual route: " + background.getDiagnostics());
+                    } else {
+                        Gt.assertTrue(helper, background.rawServesForTest() > 0,
+                                "the split raw path must have served the background read"
+                                        + " (raw_serves=0 means the dispatcher went inert)");
+                        Gt.assertTrue(helper, background.getDiagnostics().contains("read_path=bg-split"),
+                                "the split's diag receipt must be visible");
+                    }
                     background.shutdown();
                     Gt.assertTrue(helper, Arrays.equals(fgResult.get().sectionBytes(), bg.sectionBytes()),
                             describeMismatch(fgResult.get().sectionBytes(), bg.sectionBytes()));
