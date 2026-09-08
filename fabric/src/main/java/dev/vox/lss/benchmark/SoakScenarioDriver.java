@@ -137,21 +137,24 @@ public final class SoakScenarioDriver {
             step.fired = true;
             this.lastProgressTick = this.tickCount;
             LSSLogger.info("[Soak] Executing step (anchor " + step.anchor + " +" + step.at + "s): " + step.cmd);
-            boolean threw = false;
+            boolean ok = false;
+            String bare = step.cmd.startsWith("/") ? step.cmd.substring(1) : step.cmd;
+            boolean gamerule = bare.startsWith("gamerule ");
             try {
-                server.getCommands().performPrefixedCommand(server.createCommandSourceStack(), step.cmd);
+                ok = gamerule
+                        ? SoakCommandExecutor.setGamerule(server.getCommands(), server.createCommandSourceStack(), bare)
+                        : SoakCommandExecutor.dispatch(server.getCommands(), server.createCommandSourceStack(), step.cmd);
+                if (!ok) LSSLogger.error("[Soak] Step command did not complete successfully: " + step.cmd);
             } catch (RuntimeException e) {
-                threw = true;
                 LSSLogger.error("[Soak] Step command failed: " + step.cmd, e);
             }
-            // Row carries ok=did-not-throw so a step that raised is a visible breadcrumb; a
-            // command that parsed but had no effect is caught by soak_report's snapshot-delta
-            // "[no observable effect]" tag rather than here (performPrefixedCommand returns void).
+            // Only gamerules assert semantic success; generic effects have scenario checks.
             var row = baseRow("command");
             row.put("cmd", step.cmd);
             row.put("anchor", step.anchor);
             row.put("at", step.at);
-            row.put("ok", !threw);
+            row.put("ok", ok);
+            row.put("validation", gamerule ? "gamerule-readback" : "dispatch");
             BenchmarkMetricsExporter.appendJsonLine(OUTPUT, row);
         }
     }
