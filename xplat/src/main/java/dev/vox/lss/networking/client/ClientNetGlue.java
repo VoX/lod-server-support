@@ -161,6 +161,7 @@ public final class ClientNetGlue {
 
     public static void triggerHostHandshake() {
         Minecraft.getInstance().execute(() -> {
+            sessionGate.onHostServiceReady(); // remember publication even when downloads are OFF
             if (!LSSClientConfig.CONFIG.receiveServerLods) return;
             if (sessionGate.getRequestManager() != null) return;
             if (!LSSApi.hasVoxelConsumers()) return; // no LOD consumer -> stay silent
@@ -291,8 +292,12 @@ public final class ClientNetGlue {
     public static void onSessionConfigFrame(SessionConfigS2CPayload payload) {
         Minecraft.getInstance().execute(() -> {
             reconcileClientConfig();
+            var previous = sessionGate.getRequestManager();
             sessionGate.onSessionConfig(payload, LSSApi.hasVoxelConsumers(),
                     LSSClientConfig.CONFIG.enableV16ServerCompat);
+            if (previous != null && previous != sessionGate.getRequestManager()) {
+                dev.vox.lss.compat.ModCompat.retireClientAcquisition();
+            }
             // Far players (E1): the prefs frame follows the session config
             // (send-once-unless-changed, contained; no-op while the capability bit is
             // not composed — all of E1).
@@ -473,7 +478,12 @@ public final class ClientNetGlue {
             mc.execute(ClientNetGlue::reconcileClientConfig);
             return;
         }
-        sessionGate.reconcileReception(LSSClientConfig.CONFIG.receiveServerLods, LSSApi.hasVoxelConsumers());
+        if (sessionGate.reconcileReception(LSSClientConfig.CONFIG.receiveServerLods, LSSApi.hasVoxelConsumers())
+                && !LSSClientConfig.CONFIG.receiveServerLods) {
+            // Receipt retirement/save has completed; cancel queued map work but retain
+            // texture rebuilds already committed to the still-connected native world.
+            dev.vox.lss.compat.ModCompat.retireClientAcquisition();
+        }
     }
 
     /** End-of-client-tick body. */
