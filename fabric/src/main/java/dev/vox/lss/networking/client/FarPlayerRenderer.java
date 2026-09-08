@@ -420,6 +420,7 @@ public final class FarPlayerRenderer {
                     }
                     queueProxyTag(pendingTags, frustum, nameTags, tracked, proxy, localPlayer, position, light);
                 } catch (Throwable t) {
+                    restorePose(poseStack, passMark);
                     latchSeatedFailure(tracked, proxy, t);
                 }
             } else {

@@ -45,11 +45,13 @@ class FarPlayerRenderSourceContractTest {
                         && src.contains("if (range < 64.0) continue;")
                         && src.contains("if (range > 64.0 && cameraDistanceSq < range * range) continue;"),
                 "neoforge: the NAMETAG_DISTANCE attribute must be honoured in both directions");
-        assertEquals(4, count(src, "restorePose(poseStack, passMark);"),
-                "neoforge: three per-proxy drops + the mount catch must restore the pose sentinel");
+        assertEquals(5, count(src, "restorePose(poseStack, passMark);"),
+                "neoforge: three per-proxy drops + mount and seated catches must restore the pose sentinel");
     }
 
     private static void pin(String src, String tree) throws java.io.IOException {
+        assertTrue(src.contains("restorePose(poseStack, passMark);\n                    latchSeatedFailure(tracked, proxy, t);"),
+                tree + ": seated failure restores the next draw before failure latching");
         // WI-1/WI-2: the sky-15 floor with the real block light, the full-bright short-circuit,
         // and NO full-bright-by-chunk-state fallback (it was dead code: ClientLevel.hasChunk
         // is unconditionally true on this MC).
