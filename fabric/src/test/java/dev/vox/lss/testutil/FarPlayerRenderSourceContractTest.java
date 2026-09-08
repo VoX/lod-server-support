@@ -53,6 +53,8 @@ class FarPlayerRenderSourceContractTest {
     }
 
     private static void pin(String src, String tree) throws java.io.IOException {
+        assertTrue(src.contains("FarPlayerWingAnimation.advance(this.elytraAnimationState, newTick);"),
+                tree + ": synthetic players advance wing state only on a new animation tick");
         // WI-1/WI-2: the sky-15 floor with the real block light, the full-bright short-circuit,
         // NO full-bright-by-chunk-state fallback (dead code: ClientLevel.hasChunk is
         // unconditionally true on this MC too), and — this line's pipeline — the floor applied
