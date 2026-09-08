@@ -220,10 +220,22 @@ public final class RuntimeSettings {
      * value (nothing assigned).
      */
     public static String applyAndPersist(ServerConfigBase config, SettingKey key, String rawValue) {
+        return applyWithPersistenceOutcome(config, key, rawValue).effectiveValue();
+    }
+
+    public record ApplyResult(String effectiveValue, boolean persisted) {
+        public String persistenceNote() {
+            return persisted ? "" : "; applied, but not saved — see server log";
+        }
+    }
+
+    /** Runtime application remains successful when persistence fails. */
+    public static ApplyResult applyWithPersistenceOutcome(ServerConfigBase config,
+                                                          SettingKey key, String rawValue) {
         key.apply().apply(config, rawValue);
         config.validate();
-        config.save();
-        return key.current().apply(config);
+        boolean persisted = config.trySave();
+        return new ApplyResult(key.current().apply(config), persisted);
     }
 
     /** The reply's "(clamped from 'raw')" suffix, or "" when the value was accepted
