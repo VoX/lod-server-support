@@ -22,6 +22,8 @@ set -euo pipefail
 
 PLATFORM="${SOAK_PLATFORM:-fabric}"
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+source "$PROJECT_ROOT/scripts/lib/harness-lock.sh"
+harness_acquire
 RESULTS_ROOT="$PROJECT_ROOT/soak-results"
 CARRY_DIR="$PROJECT_ROOT/soak-results/store-offline-carry.$$"
 
@@ -32,7 +34,7 @@ case "$PLATFORM" in
 esac
 
 log() { echo "[store-offline] $*"; }
-cleanup() { rm -rf "$CARRY_DIR"; }
+cleanup() { harness_cleanup; rm -rf "$CARRY_DIR"; }
 trap cleanup EXIT
 
 latest_results() { # <scenario>
@@ -60,9 +62,9 @@ run_phase() { # <scenario> [carry]
     log "=== phase: $scenario (platform=$PLATFORM) ==="
     if [[ -n "$carry" ]]; then
         SOAK_PLATFORM="$PLATFORM" SOAK_WORLD_FROM="$CARRY_DIR" \
-            "$PROJECT_ROOT/scripts/soak.sh" "$scenario"
+            harness_run_script "$PROJECT_ROOT/scripts/soak.sh" "$scenario"
     else
-        SOAK_PLATFORM="$PLATFORM" "$PROJECT_ROOT/scripts/soak.sh" "$scenario"
+        SOAK_PLATFORM="$PLATFORM" harness_run_script "$PROJECT_ROOT/scripts/soak.sh" "$scenario"
     fi
     carry_world
 }

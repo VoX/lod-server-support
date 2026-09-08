@@ -29,6 +29,8 @@ if [ "$ON_MODE" != "full" ]; then
     exit 2
 fi
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+source "$PROJECT_ROOT/scripts/lib/harness-lock.sh"
+harness_acquire
 OUT_ROOT="${OUT_ROOT:-$PROJECT_ROOT/store-gate-results}"
 STAMP="${RUN_STAMP:-$(date +%Y%m%d-%H%M%S)}"
 SRV_CFG_DIR="$PROJECT_ROOT/fabric/build/run/benchmark-server/config"
@@ -88,15 +90,19 @@ collect() { # <run-out-dir>
 run_arm() { # <arm-label> <lodStore-value> <rep>
     local arm="$1" value="$2" rep="$3"
     local out="$OUT_ROOT/$STAMP/${arm}-rep${rep}"
+    python3 "$HARNESS_LIB_DIR/benchmark-results.py" prepare "$out"
     log "=== $SCENARIO $arm rep$rep (lodStore=$value, ${DURATION}s) ==="
     stage_config "$value"
     # Stale-artifact guard: a crashed run must yield MISSING files, not the last run's.
-    rm -f "$RESULTS"/server*.json "$RESULTS"/client*.json "$RESULTS"/cpu*.jsonl \
+    rm -f "$RESULTS/current.json" "$RESULTS"/server*.json "$RESULTS"/client*.json "$RESULTS"/cpu*.jsonl \
           "$RESULTS"/*.jfr "$RESULTS"/warm-join-meta.json
     local rc=0
-    (export BENCHMARK_CONFIG_STAGED=1; cd "$PROJECT_ROOT" && ./scripts/benchmark.sh "$SCENARIO" "$DURATION") \
+    harness_run_script env BENCHMARK_CONFIG_STAGED=1 "$PROJECT_ROOT/scripts/benchmark.sh" "$SCENARIO" "$DURATION" \
         > "$OUT_ROOT/$STAMP/${arm}-rep${rep}.orchestrator.log" 2>&1 || rc=$?
     collect "$out"
+    if [[ $rc -eq 0 ]]; then
+        python3 "$HARNESS_LIB_DIR/benchmark-results.py" record "$PROJECT_ROOT" "$out" || rc=$?
+    fi
     cat > "$out/meta.json" <<EOF
 {"mode":"$MODE","arm":"$arm","lodStore":"$value","rep":$rep,"duration_s":$DURATION,
  "ref":"$(git -C "$PROJECT_ROOT" rev-parse --short HEAD)","rc":$rc,"finished":"$(date -Is)"}
