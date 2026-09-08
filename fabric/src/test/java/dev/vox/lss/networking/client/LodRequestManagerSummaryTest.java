@@ -90,6 +90,63 @@ class LodRequestManagerSummaryTest {
                 dimension, POS_TILE_X, POS_TILE_Z, 0, new long[]{stamp}));
     }
 
+    @Test
+    void retainedSummaryThenDoubtAfterDimensionExcursionRedeclares() throws Exception {
+        var a = dim("overworld");
+        var b = dim("nether");
+        setupWithLod(12);
+        seedStamped(a, 7000L);
+        var player = java.util.UUID.randomUUID();
+        var clock = new java.util.concurrent.atomic.AtomicLong(1_000_000_000L);
+        var stamp = new java.util.concurrent.atomic.AtomicLong(1000L);
+        var anchor = new java.util.concurrent.atomic.AtomicReference<>(
+                new dev.vox.lss.common.region.RegionSummaryService.PlayerAnchor("lss_test:overworld", 10, -3));
+        var service = dev.vox.lss.common.region.RegionSummaryServiceFixture.create(
+                (dimension, tx, tz) -> stamp.get(), clock::get);
+        try {
+            var request = new RegionSummaryWire.Request("lss_test:overworld", POS_TILE_X, POS_TILE_Z, 0);
+            service.offerRequest(player, request);
+            Runnable hold = () -> service.pump(id -> anchor.get(), (id, body) ->
+                    dev.vox.lss.common.region.RegionSummaryService.SendOutcome.RETRY);
+            awaitSummary(hold, () -> service.diagnostics().getTilesKnown() == 1);
+            hold.run(); // retain the assembled old A frame at the ready FIFO head
+
+            manager.setLastDimensionForTest(b);
+            anchor.set(new dev.vox.lss.common.region.RegionSummaryService.PlayerAnchor("lss_test:nether", 10, -3));
+            // Model the oracle after an A edit whose dirty broadcast did not reach B.
+            stamp.set(RegionSummaryWire.STAMP_NEVER_CLEAN);
+            hold.run();
+            clock.addAndGet(6_000_000_000L); // cooldown elapsed, old frame still inside its 10s TTL
+            seedStamped(a, 7000L);
+            anchor.set(new dev.vox.lss.common.region.RegionSummaryService.PlayerAnchor("lss_test:overworld", 10, -3));
+            service.offerRequest(player, request);
+            awaitSummary(hold, () -> service.diagnostics().getTilesNeverClean() == 1);
+            var dispositions = new ArrayList<Long>();
+            awaitSummary(() -> service.pump(id -> anchor.get(), (id, body) -> {
+                manager.onRegionSummaryFrame(body);
+                dispositions.add(manager.columnsForTest().classify(POS));
+                return dev.vox.lss.common.region.RegionSummaryService.SendOutcome.SENT;
+            }), () -> dispositions.size() == 2);
+            assertEquals(List.of(ColumnStateMap.SATISFIED, 7000L), dispositions,
+                    "FIFO old proof is corrected by the new doubt frame");
+            for (int i = 0; i <= 21 && !declared(POS); i++) tick(0, 0, a);
+            assertTrue(declared(POS), "the corrected cached claim actually redeclares");
+        } finally {
+            service.shutdown();
+        }
+    }
+
+    private static void awaitSummary(Runnable pump, java.util.function.BooleanSupplier done)
+            throws InterruptedException {
+        long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(30);
+        do {
+            pump.run();
+            if (done.getAsBoolean()) return;
+            if (System.nanoTime() > deadline) fail("summary assembly did not finish");
+            Thread.sleep(1);
+        } while (true);
+    }
+
     // ---- the at-entry request ----
 
     @Test
@@ -322,6 +379,20 @@ class LodRequestManagerSummaryTest {
 
     @Test
     void aRevokedPositionReopensItsRingAndRedeclares() {
+        aRevokedPositionReopensItsRingAndRedeclares(9999L);
+    }
+
+    @Test
+    void aRevokedPositionReopensItsRingAndRedeclaresAfterNoRegion() {
+        aRevokedPositionReopensItsRingAndRedeclares(RegionSummaryWire.STAMP_NO_REGION);
+    }
+
+    @Test
+    void aRevokedPositionReopensItsRingAndRedeclaresAfterNeverClean() {
+        aRevokedPositionReopensItsRingAndRedeclares(RegionSummaryWire.STAMP_NEVER_CLEAN);
+    }
+
+    private void aRevokedPositionReopensItsRingAndRedeclares(long newerStamp) {
         // Final review, client lens MAJOR-1 end to end: a fresher frame's revocation
         // below the scanner's confirmed prefix must REOPEN the position's ring — the
         // needs bit alone is structurally outside both walk intervals and the position
@@ -351,7 +422,7 @@ class LodRequestManagerSummaryTest {
         sent.clear();
 
         // The fresher frame revokes the summary's own claim...
-        manager.onRegionSummaryFrame(frame9("lss_test:overworld", 9999L));
+        manager.onRegionSummaryFrame(frame9("lss_test:overworld", newerStamp));
         assertTrue(manager.getReopenedRingCount() > 0,
                 "the revocation must reopen the position's ring below the prefix");
         // ...and the next scheduled scan re-declares it.
@@ -364,6 +435,20 @@ class LodRequestManagerSummaryTest {
 
     @Test
     void aRevokedPositionRedeclaresOnTheRegionArmThroughNeedsBitsAlone() {
+        aRevokedPositionRedeclaresOnTheRegionArmThroughNeedsBitsAlone(9999L);
+    }
+
+    @Test
+    void aRevokedPositionRedeclaresOnTheRegionArmThroughNeedsBitsAloneAfterNoRegion() {
+        aRevokedPositionRedeclaresOnTheRegionArmThroughNeedsBitsAlone(RegionSummaryWire.STAMP_NO_REGION);
+    }
+
+    @Test
+    void aRevokedPositionRedeclaresOnTheRegionArmThroughNeedsBitsAloneAfterNeverClean() {
+        aRevokedPositionRedeclaresOnTheRegionArmThroughNeedsBitsAlone(RegionSummaryWire.STAMP_NEVER_CLEAN);
+    }
+
+    private void aRevokedPositionRedeclaresOnTheRegionArmThroughNeedsBitsAlone(long newerStamp) {
         // Region twin of the legacy reopen pin above (region-scan-plan.md §10 policy
         // (c)): the region walk has no prefix to reopen — the revocation's needs bit
         // ALONE must re-declare, and the reopen surface stays a structural no-op.
@@ -384,7 +469,7 @@ class LodRequestManagerSummaryTest {
         assertFalse(declared(pos), "premise: the validated position never declared");
         sent.clear();
 
-        manager.onRegionSummaryFrame(frame9("lss_test:overworld", 9999L));
+        manager.onRegionSummaryFrame(frame9("lss_test:overworld", newerStamp));
         assertEquals(0, manager.getReopenedRingCount(),
                 "the region arm's reopen surface is a no-op — needs bits carry the revocation");
         for (int i = 0; i <= 21 && !declared(pos); i++) {
