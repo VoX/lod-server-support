@@ -1977,8 +1977,8 @@ public class PaperRequestProcessingService {
     private boolean farPlayerSnapshotWarned;
 
     /** Far players (E1): one broadcast pass every farPlayersUpdateIntervalTicks while
-     *  armed and subscribed — mode "off" short-circuits
-     *  before any snapshot work. Pump thread (Folia: cross-region position/equipment
+     *  armed and subscribed. Mode transitions drain control frames every tick;
+     *  mode "off" skips position and equipment snapshots. Pump thread (Folia: cross-region position/equipment
      *  reads are stale-tolerant by design — accepted for display-only data, the
      *  experimental label covers it). */
     private void tickFarPlayers() {

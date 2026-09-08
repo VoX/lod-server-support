@@ -723,8 +723,8 @@ public class RequestProcessingService {
     }
 
     /** Far players (E1): one broadcast pass every {@code farPlayersUpdateIntervalTicks}
-     *  while the mode is armed and anyone subscribed. Mode "off" short-circuits
-     *  before any snapshot work — a disabled server's path is free. */
+     *  while the mode is armed and anyone subscribed. Mode transitions drain control
+     *  frames every tick; mode "off" skips position and equipment snapshots. */
     private void tickFarPlayers(LSSServerConfig config) {
         if (this.farPlayerService.subscriberCount() == 0) return;
         try {
