@@ -1124,8 +1124,8 @@ public class ServiceLifecycleGameTests {
         holdChunk(chunkSource, posK2);
         level.getChunk(posK1.x(), posK1.z());
         level.getChunk(posK2.x(), posK2.z());
-        // The pair must exist on disk: the budget routes them to the disk reader.
-        level.save(null, true, false);
+        // The pair must exist on disk before the budget forces this fallback.
+        var savedColumns = new SavedColumnFixture(level, posK1, posK2);
 
         var service = new RequestProcessingService(server);
         var state = service.registerPlayer(mock, LSSConstants.CAPABILITY_VOXEL_COLUMNS);
@@ -1146,14 +1146,20 @@ public class ServiceLifecycleGameTests {
         stamps[512] = -1L;
         packed[513] = PositionUtil.packPosition(posK2.x(), posK2.z());
         stamps[513] = -1L;
-        GameTestSeeding.seedRequests(state, packed, stamps);
-
+        var admitted = new java.util.concurrent.atomic.AtomicBoolean();
         var diag = service.getOffThreadProcessor().getDiagnostics();
         var diskDiag = service.getDiskReader().getDiag();
         helper.succeedWhen(() -> {
+            if (!admitted.get()) {
+                savedColumns.assertSaved(helper);
+                GameTestSeeding.seedRequests(state, packed, stamps);
+                admitted.set(true);
+            }
             service.tick();
             helper.assertTrue(diskDiag.getSuccessfulReadCount() >= 2 && state.getTotalSectionsSent() >= 2,
-                    "waiting for the disk-served pair to flush (budget remainder must still serve)");
+                    "waiting for the disk-served pair to flush (budget remainder must still serve): success="
+                            + diskDiag.getSuccessfulReadCount() + ", sent=" + state.getTotalSectionsSent()
+                            + "; " + service.getDiskReader().getDiagnostics());
             helper.assertTrue(diag.getTotalInMemory() == 0,
                     "the trailing loaded pair must NOT be probe-served: 512 queue entries ahead "
                             + "of it must exhaust the per-tick probe budget (misses count too)");
