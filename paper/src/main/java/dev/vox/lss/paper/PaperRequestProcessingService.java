@@ -1976,13 +1976,11 @@ public class PaperRequestProcessingService {
      *  reads are stale-tolerant by design — accepted for display-only data, the
      *  experimental label covers it). */
     private void tickFarPlayers() {
-        if ("off".equals(this.config.farPlayers)
-                || this.farPlayerService.subscriberCount() == 0) {
-            return;
-        }
-        if (++this.farPlayerTickCounter < this.config.farPlayersUpdateIntervalTicks) return;
-        this.farPlayerTickCounter = 0;
+        if (this.farPlayerService.subscriberCount() == 0) return;
         try {
+            if (!this.farPlayerService.applyMode(this.config.farPlayers, this::sendFarPlayerFrame)) return;
+            if (++this.farPlayerTickCounter < this.config.farPlayersUpdateIntervalTicks) return;
+            this.farPlayerTickCounter = 0;
             var online = buildFarPlayerSnapshots(this.server.getPlayerList().getPlayers());
             this.farPlayerService.tick(System.currentTimeMillis(), online,
                     new dev.vox.lss.common.farplayers.FarPlayerBroadcastService.Settings(
