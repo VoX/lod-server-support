@@ -1093,4 +1093,20 @@ class ClientSessionGateTest {
         assertEquals(sent + 1, handshakesSent.get(), "the guard re-announces instead");
         assertTrue(gate.isServerEnabled(), "the established session's state is untouched");
     }
+    @Test void localReceiveResumeStaysSilentUntilTheLanServiceHasStarted() {
+        gate.onJoin(false, true, true, true);
+        gate.reconcileReception(true, true);
+        assertEquals(0, handshakesSent.get(), "ordinary integrated singleplayer never negotiates");
+        gate.reconcileReception(false, true);
+        gate.onHostServiceReady(); // Open to LAN while downloads are OFF
+        gate.reconcileReception(true, true);
+        assertEquals(1, handshakesSent.get());
+        gate.onSessionConfig(config(V, true), true, true);
+        assertNotNull(gate.getRequestManager());
+        gate.getRequestManager().setBatchSenderForTest(payload -> {});
+        gate.reconcileReception(false, true);
+        gate.reconcileReception(true, true);
+        assertEquals(2, handshakesSent.get(), "an established LAN host can resume without reopening LAN");
+    }
+
 }
