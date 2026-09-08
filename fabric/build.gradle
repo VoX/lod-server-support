@@ -104,14 +104,20 @@ dependencies {
         // 1.21.11 line: ksbx9Ph5 = moonrise-opt 0.9.0-beta.4 (the 1.21.11 build)
         localRuntime "maven.modrinth:moonrise-opt:ksbx9Ph5"
     }
-    // Same arm for C2ME (the Modrinth version test-server.sh installs), doing double duty:
+    // C2ME validation has two named pins (docs/testing/c2me-validation.md), doing double duty:
     // the disk-read profile measures the chunk-IO-overhaul fallback path (adaptive read
     // throttle) against the vanilla IOWorker background-priority path, and the copyOf dirty
     // hook is validated through C2ME's rewritten save paths — the old ChunkMap.save hook
     // silently never fired there. Runtime-only: release jars and normal builds are unaffected.
     if ((findProperty('benchmark.c2me') ?: 'false').toString() == 'true') {
-        // 1.21.11 line: 879vA5z6 = c2me-fabric 0.4.0-alpha.0.26+1.21.11
-        localRuntime "maven.modrinth:c2me-fabric:879vA5z6"
+        // Preserve existing benchmark default; explicitly select the regular-map pin
+        // to validate the artifact installed by test-server.sh without upgrading it.
+        def c2meProfile = (findProperty('benchmark.c2meProfile') ?: 'benchmark').toString()
+        def c2mePins = ['benchmark': '879vA5z6', 'regular-map': 'MfQIu1Y0']
+        if (!c2mePins.containsKey(c2meProfile)) {
+            throw new GradleException("Unknown benchmark.c2meProfile: ${c2meProfile}")
+        }
+        localRuntime "maven.modrinth:c2me-fabric:${c2mePins[c2meProfile]}"
     }
 }
 
