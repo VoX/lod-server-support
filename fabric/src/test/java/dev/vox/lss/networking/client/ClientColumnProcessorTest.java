@@ -634,6 +634,28 @@ class ClientColumnProcessorTest {
                 "the post-bump straggler is never polled by the stale drain");
     }
 
+
+    @Test void ownedAlreadyPolledCallbackIsRetiredBeforeItsCompletion() {
+        var manager = managedManager();
+        manager.deliveryExecutor = Runnable::run;
+        long packed = PositionUtil.packPosition(1, 1);
+        manager.onColumnReceived(packed, 5000L, dim);
+        var receipt = manager.trackDelivery(dim, packed, -1L);
+        processor.offer(new VoxelColumnS2CPayload(1, 1, dim, 5000L, sectionWire(1, 1)), false, receipt);
+        processor.drainColumnQueue(dim, LEVEL_SECTIONS, MIN_SECTION_Y, false, FACTORY,
+                (d, x, z, data) -> {
+                    assertSame(receipt, dev.vox.lss.api.LSSApi.captureIngestFailureHandle());
+                    manager.retireAcquisition();
+                    processor.reportUndispatched(manager);
+                    assertEquals(-1L, manager.getColumnTimestamp(1, 1),
+                            "retirement accounts for a receipt already outside the queue");
+                    receipt.report(); // late callback cannot charge intentional retirement
+                }, processor.sessionEpochForTest());
+        assertEquals(-1L, manager.getColumnTimestamp(1, 1));
+        assertEquals(0, manager.getTotalIngestFailures());
+        assertEquals(0, processor.getQueuedCount());
+    }
+
     // ---- CL-044: the three clear paths report instead of silently dropping (D2) ----
 
     @Test
