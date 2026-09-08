@@ -33,7 +33,9 @@ LOD Server Support is backwards and forwards compatible from v0.4.0 through the 
 
 ## Installation
 
-Install **LOD Server Support** on **both** the **server** (LOD Server Support Fabric mod, Paper plugin, or NeoForge mod on 1.21.1) and **every client** (LOD Server Support Fabric mod + Voxy). Without LOD Server Support on both the connecting client and on the server it will not function.
+Install **LOD Server Support** on **both** the **server** (Fabric, Paper, or NeoForge on a line that ships it) and **every participating client** (the matching Fabric or NeoForge LSS mod, with Voxy or the enabled Xaero map bridge). The server and client both need LSS for its terrain download service.
+
+NeoForge ships on MC 1.21.1, 26.1 and 26.2; the 1.21.10/1.21.11 modules remain maintained builds. NeoForge far-player rendering is live on 1.21.1 and remains an intentional stub on the other lines. See the [loader/artifact matrix](docs/planning/per-version-surfaces.md#current-loader-and-artifact-surfaces-2026-09-08) and [validation profiles](docs/testing/astra-live-profiles.md) for the separate packaging, consumer and live-test boundaries.
 
 ## Commands
 
@@ -55,7 +57,7 @@ Install **LOD Server Support** on **both** the **server** (LOD Server Support Fa
 
 ## Configuration
 
-**Client cache identity.** The client keeps its per-server download cache in per-world buckets automatically: each remote world is identified by the (already hashed) seed value every vanilla login carries, so a server that resets or rotates its map stops serving you stale "already downloaded" terrain, and your first session after upgrading adopts the existing cache warmly. `useWorldSubBuckets: false` in `lss-client-config.json` turns the per-world split off. For a server reachable at several addresses, `cacheAddressAliases` (for example `[["play.example.com", "alt.example.com"]]`) lets all of them share one cache so the world only downloads once — with Voxy installed this needs voxy-extra's LoD Mirror configured with the same list (first entries identical), and LSS applies the alias only when Voxy's own storage confirms it, falling back to the per-address cache otherwise. (voxy-extra is a Fabric mod, so on NeoForge with Voxy installed the alias never corroborates and each address keeps its own cache — the per-world split works on both loaders either way.) `/lss diag` shows the active cache key on its `Cache:` line.
+**Client cache identity.** The client keeps its per-server download cache in per-world buckets automatically: each remote world is identified by the (already hashed) seed value every vanilla login carries, so a server that resets or rotates its map stops serving you stale "already downloaded" terrain, and your first session after upgrading adopts the existing cache warmly. `useWorldSubBuckets: false` in `lss-client-config.json` turns the per-world split off. For a server reachable at several addresses, `cacheAddressAliases` (for example `[["play.example.com", "alt.example.com"]]`) lets all of them share one cache so the world only downloads once — with Voxy installed this needs voxy-extra's LoD Mirror configured with the same list (first entries identical), and LSS applies the alias only when Voxy's own storage confirms it, falling back to the per-address cache otherwise. (On NeoForge, corroboration depends on the actual Voxy/compatibility stack and its observed storage path; an uncorroborated alias keeps separate address caches. The per-world split works on both loaders.) `/lss diag` shows the active cache key on its `Cache:` line.
 
 Config files are generated during first run at `config/lss-server-config.json` on Fabric and NeoForge or `plugins/LodServerSupport/lss-server-config.json` on Paper.
 
