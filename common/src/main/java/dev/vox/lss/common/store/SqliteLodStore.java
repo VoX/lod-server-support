@@ -1261,16 +1261,17 @@ public final class SqliteLodStore implements LodStoreService {
         }
         long watermark = parseLongOr(readMetaMap().get("migrate_progress_" + dimId),
                 Long.MIN_VALUE);
-        record Row(long pos, int usize, byte[] blob) {}
+        record Row(long pos, int usize, byte[] blob, long chash, long fhash) {}
         var rows = new java.util.ArrayList<Row>(MIGRATE_ROWS_PER_BATCH);
         try (PreparedStatement ps = this.writer.prepareStatement(
-                "SELECT pos, usize, blob FROM lods_" + dimId
+                "SELECT pos, usize, blob, chash, fhash FROM lods_" + dimId
                         + " WHERE wirefmt=" + WIREFMT_NATIVE_19 + " AND pos>?"
                         + " ORDER BY pos LIMIT " + MIGRATE_ROWS_PER_BATCH)) {
             ps.setLong(1, watermark);
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
-                    rows.add(new Row(rs.getLong(1), rs.getInt(2), rs.getBytes(3)));
+                    rows.add(new Row(rs.getLong(1), rs.getInt(2), rs.getBytes(3),
+                            rs.getLong(4), rs.getLong(5)));
                 }
             }
         }
@@ -1324,7 +1325,17 @@ public final class SqliteLodStore implements LodStoreService {
                         throw new IllegalStateException("usize " + row.usize()
                                 + " out of bounds");
                     }
+                    // Legacy rows carry FNV hashes. Validate before translating and
+                    // assigning current CRC hashes, exactly as both normal read rungs do.
+                    if (LodStoreService.legacyContentHashFnv(row.blob()) != row.fhash()
+                            || this.codec.declaredContentSize(row.blob()) != row.usize()) {
+                        throw new IllegalStateException("legacy frame integrity mismatch");
+                    }
                     byte[] raw = this.codec.decompress(row.blob(), row.usize());
+                    if (raw.length != row.usize()
+                            || LodStoreService.legacyContentHashFnv(raw) != row.chash()) {
+                        throw new IllegalStateException("legacy content integrity mismatch");
+                    }
                     byte[] v20 = translator.apply(raw);
                     byte[] frame = this.codec.compress(v20);
                     up.setLong(1, contentHash(v20));
