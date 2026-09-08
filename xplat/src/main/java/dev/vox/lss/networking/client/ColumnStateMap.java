@@ -725,6 +725,23 @@ class ColumnStateMap {
      *  rejecting consumer) at ~3 re-serves per position. */
     static final int MAX_INGEST_FAILURES = 3;
 
+    /** Intentional retirement costs no failure strike; an undelivered clear retains data. */
+    void onIngestCancelled(long packed, long preClearStamp) {
+        Leaf leaf = leafFor(packed);
+        if (leaf == null && preClearStamp > 0) leaf = leafForCreate(packed);
+        if (leaf == null) return;
+        int bit = bitIndexFor(packed);
+        long m = 1L << bit;
+        tsPut(leaf, bit, preClearStamp > 0 ? preClearStamp : -1L);
+        if (preClearStamp <= 0) this.persistentRemovals.add(packed);
+        leaf.validated &= ~m;
+        leaf.summaryValidated &= ~m;
+        clearSessionSatisfied(leaf, m);
+        setRetry(leaf, m);
+        this.clearedResync.remove(packed);
+        leaf.recomputeNeeds();
+    }
+
     /**
      * A column that was stamped received never actually reached a consumer (decode error,
      * consumer rejection, undispatched at disconnect) — forget the stamp so the position
