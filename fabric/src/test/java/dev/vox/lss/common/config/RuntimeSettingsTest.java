@@ -226,4 +226,22 @@ class RuntimeSettingsTest {
         assertEquals(true, c.enableSendPacing, "true applies");
     }
 
+
+    @Test void failedPersistenceKeepsAppliedValueAndOriginalFile(@TempDir Path dir) throws Exception {
+        var config = loaded(dir);
+        var file = dir.resolve("lss-server-config.json");
+        String original = java.nio.file.Files.readString(file);
+        var obstruction = java.nio.file.Files.createDirectory(dir.resolve("lss-server-config.json.tmp"));
+        var result = RuntimeSettings.applyWithPersistenceOutcome(config,
+                RuntimeSettings.byName("lodDistanceChunks"), "128");
+        assertEquals(128, config.lodDistanceChunks);
+        assertEquals("128", result.effectiveValue());
+        assertFalse(result.persisted());
+        assertTrue(result.persistenceNote().contains("applied, but not saved"));
+        assertEquals(original, java.nio.file.Files.readString(file));
+        java.nio.file.Files.delete(obstruction);
+        assertTrue(RuntimeSettings.applyWithPersistenceOutcome(config,
+                RuntimeSettings.byName("lodDistanceChunks"), "128").persisted());
+        assertEquals(128, loaded(dir).lodDistanceChunks);
+    }
 }

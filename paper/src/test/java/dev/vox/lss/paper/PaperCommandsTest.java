@@ -357,4 +357,19 @@ class PaperCommandsTest {
                 "only lodDistanceChunks triggers the SessionConfig re-push: " + messages);
         org.mockito.Mockito.verify(service, org.mockito.Mockito.never()).repushSessionConfig();
     }
+
+    @Test void failedSaveStillRepushesAndReportsAppliedButUnsaved(
+            @org.junit.jupiter.api.io.TempDir java.nio.file.Path dir) throws Exception {
+        var config = PaperConfig.load(dir);
+        var path = dir.resolve("lss-server-config.json");
+        String original = java.nio.file.Files.readString(path);
+        java.nio.file.Files.createDirectory(dir.resolve("lss-server-config.json.tmp"));
+        var service = inlineTaskService(new int[]{2, 0});
+        assertTrue(run(commands(service, config), "set", "lodDistanceChunks", "128"));
+        assertEquals(128, config.lodDistanceChunks);
+        org.mockito.Mockito.verify(service).repushSessionConfig();
+        assertTrue(messages.get(0).contains("applied, but not saved"));
+        assertTrue(messages.get(0).contains("re-pushed to 2 client(s)"));
+        assertEquals(original, java.nio.file.Files.readString(path));
+    }
 }

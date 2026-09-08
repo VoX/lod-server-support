@@ -89,6 +89,12 @@ public abstract class JsonConfig {
     protected void onFreshCreate() {}
 
     public void save() {
+        trySave();
+    }
+
+    /** Nonfatal persistence outcome for interactive callers; ordinary save callers
+     *  retain the existing logged-and-contained failure behavior. */
+    public boolean trySave() {
         String name = saveFileName();
         try {
             Path path = this.configDir.resolve(name);
@@ -103,8 +109,10 @@ public abstract class JsonConfig {
             } catch (AtomicMoveNotSupportedException e) {
                 Files.move(tmp, path, StandardCopyOption.REPLACE_EXISTING);
             }
+            return true;
         } catch (Exception e) {
             LSSLogger.error("Failed to save config " + name, e);
+            return false;
         }
     }
 
