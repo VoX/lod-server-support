@@ -45,13 +45,15 @@ class VoxelColumnReceiverTest {
 
     private static final class RecordingProcessor extends ClientColumnProcessor {
         final List<Offered> offered = new ArrayList<>();
+        ColumnDelivery delivery;
 
         RecordingProcessor() {
             super((d, x, z) -> {}, () -> null);
         }
 
         @Override
-        void offer(VoxelColumnS2CPayload payload, boolean resync) {
+        void offer(VoxelColumnS2CPayload payload, boolean resync, ColumnDelivery delivery) {
+            this.delivery = delivery;
             offered.add(new Offered(
                     PositionUtil.packPosition(payload.chunkX(), payload.chunkZ()), resync));
         }
@@ -81,6 +83,8 @@ class VoxelColumnReceiverTest {
         LSSClientNetworking.handleVoxelColumn(manager, processorRecording(), payload(3, 4, 900L, CONTENT));
         assertEquals(List.of(new Offered(PositionUtil.packPosition(3, 4), false)), processor.offered);
         assertEquals(900L, manager.columnsForTest().timestampFor(PositionUtil.packPosition(3, 4)));
+        org.junit.jupiter.api.Assertions.assertNotNull(processor.delivery);
+        org.junit.jupiter.api.Assertions.assertSame(manager, processor.delivery.owner);
     }
 
     @Test
@@ -110,10 +114,13 @@ class VoxelColumnReceiverTest {
     }
 
     @Test
-    void nullManagerStillOffersTheColumn() {
+    void directUnownedDispatchSeamStillOffersTheColumn() {
         var proc = processorRecording();
         LSSClientNetworking.handleVoxelColumn(null, proc, payload(1, 1, 900L, CONTENT));
-        assertEquals(1, processor.offered.size(), "no manager (pre-handshake race) still decodes");
+        // The direct dispatch seam remains usable by decoder fixtures. Production frame
+        // admission requires a captured active owner; this is not a pre-handshake bypass.
+        assertEquals(1, processor.offered.size(), "direct unowned dispatch still reaches the decoder seam");
+        org.junit.jupiter.api.Assertions.assertNull(processor.delivery);
         assertFalse(processor.offered.get(0).resync());
     }
 
@@ -128,11 +135,21 @@ class VoxelColumnReceiverTest {
 
         LSSClientNetworking.handleVoxelColumn(manager, processorRecording(), payload(9, 9, 900L, CLEAR));
         assertEquals(List.of(new Offered(packed, true)), processor.offered);
+        assertEquals(500L, processor.delivery.preClearStamp, "retirement retains the same pre-clear claim");
         manager.onIngestFailure(dim, packed); // consumer rejects the clear
         assertEquals(500L, manager.columnsForTest().timestampFor(packed),
                 "a rejected clear re-requests with the pre-clear stamp (WS6)");
         assertTrue(manager.columnsForTest().classify(packed) > 0,
                 "the position must re-request, not park");
+    }
+
+
+    @Test
+    void retiredOwnerCannotAdmitOrStampAColumn() {
+        manager.retireAcquisition();
+        LSSClientNetworking.handleVoxelColumn(manager, processorRecording(), payload(3, 4, 900L, CONTENT));
+        assertTrue(processor.offered.isEmpty());
+        assertEquals(-1L, manager.columnsForTest().timestampFor(PositionUtil.packPosition(3, 4)));
     }
 
     private ClientColumnProcessor processorRecording() {
