@@ -130,4 +130,18 @@ class FarPlayerClientTrackerTest {
         t.onRoster(new FarPlayerWire.Roster(1, false, List.of(), new int[]{1}));
         assertEquals(0, t.trackedCount());
     }
+
+    @Test void rosterRenameUpdatesStationaryIdentityWithoutResettingMotion() {
+        var t = new FarPlayerClientTracker();
+        t.onRoster(fullRoster(1, new FarPlayerWire.RosterEntry(0, A, "Alice")));
+        t.onUpdates(new FarPlayerWire.Updates(1, "d", 10, List.of(entry(0, 5))), 1000);
+        var before = t.snapshot().get(A);
+        t.onRoster(new FarPlayerWire.Roster(1, false,
+                List.of(new FarPlayerWire.RosterEntry(0, A, "Renamed")), new int[0]));
+        var after = t.snapshot().get(A);
+        assertEquals("Renamed", after.name());
+        assertSame(before.motion(), after.motion());
+        assertSame(before.latest(), after.latest());
+        assertEquals(before.receivedAtMillis(), after.receivedAtMillis());
+    }
 }

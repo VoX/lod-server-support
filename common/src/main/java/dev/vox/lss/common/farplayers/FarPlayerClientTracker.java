@@ -82,6 +82,12 @@ public final class FarPlayerClientTracker {
                 tracked.remove(displaced);
             }
             nameByUuid.put(e.uuid(), e.name());
+            var previous = tracked.get(e.uuid());
+            if (previous != null && !java.util.Objects.equals(previous.name(), e.name())) {
+                tracked.put(e.uuid(), new TrackedFarPlayer(previous.uuid(), e.name(),
+                        previous.latest(), previous.cadenceTicks(), previous.receivedAtMillis(),
+                        previous.motion(), previous.equipmentIdentities(), previous.equipmentCounts()));
+            }
         }
         if (uuidByIndex.size() > MAX_TRACKED_IDENTITIES
                 || indexByUuid.size() > MAX_TRACKED_IDENTITIES
