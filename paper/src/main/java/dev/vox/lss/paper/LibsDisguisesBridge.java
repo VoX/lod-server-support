@@ -54,7 +54,7 @@ public final class LibsDisguisesBridge {
     /** Resolves the reflected class name — test seam ({@code MeliusVanishBridge} shape). */
     @FunctionalInterface
     interface ClassResolver {
-        Class<?> resolve(String name) throws ClassNotFoundException;
+        Class<?> resolve(String name, ClassLoader loader) throws ClassNotFoundException;
     }
 
     /** The per-call gate — test seam: the running, ENABLED LibsDisguises plugin instance
@@ -68,7 +68,7 @@ public final class LibsDisguisesBridge {
     private static final String PLUGIN_NAME = "LibsDisguises";
 
     private static final ClassResolver DEFAULT_RESOLVER =
-            name -> Class.forName(name, false, LibsDisguisesBridge.class.getClassLoader());
+            (name, loader) -> Class.forName(name, false, loader);
     /** Null-safe so a JVM without a Bukkit server (the plain-JUnit suites) reads "not
      *  enabled" instead of throwing ({@code Bukkit.getPluginManager()} NPEs there). */
     private static final PluginProbe DEFAULT_PLUGIN_PROBE = () ->
@@ -80,12 +80,9 @@ public final class LibsDisguisesBridge {
     static ClassResolver classResolver = DEFAULT_RESOLVER;
     static PluginProbe pluginProbe = DEFAULT_PLUGIN_PROBE;
 
-    // 0 = unresolved, 1 = bound, -1 = absent or drifted (visible; warned once when drifted
-    // or invisible with the plugin enabled). Both latches are per PLUGIN INSTANCE
-    // (boundPlugin): a different instance — a hot reload — re-resolves from 0.
-    private static volatile int state;
-    private static volatile Object boundPlugin;
-    private static MethodHandle isDisguisedHandle; // (Entity) -> boolean
+    /** A null handle is a negative resolution cached for this exact plugin instance. */
+    private record Binding(Object plugin, MethodHandle handle) {}
+    private static volatile Binding binding;
     private static int resolveWarns;
 
     /** The exact-name lookup + enabled check behind the default gate (package-private so
@@ -102,9 +99,7 @@ public final class LibsDisguisesBridge {
     /** Test seam: forget the resolution and restore the default seams. */
     static void resetForTest() {
         synchronized (LibsDisguisesBridge.class) {
-            state = 0;
-            boundPlugin = null;
-            isDisguisedHandle = null;
+            binding = null;
             resolveWarns = 0;
             classResolver = DEFAULT_RESOLVER;
             pluginProbe = DEFAULT_PLUGIN_PROBE;
@@ -121,14 +116,16 @@ public final class LibsDisguisesBridge {
     /** Test seam: the bound handle's type, {@code null} while unbound. */
     static MethodType boundTypeForTest() {
         synchronized (LibsDisguisesBridge.class) {
-            return isDisguisedHandle == null ? null : isDisguisedHandle.type();
+            var current = binding;
+            return current == null || current.handle() == null ? null : current.handle().type();
         }
     }
 
     /** Test seam: whether the API resolved and bound (the gate has passed at least once).
-     *  No production caller — the call path reads {@code state} directly. */
+     *  No production caller — the call path retains one coherent binding. */
     static boolean present() {
-        return state == 1;
+        var current = binding;
+        return current != null && current.handle() != null;
     }
 
     /**
@@ -141,66 +138,46 @@ public final class LibsDisguisesBridge {
      */
     public static boolean isDisguised(Entity entity) {
         Object plugin = pluginProbe.enabledPlugin();
-        if (plugin == null) return false;
-        resolve(plugin);
-        if (state != 1) return false;
+        if (plugin == null) {
+            binding = null;
+            return false;
+        }
+        Binding current = resolve(plugin);
+        if (current.handle() == null) return false;
         try {
-            return (boolean) isDisguisedHandle.invoke(entity);
+            return (boolean) current.handle().invoke(entity);
         } catch (Throwable t) {
             if (t instanceof VirtualMachineError vme) throw vme;
             throw new IllegalStateException("LibsDisguises DisguiseAPI.isDisguised threw", t);
         }
     }
 
-    private static void resolve(Object plugin) {
-        if (state != 0 && boundPlugin == plugin) return;
+    private static Binding resolve(Object plugin) {
+        Binding current = binding;
+        if (current != null && current.plugin() == plugin) return current;
         synchronized (LibsDisguisesBridge.class) {
-            if (state != 0 && boundPlugin == plugin) return;
-            if (state != 0) {
-                // A different plugin instance than the one resolved against: a single-plugin
-                // hot reload gave LibsDisguises a fresh classloader — the old handle (or a
-                // stale absent/drift latch) must not outlive it.
-                state = 0;
-                isDisguisedHandle = null;
-            }
-            boundPlugin = plugin; // written BEFORE the state latch — readers see both
-            Class<?> api;
+            current = binding;
+            if (current != null && current.plugin() == plugin) return current;
+            MethodHandle handle = null;
             try {
-                api = classResolver.resolve(API_CLASS);
-            } catch (ClassNotFoundException invisible) {
-                // The plugin IS enabled (the gate ran first), so its API class ought to be
-                // visible — softdepend orders it before LSS. Visible failure, quiet fallback.
-                state = -1;
-                resolveWarns++;
-                LSSLogger.warn("LibsDisguises is enabled but its DisguiseAPI class is not"
-                        + " visible to LSS — disguised players are NOT hidden from far"
-                        + " players (the pre-bridge behavior). Is LibsDisguises listed in"
-                        + " plugin.yml softdepend? (" + invisible + ")");
-                return;
-            } catch (Throwable t) {
-                if (t instanceof VirtualMachineError vme) throw vme;
-                state = -1;
-                resolveWarns++;
-                LSSLogger.warn("LibsDisguises is enabled but its DisguiseAPI class failed to"
-                        + " load — disguised players are NOT hidden from far players until"
-                        + " LSS is updated for this LibsDisguises version (" + t + ")");
-                return;
-            }
-            try {
-                isDisguisedHandle = MethodHandles.publicLookup().findStatic(api, "isDisguised",
+                // LSS's loader may have initiated an older API class. The current
+                // plugin's defining loader owns the replacement static registry.
+                Class<?> api = classResolver.resolve(API_CLASS, plugin.getClass().getClassLoader());
+                handle = MethodHandles.publicLookup().findStatic(api, "isDisguised",
                         MethodType.methodType(boolean.class, Entity.class));
-            } catch (Throwable t) {
-                if (t instanceof VirtualMachineError vme) throw vme;
-                state = -1;
+            } catch (Throwable failure) {
+                if (failure instanceof VirtualMachineError vme) throw vme;
                 resolveWarns++;
-                LSSLogger.warn("LibsDisguises is enabled but DisguiseAPI.isDisguised(Entity) did"
-                        + " not resolve (API drift?) — disguised players are NOT hidden from"
-                        + " far players until LSS is updated for this LibsDisguises version"
-                        + " (" + t + ")");
-                return;
+                LSSLogger.warn("LibsDisguises is enabled but its DisguiseAPI.isDisguised(Entity)"
+                        + " did not resolve — disguised players are NOT hidden from far players"
+                        + " until this plugin instance is replaced (" + failure + ")");
             }
-            state = 1;
-            LSSLogger.info("LibsDisguises detected — disguised players are hidden from far players");
+            current = new Binding(plugin, handle);
+            binding = current;
+            if (handle != null) {
+                LSSLogger.info("LibsDisguises detected — disguised players are hidden from far players");
+            }
+            return current;
         }
     }
 }

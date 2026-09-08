@@ -98,7 +98,8 @@ class PaperFarPlayerSnapshotsTest {
     // ---- issue #282: the LibsDisguises rung (after permission and vanish) ----
 
     /** The "running plugin" identity token the default gate would hand over. */
-    private static final Object DISGUISE_PLUGIN = new Object();
+    private static final Object DISGUISE_PLUGIN = new DisguisePlugin();
+    private static final class DisguisePlugin {}
 
     @Test
     void aDisguisedPlayerIsHidden() {
@@ -148,7 +149,7 @@ class PaperFarPlayerSnapshotsTest {
     @Test
     void absentLibsDisguisesLeavesTheLadderUnchanged() {
         LibsDisguisesBridge.pluginProbe = () -> DISGUISE_PLUGIN;
-        LibsDisguisesBridge.classResolver = name -> {
+        LibsDisguisesBridge.classResolver = (name, loader) -> {
             throw new ClassNotFoundException(name);
         };
         var p = bukkit();
