@@ -1,0 +1,100 @@
+{
+  "schema_version": 1,
+  "id": "mc12110-fabric-installed",
+  "line": "1.21.10",
+  "platform": "fabric",
+  "route": "native",
+  "artifacts": [
+    {
+      "id": "sodium",
+      "version": "0.7.3+mc1.21.10",
+      "file": "sodium-fabric-0.7.3+mc1.21.10.jar",
+      "sha256": "b0bcfa324fa6acf8934b7bd5ad1946e5a003aab86f877d2a64af220fe284b683",
+      "source": "cache:sha256:b0bcfa324fa6acf8934b7bd5ad1946e5a003aab86f877d2a64af220fe284b683",
+      "metadata": {
+        "fabric": {
+          "id": "sodium",
+          "version": "0.7.3+mc1.21.10",
+          "depends": {
+            "fabricloader": ">=0.16.0",
+            "fabric-block-view-api-v2": "*",
+            "fabric-renderer-api-v1": "*",
+            "fabric-rendering-fluids-v1": ">=2.0.0",
+            "fabric-resource-loader-v0": "*"
+          }
+        }
+      },
+      "enabled": true
+    },
+    {
+      "id": "voxy",
+      "version": "0.2.9-alpha",
+      "file": "voxy-0.2.9-alpha-1.21.10.jar",
+      "sha256": "f52b817f44a4407d68d28243b1cfbac8c7ff29ae1bc0b342ced033959c56e984",
+      "source": "cache:sha256:f52b817f44a4407d68d28243b1cfbac8c7ff29ae1bc0b342ced033959c56e984",
+      "metadata": {
+        "fabric": {
+          "id": "voxy",
+          "version": "0.2.9-alpha",
+          "depends": {
+            "minecraft": [
+              "1.21.9",
+              "1.21.10"
+            ],
+            "fabricloader": ">=0.14.22",
+            "fabric-api": ">=0.91.1",
+            "sodium": "=0.7.3"
+          }
+        }
+      },
+      "enabled": true
+    },
+    {
+      "id": "xaeroworldmap",
+      "version": "1.45.0",
+      "file": "xaeroworldmap-fabric-1.21.10-1.45.0.jar",
+      "sha256": "b519907d562d5a4e4b6ca89983e6ca857e49fb6a06c6efa7e473761d39c6e6b1",
+      "source": "cache:sha256:b519907d562d5a4e4b6ca89983e6ca857e49fb6a06c6efa7e473761d39c6e6b1",
+      "metadata": {
+        "fabric": {
+          "id": "xaeroworldmap",
+          "version": "1.45.0",
+          "depends": {
+            "fabricloader": ">=0.13.0",
+            "fabric-api": ">=0.43.1",
+            "minecraft": "1.21.10",
+            "xaerolib": ">=1.0"
+          }
+        }
+      },
+      "enabled": true
+    }
+  ],
+  "components": [
+    {
+      "uid": "org.lwjgl3",
+      "version": "3.3.3"
+    },
+    {
+      "uid": "net.minecraft",
+      "version": "1.21.10"
+    },
+    {
+      "uid": "net.fabricmc.intermediary",
+      "version": "1.21.10"
+    },
+    {
+      "uid": "net.fabricmc.fabric-loader",
+      "version": "0.18.4"
+    }
+  ],
+  "capabilities": [
+    "ui",
+    "xaero",
+    "receive"
+  ],
+  "status": "blocked",
+  "limitations": [
+    "Historical installed-artifact inventory only; missing transitive dependencies and artifact download URLs must be resolved before launch. No live validation is inferred."
+  ]
+}

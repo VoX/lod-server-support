@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "facts": {
+    "line": "1.21.10",
+    "targets": {
+      "fabric": "1.21.10",
+      "paper": "1.21.10",
+      "neoforge": "1.21.10"
+    },
+    "java": 21,
+    "common_java": 21,
+    "mapping": "intermediary",
+    "neoforge_shipping": false,
+    "neoforge_renderer": "unsupported",
+    "paper_loaders": [
+      "paper",
+      "purpur"
+    ],
+    "fabric_client_gametests": false
+  },
+  "support_tier": "correct-not-perfect",
+  "capability_states": [
+    "available",
+    "unsupported",
+    "unverified",
+    "unknown"
+  ],
+  "notes": [
+    "NeoForge support commitment is best-effort independently of shipping and renderer capability.",
+    "Folia remains experimental where present."
+  ]
+}
