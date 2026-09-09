@@ -1,0 +1,82 @@
+{
+  "schema_version": 1,
+  "id": "mc1211-fabric-installed",
+  "line": "1.21.1",
+  "platform": "fabric",
+  "route": "native",
+  "artifacts": [
+    {
+      "id": "sodium",
+      "version": "0.8.13-beta.2+mc1.21.1",
+      "file": "sodium-fabric-0.8.13-beta.2+mc1.21.1.jar",
+      "sha256": "90261fcdab301314acc94c24bba483c2db1b5d94f645d92c69b9585e3422a176",
+      "source": "cache:sha256:90261fcdab301314acc94c24bba483c2db1b5d94f645d92c69b9585e3422a176",
+      "metadata": {
+        "fabric": {
+          "id": "sodium",
+          "version": "0.8.13-beta.2+mc1.21.1",
+          "depends": {
+            "minecraft": [
+              "1.21",
+              "1.21.1"
+            ],
+            "fabricloader": ">=0.16.0",
+            "fabric-block-view-api-v2": "*",
+            "fabric-renderer-api-v1": "*",
+            "fabric-rendering-data-attachment-v1": "*",
+            "fabric-rendering-fluids-v1": ">=2.0.0",
+            "fabric-resource-loader-v0": "*"
+          }
+        }
+      },
+      "enabled": true
+    },
+    {
+      "id": "xaeroworldmap",
+      "version": "1.45.0",
+      "file": "xaeroworldmap-fabric-1.21.1-1.45.0.jar",
+      "sha256": "ea84c45cb1b994a7738515670b281bcd373a9d9cc3d8d3a24b84a4baf302b9d6",
+      "source": "cache:sha256:ea84c45cb1b994a7738515670b281bcd373a9d9cc3d8d3a24b84a4baf302b9d6",
+      "metadata": {
+        "fabric": {
+          "id": "xaeroworldmap",
+          "version": "1.45.0",
+          "depends": {
+            "fabricloader": ">=0.13.0",
+            "fabric-api": ">=0.43.1",
+            "minecraft": ">1.20.6 <1.21.2",
+            "xaerolib": ">=1.0"
+          }
+        }
+      },
+      "enabled": true
+    }
+  ],
+  "components": [
+    {
+      "uid": "org.lwjgl3",
+      "version": "3.3.3"
+    },
+    {
+      "uid": "net.minecraft",
+      "version": "1.21.1"
+    },
+    {
+      "uid": "net.fabricmc.intermediary",
+      "version": "1.21.1"
+    },
+    {
+      "uid": "net.fabricmc.fabric-loader",
+      "version": "0.19.3"
+    }
+  ],
+  "capabilities": [
+    "ui",
+    "xaero",
+    "receive"
+  ],
+  "status": "blocked",
+  "limitations": [
+    "Historical installed-artifact inventory only; missing transitive dependencies and artifact download URLs must be resolved before launch. No live validation is inferred."
+  ]
+}
