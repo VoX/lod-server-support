@@ -33,7 +33,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * The Xaero map bridge against real-package-name stubs (xaero-map-bridge-plan.md §3;
  * the {@code MoonriseReadCompatTest} stub discipline — the stubs under
  * {@code fabric/src/test/java/xaero/map} mirror exactly the public surface
- * {@code XaeroMapCompat.Handles} resolves, and their state accessors ENFORCE the
+ * {@code XaeroBindings} resolves, and their state accessors ENFORCE the
  * native monitor discipline via holdsLock checks, so dropping a synchronized block
  * fails here rather than racing a live client). Pins:
  * <ul>
@@ -128,7 +128,7 @@ class XaeroMapCompatTest {
         this.backpressureEnabled = true;
         this.reports.clear();
         this.bridge = new XaeroMapCompat(
-                XaeroMapCompat.Handles.resolve(Class::forName),
+                XaeroBindings.resolve(Class::forName),
                 this.fakeLevelOps,
                 () -> this.enabled,
                 () -> this.sessionActive,
@@ -181,7 +181,7 @@ class XaeroMapCompatTest {
 
     @Test
     void resolveFailsSoftWhenAClassIsMissing() {
-        assertThrows(ClassNotFoundException.class, () -> XaeroMapCompat.Handles.resolve(name -> {
+        assertThrows(ClassNotFoundException.class, () -> XaeroBindings.resolve(name -> {
             if (name.equals("xaero.map.region.MapTile")) throw new ClassNotFoundException(name);
             return Class.forName(name);
         }));
@@ -192,7 +192,7 @@ class XaeroMapCompatTest {
         // A class of the wrong SHAPE (right name, no members) must fail resolution —
         // the all-or-nothing rule that keeps a drifted Xaero from a half-bound bridge.
         assertThrows(ReflectiveOperationException.class,
-                () -> XaeroMapCompat.Handles.resolve(name -> {
+                () -> XaeroBindings.resolve(name -> {
                     if (name.equals("xaero.map.region.MapTile")) return Object.class;
                     return Class.forName(name);
                 }));
@@ -587,7 +587,7 @@ class XaeroMapCompatTest {
         assertEquals(1, this.processor.saveLoad.loadRequests.size(),
                 "the memoryless window still grants the load");
         // Structural: no reflective handle for the pacing surface may even exist.
-        for (var f : XaeroMapCompat.Handles.class.getDeclaredFields()) {
+        for (var f : XaeroBindings.class.getDeclaredFields()) {
             var n = f.getName().toLowerCase(java.util.Locale.ROOT);
             assertFalse(n.contains("shouldallow") || n.contains("nexttoload"),
                     "no handle for the pacing surface may exist: " + f.getName());
@@ -2548,7 +2548,7 @@ class XaeroMapCompatTest {
             }
             return Class.forName(name);
         };
-        var handles = XaeroMapCompat.Handles.resolve(withoutOptional);
+        var handles = XaeroBindings.resolve(withoutOptional);
         assertNull(handles.crashGate);
         assertNull(handles.settingsGate);
         // (interpretation-version and cave-layer resolve off classes the mandatory surface
@@ -2575,7 +2575,7 @@ class XaeroMapCompatTest {
     @Test
     void theInterpretationVersionIsReadFromXaeroNotALiteral() throws Exception {
         xaero.map.region.MapTile.CURRENT_WORLD_INTERPRETATION_VERSION = 7;
-        var handles = XaeroMapCompat.Handles.resolve(Class::forName);
+        var handles = XaeroBindings.resolve(Class::forName);
         assertEquals(7, handles.interpretationVersion);
         var bridge7 = new XaeroMapCompat(handles, this.fakeLevelOps, () -> this.enabled,
                 () -> this.sessionActive, this.registered::add, this.registered::remove,
