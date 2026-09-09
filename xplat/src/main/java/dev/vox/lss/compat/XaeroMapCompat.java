@@ -82,6 +82,7 @@ import java.util.function.BooleanSupplier;
 final class XaeroMapCompat {
     final XaeroRebuildScheduler rebuilds = new XaeroRebuildScheduler(this);
     final XaeroAcquisitionQueue acquisition = new XaeroAcquisitionQueue(this);
+    final XaeroTileWriter writer = new XaeroTileWriter(this);
 
     static final int MAX_QUEUE = 8192;
     /** Byte gauge companion to the count cap (the ClientColumnProcessor discipline —
@@ -1725,16 +1726,7 @@ final class XaeroMapCompat {
      * the native writer reclaims it on its clean-flag once fully surrounded.
      */
     boolean nativelyWritable(Object world, int chunkX, int chunkZ) {
-        if (!this.levelOps.isChunkLoaded(world, chunkX, chunkZ)) return false;
-        for (int dx = -1; dx <= 1; dx++) {
-            for (int dz = -1; dz <= 1; dz++) {
-                if ((dx != 0 || dz != 0)
-                        && !this.levelOps.isChunkLoaded(world, chunkX + dx, chunkZ + dz)) {
-                    return false;
-                }
-            }
-        }
-        return true;
+        return this.writer.nativelyWritable(world, chunkX, chunkZ);
     }
 
     // ---- the kept drop reporter (§12.1: the §18 ledger heal is deleted; the
@@ -1769,93 +1761,7 @@ final class XaeroMapCompat {
     Outcome commitEntry(Object mp, Object dimensionId,
                                 XaeroTileExtractor.PreparedTile tile,
                                 boolean loadNew, boolean update) {
-        try {
-            int chunkX = tile.chunkX();
-            int chunkZ = tile.chunkZ();
-            int tileChunkX = chunkX >> 2;
-            int tileChunkZ = chunkZ >> 2;
-            int localTcX = tileChunkX & 7;
-            int localTcZ = tileChunkZ & 7;
-            Object region = this.h.getLeafMapRegion.invoke(mp, SURFACE_LAYER,
-                    tileChunkX >> 3, tileChunkZ >> 3, true);
-            if (region == null) return Outcome.DEFERRED; // detection-completeness race
-            Object writerPause = this.h.writerThreadPauseSync.invoke(region);
-            synchronized (writerPause) {
-                if ((boolean) this.h.regionIsWritingPaused.invoke(region)) return Outcome.DEFERRED;
-                boolean resting;
-                boolean createdTileChunk = false;
-                Object tileChunk = null;
-                synchronized (region) {
-                    byte loadState = (byte) this.h.getLoadState.invoke(region);
-                    boolean proper = loadState == 2;
-                    if (proper) this.h.registerVisit.invoke(region);
-                    resting = (boolean) this.h.isResting.invoke(region);
-                    if (resting) {
-                        this.h.setBeingWritten.invoke(region, true);
-                        if (proper) {
-                            tileChunk = this.h.regionGetChunk.invoke(region, localTcX, localTcZ);
-                            if (tileChunk == null) {
-                                tileChunk = this.h.newMapTileChunk.invoke(region, tileChunkX, tileChunkZ);
-                                this.h.regionSetChunk.invoke(region, localTcX, localTcZ, tileChunk);
-                                this.h.tileChunkSetLoadState.invoke(tileChunk, (byte) 2);
-                                this.h.setAllCachePrepared.invoke(region, false);
-                                createdTileChunk = true;
-                            }
-                        }
-                    }
-                    if (!proper) {
-                        // Fresh regions NEVER self-promote to loadState 2 — the grant
-                        // phase requests the load; this entry (and its whole bucket)
-                        // just waits, classified from Xaero's own state right here in
-                        // the region monitor (the memoryless window's input):
-                        // requestable now, cache-parked (needs the 3→4 revival), or
-                        // genuinely in flight (queued/loading/refreshing — occupies a
-                        // window slot).
-                        if ((boolean) this.h.canRequestReload.invoke(region)) {
-                            return Outcome.AWAITING_REQUESTABLE;
-                        }
-                        return loadState == 3 ? Outcome.AWAITING_PARKED
-                                : Outcome.AWAITING_IN_FLIGHT;
-                    }
-                }
-                if (!resting || tileChunk == null) return Outcome.DEFERRED;
-                if ((int) this.h.tileChunkGetLoadState.invoke(tileChunk) != 2) {
-                    return Outcome.DEFERRED_TILE;
-                }
-                Object leafTexture = this.h.getLeafTexture.invoke(tileChunk);
-                if ((boolean) this.h.shouldDownloadFromPBO.invoke(leafTexture)) {
-                    return Outcome.DEFERRED_TILE;
-                }
-
-                Object existingTile = this.h.getTile.invoke(tileChunk, chunkX & 3, chunkZ & 3);
-                if (existingTile == null ? !loadNew : !update) {
-                    if (createdTileChunk) {
-                        synchronized (region) {
-                            this.h.regionSetChunk.invoke(region, localTcX, localTcZ, null);
-                        }
-                    }
-                    return Outcome.SKIPPED_SETTINGS;
-                }
-                // Capture dependencies before any pixel mutation. A loaded neighbor
-                // temporarily busy with a PBO/load must not lose its one invalidation.
-                var neighbors = slopeNeighbors(region, tile);
-                if (neighbors == null || !hasRebuildCapacity(dimensionId, tile, neighbors)) {
-                    if (createdTileChunk) {
-                        synchronized (region) {
-                            this.h.regionSetChunk.invoke(region, localTcX, localTcZ, null);
-                        }
-                    }
-                    return Outcome.DEFERRED; // cap-exempt, queued bytes retained
-                }
-                commitPixels(mp, dimensionId, region, tileChunk, createdTileChunk,
-                        localTcX, localTcZ, tile, neighbors);
-                return Outcome.COMMITTED;
-            }
-        } catch (Throwable t) {
-            if (t instanceof Error err && !(t instanceof AssertionError)) throw err;
-            noteFailure(t);
-            return Outcome.FAILED;
-        }
+        return this.writer.commitEntry(mp, dimensionId, tile, loadNew, update);
     }
 
     /** Per-tile commit sequence after the settings and dependency admission gates. */
@@ -1863,83 +1769,7 @@ final class XaeroMapCompat {
                                  boolean createdTileChunk, int localTcX, int localTcZ,
                                  XaeroTileExtractor.PreparedTile tile,
                                  List<SlopeNeighbor> neighbors) throws Throwable {
-        int insideX = tile.chunkX() & 3;
-        int insideZ = tile.chunkZ() & 3;
-        Object mapTile = this.h.getTile.invoke(tileChunk, insideX, insideZ);
-        if (mapTile == null) {
-            Object pool = this.h.getTilePool.invoke(mp);
-            String dimensionToken = (String) this.h.getCurrentDimension.invoke(mp);
-            mapTile = this.h.poolGet.invoke(pool, dimensionToken, tile.chunkX(), tile.chunkZ());
-            this.h.tileChunkSetChanged.invoke(tileChunk, true);
-        }
-        Object overlayManager = this.h.getOverlayManager.invoke(mp);
-        for (int x = 0; x < 16; x++) {
-            for (int z = 0; z < 16; z++) {
-                int i = x * 16 + z;
-                Object block = this.h.newMapBlock.invoke();
-                this.h.prepareForWriting.invoke(block, tile.worldBottomY());
-                var runs = tile.overlays()[i];
-                if (runs != null) {
-                    for (var run : runs) {
-                        // Overlay.getParametres packs light << 4 unmasked too (sweep B m7).
-                        byte runLight = (byte) Math.max(0, Math.min(15, run.light()));
-                        Object overlay = this.h.newOverlay.invoke(run.state(), runLight, run.glowing());
-                        this.h.increaseOpacity.invoke(overlay, run.opacity());
-                        Object original = this.h.getOriginal.invoke(overlayManager, overlay);
-                        this.h.addOverlay.invoke(block, original);
-                    }
-                }
-                // Light must stay 0..15: MapBlock.getParametres packs it UNMASKED next to
-                // the height bits and the loader masks on read — an out-of-range value
-                // would be a one-way file corruption (sweep B m7). The extractor already
-                // delivers a nibble; the clamp is the belt.
-                byte light = (byte) Math.max(0, Math.min(15, tile.light()[i]));
-                this.h.blockWrite.invoke(block, tile.floorState()[i],
-                        (int) tile.floorY()[i], (int) tile.topY()[i],
-                        tile.biome()[i], light, tile.glowing()[i], false);
-                this.h.setBlock.invoke(mapTile, x, z, block);
-            }
-        }
-        this.h.setWorldInterpretationVersion.invoke(mapTile, this.h.interpretationVersion);
-        this.h.setWrittenCave.invoke(mapTile, SURFACE_LAYER,
-                (int) this.h.getCaveModeDepthConfig.invoke(mp));
-        this.h.tileChunkSetChanged.invoke(tileChunk, true);
-        this.h.setTile.invoke(tileChunk, insideX, insideZ, mapTile,
-                this.h.getBlockStateShortShapeCache.invoke(mp), mp);
-        this.h.setWrittenOnce.invoke(mapTile, true);
-        this.h.setLoaded.invoke(mapTile, true);
-        if (createdTileChunk) {
-            if ((boolean) this.h.includeInSave.invoke(tileChunk)) {
-                this.h.setHasHadTerrain.invoke(tileChunk);
-            }
-            Object highlights = this.h.getMapRegionHighlightsPreparer.invoke(mp);
-            this.h.highlightsPrepare.invoke(highlights, region, localTcX, localTcZ, false);
-        }
-        // The native writer ends a write by rebuilding the tile chunk's texture
-        // INSIDE this gate (updateBuffers, then setChanged(false)); ours is
-        // coalesced per tile chunk (plan §15) — the change stays marked and the
-        // rebuild runs from flushPendingUpdates under these same gates. NEVER the
-        // setToUpdateBuffers flag: Xaero's preUpload sweep consumes it with no
-        // isResting() check, i.e. possibly after the region was queued for
-        // cache-saving on prepared textures — the saver then throws ("Trying to
-        // save cache for a region with cache not prepared", 3 crashes/hour live).
-        notePendingUpdate(mp, dimensionId, region, tileChunk, localTcX, localTcZ,
-                tile.chunkX() >> 2, tile.chunkZ() >> 2);
-        for (var neighbor : neighbors) {
-            // Native slope dependencies: south row, east column excluding its
-            // first pixel, and the southeast corner (MapWriter.writeChunk).
-            if (neighbor.dx == 0) {
-                for (int x = 0; x < 16; x++) invalidateSlope(neighbor.mapTile, x, 0);
-            } else if (neighbor.dz == 0) {
-                for (int z = 1; z < 16; z++) invalidateSlope(neighbor.mapTile, 0, z);
-            } else {
-                invalidateSlope(neighbor.mapTile, 0, 0);
-            }
-            this.h.tileChunkSetChanged.invoke(neighbor.tileChunk, true);
-            notePendingUpdate(mp, dimensionId, region, neighbor.tileChunk,
-                    (neighbor.chunkX >> 2) & 7, (neighbor.chunkZ >> 2) & 7,
-                    neighbor.chunkX >> 2, neighbor.chunkZ >> 2);
-        }
+        this.writer.commitPixels(mp, dimensionId, region, tileChunk, createdTileChunk, localTcX, localTcZ, tile, neighbors);
     }
 
     record SlopeNeighbor(Object tileChunk, Object mapTile, int chunkX, int chunkZ,
@@ -1949,25 +1779,7 @@ final class XaeroMapCompat {
      *  Called under this region's writer-pause gate, like the native writer. */
     List<SlopeNeighbor> slopeNeighbors(Object region, XaeroTileExtractor.PreparedTile tile)
             throws Throwable {
-        var neighbors = new ArrayList<SlopeNeighbor>(3);
-        for (int dx = 0; dx <= 1; dx++) {
-            for (int dz = 0; dz <= 1; dz++) {
-                if (dx == 0 && dz == 0) continue;
-                int cx = tile.chunkX() + dx;
-                int cz = tile.chunkZ() + dz;
-                if ((cx >> 5) != (tile.chunkX() >> 5) || (cz >> 5) != (tile.chunkZ() >> 5)) continue;
-                Object tc = this.h.regionGetChunk.invoke(region, (cx >> 2) & 7, (cz >> 2) & 7);
-                if (tc == null) continue;
-                Object mapTile = this.h.getTile.invoke(tc, cx & 3, cz & 3);
-                if (mapTile == null || !(boolean) this.h.tileIsLoaded.invoke(mapTile)) continue;
-                if ((int) this.h.tileChunkGetLoadState.invoke(tc) != 2
-                        || (boolean) this.h.shouldDownloadFromPBO.invoke(this.h.getLeafTexture.invoke(tc))) {
-                    return null;
-                }
-                neighbors.add(new SlopeNeighbor(tc, mapTile, cx, cz, dx, dz));
-            }
-        }
-        return neighbors;
+        return this.writer.slopeNeighbors(region, tile);
     }
 
     /** Reserve all distinct groups before a multi-group commit; capacity refusal
@@ -1978,8 +1790,7 @@ final class XaeroMapCompat {
     }
 
     void invalidateSlope(Object tile, int x, int z) throws Throwable {
-        Object block = this.h.getBlock.invoke(tile, x, z);
-        if (block != null) this.h.setSlopeUnknown.invoke(block, true);
+        this.writer.invalidateSlope(tile, x, z);
     }
 
     static PendingKey pendingKey(Object dimension, int tileChunkX, int tileChunkZ) {
