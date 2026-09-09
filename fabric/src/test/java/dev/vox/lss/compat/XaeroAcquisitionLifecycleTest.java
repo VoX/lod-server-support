@@ -47,7 +47,7 @@ class XaeroAcquisitionLifecycleTest {
         session.processor = processor;
         WorldMapSession.current = session;
         try {
-            var bridge = new XaeroMapCompat(XaeroMapCompat.Handles.resolve(Class::forName),
+            var bridge = new XaeroMapCompat(XaeroBindings.resolve(Class::forName),
                     new XaeroMapCompat.LevelOps() {
                         public Object dimension(Object w) { return DIM; }
                         public boolean isChunkLoaded(Object w, int x, int z) { return false; }
@@ -127,7 +127,7 @@ class XaeroAcquisitionLifecycleTest {
         session.processor = processor;
         WorldMapSession.current = session;
         try {
-            var bridge = new XaeroMapCompat(XaeroMapCompat.Handles.resolve(Class::forName),
+            var bridge = new XaeroMapCompat(XaeroBindings.resolve(Class::forName),
                     new XaeroMapCompat.LevelOps() {
                         public Object dimension(Object w) { return DIM; }
                         public boolean isChunkLoaded(Object w, int x, int z) { return false; }
