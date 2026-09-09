@@ -232,8 +232,8 @@ final class XaeroRebuildScheduler {
      *  by the tick fallback and the frame slice's allowance ceiling (§17.1). */
     long rebuildBudgetWithBorrow() {
         boolean queueEmpty;
-        synchronized (this.session.queueLock) {
-            queueEmpty = this.session.queue.isEmpty();
+        synchronized (this.session.acquisition.queueLock) {
+            queueEmpty = this.session.acquisition.queue.isEmpty();
         }
         long borrow = queueEmpty ? this.session.updateBorrowNanos
                 : this.pendingUpdates.size() > this.session.pendingUpdatesSoftCap ? this.session.updateBorrowNanos / 2 : 0;
