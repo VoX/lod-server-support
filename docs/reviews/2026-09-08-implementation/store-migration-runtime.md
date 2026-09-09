@@ -1,0 +1,18 @@
+# First full Fabric store-migration wrapper: independent read-only monitor
+
+Wrapper receipt: `1211-store-migration.status.json`, exit 0, 2026-09-08 21:58:18.403190 → 22:04:46.145017 UTC (6m27.742s). The queue invoked run21.sh → SOAK_PLATFORM=fabric ./scripts/store_migration_gate.sh; both complete phases and wrapper assertions passed, rather than only a selected subphase.
+
+- Populate artifacts: `1.21.1/soak-results/store-offline-populate-20260908T215824Z`. Checker: 30 windows, 29 client-law windows, 30 quiescent snapshots, 0 violations, 0 warnings. Final store deposits 1,960, store errors/drops 0; both probe hashes served. Server JSONL 42 complete rows ending `end`; client JSONL 31 complete rows ending `disconnect`; CPU JSONL 164 valid rows. The report digest has 0 anomalies. Its verdict echo precedes checker execution, so verdict.json and wrapper output are authoritative.
+- Migration artifacts: `1.21.1/soak-results/store-migration-join-20260908T220123Z`. Checker: 36 windows, 35 client-law windows, 36 quiescent snapshots, 0 violations, 0 warnings. Final store hits 1,960, disk submissions 0, store errors 0, client received 2,144 columns, ingest failures 0, tracker in-flight 0. Server JSONL 48 complete rows ending `end`; client JSONL 37 complete rows ending `disconnect`; CPU JSONL 193 valid rows.
+- Collected migration server.log ordering: line76 downgrades 1,960 real rows to native/FNV schema3/wire19; line95 reports 1,961 pending; line100 holds the walk; line103 client joins; line122 resumes; line123 completes, 1,960 rewritten to V20 of 1,961 walked, with no DELETED anomaly marker. A snapshot taken while the hold was still active already showed 1,960 store hits and 0 disk submissions, providing stronger overlap evidence than join order alone.
+- After the Fabric server exited, its store WAL was absent/zero. An immutable read-only SQLite connection returned PRAGMA quick_check=ok, meta schema_version=4/wire_format_version=20, no migrate_* metadata, and lods_1 contained exactly 1,960 rows, all wirefmt=20. No database write or runtime intervention was performed.
+
+Ownership observed: queue788354 → xvfb788355 → wrapper788368 → phase1 owned launcher788378 → soak788379 → owned server788707/client789183. Phase2 used owned launcher793789 → soak793790 → owned server794107/client794574. Every tracked first-wrapper and phase process had exited at completion; regular server489815 remained running. Parent queue proceeded to the next wrapper automatically.
+
+## Limits retained explicitly
+
+`xplat/src/main/java/dev/vox/lss/benchmark/SoakStoreDowngrade.java:110–125` inserts an intended all-air migration canary at (1,000,000,1,000,000). Collected migration server.log:98 shows the startup sweep deleting one vanished-region row before the walk hold at100; the difference between 1,961 pending and 1,960 rewritten is that synthetic row. Therefore this live run does NOT establish the all-air retag shape. Existing all-air unit controls remain the evidence; a later fixture-only improvement can place the canary where the startup sweep retains it. No edits were made during this run.
+
+This is valid positive live evidence for clean ordinary native/FNV legacy-row translation and V20 convergence (WI7), with a functioning normal startup sweep. It does not inject corrupt checksums, and it does not interrupt mask-policy invalidation (WI1). Do not replace the exact corruption or shutdown/reopen unit evidence with this wrapper pass.
+
+The final log line references above target collected soak-results server.log files (which include launcher output), not the transient logs/latest.log offsets used in interim monitor messages.

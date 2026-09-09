@@ -1,0 +1,1973 @@
+{
+  "prepared_utc": "2026-09-08T22:46:29.599356+00:00",
+  "downloaded": false,
+  "launched": false,
+  "fixtures": [
+    {
+      "platform": "paper",
+      "line": "1.21.1",
+      "directory": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1",
+      "port": 25572,
+      "launch_script": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/launch.sh",
+      "config_directory": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/plugins/LodServerSupport",
+      "config_file": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/plugins/LodServerSupport/lss-server-config.json",
+      "config_directory_mode": "0o755",
+      "config_file_mode": "0o644",
+      "owner_uid": 1000,
+      "owner_gid": 1000,
+      "candidate_sha256": "5399264a3b2d5b20babd36a6659861d45587932e07e4b9eef874c2130bbfd1d8",
+      "runtime_checks": {
+        "libraries_listed": 103,
+        "versions_listed": 1
+      },
+      "world_source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base-paper",
+      "files": [
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/paper.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/paper.jar",
+          "sha256": "39bd8c00b9e18de91dcabd3cc3dcfa5328685a53b7187a2f63280c22e2d287b9",
+          "size": 49394394,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/com/destroystokyo/paper/paper-mojangapi/1.21.1-R0.1-SNAPSHOT/paper-mojangapi-1.21.1-R0.1-SNAPSHOT.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/com/destroystokyo/paper/paper-mojangapi/1.21.1-R0.1-SNAPSHOT/paper-mojangapi-1.21.1-R0.1-SNAPSHOT.jar",
+          "sha256": "b8df3e7f2739e21072a5263e41b307bd30cfa8d8f72258ce27973167f8ad07c0",
+          "size": 2344886,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/com/github/oshi/oshi-core/6.4.10/oshi-core-6.4.10.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/com/github/oshi/oshi-core/6.4.10/oshi-core-6.4.10.jar",
+          "sha256": "fef001a7a13515c273f30915915580782afbc45273cc07aa15994e51563ef310",
+          "size": 979212,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/com/google/code/findbugs/jsr305/3.0.2/jsr305-3.0.2.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/com/google/code/findbugs/jsr305/3.0.2/jsr305-3.0.2.jar",
+          "sha256": "766ad2a0783f2687962c8ad74ceecc38a28b9f72a2d085ee438b7813e928d0c7",
+          "size": 19936,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/com/google/code/gson/gson/2.10.1/gson-2.10.1.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/com/google/code/gson/gson/2.10.1/gson-2.10.1.jar",
+          "sha256": "4241c14a7727c34feea6507ec801318a3d4a90f070e4525681079fb94ee4c593",
+          "size": 283367,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/com/google/errorprone/error_prone_annotations/2.18.0/error_prone_annotations-2.18.0.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/com/google/errorprone/error_prone_annotations/2.18.0/error_prone_annotations-2.18.0.jar",
+          "sha256": "9e6814cb71816988a4fd1b07a993a8f21bb7058d522c162b1de849e19bea54ae",
+          "size": 16017,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/com/google/guava/failureaccess/1.0.1/failureaccess-1.0.1.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/com/google/guava/failureaccess/1.0.1/failureaccess-1.0.1.jar",
+          "sha256": "a171ee4c734dd2da837e4b16be9df4661afab72a41adaf31eb84dfdaf936ca26",
+          "size": 4617,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/com/google/guava/guava/32.1.2-jre/guava-32.1.2-jre.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/com/google/guava/guava/32.1.2-jre/guava-32.1.2-jre.jar",
+          "sha256": "bc65dea7cfd9e4dacf8419d8af0e741655857d27885bb35d943d7187fc3a8fce",
+          "size": 3041591,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/com/google/guava/listenablefuture/9999.0-empty-to-avoid-conflict-with-guava/listenablefuture-9999.0-empty-to-avoid-conflict-with-guava.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/com/google/guava/listenablefuture/9999.0-empty-to-avoid-conflict-with-guava/listenablefuture-9999.0-empty-to-avoid-conflict-with-guava.jar",
+          "sha256": "b372a037d4230aa57fbeffdef30fd6123f9c0c2db85d0aced00c91b974f33f99",
+          "size": 2199,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/com/google/protobuf/protobuf-java/3.25.1/protobuf-java-3.25.1.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/com/google/protobuf/protobuf-java/3.25.1/protobuf-java-3.25.1.jar",
+          "sha256": "48a8e58a1a8f82eff141a7a388d38dfe77d7a48d5e57c9066ee37f19147e20df",
+          "size": 1875070,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/com/googlecode/json-simple/json-simple/1.1.1/json-simple-1.1.1.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/com/googlecode/json-simple/json-simple/1.1.1/json-simple-1.1.1.jar",
+          "sha256": "4e69696892b88b41c55d49ab2fdcc21eead92bf54acc588c0050596c3b75199c",
+          "size": 23931,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/com/lmax/disruptor/3.4.4/disruptor-3.4.4.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/com/lmax/disruptor/3.4.4/disruptor-3.4.4.jar",
+          "sha256": "1524ed31f13bcabee1b6146e67be30c6317cb94fcd0c7c2f7c7a1f3e82087c51",
+          "size": 84626,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/com/mojang/authlib/6.0.54/authlib-6.0.54.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/com/mojang/authlib/6.0.54/authlib-6.0.54.jar",
+          "sha256": "319ea7b53b5e52f62ad3e2b81e9db7f0751240edac548bd74f5f19e35dc21a3b",
+          "size": 115242,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/com/mojang/brigadier/1.3.10/brigadier-1.3.10.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/com/mojang/brigadier/1.3.10/brigadier-1.3.10.jar",
+          "sha256": "c8ee4136e474ac7723ca2b432ec8d1a2bc88ef7d1ec57c314ba9e33cdc83dd75",
+          "size": 80082,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/com/mojang/datafixerupper/8.0.16/datafixerupper-8.0.16.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/com/mojang/datafixerupper/8.0.16/datafixerupper-8.0.16.jar",
+          "sha256": "ffc138bc2596c291781b0d5e211ccac51f0f2345f27fc2742f335cedf7e2870d",
+          "size": 724313,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/com/mojang/logging/1.2.7/logging-1.2.7.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/com/mojang/logging/1.2.7/logging-1.2.7.jar",
+          "sha256": "3dc3190204bac5f4184d8405bfe1f724f73a6a15a0d3f36ec7f69e6872c1a76c",
+          "size": 15343,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/com/mysql/mysql-connector-j/8.4.0/mysql-connector-j-8.4.0.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/com/mysql/mysql-connector-j/8.4.0/mysql-connector-j-8.4.0.jar",
+          "sha256": "d77962877d010777cff997015da90ee689f0f4bb76848340e1488f2b83332af5",
+          "size": 2533399,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/com/velocitypowered/velocity-native/3.3.0-SNAPSHOT/velocity-native-3.3.0-SNAPSHOT.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/com/velocitypowered/velocity-native/3.3.0-SNAPSHOT/velocity-native-3.3.0-SNAPSHOT.jar",
+          "sha256": "016a94555a7ba68dafa73312580d4e2b5538b2231e586baea90c9d1e053de57b",
+          "size": 237055,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/commons-codec/commons-codec/1.16.0/commons-codec-1.16.0.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/commons-codec/commons-codec/1.16.0/commons-codec-1.16.0.jar",
+          "sha256": "56595fb20b0b85bc91d0d503dad50bb7f1b9afc0eed5dffa6cbb25929000484d",
+          "size": 360738,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/commons-io/commons-io/2.15.1/commons-io-2.15.1.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/commons-io/commons-io/2.15.1/commons-io-2.15.1.jar",
+          "sha256": "a58af12ee1b68cfd2ebb0c27caef164f084381a00ec81a48cc275fd7ea54e154",
+          "size": 501218,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/commons-lang/commons-lang/2.6/commons-lang-2.6.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/commons-lang/commons-lang/2.6/commons-lang-2.6.jar",
+          "sha256": "50f11b09f877c294d56f24463f47d28f929cf5044f648661c0f0cfbae9a2f49c",
+          "size": 284220,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/io/leangen/geantyref/geantyref/1.3.16/geantyref-1.3.16.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/io/leangen/geantyref/geantyref/1.3.16/geantyref-1.3.16.jar",
+          "sha256": "7f1d591092d5142b6aaa7cf59f94c4c74d57dbeef03b2f8262949f8f36bac6e3",
+          "size": 71272,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/io/netty/netty-buffer/4.1.97.Final/netty-buffer-4.1.97.Final.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/io/netty/netty-buffer/4.1.97.Final/netty-buffer-4.1.97.Final.jar",
+          "sha256": "a4393f5b395486cc74d0325c9b41311abb9513ba0fd7ef8cf46e9345c3bffbea",
+          "size": 306590,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/io/netty/netty-codec/4.1.97.Final/netty-codec-4.1.97.Final.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/io/netty/netty-codec/4.1.97.Final/netty-codec-4.1.97.Final.jar",
+          "sha256": "bcc96737a0f912fcf031cf8c45ebda352a90a40437db0832caad3d5a63618b38",
+          "size": 345274,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/io/netty/netty-codec-haproxy/4.1.97.Final/netty-codec-haproxy-4.1.97.Final.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/io/netty/netty-codec-haproxy/4.1.97.Final/netty-codec-haproxy-4.1.97.Final.jar",
+          "sha256": "994d8cd2ae5b7d68d69836016cf9d13e906bd427fc446888fe21b5ef960485fb",
+          "size": 37774,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/io/netty/netty-common/4.1.97.Final/netty-common-4.1.97.Final.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/io/netty/netty-common/4.1.97.Final/netty-common-4.1.97.Final.jar",
+          "sha256": "a8aca0c8e9347acc75c885ecc749195d9775369aa520b9276f2d1128210a6c17",
+          "size": 659930,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/io/netty/netty-handler/4.1.97.Final/netty-handler-4.1.97.Final.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/io/netty/netty-handler/4.1.97.Final/netty-handler-4.1.97.Final.jar",
+          "sha256": "bd4771d19149cbc9c7464ed2d58035d79cdfed7adb59d38718b0d8e7a3dcc2de",
+          "size": 560040,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/io/netty/netty-resolver/4.1.97.Final/netty-resolver-4.1.97.Final.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/io/netty/netty-resolver/4.1.97.Final/netty-resolver-4.1.97.Final.jar",
+          "sha256": "38a018c6d9fb2cb11b72881354782b45080bbd20b9a0ad6cde28b80d431ed0b1",
+          "size": 37792,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/io/netty/netty-transport/4.1.97.Final/netty-transport-4.1.97.Final.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/io/netty/netty-transport/4.1.97.Final/netty-transport-4.1.97.Final.jar",
+          "sha256": "197fd2d6c6b4afe677d9e95bf2e36b49a0bcabdfce0583683fb73f29a3f5a407",
+          "size": 489624,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/io/netty/netty-transport-classes-epoll/4.1.97.Final/netty-transport-classes-epoll-4.1.97.Final.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/io/netty/netty-transport-classes-epoll/4.1.97.Final/netty-transport-classes-epoll-4.1.97.Final.jar",
+          "sha256": "ee65fa17fe65f18fd22269f92bddad85bfb3a263cf65eba01e116a2f30b86ff5",
+          "size": 147139,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/io/netty/netty-transport-native-epoll/4.1.97.Final/netty-transport-native-epoll-4.1.97.Final-linux-aarch_64.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/io/netty/netty-transport-native-epoll/4.1.97.Final/netty-transport-native-epoll-4.1.97.Final-linux-aarch_64.jar",
+          "sha256": "93b5fe8f3829dcb5e033d8d40d59159366ff4cf8266c903bbd6a4aeed9e59bac",
+          "size": 40427,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/io/netty/netty-transport-native-epoll/4.1.97.Final/netty-transport-native-epoll-4.1.97.Final-linux-x86_64.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/io/netty/netty-transport-native-epoll/4.1.97.Final/netty-transport-native-epoll-4.1.97.Final-linux-x86_64.jar",
+          "sha256": "1e83fc9f82e5415cdbb688c6a5c6bbbd7d198e9fdd6fdf64b3dc5d54dd1acfd0",
+          "size": 38954,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/io/netty/netty-transport-native-unix-common/4.1.97.Final/netty-transport-native-unix-common-4.1.97.Final.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/io/netty/netty-transport-native-unix-common/4.1.97.Final/netty-transport-native-unix-common-4.1.97.Final.jar",
+          "sha256": "412fe140257c2dda5a5e15bee911298bd61928d03ee6be4db588e82c196c5dc6",
+          "size": 43897,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/io/papermc/asm-utils/0.0.3/asm-utils-0.0.3.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/io/papermc/asm-utils/0.0.3/asm-utils-0.0.3.jar",
+          "sha256": "0e0b9b519ef36f86b44067ea1ed559751b18bb7b5ee8844bc243375961728f11",
+          "size": 112231,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/io/papermc/reflection-rewriter/0.0.3/reflection-rewriter-0.0.3.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/io/papermc/reflection-rewriter/0.0.3/reflection-rewriter-0.0.3.jar",
+          "sha256": "dc7dca499eb485d47abe179176d63efc7121d7249d3d9625f8bd2e7a1642a4d9",
+          "size": 10743,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/io/papermc/reflection-rewriter-proxy-generator/0.0.3/reflection-rewriter-proxy-generator-0.0.3.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/io/papermc/reflection-rewriter-proxy-generator/0.0.3/reflection-rewriter-proxy-generator-0.0.3.jar",
+          "sha256": "c972ba1ae0669702b5795fb4bc79ac8741702b315c1c200ab546e470973a9690",
+          "size": 7847,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/io/papermc/reflection-rewriter-runtime/0.0.3/reflection-rewriter-runtime-0.0.3.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/io/papermc/reflection-rewriter-runtime/0.0.3/reflection-rewriter-runtime-0.0.3.jar",
+          "sha256": "61e066c3eb6f164ef65a73af4dcd95d3a0caeefea261606be6f9034a715ee8e5",
+          "size": 13379,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/it/unimi/dsi/fastutil/8.5.12/fastutil-8.5.12.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/it/unimi/dsi/fastutil/8.5.12/fastutil-8.5.12.jar",
+          "sha256": "b5543ee08d062d551cf0a5c9bc0fb70588b0382079029ba48941fa9c9be8a5d4",
+          "size": 23326598,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/javax/inject/javax.inject/1/javax.inject-1.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/javax/inject/javax.inject/1/javax.inject-1.jar",
+          "sha256": "91c77044a50c481636c32d916fd89c9118a72195390452c81065080f957de7ff",
+          "size": 2497,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/me/lucko/spark-api/0.1-20240720.200737-2/spark-api-0.1-20240720.200737-2.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/me/lucko/spark-api/0.1-20240720.200737-2/spark-api-0.1-20240720.200737-2.jar",
+          "sha256": "f99a3ba0cd3df1aee7b8f285fe7967a28d9c0cea37fa6621b643da919dcfb819",
+          "size": 9520,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/me/lucko/spark-paper/1.10.119-SNAPSHOT/spark-paper-1.10.119-SNAPSHOT.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/me/lucko/spark-paper/1.10.119-SNAPSHOT/spark-paper-1.10.119-SNAPSHOT.jar",
+          "sha256": "85937f6166a7fb766c1c82ce5a083c09255188dad01d2c3b73913239017d2295",
+          "size": 2833577,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/net/java/dev/jna/jna/5.14.0/jna-5.14.0.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/net/java/dev/jna/jna/5.14.0/jna-5.14.0.jar",
+          "sha256": "34ed1e1f27fa896bca50dbc4e99cf3732967cec387a7a0d5e3486c09673fe8c6",
+          "size": 1878533,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/net/java/dev/jna/jna-platform/5.14.0/jna-platform-5.14.0.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/net/java/dev/jna/jna-platform/5.14.0/jna-platform-5.14.0.jar",
+          "sha256": "ae4caceb3840730c2537f9b7fb55a01baba580286b4122951488bcee558c2449",
+          "size": 1369287,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/net/kyori/adventure-api/4.17.0/adventure-api-4.17.0.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/net/kyori/adventure-api/4.17.0/adventure-api-4.17.0.jar",
+          "sha256": "15c8c2eb1a69d8b1bc914f554353da8ee7cf074c05c8074da9898aee5c70d0d8",
+          "size": 396512,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/net/kyori/adventure-key/4.17.0/adventure-key-4.17.0.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/net/kyori/adventure-key/4.17.0/adventure-key-4.17.0.jar",
+          "sha256": "8e5cf570612d6ccedf943ac1716a449de2dd5a90207b7de6f73c0236935b766e",
+          "size": 11158,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/net/kyori/adventure-text-logger-slf4j/4.17.0/adventure-text-logger-slf4j-4.17.0.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/net/kyori/adventure-text-logger-slf4j/4.17.0/adventure-text-logger-slf4j-4.17.0.jar",
+          "sha256": "d3e39084845e030de1e14c1859919f8e7a29341282b364ee9b188a8f2f03992b",
+          "size": 19845,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/net/kyori/adventure-text-minimessage/4.17.0/adventure-text-minimessage-4.17.0.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/net/kyori/adventure-text-minimessage/4.17.0/adventure-text-minimessage-4.17.0.jar",
+          "sha256": "8372a9e9bc0c0ae21d60e6ce6e284a81c6c96d1ec398f808825015c6f60252f5",
+          "size": 160889,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/net/kyori/adventure-text-serializer-ansi/4.17.0/adventure-text-serializer-ansi-4.17.0.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/net/kyori/adventure-text-serializer-ansi/4.17.0/adventure-text-serializer-ansi-4.17.0.jar",
+          "sha256": "d0dcd946dc2dc858621a31914643f3c06817d4c38ad52c235ec147e565d8e24c",
+          "size": 11090,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/net/kyori/adventure-text-serializer-gson/4.17.0/adventure-text-serializer-gson-4.17.0.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/net/kyori/adventure-text-serializer-gson/4.17.0/adventure-text-serializer-gson-4.17.0.jar",
+          "sha256": "6227d6bfd2d6ae6d121d3dcda590d33ff8373cea6589485df3f7b75b09e7d210",
+          "size": 54829,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/net/kyori/adventure-text-serializer-json/4.17.0/adventure-text-serializer-json-4.17.0.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/net/kyori/adventure-text-serializer-json/4.17.0/adventure-text-serializer-json-4.17.0.jar",
+          "sha256": "6c91d3e23b064d76ab7c154ebe940f552232ae178b95d21b50dfdcfec2925d96",
+          "size": 13912,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/net/kyori/adventure-text-serializer-legacy/4.17.0/adventure-text-serializer-legacy-4.17.0.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/net/kyori/adventure-text-serializer-legacy/4.17.0/adventure-text-serializer-legacy-4.17.0.jar",
+          "sha256": "9d4955542e40eb5b41dbed172b2826acf1cbe3405e002f3360eb2ea578d536ba",
+          "size": 29403,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/net/kyori/adventure-text-serializer-plain/4.17.0/adventure-text-serializer-plain-4.17.0.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/net/kyori/adventure-text-serializer-plain/4.17.0/adventure-text-serializer-plain-4.17.0.jar",
+          "sha256": "226d4a3d2c42b7727df11a02a698c6c64475384705dd12bf02c7f69744799c2e",
+          "size": 12952,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/net/kyori/ansi/1.0.3/ansi-1.0.3.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/net/kyori/ansi/1.0.3/ansi-1.0.3.jar",
+          "sha256": "26239e8fd349d6a166d7c73623518b44dbac819b80530546724cb20ee5e38243",
+          "size": 22638,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/net/kyori/examination-api/1.3.0/examination-api-1.3.0.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/net/kyori/examination-api/1.3.0/examination-api-1.3.0.jar",
+          "sha256": "c9237ffecb05428f6eff86216246ac70ce0b47b04c08ea7ca35020fde57f8492",
+          "size": 23446,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/net/kyori/examination-string/1.3.0/examination-string-1.3.0.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/net/kyori/examination-string/1.3.0/examination-string-1.3.0.jar",
+          "sha256": "7d01fc25a4bb3af0e1662685455f4541fbf4626216ea5846e455c1491e156b8c",
+          "size": 13135,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/net/kyori/option/1.1.0/option-1.1.0.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/net/kyori/option/1.1.0/option-1.1.0.jar",
+          "sha256": "97b69b4b17dfe02217c9131ad342564cbc9aebd04c75eb689639b5f78fd4b11c",
+          "size": 32200,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/net/md-5/bungeecord-chat/1.20-R0.2-deprecated+build.18/bungeecord-chat-1.20-R0.2-deprecated+build.18.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/net/md-5/bungeecord-chat/1.20-R0.2-deprecated+build.18/bungeecord-chat-1.20-R0.2-deprecated+build.18.jar",
+          "sha256": "5e61313bb35aae1b2be33276ab442f6e0d56258ff13297750d6ad9484d1a4fd6",
+          "size": 158696,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/net/minecrell/terminalconsoleappender/1.3.0/terminalconsoleappender-1.3.0.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/net/minecrell/terminalconsoleappender/1.3.0/terminalconsoleappender-1.3.0.jar",
+          "sha256": "1afea1bca095068f7f4483f061feed94753be34233ddb0df9ec380fc14d5a985",
+          "size": 16949,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/net/neoforged/AutoRenamingTool/2.0.3/AutoRenamingTool-2.0.3.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/net/neoforged/AutoRenamingTool/2.0.3/AutoRenamingTool-2.0.3.jar",
+          "sha256": "d27484a148dc5ab6fcd4d2f9465d4ce68f7459c724df570ddc45e760cdcb788e",
+          "size": 103355,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/net/neoforged/srgutils/1.0.9/srgutils-1.0.9.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/net/neoforged/srgutils/1.0.9/srgutils-1.0.9.jar",
+          "sha256": "d46c7bf9939b47d13a9b34e236869898cd27eefb7dab7bb830787b32793e8575",
+          "size": 71913,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/net/neoforged/installertools/cli-utils/2.1.4/cli-utils-2.1.4.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/net/neoforged/installertools/cli-utils/2.1.4/cli-utils-2.1.4.jar",
+          "sha256": "4b488975fd59a833b0239c2adf8996ab8f77e8d76a2e6ae9919692df3125dd37",
+          "size": 9379,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/net/neoforged/javadoctor/gson-io/2.0.17/gson-io-2.0.17.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/net/neoforged/javadoctor/gson-io/2.0.17/gson-io-2.0.17.jar",
+          "sha256": "de40a10adb58105e84864dff41e3ef490d87411afa390d86a940c74a6bf69821",
+          "size": 5747,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/net/neoforged/javadoctor/spec/2.0.17/spec-2.0.17.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/net/neoforged/javadoctor/spec/2.0.17/spec-2.0.17.jar",
+          "sha256": "67d6fdde98770e91e82303fde1ce5560f12081b733da07bfa7bac71968a93dff",
+          "size": 6266,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/net/sf/jopt-simple/jopt-simple/6.0-alpha-3/jopt-simple-6.0-alpha-3.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/net/sf/jopt-simple/jopt-simple/6.0-alpha-3/jopt-simple-6.0-alpha-3.jar",
+          "sha256": "d440ceb839d6adb5cfa81aa321813d60255e68a3e9ca564c91126599310abde5",
+          "size": 79368,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/org/apache/commons/commons-lang3/3.14.0/commons-lang3-3.14.0.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/org/apache/commons/commons-lang3/3.14.0/commons-lang3-3.14.0.jar",
+          "sha256": "7b96bf3ee68949abb5bc465559ac270e0551596fa34523fddf890ec418dde13c",
+          "size": 657952,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/org/apache/httpcomponents/httpclient/4.5.14/httpclient-4.5.14.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/org/apache/httpcomponents/httpclient/4.5.14/httpclient-4.5.14.jar",
+          "sha256": "c8bc7e1c51a6d4ce72f40d2ebbabf1c4b68bfe76e732104b04381b493478e9d6",
+          "size": 785639,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/org/apache/httpcomponents/httpcore/4.4.16/httpcore-4.4.16.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/org/apache/httpcomponents/httpcore/4.4.16/httpcore-4.4.16.jar",
+          "sha256": "6c9b3dd142a09dc468e23ad39aad6f75a0f2b85125104469f026e52a474e464f",
+          "size": 327891,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/org/apache/logging/log4j/log4j-api/2.22.1/log4j-api-2.22.1.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/org/apache/logging/log4j/log4j-api/2.22.1/log4j-api-2.22.1.jar",
+          "sha256": "5d7beae7ff15d8516d6517121d7f12a79a6ac180df64b5fcec55d5be21056e53",
+          "size": 335001,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/org/apache/logging/log4j/log4j-core/2.22.1/log4j-core-2.22.1.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/org/apache/logging/log4j/log4j-core/2.22.1/log4j-core-2.22.1.jar",
+          "sha256": "46dccecac556623d8e2ce8648496824a82951d139062a4e61148aff1a25ed18d",
+          "size": 1900022,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/org/apache/logging/log4j/log4j-iostreams/2.22.1/log4j-iostreams-2.22.1.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/org/apache/logging/log4j/log4j-iostreams/2.22.1/log4j-iostreams-2.22.1.jar",
+          "sha256": "ecf583f2c73042a1d60f9a59937bda70b2a9146f6aa502db0926fca10e940af6",
+          "size": 49665,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/org/apache/logging/log4j/log4j-slf4j2-impl/2.22.1/log4j-slf4j2-impl-2.22.1.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/org/apache/logging/log4j/log4j-slf4j2-impl/2.22.1/log4j-slf4j2-impl-2.22.1.jar",
+          "sha256": "1920cd69d8682c7ef249bb407a3d0685723aa1785867cf4c53258da6bf14da97",
+          "size": 27364,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/org/apache/maven/maven-artifact/3.9.6/maven-artifact-3.9.6.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/org/apache/maven/maven-artifact/3.9.6/maven-artifact-3.9.6.jar",
+          "sha256": "ad7a0fb408f8e47585ccc0d0011e0b501d93bfc9888d369bbd4a043d19475073",
+          "size": 58708,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/org/apache/maven/maven-builder-support/3.9.6/maven-builder-support-3.9.6.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/org/apache/maven/maven-builder-support/3.9.6/maven-builder-support-3.9.6.jar",
+          "sha256": "e1f4d2784459ce8a34b9dae1829a1999b569e483e21ee9faa7368691e729296e",
+          "size": 14347,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/org/apache/maven/maven-model/3.9.6/maven-model-3.9.6.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/org/apache/maven/maven-model/3.9.6/maven-model-3.9.6.jar",
+          "sha256": "4f8f07fdb6b8701fa89a23a2edf830808fd65892d90cce40c0e6df7c8f2fcb62",
+          "size": 217563,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/org/apache/maven/maven-model-builder/3.9.6/maven-model-builder-3.9.6.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/org/apache/maven/maven-model-builder/3.9.6/maven-model-builder-3.9.6.jar",
+          "sha256": "5f96dafbc411ee4b1e8426368d0d31d05ab5a4dace69808143142a0017598721",
+          "size": 198399,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/org/apache/maven/maven-repository-metadata/3.9.6/maven-repository-metadata-3.9.6.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/org/apache/maven/maven-repository-metadata/3.9.6/maven-repository-metadata-3.9.6.jar",
+          "sha256": "e047a67b204c434994253e2ab5bdff5fe8cb7ada9316ac3e754c39f900ea847b",
+          "size": 28440,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/org/apache/maven/maven-resolver-provider/3.9.6/maven-resolver-provider-3.9.6.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/org/apache/maven/maven-resolver-provider/3.9.6/maven-resolver-provider-3.9.6.jar",
+          "sha256": "73b00b244b7b9e285654a45e765892bf5d369da77d42b5b4b5429122ed198a33",
+          "size": 74416,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/org/apache/maven/resolver/maven-resolver-api/1.9.18/maven-resolver-api-1.9.18.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/org/apache/maven/resolver/maven-resolver-api/1.9.18/maven-resolver-api-1.9.18.jar",
+          "sha256": "ebfb9e1dfeea3c2017905184581e007874b4eaac9d28bfffcfe5133d70ac6339",
+          "size": 157111,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/org/apache/maven/resolver/maven-resolver-connector-basic/1.9.18/maven-resolver-connector-basic-1.9.18.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/org/apache/maven/resolver/maven-resolver-connector-basic/1.9.18/maven-resolver-connector-basic-1.9.18.jar",
+          "sha256": "f88d97d0f18571a675e73b45d6a9384b00322c9fae514ad6761d65b729a4e82a",
+          "size": 40439,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/org/apache/maven/resolver/maven-resolver-impl/1.9.18/maven-resolver-impl-1.9.18.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/org/apache/maven/resolver/maven-resolver-impl/1.9.18/maven-resolver-impl-1.9.18.jar",
+          "sha256": "6bb9c90d007098004749c867da2eaf5785fc1139907718749c1097bdb2929bf8",
+          "size": 317884,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/org/apache/maven/resolver/maven-resolver-named-locks/1.9.18/maven-resolver-named-locks-1.9.18.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/org/apache/maven/resolver/maven-resolver-named-locks/1.9.18/maven-resolver-named-locks-1.9.18.jar",
+          "sha256": "098de7bbc5b0b26c3eff74ac30ffba6680fdab9bf4aebab95c3f5e2fe9eaeea8",
+          "size": 37917,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/org/apache/maven/resolver/maven-resolver-spi/1.9.18/maven-resolver-spi-1.9.18.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/org/apache/maven/resolver/maven-resolver-spi/1.9.18/maven-resolver-spi-1.9.18.jar",
+          "sha256": "d364fce9a17b0e0b073c26efa92af95b29c00c42943dced4a1168a7923fd3fe1",
+          "size": 51715,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/org/apache/maven/resolver/maven-resolver-transport-http/1.9.18/maven-resolver-transport-http-1.9.18.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/org/apache/maven/resolver/maven-resolver-transport-http/1.9.18/maven-resolver-transport-http-1.9.18.jar",
+          "sha256": "1fa02272da7a604718f22e2bc9775f14350487548ffc30a2ffaae1c2d1d1a58a",
+          "size": 55883,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/org/apache/maven/resolver/maven-resolver-util/1.9.18/maven-resolver-util-1.9.18.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/org/apache/maven/resolver/maven-resolver-util/1.9.18/maven-resolver-util-1.9.18.jar",
+          "sha256": "2eb0ea667bc489384478231dda7516407d4b5b22a138077229871de9362a7ae2",
+          "size": 196023,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/org/checkerframework/checker-qual/3.33.0/checker-qual-3.33.0.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/org/checkerframework/checker-qual/3.33.0/checker-qual-3.33.0.jar",
+          "sha256": "e316255bbfcd9fe50d165314b85abb2b33cb2a66a93c491db648e498a82c2de1",
+          "size": 223979,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/org/codehaus/plexus/plexus-interpolation/1.26/plexus-interpolation-1.26.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/org/codehaus/plexus/plexus-interpolation/1.26/plexus-interpolation-1.26.jar",
+          "sha256": "b3b5412ce17889103ea564bcdfcf9fb3dfa540344ffeac6b538a73c9d7182662",
+          "size": 85348,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/org/codehaus/plexus/plexus-utils/3.5.1/plexus-utils-3.5.1.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/org/codehaus/plexus/plexus-utils/3.5.1/plexus-utils-3.5.1.jar",
+          "sha256": "86e0255d4c879c61b4833ed7f13124e8bb679df47debb127326e7db7dd49a07b",
+          "size": 269335,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/org/eclipse/sisu/org.eclipse.sisu.inject/0.9.0.M2/org.eclipse.sisu.inject-0.9.0.M2.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/org/eclipse/sisu/org.eclipse.sisu.inject/0.9.0.M2/org.eclipse.sisu.inject-0.9.0.M2.jar",
+          "sha256": "9b62bcfc352a2ec87da8b01e37c952a54d358bbb1af3f212648aeafe7ab2dbb5",
+          "size": 424617,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/org/fusesource/jansi/jansi/2.4.0/jansi-2.4.0.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/org/fusesource/jansi/jansi/2.4.0/jansi-2.4.0.jar",
+          "sha256": "6cd91991323dd7b2fb28ca93d7ac12af5a86a2f53279e2b35827b30313fd0b9f",
+          "size": 221009,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/org/jline/jline-reader/3.20.0/jline-reader-3.20.0.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/org/jline/jline-reader/3.20.0/jline-reader-3.20.0.jar",
+          "sha256": "acd1c94d1e228aa7b7962f69b21ed3a9fd828eb3a63e4baf9086954e626af1f0",
+          "size": 171052,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/org/jline/jline-terminal/3.21.0/jline-terminal-3.21.0.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/org/jline/jline-terminal/3.21.0/jline-terminal-3.21.0.jar",
+          "sha256": "3a05a1602f9d51428908879350f2cf5be87fcefced2f56c6e88d9d76f41a73fe",
+          "size": 228777,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/org/jline/jline-terminal-jansi/3.21.0/jline-terminal-jansi-3.21.0.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/org/jline/jline-terminal-jansi/3.21.0/jline-terminal-jansi-3.21.0.jar",
+          "sha256": "dc7a0b2f1577623048c514615ca14dd81e3220fc97ff1ea44b7d230ad830beec",
+          "size": 39477,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/org/joml/joml/1.10.5/joml-1.10.5.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/org/joml/joml/1.10.5/joml-1.10.5.jar",
+          "sha256": "cac9f22f83a7aa33eebda73c16ff5261e3cb4911b6bafcf4c79ea486099d0c9a",
+          "size": 712082,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/org/jspecify/jspecify/1.0.0/jspecify-1.0.0.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/org/jspecify/jspecify/1.0.0/jspecify-1.0.0.jar",
+          "sha256": "1fad6e6be7557781e4d33729d49ae1cdc8fdda6fe477bb0cc68ce351eafdfbab",
+          "size": 3819,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/org/lz4/lz4-java/1.8.0/lz4-java-1.8.0.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/org/lz4/lz4-java/1.8.0/lz4-java-1.8.0.jar",
+          "sha256": "d74a3334fb35195009b338a951f918203d6bbca3d1d359033dc33edd1cadc9ef",
+          "size": 682804,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/org/ow2/asm/asm/9.7.1/asm-9.7.1.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/org/ow2/asm/asm/9.7.1/asm-9.7.1.jar",
+          "sha256": "8cadd43ac5eb6d09de05faecca38b917a040bb9139c7edeb4cc81c740b713281",
+          "size": 126093,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/org/ow2/asm/asm-commons/9.7.1/asm-commons-9.7.1.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/org/ow2/asm/asm-commons/9.7.1/asm-commons-9.7.1.jar",
+          "sha256": "9a579b54d292ad9be171d4313fd4739c635592c2b5ac3a459bbd1049cddec6a0",
+          "size": 73459,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/org/ow2/asm/asm-tree/9.7.1/asm-tree-9.7.1.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/org/ow2/asm/asm-tree/9.7.1/asm-tree-9.7.1.jar",
+          "sha256": "9929881f59eb6b840e86d54570c77b59ce721d104e6dfd7a40978991c2d3b41f",
+          "size": 51939,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/org/slf4j/jcl-over-slf4j/1.7.36/jcl-over-slf4j-1.7.36.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/org/slf4j/jcl-over-slf4j/1.7.36/jcl-over-slf4j-1.7.36.jar",
+          "sha256": "ab57ca8fd223772c17365d121f59e94ecbf0ae59d08c03a3cb5b81071c019195",
+          "size": 16555,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/org/slf4j/slf4j-api/2.0.9/slf4j-api-2.0.9.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/org/slf4j/slf4j-api/2.0.9/slf4j-api-2.0.9.jar",
+          "sha256": "0818930dc8d7debb403204611691da58e49d42c50b6ffcfdce02dadb7c3c2b6c",
+          "size": 64579,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/org/spongepowered/configurate-core/4.2.0-SNAPSHOT/configurate-core-4.2.0-SNAPSHOT.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/org/spongepowered/configurate-core/4.2.0-SNAPSHOT/configurate-core-4.2.0-SNAPSHOT.jar",
+          "sha256": "ecd323604b3789c3fd4588e22a62b25d1faed56ccd2487c68314f33eb828f086",
+          "size": 364327,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/org/spongepowered/configurate-yaml/4.2.0-SNAPSHOT/configurate-yaml-4.2.0-SNAPSHOT.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/org/spongepowered/configurate-yaml/4.2.0-SNAPSHOT/configurate-yaml-4.2.0-SNAPSHOT.jar",
+          "sha256": "f6ba6ff12b29a4ee89d3744e84058be62b6aea2b78f35943bf8b068606c3922b",
+          "size": 379223,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/org/xerial/sqlite-jdbc/3.46.0.0/sqlite-jdbc-3.46.0.0.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/org/xerial/sqlite-jdbc/3.46.0.0/sqlite-jdbc-3.46.0.0.jar",
+          "sha256": "e697df15be3f95219d80773c5f1002030e33e932adda186c1c86fd51df6691a9",
+          "size": 13615436,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/libraries/org/yaml/snakeyaml/2.2/snakeyaml-2.2.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/libraries/org/yaml/snakeyaml/2.2/snakeyaml-2.2.jar",
+          "sha256": "1467931448a0817696ae2805b7b8b20bfb082652bf9c4efaed528930dc49389b",
+          "size": 334352,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/versions/1.21.1/paper-1.21.1.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/versions/1.21.1/paper-1.21.1.jar",
+          "sha256": "020b6831758cfbaad2890d77eb05d664758319c12a1b190f6abf40323e96120e",
+          "size": 25757283,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/paper/cache/mojang_1.21.1.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/cache/mojang_1.21.1.jar",
+          "sha256": "e3bc55693e93cda0188f2e60aea28113fc647c5e85a15fa3d1b347349231b4bb",
+          "size": 51627615,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base-paper/world/data/lss-timestamps.bin",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/world/data/lss-timestamps.bin",
+          "sha256": "f1ae760e28bafb7dc2f0d5758483b5e6904a5475196b67455e468efd0e5d08df",
+          "size": 16465,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base-paper/world/data/raids.dat",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/world/data/raids.dat",
+          "sha256": "b4b396de5e017fe7e897b1a0fdfaefa6019ff3b8cebe3539f40f3d8b563bb06a",
+          "size": 90,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base-paper/world/datapacks/bukkit/pack.mcmeta",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/world/datapacks/bukkit/pack.mcmeta",
+          "sha256": "0072a9c026c411da214dfc7b1aa3adba8469a8333859643ec8cd1729c8970719",
+          "size": 127,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base-paper/world/level.dat",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/world/level.dat",
+          "sha256": "1fc193de355d7109120a80d2e36168f98295bde634496a81bc9da6489dec4a61",
+          "size": 1619,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base-paper/world/level.dat_old",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/world/level.dat_old",
+          "sha256": "8c398e39189a24f073c56f5f83deecf7bed3497b14141ee9f054f93aca097dd5",
+          "size": 1621,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base-paper/world/paper-world.yml",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/world/paper-world.yml",
+          "sha256": "6d27bacf89f34a088fb954a5bea1eaa7675874623909b05c9c28946456de8afa",
+          "size": 218,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base-paper/world/region/r.-1.-1.mca",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/world/region/r.-1.-1.mca",
+          "sha256": "32800524f0750a1db53da8df44f2fd3651bae8e775d04b8ce8b72dc5195f254a",
+          "size": 4202496,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base-paper/world/region/r.-1.-2.mca",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/world/region/r.-1.-2.mca",
+          "sha256": "e9dec144f5bac2cedfea4316398ae824e76480be28d62a52a19ca54e1a34bb3d",
+          "size": 405504,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base-paper/world/region/r.-1.0.mca",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/world/region/r.-1.0.mca",
+          "sha256": "27d0ee43b8a3e567ea127b2250d3737514829708eb736d907dbbe7b05a2350e3",
+          "size": 4202496,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base-paper/world/region/r.-1.1.mca",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/world/region/r.-1.1.mca",
+          "sha256": "d59a27a51a7f73d993dd65b2259899e77954ed0fe2d2480cf4de2774866f0f85",
+          "size": 536576,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base-paper/world/region/r.-2.-1.mca",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/world/region/r.-2.-1.mca",
+          "sha256": "894c00e7db76a9baeafeff04d8870ce874e83f71c323cd5e55f6aa1ed47149d0",
+          "size": 405504,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base-paper/world/region/r.-2.-2.mca",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/world/region/r.-2.-2.mca",
+          "sha256": "4d332eea97a09b06c0d7792fa1d2b4816780d3bcd21b987766ee3c4b22e5f5ed",
+          "size": 49152,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base-paper/world/region/r.-2.0.mca",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/world/region/r.-2.0.mca",
+          "sha256": "825661d18abd51f4452c9ba0442fb69ef4942bcd398c4ebe4fc5f4d270b8455a",
+          "size": 405504,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base-paper/world/region/r.-2.1.mca",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/world/region/r.-2.1.mca",
+          "sha256": "afe92f9e59f94068f1f0d34bb83493a7e1b44b1a1c22468619e1463f4a95ae7d",
+          "size": 61440,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base-paper/world/region/r.0.-1.mca",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/world/region/r.0.-1.mca",
+          "sha256": "196ead1f26422e1443431e3cad420d3624c88088a67e3fd3cd8c53576d677444",
+          "size": 4202496,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base-paper/world/region/r.0.-2.mca",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/world/region/r.0.-2.mca",
+          "sha256": "9f016c8efedf3120cb6ab0160db23585676ffb29123b8b04e9b1367d43187687",
+          "size": 405504,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base-paper/world/region/r.0.0.mca",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/world/region/r.0.0.mca",
+          "sha256": "c8a2cffefa96cd514dcce4dec33270d9471d2e7adf2c2fb11ebdb36155a8684b",
+          "size": 4202496,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base-paper/world/region/r.0.1.mca",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/world/region/r.0.1.mca",
+          "sha256": "b7110f3c5b7617b3b74b12bbb877e70a20d2e3b5c70300a1c05f7c64b3aef2d3",
+          "size": 536576,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base-paper/world/region/r.1.-1.mca",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/world/region/r.1.-1.mca",
+          "sha256": "d7a37dfcf69be8f14e40c043a9ad3775fa69effb86db447f768114be50e4514e",
+          "size": 536576,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base-paper/world/region/r.1.-2.mca",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/world/region/r.1.-2.mca",
+          "sha256": "6d83a0166f36fe31ff76f5ccc45b2dd07d8f3fb975e4792fd4eea115786fd8e2",
+          "size": 61440,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base-paper/world/region/r.1.0.mca",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/world/region/r.1.0.mca",
+          "sha256": "a2a82dd655185b9a74909fc8c1bec7b9149649e87e03221ca432a889ac2cdaff",
+          "size": 536576,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base-paper/world/region/r.1.1.mca",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/world/region/r.1.1.mca",
+          "sha256": "fa3cf01bef44ed7958bfa6caa2829e2e81e77779655e8dd41de168569eef307e",
+          "size": 77824,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base-paper/world/uid.dat",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/world/uid.dat",
+          "sha256": "cd92c1de81ceda99953371af48ff2dc2b4e6de8b05080a77711e3085aafb4102",
+          "size": 16,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base-paper/world_nether/DIM-1/data/raids.dat",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/world_nether/DIM-1/data/raids.dat",
+          "sha256": "b4b396de5e017fe7e897b1a0fdfaefa6019ff3b8cebe3539f40f3d8b563bb06a",
+          "size": 90,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base-paper/world_nether/DIM-1/region/r.-1.-1.mca",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/world_nether/DIM-1/region/r.-1.-1.mca",
+          "sha256": "556f117d3b20cb67eba750c1f4d981ea2d50101fdd37b16ab4794dc50e919f8c",
+          "size": 847872,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base-paper/world_nether/DIM-1/region/r.-1.0.mca",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/world_nether/DIM-1/region/r.-1.0.mca",
+          "sha256": "32a9f30d6404d17fe92d99a1360e40481c4ebb79c0af060d15a95f7bfb2d371e",
+          "size": 892928,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base-paper/world_nether/DIM-1/region/r.0.-1.mca",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/world_nether/DIM-1/region/r.0.-1.mca",
+          "sha256": "4b0bcaae2f22d2b961be689e873584359f213955ac49466460e0f54f0f6d3480",
+          "size": 917504,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base-paper/world_nether/DIM-1/region/r.0.0.mca",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/world_nether/DIM-1/region/r.0.0.mca",
+          "sha256": "e2cee5079e207af8fcb3e2fe630c6ca5ceed96ebe77728da95d868759274e1cb",
+          "size": 999424,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base-paper/world_nether/level.dat",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/world_nether/level.dat",
+          "sha256": "32154ae7355e1901e7d63352f37a6c2cc9d0f873bff5e3e19889c6f89b5db604",
+          "size": 1607,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base-paper/world_nether/level.dat_old",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/world_nether/level.dat_old",
+          "sha256": "8965e524871092bfb325d34d733baf95c8e755cd73a382f9857870d6551a5122",
+          "size": 1608,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base-paper/world_nether/paper-world.yml",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/world_nether/paper-world.yml",
+          "sha256": "5c5eb0f59848638fe40251e9d08ed0bd3b58b8c6275ae6566825d2b9082cc9e3",
+          "size": 226,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base-paper/world_nether/uid.dat",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/world_nether/uid.dat",
+          "sha256": "2ccc7b3a4079117e6fc00b1a022ac27072a1786c01fa8f7429e82f629d72ea1c",
+          "size": 16,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base-paper/world_the_end/DIM1/data/raids_end.dat",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/world_the_end/DIM1/data/raids_end.dat",
+          "sha256": "b4b396de5e017fe7e897b1a0fdfaefa6019ff3b8cebe3539f40f3d8b563bb06a",
+          "size": 90,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base-paper/world_the_end/DIM1/entities/r.-1.-1.mca",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/world_the_end/DIM1/entities/r.-1.-1.mca",
+          "sha256": "5503337a03c7441019869aac7aa77ab82d80437412537d19efc96d1c4f1fdfe1",
+          "size": 24576,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base-paper/world_the_end/DIM1/entities/r.-1.0.mca",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/world_the_end/DIM1/entities/r.-1.0.mca",
+          "sha256": "46262b8752d9c1fa077d3d207e4508c221e9419427b9041d43e2cfcf087e44c0",
+          "size": 20480,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base-paper/world_the_end/DIM1/entities/r.0.-1.mca",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/world_the_end/DIM1/entities/r.0.-1.mca",
+          "sha256": "a3b8e258b087634e8f7fc5071ef7040603ea6eabfcee0a1d9b5f67f33b7dc1b6",
+          "size": 20480,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base-paper/world_the_end/DIM1/entities/r.0.0.mca",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/world_the_end/DIM1/entities/r.0.0.mca",
+          "sha256": "dc52083a549b2ba03b52c53ca64beb46df31ea5537e83565effac1e839347855",
+          "size": 24576,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base-paper/world_the_end/DIM1/region/r.-1.-1.mca",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/world_the_end/DIM1/region/r.-1.-1.mca",
+          "sha256": "d1bde22389445e084730d4e6e68f00ce86569b80a38c516e16cb2c2728f51140",
+          "size": 811008,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base-paper/world_the_end/DIM1/region/r.-1.0.mca",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/world_the_end/DIM1/region/r.-1.0.mca",
+          "sha256": "a0443d3fc627ca46649f9f8f276cd8d875ae775c08e7e79edf5f1a4927706ab8",
+          "size": 868352,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base-paper/world_the_end/DIM1/region/r.0.-1.mca",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/world_the_end/DIM1/region/r.0.-1.mca",
+          "sha256": "9998f6d934f6a46b24a31b3f5c5123d99fa7147a8524d7de2714c7bebb7c50ed",
+          "size": 868352,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base-paper/world_the_end/DIM1/region/r.0.0.mca",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/world_the_end/DIM1/region/r.0.0.mca",
+          "sha256": "40f5ed594370c792f8ab9176ea52a19aa876d7060253b6a61ea3ee192caea76e",
+          "size": 929792,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base-paper/world_the_end/level.dat",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/world_the_end/level.dat",
+          "sha256": "308871c1bfed74170e9b32b2c73290791d20dbc49ce28c94f8e04f02cda59606",
+          "size": 1666,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base-paper/world_the_end/level.dat_old",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/world_the_end/level.dat_old",
+          "sha256": "c6a5bdf5ab0cc8c5c1661d53b7a42b9d59b46299311c200d93af693e3b82fb9f",
+          "size": 1667,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base-paper/world_the_end/paper-world.yml",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/world_the_end/paper-world.yml",
+          "sha256": "26005919535e75c21c8b714d5ff0ac9f3918f953a159130f3b9ad3a3a446c213",
+          "size": 224,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base-paper/world_the_end/uid.dat",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/world_the_end/uid.dat",
+          "sha256": "ecfcba71a7911c2c1ad118eedb3c7995e976b22ea88a8e3873e4b4b7a2400885",
+          "size": 16,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/paper/build/libs/lod-server-support-paper-0.14.0+1.21.1.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/plugins/lod-server-support-paper.jar",
+          "sha256": "5399264a3b2d5b20babd36a6659861d45587932e07e4b9eef874c2130bbfd1d8",
+          "size": 7791918,
+          "source_unchanged": true
+        },
+        {
+          "source": "generated isolated fixture configuration",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/plugins/LodServerSupport/lss-server-config.json",
+          "sha256": "8dcdb7de2b5ecf3d3201cce1e22e355cd28799c573bb1dbbbdde230ce25b8738",
+          "size": 164
+        },
+        {
+          "source": "generated isolated fixture configuration",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/server.properties",
+          "sha256": "ee48b9fc95c06aed24eb78bfe645ea8ab5d0e469aa4bde13127f286fb26a89b0",
+          "size": 336
+        },
+        {
+          "source": "generated isolated fixture configuration",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/eula.txt",
+          "sha256": "ee27072e4a23e088522f740ddaab0c7c4145c186969e90a86254faa3a5ec5ce6",
+          "size": 10
+        },
+        {
+          "source": "generated isolated fixture configuration",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/ops.json",
+          "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "size": 3
+        },
+        {
+          "source": "generated isolated fixture configuration",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-paper-1.21.1/launch.sh",
+          "sha256": "5f89ead35ab3ca47a355305868499a62a316006507daac5d1d20ea7110064112",
+          "size": 230
+        }
+      ],
+      "startup_validated": false
+    },
+    {
+      "platform": "neoforge",
+      "line": "1.21.1",
+      "directory": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1",
+      "port": 25571,
+      "launch_script": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/launch.sh",
+      "config_directory": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/config",
+      "config_file": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/config/lss-server-config.json",
+      "config_directory_mode": "0o755",
+      "config_file_mode": "0o644",
+      "owner_uid": 1000,
+      "owner_gid": 1000,
+      "candidate_sha256": "528e0ac5e50b437c594539e4935b42ce71661b6c993065d0e3fbad4ea6bd767e",
+      "runtime_checks": {
+        "runtime_jar_paths_present": 70,
+        "additional_game_paths": "FML ProductionServerProvider and NeoForgeServerLaunchHandler bytecode identify srg, extra, Neo server and universal jars; all copied."
+      },
+      "world_source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base",
+      "files": [
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/neoforge/libraries/com/electronwill/night-config/core/3.8.3/core-3.8.3.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/libraries/com/electronwill/night-config/core/3.8.3/core-3.8.3.jar",
+          "sha256": "971dc88c1c22085611ee1c300f5bbf8595938178e819befbb5e98c3cbd272b79",
+          "size": 382911,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/neoforge/libraries/com/electronwill/night-config/toml/3.8.3/toml-3.8.3.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/libraries/com/electronwill/night-config/toml/3.8.3/toml-3.8.3.jar",
+          "sha256": "ccb92882264bf071e3916ab122fe5ea3e211b8ebf199201698a1324f151f928f",
+          "size": 39516,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/neoforge/libraries/com/github/oshi/oshi-core/6.4.10/oshi-core-6.4.10.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/libraries/com/github/oshi/oshi-core/6.4.10/oshi-core-6.4.10.jar",
+          "sha256": "fef001a7a13515c273f30915915580782afbc45273cc07aa15994e51563ef310",
+          "size": 979212,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/neoforge/libraries/com/google/code/findbugs/jsr305/3.0.2/jsr305-3.0.2.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/libraries/com/google/code/findbugs/jsr305/3.0.2/jsr305-3.0.2.jar",
+          "sha256": "766ad2a0783f2687962c8ad74ceecc38a28b9f72a2d085ee438b7813e928d0c7",
+          "size": 19936,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/neoforge/libraries/com/google/code/gson/gson/2.10.1/gson-2.10.1.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/libraries/com/google/code/gson/gson/2.10.1/gson-2.10.1.jar",
+          "sha256": "4241c14a7727c34feea6507ec801318a3d4a90f070e4525681079fb94ee4c593",
+          "size": 283367,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/neoforge/libraries/com/google/errorprone/error_prone_annotations/2.18.0/error_prone_annotations-2.18.0.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/libraries/com/google/errorprone/error_prone_annotations/2.18.0/error_prone_annotations-2.18.0.jar",
+          "sha256": "9e6814cb71816988a4fd1b07a993a8f21bb7058d522c162b1de849e19bea54ae",
+          "size": 16017,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/neoforge/libraries/com/google/guava/failureaccess/1.0.1/failureaccess-1.0.1.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/libraries/com/google/guava/failureaccess/1.0.1/failureaccess-1.0.1.jar",
+          "sha256": "a171ee4c734dd2da837e4b16be9df4661afab72a41adaf31eb84dfdaf936ca26",
+          "size": 4617,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/neoforge/libraries/com/google/guava/guava/32.1.2-jre/guava-32.1.2-jre.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/libraries/com/google/guava/guava/32.1.2-jre/guava-32.1.2-jre.jar",
+          "sha256": "bc65dea7cfd9e4dacf8419d8af0e741655857d27885bb35d943d7187fc3a8fce",
+          "size": 3041591,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/neoforge/libraries/com/google/guava/listenablefuture/9999.0-empty-to-avoid-conflict-with-guava/listenablefuture-9999.0-empty-to-avoid-conflict-with-guava.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/libraries/com/google/guava/listenablefuture/9999.0-empty-to-avoid-conflict-with-guava/listenablefuture-9999.0-empty-to-avoid-conflict-with-guava.jar",
+          "sha256": "b372a037d4230aa57fbeffdef30fd6123f9c0c2db85d0aced00c91b974f33f99",
+          "size": 2199,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/neoforge/libraries/com/google/j2objc/j2objc-annotations/2.8/j2objc-annotations-2.8.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/libraries/com/google/j2objc/j2objc-annotations/2.8/j2objc-annotations-2.8.jar",
+          "sha256": "f02a95fa1a5e95edb3ed859fd0fb7df709d121a35290eff8b74dce2ab7f4d6ed",
+          "size": 9301,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/neoforge/libraries/com/machinezoo/noexception/noexception/1.7.1/noexception-1.7.1.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/libraries/com/machinezoo/noexception/noexception/1.7.1/noexception-1.7.1.jar",
+          "sha256": "3d70aaea3904918587a21bdf99ab6ade9ab1dd0eaf6119344ba513f60f575816",
+          "size": 250861,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/neoforge/libraries/com/mojang/authlib/6.0.54/authlib-6.0.54.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/libraries/com/mojang/authlib/6.0.54/authlib-6.0.54.jar",
+          "sha256": "319ea7b53b5e52f62ad3e2b81e9db7f0751240edac548bd74f5f19e35dc21a3b",
+          "size": 115242,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/neoforge/libraries/com/mojang/brigadier/1.3.10/brigadier-1.3.10.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/libraries/com/mojang/brigadier/1.3.10/brigadier-1.3.10.jar",
+          "sha256": "c8ee4136e474ac7723ca2b432ec8d1a2bc88ef7d1ec57c314ba9e33cdc83dd75",
+          "size": 80082,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/neoforge/libraries/com/mojang/datafixerupper/8.0.16/datafixerupper-8.0.16.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/libraries/com/mojang/datafixerupper/8.0.16/datafixerupper-8.0.16.jar",
+          "sha256": "ffc138bc2596c291781b0d5e211ccac51f0f2345f27fc2742f335cedf7e2870d",
+          "size": 724313,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/neoforge/libraries/com/mojang/logging/1.2.7/logging-1.2.7.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/libraries/com/mojang/logging/1.2.7/logging-1.2.7.jar",
+          "sha256": "3dc3190204bac5f4184d8405bfe1f724f73a6a15a0d3f36ec7f69e6872c1a76c",
+          "size": 15343,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/neoforge/libraries/commons-io/commons-io/2.15.1/commons-io-2.15.1.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/libraries/commons-io/commons-io/2.15.1/commons-io-2.15.1.jar",
+          "sha256": "a58af12ee1b68cfd2ebb0c27caef164f084381a00ec81a48cc275fd7ea54e154",
+          "size": 501218,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/neoforge/libraries/cpw/mods/bootstraplauncher/2.0.2/bootstraplauncher-2.0.2.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/libraries/cpw/mods/bootstraplauncher/2.0.2/bootstraplauncher-2.0.2.jar",
+          "sha256": "d3f29309140540570fd6c709509706aa8fb133c1c8aef24491688f1a3f4e1d49",
+          "size": 11116,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/neoforge/libraries/cpw/mods/modlauncher/11.0.5/modlauncher-11.0.5.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/libraries/cpw/mods/modlauncher/11.0.5/modlauncher-11.0.5.jar",
+          "sha256": "fd9b9fc7cf043d2264ea0113eac6b258f0a71fece5b00e831bfbdf9726c78a24",
+          "size": 116486,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/neoforge/libraries/cpw/mods/securejarhandler/3.0.8/securejarhandler-3.0.8.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/libraries/cpw/mods/securejarhandler/3.0.8/securejarhandler-3.0.8.jar",
+          "sha256": "945c63d6deafc821616b0380c23867d9b8c2852438f8a6df72732ab933fc587d",
+          "size": 103765,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/neoforge/libraries/io/netty/netty-buffer/4.1.97.Final/netty-buffer-4.1.97.Final.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/libraries/io/netty/netty-buffer/4.1.97.Final/netty-buffer-4.1.97.Final.jar",
+          "sha256": "a4393f5b395486cc74d0325c9b41311abb9513ba0fd7ef8cf46e9345c3bffbea",
+          "size": 306590,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/neoforge/libraries/io/netty/netty-codec/4.1.97.Final/netty-codec-4.1.97.Final.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/libraries/io/netty/netty-codec/4.1.97.Final/netty-codec-4.1.97.Final.jar",
+          "sha256": "bcc96737a0f912fcf031cf8c45ebda352a90a40437db0832caad3d5a63618b38",
+          "size": 345274,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/neoforge/libraries/io/netty/netty-common/4.1.97.Final/netty-common-4.1.97.Final.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/libraries/io/netty/netty-common/4.1.97.Final/netty-common-4.1.97.Final.jar",
+          "sha256": "a8aca0c8e9347acc75c885ecc749195d9775369aa520b9276f2d1128210a6c17",
+          "size": 659930,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/neoforge/libraries/io/netty/netty-handler/4.1.97.Final/netty-handler-4.1.97.Final.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/libraries/io/netty/netty-handler/4.1.97.Final/netty-handler-4.1.97.Final.jar",
+          "sha256": "bd4771d19149cbc9c7464ed2d58035d79cdfed7adb59d38718b0d8e7a3dcc2de",
+          "size": 560040,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/neoforge/libraries/io/netty/netty-resolver/4.1.97.Final/netty-resolver-4.1.97.Final.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/libraries/io/netty/netty-resolver/4.1.97.Final/netty-resolver-4.1.97.Final.jar",
+          "sha256": "38a018c6d9fb2cb11b72881354782b45080bbd20b9a0ad6cde28b80d431ed0b1",
+          "size": 37792,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/neoforge/libraries/io/netty/netty-transport-classes-epoll/4.1.97.Final/netty-transport-classes-epoll-4.1.97.Final.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/libraries/io/netty/netty-transport-classes-epoll/4.1.97.Final/netty-transport-classes-epoll-4.1.97.Final.jar",
+          "sha256": "ee65fa17fe65f18fd22269f92bddad85bfb3a263cf65eba01e116a2f30b86ff5",
+          "size": 147139,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/neoforge/libraries/io/netty/netty-transport-native-epoll/4.1.97.Final/netty-transport-native-epoll-4.1.97.Final-linux-aarch_64.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/libraries/io/netty/netty-transport-native-epoll/4.1.97.Final/netty-transport-native-epoll-4.1.97.Final-linux-aarch_64.jar",
+          "sha256": "93b5fe8f3829dcb5e033d8d40d59159366ff4cf8266c903bbd6a4aeed9e59bac",
+          "size": 40427,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/neoforge/libraries/io/netty/netty-transport-native-epoll/4.1.97.Final/netty-transport-native-epoll-4.1.97.Final-linux-x86_64.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/libraries/io/netty/netty-transport-native-epoll/4.1.97.Final/netty-transport-native-epoll-4.1.97.Final-linux-x86_64.jar",
+          "sha256": "1e83fc9f82e5415cdbb688c6a5c6bbbd7d198e9fdd6fdf64b3dc5d54dd1acfd0",
+          "size": 38954,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/neoforge/libraries/io/netty/netty-transport-native-unix-common/4.1.97.Final/netty-transport-native-unix-common-4.1.97.Final.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/libraries/io/netty/netty-transport-native-unix-common/4.1.97.Final/netty-transport-native-unix-common-4.1.97.Final.jar",
+          "sha256": "412fe140257c2dda5a5e15bee911298bd61928d03ee6be4db588e82c196c5dc6",
+          "size": 43897,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/neoforge/libraries/io/netty/netty-transport/4.1.97.Final/netty-transport-4.1.97.Final.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/libraries/io/netty/netty-transport/4.1.97.Final/netty-transport-4.1.97.Final.jar",
+          "sha256": "197fd2d6c6b4afe677d9e95bf2e36b49a0bcabdfce0583683fb73f29a3f5a407",
+          "size": 489624,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/neoforge/libraries/it/unimi/dsi/fastutil/8.5.12/fastutil-8.5.12.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/libraries/it/unimi/dsi/fastutil/8.5.12/fastutil-8.5.12.jar",
+          "sha256": "b5543ee08d062d551cf0a5c9bc0fb70588b0382079029ba48941fa9c9be8a5d4",
+          "size": 23326598,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/neoforge/libraries/net/fabricmc/sponge-mixin/0.15.2+mixin.0.8.7/sponge-mixin-0.15.2+mixin.0.8.7.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/libraries/net/fabricmc/sponge-mixin/0.15.2+mixin.0.8.7/sponge-mixin-0.15.2+mixin.0.8.7.jar",
+          "sha256": "1d45cfe3ae4a2eab38dc74276803748cf799088986260d6d912e50ddb35d15c5",
+          "size": 1494751,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/neoforge/libraries/net/java/dev/jna/jna-platform/5.14.0/jna-platform-5.14.0.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/libraries/net/java/dev/jna/jna-platform/5.14.0/jna-platform-5.14.0.jar",
+          "sha256": "ae4caceb3840730c2537f9b7fb55a01baba580286b4122951488bcee558c2449",
+          "size": 1369287,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/neoforge/libraries/net/java/dev/jna/jna/5.14.0/jna-5.14.0.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/libraries/net/java/dev/jna/jna/5.14.0/jna-5.14.0.jar",
+          "sha256": "34ed1e1f27fa896bca50dbc4e99cf3732967cec387a7a0d5e3486c09673fe8c6",
+          "size": 1878533,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/neoforge/libraries/net/jodah/typetools/0.6.3/typetools-0.6.3.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/libraries/net/jodah/typetools/0.6.3/typetools-0.6.3.jar",
+          "sha256": "408300867804be05d1083cc0287dd3a21295a9e76090e288013ba5a4182dc96d",
+          "size": 18281,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/neoforge/libraries/net/minecraft/server/1.21.1-20240808.144430/server-1.21.1-20240808.144430-extra.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/libraries/net/minecraft/server/1.21.1-20240808.144430/server-1.21.1-20240808.144430-extra.jar",
+          "sha256": "24a5d2d162cfad2a1a574c4d552e99dc6c6303a49d1e68b43a7b638f3b0930fd",
+          "size": 6591051,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/neoforge/libraries/net/minecraft/server/1.21.1-20240808.144430/server-1.21.1-20240808.144430-srg.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/libraries/net/minecraft/server/1.21.1-20240808.144430/server-1.21.1-20240808.144430-srg.jar",
+          "sha256": "26ca9c40d7e1681190b428583c38816852218e78df3f8bdb60a59a78503aec71",
+          "size": 14246609,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/neoforge/libraries/net/minecraftforge/srgutils/0.4.15/srgutils-0.4.15.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/libraries/net/minecraftforge/srgutils/0.4.15/srgutils-0.4.15.jar",
+          "sha256": "f6bdebb7fae108329acddfc812f237c7f6328a98e3f282a105edfc161d0215e3",
+          "size": 69393,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/neoforge/libraries/net/minecrell/terminalconsoleappender/1.3.0/terminalconsoleappender-1.3.0.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/libraries/net/minecrell/terminalconsoleappender/1.3.0/terminalconsoleappender-1.3.0.jar",
+          "sha256": "1afea1bca095068f7f4483f061feed94753be34233ddb0df9ec380fc14d5a985",
+          "size": 16949,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/neoforge/libraries/net/neoforged/JarJarFileSystems/0.4.1/JarJarFileSystems-0.4.1.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/libraries/net/neoforged/JarJarFileSystems/0.4.1/JarJarFileSystems-0.4.1.jar",
+          "sha256": "d9f88af1223ff23395c64ff0b0fe367563288a37bd38709bf667b6b39944bfab",
+          "size": 31807,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/neoforge/libraries/net/neoforged/JarJarMetadata/0.4.1/JarJarMetadata-0.4.1.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/libraries/net/neoforged/JarJarMetadata/0.4.1/JarJarMetadata-0.4.1.jar",
+          "sha256": "05d7b89f09c6de1a9b61d0e786c8fd808aed044babf321653e14abd6740d5546",
+          "size": 15648,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/neoforge/libraries/net/neoforged/JarJarSelector/0.4.1/JarJarSelector-0.4.1.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/libraries/net/neoforged/JarJarSelector/0.4.1/JarJarSelector-0.4.1.jar",
+          "sha256": "f34bab02a5e967650dc52b7cb37a200051a7078f7d1868597699d78697da2400",
+          "size": 17168,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/neoforge/libraries/net/neoforged/accesstransformers/10.0.1/accesstransformers-10.0.1.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/libraries/net/neoforged/accesstransformers/10.0.1/accesstransformers-10.0.1.jar",
+          "sha256": "89fb0dc3d68f8a5961f309ee110dad7d2c1094ba204595602b71e02e104838a1",
+          "size": 67234,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/neoforge/libraries/net/neoforged/accesstransformers/at-modlauncher/10.0.1/at-modlauncher-10.0.1.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/libraries/net/neoforged/accesstransformers/at-modlauncher/10.0.1/at-modlauncher-10.0.1.jar",
+          "sha256": "2a4b447c6944a2b89e383c1eed9a26bb5cc60330a5bb26ef0a912a38d52df935",
+          "size": 2347,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/neoforge/libraries/net/neoforged/bus/8.0.5/bus-8.0.5.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/libraries/net/neoforged/bus/8.0.5/bus-8.0.5.jar",
+          "sha256": "705e24f37752809499a5cd0c7dd31eaabf3d933c5d3b2060168e94e9ef62593a",
+          "size": 30340,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/neoforge/libraries/net/neoforged/coremods/7.0.3/coremods-7.0.3.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/libraries/net/neoforged/coremods/7.0.3/coremods-7.0.3.jar",
+          "sha256": "d24c0d3e31af23cac36a0f9f98654b875f678b27ddccd8b28d331c1878a6de4a",
+          "size": 22659,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/neoforge/libraries/net/neoforged/fancymodloader/earlydisplay/4.0.43/earlydisplay-4.0.43.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/libraries/net/neoforged/fancymodloader/earlydisplay/4.0.43/earlydisplay-4.0.43.jar",
+          "sha256": "76461588a12fd0d1f2a4b8d570676f919fc57eba0f82066da0ac0e884fc93242",
+          "size": 261719,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/neoforge/libraries/net/neoforged/fancymodloader/loader/4.0.43/loader-4.0.43.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/libraries/net/neoforged/fancymodloader/loader/4.0.43/loader-4.0.43.jar",
+          "sha256": "ba406038d0ce8242391bb23b9974648748d217b67332c0db620fcabf50edbc37",
+          "size": 505633,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/neoforge/libraries/net/neoforged/mergetool/2.0.0/mergetool-2.0.0-api.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/libraries/net/neoforged/mergetool/2.0.0/mergetool-2.0.0-api.jar",
+          "sha256": "0260881294d8b218afe3d673f084d3745a55c28b35205d07d5e62d7f22202a00",
+          "size": 2550,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/neoforge/libraries/net/neoforged/neoforge/21.1.248/neoforge-21.1.248-server.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/libraries/net/neoforged/neoforge/21.1.248/neoforge-21.1.248-server.jar",
+          "sha256": "1808fab692dc44b2d474295d1cdd9f1fe8a7dceab4f594210873646fafdf1359",
+          "size": 5675624,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/neoforge/libraries/net/neoforged/neoforge/21.1.248/neoforge-21.1.248-universal.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/libraries/net/neoforged/neoforge/21.1.248/neoforge-21.1.248-universal.jar",
+          "sha256": "90a56f70425711b4e1a4b94ff0c2904ae9f6d74ca6478b3b2152ac794a07b8e5",
+          "size": 3551268,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/neoforge/libraries/net/sf/jopt-simple/jopt-simple/5.0.4/jopt-simple-5.0.4.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/libraries/net/sf/jopt-simple/jopt-simple/5.0.4/jopt-simple-5.0.4.jar",
+          "sha256": "df26cc58f235f477db07f753ba5a3ab243ebe5789d9f89ecf68dd62ea9a66c28",
+          "size": 78146,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/neoforge/libraries/org/antlr/antlr4-runtime/4.13.1/antlr4-runtime-4.13.1.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/libraries/org/antlr/antlr4-runtime/4.13.1/antlr4-runtime-4.13.1.jar",
+          "sha256": "54665d2838cc66458343468efc539e454fc95b46a8a04b13c6ac43fc9be63505",
+          "size": 326305,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/neoforge/libraries/org/apache/commons/commons-lang3/3.14.0/commons-lang3-3.14.0.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/libraries/org/apache/commons/commons-lang3/3.14.0/commons-lang3-3.14.0.jar",
+          "sha256": "7b96bf3ee68949abb5bc465559ac270e0551596fa34523fddf890ec418dde13c",
+          "size": 657952,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/neoforge/libraries/org/apache/logging/log4j/log4j-api/2.22.1/log4j-api-2.22.1.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/libraries/org/apache/logging/log4j/log4j-api/2.22.1/log4j-api-2.22.1.jar",
+          "sha256": "5d7beae7ff15d8516d6517121d7f12a79a6ac180df64b5fcec55d5be21056e53",
+          "size": 335001,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/neoforge/libraries/org/apache/logging/log4j/log4j-core/2.22.1/log4j-core-2.22.1.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/libraries/org/apache/logging/log4j/log4j-core/2.22.1/log4j-core-2.22.1.jar",
+          "sha256": "46dccecac556623d8e2ce8648496824a82951d139062a4e61148aff1a25ed18d",
+          "size": 1900022,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/neoforge/libraries/org/apache/logging/log4j/log4j-slf4j2-impl/2.22.1/log4j-slf4j2-impl-2.22.1.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/libraries/org/apache/logging/log4j/log4j-slf4j2-impl/2.22.1/log4j-slf4j2-impl-2.22.1.jar",
+          "sha256": "1920cd69d8682c7ef249bb407a3d0685723aa1785867cf4c53258da6bf14da97",
+          "size": 27364,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/neoforge/libraries/org/apache/maven/maven-artifact/3.8.5/maven-artifact-3.8.5.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/libraries/org/apache/maven/maven-artifact/3.8.5/maven-artifact-3.8.5.jar",
+          "sha256": "91172bc294d6eab02fc9f45f4ea01fd0e418962d128cf489abea7b6957d988ee",
+          "size": 58077,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/neoforge/libraries/org/checkerframework/checker-qual/3.33.0/checker-qual-3.33.0.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/libraries/org/checkerframework/checker-qual/3.33.0/checker-qual-3.33.0.jar",
+          "sha256": "e316255bbfcd9fe50d165314b85abb2b33cb2a66a93c491db648e498a82c2de1",
+          "size": 223979,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/neoforge/libraries/org/codehaus/plexus/plexus-utils/3.3.0/plexus-utils-3.3.0.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/libraries/org/codehaus/plexus/plexus-utils/3.3.0/plexus-utils-3.3.0.jar",
+          "sha256": "76d174792540e2775af94d03d10fb2d3c776e2cd0ac0ebf427d3e570072bb9ce",
+          "size": 263253,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/neoforge/libraries/org/jline/jline-reader/3.20.0/jline-reader-3.20.0.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/libraries/org/jline/jline-reader/3.20.0/jline-reader-3.20.0.jar",
+          "sha256": "acd1c94d1e228aa7b7962f69b21ed3a9fd828eb3a63e4baf9086954e626af1f0",
+          "size": 171052,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/neoforge/libraries/org/jline/jline-terminal/3.20.0/jline-terminal-3.20.0.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/libraries/org/jline/jline-terminal/3.20.0/jline-terminal-3.20.0.jar",
+          "sha256": "12125170e795519ba6dc8010c070b53c76aae92b485c1e37530e54ab5dd08d43",
+          "size": 228481,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/neoforge/libraries/org/joml/joml/1.10.5/joml-1.10.5.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/libraries/org/joml/joml/1.10.5/joml-1.10.5.jar",
+          "sha256": "cac9f22f83a7aa33eebda73c16ff5261e3cb4911b6bafcf4c79ea486099d0c9a",
+          "size": 712082,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/neoforge/libraries/org/lz4/lz4-java/1.8.0/lz4-java-1.8.0.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/libraries/org/lz4/lz4-java/1.8.0/lz4-java-1.8.0.jar",
+          "sha256": "d74a3334fb35195009b338a951f918203d6bbca3d1d359033dc33edd1cadc9ef",
+          "size": 682804,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/neoforge/libraries/org/openjdk/nashorn/nashorn-core/15.4/nashorn-core-15.4.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/libraries/org/openjdk/nashorn/nashorn-core/15.4/nashorn-core-15.4.jar",
+          "sha256": "6f816e84dfd63a81d4eaa7829c08337bbaff3ec683ff3bf6bbd90d017a00dc6f",
+          "size": 2167292,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/neoforge/libraries/org/ow2/asm/asm-analysis/9.10.1/asm-analysis-9.10.1.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/libraries/org/ow2/asm/asm-analysis/9.10.1/asm-analysis-9.10.1.jar",
+          "sha256": "dede75a21306b65974ecd8f87114ff6970f09fb794157a4ca09ab25c888c2bfc",
+          "size": 35140,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/neoforge/libraries/org/ow2/asm/asm-commons/9.10.1/asm-commons-9.10.1.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/libraries/org/ow2/asm/asm-commons/9.10.1/asm-commons-9.10.1.jar",
+          "sha256": "6d0abefb7cbf972ea16edb37ec14835372505063a45f976ab7ea889ed9497895",
+          "size": 74840,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/neoforge/libraries/org/ow2/asm/asm-tree/9.10.1/asm-tree-9.10.1.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/libraries/org/ow2/asm/asm-tree/9.10.1/asm-tree-9.10.1.jar",
+          "sha256": "3dfb0d5b6a106cd40b5b250e39935fbf2f927f4477546a5369a3ac609cf0506b",
+          "size": 51958,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/neoforge/libraries/org/ow2/asm/asm-util/9.10.1/asm-util-9.10.1.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/libraries/org/ow2/asm/asm-util/9.10.1/asm-util-9.10.1.jar",
+          "sha256": "1bb99d091fba2597dc6d51193e9bbcf0d8447e7ed96bd8f0198b18152f09655c",
+          "size": 95628,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/neoforge/libraries/org/ow2/asm/asm/9.10.1/asm-9.10.1.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/libraries/org/ow2/asm/asm/9.10.1/asm-9.10.1.jar",
+          "sha256": "ed825d10ab1399c8c0cb669e688cf0c8c82629b4c8399b58352b68e92ca10fcb",
+          "size": 126151,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/neoforge/libraries/org/slf4j/slf4j-api/2.0.9/slf4j-api-2.0.9.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/libraries/org/slf4j/slf4j-api/2.0.9/slf4j-api-2.0.9.jar",
+          "sha256": "0818930dc8d7debb403204611691da58e49d42c50b6ffcfdce02dadb7c3c2b6c",
+          "size": 64579,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-port-1.21.1/test-server/neoforge/libraries/net/neoforged/neoforge/21.1.248/unix_args.txt",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/libraries/net/neoforged/neoforge/21.1.248/unix_args.txt",
+          "sha256": "c8bb880e43e75495b7f58cdaa05ddf3936edcff0aa3da0231f216ce404e09915",
+          "size": 6119,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base/world/DIM-1/data/raids.dat",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/world/DIM-1/data/raids.dat",
+          "sha256": "fa8b2805a697b5279ec5e1ee7404d2048c820f5242953266602e92b1fa87144b",
+          "size": 90,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base/world/DIM1/data/raids_end.dat",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/world/DIM1/data/raids_end.dat",
+          "sha256": "fa8b2805a697b5279ec5e1ee7404d2048c820f5242953266602e92b1fa87144b",
+          "size": 90,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base/world/data/lss-timestamps.bin",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/world/data/lss-timestamps.bin",
+          "sha256": "fe3a788364d183d7317c362d60cab7e934ef79361e67210d82fc1246989dffcf",
+          "size": 16465,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base/world/data/raids.dat",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/world/data/raids.dat",
+          "sha256": "fa8b2805a697b5279ec5e1ee7404d2048c820f5242953266602e92b1fa87144b",
+          "size": 90,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base/world/entities/r.-1.-1.mca",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/world/entities/r.-1.-1.mca",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "size": 0,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base/world/entities/r.-1.0.mca",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/world/entities/r.-1.0.mca",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "size": 0,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base/world/entities/r.0.-1.mca",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/world/entities/r.0.-1.mca",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "size": 0,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base/world/entities/r.0.0.mca",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/world/entities/r.0.0.mca",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "size": 0,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base/world/level.dat",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/world/level.dat",
+          "sha256": "9e3dbac062237444f26600f11bfbfda4c875206c1d938e24478de57b2b013b45",
+          "size": 1650,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base/world/level.dat_old",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/world/level.dat_old",
+          "sha256": "18db103f514df72f2f9d4477c67036e2c6589b294f87aa7ca8efe5ccd9492924",
+          "size": 1644,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base/world/poi/r.-1.-1.mca",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/world/poi/r.-1.-1.mca",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "size": 0,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base/world/poi/r.-1.-2.mca",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/world/poi/r.-1.-2.mca",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "size": 0,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base/world/poi/r.-1.0.mca",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/world/poi/r.-1.0.mca",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "size": 0,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base/world/poi/r.-1.1.mca",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/world/poi/r.-1.1.mca",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "size": 0,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base/world/poi/r.-2.-1.mca",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/world/poi/r.-2.-1.mca",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "size": 0,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base/world/poi/r.-2.-2.mca",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/world/poi/r.-2.-2.mca",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "size": 0,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base/world/poi/r.-2.0.mca",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/world/poi/r.-2.0.mca",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "size": 0,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base/world/poi/r.-2.1.mca",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/world/poi/r.-2.1.mca",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "size": 0,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base/world/poi/r.0.-1.mca",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/world/poi/r.0.-1.mca",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "size": 0,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base/world/poi/r.0.-2.mca",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/world/poi/r.0.-2.mca",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "size": 0,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base/world/poi/r.0.0.mca",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/world/poi/r.0.0.mca",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "size": 0,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base/world/poi/r.0.1.mca",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/world/poi/r.0.1.mca",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "size": 0,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base/world/poi/r.1.-1.mca",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/world/poi/r.1.-1.mca",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "size": 0,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base/world/poi/r.1.-2.mca",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/world/poi/r.1.-2.mca",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "size": 0,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base/world/poi/r.1.0.mca",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/world/poi/r.1.0.mca",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "size": 0,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base/world/poi/r.1.1.mca",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/world/poi/r.1.1.mca",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "size": 0,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base/world/region/r.-1.-1.mca",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/world/region/r.-1.-1.mca",
+          "sha256": "d4d43e8fe8e5b872d5727890109824180403ab317eedd80f085583221eeae7ee",
+          "size": 4206592,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base/world/region/r.-1.-2.mca",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/world/region/r.-1.-2.mca",
+          "sha256": "143b619bef55302b29f1640b5a9c2458ac877ea7dd979b45af43b27ea92dc80a",
+          "size": 405504,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base/world/region/r.-1.0.mca",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/world/region/r.-1.0.mca",
+          "sha256": "598e924697d90411dd916b05d85bc859b74709294675e15c1262063087c2965b",
+          "size": 4206592,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base/world/region/r.-1.1.mca",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/world/region/r.-1.1.mca",
+          "sha256": "3f2ad70183d8f3e2c02eebda03487fab97ea83466148678944d16dc487f6a42c",
+          "size": 536576,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base/world/region/r.-2.-1.mca",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/world/region/r.-2.-1.mca",
+          "sha256": "07b9437a3b851cbcc2baa7d06b12c79dd1d741fadabe3bba060eaf40dc7b233f",
+          "size": 405504,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base/world/region/r.-2.-2.mca",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/world/region/r.-2.-2.mca",
+          "sha256": "198f7befe3ea0111d97c08bb74e4751c061612906f4ae1bc26ac4ab56f2b63ab",
+          "size": 49152,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base/world/region/r.-2.0.mca",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/world/region/r.-2.0.mca",
+          "sha256": "ee2e31efa307878f420ebb4b2f6d5fadff97d0598349f1dd9c074ff938b1559d",
+          "size": 405504,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base/world/region/r.-2.1.mca",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/world/region/r.-2.1.mca",
+          "sha256": "89abb61d7c68b092f25816c466955343c06d736dede69a00aa9fbe16b685aa0f",
+          "size": 61440,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base/world/region/r.0.-1.mca",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/world/region/r.0.-1.mca",
+          "sha256": "17856d14649f833994b63e6bbd0aa82585e2f248f4773369474733633cf2ed84",
+          "size": 4206592,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base/world/region/r.0.-2.mca",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/world/region/r.0.-2.mca",
+          "sha256": "3ad1e07f5bf5232de4aff841948246788183f4b688ecac9827feef674da11241",
+          "size": 401408,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base/world/region/r.0.0.mca",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/world/region/r.0.0.mca",
+          "sha256": "e99064dde8263909ef80ee8bc11deb2e8c50cf635fad6fae778195790504564b",
+          "size": 4206592,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base/world/region/r.0.1.mca",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/world/region/r.0.1.mca",
+          "sha256": "432fe27868a07fc1facd8cedae9b72abdb7f98c16a589568c9c6fb13292c4d42",
+          "size": 536576,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base/world/region/r.1.-1.mca",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/world/region/r.1.-1.mca",
+          "sha256": "2d0673cfd0dc09d93ea2f47bb58edd797d7ba3f829d80ac90482da3bd97520cd",
+          "size": 536576,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base/world/region/r.1.-2.mca",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/world/region/r.1.-2.mca",
+          "sha256": "3608b776463154c68cbf2e3dcf40930b467330a1137ee5506190fefdd838dc0c",
+          "size": 61440,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base/world/region/r.1.0.mca",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/world/region/r.1.0.mca",
+          "sha256": "a3451fbb9cbccac605f820ecb0e6094ba10b80825f6419bb852cbb5d27edf98f",
+          "size": 536576,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/soak-worlds/base/world/region/r.1.1.mca",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/world/region/r.1.1.mca",
+          "sha256": "2d2bbe552e9641a9a97ba30080c2fed9ab66c6b86564c56e0dd62c3457dbdf50",
+          "size": 77824,
+          "source_unchanged": true
+        },
+        {
+          "source": "/home/vox/projects/lss-lines/1.21.1/neoforge/build/libs/lod-server-support-neoforge-0.14.0+1.21.1.jar",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/mods/lod-server-support-neoforge.jar",
+          "sha256": "528e0ac5e50b437c594539e4935b42ce71661b6c993065d0e3fbad4ea6bd767e",
+          "size": 22663777,
+          "source_unchanged": true
+        },
+        {
+          "source": "generated isolated fixture configuration",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/config/lss-server-config.json",
+          "sha256": "8dcdb7de2b5ecf3d3201cce1e22e355cd28799c573bb1dbbbdde230ce25b8738",
+          "size": 164
+        },
+        {
+          "source": "generated isolated fixture configuration",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/server.properties",
+          "sha256": "ba0dabeb2e58a37b0e665849b98794049f324135a27034dedd9ab0643034258a",
+          "size": 339
+        },
+        {
+          "source": "generated isolated fixture configuration",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/eula.txt",
+          "sha256": "ee27072e4a23e088522f740ddaab0c7c4145c186969e90a86254faa3a5ec5ce6",
+          "size": 10
+        },
+        {
+          "source": "generated isolated fixture configuration",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/ops.json",
+          "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "size": 3
+        },
+        {
+          "source": "generated isolated fixture configuration",
+          "destination": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/command-server-neoforge-1.21.1/launch.sh",
+          "sha256": "1503cb5e1e34643a2072dbdcce59aaea572024ad9f3f616ad681bed6dec0bcb4",
+          "size": 270
+        }
+      ],
+      "startup_validated": false
+    }
+  ]
+}

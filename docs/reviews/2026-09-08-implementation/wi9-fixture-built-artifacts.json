@@ -1,0 +1,30 @@
+[
+  {
+    "jar": "/home/vox/.local/state/lss-review/20260908-implementation/wi9-live-fixture/build/libs/lss-wi9-live-fixture-1.0.0-test-only-neoforge-named.jar",
+    "sha256": "c1ac8a0520ec044dbc446c86fe62536d1a9c4f5a1257308a7fa8a571c11d0dea",
+    "size": 7801,
+    "loader": "neoforge",
+    "classes": [
+      "dev/vox/lssfixture/wi9/Probe.class",
+      "dev/vox/lssfixture/wi9/mixin/DispatcherMixin.class",
+      "dev/vox/lssfixture/wi9/mixin/RendererMixin.class"
+    ],
+    "package_checks_pass": true,
+    "game_launched": false,
+    "revision": "SLF4J durable markers; preserves mixin subpackage separation"
+  },
+  {
+    "jar": "/home/vox/.local/state/lss-review/20260908-implementation/wi9-live-fixture/build/libs/lss-wi9-live-fixture-1.0.0-test-only.jar",
+    "sha256": "4872232b7b24d35c366d2648f2c6825de68f1d08d9146b4c16d6f90129eb4302",
+    "size": 8660,
+    "loader": "fabric",
+    "classes": [
+      "dev/vox/lssfixture/wi9/Probe.class",
+      "dev/vox/lssfixture/wi9/mixin/DispatcherMixin.class",
+      "dev/vox/lssfixture/wi9/mixin/RendererMixin.class"
+    ],
+    "package_checks_pass": true,
+    "game_launched": false,
+    "revision": "SLF4J durable markers; preserves mixin subpackage separation"
+  }
+]

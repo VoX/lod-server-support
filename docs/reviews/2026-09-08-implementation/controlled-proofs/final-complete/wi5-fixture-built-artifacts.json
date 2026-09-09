@@ -1,0 +1,49 @@
+{
+  "lss-wi5-live-fixture-1.0.0-test-only-neoforge-named.jar": {
+    "path": "/home/vox/.local/state/lss-review/20260908-implementation/wi5-live-fixture/build/libs/lss-wi5-live-fixture-1.0.0-test-only-neoforge-named.jar",
+    "sha256": "e3e96f7ed1b94bc179e9366a71a017e1491412599eb50eeb584558756e89cea2",
+    "class_major": 65,
+    "classes": [
+      "dev/vox/lssfixture/wi5/Probe.class",
+      "dev/vox/lssfixture/wi5/mixin/ClientTickMixin.class"
+    ],
+    "namespace": "named",
+    "mixin": {
+      "required": true,
+      "minVersion": "0.8",
+      "package": "dev.vox.lssfixture.wi5.mixin",
+      "compatibilityLevel": "JAVA_21",
+      "client": [
+        "ClientTickMixin"
+      ],
+      "injectors": {
+        "defaultRequire": 1
+      }
+    },
+    "production_classes_bundled": false
+  },
+  "lss-wi5-live-fixture-1.0.0-test-only.jar": {
+    "path": "/home/vox/.local/state/lss-review/20260908-implementation/wi5-live-fixture/build/libs/lss-wi5-live-fixture-1.0.0-test-only.jar",
+    "sha256": "602c96a765c0710f7031ef180a83fe1d2a64d4fe881490875bc20a698106e6b0",
+    "class_major": 65,
+    "classes": [
+      "dev/vox/lssfixture/wi5/Probe.class",
+      "dev/vox/lssfixture/wi5/mixin/ClientTickMixin.class"
+    ],
+    "namespace": "intermediary",
+    "mixin": {
+      "required": true,
+      "minVersion": "0.8",
+      "package": "dev.vox.lssfixture.wi5.mixin",
+      "compatibilityLevel": "JAVA_21",
+      "refmap": "lss-wi5-fixture-refmap.json",
+      "client": [
+        "ClientTickMixin"
+      ],
+      "injectors": {
+        "defaultRequire": 1
+      }
+    },
+    "production_classes_bundled": false
+  }
+}

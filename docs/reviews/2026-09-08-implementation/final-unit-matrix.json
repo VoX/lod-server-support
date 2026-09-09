@@ -1,0 +1,188 @@
+[
+  {
+    "line": "1.21.1",
+    "modules": {
+      "fabric": {
+        "suites": 199,
+        "tests": 2379,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 4,
+        "failed_cases": [],
+        "skipped_cases": [
+          "dev.vox.lss.networking.server.CompressedColumnsExperimentTool.runExperiment()",
+          "dev.vox.lss.networking.server.LodStoreExperimentTool.runExperiment()",
+          "dev.vox.lss.networking.server.XverLiveCorpusCaptureTool.captureLiveCorpus()",
+          "dev.vox.lss.networking.server.V20SettlingExperimentTool.runSettlingMeasurement()"
+        ]
+      },
+      "paper": {
+        "suites": 41,
+        "tests": 501,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "failed_cases": [],
+        "skipped_cases": []
+      },
+      "neoforge": {
+        "suites": 5,
+        "tests": 23,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "failed_cases": [],
+        "skipped_cases": []
+      }
+    }
+  },
+  {
+    "line": "1.21.10",
+    "modules": {
+      "fabric": {
+        "suites": 197,
+        "tests": 2374,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 5,
+        "failed_cases": [],
+        "skipped_cases": [
+          "dev.vox.lss.networking.server.CompressedColumnsExperimentTool.runExperiment()",
+          "dev.vox.lss.config.menu.SodiumLegacySurfaceResolvesTest.everyModernDeepLinkMemberExistsInTheLinesSodium()",
+          "dev.vox.lss.networking.server.LodStoreExperimentTool.runExperiment()",
+          "dev.vox.lss.networking.server.XverLiveCorpusCaptureTool.captureLiveCorpus()",
+          "dev.vox.lss.networking.server.V20SettlingExperimentTool.runSettlingMeasurement()"
+        ]
+      },
+      "paper": {
+        "suites": 41,
+        "tests": 501,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "failed_cases": [],
+        "skipped_cases": []
+      },
+      "neoforge": {
+        "suites": 3,
+        "tests": 19,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "failed_cases": [],
+        "skipped_cases": []
+      }
+    }
+  },
+  {
+    "line": "1.21.11",
+    "modules": {
+      "fabric": {
+        "suites": 198,
+        "tests": 2378,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 4,
+        "failed_cases": [],
+        "skipped_cases": [
+          "dev.vox.lss.networking.server.CompressedColumnsExperimentTool.runExperiment()",
+          "dev.vox.lss.networking.server.LodStoreExperimentTool.runExperiment()",
+          "dev.vox.lss.networking.server.XverLiveCorpusCaptureTool.captureLiveCorpus()",
+          "dev.vox.lss.networking.server.V20SettlingExperimentTool.runSettlingMeasurement()"
+        ]
+      },
+      "paper": {
+        "suites": 41,
+        "tests": 501,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "failed_cases": [],
+        "skipped_cases": []
+      },
+      "neoforge": {
+        "suites": 5,
+        "tests": 23,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "failed_cases": [],
+        "skipped_cases": []
+      }
+    }
+  },
+  {
+    "line": "26.1",
+    "modules": {
+      "fabric": {
+        "suites": 198,
+        "tests": 2384,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 4,
+        "failed_cases": [],
+        "skipped_cases": [
+          "dev.vox.lss.networking.server.CompressedColumnsExperimentTool.runExperiment()",
+          "dev.vox.lss.networking.server.LodStoreExperimentTool.runExperiment()",
+          "dev.vox.lss.networking.server.XverLiveCorpusCaptureTool.captureLiveCorpus()",
+          "dev.vox.lss.networking.server.V20SettlingExperimentTool.runSettlingMeasurement()"
+        ]
+      },
+      "paper": {
+        "suites": 41,
+        "tests": 501,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "failed_cases": [],
+        "skipped_cases": []
+      },
+      "neoforge": {
+        "suites": 5,
+        "tests": 23,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "failed_cases": [],
+        "skipped_cases": []
+      }
+    }
+  },
+  {
+    "line": "26.2",
+    "modules": {
+      "fabric": {
+        "suites": 198,
+        "tests": 2394,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 4,
+        "failed_cases": [],
+        "skipped_cases": [
+          "dev.vox.lss.networking.server.CompressedColumnsExperimentTool.runExperiment()",
+          "dev.vox.lss.networking.server.LodStoreExperimentTool.runExperiment()",
+          "dev.vox.lss.networking.server.XverLiveCorpusCaptureTool.captureLiveCorpus()",
+          "dev.vox.lss.networking.server.V20SettlingExperimentTool.runSettlingMeasurement()"
+        ]
+      },
+      "paper": {
+        "suites": 41,
+        "tests": 511,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "failed_cases": [],
+        "skipped_cases": []
+      },
+      "neoforge": {
+        "suites": 5,
+        "tests": 23,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "failed_cases": [],
+        "skipped_cases": []
+      }
+    }
+  }
+]

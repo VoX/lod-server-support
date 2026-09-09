@@ -1,0 +1,37 @@
+{
+  "captured_utc": "2026-09-09T00:43:19.512964+00:00",
+  "client_status": "closed00:42:24",
+  "server_status": "continues forNeo; checkpoint afterWI6pass",
+  "files": [
+    {
+      "source": "/mnt/c/Users/Ian/AppData/Roaming/PrismLauncher/instances/lss-astra-validation-fabric-1.21.1/minecraft/logs/latest.log",
+      "archive": "latest.log",
+      "bytes": 40848,
+      "sha256": "08f3f5bab431d60e59fcd8ae21c6ff125595d55228e794fbd543dd34ccec7302"
+    },
+    {
+      "source": "/mnt/c/Users/Ian/AppData/Roaming/PrismLauncher/instances/lss-astra-validation-fabric-1.21.1/minecraft/lss-wi5-fixture.log",
+      "archive": "lss-wi5-fixture.log",
+      "bytes": 7803,
+      "sha256": "88e17ba2f27c1a2d3dcf6730d03aff707ca6c177db7243d73d67097ae576b4c1"
+    },
+    {
+      "source": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/gui-server-a-controlled-console.log",
+      "archive": "gui-server-a-controlled-console.log",
+      "bytes": 15260,
+      "sha256": "bd3aa6270a2d5699cf846c8dd50fc8b185da90a3bdd4622c492615d5eec3f94b"
+    },
+    {
+      "source": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/dummy-controlled-1.21.1.log",
+      "archive": "dummy-controlled-1.21.1.log",
+      "bytes": 63809,
+      "sha256": "d11ea86dfdc1dd5e56577a7581e3044d651265635c52c26247b34ef20b983f57"
+    },
+    {
+      "source": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/gui-server-a/mods/lss-wi6-transport-fixture-1.0.0-test-only.jar",
+      "archive": "lss-wi6-transport-fixture-1.0.0-test-only.jar",
+      "bytes": 9212,
+      "sha256": "3f6356b6bd3540700a2f4dfa2122c2f1a451c6335690c3e3ba4f9e96ba4397ac"
+    }
+  ]
+}

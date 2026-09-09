@@ -1,0 +1,37 @@
+{
+  "utc": "2026-09-09T00:46Z",
+  "lines": [
+    {
+      "line": "1.21.1",
+      "source_head_before_final_docs": "49c8c689fb3a21970fa0110597c0bee8574c3018"
+    },
+    {
+      "line": "1.21.10",
+      "source_head_before_final_docs": "948b0bf09dd852d357176577d7ccacd589aadb7d"
+    },
+    {
+      "line": "1.21.11",
+      "source_head_before_final_docs": "8ac799a901e7eb99cb9403d512b790a0b6576190"
+    },
+    {
+      "line": "26.1",
+      "source_head_before_final_docs": "1e7c9a9d3507c3ba90ac511ba6b62995b8796ab2"
+    },
+    {
+      "line": "26.2",
+      "source_head_before_final_docs": "98b67abc82283417ad288cbb0cca2f4fb3343425"
+    }
+  ],
+  "normal_server_pid": 489815,
+  "normal_server_alive": true,
+  "owned_gui_clients_closed": true,
+  "disposable_server_and_client_fixture_mods_removed": true,
+  "required_targeted_acceptance_complete": true,
+  "deferred": [
+    "optional supported single-plugin disguise replacement",
+    "separate wide hybrid-boundary soak"
+  ],
+  "not_validated": [
+    "native NeoForge Voxy0.2.9-alpha pairing"
+  ]
+}

@@ -1,0 +1,34 @@
+[
+  {
+    "pid": 2647776,
+    "cwd": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/gui-server-a",
+    "argv": [
+      "/bin/bash",
+      "-lc",
+      "JAVA_TOOL_OPTIONS='-Dlss.wi6.enabled=true -Dlss.wi6.observer=AstraValidator' ./launch.sh 2>&1 | tee ../gui-server-a-controlled-console.log"
+    ]
+  },
+  {
+    "pid": 2647783,
+    "cwd": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/gui-server-a",
+    "argv": [
+      "/usr/lib/jvm/java-21-openjdk-amd64/bin/java",
+      "-Xms512M",
+      "-Xmx2G",
+      "-jar",
+      "fabric-server-launch.jar",
+      "nogui"
+    ],
+    "selected_environment": [
+      "JAVA_TOOL_OPTIONS=-Dlss.wi6.enabled=true -Dlss.wi6.observer=AstraValidator"
+    ]
+  },
+  {
+    "pid": 2647784,
+    "cwd": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/gui-server-a",
+    "argv": [
+      "tee",
+      "../gui-server-a-controlled-console.log"
+    ]
+  }
+]

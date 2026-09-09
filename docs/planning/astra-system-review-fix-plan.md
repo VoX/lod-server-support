@@ -1,5 +1,7 @@
 # Astra system review: detailed implementation plan
 
+> Implementation update, 2026-09-08: three Astra plan reviews are complete and all15 packages are implemented across their applicable lines. See the [implementation ledger](astra-implementation-ledger.md) for current acceptance status and remaining live gates. The planning/baseline statements below describe the pre-implementation snapshot.
+
 Review date: 2026-09-06. Implementation-plan expansion: 2026-09-08. Status: ready for implementation; no fixes implemented. The review and its challenge are complete; this expanded implementation design has been source-checked by the parent, not subjected to a new subagent review. Primary target MC 1.21.1; all five merged lines included in port review. Review only; no production implementation, installed-jar replacement or server restart performed by this review.
 
 ## Scope and evidence discipline
@@ -522,7 +524,7 @@ All completed reviewer passes used Astra. Ten focused subsystem passes covered M
 
 The initial full wire and storage reviewer attempts were interrupted by automated content filtering and are not counted as completed audits. [Parent wire review](../reviews/2026-09-06-astra/01-wire-parent.md) and [parent storage validation](../reviews/2026-09-06-astra/03-storage-parent.md) record the narrower completed coverage. The final storage reviewer independently validated the evidence. No exhaustive security-review claim is made.
 
-## Validation completed against unchanged production code
+## Historical review baseline — before implementation
 
 - Dedicated wire/cursor/payload/legacy/corpus baseline: 169 tests, zero failures/errors/skips.
 - Final ordinary 1.21.1 unit suites: Fabric 2325 tests, zero failures/errors, four existing skips; Paper 495 tests, zero failures/errors/skips. NeoForge's 23-test task was UP-TO-DATE with green cached results, not freshly executed. The combined Gradle invocation completed successfully.
@@ -535,6 +537,11 @@ Dedicated Prism profile roles must be recorded before claiming live integration 
 
 The original transient vertical Xaero map lines were not reproduced. The confirmed Xaero lifecycle races merit repair independently, but are not presented as their proven cause.
 
-## Deliverables and implementation boundary
+## Historical planning deliverables — before implementation
 
-[Evidence bundle and reproduction instructions](../reviews/2026-09-06-astra/README.md) contains the reports, validated finding index, opt-in diagnostic sources, final result summaries/XML, bytecode evidence and logs. Production files, installed mods and the running test server remain unchanged. This expanded document specifies implementation and acceptance; production implementation and deployment remain future work.
+[Evidence bundle and reproduction instructions](../reviews/2026-09-06-astra/README.md) contains the reports, validated finding index, opt-in diagnostic sources, final result summaries/XML, bytecode evidence and logs. At the planning checkpoint, production files, installed mods and the running test server were unchanged. The implementation and acceptance specified here have since been completed as recorded below; deployment remains separate.
+
+
+## Implementation completion — 2026-09-09
+
+All15 work packages are implemented across their applicable five lines. Three Astra plan reviews and subsequent independent implementation/acceptance reviews were resolved. The [implementation ledger](astra-implementation-ledger.md) is the final result, with exact builds, tests, artifacts, runtime proof and explicit coverage limits. In the live matrix, temporary unwritability was exercised through an external fixture declining the actual server send-admission method, not by saturating a physical Netty channel. Positive Xaero backlog reception toggles used the exact menu setter/SaveHook with no queue injection, on both1.21.1 loaders. Optional disguise replacement and the separate wide hybrid-boundary soak remain deferred; the rejected native Neo Voxy0.2.9 pairing is not claimed validated.

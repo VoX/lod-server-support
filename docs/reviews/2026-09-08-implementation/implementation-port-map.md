@@ -94,3 +94,8 @@ The C2ME dev-runtime helper is byte-identical on all three 1.21.x lines, with ex
 ## Limits and follow-through
 
 The parent has confirmed 26.2 explicit client+Neo runtime exit0 / BUILD SUCCESSFUL (1m14), superseding the pending runtime-log observation in `final-ledger-review.md`. Parent owns the current ledger. The client agent is still strengthening test-only persistence premises; these later fixture commits should be appended to the map if committed after this snapshot, without implying another production port is missing. This report makes no genuine soak, visual, optional-plugin or deployment claim. Preserve those statuses from the current ledger and remaining runtime matrix.
+
+
+## Post-snapshot test, documentation and harness commits
+
+Shipping production path hashes remain unchanged from the map/accepted artifact snapshot. Later commits: primary1.21.1 `e176ac7d` proves persisted gametest fixture premises; `ceb93e60` records acceptance documentation. Dev-only command validation and scenario API corrections:1.21.1 `49c8c689`,1.21.10 `948b0bf0`,1.21.11 `8ac799a9`,26.1 `1e7c9a9d`,26.2 `98b67abc`. Full source/test scope and exact SHAs: `soak-command-fix.md`. The original JSON map is retained as its dated snapshot, not a claim of current branch tips.

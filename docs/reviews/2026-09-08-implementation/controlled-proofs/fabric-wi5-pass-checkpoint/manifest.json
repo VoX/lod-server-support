@@ -1,0 +1,36 @@
+{
+  "captured_utc": "2026-09-09T00:42:16.903924+00:00",
+  "status": "live checkpoint after decisive WI5pass",
+  "files": [
+    {
+      "source": "/mnt/c/Users/Ian/AppData/Roaming/PrismLauncher/instances/lss-astra-validation-fabric-1.21.1/minecraft/logs/latest.log",
+      "archive": "latest.log",
+      "bytes": 39739,
+      "sha256": "adcc289d72a847896552b613c40e5da06e3ef8a4e00ba2f7a7c6ef1420437f4a"
+    },
+    {
+      "source": "/mnt/c/Users/Ian/AppData/Roaming/PrismLauncher/instances/lss-astra-validation-fabric-1.21.1/minecraft/lss-wi5-fixture.log",
+      "archive": "lss-wi5-fixture.log",
+      "bytes": 7803,
+      "sha256": "88e17ba2f27c1a2d3dcf6730d03aff707ca6c177db7243d73d67097ae576b4c1"
+    },
+    {
+      "source": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/gui-server-a-controlled-console.log",
+      "archive": "gui-server-a-controlled-console.log",
+      "bytes": 14447,
+      "sha256": "4503a37902e7a961effcb120ba7317cb46bc149127cae2ab153c3d4f257908c0"
+    },
+    {
+      "source": "/mnt/c/Users/Ian/AppData/Roaming/PrismLauncher/instances/lss-astra-validation-fabric-1.21.1/minecraft/mods/lod-server-support-fabric.jar",
+      "archive": "lod-server-support-fabric.jar",
+      "bytes": 8208388,
+      "sha256": "65e2486eb725f64b88bbc1abc1597cc41e82e4dde06b550b5b4148af0751e5bf"
+    },
+    {
+      "source": "/mnt/c/Users/Ian/AppData/Roaming/PrismLauncher/instances/lss-astra-validation-fabric-1.21.1/minecraft/mods/lss-wi5-live-fixture-1.0.0-test-only.jar",
+      "archive": "lss-wi5-live-fixture-1.0.0-test-only.jar",
+      "bytes": 8649,
+      "sha256": "602c96a765c0710f7031ef180a83fe1d2a64d4fe881490875bc20a698106e6b0"
+    }
+  ]
+}

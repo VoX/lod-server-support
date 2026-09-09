@@ -1,0 +1,87 @@
+[
+  {
+    "path": "gui-fabric-render-on-before.png",
+    "source": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/gui-fabric-render/on-before.png",
+    "sha256": "19505a1aa1d1b8c24afc48142881a51b98228007ed414e334498d27c531a61e0"
+  },
+  {
+    "path": "gui-fabric-render-off.png",
+    "source": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/gui-fabric-render/off.png",
+    "sha256": "4783ec7d95f6d4af59f692d0ea2801facbaee753529c665669a4043689208b68"
+  },
+  {
+    "path": "gui-fabric-render-on-restored.png",
+    "source": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/gui-fabric-render/on-restored.png",
+    "sha256": "1606594d58165fb781bee527e4c6ccb2e2b4a1c05945792c14fd88c5681e2add"
+  },
+  {
+    "path": "gui-fabric-render-voxy-reset-terrain.png",
+    "source": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/gui-fabric-render/voxy-reset-terrain.png",
+    "sha256": "56f73cae10e64781d120dbd94acc165f62a6484ce1ef3b1c28ab3787a32b0aaf"
+  },
+  {
+    "path": "gui-neoforge-render-on-before.png",
+    "source": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/gui-neoforge-render/on-before.png",
+    "sha256": "03f1b49b79a47214793ff9f61e4c24e8aacf7915957a97c7a4419ae424c0460a"
+  },
+  {
+    "path": "gui-neoforge-render-off.png",
+    "source": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/gui-neoforge-render/off.png",
+    "sha256": "7acf4a339f75cd3a84cd23c4820d2a44df89fccc910e4968f3c40ca8360cb8c0"
+  },
+  {
+    "path": "gui-neoforge-render-on-restored.png",
+    "source": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/gui-neoforge-render/on-restored.png",
+    "sha256": "08cd55c35952ced378a7824ab711f42ec3d52b4d8eb045c91506bc542ce9ac9e"
+  },
+  {
+    "path": "gui-neoforge-render-wi9-durable-pass.png",
+    "source": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/gui-neoforge-render/wi9-durable-pass.png",
+    "sha256": "0e7978236453f473dede58f57fa0731e0cb58f4a2716cf5c54bd539bdd355939"
+  },
+  {
+    "path": "gui-elytra-1.21.10-spyglass-standing.png",
+    "source": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/gui-elytra-1.21.10/spyglass-standing.png",
+    "sha256": "9c08a40fec17a114a0c7703829680a5e4e528f293d62e8574f3d3abace515998"
+  },
+  {
+    "path": "gui-elytra-1.21.10-spyglass-crouching.png",
+    "source": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/gui-elytra-1.21.10/spyglass-crouching.png",
+    "sha256": "0132290ec56cf33f9caa20ffaaa8baa35b51afecc27a2f3878caf0b7da40d6f0"
+  },
+  {
+    "path": "gui-elytra-1.21.10-gliding.png",
+    "source": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/gui-elytra-1.21.10/gliding.png",
+    "sha256": "219d9441f5b9d7b8e6f184b828285506b49cf0ea11477cefd46ee73e4e296677"
+  },
+  {
+    "path": "gui-elytra-1.21.10-spyglass-gliding-rate5.png",
+    "source": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/gui-elytra-1.21.10/spyglass-gliding-rate5.png",
+    "sha256": "9ac5543c55b257feb03405bb69a49156dda45ab83566abbd21c1c06dbee1ffb8"
+  },
+  {
+    "path": "gui-elytra-1.21.10-spyglass-landed-standing.png",
+    "source": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/gui-elytra-1.21.10/spyglass-landed-standing.png",
+    "sha256": "24245be959eb704c58b5a30329fab9cb84fb2343da7039a65c0e1f572c698a97"
+  },
+  {
+    "path": "gui-elytra-1.21.11-spyglass-standing.png",
+    "source": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/gui-elytra-1.21.11/spyglass-standing.png",
+    "sha256": "af8d0590cbe26be69e44130a2da813d336162928c659b68ae5470f51187ee97e"
+  },
+  {
+    "path": "gui-elytra-1.21.11-spyglass-crouching.png",
+    "source": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/gui-elytra-1.21.11/spyglass-crouching.png",
+    "sha256": "d151ab8ea6c3872c2414c77fd4be7a1646b137a2e892672ae120d92f8718c646"
+  },
+  {
+    "path": "gui-elytra-1.21.11-gliding.png",
+    "source": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/gui-elytra-1.21.11/gliding.png",
+    "sha256": "c0ba2a917720ed30c34a625af942c8ea4f7deea6f99b89ad15666b4e61792168"
+  },
+  {
+    "path": "gui-elytra-1.21.11-spyglass-landed-standing.png",
+    "source": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/gui-elytra-1.21.11/spyglass-landed-standing.png",
+    "sha256": "6a6a8cd14cf5ebd5de5513954083a39794a0ba8f4109e6c53604ac75077b6718"
+  }
+]
