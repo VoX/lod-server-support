@@ -14,7 +14,7 @@ import java.lang.reflect.Method;
  * resolved classes; the three {@code ClientLevel}-typed members
  * ({@code getWorld}, {@code mainWorld}, {@code ignoreWorld}) resolve by
  * name-scan (the {@code MoonriseReadCompat} shape-scan precedent) and are
- * handled as Objects behind {@link XaeroMapCompat.LevelOps}, because tests cannot construct
+ * handled as Objects behind {@link XaeroSession.LevelOps}, because tests cannot construct
  * a {@code ClientLevel}.
  */
 final class XaeroBindings {
@@ -114,12 +114,12 @@ final class XaeroBindings {
     final MethodHandle getOriginal;
     final MethodHandle highlightsPrepare;
 
-    static XaeroBindings resolve(XaeroMapCompat.ClassResolver resolver) throws ClassNotFoundException,
+    static XaeroBindings resolve(XaeroSession.ClassResolver resolver) throws ClassNotFoundException,
             NoSuchMethodException, NoSuchFieldException, IllegalAccessException {
         return new XaeroBindings(resolver, MethodHandles.lookup());
     }
 
-    private XaeroBindings(XaeroMapCompat.ClassResolver resolver, MethodHandles.Lookup lookup)
+    private XaeroBindings(XaeroSession.ClassResolver resolver, MethodHandles.Lookup lookup)
             throws ClassNotFoundException, NoSuchMethodException, NoSuchFieldException,
             IllegalAccessException {
         Class<?> sessionClass = resolver.resolve("xaero.map.WorldMapSession");
