@@ -135,12 +135,12 @@ public final class FoliaSourceProbe extends JavaPlugin implements Listener,Sourc
                 }catch(Throwable failure){preparationFailure=failure;}
             })).exceptionally(error->{preparationFailure=error;return null;});
     }
-    @Override public Map<String,Object> loadedOwnership(Target target){
+    @Override public SourceWorkload.Ownership loadedOwnership(Target target){
         var observation=owners.get(target.subject());
         var snapshot=observation==null?null:observation.snapshot();
         long now=System.nanoTime();
         if(!OwnerObservation.available(snapshot,Bukkit.getPlayerExact(target.subject()),now))return null;
-        return Map.of("observed_ns",snapshot.time(),"region_identity",snapshot.region(),"owns_region",true,"owner_name",target.subject());
+        return new SourceWorkload.Ownership(Map.of("observed_ns",snapshot.time(),"region_identity",snapshot.region(),"owns_region",true,"owner_name",target.subject()),snapshot.player());
     }
     /** Opt-in native observation on the existing player owner, at most1Hz per subject. */
     private void observeOwnerDiagnostic(String subject,org.bukkit.entity.Player player,int index){
@@ -231,13 +231,17 @@ public final class FoliaSourceProbe extends JavaPlugin implements Listener,Sourc
         if(!checked||sourceFacts.size()!=targets.size())throw new IllegalStateException("snapshot facts incomplete");
         return sourceFacts;
     }
-    @Override public CompletionStage<SourceWorkload.Applied> edit(Target target,SourceWorkload.Mutation expected){
-        CompletableFuture<SourceWorkload.Applied> result=new CompletableFuture<>();
+    @Override public CompletionStage<SourceWorkload.EditOutcome> edit(Target target,SourceWorkload.Mutation expected,SourceWorkload.Ownership owner){
+        CompletableFuture<SourceWorkload.EditOutcome> result=new CompletableFuture<>();
         Bukkit.getRegionScheduler().run(this,new Location(world,target.x()*16,target.y(),target.z()*16),ignored->{
             try{
                 if(!Bukkit.isOwnedByCurrentRegion(world,target.x(),target.z()))throw new IllegalStateException("edit owner absent");
                 var player=Bukkit.getPlayerExact(target.subject());var region=TickRegionScheduler.getCurrentRegion();
-                if(player==null||region==null||!Bukkit.isOwnedByCurrentRegion(player))throw new IllegalStateException("loaded mutation must share actual player region");
+                // This result is emitted only before touching the revision ledger or world.
+                // A successor cannot spend the old player's acknowledged authorization.
+                if(!owner.isCurrent(player,System.nanoTime()) || region==null || !Bukkit.isOwnedByCurrentRegion(player)){
+                    result.complete(SourceWorkload.OwnerUnavailableBeforeMutation.INSTANCE);return;
+                }
                 var applied=revisions.mutate(target,expected,String.valueOf(region.id),()->{
                     world.getBlockAt(target.x()*16,target.y(),target.z()*16).setType(target.block().equals("diamond_block")?Material.DIAMOND_BLOCK:Material.GOLD_BLOCK,false);return System.nanoTime();
                 });

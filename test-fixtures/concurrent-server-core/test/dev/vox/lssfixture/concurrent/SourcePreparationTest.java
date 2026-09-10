@@ -26,7 +26,7 @@ public final class SourcePreparationTest {
         public void save(){}
         public void makeUnloadedSources(SourceWorkload.Target a,SourceWorkload.Target b){}
         public boolean sourcesReady(List<SourceWorkload.Target> targets){return false;}
-        public CompletionStage<SourceWorkload.Applied> edit(SourceWorkload.Target target,SourceWorkload.Mutation mutation){throw new AssertionError();}
+        public CompletionStage<SourceWorkload.EditOutcome> edit(SourceWorkload.Target target,SourceWorkload.Mutation mutation,SourceWorkload.Ownership owner){throw new AssertionError();}
         public void kick(String subject){throw new AssertionError();}
         public Map<String,Object> metrics(){return Map.of();}
     }
