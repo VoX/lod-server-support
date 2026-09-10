@@ -1,6 +1,6 @@
 import unittest
 from unittest.mock import Mock,patch
-from xaero_map_input import zoom_out
+from xaero_map_input import zoom_out,move_away
 
 class MapInputTest(unittest.TestCase):
  def driver(self):
@@ -26,3 +26,10 @@ class MapInputTest(unittest.TestCase):
   d=self.driver();d.verify_release.side_effect=ValueError('display changed')
   with self.assertRaisesRegex(ValueError,'display changed'):zoom_out(d,940,240,lambda:True,lambda:None)
   self.assertEqual(1,d.test.XTestFakeButtonEvent.call_count)
+
+ def test_pointer_move_never_clicks_and_revalidates(self):
+  d=self.driver();move_away(d,480,135);d.focus.assert_called_once();d.verify.assert_called_once();d.test.XTestFakeButtonEvent.assert_not_called()
+ def test_pointer_move_stops_on_identity_failure(self):
+  d=self.driver();d.verify.side_effect=ValueError('identity')
+  with self.assertRaisesRegex(ValueError,'identity'):move_away(d,480,135)
+  d.test.XTestFakeMotionEvent.assert_not_called()

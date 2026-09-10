@@ -21,6 +21,9 @@ public final class Probe {
  private static final ConcurrentHashMap<String,Method> METHODS=new ConcurrentHashMap<>();
  private static final ThreadLocal<Boolean> SAVING=ThreadLocal.withInitial(()->false);
  private static volatile boolean activeSave;
+ private static volatile int saveRegionX,saveRegionZ;
+ private static final AtomicBoolean SAVE_DEFERRED=new AtomicBoolean();
+ private static final int PAUSE_MAX_MILLIS=Integer.getInteger("lss.xaeromap.pauseMaxMillis",15000);
  private static int mapFrames; // render-thread only
  private static final Gson JSON=new Gson();
  static {
@@ -106,6 +109,9 @@ public final class Probe {
    row.put("gui_width",gui.width);row.put("gui_height",gui.height);
    row.put("zoom_out",List.of(zoom.getX(),zoom.getY(),zoom.getWidth(),zoom.getHeight()));
    row.put("zoom_active",zoom.active);row.put("zoom_visible",zoom.visible);
+   var mouse=net.minecraft.client.Minecraft.getInstance().mouseHandler;
+   row.put("mouse_x",mouse.xpos());row.put("mouse_y",mouse.ypos());
+   row.put("zoom_mouse_over",zoom.isMouseOver(mouse.xpos()*gui.width/window.getScreenWidth(),mouse.ypos()*gui.height/window.getScreenHeight()));
    emit("map_viewport",row);
   }catch(Throwable t){failure(t);}
  }
@@ -123,7 +129,18 @@ public final class Probe {
   row.put("client_chunk_z",client.player==null?Integer.MIN_VALUE:client.player.chunkPosition().z);
   row.put("floor_y",call(tile,"floorY"));row.put("top_y",call(tile,"topY"));row.put("light",call(tile,"light"));
   Object[] states=(Object[])call(tile,"floorState");row.put("floor_state",Arrays.stream(states).map(String::valueOf).toList());emit("bridge_result",row);
+  if(activeSave&&outcome.toString().equals("DEFERRED")&&x/32==saveRegionX&&z/32==saveRegionZ&&editedTarget(tile,x,states))SAVE_DEFERRED.set(true);
  }catch(Throwable t){failure(t);}}
+ private static boolean editedTarget(Object tile,int chunkX,Object[] states)throws Exception{
+  short[] heights=(short[])call(tile,"floorY");
+  if(heights.length!=256||states.length!=256)return false;
+  for(int bx=0;bx<16;bx++)for(int bz=0;bz<16;bz++){
+   int i=bx*16+bz;
+   if(heights[i]!=64+Math.floorMod(chunkX*16+bx-432,8))return false;
+   if(!(states[i] instanceof net.minecraft.world.level.block.state.BlockState state)||!state.is(net.minecraft.world.level.block.Blocks.DIAMOND_BLOCK))return false;
+  }
+  return true;
+ }
  public static void texture(Object chunk,Object processor){textureObserved(chunk,processor,"buffer_rebuild");}
  private static void textureObserved(Object chunk,Object processor,String observation){if(!ENABLED)return;try{
   int tx=number(chunk,"getX"),tz=number(chunk,"getZ");if((tx!=7&&tx!=8)||tz!=4)return;
@@ -150,10 +167,12 @@ public final class Probe {
  public static void saveBegin(Object region){if(!ENABLED||!REGIONS.contains(region)||!Files.isRegularFile(Path.of(System.getProperty("lss.xaeromap.arm")))||!PAUSE_USED.compareAndSet(false,true))return;try{
   Object monitor=region.getClass().getField("writerThreadPauseSync").get(region);
   if(!(boolean)call(region,"isWritingPaused")||Thread.holdsLock(monitor))throw new IllegalStateException("native save pause premise absent or pause monitor retained");
-  SAVING.set(true);activeSave=true;emit("save_pause_begin",Map.of("native_paused",true,"holds_pause_monitor",false,"region_x",number(region,"getRegionX"),"region_z",number(region,"getRegionZ")));
-  long deadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(3);
-  while(System.nanoTime()<deadline)java.util.concurrent.locks.LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(10));
-  emit("save_pause_release",Map.of("native_paused",call(region,"isWritingPaused")));
+  if(PAUSE_MAX_MILLIS!=15000)throw new IllegalStateException("native save overlap requires declared 15000ms hard bound");
+  SAVING.set(true);saveRegionX=number(region,"getRegionX");saveRegionZ=number(region,"getRegionZ");SAVE_DEFERRED.set(false);activeSave=true;
+  emit("save_pause_begin",Map.of("native_paused",true,"holds_pause_monitor",false,"region_x",saveRegionX,"region_z",saveRegionZ,"pause_max_ms",PAUSE_MAX_MILLIS));
+  long deadline=System.nanoTime()+TimeUnit.MILLISECONDS.toNanos(PAUSE_MAX_MILLIS);
+  while(!SAVE_DEFERRED.get()&&System.nanoTime()<deadline)java.util.concurrent.locks.LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(10));
+  emit("save_pause_release",Map.of("native_paused",call(region,"isWritingPaused"),"release_reason",SAVE_DEFERRED.get()?"target_deferred":"deadline"));
  }catch(Throwable t){failure(t);}}
  public static void saveEnd(Object region,boolean result){if(!ENABLED||!SAVING.get())return;emit("native_save_return",Map.of("success",result));activeSave=false;SAVING.remove();}
 }
