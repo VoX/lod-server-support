@@ -1,0 +1,24 @@
+modLoader="lowcodefml"
+loaderVersion="[1,)"
+license="Test fixture only"
+[[mods]]
+modId="lss_export_fixture"
+version="1.0.0-test-only"
+displayName="LSS export lifecycle isolated lifecycle fixture"
+[[dependencies.lss_export_fixture]]
+modId="neoforge"
+type="required"
+versionRange="[21.1,)"
+side="CLIENT"
+[[dependencies.lss_export_fixture]]
+modId="minecraft"
+type="required"
+versionRange="[1.21.1]"
+side="CLIENT"
+[[dependencies.lss_export_fixture]]
+modId="lss"
+type="required"
+versionRange="[0.14.0,)"
+side="CLIENT"
+[[mixins]]
+config="lss-export-lifecycle-fixture.mixins.json"
