@@ -64,7 +64,10 @@ def run(root):
    view=wait(lambda:viewport(opened))
    if framed(view):break
    if view['scale']<.1:raise ValueError('native map cannot frame target at readable scale')
-   driver.click(*zoom_button(view));opened=time.monotonic_ns()
+   from xaero_map_input import zoom_out
+   pressed=time.monotonic_ns()
+   zoom_out(driver,*zoom_button(view),lambda:any(r.get('event')=='map_viewport' and r['time_ns']>pressed and r['scale']<view['scale']-.001 for r in rows()),check_time)
+   opened=time.monotonic_ns()
   else:raise ValueError('native map framing action bound')
   capture_started=time.monotonic_ns();driver.capture('xaero-map-boundary.png');capture_finished=time.monotonic_ns()
   confirmed=wait(lambda:viewport(capture_finished))
