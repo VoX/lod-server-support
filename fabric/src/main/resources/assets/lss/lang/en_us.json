@@ -28,5 +28,13 @@
   "lss.config.far_players_render_distance.server": "Server limit",
   "lss.config.far_players_enabled.tooltip.seeu": "See other players far beyond your normal render distance, drawn as simple models. Off right now: SeeU is installed and draws far players itself. Turn on 'Prefer LSS Far Players' below to use this instead.",
   "lss.config.far_players_with_seeu": "Prefer LSS Far Players",
-  "lss.config.far_players_with_seeu.tooltip": "Draw far players with this mod even though SeeU is installed. Leave off to let SeeU handle them. If you turn it on, disable SeeU's own far player display so they are not drawn twice."
+  "lss.config.far_players_with_seeu.tooltip": "Draw far players with this mod even though SeeU is installed. Leave off to let SeeU handle them. If you turn it on, disable SeeU's own far player display so they are not drawn twice.",
+  "lss.status.open": "LOD status",
+  "lss.status.title": "LOD status",
+  "lss.status.export": "Export",
+  "lss.status.receive_off": "Reception OFF",
+  "lss.status.receive_on": "Reception ON",
+  "lss.status.more": "More",
+  "lss.status.done": "Done",
+  "lss.status.page": "Page %s/%s"
 }

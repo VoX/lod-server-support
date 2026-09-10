@@ -85,8 +85,9 @@ public class ChunkGenerationService {
     /** Test seam constructor (see {@link ColumnSerializer}); zero behavior change when
      *  default-wired through the production constructor above. */
     public ChunkGenerationService(LSSServerConfig config, ColumnSerializer columnSerializer) {
-        this.maxConcurrent = config.generationConcurrencyLimitGlobal;
-        this.maxPerPlayerActive = config.generationConcurrencyLimitPerPlayer;
+        var generationLimits = config.generationLimits();
+        this.maxConcurrent = generationLimits.global();
+        this.maxPerPlayerActive = generationLimits.perPlayer();
         this.timeoutTicks = config.generationTimeoutSeconds * LSSConstants.TICKS_PER_SECOND;
         this.columnSerializer = columnSerializer;
     }

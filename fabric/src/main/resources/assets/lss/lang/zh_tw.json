@@ -28,5 +28,13 @@
   "lss.config.far_players_render_distance.server": "伺服器限制",
   "lss.config.far_players_enabled.tooltip.seeu": "在遠景地形中以簡化模型顯示遠超正常渲染距離的其他玩家。目前已關閉：已安裝 SeeU，由它繪製遠處玩家。開啟下方的「優先使用 LSS 遠處玩家」可改用本模組。",
   "lss.config.far_players_with_seeu": "優先使用 LSS 遠處玩家",
-  "lss.config.far_players_with_seeu.tooltip": "即使安裝了 SeeU，也用本模組繪製遠處玩家。讓 SeeU 負責時請保持關閉。開啟後請關閉 SeeU 自身的遠處玩家顯示，以免重複繪製。"
+  "lss.config.far_players_with_seeu.tooltip": "即使安裝了 SeeU，也用本模組繪製遠處玩家。讓 SeeU 負責時請保持關閉。開啟後請關閉 SeeU 自身的遠處玩家顯示，以免重複繪製。",
+  "lss.status.open": "LOD 狀態",
+  "lss.status.title": "LOD 狀態",
+  "lss.status.export": "匯出",
+  "lss.status.receive_off": "關閉接收",
+  "lss.status.receive_on": "開啟接收",
+  "lss.status.more": "更多",
+  "lss.status.done": "完成",
+  "lss.status.page": "第 %s/%s 頁"
 }

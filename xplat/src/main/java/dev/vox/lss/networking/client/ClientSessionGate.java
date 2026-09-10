@@ -31,6 +31,17 @@ import java.util.function.IntConsumer;
  * </ul>
  */
 final class ClientSessionGate {
+    private boolean statusHandshakeFailed;
+    private boolean statusProtocolRejected;
+    dev.vox.lss.common.diagnostics.ClientStatusSnapshot.Discovery discoveryStatus() {
+        if (!joined) return dev.vox.lss.common.diagnostics.ClientStatusSnapshot.Discovery.NOT_CONNECTED;
+        if (statusProtocolRejected) return dev.vox.lss.common.diagnostics.ClientStatusSnapshot.Discovery.PROTOCOL_REJECTED;
+        if (sessionConfigReceived) return dev.vox.lss.common.diagnostics.ClientStatusSnapshot.Discovery.NEGOTIATED;
+        if (statusHandshakeFailed) return dev.vox.lss.common.diagnostics.ClientStatusSnapshot.Discovery.SEND_FAILED;
+        if (!receiveEnabled || localIntegratedServer || primaryAnnounce == 0) return dev.vox.lss.common.diagnostics.ClientStatusSnapshot.Discovery.DORMANT;
+        return dev.vox.lss.common.diagnostics.ClientStatusSnapshot.Discovery.AWAITING_NEGOTIATION;
+    }
+
 
     /** Builds the per-session request manager for a valid enabled config. Seam for tests. */
     @FunctionalInterface
@@ -204,6 +215,8 @@ final class ClientSessionGate {
 
     void onJoin(boolean receiveServerLods, boolean localIntegratedServer, boolean hasConsumers,
                 boolean enableV16ServerCompat, boolean enableV19ServerCompat) {
+        this.statusHandshakeFailed = false;
+        this.statusProtocolRejected = false;
         this.joined = true;
         this.localIntegratedServer = localIntegratedServer;
         this.receiveEnabled = receiveServerLods;
@@ -267,6 +280,7 @@ final class ClientSessionGate {
             // discover — every further rung is equally doomed.
             this.discoveryArmed = nextRung(announce) != 0;
         } catch (Exception e) {
+            this.statusHandshakeFailed = true;
             LSSLogger.debug("Handshake send failed (server likely doesn't have " + Brand.shortName() + "): " + e.getMessage());
         }
     }
@@ -354,6 +368,7 @@ final class ClientSessionGate {
         int primary = this.primaryAnnounce != 0
                 ? this.primaryAnnounce : SoakDialectOverride.announceVersion();
         if (version != primary && !v19 && !v16) {
+            this.statusProtocolRejected = true;
             LSSLogger.warn("Server has incompatible " + Brand.shortName() + " protocol version " + version
                     + " (client: " + primary + "), LOD distribution disabled");
             this.serverEnabled = false;
@@ -449,6 +464,8 @@ final class ClientSessionGate {
         // walk itself — an unclamped LOD distance is a CPU-stall vector, so it stays.
         var config = clampToProtocolBounds(payload);
 
+        this.statusProtocolRejected = false;
+        this.statusHandshakeFailed = false;
         this.serverEnabled = config.enabled();
         this.sessionConfigReceived = true;
         this.serverLodDistance = config.lodDistanceChunks();

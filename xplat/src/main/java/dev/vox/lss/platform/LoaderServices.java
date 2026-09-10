@@ -23,6 +23,10 @@ import java.nio.file.Path;
  */
 public interface LoaderServices {
 
+    default dev.vox.lss.common.diagnostics.DiagnosticVersions diagnosticVersions() {
+        return dev.vox.lss.common.diagnostics.DiagnosticVersions.unknown();
+    }
+
     boolean isModLoaded(String modId);
 
     Path configDir();

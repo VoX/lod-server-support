@@ -27,9 +27,14 @@ import java.util.function.Supplier;
 public class PaperCommands implements CommandExecutor, TabCompleter {
     private final Supplier<PaperRequestProcessingService> serviceSupplier;
     private final Supplier<PaperConfig> configSupplier;
+    private dev.vox.lss.common.diagnostics.DiagnosticVersions diagnosticVersions = dev.vox.lss.common.diagnostics.DiagnosticVersions.unknown();
 
     public PaperCommands(LSSPaperPlugin plugin) {
         this(plugin::getRequestService, plugin::getLssConfig);
+        diagnosticVersions = new dev.vox.lss.common.diagnostics.DiagnosticVersions(java.util.Map.of(
+                dev.vox.lss.common.diagnostics.DiagnosticVersions.Component.LSS, plugin.getDescription().getVersion(),
+                dev.vox.lss.common.diagnostics.DiagnosticVersions.Component.MINECRAFT, org.bukkit.Bukkit.getMinecraftVersion(),
+                dev.vox.lss.common.diagnostics.DiagnosticVersions.Component.LOADER, "paper-" + org.bukkit.Bukkit.getBukkitVersion()));
     }
 
     // Package-visible seam: lets T1 tests drive the command paths without a JavaPlugin
@@ -52,6 +57,26 @@ public class PaperCommands implements CommandExecutor, TabCompleter {
         }
 
         var service = this.serviceSupplier.get();
+        if (args[0].equalsIgnoreCase("preset")) {
+            if (args.length != 2) {
+                sender.sendMessage("Usage: /" + label + " preset <pregenerated-world|apply|undo> (server-global only)");
+                return true;
+            }
+            Runnable apply = () -> {
+                try {
+                    for (String line : configSupplier.get().presetCommand(args.length > 1 ? args[1] : "")) sender.sendMessage(line);
+                } catch (IllegalArgumentException | IllegalStateException failure) {
+                    sender.sendMessage(failure.getMessage());
+                }
+            };
+            if (service == null) apply.run(); else service.enqueueRuntimeTask(apply);
+            return true;
+        }
+        if (args[0].equalsIgnoreCase("diagnostics") && args.length == 2 && args[1].equalsIgnoreCase("export")) {
+            if (service == null) exportDiagnostics(sender, null);
+            else service.enqueueRuntimeTask(() -> exportDiagnostics(sender, service));
+            return true;
+        }
         if (service == null) {
             sender.sendMessage(Brand.shortName() + " LOD request processing is not active");
             return true;
@@ -62,10 +87,28 @@ public class PaperCommands implements CommandExecutor, TabCompleter {
             case "diag" -> showDiagnostics(sender, service);
             case "store" -> storeCommand(sender, label, service, args);
             case "set" -> setCommand(sender, label, service, args);
-            default -> sender.sendMessage("Usage: /" + label + " <stats|diag|store|set|help>");
+            default -> sender.sendMessage("Usage: /" + label + " <stats|diag|diagnostics|preset|store|set|help>");
         }
 
         return true;
+    }
+
+    private void exportDiagnostics(CommandSender sender, PaperRequestProcessingService service) {
+        var config = configSupplier.get();
+        var snapshot = new dev.vox.lss.common.diagnostics.ServerStatusSnapshot(1, System.currentTimeMillis(),
+                service != null, config.enabled, config.enableChunkGeneration, config.generationConfiguredForRestart(), config.lodDistanceChunks,
+                service == null ? 0 : service.getUptimeSeconds(),
+                service == null ? 0 : service.getTickDiag().getTotalSectionsSent(),
+                service == null ? 0 : service.getTickDiag().getTotalBytesSent(),
+                service == null ? 0 : service.getTickDiag().getTotalWireBytesSent(),
+                service == null ? 0 : service.getWindowBandwidthRate(), diagnosticVersions);
+        try {
+            dev.vox.lss.common.diagnostics.DiagnosticExport.write(java.nio.file.Path.of(Brand.lowerShortName() + "-diagnostics"), snapshot)
+                    .whenComplete((path, error) -> sender.sendMessage(error == null ? "Diagnostics exported: " + path
+                            : "Diagnostics export failed; check directory permissions and free space."));
+        } catch (java.util.concurrent.RejectedExecutionException busy) {
+            sender.sendMessage("Diagnostics exporter busy; retry after the current export.");
+        }
     }
 
     /** The /lsslod set apply path (v0.11.0 stage C). Unknown-key and usage errors reply
@@ -234,7 +277,7 @@ public class PaperCommands implements CommandExecutor, TabCompleter {
     @Override
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
         if (args.length == 1) {
-            return List.of("stats", "diag", "store", "set", "help").stream()
+            return List.of("stats", "diag", "diagnostics", "preset", "store", "set", "help").stream()
                     .filter(s -> s.startsWith(args[0].toLowerCase()))
                     .toList();
         }

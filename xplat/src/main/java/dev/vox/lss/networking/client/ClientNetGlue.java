@@ -78,6 +78,10 @@ public final class ClientNetGlue {
     }
 
     /** C6 observability: the established session's protocol version (0 pre-config). */
+    public static dev.vox.lss.common.diagnostics.ClientStatusSnapshot.Discovery discoveryStatus() {
+        return sessionGate.discoveryStatus();
+    }
+
     public static int getSessionVersion() {
         return sessionGate.getSessionVersion();
     }
@@ -450,6 +454,7 @@ public final class ClientNetGlue {
 
     /** JOIN ladder body (each loader's connection-join event calls this). */
     public static void onJoin() {
+        ClientStatus.invalidate();
         // Don't activate on singleplayer/integrated servers (unless testing)
         boolean localIntegratedServer = Minecraft.getInstance().hasSingleplayerServer()
                 && !Boolean.getBoolean("lss.test.integratedServer");
@@ -465,6 +470,7 @@ public final class ClientNetGlue {
      *  covers the manager on the next join; the processor/far-player/trace
      *  teardowns wait for the real disconnect. */
     public static void onDisconnect() {
+        ClientStatus.invalidate();
         sessionGate.onDisconnect();
         FarPlayerClientSupport.onSessionEnd();
         dev.vox.lss.compat.ModCompat.onDisconnect();
@@ -500,6 +506,7 @@ public final class ClientNetGlue {
         // The Xaero map bridge's budgeted commit pump (xaero-map-bridge-plan.md §2.4) —
         // main client thread, no-op unless Xaero is present with queued tiles.
         dev.vox.lss.compat.ModCompat.clientTick();
+        ClientStatus.tick();
     }
 
     /** Per-frame body (render thread) — the Xaero bridge's texture-rebuild slice

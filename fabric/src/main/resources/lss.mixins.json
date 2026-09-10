@@ -20,6 +20,7 @@
     "AccessorClientPacketListener",
     "AccessorLivingEntity",
     "AccessorEntityRenderDispatcher",
-    "AccessorBiomeManager"
+    "AccessorBiomeManager",
+    "SodiumStatusEntryHook"
   ]
 }
