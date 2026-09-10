@@ -21,7 +21,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 public final class FoliaSourceProbe extends JavaPlugin implements Listener,SourceWorkload.Engine {
     private LSSPaperPlugin lss;
     private World world;
-    private SourceWorkload workload;
+    private volatile SourceWorkload workload;
     private final OwnerRevisions revisions=new OwnerRevisions();
     private final Set<Object> instrumented=Collections.newSetFromMap(new IdentityHashMap<>());
     private final Set<String> loaded=ConcurrentHashMap.newKeySet();
@@ -29,8 +29,7 @@ public final class FoliaSourceProbe extends JavaPlugin implements Listener,Sourc
     private final java.util.concurrent.atomic.AtomicBoolean corridorScheduled=new java.util.concurrent.atomic.AtomicBoolean();
     private final Map<String,java.util.concurrent.CopyOnWriteArrayList<Target>> retainedTargets=new ConcurrentHashMap<>();
     private final java.util.concurrent.ConcurrentHashMap<String,Map<String,Object>> ownerDiagnostics=new java.util.concurrent.ConcurrentHashMap<>();
-    private record OwnerSnapshot(org.bukkit.entity.Player player,long time,String region,boolean ownsAll) {}
-    private final Map<String,OwnerSnapshot> owners=new ConcurrentHashMap<>();
+    private final Map<String,OwnerObservation<org.bukkit.entity.Player>> owners=new ConcurrentHashMap<>();
     private final AtomicLong deniedReads=new AtomicLong();
     private volatile boolean checked,checking,initialChecking;
     private volatile List<Map<String,Object>> initialFacts;
@@ -76,20 +75,30 @@ public final class FoliaSourceProbe extends JavaPlugin implements Listener,Sourc
         // The retained corridor joins each subject's positive-side loaded cells
         // into its real player region. Observe that fact on the actual owner,
         // and keep refreshing it before each later loaded mutation.
-        var joined=new java.util.concurrent.atomic.AtomicBoolean();
+        var observation=new OwnerObservation<org.bukkit.entity.Player>();
+        owners.put(subject,observation);
         player.getScheduler().runAtFixedRate(this,task->{
+            SourceWorkload currentWorkload=workload;
+            if(currentWorkload==null)return;
+            if(owners.get(subject)!=observation)return; // Retired connection cannot replace its successor.
             int index=subject.charAt(subject.length()-1)-'A';
             DiagnosticGuard.observe(()->observeOwnerDiagnostic(subject,player,index),
-                    failure->{if(workload!=null)workload.diagnosticFailure("native-owner",failure);
-                        else getLogger().severe("LSS_RIG_SOURCE_DIAGNOSTIC_FAILURE: native-owner "+failure.getClass().getName());});
-            if(player.getLocation().getBlockX()!=index*4096)return;
+                    failure->currentWorkload.diagnosticFailure("native-owner",failure));
+            var position=player.getLocation();
+            boolean anchor=position.getBlockX()==index*4096;
             var region=TickRegionScheduler.getCurrentRegion();
             var targets=retainedTargets.get(subject);
             boolean owns=region!=null && Bukkit.isOwnedByCurrentRegion(player) && targets!=null && !targets.isEmpty();
             if(owns)for(Target target:targets)if(!Bukkit.isOwnedByCurrentRegion(world,target.x(),target.z())){owns=false;break;}
-            owners.put(subject,new OwnerSnapshot(player,System.nanoTime(),region==null?"":String.valueOf(region.id),owns));
-            if(owns && joined.compareAndSet(false,true))Bukkit.getGlobalRegionScheduler().run(this,ignored->workload.join(subject));
-        },()->owners.computeIfPresent(subject,(name,old)->old.player()==player?null:old),30,1);
+            boolean firstJoin=observation.refresh(player,System.nanoTime(),region==null?"":String.valueOf(region.id),owns,anchor);
+            DiagnosticGuard.observe(()->{
+                var transition=observation.transition(anchor,position.getBlockX(),position.getBlockZ());
+                if(transition!=null)currentWorkload.ownerTransition(subject,transition);
+            },failure->currentWorkload.diagnosticFailure("owner-transition",failure));
+            if(firstJoin)Bukkit.getGlobalRegionScheduler().run(this,ignored->{
+                if(owners.get(subject)==observation && Bukkit.getPlayerExact(subject)==player)currentWorkload.join(subject);
+            });
+        },()->owners.remove(subject,observation),30,1);
     }
     @EventHandler public void quit(PlayerQuitEvent event){
         String subject=event.getPlayer().getName();
@@ -127,9 +136,10 @@ public final class FoliaSourceProbe extends JavaPlugin implements Listener,Sourc
             })).exceptionally(error->{preparationFailure=error;return null;});
     }
     @Override public Map<String,Object> loadedOwnership(Target target){
-        OwnerSnapshot snapshot=owners.get(target.subject());
+        var observation=owners.get(target.subject());
+        var snapshot=observation==null?null:observation.snapshot();
         long now=System.nanoTime();
-        if(snapshot==null||!snapshot.ownsAll()||now-snapshot.time()>250_000_000L||Bukkit.getPlayerExact(target.subject())!=snapshot.player())return null;
+        if(!OwnerObservation.available(snapshot,Bukkit.getPlayerExact(target.subject()),now))return null;
         return Map.of("observed_ns",snapshot.time(),"region_identity",snapshot.region(),"owns_region",true,"owner_name",target.subject());
     }
     /** Opt-in native observation on the existing player owner, at most1Hz per subject. */
@@ -155,7 +165,8 @@ public final class FoliaSourceProbe extends JavaPlugin implements Listener,Sourc
     }
     /** Read immutable owner snapshots; never read native chunk state on the global thread. */
     @Override public Map<String,Object> ownershipDiagnostic(Target target){
-        OwnerSnapshot snapshot=owners.get(target.subject());long now=System.nanoTime();
+        var observation=owners.get(target.subject());
+        var snapshot=observation==null?null:observation.snapshot();long now=System.nanoTime();
         Map<String,Object> row=new java.util.LinkedHashMap<>();
         row.put("observed_ns",now);row.put("chunk_x",target.x());row.put("chunk_z",target.z());
         String reason=snapshot==null?"missing_snapshot":!snapshot.ownsAll()?"target_set_not_owned":

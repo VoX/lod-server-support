@@ -102,6 +102,12 @@ public final class SourceWorkload implements AutoCloseable {
     }
     private void record(ArrayBlockingQueue<String> queue, Map<String,?> row){Map<String,Object> bound=new LinkedHashMap<>(row);bound.put("run_id",runId);if(!queue.offer(json.toJson(bound)))overflow=true;}
     private void event(String event, long now){record(events,Map.of("event",event,"time_ns",now));}
+    /** At most32 owner-state transitions plus one truncation marker per native connection.
+     * Uses the existing bounded writer queue; no owner-thread I/O or required-evidence suppression.
+     */
+    public void ownerTransition(String subject,Map<String,Object> transition){
+        Map<String,Object> row=new LinkedHashMap<>(transition);row.put("subject",subject);record(events,row);
+    }
     public boolean ready(){return stage==3;}
     public boolean denied(String subject) {
         Ack required=requirements.get(subject);
