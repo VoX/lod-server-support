@@ -16,8 +16,8 @@ class ExportTests(unittest.TestCase):
         artifact_hash=sha(self.root/'mods/candidate.jar')
         runtime.update(candidate_artifacts=[{'sha256':artifact_hash,'metadata':{'fabric':{'id':'lss'}}}],stage_files=[{'source':str(self.root/'mods/candidate.jar'),'target':'mods/candidate.jar','sha256':artifact_hash}])
         tools={}
-        for name in ('proof.py','rig.py','review_state.py'):
-            target=self.root/'tool-sources/tools/rig'/name;target.parent.mkdir(parents=True,exist_ok=True);target.write_text('# synthetic retained '+name);tools['tools/rig/'+name]=sha(target)
+        for name in ('tools/rig/proof.py','tools/rig/rig.py','tools/rig/review_state.py','tools/rig/rig','scripts/lib/harness-lock.sh','scripts/lib/owned-process.py'):
+            target=self.root/'tool-sources'/name;target.parent.mkdir(parents=True,exist_ok=True);target.write_text('# synthetic retained '+name);tools[name]=sha(target)
         scenario={'id':'controlled','required_test_count':1,'assertions':['observed'],'requires_handshake':True}
         identity={'run_id':'controlled','run_hash':'a'*64,'profile_hash':digest(profile),'scenario_hash':digest(scenario)}
         self.manifest={**identity,'runtime_hash':digest(runtime),'backend':'linux-headless','finished_at':1788987000,
@@ -43,6 +43,10 @@ class ExportTests(unittest.TestCase):
 
     def test_changed_retained_checker_rejected(self):
         (self.root/'tool-sources/tools/rig/proof.py').write_text('# changed')
+        with self.assertRaisesRegex(ValueError,'retained scenario checker dependency changed'):export(self.root,'mods/candidate.jar',[],'controlled')
+
+    def test_changed_retained_ownership_wrapper_rejected(self):
+        (self.root/'tool-sources/scripts/lib/owned-process.py').write_text('# changed ownership semantics')
         with self.assertRaisesRegex(ValueError,'retained scenario checker dependency changed'):export(self.root,'mods/candidate.jar',[],'controlled')
 
     def test_missing_or_invalid_ownership_cannot_export_complete_cleanup(self):
