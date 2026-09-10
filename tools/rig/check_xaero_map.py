@@ -3,6 +3,17 @@ import base64,hashlib,json
 from pathlib import Path
 TARGETS={(31,16),(32,16)}
 
+def target_rgba(row):
+ # Xaero 1.45 MapTileChunk.putColour: ((z * 64 + x) * 4).
+ # Each group contains 4x4 chunks; preserve the full raw buffer as evidence.
+ raw=base64.b64decode(row['buffer_base64'],validate=True)
+ if len(raw)!=64*64*4:raise ValueError('unexpected native tile-group buffer size')
+ cx,cz=row['chunk_x'],row['chunk_z']
+ if row['tile_chunk_x']!=cx//4 or row['tile_chunk_z']!=cz//4:
+  raise ValueError('native group does not contain target')
+ x0,z0=(cx&3)*16,(cz&3)*16
+ return b''.join(raw[((z0+z)*64+x0)*4:((z0+z)*64+x0+16)*4] for z in range(16))
+
 def inspect(rows,oracle,run_id,allow_open=False):
  errors=[];passed={key:False for key in ('fresh_body_received','bridge_write','boundary_continuity','shading_valid','save_race_safe')}
  if not rows or any(r.get('run_id')!=run_id or r.get('overflow') is not False for r in rows):return passed,['missing/mismatched run identity or overflow']
@@ -23,7 +34,8 @@ def inspect(rows,oracle,run_id,allow_open=False):
   textures=[r for r in event('native_texture')if at(r,p)]
   valid=[]
   for r in textures:
-   try:b=base64.b64decode(r['buffer_base64'],validate=True)
+   try:
+    b=base64.b64decode(r['buffer_base64'],validate=True);target_rgba(r)
    except (ValueError,KeyError):continue
    if len(b)!=r.get('buffer_bytes') or hashlib.sha256(b).hexdigest()!=r.get('buffer_sha256') or len(set(b))<3:continue
    pixels=r.get('pixels',[])
@@ -33,9 +45,15 @@ def inspect(rows,oracle,run_id,allow_open=False):
    valid.append(r)
   # A later native vanilla visit must independently reproduce the complete pixel
   # content/slopes AND native color buffer previously built from the bridge tile.
-  equal[p]=any(a.get('native_writer') is False and b.get('native_writer') is True
+  equal[p]=any(a.get('native_writer') is False and a.get('observation')=='buffer_rebuild'
+      and b.get('native_writer') is True
+      and b.get('observation') in ('buffer_rebuild','unchanged_native_group')
+      and any(at(scan,p) and scan.get('scan_ns')==b.get('native_scan_ns')
+          and t['native_visit_started_ns']<=scan['time_ns']<=b['time_ns']
+          and scan.get('pixels')==b['pixels']
+          for scan in event('native_scan_completed'))
       and a['time_ns']<t['native_visit_started_ns']<=b['time_ns']
-      and a['pixels']==b['pixels'] and a['buffer_sha256']==b['buffer_sha256']
+      and a['pixels']==b['pixels'] and target_rgba(a)==target_rgba(b)
       for a in valid for b in valid)
  passed['fresh_body_received']=all(fresh.values());passed['bridge_write']=all(bridge.values())
  passed['boundary_continuity']=all(bridge.values()) and all(equal.values())
