@@ -14,12 +14,12 @@ def build(runtime,profile,map_fixture,connect_fixture):
   path=regular(Path(path));result['stage_files'].append(dict(source=str(path.resolve()),target='instances/lss-rig-client/minecraft/mods/'+name,sha256=sha(path)))
  config='instances/lss-rig-client/instance.cfg';marker='JvmArgs=-Dlss.rig.runId={run_id}'
  if result['generated_files'][config].count(marker)!=1:raise ValueError('known private JVM argument declaration required')
- result['generated_files'][config]=result['generated_files'][config].replace(marker,marker+' -Dlss.rig.initialEndpoint='+result['client_endpoint']+' -Dlss.xaeromap.enabled=true -Dlss.xaeromap.evidence={run}/evidence/xaero-map.jsonl -Dlss.xaeromap.arm={run}/evidence/xaero-map-arm-save')
+ result['generated_files'][config]=result['generated_files'][config].replace(marker,marker+' -Dlss.rig.initialEndpoint='+result['client_endpoint']+' -Dlss.xaeromap.pauseMaxMillis=15000 -Dlss.xaeromap.enabled=true -Dlss.xaeromap.evidence={run}/evidence/xaero-map.jsonl -Dlss.xaeromap.arm={run}/evidence/xaero-map-arm-save')
  import json
  client='instances/lss-rig-client/minecraft/config/lss-client-config.json';values=json.loads(result['generated_files'].get(client,'{}'));values.update(receiveServerLods=True,enableXaeroMapBridge=True,enableJoinSlowStart=False);result['generated_files'][client]=json.dumps(values)+'\n'
  server='server/config/lss-server-config.json';values=json.loads(result['generated_files'].get(server,'{}'));values.update(lodDistanceChunks=32,enableChunkGeneration=False);result['generated_files'][server]=json.dumps(values)+'\n'
  # Preserve native Options data-version and defaults; never add unversioned key overrides.
- options='instances/lss-rig-client/minecraft/options.txt';lines=result['generated_files'].get(options,'').splitlines();lines=[line for line in lines if not line.startswith(('renderDistance:','simulationDistance:'))];lines+=['renderDistance:4','simulationDistance:4'];result['generated_files'][options]='\n'.join(lines)+'\n'
+ options='instances/lss-rig-client/minecraft/options.txt';lines=result['generated_files'].get(options,'').splitlines();lines=[line for line in lines if not line.startswith(('renderDistance:','simulationDistance:','tutorialStep:'))];lines+=['renderDistance:4','simulationDistance:5','tutorialStep:none'];result['generated_files'][options]='\n'.join(lines)+'\n'
  result['generated_files']['server/server.properties']+='difficulty=peaceful\nview-distance=4\nsimulation-distance=4\n'
  result['launches'].append(dict(id='map-controller',cwd='client',argv=[sys.executable,str(Path(__file__).with_name('drive_xaero_map.py').resolve()),'{run}']))
  result['map_fixture_scope']='Actual network/bridge/native Xaero observations; existing WI5 fixture supplies native loopback connect only, no WI5 arm files or lifecycle assertions.'

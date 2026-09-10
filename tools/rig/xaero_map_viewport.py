@@ -29,5 +29,5 @@ def capture_stable(rows,receipt):
  if len([r for r in samples if r['time_ns']>finish])<2:return False
  frames=[r.get('viewport_frame')for r in samples]
  if any(type(v)is not int for v in frames)or frames!=list(range(frames[0],frames[-1]+1)):return False
- keys=('camera_x','camera_z','scale','width','height','window_x','window_y','screen_width','screen_height','gui_width','gui_height')
- return all(all(r.get(k)==before.get(k)for k in keys)and framed(r)for r in samples)
+ keys=('camera_x','camera_z','scale','width','height','window_x','window_y','screen_width','screen_height','gui_width','gui_height','mouse_x','mouse_y')
+ return all(all(type(r.get(k))in(int,float)and math.isfinite(r[k])for k in ('mouse_x','mouse_y'))and all(r.get(k)==before.get(k)for k in keys)and r.get('zoom_mouse_over') is False and framed(r)for r in samples)
