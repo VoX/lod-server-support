@@ -1,4 +1,5 @@
-package dev.vox.lssfixture.elytra;
+package dev.vox.lssfixture.elytra.mixin;
+import dev.vox.lssfixture.elytra.Probe;
 import net.minecraft.client.Minecraft;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;

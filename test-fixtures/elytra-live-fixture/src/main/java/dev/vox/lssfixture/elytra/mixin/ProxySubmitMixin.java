@@ -1,4 +1,5 @@
-package dev.vox.lssfixture.elytra;
+package dev.vox.lssfixture.elytra.mixin;
+import dev.vox.lssfixture.elytra.Probe;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.renderer.entity.EntityRenderDispatcher;
