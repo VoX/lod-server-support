@@ -99,6 +99,8 @@ def export(run,candidate_target,fixture_targets,feature,evidence=(),limitations=
         participants[role]={'id':locked['id'],'profile_hash':digest(locked)}
     inputs['participant_profiles']=participants
     names={'evidence/result.json',*evidence}
+    if manifest.get('launch_journal_version'):
+        names.update(('owner.json','supervisor.json','processes.json','launch-journal.json','supervisor-cleanup.json'))
     if (run/'proof.json').is_file():names.add('proof.json')
     declared=dict(proof.get('evidence',{}))
     declared.update(proof.get('source_seed_report',{}).get('artifacts',{}))
@@ -111,7 +113,7 @@ def export(run,candidate_target,fixture_targets,feature,evidence=(),limitations=
         if sha(regular(path))!=expected:raise ValueError('proof evidence bytes changed')
         names.add('evidence/'+name)
     for name in names:
-        if name!='proof.json' and not name.startswith('evidence/'):raise ValueError('export only explicitly selected run evidence')
+        if name not in {'proof.json','owner.json','supervisor.json','processes.json','launch-journal.json','supervisor-cleanup.json'} and not name.startswith('evidence/'):raise ValueError('export only explicitly selected run evidence')
         if name.endswith('.private.log') or 'launcher' in Path(name).name.lower():raise ValueError('raw launcher/private logs cannot be indexed for export')
     index={name:sha(regular(inside(run,name))) for name in sorted(names)}
     finished=manifest.get('finished_at')

@@ -47,6 +47,12 @@ def ownership_errors(root,runtime):
  from rig import read,regular
  try:
   root=Path(root)
+  manifest=read(root/'manifest.json') if (root/'manifest.json').exists() else {}
+  if (manifest.get('launch_journal_version') or (root/'launch-journal.json').exists()
+      or 'tools/rig/launch_journal.py' in manifest.get('run_manifest',{}).get('runtime_tools',{})):
+   from launch_journal import validate
+   validate(root,runtime)
+   return []
   processes=read(regular(root/'processes.json'));supervisor=read(regular(root/'supervisor.json'))
   def identity(value):
    return (isinstance(value,dict) and type(value.get('pid')) is int and value['pid']>0
