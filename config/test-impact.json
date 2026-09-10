@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "advisory_fast_selection": true,
+  "unknown_impact": "full",
+  "shared_prefixes": ["common/", "xplat/"],
+  "tooling_prefixes": ["config/", "tools/", ".github/"],
+  "platform_prefixes": {"fabric/": "fabric", "paper/": "paper", "neoforge/": "neoforge"},
+  "common_test_dependents": ["fabric", "paper", "neoforge"],
+  "line_exclusions": {"1.21.1": {"fabric_client_gametests": "pre-authorized Tier 3 cut", "folia": "no upstream 1.21.1 build"}},
+  "never_tiered": ["wire-bytes", "cross-brand-compatibility", "protocol-negotiation"],
+  "pure_test_closure_inventory": "docs/implementation/test-moves.json",
+  "architectural_and_version_pins": "docs/implementation/test-baseline-sources.json"
+}
