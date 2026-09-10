@@ -27,6 +27,10 @@ class NativeFiles(unittest.TestCase):
    session=dict(run_id='run',role=role,connection_id='run-'+role,player=name,protocol=20)
    text='LSS_ELYTRA_SESSION '+json.dumps(session)+'\nServer session config received (protocol v20, LOD distance: 32 chunks, enabled: true)\nLSS_ELYTRA_TARGET_CONSUMER registered=true\n'+'\n'.join(tag+' '+json.dumps(x) for x in rows)
    (r/path).write_text(text)
+  camera=dict(run_id='run',role='observer',connection_id='run-observer',nano_time=1440,x=0,eye_y=100.4,z=0,yaw=0,pitch=0)
+  with (r/'instances/lss-rig-client/minecraft/logs/latest.log').open('a') as f:f.write('\nLSS_ELYTRA_CAMERA '+json.dumps(camera)+'\n')
+  pitchrow=dict(example.native[-1],nano_time=1495,pitch=60,mouse_grabbed=True)
+  with (r/'elytra-target/logs/latest.log').open('a') as f:f.write('\nLSS_ELYTRA_NATIVE '+json.dumps(pitchrow)+'\n')
   server=''.join('handshake received from '+name+' (protocol v20, controlled)\n' for name in (SUBJECT,OBSERVER));commands=[];setup=[];number=0
   for phase in example.phases:
    for kind,(command,marker) in predicates(phase['id'],'run').items():
@@ -34,11 +38,15 @@ class NativeFiles(unittest.TestCase):
   for command in setup_commands()+falling_commands()+[landing_command(),landing_command()]:
    number+=1;name=str(number)+'.json';receipt=dict(status='submitted',launch_id='server',process_identity=self.owner);write(r/'commands/results'/name,receipt);setup.append(dict(request=name,command=command,result=receipt,observed_ns=900))
   (r/'server.private.log').write_text(server)
-  inputs=[dict(action='hold',key='Shift_L',start_ns=1099,end_ns=1191),dict(action='press',key='space',start_ns=1391,end_ns=1392),dict(action='relative-look',dx=0,dy=400,start_ns=1491,end_ns=1492)]
+  inputs=[dict(action='hold',key='Shift_L',start_ns=1099,end_ns=1191),dict(action='press',key='space',start_ns=1391,end_ns=1392),dict(action='capture-mouse',x=480,y=270,button=1,start_ns=1491,end_ns=1492),dict(action='relative-look',dx=0,dy=400,start_ns=1493,end_ns=1494)]
   for row in inputs:row.update(game_root='elytra-target',window='0x10',process=self.owner)
   self.journal=dict(run_id='run',run_hash='a'*64,phases=example.phases,native_commands=commands,setup=setup,inputs=inputs,capture=dict(artifact='elytra-gliding.png',sha256=sha(r/'evidence/elytra-gliding.png'),time_ns=1450));write(r/'evidence/elytra-phases.json',self.journal)
  def test_actual_raw_file_recompute_and_proof(self):
   self.assertTrue(inspect(self.root,self.manifest)['passed']);proof=make_proof(self.root,self.manifest);self.assertEqual([],check_report(proof,self.manifest,self.scenario,self.root))
+ def test_missing_actual_pitch_rejected(self):
+  p=self.root/'elytra-target/logs/latest.log';p.write_text('\n'.join(x for x in p.read_text().splitlines() if 'mouse_grabbed' not in x));self.assertFalse(inspect(self.root,self.manifest)['passed'])
+ def test_missing_native_camera_rejected(self):
+  p=self.root/'instances/lss-rig-client/minecraft/logs/latest.log';p.write_text('\n'.join(x for x in p.read_text().splitlines() if 'LSS_ELYTRA_CAMERA' not in x));self.assertFalse(inspect(self.root,self.manifest)['passed'])
  def test_wrong_artifact(self):
   (self.root/'mods/candidate.jar').write_bytes(b'changed');self.assertFalse(inspect(self.root,self.manifest)['passed'])
  def test_fabricated_native_command_flags(self):
