@@ -2,7 +2,7 @@
 import ast,hashlib
 from pathlib import Path
 ROUTES={'client-ui':['check_client_ui.py','client_ui_steps.py','finalize_client_ui.py'],'native-server-smoke':['check_server_smoke_report.py'],'server-gametest':[], 'client-ui-no-consumer':['check_client_ui.py','client_ui_steps.py','finalize_client_ui.py'],'source-prefill':['check_prefill.py'],'source-seed':['check_source_seed.py']}
-CHECKERS={'client-ui':['check_client_ui.py','client_ui_steps.py','finalize_client_ui.py'],'elytra':['check_elytra_run.py'],'concurrent-sources':['check_source_run.py'],'receive-lifecycle':['check_receive_run.py'],'send-admission':['check_send_admission_run.py'],'xaero-map':['check_xaero_map_run.py'],'seated-draw':['check_seated_run.py'],'folia-regions':['check_regions.py'],'client-ui-no-consumer':['check_client_ui.py','client_ui_steps.py','finalize_client_ui.py']}
+CHECKERS={'export-lifecycle':['check_export_lifecycle.py'],'client-ui':['check_client_ui.py','client_ui_steps.py','finalize_client_ui.py'],'elytra':['check_elytra_run.py'],'concurrent-sources':['check_source_run.py'],'receive-lifecycle':['check_receive_run.py'],'send-admission':['check_send_admission_run.py'],'xaero-map':['check_xaero_map_run.py'],'seated-draw':['check_seated_run.py'],'folia-regions':['check_regions.py'],'client-ui-no-consumer':['check_client_ui.py','client_ui_steps.py','finalize_client_ui.py']}
 
 def closure(repo,scenario,runtime,source_repo=None,*,staged_reader=None):
  repo=Path(repo).resolve();source_repo=Path(source_repo).resolve() if source_repo else repo;roots=['tools/rig/proof.py','tools/rig/rig.py','tools/rig/review_state.py','tools/rig/rig','scripts/lib/harness-lock.sh','scripts/lib/owned-process.py']
