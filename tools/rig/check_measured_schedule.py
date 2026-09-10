@@ -13,7 +13,9 @@ def check(oracle,events,origin):
         expected=(subjects[subject]*256+12+cell//16,-7+cell%16)
         if (row.get('chunk_x'),row.get('chunk_z'))!=expected:errors.append('measured offer differs from seeded domain')
         block='diamond_block' if (round//256)%2==0 else 'gold_block'
-        if row.get('expected_source')!=0 or row.get('block_y')!=64 or row.get('expected_block')!=block or row.get('requires_ack') is not True:
+        if (type(row.get('expected_source')) is not int or row.get('expected_source')!=0 or row.get('allowed_sources')!=[0,1,3]
+                or any(type(source) is not int for source in row.get('allowed_sources',[]))
+                or row.get('block_y')!=64 or row.get('expected_block')!=block or row.get('requires_ack') is not True):
             errors.append('measured target specification changed')
         stamp=row.get('offered_ns');due=origin+round*125_000_000
         if type(stamp) is not int or not due<=stamp<=due+1_000_000_000:errors.append('measured offer outside fixed cadence')
