@@ -37,6 +37,17 @@ class ScenarioClosureTest(unittest.TestCase):
  def test_missing_root_rejected(self):
   (self.root/'tools/rig/proof.py').unlink()
   with self.assertRaisesRegex(ValueError,'missing scenario dependency'):self.get()
+ def test_export_checker_and_actual_driver_are_bound(self):
+  self.put('check_export_lifecycle','value=1\n');self.put('drive_export_lifecycle','from check_export_lifecycle import make_proof\n')
+  runtime={'launches':[{'argv':[str(self.root/'tools/rig/drive_export_lifecycle.py')]}]}
+  before=closure(self.root,{'checker':'export-lifecycle'},runtime)
+  self.assertIn('tools/rig/check_export_lifecycle.py',before);self.assertIn('tools/rig/drive_export_lifecycle.py',before)
+  self.put('check_export_lifecycle','value=2\n');self.assertNotEqual(before,closure(self.root,{'checker':'export-lifecycle'},runtime))
+ def test_unused_export_checker_is_excluded(self):
+  self.put('proof','from check_export_lifecycle import check_report\n');self.put('check_export_lifecycle','value=1\n')
+  before=self.get();self.put('check_export_lifecycle','value=2\n');self.assertEqual(before,self.get())
+ def test_declared_export_checker_must_exist(self):
+  with self.assertRaisesRegex(ValueError,'missing scenario dependency'):self.get({'checker':'export-lifecycle'})
  def test_unknown_route_rejected(self):
   with self.assertRaisesRegex(ValueError,'undeclared'):self.get({'execution_route':'new-route'})
 
