@@ -359,7 +359,7 @@ public class SerializerParityGameTests {
                                     + ": " + nativeReadyStatus.get());
                     if (nativeSavedRead.get() == null) {
                         var map = ((dev.vox.lss.mixin.AccessorServerChunkCache) chunkSource).getChunkMap();
-                        nativeSavedRead.set(map.read(chunkPos));
+                        nativeSavedRead.set(map.read(chunkPos.pos()));
                     }
                     var pending = nativeSavedRead.get();
                     if (pending.isCompletedExceptionally()) {
