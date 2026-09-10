@@ -32,6 +32,22 @@ def read_ref(root, ref, path):
 def properties(text):
     return dict(line.split('=', 1) for raw in text.splitlines() if (line := raw.strip()) and not line.startswith('#') and '=' in line)
 
+def client_gametests(build):
+    # Loom registers runClientGameTest from this setting; the task name need
+    # not occur in the source build script at all. Resolve only the two actual
+    # declared flavors: literal boolean, or one unreassigned top-level literal.
+    active=re.sub(r'/\*.*?\*/','',build,flags=re.S)
+    active=re.sub(r'(?m)//[^\n]*','',active)
+    values=re.findall(r'(?m)^\s*enableClientGameTests\s*=\s*([A-Za-z_][A-Za-z0-9_]*)\s*$',active)
+    require(len(values)==1,'client gametest capability requires one explicit Loom setting')
+    value=values[0]
+    if value not in ('true','false'):
+        declarations=re.findall(r'(?m)^def '+re.escape(value)+r'\s*=\s*(true|false)\s*$',active)
+        assignments=re.findall(r'\b'+re.escape(value)+r'\s*[+*/%&|^-]?=(?!=)',active)
+        require(len(declarations)==len(assignments)==1,'client gametest variable must be one unreassigned top-level boolean')
+        value=declarations[0]
+    return value=='true'
+
 def facts(root, ref=None):
     def read(path): return read_ref(root, ref, path) if ref else (Path(root)/path).read_text()
     env = properties(read('.github/line.env')); gradle = properties(read('gradle.properties'))
@@ -47,7 +63,7 @@ def facts(root, ref=None):
             'neoforge_shipping': env['LINE_SHIP_NEOFORGE'] == 'true',
             'neoforge_renderer': 'available' if match[1] == 'true' else 'unsupported',
             'paper_loaders': env['LINE_PAPER_LOADERS'].split(),
-            'fabric_client_gametests': 'runClientGameTest' in read('fabric/build.gradle') and 'enableClientGameTests = false' not in read('fabric/build.gradle')}
+            'fabric_client_gametests': client_gametests(read('fabric/build.gradle'))}
 
 def inspect_jar(path):
     path = Path(path)
