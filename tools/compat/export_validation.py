@@ -67,9 +67,13 @@ def export(run,candidate_target,fixture_targets,feature,evidence=(),limitations=
                   candidate_artifacts=candidate_bindings(runtime,artifact))
     if inputs['candidate_artifacts'].get(candidate_target)!=candidate:raise ValueError('selected candidate lacks native product metadata binding')
     participants={}
+    validation_profiles={profile['id']:profile}
     for reference in manifest.get('participants',[]):
         role=reference['role'];locked=read(regular(inside(run,'participants/'+role+'.json')))
         if role in participants or locked['id']!=reference['id'] or digest(locked)!=reference['profile_hash']:raise ValueError('retained participant identity changed')
+        existing=validation_profiles.get(locked['id'])
+        if existing is not None and digest(existing)!=digest(locked):raise ValueError('conflicting retained participant profile identity')
+        validation_profiles[locked['id']]=locked
         participants[role]={'id':locked['id'],'profile_hash':digest(locked)}
     inputs['participant_profiles']=participants
     names={'evidence/result.json',*evidence}
@@ -95,7 +99,7 @@ def export(run,candidate_target,fixture_targets,feature,evidence=(),limitations=
             'scenario':scenario['id'],'feature':feature,'result':{'passed':'pass','failed':'fail','inconclusive':'inconclusive'}[result['status']],
             'evidence_index':index,'evidence_sha256':digest(index),'limitations':list(limitations)}
     if result.get('cleanup')!='complete':record['limitations'].append('Cleanup incomplete in this failed/inconclusive attempt.')
-    validate_record(record,{profile['id']:profile});return record
+    validate_record(record,validation_profiles);return record
 
 
 if __name__=='__main__':
