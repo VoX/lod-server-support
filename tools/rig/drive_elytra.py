@@ -65,7 +65,12 @@ def run(root):
   phase('equipped')
   with held(target_driver,'Shift_L'):phase('crouched')
   phase('standing_recovered')
+  from elytra_phase_barrier import elevated
   for text in falling_commands():command(text)
+  after_teleport=time.monotonic_ns()
+  wait(lambda:elevated(rows(target_log,'LSS_ELYTRA_NATIVE'),rows(observer_log,'LSS_ELYTRA_SUBMIT'),after_teleport,manifest['run_id']))
+  journal['falling_barrier']={'after_command_ns':after_teleport,'observed_ns':time.monotonic_ns(),'minimum_y_exclusive':140}
+  save()
   phase('falling')
   start=time.monotonic_ns();target_driver.key('space',.08);journal['inputs'].append(dict(action='press',key='space',start_ns=start,end_ns=time.monotonic_ns(),game_root='elytra-target',window=target_window,process=target_identity));save()
   phase('gliding',True)
