@@ -105,12 +105,12 @@ def run(root):
  wait(lambda:all(inspect(rows(),oracle,m['run_id'],allow_open=True)[0].values()))
  artifacts={'visual_render':{'artifact':'xaero-map-boundary.png','artifact_sha256':sha(root/'evidence/xaero-map-boundary.png')}}
  # Ask the actual native client loop to stop, then observe its own shutdown hook.
- # Prism is deliberately configured CloseAfterLaunch=false; no raw proof exists
- # until the native writer has closed, so premature launcher exit still fails.
+ # Native shutdown waits at most ten seconds for this atomic, identity-bound
+ # proof after publishing a durable close receipt. Premature exits still fail.
  from xaero_map_shutdown import request_stop
  request_stop(root,m,inspect(rows(),oracle,m['run_id'],allow_open=True)[0])
- wait(lambda:rows() and rows()[-1].get('event')=='observer_closed' and '[XAERO-MAP-FIXTURE] CLOSED overflow=false pending=0'in logged())
- make_proof(root,m,review_artifacts=artifacts,require_closed=True)
+ wait(lambda:rows() and rows()[-1].get('event')=='observer_closed' and (root/'evidence/xaero-map-native-close.json').is_file())
+ make_proof(root,m,review_artifacts=artifacts,require_closed=True,publication=True)
  while True:time.sleep(1)
 if __name__=='__main__':
  p=argparse.ArgumentParser();p.add_argument('run',type=Path);a=p.parse_args();run(a.run)
