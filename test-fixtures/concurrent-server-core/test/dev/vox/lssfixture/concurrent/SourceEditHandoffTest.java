@@ -63,6 +63,20 @@ public final class SourceEditHandoffTest {
         public void close()throws Exception{work.close();try(var files=Files.list(root)){for(Path p:files.toList())Files.delete(p);}Files.delete(root);}
     }
     public static void main(String[] ignored)throws Exception{
+        try(Harness h=new Harness()) {
+            var offer=SourceWorkload.class.getDeclaredMethod("offer",SourceWorkload.Target.class,String.class,boolean.class,long.class);
+            offer.setAccessible(true);
+            offer.invoke(h.work,new SourceWorkload.Target("RigSubjectA",12,0,64,0,"diamond_block"),"measured-1",true,1L);
+            h.work.close();
+            var rows=Files.readAllLines(h.root.resolve("oracle.jsonl")).stream().map(x->JsonParser.parseString(x).getAsJsonObject())
+                    .filter(x->x.get("event").getAsString().equals("target")).toList();
+            check(rows.size()==5);Set<Integer> initialSources=new HashSet<>();
+            for(var row:rows) {
+                if(!row.has("target_sequence")){check(!row.has("allowed_sources"));initialSources.add(row.get("expected_source").getAsInt());}
+                else {check(row.get("expected_source").getAsInt()==0);check(row.get("allowed_sources").equals(JsonParser.parseString("[0,1,3]")));}
+            }
+            check(initialSources.equals(Set.of(0,1,2,3)));
+        }
         try(Harness h=new Harness()){
             Object original=h.pendingObject();var mutation=h.engine.calls.getFirst().mutation();
             h.work.quit("RigSubjectA");h.engine.current=null;h.engine.finish(0,false);

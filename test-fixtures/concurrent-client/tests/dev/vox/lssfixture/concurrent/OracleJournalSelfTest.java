@@ -80,6 +80,31 @@ public final class OracleJournalSelfTest {
             require(journal.poll(path,1,Set.of()).targets().get(OracleJournal.position(1,2)).getFirst().applied()==15);
             journal=new OracleJournal(RUN,SUBJECT);qualified.addProperty("subject","RigSubjectB");Files.writeString(path,session(1)+target(1)+qualified+"\n");
             try{journal.poll(path,1,Set.of());throw new AssertionError("foreign subject applied own target");}catch(java.io.IOException expected){}
+            JsonObject measuredTarget=JsonParser.parseString(target(1)).getAsJsonObject();
+            measuredTarget.add("allowed_sources",JsonParser.parseString("[0,1,3]"));
+            journal=new OracleJournal(RUN,SUBJECT);Files.writeString(path,session(1)+measuredTarget+"\n"+applied(1,1,null,15));
+            var fallback=journal.poll(path,1,Set.of()).targets().get(OracleJournal.position(1,2)).getFirst();
+            require(fallback.loadedUpdateFallback()&&fallback.facts().acceptsSource(1)&&fallback.facts().acceptsSource(3)&&!fallback.facts().acceptsSource(2));
+            Files.writeString(path,session(2)+row(Map.of("event","session_transfer","old_connection","c1","connection_id","c2","time_ns",50)),StandardOpenOption.APPEND);
+            require(journal.poll(path,2,Set.of()).targets().get(OracleJournal.position(1,2)).getFirst().loadedUpdateFallback());
+            for(String invalid:new String[]{"[0]","[0,1,2,3]","[false,1,3]","[\"0\",1,3]","[0,1,3.0]","null"}) {
+                measuredTarget.add("allowed_sources",JsonParser.parseString(invalid));
+                Files.writeString(path,session(1)+measuredTarget+"\n");journal=new OracleJournal(RUN,SUBJECT);
+                try{journal.poll(path,1,Set.of());throw new AssertionError("invalid source policy accepted: "+invalid);}catch(java.io.IOException expected){}
+            }
+            measuredTarget.add("allowed_sources",JsonParser.parseString("[0,1,3]"));
+            for(String key:new String[]{"expected_source","target_sequence"}) {
+                JsonElement originalValue=measuredTarget.get(key);
+                for(String invalid:new String[]{key.equals("expected_source")?"\"0\"":"\"1\"",key.equals("expected_source")?"0.0":"1.0"}) {
+                    measuredTarget.add(key,JsonParser.parseString(invalid));
+                    Files.writeString(path,session(1)+measuredTarget+"\n");journal=new OracleJournal(RUN,SUBJECT);
+                    try{journal.poll(path,1,Set.of());throw new AssertionError("coerced source discriminator accepted");}catch(java.io.IOException expected){}
+                }
+                measuredTarget.add(key,originalValue);
+            }
+            measuredTarget.remove("target_sequence");
+            Files.writeString(path,session(1)+measuredTarget+"\n");journal=new OracleJournal(RUN,SUBJECT);
+            try{journal.poll(path,1,Set.of());throw new AssertionError("initial route assertion weakened");}catch(java.io.IOException expected){}
             System.out.println("OracleJournal: partial append/application, cached poll, reconnect, bounded retained metadata, subjectless application, exact predecessor interval, repeated-block expiry, gap/truncation/bounded reads passed");
         }finally{Files.deleteIfExists(path);Files.deleteIfExists(root);}
     }
