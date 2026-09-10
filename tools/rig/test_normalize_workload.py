@@ -32,3 +32,52 @@ class NormalizeTests(unittest.TestCase):
         oracle,consumers,sessions=self.facts();sessions=[row for row in sessions if row.get('event')!='product_registration_observed']
         with self.assertRaisesRegex(ValueError,'actual product registration'):
             normalize(oracle,consumers,sessions,platform='paper',start_ns=0,end_ns=30_000_000_000,debt_result={'status':'passed','drain_seconds':2},cleanup_complete=True)
+
+    def measured_facts(self, source):
+        import test_target_intervals as strict
+        oracle=[];consumers={};sessions=[]
+        for subject in 'ABCD':
+            fixture=strict.StrictTargets();fixture.setUp();fixture.measured_fallback(source)
+            for row in fixture.oracle+fixture.rows['A']:
+                if 'id' in row:row['id']=subject+row['id']
+                if row.get('predecessor_id') is not None:row['predecessor_id']=subject+row['predecessor_id']
+                if 'subject' in row:row['subject']=subject
+                if 'connection_id' in row:row['connection_id']=subject
+                row['run_id']='test-run'
+            for row in fixture.rows['A']:row['subject']=subject
+            oracle.extend(fixture.oracle);consumers[subject]=fixture.rows['A']
+            sessions.extend([dict(event='join',subject=subject,connection_id=subject,time_ns=0),
+                             dict(event='product_registration_observed',subject=subject,connection_id=subject,time_ns=1),
+                             dict(event='quit',connection_id=subject,time_ns=100_000_000_000)])
+        return oracle,consumers,sessions
+
+    def normalize_measured(self, facts):
+        return normalize(*facts,platform='paper',start_ns=0,end_ns=90_000_000_000,
+                         debt_result={'status':'passed','drain_seconds':2},cleanup_complete=True)
+
+    def test_allowed_route_survives_real_correctness_and_metric_pipeline(self):
+        from performance import correctness
+        from assemble_metrics import assemble
+        for source in (1,3):
+            facts=self.measured_facts(source);result=self.normalize_measured(facts)
+            self.assertEqual([],correctness(result))
+            for target in result['oracle']:
+                self.assertEqual(source,target['delivery_source'])
+                self.assertEqual(0,target['expected_source'])
+                self.assertEqual([0,1,3],target['allowed_sources'])
+                self.assertEqual({'block':'gold_block'},target['actual'])
+                self.assertEqual(target['actual'],target['expected'])
+            # Empty timing/RSS samples deliberately cannot qualify performance, but real
+            # assembly must still account for every independently validated body exactly once.
+            owners={name:{'pid':i+100,'boot':'test','start':i} for i,name in enumerate(['server',*'ABCD'])}
+            metrics=assemble('test-run',facts[1],[],[],result['oracle'],[],owners,
+                             {name:name for name in owners},0,90_000_000_000)
+            for subject in 'ABCD':self.assertEqual(36,metrics[subject]['useful_body_bytes'])
+
+    def test_wrong_route_block_or_original_interval_cannot_normalize(self):
+        facts=self.measured_facts(2)
+        with self.assertRaisesRegex(ValueError,'raw target proof'):self.normalize_measured(facts)
+        facts=self.measured_facts(1);facts[1]['A'][0]['expected_block']='diamond_block'
+        with self.assertRaisesRegex(ValueError,'raw target proof'):self.normalize_measured(facts)
+        facts=self.measured_facts(3);facts[1]['A'][0]['resolved_ns']=66_000_000_000
+        with self.assertRaisesRegex(ValueError,'raw target proof'):self.normalize_measured(facts)
