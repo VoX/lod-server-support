@@ -35,8 +35,8 @@ public final class Probe {
    var data=new net.minecraft.client.multiplayer.ServerData("LSS owned Elytra fixture",endpoint,net.minecraft.client.multiplayer.ServerData.Type.OTHER);
    net.minecraft.client.gui.screens.ConnectScreen.startConnecting(new net.minecraft.client.gui.screens.TitleScreen(),client,address,data,false,null);
   }
-  if(!session()||!ROLE.equals("target"))return;long now=System.nanoTime();if(now-targetAt<100_000_000L)return;targetAt=now;
-  var mc=Minecraft.getInstance();var p=mc.player;var row=new LinkedHashMap<String,Object>();row.put("uuid",p.getUUID().toString());row.put("on_ground",p.onGround());row.put("fall_flying",p.isFallFlying());row.put("crouching",p.isCrouching());row.put("elytra",p.getItemBySlot(EquipmentSlot.CHEST).is(Items.ELYTRA));row.put("survival",mc.gameMode.getPlayerMode()==GameType.SURVIVAL);row.put("x",p.getX());row.put("y",p.getY());row.put("z",p.getZ());emit("LSS_ELYTRA_NATIVE",row);
+  if(!session())return;long now=System.nanoTime();if(now-targetAt<100_000_000L)return;targetAt=now;
+  var mc=Minecraft.getInstance();var p=mc.player;var row=new LinkedHashMap<String,Object>();row.put("uuid",p.getUUID().toString());row.put("on_ground",p.onGround());row.put("fall_flying",p.isFallFlying());row.put("crouching",p.isCrouching());row.put("elytra",p.getItemBySlot(EquipmentSlot.CHEST).is(Items.ELYTRA));row.put("survival",mc.gameMode.getPlayerMode()==GameType.SURVIVAL);row.put("x",p.getX());row.put("y",p.getY());row.put("z",p.getZ());row.put("eye_y",p.getEyeY());row.put("mouse_grabbed",mc.mouseHandler.isMouseGrabbed());row.put("yaw",p.getYRot());row.put("pitch",p.getXRot());emit(ROLE.equals("target")?"LSS_ELYTRA_NATIVE":"LSS_ELYTRA_CAMERA",row);
  }
  public static void submitted(Object object,double distance,Vec3 position){
   if(!session())return;

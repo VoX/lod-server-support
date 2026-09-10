@@ -51,7 +51,10 @@ def run(root):
    command(landing_command()) # Observer-only camera tracks the actual native subject.
    time.sleep(.2)
   if capture:
+   from elytra_camera import framed
    observer_driver.key('F1');time.sleep(.2)
+   framing_after=time.monotonic_ns()
+   wait(lambda:framed(rows(observer_log,'LSS_ELYTRA_CAMERA'),rows(observer_log,'LSS_ELYTRA_SUBMIT'),framing_after,manifest['run_id'],rows(target_log,'LSS_ELYTRA_SESSION')[0]['uuid']))
    try:observer_driver.capture('elytra-gliding.png')
    finally:observer_driver.key('F1')
    journal['capture']={'artifact':'elytra-gliding.png','sha256':sha(root/'evidence/elytra-gliding.png'),'time_ns':time.monotonic_ns(),'window':observer_window,'process':observer_identity}
@@ -80,7 +83,10 @@ def run(root):
   start=time.monotonic_ns();target_driver.key('space',.08);journal['inputs'].append(dict(action='press',key='space',start_ns=start,end_ns=time.monotonic_ns(),game_root='elytra-target',window=target_window,process=target_identity));save()
   phase('gliding',True)
   from elytra_input import look_down
+  capture_start=time.monotonic_ns();target_driver.click(480,270);wait(lambda:any(r.get('mouse_grabbed')is True and r['nano_time']>=capture_start for r in rows(target_log,'LSS_ELYTRA_NATIVE')));journal['inputs'].append(dict(action='capture-mouse',x=480,y=270,button=1,start_ns=capture_start,end_ns=time.monotonic_ns(),game_root='elytra-target',window=target_window,process=target_identity));save()
   start=time.monotonic_ns();look_down(target_driver);journal['inputs'].append(dict(action='relative-look',dx=0,dy=400,start_ns=start,end_ns=time.monotonic_ns(),game_root='elytra-target',window=target_window,process=target_identity));save()
+  look_end=journal['inputs'][-1]['end_ns']
+  wait(lambda:any(r['nano_time']>=look_end and r.get('mouse_grabbed')is True and r.get('pitch',0)>40 for r in rows(target_log,'LSS_ELYTRA_NATIVE')))
   # Genuine look input steers native flight into the unchanged bounded landing zone.
   command(landing_command())
   phase('landed')

@@ -10,9 +10,9 @@ class Driver:
  def verify(self):self.events.append('verify')
 class InputTests(unittest.TestCase):
  def test_guarded_bounded_real_relative_call(self):
-  d=Driver();look_down(d);self.assertEqual(['focus','verify',('motion',(1,0,400,0)),'verify'],d.events)
+  d=Driver();look_down(d);self.assertEqual(['focus']+['verify',('motion',(1,0,100,0)),'verify']*4,d.events)
  def test_failed_guard_prevents_motion(self):
   d=Driver();d.verify=lambda:(_ for _ in ()).throw(ValueError('foreign window'))
   with self.assertRaises(ValueError):look_down(d)
-  self.assertNotIn(('motion',(1,0,400,0)),d.events)
+  self.assertNotIn(('motion',(1,0,100,0)),d.events)
 if __name__=='__main__':unittest.main()
