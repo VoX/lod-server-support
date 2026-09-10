@@ -57,6 +57,14 @@ def export(run,candidate_target,fixture_targets,feature,evidence=(),limitations=
     if scenario.get('execution_route') == 'native-server-smoke':
         from server_smoke_identity import export_binding
         inputs.update(export_binding(run,runtime,manifest,scenario,candidate_target,artifact))
+    # Verify the complete originally retained source set before resolving a scope.
+    # Otherwise deleting a transitive helper can make it look like an external
+    # import and silently remove its hash from the newly computed closure.
+    from toolchain import verify as verify_retained_tools
+    try:
+        verify_retained_tools(run/'tool-sources',manifest['run_manifest']['runtime_tools'])
+    except (ValueError,OSError) as error:
+        raise ValueError('retained runtime tool sources changed') from error
     from scenario_checker_identity import closure
     scoped=closure(run/'tool-sources',scenario,runtime,Path(__file__).resolve().parents[2])
     if any(manifest['run_manifest']['runtime_tools'].get(name)!=value for name,value in scoped.items()):raise ValueError('retained scenario checker dependency changed')
