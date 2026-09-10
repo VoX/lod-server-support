@@ -1,10 +1,11 @@
 """Required acceptance is scoped to one explicit artifact and scenario target."""
 import re
-FIELDS=('profile_hash','scenario_hash','scenario_checker_sha256','candidate_sha256')
+FIELDS=('profile_hash','scenario_hash','scenario_checker_sha256','candidate_sha256','runtime_settings_sha256')
 
 def complete(t):
  if not isinstance(t,dict):return False
  if any(not isinstance(t.get(k),str) or not re.fullmatch('[0-9a-f]{64}',t[k]) for k in FIELDS):return False
+ if t.get('runtime_settings_version')!=1 or type(t.get('runtime_settings_version')) is not int:return False
  if type(t.get('scenario_version')) is not int or t['scenario_version']<1:return False
  if not isinstance(t.get('candidate_target'),str) or not t['candidate_target']:return False
  for key in ('fixture_artifacts','candidate_artifacts'):
@@ -17,7 +18,7 @@ def same_target(row,record):
  if not complete(t):return False
  if record.get('profile_id')!=row.get('profile_id') or record.get('scenario')!=row.get('scenario_id') or record.get('profile_hash')!=t['profile_hash']:return False
  a=record.get('run_manifest',{})
- if any(a.get(k)!=t[k] for k in (*FIELDS[1:],'scenario_version','candidate_target','fixture_artifacts','candidate_artifacts')):return False
+ if any(a.get(k)!=t[k] for k in (*FIELDS[1:],'runtime_settings_version','scenario_version','candidate_target','fixture_artifacts','candidate_artifacts')):return False
  expected=row.get('required_participants',{})
  if expected and (not isinstance(a.get('participant_profiles'),dict) or any(a['participant_profiles'].get(role)!=value for role,value in expected.items())):return False
  if 'participant_profiles' in t and a.get('participant_profiles')!=t['participant_profiles']:return False
