@@ -7,6 +7,19 @@ from target_intervals import intervals, delivery_errors, recovery_origin, wire_e
 from check_regions import check as regions, handshakes, load_rows
 
 
+def expected_sources(target):
+    """Keep controlled route probes exact; validate the explicit repeated-edit policy."""
+    if 'allowed_sources' not in target:
+        return (target['expected_source'],) if 'expected_source' in target else None
+    allowed=target['allowed_sources']
+    if (type(target.get('target_sequence')) is not int or target['target_sequence']<=0
+            or type(target.get('expected_source')) is not int or target['expected_source']!=0
+            or type(allowed) is not list or allowed!=[0,1,3]
+            or any(type(source) is not int for source in allowed)):
+        raise ValueError('invalid measured source policy')
+    return tuple(allowed)
+
+
 def check(oracle, consumers, required_subjects=4):
     strict=any("target_sequence" in row or "cell_revision" in row for row in oracle if row.get("event")=="target")
     bounds,errors=intervals(oracle,strict)
@@ -15,6 +28,8 @@ def check(oracle, consumers, required_subjects=4):
         if row.get('event')!='target':continue
         if row['id'] in targets:errors.append('duplicate oracle target: '+row['id'])
         targets[row['id']]=row
+        try:expected_sources(row)
+        except ValueError:errors.append('invalid target source policy: '+row['id'])
     applied={row['id']:row['time_ns'] for row in oracle if row.get('event') in ('edit_applied','target_ready')}
     acknowledged={row['id']:row['time_ns'] for row in oracle if row.get('event')=='target_acknowledged'}
     sessions={(row['subject'],row['connection_id']) for row in oracle if row.get('event')=='session'}
@@ -51,7 +66,9 @@ def check(oracle, consumers, required_subjects=4):
                     or row.get('lease_active') is not True):
                 errors.append('stale/foreign target outcome: '+row['id']);continue
             if row.get('body_bytes',0)<=0:errors.append('target without actual body bytes: '+row['id']);continue
-            if 'expected_source' in target and row.get('source')!=target['expected_source']:
+            try:allowed=expected_sources(target)
+            except ValueError:continue
+            if allowed is not None and (type(row.get('source')) is not int or row['source'] not in allowed):
                 errors.append('target delivered from wrong source: '+row['id']);continue
             if 'expected_block' in target and row.get('expected_block')!=target['expected_block']:
                 errors.append('target block oracle mismatch: '+row['id']);continue

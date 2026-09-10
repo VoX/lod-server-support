@@ -68,6 +68,15 @@ Measured mode retains the separately registered 720-second, 23,040-offer schedul
 256 cells per subject, eight edits/second/subject, no catch-up bursts. The 32-second
 revisit interval remains an actual current-revision delivery deadline; the 120-
 second recovery ceiling never permits acceptance after a successor mutation.
+Repeated-edit targets explicitly declare `allowed_sources: [0,1,3]`: live memory,
+disk, or the LOD store may deliver the current block. Their `expected_source: 0`
+records the independently verified loaded premise; it is not a routing promise.
+Folia intentionally releases held requests after one tick even when an owner
+probe is late. Generated source2 and unknown sources cannot satisfy these edits.
+The initial four-source probes and sparse diagnostic targets keep their exact
+source assertions. All original block, wire/body association, revision, receipt,
+lease, every-edit and fixed schedule checks still apply. A matching old or later
+revision cannot pass because its route is allowed.
 Calibration and measured comparisons remain separate gates.
 
 ## Build and materialize (serialized Java slot required)
