@@ -151,6 +151,14 @@ def doctor(runtime):
     result = {name: bool(shutil.which(runtime.get(name, name))) for name in names}
     result['linux_ownership'] = sys.platform == 'linux' and Path('/proc/self/stat').is_file()
     result['disk_free_bytes'] = shutil.disk_usage(Path.home()).free
+    from storage_guard import preflight
+    try:
+        result['storage']=preflight({'artifacts':[]},runtime,Path.home())
+        result['storage_ready']=True
+        result['storage_scope']='Known explicit runtime stages only; create also budgets selected profile artifacts'
+    except (ValueError,OSError,KeyError,TypeError) as error:
+        result['storage_ready']=False
+        result['storage_error']=str(error)
     for kind in ('bind_endpoint', 'client_endpoint'):
         endpoint(runtime[kind])
     try:
@@ -174,6 +182,8 @@ def create(profile, runtime, scenario, state):
     result = plan(profile, runtime, scenario)
     if result['status'] != 'ready':
         raise ValueError('profile blocked; resolve exact plan before create')
+    from storage_guard import preflight
+    storage=preflight(profile,runtime,state)
     check_available(runtime, endpoint, free_endpoint)
     run_id = time.strftime('%Y%m%dT%H%M%SZ', time.gmtime()) + '-' + uuid.uuid4().hex[:12]
     state.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -183,6 +193,7 @@ def create(profile, runtime, scenario, state):
     root.mkdir(mode=0o700)
     for name in ('artifacts', 'server', 'client', 'evidence'):
         (root / name).mkdir(mode=0o700)
+    write(root/'evidence/storage-preflight-create.json',storage)
     for artifact in profile['artifacts']:
         if artifact.get('enabled', True):
             name = artifact['file']
@@ -223,7 +234,7 @@ def create(profile, runtime, scenario, state):
     # Runtime contains local launch context paths, but never account contents.
     write(root / 'runtime.json', runtime)
     from toolchain import snapshot
-    run_manifest = {'profile_hash': digest(profile), 'scenario_hash': digest(scenario), 'runtime_hash': digest(runtime),
+    run_manifest = {'storage_estimate':storage['estimate'],'profile_hash': digest(profile), 'scenario_hash': digest(scenario), 'runtime_hash': digest(runtime),
                     'runtime_tools': snapshot(REPO),
                     'runner_sha256': sha(Path(__file__)), 'checker_sha256': digest({name: sha(Path(__file__).with_name(name)) for name in ('proof.py', 'check_source_seed.py', 'check_regions.py', 'check_workload.py', 'performance.py', 'metrics.py', 'measure.py')}),
                     'staged_inputs': [{k: row[k] for k in ('sha256', 'target')} for row in runtime.get('stage_files', [])],
@@ -391,6 +402,11 @@ def run(root):
     manifest.update(status='running', started_at=time.time())
     write(root / 'manifest.json', manifest)
     try:
+        from storage_guard import preflight, Monitor
+        storage=preflight(profile,runtime,root,manifest['run_manifest'].get('storage_estimate'),phase='run')
+        write(root/'evidence/storage-preflight-run.json',storage)
+        storage_monitor=Monitor(root,storage)
+        storage_monitor.check()
         if runtime['backend'] == 'isolated-linux-prism':
             private_display(root, env, children)
             gpu_env = runtime.get('gpu_environment', {})
@@ -415,6 +431,7 @@ def run(root):
         if runtime.get('require_gpu') and not (root / 'gpu.json').exists():
             raise ValueError('GPU-required runtime lacks an owned private display')
         for launch in runtime['launches']:
+            storage_monitor.check()
             if not re.fullmatch('[A-Za-z0-9_-]+', launch['id']):
                 raise ValueError('invalid launch ID')
             argv = [arg.replace('{run}', str(root)).replace('{run_id}', manifest['run_id']).replace('{endpoint}', runtime['client_endpoint']) for arg in launch['argv']]
@@ -437,6 +454,7 @@ def run(root):
             if launch.get('ready_marker'):
                 ready_deadline = time.monotonic() + launch.get('ready_timeout_seconds', 120)
                 while launch['ready_marker'] not in (root / (launch['id'] + '.private.log')).read_text(errors='replace'):
+                    storage_monitor.check()
                     if proc.poll() is not None or time.monotonic() >= ready_deadline or stopped or (root/'stop').exists():
                         raise ValueError('Minecraft readiness timeout/exit: ' + launch['id'])
                     time.sleep(.2)
@@ -452,6 +470,7 @@ def run(root):
                 raise ValueError('invalid joint readiness deadline')
             ready_deadline = time.monotonic() + seconds
             while marker not in (root / (target + '.private.log')).read_text(errors='replace'):
+                storage_monitor.check()
                 if stopped or (root / 'stop').exists() or time.monotonic() >= ready_deadline or any(proc.poll() is not None for proc in children):
                     raise ValueError('joint workload readiness timeout/exit')
                 time.sleep(.1)
@@ -462,6 +481,7 @@ def run(root):
         rss_stream = open(root / 'evidence/rss-samples.jsonl', 'x')
         deadline = time.monotonic() + scenario.get('observe_seconds', scenario['timeout_seconds'])
         while time.monotonic() < deadline and not stopped and not (root / 'stop').exists():
+            storage_monitor.check()
             commands.poll()
             for observation in sampler.sample():
                 rss_stream.write(json.dumps(observation) + '\n')
