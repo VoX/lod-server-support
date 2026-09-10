@@ -12,7 +12,7 @@ class FailedSlotTests(unittest.TestCase):
   registration={field:h(field) for field in ledger.FIELDS};registration['profile_hash']=ledger.digest(self.profile);registration['fixture_hash']=ledger.digest({'fixture.jar':self.fixture});registration['arms']={arm:{'source_tree':hashlib.sha1(arm.encode()).hexdigest(),'artifact_hashes':{'fabric':h(arm+' jar')}} for arm in ('baseline','candidate')}
   self.registration=ledger.init(self.root,registration);self.binding=ledger.intent(self.root,'calibration')
   metadata={key:registration[key] for key in ('hardware_hash','jvm_hash','workload_hash')};metadata.update(artifact_identity=registration['arms']['baseline'],artifact_paths={'fabric':'candidate.jar'},fixture_paths=['fixture.jar'])
-  self.runtime={'world_digest':registration['world_digest'],'measurement':metadata,'measurement_context':self.binding,'launches':[{'id':'server','argv':['/test/jdk/bin/java']},{'id':'client-A','argv':['/test/jdk/bin/java']}]}
+  self.runtime={'world_digest':registration['world_digest'],'measurement':metadata,'measurement_context':self.binding,'measurement_experiment_root':str(self.root.resolve()),'launches':[{'id':'server','argv':['/test/jdk/bin/java']},{'id':'client-A','argv':['/test/jdk/bin/java']}]}
   self.values={'runtime.json':self.runtime,'profile.json':self.profile,'scenario.json':self.scenario,'processes.json':[{'pid':2147483601,'start':'100','boot':'fixture-dead-boot'},{'pid':2147483602,'start':'101','boot':'fixture-dead-boot'}],'supervisor.json':{'pid':2147483603,'start':'102','boot':'fixture-dead-boot'}};self.refresh()
  def tearDown(self):self.tmp.cleanup()
  def refresh(self,status='failed'):
@@ -21,6 +21,8 @@ class FailedSlotTests(unittest.TestCase):
   collected={**{key:manifest[key] for key in ('run_id','run_hash','profile_hash','scenario_hash')},'status':status,'cleanup':'complete','errors':['actual fixture failed'] if status=='failed' else []}
   self.values.update({'manifest.json':manifest,'evidence/result.json':collected})
   for name,value in self.values.items():(self.run/name).write_text(json.dumps(value))
+  from run_claim import expected
+  b=self.runtime['measurement_context'];ledger.create_file(self.root/f"{b['phase']}-{b['slot']}-claim.json",expected(self.run,self.runtime,manifest)) if not (self.root/f"{b['phase']}-{b['slot']}-claim.json").exists() else None
  def write(self,name,value):(self.run/name).write_text(json.dumps(value))
  def test_failed_collection_consumes_slot_without_metrics_and_is_terminal(self):
   with patch('assemble_run.assemble_run',side_effect=AssertionError('must not assemble failed run')):
@@ -44,7 +46,7 @@ class FailedSlotTests(unittest.TestCase):
   with self.assertRaisesRegex(ValueError,'input identity'):ledger.record_failure(self.root,self.run)
  def test_wrong_bound_arm_rejected_even_when_manifest_recomputed(self):
   self.runtime['measurement']['artifact_identity']=self.registration['arms']['candidate'];self.refresh()
-  with self.assertRaisesRegex(ValueError,'arm identity'):ledger.record_failure(self.root,self.run)
+  with self.assertRaisesRegex(ValueError,'claim differs'):ledger.record_failure(self.root,self.run)
  def test_foreign_collection_and_incomplete_cleanup_rejected(self):
   for key,value in [('run_id','other'),('cleanup','incomplete')]:
    self.refresh();c=self.values['evidence/result.json'];c[key]=value;self.write('evidence/result.json',c)

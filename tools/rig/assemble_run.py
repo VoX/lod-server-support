@@ -28,6 +28,13 @@ def assemble_run(root):
     if any(alive(owner) for owner in processes) or alive(read(root/'supervisor.json')):raise ValueError('owned runtime still live')
     metadata=runtime.get('measurement',{});binding=runtime.get('measurement_context')
     if not binding or not metadata:raise ValueError('measurement intent and input identities must be bound before launch')
+    from run_claim import verify as verify_claim
+    locator=runtime.get('measurement_experiment_root')
+    if not isinstance(locator,str):raise ValueError('measured report requires experiment claim locator')
+    verify_claim(locator,root)
+    from review_state import ownership_errors
+    errors=ownership_errors(root,runtime)
+    if errors:raise ValueError('; '.join(errors))
     artifact_identity=metadata['artifact_identity'];paths=metadata['artifact_paths']
     if set(paths)!=set(artifact_identity['artifact_hashes']):raise ValueError('production artifact paths incomplete')
     staged={row['target']:row['sha256'] for row in manifest['run_manifest']['staged_inputs']}
