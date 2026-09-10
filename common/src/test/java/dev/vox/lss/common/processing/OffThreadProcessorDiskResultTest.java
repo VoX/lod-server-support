@@ -2180,4 +2180,29 @@ class OffThreadProcessorDiskResultTest {
             rig.proc.shutdown();
         }
     }
+    @Test
+    void oldLoadedProbeCannotRestampAfterInvalidation() throws Exception {
+        for (boolean late : new boolean[]{false,true}) for (boolean empty : new boolean[]{false,true}) {
+            var rig = new Rig(false);
+            try {
+                long packed=PositionUtil.packPosition(6,6);
+                var capture=rig.proc.captureLoadedProbe(DIM,packed,rig.state.registration());
+                var old=capture.bind(new LoadedColumnData(6,6,empty?null:new byte[]{1},1));
+                var probes=new it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<LoadedColumnData>();
+                probes.put(packed,old);
+                Runnable invalidate=()->{rig.proc.invalidateTimestamps(DIM,new long[]{packed});rig.proc.clearDiskReadDone(rig.uuid,new long[]{packed});};
+                if(late)rig.proc.beforeRouteAction.set(invalidate);else invalidate.run();
+                rig.state.enqueue(new IncomingRequest(6,6,0L));
+                rig.proc.postSnapshot(new TickSnapshot(Map.of(rig.uuid,DIM),Map.of(rig.uuid,probes),0,false),List.of());
+                waitFor(()->!rig.proc.diskSubmits.isEmpty()||rig.state.hasDiskReadDone(6,6),"old probe route completed");
+                assertFalse(rig.state.hasDiskReadDone(6,6),"old loaded probe restamped done after invalidation; late="+late+", empty="+empty);
+                assertTrue(rig.proc.enqueuedColumns.isEmpty());
+                assertEquals(1,rig.proc.diskSubmits.size());
+                assertEquals(0,rig.proc.timestampCacheForTest().get(DIM,packed));
+                var responses=new ArrayList<Response>();
+                rig.proc.drainSendActions((state,types,positions,count)->{for(int i=0;i<count;i++)responses.add(new Response(state.getPlayerUUID(),types[i],positions[i]));});
+                assertTrue(responses.isEmpty(),"stale empty probes must not answer up_to_date");
+            } finally {rig.proc.shutdown();}
+        }
+    }
 }

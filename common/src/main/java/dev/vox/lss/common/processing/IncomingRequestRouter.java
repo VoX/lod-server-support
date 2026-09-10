@@ -344,7 +344,7 @@ class IncomingRequestRouter<PS extends AbstractPlayerRequestState<?>> {
     private boolean resolvedFromLoadedProbe(PS state, UUID playerUuid, IncomingRequest req, long packed,
                                              Long2ObjectMap<LoadedColumnData> probes, String dimension) {
         var probe = probes.get(packed);
-        if (probe == null) return false;
+        if (probe == null || !this.processor.currentLoadedProbe(probe, dimension, packed, state)) return false;
 
         long order = this.ctx.sequence().next();
         boolean allAir = probe.serializedSections() == null || probe.serializedSections().length == 0;
