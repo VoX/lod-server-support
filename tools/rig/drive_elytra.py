@@ -52,6 +52,9 @@ def run(root):
    time.sleep(.2)
   if capture:
    from elytra_camera import framed
+   observer_driver.capture('elytra-gliding-hud-diagnostic.png')
+   journal['diagnostic_hud_capture']={'artifact':'elytra-gliding-hud-diagnostic.png','sha256':sha(root/'evidence/elytra-gliding-hud-diagnostic.png'),'time_ns':time.monotonic_ns(),'window':observer_window,'process':observer_identity}
+   save()
    observer_driver.key('F1');time.sleep(.2)
    framing_after=time.monotonic_ns()
    wait(lambda:framed(rows(observer_log,'LSS_ELYTRA_CAMERA'),rows(observer_log,'LSS_ELYTRA_SUBMIT'),framing_after,manifest['run_id'],rows(target_log,'LSS_ELYTRA_SESSION')[0]['uuid']))
