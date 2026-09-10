@@ -15,12 +15,14 @@ def build(root,profile_path,scenario_path,runtime_path,candidate_target,fixture_
  if not canonical.is_file() or json.loads(canonical.read_text())!=profile:raise ValueError('explicit profile must equal owning maintained profile')
  validate_profile(profile,allow_unresolved_ranges=True)
  staged={r['target']:r for r in runtime['stage_files']}
- def artifact(target):
+ if len(staged)!=len(runtime['stage_files']):raise ValueError('duplicate staged target')
+ def staged_bytes(target):
   row=staged[target];path=Path(row['source'])
   if path.is_symlink() or not path.is_file():raise ValueError('regular selected artifact required')
-  actual=hashlib.sha256(path.read_bytes()).hexdigest()
+  data=path.read_bytes();actual=hashlib.sha256(data).hexdigest()
   if actual!=row['sha256']:raise ValueError('recipe artifact changed: '+target)
-  return actual
+  return data
+ def artifact(target):return hashlib.sha256(staged_bytes(target)).hexdigest()
  candidates=candidate_bindings(runtime,artifact)
  if candidate_target not in candidates:raise ValueError('selected primary candidate not declared native product')
  # Require candidate role bytes to agree with the explicit current owning build outputs.
@@ -35,7 +37,7 @@ def build(root,profile_path,scenario_path,runtime_path,candidate_target,fixture_
   locked=json.loads(Path(reference['path']).read_text())
   if role in participants or locked['id']!=reference['id'] or digest(locked)!=reference['profile_hash']:raise ValueError('participant identity differs')
   participants[role]={'id':locked['id'],'profile_hash':digest(locked)}
- return dict(**settings_identity(runtime,artifact_checker=artifact),participant_profiles=participants,profile_hash=digest(profile),scenario_version=scenario.get('version',1),scenario_hash=digest(scenario),scenario_checker_sha256=digest(closure(root,scenario,runtime)),candidate_sha256=candidates[candidate_target],candidate_target=candidate_target,candidate_artifacts=candidates,fixture_artifacts={target:artifact(target) for target in fixture_targets})
+ return dict(**settings_identity(runtime,artifact_checker=artifact),participant_profiles=participants,profile_hash=digest(profile),scenario_version=scenario.get('version',1),scenario_hash=digest(scenario),scenario_checker_sha256=digest(closure(root,scenario,runtime,staged_reader=staged_bytes)),candidate_sha256=candidates[candidate_target],candidate_target=candidate_target,candidate_artifacts=candidates,fixture_artifacts={target:artifact(target) for target in fixture_targets})
 if __name__=='__main__':
  p=argparse.ArgumentParser()
  for field in ('root','profile','scenario','runtime','candidate-target','output'):p.add_argument('--'+field,required=True)

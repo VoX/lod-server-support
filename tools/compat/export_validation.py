@@ -68,8 +68,20 @@ def export(run,candidate_target,fixture_targets,feature,evidence=(),limitations=
     except (ValueError,OSError) as error:
         raise ValueError('retained runtime tool sources changed') from error
     from scenario_checker_identity import closure
-    scoped=closure(run/'tool-sources',scenario,runtime,Path(__file__).resolve().parents[2])
-    if any(manifest['run_manifest']['runtime_tools'].get(name)!=value for name,value in scoped.items()):raise ValueError('retained scenario checker dependency changed')
+    declared_staged={row['target']:row for row in runtime.get('stage_files',[])}
+    if len(staged)!=len(manifest['run_manifest']['staged_inputs']) or len(declared_staged)!=len(runtime.get('stage_files',[])):
+        raise ValueError('duplicate staged declaration')
+    def retained_staged_bytes(target):
+        if target not in staged or target not in declared_staged or declared_staged[target]['sha256']!=staged[target]:
+            raise ValueError('original staged Python declaration differs')
+        data=regular(inside(run,target)).read_bytes()
+        import hashlib
+        if hashlib.sha256(data).hexdigest()!=staged[target]:raise ValueError('retained staged Python changed')
+        return data
+    scoped=closure(run/'tool-sources',scenario,runtime,Path(__file__).resolve().parents[2],staged_reader=retained_staged_bytes)
+    for name,value in scoped.items():
+        expected=staged.get(name[len('staged/'):]) if name.startswith('staged/') else manifest['run_manifest']['runtime_tools'].get(name)
+        if expected!=value:raise ValueError('retained scenario checker dependency changed')
     from candidate_identity import candidate_bindings
     inputs.update(scenario_version=scenario.get('version',1),scenario_hash=manifest['scenario_hash'],
                   runtime_tools_sha256=digest(manifest['run_manifest']['runtime_tools']),
