@@ -151,12 +151,13 @@ public final class ClientProbe implements ClientModInitializer, VoxelColumnConsu
         Wire wire=DECODING.get();DECODING.remove();
         long bodyId=BODY_SEQUENCE.incrementAndGet();
         if(dimension!=Level.OVERWORLD||receipt==null||!receipt.isActive())return;
-        if(delivery!=level){retry(receipt,bodyId,"level-not-ready");return;}
+        if(delivery!=level)return;
+        if(!hasPendingDemand(oracle,x,z))return;
         if(stalled()){
             Runnable release=receipt.deferAcceptance();
             if(!HELD.offer(()->{try{accept(delivery,x,z,data,wire,receipt,bodyId);}finally{
                 release.run();emit(Map.of("event","acceptance_released","held",HELD.size(),"time_ns",System.nanoTime()));
-            }})){release.run();receipt.report();overflow=true;}
+            }})){try{if(receipt.isActive()&&delivery==level&&(wire==null||wire.session()==session&&wire.nativeConnection()==connection)&&hasPendingDemand(oracle,x,z))retry(receipt,bodyId,"held-queue-full");}finally{release.run();}overflow=true;}
             else emit(Map.of("event","acceptance_deferred","held",HELD.size(),"time_ns",System.nanoTime()));
             return;
         }
@@ -166,14 +167,19 @@ public final class ClientProbe implements ClientModInitializer, VoxelColumnConsu
         if(!receipt.isActive()){
             emit(Map.of("event","stale_acceptance_discarded","local_session",session,"time_ns",System.nanoTime()));return;
         }
-        if(delivery!=level){retry(receipt,bodyId,"level-not-ready");return;}
+        if(delivery!=level)return;
         Oracle current=oracle;
-        if(current.generation()!=connectionIndex||current.connection()==null){retry(receipt,bodyId,"oracle-session-not-ready");return;}
+        if(!hasPendingDemand(current,x,z))return;
+        if(wire!=null&&(wire.session()!=session||wire.nativeConnection()!=connection))return;
+        var retryOnce=new AcceptancePolicy.RetryOnce();
         var targets=current.targets().getOrDefault(OracleJournal.position(x,z),List.of());
         for(Target target:targets){
             if(!target.connection().equals(current.connection())||target.x()!=x||target.z()!=z||COMMITTED.contains(target.id()))continue;
-            if(wire==null||wire.session()!=session||wire.nativeConnection()!=connection||wire.connectionId()==null||!wire.connectionId().equals(current.connection())||wire.x()!=x||wire.z()!=z||wire.timestamp()!=data.columnTimestamp()){retry(receipt,bodyId,"wire-proof-not-current");return;}
-            if(wire.received()<target.offered())continue;
+            long resolved=System.nanoTime();
+            if(target.end()>0&&resolved>=target.end())continue;
+            if(wire==null||wire.connectionId()==null||!wire.connectionId().equals(current.connection())||wire.x()!=x||wire.z()!=z
+                    ||wire.timestamp()!=data.columnTimestamp()||!wire.dimension().equals(target.dimension())){retryOnce.require();continue;}
+            boolean matchingBlock=false;
             for(var section:data.sections()){
                 if(section.sectionY()!=Math.floorDiv(target.y(),16))continue;
                 var expected=switch(target.block()){
@@ -182,10 +188,17 @@ public final class ClientProbe implements ClientModInitializer, VoxelColumnConsu
                     case "bedrock" -> Blocks.BEDROCK;
                     default -> throw new IllegalStateException("unknown independent oracle block");
                 };
-                if(!section.section().getBlockState(0,Math.floorMod(target.y(),16),0).is(expected))continue;
-                if(!receipt.isActive()||delivery!=level)continue;
+                matchingBlock=section.section().getBlockState(0,Math.floorMod(target.y(),16),0).is(expected);
+                break;
+            }
+            resolved=System.nanoTime();
+            var decision=AcceptancePolicy.decide(target.facts(),receipt.isActive(),
+                    delivery==level&&wire.session()==session&&wire.nativeConnection()==connection,
+                    wire.received(),resolved,wire.source(),matchingBlock);
+            if(decision==AcceptancePolicy.Decision.RETRY){retryOnce.require();continue;}
+            if(decision==AcceptancePolicy.Decision.COMMIT){
                 if(COMMITTED.add(target.id())){
-                    Map<String,Object> committed=new HashMap<>(Map.of("event","target_committed","id",target.id(),"subject",subject,"connection_id",target.connection(),"local_session",session,"resolved_ns",System.nanoTime(),"body_bytes",wire!=null&&wire.session()==session?wire.bytes():-1,"source",wire!=null&&wire.session()==session?wire.source():-1,"expected_block",target.block(),"lease_active",true));
+                    Map<String,Object> committed=new HashMap<>(Map.of("event","target_committed","id",target.id(),"subject",subject,"connection_id",target.connection(),"local_session",session,"resolved_ns",resolved,"body_bytes",wire!=null&&wire.session()==session?wire.bytes():-1,"source",wire!=null&&wire.session()==session?wire.source():-1,"expected_block",target.block(),"lease_active",true));
                     committed.put("cell_revision",target.revision());committed.put("predecessor_id",target.predecessor());committed.put("world_generation",target.worldGeneration());
                     committed.put("wire_capture_id",wire.captureId());committed.put("wire_association","exact");committed.put("dimension",wire.dimension());
                     committed.put("body_received_ns",wire.received());committed.put("body_id",bodyId);committed.put("chunk_x",x);committed.put("chunk_z",z);committed.put("column_timestamp",data.columnTimestamp());
@@ -193,6 +206,16 @@ public final class ClientProbe implements ClientModInitializer, VoxelColumnConsu
                 }
             }
         }
+        retryOnce.finish(()->receipt.isActive()&&delivery==level
+                        &&(wire==null||wire.session()==session&&wire.nativeConnection()==connection),
+                ()->retry(receipt,bodyId,"eligible-target-not-satisfied"));
+    }
+    private static boolean hasPendingDemand(Oracle current,int x,int z){
+        if(current.generation()!=connectionIndex||current.connection()==null)return false;
+        long now=System.nanoTime();
+        for(Target target:current.targets().getOrDefault(OracleJournal.position(x,z),List.of()))
+            if(target.connection().equals(current.connection())&&!COMMITTED.contains(target.id())&&(target.end()==0||now<target.end()))return true;
+        return false;
     }
     private static void retry(LSSApi.IngestFailureHandle receipt,long bodyId,String reason){
         if(!receipt.isActive())return;
