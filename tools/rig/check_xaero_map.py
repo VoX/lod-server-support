@@ -14,6 +14,13 @@ def target_rgba(row):
  x0,z0=(cx&3)*16,(cz&3)*16
  return b''.join(raw[((z0+z)*64+x0)*4:((z0+z)*64+x0+16)*4] for z in range(16))
 
+def scan_content_matches(scanned,final):
+ # Native MapPixel.getPixelColours may derive vertical/diagonal slopes later,
+ # through MapBlock.fixHeightType. Scan content is height/top/parameters;
+ # complete final slopes and RGBA are still compared bridge-versus-native below.
+ if not isinstance(scanned,list)or not isinstance(final,list)or len(scanned)!=256 or len(final)!=256:return False
+ return all(isinstance(a,list)and isinstance(b,list)and len(a)==len(b)==5 and all(a[i]==b[i]for i in (0,1,4))for a,b in zip(scanned,final))
+
 def inspect(rows,oracle,run_id,allow_open=False):
  errors=[];passed={key:False for key in ('fresh_body_received','bridge_write','boundary_continuity','shading_valid','save_race_safe')}
  if not rows or any(r.get('run_id')!=run_id or r.get('overflow') is not False for r in rows):return passed,['missing/mismatched run identity or overflow']
@@ -50,7 +57,7 @@ def inspect(rows,oracle,run_id,allow_open=False):
       and b.get('observation') in ('buffer_rebuild','unchanged_native_group')
       and any(at(scan,p) and scan.get('scan_ns')==b.get('native_scan_ns')
           and t['native_visit_started_ns']<=scan['time_ns']<=b['time_ns']
-          and scan.get('pixels')==b['pixels']
+          and scan_content_matches(scan.get('pixels'),b['pixels'])
           for scan in event('native_scan_completed'))
       and a['time_ns']<t['native_visit_started_ns']<=b['time_ns']
       and a['pixels']==b['pixels'] and target_rgba(a)==target_rgba(b)
