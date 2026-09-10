@@ -32,7 +32,22 @@ public final class RuntimeSettings {
     public record SettingKey(String name,
                              Function<ServerConfigBase, String> current,
                              BiFunction<ServerConfigBase, String, Void> apply,
-                             String applyNote) {}
+                             String applyNote) {
+        public SettingDescriptor descriptor() {
+            var stored = ServerSerializedSettings.descriptors().stream()
+                    .filter(descriptor -> descriptor.key().equals(name)).findFirst().orElseThrow();
+            String parser = stored.type() == SettingDescriptor.Type.BOOLEAN ? "; command: strict true | false"
+                    : stored.type() == SettingDescriptor.Type.DECIMAL ? "; command: finite decimal required"
+                    : name.equals("farPlayers") ? "; command: off | opt-in | optin | opt_in | on; invalid rejected"
+                    : "; command: integer required";
+            return new SettingDescriptor(name, stored.type(), stored.units(), "server." + name,
+                    stored.defaultPolicy(), stored.domain() + parser,
+                    "RuntimeSettings.byName(\"" + name + "\").apply; ServerConfigBase.validate",
+                    java.util.Set.of(SettingDescriptor.Scope.SERVER), "global only",
+                    "all server platforms", applyNote, false, "applyWithPersistenceOutcome + platform reconcile",
+                    SettingDescriptor.Exposure.RUNTIME);
+        }
+    }
 
     private static int parseInt(String raw) {
         try {
@@ -197,6 +212,21 @@ public final class RuntimeSettings {
         return v;
     }
 
+    public static List<SettingBinding<ServerConfigBase>> serializedBindings() {
+        return ServerSerializedSettings.bindings().stream().map(binding -> {
+            var key = byName(binding.descriptor().key());
+            return key == null ? binding : new SettingBinding<ServerConfigBase>(key.descriptor(), binding.storedValue());
+        }).toList();
+    }
+
+    /** Includes advanced and legacy fields without making them runtime-settable. */
+    public static List<SettingDescriptor> descriptors() {
+        return ServerSerializedSettings.descriptors().stream().map(descriptor -> {
+            var key = byName(descriptor.key());
+            return key == null ? descriptor : key.descriptor();
+        }).toList();
+    }
+
     public static List<SettingKey> keys() {
         return KEYS;
     }
@@ -221,6 +251,68 @@ public final class RuntimeSettings {
      */
     public static String applyAndPersist(ServerConfigBase config, SettingKey key, String rawValue) {
         return applyWithPersistenceOutcome(config, key, rawValue).effectiveValue();
+    }
+
+    /** Prepare a validated patch without touching ingress-visible config or persistence.
+     * The registry order puts the configured global cap before its dependent per-player
+     * cap, independent of input map order. All parsing/clamping happens on scratch. */
+    public static SettingsPatch.Preview previewBatch(ServerConfigBase config,
+            java.util.Map<String, String> requested, java.util.Set<String> allowedKeys) {
+        var normalized = new java.util.LinkedHashMap<String, String>();
+        var allowed = new java.util.LinkedHashSet<String>();
+        for (String name : allowedKeys) {
+            var key = byName(name);
+            if (key == null) throw new IllegalArgumentException("not runtime-settable: " + name);
+            allowed.add(key.name());
+        }
+        for (var entry : requested.entrySet()) {
+            var key = byName(entry.getKey());
+            if (key == null || !allowed.contains(key.name())) throw new IllegalArgumentException("protected or out-of-scope key");
+            if (normalized.putIfAbsent(key.name(), entry.getValue()) != null)
+                throw new IllegalArgumentException("duplicate setting after case normalization");
+        }
+        requested = java.util.Map.copyOf(normalized);
+        allowedKeys = java.util.Set.copyOf(allowed);
+        var relevant = new java.util.LinkedHashSet<>(requested.keySet());
+        if (relevant.contains("generationConcurrencyLimitGlobal") || relevant.contains("generationConcurrencyLimitPerPlayer")) {
+            relevant.add("generationConcurrencyLimitGlobal");
+            relevant.add("generationConcurrencyLimitPerPlayer");
+        }
+        if (relevant.contains("farPlayersMaxDistanceBlocks")) relevant.add("farPlayersMinDistanceBlocks");
+        var current = new java.util.LinkedHashMap<String, String>();
+        for (String name : relevant) {
+            current.put(name, batchValue(config, name));
+        }
+        return SettingsPatch.preview(config, current, requested, allowedKeys,
+                candidate -> validateCandidate(config, candidate));
+    }
+
+    private static String batchValue(ServerConfigBase config, String name) {
+        // Read-only validator dependency: not an additional runtime-settable key.
+        if (name.equals("farPlayersMinDistanceBlocks")) return Integer.toString(config.farPlayersMinDistanceBlocks);
+        return byName(name).current().apply(config);
+    }
+
+    private static java.util.Map<String, String> validateCandidate(ServerConfigBase config,
+            java.util.Map<String, String> values) {
+        ServerConfigBase scratch = config.scratchCopy();
+        for (var key : KEYS) if (values.containsKey(key.name())) key.apply().apply(scratch, values.get(key.name()));
+        scratch.validate();
+        var effective = new java.util.LinkedHashMap<String, String>();
+        values.keySet().forEach(name -> effective.put(name, batchValue(scratch, name)));
+        return java.util.Map.copyOf(effective);
+    }
+
+    /** Owner-only publication. Correlated generation readers use generationLimits(),
+     * published once at the end of validate; other runtime fields are independently
+     * meaningful. Platform side effects/re-push must run once after this returns. */
+    public static boolean applyBatch(ServerConfigBase config, SettingsPatch.Preview preview) {
+        var current = new java.util.LinkedHashMap<String, String>();
+        preview.relevantInputs().keySet().forEach(name -> current.put(name, batchValue(config, name)));
+        var candidate = SettingsPatch.recheck(preview, config, current, values -> validateCandidate(config, values));
+        for (var key : KEYS) if (preview.changes().containsKey(key.name())) key.apply().apply(config, candidate.get(key.name()));
+        config.validate();
+        return config.trySave();
     }
 
     public record ApplyResult(String effectiveValue, boolean persisted) {

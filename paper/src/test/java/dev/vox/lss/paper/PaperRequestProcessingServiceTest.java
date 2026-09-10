@@ -1397,7 +1397,9 @@ class PaperRequestProcessingServiceTest {
         var state = service.registerPlayer(playerIn(UUID.randomUUID(), level(Level.OVERWORLD)),
                 LSSConstants.CAPABILITY_VOXEL_COLUMNS);
         int boot = state.getGenSlotCap();
+        config.generationConcurrencyLimitGlobal = boot + 5;
         config.generationConcurrencyLimitPerPlayer = boot + 5;
+        config.validate(); // publish the validated pair, as the runtime command does
         service.tick();
         assertEquals(boot + 5, state.getGenSlotCap(),
                 "the per-player cap must follow config on the next tick for EXISTING states");

@@ -1,0 +1,139 @@
+{
+  "run_id": "20260909T211758Z-599de5eccbe2",
+  "candidate_sha256": "3f16e1b2fc034a1cd37f0a7508a87a6cd5b784370ec5b468997fe2127843ac96",
+  "scoped_ui_assertions": 6,
+  "scoped_result": "pass",
+  "additional_defect": "Escape press closes status; modern Sodium handles the following release and closes its restored parent to vanilla Options. Reproduced twice, including a 10 ms XTest press.",
+  "evidence": [
+    "escape-return-unexpected-options.png",
+    "escape-short-key-return.png",
+    "parent-return-via-done-lss.png"
+  ],
+  "native_sodium": "0.8.12-beta.1+mc1.21.1 NeoForge",
+  "native_contract": "Modern Sodium VideoSettingsScreen.keyReleased(III)Z compares key 256, conditionally invokes undoChanges at bytecode offset136, then onClose at140. Vanilla Screen.keyPressed(III)Z invokes onClose on Escape. Returning at press therefore forwards release to Sodium, undoing the draft and closing it.",
+  "fix": "Consume Escape press/repeats in status; close only after its matching release. Unpaired releases do not close a newly opened status screen.",
+  "validation": "All five focused controls and client jar refreshes passed. Corrected primary Neo modern seven-assertion live UI passed; sibling native UI remains separately queued.",
+  "focused_controls": [
+    {
+      "line": "1.21.1",
+      "exit_code": 0,
+      "evidence": "/home/vox/.local/state/lss-project-improvements/status-escape-refresh/1.21.1/1788990098440311704",
+      "common": {
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "fabric": {
+        "tests": 6,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "artifacts": {
+        "/home/vox/projects/lss-improvements/1.21.1/fabric/build/libs/lod-server-support-fabric.jar": "070aa33154c4dda855879ccb852e24170899bf6382e9c5a127e00fa6b383aa75",
+        "/home/vox/projects/lss-improvements/1.21.1/neoforge/build/libs/lod-server-support-neoforge.jar": "2cc7d658dbc28f9d2fc5882ee720564f07338977436e6f9b17e145cb1469b7bd",
+        "/home/vox/projects/lss-improvements/1.21.1/paper/build/libs/lod-server-support-paper.jar": "d7c44ec0cff39e9d583d6d47dfab5664587f5462ea88d77ad828e3f04446f3f9"
+      }
+    },
+    {
+      "line": "1.21.10",
+      "exit_code": 0,
+      "evidence": "/home/vox/.local/state/lss-project-improvements/status-escape-refresh/1.21.10/1788990119823220636",
+      "common": {
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "fabric": {
+        "tests": 6,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 2
+      },
+      "artifacts": {
+        "/home/vox/projects/lss-improvements/1.21.10/fabric/build/libs/lod-server-support-fabric.jar": "7aa05ef573a1ab3fdcd8a9f7c0bd291c22ca6fb66ab6cb2fcbb58581862ead20",
+        "/home/vox/projects/lss-improvements/1.21.10/neoforge/build/libs/lod-server-support-neoforge.jar": "aabab30480e9238fc65f8c57bdd1d69b40093e2dcfc007627dabeb8db01383c6",
+        "/home/vox/projects/lss-improvements/1.21.10/paper/build/libs/lod-server-support-paper.jar": "5a5056986fd5e255ff05e095c3d45a0f44ecd0e3a57dbcd765eb9a8d888910ad"
+      }
+    },
+    {
+      "line": "1.21.11",
+      "exit_code": 0,
+      "evidence": "/home/vox/.local/state/lss-project-improvements/status-escape-refresh/1.21.11/1788990141232245665",
+      "common": {
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "fabric": {
+        "tests": 6,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "artifacts": {
+        "/home/vox/projects/lss-improvements/1.21.11/fabric/build/libs/lod-server-support-fabric.jar": "822fcb315b109e0556c46324212b44173956114e7d2cb121f17c1a25ebdb86c4",
+        "/home/vox/projects/lss-improvements/1.21.11/neoforge/build/libs/lod-server-support-neoforge.jar": "23a630724df125d4f67428377781b83d2a58236065818ade2ef51c49b5c84336",
+        "/home/vox/projects/lss-improvements/1.21.11/paper/build/libs/lod-server-support-paper.jar": "71ef7041b77a5939fa30eeaaf5fee3a7ac84e3e768211e4462d242763d9249a9"
+      }
+    },
+    {
+      "line": "26.1",
+      "exit_code": 0,
+      "evidence": "/home/vox/.local/state/lss-project-improvements/status-escape-refresh/26.1/1788990165922764149",
+      "common": {
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "fabric": {
+        "tests": 7,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "artifacts": {
+        "/home/vox/projects/lss-improvements/26.1/fabric/build/libs/lod-server-support-fabric.jar": "f41dfb9de461de2958bbd872c3e73ad835d183e398d39c0be8e4da2b3f5d1cff",
+        "/home/vox/projects/lss-improvements/26.1/neoforge/build/libs/lod-server-support-neoforge.jar": "4789b4e6638ca8e9c9054aeeeab86a70db3494cf2ec01ffb7e76b034c56a3f38",
+        "/home/vox/projects/lss-improvements/26.1/paper/build/libs/lod-server-support-paper.jar": "e07c33493b049dcc12f762a47bed84a0e6867ee7d6da3cabe67f70c2fbc3849f"
+      }
+    },
+    {
+      "line": "26.2",
+      "exit_code": 0,
+      "evidence": "/home/vox/.local/state/lss-project-improvements/status-escape-refresh/26.2/1788990185115240675",
+      "common": {
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "fabric": {
+        "tests": 6,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "artifacts": {
+        "/home/vox/projects/lss-improvements/26.2/fabric/build/libs/lod-server-support-fabric.jar": "8fd0cbd5a26eb7ec301ac0c94c6da44f02aa38dd885c36a0bdfe32446422256a",
+        "/home/vox/projects/lss-improvements/26.2/neoforge/build/libs/lod-server-support-neoforge.jar": "7f1e8609341dca351a07c55deb7d1e1345df2d94ce57b6fff8a5651709a7a0d1",
+        "/home/vox/projects/lss-improvements/26.2/paper/build/libs/lod-server-support-paper.jar": "3c0a0f1be3cdfbb11817dfa2163e2fa5a3cd1b991fc57e73d17973ea9294577f"
+      }
+    }
+  ],
+  "corrected_live": {
+    "run_id": "20260909T214859Z-45566b524e77",
+    "run_hash": "65d6a793d7cc57d9743fd56ec73978976f14c133d0aad5377af7c6cbf5470b13",
+    "candidate_sha256": "2cc7d658dbc28f9d2fc5882ee720564f07338977436e6f9b17e145cb1469b7bd",
+    "profile": "mc1211-neo-modern",
+    "result": "pass",
+    "cleanup": "complete",
+    "assertions": 7,
+    "evidence_files": 24,
+    "scope": "Neo modern actual UI, including one Escape press/release preserving pending draft and Done return; real Apply, failure and restoration. No broader feature claims."
+  }
+}

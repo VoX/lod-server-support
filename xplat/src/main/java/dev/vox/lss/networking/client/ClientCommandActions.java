@@ -158,71 +158,126 @@ public final class ClientCommandActions {
         }
     }
 
-    /** /lss diag. */
-    public static void showDiagnostics(Consumer<Component> feedback) {
-        var manager = ClientNetGlue.getRequestManager();
-        if (manager == null || !ClientNetGlue.isServerEnabled()) {
-            feedback.accept(Component.literal(Brand.shortName() + " is not active on this server").withStyle(ChatFormatting.RED));
+    /** Standalone entry, independent of Sodium and request-manager creation. */
+    public static void showStatus() {
+        ClientStatus.requestOpen();
+    }
+
+    public static void exportDiagnostics(Consumer<Component> feedback) {
+        var snapshot = ClientStatus.latest();
+        if (snapshot == null) {
+            feedback.accept(Component.literal("Waiting for a current-session snapshot; retry after the next tick."));
             return;
         }
+        try {
+            dev.vox.lss.common.diagnostics.DiagnosticExport.write(
+                    dev.vox.lss.platform.LoaderServices.get().gameDir().resolve(Brand.lowerShortName() + "-diagnostics"), snapshot)
+                    .whenComplete((path, error) -> net.minecraft.client.Minecraft.getInstance().execute(() -> {
+                        // Never disclose arbitrary exception text (paths/addresses can occur there).
+                        feedback.accept(Component.literal(error == null ? "Diagnostics exported: " + path
+                                : "Diagnostics export failed; check directory permissions and free space."));
+                    }));
+        } catch (java.util.concurrent.RejectedExecutionException busy) {
+            feedback.accept(Component.literal("Diagnostics exporter busy; retry after the current export."));
+        }
+    }
+
+    public static <S> LiteralArgumentBuilder<S> presetSubtree(
+            Function<String, LiteralArgumentBuilder<S>> literal,
+            Function<S, Consumer<Component>> feedback) {
+        var root = literal.apply("preset");
+        for (String action : java.util.List.of("map-only", "map-only-xaero-writes", "apply", "undo")) {
+            root.then(literal.apply(action).executes(context -> {
+                try {
+                    ClientPresets.command(action).forEach(line -> feedback.apply(context.getSource()).accept(Component.literal(line)));
+                } catch (IllegalArgumentException | IllegalStateException failure) {
+                    feedback.apply(context.getSource()).accept(Component.literal(failure.getMessage()));
+                }
+                return Command.SINGLE_SUCCESS;
+            }));
+        }
+        return root;
+    }
+
+    public static <S> LiteralArgumentBuilder<S> statusSubtree(
+            Function<String, LiteralArgumentBuilder<S>> literal) {
+        return literal.apply("status").executes(context -> { showStatus(); return Command.SINGLE_SUCCESS; });
+    }
+
+    public static <S> LiteralArgumentBuilder<S> diagnosticsSubtree(
+            Function<String, LiteralArgumentBuilder<S>> literal,
+            Function<S, Consumer<Component>> feedback) {
+        return literal.apply("diagnostics").then(literal.apply("export").executes(context -> {
+            exportDiagnostics(feedback.apply(context.getSource()));
+            return Command.SINGLE_SUCCESS;
+        }));
+    }
+
+    /** /lss diag. */
+    public static void showDiagnostics(Consumer<Component> feedback) {
+        var snapshot = ClientStatus.latest();
+        if (snapshot != null) snapshot.lines().forEach(line -> feedback.accept(Component.literal(line)));
+        else feedback.accept(Component.literal("Waiting for a current-session status snapshot."));
+        var details = snapshot == null ? null : snapshot.details();
+        if (details == null) return;
 
         feedback.accept(Component.literal("=== " + Brand.shortName() + " Client Diagnostics ===").withStyle(ChatFormatting.GOLD));
 
         // Connection line
-        int serverDist = ClientNetGlue.getServerLodDistance();
-        int effectiveDist = manager.getEffectiveLodDistanceChunks();
+        int serverDist = details.getServerLodDistance();
+        int effectiveDist = details.getEffectiveLodDistanceChunks();
         feedback.accept(Component.literal(String.format(
                 "Connection: server_lod_dist=%d, effective_dist=%d",
                 serverDist, effectiveDist
         )).withStyle(ChatFormatting.GRAY));
 
         // Throughput line
-        long received = ClientNetGlue.getColumnsReceived();
-        long bytes = ClientNetGlue.getBytesReceived();
-        long dropped = ClientNetGlue.getColumnsDropped();
-        long startMs = ClientNetGlue.getConnectionStartMs();
-        long uptimeSec = startMs > 0 ? (System.currentTimeMillis() - startMs) / 1000 : 0;
+        long received = details.getColumnsReceived();
+        long bytes = details.getBytesReceived();
+        long dropped = details.getColumnsDropped();
+        long startMs = details.getConnectionStartMs();
+        long uptimeSec = startMs > 0 ? (snapshot.capturedAtMillis() - startMs) / 1000 : 0;
         feedback.accept(Component.literal(String.format(
                 "Throughput: received=%d (%s), dropped=%d, recv_rate=%s/s, req_rate=%s/s, uptime=%s",
                 received, DiagnosticsFormatter.formatBytes(bytes), dropped,
-                DiagnosticsFormatter.formatRate(manager.getReceiveRate()), DiagnosticsFormatter.formatRate(manager.getRequestRate()),
+                DiagnosticsFormatter.formatRate(details.getReceiveRate()), DiagnosticsFormatter.formatRate(details.getRequestRate()),
                 DiagnosticsFormatter.formatUptime(uptimeSec)
         )).withStyle(ChatFormatting.GRAY));
 
         // Queue line
-        int queued = ClientNetGlue.getQueuedColumnCount();
+        int queued = details.getQueuedColumnCount();
         feedback.accept(Component.literal(String.format(
                 "Queue: queued=%d/%d",
                 queued, ClientColumnProcessor.MAX_QUEUED_COLUMNS
         )).withStyle(ChatFormatting.GRAY));
 
         // Columns line
-        int receivedCols = manager.getReceivedColumnCount();
-        int empty = manager.getEmptyColumnCount();
-        int dirty = manager.getDirtyColumnCount();
+        int receivedCols = details.getReceivedColumnCount();
+        int empty = details.getEmptyColumnCount();
+        int dirty = details.getDirtyColumnCount();
         feedback.accept(Component.literal(String.format(
                 "Columns: received=%d, empty=%d, dirty=%d, ingest_failed=%d, ingest_parked=%d",
-                receivedCols, empty, dirty, manager.getTotalIngestFailures(),
-                manager.getIngestParkedCount()
+                receivedCols, empty, dirty, details.getTotalIngestFailures(),
+                details.getIngestParkedCount()
         )).withStyle(ChatFormatting.GRAY));
 
         // Responses line
         feedback.accept(Component.literal(String.format(
                 "Responses: columns=%d, up_to_date=%d, not_generated=%d",
-                manager.getTotalColumnsReceived(), manager.getTotalUpToDate(),
-                manager.getTotalNotGenerated()
+                details.getTotalColumnsReceived(), details.getTotalUpToDate(),
+                details.getTotalNotGenerated()
         )).withStyle(ChatFormatting.GRAY));
 
         // Requests line
         feedback.accept(Component.literal(String.format(
                 "Requests: send_cycles=%d, total_requested=%d",
-                manager.getTotalSendCycles(), manager.getTotalPositionsRequested()
+                details.getTotalSendCycles(), details.getTotalPositionsRequested()
         )).withStyle(ChatFormatting.GRAY));
 
         // Scan line
-        int confirmedRing = manager.getConfirmedRing();
-        int scanRing = manager.getScanRing();
-        int maxRing = manager.getEffectiveLodDistanceChunks();
+        int confirmedRing = details.getConfirmedRing();
+        int scanRing = details.getScanRing();
+        int maxRing = details.getEffectiveLodDistanceChunks();
         // ring_skips: rings the leaf fast path confirmed without a per-position walk
         // (the legacy arm's quadtree path, gated by enableQuadtreeScan — AND the
         // hybrid walk's phase-1 skips, which are gate-independent and make this
@@ -235,11 +290,11 @@ public final class ClientCommandActions {
         // convergence (always 0 on the legacy arm).
         feedback.accept(Component.literal(String.format(
                 "Scan: confirmed=%d, reopened=%d, scanning=%d/%d, missing_vanilla=%d, fast=%d, ring_skips=%d, valve=%d, region_span=%d, region_skips=%d, audit_heals=%d, near_rings=%d",
-                confirmedRing, manager.getReopenedRingCount(), scanRing, maxRing,
-                manager.getMissingVanillaChunks(), manager.getFastScans(),
-                manager.getQuadRingSkips(), manager.getValveTrips(),
-                manager.getRegionSpan(), manager.getRegionSkips(), manager.getAuditHeals(),
-                manager.getNearRings()
+                confirmedRing, details.getReopenedRingCount(), scanRing, maxRing,
+                details.getMissingVanillaChunks(), details.getFastScans(),
+                details.getQuadRingSkips(), details.getValveTrips(),
+                details.getRegionSpan(), details.getRegionSkips(), details.getAuditHeals(),
+                details.getNearRings()
         )).withStyle(ChatFormatting.GRAY));
 
         // Region summaries (§6 attributability): rendered once any summary applied —
@@ -247,15 +302,15 @@ public final class ClientCommandActions {
         // Stamps counters included in the gate (final panel): a session whose summary
         // frame was lost but whose stamps flowed would otherwise hide its only
         // instrument for the applied/ignored counts.
-        if (manager.getSummaryTilesClean() + manager.getSummaryTilesStale()
-                + manager.getSummaryTilesUnknown() + manager.getSummaryTilesNoRegion()
-                + manager.getSummaryStampsApplied() + manager.getSummaryStampsIgnored() > 0) {
+        if (details.getSummaryTilesClean() + details.getSummaryTilesStale()
+                + details.getSummaryTilesUnknown() + details.getSummaryTilesNoRegion()
+                + details.getSummaryStampsApplied() + details.getSummaryStampsIgnored() > 0) {
             feedback.accept(Component.literal(String.format(
                     "Summary: tiles clean=%d stale=%d unknown=%d no_region=%d, columns_validated=%d, stamps applied=%d ignored=%d",
-                    manager.getSummaryTilesClean(), manager.getSummaryTilesStale(),
-                    manager.getSummaryTilesUnknown(), manager.getSummaryTilesNoRegion(),
-                    manager.getSummaryColumnsValidated(), manager.getSummaryStampsApplied(),
-                    manager.getSummaryStampsIgnored()
+                    details.getSummaryTilesClean(), details.getSummaryTilesStale(),
+                    details.getSummaryTilesUnknown(), details.getSummaryTilesNoRegion(),
+                    details.getSummaryColumnsValidated(), details.getSummaryStampsApplied(),
+                    details.getSummaryStampsIgnored()
             )).withStyle(ChatFormatting.GRAY));
         }
 
@@ -264,40 +319,30 @@ public final class ClientCommandActions {
         // 0=off; rate_gated: TICKS the cap's spacing gate held a would-be fast fire back
         // (one delayed fire can count several) — nonzero means the knob is binding, the
         // discriminator for weak-client reports)
-        int budget = manager.getLastBudget();
-        int lastQueued = manager.getLastQueued();
+        int budget = details.getLastBudget();
+        int lastQueued = details.getLastQueued();
         // Far players (E1, conditional slot — rendered once any far-player state
         // exists; inert sessions never see it).
-        var farTracker = FarPlayerClientSupport.tracker();
-        if (farTracker.rostersApplied() > 0 || farTracker.trackedCount() > 0) {
-            feedback.accept(Component.literal(farTracker.diagLine())
-                    .withStyle(ChatFormatting.GRAY));
-            // The renderer's own line (far-player-render-hardening-plan.md WI-10): drawn/
-            // culled/mount/tag counts of the last pass + the light mode — the live-gate
-            // instrument the black-proxy sighting lacked. Only where this loader renders.
-            if (FarPlayerRenderer.RENDER_AVAILABLE) {
-                feedback.accept(Component.literal(FarPlayerRenderer.diagLine())
-                        .withStyle(ChatFormatting.GRAY));
-            }
-        }
+        if (details.farPlayersLine() != null) feedback.accept(Component.literal(details.farPlayersLine()).withStyle(ChatFormatting.GRAY));
+        if (details.farRendererLine() != null) feedback.accept(Component.literal(details.farRendererLine()).withStyle(ChatFormatting.GRAY));
 
         feedback.accept(Component.literal(String.format(
                 "Budget: used=%d/%d, ingest_backlog=%d, rate_cap=%d, governed=%s, rate_gated=%d",
-                lastQueued, budget, manager.getLastIngestBacklog(),
-                LSSClientConfig.CONFIG.lodColumnsPerSecondLimit,
-                manager.getGovernedRateLabel(), manager.getRateGated()
+                lastQueued, budget, details.getLastIngestBacklog(),
+                details.rateCap(),
+                details.getGovernedRateLabel(), details.getRateGated()
         )).withStyle(ChatFormatting.GRAY));
 
         // The two-axis cache key (cache-alias-keying-and-reset-override-plan.md §2.1):
         // both axes and the reason branch.
-        var cacheLine = manager.describeCacheKey();
+        var cacheLine = details.describeCacheKey();
         if (cacheLine != null) {
             feedback.accept(Component.literal("Cache: " + cacheLine)
                     .withStyle(ChatFormatting.GRAY));
         }
         // Xaero map bridge (issue #223, conditional slot — present only when Xaero's
         // World Map was detected at init; the Summary-line precedent).
-        var xaeroLine = dev.vox.lss.compat.ModCompat.xaeroDiagLine();
+        var xaeroLine = details.xaeroDiagLine();
         if (xaeroLine != null) {
             feedback.accept(Component.literal(xaeroLine).withStyle(ChatFormatting.GRAY));
         }

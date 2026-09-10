@@ -1,0 +1,15 @@
+name: Settings reference
+on:
+  push:
+    branches: [main, 'support/**']
+  pull_request:
+    branches: [main, 'support/**']
+jobs:
+  settings:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Check descriptor inventory and generated reference
+        run: |
+          python3 tools/settings/inventory.py --check
+          python3 tools/settings/reference.py --check
