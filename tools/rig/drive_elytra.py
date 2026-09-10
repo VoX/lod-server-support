@@ -4,6 +4,11 @@ import argparse,json,time,contextlib
 from pathlib import Path
 from elytra_contract import PHASES,SUBJECT,OBSERVER,predicates,setup_commands,falling_commands,landing_command
 
+def capture_hud_diagnostic(driver,settle=time.sleep):
+ driver.focus() # Raises and focuses the identity-verified observer window.
+ settle(.2)
+ driver.capture("elytra-gliding-hud-diagnostic.png")
+
 def run(root):
  from rig import read,write,inside,regular,alive,sha
  from native_window import find
@@ -52,7 +57,7 @@ def run(root):
    time.sleep(.2)
   if capture:
    from elytra_camera import framed
-   observer_driver.capture('elytra-gliding-hud-diagnostic.png')
+   capture_hud_diagnostic(observer_driver)
    journal['diagnostic_hud_capture']={'artifact':'elytra-gliding-hud-diagnostic.png','sha256':sha(root/'evidence/elytra-gliding-hud-diagnostic.png'),'time_ns':time.monotonic_ns(),'window':observer_window,'process':observer_identity}
    save()
    observer_driver.key('F1');time.sleep(.2)
