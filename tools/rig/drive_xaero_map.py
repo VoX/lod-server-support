@@ -69,6 +69,10 @@ def run(root):
    zoom_out(driver,*zoom_button(view),lambda:any(r.get('event')=='map_viewport' and r['time_ns']>pressed and r['scale']<view['scale']-.001 for r in rows()),check_time)
    opened=time.monotonic_ns()
   else:raise ValueError('native map framing action bound')
+  from xaero_map_input import move_away
+  move_away(driver,round(view['window_x']+view['screen_width']/2),round(view['window_y']+view['screen_height']/4))
+  moved=time.monotonic_ns();view=wait(lambda:viewport(moved))
+  if view.get('zoom_mouse_over') is not False:raise ValueError('native zoom hover remains after pointer move')
   capture_started=time.monotonic_ns();driver.capture('xaero-map-boundary.png');capture_finished=time.monotonic_ns()
   confirmed=wait(lambda:viewport(capture_finished))
   from xaero_map_viewport import capture_stable
