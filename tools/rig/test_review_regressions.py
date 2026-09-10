@@ -37,7 +37,8 @@ class ReviewRegressionTest(unittest.TestCase):
     if not exception:p['failures']=['SYNTHETIC_RUNTIME_FAILURE'];rig.write(root/'proof.json',p)
     fake=MagicMock();fake.pid=99999999;fake.poll.return_value=None
     commands=patch('commands.Commands',side_effect=ValueError('SYNTHETIC_RUNTIME_FAILURE')) if exception else patch('commands.Commands')
-    with patch('rig.require_lock'),patch('toolchain.verify'),patch('runtime_trees.verify'),patch('rig.check_available'),patch('rig.signal.signal'),patch('rig.subprocess.Popen',return_value=fake),patch('rig.terminate_owned'),commands,patch('measure.Sampler'):
+    original_identity=rig.identity
+    with patch('rig.identity',side_effect=lambda pid:dict(pid=pid,start='1',boot='synthetic') if pid==fake.pid else original_identity(pid)),patch('rig.require_lock'),patch('toolchain.verify'),patch('runtime_trees.verify'),patch('rig.check_available'),patch('rig.signal.signal'),patch('rig.subprocess.Popen',return_value=fake),patch('rig.terminate_owned'),commands,patch('measure.Sampler'):
      result=rig.run(root)
     self.assertEqual('failed',result['status']);self.assertTrue(any('SYNTHETIC_RUNTIME_FAILURE'in e for e in result['errors']))
     self.assertFalse(any('local variable'in e for e in result['errors']))

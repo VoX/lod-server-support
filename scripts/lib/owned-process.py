@@ -26,6 +26,9 @@ def main():
     inherit = args[:1] == ["--inherit-lock"]
     if inherit:
         args = args[1:]
+    rig_root = None
+    if args[:1] == ['--rig-run-root']:
+        rig_root, args = Path(args[1]).resolve(), args[2:]
     directory = None
     if args[:1] == ['--cwd']:
         directory, args = args[1], args[2:]
@@ -59,6 +62,20 @@ def main():
     env["GRADLE_OPTS"] = env.get("GRADLE_OPTS", "") + " -Dorg.gradle.daemon=false"
     proc = subprocess.Popen(args[1:], start_new_session=True, close_fds=True,
                             pass_fds=passed, env=env, cwd=directory)
+    controller = None
+    if rig_root is not None:
+        sys.path.insert(0,str(Path(__file__).resolve().parents[2]/'tools/rig'))
+        from rig import identity
+        controller=identity(proc.pid)
+    def finish(code):
+        if rig_root is not None:
+            try:
+                from launch_journal import supervisor_complete
+                supervisor_complete(rig_root,controller)
+            except (ValueError,OSError,KeyError,TypeError) as error:
+                print('[harness] Rig cleanup receipt unavailable: '+str(error),file=sys.stderr)
+                return code if code else 1
+        return code
     while proc.poll() is None and not stopped:
         time.sleep(0.05)
     result = proc.poll()
@@ -108,10 +125,10 @@ def main():
                 break
             time.sleep(0.05)
         if stopped:
-            return 128 + stopped[0]
+            return finish(128 + stopped[0])
         print("[harness] Launcher exited while owned children remained; cleaned up incomplete run", file=sys.stderr)
-        return result if result and result > 0 else 1
-    return result if result >= 0 else 128 - result
+        return finish(result if result and result > 0 else 1)
+    return finish(result if result >= 0 else 128 - result)
 
 
 if __name__ == "__main__":
