@@ -40,7 +40,13 @@ def normalize(oracle, consumers, session_rows, *, platform, start_ns, end_ns,
         fault_removed=recovery_origin(target['offered_ns'],[f for f in faults if f['subject']==target['subject']],outcome['resolved_ns'])
         expected={'block':target.get('expected_block'),'source':target.get('expected_source')}
         actual={'block':outcome.get('expected_block'),'source':outcome.get('source') if 'expected_source' in target else None}
+        if 'allowed_sources' in target:
+            # The raw checker above already validates the explicit route policy.
+            # Compare content here and retain the actual route separately; never relabel
+            # an accepted disk/store body as a source0 response for metric equality.
+            expected.pop('source');actual.pop('source')
         targets.append(dict(target,resolved_ns=outcome['resolved_ns'],fault_removed_ns=fault_removed,
+                            delivery_source=outcome.get('source'),
                             expected=expected,actual=actual,expected_session=connection,delivery_session=outcome['connection_id'],
                             body_id=outcome.get('body_id'),body_bytes=outcome['body_bytes']))
     windows=[]
