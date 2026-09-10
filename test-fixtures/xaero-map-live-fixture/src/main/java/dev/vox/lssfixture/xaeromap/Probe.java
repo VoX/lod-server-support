@@ -57,11 +57,57 @@ public final class Probe {
   if(!EVENTS.offer(JSON.toJson(row)))OVERFLOW.set(true);
  }
  private static void failure(Throwable error){emit("observer_failure",Map.of("error",error.getClass().getName(),"message",String.valueOf(error.getMessage())));}
+ private static final ThreadLocal<Scan> SCAN=new ThreadLocal<>();
+ private static final Map<Object,Long> NATIVE_SCANS=Collections.synchronizedMap(new IdentityHashMap<>());
+ private static final class Scan {
+  final Object writer; Object chunk; int x,z;
+  Scan(Object writer){this.writer=writer;}
+ }
+ private static Object field(Object target,String name)throws Exception{
+  for(Class<?> type=target.getClass();type!=null;type=type.getSuperclass()){
+   try{var f=type.getDeclaredField(name);if(!f.trySetAccessible())throw new IllegalAccessException(name);return f.get(target);}
+   catch(NoSuchFieldException missing){}
+  }
+  throw new NoSuchFieldException(name);
+ }
+ public static void nativeBegin(Object writer){if(ENABLED)SCAN.set(new Scan(writer));}
+ public static void nativeTile(Object chunk,int x,int z){
+  Scan scan=SCAN.get();if(scan==null||scan.chunk!=null)return;
+  scan.chunk=chunk;scan.x=x;scan.z=z;
+ }
+ public static void nativeScanned(){if(!ENABLED)return;try{
+  Scan scan=SCAN.get();if(scan==null||scan.chunk==null)throw new IllegalStateException("native scan has no actual tile group");
+  int x=number(scan.chunk,"getX")*4+scan.x,z=number(scan.chunk,"getZ")*4+scan.z;
+  if(!target(x,z))return;
+  long now=System.nanoTime();NATIVE_SCANS.put(scan.chunk,now);
+  emit("native_scan_completed",Map.of("chunk_x",x,"chunk_z",z,"scan_ns",now,"pixels",pixels(scan.chunk,x,z)));
+ }catch(Throwable t){failure(t);}}
+ public static void nativeGroupChecked(Object chunk,boolean changed){if(!ENABLED||changed||!NATIVE_SCANS.containsKey(chunk))return;try{
+  Scan scan=SCAN.get();if(scan==null)return;
+  textureObserved(chunk,field(scan.writer,"mapProcessor"),"unchanged_native_group");
+ }catch(Throwable t){failure(t);}}
+ public static void nativeEnd(){SCAN.remove();}
+ private static int viewportFrames;
  public static void renderedScreen(Object screen){
   if(!ENABLED)return;
   boolean map=screen!=null&&screen.getClass().getName().equals("xaero.map.gui.GuiMap");
-  if(!map){mapFrames=0;return;}
+  if(!map){mapFrames=0;viewportFrames=0;return;}
   if(mapFrames<2)emit("map_screen_rendered",Map.of("screen",screen.getClass().getName(),"frame",++mapFrames));
+  try{
+   if(++viewportFrames>4096)throw new IllegalStateException("native viewport frame bound");
+   var window=net.minecraft.client.Minecraft.getInstance().getWindow();
+   var gui=(net.minecraft.client.gui.screens.Screen)screen;
+   var zoom=(net.minecraft.client.gui.components.AbstractWidget)field(screen,"zoomOutButton");
+   var row=new LinkedHashMap<String,Object>();
+   row.put("viewport_frame",viewportFrames);row.put("camera_x",field(screen,"cameraX"));row.put("camera_z",field(screen,"cameraZ"));row.put("scale",field(screen,"scale"));
+   row.put("width",window.getWidth());row.put("height",window.getHeight());
+   row.put("window_x",window.getX());row.put("window_y",window.getY());
+   row.put("screen_width",window.getScreenWidth());row.put("screen_height",window.getScreenHeight());
+   row.put("gui_width",gui.width);row.put("gui_height",gui.height);
+   row.put("zoom_out",List.of(zoom.getX(),zoom.getY(),zoom.getWidth(),zoom.getHeight()));
+   row.put("zoom_active",zoom.active);row.put("zoom_visible",zoom.visible);
+   emit("map_viewport",row);
+  }catch(Throwable t){failure(t);}
  }
  public static void wire(Object payload){if(!ENABLED)return;try{
   int x=number(payload,"chunkX"),z=number(payload,"chunkZ");if(!target(x,z))return;
@@ -78,19 +124,29 @@ public final class Probe {
   row.put("floor_y",call(tile,"floorY"));row.put("top_y",call(tile,"topY"));row.put("light",call(tile,"light"));
   Object[] states=(Object[])call(tile,"floorState");row.put("floor_state",Arrays.stream(states).map(String::valueOf).toList());emit("bridge_result",row);
  }catch(Throwable t){failure(t);}}
- public static void texture(Object chunk,Object processor){if(!ENABLED)return;try{
+ public static void texture(Object chunk,Object processor){textureObserved(chunk,processor,"buffer_rebuild");}
+ private static void textureObserved(Object chunk,Object processor,String observation){if(!ENABLED)return;try{
   int tx=number(chunk,"getX"),tz=number(chunk,"getZ");if((tx!=7&&tx!=8)||tz!=4)return;
   Object region=call(chunk,"getInRegion");REGIONS.add(region);
   boolean nativeWriter=StackWalker.getInstance().walk(frames->frames.anyMatch(f->f.getClassName().equals("xaero.map.MapWriter")&&f.getMethodName().equals("writeChunk")));
   Object texture=call(chunk,"getLeafTexture");ByteBuffer source=((ByteBuffer)call(texture,"getDirectColorBuffer")).duplicate();source.clear();
   if(source.remaining()>1024*1024)throw new IllegalStateException("oversized native color buffer");byte[] bytes=new byte[source.remaining()];source.get(bytes);
-  var row=new LinkedHashMap<String,Object>();row.put("save_interval_ms",call(processor,"getSaveTime"));row.put("tile_chunk_x",tx);row.put("tile_chunk_z",tz);row.put("native_writer",nativeWriter);row.put("native_save_active",activeSave);row.put("buffer_bytes",bytes.length);row.put("buffer_sha256",hash(bytes));row.put("buffer_base64",Base64.getEncoder().encodeToString(bytes));
+  var row=new LinkedHashMap<String,Object>();row.put("save_interval_ms",call(processor,"getSaveTime"));row.put("tile_chunk_x",tx);row.put("tile_chunk_z",tz);row.put("native_writer",nativeWriter);row.put("observation",observation);row.put("native_scan_ns",NATIVE_SCANS.getOrDefault(chunk,0L));row.put("native_save_active",activeSave);row.put("buffer_bytes",bytes.length);row.put("buffer_sha256",hash(bytes));row.put("buffer_base64",Base64.getEncoder().encodeToString(bytes));
   row.put("region_load_state",call(region,"getLoadState"));row.put("region_resting",call(region,"isResting"));row.put("region_paused",call(region,"isWritingPaused"));row.put("last_visited",call(region,"getLastVisited"));
-  int x=tx==7?31:32;Object tile=call(chunk,"getTile",x&3,0);var pixels=new ArrayList<List<Integer>>();
-  if(tile==null)return;
-  for(int bx=0;bx<16;bx++)for(int bz=0;bz<16;bz++){Object block=call(tile,"getBlock",bx,bz);pixels.add(List.of(number(block,"getHeight"),number(block,"getTopHeight"),number(block,"getVerticalSlope"),number(block,"getDiagonalSlope"),number(block,"getParametres")));}
+  int x=tx==7?31:32;var pixels=pixels(chunk,x,16);
   row.put("chunk_x",x);row.put("chunk_z",16);row.put("pixels",pixels);emit("native_texture",row);
+  if(nativeWriter)NATIVE_SCANS.remove(chunk);
+
  }catch(Throwable t){failure(t);}}
+ private static List<List<Integer>> pixels(Object chunk,int x,int z)throws Exception{
+  Object tile=call(chunk,"getTile",x&3,z&3);var pixels=new ArrayList<List<Integer>>();
+  if(tile==null)throw new IllegalStateException("observed native target tile absent");
+  for(int bx=0;bx<16;bx++)for(int bz=0;bz<16;bz++){
+   Object block=call(tile,"getBlock",bx,bz);
+   pixels.add(List.of(number(block,"getHeight"),number(block,"getTopHeight"),number(block,"getVerticalSlope"),number(block,"getDiagonalSlope"),number(block,"getParametres")));
+  }
+  return pixels;
+ }
  public static void saveBegin(Object region){if(!ENABLED||!REGIONS.contains(region)||!Files.isRegularFile(Path.of(System.getProperty("lss.xaeromap.arm")))||!PAUSE_USED.compareAndSet(false,true))return;try{
   Object monitor=region.getClass().getField("writerThreadPauseSync").get(region);
   if(!(boolean)call(region,"isWritingPaused")||Thread.holdsLock(monitor))throw new IllegalStateException("native save pause premise absent or pause monitor retained");
