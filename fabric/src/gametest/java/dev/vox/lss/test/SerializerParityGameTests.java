@@ -326,6 +326,10 @@ public class SerializerParityGameTests {
         // a genuine byte-mismatch failure into an NPE on the following tick.
         var fgResult = new AtomicReference<ChunkReadResult>();
         var bgResult = new AtomicReference<ChunkReadResult>();
+        var nativeSavedRead = new AtomicReference<java.util.concurrent.CompletableFuture<
+                java.util.Optional<net.minecraft.nbt.CompoundTag>>>();
+        var nativeReadyDeadline = new java.util.concurrent.atomic.AtomicLong();
+        var nativeReadyStatus = new AtomicReference<String>("not yet read");
 
         helper.succeedWhen(() -> {
             helper.assertTrue(helper.getTick() >= 6, "waiting for the ticket release");
@@ -334,10 +338,50 @@ public class SerializerParityGameTests {
                     helper.assertTrue(chunkSource.getChunkNow(cx, cz) == null,
                             "waiting for the chunk to unload");
                     level.save(null, true, false);
-                    foreground.submitReadDirect(fgId, registration(fgId), LSSConstants.DIM_STR_OVERWORLD, level, cx, cz, 0, 0L);
-                    background.submitReadDirect(bgId, registration(bgId), LSSConstants.DIM_STR_OVERWORLD, level, cx, cz, 0, 0L);
-                    step.set(1);
-                    helper.assertTrue(false, "foreground + background reads submitted");
+                    // C2ME can remove a loaded holder before its asynchronous save is visible.
+                    // Establish the saved-FULL premise before either LSS read, without retrying
+                    // a failed LSS result. The native readiness phase is bounded in wall time.
+                    nativeReadyDeadline.set(System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(10));
+                    step.set(10);
+                    helper.assertTrue(false, "awaiting native saved-FULL readiness");
+                }
+                case 10 -> {
+                    helper.assertTrue(System.nanoTime() < nativeReadyDeadline.get(),
+                            "native saved-FULL readiness deadline exceeded for " + cx + "," + cz
+                                    + ": " + nativeReadyStatus.get());
+                    if (nativeSavedRead.get() == null) {
+                        var map = ((dev.vox.lss.mixin.AccessorServerChunkCache) chunkSource).getChunkMap();
+                        nativeSavedRead.set(map.read(chunkPos));
+                    }
+                    var pending = nativeSavedRead.get();
+                    if (pending.isCompletedExceptionally()) {
+                        // An I/O error is not an absent save and must not be retried as readiness.
+                        try { pending.join(); }
+                        catch (java.util.concurrent.CompletionException | java.util.concurrent.CancellationException failure) {
+                            helper.fail("native saved-FULL readiness read failed: " + failure);
+                        }
+                    }
+                    if (pending.isDone()) {
+                        var tag = pending.join();
+                        String status = tag.isPresent() ? tag.get().getStringOr("Status", "missing") : "absent";
+                        nativeReadyStatus.set(status);
+                        if (tag.isPresent() && net.minecraft.world.level.chunk.status.ChunkStatus.byName(status)
+                                == net.minecraft.world.level.chunk.status.ChunkStatus.FULL) {
+                            foreground.submitReadDirect(fgId, registration(fgId), LSSConstants.DIM_STR_OVERWORLD, level, cx, cz, 0, 0L);
+                            background.submitReadDirect(bgId, registration(bgId), LSSConstants.DIM_STR_OVERWORLD, level, cx, cz, 0, 0L);
+                            step.set(1);
+                            helper.assertTrue(false, "foreground + background reads submitted");
+                        }
+                        nativeSavedRead.set(null);
+                    }
+                    // Unthrottled GameTest ticks otherwise exhaust the budget while real I/O
+                    // is still pending. This wait applies only to the native save premise.
+                    try { Thread.sleep(50); }
+                    catch (InterruptedException interrupted) {
+                        Thread.currentThread().interrupt();
+                        helper.fail("native saved-FULL readiness wait interrupted");
+                    }
+                    helper.assertTrue(false, "waiting for native saved-FULL readiness: " + nativeReadyStatus.get());
                 }
                 case 1 -> {
                     if (fgResult.get() == null) {
@@ -346,7 +390,8 @@ public class SerializerParityGameTests {
                     var fg = fgResult.get();
                     helper.assertTrue(fg != null, "waiting for the foreground read result");
                     helper.assertTrue(!fg.notFound() && !fg.saturated() && fg.sectionBytes() != null,
-                            "foreground read of the saved superflat chunk must return content");
+                            "foreground read of the saved superflat chunk must return content: " + fg
+                                    + "; reader=" + foreground.getDiagnostics());
                     // Shut down only once this reader's result is validated: shutdown() clears the
                     // player-results map, so an earlier call would strand a retried assertion.
                     foreground.shutdown();
