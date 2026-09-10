@@ -1,31 +1,17 @@
 package dev.vox.lss.compat;
 
-import dev.vox.lss.api.LSSApi;
-import dev.vox.lss.api.VoxelColumnConsumer;
-import dev.vox.lss.api.VoxelColumnData;
-import dev.vox.lss.common.LSSLogger;
-import dev.vox.lss.common.LogThrottle;
-import dev.vox.lss.config.LSSClientConfig;
-import net.minecraft.client.multiplayer.ClientLevel;
-import net.minecraft.resources.ResourceKey;
-import net.minecraft.world.level.Level;
-import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.chunk.EmptyLevelChunk;
-import net.minecraft.world.level.chunk.status.ChunkStatus;
 
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.BooleanSupplier;
 
-import static dev.vox.lss.compat.XaeroMapCompat.*;
+import static dev.vox.lss.compat.XaeroSession.*;
+import static dev.vox.lss.compat.XaeroTileWriter.*;
 
-/** Extracted responsibility; calls retain their originating bridge/session. */
+/** Committed native-world work; acquisition OFF deliberately does not retire it. */
 final class XaeroRebuildScheduler {
-    private final XaeroMapCompat session;
-    XaeroRebuildScheduler(XaeroMapCompat session) { this.session=session; }
+    private final XaeroSession session;
+    XaeroRebuildScheduler(XaeroSession session) { this.session = session; }
     /** Tile chunks committed but not yet texture-rebuilt, keyed by tile-chunk
      *  coords and ordered by LAST TOUCH (a re-touch re-inserts at the tail, so
      *  idle-due entries are always a prefix). Main thread only. */
@@ -413,5 +399,60 @@ final class XaeroRebuildScheduler {
             this.session.noteFailure(t);
             return UpdateResult.FAILED;
         }
+    }
+
+
+    /** Owed-rebuild key: the DIMENSION is part of it (sweep B m2 — the End/Nether
+     *  reuse the Overworld's tile-chunk coords around the origin; a coords-only key
+     *  silently evicted the other dimension's entry). ResourceKeys are interned. */
+    record PendingKey(Object dimension, long tileChunk) {}
+
+    /** A committed tile chunk owed its texture rebuild (plan §15). Bound to the
+     *  Xaero session that produced it (processor identity + world id — review B:
+     *  a server-initiated reconfiguration skips the disconnect event, and a
+     *  {@code ResourceKey} alone is identity-stable across servers). */
+    static final class PendingUpdate {
+        final Object processor;
+        final String worldId;
+        final Object dimension;
+        final Object region;
+        final Object tileChunk;
+        final int localTcX;
+        final int localTcZ;
+        final long firstTouchPump;
+        long lastTouchPump;
+        /** Pump at which a DUE rebuild first found its region not ready; -1 = never. */
+        long stalledSincePump = -1;
+
+        PendingUpdate(Object processor, String worldId, Object dimension, Object region,
+                      Object tileChunk, int localTcX, int localTcZ, long pump) {
+            this.processor = processor;
+            this.worldId = worldId;
+            this.dimension = dimension;
+            this.region = region;
+            this.tileChunk = tileChunk;
+            this.localTcX = localTcX;
+            this.localTcZ = localTcZ;
+            this.firstTouchPump = pump;
+            this.lastTouchPump = pump;
+        }
+    }
+
+    enum UpdateResult { DONE, NOT_READY, DROPPED, FAILED }
+
+    /** The per-flush rebuild inputs, resolved once (the native onRender builds one
+     *  {@code MapUpdateFastConfig} per pass the same way), plus the per-flush memo
+     *  of regions already found not ready — up to 64 tile chunks share one region
+     *  and one verdict, and re-taking the writer-pause + region monitors per tile
+     *  chunk is the per-entry-probe pattern plan §14 removed (review B MAJOR). */
+    static final class RebuildArgs {
+        Object tint;
+        Object overlayManager;
+        Object shapeCache;
+        Object fastConfig;
+        int rebuilt; // actual updateBuffers calls this flush (the frame cap's meter)
+        int probes; // rebuildTileChunk entries past the memo — the scan-bound meter
+        final java.util.Set<Object> notReadyRegions =
+                java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
     }
 }
