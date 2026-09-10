@@ -21,6 +21,7 @@ class XaeroMapRecipeTest(unittest.TestCase):
     config=json.loads(result['generated_files']['server/config/lss-server-config.json'])
     self.assertIs(False,config['enableChunkGeneration']);self.assertNotIn('generationEnabled',config)
     self.assertEqual(32,config['lodDistanceChunks']);self.assertEqual({'server','client','map-controller'},{x['id']for x in result['launches']})
+    self.assertIn('-Dlss.xaeromap.stop={run}/evidence/xaero-map-stop-client',result['generated_files']['instances/lss-rig-client/instance.cfg'])
     self.assertIn('tutorialStep:none',result['generated_files']['instances/lss-rig-client/minecraft/options.txt'])
     self.assertIn('simulationDistance:5',result['generated_files']['instances/lss-rig-client/minecraft/options.txt'])
     self.assertIn('-Dlss.xaeromap.pauseMaxMillis=15000',result['generated_files']['instances/lss-rig-client/instance.cfg'])
