@@ -60,6 +60,7 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
     // Mailbox (guarded by mailboxLock). Snapshot: latest-wins. Event buffers: lossless,
     // swapped out whole by the processing thread. Producers are main-thread-only.
     private final Object mailboxLock = new Object();
+    private final LoadedProbeGuard loadedProbeGuard = new LoadedProbeGuard();
     private TickSnapshot pendingSnapshot;
     private ArrayList<TickSnapshot.GenerationReadyData> pendingGenerationReady = new ArrayList<>();
     private ArrayList<PlayerRemoval> pendingRemovals = new ArrayList<>();
@@ -289,6 +290,16 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
         }
     }
 
+    /** Capture an invalidation epoch BEFORE native loaded-column serialization. */
+    public LoadedProbeGuard.Capture captureLoadedProbe(String dimension,long position,RequestRegistration registration) {
+        return this.loadedProbeGuard.capture(dimension,position,registration);
+    }
+
+    boolean currentLoadedProbe(LoadedColumnData data,String dimension,long position,PlayerState state) {
+        return this.players.get(state.getPlayerUUID())==state
+                && this.loadedProbeGuard.current(data,dimension,position,state.registration());
+    }
+
     /** Queue timestamp invalidation for dirty positions. */
     public void invalidateTimestamps(String dimension, long[] positions) {
         invalidateTimestamps(dimension, positions, null);
@@ -316,6 +327,7 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
             };
         }
         synchronized (this.mailboxLock) {
+            this.loadedProbeGuard.invalidate(dimension, positions);
             this.pendingInvalidations.add(new TimestampInvalidation(dimension, positions, once));
         }
     }

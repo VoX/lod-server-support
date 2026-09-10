@@ -1443,7 +1443,8 @@ public class RequestProcessingService {
                 // would make that save hash equal — silencing the dirty broadcast every OTHER
                 // client holding the old column needs. Only generation serves seed (freshly
                 // generated content cannot be stale-held by anyone).
-                var data = serializeProbeContained(SectionSerializer::serializeColumn,
+                var data = serializeCapturedProbe(
+                        () -> this.offThreadProcessor.captureLoadedProbe(level.dimension().location().toString(), packed, state.registration()), SectionSerializer::serializeColumn,
                         level, chunk, req.cx(), req.cz(), this.probeFailureWarn);
                 if (data != null) {
                     probes.put(packed, data);
@@ -1460,6 +1461,17 @@ public class RequestProcessingService {
     @FunctionalInterface
     interface ProbeColumnSerializer {
         LoadedColumnData serialize(ServerLevel level, LevelChunk chunk, int cx, int cz);
+    }
+
+    /** Production capture seam: the token is acquired before the serializer, including reentrant invalidation. */
+    static LoadedColumnData serializeCapturedProbe(
+            java.util.function.Supplier<dev.vox.lss.common.processing.LoadedProbeGuard.Capture> capture,
+            ProbeColumnSerializer serializer, ServerLevel level, LevelChunk chunk,
+            int cx, int cz, LogThrottle warnThrottle) {
+        return serializeProbeContained((l,c,x,z) -> {
+            var before = capture.get();
+            return before.bind(serializer.serialize(l,c,x,z));
+        }, level, chunk, cx, cz, warnThrottle);
     }
 
     /**

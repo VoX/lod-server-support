@@ -309,7 +309,7 @@ public class PaperRequestProcessingService {
      *  dimension change between publish and consume discards the batch instead of serving
      *  old-dimension bytes under the new dimension. The probes map is mutated only inside
      *  {@code regionProbeResults.compute} (merge) and owned by the pump after {@code remove}. */
-    record RegionProbeBatch(String dimension, Long2ObjectOpenHashMap<LoadedColumnData> probes) {}
+    record RegionProbeBatch(String dimension, RequestRegistration registration, Long2ObjectOpenHashMap<LoadedColumnData> probes) {}
 
     private final ConcurrentHashMap<UUID, RegionProbeBatch> regionProbeResults = new ConcurrentHashMap<>();
 
@@ -1728,9 +1728,10 @@ public class PaperRequestProcessingService {
             if (state.skipProbe(packed))
                 continue;
 
+            var capture = this.offThreadProcessor.captureLoadedProbe(level.dimension().location().toString(), packed, state.registration());
             var column = this.loadedColumnProbe.probe(level, req.cx(), req.cz());
             if (column != null) {
-                probes.put(packed, column);
+                probes.put(packed, capture.bind(column));
             }
             probed++;
         }
@@ -1745,6 +1746,9 @@ public class PaperRequestProcessingService {
                                                                  LongOpenHashSet skipPositions) {
         var batch = this.regionProbeResults.remove(uuid);
         if (batch == null) return null;
+        var current = this.players.get(uuid);
+        if (this.shuttingDown || current == null || current.registration() != batch.registration()
+                || batch.registration().isRetired()) return null;
         // Serialized under the dimension the player was in when the task ran; a dimension
         // change in between must not serve old-dimension bytes under the new dimension.
         if (!batch.dimension().equals(dimension)) return null;
@@ -1821,7 +1825,7 @@ public class PaperRequestProcessingService {
             UUID uuid = player.getUUID();
             try {
                 this.regionTaskScheduler.schedule(player,
-                        () -> runRegionProbe(uuid, level, positions));
+                        () -> runRegionProbe(uuid, state, level, positions));
             } catch (Exception e) {
                 // R5 containment — see the sibling below.
             }
@@ -1834,7 +1838,7 @@ public class PaperRequestProcessingService {
         UUID uuid = player.getUUID();
         try {
             this.regionTaskScheduler.schedule(player,
-                    () -> runRegionProbe(uuid, level, positions));
+                    () -> runRegionProbe(uuid, state, level, positions));
         } catch (Exception e) {
             // A plugin-manager disable from a region thread can land between tick()'s
             // shuttingDown check and this schedule: the EntityScheduler then throws
@@ -1869,22 +1873,26 @@ public class PaperRequestProcessingService {
     /** Region-thread task body. Touches no pump state: reads the level behind the ownership
      *  guard, serializes matches through the shared probe seam, and publishes one batch via
      *  compute (merge under the bin lock; the pump takes ownership atomically via remove). */
-    private void runRegionProbe(UUID uuid, ServerLevel level, long[] positions) {
+    private void runRegionProbe(UUID uuid, PaperPlayerRequestState capturedState, ServerLevel level, long[] positions) {
+        var registration = capturedState.registration();
+        if (this.shuttingDown || registration.isRetired() || this.players.get(uuid) != capturedState) return;
         Long2ObjectOpenHashMap<LoadedColumnData> found = null;
         for (long packed : positions) {
             int cx = PositionUtil.unpackX(packed);
             int cz = PositionUtil.unpackZ(packed);
             if (!this.regionOwnershipCheck.ownsChunk(level, cx, cz)) continue;
+            var capture = this.offThreadProcessor.captureLoadedProbe(level.dimension().location().toString(), packed, registration);
             var column = this.loadedColumnProbe.probe(level, cx, cz);
             if (column != null) {
                 if (found == null) found = new Long2ObjectOpenHashMap<>();
-                found.put(packed, column);
+                found.put(packed, capture.bind(column));
             }
         }
         if (found == null) return;
-        var batch = new RegionProbeBatch(level.dimension().location().toString(), found);
+        var batch = new RegionProbeBatch(level.dimension().location().toString(), registration, found);
         this.regionProbeResults.compute(uuid, (k, prev) -> {
-            if (prev == null || !prev.dimension().equals(batch.dimension())) return batch;
+            if (this.shuttingDown || registration.isRetired() || this.players.get(uuid) != capturedState) return prev;
+            if (prev == null || prev.registration() != registration || !prev.dimension().equals(batch.dimension())) return batch;
             prev.probes().putAll(batch.probes());
             return prev;
         });

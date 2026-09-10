@@ -243,7 +243,7 @@ class IncomingRequestRouterTest {
                     new IncomingRequest(4, 0, TS_BASE + 2000), // up-to-date (cached base+1000)
                     new IncomingRequest(4, 0, TS_BASE + 3000));// ts>0 duplicate answered — batch marker
             var probes = new Long2ObjectOpenHashMap<LoadedColumnData>();
-            probes.put(packed(5, 0), new LoadedColumnData(5, 0, new byte[]{1, 2, 3}, 48));
+            probes.put(packed(5, 0), proc.captureLoadedProbe(DIM, packed(5, 0), p1.registration()).bind(new LoadedColumnData(5, 0, new byte[]{1, 2, 3}, 48)));
             proc.postSnapshot(snapshot(Map.of(p1.getPlayerUUID(), probes), 0, p1), List.of());
 
             var delivered = drainUntil(proc,
@@ -513,7 +513,7 @@ class IncomingRequestRouterTest {
             // Cycle 1: probe-serve (30,0) — resolution marks diskReadDone before delivery
             p1.enqueue(new IncomingRequest(30, 0, -1));
             var probes = new Long2ObjectOpenHashMap<LoadedColumnData>();
-            probes.put(packed(30, 0), new LoadedColumnData(30, 0, new byte[]{7}, 16));
+            probes.put(packed(30, 0), proc.captureLoadedProbe(DIM, packed(30, 0), p1.registration()).bind(new LoadedColumnData(30, 0, new byte[]{7}, 16)));
             proc.postSnapshot(snapshot(Map.of(p1.getPlayerUUID(), probes), 0, p1), List.of());
             waitFor(() -> p1.hasDiskReadDone(30, 0), "probe served");
             assertEquals(1, proc.payloads.size());
@@ -649,7 +649,7 @@ class IncomingRequestRouterTest {
             // without serializing or shipping the probe's bytes.
             p1.enqueue(new IncomingRequest(90, 0, TS_BASE + 2000));
             var probes = new Long2ObjectOpenHashMap<LoadedColumnData>();
-            probes.put(packed(90, 0), new LoadedColumnData(90, 0, new byte[]{1}, 16));
+            probes.put(packed(90, 0), proc.captureLoadedProbe(DIM, packed(90, 0), p1.registration()).bind(new LoadedColumnData(90, 0, new byte[]{1}, 16)));
             proc.postSnapshot(snapshot(Map.of(p1.getPlayerUUID(), probes), 0, p1), List.of());
 
             var delivered = drainUntil(proc, contains(LSSConstants.RESPONSE_UP_TO_DATE, packed(90, 0)));
@@ -1042,7 +1042,7 @@ class IncomingRequestRouterTest {
                     new IncomingRequest(3, 0, TS_BASE + 3000), // done-bit duplicate up-to-date
                     new IncomingRequest(4, 0, -1));  // in-memory probe payload
             var probes = new Long2ObjectOpenHashMap<LoadedColumnData>();
-            probes.put(packed(4, 0), new LoadedColumnData(4, 0, new byte[]{1}, 16));
+            probes.put(packed(4, 0), proc.captureLoadedProbe(DIM, packed(4, 0), p1.registration()).bind(new LoadedColumnData(4, 0, new byte[]{1}, 16)));
             proc.postSnapshot(snapshot(Map.of(p1.getPlayerUUID(), probes), 0, p1), List.of());
             waitFor(() -> p1.getHeldGenSlots() == 1 && proc.payloads.size() == 1
                             && proc.getDiagnostics().getTotalSuperseded() == 1,
@@ -1159,7 +1159,7 @@ class IncomingRequestRouterTest {
             // Serve attempt: the probe column can't go on the wire -> terminal up-to-date
             p1.enqueue(new IncomingRequest(60, 0, -1));
             var probes = new Long2ObjectOpenHashMap<LoadedColumnData>();
-            probes.put(packed(60, 0), new LoadedColumnData(60, 0, new byte[]{1}, 16));
+            probes.put(packed(60, 0), proc.captureLoadedProbe(DIM, packed(60, 0), p1.registration()).bind(new LoadedColumnData(60, 0, new byte[]{1}, 16)));
             proc.postSnapshot(snapshot(Map.of(p1.getPlayerUUID(), probes), 0, p1), List.of());
             var delivered = drainUntil(proc, contains(LSSConstants.RESPONSE_UP_TO_DATE, packed(60, 0)));
             assertEquals(1, delivered.size(), delivered.toString());
@@ -1171,7 +1171,7 @@ class IncomingRequestRouterTest {
             // goes terminal again instead of looping inside the router.
             p1.enqueue(new IncomingRequest(60, 0, -1));
             probes = new Long2ObjectOpenHashMap<>();
-            probes.put(packed(60, 0), new LoadedColumnData(60, 0, new byte[]{1}, 16));
+            probes.put(packed(60, 0), proc.captureLoadedProbe(DIM, packed(60, 0), p1.registration()).bind(new LoadedColumnData(60, 0, new byte[]{1}, 16)));
             proc.postSnapshot(snapshot(Map.of(p1.getPlayerUUID(), probes), 0, p1), List.of());
             delivered = drainUntil(proc, contains(LSSConstants.RESPONSE_UP_TO_DATE, packed(60, 0)));
             assertEquals(1, delivered.size(), "re-attempt answers terminally again: " + delivered);
@@ -1328,7 +1328,7 @@ class IncomingRequestRouterTest {
 
             // The chunk is now LOADED (walk-in): the probe must serve it, memo notwithstanding.
             var probes = new Long2ObjectOpenHashMap<LoadedColumnData>();
-            probes.put(packed(9, 0), new LoadedColumnData(9, 0, new byte[]{4, 2}, 32));
+            probes.put(packed(9, 0), proc.captureLoadedProbe(DIM, packed(9, 0), p1.registration()).bind(new LoadedColumnData(9, 0, new byte[]{4, 2}, 32)));
             p1.enqueue(new IncomingRequest(9, 0, -1));
             proc.postSnapshot(snapshot(Map.of(p1.getPlayerUUID(), probes), 0, p1), List.of());
             waitFor(() -> proc.payloads.size() == 1, "probe serve");
