@@ -1,4 +1,14 @@
 """Enumerate actual LSS/VSS candidate roles from declared metadata, never labels."""
+def paper_product(metadata):
+ main=metadata.get('main');name=metadata.get('name')
+ production_main='dev.vox.lss.paper.LSSPaperPlugin'
+ production_names=('LodServerSupport','VoxyServerSide')
+ if main==production_main or name in production_names:
+  if main!=production_main or name not in production_names:
+   raise ValueError('inconsistent LSS/VSS Paper product identity')
+  return True
+ return False
+
 def candidate_bindings(runtime,artifact):
  hashes=set()
  def visit(value):
@@ -7,7 +17,7 @@ def candidate_bindings(runtime,artifact):
     if key=='candidate_artifacts':
      for row in item:
       metadata=row.get('metadata',{});fabric=metadata.get('fabric',{});neo=metadata.get('neoforge',{});paper=metadata.get('paper',{})
-      if fabric.get('id')=='lss' or any(m.get('modId')=='lss' for m in neo.get('mods',[])) or str(paper.get('main','')).startswith('dev.vox.lss.'):
+      if fabric.get('id')=='lss' or any(m.get('modId')=='lss' for m in neo.get('mods',[])) or paper_product(paper):
        hashes.add(row['sha256'])
     else:visit(item)
   elif isinstance(value,list):
