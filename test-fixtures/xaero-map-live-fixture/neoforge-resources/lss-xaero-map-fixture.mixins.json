@@ -7,7 +7,9 @@
     "TextureMixin",
     "SaveMixin",
     "WireMixin",
-    "ScreenMixin"
+    "ScreenMixin",
+    "NativeWriterMixin",
+    "NativeTileMixin"
   ],
   "injectors": {
     "defaultRequire": 1
