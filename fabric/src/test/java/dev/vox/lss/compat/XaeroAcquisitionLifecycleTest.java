@@ -47,8 +47,8 @@ class XaeroAcquisitionLifecycleTest {
         session.processor = processor;
         WorldMapSession.current = session;
         try {
-            var bridge = new XaeroMapCompat(XaeroBindings.resolve(Class::forName),
-                    new XaeroMapCompat.LevelOps() {
+            var bridge = new XaeroSession(XaeroBindings.resolve(Class::forName),
+                    new XaeroSession.LevelOps() {
                         public Object dimension(Object w) { return DIM; }
                         public boolean isChunkLoaded(Object w, int x, int z) { return false; }
                     }, () -> true, active::get, c -> {}, c -> {}, () -> {
@@ -67,7 +67,7 @@ class XaeroAcquisitionLifecycleTest {
                     new short[256], biomes, new byte[256], new boolean[256],
                     new XaeroTileExtractor.OverlayRun[256][]));
             bridge.pump(); // old-server region (4,2) now known awaiting
-            assertTrue(bridge.awaitingRegionsForTest().contains(XaeroMapCompat.regionKeyOf(128,64)));
+            assertTrue(bridge.awaitingRegionsForTest().contains(XaeroSession.regionKeyOf(128,64)));
             classifierHook.set(() -> {
                 var errors = new AtomicReference<Throwable>();
                 var netty = new Thread(() -> {
@@ -127,8 +127,8 @@ class XaeroAcquisitionLifecycleTest {
         session.processor = processor;
         WorldMapSession.current = session;
         try {
-            var bridge = new XaeroMapCompat(XaeroBindings.resolve(Class::forName),
-                    new XaeroMapCompat.LevelOps() {
+            var bridge = new XaeroSession(XaeroBindings.resolve(Class::forName),
+                    new XaeroSession.LevelOps() {
                         public Object dimension(Object w) { return DIM; }
                         public boolean isChunkLoaded(Object w, int x, int z) { return false; }
                     }, () -> true, active::get, c -> {}, c -> {}, () -> true,
@@ -141,7 +141,7 @@ class XaeroAcquisitionLifecycleTest {
             region.setChunk(0, 0, tileChunk);
             processor.regions.put(0L, region);
             // Same seam used by duplicateBusyDebtAndDualCategoryPayoffMatchSetMembership.
-            var owe = XaeroMapCompat.class.getDeclaredMethod("oweExpired", Object.class,
+            var owe = XaeroSession.class.getDeclaredMethod("oweExpired", Object.class,
                     long.class, long.class);
             owe.setAccessible(true);
             owe.invoke(bridge, DIM, 0L, 0L);

@@ -1,32 +1,19 @@
 package dev.vox.lss.compat;
 
-import dev.vox.lss.api.LSSApi;
-import dev.vox.lss.api.VoxelColumnConsumer;
-import dev.vox.lss.api.VoxelColumnData;
 import dev.vox.lss.common.LSSLogger;
-import dev.vox.lss.common.LogThrottle;
-import dev.vox.lss.config.LSSClientConfig;
-import net.minecraft.client.multiplayer.ClientLevel;
-import net.minecraft.resources.ResourceKey;
-import net.minecraft.world.level.Level;
-import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.chunk.EmptyLevelChunk;
-import net.minecraft.world.level.chunk.status.ChunkStatus;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.BooleanSupplier;
 
-import static dev.vox.lss.compat.XaeroMapCompat.*;
-import dev.vox.lss.compat.XaeroMapCompat.Origin;
+import static dev.vox.lss.compat.XaeroSession.*;
+import dev.vox.lss.compat.XaeroSession.Origin;
 
-/** Extracted responsibility; calls retain their originating bridge/session. */
+/** Origin-owned acquisition and debt; every removal releases its captured receipt. */
 final class XaeroAcquisitionQueue {
-    private final XaeroMapCompat session;
-    XaeroAcquisitionQueue(XaeroMapCompat session) { this.session=session; }
+    private final XaeroSession session;
+    XaeroAcquisitionQueue(XaeroSession session) { this.session = session; }
 
     final Object queueLock = new Object();
     /** Packed chunk pos → entry; insertion-ordered, latest tile wins in place. */
@@ -36,6 +23,7 @@ final class XaeroAcquisitionQueue {
      *  under {@link #queueLock} at every mutation for the lock-free 20 Hz
      *  backpressure poll (§12.2). */
     volatile double occupancy;
+    volatile int queuedGauge;
     /** Pump-side reports collected INSIDE the ladder (which runs under Xaero's
      *  renderThreadPauseSync monitor) and drained by {@link #pump} AFTER the
      *  ladder returns — up to a whole queue's worth on a world-id change, and an
@@ -501,6 +489,7 @@ final class XaeroAcquisitionQueue {
 
     /** Recompute the occupancy mirror. Caller holds {@link #queueLock}. */
     void updateOccupancyLocked() {
+        this.queuedGauge = this.queue.size();
         double byBytes = this.session.maxQueueBytes <= 0 ? 1.0
                 : (double) this.queuedBytes / this.session.maxQueueBytes;
         double byCount = this.session.maxQueue <= 0 ? 1.0
@@ -628,6 +617,60 @@ final class XaeroAcquisitionQueue {
             if (n > 0) LSSLogger.warn("Xaero map bridge: a drop report threw (contained)", t);
         } finally {
             origin.close();
+        }
+    }
+
+
+    /** Owed-set key: dimension + region (the End/Nether reuse Overworld region
+     *  coords — the {@link PendingKey} lesson). ResourceKeys are interned. */
+    record OwedKey(Object dimension, long regionKey) {}
+
+    /** One region's debt: positions shed without bytes, and the age of the oldest.
+     *  {@code positions} are REGION-scoped debts (released once the region is loaded
+     *  and resting); {@code busyTiles} are TILE-scoped ones (a deferral-expired tile
+     *  chunk — released only once ITS tile chunk is ready too, or a region-ready
+     *  release would re-serve straight back into the same busy tile and burn a
+     *  strike per DEFER_CAP interval, the §12 review's original objection). */
+    static final class OwedRegion {
+        /** Re-based on every expired release, so a region that keeps taking new
+         *  sheds pays ONE report per TTL, never a pass-through. */
+        long firstOwedMillis;
+        final long generation;
+        final it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<Origin> origins =
+                new it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<>();
+        final it.unimi.dsi.fastutil.longs.LongOpenHashSet positions =
+                new it.unimi.dsi.fastutil.longs.LongOpenHashSet();
+        final it.unimi.dsi.fastutil.longs.LongOpenHashSet busyTiles =
+                new it.unimi.dsi.fastutil.longs.LongOpenHashSet();
+
+        OwedRegion(long firstOwedMillis, long generation) {
+            this.firstOwedMillis = firstOwedMillis;
+            this.generation = generation;
+        }
+
+        int size() {
+            return this.positions.size() + this.busyTiles.size();
+        }
+
+        boolean isEmpty() {
+            return this.positions.isEmpty() && this.busyTiles.isEmpty();
+        }
+    }
+
+    static final class Entry {
+        volatile XaeroTileExtractor.PreparedTile tile; // replaced under queueLock (latest wins)
+        final Object dimension;
+        Origin origin; // replaced with tile under queueLock
+        int bytes; // under queueLock
+        /** Pump-side (++) with a decode-side reset on tile replace — the race is
+         *  benign (one deferral tick lost or kept; the cap is approximate). */
+        int ladderReadyDeferrals;
+
+        Entry(Object dimension, XaeroTileExtractor.PreparedTile tile, int bytes, Origin origin) {
+            this.dimension = dimension;
+            this.tile = tile;
+            this.bytes = bytes;
+            this.origin = origin;
         }
     }
 }
