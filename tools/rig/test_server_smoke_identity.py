@@ -12,7 +12,8 @@ class Identity(unittest.TestCase):
   for key,name in [('client_candidate_artifacts','lod-server-support-fabric.jar'),('client_fixture_artifacts','lss-server-smoke-client.jar')]:self.record['run_manifest'][key]={'smoke-'+phase+'/mods/'+name:'a'*64 for phase in ('first','second')}
   self.record['profile_hash']='a'*64
   values=self.record['run_manifest'];values.update(scenario_hash='b'*64,scenario_checker_sha256='c'*64,candidate_sha256='d'*64,fixture_artifacts={},candidate_artifacts={values['candidate_target']:'d'*64})
-  self.row['acceptance_target']={k:values[k] for k in ('scenario_hash','scenario_checker_sha256','candidate_sha256','candidate_target','candidate_artifacts','fixture_artifacts','scenario_version')}
+  values.update(runtime_settings_version=1,runtime_settings_sha256='9'*64)
+  self.row['acceptance_target']={k:values[k] for k in ('scenario_hash','scenario_checker_sha256','candidate_sha256','candidate_target','candidate_artifacts','fixture_artifacts','scenario_version','runtime_settings_version','runtime_settings_sha256')}
   self.row['acceptance_target']['profile_hash']='a'*64
  def validate(self):
   def require(ok,message):

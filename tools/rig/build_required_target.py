@@ -4,6 +4,7 @@ import argparse,hashlib,json,sys
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'compat'))
 from candidate_identity import candidate_bindings
+from runtime_settings_identity import identity as settings_identity
 
 def build(root,profile_path,scenario_path,runtime_path,candidate_target,fixture_targets):
  root=Path(root).resolve();sys.path[:0]=[str(root/'tools/compat'),str(root/'tools/rig')]
@@ -34,7 +35,7 @@ def build(root,profile_path,scenario_path,runtime_path,candidate_target,fixture_
   locked=json.loads(Path(reference['path']).read_text())
   if role in participants or locked['id']!=reference['id'] or digest(locked)!=reference['profile_hash']:raise ValueError('participant identity differs')
   participants[role]={'id':locked['id'],'profile_hash':digest(locked)}
- return dict(participant_profiles=participants,profile_hash=digest(profile),scenario_version=scenario.get('version',1),scenario_hash=digest(scenario),scenario_checker_sha256=digest(closure(root,scenario,runtime)),candidate_sha256=candidates[candidate_target],candidate_target=candidate_target,candidate_artifacts=candidates,fixture_artifacts={target:artifact(target) for target in fixture_targets})
+ return dict(**settings_identity(runtime,artifact_checker=artifact),participant_profiles=participants,profile_hash=digest(profile),scenario_version=scenario.get('version',1),scenario_hash=digest(scenario),scenario_checker_sha256=digest(closure(root,scenario,runtime)),candidate_sha256=candidates[candidate_target],candidate_target=candidate_target,candidate_artifacts=candidates,fixture_artifacts={target:artifact(target) for target in fixture_targets})
 if __name__=='__main__':
  p=argparse.ArgumentParser()
  for field in ('root','profile','scenario','runtime','candidate-target','output'):p.add_argument('--'+field,required=True)

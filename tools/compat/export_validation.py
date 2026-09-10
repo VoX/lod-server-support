@@ -9,6 +9,7 @@ sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'rig'))
 from rig import read,sha,regular,inside,alive
 from proof import check_proof
 from catalog import digest,validate_record
+from runtime_settings_identity import identity as settings_identity
 
 
 def export(run,candidate_target,fixture_targets,feature,evidence=(),limitations=()):
@@ -54,6 +55,7 @@ def export(run,candidate_target,fixture_targets,feature,evidence=(),limitations=
             'world_input_kind':'frozen snapshot' if runtime.get('world_digest') else 'fresh generated world; initial seed/generator/configuration bound by digest',
             'effective_config':{'initial_generated_config_hash':config_hash},'jvm_flags':{'launch_memory_flags':memory,'prism_memory_mib':launcher_memory},
             'backend':manifest['backend'],'rig_run_hash':manifest['run_hash'],'runtime_hash':manifest['runtime_hash']}
+    inputs.update(settings_identity(runtime,manifest['run_manifest']['staged_inputs']))
     if scenario.get('execution_route') == 'native-server-smoke':
         from server_smoke_identity import export_binding
         inputs.update(export_binding(run,runtime,manifest,scenario,candidate_target,artifact))
