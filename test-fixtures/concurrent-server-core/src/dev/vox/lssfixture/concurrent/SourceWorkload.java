@@ -18,6 +18,7 @@ public final class SourceWorkload implements AutoCloseable {
     public interface Engine {
         default List<Map<String,Object>> initialGenerationFacts(List<Target> targets){return sourceFacts(targets);}
         default Map<String,Object> loadedOwnership(Target target){return Map.of();}
+        default Map<String,Object> ownershipDiagnostic(Target target){return Map.of("reason","not_instrumented");}
         void seed(Target target);
         void save();
         void makeUnloadedSources(Target store, Target disk);
@@ -42,6 +43,8 @@ public final class SourceWorkload implements AutoCloseable {
     private final Set<String> explicitEditIds=new HashSet<>();
     private final boolean measured=Boolean.getBoolean("lss.rig.measuredWorkload");
     private final MeasuredSchedule measuredSchedule=new MeasuredSchedule();
+    private final PendingDiagnostics diagnostics=new PendingDiagnostics();
+    private final Set<String> diagnosticFailures=java.util.concurrent.ConcurrentHashMap.newKeySet();
     private final Map<String,Long> targetSequences=new HashMap<>();
     private record Ack(String connection,Set<String> targets,long sequence) {}
     private record PendingEdit(Target target,String id,long offeredAt,long sequence,Mutation mutation) {}
@@ -86,6 +89,16 @@ public final class SourceWorkload implements AutoCloseable {
             } catch(Exception failure){overflow=true;}
         },"LSS-RigSourceEvidence");
         writer.setDaemon(true);writer.start();
+    }
+    /** Distinct bounded evidence only; never changes ACK/owner/timeout decisions. */
+    public void diagnosticFailure(String component,Throwable failure){
+        if(!diagnosticFailures.add(component))return;
+        try { record(events,Map.of("event","source_diagnostic_failure","component",component,
+                "exception_type",failure.getClass().getName(),"time_ns",System.nanoTime())); }
+        catch(Throwable reportingFailure) {
+            // Primitive fallback preserves an explicit marker if ordinary serialization fails.
+            if(!events.offer("{\"event\":\"source_diagnostic_failure\",\"component\":\"reporting\",\"run_id\":\""+runId+"\"}"))overflow=true;
+        }
     }
     private void record(ArrayBlockingQueue<String> queue, Map<String,?> row){Map<String,Object> bound=new LinkedHashMap<>(row);bound.put("run_id",runId);if(!queue.offer(json.toJson(bound)))overflow=true;}
     private void event(String event, long now){record(events,Map.of("event",event,"time_ns",now));}
@@ -245,6 +258,15 @@ public final class SourceWorkload implements AutoCloseable {
             boolean accepted=connection!=null && connection.equals(activeConnections.get(pending.target.subject)) && (pending.sequence==0?acknowledged(pending.target.subject,connection,Set.of(pending.id)):
                 ack!=null && ack.connection.equals(connection) && ack.sequence>=pending.sequence);
             Map<String,Object> nativeOwnership=accepted?engine.loadedOwnership(pending.target):null;
+            // Diagnostic observation only: never changes accepted/ownership/timeout decisions.
+            if(Boolean.getBoolean("lss.rig.sourceDiagnostics") && !measured) {
+                DiagnosticGuard.observe(()->{
+                    Map<String,Object> diagnostic=diagnostics.observe(pending.id,pending.target.subject,connection,
+                            ack==null?null:ack.connection,accepted,nativeOwnership!=null,
+                            pending.offeredAt,now,engine.ownershipDiagnostic(pending.target));
+                    if(diagnostic!=null)record(events,diagnostic);
+                },failure->diagnosticFailure("pending-edit",failure));
+            }
             if(accepted && nativeOwnership!=null) {
                 if(!nativeOwnership.isEmpty()){
                     Map<String,Object> fact=new LinkedHashMap<>(nativeOwnership);fact.put("event","target_owner_precondition");fact.put("id",pending.id);fact.put("subject",pending.target.subject);fact.put("connection_id",connection);fact.put("chunk_x",pending.target.x);fact.put("chunk_z",pending.target.z);fact.put("time_ns",System.nanoTime());record(oracle,fact);
