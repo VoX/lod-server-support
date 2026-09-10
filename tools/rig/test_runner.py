@@ -9,13 +9,17 @@ import tempfile
 import unittest
 import rig
 class RunnerScriptTest(unittest.TestCase):
-    def exercise(self,body,passed,closure=False,ready=False):
+    def exercise(self,body,passed,closure=False,ready=False,partial=False,popen_failure=False):
         with tempfile.TemporaryDirectory() as temp:
             root=Path(temp);script=root/'driver.py';script.write_text(body)
             checksum=rig.sha(script)
             profile={'schema_version':1,'id':'synthetic-harness-unit','line':'26.2','platform':'fabric','route':'native','components':[], 'capabilities':[], 'status':'unverified','limitations':['synthetic harness unit only'], 'artifacts':[]}
             with socket.socket() as probe:probe.bind(('127.0.0.1',0));port=probe.getsockname()[1]
             runtime={'backend':'linux-headless','bind_endpoint':f'127.0.0.1:{port}','client_endpoint':f'127.0.0.1:{port}', 'cache':{},'stage_files':[{'source':str(script),'sha256':checksum,'target':'artifacts/driver.py'}],'launches':[{'id':'fixture','cwd':'client','argv':['python3','{run}/artifacts/driver.py','{run}']}]}
+            if partial or popen_failure:
+                runtime['launches'][0].update(ready_marker='NEVER_READY',ready_timeout_seconds=1)
+                if popen_failure:runtime['launches'][0]['argv']=['/nonexistent/synthetic-program']
+                runtime['launches'].append({'id':'never-started','cwd':'client','argv':['python3','-c','raise RuntimeError(\"MUST NOT START\")']})
             if closure:
                 context=root/'launcher';(context/'assets').mkdir(parents=True)
                 pinned=context/'assets/pinned';pinned.write_bytes(b'pinned')
@@ -34,6 +38,13 @@ class RunnerScriptTest(unittest.TestCase):
             data=json.loads(collected.stdout)
             self.assertEqual('complete',data['cleanup'])
             self.assertEqual('passed' if passed else 'failed',data['status'])
+            if partial or popen_failure:
+                journal=rig.read(Path(run)/'launch-journal.json')
+                self.assertEqual('not-attempted',journal['entries'][-1]['state'])
+                self.assertEqual('spawn-failed' if popen_failure else 'spawned',journal['entries'][0]['state'])
+                self.assertTrue((Path(run)/'supervisor-cleanup.json').is_file())
+    def test_actual_partial_startup_failure_closes_with_unlaunched_suffix(self):self.exercise('raise RuntimeError("synthetic startup failure")\n',False,partial=True)
+    def test_actual_popen_failure_closes_with_no_native_started(self):self.exercise('',False,popen_failure=True)
     def test_actual_wrapper_success_and_collection(self):
         self.exercise('import json,sys,time\nfrom pathlib import Path\nr=Path(sys.argv[1]);m=json.loads((r/"manifest.json").read_text())\np={k:m[k] for k in ("run_id","profile_hash","scenario_hash","run_hash")}\np.update(ready=True,handshake=True,test_count=1,assertions={"synthetic_only":True})\n(r/"proof.json").write_text(json.dumps(p))\ntime.sleep(60)\n',True)
     def test_actual_failed_startup_is_not_success(self):self.exercise('raise RuntimeError("synthetic startup failure")\n',False)

@@ -7,6 +7,7 @@ from pathlib import Path
 import secrets
 import re
 import time
+import os
 import performance
 
 FIELDS=('world_digest','profile_hash','fixture_hash','hardware_hash','jvm_hash','workload_hash')
@@ -14,7 +15,12 @@ ORDER=('baseline','candidate','candidate','baseline','baseline','candidate')
 def digest(value):return hashlib.sha256(json.dumps(value,sort_keys=True,separators=(',',':')).encode()).hexdigest()
 def read(path):return json.loads(Path(path).read_text())
 def create_file(path,value):
-    with Path(path).open('x') as stream:json.dump(value,stream,indent=2,sort_keys=True);stream.write('\n')
+    path=Path(path)
+    with path.open('x') as stream:
+        json.dump(value,stream,indent=2,sort_keys=True);stream.write('\n');stream.flush();os.fsync(stream.fileno())
+    directory=os.open(path.parent,os.O_RDONLY | os.O_DIRECTORY)
+    try:os.fsync(directory)
+    finally:os.close(directory)
 def init(root,registration):
     if set(registration.get('arms',{}))!={'baseline','candidate'} or any(not registration.get(field) for field in FIELDS):
         raise ValueError('complete preregistered arms and shared input identities required')
@@ -28,7 +34,7 @@ def init(root,registration):
         if not isinstance(hashes,dict) or not hashes or any(not isinstance(value,str) or re.fullmatch('[0-9a-f]{64}',value) is None for value in hashes.values()):
             raise ValueError('arm requires full artifact SHA256 identities')
     root.mkdir(parents=True,exist_ok=False)
-    registration=dict(registration,schema_version=1,experiment_id=secrets.token_hex(16),created_ns=time.time_ns(),calibration_runs=3,measured_order=list(ORDER))
+    registration=dict(registration,claim_protocol=1,experiment_root=str(root.resolve()),schema_version=1,experiment_id=secrets.token_hex(16),created_ns=time.time_ns(),calibration_runs=3,measured_order=list(ORDER))
     create_file(root/'registration.json',registration)
     return registration
 
@@ -48,6 +54,9 @@ def failures(root):
             raise ValueError('failed-slot intent changed')
         if binding['registration_sha256']!=digest(read(root/'registration.json')):
             raise ValueError('failed-slot registration changed')
+        from run_claim import verify as verify_claim
+        claim=verify_claim(root,value['failure']['run_root'])
+        if digest(claim)!=value['failure'].get('claim_sha256'):raise ValueError('failed-slot run claim changed')
         result.append(value['failure'])
     return result
 
@@ -73,6 +82,8 @@ def record_failure(root,run_root):
     if ownership:raise ValueError('; '.join(ownership))
     if collected.get('cleanup')!='complete' or any(alive(owner) for owner in values['processes.json']) or alive(values['supervisor.json']):
         raise ValueError('owned run must be collected and stopped')
+    from run_claim import verify as verify_claim
+    claimed=verify_claim(root,run_root)
     registration=read(root/'registration.json');binding=runtime.get('measurement_context',{})
     phase=binding.get('phase');slot=binding.get('slot')
     if phase not in ('calibration','measured') or type(slot) is not int or not 0<=slot<(3 if phase=='calibration' else 6):
@@ -110,7 +121,9 @@ def record_failure(root,run_root):
             if errors:reason={'kind':'assembled-report-rejected','errors':errors}
             else:raise ValueError('valid assembled report must use record, not failure')
     else:raise ValueError('collection is not a completed success/failure')
-    failure={'schema_version':1,'measurement_context':binding,'run_id':manifest['run_id'],'run_hash':manifest['run_hash'],
+    if manifest.get('launch_journal_version'):
+        names+=('owner.json','launch-journal.json','supervisor-cleanup.json')
+    failure={'schema_version':1,'run_root':str(run_root),'claim_sha256':digest(claimed),'measurement_context':binding,'run_id':manifest['run_id'],'run_hash':manifest['run_hash'],
              'artifact_identity':identity,**actual,'reason':reason,
              'evidence_sha256':{name:hashlib.sha256((run_root/name).read_bytes()).hexdigest() for name in names},
              'artifact_attribution':'Manifest-bound intended inputs only; changed or missing staged bytes may be the failure itself. No immutable-byte success claimed.',
@@ -151,6 +164,8 @@ def record(root,report):
     if not report.get('run_id') or not report.get('run_hash'):raise ValueError('run identity missing')
     for existing in root.glob('*-result.json'):
         if read(existing)['report']['run_id']==report['run_id']:raise ValueError('run reused')
+    from run_claim import verify_report
+    verify_report(root,report)
     # Record failures too. A failed selected run cannot be silently replaced.
     value={'report':report,'report_sha256':digest(report),'recorded_ns':time.time_ns()}
     create_file(root/f'{phase}-{slot}-result.json',value)
@@ -162,6 +177,8 @@ def freeze(root):
     for slot in range(3):
         value=read(root/f'calibration-{slot}-result.json')
         if digest(value['report'])!=value['report_sha256']:raise ValueError('calibration report changed')
+        from run_claim import verify_report
+        verify_report(root,value['report'])
         runs.append(value['report']);hashes.append(value['report_sha256'])
     floors=performance.calibrate(runs)
     result={'schema_version':1,'registration_sha256':digest(registration),'calibration_report_hashes':hashes,
@@ -178,6 +195,8 @@ def evaluate(root):
         raise ValueError('frozen calibration evidence changed')
     if performance.calibrate([value['report'] for value in calibration])!=frozen['absolute_floors']:
         raise ValueError('absolute floors changed after calibration')
+    from run_claim import verify_report
+    for value in calibration:verify_report(root,value['report'])
     runs=[]
     for slot,arm in enumerate(ORDER):
         value=read(root/f'measured-{slot}-result.json');report=value['report'];binding=report['measurement_context']
@@ -185,6 +204,7 @@ def evaluate(root):
             raise ValueError('measured report/intent changed')
         if binding.get('calibration_sha256')!=digest(frozen) or binding['arm']!=arm:
             raise ValueError('measurement preceded frozen calibration or order changed')
+        verify_report(root,report)
         runs.append(report)
     experiment={**registration,'preregistered':True,'calibration_frozen_before_candidate':True,'absolute_floors':frozen['absolute_floors'],'pairs':[]}
     for index in range(3):

@@ -236,10 +236,17 @@ def private_display(root, env, children):
     if display == os.environ.get('DISPLAY'):
         raise ValueError('refusing ordinary desktop display')
     subprocess.run(['xauth', '-f', str(authority), 'add', display, '.', cookie], check=True, capture_output=True)
-    proc = subprocess.Popen(['Xvfb', display, '-screen', '0', '960x540x24',
+    from launch_journal import before_spawn, spawned, spawn_failed
+    before_spawn(root,'display')
+    try:
+        proc = subprocess.Popen(['Xvfb', display, '-screen', '0', '960x540x24',
                              '-nolisten', 'tcp', '-auth', str(authority)],
                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except OSError:
+        spawn_failed(root,'display')
+        raise
     children.append(proc)
+    display_owner=spawned(root,'display',proc)
     probe_env = dict(env, DISPLAY=display, XAUTHORITY=str(authority))
     deadline = time.monotonic() + 15
     while subprocess.run(['xprop', '-root'], env=probe_env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode:
@@ -248,7 +255,7 @@ def private_display(root, env, children):
         time.sleep(.1)
     env.update(DISPLAY=display, XAUTHORITY=str(authority), ALSOFT_DRIVERS='null')
     env.pop('WAYLAND_DISPLAY', None)
-    write(root / 'display.json', {'display': display, 'host_display': os.environ.get('DISPLAY',''), 'xvfb': identity(proc.pid)})
+    write(root / 'display.json', {'display': display, 'host_display': os.environ.get('DISPLAY',''), 'xvfb': display_owner})
     return display
 
 def validate_private_xvfb_args(root, display, executable, argv):
@@ -355,9 +362,14 @@ def run(root):
             raise ValueError('staged runtime bytes changed')
     if profile['status'] != 'unverified':
         raise ValueError('blocked/unsupported profile cannot run')
+    from run_claim import acquire
+    acquire(root,runtime,manifest)
     check_available(runtime, endpoint, free_endpoint)
     write(root / 'owner.json', identity(os.getpid()))
     write(root / 'supervisor.json', identity(os.getppid()))
+    from launch_journal import initialize, before_spawn, spawned, spawn_failed, terminal
+    initialize(root,manifest,runtime,read(root/'owner.json'),read(root/'supervisor.json'))
+    manifest['launch_journal_version']=1
     children, logs, launched = [], [], []
     rss_stream = None
     observation_completed = False
@@ -403,17 +415,21 @@ def run(root):
             working.mkdir(parents=True, exist_ok=True)
             log = open(root / (launch['id'] + '.private.log'), 'xb')
             logs.append(log)
-            proc = subprocess.Popen(argv, cwd=working, env=env, stdin=subprocess.PIPE, stdout=log, stderr=subprocess.STDOUT)
+            before_spawn(root,'launch:'+launch['id'])
+            try:
+                proc = subprocess.Popen(argv, cwd=working, env=env, stdin=subprocess.PIPE, stdout=log, stderr=subprocess.STDOUT)
+            except OSError:
+                spawn_failed(root,'launch:'+launch['id'])
+                raise
             children.append(proc)
             launched.append((launch, proc))
-            write(root/'processes.json',[identity(p.pid) for p in children])
+            spawned(root,'launch:'+launch['id'],proc)
             if launch.get('ready_marker'):
                 ready_deadline = time.monotonic() + launch.get('ready_timeout_seconds', 120)
                 while launch['ready_marker'] not in (root / (launch['id'] + '.private.log')).read_text(errors='replace'):
                     if proc.poll() is not None or time.monotonic() >= ready_deadline or stopped or (root/'stop').exists():
                         raise ValueError('Minecraft readiness timeout/exit: ' + launch['id'])
                     time.sleep(.2)
-        write(root / 'processes.json', [identity(p.pid) for p in children])
         targets = {launch['id']: proc for launch, proc in launched}
         if len(targets) != len(launched):
             raise ValueError('duplicate launch identity')
@@ -589,6 +605,7 @@ def run(root):
                 if check_proof(final_proof,manifest,scenario,root)==manifest['errors']:
                     manifest.update(status='awaiting-review',review_pending_proof_hash=semantic_digest(final_proof))
         write(root / 'manifest.json', manifest)
+        terminal(root,manifest['status'])
     return manifest
 
 def main():
