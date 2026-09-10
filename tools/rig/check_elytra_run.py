@@ -48,11 +48,13 @@ def inspect(root,manifest):
    if type(offset)is not int or offset<0 or offset>=len(server_bytes) or not re.search(r'\[Server\] '+re.escape(marker)+r'\s*$',server_bytes[offset:offset+256*1024].decode(errors='replace'),re.M):errors.append('native predicate did not emit actual server response')
    if not phase['start_ns']<=row.get('observed_ns',-1)<=phase['end_ns']:errors.append('native predicate outside phase')
  setup=journal.get('setup',[])
- if [r.get('command') for r in setup]!=setup_commands()+falling_commands()+[landing_command()]:errors.append('unexpected setup/action; direct flight setters or post-flight target teleport forbidden')
+ if [r.get('command') for r in setup]!=setup_commands()+falling_commands()+[landing_command(),landing_command()]:errors.append('unexpected setup/action; direct flight setters or post-flight target teleport forbidden')
  by_phase={p['id']:p for p in phases}
  for row in setup:
   receipt=read(regular(inside(root,'commands/results/'+row['request'])))
   if row.get('result')!=receipt or receipt.get('status')!='submitted':errors.append('setup native submission receipt differs')
+ looks=[x for x in journal.get('inputs',[]) if x.get('action')=='relative-look']
+ if len(looks)!=1 or looks[0].get('dx')!=0 or looks[0].get('dy')!=400 or not by_phase['gliding']['end_ns']<looks[0].get('start_ns',-1)<=looks[0].get('end_ns',-1)<by_phase['landed']['start_ns']:errors.append('native landing look input missing/outside causal interval')
  owners=read(regular(root/'processes.json'))
  actions=journal.get('inputs',[])
  if not any(r.get('key')=='Shift_L' and r.get('action')=='hold' for r in actions) or not any(r.get('key')=='space' and r.get('action')=='press' for r in actions):errors.append('real private crouch/flight input absent')
