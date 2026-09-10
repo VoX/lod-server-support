@@ -61,11 +61,11 @@ def inspect(rows,oracle,run_id,allow_open=False):
  starts=event('save_pause_begin');ends=event('native_save_return');releases=event('save_pause_release')
  if len(starts)==len(ends)==len(releases)==1:
   start,end,release=starts[0],ends[0],releases[0]
-  pause=start.get('native_paused') is True and start.get('holds_pause_monitor') is False and end.get('success') is True and start['time_ns']<release['time_ns']<=end['time_ns']
+  pause=start.get('pause_max_ms')==15000 and release.get('release_reason')=='target_deferred' and release['time_ns']-start['time_ns']<=15_000_000_000 and start.get('native_paused') is True and start.get('holds_pause_monitor') is False and end.get('success') is True and start['time_ns']<release['time_ns']<=end['time_ns']
   region=(start.get('region_x'),start.get('region_z'))
   matching=lambda r:(r.get('chunk_x',-999)//32,r.get('chunk_z',-999)//32)==region
   no_write=not any(matching(r) and start['time_ns']<=r['time_ns']<=end['time_ns']for r in commits)
-  deferred=any(matching(r) and r.get('outcome')=='DEFERRED' and start['time_ns']<r['time_ns']<release['time_ns'] and r.get('native_save_active') is True for r in event('bridge_result'))
+  deferred=any(matching(r) and t.get('edited_during_save') is True and at(r,p) and r.get('floor_y')==t['final_floor_y'] and len(r.get('floor_state',[]))==256 and all(t['final_block']in v for v in r['floor_state']) and r.get('outcome')=='DEFERRED' and start['time_ns']<r['time_ns']<release['time_ns'] and r.get('native_save_active') is True for p,t in targets.items()for r in event('bridge_result'))
   recovery=any(matching(r) and t.get('edited_during_save') is True and at(r,p) and r['time_ns']>end['time_ns'] and r.get('floor_y')==t['final_floor_y'] and len(r.get('floor_state',[]))==256 and all(t['final_block']in v for v in r['floor_state']) for p,t in targets.items()for r in commits)
   passed['save_race_safe']=pause and no_write and deferred and recovery
  errors.extend('missing native evidence: '+key for key,value in passed.items()if not value)

@@ -23,7 +23,7 @@ class NativeMapFixTest(unittest.TestCase):
   self.assertEqual((410,210),zoom_button(dict(zoom_active=True,zoom_visible=True,zoom_out=[200,100,10,10],gui_width=480,gui_height=270,window_x=0,window_y=0,screen_width=960,screen_height=540)))
 
  def test_capture_requires_every_unchanged_completed_frame(self):
-  base=dict(event='map_viewport',camera_x=264,camera_z=264,scale=1.5,width=960,height=540)
+  base=dict(event='map_viewport',zoom_mouse_over=False,mouse_x=480,mouse_y=135,camera_x=264,camera_z=264,scale=1.5,width=960,height=540)
   rows=[dict(base,time_ns=t,viewport_frame=i+1)for i,t in enumerate((10,20,40,50))]
   receipt=dict(native_viewport=rows[0],confirmed_viewport=rows[-1],capture_started_ns=25,capture_finished_ns=30)
   self.assertTrue(capture_stable(rows,receipt))
