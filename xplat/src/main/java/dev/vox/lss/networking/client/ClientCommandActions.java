@@ -169,16 +169,28 @@ public final class ClientCommandActions {
             feedback.accept(Component.literal("Waiting for a current-session snapshot; retry after the next tick."));
             return;
         }
+        var ticket = ClientStatus.reserveExportFeedback(snapshot.lifecycle(), feedback);
+        if (ticket == null) {
+            feedback.accept(Component.literal("Diagnostics exporter busy; retry after the current export."));
+            return;
+        }
         try {
             dev.vox.lss.common.diagnostics.DiagnosticExport.write(
                     dev.vox.lss.platform.LoaderServices.get().gameDir().resolve(Brand.lowerShortName() + "-diagnostics"), snapshot)
-                    .whenComplete((path, error) -> net.minecraft.client.Minecraft.getInstance().execute(() -> {
-                        // Never disclose arbitrary exception text (paths/addresses can occur there).
-                        feedback.accept(Component.literal(error == null ? "Diagnostics exported: " + path
-                                : "Diagnostics export failed; check directory permissions and free space."));
-                    }));
+                    .whenComplete((path, error) -> {
+                        // The worker and queued owner task retain only an immutable ticket
+                        // and sanitized text, never the source, screen, world or exception.
+                        String message = error == null ? "Diagnostics exported: " + path
+                                : "Diagnostics export failed; check directory permissions and free space.";
+                        net.minecraft.client.Minecraft.getInstance().execute(() ->
+                                ClientStatus.completeExportFeedback(ticket, message));
+                    });
         } catch (java.util.concurrent.RejectedExecutionException busy) {
+            ClientStatus.releaseExportFeedback(ticket);
             feedback.accept(Component.literal("Diagnostics exporter busy; retry after the current export."));
+        } catch (RuntimeException | Error failure) {
+            ClientStatus.releaseExportFeedback(ticket);
+            throw failure;
         }
     }
 
