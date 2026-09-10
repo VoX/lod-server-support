@@ -1,0 +1,10 @@
+"""Bounded relative look on an already authenticated, identity-guarded private window."""
+import ctypes
+
+def look_down(driver):
+ driver.focus() # Revalidates exact native process/window/display ownership.
+ driver.test.XTestFakeRelativeMotionEvent.argtypes=[ctypes.c_void_p,ctypes.c_int,ctypes.c_int,ctypes.c_ulong]
+ driver.verify()
+ if driver.test.XTestFakeRelativeMotionEvent(driver.display,0,400,0)==0:raise ValueError('private relative look input rejected')
+ driver.x.XFlush(driver.display)
+ driver.verify()
