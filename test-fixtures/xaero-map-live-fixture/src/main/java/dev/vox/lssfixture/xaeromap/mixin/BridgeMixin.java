@@ -1,4 +1,5 @@
-package dev.vox.lssfixture.xaeromap;
+package dev.vox.lssfixture.xaeromap.mixin;
+import dev.vox.lssfixture.xaeromap.Probe;
 import org.spongepowered.asm.mixin.*;
 import org.spongepowered.asm.mixin.injection.*;
 import org.spongepowered.asm.mixin.injection.callback.*;
