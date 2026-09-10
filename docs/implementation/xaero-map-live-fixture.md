@@ -1,0 +1,38 @@
+# Primary native Xaero map acceptance fixture
+
+This isolated fixture targets Minecraft1.21.1's four declared native client compositions: Fabric modern/legacy and NeoForge modern/legacy Sodium, each with native Xaero World Map1.45.0. Its sources and controls are mirrored across all five lines. Shipping code is unchanged. As of2026-09-10, a Fabric modern run has passed all five live raw checks provisionally, but its collected result failed native writer closure. No map profile has completed acceptance or actual user visual review. Compilation and synthetic controls are not native acceptance.
+
+The exact inspected Xaero artifacts are Fabric SHA256 `ea84c45cb1b994a7738515670b281bcd373a9d9cc3d8d3a24b84a4baf302b9d6` and NeoForge SHA256 `d60899112e84616ba52a993c1722fd891872acc4779bfac34d9b170001451c6f`. Required native selectors are verified against both jars. Fabric uses the remapped fixture; NeoForge uses its separately packaged named jar. All ordinary helpers are outside Mixin's reserved package, and actual packaged artifacts are checked for that boundary.
+
+## Native evidence and independent targets
+
+The owned server console creates a gold ramp across x432..591,z240..335 with height `64 + ((x-432) % 8)`. The independent oracle covers every pixel of chunk31,z16 and chunk32,z16, spanning the native region boundary. Actual console receipts bind seed and native-visit times. The real spectator starts atchunk16,z16, outside vanilla tracking of both targets. Server generation is disabled, LOD distance32, native view distance4 and client simulation distance5 (the native minimum). No normal world is copied or edited.
+
+The fixture observes real incoming bodies and successful bridge commits, requiring unloaded native chunks and independently expected content. It copies the actual direct color buffer after native/product buffer construction. A later real vanilla visit must reproduce all256 target height/top/slope/parameter facts and all256 target RGBA pixels. Complete64×64 group buffers and their hashes remain retained and validated, but unrelated neighboring pixels are not part of the one-chunk oracle. The exact target byte offset follows inspected native `MapTileChunk.putColour`: `((z * 64 + x) * 4)`.
+
+Native reference provenance includes the actual `MapWriter.writeChunk` pixel-scan completion, after its native mark-clean invocation. Xaero rebuilds buffers only when the group reaches its final tile and `wasChanged()` is true. When unchanged, the observer reads the existing buffer at that actual native group-completion check; it never forces a rebuild. Both reference paths require the actual native writer stack, matching scan identity/timing and matching native pixel facts. No fixture inserts tiles, changes slope/color fields, modifies map load state, or calls a product scheduler.
+
+## Save overlap and native capture
+
+After returning to the distant observer position, a run-owned arm file enables one bounded delay inside a real targeted native saver call. Native Xaero already owns the writer pause; the fixture refuses to delay if the pause is absent or the saver still holds its pause monitor. The controller edits the selected saved region's target to diamond through actual console commands and native `save-all flush`.
+
+The artificial pause releases only after a real same-target `DEFERRED` bridge attempt contains all256 native diamond block states and the complete expected ramp heights, or after its explicit15000ms hard ceiling. A deadline release fails. The independent checker requires that edited-content overlap, no bridge commit through the native save return, a real successful saver return, and later committed edited-content recovery. Old pending gold content cannot satisfy overlap even if later recovery is correct. The fixture never invokes saveRegion or fabricates a save result.
+
+The screenshot uses native tutorialStep:none and guarded private input. Zoom is held only until actual fresh native telemetry shows scale reduction, bounded at1second per action. A pointer-only move removes the zoom tooltip. Both target rectangles must be readable and framed. Every completed frame around capture must have identical camera/scale/window/mouse state, no zoom hover, consecutive frame numbers and two observed post-capture frames. The PNG is captured before shutdown and bound by its actual SHA256. Agent inspection does not replace user review.
+
+## Orderly closure and proof
+
+The controller requests native client shutdown only after independently checking all five live raw assertions. Its bounded run-owned request contains the exact run identity, phase and monotonic timestamp at `evidence/xaero-map-stop-client`. The native client-owner hook validates that identity and exact configured sibling path, then invokes `Minecraft.stop()` once. It does not merely close the observer while native producers remain active.
+
+The controller waits for the actual JVM-written `observer_closed` footer and `CLOSED overflow=false pending=0` log receipt before writing proof. The retained checker independently verifies that all five raw checks were already true before the stop request and that the native owner stop precedes closure. Missing footer, premature launcher exit, overflow, changed evidence or incomplete cleanup fails. Native validation of this orderly-close correction is pending; no external code appends a footer. Dedicated Prism remains configured CloseAfterLaunch=false, and normal ownership/cleanup checks remain mandatory.
+
+The maintained composer/controller/checkers are `prepare_xaero_map.py`, `drive_xaero_map.py`, `check_xaero_map.py` and `check_xaero_map_run.py`. Each fresh attempt uses explicit immutable shipping/fixture artifacts, verified selected assets, fresh launcher closure and an independently built target. The scenario remains bounded at300seconds. A successful collected raw result may become awaiting-review only after complete cleanup; final acceptance still requires the actual user's response bound to the retained PNG. See [visual review](../testing/visual-review.md).
+
+## Dated failure history
+
+The [original staging document](history/2026-09-10-xaero-map-fixture-initial.md) is preserved as history; its3-second pause and whole-group equality statements are superseded above.
+
+- `20260910T055548Z-b8c93c1dd69a`: failed native-reference premise and offscreen boundary; conditional rebuild observation and unrelated group color changes were diagnosed from actual native bytecode/data.
+- `20260910T063236Z-4aadf3be0381`: failed framing action bound; instantaneous mouse press/release cleared native held zoom before a render consumed it.
+- `20260910T063750Z-58aca4515b4c`: four raw checks passed, but edited body arrived7.28seconds after the old3-second save pause began; tutorial/tooltip also obscured the screenshot. Overall failed and cleanup complete.
+- `20260910T065009Z-04824fc5d3c9`: all five live raw checks passed, including actual edited-body deferral and recovery, with an unobscured framed PNG. Collection correctly failed because abrupt launcher/display cleanup did not yield the native observer footer. This remains an overall failure, not an awaiting-review or accepted map result.

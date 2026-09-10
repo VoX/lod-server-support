@@ -104,9 +104,13 @@ def run(root):
  command('save-all flush','Saved the game')
  wait(lambda:all(inspect(rows(),oracle,m['run_id'],allow_open=True)[0].values()))
  artifacts={'visual_render':{'artifact':'xaero-map-boundary.png','artifact_sha256':sha(root/'evidence/xaero-map-boundary.png')}}
- make_proof(root,m,review_artifacts=artifacts,require_closed=False)
- # Supervisor sees provisional semantic proof and closes native writers; its
- # registered postcleanup adapter must rebuild and enforce final closed evidence.
+ # Ask the actual native client loop to stop, then observe its own shutdown hook.
+ # Prism is deliberately configured CloseAfterLaunch=false; no raw proof exists
+ # until the native writer has closed, so premature launcher exit still fails.
+ from xaero_map_shutdown import request_stop
+ request_stop(root,m,inspect(rows(),oracle,m['run_id'],allow_open=True)[0])
+ wait(lambda:rows() and rows()[-1].get('event')=='observer_closed' and '[XAERO-MAP-FIXTURE] CLOSED overflow=false pending=0'in logged())
+ make_proof(root,m,review_artifacts=artifacts,require_closed=True)
  while True:time.sleep(1)
 if __name__=='__main__':
  p=argparse.ArgumentParser();p.add_argument('run',type=Path);a=p.parse_args();run(a.run)

@@ -14,7 +14,7 @@ def build(runtime,profile,map_fixture,connect_fixture):
   path=regular(Path(path));result['stage_files'].append(dict(source=str(path.resolve()),target='instances/lss-rig-client/minecraft/mods/'+name,sha256=sha(path)))
  config='instances/lss-rig-client/instance.cfg';marker='JvmArgs=-Dlss.rig.runId={run_id}'
  if result['generated_files'][config].count(marker)!=1:raise ValueError('known private JVM argument declaration required')
- result['generated_files'][config]=result['generated_files'][config].replace(marker,marker+' -Dlss.rig.initialEndpoint='+result['client_endpoint']+' -Dlss.xaeromap.pauseMaxMillis=15000 -Dlss.xaeromap.enabled=true -Dlss.xaeromap.evidence={run}/evidence/xaero-map.jsonl -Dlss.xaeromap.arm={run}/evidence/xaero-map-arm-save')
+ result['generated_files'][config]=result['generated_files'][config].replace(marker,marker+' -Dlss.rig.initialEndpoint='+result['client_endpoint']+' -Dlss.xaeromap.stop={run}/evidence/xaero-map-stop-client -Dlss.xaeromap.pauseMaxMillis=15000 -Dlss.xaeromap.enabled=true -Dlss.xaeromap.evidence={run}/evidence/xaero-map.jsonl -Dlss.xaeromap.arm={run}/evidence/xaero-map-arm-save')
  import json
  client='instances/lss-rig-client/minecraft/config/lss-client-config.json';values=json.loads(result['generated_files'].get(client,'{}'));values.update(receiveServerLods=True,enableXaeroMapBridge=True,enableJoinSlowStart=False);result['generated_files'][client]=json.dumps(values)+'\n'
  server='server/config/lss-server-config.json';values=json.loads(result['generated_files'].get(server,'{}'));values.update(lodDistanceChunks=32,enableChunkGeneration=False);result['generated_files'][server]=json.dumps(values)+'\n'

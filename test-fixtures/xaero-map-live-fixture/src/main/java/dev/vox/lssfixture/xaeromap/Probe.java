@@ -20,6 +20,7 @@ public final class Probe {
  private static final Set<Object> REGIONS=ConcurrentHashMap.newKeySet();
  private static final ConcurrentHashMap<String,Method> METHODS=new ConcurrentHashMap<>();
  private static final ThreadLocal<Boolean> SAVING=ThreadLocal.withInitial(()->false);
+ private static final AtomicBoolean CLIENT_STOP_REQUESTED=new AtomicBoolean();
  private static volatile boolean activeSave;
  private static volatile int saveRegionX,saveRegionZ;
  private static final AtomicBoolean SAVE_DEFERRED=new AtomicBoolean();
@@ -90,9 +91,28 @@ public final class Probe {
   textureObserved(chunk,field(scan.writer,"mapProcessor"),"unchanged_native_group");
  }catch(Throwable t){failure(t);}}
  public static void nativeEnd(){SCAN.remove();}
+ private static boolean requestNativeStop(){
+  if(CLIENT_STOP_REQUESTED.get())return true;
+  try{
+   Path expected=Path.of(System.getProperty("lss.xaeromap.evidence")).toAbsolutePath().normalize().resolveSibling("xaero-map-stop-client");
+   Path request=Path.of(System.getProperty("lss.xaeromap.stop")).toAbsolutePath().normalize();
+   if(!request.equals(expected))throw new IllegalStateException("native stop path outside exact run evidence");
+   if(!Files.exists(request))return false;
+   if(Files.isSymbolicLink(request)||!Files.isRegularFile(request)||Files.size(request)>1024)throw new IllegalStateException("invalid native stop request file");
+   var value=JSON.fromJson(Files.readString(request),com.google.gson.JsonObject.class);
+   if(!RUN.equals(value.get("run_id").getAsString())||!"all_raw_checks_passed".equals(value.get("phase").getAsString())||value.get("requested_ns").getAsLong()<=0)throw new IllegalStateException("native stop request identity/phase mismatch");
+   if(!net.minecraft.client.Minecraft.getInstance().isSameThread())throw new IllegalStateException("native stop request off client owner");
+   if(CLIENT_STOP_REQUESTED.compareAndSet(false,true)){
+    emit("native_client_stop_requested",Map.of("client_thread",true,"request_run_id",RUN,"request_path","xaero-map-stop-client","requested_ns",value.get("requested_ns").getAsLong()));
+    net.minecraft.client.Minecraft.getInstance().stop();
+   }
+   return true;
+  }catch(Throwable t){failure(t);return false;}
+ }
  private static int viewportFrames;
  public static void renderedScreen(Object screen){
   if(!ENABLED)return;
+  if(requestNativeStop())return;
   boolean map=screen!=null&&screen.getClass().getName().equals("xaero.map.gui.GuiMap");
   if(!map){mapFrames=0;viewportFrames=0;return;}
   if(mapFrames<2)emit("map_screen_rendered",Map.of("screen",screen.getClass().getName(),"frame",++mapFrames));
