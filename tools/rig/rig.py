@@ -30,8 +30,16 @@ def read(path):
 def write(path, data):
     path = Path(path)
     tmp = path.with_suffix('.tmp')
-    tmp.write_text(json.dumps(data, indent=2, sort_keys=True) + '\n')
+    with tmp.open('w') as stream:
+        stream.write(json.dumps(data, indent=2, sort_keys=True) + '\n')
+        stream.flush()
+        os.fsync(stream.fileno())
     tmp.replace(path)
+    directory=os.open(path.parent,os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(directory)
+    finally:
+        os.close(directory)
 
 def regular(path):
     path = Path(path)
