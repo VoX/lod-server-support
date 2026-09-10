@@ -793,7 +793,8 @@ public class SerializerParityGameTests {
             switch (step.get()) {
                 case 0 -> {
                     var chunk = level.getChunk(cx, cz);
-                    var built = SectionSerializer.serializeColumn(level, chunk, cx, cz);
+                    var capture = proc.captureLoadedProbe(dim, packed, state.registration());
+                    var built = capture.bind(SectionSerializer.serializeColumn(level, chunk, cx, cz));
                     helper.assertTrue(built.serializedSections() != null,
                             "premise: the superflat column serves non-air content first");
                     GameTestSeeding.seedRequest(state, packed, -1L);
@@ -817,14 +818,16 @@ public class SerializerParityGameTests {
                             }
                         }
                     }
-                    var chunk = level.getChunk(cx, cz);
-                    var emptied = SectionSerializer.serializeColumn(level, chunk, cx, cz);
-                    helper.assertTrue(emptied.serializedSections() == null,
-                            "premise: the stripped column must serialize as all-air");
-                    // Broadcaster-equivalent dirty events, then the client's re-request with
-                    // its stored stamp; all posted before one snapshot = one mailbox take.
+                    // Queue the completed mutation's invalidation before capturing a fresh probe.
                     proc.invalidateTimestamps(dim, new long[]{packed});
                     proc.clearDiskReadDone(uuid, new long[]{packed});
+                    var chunk = level.getChunk(cx, cz);
+                    var capture = proc.captureLoadedProbe(dim, packed, state.registration());
+                    var emptied = capture.bind(SectionSerializer.serializeColumn(level, chunk, cx, cz));
+                    helper.assertTrue(emptied.serializedSections() == null,
+                            "premise: the stripped column must serialize as all-air");
+                    // Client re-request with its stored stamp; invalidation and fresh probe
+                    // remain posted before one snapshot = one mailbox take.
                     GameTestSeeding.seedRequest(state, packed, LSSConstants.epochSeconds() + 10_000);
                     Long2ObjectMap<LoadedColumnData> probes = new Long2ObjectOpenHashMap<>();
                     probes.put(packed, emptied);
