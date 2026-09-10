@@ -191,7 +191,7 @@
     },
     {
       "id": "mc12111-c2me-a--c2me-save-read",
-      "profile_id": "mc12111-c2me-a-named-gametest",
+      "profile_id": "mc12111-c2me-a-named-gametest-v2",
       "scenario_id": "c2me-save-read",
       "applicability": "required",
       "validation": "unverified",
@@ -199,7 +199,7 @@
     },
     {
       "id": "mc12111-c2me-b--c2me-save-read",
-      "profile_id": "mc12111-c2me-b-named-gametest",
+      "profile_id": "mc12111-c2me-b-named-gametest-v2",
       "scenario_id": "c2me-save-read",
       "applicability": "required",
       "validation": "unverified",
