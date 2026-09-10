@@ -55,6 +55,9 @@ def inspect(root,manifest):
   if row.get('result')!=receipt or receipt.get('status')!='submitted':errors.append('setup native submission receipt differs')
  looks=[x for x in journal.get('inputs',[]) if x.get('action')=='relative-look']
  if len(looks)!=1 or looks[0].get('dx')!=0 or looks[0].get('dy')!=400 or not by_phase['gliding']['end_ns']<looks[0].get('start_ns',-1)<=looks[0].get('end_ns',-1)<by_phase['landed']['start_ns']:errors.append('native landing look input missing/outside causal interval')
+ captures=[x for x in journal.get('inputs',[]) if x.get('action')=='capture-mouse']
+ if len(captures)!=1 or captures[0].get('button')!=1 or captures[0].get('x')!=480 or captures[0].get('y')!=270 or not looks or not by_phase['gliding']['end_ns']<captures[0].get('start_ns',-1)<=captures[0].get('end_ns',-1)<looks[0].get('start_ns',-1):errors.append('native mouse capture input missing/outside interval')
+ if not looks or not any(looks[0]['end_ns']<=r.get('nano_time',-1)<by_phase['landed']['start_ns'] and r.get('uuid')==expected_uuid and r.get('mouse_grabbed')is True and r.get('pitch',0)>40 for r in rows(target,'LSS_ELYTRA_NATIVE')):errors.append('actual native downward pitch after input missing')
  owners=read(regular(root/'processes.json'))
  actions=journal.get('inputs',[])
  if not any(r.get('key')=='Shift_L' and r.get('action')=='hold' for r in actions) or not any(r.get('key')=='space' and r.get('action')=='press' for r in actions):errors.append('real private crouch/flight input absent')
@@ -67,6 +70,8 @@ def inspect(root,manifest):
   if row.get('game_root')!='elytra-target' or not isinstance(row.get('process'),dict) or not row.get('window'):errors.append('private input native identity absent')
  capture=journal.get('capture',{});glide=next((p for p in phases if p['id']=='gliding'),{})
  if not glide.get('start_ns',1)<=capture.get('time_ns',-1)<=glide.get('end_ns',0):errors.append('capture outside actual gliding phase')
+ from elytra_camera import framed
+ if not framed(rows(observer,'LSS_ELYTRA_CAMERA'),rows(observer,'LSS_ELYTRA_SUBMIT'),capture.get('time_ns',0)-500_000_000,manifest['run_id'],expected_uuid,capture.get('time_ns',0)):errors.append('capture lacks time-aligned native camera framing')
  try:
   image=regular(inside(root/'evidence',capture['artifact']))
   if sha(image)!=capture['sha256']:errors.append('capture bytes changed')
