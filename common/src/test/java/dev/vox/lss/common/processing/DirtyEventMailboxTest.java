@@ -132,7 +132,8 @@ class DirtyEventMailboxTest {
             // timestamp cache. The delivery blocks the processing thread mid-cycle.
             a.enqueue(new IncomingRequest(5, 5, 1L));
             var probes = new Long2ObjectOpenHashMap<LoadedColumnData>();
-            probes.put(served, new LoadedColumnData(5, 5, new byte[]{1}, 1));
+            probes.put(served, proc.captureLoadedProbe(DIM, served, a.registration())
+                    .bind(new LoadedColumnData(5, 5, new byte[]{1}, 1)));
             Map<UUID, Long2ObjectMap<LoadedColumnData>> probesByPlayer = Map.of(uA, probes);
             var dimsA = new HashMap<UUID, String>();
             dimsA.put(uA, DIM);
