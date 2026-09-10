@@ -109,8 +109,9 @@ public class PaperChunkGenerationService {
     private final AtomicLong vanishedFailures = new AtomicLong(0);
 
     public PaperChunkGenerationService(PaperConfig config, Plugin plugin) {
-        this.maxConcurrent = config.generationConcurrencyLimitGlobal;
-        this.maxPerPlayerActive = config.generationConcurrencyLimitPerPlayer;
+        var generationLimits = config.generationLimits();
+        this.maxConcurrent = generationLimits.global();
+        this.maxPerPlayerActive = generationLimits.perPlayer();
         this.timeoutTicks = config.generationTimeoutSeconds * LSSConstants.TICKS_PER_SECOND;
         this.mainThreadScheduler = task ->
                 plugin.getServer().getGlobalRegionScheduler().execute(plugin, task);

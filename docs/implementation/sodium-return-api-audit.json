@@ -1,0 +1,80 @@
+[
+  {
+    "jar": "sodium-mc26.2-0.9.1-beta.3-neoforge.jar",
+    "sha256": "bafb321c4022ffaca4262762cc8481ac63ca12c41d29b0b04926b556dec32893",
+    "modern": true,
+    "missing": []
+  },
+  {
+    "jar": "sodium-mc1.21.1-0.8.13-beta.2-neoforge.jar",
+    "sha256": "72eb00f2a0bd9d21e9b7b0e4abc8f4a399287fc0ce5dced75968a3e2461e8919",
+    "modern": true,
+    "missing": []
+  },
+  {
+    "jar": "sodium-mc26.2-0.9.1-beta.3-fabric.jar",
+    "sha256": "5c73580f53cc54f79040ed8c76f06cc2e0908a184275243f83d0d985976c3dac",
+    "modern": true,
+    "missing": []
+  },
+  {
+    "jar": "sodium-mc1.21.1-0.8.12-neoforge.jar",
+    "sha256": "2f9e69ec9521e657100ef83b3bdf3f18dba6078d57f9853722d7643a577b2266",
+    "modern": true,
+    "missing": []
+  },
+  {
+    "jar": "sodium-mc26.2-0.9.1-neoforge.jar",
+    "sha256": "99211fc2a1d91c9beaa569044d191c08c68a1dbf5eb9bf1f5ee8296b9f768c81",
+    "modern": true,
+    "missing": []
+  },
+  {
+    "jar": "sodium-mc26.1.2-0.8.12-fabric.jar",
+    "sha256": "e084c5c3c520dc0718dbaef1deafef0ba2c7c0d77c701ac34c07646f6ccb81df",
+    "modern": true,
+    "missing": []
+  },
+  {
+    "jar": "sodium-mc1.21.10-0.7.3-neoforge.jar",
+    "sha256": "8f2dadd2acf1f7a0e63b0288af144556a54e4cc01e0e5a8ccc9b9221a71c69c4",
+    "modern": false,
+    "missing": []
+  },
+  {
+    "jar": "sodium-mc1.21.1-0.6.13-neoforge.jar",
+    "sha256": "7acd7af2ef75ec883a6872c17494ead65e38025151eb08a1d60e36d34377f403",
+    "modern": false,
+    "missing": []
+  },
+  {
+    "jar": "sodium-mc1.21.1-0.8.12-alpha.3-fabric.jar",
+    "sha256": "12ff5c835390af25aac16e3f1f3c38972e442dfbb8909e06698bc5f30450f7c0",
+    "modern": true,
+    "missing": []
+  },
+  {
+    "jar": "sodium-mc26.1.2-0.8.12-neoforge.jar",
+    "sha256": "670df7ba4d4fcd3e0f2fde35fd967defa94f0b07376e4554126cc79afa44fec6",
+    "modern": true,
+    "missing": []
+  },
+  {
+    "jar": "sodium-mc1.21.11-0.8.12-neoforge.jar",
+    "sha256": "3277859aaed67cb5006bd517257cbf49dfb97663d56093279d5523b6da4bbd7c",
+    "modern": true,
+    "missing": []
+  },
+  {
+    "jar": "sodium-mc1.21.11-0.8.12-fabric.jar",
+    "sha256": "009299748f192f6246fd6759a26304f0fea06f3412cff522d1d533e2b8db8176",
+    "modern": true,
+    "missing": []
+  },
+  {
+    "jar": "sodium-mc1.21.1-0.8.13-beta.2-fabric.jar",
+    "sha256": "90261fcdab301314acc94c24bba483c2db1b5d94f645d92c69b9585e3422a176",
+    "modern": true,
+    "missing": []
+  }
+]

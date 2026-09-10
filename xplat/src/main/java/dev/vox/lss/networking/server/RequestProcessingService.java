@@ -474,7 +474,7 @@ public class RequestProcessingService {
         }
         var state = this.players.computeIfAbsent(player.getUUID(), uuid -> {
             var s = new PlayerRequestState(player, LSSConstants.SYNC_ON_LOAD_SLOT_CAP,
-                    config.generationConcurrencyLimitPerPlayer);
+                    config.generationLimits().perPlayer());
             // Session identity for the router's stale-snapshot guard (set before the map
             // publish so the processing thread never sees it null on a live state).
             s.setRegisteredDimension(player.level().dimension().location().toString());
@@ -785,8 +785,9 @@ public class RequestProcessingService {
         this.diskReader.reapplyGateCapacity(config);
         this.offThreadProcessor.updateSweepRadius(config.lodDistanceChunks
                 + LSSConstants.LOD_DISTANCE_BUFFER + OffThreadProcessor.SWEEP_RADIUS_MARGIN_CHUNKS);
-        int genGlobal = config.generationConcurrencyLimitGlobal;
-        int genPerPlayer = config.generationConcurrencyLimitPerPlayer;
+        var generationLimits = config.generationLimits();
+        int genGlobal = generationLimits.global();
+        int genPerPlayer = generationLimits.perPlayer();
         if (genGlobal != this.lastAppliedGenGlobal || genPerPlayer != this.lastAppliedGenPerPlayer) {
             if (this.generationService != null) {
                 this.generationService.updateCaps(genGlobal, genPerPlayer);

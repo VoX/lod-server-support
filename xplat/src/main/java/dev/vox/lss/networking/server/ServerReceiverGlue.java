@@ -490,7 +490,7 @@ public final class ServerReceiverGlue {
                         // The caps ARE the old client's pacing — advertise the server's real
                         // admission values (see the v16 compat design §4.1).
                         LSSConstants.SYNC_ON_LOAD_SLOT_CAP,
-                        config.generationConcurrencyLimitPerPlayer,
+                        config.generationLimits().perPlayer(),
                         config.enableChunkGeneration)
                 : new SessionConfigS2CPayload(
                         // v18/v19 compat: the CURRENT 4-field layout, echoing the legacy

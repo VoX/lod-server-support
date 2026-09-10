@@ -59,6 +59,88 @@ public final class ClientOptionCatalog {
                 .filter(o -> o.id().equals(id)).findFirst();
     }
 
+    /** Complete serialized inventory, including intentionally file-only settings. */
+    public static java.util.List<dev.vox.lss.common.config.SettingDescriptor> serializedDescriptors() {
+        return dev.vox.lss.common.config.ClientSerializedSettings.descriptors().stream()
+                .map(ClientOptionCatalog::withControlMetadata).toList();
+    }
+
+    private static dev.vox.lss.common.config.SettingDescriptor withControlMetadata(
+            dev.vox.lss.common.config.SettingDescriptor stored) {
+        String id = switch (stored.key()) {
+            case "receiveServerLods" -> ID_RECEIVE_SERVER_LODS;
+            case "lodDistanceChunks" -> ID_LOD_DISTANCE;
+            case "lodColumnsPerSecondLimit" -> ID_COLUMN_RATE_LIMIT;
+            case "enableJoinSlowStart" -> ID_JOIN_SLOW_START;
+            case "enableXaeroMapBridge" -> ID_XAERO_MAP_BRIDGE;
+            case "farPlayersEnabled" -> ID_FAR_PLAYERS_ENABLED;
+            case "farPlayersShareSelf" -> ID_FAR_PLAYERS_SHARE_SELF;
+            case "farPlayersNameTags" -> ID_FAR_PLAYERS_NAME_TAGS;
+            case "farPlayersFullBright" -> ID_FAR_PLAYERS_FULL_BRIGHT;
+            case "farPlayersMaxRenderDistanceBlocks" -> ID_FAR_PLAYERS_RENDER_DISTANCE;
+            case "farPlayersWithSeeU" -> ID_FAR_PLAYERS_WITH_SEEU;
+            default -> null;
+        };
+        if (id == null) return stored;
+        var option = find(id).orElseThrow();
+        return new dev.vox.lss.common.config.SettingDescriptor(stored.key(), stored.type(), stored.units(),
+                option.nameKey(), stored.defaultPolicy(), stored.domain(), stored.validationBinding(),
+                stored.scopes(), stored.inheritance(), option.visibility().name(),
+                "client owner apply; " + option.saveHook(), false, option.saveHook().name(),
+                dev.vox.lss.common.config.SettingDescriptor.Exposure.UI);
+    }
+
+    public static java.util.List<dev.vox.lss.common.config.SettingBinding<dev.vox.lss.config.LSSClientConfig>> serializedBindings() {
+        var descriptors = serializedDescriptors();
+        return java.util.List.of(
+                new dev.vox.lss.common.config.SettingBinding<>(descriptors.get(0), config -> config.enableRegionScan),
+                new dev.vox.lss.common.config.SettingBinding<>(descriptors.get(1), config -> config.receiveServerLods),
+                new dev.vox.lss.common.config.SettingBinding<>(descriptors.get(2), config -> config.useWorldSubBuckets),
+                new dev.vox.lss.common.config.SettingBinding<>(descriptors.get(3), config -> config.cacheAddressAliases),
+                new dev.vox.lss.common.config.SettingBinding<>(descriptors.get(4), config -> config.lodDistanceChunks),
+                new dev.vox.lss.common.config.SettingBinding<>(descriptors.get(5), config -> config.unknownBlockFallback),
+                new dev.vox.lss.common.config.SettingBinding<>(descriptors.get(6), config -> config.crossVersionBlockFallbacks),
+                new dev.vox.lss.common.config.SettingBinding<>(descriptors.get(7), config -> config.enableV16ServerCompat),
+                new dev.vox.lss.common.config.SettingBinding<>(descriptors.get(8), config -> config.enableV19ServerCompat),
+                new dev.vox.lss.common.config.SettingBinding<>(descriptors.get(9), config -> config.enableV16Generation),
+                new dev.vox.lss.common.config.SettingBinding<>(descriptors.get(10), config -> config.enableAdaptiveScanCadence),
+                new dev.vox.lss.common.config.SettingBinding<>(descriptors.get(11), config -> config.enableScanPrefixRetention),
+                new dev.vox.lss.common.config.SettingBinding<>(descriptors.get(12), config -> config.enableQuadtreeScan),
+                new dev.vox.lss.common.config.SettingBinding<>(descriptors.get(13), config -> config.enableRegionSummarySync),
+                new dev.vox.lss.common.config.SettingBinding<>(descriptors.get(14), config -> config.enableXaeroMapBridge),
+                new dev.vox.lss.common.config.SettingBinding<>(descriptors.get(15), config -> config.enableXaeroMapBackpressure),
+                new dev.vox.lss.common.config.SettingBinding<>(descriptors.get(16), config -> config.enableIngestBackpressure),
+                new dev.vox.lss.common.config.SettingBinding<>(descriptors.get(17), config -> config.lodColumnsPerSecondLimit),
+                new dev.vox.lss.common.config.SettingBinding<>(descriptors.get(18), config -> config.enableAdaptiveTransferRate),
+                new dev.vox.lss.common.config.SettingBinding<>(descriptors.get(19), config -> config.enableJoinSlowStart),
+                new dev.vox.lss.common.config.SettingBinding<>(descriptors.get(20), config -> config.farPlayersEnabled),
+                new dev.vox.lss.common.config.SettingBinding<>(descriptors.get(21), config -> config.farPlayersMaxDistanceBlocks),
+                new dev.vox.lss.common.config.SettingBinding<>(descriptors.get(22), config -> config.farPlayersMinDistanceBlocks),
+                new dev.vox.lss.common.config.SettingBinding<>(descriptors.get(23), config -> config.farPlayersNameTags),
+                new dev.vox.lss.common.config.SettingBinding<>(descriptors.get(24), config -> config.farPlayersFullBright),
+                new dev.vox.lss.common.config.SettingBinding<>(descriptors.get(25), config -> config.farPlayersShareSelf),
+                new dev.vox.lss.common.config.SettingBinding<>(descriptors.get(26), config -> config.farPlayersShareDistanceBlocks),
+                new dev.vox.lss.common.config.SettingBinding<>(descriptors.get(27), config -> config.farPlayersWithSeeU),
+                new dev.vox.lss.common.config.SettingBinding<>(descriptors.get(28), config -> config.farPlayersMaxRenderDistanceBlocks),
+                new dev.vox.lss.common.config.SettingBinding<>(descriptors.get(29), config -> config.farPlayersMaxAnimationDistanceBlocks)        );
+    }
+
+    /** Metadata is derived from the same typed rows used by both Sodium generations. */
+    public static dev.vox.lss.common.config.SettingDescriptor descriptor(OptionSpec option) {
+        var type = option instanceof BoolSpec ? dev.vox.lss.common.config.SettingDescriptor.Type.BOOLEAN
+                : dev.vox.lss.common.config.SettingDescriptor.Type.INTEGER;
+        String domain = option instanceof IntSpec i ? i.min() + ".." + i.max() + " (UI indices)" : "true | false";
+        String defaults = option instanceof BoolSpec b ? Boolean.toString(b.defaultValue())
+                : Integer.toString(((IntSpec) option).defaultValue());
+        return new dev.vox.lss.common.config.SettingDescriptor(option.id(), type,
+                option.id().equals(ID_COLUMN_RATE_LIMIT) ? "slider index -> columns/s; 0 unlimited"
+                        : option.id().equals(ID_LOD_DISTANCE) ? "chunks; 0 server default" : "option value",
+                option.nameKey(), defaults, domain, "OptionSpec typed binding + LSSClientConfig.validate",
+                java.util.Set.of(dev.vox.lss.common.config.SettingDescriptor.Scope.CLIENT), "client-global",
+                option.visibility().name(), "client owner apply; " + option.saveHook().name(), false,
+                option.saveHook().name(), dev.vox.lss.common.config.SettingDescriptor.Exposure.UI);
+    }
+
     private static PageSpec generalPage() {
         // Receive Server LODs — the master toggle every other main-page option hangs off.
         var receive = BoolSpec.builder(ID_RECEIVE_SERVER_LODS)
