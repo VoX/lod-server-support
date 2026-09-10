@@ -22,6 +22,8 @@ def main():
         raise ValueError('explicit native26.2 Fabric/Folia composition required')
     if {r['id'] for r in runtime['launches']}!={'server','client-A','client-B','client-C','client-D'}:
         raise ValueError('exact four-client owning-region recipe required')
+    from source_client_natives import apply as isolate_source_client_natives
+    isolate_source_client_natives(runtime)
     world_digest,snapshot=stages(Path(a.world_snapshot))
     if runtime.get('world_digest'):raise ValueError('recipe must not already stage another snapshot')
     runtime['world_digest']=world_digest;runtime['stage_files'].extend(snapshot)

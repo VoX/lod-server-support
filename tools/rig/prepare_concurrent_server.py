@@ -11,6 +11,7 @@ import shutil
 import zipfile
 from rig import require_lock, sha, write, digest
 from world_snapshot import stages
+from source_client_natives import apply as isolate_source_client_natives
 
 
 def main(platform):
@@ -40,6 +41,7 @@ def main(platform):
     cache=out/'cache';cache.mkdir()
     runtime=copy.deepcopy(source)
     runtime['launches']=copy.deepcopy(clients)
+    isolate_source_client_natives(runtime)
     runtime['stage_files']=[entry for entry in runtime['stage_files'] if not entry['target'].startswith('server/')]
     runtime['generated_files']={name:value for name,value in runtime['generated_files'].items() if not name.startswith('server/')}
     runtime.pop('world_digest',None)

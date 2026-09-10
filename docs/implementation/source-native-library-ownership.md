@@ -1,0 +1,7 @@
+# Source-client native library ownership
+
+Four-client source recipes set `-Dorg.lwjgl.system.SharedLibraryExtractPath={run}/clients/<subject>/lwjgl-native` separately for `RigSubjectA` through `RigSubjectD`. The actual runtime LWJGL `Configuration.class` binds that exact string to `SHARED_LIBRARY_EXTRACT_PATH`; its loader reads the path. The source materializers apply the flag, and the rig validates the exact subject/path and rejects symlink or non-directory ancestors before launching a source client.
+
+This is an explicit launcher adaptation. It removes the clients' shared mutable `/tmp/lwjgl_vox/...` native-file extraction surface. It changes initial JVM/runtime settings and requires new functional acceptance targets and new common baseline/candidate workload/JVM fingerprints before any performance registration. Production jars, fixture class bytes, world snapshots, and workload settings are not changed by this helper.
+
+The 2026-09-10 Fabric source attempt `20260910T145458Z-890726fee7d0` remains a failed attempt with complete journal cleanup. Its client-A SIGBUS occurred inside the loader while writing mapped `libshaderc.so`; the file after the run matched its native jar payload. Concurrent extraction is plausible, but the crash-time file length/writer was not captured, so this adaptation does not claim to establish the crash's cause or waive that failure. The separately authorized unchanged-runtime retry also remains its own attempt.
