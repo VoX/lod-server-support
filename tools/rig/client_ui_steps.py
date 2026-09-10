@@ -19,16 +19,29 @@ def check(receive,slow=None):
   if values.get('receiveServerLods')is receive and(slow is None or values.get('enableJoinSlowStart',True)is slow):return values
   if time.monotonic()>deadline:raise ValueError('real saved config did not converge to expected values')
   time.sleep(.1)
-def click(role):driver.click(*layout[role]);time.sleep(.5)
+last_action_completed_ms=0
+def click(role):
+ global last_action_completed_ms
+ driver.click(*layout[role])
+ if role!='status_export':last_action_completed_ms=time.time_ns()//1_000_000
+ time.sleep(.5)
 def export(name,receive):
- before={x.name:x.stat().st_mtime_ns for x in (game/'lss-diagnostics').glob('*.json')};click('status_export');deadline=time.monotonic()+5
- while True:
-  changed=[x for x in (game/'lss-diagnostics').glob('*.json')if before.get(x.name)!=x.stat().st_mtime_ns]
-  if len(changed)==1:break
-  if time.monotonic()>deadline:raise ValueError('exactly one fresh typed export required')
-  time.sleep(.1)
- data=changed[0].read_bytes();value=json.loads(data);assert value['receptionEnabled']is receive
+ from ui_snapshot_wait import observe_after_action
+ def request(deadline):
+  before={x.name:x.stat().st_mtime_ns for x in (game/'lss-diagnostics').glob('*.json')}
+  click('status_export')
+  while time.monotonic()<deadline:
+   changed=[x for x in (game/'lss-diagnostics').glob('*.json')if before.get(x.name)!=x.stat().st_mtime_ns]
+   if len(changed)>1:raise ValueError('exactly one fresh typed export required')
+   if len(changed)==1:return changed[0].read_bytes()
+   time.sleep(.1)
+  raise ValueError('exactly one fresh typed export required before deadline')
+ def retain(attempt,raw):(e/(name+'-observation-'+str(attempt)+'.json')).write_bytes(raw)
+ data,observation=observe_after_action(request,last_action_completed_ms,receive,retain)
  (e/(name+'.json')).write_bytes(data)
+ write(e/(name+'-timing.json'),dict(run_hash=manifest['run_hash'],**observation))
+ snap(name+'-settled')
+
 try:
  if a.phase=='discover':snap('batch-current-screen');print(json.dumps(dict(window=window,pid=owner['pid'],capture=str(e/'batch-current-screen.png'))));raise SystemExit()
  if not a.layout:raise ValueError('phase requires run-bound inspected layout')
@@ -37,7 +50,7 @@ try:
  # This is an operator action record, not a human review or automatic pass.
  write(e/'batch-layout.json',layout)
  if a.phase=='status':
-  driver.key('t');driver.text('/lss status');driver.key('Return');time.sleep(.8);snap('status-command-readable');export('initial-status-export',True)
+  driver.key('t');driver.text('/lss status');driver.key('Return');last_action_completed_ms=time.time_ns()//1_000_000;time.sleep(.8);snap('status-command-readable');export('initial-status-export',True)
  elif a.phase=='pending':
   # Precondition: actual LSS Sodium General page visible and original ON values.
   check(True,True);click('sodium_slow');click('sodium_status');snap('status-entry-open');click('status_reception');check(False,True);copy('parent-return-before-apply-config')
