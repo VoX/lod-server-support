@@ -124,13 +124,14 @@ public final class PaperSourceProbe extends JavaPlugin implements Listener, Sour
         }
         return facts;
     }
-    @Override public Map<String,Object> loadedOwnership(Target target){
+    @Override public SourceWorkload.Ownership loadedOwnership(Target target){
         if(!Bukkit.isPrimaryThread())throw new IllegalStateException("source ownership observation off native server thread");
         Thread owner=Thread.currentThread();
-        return Map.of("owner_kind","server-thread","owns_thread",true,"observed_ns",System.nanoTime(),"owner_identity","server-thread:"+owner.threadId(),"thread_id",owner.threadId(),"thread_name",owner.getName(),"owner_name",target.subject());
+        return new SourceWorkload.Ownership(Map.of("owner_kind","server-thread","owns_thread",true,"observed_ns",System.nanoTime(),"owner_identity","server-thread:"+owner.threadId(),"thread_id",owner.threadId(),"thread_name",owner.getName(),"owner_name",target.subject()),owner);
     }
-    @Override public java.util.concurrent.CompletionStage<SourceWorkload.Applied> edit(Target target,SourceWorkload.Mutation expected) {
+    @Override public java.util.concurrent.CompletionStage<SourceWorkload.EditOutcome> edit(Target target,SourceWorkload.Mutation expected,SourceWorkload.Ownership owner) {
         if(!Bukkit.isPrimaryThread())throw new IllegalStateException("actual server mutation owner required");
+        if(owner.identity()!=Thread.currentThread())throw new IllegalStateException("edit owner permit mismatch");
         var applied=revisions.mutate(target,expected,"server-thread:"+Thread.currentThread().threadId(),()->{world.getBlockAt(target.x()*16,target.y(),target.z()*16).setType(target.block().equals("diamond_block")?Material.DIAMOND_BLOCK:Material.GOLD_BLOCK,false);return System.nanoTime();});
         lss.getRequestService().getDirtyTracker().markDirty("minecraft:overworld",target.x(),target.z());
         return java.util.concurrent.CompletableFuture.completedFuture(applied);

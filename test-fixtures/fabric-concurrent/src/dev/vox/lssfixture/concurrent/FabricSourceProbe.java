@@ -125,13 +125,14 @@ public final class FabricSourceProbe implements ModInitializer, SourceWorkload.E
         }
         return facts;
     }
-    @Override public Map<String,Object> loadedOwnership(Target target){
+    @Override public SourceWorkload.Ownership loadedOwnership(Target target){
         if(!server.isSameThread())throw new IllegalStateException("source ownership observation off native server thread");
         Thread owner=Thread.currentThread();
-        return Map.of("owner_kind","server-thread","owns_thread",true,"observed_ns",System.nanoTime(),"owner_identity","server-thread:"+owner.threadId(),"thread_id",owner.threadId(),"thread_name",owner.getName(),"owner_name",target.subject());
+        return new SourceWorkload.Ownership(Map.of("owner_kind","server-thread","owns_thread",true,"observed_ns",System.nanoTime(),"owner_identity","server-thread:"+owner.threadId(),"thread_id",owner.threadId(),"thread_name",owner.getName(),"owner_name",target.subject()),owner);
     }
-    @Override public java.util.concurrent.CompletionStage<SourceWorkload.Applied> edit(Target target,SourceWorkload.Mutation expected) {
+    @Override public java.util.concurrent.CompletionStage<SourceWorkload.EditOutcome> edit(Target target,SourceWorkload.Mutation expected,SourceWorkload.Ownership owner) {
         if(!server.isSameThread())throw new IllegalStateException("actual server mutation owner required");
+        if(owner.identity()!=Thread.currentThread())throw new IllegalStateException("edit owner permit mismatch");
         var applied=revisions.mutate(target,expected,"server-thread:"+Thread.currentThread().threadId(),()->{world.setBlock(new BlockPos(target.x()*16,target.y(),target.z()*16),(target.block().equals("diamond_block")?Blocks.DIAMOND_BLOCK:Blocks.GOLD_BLOCK).defaultBlockState(),3);return System.nanoTime();});
         LSSServerNetworking.getRequestService().getDirtyTracker().markDirty("minecraft:overworld",target.x(),target.z());
         return java.util.concurrent.CompletableFuture.completedFuture(applied);
