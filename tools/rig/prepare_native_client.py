@@ -41,18 +41,18 @@ def prepare(runtime,capture,source,candidate,output):
         if not line.startswith((' ','\t')):active=line=='clientArgs';continue
         if active:args.append(line.strip())
     asset_index=args[args.index('--assetIndex')+1];assetroot=Path(args[args.index('--assetsDir')+1]);index=assetroot/'indexes'/(asset_index+'.json')
-    stage(index,'smoke-assets/indexes/'+index.name);assetfiles={'indexes/'+index.name:sha(index)}
+    stage(index,'assets/indexes/'+index.name);assetfiles={'indexes/'+index.name:sha(index)}
     for entry in json.loads(index.read_text())['objects'].values():
         digest=entry['hash'];relative='objects/'+digest[:2]+'/'+digest;asset=assetroot/relative
         if relative in assetfiles:continue
         if hashlib.sha1(asset.read_bytes()).hexdigest()!=digest:raise ValueError('asset digest mismatch')
-        stage(asset,'smoke-assets/'+relative);assetfiles[relative]=sha(asset)
-    d.setdefault('immutable_trees',{})['smoke-assets']=assetfiles
+        stage(asset,'assets/'+relative);assetfiles[relative]=sha(asset)
+    d.setdefault('immutable_trees',{})['assets']=assetfiles
     stage(candidate,'smoke-template/mods/lod-server-support-fabric.jar')
     native=mc.startswith('26.');jvm=[d['java'],'-Xms256M','-Xmx1500M','-Dfabric.development=true','-Dfabric.defaultModDistributionNamespace='+('official' if native else 'intermediary'),'-Dfabric.defaultMixinRemapType='+('static' if native else 'mixin'),'-Dlss.rig.runId={run_id}']
     if native:jvm+=['--enable-native-access=ALL-UNNAMED','--sun-misc-unsafe-memory-access=allow']
     else:jvm+=['-Dfabric.remapClasspathFile={run}/smoke-remap-classpath.txt']
-    launch=dict(id='smoke-template',cwd='smoke-template',argv=jvm+['-cp',':'.join(cp),'net.fabricmc.loader.impl.launch.knot.KnotClient','--username','RigSubjectA','--version',mc,'--accessToken','0','--gameDir','{run}/smoke-template','--assetsDir','{run}/smoke-assets','--assetIndex',asset_index,'--quickPlayMultiplayer','{endpoint}','--width','960','--height','540'])
+    launch=dict(id='smoke-template',cwd='smoke-template',argv=jvm+['-cp',':'.join(cp),'net.fabricmc.loader.impl.launch.knot.KnotClient','--username','RigSubjectA','--version',mc,'--accessToken','0','--gameDir','{run}/smoke-template','--assetsDir','{run}/assets','--assetIndex',asset_index,'--quickPlayMultiplayer','{endpoint}','--width','960','--height','540'])
     d['launches'].append(launch)
     for name in ('runtime-classpath.json','target-components.json','dli-config.txt','original-mod-inputs.json'):stage(capture/name,'evidence/smoke-'+name)
     (out/'runtime.json').write_text(json.dumps(d,indent=2)+'\n');return out/'runtime.json'
