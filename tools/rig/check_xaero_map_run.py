@@ -26,6 +26,11 @@ def inspect(root,manifest,require_closed=True,prefix_count=None):
   if type(prefix_count)is not int or not 0<prefix_count<=len(rows):raise ValueError('map live prefix absent/invalid')
   rows=rows[:prefix_count]
  assertions,errors=check_rows(rows,oracle,manifest['run_id'],allow_open=not require_closed)
+ from xaero_map_viewport import framed,rectangle,capture_stable
+ viewport=read(regular(root/'evidence/xaero-map-viewport.json'))
+ native=viewport.get('native_viewport',{})
+ if viewport.get('run_id')!=manifest['run_id'] or viewport.get('run_hash')!=manifest['run_hash'] or native not in rows or native.get('event')!='map_viewport' or not framed(native) or viewport.get('target_rectangle')!=rectangle(native) or not capture_stable(rows,viewport):
+  errors.append('target boundary not framed by retained actual native viewport')
  log=regular(root/'instances/lss-rig-client/minecraft/logs/latest.log')
  if log.stat().st_size>32*1024*1024:raise ValueError('native log bound exceeded')
  text=log.read_text(errors='replace');handshake=bool(re.search(r'Server session config received \(protocol v20, LOD distance: \d+ chunks, enabled: true\)',text))
@@ -42,7 +47,7 @@ def make_proof(root,manifest,review_artifacts=None,require_closed=True):
  prior=read(root/'proof.json')if(root/'proof.json').is_file()else{}
  failures=list(dict.fromkeys([str(x)for x in prior.get('failures',[])]+report['errors']))
  proof={key:manifest[key]for key in ('run_id','run_hash','profile_hash','scenario_hash')}
- evidence={name:sha(root/'evidence'/name)for name in ['xaero-map-report.json','xaero-map-oracle.json','xaero-map-commands.json']}
+ evidence={name:sha(root/'evidence'/name)for name in ['xaero-map-report.json','xaero-map-oracle.json','xaero-map-commands.json','xaero-map-viewport.json']}
  # Raw append-only stream remains live until normal writer shutdown. The final
  # postcleanup report additionally freezes its exact full bytes.
  if report['closed']:evidence['xaero-map.jsonl']=sha(root/'evidence/xaero-map.jsonl')

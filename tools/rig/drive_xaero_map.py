@@ -53,7 +53,26 @@ def run(root):
  try:
   driver.focus();opened=time.monotonic_ns();driver.key('m')
   wait(lambda:any(r.get('event')=='map_screen_rendered' and r.get('frame')==2 and r['time_ns']>opened for r in rows()))
-  driver.capture('xaero-map-boundary.png');driver.key('Escape')
+  from xaero_map_viewport import framed,zoom_button,rectangle
+  def viewport(after):
+   samples=[r for r in rows()if r.get('event')=='map_viewport' and r['time_ns']>after]
+   if len(samples)<2:return None
+   a,b=samples[-2:]
+   if any(abs(a[k]-b[k])>.001 for k in ('camera_x','camera_z','scale','width','height')):return None
+   return b
+  for step in range(16):
+   view=wait(lambda:viewport(opened))
+   if framed(view):break
+   if view['scale']<.1:raise ValueError('native map cannot frame target at readable scale')
+   driver.click(*zoom_button(view));opened=time.monotonic_ns()
+  else:raise ValueError('native map framing action bound')
+  capture_started=time.monotonic_ns();driver.capture('xaero-map-boundary.png');capture_finished=time.monotonic_ns()
+  confirmed=wait(lambda:viewport(capture_finished))
+  from xaero_map_viewport import capture_stable
+  receipt=dict(run_id=m['run_id'],run_hash=m['run_hash'],native_viewport=view,target_rectangle=rectangle(view),capture_started_ns=capture_started,capture_finished_ns=capture_finished,confirmed_viewport=confirmed)
+  if not capture_stable(rows(),receipt):raise ValueError('native map viewport changed around screenshot')
+  write(root/'evidence/xaero-map-viewport.json',receipt)
+  driver.key('Escape')
  finally:driver.close()
  visit_start=time.monotonic_ns()
  command(terrain['native_visit_command'],'Teleported '+subject)
