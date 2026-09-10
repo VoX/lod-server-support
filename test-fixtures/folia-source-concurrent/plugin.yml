@@ -1,0 +1,6 @@
+name: LssRigFoliaSources
+version: 1.0.0-test-only
+main: dev.vox.lssfixture.concurrent.FoliaSourceProbe
+api-version: '26.2'
+folia-supported: true
+depend: [LodServerSupport, LssRigRegions]

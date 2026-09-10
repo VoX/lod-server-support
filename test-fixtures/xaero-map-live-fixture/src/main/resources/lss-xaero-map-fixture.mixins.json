@@ -1,0 +1,15 @@
+{
+  "required": true,
+  "package": "dev.vox.lssfixture.xaeromap",
+  "compatibilityLevel": "JAVA_21",
+  "client": [
+    "BridgeMixin",
+    "TextureMixin",
+    "SaveMixin",
+    "WireMixin",
+    "ScreenMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "dev.vox.lssfixture.wi5.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "client": [
+    "ClientTickMixin",
+    "ReplacementMixin",
+    "RetirementMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

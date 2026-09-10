@@ -1,0 +1,15 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "dev.vox.lssfixture.concurrent.mixin",
+  "compatibilityLevel": "JAVA_25",
+  "client": [
+    "TickMixin",
+    "WireMixin",
+    "FrameMixin",
+    "DecodeWireMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

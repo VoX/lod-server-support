@@ -1,0 +1,2 @@
+pluginManagement { repositories { maven { url='https://maven.fabricmc.net/' }; gradlePluginPortal(); mavenCentral() } }
+rootProject.name = 'lss-native-server-smoke-client'
