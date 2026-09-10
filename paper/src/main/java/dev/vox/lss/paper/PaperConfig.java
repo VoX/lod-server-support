@@ -34,6 +34,12 @@ public class PaperConfig extends ServerConfigBase {
     // Fabric chunk-save hook's coverage (decay, growth, ice/snow, fire, falling blocks).
     // High-frequency fluid flow (BlockFromToEvent) is intentionally NOT a default — admins who
     // want fluid-flow LOD accuracy can add it. Unrecognized events are skipped gracefully.
+    public static java.util.List<dev.vox.lss.common.config.SettingDescriptor> settingDescriptors() {
+        var all = new java.util.ArrayList<>(dev.vox.lss.common.config.RuntimeSettings.descriptors());
+        all.addAll(dev.vox.lss.common.config.PaperSerializedSettings.descriptors());
+        return java.util.List.copyOf(all);
+    }
+
     public List<String> updateEvents = List.of(
             "org.bukkit.event.block.BlockPlaceEvent",
             "org.bukkit.event.block.BlockBreakEvent",
@@ -74,7 +80,7 @@ public class PaperConfig extends ServerConfigBase {
         // install's generated "on" or an explicit choice — either way it stays a warning
         // rather than a gate (Folia support is experimental wholesale; the store adds
         // one more unvalidated surface, not the first), but it must not be silent.
-        if (FoliaSupport.IS_FOLIA
+        if (!isScratchCopy() && FoliaSupport.IS_FOLIA
                 && dev.vox.lss.common.store.LodStoreMode.normalize(lodStore)
                         != dev.vox.lss.common.store.LodStoreMode.OFF
                 && !lodStore.equals(this.lastAdvisedFoliaStoreMode)) {
@@ -92,7 +98,7 @@ public class PaperConfig extends ServerConfigBase {
         boolean backfillAsk = lodStoreBackfill
                 && dev.vox.lss.common.store.LodStoreMode.normalize(lodStore)
                         != dev.vox.lss.common.store.LodStoreMode.OFF;
-        if (backfillAsk && !this.lastAdvisedBackfillInert) {
+        if (!isScratchCopy() && backfillAsk && !this.lastAdvisedBackfillInert) {
             LSSLogger.info("lodStoreBackfill is Fabric-only — on Paper/Folia the LOD"
                     + " store warms from serves (the backfill keys in this file are"
                     + " accepted but inert).");

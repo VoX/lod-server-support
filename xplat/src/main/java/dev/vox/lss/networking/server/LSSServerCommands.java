@@ -16,6 +16,39 @@ import net.minecraft.server.permissions.Permissions;
  *  per-loader {@code LSSServerNetworking.getRequestService()} holder (same-FQN twin
  *  contract, plan §1.1). */
 public class LSSServerCommands {
+    private static int preset(CommandSourceStack source, String action) {
+        try {
+            for (String line : dev.vox.lss.config.LSSServerConfig.CONFIG.presetCommand(action))
+                source.sendSuccess(() -> Component.literal(line), false);
+        } catch (IllegalArgumentException | IllegalStateException failure) {
+            source.sendFailure(Component.literal(failure.getMessage()));
+        }
+        return com.mojang.brigadier.Command.SINGLE_SUCCESS;
+    }
+
+    private static int exportDiagnostics(CommandSourceStack source) {
+        var service = LSSServerNetworking.getRequestService();
+        var config = dev.vox.lss.config.LSSServerConfig.CONFIG;
+        var snapshot = new dev.vox.lss.common.diagnostics.ServerStatusSnapshot(1, System.currentTimeMillis(),
+                service != null, config.enabled, config.enableChunkGeneration, config.generationConfiguredForRestart(), config.lodDistanceChunks,
+                service == null ? 0 : service.getUptimeSeconds(),
+                service == null ? 0 : service.getTickDiag().getTotalSectionsSent(),
+                service == null ? 0 : service.getTickDiag().getTotalBytesSent(),
+                service == null ? 0 : service.getTickDiag().getTotalWireBytesSent(),
+                service == null ? 0 : service.getWindowBandwidthRate(),
+                dev.vox.lss.platform.LoaderServices.get().diagnosticVersions());
+        try {
+            dev.vox.lss.common.diagnostics.DiagnosticExport.write(
+                    dev.vox.lss.platform.LoaderServices.get().gameDir().resolve(Brand.lowerShortName() + "-diagnostics"), snapshot)
+                    .whenComplete((path, error) -> source.getServer().execute(() ->
+                            source.sendSuccess(() -> Component.literal(error == null
+                                    ? "Diagnostics exported: " + path : "Diagnostics export failed; check directory permissions and free space."), false)));
+        } catch (java.util.concurrent.RejectedExecutionException busy) {
+            source.sendFailure(Component.literal("Diagnostics exporter busy; retry after the current export."));
+        }
+        return com.mojang.brigadier.Command.SINGLE_SUCCESS;
+    }
+
     public static void register(com.mojang.brigadier.CommandDispatcher<CommandSourceStack> dispatcher) {
             dispatcher.register(
                     Commands.literal(Brand.serverCommand())
@@ -31,6 +64,12 @@ public class LSSServerCommands {
                             .then(Commands.literal("stats")
                                     .executes(ctx -> showStats(ctx.getSource()))
                             )
+                            .then(Commands.literal("preset")
+                                    .then(Commands.literal("pregenerated-world").executes(ctx -> preset(ctx.getSource(), "pregenerated-world")))
+                                    .then(Commands.literal("apply").executes(ctx -> preset(ctx.getSource(), "apply")))
+                                    .then(Commands.literal("undo").executes(ctx -> preset(ctx.getSource(), "undo"))))
+                            .then(Commands.literal("diagnostics")
+                                    .then(Commands.literal("export").executes(ctx -> exportDiagnostics(ctx.getSource()))))
                             .then(Commands.literal("diag")
                                     .executes(ctx -> showDiagnostics(ctx.getSource()))
                             )

@@ -28,7 +28,7 @@ import static org.mockito.Mockito.when;
  */
 class PaperCommandsTest {
 
-    private static final String USAGE = "Usage: /lsslod <stats|diag|store|set|help>";
+    private static final String USAGE = "Usage: /lsslod <stats|diag|diagnostics|preset|store|set|help>";
     private static final String STORE_USAGE = "Usage: /lsslod store <status|invalidate all>";
 
     private final List<String> messages = new ArrayList<>();
@@ -258,10 +258,10 @@ class PaperCommandsTest {
     @Test
     void tabCompleteFiltersByPrefix() {
         var cmd = commands(null, null);
-        assertEquals(List.of("stats", "diag", "store", "set", "help"),
+        assertEquals(List.of("stats", "diag", "diagnostics", "preset", "store", "set", "help"),
                 cmd.onTabComplete(sender, null, "lsslod", new String[]{""}));
         assertEquals(List.of("stats", "store", "set"), cmd.onTabComplete(sender, null, "lsslod", new String[]{"s"}));
-        assertEquals(List.of("diag"), cmd.onTabComplete(sender, null, "lsslod", new String[]{"D"}));
+        assertEquals(List.of("diag", "diagnostics"), cmd.onTabComplete(sender, null, "lsslod", new String[]{"D"}));
         assertEquals(List.of(), cmd.onTabComplete(sender, null, "lsslod", new String[]{"zz"}));
         assertEquals(List.of(), cmd.onTabComplete(sender, null, "lsslod", new String[]{"stats", "x"}));
         assertEquals(List.of("status", "invalidate"),

@@ -814,8 +814,9 @@ public class PaperRequestProcessingService {
         this.offThreadProcessor.updateSweepRadius(this.config.lodDistanceChunks
                 + LSSConstants.LOD_DISTANCE_BUFFER
                 + dev.vox.lss.common.processing.OffThreadProcessor.SWEEP_RADIUS_MARGIN_CHUNKS);
-        int genGlobal = this.config.generationConcurrencyLimitGlobal;
-        int genPerPlayer = this.config.generationConcurrencyLimitPerPlayer;
+        var generationLimits = this.config.generationLimits();
+        int genGlobal = generationLimits.global();
+        int genPerPlayer = generationLimits.perPlayer();
         if (genGlobal != this.lastAppliedGenGlobal || genPerPlayer != this.lastAppliedGenPerPlayer) {
             if (this.generationService != null) {
                 this.generationService.updateCaps(genGlobal, genPerPlayer);
@@ -1082,7 +1083,7 @@ public class PaperRequestProcessingService {
         var state = this.players.computeIfAbsent(player.getUUID(), uuid -> {
             var s = new PaperPlayerRequestState(player,
                     LSSConstants.SYNC_ON_LOAD_SLOT_CAP,
-                    this.config.generationConcurrencyLimitPerPlayer);
+                    this.config.generationLimits().perPlayer());
             // Session identity for the router's stale-snapshot guard (set before the map
             // publish so the processing thread never sees it null on a live state).
             s.setRegisteredDimension(player.level().dimension().identifier().toString());
@@ -1202,7 +1203,7 @@ public class PaperRequestProcessingService {
         PaperPayloadHandler.sendSessionConfigV16(player.getBukkitEntity(),
                 this.config.enabled, this.config.lodDistanceChunks,
                 LSSConstants.SYNC_ON_LOAD_SLOT_CAP,
-                this.config.generationConcurrencyLimitPerPlayer,
+                this.config.generationLimits().perPlayer(),
                 this.config.enableChunkGeneration);
     }
     // Per-UUID last-prompt/last-removal stamps (millis). Concurrent: batches arrive on
