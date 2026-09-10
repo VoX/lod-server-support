@@ -5,7 +5,7 @@ ROUTES={'client-ui':['check_client_ui.py','client_ui_steps.py','finalize_client_
 CHECKERS={'client-ui':['check_client_ui.py','client_ui_steps.py','finalize_client_ui.py'],'elytra':['check_elytra_run.py'],'concurrent-sources':['check_source_run.py'],'receive-lifecycle':['check_receive_run.py'],'send-admission':['check_send_admission_run.py'],'xaero-map':['check_xaero_map_run.py'],'seated-draw':['check_seated_run.py'],'folia-regions':['check_regions.py'],'client-ui-no-consumer':['check_client_ui.py','client_ui_steps.py','finalize_client_ui.py']}
 
 def closure(repo,scenario,runtime,source_repo=None):
- repo=Path(repo).resolve();source_repo=Path(source_repo).resolve() if source_repo else repo;roots=['tools/rig/proof.py','tools/rig/rig.py','tools/rig/review_state.py']
+ repo=Path(repo).resolve();source_repo=Path(source_repo).resolve() if source_repo else repo;roots=['tools/rig/proof.py','tools/rig/rig.py','tools/rig/review_state.py','tools/rig/rig','scripts/lib/harness-lock.sh','scripts/lib/owned-process.py']
  route=scenario.get('execution_route');checker=scenario.get('checker')
  if route is not None and route not in ROUTES:raise ValueError('undeclared scenario execution route')
  if checker is not None and checker not in CHECKERS:raise ValueError('undeclared scenario checker')
@@ -27,13 +27,18 @@ def closure(repo,scenario,runtime,source_repo=None):
   path=repo/name
   if path.is_symlink() or not path.is_file():raise ValueError('missing scenario dependency: '+name)
   data=path.read_bytes();result[name]=hashlib.sha256(data).hexdigest()
-  # Dispatcher/runner are hashed as whole files. Their unused scenario branches
-  # are not followed; the selected branch dependencies are explicitly rooted above.
-  if name in ('tools/rig/proof.py','tools/rig/rig.py'):continue
+  # Follow common dispatcher dependencies too: ownership, immutable-tree and
+  # toolchain verification affect acceptance even without a scenario checker.
+  # Only explicitly known scenario branches may be omitted; selected branches
+  # are independently rooted above. New common imports remain included.
+  branch_modules={Path(p).stem for group in (*ROUTES.values(),*CHECKERS.values()) for p in group}
+  dispatcher=name in ('tools/rig/proof.py','tools/rig/rig.py')
+  if path.suffix!='.py':continue
   for node in ast.walk(ast.parse(data)):
    modules=[node.module] if isinstance(node,ast.ImportFrom) else [a.name for a in node.names] if isinstance(node,ast.Import) else []
    for module in modules:
     if not module:continue
+    if dispatcher and module in branch_modules:continue
     for directory in ('tools/rig','tools/compat'):
      local=directory+'/'+module.replace('.','/')+'.py'
      if (repo/local).is_file():pending.append(local);break
