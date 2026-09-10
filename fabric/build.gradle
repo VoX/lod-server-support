@@ -347,8 +347,9 @@ tasks.register('slimStoreDepJars') {
                         }
                         // Directory entries for stripped dirs are harmless; copy all.
                         def ne = new ZipEntry(e.name)
-                        // ZIP-local epoch keeps nested jars stable across build times and time zones.
-                        ne.setTimeLocal(java.time.LocalDateTime.of(1980, 1, 1, 0, 0))
+                        // Two seconds past the ZIP epoch avoids the JDK minimum-date sentinel
+                        // that emits a timezone-dependent extended timestamp.
+                        ne.setTimeLocal(java.time.LocalDateTime.of(1980, 1, 1, 0, 0, 2))
                         ne.method = e.method
                         if (e.method == ZipEntry.STORED) {
                             ne.size = e.size
@@ -360,7 +361,7 @@ tasks.register('slimStoreDepJars') {
                         zos.closeEntry()
                     }
                     def descriptorEntry = new ZipEntry('fabric.mod.json')
-                    descriptorEntry.setTimeLocal(java.time.LocalDateTime.of(1980, 1, 1, 0, 0))
+                    descriptorEntry.setTimeLocal(java.time.LocalDateTime.of(1980, 1, 1, 0, 0, 2))
                     zos.putNextEntry(descriptorEntry)
                     zos.write(groovy.json.JsonOutput.toJson([
                             schemaVersion: 1, id: modId, version: version,
