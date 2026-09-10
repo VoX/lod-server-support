@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Disposable Linux rig. No download, credentials, desktop automation or implicit retry."""
 from bind_endpoints import bindings, check_available
+from source_client_natives import prepare_directory as prepare_source_native_directory
 import argparse
 import hashlib
 import json
@@ -423,6 +424,7 @@ def run(root):
             working.mkdir(parents=True, exist_ok=True)
             log = open(root / (launch['id'] + '.private.log'), 'xb')
             logs.append(log)
+            prepare_source_native_directory(root,launch)
             before_spawn(root,'launch:'+launch['id'])
             try:
                 proc = subprocess.Popen(argv, cwd=working, env=env, stdin=subprocess.PIPE, stdout=log, stderr=subprocess.STDOUT)
