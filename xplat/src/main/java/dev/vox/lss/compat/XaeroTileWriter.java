@@ -1,31 +1,15 @@
 package dev.vox.lss.compat;
 
-import dev.vox.lss.api.LSSApi;
-import dev.vox.lss.api.VoxelColumnConsumer;
-import dev.vox.lss.api.VoxelColumnData;
-import dev.vox.lss.common.LSSLogger;
-import dev.vox.lss.common.LogThrottle;
-import dev.vox.lss.config.LSSClientConfig;
-import net.minecraft.client.multiplayer.ClientLevel;
-import net.minecraft.resources.ResourceKey;
-import net.minecraft.world.level.Level;
-import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.chunk.EmptyLevelChunk;
-import net.minecraft.world.level.chunk.status.ChunkStatus;
 
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.BooleanSupplier;
 
-import static dev.vox.lss.compat.XaeroMapCompat.*;
+import static dev.vox.lss.compat.XaeroSession.*;
 
-/** Extracted responsibility; calls retain their originating bridge/session. */
+/** Main-thread native writes under the existing Xaero monitor ladder. */
 final class XaeroTileWriter {
-    private final XaeroMapCompat session;
-    XaeroTileWriter(XaeroMapCompat session) { this.session=session; }
+    private final XaeroSession session;
+    XaeroTileWriter(XaeroSession session) { this.session = session; }
 
     /**
      * Will the NATIVE writer actually write this chunk? Its edge rule (decompiled
@@ -266,4 +250,8 @@ final class XaeroTileWriter {
         Object block = this.session.h.getBlock.invoke(tile, x, z);
         if (block != null) this.session.h.setSlopeUnknown.invoke(block, true);
     }
+
+
+    record SlopeNeighbor(Object tileChunk, Object mapTile, int chunkX, int chunkZ,
+                                 int dx, int dz) {}
 }
