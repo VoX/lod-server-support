@@ -1,0 +1,501 @@
+{
+  "schema_version": 1,
+  "rows": [
+    {
+      "id": "mc1211-fabric-modern--ui-apply",
+      "profile_id": "mc1211-fabric-modern",
+      "scenario_id": "ui-apply",
+      "applicability": "required",
+      "validation": "unverified",
+      "human_proof": []
+    },
+    {
+      "id": "mc1211-fabric-modern--receive-lifecycle",
+      "profile_id": "mc1211-fabric-modern",
+      "scenario_id": "receive-lifecycle",
+      "applicability": "required",
+      "validation": "unverified",
+      "human_proof": []
+    },
+    {
+      "id": "mc1211-fabric-modern--xaero-map",
+      "profile_id": "mc1211-fabric-modern",
+      "scenario_id": "xaero-map",
+      "applicability": "required",
+      "validation": "unverified",
+      "human_proof": [
+        "visual_render"
+      ]
+    },
+    {
+      "id": "mc1211-fabric-modern--seated-draw",
+      "profile_id": "mc1211-fabric-modern",
+      "scenario_id": "seated-draw",
+      "applicability": "required",
+      "validation": "unverified",
+      "human_proof": [
+        "visual_render"
+      ]
+    },
+    {
+      "id": "mc1211-fabric-modern--send-admission",
+      "profile_id": "mc1211-fabric-modern",
+      "scenario_id": "send-admission",
+      "applicability": "required",
+      "validation": "unverified",
+      "human_proof": []
+    },
+    {
+      "id": "mc1211-fabric-legacy--ui-apply",
+      "profile_id": "mc1211-fabric-legacy",
+      "scenario_id": "ui-apply",
+      "applicability": "required",
+      "validation": "unverified",
+      "human_proof": []
+    },
+    {
+      "id": "mc1211-fabric-legacy--receive-lifecycle",
+      "profile_id": "mc1211-fabric-legacy",
+      "scenario_id": "receive-lifecycle",
+      "applicability": "required",
+      "validation": "unverified",
+      "human_proof": []
+    },
+    {
+      "id": "mc1211-fabric-legacy--xaero-map",
+      "profile_id": "mc1211-fabric-legacy",
+      "scenario_id": "xaero-map",
+      "applicability": "required",
+      "validation": "unverified",
+      "human_proof": [
+        "visual_render"
+      ]
+    },
+    {
+      "id": "mc1211-neo-modern--ui-apply",
+      "profile_id": "mc1211-neo-modern",
+      "scenario_id": "ui-apply",
+      "applicability": "required",
+      "validation": "unverified",
+      "human_proof": []
+    },
+    {
+      "id": "mc1211-neo-modern--receive-lifecycle",
+      "profile_id": "mc1211-neo-modern",
+      "scenario_id": "receive-lifecycle",
+      "applicability": "required",
+      "validation": "unverified",
+      "human_proof": []
+    },
+    {
+      "id": "mc1211-neo-modern--xaero-map",
+      "profile_id": "mc1211-neo-modern",
+      "scenario_id": "xaero-map",
+      "applicability": "required",
+      "validation": "unverified",
+      "human_proof": [
+        "visual_render"
+      ]
+    },
+    {
+      "id": "mc1211-neo-modern--seated-draw",
+      "profile_id": "mc1211-neo-modern",
+      "scenario_id": "seated-draw",
+      "applicability": "required",
+      "validation": "unverified",
+      "human_proof": [
+        "visual_render"
+      ]
+    },
+    {
+      "id": "mc1211-neo-modern--send-admission",
+      "profile_id": "mc1211-neo-modern",
+      "scenario_id": "send-admission",
+      "applicability": "required",
+      "validation": "unverified",
+      "human_proof": []
+    },
+    {
+      "id": "mc1211-neo-legacy-xaero--ui-apply",
+      "profile_id": "mc1211-neo-legacy-xaero",
+      "scenario_id": "ui-apply",
+      "applicability": "required",
+      "validation": "unverified",
+      "human_proof": []
+    },
+    {
+      "id": "mc1211-neo-legacy-xaero--receive-lifecycle",
+      "profile_id": "mc1211-neo-legacy-xaero",
+      "scenario_id": "receive-lifecycle",
+      "applicability": "required",
+      "validation": "unverified",
+      "human_proof": []
+    },
+    {
+      "id": "mc1211-neo-legacy-xaero--xaero-map",
+      "profile_id": "mc1211-neo-legacy-xaero",
+      "scenario_id": "xaero-map",
+      "applicability": "required",
+      "validation": "unverified",
+      "human_proof": [
+        "visual_render"
+      ]
+    },
+    {
+      "id": "mc1211-paper--server-smoke",
+      "profile_id": "mc1211-native-smoke-client",
+      "scenario_id": "server-smoke",
+      "applicability": "required",
+      "validation": "unverified",
+      "human_proof": [],
+      "required_client_profile_hash": "4c84dcca1a75b06d49ec1a4c2032e2b4bf451505c7bdfebddab55816d91e790d",
+      "scenario_version": 2,
+      "required_server": {
+        "id": "mc1211-paper",
+        "profile_hash": "dc5f7e6bf9d19ab55be734ffed51c60a31b7872eeaf7a85db72cc0307d100234",
+        "platform": "paper",
+        "candidate_target": "server/plugins/lod-server-support-paper.jar"
+      }
+    },
+    {
+      "id": "mc12110-elytra--elytra",
+      "profile_id": "mc12110-fabric-legacy",
+      "scenario_id": "elytra",
+      "applicability": "required",
+      "validation": "unverified",
+      "human_proof": [
+        "visual_render"
+      ],
+      "required_participants": {
+        "elytra-target": {
+          "id": "mc12110-elytra-target",
+          "profile_hash": "b94cc5851905425c9e2f9fdcbdf02fb46ea6c2077dec753b471474c500ddb144"
+        }
+      }
+    },
+    {
+      "id": "mc12111-elytra--elytra",
+      "profile_id": "mc12111-fabric-modern",
+      "scenario_id": "elytra",
+      "applicability": "required",
+      "validation": "unverified",
+      "human_proof": [
+        "visual_render"
+      ],
+      "required_participants": {
+        "elytra-target": {
+          "id": "mc12111-elytra-target",
+          "profile_hash": "9fc7c9b9124b797af02a4ff690841fdda2fbc9b4943c5673560a8debe792e5ce"
+        }
+      }
+    },
+    {
+      "id": "mc12111-c2me-a--c2me-save-read",
+      "profile_id": "mc12111-c2me-a-named-gametest",
+      "scenario_id": "c2me-save-read",
+      "applicability": "required",
+      "validation": "unverified",
+      "human_proof": []
+    },
+    {
+      "id": "mc12111-c2me-b--c2me-save-read",
+      "profile_id": "mc12111-c2me-b-named-gametest",
+      "scenario_id": "c2me-save-read",
+      "applicability": "required",
+      "validation": "unverified",
+      "human_proof": []
+    },
+    {
+      "id": "mc262-folia-concurrent--folia-concurrent",
+      "profile_id": "mc262-folia-xaero-client",
+      "scenario_id": "folia-four-client-source-correctness",
+      "applicability": "required",
+      "validation": "unverified",
+      "human_proof": [],
+      "required_participants": {
+        "server": {
+          "id": "mc262-folia-server-feasibility",
+          "profile_hash": "3f34ea06aa806eb61642b9892e394f690d349a53736f2c6185cea45fa6876952"
+        },
+        "client-A": {
+          "id": "mc262-folia-xaero-client",
+          "profile_hash": "1506aae7b0b78d85ab81a6c7cf4fb8df9c697811001d41ddc29964f2c1a0e352"
+        },
+        "client-B": {
+          "id": "mc262-folia-xaero-client",
+          "profile_hash": "1506aae7b0b78d85ab81a6c7cf4fb8df9c697811001d41ddc29964f2c1a0e352"
+        },
+        "client-C": {
+          "id": "mc262-folia-xaero-client",
+          "profile_hash": "1506aae7b0b78d85ab81a6c7cf4fb8df9c697811001d41ddc29964f2c1a0e352"
+        },
+        "client-D": {
+          "id": "mc262-folia-xaero-client",
+          "profile_hash": "1506aae7b0b78d85ab81a6c7cf4fb8df9c697811001d41ddc29964f2c1a0e352"
+        }
+      }
+    },
+    {
+      "id": "sibling-1.21.10-fabric--server-smoke",
+      "profile_id": "mc12110-native-smoke-client",
+      "scenario_id": "server-smoke",
+      "applicability": "required",
+      "validation": "unverified",
+      "human_proof": [],
+      "required_client_profile_hash": "d38a5df315044985e16a36bb5f4f2eb4726fbf45ef1e220e1a34da9fd697af8d",
+      "scenario_version": 2,
+      "required_server": {
+        "id": "mc12110-fabric-server",
+        "profile_hash": "28da3f40a1e441614f502a41dff32937e35742b5a58c1d10bd90dacb65136e18",
+        "platform": "fabric",
+        "candidate_target": "server/mods/lod-server-support-fabric.jar"
+      }
+    },
+    {
+      "id": "sibling-1.21.10-fabric--ui-apply",
+      "profile_id": "mc12110-fabric-legacy",
+      "scenario_id": "ui-apply",
+      "applicability": "required",
+      "validation": "unverified",
+      "human_proof": []
+    },
+    {
+      "id": "sibling-1.21.10-paper--server-smoke",
+      "profile_id": "mc12110-native-smoke-client",
+      "scenario_id": "server-smoke",
+      "applicability": "required",
+      "validation": "unverified",
+      "human_proof": [],
+      "required_client_profile_hash": "d38a5df315044985e16a36bb5f4f2eb4726fbf45ef1e220e1a34da9fd697af8d",
+      "scenario_version": 2,
+      "required_server": {
+        "id": "mc12110-paper-legacy",
+        "profile_hash": "25164038d343304a7141b6a6abd72e10ba86908f074e92b25ba32f82fbb57b88",
+        "platform": "paper",
+        "candidate_target": "server/plugins/lod-server-support-paper.jar"
+      }
+    },
+    {
+      "id": "sibling-1.21.10-neoforge--server-smoke",
+      "profile_id": "mc12110-native-smoke-client",
+      "scenario_id": "server-smoke",
+      "applicability": "required",
+      "validation": "unverified",
+      "human_proof": [],
+      "required_client_profile_hash": "d38a5df315044985e16a36bb5f4f2eb4726fbf45ef1e220e1a34da9fd697af8d",
+      "scenario_version": 2,
+      "required_server": {
+        "id": "mc12110-neoforge-server-smoke",
+        "profile_hash": "3b9ee43ae3855a490409f2f749f9e82c9d5c995988aeb99b551c1bdf30dea972",
+        "platform": "neoforge",
+        "candidate_target": "server/mods/lod-server-support-neoforge.jar"
+      }
+    },
+    {
+      "id": "sibling-1.21.10-neoforge--ui-apply",
+      "profile_id": "mc12110-neoforge-legacy",
+      "scenario_id": "client-ui-no-consumer",
+      "applicability": "required",
+      "validation": "unverified",
+      "human_proof": []
+    },
+    {
+      "id": "sibling-1.21.11-fabric--server-smoke",
+      "profile_id": "mc12111-native-smoke-client",
+      "scenario_id": "server-smoke",
+      "applicability": "required",
+      "validation": "unverified",
+      "human_proof": [],
+      "required_client_profile_hash": "1063c477e26ded0a978b1e9bf64ef350208a4c91e232ef0cbf95a9ba67739cf6",
+      "scenario_version": 2,
+      "required_server": {
+        "id": "mc12111-fabric-server",
+        "profile_hash": "3dcbef1e4c9306820847aab10263bc8fbd6b37f3af5038e954ca5355ce50c8ac",
+        "platform": "fabric",
+        "candidate_target": "server/mods/lod-server-support-fabric.jar"
+      }
+    },
+    {
+      "id": "sibling-1.21.11-fabric--ui-apply",
+      "profile_id": "mc12111-fabric-modern",
+      "scenario_id": "ui-apply",
+      "applicability": "required",
+      "validation": "unverified",
+      "human_proof": []
+    },
+    {
+      "id": "sibling-1.21.11-paper--server-smoke",
+      "profile_id": "mc12111-native-smoke-client",
+      "scenario_id": "server-smoke",
+      "applicability": "required",
+      "validation": "unverified",
+      "human_proof": [],
+      "required_client_profile_hash": "1063c477e26ded0a978b1e9bf64ef350208a4c91e232ef0cbf95a9ba67739cf6",
+      "scenario_version": 2,
+      "required_server": {
+        "id": "mc12111-paper-modern",
+        "profile_hash": "17187438740ce86ee724e65486e3a076622eeea9ff2c9153f8f1645b72b76f08",
+        "platform": "paper",
+        "candidate_target": "server/plugins/lod-server-support-paper.jar"
+      }
+    },
+    {
+      "id": "sibling-1.21.11-neoforge--server-smoke",
+      "profile_id": "mc12111-native-smoke-client",
+      "scenario_id": "server-smoke",
+      "applicability": "required",
+      "validation": "unverified",
+      "human_proof": [],
+      "required_client_profile_hash": "1063c477e26ded0a978b1e9bf64ef350208a4c91e232ef0cbf95a9ba67739cf6",
+      "scenario_version": 2,
+      "required_server": {
+        "id": "mc12111-neoforge-server-smoke",
+        "profile_hash": "784e1690929e0c217366efd75af99efcfd1807b9c1e3767fd2eecb841526a030",
+        "platform": "neoforge",
+        "candidate_target": "server/mods/lod-server-support-neoforge.jar"
+      }
+    },
+    {
+      "id": "sibling-1.21.11-neoforge--ui-apply",
+      "profile_id": "mc12111-neoforge-modern",
+      "scenario_id": "client-ui-no-consumer",
+      "applicability": "required",
+      "validation": "unverified",
+      "human_proof": []
+    },
+    {
+      "id": "sibling-26.1-fabric--server-smoke",
+      "profile_id": "mc261-native-smoke-client",
+      "scenario_id": "server-smoke",
+      "applicability": "required",
+      "validation": "unverified",
+      "human_proof": [],
+      "required_client_profile_hash": "987e8413fc5983c44409e3eac8f64b7525a920bd1d871aff3fa04f53c33ad623",
+      "scenario_version": 2,
+      "required_server": {
+        "id": "mc261-fabric-server",
+        "profile_hash": "323b67a8fc891126e529f8387e6ba62bf4b38253c1ecba0e3205359800cd35de",
+        "platform": "fabric",
+        "candidate_target": "server/mods/lod-server-support-fabric.jar"
+      }
+    },
+    {
+      "id": "sibling-26.1-fabric--ui-apply",
+      "profile_id": "mc261-fabric-modern",
+      "scenario_id": "ui-apply",
+      "applicability": "required",
+      "validation": "unverified",
+      "human_proof": []
+    },
+    {
+      "id": "sibling-26.1-paper--server-smoke",
+      "profile_id": "mc261-native-smoke-client",
+      "scenario_id": "server-smoke",
+      "applicability": "required",
+      "validation": "unverified",
+      "human_proof": [],
+      "required_client_profile_hash": "987e8413fc5983c44409e3eac8f64b7525a920bd1d871aff3fa04f53c33ad623",
+      "scenario_version": 2,
+      "required_server": {
+        "id": "mc261-paper-modern",
+        "profile_hash": "23f375275e221dc51630bbe52eb2f62aa14298da89f04e3f6ccc7eba1d3d856d",
+        "platform": "paper",
+        "candidate_target": "server/plugins/lod-server-support-paper.jar"
+      }
+    },
+    {
+      "id": "sibling-26.1-neoforge--server-smoke",
+      "profile_id": "mc261-native-smoke-client",
+      "scenario_id": "server-smoke",
+      "applicability": "required",
+      "validation": "unverified",
+      "human_proof": [],
+      "required_client_profile_hash": "987e8413fc5983c44409e3eac8f64b7525a920bd1d871aff3fa04f53c33ad623",
+      "scenario_version": 2,
+      "required_server": {
+        "id": "mc261-neoforge-server-smoke",
+        "profile_hash": "222124b7d969fc5bb793be8ce5f7b62a9c1dcc123e28e92add4f76527cee9954",
+        "platform": "neoforge",
+        "candidate_target": "server/mods/lod-server-support-neoforge.jar"
+      }
+    },
+    {
+      "id": "sibling-26.1-neoforge--ui-apply",
+      "profile_id": "mc261-neoforge-modern",
+      "scenario_id": "client-ui-no-consumer",
+      "applicability": "required",
+      "validation": "unverified",
+      "human_proof": []
+    },
+    {
+      "id": "sibling-26.2-fabric--server-smoke",
+      "profile_id": "mc262-native-smoke-client",
+      "scenario_id": "server-smoke",
+      "applicability": "required",
+      "validation": "unverified",
+      "human_proof": [],
+      "required_client_profile_hash": "b787daa39857ab2befcd6930d7feacacc4c57255c45d8a1f4acff7c07b06a45e",
+      "scenario_version": 2,
+      "required_server": {
+        "id": "mc262-fabric-server",
+        "profile_hash": "bf71c648b0f7183447122d78754a85cfbd7480f426ef38f3145e0adb66d1d921",
+        "platform": "fabric",
+        "candidate_target": "server/mods/lod-server-support-fabric.jar"
+      }
+    },
+    {
+      "id": "sibling-26.2-fabric--ui-apply",
+      "profile_id": "mc262-fabric-modern",
+      "scenario_id": "ui-apply",
+      "applicability": "required",
+      "validation": "unverified",
+      "human_proof": []
+    },
+    {
+      "id": "sibling-26.2-paper--server-smoke",
+      "profile_id": "mc262-native-smoke-client",
+      "scenario_id": "server-smoke",
+      "applicability": "required",
+      "validation": "unverified",
+      "human_proof": [],
+      "required_client_profile_hash": "b787daa39857ab2befcd6930d7feacacc4c57255c45d8a1f4acff7c07b06a45e",
+      "scenario_version": 2,
+      "required_server": {
+        "id": "mc262-paper-modern",
+        "profile_hash": "555f599587fa3a84070d1ea4cdbb5c2fe9dacdc6d78fba2f2e513cf96f6f9cae",
+        "platform": "paper",
+        "candidate_target": "server/plugins/lod-server-support-paper.jar"
+      }
+    },
+    {
+      "id": "sibling-26.2-neoforge--server-smoke",
+      "profile_id": "mc262-native-smoke-client",
+      "scenario_id": "server-smoke",
+      "applicability": "required",
+      "validation": "unverified",
+      "human_proof": [],
+      "required_client_profile_hash": "b787daa39857ab2befcd6930d7feacacc4c57255c45d8a1f4acff7c07b06a45e",
+      "scenario_version": 2,
+      "required_server": {
+        "id": "mc262-neoforge-server-smoke",
+        "profile_hash": "0102ea8f651397c54cf6eb2fcc10551508f3d7b2c5db7809aa45d95c67864d8a",
+        "platform": "neoforge",
+        "candidate_target": "server/mods/lod-server-support-neoforge.jar"
+      }
+    },
+    {
+      "id": "sibling-26.2-neoforge--ui-apply",
+      "profile_id": "mc262-neoforge-modern",
+      "scenario_id": "ui-apply",
+      "applicability": "required",
+      "validation": "unverified",
+      "human_proof": []
+    }
+  ],
+  "constraints": [
+    "1.21.1 has no Folia or Tier3",
+    "native Neo Voxy0.2.9 is a separately rejected optional trial, not a prerequisite",
+    "stub renderers expected unavailable; do not mark failed",
+    "a missing exact profile blocks a required row; no implicit skip"
+  ]
+}

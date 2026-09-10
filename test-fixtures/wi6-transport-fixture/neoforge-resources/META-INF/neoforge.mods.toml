@@ -1,0 +1,24 @@
+modLoader="lowcodefml"
+loaderVersion="[1,)"
+license="Test fixture only"
+[[mods]]
+modId="lss_wi6_fixture"
+version="1.0.0-test-only"
+displayName="LSS WI6 isolated send-admission fixture"
+[[dependencies.lss_wi6_fixture]]
+modId="neoforge"
+type="required"
+versionRange="[21.1,)"
+side="SERVER"
+[[dependencies.lss_wi6_fixture]]
+modId="minecraft"
+type="required"
+versionRange="[1.21.1]"
+side="SERVER"
+[[dependencies.lss_wi6_fixture]]
+modId="lss"
+type="required"
+versionRange="[0.14.0,)"
+side="SERVER"
+[[mixins]]
+config="lss-wi6-fixture.mixins.json"

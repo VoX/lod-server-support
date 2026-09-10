@@ -1,0 +1,6 @@
+name: LssRigRegions
+version: 1.0.0-test-only
+main: dev.vox.lssfixture.regions.RegionProbe
+api-version: '26.2'
+folia-supported: true
+depend: [LodServerSupport]
