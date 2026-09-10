@@ -489,6 +489,14 @@ def run(root):
             log.close()
         if rss_stream is not None:
             rss_stream.close()
+        if scenario.get('checker') == 'export-lifecycle' and (root/'proof.json').is_file():
+            try:
+                from check_export_lifecycle import make_proof
+                export_proof=make_proof(root,manifest)
+                errors=check_proof(export_proof,manifest,scenario,root)
+                manifest.update(status='failed' if errors else 'passed',errors=errors)
+            except Exception as error:
+                manifest.update(status='failed',errors=['export lifecycle checker failed: '+str(error)])
         if scenario.get('checker') == 'receive-lifecycle' and (root/'proof.json').is_file():
             try:
                 from check_receive_run import make_proof

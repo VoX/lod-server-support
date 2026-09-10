@@ -74,6 +74,9 @@ def check_proof(proof, manifest, scenario, root=None):
     if scenario.get('checker') == 'concurrent-sources':
         from check_source_run import check_report
         errors.extend(check_report(proof,manifest,root))
+    if scenario.get('checker') == 'export-lifecycle':
+        from check_export_lifecycle import check_report
+        errors.extend(check_report(proof,manifest,scenario,root))
     if scenario.get('checker') == 'receive-lifecycle':
         from check_receive_run import check_report
         errors.extend(check_report(proof,manifest,scenario,root))
