@@ -29,7 +29,7 @@ def run(root):
  target_log='elytra-target/logs/latest.log';observer_log='instances/lss-rig-client/minecraft/logs/latest.log'
  def command(text,expected=None,phase=None,kind=None):
   nonlocal counter
-  counter+=1;name='elytra-'+str(counter).zfill(3)+'.json';request={'launch_id':'server','command':text,'timeout_seconds':8,'response_contains':expected};write(root/'commands'/name,request)
+  counter+=1;name='elytra-'+str(counter).zfill(3)+'.json';request={'launch_id':'server','command':text,'timeout_seconds':8,'response_contains':('[Server] '+expected if expected else None)};write(root/'commands'/name,request)
   value=wait(lambda:read(root/'commands/results'/name) if (root/'commands/results'/name).exists() else None)
   if value.get('status')!=('response_observed' if expected else 'submitted'):raise ValueError('actual native command failed: '+text)
   row={'request':name,'command':text,'result':value,'observed_ns':time.monotonic_ns()}
@@ -47,9 +47,14 @@ def run(root):
    return True
   wait(ready)
   for kind,(text,marker) in predicates(name,manifest['run_id']).items():command(text,marker,name,kind)
-  if name=='gliding':time.sleep(.5)
+  if name=='gliding':
+   command(landing_command()) # Observer-only camera tracks the actual native subject.
+   time.sleep(.2)
   if capture:
-   observer_driver.focus();observer_driver.capture('elytra-gliding.png');journal['capture']={'artifact':'elytra-gliding.png','sha256':sha(root/'evidence/elytra-gliding.png'),'time_ns':time.monotonic_ns(),'window':observer_window,'process':observer_identity}
+   observer_driver.key('F1');time.sleep(.2)
+   try:observer_driver.capture('elytra-gliding.png')
+   finally:observer_driver.key('F1')
+   journal['capture']={'artifact':'elytra-gliding.png','sha256':sha(root/'evidence/elytra-gliding.png'),'time_ns':time.monotonic_ns(),'window':observer_window,'process':observer_identity}
   p['end_ns']=time.monotonic_ns();journal['phases'].append(p);save()
  @contextlib.contextmanager
  def held(driver,key):
@@ -74,7 +79,9 @@ def run(root):
   phase('falling')
   start=time.monotonic_ns();target_driver.key('space',.08);journal['inputs'].append(dict(action='press',key='space',start_ns=start,end_ns=time.monotonic_ns(),game_root='elytra-target',window=target_window,process=target_identity));save()
   phase('gliding',True)
-  # Only the observer camera turns; target landing remains native motion.
+  from elytra_input import look_down
+  start=time.monotonic_ns();look_down(target_driver);journal['inputs'].append(dict(action='relative-look',dx=0,dy=400,start_ns=start,end_ns=time.monotonic_ns(),game_root='elytra-target',window=target_window,process=target_identity));save()
+  # Genuine look input steers native flight into the unchanged bounded landing zone.
   command(landing_command())
   phase('landed')
   make_proof(root,manifest)

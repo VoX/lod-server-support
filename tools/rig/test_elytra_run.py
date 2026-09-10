@@ -31,10 +31,10 @@ class NativeFiles(unittest.TestCase):
   for phase in example.phases:
    for kind,(command,marker) in predicates(phase['id'],'run').items():
     number+=1;name=str(number)+'.json';receipt=dict(status='response_observed',launch_id='server',log_offset=len(server.encode()),process_identity=self.owner);write(r/'commands/results'/name,receipt);server+='[Server thread/INFO]: [Server] '+marker+'\n';commands.append(dict(request=name,phase=phase['id'],kind=kind,command=command,result=receipt,observed_ns=phase['start_ns']+20))
-  for command in setup_commands()+falling_commands()+[landing_command()]:
+  for command in setup_commands()+falling_commands()+[landing_command(),landing_command()]:
    number+=1;name=str(number)+'.json';receipt=dict(status='submitted',launch_id='server',process_identity=self.owner);write(r/'commands/results'/name,receipt);setup.append(dict(request=name,command=command,result=receipt,observed_ns=900))
   (r/'server.private.log').write_text(server)
-  inputs=[dict(action='hold',key='Shift_L',start_ns=1099,end_ns=1191),dict(action='press',key='space',start_ns=1391,end_ns=1392)]
+  inputs=[dict(action='hold',key='Shift_L',start_ns=1099,end_ns=1191),dict(action='press',key='space',start_ns=1391,end_ns=1392),dict(action='relative-look',dx=0,dy=400,start_ns=1491,end_ns=1492)]
   for row in inputs:row.update(game_root='elytra-target',window='0x10',process=self.owner)
   self.journal=dict(run_id='run',run_hash='a'*64,phases=example.phases,native_commands=commands,setup=setup,inputs=inputs,capture=dict(artifact='elytra-gliding.png',sha256=sha(r/'evidence/elytra-gliding.png'),time_ns=1450));write(r/'evidence/elytra-phases.json',self.journal)
  def test_actual_raw_file_recompute_and_proof(self):
@@ -43,6 +43,10 @@ class NativeFiles(unittest.TestCase):
   (self.root/'mods/candidate.jar').write_bytes(b'changed');self.assertFalse(inspect(self.root,self.manifest)['passed'])
  def test_fabricated_native_command_flags(self):
   (self.root/'server.private.log').write_text('handshake received from ElytraSubject (protocol v20, x)\nhandshake received from Voximus_Maximus (protocol v20, x)\n');self.assertFalse(inspect(self.root,self.manifest)['passed'])
+ def test_syntax_error_echo_does_not_count_as_native_readback(self):
+  p=self.root/'server.private.log';p.write_text(p.read_text().replace('[Server] ','syntax error run say '));self.assertFalse(inspect(self.root,self.manifest)['passed'])
+ def test_missing_private_landing_look_rejected(self):
+  self.journal['inputs']=[x for x in self.journal['inputs'] if x['action']!='relative-look'];write(self.root/'evidence/elytra-phases.json',self.journal);self.assertFalse(inspect(self.root,self.manifest)['passed'])
  def test_forbidden_direct_flight_setter(self):
   self.journal['setup'][0]['command']='data merge entity ElytraSubject {FallFlying:1b}';write(self.root/'evidence/elytra-phases.json',self.journal);self.assertFalse(inspect(self.root,self.manifest)['passed'])
  def test_forged_report_cannot_replace_raw(self):
