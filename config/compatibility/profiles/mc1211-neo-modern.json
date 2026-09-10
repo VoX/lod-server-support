@@ -1,0 +1,1133 @@
+{
+  "schema_version": 1,
+  "id": "mc1211-neo-modern",
+  "line": "1.21.1",
+  "platform": "neoforge",
+  "route": "connector",
+  "artifacts": [
+    {
+      "file": "ConnectorExtras-1.12.1+1.21.1.jar",
+      "sha256": "ee89c3425b9a4bff766aaff02ccf8110c06f5da6ef5d71974556885cf25d4880",
+      "metadata": {
+        "neoforge": {
+          "modLoader": "javafml",
+          "loaderVersion": "*",
+          "license": "MIT",
+          "issueTrackerURL": "https://github.com/Sinytra/ConnectorExtras/issues",
+          "mods": [
+            {
+              "modId": "connectorextras",
+              "version": "${file.jarVersion}",
+              "displayName": "Connector Extras",
+              "authors": "Su5eD",
+              "displayURL": "https://github.com/Sinytra/ConnectorExtras",
+              "description": "Integrating Connector with third-party APIs\n",
+              "displayTest": "IGNORE_ALL_VERSION"
+            }
+          ],
+          "dependencies": {
+            "connectorextras": [
+              {
+                "modId": "neoforge",
+                "type": "required",
+                "versionRange": "*",
+                "ordering": "NONE",
+                "side": "BOTH"
+              },
+              {
+                "modId": "minecraft",
+                "type": "required",
+                "versionRange": "[1.21,1.22)",
+                "ordering": "NONE",
+                "side": "BOTH"
+              }
+            ],
+            "connectorextras_kubejs_bridge": [
+              {
+                "modId": "connector",
+                "type": "required",
+                "versionRange": "*",
+                "ordering": "NONE",
+                "side": "BOTH"
+              }
+            ]
+          }
+        },
+        "jarjar": {
+          "jars": [
+            {
+              "identifier": {
+                "group": "dev.su5ed.sinytra",
+                "artifact": "pehkui-bridge"
+              },
+              "version": {
+                "range": "[1.12.1+1.21.1,)",
+                "artifactVersion": "1.12.1+1.21.1"
+              },
+              "path": "META-INF/jarjar/pehkui-bridge-1.12.1+1.21.1.jar"
+            },
+            {
+              "identifier": {
+                "group": "dev.su5ed.sinytra",
+                "artifact": "jei-bridge"
+              },
+              "version": {
+                "range": "[1.12.1+1.21.1,)",
+                "artifactVersion": "1.12.1+1.21.1"
+              },
+              "path": "META-INF/jarjar/jei-bridge-1.12.1+1.21.1.jar"
+            },
+            {
+              "identifier": {
+                "group": "dev.su5ed.sinytra",
+                "artifact": "emi-bridge"
+              },
+              "version": {
+                "range": "[1.12.1+1.21.1,)",
+                "artifactVersion": "1.12.1+1.21.1"
+              },
+              "path": "META-INF/jarjar/emi-bridge-1.12.1+1.21.1.jar"
+            },
+            {
+              "identifier": {
+                "group": "dev.su5ed.sinytra",
+                "artifact": "extras-utils"
+              },
+              "version": {
+                "range": "[1.12.1+1.21.1,)",
+                "artifactVersion": "1.12.1+1.21.1"
+              },
+              "path": "META-INF/jarjar/extras-utils-1.12.1+1.21.1.jar"
+            },
+            {
+              "identifier": {
+                "group": "dev.su5ed.sinytra",
+                "artifact": "rei-bridge"
+              },
+              "version": {
+                "range": "[1.12.1+1.21.1,)",
+                "artifactVersion": "1.12.1+1.21.1"
+              },
+              "path": "META-INF/jarjar/rei-bridge-1.12.1+1.21.1.jar"
+            },
+            {
+              "identifier": {
+                "group": "dev.su5ed.sinytra",
+                "artifact": "modmenu-bridge"
+              },
+              "version": {
+                "range": "[1.12.1+1.21.1,)",
+                "artifactVersion": "1.12.1+1.21.1"
+              },
+              "path": "META-INF/jarjar/modmenu-bridge-1.12.1+1.21.1.jar"
+            },
+            {
+              "identifier": {
+                "group": "dev.su5ed.sinytra",
+                "artifact": "energy-bridge"
+              },
+              "version": {
+                "range": "[1.12.1+1.21.1,)",
+                "artifactVersion": "1.12.1+1.21.1"
+              },
+              "path": "META-INF/jarjar/energy-bridge-1.12.1+1.21.1.jar"
+            },
+            {
+              "identifier": {
+                "group": "dev.su5ed.sinytra",
+                "artifact": "kubejs-bridge"
+              },
+              "version": {
+                "range": "[1.12.1+1.21.1,)",
+                "artifactVersion": "1.12.1+1.21.1"
+              },
+              "path": "META-INF/jarjar/kubejs-bridge-1.12.1+1.21.1.jar"
+            },
+            {
+              "identifier": {
+                "group": "dev.su5ed.sinytra",
+                "artifact": "terrablender-bridge"
+              },
+              "version": {
+                "range": "[1.12.1+1.21.1,)",
+                "artifactVersion": "1.12.1+1.21.1"
+              },
+              "path": "META-INF/jarjar/terrablender-bridge-1.12.1+1.21.1.jar"
+            }
+          ]
+        }
+      },
+      "id": "connectorextras",
+      "version": "1.12.1+1.21.1",
+      "source": "https://cdn.modrinth.com/data/FYpiwiBR/versions/dgLCqZyo/ConnectorExtras-1.12.1%2B1.21.1.jar",
+      "enabled": true,
+      "kind": "mod"
+    },
+    {
+      "file": "connector-2.0.0-beta.14+1.21.1-full.jar",
+      "sha256": "a79817f1076e2e6499b0ab09c4e8c032d04b071341b66d036c3d96112804e51b",
+      "metadata": {
+        "jarjar": {
+          "jars": [
+            {
+              "identifier": {
+                "group": "org.sinytra.adapter",
+                "artifact": "runtime"
+              },
+              "version": {
+                "range": "[1.0.0+1.21.1,)",
+                "artifactVersion": "1.0.0+1.21.1"
+              },
+              "path": "META-INF/jarjar/runtime-1.0.0+1.21.1.jar",
+              "isObfuscated": false
+            },
+            {
+              "identifier": {
+                "group": "org.sinytra",
+                "artifact": "connector-mod"
+              },
+              "version": {
+                "range": "[2.0.0-beta.14+1.21.1,)",
+                "artifactVersion": "2.0.0-beta.14+1.21.1"
+              },
+              "path": "META-INF/jarjar/org.sinytra.connector-2.0.0-beta.14+1.21.1-mod.jar",
+              "isObfuscated": false
+            }
+          ]
+        }
+      },
+      "id": "connector",
+      "version": "2.0.0-beta.14+1.21.1",
+      "source": "https://cdn.modrinth.com/data/u58R1TMW/versions/1i8teo7m/connector-2.0.0-beta.14%2B1.21.1-full.jar",
+      "enabled": true,
+      "kind": "mod"
+    },
+    {
+      "file": "forgified-fabric-api-0.116.15+2.3.3+1.21.1.jar",
+      "sha256": "6d5d81d3203bde3c72c4702193ae1667b0a3a2272b002ce0a1dda5561af12b2d",
+      "metadata": {
+        "neoforge": {
+          "modLoader": "lowcodefml",
+          "loaderVersion": "[1,)",
+          "license": "Apache-2.0",
+          "issueTrackerURL": "https://github.com/Sinytra/ForgifiedFabricAPI/issues",
+          "mods": [
+            {
+              "modId": "fabric_api",
+              "version": "${file.jarVersion}",
+              "displayName": "Forgified Fabric API",
+              "logoFile": "assets/fabric/icon.png",
+              "authors": "Sinytra, FabricMC",
+              "description": "Core API module providing key hooks and intercompatibility features.",
+              "provides": [
+                "fabric",
+                "fabric-api"
+              ],
+              "displayURL": "https://github.com/Sinytra/ForgifiedFabricAPI"
+            },
+            {
+              "modId": "forgified_fabric_api",
+              "version": "${file.jarVersion}",
+              "displayName": "Forgified Fabric API (dummy)",
+              "logoFile": "assets/fabric/icon.png",
+              "authors": "Sinytra, FabricMC",
+              "description": "Dependency target for other mods",
+              "displayURL": "https://github.com/Sinytra/ForgifiedFabricAPI"
+            }
+          ],
+          "dependencies": {
+            "fabric_api": [
+              {
+                "modId": "neoforge",
+                "type": "required",
+                "versionRange": "[21.1.169,)",
+                "ordering": "NONE",
+                "side": "BOTH"
+              },
+              {
+                "modId": "minecraft",
+                "type": "required",
+                "versionRange": "[1.21.1,1.22)",
+                "ordering": "NONE",
+                "side": "BOTH"
+              }
+            ],
+            "forgified_fabric_api": [
+              {
+                "modId": "neoforge",
+                "type": "required",
+                "versionRange": "[21.1.169,)",
+                "ordering": "NONE",
+                "side": "BOTH"
+              },
+              {
+                "modId": "minecraft",
+                "type": "required",
+                "versionRange": "[1.21.1,1.22)",
+                "ordering": "NONE",
+                "side": "BOTH"
+              }
+            ]
+          }
+        },
+        "jarjar": {
+          "jars": [
+            {
+              "identifier": {
+                "group": "org.sinytra.forgified-fabric-api",
+                "artifact": "fabric-command-api-v2"
+              },
+              "version": {
+                "range": "[2.2.28+36d727be19,)",
+                "artifactVersion": "2.2.28+36d727be19"
+              },
+              "path": "META-INF/jars/fabric-command-api-v2-2.2.28+36d727be19.jar"
+            },
+            {
+              "identifier": {
+                "group": "org.sinytra.forgified-fabric-api",
+                "artifact": "fabric-item-api-v1"
+              },
+              "version": {
+                "range": "[11.3.0+766f218719,)",
+                "artifactVersion": "11.3.0+766f218719"
+              },
+              "path": "META-INF/jars/fabric-item-api-v1-11.3.0+766f218719.jar"
+            },
+            {
+              "identifier": {
+                "group": "org.sinytra.forgified-fabric-api",
+                "artifact": "fabric-convention-tags-v2"
+              },
+              "version": {
+                "range": "[2.12.0+75d3639619,)",
+                "artifactVersion": "2.12.0+75d3639619"
+              },
+              "path": "META-INF/jars/fabric-convention-tags-v2-2.12.0+75d3639619.jar"
+            },
+            {
+              "identifier": {
+                "group": "org.sinytra.forgified-fabric-api",
+                "artifact": "fabric-block-view-api-v2"
+              },
+              "version": {
+                "range": "[1.0.11+e9036fd419,)",
+                "artifactVersion": "1.0.11+e9036fd419"
+              },
+              "path": "META-INF/jars/fabric-block-view-api-v2-1.0.11+e9036fd419.jar"
+            },
+            {
+              "identifier": {
+                "group": "org.sinytra.forgified-fabric-api",
+                "artifact": "fabric-content-registries-v0"
+              },
+              "version": {
+                "range": "[8.0.19+5e0d320019,)",
+                "artifactVersion": "8.0.19+5e0d320019"
+              },
+              "path": "META-INF/jars/fabric-content-registries-v0-8.0.19+5e0d320019.jar"
+            },
+            {
+              "identifier": {
+                "group": "org.sinytra.forgified-fabric-api",
+                "artifact": "fabric-transfer-api-v1"
+              },
+              "version": {
+                "range": "[5.4.4+6244b11119,)",
+                "artifactVersion": "5.4.4+6244b11119"
+              },
+              "path": "META-INF/jars/fabric-transfer-api-v1-5.4.4+6244b11119.jar"
+            },
+            {
+              "identifier": {
+                "group": "org.sinytra.forgified-fabric-api",
+                "artifact": "fabric-biome-api-v1"
+              },
+              "version": {
+                "range": "[13.0.31+1e62d33c19,)",
+                "artifactVersion": "13.0.31+1e62d33c19"
+              },
+              "path": "META-INF/jars/fabric-biome-api-v1-13.0.31+1e62d33c19.jar"
+            },
+            {
+              "identifier": {
+                "group": "org.sinytra.forgified-fabric-api",
+                "artifact": "fabric-particles-v1"
+              },
+              "version": {
+                "range": "[4.0.2+824f924c19,)",
+                "artifactVersion": "4.0.2+824f924c19"
+              },
+              "path": "META-INF/jars/fabric-particles-v1-4.0.2+824f924c19.jar"
+            },
+            {
+              "identifier": {
+                "group": "org.sinytra.forgified-fabric-api",
+                "artifact": "fabric-lifecycle-events-v1"
+              },
+              "version": {
+                "range": "[2.6.0+e40d8add19,)",
+                "artifactVersion": "2.6.0+e40d8add19"
+              },
+              "path": "META-INF/jars/fabric-lifecycle-events-v1-2.6.0+e40d8add19.jar"
+            },
+            {
+              "identifier": {
+                "group": "org.sinytra.forgified-fabric-api",
+                "artifact": "fabric-api-base"
+              },
+              "version": {
+                "range": "[0.4.42+d1308ded19,)",
+                "artifactVersion": "0.4.42+d1308ded19"
+              },
+              "path": "META-INF/jars/fabric-api-base-0.4.42+d1308ded19.jar"
+            },
+            {
+              "identifier": {
+                "group": "org.sinytra.forgified-fabric-api",
+                "artifact": "fabric-message-api-v1"
+              },
+              "version": {
+                "range": "[6.0.14+6a754fce19,)",
+                "artifactVersion": "6.0.14+6a754fce19"
+              },
+              "path": "META-INF/jars/fabric-message-api-v1-6.0.14+6a754fce19.jar"
+            },
+            {
+              "identifier": {
+                "group": "org.sinytra.forgified-fabric-api",
+                "artifact": "fabric-tag-api-v1"
+              },
+              "version": {
+                "range": "[1.3.0+3e2bcb4b19,)",
+                "artifactVersion": "1.3.0+3e2bcb4b19"
+              },
+              "path": "META-INF/jars/fabric-tag-api-v1-1.3.0+3e2bcb4b19.jar"
+            },
+            {
+              "identifier": {
+                "group": "org.sinytra.forgified-fabric-api",
+                "artifact": "fabric-renderer-indigo"
+              },
+              "version": {
+                "range": "[1.7.1+9125b6dc19,)",
+                "artifactVersion": "1.7.1+9125b6dc19"
+              },
+              "path": "META-INF/jars/fabric-renderer-indigo-1.7.1+9125b6dc19.jar"
+            },
+            {
+              "identifier": {
+                "group": "org.sinytra.forgified-fabric-api",
+                "artifact": "fabric-object-builder-api-v1"
+              },
+              "version": {
+                "range": "[15.2.1+cc242efd19,)",
+                "artifactVersion": "15.2.1+cc242efd19"
+              },
+              "path": "META-INF/jars/fabric-object-builder-api-v1-15.2.1+cc242efd19.jar"
+            },
+            {
+              "identifier": {
+                "group": "org.sinytra.forgified-fabric-api",
+                "artifact": "fabric-networking-api-v1"
+              },
+              "version": {
+                "range": "[4.3.1+7e3d421f19,)",
+                "artifactVersion": "4.3.1+7e3d421f19"
+              },
+              "path": "META-INF/jars/fabric-networking-api-v1-4.3.1+7e3d421f19.jar"
+            },
+            {
+              "identifier": {
+                "group": "org.sinytra.forgified-fabric-api",
+                "artifact": "fabric-rendering-v1"
+              },
+              "version": {
+                "range": "[5.1.0+1a09bd5a19,)",
+                "artifactVersion": "5.1.0+1a09bd5a19"
+              },
+              "path": "META-INF/jars/fabric-rendering-v1-5.1.0+1a09bd5a19.jar"
+            },
+            {
+              "identifier": {
+                "group": "org.sinytra.forgified-fabric-api",
+                "artifact": "fabric-renderer-registries-v1"
+              },
+              "version": {
+                "range": "[3.2.69+df3654b319,)",
+                "artifactVersion": "3.2.69+df3654b319"
+              },
+              "path": "META-INF/jars/fabric-renderer-registries-v1-3.2.69+df3654b319.jar"
+            },
+            {
+              "identifier": {
+                "group": "org.sinytra.forgified-fabric-api",
+                "artifact": "fabric-item-group-api-v1"
+              },
+              "version": {
+                "range": "[4.1.7+e324903319,)",
+                "artifactVersion": "4.1.7+e324903319"
+              },
+              "path": "META-INF/jars/fabric-item-group-api-v1-4.1.7+e324903319.jar"
+            },
+            {
+              "identifier": {
+                "group": "org.sinytra.forgified-fabric-api",
+                "artifact": "fabric-renderer-api-v1"
+              },
+              "version": {
+                "range": "[3.4.1+9125b6dc19,)",
+                "artifactVersion": "3.4.1+9125b6dc19"
+              },
+              "path": "META-INF/jars/fabric-renderer-api-v1-3.4.1+9125b6dc19.jar"
+            },
+            {
+              "identifier": {
+                "group": "org.sinytra.forgified-fabric-api",
+                "artifact": "fabric-resource-conditions-api-v1"
+              },
+              "version": {
+                "range": "[4.3.0+5bdd099819,)",
+                "artifactVersion": "4.3.0+5bdd099819"
+              },
+              "path": "META-INF/jars/fabric-resource-conditions-api-v1-4.3.0+5bdd099819.jar"
+            },
+            {
+              "identifier": {
+                "group": "org.sinytra.forgified-fabric-api",
+                "artifact": "fabric-game-rule-api-v1"
+              },
+              "version": {
+                "range": "[1.0.53+36d727be19,)",
+                "artifactVersion": "1.0.53+36d727be19"
+              },
+              "path": "META-INF/jars/fabric-game-rule-api-v1-1.0.53+36d727be19.jar"
+            },
+            {
+              "identifier": {
+                "group": "org.sinytra",
+                "artifact": "forgified-fabric-loader"
+              },
+              "version": {
+                "range": "[2.5.68+0.18.4+1.21.1,)",
+                "artifactVersion": "2.5.68+0.18.4+1.21.1"
+              },
+              "path": "META-INF/jars/forgified-fabric-loader-2.5.68+0.18.4+1.21.1-full.jar"
+            },
+            {
+              "identifier": {
+                "group": "org.sinytra.forgified-fabric-api",
+                "artifact": "fabric-screen-handler-api-v1"
+              },
+              "version": {
+                "range": "[1.3.91+8dbc56dd19,)",
+                "artifactVersion": "1.3.91+8dbc56dd19"
+              },
+              "path": "META-INF/jars/fabric-screen-handler-api-v1-1.3.91+8dbc56dd19.jar"
+            },
+            {
+              "identifier": {
+                "group": "org.sinytra.forgified-fabric-api",
+                "artifact": "fabric-loot-api-v2"
+              },
+              "version": {
+                "range": "[3.0.15+a3ee712d19,)",
+                "artifactVersion": "3.0.15+a3ee712d19"
+              },
+              "path": "META-INF/jars/fabric-loot-api-v2-3.0.15+a3ee712d19.jar"
+            },
+            {
+              "identifier": {
+                "group": "org.sinytra.forgified-fabric-api",
+                "artifact": "fabric-model-loading-api-v1"
+              },
+              "version": {
+                "range": "[2.1.0+6e8f52c719,)",
+                "artifactVersion": "2.1.0+6e8f52c719"
+              },
+              "path": "META-INF/jars/fabric-model-loading-api-v1-2.1.0+6e8f52c719.jar"
+            },
+            {
+              "identifier": {
+                "group": "org.sinytra.forgified-fabric-api",
+                "artifact": "fabric-blockrenderlayer-v1"
+              },
+              "version": {
+                "range": "[1.1.52+c290471319,)",
+                "artifactVersion": "1.1.52+c290471319"
+              },
+              "path": "META-INF/jars/fabric-blockrenderlayer-v1-1.1.52+c290471319.jar"
+            },
+            {
+              "identifier": {
+                "group": "org.sinytra.forgified-fabric-api",
+                "artifact": "fabric-registry-sync-v0"
+              },
+              "version": {
+                "range": "[5.3.2+f9aace1619,)",
+                "artifactVersion": "5.3.2+f9aace1619"
+              },
+              "path": "META-INF/jars/fabric-registry-sync-v0-5.3.2+f9aace1619.jar"
+            },
+            {
+              "identifier": {
+                "group": "org.sinytra.forgified-fabric-api",
+                "artifact": "fabric-transitive-access-wideners-v1"
+              },
+              "version": {
+                "range": "[6.2.0+6c854b6f19,)",
+                "artifactVersion": "6.2.0+6c854b6f19"
+              },
+              "path": "META-INF/jars/fabric-transitive-access-wideners-v1-6.2.0+6c854b6f19.jar"
+            },
+            {
+              "identifier": {
+                "group": "org.sinytra.forgified-fabric-api",
+                "artifact": "fabric-key-binding-api-v1"
+              },
+              "version": {
+                "range": "[1.0.47+62cc7ce119,)",
+                "artifactVersion": "1.0.47+62cc7ce119"
+              },
+              "path": "META-INF/jars/fabric-key-binding-api-v1-1.0.47+62cc7ce119.jar"
+            },
+            {
+              "identifier": {
+                "group": "org.sinytra.forgified-fabric-api",
+                "artifact": "fabric-screen-api-v1"
+              },
+              "version": {
+                "range": "[2.0.26+9991ca2f19,)",
+                "artifactVersion": "2.0.26+9991ca2f19"
+              },
+              "path": "META-INF/jars/fabric-screen-api-v1-2.0.26+9991ca2f19.jar"
+            },
+            {
+              "identifier": {
+                "group": "org.sinytra.forgified-fabric-api",
+                "artifact": "fabric-convention-tags-v1"
+              },
+              "version": {
+                "range": "[2.1.7+7f945d5b19,)",
+                "artifactVersion": "2.1.7+7f945d5b19"
+              },
+              "path": "META-INF/jars/fabric-convention-tags-v1-2.1.7+7f945d5b19.jar"
+            },
+            {
+              "identifier": {
+                "group": "org.sinytra.forgified-fabric-api",
+                "artifact": "fabric-loot-api-v3"
+              },
+              "version": {
+                "range": "[1.0.3+333dfad919,)",
+                "artifactVersion": "1.0.3+333dfad919"
+              },
+              "path": "META-INF/jars/fabric-loot-api-v3-1.0.3+333dfad919.jar"
+            },
+            {
+              "identifier": {
+                "group": "org.sinytra.forgified-fabric-api",
+                "artifact": "fabric-recipe-api-v1"
+              },
+              "version": {
+                "range": "[5.0.16+59440bcc19,)",
+                "artifactVersion": "5.0.16+59440bcc19"
+              },
+              "path": "META-INF/jars/fabric-recipe-api-v1-5.0.16+59440bcc19.jar"
+            },
+            {
+              "identifier": {
+                "group": "org.sinytra.forgified-fabric-api",
+                "artifact": "fabric-resource-loader-v0"
+              },
+              "version": {
+                "range": "[1.3.1+4ea8954419,)",
+                "artifactVersion": "1.3.1+4ea8954419"
+              },
+              "path": "META-INF/jars/fabric-resource-loader-v0-1.3.1+4ea8954419.jar"
+            },
+            {
+              "identifier": {
+                "group": "org.sinytra.forgified-fabric-api",
+                "artifact": "fabric-data-generation-api-v1"
+              },
+              "version": {
+                "range": "[20.3.0+3e2bcb4b19,)",
+                "artifactVersion": "20.3.0+3e2bcb4b19"
+              },
+              "path": "META-INF/jars/fabric-data-generation-api-v1-20.3.0+3e2bcb4b19.jar"
+            },
+            {
+              "identifier": {
+                "group": "org.sinytra.forgified-fabric-api",
+                "artifact": "fabric-api-lookup-api-v1"
+              },
+              "version": {
+                "range": "[1.6.72+6244b11119,)",
+                "artifactVersion": "1.6.72+6244b11119"
+              },
+              "path": "META-INF/jars/fabric-api-lookup-api-v1-1.6.72+6244b11119.jar"
+            },
+            {
+              "identifier": {
+                "group": "org.sinytra.forgified-fabric-api",
+                "artifact": "fabric-events-interaction-v0"
+              },
+              "version": {
+                "range": "[0.7.14+057f5afd19,)",
+                "artifactVersion": "0.7.14+057f5afd19"
+              },
+              "path": "META-INF/jars/fabric-events-interaction-v0-0.7.14+057f5afd19.jar"
+            },
+            {
+              "identifier": {
+                "group": "org.sinytra.forgified-fabric-api",
+                "artifact": "fabric-gametest-api-v1"
+              },
+              "version": {
+                "range": "[2.0.5+29f188ce19,)",
+                "artifactVersion": "2.0.5+29f188ce19"
+              },
+              "path": "META-INF/jars/fabric-gametest-api-v1-2.0.5+29f188ce19.jar"
+            },
+            {
+              "identifier": {
+                "group": "org.sinytra.forgified-fabric-api",
+                "artifact": "fabric-rendering-fluids-v1"
+              },
+              "version": {
+                "range": "[3.1.6+a51883b219,)",
+                "artifactVersion": "3.1.6+a51883b219"
+              },
+              "path": "META-INF/jars/fabric-rendering-fluids-v1-3.1.6+a51883b219.jar"
+            },
+            {
+              "identifier": {
+                "group": "org.sinytra.forgified-fabric-api",
+                "artifact": "fabric-rendering-data-attachment-v1"
+              },
+              "version": {
+                "range": "[0.3.49+73761d2e19,)",
+                "artifactVersion": "0.3.49+73761d2e19"
+              },
+              "path": "META-INF/jars/fabric-rendering-data-attachment-v1-0.3.49+73761d2e19.jar"
+            },
+            {
+              "identifier": {
+                "group": "org.sinytra.forgified-fabric-api",
+                "artifact": "fabric-sound-api-v1"
+              },
+              "version": {
+                "range": "[1.0.23+10b84f8419,)",
+                "artifactVersion": "1.0.23+10b84f8419"
+              },
+              "path": "META-INF/jars/fabric-sound-api-v1-1.0.23+10b84f8419.jar"
+            },
+            {
+              "identifier": {
+                "group": "org.sinytra.forgified-fabric-api",
+                "artifact": "fabric-data-attachment-api-v1"
+              },
+              "version": {
+                "range": "[1.4.7+26d408aa19,)",
+                "artifactVersion": "1.4.7+26d408aa19"
+              },
+              "path": "META-INF/jars/fabric-data-attachment-api-v1-1.4.7+26d408aa19.jar"
+            },
+            {
+              "identifier": {
+                "group": "org.sinytra.forgified-fabric-api",
+                "artifact": "fabric-block-api-v1"
+              },
+              "version": {
+                "range": "[1.1.0+b0c22bb819,)",
+                "artifactVersion": "1.1.0+b0c22bb819"
+              },
+              "path": "META-INF/jars/fabric-block-api-v1-1.1.0+b0c22bb819.jar"
+            },
+            {
+              "identifier": {
+                "group": "org.sinytra.forgified-fabric-api",
+                "artifact": "fabric-client-tags-api-v1"
+              },
+              "version": {
+                "range": "[1.2.0+5adff2d719,)",
+                "artifactVersion": "1.2.0+5adff2d719"
+              },
+              "path": "META-INF/jars/fabric-client-tags-api-v1-1.2.0+5adff2d719.jar"
+            },
+            {
+              "identifier": {
+                "group": "org.sinytra.forgified-fabric-api",
+                "artifact": "fabric-entity-events-v1"
+              },
+              "version": {
+                "range": "[1.8.0+e46a02ca19,)",
+                "artifactVersion": "1.8.0+e46a02ca19"
+              },
+              "path": "META-INF/jars/fabric-entity-events-v1-1.8.0+e46a02ca19.jar"
+            }
+          ]
+        }
+      },
+      "id": "fabric_api",
+      "version": "0.116.15+2.3.3+1.21.1",
+      "source": "https://cdn.modrinth.com/data/Aqlf1Shp/versions/ubZIpGFv/forgified-fabric-api-0.116.15%2B2.3.3%2B1.21.1.jar",
+      "enabled": true,
+      "kind": "mod"
+    },
+    {
+      "file": "sodium-neoforge-0.8.12-beta.1+mc1.21.1.jar",
+      "sha256": "dc2838d5538db39414171fe86586ab89d1a30d2fd97f59229cc44cf3777f569d",
+      "metadata": {
+        "neoforge": {
+          "modLoader": "javafml",
+          "loaderVersion": "[4,)",
+          "license": "Polyform-Shield-1.0.0",
+          "mods": [
+            {
+              "modId": "sodium",
+              "version": "0.8.12-beta.1+mc1.21.1",
+              "displayName": "Sodium",
+              "logoFile": "sodium-icon.png",
+              "authors": "JellySquid (jellysquid3), IMS212",
+              "credits": "bytzo, PepperCode1, FlashyReese, altrisi, Grayray75, Madis0, Johni0702, comp500, coderbot16, Moulberry, MCRcortex, Altirix, embeddedt, pajicadvance, Kroppeb, douira, burgerindividual, TwistedZero, Leo40Git, haykam821, muzikbike",
+              "description": "Sodium is a powerful rendering engine for Minecraft which improves frame rates and reduces lag spikes.\n",
+              "provides": [
+                "indium"
+              ]
+            }
+          ],
+          "modproperties": {
+            "sodium": {
+              "fabric-renderer-api-v1:contains_renderer": true
+            }
+          },
+          "dependencies": {
+            "sodium": [
+              {
+                "modId": "minecraft",
+                "type": "required",
+                "versionRange": "1.21.1",
+                "ordering": "NONE",
+                "side": "CLIENT"
+              },
+              {
+                "modId": "neoforge",
+                "type": "required",
+                "versionRange": "[21.1.82,)",
+                "ordering": "NONE",
+                "side": "CLIENT"
+              },
+              {
+                "modId": "embeddium",
+                "type": "incompatible",
+                "reason": "Sodium and Embeddium cannot be used together. Please remove Embeddium.",
+                "versionRange": "[0.0.1,)",
+                "ordering": "NONE",
+                "side": "CLIENT"
+              }
+            ]
+          },
+          "mixins": [
+            {
+              "config": "sodium-common.mixins.json"
+            },
+            {
+              "config": "sodium-neoforge.mixins.json"
+            }
+          ]
+        },
+        "jarjar": {
+          "jars": [
+            {
+              "identifier": {
+                "group": "net.caffeinemc",
+                "artifact": "neoforge"
+              },
+              "version": {
+                "range": "[0.8.12-beta.1+mc1.21.1,)",
+                "artifactVersion": "0.8.12-beta.1+mc1.21.1"
+              },
+              "path": "META-INF/jarjar/net.caffeinemc.sodium-neoforge-0.8.12-beta.1+mc1.21.1-mod.jar",
+              "isObfuscated": false
+            },
+            {
+              "identifier": {
+                "group": "org.sinytra.forgified-fabric-api",
+                "artifact": "fabric-api-base"
+              },
+              "version": {
+                "range": "[0.4.42+d1308ded19,)",
+                "artifactVersion": "0.4.42+d1308ded19"
+              },
+              "path": "META-INF/jarjar/fabric-api-base-0.4.42+d1308ded19.jar",
+              "isObfuscated": false
+            },
+            {
+              "identifier": {
+                "group": "org.sinytra.forgified-fabric-api",
+                "artifact": "fabric-block-view-api-v2"
+              },
+              "version": {
+                "range": "[1.0.10+9afaaf8c19,)",
+                "artifactVersion": "1.0.10+9afaaf8c19"
+              },
+              "path": "META-INF/jarjar/fabric-block-view-api-v2-1.0.10+9afaaf8c19.jar",
+              "isObfuscated": false
+            },
+            {
+              "identifier": {
+                "group": "org.sinytra.forgified-fabric-api",
+                "artifact": "fabric-renderer-api-v1"
+              },
+              "version": {
+                "range": "[3.4.1+9125b6dc19,)",
+                "artifactVersion": "3.4.1+9125b6dc19"
+              },
+              "path": "META-INF/jarjar/fabric-renderer-api-v1-3.4.1+9125b6dc19.jar",
+              "isObfuscated": false
+            },
+            {
+              "identifier": {
+                "group": "org.sinytra.forgified-fabric-api",
+                "artifact": "fabric-rendering-data-attachment-v1"
+              },
+              "version": {
+                "range": "[0.3.48+73761d2e19,)",
+                "artifactVersion": "0.3.48+73761d2e19"
+              },
+              "path": "META-INF/jarjar/fabric-rendering-data-attachment-v1-0.3.48+73761d2e19.jar",
+              "isObfuscated": false
+            }
+          ]
+        }
+      },
+      "id": "sodium",
+      "version": "0.8.12-beta.1+mc1.21.1",
+      "source": "https://cdn.modrinth.com/data/AANobbMI/versions/iw5APcWy/sodium-neoforge-0.8.12-beta.1%2Bmc1.21.1.jar",
+      "enabled": true,
+      "kind": "mod"
+    },
+    {
+      "file": "voxy-0.2.15-beta-sodium0.8.12.jar",
+      "sha256": "024d58076649dbd348ad75c3778f90916ec35b7b9a1196b0662823a72f071a49",
+      "metadata": {
+        "fabric": {
+          "schemaVersion": 1,
+          "id": "voxy",
+          "version": "0.2.15-beta",
+          "custom": {
+            "commit": "ff9b80ac96b030b21af3e868c1255e0ca9737ec7",
+            "buildtime": "1786888113"
+          },
+          "name": "Voxy",
+          "description": "Far distance rendering mod utilising LoDs",
+          "authors": [
+            "Cortex"
+          ],
+          "contact": {},
+          "license": "All-Rights-Reserved",
+          "icon": "assets/voxy/icon.png",
+          "environment": "*",
+          "entrypoints": {
+            "client": [
+              "me.cortex.voxy.client.VoxyClient"
+            ],
+            "modmenu": [
+              "me.cortex.voxy.client.config.ModMenuIntegration"
+            ],
+            "sodium:config_api_user": [
+              "me.cortex.voxy.client.config.VoxyConfigMenu"
+            ],
+            "main": [
+              "me.cortex.voxy.commonImpl.VoxyCommon"
+            ]
+          },
+          "mixins": [
+            {
+              "config": "client.voxy.mixins.json",
+              "environment": "client"
+            },
+            "common.voxy.mixins.json"
+          ],
+          "depends": {
+            "minecraft": [
+              "1.21.1"
+            ],
+            "fabricloader": ">=0.14.22",
+            "fabric-api": ">=0.91.1",
+            "sodium": ">=0.8.12-alpha.2+mc1.21.1"
+          },
+          "breaks": {
+            "voxyworldgenv2": "=2.2.2"
+          },
+          "accessWidener": "voxy.accesswidener",
+          "jars": [
+            {
+              "file": "META-INF/jars/commons-pool2-2.12.0.jar"
+            },
+            {
+              "file": "META-INF/jars/jedis-5.1.0.jar"
+            },
+            {
+              "file": "META-INF/jars/lwjgl-lmdb-3.3.3-natives-linux.jar"
+            },
+            {
+              "file": "META-INF/jars/lwjgl-lmdb-3.3.3-natives-windows.jar"
+            },
+            {
+              "file": "META-INF/jars/lwjgl-lmdb-3.3.3.jar"
+            },
+            {
+              "file": "META-INF/jars/lwjgl-zstd-3.3.3-natives-linux.jar"
+            },
+            {
+              "file": "META-INF/jars/lwjgl-zstd-3.3.3-natives-windows.jar"
+            },
+            {
+              "file": "META-INF/jars/lwjgl-zstd-3.3.3.jar"
+            },
+            {
+              "file": "META-INF/jars/lz4-java-1.8.0.jar"
+            },
+            {
+              "file": "META-INF/jars/rocksdbjni-10.2.1.jar"
+            },
+            {
+              "file": "META-INF/jars/xz-1.10.jar"
+            }
+          ]
+        }
+      },
+      "id": "voxy",
+      "version": "0.2.15-beta",
+      "source": "cache:sha256:024d58076649dbd348ad75c3778f90916ec35b7b9a1196b0662823a72f071a49",
+      "enabled": true,
+      "kind": "mod"
+    },
+    {
+      "file": "xaeroworldmap-neoforge-1.21.1-1.45.0.jar",
+      "sha256": "d60899112e84616ba52a993c1722fd891872acc4779bfac34d9b170001451c6f",
+      "metadata": {
+        "neoforge": {
+          "modLoader": "javafml",
+          "loaderVersion": "[4,)",
+          "license": "All Rights Reserved",
+          "mods": [
+            {
+              "modId": "xaeroworldmap",
+              "version": "1.45.0",
+              "displayName": "Xaero's World Map",
+              "logoFile": "xaeroworldmap.png",
+              "credits": "",
+              "authors": "xaero96",
+              "description": "A self-writing fullscreen map which also works as an add-on to Xaero's Minimap."
+            }
+          ],
+          "mixins": [
+            {
+              "config": "xaeroworldmap.mixins.json"
+            },
+            {
+              "config": "xaeroworldmap.neoforge.mixins.json"
+            }
+          ],
+          "dependencies": {
+            "xaeroworldmap": [
+              {
+                "modId": "neoforge",
+                "type": "required",
+                "versionRange": "[21.0.110-beta, 21.2.0)",
+                "ordering": "NONE",
+                "side": "BOTH"
+              },
+              {
+                "modId": "minecraft",
+                "type": "required",
+                "versionRange": "[1.21, 1.21.2)",
+                "ordering": "NONE",
+                "side": "BOTH"
+              },
+              {
+                "modId": "openpartiesandclaims",
+                "type": "optional",
+                "versionRange": "[0.30.3,)",
+                "ordering": "NONE",
+                "side": "BOTH"
+              },
+              {
+                "modId": "xaerominimap",
+                "type": "optional",
+                "versionRange": "[26.4.0,)",
+                "ordering": "NONE",
+                "side": "BOTH"
+              },
+              {
+                "modId": "xaerobetterpvp",
+                "type": "optional",
+                "versionRange": "[26.4.0,)",
+                "ordering": "NONE",
+                "side": "BOTH"
+              },
+              {
+                "modId": "xaerolib",
+                "type": "required",
+                "versionRange": "[1.0,)",
+                "ordering": "NONE",
+                "side": "BOTH"
+              }
+            ]
+          }
+        },
+        "jarjar": {
+          "jars": [
+            {
+              "identifier": {
+                "group": "xaero.lib",
+                "artifact": "xaerolib-neoforge-1.21.1"
+              },
+              "version": {
+                "range": "[1.7.0,1.8)",
+                "artifactVersion": "1.7.1"
+              },
+              "path": "META-INF/jarjar/xaerolib-neoforge-1.21.1-1.7.1.jar",
+              "isObfuscated": false
+            }
+          ]
+        }
+      },
+      "id": "xaeroworldmap",
+      "version": "1.45.0",
+      "source": "https://cdn.modrinth.com/data/NcUtCpym/versions/fOv9QzLO/xaeroworldmap-neoforge-1.21.1-1.45.0.jar",
+      "enabled": true,
+      "kind": "mod"
+    }
+  ],
+  "components": [
+    {
+      "uid": "org.lwjgl3",
+      "version": "3.3.3"
+    },
+    {
+      "uid": "net.minecraft",
+      "version": "1.21.1"
+    },
+    {
+      "uid": "net.neoforged",
+      "version": "21.1.248"
+    },
+    {
+      "uid": "java",
+      "version": "21"
+    }
+  ],
+  "capabilities": [],
+  "status": "unverified",
+  "limitations": [
+    "Imported dependency candidate only; no final feature validation inferred. Cache-only sources require the exact existing bytes."
+  ],
+  "excluded_candidate_or_fixture_ids": [
+    "lss"
+  ]
+}

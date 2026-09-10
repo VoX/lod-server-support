@@ -1,0 +1,764 @@
+{
+  "schema_version": 1,
+  "id": "mc1211-fabric-modern",
+  "line": "1.21.1",
+  "platform": "fabric",
+  "route": "native",
+  "artifacts": [
+    {
+      "file": "fabric-api-0.116.15+1.21.1.jar",
+      "sha256": "a61a10f730ab8aa45ff42486ee65699e6e51c28a0c168deb161e7d4029473aa3",
+      "metadata": {
+        "fabric": {
+          "schemaVersion": 1,
+          "id": "fabric-api",
+          "provides": [
+            "fabric"
+          ],
+          "name": "Fabric API",
+          "version": "0.116.15+1.21.1",
+          "environment": "*",
+          "license": "Apache-2.0",
+          "icon": "assets/fabric/icon.png",
+          "contact": {
+            "homepage": "https://fabricmc.net",
+            "irc": "irc://irc.esper.net:6667/fabric",
+            "issues": "https://github.com/FabricMC/fabric/issues",
+            "sources": "https://github.com/FabricMC/fabric"
+          },
+          "authors": [
+            "FabricMC"
+          ],
+          "depends": {
+            "fabricloader": ">=0.15.11",
+            "java": ">=21",
+            "minecraft": ">=1.21- <1.21.2-"
+          },
+          "description": "Core API module providing key hooks and intercompatibility features.",
+          "jars": [
+            {
+              "file": "META-INF/jars/fabric-api-base-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-api-lookup-api-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-biome-api-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-block-api-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-block-view-api-v2-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-blockrenderlayer-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-client-tags-api-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-command-api-v2-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-content-registries-v0-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-convention-tags-v2-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-crash-report-info-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-data-attachment-api-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-data-generation-api-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-dimensions-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-entity-events-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-events-interaction-v0-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-game-rule-api-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-item-api-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-item-group-api-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-key-binding-api-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-lifecycle-events-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-loot-api-v3-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-message-api-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-model-loading-api-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-networking-api-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-object-builder-api-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-particles-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-recipe-api-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-registry-sync-v0-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-renderer-api-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-renderer-indigo-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-rendering-fluids-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-rendering-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-resource-conditions-api-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-resource-loader-v0-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-screen-api-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-screen-handler-api-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-sound-api-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-tag-api-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-transfer-api-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-transitive-access-wideners-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-command-api-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-commands-v0-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-convention-tags-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-keybindings-v0-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-loot-api-v2-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-renderer-registries-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-rendering-data-attachment-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-rendering-v0-0.116.15.jar"
+            }
+          ]
+        }
+      },
+      "id": "fabric-api",
+      "version": "0.116.15+1.21.1",
+      "source": "https://cdn.modrinth.com/data/P7dR8mSH/versions/Nlt8gI9z/fabric-api-0.116.15%2B1.21.1.jar",
+      "enabled": true,
+      "kind": "mod"
+    },
+    {
+      "file": "fabric-language-kotlin-1.13.13+kotlin.2.4.10.jar",
+      "sha256": "34ccdacf13bb9351fe43ce61912c2e09b72364e43e787d36ba3d2d04dec75a52",
+      "metadata": {
+        "fabric": {
+          "schemaVersion": 1,
+          "id": "fabric-language-kotlin",
+          "version": "1.13.13+kotlin.2.4.10",
+          "name": "Fabric Language Kotlin",
+          "description": "Fabric language module for Kotlin.",
+          "authors": [
+            "FabricMC"
+          ],
+          "contact": {
+            "homepage": "https://minecraft.curseforge.com/projects/fabric-language-kotlin",
+            "irc": "irc://irc.esper.net:6667/fabric",
+            "issues": "https://github.com/FabricMC/fabric-language-kotlin/issues",
+            "sources": "https://github.com/FabricMC/fabric-language-kotlin"
+          },
+          "languageAdapters": {
+            "kotlin": "net.fabricmc.language.kotlin.KotlinAdapter"
+          },
+          "license": "Apache-2.0",
+          "icon": "assets/fabric-language-kotlin/icon500.png",
+          "depends": {
+            "fabricloader": ">=0.16.9"
+          },
+          "jars": [
+            {
+              "file": "META-INF/jars/atomicfu-jvm-0.33.0.jar"
+            },
+            {
+              "file": "META-INF/jars/kotlin-reflect-2.4.10.jar"
+            },
+            {
+              "file": "META-INF/jars/kotlin-stdlib-2.4.10.jar"
+            },
+            {
+              "file": "META-INF/jars/kotlin-stdlib-jdk7-2.4.10.jar"
+            },
+            {
+              "file": "META-INF/jars/kotlin-stdlib-jdk8-2.4.10.jar"
+            },
+            {
+              "file": "META-INF/jars/kotlinx-coroutines-core-jvm-1.11.0.jar"
+            },
+            {
+              "file": "META-INF/jars/kotlinx-coroutines-jdk8-1.11.0.jar"
+            },
+            {
+              "file": "META-INF/jars/kotlinx-datetime-jvm-0.8.0.jar"
+            },
+            {
+              "file": "META-INF/jars/kotlinx-io-bytestring-jvm-0.9.1.jar"
+            },
+            {
+              "file": "META-INF/jars/kotlinx-io-core-jvm-0.9.1.jar"
+            },
+            {
+              "file": "META-INF/jars/kotlinx-serialization-cbor-jvm-1.11.0.jar"
+            },
+            {
+              "file": "META-INF/jars/kotlinx-serialization-core-jvm-1.11.0.jar"
+            },
+            {
+              "file": "META-INF/jars/kotlinx-serialization-json-jvm-1.11.0.jar"
+            }
+          ]
+        }
+      },
+      "id": "fabric-language-kotlin",
+      "version": "1.13.13+kotlin.2.4.10",
+      "source": "https://cdn.modrinth.com/data/Ha28R6CL/versions/bdhiINYC/fabric-language-kotlin-1.13.13%2Bkotlin.2.4.10.jar",
+      "enabled": true,
+      "kind": "mod"
+    },
+    {
+      "file": "sodium-fabric-0.8.13-beta.2+mc1.21.1.jar",
+      "sha256": "90261fcdab301314acc94c24bba483c2db1b5d94f645d92c69b9585e3422a176",
+      "metadata": {
+        "fabric": {
+          "schemaVersion": 1,
+          "id": "sodium",
+          "version": "0.8.13-beta.2+mc1.21.1",
+          "name": "Sodium",
+          "description": "Sodium is a powerful rendering engine for Minecraft which greatly improves frame rates and micro-stutter, while fixing many graphical issues",
+          "authors": [
+            {
+              "name": "JellySquid (jellysquid3)",
+              "contact": {
+                "email": "jellysquid@pm.me",
+                "homepage": "https://jellysquid.me"
+              }
+            }
+          ],
+          "contributors": [
+            "IMS212",
+            "bytzo",
+            "PepperCode1",
+            "FlashyReese",
+            "altrisi",
+            "Grayray75",
+            "Madis0",
+            "Johni0702",
+            "comp500",
+            "coderbot16",
+            "Moulberry",
+            "MCRcortex",
+            "Altirix",
+            "embeddedt",
+            "pajicadvance",
+            "Kroppeb",
+            "douira",
+            "burgerindividual",
+            "TwistedZero",
+            "Leo40Git",
+            "haykam821",
+            "muzikbike"
+          ],
+          "contact": {
+            "homepage": "https://github.com/CaffeineMC/sodium",
+            "sources": "https://github.com/CaffeineMC/sodium",
+            "issues": "https://github.com/CaffeineMC/sodium/issues"
+          },
+          "license": "Polyform-Shield-1.0.0",
+          "icon": "sodium-icon.png",
+          "environment": "client",
+          "entrypoints": {
+            "client": [
+              "net.caffeinemc.mods.sodium.fabric.SodiumFabricMod"
+            ],
+            "preLaunch": [
+              "net.caffeinemc.mods.sodium.fabric.SodiumPreLaunch"
+            ]
+          },
+          "custom": {
+            "fabric-renderer-api-v1:contains_renderer": true,
+            "modmenu": {
+              "links": {
+                "modmenu.donate": "https://caffeinemc.net/donate",
+                "modmenu.discord": "https://caffeinemc.net/discord",
+                "modmenu.github_releases": "https://github.com/CaffeineMC/sodium/releases",
+                "modmenu.kofi": "https://caffeinemc.net/donate",
+                "modmenu.modrinth": "https://modrinth.com/mod/sodium"
+              }
+            }
+          },
+          "accessWidener": "sodium-fabric.accesswidener",
+          "mixins": [
+            "sodium-common.mixins.json",
+            "sodium-fabric.mixins.json"
+          ],
+          "depends": {
+            "minecraft": [
+              "1.21",
+              "1.21.1"
+            ],
+            "fabricloader": ">=0.16.0",
+            "fabric-block-view-api-v2": "*",
+            "fabric-renderer-api-v1": "*",
+            "fabric-rendering-data-attachment-v1": "*",
+            "fabric-rendering-fluids-v1": ">=2.0.0",
+            "fabric-resource-loader-v0": "*"
+          },
+          "breaks": {
+            "embeddium": "*",
+            "optifabric": "*",
+            "canvas": "*",
+            "vulkanmod": "*",
+            "sodium-blendingregistry": "*",
+            "ocrenderfix_sodium": "*",
+            "betterfpsdist": "<=1.21-4.5",
+            "bobby": "<5.2.4",
+            "chunksfadein": "<3.0.22-1.21",
+            "cull-less-leaves": "<=1.3.0",
+            "cullleaves": "<=3.4.0-fabric",
+            "custom_hud": "<3.4.2",
+            "farsight": "<=1.21-4.3",
+            "iceberg": "<1.2.7",
+            "iris": "<1.8.13",
+            "movingelevators": "<=1.4.7",
+            "notenoughcrashes": "<4.4.8",
+            "noxesium": "<2.3.3",
+            "reeses-sodium-options": "<1.8.0",
+            "sodium-extra": "<0.8.7",
+            "sspb": "<4.1.0",
+            "moreculling": "<1.0.8",
+            "simply-no-shading": "<7.6.2",
+            "betterend": "<=21.0.11",
+            "sodiumoptionsapi": "*",
+            "sodiumoptionsmodcompat": "*",
+            "sodiumextras": "*",
+            "sodiumdynamiclights": "*",
+            "sodiumleafculling": "*"
+          },
+          "provides": [
+            "indium"
+          ],
+          "jars": [
+            {
+              "file": "META-INF/jars/fabric-api-base-0.4.42+6573ed8c19.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-block-view-api-v2-1.0.11+ebb2264e19.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-renderer-api-v1-3.4.1+b4d813fc19.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-rendering-data-attachment-v1-0.3.49+73761d2e19.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-rendering-fluids-v1-3.1.6+1daea21519.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-resource-loader-v0-1.3.1+5b5275af19.jar"
+            }
+          ]
+        }
+      },
+      "id": "sodium",
+      "version": "0.8.13-beta.2+mc1.21.1",
+      "source": "https://cdn.modrinth.com/data/AANobbMI/versions/QV48eyCs/sodium-fabric-0.8.13-beta.2%2Bmc1.21.1.jar",
+      "enabled": true,
+      "kind": "mod"
+    },
+    {
+      "file": "voxy-0.2.15-beta-sodium0.8.12.jar",
+      "sha256": "024d58076649dbd348ad75c3778f90916ec35b7b9a1196b0662823a72f071a49",
+      "metadata": {
+        "fabric": {
+          "schemaVersion": 1,
+          "id": "voxy",
+          "version": "0.2.15-beta",
+          "custom": {
+            "commit": "ff9b80ac96b030b21af3e868c1255e0ca9737ec7",
+            "buildtime": "1786888113"
+          },
+          "name": "Voxy",
+          "description": "Far distance rendering mod utilising LoDs",
+          "authors": [
+            "Cortex"
+          ],
+          "contact": {},
+          "license": "All-Rights-Reserved",
+          "icon": "assets/voxy/icon.png",
+          "environment": "*",
+          "entrypoints": {
+            "client": [
+              "me.cortex.voxy.client.VoxyClient"
+            ],
+            "modmenu": [
+              "me.cortex.voxy.client.config.ModMenuIntegration"
+            ],
+            "sodium:config_api_user": [
+              "me.cortex.voxy.client.config.VoxyConfigMenu"
+            ],
+            "main": [
+              "me.cortex.voxy.commonImpl.VoxyCommon"
+            ]
+          },
+          "mixins": [
+            {
+              "config": "client.voxy.mixins.json",
+              "environment": "client"
+            },
+            "common.voxy.mixins.json"
+          ],
+          "depends": {
+            "minecraft": [
+              "1.21.1"
+            ],
+            "fabricloader": ">=0.14.22",
+            "fabric-api": ">=0.91.1",
+            "sodium": ">=0.8.12-alpha.2+mc1.21.1"
+          },
+          "breaks": {
+            "voxyworldgenv2": "=2.2.2"
+          },
+          "accessWidener": "voxy.accesswidener",
+          "jars": [
+            {
+              "file": "META-INF/jars/commons-pool2-2.12.0.jar"
+            },
+            {
+              "file": "META-INF/jars/jedis-5.1.0.jar"
+            },
+            {
+              "file": "META-INF/jars/lwjgl-lmdb-3.3.3-natives-linux.jar"
+            },
+            {
+              "file": "META-INF/jars/lwjgl-lmdb-3.3.3-natives-windows.jar"
+            },
+            {
+              "file": "META-INF/jars/lwjgl-lmdb-3.3.3.jar"
+            },
+            {
+              "file": "META-INF/jars/lwjgl-zstd-3.3.3-natives-linux.jar"
+            },
+            {
+              "file": "META-INF/jars/lwjgl-zstd-3.3.3-natives-windows.jar"
+            },
+            {
+              "file": "META-INF/jars/lwjgl-zstd-3.3.3.jar"
+            },
+            {
+              "file": "META-INF/jars/lz4-java-1.8.0.jar"
+            },
+            {
+              "file": "META-INF/jars/rocksdbjni-10.2.1.jar"
+            },
+            {
+              "file": "META-INF/jars/xz-1.10.jar"
+            }
+          ]
+        }
+      },
+      "id": "voxy",
+      "version": "0.2.15-beta",
+      "source": "cache:sha256:024d58076649dbd348ad75c3778f90916ec35b7b9a1196b0662823a72f071a49",
+      "enabled": true,
+      "kind": "mod"
+    },
+    {
+      "file": "xaeroworldmap-fabric-1.21.1-1.45.0.jar",
+      "sha256": "ea84c45cb1b994a7738515670b281bcd373a9d9cc3d8d3a24b84a4baf302b9d6",
+      "metadata": {
+        "fabric": {
+          "schemaVersion": 1,
+          "id": "xaeroworldmap",
+          "version": "1.45.0",
+          "name": "Xaero's World Map",
+          "description": "A self-writing fullscreen map which also works as an add-on to Xaero's Minimap.",
+          "authors": [
+            "xaero96"
+          ],
+          "contact": {
+            "issues": "https://www.curseforge.com/minecraft/mc-mods/xaeros-world-map/issues",
+            "homepage": "https://www.curseforge.com/minecraft/mc-mods/xaeros-world-map"
+          },
+          "license": "All Rights Reserved",
+          "icon": "assets/xaeroworldmap/icon.png",
+          "environment": "*",
+          "entrypoints": {
+            "client": [
+              "xaero.map.WorldMapFabric"
+            ],
+            "server": [
+              "xaero.map.WorldMapFabric"
+            ],
+            "modmenu": [
+              "xaero.map.mods.XaeroWorldMapModMenu"
+            ]
+          },
+          "mixins": [
+            "xaeroworldmap.mixins.json",
+            "xaeroworldmap.fabric.mixins.json"
+          ],
+          "depends": {
+            "fabricloader": ">=0.13.0",
+            "fabric-api": ">=0.43.1",
+            "minecraft": ">1.20.6 <1.21.2",
+            "xaerolib": ">=1.0"
+          },
+          "suggests": {},
+          "breaks": {
+            "openpartiesandclaims": "<0.30.3",
+            "xaerominimap": "<26.4.0",
+            "xaerobetterpvp": "<26.4.0"
+          },
+          "jars": [
+            {
+              "file": "META-INF/jars/xaerolib-fabric-1.21.1-1.7.1.jar"
+            }
+          ]
+        }
+      },
+      "id": "xaeroworldmap",
+      "version": "1.45.0",
+      "source": "https://cdn.modrinth.com/data/NcUtCpym/versions/i80CxP4n/xaeroworldmap-fabric-1.21.1-1.45.0.jar",
+      "enabled": true,
+      "kind": "mod"
+    },
+    {
+      "file": "yet_another_config_lib_v3-3.8.2+1.21.1-fabric.jar",
+      "sha256": "6ab420b7d1326fc9851b96a8967504bd644da421ed6438ceb9a9d9c993a408b1",
+      "metadata": {
+        "fabric": {
+          "schemaVersion": 1,
+          "id": "yet_another_config_lib_v3",
+          "version": "3.8.2+1.21.1-fabric",
+          "name": "YetAnotherConfigLib",
+          "description": "YetAnotherConfigLib (yacl) is just that. A builder-based configuration library for Minecraft.",
+          "authors": [
+            "isXander"
+          ],
+          "contact": {
+            "homepage": "https://isxander.dev",
+            "issues": "https://github.com/isXander/YetAnotherConfigLib/issues",
+            "sources": "https://github.com/isXander/YetAnotherConfigLib"
+          },
+          "icon": "yacl-128x.png",
+          "license": "LGPL-3.0-or-later",
+          "environment": "*",
+          "depends": {
+            "fabricloader": ">=0.17.0",
+            "minecraft": "~1.21 <1.21.2",
+            "java": ">=17",
+            "fabric-api": ">=0.104.0+1.21.1"
+          },
+          "entrypoints": {
+            "client": [
+              "dev.isxander.yacl3.platform.PlatformEntrypoint"
+            ]
+          },
+          "custom": {
+            "modmenu": {
+              "badges": [
+                "library"
+              ]
+            }
+          },
+          "accessWidener": "yet_another_config_lib_v3.ct",
+          "mixins": [
+            {
+              "config": "yacl.mixins.json",
+              "environment": "*"
+            },
+            {
+              "config": "yacl-fabric.mixins.json",
+              "environment": "*"
+            }
+          ],
+          "jars": [
+            {
+              "file": "META-INF/jars/common-image-3.12.0.jar"
+            },
+            {
+              "file": "META-INF/jars/common-io-3.12.0.jar"
+            },
+            {
+              "file": "META-INF/jars/common-lang-3.12.0.jar"
+            },
+            {
+              "file": "META-INF/jars/gson-0.2.1.jar"
+            },
+            {
+              "file": "META-INF/jars/imageio-core-3.12.0.jar"
+            },
+            {
+              "file": "META-INF/jars/imageio-metadata-3.12.0.jar"
+            },
+            {
+              "file": "META-INF/jars/imageio-webp-3.12.0.jar"
+            },
+            {
+              "file": "META-INF/jars/json-0.2.1.jar"
+            }
+          ]
+        }
+      },
+      "id": "yet_another_config_lib_v3",
+      "version": "3.8.2+1.21.1-fabric",
+      "source": "https://cdn.modrinth.com/data/1eAoo2KR/versions/o3cDn8Vp/yet_another_config_lib_v3-3.8.2%2B1.21.1-fabric.jar",
+      "enabled": true,
+      "kind": "mod"
+    },
+    {
+      "file": "zoomify-2.15.2+1.21.1.jar",
+      "sha256": "6c317987df28922e227ab3ac4e39090460d99b965bcb9c8da8f9a4493b705d00",
+      "metadata": {
+        "fabric": {
+          "schemaVersion": 1,
+          "id": "zoomify",
+          "version": "2.15.2+1.21.1",
+          "name": "Zoomify",
+          "description": "A zoom mod with infinite customizability.",
+          "authors": [
+            "isXander"
+          ],
+          "contact": {
+            "homepage": "https://isxander.dev",
+            "issues": "https://github.com/isXander/Zoomify/issues",
+            "sources": "https://github.com/isXander/Zoomify"
+          },
+          "icon": "assets/zoomify/zoomify.png",
+          "license": "LGPL-3.0-or-later",
+          "environment": "client",
+          "entrypoints": {
+            "client": [
+              {
+                "adapter": "kotlin",
+                "value": "dev.isxander.zoomify.Zoomify"
+              }
+            ],
+            "modmenu": [
+              {
+                "adapter": "kotlin",
+                "value": "dev.isxander.zoomify.integrations.ModMenuIntegration"
+              }
+            ],
+            "controlify": [
+              {
+                "adapter": "kotlin",
+                "value": "dev.isxander.zoomify.integrations.ControlifyIntegration"
+              }
+            ]
+          },
+          "mixins": [
+            "zoomify.mixins.json"
+          ],
+          "depends": {
+            "fabricloader": ">=0.18.0",
+            "fabric-language-kotlin": ">=1.13.8+kotlin.2.3.0",
+            "minecraft": "~1.21 <1.21.2",
+            "java": ">=17",
+            "yet_another_config_lib_v3": ">=3.6.6"
+          },
+          "suggests": {
+            "modmenu": "*"
+          },
+          "breaks": {
+            "optifabric": "*",
+            "controlify": "<2"
+          },
+          "jars": [
+            {
+              "file": "META-INF/jars/ktoml-core-jvm-0.7.1.jar"
+            }
+          ]
+        }
+      },
+      "id": "zoomify",
+      "version": "2.15.2+1.21.1",
+      "source": "https://cdn.modrinth.com/data/w7ThoJFB/versions/6jrMC48Z/zoomify-2.15.2%2B1.21.1.jar",
+      "enabled": true,
+      "kind": "mod"
+    }
+  ],
+  "components": [
+    {
+      "uid": "org.lwjgl3",
+      "version": "3.3.3"
+    },
+    {
+      "uid": "net.minecraft",
+      "version": "1.21.1"
+    },
+    {
+      "uid": "net.fabricmc.intermediary",
+      "version": "1.21.1"
+    },
+    {
+      "uid": "net.fabricmc.fabric-loader",
+      "version": "0.19.3"
+    },
+    {
+      "uid": "java",
+      "version": "21"
+    }
+  ],
+  "capabilities": [],
+  "status": "unverified",
+  "limitations": [
+    "Imported dependency candidate only; no final feature validation inferred. Cache-only sources require the exact existing bytes."
+  ],
+  "excluded_candidate_or_fixture_ids": [
+    "lss"
+  ]
+}
