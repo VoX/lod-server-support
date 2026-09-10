@@ -2,7 +2,7 @@ import copy,unittest
 from required_row_match import matches,evaluate,FIELDS
 class Targets(unittest.TestCase):
  def setUp(self):
-  self.target={k:'a'*64 for k in FIELDS};self.target.update(scenario_version=2,candidate_target='client/mods/lss.jar',fixture_artifacts={'client/mods/fixture.jar':'b'*64},candidate_artifacts={'client/mods/lss.jar':'a'*64})
+  self.target={k:'a'*64 for k in FIELDS};self.target.update(runtime_settings_version=1,scenario_version=2,candidate_target='client/mods/lss.jar',fixture_artifacts={'client/mods/fixture.jar':'b'*64},candidate_artifacts={'client/mods/lss.jar':'a'*64})
   self.row=dict(profile_id='p',scenario_id='ui-apply',acceptance_target=self.target)
   self.record=dict(profile_id='p',profile_hash='a'*64,scenario='ui-apply',result='pass',timestamp='2026-09-10T00:00:00Z',run_id='one',run_manifest={k:v for k,v in self.target.items() if k!='profile_hash'})
  def test_exact(self):self.assertTrue(matches(self.row,self.record));self.assertEqual('passed',evaluate(self.row,[self.record])['status'])
