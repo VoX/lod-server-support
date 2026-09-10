@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "id": "lss_xaero_map_fixture",
+  "version": "1.0.0-test-only",
+  "name": "LSS native Xaero map observer",
+  "environment": "client",
+  "mixins": [
+    "lss-xaero-map-fixture.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=0.19.3",
+    "minecraft": "1.21.1",
+    "java": ">=21",
+    "lss": ">=0.14.0"
+  }
+}
