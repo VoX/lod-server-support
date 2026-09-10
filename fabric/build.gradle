@@ -497,3 +497,6 @@ tasks.register('vssJar') {
 }
 
 tasks.named('build') { dependsOn 'vssJar' }
+
+// Shared pure test seam; never part of shipping artifacts.
+dependencies { testImplementation(testFixtures(project(':common'))) }

@@ -8,6 +8,10 @@ on:
     branches: [main, 'support/**']
     paths-ignore: ['**.md', 'docs/**', 'LICENSE', '.gitignore']
 
+# Common tests have a fixed Java 21 runtime, independent of the Minecraft build JDK.
+env:
+  COMMON_TEST_JAVA_VERSION: 21
+
 jobs:
   build:
     name: Build + Unit Tests + Server GameTests
@@ -15,6 +19,12 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v5
+
+      - name: Install Java 21 for common tests
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: ${{ env.COMMON_TEST_JAVA_VERSION }}
 
       - uses: actions/setup-java@v5
         with:
@@ -84,6 +94,11 @@ jobs:
       - name: Release-jar safety gate
         run: python3 scripts/release_check.py
 
+      - name: Verify fixture classes stay out of maintained artifacts
+        run: |
+          python3 tools/tests/inventory.py validate-moves
+          python3 tools/tests/check_artifacts.py
+
       - name: Upload flake evidence (first attempt of a retried gametest)
         if: always()
         uses: actions/upload-artifact@v5
@@ -102,6 +117,7 @@ jobs:
             fabric/build/run/*/logs/
             fabric/build/run/*/crash-reports/
             fabric/build/reports/
+            common/build/test-results/
             fabric/build/test-results/
             paper/build/reports/
             paper/build/test-results/
@@ -153,6 +169,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+
+      - name: Install Java 21 for common tests
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: ${{ env.COMMON_TEST_JAVA_VERSION }}
 
       - uses: actions/setup-java@v5
         with:
