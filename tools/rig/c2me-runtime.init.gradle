@@ -1,0 +1,42 @@
+import groovy.json.JsonOutput
+import java.security.MessageDigest
+allprojects {
+    afterEvaluate { p ->
+        if (p.path == ':fabric') {
+            def output = new File(System.getProperty('lss.c2me.evidence'))
+            p.loom.runs.configureEach { run ->
+                if (run.name.toLowerCase().contains('gametest')) {
+                    run.vmArg "-Dfabric-api.gametest.report-file=${new File(output, run.name + '.xml').absolutePath}"
+                }
+            }
+            p.tasks.register('captureC2meRuntime') {
+                dependsOn p.tasks.named('gametestClasses'), p.tasks.named('configureLaunch'), p.tasks.named('jar'), p.rootProject.project(':common').tasks.named('jar')
+                doLast {
+                    def hash = { file -> MessageDigest.getInstance('SHA-256').digest(file.bytes).encodeHex().toString() }
+                    def configuration = p.sourceSets.findByName('gametest')?.runtimeClasspath
+                    if (configuration == null) throw new GradleException('Missing actual gametestRuntimeClasspath')
+                    def originalConfig = p.configurations.findByName('modRuntimeClasspath')
+                    if (originalConfig == null || !originalConfig.canBeResolved) {
+                        originalConfig = p.configurations.findByName('modLocalRuntime').copyRecursive()
+                        originalConfig.canBeResolved = true
+                    }
+                    def originals = originalConfig.files.findAll { it.isFile() }.collect { file -> [path:file.absolutePath,sha256:hash(file)] }
+                    new File(output, 'original-mod-inputs.json').text = JsonOutput.prettyPrint(JsonOutput.toJson(originals)) + '\n'
+                    def files = configuration.files.collect { file ->
+                        file.isFile() ? [path:file.absolutePath,sha256:hash(file),directory:false] : [path:file.absolutePath,directory:true,files:p.fileTree(file).files.sort { it.absolutePath }.collectEntries { item -> [(file.toPath().relativize(item.toPath()).toString()):hash(item)] }]
+                    }
+                    def candidate = p.tasks.named('jar').get().archiveFile.get().asFile
+                    new File(output, 'named-candidate.json').text = JsonOutput.prettyPrint(JsonOutput.toJson([path:candidate.absolutePath,sha256:hash(candidate)])) + '\n'
+                    def commonJar = p.rootProject.project(':common').tasks.named('jar').get().archiveFile.get().asFile
+                    new File(output, 'named-common.json').text = JsonOutput.prettyPrint(JsonOutput.toJson([path:commonJar.absolutePath,sha256:hash(commonJar)])) + '\n'
+                    def remapFile = new File(p.rootProject.projectDir, '.gradle/loom-cache/projects/fabric/remapClasspath.txt')
+                    new File(output, 'remap-classpath.txt').text = remapFile.text
+                    def launch = p.tasks.named('runGameTest').get()
+                    new File(output, 'launch-settings.json').text = JsonOutput.prettyPrint(JsonOutput.toJson([jvmArgs:launch.allJvmArgs, args:launch.args, mainClass:launch.mainClass.get(), workingDir:launch.workingDir.absolutePath])) + '\n'
+                    new File(output, 'runtime-classpath.json').text = JsonOutput.prettyPrint(JsonOutput.toJson(files)) + '\n'
+                }
+            }
+            p.tasks.named('runGameTest').configure { dependsOn p.tasks.named('captureC2meRuntime') }
+        }
+    }
+}

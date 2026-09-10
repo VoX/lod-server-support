@@ -1,0 +1,20 @@
+import groovy.json.JsonOutput
+// Explicit preparation only: preserve actual runServer dependencies, replace launch action.
+gradle.projectsEvaluated {
+ def project=gradle.rootProject.findProject(':neoforge')
+ def output=System.getProperty('lss.smoke.neoCapture')
+ if(project==null || output==null)throw new GradleException('explicit Neo capture output required')
+ project.tasks.named('runServer').configure { task ->
+  task.actions.clear()
+  task.doLast {
+   def dir=new File(output);if(dir.exists())throw new GradleException('refuse existing capture')
+   dir.mkdirs()
+   def data=[task:task.path,minecraft:project.minecraft_version,neoforge:project.neoforge_version,
+     mainClass:task.mainClass.get(),jvmArgs:(task.allJvmArgs + task.jvmArgumentProviders.collectMany { it.asArguments().toList() }),args:(task.args + task.argumentProviders.collectMany { it.asArguments().toList() }),
+     classpath:task.classpath.files.collect{it.absolutePath},workingDir:task.workingDir.absolutePath,
+     environment:task.environment.findAll{k,v-> k in ['MOD_CLASSES','MOD_RESOURCES','FML_MOD_FOLDERS']},
+     route:'actual-runServer-preparation-no-launch']
+   new File(dir,'capture.json').text=JsonOutput.prettyPrint(JsonOutput.toJson(data))+'\n'
+  }
+ }
+}

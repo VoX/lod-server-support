@@ -1,0 +1,14 @@
+plugins { id 'net.fabricmc.fabric-loom-remap' version '1.17.13' }
+version='1.0.0-test-only'
+group='dev.vox.lssfixture'
+base { archivesName='lss-elytra-live-fixture' }
+repositories { mavenCentral() }
+def mc=providers.gradleProperty('fixtureMinecraft').get()
+if (!(mc in ['1.21.10','1.21.11'])) throw new GradleException('fixtureMinecraft must be 1.21.10 or 1.21.11')
+dependencies {
+    minecraft "com.mojang:minecraft:${mc}"
+    mappings loom.officialMojangMappings()
+    modImplementation 'net.fabricmc:fabric-loader:0.19.3'
+    modCompileOnly files(providers.gradleProperty('lssFabricJar').get())
+}
+java { toolchain { languageVersion=JavaLanguageVersion.of(21) } }

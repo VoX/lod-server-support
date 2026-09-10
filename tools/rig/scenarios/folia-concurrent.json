@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "id": "folia-concurrent",
+  "version": 1,
+  "timeout_seconds": 840,
+  "required_test_count": 9,
+  "assertions": [
+    "two_client_feasibility",
+    "owning_region_overlap",
+    "four_simultaneous_clients",
+    "independent_oracle",
+    "every_window_progress",
+    "all_edits_delivered",
+    "no_stale_delivery",
+    "bounded_queues",
+    "clean_drain"
+  ],
+  "human_reviews": []
+}
