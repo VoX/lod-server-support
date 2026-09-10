@@ -8,9 +8,17 @@ package dev.vox.lss.common.processing;
  * @param cz                 chunk Z coordinate
  * @param serializedSections section bytes in MC-native wire format
  * @param estimatedBytes     estimated wire size
+ * @param probeCapture       pre-serialization authority; null only for ordinary disk/generation data
+ *                           (unbound data is never an eligible loaded-probe hit)
  */
 public record LoadedColumnData(
         int cx, int cz,
         byte[] serializedSections,
-        int estimatedBytes
-) {}
+        int estimatedBytes,
+        LoadedProbeGuard.Capture probeCapture
+) {
+    /** Ordinary disk/generation data has no loaded-probe authority. */
+    public LoadedColumnData(int cx,int cz,byte[] serializedSections,int estimatedBytes) {
+        this(cx,cz,serializedSections,estimatedBytes,null);
+    }
+}
