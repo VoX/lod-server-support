@@ -164,13 +164,15 @@ public final class Probe {
  public static void texture(Object chunk,Object processor){textureObserved(chunk,processor,"buffer_rebuild");}
  private static void textureObserved(Object chunk,Object processor,String observation){if(!ENABLED)return;try{
   int tx=number(chunk,"getX"),tz=number(chunk,"getZ");if((tx!=7&&tx!=8)||tz!=4)return;
+  int x=tx==7?31:32;
+  if(!NativeTargetEligibility.capture(call(chunk,"getTile",x&3,0)!=null,NATIVE_SCANS.containsKey(chunk)))return;
   Object region=call(chunk,"getInRegion");REGIONS.add(region);
   boolean nativeWriter=StackWalker.getInstance().walk(frames->frames.anyMatch(f->f.getClassName().equals("xaero.map.MapWriter")&&f.getMethodName().equals("writeChunk")));
   Object texture=call(chunk,"getLeafTexture");ByteBuffer source=((ByteBuffer)call(texture,"getDirectColorBuffer")).duplicate();source.clear();
   if(source.remaining()>1024*1024)throw new IllegalStateException("oversized native color buffer");byte[] bytes=new byte[source.remaining()];source.get(bytes);
   var row=new LinkedHashMap<String,Object>();row.put("save_interval_ms",call(processor,"getSaveTime"));row.put("tile_chunk_x",tx);row.put("tile_chunk_z",tz);row.put("native_writer",nativeWriter);row.put("observation",observation);row.put("native_scan_ns",NATIVE_SCANS.getOrDefault(chunk,0L));row.put("native_save_active",activeSave);row.put("buffer_bytes",bytes.length);row.put("buffer_sha256",hash(bytes));row.put("buffer_base64",Base64.getEncoder().encodeToString(bytes));
   row.put("region_load_state",call(region,"getLoadState"));row.put("region_resting",call(region,"isResting"));row.put("region_paused",call(region,"isWritingPaused"));row.put("last_visited",call(region,"getLastVisited"));
-  int x=tx==7?31:32;var pixels=pixels(chunk,x,16);
+  var pixels=pixels(chunk,x,16);
   row.put("chunk_x",x);row.put("chunk_z",16);row.put("pixels",pixels);emit("native_texture",row);
   if(nativeWriter)NATIVE_SCANS.remove(chunk);
 
