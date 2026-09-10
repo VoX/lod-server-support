@@ -14,17 +14,27 @@ import java.util.concurrent.TimeUnit;
 public final class SourceWorkload implements AutoCloseable {
     public record Target(String subject, int x, int z, int y, int source, String block) {}
     public record Mutation(String id,String dimension,String worldGeneration,long revision,String predecessor) {}
-    public record Applied(long time,long revision,String predecessor,String ownerRegion) {}
+    public sealed interface EditOutcome permits Applied,OwnerUnavailableBeforeMutation {}
+    public enum OwnerUnavailableBeforeMutation implements EditOutcome { INSTANCE }
+    public record Applied(long time,long revision,String predecessor,String ownerRegion) implements EditOutcome {}
+    /** Immutable facts for evidence plus an opaque native identity, never serialized. */
+    public record Ownership(Map<String,Object> facts,Object identity) {
+        public Ownership { facts=Map.copyOf(facts); }
+        public boolean isCurrent(Object current,long now){
+            return current!=null && identity==current && facts.get("observed_ns") instanceof Number observed
+                    && now-observed.longValue()<=250_000_000L;
+        }
+    }
     public interface Engine {
         default List<Map<String,Object>> initialGenerationFacts(List<Target> targets){return sourceFacts(targets);}
-        default Map<String,Object> loadedOwnership(Target target){return Map.of();}
+        default Ownership loadedOwnership(Target target){return new Ownership(Map.of(),this);}
         default Map<String,Object> ownershipDiagnostic(Target target){return Map.of("reason","not_instrumented");}
         void seed(Target target);
         void save();
         void makeUnloadedSources(Target store, Target disk);
         boolean sourcesReady(List<Target> targets);
         List<Map<String,Object>> sourceFacts(List<Target> targets);
-        java.util.concurrent.CompletionStage<Applied> edit(Target target,Mutation mutation);
+        java.util.concurrent.CompletionStage<EditOutcome> edit(Target target,Mutation mutation,Ownership owner);
         void kick(String subject);
         Map<String,Object> metrics();
     }
@@ -51,7 +61,12 @@ public final class SourceWorkload implements AutoCloseable {
     private final Map<String,Mutation> offeredRevisions=new HashMap<>();
     private volatile Map<String,Ack> acknowledgements=Map.of(), requirements=Map.of();
     private final List<PendingEdit> pendingEdits=new ArrayList<>();
-    private final java.util.concurrent.atomic.AtomicInteger inFlightEdits=new java.util.concurrent.atomic.AtomicInteger();
+    private record Flight(java.util.concurrent.CompletableFuture<EditOutcome> future,long submittedAt,
+                          String connection,Ownership ownership) {}
+    // Only the global workload thread mutates these structures. Each original edit occupies
+    // one pending slot through waiting, in-flight completion, and safe owner deferral.
+    private final Map<PendingEdit,Flight> flights=new HashMap<>();
+    private final Set<PendingEdit> deferredObserved=new HashSet<>();
     private final Thread writer;
     private final String runId;
     private volatile boolean running = true, overflow;
@@ -196,7 +211,7 @@ public final class SourceWorkload implements AutoCloseable {
         record(oracle,row);
         if(edit) {
             if(sequence==0)explicitEditIds.add(id);
-            if(pendingEdits.size()+inFlightEdits.get()>=128)throw new IllegalStateException("pending edit bound exceeded");
+            if(pendingEdits.size()>=128)throw new IllegalStateException("pending edit bound exceeded");
             pendingEdits.add(new PendingEdit(target,id,now,sequence,mutation));
         } else {
             Map<String,Object> ready=new LinkedHashMap<>();ready.put("event","target_ready");ready.put("id",id);ready.put("time_ns",System.nanoTime());ready.put("cell_revision",mutation.revision);ready.put("predecessor_id",mutation.predecessor);ready.put("dimension",mutation.dimension);ready.put("world_generation",mutation.worldGeneration);record(oracle,ready);
@@ -259,11 +274,50 @@ public final class SourceWorkload implements AutoCloseable {
             event("oracle_ack_timeout",now);throw new IllegalStateException("initial/session oracle acknowledgement timed out");
         }
         for(var iterator=pendingEdits.iterator();iterator.hasNext();) {
-            PendingEdit pending=iterator.next();String connection=connections.get(pending.target.subject);
+            PendingEdit pending=iterator.next();
+            Flight flight=flights.get(pending);
+            if(flight!=null){
+                if(!flight.future.isDone()){
+                    if(now-pending.offeredAt>120_000_000_000L){event("oracle_ack_timeout",now);throw new IllegalStateException("in-flight edit exceeded original deadline");}
+                    continue;
+                }
+                EditOutcome outcome=null;Throwable failure=null;
+                try{outcome=flight.future.join();}
+                catch(java.util.concurrent.CompletionException error){failure=error.getCause()==null?error:error.getCause();}
+                catch(RuntimeException error){failure=error;}
+                long completedAt=System.nanoTime();
+                flights.remove(pending);
+                if(outcome==OwnerUnavailableBeforeMutation.INSTANCE && failure==null){
+                    if(deferredObserved.add(pending))record(oracle,Map.of("event","edit_deferred","id",pending.id,
+                            "subject",pending.target.subject,"time_ns",now,"reason","owner_unavailable_before_mutation"));
+                    if(now-pending.offeredAt>120_000_000_000L){event("oracle_ack_timeout",now);throw new IllegalStateException("deferred edit exceeded original deadline");}
+                    continue; // Next tick must re-check the successor's actual ACK and fresh owner.
+                }
+                if(failure==null && outcome instanceof Applied applied
+                        && applied.time>=flight.submittedAt && applied.time<=completedAt
+                        && applied.time-pending.offeredAt<=120_000_000_000L
+                        && applied.revision==pending.mutation.revision
+                        && Objects.equals(applied.predecessor,pending.mutation.predecessor)){
+                    Map<String,Object> nativeOwnership=flight.ownership.facts();
+                    if(!nativeOwnership.isEmpty()){
+                        Map<String,Object> fact=new LinkedHashMap<>(nativeOwnership);fact.put("event","target_owner_precondition");fact.put("id",pending.id);fact.put("subject",pending.target.subject);fact.put("connection_id",flight.connection);fact.put("chunk_x",pending.target.x);fact.put("chunk_z",pending.target.z);fact.put("time_ns",flight.submittedAt);record(oracle,fact);
+                    }
+                    record(oracle,Map.of("event","target_acknowledged","id",pending.id,"subject",pending.target.subject,"time_ns",flight.submittedAt));
+                    Map<String,Object> row=new LinkedHashMap<>();row.put("event","edit_applied");row.put("id",pending.id);row.put("subject",pending.target.subject);row.put("time_ns",applied.time);row.put("cell_revision",applied.revision);row.put("predecessor_id",applied.predecessor);row.put("dimension",pending.mutation.dimension);row.put("world_generation",pending.mutation.worldGeneration);row.put("owner_region_identity",applied.ownerRegion);row.put("owner_identity",applied.ownerRegion);row.put("owner_kind",nativeOwnership.getOrDefault("owner_kind","owning-region"));record(oracle,row);
+                } else {
+                    String type=failure==null?"invalid_outcome":failure.getClass().getName();
+                    record(oracle,Map.of("event","edit_failed","id",pending.id,"subject",pending.target.subject,
+                            "time_ns",now,"reason",failure==null?"invalid_applied_result":"mutation_exception",
+                            "exception_type",type.substring(0,Math.min(type.length(),256))));
+                }
+                deferredObserved.remove(pending);iterator.remove();continue;
+            }
+            if(now-pending.offeredAt>120_000_000_000L){event("oracle_ack_timeout",now);throw new IllegalStateException("edit oracle acknowledgement timed out");}
+            String connection=connections.get(pending.target.subject);
             Ack ack=acknowledgements.get(pending.target.subject);
             boolean accepted=connection!=null && connection.equals(activeConnections.get(pending.target.subject)) && (pending.sequence==0?acknowledged(pending.target.subject,connection,Set.of(pending.id)):
                 ack!=null && ack.connection.equals(connection) && ack.sequence>=pending.sequence);
-            Map<String,Object> nativeOwnership=accepted?engine.loadedOwnership(pending.target):null;
+            Ownership nativeOwnership=accepted?engine.loadedOwnership(pending.target):null;
             // Diagnostic observation only: never changes accepted/ownership/timeout decisions.
             if(Boolean.getBoolean("lss.rig.sourceDiagnostics") && !measured) {
                 DiagnosticGuard.observe(()->{
@@ -274,32 +328,18 @@ public final class SourceWorkload implements AutoCloseable {
                 },failure->diagnosticFailure("pending-edit",failure));
             }
             if(accepted && nativeOwnership!=null) {
-                if(!nativeOwnership.isEmpty()){
-                    Map<String,Object> fact=new LinkedHashMap<>(nativeOwnership);fact.put("event","target_owner_precondition");fact.put("id",pending.id);fact.put("subject",pending.target.subject);fact.put("connection_id",connection);fact.put("chunk_x",pending.target.x);fact.put("chunk_z",pending.target.z);fact.put("time_ns",System.nanoTime());record(oracle,fact);
-                }
-                record(oracle,Map.of("event","target_acknowledged","id",pending.id,"time_ns",now));
-                inFlightEdits.incrementAndGet();
-                try {
-                    engine.edit(pending.target,pending.mutation).whenComplete((applied,error)-> {
-                        if(error!=null || applied==null || applied.time<now || applied.time>System.nanoTime() || applied.revision!=pending.mutation.revision || !Objects.equals(applied.predecessor,pending.mutation.predecessor))
-                            record(oracle,Map.of("event","edit_failed","id",pending.id,"time_ns",System.nanoTime()));
-                        else {
-                            Map<String,Object> outcome=new LinkedHashMap<>();outcome.put("event","edit_applied");outcome.put("id",pending.id);outcome.put("time_ns",applied.time);outcome.put("cell_revision",applied.revision);outcome.put("predecessor_id",applied.predecessor);outcome.put("dimension",pending.mutation.dimension);outcome.put("world_generation",pending.mutation.worldGeneration);outcome.put("owner_region_identity",applied.ownerRegion);outcome.put("owner_identity",applied.ownerRegion);outcome.put("owner_kind",nativeOwnership.getOrDefault("owner_kind","owning-region"));record(oracle,outcome);
-                        }
-                        inFlightEdits.decrementAndGet();
-                    });
-                } catch(Exception error) {
-                    inFlightEdits.decrementAndGet();record(oracle,Map.of("event","edit_failed","id",pending.id,"time_ns",System.nanoTime()));
-                }
-                iterator.remove();
-            } else if(now-pending.offeredAt>120_000_000_000L) {
-                event("oracle_ack_timeout",now);throw new IllegalStateException("edit oracle acknowledgement timed out");
+                java.util.concurrent.CompletableFuture<EditOutcome> future;
+                long submittedAt=System.nanoTime();
+                try{future=engine.edit(pending.target,pending.mutation,nativeOwnership).toCompletableFuture();}
+                catch(Throwable failure){future=java.util.concurrent.CompletableFuture.failedFuture(failure);}
+                flights.put(pending,new Flight(future,submittedAt,connection,nativeOwnership));
             }
         }
+
         if(now-lastMetrics>=1_000_000_000L) {
             lastMetrics=now;Map<String,Object> metrics=engine.metrics();
             if(metrics!=null){
-                metrics.put("event","product_metrics");metrics.put("time_ns",now);metrics.put("fixture_pending_edits",pendingEdits.size()+inFlightEdits.get());record(events,metrics);
+                metrics.put("event","product_metrics");metrics.put("time_ns",now);metrics.put("fixture_pending_edits",pendingEdits.size());record(events,metrics);
                 if(origin==0 && connections.size()==4 && metrics.get("players") instanceof List<?> players) {
                     Set<String> registered=new HashSet<>();
                     for(Object player:players)if(player instanceof Map<?,?> fields && fields.get("name") instanceof String name)registered.add(name);
