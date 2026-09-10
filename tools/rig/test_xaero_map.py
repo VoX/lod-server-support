@@ -68,6 +68,18 @@ class XaeroMapTest(unittest.TestCase):
    for row in rows:
     if row.get('outcome')=='DEFERRED':row[field]=value
    self.assertFalse(inspect(rows,oracle,'SYNTHETIC')[0]['save_race_safe'])
+ def test_native_scan_slopes_may_be_derived_by_later_native_color_build(self):
+  rows,oracle=fixture()
+  for row in rows:
+   if row['event']=='native_scan_completed':row['pixels'][0]=[64,64,1,1,15]
+  self.assertEqual([],inspect(rows,oracle,'SYNTHETIC')[1])
+ def test_scan_content_and_final_slopes_still_strict(self):
+  for event,index in [('native_scan_completed',0),('native_scan_completed',1),('native_scan_completed',4),('native_texture',2),('native_texture',3)]:
+   rows,oracle=fixture()
+   for row in rows:
+    if row['event']==event and (event!='native_texture'or row['native_writer']):
+     row['pixels']=copy.deepcopy(row['pixels']);row['pixels'][0][index]+=1
+   self.assertFalse(inspect(rows,oracle,'SYNTHETIC')[0]['shading_valid'],(event,index))
  def test_only_saved_region_must_defer(self):
   rows,oracle=fixture();other=dict(rows[0],event='bridge_result',time_ns=80,chunk_x=32,chunk_z=16,outcome='COMMITTED');rows.insert(-1,other)
   self.assertEqual([],inspect(rows,oracle,'SYNTHETIC')[1]);other['chunk_x']=31
