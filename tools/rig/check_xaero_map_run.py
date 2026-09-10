@@ -41,21 +41,26 @@ def inspect(root,manifest,require_closed=True,prefix_count=None):
  if not handshake:errors.append('actual enabled native v20 negotiation absent')
  if any(word in text for word in ['Trying to save cache for a region with cache not prepared','[XAERO-MAP-FIXTURE] EVIDENCE_FAILED']):errors.append('native map save/observer failure')
  closed=bool(rows and rows[-1].get('event')=='observer_closed')
- if require_closed and '[XAERO-MAP-FIXTURE] CLOSED overflow=false pending=0' not in text:errors.append('map writer process closure receipt absent')
+ if require_closed:
+  from xaero_map_shutdown import validate_close
+  validate_close(root,manifest,rows)
  return dict(run_id=manifest['run_id'],run_hash=manifest['run_hash'],passed=not errors,assertions=assertions,errors=errors,handshake=handshake,closed=closed,observations_count=len(rows),observations_sha256=digest(rows),oracle_sha256=sha(root/'evidence/xaero-map-oracle.json'))
 
-def make_proof(root,manifest,review_artifacts=None,require_closed=True):
+def make_proof(root,manifest,review_artifacts=None,require_closed=True,publication=False):
  from rig import read,write,sha
  root=Path(root);report=inspect(root,manifest,require_closed)
  path=root/'evidence/xaero-map-report.json';write(path,report)
  prior=read(root/'proof.json')if(root/'proof.json').is_file()else{}
  failures=list(dict.fromkeys([str(x)for x in prior.get('failures',[])]+report['errors']))
  proof={key:manifest[key]for key in ('run_id','run_hash','profile_hash','scenario_hash')}
- evidence={name:sha(root/'evidence'/name)for name in ['xaero-map-report.json','xaero-map-oracle.json','xaero-map-commands.json','xaero-map-viewport.json','xaero-map-stop-client']}
+ evidence={name:sha(root/'evidence'/name)for name in ['xaero-map-report.json','xaero-map-oracle.json','xaero-map-commands.json','xaero-map-viewport.json','xaero-map-stop-client','xaero-map-native-close.json']}
  # Raw append-only stream remains live until normal writer shutdown. The final
  # postcleanup report additionally freezes its exact full bytes.
  if report['closed']:evidence['xaero-map.jsonl']=sha(root/'evidence/xaero-map.jsonl')
  proof.update(ready=report['handshake'],handshake=report['handshake'],test_count=5 if report['passed']else 0,assertions=report['assertions'],failures=failures,map_report=report,evidence=evidence,reviews=prior.get('reviews',{}),review_artifacts=prior.get('review_artifacts',{})if review_artifacts is None else review_artifacts)
+ if require_closed:
+  from xaero_map_shutdown import validate_close
+  validate_close(root,manifest,load_rows(root,require_closed=True),publication=publication)
  write(root/'proof.json',proof);return proof
 
 def check_report(proof,manifest,root):
