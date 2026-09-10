@@ -43,11 +43,22 @@ class ExportTests(unittest.TestCase):
 
     def test_changed_retained_checker_rejected(self):
         (self.root/'tool-sources/tools/rig/proof.py').write_text('# changed')
-        with self.assertRaisesRegex(ValueError,'retained scenario checker dependency changed'):export(self.root,'mods/candidate.jar',[],'controlled')
+        with self.assertRaisesRegex(ValueError,'retained runtime tool sources changed'):export(self.root,'mods/candidate.jar',[],'controlled')
 
     def test_changed_retained_ownership_wrapper_rejected(self):
         (self.root/'tool-sources/scripts/lib/owned-process.py').write_text('# changed ownership semantics')
-        with self.assertRaisesRegex(ValueError,'retained scenario checker dependency changed'):export(self.root,'mods/candidate.jar',[],'controlled')
+        with self.assertRaisesRegex(ValueError,'retained runtime tool sources changed'):export(self.root,'mods/candidate.jar',[],'controlled')
+
+    def test_deleted_transitive_helper_cannot_disappear_from_retained_scope(self):
+        retained=self.root/'tool-sources'
+        (retained/'tools/rig/rig.py').write_text('from runtime_trees import verify\n')
+        helper=retained/'tools/rig/runtime_trees.py';helper.write_text('# original retained verifier')
+        self.manifest['run_manifest']['runtime_tools']['tools/rig/rig.py']=sha(retained/'tools/rig/rig.py')
+        self.manifest['run_manifest']['runtime_tools']['tools/rig/runtime_trees.py']=sha(helper)
+        write(self.root/'manifest.json',self.manifest)
+        self.assertEqual('pass',export(self.root,'mods/candidate.jar',[],'controlled')['result'])
+        helper.unlink()
+        with self.assertRaisesRegex(ValueError,'retained runtime tool sources changed'):export(self.root,'mods/candidate.jar',[],'controlled')
 
     def test_missing_or_invalid_ownership_cannot_export_complete_cleanup(self):
         for name,value in [('processes.json',[]),('supervisor.json',None),('supervisor.json',{}),('processes.json',[None])]:
