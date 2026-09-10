@@ -38,7 +38,8 @@ public final class Probe {
    },"LSS-XaeroMap-Evidence");writer.setDaemon(true);writer.start();
    Runtime.getRuntime().addShutdownHook(new Thread(()->{
     try{if(!EVENTS.offer("__CLOSE__",3,TimeUnit.SECONDS))OVERFLOW.set(true);writer.join(3000);if(writer.isAlive())OVERFLOW.set(true);}catch(InterruptedException error){OVERFLOW.set(true);Thread.currentThread().interrupt();}
-    System.err.println("[XAERO-MAP-FIXTURE] CLOSED overflow="+OVERFLOW.get()+" pending="+EVENTS.size());
+    try{NativeCloseHandshake.finish(output,RUN,CLIENT_STOP_REQUESTED.get(),writer.isAlive(),OVERFLOW.get(),EVENTS.size());}
+    catch(Throwable failure){NativeCloseHandshake.failed(output,RUN,failure);}
    },"LSS-XaeroMap-Close"));
   }
  }
