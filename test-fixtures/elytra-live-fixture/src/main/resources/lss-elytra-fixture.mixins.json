@@ -4,7 +4,8 @@
   "compatibilityLevel": "JAVA_21",
   "client": [
     "ProxySubmitMixin",
-    "TargetTickMixin"
+    "TargetTickMixin",
+    "FogBufferMixin"
   ],
   "injectors": {
     "defaultRequire": 1
