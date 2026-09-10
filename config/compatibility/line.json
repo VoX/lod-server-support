@@ -16,7 +16,7 @@
       "paper",
       "purpur"
     ],
-    "fabric_client_gametests": false
+    "fabric_client_gametests": true
   },
   "support_tier": "correct-not-perfect",
   "capability_states": [
