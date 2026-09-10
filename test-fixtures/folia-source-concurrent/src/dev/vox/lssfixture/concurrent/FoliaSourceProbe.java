@@ -28,6 +28,7 @@ public final class FoliaSourceProbe extends JavaPlugin implements Listener,Sourc
     private final Set<String> corridorLoaded=ConcurrentHashMap.newKeySet();
     private final java.util.concurrent.atomic.AtomicBoolean corridorScheduled=new java.util.concurrent.atomic.AtomicBoolean();
     private final Map<String,java.util.concurrent.CopyOnWriteArrayList<Target>> retainedTargets=new ConcurrentHashMap<>();
+    private final java.util.concurrent.ConcurrentHashMap<String,Map<String,Object>> ownerDiagnostics=new java.util.concurrent.ConcurrentHashMap<>();
     private record OwnerSnapshot(org.bukkit.entity.Player player,long time,String region,boolean ownsAll) {}
     private final Map<String,OwnerSnapshot> owners=new ConcurrentHashMap<>();
     private final AtomicLong deniedReads=new AtomicLong();
@@ -78,6 +79,9 @@ public final class FoliaSourceProbe extends JavaPlugin implements Listener,Sourc
         var joined=new java.util.concurrent.atomic.AtomicBoolean();
         player.getScheduler().runAtFixedRate(this,task->{
             int index=subject.charAt(subject.length()-1)-'A';
+            DiagnosticGuard.observe(()->observeOwnerDiagnostic(subject,player,index),
+                    failure->{if(workload!=null)workload.diagnosticFailure("native-owner",failure);
+                        else getLogger().severe("LSS_RIG_SOURCE_DIAGNOSTIC_FAILURE: native-owner "+failure.getClass().getName());});
             if(player.getLocation().getBlockX()!=index*4096)return;
             var region=TickRegionScheduler.getCurrentRegion();
             var targets=retainedTargets.get(subject);
@@ -127,6 +131,42 @@ public final class FoliaSourceProbe extends JavaPlugin implements Listener,Sourc
         long now=System.nanoTime();
         if(snapshot==null||!snapshot.ownsAll()||now-snapshot.time()>250_000_000L||Bukkit.getPlayerExact(target.subject())!=snapshot.player())return null;
         return Map.of("observed_ns",snapshot.time(),"region_identity",snapshot.region(),"owns_region",true,"owner_name",target.subject());
+    }
+    /** Opt-in native observation on the existing player owner, at most1Hz per subject. */
+    private void observeOwnerDiagnostic(String subject,org.bukkit.entity.Player player,int index){
+        if(!Boolean.getBoolean("lss.rig.sourceDiagnostics")||Boolean.getBoolean("lss.rig.measuredWorkload"))return;
+        long now=System.nanoTime();var old=ownerDiagnostics.get(subject);
+        if(old!=null&&now-((Number)old.get("time_ns")).longValue()<1_000_000_000L)return;
+        var position=player.getLocation();var region=TickRegionScheduler.getCurrentRegion();
+        Map<String,Object> value=new java.util.LinkedHashMap<>();value.put("time_ns",now);
+        value.put("player_block_x",position.getBlockX());value.put("player_block_z",position.getBlockZ());
+        value.put("anchor_x_matches",position.getBlockX()==index*4096);
+        value.put("region_identity",region==null?"":String.valueOf(region.id));
+        java.util.List<Map<String,Object>> cells=new java.util.ArrayList<>();
+        var targets=retainedTargets.get(subject);
+        if(targets!=null)for(Target target:targets){
+            boolean owns=Bukkit.isOwnedByCurrentRegion(world,target.x(),target.z());
+            Map<String,Object> cell=new java.util.LinkedHashMap<>();cell.put("chunk_x",target.x());cell.put("chunk_z",target.z());cell.put("owns_region",owns);
+            if(owns){cell.put("loaded",world.isChunkLoaded(target.x(),target.z()));
+                cell.put("fixture_ticket_present",world.getPluginChunkTickets(target.x(),target.z()).contains(this));}
+            cells.add(Map.copyOf(cell));
+        }
+        value.put("targets",java.util.List.copyOf(cells));ownerDiagnostics.put(subject,Map.copyOf(value));
+    }
+    /** Read immutable owner snapshots; never read native chunk state on the global thread. */
+    @Override public Map<String,Object> ownershipDiagnostic(Target target){
+        OwnerSnapshot snapshot=owners.get(target.subject());long now=System.nanoTime();
+        Map<String,Object> row=new java.util.LinkedHashMap<>();
+        row.put("observed_ns",now);row.put("chunk_x",target.x());row.put("chunk_z",target.z());
+        String reason=snapshot==null?"missing_snapshot":!snapshot.ownsAll()?"target_set_not_owned":
+                now-snapshot.time()>250_000_000L?"stale_snapshot":
+                Bukkit.getPlayerExact(target.subject())!=snapshot.player()?"different_current_player":"owner_available";
+        row.put("reason",reason);
+        var nativeSample=ownerDiagnostics.get(target.subject());if(nativeSample!=null)row.put("latest_native_sample",nativeSample);
+        if(snapshot!=null){row.put("snapshot_ns",snapshot.time());row.put("snapshot_age_ns",now-snapshot.time());
+            row.put("region_identity",snapshot.region());row.put("owns_all",snapshot.ownsAll());
+            row.put("current_player_matches",Bukkit.getPlayerExact(target.subject())==snapshot.player());}
+        return row;
     }
     @Override public void save(){} // Clean snapshot save was witnessed before this run.
     @Override public void makeUnloadedSources(Target store,Target disk){} // Never load these corners.
