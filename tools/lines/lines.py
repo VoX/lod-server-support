@@ -158,6 +158,11 @@ def resume(destination):
     for entry in state['proposal']['commits']:
         if entry['commit']==failed:pending=True;continue
         if not pending:continue
+        # Match prepare: exact identity only, never inferred adapted equivalence.
+        if exact_patch_present(destination,'HEAD',entry):
+            state['completed'].append({'commit':entry['commit'],'result':'exact-patch-present'})
+            statepath.write_text(json.dumps(state,indent=2)+'\n')
+            continue
         args=['cherry-pick']+(['-m',str(entry['mainline'])] if entry['mainline'] else [])+[entry['commit']]
         p=subprocess.run(['git','-C',str(destination),*args],capture_output=True,text=True)
         if p.returncode:
