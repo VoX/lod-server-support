@@ -207,7 +207,12 @@ public final class SourceWorkload implements AutoCloseable {
         row.put("connection_id",connections.get(target.subject));row.put("chunk_x",target.x);row.put("chunk_z",target.z);
         row.put("block_y",target.y);row.put("expected_source",target.source);row.put("expected_block",target.block);row.put("offered_ns",now);
         if(edit)row.put("requires_ack",true);
-        if(sequence>0)row.put("target_sequence",sequence);
+        if(sequence>0){
+            row.put("target_sequence",sequence);
+            // Loaded ownership is a premise, not a promise that Folia's one-tick probe wins.
+            // Current disk/store bodies are valid for repeated edits; generation is not.
+            row.put("allowed_sources",List.of(0,1,3));
+        }
         record(oracle,row);
         if(edit) {
             if(sequence==0)explicitEditIds.add(id);

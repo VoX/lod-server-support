@@ -10,11 +10,11 @@ import java.util.*;
 
 /** Bounded append-only reader; parsing and indexing never run on a game thread. */
 public final class OracleJournal {
-    public record Target(String id,String connection,int x,int z,int y,String block,long offered,String dimension,String worldGeneration,long revision,String predecessor,int source,long applied,long end,long authoritySince) {
-        public AcceptancePolicy.Facts facts(){return new AcceptancePolicy.Facts(source,offered,applied,end,authoritySince);}
-        Target withApplication(long at){return new Target(id,connection,x,z,y,block,offered,dimension,worldGeneration,revision,predecessor,source,at,end,authoritySince);}
-        Target withEnd(long at){return new Target(id,connection,x,z,y,block,offered,dimension,worldGeneration,revision,predecessor,source,applied,at,authoritySince);}
-        Target rebound(String destination,long since){return new Target(id,destination,x,z,y,block,offered,dimension,worldGeneration,revision,predecessor,source,applied,end,since);}
+    public record Target(String id,String connection,int x,int z,int y,String block,long offered,String dimension,String worldGeneration,long revision,String predecessor,int source,long applied,long end,long authoritySince,boolean loadedUpdateFallback) {
+        public AcceptancePolicy.Facts facts(){return new AcceptancePolicy.Facts(source,offered,applied,end,authoritySince,loadedUpdateFallback);}
+        Target withApplication(long at){return new Target(id,connection,x,z,y,block,offered,dimension,worldGeneration,revision,predecessor,source,at,end,authoritySince,loadedUpdateFallback);}
+        Target withEnd(long at){return new Target(id,connection,x,z,y,block,offered,dimension,worldGeneration,revision,predecessor,source,applied,at,authoritySince,loadedUpdateFallback);}
+        Target rebound(String destination,long since){return new Target(id,destination,x,z,y,block,offered,dimension,worldGeneration,revision,predecessor,source,applied,end,since,loadedUpdateFallback);}
     }
     public record Snapshot(long generation,String connection,Map<Long,List<Target>> targets,
                            long stallStart,long stallEnd,String acknowledgment) {}
@@ -112,10 +112,31 @@ public final class OracleJournal {
                         row.get("chunk_z").getAsInt(),row.get("block_y").getAsInt(),row.get("expected_block").getAsString(),row.get("offered_ns").getAsLong(),
                         row.has("dimension")?row.get("dimension").getAsString():"minecraft:overworld",row.has("world_generation")?row.get("world_generation").getAsString():"legacy",
                         row.has("cell_revision")?row.get("cell_revision").getAsLong():0,row.has("predecessor_id")&&!row.get("predecessor_id").isJsonNull()?row.get("predecessor_id").getAsString():null,
-                        row.get("expected_source").getAsInt(),0,0,0));
+                        row.get("expected_source").getAsInt(),0,0,0,loadedUpdateFallback(row)));
             }
             default -> {} // Full original-revision/fault evidence remains independently checked after collection.
         }
+    }
+    /** The initial route probes remain exact. Only registered repeated edits allow existing-column fallback. */
+    private static boolean loadedUpdateFallback(JsonObject row) throws IOException {
+        if(!row.has("allowed_sources"))return false;
+        JsonElement policy=row.get("allowed_sources");
+        if(!row.has("target_sequence") || !row.get("target_sequence").isJsonPrimitive()
+                || !row.get("target_sequence").getAsJsonPrimitive().isNumber()
+                || !row.get("target_sequence").getAsString().matches("[1-9][0-9]{0,3}")
+                || !row.get("expected_source").isJsonPrimitive()
+                || !row.get("expected_source").getAsJsonPrimitive().isNumber()
+                || !row.get("expected_source").getAsString().equals("0") || !policy.isJsonArray())
+            throw new IOException("fallback policy requires a measured loaded edit");
+        JsonArray values=policy.getAsJsonArray();int[] expected={0,1,3};
+        if(values.size()!=expected.length)throw new IOException("invalid measured source policy");
+        for(int i=0;i<expected.length;i++) {
+            JsonElement value=values.get(i);
+            if(!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isNumber()
+                    || !value.getAsString().equals(Integer.toString(expected[i])))
+                throw new IOException("invalid measured source policy");
+        }
+        return true;
     }
     private void apply(JsonObject row) throws IOException {
         String id=row.get("id").getAsString();Target target=indexed.get(id);

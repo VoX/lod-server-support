@@ -11,7 +11,7 @@ public final class AcceptancePolicySelfTest {
     }
     public static void main(String[] args){
         var current=new AcceptancePolicy.Facts(0,80,100,200,0);
-        require(decide(current,1,true,120,130)==AcceptancePolicy.Decision.RETRY); // D257: disk source, correct block.
+        require(decide(current,1,true,120,130)==AcceptancePolicy.Decision.RETRY); // Controlled initial memory-source probe remains exact.
         require(decide(current,0,false,120,130)==AcceptancePolicy.Decision.RETRY);
         require(decide(current,0,true,120,130)==AcceptancePolicy.Decision.COMMIT);
         require(decide(current,0,true,90,130)==AcceptancePolicy.Decision.RETRY); // Actual pre-apply wire.
@@ -21,6 +21,18 @@ public final class AcceptancePolicySelfTest {
         require(decide(new AcceptancePolicy.Facts(0,80,100,0,150),0,true,120,160)==AcceptancePolicy.Decision.IGNORE);
         require(AcceptancePolicy.decide(current,false,true,120,130,1,false)==AcceptancePolicy.Decision.IGNORE);
         require(AcceptancePolicy.decide(current,true,false,120,130,1,false)==AcceptancePolicy.Decision.IGNORE);
+        var measured=new AcceptancePolicy.Facts(0,80,100,200,0,true);
+        for(int source:new int[]{0,1,3}) {
+            require(decide(measured,source,true,120,130)==AcceptancePolicy.Decision.COMMIT);
+            require(decide(measured,source,false,120,130)==AcceptancePolicy.Decision.RETRY);
+            require(decide(measured,source,true,90,130)==AcceptancePolicy.Decision.RETRY);
+            require(decide(measured,source,true,120,200)==AcceptancePolicy.Decision.IGNORE);
+            require(AcceptancePolicy.decide(measured,true,false,120,130,source,true)==AcceptancePolicy.Decision.IGNORE);
+        }
+        for(int source:new int[]{-1,2,4})require(decide(measured,source,true,120,130)==AcceptancePolicy.Decision.RETRY);
+        for(int expected:new int[]{0,1,2,3})for(int source:new int[]{0,1,2,3})
+            require(decide(new AcceptancePolicy.Facts(expected,80,100,200,0),source,true,120,130)
+                    ==(source==expected?AcceptancePolicy.Decision.COMMIT:AcceptancePolicy.Decision.RETRY));
         AtomicInteger reports=new AtomicInteger();var noTarget=new AcceptancePolicy.RetryOnce();
         require(!noTarget.finish(()->true,reports::incrementAndGet));require(reports.get()==0);
         var mismatch=new AcceptancePolicy.RetryOnce();mismatch.require();mismatch.require();

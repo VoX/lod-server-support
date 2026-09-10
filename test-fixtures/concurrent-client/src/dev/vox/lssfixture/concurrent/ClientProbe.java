@@ -204,11 +204,12 @@ public final class ClientProbe implements ClientModInitializer, VoxelColumnConsu
             if(decision==AcceptancePolicy.Decision.RETRY){
                 retryOnce.require();
                 final boolean matched=matchingBlock;final long decidedAt=resolved;
-                if(REJECTIONS.enabled())REJECTIONS.observe(RejectionTelemetry.bucket(target.applied(),wire.received(),decidedAt,wire.source()==target.source(),matched),()->{
+                if(REJECTIONS.enabled())REJECTIONS.observe(RejectionTelemetry.bucket(target.applied(),wire.received(),decidedAt,target.facts().acceptsSource(wire.source()),matched),()->{
                     Map<String,Object> row=new HashMap<>();row.put("event","acceptance_rejection_diagnostic");
                     row.put("id",target.id());row.put("cell_revision",target.revision());
                     row.put("wire_capture_id",wire.captureId());row.put("body_id",bodyId);
                     row.put("source",wire.source());row.put("expected_source",target.source());row.put("matching_block",matched);
+                    row.put("allowed_sources",target.loadedUpdateFallback()?List.of(0,1,3):List.of(target.source()));
                     row.put("body_received_ns",wire.received());row.put("applied_ns",target.applied());
                     row.put("end_ns",target.end());row.put("resolved_ns",decidedAt);
                     row.put("lease_active",active);row.put("native_authority",nativeAuthority);

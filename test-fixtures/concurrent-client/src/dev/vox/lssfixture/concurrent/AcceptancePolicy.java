@@ -3,7 +3,14 @@ package dev.vox.lssfixture.concurrent;
 /** Pure fixture acceptance policy. Cached facts never replace the full-journal final checker. */
 public final class AcceptancePolicy {
     public enum Decision { IGNORE, RETRY, COMMIT }
-    public record Facts(int source,long offered,long applied,long end,long authoritySince) {}
+    public record Facts(int source,long offered,long applied,long end,long authoritySince,boolean loadedUpdateFallback) {
+        public Facts(int source,long offered,long applied,long end,long authoritySince) {
+            this(source,offered,applied,end,authoritySince,false);
+        }
+        public boolean acceptsSource(int actual) {
+            return actual==source || loadedUpdateFallback && source==0 && (actual==1 || actual==3);
+        }
+    }
     /** Aggregate mismatches in one callback; report an active current lease at most once. */
     public static final class RetryOnce {
         private boolean needed,finished;
@@ -23,6 +30,6 @@ public final class AcceptancePolicy {
         if(received<target.offered()||received<target.authoritySince())return Decision.IGNORE;
         // Missing asynchronous owner evidence or pre-application content is not success.
         if(target.applied()==0||received<target.applied()||resolved<received)return Decision.RETRY;
-        return source==target.source()&&matchingBlock?Decision.COMMIT:Decision.RETRY;
+        return target.acceptsSource(source)&&matchingBlock?Decision.COMMIT:Decision.RETRY;
     }
 }

@@ -15,6 +15,27 @@ class StrictTargets(unittest.TestCase):
     row.update(source=0,column_timestamp=row['body_id']+100,local_session=1)
     self.rows['A'].append(dict(event='wire_capture',connection_id=row['connection_id'],wire_capture_id=row['wire_capture_id'],chunk_x=row['chunk_x'],chunk_z=row['chunk_z'],body_bytes=row['body_bytes'],column_timestamp=row['column_timestamp'],local_session=1,dimension=row['dimension'],source=0,arrival_ns=row['body_received_ns']))
  def result(self):return check(self.oracle,self.rows,1)
+ def measured_fallback(self, source):
+  for target in self.oracle:
+   if target.get('event')=='target':target.update(expected_source=0,allowed_sources=[0,1,3],expected_block='gold_block')
+  for row in self.rows['A']:
+   if row.get('event') in ('target_committed','wire_capture'):row['source']=source
+   if row.get('event')=='target_committed':row['expected_block']='gold_block'
+ def test_current_existing_column_fallback_is_useful_delivery(self):
+  for source in (0,1,3):
+   self.measured_fallback(source);result=self.result()
+   self.assertEqual('passed',result['status']);self.assertEqual(36,result['useful_body_bytes']['A'])
+ def test_fallback_keeps_initial_source_and_current_content_laws(self):
+  self.measured_fallback(1);self.oracle[1].pop('allowed_sources')
+  self.assertIn('target delivered from wrong source: 0',self.result()['errors'])
+  self.measured_fallback(2);self.assertEqual('failed',self.result()['status'])
+  self.measured_fallback(1);self.rows['A'][0]['expected_block']='diamond_block';self.assertEqual('failed',self.result()['status'])
+  self.measured_fallback(3);self.rows['A'][0]['resolved_ns']=66*S;self.assertEqual('failed',self.result()['status'])
+ def test_invalid_fallback_policy_is_rejected_even_without_delivery(self):
+  self.measured_fallback(1);self.oracle[1]['allowed_sources']=[0,1,2,3];self.rows['A'].pop(0)
+  self.assertIn('invalid target source policy: 0',self.result()['errors'])
+  self.oracle[1]['allowed_sources']=[0,1,3];self.oracle[1].pop('target_sequence')
+  self.assertIn('invalid target source policy: 0',self.result()['errors'])
  def test_all_actual_deliveries(self):self.assertEqual('passed',self.result()['status'])
  def test_later_repeated_state_cannot_deliver_old_offer(self):
   self.rows['A'][0].update(resolved_ns=66*S,body_received_ns=66*S-1)
