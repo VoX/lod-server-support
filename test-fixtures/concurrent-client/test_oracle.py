@@ -10,11 +10,15 @@ with tempfile.TemporaryDirectory(prefix='lss-oracle-tests-') as temp:
     subprocess.run([str(Path(a.java_home)/'bin/javac'),'--release','25','-cp',a.gson_jar,'-d',temp,
                     str(root/'src/dev/vox/lssfixture/concurrent/OracleJournal.java'),
                     str(root/'src/dev/vox/lssfixture/concurrent/AcceptancePolicy.java'),
+                    str(root/'src/dev/vox/lssfixture/concurrent/RejectionTelemetry.java'),
+                    str(root/'tests/dev/vox/lssfixture/concurrent/RejectionTelemetrySelfTest.java'),
                     str(root/'tests/dev/vox/lssfixture/concurrent/AcceptancePolicySelfTest.java'),
                     str(root/'tests/dev/vox/lssfixture/concurrent/OracleJournalSelfTest.java')],check=True)
     subprocess.run([str(Path(a.java_home)/'bin/java'),'-ea','-cp',temp+':'+a.gson_jar,
                     'dev.vox.lssfixture.concurrent.OracleJournalSelfTest'],check=True)
     subprocess.run([str(Path(a.java_home)/'bin/java'),'-ea','-cp',temp+':'+a.gson_jar,
                     'dev.vox.lssfixture.concurrent.AcceptancePolicySelfTest'],check=True)
+    subprocess.run([str(Path(a.java_home)/'bin/java'),'-ea','-cp',temp+':'+a.gson_jar,
+                    'dev.vox.lssfixture.concurrent.RejectionTelemetrySelfTest'],check=True)
 
-# Both pure suites use the same explicit JDK/Gson compilation above.
+# All pure suites use the same explicit JDK/Gson compilation above.

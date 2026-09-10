@@ -20,6 +20,7 @@ import com.google.gson.*;
 public final class ClientProbe implements ClientModInitializer, VoxelColumnConsumer {
     private record Wire(long captureId,int x,int z,long timestamp,long session,int bytes,int source,long received,String dimension,String connectionId,Object nativeConnection) {}
     private static final Gson JSON=new GsonBuilder().serializeNulls().create();
+    private static final RejectionTelemetry REJECTIONS=new RejectionTelemetry(Boolean.getBoolean("lss.rig.rejectionDiagnostics"));
     private static final AtomicLong BODY_SEQUENCE=new AtomicLong(),WIRE_SEQUENCE=new AtomicLong();
     private static String lastAcknowledgment="";
     private static OracleJournal journal;
@@ -71,7 +72,8 @@ public final class ClientProbe implements ClientModInitializer, VoxelColumnConsu
                     }
                     if(!stalled()){Runnable release;while((release=HELD.poll())!=null)release.run();}
                 }
-                stream.write(JSON.toJson(Map.of("event","consumer_closed","run_id",run,"subject",subject,"overflow",overflow,"held",HELD.size())));stream.newLine();
+                Map<String,Object> closed=new HashMap<>(Map.of("event","consumer_closed","run_id",run,"subject",subject,"overflow",overflow,"held",HELD.size()));
+                closed.putAll(REJECTIONS.status());stream.write(JSON.toJson(closed));stream.newLine();
             }catch(Exception e){overflow=true;}
         },"LSS-RigConsumerEvidence");writer.setDaemon(true);writer.start();
         Runtime.getRuntime().addShutdownHook(new Thread(()->{running=false;Runnable release;while((release=HELD.poll())!=null)release.run();try{writer.join(3000);}catch(InterruptedException e){Thread.currentThread().interrupt();}}));
@@ -81,6 +83,10 @@ public final class ClientProbe implements ClientModInitializer, VoxelColumnConsu
     private static void emit(Map<String,?> row){
         Map<String,Object> bound=new HashMap<>(row);bound.put("run_id",run);bound.put("subject",subject);
         if(!OUTPUT.offer(JSON.toJson(bound)))overflow=true;
+    }
+    private static void emitRejection(Map<String,?> row){
+        Map<String,Object> bound=new HashMap<>(row);bound.put("run_id",run);bound.put("subject",subject);
+        if(!OUTPUT.offer(JSON.toJson(bound))){overflow=true;throw new IllegalStateException("existing diagnostic queue full");}
     }
     private static void readOracle() throws IOException {
         var next=journal.poll(root.resolve("oracle.jsonl"),connectionIndex,COMMITTED);
@@ -192,10 +198,25 @@ public final class ClientProbe implements ClientModInitializer, VoxelColumnConsu
                 break;
             }
             resolved=System.nanoTime();
-            var decision=AcceptancePolicy.decide(target.facts(),receipt.isActive(),
-                    delivery==level&&wire.session()==session&&wire.nativeConnection()==connection,
+            boolean active=receipt.isActive(),nativeAuthority=delivery==level&&wire.session()==session&&wire.nativeConnection()==connection;
+            var decision=AcceptancePolicy.decide(target.facts(),active,nativeAuthority,
                     wire.received(),resolved,wire.source(),matchingBlock);
-            if(decision==AcceptancePolicy.Decision.RETRY){retryOnce.require();continue;}
+            if(decision==AcceptancePolicy.Decision.RETRY){
+                retryOnce.require();
+                final boolean matched=matchingBlock;final long decidedAt=resolved;
+                if(REJECTIONS.enabled())REJECTIONS.observe(RejectionTelemetry.bucket(target.applied(),wire.received(),decidedAt,wire.source()==target.source(),matched),()->{
+                    Map<String,Object> row=new HashMap<>();row.put("event","acceptance_rejection_diagnostic");
+                    row.put("id",target.id());row.put("cell_revision",target.revision());
+                    row.put("wire_capture_id",wire.captureId());row.put("body_id",bodyId);
+                    row.put("source",wire.source());row.put("expected_source",target.source());row.put("matching_block",matched);
+                    row.put("body_received_ns",wire.received());row.put("applied_ns",target.applied());
+                    row.put("end_ns",target.end());row.put("resolved_ns",decidedAt);
+                    row.put("lease_active",active);row.put("native_authority",nativeAuthority);
+                    row.put("connection_id",target.connection());row.put("local_session",wire.session());
+                    return row;
+                },ClientProbe::emitRejection);
+                continue;
+            }
             if(decision==AcceptancePolicy.Decision.COMMIT){
                 if(COMMITTED.add(target.id())){
                     Map<String,Object> committed=new HashMap<>(Map.of("event","target_committed","id",target.id(),"subject",subject,"connection_id",target.connection(),"local_session",session,"resolved_ns",resolved,"body_bytes",wire!=null&&wire.session()==session?wire.bytes():-1,"source",wire!=null&&wire.session()==session?wire.source():-1,"expected_block",target.block(),"lease_active",true));
