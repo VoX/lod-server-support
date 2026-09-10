@@ -884,5 +884,15 @@
       ],
       "production_artifact": false
     }
+  ],
+  "post_migration_additions": [
+    {
+      "identity": "dev.vox.lss.common.processing.OffThreadProcessorDiskResultTest#oldLoadedProbeCannotRestampAfterInvalidation()",
+      "task": ":common:test",
+      "outcome": "passed",
+      "count": 1,
+      "rationale": "Post-migration regression: an old loaded snapshot must not restore stamp, done-bit or all-air response after queued invalidation; covers cycle-start and late drain.",
+      "introducing_commit": "e1a323f1d17dea2eb8978fd0101a5bd7bf32cc36"
+    }
   ]
 }
