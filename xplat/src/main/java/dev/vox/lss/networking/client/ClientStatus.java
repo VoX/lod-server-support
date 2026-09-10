@@ -10,6 +10,10 @@ import net.minecraft.client.Minecraft;
 public final class ClientStatus {
     private static final boolean COLLECTION_ENABLED = !Boolean.getBoolean("lss.test.disableStatusCollection");
     private static final StatusCache<ClientStatusSnapshot> CACHE = new StatusCache<>();
+    // Same monitor owns world/connection identity and pending callback references.
+    // StatusCache never calls back into this monitor (no reverse lock order).
+    private static final LifecycleFeedback<net.minecraft.network.chat.Component> EXPORT_FEEDBACK =
+            new LifecycleFeedback<>(2);
     private static Object world;
     private static Object connection;
     private static long baselineLifecycle = -1;
@@ -19,21 +23,46 @@ public final class ClientStatus {
     public static void requestOpen() { openRequested = true; }
 
     public static void invalidate() {
-        CACHE.invalidate(); // immediate, even if a settings save is still finishing
-        synchronized (ClientStatus.class) {
+        synchronized (EXPORT_FEEDBACK) {
+            CACHE.invalidate();
+            EXPORT_FEEDBACK.clear();
             world = null;
             connection = null;
         }
         ClientPresets.invalidate();
     }
-    private static synchronized long checkLifecycle() {
-        var mc = Minecraft.getInstance();
-        if (world != mc.level || connection != mc.getConnection()) {
-            CACHE.invalidate();
-            world = mc.level;
-            connection = mc.getConnection();
+    private static long checkLifecycle() {
+        synchronized (EXPORT_FEEDBACK) {
+            var mc = Minecraft.getInstance();
+            if (world != mc.level || connection != mc.getConnection()) {
+                CACHE.invalidate();
+                EXPORT_FEEDBACK.clear();
+                world = mc.level;
+                connection = mc.getConnection();
+            }
+            return CACHE.lifecycle();
         }
-        return CACHE.lifecycle();
+    }
+    static LifecycleFeedback.Ticket reserveExportFeedback(
+            long lifecycle, java.util.function.Consumer<net.minecraft.network.chat.Component> callback) {
+        synchronized (EXPORT_FEEDBACK) {
+            return EXPORT_FEEDBACK.reserve(lifecycle, checkLifecycle(), callback);
+        }
+    }
+    static void releaseExportFeedback(LifecycleFeedback.Ticket ticket) {
+        EXPORT_FEEDBACK.release(ticket);
+    }
+    static void completeExportFeedback(LifecycleFeedback.Ticket ticket,
+            String message) {
+        if (!Minecraft.getInstance().isSameThread()) throw new IllegalStateException("export feedback requires client owner");
+        java.util.function.Consumer<net.minecraft.network.chat.Component> callback;
+        synchronized (EXPORT_FEEDBACK) {
+            // Taking is the delivery linearization point. Queued old completions
+            // lose their callback on invalidation, including same-dimension swaps.
+            callback = EXPORT_FEEDBACK.take(ticket, checkLifecycle());
+        }
+        // Never invoke chat/UI code while holding the lifecycle monitor.
+        if (callback != null) callback.accept(net.minecraft.network.chat.Component.literal(message));
     }
     public static ClientStatusSnapshot latest() {
         // Identity comparison only: same-dimension replacement invalidates immediately,
