@@ -42,6 +42,12 @@ public final class Probe {
   if(!session())return;
   if(!(object instanceof LivingEntity e)||!object.getClass().getName().equals("dev.vox.lss.networking.client.FarPlayerRenderer$Proxy"))throw new AssertionError("unexpected proxy type");
   long now=System.nanoTime();if(now-LAST.getOrDefault(e.getUUID(),0L)<100_000_000L)return;LAST.put(e.getUUID(),now);
-  var mc=Minecraft.getInstance();var row=new LinkedHashMap<String,Object>();row.put("uuid",e.getUUID().toString());row.put("entity_id",e.getId());row.put("native_absent",mc.level.getPlayerByUUID(e.getUUID())==null);row.put("elytra",e.getItemBySlot(EquipmentSlot.CHEST).is(Items.ELYTRA));row.put("crouching",e.isCrouching());row.put("fall_flying",e.isFallFlying());row.put("pose",e.getPose().name());row.put("distance",distance);row.put("x",position.x);row.put("y",position.y);row.put("z",position.z);emit("LSS_ELYTRA_SUBMIT",row);
+  var mc=Minecraft.getInstance();var row=new LinkedHashMap<String,Object>();row.put("uuid",e.getUUID().toString());row.put("entity_id",e.getId());row.put("native_absent",mc.level.getPlayerByUUID(e.getUUID())==null);row.put("elytra",e.getItemBySlot(EquipmentSlot.CHEST).is(Items.ELYTRA));row.put("crouching",e.isCrouching());row.put("fall_flying",e.isFallFlying());row.put("pose",e.getPose().name());row.put("distance",distance);row.put("x",position.x);row.put("y",position.y);row.put("z",position.z);var camera=mc.gameRenderer.getMainCamera();var cp=camera.position();row.put("camera_x",cp.x);row.put("camera_y",cp.y);row.put("camera_z",cp.z);row.put("camera_yaw",camera.yRot());row.put("camera_pitch",camera.xRot());row.put("camera_entity_uuid",camera.entity()==null?"none":camera.entity().getUUID().toString());row.put("proxy_invisible",e.isInvisible());row.put("effective_render_distance",mc.options.getEffectiveRenderDistance());row.put("configured_render_distance",mc.options.renderDistance().get());emit("LSS_ELYTRA_SUBMIT",row);
  }
+ private static final Map<Integer,Long> FOG_AT=new HashMap<>();
+ public static void fog(int bufferOffset,org.joml.Vector4f color,float a,float b,float c,float d,float e,float f){
+  if(!ROLE.equals("observer")||!session())return;long now=System.nanoTime();if(now-FOG_AT.getOrDefault(bufferOffset,0L)<100_000_000L)return;FOG_AT.put(bufferOffset,now);
+  var row=new LinkedHashMap<String,Object>();row.put("buffer_offset",bufferOffset);row.put("color",List.of(color.x,color.y,color.z,color.w));row.put("native_float_arguments",List.of(a,b,c,d,e,f));emit("LSS_ELYTRA_FOG_BUFFER",row);
+ }
+
 }
