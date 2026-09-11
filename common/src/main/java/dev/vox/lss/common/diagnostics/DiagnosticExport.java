@@ -48,20 +48,56 @@ public final class DiagnosticExport {
         return gson.toJson(safe);
     }
 
+    /** Admitted server export; target allocation performs no filesystem work. */
+    public record ServerExportJob(Path target, CompletableFuture<Path> completion) {}
+
+    public static ServerExportJob submitServer(Path directory, ServerStatusSnapshot snapshot) {
+        return submitServer(directory, snapshot, IO);
+    }
+
+    static ServerExportJob submitServer(Path directory, ServerStatusSnapshot snapshot,
+            java.util.concurrent.Executor executor) {
+        Path target = newTarget(directory);
+        CompletableFuture<Path> completion = enqueueServer(target, snapshot, executor);
+        // This callback must never capture a command source, sender, server or world.
+        completion.whenComplete(DiagnosticExport::logServerCompletion);
+        return new ServerExportJob(target, completion);
+    }
+
     public static CompletableFuture<Path> write(Path directory, ServerStatusSnapshot snapshot) {
+        return enqueueServer(newTarget(directory), snapshot, IO);
+    }
+
+    private static CompletableFuture<Path> enqueueServer(Path target, ServerStatusSnapshot snapshot,
+            java.util.concurrent.Executor executor) {
         byte[] bytes = new GsonBuilder().setPrettyPrinting().create().toJson(snapshot)
                 .getBytes(java.nio.charset.StandardCharsets.UTF_8);
         String summary = String.join(System.lineSeparator(), snapshot.lines());
         return CompletableFuture.supplyAsync(() -> {
-            try { return writeCaptured(directory, bytes, summary); }
+            try { return writeTarget(target, bytes, summary); }
             catch (IOException e) { throw new java.util.concurrent.CompletionException(e); }
-        }, IO);
+        }, executor);
     }
+
+    private static void logServerCompletion(Path path, Throwable error) {
+        if (error == null) dev.vox.lss.common.LSSLogger.info("Diagnostics exported: " + path);
+        else dev.vox.lss.common.LSSLogger.warn(
+                "Diagnostics export failed; check directory permissions and free space.");
+    }
+
+    private static Path newTarget(Path directory) {
+        return directory.toAbsolutePath().normalize().resolve("diagnostics-" + java.util.UUID.randomUUID() + ".json");
+    }
+
     static Path writeCaptured(Path directory, byte[] bytes, String summary) throws IOException {
+        return writeTarget(newTarget(directory), bytes, summary);
+    }
+
+    private static Path writeTarget(Path target, byte[] bytes, String summary) throws IOException {
         byte[] summaryBytes = summary.getBytes(java.nio.charset.StandardCharsets.UTF_8);
         if (bytes.length > MAX_BYTES || summaryBytes.length > MAX_BYTES) throw new IOException("report too large");
         // Refuse symlink components, including a user-replaced diagnostics directory.
-        Path absolute = directory.toAbsolutePath().normalize();
+        Path absolute = target.getParent();
         for (Path part = absolute; part != null; part = part.getParent())
             if (Files.isSymbolicLink(part)) throw new IOException("symlink destination");
         Files.createDirectories(absolute);
@@ -71,9 +107,9 @@ public final class DiagnosticExport {
                     .sorted(Comparator.comparingLong(DiagnosticExport::modified)).toList();
             for (int i = 0; i < Math.max(0, files.size() - 18); i++) Files.delete(files.get(i));
         }
-        String name = "diagnostics-" + java.util.UUID.randomUUID();
-        Path json = absolute.resolve(name + ".json");
-        Path txt = absolute.resolve(name + ".txt");
+        Path json = target;
+        String name = target.getFileName().toString();
+        Path txt = absolute.resolve(name.substring(0, name.length() - ".json".length()) + ".txt");
         Files.write(json, bytes, StandardOpenOption.CREATE_NEW);
         try { Files.write(txt, summaryBytes, StandardOpenOption.CREATE_NEW); }
         catch (IOException error) { Files.deleteIfExists(json); throw error; }

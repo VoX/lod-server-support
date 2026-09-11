@@ -38,11 +38,11 @@ public class LSSServerCommands {
                 service == null ? 0 : service.getWindowBandwidthRate(),
                 dev.vox.lss.platform.LoaderServices.get().diagnosticVersions());
         try {
-            dev.vox.lss.common.diagnostics.DiagnosticExport.write(
-                    dev.vox.lss.platform.LoaderServices.get().gameDir().resolve(Brand.lowerShortName() + "-diagnostics"), snapshot)
-                    .whenComplete((path, error) -> source.getServer().execute(() ->
-                            source.sendSuccess(() -> Component.literal(error == null
-                                    ? "Diagnostics exported: " + path : "Diagnostics export failed; check directory permissions and free space."), false)));
+            var job = dev.vox.lss.common.diagnostics.DiagnosticExport.submitServer(
+                    dev.vox.lss.platform.LoaderServices.get().gameDir().resolve(Brand.lowerShortName() + "-diagnostics"), snapshot);
+            String queued = "Diagnostics export queued: " + job.target()
+                    + "; completion is reported in the server log.";
+            source.sendSuccess(() -> Component.literal(queued), false);
         } catch (java.util.concurrent.RejectedExecutionException busy) {
             source.sendFailure(Component.literal("Diagnostics exporter busy; retry after the current export."));
         }
