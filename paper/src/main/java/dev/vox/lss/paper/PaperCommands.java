@@ -103,9 +103,10 @@ public class PaperCommands implements CommandExecutor, TabCompleter {
                 service == null ? 0 : service.getTickDiag().getTotalWireBytesSent(),
                 service == null ? 0 : service.getWindowBandwidthRate(), diagnosticVersions);
         try {
-            dev.vox.lss.common.diagnostics.DiagnosticExport.write(java.nio.file.Path.of(Brand.lowerShortName() + "-diagnostics"), snapshot)
-                    .whenComplete((path, error) -> sender.sendMessage(error == null ? "Diagnostics exported: " + path
-                            : "Diagnostics export failed; check directory permissions and free space."));
+            var job = dev.vox.lss.common.diagnostics.DiagnosticExport.submitServer(
+                    java.nio.file.Path.of(Brand.lowerShortName() + "-diagnostics"), snapshot);
+            sender.sendMessage("Diagnostics export queued: " + job.target()
+                    + "; completion is reported in the server log.");
         } catch (java.util.concurrent.RejectedExecutionException busy) {
             sender.sendMessage("Diagnostics exporter busy; retry after the current export.");
         }
