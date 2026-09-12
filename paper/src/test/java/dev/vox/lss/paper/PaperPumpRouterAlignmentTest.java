@@ -237,4 +237,83 @@ class PaperPumpRouterAlignmentTest {
             }
         }
     }
+    /** Observe actual encoded send callbacks, not the earlier build/enqueue seam. */
+    private static Delivery sentFrame(byte[] frame) {
+        var buf = new net.minecraft.network.FriendlyByteBuf(io.netty.buffer.Unpooled.wrappedBuffer(frame));
+        try {
+            assertEquals(X, buf.readInt()); assertEquals(Z, buf.readInt());
+            assertEquals("minecraft:overworld", buf.readUtf(LSSConstants.MAX_DIMENSION_STRING_LENGTH));
+            assertTrue(buf.readLong() > 0);
+            byte source = buf.readByte();
+            assertEquals(0, buf.readByte(), "test recipient requests raw columns");
+            byte[] body = buf.readByteArray(LSSConstants.MAX_SECTIONS_SIZE);
+            assertEquals(0, buf.readableBytes());
+            return new Delivery(source, body);
+        } finally { buf.release(); }
+    }
+
+    /** Two route hooks prove one complete worker route/result cycle, without sleeping. */
+    private static void completeWorkerCycle(Rig r) {
+        var first = new CountDownLatch(1); var second = new CountDownLatch(1);
+        var releaseFirst = new CountDownLatch(1); var releaseSecond = new CountDownLatch(1);
+        try {
+            r.processor.beforeRoute.set(() -> { first.countDown(); await(releaseFirst); });
+            r.processor.postSnapshot(r.processor.lastPosted, List.of()); await(first);
+            r.processor.beforeRoute.set(() -> { second.countDown(); await(releaseSecond); });
+            r.processor.postSnapshot(r.processor.lastPosted, List.of());
+            releaseFirst.countDown(); await(second);
+        } finally {
+            releaseFirst.countDown(); releaseSecond.countDown();
+        }
+    }
+
+    private static void lateCallbackAfterFallback(boolean flushDiskFirst) throws Exception {
+        lateCallbackAfterFallback(flushDiskFirst, CURRENT);
+    }
+
+    private static void lateCallbackAfterFallback(boolean flushDiskFirst, byte[] current) throws Exception {
+        try (var r = new Rig()) {
+            r.service.tick(); r.service.tick(); // preserve unconditional one-tick release
+            assertEquals(1, r.ownerTasks.size(), "one original owner task is still delayed");
+            r.start(); await(r.processor.diskSubmitted);
+            r.processor.postSnapshot(r.processor.lastPosted, List.of());
+            var built = r.processor.delivered();
+            assertEquals(1, built.source()); assertArrayEquals(OLD_DISK, built.bytes());
+            assertTrue(r.state.hasEnqueuedColumn(dev.vox.lss.common.PositionUtil.packPosition(X, Z)));
+            assertTrue(r.capturedFrames.isEmpty(), "disk built but has not reached the actual sender");
+            if (flushDiskFirst) {
+                r.service.tick();
+                assertEquals(1, r.capturedFrames.size(), "fallback must actually send before late callback");
+                assertArrayEquals(OLD_DISK, sentFrame(r.capturedFrames.get(0)).bytes());
+            }
+            r.service.setLoadedColumnProbe((level, x, z) ->
+                    new LoadedColumnData(x, z, current.clone(), current.length));
+            r.ownerTasks.get(0).run(); // real scheduled callback, no second client declaration/dirty
+            // Each iteration completes real worker work and the real pump's send drain.
+            // Fixed finite cycles also expose duplicate corrections; no timed negative wait.
+            for (int i = 0; i < 8; i++) {
+                r.service.tick(); completeWorkerCycle(r);
+            }
+            r.service.tick();
+            assertEquals(2, r.capturedFrames.size(),
+                    "late original owner probe must correct disk exactly once without a new declaration");
+            var first = sentFrame(r.capturedFrames.get(0));
+            var second = sentFrame(r.capturedFrames.get(1));
+            assertEquals(1, first.source()); assertArrayEquals(OLD_DISK, first.bytes());
+            assertEquals(0, second.source()); assertArrayEquals(current.length == 0 ? new byte[]{0, 0} : current, second.bytes(),
+                    "actual sender order must be OLD_DISK then CURRENT, never stale last");
+        }
+    }
+
+    @Test void lateOwnerCallbackCorrectsAlreadySentDiskWithoutNewDeclaration() throws Exception {
+        lateCallbackAfterFallback(true);
+    }
+
+    @Test void lateOwnerCallbackCannotOvertakeQueuedDiskAtActualSend() throws Exception {
+        lateCallbackAfterFallback(false);
+    }
+
+    @Test void lateAllAirProbeClearsAlreadyDeliveredDiskForOriginalNoDataRequest() throws Exception {
+        lateCallbackAfterFallback(true, new byte[0]);
+    }
 }

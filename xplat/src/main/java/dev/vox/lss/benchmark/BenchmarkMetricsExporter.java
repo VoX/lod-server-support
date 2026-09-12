@@ -242,6 +242,7 @@ public final class BenchmarkMetricsExporter {
         var serviceMap = new LinkedHashMap<String, Object>();
         serviceMap.put("requests_received", diag.getTotalRequestsRouted());
         serviceMap.put("columns_sent", src.tickDiag().getTotalSectionsSent());
+        serviceMap.put("corrective_columns_sent", src.tickDiag().getTotalCorrectiveColumnsSent());
         serviceMap.put("bytes_sent", src.tickDiag().getTotalBytesSent());
         // Compressed columns (protocol 19): SHIPPED payload volume (codec-1 frames) next
         // to the raw-denominated bytes_sent, plus the per-payload codec split. Law A2

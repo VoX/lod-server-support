@@ -300,6 +300,50 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
                 && this.loadedProbeGuard.current(data,dimension,position,state.registration());
     }
 
+    /** One-shot Folia late completion, after the original per-position pipeline drains.
+     * No native access and no cancellation of another recipient's shared read. */
+    private final dev.vox.lss.common.LogThrottle lateProbeFailWarn = new dev.vox.lss.common.LogThrottle(60_000);
+    void processLateProbes(PlayerState state, String dimension, int queueLimit) {
+        state.expireLateProbes(System.nanoTime());
+        int remainingBytes = AbstractPlayerRequestState.MAX_LATE_PROBE_BYTES;
+        for (int i = 0; i < AbstractPlayerRequestState.MAX_LATE_PROBES; i++) {
+            if (queueLimit > 0 && state.getSendQueueSize() >= queueLimit) return;
+            var completion = state.takeLateProbe(System.nanoTime());
+            if (completion == null) return;
+            if (completion.generation() != state.offerGeneration()) continue;
+            var data = completion.data();
+            int bytes = data.serializedSections() == null ? 0 : data.serializedSections().length;
+            if (bytes > remainingBytes) return; // bounded optional correction, no deferred retry loop
+            remainingBytes -= bytes;
+            long packed = PositionUtil.packPosition(data.cx(), data.cz());
+            if (!currentLoadedProbe(data, dimension, packed, state)) continue;
+            long order = this.ctx.sequence().next();
+            if (!state.beginCorrectiveEnqueue(order)) return;
+            boolean accepted = false;
+            try {
+                boolean allAir = data.serializedSections() == null || data.serializedSections().length == 0;
+                // Even an original ts<=0 requester may now hold the fallback's non-air data.
+                accepted = allAir
+                        ? sendEmptiedColumn(state, data.cx(), data.cz(), dimension, this.cycleNow,
+                                order, LSSConstants.COLUMN_SOURCE_IN_MEMORY)
+                        : enqueueLoadedColumn(state, data, this.cycleNow, order, dimension,
+                                LSSConstants.COLUMN_SOURCE_IN_MEMORY);
+                if (accepted) {
+                    if (allAir) recordAllAirResolution(dimension, packed, this.cycleNow);
+                    state.markDiskReadDone(data.cx(), data.cz());
+                    this.ctx.diagnostics().incrementInMemory();
+                }
+            } catch (Throwable failure) {
+                // Correction is optional after the original fallback; a failed encode must
+                // not abort other players' routing or claim an up-to-date result.
+                long n = this.lateProbeFailWarn.recordAndTryAcquire(System.nanoTime() / 1_000_000);
+                if (n > 0) LSSLogger.error("Late loaded-column completion failed (" + n + " failures)", failure);
+            } finally {
+                state.endCorrectiveEnqueue();
+            }
+        }
+    }
+
     /** Queue timestamp invalidation for dirty positions. */
     public void invalidateTimestamps(String dimension, long[] positions) {
         invalidateTimestamps(dimension, positions, null);
@@ -831,6 +875,10 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
     /** Shared by the cycle-start apply and the late drain so the two paths cannot drift. */
     private void applyInvalidations(List<TimestampInvalidation> invalidations) {
         for (var inv : invalidations) {
+            for (var state : this.players.values()) {
+                if (inv.dimension().equals(state.registeredDimension()))
+                    for (long packed : inv.positions()) state.discardLateProbe(packed);
+            }
             // Store fan-out FIRST (plan §1 invalidation fan-out): the store's synchronous
             // removal + tombstone must land before anything can re-read the position.
             if (this.store != null) {
@@ -1301,6 +1349,8 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
                                 result.columnTimestamp(), submissionOrder,
                                 columnBytes, result.estimatedBytes(),
                                 source);
+                if (sent && !result.fromStore() && !staleAgainstEdit) state.markLateProbeDiskFallback(packed, submissionOrder);
+                else state.discardLateProbeDiskResult(packed, submissionOrder);
                 if (!sent) {
                     // All-air chunk (no visible sections): a resync client (claimsData) may hold
                     // stale content here, so send an authoritative clearing 0-section column; a
