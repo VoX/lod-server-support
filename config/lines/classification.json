@@ -5142,11 +5142,11 @@
       "kind": "adapted",
       "review": "Implementation candidate; independent final change review must cover residual logic before handoff.",
       "reviewed_blobs": {
-        "1.21.1": "cbc53e23627c9a69e6ccbbfe08c9e1f8d58b0da7",
-        "1.21.10": "962f463f11994211cf8d714684b9608c07b3f369",
-        "1.21.11": "dab4164b658a1e7043a3c00482a9e9b53e4113c4",
-        "26.1": "c22ec3ef175124e7261500921a1e65ed68ea352f",
-        "26.2": "8f4bb9109c2ebe441571fa501b79526e02c3186f"
+        "1.21.1": "0d21429a2299bb883638a991a6b5166fd6829c67",
+        "1.21.10": "bcab093398e2d025b13a886fb6b16043687df235",
+        "1.21.11": "5965bffa0d04b27d79d6e117da0753ce2a4a37d9",
+        "26.1": "d11f66b0f4a3debe8c6ad45c811871df460f66e5",
+        "26.2": "cda703f0ffc40efe185b4e07e4daadae231803a6"
       },
       "surface": "line-adaptation:paper/src/main/java/dev/vox/lss/paper/PaperRequestProcessingService.java",
       "tests": [
