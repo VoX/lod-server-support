@@ -1592,6 +1592,7 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
             // cycle could still string-match, but registration takes multiple ticks.)
             String registered = state.registeredDimension();
             if (registered != null && !registered.equals(entry.dimension())) continue;
+            state.discardPairedProbe(packed);
             // Completion-order evidence (diagnostics only): a successful completion while a
             // NEARER ticket is still outstanding means the platform scheduler finished
             // far-before-near. A high rate here is the C2ME-style inversion signature that

@@ -110,7 +110,7 @@ class IncomingRequestRouter<PS extends AbstractPlayerRequestState<?>> {
         this.ctx.diagnostics().addSuperseded(state.drainPendingSuperseded());
         this.ctx.diagnostics().addRangeFiltered(state.drainPendingRangeFiltered());
 
-        var batch = state.takeIncomingBatch();
+        var batch = state.takeIncomingBatchForRouting();
         if (batch != null) {
             // Replace semantics: everything not yet admitted is dropped — un-admitted
             // entries have no pending slot, no dedup group, no stale-guard entry, so the
@@ -122,112 +122,116 @@ class IncomingRequestRouter<PS extends AbstractPlayerRequestState<?>> {
         ArrayList<IncomingRequest> retained = null;
         boolean stopPass = false;
 
-        IncomingRequest req;
-        // The acquisition-frontier rule (gen-frontier-acquisition-anchor-plan.md): the
-        // live frontier prefers the first unsatisfied ts<=0 entry (ACQUISITION — the
-        // client has nothing there; generation may be needed). Unsatisfied ts>0 entries
-        // (REVALIDATION — dirty re-asks/resync; generation can never serve them) only
-        // stamp at end of pass, and only when the pass held no acquisition entry at all —
-        // which keeps pure-resync sessions stamping exactly as before, while an inner
-        // dirty head no longer collapses the generation admission window for ~5 s of
-        // outward damping (the measured 40%-of-backfill stall).
-        var frontierPass = new FrontierPass();
-        while (!stopPass && (req = state.pollBacklog()) != null) {
-            long packed = PositionUtil.packPosition(req.cx(), req.cz());
-            var duplicate = resolvedAsDuplicate(state, playerUuid, req, packed);
-            if (duplicate != Duplicate.NO) {
-                // In-flight duplicates (pending read/generation, enqueued payload) are
-                // UNSATISFIED: the first such ts<=0 entry pins the live frontier so the
-                // generation band can never walk away from a starving acquisition head
-                // (a ts>0 in-flight entry's anti-starvation carrier is the pending map —
-                // see the liveFrontierRing field comment). SATISFIED
-                // resolutions (the done-bit up_to_date answer here, and the timestamp/
-                // probe ladder below) deliberately do not stamp — the frontier advances
-                // through them at drain speed (20 Hz), and stamping a satisfied ring
-                // would over-gate the true frontier and tick gen_order_gated on
-                // FIFO-clean servers, diluting that counter's runaway meaning.
-                if (duplicate == Duplicate.IN_FLIGHT) {
+        try {
+            IncomingRequest req;
+            // The acquisition-frontier rule (gen-frontier-acquisition-anchor-plan.md): the
+            // live frontier prefers the first unsatisfied ts<=0 entry (ACQUISITION — the
+            // client has nothing there; generation may be needed). Unsatisfied ts>0 entries
+            // (REVALIDATION — dirty re-asks/resync; generation can never serve them) only
+            // stamp at end of pass, and only when the pass held no acquisition entry at all —
+            // which keeps pure-resync sessions stamping exactly as before, while an inner
+            // dirty head no longer collapses the generation admission window for ~5 s of
+            // outward damping (the measured 40%-of-backfill stall).
+            var frontierPass = new FrontierPass();
+            while (!stopPass && (req = state.pollBacklog()) != null) {
+                long packed = PositionUtil.packPosition(req.cx(), req.cz());
+                var duplicate = resolvedAsDuplicate(state, playerUuid, req, packed);
+                if (duplicate != Duplicate.NO) {
+                    // In-flight duplicates (pending read/generation, enqueued payload) are
+                    // UNSATISFIED: the first such ts<=0 entry pins the live frontier so the
+                    // generation band can never walk away from a starving acquisition head
+                    // (a ts>0 in-flight entry's anti-starvation carrier is the pending map —
+                    // see the liveFrontierRing field comment). SATISFIED
+                    // resolutions (the done-bit up_to_date answer here, and the timestamp/
+                    // probe ladder below) deliberately do not stamp — the frontier advances
+                    // through them at drain speed (20 Hz), and stamping a satisfied ring
+                    // would over-gate the true frontier and tick gen_order_gated on
+                    // FIFO-clean servers, diluting that counter's runaway meaning.
+                    if (duplicate == Duplicate.IN_FLIGHT) {
+                        frontierPass.observe(state, req);
+                    }
+                    this.ctx.diagnostics().incrementRequestRouted();
+                    continue;
+                }
+                if (sendQueueFull(state, snapshot)) {
+                    // Stamp the retained head: it passed the duplicate ladder, so it is the
+                    // nearest possibly-unsatisfied entry this pass. It has NOT passed the
+                    // timestamp ladder yet, so this can under-estimate the frontier — the
+                    // safe direction (transient over-gating while the send queue is already
+                    // saturating delivery), unlike leaving a stale higher stamp in place.
                     frontierPass.observe(state, req);
+                    // Retain (no disposition): the entry stays queued for the next cycle or is
+                    // superseded by the next replace. queue_full stays a pure event counter,
+                    // no longer a law A1 term. Stopping the pass keeps order: this entry is
+                    // re-prepended by restoreBacklog ahead of the un-polled remainder.
+                    if (retained == null) retained = new ArrayList<>();
+                    retained.add(req);
+                    break;
                 }
-                this.ctx.diagnostics().incrementRequestRouted();
-                continue;
-            }
-            if (sendQueueFull(state, snapshot)) {
-                // Stamp the retained head: it passed the duplicate ladder, so it is the
-                // nearest possibly-unsatisfied entry this pass. It has NOT passed the
-                // timestamp ladder yet, so this can under-estimate the frontier — the
-                // safe direction (transient over-gating while the send queue is already
-                // saturating delivery), unlike leaving a stale higher stamp in place.
+                if (resolvedFromTimestamp(state, playerUuid, req, packed, dimension)) {
+                    this.ctx.diagnostics().incrementRequestRouted();
+                    continue;
+                }
+                // Check loaded probes before admission — in-memory hits don't need a disk/gen slot
+                if (resolvedFromLoadedProbe(state, playerUuid, req, packed, loadedProbes, dimension)) {
+                    this.ctx.diagnostics().incrementRequestRouted();
+                    continue;
+                }
+
+                // First entry needing real work this pass: the live frontier (see the
+                // duplicate branch above — ts<=0 in-flight entries stamp it too).
                 frontierPass.observe(state, req);
-                // Retain (no disposition): the entry stays queued for the next cycle or is
-                // superseded by the next replace. queue_full stays a pure event counter,
-                // no longer a law A1 term. Stopping the pass keeps order: this entry is
-                // re-prepended by restoreBacklog ahead of the un-polled remainder.
-                if (retained == null) retained = new ArrayList<>();
-                retained.add(req);
-                break;
-            }
-            if (resolvedFromTimestamp(state, playerUuid, req, packed, dimension)) {
-                this.ctx.diagnostics().incrementRequestRouted();
-                continue;
-            }
-            // Check loaded probes before admission — in-memory hits don't need a disk/gen slot
-            if (resolvedFromLoadedProbe(state, playerUuid, req, packed, loadedProbes, dimension)) {
-                this.ctx.diagnostics().incrementRequestRouted();
-                continue;
+                // Every request routes the same way — the client no longer classifies sync vs
+                // generation (server-owned generation: the disk miss is the generation trigger,
+                // and a ts of 0 is just another "no data" shape, as inert as the retired byte 0).
+                switch (tryAdmitAndSubmit(state, playerUuid, req, packed, dimension)) {
+                    case SUBMITTED -> this.ctx.diagnostics().incrementRequestRouted();
+                    case SLOT_FULL -> {
+                        // Dequeue gate: the per-player cap now means "dequeue at most N
+                        // concurrently", not "reject above N". Retain in order and KEEP
+                        // scanning — entries behind the full slot can still resolve without
+                        // one (timestamp ladder, done-bit duplicate, loaded-chunk probe).
+                        if (retained == null) retained = new ArrayList<>();
+                        retained.add(req);
+                    }
+                    case NO_DISK_HEADROOM -> {
+                        // The shared reader pool is full — nothing disk-bound can be admitted
+                        // this cycle. Retain this entry and STOP the pass: saturation never
+                        // reaches the wire (issue #32's root cause, fixed at the source).
+                        if (retained == null) retained = new ArrayList<>();
+                        retained.add(req);
+                        stopPass = true;
+                    }
+                    case GATE_SATURATED -> {
+                        // The disk-read gate is saturated (Amendment 2): retain and STOP this
+                        // player's pass exactly like the headroom stop — pending asks stay in
+                        // the backlog and the next declaration replaces/re-prioritizes them
+                        // wholesale, instead of burning park-overflow drop-and-re-ask cycles.
+                        // ONE gate_stops per stopped player-pass (this arm is reachable at
+                        // most once per pass — stopPass ends the drain); routeAll continues
+                        // to the NEXT player (probe/timestamp/duplicate resolution stays
+                        // live for everyone, M4 rotation keeps admission fair).
+                        if (retained == null) retained = new ArrayList<>();
+                        retained.add(req);
+                        stopPass = true;
+                        this.processor.recordGateStop();
+                    }
+                }
             }
 
-            // First entry needing real work this pass: the live frontier (see the
-            // duplicate branch above — ts<=0 in-flight entries stamp it too).
-            frontierPass.observe(state, req);
-            // Every request routes the same way — the client no longer classifies sync vs
-            // generation (server-owned generation: the disk miss is the generation trigger,
-            // and a ts of 0 is just another "no data" shape, as inert as the retired byte 0).
-            switch (tryAdmitAndSubmit(state, playerUuid, req, packed, dimension)) {
-                case SUBMITTED -> this.ctx.diagnostics().incrementRequestRouted();
-                case SLOT_FULL -> {
-                    // Dequeue gate: the per-player cap now means "dequeue at most N
-                    // concurrently", not "reject above N". Retain in order and KEEP
-                    // scanning — entries behind the full slot can still resolve without
-                    // one (timestamp ladder, done-bit duplicate, loaded-chunk probe).
-                    if (retained == null) retained = new ArrayList<>();
-                    retained.add(req);
-                }
-                case NO_DISK_HEADROOM -> {
-                    // The shared reader pool is full — nothing disk-bound can be admitted
-                    // this cycle. Retain this entry and STOP the pass: saturation never
-                    // reaches the wire (issue #32's root cause, fixed at the source).
-                    if (retained == null) retained = new ArrayList<>();
-                    retained.add(req);
-                    stopPass = true;
-                }
-                case GATE_SATURATED -> {
-                    // The disk-read gate is saturated (Amendment 2): retain and STOP this
-                    // player's pass exactly like the headroom stop — pending asks stay in
-                    // the backlog and the next declaration replaces/re-prioritizes them
-                    // wholesale, instead of burning park-overflow drop-and-re-ask cycles.
-                    // ONE gate_stops per stopped player-pass (this arm is reachable at
-                    // most once per pass — stopPass ends the drain); routeAll continues
-                    // to the NEXT player (probe/timestamp/duplicate resolution stays
-                    // live for everyone, M4 rotation keeps admission fair).
-                    if (retained == null) retained = new ArrayList<>();
-                    retained.add(req);
-                    stopPass = true;
-                    this.processor.recordGateStop();
-                }
-            }
+            // End-of-pass revalidation fallback: no unsatisfied acquisition entry was seen,
+            // so the first unsatisfied ts>0 entry stamps — the identical POSITION to the
+            // pre-split behavior for pure-revalidation passes (cold-restart resync, converged
+            // players under dirty pushes). The damped RING may differ by at most one ring
+            // outward: the deferred call reads a clock later by one drain pass (~50 ms), so
+            // an outward stamp straddling a 333 ms damping tick lands one ring further —
+            // bounded, permissive-direction only, inward stamps unaffected.
+            frontierPass.finish(state);
+
+            if (retained != null) state.restoreBacklog(retained);
+        } finally {
+            state.finishProbeRoutingPass();
         }
-
-        // End-of-pass revalidation fallback: no unsatisfied acquisition entry was seen,
-        // so the first unsatisfied ts>0 entry stamps — the identical POSITION to the
-        // pre-split behavior for pure-revalidation passes (cold-restart resync, converged
-        // players under dirty pushes). The damped RING may differ by at most one ring
-        // outward: the deferred call reads a clock later by one drain pass (~50 ms), so
-        // an outward stamp straddling a 333 ms damping tick lands one ring further —
-        // bounded, permissive-direction only, inward stamps unaffected.
-        frontierPass.finish(state);
-
-        if (retained != null) state.restoreBacklog(retained);
     }
 
     /**
@@ -344,7 +348,12 @@ class IncomingRequestRouter<PS extends AbstractPlayerRequestState<?>> {
     private boolean resolvedFromLoadedProbe(PS state, UUID playerUuid, IncomingRequest req, long packed,
                                              Long2ObjectMap<LoadedColumnData> probes, String dimension) {
         var probe = probes.get(packed);
-        if (probe == null || !this.processor.currentLoadedProbe(probe, dimension, packed, state)) return false;
+        if (probe == null || !this.processor.currentLoadedProbe(probe, dimension, packed, state)) {
+            // A newer valid snapshot remains preferred; a stale/missing snapshot must not
+            // hide a still-current probe atomically paired with the released declaration.
+            probe = state.pairedLoadedProbe(packed);
+            if (probe == null || !this.processor.currentLoadedProbe(probe, dimension, packed, state)) return false;
+        }
 
         long order = this.ctx.sequence().next();
         boolean allAir = probe.serializedSections() == null || probe.serializedSections().length == 0;

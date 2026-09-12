@@ -1,6 +1,8 @@
 package dev.vox.lss.common.processing;
 
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
+import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
+import it.unimi.dsi.fastutil.longs.Long2ObjectMaps;
 import it.unimi.dsi.fastutil.longs.LongArrayList;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 
@@ -142,7 +144,15 @@ public abstract class AbstractPlayerRequestState<T> {
     // consumption is superseded wholesale — exactly the want-set replace semantics. This
     // bounds ingress at ONE batch (≤ MAX_BATCH_CHUNK_REQUESTS entries) regardless of client
     // behavior, replacing the old MAX_INCOMING_QUEUE flood bound.
-    private final AtomicReference<IncomingBatch> pendingBatch = new AtomicReference<>();
+    private record IncomingEnvelope(IncomingBatch batch, long generation, boolean released,
+                                    Long2ObjectMap<LoadedColumnData> probes) {}
+    private final AtomicReference<IncomingEnvelope> pendingBatch = new AtomicReference<>();
+    // Set only before registration publication. Ordinary Paper/Fabric ingress is unchanged.
+    private boolean probeHandoffRequired;
+    private static final int MAX_PAIRED_PROBES = 512;
+    // Separate from appliedWantSet: that batch may outlive convergence. Ingress/removal can
+    // discard this immutable holder; only the router installs/uses it for retained backlog.
+    private final AtomicReference<IncomingEnvelope> activeProbeEnvelope = new AtomicReference<>();
     // Offer generation: bumped BEFORE every mailbox write so the Folia pump can detect a
     // batch that passed THROUGH the mailbox (offered AND taken by the processing thread)
     // during its one-tick probe hold. The republish CAS alone cannot see that — it finds
@@ -269,11 +279,13 @@ public abstract class AbstractPlayerRequestState<T> {
 
     /** Offer a decoded batch (any thread). Latest-wins; an overwritten batch is superseded. */
     public void offerIncomingBatch(IncomingBatch batch) {
-        this.offerGeneration.incrementAndGet(); // BEFORE the write — see the field comment
+        long generation = this.offerGeneration.incrementAndGet(); // BEFORE the write
+        this.activeProbeEnvelope.set(null);
         this.totalRequestsReceived.addAndGet(batch.size());
-        var previous = this.pendingBatch.getAndSet(batch);
+        var previous = this.pendingBatch.getAndSet(new IncomingEnvelope(
+                batch, generation, false, Long2ObjectMaps.emptyMap()));
         if (previous != null) {
-            this.pendingSuperseded.addAndGet(previous.size());
+            this.pendingSuperseded.addAndGet(previous.batch().size());
         }
     }
 
@@ -290,7 +302,8 @@ public abstract class AbstractPlayerRequestState<T> {
      *  the Folia hold-release, and tests. See also {@link #peekWantSet}, the fallback source
      *  for the ~19 ticks per second on which no batch arrives. */
     public IncomingBatch peekIncomingBatch() {
-        return this.pendingBatch.get();
+        var pending = this.pendingBatch.get();
+        return pending == null ? null : pending.batch();
     }
 
     /** Main-thread loaded-chunk probe FALLBACK source (after {@link #peekIncomingBatch}): the
@@ -306,7 +319,71 @@ public abstract class AbstractPlayerRequestState<T> {
 
     /** Consume the pending batch (processing thread; Folia pump during hold-release). */
     public IncomingBatch takeIncomingBatch() {
-        return this.pendingBatch.getAndSet(null);
+        var pending = this.pendingBatch.getAndSet(null);
+        return pending == null ? null : pending.batch();
+    }
+
+    /** Configure Folia ownership BEFORE publishing this registration to other threads. */
+    public void requireProbeHandoff() { this.probeHandoffRequired = true; }
+
+    /** Pump only: never steal an already released declaration and its paired probes. */
+    public IncomingBatch takeFreshIncomingBatchForProbe() {
+        while (true) {
+            var pending = this.pendingBatch.get();
+            if (pending == null || pending.released()) return null;
+            if (this.pendingBatch.compareAndSet(pending, null)) return pending.batch();
+        }
+    }
+
+    /** Router only: Folia fresh ingress is ineligible until the pump's bounded release. */
+    IncomingBatch takeIncomingBatchForRouting() {
+        while (true) {
+            var pending = this.pendingBatch.get();
+            if (pending == null || (this.probeHandoffRequired && !pending.released())) return null;
+            if (!this.pendingBatch.compareAndSet(pending, null)) continue;
+            this.activeProbeEnvelope.set(pending.probes().isEmpty() ? null : pending);
+            if (this.offerGeneration.get() != pending.generation() || this.registration.isRetired())
+                this.activeProbeEnvelope.compareAndSet(pending, null);
+            return pending.batch();
+        }
+    }
+
+    /** Router only, after retained entries have been restored (not during pollBacklog). */
+    void finishProbeRoutingPass() {
+        var active = this.activeProbeEnvelope.get();
+        if (active != null && (this.backlog.isEmpty()
+                || active.generation() != this.offerGeneration.get() || this.registration.isRetired()))
+            this.activeProbeEnvelope.compareAndSet(active, null);
+    }
+
+    LoadedColumnData pairedLoadedProbe(long packed) {
+        var active = this.activeProbeEnvelope.get();
+        return active == null || active.generation() != this.offerGeneration.get()
+                || this.registration.isRetired() ? null : active.probes().get(packed);
+    }
+
+    /** Generation outcomes exclude paired probes too, including a pending released envelope. */
+    void discardPairedProbe(long packed) {
+        discardPairedProbe(this.pendingBatch, packed);
+        discardPairedProbe(this.activeProbeEnvelope, packed);
+    }
+
+    private static void discardPairedProbe(AtomicReference<IncomingEnvelope> holder, long packed) {
+        while (true) {
+            var old = holder.get();
+            if (old == null || !old.probes().containsKey(packed)) return;
+            var probes = new Long2ObjectOpenHashMap<>(old.probes());
+            probes.remove(packed);
+            var replacement = new IncomingEnvelope(old.batch(), old.generation(), old.released(),
+                    Long2ObjectMaps.unmodifiable(probes));
+            if (holder.compareAndSet(old, replacement)) return;
+        }
+    }
+
+    /** Session removal/shutdown: release byte holders even if a callback retains the state. */
+    public void discardProbeHandoff() {
+        this.activeProbeEnvelope.set(null);
+        this.pendingBatch.set(null);
     }
 
     /**
@@ -323,12 +400,29 @@ public abstract class AbstractPlayerRequestState<T> {
      * {@link #offerGeneration()} the pump recorded before taking the batch to hold.
      */
     public boolean republishHeldBatch(IncomingBatch held, long heldAtGeneration) {
-        if (this.offerGeneration.get() != heldAtGeneration) {
+        return republishHeldBatch(held, heldAtGeneration, Long2ObjectMaps.emptyMap());
+    }
+
+    /** Atomically release matching ready probes with the declaration. No native objects. */
+    public boolean republishHeldBatch(IncomingBatch held, long heldAtGeneration,
+                                      Long2ObjectMap<LoadedColumnData> readyProbes) {
+        var paired = new Long2ObjectOpenHashMap<LoadedColumnData>();
+        if (readyProbes != null) {
+            for (var request : held.requests()) {
+                long packed = PositionUtil.packPosition(request.cx(), request.cz());
+                var probe = readyProbes.get(packed);
+                if (probe != null) paired.put(packed, probe);
+                if (paired.size() == MAX_PAIRED_PROBES) break;
+            }
+        }
+        var envelope = new IncomingEnvelope(held, heldAtGeneration, true,
+                Long2ObjectMaps.unmodifiable(paired));
+        if (this.registration.isRetired() || this.offerGeneration.get() != heldAtGeneration) {
             this.pendingSuperseded.addAndGet(held.size());
             return false;
         }
         beforeRepublishCas();
-        if (!this.pendingBatch.compareAndSet(null, held)) {
+        if (!this.pendingBatch.compareAndSet(null, envelope)) {
             this.pendingSuperseded.addAndGet(held.size());
             return false;
         }
@@ -345,12 +439,22 @@ public abstract class AbstractPlayerRequestState<T> {
         // client's next declaration (≤1 s fallback) re-supersedes the stale want-set —
         // one interval of stale routing, nanoseconds-wide to enter, judged not worth a
         // third guard's complexity.
-        if (this.offerGeneration.get() != heldAtGeneration
-                && this.pendingBatch.compareAndSet(held, null)) {
+        if ((this.registration.isRetired() || this.offerGeneration.get() != heldAtGeneration)
+                && retractReleasedEnvelope(envelope)) {
             this.pendingSuperseded.addAndGet(held.size());
             return false;
         }
         return true;
+    }
+
+    private boolean retractReleasedEnvelope(IncomingEnvelope released) {
+        while (true) {
+            var pending = this.pendingBatch.get();
+            // Generation-result filtering may replace only the probe map, not ownership.
+            if (pending == null || pending.batch() != released.batch()
+                    || pending.generation() != released.generation() || !pending.released()) return false;
+            if (this.pendingBatch.compareAndSet(pending, null)) return true;
+        }
     }
 
     /** Test seam (Folia review 2026-08-27 R8): runs between the generation guard and
@@ -376,6 +480,8 @@ public abstract class AbstractPlayerRequestState<T> {
      *  entries. An empty batch is the explicit clear. Also publishes the want-set for the
      *  main-thread probe (an empty batch publishes null — nothing left to probe). */
     public int replaceBacklogWith(IncomingBatch batch) {
+        var active = this.activeProbeEnvelope.get();
+        if (active != null && active.batch() != batch) this.activeProbeEnvelope.compareAndSet(active, null);
         int dropped = this.backlog.size();
         this.backlog.clear();
         Collections.addAll(this.backlog, batch.requests());
