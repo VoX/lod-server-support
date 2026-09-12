@@ -486,8 +486,10 @@ class IncomingRequestRouter<PS extends AbstractPlayerRequestState<?>> {
                 state.removePendingByPosition(req.cx(), req.cz());
                 return AdmitResult.GATE_SATURATED;
             }
+            state.noteLateProbeDiskSubmission(packed, order);
             if (!attached && !this.processor.submitDiskRead(playerUuid, state.registration(), dimension, req.cx(),
                     req.cz(), order, req.clientTimestamp())) {
+                state.discardLateProbeDiskResult(packed, order);
                 // Submit was a no-op (e.g. the dimension's level isn't registered yet) — a
                 // TRANSIENT condition. Unwind the pending entry (which frees the slot) and the
                 // dedup group so they aren't leaked, and drop silently (counted superseded):
@@ -498,7 +500,6 @@ class IncomingRequestRouter<PS extends AbstractPlayerRequestState<?>> {
                 this.ctx.diagnostics().addSuperseded(1);
                 return AdmitResult.SUBMITTED; // dispositioned (silent transient drop)
             }
-            state.noteLateProbeDiskSubmission(packed, order);
             this.ctx.diagnostics().incrementDiskQueued();
             return AdmitResult.SUBMITTED;
         } else if (this.generationAvailable) {

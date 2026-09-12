@@ -52,6 +52,8 @@ class PaperPumpRouterAlignmentTest {
         final CountDownLatch routeDecided = new CountDownLatch(1);
         final PaperChunkDiskReader reader;
         volatile TickSnapshot lastPosted;
+        boolean holdTargetDisk;
+        final AtomicReference<ChunkReadResult> heldTargetDisk = new AtomicReference<>();
         Processor(Map<UUID, PaperPlayerRequestState> players, PaperChunkDiskReader reader) {
             super(players, reader, false, null, 1, 0);
             this.reader = reader;
@@ -71,9 +73,11 @@ class PaperPumpRouterAlignmentTest {
                 String dimension, int x, int z, long order, long clientTimestamp) {
             // Complete the admitted read through the ACTUAL per-player result queue. The
             // timestamp is current; bytes model a persisted pre-edit snapshot, not corruption.
-            reader.getPlayerQueue(uuid).add(new ChunkReadResult(uuid, x, z,
+            var result = new ChunkReadResult(uuid, x, z,
                     OLD_DISK.clone(), dimension, OLD_DISK.length + LSSConstants.ESTIMATED_COLUMN_OVERHEAD_BYTES,
-                    LSSConstants.epochSeconds(), false, false, false, order));
+                    LSSConstants.epochSeconds(), false, false, false, order);
+            if (holdTargetDisk && x == X && z == Z) heldTargetDisk.set(result);
+            else reader.getPlayerQueue(uuid).add(result);
             diskSubmitted.countDown(); routeDecided.countDown();
             return true;
         }
@@ -282,7 +286,13 @@ class PaperPumpRouterAlignmentTest {
             assertTrue(r.state.hasEnqueuedColumn(dev.vox.lss.common.PositionUtil.packPosition(X, Z)));
             assertTrue(r.capturedFrames.isEmpty(), "disk built but has not reached the actual sender");
             if (flushDiskFirst) {
-                r.service.tick();
+                // Real token bucket starts at zero and skips sub-millisecond refills.
+                // Await the actual send while withholding every owner callback.
+                long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+                while (r.capturedFrames.isEmpty() && System.nanoTime() < deadline) {
+                    r.service.tick();
+                    if (r.capturedFrames.isEmpty()) Thread.sleep(1);
+                }
                 assertEquals(1, r.capturedFrames.size(), "fallback must actually send before late callback");
                 assertArrayEquals(OLD_DISK, sentFrame(r.capturedFrames.get(0)).bytes());
             }
@@ -316,4 +326,118 @@ class PaperPumpRouterAlignmentTest {
     @Test void lateAllAirProbeClearsAlreadyDeliveredDiskForOriginalNoDataRequest() throws Exception {
         lateCallbackAfterFallback(true, new byte[0]);
     }
+
+    @Test void targetBeyondProbePrefixMustConvergeAfterItsPublishedWantProbe() throws Exception {
+        try (var r = new Rig(false)) {
+            var requests = new ArrayList<IncomingRequest>();
+            for (int x = -16; x < 16; x++) for (int z = -12; z <= 12; z++) {
+                if (x != X || z != Z) requests.add(new IncomingRequest(x, z, -1));
+            }
+            requests.add(new IncomingRequest(X, Z, -1));
+            assertEquals(800, requests.size());
+            var targetProbes = new java.util.concurrent.atomic.AtomicInteger();
+            r.service.setLoadedColumnProbe((level, x, z) -> {
+                if (x == X && z == Z) targetProbes.incrementAndGet();
+                return new LoadedColumnData(x, z, CURRENT.clone(), CURRENT.length);
+            });
+            java.util.function.Supplier<List<Delivery>> targetFrames = () -> {
+                var found = new ArrayList<Delivery>();
+                for (byte[] frame : r.capturedFrames) {
+                    var coordinates = java.nio.ByteBuffer.wrap(frame);
+                    if (coordinates.getInt() == X && coordinates.getInt() == Z) found.add(sentFrame(frame));
+                }
+                return found;
+            };
+            r.state.offerIncomingBatch(new IncomingBatch(requests.toArray(IncomingRequest[]::new)));
+            r.holdAndCompleteProbe(); // prompt original callback, unchanged 512-position cap
+            assertEquals(0, targetProbes.get(), "target lies outside original selected prefix");
+            r.service.tick(); r.start();
+            // Pump/worker barriers drive real admission/results/sends. Published-want
+            // tasks are deliberately retained until the target's stale disk body sends.
+            for (int cycle = 0; cycle < 64 && targetFrames.get().isEmpty(); cycle++) {
+                completeWorkerCycle(r); r.service.tick();
+            }
+            var fallback = targetFrames.get();
+            assertEquals(1, fallback.size(), "setup must deliver the actual target disk frame");
+            assertEquals(1, fallback.get(0).source());
+            assertArrayEquals(OLD_DISK, fallback.get(0).bytes());
+            assertEquals(0, targetProbes.get(), "no published-want callback has run before fallback");
+            int nextTask = 1; // original task already completed promptly above
+            for (int cycle = 0; cycle < 8; cycle++) {
+                while (nextTask < r.ownerTasks.size()) r.ownerTasks.get(nextTask++).run();
+                r.service.tick(); completeWorkerCycle(r);
+            }
+            r.service.tick();
+            assertTrue(targetProbes.get() > 0, "actual published-want callback must observe target CURRENT");
+            var actual = targetFrames.get();
+            assertArrayEquals(CURRENT, actual.get(actual.size() - 1).bytes(),
+                    "actual target sender must converge from old disk to current loaded bytes beyond probe prefix");
+        }
+    }
+    private void frontierReplacementAfterAdmittedCallback(boolean exclude, boolean empty) throws Exception {
+        try (var r = new Rig(false)) {
+            var requests = new ArrayList<IncomingRequest>();
+            for (int x = -16; x < 16; x++) for (int z = -12; z <= 12; z++) {
+                if (x != X || z != Z) requests.add(new IncomingRequest(x, z, -1));
+            }
+            requests.add(new IncomingRequest(X, Z, -1));
+            assertEquals(800, requests.size());
+            var targetProbes = new java.util.concurrent.atomic.AtomicInteger();
+            r.service.setLoadedColumnProbe((level, x, z) -> {
+                if (x == X && z == Z) targetProbes.incrementAndGet();
+                return new LoadedColumnData(x, z, CURRENT.clone(), CURRENT.length);
+            });
+            java.util.function.Supplier<List<Delivery>> targetFrames = () -> {
+                var found = new ArrayList<Delivery>();
+                for (byte[] frame : r.capturedFrames) {
+                    var coordinates = java.nio.ByteBuffer.wrap(frame);
+                    if (coordinates.getInt() == X && coordinates.getInt() == Z) found.add(sentFrame(frame));
+                }
+                return found;
+            };
+            r.processor.holdTargetDisk = true;
+            var batch = new IncomingBatch(requests.toArray(IncomingRequest[]::new));
+            r.state.offerIncomingBatch(batch);
+            r.holdAndCompleteProbe();
+            assertEquals(0, targetProbes.get(), "target outside original 512");
+            r.service.tick(); r.start();
+            for (int cycle = 0; cycle < 64 && r.processor.heldTargetDisk.get() == null; cycle++) {
+                completeWorkerCycle(r); r.service.tick();
+            }
+            assertNotNull(r.processor.heldTargetDisk.get(), "actual target disk admission is pending");
+            int nextTask = 1;
+            for (int cycle = 0; cycle < 8 && targetProbes.get() == 0; cycle++) {
+                r.service.tick(); completeWorkerCycle(r);
+                while (nextTask < r.ownerTasks.size()) r.ownerTasks.get(nextTask++).run();
+            }
+            assertTrue(targetProbes.get() > 0, "claimed owner callback actually serialized CURRENT");
+            assertTrue(targetFrames.get().isEmpty(), "disk result still held, no target sender yet");
+            var next = empty ? new IncomingBatch(new IncomingRequest[0])
+                    : exclude ? new IncomingBatch(new IncomingRequest[]{new IncomingRequest(-15, -11, -1)}) : batch;
+            r.state.offerIncomingBatch(next); // replaces backlog, admitted target still completes
+            r.reader.getPlayerQueue(r.uuid).add(r.processor.heldTargetDisk.getAndSet(null));
+            for (int cycle = 0; cycle < 64; cycle++) {
+                r.service.tick(); completeWorkerCycle(r);
+                while (nextTask < r.ownerTasks.size()) r.ownerTasks.get(nextTask++).run();
+            }
+            r.service.tick();
+            var actual = targetFrames.get();
+            assertFalse(actual.isEmpty(), "actual target sender must receive the held disk result");
+            assertEquals(1, actual.get(0).source());
+            assertArrayEquals(OLD_DISK, actual.get(0).bytes());
+            assertArrayEquals(CURRENT, actual.get(actual.size() - 1).bytes(),
+                    "overlapping declaration must preserve the pending disk attempt's current correction");
+        }
+    }
+
+    @Test void overlappingDeclarationMustRetainCompletedProbeForPendingDisk() throws Exception {
+        frontierReplacementAfterAdmittedCallback(false, false);
+    }
+    @Test void excludingFrontierMustNotCancelAdmittedCorrection() throws Exception {
+        frontierReplacementAfterAdmittedCallback(true, false);
+    }
+    @Test void emptyBackpressureClearMustNotCancelAdmittedCorrection() throws Exception {
+        frontierReplacementAfterAdmittedCallback(false, true);
+    }
+
 }

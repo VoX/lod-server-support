@@ -310,7 +310,7 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
             if (queueLimit > 0 && state.getSendQueueSize() >= queueLimit) return;
             var completion = state.takeLateProbe(System.nanoTime());
             if (completion == null) return;
-            if (completion.generation() != state.offerGeneration()) continue;
+            if (!state.consumeLateProbe(completion, System.nanoTime())) return;
             var data = completion.data();
             int bytes = data.serializedSections() == null ? 0 : data.serializedSections().length;
             if (bytes > remainingBytes) return; // bounded optional correction, no deferred retry loop
