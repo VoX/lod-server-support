@@ -260,6 +260,11 @@ class ReadFreshnessRungTest {
     }
 
     private static final class TestState extends AbstractPlayerRequestState<Object> {
+        final ConcurrentHashMap<Long, Long> admittedOrders = new ConcurrentHashMap<>();
+        @Override synchronized void noteLateProbeDiskSubmission(long packed, long order) {
+            super.noteLateProbeDiskSubmission(packed, order);
+            admittedOrders.put(packed, order); // actual router hook, including dedup attachment
+        }
         TestState(UUID uuid) {
             super(uuid, 4, 4);
             setFrontierDampingForTest(0, System::nanoTime);
@@ -388,6 +393,72 @@ class ReadFreshnessRungTest {
         waitFor(() -> state.hasPendingRequest(cx, cz), "pending admission for " + cx + "," + cz);
     }
 
+    /** Model the real Folia reservation separately from this reader-only rig's ordinary ingress. */
+    private static AbstractPlayerRequestState.LateProbeRequest reserveLate(TestState state,
+            int x, int z) throws InterruptedException {
+        long packed = PositionUtil.packPosition(x, z);
+        waitFor(() -> state.admittedOrders.containsKey(packed), "actual admission order observed");
+        return reserveLateAtOrder(state, x, z, state.admittedOrders.get(packed));
+    }
+
+    private static AbstractPlayerRequestState.LateProbeRequest reserveLateAtOrder(TestState state,
+            int x, int z, long order) {
+        state.requireProbeHandoff(); state.updatePlayerChunk(0, 0); state.updateLateProbeRange(32);
+        state.noteLateProbeDiskSubmission(PositionUtil.packPosition(x, z), order);
+        var requests = state.claimLateProbes(1);
+        assertEquals(1, requests.length);
+        return requests[0];
+    }
+
+    /** Stop the worker before publishing so this assertion owns the actual one-shot consume. */
+    private static void assertLateAfterResult(Rig rig, TestState state,
+            AbstractPlayerRequestState.LateProbeRequest request, boolean eligible) {
+        rig.proc.shutdown();
+        int x = PositionUtil.unpackX(request.position()), z = PositionUtil.unpackZ(request.position());
+        state.completeLateProbe(request, new LoadedColumnData(x, z, new byte[]{7, 7, 7}, 3));
+        var ready = state.takeLateProbe(System.nanoTime());
+        if (!eligible) { assertNull(ready, "invalid header result must not arm a late correction"); return; }
+        assertNotNull(ready, "valid recipient's header result arms its reserved correction");
+        assertEquals(request.diskOrder(), ready.diskOrder());
+        assertTrue(state.consumeLateProbe(ready, System.nanoTime()));
+        assertFalse(state.consumeLateProbe(ready, System.nanoTime()));
+        assertNull(state.takeLateProbe(System.nanoTime()));
+    }
+
+    @Test
+    void headerFreshArmsBothEligibleDedupRecipientsAtTheirOwnOrders() throws Exception {
+        var rig = new Rig();
+        try {
+            var other = rig.addPlayer(UUID.randomUUID());
+            declareAndAwaitPending(rig, rig.state, 11, 11, HEADER_SECOND + 10);
+            declareAndAwaitPending(rig, other, 11, 11, HEADER_SECOND + 20);
+            var primaryLate = reserveLate(rig.state, 11, 11);
+            var otherLate = reserveLate(other, 11, 11);
+            rig.inject(ChunkReadResult.headerFresh(rig.uuid, 11, 11, DIM, primaryLate.diskOrder(), HEADER_SECOND));
+            rig.proc.postSnapshot(snapshot(rig.uuid, other.getPlayerUUID()), List.of());
+            var responses = drainUntil(rig.proc, rs -> rs.size() == 2);
+            assertTrue(responses.stream().allMatch(r -> r.type() == LSSConstants.RESPONSE_UP_TO_DATE));
+            assertLateAfterResult(rig, rig.state, primaryLate, true);
+            assertLateAfterResult(rig, other, otherLate, true);
+        } finally { rig.proc.shutdown(); }
+    }
+
+    @Test
+    void oldHeaderResultCannotArmReplacementLateOrder() throws Exception {
+        var rig = new Rig();
+        try {
+            declareAndAwaitPending(rig, rig.state, 7, 7, HEADER_SECOND + 10);
+            var old = reserveLate(rig.state, 7, 7);
+            var replacement = reserveLateAtOrder(rig.state, 7, 7, old.diskOrder() + 1);
+            rig.inject(ChunkReadResult.headerFresh(rig.uuid, 7, 7, DIM, old.diskOrder(), HEADER_SECOND));
+            rig.proc.postSnapshot(snapshot(rig.uuid), List.of());
+            drainUntil(rig.proc, rs -> rs.stream().anyMatch(
+                    r -> r.type() == LSSConstants.RESPONSE_UP_TO_DATE));
+            assertLateAfterResult(rig, rig.state, old, false);
+            assertLateAfterResult(rig, rig.state, replacement, false);
+        } finally { rig.proc.shutdown(); }
+    }
+
     @Test
     void headerFreshDeliversUpToDateAndStampsStrictMargin() throws Exception {
         var rig = new Rig();
@@ -395,7 +466,8 @@ class ReadFreshnessRungTest {
             long clientTs = HEADER_SECOND + 10;
             declareAndAwaitPending(rig, rig.state, 7, 7, clientTs);
             long packed = PositionUtil.packPosition(7, 7);
-            rig.inject(ChunkReadResult.headerFresh(rig.uuid, 7, 7, DIM, 1L, HEADER_SECOND));
+            var late = reserveLate(rig.state, 7, 7);
+            rig.inject(ChunkReadResult.headerFresh(rig.uuid, 7, 7, DIM, late.diskOrder(), HEADER_SECOND));
             rig.proc.postSnapshot(snapshot(rig.uuid), List.of());
             drainUntil(rig.proc, rs -> rs.stream().anyMatch(
                     r -> r.type() == LSSConstants.RESPONSE_UP_TO_DATE && r.packed() == packed));
@@ -406,6 +478,7 @@ class ReadFreshnessRungTest {
             // exactly iff clientTs > HEADER_SECOND — the rung's own strict margin.
             assertEquals(HEADER_SECOND + 1,
                     rig.proc.timestampCacheForTest().get(DIM, packed));
+            assertLateAfterResult(rig, rig.state, late, true);
         } finally {
             rig.proc.shutdown();
         }
@@ -415,13 +488,17 @@ class ReadFreshnessRungTest {
     void headerFreshGhostDropsSilently() throws Exception {
         var rig = new Rig();
         try {
+            declareAndAwaitPending(rig, rig.state, 9, 9, HEADER_SECOND + 10);
             long before = rig.proc.getDiagnostics().getTotalSuperseded();
             // No pending backs this delivery (raced/duplicate result).
-            rig.inject(ChunkReadResult.headerFresh(rig.uuid, 9, 9, DIM, 1L, HEADER_SECOND));
+            var late = reserveLate(rig.state, 9, 9);
+            assertNotNull(rig.state.removePendingByPosition(9, 9));
+            rig.inject(ChunkReadResult.headerFresh(rig.uuid, 9, 9, DIM, late.diskOrder(), HEADER_SECOND));
             rig.proc.postSnapshot(snapshot(rig.uuid), List.of());
             waitFor(() -> rig.proc.getDiagnostics().getTotalSuperseded() > before,
                     "ghost header answer counted superseded");
             assertFalse(rig.state.hasDiskReadDone(9, 9));
+            assertLateAfterResult(rig, rig.state, late, false);
         } finally {
             rig.proc.shutdown();
         }
@@ -438,14 +515,16 @@ class ReadFreshnessRungTest {
             // The invalidation applies at the top of the same cycle that drains the
             // result: the dedup group is live, so the in-flight answer is tainted —
             // its proof predates the edit and must not seal a stale up_to_date.
+            var late = reserveLate(rig.state, 8, 8);
             rig.proc.invalidateTimestamps(DIM, new long[]{packed});
-            rig.inject(ChunkReadResult.headerFresh(rig.uuid, 8, 8, DIM, 1L, HEADER_SECOND));
+            rig.inject(ChunkReadResult.headerFresh(rig.uuid, 8, 8, DIM, late.diskOrder(), HEADER_SECOND));
             rig.proc.postSnapshot(snapshot(rig.uuid), List.of());
             waitFor(() -> rig.proc.getDiagnostics().getTotalSuperseded() > before,
                     "tainted header answer counted superseded");
             assertFalse(rig.state.hasDiskReadDone(8, 8));
             assertEquals(0, rig.proc.timestampCacheForTest().get(DIM, packed),
                     "no stamp refresh from a tainted proof");
+            assertLateAfterResult(rig, rig.state, late, false);
         } finally {
             rig.proc.shutdown();
         }
@@ -461,7 +540,9 @@ class ReadFreshnessRungTest {
             declareAndAwaitPending(rig, rig.state, 11, 11, HEADER_SECOND + 10);
             declareAndAwaitPending(rig, other, 11, 11, HEADER_SECOND - 10);
             long before = rig.proc.getDiagnostics().getTotalSuperseded();
-            rig.inject(ChunkReadResult.headerFresh(rig.uuid, 11, 11, DIM, 1L, HEADER_SECOND));
+            var primaryLate = reserveLate(rig.state, 11, 11);
+            var otherLate = reserveLate(other, 11, 11);
+            rig.inject(ChunkReadResult.headerFresh(rig.uuid, 11, 11, DIM, primaryLate.diskOrder(), HEADER_SECOND));
             rig.proc.postSnapshot(snapshot(rig.uuid, other.getPlayerUUID()), List.of());
             var responses = drainUntil(rig.proc, rs -> rs.stream().anyMatch(
                     r -> r.player().equals(rig.uuid)
@@ -474,6 +555,8 @@ class ReadFreshnessRungTest {
             assertTrue(rig.state.hasDiskReadDone(11, 11));
             assertFalse(other.hasDiskReadDone(11, 11),
                     "no unearned done-bit on the dropped member");
+            assertLateAfterResult(rig, rig.state, primaryLate, true);
+            assertLateAfterResult(rig, other, otherLate, false);
         } finally {
             rig.proc.shutdown();
         }
@@ -567,7 +650,9 @@ class ReadFreshnessRungTest {
             declareAndAwaitPending(rig, rig.state, 23, 23, HEADER_SECOND + 10);
             declareAndAwaitPending(rig, other, 23, 23, HEADER_SECOND);
             long before = rig.proc.getDiagnostics().getTotalSuperseded();
-            rig.inject(ChunkReadResult.headerFresh(rig.uuid, 23, 23, DIM, 1L, HEADER_SECOND));
+            var primaryLate = reserveLate(rig.state, 23, 23);
+            var otherLate = reserveLate(other, 23, 23);
+            rig.inject(ChunkReadResult.headerFresh(rig.uuid, 23, 23, DIM, primaryLate.diskOrder(), HEADER_SECOND));
             rig.proc.postSnapshot(snapshot(rig.uuid, other.getPlayerUUID()), List.of());
             drainUntil(rig.proc, rs -> rs.stream().anyMatch(
                     r -> r.player().equals(rig.uuid)
@@ -577,6 +662,8 @@ class ReadFreshnessRungTest {
                     "the equal-stamped member's drop counted superseded");
             assertFalse(other.hasDiskReadDone(23, 23),
                     "equality must not earn a done-bit — the compare is strict");
+            assertLateAfterResult(rig, rig.state, primaryLate, true);
+            assertLateAfterResult(rig, other, otherLate, false);
         } finally {
             rig.proc.shutdown();
         }
