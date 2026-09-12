@@ -1084,6 +1084,7 @@ public class PaperRequestProcessingService {
             var s = new PaperPlayerRequestState(player,
                     LSSConstants.SYNC_ON_LOAD_SLOT_CAP,
                     this.config.generationLimits().perPlayer());
+            if (this.regionizedProbing) s.requireProbeHandoff();
             // Session identity for the router's stale-snapshot guard (set before the map
             // publish so the processing thread never sees it null on a live state).
             s.setRegisteredDimension(player.level().dimension().identifier().toString());
@@ -1126,6 +1127,7 @@ public class PaperRequestProcessingService {
             this.reattachPromptAt.values().removeIf(stamp -> stamp < cutoff);
         }
         if (removed != null) {
+            removed.discardProbeHandoff();
             this.offThreadProcessor.notifyPlayerRemoved(uuid, removed.registration());
             cleanupPlayerServices(uuid, removed.registration());
         }
@@ -1586,7 +1588,7 @@ public class PaperRequestProcessingService {
                 // pipeline (release last tick's arrivals, park + probe this tick's). The
                 // sync probe is skipped entirely: the pump owns no chunks on Folia.
                 probes = consumeRegionProbes(player.getUUID(), dimension, skipPositions);
-                holdAndScheduleRegionProbe(state, player, level, skipPositions);
+                holdAndScheduleRegionProbe(state, player, level, skipPositions, probes);
             } else {
                 probes = this.probeLoadedChunks(state, level, skipPositions, globalProbeBudget);
                 globalProbeBudget -= probes.size();   // charge only actual serializations (pump path)
@@ -1751,39 +1753,18 @@ public class PaperRequestProcessingService {
         return batch.probes();
     }
 
-    /** Pump only. One-tick hold-release at BATCH granularity: release last tick's held batch
-     *  back into the mailbox — but only if no newer batch arrived during the hold
-     *  (republishHeldBatch: the mailbox CAS catches a newer batch still sitting there; the
-     *  offer-generation guard catches one that passed THROUGH the mailbox — offered and
-     *  taken by the processing thread — during the hold. A lost republish means the held
-     *  batch was superseded, is counted, and is dropped, never resurrected) — otherwise
-     *  take whatever is pending now, park it with the pre-take offer generation, and hand
-     *  its positions to the player's owning region. The processing thread takes batches
-     *  only from the mailbox, so a held batch is invisible to routing until released with
-     *  its probe results already published, and no batch is ever both held and pending.
-     *
-     *  <p>Release strictly precedes the take, and a successful release ends the tick: the CAS
-     *  is {@code compareAndSet(null, held)}, so taking first would empty the mailbox and make
-     *  the CAS unconditionally succeed — resurrecting a batch the client has already
-     *  superseded while parking the newer one behind it. (The offer-generation guard now
-     *  also catches that shape, but the release-then-take order stays: it is what keeps the
-     *  pump from re-holding a batch routing is about to take.) Returning on a successful
-     *  release keeps the pump from immediately stealing back the batch it just handed to
-     *  routing.
-     *
-     *  <p><b>Known limitation.</b> The release-then-return only protects the batch for ONE
-     *  pump tick: if the processing cycle overruns and has not taken the released batch by
-     *  the NEXT pump tick, this method finds nothing held and takes it back out of the
-     *  mailbox — re-holding it for another tick (with fresh probe results) instead of
-     *  letting routing have it. A persistently slow processing thread can ping-pong a batch
-     *  this way, each bounce adding a tick of routing delay until either the processing
-     *  thread wins the race or the next 1 Hz declaration supersedes the batch. Bounded and
-     *  self-healing, but worth knowing when reading Folia soak latencies. */
+    /** Pump only. Release the previous tick's held declaration unconditionally, with
+     * currently ready, generation-filtered probes in the same atomic envelope. A late
+     * callback never extends the hold. Newer offers still defeat both generation/CAS guards.
+     * Only fresh ingress is taken below; released envelopes remain router-owned across
+     * later pump snapshots, so a slow worker cannot lose their ready probes by re-holding.
+     */
     private void holdAndScheduleRegionProbe(PaperPlayerRequestState state, ServerPlayer player,
-                                            ServerLevel level, LongOpenHashSet skipPositions) {
+                                            ServerLevel level, LongOpenHashSet skipPositions,
+                                            Long2ObjectMap<LoadedColumnData> readyProbes) {
         var released = this.heldForProbe.remove(player.getUUID());
         if (released != null
-                && state.republishHeldBatch(released.batch(), released.offerGeneration())) {
+                && state.republishHeldBatch(released.batch(), released.offerGeneration(), readyProbes)) {
             return;
         }
 
@@ -1794,7 +1775,7 @@ public class PaperRequestProcessingService {
         // only make the eventual republish refuse spuriously (a healed drop), never let a
         // stale batch resurrect.
         long heldAtGeneration = state.offerGeneration();
-        var fresh = state.takeIncomingBatch();
+        var fresh = state.takeFreshIncomingBatchForProbe();
         if (fresh == null) {
             // The published-want-set arm (Folia review 2026-08-27 R1): before this arm
             // existed, Folia probed ONLY on a declaration's arrival tick — the probe
@@ -2126,6 +2107,10 @@ public class PaperRequestProcessingService {
             this.offThreadProcessor.shutdown();
         } catch (Exception e) {
             LSSLogger.error("Error shutting down off-thread processor", e);
+        }
+        for (var state : this.players.values()) {
+            state.registration().retire();
+            state.discardProbeHandoff();
         }
         this.players.clear();
         try {

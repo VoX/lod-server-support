@@ -782,4 +782,23 @@ class RegionProbeSchedulingTest {
         var flag=PaperRequestProcessingService.class.getDeclaredField("shuttingDown");flag.setAccessible(true);flag.setBoolean(service,true);
         scheduledTasks.get(0).run();assertEquals(0,reads.get());
     }
+    @Test
+    void actualShutdownRetiresBeforeADeferredHeldReleaseCanPublish() {
+        var uuid = UUID.randomUUID();
+        var player = playerIn(uuid, level(Level.OVERWORLD));
+        var state = service.registerPlayer(player, 1);
+        var held = new IncomingBatch(new IncomingRequest[]{new IncomingRequest(5, 7, -1)});
+        state.offerIncomingBatch(held);
+        long generation = state.offerGeneration();
+        service.tick();
+        assertNull(state.peekIncomingBatch());
+        service.shutdown();
+        assertTrue(state.registration().isRetired(), "actual service shutdown closes publication authority");
+        var ready = new it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<LoadedColumnData>();
+        ready.put(PositionUtil.packPosition(5, 7), column(5, 7));
+        assertFalse(state.republishHeldBatch(held, generation, ready), "late release cannot restore retained bytes");
+        scheduledTasks.get(0).run();
+        assertNull(state.peekIncomingBatch());
+    }
+
 }
