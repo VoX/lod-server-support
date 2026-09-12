@@ -302,6 +302,14 @@ class ClientColumnProcessor {
             this.queuedBytes.addAndGet(-queued.charge());
             var delivery = queued.delivery();
             try {
+            // The epoch check and shared-queue poll are separate operations. Teardown
+            // can occur between them and admit a replacement session's receipt before
+            // this old drain polls. Reject through that receipt's owner before decoding;
+            // completing it silently would preserve a stamp for an undispatched column.
+            if (delivery != null && epoch != this.sessionEpoch) {
+                delivery.report();
+                continue;
+            }
             var payload = queued.payload();
             if (!levelDimension.equals(payload.dimension())) continue;
 
@@ -386,7 +394,10 @@ class ClientColumnProcessor {
                             factory, brightClear);
                 }
                 var columnData = new VoxelColumnData(sections, payload.columnTimestamp());
-                if (delivery != null && (epoch != this.sessionEpoch || !delivery.isActive())) continue;
+                if (delivery != null && (epoch != this.sessionEpoch || !delivery.isActive())) {
+                    delivery.report(); // inactive old owners ignore this; an active receipt must retry
+                    continue;
+                }
                 LSSApi.withIngestFailureHandle(payload.dimension(), payload.chunkX(), payload.chunkZ(),
                         delivery, () -> dispatcher.dispatch(payload.dimension(),
                                 payload.chunkX(), payload.chunkZ(), columnData));

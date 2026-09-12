@@ -232,6 +232,7 @@ class IncomingRequestRouter<PS extends AbstractPlayerRequestState<?>> {
         } finally {
             state.finishProbeRoutingPass();
         }
+        this.processor.processLateProbes(state, dimension, snapshot.maxSendQueueSize());
     }
 
     /**
@@ -355,6 +356,7 @@ class IncomingRequestRouter<PS extends AbstractPlayerRequestState<?>> {
             if (probe == null || !this.processor.currentLoadedProbe(probe, dimension, packed, state)) return false;
         }
 
+        state.discardRoutingLateProbe(packed); // already served by the ordinary ready-probe path
         long order = this.ctx.sequence().next();
         boolean allAir = probe.serializedSections() == null || probe.serializedSections().length == 0;
         boolean sent;
@@ -414,6 +416,7 @@ class IncomingRequestRouter<PS extends AbstractPlayerRequestState<?>> {
 
         long cachedTs = this.timestampCache.get(dimension, packed);
         if (cachedTs > 0 && cachedTs <= req.clientTimestamp()) {
+            state.discardRoutingLateProbe(packed);
             state.markDiskReadDone(req.cx(), req.cz());
             // Compare-backed rung — stamped-up_to_date eligible (plan §9.1): the
             // predicate answers -1 under a pending mark / armed latch (§9.2).
@@ -495,6 +498,7 @@ class IncomingRequestRouter<PS extends AbstractPlayerRequestState<?>> {
                 this.ctx.diagnostics().addSuperseded(1);
                 return AdmitResult.SUBMITTED; // dispositioned (silent transient drop)
             }
+            state.noteLateProbeDiskSubmission(packed, order);
             this.ctx.diagnostics().incrementDiskQueued();
             return AdmitResult.SUBMITTED;
         } else if (this.generationAvailable) {

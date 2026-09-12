@@ -1770,6 +1770,7 @@ public class PaperRequestProcessingService {
     private void holdAndScheduleRegionProbe(PaperPlayerRequestState state, ServerPlayer player,
                                             ServerLevel level, LongOpenHashSet skipPositions,
                                             Long2ObjectMap<LoadedColumnData> readyProbes) {
+        state.updateLateProbeRange(this.config.lodDistanceChunks + LSSConstants.LOD_DISTANCE_BUFFER);
         var released = this.heldForProbe.remove(player.getUUID());
         if (released != null
                 && state.republishHeldBatch(released.batch(), released.offerGeneration(), readyProbes)) {
@@ -1805,7 +1806,7 @@ public class PaperRequestProcessingService {
             UUID uuid = player.getUUID();
             try {
                 this.regionTaskScheduler.schedule(player,
-                        () -> runRegionProbe(uuid, state, level, positions));
+                        () -> runRegionProbe(uuid, state, level, positions, -1));
             } catch (Exception e) {
                 // R5 containment — see the sibling below.
             }
@@ -1814,11 +1815,12 @@ public class PaperRequestProcessingService {
         this.heldForProbe.put(player.getUUID(), new HeldBatch(fresh, heldAtGeneration));
 
         long[] positions = snapshotProbePositions(state, fresh, skipPositions);
+        state.beginLateProbes(heldAtGeneration, positions);
         if (positions.length == 0) return;
         UUID uuid = player.getUUID();
         try {
             this.regionTaskScheduler.schedule(player,
-                    () -> runRegionProbe(uuid, state, level, positions));
+                    () -> runRegionProbe(uuid, state, level, positions, heldAtGeneration));
         } catch (Exception e) {
             // A plugin-manager disable from a region thread can land between tick()'s
             // shuttingDown check and this schedule: the EntityScheduler then throws
@@ -1853,7 +1855,7 @@ public class PaperRequestProcessingService {
     /** Region-thread task body. Touches no pump state: reads the level behind the ownership
      *  guard, serializes matches through the shared probe seam, and publishes one batch via
      *  compute (merge under the bin lock; the pump takes ownership atomically via remove). */
-    private void runRegionProbe(UUID uuid, PaperPlayerRequestState capturedState, ServerLevel level, long[] positions) {
+    private void runRegionProbe(UUID uuid, PaperPlayerRequestState capturedState, ServerLevel level, long[] positions, long heldGeneration) {
         var registration = capturedState.registration();
         if (this.shuttingDown || registration.isRetired() || this.players.get(uuid) != capturedState) return;
         Long2ObjectOpenHashMap<LoadedColumnData> found = null;
@@ -1865,7 +1867,9 @@ public class PaperRequestProcessingService {
             var column = this.loadedColumnProbe.probe(level, cx, cz);
             if (column != null) {
                 if (found == null) found = new Long2ObjectOpenHashMap<>();
-                found.put(packed, capture.bind(column));
+                var bound = capture.bind(column);
+                found.put(packed, bound);
+                if (heldGeneration >= 0) capturedState.publishLateProbe(heldGeneration, bound);
             }
         }
         if (found == null) return;
