@@ -57,8 +57,9 @@ closed consumer writers. It also checks the genuine owning-tick overlap evidence
 The optional workload currently creates loaded target edits and explicit
 send-admission/slow-consumer intervals. The server admission seam is an adapter
 constraint, not evidence of physical Netty saturation. Source mix, churn,
-full queue/debt drain, and the complete performance protocol remain required
-before a full P6b acceptance claim. The concurrent client's required `FrameMixin`
+full queue/debt drain, and the complete performance protocol are required
+for a full P6b acceptance claim. Dated run results and outstanding gates are
+recorded in the [implementation ledger](../docs/implementation/project-improvements-ledger.md). The concurrent client's required `FrameMixin`
 records real `Minecraft.runTick(Z)V` frame intervals through its bounded writer.
 The original game, loader, candidate and fixture bytes are pinned by the run.
 The earlier `client-timing` class-hash observer is retained as diagnostic source:
@@ -71,8 +72,11 @@ publish `expected_source` and `target_ready` for prepared source lanes; the chec
 rejects a body from another source. The Folia workload now keeps publishing during
 Subject B's controlled disconnect, and the client requests one fresh connection
 after five seconds. An independent `session_transfer` rebases unresolved targets;
-old-session acceptance is discarded. These new churn and source checks are
-compiled and tool-tested, but their live acceptance remains pending.
+old-session acceptance is discarded. See the
+[implementation ledger](../docs/implementation/project-improvements-ledger.md)
+for source/churn validation results, exact fixture identities, and remaining
+acceptance gates. Fixture source on a support line does not establish native
+execution or platform availability on that line.
 
 
 The WI6 send-admission scenario uses three actual connected clients. It declines

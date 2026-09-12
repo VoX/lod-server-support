@@ -1,0 +1,202 @@
+{
+  "checkpoint_utc": "2026-09-12T06:35:06.674019+00:00",
+  "status": "in_progress",
+  "heads_at_product_gate": [
+    {
+      "line": "1.21.1",
+      "commit": "db0d933d517e231eaa3a095f66107c2c6aa4edf7",
+      "tree": "830d2102b5085210d7bbd100357c707160bb07df"
+    },
+    {
+      "line": "1.21.10",
+      "commit": "cee63ab445ef995691abc7aeedb1d3c17015cec4",
+      "tree": "e7ddc538c4cc137062d41282a29c45214ff47889"
+    },
+    {
+      "line": "1.21.11",
+      "commit": "107598b57637e50aecd320efecb7f1827dcbe2e2",
+      "tree": "00eab27eda8f7702d530b3ee3bba3aa9d1d7cba2"
+    },
+    {
+      "line": "26.1",
+      "commit": "8636d125d1b9d80f79561060c50e40168b51fe03",
+      "tree": "75b36ad4d96750661958e24aa80774996c1921b9"
+    },
+    {
+      "line": "26.2",
+      "commit": "c5dcbfcccdd941d991c23d718537dfd7929fc147",
+      "tree": "912fd439648fd1932d912bb0b32242deb55c5443"
+    }
+  ],
+  "product_build_gates": [
+    {
+      "line": "1.21.1",
+      "head": "db0d933d517e231eaa3a095f66107c2c6aa4edf7",
+      "gate": "/home/vox/.local/state/lss-project-improvements/final-validation-after-preset/1.21.1/attempt-pre-performance-late-correction-schema-20260912/manifest.json",
+      "gate_sha256": "94e4f4d30a7e094a536d253e4c4e8b95c11f08aa4544563377836df1e1a94f93"
+    },
+    {
+      "line": "1.21.10",
+      "head": "cee63ab445ef995691abc7aeedb1d3c17015cec4",
+      "gate": "/home/vox/.local/state/lss-project-improvements/final-validation-after-preset/1.21.10/attempt-pre-performance-late-correction-schema-20260912/manifest.json",
+      "gate_sha256": "0cd2a66139dd2d0ba15a9dff321fddded59b755392b59dae6934db5dc2779eaa"
+    },
+    {
+      "line": "1.21.11",
+      "head": "107598b57637e50aecd320efecb7f1827dcbe2e2",
+      "gate": "/home/vox/.local/state/lss-project-improvements/final-validation-after-preset/1.21.11/attempt-pre-performance-late-correction-schema-20260912/manifest.json",
+      "gate_sha256": "e6438392156b1a0f86f909abc59d96d79c58f1208c28ffde469db0a2211abb91"
+    },
+    {
+      "line": "26.1",
+      "head": "8636d125d1b9d80f79561060c50e40168b51fe03",
+      "gate": "/home/vox/.local/state/lss-project-improvements/final-validation-after-preset/26.1/attempt-pre-performance-late-correction-schema-20260912/manifest.json",
+      "gate_sha256": "f5b6940e0733a542af91f536bacd0cefcb59db87b2594ecc35179d54dea169bb"
+    },
+    {
+      "line": "26.2",
+      "head": "c5dcbfcccdd941d991c23d718537dfd7929fc147",
+      "gate": "/home/vox/.local/state/lss-project-improvements/final-validation-after-preset/26.2/attempt-pre-performance-late-correction-schema-20260912/manifest.json",
+      "gate_sha256": "b0cee9efb38f6fa3900a97ae8b6f881317f630d557ea70d5812f13a83e9648b3"
+    }
+  ],
+  "new_regression_execution": {
+    "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260910/late-correction-test-execution.json",
+    "sha256": "dbd48639a7204ebc7bdb0a12bf2676ddb3a05e90809d6c59e50f85daacfaa796",
+    "cases_per_line": 18,
+    "actual_executions": 90,
+    "status": "passed"
+  },
+  "folia_sustained": {
+    "run": "20260912T043435Z-113ea71137d9",
+    "status": "failed",
+    "targets": 23056,
+    "committed": 23045,
+    "missing_subject": "RigSubjectB",
+    "missing_sequences": [
+      2854,
+      2855,
+      2856,
+      2857,
+      2858,
+      2859,
+      2860,
+      2861,
+      2862,
+      2863,
+      2864
+    ],
+    "raw_equals_retained_proof": true,
+    "cleanup": "complete",
+    "receipt": "/home/vox/.local/state/lss-rig/source-functional-late-probe-20260912/baseline-folia-sustained/attempt-1/failure-summary.json",
+    "sha256": "19ae7d8de8bdd0ae5f795b3d578954224788e616c4e04100f5636fdd2fda079d"
+  },
+  "performance": "unaccepted",
+  "numeric_preset": "unselected",
+  "final_astra_reviews": "not_started",
+  "scope": "Product build evidence precedes later nonnumeric tooling, documentation and the 26.2 probe-coverage correction. Targeted regression results do not qualify final aggregate or native gates.",
+  "coverage_correction": {
+    "line": "26.2",
+    "status": "targeted_tests_passed_diagnostic_failed_not_ported",
+    "tests": 56,
+    "receipt": {
+      "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260910/probe-prefix-coverage-green/result.json",
+      "sha256": "a82cbabeb1a9becac4d282c1f375fdf82aec14591f1de78db888dfbc77f99a0b"
+    },
+    "red_receipt": {
+      "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260910/probe-prefix-coverage-red/result.json",
+      "sha256": "3c489427cd9a4fbe20a6aea4fb0662c4b3f0e25aba774344b97b3350f4947c27"
+    },
+    "reviewed_diff": {
+      "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260910/probe-prefix-coverage-red/admitted-opportunity.diff",
+      "sha256": "c5bdb1acd43c02809c81509fd1dc945e3c300669c88863f03b0626bb63dfbc97"
+    },
+    "scope": "Not yet ported or qualified by full/native gates."
+  },
+  "nonnumeric_integration": {
+    "placements_applied": 162,
+    "remaining_measured_placements": 41,
+    "distinct_python_cases_passed": 3065,
+    "applied_receipt": {
+      "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260910/final-integration-staging/applied-nonnumeric-20260912/applied.json",
+      "sha256": "0c3747a5555a2c83da479675fe707259f381a6f68396f00d4db2007d7f477069"
+    },
+    "followup_receipt": {
+      "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260910/final-integration-staging/applied-nonnumeric-20260912/skipped-controls-followup.json",
+      "sha256": "9940516e89a20ba43c4853da0332a104239472f5198dd383d916923b7902fcc7"
+    },
+    "status": "committed_locally",
+    "commit_receipt": {
+      "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260910/final-integration-staging/applied-nonnumeric-20260912/commits.json",
+      "sha256": "5093091fde4fedc65011f8d9c1b0d7fa49d2f1fa5a494068d9d8a1b28b092d55"
+    }
+  },
+  "current_classification": {
+    "status": "committed_locally",
+    "commit_receipt": {
+      "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260910/final-accounting-staging/current-classification/commits.json",
+      "sha256": "02ff76909fc167afd3bf93ff8cea430473f31e655ab21f2d765b07c3ac17287a"
+    },
+    "unclassified_paths": 0,
+    "future_numeric_command_flags": 10,
+    "paths_per_line": 2
+  },
+  "coverage_diagnostic": {
+    "run": "20260912T054915Z-205396905ccc",
+    "status": "failed",
+    "closed_missing": 8,
+    "open_uncommitted_at_cutoff": 208,
+    "receipt": {
+      "path": "/home/vox/.local/state/lss-rig/late-probe-coverage-diagnostic-450-20260912/attempt-1/diagnostic-summary.json",
+      "sha256": "31734aeec7729c2bbb970a091f2d9c103d50274140f455791453ea4ae60cf70b"
+    },
+    "diagnostic_only": true
+  },
+  "overlap_correction": {
+    "line": "26.2",
+    "targeted_tests": 73,
+    "status": "targeted_tests_passed_native_diagnostic_failed",
+    "receipt": {
+      "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260910/probe-overlap-green/attempt-1/result.json",
+      "sha256": "9e480a7cbef347b3631fc3b07be5f71c577d1b3420061075ede26b97821d85a0"
+    },
+    "native_run": "20260912T061930Z-19127a71249f",
+    "native_status": "failed",
+    "porting": "pending",
+    "full_gates": "pending",
+    "native_closed_missing": 5,
+    "native_missing_subject": "RigSubjectB",
+    "native_missing_sequences": [
+      2849,
+      2850,
+      2851,
+      2852,
+      2853
+    ],
+    "native_receipt": {
+      "path": "/home/vox/.local/state/lss-rig/late-probe-overlap-diagnostic-450-20260912/attempt-1/diagnostic-summary.json",
+      "sha256": "111d868d9daf9be313414477043da0390d1b5f0a73298d57d36386c970353727"
+    },
+    "finding": "Generation-3 declaration omission cancels probe captures while admitted disk work survives.",
+    "admission_lifecycle_fix": "pending"
+  },
+  "remaining_acceptance": {
+    "performance_slots": 9,
+    "native_rows_including_presets": 52,
+    "human_assessments": 8,
+    "final_astra_reviews": 6,
+    "original_migrated_suites": 67
+  },
+  "compat_current_controls": {
+    "cases_per_line": 91,
+    "total": 455,
+    "skipped": 0,
+    "status": "passed",
+    "python_sources_unchanged": true,
+    "separate_from_3065": true,
+    "receipt": {
+      "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260910/compat-current-controls-20260912/results.json",
+      "sha256": "fdbe53ee716edec6a9de169ae6091d554730f1dd91d5faa72007230500b15332"
+    }
+  }
+}
