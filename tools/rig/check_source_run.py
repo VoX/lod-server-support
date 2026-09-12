@@ -9,6 +9,7 @@ from native_sessions import check as native_sessions
 from check_measured_schedule import check as schedule_check
 from normalize_workload import normalize
 from performance import correctness
+from native_save_setup import check as save_setup_check, requested as save_setup_requested
 
 SUBJECTS={'RigSubject'+letter for letter in 'ABCD'}
 ASSERTIONS=('independent_target_delivery','actual_payload_source','bounded_debt_drain','owning_region_overlap')
@@ -76,6 +77,8 @@ def inspect(root,manifest):
     server=runtime.get('server_profile',{});profile=read(root/'participants/server.json')
     if profile.get('platform')!=platform or digest(profile)!=server.get('profile_hash'):errors.append('exact declared native server profile required')
     oracle=rows('oracle.jsonl');events=rows('server-events.jsonl')
+    if save_setup_requested(scenario,runtime):
+        errors.extend(save_setup_check(scenario,runtime,events,manifest['run_id']))
     consumers={subject:rows('consumer-'+subject+'.jsonl') for subject in sorted(SUBJECTS)}
     if {p.name for p in (root/'evidence').glob('consumer-*.jsonl')}!={'consumer-'+s+'.jsonl' for s in SUBJECTS}:errors.append('unexpected consumer evidence identity')
     for row in oracle+events:

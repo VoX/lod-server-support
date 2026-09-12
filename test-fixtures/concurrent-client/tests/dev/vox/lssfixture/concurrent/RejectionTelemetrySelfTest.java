@@ -23,21 +23,18 @@ public final class RejectionTelemetrySelfTest {
         var facts=new AcceptancePolicy.Facts(0,1,10,100,1);
         for(boolean block:new boolean[]{true,false})for(int source:new int[]{0,1}){
             var expected=AcceptancePolicy.decide(facts,true,true,20,30,source,block);
-            var retry=new AcceptancePolicy.RetryOnce();var diagnostic=new RejectionTelemetry(true);
-            if(expected==AcceptancePolicy.Decision.RETRY){
-                retry.require();
+            var diagnostic=new RejectionTelemetry(true);
+            if(expected==AcceptancePolicy.Decision.OBSERVE){
                 diagnostic.observe(RejectionTelemetry.bucket(10,20,30,source==0,block),()->{throw new AssertionError("record construction failure");},rows::add);
                 assert diagnostic.status().get("rejection_diagnostics_error").equals(true);
             }
-            var reports=new AtomicInteger();retry.finish(()->true,reports::incrementAndGet);
-            assert reports.get()==(expected==AcceptancePolicy.Decision.RETRY?1:0);
+            // Telemetry failure cannot change passive observation into target success.
             assert AcceptancePolicy.decide(facts,true,true,20,30,source,block)==expected;
         }
         var failedSink=new RejectionTelemetry(true);var attempts=new AtomicInteger();
         for(int n=0;n<100;n++)failedSink.observe(RejectionTelemetry.Bucket.BOTH,()->Map.of(),row->{attempts.incrementAndGet();throw new AssertionError("queue unavailable");});
         assert attempts.get()==2;assert failedSink.status().get("rejection_diagnostics_error").equals(true);
-        var stale=new AcceptancePolicy.RetryOnce();stale.require();
-        assert !stale.finish(()->false,()->{throw new AssertionError("stale lease reported");});
-        System.out.println("RejectionTelemetry: disabled, fixed bucket budget, truncation, classification, decision/retry neutrality and evidence failures passed");
+        assert AcceptancePolicy.decide(facts,false,true,20,30,1,false)==AcceptancePolicy.Decision.IGNORE;
+        System.out.println("RejectionTelemetry: disabled, fixed bucket budget, truncation, classification, passive decision neutrality and evidence failures passed");
     }
 }

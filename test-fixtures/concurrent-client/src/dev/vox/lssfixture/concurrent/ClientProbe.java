@@ -26,7 +26,8 @@ public final class ClientProbe implements ClientModInitializer, VoxelColumnConsu
     private static OracleJournal journal;
     private static BridgeObservation bridge;
     private static final ArrayBlockingQueue<String> OUTPUT=new ArrayBlockingQueue<>(8192);
-    private static final ArrayBlockingQueue<Runnable> HELD=new ArrayBlockingQueue<>(128);
+    private static final ArrayBlockingQueue<PendingAcceptance> HELD=new ArrayBlockingQueue<>(128);
+    private static final Semaphore HELD_SLOTS=new Semaphore(128);
     private static final IdentityCaptures<Wire> WIRES=new IdentityCaptures<>(8192);
     private static final ThreadLocal<Wire> DECODING=new ThreadLocal<>();
     private static final Set<String> COMMITTED=ConcurrentHashMap.newKeySet();
@@ -55,7 +56,7 @@ public final class ClientProbe implements ClientModInitializer, VoxelColumnConsu
         running=true;
         Thread writer=new Thread(()->{
             try(BufferedWriter stream=Files.newBufferedWriter(root.resolve("consumer-"+subject+".jsonl"))){
-                while(running||!OUTPUT.isEmpty()){
+                while(running||!OUTPUT.isEmpty()||HELD_SLOTS.availablePermits()!=128){
                     String row=OUTPUT.poll(100,TimeUnit.MILLISECONDS);
                     if(row!=null){stream.write(row);stream.newLine();stream.flush();}
                     readOracle();
@@ -70,13 +71,17 @@ public final class ClientProbe implements ClientModInitializer, VoxelColumnConsu
                         }
                         emit(Map.of("event","jvm_gc","time_ns",sampleTime,"gc_count",countKnown?count:-1,"gc_time_ms",timeKnown?millis:-1));
                     }
-                    if(!stalled()){Runnable release;while((release=HELD.poll())!=null)release.run();}
+                    int batch=HELD.size();
+                    for(int i=0;i<batch;i++){
+                        PendingAcceptance held=HELD.poll();if(held==null)break;
+                        if(!held.poll(System.nanoTime(),stalled())&&!HELD.offer(held))held.reject();
+                    }
                 }
-                Map<String,Object> closed=new HashMap<>(Map.of("event","consumer_closed","run_id",run,"subject",subject,"overflow",overflow,"held",HELD.size()));
+                Map<String,Object> closed=new HashMap<>(Map.of("event","consumer_closed","run_id",run,"subject",subject,"overflow",overflow,"held",128-HELD_SLOTS.availablePermits()));
                 closed.putAll(REJECTIONS.status());stream.write(JSON.toJson(closed));stream.newLine();
-            }catch(Exception e){overflow=true;}
+            }catch(Exception e){overflow=true;}finally{synchronized(HELD){running=false;PendingAcceptance held;while((held=HELD.poll())!=null)held.reject();}}
         },"LSS-RigConsumerEvidence");writer.setDaemon(true);writer.start();
-        Runtime.getRuntime().addShutdownHook(new Thread(()->{running=false;Runnable release;while((release=HELD.poll())!=null)release.run();try{writer.join(3000);}catch(InterruptedException e){Thread.currentThread().interrupt();}}));
+        Runtime.getRuntime().addShutdownHook(new Thread(()->{synchronized(HELD){running=false;PendingAcceptance held;while((held=HELD.poll())!=null)held.cancel();}try{writer.join(3000);}catch(InterruptedException e){Thread.currentThread().interrupt();}}));
         LSSApi.registerColumnConsumer(this);
         emit(Map.of("event","consumer_ready","run_id",run,"subject",subject));
     }
@@ -108,7 +113,7 @@ public final class ClientProbe implements ClientModInitializer, VoxelColumnConsu
                 reconnectAt=System.nanoTime()+5_000_000_000L;
             if(connection!=mc.getConnection() && mc.getConnection()!=null)connectionIndex++;
             level=mc.level;connection=mc.getConnection();session++;oracle=new Oracle(connectionIndex,null,Map.of());WIRES.clear();
-            Runnable release;while((release=HELD.poll())!=null)release.run();
+            PendingAcceptance held;while((held=HELD.poll())!=null)held.cancel();
             emit(Map.of("event","client_session","session",session,"connected",connection!=null,"time_ns",System.nanoTime()));
         }
         if (reconnectAt!=0 && !reconnected && connection==null && System.nanoTime()>=reconnectAt) {
@@ -153,38 +158,75 @@ public final class ClientProbe implements ClientModInitializer, VoxelColumnConsu
     public static void decodingFinished(){DECODING.remove();}
     @Override public int pendingIngestBacklog(){return HELD.size()>=64?8192:HELD.size();}
     @Override public void onVoxelColumnReceived(ClientLevel delivery,ResourceKey<Level> dimension,int x,int z,VoxelColumnData data){
+        if(!running)return;
         var receipt=LSSApi.captureIngestFailureHandle();
         Wire wire=DECODING.get();DECODING.remove();
         long bodyId=BODY_SEQUENCE.incrementAndGet();
         if(dimension!=Level.OVERWORLD||receipt==null||!receipt.isActive())return;
         if(delivery!=level)return;
         if(!hasPendingDemand(oracle,x,z))return;
-        if(stalled()){
-            Runnable release=receipt.deferAcceptance();
-            if(!HELD.offer(()->{try{accept(delivery,x,z,data,wire,receipt,bodyId);}finally{
-                release.run();emit(Map.of("event","acceptance_released","held",HELD.size(),"time_ns",System.nanoTime()));
-            }})){try{if(receipt.isActive()&&delivery==level&&(wire==null||wire.session()==session&&wire.nativeConnection()==connection)&&hasPendingDemand(oracle,x,z))retry(receipt,bodyId,"held-queue-full");}finally{release.run();}overflow=true;}
-            else emit(Map.of("event","acceptance_deferred","held",HELD.size(),"time_ns",System.nanoTime()));
-            return;
+        Set<String> awaiting=new HashSet<>();
+        boolean forced=stalled();
+        try {if(!forced&&accept(delivery,x,z,data,wire,receipt,bodyId,awaiting))return;}
+        catch(RuntimeException failure){fixtureFailure(bodyId,"callback-observation-failed");return;}
+        synchronized(HELD){
+        if(!running)return;
+        Runnable release=receipt.deferAcceptance();
+        if(!HELD_SLOTS.tryAcquire()){overflow=true;release.run();return;}
+        PendingAcceptance held=new PendingAcceptance(
+                ()->running&&receipt.isActive()&&delivery==level&&(wire==null||wire.session()==session&&wire.nativeConnection()==connection),
+                ()->accept(delivery,x,z,data,wire,receipt,bodyId,awaiting),
+                ()->unknownDeadline(oracle,x,z,awaiting),
+                ()->{try{release.run();}finally{HELD_SLOTS.release();emit(Map.of("event","acceptance_released","held",HELD.size(),"time_ns",System.nanoTime()));}},
+                ()->overflow=true);
+        if(!HELD.offer(held))held.reject();
+        else emit(Map.of("event","acceptance_deferred","held",HELD.size(),"time_ns",System.nanoTime()));
         }
-        accept(delivery,x,z,data,wire,receipt,bodyId);
     }
-    private static void accept(ClientLevel delivery,int x,int z,VoxelColumnData data,Wire wire,LSSApi.IngestFailureHandle receipt,long bodyId){
-        if(!receipt.isActive()){
-            emit(Map.of("event","stale_acceptance_discarded","local_session",session,"time_ns",System.nanoTime()));return;
+    private static long unknownDeadline(Oracle current,int x,int z,Set<String> awaiting){
+        long deadline=Long.MAX_VALUE;
+        for(Target target:current.targets().getOrDefault(OracleJournal.position(x,z),List.of()))
+            if(awaiting.contains(target.id())&&!COMMITTED.contains(target.id())&&target.applied()==0)
+                deadline=Math.min(deadline,target.offered()+120_000_000_000L);
+        return deadline;
+    }
+    private static boolean accept(ClientLevel delivery,int x,int z,VoxelColumnData data,Wire wire,LSSApi.IngestFailureHandle receipt,long bodyId,Set<String> awaiting){
+        if(!running||!receipt.isActive()){
+            emit(Map.of("event","stale_acceptance_discarded","local_session",session,"time_ns",System.nanoTime()));return true;
         }
-        if(delivery!=level)return;
+        if(delivery!=level)return true;
         Oracle current=oracle;
-        if(!hasPendingDemand(current,x,z))return;
-        if(wire!=null&&(wire.session()!=session||wire.nativeConnection()!=connection))return;
-        var retryOnce=new AcceptancePolicy.RetryOnce();
+        if(wire!=null&&(wire.session()!=session||wire.nativeConnection()!=connection))return true;
         var targets=current.targets().getOrDefault(OracleJournal.position(x,z),List.of());
+        long checkedAt=System.nanoTime();
+        for(String id:awaiting){
+            if(COMMITTED.contains(id))continue;
+            Target target=targets.stream().filter(t->t.id().equals(id)).findFirst().orElse(null);
+            if(target==null||target.end()>0&&checkedAt>=target.end())
+                throw new IllegalStateException("unknown application hold lost its original target interval");
+        }
+        if(!hasPendingDemand(current,x,z))return true;
+        if(wire==null||wire.connectionId()==null||!wire.connectionId().equals(current.connection())||wire.x()!=x||wire.z()!=z
+                ||wire.timestamp()!=data.columnTimestamp()||!wire.dimension().equals("minecraft:overworld")){
+            fixtureFailure(bodyId,"invalid-wire-association");return true;
+        }
+        if(checkedAt<wire.received()){fixtureFailure(bodyId,"invalid-body-clock");return true;}
+        boolean unknown=false;
+        for(Target target:targets){
+            if(!target.connection().equals(current.connection())||COMMITTED.contains(target.id())||wire==null
+                    ||!Objects.equals(wire.connectionId(),current.connection())||wire.x()!=x||wire.z()!=z
+                    ||wire.timestamp()!=data.columnTimestamp()||!wire.dimension().equals(target.dimension()))continue;
+            if(AcceptancePolicy.decide(target.facts(),receipt.isActive(),running&&delivery==level&&wire.session()==session&&wire.nativeConnection()==connection,
+                    wire.received(),checkedAt,wire.source(),true)==AcceptancePolicy.Decision.AWAIT_APPLICATION){awaiting.add(target.id());unknown=true;}
+        }
+        if(unknown)return false;
+        awaiting.clear();
         for(Target target:targets){
             if(!target.connection().equals(current.connection())||target.x()!=x||target.z()!=z||COMMITTED.contains(target.id()))continue;
             long resolved=System.nanoTime();
             if(target.end()>0&&resolved>=target.end())continue;
             if(wire==null||wire.connectionId()==null||!wire.connectionId().equals(current.connection())||wire.x()!=x||wire.z()!=z
-                    ||wire.timestamp()!=data.columnTimestamp()||!wire.dimension().equals(target.dimension())){retryOnce.require();continue;}
+                    ||wire.timestamp()!=data.columnTimestamp()||!wire.dimension().equals(target.dimension())){fixtureFailure(bodyId,"invalid-target-association");return true;}
             boolean matchingBlock=false;
             for(var section:data.sections()){
                 if(section.sectionY()!=Math.floorDiv(target.y(),16))continue;
@@ -198,11 +240,11 @@ public final class ClientProbe implements ClientModInitializer, VoxelColumnConsu
                 break;
             }
             resolved=System.nanoTime();
-            boolean active=receipt.isActive(),nativeAuthority=delivery==level&&wire.session()==session&&wire.nativeConnection()==connection;
+            boolean active=receipt.isActive(),nativeAuthority=running&&delivery==level&&wire.session()==session&&wire.nativeConnection()==connection;
             var decision=AcceptancePolicy.decide(target.facts(),active,nativeAuthority,
                     wire.received(),resolved,wire.source(),matchingBlock);
-            if(decision==AcceptancePolicy.Decision.RETRY){
-                retryOnce.require();
+            if(decision==AcceptancePolicy.Decision.FAILURE){fixtureFailure(bodyId,"invalid-body-clock");return true;}
+            if(decision==AcceptancePolicy.Decision.OBSERVE){
                 final boolean matched=matchingBlock;final long decidedAt=resolved;
                 if(REJECTIONS.enabled())REJECTIONS.observe(RejectionTelemetry.bucket(target.applied(),wire.received(),decidedAt,target.facts().acceptsSource(wire.source()),matched),()->{
                     Map<String,Object> row=new HashMap<>();row.put("event","acceptance_rejection_diagnostic");
@@ -228,9 +270,7 @@ public final class ClientProbe implements ClientModInitializer, VoxelColumnConsu
                 }
             }
         }
-        retryOnce.finish(()->receipt.isActive()&&delivery==level
-                        &&(wire==null||wire.session()==session&&wire.nativeConnection()==connection),
-                ()->retry(receipt,bodyId,"eligible-target-not-satisfied"));
+        return true;
     }
     private static boolean hasPendingDemand(Oracle current,int x,int z){
         if(current.generation()!=connectionIndex||current.connection()==null)return false;
@@ -239,9 +279,8 @@ public final class ClientProbe implements ClientModInitializer, VoxelColumnConsu
             if(target.connection().equals(current.connection())&&!COMMITTED.contains(target.id())&&(target.end()==0||now<target.end()))return true;
         return false;
     }
-    private static void retry(LSSApi.IngestFailureHandle receipt,long bodyId,String reason){
-        if(!receipt.isActive())return;
-        receipt.report();
-        emit(Map.of("event","acceptance_retry","body_id",bodyId,"reason",reason,"time_ns",System.nanoTime()));
+    private static void fixtureFailure(long bodyId,String reason){
+        overflow=true;
+        emit(Map.of("event","observer_failure","body_id",bodyId,"reason",reason,"time_ns",System.nanoTime()));
     }
 }
