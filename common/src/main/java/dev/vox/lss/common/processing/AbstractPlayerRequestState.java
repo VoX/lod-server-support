@@ -153,6 +153,129 @@ public abstract class AbstractPlayerRequestState<T> {
     // Separate from appliedWantSet: that batch may outlive convergence. Ingress/removal can
     // discard this immutable holder; only the router installs/uses it for retained backlog.
     private final AtomicReference<IncomingEnvelope> activeProbeEnvelope = new AtomicReference<>();
+    // A scheduled Folia owner probe may finish after its bounded hold released disk
+    // fallback. Keep only that original attempt, never a standing repair subscription.
+    static final int MAX_LATE_PROBES = MAX_PAIRED_PROBES;
+    static final int MAX_LATE_PROBE_BYTES = LSSConstants.MAX_SEND_SECTIONS_SIZE;
+    static final long LATE_PROBE_LIFETIME_NANOS =
+            java.util.concurrent.TimeUnit.SECONDS.toNanos(LSSConstants.DISK_READ_TIMEOUT_SECONDS);
+    private static final class LateProbe {
+        final long generation, started;
+        LoadedColumnData data;
+        boolean diskFallback;
+        long diskOrder = Long.MIN_VALUE;
+        LateProbe(long generation, long started) { this.generation = generation; this.started = started; }
+    }
+    // Short scalar/map operations only under this monitor: never serialization or send.
+    private final Long2ObjectOpenHashMap<LateProbe> lateProbes = new Long2ObjectOpenHashMap<>();
+    private int lateProbeBytes;
+    // Worker-owned scope around one synchronous payload build. The immutable queued
+    // copy carries classification thereafter, including concurrent retirement/send.
+    private long correctiveEnqueueOrder = Long.MIN_VALUE;
+    boolean beginCorrectiveEnqueue(long order) {
+        if (order == Long.MIN_VALUE || this.registration.isRetired()
+                || this.correctiveEnqueueOrder != Long.MIN_VALUE) return false;
+        this.correctiveEnqueueOrder = order; return true;
+    }
+    void endCorrectiveEnqueue() { this.correctiveEnqueueOrder = Long.MIN_VALUE; }
+    private long routingOfferGeneration;
+    private volatile int lateProbeRange;
+    public void updateLateProbeRange(int range) { this.lateProbeRange = range; }
+    record LateProbeCompletion(LoadedColumnData data, long generation) {}
+
+    /** Pump, before scheduling the original owner callback. No native objects retained. */
+    public synchronized void beginLateProbes(long generation, long[] positions) {
+        clearLateProbes();
+        if (!this.probeHandoffRequired || this.registration.isRetired()
+                || this.offerGeneration.get() != generation) return;
+        long now = System.nanoTime();
+        for (long pos : positions) {
+            this.lateProbes.put(pos, new LateProbe(generation, now));
+            if (this.lateProbes.size() == MAX_LATE_PROBES) break;
+        }
+    }
+
+    /** Owner callback publication; late/repeated callbacks cannot recreate a removed entry. */
+    public synchronized void publishLateProbe(long generation, LoadedColumnData data) {
+        long packed = PositionUtil.packPosition(data.cx(), data.cz());
+        var entry = this.lateProbes.get(packed);
+        if (entry == null || entry.generation != generation || entry.data != null) return;
+        if (!lateProbeCurrent(entry, System.nanoTime())) { discardLateProbe(packed); return; }
+        int size = data.serializedSections() == null ? 0 : data.serializedSections().length;
+        if (size > MAX_LATE_PROBE_BYTES - this.lateProbeBytes) { discardLateProbe(packed); return; }
+        entry.data = data;
+        this.lateProbeBytes += size;
+    }
+
+    private boolean lateProbeCurrent(LateProbe entry, long now) {
+        return !this.registration.isRetired() && entry.generation == this.offerGeneration.get()
+                && now - entry.started < LATE_PROBE_LIFETIME_NANOS;
+    }
+
+    synchronized void noteLateProbeDiskSubmission(long packed, long order) {
+        var entry = this.lateProbes.get(packed);
+        if (entry != null && entry.generation == this.routingOfferGeneration
+                && lateProbeCurrent(entry, System.nanoTime())) entry.diskOrder = order;
+    }
+
+    synchronized void markLateProbeDiskFallback(long packed, long order) {
+        var entry = this.lateProbes.get(packed);
+        if (entry != null && entry.diskOrder == order) entry.diskFallback = true;
+    }
+
+    synchronized void expireLateProbes(long now) {
+        var iterator = this.lateProbes.long2ObjectEntrySet().fastIterator();
+        while (iterator.hasNext()) {
+            var entry = iterator.next().getValue();
+            if (lateProbeCurrent(entry, now)) continue;
+            iterator.remove();
+            if (entry.data != null && entry.data.serializedSections() != null)
+                this.lateProbeBytes -= entry.data.serializedSections().length;
+        }
+    }
+
+    synchronized void discardRoutingLateProbe(long packed) {
+        var entry = this.lateProbes.get(packed);
+        if (entry != null && entry.generation == this.routingOfferGeneration) discardLateProbe(packed);
+    }
+
+    synchronized void discardLateProbeDiskResult(long packed, long order) {
+        var entry = this.lateProbes.get(packed);
+        if (entry != null && entry.diskOrder == order) discardLateProbe(packed);
+    }
+
+    synchronized void discardLateProbe(long packed) {
+        var removed = this.lateProbes.remove(packed);
+        if (removed != null && removed.data != null && removed.data.serializedSections() != null)
+            this.lateProbeBytes -= removed.data.serializedSections().length;
+    }
+
+    private synchronized void clearLateProbes() {
+        this.lateProbes.clear(); this.lateProbeBytes = 0;
+    }
+
+    /** Worker only. Absence of pending and enqueued work means DRAINED, not necessarily
+     * sent successfully. Waiting here prevents an older body arriving after correction,
+     * including send-queue starvation-floor reordering. Never cancels a shared disk read. */
+    synchronized LateProbeCompletion takeLateProbe(long now) {
+        var iterator = this.lateProbes.long2ObjectEntrySet().fastIterator();
+        while (iterator.hasNext()) {
+            var row = iterator.next(); long packed = row.getLongKey(); var entry = row.getValue();
+            long player = this.playerChunkPacked;
+            boolean current = lateProbeCurrent(entry, now) && player != NO_PLAYER_CHUNK
+                    && !PositionUtil.isOutOfRange(packed, PositionUtil.unpackX(player),
+                            PositionUtil.unpackZ(player), this.lateProbeRange);
+            if (current && (entry.data == null || !entry.diskFallback
+                    || hasPendingRequest(PositionUtil.unpackX(packed), PositionUtil.unpackZ(packed))
+                    || hasEnqueuedColumn(packed))) continue;
+            iterator.remove();
+            if (entry.data != null && entry.data.serializedSections() != null)
+                this.lateProbeBytes -= entry.data.serializedSections().length;
+            if (current) return new LateProbeCompletion(entry.data, entry.generation);
+        }
+        return null;
+    }
+
     // Offer generation: bumped BEFORE every mailbox write so the Folia pump can detect a
     // batch that passed THROUGH the mailbox (offered AND taken by the processing thread)
     // during its one-tick probe hold. The republish CAS alone cannot see that — it finds
@@ -280,6 +403,7 @@ public abstract class AbstractPlayerRequestState<T> {
     /** Offer a decoded batch (any thread). Latest-wins; an overwritten batch is superseded. */
     public void offerIncomingBatch(IncomingBatch batch) {
         long generation = this.offerGeneration.incrementAndGet(); // BEFORE the write
+        clearLateProbes();
         this.activeProbeEnvelope.set(null);
         this.totalRequestsReceived.addAndGet(batch.size());
         var previous = this.pendingBatch.getAndSet(new IncomingEnvelope(
@@ -341,6 +465,7 @@ public abstract class AbstractPlayerRequestState<T> {
             var pending = this.pendingBatch.get();
             if (pending == null || (this.probeHandoffRequired && !pending.released())) return null;
             if (!this.pendingBatch.compareAndSet(pending, null)) continue;
+            this.routingOfferGeneration = pending.generation();
             this.activeProbeEnvelope.set(pending.probes().isEmpty() ? null : pending);
             if (this.offerGeneration.get() != pending.generation() || this.registration.isRetired())
                 this.activeProbeEnvelope.compareAndSet(pending, null);
@@ -364,6 +489,7 @@ public abstract class AbstractPlayerRequestState<T> {
 
     /** Generation outcomes exclude paired probes too, including a pending released envelope. */
     void discardPairedProbe(long packed) {
+        discardLateProbe(packed);
         discardPairedProbe(this.pendingBatch, packed);
         discardPairedProbe(this.activeProbeEnvelope, packed);
     }
@@ -382,6 +508,7 @@ public abstract class AbstractPlayerRequestState<T> {
 
     /** Session removal/shutdown: release byte holders even if a callback retains the state. */
     public void discardProbeHandoff() {
+        clearLateProbes();
         this.activeProbeEnvelope.set(null);
         this.pendingBatch.set(null);
     }
@@ -1000,6 +1127,7 @@ public abstract class AbstractPlayerRequestState<T> {
                 globalLimiter.recordSend(queued.estimatedBytes());
                 paceWritten += queued.estimatedBytes();
                 diag.recordSectionSent(queued.estimatedBytes());
+                if (queued.corrective()) diag.recordCorrectiveColumnSent();
                 // Shipped size (frame for codec-1 payloads) — the wire_bytes gauge that
                 // makes /lsslod diag match observed bandwidth (design §5: the limiter
                 // keeps charging raw; this counter is the observability half).
@@ -1290,6 +1418,7 @@ public abstract class AbstractPlayerRequestState<T> {
     /** Clear dirty positions from diskReadDone (processing thread, from dirty-clear events). */
     public void clearDiskReadDone(long[] positions) {
         for (long pos : positions) {
+            discardLateProbe(pos);
             this.diskReadDone.remove(pos);
             // An edited (or honestly re-resolved) column must probe again immediately —
             // the suppress stamp's premise ("the router discards this probe") is gone.
@@ -1354,6 +1483,10 @@ public abstract class AbstractPlayerRequestState<T> {
     // ---- Accessors for concurrent queues (used by sibling classes) ----
 
     public void addReadyPayload(QueuedPayload<T> payload) {
+        if (this.correctiveEnqueueOrder != Long.MIN_VALUE
+                && payload.submissionOrder() == this.correctiveEnqueueOrder)
+            payload = new QueuedPayload<>(payload.payload(), payload.estimatedBytes(), payload.wireBytes(),
+                    payload.submissionOrder(), payload.packedPos(), true);
         this.enqueuedColumns.merge(payload.packedPos(), 1, Integer::sum);
         this.readyPayloads.add(payload);
     }
