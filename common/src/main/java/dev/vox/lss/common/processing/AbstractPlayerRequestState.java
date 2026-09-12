@@ -153,8 +153,8 @@ public abstract class AbstractPlayerRequestState<T> {
     // Separate from appliedWantSet: that batch may outlive convergence. Ingress/removal can
     // discard this immutable holder; only the router installs/uses it for retained backlog.
     private final AtomicReference<IncomingEnvelope> activeProbeEnvelope = new AtomicReference<>();
-    // A scheduled Folia owner probe may finish after its bounded hold released disk
-    // fallback. Keep only that original attempt, never a standing repair subscription.
+    // One bounded Folia owner opportunity per admitted disk attempt, including reads
+    // beyond the original probe prefix. Never a standing repair subscription.
     static final int MAX_LATE_PROBES = MAX_PAIRED_PROBES;
     static final int MAX_LATE_PROBE_BYTES = LSSConstants.MAX_SEND_SECTIONS_SIZE;
     static final long LATE_PROBE_LIFETIME_NANOS =
@@ -162,9 +162,12 @@ public abstract class AbstractPlayerRequestState<T> {
     private static final class LateProbe {
         final long generation, started;
         LoadedColumnData data;
-        boolean diskFallback;
-        long diskOrder = Long.MIN_VALUE;
-        LateProbe(long generation, long started) { this.generation = generation; this.started = started; }
+        boolean diskFallback, scheduled;
+        final long diskOrder;
+        LateProbe(long generation, long started, long diskOrder) {
+            this.generation = generation;
+            this.started = started; this.diskOrder = diskOrder;
+        }
     }
     // Short scalar/map operations only under this monitor: never serialization or send.
     private final Long2ObjectOpenHashMap<LateProbe> lateProbes = new Long2ObjectOpenHashMap<>();
@@ -181,18 +184,49 @@ public abstract class AbstractPlayerRequestState<T> {
     private long routingOfferGeneration;
     private volatile int lateProbeRange;
     public void updateLateProbeRange(int range) { this.lateProbeRange = range; }
-    record LateProbeCompletion(LoadedColumnData data, long generation) {}
+    record LateProbeCompletion(LoadedColumnData data, long generation, long diskOrder) {}
 
-    /** Pump, before scheduling the original owner callback. No native objects retained. */
-    public synchronized void beginLateProbes(long generation, long[] positions) {
-        clearLateProbes();
-        if (!this.probeHandoffRequired || this.registration.isRetired()
-                || this.offerGeneration.get() != generation) return;
-        long now = System.nanoTime();
-        for (long pos : positions) {
-            this.lateProbes.put(pos, new LateProbe(generation, now));
-            if (this.lateProbes.size() == MAX_LATE_PROBES) break;
+    /** Exact admitted attempt carried to one bounded owner callback; scalar data only. */
+    public record LateProbeRequest(long position, long generation, long diskOrder) {}
+
+    /** Pump only. Claim unscheduled admitted reads even after their ordinary backlog drains.
+     * Their older disk payload may be queued/suppressed, so ordinary skipProbe does not apply. */
+    public synchronized LateProbeRequest[] claimLateProbes(int limit) {
+        var claimed = new java.util.ArrayList<LateProbeRequest>();
+        long now = System.nanoTime(); long player = this.playerChunkPacked;
+        if (player == NO_PLAYER_CHUNK) return new LateProbeRequest[0];
+        for (var row : this.lateProbes.long2ObjectEntrySet()) {
+            var entry = row.getValue(); long pos = row.getLongKey();
+            if (entry.scheduled || entry.data != null || !lateProbeCurrent(entry, now)
+                    || PositionUtil.isOutOfRange(pos, PositionUtil.unpackX(player),
+                            PositionUtil.unpackZ(player), this.lateProbeRange)) continue;
+            if (claimed.size() >= Math.min(limit, MAX_LATE_PROBES)) break;
+            entry.scheduled = true;
+            claimed.add(new LateProbeRequest(pos, entry.generation, entry.diskOrder));
         }
+        return claimed.toArray(LateProbeRequest[]::new);
+    }
+
+    /** A null/unowned/refused completion retires its exact attempt only if no body arrived. */
+    public synchronized void completeLateProbe(LateProbeRequest request, LoadedColumnData data) {
+        var entry = this.lateProbes.get(request.position());
+        if (entry == null || entry.generation != request.generation()
+                || entry.diskOrder != request.diskOrder()) return;
+        if (data == null) {
+            // The original owner callback may already have supplied a valid body after
+            // this claim. A later null/unowned/refused callback is not invalidation.
+            if (entry.data == null) discardLateProbe(request.position());
+            return;
+        }
+        if (PositionUtil.packPosition(data.cx(), data.cz()) != request.position()) return;
+        publishLateProbe(request.generation(), data);
+    }
+
+    /** Actual generation-result exclusion cancels even an already-published body. */
+    public synchronized void cancelLateProbe(LateProbeRequest request) {
+        var entry = this.lateProbes.get(request.position());
+        if (entry != null && entry.generation == request.generation()
+                && entry.diskOrder == request.diskOrder()) discardLateProbe(request.position());
     }
 
     /** Owner callback publication; late/repeated callbacks cannot recreate a removed entry. */
@@ -208,14 +242,19 @@ public abstract class AbstractPlayerRequestState<T> {
     }
 
     private boolean lateProbeCurrent(LateProbe entry, long now) {
-        return !this.registration.isRetired() && entry.generation == this.offerGeneration.get()
-                && now - entry.started < LATE_PROBE_LIFETIME_NANOS;
+        return !this.registration.isRetired() && now - entry.started < LATE_PROBE_LIFETIME_NANOS;
     }
 
+    /** Worker, after admission/headroom checks and BEFORE external submit: the owner
+     * callback can finish during submit. Refusal rolls back this exact order below. */
     synchronized void noteLateProbeDiskSubmission(long packed, long order) {
-        var entry = this.lateProbes.get(packed);
-        if (entry != null && entry.generation == this.routingOfferGeneration
-                && lateProbeCurrent(entry, System.nanoTime())) entry.diskOrder = order;
+        if (!this.probeHandoffRequired || this.registration.isRetired()) return;
+        var old = this.lateProbes.get(packed);
+        if (old != null && old.diskOrder == order) return;
+        if (old != null) discardLateProbe(packed);
+        if (this.lateProbes.size() >= MAX_LATE_PROBES) return;
+        var admitted = new LateProbe(this.routingOfferGeneration, System.nanoTime(), order);
+        this.lateProbes.put(packed, admitted);
     }
 
     synchronized void markLateProbeDiskFallback(long packed, long order) {
@@ -236,7 +275,7 @@ public abstract class AbstractPlayerRequestState<T> {
 
     synchronized void discardRoutingLateProbe(long packed) {
         var entry = this.lateProbes.get(packed);
-        if (entry != null && entry.generation == this.routingOfferGeneration) discardLateProbe(packed);
+        if (entry != null && this.routingOfferGeneration == this.offerGeneration.get()) discardLateProbe(packed);
     }
 
     synchronized void discardLateProbeDiskResult(long packed, long order) {
@@ -268,12 +307,30 @@ public abstract class AbstractPlayerRequestState<T> {
             if (current && (entry.data == null || !entry.diskFallback
                     || hasPendingRequest(PositionUtil.unpackX(packed), PositionUtil.unpackZ(packed))
                     || hasEnqueuedColumn(packed))) continue;
+            if (current) return new LateProbeCompletion(entry.data, entry.generation, entry.diskOrder);
             iterator.remove();
             if (entry.data != null && entry.data.serializedSections() != null)
                 this.lateProbeBytes -= entry.data.serializedSections().length;
-            if (current) return new LateProbeCompletion(entry.data, entry.generation);
         }
         return null;
+    }
+
+    /** Final worker authorization against the exact admitted attempt, not the next
+     * frontier. Dirty/retirement/replacement removal cannot revive its selected token. */
+    synchronized boolean consumeLateProbe(LateProbeCompletion completion, long now) {
+        var data = completion.data(); long pos = PositionUtil.packPosition(data.cx(), data.cz());
+        var entry = this.lateProbes.get(pos);
+        if (entry == null || entry.generation != completion.generation()
+                || entry.diskOrder != completion.diskOrder() || entry.data != data) return false;
+        long player = this.playerChunkPacked;
+        if (!lateProbeCurrent(entry, now) || player == NO_PLAYER_CHUNK
+                || PositionUtil.isOutOfRange(pos, PositionUtil.unpackX(player),
+                        PositionUtil.unpackZ(player), this.lateProbeRange)) {
+            discardLateProbe(pos); return false;
+        }
+        if (hasPendingRequest(data.cx(), data.cz()) || hasEnqueuedColumn(pos)) return false;
+        discardLateProbe(pos);
+        return true;
     }
 
     // Offer generation: bumped BEFORE every mailbox write so the Folia pump can detect a
@@ -403,7 +460,8 @@ public abstract class AbstractPlayerRequestState<T> {
     /** Offer a decoded batch (any thread). Latest-wins; an overwritten batch is superseded. */
     public void offerIncomingBatch(IncomingBatch batch) {
         long generation = this.offerGeneration.incrementAndGet(); // BEFORE the write
-        clearLateProbes();
+        // Replacement (including empty backpressure clear) drops only unadmitted
+        // backlog. Existing disk admissions and their one-shot corrections still finish.
         this.activeProbeEnvelope.set(null);
         this.totalRequestsReceived.addAndGet(batch.size());
         var previous = this.pendingBatch.getAndSet(new IncomingEnvelope(
@@ -507,7 +565,7 @@ public abstract class AbstractPlayerRequestState<T> {
     }
 
     /** Session removal/shutdown: release byte holders even if a callback retains the state. */
-    public void discardProbeHandoff() {
+    public synchronized void discardProbeHandoff() {
         clearLateProbes();
         this.activeProbeEnvelope.set(null);
         this.pendingBatch.set(null);
