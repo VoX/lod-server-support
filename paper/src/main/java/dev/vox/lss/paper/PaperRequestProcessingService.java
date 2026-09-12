@@ -1,6 +1,7 @@
 package dev.vox.lss.paper;
 
 import dev.vox.lss.common.processing.RequestRegistration;
+import dev.vox.lss.common.processing.AbstractPlayerRequestState;
 
 import dev.vox.lss.common.DiagnosticsFormatter;
 import dev.vox.lss.common.LSSConstants;
@@ -1800,23 +1801,35 @@ public class PaperRequestProcessingService {
             // no-fresh-batch ticks, so the one-region-task-per-player-per-tick shape
             // holds; a release-success tick returns above and the arm picks up next
             // tick.
+            var late = state.claimLateProbes(MAX_PROBES_PER_TICK_PER_PLAYER);
+            var positions = new LongOpenHashSet();
+            for (var request : late) {
+                if (skipPositions != null && skipPositions.contains(request.position()))
+                    state.cancelLateProbe(request);
+                else positions.add(request.position());
+            }
             var published = state.peekWantSet();
-            if (published == null) return; // converged player, no probe cost
-            long[] positions = snapshotProbePositions(state, published, skipPositions);
-            if (positions.length == 0) return;
+            if (published != null) {
+                for (long pos : snapshotProbePositions(state, published, skipPositions)) {
+                    if (positions.size() >= MAX_PROBES_PER_TICK_PER_PLAYER) break;
+                    positions.add(pos);
+                }
+            }
+            if (positions.isEmpty()) return;
+            long[] selected = positions.toLongArray();
             UUID uuid = player.getUUID();
             try {
                 this.regionTaskScheduler.schedule(player,
-                        () -> runRegionProbe(uuid, state, level, positions, -1));
+                        () -> runRegionProbe(uuid, state, level, selected, -1, late));
             } catch (Exception e) {
-                // R5 containment — see the sibling below.
+                // A rejected schedule must not keep a claimed one-shot obligation alive.
+                for (var request : late) state.completeLateProbe(request, null);
             }
             return;
         }
         this.heldForProbe.put(player.getUUID(), new HeldBatch(fresh, heldAtGeneration));
 
         long[] positions = snapshotProbePositions(state, fresh, skipPositions);
-        state.beginLateProbes(heldAtGeneration, positions);
         if (positions.length == 0) return;
         UUID uuid = player.getUUID();
         try {
@@ -1857,20 +1870,35 @@ public class PaperRequestProcessingService {
      *  guard, serializes matches through the shared probe seam, and publishes one batch via
      *  compute (merge under the bin lock; the pump takes ownership atomically via remove). */
     private void runRegionProbe(UUID uuid, PaperPlayerRequestState capturedState, ServerLevel level, long[] positions, long heldGeneration) {
+        runRegionProbe(uuid, capturedState, level, positions, heldGeneration,
+                new AbstractPlayerRequestState.LateProbeRequest[0]);
+    }
+
+    private void runRegionProbe(UUID uuid, PaperPlayerRequestState capturedState, ServerLevel level,
+            long[] positions, long heldGeneration, AbstractPlayerRequestState.LateProbeRequest[] late) {
+        var claims = new Long2ObjectOpenHashMap<AbstractPlayerRequestState.LateProbeRequest>();
+        for (var request : late) claims.put(request.position(), request);
         var registration = capturedState.registration();
         if (this.shuttingDown || registration.isRetired() || this.players.get(uuid) != capturedState) return;
         Long2ObjectOpenHashMap<LoadedColumnData> found = null;
         for (long packed : positions) {
             int cx = PositionUtil.unpackX(packed);
             int cz = PositionUtil.unpackZ(packed);
-            if (!this.regionOwnershipCheck.ownsChunk(level, cx, cz)) continue;
+            var claim = claims.get(packed);
+            if (!this.regionOwnershipCheck.ownsChunk(level, cx, cz)) {
+                if (claim != null) capturedState.completeLateProbe(claim, null);
+                continue;
+            }
             var capture = this.offThreadProcessor.captureLoadedProbe(level.dimension().location().toString(), packed, registration);
             var column = this.loadedColumnProbe.probe(level, cx, cz);
             if (column != null) {
                 if (found == null) found = new Long2ObjectOpenHashMap<>();
                 var bound = capture.bind(column);
                 found.put(packed, bound);
-                if (heldGeneration >= 0) capturedState.publishLateProbe(heldGeneration, bound);
+                if (claim != null) capturedState.completeLateProbe(claim, bound);
+                else if (heldGeneration >= 0) capturedState.publishLateProbe(heldGeneration, bound);
+            } else if (claim != null) {
+                capturedState.completeLateProbe(claim, null);
             }
         }
         if (found == null) return;
