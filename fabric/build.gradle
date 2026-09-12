@@ -418,8 +418,8 @@ def lssFabricJarName = "lod-server-support-fabric" + (ciArchiveVersion ? "-${ciA
 
 tasks.register('vssJar') {
     description = 'Repackages the LSS Fabric jar under the Voxy Server Side branding.'
-    // This Loom version (1.17) has no separate remapJar — the `jar` task produces the final
-    // remapped release jar directly (with the nested common JiJ + Fabric-Mapping-Namespace).
+    // loom-remap produces the final intermediary-mapped release jar through remapJar,
+    // including nested common JiJ and Fabric-Mapping-Namespace metadata.
     // String dependency so it resolves at graph-build time, not config time.
     dependsOn 'remapJar'  // loom-remap emits the release jar
     def iconFile = rootProject.file('branding/vss/icon.png')

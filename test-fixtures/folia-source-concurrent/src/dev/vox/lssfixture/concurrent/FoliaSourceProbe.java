@@ -22,6 +22,7 @@ public final class FoliaSourceProbe extends JavaPlugin implements Listener,Sourc
     private LSSPaperPlugin lss;
     private World world;
     private volatile SourceWorkload workload;
+    private final NativeSaveSetup nativeSaveSetup=new NativeSaveSetup(System.getProperty("lss.rig.nativeAutoSaveInterval"));
     private final OwnerRevisions revisions=new OwnerRevisions();
     private final Set<Object> instrumented=Collections.newSetFromMap(new IdentityHashMap<>());
     private final Set<String> loaded=ConcurrentHashMap.newKeySet();
@@ -114,6 +115,15 @@ public final class FoliaSourceProbe extends JavaPlugin implements Listener,Sourc
                     if(chunk==null||!Bukkit.isOwnedByCurrentRegion(world,target.x(),target.z()))throw new IllegalStateException("loaded premise owner absent");
                     if(world.getBlockAt(target.x()*16,target.y(),target.z()*16).getType()!=Material.GOLD_BLOCK)
                         throw new IllegalStateException("seed snapshot loaded target mismatch");
+                    if(!nativeSaveSetup.ready()){
+                    var region=TickRegionScheduler.getCurrentRegion();
+                    nativeSaveSetup.observe(region!=null && Bukkit.isOwnedByCurrentRegion(world,target.x(),target.z()),()->{
+                        var chunks=((CraftWorld)world).getHandle().paperConfig().chunks;
+                        return new NativeSaveSetup.Observation(chunks.autoSaveInterval.value(),chunks.maxAutoSaveChunksPerTick,
+                                world.getKey().toString(),world.getUID().toString(),world.getName(),"owning-region",
+                                String.valueOf(region.id),System.nanoTime());
+                    },workload::nativeSaveSetup);
+                    }
                     world.addPluginChunkTicket(target.x(),target.z(),this);loaded.add(target.x()+":"+target.z());
                 }catch(Throwable failure){preparationFailure=failure;}
             })).exceptionally(error->{preparationFailure=error;return null;});
@@ -209,6 +219,7 @@ public final class FoliaSourceProbe extends JavaPlugin implements Listener,Sourc
     }
     @Override public boolean sourcesReady(List<Target> targets){
         if(preparationFailure!=null)throw new IllegalStateException("snapshot source premise failed",preparationFailure);
+        if(!nativeSaveSetup.ready())return false;
         if(corridorLoaded.size()!=84 || loaded.size()!=targets.stream().filter(target->target.source()==0).count())return false;
         if(!checking){
             checking=true;

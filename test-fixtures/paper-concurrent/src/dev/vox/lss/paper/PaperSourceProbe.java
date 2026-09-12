@@ -18,6 +18,8 @@ import org.bukkit.plugin.java.JavaPlugin;
 /** Disposable Paper-only source/pressure adapter, deliberately not Folia-compatible. */
 public final class PaperSourceProbe extends JavaPlugin implements Listener, SourceWorkload.Engine {
     private SourceWorkload workload;
+    private final dev.vox.lssfixture.concurrent.NativeSaveSetup nativeSaveSetup=
+            new dev.vox.lssfixture.concurrent.NativeSaveSetup(System.getProperty("lss.rig.nativeAutoSaveInterval"));
     private final dev.vox.lssfixture.concurrent.OwnerRevisions revisions=new dev.vox.lssfixture.concurrent.OwnerRevisions();
     private LSSPaperPlugin lss;
     private World world;
@@ -41,6 +43,13 @@ public final class PaperSourceProbe extends JavaPlugin implements Listener, Sour
         Bukkit.getScheduler().runTaskTimer(this,()-> {
             if(lss.getRequestService()==null)return;
             if(workload==null)workload=new SourceWorkload(this,world.getMinHeight());
+            if(!nativeSaveSetup.ready())nativeSaveSetup.observe(Bukkit.isPrimaryThread(),()->{
+                var chunks=((CraftWorld)world).getHandle().paperConfig().chunks;
+                return new dev.vox.lssfixture.concurrent.NativeSaveSetup.Observation(chunks.autoSaveInterval.value(),
+                        chunks.maxAutoSaveChunksPerTick,world.getKey().toString(),world.getUID().toString(),world.getName(),
+                        "server-thread",Thread.currentThread().getName(),System.nanoTime());
+            },workload::nativeSaveSetup);
+            if(!nativeSaveSetup.ready())return;
             installPressure();workload.tick();
         },1,1);
     }

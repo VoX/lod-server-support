@@ -115,13 +115,19 @@ public final class SourceWorkload implements AutoCloseable {
             if(!events.offer("{\"event\":\"source_diagnostic_failure\",\"component\":\"reporting\",\"run_id\":\""+runId+"\"}"))overflow=true;
         }
     }
-    private void record(ArrayBlockingQueue<String> queue, Map<String,?> row){Map<String,Object> bound=new LinkedHashMap<>(row);bound.put("run_id",runId);if(!queue.offer(json.toJson(bound)))overflow=true;}
+    private boolean record(ArrayBlockingQueue<String> queue, Map<String,?> row){Map<String,Object> bound=new LinkedHashMap<>(row);bound.put("run_id",runId);boolean accepted=queue.offer(json.toJson(bound));if(!accepted)overflow=true;return accepted;}
     private void event(String event, long now){record(events,Map.of("event",event,"time_ns",now));}
     /** At most32 owner-state transitions plus one truncation marker per native connection.
      * Uses the existing bounded writer queue; no owner-thread I/O or required-evidence suppression.
      */
     public void ownerTransition(String subject,Map<String,Object> transition){
         Map<String,Object> row=new LinkedHashMap<>(transition);row.put("subject",subject);record(events,row);
+    }
+    /** Once-only adapter witness; bounded queue publication, not a save-completion claim. */
+    public void nativeSaveSetup(Map<String,Object> observation){
+        Map<String,Object> row=new LinkedHashMap<>(observation);
+        row.put("event","native_save_setup");row.put("time_ns",System.nanoTime());
+        if(!record(events,row))throw new IllegalStateException("native save setup evidence queue full");
     }
     public boolean ready(){return stage==3;}
     public boolean denied(String subject) {
