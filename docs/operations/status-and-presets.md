@@ -7,8 +7,9 @@ retains the detailed troubleshooting counters and also describes OFF, dormant,
 negotiation and missing-consumer states without creating a request manager.
 
 Status collects on the client tick at most twice per second, including the detailed
-CLI counters. `-Dlss.test.disableStatusCollection=true` disables collection for the
-preregistered performance baseline; it is a test-only JVM switch, not a user setting. A disconnect or a
+CLI counters. `-Dlss.test.disableStatusCollection=true` disables collection for a separate
+diagnostic A/B comparison; it is a test-only JVM switch, not a user setting.
+The preregistered performance baseline uses the actual pre-improvement artifacts. A disconnect or a
 replacement world invalidates its cached data. Progress on the new screen counts
 from the first status sample in the current world; existing detailed diagnostics
 retain their established connection counters. Queue presence is an observation,
@@ -24,6 +25,11 @@ identifiers, seeds, aliases, personal paths and raw exception messages are not
 accepted by the exporter. The command displays the local output path; the report
 does not contain that path. Nothing uploads automatically. The exporter retains
 at most ten reports and admits one active plus one queued export.
+
+The server command acknowledges the queued target path after admission. Check the
+server log for completion or a sanitized write failure; the queued message does
+not mean the files have been written. Client completion feedback is shown only
+while its originating session remains current.
 
 Presets always require a preview followed by an explicit apply:
 
