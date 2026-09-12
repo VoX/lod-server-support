@@ -28,6 +28,7 @@ public final class ClientProbe implements ClientModInitializer, VoxelColumnConsu
     private static final ArrayBlockingQueue<String> OUTPUT=new ArrayBlockingQueue<>(8192);
     private static final ArrayBlockingQueue<PendingAcceptance> HELD=new ArrayBlockingQueue<>(128);
     private static final Semaphore HELD_SLOTS=new Semaphore(128);
+    private static final PendingAcceptance.Admission HELD_ADMISSION=new PendingAcceptance.Admission(HELD_SLOTS);
     private static final IdentityCaptures<Wire> WIRES=new IdentityCaptures<>(8192);
     private static final ThreadLocal<Wire> DECODING=new ThreadLocal<>();
     private static final Set<String> COMMITTED=ConcurrentHashMap.newKeySet();
@@ -78,6 +79,9 @@ public final class ClientProbe implements ClientModInitializer, VoxelColumnConsu
                     }
                 }
                 Map<String,Object> closed=new HashMap<>(Map.of("event","consumer_closed","run_id",run,"subject",subject,"overflow",overflow,"held",128-HELD_SLOTS.availablePermits()));
+                closed.put("held_admission_refusals",HELD_ADMISSION.refusals());
+                closed.put("held_admission_report_errors",HELD_ADMISSION.reportErrors());
+                closed.put("held_admission_release_errors",HELD_ADMISSION.releaseErrors());
                 closed.putAll(REJECTIONS.status());stream.write(JSON.toJson(closed));stream.newLine();
             }catch(Exception e){overflow=true;}finally{synchronized(HELD){running=false;PendingAcceptance held;while((held=HELD.poll())!=null)held.reject();}}
         },"LSS-RigConsumerEvidence");writer.setDaemon(true);writer.start();
@@ -172,7 +176,11 @@ public final class ClientProbe implements ClientModInitializer, VoxelColumnConsu
         synchronized(HELD){
         if(!running)return;
         Runnable release=receipt.deferAcceptance();
-        if(!HELD_SLOTS.tryAcquire()){overflow=true;release.run();return;}
+        var admission=HELD_ADMISSION.acquireOrRefuse(receipt::report,release);
+        if(admission!=PendingAcceptance.Admission.Result.ADMITTED){
+            if(admission==PendingAcceptance.Admission.Result.REFUSAL_FAILED)overflow=true;
+            return;
+        }
         PendingAcceptance held=new PendingAcceptance(
                 ()->running&&receipt.isActive()&&delivery==level&&(wire==null||wire.session()==session&&wire.nativeConnection()==connection),
                 ()->accept(delivery,x,z,data,wire,receipt,bodyId,awaiting),

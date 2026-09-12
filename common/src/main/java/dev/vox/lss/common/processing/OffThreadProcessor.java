@@ -1301,6 +1301,10 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
                         this.ctx.stampSource().stampSecond(playerUuid, dimension, packed),
                         dimension));
                 this.ctx.diagnostics().incrementUpToDate();
+                // Header freshness resolves the admitted disk request without bytes.
+                // Its already-reserved owner opportunity can still observe newer loaded
+                // content; retain that exact one-shot correction after this response.
+                state.markLateProbeDiskFallback(packed, submissionOrder);
             } else {
                 this.ctx.diagnostics().addSuperseded(1);
             }

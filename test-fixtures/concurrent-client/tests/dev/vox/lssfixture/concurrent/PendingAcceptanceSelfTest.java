@@ -1,5 +1,10 @@
 package dev.vox.lssfixture.concurrent;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -69,6 +74,76 @@ public final class PendingAcceptanceSelfTest {
         require(delayed.poll(102,false));require(reports.get()==0);
         require(AcceptancePolicy.decide(new AcceptancePolicy.Facts(0,80,125,200,0,true),true,true,120,130,1,true)==AcceptancePolicy.Decision.OBSERVE);
         require(AcceptancePolicy.decide(facts[0],true,true,120,200,1,true)==AcceptancePolicy.Decision.IGNORE);
+        admissionControls();
         System.out.println("PendingAcceptance: delayed original fact, actual preapply, original deadline, stall, retirement/supersession priority, error and rejection once passed");
     }
+
+    private static void require(boolean value,String message){if(!value)throw new AssertionError(message);}
+    private static final class Receipt {
+        final List<String> order=new ArrayList<>();
+        final int coordinate,source;
+        Receipt(){this(-1,-1);}
+        Receipt(int coordinate,int source){this.coordinate=coordinate;this.source=source;}
+        boolean active=true,failed,completed,released;
+        int reports,releases;
+        void report(){order.add("report");if(active&&!failed){failed=true;reports++;}}
+        void release(){order.add("release");if(!released){released=true;releases++;}}
+        boolean accepted(){return active&&completed&&released&&!failed;}
+    }
+    private static void admissionControls(){
+        Semaphore slots=new Semaphore(128);PendingAcceptance.Admission admission=new PendingAcceptance.Admission(slots);
+        List<PendingAcceptance> held=new ArrayList<>();List<Receipt> receipts=new ArrayList<>();
+        AtomicInteger commits=new AtomicInteger();Set<Integer> committedTargets=new HashSet<>();
+        // Two distinct receipts per coordinate (disk1 then live0), never coalesced.
+        Set<Receipt> distinctReceipts=new HashSet<>();
+        for(int i=0;i<160;i++){
+            int coordinate=i/2;
+            Receipt receipt=new Receipt(coordinate,i%2==0?1:0);receipts.add(receipt);distinctReceipts.add(receipt);
+            var result=admission.acquireOrRefuse(receipt::report,receipt::release);
+            receipt.completed=true;
+            if(i<128){
+                require(result==PendingAcceptance.Admission.Result.ADMITTED,"available slot must admit");
+                held.add(new PendingAcceptance(()->receipt.active,()->{if(committedTargets.add(coordinate))commits.incrementAndGet();return true;},
+                        ()->120_000_000_000L,()->{receipt.release();slots.release();},()->{throw new AssertionError("held work failed");}));
+            }else{
+                require(result==PendingAcceptance.Admission.Result.REFUSED,"full slot refusal is expected, not fixture failure");
+                require(receipt.order.equals(List.of("report","release")),"must reject before acceptance lease releases");
+                require(receipt.reports==1&&receipt.releases==1&&!receipt.accepted(),"refused body cannot silently settle accepted");
+            }
+        }
+        for(int i=0;i<80;i++)require(receipts.get(i*2).coordinate==i&&receipts.get(i*2+1).coordinate==i
+                &&receipts.get(i*2).source==1&&receipts.get(i*2+1).source==0,"two original receipt identities per coordinate");
+        require(distinctReceipts.size()==160&&held.size()==128&&slots.availablePermits()==0,"retention remains128 including worker-owned entries");
+        require(admission.refusals()==32&&admission.reportErrors()==0&&admission.releaseErrors()==0,"bounded refusal counters exact");
+        for(var entry:held)require(!entry.poll(19_999_999_999L,true),"forced20s stall must suppress evaluation");
+        require(commits.get()==0,"no target credit during stall or for refusals");
+        for(var entry:held){require(entry.poll(20_000_000_000L,false),"valid held body settles after stall");entry.cancel();entry.reject();}
+        require(slots.availablePermits()==128&&commits.get()==64,"all128 permits released once");
+        for(int i=0;i<128;i++)require(receipts.get(i).accepted()&&receipts.get(i).releases==1,"admitted receipt settles once");
+        // A later valid retry can be admitted; this does not simulate the product's retry scheduling.
+        for(int i=0;i<32;i++){
+            Receipt retry=new Receipt();int coordinate=64+i/2;
+            require(admission.acquireOrRefuse(retry::report,retry::release)==PendingAcceptance.Admission.Result.ADMITTED,"capacity returns to later deliveries");
+            retry.completed=true;
+            PendingAcceptance entry=new PendingAcceptance(()->true,()->{if(committedTargets.add(coordinate))commits.incrementAndGet();return true;},
+                    ()->120_000_000_000L,()->{retry.release();slots.release();},()->{throw new AssertionError();});
+            require(entry.poll(21_000_000_000L,false)&&retry.accepted()&&retry.reports==0,"only actual later evaluation credits retry");
+        }
+        require(commits.get()==80&&committedTargets.size()==80&&slots.availablePermits()==128,"80 paired coordinate obligations retained without treating160 bodies as160 targets");
+
+        PendingAcceptance.Admission full=new PendingAcceptance.Admission(new Semaphore(0));Receipt retired=new Receipt();retired.active=false;retired.completed=true;
+        require(full.acquireOrRefuse(retired::report,retired::release)==PendingAcceptance.Admission.Result.REFUSED,"retirement itself is not failure");
+        require(retired.reports==0&&retired.releases==1&&!retired.accepted(),"receipt suppresses retired report without leaking lease");
+        List<String> order=new ArrayList<>();
+        require(full.acquireOrRefuse(()->{order.add("report");throw new AssertionError("report failure");},()->order.add("release"))==PendingAcceptance.Admission.Result.REFUSAL_FAILED,"report exception remains a fixture error");
+        require(order.equals(List.of("report","release"))&&full.reportErrors()==1,"report throw must still release");
+        require(full.acquireOrRefuse(()->{},()->{throw new AssertionError("release failure");})==PendingAcceptance.Admission.Result.REFUSAL_FAILED,"release failure remains fatal");
+        require(full.releaseErrors()==1,"release error counted once");
+        require(full.acquireOrRefuse(()->{throw new AssertionError();},()->{throw new AssertionError();})==PendingAcceptance.Admission.Result.REFUSAL_FAILED,"both errors contained");
+        require(full.reportErrors()==2&&full.releaseErrors()==2&&full.refusals()==4,"both error counters retained independently");
+        // Ordinary admitted work never calls report/release from admission itself.
+        require(new PendingAcceptance.Admission(new Semaphore(1)).acquireOrRefuse(()->{throw new AssertionError();},()->{throw new AssertionError();})==PendingAcceptance.Admission.Result.ADMITTED,"admission is observationally neutral");
+        System.out.println("PendingAcceptance.Admission:80 pairs/160 distinct receipts/128+32 saturation,20s stall, report-before-release, no false acceptance, returned-capacity retries, retirement and exception controls passed");
+    }
+
 }
