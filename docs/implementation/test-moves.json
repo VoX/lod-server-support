@@ -893,6 +893,22 @@
       "count": 1,
       "rationale": "Post-migration regression: an old loaded snapshot must not restore stamp, done-bit or all-air response after queued invalidation; covers cycle-start and late drain.",
       "introducing_commit": "938008640c7fba812c3aa315091dd98753adc31e"
+    },
+    {
+      "identity": "dev.vox.lss.common.processing.ReadFreshnessRungTest#oldHeaderResultCannotArmReplacementLateOrder()",
+      "task": ":common:test",
+      "outcome": "passed",
+      "count": 1,
+      "rationale": "Post-migration header-correction regression: A valid older header result cannot enable a replacement admission with a different order.",
+      "introducing_commit": "efadd3c2ddc374506f2dce864a74b1c7683b5c71"
+    },
+    {
+      "identity": "dev.vox.lss.common.processing.ReadFreshnessRungTest#headerFreshArmsBothEligibleDedupRecipientsAtTheirOwnOrders()",
+      "task": ":common:test",
+      "outcome": "passed",
+      "count": 1,
+      "rationale": "Post-migration header-correction regression: Valid header freshness enables each deduplicated recipient’s already-reserved loaded correction using its actual admission order.",
+      "introducing_commit": "efadd3c2ddc374506f2dce864a74b1c7683b5c71"
     }
   ]
 }
