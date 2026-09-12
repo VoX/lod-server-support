@@ -53,6 +53,7 @@ class PaperPumpRouterAlignmentTest {
         final PaperChunkDiskReader reader;
         volatile TickSnapshot lastPosted;
         boolean holdTargetDisk;
+        boolean headerFreshResult;
         final AtomicReference<ChunkReadResult> heldTargetDisk = new AtomicReference<>();
         Processor(Map<UUID, PaperPlayerRequestState> players, PaperChunkDiskReader reader) {
             super(players, reader, false, null, 1, 0);
@@ -76,6 +77,8 @@ class PaperPumpRouterAlignmentTest {
             var result = new ChunkReadResult(uuid, x, z,
                     OLD_DISK.clone(), dimension, OLD_DISK.length + LSSConstants.ESTIMATED_COLUMN_OVERHEAD_BYTES,
                     LSSConstants.epochSeconds(), false, false, false, order);
+            if (headerFreshResult) result = ChunkReadResult.headerFresh(uuid, x, z,
+                    dimension, order, clientTimestamp - 100);
             if (holdTargetDisk && x == X && z == Z) heldTargetDisk.set(result);
             else reader.getPlayerQueue(uuid).add(result);
             diskSubmitted.countDown(); routeDecided.countDown();
@@ -312,6 +315,60 @@ class PaperPumpRouterAlignmentTest {
             assertEquals(1, first.source()); assertArrayEquals(OLD_DISK, first.bytes());
             assertEquals(0, second.source()); assertArrayEquals(current.length == 0 ? new byte[]{0, 0} : current, second.bytes(),
                     "actual sender order must be OLD_DISK then CURRENT, never stale last");
+        }
+    }
+
+    @Test void lateOwnerCallbackMustDeliverCurrentAfterHeaderFreshResolution() throws Exception {
+        lateCallbackAfterHeaderFresh(CURRENT);
+    }
+
+    @Test void lateAllAirCallbackClearsAfterHeaderFreshResolutionExactlyOnce() throws Exception {
+        lateCallbackAfterHeaderFresh(new byte[0]);
+    }
+
+    private static void lateCallbackAfterHeaderFresh(byte[] current) throws Exception {
+        try (var r = new Rig(false)) {
+            r.service.setLoadedColumnProbe((level, x, z) ->
+                    new LoadedColumnData(x, z, current.clone(), current.length));
+            // Inject the existing reader's header-fresh result, not fabricated column bytes.
+            // The client already has old content; the owner callback observes current content.
+            r.processor.headerFreshResult = true;
+            r.state.offerIncomingBatch(new IncomingBatch(new IncomingRequest[]{
+                    new IncomingRequest(X, Z, LSSConstants.epochSeconds())}));
+            r.service.tick(); r.service.tick(); // original owner callback remains delayed
+            assertEquals(1, r.ownerTasks.size());
+            r.start(); await(r.processor.diskSubmitted);
+            completeWorkerCycle(r); // actual result queue -> delivery -> response action
+            var responses = new ArrayList<Long>();
+            r.processor.drainSendActions((state, types, positions, count) -> {
+                assertSame(r.state, state);
+                for (int i = 0; i < count; i++) {
+                    assertEquals(LSSConstants.RESPONSE_UP_TO_DATE, types[i]);
+                    responses.add(positions[i]);
+                }
+            });
+            assertEquals(List.of(dev.vox.lss.common.PositionUtil.packPosition(X, Z)), responses,
+                    "setup must actually resolve the admitted read as header-fresh up_to_date");
+            assertTrue(r.state.hasDiskReadDone(X, Z));
+            assertTrue(r.capturedFrames.isEmpty(), "header-fresh answer has no column body");
+            r.ownerTasks.get(0).run(); // original capture, no new declaration, edit or reset
+            for (int i = 0; i < 8; i++) {
+                r.service.tick(); completeWorkerCycle(r);
+            }
+            // Respect the real token bucket's sub-millisecond refill floor.
+            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+            while (r.capturedFrames.isEmpty() && System.nanoTime() < deadline) {
+                r.service.tick();
+                if (r.capturedFrames.isEmpty()) Thread.sleep(1);
+            }
+            assertEquals(1, r.capturedFrames.size(),
+                    "late current owner capture must deliver a body after header-fresh resolution");
+            var frame = sentFrame(r.capturedFrames.get(0));
+            assertEquals(0, frame.source());
+            assertArrayEquals(current.length == 0 ? new byte[]{0, 0} : current, frame.bytes());
+            r.ownerTasks.get(0).run(); // repeated callback cannot renew the consumed opportunity
+            for (int i = 0; i < 4; i++) { r.service.tick(); completeWorkerCycle(r); }
+            r.service.tick(); assertEquals(1, r.capturedFrames.size(), "one correction only");
         }
     }
 
