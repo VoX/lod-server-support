@@ -799,6 +799,43 @@ class ClientColumnProcessorTest {
                 "only the epoch gates the drain — a current-epoch drain still serves");
     }
 
+    @Test
+    void teardownBetweenEpochCheckAndPollCannotAcceptANewSessionColumn() throws Exception {
+        var replacement = managedManager();
+        replacement.deliveryExecutor = Runnable::run;
+        long packed = PositionUtil.packPosition(9, 9);
+        var queueField = ClientColumnProcessor.class.getDeclaredField("columnQueue");
+        queueField.setAccessible(true);
+        // Force the real check/poll interleaving without timing or a production test hook.
+        // The teardown's recursive poll sees an empty queue; only afterward does the new
+        // owner admit a receipt into the lifetime processor's shared queue.
+        queueField.set(processor, new java.util.concurrent.ConcurrentLinkedQueue<Object>() {
+            private boolean firstPoll = true;
+            @Override public Object poll() {
+                if (firstPoll) {
+                    firstPoll = false;
+                    processor.shutdown();
+                    replacement.onColumnReceived(packed, 5000L, dim);
+                    var receipt = replacement.trackDelivery(dim, packed, -1L);
+                    processor.offer(new VoxelColumnS2CPayload(9, 9, dim, 5000L,
+                            sectionWire(1, 1)), false, receipt);
+                }
+                return super.poll();
+            }
+        });
+
+        int oldEpoch = processor.sessionEpochForTest();
+        processor.drainColumnQueue(dim, LEVEL_SECTIONS, MIN_SECTION_Y, false, FACTORY,
+                recordingDispatcher, oldEpoch);
+
+        assertTrue(dispatches.isEmpty(), "an old drain must not dispatch into its replacement");
+        assertEquals(-1L, replacement.getColumnTimestamp(9, 9),
+                "a new receipt stolen by the old drain must be re-requested, never accepted silently");
+        assertEquals(1, replacement.getTotalIngestFailures());
+        assertEquals(0, processor.getQueuedCount());
+        assertEquals(0L, processor.getQueuedBytes());
+    }
+
     // ---- CL-047: a decode-failure unstamp survives the disconnect cache flush ----
 
     @Test
