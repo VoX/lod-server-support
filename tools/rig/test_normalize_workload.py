@@ -81,3 +81,33 @@ class NormalizeTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'raw target proof'):self.normalize_measured(facts)
         facts=self.measured_facts(3);facts[1]['A'][0]['resolved_ns']=66_000_000_000
         with self.assertRaisesRegex(ValueError,'raw target proof'):self.normalize_measured(facts)
+
+
+    def test_full_normalization_is_identical_across_fresh_hash_seeds(self):
+        import json
+        import os
+        from pathlib import Path
+        import subprocess
+        import sys
+        code = """
+import json
+from test_normalize_workload import NormalizeTests
+from normalize_workload import normalize
+facts=NormalizeTests().facts()
+result=normalize(*facts,platform='paper',start_ns=0,end_ns=90_000_000_000,
+                 debt_result={'status':'passed','drain_seconds':2},cleanup_complete=True)
+print(json.dumps(result,sort_keys=True))
+"""
+        outputs=[]
+        for seed in ('1','2','7','41'):
+            env=dict(os.environ,PYTHONHASHSEED=seed)
+            env['PYTHONPATH']=os.pathsep.join(sys.path)
+            result=subprocess.run([sys.executable,'-c',code],cwd=Path(__file__).parent,
+                                  env=env,text=True,capture_output=True,timeout=30,check=True)
+            outputs.append(result.stdout)
+        self.assertTrue(all(value==outputs[0] for value in outputs[1:]),
+                        'fresh-process normalization changed with hash seed')
+        windows=json.loads(outputs[0])['progress_windows']
+        self.assertEqual([(s,t) for s in 'ABCD' for t in (0,30_000_000_000,60_000_000_000)],
+                         [(w['subject'],w['start_ns']) for w in windows])
+        self.assertEqual(4,sum(w['useful_outcomes'] for w in windows))

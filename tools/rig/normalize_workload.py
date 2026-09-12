@@ -50,7 +50,7 @@ def normalize(oracle, consumers, session_rows, *, platform, start_ns, end_ns,
                             expected=expected,actual=actual,expected_session=connection,delivery_session=outcome['connection_id'],
                             body_id=outcome.get('body_id'),body_bytes=outcome['body_bytes']))
     windows=[]
-    for subject in {r['subject'] for r in sessions}:
+    for subject in sorted({r['subject'] for r in sessions}):
         own=[r for r in targets if r['subject']==subject]
         for start in range(start_ns,end_ns-29_999_999_999,30_000_000_000):
             end=start+30_000_000_000
