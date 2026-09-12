@@ -61,6 +61,7 @@ service.bytes_sent=long
 service.cols_raw=long
 service.cols_zstd=long
 service.columns_sent=long
+service.corrective_columns_sent=long
 service.disk_resolved=long
 service.duplicate_skips=long
 service.gen_drained=long
