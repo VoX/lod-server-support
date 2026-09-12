@@ -8,16 +8,19 @@ https://github.com/user-attachments/assets/721fb344-890e-4e03-ab36-539444427f7b
 
 ## Compatibility
 
-Clients use the Fabric mod on every version; on 1.21.1 a NeoForge client works as well. Supported servers:
+Use the matching Fabric or shipped NeoForge artifact. Server support and renderer availability are separate; see the generated [compatibility matrix](docs/compatibility.md). Supported servers:
 
-| Minecraft | Fabric | Paper / Purpur | Folia | NeoForge |
-|---|---|---|---|---|
-| 26.2 | ✅ | ✅ | ✅ (experimental) | - |
-| 26.1 | ✅ | ✅ | ✅ (experimental) | - |
-| 1.21.11 | ✅ | ✅ | ✅ (experimental) | - |
-| 1.21.1 | ✅ | ✅ | - | ✅ |
+<!-- LSS SERVER MATRIX START -->
+| Minecraft line | Fabric / Paper | Folia | NeoForge shipping | Neo far renderer |
+| --- | --- | --- | --- | --- |
+| 1.21.1 | maintained | unsupported | shipped; best-effort | available |
+| 1.21.10 | maintained | unsupported | maintained build only | unsupported |
+| 1.21.11 | maintained | experimental | maintained build only | unsupported |
+| 26.1 | maintained | experimental | shipped; best-effort | unsupported |
+| 26.2 | maintained | experimental | shipped; best-effort | unsupported |
+<!-- LSS SERVER MATRIX END -->
 
-On NeoForge (1.21.1) the recommended client path is the community [Voxy NeoForge port](https://github.com/j-shelfwood/voxy-neoforge) with [Forgified Fabric API](https://modrinth.com/mod/forgified-fabric-api) in place of Fabric API. Tested working with Forgified Fabric API 0.116.15, Sodium 0.6.13, and Voxy NeoForge port 0.2.9-alpha.
+NeoForge 1.21.1 has distinct native and Connector dependency routes. The recorded 2026-09-08 native Voxy 0.2.9-alpha trial was rejected; older successful reports do not establish current compatibility or its failure's upstream cause. Xaero-only legacy Sodium and the modern Connector Voxy route are separate profiles. Use the [dated profile inventory](docs/testing/astra-live-profiles.md) and exact dependency locks; do not combine their jars by filename.
 
 The in-game settings page (Sodium's Video Settings → the LSS entry or tabs; on Fabric also ModMenu's Configure button) renders on both Sodium generations from v0.13.0: on Sodium 0.8+ it appears under LSS's own entry in the settings screen; on Sodium 0.6/0.7 (MC ≤1.21.10 and the 1.21.1 Voxy-fork pairing) it appears as LSS tabs beside Sodium's own. On NeoForge the page renders on both generations too — the 0.6/0.7 tabs on the Voxy-fork pairing, and LSS's own entry on native NeoForge Sodium 0.8+ builds (what the Connector stack pairs with) — without the far-player render options, which NeoForge does not render yet.
 
@@ -48,7 +51,7 @@ NeoForge ships on MC 1.21.1, 26.1 and 26.2; the 1.21.10/1.21.11 modules remain m
 - `/lsslod store backfill start|stop|status` - Control the background pre-warm walk (not on Paper)
 - `/lsslod help` - List all commands
 
-### Client (Fabric only)
+### Client (Fabric and supported NeoForge clients)
 
 - `/lss clearcache` - Clear the local column cache, forcing all chunks to be re-requested from the server
 - `/lss reset` - Wipe this server's LODs (local cache and Voxy's stored data) and re-stream them fresh
@@ -91,18 +94,12 @@ Config files are generated during first run at `config/lss-server-config.json` o
 
 ### Server Performance Tuning
 
-**Turn the LOD store on.** `"lodStore": "on"` is the single biggest CPU performance win available, it caches the preprocessed LOD data to disk with the drawback of **roughly doubling (+70%) the size of your world directory**.
-
-When the LOD store is enabled a backfill task will populate it. Maximum CPU savings are only achieved after the store is populated. Check the progress of the task with `/lsslod store backfill status`. If your world is much larger than the area players commonly visit you can save on disk space by disabling the backfill task with the `"lodStoreBackfill": false` config.
-
-**Use the bandwidth and generation limiters to limit CPU.** LOD Server Support's CPU cost is essentially how many columns per second it serves plus how many chunks it generates, and these configs cap exactly that:
-
-- `mbPerSecondLimitPerPlayer` / `mbPerSecondLimitGlobal` bound the chunk serve rate. They count **uncompressed** bytes on purpose so compression doesn't quietly raise the real ceiling. The actual max network utilization will be approximately 1/8th of these limits.
-- `generationConcurrencyLimitGlobal` / `generationConcurrencyLimitPerPlayer` bound new chunk generation, by far the most expensive thing LOD Server Support can trigger. On a server exploring fresh terrain this dominates, and lowering it is the single biggest saving. `enableChunkGeneration: false` removes it entirely.
-- `maxConcurrentDiskReads` bounds how many LOD disk reads run at once, so LOD traffic can't monopolize disk I/O that vanilla chunk loading needs. The `0` auto default is right for most servers; lower it to `1` or `2` if gameplay chunk loading stutters while LODs stream, raise it if LOD loading feels slow on fast NVMe storage.
-
-**Disable LOD store resweep on Paper.** `"lodStoreResweepSeconds": 0` This will reduce CPU utilization at a slight cost to correctness, on Paper its possible to miss chunk updates so old LODs could be served.
+See [current performance diagnosis and tuning](docs/operations/performance.md) for workload-based checks, setting semantics and the measurement requirements for presets. The [settings reference](docs/reference/settings.md) records exact domains and apply timing.
 
 ## Redistribution
 
 This mod is MIT-licensed, redistribution with attribution is welcome, and modpacks can reference the official Modrinth project directly. Per Modrinth's reupload policy: [XANTHA](https://modrinth.com/user/XANTHA) via [Voxy Server Side](https://modrinth.com/plugin/voxy-server-side) has the copyright holder's explicit permission to distribute this mod, and derivatives of it, on Modrinth.
+
+<!-- LSS COMPATIBILITY START -->
+Current platform, shipping and renderer facts: [compatibility matrix](docs/compatibility.md). Dependency locks describe candidates; dated feature evidence establishes tested combinations.
+<!-- LSS COMPATIBILITY END -->
