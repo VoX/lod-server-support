@@ -1,10 +1,10 @@
 {
-  "checkpoint_utc": "2026-09-14T12:56:22.722727+00:00",
+  "checkpoint_utc": "2026-09-14",
   "status": "in_progress",
-  "scope": "75 reviewed fixture/tool placements plus five two-entry classification manifests locally committed. V21 terminal inconclusive and functional qualifications preserved;41 numeric placements and9 classification actions remain pending.",
+  "scope": "Current status: V27 performance accepted for exact26.2 measured artifacts; final integrated all-five qualification/native/human/fresh Astra pending. Existing historical fields retain original scope.",
   "source_commits": {
-    "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260910/store-late-probe-control/commits.json",
-    "sha256": "570f2561485b99d034edd844ff6e75f50c8182e36cbf23448c919ac1bc4763b2"
+    "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260910/accepted-performance-v27-20260914/numeric-commits-progress.json",
+    "sha256": "7da2b5fb6f970181e6470681760a0fe501f7c5c19dce9e7b0413492d75f5b0e4"
   },
   "current_targeted_tests": {
     "status": "passed",
@@ -100,11 +100,36 @@
       }
     }
   },
-  "performance": "V21 terminal baseline-calibration inconclusive under unchanged stability law; no accepted complete comparison, candidate measurement, numeric selection or postprocessing. No retry/resume/replacement authorized.",
-  "numeric_preset": "unselected",
+  "performance": {
+    "experiment": "V27-fixed-client-heap",
+    "status": "accepted",
+    "calibrations": 3,
+    "measured_pairs": 3,
+    "comparisons_passed": 30,
+    "summary": "../operations/performance-v27-summary.json",
+    "evidence_sha256": {
+      "evaluation": "455c0101dfde3ebf22bb75f29c76d7d587741b7726df9e8d423da5be45bd4447",
+      "tested_effective_config": "5ebd6ad1b04ba7cc220b5cb41f2b86de458178364e163519947b350f672e9ac6",
+      "xaero_work": "983c61d27891dcdc1280579248e3bc707b39e1cc299dce767d384d1d4d93af49"
+    }
+  },
+  "numeric_preset": {
+    "values": {
+      "lodDistanceChunks": 32,
+      "generationConcurrencyLimitGlobal": 4,
+      "generationConcurrencyLimitPerPlayer": 1,
+      "opt_in": true,
+      "defaults_changed": false
+    },
+    "integration_commit_receipt": {
+      "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260910/accepted-performance-v27-20260914/numeric-commits-progress.json",
+      "sha256": "7da2b5fb6f970181e6470681760a0fe501f7c5c19dce9e7b0413492d75f5b0e4"
+    },
+    "status": "accepted values integrated and locally committed; final qualification pending"
+  },
   "final_astra_reviews": "not_started",
   "remaining_acceptance": {
-    "performance_slots": 9,
+    "performance_slots": 0,
     "native_rows_including_presets": 52,
     "required_native_rows": 42,
     "supplemental_rows": 4,
@@ -112,13 +137,13 @@
     "human_assessments": 8,
     "final_astra_reviews": 6,
     "original_migrated_suites": 67,
-    "measured_placements": 41,
+    "measured_placements": 0,
     "folia_config_placements": 0,
     "sparse_fixture_placements": 0,
     "scheduled_hold_checker_placements": 0,
-    "total_known_pending_placements": 41,
+    "total_known_pending_placements": 0,
     "uuid_fixture_placements": 0,
-    "classification_actions": 9,
+    "classification_actions": 0,
     "final_six_group_source_inventory_expected": 55,
     "paired_runtime_source_inventory": 54,
     "prior_96_preimages": {
@@ -131,12 +156,14 @@
       "sha256": "219ae708ad92aa168e8c84486ee97db171f0d493fdf3b3b63227d6639c223894",
       "size": 14187
     },
-    "final_six_group_inventory_status": "expected55; final inventory derivation pending"
+    "final_six_group_inventory_status": "expected55; final inventory derivation pending",
+    "numeric_integration_binding": "complete",
+    "new_junit_expected_not_executed": 82
   },
   "current_functional_setup": {
     "paired_eight": "passed; all four full entry maps equal between arms",
     "six_recipes": "all six strict functional prerequisites passed; two23056/23056 sustained and four28/28 sparse; all cleanup complete and ownership errors empty",
-    "measured_pause": "fixed160–180 seconds unchanged",
+    "measured_pause": "fixed160\u2013180 seconds unchanged",
     "sparse_pause": "original target armed, actual receipt-triggered20 seconds",
     "evidence": {
       "fresh_paired_eight": {
@@ -523,6 +550,18 @@
         "size": 1242
       },
       "scope": "actual maintained pure mains; separate from110Python cases; no full-build claim"
-    }
+    },
+    "scope": "Historical fixture integration checkpoint; its nine remaining classification actions were subsequently completed by final_integration_commits."
+  },
+  "final_integration_commits": {
+    "1.21.1": "e14d64c84bbfb4d5859c550536a6df5d6c4becb1",
+    "1.21.10": "d33592a44688361468af9362ff392865aa43efc8",
+    "1.21.11": "ccb90cfcd5ee2962859e9fa8b22a41ebd6d08c2e",
+    "26.1": "886bf68e03984691a713f720b7b6fdf26d6f4b67",
+    "26.2": "b3498fb0a990163f602f806cf0f7e5a13e593bb5"
+  },
+  "historical_source_commits": {
+    "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260910/store-late-probe-control/commits.json",
+    "sha256": "570f2561485b99d034edd844ff6e75f50c8182e36cbf23448c919ac1bc4763b2"
   }
 }

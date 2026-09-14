@@ -9,7 +9,7 @@ negotiation and missing-consumer states without creating a request manager.
 Status collects on the client tick at most twice per second, including the detailed
 CLI counters. `-Dlss.test.disableStatusCollection=true` disables collection for a separate
 diagnostic A/B comparison; it is a test-only JVM switch, not a user setting.
-The preregistered performance baseline uses the actual pre-improvement artifacts. A disconnect or a
+The accepted V27 comparison uses a qualified corrected reference sharing the candidate’s correctness fixes; see [performance scope](performance.md). A disconnect or a
 replacement world invalidates its cached data. Progress on the new screen counts
 from the first status sample in the current world; existing detailed diagnostics
 retain their established connection counters. Queue presence is an observation,
@@ -52,10 +52,6 @@ choices remain staged across subsequent unrelated config saves. Server reports s
 running generation separately from the configured restart value and mark a pending
 restart. Configured values can remain unsaved after a persistence failure.
 
-The conservative numeric server preset is not available: its values depend on
-completed reference measurements. No numeric tuning has been invented. These
-features still require the implementation ledger's exact-artifact live UI and
-performance gates before acceptance. The [settings reference](../reference/settings.md)
-records current fields, exposure and sentinel meanings.
+`/lsslod preset conservative` previews server radius 32, global generation concurrency 4 and per-player concurrency 1. Review the patch, then use `/lsslod preset apply`; `/lsslod preset undo` restores the changed values when the existing conflict checks allow it. This is opt-in and does not change defaults. The numbers come from the accepted Minecraft 26.2 V27 comparison, not measurements of every support line. Final integrated artifact/UI gates remain pending. The [settings reference](../reference/settings.md) records domains and scope; [performance](performance.md) explains the calibration and limits.
 
 For setup and diagnosis, see [installation](installation.md), [troubleshooting](troubleshooting.md) and [performance](performance.md). Maintainers use the [live status/settings checklist](status-settings-live-acceptance.md) for exact-artifact acceptance.
