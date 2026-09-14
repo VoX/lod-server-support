@@ -282,6 +282,7 @@ class ReadFreshnessRungTest {
     private static final class TestProcessor extends OffThreadProcessor<TestState> {
         record EnqueuedColumn(UUID player, int cx, int cz, long ts, byte source, int rawSize) {}
         final ConcurrentLinkedQueue<EnqueuedColumn> enqueued = new ConcurrentLinkedQueue<>();
+        boolean rejectPayload;
         // Clearing 0-section columns (the all-air ghost-terrain guard) land separately
         // so the pins can tell "bytes served" from "clear sent" apart.
         final ConcurrentLinkedQueue<EnqueuedColumn> emptiedColumns = new ConcurrentLinkedQueue<>();
@@ -301,6 +302,7 @@ class ReadFreshnessRungTest {
                                                        String dimension, long columnTimestamp,
                                                        long submissionOrder, ColumnBytes bytes,
                                                        int estimatedBytes, byte source) {
+            if (rejectPayload) return false;
             var column = new EnqueuedColumn(state.getPlayerUUID(), cx, cz,
                     columnTimestamp, source, bytes.raw().length);
             // The clearing column is the 2-byte v20 zero-section body.
@@ -560,6 +562,38 @@ class ReadFreshnessRungTest {
         } finally {
             rig.proc.shutdown();
         }
+    }
+
+    @Test void ghostStoreBodyCannotArmLateCorrection() throws Exception {
+        invalidStoreResolutionCannotArm(false, true, false, false);
+    }
+    @Test void staleEmptyStoreResolutionCannotArmLateCorrection() throws Exception {
+        invalidStoreResolutionCannotArm(true, false, true, false);
+    }
+    @Test void rejectedStoreBodyCannotArmLateCorrection() throws Exception {
+        invalidStoreResolutionCannotArm(false, false, false, true);
+    }
+    @Test void rejectedStoreClearCannotArmLateCorrection() throws Exception {
+        invalidStoreResolutionCannotArm(true, false, false, true);
+    }
+    private static void invalidStoreResolutionCannotArm(boolean empty, boolean ghost,
+                                                        boolean stale, boolean reject) throws Exception {
+        var rig = new Rig();
+        try {
+            declareAndAwaitPending(rig, rig.state, 12, 12, empty && reject ? 1L : -1L);
+            long packed = PositionUtil.packPosition(12, 12);
+            var late = reserveLate(rig.state, 12, 12);
+            if (ghost) assertNotNull(rig.state.removePendingByPosition(12, 12));
+            if (stale) rig.proc.invalidateTimestamps(DIM, new long[]{packed});
+            rig.proc.rejectPayload = reject;
+            rig.inject(new ChunkReadResult(rig.uuid, 12, 12, empty ? null : new byte[]{1, 2, 3},
+                    DIM, 64, HEADER_SECOND, false, false, false, true, late.diskOrder(), 0L));
+            rig.proc.postSnapshot(snapshot(rig.uuid), List.of());
+            if (ghost) waitFor(() -> !rig.proc.enqueued.isEmpty(), "ghost store body branch completed");
+            else drainUntil(rig.proc, rs -> rs.stream().anyMatch(r ->
+                    r.type() == LSSConstants.RESPONSE_UP_TO_DATE && r.packed() == packed));
+            assertLateAfterResult(rig, rig.state, late, false);
+        } finally { rig.proc.shutdown(); }
     }
 
     @Test

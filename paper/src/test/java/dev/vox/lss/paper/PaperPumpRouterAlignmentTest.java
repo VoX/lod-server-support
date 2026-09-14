@@ -54,6 +54,8 @@ class PaperPumpRouterAlignmentTest {
         volatile TickSnapshot lastPosted;
         boolean holdTargetDisk;
         boolean headerFreshResult;
+        boolean storeResult;
+        boolean allAirResult;
         final AtomicReference<ChunkReadResult> heldTargetDisk = new AtomicReference<>();
         Processor(Map<UUID, PaperPlayerRequestState> players, PaperChunkDiskReader reader) {
             super(players, reader, false, null, 1, 0);
@@ -75,10 +77,14 @@ class PaperPumpRouterAlignmentTest {
             // Complete the admitted read through the ACTUAL per-player result queue. The
             // timestamp is current; bytes model a persisted pre-edit snapshot, not corruption.
             var result = new ChunkReadResult(uuid, x, z,
-                    OLD_DISK.clone(), dimension, OLD_DISK.length + LSSConstants.ESTIMATED_COLUMN_OVERHEAD_BYTES,
+                    allAirResult ? null : OLD_DISK.clone(), dimension, OLD_DISK.length + LSSConstants.ESTIMATED_COLUMN_OVERHEAD_BYTES,
                     LSSConstants.epochSeconds(), false, false, false, order);
             if (headerFreshResult) result = ChunkReadResult.headerFresh(uuid, x, z,
                     dimension, order, clientTimestamp - 100);
+            // Inject a validated store-reader completion; real result routing and sender remain.
+            if (storeResult) result = new ChunkReadResult(uuid, x, z, allAirResult ? null : OLD_DISK.clone(),
+                    dimension, OLD_DISK.length + LSSConstants.ESTIMATED_COLUMN_OVERHEAD_BYTES,
+                    LSSConstants.epochSeconds() - 100, false, false, false, true, order, 0L);
             if (holdTargetDisk && x == X && z == Z) heldTargetDisk.set(result);
             else reader.getPlayerQueue(uuid).add(result);
             diskSubmitted.countDown(); routeDecided.countDown();
@@ -315,6 +321,101 @@ class PaperPumpRouterAlignmentTest {
             assertEquals(1, first.source()); assertArrayEquals(OLD_DISK, first.bytes());
             assertEquals(0, second.source()); assertArrayEquals(current.length == 0 ? new byte[]{0, 0} : current, second.bytes(),
                     "actual sender order must be OLD_DISK then CURRENT, never stale last");
+        }
+    }
+
+    @Test void lateStoreRetryMustDeliverCurrentAfterBody() throws Exception {
+        lateStoreRetry(false, CURRENT);
+    }
+
+    @Test void lateStoreRetryMustClearAfterBody() throws Exception {
+        lateStoreRetry(false, new byte[0]);
+    }
+
+    @Test void lateStoreRetryMustDeliverCurrentAfterFreshnessResponse() throws Exception {
+        lateStoreRetry(true, CURRENT);
+    }
+
+    @Test void lateStoreRetryMustClearAfterFreshnessResponse() throws Exception {
+        lateStoreRetry(true, new byte[0]);
+    }
+
+    @Test void lateEmptyStoreFallbackMustDeliverCurrentForNoData() throws Exception {
+        lateStoreRetry(false, CURRENT, true, true);
+    }
+    @Test void lateEmptyStoreFallbackMustDeliverCurrentForClaimsData() throws Exception {
+        lateStoreRetry(true, CURRENT, true, true);
+    }
+    @Test void lateEmptyDiskFallbackMustDeliverCurrentForNoData() throws Exception {
+        lateStoreRetry(false, CURRENT, false, true);
+    }
+    @Test void lateEmptyDiskFallbackMustDeliverCurrentForClaimsData() throws Exception {
+        lateStoreRetry(true, CURRENT, false, true);
+    }
+
+    private static void lateStoreRetry(boolean claimsData, byte[] current) throws Exception {
+        lateStoreRetry(claimsData, current, true, false);
+    }
+
+    /** Models the server side of a refused-current retry, not native store contents or
+     * the client refusal scheduler. The real sender must preserve STORE-old then live-current. */
+    private static void lateStoreRetry(boolean claimsData, byte[] current,
+                                       boolean fromStore, boolean emptyFallback) throws Exception {
+        try (var r = new Rig(false)) {
+            r.processor.storeResult = fromStore;
+            r.processor.allAirResult = emptyFallback;
+            r.service.setLoadedColumnProbe((level, x, z) ->
+                    new LoadedColumnData(x, z, current.clone(), current.length));
+            r.state.offerIncomingBatch(new IncomingBatch(new IncomingRequest[]{
+                    new IncomingRequest(X, Z, claimsData ? (emptyFallback ? 1L : LSSConstants.epochSeconds()) : -1L)}));
+            r.service.tick(); r.service.tick();
+            assertEquals(1, r.ownerTasks.size(), "one original callback remains delayed");
+            r.start(); await(r.processor.diskSubmitted); completeWorkerCycle(r);
+            int originalFrames = emptyFallback ? (claimsData ? 1 : 0) : (claimsData ? 0 : 1);
+            byte originalSource = fromStore ? LSSConstants.COLUMN_SOURCE_STORE : LSSConstants.COLUMN_SOURCE_DISK;
+            byte[] originalBody = emptyFallback ? new byte[]{0, 0} : OLD_DISK;
+            if (originalFrames == 0) {
+                var responses = new ArrayList<Long>();
+                r.processor.drainSendActions((state, types, positions, count) -> {
+                    assertSame(r.state, state);
+                    for (int i = 0; i < count; i++) {
+                        assertEquals(LSSConstants.RESPONSE_UP_TO_DATE, types[i]);
+                        responses.add(positions[i]);
+                    }
+                });
+                assertEquals(List.of(dev.vox.lss.common.PositionUtil.packPosition(X, Z)), responses,
+                        "actual store freshness result must resolve up_to_date without a body");
+                assertTrue(r.capturedFrames.isEmpty());
+            } else {
+                if (!emptyFallback) {
+                    var built = r.processor.delivered();
+                    assertEquals(originalSource, built.source());
+                    assertArrayEquals(originalBody, built.bytes());
+                }
+                long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+                while (r.capturedFrames.isEmpty() && System.nanoTime() < deadline) {
+                    r.service.tick();
+                    if (r.capturedFrames.isEmpty()) Thread.sleep(1);
+                }
+                assertEquals(1, r.capturedFrames.size(), "store fallback must actually send first");
+                assertEquals(originalSource, sentFrame(r.capturedFrames.get(0)).source());
+                assertArrayEquals(originalBody, sentFrame(r.capturedFrames.get(0)).bytes());
+            }
+            r.ownerTasks.get(0).run(); // no new edit, request, or renewed opportunity
+            for (int i = 0; i < 8; i++) { r.service.tick(); completeWorkerCycle(r); }
+            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+            while (r.capturedFrames.size() == originalFrames && System.nanoTime() < deadline) {
+                r.service.tick(); completeWorkerCycle(r);
+                if (r.capturedFrames.size() == originalFrames) Thread.sleep(1);
+            }
+            assertEquals(originalFrames + 1, r.capturedFrames.size(),
+                    "late loaded capture must correct the admitted store resolution exactly once");
+            var actual = sentFrame(r.capturedFrames.get(originalFrames));
+            assertEquals(LSSConstants.COLUMN_SOURCE_IN_MEMORY, actual.source());
+            assertArrayEquals(current.length == 0 ? new byte[]{0, 0} : current, actual.bytes());
+            r.ownerTasks.get(0).run();
+            for (int i = 0; i < 4; i++) { r.service.tick(); completeWorkerCycle(r); }
+            r.service.tick(); assertEquals(originalFrames + 1, r.capturedFrames.size());
         }
     }
 
