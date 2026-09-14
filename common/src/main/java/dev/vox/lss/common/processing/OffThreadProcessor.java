@@ -1337,6 +1337,8 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
                 this.ctx.sendActions().add(new SendAction.ColumnUpToDate(playerUuid, packed, state));
                 this.ctx.diagnostics().incrementUpToDate();
                 this.ctx.diagnostics().incrementDiskDrained();
+                // A store answer does not exhaust the admitted Folia owner opportunity.
+                state.markLateProbeDiskFallback(packed, submissionOrder);
                 return;
             }
             try {
@@ -1353,8 +1355,7 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
                                 result.columnTimestamp(), submissionOrder,
                                 columnBytes, result.estimatedBytes(),
                                 source);
-                if (sent && !result.fromStore() && !staleAgainstEdit) state.markLateProbeDiskFallback(packed, submissionOrder);
-                else state.discardLateProbeDiskResult(packed, submissionOrder);
+                boolean resolvedAllAir = false;
                 if (!sent) {
                     // All-air chunk (no visible sections): a resync client (claimsData) may hold
                     // stale content here, so send an authoritative clearing 0-section column; a
@@ -1364,11 +1365,18 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
                     // stale-but-real terrain and seal the fabricated air — the terminal answer is
                     // up_to_date so the client keeps what it has.
                     boolean claimsData = pending != null && pending.claimsData();
-                    if (!(allAir && claimsData && sendEmptiedColumn(state, cx, cz, result.dimension(),
-                            result.columnTimestamp(), submissionOrder, source))) {
+                    boolean cleared = allAir && claimsData && sendEmptiedColumn(state, cx, cz, result.dimension(),
+                            result.columnTimestamp(), submissionOrder, source);
+                    if (!cleared) {
                         this.ctx.sendActions().add(new SendAction.ColumnUpToDate(playerUuid, packed, state));
                     }
+                    resolvedAllAir = allAir && (!claimsData || cleared);
                 }
+                // Body, no-data all-air response, or successful clear may still be older
+                // than the delayed loaded capture. Keep only this exact admitted attempt.
+                if (pending != null && !staleAgainstEdit && (sent || resolvedAllAir))
+                    state.markLateProbeDiskFallback(packed, submissionOrder);
+                else state.discardLateProbeDiskResult(packed, submissionOrder);
             } catch (Throwable t) {
                 // Per-delivery containment — the phase-2 twin of processGenerationReady's
                 // catch: the done-bit was marked BEFORE the payload build, so a build throw
