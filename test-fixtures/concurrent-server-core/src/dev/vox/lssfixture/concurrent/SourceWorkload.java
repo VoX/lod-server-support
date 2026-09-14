@@ -73,6 +73,8 @@ public final class SourceWorkload implements AutoCloseable {
     private int stage, editStep, seedCursor;
     private long stageAt, lastMetrics;
     private volatile long origin;
+    private volatile Map<String,Object> sparseArm, sparseTriggerAcknowledged;
+    private Map<String,Object> sparseTriggerEchoed;
     private boolean kicked, closed, initialChecked, preparationRejected;
     public SourceWorkload(Engine engine, int minimumY) {
         this.engine=engine;
@@ -192,11 +194,39 @@ public final class SourceWorkload implements AutoCloseable {
                     sequence=Long.parseLong(value);
                     if(sequence>8192)throw new IllegalStateException("target sequence ack exceeds workload bound");
                 }
+                if(row.has("sparse_consumer_trigger")) {
+                    Map<String,Object> trigger=validatedSparseTrigger(row.getAsJsonObject("sparse_consumer_trigger"),sparseArm,runId,subject,connection,System.nanoTime());
+                    if(sparseTriggerAcknowledged!=null&&!sparseTriggerAcknowledged.equals(trigger))throw new IllegalStateException("sparse trigger changed");
+                    sparseTriggerAcknowledged=trigger;
+                }
                 next.put(subject,new Ack(connection,Set.copyOf(targets),sequence));
             } catch(java.nio.file.NoSuchFileException transientRename) { /* next polling pass */ }
             catch(Exception invalid){overflow=true;}
         }
         acknowledgements=Map.copyOf(next);
+    }
+    /** Validate the existing bounded ACK, never synthesize a trigger from target success. */
+    static Map<String,Object> validatedSparseTrigger(com.google.gson.JsonObject row,Map<String,Object> arm,
+                                                     String run,String subject,String connection,long now) {
+        if(arm==null||!"RigSubjectD".equals(subject)||!run.equals(arm.get("run_id"))||!connection.equals(arm.get("connection_id")))
+            throw new IllegalStateException("unarmed/foreign sparse trigger");
+        Set<String> keys=new HashSet<>(arm.keySet());keys.addAll(Set.of("body_id","wire_capture_id","start_ns","end_ns"));
+        if(!row.keySet().equals(keys))throw new IllegalStateException("invalid sparse trigger shape");
+        Map<String,Object> trigger=new HashMap<>();
+        for(String key:keys){
+            var value=row.get(key);
+            if(!value.isJsonPrimitive())throw new IllegalStateException("invalid sparse trigger value");
+            if(Set.of("run_id","subject","connection_id","target_id").contains(key))trigger.put(key,value.getAsString());
+            else {
+                String number=value.getAsString();if(!number.matches("[1-9][0-9]{0,18}"))throw new IllegalStateException("invalid sparse trigger clock/identity");
+                trigger.put(key,Long.parseLong(number));
+            }
+        }
+        for(var entry:arm.entrySet())if(!entry.getValue().equals(trigger.get(entry.getKey())))throw new IllegalStateException("sparse trigger arm differs");
+        long start=(long)trigger.get("start_ns"),end=(long)trigger.get("end_ns");
+        if(start<(long)arm.get("armed_ns")||start>=(long)arm.get("deadline_ns")||start>now
+                ||end-start!=20_000_000_000L)throw new IllegalStateException("sparse trigger outside original bounds");
+        return Map.copyOf(trigger);
     }
     private void offer(Target target,String suffix,boolean edit) {
         offer(target,suffix,edit,0);
@@ -359,7 +389,7 @@ public final class SourceWorkload implements AutoCloseable {
                         for(var required:requirements.values())for(String id:required.targets)if(!explicitEditIds.contains(id))
                             record(oracle,Map.of("event","target_acknowledged","id",id,"time_ns",now));
                         origin=now;
-                        record(oracle,Map.of("event","slow_consumer","subject","RigSubjectD","start_ns",origin+160_000_000_000L,"end_ns",origin+180_000_000_000L));
+                        if(measured)record(oracle,Map.of("event","slow_consumer","subject","RigSubjectD","start_ns",origin+160_000_000_000L,"end_ns",origin+180_000_000_000L));
                         record(oracle,Map.of("event","send_admission","subject","RigSubjectC","start_ns",origin+200_000_000_000L,"end_ns",origin+220_000_000_000L));
                         event("workload_started",now);
                         System.out.println("LSS_RIG_SOURCE_WORKLOAD_ACTIVE");
@@ -368,6 +398,13 @@ public final class SourceWorkload implements AutoCloseable {
             }
         }
         if(origin==0)return;
+        if(sparseArm!=null&&sparseTriggerEchoed==null) {
+            Map<String,Object> trigger=sparseTriggerAcknowledged;
+            if(trigger!=null) {
+                sparseTriggerEchoed=trigger;Map<String,Object> row=new HashMap<>(trigger);row.put("event","slow_consumer");
+                if(!record(oracle,row))throw new IllegalStateException("sparse trigger echo publication failed");
+            } else if(now>=(long)sparseArm.get("deadline_ns"))throw new IllegalStateException("sparse consumer trigger deadline exceeded");
+        }
         long elapsed=now-origin;
         if(measured) {
             int round;
@@ -386,6 +423,12 @@ public final class SourceWorkload implements AutoCloseable {
             if(editStep<edits.length && elapsed>=edits[editStep]*1_000_000_000L) {
                 for(int subject=0;subject<4;subject++){
                     Target target=diagnosticTargets.get(subject*3+editStep);
+                    if(subject==3&&editStep==0) {
+                        sparseArm=Map.of("run_id",runId,"subject",target.subject,"connection_id",connections.get(target.subject),
+                                "target_id",targetId(target,"edit-0"),"armed_ns",now,"deadline_ns",now+120_000_000_000L,"duration_ns",20_000_000_000L);
+                        Map<String,Object> arm=new HashMap<>(sparseArm);arm.put("event","slow_consumer_arm");
+                        if(!record(oracle,arm))throw new IllegalStateException("sparse arm publication failed");
+                    }
                     offer(new Target(target.subject,target.x,target.z,target.y,0,"diamond_block"),"edit-"+editStep,true);
                 }
                 editStep++;

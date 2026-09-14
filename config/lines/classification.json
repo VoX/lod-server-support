@@ -7031,6 +7031,14 @@
     "test-fixtures/folia-source-concurrent/src/dev/vox/lssfixture/concurrent/FoliaSourceProbe.java": {
       "kind": "identical"
     },
+    "test-fixtures/folia-source-concurrent/src/dev/vox/lssfixture/concurrent/SubjectPlayers.java": {
+      "kind": "identical",
+      "review": "Exact staged all-five source identity; final independent implementation review remains pending."
+    },
+    "test-fixtures/folia-source-concurrent/test/dev/vox/lssfixture/concurrent/SubjectPlayersTest.java": {
+      "kind": "identical",
+      "review": "Exact staged all-five source identity; final independent implementation review remains pending."
+    },
     "test-fixtures/folia-timing/build.py": {
       "kind": "identical"
     },

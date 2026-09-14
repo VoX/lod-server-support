@@ -8,6 +8,7 @@ p=argparse.ArgumentParser();p.add_argument('--java-home',required=True);p.add_ar
 root=Path(__file__).resolve().parent
 with tempfile.TemporaryDirectory(prefix='lss-oracle-tests-') as temp:
     subprocess.run([str(Path(a.java_home)/'bin/javac'),'--release','25','-cp',a.gson_jar,'-d',temp,
+                    *[str(root.parent/'concurrent-server-core/src/dev/vox/lssfixture/concurrent'/name) for name in ('SourceWorkload.java','MeasuredSchedule.java','PendingDiagnostics.java','DiagnosticGuard.java')],
                     str(root/'src/dev/vox/lssfixture/concurrent/OracleJournal.java'),
                     str(root/'src/dev/vox/lssfixture/concurrent/AcceptancePolicy.java'),
                     str(root/'src/dev/vox/lssfixture/concurrent/PendingAcceptance.java'),

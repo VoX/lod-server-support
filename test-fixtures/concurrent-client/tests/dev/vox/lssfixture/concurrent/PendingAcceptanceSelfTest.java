@@ -75,7 +75,38 @@ public final class PendingAcceptanceSelfTest {
         require(AcceptancePolicy.decide(new AcceptancePolicy.Facts(0,80,125,200,0,true),true,true,120,130,1,true)==AcceptancePolicy.Decision.OBSERVE);
         require(AcceptancePolicy.decide(facts[0],true,true,120,200,1,true)==AcceptancePolicy.Decision.IGNORE);
         admissionControls();
+        sparseFaultControls();
         System.out.println("PendingAcceptance: delayed original fact, actual preapply, original deadline, stall, retirement/supersession priority, error and rejection once passed");
+    }
+
+    private static void sparseFaultControls(){
+        var arm=new OracleJournal.SparseArm("r","RigSubjectD","r-RigSubjectD-1","r-RigSubjectD-0-edit-0",170,170+120_000_000_000L,20_000_000_000L);
+        var fault=new PendingAcceptance.SparseFault();fault.arm(arm);fault.arm(arm);
+        require(!fault.stalled(171),"arm alone must not invent actual stall");
+        require(!fault.eligible("old",arm.target(),171,172,173,1),"old connection rejected");
+        require(!fault.eligible(arm.connection(),"other",171,172,173,1),"wrong target rejected");
+        require(!fault.eligible(arm.connection(),arm.target(),0,172,173,1),"unknown application rejected");
+        require(!fault.eligible(arm.connection(),arm.target(),173,172,174,1),"pre-application body rejected");
+        require(!fault.eligible(arm.connection(),arm.target(),171,172,169,1),"early callback rejected");
+        require(!fault.eligible(arm.connection(),arm.target(),171,172,arm.deadline(),1),"deadline exclusive");
+        require(!fault.eligible(arm.connection(),arm.target(),171,172,173,0),"missing wire rejected");
+        long start=110_000_000_000L; // Receipt can arrive long after arming; duration remains exactly20s.
+        var trigger=fault.begin(arm.connection(),arm.target(),171,172,start,9,7);
+        require(trigger!=null&&(long)trigger.get("end_ns")==start+20_000_000_000L,"first real receipt fixes original interval");
+        fault.arm(null);fault.arm(arm); // A cached/older journal snapshot cannot overwrite the active timer.
+        require(fault.stalled(start+19_999_999_999L)&&!fault.stalled(start+20_000_000_000L),"exact20s boundary");
+        require(fault.begin(arm.connection(),arm.target(),171,172,start+1,10,8)==null,"duplicate callback cannot renew");
+        require(fault.trigger().equals(trigger),"trigger identity immutable");
+        AtomicInteger evaluated=new AtomicInteger(),released=new AtomicInteger();
+        PendingAcceptance entry=new PendingAcceptance(()->true,()->{evaluated.incrementAndGet();return true;},()->Long.MAX_VALUE,released::incrementAndGet,()->{throw new AssertionError();});
+        require(!entry.poll(start+19_999_999_999L,fault.stalled(start+19_999_999_999L))&&evaluated.get()==0,"real held-entry poll suppresses observation");
+        require(entry.poll(start+20_000_000_000L,fault.stalled(start+20_000_000_000L))&&released.get()==1&&evaluated.get()==1,"actual release follows interval");
+        entry.cancel();require(released.get()==1,"release once");
+        var missing=new PendingAcceptance.SparseFault();missing.arm(arm);require(missing.expired(arm.deadline()),"missing receipt explicitly expires");
+        missing.retire();require(missing.begin(arm.connection(),arm.target(),171,172,start,9,7)==null,"retired session cannot trigger");
+        fault.retire();require(!fault.stalled(start+1),"retirement ends retained obligation, never renews");
+        try{fault.arm(new OracleJournal.SparseArm("r","RigSubjectD",arm.connection(),arm.target(),171,171+120_000_000_000L,20_000_000_000L));throw new AssertionError("rearm accepted");}catch(IllegalStateException expected){}
+        System.out.println("SparseFault: actual20s held-entry boundary, immutable receipt identity, stale snapshot, old-session/target/preapply/late/missing-wire rejection, no renewal and bounded expiry passed");
     }
 
     private static void require(boolean value,String message){if(!value)throw new AssertionError(message);}

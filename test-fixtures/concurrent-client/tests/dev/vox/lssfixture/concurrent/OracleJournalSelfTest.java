@@ -105,7 +105,37 @@ public final class OracleJournalSelfTest {
             measuredTarget.remove("target_sequence");
             Files.writeString(path,session(1)+measuredTarget+"\n");journal=new OracleJournal(RUN,SUBJECT);
             try{journal.poll(path,1,Set.of());throw new AssertionError("initial route assertion weakened");}catch(java.io.IOException expected){}
+            sparseControls(path);
             System.out.println("OracleJournal: partial append/application, cached poll, reconnect, bounded retained metadata, subjectless application, exact predecessor interval, repeated-block expiry, gap/truncation/bounded reads passed");
         }finally{Files.deleteIfExists(path);Files.deleteIfExists(root);}
     }
+    private static void sparseControls(Path path)throws Exception{
+        String subject="RigSubjectD",connection=RUN+"-"+subject+"-1",id=RUN+"-"+subject+"-0-edit-0";
+        var arm=new OracleJournal.SparseArm(RUN,subject,connection,id,170,120_000_000_170L,20_000_000_000L);
+        var session=new HashMap<String,Object>(Map.of("event","session","run_id",RUN,"subject",subject,"connection_id",connection,"connection_index",1));
+        var armRow=new HashMap<String,Object>(arm.fields());armRow.put("event","slow_consumer_arm");
+        Files.writeString(path,JSON.toJson(session)+"\n"+JSON.toJson(armRow)+"\n");
+        var journal=new OracleJournal(RUN,subject);var snapshot=journal.poll(path,1,Set.of());
+        require(snapshot.sparseArm().equals(arm)&&snapshot.stallStart()==0&&snapshot.stallEnd()==0);
+        require(journal.poll(path,1,Set.of())==snapshot);
+        Files.writeString(path,JSON.toJson(armRow)+"\n",StandardOpenOption.APPEND);
+        try{journal.poll(path,1,Set.of());throw new AssertionError("duplicate arm accepted");}catch(java.io.IOException expected){}
+        var fault=new PendingAcceptance.SparseFault();fault.arm(arm);
+        var trigger=fault.begin(connection,id,171,172,200,7,9);var encoded=JSON.toJsonTree(trigger).getAsJsonObject();
+        require(SourceWorkload.validatedSparseTrigger(encoded,arm.fields(),RUN,subject,connection,201).equals(trigger));
+        for(String key:new String[]{"body_id","wire_capture_id","start_ns","end_ns","target_id","connection_id"}){
+            var bad=encoded.deepCopy();
+            if(key.endsWith("id"))bad.addProperty(key,key.equals("target_id")||key.equals("connection_id")?"foreign":"0");
+            else bad.addProperty(key,1);
+            try{SourceWorkload.validatedSparseTrigger(bad,arm.fields(),RUN,subject,connection,201);throw new AssertionError("invalid ACK accepted: "+key);}catch(IllegalStateException expected){}
+        }
+        try{SourceWorkload.validatedSparseTrigger(encoded,null,RUN,subject,connection,201);throw new AssertionError("unarmed ACK accepted");}catch(IllegalStateException expected){}
+        try{SourceWorkload.validatedSparseTrigger(encoded,arm.fields(),RUN,subject,"old",201);throw new AssertionError("old-session ACK accepted");}catch(IllegalStateException expected){}
+        var fixed=Map.of("event","slow_consumer","run_id",RUN,"subject",subject,"start_ns",160_000_000_000L,"end_ns",180_000_000_000L);
+        Files.writeString(path,JSON.toJson(session)+"\n"+JSON.toJson(fixed)+"\n");
+        snapshot=new OracleJournal(RUN,subject).poll(path,1,Set.of());
+        require(snapshot.sparseArm()==null&&snapshot.stallStart()==160_000_000_000L&&snapshot.stallEnd()==180_000_000_000L);
+        System.out.println("Sparse oracle/ACK: actual parser arm without fabricated interval, duplicate rejection, exact receipt echo validation and fixed measured interval unchanged passed");
+    }
+
 }
