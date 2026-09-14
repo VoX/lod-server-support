@@ -17,7 +17,7 @@ public final class CommandHelp {
         out.add("/" + rootLabel + " stats — per-player LOD session counters");
         out.add("/" + rootLabel + " diag — full service diagnostics (serve sources, disk"
                 + " reader, generation, store, dialects)");
-        out.add("/" + rootLabel + " preset pregenerated-world|apply|undo — preview/stage server-global generation OFF for restart");
+        out.add("/" + rootLabel + " preset conservative|pregenerated-world|apply|undo — preview, apply or undo a server-global settings patch");
         out.add("/" + rootLabel + " diagnostics export — save a redacted local JSON/text report");
         out.add("/" + rootLabel + " store status — LOD store health, size, and sweep state");
         out.add("/" + rootLabel + " store invalidate all — drop every stored LOD row"

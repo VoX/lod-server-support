@@ -103,11 +103,11 @@
       "kind": "adapted",
       "review": "Implementation candidate; independent final change review must cover residual logic before handoff.",
       "reviewed_blobs": {
-        "1.21.1": "4928fdb9f638940ee304f2928caddc735ec5cb12",
-        "1.21.10": "4928fdb9f638940ee304f2928caddc735ec5cb12",
-        "1.21.11": "4928fdb9f638940ee304f2928caddc735ec5cb12",
-        "26.1": "4928fdb9f638940ee304f2928caddc735ec5cb12",
-        "26.2": "bca8c8cbbc93128f32b70d13907cb507db324af7"
+        "1.21.1": "34fe012d01895bd2e6004cd159a4161655749362",
+        "1.21.10": "34fe012d01895bd2e6004cd159a4161655749362",
+        "1.21.11": "34fe012d01895bd2e6004cd159a4161655749362",
+        "26.1": "34fe012d01895bd2e6004cd159a4161655749362",
+        "26.2": "f1d0c47944c826c20d5ce6ae13ecaa8a228ff4e9"
       },
       "surface": "line-adaptation:common/src/main/java/dev/vox/lss/common/CommandHelp.java",
       "tests": [
@@ -189,11 +189,11 @@
       "kind": "adapted",
       "review": "Implementation candidate; independent final change review must cover residual logic before handoff.",
       "reviewed_blobs": {
-        "1.21.1": "0a29a117a5e5f5578d57d5bb21d1ccbf926ba90f",
-        "1.21.10": "0a29a117a5e5f5578d57d5bb21d1ccbf926ba90f",
-        "1.21.11": "0a29a117a5e5f5578d57d5bb21d1ccbf926ba90f",
-        "26.1": "0a29a117a5e5f5578d57d5bb21d1ccbf926ba90f",
-        "26.2": "36255a88a222e67c20bf2c9a99c7efe0ff6605e1"
+        "1.21.1": "86b105dd52aa9f85dc7d45cd69f21a8b17c5bba3",
+        "1.21.10": "86b105dd52aa9f85dc7d45cd69f21a8b17c5bba3",
+        "1.21.11": "86b105dd52aa9f85dc7d45cd69f21a8b17c5bba3",
+        "26.1": "86b105dd52aa9f85dc7d45cd69f21a8b17c5bba3",
+        "26.2": "d8027dca7e7f5e95437df8d6509575c535120836"
       },
       "surface": "runtime-settings-world-scope",
       "tests": [
@@ -206,11 +206,11 @@
       "kind": "adapted",
       "review": "Implementation candidate; independent final change review must cover residual logic before handoff.",
       "reviewed_blobs": {
-        "1.21.1": "3872fcfe0ce7b32a3fc0272cba8991b24021aa2b",
-        "1.21.10": "3872fcfe0ce7b32a3fc0272cba8991b24021aa2b",
-        "1.21.11": "3872fcfe0ce7b32a3fc0272cba8991b24021aa2b",
-        "26.1": "3872fcfe0ce7b32a3fc0272cba8991b24021aa2b",
-        "26.2": "53efdb8665d4e919f35f11083c6b60ac0941ac0f"
+        "1.21.1": "6de06e1d0d3446eed0835df9552606370d2403ae",
+        "1.21.10": "6de06e1d0d3446eed0835df9552606370d2403ae",
+        "1.21.11": "6de06e1d0d3446eed0835df9552606370d2403ae",
+        "26.1": "6de06e1d0d3446eed0835df9552606370d2403ae",
+        "26.2": "6d38ebcd3b42cb29090b553523fc3a88e2bc07e7"
       },
       "surface": "line-adaptation:common/src/main/java/dev/vox/lss/common/config/ServerConfigBase.java",
       "tests": [
@@ -5034,11 +5034,11 @@
       "kind": "adapted",
       "review": "Implementation candidate; independent final change review must cover residual logic before handoff.",
       "reviewed_blobs": {
-        "1.21.1": "cbb9396ada960171d5204683e9d9f43f7efcd1e4",
-        "1.21.10": "cbb9396ada960171d5204683e9d9f43f7efcd1e4",
-        "1.21.11": "cbb9396ada960171d5204683e9d9f43f7efcd1e4",
-        "26.1": "cbb9396ada960171d5204683e9d9f43f7efcd1e4",
-        "26.2": "321c2be7d830e506cd53a8a0218fa0abab092a80"
+        "1.21.1": "57a3ba739cb0cefb346f5e839ef62c22b2196a9b",
+        "1.21.10": "57a3ba739cb0cefb346f5e839ef62c22b2196a9b",
+        "1.21.11": "57a3ba739cb0cefb346f5e839ef62c22b2196a9b",
+        "26.1": "57a3ba739cb0cefb346f5e839ef62c22b2196a9b",
+        "26.2": "caf49c700ad7a357b87cd8fc93b3e5b3fbccaf5b"
       },
       "surface": "line-adaptation:paper/src/main/java/dev/vox/lss/paper/PaperCommands.java",
       "tests": [
@@ -9086,11 +9086,11 @@
       "kind": "adapted",
       "review": "Implementation candidate; independent final change review must cover residual logic before handoff.",
       "reviewed_blobs": {
-        "1.21.1": "25decfbb88569d7bc4a971b2b5507b6f4be35340",
-        "1.21.10": "5d57549af8c6247d9a98a2d1fb5c0853423baf16",
-        "1.21.11": "35b44a0bd9dde7cfb0f60078c206b8118f6ae0c8",
-        "26.1": "35b44a0bd9dde7cfb0f60078c206b8118f6ae0c8",
-        "26.2": "c450d2746c9e7176c46b6b0a17d8501f4a319525"
+        "1.21.1": "9c168563a1ac860d60ce2878852d6548432c1011",
+        "1.21.10": "8ae662e428a818e573ba33207ab5d5b51ba6e2f0",
+        "1.21.11": "0c36716172507ec51a3227da27249289420aa0c2",
+        "26.1": "0c36716172507ec51a3227da27249289420aa0c2",
+        "26.2": "b0e967708fe52ace2d0367ba109b08410502e9d1"
       },
       "surface": "line-adaptation:xplat/src/main/java/dev/vox/lss/networking/server/LSSServerCommands.java",
       "tests": [
@@ -9316,6 +9316,34 @@
     },
     "xplat/src/main/java/dev/vox/lss/trace/PlayerTraceState.java": {
       "kind": "identical"
+    },
+    "common/src/test/java/dev/vox/lss/common/config/ConservativePresetTest.java": {
+      "kind": "identical",
+      "review": "Exact staged all-five source identity; final independent implementation review remains pending."
+    },
+    "common/src/test/java/dev/vox/lss/common/config/ConservativePresetWorldScopeTest.java": {
+      "kind": "adapted",
+      "surface": "conservative-preset-world-scope-26.2",
+      "axes": "Test uses the existing26.2 world-distance API; deliberately absent from four support lines.",
+      "tests": [
+        "ConservativePresetWorldScopeTest.worldEditAfterPreviewSurvivesGlobalApplyUndoAndKeepsNameDimensionPrecedence",
+        "ConservativePresetWorldScopeTest.laterWorldRemovalIsNotResurrectedByGlobalUndo"
+      ],
+      "reviewed_blobs": {
+        "1.21.1": null,
+        "1.21.10": null,
+        "1.21.11": null,
+        "26.1": null,
+        "26.2": "39767ac8be833b4797b367a7bcf0cbe0572282e7"
+      }
+    },
+    "common/src/test/java/dev/vox/lss/common/config/RuntimeBatchUndoTest.java": {
+      "kind": "identical",
+      "review": "Exact staged all-five source identity; final independent implementation review remains pending."
+    },
+    "paper/src/test/java/dev/vox/lss/paper/PaperConservativePresetTest.java": {
+      "kind": "identical",
+      "review": "Exact staged all-five source identity; final independent implementation review remains pending."
     }
   },
   "nonproduction_patterns": {

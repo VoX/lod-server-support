@@ -18,8 +18,18 @@ import net.minecraft.server.permissions.Permissions;
 public class LSSServerCommands {
     private static int preset(CommandSourceStack source, String action) {
         try {
-            for (String line : dev.vox.lss.config.LSSServerConfig.CONFIG.presetCommand(action))
-                source.sendSuccess(() -> Component.literal(line), false);
+            var config = dev.vox.lss.config.LSSServerConfig.CONFIG;
+            int previousDistance = config.lodDistanceChunks;
+            var feedback = config.presetCommand(action);
+            if (config.lodDistanceChunks != previousDistance) {
+                var service = LSSServerNetworking.getRequestService();
+                if (service != null) {
+                    int[] counts = service.repushSessionConfig();
+                    source.sendSuccess(() -> Component.literal("Re-pushed to " + counts[0] + " client(s)"
+                            + (counts[1] > 0 ? " (" + counts[1] + " legacy update on rejoin)" : "")), false);
+                }
+            }
+            for (String line : feedback) source.sendSuccess(() -> Component.literal(line), false);
         } catch (IllegalArgumentException | IllegalStateException failure) {
             source.sendFailure(Component.literal(failure.getMessage()));
         }
@@ -65,6 +75,7 @@ public class LSSServerCommands {
                                     .executes(ctx -> showStats(ctx.getSource()))
                             )
                             .then(Commands.literal("preset")
+                                    .then(Commands.literal("conservative").executes(ctx -> preset(ctx.getSource(), "conservative")))
                                     .then(Commands.literal("pregenerated-world").executes(ctx -> preset(ctx.getSource(), "pregenerated-world")))
                                     .then(Commands.literal("apply").executes(ctx -> preset(ctx.getSource(), "apply")))
                                     .then(Commands.literal("undo").executes(ctx -> preset(ctx.getSource(), "undo"))))
