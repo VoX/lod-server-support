@@ -31,6 +31,8 @@ public final class FoliaSourceProbe extends JavaPlugin implements Listener,Sourc
     private final Map<String,java.util.concurrent.CopyOnWriteArrayList<Target>> retainedTargets=new ConcurrentHashMap<>();
     private final java.util.concurrent.ConcurrentHashMap<String,Map<String,Object>> ownerDiagnostics=new java.util.concurrent.ConcurrentHashMap<>();
     private final Map<String,OwnerObservation<org.bukkit.entity.Player>> owners=new ConcurrentHashMap<>();
+    private final SubjectPlayers<org.bukkit.entity.Player> subjectPlayers=new SubjectPlayers<>(Bukkit::getPlayer);
+    private final Set<String> lookupDiagnostics=ConcurrentHashMap.newKeySet();
     private final AtomicLong deniedReads=new AtomicLong();
     private volatile boolean checked,checking,initialChecking;
     private volatile List<Map<String,Object>> initialFacts;
@@ -53,7 +55,8 @@ public final class FoliaSourceProbe extends JavaPlugin implements Listener,Sourc
         var service=lss.getRequestService();instrumented.retainAll(service.getPlayers().values());
         for(var state:service.getPlayers().values()){
             String subject=state.getPlayerName();
-            var currentPlayer=Bukkit.getPlayerExact(subject);
+            var currentPlayer=subjectPlayers.current(subject);
+            observeLookup(subject,"pressure",currentPlayer,state.getPlayer());
             if(currentPlayer==null || ((org.bukkit.craftbukkit.entity.CraftPlayer)currentPlayer).getHandle()!=state.getPlayer())continue;
             workload.productRegistrationObserved(subject);
             if(!instrumented.add(state))continue;
@@ -70,9 +73,24 @@ public final class FoliaSourceProbe extends JavaPlugin implements Listener,Sourc
             });
         }
     }
+    /** At most one observation per site and fixed subject; lookup evidence never authorizes work. */
+    private void observeLookup(String subject,String site,org.bukkit.entity.Player captured,Object expectedHandle){
+        if(!subject.matches("RigSubject[ABCD]")||!lookupDiagnostics.add(subject+":"+site))return;
+        DiagnosticGuard.observe(()->{
+            var byName=Bukkit.getPlayerExact(subject);var byUuid=subjectPlayers.current(subject);
+            Map<String,Object> row=new LinkedHashMap<>();
+            row.put("event","player_lookup");row.put("site",site);row.put("time_ns",System.nanoTime());
+            row.put("name_present",byName!=null);row.put("uuid_present",byUuid!=null);
+            row.put("name_matches_uuid",byName!=null&&byName==byUuid);
+            row.put("uuid_matches_captured",byUuid!=null&&byUuid==captured);
+            row.put("uuid_handle_matches",byUuid!=null&&((org.bukkit.craftbukkit.entity.CraftPlayer)byUuid).getHandle()==expectedHandle);
+            workload.ownerTransition(subject,row);
+        },failure->workload.diagnosticFailure("player-lookup",failure));
+    }
     @EventHandler public void join(PlayerJoinEvent event){
         var player=event.getPlayer();String subject=player.getName();
         if(!subject.matches("RigSubject[ABCD]"))return;
+        subjectPlayers.join(subject,player.getUniqueId());
         // The retained corridor joins each subject's positive-side loaded cells
         // into its real player region. Observe that fact on the actual owner,
         // and keep refreshing it before each later loaded mutation.
@@ -97,7 +115,9 @@ public final class FoliaSourceProbe extends JavaPlugin implements Listener,Sourc
                 if(transition!=null)currentWorkload.ownerTransition(subject,transition);
             },failure->currentWorkload.diagnosticFailure("owner-transition",failure));
             if(firstJoin)Bukkit.getGlobalRegionScheduler().run(this,ignored->{
-                if(owners.get(subject)==observation && Bukkit.getPlayerExact(subject)==player)currentWorkload.join(subject);
+                var currentPlayer=subjectPlayers.current(subject);
+                observeLookup(subject,"first-join",player,((org.bukkit.craftbukkit.entity.CraftPlayer)player).getHandle());
+                if(owners.get(subject)==observation && currentPlayer==player)currentWorkload.join(subject);
             });
         },()->owners.remove(subject,observation),30,1);
     }
@@ -149,7 +169,7 @@ public final class FoliaSourceProbe extends JavaPlugin implements Listener,Sourc
         var observation=owners.get(target.subject());
         var snapshot=observation==null?null:observation.snapshot();
         long now=System.nanoTime();
-        if(!OwnerObservation.available(snapshot,Bukkit.getPlayerExact(target.subject()),now))return null;
+        if(!OwnerObservation.available(snapshot,subjectPlayers.current(target.subject()),now))return null;
         return new SourceWorkload.Ownership(Map.of("observed_ns",snapshot.time(),"region_identity",snapshot.region(),"owns_region",true,"owner_name",target.subject()),snapshot.player());
     }
     /** Opt-in native observation on the existing player owner, at most1Hz per subject. */
@@ -181,12 +201,12 @@ public final class FoliaSourceProbe extends JavaPlugin implements Listener,Sourc
         row.put("observed_ns",now);row.put("chunk_x",target.x());row.put("chunk_z",target.z());
         String reason=snapshot==null?"missing_snapshot":!snapshot.ownsAll()?"target_set_not_owned":
                 now-snapshot.time()>250_000_000L?"stale_snapshot":
-                Bukkit.getPlayerExact(target.subject())!=snapshot.player()?"different_current_player":"owner_available";
+                subjectPlayers.current(target.subject())!=snapshot.player()?"different_current_player":"owner_available";
         row.put("reason",reason);
         var nativeSample=ownerDiagnostics.get(target.subject());if(nativeSample!=null)row.put("latest_native_sample",nativeSample);
         if(snapshot!=null){row.put("snapshot_ns",snapshot.time());row.put("snapshot_age_ns",now-snapshot.time());
             row.put("region_identity",snapshot.region());row.put("owns_all",snapshot.ownsAll());
-            row.put("current_player_matches",Bukkit.getPlayerExact(target.subject())==snapshot.player());}
+            row.put("current_player_matches",subjectPlayers.current(target.subject())==snapshot.player());}
         return row;
     }
     @Override public void save(){} // Clean snapshot save was witnessed before this run.
@@ -247,7 +267,7 @@ public final class FoliaSourceProbe extends JavaPlugin implements Listener,Sourc
         Bukkit.getRegionScheduler().run(this,new Location(world,target.x()*16,target.y(),target.z()*16),ignored->{
             try{
                 if(!Bukkit.isOwnedByCurrentRegion(world,target.x(),target.z()))throw new IllegalStateException("edit owner absent");
-                var player=Bukkit.getPlayerExact(target.subject());var region=TickRegionScheduler.getCurrentRegion();
+                var player=subjectPlayers.current(target.subject());var region=TickRegionScheduler.getCurrentRegion();
                 // This result is emitted only before touching the revision ledger or world.
                 // A successor cannot spend the old player's acknowledged authorization.
                 if(!owner.isCurrent(player,System.nanoTime()) || region==null || !Bukkit.isOwnedByCurrentRegion(player)){
@@ -262,7 +282,7 @@ public final class FoliaSourceProbe extends JavaPlugin implements Listener,Sourc
         return result;
     }
     @Override public void kick(String subject){
-        var player=Bukkit.getPlayerExact(subject);if(player!=null)player.getScheduler().run(this,task->
+        var player=subjectPlayers.current(subject);if(player!=null)player.getScheduler().run(this,task->
             player.kick(net.kyori.adventure.text.Component.text("Owned rig reconnect control")),()->{});
     }
     @Override public Map<String,Object> metrics(){

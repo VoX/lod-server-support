@@ -44,7 +44,8 @@ public final class ClientProbe implements ClientModInitializer, VoxelColumnConsu
     private static long lastGcSample;
     private static volatile boolean running,overflow;
     private static volatile long stallStart,stallUntil;
-    private static boolean stalled(){long now=System.nanoTime();return now>=stallStart&&now<stallUntil;}
+    private static final PendingAcceptance.SparseFault SPARSE_FAULT=new PendingAcceptance.SparseFault();
+    private static boolean stalled(){long now=System.nanoTime();return SPARSE_FAULT.arm()!=null?SPARSE_FAULT.stalled(now):now>=stallStart&&now<stallUntil;}
     private static Path root;
     private static String subject,run;
     @Override public void onInitializeClient() {
@@ -99,9 +100,16 @@ public final class ClientProbe implements ClientModInitializer, VoxelColumnConsu
     }
     private static void readOracle() throws IOException {
         var next=journal.poll(root.resolve("oracle.jsonl"),connectionIndex,COMMITTED);
+        SPARSE_FAULT.arm(next.sparseArm()); // Publish arm before its target becomes callback-visible.
         oracle=new Oracle(next.generation(),next.connection(),next.targets());
         stallStart=next.stallStart();stallUntil=next.stallEnd();
+        if(SPARSE_FAULT.arm()!=null&&!java.util.Objects.equals(SPARSE_FAULT.arm().connection(),next.connection()))SPARSE_FAULT.retire();
+        if(SPARSE_FAULT.expired(System.nanoTime()))throw new IOException("sparse consumer trigger deadline exceeded");
         String acknowledgment=next.acknowledgment();
+        if(acknowledgment!=null&&SPARSE_FAULT.trigger()!=null){
+            var ack=JsonParser.parseString(acknowledgment).getAsJsonObject();
+            ack.add("sparse_consumer_trigger",JSON.toJsonTree(SPARSE_FAULT.trigger()));acknowledgment=JSON.toJson(ack);
+        }
         if(acknowledgment!=null&&!acknowledgment.equals(lastAcknowledgment)){
             Path pending=root.resolve("oracle-ack-"+subject+".tmp"),destination=root.resolve("oracle-ack-"+subject+".json");
             Files.writeString(pending,acknowledgment);
@@ -170,25 +178,40 @@ public final class ClientProbe implements ClientModInitializer, VoxelColumnConsu
         if(delivery!=level)return;
         if(!hasPendingDemand(oracle,x,z))return;
         Set<String> awaiting=new HashSet<>();
-        boolean forced=stalled();
+        OracleJournal.Target sparseTarget=null;
+        if(wire!=null&&wire.session()==session&&wire.nativeConnection()==connection
+                &&Objects.equals(wire.connectionId(),oracle.connection())&&wire.x()==x&&wire.z()==z&&wire.timestamp()==data.columnTimestamp()){
+            for(var target:oracle.targets().getOrDefault(OracleJournal.position(x,z),List.of()))
+                if(!COMMITTED.contains(target.id())&&(target.end()==0||System.nanoTime()<target.end())
+                        &&wire.dimension().equals(target.dimension())&&wire.source()==target.source()&&SPARSE_FAULT.eligible(oracle.connection(),target.id(),target.applied(),wire.received(),System.nanoTime(),wire.captureId())){sparseTarget=target;break;}
+        }
+        boolean forced=stalled()||sparseTarget!=null;
         try {if(!forced&&accept(delivery,x,z,data,wire,receipt,bodyId,awaiting))return;}
         catch(RuntimeException failure){fixtureFailure(bodyId,"callback-observation-failed");return;}
         synchronized(HELD){
-        if(!running)return;
+        if(!running||!receipt.isActive()||delivery!=level||(wire!=null&&(wire.session()!=session||wire.nativeConnection()!=connection)))return;
         Runnable release=receipt.deferAcceptance();
         var admission=HELD_ADMISSION.acquireOrRefuse(receipt::report,release);
         if(admission!=PendingAcceptance.Admission.Result.ADMITTED){
             if(admission==PendingAcceptance.Admission.Result.REFUSAL_FAILED)overflow=true;
             return;
         }
+        long deferredAt=System.nanoTime();
+        synchronized(SPARSE_FAULT){
+        if(sparseTarget!=null&&!COMMITTED.contains(sparseTarget.id())&&SPARSE_FAULT.eligible(oracle.connection(),sparseTarget.id(),sparseTarget.applied(),wire.received(),deferredAt,wire.captureId())){
+            var trigger=SPARSE_FAULT.begin(oracle.connection(),sparseTarget.id(),sparseTarget.applied(),wire.received(),deferredAt,bodyId,wire.captureId());
+            if(trigger!=null){var row=new HashMap<String,Object>(trigger);row.put("event","slow_consumer_triggered");emit(row);}
+        }
+        }
+        long wireId=wire==null?0:wire.captureId();
         PendingAcceptance held=new PendingAcceptance(
                 ()->running&&receipt.isActive()&&delivery==level&&(wire==null||wire.session()==session&&wire.nativeConnection()==connection),
                 ()->accept(delivery,x,z,data,wire,receipt,bodyId,awaiting),
                 ()->unknownDeadline(oracle,x,z,awaiting),
-                ()->{try{release.run();}finally{HELD_SLOTS.release();emit(Map.of("event","acceptance_released","held",HELD.size(),"time_ns",System.nanoTime()));}},
+                ()->{long releasedAt=System.nanoTime();try{release.run();}finally{HELD_SLOTS.release();emit(Map.of("event","acceptance_released","held",HELD.size(),"time_ns",releasedAt,"body_id",bodyId,"wire_capture_id",wireId));}},
                 ()->overflow=true);
         if(!HELD.offer(held))held.reject();
-        else emit(Map.of("event","acceptance_deferred","held",HELD.size(),"time_ns",System.nanoTime()));
+        else emit(Map.of("event","acceptance_deferred","held",HELD.size(),"time_ns",deferredAt,"body_id",bodyId,"wire_capture_id",wireId));
         }
     }
     private static long unknownDeadline(Oracle current,int x,int z,Set<String> awaiting){
@@ -199,6 +222,14 @@ public final class ClientProbe implements ClientModInitializer, VoxelColumnConsu
         return deadline;
     }
     private static boolean accept(ClientLevel delivery,int x,int z,VoxelColumnData data,Wire wire,LSSApi.IngestFailureHandle receipt,long bodyId,Set<String> awaiting){
+        if(SPARSE_FAULT.arm()==null)return observe(delivery,x,z,data,wire,receipt,bodyId,awaiting);
+        // Sparse-only timer/observation ordering; no total event-writer ordering is assumed.
+        synchronized(SPARSE_FAULT){
+            if(SPARSE_FAULT.stalled(System.nanoTime()))return false;
+            return observe(delivery,x,z,data,wire,receipt,bodyId,awaiting);
+        }
+    }
+    private static boolean observe(ClientLevel delivery,int x,int z,VoxelColumnData data,Wire wire,LSSApi.IngestFailureHandle receipt,long bodyId,Set<String> awaiting){
         if(!running||!receipt.isActive()){
             emit(Map.of("event","stale_acceptance_discarded","local_session",session,"time_ns",System.nanoTime()));return true;
         }
