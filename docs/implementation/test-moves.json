@@ -907,8 +907,104 @@
       "task": ":common:test",
       "outcome": "passed",
       "count": 1,
-      "rationale": "Post-migration header-correction regression: Valid header freshness enables each deduplicated recipient’s already-reserved loaded correction using its actual admission order.",
+      "rationale": "Post-migration header-correction regression: Valid header freshness enables each deduplicated recipient\u2019s already-reserved loaded correction using its actual admission order.",
       "introducing_commit": "4fd769da5ec73d06d144be753be4346d581aafbf"
+    },
+    {
+      "identity": "dev.vox.lss.common.processing.ReadFreshnessRungTest#ghostStoreBodyCannotArmLateCorrection()",
+      "task": ":common:test",
+      "outcome": "passed",
+      "count": 1,
+      "rationale": "Post-migration regression for bounded admitted loaded correction after store/empty resolution; preserves successful delivery and invalid-result exclusions.",
+      "introducing_commit": "68c872de0ee6b00a4a1a16629158435f28a57e56"
+    },
+    {
+      "identity": "dev.vox.lss.common.processing.ReadFreshnessRungTest#rejectedStoreBodyCannotArmLateCorrection()",
+      "task": ":common:test",
+      "outcome": "passed",
+      "count": 1,
+      "rationale": "Post-migration regression for bounded admitted loaded correction after store/empty resolution; preserves successful delivery and invalid-result exclusions.",
+      "introducing_commit": "68c872de0ee6b00a4a1a16629158435f28a57e56"
+    },
+    {
+      "identity": "dev.vox.lss.common.processing.ReadFreshnessRungTest#rejectedStoreClearCannotArmLateCorrection()",
+      "task": ":common:test",
+      "outcome": "passed",
+      "count": 1,
+      "rationale": "Post-migration regression for bounded admitted loaded correction after store/empty resolution; preserves successful delivery and invalid-result exclusions.",
+      "introducing_commit": "68c872de0ee6b00a4a1a16629158435f28a57e56"
+    },
+    {
+      "identity": "dev.vox.lss.common.processing.ReadFreshnessRungTest#staleEmptyStoreResolutionCannotArmLateCorrection()",
+      "task": ":common:test",
+      "outcome": "passed",
+      "count": 1,
+      "rationale": "Post-migration regression for bounded admitted loaded correction after store/empty resolution; preserves successful delivery and invalid-result exclusions.",
+      "introducing_commit": "68c872de0ee6b00a4a1a16629158435f28a57e56"
+    },
+    {
+      "identity": "dev.vox.lss.paper.PaperPumpRouterAlignmentTest#lateEmptyDiskFallbackMustDeliverCurrentForClaimsData()",
+      "task": ":paper:test",
+      "outcome": "passed",
+      "count": 1,
+      "rationale": "Post-migration regression for bounded admitted loaded correction after store/empty resolution; preserves successful delivery and invalid-result exclusions.",
+      "introducing_commit": "68c872de0ee6b00a4a1a16629158435f28a57e56"
+    },
+    {
+      "identity": "dev.vox.lss.paper.PaperPumpRouterAlignmentTest#lateEmptyDiskFallbackMustDeliverCurrentForNoData()",
+      "task": ":paper:test",
+      "outcome": "passed",
+      "count": 1,
+      "rationale": "Post-migration regression for bounded admitted loaded correction after store/empty resolution; preserves successful delivery and invalid-result exclusions.",
+      "introducing_commit": "68c872de0ee6b00a4a1a16629158435f28a57e56"
+    },
+    {
+      "identity": "dev.vox.lss.paper.PaperPumpRouterAlignmentTest#lateEmptyStoreFallbackMustDeliverCurrentForClaimsData()",
+      "task": ":paper:test",
+      "outcome": "passed",
+      "count": 1,
+      "rationale": "Post-migration regression for bounded admitted loaded correction after store/empty resolution; preserves successful delivery and invalid-result exclusions.",
+      "introducing_commit": "68c872de0ee6b00a4a1a16629158435f28a57e56"
+    },
+    {
+      "identity": "dev.vox.lss.paper.PaperPumpRouterAlignmentTest#lateEmptyStoreFallbackMustDeliverCurrentForNoData()",
+      "task": ":paper:test",
+      "outcome": "passed",
+      "count": 1,
+      "rationale": "Post-migration regression for bounded admitted loaded correction after store/empty resolution; preserves successful delivery and invalid-result exclusions.",
+      "introducing_commit": "68c872de0ee6b00a4a1a16629158435f28a57e56"
+    },
+    {
+      "identity": "dev.vox.lss.paper.PaperPumpRouterAlignmentTest#lateStoreRetryMustClearAfterBody()",
+      "task": ":paper:test",
+      "outcome": "passed",
+      "count": 1,
+      "rationale": "Post-migration regression for bounded admitted loaded correction after store/empty resolution; preserves successful delivery and invalid-result exclusions.",
+      "introducing_commit": "68c872de0ee6b00a4a1a16629158435f28a57e56"
+    },
+    {
+      "identity": "dev.vox.lss.paper.PaperPumpRouterAlignmentTest#lateStoreRetryMustClearAfterFreshnessResponse()",
+      "task": ":paper:test",
+      "outcome": "passed",
+      "count": 1,
+      "rationale": "Post-migration regression for bounded admitted loaded correction after store/empty resolution; preserves successful delivery and invalid-result exclusions.",
+      "introducing_commit": "68c872de0ee6b00a4a1a16629158435f28a57e56"
+    },
+    {
+      "identity": "dev.vox.lss.paper.PaperPumpRouterAlignmentTest#lateStoreRetryMustDeliverCurrentAfterBody()",
+      "task": ":paper:test",
+      "outcome": "passed",
+      "count": 1,
+      "rationale": "Post-migration regression for bounded admitted loaded correction after store/empty resolution; preserves successful delivery and invalid-result exclusions.",
+      "introducing_commit": "68c872de0ee6b00a4a1a16629158435f28a57e56"
+    },
+    {
+      "identity": "dev.vox.lss.paper.PaperPumpRouterAlignmentTest#lateStoreRetryMustDeliverCurrentAfterFreshnessResponse()",
+      "task": ":paper:test",
+      "outcome": "passed",
+      "count": 1,
+      "rationale": "Post-migration regression for bounded admitted loaded correction after store/empty resolution; preserves successful delivery and invalid-result exclusions.",
+      "introducing_commit": "68c872de0ee6b00a4a1a16629158435f28a57e56"
     }
   ]
 }
