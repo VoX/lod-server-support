@@ -17,7 +17,16 @@ public final class OracleJournal {
         Target rebound(String destination,long since){return new Target(id,destination,x,z,y,block,offered,dimension,worldGeneration,revision,predecessor,source,applied,end,since,loadedUpdateFallback);}
     }
     public record Snapshot(long generation,String connection,Map<Long,List<Target>> targets,
-                           long stallStart,long stallEnd,String acknowledgment) {}
+                           long stallStart,long stallEnd,String acknowledgment,SparseArm sparseArm) {}
+    public record SparseArm(String run,String subject,String connection,String target,long armed,long deadline,long duration) {
+        public SparseArm {
+            if(run==null||!"RigSubjectD".equals(subject)||connection==null||!connection.startsWith(run+"-"+subject+"-")
+                    ||!target.equals(run+"-"+subject+"-0-edit-0")||armed<=0||deadline-armed!=120_000_000_000L||duration!=20_000_000_000L)
+                throw new IllegalArgumentException("invalid sparse consumer arm");
+        }
+        Map<String,Object> fields(){return Map.of("run_id",run,"subject",subject,"connection_id",connection,"target_id",target,
+                "armed_ns",armed,"deadline_ns",deadline,"duration_ns",duration);}
+    }
     private static final int MAX_POLL_BYTES=262144,MAX_LINE_BYTES=65536,MAX_TARGETS=8192;
     private static final long MAX_JOURNAL_BYTES=64L*1024*1024;
     private final String run,subject;
@@ -30,6 +39,7 @@ public final class OracleJournal {
     private long offset,sequence,stallStart,stallEnd,lastGeneration=-1;
     private int lastCommitted=-1;
     private Snapshot cached;
+    private SparseArm sparseArm;
     public OracleJournal(String run,String subject){this.run=run;this.subject=subject;}
     public static long position(int x,int z){return ((long)x<<32)|(z&0xffffffffL);}
     public Snapshot poll(Path path,long generation,Set<String> committed) throws IOException {
@@ -75,10 +85,10 @@ public final class OracleJournal {
         index.replaceAll((key,value)->List.copyOf(value));
         String acknowledgment=connection==null?null:new Gson().toJson(Map.of("run_id",run,"subject",subject,
                 "connection_id",connection,"target_sequence",sequence,"targets",legacyAcknowledged));
-        cached=new Snapshot(generation,connection,Map.copyOf(index),stallStart,stallEnd,acknowledgment);
+        cached=new Snapshot(generation,connection,Map.copyOf(index),stallStart,stallEnd,acknowledgment,sparseArm);
         lastGeneration=generation;lastCommitted=committed.size();return cached;
     }
-    private Snapshot empty(long generation){return new Snapshot(generation,null,Map.of(),0,0,null);}
+    private Snapshot empty(long generation){return new Snapshot(generation,null,Map.of(),0,0,null,null);}
     private void parse(String line) throws IOException {
         final JsonObject row;
         try{row=JsonParser.parseString(line).getAsJsonObject();}
@@ -99,6 +109,12 @@ public final class OracleJournal {
             case "session_transfer" -> {
                 if(transfers.size()>=16||transfers.putIfAbsent(row.get("old_connection").getAsString(),new Transfer(row.get("connection_id").getAsString(),row.get("time_ns").getAsLong()))!=null)
                     throw new IOException("duplicate/excessive oracle transfer");
+            }
+            case "slow_consumer_arm" -> {
+                if(sparseArm!=null)throw new IOException("duplicate sparse consumer arm");
+                try{sparseArm=new SparseArm(run,subject,row.get("connection_id").getAsString(),row.get("target_id").getAsString(),
+                        row.get("armed_ns").getAsLong(),row.get("deadline_ns").getAsLong(),row.get("duration_ns").getAsLong());}
+                catch(RuntimeException invalid){throw new IOException("invalid sparse consumer arm",invalid);}
             }
             case "slow_consumer" -> {stallStart=row.get("start_ns").getAsLong();stallEnd=row.get("end_ns").getAsLong();}
             case "target" -> {
