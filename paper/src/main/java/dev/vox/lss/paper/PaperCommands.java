@@ -59,12 +59,20 @@ public class PaperCommands implements CommandExecutor, TabCompleter {
         var service = this.serviceSupplier.get();
         if (args[0].equalsIgnoreCase("preset")) {
             if (args.length != 2) {
-                sender.sendMessage("Usage: /" + label + " preset <pregenerated-world|apply|undo> (server-global only)");
+                sender.sendMessage("Usage: /" + label + " preset <conservative|pregenerated-world|apply|undo> (server-global only)");
                 return true;
             }
             Runnable apply = () -> {
                 try {
-                    for (String line : configSupplier.get().presetCommand(args.length > 1 ? args[1] : "")) sender.sendMessage(line);
+                    var config = configSupplier.get();
+                    int previousDistance = config.lodDistanceChunks;
+                    var feedback = config.presetCommand(args[1]);
+                    if (config.lodDistanceChunks != previousDistance && service != null) {
+                        int[] counts = service.repushSessionConfig();
+                        sender.sendMessage("Re-pushed to " + counts[0] + " client(s)"
+                                + (counts[1] > 0 ? " (" + counts[1] + " legacy update on rejoin)" : ""));
+                    }
+                    for (String line : feedback) sender.sendMessage(line);
                 } catch (IllegalArgumentException | IllegalStateException failure) {
                     sender.sendMessage(failure.getMessage());
                 }
@@ -281,6 +289,10 @@ public class PaperCommands implements CommandExecutor, TabCompleter {
             return List.of("stats", "diag", "diagnostics", "preset", "store", "set", "help").stream()
                     .filter(s -> s.startsWith(args[0].toLowerCase()))
                     .toList();
+        }
+        if (args.length == 2 && args[0].equalsIgnoreCase("preset")) {
+            return List.of("conservative", "pregenerated-world", "apply", "undo").stream()
+                    .filter(s -> s.startsWith(args[1].toLowerCase(java.util.Locale.ROOT))).toList();
         }
         if (args.length == 2 && args[0].equalsIgnoreCase("store")) {
             return List.of("status", "invalidate").stream()
