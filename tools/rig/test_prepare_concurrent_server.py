@@ -22,7 +22,7 @@ class PrepareSourceRuntimeTest(unittest.TestCase):
             jar(root/'paper.jar');jar(root/'candidate.jar','LodServerSupport');jar(root/'fixture.jar','LssRigPaperConcurrent')
             profile={'id':'clients','line':'26.2','platform':'fabric','components':[],'artifacts':[]}
             launches=[dict(id='client-'+letter,argv=['java','-Dlss.rig.subject=RigSubject'+letter,'-Dlss.rig.endpoint={endpoint}']) for letter in 'ABCD']
-            runtime=dict(launches=launches,stage_files=[dict(source='unused',target='server/folia.jar')],generated_files={'server/config/folia-global.yml':'old'},cache={},candidate_artifacts=[],immutable_trees={'server/libraries':{'old':'hash'}},bind_endpoint='127.0.0.1:25574',server_profile={'old':True},world_digest='old')
+            runtime=dict(launches=launches,stage_files=[dict(source='unused',target='server/folia.jar')],generated_files={'server/config/folia-global.yml':'legacy stale input','server/config/paper-global.yml':'_version: 31\nthreaded-regions:\n  scheduler: EDF\n  threads: 4\n'},cache={},candidate_artifacts=[],immutable_trees={'server/libraries':{'old':'hash'}},bind_endpoint='127.0.0.1:25574',server_profile={'old':True},world_digest='old')
             (root/'profile.json').write_text(json.dumps(profile));(root/'runtime.json').write_text(json.dumps(runtime))
             snapshot=root/'snapshot';(snapshot/'world').mkdir(parents=True);(snapshot/'world/level.dat').write_bytes(b'owned test fixture')
             files=[{'file':'world/level.dat','sha256':sha(snapshot/'world/level.dat')}]
@@ -36,6 +36,7 @@ class PrepareSourceRuntimeTest(unittest.TestCase):
             self.assertEqual(2,scenario['target_schema']);self.assertEqual('paper',scenario['server_platform']);self.assertEqual('concurrent-sources',scenario['checker'])
             self.assertEqual(3,scenario['required_test_count'])
             self.assertNotIn('server/config/folia-global.yml',result['generated_files'])
+            self.assertNotIn('server/config/paper-global.yml',result['generated_files'])
             self.assertFalse(any(row['target']=='server/folia.jar' for row in result['stage_files']))
             self.assertEqual({},result['immutable_trees']['server/libraries'])
             self.assertEqual('LSS_RIG_SOURCES_READY',result['launches'][0]['ready_marker'])

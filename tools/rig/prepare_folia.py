@@ -90,7 +90,7 @@ def main():
         checksum=sha(candidate);metadata=inspect_jar(candidate)['metadata']
         server_candidates.append({'id':metadata['paper']['name'],'version':str(metadata['paper']['version']),'file':candidate.name,'sha256':checksum,'source':'local-cache:sha256:'+checksum,'metadata':metadata,'enabled':True,'kind':'plugin'})
         runtime['cache'][checksum]=str(candidate.resolve())
-    runtime['generated_files'].update({'server/eula.txt':'eula=true\n','server/server.properties':'server-ip=127.0.0.1\nserver-port=25574\nonline-mode=false\nlevel-type=minecraft:flat\nlevel-seed=rig-feasibility-1\nview-distance=3\nsimulation-distance=3\nspawn-protection=0\nmax-players=8\nallow-flight=true\nenforce-secure-profile=false\n','server/config/folia-global.yml':'_version: 1\nthreaded-regions:\n  threads: 4\n'})
+    runtime['generated_files'].update({'server/eula.txt':'eula=true\n','server/server.properties':'server-ip=127.0.0.1\nserver-port=25574\nonline-mode=false\nlevel-type=minecraft:flat\nlevel-seed=rig-feasibility-1\nview-distance=3\nsimulation-distance=3\nspawn-protection=0\nmax-players=8\nallow-flight=true\nenforce-secure-profile=false\n','server/config/paper-global.yml':'_version: 31\nthreaded-regions:\n  scheduler: EDF\n  threads: 4\n'})
     flat={'layers':[{'block':'minecraft:bedrock','height':1},{'block':'minecraft:dirt','height':2},{'block':'minecraft:grass_block','height':1}],'biome':'minecraft:plains','features':False,'lakes':False,'structure_overrides':[]}
     runtime['generated_files']['server/server.properties']+='generator-settings='+json.dumps(flat,separators=(',',':'))+'\n'
     java=str(Path(a.java_home)/'bin/java')
