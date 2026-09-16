@@ -516,6 +516,26 @@
         "Full platform build and existing version-surface/behavior contracts"
       ]
     },
+    "common/src/test/java/dev/vox/lss/common/config/ConservativePresetTest.java": {
+      "kind": "identical",
+      "review": "Exact staged all-five source identity; final independent implementation review remains pending."
+    },
+    "common/src/test/java/dev/vox/lss/common/config/ConservativePresetWorldScopeTest.java": {
+      "kind": "adapted",
+      "surface": "conservative-preset-world-scope-26.2",
+      "axes": "Test uses the existing26.2 world-distance API; deliberately absent from four support lines.",
+      "tests": [
+        "ConservativePresetWorldScopeTest.worldEditAfterPreviewSurvivesGlobalApplyUndoAndKeepsNameDimensionPrecedence",
+        "ConservativePresetWorldScopeTest.laterWorldRemovalIsNotResurrectedByGlobalUndo"
+      ],
+      "reviewed_blobs": {
+        "1.21.1": null,
+        "1.21.10": null,
+        "1.21.11": null,
+        "26.1": null,
+        "26.2": "39767ac8be833b4797b367a7bcf0cbe0572282e7"
+      }
+    },
     "common/src/test/java/dev/vox/lss/common/config/ExternalOptionRefreshTest.java": {
       "kind": "identical"
     },
@@ -534,6 +554,10 @@
       "tests": [
         "Full platform build and existing version-surface/behavior contracts"
       ]
+    },
+    "common/src/test/java/dev/vox/lss/common/config/RuntimeBatchUndoTest.java": {
+      "kind": "identical",
+      "review": "Exact staged all-five source identity; final independent implementation review remains pending."
     },
     "common/src/test/java/dev/vox/lss/common/config/RuntimeSettingsTest.java": {
       "axes": "26.2 world-distance command flavor, line-specific runtime key inventories; correlated limit snapshot invariant shared.",
@@ -5386,6 +5410,10 @@
     "paper/src/test/java/dev/vox/lss/paper/PaperConfigValidationTest.java": {
       "kind": "identical"
     },
+    "paper/src/test/java/dev/vox/lss/paper/PaperConservativePresetTest.java": {
+      "kind": "identical",
+      "review": "Exact staged all-five source identity; final independent implementation review remains pending."
+    },
     "paper/src/test/java/dev/vox/lss/paper/PaperDirtyColumnBroadcasterTest.java": {
       "axes": "Exact file flavor; residual shared logic is not normalized or exempted.",
       "kind": "adapted",
@@ -7354,13 +7382,13 @@
     "tools/compat/materialize.py": {
       "axes": "Current implementation is byte-identical across all five lines; exact source refs, profile data and explicit target inputs carry line variation. No normalization or residual shared-logic exemption.",
       "kind": "adapted",
-      "review": "Full source review: exact cache hashes and embedded metadata, declared nested loader graph, dependency intersection/conflict checks and explicit fetch separation. CI uses explicit source commits and exact candidate port-batch blobs; it does not promote ready candidates to native acceptance. Original plan baseline lacks this path: full addition reviewed, not unavailable intermediate blobs. Final independent review remains pending.",
+      "review": "Full source review: exact cache hashes and embedded metadata, declared nested loader graph, dependency intersection/conflict checks and explicit fetch separation. CI uses explicit source commits and exact candidate port-batch blobs; it does not promote ready candidates to native acceptance. Original plan baseline lacks this path: full addition reviewed, not unavailable intermediate blobs. Final independent review 04 (2026-09-14) found R04-1: native/jarjar metadata was traversed for every loader and a wrong-loader jar could make a Fabric/Paper profile ready; fixed 2026-09-16 with a selected-loader-route descriptor requirement and six negative/positive controls (docs/reviews/2026-09-14-final/04-lines.md).",
       "reviewed_blobs": {
-        "1.21.1": "afb4ce2e5aef3b37256a2993ca819b6db47501e3",
-        "1.21.10": "afb4ce2e5aef3b37256a2993ca819b6db47501e3",
-        "1.21.11": "afb4ce2e5aef3b37256a2993ca819b6db47501e3",
-        "26.1": "afb4ce2e5aef3b37256a2993ca819b6db47501e3",
-        "26.2": "afb4ce2e5aef3b37256a2993ca819b6db47501e3"
+        "1.21.1": "68b981659267da7f185ae7931e7ec3c1ec39480b",
+        "1.21.10": "68b981659267da7f185ae7931e7ec3c1ec39480b",
+        "1.21.11": "68b981659267da7f185ae7931e7ec3c1ec39480b",
+        "26.1": "68b981659267da7f185ae7931e7ec3c1ec39480b",
+        "26.2": "68b981659267da7f185ae7931e7ec3c1ec39480b"
       },
       "surface": "line-adaptation:tools/compat/materialize.py",
       "tests": [
@@ -7404,13 +7432,13 @@
     "tools/compat/test_materialize.py": {
       "axes": "Current implementation is byte-identical across all five lines; exact source refs, profile data and explicit target inputs carry line variation. No normalization or residual shared-logic exemption.",
       "kind": "adapted",
-      "review": "Full source review: exact cache hashes and embedded metadata, declared nested loader graph, dependency intersection/conflict checks and explicit fetch separation. CI uses explicit source commits and exact candidate port-batch blobs; it does not promote ready candidates to native acceptance. Original plan baseline lacks this path: full addition reviewed, not unavailable intermediate blobs. Final independent review remains pending.",
+      "review": "Full source review: exact cache hashes and embedded metadata, declared nested loader graph, dependency intersection/conflict checks and explicit fetch separation. CI uses explicit source commits and exact candidate port-batch blobs; it does not promote ready candidates to native acceptance. Original plan baseline lacks this path: full addition reviewed, not unavailable intermediate blobs. Final independent review 04 (2026-09-14) found R04-1: native/jarjar metadata was traversed for every loader and a wrong-loader jar could make a Fabric/Paper profile ready; fixed 2026-09-16 with a selected-loader-route descriptor requirement and six negative/positive controls (docs/reviews/2026-09-14-final/04-lines.md).",
       "reviewed_blobs": {
-        "1.21.1": "aafac9bcae28ef75e05bd87818973b18abdbee61",
-        "1.21.10": "aafac9bcae28ef75e05bd87818973b18abdbee61",
-        "1.21.11": "aafac9bcae28ef75e05bd87818973b18abdbee61",
-        "26.1": "aafac9bcae28ef75e05bd87818973b18abdbee61",
-        "26.2": "aafac9bcae28ef75e05bd87818973b18abdbee61"
+        "1.21.1": "501d120a7ed20d8d99bcaa24a37782c4d7567b27",
+        "1.21.10": "501d120a7ed20d8d99bcaa24a37782c4d7567b27",
+        "1.21.11": "501d120a7ed20d8d99bcaa24a37782c4d7567b27",
+        "26.1": "501d120a7ed20d8d99bcaa24a37782c4d7567b27",
+        "26.2": "501d120a7ed20d8d99bcaa24a37782c4d7567b27"
       },
       "surface": "line-adaptation:tools/compat/test_materialize.py",
       "tests": [
@@ -7925,6 +7953,9 @@
     "tools/rig/test_failed_slot.py": {
       "kind": "identical"
     },
+    "tools/rig/test_launch_environment.py": {
+      "kind": "identical"
+    },
     "tools/rig/test_launch_journal.py": {
       "kind": "identical"
     },
@@ -7947,6 +7978,9 @@
       "kind": "identical"
     },
     "tools/rig/test_measurement_inputs.py": {
+      "kind": "identical"
+    },
+    "tools/rig/test_metric_schema.py": {
       "kind": "identical"
     },
     "tools/rig/test_metrics.py": {
@@ -8117,6 +8151,9 @@
       "kind": "identical"
     },
     "tools/rig/test_store_witness.py": {
+      "kind": "identical"
+    },
+    "tools/rig/test_supervisor_stop.py": {
       "kind": "identical"
     },
     "tools/rig/test_supplemental_metrics.py": {
@@ -9316,34 +9353,6 @@
     },
     "xplat/src/main/java/dev/vox/lss/trace/PlayerTraceState.java": {
       "kind": "identical"
-    },
-    "common/src/test/java/dev/vox/lss/common/config/ConservativePresetTest.java": {
-      "kind": "identical",
-      "review": "Exact staged all-five source identity; final independent implementation review remains pending."
-    },
-    "common/src/test/java/dev/vox/lss/common/config/ConservativePresetWorldScopeTest.java": {
-      "kind": "adapted",
-      "surface": "conservative-preset-world-scope-26.2",
-      "axes": "Test uses the existing26.2 world-distance API; deliberately absent from four support lines.",
-      "tests": [
-        "ConservativePresetWorldScopeTest.worldEditAfterPreviewSurvivesGlobalApplyUndoAndKeepsNameDimensionPrecedence",
-        "ConservativePresetWorldScopeTest.laterWorldRemovalIsNotResurrectedByGlobalUndo"
-      ],
-      "reviewed_blobs": {
-        "1.21.1": null,
-        "1.21.10": null,
-        "1.21.11": null,
-        "26.1": null,
-        "26.2": "39767ac8be833b4797b367a7bcf0cbe0572282e7"
-      }
-    },
-    "common/src/test/java/dev/vox/lss/common/config/RuntimeBatchUndoTest.java": {
-      "kind": "identical",
-      "review": "Exact staged all-five source identity; final independent implementation review remains pending."
-    },
-    "paper/src/test/java/dev/vox/lss/paper/PaperConservativePresetTest.java": {
-      "kind": "identical",
-      "review": "Exact staged all-five source identity; final independent implementation review remains pending."
     }
   },
   "nonproduction_patterns": {
