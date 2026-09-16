@@ -273,6 +273,11 @@ def private_display(root, env, children):
         if proc.poll() is not None or time.monotonic() >= deadline:
             raise ValueError('private display startup timeout/collision')
         time.sleep(.1)
+    # A foreign X server on the same display number answers the probe while the
+    # owned Xvfb has already exited; adopt only a live, verified owned Xvfb.
+    if proc.poll() is not None:
+        raise ValueError('private display exited during startup')
+    verify_private_xvfb(root, {'display': display, 'xvfb': display_owner})
     env.update(DISPLAY=display, XAUTHORITY=str(authority), ALSOFT_DRIVERS='null')
     env.pop('WAYLAND_DISPLAY', None)
     write(root / 'display.json', {'display': display, 'host_display': os.environ.get('DISPLAY',''), 'xvfb': display_owner})
@@ -343,6 +348,26 @@ def input_action(root, window, expected, action, args):
     finally:
         driver.close()
 
+# Inherited shell variables that must never reach an owned participant: the
+# harness ownership bindings and anything that names a credential.
+SECRET_ENVIRONMENT_PATTERN = re.compile(r'(PASSWORD|PASSWD|SECRET|TOKEN|CREDENTIAL|API_KEY|PRIVATE_KEY|ACCESS_KEY|_PAT$|^PAT$)', re.IGNORECASE)
+OWNERSHIP_ENVIRONMENT_KEYS = ('LSS_HARNESS_LOCK_FD', 'LSS_HARNESS_OWNER_PID')
+HOST_DISPLAY_ENVIRONMENT_KEYS = ('DISPLAY', 'XAUTHORITY', 'WAYLAND_DISPLAY')
+GUI_CLIENT_ARGV_MARKERS = ('KnotClient', '--quickPlayMultiplayer', 'launch_prism.py')
+
+def launch_environment(source):
+    """Copy of the inherited environment without ownership bindings or credential-named keys."""
+    return {key: value for key, value in dict(source).items()
+            if key not in OWNERSHIP_ENVIRONMENT_KEYS and not SECRET_ENVIRONMENT_PATTERN.search(key)}
+
+def drop_host_display(env):
+    """Without an owned private display no participant may inherit the desktop display."""
+    for key in HOST_DISPLAY_ENVIRONMENT_KEYS:
+        env.pop(key, None)
+
+def is_gui_client_launch(argv):
+    return any(marker in part for part in argv for marker in GUI_CLIENT_ARGV_MARKERS)
+
 def terminate_owned(children, display_pid=None):
     # Keep X alive through application shutdown hooks. Closing the display first
     # can trigger native XIO exit before Java's bounded evidence writers flush.
@@ -397,7 +422,7 @@ def run(root):
     stopped = []
     for sig in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
         signal.signal(sig, lambda signum, frame: stopped.append(signum))
-    env = os.environ.copy()
+    env = launch_environment(os.environ)
     env.update(ALSOFT_DRIVERS='null', LSS_RIG_RUN_ID=manifest['run_id'])
     manifest.update(status='running', started_at=time.time())
     write(root / 'manifest.json', manifest)
@@ -430,6 +455,9 @@ def run(root):
                 write(root / 'gpu.json', {'accelerated': True, 'renderer': next((s.strip() for s in gl.splitlines() if 'OpenGL renderer string:' in s), 'unknown')})
         if runtime.get('require_gpu') and not (root / 'gpu.json').exists():
             raise ValueError('GPU-required runtime lacks an owned private display')
+        private_display_owned = (root / 'display.json').exists()
+        if not private_display_owned:
+            drop_host_display(env)
         for launch in runtime['launches']:
             storage_monitor.check()
             if not re.fullmatch('[A-Za-z0-9_-]+', launch['id']):
@@ -437,6 +465,8 @@ def run(root):
             argv = [arg.replace('{run}', str(root)).replace('{run_id}', manifest['run_id']).replace('{endpoint}', runtime['client_endpoint']) for arg in launch['argv']]
             if '--server' in argv and any('prism' in part.lower() for part in argv):
                 raise ValueError('unverified Prism --server connection route')
+            if not private_display_owned and is_gui_client_launch(argv):
+                raise ValueError('GUI client launch requires an owned private display: ' + launch['id'])
             working = inside(root, launch['cwd'])
             working.mkdir(parents=True, exist_ok=True)
             log = open(root / (launch['id'] + '.private.log'), 'xb')
