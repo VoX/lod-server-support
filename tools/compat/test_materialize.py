@@ -93,4 +93,41 @@ class MaterializeTests(unittest.TestCase):
  def test_fetch_rejects_unverified_existing_cache(self):
   _,a=self.jar('a.jar',{'id':'a','version':'1'});cache=self.root/'cache';cache.mkdir();(cache/a['sha256']).write_text('foreign')
   with self.assertRaises(Invalid):fetch(self.profile(a),cache)
+
+ def locked_zip(self,name,files,identity='outer'):
+  path=self.root/name
+  with zipfile.ZipFile(path,'w') as z:
+   for entry_name,data in files.items():z.writestr(entry_name,data)
+  row=inspect_jar(path)|{'id':identity,'version':'1','source':'https://example.invalid/'+name,'enabled':True}
+  return path,row
+ def test_native_neo_mod_cannot_make_fabric_or_plugin_profile_ready(self):
+  p,a=self.locked_zip('neo.jar',{'META-INF/neoforge.mods.toml':'[[mods]]\nmodId="outer"\nversion="1"\n'})
+  for platform in ('fabric','paper','folia'):
+   with self.subTest(platform=platform):
+    profile=self.profile(a);profile['platform']=platform
+    self.assertFalse(resolution(profile,{a['sha256']:str(p)})['ready'])
+ def test_fabric_dual_metadata_ignores_foreign_native_dependencies(self):
+  p,a=self.locked_zip('dual.jar',{'fabric.mod.json':json.dumps({'id':'outer','version':'1'}),'META-INF/neoforge.mods.toml':'[[mods]]\nmodId="outer"\nversion="1"\n[[dependencies.outer]]\nmodId="neo_only_dependency"\ntype="required"\nversionRange="[1,)"\n'})
+  self.assertTrue(resolution(self.profile(a),{a['sha256']:str(p)})['ready'])
+  profile=self.profile(a);profile['platform']='neoforge'
+  self.assertFalse(resolution(profile,{a['sha256']:str(p)})['ready'])
+ def test_only_fabric_declared_nested_jars_can_provide_fabric_dependencies(self):
+  body=io.BytesIO()
+  with zipfile.ZipFile(body,'w') as z:z.writestr('fabric.mod.json',json.dumps({'id':'nested','version':'1'}))
+  for fabric_declared in (False,True):
+   with self.subTest(fabric_declared=fabric_declared):
+    meta={'id':'outer','version':'1','depends':{'nested':'1'}}
+    if fabric_declared:meta['jars']=[{'file':'META-INF/jarjar/nested.jar'}]
+    p,a=self.locked_zip('nested-'+str(fabric_declared)+'.jar',{'fabric.mod.json':json.dumps(meta),'META-INF/jarjar/metadata.json':json.dumps({'jars':[{'path':'META-INF/jarjar/nested.jar'}]}),'META-INF/jarjar/nested.jar':body.getvalue()})
+    self.assertEqual(fabric_declared,resolution(self.profile(a),{a['sha256']:str(p)})['ready'])
+ def test_fabric_selects_its_descriptor_when_plugin_metadata_also_exists(self):
+  p,a=self.locked_zip('dual-plugin.jar',{'fabric.mod.json':json.dumps({'id':'outer','version':'1'}),'plugin.yml':'name: outer\nversion: "1"\n'})
+  self.assertTrue(resolution(self.profile(a),{a['sha256']:str(p)})['ready'])
+ def test_native_neo_still_discovers_jarjar_dependencies(self):
+  body=io.BytesIO()
+  with zipfile.ZipFile(body,'w') as z:z.writestr('META-INF/neoforge.mods.toml','[[mods]]\nmodId="nested"\nversion="1"\n')
+  p,a=self.locked_zip('neo-nested.jar',{'META-INF/neoforge.mods.toml':'[[mods]]\nmodId="outer"\nversion="1"\n[[dependencies.outer]]\nmodId="nested"\ntype="required"\nversionRange="[1,)"\n','META-INF/jarjar/metadata.json':json.dumps({'jars':[{'path':'META-INF/jarjar/nested.jar'}]}),'META-INF/jarjar/nested.jar':body.getvalue()})
+  profile=self.profile(a);profile['platform']='neoforge'
+  self.assertTrue(resolution(profile,{a['sha256']:str(p)})['ready'])
+
 if __name__=='__main__':unittest.main()
