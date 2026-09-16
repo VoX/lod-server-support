@@ -1,0 +1,67 @@
+{
+  "comparisons_match": 30,
+  "all_pass": true,
+  "outside": [
+    {
+      "subject": "aggregate",
+      "metric": "tick_delay_p99_ms",
+      "paired_differences": [
+        0.004744999999999777,
+        0.020309000000000133,
+        0.21694900000000006
+      ],
+      "bounds": [
+        0.21264650000000002,
+        0.21053280000000002,
+        0.1919346
+      ],
+      "passed": true
+    },
+    {
+      "subject": "server",
+      "metric": "tick_delay_p99_ms",
+      "paired_differences": [
+        0.004744999999999777,
+        0.020309000000000133,
+        0.21694900000000006
+      ],
+      "bounds": [
+        0.21264650000000002,
+        0.21053280000000002,
+        0.1919346
+      ],
+      "passed": true
+    }
+  ],
+  "largest_calibration_relative_spreads": [
+    [
+      "aggregate",
+      "tick_execution_p99_ms",
+      0.07169215157915798
+    ],
+    [
+      "server",
+      "tick_execution_p99_ms",
+      0.07169215157915798
+    ],
+    [
+      "aggregate",
+      "tick_execution_p95_ms",
+      0.05415071777322151
+    ],
+    [
+      "server",
+      "tick_execution_p95_ms",
+      0.05415071777322151
+    ],
+    [
+      "RigSubjectC",
+      "peak_rss_bytes",
+      0.03170903436056105
+    ]
+  ],
+  "min_frames": 17970,
+  "min_ticks": 47999,
+  "min_rss_fraction": 1.0,
+  "selected_result_hashes_verified": 9
+}

@@ -1,7 +1,7 @@
 {
-  "checkpoint_utc": "2026-09-14",
-  "status": "in_progress",
-  "scope": "Current status: V27 performance accepted for exact26.2 measured artifacts; final integrated all-five qualification/native/human/fresh Astra pending. Existing historical fields retain original scope.",
+  "checkpoint_utc": "2026-09-16",
+  "status": "code_complete_native_pending",
+  "scope": "Implementation, final all-five builds (2026-09-14) and all six final independent reviews (1-4 Astra 2026-09-14, 5-6 Claude 2026-09-16) are complete; review fixes are committed on all five lines as tooling/tests/docs only (no Java change after the final builds). Native matrix rows, six preset native runs, eight human assessments and the Fabric/Paper functional lanes on final bytes remain pending. Existing historical fields retain their original scope.",
   "source_commits": {
     "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260910/accepted-performance-v27-20260914/numeric-commits-progress.json",
     "sha256": "7da2b5fb6f970181e6470681760a0fe501f7c5c19dce9e7b0413492d75f5b0e4"
@@ -127,7 +127,57 @@
     },
     "status": "accepted values integrated and locally committed; final qualification pending"
   },
-  "final_astra_reviews": "not_started",
+  "final_astra_reviews": {
+    "status": "complete",
+    "reports": "docs/reviews/2026-09-14-final/",
+    "reviews": [
+      {
+        "id": 1,
+        "scope": "settings/presets/owner publication",
+        "reviewer": "gpt-6-astra",
+        "date": "2026-09-14",
+        "findings": 0
+      },
+      {
+        "id": 2,
+        "scope": "status and diagnostics export",
+        "reviewer": "gpt-6-astra",
+        "date": "2026-09-14",
+        "findings": 0
+      },
+      {
+        "id": 3,
+        "scope": "Xaero and client lifecycle",
+        "reviewer": "gpt-6-astra",
+        "date": "2026-09-14",
+        "findings": 0
+      },
+      {
+        "id": 4,
+        "scope": "compatibility, support lines, tests, shipping",
+        "reviewer": "gpt-6-astra",
+        "date": "2026-09-14",
+        "findings": 1,
+        "disposition": "R04-1 fixed on all five lines (tools/compat/materialize.py loader-route descriptor requirement + six controls)"
+      },
+      {
+        "id": 5,
+        "scope": "rig ownership, storage, evidence",
+        "reviewer": "claude-fable-5.1",
+        "date": "2026-09-16",
+        "findings": 5,
+        "disposition": "R05-1..R05-5 fixed on all five lines (owned-process signal drain + group signal guard, private display liveness/verification, launch environment hygiene + GUI gate, metric schema pin)"
+      },
+      {
+        "id": 6,
+        "scope": "concurrent source correctness and performance",
+        "reviewer": "claude-fable-5.1",
+        "date": "2026-09-16",
+        "findings": 6,
+        "disposition": "R06-3..R06-6 documented as evidence limits (performance.md, V27 summary, preset guide); R06-1 and R06-2 recorded follow-ups, not regressions"
+      }
+    ]
+  },
   "remaining_acceptance": {
     "performance_slots": 0,
     "native_rows_including_presets": 52,
@@ -135,7 +185,7 @@
     "supplemental_rows": 4,
     "preset_runs": 6,
     "human_assessments": 8,
-    "final_astra_reviews": 6,
+    "final_astra_reviews": 0,
     "original_migrated_suites": 67,
     "measured_placements": 0,
     "folia_config_placements": 0,
@@ -158,7 +208,15 @@
     },
     "final_six_group_inventory_status": "expected55; final inventory derivation pending",
     "numeric_integration_binding": "complete",
-    "new_junit_expected_not_executed": 82
+    "new_junit_expected_not_executed": 82,
+    "fabric_paper_functional_on_final_bytes": "pending (R06-4)",
+    "fixture_builds_completed": [
+      "wi5-1.21.1",
+      "wi6-1.21.1",
+      "wi9-1.21.1"
+    ],
+    "fixture_builds_remaining": 11,
+    "native_hold_reason": "requires four real clients on private displays and an idle GPU; held until the machine is free"
   },
   "current_functional_setup": {
     "paired_eight": "passed; all four full entry maps equal between arms",
@@ -293,7 +351,7 @@
     "performance_acceptance": false,
     "scope": "Historical V20 fixture: all six actual passes preserved; does not qualify the new Folia fixture."
   },
-  "workspace_preservation": "All five retain preexisting tracked xaero-map-live-fixture.md edits and historical untracked evidence;1.21.11 also c2me-validation.md. No clean-tree claim; unrelated files unchanged.",
+  "workspace_preservation": "All five retain preexisting tracked xaero-map-live-fixture.md edits and historical untracked 2026-09-10 evidence under docs/implementation and config/compatibility/validation; 1.21.11 also c2me-validation.md. Deliberately left uncommitted: they record runs against pre-correction artifacts.",
   "v21_uuid_preparation": {
     "status": "functional_prerequisites_passed_performance_terminal_inconclusive",
     "runtime_source_count": 54,
@@ -563,5 +621,20 @@
   "historical_source_commits": {
     "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260910/store-late-probe-control/commits.json",
     "sha256": "570f2561485b99d034edd844ff6e75f50c8182e36cbf23448c919ac1bc4763b2"
+  },
+  "post_final_build_commits": {
+    "line": "1.21.11",
+    "r04_1_fix": "decbc5eae959160f4f9def60e31705a3b82ef713",
+    "r05_fix": "afd0a2d86bfbdb8eeb980db4ba7e035da5f8bc7b",
+    "java_unchanged_since_final_builds": true,
+    "verification": "git diff <built commit>..HEAD -- '*.java' is empty on every line",
+    "classification_commit": "6a9a0da842e18b0587f96b93c153b100e965149c",
+    "source_refs": {
+      "1.21.1": "b376718c94ca4f2fdc323590838178a23adb373b",
+      "1.21.10": "91304598ff601333500c070f89dd65b9553de0c1",
+      "1.21.11": "6a9a0da842e18b0587f96b93c153b100e965149c",
+      "26.1": "6ee930c03de3f23404d9d84f8fbeb17a17977ea6",
+      "26.2": "7fb85eb79bf0df85d2dbed0265df543c48798c1c"
+    }
   }
 }
