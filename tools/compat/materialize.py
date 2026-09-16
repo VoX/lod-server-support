@@ -15,7 +15,7 @@ def nested_metadata(path,platform=None):
                 require(z.getinfo('fabric.mod.json').file_size<=2**20,'oversized metadata')
                 m=json.loads(z.read('fabric.mod.json'));result.append(('fabric',m))
                 nested.extend(row['file'] for row in m.get('jars',[]))
-            for name in ('META-INF/neoforge.mods.toml','META-INF/mods.toml'):
+            for name in (('META-INF/neoforge.mods.toml','META-INF/mods.toml') if platform in (None,'neoforge') else ()):
                 if name in names:
                     require(z.getinfo(name).file_size<=2**20,'oversized metadata')
                     m=tomllib.loads(z.read(name).decode())
@@ -26,7 +26,7 @@ def nested_metadata(path,platform=None):
                     for mod in m.get('mods',[]):
                         if mod.get('version')=='${file.jarVersion}' and version:mod['version']=version[1].strip()
                     result.append(('maven',m))
-            if 'META-INF/jarjar/metadata.json' in names:
+            if platform in (None,'neoforge') and 'META-INF/jarjar/metadata.json' in names:
                 nested.extend(row['path'] for row in json.loads(z.read('META-INF/jarjar/metadata.json')).get('jars',[]))
             for name in dict.fromkeys(nested):
                 require(name in names,'declared nested jar missing')
@@ -62,8 +62,8 @@ def resolution(profile,cache,range_runtime=None):
             # Historical inventories may contain abbreviated metadata, so exact runtime
             # locks require full metadata equality before admission.
             require(current==a['metadata'],a['id']+': embedded metadata differs from lock')
-            if 'paper' in current:
-                require(profile['platform'] in ('paper','folia'),'Paper plugin on non-Paper platform')
+            if profile['platform'] in ('paper','folia'):
+                require('paper' in current,'Paper platform requires plugin.yml')
                 meta=current['paper'];name=meta.get('name');version=str(meta.get('version',''))
                 require(isinstance(name,str) and name and version and '${' not in version,'invalid/unresolved plugin identity')
                 require(name not in top_level_ids,'duplicate top-level plugin identity');top_level_ids.add(name)
@@ -78,6 +78,10 @@ def resolution(profile,cache,range_runtime=None):
                 deps.extend((name,dep,'*','maven') for dep in meta.get('depend',[]))
                 continue
             require(a.get('kind','mod')!='plugin','plugin artifact missing plugin.yml')
+            require(('fabric' in current if profile['platform']=='fabric' else
+                     any(k in current for k in ('neoforge','forge')) or
+                     profile['route']=='connector' and 'fabric' in current),
+                    'artifact lacks a descriptor for the selected loader route')
             top_ids=([current['fabric']['id']] if 'fabric' in current and not (profile['platform']=='neoforge' and any(k in current for k in ('neoforge','forge'))) else [mod['modId'] for kind in ('neoforge','forge') for mod in current.get(kind,{}).get('mods',[])])
             require(not top_level_ids.intersection(top_ids),'duplicate top-level mod identity')
             top_level_ids.update(top_ids)
