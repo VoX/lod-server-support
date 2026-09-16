@@ -1,4 +1,4 @@
-import os,tempfile,unittest
+import os,subprocess,sys,tempfile,unittest
 from pathlib import Path
 from unittest.mock import patch
 import rig
@@ -26,3 +26,18 @@ class PrivateDisplayContextTests(unittest.TestCase):
  def test_current_process_cannot_pose_as_xvfb(self):
   (self.root/'Xauthority').touch(mode=0o600)
   with self.assertRaisesRegex(ValueError,'not native Xvfb'):rig.verify_private_xvfb(self.root,self.record)
+ def exited(self,process):
+  process.wait();return process
+ def test_private_display_rejects_an_exited_owned_xvfb_even_when_the_probe_answers(self):
+  # A foreign X server on the chosen number answers xprop while the owned Xvfb already exited.
+  probe=patch('rig.subprocess.run',return_value=subprocess.CompletedProcess([],0));real_popen=subprocess.Popen
+  with probe,patch('rig.subprocess.Popen',side_effect=lambda *a,**k:self.exited(real_popen(['true']))),patch('launch_journal.before_spawn'),patch('launch_journal.spawn_failed'),patch('launch_journal.spawned',return_value=self.record['xvfb']):
+   with self.assertRaisesRegex(ValueError,'exited during startup'):rig.private_display(self.root,{},[])
+ def test_private_display_requires_a_verified_native_xvfb_before_adoption(self):
+  probe=patch('rig.subprocess.run',return_value=subprocess.CompletedProcess([],0))
+  keeper=subprocess.Popen([sys.executable,'-c','import time;time.sleep(30)']);self.addCleanup(lambda:(keeper.kill(),keeper.wait()))
+  with probe,patch('rig.subprocess.Popen',return_value=keeper),patch('launch_journal.before_spawn'),patch('launch_journal.spawn_failed'),patch('launch_journal.spawned',return_value=rig.identity(keeper.pid)):
+   with self.assertRaisesRegex(ValueError,'not native Xvfb'):rig.private_display(self.root,{},[])
+  self.assertEqual(self.record,rig.read(self.root/'display.json'))
+
+if __name__=='__main__':unittest.main()
