@@ -21,6 +21,63 @@ def children():
         return []
 
 
+# The runner's own bounded stop protocol: 20 s stdin stop, 5 s per owned
+# process, post-cleanup checkers and the journal's terminal write.
+RUNNER_STOP_GRACE_SECONDS = 60
+
+
+def group_members(pgid):
+    """PIDs currently in process group ``pgid`` (field 5 of /proc/<pid>/stat)."""
+    members = []
+    for entry in Path('/proc').iterdir():
+        if not entry.name.isdigit():
+            continue
+        try:
+            fields = (entry / 'stat').read_text().rsplit(')', 1)[1].split()
+        except (OSError, IndexError):
+            continue
+        if len(fields) > 2 and fields[2] == str(pgid):
+            members.append(int(entry.name))
+    return members
+
+
+def signal_group(pgid, sig):
+    """Signal the owned group only while it still has members.
+
+    A group id is only the reaped leader's PID once its members are gone;
+    signalling it by number alone could reach a foreign process after PID reuse.
+    """
+    if not group_members(pgid):
+        return False
+    try:
+        os.killpg(pgid, sig)
+    except ProcessLookupError:
+        return False
+    return True
+
+
+def request_runner_stop(rig_root, proc, stopped, deadline):
+    """Hand a stop signal to the rig runner through its own designed path.
+
+    Touches ``<run>/stop`` (consumed by the owning runner), signals only the
+    direct child, and waits for the runner's bounded shutdown protocol so the
+    launch journal reaches its terminal write and the cleanup receipt can be
+    issued. A second stop signal, or the grace deadline, ends the wait.
+    """
+    try:
+        (rig_root / 'stop').touch()
+    except OSError:
+        pass
+    try:
+        os.kill(proc.pid, signal.SIGTERM)
+    except ProcessLookupError:
+        pass
+    signals_seen = len(stopped)
+    while proc.poll() is None and len(stopped) == signals_seen and time.monotonic() < deadline:
+        time.sleep(0.05)
+    return proc.poll()
+
+
 def main():
     args = sys.argv[1:]
     inherit = args[:1] == ["--inherit-lock"]
@@ -91,6 +148,12 @@ def main():
             pass
         time.sleep(0.05)
     orphaned = bool(children()) if result is not None else False
+    if stopped and result is None and rig_root is not None:
+        # A signal-initiated stop must not outrun the runner's graceful protocol:
+        # the journal's terminal write and the cleanup receipt are what make an
+        # interrupted attempt collectable (recorded failed, slot reclaimable).
+        result = request_runner_stop(rig_root, proc, stopped, time.monotonic() + RUNNER_STOP_GRACE_SECONDS)
+        orphaned = bool(children()) if result is not None else False
     if stopped or orphaned:
         # The original process group covers grandchildren; adopted children cover
         # a child that started another session. Reap until none remain, retaining
@@ -101,10 +164,7 @@ def main():
         while True:
             sig = signal.SIGKILL if time.monotonic() - started >= 3 else signal.SIGTERM
             if group_signal != sig:
-                try:
-                    os.killpg(proc.pid, sig)
-                except ProcessLookupError:
-                    pass
+                signal_group(proc.pid, sig)
                 group_signal = sig
             for pid in children():
                 if sent.get(pid) != sig:

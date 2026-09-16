@@ -54,7 +54,9 @@ The imported WI fixtures and the new Folia fixture still require exact descripto
 and live matrix validation. The maintained runner does not convert the historical
 WSL smoke, prior fixture logs, or baseline bytecode into final candidate evidence.
 
-The frozen metric schema is `tools/rig/metric-schema.json`. Raw RSS observations
+`tools/rig/metric-schema.json` describes the metric shapes and thresholds; the
+enforced values live in `performance.py`/`metrics.py` and a unit test pins the
+two equal. The JSON is documentation, not an identity-bound input. Raw RSS observations
 retain each scheduled second, process creation identity, units and explicit
 missing flags. The Folia observer records full owning tick spans independently
 from scheduler delay; client timing agents record real frame entry intervals.
