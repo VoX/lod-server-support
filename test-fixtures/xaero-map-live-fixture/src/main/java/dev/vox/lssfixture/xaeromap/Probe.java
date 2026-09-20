@@ -26,6 +26,8 @@ public final class Probe {
  private static final AtomicBoolean SAVE_DEFERRED=new AtomicBoolean();
  private static final int PAUSE_MAX_MILLIS=Integer.getInteger("lss.xaeromap.pauseMaxMillis",15000);
  private static int mapFrames; // render-thread only
+ private static final boolean COVERAGE_DIAGNOSTICS=Boolean.getBoolean("lss.xaeromap.coverageDiagnostics");
+ private static int coverageFrames,coverageSamples; // client owner only; never reset on map close
  private static final Gson JSON=new Gson();
  static {
   if(ENABLED){
@@ -134,7 +136,52 @@ public final class Probe {
    row.put("mouse_x",mouse.xpos());row.put("mouse_y",mouse.ypos());
    row.put("zoom_mouse_over",zoom.isMouseOver(mouse.xpos()*gui.width/window.getScreenWidth(),mouse.ypos()*gui.height/window.getScreenHeight()));
    emit("map_viewport",row);
+   coverageObserved(row);
   }catch(Throwable t){failure(t);}
+ }
+ /** Optional observation only: first completed map frame, then every15 map frames,
+  * at most32 attempts per client process. FULL lookup with create=false never loads chunks.
+  * No footprint/erosion classification is baked into the observed coordinate set. */
+ private static void coverageObserved(Map<String,Object> viewport)throws Exception{
+  if(!COVERAGE_DIAGNOSTICS||coverageSamples>=32)return;
+  int frame=++coverageFrames;
+  if((frame-1)%15!=0)return;
+  int sample=++coverageSamples; // Failed/missing-world attempts also consume the bound.
+  var client=net.minecraft.client.Minecraft.getInstance();
+  if(!client.isSameThread())throw new IllegalStateException("chunk coverage observation off client owner");
+  var row=new LinkedHashMap<String,Object>(viewport);
+  row.put("coverage_sample",sample);row.put("coverage_frame",frame);row.put("client_thread",true);
+  row.put("sample_started_ns",System.nanoTime());row.put("radius_chunks",6);
+  row.put("lookup_status","FULL");row.put("create_missing",false);
+  row.put("effective_render_distance",client.options.getEffectiveRenderDistance());
+  row.put("configured_render_distance",client.options.renderDistance().get());
+  var level=client.level;var player=client.player;
+  row.put("world_present",level!=null);row.put("player_present",player!=null);
+  if(level!=null&&player!=null){
+   int centerX=player.chunkPosition().x,centerZ=player.chunkPosition().z;
+   row.put("dimension",level.dimension().location().toString());
+   row.put("player_x",player.getX());row.put("player_y",player.getY());row.put("player_z",player.getZ());
+   row.put("player_chunk_x",centerX);row.put("player_chunk_z",centerZ);
+   row.put("player_yaw",player.getYRot());row.put("player_pitch",player.getXRot());
+   var camera=client.gameRenderer.getMainCamera();var cameraPosition=camera.getPosition();
+   row.put("render_camera_position",List.of(cameraPosition.x,cameraPosition.y,cameraPosition.z));
+   row.put("render_camera_yaw",camera.getYRot());row.put("render_camera_pitch",camera.getXRot());
+   var loaded=new ArrayList<List<Integer>>();var empty=new ArrayList<List<Integer>>();var missing=new ArrayList<List<Integer>>();
+   for(int dz=-6;dz<=6;dz++)for(int dx=-6;dx<=6;dx++){
+    int x=centerX+dx,z=centerZ+dz;
+    var chunk=level.getChunk(x,z,net.minecraft.world.level.chunk.status.ChunkStatus.FULL,false);
+    var coordinate=List.of(x,z);
+    if(chunk==null)missing.add(coordinate);
+    else if(chunk instanceof net.minecraft.world.level.chunk.EmptyLevelChunk)empty.add(coordinate);
+    else {
+     if(chunk.getPos().x!=x||chunk.getPos().z!=z)throw new IllegalStateException("coverage chunk coordinate mismatch");
+     loaded.add(coordinate);
+    }
+   }
+   row.put("grid_cells",169);row.put("loaded_count",loaded.size());row.put("loaded_chunks",loaded);
+   row.put("empty_chunks",empty);row.put("missing_chunks",missing);
+  }
+  row.put("sample_finished_ns",System.nanoTime());emit("map_chunk_coverage",row);
  }
  public static void wire(Object payload){if(!ENABLED)return;try{
   int x=number(payload,"chunkX"),z=number(payload,"chunkZ");if(!target(x,z))return;
