@@ -259,6 +259,76 @@ public class CommandGameTests {
         helper.succeed();
     }
 
+    /** Per-world set/clear through Brigadier must reach negotiation and the range gate. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void setWorldLodDistanceUpdatesHandshakeAndRangeWithoutChangingDefault(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        var server = level.getServer();
+        var commands = server.getCommands();
+        var service = LSSServerNetworking.getRequestService();
+        Gt.assertTrue(helper, service != null, "service active on the gametest server");
+        var player = placeMockServerPlayer(helper);
+        var config = LSSServerConfig.CONFIG;
+        int savedDistance = config.lodDistanceChunks;
+        var savedOverrides = config.lodDistanceChunksByWorld;
+        var lines = new ArrayList<String>();
+        var source = new CommandSourceStack(recorder(lines), Vec3.ZERO, Vec2.ZERO, level,
+                4, "lss-test", Component.literal("lss-test"), server, null);
+        String world = level.dimension().location().toString();
+        var replies = new ArrayList<dev.vox.lss.networking.payloads.SessionConfigS2CPayload>();
+        var handshake = new dev.vox.lss.networking.payloads.HandshakeC2SPayload(
+                LSSConstants.PROTOCOL_VERSION, LSSConstants.CAPABILITY_VOXEL_COLUMNS);
+        try {
+            config.lodDistanceChunks = 96;
+            config.lodDistanceChunksByWorld = new java.util.LinkedHashMap<>();
+            LSSServerNetworking.handleHandshake(handshake, player, service, replies::add);
+            Gt.assertTrue(helper, replies.size() == 1 && replies.get(0).lodDistanceChunks() == 96,
+                    "control: the first handshake uses the default");
+
+            commands.performPrefixedCommand(source, "lsslod set lodDistanceChunks " + world + " 7");
+            Gt.assertTrue(helper, config.lodDistanceChunks == 96 && config.lodDistanceForWorld(world) == 7,
+                    "a world override must preserve the global default");
+            Gt.assertTrue(helper, anyLineContains(lines, "re-pushed to ")
+                            && !anyLineContains(lines, "re-pushed to 0 "),
+                    "an override-only mutation must push to the negotiated client: " + lines);
+            replies.clear();
+            LSSServerNetworking.handleHandshake(handshake, player, service, replies::add);
+            Gt.assertTrue(helper, replies.size() == 1 && replies.get(0).lodDistanceChunks() == 7,
+                    "the current world's override must be advertised on the wire");
+
+            var state = service.getPlayers().get(player.getUUID());
+            long before = state.getTotalRequestsReceived();
+            int cx = player.getBlockX() >> 4;
+            int cz = player.getBlockZ() >> 4;
+            int radius = 7 + LSSConstants.LOD_DISTANCE_BUFFER;
+            service.handleBatchRequest(player, new dev.vox.lss.networking.payloads.BatchChunkRequestC2SPayload(
+                    new long[]{PositionUtil.packPosition(cx + radius, cz),
+                            PositionUtil.packPosition(cx + radius + 1, cz)}, new long[]{0L, 0L}, 2));
+            Gt.assertTrue(helper, state.getTotalRequestsReceived() == before + 1,
+                    "only the override boundary is accepted; the global radius must not leak through");
+
+            lines.clear();
+            commands.performPrefixedCommand(source, "lsslod set lodDistanceChunks " + world + " default");
+            Gt.assertTrue(helper, !config.lodDistanceChunksByWorld.containsKey(world), "clear removes the override");
+            Gt.assertTrue(helper, anyLineContains(lines, "re-pushed to ")
+                            && !anyLineContains(lines, "re-pushed to 0 "),
+                    "clearing an override must also push the restored distance: " + lines);
+            replies.clear();
+            LSSServerNetworking.handleHandshake(handshake, player, service, replies::add);
+            Gt.assertTrue(helper, replies.size() == 1 && replies.get(0).lodDistanceChunks() == 96,
+                    "clearing restores the advertised default");
+        } finally {
+            service.removePlayer(player.getUUID());
+            service.getDialectTracker().onDisconnect(player.getUUID());
+            server.getPlayerList().remove(player);
+            config.lodDistanceChunks = savedDistance;
+            config.lodDistanceChunksByWorld = savedOverrides;
+            config.validate();
+            config.save();
+        }
+        helper.succeed();
+    }
+
     /**
      * CG-022: /lsslod stats executed through the dispatcher against the LIVE service with a
      * registered player carrying known counters — the command → service → shared formatter
