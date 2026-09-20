@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "status": "user-confirmed",
+  "recorded_at_utc": "2026-09-20T16:27:22Z",
+  "scope": "User observation during the recent private WSL test runs; plan section 16 desktop-coexistence acceptance.",
+  "reviewer_kind": "user",
+  "reviewer_id": "conversation-user",
+  "source": "Actual conversation replies; exact questions and responses retained below.",
+  "responses": [
+    {
+      "question": "During these private WSL test runs, has your Windows desktop remained usable without input interference or noticeable slowdown? This closes the plan\u2019s desktop-coexistence check; performance measurements are separate.",
+      "response": "Desktop stayed usable; no noticeable interference"
+    },
+    {
+      "question": "One separate check for the testing plan: during the recent isolated test runs, was Windows usable without disruptive slowdowns?",
+      "response": "Yes, Windows remained usable"
+    }
+  ],
+  "desktop_remained_usable": true,
+  "no_noticeable_interference_reported": true,
+  "no_disruptive_slowdown_reported": true,
+  "performance_measurement": false,
+  "native_windows_rendering_validated": false,
+  "limitation": "Subjective desktop usability during these runs; does not extend V27 performance claims or validate the native Windows rendering route.",
+  "known_map_product_fixes": "remain open"
+}
