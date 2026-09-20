@@ -1,7 +1,7 @@
 {
   "checkpoint_utc": "2026-09-16",
-  "status": "automated_native_complete_user_signoff_and_integration_pending",
-  "scope": "Historical September 16 checkpoint fields retain their dated scope. See completion_reconciliation_2026_09_20 and the dated native progress index for completed automated execution: 46 collected passes and 8 automated-green cases awaiting actual user image decisions. User sign-off and full evidence/catalog integration remain open; offline suites and game cleanup passed, with the review gallery intentionally live. Original build heads are not relabeled as later tooling heads.",
+  "status": "map-causes-confirmed-seated-recaptured-acceptance-open",
+  "scope": "Historical checkpoint fields and the earlier September 20 completion reconciliation retain their dated scope. The latest visual_followup_2026_09_20 supersedes sign-off-only completion: two map causes confirmed, product corrections pending, healthy seated captures repaired and recaptured. User acceptance and final evidence integration remain open.",
   "source_commits": {
     "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260910/accepted-performance-v27-20260914/numeric-commits-progress.json",
     "sha256": "7da2b5fb6f970181e6470681760a0fe501f7c5c19dce9e7b0413492d75f5b0e4"
@@ -714,5 +714,46 @@
     "statistical_independence_established": false,
     "support_tiers_changed": false,
     "folia_remains_experimental": true
+  },
+  "visual_followup_2026_09_20": {
+    "status": "map-causes-confirmed-seated-recaptured-acceptance-open",
+    "report": "docs/implementation/visual-review-followup-2026-09-20.md",
+    "index": "docs/implementation/visual-review-followup-2026-09-20.json",
+    "shipping_map_fix_applied": false,
+    "seated_recaptures": [
+      {
+        "loader": "fabric",
+        "run_id": "20260920T154926Z-a7e51c16390b",
+        "run_hash": "128f8b7360e476ab4250b6a5ae4274e20686f3edeaf7693add686fe01d63057d",
+        "automated_status": "passed",
+        "visual_status": "awaiting-user",
+        "healthy": {
+          "artifact": "seated-healthy.png",
+          "artifact_sha256": "05a8a2825c6c5e060de6248696f811a01035ffe5fef48f6dd18c56c8bb976267"
+        },
+        "recovery": {
+          "artifact": "seated-recovery.png",
+          "artifact_sha256": "5a804203c315e67a9917d01bc6e7eafdac9030c8506b51f47b909e3c9e0a42dd"
+        }
+      },
+      {
+        "loader": "neo",
+        "run_id": "20260920T155051Z-36f0d11707ae",
+        "run_hash": "2b84d3cbcc2db55a6625e6919deff967e713ee5c2c415cbbd9133be4161a3c20",
+        "automated_status": "passed",
+        "visual_status": "awaiting-user",
+        "healthy": {
+          "artifact": "seated-healthy.png",
+          "artifact_sha256": "9d726eafc402ea81a076eaa262e8b778190642787d64d4e2ac7e2bec30ddc9d0"
+        },
+        "recovery": {
+          "artifact": "seated-recovery.png",
+          "artifact_sha256": "4571a13aa76ff0bfd3ad6d49ff370c37452a944db110bf78191ffb797eaecc75"
+        }
+      }
+    ],
+    "first_recapture_failure_preserved": "20260920T153910Z-f61822c4648b",
+    "user_visual_acceptance": false,
+    "historical_progress_preserved": true
   }
 }
