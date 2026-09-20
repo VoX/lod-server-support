@@ -25,6 +25,107 @@ public abstract class ServerConfigBase extends JsonConfig {
         return brandedConfigCandidates("server");
     }
 
+    public record GenerationLimits(int global, int perPlayer) {}
+    private transient volatile GenerationLimits effectiveGenerationLimits;
+    /** One immutable publication for the correlated admission limits. Constructor-only
+     * unvalidated configurations retain the historical field-based test seam. */
+    public final GenerationLimits generationLimits() {
+        var snapshot = effectiveGenerationLimits;
+        if (snapshot != null) return snapshot;
+        int global = clampGenGlobal(generationConcurrencyLimitGlobal);
+        return new GenerationLimits(global, clampGenPerPlayer(generationConcurrencyLimitPerPlayer, global));
+    }
+
+    private transient SettingsPatch.Preview presetPreview;
+    private transient SettingsPatch.Preview lastPresetApplication;
+    private enum PresetKind { RESTART_GENERATION, RUNTIME_CONSERVATIVE }
+    private transient PresetKind presetPreviewKind;
+    private transient PresetKind lastPresetKind;
+
+    /** Configured value persisted for the next restart, distinct from running services. */
+    public final boolean generationConfiguredForRestart() {
+        return configuredRestartBoolean("enableChunkGeneration", enableChunkGeneration);
+    }
+
+    /** Explicit server-global patches; numeric values are tied to the documented reference measurement. */
+    public synchronized java.util.List<String> presetCommand(String action) {
+        var current = java.util.Map.of("enableChunkGeneration", Boolean.toString(
+                generationConfiguredForRestart()));
+        switch (action) {
+            case "conservative" -> {
+                presetPreview = RuntimeSettings.previewBatch(this,
+                        java.util.Map.of("lodDistanceChunks", "32",
+                                "generationConcurrencyLimitGlobal", "4",
+                                "generationConcurrencyLimitPerPlayer", "1"),
+                        java.util.Set.of("lodDistanceChunks", "generationConcurrencyLimitGlobal",
+                                "generationConcurrencyLimitPerPlayer"));
+                presetPreviewKind = PresetKind.RUNTIME_CONSERVATIVE;
+                var lines = new java.util.ArrayList<String>();
+                lines.add("Preset preview: SERVER GLOBAL; conservative runtime settings.");
+                presetPreview.changes().entrySet().stream().sorted(java.util.Map.Entry.comparingByKey())
+                        .forEach(entry -> lines.add(entry.getKey() + " = " + entry.getValue().before()
+                                + " -> " + entry.getValue().after()));
+                if (presetPreview.changes().isEmpty()) lines.add("Already at these settings; no effective changes.");
+                lines.add("Applies immediately. AUTO timestamp cache sizing updates on restart; legacy clients update on rejoin.");
+                lines.add("Generation enabled/disabled, permissions and world overrides stay as configured.");
+                lines.add("Use preset apply to apply this preview. Reference measurement and limits: docs/operations/performance.md.");
+                return java.util.List.copyOf(lines);
+            }
+            case "pregenerated-world" -> {
+                presetPreview = SettingsPatch.preview(this, current,
+                        java.util.Map.of("enableChunkGeneration", "false"),
+                        java.util.Set.of("enableChunkGeneration"), values -> values);
+                presetPreviewKind = PresetKind.RESTART_GENERATION;
+                return java.util.List.of("Preset preview: SERVER GLOBAL; generation " + current.get("enableChunkGeneration")
+                        + " -> false. Requires server restart. Running generation stays " + enableChunkGeneration + ".",
+                        "Missing terrain remains unavailable; this does not verify world pregeneration.",
+                        "Use preset apply to persist, or leave the preview unapplied.");
+            }
+            case "apply" -> {
+                if (presetPreview == null) throw new IllegalStateException("Preview conservative or pregenerated-world first.");
+                if (presetPreviewKind == PresetKind.RUNTIME_CONSERVATIVE) {
+                    boolean saved = RuntimeSettings.applyBatch(this, presetPreview);
+                    lastPresetApplication = presetPreview;
+                    lastPresetKind = presetPreviewKind;
+                    presetPreview = null;
+                    presetPreviewKind = null;
+                    return java.util.List.of("Preset applied to SERVER GLOBAL; "
+                            + (saved ? "saved." : "applied, but not saved — check server log."));
+                }
+                var candidate = SettingsPatch.recheck(presetPreview, this, current, values -> values);
+                stageRestartBoolean("enableChunkGeneration", Boolean.parseBoolean(candidate.get("enableChunkGeneration")));
+                lastPresetApplication = presetPreview;
+                lastPresetKind = presetPreviewKind;
+                presetPreview = null;
+                presetPreviewKind = null;
+                boolean saved = trySave();
+                return java.util.List.of("Preset staged for server restart; running settings unchanged; "
+                        + (saved ? "saved." : "not saved — check server log."));
+            }
+            case "undo" -> {
+                if (lastPresetApplication == null) throw new IllegalStateException("No preset application to undo.");
+                if (lastPresetKind == PresetKind.RUNTIME_CONSERVATIVE) {
+                    boolean saved = RuntimeSettings.undoBatch(this, lastPresetApplication);
+                    lastPresetApplication = null;
+                    lastPresetKind = null;
+                    presetPreview = null;
+                    presetPreviewKind = null;
+                    return java.util.List.of("Last preset settings restored; "
+                            + (saved ? "saved." : "applied, but not saved — check server log."));
+                }
+                var candidate = SettingsPatch.undo(lastPresetApplication, this, current, values -> values);
+                stageRestartBoolean("enableChunkGeneration", Boolean.parseBoolean(candidate.get("enableChunkGeneration")));
+                lastPresetApplication = null;
+                lastPresetKind = null;
+                presetPreview = null;
+                presetPreviewKind = null;
+                boolean saved = trySave();
+                return java.util.List.of("Last preset settings restored; " + (saved ? "saved." : "not saved — check server log."));
+            }
+            default -> throw new IllegalArgumentException("Preset actions: conservative | pregenerated-world | apply | undo.");
+        }
+    }
+
     public boolean enabled = true;
     /**
      * Per-player service gate (service-permission-gate-plan.md; evolved from PR #244):
@@ -846,7 +947,7 @@ public abstract class ServerConfigBase extends JsonConfig {
         // 0 (and negative nonsense) = dirty pushes disabled — the lodStoreMaxMB idiom; only a
         // nonzero value clamps into the sending band. See the field javadoc for the semantics.
         dirtyBroadcastIntervalSeconds = clampDirtyBroadcastInterval(dirtyBroadcastIntervalSeconds);
-        if (dirtyBroadcastIntervalSeconds == 0
+        if (!isScratchCopy() && dirtyBroadcastIntervalSeconds == 0
                 && lastAdvisedDirtyInterval != dirtyBroadcastIntervalSeconds) {
             // Precedent: PaperConfig's Folia store warn — the mode must be visible in the
             // log. Log-on-CHANGE (R-5, stage C): validate() re-runs on every /lsslod set.
@@ -888,5 +989,7 @@ public abstract class ServerConfigBase extends JsonConfig {
         // Its successor is a static inequality between constants, pinned by
         // WantSetBudgetInvariantTest: SYNC_ON_LOAD_SLOT_CAP + MAX_CONCURRENT_GENERATIONS
         //   + WANT_SET_FRONTIER_RESERVE <= WANT_SET_BUDGET <= MAX_BATCH_CHUNK_REQUESTS.
+        effectiveGenerationLimits = new GenerationLimits(generationConcurrencyLimitGlobal,
+                generationConcurrencyLimitPerPlayer);
     }
 }

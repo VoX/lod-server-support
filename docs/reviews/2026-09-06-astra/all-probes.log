@@ -1,0 +1,110 @@
+
+> Configure project :fabric
+Fabric Loom: 1.17.13
+
+> Task :common:compileJava UP-TO-DATE
+> Task :common:processResources NO-SOURCE
+> Task :common:classes UP-TO-DATE
+> Task :common:jar UP-TO-DATE
+> Task :fabric:compileJava UP-TO-DATE
+> Task :fabric:processResources UP-TO-DATE
+> Task :fabric:classes UP-TO-DATE
+> Task :fabric:compileTestJava UP-TO-DATE
+> Task :fabric:processTestResources UP-TO-DATE
+> Task :fabric:testClasses UP-TO-DATE
+
+> Task :fabric:test
+
+VoxyHolderCompatibilityReviewTest > resetMustResolveTheNamespacedMethodOnTheOldHolderInterface() FAILED
+    org.opentest4j.AssertionFailedError at VoxyHolderCompatibilityReviewTest.java:27
+
+FarPlayerDisableReviewTest > runtimeOffMustWithdrawAlreadyPublishedPlayersInsteadOfFreezingThem() FAILED
+    org.opentest4j.AssertionFailedError at FarPlayerDisableReviewTest.java:37
+
+FarPlayerIdentityReviewTest > repeatedlyRebindingOneIndexMustNotBypassTheIdentityCap() FAILED
+    org.opentest4j.AssertionFailedError at FarPlayerIdentityReviewTest.java:32
+
+FarPlayerIdentityReviewTest > rebindingOneIndexMustRetireItsPreviousTrackedIdentity() FAILED
+    org.gradle.internal.exceptions.DefaultMultiCauseException at FarPlayerIdentityReviewTest.java:23
+        Caused by: org.opentest4j.AssertionFailedError at FarPlayerIdentityReviewTest.java:24
+
+GenerationSessionOwnershipReviewTest > bufferedGenerationMustNotLoseDirtyTaintAndSealReplacementSession() FAILED
+    org.gradle.internal.exceptions.DefaultMultiCauseException at GenerationSessionOwnershipReviewTest.java:69
+        Caused by: org.opentest4j.AssertionFailedError at GenerationSessionOwnershipReviewTest.java:70
+
+SessionOwnershipReviewTest > oldReadMustNotEnterAReRegisteredPlayersQueue() FAILED
+    org.opentest4j.AssertionFailedError at SessionOwnershipReviewTest.java:73
+
+SessionOwnershipReviewTest > reconnectMustNotEraseAnOldReadsDirtyTaintAndSealItsPreEditBytes() FAILED
+    org.gradle.internal.exceptions.DefaultMultiCauseException at SessionOwnershipReviewTest.java:98
+        Caused by: org.opentest4j.AssertionFailedError at SessionOwnershipReviewTest.java:99
+
+ReviewMaskShutdownTest > interruptedMaskDropMustNotCommitNewFingerprintOverSurvivingRows() FAILED
+    org.opentest4j.AssertionFailedError at ReviewMaskShutdownTest.java:60
+
+ReviewMigrationChecksumTest > migrationMustNotCertifyAChecksumMismatchedLegacyRow() FAILED
+    org.opentest4j.AssertionFailedError at ReviewMigrationChecksumTest.java:32
+
+XaeroOwedDisconnectReviewTest > shedAfterDisconnectMustNotCarryOldDebtIntoTheNextServer() FAILED
+    org.gradle.internal.exceptions.DefaultMultiCauseException at XaeroOwedDisconnectReviewTest.java:105
+        Caused by: org.opentest4j.AssertionFailedError at XaeroOwedDisconnectReviewTest.java:106
+
+XaeroOwedDisconnectReviewTest > abruptDisconnectDuringOwedReleaseCannotRepublishDebtOrNegativeGauge() FAILED
+    org.gradle.internal.exceptions.DefaultMultiCauseException at XaeroOwedDisconnectReviewTest.java:165
+        Caused by: org.opentest4j.AssertionFailedError at XaeroOwedDisconnectReviewTest.java:166
+
+ClientMasterToggleReviewTest > turningOffEstablishedSessionStopsNonemptyDeclarations() FAILED
+    org.opentest4j.AssertionFailedError at ClientMasterToggleReviewTest.java:66
+
+ClientMasterToggleReviewTest > temporaryOffMustNotExhaustIngestRetriesAndStrandTerrainOnReenable() FAILED
+    org.opentest4j.AssertionFailedError at ClientMasterToggleReviewTest.java:100
+
+ReviewSummarySentinelTest > neverCleanMustRevokeAnOlderSummaryProof() FAILED
+    org.opentest4j.AssertionFailedError at ReviewSummarySentinelTest.java:39
+
+ReviewSummarySentinelTest > noRegionMustRevokeAnOlderSummaryProof() FAILED
+    org.opentest4j.AssertionFailedError at ReviewSummarySentinelTest.java:39
+
+16 tests completed, 15 failed
+
+> Task :fabric:test FAILED
+> Task :paper:paperweightUserdevSetup UP-TO-DATE
+> Task :paper:compileJava UP-TO-DATE
+> Task :paper:processResources UP-TO-DATE
+> Task :paper:classes UP-TO-DATE
+> Task :paper:compileTestJava UP-TO-DATE
+> Task :paper:processTestResources UP-TO-DATE
+> Task :paper:testClasses UP-TO-DATE
+OpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
+
+> Task :paper:test FAILED
+
+LibsDisguisesReloadReviewTest > changingPluginInstanceMustReadTheNewPluginsDisguiseRegistry() FAILED
+    org.opentest4j.AssertionFailedError at LibsDisguisesReloadReviewTest.java:79
+
+1 test completed, 1 failed
+
+FAILURE: Build completed with 2 failures.
+
+1: Task failed with an exception.
+-----------
+* What went wrong:
+Execution failed for task ':fabric:test'.
+> There were failing tests. See the report at: file:///home/vox/projects/lss-lines/1.21.1/fabric/build/reports/tests/test/index.html
+
+* Try:
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+==============================================================================
+
+2: Task failed with an exception.
+-----------
+* What went wrong:
+Execution failed for task ':paper:test'.
+> There were failing tests. See the report at: file:///home/vox/projects/lss-lines/1.21.1/paper/build/reports/tests/test/index.html
+
+* Try:
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+==============================================================================
+
+BUILD FAILED in 14s
+13 actionable tasks: 2 executed, 11 up-to-date

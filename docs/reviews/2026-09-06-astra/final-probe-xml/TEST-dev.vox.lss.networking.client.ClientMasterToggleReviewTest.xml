@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="dev.vox.lss.networking.client.ClientMasterToggleReviewTest" tests="2" skipped="0" failures="2" errors="0" timestamp="2026-09-07T02:54:31.878Z" hostname="DESKTOP-K93QJU0" time="0.065">
+  <properties/>
+  <testcase name="turningOffEstablishedSessionStopsNonemptyDeclarations()" classname="dev.vox.lss.networking.client.ClientMasterToggleReviewTest" time="0.024">
+    <failure message="org.opentest4j.AssertionFailedError: OFF promises to stop downloads, but manager keeps nonempty want-sets flowing ==&gt; expected: &lt;0&gt; but was: &lt;2&gt;" type="org.opentest4j.AssertionFailedError">org.opentest4j.AssertionFailedError: OFF promises to stop downloads, but manager keeps nonempty want-sets flowing ==&gt; expected: &lt;0&gt; but was: &lt;2&gt;
+	at org.junit.jupiter.api.AssertionFailureBuilder.build(AssertionFailureBuilder.java:151)
+	at org.junit.jupiter.api.AssertionFailureBuilder.buildAndThrow(AssertionFailureBuilder.java:132)
+	at org.junit.jupiter.api.AssertEquals.failNotEqual(AssertEquals.java:197)
+	at org.junit.jupiter.api.AssertEquals.assertEquals(AssertEquals.java:166)
+	at org.junit.jupiter.api.Assertions.assertEquals(Assertions.java:660)
+	at knot//dev.vox.lss.networking.client.ClientMasterToggleReviewTest.turningOffEstablishedSessionStopsNonemptyDeclarations(ClientMasterToggleReviewTest.java:66)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
+</failure>
+  </testcase>
+  <testcase name="temporaryOffMustNotExhaustIngestRetriesAndStrandTerrainOnReenable()" classname="dev.vox.lss.networking.client.ClientMasterToggleReviewTest" time="0.039">
+    <failure message="org.opentest4j.AssertionFailedError: turning ON must not leave an undelivered position parked until rejoin/dirty ==&gt; expected: not equal but was: &lt;-9223372036854775808&gt;" type="org.opentest4j.AssertionFailedError">org.opentest4j.AssertionFailedError: turning ON must not leave an undelivered position parked until rejoin/dirty ==&gt; expected: not equal but was: &lt;-9223372036854775808&gt;
+	at org.junit.jupiter.api.AssertionFailureBuilder.build(AssertionFailureBuilder.java:152)
+	at org.junit.jupiter.api.AssertionFailureBuilder.buildAndThrow(AssertionFailureBuilder.java:132)
+	at org.junit.jupiter.api.AssertNotEquals.failEqual(AssertNotEquals.java:277)
+	at org.junit.jupiter.api.AssertNotEquals.assertNotEquals(AssertNotEquals.java:119)
+	at org.junit.jupiter.api.Assertions.assertNotEquals(Assertions.java:2159)
+	at knot//dev.vox.lss.networking.client.ClientMasterToggleReviewTest.temporaryOffMustNotExhaustIngestRetriesAndStrandTerrainOnReenable(ClientMasterToggleReviewTest.java:100)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
+</failure>
+  </testcase>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

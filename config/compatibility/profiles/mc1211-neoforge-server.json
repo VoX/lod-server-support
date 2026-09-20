@@ -1,0 +1,42 @@
+{
+  "artifacts": [
+    {
+      "enabled": true,
+      "file": "neoforge-21.1.248-installer.jar",
+      "id": "neoforge-installer",
+      "kind": "server",
+      "metadata": {},
+      "sha256": "68eeab77059ba53df1812f1afa5bf530ab2566a3cdcd5f924aa6e71be42e410c",
+      "source": "https://maven.neoforged.net/releases/net/neoforged/neoforge/21.1.248/neoforge-21.1.248-installer.jar",
+      "version": "21.1.248"
+    }
+  ],
+  "capabilities": [
+    "native-server",
+    "handshake",
+    "store"
+  ],
+  "components": [
+    {
+      "uid": "net.minecraft",
+      "version": "1.21.1"
+    },
+    {
+      "uid": "net.neoforged",
+      "version": "21.1.248"
+    },
+    {
+      "uid": "java",
+      "version": "21"
+    }
+  ],
+  "id": "mc1211-neoforge-server",
+  "limitations": [
+    "Exact production installer closure; fixture-specific native acceptance remains separate."
+  ],
+  "line": "1.21.1",
+  "platform": "neoforge",
+  "route": "native",
+  "schema_version": 1,
+  "status": "unverified"
+}

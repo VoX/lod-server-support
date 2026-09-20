@@ -1,0 +1,2609 @@
+Artifact: /mnt/c/Users/Ian/AppData/Roaming/PrismLauncher/instances/LSS dev — 1.21.1 NeoForge - Copy For Far Testing/minecraft/mods/.connector/voxy-0.2.15-beta-sodium0.8.12_mapped_moj_1.21.1.jar
+SHA256: ef169cc785b898cc53b63b6c63a0a2a11a96565e1951d0ac99cebef610c95384
+Compiled from "WorldIdentifier.java"
+public class me.cortex.voxy.commonImpl.WorldIdentifier {
+  private static final net.minecraft.resources.ResourceKey<net.minecraft.world.level.dimension.DimensionType> NULL_DIM_KEY;
+
+  public final net.minecraft.resources.ResourceKey<net.minecraft.world.level.Level> key;
+
+  public final long biomeSeed;
+
+  public final net.minecraft.resources.ResourceKey<net.minecraft.world.level.dimension.DimensionType> dimension;
+
+  private final transient long hashCode;
+
+  transient java.lang.ref.WeakReference<me.cortex.voxy.common.world.WorldEngine> cachedEngineObject;
+
+  public me.cortex.voxy.commonImpl.WorldIdentifier(net.minecraft.resources.ResourceKey<net.minecraft.world.level.Level>, long, net.minecraft.resources.ResourceKey<net.minecraft.world.level.dimension.DimensionType>);
+    Code:
+         0: aload_0
+         1: invokespecial #33                 // Method java/lang/Object."<init>":()V
+         4: aload_1
+         5: ifnonnull     18
+         8: new           #35                 // class java/lang/IllegalStateException
+        11: dup
+        12: ldc           #37                 // String Key cannot be null
+        14: invokespecial #40                 // Method java/lang/IllegalStateException."<init>":(Ljava/lang/String;)V
+        17: athrow
+        18: aload         4
+        20: ifnonnull     29
+        23: getstatic     #44                 // Field NULL_DIM_KEY:Lnet/minecraft/resources/ResourceKey;
+        26: goto          31
+        29: aload         4
+        31: astore        4
+        33: aload_0
+        34: aload_1
+        35: putfield      #46                 // Field key:Lnet/minecraft/resources/ResourceKey;
+        38: aload_0
+        39: lload_2
+        40: putfield      #48                 // Field biomeSeed:J
+        43: aload_0
+        44: aload         4
+        46: putfield      #50                 // Field dimension:Lnet/minecraft/resources/ResourceKey;
+        49: aload_0
+        50: aload_1
+        51: invokestatic  #54                 // Method registryKeyHashCode:(Lnet/minecraft/resources/ResourceKey;)J
+        54: invokestatic  #58                 // Method mixStafford13:(J)J
+        57: aload         4
+        59: invokestatic  #54                 // Method registryKeyHashCode:(Lnet/minecraft/resources/ResourceKey;)J
+        62: invokestatic  #58                 // Method mixStafford13:(J)J
+        65: lxor
+        66: lload_2
+        67: invokestatic  #58                 // Method mixStafford13:(J)J
+        70: lxor
+        71: putfield      #60                 // Field hashCode:J
+        74: return
+
+  public int hashCode();
+    Code:
+         0: aload_0
+         1: getfield      #60                 // Field hashCode:J
+         4: l2i
+         5: ireturn
+
+  public boolean equals(java.lang.Object);
+    Code:
+         0: aload_1
+         1: instanceof    #2                  // class me/cortex/voxy/commonImpl/WorldIdentifier
+         4: ifeq          70
+         7: aload_1
+         8: checkcast     #2                  // class me/cortex/voxy/commonImpl/WorldIdentifier
+        11: astore_2
+        12: aload_2
+        13: getfield      #60                 // Field hashCode:J
+        16: aload_0
+        17: getfield      #60                 // Field hashCode:J
+        20: lcmp
+        21: ifne          68
+        24: aload_2
+        25: getfield      #48                 // Field biomeSeed:J
+        28: aload_0
+        29: getfield      #48                 // Field biomeSeed:J
+        32: lcmp
+        33: ifne          68
+        36: aload_2
+        37: getfield      #46                 // Field key:Lnet/minecraft/resources/ResourceKey;
+        40: aload_0
+        41: getfield      #46                 // Field key:Lnet/minecraft/resources/ResourceKey;
+        44: invokestatic  #70                 // Method equal:(Lnet/minecraft/resources/ResourceKey;Lnet/minecraft/resources/ResourceKey;)Z
+        47: ifeq          68
+        50: aload_2
+        51: getfield      #50                 // Field dimension:Lnet/minecraft/resources/ResourceKey;
+        54: aload_0
+        55: getfield      #50                 // Field dimension:Lnet/minecraft/resources/ResourceKey;
+        58: invokestatic  #70                 // Method equal:(Lnet/minecraft/resources/ResourceKey;Lnet/minecraft/resources/ResourceKey;)Z
+        61: ifeq          68
+        64: iconst_1
+        65: goto          69
+        68: iconst_0
+        69: ireturn
+        70: iconst_0
+        71: ireturn
+
+  private static <T> boolean equal(net.minecraft.resources.ResourceKey<T>, net.minecraft.resources.ResourceKey<T>);
+    Code:
+         0: aload_0
+         1: aload_1
+         2: if_acmpne     7
+         5: iconst_1
+         6: ireturn
+         7: aload_0
+         8: ifnull        15
+        11: aload_1
+        12: ifnonnull     17
+        15: iconst_0
+        16: ireturn
+        17: aload_0
+        18: invokevirtual #79                 // Method net/minecraft/resources/ResourceKey.registry:()Lnet/minecraft/resources/ResourceLocation;
+        21: aload_1
+        22: invokevirtual #79                 // Method net/minecraft/resources/ResourceKey.registry:()Lnet/minecraft/resources/ResourceLocation;
+        25: invokevirtual #83                 // Method net/minecraft/resources/ResourceLocation.equals:(Ljava/lang/Object;)Z
+        28: ifeq          49
+        31: aload_0
+        32: invokevirtual #86                 // Method net/minecraft/resources/ResourceKey.location:()Lnet/minecraft/resources/ResourceLocation;
+        35: aload_1
+        36: invokevirtual #86                 // Method net/minecraft/resources/ResourceKey.location:()Lnet/minecraft/resources/ResourceLocation;
+        39: invokevirtual #83                 // Method net/minecraft/resources/ResourceLocation.equals:(Ljava/lang/Object;)Z
+        42: ifeq          49
+        45: iconst_1
+        46: goto          50
+        49: iconst_0
+        50: ireturn
+
+  public me.cortex.voxy.common.world.WorldEngine getOrCreateEngine();
+    Code:
+         0: invokestatic  #95                 // Method me/cortex/voxy/commonImpl/VoxyCommon.getInstance:()Lme/cortex/voxy/commonImpl/VoxyInstance;
+         3: astore_1
+         4: aload_1
+         5: ifnonnull     15
+         8: aload_0
+         9: aconst_null
+        10: putfield      #97                 // Field cachedEngineObject:Ljava/lang/ref/WeakReference;
+        13: aconst_null
+        14: areturn
+        15: aload_1
+        16: aload_0
+        17: invokevirtual #103                // Method me/cortex/voxy/commonImpl/VoxyInstance.getOrCreate:(Lme/cortex/voxy/commonImpl/WorldIdentifier;)Lme/cortex/voxy/common/world/WorldEngine;
+        20: astore_2
+        21: aload_2
+        22: ifnonnull     35
+        25: new           #35                 // class java/lang/IllegalStateException
+        28: dup
+        29: ldc           #105                // String Engine null on creation
+        31: invokespecial #40                 // Method java/lang/IllegalStateException."<init>":(Ljava/lang/String;)V
+        34: athrow
+        35: aload_2
+        36: areturn
+
+  public me.cortex.voxy.common.world.WorldEngine getNullable();
+    Code:
+         0: invokestatic  #95                 // Method me/cortex/voxy/commonImpl/VoxyCommon.getInstance:()Lme/cortex/voxy/commonImpl/VoxyInstance;
+         3: astore_1
+         4: aload_1
+         5: ifnonnull     15
+         8: aload_0
+         9: aconst_null
+        10: putfield      #97                 // Field cachedEngineObject:Ljava/lang/ref/WeakReference;
+        13: aconst_null
+        14: areturn
+        15: aload_1
+        16: aload_0
+        17: invokevirtual #114                // Method me/cortex/voxy/commonImpl/VoxyInstance.getNullable:(Lme/cortex/voxy/commonImpl/WorldIdentifier;)Lme/cortex/voxy/common/world/WorldEngine;
+        20: areturn
+
+  public static me.cortex.voxy.commonImpl.WorldIdentifier of(net.minecraft.world.level.Level);
+    Code:
+         0: aload_0
+         1: ifnonnull     6
+         4: aconst_null
+         5: areturn
+         6: aload_0
+         7: checkcast     #119                // class me/cortex/voxy/commonImpl/IWorldGetIdentifier
+        10: invokeinterface #123,  1          // InterfaceMethod me/cortex/voxy/commonImpl/IWorldGetIdentifier.voxy$getIdentifier:()Lme/cortex/voxy/commonImpl/WorldIdentifier;
+        15: areturn
+
+  public static me.cortex.voxy.common.world.WorldEngine ofEngine(net.minecraft.world.level.Level);
+    Code:
+         0: aload_0
+         1: invokestatic  #128                // Method of:(Lnet/minecraft/world/level/Level;)Lme/cortex/voxy/commonImpl/WorldIdentifier;
+         4: astore_1
+         5: aload_1
+         6: ifnonnull     11
+         9: aconst_null
+        10: areturn
+        11: aload_1
+        12: invokevirtual #130                // Method getOrCreateEngine:()Lme/cortex/voxy/common/world/WorldEngine;
+        15: areturn
+
+  public static me.cortex.voxy.common.world.WorldEngine ofEngineNullable(net.minecraft.world.level.Level);
+    Code:
+         0: aload_0
+         1: invokestatic  #128                // Method of:(Lnet/minecraft/world/level/Level;)Lme/cortex/voxy/commonImpl/WorldIdentifier;
+         4: astore_1
+         5: aload_1
+         6: ifnonnull     11
+         9: aconst_null
+        10: areturn
+        11: aload_1
+        12: invokevirtual #134                // Method getNullable:()Lme/cortex/voxy/common/world/WorldEngine;
+        15: areturn
+
+  public static long mixStafford13(long);
+    Code:
+         0: lload_0
+         1: ldc2_w        #136                // long 918759875987111l
+         4: ladd
+         5: lstore_0
+         6: lload_0
+         7: lload_0
+         8: bipush        30
+        10: lushr
+        11: lxor
+        12: ldc2_w        #138                // long -4658895280553007687l
+        15: lmul
+        16: lstore_0
+        17: lload_0
+        18: lload_0
+        19: bipush        27
+        21: lushr
+        22: lxor
+        23: ldc2_w        #140                // long -7723592293110705685l
+        26: lmul
+        27: lstore_0
+        28: lload_0
+        29: lload_0
+        30: bipush        31
+        32: lushr
+        33: lxor
+        34: lreturn
+
+  public long getLongHash();
+    Code:
+         0: aload_0
+         1: getfield      #60                 // Field hashCode:J
+         4: lreturn
+
+  private static long registryKeyHashCode(net.minecraft.resources.ResourceKey<?>);
+    Code:
+         0: aload_0
+         1: invokevirtual #79                 // Method net/minecraft/resources/ResourceKey.registry:()Lnet/minecraft/resources/ResourceLocation;
+         4: astore_1
+         5: aload_0
+         6: invokevirtual #86                 // Method net/minecraft/resources/ResourceKey.location:()Lnet/minecraft/resources/ResourceLocation;
+         9: astore_2
+        10: aload_1
+        11: ifnonnull     18
+        14: iconst_0
+        15: goto          22
+        18: aload_1
+        19: invokevirtual #146                // Method net/minecraft/resources/ResourceLocation.hashCode:()I
+        22: istore_3
+        23: aload_2
+        24: ifnonnull     31
+        27: iconst_0
+        28: goto          35
+        31: aload_2
+        32: invokevirtual #146                // Method net/minecraft/resources/ResourceLocation.hashCode:()I
+        35: istore        4
+        37: iload_3
+        38: invokestatic  #152                // Method java/lang/Integer.toUnsignedLong:(I)J
+        41: bipush        32
+        43: lshl
+        44: iload         4
+        46: invokestatic  #152                // Method java/lang/Integer.toUnsignedLong:(I)J
+        49: lor
+        50: lreturn
+
+  private static java.lang.String bytesToHex(byte[]);
+    Code:
+         0: new           #162                // class java/lang/StringBuilder
+         3: dup
+         4: iconst_2
+         5: aload_0
+         6: arraylength
+         7: imul
+         8: invokespecial #165                // Method java/lang/StringBuilder."<init>":(I)V
+        11: astore_1
+        12: aload_0
+        13: astore_2
+        14: aload_2
+        15: arraylength
+        16: istore_3
+        17: iconst_0
+        18: istore        4
+        20: iload         4
+        22: iload_3
+        23: if_icmpge     72
+        26: aload_2
+        27: iload         4
+        29: baload
+        30: istore        5
+        32: sipush        255
+        35: iload         5
+        37: iand
+        38: invokestatic  #171                // Method java/lang/Integer.toHexString:(I)Ljava/lang/String;
+        41: astore        6
+        43: aload         6
+        45: invokevirtual #176                // Method java/lang/String.length:()I
+        48: iconst_1
+        49: if_icmpne     59
+        52: aload_1
+        53: bipush        48
+        55: invokevirtual #180                // Method java/lang/StringBuilder.append:(C)Ljava/lang/StringBuilder;
+        58: pop
+        59: aload_1
+        60: aload         6
+        62: invokevirtual #183                // Method java/lang/StringBuilder.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;
+        65: pop
+        66: iinc          4, 1
+        69: goto          20
+        72: aload_1
+        73: invokevirtual #187                // Method java/lang/StringBuilder.toString:()Ljava/lang/String;
+        76: areturn
+
+  public java.lang.String getWorldId();
+    Code:
+         0: aload_0
+         1: invokestatic  #195                // Method getWorldId:(Lme/cortex/voxy/commonImpl/WorldIdentifier;)Ljava/lang/String;
+         4: areturn
+
+  public static java.lang.String getWorldId(me.cortex.voxy.commonImpl.WorldIdentifier);
+    Code:
+         0: aload_0
+         1: getfield      #48                 // Field biomeSeed:J
+         4: aload_0
+         5: getfield      #46                 // Field key:Lnet/minecraft/resources/ResourceKey;
+         8: invokevirtual #199                // Method net/minecraft/resources/ResourceKey.toString:()Ljava/lang/String;
+        11: invokedynamic #211,  0            // InvokeDynamic #0:makeConcatWithConstants:(JLjava/lang/String;)Ljava/lang/String;
+        16: astore_1
+        17: ldc           #213                // String SHA-256
+        19: invokestatic  #218                // Method java/security/MessageDigest.getInstance:(Ljava/lang/String;)Ljava/security/MessageDigest;
+        22: aload_1
+        23: invokevirtual #222                // Method java/lang/String.getBytes:()[B
+        26: invokevirtual #226                // Method java/security/MessageDigest.digest:([B)[B
+        29: invokestatic  #228                // Method bytesToHex:([B)Ljava/lang/String;
+        32: iconst_0
+        33: bipush        32
+        35: invokevirtual #232                // Method java/lang/String.substring:(II)Ljava/lang/String;
+        38: areturn
+        39: astore_2
+        40: new           #234                // class java/lang/RuntimeException
+        43: dup
+        44: aload_2
+        45: invokespecial #237                // Method java/lang/RuntimeException."<init>":(Ljava/lang/Throwable;)V
+        48: athrow
+      Exception table:
+         from    to  target type
+            17    38    39   Class java/security/NoSuchAlgorithmException
+
+  public java.lang.String toString();
+    Code:
+         0: aload_0
+         1: getfield      #46                 // Field key:Lnet/minecraft/resources/ResourceKey;
+         4: invokevirtual #86                 // Method net/minecraft/resources/ResourceKey.location:()Lnet/minecraft/resources/ResourceLocation;
+         7: invokevirtual #241                // Method net/minecraft/resources/ResourceLocation.toString:()Ljava/lang/String;
+        10: aload_0
+        11: getfield      #48                 // Field biomeSeed:J
+        14: aload_0
+        15: getfield      #50                 // Field dimension:Lnet/minecraft/resources/ResourceKey;
+        18: invokevirtual #86                 // Method net/minecraft/resources/ResourceKey.location:()Lnet/minecraft/resources/ResourceLocation;
+        21: invokevirtual #241                // Method net/minecraft/resources/ResourceLocation.toString:()Ljava/lang/String;
+        24: invokedynamic #246,  0            // InvokeDynamic #1:makeConcatWithConstants:(Ljava/lang/String;JLjava/lang/String;)Ljava/lang/String;
+        29: areturn
+
+  static {};
+    Code:
+         0: getstatic     #252                // Field net/minecraft/core/registries/Registries.DIMENSION_TYPE:Lnet/minecraft/resources/ResourceKey;
+         3: ldc           #254                // String voxy:null_dimension_id
+         5: invokestatic  #258                // Method net/minecraft/resources/ResourceLocation.parse:(Ljava/lang/String;)Lnet/minecraft/resources/ResourceLocation;
+         8: invokestatic  #262                // Method net/minecraft/resources/ResourceKey.create:(Lnet/minecraft/resources/ResourceKey;Lnet/minecraft/resources/ResourceLocation;)Lnet/minecraft/resources/ResourceKey;
+        11: putstatic     #44                 // Field NULL_DIM_KEY:Lnet/minecraft/resources/ResourceKey;
+        14: return
+}
+
+
+Compiled from "VoxelIngestService.java"
+public class me.cortex.voxy.common.world.service.VoxelIngestService {
+  private static final java.lang.ThreadLocal<me.cortex.voxy.common.voxelization.VoxelizedSection> SECTION_CACHE;
+
+  private final me.cortex.voxy.common.thread.Service service;
+
+  private final java.util.concurrent.ConcurrentLinkedDeque<me.cortex.voxy.common.world.service.VoxelIngestService$IngestSection> ingestQueue;
+
+  public me.cortex.voxy.common.world.service.VoxelIngestService(me.cortex.voxy.common.thread.ServiceManager);
+    Code:
+         0: aload_0
+         1: invokespecial #32                 // Method java/lang/Object."<init>":()V
+         4: aload_0
+         5: new           #34                 // class java/util/concurrent/ConcurrentLinkedDeque
+         8: dup
+         9: invokespecial #35                 // Method java/util/concurrent/ConcurrentLinkedDeque."<init>":()V
+        12: putfield      #37                 // Field ingestQueue:Ljava/util/concurrent/ConcurrentLinkedDeque;
+        15: aload_0
+        16: aload_1
+        17: aload_0
+        18: invokedynamic #56,  0             // InvokeDynamic #0:get:(Lme/cortex/voxy/common/world/service/VoxelIngestService;)Ljava/util/function/Supplier;
+        23: ldc2_w        #57                 // long 5000l
+        26: ldc           #60                 // String Ingest service
+        28: invokevirtual #66                 // Method me/cortex/voxy/common/thread/ServiceManager.createServiceNoCleanup:(Ljava/util/function/Supplier;JLjava/lang/String;)Lme/cortex/voxy/common/thread/Service;
+        31: putfield      #68                 // Field service:Lme/cortex/voxy/common/thread/Service;
+        34: return
+
+  private void processJob();
+    Code:
+         0: aload_0
+         1: getfield      #37                 // Field ingestQueue:Ljava/util/concurrent/ConcurrentLinkedDeque;
+         4: invokevirtual #75                 // Method java/util/concurrent/ConcurrentLinkedDeque.pop:()Ljava/lang/Object;
+         7: checkcast     #7                  // class me/cortex/voxy/common/world/service/VoxelIngestService$IngestSection
+        10: astore_1
+        11: aload_1
+        12: getfield      #79                 // Field me/cortex/voxy/common/world/service/VoxelIngestService$IngestSection.world:Lme/cortex/voxy/common/world/WorldEngine;
+        15: invokevirtual #84                 // Method me/cortex/voxy/common/world/WorldEngine.markActive:()V
+        18: aload_1
+        19: getfield      #88                 // Field me/cortex/voxy/common/world/service/VoxelIngestService$IngestSection.section:Lnet/minecraft/world/level/chunk/LevelChunkSection;
+        22: astore_2
+        23: getstatic     #90                 // Field SECTION_CACHE:Ljava/lang/ThreadLocal;
+        26: invokevirtual #94                 // Method java/lang/ThreadLocal.get:()Ljava/lang/Object;
+        29: checkcast     #96                 // class me/cortex/voxy/common/voxelization/VoxelizedSection
+        32: aload_1
+        33: getfield      #100                // Field me/cortex/voxy/common/world/service/VoxelIngestService$IngestSection.cx:I
+        36: aload_1
+        37: getfield      #103                // Field me/cortex/voxy/common/world/service/VoxelIngestService$IngestSection.cy:I
+        40: aload_1
+        41: getfield      #106                // Field me/cortex/voxy/common/world/service/VoxelIngestService$IngestSection.cz:I
+        44: invokevirtual #110                // Method me/cortex/voxy/common/voxelization/VoxelizedSection.setPosition:(III)Lme/cortex/voxy/common/voxelization/VoxelizedSection;
+        47: astore_3
+        48: aload_2
+        49: invokevirtual #116                // Method net/minecraft/world/level/chunk/LevelChunkSection.hasOnlyAir:()Z
+        52: ifeq          83
+        55: aload_1
+        56: getfield      #120                // Field me/cortex/voxy/common/world/service/VoxelIngestService$IngestSection.blockLight:Lnet/minecraft/world/level/chunk/DataLayer;
+        59: ifnonnull     83
+        62: aload_1
+        63: getfield      #123                // Field me/cortex/voxy/common/world/service/VoxelIngestService$IngestSection.skyLight:Lnet/minecraft/world/level/chunk/DataLayer;
+        66: ifnonnull     83
+        69: aload_1
+        70: getfield      #79                 // Field me/cortex/voxy/common/world/service/VoxelIngestService$IngestSection.world:Lme/cortex/voxy/common/world/WorldEngine;
+        73: aload_3
+        74: invokevirtual #127                // Method me/cortex/voxy/common/voxelization/VoxelizedSection.zero:()Lme/cortex/voxy/common/voxelization/VoxelizedSection;
+        77: invokestatic  #133                // Method me/cortex/voxy/common/world/WorldUpdater.insertUpdate:(Lme/cortex/voxy/common/world/WorldEngine;Lme/cortex/voxy/common/voxelization/VoxelizedSection;)V
+        80: goto          129
+        83: aload_3
+        84: aload_1
+        85: getfield      #79                 // Field me/cortex/voxy/common/world/service/VoxelIngestService$IngestSection.world:Lme/cortex/voxy/common/world/WorldEngine;
+        88: invokevirtual #137                // Method me/cortex/voxy/common/world/WorldEngine.getMapper:()Lme/cortex/voxy/common/world/other/Mapper;
+        91: aload_2
+        92: invokevirtual #141                // Method net/minecraft/world/level/chunk/LevelChunkSection.getStates:()Lnet/minecraft/world/level/chunk/PalettedContainer;
+        95: aload_2
+        96: invokevirtual #145                // Method net/minecraft/world/level/chunk/LevelChunkSection.getBiomes:()Lnet/minecraft/world/level/chunk/PalettedContainerRO;
+        99: aload_1
+       100: invokestatic  #149                // Method getLightingSupplier:(Lme/cortex/voxy/common/world/service/VoxelIngestService$IngestSection;)Lme/cortex/voxy/common/voxelization/ILightingSupplier;
+       103: invokestatic  #155                // Method me/cortex/voxy/common/voxelization/WorldConversionFactory.convert:(Lme/cortex/voxy/common/voxelization/VoxelizedSection;Lme/cortex/voxy/common/world/other/Mapper;Lnet/minecraft/world/level/chunk/PalettedContainer;Lnet/minecraft/world/level/chunk/PalettedContainerRO;Lme/cortex/voxy/common/voxelization/ILightingSupplier;)Lme/cortex/voxy/common/voxelization/VoxelizedSection;
+       106: astore        4
+       108: aload         4
+       110: aload_1
+       111: getfield      #79                 // Field me/cortex/voxy/common/world/service/VoxelIngestService$IngestSection.world:Lme/cortex/voxy/common/world/WorldEngine;
+       114: invokevirtual #137                // Method me/cortex/voxy/common/world/WorldEngine.getMapper:()Lme/cortex/voxy/common/world/other/Mapper;
+       117: invokestatic  #161                // Method me/cortex/voxy/common/voxelization/WorldVoxilizedSectionMipper.mipSection:(Lme/cortex/voxy/common/voxelization/VoxelizedSection;Lme/cortex/voxy/common/world/other/Mapper;)V
+       120: aload_1
+       121: getfield      #79                 // Field me/cortex/voxy/common/world/service/VoxelIngestService$IngestSection.world:Lme/cortex/voxy/common/world/WorldEngine;
+       124: aload         4
+       126: invokestatic  #133                // Method me/cortex/voxy/common/world/WorldUpdater.insertUpdate:(Lme/cortex/voxy/common/world/WorldEngine;Lme/cortex/voxy/common/voxelization/VoxelizedSection;)V
+       129: return
+
+  private static me.cortex.voxy.common.voxelization.ILightingSupplier getLightingSupplier(me.cortex.voxy.common.world.service.VoxelIngestService$IngestSection);
+    Code:
+         0: invokedynamic #177,  0            // InvokeDynamic #1:supply:()Lme/cortex/voxy/common/voxelization/ILightingSupplier;
+         5: astore_1
+         6: aload_0
+         7: getfield      #123                // Field me/cortex/voxy/common/world/service/VoxelIngestService$IngestSection.skyLight:Lnet/minecraft/world/level/chunk/DataLayer;
+        10: astore_2
+        11: aload_0
+        12: getfield      #120                // Field me/cortex/voxy/common/world/service/VoxelIngestService$IngestSection.blockLight:Lnet/minecraft/world/level/chunk/DataLayer;
+        15: astore_3
+        16: aload_2
+        17: ifnull        31
+        20: aload_2
+        21: invokevirtual #182                // Method net/minecraft/world/level/chunk/DataLayer.isEmpty:()Z
+        24: ifne          31
+        27: iconst_1
+        28: goto          32
+        31: iconst_0
+        32: istore        4
+        34: aload_3
+        35: ifnull        49
+        38: aload_3
+        39: invokevirtual #182                // Method net/minecraft/world/level/chunk/DataLayer.isEmpty:()Z
+        42: ifne          49
+        45: iconst_1
+        46: goto          50
+        49: iconst_0
+        50: istore        5
+        52: iload         4
+        54: ifne          62
+        57: iload         5
+        59: ifeq          105
+        62: iload         4
+        64: ifeq          83
+        67: iload         5
+        69: ifeq          83
+        72: aload_3
+        73: aload_2
+        74: invokedynamic #192,  0            // InvokeDynamic #2:supply:(Lnet/minecraft/world/level/chunk/DataLayer;Lnet/minecraft/world/level/chunk/DataLayer;)Lme/cortex/voxy/common/voxelization/ILightingSupplier;
+        79: astore_1
+        80: goto          105
+        83: iload         5
+        85: ifeq          98
+        88: aload_3
+        89: invokedynamic #200,  0            // InvokeDynamic #3:supply:(Lnet/minecraft/world/level/chunk/DataLayer;)Lme/cortex/voxy/common/voxelization/ILightingSupplier;
+        94: astore_1
+        95: goto          105
+        98: aload_2
+        99: invokedynamic #205,  0            // InvokeDynamic #4:supply:(Lnet/minecraft/world/level/chunk/DataLayer;)Lme/cortex/voxy/common/voxelization/ILightingSupplier;
+       104: astore_1
+       105: aload_1
+       106: areturn
+
+  private static boolean shouldIngestSection(net.minecraft.world.level.chunk.LevelChunkSection, int, int, int);
+    Code:
+         0: iconst_1
+         1: ireturn
+
+  public boolean enqueueIngest(me.cortex.voxy.common.world.WorldEngine, net.minecraft.world.level.chunk.LevelChunk);
+    Code:
+         0: aload_0
+         1: getfield      #68                 // Field service:Lme/cortex/voxy/common/thread/Service;
+         4: invokevirtual #225                // Method me/cortex/voxy/common/thread/Service.isLive:()Z
+         7: ifne          12
+        10: iconst_0
+        11: ireturn
+        12: aload_1
+        13: invokevirtual #226                // Method me/cortex/voxy/common/world/WorldEngine.isLive:()Z
+        16: ifne          29
+        19: new           #228                // class java/lang/IllegalStateException
+        22: dup
+        23: ldc           #230                // String Tried inserting chunk into WorldEngine that was not alive
+        25: invokespecial #233                // Method java/lang/IllegalStateException."<init>":(Ljava/lang/String;)V
+        28: athrow
+        29: aload_1
+        30: invokevirtual #84                 // Method me/cortex/voxy/common/world/WorldEngine.markActive:()V
+        33: aload_2
+        34: invokevirtual #239                // Method net/minecraft/world/level/chunk/LevelChunk.getLevel:()Lnet/minecraft/world/level/Level;
+        37: invokevirtual #245                // Method net/minecraft/world/level/Level.getLightEngine:()Lnet/minecraft/world/level/lighting/LevelLightEngine;
+        40: astore_3
+        41: iconst_0
+        42: istore        4
+        44: aload_2
+        45: invokevirtual #249                // Method net/minecraft/world/level/chunk/LevelChunk.getMinSection:()I
+        48: iconst_1
+        49: isub
+        50: istore        5
+        52: iconst_1
+        53: istore        6
+        55: aload_2
+        56: invokevirtual #253                // Method net/minecraft/world/level/chunk/LevelChunk.getSections:()[Lnet/minecraft/world/level/chunk/LevelChunkSection;
+        59: astore        7
+        61: aload         7
+        63: arraylength
+        64: istore        8
+        66: iconst_0
+        67: istore        9
+        69: iload         9
+        71: iload         8
+        73: if_icmpge     181
+        76: aload         7
+        78: iload         9
+        80: aaload
+        81: astore        10
+        83: iinc          5, 1
+        86: aload         10
+        88: ifnull        175
+        91: aload         10
+        93: aload_2
+        94: invokevirtual #261                // Method net/minecraft/world/level/chunk/LevelChunk.getPos:()Lnet/minecraft/world/level/ChunkPos;
+        97: getfield      #266                // Field net/minecraft/world/level/ChunkPos.x:I
+       100: iload         5
+       102: aload_2
+       103: invokevirtual #261                // Method net/minecraft/world/level/chunk/LevelChunk.getPos:()Lnet/minecraft/world/level/ChunkPos;
+       106: getfield      #269                // Field net/minecraft/world/level/ChunkPos.z:I
+       109: invokestatic  #271                // Method shouldIngestSection:(Lnet/minecraft/world/level/chunk/LevelChunkSection;III)Z
+       112: ifne          118
+       115: goto          175
+       118: iload         6
+       120: aload         10
+       122: invokevirtual #116                // Method net/minecraft/world/level/chunk/LevelChunkSection.hasOnlyAir:()Z
+       125: iand
+       126: istore        6
+       128: aload_2
+       129: invokevirtual #261                // Method net/minecraft/world/level/chunk/LevelChunk.getPos:()Lnet/minecraft/world/level/ChunkPos;
+       132: iload         5
+       134: invokestatic  #277                // Method net/minecraft/core/SectionPos.of:(Lnet/minecraft/world/level/ChunkPos;I)Lnet/minecraft/core/SectionPos;
+       137: astore        11
+       139: aload_3
+       140: getstatic     #283                // Field net/minecraft/world/level/LightLayer.SKY:Lnet/minecraft/world/level/LightLayer;
+       143: aload         11
+       145: invokevirtual #287                // Method net/minecraft/world/level/lighting/LevelLightEngine.getDebugSectionType:(Lnet/minecraft/world/level/LightLayer;Lnet/minecraft/core/SectionPos;)Lnet/minecraft/world/level/lighting/LayerLightSectionStorage$SectionType;
+       148: getstatic     #291                // Field net/minecraft/world/level/lighting/LayerLightSectionStorage$SectionType.LIGHT_AND_DATA:Lnet/minecraft/world/level/lighting/LayerLightSectionStorage$SectionType;
+       151: if_acmpeq     172
+       154: aload_3
+       155: getstatic     #294                // Field net/minecraft/world/level/LightLayer.BLOCK:Lnet/minecraft/world/level/LightLayer;
+       158: aload         11
+       160: invokevirtual #287                // Method net/minecraft/world/level/lighting/LevelLightEngine.getDebugSectionType:(Lnet/minecraft/world/level/LightLayer;Lnet/minecraft/core/SectionPos;)Lnet/minecraft/world/level/lighting/LayerLightSectionStorage$SectionType;
+       163: getstatic     #291                // Field net/minecraft/world/level/lighting/LayerLightSectionStorage$SectionType.LIGHT_AND_DATA:Lnet/minecraft/world/level/lighting/LayerLightSectionStorage$SectionType;
+       166: if_acmpeq     172
+       169: goto          175
+       172: iconst_1
+       173: istore        4
+       175: iinc          9, 1
+       178: goto          69
+       181: iload         6
+       183: ifeq          341
+       186: iload         4
+       188: ifne          341
+       191: aload_2
+       192: invokevirtual #249                // Method net/minecraft/world/level/chunk/LevelChunk.getMinSection:()I
+       195: iconst_1
+       196: isub
+       197: istore        5
+       199: aload_2
+       200: invokevirtual #253                // Method net/minecraft/world/level/chunk/LevelChunk.getSections:()[Lnet/minecraft/world/level/chunk/LevelChunkSection;
+       203: astore        7
+       205: aload         7
+       207: arraylength
+       208: istore        8
+       210: iconst_0
+       211: istore        9
+       213: iload         9
+       215: iload         8
+       217: if_icmpge     341
+       220: aload         7
+       222: iload         9
+       224: aaload
+       225: astore        10
+       227: iinc          5, 1
+       230: aload         10
+       232: ifnull        335
+       235: aload         10
+       237: aload_2
+       238: invokevirtual #261                // Method net/minecraft/world/level/chunk/LevelChunk.getPos:()Lnet/minecraft/world/level/ChunkPos;
+       241: getfield      #266                // Field net/minecraft/world/level/ChunkPos.x:I
+       244: iload         5
+       246: aload_2
+       247: invokevirtual #261                // Method net/minecraft/world/level/chunk/LevelChunk.getPos:()Lnet/minecraft/world/level/ChunkPos;
+       250: getfield      #269                // Field net/minecraft/world/level/ChunkPos.z:I
+       253: invokestatic  #271                // Method shouldIngestSection:(Lnet/minecraft/world/level/chunk/LevelChunkSection;III)Z
+       256: ifne          262
+       259: goto          335
+       262: aload_1
+       263: invokevirtual #84                 // Method me/cortex/voxy/common/world/WorldEngine.markActive:()V
+       266: aload_0
+       267: getfield      #37                 // Field ingestQueue:Ljava/util/concurrent/ConcurrentLinkedDeque;
+       270: new           #7                  // class me/cortex/voxy/common/world/service/VoxelIngestService$IngestSection
+       273: dup
+       274: aload_2
+       275: invokevirtual #261                // Method net/minecraft/world/level/chunk/LevelChunk.getPos:()Lnet/minecraft/world/level/ChunkPos;
+       278: getfield      #266                // Field net/minecraft/world/level/ChunkPos.x:I
+       281: iload         5
+       283: aload_2
+       284: invokevirtual #261                // Method net/minecraft/world/level/chunk/LevelChunk.getPos:()Lnet/minecraft/world/level/ChunkPos;
+       287: getfield      #269                // Field net/minecraft/world/level/ChunkPos.z:I
+       290: aload_1
+       291: aload         10
+       293: aconst_null
+       294: aconst_null
+       295: invokespecial #297                // Method me/cortex/voxy/common/world/service/VoxelIngestService$IngestSection."<init>":(IIILme/cortex/voxy/common/world/WorldEngine;Lnet/minecraft/world/level/chunk/LevelChunkSection;Lnet/minecraft/world/level/chunk/DataLayer;Lnet/minecraft/world/level/chunk/DataLayer;)V
+       298: invokevirtual #301                // Method java/util/concurrent/ConcurrentLinkedDeque.add:(Ljava/lang/Object;)Z
+       301: pop
+       302: aload_0
+       303: getfield      #68                 // Field service:Lme/cortex/voxy/common/thread/Service;
+       306: invokevirtual #304                // Method me/cortex/voxy/common/thread/Service.execute:()V
+       309: goto          335
+       312: astore        11
+       314: iconst_2
+       315: anewarray     #4                  // class java/lang/Object
+       318: dup
+       319: iconst_0
+       320: ldc_w         #306                // String Executing had an error: assume shutting down, aborting
+       323: aastore
+       324: dup
+       325: iconst_1
+       326: aload         11
+       328: aastore
+       329: invokestatic  #312                // Method me/cortex/voxy/common/Logger.error:([Ljava/lang/Object;)V
+       332: goto          341
+       335: iinc          9, 1
+       338: goto          213
+       341: iload         4
+       343: ifne          348
+       346: iconst_0
+       347: ireturn
+       348: aload_3
+       349: getstatic     #294                // Field net/minecraft/world/level/LightLayer.BLOCK:Lnet/minecraft/world/level/LightLayer;
+       352: invokevirtual #316                // Method net/minecraft/world/level/lighting/LevelLightEngine.getLayerListener:(Lnet/minecraft/world/level/LightLayer;)Lnet/minecraft/world/level/lighting/LayerLightEventListener;
+       355: astore        7
+       357: aload_3
+       358: getstatic     #283                // Field net/minecraft/world/level/LightLayer.SKY:Lnet/minecraft/world/level/LightLayer;
+       361: invokevirtual #316                // Method net/minecraft/world/level/lighting/LevelLightEngine.getLayerListener:(Lnet/minecraft/world/level/LightLayer;)Lnet/minecraft/world/level/lighting/LayerLightEventListener;
+       364: astore        8
+       366: aload_2
+       367: invokevirtual #249                // Method net/minecraft/world/level/chunk/LevelChunk.getMinSection:()I
+       370: iconst_1
+       371: isub
+       372: istore        5
+       374: aload_2
+       375: invokevirtual #253                // Method net/minecraft/world/level/chunk/LevelChunk.getSections:()[Lnet/minecraft/world/level/chunk/LevelChunkSection;
+       378: astore        9
+       380: aload         9
+       382: arraylength
+       383: istore        10
+       385: iconst_0
+       386: istore        11
+       388: iload         11
+       390: iload         10
+       392: if_icmpge     575
+       395: aload         9
+       397: iload         11
+       399: aaload
+       400: astore        12
+       402: iinc          5, 1
+       405: aload         12
+       407: ifnull        569
+       410: aload         12
+       412: aload_2
+       413: invokevirtual #261                // Method net/minecraft/world/level/chunk/LevelChunk.getPos:()Lnet/minecraft/world/level/ChunkPos;
+       416: getfield      #266                // Field net/minecraft/world/level/ChunkPos.x:I
+       419: iload         5
+       421: aload_2
+       422: invokevirtual #261                // Method net/minecraft/world/level/chunk/LevelChunk.getPos:()Lnet/minecraft/world/level/ChunkPos;
+       425: getfield      #269                // Field net/minecraft/world/level/ChunkPos.z:I
+       428: invokestatic  #271                // Method shouldIngestSection:(Lnet/minecraft/world/level/chunk/LevelChunkSection;III)Z
+       431: ifne          437
+       434: goto          569
+       437: aload_2
+       438: invokevirtual #261                // Method net/minecraft/world/level/chunk/LevelChunk.getPos:()Lnet/minecraft/world/level/ChunkPos;
+       441: iload         5
+       443: invokestatic  #277                // Method net/minecraft/core/SectionPos.of:(Lnet/minecraft/world/level/ChunkPos;I)Lnet/minecraft/core/SectionPos;
+       446: astore        13
+       448: aload         7
+       450: aload         13
+       452: invokeinterface #322,  2          // InterfaceMethod net/minecraft/world/level/lighting/LayerLightEventListener.getDataLayerData:(Lnet/minecraft/core/SectionPos;)Lnet/minecraft/world/level/chunk/DataLayer;
+       457: astore        14
+       459: aload         14
+       461: ifnull        471
+       464: aload         14
+       466: invokevirtual #326                // Method net/minecraft/world/level/chunk/DataLayer.copy:()Lnet/minecraft/world/level/chunk/DataLayer;
+       469: astore        14
+       471: aload         8
+       473: aload         13
+       475: invokeinterface #322,  2          // InterfaceMethod net/minecraft/world/level/lighting/LayerLightEventListener.getDataLayerData:(Lnet/minecraft/core/SectionPos;)Lnet/minecraft/world/level/chunk/DataLayer;
+       480: astore        15
+       482: aload         15
+       484: ifnull        494
+       487: aload         15
+       489: invokevirtual #326                // Method net/minecraft/world/level/chunk/DataLayer.copy:()Lnet/minecraft/world/level/chunk/DataLayer;
+       492: astore        15
+       494: aload_1
+       495: invokevirtual #84                 // Method me/cortex/voxy/common/world/WorldEngine.markActive:()V
+       498: aload_0
+       499: getfield      #37                 // Field ingestQueue:Ljava/util/concurrent/ConcurrentLinkedDeque;
+       502: new           #7                  // class me/cortex/voxy/common/world/service/VoxelIngestService$IngestSection
+       505: dup
+       506: aload_2
+       507: invokevirtual #261                // Method net/minecraft/world/level/chunk/LevelChunk.getPos:()Lnet/minecraft/world/level/ChunkPos;
+       510: getfield      #266                // Field net/minecraft/world/level/ChunkPos.x:I
+       513: iload         5
+       515: aload_2
+       516: invokevirtual #261                // Method net/minecraft/world/level/chunk/LevelChunk.getPos:()Lnet/minecraft/world/level/ChunkPos;
+       519: getfield      #269                // Field net/minecraft/world/level/ChunkPos.z:I
+       522: aload_1
+       523: aload         12
+       525: aload         14
+       527: aload         15
+       529: invokespecial #297                // Method me/cortex/voxy/common/world/service/VoxelIngestService$IngestSection."<init>":(IIILme/cortex/voxy/common/world/WorldEngine;Lnet/minecraft/world/level/chunk/LevelChunkSection;Lnet/minecraft/world/level/chunk/DataLayer;Lnet/minecraft/world/level/chunk/DataLayer;)V
+       532: invokevirtual #301                // Method java/util/concurrent/ConcurrentLinkedDeque.add:(Ljava/lang/Object;)Z
+       535: pop
+       536: aload_0
+       537: getfield      #68                 // Field service:Lme/cortex/voxy/common/thread/Service;
+       540: invokevirtual #304                // Method me/cortex/voxy/common/thread/Service.execute:()V
+       543: goto          569
+       546: astore        16
+       548: iconst_2
+       549: anewarray     #4                  // class java/lang/Object
+       552: dup
+       553: iconst_0
+       554: ldc_w         #306                // String Executing had an error: assume shutting down, aborting
+       557: aastore
+       558: dup
+       559: iconst_1
+       560: aload         16
+       562: aastore
+       563: invokestatic  #312                // Method me/cortex/voxy/common/Logger.error:([Ljava/lang/Object;)V
+       566: goto          575
+       569: iinc          11, 1
+       572: goto          388
+       575: iconst_1
+       576: ireturn
+      Exception table:
+         from    to  target type
+           302   309   312   Class java/lang/Exception
+           536   543   546   Class java/lang/Exception
+
+  public int getTaskCount();
+    Code:
+         0: aload_0
+         1: getfield      #68                 // Field service:Lme/cortex/voxy/common/thread/Service;
+         4: invokevirtual #343                // Method me/cortex/voxy/common/thread/Service.numJobs:()I
+         7: ireturn
+
+  public void shutdown();
+    Code:
+         0: aload_0
+         1: getfield      #68                 // Field service:Lme/cortex/voxy/common/thread/Service;
+         4: invokevirtual #346                // Method me/cortex/voxy/common/thread/Service.shutdown:()I
+         7: pop
+         8: return
+
+  public static boolean tryIngestChunk(me.cortex.voxy.commonImpl.WorldIdentifier, net.minecraft.world.level.chunk.LevelChunk);
+    Code:
+         0: aload_0
+         1: ifnonnull     6
+         4: iconst_0
+         5: ireturn
+         6: invokestatic  #355                // Method me/cortex/voxy/commonImpl/VoxyCommon.getInstance:()Lme/cortex/voxy/commonImpl/VoxyInstance;
+         9: astore_2
+        10: aload_2
+        11: ifnonnull     16
+        14: iconst_0
+        15: ireturn
+        16: aload_2
+        17: aload_0
+        18: invokevirtual #361                // Method me/cortex/voxy/commonImpl/VoxyInstance.isIngestEnabled:(Lme/cortex/voxy/commonImpl/WorldIdentifier;)Z
+        21: ifne          26
+        24: iconst_0
+        25: ireturn
+        26: aload_2
+        27: aload_0
+        28: invokevirtual #365                // Method me/cortex/voxy/commonImpl/VoxyInstance.getOrCreate:(Lme/cortex/voxy/commonImpl/WorldIdentifier;)Lme/cortex/voxy/common/world/WorldEngine;
+        31: astore_3
+        32: aload_3
+        33: ifnonnull     38
+        36: iconst_0
+        37: ireturn
+        38: aload_2
+        39: invokevirtual #369                // Method me/cortex/voxy/commonImpl/VoxyInstance.getIngestService:()Lme/cortex/voxy/common/world/service/VoxelIngestService;
+        42: aload_3
+        43: aload_1
+        44: invokevirtual #371                // Method enqueueIngest:(Lme/cortex/voxy/common/world/WorldEngine;Lnet/minecraft/world/level/chunk/LevelChunk;)Z
+        47: ireturn
+
+  public static boolean tryAutoIngestChunk(net.minecraft.world.level.chunk.LevelChunk);
+    Code:
+         0: aload_0
+         1: invokevirtual #239                // Method net/minecraft/world/level/chunk/LevelChunk.getLevel:()Lnet/minecraft/world/level/Level;
+         4: invokestatic  #381                // Method me/cortex/voxy/commonImpl/WorldIdentifier.of:(Lnet/minecraft/world/level/Level;)Lme/cortex/voxy/commonImpl/WorldIdentifier;
+         7: aload_0
+         8: invokestatic  #383                // Method tryIngestChunk:(Lme/cortex/voxy/commonImpl/WorldIdentifier;Lnet/minecraft/world/level/chunk/LevelChunk;)Z
+        11: ireturn
+
+  private boolean rawIngest0(me.cortex.voxy.common.world.WorldEngine, net.minecraft.world.level.chunk.LevelChunkSection, int, int, int, net.minecraft.world.level.chunk.DataLayer, net.minecraft.world.level.chunk.DataLayer);
+    Code:
+         0: aload_0
+         1: getfield      #37                 // Field ingestQueue:Ljava/util/concurrent/ConcurrentLinkedDeque;
+         4: new           #7                  // class me/cortex/voxy/common/world/service/VoxelIngestService$IngestSection
+         7: dup
+         8: iload_3
+         9: iload         4
+        11: iload         5
+        13: aload_1
+        14: aload_2
+        15: aload         6
+        17: aload         7
+        19: invokespecial #297                // Method me/cortex/voxy/common/world/service/VoxelIngestService$IngestSection."<init>":(IIILme/cortex/voxy/common/world/WorldEngine;Lnet/minecraft/world/level/chunk/LevelChunkSection;Lnet/minecraft/world/level/chunk/DataLayer;Lnet/minecraft/world/level/chunk/DataLayer;)V
+        22: invokevirtual #301                // Method java/util/concurrent/ConcurrentLinkedDeque.add:(Ljava/lang/Object;)Z
+        25: pop
+        26: aload_0
+        27: getfield      #68                 // Field service:Lme/cortex/voxy/common/thread/Service;
+        30: invokevirtual #304                // Method me/cortex/voxy/common/thread/Service.execute:()V
+        33: iconst_1
+        34: ireturn
+        35: astore        8
+        37: iconst_2
+        38: anewarray     #4                  // class java/lang/Object
+        41: dup
+        42: iconst_0
+        43: ldc_w         #306                // String Executing had an error: assume shutting down, aborting
+        46: aastore
+        47: dup
+        48: iconst_1
+        49: aload         8
+        51: aastore
+        52: invokestatic  #312                // Method me/cortex/voxy/common/Logger.error:([Ljava/lang/Object;)V
+        55: iconst_0
+        56: ireturn
+      Exception table:
+         from    to  target type
+            26    34    35   Class java/lang/Exception
+
+  public static boolean rawIngest(me.cortex.voxy.commonImpl.WorldIdentifier, net.minecraft.world.level.chunk.LevelChunkSection, int, int, int, net.minecraft.world.level.chunk.DataLayer, net.minecraft.world.level.chunk.DataLayer);
+    Code:
+         0: aload_0
+         1: ifnonnull     6
+         4: iconst_0
+         5: ireturn
+         6: aload_0
+         7: invokevirtual #393                // Method me/cortex/voxy/commonImpl/WorldIdentifier.getOrCreateEngine:()Lme/cortex/voxy/common/world/WorldEngine;
+        10: astore        7
+        12: aload         7
+        14: ifnonnull     19
+        17: iconst_0
+        18: ireturn
+        19: aload         7
+        21: aload_1
+        22: iload_2
+        23: iload_3
+        24: iload         4
+        26: aload         5
+        28: aload         6
+        30: invokestatic  #395                // Method rawIngest:(Lme/cortex/voxy/common/world/WorldEngine;Lnet/minecraft/world/level/chunk/LevelChunkSection;IIILnet/minecraft/world/level/chunk/DataLayer;Lnet/minecraft/world/level/chunk/DataLayer;)Z
+        33: ireturn
+
+  public static boolean rawIngest(me.cortex.voxy.common.world.WorldEngine, net.minecraft.world.level.chunk.LevelChunkSection, int, int, int, net.minecraft.world.level.chunk.DataLayer, net.minecraft.world.level.chunk.DataLayer);
+    Code:
+         0: aload_1
+         1: iload_2
+         2: iload_3
+         3: iload         4
+         5: invokestatic  #271                // Method shouldIngestSection:(Lnet/minecraft/world/level/chunk/LevelChunkSection;III)Z
+         8: ifne          13
+        11: iconst_0
+        12: ireturn
+        13: aload_0
+        14: getfield      #398                // Field me/cortex/voxy/common/world/WorldEngine.instanceIn:Lme/cortex/voxy/commonImpl/VoxyInstance;
+        17: ifnonnull     22
+        20: iconst_0
+        21: ireturn
+        22: aload_0
+        23: getfield      #398                // Field me/cortex/voxy/common/world/WorldEngine.instanceIn:Lme/cortex/voxy/commonImpl/VoxyInstance;
+        26: aconst_null
+        27: invokevirtual #361                // Method me/cortex/voxy/commonImpl/VoxyInstance.isIngestEnabled:(Lme/cortex/voxy/commonImpl/WorldIdentifier;)Z
+        30: ifne          35
+        33: iconst_0
+        34: ireturn
+        35: aload_0
+        36: getfield      #398                // Field me/cortex/voxy/common/world/WorldEngine.instanceIn:Lme/cortex/voxy/commonImpl/VoxyInstance;
+        39: invokevirtual #369                // Method me/cortex/voxy/commonImpl/VoxyInstance.getIngestService:()Lme/cortex/voxy/common/world/service/VoxelIngestService;
+        42: aload_0
+        43: aload_1
+        44: iload_2
+        45: iload_3
+        46: iload         4
+        48: aload         5
+        50: aload         6
+        52: invokevirtual #400                // Method rawIngest0:(Lme/cortex/voxy/common/world/WorldEngine;Lnet/minecraft/world/level/chunk/LevelChunkSection;IIILnet/minecraft/world/level/chunk/DataLayer;Lnet/minecraft/world/level/chunk/DataLayer;)Z
+        55: ireturn
+
+  private static byte lambda$getLightingSupplier$3(net.minecraft.world.level.chunk.DataLayer, int, int, int);
+    Code:
+         0: iconst_0
+         1: istore        4
+         3: bipush        15
+         5: aload_0
+         6: iload_1
+         7: iload_2
+         8: iload_3
+         9: invokevirtual #403                // Method net/minecraft/world/level/chunk/DataLayer.get:(III)I
+        12: invokestatic  #409                // Method java/lang/Math.min:(II)I
+        15: istore        5
+        17: iload         5
+        19: iload         4
+        21: iconst_4
+        22: ishl
+        23: ior
+        24: i2b
+        25: ireturn
+
+  private static byte lambda$getLightingSupplier$2(net.minecraft.world.level.chunk.DataLayer, int, int, int);
+    Code:
+         0: bipush        15
+         2: aload_0
+         3: iload_1
+         4: iload_2
+         5: iload_3
+         6: invokevirtual #403                // Method net/minecraft/world/level/chunk/DataLayer.get:(III)I
+         9: invokestatic  #409                // Method java/lang/Math.min:(II)I
+        12: istore        4
+        14: iconst_0
+        15: istore        5
+        17: iload         5
+        19: iload         4
+        21: iconst_4
+        22: ishl
+        23: ior
+        24: i2b
+        25: ireturn
+
+  private static byte lambda$getLightingSupplier$1(net.minecraft.world.level.chunk.DataLayer, net.minecraft.world.level.chunk.DataLayer, int, int, int);
+    Code:
+         0: bipush        15
+         2: aload_0
+         3: iload_2
+         4: iload_3
+         5: iload         4
+         7: invokevirtual #403                // Method net/minecraft/world/level/chunk/DataLayer.get:(III)I
+        10: invokestatic  #409                // Method java/lang/Math.min:(II)I
+        13: istore        5
+        15: bipush        15
+        17: aload_1
+        18: iload_2
+        19: iload_3
+        20: iload         4
+        22: invokevirtual #403                // Method net/minecraft/world/level/chunk/DataLayer.get:(III)I
+        25: invokestatic  #409                // Method java/lang/Math.min:(II)I
+        28: istore        6
+        30: iload         6
+        32: iload         5
+        34: iconst_4
+        35: ishl
+        36: ior
+        37: i2b
+        38: ireturn
+
+  private static byte lambda$getLightingSupplier$0(int, int, int);
+    Code:
+         0: iconst_0
+         1: ireturn
+
+  private java.lang.Runnable lambda$new$0();
+    Code:
+         0: aload_0
+         1: invokedynamic #419,  0            // InvokeDynamic #5:run:(Lme/cortex/voxy/common/world/service/VoxelIngestService;)Ljava/lang/Runnable;
+         6: areturn
+
+  static {};
+    Code:
+         0: invokedynamic #428,  0            // InvokeDynamic #6:get:()Ljava/util/function/Supplier;
+         5: invokestatic  #432                // Method java/lang/ThreadLocal.withInitial:(Ljava/util/function/Supplier;)Ljava/lang/ThreadLocal;
+         8: putstatic     #90                 // Field SECTION_CACHE:Ljava/lang/ThreadLocal;
+        11: return
+}
+
+
+Compiled from "VoxyCommon.java"
+public class me.cortex.voxy.commonImpl.VoxyCommon implements net.fabricmc.api.ModInitializer {
+  public static final java.lang.String MOD_VERSION;
+
+  public static final boolean IS_DEDICATED_SERVER;
+
+  public static final boolean IS_IN_MINECRAFT;
+
+  private static me.cortex.voxy.commonImpl.VoxyInstance INSTANCE;
+
+  private static me.cortex.voxy.commonImpl.VoxyCommon$IInstanceFactory FACTORY;
+
+  public static final boolean IS_MINE_IN_ABYSS;
+
+  public me.cortex.voxy.commonImpl.VoxyCommon();
+    Code:
+         0: aload_0
+         1: invokespecial #30                 // Method java/lang/Object."<init>":()V
+         4: return
+
+  public static boolean isVerificationFlagOn(java.lang.String);
+    Code:
+         0: aload_0
+         1: iconst_0
+         2: invokestatic  #38                 // Method isVerificationFlagOn:(Ljava/lang/String;Z)Z
+         5: ireturn
+
+  public static boolean isVerificationFlagOn(java.lang.String, boolean);
+    Code:
+         0: aload_0
+         1: invokedynamic #51,  0             // InvokeDynamic #0:makeConcatWithConstants:(Ljava/lang/String;)Ljava/lang/String;
+         6: iload_1
+         7: ifeq          15
+        10: ldc           #53                 // String true
+        12: goto          17
+        15: ldc           #57                 // String false
+        17: invokestatic  #63                 // Method java/lang/System.getProperty:(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;
+        20: ldc           #53                 // String true
+        22: invokevirtual #67                 // Method java/lang/String.equals:(Ljava/lang/Object;)Z
+        25: ireturn
+
+  public static void breakpoint();
+    Code:
+         0: iconst_0
+         1: istore_0
+         2: return
+
+  public void onInitialize();
+    Code:
+         0: return
+
+  public static void setInstanceFactory(me.cortex.voxy.commonImpl.VoxyCommon$IInstanceFactory);
+    Code:
+         0: getstatic     #75                 // Field FACTORY:Lme/cortex/voxy/commonImpl/VoxyCommon$IInstanceFactory;
+         3: ifnull        16
+         6: new           #77                 // class java/lang/IllegalStateException
+         9: dup
+        10: ldc           #79                 // String Cannot set instance factory more than once
+        12: invokespecial #82                 // Method java/lang/IllegalStateException."<init>":(Ljava/lang/String;)V
+        15: athrow
+        16: aload_0
+        17: putstatic     #75                 // Field FACTORY:Lme/cortex/voxy/commonImpl/VoxyCommon$IInstanceFactory;
+        20: return
+
+  public static me.cortex.voxy.commonImpl.VoxyInstance getInstance();
+    Code:
+         0: getstatic     #86                 // Field INSTANCE:Lme/cortex/voxy/commonImpl/VoxyInstance;
+         3: areturn
+
+  public static void shutdownInstance();
+    Code:
+         0: getstatic     #86                 // Field INSTANCE:Lme/cortex/voxy/commonImpl/VoxyInstance;
+         3: ifnull        18
+         6: getstatic     #86                 // Field INSTANCE:Lme/cortex/voxy/commonImpl/VoxyInstance;
+         9: astore_0
+        10: aconst_null
+        11: putstatic     #86                 // Field INSTANCE:Lme/cortex/voxy/commonImpl/VoxyInstance;
+        14: aload_0
+        15: invokevirtual #92                 // Method me/cortex/voxy/commonImpl/VoxyInstance.shutdown:()V
+        18: return
+
+  public static void createInstance();
+    Code:
+         0: getstatic     #75                 // Field FACTORY:Lme/cortex/voxy/commonImpl/VoxyCommon$IInstanceFactory;
+         3: ifnonnull     7
+         6: return
+         7: getstatic     #86                 // Field INSTANCE:Lme/cortex/voxy/commonImpl/VoxyInstance;
+        10: ifnull        23
+        13: new           #77                 // class java/lang/IllegalStateException
+        16: dup
+        17: ldc           #96                 // String Cannot create multiple instances
+        19: invokespecial #82                 // Method java/lang/IllegalStateException."<init>":(Ljava/lang/String;)V
+        22: athrow
+        23: getstatic     #75                 // Field FACTORY:Lme/cortex/voxy/commonImpl/VoxyCommon$IInstanceFactory;
+        26: invokeinterface #99,  1           // InterfaceMethod me/cortex/voxy/commonImpl/VoxyCommon$IInstanceFactory.create:()Lme/cortex/voxy/commonImpl/VoxyInstance;
+        31: putstatic     #86                 // Field INSTANCE:Lme/cortex/voxy/commonImpl/VoxyInstance;
+        34: return
+
+  public static boolean isAvailable();
+    Code:
+         0: getstatic     #75                 // Field FACTORY:Lme/cortex/voxy/commonImpl/VoxyCommon$IInstanceFactory;
+         3: ifnull        10
+         6: iconst_1
+         7: goto          11
+        10: iconst_0
+        11: ireturn
+
+  static {};
+    Code:
+         0: invokestatic  #107                // InterfaceMethod net/fabricmc/loader/api/FabricLoader.getInstance:()Lnet/fabricmc/loader/api/FabricLoader;
+         3: ldc           #109                // String voxy
+         5: invokeinterface #113,  2          // InterfaceMethod net/fabricmc/loader/api/FabricLoader.getModContainer:(Ljava/lang/String;)Ljava/util/Optional;
+        10: aconst_null
+        11: invokevirtual #119                // Method java/util/Optional.orElse:(Ljava/lang/Object;)Ljava/lang/Object;
+        14: checkcast     #121                // class net/fabricmc/loader/api/ModContainer
+        17: astore_0
+        18: aload_0
+        19: ifnonnull     50
+        22: iconst_0
+        23: putstatic     #123                // Field IS_IN_MINECRAFT:Z
+        26: iconst_1
+        27: anewarray     #4                  // class java/lang/Object
+        30: dup
+        31: iconst_0
+        32: ldc           #125                // String Running voxy without minecraft
+        34: aastore
+        35: invokestatic  #131                // Method me/cortex/voxy/common/Logger.error:([Ljava/lang/Object;)V
+        38: ldc           #133                // String <UNKNOWN>
+        40: putstatic     #135                // Field MOD_VERSION:Ljava/lang/String;
+        43: iconst_0
+        44: putstatic     #137                // Field IS_DEDICATED_SERVER:Z
+        47: goto          131
+        50: iconst_1
+        51: putstatic     #123                // Field IS_IN_MINECRAFT:Z
+        54: aload_0
+        55: invokeinterface #141,  1          // InterfaceMethod net/fabricmc/loader/api/ModContainer.getMetadata:()Lnet/fabricmc/loader/api/metadata/ModMetadata;
+        60: invokeinterface #147,  1          // InterfaceMethod net/fabricmc/loader/api/metadata/ModMetadata.getVersion:()Lnet/fabricmc/loader/api/Version;
+        65: invokeinterface #153,  1          // InterfaceMethod net/fabricmc/loader/api/Version.getFriendlyString:()Ljava/lang/String;
+        70: astore_1
+        71: aload_0
+        72: invokeinterface #141,  1          // InterfaceMethod net/fabricmc/loader/api/ModContainer.getMetadata:()Lnet/fabricmc/loader/api/metadata/ModMetadata;
+        77: ldc           #155                // String commit
+        79: invokeinterface #159,  2          // InterfaceMethod net/fabricmc/loader/api/metadata/ModMetadata.getCustomValue:(Ljava/lang/String;)Lnet/fabricmc/loader/api/metadata/CustomValue;
+        84: invokeinterface #164,  1          // InterfaceMethod net/fabricmc/loader/api/metadata/CustomValue.getAsString:()Ljava/lang/String;
+        89: astore_2
+        90: aload_1
+        91: aload_2
+        92: iconst_0
+        93: bipush        7
+        95: invokevirtual #168                // Method java/lang/String.substring:(II)Ljava/lang/String;
+        98: invokedynamic #172,  0            // InvokeDynamic #1:makeConcatWithConstants:(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;
+       103: putstatic     #135                // Field MOD_VERSION:Ljava/lang/String;
+       106: invokestatic  #107                // InterfaceMethod net/fabricmc/loader/api/FabricLoader.getInstance:()Lnet/fabricmc/loader/api/FabricLoader;
+       109: invokeinterface #176,  1          // InterfaceMethod net/fabricmc/loader/api/FabricLoader.getEnvironmentType:()Lnet/fabricmc/api/EnvType;
+       114: getstatic     #182                // Field net/fabricmc/api/EnvType.SERVER:Lnet/fabricmc/api/EnvType;
+       117: if_acmpne     124
+       120: iconst_1
+       121: goto          125
+       124: iconst_0
+       125: putstatic     #137                // Field IS_DEDICATED_SERVER:Z
+       128: invokestatic  #187                // Method me/cortex/voxy/common/config/Serialization.init:()V
+       131: aconst_null
+       132: putstatic     #75                 // Field FACTORY:Lme/cortex/voxy/commonImpl/VoxyCommon$IInstanceFactory;
+       135: return
+}
+
+
+Compiled from "VoxyClientInstance.java"
+public class me.cortex.voxy.client.VoxyClientInstance extends me.cortex.voxy.commonImpl.VoxyInstance {
+  private final me.cortex.voxy.client.VoxyClientInstance$Config config;
+
+  private final java.nio.file.Path basePath;
+
+  private final boolean noIngestOverride;
+
+  private static final me.cortex.voxy.client.VoxyClientInstance$Config DEFAULT_STORAGE_CONFIG;
+
+  public me.cortex.voxy.client.VoxyClientInstance();
+    Code:
+         0: aload_0
+         1: invokespecial #28                 // Method me/cortex/voxy/commonImpl/VoxyInstance."<init>":()V
+         4: invokestatic  #34                 // Method me/cortex/voxy/client/compat/FlashbackCompat.getReplayStoragePath:()Ljava/nio/file/Path;
+         7: astore_1
+         8: aload_0
+         9: aload_1
+        10: ifnull        17
+        13: iconst_1
+        14: goto          18
+        17: iconst_0
+        18: putfield      #38                 // Field noIngestOverride:Z
+        21: aload_1
+        22: ifnonnull     29
+        25: invokestatic  #41                 // Method getBasePath:()Ljava/nio/file/Path;
+        28: astore_1
+        29: aload_0
+        30: aload_1
+        31: invokeinterface #44,  1           // InterfaceMethod java/nio/file/Path.normalize:()Ljava/nio/file/Path;
+        36: putfield      #46                 // Field basePath:Ljava/nio/file/Path;
+        39: aload_0
+        40: ldc           #7                  // class me/cortex/voxy/client/VoxyClientInstance$Config
+        42: invokedynamic #65,  0             // InvokeDynamic #0:test:()Ljava/util/function/Predicate;
+        47: invokedynamic #77,  0             // InvokeDynamic #1:get:()Ljava/util/function/Supplier;
+        52: aload_0
+        53: getfield      #46                 // Field basePath:Ljava/nio/file/Path;
+        56: invokestatic  #83                 // Method me/cortex/voxy/common/StorageConfigUtil.getCreateStorageConfig:(Ljava/lang/Class;Ljava/util/function/Predicate;Ljava/util/function/Supplier;Ljava/nio/file/Path;)Ljava/lang/Object;
+        59: checkcast     #7                  // class me/cortex/voxy/client/VoxyClientInstance$Config
+        62: putfield      #85                 // Field config:Lme/cortex/voxy/client/VoxyClientInstance$Config;
+        65: aload_0
+        66: invokevirtual #88                 // Method updateDedicatedThreads:()V
+        69: return
+
+  public void updateDedicatedThreads();
+    Code:
+         0: getstatic     #97                 // Field me/cortex/voxy/client/config/VoxyConfig.CONFIG:Lme/cortex/voxy/client/config/VoxyConfig;
+         3: getfield      #101                // Field me/cortex/voxy/client/config/VoxyConfig.serviceThreads:I
+         6: istore_1
+         7: getstatic     #97                 // Field me/cortex/voxy/client/config/VoxyConfig.CONFIG:Lme/cortex/voxy/client/config/VoxyConfig;
+        10: getfield      #104                // Field me/cortex/voxy/client/config/VoxyConfig.dontUseSodiumBuilderThreads:Z
+        13: ifne          56
+        16: invokestatic  #110                // Method net/caffeinemc/mods/sodium/client/render/SodiumWorldRenderer.instanceNullable:()Lnet/caffeinemc/mods/sodium/client/render/SodiumWorldRenderer;
+        19: astore_2
+        20: aload_2
+        21: ifnull        56
+        24: aload_2
+        25: checkcast     #112                // class me/cortex/voxy/client/mixin/sodium/AccessorSodiumWorldRenderer
+        28: invokeinterface #116,  1          // InterfaceMethod me/cortex/voxy/client/mixin/sodium/AccessorSodiumWorldRenderer.getRenderSectionManager:()Lnet/caffeinemc/mods/sodium/client/render/chunk/RenderSectionManager;
+        33: astore_3
+        34: aload_3
+        35: ifnull        56
+        38: aload_0
+        39: iconst_1
+        40: iload_1
+        41: aload_3
+        42: invokevirtual #122                // Method net/caffeinemc/mods/sodium/client/render/chunk/RenderSectionManager.getBuilder:()Lnet/caffeinemc/mods/sodium/client/render/chunk/compile/executor/ChunkBuilder;
+        45: invokevirtual #128                // Method net/caffeinemc/mods/sodium/client/render/chunk/compile/executor/ChunkBuilder.getTotalThreadCount:()I
+        48: isub
+        49: invokestatic  #134                // Method java/lang/Math.max:(II)I
+        52: invokevirtual #138                // Method setNumThreads:(I)V
+        55: return
+        56: aload_0
+        57: iload_1
+        58: invokevirtual #138                // Method setNumThreads:(I)V
+        61: return
+
+  protected me.cortex.voxy.commonImpl.ImportManager createImportManager();
+    Code:
+         0: new           #147                // class me/cortex/voxy/client/ClientImportManager
+         3: dup
+         4: invokespecial #148                // Method me/cortex/voxy/client/ClientImportManager."<init>":()V
+         7: areturn
+
+  protected me.cortex.voxy.common.config.section.SectionStorage createStorage(me.cortex.voxy.commonImpl.WorldIdentifier);
+    Code:
+         0: new           #153                // class me/cortex/voxy/common/config/ConfigBuildCtx
+         3: dup
+         4: invokespecial #154                // Method me/cortex/voxy/common/config/ConfigBuildCtx."<init>":()V
+         7: astore_2
+         8: aload_2
+         9: ldc           #156                // String {base_save_path}
+        11: aload_0
+        12: getfield      #46                 // Field basePath:Ljava/nio/file/Path;
+        15: invokeinterface #160,  1          // InterfaceMethod java/nio/file/Path.toString:()Ljava/lang/String;
+        20: invokevirtual #164                // Method me/cortex/voxy/common/config/ConfigBuildCtx.setProperty:(Ljava/lang/String;Ljava/lang/String;)Lme/cortex/voxy/common/config/ConfigBuildCtx;
+        23: pop
+        24: aload_2
+        25: ldc           #166                // String {world_identifier}
+        27: aload_1
+        28: invokevirtual #171                // Method me/cortex/voxy/commonImpl/WorldIdentifier.getWorldId:()Ljava/lang/String;
+        31: invokevirtual #164                // Method me/cortex/voxy/common/config/ConfigBuildCtx.setProperty:(Ljava/lang/String;Ljava/lang/String;)Lme/cortex/voxy/common/config/ConfigBuildCtx;
+        34: pop
+        35: aload_2
+        36: ldc           #173                // String {player_uuid}
+        38: invokestatic  #179                // Method net/minecraft/client/Minecraft.getInstance:()Lnet/minecraft/client/Minecraft;
+        41: invokevirtual #183                // Method net/minecraft/client/Minecraft.getUser:()Lnet/minecraft/client/User;
+        44: invokevirtual #189                // Method net/minecraft/client/User.getProfileId:()Ljava/util/UUID;
+        47: invokevirtual #192                // Method java/util/UUID.toString:()Ljava/lang/String;
+        50: bipush        58
+        52: bipush        45
+        54: invokevirtual #198                // Method java/lang/String.replace:(CC)Ljava/lang/String;
+        57: invokevirtual #164                // Method me/cortex/voxy/common/config/ConfigBuildCtx.setProperty:(Ljava/lang/String;Ljava/lang/String;)Lme/cortex/voxy/common/config/ConfigBuildCtx;
+        60: pop
+        61: aload_2
+        62: ldc           #200                // String {base_save_path}/{world_identifier}/storage/
+        64: invokevirtual #204                // Method me/cortex/voxy/common/config/ConfigBuildCtx.pushPath:(Ljava/lang/String;)Lme/cortex/voxy/common/config/ConfigBuildCtx;
+        67: pop
+        68: aload_0
+        69: getfield      #85                 // Field config:Lme/cortex/voxy/client/VoxyClientInstance$Config;
+        72: getfield      #208                // Field me/cortex/voxy/client/VoxyClientInstance$Config.sectionStorageConfig:Lme/cortex/voxy/common/config/section/SectionStorageConfig;
+        75: aload_2
+        76: invokevirtual #214                // Method me/cortex/voxy/common/config/section/SectionStorageConfig.build:(Lme/cortex/voxy/common/config/ConfigBuildCtx;)Lme/cortex/voxy/common/config/section/SectionStorage;
+        79: areturn
+
+  public java.nio.file.Path getStorageBasePath();
+    Code:
+         0: aload_0
+         1: getfield      #46                 // Field basePath:Ljava/nio/file/Path;
+         4: areturn
+
+  public boolean isIngestEnabled(me.cortex.voxy.commonImpl.WorldIdentifier);
+    Code:
+         0: aload_0
+         1: getfield      #38                 // Field noIngestOverride:Z
+         4: ifne          20
+         7: getstatic     #97                 // Field me/cortex/voxy/client/config/VoxyConfig.CONFIG:Lme/cortex/voxy/client/config/VoxyConfig;
+        10: getfield      #224                // Field me/cortex/voxy/client/config/VoxyConfig.ingestEnabled:Z
+        13: ifeq          20
+        16: iconst_1
+        17: goto          21
+        20: iconst_0
+        21: ireturn
+
+  public void shutdown();
+    Code:
+         0: aload_0
+         1: invokespecial #227                // Method me/cortex/voxy/commonImpl/VoxyInstance.shutdown:()V
+         4: invokestatic  #232                // Method me/cortex/voxy/client/core/RenderResourceReuse.clearResources:()V
+         7: return
+
+  private static java.nio.file.Path getBasePath();
+    Code:
+         0: invokestatic  #179                // Method net/minecraft/client/Minecraft.getInstance:()Lnet/minecraft/client/Minecraft;
+         3: getfield      #236                // Field net/minecraft/client/Minecraft.gameDirectory:Ljava/io/File;
+         6: invokevirtual #241                // Method java/io/File.toPath:()Ljava/nio/file/Path;
+         9: ldc           #243                // String .voxy
+        11: invokeinterface #247,  2          // InterfaceMethod java/nio/file/Path.resolve:(Ljava/lang/String;)Ljava/nio/file/Path;
+        16: ldc           #249                // String saves
+        18: invokeinterface #247,  2          // InterfaceMethod java/nio/file/Path.resolve:(Ljava/lang/String;)Ljava/nio/file/Path;
+        23: astore_0
+        24: invokestatic  #179                // Method net/minecraft/client/Minecraft.getInstance:()Lnet/minecraft/client/Minecraft;
+        27: invokevirtual #253                // Method net/minecraft/client/Minecraft.getSingleplayerServer:()Lnet/minecraft/client/server/IntegratedServer;
+        30: astore_1
+        31: aload_1
+        32: ifnull        54
+        35: aload_1
+        36: getstatic     #259                // Field net/minecraft/world/level/storage/LevelResource.ROOT:Lnet/minecraft/world/level/storage/LevelResource;
+        39: invokevirtual #265                // Method net/minecraft/client/server/IntegratedServer.getWorldPath:(Lnet/minecraft/world/level/storage/LevelResource;)Ljava/nio/file/Path;
+        42: ldc_w         #267                // String voxy
+        45: invokeinterface #247,  2          // InterfaceMethod java/nio/file/Path.resolve:(Ljava/lang/String;)Ljava/nio/file/Path;
+        50: astore_0
+        51: goto          169
+        54: invokestatic  #179                // Method net/minecraft/client/Minecraft.getInstance:()Lnet/minecraft/client/Minecraft;
+        57: getfield      #271                // Field net/minecraft/client/Minecraft.gameMode:Lnet/minecraft/client/multiplayer/MultiPlayerGameMode;
+        60: astore_2
+        61: aload_2
+        62: ifnonnull     91
+        65: iconst_1
+        66: anewarray     #273                // class java/lang/Object
+        69: dup
+        70: iconst_0
+        71: ldc_w         #275                // String Network handle null
+        74: aastore
+        75: invokestatic  #281                // Method me/cortex/voxy/common/Logger.error:([Ljava/lang/Object;)V
+        78: aload_0
+        79: ldc_w         #283                // String UNKNOWN
+        82: invokeinterface #247,  2          // InterfaceMethod java/nio/file/Path.resolve:(Ljava/lang/String;)Ljava/nio/file/Path;
+        87: astore_0
+        88: goto          169
+        91: aload_2
+        92: getfield      #289                // Field net/minecraft/client/multiplayer/MultiPlayerGameMode.connection:Lnet/minecraft/client/multiplayer/ClientPacketListener;
+        95: invokevirtual #295                // Method net/minecraft/client/multiplayer/ClientPacketListener.getServerData:()Lnet/minecraft/client/multiplayer/ServerData;
+        98: astore_3
+        99: aload_3
+       100: ifnonnull     129
+       103: iconst_1
+       104: anewarray     #273                // class java/lang/Object
+       107: dup
+       108: iconst_0
+       109: ldc_w         #297                // String Server info null
+       112: aastore
+       113: invokestatic  #281                // Method me/cortex/voxy/common/Logger.error:([Ljava/lang/Object;)V
+       116: aload_0
+       117: ldc_w         #283                // String UNKNOWN
+       120: invokeinterface #247,  2          // InterfaceMethod java/nio/file/Path.resolve:(Ljava/lang/String;)Ljava/nio/file/Path;
+       125: astore_0
+       126: goto          169
+       129: aload_3
+       130: invokevirtual #303                // Method net/minecraft/client/multiplayer/ServerData.isRealm:()Z
+       133: ifeq          149
+       136: aload_0
+       137: ldc_w         #305                // String realms
+       140: invokeinterface #247,  2          // InterfaceMethod java/nio/file/Path.resolve:(Ljava/lang/String;)Ljava/nio/file/Path;
+       145: astore_0
+       146: goto          169
+       149: aload_0
+       150: aload_3
+       151: getfield      #309                // Field net/minecraft/client/multiplayer/ServerData.ip:Ljava/lang/String;
+       154: ldc_w         #311                // String :
+       157: ldc_w         #313                // String _
+       160: invokevirtual #316                // Method java/lang/String.replace:(Ljava/lang/CharSequence;Ljava/lang/CharSequence;)Ljava/lang/String;
+       163: invokeinterface #247,  2          // InterfaceMethod java/nio/file/Path.resolve:(Ljava/lang/String;)Ljava/nio/file/Path;
+       168: astore_0
+       169: aload_0
+       170: invokeinterface #319,  1          // InterfaceMethod java/nio/file/Path.toAbsolutePath:()Ljava/nio/file/Path;
+       175: areturn
+
+  private static me.cortex.voxy.client.VoxyClientInstance$Config lambda$new$1();
+    Code:
+         0: getstatic     #326                // Field DEFAULT_STORAGE_CONFIG:Lme/cortex/voxy/client/VoxyClientInstance$Config;
+         3: areturn
+
+  private static boolean lambda$new$0(me.cortex.voxy.client.VoxyClientInstance$Config);
+    Code:
+         0: aload_0
+         1: getfield      #330                // Field me/cortex/voxy/client/VoxyClientInstance$Config.version:I
+         4: iconst_1
+         5: if_icmpne     19
+         8: aload_0
+         9: getfield      #208                // Field me/cortex/voxy/client/VoxyClientInstance$Config.sectionStorageConfig:Lme/cortex/voxy/common/config/section/SectionStorageConfig;
+        12: ifnull        19
+        15: iconst_1
+        16: goto          20
+        19: iconst_0
+        20: ireturn
+
+  static {};
+    Code:
+         0: new           #7                  // class me/cortex/voxy/client/VoxyClientInstance$Config
+         3: dup
+         4: invokespecial #332                // Method me/cortex/voxy/client/VoxyClientInstance$Config."<init>":()V
+         7: astore_0
+         8: aload_0
+         9: invokestatic  #336                // Method me/cortex/voxy/common/StorageConfigUtil.createDefaultSerializer:()Lme/cortex/voxy/common/config/section/SectionSerializationStorage$Config;
+        12: putfield      #208                // Field me/cortex/voxy/client/VoxyClientInstance$Config.sectionStorageConfig:Lme/cortex/voxy/common/config/section/SectionStorageConfig;
+        15: aload_0
+        16: putstatic     #326                // Field DEFAULT_STORAGE_CONFIG:Lme/cortex/voxy/client/VoxyClientInstance$Config;
+        19: return
+}
+
+
+Compiled from "IGetVoxyRenderSystem.java"
+public interface me.cortex.voxy.client.core.IGetVoxyRenderSystem {
+  public abstract me.cortex.voxy.client.core.VoxyRenderSystem voxy$getRenderSystem();
+
+  public abstract void voxy$shutdownRenderer();
+
+  public abstract void voxy$createRenderer();
+
+  public static me.cortex.voxy.client.core.VoxyRenderSystem getNullable();
+    Code:
+         0: invokestatic  #17                 // Method net/minecraft/client/Minecraft.getInstance:()Lnet/minecraft/client/Minecraft;
+         3: getfield      #21                 // Field net/minecraft/client/Minecraft.levelRenderer:Lnet/minecraft/client/renderer/LevelRenderer;
+         6: checkcast     #2                  // class me/cortex/voxy/client/core/IGetVoxyRenderSystem
+         9: astore_0
+        10: aload_0
+        11: ifnonnull     16
+        14: aconst_null
+        15: areturn
+        16: aload_0
+        17: invokeinterface #23,  1           // InterfaceMethod voxy$getRenderSystem:()Lme/cortex/voxy/client/core/VoxyRenderSystem;
+        22: areturn
+}
+
+
+
+Error: class not found: me.cortex.voxy.client.core.IVoxyRenderSystemHolder
+
+Compiled from "VoxyConfig.java"
+public class me.cortex.voxy.client.config.VoxyConfig {
+  private static final com.google.gson.Gson GSON;
+
+  public static me.cortex.voxy.client.config.VoxyConfig CONFIG;
+
+  public boolean enabled;
+
+  public boolean enableRendering;
+
+  public boolean ingestEnabled;
+
+  public float sectionRenderDistance;
+
+  public int serviceThreads;
+
+  public float subDivisionSize;
+
+  public int skyFogDistance;
+
+  public float fogIntensity;
+
+  public float fogDensity;
+
+  public boolean adaptCloudDistance;
+
+  public int cloudDistance;
+
+  public boolean dontUseSodiumBuilderThreads;
+
+  public java.lang.String ssaoMode;
+
+  public boolean useEnvironmentalFog;
+
+  public me.cortex.voxy.client.config.VoxyConfig();
+    Code:
+         0: aload_0
+         1: invokespecial #36                 // Method java/lang/Object."<init>":()V
+         4: aload_0
+         5: iconst_1
+         6: putfield      #38                 // Field enabled:Z
+         9: aload_0
+        10: iconst_1
+        11: putfield      #40                 // Field enableRendering:Z
+        14: aload_0
+        15: iconst_1
+        16: putfield      #42                 // Field ingestEnabled:Z
+        19: aload_0
+        20: ldc           #43                 // float 16.0f
+        22: putfield      #45                 // Field sectionRenderDistance:F
+        25: aload_0
+        26: invokestatic  #51                 // Method me/cortex/voxy/common/util/cpu/CpuLayout.getCoreCount:()I
+        29: i2d
+        30: ldc2_w        #52                 // double 1.5d
+        33: ddiv
+        34: dconst_1
+        35: invokestatic  #59                 // Method java/lang/Math.max:(DD)D
+        38: d2i
+        39: putfield      #61                 // Field serviceThreads:I
+        42: aload_0
+        43: ldc           #62                 // float 64.0f
+        45: putfield      #64                 // Field subDivisionSize:F
+        48: aload_0
+        49: bipush        96
+        51: putfield      #66                 // Field skyFogDistance:I
+        54: aload_0
+        55: fconst_1
+        56: putfield      #68                 // Field fogIntensity:F
+        59: aload_0
+        60: fconst_0
+        61: putfield      #70                 // Field fogDensity:F
+        64: aload_0
+        65: iconst_1
+        66: putfield      #72                 // Field adaptCloudDistance:Z
+        69: aload_0
+        70: iconst_0
+        71: putfield      #74                 // Field cloudDistance:I
+        74: aload_0
+        75: iconst_0
+        76: putfield      #76                 // Field dontUseSodiumBuilderThreads:Z
+        79: aload_0
+        80: iconst_1
+        81: putfield      #78                 // Field useEnvironmentalFog:Z
+        84: return
+
+  public me.cortex.voxy.client.core.SSAO$SSAOMode getSSAOMode();
+    Code:
+         0: aload_0
+         1: getfield      #85                 // Field ssaoMode:Ljava/lang/String;
+         4: ifnonnull     11
+         7: getstatic     #89                 // Field me/cortex/voxy/client/core/SSAO$SSAOMode.AUTO:Lme/cortex/voxy/client/core/SSAO$SSAOMode;
+        10: areturn
+        11: aload_0
+        12: getfield      #85                 // Field ssaoMode:Ljava/lang/String;
+        15: getstatic     #95                 // Field java/util/Locale.ROOT:Ljava/util/Locale;
+        18: invokevirtual #101                // Method java/lang/String.toUpperCase:(Ljava/util/Locale;)Ljava/lang/String;
+        21: invokestatic  #105                // Method me/cortex/voxy/client/core/SSAO$SSAOMode.valueOf:(Ljava/lang/String;)Lme/cortex/voxy/client/core/SSAO$SSAOMode;
+        24: areturn
+        25: astore_1
+        26: getstatic     #89                 // Field me/cortex/voxy/client/core/SSAO$SSAOMode.AUTO:Lme/cortex/voxy/client/core/SSAO$SSAOMode;
+        29: areturn
+      Exception table:
+         from    to  target type
+            11    24    25   Class java/lang/Exception
+
+  public void setSSAOMode(me.cortex.voxy.client.core.SSAO$SSAOMode);
+    Code:
+         0: aload_0
+         1: aload_1
+         2: invokevirtual #114                // Method me/cortex/voxy/client/core/SSAO$SSAOMode.name:()Ljava/lang/String;
+         5: getstatic     #95                 // Field java/util/Locale.ROOT:Ljava/util/Locale;
+         8: invokevirtual #117                // Method java/lang/String.toLowerCase:(Ljava/util/Locale;)Ljava/lang/String;
+        11: putfield      #85                 // Field ssaoMode:Ljava/lang/String;
+        14: return
+
+  private static me.cortex.voxy.client.config.VoxyConfig loadOrCreate();
+    Code:
+         0: invokestatic  #129                // Method me/cortex/voxy/commonImpl/VoxyCommon.isAvailable:()Z
+         3: ifeq          146
+         6: invokestatic  #133                // Method getConfigPath:()Ljava/nio/file/Path;
+         9: astore_0
+        10: aload_0
+        11: iconst_0
+        12: anewarray     #135                // class java/nio/file/LinkOption
+        15: invokestatic  #141                // Method java/nio/file/Files.exists:(Ljava/nio/file/Path;[Ljava/nio/file/LinkOption;)Z
+        18: ifeq          119
+        21: new           #143                // class java/io/FileReader
+        24: dup
+        25: aload_0
+        26: invokeinterface #149,  1          // InterfaceMethod java/nio/file/Path.toFile:()Ljava/io/File;
+        31: invokespecial #152                // Method java/io/FileReader."<init>":(Ljava/io/File;)V
+        34: astore_1
+        35: getstatic     #154                // Field GSON:Lcom/google/gson/Gson;
+        38: aload_1
+        39: ldc           #2                  // class me/cortex/voxy/client/config/VoxyConfig
+        41: invokevirtual #160                // Method com/google/gson/Gson.fromJson:(Ljava/io/Reader;Ljava/lang/Class;)Ljava/lang/Object;
+        44: checkcast     #2                  // class me/cortex/voxy/client/config/VoxyConfig
+        47: astore_2
+        48: aload_2
+        49: ifnull        64
+        52: aload_2
+        53: invokevirtual #163                // Method save:()V
+        56: aload_2
+        57: astore_3
+        58: aload_1
+        59: invokevirtual #166                // Method java/io/FileReader.close:()V
+        62: aload_3
+        63: areturn
+        64: iconst_1
+        65: anewarray     #4                  // class java/lang/Object
+        68: dup
+        69: iconst_0
+        70: ldc           #168                // String Failed to load voxy config, resetting
+        72: aastore
+        73: invokestatic  #174                // Method me/cortex/voxy/common/Logger.error:([Ljava/lang/Object;)V
+        76: aload_1
+        77: invokevirtual #166                // Method java/io/FileReader.close:()V
+        80: goto          99
+        83: astore_2
+        84: aload_1
+        85: invokevirtual #166                // Method java/io/FileReader.close:()V
+        88: goto          97
+        91: astore_3
+        92: aload_2
+        93: aload_3
+        94: invokevirtual #178                // Method java/lang/Throwable.addSuppressed:(Ljava/lang/Throwable;)V
+        97: aload_2
+        98: athrow
+        99: goto          119
+       102: astore_1
+       103: iconst_2
+       104: anewarray     #4                  // class java/lang/Object
+       107: dup
+       108: iconst_0
+       109: ldc           #180                // String Could not parse config
+       111: aastore
+       112: dup
+       113: iconst_1
+       114: aload_1
+       115: aastore
+       116: invokestatic  #174                // Method me/cortex/voxy/common/Logger.error:([Ljava/lang/Object;)V
+       119: iconst_1
+       120: anewarray     #4                  // class java/lang/Object
+       123: dup
+       124: iconst_0
+       125: ldc           #182                // String Config doesnt exist, creating new
+       127: aastore
+       128: invokestatic  #186                // Method me/cortex/voxy/common/Logger.info:([Ljava/lang/Object;)Ljava/lang/String;
+       131: pop
+       132: new           #2                  // class me/cortex/voxy/client/config/VoxyConfig
+       135: dup
+       136: invokespecial #187                // Method "<init>":()V
+       139: astore_1
+       140: aload_1
+       141: invokevirtual #163                // Method save:()V
+       144: aload_1
+       145: areturn
+       146: new           #2                  // class me/cortex/voxy/client/config/VoxyConfig
+       149: dup
+       150: invokespecial #187                // Method "<init>":()V
+       153: astore_0
+       154: aload_0
+       155: iconst_0
+       156: putfield      #38                 // Field enabled:Z
+       159: aload_0
+       160: iconst_0
+       161: putfield      #40                 // Field enableRendering:Z
+       164: aload_0
+       165: areturn
+      Exception table:
+         from    to  target type
+            35    58    83   Class java/lang/Throwable
+            64    76    83   Class java/lang/Throwable
+            84    88    91   Class java/lang/Throwable
+            21    62   102   Class java/io/IOException
+            64    99   102   Class java/io/IOException
+
+  public void save();
+    Code:
+         0: invokestatic  #129                // Method me/cortex/voxy/commonImpl/VoxyCommon.isAvailable:()Z
+         3: ifne          20
+         6: iconst_1
+         7: anewarray     #4                  // class java/lang/Object
+        10: dup
+        11: iconst_0
+        12: ldc           #196                // String Not saving config since voxy is unavalible
+        14: aastore
+        15: invokestatic  #186                // Method me/cortex/voxy/common/Logger.info:([Ljava/lang/Object;)Ljava/lang/String;
+        18: pop
+        19: return
+        20: invokestatic  #133                // Method getConfigPath:()Ljava/nio/file/Path;
+        23: getstatic     #154                // Field GSON:Lcom/google/gson/Gson;
+        26: aload_0
+        27: invokevirtual #200                // Method com/google/gson/Gson.toJson:(Ljava/lang/Object;)Ljava/lang/String;
+        30: iconst_0
+        31: anewarray     #202                // class java/nio/file/OpenOption
+        34: invokestatic  #206                // Method java/nio/file/Files.writeString:(Ljava/nio/file/Path;Ljava/lang/CharSequence;[Ljava/nio/file/OpenOption;)Ljava/nio/file/Path;
+        37: pop
+        38: goto          58
+        41: astore_1
+        42: iconst_2
+        43: anewarray     #4                  // class java/lang/Object
+        46: dup
+        47: iconst_0
+        48: ldc           #208                // String Failed to write config file
+        50: aastore
+        51: dup
+        52: iconst_1
+        53: aload_1
+        54: aastore
+        55: invokestatic  #174                // Method me/cortex/voxy/common/Logger.error:([Ljava/lang/Object;)V
+        58: return
+      Exception table:
+         from    to  target type
+            20    38    41   Class java/io/IOException
+
+  private static java.nio.file.Path getConfigPath();
+    Code:
+         0: invokestatic  #214                // InterfaceMethod net/fabricmc/loader/api/FabricLoader.getInstance:()Lnet/fabricmc/loader/api/FabricLoader;
+         3: invokeinterface #217,  1          // InterfaceMethod net/fabricmc/loader/api/FabricLoader.getConfigDir:()Ljava/nio/file/Path;
+         8: ldc           #219                // String voxy-config.json
+        10: invokeinterface #223,  2          // InterfaceMethod java/nio/file/Path.resolve:(Ljava/lang/String;)Ljava/nio/file/Path;
+        15: areturn
+
+  public boolean isRenderingEnabled();
+    Code:
+         0: invokestatic  #129                // Method me/cortex/voxy/commonImpl/VoxyCommon.isAvailable:()Z
+         3: ifeq          24
+         6: aload_0
+         7: getfield      #38                 // Field enabled:Z
+        10: ifeq          24
+        13: aload_0
+        14: getfield      #40                 // Field enableRendering:Z
+        17: ifeq          24
+        20: iconst_1
+        21: goto          25
+        24: iconst_0
+        25: ireturn
+
+  static {};
+    Code:
+         0: new           #227                // class com/google/gson/GsonBuilder
+         3: dup
+         4: invokespecial #228                // Method com/google/gson/GsonBuilder."<init>":()V
+         7: getstatic     #234                // Field com/google/gson/FieldNamingPolicy.LOWER_CASE_WITH_UNDERSCORES:Lcom/google/gson/FieldNamingPolicy;
+        10: invokevirtual #238                // Method com/google/gson/GsonBuilder.setFieldNamingPolicy:(Lcom/google/gson/FieldNamingPolicy;)Lcom/google/gson/GsonBuilder;
+        13: invokevirtual #242                // Method com/google/gson/GsonBuilder.setPrettyPrinting:()Lcom/google/gson/GsonBuilder;
+        16: iconst_1
+        17: newarray       int
+        19: dup
+        20: iconst_0
+        21: iconst_2
+        22: iastore
+        23: invokevirtual #246                // Method com/google/gson/GsonBuilder.excludeFieldsWithModifiers:([I)Lcom/google/gson/GsonBuilder;
+        26: invokevirtual #250                // Method com/google/gson/GsonBuilder.create:()Lcom/google/gson/Gson;
+        29: putstatic     #154                // Field GSON:Lcom/google/gson/Gson;
+        32: invokestatic  #252                // Method loadOrCreate:()Lme/cortex/voxy/client/config/VoxyConfig;
+        35: putstatic     #254                // Field CONFIG:Lme/cortex/voxy/client/config/VoxyConfig;
+        38: return
+}
+
+
+Compiled from "VoxyCommands.java"
+public class me.cortex.voxy.client.VoxyCommands {
+  public me.cortex.voxy.client.VoxyCommands();
+    Code:
+         0: aload_0
+         1: invokespecial #14                 // Method java/lang/Object."<init>":()V
+         4: return
+
+  public static com.mojang.brigadier.builder.LiteralArgumentBuilder<net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource> register();
+    Code:
+         0: ldc           #21                 // String import
+         2: invokestatic  #27                 // Method net/fabricmc/fabric/api/client/command/v2/ClientCommandManager.literal:(Ljava/lang/String;)Lcom/mojang/brigadier/builder/LiteralArgumentBuilder;
+         5: ldc           #29                 // String world
+         7: invokestatic  #27                 // Method net/fabricmc/fabric/api/client/command/v2/ClientCommandManager.literal:(Ljava/lang/String;)Lcom/mojang/brigadier/builder/LiteralArgumentBuilder;
+        10: ldc           #31                 // String world_name
+        12: invokestatic  #37                 // Method com/mojang/brigadier/arguments/StringArgumentType.string:()Lcom/mojang/brigadier/arguments/StringArgumentType;
+        15: invokestatic  #41                 // Method net/fabricmc/fabric/api/client/command/v2/ClientCommandManager.argument:(Ljava/lang/String;Lcom/mojang/brigadier/arguments/ArgumentType;)Lcom/mojang/brigadier/builder/RequiredArgumentBuilder;
+        18: invokedynamic #58,  0             // InvokeDynamic #0:getSuggestions:()Lcom/mojang/brigadier/suggestion/SuggestionProvider;
+        23: invokevirtual #64                 // Method com/mojang/brigadier/builder/RequiredArgumentBuilder.suggests:(Lcom/mojang/brigadier/suggestion/SuggestionProvider;)Lcom/mojang/brigadier/builder/RequiredArgumentBuilder;
+        26: invokedynamic #74,  0             // InvokeDynamic #1:run:()Lcom/mojang/brigadier/Command;
+        31: invokevirtual #78                 // Method com/mojang/brigadier/builder/RequiredArgumentBuilder.executes:(Lcom/mojang/brigadier/Command;)Lcom/mojang/brigadier/builder/ArgumentBuilder;
+        34: invokevirtual #84                 // Method com/mojang/brigadier/builder/LiteralArgumentBuilder.then:(Lcom/mojang/brigadier/builder/ArgumentBuilder;)Lcom/mojang/brigadier/builder/ArgumentBuilder;
+        37: invokevirtual #84                 // Method com/mojang/brigadier/builder/LiteralArgumentBuilder.then:(Lcom/mojang/brigadier/builder/ArgumentBuilder;)Lcom/mojang/brigadier/builder/ArgumentBuilder;
+        40: checkcast     #80                 // class com/mojang/brigadier/builder/LiteralArgumentBuilder
+        43: ldc           #86                 // String bobby
+        45: invokestatic  #27                 // Method net/fabricmc/fabric/api/client/command/v2/ClientCommandManager.literal:(Ljava/lang/String;)Lcom/mojang/brigadier/builder/LiteralArgumentBuilder;
+        48: ldc           #31                 // String world_name
+        50: invokestatic  #37                 // Method com/mojang/brigadier/arguments/StringArgumentType.string:()Lcom/mojang/brigadier/arguments/StringArgumentType;
+        53: invokestatic  #41                 // Method net/fabricmc/fabric/api/client/command/v2/ClientCommandManager.argument:(Ljava/lang/String;Lcom/mojang/brigadier/arguments/ArgumentType;)Lcom/mojang/brigadier/builder/RequiredArgumentBuilder;
+        56: invokedynamic #91,  0             // InvokeDynamic #2:getSuggestions:()Lcom/mojang/brigadier/suggestion/SuggestionProvider;
+        61: invokevirtual #64                 // Method com/mojang/brigadier/builder/RequiredArgumentBuilder.suggests:(Lcom/mojang/brigadier/suggestion/SuggestionProvider;)Lcom/mojang/brigadier/builder/RequiredArgumentBuilder;
+        64: invokedynamic #96,  0             // InvokeDynamic #3:run:()Lcom/mojang/brigadier/Command;
+        69: invokevirtual #78                 // Method com/mojang/brigadier/builder/RequiredArgumentBuilder.executes:(Lcom/mojang/brigadier/Command;)Lcom/mojang/brigadier/builder/ArgumentBuilder;
+        72: invokevirtual #84                 // Method com/mojang/brigadier/builder/LiteralArgumentBuilder.then:(Lcom/mojang/brigadier/builder/ArgumentBuilder;)Lcom/mojang/brigadier/builder/ArgumentBuilder;
+        75: invokevirtual #84                 // Method com/mojang/brigadier/builder/LiteralArgumentBuilder.then:(Lcom/mojang/brigadier/builder/ArgumentBuilder;)Lcom/mojang/brigadier/builder/ArgumentBuilder;
+        78: checkcast     #80                 // class com/mojang/brigadier/builder/LiteralArgumentBuilder
+        81: ldc           #98                 // String raw
+        83: invokestatic  #27                 // Method net/fabricmc/fabric/api/client/command/v2/ClientCommandManager.literal:(Ljava/lang/String;)Lcom/mojang/brigadier/builder/LiteralArgumentBuilder;
+        86: ldc           #100                // String path
+        88: invokestatic  #37                 // Method com/mojang/brigadier/arguments/StringArgumentType.string:()Lcom/mojang/brigadier/arguments/StringArgumentType;
+        91: invokestatic  #41                 // Method net/fabricmc/fabric/api/client/command/v2/ClientCommandManager.argument:(Ljava/lang/String;Lcom/mojang/brigadier/arguments/ArgumentType;)Lcom/mojang/brigadier/builder/RequiredArgumentBuilder;
+        94: invokedynamic #105,  0            // InvokeDynamic #4:run:()Lcom/mojang/brigadier/Command;
+        99: invokevirtual #78                 // Method com/mojang/brigadier/builder/RequiredArgumentBuilder.executes:(Lcom/mojang/brigadier/Command;)Lcom/mojang/brigadier/builder/ArgumentBuilder;
+       102: invokevirtual #84                 // Method com/mojang/brigadier/builder/LiteralArgumentBuilder.then:(Lcom/mojang/brigadier/builder/ArgumentBuilder;)Lcom/mojang/brigadier/builder/ArgumentBuilder;
+       105: invokevirtual #84                 // Method com/mojang/brigadier/builder/LiteralArgumentBuilder.then:(Lcom/mojang/brigadier/builder/ArgumentBuilder;)Lcom/mojang/brigadier/builder/ArgumentBuilder;
+       108: checkcast     #80                 // class com/mojang/brigadier/builder/LiteralArgumentBuilder
+       111: ldc           #107                // String zip
+       113: invokestatic  #27                 // Method net/fabricmc/fabric/api/client/command/v2/ClientCommandManager.literal:(Ljava/lang/String;)Lcom/mojang/brigadier/builder/LiteralArgumentBuilder;
+       116: ldc           #109                // String zipPath
+       118: invokestatic  #37                 // Method com/mojang/brigadier/arguments/StringArgumentType.string:()Lcom/mojang/brigadier/arguments/StringArgumentType;
+       121: invokestatic  #41                 // Method net/fabricmc/fabric/api/client/command/v2/ClientCommandManager.argument:(Ljava/lang/String;Lcom/mojang/brigadier/arguments/ArgumentType;)Lcom/mojang/brigadier/builder/RequiredArgumentBuilder;
+       124: invokedynamic #114,  0            // InvokeDynamic #5:run:()Lcom/mojang/brigadier/Command;
+       129: invokevirtual #78                 // Method com/mojang/brigadier/builder/RequiredArgumentBuilder.executes:(Lcom/mojang/brigadier/Command;)Lcom/mojang/brigadier/builder/ArgumentBuilder;
+       132: checkcast     #60                 // class com/mojang/brigadier/builder/RequiredArgumentBuilder
+       135: ldc           #116                // String innerPath
+       137: invokestatic  #37                 // Method com/mojang/brigadier/arguments/StringArgumentType.string:()Lcom/mojang/brigadier/arguments/StringArgumentType;
+       140: invokestatic  #41                 // Method net/fabricmc/fabric/api/client/command/v2/ClientCommandManager.argument:(Ljava/lang/String;Lcom/mojang/brigadier/arguments/ArgumentType;)Lcom/mojang/brigadier/builder/RequiredArgumentBuilder;
+       143: invokedynamic #114,  0            // InvokeDynamic #5:run:()Lcom/mojang/brigadier/Command;
+       148: invokevirtual #78                 // Method com/mojang/brigadier/builder/RequiredArgumentBuilder.executes:(Lcom/mojang/brigadier/Command;)Lcom/mojang/brigadier/builder/ArgumentBuilder;
+       151: invokevirtual #117                // Method com/mojang/brigadier/builder/RequiredArgumentBuilder.then:(Lcom/mojang/brigadier/builder/ArgumentBuilder;)Lcom/mojang/brigadier/builder/ArgumentBuilder;
+       154: invokevirtual #84                 // Method com/mojang/brigadier/builder/LiteralArgumentBuilder.then:(Lcom/mojang/brigadier/builder/ArgumentBuilder;)Lcom/mojang/brigadier/builder/ArgumentBuilder;
+       157: invokevirtual #84                 // Method com/mojang/brigadier/builder/LiteralArgumentBuilder.then:(Lcom/mojang/brigadier/builder/ArgumentBuilder;)Lcom/mojang/brigadier/builder/ArgumentBuilder;
+       160: checkcast     #80                 // class com/mojang/brigadier/builder/LiteralArgumentBuilder
+       163: ldc           #119                // String current
+       165: invokestatic  #27                 // Method net/fabricmc/fabric/api/client/command/v2/ClientCommandManager.literal:(Ljava/lang/String;)Lcom/mojang/brigadier/builder/LiteralArgumentBuilder;
+       168: invokedynamic #124,  0            // InvokeDynamic #6:run:()Lcom/mojang/brigadier/Command;
+       173: invokevirtual #125                // Method com/mojang/brigadier/builder/LiteralArgumentBuilder.executes:(Lcom/mojang/brigadier/Command;)Lcom/mojang/brigadier/builder/ArgumentBuilder;
+       176: invokevirtual #84                 // Method com/mojang/brigadier/builder/LiteralArgumentBuilder.then:(Lcom/mojang/brigadier/builder/ArgumentBuilder;)Lcom/mojang/brigadier/builder/ArgumentBuilder;
+       179: checkcast     #80                 // class com/mojang/brigadier/builder/LiteralArgumentBuilder
+       182: ldc           #127                // String cancel
+       184: invokestatic  #27                 // Method net/fabricmc/fabric/api/client/command/v2/ClientCommandManager.literal:(Ljava/lang/String;)Lcom/mojang/brigadier/builder/LiteralArgumentBuilder;
+       187: invokedynamic #132,  0            // InvokeDynamic #7:run:()Lcom/mojang/brigadier/Command;
+       192: invokevirtual #125                // Method com/mojang/brigadier/builder/LiteralArgumentBuilder.executes:(Lcom/mojang/brigadier/Command;)Lcom/mojang/brigadier/builder/ArgumentBuilder;
+       195: invokevirtual #84                 // Method com/mojang/brigadier/builder/LiteralArgumentBuilder.then:(Lcom/mojang/brigadier/builder/ArgumentBuilder;)Lcom/mojang/brigadier/builder/ArgumentBuilder;
+       198: checkcast     #80                 // class com/mojang/brigadier/builder/LiteralArgumentBuilder
+       201: astore_0
+       202: getstatic     #138                // Field me/cortex/voxy/commonImpl/importers/DHImporter.HasRequiredLibraries:Z
+       205: ifeq          240
+       208: aload_0
+       209: ldc           #140                // String distant_horizons
+       211: invokestatic  #27                 // Method net/fabricmc/fabric/api/client/command/v2/ClientCommandManager.literal:(Ljava/lang/String;)Lcom/mojang/brigadier/builder/LiteralArgumentBuilder;
+       214: ldc           #142                // String sqlDbPath
+       216: invokestatic  #37                 // Method com/mojang/brigadier/arguments/StringArgumentType.string:()Lcom/mojang/brigadier/arguments/StringArgumentType;
+       219: invokestatic  #41                 // Method net/fabricmc/fabric/api/client/command/v2/ClientCommandManager.argument:(Ljava/lang/String;Lcom/mojang/brigadier/arguments/ArgumentType;)Lcom/mojang/brigadier/builder/RequiredArgumentBuilder;
+       222: invokedynamic #147,  0            // InvokeDynamic #8:run:()Lcom/mojang/brigadier/Command;
+       227: invokevirtual #78                 // Method com/mojang/brigadier/builder/RequiredArgumentBuilder.executes:(Lcom/mojang/brigadier/Command;)Lcom/mojang/brigadier/builder/ArgumentBuilder;
+       230: invokevirtual #84                 // Method com/mojang/brigadier/builder/LiteralArgumentBuilder.then:(Lcom/mojang/brigadier/builder/ArgumentBuilder;)Lcom/mojang/brigadier/builder/ArgumentBuilder;
+       233: invokevirtual #84                 // Method com/mojang/brigadier/builder/LiteralArgumentBuilder.then:(Lcom/mojang/brigadier/builder/ArgumentBuilder;)Lcom/mojang/brigadier/builder/ArgumentBuilder;
+       236: checkcast     #80                 // class com/mojang/brigadier/builder/LiteralArgumentBuilder
+       239: astore_0
+       240: ldc           #149                // String debug
+       242: invokestatic  #27                 // Method net/fabricmc/fabric/api/client/command/v2/ClientCommandManager.literal:(Ljava/lang/String;)Lcom/mojang/brigadier/builder/LiteralArgumentBuilder;
+       245: ldc           #151                // String verifyTLNChildMask
+       247: invokestatic  #27                 // Method net/fabricmc/fabric/api/client/command/v2/ClientCommandManager.literal:(Ljava/lang/String;)Lcom/mojang/brigadier/builder/LiteralArgumentBuilder;
+       250: invokedynamic #156,  0            // InvokeDynamic #9:run:()Lcom/mojang/brigadier/Command;
+       255: invokevirtual #125                // Method com/mojang/brigadier/builder/LiteralArgumentBuilder.executes:(Lcom/mojang/brigadier/Command;)Lcom/mojang/brigadier/builder/ArgumentBuilder;
+       258: checkcast     #80                 // class com/mojang/brigadier/builder/LiteralArgumentBuilder
+       261: ldc           #158                // String attemptRepair
+       263: invokestatic  #164                // Method com/mojang/brigadier/arguments/BoolArgumentType.bool:()Lcom/mojang/brigadier/arguments/BoolArgumentType;
+       266: invokestatic  #41                 // Method net/fabricmc/fabric/api/client/command/v2/ClientCommandManager.argument:(Ljava/lang/String;Lcom/mojang/brigadier/arguments/ArgumentType;)Lcom/mojang/brigadier/builder/RequiredArgumentBuilder;
+       269: invokedynamic #169,  0            // InvokeDynamic #10:run:()Lcom/mojang/brigadier/Command;
+       274: invokevirtual #78                 // Method com/mojang/brigadier/builder/RequiredArgumentBuilder.executes:(Lcom/mojang/brigadier/Command;)Lcom/mojang/brigadier/builder/ArgumentBuilder;
+       277: invokevirtual #84                 // Method com/mojang/brigadier/builder/LiteralArgumentBuilder.then:(Lcom/mojang/brigadier/builder/ArgumentBuilder;)Lcom/mojang/brigadier/builder/ArgumentBuilder;
+       280: invokevirtual #84                 // Method com/mojang/brigadier/builder/LiteralArgumentBuilder.then:(Lcom/mojang/brigadier/builder/ArgumentBuilder;)Lcom/mojang/brigadier/builder/ArgumentBuilder;
+       283: checkcast     #80                 // class com/mojang/brigadier/builder/LiteralArgumentBuilder
+       286: astore_1
+       287: ldc           #171                // String voxy
+       289: invokestatic  #27                 // Method net/fabricmc/fabric/api/client/command/v2/ClientCommandManager.literal:(Ljava/lang/String;)Lcom/mojang/brigadier/builder/LiteralArgumentBuilder;
+       292: ldc           #173                // String reload
+       294: invokestatic  #27                 // Method net/fabricmc/fabric/api/client/command/v2/ClientCommandManager.literal:(Ljava/lang/String;)Lcom/mojang/brigadier/builder/LiteralArgumentBuilder;
+       297: invokedynamic #178,  0            // InvokeDynamic #11:run:()Lcom/mojang/brigadier/Command;
+       302: invokevirtual #125                // Method com/mojang/brigadier/builder/LiteralArgumentBuilder.executes:(Lcom/mojang/brigadier/Command;)Lcom/mojang/brigadier/builder/ArgumentBuilder;
+       305: invokevirtual #84                 // Method com/mojang/brigadier/builder/LiteralArgumentBuilder.then:(Lcom/mojang/brigadier/builder/ArgumentBuilder;)Lcom/mojang/brigadier/builder/ArgumentBuilder;
+       308: checkcast     #80                 // class com/mojang/brigadier/builder/LiteralArgumentBuilder
+       311: aload_0
+       312: invokevirtual #84                 // Method com/mojang/brigadier/builder/LiteralArgumentBuilder.then:(Lcom/mojang/brigadier/builder/ArgumentBuilder;)Lcom/mojang/brigadier/builder/ArgumentBuilder;
+       315: checkcast     #80                 // class com/mojang/brigadier/builder/LiteralArgumentBuilder
+       318: aload_1
+       319: invokevirtual #84                 // Method com/mojang/brigadier/builder/LiteralArgumentBuilder.then:(Lcom/mojang/brigadier/builder/ArgumentBuilder;)Lcom/mojang/brigadier/builder/ArgumentBuilder;
+       322: checkcast     #80                 // class com/mojang/brigadier/builder/LiteralArgumentBuilder
+       325: areturn
+
+  private static int reloadInstance(com.mojang.brigadier.context.CommandContext<net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource>);
+    Code:
+         0: invokestatic  #189                // Method me/cortex/voxy/commonImpl/VoxyCommon.getInstance:()Lme/cortex/voxy/commonImpl/VoxyInstance;
+         3: checkcast     #191                // class me/cortex/voxy/client/VoxyClientInstance
+         6: astore_1
+         7: aload_1
+         8: ifnonnull     30
+        11: aload_0
+        12: invokevirtual #197                // Method com/mojang/brigadier/context/CommandContext.getSource:()Ljava/lang/Object;
+        15: checkcast     #199                // class net/fabricmc/fabric/api/client/command/v2/FabricClientCommandSource
+        18: ldc           #201                // String Voxy must be enabled in settings to use this
+        20: invokestatic  #207                // InterfaceMethod net/minecraft/network/chat/Component.translatable:(Ljava/lang/String;)Lnet/minecraft/network/chat/MutableComponent;
+        23: invokeinterface #211,  2          // InterfaceMethod net/fabricmc/fabric/api/client/command/v2/FabricClientCommandSource.sendError:(Lnet/minecraft/network/chat/Component;)V
+        28: iconst_1
+        29: ireturn
+        30: invokestatic  #216                // Method net/minecraft/client/Minecraft.getInstance:()Lnet/minecraft/client/Minecraft;
+        33: getfield      #220                // Field net/minecraft/client/Minecraft.levelRenderer:Lnet/minecraft/client/renderer/LevelRenderer;
+        36: astore_2
+        37: aload_2
+        38: ifnull        50
+        41: aload_2
+        42: checkcast     #222                // class me/cortex/voxy/client/core/IGetVoxyRenderSystem
+        45: invokeinterface #225,  1          // InterfaceMethod me/cortex/voxy/client/core/IGetVoxyRenderSystem.voxy$shutdownRenderer:()V
+        50: invokestatic  #230                // Method me/cortex/voxy/commonImpl/VoxyCommon.shutdownInstance:()V
+        53: invokestatic  #235                // Method java/lang/System.gc:()V
+        56: invokestatic  #238                // Method me/cortex/voxy/commonImpl/VoxyCommon.createInstance:()V
+        59: invokestatic  #216                // Method net/minecraft/client/Minecraft.getInstance:()Lnet/minecraft/client/Minecraft;
+        62: getfield      #220                // Field net/minecraft/client/Minecraft.levelRenderer:Lnet/minecraft/client/renderer/LevelRenderer;
+        65: astore_3
+        66: aload_3
+        67: ifnull        74
+        70: aload_3
+        71: invokevirtual #241                // Method net/minecraft/client/renderer/LevelRenderer.allChanged:()V
+        74: iconst_0
+        75: ireturn
+
+  private static int verifyTLNs(com.mojang.brigadier.context.CommandContext<net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource>, boolean);
+    Code:
+         0: invokestatic  #189                // Method me/cortex/voxy/commonImpl/VoxyCommon.getInstance:()Lme/cortex/voxy/commonImpl/VoxyInstance;
+         3: astore_2
+         4: aload_2
+         5: ifnonnull     27
+         8: aload_0
+         9: invokevirtual #197                // Method com/mojang/brigadier/context/CommandContext.getSource:()Ljava/lang/Object;
+        12: checkcast     #199                // class net/fabricmc/fabric/api/client/command/v2/FabricClientCommandSource
+        15: ldc           #201                // String Voxy must be enabled in settings to use this
+        17: invokestatic  #207                // InterfaceMethod net/minecraft/network/chat/Component.translatable:(Ljava/lang/String;)Lnet/minecraft/network/chat/MutableComponent;
+        20: invokeinterface #211,  2          // InterfaceMethod net/fabricmc/fabric/api/client/command/v2/FabricClientCommandSource.sendError:(Lnet/minecraft/network/chat/Component;)V
+        25: iconst_1
+        26: ireturn
+        27: invokestatic  #216                // Method net/minecraft/client/Minecraft.getInstance:()Lnet/minecraft/client/Minecraft;
+        30: getfield      #256                // Field net/minecraft/client/Minecraft.level:Lnet/minecraft/client/multiplayer/ClientLevel;
+        33: ifnonnull     47
+        36: new           #258                // class java/lang/IllegalStateException
+        39: dup
+        40: ldc_w         #260                // String How you even do this
+        43: invokespecial #263                // Method java/lang/IllegalStateException."<init>":(Ljava/lang/String;)V
+        46: athrow
+        47: invokestatic  #216                // Method net/minecraft/client/Minecraft.getInstance:()Lnet/minecraft/client/Minecraft;
+        50: getfield      #256                // Field net/minecraft/client/Minecraft.level:Lnet/minecraft/client/multiplayer/ClientLevel;
+        53: invokestatic  #269                // Method me/cortex/voxy/commonImpl/WorldIdentifier.ofEngine:(Lnet/minecraft/world/level/Level;)Lme/cortex/voxy/common/world/WorldEngine;
+        56: iload_1
+        57: invokestatic  #275                // Method me/cortex/voxy/common/DebugUtils.verifyAllTopLevelNodes:(Lme/cortex/voxy/common/world/WorldEngine;Z)V
+        60: iconst_0
+        61: ireturn
+
+  private static int importDistantHorizons(com.mojang.brigadier.context.CommandContext<net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource>);
+    Code:
+         0: invokestatic  #189                // Method me/cortex/voxy/commonImpl/VoxyCommon.getInstance:()Lme/cortex/voxy/commonImpl/VoxyInstance;
+         3: checkcast     #191                // class me/cortex/voxy/client/VoxyClientInstance
+         6: astore_1
+         7: aload_1
+         8: ifnonnull     30
+        11: aload_0
+        12: invokevirtual #197                // Method com/mojang/brigadier/context/CommandContext.getSource:()Ljava/lang/Object;
+        15: checkcast     #199                // class net/fabricmc/fabric/api/client/command/v2/FabricClientCommandSource
+        18: ldc           #201                // String Voxy must be enabled in settings to use this
+        20: invokestatic  #207                // InterfaceMethod net/minecraft/network/chat/Component.translatable:(Ljava/lang/String;)Lnet/minecraft/network/chat/MutableComponent;
+        23: invokeinterface #211,  2          // InterfaceMethod net/fabricmc/fabric/api/client/command/v2/FabricClientCommandSource.sendError:(Lnet/minecraft/network/chat/Component;)V
+        28: iconst_1
+        29: ireturn
+        30: new           #278                // class java/io/File
+        33: dup
+        34: aload_0
+        35: ldc           #142                // String sqlDbPath
+        37: ldc_w         #280                // class java/lang/String
+        40: invokevirtual #284                // Method com/mojang/brigadier/context/CommandContext.getArgument:(Ljava/lang/String;Ljava/lang/Class;)Ljava/lang/Object;
+        43: checkcast     #280                // class java/lang/String
+        46: invokespecial #285                // Method java/io/File."<init>":(Ljava/lang/String;)V
+        49: astore_2
+        50: aload_2
+        51: invokevirtual #289                // Method java/io/File.exists:()Z
+        54: ifne          59
+        57: iconst_1
+        58: ireturn
+        59: aload_2
+        60: invokevirtual #292                // Method java/io/File.isDirectory:()Z
+        63: ifeq          93
+        66: aload_2
+        67: invokevirtual #296                // Method java/io/File.toPath:()Ljava/nio/file/Path;
+        70: ldc_w         #298                // String DistantHorizons.sqlite
+        73: invokeinterface #304,  2          // InterfaceMethod java/nio/file/Path.resolve:(Ljava/lang/String;)Ljava/nio/file/Path;
+        78: invokeinterface #308,  1          // InterfaceMethod java/nio/file/Path.toFile:()Ljava/io/File;
+        83: astore_2
+        84: aload_2
+        85: invokevirtual #289                // Method java/io/File.exists:()Z
+        88: ifne          93
+        91: iconst_1
+        92: ireturn
+        93: aload_2
+        94: astore_3
+        95: invokestatic  #216                // Method net/minecraft/client/Minecraft.getInstance:()Lnet/minecraft/client/Minecraft;
+        98: getfield      #256                // Field net/minecraft/client/Minecraft.level:Lnet/minecraft/client/multiplayer/ClientLevel;
+       101: invokestatic  #269                // Method me/cortex/voxy/commonImpl/WorldIdentifier.ofEngine:(Lnet/minecraft/world/level/Level;)Lme/cortex/voxy/common/world/WorldEngine;
+       104: astore        4
+       106: aload         4
+       108: ifnonnull     113
+       111: iconst_1
+       112: ireturn
+       113: aload_1
+       114: invokevirtual #314                // Method me/cortex/voxy/client/VoxyClientInstance.getImportManager:()Lme/cortex/voxy/commonImpl/ImportManager;
+       117: aload         4
+       119: aload_3
+       120: aload         4
+       122: aload_1
+       123: invokedynamic #326,  0            // InvokeDynamic #12:get:(Ljava/io/File;Lme/cortex/voxy/common/world/WorldEngine;Lme/cortex/voxy/client/VoxyClientInstance;)Ljava/util/function/Supplier;
+       128: invokevirtual #332                // Method me/cortex/voxy/commonImpl/ImportManager.makeAndRunIfNone:(Lme/cortex/voxy/common/world/WorldEngine;Ljava/util/function/Supplier;)Z
+       131: ifeq          138
+       134: iconst_0
+       135: goto          139
+       138: iconst_1
+       139: ireturn
+
+  private static boolean fileBasedImporter(java.io.File);
+    Code:
+         0: invokestatic  #189                // Method me/cortex/voxy/commonImpl/VoxyCommon.getInstance:()Lme/cortex/voxy/commonImpl/VoxyInstance;
+         3: checkcast     #191                // class me/cortex/voxy/client/VoxyClientInstance
+         6: astore_1
+         7: aload_1
+         8: ifnonnull     13
+        11: iconst_0
+        12: ireturn
+        13: invokestatic  #216                // Method net/minecraft/client/Minecraft.getInstance:()Lnet/minecraft/client/Minecraft;
+        16: getfield      #256                // Field net/minecraft/client/Minecraft.level:Lnet/minecraft/client/multiplayer/ClientLevel;
+        19: invokestatic  #269                // Method me/cortex/voxy/commonImpl/WorldIdentifier.ofEngine:(Lnet/minecraft/world/level/Level;)Lme/cortex/voxy/common/world/WorldEngine;
+        22: astore_2
+        23: aload_2
+        24: ifnonnull     29
+        27: iconst_0
+        28: ireturn
+        29: aload_1
+        30: invokevirtual #314                // Method me/cortex/voxy/client/VoxyClientInstance.getImportManager:()Lme/cortex/voxy/commonImpl/ImportManager;
+        33: aload_2
+        34: aload_2
+        35: aload_1
+        36: aload_0
+        37: invokedynamic #348,  0            // InvokeDynamic #13:get:(Lme/cortex/voxy/common/world/WorldEngine;Lme/cortex/voxy/client/VoxyClientInstance;Ljava/io/File;)Ljava/util/function/Supplier;
+        42: invokevirtual #332                // Method me/cortex/voxy/commonImpl/ImportManager.makeAndRunIfNone:(Lme/cortex/voxy/common/world/WorldEngine;Ljava/util/function/Supplier;)Z
+        45: ireturn
+
+  private static int importRaw(com.mojang.brigadier.context.CommandContext<net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource>);
+    Code:
+         0: invokestatic  #189                // Method me/cortex/voxy/commonImpl/VoxyCommon.getInstance:()Lme/cortex/voxy/commonImpl/VoxyInstance;
+         3: ifnonnull     25
+         6: aload_0
+         7: invokevirtual #197                // Method com/mojang/brigadier/context/CommandContext.getSource:()Ljava/lang/Object;
+        10: checkcast     #199                // class net/fabricmc/fabric/api/client/command/v2/FabricClientCommandSource
+        13: ldc           #201                // String Voxy must be enabled in settings to use this
+        15: invokestatic  #207                // InterfaceMethod net/minecraft/network/chat/Component.translatable:(Ljava/lang/String;)Lnet/minecraft/network/chat/MutableComponent;
+        18: invokeinterface #211,  2          // InterfaceMethod net/fabricmc/fabric/api/client/command/v2/FabricClientCommandSource.sendError:(Lnet/minecraft/network/chat/Component;)V
+        23: iconst_1
+        24: ireturn
+        25: new           #278                // class java/io/File
+        28: dup
+        29: aload_0
+        30: ldc           #100                // String path
+        32: ldc_w         #280                // class java/lang/String
+        35: invokevirtual #284                // Method com/mojang/brigadier/context/CommandContext.getArgument:(Ljava/lang/String;Ljava/lang/Class;)Ljava/lang/Object;
+        38: checkcast     #280                // class java/lang/String
+        41: invokespecial #285                // Method java/io/File."<init>":(Ljava/lang/String;)V
+        44: invokestatic  #350                // Method fileBasedImporter:(Ljava/io/File;)Z
+        47: ifeq          54
+        50: iconst_0
+        51: goto          55
+        54: iconst_1
+        55: ireturn
+
+  private static int importBobby(com.mojang.brigadier.context.CommandContext<net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource>);
+    Code:
+         0: invokestatic  #189                // Method me/cortex/voxy/commonImpl/VoxyCommon.getInstance:()Lme/cortex/voxy/commonImpl/VoxyInstance;
+         3: ifnonnull     25
+         6: aload_0
+         7: invokevirtual #197                // Method com/mojang/brigadier/context/CommandContext.getSource:()Ljava/lang/Object;
+        10: checkcast     #199                // class net/fabricmc/fabric/api/client/command/v2/FabricClientCommandSource
+        13: ldc           #201                // String Voxy must be enabled in settings to use this
+        15: invokestatic  #207                // InterfaceMethod net/minecraft/network/chat/Component.translatable:(Ljava/lang/String;)Lnet/minecraft/network/chat/MutableComponent;
+        18: invokeinterface #211,  2          // InterfaceMethod net/fabricmc/fabric/api/client/command/v2/FabricClientCommandSource.sendError:(Lnet/minecraft/network/chat/Component;)V
+        23: iconst_1
+        24: ireturn
+        25: new           #278                // class java/io/File
+        28: dup
+        29: ldc_w         #352                // String .bobby
+        32: invokespecial #285                // Method java/io/File."<init>":(Ljava/lang/String;)V
+        35: invokevirtual #296                // Method java/io/File.toPath:()Ljava/nio/file/Path;
+        38: aload_0
+        39: ldc           #31                 // String world_name
+        41: ldc_w         #280                // class java/lang/String
+        44: invokevirtual #284                // Method com/mojang/brigadier/context/CommandContext.getArgument:(Ljava/lang/String;Ljava/lang/Class;)Ljava/lang/Object;
+        47: checkcast     #280                // class java/lang/String
+        50: invokeinterface #304,  2          // InterfaceMethod java/nio/file/Path.resolve:(Ljava/lang/String;)Ljava/nio/file/Path;
+        55: invokeinterface #308,  1          // InterfaceMethod java/nio/file/Path.toFile:()Ljava/io/File;
+        60: astore_1
+        61: aload_1
+        62: invokestatic  #350                // Method fileBasedImporter:(Ljava/io/File;)Z
+        65: ifeq          72
+        68: iconst_0
+        69: goto          73
+        72: iconst_1
+        73: ireturn
+
+  private static java.util.concurrent.CompletableFuture<com.mojang.brigadier.suggestion.Suggestions> importWorldSuggester(com.mojang.brigadier.context.CommandContext<net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource>, com.mojang.brigadier.suggestion.SuggestionsBuilder);
+    Code:
+         0: invokestatic  #216                // Method net/minecraft/client/Minecraft.getInstance:()Lnet/minecraft/client/Minecraft;
+         3: getfield      #358                // Field net/minecraft/client/Minecraft.gameDirectory:Ljava/io/File;
+         6: invokevirtual #296                // Method java/io/File.toPath:()Ljava/nio/file/Path;
+         9: ldc_w         #360                // String saves
+        12: invokeinterface #304,  2          // InterfaceMethod java/nio/file/Path.resolve:(Ljava/lang/String;)Ljava/nio/file/Path;
+        17: aload_1
+        18: invokestatic  #364                // Method fileDirectorySuggester:(Ljava/nio/file/Path;Lcom/mojang/brigadier/suggestion/SuggestionsBuilder;)Ljava/util/concurrent/CompletableFuture;
+        21: areturn
+
+  private static java.util.concurrent.CompletableFuture<com.mojang.brigadier.suggestion.Suggestions> importBobbySuggester(com.mojang.brigadier.context.CommandContext<net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource>, com.mojang.brigadier.suggestion.SuggestionsBuilder);
+    Code:
+         0: invokestatic  #216                // Method net/minecraft/client/Minecraft.getInstance:()Lnet/minecraft/client/Minecraft;
+         3: getfield      #358                // Field net/minecraft/client/Minecraft.gameDirectory:Ljava/io/File;
+         6: invokevirtual #296                // Method java/io/File.toPath:()Ljava/nio/file/Path;
+         9: ldc_w         #352                // String .bobby
+        12: invokeinterface #304,  2          // InterfaceMethod java/nio/file/Path.resolve:(Ljava/lang/String;)Ljava/nio/file/Path;
+        17: aload_1
+        18: invokestatic  #364                // Method fileDirectorySuggester:(Ljava/nio/file/Path;Lcom/mojang/brigadier/suggestion/SuggestionsBuilder;)Ljava/util/concurrent/CompletableFuture;
+        21: areturn
+
+  private static java.util.concurrent.CompletableFuture<com.mojang.brigadier.suggestion.Suggestions> fileDirectorySuggester(java.nio.file.Path, com.mojang.brigadier.suggestion.SuggestionsBuilder);
+    Code:
+         0: aload_1
+         1: invokevirtual #377                // Method com/mojang/brigadier/suggestion/SuggestionsBuilder.getRemaining:()Ljava/lang/String;
+         4: ldc_w         #379                // String \\\\
+         7: ldc_w         #381                // String \\
+        10: invokevirtual #385                // Method java/lang/String.replace:(Ljava/lang/CharSequence;Ljava/lang/CharSequence;)Ljava/lang/String;
+        13: ldc_w         #381                // String \\
+        16: ldc_w         #387                // String /
+        19: invokevirtual #385                // Method java/lang/String.replace:(Ljava/lang/CharSequence;Ljava/lang/CharSequence;)Ljava/lang/String;
+        22: astore_2
+        23: aload_2
+        24: ldc_w         #389                // String \"
+        27: invokevirtual #393                // Method java/lang/String.startsWith:(Ljava/lang/String;)Z
+        30: ifeq          39
+        33: aload_2
+        34: iconst_1
+        35: invokevirtual #397                // Method java/lang/String.substring:(I)Ljava/lang/String;
+        38: astore_2
+        39: aload_2
+        40: ldc_w         #389                // String \"
+        43: invokevirtual #400                // Method java/lang/String.endsWith:(Ljava/lang/String;)Z
+        46: ifeq          61
+        49: aload_2
+        50: iconst_0
+        51: aload_2
+        52: invokevirtual #404                // Method java/lang/String.length:()I
+        55: iconst_1
+        56: isub
+        57: invokevirtual #407                // Method java/lang/String.substring:(II)Ljava/lang/String;
+        60: astore_2
+        61: aload_2
+        62: astore_3
+        63: aload_2
+        64: ldc_w         #387                // String /
+        67: invokevirtual #411                // Method java/lang/String.contains:(Ljava/lang/CharSequence;)Z
+        70: ifeq          126
+        73: aload_2
+        74: bipush        47
+        76: invokevirtual #415                // Method java/lang/String.lastIndexOf:(I)I
+        79: istore        4
+        81: aload_2
+        82: iload         4
+        84: iconst_1
+        85: iadd
+        86: invokevirtual #397                // Method java/lang/String.substring:(I)Ljava/lang/String;
+        89: astore_3
+        90: aload_0
+        91: aload_2
+        92: iconst_0
+        93: iload         4
+        95: invokevirtual #407                // Method java/lang/String.substring:(II)Ljava/lang/String;
+        98: invokeinterface #304,  2          // InterfaceMethod java/nio/file/Path.resolve:(Ljava/lang/String;)Ljava/nio/file/Path;
+       103: astore_0
+       104: goto          113
+       107: astore        5
+       109: invokestatic  #421                // Method com/mojang/brigadier/suggestion/Suggestions.empty:()Ljava/util/concurrent/CompletableFuture;
+       112: areturn
+       113: aload_2
+       114: iconst_0
+       115: iload         4
+       117: iconst_1
+       118: iadd
+       119: invokevirtual #407                // Method java/lang/String.substring:(II)Ljava/lang/String;
+       122: astore_2
+       123: goto          130
+       126: ldc_w         #423                // String
+       129: astore_2
+       130: aload_0
+       131: invokestatic  #429                // Method java/nio/file/Files.list:(Ljava/nio/file/Path;)Ljava/util/stream/Stream;
+       134: invokeinterface #435,  1          // InterfaceMethod java/util/stream/Stream.toList:()Ljava/util/List;
+       139: astore        4
+       141: aload         4
+       143: invokeinterface #441,  1          // InterfaceMethod java/util/List.iterator:()Ljava/util/Iterator;
+       148: astore        5
+       150: aload         5
+       152: invokeinterface #446,  1          // InterfaceMethod java/util/Iterator.hasNext:()Z
+       157: ifeq          260
+       160: aload         5
+       162: invokeinterface #449,  1          // InterfaceMethod java/util/Iterator.next:()Ljava/lang/Object;
+       167: checkcast     #300                // class java/nio/file/Path
+       170: astore        6
+       172: aload         6
+       174: invokeinterface #308,  1          // InterfaceMethod java/nio/file/Path.toFile:()Ljava/io/File;
+       179: invokevirtual #292                // Method java/io/File.isDirectory:()Z
+       182: ifne          188
+       185: goto          150
+       188: aload         6
+       190: invokeinterface #452,  1          // InterfaceMethod java/nio/file/Path.getFileName:()Ljava/nio/file/Path;
+       195: invokeinterface #455,  1          // InterfaceMethod java/nio/file/Path.toString:()Ljava/lang/String;
+       200: astore        7
+       202: aload         7
+       204: aload_3
+       205: invokevirtual #459                // Method java/lang/String.equals:(Ljava/lang/Object;)Z
+       208: ifeq          214
+       211: goto          150
+       214: aload_3
+       215: aload         7
+       217: invokestatic  #465                // InterfaceMethod net/minecraft/commands/SharedSuggestionProvider.matchesSubStr:(Ljava/lang/String;Ljava/lang/String;)Z
+       220: ifne          237
+       223: aload_3
+       224: aload         7
+       226: invokedynamic #477,  0            // InvokeDynamic #14:makeConcatWithConstants:(Ljava/lang/String;)Ljava/lang/String;
+       231: invokestatic  #465                // InterfaceMethod net/minecraft/commands/SharedSuggestionProvider.matchesSubStr:(Ljava/lang/String;Ljava/lang/String;)Z
+       234: ifeq          257
+       237: aload_2
+       238: aload         7
+       240: invokedynamic #482,  0            // InvokeDynamic #15:makeConcatWithConstants:(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;
+       245: astore        7
+       247: aload_1
+       248: aload         7
+       250: invokestatic  #485                // Method com/mojang/brigadier/arguments/StringArgumentType.escapeIfRequired:(Ljava/lang/String;)Ljava/lang/String;
+       253: invokevirtual #489                // Method com/mojang/brigadier/suggestion/SuggestionsBuilder.suggest:(Ljava/lang/String;)Lcom/mojang/brigadier/suggestion/SuggestionsBuilder;
+       256: pop
+       257: goto          150
+       260: goto          265
+       263: astore        4
+       265: aload_1
+       266: invokevirtual #492                // Method com/mojang/brigadier/suggestion/SuggestionsBuilder.buildFuture:()Ljava/util/concurrent/CompletableFuture;
+       269: areturn
+      Exception table:
+         from    to  target type
+            90   104   107   Class java/lang/Exception
+           130   260   263   Class java/io/IOException
+
+  private static int importCurrentWorldIn(com.mojang.brigadier.context.CommandContext<net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource>);
+    Code:
+         0: invokestatic  #189                // Method me/cortex/voxy/commonImpl/VoxyCommon.getInstance:()Lme/cortex/voxy/commonImpl/VoxyInstance;
+         3: ifnonnull     25
+         6: aload_0
+         7: invokevirtual #197                // Method com/mojang/brigadier/context/CommandContext.getSource:()Ljava/lang/Object;
+        10: checkcast     #199                // class net/fabricmc/fabric/api/client/command/v2/FabricClientCommandSource
+        13: ldc           #201                // String Voxy must be enabled in settings to use this
+        15: invokestatic  #207                // InterfaceMethod net/minecraft/network/chat/Component.translatable:(Ljava/lang/String;)Lnet/minecraft/network/chat/MutableComponent;
+        18: invokeinterface #211,  2          // InterfaceMethod net/fabricmc/fabric/api/client/command/v2/FabricClientCommandSource.sendError:(Lnet/minecraft/network/chat/Component;)V
+        23: iconst_1
+        24: ireturn
+        25: invokestatic  #216                // Method net/minecraft/client/Minecraft.getInstance:()Lnet/minecraft/client/Minecraft;
+        28: invokevirtual #508                // Method net/minecraft/client/Minecraft.getSingleplayerServer:()Lnet/minecraft/client/server/IntegratedServer;
+        31: astore_1
+        32: aload_1
+        33: ifnonnull     56
+        36: aload_0
+        37: invokevirtual #197                // Method com/mojang/brigadier/context/CommandContext.getSource:()Ljava/lang/Object;
+        40: checkcast     #199                // class net/fabricmc/fabric/api/client/command/v2/FabricClientCommandSource
+        43: ldc_w         #510                // String You must be in single player to use this command
+        46: invokestatic  #207                // InterfaceMethod net/minecraft/network/chat/Component.translatable:(Ljava/lang/String;)Lnet/minecraft/network/chat/MutableComponent;
+        49: invokeinterface #211,  2          // InterfaceMethod net/fabricmc/fabric/api/client/command/v2/FabricClientCommandSource.sendError:(Lnet/minecraft/network/chat/Component;)V
+        54: iconst_1
+        55: ireturn
+        56: invokestatic  #216                // Method net/minecraft/client/Minecraft.getInstance:()Lnet/minecraft/client/Minecraft;
+        59: getfield      #256                // Field net/minecraft/client/Minecraft.level:Lnet/minecraft/client/multiplayer/ClientLevel;
+        62: invokevirtual #518                // Method net/minecraft/client/multiplayer/ClientLevel.dimension:()Lnet/minecraft/resources/ResourceKey;
+        65: aload_1
+        66: getstatic     #524                // Field net/minecraft/world/level/storage/LevelResource.ROOT:Lnet/minecraft/world/level/storage/LevelResource;
+        69: invokevirtual #528                // Method net/minecraft/client/server/IntegratedServer.getWorldPath:(Lnet/minecraft/world/level/storage/LevelResource;)Ljava/nio/file/Path;
+        72: invokestatic  #534                // Method net/minecraft/world/level/dimension/DimensionType.getStorageFolder:(Lnet/minecraft/resources/ResourceKey;Ljava/nio/file/Path;)Ljava/nio/file/Path;
+        75: ldc_w         #536                // String region
+        78: invokeinterface #304,  2          // InterfaceMethod java/nio/file/Path.resolve:(Ljava/lang/String;)Ljava/nio/file/Path;
+        83: astore_2
+        84: aload_2
+        85: invokeinterface #308,  1          // InterfaceMethod java/nio/file/Path.toFile:()Ljava/io/File;
+        90: invokevirtual #289                // Method java/io/File.exists:()Z
+        93: ifeq          108
+        96: aload_2
+        97: invokeinterface #308,  1          // InterfaceMethod java/nio/file/Path.toFile:()Ljava/io/File;
+       102: invokevirtual #292                // Method java/io/File.isDirectory:()Z
+       105: ifne          128
+       108: aload_0
+       109: invokevirtual #197                // Method com/mojang/brigadier/context/CommandContext.getSource:()Ljava/lang/Object;
+       112: checkcast     #199                // class net/fabricmc/fabric/api/client/command/v2/FabricClientCommandSource
+       115: ldc_w         #538                // String Cannot find region folder for current dimension
+       118: invokestatic  #207                // InterfaceMethod net/minecraft/network/chat/Component.translatable:(Ljava/lang/String;)Lnet/minecraft/network/chat/MutableComponent;
+       121: invokeinterface #211,  2          // InterfaceMethod net/fabricmc/fabric/api/client/command/v2/FabricClientCommandSource.sendError:(Lnet/minecraft/network/chat/Component;)V
+       126: iconst_1
+       127: ireturn
+       128: aload_2
+       129: invokeinterface #308,  1          // InterfaceMethod java/nio/file/Path.toFile:()Ljava/io/File;
+       134: invokestatic  #350                // Method fileBasedImporter:(Ljava/io/File;)Z
+       137: ifeq          144
+       140: iconst_0
+       141: goto          145
+       144: iconst_1
+       145: ireturn
+
+  private static int importWorld(com.mojang.brigadier.context.CommandContext<net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource>);
+    Code:
+         0: invokestatic  #189                // Method me/cortex/voxy/commonImpl/VoxyCommon.getInstance:()Lme/cortex/voxy/commonImpl/VoxyInstance;
+         3: ifnonnull     25
+         6: aload_0
+         7: invokevirtual #197                // Method com/mojang/brigadier/context/CommandContext.getSource:()Ljava/lang/Object;
+        10: checkcast     #199                // class net/fabricmc/fabric/api/client/command/v2/FabricClientCommandSource
+        13: ldc           #201                // String Voxy must be enabled in settings to use this
+        15: invokestatic  #207                // InterfaceMethod net/minecraft/network/chat/Component.translatable:(Ljava/lang/String;)Lnet/minecraft/network/chat/MutableComponent;
+        18: invokeinterface #211,  2          // InterfaceMethod net/fabricmc/fabric/api/client/command/v2/FabricClientCommandSource.sendError:(Lnet/minecraft/network/chat/Component;)V
+        23: iconst_1
+        24: ireturn
+        25: aload_0
+        26: ldc           #31                 // String world_name
+        28: ldc_w         #280                // class java/lang/String
+        31: invokevirtual #284                // Method com/mojang/brigadier/context/CommandContext.getArgument:(Ljava/lang/String;Ljava/lang/Class;)Ljava/lang/Object;
+        34: checkcast     #280                // class java/lang/String
+        37: astore_1
+        38: new           #278                // class java/io/File
+        41: dup
+        42: ldc_w         #360                // String saves
+        45: invokespecial #285                // Method java/io/File."<init>":(Ljava/lang/String;)V
+        48: invokevirtual #296                // Method java/io/File.toPath:()Ljava/nio/file/Path;
+        51: aload_1
+        52: invokeinterface #304,  2          // InterfaceMethod java/nio/file/Path.resolve:(Ljava/lang/String;)Ljava/nio/file/Path;
+        57: astore_2
+        58: aload_1
+        59: getstatic     #546                // Field java/util/Locale.ROOT:Ljava/util/Locale;
+        62: invokevirtual #550                // Method java/lang/String.toLowerCase:(Ljava/util/Locale;)Ljava/lang/String;
+        65: astore_1
+        66: aload_1
+        67: ldc_w         #387                // String /
+        70: invokevirtual #400                // Method java/lang/String.endsWith:(Ljava/lang/String;)Z
+        73: ifeq          88
+        76: aload_1
+        77: iconst_0
+        78: aload_1
+        79: invokevirtual #404                // Method java/lang/String.length:()I
+        82: iconst_1
+        83: isub
+        84: invokevirtual #407                // Method java/lang/String.substring:(II)Ljava/lang/String;
+        87: astore_1
+        88: aload_2
+        89: ldc_w         #552                // String level.dat
+        92: invokeinterface #304,  2          // InterfaceMethod java/nio/file/Path.resolve:(Ljava/lang/String;)Ljava/nio/file/Path;
+        97: invokeinterface #308,  1          // InterfaceMethod java/nio/file/Path.toFile:()Ljava/io/File;
+       102: invokevirtual #289                // Method java/io/File.exists:()Z
+       105: ifeq          157
+       108: invokestatic  #216                // Method net/minecraft/client/Minecraft.getInstance:()Lnet/minecraft/client/Minecraft;
+       111: getfield      #256                // Field net/minecraft/client/Minecraft.level:Lnet/minecraft/client/multiplayer/ClientLevel;
+       114: invokevirtual #518                // Method net/minecraft/client/multiplayer/ClientLevel.dimension:()Lnet/minecraft/resources/ResourceKey;
+       117: aload_2
+       118: invokestatic  #534                // Method net/minecraft/world/level/dimension/DimensionType.getStorageFolder:(Lnet/minecraft/resources/ResourceKey;Ljava/nio/file/Path;)Ljava/nio/file/Path;
+       121: ldc_w         #536                // String region
+       124: invokeinterface #304,  2          // InterfaceMethod java/nio/file/Path.resolve:(Ljava/lang/String;)Ljava/nio/file/Path;
+       129: invokeinterface #308,  1          // InterfaceMethod java/nio/file/Path.toFile:()Ljava/io/File;
+       134: astore_3
+       135: aload_3
+       136: invokevirtual #292                // Method java/io/File.isDirectory:()Z
+       139: ifne          144
+       142: iconst_1
+       143: ireturn
+       144: aload_3
+       145: invokestatic  #350                // Method fileBasedImporter:(Ljava/io/File;)Z
+       148: ifeq          155
+       151: iconst_0
+       152: goto          156
+       155: iconst_1
+       156: ireturn
+       157: aload_1
+       158: ldc_w         #536                // String region
+       161: invokevirtual #400                // Method java/lang/String.endsWith:(Ljava/lang/String;)Z
+       164: ifne          177
+       167: aload_2
+       168: ldc_w         #536                // String region
+       171: invokeinterface #304,  2          // InterfaceMethod java/nio/file/Path.resolve:(Ljava/lang/String;)Ljava/nio/file/Path;
+       176: astore_2
+       177: aload_2
+       178: invokeinterface #308,  1          // InterfaceMethod java/nio/file/Path.toFile:()Ljava/io/File;
+       183: invokestatic  #350                // Method fileBasedImporter:(Ljava/io/File;)Z
+       186: ifeq          193
+       189: iconst_0
+       190: goto          194
+       193: iconst_1
+       194: ireturn
+
+  private static int importZip(com.mojang.brigadier.context.CommandContext<net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource>);
+    Code:
+         0: new           #278                // class java/io/File
+         3: dup
+         4: aload_0
+         5: ldc           #109                // String zipPath
+         7: ldc_w         #280                // class java/lang/String
+        10: invokevirtual #284                // Method com/mojang/brigadier/context/CommandContext.getArgument:(Ljava/lang/String;Ljava/lang/Class;)Ljava/lang/Object;
+        13: checkcast     #280                // class java/lang/String
+        16: invokespecial #285                // Method java/io/File."<init>":(Ljava/lang/String;)V
+        19: astore_1
+        20: ldc_w         #556                // String region/
+        23: astore_2
+        24: aload_0
+        25: ldc           #116                // String innerPath
+        27: ldc_w         #280                // class java/lang/String
+        30: invokevirtual #284                // Method com/mojang/brigadier/context/CommandContext.getArgument:(Ljava/lang/String;Ljava/lang/Class;)Ljava/lang/Object;
+        33: checkcast     #280                // class java/lang/String
+        36: astore_2
+        37: goto          41
+        40: astore_3
+        41: invokestatic  #189                // Method me/cortex/voxy/commonImpl/VoxyCommon.getInstance:()Lme/cortex/voxy/commonImpl/VoxyInstance;
+        44: checkcast     #191                // class me/cortex/voxy/client/VoxyClientInstance
+        47: astore_3
+        48: aload_3
+        49: ifnonnull     71
+        52: aload_0
+        53: invokevirtual #197                // Method com/mojang/brigadier/context/CommandContext.getSource:()Ljava/lang/Object;
+        56: checkcast     #199                // class net/fabricmc/fabric/api/client/command/v2/FabricClientCommandSource
+        59: ldc           #201                // String Voxy must be enabled in settings to use this
+        61: invokestatic  #207                // InterfaceMethod net/minecraft/network/chat/Component.translatable:(Ljava/lang/String;)Lnet/minecraft/network/chat/MutableComponent;
+        64: invokeinterface #211,  2          // InterfaceMethod net/fabricmc/fabric/api/client/command/v2/FabricClientCommandSource.sendError:(Lnet/minecraft/network/chat/Component;)V
+        69: iconst_1
+        70: ireturn
+        71: aload_2
+        72: astore        4
+        74: invokestatic  #216                // Method net/minecraft/client/Minecraft.getInstance:()Lnet/minecraft/client/Minecraft;
+        77: getfield      #256                // Field net/minecraft/client/Minecraft.level:Lnet/minecraft/client/multiplayer/ClientLevel;
+        80: invokestatic  #269                // Method me/cortex/voxy/commonImpl/WorldIdentifier.ofEngine:(Lnet/minecraft/world/level/Level;)Lme/cortex/voxy/common/world/WorldEngine;
+        83: astore        5
+        85: aload         5
+        87: ifnull        119
+        90: aload_3
+        91: invokevirtual #314                // Method me/cortex/voxy/client/VoxyClientInstance.getImportManager:()Lme/cortex/voxy/commonImpl/ImportManager;
+        94: aload         5
+        96: aload         5
+        98: aload_3
+        99: aload_1
+       100: aload         4
+       102: invokedynamic #564,  0            // InvokeDynamic #16:get:(Lme/cortex/voxy/common/world/WorldEngine;Lme/cortex/voxy/client/VoxyClientInstance;Ljava/io/File;Ljava/lang/String;)Ljava/util/function/Supplier;
+       107: invokevirtual #332                // Method me/cortex/voxy/commonImpl/ImportManager.makeAndRunIfNone:(Lme/cortex/voxy/common/world/WorldEngine;Ljava/util/function/Supplier;)Z
+       110: ifeq          117
+       113: iconst_0
+       114: goto          118
+       117: iconst_1
+       118: ireturn
+       119: iconst_1
+       120: ireturn
+      Exception table:
+         from    to  target type
+            24    37    40   Class java/lang/Exception
+
+  private static int cancelImport(com.mojang.brigadier.context.CommandContext<net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource>);
+    Code:
+         0: invokestatic  #189                // Method me/cortex/voxy/commonImpl/VoxyCommon.getInstance:()Lme/cortex/voxy/commonImpl/VoxyInstance;
+         3: checkcast     #191                // class me/cortex/voxy/client/VoxyClientInstance
+         6: astore_1
+         7: aload_1
+         8: ifnonnull     30
+        11: aload_0
+        12: invokevirtual #197                // Method com/mojang/brigadier/context/CommandContext.getSource:()Ljava/lang/Object;
+        15: checkcast     #199                // class net/fabricmc/fabric/api/client/command/v2/FabricClientCommandSource
+        18: ldc           #201                // String Voxy must be enabled in settings to use this
+        20: invokestatic  #207                // InterfaceMethod net/minecraft/network/chat/Component.translatable:(Ljava/lang/String;)Lnet/minecraft/network/chat/MutableComponent;
+        23: invokeinterface #211,  2          // InterfaceMethod net/fabricmc/fabric/api/client/command/v2/FabricClientCommandSource.sendError:(Lnet/minecraft/network/chat/Component;)V
+        28: iconst_1
+        29: ireturn
+        30: invokestatic  #216                // Method net/minecraft/client/Minecraft.getInstance:()Lnet/minecraft/client/Minecraft;
+        33: getfield      #256                // Field net/minecraft/client/Minecraft.level:Lnet/minecraft/client/multiplayer/ClientLevel;
+        36: invokestatic  #569                // Method me/cortex/voxy/commonImpl/WorldIdentifier.ofEngineNullable:(Lnet/minecraft/world/level/Level;)Lme/cortex/voxy/common/world/WorldEngine;
+        39: astore_2
+        40: aload_2
+        41: ifnull        61
+        44: aload_1
+        45: invokevirtual #314                // Method me/cortex/voxy/client/VoxyClientInstance.getImportManager:()Lme/cortex/voxy/commonImpl/ImportManager;
+        48: aload_2
+        49: invokevirtual #572                // Method me/cortex/voxy/commonImpl/ImportManager.cancelImport:(Lme/cortex/voxy/common/world/WorldEngine;)Z
+        52: ifeq          59
+        55: iconst_0
+        56: goto          60
+        59: iconst_1
+        60: ireturn
+        61: iconst_1
+        62: ireturn
+
+  private static me.cortex.voxy.commonImpl.importers.IDataImporter lambda$importZip$0(me.cortex.voxy.common.world.WorldEngine, me.cortex.voxy.client.VoxyClientInstance, java.io.File, java.lang.String);
+    Code:
+         0: new           #574                // class me/cortex/voxy/commonImpl/importers/WorldImporter
+         3: dup
+         4: aload_0
+         5: invokestatic  #216                // Method net/minecraft/client/Minecraft.getInstance:()Lnet/minecraft/client/Minecraft;
+         8: getfield      #256                // Field net/minecraft/client/Minecraft.level:Lnet/minecraft/client/multiplayer/ClientLevel;
+        11: aload_1
+        12: invokevirtual #578                // Method me/cortex/voxy/client/VoxyClientInstance.getServiceManager:()Lme/cortex/voxy/common/thread/ServiceManager;
+        15: aload_1
+        16: getfield      #582                // Field me/cortex/voxy/client/VoxyClientInstance.savingServiceRateLimiter:Ljava/util/function/BooleanSupplier;
+        19: invokespecial #585                // Method me/cortex/voxy/commonImpl/importers/WorldImporter."<init>":(Lme/cortex/voxy/common/world/WorldEngine;Lnet/minecraft/world/level/Level;Lme/cortex/voxy/common/thread/ServiceManager;Ljava/util/function/BooleanSupplier;)V
+        22: astore        4
+        24: aload         4
+        26: aload_2
+        27: aload_3
+        28: invokevirtual #589                // Method me/cortex/voxy/commonImpl/importers/WorldImporter.importZippedRegionDirectoryAsync:(Ljava/io/File;Ljava/lang/String;)V
+        31: aload         4
+        33: areturn
+
+  private static me.cortex.voxy.commonImpl.importers.IDataImporter lambda$fileBasedImporter$0(me.cortex.voxy.common.world.WorldEngine, me.cortex.voxy.client.VoxyClientInstance, java.io.File);
+    Code:
+         0: new           #574                // class me/cortex/voxy/commonImpl/importers/WorldImporter
+         3: dup
+         4: aload_0
+         5: invokestatic  #216                // Method net/minecraft/client/Minecraft.getInstance:()Lnet/minecraft/client/Minecraft;
+         8: getfield      #256                // Field net/minecraft/client/Minecraft.level:Lnet/minecraft/client/multiplayer/ClientLevel;
+        11: aload_1
+        12: invokevirtual #578                // Method me/cortex/voxy/client/VoxyClientInstance.getServiceManager:()Lme/cortex/voxy/common/thread/ServiceManager;
+        15: aload_1
+        16: getfield      #582                // Field me/cortex/voxy/client/VoxyClientInstance.savingServiceRateLimiter:Ljava/util/function/BooleanSupplier;
+        19: invokespecial #585                // Method me/cortex/voxy/commonImpl/importers/WorldImporter."<init>":(Lme/cortex/voxy/common/world/WorldEngine;Lnet/minecraft/world/level/Level;Lme/cortex/voxy/common/thread/ServiceManager;Ljava/util/function/BooleanSupplier;)V
+        22: astore_3
+        23: aload_3
+        24: aload_2
+        25: invokevirtual #595                // Method me/cortex/voxy/commonImpl/importers/WorldImporter.importRegionDirectoryAsync:(Ljava/io/File;)V
+        28: aload_3
+        29: areturn
+
+  private static me.cortex.voxy.commonImpl.importers.IDataImporter lambda$importDistantHorizons$0(java.io.File, me.cortex.voxy.common.world.WorldEngine, me.cortex.voxy.client.VoxyClientInstance);
+    Code:
+         0: new           #134                // class me/cortex/voxy/commonImpl/importers/DHImporter
+         3: dup
+         4: aload_0
+         5: aload_1
+         6: invokestatic  #216                // Method net/minecraft/client/Minecraft.getInstance:()Lnet/minecraft/client/Minecraft;
+         9: getfield      #256                // Field net/minecraft/client/Minecraft.level:Lnet/minecraft/client/multiplayer/ClientLevel;
+        12: aload_2
+        13: invokevirtual #578                // Method me/cortex/voxy/client/VoxyClientInstance.getServiceManager:()Lme/cortex/voxy/common/thread/ServiceManager;
+        16: aload_2
+        17: getfield      #582                // Field me/cortex/voxy/client/VoxyClientInstance.savingServiceRateLimiter:Ljava/util/function/BooleanSupplier;
+        20: invokespecial #598                // Method me/cortex/voxy/commonImpl/importers/DHImporter."<init>":(Ljava/io/File;Lme/cortex/voxy/common/world/WorldEngine;Lnet/minecraft/world/level/Level;Lme/cortex/voxy/common/thread/ServiceManager;Ljava/util/function/BooleanSupplier;)V
+        23: areturn
+
+  private static int lambda$register$1(com.mojang.brigadier.context.CommandContext) throws com.mojang.brigadier.exceptions.CommandSyntaxException;
+    Code:
+         0: aload_0
+         1: aload_0
+         2: ldc           #158                // String attemptRepair
+         4: invokestatic  #604                // Method com/mojang/brigadier/arguments/BoolArgumentType.getBool:(Lcom/mojang/brigadier/context/CommandContext;Ljava/lang/String;)Z
+         7: invokestatic  #606                // Method verifyTLNs:(Lcom/mojang/brigadier/context/CommandContext;Z)I
+        10: ireturn
+
+  private static int lambda$register$0(com.mojang.brigadier.context.CommandContext) throws com.mojang.brigadier.exceptions.CommandSyntaxException;
+    Code:
+         0: aload_0
+         1: iconst_0
+         2: invokestatic  #606                // Method verifyTLNs:(Lcom/mojang/brigadier/context/CommandContext;Z)I
+         5: ireturn
+}
+

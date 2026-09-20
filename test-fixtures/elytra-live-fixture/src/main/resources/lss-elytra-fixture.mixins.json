@@ -1,0 +1,12 @@
+{
+  "required": true,
+  "package": "dev.vox.lssfixture.elytra.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "client": [
+    "ProxySubmitMixin",
+    "TargetTickMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

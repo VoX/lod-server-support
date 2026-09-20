@@ -941,7 +941,9 @@ case "${1:-run}" in
         echo "  cosmetic; the join itself works). A Fabric client WITH LSS+Voxy gets a full"
         echo "  LOD session — the cross-loader wire is the point of this rig."
         echo "  NOTE best-effort tier: the /lsslod command tree + wire behavior should match"
-        echo "  Fabric exactly; a NEOFORGE client would run LSS inert (no Voxy build exists)."
+        echo "  Fabric exactly. NeoForge terrain needs a Voxy build matching this MC/loader."
+        echo "  Check the verified profile inventory; jar filenames alone are not compatibility proof."
+        echo "  LSS far-player rendering on this NeoForge line: available."
         echo ""
         run_neoforge
         ;;

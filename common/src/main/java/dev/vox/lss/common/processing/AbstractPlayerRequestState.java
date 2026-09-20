@@ -1,6 +1,8 @@
 package dev.vox.lss.common.processing;
 
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
+import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
+import it.unimi.dsi.fastutil.longs.Long2ObjectMaps;
 import it.unimi.dsi.fastutil.longs.LongArrayList;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 
@@ -33,6 +35,9 @@ import java.util.concurrent.atomic.AtomicReference;
 public abstract class AbstractPlayerRequestState<T> {
 
     private final UUID playerUuid;
+    private final RequestRegistration registration = new RequestRegistration();
+
+    public final RequestRegistration registration() { return this.registration; }
     private volatile boolean hasHandshake = false;
     private volatile int capabilities = 0;
     private volatile boolean wantsCompressedColumns;
@@ -139,7 +144,195 @@ public abstract class AbstractPlayerRequestState<T> {
     // consumption is superseded wholesale — exactly the want-set replace semantics. This
     // bounds ingress at ONE batch (≤ MAX_BATCH_CHUNK_REQUESTS entries) regardless of client
     // behavior, replacing the old MAX_INCOMING_QUEUE flood bound.
-    private final AtomicReference<IncomingBatch> pendingBatch = new AtomicReference<>();
+    private record IncomingEnvelope(IncomingBatch batch, long generation, boolean released,
+                                    Long2ObjectMap<LoadedColumnData> probes) {}
+    private final AtomicReference<IncomingEnvelope> pendingBatch = new AtomicReference<>();
+    // Set only before registration publication. Ordinary Paper/Fabric ingress is unchanged.
+    private boolean probeHandoffRequired;
+    private static final int MAX_PAIRED_PROBES = 512;
+    // Separate from appliedWantSet: that batch may outlive convergence. Ingress/removal can
+    // discard this immutable holder; only the router installs/uses it for retained backlog.
+    private final AtomicReference<IncomingEnvelope> activeProbeEnvelope = new AtomicReference<>();
+    // One bounded Folia owner opportunity per admitted disk attempt, including reads
+    // beyond the original probe prefix. Never a standing repair subscription.
+    static final int MAX_LATE_PROBES = MAX_PAIRED_PROBES;
+    static final int MAX_LATE_PROBE_BYTES = LSSConstants.MAX_SEND_SECTIONS_SIZE;
+    static final long LATE_PROBE_LIFETIME_NANOS =
+            java.util.concurrent.TimeUnit.SECONDS.toNanos(LSSConstants.DISK_READ_TIMEOUT_SECONDS);
+    private static final class LateProbe {
+        final long generation, started;
+        LoadedColumnData data;
+        boolean diskFallback, scheduled;
+        final long diskOrder;
+        LateProbe(long generation, long started, long diskOrder) {
+            this.generation = generation;
+            this.started = started; this.diskOrder = diskOrder;
+        }
+    }
+    // Short scalar/map operations only under this monitor: never serialization or send.
+    private final Long2ObjectOpenHashMap<LateProbe> lateProbes = new Long2ObjectOpenHashMap<>();
+    private int lateProbeBytes;
+    // Worker-owned scope around one synchronous payload build. The immutable queued
+    // copy carries classification thereafter, including concurrent retirement/send.
+    private long correctiveEnqueueOrder = Long.MIN_VALUE;
+    boolean beginCorrectiveEnqueue(long order) {
+        if (order == Long.MIN_VALUE || this.registration.isRetired()
+                || this.correctiveEnqueueOrder != Long.MIN_VALUE) return false;
+        this.correctiveEnqueueOrder = order; return true;
+    }
+    void endCorrectiveEnqueue() { this.correctiveEnqueueOrder = Long.MIN_VALUE; }
+    private long routingOfferGeneration;
+    private volatile int lateProbeRange;
+    public void updateLateProbeRange(int range) { this.lateProbeRange = range; }
+    record LateProbeCompletion(LoadedColumnData data, long generation, long diskOrder) {}
+
+    /** Exact admitted attempt carried to one bounded owner callback; scalar data only. */
+    public record LateProbeRequest(long position, long generation, long diskOrder) {}
+
+    /** Pump only. Claim unscheduled admitted reads even after their ordinary backlog drains.
+     * Their older disk payload may be queued/suppressed, so ordinary skipProbe does not apply. */
+    public synchronized LateProbeRequest[] claimLateProbes(int limit) {
+        var claimed = new java.util.ArrayList<LateProbeRequest>();
+        long now = System.nanoTime(); long player = this.playerChunkPacked;
+        if (player == NO_PLAYER_CHUNK) return new LateProbeRequest[0];
+        for (var row : this.lateProbes.long2ObjectEntrySet()) {
+            var entry = row.getValue(); long pos = row.getLongKey();
+            if (entry.scheduled || entry.data != null || !lateProbeCurrent(entry, now)
+                    || PositionUtil.isOutOfRange(pos, PositionUtil.unpackX(player),
+                            PositionUtil.unpackZ(player), this.lateProbeRange)) continue;
+            if (claimed.size() >= Math.min(limit, MAX_LATE_PROBES)) break;
+            entry.scheduled = true;
+            claimed.add(new LateProbeRequest(pos, entry.generation, entry.diskOrder));
+        }
+        return claimed.toArray(LateProbeRequest[]::new);
+    }
+
+    /** A null/unowned/refused completion retires its exact attempt only if no body arrived. */
+    public synchronized void completeLateProbe(LateProbeRequest request, LoadedColumnData data) {
+        var entry = this.lateProbes.get(request.position());
+        if (entry == null || entry.generation != request.generation()
+                || entry.diskOrder != request.diskOrder()) return;
+        if (data == null) {
+            // The original owner callback may already have supplied a valid body after
+            // this claim. A later null/unowned/refused callback is not invalidation.
+            if (entry.data == null) discardLateProbe(request.position());
+            return;
+        }
+        if (PositionUtil.packPosition(data.cx(), data.cz()) != request.position()) return;
+        publishLateProbe(request.generation(), data);
+    }
+
+    /** Actual generation-result exclusion cancels even an already-published body. */
+    public synchronized void cancelLateProbe(LateProbeRequest request) {
+        var entry = this.lateProbes.get(request.position());
+        if (entry != null && entry.generation == request.generation()
+                && entry.diskOrder == request.diskOrder()) discardLateProbe(request.position());
+    }
+
+    /** Owner callback publication; late/repeated callbacks cannot recreate a removed entry. */
+    public synchronized void publishLateProbe(long generation, LoadedColumnData data) {
+        long packed = PositionUtil.packPosition(data.cx(), data.cz());
+        var entry = this.lateProbes.get(packed);
+        if (entry == null || entry.generation != generation || entry.data != null) return;
+        if (!lateProbeCurrent(entry, System.nanoTime())) { discardLateProbe(packed); return; }
+        int size = data.serializedSections() == null ? 0 : data.serializedSections().length;
+        if (size > MAX_LATE_PROBE_BYTES - this.lateProbeBytes) { discardLateProbe(packed); return; }
+        entry.data = data;
+        this.lateProbeBytes += size;
+    }
+
+    private boolean lateProbeCurrent(LateProbe entry, long now) {
+        return !this.registration.isRetired() && now - entry.started < LATE_PROBE_LIFETIME_NANOS;
+    }
+
+    /** Worker, after admission/headroom checks and BEFORE external submit: the owner
+     * callback can finish during submit. Refusal rolls back this exact order below. */
+    synchronized void noteLateProbeDiskSubmission(long packed, long order) {
+        if (!this.probeHandoffRequired || this.registration.isRetired()) return;
+        var old = this.lateProbes.get(packed);
+        if (old != null && old.diskOrder == order) return;
+        if (old != null) discardLateProbe(packed);
+        if (this.lateProbes.size() >= MAX_LATE_PROBES) return;
+        var admitted = new LateProbe(this.routingOfferGeneration, System.nanoTime(), order);
+        this.lateProbes.put(packed, admitted);
+    }
+
+    synchronized void markLateProbeDiskFallback(long packed, long order) {
+        var entry = this.lateProbes.get(packed);
+        if (entry != null && entry.diskOrder == order) entry.diskFallback = true;
+    }
+
+    synchronized void expireLateProbes(long now) {
+        var iterator = this.lateProbes.long2ObjectEntrySet().fastIterator();
+        while (iterator.hasNext()) {
+            var entry = iterator.next().getValue();
+            if (lateProbeCurrent(entry, now)) continue;
+            iterator.remove();
+            if (entry.data != null && entry.data.serializedSections() != null)
+                this.lateProbeBytes -= entry.data.serializedSections().length;
+        }
+    }
+
+    synchronized void discardRoutingLateProbe(long packed) {
+        var entry = this.lateProbes.get(packed);
+        if (entry != null && this.routingOfferGeneration == this.offerGeneration.get()) discardLateProbe(packed);
+    }
+
+    synchronized void discardLateProbeDiskResult(long packed, long order) {
+        var entry = this.lateProbes.get(packed);
+        if (entry != null && entry.diskOrder == order) discardLateProbe(packed);
+    }
+
+    synchronized void discardLateProbe(long packed) {
+        var removed = this.lateProbes.remove(packed);
+        if (removed != null && removed.data != null && removed.data.serializedSections() != null)
+            this.lateProbeBytes -= removed.data.serializedSections().length;
+    }
+
+    private synchronized void clearLateProbes() {
+        this.lateProbes.clear(); this.lateProbeBytes = 0;
+    }
+
+    /** Worker only. Absence of pending and enqueued work means DRAINED, not necessarily
+     * sent successfully. Waiting here prevents an older body arriving after correction,
+     * including send-queue starvation-floor reordering. Never cancels a shared disk read. */
+    synchronized LateProbeCompletion takeLateProbe(long now) {
+        var iterator = this.lateProbes.long2ObjectEntrySet().fastIterator();
+        while (iterator.hasNext()) {
+            var row = iterator.next(); long packed = row.getLongKey(); var entry = row.getValue();
+            long player = this.playerChunkPacked;
+            boolean current = lateProbeCurrent(entry, now) && player != NO_PLAYER_CHUNK
+                    && !PositionUtil.isOutOfRange(packed, PositionUtil.unpackX(player),
+                            PositionUtil.unpackZ(player), this.lateProbeRange);
+            if (current && (entry.data == null || !entry.diskFallback
+                    || hasPendingRequest(PositionUtil.unpackX(packed), PositionUtil.unpackZ(packed))
+                    || hasEnqueuedColumn(packed))) continue;
+            if (current) return new LateProbeCompletion(entry.data, entry.generation, entry.diskOrder);
+            iterator.remove();
+            if (entry.data != null && entry.data.serializedSections() != null)
+                this.lateProbeBytes -= entry.data.serializedSections().length;
+        }
+        return null;
+    }
+
+    /** Final worker authorization against the exact admitted attempt, not the next
+     * frontier. Dirty/retirement/replacement removal cannot revive its selected token. */
+    synchronized boolean consumeLateProbe(LateProbeCompletion completion, long now) {
+        var data = completion.data(); long pos = PositionUtil.packPosition(data.cx(), data.cz());
+        var entry = this.lateProbes.get(pos);
+        if (entry == null || entry.generation != completion.generation()
+                || entry.diskOrder != completion.diskOrder() || entry.data != data) return false;
+        long player = this.playerChunkPacked;
+        if (!lateProbeCurrent(entry, now) || player == NO_PLAYER_CHUNK
+                || PositionUtil.isOutOfRange(pos, PositionUtil.unpackX(player),
+                        PositionUtil.unpackZ(player), this.lateProbeRange)) {
+            discardLateProbe(pos); return false;
+        }
+        if (hasPendingRequest(data.cx(), data.cz()) || hasEnqueuedColumn(pos)) return false;
+        discardLateProbe(pos);
+        return true;
+    }
+
     // Offer generation: bumped BEFORE every mailbox write so the Folia pump can detect a
     // batch that passed THROUGH the mailbox (offered AND taken by the processing thread)
     // during its one-tick probe hold. The republish CAS alone cannot see that — it finds
@@ -266,11 +459,15 @@ public abstract class AbstractPlayerRequestState<T> {
 
     /** Offer a decoded batch (any thread). Latest-wins; an overwritten batch is superseded. */
     public void offerIncomingBatch(IncomingBatch batch) {
-        this.offerGeneration.incrementAndGet(); // BEFORE the write — see the field comment
+        long generation = this.offerGeneration.incrementAndGet(); // BEFORE the write
+        // Replacement (including empty backpressure clear) drops only unadmitted
+        // backlog. Existing disk admissions and their one-shot corrections still finish.
+        this.activeProbeEnvelope.set(null);
         this.totalRequestsReceived.addAndGet(batch.size());
-        var previous = this.pendingBatch.getAndSet(batch);
+        var previous = this.pendingBatch.getAndSet(new IncomingEnvelope(
+                batch, generation, false, Long2ObjectMaps.emptyMap()));
         if (previous != null) {
-            this.pendingSuperseded.addAndGet(previous.size());
+            this.pendingSuperseded.addAndGet(previous.batch().size());
         }
     }
 
@@ -287,7 +484,8 @@ public abstract class AbstractPlayerRequestState<T> {
      *  the Folia hold-release, and tests. See also {@link #peekWantSet}, the fallback source
      *  for the ~19 ticks per second on which no batch arrives. */
     public IncomingBatch peekIncomingBatch() {
-        return this.pendingBatch.get();
+        var pending = this.pendingBatch.get();
+        return pending == null ? null : pending.batch();
     }
 
     /** Main-thread loaded-chunk probe FALLBACK source (after {@link #peekIncomingBatch}): the
@@ -303,7 +501,74 @@ public abstract class AbstractPlayerRequestState<T> {
 
     /** Consume the pending batch (processing thread; Folia pump during hold-release). */
     public IncomingBatch takeIncomingBatch() {
-        return this.pendingBatch.getAndSet(null);
+        var pending = this.pendingBatch.getAndSet(null);
+        return pending == null ? null : pending.batch();
+    }
+
+    /** Configure Folia ownership BEFORE publishing this registration to other threads. */
+    public void requireProbeHandoff() { this.probeHandoffRequired = true; }
+
+    /** Pump only: never steal an already released declaration and its paired probes. */
+    public IncomingBatch takeFreshIncomingBatchForProbe() {
+        while (true) {
+            var pending = this.pendingBatch.get();
+            if (pending == null || pending.released()) return null;
+            if (this.pendingBatch.compareAndSet(pending, null)) return pending.batch();
+        }
+    }
+
+    /** Router only: Folia fresh ingress is ineligible until the pump's bounded release. */
+    IncomingBatch takeIncomingBatchForRouting() {
+        while (true) {
+            var pending = this.pendingBatch.get();
+            if (pending == null || (this.probeHandoffRequired && !pending.released())) return null;
+            if (!this.pendingBatch.compareAndSet(pending, null)) continue;
+            this.routingOfferGeneration = pending.generation();
+            this.activeProbeEnvelope.set(pending.probes().isEmpty() ? null : pending);
+            if (this.offerGeneration.get() != pending.generation() || this.registration.isRetired())
+                this.activeProbeEnvelope.compareAndSet(pending, null);
+            return pending.batch();
+        }
+    }
+
+    /** Router only, after retained entries have been restored (not during pollBacklog). */
+    void finishProbeRoutingPass() {
+        var active = this.activeProbeEnvelope.get();
+        if (active != null && (this.backlog.isEmpty()
+                || active.generation() != this.offerGeneration.get() || this.registration.isRetired()))
+            this.activeProbeEnvelope.compareAndSet(active, null);
+    }
+
+    LoadedColumnData pairedLoadedProbe(long packed) {
+        var active = this.activeProbeEnvelope.get();
+        return active == null || active.generation() != this.offerGeneration.get()
+                || this.registration.isRetired() ? null : active.probes().get(packed);
+    }
+
+    /** Generation outcomes exclude paired probes too, including a pending released envelope. */
+    void discardPairedProbe(long packed) {
+        discardLateProbe(packed);
+        discardPairedProbe(this.pendingBatch, packed);
+        discardPairedProbe(this.activeProbeEnvelope, packed);
+    }
+
+    private static void discardPairedProbe(AtomicReference<IncomingEnvelope> holder, long packed) {
+        while (true) {
+            var old = holder.get();
+            if (old == null || !old.probes().containsKey(packed)) return;
+            var probes = new Long2ObjectOpenHashMap<>(old.probes());
+            probes.remove(packed);
+            var replacement = new IncomingEnvelope(old.batch(), old.generation(), old.released(),
+                    Long2ObjectMaps.unmodifiable(probes));
+            if (holder.compareAndSet(old, replacement)) return;
+        }
+    }
+
+    /** Session removal/shutdown: release byte holders even if a callback retains the state. */
+    public synchronized void discardProbeHandoff() {
+        clearLateProbes();
+        this.activeProbeEnvelope.set(null);
+        this.pendingBatch.set(null);
     }
 
     /**
@@ -320,12 +585,29 @@ public abstract class AbstractPlayerRequestState<T> {
      * {@link #offerGeneration()} the pump recorded before taking the batch to hold.
      */
     public boolean republishHeldBatch(IncomingBatch held, long heldAtGeneration) {
-        if (this.offerGeneration.get() != heldAtGeneration) {
+        return republishHeldBatch(held, heldAtGeneration, Long2ObjectMaps.emptyMap());
+    }
+
+    /** Atomically release matching ready probes with the declaration. No native objects. */
+    public boolean republishHeldBatch(IncomingBatch held, long heldAtGeneration,
+                                      Long2ObjectMap<LoadedColumnData> readyProbes) {
+        var paired = new Long2ObjectOpenHashMap<LoadedColumnData>();
+        if (readyProbes != null) {
+            for (var request : held.requests()) {
+                long packed = PositionUtil.packPosition(request.cx(), request.cz());
+                var probe = readyProbes.get(packed);
+                if (probe != null) paired.put(packed, probe);
+                if (paired.size() == MAX_PAIRED_PROBES) break;
+            }
+        }
+        var envelope = new IncomingEnvelope(held, heldAtGeneration, true,
+                Long2ObjectMaps.unmodifiable(paired));
+        if (this.registration.isRetired() || this.offerGeneration.get() != heldAtGeneration) {
             this.pendingSuperseded.addAndGet(held.size());
             return false;
         }
         beforeRepublishCas();
-        if (!this.pendingBatch.compareAndSet(null, held)) {
+        if (!this.pendingBatch.compareAndSet(null, envelope)) {
             this.pendingSuperseded.addAndGet(held.size());
             return false;
         }
@@ -342,12 +624,22 @@ public abstract class AbstractPlayerRequestState<T> {
         // client's next declaration (≤1 s fallback) re-supersedes the stale want-set —
         // one interval of stale routing, nanoseconds-wide to enter, judged not worth a
         // third guard's complexity.
-        if (this.offerGeneration.get() != heldAtGeneration
-                && this.pendingBatch.compareAndSet(held, null)) {
+        if ((this.registration.isRetired() || this.offerGeneration.get() != heldAtGeneration)
+                && retractReleasedEnvelope(envelope)) {
             this.pendingSuperseded.addAndGet(held.size());
             return false;
         }
         return true;
+    }
+
+    private boolean retractReleasedEnvelope(IncomingEnvelope released) {
+        while (true) {
+            var pending = this.pendingBatch.get();
+            // Generation-result filtering may replace only the probe map, not ownership.
+            if (pending == null || pending.batch() != released.batch()
+                    || pending.generation() != released.generation() || !pending.released()) return false;
+            if (this.pendingBatch.compareAndSet(pending, null)) return true;
+        }
     }
 
     /** Test seam (Folia review 2026-08-27 R8): runs between the generation guard and
@@ -373,6 +665,8 @@ public abstract class AbstractPlayerRequestState<T> {
      *  entries. An empty batch is the explicit clear. Also publishes the want-set for the
      *  main-thread probe (an empty batch publishes null — nothing left to probe). */
     public int replaceBacklogWith(IncomingBatch batch) {
+        var active = this.activeProbeEnvelope.get();
+        if (active != null && active.batch() != batch) this.activeProbeEnvelope.compareAndSet(active, null);
         int dropped = this.backlog.size();
         this.backlog.clear();
         Collections.addAll(this.backlog, batch.requests());
@@ -891,6 +1185,7 @@ public abstract class AbstractPlayerRequestState<T> {
                 globalLimiter.recordSend(queued.estimatedBytes());
                 paceWritten += queued.estimatedBytes();
                 diag.recordSectionSent(queued.estimatedBytes());
+                if (queued.corrective()) diag.recordCorrectiveColumnSent();
                 // Shipped size (frame for codec-1 payloads) — the wire_bytes gauge that
                 // makes /lsslod diag match observed bandwidth (design §5: the limiter
                 // keeps charging raw; this counter is the observability half).
@@ -1181,6 +1476,7 @@ public abstract class AbstractPlayerRequestState<T> {
     /** Clear dirty positions from diskReadDone (processing thread, from dirty-clear events). */
     public void clearDiskReadDone(long[] positions) {
         for (long pos : positions) {
+            discardLateProbe(pos);
             this.diskReadDone.remove(pos);
             // An edited (or honestly re-resolved) column must probe again immediately —
             // the suppress stamp's premise ("the router discards this probe") is gone.
@@ -1245,6 +1541,10 @@ public abstract class AbstractPlayerRequestState<T> {
     // ---- Accessors for concurrent queues (used by sibling classes) ----
 
     public void addReadyPayload(QueuedPayload<T> payload) {
+        if (this.correctiveEnqueueOrder != Long.MIN_VALUE
+                && payload.submissionOrder() == this.correctiveEnqueueOrder)
+            payload = new QueuedPayload<>(payload.payload(), payload.estimatedBytes(), payload.wireBytes(),
+                    payload.submissionOrder(), payload.packedPos(), true);
         this.enqueuedColumns.merge(payload.packedPos(), 1, Integer::sum);
         this.readyPayloads.add(payload);
     }

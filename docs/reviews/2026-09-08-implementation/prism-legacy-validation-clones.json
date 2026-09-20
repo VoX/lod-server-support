@@ -1,0 +1,1007 @@
+[
+  {
+    "clone": "/mnt/c/Users/Ian/AppData/Roaming/PrismLauncher/instances/lss-astra-validation-fabric-legacy-1.21.1",
+    "instance_id": "lss-astra-validation-fabric-legacy-1.21.1",
+    "launched": false,
+    "loader": "fabric",
+    "files": [
+      {
+        "path": "instance.cfg",
+        "sha256": "ded753816e976b2ce1b02d25b084d798c2de8da3557997260752c653183eb5d4",
+        "size": 857
+      },
+      {
+        "path": "minecraft/config/fabric/indigo-renderer.properties",
+        "sha256": "8cb9c5c1af8b879818aebf33a355c0fa6ca7873fd8f6d56a32640ce17b5318db",
+        "size": 290
+      },
+      {
+        "path": "minecraft/config/lss-client-config.json",
+        "sha256": "0f2139961e5175efea7c49a0f1ee09d68c45f1e2fd340d6ab11eff813e53da2d",
+        "size": 989
+      },
+      {
+        "path": "minecraft/config/xaero/lib/client.cfg",
+        "sha256": "43ed9dbfa5b4d6f0f3d2e8c2ced17ad298164b22c68ff11d415257a39b074336",
+        "size": 26
+      },
+      {
+        "path": "minecraft/config/xaero/lib/common.cfg",
+        "sha256": "98f698d96a6d21d830a455b4ad045b70516fa63c298021742d8499e7f0366cd2",
+        "size": 236
+      },
+      {
+        "path": "minecraft/config/xaero/lib/profiles/default.cfg",
+        "sha256": "34ae854b17d896d7cb853bdc28c27231a3947e91cb9f0991f372846ee3c2a907",
+        "size": 121
+      },
+      {
+        "path": "minecraft/config/xaero/lib/server_profiles/default.cfg",
+        "sha256": "d438aea41ca41e93697e059f523686935c0add482f6abe96b532bbf10c6ed80a",
+        "size": 75
+      },
+      {
+        "path": "minecraft/config/xaero/world-map/client.cfg",
+        "sha256": "d0f079a8df083f6f60a0e0c1316a25fc841755a91bdcb2f86c66ead8e7d4d13d",
+        "size": 521
+      },
+      {
+        "path": "minecraft/config/xaero/world-map/common.cfg",
+        "sha256": "0c229eb0daf85bd09af51f21eeeb99497a3bd50a825d5ab1ca695fb21bf6cf9d",
+        "size": 141
+      },
+      {
+        "path": "minecraft/config/xaero/world-map/profiles/default.cfg",
+        "sha256": "5422abf9c83fedef6509144293fad20f588d4bb6ce0cf1af78cbcd2bcd0d2ccf",
+        "size": 1619
+      },
+      {
+        "path": "minecraft/config/xaero/world-map/server_profiles/default.cfg",
+        "sha256": "d438aea41ca41e93697e059f523686935c0add482f6abe96b532bbf10c6ed80a",
+        "size": 75
+      },
+      {
+        "path": "minecraft/mods/fabric-api-0.116.15+1.21.1.jar",
+        "sha256": "a61a10f730ab8aa45ff42486ee65699e6e51c28a0c168deb161e7d4029473aa3",
+        "size": 2452718
+      },
+      {
+        "path": "minecraft/mods/lod-server-support-fabric.jar",
+        "sha256": "65e2486eb725f64b88bbc1abc1597cc41e82e4dde06b550b5b4148af0751e5bf",
+        "size": 8208388
+      },
+      {
+        "path": "minecraft/mods/sodium-fabric-0.6.13+mc1.21.1.jar",
+        "sha256": "e04599514d88e41765f710eeba59e3814909833396bc11b977f48fc2e7e50353",
+        "size": 1297761
+      },
+      {
+        "path": "minecraft/mods/xaeroworldmap-fabric-1.21.1-1.45.0.jar",
+        "sha256": "ea84c45cb1b994a7738515670b281bcd373a9d9cc3d8d3a24b84a4baf302b9d6",
+        "size": 1451594
+      },
+      {
+        "path": "minecraft/options.txt",
+        "sha256": "40bfce007eab356d724b6e322d1729d2428e4fa1bdf1ee86fd7fc3f937f712c0",
+        "size": 4012
+      },
+      {
+        "path": "mmc-pack.json",
+        "sha256": "62664dc02684a83cd7e631cd08c3b5cb15eea8838f940be69f67b55e347e29fb",
+        "size": 1362
+      }
+    ],
+    "source_hashes": {
+      "/mnt/c/Users/Ian/AppData/Roaming/PrismLauncher/instances/lss-astra-validation-fabric-1.21.1/instance.cfg": "1662bf45ea3cc7adb37a36fae13f7d74af4496db8c598147aa0dc6b61494fc32",
+      "/mnt/c/Users/Ian/AppData/Roaming/PrismLauncher/instances/lss-astra-validation-fabric-1.21.1/mmc-pack.json": "62664dc02684a83cd7e631cd08c3b5cb15eea8838f940be69f67b55e347e29fb",
+      "/mnt/c/Users/Ian/AppData/Roaming/PrismLauncher/instances/lss-astra-validation-fabric-1.21.1/minecraft/options.txt": "40bfce007eab356d724b6e322d1729d2428e4fa1bdf1ee86fd7fc3f937f712c0",
+      "/mnt/c/Users/Ian/AppData/Roaming/PrismLauncher/instances/lss-astra-validation-fabric-1.21.1/minecraft/config/lss-client-config.json": "0f2139961e5175efea7c49a0f1ee09d68c45f1e2fd340d6ab11eff813e53da2d",
+      "/mnt/c/Users/Ian/AppData/Roaming/PrismLauncher/instances/lss-astra-validation-fabric-1.21.1/minecraft/config/fabric/indigo-renderer.properties": "8cb9c5c1af8b879818aebf33a355c0fa6ca7873fd8f6d56a32640ce17b5318db",
+      "/mnt/c/Users/Ian/AppData/Roaming/PrismLauncher/instances/lss-astra-validation-fabric-1.21.1/minecraft/config/xaero/lib/client.cfg": "43ed9dbfa5b4d6f0f3d2e8c2ced17ad298164b22c68ff11d415257a39b074336",
+      "/mnt/c/Users/Ian/AppData/Roaming/PrismLauncher/instances/lss-astra-validation-fabric-1.21.1/minecraft/config/xaero/lib/common.cfg": "98f698d96a6d21d830a455b4ad045b70516fa63c298021742d8499e7f0366cd2",
+      "/mnt/c/Users/Ian/AppData/Roaming/PrismLauncher/instances/lss-astra-validation-fabric-1.21.1/minecraft/config/xaero/world-map/client.cfg": "d0f079a8df083f6f60a0e0c1316a25fc841755a91bdcb2f86c66ead8e7d4d13d",
+      "/mnt/c/Users/Ian/AppData/Roaming/PrismLauncher/instances/lss-astra-validation-fabric-1.21.1/minecraft/config/xaero/world-map/common.cfg": "0c229eb0daf85bd09af51f21eeeb99497a3bd50a825d5ab1ca695fb21bf6cf9d",
+      "/mnt/c/Users/Ian/AppData/Roaming/PrismLauncher/instances/lss-astra-validation-fabric-1.21.1/minecraft/config/xaero/lib/profiles/default.cfg": "34ae854b17d896d7cb853bdc28c27231a3947e91cb9f0991f372846ee3c2a907",
+      "/mnt/c/Users/Ian/AppData/Roaming/PrismLauncher/instances/lss-astra-validation-fabric-1.21.1/minecraft/config/xaero/lib/server_profiles/default.cfg": "d438aea41ca41e93697e059f523686935c0add482f6abe96b532bbf10c6ed80a",
+      "/mnt/c/Users/Ian/AppData/Roaming/PrismLauncher/instances/lss-astra-validation-fabric-1.21.1/minecraft/config/xaero/world-map/profiles/default.cfg": "5422abf9c83fedef6509144293fad20f588d4bb6ce0cf1af78cbcd2bcd0d2ccf",
+      "/mnt/c/Users/Ian/AppData/Roaming/PrismLauncher/instances/lss-astra-validation-fabric-1.21.1/minecraft/config/xaero/world-map/server_profiles/default.cfg": "d438aea41ca41e93697e059f523686935c0add482f6abe96b532bbf10c6ed80a",
+      "/mnt/c/Users/Ian/AppData/Roaming/PrismLauncher/instances/lss-astra-validation-fabric-1.21.1/minecraft/mods/lod-server-support-fabric.jar": "65e2486eb725f64b88bbc1abc1597cc41e82e4dde06b550b5b4148af0751e5bf",
+      "/mnt/c/Users/Ian/AppData/Roaming/PrismLauncher/instances/lss-astra-validation-fabric-1.21.1/minecraft/mods/xaeroworldmap-fabric-1.21.1-1.45.0.jar": "ea84c45cb1b994a7738515670b281bcd373a9d9cc3d8d3a24b84a4baf302b9d6",
+      "/mnt/c/Users/Ian/AppData/Roaming/PrismLauncher/instances/lss-astra-validation-fabric-1.21.1/minecraft/mods/fabric-api-0.116.15+1.21.1.jar": "a61a10f730ab8aa45ff42486ee65699e6e51c28a0c168deb161e7d4029473aa3",
+      "/home/vox/.local/state/lss-review/20260908-implementation/downloads/sodium-fabric-0.6.13+mc1.21.1.jar": "e04599514d88e41765f710eeba59e3814909833396bc11b977f48fc2e7e50353"
+    },
+    "source_hashes_unchanged": true,
+    "config_absolute_path_scan": [],
+    "storage_cache_directories_copied": false,
+    "metadata": [
+      {
+        "jar": "fabric-api-0.116.15+1.21.1.jar",
+        "format": "fabric",
+        "metadata": {
+          "schemaVersion": 1,
+          "id": "fabric-api",
+          "provides": [
+            "fabric"
+          ],
+          "name": "Fabric API",
+          "version": "0.116.15+1.21.1",
+          "environment": "*",
+          "license": "Apache-2.0",
+          "icon": "assets/fabric/icon.png",
+          "contact": {
+            "homepage": "https://fabricmc.net",
+            "irc": "irc://irc.esper.net:6667/fabric",
+            "issues": "https://github.com/FabricMC/fabric/issues",
+            "sources": "https://github.com/FabricMC/fabric"
+          },
+          "authors": [
+            "FabricMC"
+          ],
+          "depends": {
+            "fabricloader": ">=0.15.11",
+            "java": ">=21",
+            "minecraft": ">=1.21- <1.21.2-"
+          },
+          "description": "Core API module providing key hooks and intercompatibility features.",
+          "jars": [
+            {
+              "file": "META-INF/jars/fabric-api-base-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-api-lookup-api-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-biome-api-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-block-api-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-block-view-api-v2-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-blockrenderlayer-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-client-tags-api-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-command-api-v2-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-content-registries-v0-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-convention-tags-v2-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-crash-report-info-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-data-attachment-api-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-data-generation-api-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-dimensions-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-entity-events-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-events-interaction-v0-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-game-rule-api-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-item-api-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-item-group-api-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-key-binding-api-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-lifecycle-events-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-loot-api-v3-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-message-api-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-model-loading-api-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-networking-api-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-object-builder-api-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-particles-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-recipe-api-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-registry-sync-v0-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-renderer-api-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-renderer-indigo-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-rendering-fluids-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-rendering-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-resource-conditions-api-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-resource-loader-v0-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-screen-api-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-screen-handler-api-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-sound-api-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-tag-api-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-transfer-api-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-transitive-access-wideners-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-command-api-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-commands-v0-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-convention-tags-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-keybindings-v0-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-loot-api-v2-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-renderer-registries-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-rendering-data-attachment-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-rendering-v0-0.116.15.jar"
+            }
+          ]
+        }
+      },
+      {
+        "jar": "lod-server-support-fabric.jar",
+        "format": "fabric",
+        "metadata": {
+          "schemaVersion": 1,
+          "id": "lss",
+          "version": "0.14.0",
+          "name": "LOD Server Support",
+          "description": "Voxy multiplayer support (unofficial). Enables players with Voxy to see fully rendered terrain out to hundreds of chunks on multiplayer servers without needing to explore the world first.",
+          "authors": [
+            "VoX"
+          ],
+          "contact": {
+            "sources": "https://github.com/VoX/lod-server-support"
+          },
+          "license": "MIT",
+          "icon": "assets/lss/icon.png",
+          "accessWidener": "lss.accesswidener",
+          "environment": "*",
+          "entrypoints": {
+            "main": [
+              "dev.vox.lss.LSSMod"
+            ],
+            "client": [
+              "dev.vox.lss.LSSClient"
+            ],
+            "sodium:config_api_user": [
+              "dev.vox.lss.config.LSSConfigMenu"
+            ],
+            "modmenu": [
+              "dev.vox.lss.config.LSSModMenuIntegration"
+            ]
+          },
+          "mixins": [
+            "lss.mixins.json",
+            "lss-trace.mixins.json",
+            "lss-sodium-legacy.mixins.json"
+          ],
+          "jars": [
+            {
+              "file": "META-INF/jars/sqlite-jdbc-slim.jar"
+            },
+            {
+              "file": "META-INF/jars/zstd-jni-slim.jar"
+            },
+            {
+              "file": "META-INF/jars/common-0.14.0.jar"
+            }
+          ],
+          "depends": {
+            "minecraft": "1.21.1",
+            "fabricloader": ">=0.18.4",
+            "fabric-api": ">=0.100.0"
+          },
+          "suggests": {
+            "sodium": "*",
+            "modmenu": "*",
+            "xaeroworldmap": "*"
+          }
+        }
+      },
+      {
+        "jar": "sodium-fabric-0.6.13+mc1.21.1.jar",
+        "format": "fabric",
+        "metadata": {
+          "schemaVersion": 1,
+          "id": "sodium",
+          "version": "0.6.13+mc1.21.1",
+          "name": "Sodium",
+          "description": "Sodium is a powerful rendering engine for Minecraft which greatly improves frame rates and micro-stutter, while fixing many graphical issues",
+          "authors": [
+            {
+              "name": "JellySquid (jellysquid3)",
+              "contact": {
+                "email": "jellysquid@pm.me",
+                "homepage": "https://jellysquid.me"
+              }
+            }
+          ],
+          "contributors": [
+            "IMS212",
+            "bytzo",
+            "PepperCode1",
+            "FlashyReese",
+            "altrisi",
+            "Grayray75",
+            "Madis0",
+            "Johni0702",
+            "comp500",
+            "coderbot16",
+            "Moulberry",
+            "MCRcortex",
+            "Altirix",
+            "embeddedt",
+            "pajicadvance",
+            "Kroppeb",
+            "douira",
+            "burgerindividual",
+            "TwistedZero",
+            "Leo40Git",
+            "haykam821",
+            "muzikbike"
+          ],
+          "contact": {
+            "homepage": "https://github.com/CaffeineMC/sodium",
+            "sources": "https://github.com/CaffeineMC/sodium",
+            "issues": "https://github.com/CaffeineMC/sodium/issues"
+          },
+          "license": "Polyform-Shield-1.0.0",
+          "icon": "sodium-icon.png",
+          "environment": "client",
+          "entrypoints": {
+            "client": [
+              "net.caffeinemc.mods.sodium.fabric.SodiumFabricMod"
+            ],
+            "preLaunch": [
+              "net.caffeinemc.mods.sodium.fabric.SodiumPreLaunch"
+            ]
+          },
+          "custom": {
+            "fabric-renderer-api-v1:contains_renderer": true,
+            "modmenu": {
+              "links": {
+                "modmenu.donate": "https://caffeinemc.net/donate",
+                "modmenu.discord": "https://caffeinemc.net/discord",
+                "modmenu.github_releases": "https://github.com/CaffeineMC/sodium/releases",
+                "modmenu.kofi": "https://caffeinemc.net/donate",
+                "modmenu.modrinth": "https://modrinth.com/mod/sodium"
+              }
+            }
+          },
+          "accessWidener": "sodium-fabric.accesswidener",
+          "mixins": [
+            "sodium-common.mixins.json",
+            "sodium-fabric.mixins.json"
+          ],
+          "depends": {
+            "minecraft": [
+              "1.21",
+              "1.21.1"
+            ],
+            "fabricloader": ">=0.16.0",
+            "fabric-block-view-api-v2": "*",
+            "fabric-renderer-api-v1": "*",
+            "fabric-rendering-data-attachment-v1": "*",
+            "fabric-rendering-fluids-v1": ">=2.0.0",
+            "fabric-resource-loader-v0": "*"
+          },
+          "breaks": {
+            "embeddium": "*",
+            "optifabric": "*",
+            "canvas": "*",
+            "vulkanmod": "*",
+            "sodium-blendingregistry": "*",
+            "ocrenderfix_sodium": "*",
+            "betterfpsdist": "<=1.21-4.5",
+            "bobby": "<5.2.4",
+            "chunksfadein": "<2.0.2-1.21.2",
+            "cull-less-leaves": "<=1.3.0",
+            "cullleaves": "<=3.4.0-fabric",
+            "custom_hud": "<3.4.2",
+            "farsight": "<=1.21-4.3",
+            "iceberg": "<1.2.7",
+            "iris": "<1.8.7",
+            "movingelevators": "<=1.4.7",
+            "notenoughcrashes": "<4.4.8",
+            "noxesium": "<2.3.3",
+            "reeses-sodium-options": "<1.8.0",
+            "sodium-extra": "<0.6.0",
+            "sspb": "<4.0.0",
+            "moreculling": "<1.0.4",
+            "simply-no-shading": "<7.6.2",
+            "betterend": "<=21.0.11"
+          },
+          "provides": [
+            "indium"
+          ],
+          "jars": [
+            {
+              "file": "META-INF/jars/fabric-resource-loader-v0-1.3.1+5b5275af19.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-block-view-api-v2-1.0.10+6573ed8c19.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-rendering-data-attachment-v1-0.3.48+73761d2e19.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-rendering-fluids-v1-3.1.6+1daea21519.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-renderer-api-v1-3.4.0+c705a49c19.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-api-base-0.4.42+6573ed8c19.jar"
+            }
+          ]
+        }
+      },
+      {
+        "jar": "xaeroworldmap-fabric-1.21.1-1.45.0.jar",
+        "format": "fabric",
+        "metadata": {
+          "schemaVersion": 1,
+          "id": "xaeroworldmap",
+          "version": "1.45.0",
+          "name": "Xaero's World Map",
+          "description": "A self-writing fullscreen map which also works as an add-on to Xaero's Minimap.",
+          "authors": [
+            "xaero96"
+          ],
+          "contact": {
+            "issues": "https://www.curseforge.com/minecraft/mc-mods/xaeros-world-map/issues",
+            "homepage": "https://www.curseforge.com/minecraft/mc-mods/xaeros-world-map"
+          },
+          "license": "All Rights Reserved",
+          "icon": "assets/xaeroworldmap/icon.png",
+          "environment": "*",
+          "entrypoints": {
+            "client": [
+              "xaero.map.WorldMapFabric"
+            ],
+            "server": [
+              "xaero.map.WorldMapFabric"
+            ],
+            "modmenu": [
+              "xaero.map.mods.XaeroWorldMapModMenu"
+            ]
+          },
+          "mixins": [
+            "xaeroworldmap.mixins.json",
+            "xaeroworldmap.fabric.mixins.json"
+          ],
+          "depends": {
+            "fabricloader": ">=0.13.0",
+            "fabric-api": ">=0.43.1",
+            "minecraft": ">1.20.6 <1.21.2",
+            "xaerolib": ">=1.0"
+          },
+          "suggests": {},
+          "breaks": {
+            "openpartiesandclaims": "<0.30.3",
+            "xaerominimap": "<26.4.0",
+            "xaerobetterpvp": "<26.4.0"
+          },
+          "jars": [
+            {
+              "file": "META-INF/jars/xaerolib-fabric-1.21.1-1.7.1.jar"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "clone": "/mnt/c/Users/Ian/AppData/Roaming/PrismLauncher/instances/lss-astra-validation-neoforge-legacy-1.21.1",
+    "instance_id": "lss-astra-validation-neoforge-legacy-1.21.1",
+    "launched": false,
+    "loader": "neoforge",
+    "files": [
+      {
+        "path": "instance.cfg",
+        "sha256": "c50ebfd6a849ff883d0d2e74c3a6833dd0ca039e03f073bae33a07ed37c674ef",
+        "size": 772
+      },
+      {
+        "path": "minecraft/config/fabric/indigo-renderer.properties",
+        "sha256": "12a83b70accbebcedccaed45c4dd9831809f2a9f79e0e1db9689fdcd37d2c353",
+        "size": 290
+      },
+      {
+        "path": "minecraft/config/fml.toml",
+        "sha256": "cc59fb1039726fda3ab1eb69b06d9b9aebb7496604ea579cfb735bc5377e7825",
+        "size": 1550
+      },
+      {
+        "path": "minecraft/config/lss-client-config.json",
+        "sha256": "0f2139961e5175efea7c49a0f1ee09d68c45f1e2fd340d6ab11eff813e53da2d",
+        "size": 989
+      },
+      {
+        "path": "minecraft/config/neoforge-client.toml",
+        "sha256": "d58d93e2c429410d0abf25507d1679f732e1023b03bb52414348efcf5cf3ddb0",
+        "size": 578
+      },
+      {
+        "path": "minecraft/config/neoforge-common.toml",
+        "sha256": "fe878a2717a145cd890621eac5b3be1e1fd656f7ff9abc6e8d53f670d37474c4",
+        "size": 772
+      },
+      {
+        "path": "minecraft/config/xaero/lib/client.cfg",
+        "sha256": "43ed9dbfa5b4d6f0f3d2e8c2ced17ad298164b22c68ff11d415257a39b074336",
+        "size": 26
+      },
+      {
+        "path": "minecraft/config/xaero/lib/common.cfg",
+        "sha256": "98f698d96a6d21d830a455b4ad045b70516fa63c298021742d8499e7f0366cd2",
+        "size": 236
+      },
+      {
+        "path": "minecraft/config/xaero/lib/profiles/default.cfg",
+        "sha256": "34ae854b17d896d7cb853bdc28c27231a3947e91cb9f0991f372846ee3c2a907",
+        "size": 121
+      },
+      {
+        "path": "minecraft/config/xaero/lib/server_profiles/default.cfg",
+        "sha256": "d438aea41ca41e93697e059f523686935c0add482f6abe96b532bbf10c6ed80a",
+        "size": 75
+      },
+      {
+        "path": "minecraft/config/xaero/world-map/client.cfg",
+        "sha256": "d0f079a8df083f6f60a0e0c1316a25fc841755a91bdcb2f86c66ead8e7d4d13d",
+        "size": 521
+      },
+      {
+        "path": "minecraft/config/xaero/world-map/common.cfg",
+        "sha256": "0c229eb0daf85bd09af51f21eeeb99497a3bd50a825d5ab1ca695fb21bf6cf9d",
+        "size": 141
+      },
+      {
+        "path": "minecraft/config/xaero/world-map/profiles/default.cfg",
+        "sha256": "5422abf9c83fedef6509144293fad20f588d4bb6ce0cf1af78cbcd2bcd0d2ccf",
+        "size": 1619
+      },
+      {
+        "path": "minecraft/config/xaero/world-map/server_profiles/default.cfg",
+        "sha256": "d438aea41ca41e93697e059f523686935c0add482f6abe96b532bbf10c6ed80a",
+        "size": 75
+      },
+      {
+        "path": "minecraft/mods/forgified-fabric-api-0.116.15+2.3.3+1.21.1.jar",
+        "sha256": "6d5d81d3203bde3c72c4702193ae1667b0a3a2272b002ce0a1dda5561af12b2d",
+        "size": 5613494
+      },
+      {
+        "path": "minecraft/mods/lod-server-support-neoforge.jar",
+        "sha256": "528e0ac5e50b437c594539e4935b42ce71661b6c993065d0e3fbad4ea6bd767e",
+        "size": 22663777
+      },
+      {
+        "path": "minecraft/mods/sodium-neoforge-0.6.13+mc1.21.1.jar",
+        "sha256": "7acd7af2ef75ec883a6872c17494ead65e38025151eb08a1d60e36d34377f403",
+        "size": 1162994
+      },
+      {
+        "path": "minecraft/mods/voxy-0.2.9-alpha.jar",
+        "sha256": "16144e178f592cb9ff3f062b16c215f9df6b036c66d0626fa2d8797d75317829",
+        "size": 89102552
+      },
+      {
+        "path": "minecraft/mods/xaeroworldmap-neoforge-1.21.1-1.45.0.jar",
+        "sha256": "d60899112e84616ba52a993c1722fd891872acc4779bfac34d9b170001451c6f",
+        "size": 1422531
+      },
+      {
+        "path": "minecraft/options.txt",
+        "sha256": "40bfce007eab356d724b6e322d1729d2428e4fa1bdf1ee86fd7fc3f937f712c0",
+        "size": 4012
+      },
+      {
+        "path": "mmc-pack.json",
+        "sha256": "e748779ac72c9bb7a154dad9b9445e65f1cedfaf2cbcea899bfa8bcd37c54fde",
+        "size": 983
+      }
+    ],
+    "source_hashes": {
+      "/mnt/c/Users/Ian/AppData/Roaming/PrismLauncher/instances/lss-astra-validation-neoforge-1.21.1/instance.cfg": "1e3e8baac4ec3f12f26c75b65e919bb58bf32afbf10f65c1fdb13a6f0097c8bc",
+      "/mnt/c/Users/Ian/AppData/Roaming/PrismLauncher/instances/lss-astra-validation-neoforge-1.21.1/mmc-pack.json": "e748779ac72c9bb7a154dad9b9445e65f1cedfaf2cbcea899bfa8bcd37c54fde",
+      "/mnt/c/Users/Ian/AppData/Roaming/PrismLauncher/instances/lss-astra-validation-neoforge-1.21.1/minecraft/options.txt": "40bfce007eab356d724b6e322d1729d2428e4fa1bdf1ee86fd7fc3f937f712c0",
+      "/mnt/c/Users/Ian/AppData/Roaming/PrismLauncher/instances/lss-astra-validation-neoforge-1.21.1/minecraft/config/fml.toml": "cc59fb1039726fda3ab1eb69b06d9b9aebb7496604ea579cfb735bc5377e7825",
+      "/mnt/c/Users/Ian/AppData/Roaming/PrismLauncher/instances/lss-astra-validation-neoforge-1.21.1/minecraft/config/lss-client-config.json": "0f2139961e5175efea7c49a0f1ee09d68c45f1e2fd340d6ab11eff813e53da2d",
+      "/mnt/c/Users/Ian/AppData/Roaming/PrismLauncher/instances/lss-astra-validation-neoforge-1.21.1/minecraft/config/neoforge-client.toml": "d58d93e2c429410d0abf25507d1679f732e1023b03bb52414348efcf5cf3ddb0",
+      "/mnt/c/Users/Ian/AppData/Roaming/PrismLauncher/instances/lss-astra-validation-neoforge-1.21.1/minecraft/config/neoforge-common.toml": "fe878a2717a145cd890621eac5b3be1e1fd656f7ff9abc6e8d53f670d37474c4",
+      "/mnt/c/Users/Ian/AppData/Roaming/PrismLauncher/instances/lss-astra-validation-neoforge-1.21.1/minecraft/config/fabric/indigo-renderer.properties": "12a83b70accbebcedccaed45c4dd9831809f2a9f79e0e1db9689fdcd37d2c353",
+      "/mnt/c/Users/Ian/AppData/Roaming/PrismLauncher/instances/lss-astra-validation-neoforge-1.21.1/minecraft/config/xaero/lib/client.cfg": "43ed9dbfa5b4d6f0f3d2e8c2ced17ad298164b22c68ff11d415257a39b074336",
+      "/mnt/c/Users/Ian/AppData/Roaming/PrismLauncher/instances/lss-astra-validation-neoforge-1.21.1/minecraft/config/xaero/lib/common.cfg": "98f698d96a6d21d830a455b4ad045b70516fa63c298021742d8499e7f0366cd2",
+      "/mnt/c/Users/Ian/AppData/Roaming/PrismLauncher/instances/lss-astra-validation-neoforge-1.21.1/minecraft/config/xaero/world-map/client.cfg": "d0f079a8df083f6f60a0e0c1316a25fc841755a91bdcb2f86c66ead8e7d4d13d",
+      "/mnt/c/Users/Ian/AppData/Roaming/PrismLauncher/instances/lss-astra-validation-neoforge-1.21.1/minecraft/config/xaero/world-map/common.cfg": "0c229eb0daf85bd09af51f21eeeb99497a3bd50a825d5ab1ca695fb21bf6cf9d",
+      "/mnt/c/Users/Ian/AppData/Roaming/PrismLauncher/instances/lss-astra-validation-neoforge-1.21.1/minecraft/config/xaero/lib/profiles/default.cfg": "34ae854b17d896d7cb853bdc28c27231a3947e91cb9f0991f372846ee3c2a907",
+      "/mnt/c/Users/Ian/AppData/Roaming/PrismLauncher/instances/lss-astra-validation-neoforge-1.21.1/minecraft/config/xaero/lib/server_profiles/default.cfg": "d438aea41ca41e93697e059f523686935c0add482f6abe96b532bbf10c6ed80a",
+      "/mnt/c/Users/Ian/AppData/Roaming/PrismLauncher/instances/lss-astra-validation-neoforge-1.21.1/minecraft/config/xaero/world-map/profiles/default.cfg": "5422abf9c83fedef6509144293fad20f588d4bb6ce0cf1af78cbcd2bcd0d2ccf",
+      "/mnt/c/Users/Ian/AppData/Roaming/PrismLauncher/instances/lss-astra-validation-neoforge-1.21.1/minecraft/config/xaero/world-map/server_profiles/default.cfg": "d438aea41ca41e93697e059f523686935c0add482f6abe96b532bbf10c6ed80a",
+      "/mnt/c/Users/Ian/AppData/Roaming/PrismLauncher/instances/lss-astra-validation-neoforge-1.21.1/minecraft/mods/lod-server-support-neoforge.jar": "528e0ac5e50b437c594539e4935b42ce71661b6c993065d0e3fbad4ea6bd767e",
+      "/mnt/c/Users/Ian/AppData/Roaming/PrismLauncher/instances/lss-astra-validation-neoforge-1.21.1/minecraft/mods/xaeroworldmap-neoforge-1.21.1-1.45.0.jar": "d60899112e84616ba52a993c1722fd891872acc4779bfac34d9b170001451c6f",
+      "/mnt/c/Users/Ian/AppData/Roaming/PrismLauncher/instances/lss-test-neo-1.21.1/minecraft/mods/sodium-neoforge-0.6.13+mc1.21.1.jar.disabled": "7acd7af2ef75ec883a6872c17494ead65e38025151eb08a1d60e36d34377f403",
+      "/mnt/c/Users/Ian/AppData/Roaming/PrismLauncher/instances/lss-test-neo-1.21.1/minecraft/mods/voxy-0.2.9-alpha.jar.disabled": "16144e178f592cb9ff3f062b16c215f9df6b036c66d0626fa2d8797d75317829",
+      "/mnt/c/Users/Ian/AppData/Roaming/PrismLauncher/instances/lss-test-neo-1.21.1/minecraft/mods/forgified-fabric-api-0.116.15+2.3.3+1.21.1.jar": "6d5d81d3203bde3c72c4702193ae1667b0a3a2272b002ce0a1dda5561af12b2d"
+    },
+    "source_hashes_unchanged": true,
+    "config_absolute_path_scan": [],
+    "storage_cache_directories_copied": false,
+    "metadata": [
+      {
+        "jar": "forgified-fabric-api-0.116.15+2.3.3+1.21.1.jar",
+        "format": "neoforge",
+        "metadata": {
+          "modLoader": "lowcodefml",
+          "loaderVersion": "[1,)",
+          "license": "Apache-2.0",
+          "issueTrackerURL": "https://github.com/Sinytra/ForgifiedFabricAPI/issues",
+          "mods": [
+            {
+              "modId": "fabric_api",
+              "version": "${file.jarVersion}",
+              "displayName": "Forgified Fabric API",
+              "logoFile": "assets/fabric/icon.png",
+              "authors": "Sinytra, FabricMC",
+              "description": "Core API module providing key hooks and intercompatibility features.",
+              "provides": [
+                "fabric",
+                "fabric-api"
+              ],
+              "displayURL": "https://github.com/Sinytra/ForgifiedFabricAPI"
+            },
+            {
+              "modId": "forgified_fabric_api",
+              "version": "${file.jarVersion}",
+              "displayName": "Forgified Fabric API (dummy)",
+              "logoFile": "assets/fabric/icon.png",
+              "authors": "Sinytra, FabricMC",
+              "description": "Dependency target for other mods",
+              "displayURL": "https://github.com/Sinytra/ForgifiedFabricAPI"
+            }
+          ],
+          "dependencies": {
+            "fabric_api": [
+              {
+                "modId": "neoforge",
+                "type": "required",
+                "versionRange": "[21.1.169,)",
+                "ordering": "NONE",
+                "side": "BOTH"
+              },
+              {
+                "modId": "minecraft",
+                "type": "required",
+                "versionRange": "[1.21.1,1.22)",
+                "ordering": "NONE",
+                "side": "BOTH"
+              }
+            ],
+            "forgified_fabric_api": [
+              {
+                "modId": "neoforge",
+                "type": "required",
+                "versionRange": "[21.1.169,)",
+                "ordering": "NONE",
+                "side": "BOTH"
+              },
+              {
+                "modId": "minecraft",
+                "type": "required",
+                "versionRange": "[1.21.1,1.22)",
+                "ordering": "NONE",
+                "side": "BOTH"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "jar": "lod-server-support-neoforge.jar",
+        "format": "neoforge",
+        "metadata": {
+          "modLoader": "javafml",
+          "loaderVersion": "[4,)",
+          "license": "MIT",
+          "issueTrackerURL": "https://github.com/VoX/lod-server-support/issues",
+          "mods": [
+            {
+              "modId": "lss",
+              "version": "0.14.0",
+              "displayName": "LOD Server Support",
+              "authors": "VoX",
+              "logoFile": "assets/lss/icon.png",
+              "description": "Voxy multiplayer support (unofficial). Enables players with Voxy to see fully rendered terrain out to hundreds of chunks on multiplayer servers without needing to explore the world first. Server-side works with any LSS/VSS client; the client half needs a community Voxy build for NeoForge."
+            }
+          ],
+          "mixins": [
+            {
+              "config": "lss.neoforge.mixins.json"
+            },
+            {
+              "config": "lss-sodium-legacy.mixins.json"
+            }
+          ],
+          "dependencies": {
+            "lss": [
+              {
+                "modId": "neoforge",
+                "type": "required",
+                "versionRange": "[21.1,)",
+                "ordering": "NONE",
+                "side": "BOTH"
+              },
+              {
+                "modId": "minecraft",
+                "type": "required",
+                "versionRange": "[1.21.1]",
+                "ordering": "NONE",
+                "side": "BOTH"
+              }
+            ]
+          },
+          "modproperties": {
+            "lss": {
+              "sodium:config_api_user": "dev.vox.lss.config.LSSConfigMenu"
+            }
+          }
+        }
+      },
+      {
+        "jar": "sodium-neoforge-0.6.13+mc1.21.1.jar",
+        "format": "neoforge",
+        "metadata": {
+          "modLoader": "javafml",
+          "loaderVersion": "[4,)",
+          "license": "Polyform-Shield-1.0.0",
+          "mods": [
+            {
+              "modId": "sodium",
+              "version": "0.6.13+mc1.21.1",
+              "displayName": "Sodium",
+              "logoFile": "sodium-icon.png",
+              "authors": "JellySquid (jellysquid3), IMS212",
+              "credits": "bytzo, PepperCode1, FlashyReese, altrisi, Grayray75, Madis0, Johni0702, comp500, coderbot16, Moulberry, MCRcortex, Altirix, embeddedt, pajicadvance, Kroppeb, douira, burgerindividual, TwistedZero, Leo40Git, haykam821, muzikbike",
+              "description": "Sodium is a powerful rendering engine for Minecraft which improves frame rates and reduces lag spikes.\n",
+              "provides": [
+                "indium"
+              ]
+            }
+          ],
+          "modproperties": {
+            "sodium": {
+              "fabric-renderer-api-v1:contains_renderer": true
+            }
+          },
+          "dependencies": {
+            "sodium": [
+              {
+                "modId": "minecraft",
+                "type": "required",
+                "versionRange": "1.21.1",
+                "ordering": "NONE",
+                "side": "CLIENT"
+              },
+              {
+                "modId": "neoforge",
+                "type": "required",
+                "versionRange": "[21.1.82,)",
+                "ordering": "NONE",
+                "side": "CLIENT"
+              },
+              {
+                "modId": "embeddium",
+                "type": "incompatible",
+                "reason": "Sodium and Embeddium cannot be used together. Please remove Embeddium.",
+                "versionRange": "[0.0.1,)",
+                "ordering": "NONE",
+                "side": "CLIENT"
+              }
+            ]
+          },
+          "mixins": [
+            {
+              "config": "sodium-common.mixins.json"
+            },
+            {
+              "config": "sodium-neoforge.mixins.json"
+            }
+          ]
+        }
+      },
+      {
+        "jar": "voxy-0.2.9-alpha.jar",
+        "format": "neoforge",
+        "metadata": {
+          "modLoader": "javafml",
+          "loaderVersion": "[4,)",
+          "license": "All-Rights-Reserved",
+          "issueTrackerURL": "https://github.com/MCRcortex/voxy/issues",
+          "mods": [
+            {
+              "modId": "voxy",
+              "version": "0.2.9-alpha",
+              "displayName": "Voxy",
+              "description": "Far distance rendering mod utilising LoDs",
+              "authors": "Cortex",
+              "logoFile": "assets/voxy/icon.png"
+            }
+          ],
+          "dependencies": {
+            "voxy": [
+              {
+                "modId": "neoforge",
+                "type": "required",
+                "versionRange": "[21.1,)",
+                "ordering": "NONE",
+                "side": "BOTH"
+              },
+              {
+                "modId": "minecraft",
+                "type": "required",
+                "versionRange": "[1.21.1]",
+                "ordering": "NONE",
+                "side": "BOTH"
+              },
+              {
+                "modId": "sodium",
+                "type": "required",
+                "versionRange": "[0.6.13,)",
+                "ordering": "AFTER",
+                "side": "CLIENT"
+              },
+              {
+                "modId": "fabric_api",
+                "type": "required",
+                "versionRange": "[0.102.0,)",
+                "ordering": "BEFORE",
+                "side": "BOTH"
+              }
+            ]
+          },
+          "mixins": [
+            {
+              "config": "client.voxy.mixins.json"
+            },
+            {
+              "config": "common.voxy.mixins.json"
+            }
+          ]
+        }
+      },
+      {
+        "jar": "xaeroworldmap-neoforge-1.21.1-1.45.0.jar",
+        "format": "neoforge",
+        "metadata": {
+          "modLoader": "javafml",
+          "loaderVersion": "[4,)",
+          "license": "All Rights Reserved",
+          "mods": [
+            {
+              "modId": "xaeroworldmap",
+              "version": "1.45.0",
+              "displayName": "Xaero's World Map",
+              "logoFile": "xaeroworldmap.png",
+              "credits": "",
+              "authors": "xaero96",
+              "description": "A self-writing fullscreen map which also works as an add-on to Xaero's Minimap."
+            }
+          ],
+          "mixins": [
+            {
+              "config": "xaeroworldmap.mixins.json"
+            },
+            {
+              "config": "xaeroworldmap.neoforge.mixins.json"
+            }
+          ],
+          "dependencies": {
+            "xaeroworldmap": [
+              {
+                "modId": "neoforge",
+                "type": "required",
+                "versionRange": "[21.0.110-beta, 21.2.0)",
+                "ordering": "NONE",
+                "side": "BOTH"
+              },
+              {
+                "modId": "minecraft",
+                "type": "required",
+                "versionRange": "[1.21, 1.21.2)",
+                "ordering": "NONE",
+                "side": "BOTH"
+              },
+              {
+                "modId": "openpartiesandclaims",
+                "type": "optional",
+                "versionRange": "[0.30.3,)",
+                "ordering": "NONE",
+                "side": "BOTH"
+              },
+              {
+                "modId": "xaerominimap",
+                "type": "optional",
+                "versionRange": "[26.4.0,)",
+                "ordering": "NONE",
+                "side": "BOTH"
+              },
+              {
+                "modId": "xaerobetterpvp",
+                "type": "optional",
+                "versionRange": "[26.4.0,)",
+                "ordering": "NONE",
+                "side": "BOTH"
+              },
+              {
+                "modId": "xaerolib",
+                "type": "required",
+                "versionRange": "[1.0,)",
+                "ordering": "NONE",
+                "side": "BOTH"
+              }
+            ]
+          }
+        }
+      }
+    ]
+  }
+]

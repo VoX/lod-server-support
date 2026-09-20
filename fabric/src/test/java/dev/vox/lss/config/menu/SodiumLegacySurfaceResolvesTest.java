@@ -124,6 +124,34 @@ class SodiumLegacySurfaceResolvesTest {
         return new ZipFile(jar.toFile());
     }
 
+    @Test
+    void legacyStatusReturnMembersExistInActualSodium() throws IOException {
+        Path jar = goldenJar("lss.sodiumLegacyGoldenJar", true);
+        try (ZipFile zip = openGolden(jar, "net/caffeinemc/mods/sodium/client/gui/SodiumOptionsGUI.class")) {
+            statusMethods(zip, "client/gui/SodiumOptionsGUI", "getAllOptions");
+            statusMethods(zip, "client/gui/options/OptionImpl", "getValue", "hasChanged", "reset", "setValue", "getStorage", "getName");
+            statusMethods(zip, "client/gui/options/storage/OptionStorage", "getData");
+        }
+    }
+
+    @Test
+    void modernStatusReturnMembersExistInActualSodium() throws IOException {
+        Path jar = goldenJar("lss.sodiumModernGoldenJar",
+                "true".equals(System.getProperty("lss.sodiumModernGoldenExpected", "false")));
+        try (ZipFile zip = openGolden(jar, "net/caffeinemc/mods/sodium/api/config/ConfigEntryPoint.class")) {
+            statusMethods(zip, "client/config/structure/StatefulOption", "getValidatedValue", "hasChanged", "resetFromBinding", "modifyValue");
+            for (String[] field : List.of(new String[]{"client/config/ConfigManager", "CONFIG"}, new String[]{"client/config/structure/Config", "options"})) {
+                ClassNode node = read(zip, "net/caffeinemc/mods/sodium/" + field[0] + ".class");
+                assertTrue(node != null && node.fields.stream().anyMatch(f -> f.name.equals(field[1])), field[0] + "#" + field[1]);
+            }
+        }
+    }
+
+    private static void statusMethods(ZipFile zip, String owner, String... names) {
+        ClassNode node = read(zip, "net/caffeinemc/mods/sodium/" + owner + ".class");
+        for (String name : names) assertTrue(node != null && node.methods.stream().anyMatch(m -> m.name.equals(name)), owner + "#" + name);
+    }
+
     private static Path goldenJar(String property, boolean expected) {
         String jarPath = System.getProperty(property, "");
         boolean present = !jarPath.isBlank() && Files.isRegularFile(Path.of(jarPath));

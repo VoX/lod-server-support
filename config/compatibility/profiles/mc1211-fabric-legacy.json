@@ -1,0 +1,431 @@
+{
+  "schema_version": 1,
+  "id": "mc1211-fabric-legacy",
+  "line": "1.21.1",
+  "platform": "fabric",
+  "route": "native",
+  "artifacts": [
+    {
+      "file": "fabric-api-0.116.15+1.21.1.jar",
+      "sha256": "a61a10f730ab8aa45ff42486ee65699e6e51c28a0c168deb161e7d4029473aa3",
+      "metadata": {
+        "fabric": {
+          "schemaVersion": 1,
+          "id": "fabric-api",
+          "provides": [
+            "fabric"
+          ],
+          "name": "Fabric API",
+          "version": "0.116.15+1.21.1",
+          "environment": "*",
+          "license": "Apache-2.0",
+          "icon": "assets/fabric/icon.png",
+          "contact": {
+            "homepage": "https://fabricmc.net",
+            "irc": "irc://irc.esper.net:6667/fabric",
+            "issues": "https://github.com/FabricMC/fabric/issues",
+            "sources": "https://github.com/FabricMC/fabric"
+          },
+          "authors": [
+            "FabricMC"
+          ],
+          "depends": {
+            "fabricloader": ">=0.15.11",
+            "java": ">=21",
+            "minecraft": ">=1.21- <1.21.2-"
+          },
+          "description": "Core API module providing key hooks and intercompatibility features.",
+          "jars": [
+            {
+              "file": "META-INF/jars/fabric-api-base-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-api-lookup-api-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-biome-api-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-block-api-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-block-view-api-v2-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-blockrenderlayer-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-client-tags-api-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-command-api-v2-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-content-registries-v0-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-convention-tags-v2-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-crash-report-info-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-data-attachment-api-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-data-generation-api-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-dimensions-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-entity-events-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-events-interaction-v0-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-game-rule-api-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-item-api-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-item-group-api-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-key-binding-api-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-lifecycle-events-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-loot-api-v3-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-message-api-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-model-loading-api-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-networking-api-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-object-builder-api-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-particles-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-recipe-api-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-registry-sync-v0-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-renderer-api-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-renderer-indigo-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-rendering-fluids-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-rendering-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-resource-conditions-api-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-resource-loader-v0-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-screen-api-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-screen-handler-api-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-sound-api-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-tag-api-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-transfer-api-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-transitive-access-wideners-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-command-api-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-commands-v0-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-convention-tags-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-keybindings-v0-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-loot-api-v2-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-renderer-registries-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-rendering-data-attachment-v1-0.116.15.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-rendering-v0-0.116.15.jar"
+            }
+          ]
+        }
+      },
+      "id": "fabric-api",
+      "version": "0.116.15+1.21.1",
+      "source": "https://cdn.modrinth.com/data/P7dR8mSH/versions/Nlt8gI9z/fabric-api-0.116.15%2B1.21.1.jar",
+      "enabled": true,
+      "kind": "mod"
+    },
+    {
+      "file": "sodium-fabric-0.6.13+mc1.21.1.jar",
+      "sha256": "e04599514d88e41765f710eeba59e3814909833396bc11b977f48fc2e7e50353",
+      "metadata": {
+        "fabric": {
+          "schemaVersion": 1,
+          "id": "sodium",
+          "version": "0.6.13+mc1.21.1",
+          "name": "Sodium",
+          "description": "Sodium is a powerful rendering engine for Minecraft which greatly improves frame rates and micro-stutter, while fixing many graphical issues",
+          "authors": [
+            {
+              "name": "JellySquid (jellysquid3)",
+              "contact": {
+                "email": "jellysquid@pm.me",
+                "homepage": "https://jellysquid.me"
+              }
+            }
+          ],
+          "contributors": [
+            "IMS212",
+            "bytzo",
+            "PepperCode1",
+            "FlashyReese",
+            "altrisi",
+            "Grayray75",
+            "Madis0",
+            "Johni0702",
+            "comp500",
+            "coderbot16",
+            "Moulberry",
+            "MCRcortex",
+            "Altirix",
+            "embeddedt",
+            "pajicadvance",
+            "Kroppeb",
+            "douira",
+            "burgerindividual",
+            "TwistedZero",
+            "Leo40Git",
+            "haykam821",
+            "muzikbike"
+          ],
+          "contact": {
+            "homepage": "https://github.com/CaffeineMC/sodium",
+            "sources": "https://github.com/CaffeineMC/sodium",
+            "issues": "https://github.com/CaffeineMC/sodium/issues"
+          },
+          "license": "Polyform-Shield-1.0.0",
+          "icon": "sodium-icon.png",
+          "environment": "client",
+          "entrypoints": {
+            "client": [
+              "net.caffeinemc.mods.sodium.fabric.SodiumFabricMod"
+            ],
+            "preLaunch": [
+              "net.caffeinemc.mods.sodium.fabric.SodiumPreLaunch"
+            ]
+          },
+          "custom": {
+            "fabric-renderer-api-v1:contains_renderer": true,
+            "modmenu": {
+              "links": {
+                "modmenu.donate": "https://caffeinemc.net/donate",
+                "modmenu.discord": "https://caffeinemc.net/discord",
+                "modmenu.github_releases": "https://github.com/CaffeineMC/sodium/releases",
+                "modmenu.kofi": "https://caffeinemc.net/donate",
+                "modmenu.modrinth": "https://modrinth.com/mod/sodium"
+              }
+            }
+          },
+          "accessWidener": "sodium-fabric.accesswidener",
+          "mixins": [
+            "sodium-common.mixins.json",
+            "sodium-fabric.mixins.json"
+          ],
+          "depends": {
+            "minecraft": [
+              "1.21",
+              "1.21.1"
+            ],
+            "fabricloader": ">=0.16.0",
+            "fabric-block-view-api-v2": "*",
+            "fabric-renderer-api-v1": "*",
+            "fabric-rendering-data-attachment-v1": "*",
+            "fabric-rendering-fluids-v1": ">=2.0.0",
+            "fabric-resource-loader-v0": "*"
+          },
+          "breaks": {
+            "embeddium": "*",
+            "optifabric": "*",
+            "canvas": "*",
+            "vulkanmod": "*",
+            "sodium-blendingregistry": "*",
+            "ocrenderfix_sodium": "*",
+            "betterfpsdist": "<=1.21-4.5",
+            "bobby": "<5.2.4",
+            "chunksfadein": "<2.0.2-1.21.2",
+            "cull-less-leaves": "<=1.3.0",
+            "cullleaves": "<=3.4.0-fabric",
+            "custom_hud": "<3.4.2",
+            "farsight": "<=1.21-4.3",
+            "iceberg": "<1.2.7",
+            "iris": "<1.8.7",
+            "movingelevators": "<=1.4.7",
+            "notenoughcrashes": "<4.4.8",
+            "noxesium": "<2.3.3",
+            "reeses-sodium-options": "<1.8.0",
+            "sodium-extra": "<0.6.0",
+            "sspb": "<4.0.0",
+            "moreculling": "<1.0.4",
+            "simply-no-shading": "<7.6.2",
+            "betterend": "<=21.0.11"
+          },
+          "provides": [
+            "indium"
+          ],
+          "jars": [
+            {
+              "file": "META-INF/jars/fabric-resource-loader-v0-1.3.1+5b5275af19.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-block-view-api-v2-1.0.10+6573ed8c19.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-rendering-data-attachment-v1-0.3.48+73761d2e19.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-rendering-fluids-v1-3.1.6+1daea21519.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-renderer-api-v1-3.4.0+c705a49c19.jar"
+            },
+            {
+              "file": "META-INF/jars/fabric-api-base-0.4.42+6573ed8c19.jar"
+            }
+          ]
+        }
+      },
+      "id": "sodium",
+      "version": "0.6.13+mc1.21.1",
+      "source": "https://cdn.modrinth.com/data/AANobbMI/versions/u1OEbNKx/sodium-fabric-0.6.13%2Bmc1.21.1.jar",
+      "enabled": true,
+      "kind": "mod"
+    },
+    {
+      "file": "xaeroworldmap-fabric-1.21.1-1.45.0.jar",
+      "sha256": "ea84c45cb1b994a7738515670b281bcd373a9d9cc3d8d3a24b84a4baf302b9d6",
+      "metadata": {
+        "fabric": {
+          "schemaVersion": 1,
+          "id": "xaeroworldmap",
+          "version": "1.45.0",
+          "name": "Xaero's World Map",
+          "description": "A self-writing fullscreen map which also works as an add-on to Xaero's Minimap.",
+          "authors": [
+            "xaero96"
+          ],
+          "contact": {
+            "issues": "https://www.curseforge.com/minecraft/mc-mods/xaeros-world-map/issues",
+            "homepage": "https://www.curseforge.com/minecraft/mc-mods/xaeros-world-map"
+          },
+          "license": "All Rights Reserved",
+          "icon": "assets/xaeroworldmap/icon.png",
+          "environment": "*",
+          "entrypoints": {
+            "client": [
+              "xaero.map.WorldMapFabric"
+            ],
+            "server": [
+              "xaero.map.WorldMapFabric"
+            ],
+            "modmenu": [
+              "xaero.map.mods.XaeroWorldMapModMenu"
+            ]
+          },
+          "mixins": [
+            "xaeroworldmap.mixins.json",
+            "xaeroworldmap.fabric.mixins.json"
+          ],
+          "depends": {
+            "fabricloader": ">=0.13.0",
+            "fabric-api": ">=0.43.1",
+            "minecraft": ">1.20.6 <1.21.2",
+            "xaerolib": ">=1.0"
+          },
+          "suggests": {},
+          "breaks": {
+            "openpartiesandclaims": "<0.30.3",
+            "xaerominimap": "<26.4.0",
+            "xaerobetterpvp": "<26.4.0"
+          },
+          "jars": [
+            {
+              "file": "META-INF/jars/xaerolib-fabric-1.21.1-1.7.1.jar"
+            }
+          ]
+        }
+      },
+      "id": "xaeroworldmap",
+      "version": "1.45.0",
+      "source": "https://cdn.modrinth.com/data/NcUtCpym/versions/i80CxP4n/xaeroworldmap-fabric-1.21.1-1.45.0.jar",
+      "enabled": true,
+      "kind": "mod"
+    }
+  ],
+  "components": [
+    {
+      "uid": "org.lwjgl3",
+      "version": "3.3.3"
+    },
+    {
+      "uid": "net.minecraft",
+      "version": "1.21.1"
+    },
+    {
+      "uid": "net.fabricmc.intermediary",
+      "version": "1.21.1"
+    },
+    {
+      "uid": "net.fabricmc.fabric-loader",
+      "version": "0.19.3"
+    },
+    {
+      "uid": "java",
+      "version": "21"
+    }
+  ],
+  "capabilities": [],
+  "status": "unverified",
+  "limitations": [
+    "Imported dependency candidate only; no final feature validation inferred. Cache-only sources require the exact existing bytes."
+  ],
+  "excluded_candidate_or_fixture_ids": [
+    "lss"
+  ]
+}

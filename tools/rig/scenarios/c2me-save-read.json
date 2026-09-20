@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "id": "c2me-save-read",
+  "version": 3,
+  "timeout_seconds": 180,
+  "required_test_count": 3,
+  "assertions": [
+    "save_completed",
+    "fresh_disk_read",
+    "body_matches_expected"
+  ],
+  "human_reviews": [],
+  "requires_handshake": false,
+  "execution_route": "server-gametest",
+  "required_gametests": [
+    "lss-test:serializer_parity_game_tests_disk_read_bytes_match_live_bytes_for_disk_loaded_column",
+    "lss-test:serializer_parity_game_tests_xray_masked_disk_read_bytes_match_masked_live_bytes",
+    "lss-test:serializer_parity_game_tests_background_priority_read_matches_foreground_read_for_disk_loaded_column"
+  ],
+  "native_filter": "lss-test:serializer_parity_game_tests_*read*match*"
+}

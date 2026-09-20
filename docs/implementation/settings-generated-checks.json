@@ -1,0 +1,152 @@
+[
+  {
+    "line": "1.21.1",
+    "command": [
+      "python3",
+      "tools/settings/inventory.py",
+      "--check"
+    ],
+    "exit": 0,
+    "output": ""
+  },
+  {
+    "line": "1.21.1",
+    "command": [
+      "python3",
+      "tools/settings/reference.py",
+      "--check"
+    ],
+    "exit": 0,
+    "output": ""
+  },
+  {
+    "line": "1.21.1",
+    "command": [
+      "git",
+      "diff",
+      "--check"
+    ],
+    "exit": 0,
+    "output": ""
+  },
+  {
+    "line": "1.21.10",
+    "command": [
+      "python3",
+      "tools/settings/inventory.py",
+      "--check"
+    ],
+    "exit": 0,
+    "output": ""
+  },
+  {
+    "line": "1.21.10",
+    "command": [
+      "python3",
+      "tools/settings/reference.py",
+      "--check"
+    ],
+    "exit": 0,
+    "output": ""
+  },
+  {
+    "line": "1.21.10",
+    "command": [
+      "git",
+      "diff",
+      "--check"
+    ],
+    "exit": 0,
+    "output": ""
+  },
+  {
+    "line": "1.21.11",
+    "command": [
+      "python3",
+      "tools/settings/inventory.py",
+      "--check"
+    ],
+    "exit": 0,
+    "output": ""
+  },
+  {
+    "line": "1.21.11",
+    "command": [
+      "python3",
+      "tools/settings/reference.py",
+      "--check"
+    ],
+    "exit": 0,
+    "output": ""
+  },
+  {
+    "line": "1.21.11",
+    "command": [
+      "git",
+      "diff",
+      "--check"
+    ],
+    "exit": 0,
+    "output": ""
+  },
+  {
+    "line": "26.1",
+    "command": [
+      "python3",
+      "tools/settings/inventory.py",
+      "--check"
+    ],
+    "exit": 0,
+    "output": ""
+  },
+  {
+    "line": "26.1",
+    "command": [
+      "python3",
+      "tools/settings/reference.py",
+      "--check"
+    ],
+    "exit": 0,
+    "output": ""
+  },
+  {
+    "line": "26.1",
+    "command": [
+      "git",
+      "diff",
+      "--check"
+    ],
+    "exit": 0,
+    "output": ""
+  },
+  {
+    "line": "26.2",
+    "command": [
+      "python3",
+      "tools/settings/inventory.py",
+      "--check"
+    ],
+    "exit": 0,
+    "output": ""
+  },
+  {
+    "line": "26.2",
+    "command": [
+      "python3",
+      "tools/settings/reference.py",
+      "--check"
+    ],
+    "exit": 0,
+    "output": ""
+  },
+  {
+    "line": "26.2",
+    "command": [
+      "git",
+      "diff",
+      "--check"
+    ],
+    "exit": 0,
+    "output": ""
+  }
+]

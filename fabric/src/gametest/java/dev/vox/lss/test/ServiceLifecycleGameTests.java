@@ -3,6 +3,7 @@ package dev.vox.lss.test;
 import static dev.vox.lss.test.TestPositions.chunkAt;
 import static dev.vox.lss.test.TestPositions.holdChunk;
 import static dev.vox.lss.test.TestPositions.releaseChunk;
+import static dev.vox.lss.test.TestPositions.saveHolder;
 
 import dev.vox.lss.common.LSSConstants;
 import dev.vox.lss.common.PositionUtil;
@@ -310,7 +311,7 @@ public class ServiceLifecycleGameTests {
                     "generation service expected (gametest config has enableChunkGeneration=true)");
             int pcx = mock.getBlockX() >> 4;
             int pcz = mock.getBlockZ() >> 4;
-            helper.assertTrue(gen.submitGeneration(uuid, level, pcx - GEN_CHUNK_OFFSET, pcz + GEN_CHUNK_OFFSET, 1L),
+            helper.assertTrue(gen.submitGeneration(uuid, service.getPlayers().get(uuid).registration(), level, pcx - GEN_CHUNK_OFFSET, pcz + GEN_CHUNK_OFFSET, 1L),
                     "a fresh generation service must accept a submission");
             helper.assertTrue(gen.getActiveCount() == 1, "submission must be tracked as active");
 
@@ -571,7 +572,7 @@ public class ServiceLifecycleGameTests {
             helper.assertTrue(gen != null, "generation service expected (gametest config)");
             int pcx = mock.getBlockX() >> 4;
             int pcz = mock.getBlockZ() >> 4;
-            helper.assertTrue(gen.submitGeneration(uuid, level, pcx - 132, pcz + 132, 1L),
+            helper.assertTrue(gen.submitGeneration(uuid, service.getPlayers().get(uuid).registration(), level, pcx - 132, pcz + 132, 1L),
                     "premise: an in-flight generation entry must exist at shutdown");
             helper.assertTrue(gen.getActiveCount() == 1, "premise: entry tracked as active");
 
@@ -1123,8 +1124,8 @@ public class ServiceLifecycleGameTests {
         holdChunk(chunkSource, posK2);
         level.getChunk(posK1.x(), posK1.z());
         level.getChunk(posK2.x(), posK2.z());
-        // The pair must exist on disk: the budget routes them to the disk reader.
-        level.save(null, true, false);
+        // The pair must exist on disk before the budget forces this fallback.
+        var savedColumns = new SavedColumnFixture(level, posK1, posK2);
 
         var service = new RequestProcessingService(server);
         var state = service.registerPlayer(mock, LSSConstants.CAPABILITY_VOXEL_COLUMNS);
@@ -1145,14 +1146,20 @@ public class ServiceLifecycleGameTests {
         stamps[512] = -1L;
         packed[513] = PositionUtil.packPosition(posK2.x(), posK2.z());
         stamps[513] = -1L;
-        GameTestSeeding.seedRequests(state, packed, stamps);
-
+        var admitted = new java.util.concurrent.atomic.AtomicBoolean();
         var diag = service.getOffThreadProcessor().getDiagnostics();
         var diskDiag = service.getDiskReader().getDiag();
         helper.succeedWhen(() -> {
+            if (!admitted.get()) {
+                savedColumns.assertSaved(helper);
+                GameTestSeeding.seedRequests(state, packed, stamps);
+                admitted.set(true);
+            }
             service.tick();
             helper.assertTrue(diskDiag.getSuccessfulReadCount() >= 2 && state.getTotalSectionsSent() >= 2,
-                    "waiting for the disk-served pair to flush (budget remainder must still serve)");
+                    "waiting for the disk-served pair to flush (budget remainder must still serve): success="
+                            + diskDiag.getSuccessfulReadCount() + ", sent=" + state.getTotalSectionsSent()
+                            + "; " + service.getDiskReader().getDiagnostics());
             helper.assertTrue(diag.getTotalInMemory() == 0,
                     "the trailing loaded pair must NOT be probe-served: 512 queue entries ahead "
                             + "of it must exhaust the per-tick probe budget (misses count too)");
@@ -1243,8 +1250,9 @@ public class ServiceLifecycleGameTests {
      * mark dirty ({@code LSSServerNetworking.onChunkSaveData}'s {@code instanceof LevelChunk} guard) — proto
      * saves have no LOD-servable content, and marking them would broadcast positions that
      * then resolve not-found. The edited LevelChunk in the same save pass is the positive
-     * control proving the save ran and the hook is live. Drain–save–drain runs in one
-     * synchronous callback so no other test's marks interleave.
+     * control proving the save ran and the hook is live. The real proto snapshot is
+     * also invoked explicitly: saveAll may omit a generation-stage holder entirely.
+     * Drain–save–snapshot–drain runs in one synchronous callback.
      */
     @GameTest(template = "fabric-gametest-api-v1:empty", timeoutTicks = 300)
     public void protoChunkSavesAreExcludedFromDirtyMarking(GameTestHelper helper) {
@@ -1262,10 +1270,8 @@ public class ServiceLifecycleGameTests {
         var controlPos = chunkAt(origin.x() - 172, origin.z() - 32);
         long controlPacked = PositionUtil.packPosition(controlPos.x(), controlPos.z());
         holdChunk(chunkSource, controlPos);
-        level.getChunk(controlPos.x(), controlPos.z());
+        var control = level.getChunk(controlPos.x(), controlPos.z());
         var editPos = new BlockPos(controlPos.x() * 16 + 4, -61, controlPos.z() * 16 + 4);
-        var edit = level.getBlockState(editPos).is(Blocks.STONE) ? Blocks.COBBLESTONE : Blocks.STONE;
-        level.setBlock(editPos, edit.defaultBlockState(), 3);
 
         // Proto: per-run salted coords — a previous run's chunk would load already-generated
         // and not be unsaved, making the save pass skip it and the assertion vacuous.
@@ -1277,18 +1283,32 @@ public class ServiceLifecycleGameTests {
         proto.setUnsaved(true); // 1.21.1 line: markUnsaved is 26.x
         long protoPacked = PositionUtil.packPosition(protoCx, protoCz);
 
-        var tracker = liveService.getDirtyTracker();
-        tracker.drainDirty(dim);
-        level.save(null, true, false);
-        long[] dirty = tracker.drainDirty(dim);
-        helper.assertTrue(containsPosition(dirty, controlPacked),
-                "premise/control: the edited LevelChunk must mark dirty in this save pass "
-                        + "(proves the save ran and the hook is live)");
-        helper.assertTrue(!containsPosition(dirty, protoPacked),
-                "a ProtoChunk save must NOT mark dirty (ChunkSaveDataHook must exclude "
-                        + "generation-stage saves — they have no LOD-servable content)");
-        releaseChunk(chunkSource, controlPos);
-        helper.succeed();
+        helper.startSequence().thenWaitUntil(() -> {
+            // C2ME distinguishes obtaining a LevelChunk from its holder becoming
+            // accessible and entering the visible save set. Settle that premise before
+            // editing; do not weaken the immediate save-hook receipt into eventual success.
+            var holder = saveHolder(chunkSource, controlPos);
+            helper.assertTrue(helper.getTick() >= 2 && holder != null
+                            && holder.wasAccessibleSinceLastSave() && holder.isReadyForSaving(),
+                    "waiting for the control holder to become save-eligible; holder=" + holder
+                            + ", status=" + control.getFullStatus());
+        }).thenExecute(() -> {
+            // This is a one-shot assertion after readiness, not an edit/retry loop.
+            var edit = level.getBlockState(editPos).is(Blocks.STONE) ? Blocks.COBBLESTONE : Blocks.STONE;
+            level.setBlock(editPos, edit.defaultBlockState(), 3);
+            var tracker = liveService.getDirtyTracker();
+            tracker.drainDirty(dim);
+            level.save(null, true, false);
+            net.minecraft.world.level.chunk.storage.ChunkSerializer.write(level, proto);
+            long[] dirty = tracker.drainDirty(dim);
+            helper.assertTrue(containsPosition(dirty, controlPacked),
+                    "premise/control: the edited LevelChunk must mark dirty in this save pass "
+                            + "(proves the save ran and the hook is live); unsaved=" + control.isUnsaved());
+            helper.assertTrue(!containsPosition(dirty, protoPacked),
+                    "a ProtoChunk save must NOT mark dirty (ChunkSaveDataHook must exclude "
+                            + "generation-stage saves — they have no LOD-servable content)");
+            releaseChunk(chunkSource, controlPos);
+        }).thenSucceed();
     }
 
     /**
@@ -1474,7 +1494,7 @@ public class ServiceLifecycleGameTests {
         helper.assertTrue(state.tryAdmit(new PendingRequest(cx, cz,
                         SlotType.SYNC_ON_LOAD, clientTs)),
                 "premise: pending admitted (the router's admission shape)");
-        service.getDiskReader().submitReadDirect(mock.getUUID(), dim, level, cx, cz,
+        service.getDiskReader().submitReadDirect(mock.getUUID(), state.registration(), dim, level, cx, cz,
                 1L, clientTs);
 
         service.handleRegionSummaryRequest(mock,

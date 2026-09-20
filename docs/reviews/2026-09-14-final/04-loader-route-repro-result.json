@@ -1,0 +1,65 @@
+{
+  "profile": {
+    "schema_version": 1,
+    "id": "fabric-with-neo",
+    "line": "1.21.1",
+    "platform": "fabric",
+    "route": "native",
+    "artifacts": [
+      {
+        "id": "neoonly",
+        "version": "1.0",
+        "file": "neo-only.jar",
+        "sha256": "1ff30803002d65194a3bdf3fec939372d5c1c901768ef90525088f286e680213",
+        "source": "https://example.invalid/neo-only.jar",
+        "metadata": {
+          "neoforge": {
+            "modLoader": "javafml",
+            "loaderVersion": "[1,)",
+            "license": "MIT",
+            "mods": [
+              {
+                "modId": "neoonly",
+                "version": "1.0"
+              }
+            ],
+            "dependencies": {
+              "neoonly": [
+                {
+                  "modId": "minecraft",
+                  "type": "required",
+                  "versionRange": "[1.21.1]"
+                }
+              ]
+            }
+          }
+        },
+        "enabled": true
+      }
+    ],
+    "components": [
+      {
+        "uid": "net.minecraft",
+        "version": "1.21.1"
+      },
+      {
+        "uid": "net.fabricmc.fabric-loader",
+        "version": "0.19.3"
+      }
+    ],
+    "capabilities": [
+      "receive"
+    ],
+    "status": "unverified",
+    "limitations": []
+  },
+  "jar_metadata_text": "modLoader=\"javafml\"\nloaderVersion=\"[1,)\"\nlicense=\"MIT\"\n[[mods]]\nmodId=\"neoonly\"\nversion=\"1.0\"\n[[dependencies.neoonly]]\nmodId=\"minecraft\"\ntype=\"required\"\nversionRange=\"[1.21.1]\"\n",
+  "result": {
+    "schema_version": 1,
+    "profile_hash": "8302acbe5d5896337b023033ea338428dd8ebc60756c6be9c393d3b4048b73cc",
+    "missing": [],
+    "errors": [],
+    "ready": true,
+    "resolved_artifacts": 1
+  }
+}

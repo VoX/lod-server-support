@@ -1,0 +1,10 @@
+// Explicit private Linux display; Loom otherwise defaults to Xvfb only in CI.
+allprojects {
+    tasks.matching { it.name == 'runClientGameTest' }.configureEach { task ->
+        if (!task.hasProperty('useXvfb')) throw new GradleException('Client gametest lacks private Xvfb capability')
+        task.useXvfb.set(true)
+        task.doFirst {
+            if (!task.useXvfb.get()) throw new GradleException('Refusing client gametest without private Xvfb')
+        }
+    }
+}

@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "id": "elytra",
+  "version": 2,
+  "timeout_seconds": 180,
+  "required_test_count": 6,
+  "assertions": [
+    "equipment_verified",
+    "game_mode_verified",
+    "falling_observed",
+    "fall_flying_true",
+    "movement_verified",
+    "render_observed"
+  ],
+  "human_reviews": [
+    "visual_render"
+  ],
+  "checker": "elytra",
+  "requires_handshake": true,
+  "phases": [
+    "equipped",
+    "crouched",
+    "standing_recovered",
+    "falling",
+    "gliding",
+    "landed"
+  ],
+  "scope": "Actual LSS far-player proxy flight/pose rendering; Voxy terrain rendering is outside this gate."
+}

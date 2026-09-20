@@ -1,0 +1,14 @@
+# Final independent reviews — project improvements program
+
+Six read-only reviews over the original-baseline-to-final diff on all five support lines, per [00-assignments.md](00-assignments.md). Reviews 1–4 ran on 2026-09-14 (`gpt-6-astra`); that session ended at a usage limit before reviews 5 and 6 started, so those ran on 2026-09-16 (Claude Fable 5.1, Claude Code). Reviewed heads: 1.21.1 `0ae20c5f`, 1.21.10 `8a6457bd`, 1.21.11 `b8828f5a`, 26.1 `f8f31bb6`, 26.2 `6f708110` (reviews 1–4) and the same trees plus the R04-1 tooling commit (reviews 5–6). The coordinator validated every finding before acting on it.
+
+| # | Scope | Report | Findings | Disposition |
+| --- | --- | --- | --- | --- |
+| 1 | Settings, presets, owner publication | [01-settings.md](01-settings.md) | none | — |
+| 2 | Status and diagnostics export | [02-status.md](02-status.md) | none | — |
+| 3 | Xaero and client lifecycle | [03-xaero.md](03-xaero.md) | none | — |
+| 4 | Compatibility, support lines, tests, shipping | [04-lines.md](04-lines.md) | R04-1 medium | **Fixed** on all five lines: `tools/compat/materialize.py` requires a descriptor for the selected loader route and traverses native/jarjar metadata only for NeoForge; six new controls ([repro](04-loader-route-repro.py), [result](04-loader-route-repro-result.json)). |
+| 5 | Rig ownership, storage, evidence | [05-rig.md](05-rig.md) | R05-1 medium, R05-2..5 low | **Fixed** on all five lines: signal stops drain the runner's protocol before escalation (R05-1), group signals only while the group has members (R05-4), the owned Xvfb must be alive and verified before adoption (R05-2), launch environments drop ownership bindings, credential-named variables and the host display, and GUI clients need an owned private display (R05-3); the metric schema is documented as descriptive and unit-pinned to the checkers (R05-5). |
+| 6 | Concurrent source correctness and performance | [06-concurrent-performance.md](06-concurrent-performance.md) | R06-1/R06-2 low (code), R06-3/R06-4 medium and R06-5/R06-6 low (evidence) | R06-3/4/5/6 are **documented** as sensitivity/identity limits in `docs/operations/performance.md`, the V27 summary and the preset guide (no threshold widened, no result relabelled). R06-1 (Folia correction re-sends identical bodies; unmeasured) and R06-2 (correction is own-region only; cross-region loaded-unsaved edits keep the pre-existing stale-disk exposure) are **recorded follow-ups**, not regressions. |
+
+None of the findings produced a false pass or changed a recorded result. No Java source changed after the final all-five builds of 2026-09-14; the fixes are Python tooling, tests and documentation. The 42 required native matrix rows, 4 supplemental rows, 6 preset runs and 8 human visual assessments remain pending and are tracked in the [implementation ledger](../../implementation/project-improvements-ledger.md).

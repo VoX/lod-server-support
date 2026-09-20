@@ -1,0 +1,153 @@
+[
+  {
+    "module": "fabric",
+    "class": "dev.vox.lss.networking.client.ReviewSummarySentinelTest",
+    "method": "neverCleanMustRevokeAnOlderSummaryProof()",
+    "result": "RED",
+    "failure": [
+      "org.opentest4j.AssertionFailedError: New doubt must retract old summary proof and make the cached column re-ask ==> expected: <7000> but was: <-9223372036854775808>"
+    ]
+  },
+  {
+    "module": "fabric",
+    "class": "dev.vox.lss.networking.client.ReviewSummarySentinelTest",
+    "method": "noRegionMustRevokeAnOlderSummaryProof()",
+    "result": "RED",
+    "failure": [
+      "org.opentest4j.AssertionFailedError: New doubt must retract old summary proof and make the cached column re-ask ==> expected: <7000> but was: <-9223372036854775808>"
+    ]
+  },
+  {
+    "module": "fabric",
+    "class": "dev.vox.lss.common.store.ReviewMigrationChecksumTest",
+    "method": "migrationMustNotCertifyAChecksumMismatchedLegacyRow()",
+    "result": "RED",
+    "failure": [
+      "org.opentest4j.AssertionFailedError: migration must reject the same checksum-mismatched row as normal read, not recompute a valid checksum over it ==> expected: <null> but was: <StoreHit[sectionBytes=[B@4656fcc5, columnTimestamp=1788749667, wirefmt=20]>"
+    ]
+  },
+  {
+    "module": "fabric",
+    "class": "dev.vox.lss.common.store.ReviewMigrationChecksumTest",
+    "method": "controlNormalReadRejectsChecksumMismatch()",
+    "result": "GREEN",
+    "failure": []
+  },
+  {
+    "module": "fabric",
+    "class": "dev.vox.lss.common.processing.GenerationSessionOwnershipReviewTest",
+    "method": "bufferedGenerationMustNotLoseDirtyTaintAndSealReplacementSession()",
+    "result": "RED",
+    "failure": [
+      "org.opentest4j.MultipleFailuresError: Multiple Failures (2 failures)\n\torg.opentest4j.AssertionFailedError: old buffered generation must not be delivered to replacement state ==> expected: <false> but was: <true>\n\torg.opentest4j.AssertionFailedError: teardown must not erase old generation taint then mark replacement done ==> expected: <false> but was: <true>"
+    ]
+  },
+  {
+    "module": "fabric",
+    "class": "dev.vox.lss.common.farplayers.FarPlayerDisableReviewTest",
+    "method": "runtimeOffMustWithdrawAlreadyPublishedPlayersInsteadOfFreezingThem()",
+    "result": "RED",
+    "failure": [
+      "org.opentest4j.AssertionFailedError: server off must explicitly revoke prior roster; silence leaves the target rendered indefinitely ==> expected: <0> but was: <1>"
+    ]
+  },
+  {
+    "module": "fabric",
+    "class": "dev.vox.lss.networking.client.ClientMasterToggleReviewTest",
+    "method": "turningOffEstablishedSessionStopsNonemptyDeclarations()",
+    "result": "RED",
+    "failure": [
+      "org.opentest4j.AssertionFailedError: OFF promises to stop downloads, but manager keeps nonempty want-sets flowing ==> expected: <0> but was: <2>"
+    ]
+  },
+  {
+    "module": "fabric",
+    "class": "dev.vox.lss.networking.client.ClientMasterToggleReviewTest",
+    "method": "temporaryOffMustNotExhaustIngestRetriesAndStrandTerrainOnReenable()",
+    "result": "RED",
+    "failure": [
+      "org.opentest4j.AssertionFailedError: turning ON must not leave an undelivered position parked until rejoin/dirty ==> expected: not equal but was: <-9223372036854775808>"
+    ]
+  },
+  {
+    "module": "fabric",
+    "class": "dev.vox.lss.common.store.ReviewMaskShutdownTest",
+    "method": "interruptedMaskDropMustNotCommitNewFingerprintOverSurvivingRows()",
+    "result": "RED",
+    "failure": [
+      "org.opentest4j.AssertionFailedError: Old unmasked bytes must not survive an interrupted policy-change drop ==> expected: <null> but was: <StoreHit[sectionBytes=[B@14b5752f, columnTimestamp=100, wirefmt=20]>"
+    ]
+  },
+  {
+    "module": "fabric",
+    "class": "dev.vox.lss.compat.XaeroOwedDisconnectReviewTest",
+    "method": "shedAfterDisconnectMustNotCarryOldDebtIntoTheNextServer()",
+    "result": "RED",
+    "failure": [
+      "org.opentest4j.MultipleFailuresError: Multiple Failures (2 failures)\n\torg.opentest4j.AssertionFailedError: old debt recreated after teardown survived title screen ==> expected: <0> but was: <1>\n\torg.opentest4j.AssertionFailedError: old-server position was reported in the new active session: [554050781248] ==> expected: <true> but was: <false>"
+    ]
+  },
+  {
+    "module": "fabric",
+    "class": "dev.vox.lss.compat.XaeroOwedDisconnectReviewTest",
+    "method": "abruptDisconnectDuringOwedReleaseCannotRepublishDebtOrNegativeGauge()",
+    "result": "RED",
+    "failure": [
+      "org.opentest4j.MultipleFailuresError: Multiple Failures (2 failures)\n\torg.opentest4j.AssertionFailedError: release resumed against detached old record and decremented cleared gauge ==> expected: <0> but was: <-1>\n\torg.opentest4j.AssertionFailedError: an old-session debt was republished after onSessionEnd cleared it ==> expected: <true> but was: <false>"
+    ]
+  },
+  {
+    "module": "fabric",
+    "class": "dev.vox.lss.common.processing.SessionOwnershipReviewTest",
+    "method": "oldReadMustNotEnterAReRegisteredPlayersQueue()",
+    "result": "RED",
+    "failure": [
+      "org.opentest4j.AssertionFailedError: read captured for removed session must not be appended to replacement queue ==> expected: <true> but was: <false>"
+    ]
+  },
+  {
+    "module": "fabric",
+    "class": "dev.vox.lss.common.processing.SessionOwnershipReviewTest",
+    "method": "reconnectMustNotEraseAnOldReadsDirtyTaintAndSealItsPreEditBytes()",
+    "result": "RED",
+    "failure": [
+      "org.opentest4j.MultipleFailuresError: Multiple Failures (3 failures)\n\torg.opentest4j.AssertionFailedError: old read's taint was discarded at teardown; it must not mark replacement state done ==> expected: <false> but was: <true>\n\torg.opentest4j.AssertionFailedError: pre-edit bytes from removed session must not seal a replacement client's warm request as up_to_date ==> expected: <false> but was: <true>\n\torg.opentest4j.AssertionFailedError: pre-edit byte1 from removed session must not be delivered into replacement session ==> expected: <false> but was: <true>"
+    ]
+  },
+  {
+    "module": "fabric",
+    "class": "dev.vox.lss.common.farplayers.FarPlayerIdentityReviewTest",
+    "method": "repeatedlyRebindingOneIndexMustNotBypassTheIdentityCap()",
+    "result": "RED",
+    "failure": [
+      "org.opentest4j.AssertionFailedError: one index bypassed the 4096 cap: tracked=4097, capResets=0 ==> expected: <true> but was: <false>"
+    ]
+  },
+  {
+    "module": "fabric",
+    "class": "dev.vox.lss.common.farplayers.FarPlayerIdentityReviewTest",
+    "method": "rebindingOneIndexMustRetireItsPreviousTrackedIdentity()",
+    "result": "RED",
+    "failure": [
+      "org.opentest4j.MultipleFailuresError: Multiple Failures (2 failures)\n\torg.opentest4j.AssertionFailedError: one current roster binding must not retain two drawable identities ==> expected: <1> but was: <2>\n\torg.opentest4j.AssertionFailedError: rebound identity's old ghost must be removed ==> expected: <null> but was: <TrackedFarPlayer[uuid=00000000-0000-0001-0000-000000000001, name=P1, latest=UpdateEntry[rosterIndex=0, quantX=1600, quantY=1024, quantZ=0, yaw=0, headYaw=0, pitch=0, poseFlags=0, velX=0, velY=0, velZ=0, equipmentDictIdxPlus1=null, equipmentCounts=null, equipmentIdentities=null, vehicle=null], cadenceTicks=10, receivedAtMillis=500, motion=dev.vox.lss.common.farplayers.FarPlayerMotion@4c5da4f9, equipmentIdentities=null, equipmentCounts=null]>"
+    ]
+  },
+  {
+    "module": "fabric",
+    "class": "dev.vox.lss.compat.VoxyHolderCompatibilityReviewTest",
+    "method": "resetMustResolveTheNamespacedMethodOnTheOldHolderInterface()",
+    "result": "RED",
+    "failure": [
+      "org.opentest4j.AssertionFailedError: 1.21.1 Voxy 0.2.15-beta exposes IGetVoxyRenderSystem.voxy$shutdownRenderer ==> expected: <true> but was: <false>"
+    ]
+  },
+  {
+    "module": "paper",
+    "class": "dev.vox.lss.paper.LibsDisguisesReloadReviewTest",
+    "method": "changingPluginInstanceMustReadTheNewPluginsDisguiseRegistry()",
+    "result": "RED",
+    "failure": [
+      "org.opentest4j.AssertionFailedError: enabled replacement plugin's disguise must be hidden; old registry is stale ==> expected: <true> but was: <false>"
+    ]
+  }
+]

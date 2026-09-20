@@ -1,0 +1,132 @@
+{
+  "evidence_index": {
+    "evidence/result.json": "e969e1170b30c51133389b06921a903027f66a1a2e193f7603dc6e1f32a13b5d",
+    "evidence/xaero-map-boundary.png": "37725ab0457d87932451ec4b36770ab77506a0fd77551e1f1a0b695a1a71d778",
+    "evidence/xaero-map-commands.json": "007295cc955b2463bd304287812948b7e35c50339eec38d98da0d31fcd4689a8",
+    "evidence/xaero-map-native-close.json": "cfe262e58d431b24e372ec26c88da2ec8e03f8e6fe8b5861fb4f91a25b103f4a",
+    "evidence/xaero-map-oracle.json": "84abe5682e54b5bd8bfeb8a215167912b55b8e4b579e74b569b4c2c8659d0b1b",
+    "evidence/xaero-map-report.json": "2a6ca6f8a77aa2c445ca872931ee05cce4efa2735cc122a839080ccf967b8721",
+    "evidence/xaero-map-stop-client": "2a1a4b4d3085a4f3da72d89653004e932c91f83901e2f8bd0e3e886172c6c4d6",
+    "evidence/xaero-map-viewport.json": "44d329744fb78c1f6f0240bcc8613fa1a3bfa97a0c2fbccb136b67c8256026e2",
+    "evidence/xaero-map.jsonl": "bdcf3a0adf0c98915bf8da028cd735db4ea99966d4d29f94f7b05de9d5783e81",
+    "launch-journal.json": "b35013c2cf322a61689b5c39954fe540c19524b399ddb802a95a3a8abd4f30b1",
+    "owner.json": "365eeff97de4da65904f61a584f60696efc77e53cf6c0cb1bae1808b0c661b88",
+    "processes.json": "84c916009ea147e21918e48a3f56431569c74d8e7191c1f6de9610ff785255fa",
+    "proof.json": "a8d66e0e9ffa9c2d4f169bbce14ab81fa6a216492389b5f7f4608ca22f128dd0",
+    "supervisor-cleanup.json": "5df0ad87245b17644ed947c0f64e0c05a88e86dd772cefd0c901f922708eb596",
+    "supervisor.json": "174e435848911f3ba747146b7a5523cc88a1f4f675fe4435a028165c9f78b4a0"
+  },
+  "evidence_sha256": "15fb94a71636306be997eedd206646a7a8d89b1405ad7ebb21ffd1f6e4ebe612",
+  "feature": "xaero-map",
+  "limitations": [
+    "Exact retained functional run and artifact identities only; no performance claim.",
+    "User visually accepted the displayed result with the disclosed defects; this is not evidence of seam-free shading or complete first-spawn map coverage.",
+    "Known missing gold shading stripe at world X=512: native Xaero region-local slope fallback is reproduced by the bridge; no shipping correction applied.",
+    "Known near-player acquisition gap: eight positions fall inside LSS vanilla exclusion but lack Xaero required 3x3 native coverage (one already filled in the original Neo modern image); no shipping correction applied."
+  ],
+  "profile_hash": "55683755e52eb8c92f992144db988edf7409e369322662bd9dc7d5c0d7a2e4f8",
+  "profile_id": "mc1211-fabric-modern",
+  "result": "pass",
+  "run_hash": "595fda39e8ee3d1df2ab1f6e1b117871e5d48a6b5d9aaf35d7fab8bfb078aafe",
+  "run_id": "20260920T021346Z-b91bc348f76a",
+  "run_manifest": {
+    "backend": "isolated-linux-prism",
+    "candidate_artifacts": {
+      "instances/lss-rig-client/minecraft/mods/lod-server-support-fabric.jar": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c",
+      "server/mods/lod-server-support-fabric.jar": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c"
+    },
+    "candidate_sha256": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c",
+    "candidate_target": "instances/lss-rig-client/minecraft/mods/lod-server-support-fabric.jar",
+    "checker_sha256": "d5f9c98f3c9218282dbd20b48351567fd4a4fd121e1dd86411feefaf61585947",
+    "effective_config": {
+      "initial_generated_config_hash": "7407dc2de7caecc0bd019321f5dc431d1f18891fdf475479813b7b64631c1440"
+    },
+    "fixture_artifacts": {
+      "instances/lss-rig-client/minecraft/mods/lss-map-connect-fixture.jar": "5d6dbe1b6a1022cc91b2447e95aaf04146c8e395c53eb2444686fd06b89a5307",
+      "instances/lss-rig-client/minecraft/mods/lss-xaero-map-fixture.jar": "8ac8c8a0a878b8ca4d0cf89128b0d0e5a95257a11ae736eb7d6be1e2973c5311"
+    },
+    "fixture_sha256": "30b7c6761a860551cfbd11f253872e61cc10b44c9c916f0739513d8828b2f8e5",
+    "jvm_flags": {
+      "launch_memory_flags": {
+        "client": [],
+        "map-controller": [],
+        "server": [
+          "-Xms512M",
+          "-Xmx2G"
+        ]
+      },
+      "prism_memory_mib": {
+        "MaxMemAlloc": 3072,
+        "MinMemAlloc": 512
+      }
+    },
+    "participant_profiles": {
+      "server": {
+        "id": "mc1211-fabric-server",
+        "profile_hash": "737fc992ba97dc2cdf559980e4cbad0fa7389a7b34e60e454100d872853972d1"
+      }
+    },
+    "rig_run_hash": "7ca103cb807a2de34cc338e3cbb41ad4a5fa03cb295a2a5655b822f498ae550d",
+    "runtime_hash": "d924bb02d5be9e6163beca9155d37e8bce6e19888b0ed774c86bd0799539a1b0",
+    "runtime_settings_sha256": "bbb396dcc68efb031c853fbe32a9cea56a293741c67000f922ae7346d9aee995",
+    "runtime_settings_version": 1,
+    "runtime_tools_sha256": "c85cf886ad49a47a41fec6892768188c0c9434785941329067e99ac9c2a26495",
+    "scenario_checker_sha256": "5b1c8ea725b2d11d3fc6c2fd0fcac5365c0083c736cb0e60b0f7ebeb506ea193",
+    "scenario_checker_sources": {
+      "scripts/lib/harness-lock.sh": "0e844b7de643c8bdf9ed560bcad16aec6ec6620123fa0357be0204c76d38b056",
+      "scripts/lib/owned-process.py": "9cfa024fc235604c9defe661a1fe81d7b4e50788accb4ac2260d5df423b5bc55",
+      "staged/launcher/prism-offline.py": "18589d1dc2d9b9fdef4b6332895bb7e9b00ff72f367b72f71c9256d964ccf404",
+      "tools/compat/catalog.py": "6b4628eec83baca37c5c439d171cf2daa12028d8dd24a38b7a735d9c28448432",
+      "tools/compat/loader_ranges.py": "48587c8ee57c232464817a3b05ffc1eb49290c9ddd912a87a5c50aa33851c071",
+      "tools/compat/materialize.py": "4ffdcf3dcb95e5c840d466b23c9a1084df1528c7a399807d76794a44a6b0eb0e",
+      "tools/compat/server_smoke_identity.py": "131a80ff43fca140576be76d25f321ea43fc49171629ebf36a1afe895b9b25e1",
+      "tools/rig/assemble_metrics.py": "e82a727f3841e50b82a4a25af331d3624e9a5bef4fbc7b67b4283cb95b79a119",
+      "tools/rig/assemble_run.py": "5f92f1e438bd105888836633654d5033ef6527069d44161885ef39e5de1733fa",
+      "tools/rig/bind_endpoints.py": "025ef49aa8c3a6307be7ee5c3ae2684a5d0707d506d4c5ae0c9173df543e43b7",
+      "tools/rig/check_concurrent_sources.py": "b59730d29c95defe3f96ef1f9e8f211d2642907ad7224581eb2794e02afeb7d1",
+      "tools/rig/check_debt.py": "54c3012c91825dd835589c0fbccfbe6f37e9a09b83870b7169de372082afbb55",
+      "tools/rig/check_measured_schedule.py": "6ae5ef22fd3496d9722c0c414c043e950493d492ad8ce92e1f6b404df10a4609",
+      "tools/rig/check_regions.py": "941ddd27ee94ef08b3d97364e5ca4992ea07a54c3ff0c5b7c131a31af93eef56",
+      "tools/rig/check_workload.py": "c31b0b122ee316d07392c57c07efcb57835062c586f6a890364ccf9f63bf0e3b",
+      "tools/rig/check_xaero_map.py": "7cb5ebb82bb242d55caf77aadeed3d81fe0f093d26fb1968aff982c3b0350da6",
+      "tools/rig/check_xaero_map_run.py": "3857d173f46591e2ce4ec3268a20e26e6695f5da2c160f166046f9d97d2c3841",
+      "tools/rig/check_xaero_progress.py": "0ffbc4f4770aba92e09443d5cde0b6a2ce9610913fd487e078ce22601213d86e",
+      "tools/rig/commands.py": "504274c1cd2fc7cbec0e813c106ca2beaec364f9032457d988a90b5fa3e6696f",
+      "tools/rig/drive_xaero_map.py": "c1237e2ab5e5fc69ccde7c6e219081e85361be8d73ed92602f6bebeef4335134",
+      "tools/rig/experiment.py": "44179899da48100518a74b9a203cb3727a8aadcfd8445e0c0ad50347743db788",
+      "tools/rig/launch_journal.py": "4a1bce5359713f6c6605fa42cdb9289784b4c166f5b34679d4527fb696619c27",
+      "tools/rig/launch_prism.py": "dbc1b2aefc93cf90e224736dcf5db09c77a2e05d510ca4fbb6119c445d2fd8d7",
+      "tools/rig/measure.py": "a33126913892e11d1172cfb243c1f1586e920070dd1ee9678e97efa119c721f3",
+      "tools/rig/measured_regions.py": "8242250cd27628d21a2fa866b6c5b9fe3b32351356176fb5ee7a7c308e295a4f",
+      "tools/rig/measurement_inputs.py": "69cd7f4d26691dad8db9266fe6f7bf1a86974cbec79f8d1cc3f4224eb6ea54ab",
+      "tools/rig/metrics.py": "5945623000072367932ac8a81a0e7199bf80b9c721d8a6ed37c2bc5370e1326c",
+      "tools/rig/native_window.py": "1134a438f5b243a3f1b7f44b9189c1176766fbea4d4d4330cde08d295587bda1",
+      "tools/rig/normalize_workload.py": "5fdf41ba91551d5f0ab144bd527cb84cfb700cf81b0c884523bb62c99a637428",
+      "tools/rig/performance.py": "2e21801b0279df5f811e58bcabfca2b102d427c8b91a8fadc0fffde77caa72ab",
+      "tools/rig/prepare_xaero_map.py": "3bbb957c6d9722e751e8d9607f90991763447e644acebb875f56d999fc3a5c98",
+      "tools/rig/private_input.py": "1d5330562b78b5d72cebe59279bced57d8dbc2a4ec8ffae6279c14730e314a74",
+      "tools/rig/proof.py": "968771dbd553e806647be4949730f89baf9626341435f776750888ceea16ad05",
+      "tools/rig/review_state.py": "820c2992e282b8d3204485427e68422b877f3a60d3861e23452e89925feb750d",
+      "tools/rig/rig": "c0e78f2ec42d610396fc09090c571262bccb909f5215d8a9f79d8a126cf3c72e",
+      "tools/rig/rig.py": "e5503f6abd0ecb5cf51a9081c5a558d3f3082c3cdd4ee99ba596e247f2e93500",
+      "tools/rig/run_claim.py": "312ac9f283c2123286938b9930d03e4b694aa98c5c413b125ee37b6866951278",
+      "tools/rig/runtime_trees.py": "802f2f3d3539e2a132c1f1ffde26ea206547bcd8190a015e9d188d050e21690c",
+      "tools/rig/source_client_natives.py": "92bb5611462ec25e444ca95daa0ebb638bd9c274ff3436bd9b4c77d75527850c",
+      "tools/rig/storage_guard.py": "930143fab92ad0cd3d15b23881334459a51ee04fea491494cf54285de3e83bee",
+      "tools/rig/supplemental_metrics.py": "160c68eeb8f2f5dadd63dae8ed325c4e8b784fcdf6e820dda2dae015311bea1e",
+      "tools/rig/target_intervals.py": "ad22d510c1d5393c298bf311de6f49decc8266e7fe81be8885be6aeea962d4bf",
+      "tools/rig/toolchain.py": "8b41446cb2c0db52d395a4c5cb7e742160542ef2658f352196924566952a0194",
+      "tools/rig/xaero_map_input.py": "f79f7b0eb290ea3b5c57ddd3819ecdc9e98534ca0e90c1b240441c875abaa38b",
+      "tools/rig/xaero_map_shutdown.py": "b38c6ab88320c7e5c03501000f0a22d4edc16dd299d17d42c5aa53565eeee823",
+      "tools/rig/xaero_map_terrain.py": "36ef6b40d1bc13e9410ad55b21281646ffdf7a08fe2dc1dc197f6a611667223c",
+      "tools/rig/xaero_map_viewport.py": "cdef27925538a43a00103cec00d026142dddb97c8e2b904bef9381ae673e25fc"
+    },
+    "scenario_hash": "662c1e8065fe3eb94f8cad2aabd5e347c8a7054f579270e08db016d0aa21be31",
+    "scenario_version": 2,
+    "world_input_kind": "fresh generated world; initial seed/generator/configuration bound by digest",
+    "world_sha256": "fa1c3e11ec9af0043e7047a43cd4f964e568f220afe188ecdf9c37051049e9ba"
+  },
+  "scenario": "xaero-map",
+  "schema_version": 1,
+  "timestamp": "2026-09-20T02:15:39Z"
+}

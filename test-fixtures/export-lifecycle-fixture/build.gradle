@@ -1,0 +1,24 @@
+plugins { id 'net.fabricmc.fabric-loom-remap' version '1.17.13' }
+version = '1.0.0-test-only'
+group = 'dev.vox.lssfixture'
+base { archivesName = 'lss-export-lifecycle-fixture' }
+repositories { mavenCentral() }
+dependencies {
+    minecraft 'com.mojang:minecraft:1.21.1'
+    mappings loom.officialMojangMappings()
+    modImplementation 'net.fabricmc:fabric-loader:0.19.3'
+    compileOnly files(providers.gradleProperty('lssCommonJar').get())
+    modCompileOnly files(providers.gradleProperty('lssFabricJar').get())
+}
+java { toolchain { languageVersion = JavaLanguageVersion.of(21) } }
+loom { mixin { useLegacyMixinAp = true; defaultRefmapName = 'lss-export-lifecycle-fixture-refmap.json' } }
+// Optional second-loader artifact: NeoForge1.21.1 uses official names. Never install
+// the Fabric remapped jar there. Its config intentionally omits the Fabric refmap.
+tasks.register('neoforgeFixtureJar', Jar) {
+    dependsOn classes
+    archiveClassifier = 'neoforge-named'
+    from(sourceSets.main.output) {
+        exclude 'fabric.mod.json', 'lss-export-lifecycle-fixture.mixins.json', '*refmap*.json'
+    }
+    from('neoforge-resources')
+}

@@ -1,0 +1,113 @@
+--- 1.21.10
+
++++ 1.21.11
+
+@@ -30,8 +30,8 @@
+
+ import net.minecraft.client.renderer.entity.state.AvatarRenderState;
+ import net.minecraft.client.renderer.entity.state.EntityRenderState;
+-import net.minecraft.client.renderer.entity.state.HitboxesRenderState;
+ import net.minecraft.client.renderer.feature.ModelFeatureRenderer;
+ import net.minecraft.client.renderer.item.ItemStackRenderState;
+-import net.minecraft.client.renderer.RenderType;
++import net.minecraft.client.renderer.rendertype.RenderType;
++import net.minecraft.client.renderer.rendertype.RenderTypes;
+ import net.minecraft.client.renderer.state.CameraRenderState;
+ import net.minecraft.client.renderer.texture.TextureAtlasSprite;
+@@ -41,5 +41,5 @@
+
+ import net.minecraft.core.registries.BuiltInRegistries;
+ import net.minecraft.network.chat.Component;
+-import net.minecraft.resources.ResourceLocation;
++import net.minecraft.resources.Identifier;
+ import net.minecraft.util.FormattedCharSequence;
+ import net.minecraft.util.Mth;
+@@ -102,5 +102,5 @@
+
+  *       to "no proxies" for the session, never a render-thread crash loop.</li>
+  *   <li><b>Light, tags, depth lift (2026-09-04, far-player-render-hardening-plan.md; ported to
+- *       this 1.21.10 line 2026-09-05)</b>: proxies are lit with a sky-15 FLOOR (or full-bright,
++ *       this 1.21.11 line 2026-09-05)</b>: proxies are lit with a sky-15 FLOOR (or full-bright,
+  *       {@code farPlayersFullBright}) set on the extracted render state — never from the
+  *       client's stored light data, which reads zero in the C2ME no-tick ring; LSS draws its own
+@@ -249,5 +249,5 @@
+
+     }
+ 
+-    /** The BEFORE_ENTITIES pass (1.21.10 line: BEFORE, not 26.2's COLLECT_SUBMITS
++    /** The BEFORE_ENTITIES pass (1.21.11 line: BEFORE, not 26.2's COLLECT_SUBMITS
+      *  analog AFTER_ENTITIES — on this line AFTER_ENTITIES fires after
+      *  FeatureRenderDispatcher.renderAllFeatures() has already drained AND CLEARED the
+@@ -301,5 +301,5 @@
+
+         String trackerDimension = tracker.dimension();
+         if (trackerDimension == null
+-                || !trackerDimension.equals(level.dimension().location().toString())) {
++                || !trackerDimension.equals(level.dimension().identifier().toString())) {
+             clear();
+             return;
+@@ -477,5 +477,6 @@
+
+         // team switch returns first — stricter only (F5). The body clause is vanilla's own
+         // entity-extraction predicate on this line (LevelRenderer: isOutsideBuildHeight ||
+-        // isSectionCompiled — 1.21.11 adds the section-visibility conjunct to the latter);
++        // isSectionCompiledAndVisible — the latter also carries vanilla's section-visibility test, so a tag
++        // never draws where the body was culled by it);
+         // a player above the build ceiling keeps its vanilla body and therefore its tag.
+         if (nameTags) {
+@@ -489,5 +490,5 @@
+
+                 var pos = realPlayer.blockPosition();
+                 if (!level.isOutsideBuildHeight(pos.getY())
+-                        && !minecraft.levelRenderer.isSectionCompiled(pos)) continue; // vanilla's own body predicate (F4)
++                        && !minecraft.levelRenderer.isSectionCompiledAndVisible(pos)) continue; // vanilla's own body predicate (F4)
+                 double cameraDistanceSq = cameraPosition.distanceToSqr(realPosition);
+                 if (cameraDistanceSq < 64.0 * 64.0) continue; // vanilla's own tag range (camera-based, as its cap is)
+@@ -774,9 +775,9 @@
+
+      *  replaced renderer still answers, and fall back to vanilla's function. */
+     private static RenderType skinRenderType(EntityRenderDispatcher dispatcher, Proxy proxy) {
+-        ResourceLocation skin = proxy.getSkin().body().texturePath();
++        Identifier skin = proxy.getSkin().body().texturePath();
+         if (dispatcher.getRenderer(proxy) instanceof LivingEntityRenderer<?, ?, ?> living) {
+             return living.getModel().renderType(skin);
+         }
+-        return RenderType.entityTranslucent(skin);
++        return RenderTypes.entityTranslucent(skin);
+     }
+ 
+@@ -910,9 +911,4 @@
+
+             delegate.submitText(poseStack, x, y, text, dropShadow, mode, light, color, backgroundColor,
+                     outlineColor);
+-        }
+-
+-        @Override
+-        public void submitHitbox(PoseStack poseStack, EntityRenderState state, HitboxesRenderState hitboxes) {
+-            delegate.submitHitbox(poseStack, state, hitboxes); // 1.21.10 line: the debug hitbox submit (gone on 1.21.11)
+         }
+ 
+@@ -1217,5 +1213,5 @@
+
+             liftTiers.put(Sheets.armorTrimsSheet(true), 1);
+             liftTiers.put(Sheets.armorTrimsSheet(false), 1);
+-            liftTiers.put(RenderType.armorEntityGlint(), 1);
++            liftTiers.put(RenderTypes.armorEntityGlint(), 1);
+             if (equipmentAssets == null) return;
+             for (EquipmentSlot slot : ARMOR_EQUIPMENT_SLOTS) {
+@@ -1227,5 +1223,5 @@
+
+                         : EquipmentClientInfo.LayerType.HUMANOID;
+                 for (EquipmentClientInfo.Layer layer : equipmentAssets.get(equippable.assetId().get()).getLayers(layerType)) {
+-                    liftTiers.put(RenderType.armorCutoutNoCull(layer.getTextureLocation(layerType)), inner ? 0 : 1);
++                    liftTiers.put(RenderTypes.armorCutoutNoCull(layer.getTextureLocation(layerType)), inner ? 0 : 1);
+                 }
+             }
+@@ -1262,5 +1258,5 @@
+
+                 // registry lacks — an unknown identity renders as an EMPTY slot,
+                 // the far-player analogue of the column fallback ladder.
+-                return BuiltInRegistries.ITEM.getValue(ResourceLocation.parse(id));
++                return BuiltInRegistries.ITEM.getValue(Identifier.parse(id));
+             } catch (Exception e) {
+                 return Items.AIR;

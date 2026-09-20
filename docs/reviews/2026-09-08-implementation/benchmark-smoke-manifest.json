@@ -1,0 +1,21 @@
+{
+  "run_id": "20260908T215639-4fad536d11ef49519da93e18e17c424d",
+  "commit": "5887c45a6cee13bef1933fe03e9aa1a808272f5b",
+  "scenario": "fresh",
+  "duration_seconds": 60,
+  "started": "2026-09-08T21:56:39.544676+00:00",
+  "status": "complete",
+  "cycles": {
+    "measure": {
+      "started": "2026-09-08T21:56:49.987968+00:00",
+      "status": "complete",
+      "server_exit": 0,
+      "client_exit": 0,
+      "finished": "2026-09-08T21:58:07.569415+00:00",
+      "server_jfr": "present",
+      "client_jfr": "present",
+      "errors": []
+    }
+  },
+  "finished": "2026-09-08T21:58:07.653447+00:00"
+}

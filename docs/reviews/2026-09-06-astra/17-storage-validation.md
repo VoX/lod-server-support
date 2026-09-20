@@ -1,0 +1,43 @@
+# 17 — Independent challenge of the two storage findings and WI-2
+
+This is a bounded second review of report03's findings and supplied evidence, not a replacement for the interrupted whole-storage audit. Reviewed the merged MC1.21.1 source, external probe source, saved XML/log evidence, existing SQLite tests, relevant migration plan and pinned-decision guidance. No code changes, test execution, Gradle, server operations, or new storage measurements.
+
+## Verdict
+
+**Both findings stand.** ST-01's P1 priority is justified by the possible new-policy disclosure of old unmasked rows. ST-02 remains P2 integrity enforcement; its probe does not prove a malformed native palette survives the real translator. WI-2's current draft body and acceptance criteria correctly include the validated buffered-generation manifestation. No disqualifying fixture or intentional-behavior conflict was found.
+
+## ST-01: shutdown-interrupted mask invalidation
+
+`SqliteLodStore.runSweep` checks shutdown at `:2355`, resolves the region directory, detects fingerprint drift, and calls `dropDimensionRows` at `:2382`. That helper observes shutdown inside its bounded deletion loop at `:2597` and **breaks**, returning only a deleted-row count. The caller cannot distinguish exhaustion from interruption and unconditionally updates `dims.mask_fingerprint` and commits at `:2383–2389`. Ordinary header freshness on the next boot does not detect a masking-policy mismatch after its only policy marker has been advanced.
+
+The supplied resolver latch is a legitimate scheduling seam. Production does not require a resolver that blocks or catches interrupts: shutdown may arrive after the top-of-dimension check, before the first deletion batch, or between any two bounded batches. The helper's own comment explicitly says large dimensions can spend tens of seconds in this deletion path and must observe shutdown to avoid surviving writer threads. The test enlarges one of those scheduling windows without changing its control flow or injecting a SQL error.
+
+The test's first store is fully swept, receives a real compressed/checksummed deposit, confirms a real hit, and shuts down. Its minimal region header uses the same store-layer abstraction as `SqliteLodStoreTest.maskFingerprintDriftDropsTheDimensionsRows`; a full NBT chunk is not needed to test a store that examines only freshness headers and treats section bytes opaquely. The region header is older than acquisition and stays unchanged, so normal freshness is correctly unable to replace the missing mask invalidation. The final reopen uses the same new fingerprint as the interrupted middle open. The saved XML records one failure, zero errors/skips: a real `StoreHit` at line60, not a barrier timeout.
+
+The important production scenario is **policy strengthening** (e.g. previously disabled mask or an expanded hidden-state set), followed by stop/reload during startup invalidation, followed by reopening under that stronger policy. Surviving rows then claim the new policy despite retaining old bytes. The probe does not claim leakage during the shutdown itself; read/serving shutdown guards are orthogonal to durable next-boot validity.
+
+Existing tests require dropping rows on mask drift and keeping fresh rows once the fingerprint is stable. They do not test interrupted drift. Moreover, the admin `DropAll` caller at `SqliteLodStore.java:1680–1706` already implements the exact missing principle: a shutdown-interrupted row drop must preserve migration metadata over survivors, and completion metadata is cleared only when the drop completed. This corroborates ST-01 rather than creating a new finding.
+
+**Required fix properties:** The helper must return explicit completion or signal controlled interruption; zero deleted rows alone is not proof of completion. Only a completed drop may advance the fingerprint. Preserve bounded commits, shutdown responsiveness, `droppingDims` reader exclusion, deposit barriers, and admin-drop completion semantics. A shutdown after proven exhaustion can safely commit the fingerprint; a conservative retry next boot is also safe. Do not roll back already committed deletion batches or require one unbounded transaction.
+
+**Required regressions:** Before-first-batch interruption; between-batch interruption with survivors; completed drift followed by same-policy reopen; completed empty dimension; unchanged-policy control; no store-error/latch strike for an intentional shutdown interruption; existing admin-drop/migration-residual tests remain green.
+
+## ST-02: migration verifies decode but ignores original integrity
+
+The migration selection at `SqliteLodStore.java:1265–1274` reads only `pos`, `usize`, and `blob`. Non-air processing at `:1326–1335` decompresses, translates, recompresses, and computes new CRC32C values without consulting either old checksum. In contrast, normal `get` at `:761–767` checks legacy FNV content hash and actual size; `getFrame` at `:825–833` checks legacy FNV frame hash and frame-declared size.
+
+The external fixture comes directly from `SqliteLodStoreMigrationTest`'s exact released schema3/wire19 setup, including WAL/page/vacuum shape, matching codec and registry fingerprint, FNV checksums, region header and remembered mtime. Its `26.2-test` metadata is a consistent opaque fixture label also used by the existing common store suite; it is not a mismatch against the MC1.21.1 runtime registry. The probe alters only `chash`, then uses separate fresh fixture instances for normal-read and migration arms. The normal-read GREEN therefore did not delete the migration arm's row.
+
+Saved XML records two tests, one failure, zero errors/skips. The control rejects the mismatched checksum; the background migration completes normally and returns a wirefmt20 `StoreHit` at line32. The injected clone translator uses the store's existing opaque-translation seam. This precisely proves that migration can certify a row whose original content-integrity check fails. It does **not** demonstrate palette fidelity or a real-world bit-rotted chunk's exact rendered content. P2 is appropriate for the integrity-contract violation; avoid inflating the claim beyond that evidence.
+
+There is no intentional checksum-repair policy in the consulted plan/tests. Migration explicitly deletes anomalous derived rows and preserves forward progress. Existing anomaly coverage uses invalid compressed data and out-of-bounds `usize`; neither tests a decodable body with failed integrity. Recomputing hashes for newly encoded bytes is required **after** validating the original representation, not a substitute for validating it.
+
+**Required fix properties:** Select `chash` and `fhash`, verify with the existing legacy FNV function, retain bounded positive `usize`, frame-declared-size and decompressed-length checks, then translate and create CRC32C checksums for the new v20 body/frame. Keep `usize==0` ahead of all body/hash validation: all-air is intentionally a bare retag, and both current readers ignore its hashes/blob. Keep the registry ordered/content fingerprint ladder unchanged; it determines whether native IDs are interpretable, not whether a row's bytes are intact. Maintain transactional row/watermark/done-count updates, row-local anomaly deletion/counters, and residual-marker behavior when deletion fails.
+
+**Required regressions:** Valid decodable row; content-hash mismatch; frame-hash mismatch; declared/actual size mismatch; legitimate all-air with ignored hash/body values; existing rollback/retry, restart-resume, hostile-size, anomaly, residual-marker and latest-wins deposit tests. Real translator corpus tests remain separate evidence and should not be replaced by this store-level probe.
+
+## WI-2 generation scope
+
+`draft-plan.md:44–46` correctly requires ownership through generation tickets, per-player callbacks and ready records, validation before consuming tracking/removing pending or publishing/stamping/depositing, and the already-validated buffered-generation regression plus permanent-failure/shared-load/adapter variants. It expressly rejects clearing only Paper `mainReady` and preserves legitimate same-session ghosts. This satisfies report09's required scope.
+
+One documentation amendment was sent to the parent: the WI-2 heading/table still say “read” ownership and “two probes,” while report02's original conclusion predates the validated generation reproduction. Rename the work item to asynchronous result/session ownership and add a report09 link or dated expansion note. This prevents a reviewer from applying a reader-only fix despite the correctly expanded detailed plan. No separate finding count is warranted.

@@ -1,5 +1,11 @@
 # NeoForge support plan — client + server, best-effort tier (2026-08-14, v1.2)
 
+> Current operational state (2026-09-08): the dated spike/rollout records in this
+> plan are retained. Consult the [loader/artifact matrix](per-version-surfaces.md#current-loader-and-artifact-surfaces-2026-09-08)
+> and [live-profile inventory](../testing/astra-live-profiles.md) for current shipping,
+> rendering and terrain-consumer coverage. Both native libraries now use stock jarJar
+> nesting; the old no-consumer spike result is not a current compatibility census.
+
 **Status: PLANNED — folded into the v0.11.0 mega plan as stage N (post-pause,
 pre-G). Sequencing RESOLVED (user, 2026-08-14): N precedes G, and v0.11.0
 releases ALL FOUR MC lines (26.2, 26.1, 1.21.11, 1.21.1) × THREE loaders

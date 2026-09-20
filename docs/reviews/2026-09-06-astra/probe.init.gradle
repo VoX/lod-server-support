@@ -1,0 +1,7 @@
+// Opt-in diagnostic sources: expected assertions fail on the reviewed baseline.
+gradle.projectsEvaluated {
+    def reviewRoot = gradle.rootProject.findProperty('lssReviewRoot')
+    if (reviewRoot == null) throw new GradleException('Set -PlssReviewRoot to the evidence bundle directory')
+    gradle.rootProject.project(':fabric').sourceSets.test.java.srcDir(new File(reviewRoot, 'probes'))
+    gradle.rootProject.project(':paper').sourceSets.test.java.srcDir(new File(reviewRoot, 'paper-probes'))
+}

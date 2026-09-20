@@ -1,5 +1,7 @@
 package dev.vox.lss.paper;
 
+import dev.vox.lss.common.processing.RequestRegistration;
+
 // 1.21.1 line: Paper's chunk-system IO here is RegionFileIOThread + the
 // PrioritisedExecutor.Priority enum (26.x's MoonriseRegionFileIO/flat Priority
 // reshape does not exist on this line; javap-verified against the 1.21.1 dev bundle).
@@ -45,7 +47,7 @@ public class PaperChunkDiskReader extends AbstractChunkDiskReader {
         this.readOverride = read;
     }
 
-    public void submitReadDirect(UUID playerUuid, String dimension, ServerLevel level,
+    public void submitReadDirect(UUID playerUuid, RequestRegistration registration, String dimension, ServerLevel level,
                                   int chunkX, int chunkZ, long submissionOrder,
                                   long clientTimestamp) {
         var registryAccess = level.registryAccess();
@@ -65,7 +67,7 @@ public class PaperChunkDiskReader extends AbstractChunkDiskReader {
         // 1.21.1 line: getMinSection()/getMaxSection() (max EXCLUSIVE -> -1 for inclusive).
         int minSectionY = level.getMinSection();
         int maxSectionY = level.getMaxSection() - 1;
-        submitRead(playerUuid, chunkX, chunkZ, dimension, submissionOrder, clientTimestamp,
+        submitRead(playerUuid, registration, chunkX, chunkZ, dimension, submissionOrder, clientTimestamp,
                 () -> PaperNbtSectionSerializer.readAndSerializeSections(read, registryAccess, chunkX, chunkZ,
                         maskEntry, minSectionY, maxSectionY, this.useNbtTranscode));
     }

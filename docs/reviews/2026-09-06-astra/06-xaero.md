@@ -1,0 +1,51 @@
+# Xaero bridge review — 2026-09-06
+
+Reviewed `/home/vox/projects/lss-lines/1.21.1`, HEAD `49e588dba275568b71516dbf95aff95033609bbb`; parent verified its tree equals merged `1b544494` using git diff. Read-only review and external probes only. No repository edits, Gradle, client/server changes, or delegated agents. Parent coordinates probe execution.
+
+## New finding: P2 — an old-session overflow can recreate owed debt after disconnect
+
+**Primary location:** `xplat/src/main/java/dev/vox/lss/compat/XaeroMapCompat.java:1048` (`shedToOwed` creates debt without session/generation validation). Producer: `offerColumn:923` unlocked overflow path, also `offerPrepared:1010` unlocked eviction classification. Teardown: `onSessionEnd:700–709`, settlement `settleSessionEnd:713`.
+
+**Trigger:** Under scatter/backpressure, the bridge has a full queue and its last pump classified the affected region as awaiting load. The decode thread passes `offerColumn`'s active-session guard, detects overflow under queueLock, then leaves the lock before classifying the drop. Fabric's documented abrupt-disconnect callback runs on netty in that interval, turns the LSS session inactive, and clears both the queue and owed debt. The old decode call resumes `shedToOwed`: this checks only the backpressure switch and old `awaitingRegions` classifier, then creates an OwedRegion after teardown has completed. The title-screen `settleSessionEnd` clears pending redraws/reports but neither this recreated debt nor the classifier. A later server's same-dimension Xaero session can load/rest that region and release the OLD coordinate as an ingest-failure report to the NEW active LSS manager.
+
+**Impact:** Session isolation fails for repair reports. If the new manager holds a positive stamp at that coordinate, the stale report removes it and consumes an ingest retry against a delivery from another server, causing unnecessary download/repair. This is not evidence of cross-server map-pixel copying or an unconditional permanent terrain hole; those stronger claims are not established. The overlap can occur during an abrupt Fabric disconnect with a saturated bridge queue. The underlying unlocked shed tail can also overlap main-thread lifecycle on either loader's decode thread.
+
+**Evidence:** Queue/owed locking individually protects container operations, but does not protect the operation's origin session. `shedToOwed` has no active-session check, pending-teardown check or epoch. `onSessionEnd` leaves `awaitingRegions` unchanged, and settlement never clears a debt installed after the initial clear. Existing `sessionEndClearsTheOwedSet` is sequential, while the recent duplicate-shed and byte-replacement pins only cover accounting within one session. The earlier extraction-after-disconnect fix guards retained BYTES in `offerPrepared`; the subsequent WI-3 debt tail has no equivalent guard.
+
+**External regression and parent validation:** `/tmp/lss-review06-probes/XaeroOwedDisconnectReviewTest.java`, method `shedAfterDisconnectMustNotCarryOldDebtIntoTheNextServer`. Drives the actual `offerColumn` pre-extraction count refusal, pauses at its backpressure-classifier read, runs real background `onSessionEnd`, settles the title screen, then creates a different Xaero session/world ID with the same MC dimension. Parent executed it: both intended subassertions are RED, with debt=1 surviving title settlement and old packed position 554050781248 (129,64) reported in the new active session. Evidence: `xaero-and-farplayer-lifecycle-probes.log` and `xaero-owed-cross-session-probe.xml` in the review directory. The first probe's owed=-1 remains reproduced too.
+
+**Fix direction:** Add a bridge session generation and carry the captured origin through extraction/queue-eviction/debt creation and release. Increment generation before teardown clears. Validate it while holding owedLock before adding or mutating debt, and before publishing deferred reports. Checking `sessionActive` alone is insufficient if the next connection has already made it true; a boolean is not an origin identity. Reset the derived awaiting classifier on session settlement. Keep queueLock/owedLock order acyclic and do not move Xaero tile probes under owedLock. The active session's governed/ungoverned/wedged classification, owed TTL and cap rules remain unchanged.
+
+**Regression additions:** actual overflow→disconnect→shed interleave, byte-eviction twin, dimension-preserving reconnect, accepted new-session debt still releases, obsolete reports never mutate the new session, and unchanged existing overflow/owed/load-ready/defer-cap tests. Test via hooks/latches without timing sleeps or real client lifecycle assumptions.
+
+## Companion P3 — release resumes against a detached debt record and makes owed negative
+
+**Location:** `XaeroMapCompat.java:1267–1275` (`releaseOwed` resumes after tile probes and subtracts `taken.size()` from the global gauge without validating that the old record/session is still live).
+
+**Trigger:** The main pump snapshots busyTiles, drops owedLock to probe the Xaero tile chunk, and a netty disconnect clears owed and zeroes both gauges. The pump resumes against the detached old OwedRegion, removes its still-present busy tile, subtracts from the already-zero gauge, and queues an old failure report. The next main settlement does not restore owedGauge.
+
+**Confirmed parent execution:** `abruptDisconnectDuringOwedReleaseCannotRepublishDebtOrNegativeGauge` in the same external probe class is RED at exactly two intended subassertions: owed is -1, and the old report was republished. owed_regions remains 0. Log/XML saved as `xaero-owed-disconnect-probe.*` in the review directory. No setup/premise failure occurred.
+
+**Bounded impact:** owedGauge is diagnostic; actual pump scheduling uses owedRegionsGauge. This does not itself prove a stuck acquisition loop. The report is drained in the SAME pump's finally, before next settlement; in a normal disconnect the production LSS manager is already null and drops it. Do not infer new-session corruption from this gauge reproducer alone. The separate shed-after-clear scenario above establishes actual debt survival instead.
+
+**Fix/regression:** Generation/record validation in the same lifecycle repair above; couple each set removal's gauge decrement under its owning lock and ensure an invalidated release cannot subtract or publish. Do not weaken the outside-lock tile probe discipline, which closed a real render/decode contention issue. The external test drives a real background teardown while an overridden faithful stub getter is inside the release probe; no production stub or repo edits.
+
+## Native surface and already-fixed issues checked
+
+- Read `xaero-edge-queue-fix-plan.md`, `xaero-scatter-remediation-plan.md` and the relevant as-built sections of `xaero-map-bridge-plan.md`. The 2026-09-06 south/east/southeast slope invalidation, distinct pending-group capacity preflight, busy-neighbor cap-exempt deferral, update-setting-first ordering, replacement-byte eviction and duplicate owed-gauge fixes are present. They are not re-reported.
+- Inspected the installed Fabric Xaero World Map 1.45.0 `MapWriter` bytecode and NeoForge 1.45.0 public surface. `MapTile.isLoaded`, `getBlock(int,int)`, `MapBlock.setSlopeUnknown(boolean)`, `MapTileChunk.updateBuffers(...)` and `setChanged(boolean)` match the bridge handles. Evidence: `/tmp/lss-review06-mapwriter-fabric.txt`, `/tmp/lss-review06-neoforge-surface.txt`.
+- Fabric writeChunk bytecode confirms region-local neighbor lookup, south-row, east-column z+1 and southeast dependency handling. The bridge's full-column invalidation conservatively covers this. Do not add cross-region neighbor loads/monitors: native does not perform them here.
+- Rebuilds retain writer-pause, region load-state, object identity and resting gates; never setToUpdateBuffers. Same-session owed rebuilds are visited so Xaero cannot park them merely because the 2-second coalescing interval exceeds its 1-second texture visit timeout. Tick/frame gate ordering and changed/beingWritten handling were inspected; no new save-race defect established.
+- Extractor's translucency-family/fluid-type approximation, default flower visibility, top-height persistence limitation, null-biome fallback and absent-section behavior are recorded tradeoffs. No new concrete extraction mismatch established.
+
+## Ruled out / accepted limitations
+
+- Memoryless load-window over-grant when the pump's probe pass is budget-truncated is explicitly accepted by `xaero-map-bridge-plan.md:776–783`; tests of the full-pass window do not erase that stated exception. Not counted anew.
+- Region-scoped deferral on a busy slope neighbor can delay otherwise-ready siblings, but the edge plan explicitly chose cap-exempt DEFERRED to retain bytes; existing update/new settings ordering already prevents a refused update from blocking an allowed new tile.
+- TTL/cap debt loss, silent ungoverned drops, settings-off drops, add-only consumer registration, dropped rebuilds after long dimension absence, and the last coalescing window lost at session end are documented choices. No new findings from these.
+- The expired-old-tile→fresh-offer interleave can momentarily create redundant debt; a later release checks queued bytes and suppresses reporting while those bytes remain. A durable material regression beyond the known asynchronous report/offer window was not established; not promoted.
+- This review does not claim the user's transient map lines are reproduced. The recent slope fix's in-game visual retest remains separate. Static NeoForge signatures do not establish the still-owed live nested-xaerolib binding check.
+
+## Suggested implementation/validation scope
+
+One focused Xaero lifecycle hardening change can cover both new interleavings: generation-bound shed/release, atomic gauge bookkeeping, and classifier reset. Keep the recent edge/extractor/native monitor behavior byte-for-byte. Parent should run the external probes, then the existing XaeroMapCompatTest, XaeroTileExtractorTest and XaeroWiringContractTest after implementation; require a real abrupt-disconnect/rejoin client check before asserting end-to-end lifecycle coverage. No server protocol or world changes are needed for this repair.

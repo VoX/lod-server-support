@@ -1,0 +1,146 @@
+[
+  {
+    "minecraft": "1.21.1",
+    "class_sha256": "058b78574f521202860a40fbdc85fe7f4d9d8aed8120a38ffda6db0c8d7d6871",
+    "methods": [
+      {
+        "name": "a",
+        "descriptor": "(Lfhz;IIF)V",
+        "calls": [
+          [
+            6,
+            "fod:b:(Lfhz;IIF)V"
+          ],
+          [
+            13,
+            "java/util/List:iterator:()Ljava/util/Iterator;"
+          ],
+          [
+            22,
+            "java/util/Iterator:hasNext:()Z"
+          ],
+          [
+            32,
+            "java/util/Iterator:next:()Ljava/lang/Object;"
+          ],
+          [
+            49,
+            "fjp:a:(Lfhz;IIF)V"
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "minecraft": "1.21.10",
+    "class_sha256": "f35fb0acad62706e55efe57a43cab5be76c5e219ae3c6627339e0c0b46cb12ec",
+    "methods": [
+      {
+        "name": "a",
+        "descriptor": "(Lgdd;IIF)V",
+        "calls": [
+          [
+            4,
+            "java/util/List:iterator:()Ljava/util/Iterator;"
+          ],
+          [
+            13,
+            "java/util/Iterator:hasNext:()Z"
+          ],
+          [
+            23,
+            "java/util/Iterator:next:()Ljava/lang/Object;"
+          ],
+          [
+            40,
+            "get:a:(Lgdd;IIF)V"
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "minecraft": "1.21.11",
+    "class_sha256": "7d4be651b504fd1ddc287753885f670b880eb39aa9f9db75359b7e01a71ae636",
+    "methods": [
+      {
+        "name": "a",
+        "descriptor": "(Lgir;IIF)V",
+        "calls": [
+          [
+            4,
+            "java/util/List:iterator:()Ljava/util/Iterator;"
+          ],
+          [
+            13,
+            "java/util/Iterator:hasNext:()Z"
+          ],
+          [
+            23,
+            "java/util/Iterator:next:()Ljava/lang/Object;"
+          ],
+          [
+            40,
+            "gki:a:(Lgir;IIF)V"
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "minecraft": "26.1.2",
+    "class_sha256": "79089e18a5af9df6cb3428aca4186819d963c3591efd4908fe0906d90a2693d9",
+    "methods": [
+      {
+        "name": "extractRenderState",
+        "descriptor": "(Lnet/minecraft/client/gui/GuiGraphicsExtractor;IIF)V",
+        "calls": [
+          [
+            4,
+            "java/util/List:iterator:()Ljava/util/Iterator;"
+          ],
+          [
+            13,
+            "java/util/Iterator:hasNext:()Z"
+          ],
+          [
+            23,
+            "java/util/Iterator:next:()Ljava/lang/Object;"
+          ],
+          [
+            40,
+            "net/minecraft/client/gui/components/Renderable:extractRenderState:(Lnet/minecraft/client/gui/GuiGraphicsExtractor;IIF)V"
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "minecraft": "26.2",
+    "class_sha256": "d40c9a32e5d7a250d1c11cbe6c307506b85964c5c10de012ae0594e075ea195f",
+    "methods": [
+      {
+        "name": "extractRenderState",
+        "descriptor": "(Lnet/minecraft/client/gui/GuiGraphicsExtractor;IIF)V",
+        "calls": [
+          [
+            4,
+            "java/util/List:iterator:()Ljava/util/Iterator;"
+          ],
+          [
+            13,
+            "java/util/Iterator:hasNext:()Z"
+          ],
+          [
+            23,
+            "java/util/Iterator:next:()Ljava/lang/Object;"
+          ],
+          [
+            40,
+            "net/minecraft/client/gui/components/Renderable:extractRenderState:(Lnet/minecraft/client/gui/GuiGraphicsExtractor;IIF)V"
+          ]
+        ]
+      }
+    ]
+  }
+]

@@ -53,6 +53,8 @@ configurations {
     }
 }
 
+apply from: rootProject.file('gradle/c2me-dev-runtime.gradle')
+
 dependencies {
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
     mappings loom.officialMojangMappings()
@@ -108,7 +110,8 @@ dependencies {
     // silently never fired there. Runtime-only: release jars and normal builds are unaffected.
     if ((findProperty('benchmark.c2me') ?: 'false').toString() == 'true') {
         // 1.21.1 line: gRm1ZAvc = c2me-fabric 0.4.0-alpha.0.27+1.21.1 (matches test-server.sh)
-        localRuntime "maven.modrinth:c2me-fabric:gRm1ZAvc"
+        def c2meArtifact = "maven.modrinth:c2me-fabric:gRm1ZAvc"
+        project.addC2meDevRuntime(c2meArtifact, 21)
     }
 }
 
@@ -344,6 +347,9 @@ tasks.register('slimStoreDepJars') {
                         }
                         // Directory entries for stripped dirs are harmless; copy all.
                         def ne = new ZipEntry(e.name)
+                        // Two seconds past the ZIP epoch avoids the JDK minimum-date sentinel
+                        // that emits a timezone-dependent extended timestamp.
+                        ne.setTimeLocal(java.time.LocalDateTime.of(1980, 1, 1, 0, 0, 2))
                         ne.method = e.method
                         if (e.method == ZipEntry.STORED) {
                             ne.size = e.size
@@ -354,7 +360,9 @@ tasks.register('slimStoreDepJars') {
                         zf.getInputStream(e).withCloseable { is -> zos << is }
                         zos.closeEntry()
                     }
-                    zos.putNextEntry(new ZipEntry('fabric.mod.json'))
+                    def descriptorEntry = new ZipEntry('fabric.mod.json')
+                    descriptorEntry.setTimeLocal(java.time.LocalDateTime.of(1980, 1, 1, 0, 0, 2))
+                    zos.putNextEntry(descriptorEntry)
                     zos.write(groovy.json.JsonOutput.toJson([
                             schemaVersion: 1, id: modId, version: version,
                             name: "${name} (LSS LOD store)".toString(),
@@ -410,8 +418,8 @@ def lssFabricJarName = "lod-server-support-fabric" + (ciArchiveVersion ? "-${ciA
 
 tasks.register('vssJar') {
     description = 'Repackages the LSS Fabric jar under the Voxy Server Side branding.'
-    // This Loom version (1.17) has no separate remapJar — the `jar` task produces the final
-    // remapped release jar directly (with the nested common JiJ + Fabric-Mapping-Namespace).
+    // loom-remap produces the final intermediary-mapped release jar through remapJar,
+    // including nested common JiJ and Fabric-Mapping-Namespace metadata.
     // String dependency so it resolves at graph-build time, not config time.
     dependsOn 'remapJar'  // loom-remap emits the release jar
     def iconFile = rootProject.file('branding/vss/icon.png')
@@ -508,3 +516,6 @@ tasks.register('vssJar') {
 }
 
 tasks.named('build') { dependsOn 'vssJar' }
+
+// Shared pure test seam; never part of shipping artifacts.
+dependencies { testImplementation(testFixtures(project(':common'))) }

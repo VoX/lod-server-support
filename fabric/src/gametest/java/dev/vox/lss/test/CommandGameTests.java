@@ -480,4 +480,96 @@ public class CommandGameTests {
             playerList.remove(mock);
         });
     }
+
+    /** The actual per-line scenario files, executed and read back through Minecraft's
+     * registered command tree. Restore within this callback, before any other test ticks. */
+    @GameTest(template = "fabric-gametest-api-v1:empty")
+    public void soakScenarioGamerulesExecuteAndReadBack(GameTestHelper helper) throws Exception {
+        var root = java.nio.file.Path.of("").toAbsolutePath();
+        while (root != null && !java.nio.file.Files.isDirectory(root.resolve("scripts/soak-scenarios"))) {
+            root = root.getParent();
+        }
+        helper.assertTrue(root != null, "could not locate actual scenario JSON files");
+        var commandsToCheck = new java.util.TreeSet<String>();
+        try (var paths = java.nio.file.Files.list(root.resolve("scripts/soak-scenarios"))) {
+            for (var path : paths.filter(p -> p.toString().endsWith(".json")).toList()) {
+                var json = com.google.gson.JsonParser.parseString(java.nio.file.Files.readString(path)).getAsJsonObject();
+                if (!json.has("steps")) continue;
+                for (var step : json.getAsJsonArray("steps")) {
+                    String command = step.getAsJsonObject().get("cmd").getAsString();
+                    if (command.startsWith("gamerule ")) commandsToCheck.add(command);
+                }
+            }
+        }
+        helper.assertTrue(commandsToCheck.size() >= 5, "scenario setup command inventory must not be empty");
+        var server = helper.getLevel().getServer();
+        var commands = server.getCommands();
+        var source = server.createCommandSourceStack();
+        for (String command : commandsToCheck) {
+            int split = command.lastIndexOf(' ');
+            String query = command.substring(0, split);
+            String value = command.substring(split + 1);
+            var before = dev.vox.lss.benchmark.SoakCommandExecutor.executeForResult(commands, source, query);
+            helper.assertTrue(before.success(), "real rule query must succeed: " + query);
+            try {
+                helper.assertTrue(dev.vox.lss.benchmark.SoakCommandExecutor.setGamerule(commands, source, command),
+                        "scenario setter and exact readback must succeed (zero is valid): " + command);
+            } finally {
+                String restore = value.equals("true") || value.equals("false")
+                        ? Boolean.toString(before.value() != 0) : Integer.toString(before.value());
+                helper.assertTrue(dev.vox.lss.benchmark.SoakCommandExecutor.setGamerule(commands, source, query + " " + restore),
+                        "must restore original gamerule: " + query);
+            }
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "fabric-gametest-api-v1:empty")
+    public void soakCommandsRejectInvalidSyntaxAndMissingCallbacks(GameTestHelper helper) {
+        var server = helper.getLevel().getServer();
+        var commands = server.getCommands();
+        var source = server.createCommandSourceStack();
+        for (String bad : java.util.List.of("gamerule lss_nonexistent_rule 0", "gamerule", "execute in")) {
+            boolean rejected = false;
+            try {
+                dev.vox.lss.benchmark.SoakCommandExecutor.dispatch(commands, source, bad);
+            } catch (IllegalArgumentException expected) {
+                rejected = true;
+            }
+            helper.assertTrue(rejected, "unknown/incomplete command must fail validation: " + bad);
+        }
+        // Real command context deliberately defers the inner queue. Our tick-only helper
+        // must not report semantic success before the callback actually runs.
+        dev.vox.lss.benchmark.SoakCommandExecutor.Result[] nested = {null};
+        net.minecraft.commands.Commands.executeCommandInContext(source, context -> {
+            nested[0] = dev.vox.lss.benchmark.SoakCommandExecutor.executeForResult(commands, source, "list");
+        });
+        helper.assertTrue(nested[0] != null && !nested[0].success(),
+                "missing/deferred callback must not become success");
+        helper.succeed();
+    }
+
+    @GameTest(template = "fabric-gametest-api-v1:empty")
+    public void soakCommandsDistinguishHandlerFailureAndWrongReadback(GameTestHelper helper) {
+        var server = helper.getLevel().getServer();
+        var commands = server.getCommands();
+        var source = server.createCommandSourceStack();
+        commands.getDispatcher().register(net.minecraft.commands.Commands.literal("lss_soak_test_failure")
+                .executes(context -> { throw new com.mojang.brigadier.exceptions.SimpleCommandExceptionType(
+                        Component.literal("deliberate soak handler failure")).create(); }));
+        helper.assertTrue(!dev.vox.lss.benchmark.SoakCommandExecutor.executeForResult(
+                        commands, source, "lss_soak_test_failure").success(),
+                "command failure callback must remain false");
+        helper.assertTrue(dev.vox.lss.benchmark.SoakCommandExecutor.dispatch(
+                        commands, source, "lss_soak_test_failure"),
+                "generic cleanup retains parse/dispatch semantics, not mandatory effects");
+        commands.getDispatcher().register(net.minecraft.commands.Commands.literal("lss_soak_test_readback")
+                .executes(context -> 1)
+                .then(net.minecraft.commands.Commands.argument("value", com.mojang.brigadier.arguments.IntegerArgumentType.integer())
+                        .executes(context -> com.mojang.brigadier.arguments.IntegerArgumentType.getInteger(context, "value"))));
+        helper.assertTrue(!dev.vox.lss.benchmark.SoakCommandExecutor.setGamerule(
+                        commands, source, "lss_soak_test_readback 0"),
+                "successful zero-valued setter cannot hide wrong readback");
+        helper.succeed();
+    }
 }

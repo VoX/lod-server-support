@@ -19,6 +19,7 @@
     "IntegratedServerLanHook",
     "AccessorClientPacketListener",
     "AccessorLivingEntity",
-    "AccessorBiomeManager"
+    "AccessorBiomeManager",
+    "SodiumStatusEntryHook"
   ]
 }

@@ -17,8 +17,8 @@ import java.util.UUID;
  */
 class DedupTracker {
 
-    record Attachment(UUID playerUuid, long submissionOrder) {}
-    record Group(UUID primaryPlayer, String dimension, ArrayList<Attachment> attached) {}
+    record Attachment(UUID playerUuid, RequestRegistration registration, long submissionOrder) {}
+    record Group(UUID primaryPlayer, RequestRegistration registration, String dimension, ArrayList<Attachment> attached) {}
     record RemovedGroup(long packed, Group group) {}
 
     // Keyed by dimension first, then packed XZ: the same (cx, cz) in two different
@@ -32,14 +32,14 @@ class DedupTracker {
      * @return {@code true} if an existing group was found (caller should NOT submit a disk read),
      *         {@code false} if a new group was created (caller SHOULD submit a disk read)
      */
-    boolean tryAttachOrCreate(long packed, String dimension, UUID primaryPlayer, long submissionOrder) {
+    boolean tryAttachOrCreate(long packed, String dimension, UUID primaryPlayer, RequestRegistration registration, long submissionOrder) {
         var dimMap = this.pending.computeIfAbsent(dimension, k -> new Long2ObjectOpenHashMap<>());
         var existing = dimMap.get(packed);
         if (existing != null) {
-            existing.attached().add(new Attachment(primaryPlayer, submissionOrder));
+            existing.attached().add(new Attachment(primaryPlayer, registration, submissionOrder));
             return true;
         }
-        dimMap.put(packed, new Group(primaryPlayer, dimension, new ArrayList<>(2)));
+        dimMap.put(packed, new Group(primaryPlayer, registration, dimension, new ArrayList<>(2)));
         return false;
     }
 
@@ -95,7 +95,7 @@ class DedupTracker {
      *
      * @return groups that were removed because the player was the primary (empty list if none)
      */
-    List<RemovedGroup> removePlayer(UUID playerUuid) {
+    List<RemovedGroup> removePlayer(UUID playerUuid, RequestRegistration registration) {
         List<RemovedGroup> removed = null;
         var dimIter = this.pending.values().iterator();
         while (dimIter.hasNext()) {
@@ -104,12 +104,12 @@ class DedupTracker {
             while (iter.hasNext()) {
                 var entry = iter.next();
                 var group = entry.getValue();
-                if (group.primaryPlayer().equals(playerUuid)) {
+                if (group.primaryPlayer().equals(playerUuid) && group.registration() == registration) {
                     if (removed == null) removed = new ArrayList<>();
                     removed.add(new RemovedGroup(entry.getLongKey(), group));
                     iter.remove();
                 } else {
-                    group.attached().removeIf(a -> a.playerUuid().equals(playerUuid));
+                    group.attached().removeIf(a -> a.playerUuid().equals(playerUuid) && a.registration() == registration);
                 }
             }
             if (dimMap.isEmpty()) dimIter.remove();

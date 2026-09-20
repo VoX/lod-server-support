@@ -1,0 +1,98 @@
+Compiled from "LevelHeightAccessor.java"
+public interface net.minecraft.world.level.LevelHeightAccessor {
+  public abstract int getHeight();
+
+  public abstract int getMinBuildHeight();
+
+  public default int getMaxBuildHeight();
+    Code:
+         0: aload_0
+         1: invokeinterface #13,  1           // InterfaceMethod getMinBuildHeight:()I
+         6: aload_0
+         7: invokeinterface #15,  1           // InterfaceMethod getHeight:()I
+        12: iadd
+        13: ireturn
+
+  public default int getSectionsCount();
+    Code:
+         0: aload_0
+         1: invokeinterface #21,  1           // InterfaceMethod getMaxSection:()I
+         6: aload_0
+         7: invokeinterface #24,  1           // InterfaceMethod getMinSection:()I
+        12: isub
+        13: ireturn
+
+  public default int getMinSection();
+    Code:
+         0: aload_0
+         1: invokeinterface #13,  1           // InterfaceMethod getMinBuildHeight:()I
+         6: invokestatic  #30                 // Method net/minecraft/core/SectionPos.blockToSectionCoord:(I)I
+         9: ireturn
+
+  public default int getMaxSection();
+    Code:
+         0: aload_0
+         1: invokeinterface #32,  1           // InterfaceMethod getMaxBuildHeight:()I
+         6: iconst_1
+         7: isub
+         8: invokestatic  #30                 // Method net/minecraft/core/SectionPos.blockToSectionCoord:(I)I
+        11: iconst_1
+        12: iadd
+        13: ireturn
+
+  public default boolean isOutsideBuildHeight(net.minecraft.core.BlockPos);
+    Code:
+         0: aload_0
+         1: aload_1
+         2: invokevirtual #40                 // Method net/minecraft/core/BlockPos.getY:()I
+         5: invokeinterface #43,  2           // InterfaceMethod isOutsideBuildHeight:(I)Z
+        10: ireturn
+
+  public default boolean isOutsideBuildHeight(int);
+    Code:
+         0: iload_1
+         1: aload_0
+         2: invokeinterface #13,  1           // InterfaceMethod getMinBuildHeight:()I
+         7: if_icmplt     20
+        10: iload_1
+        11: aload_0
+        12: invokeinterface #32,  1           // InterfaceMethod getMaxBuildHeight:()I
+        17: if_icmplt     24
+        20: iconst_1
+        21: goto          25
+        24: iconst_0
+        25: ireturn
+
+  public default int getSectionIndex(int);
+    Code:
+         0: aload_0
+         1: iload_1
+         2: invokestatic  #30                 // Method net/minecraft/core/SectionPos.blockToSectionCoord:(I)I
+         5: invokeinterface #50,  2           // InterfaceMethod getSectionIndexFromSectionY:(I)I
+        10: ireturn
+
+  public default int getSectionIndexFromSectionY(int);
+    Code:
+         0: iload_1
+         1: aload_0
+         2: invokeinterface #24,  1           // InterfaceMethod getMinSection:()I
+         7: isub
+         8: ireturn
+
+  public default int getSectionYFromSectionIndex(int);
+    Code:
+         0: iload_1
+         1: aload_0
+         2: invokeinterface #24,  1           // InterfaceMethod getMinSection:()I
+         7: iadd
+         8: ireturn
+
+  public static net.minecraft.world.level.LevelHeightAccessor create(int, int);
+    Code:
+         0: new           #7                  // class net/minecraft/world/level/LevelHeightAccessor$1
+         3: dup
+         4: iload_1
+         5: iload_0
+         6: invokespecial #58                 // Method net/minecraft/world/level/LevelHeightAccessor$1."<init>":(II)V
+         9: areturn
+}

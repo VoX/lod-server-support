@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="dev.vox.lss.common.store.ReviewMaskShutdownTest" tests="1" skipped="0" failures="1" errors="0" timestamp="2026-09-07T02:54:27.430Z" hostname="DESKTOP-K93QJU0" time="0.396">
+  <properties/>
+  <testcase name="interruptedMaskDropMustNotCommitNewFingerprintOverSurvivingRows()" classname="dev.vox.lss.common.store.ReviewMaskShutdownTest" time="0.394">
+    <failure message="org.opentest4j.AssertionFailedError: Old unmasked bytes must not survive an interrupted policy-change drop ==&gt; expected: &lt;null&gt; but was: &lt;StoreHit[sectionBytes=[B@14b5752f, columnTimestamp=100, wirefmt=20]&gt;" type="org.opentest4j.AssertionFailedError">org.opentest4j.AssertionFailedError: Old unmasked bytes must not survive an interrupted policy-change drop ==&gt; expected: &lt;null&gt; but was: &lt;StoreHit[sectionBytes=[B@14b5752f, columnTimestamp=100, wirefmt=20]&gt;
+	at org.junit.jupiter.api.AssertionFailureBuilder.build(AssertionFailureBuilder.java:151)
+	at org.junit.jupiter.api.AssertionFailureBuilder.buildAndThrow(AssertionFailureBuilder.java:132)
+	at org.junit.jupiter.api.AssertNull.failNotNull(AssertNull.java:50)
+	at org.junit.jupiter.api.AssertNull.assertNull(AssertNull.java:35)
+	at org.junit.jupiter.api.Assertions.assertNull(Assertions.java:283)
+	at knot//dev.vox.lss.common.store.ReviewMaskShutdownTest.interruptedMaskDropMustNotCommitNewFingerprintOverSurvivingRows(ReviewMaskShutdownTest.java:60)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
+</failure>
+  </testcase>
+  <system-out><![CDATA[[22:54:27] [LSS LOD Store SQLite/INFO]: LOD store sweep [minecraft:overworld]: 1 changed region(s), dropped 0 stale + 0 vanished-region row(s)
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

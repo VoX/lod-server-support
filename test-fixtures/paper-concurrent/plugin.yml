@@ -1,0 +1,5 @@
+name: LssRigPaperConcurrent
+version: 1
+main: dev.vox.lss.paper.PaperSourceProbe
+api-version: '26.2'
+depend: [LodServerSupport]

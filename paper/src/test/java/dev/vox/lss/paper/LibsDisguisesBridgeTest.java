@@ -29,7 +29,8 @@ import static org.mockito.Mockito.when;
 class LibsDisguisesBridgeTest {
 
     /** The "running plugin" identity token the default gate would hand over. */
-    private static final Object PLUGIN = new Object();
+    private static final Object PLUGIN = new PluginToken();
+    private static final class PluginToken {}
 
     @BeforeEach
     void reset() {
@@ -88,12 +89,12 @@ class LibsDisguisesBridgeTest {
         assertTrue(LibsDisguisesBridge.present());
         // The re-resolve is made observable by swapping the resolver: a NEW instance must
         // resolve again (and hit the throwing resolver); the SAME instance must not.
-        LibsDisguisesBridge.classResolver = name -> {
+        LibsDisguisesBridge.classResolver = (name, loader) -> {
             throw new ClassNotFoundException(name);
         };
         assertTrue(LibsDisguisesBridge.isDisguised(e), "same instance: the bound handle stays");
         assertEquals(0, LibsDisguisesBridge.resolveWarnsForTest());
-        LibsDisguisesBridge.pluginProbe = () -> new Object();
+        LibsDisguisesBridge.pluginProbe = PluginToken::new;
         assertFalse(LibsDisguisesBridge.isDisguised(e), "new instance: resolved again");
         assertFalse(LibsDisguisesBridge.present());
         assertEquals(1, LibsDisguisesBridge.resolveWarnsForTest(), "the re-resolve ran");
@@ -113,7 +114,7 @@ class LibsDisguisesBridgeTest {
 
     @Test
     void anInvisibleClassReadsAbsentWithOneWarnAndNoThrow() {
-        LibsDisguisesBridge.classResolver = name -> {
+        LibsDisguisesBridge.classResolver = (name, loader) -> {
             throw new ClassNotFoundException(name);
         };
         var e = entity();
@@ -128,7 +129,7 @@ class LibsDisguisesBridgeTest {
 
     @Test
     void aDriftedSurfaceReadsAbsentWithOneWarn() {
-        LibsDisguisesBridge.classResolver = name -> String.class; // present, no isDisguised(Entity)
+        LibsDisguisesBridge.classResolver = (name, loader) -> String.class; // present, no isDisguised(Entity)
         var e = entity();
         DisguiseAPI.DISGUISED.add(e);
         assertFalse(LibsDisguisesBridge.isDisguised(e), "drift: visible, never a throw");
@@ -140,7 +141,7 @@ class LibsDisguisesBridgeTest {
 
     @Test
     void aFailingClassLoadReadsAbsentWithOneWarn() {
-        LibsDisguisesBridge.classResolver = name -> {
+        LibsDisguisesBridge.classResolver = (name, loader) -> {
             throw new NoClassDefFoundError("me/libraryaddict/disguise/DisguiseUtilities");
         };
         assertFalse(LibsDisguisesBridge.isDisguised(entity()),

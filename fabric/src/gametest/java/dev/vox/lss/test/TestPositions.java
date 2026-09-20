@@ -42,6 +42,21 @@ final class TestPositions {
         return ChunkPos.asLong(chunkX, chunkZ);
     }
 
+    /** This line keeps the holder lookup protected (public on newer lines). The
+     * gametest JVM uses named mappings, so keep this test-only reflection here instead
+     * of widening production access merely to inspect the real save predicates. */
+    static net.minecraft.server.level.ChunkHolder saveHolder(ServerChunkCache chunkSource, ChunkAt at) {
+        try {
+            var lookup = net.minecraft.server.level.ChunkMap.class
+                    .getDeclaredMethod("getUpdatingChunkIfPresent", long.class);
+            lookup.setAccessible(true);
+            var chunkMap = ((dev.vox.lss.mixin.AccessorServerChunkCache) chunkSource).getChunkMap();
+            return (net.minecraft.server.level.ChunkHolder) lookup.invoke(chunkMap, mcChunkKey(at.x(), at.z()));
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException("Unable to inspect the control chunk's save eligibility", e);
+        }
+    }
+
     /** Force-load hold at radius 0 (per-line ticket API: 26.x
      *  {@code addTicketWithRadius(PLAYER_LOADING, pos, 0)}; 1.21.1
      *  {@code addRegionTicket(PLAYER, pos, 0, pos)}). */

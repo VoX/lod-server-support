@@ -1,0 +1,29 @@
+{
+  "primary_line": "1.21.1",
+  "reviewer_model": "gpt-6-astra",
+  "max_parallel_reviewers": 3,
+  "planned_lenses": [
+    "wire/protocol/codecs",
+    "server request pipeline/concurrency",
+    "server persistence/disk/cache",
+    "client acquisition/session lifecycle",
+    "region summaries/stamps/dirty freshness",
+    "Xaero bridge/extraction/backpressure",
+    "far-player rendering/motion/mounts",
+    "permissions/privacy/xray/security",
+    "Paper threading/platform lifecycle",
+    "Voxy/Moonrise/C2ME/loader integration",
+    "configuration/commands/resource lifecycle",
+    "tests/soaks/diagnostics/performance",
+    "cross-line wire/MC surfaces",
+    "cross-line loader/render/API divergence",
+    "cross-line build/release/branding/toolchains"
+  ],
+  "baselines": {
+    "26.2": "2b2a0df728e220411da61625cc4b36c7b76dd837",
+    "26.1": "8e900e69e8ce927b19eb20681bb2261c71455352",
+    "1.21.11": "da726358f2c0cb7c33540bea8d0aa6940b9668c8",
+    "1.21.10": "d08faa91428d24f26747b684f16227ec03be9952",
+    "1.21.1": "1b544494d66e01ebc2ae4e182fd1ff3f802ec085"
+  }
+}

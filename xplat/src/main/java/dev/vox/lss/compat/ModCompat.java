@@ -12,6 +12,7 @@ import java.util.OptionalInt;
  */
 public final class ModCompat {
     private static boolean voxyLoaded;
+    private static volatile boolean discoveryComplete;
 
     public static void init() {
         if (dev.vox.lss.platform.LoaderServices.get().isModLoaded("voxy")) {
@@ -20,6 +21,7 @@ public final class ModCompat {
         if (dev.vox.lss.platform.LoaderServices.get().isModLoaded("xaeroworldmap")) {
             XaeroMapCompat.init();
         }
+        discoveryComplete = true;
     }
 
     /** End-of-client-tick forwarder (main client thread) — the Xaero bridge's pump. */
@@ -34,6 +36,10 @@ public final class ModCompat {
     }
 
     /** Disconnect forwarder — a session's queued map tiles never outlive it. */
+    public static void retireClientAcquisition() {
+        XaeroMapCompat.retireClientAcquisition();
+    }
+
     public static void onDisconnect() {
         XaeroMapCompat.onDisconnect();
     }
@@ -191,5 +197,12 @@ public final class ModCompat {
                     null, null, false);
         }
         return VoxyCompat.probeStorageProduction();
+    }
+    /** Immutable cached integration facts; reading does not load optional classes or take native locks. */
+    public record XaeroStatus(String resolution, boolean failed, boolean retiring,
+                              int queuedColumns, int pendingRebuilds) {}
+
+    public static XaeroStatus cachedXaeroStatus() {
+        return XaeroMapCompat.cachedStatus(discoveryComplete);
     }
 }

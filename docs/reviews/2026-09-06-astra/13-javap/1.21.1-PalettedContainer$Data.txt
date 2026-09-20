@@ -1,0 +1,143 @@
+Compiled from "PalettedContainer.java"
+final class net.minecraft.world.level.chunk.PalettedContainer$Data<T> extends java.lang.Record {
+  private final net.minecraft.world.level.chunk.PalettedContainer$Configuration<T> configuration;
+
+  final net.minecraft.util.BitStorage storage;
+
+  final net.minecraft.world.level.chunk.Palette<T> palette;
+
+  net.minecraft.world.level.chunk.PalettedContainer$Data(net.minecraft.world.level.chunk.PalettedContainer$Configuration<T>, net.minecraft.util.BitStorage, net.minecraft.world.level.chunk.Palette<T>);
+    Code:
+         0: aload_0
+         1: invokespecial #32                 // Method java/lang/Record."<init>":()V
+         4: aload_0
+         5: aload_1
+         6: putfield      #34                 // Field configuration:Lnet/minecraft/world/level/chunk/PalettedContainer$Configuration;
+         9: aload_0
+        10: aload_2
+        11: putfield      #36                 // Field storage:Lnet/minecraft/util/BitStorage;
+        14: aload_0
+        15: aload_3
+        16: putfield      #38                 // Field palette:Lnet/minecraft/world/level/chunk/Palette;
+        19: return
+
+  public void copyFrom(net.minecraft.world.level.chunk.Palette<T>, net.minecraft.util.BitStorage);
+    Code:
+         0: iconst_0
+         1: istore_3
+         2: iload_3
+         3: aload_2
+         4: invokeinterface #50,  1           // InterfaceMethod net/minecraft/util/BitStorage.getSize:()I
+         9: if_icmpge     54
+        12: aload_1
+        13: aload_2
+        14: iload_3
+        15: invokeinterface #54,  2           // InterfaceMethod net/minecraft/util/BitStorage.get:(I)I
+        20: invokeinterface #60,  2           // InterfaceMethod net/minecraft/world/level/chunk/Palette.valueFor:(I)Ljava/lang/Object;
+        25: astore        4
+        27: aload_0
+        28: getfield      #36                 // Field storage:Lnet/minecraft/util/BitStorage;
+        31: iload_3
+        32: aload_0
+        33: getfield      #38                 // Field palette:Lnet/minecraft/world/level/chunk/Palette;
+        36: aload         4
+        38: invokeinterface #64,  2           // InterfaceMethod net/minecraft/world/level/chunk/Palette.idFor:(Ljava/lang/Object;)I
+        43: invokeinterface #68,  3           // InterfaceMethod net/minecraft/util/BitStorage.set:(II)V
+        48: iinc          3, 1
+        51: goto          2
+        54: return
+
+  public int getSerializedSize();
+    Code:
+         0: iconst_1
+         1: aload_0
+         2: getfield      #38                 // Field palette:Lnet/minecraft/world/level/chunk/Palette;
+         5: invokeinterface #76,  1           // InterfaceMethod net/minecraft/world/level/chunk/Palette.getSerializedSize:()I
+        10: iadd
+        11: aload_0
+        12: getfield      #36                 // Field storage:Lnet/minecraft/util/BitStorage;
+        15: invokeinterface #80,  1           // InterfaceMethod net/minecraft/util/BitStorage.getRaw:()[J
+        20: arraylength
+        21: invokestatic  #85                 // Method net/minecraft/network/VarInt.getByteSize:(I)I
+        24: iadd
+        25: aload_0
+        26: getfield      #36                 // Field storage:Lnet/minecraft/util/BitStorage;
+        29: invokeinterface #80,  1           // InterfaceMethod net/minecraft/util/BitStorage.getRaw:()[J
+        34: arraylength
+        35: bipush        8
+        37: imul
+        38: iadd
+        39: ireturn
+
+  public void write(net.minecraft.network.FriendlyByteBuf);
+    Code:
+         0: aload_1
+         1: aload_0
+         2: getfield      #36                 // Field storage:Lnet/minecraft/util/BitStorage;
+         5: invokeinterface #91,  1           // InterfaceMethod net/minecraft/util/BitStorage.getBits:()I
+        10: invokevirtual #97                 // Method net/minecraft/network/FriendlyByteBuf.writeByte:(I)Lnet/minecraft/network/FriendlyByteBuf;
+        13: pop
+        14: aload_0
+        15: getfield      #38                 // Field palette:Lnet/minecraft/world/level/chunk/Palette;
+        18: aload_1
+        19: invokeinterface #99,  2           // InterfaceMethod net/minecraft/world/level/chunk/Palette.write:(Lnet/minecraft/network/FriendlyByteBuf;)V
+        24: aload_1
+        25: aload_0
+        26: getfield      #36                 // Field storage:Lnet/minecraft/util/BitStorage;
+        29: invokeinterface #80,  1           // InterfaceMethod net/minecraft/util/BitStorage.getRaw:()[J
+        34: invokevirtual #103                // Method net/minecraft/network/FriendlyByteBuf.writeLongArray:([J)Lnet/minecraft/network/FriendlyByteBuf;
+        37: pop
+        38: return
+
+  public net.minecraft.world.level.chunk.PalettedContainer$Data<T> copy();
+    Code:
+         0: new           #2                  // class net/minecraft/world/level/chunk/PalettedContainer$Data
+         3: dup
+         4: aload_0
+         5: getfield      #34                 // Field configuration:Lnet/minecraft/world/level/chunk/PalettedContainer$Configuration;
+         8: aload_0
+         9: getfield      #36                 // Field storage:Lnet/minecraft/util/BitStorage;
+        12: invokeinterface #110,  1          // InterfaceMethod net/minecraft/util/BitStorage.copy:()Lnet/minecraft/util/BitStorage;
+        17: aload_0
+        18: getfield      #38                 // Field palette:Lnet/minecraft/world/level/chunk/Palette;
+        21: invokeinterface #113,  1          // InterfaceMethod net/minecraft/world/level/chunk/Palette.copy:()Lnet/minecraft/world/level/chunk/Palette;
+        26: invokespecial #115                // Method "<init>":(Lnet/minecraft/world/level/chunk/PalettedContainer$Configuration;Lnet/minecraft/util/BitStorage;Lnet/minecraft/world/level/chunk/Palette;)V
+        29: areturn
+
+  public final java.lang.String toString();
+    Code:
+         0: aload_0
+         1: invokedynamic #132,  0            // InvokeDynamic #0:toString:(Lnet/minecraft/world/level/chunk/PalettedContainer$Data;)Ljava/lang/String;
+         6: areturn
+
+  public final int hashCode();
+    Code:
+         0: aload_0
+         1: invokedynamic #136,  0            // InvokeDynamic #0:hashCode:(Lnet/minecraft/world/level/chunk/PalettedContainer$Data;)I
+         6: ireturn
+
+  public final boolean equals(java.lang.Object);
+    Code:
+         0: aload_0
+         1: aload_1
+         2: invokedynamic #141,  0            // InvokeDynamic #0:equals:(Lnet/minecraft/world/level/chunk/PalettedContainer$Data;Ljava/lang/Object;)Z
+         7: ireturn
+
+  public net.minecraft.world.level.chunk.PalettedContainer$Configuration<T> configuration();
+    Code:
+         0: aload_0
+         1: getfield      #34                 // Field configuration:Lnet/minecraft/world/level/chunk/PalettedContainer$Configuration;
+         4: areturn
+
+  public net.minecraft.util.BitStorage storage();
+    Code:
+         0: aload_0
+         1: getfield      #36                 // Field storage:Lnet/minecraft/util/BitStorage;
+         4: areturn
+
+  public net.minecraft.world.level.chunk.Palette<T> palette();
+    Code:
+         0: aload_0
+         1: getfield      #38                 // Field palette:Lnet/minecraft/world/level/chunk/Palette;
+         4: areturn
+}

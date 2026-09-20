@@ -1,0 +1,23 @@
+{
+  "observed_utc": "2026-09-09T00:45:36.739860+00:00",
+  "server_task_pids_present": {
+    "2647776": false,
+    "2647783": false,
+    "2647784": false
+  },
+  "protected_regular_server489815_present": true,
+  "clones": [
+    {
+      "name": "fabric",
+      "wi5_jar_paths": [],
+      "wi5_marker_files": []
+    },
+    {
+      "name": "neoforge",
+      "wi5_jar_paths": [],
+      "wi5_marker_files": []
+    }
+  ],
+  "server_wi6_jar_paths": [],
+  "server_wi6_hold_exists": false
+}

@@ -1,0 +1,3163 @@
+{
+  "lines": {
+    "1.21.1": {
+      "baseline": "1b544494d66e01ebc2ae4e182fd1ff3f802ec085",
+      "head": "5887c45a6cee13bef1933fe03e9aa1a808272f5b",
+      "status": [
+        " M docs/planning/astra-implementation-ledger.md",
+        " M fabric/src/gametest/java/dev/vox/lss/test/TwoPlayerGameTests.java",
+        "?? docs/reviews/2026-09-08-implementation/client-composition-review.md",
+        "?? docs/reviews/2026-09-08-implementation/client-implementation.md",
+        "?? docs/reviews/2026-09-08-implementation/remaining-runtime-matrix.md",
+        "?? docs/reviews/2026-09-08-implementation/root-fix-independent-review.md",
+        "?? docs/reviews/2026-09-08-implementation/wi13-and-root-ports.md",
+        "?? docs/reviews/2026-09-08-implementation/wi14-docs-implementation.md",
+        "?? docs/reviews/2026-09-08-implementation/wi2-implementation.md"
+      ],
+      "commits": [
+        {
+          "sha": "be09dd2f11e8e336581e9271a858438cd94ed3e9",
+          "subject": "docs: record reviewed Astra implementation plan and baseline evidence",
+          "work_items": [],
+          "files": [
+            "docs/planning/astra-implementation-ledger.md",
+            "docs/planning/astra-system-review-fix-plan.md",
+            "docs/reviews/2026-09-06-astra/01-wire-parent.md",
+            "docs/reviews/2026-09-06-astra/01-wire-status.md",
+            "docs/reviews/2026-09-06-astra/02-server.md",
+            "docs/reviews/2026-09-06-astra/03-storage-parent.md",
+            "docs/reviews/2026-09-06-astra/04-client.md",
+            "docs/reviews/2026-09-06-astra/05-freshness.md",
+            "docs/reviews/2026-09-06-astra/06-xaero.md",
+            "docs/reviews/2026-09-06-astra/07-farplayers.md",
+            "docs/reviews/2026-09-06-astra/08-permissions.md",
+            "docs/reviews/2026-09-06-astra/09-paper.md",
+            "docs/reviews/2026-09-06-astra/10-compat.md",
+            "docs/reviews/2026-09-06-astra/11-config.md",
+            "docs/reviews/2026-09-06-astra/12-validation.md",
+            "docs/reviews/2026-09-06-astra/13-cross-wire.md",
+            "docs/reviews/2026-09-06-astra/13-javap/1.21.1-BlockBehaviour$BlockStateBase.txt",
+            "docs/reviews/2026-09-06-astra/13-javap/1.21.1-ChunkMap.txt",
+            "docs/reviews/2026-09-06-astra/13-javap/1.21.1-IOWorker$Priority.txt",
+            "docs/reviews/2026-09-06-astra/13-javap/1.21.1-IOWorker.txt",
+            "docs/reviews/2026-09-06-astra/13-javap/1.21.1-LevelChunkSection$1BlockCounter.txt",
+            "docs/reviews/2026-09-06-astra/13-javap/1.21.1-LevelChunkSection.txt",
+            "docs/reviews/2026-09-06-astra/13-javap/1.21.1-LevelHeightAccessor.txt",
+            "docs/reviews/2026-09-06-astra/13-javap/1.21.1-PalettedContainer$Data.txt",
+            "docs/reviews/2026-09-06-astra/13-javap/1.21.1-RegionFile.txt",
+            "docs/reviews/2026-09-06-astra/13-javap/1.21.10-BlockBehaviour$BlockStateBase.txt",
+            "docs/reviews/2026-09-06-astra/13-javap/1.21.10-ChunkMap.txt",
+            "docs/reviews/2026-09-06-astra/13-javap/1.21.10-IOWorker$Priority.txt",
+            "docs/reviews/2026-09-06-astra/13-javap/1.21.10-IOWorker.txt",
+            "docs/reviews/2026-09-06-astra/13-javap/1.21.10-LevelChunkSection$1BlockCounter.txt",
+            "docs/reviews/2026-09-06-astra/13-javap/1.21.10-LevelChunkSection.txt",
+            "docs/reviews/2026-09-06-astra/13-javap/1.21.10-LevelHeightAccessor.txt",
+            "docs/reviews/2026-09-06-astra/13-javap/1.21.10-PalettedContainer$Data.txt",
+            "docs/reviews/2026-09-06-astra/13-javap/1.21.10-RegionFile.txt",
+            "docs/reviews/2026-09-06-astra/13-javap/1.21.11-BlockBehaviour$BlockStateBase.txt",
+            "docs/reviews/2026-09-06-astra/13-javap/1.21.11-ChunkMap.txt",
+            "docs/reviews/2026-09-06-astra/13-javap/1.21.11-IOWorker$Priority.txt",
+            "docs/reviews/2026-09-06-astra/13-javap/1.21.11-IOWorker.txt",
+            "docs/reviews/2026-09-06-astra/13-javap/1.21.11-LevelChunkSection$1BlockCounter.txt",
+            "docs/reviews/2026-09-06-astra/13-javap/1.21.11-LevelChunkSection.txt",
+            "docs/reviews/2026-09-06-astra/13-javap/1.21.11-LevelHeightAccessor.txt",
+            "docs/reviews/2026-09-06-astra/13-javap/1.21.11-PalettedContainer$Data.txt",
+            "docs/reviews/2026-09-06-astra/13-javap/1.21.11-RegionFile.txt",
+            "docs/reviews/2026-09-06-astra/13-javap/26.1-BlockBehaviour$BlockStateBase.txt",
+            "docs/reviews/2026-09-06-astra/13-javap/26.1-ChunkMap.txt",
+            "docs/reviews/2026-09-06-astra/13-javap/26.1-IOWorker$Priority.txt",
+            "docs/reviews/2026-09-06-astra/13-javap/26.1-IOWorker.txt",
+            "docs/reviews/2026-09-06-astra/13-javap/26.1-LevelChunkSection$1BlockCounter.txt",
+            "docs/reviews/2026-09-06-astra/13-javap/26.1-LevelChunkSection.txt",
+            "docs/reviews/2026-09-06-astra/13-javap/26.1-LevelHeightAccessor.txt",
+            "docs/reviews/2026-09-06-astra/13-javap/26.1-PalettedContainer$Data.txt",
+            "docs/reviews/2026-09-06-astra/13-javap/26.1-RegionFile.txt",
+            "docs/reviews/2026-09-06-astra/13-javap/26.2-BlockBehaviour$BlockStateBase.txt",
+            "docs/reviews/2026-09-06-astra/13-javap/26.2-ChunkMap.txt",
+            "docs/reviews/2026-09-06-astra/13-javap/26.2-IOWorker$Priority.txt",
+            "docs/reviews/2026-09-06-astra/13-javap/26.2-IOWorker.txt",
+            "docs/reviews/2026-09-06-astra/13-javap/26.2-LevelChunkSection$1BlockCounter.txt",
+            "docs/reviews/2026-09-06-astra/13-javap/26.2-LevelChunkSection.txt",
+            "docs/reviews/2026-09-06-astra/13-javap/26.2-LevelHeightAccessor.txt",
+            "docs/reviews/2026-09-06-astra/13-javap/26.2-PalettedContainer$Data.txt",
+            "docs/reviews/2026-09-06-astra/13-javap/26.2-RegionFile.txt",
+            "docs/reviews/2026-09-06-astra/13-javap/paper-1.21.1-CraftWorld.txt",
+            "docs/reviews/2026-09-06-astra/13-javap/paper-1.21.1-LevelChunkSection.txt",
+            "docs/reviews/2026-09-06-astra/13-javap/paper-1.21.10-CraftWorld.txt",
+            "docs/reviews/2026-09-06-astra/13-javap/paper-1.21.10-LevelChunkSection.txt",
+            "docs/reviews/2026-09-06-astra/13-javap/paper-1.21.11-CraftWorld.txt",
+            "docs/reviews/2026-09-06-astra/13-javap/paper-1.21.11-LevelChunkSection.txt",
+            "docs/reviews/2026-09-06-astra/13-javap/paper-26.1.2-CraftWorld.txt",
+            "docs/reviews/2026-09-06-astra/13-javap/paper-26.1.2-LevelChunkSection.txt",
+            "docs/reviews/2026-09-06-astra/13-javap/paper-26.2-CraftWorld.txt",
+            "docs/reviews/2026-09-06-astra/13-javap/paper-26.2-LevelChunkSection.txt",
+            "docs/reviews/2026-09-06-astra/14-cross-loaders.md",
+            "docs/reviews/2026-09-06-astra/15-artifact-inspection.json",
+            "docs/reviews/2026-09-06-astra/15-cross-release.md",
+            "docs/reviews/2026-09-06-astra/16-plan-challenge.md",
+            "docs/reviews/2026-09-06-astra/17-storage-validation.md",
+            "docs/reviews/2026-09-06-astra/README.md",
+            "docs/reviews/2026-09-06-astra/all-probes.log",
+            "docs/reviews/2026-09-06-astra/c2me-1211-027-javap.txt",
+            "docs/reviews/2026-09-06-astra/cross-line-inventory.json",
+            "docs/reviews/2026-09-06-astra/elytra-1.21.10-javap.txt",
+            "docs/reviews/2026-09-06-astra/elytra-1.21.11-javap.txt",
+            "docs/reviews/2026-09-06-astra/elytra-model-1.21.10-javap.txt",
+            "docs/reviews/2026-09-06-astra/elytra-model-1.21.11-javap.txt",
+            "docs/reviews/2026-09-06-astra/final-baseline-results.json",
+            "docs/reviews/2026-09-06-astra/final-baseline.log",
+            "docs/reviews/2026-09-06-astra/final-probe-results.json",
+            "docs/reviews/2026-09-06-astra/final-probe-xml/TEST-dev.vox.lss.common.farplayers.FarPlayerDisableReviewTest.xml",
+            "docs/reviews/2026-09-06-astra/final-probe-xml/TEST-dev.vox.lss.common.farplayers.FarPlayerIdentityReviewTest.xml",
+            "docs/reviews/2026-09-06-astra/final-probe-xml/TEST-dev.vox.lss.common.processing.GenerationSessionOwnershipReviewTest.xml",
+            "docs/reviews/2026-09-06-astra/final-probe-xml/TEST-dev.vox.lss.common.processing.SessionOwnershipReviewTest.xml",
+            "docs/reviews/2026-09-06-astra/final-probe-xml/TEST-dev.vox.lss.common.store.ReviewMaskShutdownTest.xml",
+            "docs/reviews/2026-09-06-astra/final-probe-xml/TEST-dev.vox.lss.common.store.ReviewMigrationChecksumTest.xml",
+            "docs/reviews/2026-09-06-astra/final-probe-xml/TEST-dev.vox.lss.compat.VoxyHolderCompatibilityReviewTest.xml",
+            "docs/reviews/2026-09-06-astra/final-probe-xml/TEST-dev.vox.lss.compat.XaeroOwedDisconnectReviewTest.xml",
+            "docs/reviews/2026-09-06-astra/final-probe-xml/TEST-dev.vox.lss.networking.client.ClientMasterToggleReviewTest.xml",
+            "docs/reviews/2026-09-06-astra/final-probe-xml/TEST-dev.vox.lss.networking.client.ReviewSummarySentinelTest.xml",
+            "docs/reviews/2026-09-06-astra/final-probe-xml/TEST-dev.vox.lss.paper.LibsDisguisesReloadReviewTest.xml",
+            "docs/reviews/2026-09-06-astra/paper-probes/dev/vox/lss/paper/LibsDisguisesReloadReviewTest.java",
+            "docs/reviews/2026-09-06-astra/probe.init.gradle",
+            "docs/reviews/2026-09-06-astra/probes/compat/dev/vox/lss/compat/VoxyHolderCompatibilityReviewTest.java",
+            "docs/reviews/2026-09-06-astra/probes/dev/vox/lss/common/store/ReviewMaskShutdownTest.java",
+            "docs/reviews/2026-09-06-astra/probes/dev/vox/lss/common/store/ReviewMigrationChecksumTest.java",
+            "docs/reviews/2026-09-06-astra/probes/dev/vox/lss/compat/XaeroOwedDisconnectReviewTest.java",
+            "docs/reviews/2026-09-06-astra/probes/dev/vox/lss/networking/client/ClientMasterToggleReviewTest.java",
+            "docs/reviews/2026-09-06-astra/probes/dev/vox/lss/networking/client/ReviewSummarySentinelTest.java",
+            "docs/reviews/2026-09-06-astra/probes/farplayers/dev/vox/lss/common/farplayers/FarPlayerDisableReviewTest.java",
+            "docs/reviews/2026-09-06-astra/probes/farplayers/dev/vox/lss/common/farplayers/FarPlayerIdentityReviewTest.java",
+            "docs/reviews/2026-09-06-astra/probes/server/dev/vox/lss/common/processing/GenerationSessionOwnershipReviewTest.java",
+            "docs/reviews/2026-09-06-astra/probes/server/dev/vox/lss/common/processing/SessionOwnershipReviewTest.java",
+            "docs/reviews/2026-09-06-astra/render-1.21.1-vs-1.21.11.diff",
+            "docs/reviews/2026-09-06-astra/render-1.21.10-vs-1.21.11.diff",
+            "docs/reviews/2026-09-06-astra/render-1.21.11-vs-26.1.diff",
+            "docs/reviews/2026-09-06-astra/render-26.1-vs-26.2.diff",
+            "docs/reviews/2026-09-06-astra/scope.json",
+            "docs/reviews/2026-09-06-astra/validated-index.json",
+            "docs/reviews/2026-09-06-astra/voxy-1211-015-javap.txt",
+            "docs/reviews/2026-09-06-astra/wire-baseline-results.json",
+            "docs/reviews/2026-09-06-astra/wire-baseline.log",
+            "docs/reviews/2026-09-08-implementation/plan-client-review.md",
+            "docs/reviews/2026-09-08-implementation/plan-operations-review.md",
+            "docs/reviews/2026-09-08-implementation/plan-server-review.md"
+          ]
+        },
+        {
+          "sha": "4b29afd26aef898c43f305a76aee765890dbac48",
+          "subject": "fix(store): keep interrupted policy invalidation incomplete",
+          "work_items": [
+            1
+          ],
+          "files": [
+            "common/src/main/java/dev/vox/lss/common/store/SqliteLodStore.java",
+            "fabric/src/test/java/dev/vox/lss/common/store/SqliteLodStoreMaskShutdownTest.java"
+          ]
+        },
+        {
+          "sha": "d01c3be0de9df96596c6429241a5445ef96ce704",
+          "subject": "fix: retract summary proofs when newer tiles are uncertain",
+          "work_items": [
+            4
+          ],
+          "files": [
+            "fabric/src/test/java/dev/vox/lss/common/region/RegionSummaryServiceFixture.java",
+            "fabric/src/test/java/dev/vox/lss/networking/client/ColumnStateMapTest.java",
+            "fabric/src/test/java/dev/vox/lss/networking/client/LodRequestManagerSummaryTest.java",
+            "fabric/src/test/java/dev/vox/lss/networking/client/ReferenceColumnStateMap.java",
+            "fabric/src/test/java/dev/vox/lss/networking/client/SectionStateFuzzTest.java",
+            "xplat/src/main/java/dev/vox/lss/networking/client/ColumnStateMap.java",
+            "xplat/src/main/java/dev/vox/lss/networking/client/LodRequestManager.java"
+          ]
+        },
+        {
+          "sha": "851479d7fe51d4753e5b0add4be5520898c04eca",
+          "subject": "fix(harness): own process lifetimes and require fresh benchmark evidence",
+          "work_items": [
+            13
+          ],
+          "files": [
+            ".github/workflows/build.yml",
+            "scripts/backfill_profile.sh",
+            "scripts/benchmark.sh",
+            "scripts/benchmark_compare.sh",
+            "scripts/compress_gate.sh",
+            "scripts/lib/HARNESS.md",
+            "scripts/lib/benchmark-results.py",
+            "scripts/lib/harness-lock.sh",
+            "scripts/lib/mc-run.sh",
+            "scripts/lib/owned-process.py",
+            "scripts/profile_disk_read.sh",
+            "scripts/soak.sh",
+            "scripts/stamp_heal.sh",
+            "scripts/store_gate.sh",
+            "scripts/store_migration_gate.sh",
+            "scripts/store_offline_edit.sh",
+            "scripts/store_save_storm.sh",
+            "scripts/summary_evicted.sh",
+            "scripts/test_harness.py"
+          ]
+        },
+        {
+          "sha": "7a674e0b71ac7e1d2eb2c6a6c37a489ada4c86bc",
+          "subject": "fix(store): verify legacy row integrity before migration",
+          "work_items": [
+            7
+          ],
+          "files": [
+            "common/src/main/java/dev/vox/lss/common/store/SqliteLodStore.java",
+            "fabric/src/test/java/dev/vox/lss/common/store/SqliteLodStoreMigrationTest.java"
+          ]
+        },
+        {
+          "sha": "e3a69850cc67610ca850c920300a86df89f5a556",
+          "subject": "fix(client): bound and reconcile far-player identity bindings",
+          "work_items": [
+            8
+          ],
+          "files": [
+            "common/src/main/java/dev/vox/lss/common/farplayers/FarPlayerClientTracker.java",
+            "fabric/src/test/java/dev/vox/lss/common/farplayers/FarPlayerClientTrackerTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/farplayers/FarPlayerIdentityBindingTest.java"
+          ]
+        },
+        {
+          "sha": "6a57b37a581befb7a5625e9645dfd5b4528eef90",
+          "subject": "fix(compat): resolve namespaced reset on legacy Voxy holder",
+          "work_items": [
+            12
+          ],
+          "files": [
+            "fabric/src/test/java/dev/vox/lss/compat/VoxyHolderCompatibilityTest.java",
+            "xplat/src/main/java/dev/vox/lss/compat/VoxyCompat.java"
+          ]
+        },
+        {
+          "sha": "1f8bb5beb1555d9793c7634d56a54932068a51b1",
+          "subject": "fix(client): restore seated draw pose before continuing render pass",
+          "work_items": [
+            9
+          ],
+          "files": [
+            "fabric/src/main/java/dev/vox/lss/networking/client/FarPlayerRenderer.java",
+            "fabric/src/test/java/dev/vox/lss/networking/client/FarPlayerPoseRecoveryTest.java",
+            "fabric/src/test/java/dev/vox/lss/testutil/FarPlayerRenderSourceContractTest.java",
+            "neoforge/src/main/java/dev/vox/lss/networking/client/FarPlayerRenderer.java"
+          ]
+        },
+        {
+          "sha": "8729d674e7144a7c833151ee774013b2523c214c",
+          "subject": "fix(config): report runtime settings applied but not saved",
+          "work_items": [
+            10
+          ],
+          "files": [
+            "common/src/main/java/dev/vox/lss/common/config/JsonConfig.java",
+            "common/src/main/java/dev/vox/lss/common/config/RuntimeSettings.java",
+            "fabric/src/test/java/dev/vox/lss/common/config/RuntimeSettingsTest.java",
+            "paper/src/main/java/dev/vox/lss/paper/PaperCommands.java",
+            "paper/src/test/java/dev/vox/lss/paper/PaperCommandsTest.java",
+            "xplat/src/main/java/dev/vox/lss/networking/server/LSSServerCommands.java"
+          ]
+        },
+        {
+          "sha": "e438a63353c2db24d4a68d0bd61b4eb10965fac4",
+          "subject": "fix(paper): bind disguise API to current plugin classloader",
+          "work_items": [
+            11
+          ],
+          "files": [
+            "paper/src/main/java/dev/vox/lss/paper/LibsDisguisesBridge.java",
+            "paper/src/test/java/dev/vox/lss/paper/LibsDisguisesBridgeTest.java",
+            "paper/src/test/java/dev/vox/lss/paper/LibsDisguisesReloadTest.java",
+            "paper/src/test/java/dev/vox/lss/paper/PaperFarPlayerSnapshotsTest.java"
+          ]
+        },
+        {
+          "sha": "f84f9f6dc501e4ed76ada1a41e3eee2dcbe963b2",
+          "subject": "fix(farplayers): withdraw rosters on runtime server disable",
+          "work_items": [
+            6
+          ],
+          "files": [
+            "common/src/main/java/dev/vox/lss/common/farplayers/FarPlayerBroadcastService.java",
+            "fabric/src/test/java/dev/vox/lss/common/farplayers/FarPlayerModeTransitionTest.java",
+            "paper/src/main/java/dev/vox/lss/paper/PaperRequestProcessingService.java",
+            "xplat/src/main/java/dev/vox/lss/networking/server/RequestProcessingService.java"
+          ]
+        },
+        {
+          "sha": "cd0790e9fa81eaeaff0773d357165b5b3b5c36cd",
+          "subject": "fix: retire client acquisition receipts on live receive toggle",
+          "work_items": [
+            3
+          ],
+          "files": [
+            "fabric/src/test/java/dev/vox/lss/api/LSSApiDispatchReportTest.java",
+            "fabric/src/test/java/dev/vox/lss/networking/client/ClientColumnProcessorTest.java",
+            "fabric/src/test/java/dev/vox/lss/networking/client/ClientSessionGateTest.java",
+            "fabric/src/test/java/dev/vox/lss/networking/client/ColumnDeliveryLifecycleTest.java",
+            "xplat/src/main/java/dev/vox/lss/api/LSSApi.java",
+            "xplat/src/main/java/dev/vox/lss/config/menu/SaveHook.java",
+            "xplat/src/main/java/dev/vox/lss/networking/client/ClientColumnProcessor.java",
+            "xplat/src/main/java/dev/vox/lss/networking/client/ClientNetGlue.java",
+            "xplat/src/main/java/dev/vox/lss/networking/client/ClientSessionGate.java",
+            "xplat/src/main/java/dev/vox/lss/networking/client/ColumnDelivery.java",
+            "xplat/src/main/java/dev/vox/lss/networking/client/ColumnStateMap.java",
+            "xplat/src/main/java/dev/vox/lss/networking/client/LodRequestManager.java"
+          ]
+        },
+        {
+          "sha": "a65627434329c6d770e87b7cdc8bc08c1410e6ac",
+          "subject": "fix(processing): bind async work to player registration lifetimes",
+          "work_items": [
+            2
+          ],
+          "files": [
+            "common/src/main/java/dev/vox/lss/common/processing/AbstractChunkDiskReader.java",
+            "common/src/main/java/dev/vox/lss/common/processing/AbstractPlayerRequestState.java",
+            "common/src/main/java/dev/vox/lss/common/processing/DedupTracker.java",
+            "common/src/main/java/dev/vox/lss/common/processing/IncomingRequestRouter.java",
+            "common/src/main/java/dev/vox/lss/common/processing/OffThreadProcessor.java",
+            "common/src/main/java/dev/vox/lss/common/processing/RequestRegistration.java",
+            "common/src/main/java/dev/vox/lss/common/processing/TickSnapshot.java",
+            "fabric/src/gametest/java/dev/vox/lss/test/GenerationLifecycleGameTests.java",
+            "fabric/src/gametest/java/dev/vox/lss/test/SerializerParityGameTests.java",
+            "fabric/src/gametest/java/dev/vox/lss/test/ServiceLifecycleGameTests.java",
+            "fabric/src/test/java/dev/vox/lss/benchmark/ExporterContractTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/processing/DedupFanoutTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/processing/DirtyEventMailboxTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/processing/DiskReadDoneSweepTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/processing/GateRetentionRoutingTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/processing/GenerationSessionOwnershipTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/processing/IncomingRequestRouterTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/processing/OffThreadProcessorDiskResultTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/processing/OffThreadProcessorLifecycleTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/processing/OffThreadProcessorMailboxTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/processing/OffThreadProcessorStoreTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/processing/ReadFreshnessRungTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/processing/RequestSessionOwnershipTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/processing/RouteRotationFairnessTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/processing/SendActionIdentityTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/processing/StampedUpToDateFlowTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/processing/StoreFrameDeliveryTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/processing/TimestampSaveSchedulerTest.java",
+            "fabric/src/test/java/dev/vox/lss/networking/server/ServiceGlueTest.java",
+            "neoforge/src/gametest/java/dev/vox/lss/neoforge/gametest/LSSNeoGameTests.java",
+            "paper/src/main/java/dev/vox/lss/paper/PaperChunkDiskReader.java",
+            "paper/src/main/java/dev/vox/lss/paper/PaperChunkGenerationService.java",
+            "paper/src/main/java/dev/vox/lss/paper/PaperOffThreadProcessor.java",
+            "paper/src/main/java/dev/vox/lss/paper/PaperRequestProcessingService.java",
+            "paper/src/test/java/dev/vox/lss/paper/PaperChunkDiskReaderPriorityTest.java",
+            "paper/src/test/java/dev/vox/lss/paper/PaperChunkGenerationServiceTest.java",
+            "paper/src/test/java/dev/vox/lss/paper/PaperDiskReaderEnvelopeTest.java",
+            "paper/src/test/java/dev/vox/lss/paper/PaperRequestProcessingServiceTest.java",
+            "paper/src/test/java/dev/vox/lss/paper/RegionProbeSchedulingTest.java",
+            "xplat/src/main/java/dev/vox/lss/networking/server/ChunkDiskReader.java",
+            "xplat/src/main/java/dev/vox/lss/networking/server/ChunkGenerationService.java",
+            "xplat/src/main/java/dev/vox/lss/networking/server/FabricOffThreadProcessor.java",
+            "xplat/src/main/java/dev/vox/lss/networking/server/RequestProcessingService.java"
+          ]
+        },
+        {
+          "sha": "e1a38b63b29db956c3281d7339a6c87a1361a49c",
+          "subject": "docs(testing): clarify live profiles and validation routes",
+          "work_items": [
+            14
+          ],
+          "files": [
+            "docs/reviews/2026-09-08-implementation/prism-inventory.json",
+            "docs/testing/astra-live-profiles.md",
+            "paper/src/main/java/dev/vox/lss/paper/PaperRequestProcessingService.java",
+            "test-server.sh",
+            "xplat/src/main/java/dev/vox/lss/networking/server/RequestProcessingService.java"
+          ]
+        },
+        {
+          "sha": "9b3fe935fa61a0d9123863f16d753cd205087ddc",
+          "subject": "fix: retire cancelled receipt handles across dimension changes",
+          "work_items": [
+            3
+          ],
+          "files": [
+            "fabric/src/test/java/dev/vox/lss/networking/client/ClientSessionGateTest.java",
+            "fabric/src/test/java/dev/vox/lss/networking/client/ColumnDeliveryLifecycleTest.java",
+            "xplat/src/main/java/dev/vox/lss/networking/client/ClientSessionGate.java",
+            "xplat/src/main/java/dev/vox/lss/networking/client/ColumnDelivery.java",
+            "xplat/src/main/java/dev/vox/lss/networking/client/LodRequestManager.java"
+          ]
+        },
+        {
+          "sha": "0c613fca36859976baaf08daf7205fc9ede33472",
+          "subject": "fix: bind Xaero queued work and debt to acquisition receipts",
+          "work_items": [
+            5
+          ],
+          "files": [
+            "fabric/src/test/java/dev/vox/lss/compat/XaeroAcquisitionLifecycleTest.java",
+            "fabric/src/test/java/dev/vox/lss/compat/XaeroMapCompatTest.java",
+            "fabric/src/test/java/dev/vox/lss/networking/client/ColumnDeliveryFixture.java",
+            "xplat/src/main/java/dev/vox/lss/compat/ModCompat.java",
+            "xplat/src/main/java/dev/vox/lss/compat/XaeroMapCompat.java",
+            "xplat/src/main/java/dev/vox/lss/networking/client/ClientNetGlue.java"
+          ]
+        },
+        {
+          "sha": "b2756f81a5a429df27d01e5bcbfd17fc77bec47b",
+          "subject": "fix(farplayers): apply roster renames to stationary proxies",
+          "work_items": [
+            8
+          ],
+          "files": [
+            "common/src/main/java/dev/vox/lss/common/farplayers/FarPlayerClientTracker.java",
+            "fabric/src/test/java/dev/vox/lss/common/farplayers/FarPlayerClientTrackerTest.java"
+          ]
+        },
+        {
+          "sha": "8504568da38182c7c94b83d2427c2a8c0372c471",
+          "subject": "docs: refresh current NeoForge artifact and client surfaces",
+          "work_items": [
+            14
+          ],
+          "files": [
+            "CLAUDE.md",
+            "README.md",
+            "docs/planning/neoforge-support-plan.md",
+            "docs/planning/per-version-surfaces.md"
+          ]
+        },
+        {
+          "sha": "3a0c61c296b729a7db8d64d83a7d35f511874c48",
+          "subject": "test: record owner-aware column receipt dispatch",
+          "work_items": [
+            3
+          ],
+          "files": [
+            "fabric/src/test/java/dev/vox/lss/networking/client/VoxelColumnReceiverTest.java"
+          ]
+        },
+        {
+          "sha": "2da753f7da08fcd07876b5d5c07986b7da826ed5",
+          "subject": "fix(testing): remap bundled C2ME modules for Java 21 profiles",
+          "work_items": [
+            14
+          ],
+          "files": [
+            "fabric/build.gradle",
+            "gradle/c2me-dev-runtime.gradle"
+          ]
+        },
+        {
+          "sha": "5887c45a6cee13bef1933fe03e9aa1a808272f5b",
+          "subject": "test: preserve IO fallback and save readiness runtime controls",
+          "work_items": [
+            14
+          ],
+          "files": [
+            "fabric/src/gametest/java/dev/vox/lss/test/SerializerParityGameTests.java",
+            "fabric/src/gametest/java/dev/vox/lss/test/ServiceLifecycleGameTests.java",
+            "fabric/src/gametest/java/dev/vox/lss/test/TestPositions.java"
+          ]
+        }
+      ]
+    },
+    "1.21.10": {
+      "baseline": "d08faa91428d24f26747b684f16227ec03be9952",
+      "head": "28899adb28f5939a16296a9d2b677bd048418f10",
+      "status": [],
+      "commits": [
+        {
+          "sha": "ef8b81ca1dba052be556c569b470b57aab93eca8",
+          "subject": "fix(store): keep interrupted policy invalidation incomplete",
+          "work_items": [
+            1
+          ],
+          "files": [
+            "common/src/main/java/dev/vox/lss/common/store/SqliteLodStore.java",
+            "fabric/src/test/java/dev/vox/lss/common/store/SqliteLodStoreMaskShutdownTest.java"
+          ]
+        },
+        {
+          "sha": "787aa96c95411d8311cd0807cafd8ea9a466bf8e",
+          "subject": "fix(store): verify legacy row integrity before migration",
+          "work_items": [
+            7
+          ],
+          "files": [
+            "common/src/main/java/dev/vox/lss/common/store/SqliteLodStore.java",
+            "fabric/src/test/java/dev/vox/lss/common/store/SqliteLodStoreMigrationTest.java"
+          ]
+        },
+        {
+          "sha": "f30984bf82ee1c828ab67725df48b647981a8b5f",
+          "subject": "fix(client): bound and reconcile far-player identity bindings",
+          "work_items": [
+            8
+          ],
+          "files": [
+            "common/src/main/java/dev/vox/lss/common/farplayers/FarPlayerClientTracker.java",
+            "fabric/src/test/java/dev/vox/lss/common/farplayers/FarPlayerClientTrackerTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/farplayers/FarPlayerIdentityBindingTest.java"
+          ]
+        },
+        {
+          "sha": "7fd5d9e884a4f3f0efb284a1b1618c3f353fba4a",
+          "subject": "fix(compat): resolve namespaced reset on legacy Voxy holder",
+          "work_items": [
+            12
+          ],
+          "files": [
+            "fabric/src/test/java/dev/vox/lss/compat/VoxyHolderCompatibilityTest.java",
+            "xplat/src/main/java/dev/vox/lss/compat/VoxyCompat.java"
+          ]
+        },
+        {
+          "sha": "f45234351716bc4f5c9527b348b4535dc393ec0d",
+          "subject": "fix: retract summary proofs when newer tiles are uncertain",
+          "work_items": [
+            4
+          ],
+          "files": [
+            "fabric/src/test/java/dev/vox/lss/common/region/RegionSummaryServiceFixture.java",
+            "fabric/src/test/java/dev/vox/lss/networking/client/ColumnStateMapTest.java",
+            "fabric/src/test/java/dev/vox/lss/networking/client/LodRequestManagerSummaryTest.java",
+            "fabric/src/test/java/dev/vox/lss/networking/client/ReferenceColumnStateMap.java",
+            "fabric/src/test/java/dev/vox/lss/networking/client/SectionStateFuzzTest.java",
+            "xplat/src/main/java/dev/vox/lss/networking/client/ColumnStateMap.java",
+            "xplat/src/main/java/dev/vox/lss/networking/client/LodRequestManager.java"
+          ]
+        },
+        {
+          "sha": "390a70d7fbbb8e9ffce4460471001a51052c706d",
+          "subject": "fix(harness): own process lifetimes and require fresh benchmark evidence",
+          "work_items": [
+            13
+          ],
+          "files": [
+            ".github/workflows/build.yml",
+            "scripts/backfill_profile.sh",
+            "scripts/benchmark.sh",
+            "scripts/benchmark_compare.sh",
+            "scripts/compress_gate.sh",
+            "scripts/lib/HARNESS.md",
+            "scripts/lib/benchmark-results.py",
+            "scripts/lib/harness-lock.sh",
+            "scripts/lib/mc-run.sh",
+            "scripts/lib/owned-process.py",
+            "scripts/profile_disk_read.sh",
+            "scripts/soak.sh",
+            "scripts/stamp_heal.sh",
+            "scripts/store_gate.sh",
+            "scripts/store_migration_gate.sh",
+            "scripts/store_offline_edit.sh",
+            "scripts/store_save_storm.sh",
+            "scripts/summary_evicted.sh",
+            "scripts/test_harness.py"
+          ]
+        },
+        {
+          "sha": "f8d0398bbadea4307826ebd0c0f3b096dec675bb",
+          "subject": "fix(config): report runtime settings applied but not saved",
+          "work_items": [
+            10
+          ],
+          "files": [
+            "common/src/main/java/dev/vox/lss/common/config/JsonConfig.java",
+            "common/src/main/java/dev/vox/lss/common/config/RuntimeSettings.java",
+            "fabric/src/test/java/dev/vox/lss/common/config/RuntimeSettingsTest.java",
+            "paper/src/main/java/dev/vox/lss/paper/PaperCommands.java",
+            "paper/src/test/java/dev/vox/lss/paper/PaperCommandsTest.java",
+            "xplat/src/main/java/dev/vox/lss/networking/server/LSSServerCommands.java"
+          ]
+        },
+        {
+          "sha": "a0b3bbeb7ed9639f5bc4251cc8df35b9711298fd",
+          "subject": "fix(paper): bind disguise API to current plugin classloader",
+          "work_items": [
+            11
+          ],
+          "files": [
+            "paper/src/main/java/dev/vox/lss/paper/LibsDisguisesBridge.java",
+            "paper/src/test/java/dev/vox/lss/paper/LibsDisguisesBridgeTest.java",
+            "paper/src/test/java/dev/vox/lss/paper/LibsDisguisesReloadTest.java",
+            "paper/src/test/java/dev/vox/lss/paper/PaperFarPlayerSnapshotsTest.java"
+          ]
+        },
+        {
+          "sha": "9e49dcf71cf92f88c7c93e0980837a5037cc605f",
+          "subject": "fix(farplayers): withdraw rosters on runtime server disable",
+          "work_items": [
+            6
+          ],
+          "files": [
+            "common/src/main/java/dev/vox/lss/common/farplayers/FarPlayerBroadcastService.java",
+            "fabric/src/test/java/dev/vox/lss/common/farplayers/FarPlayerModeTransitionTest.java",
+            "paper/src/main/java/dev/vox/lss/paper/PaperRequestProcessingService.java",
+            "xplat/src/main/java/dev/vox/lss/networking/server/RequestProcessingService.java"
+          ]
+        },
+        {
+          "sha": "4c388643da04e54ec290c8e32bb81f8f078b106e",
+          "subject": "fix(processing): bind async work to player registration lifetimes",
+          "work_items": [
+            2
+          ],
+          "files": [
+            "common/src/main/java/dev/vox/lss/common/processing/AbstractChunkDiskReader.java",
+            "common/src/main/java/dev/vox/lss/common/processing/AbstractPlayerRequestState.java",
+            "common/src/main/java/dev/vox/lss/common/processing/DedupTracker.java",
+            "common/src/main/java/dev/vox/lss/common/processing/IncomingRequestRouter.java",
+            "common/src/main/java/dev/vox/lss/common/processing/OffThreadProcessor.java",
+            "common/src/main/java/dev/vox/lss/common/processing/RequestRegistration.java",
+            "common/src/main/java/dev/vox/lss/common/processing/TickSnapshot.java",
+            "fabric/src/gametest/java/dev/vox/lss/test/GenerationLifecycleGameTests.java",
+            "fabric/src/gametest/java/dev/vox/lss/test/SerializerParityGameTests.java",
+            "fabric/src/gametest/java/dev/vox/lss/test/ServiceLifecycleGameTests.java",
+            "fabric/src/test/java/dev/vox/lss/benchmark/ExporterContractTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/processing/DedupFanoutTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/processing/DirtyEventMailboxTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/processing/DiskReadDoneSweepTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/processing/GateRetentionRoutingTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/processing/GenerationSessionOwnershipTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/processing/IncomingRequestRouterTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/processing/OffThreadProcessorDiskResultTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/processing/OffThreadProcessorLifecycleTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/processing/OffThreadProcessorMailboxTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/processing/OffThreadProcessorStoreTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/processing/ReadFreshnessRungTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/processing/RequestSessionOwnershipTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/processing/RouteRotationFairnessTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/processing/SendActionIdentityTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/processing/StampedUpToDateFlowTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/processing/StoreFrameDeliveryTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/processing/TimestampSaveSchedulerTest.java",
+            "fabric/src/test/java/dev/vox/lss/networking/server/ServiceGlueTest.java",
+            "neoforge/src/gametest/java/dev/vox/lss/neoforge/gametest/LSSNeoGameTests.java",
+            "paper/src/main/java/dev/vox/lss/paper/PaperChunkDiskReader.java",
+            "paper/src/main/java/dev/vox/lss/paper/PaperChunkGenerationService.java",
+            "paper/src/main/java/dev/vox/lss/paper/PaperOffThreadProcessor.java",
+            "paper/src/main/java/dev/vox/lss/paper/PaperRequestProcessingService.java",
+            "paper/src/test/java/dev/vox/lss/paper/PaperChunkDiskReaderPriorityTest.java",
+            "paper/src/test/java/dev/vox/lss/paper/PaperChunkGenerationServiceTest.java",
+            "paper/src/test/java/dev/vox/lss/paper/PaperDiskReaderEnvelopeTest.java",
+            "paper/src/test/java/dev/vox/lss/paper/PaperRequestProcessingServiceTest.java",
+            "paper/src/test/java/dev/vox/lss/paper/RegionProbeSchedulingTest.java",
+            "xplat/src/main/java/dev/vox/lss/networking/server/ChunkDiskReader.java",
+            "xplat/src/main/java/dev/vox/lss/networking/server/ChunkGenerationService.java",
+            "xplat/src/main/java/dev/vox/lss/networking/server/FabricOffThreadProcessor.java",
+            "xplat/src/main/java/dev/vox/lss/networking/server/RequestProcessingService.java"
+          ]
+        },
+        {
+          "sha": "e8a0326f0c657fa630f5c3cac2a712d85981c8b0",
+          "subject": "fix(client): advance proxy wing animation on new ticks",
+          "work_items": [
+            15
+          ],
+          "files": [
+            "fabric/src/gametest/java/dev/vox/lss/test/LSSGameTests.java",
+            "fabric/src/main/java/dev/vox/lss/networking/client/FarPlayerRenderer.java",
+            "fabric/src/test/java/dev/vox/lss/testutil/FarPlayerRenderSourceContractTest.java",
+            "xplat/src/main/java/dev/vox/lss/networking/client/FarPlayerWingAnimation.java"
+          ]
+        },
+        {
+          "sha": "e6e98ecc5a6c46b6677ed31f967033c6959a724c",
+          "subject": "docs(testing): clarify live profiles and validation routes",
+          "work_items": [
+            14
+          ],
+          "files": [
+            "paper/src/main/java/dev/vox/lss/paper/PaperRequestProcessingService.java",
+            "test-server.sh",
+            "xplat/src/main/java/dev/vox/lss/networking/server/RequestProcessingService.java"
+          ]
+        },
+        {
+          "sha": "801ed3f4737d481313ecdfa27b9f6a889b5234e6",
+          "subject": "fix: retire client acquisition receipts on live receive toggle",
+          "work_items": [
+            3
+          ],
+          "files": [
+            "fabric/src/test/java/dev/vox/lss/api/LSSApiDispatchReportTest.java",
+            "fabric/src/test/java/dev/vox/lss/networking/client/ClientColumnProcessorTest.java",
+            "fabric/src/test/java/dev/vox/lss/networking/client/ClientSessionGateTest.java",
+            "fabric/src/test/java/dev/vox/lss/networking/client/ColumnDeliveryLifecycleTest.java",
+            "xplat/src/main/java/dev/vox/lss/api/LSSApi.java",
+            "xplat/src/main/java/dev/vox/lss/config/menu/SaveHook.java",
+            "xplat/src/main/java/dev/vox/lss/networking/client/ClientColumnProcessor.java",
+            "xplat/src/main/java/dev/vox/lss/networking/client/ClientNetGlue.java",
+            "xplat/src/main/java/dev/vox/lss/networking/client/ClientSessionGate.java",
+            "xplat/src/main/java/dev/vox/lss/networking/client/ColumnDelivery.java",
+            "xplat/src/main/java/dev/vox/lss/networking/client/ColumnStateMap.java",
+            "xplat/src/main/java/dev/vox/lss/networking/client/LodRequestManager.java"
+          ]
+        },
+        {
+          "sha": "eec2c3921208298bc678340513b6dd33c67b356d",
+          "subject": "fix: retire cancelled receipt handles across dimension changes",
+          "work_items": [
+            3
+          ],
+          "files": [
+            "fabric/src/test/java/dev/vox/lss/networking/client/ClientSessionGateTest.java",
+            "fabric/src/test/java/dev/vox/lss/networking/client/ColumnDeliveryLifecycleTest.java",
+            "xplat/src/main/java/dev/vox/lss/networking/client/ClientSessionGate.java",
+            "xplat/src/main/java/dev/vox/lss/networking/client/ColumnDelivery.java",
+            "xplat/src/main/java/dev/vox/lss/networking/client/LodRequestManager.java"
+          ]
+        },
+        {
+          "sha": "b1f3ab22aa502be6449a0c4803bfb84d7e1f8a25",
+          "subject": "fix: bind Xaero queued work and debt to acquisition receipts",
+          "work_items": [
+            5
+          ],
+          "files": [
+            "fabric/src/test/java/dev/vox/lss/compat/XaeroAcquisitionLifecycleTest.java",
+            "fabric/src/test/java/dev/vox/lss/compat/XaeroMapCompatTest.java",
+            "fabric/src/test/java/dev/vox/lss/networking/client/ColumnDeliveryFixture.java",
+            "xplat/src/main/java/dev/vox/lss/compat/ModCompat.java",
+            "xplat/src/main/java/dev/vox/lss/compat/XaeroMapCompat.java",
+            "xplat/src/main/java/dev/vox/lss/networking/client/ClientNetGlue.java"
+          ]
+        },
+        {
+          "sha": "3c62f5700d8b3150431c74508215bf76e670b9ab",
+          "subject": "fix(farplayers): apply roster renames to stationary proxies",
+          "work_items": [
+            8
+          ],
+          "files": [
+            "common/src/main/java/dev/vox/lss/common/farplayers/FarPlayerClientTracker.java",
+            "fabric/src/test/java/dev/vox/lss/common/farplayers/FarPlayerClientTrackerTest.java"
+          ]
+        },
+        {
+          "sha": "592de067ff2301d1f379cd862985a5eddbf3da24",
+          "subject": "docs: refresh current NeoForge artifact and client surfaces",
+          "work_items": [
+            14
+          ],
+          "files": [
+            "CLAUDE.md",
+            "README.md",
+            "docs/planning/neoforge-support-plan.md",
+            "docs/planning/per-version-surfaces.md",
+            "docs/reviews/2026-09-08-implementation/prism-inventory.json",
+            "docs/testing/astra-live-profiles.md"
+          ]
+        },
+        {
+          "sha": "4b7229ca421c4f082ec46fff299315597e2a2e55",
+          "subject": "test: record owner-aware column receipt dispatch",
+          "work_items": [
+            3
+          ],
+          "files": [
+            "fabric/src/test/java/dev/vox/lss/networking/client/VoxelColumnReceiverTest.java"
+          ]
+        },
+        {
+          "sha": "89ac90c1d4c1402353c3f178dbdd2174bf3d51c0",
+          "subject": "test: exercise LAN receive toggle and cancelled receipt recovery",
+          "work_items": [
+            3
+          ],
+          "files": [
+            "fabric/src/gametest/java/dev/vox/lss/test/LSSClientGameTests.java"
+          ]
+        },
+        {
+          "sha": "7e632b9a455cc883351d28f4e0d3ebfa22c59e54",
+          "subject": "fix(testing): remap bundled C2ME modules for Java 21 profiles",
+          "work_items": [
+            14
+          ],
+          "files": [
+            "fabric/build.gradle",
+            "gradle/c2me-dev-runtime.gradle"
+          ]
+        },
+        {
+          "sha": "28899adb28f5939a16296a9d2b677bd048418f10",
+          "subject": "test: preserve IO fallback and save readiness runtime controls",
+          "work_items": [
+            14
+          ],
+          "files": [
+            "fabric/src/gametest/java/dev/vox/lss/test/SerializerParityGameTests.java",
+            "fabric/src/gametest/java/dev/vox/lss/test/ServiceLifecycleGameTests.java"
+          ]
+        }
+      ]
+    },
+    "1.21.11": {
+      "baseline": "da726358f2c0cb7c33540bea8d0aa6940b9668c8",
+      "head": "f683bf56bac6f5bc886c6e7d327f678e2b74e6d3",
+      "status": [],
+      "commits": [
+        {
+          "sha": "15fb4599fc95c7ffc9b1b1138997f11743f4997d",
+          "subject": "fix(store): keep interrupted policy invalidation incomplete",
+          "work_items": [
+            1
+          ],
+          "files": [
+            "common/src/main/java/dev/vox/lss/common/store/SqliteLodStore.java",
+            "fabric/src/test/java/dev/vox/lss/common/store/SqliteLodStoreMaskShutdownTest.java"
+          ]
+        },
+        {
+          "sha": "b49f62af05d643920fbd8650689ef66336d2253f",
+          "subject": "fix(client): advance render-only player wing animation",
+          "work_items": [
+            15
+          ],
+          "files": [
+            "fabric/src/gametest/java/dev/vox/lss/test/LSSGameTests.java",
+            "fabric/src/main/java/dev/vox/lss/networking/client/FarPlayerRenderer.java",
+            "fabric/src/test/java/dev/vox/lss/testutil/FarPlayerRenderSourceContractTest.java",
+            "xplat/src/main/java/dev/vox/lss/networking/client/FarPlayerWingAnimation.java"
+          ]
+        },
+        {
+          "sha": "3699ba9ab93347a4e9c6c1398f6b48d713850511",
+          "subject": "fix(store): verify legacy row integrity before migration",
+          "work_items": [
+            7
+          ],
+          "files": [
+            "common/src/main/java/dev/vox/lss/common/store/SqliteLodStore.java",
+            "fabric/src/test/java/dev/vox/lss/common/store/SqliteLodStoreMigrationTest.java"
+          ]
+        },
+        {
+          "sha": "c83634e311dcdf6ba12a35c5356b61e31fc9c3a4",
+          "subject": "fix(client): bound and reconcile far-player identity bindings",
+          "work_items": [
+            8
+          ],
+          "files": [
+            "common/src/main/java/dev/vox/lss/common/farplayers/FarPlayerClientTracker.java",
+            "fabric/src/test/java/dev/vox/lss/common/farplayers/FarPlayerClientTrackerTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/farplayers/FarPlayerIdentityBindingTest.java"
+          ]
+        },
+        {
+          "sha": "a451464047e85bf5bd8483ec07ad9ba2ead0407c",
+          "subject": "fix(compat): resolve namespaced reset on legacy Voxy holder",
+          "work_items": [
+            12
+          ],
+          "files": [
+            "fabric/src/test/java/dev/vox/lss/compat/VoxyHolderCompatibilityTest.java",
+            "xplat/src/main/java/dev/vox/lss/compat/VoxyCompat.java"
+          ]
+        },
+        {
+          "sha": "6f2b3b4478b4c5a44dceba6efa3d776efe3938d6",
+          "subject": "fix: retract summary proofs when newer tiles are uncertain",
+          "work_items": [
+            4
+          ],
+          "files": [
+            "fabric/src/test/java/dev/vox/lss/common/region/RegionSummaryServiceFixture.java",
+            "fabric/src/test/java/dev/vox/lss/networking/client/ColumnStateMapTest.java",
+            "fabric/src/test/java/dev/vox/lss/networking/client/LodRequestManagerSummaryTest.java",
+            "fabric/src/test/java/dev/vox/lss/networking/client/ReferenceColumnStateMap.java",
+            "fabric/src/test/java/dev/vox/lss/networking/client/SectionStateFuzzTest.java",
+            "xplat/src/main/java/dev/vox/lss/networking/client/ColumnStateMap.java",
+            "xplat/src/main/java/dev/vox/lss/networking/client/LodRequestManager.java"
+          ]
+        },
+        {
+          "sha": "8886a12fa0c50865dcfc6ae3258d22e6f6e80a14",
+          "subject": "fix(harness): own process lifetimes and require fresh benchmark evidence",
+          "work_items": [
+            13
+          ],
+          "files": [
+            ".github/workflows/build.yml",
+            "scripts/backfill_profile.sh",
+            "scripts/benchmark.sh",
+            "scripts/benchmark_compare.sh",
+            "scripts/compress_gate.sh",
+            "scripts/lib/HARNESS.md",
+            "scripts/lib/benchmark-results.py",
+            "scripts/lib/harness-lock.sh",
+            "scripts/lib/mc-run.sh",
+            "scripts/lib/owned-process.py",
+            "scripts/profile_disk_read.sh",
+            "scripts/soak.sh",
+            "scripts/stamp_heal.sh",
+            "scripts/store_gate.sh",
+            "scripts/store_migration_gate.sh",
+            "scripts/store_offline_edit.sh",
+            "scripts/store_save_storm.sh",
+            "scripts/summary_evicted.sh",
+            "scripts/test_harness.py"
+          ]
+        },
+        {
+          "sha": "6112706714e3567cdbf5cbfb493ebf669cad24f4",
+          "subject": "fix(config): report runtime settings applied but not saved",
+          "work_items": [
+            10
+          ],
+          "files": [
+            "common/src/main/java/dev/vox/lss/common/config/JsonConfig.java",
+            "common/src/main/java/dev/vox/lss/common/config/RuntimeSettings.java",
+            "fabric/src/test/java/dev/vox/lss/common/config/RuntimeSettingsTest.java",
+            "paper/src/main/java/dev/vox/lss/paper/PaperCommands.java",
+            "paper/src/test/java/dev/vox/lss/paper/PaperCommandsTest.java",
+            "xplat/src/main/java/dev/vox/lss/networking/server/LSSServerCommands.java"
+          ]
+        },
+        {
+          "sha": "5f7166aff44e16529b0b5db13b7e257b199bbb0e",
+          "subject": "fix(paper): bind disguise API to current plugin classloader",
+          "work_items": [
+            11
+          ],
+          "files": [
+            "paper/src/main/java/dev/vox/lss/paper/LibsDisguisesBridge.java",
+            "paper/src/test/java/dev/vox/lss/paper/LibsDisguisesBridgeTest.java",
+            "paper/src/test/java/dev/vox/lss/paper/LibsDisguisesReloadTest.java",
+            "paper/src/test/java/dev/vox/lss/paper/PaperFarPlayerSnapshotsTest.java"
+          ]
+        },
+        {
+          "sha": "96d25bf596741370559e6408010bb73113f4f581",
+          "subject": "fix(farplayers): withdraw rosters on runtime server disable",
+          "work_items": [
+            6
+          ],
+          "files": [
+            "common/src/main/java/dev/vox/lss/common/farplayers/FarPlayerBroadcastService.java",
+            "fabric/src/test/java/dev/vox/lss/common/farplayers/FarPlayerModeTransitionTest.java",
+            "paper/src/main/java/dev/vox/lss/paper/PaperRequestProcessingService.java",
+            "xplat/src/main/java/dev/vox/lss/networking/server/RequestProcessingService.java"
+          ]
+        },
+        {
+          "sha": "7dd7baea74f424a44255c113ed34a52a83ee71e9",
+          "subject": "fix(processing): bind async work to player registration lifetimes",
+          "work_items": [
+            2
+          ],
+          "files": [
+            "common/src/main/java/dev/vox/lss/common/processing/AbstractChunkDiskReader.java",
+            "common/src/main/java/dev/vox/lss/common/processing/AbstractPlayerRequestState.java",
+            "common/src/main/java/dev/vox/lss/common/processing/DedupTracker.java",
+            "common/src/main/java/dev/vox/lss/common/processing/IncomingRequestRouter.java",
+            "common/src/main/java/dev/vox/lss/common/processing/OffThreadProcessor.java",
+            "common/src/main/java/dev/vox/lss/common/processing/RequestRegistration.java",
+            "common/src/main/java/dev/vox/lss/common/processing/TickSnapshot.java",
+            "fabric/src/gametest/java/dev/vox/lss/test/GenerationLifecycleGameTests.java",
+            "fabric/src/gametest/java/dev/vox/lss/test/SerializerParityGameTests.java",
+            "fabric/src/gametest/java/dev/vox/lss/test/ServiceLifecycleGameTests.java",
+            "fabric/src/test/java/dev/vox/lss/benchmark/ExporterContractTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/processing/DedupFanoutTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/processing/DirtyEventMailboxTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/processing/DiskReadDoneSweepTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/processing/GateRetentionRoutingTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/processing/GenerationSessionOwnershipTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/processing/IncomingRequestRouterTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/processing/OffThreadProcessorDiskResultTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/processing/OffThreadProcessorLifecycleTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/processing/OffThreadProcessorMailboxTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/processing/OffThreadProcessorStoreTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/processing/ReadFreshnessRungTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/processing/RequestSessionOwnershipTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/processing/RouteRotationFairnessTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/processing/SendActionIdentityTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/processing/StampedUpToDateFlowTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/processing/StoreFrameDeliveryTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/processing/TimestampSaveSchedulerTest.java",
+            "fabric/src/test/java/dev/vox/lss/networking/server/ServiceGlueTest.java",
+            "neoforge/src/gametest/java/dev/vox/lss/neoforge/gametest/LSSNeoGameTests.java",
+            "paper/src/main/java/dev/vox/lss/paper/PaperChunkDiskReader.java",
+            "paper/src/main/java/dev/vox/lss/paper/PaperChunkGenerationService.java",
+            "paper/src/main/java/dev/vox/lss/paper/PaperOffThreadProcessor.java",
+            "paper/src/main/java/dev/vox/lss/paper/PaperRequestProcessingService.java",
+            "paper/src/test/java/dev/vox/lss/paper/PaperChunkDiskReaderPriorityTest.java",
+            "paper/src/test/java/dev/vox/lss/paper/PaperChunkGenerationServiceTest.java",
+            "paper/src/test/java/dev/vox/lss/paper/PaperDiskReaderEnvelopeTest.java",
+            "paper/src/test/java/dev/vox/lss/paper/PaperRequestProcessingServiceTest.java",
+            "paper/src/test/java/dev/vox/lss/paper/RegionProbeSchedulingTest.java",
+            "xplat/src/main/java/dev/vox/lss/networking/server/ChunkDiskReader.java",
+            "xplat/src/main/java/dev/vox/lss/networking/server/ChunkGenerationService.java",
+            "xplat/src/main/java/dev/vox/lss/networking/server/FabricOffThreadProcessor.java",
+            "xplat/src/main/java/dev/vox/lss/networking/server/RequestProcessingService.java"
+          ]
+        },
+        {
+          "sha": "3f238fb32ff8135543bd374cef94ff2e7287a3c6",
+          "subject": "docs(testing): clarify live profiles and validation routes",
+          "work_items": [
+            14
+          ],
+          "files": [
+            "docs/testing/c2me-validation.md",
+            "fabric/build.gradle",
+            "paper/src/main/java/dev/vox/lss/paper/PaperRequestProcessingService.java",
+            "test-server.sh",
+            "xplat/src/main/java/dev/vox/lss/networking/server/RequestProcessingService.java"
+          ]
+        },
+        {
+          "sha": "7b6b67e5a418e42710549b86054b607803e5f51c",
+          "subject": "fix: retire client acquisition receipts on live receive toggle",
+          "work_items": [
+            3
+          ],
+          "files": [
+            "fabric/src/test/java/dev/vox/lss/api/LSSApiDispatchReportTest.java",
+            "fabric/src/test/java/dev/vox/lss/networking/client/ClientColumnProcessorTest.java",
+            "fabric/src/test/java/dev/vox/lss/networking/client/ClientSessionGateTest.java",
+            "fabric/src/test/java/dev/vox/lss/networking/client/ColumnDeliveryLifecycleTest.java",
+            "xplat/src/main/java/dev/vox/lss/api/LSSApi.java",
+            "xplat/src/main/java/dev/vox/lss/config/menu/SaveHook.java",
+            "xplat/src/main/java/dev/vox/lss/networking/client/ClientColumnProcessor.java",
+            "xplat/src/main/java/dev/vox/lss/networking/client/ClientNetGlue.java",
+            "xplat/src/main/java/dev/vox/lss/networking/client/ClientSessionGate.java",
+            "xplat/src/main/java/dev/vox/lss/networking/client/ColumnDelivery.java",
+            "xplat/src/main/java/dev/vox/lss/networking/client/ColumnStateMap.java",
+            "xplat/src/main/java/dev/vox/lss/networking/client/LodRequestManager.java"
+          ]
+        },
+        {
+          "sha": "8a253e7a8012dbe39e4e661ebc00840ac219094b",
+          "subject": "fix: retire cancelled receipt handles across dimension changes",
+          "work_items": [
+            3
+          ],
+          "files": [
+            "fabric/src/test/java/dev/vox/lss/networking/client/ClientSessionGateTest.java",
+            "fabric/src/test/java/dev/vox/lss/networking/client/ColumnDeliveryLifecycleTest.java",
+            "xplat/src/main/java/dev/vox/lss/networking/client/ClientSessionGate.java",
+            "xplat/src/main/java/dev/vox/lss/networking/client/ColumnDelivery.java",
+            "xplat/src/main/java/dev/vox/lss/networking/client/LodRequestManager.java"
+          ]
+        },
+        {
+          "sha": "6587b4dab7482dcc5c657b55ef4d5239860b3df6",
+          "subject": "fix: bind Xaero queued work and debt to acquisition receipts",
+          "work_items": [
+            5
+          ],
+          "files": [
+            "fabric/src/test/java/dev/vox/lss/compat/XaeroAcquisitionLifecycleTest.java",
+            "fabric/src/test/java/dev/vox/lss/compat/XaeroMapCompatTest.java",
+            "fabric/src/test/java/dev/vox/lss/networking/client/ColumnDeliveryFixture.java",
+            "xplat/src/main/java/dev/vox/lss/compat/ModCompat.java",
+            "xplat/src/main/java/dev/vox/lss/compat/XaeroMapCompat.java",
+            "xplat/src/main/java/dev/vox/lss/networking/client/ClientNetGlue.java"
+          ]
+        },
+        {
+          "sha": "fa92367c5badb2a46e43a4d364d0cac470df1706",
+          "subject": "fix(farplayers): apply roster renames to stationary proxies",
+          "work_items": [
+            8
+          ],
+          "files": [
+            "common/src/main/java/dev/vox/lss/common/farplayers/FarPlayerClientTracker.java",
+            "fabric/src/test/java/dev/vox/lss/common/farplayers/FarPlayerClientTrackerTest.java"
+          ]
+        },
+        {
+          "sha": "c35213cd7cbeae305d9c9a72104458355a6615e8",
+          "subject": "docs: refresh current NeoForge artifact and client surfaces",
+          "work_items": [
+            14
+          ],
+          "files": [
+            "CLAUDE.md",
+            "README.md",
+            "docs/planning/neoforge-support-plan.md",
+            "docs/planning/per-version-surfaces.md",
+            "docs/reviews/2026-09-08-implementation/prism-inventory.json",
+            "docs/testing/astra-live-profiles.md"
+          ]
+        },
+        {
+          "sha": "d9df311d5852dea1139ff7618ab4b06084cfb513",
+          "subject": "test: record owner-aware column receipt dispatch",
+          "work_items": [
+            3
+          ],
+          "files": [
+            "fabric/src/test/java/dev/vox/lss/networking/client/VoxelColumnReceiverTest.java"
+          ]
+        },
+        {
+          "sha": "c64f67b8dd82d4fa6dfd195513cc471a8243603c",
+          "subject": "test: exercise LAN receive toggle and cancelled receipt recovery",
+          "work_items": [
+            3
+          ],
+          "files": [
+            "fabric/src/gametest/java/dev/vox/lss/test/LSSClientGameTests.java"
+          ]
+        },
+        {
+          "sha": "471282ef0e489593ed96c0c2b6145184a6187fb2",
+          "subject": "fix(testing): remap bundled C2ME modules for Java 21 profiles",
+          "work_items": [
+            14
+          ],
+          "files": [
+            "docs/testing/c2me-validation.md",
+            "fabric/build.gradle",
+            "gradle/c2me-dev-runtime.gradle"
+          ]
+        },
+        {
+          "sha": "f683bf56bac6f5bc886c6e7d327f678e2b74e6d3",
+          "subject": "test: preserve IO fallback and save readiness runtime controls",
+          "work_items": [
+            14
+          ],
+          "files": [
+            "fabric/src/gametest/java/dev/vox/lss/test/SerializerParityGameTests.java",
+            "fabric/src/gametest/java/dev/vox/lss/test/ServiceLifecycleGameTests.java"
+          ]
+        }
+      ]
+    },
+    "26.1": {
+      "baseline": "8e900e69e8ce927b19eb20681bb2261c71455352",
+      "head": "7caf33035992b9f273e0a5b18876ae642084ced3",
+      "status": [],
+      "commits": [
+        {
+          "sha": "7e6d08ba3758da2357266bdc67e3c5c98eb33af0",
+          "subject": "fix(store): keep interrupted policy invalidation incomplete",
+          "work_items": [
+            1
+          ],
+          "files": [
+            "common/src/main/java/dev/vox/lss/common/store/SqliteLodStore.java",
+            "fabric/src/test/java/dev/vox/lss/common/store/SqliteLodStoreMaskShutdownTest.java"
+          ]
+        },
+        {
+          "sha": "a385c5e05b0040391114fdcfb92d24f2d628f4dc",
+          "subject": "fix(store): verify legacy row integrity before migration",
+          "work_items": [
+            7
+          ],
+          "files": [
+            "common/src/main/java/dev/vox/lss/common/store/SqliteLodStore.java",
+            "fabric/src/test/java/dev/vox/lss/common/store/SqliteLodStoreMigrationTest.java"
+          ]
+        },
+        {
+          "sha": "d4d91b469e9d7f7f3f40cd6d1f2eeceb0ddc6ce9",
+          "subject": "fix(client): bound and reconcile far-player identity bindings",
+          "work_items": [
+            8
+          ],
+          "files": [
+            "common/src/main/java/dev/vox/lss/common/farplayers/FarPlayerClientTracker.java",
+            "fabric/src/test/java/dev/vox/lss/common/farplayers/FarPlayerClientTrackerTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/farplayers/FarPlayerIdentityBindingTest.java"
+          ]
+        },
+        {
+          "sha": "9119b989719c8293661317b84c6cb636a6d3cdaa",
+          "subject": "fix(compat): resolve namespaced reset on legacy Voxy holder",
+          "work_items": [
+            12
+          ],
+          "files": [
+            "fabric/src/test/java/dev/vox/lss/compat/VoxyHolderCompatibilityTest.java",
+            "xplat/src/main/java/dev/vox/lss/compat/VoxyCompat.java"
+          ]
+        },
+        {
+          "sha": "1eeba0a51e82b599bb356e48d9fb4951100107fc",
+          "subject": "fix: retract summary proofs when newer tiles are uncertain",
+          "work_items": [
+            4
+          ],
+          "files": [
+            "fabric/src/test/java/dev/vox/lss/common/region/RegionSummaryServiceFixture.java",
+            "fabric/src/test/java/dev/vox/lss/networking/client/ColumnStateMapTest.java",
+            "fabric/src/test/java/dev/vox/lss/networking/client/LodRequestManagerSummaryTest.java",
+            "fabric/src/test/java/dev/vox/lss/networking/client/ReferenceColumnStateMap.java",
+            "fabric/src/test/java/dev/vox/lss/networking/client/SectionStateFuzzTest.java",
+            "xplat/src/main/java/dev/vox/lss/networking/client/ColumnStateMap.java",
+            "xplat/src/main/java/dev/vox/lss/networking/client/LodRequestManager.java"
+          ]
+        },
+        {
+          "sha": "ff1975da2f3a0d737afda07be7d53b2a790f4e8b",
+          "subject": "fix(harness): own process lifetimes and require fresh benchmark evidence",
+          "work_items": [
+            13
+          ],
+          "files": [
+            ".github/workflows/build.yml",
+            "scripts/backfill_profile.sh",
+            "scripts/benchmark.sh",
+            "scripts/benchmark_compare.sh",
+            "scripts/compress_gate.sh",
+            "scripts/lib/HARNESS.md",
+            "scripts/lib/benchmark-results.py",
+            "scripts/lib/harness-lock.sh",
+            "scripts/lib/mc-run.sh",
+            "scripts/lib/owned-process.py",
+            "scripts/profile_disk_read.sh",
+            "scripts/soak.sh",
+            "scripts/stamp_heal.sh",
+            "scripts/store_gate.sh",
+            "scripts/store_migration_gate.sh",
+            "scripts/store_offline_edit.sh",
+            "scripts/store_save_storm.sh",
+            "scripts/summary_evicted.sh",
+            "scripts/test_harness.py"
+          ]
+        },
+        {
+          "sha": "4bae1626a7f9d3234c5b2c58cd4d8cd5966b833b",
+          "subject": "fix(config): report runtime settings applied but not saved",
+          "work_items": [
+            10
+          ],
+          "files": [
+            "common/src/main/java/dev/vox/lss/common/config/JsonConfig.java",
+            "common/src/main/java/dev/vox/lss/common/config/RuntimeSettings.java",
+            "fabric/src/test/java/dev/vox/lss/common/config/RuntimeSettingsTest.java",
+            "paper/src/main/java/dev/vox/lss/paper/PaperCommands.java",
+            "paper/src/test/java/dev/vox/lss/paper/PaperCommandsTest.java",
+            "xplat/src/main/java/dev/vox/lss/networking/server/LSSServerCommands.java"
+          ]
+        },
+        {
+          "sha": "781cd0677547938b6ceb92e60c457239bf2b3faa",
+          "subject": "fix(paper): bind disguise API to current plugin classloader",
+          "work_items": [
+            11
+          ],
+          "files": [
+            "paper/src/main/java/dev/vox/lss/paper/LibsDisguisesBridge.java",
+            "paper/src/test/java/dev/vox/lss/paper/LibsDisguisesBridgeTest.java",
+            "paper/src/test/java/dev/vox/lss/paper/LibsDisguisesReloadTest.java",
+            "paper/src/test/java/dev/vox/lss/paper/PaperFarPlayerSnapshotsTest.java"
+          ]
+        },
+        {
+          "sha": "111036408d011f154699392a00ce92f52e41dcfa",
+          "subject": "fix(farplayers): withdraw rosters on runtime server disable",
+          "work_items": [
+            6
+          ],
+          "files": [
+            "common/src/main/java/dev/vox/lss/common/farplayers/FarPlayerBroadcastService.java",
+            "fabric/src/test/java/dev/vox/lss/common/farplayers/FarPlayerModeTransitionTest.java",
+            "paper/src/main/java/dev/vox/lss/paper/PaperRequestProcessingService.java",
+            "xplat/src/main/java/dev/vox/lss/networking/server/RequestProcessingService.java"
+          ]
+        },
+        {
+          "sha": "fa76056e434e924b046eb7fb841b8151c9cacbc3",
+          "subject": "fix(processing): bind async work to player registration lifetimes",
+          "work_items": [
+            2
+          ],
+          "files": [
+            "common/src/main/java/dev/vox/lss/common/processing/AbstractChunkDiskReader.java",
+            "common/src/main/java/dev/vox/lss/common/processing/AbstractPlayerRequestState.java",
+            "common/src/main/java/dev/vox/lss/common/processing/DedupTracker.java",
+            "common/src/main/java/dev/vox/lss/common/processing/IncomingRequestRouter.java",
+            "common/src/main/java/dev/vox/lss/common/processing/OffThreadProcessor.java",
+            "common/src/main/java/dev/vox/lss/common/processing/RequestRegistration.java",
+            "common/src/main/java/dev/vox/lss/common/processing/TickSnapshot.java",
+            "fabric/src/gametest/java/dev/vox/lss/test/GenerationLifecycleGameTests.java",
+            "fabric/src/gametest/java/dev/vox/lss/test/SerializerParityGameTests.java",
+            "fabric/src/gametest/java/dev/vox/lss/test/ServiceLifecycleGameTests.java",
+            "fabric/src/test/java/dev/vox/lss/benchmark/ExporterContractTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/processing/DedupFanoutTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/processing/DirtyEventMailboxTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/processing/DiskReadDoneSweepTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/processing/GateRetentionRoutingTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/processing/GenerationSessionOwnershipTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/processing/IncomingRequestRouterTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/processing/OffThreadProcessorDiskResultTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/processing/OffThreadProcessorLifecycleTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/processing/OffThreadProcessorMailboxTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/processing/OffThreadProcessorStoreTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/processing/ReadFreshnessRungTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/processing/RequestSessionOwnershipTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/processing/RouteRotationFairnessTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/processing/SendActionIdentityTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/processing/StampedUpToDateFlowTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/processing/StoreFrameDeliveryTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/processing/TimestampSaveSchedulerTest.java",
+            "fabric/src/test/java/dev/vox/lss/networking/server/ServiceGlueTest.java",
+            "neoforge/src/gametest/java/dev/vox/lss/neoforge/gametest/LSSNeoGameTests.java",
+            "paper/src/main/java/dev/vox/lss/paper/PaperChunkDiskReader.java",
+            "paper/src/main/java/dev/vox/lss/paper/PaperChunkGenerationService.java",
+            "paper/src/main/java/dev/vox/lss/paper/PaperOffThreadProcessor.java",
+            "paper/src/main/java/dev/vox/lss/paper/PaperRequestProcessingService.java",
+            "paper/src/test/java/dev/vox/lss/paper/PaperChunkDiskReaderPriorityTest.java",
+            "paper/src/test/java/dev/vox/lss/paper/PaperChunkGenerationServiceTest.java",
+            "paper/src/test/java/dev/vox/lss/paper/PaperDiskReaderEnvelopeTest.java",
+            "paper/src/test/java/dev/vox/lss/paper/PaperRequestProcessingServiceTest.java",
+            "paper/src/test/java/dev/vox/lss/paper/RegionProbeSchedulingTest.java",
+            "xplat/src/main/java/dev/vox/lss/networking/server/ChunkDiskReader.java",
+            "xplat/src/main/java/dev/vox/lss/networking/server/ChunkGenerationService.java",
+            "xplat/src/main/java/dev/vox/lss/networking/server/FabricOffThreadProcessor.java",
+            "xplat/src/main/java/dev/vox/lss/networking/server/RequestProcessingService.java"
+          ]
+        },
+        {
+          "sha": "141abf6422cc63ea391e9afee1f1db3590bae21f",
+          "subject": "docs(testing): clarify live profiles and validation routes",
+          "work_items": [
+            14
+          ],
+          "files": [
+            "paper/src/main/java/dev/vox/lss/paper/PaperRequestProcessingService.java",
+            "test-server.sh",
+            "xplat/src/main/java/dev/vox/lss/networking/server/RequestProcessingService.java"
+          ]
+        },
+        {
+          "sha": "7d87d6ac58341dcd6da060b4e9e20453cf383ab2",
+          "subject": "fix: retire client acquisition receipts on live receive toggle",
+          "work_items": [
+            3
+          ],
+          "files": [
+            "fabric/src/test/java/dev/vox/lss/api/LSSApiDispatchReportTest.java",
+            "fabric/src/test/java/dev/vox/lss/networking/client/ClientColumnProcessorTest.java",
+            "fabric/src/test/java/dev/vox/lss/networking/client/ClientSessionGateTest.java",
+            "fabric/src/test/java/dev/vox/lss/networking/client/ColumnDeliveryLifecycleTest.java",
+            "xplat/src/main/java/dev/vox/lss/api/LSSApi.java",
+            "xplat/src/main/java/dev/vox/lss/config/menu/SaveHook.java",
+            "xplat/src/main/java/dev/vox/lss/networking/client/ClientColumnProcessor.java",
+            "xplat/src/main/java/dev/vox/lss/networking/client/ClientNetGlue.java",
+            "xplat/src/main/java/dev/vox/lss/networking/client/ClientSessionGate.java",
+            "xplat/src/main/java/dev/vox/lss/networking/client/ColumnDelivery.java",
+            "xplat/src/main/java/dev/vox/lss/networking/client/ColumnStateMap.java",
+            "xplat/src/main/java/dev/vox/lss/networking/client/LodRequestManager.java"
+          ]
+        },
+        {
+          "sha": "c97c0a4b4b645b2332ca681c9d5b5efa53938542",
+          "subject": "fix: retire cancelled receipt handles across dimension changes",
+          "work_items": [
+            3
+          ],
+          "files": [
+            "fabric/src/test/java/dev/vox/lss/networking/client/ClientSessionGateTest.java",
+            "fabric/src/test/java/dev/vox/lss/networking/client/ColumnDeliveryLifecycleTest.java",
+            "xplat/src/main/java/dev/vox/lss/networking/client/ClientSessionGate.java",
+            "xplat/src/main/java/dev/vox/lss/networking/client/ColumnDelivery.java",
+            "xplat/src/main/java/dev/vox/lss/networking/client/LodRequestManager.java"
+          ]
+        },
+        {
+          "sha": "324623fcbfd04db6b1c3f52f2b9d09bf00f00e75",
+          "subject": "fix: bind Xaero queued work and debt to acquisition receipts",
+          "work_items": [
+            5
+          ],
+          "files": [
+            "fabric/src/test/java/dev/vox/lss/compat/XaeroAcquisitionLifecycleTest.java",
+            "fabric/src/test/java/dev/vox/lss/compat/XaeroMapCompatTest.java",
+            "fabric/src/test/java/dev/vox/lss/networking/client/ColumnDeliveryFixture.java",
+            "xplat/src/main/java/dev/vox/lss/compat/ModCompat.java",
+            "xplat/src/main/java/dev/vox/lss/compat/XaeroMapCompat.java",
+            "xplat/src/main/java/dev/vox/lss/networking/client/ClientNetGlue.java"
+          ]
+        },
+        {
+          "sha": "e7a5e1389b8cb2e41ace1f915ee0b50e22421d07",
+          "subject": "fix(farplayers): apply roster renames to stationary proxies",
+          "work_items": [
+            8
+          ],
+          "files": [
+            "common/src/main/java/dev/vox/lss/common/farplayers/FarPlayerClientTracker.java",
+            "fabric/src/test/java/dev/vox/lss/common/farplayers/FarPlayerClientTrackerTest.java"
+          ]
+        },
+        {
+          "sha": "1d6914655d9c7cc127ac5397c5c0f2283abc6b14",
+          "subject": "docs: refresh current NeoForge artifact and client surfaces",
+          "work_items": [
+            14
+          ],
+          "files": [
+            "CLAUDE.md",
+            "README.md",
+            "docs/planning/neoforge-support-plan.md",
+            "docs/planning/per-version-surfaces.md",
+            "docs/reviews/2026-09-08-implementation/prism-inventory.json",
+            "docs/testing/astra-live-profiles.md"
+          ]
+        },
+        {
+          "sha": "5c79387aa70d6e26bfaebc2d2684a95bd1de10ed",
+          "subject": "test: record owner-aware column receipt dispatch",
+          "work_items": [
+            3
+          ],
+          "files": [
+            "fabric/src/test/java/dev/vox/lss/networking/client/VoxelColumnReceiverTest.java"
+          ]
+        },
+        {
+          "sha": "41020c0fde83b2adee32cf0d156458ac3bb14f38",
+          "subject": "test: exercise LAN receive toggle and cancelled receipt recovery",
+          "work_items": [
+            3
+          ],
+          "files": [
+            "fabric/src/gametest/java/dev/vox/lss/test/LSSClientGameTests.java"
+          ]
+        },
+        {
+          "sha": "7caf33035992b9f273e0a5b18876ae642084ced3",
+          "subject": "test: preserve IO fallback and save readiness runtime controls",
+          "work_items": [
+            14
+          ],
+          "files": [
+            "fabric/src/gametest/java/dev/vox/lss/test/SerializerParityGameTests.java",
+            "fabric/src/gametest/java/dev/vox/lss/test/ServiceLifecycleGameTests.java"
+          ]
+        }
+      ]
+    },
+    "26.2": {
+      "baseline": "2b2a0df728e220411da61625cc4b36c7b76dd837",
+      "head": "9638042bb543382203a835aacd8f0f7444d2cb36",
+      "status": [],
+      "commits": [
+        {
+          "sha": "85c01017fa3623b7adef1fb099587c620375689c",
+          "subject": "fix(store): keep interrupted policy invalidation incomplete",
+          "work_items": [
+            1
+          ],
+          "files": [
+            "common/src/main/java/dev/vox/lss/common/store/SqliteLodStore.java",
+            "fabric/src/test/java/dev/vox/lss/common/store/SqliteLodStoreMaskShutdownTest.java"
+          ]
+        },
+        {
+          "sha": "44933a6e4770aae49c6aa3e69d2a97e411aa877d",
+          "subject": "fix(store): verify legacy row integrity before migration",
+          "work_items": [
+            7
+          ],
+          "files": [
+            "common/src/main/java/dev/vox/lss/common/store/SqliteLodStore.java",
+            "fabric/src/test/java/dev/vox/lss/common/store/SqliteLodStoreMigrationTest.java"
+          ]
+        },
+        {
+          "sha": "29bf9beaa9ce6f9397fbd406b5b93bd8f95207cd",
+          "subject": "fix(client): bound and reconcile far-player identity bindings",
+          "work_items": [
+            8
+          ],
+          "files": [
+            "common/src/main/java/dev/vox/lss/common/farplayers/FarPlayerClientTracker.java",
+            "fabric/src/test/java/dev/vox/lss/common/farplayers/FarPlayerClientTrackerTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/farplayers/FarPlayerIdentityBindingTest.java"
+          ]
+        },
+        {
+          "sha": "c942fc0e601930b1719955d2e9b5b7b638f8f4ef",
+          "subject": "fix(compat): resolve namespaced reset on legacy Voxy holder",
+          "work_items": [
+            12
+          ],
+          "files": [
+            "fabric/src/test/java/dev/vox/lss/compat/VoxyHolderCompatibilityTest.java",
+            "xplat/src/main/java/dev/vox/lss/compat/VoxyCompat.java"
+          ]
+        },
+        {
+          "sha": "d1de559f457c333559eeed6626a3cedd567f433f",
+          "subject": "fix: retract summary proofs when newer tiles are uncertain",
+          "work_items": [
+            4
+          ],
+          "files": [
+            "fabric/src/test/java/dev/vox/lss/common/region/RegionSummaryServiceFixture.java",
+            "fabric/src/test/java/dev/vox/lss/networking/client/ColumnStateMapTest.java",
+            "fabric/src/test/java/dev/vox/lss/networking/client/LodRequestManagerSummaryTest.java",
+            "fabric/src/test/java/dev/vox/lss/networking/client/ReferenceColumnStateMap.java",
+            "fabric/src/test/java/dev/vox/lss/networking/client/SectionStateFuzzTest.java",
+            "xplat/src/main/java/dev/vox/lss/networking/client/ColumnStateMap.java",
+            "xplat/src/main/java/dev/vox/lss/networking/client/LodRequestManager.java"
+          ]
+        },
+        {
+          "sha": "20aa7c4710e96c722fe43d58a40a77ec209fd496",
+          "subject": "fix(harness): own process lifetimes and require fresh benchmark evidence",
+          "work_items": [
+            13
+          ],
+          "files": [
+            ".github/workflows/build.yml",
+            "scripts/backfill_profile.sh",
+            "scripts/benchmark.sh",
+            "scripts/benchmark_compare.sh",
+            "scripts/compress_gate.sh",
+            "scripts/lib/HARNESS.md",
+            "scripts/lib/benchmark-results.py",
+            "scripts/lib/harness-lock.sh",
+            "scripts/lib/mc-run.sh",
+            "scripts/lib/owned-process.py",
+            "scripts/profile_disk_read.sh",
+            "scripts/soak.sh",
+            "scripts/stamp_heal.sh",
+            "scripts/store_gate.sh",
+            "scripts/store_migration_gate.sh",
+            "scripts/store_offline_edit.sh",
+            "scripts/store_save_storm.sh",
+            "scripts/summary_evicted.sh",
+            "scripts/test_harness.py"
+          ]
+        },
+        {
+          "sha": "20253500d9339870f2dd11e32893ff7635181fd6",
+          "subject": "fix(config): report runtime settings applied but not saved",
+          "work_items": [
+            10
+          ],
+          "files": [
+            "common/src/main/java/dev/vox/lss/common/config/JsonConfig.java",
+            "common/src/main/java/dev/vox/lss/common/config/RuntimeSettings.java",
+            "fabric/src/test/java/dev/vox/lss/common/config/RuntimeSettingsTest.java",
+            "paper/src/main/java/dev/vox/lss/paper/PaperCommands.java",
+            "paper/src/test/java/dev/vox/lss/paper/PaperCommandsTest.java",
+            "xplat/src/main/java/dev/vox/lss/networking/server/LSSServerCommands.java"
+          ]
+        },
+        {
+          "sha": "8974a7bf31e338396e8757f048443e478c250460",
+          "subject": "fix(paper): bind disguise API to current plugin classloader",
+          "work_items": [
+            11
+          ],
+          "files": [
+            "paper/src/main/java/dev/vox/lss/paper/LibsDisguisesBridge.java",
+            "paper/src/test/java/dev/vox/lss/paper/LibsDisguisesBridgeTest.java",
+            "paper/src/test/java/dev/vox/lss/paper/LibsDisguisesReloadTest.java",
+            "paper/src/test/java/dev/vox/lss/paper/PaperFarPlayerSnapshotsTest.java"
+          ]
+        },
+        {
+          "sha": "d080f6211440fb3db69c653640b660eb0f44d054",
+          "subject": "fix(farplayers): withdraw rosters on runtime server disable",
+          "work_items": [
+            6
+          ],
+          "files": [
+            "common/src/main/java/dev/vox/lss/common/farplayers/FarPlayerBroadcastService.java",
+            "fabric/src/test/java/dev/vox/lss/common/farplayers/FarPlayerModeTransitionTest.java",
+            "paper/src/main/java/dev/vox/lss/paper/PaperRequestProcessingService.java",
+            "xplat/src/main/java/dev/vox/lss/networking/server/RequestProcessingService.java"
+          ]
+        },
+        {
+          "sha": "3759894a8ca4fe3dea0e965d0596b73f9978fef4",
+          "subject": "fix(processing): bind async work to player registration lifetimes",
+          "work_items": [
+            2
+          ],
+          "files": [
+            "common/src/main/java/dev/vox/lss/common/processing/AbstractChunkDiskReader.java",
+            "common/src/main/java/dev/vox/lss/common/processing/AbstractPlayerRequestState.java",
+            "common/src/main/java/dev/vox/lss/common/processing/DedupTracker.java",
+            "common/src/main/java/dev/vox/lss/common/processing/IncomingRequestRouter.java",
+            "common/src/main/java/dev/vox/lss/common/processing/OffThreadProcessor.java",
+            "common/src/main/java/dev/vox/lss/common/processing/RequestRegistration.java",
+            "common/src/main/java/dev/vox/lss/common/processing/TickSnapshot.java",
+            "fabric/src/gametest/java/dev/vox/lss/test/GenerationLifecycleGameTests.java",
+            "fabric/src/gametest/java/dev/vox/lss/test/SerializerParityGameTests.java",
+            "fabric/src/gametest/java/dev/vox/lss/test/ServiceLifecycleGameTests.java",
+            "fabric/src/test/java/dev/vox/lss/benchmark/ExporterContractTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/processing/DedupFanoutTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/processing/DirtyEventMailboxTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/processing/DiskReadDoneSweepTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/processing/GateRetentionRoutingTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/processing/GenerationSessionOwnershipTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/processing/IncomingRequestRouterTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/processing/OffThreadProcessorDiskResultTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/processing/OffThreadProcessorLifecycleTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/processing/OffThreadProcessorMailboxTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/processing/OffThreadProcessorStoreTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/processing/ReadFreshnessRungTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/processing/RequestSessionOwnershipTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/processing/RouteRotationFairnessTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/processing/SendActionIdentityTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/processing/StampedUpToDateFlowTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/processing/StoreFrameDeliveryTest.java",
+            "fabric/src/test/java/dev/vox/lss/common/processing/TimestampSaveSchedulerTest.java",
+            "fabric/src/test/java/dev/vox/lss/networking/server/ServiceGlueTest.java",
+            "neoforge/src/gametest/java/dev/vox/lss/neoforge/gametest/LSSNeoGameTests.java",
+            "paper/src/main/java/dev/vox/lss/paper/PaperChunkDiskReader.java",
+            "paper/src/main/java/dev/vox/lss/paper/PaperChunkGenerationService.java",
+            "paper/src/main/java/dev/vox/lss/paper/PaperOffThreadProcessor.java",
+            "paper/src/main/java/dev/vox/lss/paper/PaperRequestProcessingService.java",
+            "paper/src/test/java/dev/vox/lss/paper/PaperChunkDiskReaderPriorityTest.java",
+            "paper/src/test/java/dev/vox/lss/paper/PaperChunkGenerationServiceTest.java",
+            "paper/src/test/java/dev/vox/lss/paper/PaperDiskReaderEnvelopeTest.java",
+            "paper/src/test/java/dev/vox/lss/paper/PaperRequestProcessingServiceTest.java",
+            "paper/src/test/java/dev/vox/lss/paper/RegionProbeSchedulingTest.java",
+            "xplat/src/main/java/dev/vox/lss/networking/server/ChunkDiskReader.java",
+            "xplat/src/main/java/dev/vox/lss/networking/server/ChunkGenerationService.java",
+            "xplat/src/main/java/dev/vox/lss/networking/server/FabricOffThreadProcessor.java",
+            "xplat/src/main/java/dev/vox/lss/networking/server/RequestProcessingService.java"
+          ]
+        },
+        {
+          "sha": "ffc01dacfcc093493e08057ae78e8a482816a7c7",
+          "subject": "docs(testing): clarify live profiles and validation routes",
+          "work_items": [
+            14
+          ],
+          "files": [
+            "paper/src/main/java/dev/vox/lss/paper/PaperRequestProcessingService.java",
+            "test-server.sh",
+            "xplat/src/main/java/dev/vox/lss/networking/server/RequestProcessingService.java"
+          ]
+        },
+        {
+          "sha": "e3d67aaebf82398029b4d8d177c3a139b12c4fcc",
+          "subject": "fix: retire client acquisition receipts on live receive toggle",
+          "work_items": [
+            3
+          ],
+          "files": [
+            "fabric/src/test/java/dev/vox/lss/api/LSSApiDispatchReportTest.java",
+            "fabric/src/test/java/dev/vox/lss/networking/client/ClientColumnProcessorTest.java",
+            "fabric/src/test/java/dev/vox/lss/networking/client/ClientSessionGateTest.java",
+            "fabric/src/test/java/dev/vox/lss/networking/client/ColumnDeliveryLifecycleTest.java",
+            "xplat/src/main/java/dev/vox/lss/api/LSSApi.java",
+            "xplat/src/main/java/dev/vox/lss/config/menu/SaveHook.java",
+            "xplat/src/main/java/dev/vox/lss/networking/client/ClientColumnProcessor.java",
+            "xplat/src/main/java/dev/vox/lss/networking/client/ClientNetGlue.java",
+            "xplat/src/main/java/dev/vox/lss/networking/client/ClientSessionGate.java",
+            "xplat/src/main/java/dev/vox/lss/networking/client/ColumnDelivery.java",
+            "xplat/src/main/java/dev/vox/lss/networking/client/ColumnStateMap.java",
+            "xplat/src/main/java/dev/vox/lss/networking/client/LodRequestManager.java"
+          ]
+        },
+        {
+          "sha": "71caf90b799dc6ae474433feebe6b948ba75ad3e",
+          "subject": "fix: retire cancelled receipt handles across dimension changes",
+          "work_items": [
+            3
+          ],
+          "files": [
+            "fabric/src/test/java/dev/vox/lss/networking/client/ClientSessionGateTest.java",
+            "fabric/src/test/java/dev/vox/lss/networking/client/ColumnDeliveryLifecycleTest.java",
+            "xplat/src/main/java/dev/vox/lss/networking/client/ClientSessionGate.java",
+            "xplat/src/main/java/dev/vox/lss/networking/client/ColumnDelivery.java",
+            "xplat/src/main/java/dev/vox/lss/networking/client/LodRequestManager.java"
+          ]
+        },
+        {
+          "sha": "adfd04263bb96191b67d0bdf124ca8ec273a924e",
+          "subject": "fix: bind Xaero queued work and debt to acquisition receipts",
+          "work_items": [
+            5
+          ],
+          "files": [
+            "fabric/src/test/java/dev/vox/lss/compat/XaeroAcquisitionLifecycleTest.java",
+            "fabric/src/test/java/dev/vox/lss/compat/XaeroMapCompatTest.java",
+            "fabric/src/test/java/dev/vox/lss/networking/client/ColumnDeliveryFixture.java",
+            "xplat/src/main/java/dev/vox/lss/compat/ModCompat.java",
+            "xplat/src/main/java/dev/vox/lss/compat/XaeroMapCompat.java",
+            "xplat/src/main/java/dev/vox/lss/networking/client/ClientNetGlue.java"
+          ]
+        },
+        {
+          "sha": "8eb7af1b60997ab859369c73976a3f40a80eff7e",
+          "subject": "fix(farplayers): apply roster renames to stationary proxies",
+          "work_items": [
+            8
+          ],
+          "files": [
+            "common/src/main/java/dev/vox/lss/common/farplayers/FarPlayerClientTracker.java",
+            "fabric/src/test/java/dev/vox/lss/common/farplayers/FarPlayerClientTrackerTest.java"
+          ]
+        },
+        {
+          "sha": "caded5f0ce1eba7b661cf90474f520e7be7afde0",
+          "subject": "docs: refresh current NeoForge artifact and client surfaces",
+          "work_items": [
+            14
+          ],
+          "files": [
+            "CLAUDE.md",
+            "README.md",
+            "docs/planning/neoforge-support-plan.md",
+            "docs/planning/per-version-surfaces.md",
+            "docs/reviews/2026-09-08-implementation/prism-inventory.json",
+            "docs/testing/astra-live-profiles.md"
+          ]
+        },
+        {
+          "sha": "0d046f42977eee1cdd4529f68e14c88fe504dc4e",
+          "subject": "test: record owner-aware column receipt dispatch",
+          "work_items": [
+            3
+          ],
+          "files": [
+            "fabric/src/test/java/dev/vox/lss/networking/client/VoxelColumnReceiverTest.java"
+          ]
+        },
+        {
+          "sha": "8403171604baa21422f5d46a52cdd08e081324ba",
+          "subject": "test: exercise LAN receive toggle and cancelled receipt recovery",
+          "work_items": [
+            3
+          ],
+          "files": [
+            "fabric/src/gametest/java/dev/vox/lss/test/LSSClientGameTests.java"
+          ]
+        },
+        {
+          "sha": "9638042bb543382203a835aacd8f0f7444d2cb36",
+          "subject": "test: preserve IO fallback and save readiness runtime controls",
+          "work_items": [
+            14
+          ],
+          "files": [
+            "fabric/src/gametest/java/dev/vox/lss/test/SerializerParityGameTests.java",
+            "fabric/src/gametest/java/dev/vox/lss/test/ServiceLifecycleGameTests.java"
+          ]
+        }
+      ]
+    }
+  },
+  "work_items": {
+    "1": {
+      "1.21.1": [
+        {
+          "sha": "4b29afd26aef898c43f305a76aee765890dbac48",
+          "subject": "fix(store): keep interrupted policy invalidation incomplete"
+        }
+      ],
+      "1.21.10": [
+        {
+          "sha": "ef8b81ca1dba052be556c569b470b57aab93eca8",
+          "subject": "fix(store): keep interrupted policy invalidation incomplete"
+        }
+      ],
+      "1.21.11": [
+        {
+          "sha": "15fb4599fc95c7ffc9b1b1138997f11743f4997d",
+          "subject": "fix(store): keep interrupted policy invalidation incomplete"
+        }
+      ],
+      "26.1": [
+        {
+          "sha": "7e6d08ba3758da2357266bdc67e3c5c98eb33af0",
+          "subject": "fix(store): keep interrupted policy invalidation incomplete"
+        }
+      ],
+      "26.2": [
+        {
+          "sha": "85c01017fa3623b7adef1fb099587c620375689c",
+          "subject": "fix(store): keep interrupted policy invalidation incomplete"
+        }
+      ]
+    },
+    "2": {
+      "1.21.1": [
+        {
+          "sha": "a65627434329c6d770e87b7cdc8bc08c1410e6ac",
+          "subject": "fix(processing): bind async work to player registration lifetimes"
+        }
+      ],
+      "1.21.10": [
+        {
+          "sha": "4c388643da04e54ec290c8e32bb81f8f078b106e",
+          "subject": "fix(processing): bind async work to player registration lifetimes"
+        }
+      ],
+      "1.21.11": [
+        {
+          "sha": "7dd7baea74f424a44255c113ed34a52a83ee71e9",
+          "subject": "fix(processing): bind async work to player registration lifetimes"
+        }
+      ],
+      "26.1": [
+        {
+          "sha": "fa76056e434e924b046eb7fb841b8151c9cacbc3",
+          "subject": "fix(processing): bind async work to player registration lifetimes"
+        }
+      ],
+      "26.2": [
+        {
+          "sha": "3759894a8ca4fe3dea0e965d0596b73f9978fef4",
+          "subject": "fix(processing): bind async work to player registration lifetimes"
+        }
+      ]
+    },
+    "3": {
+      "1.21.1": [
+        {
+          "sha": "cd0790e9fa81eaeaff0773d357165b5b3b5c36cd",
+          "subject": "fix: retire client acquisition receipts on live receive toggle"
+        },
+        {
+          "sha": "9b3fe935fa61a0d9123863f16d753cd205087ddc",
+          "subject": "fix: retire cancelled receipt handles across dimension changes"
+        },
+        {
+          "sha": "3a0c61c296b729a7db8d64d83a7d35f511874c48",
+          "subject": "test: record owner-aware column receipt dispatch"
+        }
+      ],
+      "1.21.10": [
+        {
+          "sha": "801ed3f4737d481313ecdfa27b9f6a889b5234e6",
+          "subject": "fix: retire client acquisition receipts on live receive toggle"
+        },
+        {
+          "sha": "eec2c3921208298bc678340513b6dd33c67b356d",
+          "subject": "fix: retire cancelled receipt handles across dimension changes"
+        },
+        {
+          "sha": "4b7229ca421c4f082ec46fff299315597e2a2e55",
+          "subject": "test: record owner-aware column receipt dispatch"
+        },
+        {
+          "sha": "89ac90c1d4c1402353c3f178dbdd2174bf3d51c0",
+          "subject": "test: exercise LAN receive toggle and cancelled receipt recovery"
+        }
+      ],
+      "1.21.11": [
+        {
+          "sha": "7b6b67e5a418e42710549b86054b607803e5f51c",
+          "subject": "fix: retire client acquisition receipts on live receive toggle"
+        },
+        {
+          "sha": "8a253e7a8012dbe39e4e661ebc00840ac219094b",
+          "subject": "fix: retire cancelled receipt handles across dimension changes"
+        },
+        {
+          "sha": "d9df311d5852dea1139ff7618ab4b06084cfb513",
+          "subject": "test: record owner-aware column receipt dispatch"
+        },
+        {
+          "sha": "c64f67b8dd82d4fa6dfd195513cc471a8243603c",
+          "subject": "test: exercise LAN receive toggle and cancelled receipt recovery"
+        }
+      ],
+      "26.1": [
+        {
+          "sha": "7d87d6ac58341dcd6da060b4e9e20453cf383ab2",
+          "subject": "fix: retire client acquisition receipts on live receive toggle"
+        },
+        {
+          "sha": "c97c0a4b4b645b2332ca681c9d5b5efa53938542",
+          "subject": "fix: retire cancelled receipt handles across dimension changes"
+        },
+        {
+          "sha": "5c79387aa70d6e26bfaebc2d2684a95bd1de10ed",
+          "subject": "test: record owner-aware column receipt dispatch"
+        },
+        {
+          "sha": "41020c0fde83b2adee32cf0d156458ac3bb14f38",
+          "subject": "test: exercise LAN receive toggle and cancelled receipt recovery"
+        }
+      ],
+      "26.2": [
+        {
+          "sha": "e3d67aaebf82398029b4d8d177c3a139b12c4fcc",
+          "subject": "fix: retire client acquisition receipts on live receive toggle"
+        },
+        {
+          "sha": "71caf90b799dc6ae474433feebe6b948ba75ad3e",
+          "subject": "fix: retire cancelled receipt handles across dimension changes"
+        },
+        {
+          "sha": "0d046f42977eee1cdd4529f68e14c88fe504dc4e",
+          "subject": "test: record owner-aware column receipt dispatch"
+        },
+        {
+          "sha": "8403171604baa21422f5d46a52cdd08e081324ba",
+          "subject": "test: exercise LAN receive toggle and cancelled receipt recovery"
+        }
+      ]
+    },
+    "4": {
+      "1.21.1": [
+        {
+          "sha": "d01c3be0de9df96596c6429241a5445ef96ce704",
+          "subject": "fix: retract summary proofs when newer tiles are uncertain"
+        }
+      ],
+      "1.21.10": [
+        {
+          "sha": "f45234351716bc4f5c9527b348b4535dc393ec0d",
+          "subject": "fix: retract summary proofs when newer tiles are uncertain"
+        }
+      ],
+      "1.21.11": [
+        {
+          "sha": "6f2b3b4478b4c5a44dceba6efa3d776efe3938d6",
+          "subject": "fix: retract summary proofs when newer tiles are uncertain"
+        }
+      ],
+      "26.1": [
+        {
+          "sha": "1eeba0a51e82b599bb356e48d9fb4951100107fc",
+          "subject": "fix: retract summary proofs when newer tiles are uncertain"
+        }
+      ],
+      "26.2": [
+        {
+          "sha": "d1de559f457c333559eeed6626a3cedd567f433f",
+          "subject": "fix: retract summary proofs when newer tiles are uncertain"
+        }
+      ]
+    },
+    "5": {
+      "1.21.1": [
+        {
+          "sha": "0c613fca36859976baaf08daf7205fc9ede33472",
+          "subject": "fix: bind Xaero queued work and debt to acquisition receipts"
+        }
+      ],
+      "1.21.10": [
+        {
+          "sha": "b1f3ab22aa502be6449a0c4803bfb84d7e1f8a25",
+          "subject": "fix: bind Xaero queued work and debt to acquisition receipts"
+        }
+      ],
+      "1.21.11": [
+        {
+          "sha": "6587b4dab7482dcc5c657b55ef4d5239860b3df6",
+          "subject": "fix: bind Xaero queued work and debt to acquisition receipts"
+        }
+      ],
+      "26.1": [
+        {
+          "sha": "324623fcbfd04db6b1c3f52f2b9d09bf00f00e75",
+          "subject": "fix: bind Xaero queued work and debt to acquisition receipts"
+        }
+      ],
+      "26.2": [
+        {
+          "sha": "adfd04263bb96191b67d0bdf124ca8ec273a924e",
+          "subject": "fix: bind Xaero queued work and debt to acquisition receipts"
+        }
+      ]
+    },
+    "6": {
+      "1.21.1": [
+        {
+          "sha": "f84f9f6dc501e4ed76ada1a41e3eee2dcbe963b2",
+          "subject": "fix(farplayers): withdraw rosters on runtime server disable"
+        }
+      ],
+      "1.21.10": [
+        {
+          "sha": "9e49dcf71cf92f88c7c93e0980837a5037cc605f",
+          "subject": "fix(farplayers): withdraw rosters on runtime server disable"
+        }
+      ],
+      "1.21.11": [
+        {
+          "sha": "96d25bf596741370559e6408010bb73113f4f581",
+          "subject": "fix(farplayers): withdraw rosters on runtime server disable"
+        }
+      ],
+      "26.1": [
+        {
+          "sha": "111036408d011f154699392a00ce92f52e41dcfa",
+          "subject": "fix(farplayers): withdraw rosters on runtime server disable"
+        }
+      ],
+      "26.2": [
+        {
+          "sha": "d080f6211440fb3db69c653640b660eb0f44d054",
+          "subject": "fix(farplayers): withdraw rosters on runtime server disable"
+        }
+      ]
+    },
+    "7": {
+      "1.21.1": [
+        {
+          "sha": "7a674e0b71ac7e1d2eb2c6a6c37a489ada4c86bc",
+          "subject": "fix(store): verify legacy row integrity before migration"
+        }
+      ],
+      "1.21.10": [
+        {
+          "sha": "787aa96c95411d8311cd0807cafd8ea9a466bf8e",
+          "subject": "fix(store): verify legacy row integrity before migration"
+        }
+      ],
+      "1.21.11": [
+        {
+          "sha": "3699ba9ab93347a4e9c6c1398f6b48d713850511",
+          "subject": "fix(store): verify legacy row integrity before migration"
+        }
+      ],
+      "26.1": [
+        {
+          "sha": "a385c5e05b0040391114fdcfb92d24f2d628f4dc",
+          "subject": "fix(store): verify legacy row integrity before migration"
+        }
+      ],
+      "26.2": [
+        {
+          "sha": "44933a6e4770aae49c6aa3e69d2a97e411aa877d",
+          "subject": "fix(store): verify legacy row integrity before migration"
+        }
+      ]
+    },
+    "8": {
+      "1.21.1": [
+        {
+          "sha": "e3a69850cc67610ca850c920300a86df89f5a556",
+          "subject": "fix(client): bound and reconcile far-player identity bindings"
+        },
+        {
+          "sha": "b2756f81a5a429df27d01e5bcbfd17fc77bec47b",
+          "subject": "fix(farplayers): apply roster renames to stationary proxies"
+        }
+      ],
+      "1.21.10": [
+        {
+          "sha": "f30984bf82ee1c828ab67725df48b647981a8b5f",
+          "subject": "fix(client): bound and reconcile far-player identity bindings"
+        },
+        {
+          "sha": "3c62f5700d8b3150431c74508215bf76e670b9ab",
+          "subject": "fix(farplayers): apply roster renames to stationary proxies"
+        }
+      ],
+      "1.21.11": [
+        {
+          "sha": "c83634e311dcdf6ba12a35c5356b61e31fc9c3a4",
+          "subject": "fix(client): bound and reconcile far-player identity bindings"
+        },
+        {
+          "sha": "fa92367c5badb2a46e43a4d364d0cac470df1706",
+          "subject": "fix(farplayers): apply roster renames to stationary proxies"
+        }
+      ],
+      "26.1": [
+        {
+          "sha": "d4d91b469e9d7f7f3f40cd6d1f2eeceb0ddc6ce9",
+          "subject": "fix(client): bound and reconcile far-player identity bindings"
+        },
+        {
+          "sha": "e7a5e1389b8cb2e41ace1f915ee0b50e22421d07",
+          "subject": "fix(farplayers): apply roster renames to stationary proxies"
+        }
+      ],
+      "26.2": [
+        {
+          "sha": "29bf9beaa9ce6f9397fbd406b5b93bd8f95207cd",
+          "subject": "fix(client): bound and reconcile far-player identity bindings"
+        },
+        {
+          "sha": "8eb7af1b60997ab859369c73976a3f40a80eff7e",
+          "subject": "fix(farplayers): apply roster renames to stationary proxies"
+        }
+      ]
+    },
+    "9": {
+      "1.21.1": [
+        {
+          "sha": "1f8bb5beb1555d9793c7634d56a54932068a51b1",
+          "subject": "fix(client): restore seated draw pose before continuing render pass"
+        }
+      ]
+    },
+    "10": {
+      "1.21.1": [
+        {
+          "sha": "8729d674e7144a7c833151ee774013b2523c214c",
+          "subject": "fix(config): report runtime settings applied but not saved"
+        }
+      ],
+      "1.21.10": [
+        {
+          "sha": "f8d0398bbadea4307826ebd0c0f3b096dec675bb",
+          "subject": "fix(config): report runtime settings applied but not saved"
+        }
+      ],
+      "1.21.11": [
+        {
+          "sha": "6112706714e3567cdbf5cbfb493ebf669cad24f4",
+          "subject": "fix(config): report runtime settings applied but not saved"
+        }
+      ],
+      "26.1": [
+        {
+          "sha": "4bae1626a7f9d3234c5b2c58cd4d8cd5966b833b",
+          "subject": "fix(config): report runtime settings applied but not saved"
+        }
+      ],
+      "26.2": [
+        {
+          "sha": "20253500d9339870f2dd11e32893ff7635181fd6",
+          "subject": "fix(config): report runtime settings applied but not saved"
+        }
+      ]
+    },
+    "11": {
+      "1.21.1": [
+        {
+          "sha": "e438a63353c2db24d4a68d0bd61b4eb10965fac4",
+          "subject": "fix(paper): bind disguise API to current plugin classloader"
+        }
+      ],
+      "1.21.10": [
+        {
+          "sha": "a0b3bbeb7ed9639f5bc4251cc8df35b9711298fd",
+          "subject": "fix(paper): bind disguise API to current plugin classloader"
+        }
+      ],
+      "1.21.11": [
+        {
+          "sha": "5f7166aff44e16529b0b5db13b7e257b199bbb0e",
+          "subject": "fix(paper): bind disguise API to current plugin classloader"
+        }
+      ],
+      "26.1": [
+        {
+          "sha": "781cd0677547938b6ceb92e60c457239bf2b3faa",
+          "subject": "fix(paper): bind disguise API to current plugin classloader"
+        }
+      ],
+      "26.2": [
+        {
+          "sha": "8974a7bf31e338396e8757f048443e478c250460",
+          "subject": "fix(paper): bind disguise API to current plugin classloader"
+        }
+      ]
+    },
+    "12": {
+      "1.21.1": [
+        {
+          "sha": "6a57b37a581befb7a5625e9645dfd5b4528eef90",
+          "subject": "fix(compat): resolve namespaced reset on legacy Voxy holder"
+        }
+      ],
+      "1.21.10": [
+        {
+          "sha": "7fd5d9e884a4f3f0efb284a1b1618c3f353fba4a",
+          "subject": "fix(compat): resolve namespaced reset on legacy Voxy holder"
+        }
+      ],
+      "1.21.11": [
+        {
+          "sha": "a451464047e85bf5bd8483ec07ad9ba2ead0407c",
+          "subject": "fix(compat): resolve namespaced reset on legacy Voxy holder"
+        }
+      ],
+      "26.1": [
+        {
+          "sha": "9119b989719c8293661317b84c6cb636a6d3cdaa",
+          "subject": "fix(compat): resolve namespaced reset on legacy Voxy holder"
+        }
+      ],
+      "26.2": [
+        {
+          "sha": "c942fc0e601930b1719955d2e9b5b7b638f8f4ef",
+          "subject": "fix(compat): resolve namespaced reset on legacy Voxy holder"
+        }
+      ]
+    },
+    "13": {
+      "1.21.1": [
+        {
+          "sha": "851479d7fe51d4753e5b0add4be5520898c04eca",
+          "subject": "fix(harness): own process lifetimes and require fresh benchmark evidence"
+        }
+      ],
+      "1.21.10": [
+        {
+          "sha": "390a70d7fbbb8e9ffce4460471001a51052c706d",
+          "subject": "fix(harness): own process lifetimes and require fresh benchmark evidence"
+        }
+      ],
+      "1.21.11": [
+        {
+          "sha": "8886a12fa0c50865dcfc6ae3258d22e6f6e80a14",
+          "subject": "fix(harness): own process lifetimes and require fresh benchmark evidence"
+        }
+      ],
+      "26.1": [
+        {
+          "sha": "ff1975da2f3a0d737afda07be7d53b2a790f4e8b",
+          "subject": "fix(harness): own process lifetimes and require fresh benchmark evidence"
+        }
+      ],
+      "26.2": [
+        {
+          "sha": "20aa7c4710e96c722fe43d58a40a77ec209fd496",
+          "subject": "fix(harness): own process lifetimes and require fresh benchmark evidence"
+        }
+      ]
+    },
+    "14": {
+      "1.21.1": [
+        {
+          "sha": "e1a38b63b29db956c3281d7339a6c87a1361a49c",
+          "subject": "docs(testing): clarify live profiles and validation routes"
+        },
+        {
+          "sha": "8504568da38182c7c94b83d2427c2a8c0372c471",
+          "subject": "docs: refresh current NeoForge artifact and client surfaces"
+        },
+        {
+          "sha": "2da753f7da08fcd07876b5d5c07986b7da826ed5",
+          "subject": "fix(testing): remap bundled C2ME modules for Java 21 profiles"
+        },
+        {
+          "sha": "5887c45a6cee13bef1933fe03e9aa1a808272f5b",
+          "subject": "test: preserve IO fallback and save readiness runtime controls"
+        }
+      ],
+      "1.21.10": [
+        {
+          "sha": "e6e98ecc5a6c46b6677ed31f967033c6959a724c",
+          "subject": "docs(testing): clarify live profiles and validation routes"
+        },
+        {
+          "sha": "592de067ff2301d1f379cd862985a5eddbf3da24",
+          "subject": "docs: refresh current NeoForge artifact and client surfaces"
+        },
+        {
+          "sha": "7e632b9a455cc883351d28f4e0d3ebfa22c59e54",
+          "subject": "fix(testing): remap bundled C2ME modules for Java 21 profiles"
+        },
+        {
+          "sha": "28899adb28f5939a16296a9d2b677bd048418f10",
+          "subject": "test: preserve IO fallback and save readiness runtime controls"
+        }
+      ],
+      "1.21.11": [
+        {
+          "sha": "3f238fb32ff8135543bd374cef94ff2e7287a3c6",
+          "subject": "docs(testing): clarify live profiles and validation routes"
+        },
+        {
+          "sha": "c35213cd7cbeae305d9c9a72104458355a6615e8",
+          "subject": "docs: refresh current NeoForge artifact and client surfaces"
+        },
+        {
+          "sha": "471282ef0e489593ed96c0c2b6145184a6187fb2",
+          "subject": "fix(testing): remap bundled C2ME modules for Java 21 profiles"
+        },
+        {
+          "sha": "f683bf56bac6f5bc886c6e7d327f678e2b74e6d3",
+          "subject": "test: preserve IO fallback and save readiness runtime controls"
+        }
+      ],
+      "26.1": [
+        {
+          "sha": "141abf6422cc63ea391e9afee1f1db3590bae21f",
+          "subject": "docs(testing): clarify live profiles and validation routes"
+        },
+        {
+          "sha": "1d6914655d9c7cc127ac5397c5c0f2283abc6b14",
+          "subject": "docs: refresh current NeoForge artifact and client surfaces"
+        },
+        {
+          "sha": "7caf33035992b9f273e0a5b18876ae642084ced3",
+          "subject": "test: preserve IO fallback and save readiness runtime controls"
+        }
+      ],
+      "26.2": [
+        {
+          "sha": "ffc01dacfcc093493e08057ae78e8a482816a7c7",
+          "subject": "docs(testing): clarify live profiles and validation routes"
+        },
+        {
+          "sha": "caded5f0ce1eba7b661cf90474f520e7be7afde0",
+          "subject": "docs: refresh current NeoForge artifact and client surfaces"
+        },
+        {
+          "sha": "9638042bb543382203a835aacd8f0f7444d2cb36",
+          "subject": "test: preserve IO fallback and save readiness runtime controls"
+        }
+      ]
+    },
+    "15": {
+      "1.21.10": [
+        {
+          "sha": "e8a0326f0c657fa630f5c3cac2a712d85981c8b0",
+          "subject": "fix(client): advance proxy wing animation on new ticks"
+        }
+      ],
+      "1.21.11": [
+        {
+          "sha": "b49f62af05d643920fbd8650689ef66336d2253f",
+          "subject": "fix(client): advance render-only player wing animation"
+        }
+      ]
+    }
+  },
+  "changed_production_parity": [
+    {
+      "path": "common/src/main/java/dev/vox/lss/common/config/JsonConfig.java",
+      "groups": {
+        "8f998f7e4fbc68efa7606bc617d0d9dfedf5a2582319430f7ebccdddfbfac5bc": [
+          "1.21.1",
+          "1.21.10",
+          "1.21.11",
+          "26.1",
+          "26.2"
+        ]
+      },
+      "identical_all_five": true,
+      "review": "Byte-identical in all five worktrees."
+    },
+    {
+      "path": "common/src/main/java/dev/vox/lss/common/config/RuntimeSettings.java",
+      "groups": {
+        "634311d1d1c506ebd140eb269a952d186db2f5a64129567989290bac06552f11": [
+          "1.21.1",
+          "1.21.10",
+          "1.21.11",
+          "26.1"
+        ],
+        "f43719a47584dbb446687e8aae6e8fc06f0a6a74684a412270b31f80b2542e15": [
+          "26.2"
+        ]
+      },
+      "identical_all_five": false,
+      "review": "26.2 retains its pre-existing per-world ApplyResult display/repush behavior. persisted outcome is added without replacing mutation-based repush."
+    },
+    {
+      "path": "common/src/main/java/dev/vox/lss/common/farplayers/FarPlayerBroadcastService.java",
+      "groups": {
+        "2531f9a7ea25ed6642eeac48aab6d930cc4cb954b7a80ae74a223fb9f1ff38ae": [
+          "1.21.1",
+          "1.21.10",
+          "1.21.11",
+          "26.1",
+          "26.2"
+        ]
+      },
+      "identical_all_five": true,
+      "review": "Byte-identical in all five worktrees."
+    },
+    {
+      "path": "common/src/main/java/dev/vox/lss/common/farplayers/FarPlayerClientTracker.java",
+      "groups": {
+        "eebc5650ce13ddcd4cf20b641c9c8acb9d21dbfe45d1f43992412b270ad61fdb": [
+          "1.21.1",
+          "1.21.10",
+          "1.21.11",
+          "26.1",
+          "26.2"
+        ]
+      },
+      "identical_all_five": true,
+      "review": "Byte-identical in all five worktrees."
+    },
+    {
+      "path": "common/src/main/java/dev/vox/lss/common/processing/AbstractChunkDiskReader.java",
+      "groups": {
+        "12c6bfc5913d201e87672222e6949ac3b4a80fa54b52c7e132c25df78ce28349": [
+          "1.21.1",
+          "1.21.10",
+          "1.21.11",
+          "26.1",
+          "26.2"
+        ]
+      },
+      "identical_all_five": true,
+      "review": "Byte-identical in all five worktrees."
+    },
+    {
+      "path": "common/src/main/java/dev/vox/lss/common/processing/AbstractPlayerRequestState.java",
+      "groups": {
+        "2e1503d9418e89a44e79782597330e8070ef53346e1bfd6d118c5d87c9a33056": [
+          "1.21.1",
+          "1.21.10",
+          "1.21.11",
+          "26.1",
+          "26.2"
+        ]
+      },
+      "identical_all_five": true,
+      "review": "Byte-identical in all five worktrees."
+    },
+    {
+      "path": "common/src/main/java/dev/vox/lss/common/processing/DedupTracker.java",
+      "groups": {
+        "76bb1a115842cb1700b3dbd1ee287bba2c4d2339628dece62bca7428817cdee9": [
+          "1.21.1",
+          "1.21.10",
+          "1.21.11",
+          "26.1",
+          "26.2"
+        ]
+      },
+      "identical_all_five": true,
+      "review": "Byte-identical in all five worktrees."
+    },
+    {
+      "path": "common/src/main/java/dev/vox/lss/common/processing/IncomingRequestRouter.java",
+      "groups": {
+        "a66eaad6d2afd9b0ccb558767d0c44e9c681748336ac99bfde8bc7e27befb5ff": [
+          "1.21.1",
+          "1.21.10",
+          "1.21.11",
+          "26.1",
+          "26.2"
+        ]
+      },
+      "identical_all_five": true,
+      "review": "Byte-identical in all five worktrees."
+    },
+    {
+      "path": "common/src/main/java/dev/vox/lss/common/processing/OffThreadProcessor.java",
+      "groups": {
+        "22aa31d1fa79a548b09e9b78fdb4c42f023bf293eb090e2a2b7fa577a9e842cb": [
+          "1.21.1",
+          "1.21.10",
+          "1.21.11",
+          "26.1",
+          "26.2"
+        ]
+      },
+      "identical_all_five": true,
+      "review": "Byte-identical in all five worktrees."
+    },
+    {
+      "path": "common/src/main/java/dev/vox/lss/common/processing/RequestRegistration.java",
+      "groups": {
+        "2c2016d3cf2715bff2a81422c39896700b9c95a2963e4889282efec7898533ad": [
+          "1.21.1",
+          "1.21.10",
+          "1.21.11",
+          "26.1",
+          "26.2"
+        ]
+      },
+      "identical_all_five": true,
+      "review": "Byte-identical in all five worktrees."
+    },
+    {
+      "path": "common/src/main/java/dev/vox/lss/common/processing/TickSnapshot.java",
+      "groups": {
+        "afc4972c25aea7626e037a874b4571a10c88ef7d7f6032e3bc3d3334fb336876": [
+          "1.21.1",
+          "1.21.10",
+          "1.21.11",
+          "26.1",
+          "26.2"
+        ]
+      },
+      "identical_all_five": true,
+      "review": "Byte-identical in all five worktrees."
+    },
+    {
+      "path": "common/src/main/java/dev/vox/lss/common/store/SqliteLodStore.java",
+      "groups": {
+        "6db871e5e3a8e0c435ce60c46938322ee783ffd03dd5f5386da6512043fc0418": [
+          "1.21.1",
+          "1.21.10",
+          "1.21.11",
+          "26.1",
+          "26.2"
+        ]
+      },
+      "identical_all_five": true,
+      "review": "Byte-identical in all five worktrees."
+    },
+    {
+      "path": "fabric/src/main/java/dev/vox/lss/networking/client/FarPlayerRenderer.java",
+      "groups": {
+        "2b65558c0e8d8df8c16376ff6ee90eb0f1c25d60518510c6964598674b2ac2a8": [
+          "1.21.1"
+        ],
+        "44f59153331a849f8611a61f27a19ddf0f688b691428f28dc4ecac41a3954fa7": [
+          "1.21.10"
+        ],
+        "bfde9135eed4af42f7118d7a66c0688f7eb4f7231df0eb1b8b8ced80fa71552d": [
+          "1.21.11"
+        ],
+        "df1e7d18585e5868c603cdc7ccdae2eaa5c484e43e78afe1f648ea1d6de6ecf7": [
+          "26.1"
+        ],
+        "c35949357d202d705bb582aa5053c0c19e863e0c0c4732425bac6bf15388cd24": [
+          "26.2"
+        ]
+      },
+      "identical_all_five": false,
+      "review": "Scoped render repair, not whole-file parity: 1.21.1 Fabric and Neo add restorePose before seated failure continuation; 1.21.10/1.21.11 Fabric add guarded wing helper. 26.x already ticks native wing state. Other Neo renderers remain intentional stubs."
+    },
+    {
+      "path": "neoforge/src/main/java/dev/vox/lss/networking/client/FarPlayerRenderer.java",
+      "groups": {
+        "67cc289c4d330cc4e5e291d2501905bec67e1c2cc8f715955b5c9812e6a0518a": [
+          "1.21.1"
+        ],
+        "8ecf95bef750de5a12304e386ac4dc31392dee6e4bf0e9153b264d660f7fa958": [
+          "1.21.10",
+          "1.21.11"
+        ],
+        "cfb3fba6f05d96f176390e15c477f014856d41cf5cf40ed4a6165e3a72385a35": [
+          "26.1",
+          "26.2"
+        ]
+      },
+      "identical_all_five": false,
+      "review": "Scoped render repair, not whole-file parity: 1.21.1 Fabric and Neo add restorePose before seated failure continuation; 1.21.10/1.21.11 Fabric add guarded wing helper. 26.x already ticks native wing state. Other Neo renderers remain intentional stubs."
+    },
+    {
+      "path": "paper/src/main/java/dev/vox/lss/paper/LibsDisguisesBridge.java",
+      "groups": {
+        "6ff866773f915cc49d1cbb031c5ee17b09ba6992a9c90c0b5b4de45694f88923": [
+          "1.21.1",
+          "1.21.10",
+          "1.21.11",
+          "26.1",
+          "26.2"
+        ]
+      },
+      "identical_all_five": true,
+      "review": "Byte-identical in all five worktrees."
+    },
+    {
+      "path": "paper/src/main/java/dev/vox/lss/paper/PaperChunkDiskReader.java",
+      "groups": {
+        "d1972c918523ff553560b805156dc4cee51163b3a532965c32dc40dccbf19e1d": [
+          "1.21.1"
+        ],
+        "bf05716b98c2a25074dc50178ba212f63061fee9ed18fb8f5a406522f029c42e": [
+          "1.21.10",
+          "1.21.11",
+          "26.1",
+          "26.2"
+        ]
+      },
+      "identical_all_five": false,
+      "review": "1.21.1 uses RegionFileIOThread/PrioritisedExecutor and exclusive max-section conversion; later lines use MoonriseRegionFileIO/Priority and inclusive section accessors. Registration is passed identically."
+    },
+    {
+      "path": "paper/src/main/java/dev/vox/lss/paper/PaperChunkGenerationService.java",
+      "groups": {
+        "2446e1177389b17ce97a1090155c167bcb64610b40a8030e01297fc4d12afda4": [
+          "1.21.1"
+        ],
+        "b5de3296ed45ad7147978924c98b8bbf6b7415589780dfca1be635bdb8747832": [
+          "1.21.10"
+        ],
+        "3e9253d6bf15d5e58503e35e66a5934d1e97774f796bde598c0468f0d09721ff": [
+          "1.21.11",
+          "26.1",
+          "26.2"
+        ]
+      },
+      "identical_all_five": false,
+      "review": "1.21.1 ChunkSystem/PrioritisedExecutor versus later PlatformHooks/Priority; location versus identifier spelling. Callback registration, ready data and per-owner counting are preserved."
+    },
+    {
+      "path": "paper/src/main/java/dev/vox/lss/paper/PaperCommands.java",
+      "groups": {
+        "01805785a546d8ee398b2c5f4a3d1dd16b3cf6a7e1f966535991ad64c7d8009a": [
+          "1.21.1",
+          "1.21.10",
+          "1.21.11",
+          "26.1"
+        ],
+        "cf97c59703d31a60e1914346297686ef370f02479c46ed8bfe8ffa46f8600b0a": [
+          "26.2"
+        ]
+      },
+      "identical_all_five": false,
+      "review": "26.2 uses per-world-aware display/repush; all lines append persistence failure feedback without rolling back successful runtime apply."
+    },
+    {
+      "path": "paper/src/main/java/dev/vox/lss/paper/PaperOffThreadProcessor.java",
+      "groups": {
+        "6ad7962e6c08bce386cc3c68d90d5fd9521e7a72ede9cd47cd14f57867119e29": [
+          "1.21.1",
+          "1.21.10",
+          "1.21.11",
+          "26.1",
+          "26.2"
+        ]
+      },
+      "identical_all_five": true,
+      "review": "Byte-identical in all five worktrees."
+    },
+    {
+      "path": "paper/src/main/java/dev/vox/lss/paper/PaperRequestProcessingService.java",
+      "groups": {
+        "8ca84b6f1545eb57886965561468b5ec60f263b88e423a1ee555112955e46e47": [
+          "1.21.1"
+        ],
+        "2b0c309670ec9073ea2fd4979b7cdb7eca50b1d2fd0ec20f493d2f6ae2176bdc": [
+          "1.21.10"
+        ],
+        "c22f5fcfff5f75a31d02bdb390086826b0b4e4509a473b21634ef9c46a2d6b88": [
+          "1.21.11"
+        ],
+        "f13377910b23fa454d19e17eaca447a806d5464073b0d1fd36dfab023a37e5c6": [
+          "26.1"
+        ],
+        "d3fdf0a2191e414c3c6bf49a6d2ba4576b66064d6f4b8b54d2eaa477ca5bc1f7": [
+          "26.2"
+        ]
+      },
+      "identical_all_five": false,
+      "review": "Bukkit split world directories on 1.21.x versus unified 26.x; registry/level/position/payload APIs vary. 26.2 preserves per-world distance and dimension-change config repush. WI2 admission/removal and WI6 disabled control draining match."
+    },
+    {
+      "path": "xplat/src/main/java/dev/vox/lss/api/LSSApi.java",
+      "groups": {
+        "99c4ca3b671272566514e8ac4f615062ecefd33aad7ba52bf6cce495894a1d5c": [
+          "1.21.1",
+          "1.21.10",
+          "1.21.11",
+          "26.1",
+          "26.2"
+        ]
+      },
+      "identical_all_five": true,
+      "review": "Byte-identical in all five worktrees."
+    },
+    {
+      "path": "xplat/src/main/java/dev/vox/lss/compat/ModCompat.java",
+      "groups": {
+        "d06ffcdef877f158fa9307119f1f6435fba3f7e9f1769fd7f3ca0f4846bf4be5": [
+          "1.21.1",
+          "1.21.10",
+          "1.21.11",
+          "26.1",
+          "26.2"
+        ]
+      },
+      "identical_all_five": true,
+      "review": "Byte-identical in all five worktrees."
+    },
+    {
+      "path": "xplat/src/main/java/dev/vox/lss/compat/VoxyCompat.java",
+      "groups": {
+        "37773ce61e4ad92e0805440d4895484f84e1109b6373913cb4c457a63392a70b": [
+          "1.21.1"
+        ],
+        "75737b9e2438e4b59b7b6034015a1594912d630d1e5c64d2b53de617a32fc51f": [
+          "1.21.10",
+          "1.21.11"
+        ],
+        "503d5e22c86862c83889462274152c12e5ef9a736a0f0f58d15e752b371a3c7a": [
+          "26.1"
+        ],
+        "7575149aae82f72cdce54d880f5741bbc543285c9c49f3c0c6a1704d5a20700c": [
+          "26.2"
+        ]
+      },
+      "identical_all_five": false,
+      "review": "Reset ladder fix is identical. Rebuild uses levelRenderer.allChanged through 26.1 and levelExtractor.allChanged on 26.2; some older-line comments differ. No broader reflection ladder or ingestion change."
+    },
+    {
+      "path": "xplat/src/main/java/dev/vox/lss/compat/XaeroMapCompat.java",
+      "groups": {
+        "80b7f4e447f358d3f74d753505de0eb593de7f6b44d1c5869e0224a7c27b91cf": [
+          "1.21.1"
+        ],
+        "e933eb73196e71654b9a94eda46ca60ed2e00d9c7b2989dfeda07ae6a3061561": [
+          "1.21.10",
+          "1.21.11",
+          "26.1",
+          "26.2"
+        ]
+      },
+      "identical_all_five": false,
+      "review": "Only meaningful difference is world height accessor: 1.21.1 max build height already exclusive; later maxY requires +1. Origin receipt/debt logic matches."
+    },
+    {
+      "path": "xplat/src/main/java/dev/vox/lss/config/menu/SaveHook.java",
+      "groups": {
+        "bc2b771baa1ff0c2a5b05b477ea08c735450d4508134cc0fab7da74ee63866fb": [
+          "1.21.1",
+          "1.21.10",
+          "1.21.11",
+          "26.1",
+          "26.2"
+        ]
+      },
+      "identical_all_five": true,
+      "review": "Byte-identical in all five worktrees."
+    },
+    {
+      "path": "xplat/src/main/java/dev/vox/lss/networking/client/ClientColumnProcessor.java",
+      "groups": {
+        "e778b320c86001af8ba6dddb5299a834e8433c4352cdcde53f7e73b5e2235bd1": [
+          "1.21.1"
+        ],
+        "9cf5513758ddf93c059f338a9e85ff64a0281452ed5142b5cb03be48943cbe7f": [
+          "1.21.10",
+          "1.21.11",
+          "26.1",
+          "26.2"
+        ]
+      },
+      "identical_all_five": false,
+      "review": "1.21.1 uses biome Registry and old section accessors; later lines use PalettedContainerFactory/global biome map. Queue epoch and delivery-owner behavior match."
+    },
+    {
+      "path": "xplat/src/main/java/dev/vox/lss/networking/client/ClientNetGlue.java",
+      "groups": {
+        "e513e09b7735baa9daf7e8bb321e6992a7a415a37133dbbc3691ad87528faaa3": [
+          "1.21.1"
+        ],
+        "4c8316260a743e7d8300eed4a880cc1fd785cb48ad4daf08addb556a1743aac5": [
+          "1.21.10",
+          "1.21.11",
+          "26.1",
+          "26.2"
+        ]
+      },
+      "identical_all_five": false,
+      "review": "Only current-game data-version accessor spelling differs on 1.21.1. Session/receive reconciliation logic matches."
+    },
+    {
+      "path": "xplat/src/main/java/dev/vox/lss/networking/client/ClientSessionGate.java",
+      "groups": {
+        "6fa66e157691cf47cf6b92769853f6fe4573ef346ba2d237a458baf8386903fc": [
+          "1.21.1",
+          "1.21.10",
+          "1.21.11",
+          "26.1",
+          "26.2"
+        ]
+      },
+      "identical_all_five": true,
+      "review": "Byte-identical in all five worktrees."
+    },
+    {
+      "path": "xplat/src/main/java/dev/vox/lss/networking/client/ColumnDelivery.java",
+      "groups": {
+        "214efec0f99048243866a9763709f78c8b44a3d9121f5bb913ac39764a1b8c56": [
+          "1.21.1",
+          "1.21.10",
+          "1.21.11",
+          "26.1",
+          "26.2"
+        ]
+      },
+      "identical_all_five": true,
+      "review": "Byte-identical in all five worktrees."
+    },
+    {
+      "path": "xplat/src/main/java/dev/vox/lss/networking/client/ColumnStateMap.java",
+      "groups": {
+        "f65d27e1604edd07a58d3611230ae3c654cb48850b11e19773395b66132599f1": [
+          "1.21.1",
+          "1.21.10",
+          "1.21.11",
+          "26.1",
+          "26.2"
+        ]
+      },
+      "identical_all_five": true,
+      "review": "Byte-identical in all five worktrees."
+    },
+    {
+      "path": "xplat/src/main/java/dev/vox/lss/networking/client/FarPlayerWingAnimation.java",
+      "groups": {
+        "ABSENT": [
+          "1.21.1",
+          "26.1",
+          "26.2"
+        ],
+        "5c4a5fcdd1f3165f4f1ee79f00c8537f386c74f7da87cea58744e2ff1ee501b5": [
+          "1.21.10",
+          "1.21.11"
+        ]
+      },
+      "identical_all_five": false,
+      "review": "New helper exists only on affected 1.21.10/1.21.11 and is byte-identical there. Absence on 1.21.1 direct-model and already-correct 26.x lines is intentional."
+    },
+    {
+      "path": "xplat/src/main/java/dev/vox/lss/networking/client/LodRequestManager.java",
+      "groups": {
+        "3fd79bdaf6b150867ebf14179dae6fb8e317c8f0de4fda70579f0e67aef4aa12": [
+          "1.21.1",
+          "1.21.10"
+        ],
+        "3b7b0fc8370836640e8dc3309e2e5d926d4255e3a04f8889f9ef87c1878af8fa": [
+          "1.21.11",
+          "26.1",
+          "26.2"
+        ]
+      },
+      "identical_all_five": false,
+      "review": "Only Util package and dimension location/identifier API spellings differ. Cancellation, summary proof and retired-manager publication behavior match."
+    },
+    {
+      "path": "xplat/src/main/java/dev/vox/lss/networking/server/ChunkDiskReader.java",
+      "groups": {
+        "67cd9aca9f3ef05a28f3855c9f84ea85f7a13def0aba25e7bffd9c5c16b3f90e": [
+          "1.21.1"
+        ],
+        "f9dd2462bac1a6f74979410f86fd6c79bd481882e3911957e53f67dded7d4d33": [
+          "1.21.10",
+          "1.21.11"
+        ],
+        "1fcc89f58b0ecef889ce77ddd8110bef9a163a503c504cf974494d04543a69da": [
+          "26.1"
+        ],
+        "c4eed6a10104aff530f42866b45068cba911f56ed19481ce391ef791bfb342ba": [
+          "26.2"
+        ]
+      },
+      "identical_all_five": false,
+      "review": "1.21.1 and 26.2 preserve BackgroundIoSubmit seam; middle lines retain inline PriorityConsecutiveExecutor rung. 1.21.1 section bounds differ. Captured registration reaches common read submission on every route."
+    },
+    {
+      "path": "xplat/src/main/java/dev/vox/lss/networking/server/ChunkGenerationService.java",
+      "groups": {
+        "b40f703067c561b8f065bdbd6f7acb37939cf7822b1a256883f50decd13365b7": [
+          "1.21.1"
+        ],
+        "bd2e5e510835d637e19dd9e671e26b578b5b48e52a0ec9f762a1194bf180182b": [
+          "1.21.10"
+        ],
+        "5ede2a84b0f98f46820d4b5535e7fd45c7f7bb1d396eefa4d40603ae401157d1": [
+          "1.21.11"
+        ],
+        "0bba285a7fe94918f12bd89eac9832cd166c7287cc3afef56a546153e1b44860": [
+          "26.1",
+          "26.2"
+        ]
+      },
+      "identical_all_five": false,
+      "review": "1.21.1 generic TicketType.create/addRegionTicket/removeRegionTicket versus later NO_TIMEOUT FLAG_LOADING radius APIs; position field/record and dimension accessor variations. Ownership/callback/removal semantics match."
+    },
+    {
+      "path": "xplat/src/main/java/dev/vox/lss/networking/server/FabricOffThreadProcessor.java",
+      "groups": {
+        "b02c2ba99fab7e707a6360a5b72842d6942b08caa574e4f91d00a8e36c569d20": [
+          "1.21.1",
+          "1.21.10"
+        ],
+        "5e46b15825f07086b3316e693ba09e6e905fc31756e7a0d432d85cd7228f0cdd": [
+          "1.21.11",
+          "26.1",
+          "26.2"
+        ]
+      },
+      "identical_all_five": false,
+      "review": "Only ResourceLocation/Identifier naming differs. Registration-aware send guards match."
+    },
+    {
+      "path": "xplat/src/main/java/dev/vox/lss/networking/server/LSSServerCommands.java",
+      "groups": {
+        "fd2630a6f8b84d69957136b15f872568278051cbce6b1d8dfc28812885db6783": [
+          "1.21.1"
+        ],
+        "5401b40be33b9e040b90cdc203ef5d4a276ac0c46b2accc76e7dd214e55eec04": [
+          "1.21.10"
+        ],
+        "70815dcff078e58cd9f4f20b54e6bf3a564781fe98f9d90322f79298beeb054a": [
+          "1.21.11",
+          "26.1"
+        ],
+        "062412e8a0b58c2aebb9a1656627622b2d06d000f946238d77dad01f4c670f56": [
+          "26.2"
+        ]
+      },
+      "identical_all_five": false,
+      "review": "Command permission API differs by engine generation; 26.2 retains per-world display/repush. Runtime-success persistence-note behavior matches."
+    },
+    {
+      "path": "xplat/src/main/java/dev/vox/lss/networking/server/RequestProcessingService.java",
+      "groups": {
+        "79aefb1d38be189ad1bc0ec2716dec9e3629df5872c9c75ed740452c7f4945f3": [
+          "1.21.1"
+        ],
+        "f85a12016ee0fff4e9e420f3ed14d6c5c852a2e2a301198e8dd913e8e5c9be41": [
+          "1.21.10"
+        ],
+        "a11db0f172a3345d10c9b6b4c008f84df7af14b1071f5c3eb1193745cebcdd36": [
+          "1.21.11"
+        ],
+        "222bdf1b41070fb2fa9563a0af0d075feb171253650f5a5348684f55445fe921": [
+          "26.1"
+        ],
+        "d29a6cbd41197aeef5b1b75b01c858867dc6d36ec217fa1155d921e62e7b1473": [
+          "26.2"
+        ]
+      },
+      "identical_all_five": false,
+      "review": "Spawn/level/registry/data-version/dimension/position APIs vary; 26.2 retains per-world distance and dimension re-push. WI2 and WI6 control paths match."
+    }
+  ],
+  "harness_parity": [
+    {
+      "path": ".github/workflows/build.yml",
+      "groups": {
+        "3d72033e69b140a556e949737c9e7d3379a7f980a2c35c8349c50b15ff0bcb72": [
+          "1.21.1"
+        ],
+        "ae421e02fe8622fa60d52049d94df3c504f7f32b5adfa3ab960057893db23406": [
+          "1.21.10",
+          "1.21.11"
+        ],
+        "5a093f4c5f15f34e13e30add06e60b0f52feb6766cc24b7b94eedf52dd1239d4": [
+          "26.1"
+        ],
+        "2f71418bf8ac67805f1e2db68f19a77050897fd634918f7743ed2bab49251941": [
+          "26.2"
+        ]
+      }
+    },
+    {
+      "path": "scripts/backfill_profile.sh",
+      "groups": {
+        "d8c3ab4cf17fab478f0c290f388e3a9d7238df87ab6918304cb227d7df63be38": [
+          "1.21.1"
+        ],
+        "0a662abd31f14e3628017ec19ad318055d64be4cf620a9502d37b142d28a5fb9": [
+          "1.21.10",
+          "1.21.11",
+          "26.1",
+          "26.2"
+        ]
+      }
+    },
+    {
+      "path": "scripts/benchmark.sh",
+      "groups": {
+        "9fe1ca1bbb473e6ae8259d8cbedc3dcc05c986afa110635eac81677ea25910a0": [
+          "1.21.1"
+        ],
+        "e6608f9734cc1c100731d63446f659d8117d9ca44ed0b5f94c1e238de7f82e7d": [
+          "1.21.10",
+          "1.21.11",
+          "26.1",
+          "26.2"
+        ]
+      }
+    },
+    {
+      "path": "scripts/benchmark_compare.sh",
+      "groups": {
+        "81c34f38291b63088d2fe3aec2740ccd185c4390ff730c277df1901d76b03f43": [
+          "1.21.1"
+        ],
+        "0a5c1ac08efbaa9c88ad2a95b8e30e2cfa7870f4154d0e023565b5b0b1a88885": [
+          "1.21.10",
+          "1.21.11",
+          "26.1",
+          "26.2"
+        ]
+      }
+    },
+    {
+      "path": "scripts/compress_gate.sh",
+      "groups": {
+        "578e4b6ea21d132deb8ae9a5fe41245ccee88c21c605d21392858c5932fd6272": [
+          "1.21.1",
+          "1.21.10",
+          "1.21.11",
+          "26.1",
+          "26.2"
+        ]
+      }
+    },
+    {
+      "path": "scripts/lib/HARNESS.md",
+      "groups": {
+        "0f9d6e121106e7bc45e2f98105d57adacc4c013fed38ef83f3300054f0257beb": [
+          "1.21.1",
+          "1.21.10",
+          "1.21.11",
+          "26.1",
+          "26.2"
+        ]
+      }
+    },
+    {
+      "path": "scripts/lib/benchmark-results.py",
+      "groups": {
+        "cb3716764bb6a2a495d505dfae96393b7cb5b3cf743501ab356fb52e7e0d2107": [
+          "1.21.1",
+          "1.21.10",
+          "1.21.11",
+          "26.1",
+          "26.2"
+        ]
+      }
+    },
+    {
+      "path": "scripts/lib/harness-lock.sh",
+      "groups": {
+        "0e844b7de643c8bdf9ed560bcad16aec6ec6620123fa0357be0204c76d38b056": [
+          "1.21.1",
+          "1.21.10",
+          "1.21.11",
+          "26.1",
+          "26.2"
+        ]
+      }
+    },
+    {
+      "path": "scripts/lib/mc-run.sh",
+      "groups": {
+        "9d0caf5bc90da068c28bca3dc52ca08da9961c8423c696b13a7799c55b71af84": [
+          "1.21.1",
+          "1.21.10",
+          "1.21.11",
+          "26.1",
+          "26.2"
+        ]
+      }
+    },
+    {
+      "path": "scripts/lib/owned-process.py",
+      "groups": {
+        "dbb0c92b39d313f2d1eecd638f4a0c7b36ef78c4173a27db2ac23a1f97466b70": [
+          "1.21.1",
+          "1.21.10",
+          "1.21.11",
+          "26.1",
+          "26.2"
+        ]
+      }
+    },
+    {
+      "path": "scripts/profile_disk_read.sh",
+      "groups": {
+        "bbb622a59c4b7dff28617538e85596a4e1bb0ae610541da414496e3872566839": [
+          "1.21.1"
+        ],
+        "6404243e1da3d89df6076ce95685421a75d9eb0e30905c786b3da5072ac6ba84": [
+          "1.21.10",
+          "1.21.11",
+          "26.1",
+          "26.2"
+        ]
+      }
+    },
+    {
+      "path": "scripts/soak.sh",
+      "groups": {
+        "04bf20256296463e1209c82866199881233e08c2d589e3a7b1e26a658b26d80e": [
+          "1.21.1"
+        ],
+        "584ec06875f307b1618947369018f09bf4658d37d46e648dd85c8936b45a68f7": [
+          "1.21.10",
+          "1.21.11"
+        ],
+        "7eebda45490904cdc4a5d5c9b16f6a2e01fc4fb278653495f41287daa8c38094": [
+          "26.1"
+        ],
+        "c5d8517ebb87ec256412a63963d8e7d9599110d222d1d092ebb60fae656a2885": [
+          "26.2"
+        ]
+      }
+    },
+    {
+      "path": "scripts/stamp_heal.sh",
+      "groups": {
+        "3fa348a2bdb24370dd1b29be385d6151ec95615411c1f759cefec1e588c64add": [
+          "1.21.1",
+          "1.21.10",
+          "1.21.11",
+          "26.1",
+          "26.2"
+        ]
+      }
+    },
+    {
+      "path": "scripts/store_gate.sh",
+      "groups": {
+        "3797d0a5fd1abcccefcbeb8dc3244b2ada42ddc092f069a254df2882380a4ad7": [
+          "1.21.1",
+          "1.21.10",
+          "1.21.11",
+          "26.1",
+          "26.2"
+        ]
+      }
+    },
+    {
+      "path": "scripts/store_migration_gate.sh",
+      "groups": {
+        "7cef7428060e819dadaa73ef21ccabb0db9772bc3fe0d02fd62a03b161f02b16": [
+          "1.21.1",
+          "1.21.10",
+          "1.21.11",
+          "26.1",
+          "26.2"
+        ]
+      }
+    },
+    {
+      "path": "scripts/store_offline_edit.sh",
+      "groups": {
+        "fd455ed9cf969c38bde3f36eb92364c96d5b91cbc2c15e6a07d23b9971b243a4": [
+          "1.21.1",
+          "1.21.10",
+          "1.21.11",
+          "26.1",
+          "26.2"
+        ]
+      }
+    },
+    {
+      "path": "scripts/store_save_storm.sh",
+      "groups": {
+        "d72c67a2442370c22a7f47746cc81d75a02e2a5146ffb023f79511cfba034adc": [
+          "1.21.1",
+          "1.21.10",
+          "1.21.11",
+          "26.1",
+          "26.2"
+        ]
+      }
+    },
+    {
+      "path": "scripts/summary_evicted.sh",
+      "groups": {
+        "0395f0afffbec91510b5a298d7d4b4943228ce19bcc862bc5acd11ca47664d58": [
+          "1.21.1",
+          "1.21.10",
+          "1.21.11",
+          "26.1",
+          "26.2"
+        ]
+      }
+    },
+    {
+      "path": "scripts/test_harness.py",
+      "groups": {
+        "4d35b3f3ff5806ee9fd1bdd902727dd88b18f3d530bad4655b01a2e6bef913ad": [
+          "1.21.1",
+          "1.21.10",
+          "1.21.11",
+          "26.1",
+          "26.2"
+        ]
+      }
+    }
+  ],
+  "reviewed_at": "2026-09-08T21:54:04.208114+00:00",
+  "scope_note": "Read-only snapshot. Commit map derived from baseline..HEAD titles and explicit file lists, then reviewed against WI scope. Production parity uses current file SHA-256; test-only edits may be in flight and are recorded in status. No build/runtime invocation."
+}

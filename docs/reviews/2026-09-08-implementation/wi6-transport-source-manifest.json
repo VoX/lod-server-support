@@ -1,0 +1,40 @@
+{
+  "files": [
+    {
+      "path": "README.md",
+      "sha256": "70ec222c8268db5ca9a99d8610013e2d4f00b671f997a92fa0e6af850f6e3883"
+    },
+    {
+      "path": "build.gradle",
+      "sha256": "9ff4d661f09df90512464edfe1def070bdba7f8e1a932b64cb6895fa21fb4651"
+    },
+    {
+      "path": "settings.gradle",
+      "sha256": "877bf8a6ba4fa8ee77f68f01dba681bb79a6e090547abad3ea6e88fb903b6a97"
+    },
+    {
+      "path": "src/main/java/dev/vox/lssfixture/wi6/Probe.java",
+      "sha256": "e5856bd5a181c4a8beed9b9262bcba6db6bf428a33a46710dceb9a65c1043636"
+    },
+    {
+      "path": "src/main/java/dev/vox/lssfixture/wi6/mixin/ServiceMixin.java",
+      "sha256": "7193b42de9e4d3fd1eae63bf9e9068b3403edd595148c585bf677877a7986882"
+    },
+    {
+      "path": "src/main/resources/fabric.mod.json",
+      "sha256": "291b8c216e904a0e8727c9c5c0b8e7346975d582a8a04d06119e18c042b069c3"
+    },
+    {
+      "path": "src/main/resources/lss-wi6-fixture.mixins.json",
+      "sha256": "4bf98b2085a3b9d45a96ad396914d2b70c4c8d9ce9087ecc7512088ae58ce0cd"
+    }
+  ],
+  "compile_lss": {
+    "path": "/home/vox/projects/lss-lines/1.21.1/fabric/build/libs/lod-server-support-fabric-0.14.0+1.21.1.jar",
+    "sha256": "65e2486eb725f64b88bbc1abc1597cc41e82e4dde06b550b5b4148af0751e5bf"
+  },
+  "compile_common": {
+    "path": "/home/vox/projects/lss-lines/1.21.1/common/build/libs/common-0.14.0.jar",
+    "sha256": "ad28698040d92ee4f67f0081cf12e9832a4df10e658bb321670344764b7a250b"
+  }
+}

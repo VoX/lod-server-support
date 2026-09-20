@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="dev.vox.lss.common.processing.SessionOwnershipReviewTest" tests="2" skipped="0" failures="2" errors="0" timestamp="2026-09-07T02:54:27.416Z" hostname="DESKTOP-K93QJU0" time="0.014">
+  <properties/>
+  <testcase name="oldReadMustNotEnterAReRegisteredPlayersQueue()" classname="dev.vox.lss.common.processing.SessionOwnershipReviewTest" time="0.004">
+    <failure message="org.opentest4j.AssertionFailedError: read captured for removed session must not be appended to replacement queue ==&gt; expected: &lt;true&gt; but was: &lt;false&gt;" type="org.opentest4j.AssertionFailedError">org.opentest4j.AssertionFailedError: read captured for removed session must not be appended to replacement queue ==&gt; expected: &lt;true&gt; but was: &lt;false&gt;
+	at org.junit.jupiter.api.AssertionFailureBuilder.build(AssertionFailureBuilder.java:151)
+	at org.junit.jupiter.api.AssertionFailureBuilder.buildAndThrow(AssertionFailureBuilder.java:132)
+	at org.junit.jupiter.api.AssertTrue.failNotTrue(AssertTrue.java:63)
+	at org.junit.jupiter.api.AssertTrue.assertTrue(AssertTrue.java:36)
+	at org.junit.jupiter.api.Assertions.assertTrue(Assertions.java:210)
+	at knot//dev.vox.lss.common.processing.SessionOwnershipReviewTest.oldReadMustNotEnterAReRegisteredPlayersQueue(SessionOwnershipReviewTest.java:73)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
+</failure>
+  </testcase>
+  <testcase name="reconnectMustNotEraseAnOldReadsDirtyTaintAndSealItsPreEditBytes()" classname="dev.vox.lss.common.processing.SessionOwnershipReviewTest" time="0.008">
+    <failure message="org.opentest4j.MultipleFailuresError: Multiple Failures (3 failures)&#10;&#9;org.opentest4j.AssertionFailedError: old read's taint was discarded at teardown; it must not mark replacement state done ==&gt; expected: &lt;false&gt; but was: &lt;true&gt;&#10;&#9;org.opentest4j.AssertionFailedError: pre-edit bytes from removed session must not seal a replacement client's warm request as up_to_date ==&gt; expected: &lt;false&gt; but was: &lt;true&gt;&#10;&#9;org.opentest4j.AssertionFailedError: pre-edit byte1 from removed session must not be delivered into replacement session ==&gt; expected: &lt;false&gt; but was: &lt;true&gt;" type="org.opentest4j.MultipleFailuresError">org.opentest4j.MultipleFailuresError: Multiple Failures (3 failures)
+	org.opentest4j.AssertionFailedError: old read's taint was discarded at teardown; it must not mark replacement state done ==&gt; expected: &lt;false&gt; but was: &lt;true&gt;
+	org.opentest4j.AssertionFailedError: pre-edit bytes from removed session must not seal a replacement client's warm request as up_to_date ==&gt; expected: &lt;false&gt; but was: &lt;true&gt;
+	org.opentest4j.AssertionFailedError: pre-edit byte1 from removed session must not be delivered into replacement session ==&gt; expected: &lt;false&gt; but was: &lt;true&gt;
+	at org.junit.jupiter.api.AssertAll.assertAll(AssertAll.java:80)
+	at org.junit.jupiter.api.AssertAll.assertAll(AssertAll.java:44)
+	at org.junit.jupiter.api.AssertAll.assertAll(AssertAll.java:38)
+	at org.junit.jupiter.api.Assertions.assertAll(Assertions.java:2940)
+	at knot//dev.vox.lss.common.processing.SessionOwnershipReviewTest.reconnectMustNotEraseAnOldReadsDirtyTaintAndSealItsPreEditBytes(SessionOwnershipReviewTest.java:98)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
+	Suppressed: org.opentest4j.AssertionFailedError: old read's taint was discarded at teardown; it must not mark replacement state done ==&gt; expected: &lt;false&gt; but was: &lt;true&gt;
+		at org.junit.jupiter.api.AssertionFailureBuilder.build(AssertionFailureBuilder.java:151)
+		at org.junit.jupiter.api.AssertionFailureBuilder.buildAndThrow(AssertionFailureBuilder.java:132)
+		at org.junit.jupiter.api.AssertFalse.failNotFalse(AssertFalse.java:63)
+		at org.junit.jupiter.api.AssertFalse.assertFalse(AssertFalse.java:36)
+		at org.junit.jupiter.api.Assertions.assertFalse(Assertions.java:235)
+		at knot//dev.vox.lss.common.processing.SessionOwnershipReviewTest.lambda$reconnectMustNotEraseAnOldReadsDirtyTaintAndSealItsPreEditBytes$4(SessionOwnershipReviewTest.java:99)
+		at org.junit.jupiter.api.AssertAll.lambda$assertAll$0(AssertAll.java:68)
+		at java.base/java.util.stream.ReferencePipeline$3$1.accept(ReferencePipeline.java:197)
+		at java.base/java.util.Spliterators$ArraySpliterator.forEachRemaining(Spliterators.java:1024)
+		at java.base/java.util.stream.AbstractPipeline.copyInto(AbstractPipeline.java:509)
+		at java.base/java.util.stream.AbstractPipeline.wrapAndCopyInto(AbstractPipeline.java:499)
+		at java.base/java.util.stream.ReduceOps$ReduceOp.evaluateSequential(ReduceOps.java:921)
+		at java.base/java.util.stream.AbstractPipeline.evaluate(AbstractPipeline.java:234)
+		at java.base/java.util.stream.ReferencePipeline.collect(ReferencePipeline.java:682)
+		at org.junit.jupiter.api.AssertAll.assertAll(AssertAll.java:77)
+		... 7 more
+	Suppressed: org.opentest4j.AssertionFailedError: pre-edit bytes from removed session must not seal a replacement client's warm request as up_to_date ==&gt; expected: &lt;false&gt; but was: &lt;true&gt;
+		at org.junit.jupiter.api.AssertionFailureBuilder.build(AssertionFailureBuilder.java:151)
+		at org.junit.jupiter.api.AssertionFailureBuilder.buildAndThrow(AssertionFailureBuilder.java:132)
+		at org.junit.jupiter.api.AssertFalse.failNotFalse(AssertFalse.java:63)
+		at org.junit.jupiter.api.AssertFalse.assertFalse(AssertFalse.java:36)
+		at org.junit.jupiter.api.Assertions.assertFalse(Assertions.java:235)
+		at knot//dev.vox.lss.common.processing.SessionOwnershipReviewTest.lambda$reconnectMustNotEraseAnOldReadsDirtyTaintAndSealItsPreEditBytes$5(SessionOwnershipReviewTest.java:101)
+		at org.junit.jupiter.api.AssertAll.lambda$assertAll$0(AssertAll.java:68)
+		at java.base/java.util.stream.ReferencePipeline$3$1.accept(ReferencePipeline.java:197)
+		at java.base/java.util.Spliterators$ArraySpliterator.forEachRemaining(Spliterators.java:1024)
+		at java.base/java.util.stream.AbstractPipeline.copyInto(AbstractPipeline.java:509)
+		at java.base/java.util.stream.AbstractPipeline.wrapAndCopyInto(AbstractPipeline.java:499)
+		at java.base/java.util.stream.ReduceOps$ReduceOp.evaluateSequential(ReduceOps.java:921)
+		at java.base/java.util.stream.AbstractPipeline.evaluate(AbstractPipeline.java:234)
+		at java.base/java.util.stream.ReferencePipeline.collect(ReferencePipeline.java:682)
+		at org.junit.jupiter.api.AssertAll.assertAll(AssertAll.java:77)
+		... 7 more
+	Suppressed: org.opentest4j.AssertionFailedError: pre-edit byte1 from removed session must not be delivered into replacement session ==&gt; expected: &lt;false&gt; but was: &lt;true&gt;
+		at org.junit.jupiter.api.AssertionFailureBuilder.build(AssertionFailureBuilder.java:151)
+		at org.junit.jupiter.api.AssertionFailureBuilder.buildAndThrow(AssertionFailureBuilder.java:132)
+		at org.junit.jupiter.api.AssertFalse.failNotFalse(AssertFalse.java:63)
+		at org.junit.jupiter.api.AssertFalse.assertFalse(AssertFalse.java:36)
+		at org.junit.jupiter.api.Assertions.assertFalse(Assertions.java:235)
+		at knot//dev.vox.lss.common.processing.SessionOwnershipReviewTest.lambda$reconnectMustNotEraseAnOldReadsDirtyTaintAndSealItsPreEditBytes$6(SessionOwnershipReviewTest.java:103)
+		at org.junit.jupiter.api.AssertAll.lambda$assertAll$0(AssertAll.java:68)
+		at java.base/java.util.stream.ReferencePipeline$3$1.accept(ReferencePipeline.java:197)
+		at java.base/java.util.Spliterators$ArraySpliterator.forEachRemaining(Spliterators.java:1024)
+		at java.base/java.util.stream.AbstractPipeline.copyInto(AbstractPipeline.java:509)
+		at java.base/java.util.stream.AbstractPipeline.wrapAndCopyInto(AbstractPipeline.java:499)
+		at java.base/java.util.stream.ReduceOps$ReduceOp.evaluateSequential(ReduceOps.java:921)
+		at java.base/java.util.stream.AbstractPipeline.evaluate(AbstractPipeline.java:234)
+		at java.base/java.util.stream.ReferencePipeline.collect(ReferencePipeline.java:682)
+		at org.junit.jupiter.api.AssertAll.assertAll(AssertAll.java:77)
+		... 7 more
+</failure>
+  </testcase>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

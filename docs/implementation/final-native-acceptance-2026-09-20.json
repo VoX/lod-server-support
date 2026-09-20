@@ -1,0 +1,2215 @@
+{
+  "cases": [
+    {
+      "acceptance_target": {
+        "candidate_artifacts": {
+          "artifacts/lss-common-named.jar": "83dbe3f03631825c29695390224ce1561ef18494307b0130d662ec2ed3dec2be",
+          "artifacts/lss-main-named.jar": "ff721e938246b3b57276f07fd3e82f4264b09f3a551b1b3a6ecea13fe308ca78"
+        },
+        "candidate_sha256": "ff721e938246b3b57276f07fd3e82f4264b09f3a551b1b3a6ecea13fe308ca78",
+        "candidate_target": "artifacts/lss-main-named.jar",
+        "fixture_artifacts": {
+          "artifacts/lss-dev-test-support.jar": "7778fa48fcb229bc29c69e31b67c7aa55e269134203a8e092733feb1e20115a7",
+          "artifacts/lss-gametest-named.jar": "7df8553b57ffb069c6739811acd57ecda0ae5ef2d3bced5437547163501fb9a2"
+        },
+        "participant_profiles": {},
+        "profile_hash": "e6a921d56e7653e9cce70556b6e9abedb140e66b92043622c5a64665fca5d9bc",
+        "runtime_settings_sha256": "848eeef82e562cc3e93be5964aee0d743b64b34b41dcdd03f347b38e0751af5a",
+        "runtime_settings_version": 1,
+        "scenario_checker_sha256": "f265be5f86a9c87dd1c8376ca3cf6bcf6ef4be76715967a27d984ee5a7224957",
+        "scenario_hash": "66d2610933a545e0ebab5c42a8321cf744ef71663b57766ab074adfc106c2544",
+        "scenario_version": 3
+      },
+      "feature": "c2me-save-read",
+      "group": "required42",
+      "id": "mc12111-c2me-a--c2me-save-read",
+      "limitations": [
+        "Three named server game tests; no GUI, external client transport or performance claim."
+      ],
+      "line": "1.21.11",
+      "profile_id": "mc12111-c2me-a-named-gametest-v2",
+      "record_path": "config/compatibility/validation/20260920T020135Z-07a443c42a7a-c2me-save-read.json",
+      "record_sha256": "a236bbf60f6620da5cae737c032f6d935fdbaf62d3d9fc7b97e4b82dfb2b40d0",
+      "run_hash": "e7e581d07b7aff163c38cc2bae3a7b12aedc64a940f1811ea636e445c1ae50a4",
+      "run_id": "20260920T020135Z-07a443c42a7a",
+      "scenario": "c2me-save-read"
+    },
+    {
+      "acceptance_target": {
+        "candidate_artifacts": {
+          "artifacts/lss-common-named.jar": "83dbe3f03631825c29695390224ce1561ef18494307b0130d662ec2ed3dec2be",
+          "artifacts/lss-main-named.jar": "ff721e938246b3b57276f07fd3e82f4264b09f3a551b1b3a6ecea13fe308ca78"
+        },
+        "candidate_sha256": "ff721e938246b3b57276f07fd3e82f4264b09f3a551b1b3a6ecea13fe308ca78",
+        "candidate_target": "artifacts/lss-main-named.jar",
+        "fixture_artifacts": {
+          "artifacts/lss-dev-test-support.jar": "7778fa48fcb229bc29c69e31b67c7aa55e269134203a8e092733feb1e20115a7",
+          "artifacts/lss-gametest-named.jar": "7df8553b57ffb069c6739811acd57ecda0ae5ef2d3bced5437547163501fb9a2"
+        },
+        "participant_profiles": {},
+        "profile_hash": "f7ed1e61a37e163a2a3ea03b477b85f2080012c583b2d019209d76bf82fd9eee",
+        "runtime_settings_sha256": "c874f2d26bad00c790daef8dfee0e721356549775d870b5a99d1ac839b969906",
+        "runtime_settings_version": 1,
+        "scenario_checker_sha256": "f265be5f86a9c87dd1c8376ca3cf6bcf6ef4be76715967a27d984ee5a7224957",
+        "scenario_hash": "66d2610933a545e0ebab5c42a8321cf744ef71663b57766ab074adfc106c2544",
+        "scenario_version": 3
+      },
+      "feature": "c2me-save-read",
+      "group": "required42",
+      "id": "mc12111-c2me-b--c2me-save-read",
+      "limitations": [
+        "Three named server game tests; no GUI, external client transport or performance claim."
+      ],
+      "line": "1.21.11",
+      "profile_id": "mc12111-c2me-b-named-gametest-v2",
+      "record_path": "config/compatibility/validation/20260920T020219Z-027f62df643a-c2me-save-read.json",
+      "record_sha256": "23bc312e91aa24d54b45072245bb0d0617c5dc066e48ec880df2d7a128f2f7eb",
+      "run_hash": "3205869053947fbbbd1451260f4df125679cbf355ad169b02b0c0371ed1b19bb",
+      "run_id": "20260920T020219Z-027f62df643a",
+      "scenario": "c2me-save-read"
+    },
+    {
+      "acceptance_target": {
+        "candidate_artifacts": {
+          "server/mods/lod-server-support-fabric.jar": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c",
+          "smoke-first/mods/lod-server-support-fabric.jar": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c",
+          "smoke-second/mods/lod-server-support-fabric.jar": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c"
+        },
+        "candidate_sha256": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c",
+        "candidate_target": "server/mods/lod-server-support-fabric.jar",
+        "fixture_artifacts": {
+          "smoke-first/mods/lss-server-smoke-client.jar": "6ac5ebdb85482aaed87ee1cb1c0305b9dd53914b051e159854afd33a682517e8",
+          "smoke-second/mods/lss-server-smoke-client.jar": "6ac5ebdb85482aaed87ee1cb1c0305b9dd53914b051e159854afd33a682517e8"
+        },
+        "participant_profiles": {
+          "server": {
+            "id": "mc1211-fabric-server",
+            "profile_hash": "737fc992ba97dc2cdf559980e4cbad0fa7389a7b34e60e454100d872853972d1"
+          }
+        },
+        "profile_hash": "4c84dcca1a75b06d49ec1a4c2032e2b4bf451505c7bdfebddab55816d91e790d",
+        "runtime_settings_sha256": "ee56ee85608f14ed44262d7cfe89b8bbf92246fe4156a3732bab406b9d3f34bb",
+        "runtime_settings_version": 1,
+        "scenario_checker_sha256": "915717b453326bbd3990d785dedb1ca5312078e61d6cef165a3a998b390c5cd5",
+        "scenario_hash": "ed0a8835133f5613ecffc2ce740d36d1fdd6114c6448fdb23a772d6b5fdd320e",
+        "scenario_version": 1
+      },
+      "feature": "server-presets-before-restart",
+      "group": "extra-preset",
+      "id": "server-presets-fabric-before-restart",
+      "limitations": [
+        "Native command preset controls; no GUI or performance claim. Before-restart and after-restart evidence are paired per platform."
+      ],
+      "line": "1.21.1",
+      "profile_id": "mc1211-native-smoke-client",
+      "record_path": "config/compatibility/validation/20260920T020312Z-d89cdea51424-server-presets-before-restart.json",
+      "record_sha256": "33763ba1865580377904a3f6c10408fc50248472aa1f3901835a13052db8983f",
+      "run_hash": "b13132488f491b72ad5cb2213e7c3c6a0852c91f844db81a3481f306b6230a4d",
+      "run_id": "20260920T020312Z-d89cdea51424",
+      "scenario": "native-server-preset-controls"
+    },
+    {
+      "acceptance_target": {
+        "candidate_artifacts": {
+          "server/mods/lod-server-support-fabric.jar": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c",
+          "smoke-first/mods/lod-server-support-fabric.jar": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c",
+          "smoke-second/mods/lod-server-support-fabric.jar": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c"
+        },
+        "candidate_sha256": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c",
+        "candidate_target": "server/mods/lod-server-support-fabric.jar",
+        "fixture_artifacts": {
+          "smoke-first/mods/lss-server-smoke-client.jar": "6ac5ebdb85482aaed87ee1cb1c0305b9dd53914b051e159854afd33a682517e8",
+          "smoke-second/mods/lss-server-smoke-client.jar": "6ac5ebdb85482aaed87ee1cb1c0305b9dd53914b051e159854afd33a682517e8"
+        },
+        "participant_profiles": {
+          "server": {
+            "id": "mc1211-fabric-server",
+            "profile_hash": "737fc992ba97dc2cdf559980e4cbad0fa7389a7b34e60e454100d872853972d1"
+          }
+        },
+        "profile_hash": "4c84dcca1a75b06d49ec1a4c2032e2b4bf451505c7bdfebddab55816d91e790d",
+        "runtime_settings_sha256": "acfdf4367e38e7a06ad2b487789f9b1f96a46a684d635e51ec0240c6beb61f82",
+        "runtime_settings_version": 1,
+        "scenario_checker_sha256": "915717b453326bbd3990d785dedb1ca5312078e61d6cef165a3a998b390c5cd5",
+        "scenario_hash": "53200be835cc289f83226f1525354debb035dc49c40f7e85d73dc5641d5bcb2c",
+        "scenario_version": 1
+      },
+      "feature": "server-presets-after-restart",
+      "group": "extra-preset",
+      "id": "server-presets-fabric-after-restart",
+      "limitations": [
+        "Native command preset controls; no GUI or performance claim. Before-restart and after-restart evidence are paired per platform."
+      ],
+      "line": "1.21.1",
+      "profile_id": "mc1211-native-smoke-client",
+      "record_path": "config/compatibility/validation/20260920T020623Z-ba3ddd9108f5-server-presets-after-restart.json",
+      "record_sha256": "e70242e5b19bc695f580ca400421dd9b0bdf1b49a287548d0fb3fec822b82a33",
+      "run_hash": "d1a3bff593d58db211e8c612dfc18ce1edb2690b0f3f45d2de05d64899a08451",
+      "run_id": "20260920T020623Z-ba3ddd9108f5",
+      "scenario": "native-server-preset-controls"
+    },
+    {
+      "acceptance_target": {
+        "candidate_artifacts": {
+          "server/mods/lod-server-support-neoforge.jar": "8faa03c1b21416bbd54497f2f3ffc3e053ec2179ea65aad4be6fa10d78085fd1",
+          "smoke-first/mods/lod-server-support-fabric.jar": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c",
+          "smoke-second/mods/lod-server-support-fabric.jar": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c"
+        },
+        "candidate_sha256": "8faa03c1b21416bbd54497f2f3ffc3e053ec2179ea65aad4be6fa10d78085fd1",
+        "candidate_target": "server/mods/lod-server-support-neoforge.jar",
+        "fixture_artifacts": {
+          "smoke-first/mods/lss-server-smoke-client.jar": "6ac5ebdb85482aaed87ee1cb1c0305b9dd53914b051e159854afd33a682517e8",
+          "smoke-second/mods/lss-server-smoke-client.jar": "6ac5ebdb85482aaed87ee1cb1c0305b9dd53914b051e159854afd33a682517e8"
+        },
+        "participant_profiles": {
+          "server": {
+            "id": "mc1211-neoforge-server-smoke",
+            "profile_hash": "453552c364313b949a60c1517e8fdcc62713cde912bc02ea8a08d1c98b068854"
+          }
+        },
+        "profile_hash": "4c84dcca1a75b06d49ec1a4c2032e2b4bf451505c7bdfebddab55816d91e790d",
+        "runtime_settings_sha256": "fea1ce928f81b09d292698a167dfe50e3f7f8c39d628f6e7d9c18b929113a79f",
+        "runtime_settings_version": 1,
+        "scenario_checker_sha256": "915717b453326bbd3990d785dedb1ca5312078e61d6cef165a3a998b390c5cd5",
+        "scenario_hash": "ed0a8835133f5613ecffc2ce740d36d1fdd6114c6448fdb23a772d6b5fdd320e",
+        "scenario_version": 1
+      },
+      "feature": "server-presets-before-restart",
+      "group": "extra-preset",
+      "id": "server-presets-neoforge-before-restart",
+      "limitations": [
+        "Native command preset controls; no GUI or performance claim. Before-restart and after-restart evidence are paired per platform."
+      ],
+      "line": "1.21.1",
+      "profile_id": "mc1211-native-smoke-client",
+      "record_path": "config/compatibility/validation/20260920T020841Z-7ae10cb80a8e-server-presets-before-restart.json",
+      "record_sha256": "212a86a8b96cc09ee34e5dbae9fa04c156215f4a98f6f22a63789099992d3bd8",
+      "run_hash": "fdaffd522c18fc628b2f89705e4c112464c505a3651d0fdc5455416e8b310d11",
+      "run_id": "20260920T020841Z-7ae10cb80a8e",
+      "scenario": "native-server-preset-controls"
+    },
+    {
+      "acceptance_target": {
+        "candidate_artifacts": {
+          "server/mods/lod-server-support-neoforge.jar": "8faa03c1b21416bbd54497f2f3ffc3e053ec2179ea65aad4be6fa10d78085fd1",
+          "smoke-first/mods/lod-server-support-fabric.jar": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c",
+          "smoke-second/mods/lod-server-support-fabric.jar": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c"
+        },
+        "candidate_sha256": "8faa03c1b21416bbd54497f2f3ffc3e053ec2179ea65aad4be6fa10d78085fd1",
+        "candidate_target": "server/mods/lod-server-support-neoforge.jar",
+        "fixture_artifacts": {
+          "smoke-first/mods/lss-server-smoke-client.jar": "6ac5ebdb85482aaed87ee1cb1c0305b9dd53914b051e159854afd33a682517e8",
+          "smoke-second/mods/lss-server-smoke-client.jar": "6ac5ebdb85482aaed87ee1cb1c0305b9dd53914b051e159854afd33a682517e8"
+        },
+        "participant_profiles": {
+          "server": {
+            "id": "mc1211-neoforge-server-smoke",
+            "profile_hash": "453552c364313b949a60c1517e8fdcc62713cde912bc02ea8a08d1c98b068854"
+          }
+        },
+        "profile_hash": "4c84dcca1a75b06d49ec1a4c2032e2b4bf451505c7bdfebddab55816d91e790d",
+        "runtime_settings_sha256": "4856fa5bbf17311f46e9135414e47c049daed753fe8323f00793899d11aaa827",
+        "runtime_settings_version": 1,
+        "scenario_checker_sha256": "915717b453326bbd3990d785dedb1ca5312078e61d6cef165a3a998b390c5cd5",
+        "scenario_hash": "53200be835cc289f83226f1525354debb035dc49c40f7e85d73dc5641d5bcb2c",
+        "scenario_version": 1
+      },
+      "feature": "server-presets-after-restart",
+      "group": "extra-preset",
+      "id": "server-presets-neoforge-after-restart",
+      "limitations": [
+        "Native command preset controls; no GUI or performance claim. Before-restart and after-restart evidence are paired per platform."
+      ],
+      "line": "1.21.1",
+      "profile_id": "mc1211-native-smoke-client",
+      "record_path": "config/compatibility/validation/20260920T021007Z-f18646291546-server-presets-after-restart.json",
+      "record_sha256": "d4a445374500a0960af74a541e479788361115a1133e4d0d6d9b676a93ed0d4c",
+      "run_hash": "b049c9d6eccc040ffb6bda0a9d29b115bb9c049a58101865c672d3c9cacc667f",
+      "run_id": "20260920T021007Z-f18646291546",
+      "scenario": "native-server-preset-controls"
+    },
+    {
+      "acceptance_target": {
+        "candidate_artifacts": {
+          "server/plugins/lod-server-support-paper.jar": "ce6ad3db4b31c1fc17adb6efc0fbc7e98392373f5f93496e57dbd81c05b663dd",
+          "smoke-first/mods/lod-server-support-fabric.jar": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c",
+          "smoke-second/mods/lod-server-support-fabric.jar": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c"
+        },
+        "candidate_sha256": "ce6ad3db4b31c1fc17adb6efc0fbc7e98392373f5f93496e57dbd81c05b663dd",
+        "candidate_target": "server/plugins/lod-server-support-paper.jar",
+        "fixture_artifacts": {
+          "smoke-first/mods/lss-server-smoke-client.jar": "6ac5ebdb85482aaed87ee1cb1c0305b9dd53914b051e159854afd33a682517e8",
+          "smoke-second/mods/lss-server-smoke-client.jar": "6ac5ebdb85482aaed87ee1cb1c0305b9dd53914b051e159854afd33a682517e8"
+        },
+        "participant_profiles": {
+          "server": {
+            "id": "mc1211-paper",
+            "profile_hash": "dc5f7e6bf9d19ab55be734ffed51c60a31b7872eeaf7a85db72cc0307d100234"
+          }
+        },
+        "profile_hash": "4c84dcca1a75b06d49ec1a4c2032e2b4bf451505c7bdfebddab55816d91e790d",
+        "runtime_settings_sha256": "a4f6ba2b7a6ab4f2d8692a8704b4b5f4e536afcf5f1bca8927534ea134528261",
+        "runtime_settings_version": 1,
+        "scenario_checker_sha256": "915717b453326bbd3990d785dedb1ca5312078e61d6cef165a3a998b390c5cd5",
+        "scenario_hash": "ed0a8835133f5613ecffc2ce740d36d1fdd6114c6448fdb23a772d6b5fdd320e",
+        "scenario_version": 1
+      },
+      "feature": "server-presets-before-restart",
+      "group": "extra-preset",
+      "id": "server-presets-paper-before-restart",
+      "limitations": [
+        "Native command preset controls; no GUI or performance claim. Before-restart and after-restart evidence are paired per platform."
+      ],
+      "line": "1.21.1",
+      "profile_id": "mc1211-native-smoke-client",
+      "record_path": "config/compatibility/validation/20260920T021044Z-076bfc109146-server-presets-before-restart.json",
+      "record_sha256": "77142a8c571363570672349a8aa78515cca03a8be70d64bf51d85c4175c5d60d",
+      "run_hash": "0af3e13ffdf7a56c8a3e5fe65117455b22eb7671837f85bbd9134b09aca01182",
+      "run_id": "20260920T021044Z-076bfc109146",
+      "scenario": "native-server-preset-controls"
+    },
+    {
+      "acceptance_target": {
+        "candidate_artifacts": {
+          "server/plugins/lod-server-support-paper.jar": "ce6ad3db4b31c1fc17adb6efc0fbc7e98392373f5f93496e57dbd81c05b663dd",
+          "smoke-first/mods/lod-server-support-fabric.jar": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c",
+          "smoke-second/mods/lod-server-support-fabric.jar": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c"
+        },
+        "candidate_sha256": "ce6ad3db4b31c1fc17adb6efc0fbc7e98392373f5f93496e57dbd81c05b663dd",
+        "candidate_target": "server/plugins/lod-server-support-paper.jar",
+        "fixture_artifacts": {
+          "smoke-first/mods/lss-server-smoke-client.jar": "6ac5ebdb85482aaed87ee1cb1c0305b9dd53914b051e159854afd33a682517e8",
+          "smoke-second/mods/lss-server-smoke-client.jar": "6ac5ebdb85482aaed87ee1cb1c0305b9dd53914b051e159854afd33a682517e8"
+        },
+        "participant_profiles": {
+          "server": {
+            "id": "mc1211-paper",
+            "profile_hash": "dc5f7e6bf9d19ab55be734ffed51c60a31b7872eeaf7a85db72cc0307d100234"
+          }
+        },
+        "profile_hash": "4c84dcca1a75b06d49ec1a4c2032e2b4bf451505c7bdfebddab55816d91e790d",
+        "runtime_settings_sha256": "c8d992218bcd90100189b4e3ff664c071ea73245a151825e8d4eb4481c24ac4e",
+        "runtime_settings_version": 1,
+        "scenario_checker_sha256": "915717b453326bbd3990d785dedb1ca5312078e61d6cef165a3a998b390c5cd5",
+        "scenario_hash": "53200be835cc289f83226f1525354debb035dc49c40f7e85d73dc5641d5bcb2c",
+        "scenario_version": 1
+      },
+      "feature": "server-presets-after-restart",
+      "group": "extra-preset",
+      "id": "server-presets-paper-after-restart",
+      "limitations": [
+        "Native command preset controls; no GUI or performance claim. Before-restart and after-restart evidence are paired per platform."
+      ],
+      "line": "1.21.1",
+      "profile_id": "mc1211-native-smoke-client",
+      "record_path": "config/compatibility/validation/20260920T021207Z-5fc5e9755036-server-presets-after-restart.json",
+      "record_sha256": "13881e8aed3789c2cf97c4fb1d33d94059d429e5823d610a85c1fcbf27fff88d",
+      "run_hash": "fe83e676f1ea49070461a9f8317de6405b00911033951db103717985e357381a",
+      "run_id": "20260920T021207Z-5fc5e9755036",
+      "scenario": "native-server-preset-controls"
+    },
+    {
+      "acceptance_target": {
+        "candidate_artifacts": {
+          "instances/lss-rig-client/minecraft/mods/lod-server-support-fabric.jar": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c",
+          "server/mods/lod-server-support-fabric.jar": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c"
+        },
+        "candidate_sha256": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c",
+        "candidate_target": "instances/lss-rig-client/minecraft/mods/lod-server-support-fabric.jar",
+        "fixture_artifacts": {},
+        "participant_profiles": {
+          "server": {
+            "id": "mc1211-fabric-server",
+            "profile_hash": "737fc992ba97dc2cdf559980e4cbad0fa7389a7b34e60e454100d872853972d1"
+          }
+        },
+        "profile_hash": "55683755e52eb8c92f992144db988edf7409e369322662bd9dc7d5c0d7a2e4f8",
+        "runtime_settings_sha256": "9173e520b0828bf2feaeb6aa9b30128a1df69622d4fa9efe0abc15b2a9923483",
+        "runtime_settings_version": 1,
+        "scenario_checker_sha256": "548c157ea67e0f12d1fdbcdcbee06360eb0ff49c1b025a463ac6653244ec56b8",
+        "scenario_hash": "08fb475f671dddb0d1ad412d947fcd45ac2645cde397b0b0c8e473757ead7066",
+        "scenario_version": 2
+      },
+      "feature": "ui-apply",
+      "group": "required42",
+      "id": "mc1211-fabric-modern--ui-apply",
+      "limitations": [
+        "Exact retained functional run and artifact identities only; no performance claim."
+      ],
+      "line": "1.21.1",
+      "profile_id": "mc1211-fabric-modern",
+      "record_path": "config/compatibility/validation/20260920T023146Z-414c502c3bf9-ui-apply.json",
+      "record_sha256": "d744ec5c3ae5975ef8781dd9f57ad9bf2276954b5d8d45cda3d81cee8c7a68ce",
+      "run_hash": "01b9529decb240b6cdfdd09acdd053331afe3eb1b4391c39b18270ab3c4ae3d8",
+      "run_id": "20260920T023146Z-414c502c3bf9",
+      "scenario": "ui-apply"
+    },
+    {
+      "acceptance_target": {
+        "candidate_artifacts": {
+          "instances/lss-rig-client/minecraft/mods/lod-server-support-fabric.jar": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c",
+          "server/mods/lod-server-support-fabric.jar": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c"
+        },
+        "candidate_sha256": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c",
+        "candidate_target": "instances/lss-rig-client/minecraft/mods/lod-server-support-fabric.jar",
+        "fixture_artifacts": {},
+        "participant_profiles": {
+          "server": {
+            "id": "mc1211-fabric-server",
+            "profile_hash": "737fc992ba97dc2cdf559980e4cbad0fa7389a7b34e60e454100d872853972d1"
+          }
+        },
+        "profile_hash": "ba08fcb6a09535012875e96e4a1d61e6acfa0c332b90846ff51aacc04502a76f",
+        "runtime_settings_sha256": "9173e520b0828bf2feaeb6aa9b30128a1df69622d4fa9efe0abc15b2a9923483",
+        "runtime_settings_version": 1,
+        "scenario_checker_sha256": "548c157ea67e0f12d1fdbcdcbee06360eb0ff49c1b025a463ac6653244ec56b8",
+        "scenario_hash": "08fb475f671dddb0d1ad412d947fcd45ac2645cde397b0b0c8e473757ead7066",
+        "scenario_version": 2
+      },
+      "feature": "ui-apply",
+      "group": "required42",
+      "id": "mc1211-fabric-legacy--ui-apply",
+      "limitations": [
+        "Exact retained functional run and artifact identities only; no performance claim."
+      ],
+      "line": "1.21.1",
+      "profile_id": "mc1211-fabric-legacy",
+      "record_path": "config/compatibility/validation/20260920T024111Z-4df2cfe2e347-ui-apply.json",
+      "record_sha256": "5069d6f7530d05a1aa345598ed812cf797b6c6acf5d29347fa0f2956d673abfc",
+      "run_hash": "70bf866df8fb81a8808d936653535e5ff6bce2d3c025abb18d363d0de259a243",
+      "run_id": "20260920T024111Z-4df2cfe2e347",
+      "scenario": "ui-apply"
+    },
+    {
+      "acceptance_target": {
+        "candidate_artifacts": {
+          "instances/lss-rig-client/minecraft/mods/lod-server-support-neoforge.jar": "8faa03c1b21416bbd54497f2f3ffc3e053ec2179ea65aad4be6fa10d78085fd1",
+          "server/mods/lod-server-support-fabric.jar": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c"
+        },
+        "candidate_sha256": "8faa03c1b21416bbd54497f2f3ffc3e053ec2179ea65aad4be6fa10d78085fd1",
+        "candidate_target": "instances/lss-rig-client/minecraft/mods/lod-server-support-neoforge.jar",
+        "fixture_artifacts": {},
+        "participant_profiles": {
+          "server": {
+            "id": "mc1211-fabric-server",
+            "profile_hash": "737fc992ba97dc2cdf559980e4cbad0fa7389a7b34e60e454100d872853972d1"
+          }
+        },
+        "profile_hash": "acab9724fe9f6e031ef0d39fe9256c1c81a4d82edd672f295408b503a6dbd0a3",
+        "runtime_settings_sha256": "6b28f8e56e75f8b1e8173b76c7d1bdbceaa18ed6dd0b6515538e50ec799890c0",
+        "runtime_settings_version": 1,
+        "scenario_checker_sha256": "88702d2e07a1ba61b13189893a5520d6eff7c685340a548561fd69fdd728d24a",
+        "scenario_hash": "08fb475f671dddb0d1ad412d947fcd45ac2645cde397b0b0c8e473757ead7066",
+        "scenario_version": 2
+      },
+      "feature": "ui-apply",
+      "group": "required42",
+      "id": "mc1211-neo-legacy-xaero--ui-apply",
+      "limitations": [
+        "Exact retained functional run and artifact identities only; no performance claim."
+      ],
+      "line": "1.21.1",
+      "profile_id": "mc1211-neo-legacy-xaero",
+      "record_path": "config/compatibility/validation/20260920T024616Z-5e9290553fb2-ui-apply.json",
+      "record_sha256": "76a8b37284d6a24d7741bc80869b399a78a5e3d402c3eb3e18406bcdd6b0a232",
+      "run_hash": "81ef43b113452d03ad7ecc257b2430d58e6f9dd1d7e97e609112042b26c141d5",
+      "run_id": "20260920T024616Z-5e9290553fb2",
+      "scenario": "ui-apply"
+    },
+    {
+      "acceptance_target": {
+        "candidate_artifacts": {
+          "instances/lss-rig-client/minecraft/mods/lod-server-support-neoforge.jar": "8faa03c1b21416bbd54497f2f3ffc3e053ec2179ea65aad4be6fa10d78085fd1",
+          "server/mods/lod-server-support-fabric.jar": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c"
+        },
+        "candidate_sha256": "8faa03c1b21416bbd54497f2f3ffc3e053ec2179ea65aad4be6fa10d78085fd1",
+        "candidate_target": "instances/lss-rig-client/minecraft/mods/lod-server-support-neoforge.jar",
+        "fixture_artifacts": {},
+        "participant_profiles": {
+          "server": {
+            "id": "mc1211-fabric-server",
+            "profile_hash": "737fc992ba97dc2cdf559980e4cbad0fa7389a7b34e60e454100d872853972d1"
+          }
+        },
+        "profile_hash": "62937fc0c53351ca1fbfa242d04c5d66ac4d16c9765708522340d3ee931bd881",
+        "runtime_settings_sha256": "6b28f8e56e75f8b1e8173b76c7d1bdbceaa18ed6dd0b6515538e50ec799890c0",
+        "runtime_settings_version": 1,
+        "scenario_checker_sha256": "88702d2e07a1ba61b13189893a5520d6eff7c685340a548561fd69fdd728d24a",
+        "scenario_hash": "08fb475f671dddb0d1ad412d947fcd45ac2645cde397b0b0c8e473757ead7066",
+        "scenario_version": 2
+      },
+      "feature": "ui-apply",
+      "group": "required42",
+      "id": "mc1211-neo-modern--ui-apply",
+      "limitations": [
+        "Exact retained functional run and artifact identities only; no performance claim."
+      ],
+      "line": "1.21.1",
+      "profile_id": "mc1211-neo-modern",
+      "record_path": "config/compatibility/validation/20260920T024929Z-49d6ded8ee12-ui-apply.json",
+      "record_sha256": "93157a93e62068d0588a056b1549dfc0746a72d70996c687bc9e75a183f56740",
+      "run_hash": "3403670763ac715d1c51937957fdb76dfd3726c3523cb6b6f25d1b9d37e4fc3a",
+      "run_id": "20260920T024929Z-49d6ded8ee12",
+      "scenario": "ui-apply"
+    },
+    {
+      "acceptance_target": {
+        "candidate_artifacts": {
+          "instances/lss-rig-client/minecraft/mods/lod-server-support-fabric.jar": "b1d4121d5dab5d90cf708e9db44a0d20d2528e4205d7a7d323f06e4fbea0245d",
+          "server/mods/lod-server-support-fabric.jar": "b1d4121d5dab5d90cf708e9db44a0d20d2528e4205d7a7d323f06e4fbea0245d"
+        },
+        "candidate_sha256": "b1d4121d5dab5d90cf708e9db44a0d20d2528e4205d7a7d323f06e4fbea0245d",
+        "candidate_target": "instances/lss-rig-client/minecraft/mods/lod-server-support-fabric.jar",
+        "fixture_artifacts": {},
+        "participant_profiles": {
+          "server": {
+            "id": "mc12110-fabric-server",
+            "profile_hash": "28da3f40a1e441614f502a41dff32937e35742b5a58c1d10bd90dacb65136e18"
+          }
+        },
+        "profile_hash": "4680972c8cfe0cb4febf1a59b9f109ad1f3ac4a571a571ad239a0e365bb730f2",
+        "runtime_settings_sha256": "2dcb1275081b4bfe6191da848612d46bff8ac9ede71afc4fd9e1462588b94931",
+        "runtime_settings_version": 1,
+        "scenario_checker_sha256": "88702d2e07a1ba61b13189893a5520d6eff7c685340a548561fd69fdd728d24a",
+        "scenario_hash": "08fb475f671dddb0d1ad412d947fcd45ac2645cde397b0b0c8e473757ead7066",
+        "scenario_version": 2
+      },
+      "feature": "ui-apply",
+      "group": "required42",
+      "id": "sibling-1.21.10-fabric--ui-apply",
+      "limitations": [
+        "Exact retained functional run and artifact identities only; no performance claim."
+      ],
+      "line": "1.21.10",
+      "profile_id": "mc12110-fabric-legacy",
+      "record_path": "config/compatibility/validation/20260920T025240Z-6044a39c9a94-ui-apply.json",
+      "record_sha256": "f9d6bd90a64b12ec1cec554ef130a597d4ecf33b43d1fbafa4847918c3c7a0b1",
+      "run_hash": "75ae0ebb411fc9e29426970f76cf0897efdb719402da76b345c7d0571079ac45",
+      "run_id": "20260920T025240Z-6044a39c9a94",
+      "scenario": "ui-apply"
+    },
+    {
+      "acceptance_target": {
+        "candidate_artifacts": {
+          "instances/lss-rig-client/minecraft/mods/lod-server-support-neoforge.jar": "f5dcb80bdca9103f4b046be933300837b54d7b2573b9b4664981354f1f216309",
+          "server/mods/lod-server-support-fabric.jar": "b1d4121d5dab5d90cf708e9db44a0d20d2528e4205d7a7d323f06e4fbea0245d"
+        },
+        "candidate_sha256": "f5dcb80bdca9103f4b046be933300837b54d7b2573b9b4664981354f1f216309",
+        "candidate_target": "instances/lss-rig-client/minecraft/mods/lod-server-support-neoforge.jar",
+        "fixture_artifacts": {},
+        "participant_profiles": {
+          "server": {
+            "id": "mc12110-fabric-server",
+            "profile_hash": "28da3f40a1e441614f502a41dff32937e35742b5a58c1d10bd90dacb65136e18"
+          }
+        },
+        "profile_hash": "80b3e7493476c2d8d73cb23ccf9971e0cb592a96141391042d6560f73df01d00",
+        "runtime_settings_sha256": "df007ec367fb33900385f0d27cfd43e55c0ef3ececfd4c8a3a510ad7a250fa1d",
+        "runtime_settings_version": 1,
+        "scenario_checker_sha256": "88702d2e07a1ba61b13189893a5520d6eff7c685340a548561fd69fdd728d24a",
+        "scenario_hash": "6a6219f6af7d90c0dccd415aeeb9420d81523920cd1b6c89dd6f200d9fbdd6c7",
+        "scenario_version": 2
+      },
+      "feature": "client-ui-no-consumer",
+      "group": "required42",
+      "id": "sibling-1.21.10-neoforge--ui-apply",
+      "limitations": [
+        "Exact retained functional run and artifact identities only; no performance claim."
+      ],
+      "line": "1.21.10",
+      "profile_id": "mc12110-neoforge-legacy",
+      "record_path": "config/compatibility/validation/20260920T025553Z-b859f593316b-client-ui-no-consumer.json",
+      "record_sha256": "6d23947abf6a0e2ad1d26200778af7cdc5d42f4c004636035bfd5e25d117679b",
+      "run_hash": "1509d8396eb342bc5f4867bc7c62b91f9836470c3a883ad06eee6a1a503db709",
+      "run_id": "20260920T025553Z-b859f593316b",
+      "scenario": "client-ui-no-consumer"
+    },
+    {
+      "acceptance_target": {
+        "candidate_artifacts": {
+          "instances/lss-rig-client/minecraft/mods/lod-server-support-fabric.jar": "04770ac9857022d307bdcdee299ab87ab8e507a795f06f3fd8569c3982ed2fe6",
+          "server/mods/lod-server-support-fabric.jar": "04770ac9857022d307bdcdee299ab87ab8e507a795f06f3fd8569c3982ed2fe6"
+        },
+        "candidate_sha256": "04770ac9857022d307bdcdee299ab87ab8e507a795f06f3fd8569c3982ed2fe6",
+        "candidate_target": "instances/lss-rig-client/minecraft/mods/lod-server-support-fabric.jar",
+        "fixture_artifacts": {},
+        "participant_profiles": {
+          "server": {
+            "id": "mc12111-fabric-server",
+            "profile_hash": "3dcbef1e4c9306820847aab10263bc8fbd6b37f3af5038e954ca5355ce50c8ac"
+          }
+        },
+        "profile_hash": "0366b3e6b9d0afeb2379a77397a79f24ad05653a18cbf0ec6ce52207065e22b4",
+        "runtime_settings_sha256": "8e00ab162190d227ec33b4b3606140386292d65f4bd7058202b47f3d411a6e6f",
+        "runtime_settings_version": 1,
+        "scenario_checker_sha256": "88702d2e07a1ba61b13189893a5520d6eff7c685340a548561fd69fdd728d24a",
+        "scenario_hash": "08fb475f671dddb0d1ad412d947fcd45ac2645cde397b0b0c8e473757ead7066",
+        "scenario_version": 2
+      },
+      "feature": "ui-apply",
+      "group": "required42",
+      "id": "sibling-1.21.11-fabric--ui-apply",
+      "limitations": [
+        "Exact retained functional run and artifact identities only; no performance claim."
+      ],
+      "line": "1.21.11",
+      "profile_id": "mc12111-fabric-modern",
+      "record_path": "config/compatibility/validation/20260920T025853Z-6992f848310b-ui-apply.json",
+      "record_sha256": "977b90990cbbb3ff043655b46c274331f3d013550cd2d7f5093984f6d69aaa8f",
+      "run_hash": "3c82eb014dc6907f44aa9e0be4cbf64a2acf49f34f9394435f0816ed47782f35",
+      "run_id": "20260920T025853Z-6992f848310b",
+      "scenario": "ui-apply"
+    },
+    {
+      "acceptance_target": {
+        "candidate_artifacts": {
+          "instances/lss-rig-client/minecraft/mods/lod-server-support-neoforge.jar": "fd68604915ca0e84b2af9789f3c87c2d5b3d6adb8ce218667d17ba41b94a884c",
+          "server/mods/lod-server-support-fabric.jar": "04770ac9857022d307bdcdee299ab87ab8e507a795f06f3fd8569c3982ed2fe6"
+        },
+        "candidate_sha256": "fd68604915ca0e84b2af9789f3c87c2d5b3d6adb8ce218667d17ba41b94a884c",
+        "candidate_target": "instances/lss-rig-client/minecraft/mods/lod-server-support-neoforge.jar",
+        "fixture_artifacts": {},
+        "participant_profiles": {
+          "server": {
+            "id": "mc12111-fabric-server",
+            "profile_hash": "3dcbef1e4c9306820847aab10263bc8fbd6b37f3af5038e954ca5355ce50c8ac"
+          }
+        },
+        "profile_hash": "730e6868d5a058ea7e93a973131faa88bf25ed80ff1ce8bca9ad695397ebd9f1",
+        "runtime_settings_sha256": "9bc238d8a424ab2389e7832342ba70b26188e0603c544e03b1801f38bff9e80b",
+        "runtime_settings_version": 1,
+        "scenario_checker_sha256": "88702d2e07a1ba61b13189893a5520d6eff7c685340a548561fd69fdd728d24a",
+        "scenario_hash": "6a6219f6af7d90c0dccd415aeeb9420d81523920cd1b6c89dd6f200d9fbdd6c7",
+        "scenario_version": 2
+      },
+      "feature": "client-ui-no-consumer",
+      "group": "required42",
+      "id": "sibling-1.21.11-neoforge--ui-apply",
+      "limitations": [
+        "Exact retained functional run and artifact identities only; no performance claim."
+      ],
+      "line": "1.21.11",
+      "profile_id": "mc12111-neoforge-modern",
+      "record_path": "config/compatibility/validation/20260920T030208Z-0292e950bf48-client-ui-no-consumer.json",
+      "record_sha256": "98185f16a7cb79d771d422d79a30a8e09556216a6785cbd42a2b8d6a5da89de3",
+      "run_hash": "2db359b60767c3c3651c6e2e3014377b60c407dfde83aa7f0edb96810e8ab869",
+      "run_id": "20260920T030208Z-0292e950bf48",
+      "scenario": "client-ui-no-consumer"
+    },
+    {
+      "acceptance_target": {
+        "candidate_artifacts": {
+          "instances/lss-rig-client/minecraft/mods/lod-server-support-fabric.jar": "f5bc3c0dcf1823d46437fc80c4f7d8896d32f458096ff8dbc09f9660e068feae",
+          "server/plugins/lod-server-support-paper.jar": "71af700ff64dc15f60b15a8d0d914c98e8379c1be477bf831069b4dcdc9e5ef3"
+        },
+        "candidate_sha256": "f5bc3c0dcf1823d46437fc80c4f7d8896d32f458096ff8dbc09f9660e068feae",
+        "candidate_target": "instances/lss-rig-client/minecraft/mods/lod-server-support-fabric.jar",
+        "fixture_artifacts": {},
+        "participant_profiles": {
+          "server": {
+            "id": "mc261-paper-modern",
+            "profile_hash": "23f375275e221dc51630bbe52eb2f62aa14298da89f04e3f6ccc7eba1d3d856d"
+          }
+        },
+        "profile_hash": "e17c17d79128de4d3169c1858216667196e0412f0438961ca7f42ef1e69b4dcc",
+        "runtime_settings_sha256": "de7236f2b6e4bc8906fb27dcf66654ca4c09476f8a3b3a2166f13b86aa8f28ea",
+        "runtime_settings_version": 1,
+        "scenario_checker_sha256": "88702d2e07a1ba61b13189893a5520d6eff7c685340a548561fd69fdd728d24a",
+        "scenario_hash": "08fb475f671dddb0d1ad412d947fcd45ac2645cde397b0b0c8e473757ead7066",
+        "scenario_version": 2
+      },
+      "feature": "ui-apply",
+      "group": "required42",
+      "id": "sibling-26.1-fabric--ui-apply",
+      "limitations": [
+        "Exact retained functional run and artifact identities only; no performance claim."
+      ],
+      "line": "26.1",
+      "profile_id": "mc261-fabric-modern",
+      "record_path": "config/compatibility/validation/20260920T030525Z-18dba2a74a18-ui-apply.json",
+      "record_sha256": "4949609ab20f8501815ee1294d7cc5dc2f308c2fd2384bcee09a23401ae6d6c5",
+      "run_hash": "dfd6ca074b3ff26277c7269103856870fcaf1e2676277b1f4190b54e61d9c390",
+      "run_id": "20260920T030525Z-18dba2a74a18",
+      "scenario": "ui-apply"
+    },
+    {
+      "acceptance_target": {
+        "candidate_artifacts": {
+          "instances/lss-rig-client/minecraft/mods/lod-server-support-neoforge.jar": "5572512d6f05c2842d3b3e2e9a6c654ef6f19754d0a10e29853ed7d16b8cfeae",
+          "server/plugins/lod-server-support-paper.jar": "71af700ff64dc15f60b15a8d0d914c98e8379c1be477bf831069b4dcdc9e5ef3"
+        },
+        "candidate_sha256": "5572512d6f05c2842d3b3e2e9a6c654ef6f19754d0a10e29853ed7d16b8cfeae",
+        "candidate_target": "instances/lss-rig-client/minecraft/mods/lod-server-support-neoforge.jar",
+        "fixture_artifacts": {},
+        "participant_profiles": {
+          "server": {
+            "id": "mc261-paper-modern",
+            "profile_hash": "23f375275e221dc51630bbe52eb2f62aa14298da89f04e3f6ccc7eba1d3d856d"
+          }
+        },
+        "profile_hash": "65efd08747dab7222435e6c09192a75b329496db9828ea290d17bf89057d6326",
+        "runtime_settings_sha256": "fdc8ad2b706e91d5f684cfc51f3376932cecc3519a66672b5038d3808a0d745d",
+        "runtime_settings_version": 1,
+        "scenario_checker_sha256": "88702d2e07a1ba61b13189893a5520d6eff7c685340a548561fd69fdd728d24a",
+        "scenario_hash": "6a6219f6af7d90c0dccd415aeeb9420d81523920cd1b6c89dd6f200d9fbdd6c7",
+        "scenario_version": 2
+      },
+      "feature": "client-ui-no-consumer",
+      "group": "required42",
+      "id": "sibling-26.1-neoforge--ui-apply",
+      "limitations": [
+        "Exact retained functional run and artifact identities only; no performance claim."
+      ],
+      "line": "26.1",
+      "profile_id": "mc261-neoforge-modern",
+      "record_path": "config/compatibility/validation/20260920T031212Z-970ebd0f58e8-client-ui-no-consumer.json",
+      "record_sha256": "906371dc0fa5028c0f9be86309cbfeb7d9ba6882d71fb4c627a0be09ea967fb3",
+      "run_hash": "edaa4ff5ba04d1e6461d91fd171540856e2571b65ace88919e5cc78c2bf5e962",
+      "run_id": "20260920T031212Z-970ebd0f58e8",
+      "scenario": "client-ui-no-consumer"
+    },
+    {
+      "acceptance_target": {
+        "candidate_artifacts": {
+          "instances/lss-rig-client/minecraft/mods/lod-server-support-fabric.jar": "cfb13bb52d8c94db42b357ac3e335f2548077bba6153e23dd5ddedf238ce89b1",
+          "server/plugins/lod-server-support-paper.jar": "98a090950229e53d8693fe93c821e15a5790f3e0e1aff7f35cdae41e5dea55d9"
+        },
+        "candidate_sha256": "cfb13bb52d8c94db42b357ac3e335f2548077bba6153e23dd5ddedf238ce89b1",
+        "candidate_target": "instances/lss-rig-client/minecraft/mods/lod-server-support-fabric.jar",
+        "fixture_artifacts": {},
+        "participant_profiles": {
+          "server": {
+            "id": "mc262-paper-modern",
+            "profile_hash": "555f599587fa3a84070d1ea4cdbb5c2fe9dacdc6d78fba2f2e513cf96f6f9cae"
+          }
+        },
+        "profile_hash": "9292831aa1760aa433b4937d7cc192fa2e882c1198a2c05d19d4a02f209983bb",
+        "runtime_settings_sha256": "230bab9b643bf1c14cd8ff96386592e35c236f5fdaf76a2a4a593d48c8cb7453",
+        "runtime_settings_version": 1,
+        "scenario_checker_sha256": "88702d2e07a1ba61b13189893a5520d6eff7c685340a548561fd69fdd728d24a",
+        "scenario_hash": "08fb475f671dddb0d1ad412d947fcd45ac2645cde397b0b0c8e473757ead7066",
+        "scenario_version": 2
+      },
+      "feature": "ui-apply",
+      "group": "required42",
+      "id": "sibling-26.2-fabric--ui-apply",
+      "limitations": [
+        "Exact retained functional run and artifact identities only; no performance claim."
+      ],
+      "line": "26.2",
+      "profile_id": "mc262-fabric-modern",
+      "record_path": "config/compatibility/validation/20260920T031523Z-2ebe138d6f73-ui-apply.json",
+      "record_sha256": "6cb1d305a30286c45dc8e038d94ac691c2c5f4187e22f4824af13e9dbae62709",
+      "run_hash": "2ecb90b82cda00728935908a49eede6a4a10301fbd6d3972b4bf246232f47e5f",
+      "run_id": "20260920T031523Z-2ebe138d6f73",
+      "scenario": "ui-apply"
+    },
+    {
+      "acceptance_target": {
+        "candidate_artifacts": {
+          "instances/lss-rig-client/minecraft/mods/lod-server-support-neoforge.jar": "21f4ca9082ba0b38873e28fc0c70aa0c8fe02dfc29b7f0ef153c96ad0b9a766e",
+          "server/plugins/lod-server-support-paper.jar": "98a090950229e53d8693fe93c821e15a5790f3e0e1aff7f35cdae41e5dea55d9"
+        },
+        "candidate_sha256": "21f4ca9082ba0b38873e28fc0c70aa0c8fe02dfc29b7f0ef153c96ad0b9a766e",
+        "candidate_target": "instances/lss-rig-client/minecraft/mods/lod-server-support-neoforge.jar",
+        "fixture_artifacts": {},
+        "participant_profiles": {
+          "server": {
+            "id": "mc262-paper-modern",
+            "profile_hash": "555f599587fa3a84070d1ea4cdbb5c2fe9dacdc6d78fba2f2e513cf96f6f9cae"
+          }
+        },
+        "profile_hash": "b209c1d0ce86fa185441793e6f6cc732438ba1fde8180d7484b330107057a56b",
+        "runtime_settings_sha256": "9420f8ec09c65dc850c4c8b0716aa28c7b52fd756702149a3a4f9d44b05155bf",
+        "runtime_settings_version": 1,
+        "scenario_checker_sha256": "88702d2e07a1ba61b13189893a5520d6eff7c685340a548561fd69fdd728d24a",
+        "scenario_hash": "08fb475f671dddb0d1ad412d947fcd45ac2645cde397b0b0c8e473757ead7066",
+        "scenario_version": 2
+      },
+      "feature": "ui-apply",
+      "group": "required42",
+      "id": "sibling-26.2-neoforge--ui-apply",
+      "limitations": [
+        "Exact retained functional run and artifact identities only; no performance claim."
+      ],
+      "line": "26.2",
+      "profile_id": "mc262-neoforge-modern",
+      "record_path": "config/compatibility/validation/20260920T031845Z-f60e4ddcb221-ui-apply.json",
+      "record_sha256": "20aaf03af31576ac3c57aecbb377eaf3236994d7b80c8ff82dbe18ed3dc1132a",
+      "run_hash": "b184c9ae1327f561473b0a4514b3cb992d12f26e5b7ab55004a210e6a30d8d94",
+      "run_id": "20260920T031845Z-f60e4ddcb221",
+      "scenario": "ui-apply"
+    },
+    {
+      "acceptance_target": {
+        "candidate_artifacts": {
+          "instances/lss-rig-client/minecraft/mods/lod-server-support-fabric.jar": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c",
+          "server/mods/lod-server-support-fabric.jar": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c"
+        },
+        "candidate_sha256": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c",
+        "candidate_target": "instances/lss-rig-client/minecraft/mods/lod-server-support-fabric.jar",
+        "fixture_artifacts": {},
+        "participant_profiles": {
+          "server": {
+            "id": "mc1211-fabric-server",
+            "profile_hash": "737fc992ba97dc2cdf559980e4cbad0fa7389a7b34e60e454100d872853972d1"
+          }
+        },
+        "profile_hash": "348875a6f682b8f672eefdb2fd17491e5fbca9efb8cdeeeb3902a66194dad4e0",
+        "runtime_settings_sha256": "ee66b3dbcbf332e425cb6477ae9dcefbb3b99eb776ee30c920a6e5694c7fb489",
+        "runtime_settings_version": 1,
+        "scenario_checker_sha256": "f8bd96cf25a3e1c1457706852e1a9381c11a27ec16181c2a96ca264229a16259",
+        "scenario_hash": "30ecb6d9f046651fa23ea843cc1fe343b26aa4a9d5eaeae4ba6138542041df79",
+        "scenario_version": 1
+      },
+      "feature": "client-standalone-preset-controls",
+      "group": "acceptance46-supplemental",
+      "id": "no-sodium:20260910T065412Z-8a9db3f8850c",
+      "limitations": [
+        "Standalone settings and preset controls with Xaero and without Sodium, Voxy or Connector; no renderer or performance acceptance."
+      ],
+      "line": "1.21.1",
+      "profile_id": "mc1211-fabric-xaero-no-sodium-controls",
+      "record_path": "config/compatibility/validation/20260920T032225Z-d40043cc53c3-client-standalone-preset-controls.json",
+      "record_sha256": "c9bbb7b504e6c8b0999fc1274c9db1e840f3901b1dcbcaf4dab1fde60fd21b0c",
+      "run_hash": "673c8a5aeb761d98186159dfe939520e5c1ed69af75939b8e8bb4730e6963c86",
+      "run_id": "20260920T032225Z-d40043cc53c3",
+      "scenario": "client-standalone-preset-controls"
+    },
+    {
+      "acceptance_target": {
+        "candidate_artifacts": {
+          "instances/lss-rig-client/minecraft/mods/lod-server-support-neoforge.jar": "8faa03c1b21416bbd54497f2f3ffc3e053ec2179ea65aad4be6fa10d78085fd1",
+          "server/mods/lod-server-support-fabric.jar": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c"
+        },
+        "candidate_sha256": "8faa03c1b21416bbd54497f2f3ffc3e053ec2179ea65aad4be6fa10d78085fd1",
+        "candidate_target": "instances/lss-rig-client/minecraft/mods/lod-server-support-neoforge.jar",
+        "fixture_artifacts": {},
+        "participant_profiles": {
+          "server": {
+            "id": "mc1211-fabric-server",
+            "profile_hash": "737fc992ba97dc2cdf559980e4cbad0fa7389a7b34e60e454100d872853972d1"
+          }
+        },
+        "profile_hash": "5e70384e8e5dbb5b60aeb47b5daf7358f22ae9639162b70b3ffd41e6b60b1142",
+        "runtime_settings_sha256": "14a8c726fac5907c518f3b6186825a1aba5bb71998737eef656aede3b78d0559",
+        "runtime_settings_version": 1,
+        "scenario_checker_sha256": "f8bd96cf25a3e1c1457706852e1a9381c11a27ec16181c2a96ca264229a16259",
+        "scenario_hash": "30ecb6d9f046651fa23ea843cc1fe343b26aa4a9d5eaeae4ba6138542041df79",
+        "scenario_version": 1
+      },
+      "feature": "client-standalone-preset-controls",
+      "group": "acceptance46-supplemental",
+      "id": "no-sodium:20260910T065732Z-dd60c1b54e8f",
+      "limitations": [
+        "Standalone settings and preset controls with Xaero and without Sodium, Voxy or Connector; no renderer or performance acceptance."
+      ],
+      "line": "1.21.1",
+      "profile_id": "mc1211-neoforge-xaero-no-sodium-controls",
+      "record_path": "config/compatibility/validation/20260920T032535Z-1ac3ce5ff80d-client-standalone-preset-controls.json",
+      "record_sha256": "9a665218f6356e48b1fe3971185636e70d72621779d7157074843fbe7e6b8517",
+      "run_hash": "791eef91f16a6e0d36bd755506f23ea99fc1948e6c6043e55e585b81548704c8",
+      "run_id": "20260920T032535Z-1ac3ce5ff80d",
+      "scenario": "client-standalone-preset-controls"
+    },
+    {
+      "acceptance_target": {
+        "candidate_artifacts": {
+          "instances/lss-rig-client/minecraft/mods/lod-server-support-fabric.jar": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c",
+          "server-replacement/mods/lod-server-support-fabric.jar": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c",
+          "server/mods/lod-server-support-fabric.jar": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c"
+        },
+        "candidate_sha256": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c",
+        "candidate_target": "instances/lss-rig-client/minecraft/mods/lod-server-support-fabric.jar",
+        "fixture_artifacts": {
+          "instances/lss-rig-client/minecraft/mods/lss-wi5-live-fixture-1.0.0-test-only.jar": "5d6dbe1b6a1022cc91b2447e95aaf04146c8e395c53eb2444686fd06b89a5307",
+          "server-replacement/mods/lss-wi6-transport-fixture-1.0.0-test-only.jar": "080863efe2811ab262b5ae3827c0c1beddf70ac5df22c3bb147108456d77d6a1",
+          "server/mods/lss-wi6-transport-fixture-1.0.0-test-only.jar": "080863efe2811ab262b5ae3827c0c1beddf70ac5df22c3bb147108456d77d6a1"
+        },
+        "participant_profiles": {
+          "server": {
+            "id": "mc1211-fabric-server",
+            "profile_hash": "737fc992ba97dc2cdf559980e4cbad0fa7389a7b34e60e454100d872853972d1"
+          }
+        },
+        "profile_hash": "ba08fcb6a09535012875e96e4a1d61e6acfa0c332b90846ff51aacc04502a76f",
+        "runtime_settings_sha256": "71eb8263d0f15441d42983c09e0b691b13ad7c72a94e921f047d7198e5ab14b2",
+        "runtime_settings_version": 1,
+        "scenario_checker_sha256": "14e656322ed728009007681351cf5ae23ad459b2e4bc6c814a3e42036fd10ef6",
+        "scenario_hash": "13e75f9deae1704ebba10316a39a58715dbac9412b6e0e5ca4858e55eef1d25a",
+        "scenario_version": 2
+      },
+      "feature": "receive-lifecycle",
+      "group": "required42",
+      "id": "mc1211-fabric-legacy--receive-lifecycle",
+      "limitations": [
+        "Exact retained functional run and artifact identities only; no performance claim."
+      ],
+      "line": "1.21.1",
+      "profile_id": "mc1211-fabric-legacy",
+      "record_path": "config/compatibility/validation/20260920T033053Z-2120627fe584-receive-lifecycle.json",
+      "record_sha256": "ca668d2d4d158d80011db9cce1eb933bae20588f79385b4e2f4e04f5e2efcdb1",
+      "run_hash": "16a2cf91bd520c99178c4fdf630bf800138a5e26ad6ac52769f1f499ebc2cc55",
+      "run_id": "20260920T033053Z-2120627fe584",
+      "scenario": "receive-lifecycle"
+    },
+    {
+      "acceptance_target": {
+        "candidate_artifacts": {
+          "instances/lss-rig-client/minecraft/mods/lod-server-support-fabric.jar": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c",
+          "server-replacement/mods/lod-server-support-fabric.jar": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c",
+          "server/mods/lod-server-support-fabric.jar": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c"
+        },
+        "candidate_sha256": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c",
+        "candidate_target": "instances/lss-rig-client/minecraft/mods/lod-server-support-fabric.jar",
+        "fixture_artifacts": {
+          "instances/lss-rig-client/minecraft/mods/lss-wi5-live-fixture-1.0.0-test-only.jar": "5d6dbe1b6a1022cc91b2447e95aaf04146c8e395c53eb2444686fd06b89a5307",
+          "server-replacement/mods/lss-wi6-transport-fixture-1.0.0-test-only.jar": "080863efe2811ab262b5ae3827c0c1beddf70ac5df22c3bb147108456d77d6a1",
+          "server/mods/lss-wi6-transport-fixture-1.0.0-test-only.jar": "080863efe2811ab262b5ae3827c0c1beddf70ac5df22c3bb147108456d77d6a1"
+        },
+        "participant_profiles": {
+          "server": {
+            "id": "mc1211-fabric-server",
+            "profile_hash": "737fc992ba97dc2cdf559980e4cbad0fa7389a7b34e60e454100d872853972d1"
+          }
+        },
+        "profile_hash": "55683755e52eb8c92f992144db988edf7409e369322662bd9dc7d5c0d7a2e4f8",
+        "runtime_settings_sha256": "71eb8263d0f15441d42983c09e0b691b13ad7c72a94e921f047d7198e5ab14b2",
+        "runtime_settings_version": 1,
+        "scenario_checker_sha256": "14e656322ed728009007681351cf5ae23ad459b2e4bc6c814a3e42036fd10ef6",
+        "scenario_hash": "13e75f9deae1704ebba10316a39a58715dbac9412b6e0e5ca4858e55eef1d25a",
+        "scenario_version": 2
+      },
+      "feature": "receive-lifecycle",
+      "group": "required42",
+      "id": "mc1211-fabric-modern--receive-lifecycle",
+      "limitations": [
+        "Exact retained functional run and artifact identities only; no performance claim."
+      ],
+      "line": "1.21.1",
+      "profile_id": "mc1211-fabric-modern",
+      "record_path": "config/compatibility/validation/20260920T033158Z-90fbfe2f6130-receive-lifecycle.json",
+      "record_sha256": "aa913b29bc4bcf2b98429e9fea4f284531201f432dec1ac1d4e06558a7c2921f",
+      "run_hash": "d7598e26a21118ee584e959d53456ded13bed4795ea4c33899875f437425357b",
+      "run_id": "20260920T033158Z-90fbfe2f6130",
+      "scenario": "receive-lifecycle"
+    },
+    {
+      "acceptance_target": {
+        "candidate_artifacts": {
+          "instances/lss-rig-client/minecraft/mods/lod-server-support-fabric.jar": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c",
+          "seated-target-a/mods/lod-server-support-fabric.jar": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c",
+          "seated-target-b/mods/lod-server-support-fabric.jar": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c",
+          "server/mods/lod-server-support-fabric.jar": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c"
+        },
+        "candidate_sha256": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c",
+        "candidate_target": "instances/lss-rig-client/minecraft/mods/lod-server-support-fabric.jar",
+        "fixture_artifacts": {
+          "instances/lss-rig-client/minecraft/mods/lss-wi5-live-fixture-1.0.0-test-only.jar": "5d6dbe1b6a1022cc91b2447e95aaf04146c8e395c53eb2444686fd06b89a5307",
+          "instances/lss-rig-client/minecraft/mods/lss-wi9-live-fixture-1.0.0-test-only.jar": "7dac4a1f064ba68f141823b643bef450ec44bf33ba491f2c72190a755d762f1f",
+          "seated-target-a/mods/lss-wi9-fixture.jar": "7dac4a1f064ba68f141823b643bef450ec44bf33ba491f2c72190a755d762f1f",
+          "seated-target-b/mods/lss-wi9-fixture.jar": "7dac4a1f064ba68f141823b643bef450ec44bf33ba491f2c72190a755d762f1f",
+          "server/mods/lss-wi6-transport-fixture-1.0.0-test-only.jar": "080863efe2811ab262b5ae3827c0c1beddf70ac5df22c3bb147108456d77d6a1"
+        },
+        "participant_profiles": {
+          "seated-target-a": {
+            "id": "mc1211-fabric-seated-subject",
+            "profile_hash": "514793efafe9d45e5d120fa4f7e705edb54bcbcfca99b242399c18806d129bd8"
+          },
+          "seated-target-b": {
+            "id": "mc1211-fabric-seated-subject",
+            "profile_hash": "514793efafe9d45e5d120fa4f7e705edb54bcbcfca99b242399c18806d129bd8"
+          },
+          "server": {
+            "id": "mc1211-fabric-server",
+            "profile_hash": "737fc992ba97dc2cdf559980e4cbad0fa7389a7b34e60e454100d872853972d1"
+          }
+        },
+        "profile_hash": "55683755e52eb8c92f992144db988edf7409e369322662bd9dc7d5c0d7a2e4f8",
+        "runtime_settings_sha256": "0a6da7886118911eba3d4a24a9f5e55016eb0405e4b63411d1e6bf4623b4cb51",
+        "runtime_settings_version": 1,
+        "scenario_checker_sha256": "306fe9d8b6c6b0445e27b344a4b48722a204f641deb25248b4a4637abc2ec6c8",
+        "scenario_hash": "cadfcf5a6f752de75f985362a872cdf7529fbfc5c11a3fc5356659d0bdfd82c5",
+        "scenario_version": 2
+      },
+      "feature": "send-admission",
+      "group": "required42",
+      "id": "mc1211-fabric-modern--send-admission",
+      "limitations": [
+        "Exact retained functional run and artifact identities only; no performance claim."
+      ],
+      "line": "1.21.1",
+      "profile_id": "mc1211-fabric-modern",
+      "record_path": "config/compatibility/validation/20260920T033306Z-b9d13e67c579-send-admission.json",
+      "record_sha256": "f49b338d1b97f10b5e2000767919de3b6d8d56d5b5594b7edb5bbfb209b57f67",
+      "run_hash": "8c9141fa0fde954c9655ddadad2b286fef850bd53aac63decc49d36c2861e3f2",
+      "run_id": "20260920T033306Z-b9d13e67c579",
+      "scenario": "send-admission"
+    },
+    {
+      "acceptance_target": {
+        "candidate_artifacts": {
+          "instances/lss-rig-client/minecraft/mods/lod-server-support-neoforge.jar": "8faa03c1b21416bbd54497f2f3ffc3e053ec2179ea65aad4be6fa10d78085fd1",
+          "server-replacement/mods/lod-server-support-fabric.jar": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c",
+          "server/mods/lod-server-support-fabric.jar": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c"
+        },
+        "candidate_sha256": "8faa03c1b21416bbd54497f2f3ffc3e053ec2179ea65aad4be6fa10d78085fd1",
+        "candidate_target": "instances/lss-rig-client/minecraft/mods/lod-server-support-neoforge.jar",
+        "fixture_artifacts": {
+          "instances/lss-rig-client/minecraft/mods/lss-wi5-live-fixture-1.0.0-test-only-neoforge-named.jar": "936f96d622b232855d2384a5c58b234340a7165d7441f61b1b0e9418f212dd6f",
+          "server-replacement/mods/lss-wi6-transport-fixture-1.0.0-test-only.jar": "080863efe2811ab262b5ae3827c0c1beddf70ac5df22c3bb147108456d77d6a1",
+          "server/mods/lss-wi6-transport-fixture-1.0.0-test-only.jar": "080863efe2811ab262b5ae3827c0c1beddf70ac5df22c3bb147108456d77d6a1"
+        },
+        "participant_profiles": {
+          "server": {
+            "id": "mc1211-fabric-server",
+            "profile_hash": "737fc992ba97dc2cdf559980e4cbad0fa7389a7b34e60e454100d872853972d1"
+          }
+        },
+        "profile_hash": "acab9724fe9f6e031ef0d39fe9256c1c81a4d82edd672f295408b503a6dbd0a3",
+        "runtime_settings_sha256": "12f5ff53abb2de6edcfe92e76c099ab744dc0a35ccb85296b0a41dda687ad0e2",
+        "runtime_settings_version": 1,
+        "scenario_checker_sha256": "14e656322ed728009007681351cf5ae23ad459b2e4bc6c814a3e42036fd10ef6",
+        "scenario_hash": "13e75f9deae1704ebba10316a39a58715dbac9412b6e0e5ca4858e55eef1d25a",
+        "scenario_version": 2
+      },
+      "feature": "receive-lifecycle",
+      "group": "required42",
+      "id": "mc1211-neo-legacy-xaero--receive-lifecycle",
+      "limitations": [
+        "Exact retained functional run and artifact identities only; no performance claim."
+      ],
+      "line": "1.21.1",
+      "profile_id": "mc1211-neo-legacy-xaero",
+      "record_path": "config/compatibility/validation/20260920T033411Z-336978ba1282-receive-lifecycle.json",
+      "record_sha256": "be6c0e6910c24c58ed8f0fa7dcffa9de1b0f948897494c836afb8f3a276acd6b",
+      "run_hash": "1289b82f08ee472e8bb6dd366b51184bceef7f52db3c19f6d5433d2b911fab51",
+      "run_id": "20260920T033411Z-336978ba1282",
+      "scenario": "receive-lifecycle"
+    },
+    {
+      "acceptance_target": {
+        "candidate_artifacts": {
+          "instances/lss-rig-client/minecraft/mods/lod-server-support-neoforge.jar": "8faa03c1b21416bbd54497f2f3ffc3e053ec2179ea65aad4be6fa10d78085fd1",
+          "server-replacement/mods/lod-server-support-fabric.jar": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c",
+          "server/mods/lod-server-support-fabric.jar": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c"
+        },
+        "candidate_sha256": "8faa03c1b21416bbd54497f2f3ffc3e053ec2179ea65aad4be6fa10d78085fd1",
+        "candidate_target": "instances/lss-rig-client/minecraft/mods/lod-server-support-neoforge.jar",
+        "fixture_artifacts": {
+          "instances/lss-rig-client/minecraft/mods/lss-wi5-live-fixture-1.0.0-test-only-neoforge-named.jar": "936f96d622b232855d2384a5c58b234340a7165d7441f61b1b0e9418f212dd6f",
+          "server-replacement/mods/lss-wi6-transport-fixture-1.0.0-test-only.jar": "080863efe2811ab262b5ae3827c0c1beddf70ac5df22c3bb147108456d77d6a1",
+          "server/mods/lss-wi6-transport-fixture-1.0.0-test-only.jar": "080863efe2811ab262b5ae3827c0c1beddf70ac5df22c3bb147108456d77d6a1"
+        },
+        "participant_profiles": {
+          "server": {
+            "id": "mc1211-fabric-server",
+            "profile_hash": "737fc992ba97dc2cdf559980e4cbad0fa7389a7b34e60e454100d872853972d1"
+          }
+        },
+        "profile_hash": "62937fc0c53351ca1fbfa242d04c5d66ac4d16c9765708522340d3ee931bd881",
+        "runtime_settings_sha256": "12f5ff53abb2de6edcfe92e76c099ab744dc0a35ccb85296b0a41dda687ad0e2",
+        "runtime_settings_version": 1,
+        "scenario_checker_sha256": "14e656322ed728009007681351cf5ae23ad459b2e4bc6c814a3e42036fd10ef6",
+        "scenario_hash": "13e75f9deae1704ebba10316a39a58715dbac9412b6e0e5ca4858e55eef1d25a",
+        "scenario_version": 2
+      },
+      "feature": "receive-lifecycle",
+      "group": "required42",
+      "id": "mc1211-neo-modern--receive-lifecycle",
+      "limitations": [
+        "Exact retained functional run and artifact identities only; no performance claim."
+      ],
+      "line": "1.21.1",
+      "profile_id": "mc1211-neo-modern",
+      "record_path": "config/compatibility/validation/20260920T033515Z-5a6dc1b8bc4e-receive-lifecycle.json",
+      "record_sha256": "5975fe4335ef9c7cbb1e9513e41ca816e8794e91a554538a8d4b673d9149d510",
+      "run_hash": "2ab5b2cf666dd538c91848ea65676e3503140ea486008870f374ea99a6d2a004",
+      "run_id": "20260920T033515Z-5a6dc1b8bc4e",
+      "scenario": "receive-lifecycle"
+    },
+    {
+      "acceptance_target": {
+        "candidate_artifacts": {
+          "instances/lss-rig-client/minecraft/mods/lod-server-support-neoforge.jar": "8faa03c1b21416bbd54497f2f3ffc3e053ec2179ea65aad4be6fa10d78085fd1",
+          "seated-target-a/mods/lod-server-support-fabric.jar": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c",
+          "seated-target-b/mods/lod-server-support-fabric.jar": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c",
+          "server/mods/lod-server-support-neoforge.jar": "8faa03c1b21416bbd54497f2f3ffc3e053ec2179ea65aad4be6fa10d78085fd1"
+        },
+        "candidate_sha256": "8faa03c1b21416bbd54497f2f3ffc3e053ec2179ea65aad4be6fa10d78085fd1",
+        "candidate_target": "instances/lss-rig-client/minecraft/mods/lod-server-support-neoforge.jar",
+        "fixture_artifacts": {
+          "instances/lss-rig-client/minecraft/mods/lss-wi5-live-fixture-1.0.0-test-only-neoforge-named.jar": "936f96d622b232855d2384a5c58b234340a7165d7441f61b1b0e9418f212dd6f",
+          "instances/lss-rig-client/minecraft/mods/lss-wi9-live-fixture-1.0.0-test-only-neoforge-named.jar": "6926c8fa5e506b2bf343e0657932681290b557a0ebfa8af2b9597b88d88e5d2c",
+          "seated-target-a/mods/lss-wi9-fixture.jar": "7dac4a1f064ba68f141823b643bef450ec44bf33ba491f2c72190a755d762f1f",
+          "seated-target-b/mods/lss-wi9-fixture.jar": "7dac4a1f064ba68f141823b643bef450ec44bf33ba491f2c72190a755d762f1f",
+          "server/mods/lss-wi6-transport-fixture-1.0.0-test-only-neoforge-named.jar": "1853d33706843ac0104d0f1e30eabbd7586b7bd59ed625e4e8e40d3e72536fe9"
+        },
+        "participant_profiles": {
+          "seated-target-a": {
+            "id": "mc1211-fabric-seated-subject",
+            "profile_hash": "514793efafe9d45e5d120fa4f7e705edb54bcbcfca99b242399c18806d129bd8"
+          },
+          "seated-target-b": {
+            "id": "mc1211-fabric-seated-subject",
+            "profile_hash": "514793efafe9d45e5d120fa4f7e705edb54bcbcfca99b242399c18806d129bd8"
+          },
+          "server": {
+            "id": "mc1211-neoforge-server",
+            "profile_hash": "beb02b17d3155332cc93c3587a1a33d8a40303185644e7022dfacf38f52c49d7"
+          }
+        },
+        "profile_hash": "62937fc0c53351ca1fbfa242d04c5d66ac4d16c9765708522340d3ee931bd881",
+        "runtime_settings_sha256": "d48f338cfd37dd7ea13fc6f46c53cb9a10d1cf380cd655cffb8d4eb318330349",
+        "runtime_settings_version": 1,
+        "scenario_checker_sha256": "306fe9d8b6c6b0445e27b344a4b48722a204f641deb25248b4a4637abc2ec6c8",
+        "scenario_hash": "cadfcf5a6f752de75f985362a872cdf7529fbfc5c11a3fc5356659d0bdfd82c5",
+        "scenario_version": 2
+      },
+      "feature": "send-admission",
+      "group": "required42",
+      "id": "mc1211-neo-modern--send-admission",
+      "limitations": [
+        "Exact retained functional run and artifact identities only; no performance claim."
+      ],
+      "line": "1.21.1",
+      "profile_id": "mc1211-neo-modern",
+      "record_path": "config/compatibility/validation/20260920T033625Z-ef6902b88e74-send-admission.json",
+      "record_sha256": "f20c44a8190cc4367416ea751d5c726bd15bebf07b4dfbef51be670d9c858735",
+      "run_hash": "b7f7359ba7f8df888c24b52dfeee310a19a3a06a0a67647f157bec41fa5d3ee2",
+      "run_id": "20260920T033625Z-ef6902b88e74",
+      "scenario": "send-admission"
+    },
+    {
+      "acceptance_target": {
+        "candidate_artifacts": {
+          "server/plugins/lod-server-support-paper.jar": "ce6ad3db4b31c1fc17adb6efc0fbc7e98392373f5f93496e57dbd81c05b663dd",
+          "smoke-first/mods/lod-server-support-fabric.jar": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c",
+          "smoke-second/mods/lod-server-support-fabric.jar": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c"
+        },
+        "candidate_sha256": "ce6ad3db4b31c1fc17adb6efc0fbc7e98392373f5f93496e57dbd81c05b663dd",
+        "candidate_target": "server/plugins/lod-server-support-paper.jar",
+        "fixture_artifacts": {
+          "smoke-first/mods/lss-server-smoke-client.jar": "6ac5ebdb85482aaed87ee1cb1c0305b9dd53914b051e159854afd33a682517e8",
+          "smoke-second/mods/lss-server-smoke-client.jar": "6ac5ebdb85482aaed87ee1cb1c0305b9dd53914b051e159854afd33a682517e8"
+        },
+        "participant_profiles": {
+          "server": {
+            "id": "mc1211-paper",
+            "profile_hash": "dc5f7e6bf9d19ab55be734ffed51c60a31b7872eeaf7a85db72cc0307d100234"
+          }
+        },
+        "profile_hash": "4c84dcca1a75b06d49ec1a4c2032e2b4bf451505c7bdfebddab55816d91e790d",
+        "runtime_settings_sha256": "e54ebbdd45fb310f31de1fbdcef4562c61238ea3a65851cf79da82021ac2a59c",
+        "runtime_settings_version": 1,
+        "scenario_checker_sha256": "b0945cfee824e0d5f34715dfd0c98cf35988a7c57e35db723b3f663fc2171500",
+        "scenario_hash": "729dae58b02b86fd6826bf2bc5506fbb74f3b6a4df89a64b0e877dda7a13a408",
+        "scenario_version": 2
+      },
+      "feature": "server-smoke",
+      "group": "required42",
+      "id": "mc1211-paper--server-smoke",
+      "limitations": [
+        "Exact retained functional run and artifact identities only; no performance claim."
+      ],
+      "line": "1.21.1",
+      "profile_id": "mc1211-native-smoke-client",
+      "record_path": "config/compatibility/validation/20260920T033732Z-29e4deea025b-server-smoke.json",
+      "record_sha256": "c325ae5c0ab343f0c126c3fa9ad188e5cb92892c37020654262e88738f70ad36",
+      "run_hash": "738228be0bcd33293f997f90a56f77d10faf9919cbcc7444a706be0beb8ee013",
+      "run_id": "20260920T033732Z-29e4deea025b",
+      "scenario": "server-smoke"
+    },
+    {
+      "acceptance_target": {
+        "candidate_artifacts": {
+          "server/mods/lod-server-support-fabric.jar": "b1d4121d5dab5d90cf708e9db44a0d20d2528e4205d7a7d323f06e4fbea0245d",
+          "smoke-first/mods/lod-server-support-fabric.jar": "b1d4121d5dab5d90cf708e9db44a0d20d2528e4205d7a7d323f06e4fbea0245d",
+          "smoke-second/mods/lod-server-support-fabric.jar": "b1d4121d5dab5d90cf708e9db44a0d20d2528e4205d7a7d323f06e4fbea0245d"
+        },
+        "candidate_sha256": "b1d4121d5dab5d90cf708e9db44a0d20d2528e4205d7a7d323f06e4fbea0245d",
+        "candidate_target": "server/mods/lod-server-support-fabric.jar",
+        "fixture_artifacts": {
+          "smoke-first/mods/lss-server-smoke-client.jar": "89497f24bed6c5b333b3d3b0599db3de3889e47f02d6712d48fcf7412de68bbc",
+          "smoke-second/mods/lss-server-smoke-client.jar": "89497f24bed6c5b333b3d3b0599db3de3889e47f02d6712d48fcf7412de68bbc"
+        },
+        "participant_profiles": {
+          "server": {
+            "id": "mc12110-fabric-server",
+            "profile_hash": "28da3f40a1e441614f502a41dff32937e35742b5a58c1d10bd90dacb65136e18"
+          }
+        },
+        "profile_hash": "d38a5df315044985e16a36bb5f4f2eb4726fbf45ef1e220e1a34da9fd697af8d",
+        "runtime_settings_sha256": "0ff21d01bac6241b7fc5fbc6fc9e64b40b4433fad94d4b8ca8ccf181c6e0a6d0",
+        "runtime_settings_version": 1,
+        "scenario_checker_sha256": "b0945cfee824e0d5f34715dfd0c98cf35988a7c57e35db723b3f663fc2171500",
+        "scenario_hash": "729dae58b02b86fd6826bf2bc5506fbb74f3b6a4df89a64b0e877dda7a13a408",
+        "scenario_version": 2
+      },
+      "feature": "server-smoke",
+      "group": "required42",
+      "id": "sibling-1.21.10-fabric--server-smoke",
+      "limitations": [
+        "Exact retained functional run and artifact identities only; no performance claim."
+      ],
+      "line": "1.21.10",
+      "profile_id": "mc12110-native-smoke-client",
+      "record_path": "config/compatibility/validation/20260920T033826Z-43a695805387-server-smoke.json",
+      "record_sha256": "c9b3f27592d240147512dbb3270324a1fd67ce3f0dfb95fdc72b00a5d3f89466",
+      "run_hash": "c8678cbd6a07f532798612d024c6d70f10e9c955946ca5de76815f96fc873c87",
+      "run_id": "20260920T033826Z-43a695805387",
+      "scenario": "server-smoke"
+    },
+    {
+      "acceptance_target": {
+        "candidate_artifacts": {
+          "server/mods/lod-server-support-neoforge.jar": "f5dcb80bdca9103f4b046be933300837b54d7b2573b9b4664981354f1f216309",
+          "smoke-first/mods/lod-server-support-fabric.jar": "b1d4121d5dab5d90cf708e9db44a0d20d2528e4205d7a7d323f06e4fbea0245d",
+          "smoke-second/mods/lod-server-support-fabric.jar": "b1d4121d5dab5d90cf708e9db44a0d20d2528e4205d7a7d323f06e4fbea0245d"
+        },
+        "candidate_sha256": "f5dcb80bdca9103f4b046be933300837b54d7b2573b9b4664981354f1f216309",
+        "candidate_target": "server/mods/lod-server-support-neoforge.jar",
+        "fixture_artifacts": {
+          "smoke-first/mods/lss-server-smoke-client.jar": "89497f24bed6c5b333b3d3b0599db3de3889e47f02d6712d48fcf7412de68bbc",
+          "smoke-second/mods/lss-server-smoke-client.jar": "89497f24bed6c5b333b3d3b0599db3de3889e47f02d6712d48fcf7412de68bbc"
+        },
+        "participant_profiles": {
+          "server": {
+            "id": "mc12110-neoforge-server-smoke",
+            "profile_hash": "3b9ee43ae3855a490409f2f749f9e82c9d5c995988aeb99b551c1bdf30dea972"
+          }
+        },
+        "profile_hash": "d38a5df315044985e16a36bb5f4f2eb4726fbf45ef1e220e1a34da9fd697af8d",
+        "runtime_settings_sha256": "f1e4a311970fb48437af911fb8a10164ee207a71eebb61c2af7179dcdf14fbb2",
+        "runtime_settings_version": 1,
+        "scenario_checker_sha256": "b0945cfee824e0d5f34715dfd0c98cf35988a7c57e35db723b3f663fc2171500",
+        "scenario_hash": "729dae58b02b86fd6826bf2bc5506fbb74f3b6a4df89a64b0e877dda7a13a408",
+        "scenario_version": 2
+      },
+      "feature": "server-smoke",
+      "group": "required42",
+      "id": "sibling-1.21.10-neoforge--server-smoke",
+      "limitations": [
+        "Exact retained functional run and artifact identities only; no performance claim."
+      ],
+      "line": "1.21.10",
+      "profile_id": "mc12110-native-smoke-client",
+      "record_path": "config/compatibility/validation/20260920T033921Z-e81a49ada1c6-server-smoke.json",
+      "record_sha256": "9e0477cb1c3bb130ee468281df71fca140a2b2529311b8fd52801ef47335f9a4",
+      "run_hash": "8777e104df337852335811252119bcb99d18a7d160ec0915fab35c5995f7f84f",
+      "run_id": "20260920T033921Z-e81a49ada1c6",
+      "scenario": "server-smoke"
+    },
+    {
+      "acceptance_target": {
+        "candidate_artifacts": {
+          "server/plugins/lod-server-support-paper.jar": "9b509cb444c82c5ccf6b9a7ed36df6dcfe66b7d824349acbf138faace9e964ef",
+          "smoke-first/mods/lod-server-support-fabric.jar": "b1d4121d5dab5d90cf708e9db44a0d20d2528e4205d7a7d323f06e4fbea0245d",
+          "smoke-second/mods/lod-server-support-fabric.jar": "b1d4121d5dab5d90cf708e9db44a0d20d2528e4205d7a7d323f06e4fbea0245d"
+        },
+        "candidate_sha256": "9b509cb444c82c5ccf6b9a7ed36df6dcfe66b7d824349acbf138faace9e964ef",
+        "candidate_target": "server/plugins/lod-server-support-paper.jar",
+        "fixture_artifacts": {
+          "smoke-first/mods/lss-server-smoke-client.jar": "89497f24bed6c5b333b3d3b0599db3de3889e47f02d6712d48fcf7412de68bbc",
+          "smoke-second/mods/lss-server-smoke-client.jar": "89497f24bed6c5b333b3d3b0599db3de3889e47f02d6712d48fcf7412de68bbc"
+        },
+        "participant_profiles": {
+          "server": {
+            "id": "mc12110-paper-legacy",
+            "profile_hash": "25164038d343304a7141b6a6abd72e10ba86908f074e92b25ba32f82fbb57b88"
+          }
+        },
+        "profile_hash": "d38a5df315044985e16a36bb5f4f2eb4726fbf45ef1e220e1a34da9fd697af8d",
+        "runtime_settings_sha256": "d5ad13d839cc1ccf3bd8b0f515c3733dbb161941e424bad9353a6b2fa5ed220b",
+        "runtime_settings_version": 1,
+        "scenario_checker_sha256": "b0945cfee824e0d5f34715dfd0c98cf35988a7c57e35db723b3f663fc2171500",
+        "scenario_hash": "729dae58b02b86fd6826bf2bc5506fbb74f3b6a4df89a64b0e877dda7a13a408",
+        "scenario_version": 2
+      },
+      "feature": "server-smoke",
+      "group": "required42",
+      "id": "sibling-1.21.10-paper--server-smoke",
+      "limitations": [
+        "Exact retained functional run and artifact identities only; no performance claim."
+      ],
+      "line": "1.21.10",
+      "profile_id": "mc12110-native-smoke-client",
+      "record_path": "config/compatibility/validation/20260920T034013Z-7daf47b84f7e-server-smoke.json",
+      "record_sha256": "a872867396ea900a58b375880150202522db8f46eabc4949a9b60d936e1d32fb",
+      "run_hash": "cf2b02af9b472a85ac1151bf571be1e8e3d3fced1d9ef783c973336ec0ee3f85",
+      "run_id": "20260920T034013Z-7daf47b84f7e",
+      "scenario": "server-smoke"
+    },
+    {
+      "acceptance_target": {
+        "candidate_artifacts": {
+          "server/mods/lod-server-support-fabric.jar": "04770ac9857022d307bdcdee299ab87ab8e507a795f06f3fd8569c3982ed2fe6",
+          "smoke-first/mods/lod-server-support-fabric.jar": "04770ac9857022d307bdcdee299ab87ab8e507a795f06f3fd8569c3982ed2fe6",
+          "smoke-second/mods/lod-server-support-fabric.jar": "04770ac9857022d307bdcdee299ab87ab8e507a795f06f3fd8569c3982ed2fe6"
+        },
+        "candidate_sha256": "04770ac9857022d307bdcdee299ab87ab8e507a795f06f3fd8569c3982ed2fe6",
+        "candidate_target": "server/mods/lod-server-support-fabric.jar",
+        "fixture_artifacts": {
+          "smoke-first/mods/lss-server-smoke-client.jar": "63aebaf6b1fc3b691b7ec3f283c8046aa9067b3dd379779510bca4f07b4867ea",
+          "smoke-second/mods/lss-server-smoke-client.jar": "63aebaf6b1fc3b691b7ec3f283c8046aa9067b3dd379779510bca4f07b4867ea"
+        },
+        "participant_profiles": {
+          "server": {
+            "id": "mc12111-fabric-server",
+            "profile_hash": "3dcbef1e4c9306820847aab10263bc8fbd6b37f3af5038e954ca5355ce50c8ac"
+          }
+        },
+        "profile_hash": "1063c477e26ded0a978b1e9bf64ef350208a4c91e232ef0cbf95a9ba67739cf6",
+        "runtime_settings_sha256": "4a3a533a4bdb2ce118172be3d27bedfc5a1421d1b1de96374b7b005d04b460d7",
+        "runtime_settings_version": 1,
+        "scenario_checker_sha256": "b0945cfee824e0d5f34715dfd0c98cf35988a7c57e35db723b3f663fc2171500",
+        "scenario_hash": "729dae58b02b86fd6826bf2bc5506fbb74f3b6a4df89a64b0e877dda7a13a408",
+        "scenario_version": 2
+      },
+      "feature": "server-smoke",
+      "group": "required42",
+      "id": "sibling-1.21.11-fabric--server-smoke",
+      "limitations": [
+        "Exact retained functional run and artifact identities only; no performance claim."
+      ],
+      "line": "1.21.11",
+      "profile_id": "mc12111-native-smoke-client",
+      "record_path": "config/compatibility/validation/20260920T034106Z-d96c3cc3ac37-server-smoke.json",
+      "record_sha256": "e515e4c9ac43d732c723daffe815e41570903255d6f5ea3bf602e9debb9a3a5c",
+      "run_hash": "f82861ba0ea89ce00cc3b68bcab5afa9d23a6d984ce1925f80c55c9dbd960096",
+      "run_id": "20260920T034106Z-d96c3cc3ac37",
+      "scenario": "server-smoke"
+    },
+    {
+      "acceptance_target": {
+        "candidate_artifacts": {
+          "server/mods/lod-server-support-neoforge.jar": "fd68604915ca0e84b2af9789f3c87c2d5b3d6adb8ce218667d17ba41b94a884c",
+          "smoke-first/mods/lod-server-support-fabric.jar": "04770ac9857022d307bdcdee299ab87ab8e507a795f06f3fd8569c3982ed2fe6",
+          "smoke-second/mods/lod-server-support-fabric.jar": "04770ac9857022d307bdcdee299ab87ab8e507a795f06f3fd8569c3982ed2fe6"
+        },
+        "candidate_sha256": "fd68604915ca0e84b2af9789f3c87c2d5b3d6adb8ce218667d17ba41b94a884c",
+        "candidate_target": "server/mods/lod-server-support-neoforge.jar",
+        "fixture_artifacts": {
+          "smoke-first/mods/lss-server-smoke-client.jar": "63aebaf6b1fc3b691b7ec3f283c8046aa9067b3dd379779510bca4f07b4867ea",
+          "smoke-second/mods/lss-server-smoke-client.jar": "63aebaf6b1fc3b691b7ec3f283c8046aa9067b3dd379779510bca4f07b4867ea"
+        },
+        "participant_profiles": {
+          "server": {
+            "id": "mc12111-neoforge-server-smoke",
+            "profile_hash": "784e1690929e0c217366efd75af99efcfd1807b9c1e3767fd2eecb841526a030"
+          }
+        },
+        "profile_hash": "1063c477e26ded0a978b1e9bf64ef350208a4c91e232ef0cbf95a9ba67739cf6",
+        "runtime_settings_sha256": "af8c89ef37b79bb80f84d6673e980e75815544658f7ccf59e230ff892ea86ccb",
+        "runtime_settings_version": 1,
+        "scenario_checker_sha256": "b0945cfee824e0d5f34715dfd0c98cf35988a7c57e35db723b3f663fc2171500",
+        "scenario_hash": "729dae58b02b86fd6826bf2bc5506fbb74f3b6a4df89a64b0e877dda7a13a408",
+        "scenario_version": 2
+      },
+      "feature": "server-smoke",
+      "group": "required42",
+      "id": "sibling-1.21.11-neoforge--server-smoke",
+      "limitations": [
+        "Exact retained functional run and artifact identities only; no performance claim."
+      ],
+      "line": "1.21.11",
+      "profile_id": "mc12111-native-smoke-client",
+      "record_path": "config/compatibility/validation/20260920T034201Z-2dbc805a213b-server-smoke.json",
+      "record_sha256": "47add7b0ff094a1d3bb613fe9c8c2524eff6d77c9e1dc3859455db41d6e67b56",
+      "run_hash": "806b509efb8bb6089dc5320082a7237b54ae785080db439727e5d4ea586f959c",
+      "run_id": "20260920T034201Z-2dbc805a213b",
+      "scenario": "server-smoke"
+    },
+    {
+      "acceptance_target": {
+        "candidate_artifacts": {
+          "server/plugins/lod-server-support-paper.jar": "131c6d618d3ff40bb84dcf3683bdf0438759980ad63cc0cbe0edf441e7562a6e",
+          "smoke-first/mods/lod-server-support-fabric.jar": "04770ac9857022d307bdcdee299ab87ab8e507a795f06f3fd8569c3982ed2fe6",
+          "smoke-second/mods/lod-server-support-fabric.jar": "04770ac9857022d307bdcdee299ab87ab8e507a795f06f3fd8569c3982ed2fe6"
+        },
+        "candidate_sha256": "131c6d618d3ff40bb84dcf3683bdf0438759980ad63cc0cbe0edf441e7562a6e",
+        "candidate_target": "server/plugins/lod-server-support-paper.jar",
+        "fixture_artifacts": {
+          "smoke-first/mods/lss-server-smoke-client.jar": "63aebaf6b1fc3b691b7ec3f283c8046aa9067b3dd379779510bca4f07b4867ea",
+          "smoke-second/mods/lss-server-smoke-client.jar": "63aebaf6b1fc3b691b7ec3f283c8046aa9067b3dd379779510bca4f07b4867ea"
+        },
+        "participant_profiles": {
+          "server": {
+            "id": "mc12111-paper-modern",
+            "profile_hash": "17187438740ce86ee724e65486e3a076622eeea9ff2c9153f8f1645b72b76f08"
+          }
+        },
+        "profile_hash": "1063c477e26ded0a978b1e9bf64ef350208a4c91e232ef0cbf95a9ba67739cf6",
+        "runtime_settings_sha256": "10ad83c8711b305288742e319e26f46ecebdfdda8676cc7ad41d22bf5d3c9129",
+        "runtime_settings_version": 1,
+        "scenario_checker_sha256": "b0945cfee824e0d5f34715dfd0c98cf35988a7c57e35db723b3f663fc2171500",
+        "scenario_hash": "729dae58b02b86fd6826bf2bc5506fbb74f3b6a4df89a64b0e877dda7a13a408",
+        "scenario_version": 2
+      },
+      "feature": "server-smoke",
+      "group": "required42",
+      "id": "sibling-1.21.11-paper--server-smoke",
+      "limitations": [
+        "Exact retained functional run and artifact identities only; no performance claim."
+      ],
+      "line": "1.21.11",
+      "profile_id": "mc12111-native-smoke-client",
+      "record_path": "config/compatibility/validation/20260920T034253Z-a3d38547fff5-server-smoke.json",
+      "record_sha256": "73b21c573828394adcc1046008715dd24c3b785fed548e7f1110644f21444d9b",
+      "run_hash": "816532f94d38c5f68a08332e2123221754047f36f4aef76e64756c7cac1c6e1f",
+      "run_id": "20260920T034253Z-a3d38547fff5",
+      "scenario": "server-smoke"
+    },
+    {
+      "acceptance_target": {
+        "candidate_artifacts": {
+          "server/mods/lod-server-support-fabric.jar": "f5bc3c0dcf1823d46437fc80c4f7d8896d32f458096ff8dbc09f9660e068feae",
+          "smoke-first/mods/lod-server-support-fabric.jar": "f5bc3c0dcf1823d46437fc80c4f7d8896d32f458096ff8dbc09f9660e068feae",
+          "smoke-second/mods/lod-server-support-fabric.jar": "f5bc3c0dcf1823d46437fc80c4f7d8896d32f458096ff8dbc09f9660e068feae"
+        },
+        "candidate_sha256": "f5bc3c0dcf1823d46437fc80c4f7d8896d32f458096ff8dbc09f9660e068feae",
+        "candidate_target": "server/mods/lod-server-support-fabric.jar",
+        "fixture_artifacts": {
+          "smoke-first/mods/lss-server-smoke-client.jar": "efcc4a92956482573fe65bb018ca7e113061f056458142fd4667d9179d8a68b6",
+          "smoke-second/mods/lss-server-smoke-client.jar": "efcc4a92956482573fe65bb018ca7e113061f056458142fd4667d9179d8a68b6"
+        },
+        "participant_profiles": {
+          "server": {
+            "id": "mc261-fabric-server",
+            "profile_hash": "323b67a8fc891126e529f8387e6ba62bf4b38253c1ecba0e3205359800cd35de"
+          }
+        },
+        "profile_hash": "987e8413fc5983c44409e3eac8f64b7525a920bd1d871aff3fa04f53c33ad623",
+        "runtime_settings_sha256": "50a2d63d2cf187e6bf97578d0b79b740567ef3157742c304218d8e0595e717cd",
+        "runtime_settings_version": 1,
+        "scenario_checker_sha256": "b0945cfee824e0d5f34715dfd0c98cf35988a7c57e35db723b3f663fc2171500",
+        "scenario_hash": "729dae58b02b86fd6826bf2bc5506fbb74f3b6a4df89a64b0e877dda7a13a408",
+        "scenario_version": 2
+      },
+      "feature": "server-smoke",
+      "group": "required42",
+      "id": "sibling-26.1-fabric--server-smoke",
+      "limitations": [
+        "Exact retained functional run and artifact identities only; no performance claim."
+      ],
+      "line": "26.1",
+      "profile_id": "mc261-native-smoke-client",
+      "record_path": "config/compatibility/validation/20260920T034843Z-082afc602862-server-smoke.json",
+      "record_sha256": "71e162792cbe46d98caac510fa4f5fa0a0b558fd286144066644820fc69b865b",
+      "run_hash": "3d4f8600c733ae04c836b8cb532807e712cb140ab0111fa064ac71083fe9bcbb",
+      "run_id": "20260920T034843Z-082afc602862",
+      "scenario": "server-smoke"
+    },
+    {
+      "acceptance_target": {
+        "candidate_artifacts": {
+          "server/mods/lod-server-support-neoforge.jar": "5572512d6f05c2842d3b3e2e9a6c654ef6f19754d0a10e29853ed7d16b8cfeae",
+          "smoke-first/mods/lod-server-support-fabric.jar": "f5bc3c0dcf1823d46437fc80c4f7d8896d32f458096ff8dbc09f9660e068feae",
+          "smoke-second/mods/lod-server-support-fabric.jar": "f5bc3c0dcf1823d46437fc80c4f7d8896d32f458096ff8dbc09f9660e068feae"
+        },
+        "candidate_sha256": "5572512d6f05c2842d3b3e2e9a6c654ef6f19754d0a10e29853ed7d16b8cfeae",
+        "candidate_target": "server/mods/lod-server-support-neoforge.jar",
+        "fixture_artifacts": {
+          "smoke-first/mods/lss-server-smoke-client.jar": "efcc4a92956482573fe65bb018ca7e113061f056458142fd4667d9179d8a68b6",
+          "smoke-second/mods/lss-server-smoke-client.jar": "efcc4a92956482573fe65bb018ca7e113061f056458142fd4667d9179d8a68b6"
+        },
+        "participant_profiles": {
+          "server": {
+            "id": "mc261-neoforge-server-smoke",
+            "profile_hash": "222124b7d969fc5bb793be8ce5f7b62a9c1dcc123e28e92add4f76527cee9954"
+          }
+        },
+        "profile_hash": "987e8413fc5983c44409e3eac8f64b7525a920bd1d871aff3fa04f53c33ad623",
+        "runtime_settings_sha256": "b801bc2fa987e87ad0a1de444d529f0a612ce8045af0d1e2293ece5f64e31b93",
+        "runtime_settings_version": 1,
+        "scenario_checker_sha256": "b0945cfee824e0d5f34715dfd0c98cf35988a7c57e35db723b3f663fc2171500",
+        "scenario_hash": "729dae58b02b86fd6826bf2bc5506fbb74f3b6a4df89a64b0e877dda7a13a408",
+        "scenario_version": 2
+      },
+      "feature": "server-smoke",
+      "group": "required42",
+      "id": "sibling-26.1-neoforge--server-smoke",
+      "limitations": [
+        "Exact retained functional run and artifact identities only; no performance claim."
+      ],
+      "line": "26.1",
+      "profile_id": "mc261-native-smoke-client",
+      "record_path": "config/compatibility/validation/20260920T034928Z-0200e1a3f501-server-smoke.json",
+      "record_sha256": "43c35172369f963adc795bf6500aa44996163df29d366881340c28bfd60dcc89",
+      "run_hash": "fd6089e54a542ff8b0556e43c3c7894cc414f88186914205992360f799bf95cc",
+      "run_id": "20260920T034928Z-0200e1a3f501",
+      "scenario": "server-smoke"
+    },
+    {
+      "acceptance_target": {
+        "candidate_artifacts": {
+          "server/plugins/lod-server-support-paper.jar": "71af700ff64dc15f60b15a8d0d914c98e8379c1be477bf831069b4dcdc9e5ef3",
+          "smoke-first/mods/lod-server-support-fabric.jar": "f5bc3c0dcf1823d46437fc80c4f7d8896d32f458096ff8dbc09f9660e068feae",
+          "smoke-second/mods/lod-server-support-fabric.jar": "f5bc3c0dcf1823d46437fc80c4f7d8896d32f458096ff8dbc09f9660e068feae"
+        },
+        "candidate_sha256": "71af700ff64dc15f60b15a8d0d914c98e8379c1be477bf831069b4dcdc9e5ef3",
+        "candidate_target": "server/plugins/lod-server-support-paper.jar",
+        "fixture_artifacts": {
+          "smoke-first/mods/lss-server-smoke-client.jar": "efcc4a92956482573fe65bb018ca7e113061f056458142fd4667d9179d8a68b6",
+          "smoke-second/mods/lss-server-smoke-client.jar": "efcc4a92956482573fe65bb018ca7e113061f056458142fd4667d9179d8a68b6"
+        },
+        "participant_profiles": {
+          "server": {
+            "id": "mc261-paper-modern",
+            "profile_hash": "23f375275e221dc51630bbe52eb2f62aa14298da89f04e3f6ccc7eba1d3d856d"
+          }
+        },
+        "profile_hash": "987e8413fc5983c44409e3eac8f64b7525a920bd1d871aff3fa04f53c33ad623",
+        "runtime_settings_sha256": "559d26c8af68ffc822cf96e08dc5b887485db06e6cfd73e06dac1cfb02a707f1",
+        "runtime_settings_version": 1,
+        "scenario_checker_sha256": "b0945cfee824e0d5f34715dfd0c98cf35988a7c57e35db723b3f663fc2171500",
+        "scenario_hash": "729dae58b02b86fd6826bf2bc5506fbb74f3b6a4df89a64b0e877dda7a13a408",
+        "scenario_version": 2
+      },
+      "feature": "server-smoke",
+      "group": "required42",
+      "id": "sibling-26.1-paper--server-smoke",
+      "limitations": [
+        "Exact retained functional run and artifact identities only; no performance claim."
+      ],
+      "line": "26.1",
+      "profile_id": "mc261-native-smoke-client",
+      "record_path": "config/compatibility/validation/20260920T035013Z-ecd8bc7e8d51-server-smoke.json",
+      "record_sha256": "6babc1b6ac147a0376058c7467e680ecedd344b96ded041de8ecf836b74f7360",
+      "run_hash": "98cd12962d50ecc05578cd3f12ecafb3c22262a97b19412e481ae3f23a99ca82",
+      "run_id": "20260920T035013Z-ecd8bc7e8d51",
+      "scenario": "server-smoke"
+    },
+    {
+      "acceptance_target": {
+        "candidate_artifacts": {
+          "server/mods/lod-server-support-fabric.jar": "cfb13bb52d8c94db42b357ac3e335f2548077bba6153e23dd5ddedf238ce89b1",
+          "smoke-first/mods/lod-server-support-fabric.jar": "cfb13bb52d8c94db42b357ac3e335f2548077bba6153e23dd5ddedf238ce89b1",
+          "smoke-second/mods/lod-server-support-fabric.jar": "cfb13bb52d8c94db42b357ac3e335f2548077bba6153e23dd5ddedf238ce89b1"
+        },
+        "candidate_sha256": "cfb13bb52d8c94db42b357ac3e335f2548077bba6153e23dd5ddedf238ce89b1",
+        "candidate_target": "server/mods/lod-server-support-fabric.jar",
+        "fixture_artifacts": {
+          "smoke-first/mods/lss-server-smoke-client.jar": "393eafab9da2f553dd65d2670aa48ea104564fcec2b919d7ff67eebde005b886",
+          "smoke-second/mods/lss-server-smoke-client.jar": "393eafab9da2f553dd65d2670aa48ea104564fcec2b919d7ff67eebde005b886"
+        },
+        "participant_profiles": {
+          "server": {
+            "id": "mc262-fabric-server",
+            "profile_hash": "bf71c648b0f7183447122d78754a85cfbd7480f426ef38f3145e0adb66d1d921"
+          }
+        },
+        "profile_hash": "b787daa39857ab2befcd6930d7feacacc4c57255c45d8a1f4acff7c07b06a45e",
+        "runtime_settings_sha256": "f58e963be46a2c76e7d8cf2f14e68cf9ce0497d0b9db78e5e0d1857626c2f745",
+        "runtime_settings_version": 1,
+        "scenario_checker_sha256": "b0945cfee824e0d5f34715dfd0c98cf35988a7c57e35db723b3f663fc2171500",
+        "scenario_hash": "729dae58b02b86fd6826bf2bc5506fbb74f3b6a4df89a64b0e877dda7a13a408",
+        "scenario_version": 2
+      },
+      "feature": "server-smoke",
+      "group": "required42",
+      "id": "sibling-26.2-fabric--server-smoke",
+      "limitations": [
+        "Exact retained functional run and artifact identities only; no performance claim."
+      ],
+      "line": "26.2",
+      "profile_id": "mc262-native-smoke-client",
+      "record_path": "config/compatibility/validation/20260920T035058Z-a436f7567600-server-smoke.json",
+      "record_sha256": "50ba5b2ec2cb5fee0c53085e71840f5f08373fd32015f878c647ef2ecc29640d",
+      "run_hash": "3455bf9874e7701d364c4ecc48a3aea563981dc690aea89d970b71239c1d0b8e",
+      "run_id": "20260920T035058Z-a436f7567600",
+      "scenario": "server-smoke"
+    },
+    {
+      "acceptance_target": {
+        "candidate_artifacts": {
+          "server/mods/lod-server-support-neoforge.jar": "21f4ca9082ba0b38873e28fc0c70aa0c8fe02dfc29b7f0ef153c96ad0b9a766e",
+          "smoke-first/mods/lod-server-support-fabric.jar": "cfb13bb52d8c94db42b357ac3e335f2548077bba6153e23dd5ddedf238ce89b1",
+          "smoke-second/mods/lod-server-support-fabric.jar": "cfb13bb52d8c94db42b357ac3e335f2548077bba6153e23dd5ddedf238ce89b1"
+        },
+        "candidate_sha256": "21f4ca9082ba0b38873e28fc0c70aa0c8fe02dfc29b7f0ef153c96ad0b9a766e",
+        "candidate_target": "server/mods/lod-server-support-neoforge.jar",
+        "fixture_artifacts": {
+          "smoke-first/mods/lss-server-smoke-client.jar": "393eafab9da2f553dd65d2670aa48ea104564fcec2b919d7ff67eebde005b886",
+          "smoke-second/mods/lss-server-smoke-client.jar": "393eafab9da2f553dd65d2670aa48ea104564fcec2b919d7ff67eebde005b886"
+        },
+        "participant_profiles": {
+          "server": {
+            "id": "mc262-neoforge-server-smoke",
+            "profile_hash": "0102ea8f651397c54cf6eb2fcc10551508f3d7b2c5db7809aa45d95c67864d8a"
+          }
+        },
+        "profile_hash": "b787daa39857ab2befcd6930d7feacacc4c57255c45d8a1f4acff7c07b06a45e",
+        "runtime_settings_sha256": "be9458dd25b54e9798a94e1ba0b957989038bf5f39b6b0f2908d4a94f3be1a13",
+        "runtime_settings_version": 1,
+        "scenario_checker_sha256": "b0945cfee824e0d5f34715dfd0c98cf35988a7c57e35db723b3f663fc2171500",
+        "scenario_hash": "729dae58b02b86fd6826bf2bc5506fbb74f3b6a4df89a64b0e877dda7a13a408",
+        "scenario_version": 2
+      },
+      "feature": "server-smoke",
+      "group": "required42",
+      "id": "sibling-26.2-neoforge--server-smoke",
+      "limitations": [
+        "Exact retained functional run and artifact identities only; no performance claim."
+      ],
+      "line": "26.2",
+      "profile_id": "mc262-native-smoke-client",
+      "record_path": "config/compatibility/validation/20260920T035143Z-8d92d685ec2a-server-smoke.json",
+      "record_sha256": "f1d4f3137354c32e5dd9d23df80cb4971496b2aa6805366251a29bb73fff1a5b",
+      "run_hash": "43c98f85eaa45fd8508cc06791003239e3d5b3bb5f64af74e471b4b7a0245376",
+      "run_id": "20260920T035143Z-8d92d685ec2a",
+      "scenario": "server-smoke"
+    },
+    {
+      "acceptance_target": {
+        "candidate_artifacts": {
+          "server/plugins/lod-server-support-paper.jar": "98a090950229e53d8693fe93c821e15a5790f3e0e1aff7f35cdae41e5dea55d9",
+          "smoke-first/mods/lod-server-support-fabric.jar": "cfb13bb52d8c94db42b357ac3e335f2548077bba6153e23dd5ddedf238ce89b1",
+          "smoke-second/mods/lod-server-support-fabric.jar": "cfb13bb52d8c94db42b357ac3e335f2548077bba6153e23dd5ddedf238ce89b1"
+        },
+        "candidate_sha256": "98a090950229e53d8693fe93c821e15a5790f3e0e1aff7f35cdae41e5dea55d9",
+        "candidate_target": "server/plugins/lod-server-support-paper.jar",
+        "fixture_artifacts": {
+          "smoke-first/mods/lss-server-smoke-client.jar": "393eafab9da2f553dd65d2670aa48ea104564fcec2b919d7ff67eebde005b886",
+          "smoke-second/mods/lss-server-smoke-client.jar": "393eafab9da2f553dd65d2670aa48ea104564fcec2b919d7ff67eebde005b886"
+        },
+        "participant_profiles": {
+          "server": {
+            "id": "mc262-paper-modern",
+            "profile_hash": "555f599587fa3a84070d1ea4cdbb5c2fe9dacdc6d78fba2f2e513cf96f6f9cae"
+          }
+        },
+        "profile_hash": "b787daa39857ab2befcd6930d7feacacc4c57255c45d8a1f4acff7c07b06a45e",
+        "runtime_settings_sha256": "9704d67e980c7048bd488d4a6f14834620ee04affaecf737879f30bb05e44319",
+        "runtime_settings_version": 1,
+        "scenario_checker_sha256": "b0945cfee824e0d5f34715dfd0c98cf35988a7c57e35db723b3f663fc2171500",
+        "scenario_hash": "729dae58b02b86fd6826bf2bc5506fbb74f3b6a4df89a64b0e877dda7a13a408",
+        "scenario_version": 2
+      },
+      "feature": "server-smoke",
+      "group": "required42",
+      "id": "sibling-26.2-paper--server-smoke",
+      "limitations": [
+        "Exact retained functional run and artifact identities only; no performance claim."
+      ],
+      "line": "26.2",
+      "profile_id": "mc262-native-smoke-client",
+      "record_path": "config/compatibility/validation/20260920T035229Z-9fe471bc4df1-server-smoke.json",
+      "record_sha256": "5d282e14106a4c537d0e588a72542f9180e28613f5fc1131dcb7a314ad6c7450",
+      "run_hash": "2e3370f5577b64b728d5454ebb4f29227f723eedfefefe4f1fd7d404a068f15c",
+      "run_id": "20260920T035229Z-9fe471bc4df1",
+      "scenario": "server-smoke"
+    },
+    {
+      "acceptance_target": {
+        "candidate_artifacts": {
+          "instances/lss-rig-client/minecraft/mods/lod-server-support-fabric.jar": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c",
+          "server/mods/lod-server-support-fabric.jar": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c"
+        },
+        "candidate_sha256": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c",
+        "candidate_target": "instances/lss-rig-client/minecraft/mods/lod-server-support-fabric.jar",
+        "fixture_artifacts": {
+          "instances/lss-rig-client/minecraft/mods/lss-export-lifecycle-fixture-1.0.0-test-only.jar": "13566632b6baf3e6d47cd0d751cb41755d037eba2b60f048709c5b4c22de6d0b"
+        },
+        "participant_profiles": {
+          "server": {
+            "id": "mc1211-fabric-server",
+            "profile_hash": "737fc992ba97dc2cdf559980e4cbad0fa7389a7b34e60e454100d872853972d1"
+          }
+        },
+        "profile_hash": "55683755e52eb8c92f992144db988edf7409e369322662bd9dc7d5c0d7a2e4f8",
+        "runtime_settings_sha256": "ca0f602df0e5a63b4330e4fd299287210e3fcb1bfaf73b422440b50f99b40bd9",
+        "runtime_settings_version": 1,
+        "scenario_checker_sha256": "77d5b63bd466d561b7a7778ea4dfb4291d325d9deda583f2ba2d66200162bc91",
+        "scenario_hash": "a5b570529359e074e0b36b0926f80aef4a42bc8adfc8b377fd356bb5278c999b",
+        "scenario_version": 1
+      },
+      "feature": "export-lifecycle",
+      "group": "acceptance46-supplemental",
+      "id": "export-lifecycle:20260910T145008Z-9571f6a53a6e",
+      "limitations": [
+        "Exact retained functional run and artifact identities only; no performance claim."
+      ],
+      "line": "1.21.1",
+      "profile_id": "mc1211-fabric-modern",
+      "record_path": "config/compatibility/validation/20260920T035313Z-a66b788c69b0-export-lifecycle.json",
+      "record_sha256": "b1d76bde3ae3afe6140ccd3c250039eb92d877e06daa75c1fc64db6cace9807e",
+      "run_hash": "2c1139da2e60ce5ce7a6b6a6604586e93fb5789fe014ad60d2efb9b3144170ce",
+      "run_id": "20260920T035313Z-a66b788c69b0",
+      "scenario": "export-lifecycle"
+    },
+    {
+      "acceptance_target": {
+        "candidate_artifacts": {
+          "instances/lss-rig-client/minecraft/mods/lod-server-support-neoforge.jar": "8faa03c1b21416bbd54497f2f3ffc3e053ec2179ea65aad4be6fa10d78085fd1",
+          "server/mods/lod-server-support-fabric.jar": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c"
+        },
+        "candidate_sha256": "8faa03c1b21416bbd54497f2f3ffc3e053ec2179ea65aad4be6fa10d78085fd1",
+        "candidate_target": "instances/lss-rig-client/minecraft/mods/lod-server-support-neoforge.jar",
+        "fixture_artifacts": {
+          "instances/lss-rig-client/minecraft/mods/lss-export-lifecycle-fixture-1.0.0-test-only-neoforge-named.jar": "2c6172ef6f2c69cee03aa105ca1f2edf63e9b75e4dea26a49a0a218ac4a625de"
+        },
+        "participant_profiles": {
+          "server": {
+            "id": "mc1211-fabric-server",
+            "profile_hash": "737fc992ba97dc2cdf559980e4cbad0fa7389a7b34e60e454100d872853972d1"
+          }
+        },
+        "profile_hash": "62937fc0c53351ca1fbfa242d04c5d66ac4d16c9765708522340d3ee931bd881",
+        "runtime_settings_sha256": "72fe48d84eaf5332ccc96250166a22979d0049c0d6f6cf88a0047ccf92dcaa69",
+        "runtime_settings_version": 1,
+        "scenario_checker_sha256": "77d5b63bd466d561b7a7778ea4dfb4291d325d9deda583f2ba2d66200162bc91",
+        "scenario_hash": "a5b570529359e074e0b36b0926f80aef4a42bc8adfc8b377fd356bb5278c999b",
+        "scenario_version": 1
+      },
+      "feature": "export-lifecycle",
+      "group": "acceptance46-supplemental",
+      "id": "export-lifecycle:20260910T145141Z-590e96ddaba3",
+      "limitations": [
+        "Exact retained functional run and artifact identities only; no performance claim."
+      ],
+      "line": "1.21.1",
+      "profile_id": "mc1211-neo-modern",
+      "record_path": "config/compatibility/validation/20260920T035413Z-be961fb1b828-export-lifecycle.json",
+      "record_sha256": "d88d030361c41ecf75c0462acbe1ecd84363fb65009bfaae3752f40519f7b3a0",
+      "run_hash": "cd4152baf08fc26d1b62ed09aa346d3c8d678a109b0b52e175e524734cd9f3bf",
+      "run_id": "20260920T035413Z-be961fb1b828",
+      "scenario": "export-lifecycle"
+    },
+    {
+      "acceptance_target": {
+        "candidate_artifacts": {
+          "artifacts/client-000.jar": "cfb13bb52d8c94db42b357ac3e335f2548077bba6153e23dd5ddedf238ce89b1",
+          "server/libraries/lod-server-support-fabric.jar": "cfb13bb52d8c94db42b357ac3e335f2548077bba6153e23dd5ddedf238ce89b1"
+        },
+        "candidate_sha256": "cfb13bb52d8c94db42b357ac3e335f2548077bba6153e23dd5ddedf238ce89b1",
+        "candidate_target": "artifacts/client-000.jar",
+        "fixture_artifacts": {
+          "artifacts/lss-rig-concurrent-client.jar": "b29626566e50d0948944d147b0d6cab4a7b7d8b8c3248048e8b6795d98e5c5ef",
+          "server/libraries/lss-rig-fabric-concurrent.jar": "632fdfe4cc3b60aaf9bcbd4f098e0f6ba4b2b68999a54f52d1ad48e2b1379a97"
+        },
+        "participant_profiles": {
+          "client-A": {
+            "id": "mc262-folia-xaero-client",
+            "profile_hash": "1506aae7b0b78d85ab81a6c7cf4fb8df9c697811001d41ddc29964f2c1a0e352"
+          },
+          "client-B": {
+            "id": "mc262-folia-xaero-client",
+            "profile_hash": "1506aae7b0b78d85ab81a6c7cf4fb8df9c697811001d41ddc29964f2c1a0e352"
+          },
+          "client-C": {
+            "id": "mc262-folia-xaero-client",
+            "profile_hash": "1506aae7b0b78d85ab81a6c7cf4fb8df9c697811001d41ddc29964f2c1a0e352"
+          },
+          "client-D": {
+            "id": "mc262-folia-xaero-client",
+            "profile_hash": "1506aae7b0b78d85ab81a6c7cf4fb8df9c697811001d41ddc29964f2c1a0e352"
+          },
+          "server": {
+            "id": "mc262-fabric-source-correctness",
+            "profile_hash": "80368d4bb07f6c8d333f1431279259df526916cccd1e9ddcf7952c1c97286ab1"
+          }
+        },
+        "profile_hash": "1506aae7b0b78d85ab81a6c7cf4fb8df9c697811001d41ddc29964f2c1a0e352",
+        "runtime_settings_sha256": "ed40e14ad9f8f1bf205d6adb74a3cbe12c0086cc8fdc6f5d50c48b5444f5a1be",
+        "runtime_settings_version": 1,
+        "scenario_checker_sha256": "b770ff1f30a20dbb7e1abf8d72f704ea4127914a63204e9c1c8b67dd50e85749",
+        "scenario_hash": "47b27037ad356a687f98a5d5f239cd0904fbef155a91bd60df9c1c8b5b499896",
+        "scenario_version": 2
+      },
+      "feature": "fabric-four-client-source-correctness",
+      "group": "extra-source",
+      "id": "source-fabric",
+      "limitations": [
+        "Bounded four-client native source-correctness test; no performance claim."
+      ],
+      "line": "26.2",
+      "profile_id": "mc262-folia-xaero-client",
+      "record_path": "config/compatibility/validation/20260920T035610Z-1f71305d69b6-fabric-four-client-source-correctness.json",
+      "record_sha256": "433a42062871aad43327537515696f68514fa0f59581c75b5789b3a3f89e7883",
+      "run_hash": "8aa2394dd926ee102eb0e132b82de252f31cf4464296223599579b160e56566f",
+      "run_id": "20260920T035610Z-1f71305d69b6",
+      "scenario": "fabric-four-client-source-correctness"
+    },
+    {
+      "acceptance_target": {
+        "candidate_artifacts": {
+          "artifacts/client-000.jar": "cfb13bb52d8c94db42b357ac3e335f2548077bba6153e23dd5ddedf238ce89b1",
+          "server/plugins/lod-server-support-paper.jar": "98a090950229e53d8693fe93c821e15a5790f3e0e1aff7f35cdae41e5dea55d9"
+        },
+        "candidate_sha256": "98a090950229e53d8693fe93c821e15a5790f3e0e1aff7f35cdae41e5dea55d9",
+        "candidate_target": "server/plugins/lod-server-support-paper.jar",
+        "fixture_artifacts": {
+          "artifacts/lss-rig-concurrent-client.jar": "b29626566e50d0948944d147b0d6cab4a7b7d8b8c3248048e8b6795d98e5c5ef",
+          "server/lss-rig-folia-timing.jar": "c3b304cb2d5ab4f9514e3b64af01c35130b33ba846d07d24bc7bd03b80dbca5c",
+          "server/lss-rig-observer.jar": "db47a5435fa3698b9597691a625671fd416adbc19b0eece538ef7c3ea92d7a88",
+          "server/plugins/lss-rig-folia-sources.jar": "5d925cd21e335eda1db49a7a35bbd8a9dbec41b8058319a40cbc3251fe265b19",
+          "server/plugins/lss-rig-regions.jar": "0912a4755e84f145d3d78c9e7c69d843d78b49b46c0afda4fad77c18476024fa"
+        },
+        "participant_profiles": {
+          "client-A": {
+            "id": "mc262-folia-xaero-client",
+            "profile_hash": "1506aae7b0b78d85ab81a6c7cf4fb8df9c697811001d41ddc29964f2c1a0e352"
+          },
+          "client-B": {
+            "id": "mc262-folia-xaero-client",
+            "profile_hash": "1506aae7b0b78d85ab81a6c7cf4fb8df9c697811001d41ddc29964f2c1a0e352"
+          },
+          "client-C": {
+            "id": "mc262-folia-xaero-client",
+            "profile_hash": "1506aae7b0b78d85ab81a6c7cf4fb8df9c697811001d41ddc29964f2c1a0e352"
+          },
+          "client-D": {
+            "id": "mc262-folia-xaero-client",
+            "profile_hash": "1506aae7b0b78d85ab81a6c7cf4fb8df9c697811001d41ddc29964f2c1a0e352"
+          },
+          "server": {
+            "id": "mc262-folia-server-feasibility",
+            "profile_hash": "3f34ea06aa806eb61642b9892e394f690d349a53736f2c6185cea45fa6876952"
+          }
+        },
+        "profile_hash": "1506aae7b0b78d85ab81a6c7cf4fb8df9c697811001d41ddc29964f2c1a0e352",
+        "runtime_settings_sha256": "316a14e2f19787f9f692ab5b5404e40a70350f011b997e26ed7be44134e43ea8",
+        "runtime_settings_version": 1,
+        "scenario_checker_sha256": "b770ff1f30a20dbb7e1abf8d72f704ea4127914a63204e9c1c8b67dd50e85749",
+        "scenario_hash": "5637562332f9bcfdcef17e24824e37b40f86066dc4fe3060fa258c7c1cb70f28",
+        "scenario_version": 2
+      },
+      "feature": "folia-four-client-source-correctness",
+      "group": "required42",
+      "id": "mc262-folia-concurrent--folia-concurrent",
+      "limitations": [
+        "Folia remains experimental. Bounded four-client concurrent-source check; no exhaustive correctness or performance claim."
+      ],
+      "line": "26.2",
+      "profile_id": "mc262-folia-xaero-client",
+      "record_path": "config/compatibility/validation/20260920T041631Z-b61f9e90be34-folia-four-client-source-correctness.json",
+      "record_sha256": "7eda8e77ae49a017f76e14b12c42ceb479b674fbc8b16cb917f7c20de78880e4",
+      "run_hash": "d2da02434d4fe9ad7259c7717cdaabbff985d159b89de86e64b2400f989d1ec1",
+      "run_id": "20260920T041631Z-b61f9e90be34",
+      "scenario": "folia-four-client-source-correctness"
+    },
+    {
+      "acceptance_target": {
+        "candidate_artifacts": {
+          "artifacts/client-000.jar": "cfb13bb52d8c94db42b357ac3e335f2548077bba6153e23dd5ddedf238ce89b1",
+          "server/plugins/lod-server-support-paper.jar": "98a090950229e53d8693fe93c821e15a5790f3e0e1aff7f35cdae41e5dea55d9"
+        },
+        "candidate_sha256": "cfb13bb52d8c94db42b357ac3e335f2548077bba6153e23dd5ddedf238ce89b1",
+        "candidate_target": "artifacts/client-000.jar",
+        "fixture_artifacts": {
+          "artifacts/lss-rig-concurrent-client.jar": "b29626566e50d0948944d147b0d6cab4a7b7d8b8c3248048e8b6795d98e5c5ef",
+          "server/plugins/lss-rig-paper-concurrent.jar": "7caaf712135aa48b0abbe45e9ed6c1162e669bb54720aaf772fb701e67cfae47"
+        },
+        "participant_profiles": {
+          "client-A": {
+            "id": "mc262-folia-xaero-client",
+            "profile_hash": "1506aae7b0b78d85ab81a6c7cf4fb8df9c697811001d41ddc29964f2c1a0e352"
+          },
+          "client-B": {
+            "id": "mc262-folia-xaero-client",
+            "profile_hash": "1506aae7b0b78d85ab81a6c7cf4fb8df9c697811001d41ddc29964f2c1a0e352"
+          },
+          "client-C": {
+            "id": "mc262-folia-xaero-client",
+            "profile_hash": "1506aae7b0b78d85ab81a6c7cf4fb8df9c697811001d41ddc29964f2c1a0e352"
+          },
+          "client-D": {
+            "id": "mc262-folia-xaero-client",
+            "profile_hash": "1506aae7b0b78d85ab81a6c7cf4fb8df9c697811001d41ddc29964f2c1a0e352"
+          },
+          "server": {
+            "id": "mc262-paper-source-correctness",
+            "profile_hash": "052dd660f09cdfa18c968c2f1b40401d08e15206806dbf7914acd58f746f9428"
+          }
+        },
+        "profile_hash": "1506aae7b0b78d85ab81a6c7cf4fb8df9c697811001d41ddc29964f2c1a0e352",
+        "runtime_settings_sha256": "c88c2ae408957fa402667f13dc236fdf108db324021c68e257c1b24710d8fe06",
+        "runtime_settings_version": 1,
+        "scenario_checker_sha256": "b770ff1f30a20dbb7e1abf8d72f704ea4127914a63204e9c1c8b67dd50e85749",
+        "scenario_hash": "e9fdca321d12fbf74512ea689781e6b06fad657b6631eaab883fb32b4104a767",
+        "scenario_version": 2
+      },
+      "feature": "paper-four-client-source-correctness",
+      "group": "extra-source",
+      "id": "source-paper",
+      "limitations": [
+        "Bounded four-client native source-correctness test; no performance claim.",
+        "Final Paper source acceptance uses explicitly predeclared bounded client rejection diagnostics. The earlier normal attempt failed27/28 and remains failed; the diagnostic replay passed all28 strict targets and cleanup. It does not establish the original rejected body content or extend performance claims."
+      ],
+      "line": "26.2",
+      "profile_id": "mc262-folia-xaero-client",
+      "record_path": "config/compatibility/validation/20260920T042642Z-c80ce612cd66-paper-four-client-source-correctness.json",
+      "record_sha256": "05af57d55a76af305c2a73ea268827f4506f95475d642f0fbd4a55739d9c499d",
+      "run_hash": "f5ac5a8aad8a5873d9b35917bea1aef10c29f104386ad43eb0daff96e43fa977",
+      "run_id": "20260920T042642Z-c80ce612cd66",
+      "scenario": "paper-four-client-source-correctness"
+    },
+    {
+      "acceptance_target": {
+        "candidate_artifacts": {
+          "instances/lss-rig-client/minecraft/mods/lod-server-support-fabric.jar": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c",
+          "server/mods/lod-server-support-fabric.jar": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c"
+        },
+        "candidate_sha256": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c",
+        "candidate_target": "instances/lss-rig-client/minecraft/mods/lod-server-support-fabric.jar",
+        "fixture_artifacts": {
+          "instances/lss-rig-client/minecraft/mods/lss-map-connect-fixture.jar": "5d6dbe1b6a1022cc91b2447e95aaf04146c8e395c53eb2444686fd06b89a5307",
+          "instances/lss-rig-client/minecraft/mods/lss-xaero-map-fixture.jar": "8ac8c8a0a878b8ca4d0cf89128b0d0e5a95257a11ae736eb7d6be1e2973c5311"
+        },
+        "participant_profiles": {
+          "server": {
+            "id": "mc1211-fabric-server",
+            "profile_hash": "737fc992ba97dc2cdf559980e4cbad0fa7389a7b34e60e454100d872853972d1"
+          }
+        },
+        "profile_hash": "55683755e52eb8c92f992144db988edf7409e369322662bd9dc7d5c0d7a2e4f8",
+        "runtime_settings_sha256": "bbb396dcc68efb031c853fbe32a9cea56a293741c67000f922ae7346d9aee995",
+        "runtime_settings_version": 1,
+        "scenario_checker_sha256": "5b1c8ea725b2d11d3fc6c2fd0fcac5365c0083c736cb0e60b0f7ebeb506ea193",
+        "scenario_hash": "662c1e8065fe3eb94f8cad2aabd5e347c8a7054f579270e08db016d0aa21be31",
+        "scenario_version": 2
+      },
+      "feature": "xaero-map",
+      "group": "required42",
+      "id": "mc1211-fabric-modern--xaero-map",
+      "limitations": [
+        "Exact retained functional run and artifact identities only; no performance claim.",
+        "User visually accepted the displayed result with the disclosed defects; this is not evidence of seam-free shading or complete first-spawn map coverage.",
+        "Known missing gold shading stripe at world X=512: native Xaero region-local slope fallback is reproduced by the bridge; no shipping correction applied.",
+        "Known near-player acquisition gap: eight positions fall inside LSS vanilla exclusion but lack Xaero required 3x3 native coverage (one already filled in the original Neo modern image); no shipping correction applied."
+      ],
+      "line": "1.21.1",
+      "profile_id": "mc1211-fabric-modern",
+      "record_path": "config/compatibility/validation/20260920T021346Z-b91bc348f76a-xaero-map.json",
+      "record_sha256": "df87b3276759a89d499b50a7aac885c7652efc4f8f8dfff1676c60da12f01455",
+      "run_hash": "595fda39e8ee3d1df2ab1f6e1b117871e5d48a6b5d9aaf35d7fab8bfb078aafe",
+      "run_id": "20260920T021346Z-b91bc348f76a",
+      "scenario": "xaero-map"
+    },
+    {
+      "acceptance_target": {
+        "candidate_artifacts": {
+          "instances/lss-rig-client/minecraft/mods/lod-server-support-fabric.jar": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c",
+          "server/mods/lod-server-support-fabric.jar": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c"
+        },
+        "candidate_sha256": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c",
+        "candidate_target": "instances/lss-rig-client/minecraft/mods/lod-server-support-fabric.jar",
+        "fixture_artifacts": {
+          "instances/lss-rig-client/minecraft/mods/lss-map-connect-fixture.jar": "5d6dbe1b6a1022cc91b2447e95aaf04146c8e395c53eb2444686fd06b89a5307",
+          "instances/lss-rig-client/minecraft/mods/lss-xaero-map-fixture.jar": "8ac8c8a0a878b8ca4d0cf89128b0d0e5a95257a11ae736eb7d6be1e2973c5311"
+        },
+        "participant_profiles": {
+          "server": {
+            "id": "mc1211-fabric-server",
+            "profile_hash": "737fc992ba97dc2cdf559980e4cbad0fa7389a7b34e60e454100d872853972d1"
+          }
+        },
+        "profile_hash": "ba08fcb6a09535012875e96e4a1d61e6acfa0c332b90846ff51aacc04502a76f",
+        "runtime_settings_sha256": "bbb396dcc68efb031c853fbe32a9cea56a293741c67000f922ae7346d9aee995",
+        "runtime_settings_version": 1,
+        "scenario_checker_sha256": "5b1c8ea725b2d11d3fc6c2fd0fcac5365c0083c736cb0e60b0f7ebeb506ea193",
+        "scenario_hash": "662c1e8065fe3eb94f8cad2aabd5e347c8a7054f579270e08db016d0aa21be31",
+        "scenario_version": 2
+      },
+      "feature": "xaero-map",
+      "group": "required42",
+      "id": "mc1211-fabric-legacy--xaero-map",
+      "limitations": [
+        "Exact retained functional run and artifact identities only; no performance claim.",
+        "User visually accepted the displayed result with the disclosed defects; this is not evidence of seam-free shading or complete first-spawn map coverage.",
+        "Known missing gold shading stripe at world X=512: native Xaero region-local slope fallback is reproduced by the bridge; no shipping correction applied.",
+        "Known near-player acquisition gap: eight positions fall inside LSS vanilla exclusion but lack Xaero required 3x3 native coverage (one already filled in the original Neo modern image); no shipping correction applied."
+      ],
+      "line": "1.21.1",
+      "profile_id": "mc1211-fabric-legacy",
+      "record_path": "config/compatibility/validation/20260920T021655Z-1aa7e001e6ba-xaero-map.json",
+      "record_sha256": "1b71d45cf2e8db4ec225953b6d4d897e4aa6da708ebcb9ba306f264bd6b4d42a",
+      "run_hash": "008f5f98e596b8cbe316478bff6a95f7d1479acd1ffeb0ff93c0a6cce15ed227",
+      "run_id": "20260920T021655Z-1aa7e001e6ba",
+      "scenario": "xaero-map"
+    },
+    {
+      "acceptance_target": {
+        "candidate_artifacts": {
+          "instances/lss-rig-client/minecraft/mods/lod-server-support-neoforge.jar": "8faa03c1b21416bbd54497f2f3ffc3e053ec2179ea65aad4be6fa10d78085fd1",
+          "server/mods/lod-server-support-fabric.jar": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c"
+        },
+        "candidate_sha256": "8faa03c1b21416bbd54497f2f3ffc3e053ec2179ea65aad4be6fa10d78085fd1",
+        "candidate_target": "instances/lss-rig-client/minecraft/mods/lod-server-support-neoforge.jar",
+        "fixture_artifacts": {
+          "instances/lss-rig-client/minecraft/mods/lss-map-connect-fixture.jar": "936f96d622b232855d2384a5c58b234340a7165d7441f61b1b0e9418f212dd6f",
+          "instances/lss-rig-client/minecraft/mods/lss-xaero-map-fixture.jar": "b0ae1403e1bdbcc5b1ddc8355a867299171443af0339820db28b89f07b3eb9da"
+        },
+        "participant_profiles": {
+          "server": {
+            "id": "mc1211-fabric-server",
+            "profile_hash": "737fc992ba97dc2cdf559980e4cbad0fa7389a7b34e60e454100d872853972d1"
+          }
+        },
+        "profile_hash": "62937fc0c53351ca1fbfa242d04c5d66ac4d16c9765708522340d3ee931bd881",
+        "runtime_settings_sha256": "e477f6d4ec6407a632d0f9a14e28952ac085c8e455ab110fe76ba41e079efd9e",
+        "runtime_settings_version": 1,
+        "scenario_checker_sha256": "26fa1423464623d7a09218dd46da203cbb7276803f1a66dc62dc3a18a63a20d3",
+        "scenario_hash": "662c1e8065fe3eb94f8cad2aabd5e347c8a7054f579270e08db016d0aa21be31",
+        "scenario_version": 2
+      },
+      "feature": "xaero-map",
+      "group": "required42",
+      "id": "mc1211-neo-modern--xaero-map",
+      "limitations": [
+        "Exact retained functional run and artifact identities only; no performance claim.",
+        "User visually accepted the displayed result with the disclosed defects; this is not evidence of seam-free shading or complete first-spawn map coverage.",
+        "Known missing gold shading stripe at world X=512: native Xaero region-local slope fallback is reproduced by the bridge; no shipping correction applied.",
+        "Known near-player acquisition gap: eight positions fall inside LSS vanilla exclusion but lack Xaero required 3x3 native coverage (one already filled in the original Neo modern image); no shipping correction applied."
+      ],
+      "line": "1.21.1",
+      "profile_id": "mc1211-neo-modern",
+      "record_path": "config/compatibility/validation/20260920T022818Z-be9d7acf6ac1-xaero-map.json",
+      "record_sha256": "d820b6899d32f731b0ee447c42cfd7890ca374f8dac96634742279d6c50a680b",
+      "run_hash": "c10c8e81583707443e1743b265b300c8b990282b33d6353ae96af2bcf38c3141",
+      "run_id": "20260920T022818Z-be9d7acf6ac1",
+      "scenario": "xaero-map"
+    },
+    {
+      "acceptance_target": {
+        "candidate_artifacts": {
+          "instances/lss-rig-client/minecraft/mods/lod-server-support-neoforge.jar": "8faa03c1b21416bbd54497f2f3ffc3e053ec2179ea65aad4be6fa10d78085fd1",
+          "server/mods/lod-server-support-fabric.jar": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c"
+        },
+        "candidate_sha256": "8faa03c1b21416bbd54497f2f3ffc3e053ec2179ea65aad4be6fa10d78085fd1",
+        "candidate_target": "instances/lss-rig-client/minecraft/mods/lod-server-support-neoforge.jar",
+        "fixture_artifacts": {
+          "instances/lss-rig-client/minecraft/mods/lss-map-connect-fixture.jar": "936f96d622b232855d2384a5c58b234340a7165d7441f61b1b0e9418f212dd6f",
+          "instances/lss-rig-client/minecraft/mods/lss-xaero-map-fixture.jar": "b0ae1403e1bdbcc5b1ddc8355a867299171443af0339820db28b89f07b3eb9da"
+        },
+        "participant_profiles": {
+          "server": {
+            "id": "mc1211-fabric-server",
+            "profile_hash": "737fc992ba97dc2cdf559980e4cbad0fa7389a7b34e60e454100d872853972d1"
+          }
+        },
+        "profile_hash": "acab9724fe9f6e031ef0d39fe9256c1c81a4d82edd672f295408b503a6dbd0a3",
+        "runtime_settings_sha256": "e477f6d4ec6407a632d0f9a14e28952ac085c8e455ab110fe76ba41e079efd9e",
+        "runtime_settings_version": 1,
+        "scenario_checker_sha256": "5b1c8ea725b2d11d3fc6c2fd0fcac5365c0083c736cb0e60b0f7ebeb506ea193",
+        "scenario_hash": "662c1e8065fe3eb94f8cad2aabd5e347c8a7054f579270e08db016d0aa21be31",
+        "scenario_version": 2
+      },
+      "feature": "xaero-map",
+      "group": "required42",
+      "id": "mc1211-neo-legacy-xaero--xaero-map",
+      "limitations": [
+        "Exact retained functional run and artifact identities only; no performance claim.",
+        "User visually accepted the displayed result with the disclosed defects; this is not evidence of seam-free shading or complete first-spawn map coverage.",
+        "Known missing gold shading stripe at world X=512: native Xaero region-local slope fallback is reproduced by the bridge; no shipping correction applied.",
+        "Known near-player acquisition gap: eight positions fall inside LSS vanilla exclusion but lack Xaero required 3x3 native coverage (one already filled in the original Neo modern image); no shipping correction applied."
+      ],
+      "line": "1.21.1",
+      "profile_id": "mc1211-neo-legacy-xaero",
+      "record_path": "config/compatibility/validation/20260920T022023Z-33a9bd85215a-xaero-map.json",
+      "record_sha256": "3c66d5f4201c1784c61475ed73e3da51f1d0368d15c344c6a7b4225c5af834b5",
+      "run_hash": "13187b3292f59ac0910cc464913cb5d8bc77430411572b155e2fc27c677ea019",
+      "run_id": "20260920T022023Z-33a9bd85215a",
+      "scenario": "xaero-map"
+    },
+    {
+      "acceptance_target": {
+        "candidate_artifacts": {
+          "instances/lss-rig-client/minecraft/mods/lod-server-support-fabric.jar": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c",
+          "seated-target-a/mods/lod-server-support-fabric.jar": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c",
+          "seated-target-b/mods/lod-server-support-fabric.jar": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c",
+          "server/mods/lod-server-support-fabric.jar": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c"
+        },
+        "candidate_sha256": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c",
+        "candidate_target": "instances/lss-rig-client/minecraft/mods/lod-server-support-fabric.jar",
+        "fixture_artifacts": {
+          "instances/lss-rig-client/minecraft/mods/lss-wi5-live-fixture-1.0.0-test-only.jar": "5d6dbe1b6a1022cc91b2447e95aaf04146c8e395c53eb2444686fd06b89a5307",
+          "instances/lss-rig-client/minecraft/mods/lss-wi9-live-fixture-1.0.0-test-only.jar": "c0346db2728835b6d934fdb3fa28fd333daa87fabb4c5ed8c87d42124910dd9a",
+          "seated-target-a/mods/lss-wi9-fixture.jar": "c0346db2728835b6d934fdb3fa28fd333daa87fabb4c5ed8c87d42124910dd9a",
+          "seated-target-b/mods/lss-wi9-fixture.jar": "c0346db2728835b6d934fdb3fa28fd333daa87fabb4c5ed8c87d42124910dd9a"
+        },
+        "participant_profiles": {
+          "seated-target-a": {
+            "id": "mc1211-fabric-seated-subject",
+            "profile_hash": "514793efafe9d45e5d120fa4f7e705edb54bcbcfca99b242399c18806d129bd8"
+          },
+          "seated-target-b": {
+            "id": "mc1211-fabric-seated-subject",
+            "profile_hash": "514793efafe9d45e5d120fa4f7e705edb54bcbcfca99b242399c18806d129bd8"
+          },
+          "server": {
+            "id": "mc1211-fabric-server",
+            "profile_hash": "737fc992ba97dc2cdf559980e4cbad0fa7389a7b34e60e454100d872853972d1"
+          }
+        },
+        "profile_hash": "55683755e52eb8c92f992144db988edf7409e369322662bd9dc7d5c0d7a2e4f8",
+        "runtime_settings_sha256": "27a7d38a45e338e9f99a2f8d0982b369ff39f122d1cbc586734d986fbff9e477",
+        "runtime_settings_version": 1,
+        "scenario_checker_sha256": "d911555241cb6c844b406266e5265f82966132db03d97a3244f3d80a9ab6519a",
+        "scenario_hash": "83abcab34495b92688abd8d7dfb0a4340699f519f7931cdcc6093d6ed4ed3c82",
+        "scenario_version": 1
+      },
+      "feature": "seated-draw",
+      "group": "required42",
+      "id": "mc1211-fabric-modern--seated-draw",
+      "limitations": [
+        "Exact retained functional run and artifact identities only; no performance claim.",
+        "Healthy seated pose captured before fault through a real spyglass; recovery separately shows the affected left rider standing while the second rider remains seated. Both subjects exceed 128 blocks and are absent from native player tracking."
+      ],
+      "line": "1.21.1",
+      "profile_id": "mc1211-fabric-modern",
+      "record_path": "config/compatibility/validation/20260920T154926Z-a7e51c16390b-seated-draw.json",
+      "record_sha256": "96ee89d1ff96ef3e0bbef423fbb1be15250636d2aee37ce43a7a38a2ac6c605f",
+      "run_hash": "dfc2c422e7c605e50444dd36c1a777253aae5e5f1b300dbefa3d94f686c43ed4",
+      "run_id": "20260920T154926Z-a7e51c16390b",
+      "scenario": "seated-draw"
+    },
+    {
+      "acceptance_target": {
+        "candidate_artifacts": {
+          "instances/lss-rig-client/minecraft/mods/lod-server-support-neoforge.jar": "8faa03c1b21416bbd54497f2f3ffc3e053ec2179ea65aad4be6fa10d78085fd1",
+          "seated-target-a/mods/lod-server-support-fabric.jar": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c",
+          "seated-target-b/mods/lod-server-support-fabric.jar": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c",
+          "server/mods/lod-server-support-fabric.jar": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c"
+        },
+        "candidate_sha256": "8faa03c1b21416bbd54497f2f3ffc3e053ec2179ea65aad4be6fa10d78085fd1",
+        "candidate_target": "instances/lss-rig-client/minecraft/mods/lod-server-support-neoforge.jar",
+        "fixture_artifacts": {
+          "instances/lss-rig-client/minecraft/mods/lss-wi5-live-fixture-1.0.0-test-only-neoforge-named.jar": "936f96d622b232855d2384a5c58b234340a7165d7441f61b1b0e9418f212dd6f",
+          "instances/lss-rig-client/minecraft/mods/lss-wi9-live-fixture-1.0.0-test-only-neoforge-named.jar": "b8eb0ce20143743ecca0ea54558c54b4901137a01d5739763f2a8309a2c70a6d",
+          "seated-target-a/mods/lss-wi9-fixture.jar": "c0346db2728835b6d934fdb3fa28fd333daa87fabb4c5ed8c87d42124910dd9a",
+          "seated-target-b/mods/lss-wi9-fixture.jar": "c0346db2728835b6d934fdb3fa28fd333daa87fabb4c5ed8c87d42124910dd9a"
+        },
+        "participant_profiles": {
+          "seated-target-a": {
+            "id": "mc1211-fabric-seated-subject",
+            "profile_hash": "514793efafe9d45e5d120fa4f7e705edb54bcbcfca99b242399c18806d129bd8"
+          },
+          "seated-target-b": {
+            "id": "mc1211-fabric-seated-subject",
+            "profile_hash": "514793efafe9d45e5d120fa4f7e705edb54bcbcfca99b242399c18806d129bd8"
+          },
+          "server": {
+            "id": "mc1211-fabric-server",
+            "profile_hash": "737fc992ba97dc2cdf559980e4cbad0fa7389a7b34e60e454100d872853972d1"
+          }
+        },
+        "profile_hash": "62937fc0c53351ca1fbfa242d04c5d66ac4d16c9765708522340d3ee931bd881",
+        "runtime_settings_sha256": "45434a8b6fbe92e059f74f229d4028e4b3bd19fd7dd136beb7590af8cf1f2645",
+        "runtime_settings_version": 1,
+        "scenario_checker_sha256": "d911555241cb6c844b406266e5265f82966132db03d97a3244f3d80a9ab6519a",
+        "scenario_hash": "83abcab34495b92688abd8d7dfb0a4340699f519f7931cdcc6093d6ed4ed3c82",
+        "scenario_version": 1
+      },
+      "feature": "seated-draw",
+      "group": "required42",
+      "id": "mc1211-neo-modern--seated-draw",
+      "limitations": [
+        "Exact retained functional run and artifact identities only; no performance claim.",
+        "Healthy seated pose captured before fault through a real spyglass; recovery separately shows the affected left rider standing while the second rider remains seated. Both subjects exceed 128 blocks and are absent from native player tracking."
+      ],
+      "line": "1.21.1",
+      "profile_id": "mc1211-neo-modern",
+      "record_path": "config/compatibility/validation/20260920T155051Z-36f0d11707ae-seated-draw.json",
+      "record_sha256": "6dcd812e692f212c12eb6ff0f8f199eba3830b4c90db51bf9f91189aeb49d5b7",
+      "run_hash": "3c6f56ab5a866c19b4a63454017d00209cae3465a0f8ab6b3b0ed0cc636be196",
+      "run_id": "20260920T155051Z-36f0d11707ae",
+      "scenario": "seated-draw"
+    },
+    {
+      "acceptance_target": {
+        "candidate_artifacts": {
+          "elytra-target/mods/lod-server-support-fabric.jar": "b1d4121d5dab5d90cf708e9db44a0d20d2528e4205d7a7d323f06e4fbea0245d",
+          "instances/lss-rig-client/minecraft/mods/lod-server-support-fabric.jar": "b1d4121d5dab5d90cf708e9db44a0d20d2528e4205d7a7d323f06e4fbea0245d",
+          "server/mods/lod-server-support-fabric.jar": "b1d4121d5dab5d90cf708e9db44a0d20d2528e4205d7a7d323f06e4fbea0245d"
+        },
+        "candidate_sha256": "b1d4121d5dab5d90cf708e9db44a0d20d2528e4205d7a7d323f06e4fbea0245d",
+        "candidate_target": "instances/lss-rig-client/minecraft/mods/lod-server-support-fabric.jar",
+        "fixture_artifacts": {
+          "elytra-target/mods/lss-elytra-fixture.jar": "df947c4e1e4592b80598183d70006b5207e91e039c1658f27657f6a213f0ef5a",
+          "instances/lss-rig-client/minecraft/mods/lss-elytra-live-fixture-1.0.0-test-only.jar": "df947c4e1e4592b80598183d70006b5207e91e039c1658f27657f6a213f0ef5a"
+        },
+        "participant_profiles": {
+          "elytra-target": {
+            "id": "mc12110-elytra-target",
+            "profile_hash": "b94cc5851905425c9e2f9fdcbdf02fb46ea6c2077dec753b471474c500ddb144"
+          },
+          "server": {
+            "id": "mc12110-fabric-server",
+            "profile_hash": "28da3f40a1e441614f502a41dff32937e35742b5a58c1d10bd90dacb65136e18"
+          }
+        },
+        "profile_hash": "4680972c8cfe0cb4febf1a59b9f109ad1f3ac4a571a571ad239a0e365bb730f2",
+        "runtime_settings_sha256": "87d733da4ff1ae5a7d78b494edeb7d6ec798676dd8d872089007982646ccf3e8",
+        "runtime_settings_version": 1,
+        "scenario_checker_sha256": "8615d53ec898f4ac851c64fde9c3529b41660e33ca5b5372c6918f7fb6fd701f",
+        "scenario_hash": "6b44d041b767e31c6d73373d8d97fe54d854b5ac53db2b7639ca250844874ec5",
+        "scenario_version": 2
+      },
+      "feature": "elytra",
+      "group": "required42",
+      "id": "mc12110-elytra--elytra",
+      "limitations": [
+        "Exact retained functional run and artifact identities only; no performance claim."
+      ],
+      "line": "1.21.10",
+      "profile_id": "mc12110-fabric-legacy",
+      "record_path": "config/compatibility/validation/20260920T022211Z-6d1eb705d803-elytra.json",
+      "record_sha256": "784df3909bdda20ea932db9a6749a0fb136a42aac0a1602fdce22f4477e201ed",
+      "run_hash": "2863f1b1200b766b15a275c83af3b18e8599634ffe7f6239d17884a36a3f40d8",
+      "run_id": "20260920T022211Z-6d1eb705d803",
+      "scenario": "elytra"
+    },
+    {
+      "acceptance_target": {
+        "candidate_artifacts": {
+          "elytra-target/mods/lod-server-support-fabric.jar": "04770ac9857022d307bdcdee299ab87ab8e507a795f06f3fd8569c3982ed2fe6",
+          "instances/lss-rig-client/minecraft/mods/lod-server-support-fabric.jar": "04770ac9857022d307bdcdee299ab87ab8e507a795f06f3fd8569c3982ed2fe6",
+          "server/mods/lod-server-support-fabric.jar": "04770ac9857022d307bdcdee299ab87ab8e507a795f06f3fd8569c3982ed2fe6"
+        },
+        "candidate_sha256": "04770ac9857022d307bdcdee299ab87ab8e507a795f06f3fd8569c3982ed2fe6",
+        "candidate_target": "instances/lss-rig-client/minecraft/mods/lod-server-support-fabric.jar",
+        "fixture_artifacts": {
+          "elytra-target/mods/lss-elytra-fixture.jar": "a063170088a2e0ad0387c26f4f0de97d1781d5fbc4db1661a8f3914245552f62",
+          "instances/lss-rig-client/minecraft/mods/lss-elytra-live-fixture-1.0.0-test-only.jar": "a063170088a2e0ad0387c26f4f0de97d1781d5fbc4db1661a8f3914245552f62"
+        },
+        "participant_profiles": {
+          "elytra-target": {
+            "id": "mc12111-elytra-target",
+            "profile_hash": "9fc7c9b9124b797af02a4ff690841fdda2fbc9b4943c5673560a8debe792e5ce"
+          },
+          "server": {
+            "id": "mc12111-fabric-server",
+            "profile_hash": "3dcbef1e4c9306820847aab10263bc8fbd6b37f3af5038e954ca5355ce50c8ac"
+          }
+        },
+        "profile_hash": "0366b3e6b9d0afeb2379a77397a79f24ad05653a18cbf0ec6ce52207065e22b4",
+        "runtime_settings_sha256": "3deb4da1805d6c05812247d8f39b1aed0d837c7dc792a372d7db9a7c02e5e311",
+        "runtime_settings_version": 1,
+        "scenario_checker_sha256": "c0e4fa0f6b49b5149b58bae880e86d7490e196f500d9de5392e506342677e82f",
+        "scenario_hash": "6b44d041b767e31c6d73373d8d97fe54d854b5ac53db2b7639ca250844874ec5",
+        "scenario_version": 2
+      },
+      "feature": "elytra",
+      "group": "required42",
+      "id": "mc12111-elytra--elytra",
+      "limitations": [
+        "Exact retained functional run and artifact identities only; no performance claim."
+      ],
+      "line": "1.21.11",
+      "profile_id": "mc12111-fabric-modern",
+      "record_path": "config/compatibility/validation/20260920T023835Z-6bfbbf2347f8-elytra.json",
+      "record_sha256": "3e8a2dd446cd8bdc0c9a37d5edf6fa7db6ef73a1875585ca996d6db0fc8cb47e",
+      "run_hash": "df6fb927f9249cb1ab12baf2865e0b5711f4fabf73268fe09bb6742a2e004d18",
+      "run_id": "20260920T023835Z-6bfbbf2347f8",
+      "scenario": "elytra"
+    }
+  ],
+  "complete46": true,
+  "complete_extra8": true,
+  "overall_project_complete": false,
+  "pending": [],
+  "schema_version": 1,
+  "scope": "exact-target native validation and user visual sign-off with documented map limitations; not overall project completion"
+}

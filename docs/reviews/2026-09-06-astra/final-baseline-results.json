@@ -1,0 +1,23 @@
+[
+  {
+    "module": "fabric",
+    "tests": 2325,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 4
+  },
+  {
+    "module": "paper",
+    "tests": 495,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  {
+    "module": "neoforge",
+    "tests": 23,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  }
+]

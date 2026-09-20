@@ -77,13 +77,7 @@ public class TwoPlayerGameTests {
             holdChunk(chunkSource, chunkPositions[i]);
             level.getChunk(chunkPositions[i].x(), chunkPositions[i].z());
         }
-        // Release after generation: the serves must come from DISK (a loaded chunk
-        // probe-serves and never engages the dedup tracker).
-        helper.runAfterDelay(4, () -> {
-            for (var pos : chunkPositions) {
-                releaseChunk(chunkSource, pos);
-            }
-        });
+        var savedColumns = new SavedColumnFixture(level, chunkPositions);
 
         var service = new RequestProcessingService(server);
         var stateA = service.registerPlayer(mockA, LSSConstants.CAPABILITY_VOXEL_COLUMNS);
@@ -91,8 +85,14 @@ public class TwoPlayerGameTests {
         var step = new AtomicInteger();
 
         helper.succeedWhen(() -> {
-            helper.assertTrue(helper.getTick() >= 6, "waiting for the ticket release");
             if (step.get() == 0) {
+                savedColumns.assertSaved(helper);
+                // Release only after proving real saved content. The measured serves
+                // must come from DISK, which is what engages the dedup tracker.
+                for (var pos : chunkPositions) releaseChunk(chunkSource, pos);
+                step.set(1);
+            }
+            if (step.get() == 1) {
                 for (var pos : chunkPositions) {
                     helper.assertTrue(chunkSource.getChunkNow(pos.x(), pos.z()) == null,
                             "waiting for the dedup chunks to unload");
@@ -106,7 +106,7 @@ public class TwoPlayerGameTests {
                 helper.assertTrue(stateA.getTotalRequestsReceived() == 3
                                 && stateB.getTotalRequestsReceived() == 3,
                         "premise: all six requests must pass the distance guard");
-                step.set(1);
+                step.set(2);
                 helper.assertTrue(false, "requests queued, awaiting dedup convergence");
             }
             service.tick();
@@ -133,7 +133,11 @@ public class TwoPlayerGameTests {
                             + "player attaches to the in-flight dedup groups), got "
                             + diskDiag.getSubmittedCount());
             helper.assertTrue(diskDiag.getSuccessfulReadCount() == 3,
-                    "all three deduped reads must resolve with content");
+                    "all three deduped reads must resolve with content: success="
+                            + diskDiag.getSuccessfulReadCount() + ", not_found=" + diskDiag.getNotFoundCount()
+                            + ", errors=" + diskDiag.getErrorCount() + ", all_air=" + diskDiag.getAllAirCount()
+                            + ", completed=" + diskDiag.getCompletedCount() + "; "
+                            + service.getDiskReader().getDiagnostics());
             helper.assertTrue(stateA.getHeldSyncSlots() == 0 && stateA.getHeldGenSlots() == 0
                             && stateB.getHeldSyncSlots() == 0 && stateB.getHeldGenSlots() == 0,
                     "every slot must be free once both players converged");

@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "id": "lss_wi5_fixture",
+  "version": "1.0.0-test-only",
+  "name": "LSS WI5 isolated reception lifecycle fixture",
+  "environment": "client",
+  "mixins": ["lss-wi5-fixture.mixins.json"],
+  "depends": {"fabricloader": ">=0.19.3", "minecraft": "1.21.1", "java": ">=21", "lss": ">=0.14.0"}
+}

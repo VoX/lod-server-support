@@ -1,0 +1,30 @@
+{
+  "captured_utc": "2026-09-09T00:44:33.148894+00:00",
+  "status": "pass captured; closure finalization pending",
+  "files": [
+    {
+      "source": "/mnt/c/Users/Ian/AppData/Roaming/PrismLauncher/instances/lss-astra-validation-neoforge-1.21.1/minecraft/logs/latest.log",
+      "archive": "latest.log",
+      "bytes": 81533,
+      "sha256": "aedbe2e4d3c88ce0f3702d3731ffc71d60658f5f264d9afadf099d945a195c7d"
+    },
+    {
+      "source": "/mnt/c/Users/Ian/AppData/Roaming/PrismLauncher/instances/lss-astra-validation-neoforge-1.21.1/minecraft/lss-wi5-fixture.log",
+      "archive": "lss-wi5-fixture.log",
+      "bytes": 7837,
+      "sha256": "fde0c92566a27c7e183d49e92d7d1eb641853148842e4cda0d45451592987bd3"
+    },
+    {
+      "source": "/home/vox/.local/state/lss-review/20260908-implementation/runtime/gui-server-a-controlled-console.log",
+      "archive": "gui-server-a-controlled-console.log",
+      "bytes": 16531,
+      "sha256": "c534347c9860fefda14dc8b1aa8f1ef531c84831b513355cb52aae1a1f5d17af"
+    },
+    {
+      "source": "/mnt/c/Users/Ian/AppData/Roaming/PrismLauncher/instances/lss-astra-validation-neoforge-1.21.1/minecraft/mods/lod-server-support-neoforge.jar",
+      "archive": "lod-server-support-neoforge.jar",
+      "bytes": 22663777,
+      "sha256": "528e0ac5e50b437c594539e4935b42ce71661b6c993065d0e3fbad4ea6bd767e"
+    }
+  ]
+}

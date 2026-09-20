@@ -1,0 +1,36 @@
+
+> Configure project :fabric
+Fabric Loom: 1.17.13
+
+> Task :common:compileJava UP-TO-DATE
+> Task :common:processResources NO-SOURCE
+> Task :common:classes UP-TO-DATE
+> Task :common:jar UP-TO-DATE
+> Task :fabric:compileJava UP-TO-DATE
+> Task :fabric:processResources UP-TO-DATE
+> Task :fabric:classes UP-TO-DATE
+> Task :fabric:compileTestJava UP-TO-DATE
+> Task :fabric:processTestResources UP-TO-DATE
+> Task :fabric:testClasses UP-TO-DATE
+> Task :fabric:test
+> Task :paper:paperweightUserdevSetup UP-TO-DATE
+> Task :paper:compileJava UP-TO-DATE
+> Task :paper:processResources UP-TO-DATE
+> Task :paper:classes UP-TO-DATE
+> Task :paper:compileTestJava UP-TO-DATE
+> Task :paper:processTestResources UP-TO-DATE
+> Task :paper:testClasses UP-TO-DATE
+OpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
+> Task :paper:test
+> Task :neoforge:createMinecraftArtifacts UP-TO-DATE
+> Task :neoforge:compileJava UP-TO-DATE
+> Task :neoforge:processResources UP-TO-DATE
+> Task :neoforge:classes UP-TO-DATE
+> Task :neoforge:compileTestJava UP-TO-DATE
+> Task :neoforge:processTestResources NO-SOURCE
+> Task :neoforge:testClasses UP-TO-DATE
+> Task :neoforge:test UP-TO-DATE
+
+BUILD SUCCESSFUL in 2m 20s
+18 actionable tasks: 2 executed, 16 up-to-date
+Consider enabling configuration cache to speed up this build: https://docs.gradle.org/9.5.1/userguide/configuration_cache_enabling.html

@@ -1,5 +1,6 @@
 plugins {
     id 'java-library'
+    id 'java-test-fixtures'
 }
 
 version = project.mod_version
@@ -25,4 +26,34 @@ dependencies {
     // the plugin jar WITHOUT relocating org.sqlite (relocation breaks its native loader).
     compileOnly 'org.xerial:sqlite-jdbc:3.49.1.0'
     compileOnly 'com.github.luben:zstd-jni:1.5.7-3'
+}
+
+// P6a: MC/loader-free tests execute on Java 21 on every support line.
+dependencies {
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.11.4'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    testImplementation 'it.unimi.dsi:fastutil:8.5.18'
+    testImplementation 'com.google.code.gson:gson:2.13.2'
+    testImplementation 'org.xerial:sqlite-jdbc:3.49.1.0'
+    testImplementation 'com.github.luben:zstd-jni:1.5.7-3'
+}
+test {
+    useJUnitPlatform()
+    doFirst {
+        def forbidden = configurations.testRuntimeClasspath.incoming.resolutionResult.allComponents.findAll { component ->
+            def id = component.id
+            (id instanceof org.gradle.api.artifacts.component.ModuleComponentIdentifier
+                && (id.group.startsWith('net.minecraft') || id.group.startsWith('net.fabricmc')
+                    || id.group.startsWith('net.neoforged')))
+                || (id instanceof org.gradle.api.artifacts.component.ProjectComponentIdentifier
+                    && id.projectPath in [':fabric', ':paper', ':neoforge'])
+        }
+        if (!forbidden.empty) throw new GradleException("common:test must remain MC/loader-free: ${forbidden*.id}")
+    }
+    javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(21) }
+    // Preserve moved tests' path lookup and corpus provenance without a Fabric dependency.
+    workingDir rootProject.file('fabric')
+    inputs.dir(rootProject.file('fabric/src/test/resources/nbt-corpus'))
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.dir('src/main/java').withPathSensitivity(PathSensitivity.RELATIVE)
 }

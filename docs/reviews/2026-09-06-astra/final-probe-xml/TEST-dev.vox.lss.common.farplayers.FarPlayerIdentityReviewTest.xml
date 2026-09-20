@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="dev.vox.lss.common.farplayers.FarPlayerIdentityReviewTest" tests="2" skipped="0" failures="2" errors="0" timestamp="2026-09-07T02:54:27.342Z" hostname="DESKTOP-K93QJU0" time="0.054">
+  <properties/>
+  <testcase name="repeatedlyRebindingOneIndexMustNotBypassTheIdentityCap()" classname="dev.vox.lss.common.farplayers.FarPlayerIdentityReviewTest" time="0.017">
+    <failure message="org.opentest4j.AssertionFailedError: one index bypassed the 4096 cap: tracked=4097, capResets=0 ==&gt; expected: &lt;true&gt; but was: &lt;false&gt;" type="org.opentest4j.AssertionFailedError">org.opentest4j.AssertionFailedError: one index bypassed the 4096 cap: tracked=4097, capResets=0 ==&gt; expected: &lt;true&gt; but was: &lt;false&gt;
+	at org.junit.jupiter.api.AssertionFailureBuilder.build(AssertionFailureBuilder.java:151)
+	at org.junit.jupiter.api.AssertionFailureBuilder.buildAndThrow(AssertionFailureBuilder.java:132)
+	at org.junit.jupiter.api.AssertTrue.failNotTrue(AssertTrue.java:63)
+	at org.junit.jupiter.api.AssertTrue.assertTrue(AssertTrue.java:36)
+	at org.junit.jupiter.api.Assertions.assertTrue(Assertions.java:210)
+	at knot//dev.vox.lss.common.farplayers.FarPlayerIdentityReviewTest.repeatedlyRebindingOneIndexMustNotBypassTheIdentityCap(FarPlayerIdentityReviewTest.java:32)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
+</failure>
+  </testcase>
+  <testcase name="rebindingOneIndexMustRetireItsPreviousTrackedIdentity()" classname="dev.vox.lss.common.farplayers.FarPlayerIdentityReviewTest" time="0.036">
+    <failure message="org.opentest4j.MultipleFailuresError: Multiple Failures (2 failures)&#10;&#9;org.opentest4j.AssertionFailedError: one current roster binding must not retain two drawable identities ==&gt; expected: &lt;1&gt; but was: &lt;2&gt;&#10;&#9;org.opentest4j.AssertionFailedError: rebound identity's old ghost must be removed ==&gt; expected: &lt;null&gt; but was: &lt;TrackedFarPlayer[uuid=00000000-0000-0001-0000-000000000001, name=P1, latest=UpdateEntry[rosterIndex=0, quantX=1600, quantY=1024, quantZ=0, yaw=0, headYaw=0, pitch=0, poseFlags=0, velX=0, velY=0, velZ=0, equipmentDictIdxPlus1=null, equipmentCounts=null, equipmentIdentities=null, vehicle=null], cadenceTicks=10, receivedAtMillis=500, motion=dev.vox.lss.common.farplayers.FarPlayerMotion@4c5da4f9, equipmentIdentities=null, equipmentCounts=null]&gt;" type="org.opentest4j.MultipleFailuresError">org.opentest4j.MultipleFailuresError: Multiple Failures (2 failures)
+	org.opentest4j.AssertionFailedError: one current roster binding must not retain two drawable identities ==&gt; expected: &lt;1&gt; but was: &lt;2&gt;
+	org.opentest4j.AssertionFailedError: rebound identity's old ghost must be removed ==&gt; expected: &lt;null&gt; but was: &lt;TrackedFarPlayer[uuid=00000000-0000-0001-0000-000000000001, name=P1, latest=UpdateEntry[rosterIndex=0, quantX=1600, quantY=1024, quantZ=0, yaw=0, headYaw=0, pitch=0, poseFlags=0, velX=0, velY=0, velZ=0, equipmentDictIdxPlus1=null, equipmentCounts=null, equipmentIdentities=null, vehicle=null], cadenceTicks=10, receivedAtMillis=500, motion=dev.vox.lss.common.farplayers.FarPlayerMotion@4c5da4f9, equipmentIdentities=null, equipmentCounts=null]&gt;
+	at org.junit.jupiter.api.AssertAll.assertAll(AssertAll.java:80)
+	at org.junit.jupiter.api.AssertAll.assertAll(AssertAll.java:44)
+	at org.junit.jupiter.api.AssertAll.assertAll(AssertAll.java:38)
+	at org.junit.jupiter.api.Assertions.assertAll(Assertions.java:2940)
+	at knot//dev.vox.lss.common.farplayers.FarPlayerIdentityReviewTest.rebindingOneIndexMustRetireItsPreviousTrackedIdentity(FarPlayerIdentityReviewTest.java:23)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
+	Suppressed: org.opentest4j.AssertionFailedError: one current roster binding must not retain two drawable identities ==&gt; expected: &lt;1&gt; but was: &lt;2&gt;
+		at org.junit.jupiter.api.AssertionFailureBuilder.build(AssertionFailureBuilder.java:151)
+		at org.junit.jupiter.api.AssertionFailureBuilder.buildAndThrow(AssertionFailureBuilder.java:132)
+		at org.junit.jupiter.api.AssertEquals.failNotEqual(AssertEquals.java:197)
+		at org.junit.jupiter.api.AssertEquals.assertEquals(AssertEquals.java:150)
+		at org.junit.jupiter.api.Assertions.assertEquals(Assertions.java:559)
+		at knot//dev.vox.lss.common.farplayers.FarPlayerIdentityReviewTest.lambda$rebindingOneIndexMustRetireItsPreviousTrackedIdentity$0(FarPlayerIdentityReviewTest.java:24)
+		at org.junit.jupiter.api.AssertAll.lambda$assertAll$0(AssertAll.java:68)
+		at java.base/java.util.stream.ReferencePipeline$3$1.accept(ReferencePipeline.java:197)
+		at java.base/java.util.Spliterators$ArraySpliterator.forEachRemaining(Spliterators.java:1024)
+		at java.base/java.util.stream.AbstractPipeline.copyInto(AbstractPipeline.java:509)
+		at java.base/java.util.stream.AbstractPipeline.wrapAndCopyInto(AbstractPipeline.java:499)
+		at java.base/java.util.stream.ReduceOps$ReduceOp.evaluateSequential(ReduceOps.java:921)
+		at java.base/java.util.stream.AbstractPipeline.evaluate(AbstractPipeline.java:234)
+		at java.base/java.util.stream.ReferencePipeline.collect(ReferencePipeline.java:682)
+		at org.junit.jupiter.api.AssertAll.assertAll(AssertAll.java:77)
+		... 7 more
+	Suppressed: org.opentest4j.AssertionFailedError: rebound identity's old ghost must be removed ==&gt; expected: &lt;null&gt; but was: &lt;TrackedFarPlayer[uuid=00000000-0000-0001-0000-000000000001, name=P1, latest=UpdateEntry[rosterIndex=0, quantX=1600, quantY=1024, quantZ=0, yaw=0, headYaw=0, pitch=0, poseFlags=0, velX=0, velY=0, velZ=0, equipmentDictIdxPlus1=null, equipmentCounts=null, equipmentIdentities=null, vehicle=null], cadenceTicks=10, receivedAtMillis=500, motion=dev.vox.lss.common.farplayers.FarPlayerMotion@4c5da4f9, equipmentIdentities=null, equipmentCounts=null]&gt;
+		at org.junit.jupiter.api.AssertionFailureBuilder.build(AssertionFailureBuilder.java:151)
+		at org.junit.jupiter.api.AssertionFailureBuilder.buildAndThrow(AssertionFailureBuilder.java:132)
+		at org.junit.jupiter.api.AssertNull.failNotNull(AssertNull.java:50)
+		at org.junit.jupiter.api.AssertNull.assertNull(AssertNull.java:35)
+		at org.junit.jupiter.api.Assertions.assertNull(Assertions.java:283)
+		at knot//dev.vox.lss.common.farplayers.FarPlayerIdentityReviewTest.lambda$rebindingOneIndexMustRetireItsPreviousTrackedIdentity$1(FarPlayerIdentityReviewTest.java:25)
+		at org.junit.jupiter.api.AssertAll.lambda$assertAll$0(AssertAll.java:68)
+		at java.base/java.util.stream.ReferencePipeline$3$1.accept(ReferencePipeline.java:197)
+		at java.base/java.util.Spliterators$ArraySpliterator.forEachRemaining(Spliterators.java:1024)
+		at java.base/java.util.stream.AbstractPipeline.copyInto(AbstractPipeline.java:509)
+		at java.base/java.util.stream.AbstractPipeline.wrapAndCopyInto(AbstractPipeline.java:499)
+		at java.base/java.util.stream.ReduceOps$ReduceOp.evaluateSequential(ReduceOps.java:921)
+		at java.base/java.util.stream.AbstractPipeline.evaluate(AbstractPipeline.java:234)
+		at java.base/java.util.stream.ReferencePipeline.collect(ReferencePipeline.java:682)
+		at org.junit.jupiter.api.AssertAll.assertAll(AssertAll.java:77)
+		... 7 more
+</failure>
+  </testcase>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

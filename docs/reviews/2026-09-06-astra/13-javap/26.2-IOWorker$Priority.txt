@@ -1,0 +1,75 @@
+Compiled from "IOWorker.java"
+final class net.minecraft.world.level.chunk.storage.IOWorker$Priority extends java.lang.Enum<net.minecraft.world.level.chunk.storage.IOWorker$Priority> {
+  public static final net.minecraft.world.level.chunk.storage.IOWorker$Priority FOREGROUND;
+
+  public static final net.minecraft.world.level.chunk.storage.IOWorker$Priority BACKGROUND;
+
+  public static final net.minecraft.world.level.chunk.storage.IOWorker$Priority SHUTDOWN;
+
+  private static final net.minecraft.world.level.chunk.storage.IOWorker$Priority[] $VALUES;
+
+  public static net.minecraft.world.level.chunk.storage.IOWorker$Priority[] values();
+    Code:
+         0: getstatic     #13                 // Field $VALUES:[Lnet/minecraft/world/level/chunk/storage/IOWorker$Priority;
+         3: invokevirtual #17                 // Method "[Lnet/minecraft/world/level/chunk/storage/IOWorker$Priority;".clone:()Ljava/lang/Object;
+         6: checkcast     #18                 // class "[Lnet/minecraft/world/level/chunk/storage/IOWorker$Priority;"
+         9: areturn
+
+  public static net.minecraft.world.level.chunk.storage.IOWorker$Priority valueOf(java.lang.String);
+    Code:
+         0: ldc           #1                  // class net/minecraft/world/level/chunk/storage/IOWorker$Priority
+         2: aload_0
+         3: invokestatic  #22                 // Method java/lang/Enum.valueOf:(Ljava/lang/Class;Ljava/lang/String;)Ljava/lang/Enum;
+         6: checkcast     #1                  // class net/minecraft/world/level/chunk/storage/IOWorker$Priority
+         9: areturn
+
+  private net.minecraft.world.level.chunk.storage.IOWorker$Priority();
+    Code:
+         0: aload_0
+         1: aload_1
+         2: iload_2
+         3: invokespecial #28                 // Method java/lang/Enum."<init>":(Ljava/lang/String;I)V
+         6: return
+
+  private static net.minecraft.world.level.chunk.storage.IOWorker$Priority[] $values();
+    Code:
+         0: iconst_3
+         1: anewarray     #1                  // class net/minecraft/world/level/chunk/storage/IOWorker$Priority
+         4: dup
+         5: iconst_0
+         6: getstatic     #3                  // Field FOREGROUND:Lnet/minecraft/world/level/chunk/storage/IOWorker$Priority;
+         9: aastore
+        10: dup
+        11: iconst_1
+        12: getstatic     #7                  // Field BACKGROUND:Lnet/minecraft/world/level/chunk/storage/IOWorker$Priority;
+        15: aastore
+        16: dup
+        17: iconst_2
+        18: getstatic     #10                 // Field SHUTDOWN:Lnet/minecraft/world/level/chunk/storage/IOWorker$Priority;
+        21: aastore
+        22: areturn
+
+  static {};
+    Code:
+         0: new           #1                  // class net/minecraft/world/level/chunk/storage/IOWorker$Priority
+         3: dup
+         4: ldc           #32                 // String FOREGROUND
+         6: iconst_0
+         7: invokespecial #33                 // Method "<init>":(Ljava/lang/String;I)V
+        10: putstatic     #3                  // Field FOREGROUND:Lnet/minecraft/world/level/chunk/storage/IOWorker$Priority;
+        13: new           #1                  // class net/minecraft/world/level/chunk/storage/IOWorker$Priority
+        16: dup
+        17: ldc           #34                 // String BACKGROUND
+        19: iconst_1
+        20: invokespecial #33                 // Method "<init>":(Ljava/lang/String;I)V
+        23: putstatic     #7                  // Field BACKGROUND:Lnet/minecraft/world/level/chunk/storage/IOWorker$Priority;
+        26: new           #1                  // class net/minecraft/world/level/chunk/storage/IOWorker$Priority
+        29: dup
+        30: ldc           #35                 // String SHUTDOWN
+        32: iconst_2
+        33: invokespecial #33                 // Method "<init>":(Ljava/lang/String;I)V
+        36: putstatic     #10                 // Field SHUTDOWN:Lnet/minecraft/world/level/chunk/storage/IOWorker$Priority;
+        39: invokestatic  #36                 // Method $values:()[Lnet/minecraft/world/level/chunk/storage/IOWorker$Priority;
+        42: putstatic     #13                 // Field $VALUES:[Lnet/minecraft/world/level/chunk/storage/IOWorker$Priority;
+        45: return
+}

@@ -1,0 +1,782 @@
+[
+  {
+    "line": "26.2",
+    "loader": "fabric",
+    "sha256": "566fb25f140a168238aee1110187f341de59c1afbcac05cfe30f04051c8fba25",
+    "class_majors": {
+      "69": 267
+    },
+    "wire_classes_identical": true,
+    "manifest": "Manifest-Version: 1.0\r\nFabric-Mapping-Namespace: official\r\nFabric-Gradle-Version: 9.5.1\r\nFabric-Loom-Version: 1.17.13\r\nFabric-Mixin-Compile-Extensions-Version: 0.6.0\r\nFabric-Minecraft-Version: 26.2\r\nFabric-Tiny-Remapper-Version: 0.14.0\r\nFabric-Loader-Version: 0.19.3\r\nFabric-Mixin-Version: 0.17.3+mixin.0.8.7\r\nFabric-Mixin-Group: net.fabricmc\r\n\r\n",
+    "nested": [
+      {
+        "path": "META-INF/jars/sqlite-jdbc-slim.jar",
+        "sha256": "d5adf3379521b94fe5e9e9e9d64cac141a410ad3dff74175ce5fdce7320d47a3",
+        "class_count": 129,
+        "native_count": 8
+      },
+      {
+        "path": "META-INF/jars/zstd-jni-slim.jar",
+        "sha256": "b18631b75106d5f3c60a7309d1942e7d0eb19951a5702a617dce9c0d748e47c8",
+        "class_count": 37,
+        "native_count": 6
+      },
+      {
+        "path": "META-INF/jars/common-0.14.0.jar",
+        "sha256": "5053e2605acff3cd15fa900086de5050605d12911dcbd02864ec1a7c2904b96c",
+        "class_count": 176,
+        "native_count": 0
+      }
+    ],
+    "metadata": {
+      "schemaVersion": 1,
+      "id": "lss",
+      "version": "0.14.0",
+      "name": "LOD Server Support",
+      "description": "Voxy multiplayer support (unofficial). Enables players with Voxy to see fully rendered terrain out to hundreds of chunks on multiplayer servers without needing to explore the world first.",
+      "authors": [
+        "VoX"
+      ],
+      "contact": {
+        "sources": "https://github.com/VoX/lod-server-support"
+      },
+      "license": "MIT",
+      "icon": "assets/lss/icon.png",
+      "accessWidener": "lss.accesswidener",
+      "environment": "*",
+      "entrypoints": {
+        "main": [
+          "dev.vox.lss.LSSMod"
+        ],
+        "client": [
+          "dev.vox.lss.LSSClient"
+        ],
+        "sodium:config_api_user": [
+          "dev.vox.lss.config.LSSConfigMenu"
+        ],
+        "modmenu": [
+          "dev.vox.lss.config.LSSModMenuIntegration"
+        ]
+      },
+      "mixins": [
+        "lss.mixins.json",
+        "lss-trace.mixins.json",
+        "lss-sodium-legacy.mixins.json"
+      ],
+      "jars": [
+        {
+          "file": "META-INF/jars/sqlite-jdbc-slim.jar"
+        },
+        {
+          "file": "META-INF/jars/zstd-jni-slim.jar"
+        },
+        {
+          "file": "META-INF/jars/common-0.14.0.jar"
+        }
+      ],
+      "depends": {
+        "minecraft": ">=26.2 <26.3-",
+        "fabricloader": ">=0.18.4",
+        "fabric-api": ">=0.152.1"
+      },
+      "suggests": {
+        "sodium": ">=0.9.0",
+        "modmenu": "*",
+        "voxy": ">=0.2.17-alpha",
+        "xaeroworldmap": "*"
+      }
+    },
+    "forbidden_flat_native_libs": null
+  },
+  {
+    "line": "26.2",
+    "loader": "paper",
+    "sha256": "38bba0711438e16436ebe77c57eff008c42ae8f40350e078a7facd1c607ee7e3",
+    "class_majors": {
+      "69": 76,
+      "65": 176
+    },
+    "wire_classes_identical": true,
+    "manifest": "Manifest-Version: 1.0\r\npaperweight-mappings-namespace: mojang\r\nMulti-Release: true\r\n\r\n",
+    "nested": [],
+    "metadata": "name: LodServerSupport\nversion: '0.14.0'\nmain: dev.vox.lss.paper.LSSPaperPlugin\napi-version: '26.2'\n# DERIVED (R2-5): the value expands from `folia` membership in line.env's\n# LINE_PAPER_LOADERS \u2014 the one per-line judgment (\"does Folia exist upstream for\n# THIS line?\") lives there, beside the other line identity rows a fresh cut must\n# touch anyway. Where true, Folia support is EXPERIMENTAL (single-player soak\n# validated; concurrent multi-region ingress untested) \u2014 the flag is a loads-at-all\n# statement, never a claim that SOAK_PLATFORM=folia has passed on this line.\nfolia-supported: true\n# C5 (XVER \u00a77): the Via mismatch guard reflectively reads ViaVersion's API when the\n# plugin is present. softdepend keeps Spigot's classloader from logging the one-time\n# \"loaded class ... which is not a depend/softdepend\" warning on the first handshake \u2014\n# noise that reads like an LSS bug. No hard dependency: without Via the probe is a\n# silent no-signal. LibsDisguises (issue #282): the far-player privacy ladder reads\n# DisguiseAPI reflectively to hide disguised players \u2014 same precedent (load ORDER +\n# classloader visibility, never a hard depend; absent = the rung is skipped).\nsoftdepend: [ViaVersion, LibsDisguises]\ndescription: Voxy multiplayer support (unofficial). Enables players with Voxy to see fully rendered terrain out to hundreds of chunks on multiplayer servers without needing to explore the world first.\nauthor: VoX\nwebsite: https://modrinth.com/plugin/lod-server-support\ncommands:\n  lsslod:\n    description: LOD Server Support admin commands\n    usage: /lsslod <stats|diag|store|set|help>\n    permission: lss.admin\npermissions:\n  lss.admin:\n    description: Access to LSS admin commands\n    default: op\n  # Far players (v0.11.0 E1): server-side privacy lever \u2014 holders are never served as\n  # far players regardless of the farPlayers mode (FARP \u00a73.2). BOTH brand spellings are\n  # declared (default false) and the enforcement honors either: Bukkit resolves an\n  # UNDECLARED node to the op default, so a single-brand declaration plus a cross-brand\n  # check would silently hide every op \u2014 and declaring both keeps the privacy grant\n  # working across an LSS<->VSS jar swap.\n  lss.farplayers.hidden:\n    description: Players with this permission are never shown as far players\n    default: false\n  vss.farplayers.hidden:\n    description: Players with this permission are never shown as far players (VSS spelling)\n    default: false\n  # Service gate (requireServicePermission, default false): with the config key on, only\n  # holders are served LOD data \u2014 a handshake from anyone else is answered with an\n  # enabled=false SessionConfig and no session. BOTH brand spellings are declared for the\n  # reason spelled out on lss.farplayers.hidden above (Bukkit resolves an UNDECLARED node to\n  # the op default, so a single-brand declaration plus a cross-brand check goes silently\n  # wrong, and declaring both keeps grants alive across an LSS<->VSS jar swap).\n  #\n  # `default: true`, NOT op: everyone holds these unless an admin says otherwise, so arming\n  # the gate on its own changes nothing for anybody \u2014 the original behavior, preserved. The\n  # gate is a DENY tool: the only thing that takes LOD away is an explicit negative grant in\n  # the permission plugin (e.g. LuckPerms `group default permission set lss.use false`).\n  #\n  # Enforcement requires BOTH spellings, so a negative grant on EITHER one denies \u2014 the De\n  # Morgan mirror of the privacy nodes above (grant model: hold EITHER; deny model: lose\n  # EITHER). An OR here would be inert: the spelling the admin did NOT touch still resolves\n  # to its declared `true` and would out-vote the single negative grant.\n  #\n  # That direction is also why losing either declaration is dangerous: an undeclared node\n  # falls back to Bukkit's op default, silently turning \"everyone\" into \"ops only\".\n  lss.use:\n    description: Receive LOD data when requireServicePermission is enabled\n    default: true\n  vss.use:\n    description: Receive LOD data when requireServicePermission is enabled (VSS spelling)\n    default: true\n",
+    "forbidden_flat_native_libs": null
+  },
+  {
+    "line": "26.2",
+    "loader": "neoforge",
+    "sha256": "978b52ef309f858b4068b0d3a8e21cfff50cff260dfffa53e203775e0a01b8fc",
+    "class_majors": {
+      "69": 254,
+      "65": 176
+    },
+    "wire_classes_identical": true,
+    "manifest": "Manifest-Version: 1.0\r\nMulti-Release: true\r\n\r\n",
+    "nested": [
+      {
+        "path": "META-INF/jarjar/sqlite-jdbc-3.49.1.0.jar",
+        "sha256": "5c8609d2ca341deb8c6f71778974b5ba4995c7d32d7c7c89d9392a3e72c39291",
+        "class_count": 129,
+        "native_count": 24
+      },
+      {
+        "path": "META-INF/jarjar/zstd-jni-1.5.7-3.jar",
+        "sha256": "a38a4a97f1b43b878c91e0dd7f1e3d17f0e70beec71d95bacaf56a2f207624a3",
+        "class_count": 37,
+        "native_count": 18
+      }
+    ],
+    "metadata": "modLoader=\"javafml\"\nloaderVersion=\"[4,)\"\nlicense=\"MIT\"\nissueTrackerURL=\"https://github.com/VoX/lod-server-support/issues\"\n\n[[mods]]\nmodId=\"lss\"\nversion=\"0.14.0\"\ndisplayName=\"LOD Server Support\"\nauthors=\"VoX\"\nlogoFile=\"assets/lss/icon.png\"\ndescription='''Voxy multiplayer support (unofficial). Enables players with Voxy to see fully rendered terrain out to hundreds of chunks on multiplayer servers without needing to explore the world first. Server-side works with any LSS/VSS client; the client half needs a community Voxy build for NeoForge.'''\n\n[[mixins]]\nconfig=\"lss.neoforge.mixins.json\"\n\n[[mixins]]\nconfig=\"lss-sodium-legacy.mixins.json\"\n\n[[dependencies.lss]]\n    modId=\"neoforge\"\n    type=\"required\"\n    # DERIVED (R2-6): the loader floor is neoforge_version's first two components\n    # (26.2.0.59 -> [26.2,)) \u2014 the hand row churned on all three v0.11 ports.\n    versionRange=\"[26.2,)\"\n    ordering=\"NONE\"\n    side=\"BOTH\"\n\n[[dependencies.lss]]\n    modId=\"minecraft\"\n    type=\"required\"\n    versionRange=\"[26.2]\"\n    ordering=\"NONE\"\n    side=\"BOTH\"\n\n# Sodium 0.8+ options page (sodium-options-page-generations-plan.md, NeoForge\n# amendment): sodium-neoforge's ConfigLoaderForge reads this property from every\n# mod and instantiates the named ConfigEntryPoint \u2014 the same key Fabric declares\n# as an entrypoint. Harmless when Sodium is absent or pre-0.8.\n[modproperties.lss]\n\"sodium:config_api_user\"=\"dev.vox.lss.config.LSSConfigMenu\"\n",
+    "jarjar": {
+      "jars": [
+        {
+          "identifier": {
+            "group": "org.xerial",
+            "artifact": "sqlite-jdbc"
+          },
+          "version": {
+            "range": "[3.49.1.0,4.0.0.0)",
+            "artifactVersion": "3.49.1.0"
+          },
+          "path": "META-INF/jarjar/sqlite-jdbc-3.49.1.0.jar",
+          "isObfuscated": false
+        },
+        {
+          "identifier": {
+            "group": "com.github.luben",
+            "artifact": "zstd-jni"
+          },
+          "version": {
+            "range": "[1.5.7-3,2.0.0.0)",
+            "artifactVersion": "1.5.7-3"
+          },
+          "path": "META-INF/jarjar/zstd-jni-1.5.7-3.jar",
+          "isObfuscated": false
+        }
+      ]
+    },
+    "forbidden_flat_native_libs": false
+  },
+  {
+    "line": "26.1",
+    "loader": "fabric",
+    "sha256": "5a4889de170492d10ec01d0769ce3cb15c2a0050b66529b5a9142d0ef9422f1a",
+    "class_majors": {
+      "69": 265
+    },
+    "wire_classes_identical": true,
+    "manifest": "Manifest-Version: 1.0\r\nFabric-Mapping-Namespace: official\r\nFabric-Gradle-Version: 9.5.1\r\nFabric-Loom-Version: 1.17.13\r\nFabric-Mixin-Compile-Extensions-Version: 0.6.0\r\nFabric-Minecraft-Version: 26.1.2\r\nFabric-Tiny-Remapper-Version: 0.14.0\r\nFabric-Loader-Version: 0.19.3\r\nFabric-Mixin-Version: 0.17.3+mixin.0.8.7\r\nFabric-Mixin-Group: net.fabricmc\r\n\r\n",
+    "nested": [
+      {
+        "path": "META-INF/jars/sqlite-jdbc-slim.jar",
+        "sha256": "6d1d4918cad7d6cdefd2474a5cf47d0ed519d96c67b9779e4a85eca78d29112d",
+        "class_count": 129,
+        "native_count": 8
+      },
+      {
+        "path": "META-INF/jars/zstd-jni-slim.jar",
+        "sha256": "6ee92119be10f9f5aa819bd7ab0a7ba18ac17652529644c9efe2be7bec76a7f4",
+        "class_count": 37,
+        "native_count": 6
+      },
+      {
+        "path": "META-INF/jars/common-0.14.0.jar",
+        "sha256": "113eeb57b46adcef9d0a758503713f84c4c5003a7968ff9bd0b11e4fe0ebcbb2",
+        "class_count": 175,
+        "native_count": 0
+      }
+    ],
+    "metadata": {
+      "schemaVersion": 1,
+      "id": "lss",
+      "version": "0.14.0",
+      "name": "LOD Server Support",
+      "description": "Voxy multiplayer support (unofficial). Enables players with Voxy to see fully rendered terrain out to hundreds of chunks on multiplayer servers without needing to explore the world first.",
+      "authors": [
+        "VoX"
+      ],
+      "contact": {
+        "sources": "https://github.com/VoX/lod-server-support"
+      },
+      "license": "MIT",
+      "icon": "assets/lss/icon.png",
+      "accessWidener": "lss.accesswidener",
+      "environment": "*",
+      "entrypoints": {
+        "main": [
+          "dev.vox.lss.LSSMod"
+        ],
+        "client": [
+          "dev.vox.lss.LSSClient"
+        ],
+        "sodium:config_api_user": [
+          "dev.vox.lss.config.LSSConfigMenu"
+        ],
+        "modmenu": [
+          "dev.vox.lss.config.LSSModMenuIntegration"
+        ]
+      },
+      "mixins": [
+        "lss.mixins.json",
+        "lss-trace.mixins.json",
+        "lss-sodium-legacy.mixins.json"
+      ],
+      "jars": [
+        {
+          "file": "META-INF/jars/sqlite-jdbc-slim.jar"
+        },
+        {
+          "file": "META-INF/jars/zstd-jni-slim.jar"
+        },
+        {
+          "file": "META-INF/jars/common-0.14.0.jar"
+        }
+      ],
+      "depends": {
+        "minecraft": ">=26.1 <26.2-",
+        "fabricloader": ">=0.18.4",
+        "fabric-api": ">=0.146.0"
+      },
+      "suggests": {
+        "sodium": ">=0.8.12",
+        "modmenu": "*",
+        "voxy": ">=0.2.14-alpha",
+        "xaeroworldmap": "*"
+      }
+    },
+    "forbidden_flat_native_libs": null
+  },
+  {
+    "line": "26.1",
+    "loader": "paper",
+    "sha256": "4c95b4ac37053181f953d7621c3a1b3b5ed11e6ed99d460f37b76a4efea60948",
+    "class_majors": {
+      "69": 75,
+      "65": 175
+    },
+    "wire_classes_identical": true,
+    "manifest": "Manifest-Version: 1.0\r\npaperweight-mappings-namespace: mojang\r\nMulti-Release: true\r\n\r\n",
+    "nested": [],
+    "metadata": "name: LodServerSupport\nversion: '0.14.0'\nmain: dev.vox.lss.paper.LSSPaperPlugin\napi-version: '26.1.2'\n# 26.1 support line: Folia publishes real MC 26.1.2 builds, so the flag is correct HERE for\n# the same reason it is correct on the 26.2 primary line \u2014 the guarded failure is a jar that\n# silently stops loading on Folia (PluginYmlContractTest + release_check.py pin its\n# PRESENCE). Folia support remains EXPERIMENTAL on every line \u2014 single-player soak\n# validated; concurrent multi-region ingress untested.\nfolia-supported: true\n# C5 (XVER \u00a77): the Via mismatch guard reflectively reads ViaVersion's API when the\n# plugin is present. softdepend keeps Spigot's classloader from logging the one-time\n# \"loaded class ... which is not a depend/softdepend\" warning on the first handshake \u2014\n# noise that reads like an LSS bug. No hard dependency: without Via the probe is a\n# silent no-signal. LibsDisguises (issue #282): the far-player privacy ladder reads\n# DisguiseAPI reflectively to hide disguised players \u2014 same precedent (load ORDER +\n# classloader visibility, never a hard depend; absent = the rung is skipped).\nsoftdepend: [ViaVersion, LibsDisguises]\ndescription: Voxy multiplayer support (unofficial). Enables players with Voxy to see fully rendered terrain out to hundreds of chunks on multiplayer servers without needing to explore the world first.\nauthor: VoX\nwebsite: https://modrinth.com/plugin/lod-server-support\ncommands:\n  lsslod:\n    description: LOD Server Support admin commands\n    usage: /lsslod <stats|diag|store|set|help>\n    permission: lss.admin\npermissions:\n  lss.admin:\n    description: Access to LSS admin commands\n    default: op\n  # Far players (v0.11.0 E1): server-side privacy lever \u2014 holders are never served as\n  # far players regardless of the farPlayers mode (FARP \u00a73.2). BOTH brand spellings are\n  # declared (default false) and the enforcement honors either: Bukkit resolves an\n  # UNDECLARED node to the op default, so a single-brand declaration plus a cross-brand\n  # check would silently hide every op \u2014 and declaring both keeps the privacy grant\n  # working across an LSS<->VSS jar swap.\n  lss.farplayers.hidden:\n    description: Players with this permission are never shown as far players\n    default: false\n  vss.farplayers.hidden:\n    description: Players with this permission are never shown as far players (VSS spelling)\n    default: false\n  # Service gate (requireServicePermission, default false): with the config key on, only\n  # holders are served LOD data \u2014 a handshake from anyone else is answered with an\n  # enabled=false SessionConfig and no session. BOTH brand spellings are declared for the\n  # reason spelled out on lss.farplayers.hidden above (Bukkit resolves an UNDECLARED node to\n  # the op default, so a single-brand declaration plus a cross-brand check goes silently\n  # wrong, and declaring both keeps grants alive across an LSS<->VSS jar swap).\n  #\n  # `default: true`, NOT op: everyone holds these unless an admin says otherwise, so arming\n  # the gate on its own changes nothing for anybody \u2014 the original behavior, preserved. The\n  # gate is a DENY tool: the only thing that takes LOD away is an explicit negative grant in\n  # the permission plugin (e.g. LuckPerms `group default permission set lss.use false`).\n  #\n  # Enforcement requires BOTH spellings, so a negative grant on EITHER one denies \u2014 the De\n  # Morgan mirror of the privacy nodes above (grant model: hold EITHER; deny model: lose\n  # EITHER). An OR here would be inert: the spelling the admin did NOT touch still resolves\n  # to its declared `true` and would out-vote the single negative grant.\n  #\n  # That direction is also why losing either declaration is dangerous: an undeclared node\n  # falls back to Bukkit's op default, silently turning \"everyone\" into \"ops only\".\n  lss.use:\n    description: Receive LOD data when requireServicePermission is enabled\n    default: true\n  vss.use:\n    description: Receive LOD data when requireServicePermission is enabled (VSS spelling)\n    default: true\n",
+    "forbidden_flat_native_libs": null
+  },
+  {
+    "line": "26.1",
+    "loader": "neoforge",
+    "sha256": "89018aa97031f8f4d0edeceee3f164fb75cf685b23e29717efa1965dbdd93ca4",
+    "class_majors": {
+      "69": 252,
+      "65": 175
+    },
+    "wire_classes_identical": true,
+    "manifest": "Manifest-Version: 1.0\r\nMulti-Release: true\r\n\r\n",
+    "nested": [
+      {
+        "path": "META-INF/jarjar/sqlite-jdbc-3.49.1.0.jar",
+        "sha256": "5c8609d2ca341deb8c6f71778974b5ba4995c7d32d7c7c89d9392a3e72c39291",
+        "class_count": 129,
+        "native_count": 24
+      },
+      {
+        "path": "META-INF/jarjar/zstd-jni-1.5.7-3.jar",
+        "sha256": "a38a4a97f1b43b878c91e0dd7f1e3d17f0e70beec71d95bacaf56a2f207624a3",
+        "class_count": 37,
+        "native_count": 18
+      }
+    ],
+    "metadata": "modLoader=\"javafml\"\nloaderVersion=\"[4,)\"\nlicense=\"MIT\"\nissueTrackerURL=\"https://github.com/VoX/lod-server-support/issues\"\n\n[[mods]]\nmodId=\"lss\"\nversion=\"0.14.0\"\ndisplayName=\"LOD Server Support\"\nauthors=\"VoX\"\nlogoFile=\"assets/lss/icon.png\"\ndescription='''Voxy multiplayer support (unofficial). Enables players with Voxy to see fully rendered terrain out to hundreds of chunks on multiplayer servers without needing to explore the world first. Server-side works with any LSS/VSS client; the client half needs a community Voxy build for NeoForge.'''\n\n[[mixins]]\nconfig=\"lss.neoforge.mixins.json\"\n\n[[mixins]]\nconfig=\"lss-sodium-legacy.mixins.json\"\n\n[[dependencies.lss]]\n    modId=\"neoforge\"\n    type=\"required\"\n    # LINE DATA: per-line NeoForge loader floor (round-3 review NIT \u2014 the MC dep\n    # above is templated from gradle.properties; this row is hand-edited per line)\n    versionRange=\"[26.1,)\"\n    ordering=\"NONE\"\n    side=\"BOTH\"\n\n[[dependencies.lss]]\n    modId=\"minecraft\"\n    type=\"required\"\n    versionRange=\"[26.1.2]\"\n    ordering=\"NONE\"\n    side=\"BOTH\"\n\n# Sodium 0.8+ options page (sodium-options-page-generations-plan.md, NeoForge\n# amendment): sodium-neoforge's ConfigLoaderForge reads this property from every\n# mod and instantiates the named ConfigEntryPoint \u2014 the same key Fabric declares\n# as an entrypoint. Harmless when Sodium is absent or pre-0.8.\n[modproperties.lss]\n\"sodium:config_api_user\"=\"dev.vox.lss.config.LSSConfigMenu\"\n",
+    "jarjar": {
+      "jars": [
+        {
+          "identifier": {
+            "group": "org.xerial",
+            "artifact": "sqlite-jdbc"
+          },
+          "version": {
+            "range": "[3.49.1.0,4.0.0.0)",
+            "artifactVersion": "3.49.1.0"
+          },
+          "path": "META-INF/jarjar/sqlite-jdbc-3.49.1.0.jar",
+          "isObfuscated": false
+        },
+        {
+          "identifier": {
+            "group": "com.github.luben",
+            "artifact": "zstd-jni"
+          },
+          "version": {
+            "range": "[1.5.7-3,2.0.0.0)",
+            "artifactVersion": "1.5.7-3"
+          },
+          "path": "META-INF/jarjar/zstd-jni-1.5.7-3.jar",
+          "isObfuscated": false
+        }
+      ]
+    },
+    "forbidden_flat_native_libs": false
+  },
+  {
+    "line": "1.21.11",
+    "loader": "fabric",
+    "sha256": "f38bd631947591d5b057b1cfd87904d30efa2aafe1078911528073eddbce1700",
+    "class_majors": {
+      "65": 264
+    },
+    "wire_classes_identical": true,
+    "manifest": "Manifest-Version: 1.0\r\nFabric-Jar-Type: classes\r\nFabric-Loom-Mixin-Remap-Type: static\r\nFabric-Gradle-Version: 9.5.1\r\nFabric-Loom-Version: 1.17.13\r\nFabric-Mixin-Compile-Extensions-Version: 0.6.0\r\nFabric-Minecraft-Version: 1.21.11\r\nFabric-Tiny-Remapper-Version: 0.14.0\r\nFabric-Loader-Version: 0.19.3\r\nFabric-Mixin-Version: 0.17.3+mixin.0.8.7\r\nFabric-Mixin-Group: net.fabricmc\r\nFabric-Mapping-Namespace: intermediary\r\n\r\n",
+    "nested": [
+      {
+        "path": "META-INF/jars/common-0.14.0.jar",
+        "sha256": "608ecdb6dd34554686a9ecfe98776ea2a7594ec26022fce7670d4eaf29f38b00",
+        "class_count": 175,
+        "native_count": 0
+      },
+      {
+        "path": "META-INF/jars/sqlite-jdbc-slim.jar",
+        "sha256": "fdc6d9871465c4f5466e9834cc64dff27df041e344def24cce94a89e2941d5fc",
+        "class_count": 129,
+        "native_count": 8
+      },
+      {
+        "path": "META-INF/jars/zstd-jni-slim.jar",
+        "sha256": "ba7a7fbf0871c733706dbcf8e8dfe9a142481d8bd143305204a72552e3413439",
+        "class_count": 37,
+        "native_count": 6
+      }
+    ],
+    "metadata": {
+      "schemaVersion": 1,
+      "id": "lss",
+      "version": "0.14.0",
+      "name": "LOD Server Support",
+      "description": "Voxy multiplayer support (unofficial). Enables players with Voxy to see fully rendered terrain out to hundreds of chunks on multiplayer servers without needing to explore the world first.",
+      "authors": [
+        "VoX"
+      ],
+      "contact": {
+        "sources": "https://github.com/VoX/lod-server-support"
+      },
+      "license": "MIT",
+      "icon": "assets/lss/icon.png",
+      "accessWidener": "lss.accesswidener",
+      "environment": "*",
+      "entrypoints": {
+        "main": [
+          "dev.vox.lss.LSSMod"
+        ],
+        "client": [
+          "dev.vox.lss.LSSClient"
+        ],
+        "sodium:config_api_user": [
+          "dev.vox.lss.config.LSSConfigMenu"
+        ],
+        "modmenu": [
+          "dev.vox.lss.config.LSSModMenuIntegration"
+        ]
+      },
+      "mixins": [
+        "lss.mixins.json",
+        "lss-trace.mixins.json",
+        "lss-sodium-legacy.mixins.json"
+      ],
+      "jars": [
+        {
+          "file": "META-INF/jars/sqlite-jdbc-slim.jar"
+        },
+        {
+          "file": "META-INF/jars/zstd-jni-slim.jar"
+        },
+        {
+          "file": "META-INF/jars/common-0.14.0.jar"
+        }
+      ],
+      "depends": {
+        "minecraft": "1.21.11",
+        "fabricloader": ">=0.18.4",
+        "fabric-api": ">=0.141.0"
+      },
+      "suggests": {
+        "sodium": ">=0.8.12",
+        "modmenu": "*",
+        "voxy": ">=0.2.15-beta",
+        "xaeroworldmap": "*"
+      }
+    },
+    "forbidden_flat_native_libs": null
+  },
+  {
+    "line": "1.21.11",
+    "loader": "paper",
+    "sha256": "2354cc87e16af90da41ba2645b3475fe15382bc2de43b0190e9ee65ee3ff134b",
+    "class_majors": {
+      "65": 250
+    },
+    "wire_classes_identical": true,
+    "manifest": "Manifest-Version: 1.0\r\npaperweight-mappings-namespace: mojang\r\nMulti-Release: true\r\n\r\n",
+    "nested": [],
+    "metadata": "name: LodServerSupport\nversion: '0.14.0'\nmain: dev.vox.lss.paper.LSSPaperPlugin\napi-version: '1.21.11'\n# 1.21.11 support line: Folia publishes real 1.21.11 builds, so the flag is correct HERE \u2014\n# the guarded failure is a jar that silently stops loading on Folia (PluginYmlContractTest +\n# release_check.py pin its PRESENCE). Folia support remains EXPERIMENTAL on every line \u2014\n# single-player soak validated; concurrent multi-region ingress untested.\nfolia-supported: true\n# C5 (XVER \u00a77): the Via mismatch guard reflectively reads ViaVersion's API when the\n# plugin is present. softdepend keeps Spigot's classloader from logging the one-time\n# \"loaded class ... which is not a depend/softdepend\" warning on the first handshake \u2014\n# noise that reads like an LSS bug. No hard dependency: without Via the probe is a\n# silent no-signal. LibsDisguises (issue #282): the far-player privacy ladder reads\n# DisguiseAPI reflectively to hide disguised players \u2014 same precedent (load ORDER +\n# classloader visibility, never a hard depend; absent = the rung is skipped).\nsoftdepend: [ViaVersion, LibsDisguises]\ndescription: Voxy multiplayer support (unofficial). Enables players with Voxy to see fully rendered terrain out to hundreds of chunks on multiplayer servers without needing to explore the world first.\nauthor: VoX\nwebsite: https://modrinth.com/plugin/lod-server-support\ncommands:\n  lsslod:\n    description: LOD Server Support admin commands\n    usage: /lsslod <stats|diag|store|set|help>\n    permission: lss.admin\npermissions:\n  lss.admin:\n    description: Access to LSS admin commands\n    default: op\n  # Far players (v0.11.0 E1): server-side privacy lever \u2014 holders are never served as\n  # far players regardless of the farPlayers mode (FARP \u00a73.2). BOTH brand spellings are\n  # declared (default false) and the enforcement honors either: Bukkit resolves an\n  # UNDECLARED node to the op default, so a single-brand declaration plus a cross-brand\n  # check would silently hide every op \u2014 and declaring both keeps the privacy grant\n  # working across an LSS<->VSS jar swap.\n  lss.farplayers.hidden:\n    description: Players with this permission are never shown as far players\n    default: false\n  vss.farplayers.hidden:\n    description: Players with this permission are never shown as far players (VSS spelling)\n    default: false\n  # Service gate (requireServicePermission, default false): with the config key on, only\n  # holders are served LOD data \u2014 a handshake from anyone else is answered with an\n  # enabled=false SessionConfig and no session. BOTH brand spellings are declared for the\n  # reason spelled out on lss.farplayers.hidden above (Bukkit resolves an UNDECLARED node to\n  # the op default, so a single-brand declaration plus a cross-brand check goes silently\n  # wrong, and declaring both keeps grants alive across an LSS<->VSS jar swap).\n  #\n  # `default: true`, NOT op: everyone holds these unless an admin says otherwise, so arming\n  # the gate on its own changes nothing for anybody \u2014 the original behavior, preserved. The\n  # gate is a DENY tool: the only thing that takes LOD away is an explicit negative grant in\n  # the permission plugin (e.g. LuckPerms `group default permission set lss.use false`).\n  #\n  # Enforcement requires BOTH spellings, so a negative grant on EITHER one denies \u2014 the De\n  # Morgan mirror of the privacy nodes above (grant model: hold EITHER; deny model: lose\n  # EITHER). An OR here would be inert: the spelling the admin did NOT touch still resolves\n  # to its declared `true` and would out-vote the single negative grant.\n  #\n  # That direction is also why losing either declaration is dangerous: an undeclared node\n  # falls back to Bukkit's op default, silently turning \"everyone\" into \"ops only\".\n  lss.use:\n    description: Receive LOD data when requireServicePermission is enabled\n    default: true\n  vss.use:\n    description: Receive LOD data when requireServicePermission is enabled (VSS spelling)\n    default: true\n",
+    "forbidden_flat_native_libs": null
+  },
+  {
+    "line": "1.21.11",
+    "loader": "neoforge",
+    "sha256": "ffa47ae6ea166dfd56d7643a5d67c76682d83c2abd9e02fe580fe35b319653bb",
+    "class_majors": {
+      "65": 426
+    },
+    "wire_classes_identical": true,
+    "manifest": "Manifest-Version: 1.0\r\nMulti-Release: true\r\n\r\n",
+    "nested": [
+      {
+        "path": "META-INF/jarjar/sqlite-jdbc-3.49.1.0.jar",
+        "sha256": "5c8609d2ca341deb8c6f71778974b5ba4995c7d32d7c7c89d9392a3e72c39291",
+        "class_count": 129,
+        "native_count": 24
+      },
+      {
+        "path": "META-INF/jarjar/zstd-jni-1.5.7-3.jar",
+        "sha256": "a38a4a97f1b43b878c91e0dd7f1e3d17f0e70beec71d95bacaf56a2f207624a3",
+        "class_count": 37,
+        "native_count": 18
+      }
+    ],
+    "metadata": "modLoader=\"javafml\"\nloaderVersion=\"[4,)\"\nlicense=\"MIT\"\nissueTrackerURL=\"https://github.com/VoX/lod-server-support/issues\"\n\n[[mods]]\nmodId=\"lss\"\nversion=\"0.14.0\"\ndisplayName=\"LOD Server Support\"\nauthors=\"VoX\"\nlogoFile=\"assets/lss/icon.png\"\ndescription='''Voxy multiplayer support (unofficial). Enables players with Voxy to see fully rendered terrain out to hundreds of chunks on multiplayer servers without needing to explore the world first. Server-side works with any LSS/VSS client; the client half needs a community Voxy build for NeoForge.'''\n\n[[mixins]]\nconfig=\"lss.neoforge.mixins.json\"\n\n[[mixins]]\nconfig=\"lss-sodium-legacy.mixins.json\"\n\n[[dependencies.lss]]\n    modId=\"neoforge\"\n    type=\"required\"\n    # LINE DATA: per-line NeoForge loader floor (round-3 review NIT \u2014 the MC dep\n    # above is templated from gradle.properties; this row is hand-edited per line)\n    versionRange=\"[21.11,)\"\n    ordering=\"NONE\"\n    side=\"BOTH\"\n\n[[dependencies.lss]]\n    modId=\"minecraft\"\n    type=\"required\"\n    versionRange=\"[1.21.11]\"\n    ordering=\"NONE\"\n    side=\"BOTH\"\n\n# Sodium 0.8+ options page (sodium-options-page-generations-plan.md, NeoForge\n# amendment): sodium-neoforge's ConfigLoaderForge reads this property from every\n# mod and instantiates the named ConfigEntryPoint \u2014 the same key Fabric declares\n# as an entrypoint. Harmless when Sodium is absent or pre-0.8.\n[modproperties.lss]\n\"sodium:config_api_user\"=\"dev.vox.lss.config.LSSConfigMenu\"\n",
+    "jarjar": {
+      "jars": [
+        {
+          "identifier": {
+            "group": "org.xerial",
+            "artifact": "sqlite-jdbc"
+          },
+          "version": {
+            "range": "[3.49.1.0,4.0.0.0)",
+            "artifactVersion": "3.49.1.0"
+          },
+          "path": "META-INF/jarjar/sqlite-jdbc-3.49.1.0.jar",
+          "isObfuscated": false
+        },
+        {
+          "identifier": {
+            "group": "com.github.luben",
+            "artifact": "zstd-jni"
+          },
+          "version": {
+            "range": "[1.5.7-3,2.0.0.0)",
+            "artifactVersion": "1.5.7-3"
+          },
+          "path": "META-INF/jarjar/zstd-jni-1.5.7-3.jar",
+          "isObfuscated": false
+        }
+      ]
+    },
+    "forbidden_flat_native_libs": false
+  },
+  {
+    "line": "1.21.10",
+    "loader": "fabric",
+    "sha256": "8d5b1d7640f8028920972f80ed1af49d068397d67ff920ae25065fd3c373d6be",
+    "class_majors": {
+      "65": 263
+    },
+    "wire_classes_identical": true,
+    "manifest": "Manifest-Version: 1.0\r\nFabric-Jar-Type: classes\r\nFabric-Loom-Mixin-Remap-Type: static\r\nFabric-Gradle-Version: 9.5.1\r\nFabric-Loom-Version: 1.17.13\r\nFabric-Mixin-Compile-Extensions-Version: 0.6.0\r\nFabric-Minecraft-Version: 1.21.10\r\nFabric-Tiny-Remapper-Version: 0.14.0\r\nFabric-Loader-Version: 0.19.3\r\nFabric-Mixin-Version: 0.17.3+mixin.0.8.7\r\nFabric-Mixin-Group: net.fabricmc\r\nFabric-Mapping-Namespace: intermediary\r\n\r\n",
+    "nested": [
+      {
+        "path": "META-INF/jars/common-0.14.0.jar",
+        "sha256": "608ecdb6dd34554686a9ecfe98776ea2a7594ec26022fce7670d4eaf29f38b00",
+        "class_count": 175,
+        "native_count": 0
+      },
+      {
+        "path": "META-INF/jars/sqlite-jdbc-slim.jar",
+        "sha256": "05e7266da40cd8e114ee59c862032f5a39058f5a2b18e9bbc35b59d46dd75028",
+        "class_count": 129,
+        "native_count": 8
+      },
+      {
+        "path": "META-INF/jars/zstd-jni-slim.jar",
+        "sha256": "5996b0ca8043763a55c7207feedba19d4aeeb99ea974f48250b810de401518ba",
+        "class_count": 37,
+        "native_count": 6
+      }
+    ],
+    "metadata": {
+      "schemaVersion": 1,
+      "id": "lss",
+      "version": "0.14.0",
+      "name": "LOD Server Support",
+      "description": "Voxy multiplayer support (unofficial). Enables players with Voxy to see fully rendered terrain out to hundreds of chunks on multiplayer servers without needing to explore the world first.",
+      "authors": [
+        "VoX"
+      ],
+      "contact": {
+        "sources": "https://github.com/VoX/lod-server-support"
+      },
+      "license": "MIT",
+      "icon": "assets/lss/icon.png",
+      "accessWidener": "lss.accesswidener",
+      "environment": "*",
+      "entrypoints": {
+        "main": [
+          "dev.vox.lss.LSSMod"
+        ],
+        "client": [
+          "dev.vox.lss.LSSClient"
+        ],
+        "modmenu": [
+          "dev.vox.lss.config.LSSModMenuIntegration"
+        ]
+      },
+      "mixins": [
+        "lss.mixins.json",
+        "lss-trace.mixins.json",
+        "lss-sodium-legacy.mixins.json"
+      ],
+      "jars": [
+        {
+          "file": "META-INF/jars/sqlite-jdbc-slim.jar"
+        },
+        {
+          "file": "META-INF/jars/zstd-jni-slim.jar"
+        },
+        {
+          "file": "META-INF/jars/common-0.14.0.jar"
+        }
+      ],
+      "depends": {
+        "minecraft": "1.21.10",
+        "fabricloader": ">=0.18.4",
+        "fabric-api": ">=0.138.4"
+      },
+      "suggests": {
+        "voxy": ">=0.2.15-beta",
+        "sodium": "*",
+        "modmenu": "*",
+        "xaeroworldmap": "*"
+      }
+    },
+    "forbidden_flat_native_libs": null
+  },
+  {
+    "line": "1.21.10",
+    "loader": "paper",
+    "sha256": "4fe2c62791c062621cb29d4fd79ac19ca5fb6ce92338f88a6d68b67f6197cf8e",
+    "class_majors": {
+      "65": 250
+    },
+    "wire_classes_identical": true,
+    "manifest": "Manifest-Version: 1.0\r\npaperweight-mappings-namespace: mojang\r\nMulti-Release: true\r\n\r\n",
+    "nested": [],
+    "metadata": "name: LodServerSupport\nversion: '0.14.0'\nmain: dev.vox.lss.paper.LSSPaperPlugin\napi-version: '1.21.10'\n# 1.21.10 support line: Folia publishes NO MC 1.21.10 build (its versions jump\n# 1.21.8 -> 1.21.11), so the flag is FALSE here \u2014 the R-7 direction-flip doctrine:\n# presence would advertise a platform nobody can run this MC version on, and the\n# frozen 1.21.8-era precedent carried the same absence shape. PluginYmlContractTest\n# + release_check.py pin the FALSE form (a true flag reappearing on this line is\n# the guarded regression). The Folia code paths still ship in the jar (single\n# plugin jar across lines); they simply have no loadable host at 1.21.10.\nfolia-supported: false\n# C5 (XVER \u00a77): the Via mismatch guard reflectively reads ViaVersion's API when the\n# plugin is present. softdepend keeps Spigot's classloader from logging the one-time\n# \"loaded class ... which is not a depend/softdepend\" warning on the first handshake \u2014\n# noise that reads like an LSS bug. No hard dependency: without Via the probe is a\n# silent no-signal. LibsDisguises (issue #282): the far-player privacy ladder reads\n# DisguiseAPI reflectively to hide disguised players \u2014 same precedent (load ORDER +\n# classloader visibility, never a hard depend; absent = the rung is skipped).\nsoftdepend: [ViaVersion, LibsDisguises]\ndescription: Voxy multiplayer support (unofficial). Enables players with Voxy to see fully rendered terrain out to hundreds of chunks on multiplayer servers without needing to explore the world first.\nauthor: VoX\nwebsite: https://modrinth.com/plugin/lod-server-support\ncommands:\n  lsslod:\n    description: LOD Server Support admin commands\n    usage: /lsslod <stats|diag|store|set|help>\n    permission: lss.admin\npermissions:\n  lss.admin:\n    description: Access to LSS admin commands\n    default: op\n  # Far players (v0.11.0 E1): server-side privacy lever \u2014 holders are never served as\n  # far players regardless of the farPlayers mode (FARP \u00a73.2). BOTH brand spellings are\n  # declared (default false) and the enforcement honors either: Bukkit resolves an\n  # UNDECLARED node to the op default, so a single-brand declaration plus a cross-brand\n  # check would silently hide every op \u2014 and declaring both keeps the privacy grant\n  # working across an LSS<->VSS jar swap.\n  lss.farplayers.hidden:\n    description: Players with this permission are never shown as far players\n    default: false\n  vss.farplayers.hidden:\n    description: Players with this permission are never shown as far players (VSS spelling)\n    default: false\n  # Service gate (requireServicePermission, default false): with the config key on, only\n  # holders are served LOD data \u2014 a handshake from anyone else is answered with an\n  # enabled=false SessionConfig and no session. BOTH brand spellings are declared for the\n  # reason spelled out on lss.farplayers.hidden above (Bukkit resolves an UNDECLARED node to\n  # the op default, so a single-brand declaration plus a cross-brand check goes silently\n  # wrong, and declaring both keeps grants alive across an LSS<->VSS jar swap).\n  #\n  # `default: true`, NOT op: everyone holds these unless an admin says otherwise, so arming\n  # the gate on its own changes nothing for anybody \u2014 the original behavior, preserved. The\n  # gate is a DENY tool: the only thing that takes LOD away is an explicit negative grant in\n  # the permission plugin (e.g. LuckPerms `group default permission set lss.use false`).\n  #\n  # Enforcement requires BOTH spellings, so a negative grant on EITHER one denies \u2014 the De\n  # Morgan mirror of the privacy nodes above (grant model: hold EITHER; deny model: lose\n  # EITHER). An OR here would be inert: the spelling the admin did NOT touch still resolves\n  # to its declared `true` and would out-vote the single negative grant.\n  #\n  # That direction is also why losing either declaration is dangerous: an undeclared node\n  # falls back to Bukkit's op default, silently turning \"everyone\" into \"ops only\".\n  lss.use:\n    description: Receive LOD data when requireServicePermission is enabled\n    default: true\n  vss.use:\n    description: Receive LOD data when requireServicePermission is enabled (VSS spelling)\n    default: true\n",
+    "forbidden_flat_native_libs": null
+  },
+  {
+    "line": "1.21.10",
+    "loader": "neoforge",
+    "sha256": "2a23cc157f4177dc679aff3f47ba8a743005da3da6078b8cbd01097585a374fe",
+    "class_majors": {
+      "65": 425
+    },
+    "wire_classes_identical": true,
+    "manifest": "Manifest-Version: 1.0\r\nMulti-Release: true\r\n\r\n",
+    "nested": [
+      {
+        "path": "META-INF/jarjar/sqlite-jdbc-3.49.1.0.jar",
+        "sha256": "5c8609d2ca341deb8c6f71778974b5ba4995c7d32d7c7c89d9392a3e72c39291",
+        "class_count": 129,
+        "native_count": 24
+      },
+      {
+        "path": "META-INF/jarjar/zstd-jni-1.5.7-3.jar",
+        "sha256": "a38a4a97f1b43b878c91e0dd7f1e3d17f0e70beec71d95bacaf56a2f207624a3",
+        "class_count": 37,
+        "native_count": 18
+      }
+    ],
+    "metadata": "modLoader=\"javafml\"\nloaderVersion=\"[4,)\"\nlicense=\"MIT\"\nissueTrackerURL=\"https://github.com/VoX/lod-server-support/issues\"\n\n[[mods]]\nmodId=\"lss\"\nversion=\"0.14.0\"\ndisplayName=\"LOD Server Support\"\nauthors=\"VoX\"\nlogoFile=\"assets/lss/icon.png\"\ndescription='''Voxy multiplayer support (unofficial). Enables players with Voxy to see fully rendered terrain out to hundreds of chunks on multiplayer servers without needing to explore the world first. Server-side works with any LSS/VSS client; the client half needs a community Voxy build for NeoForge.'''\n\n[[mixins]]\nconfig=\"lss.neoforge.mixins.json\"\n\n[[mixins]]\nconfig=\"lss-sodium-legacy.mixins.json\"\n\n[[dependencies.lss]]\n    modId=\"neoforge\"\n    type=\"required\"\n    # LINE DATA: per-line NeoForge loader floor (round-3 review NIT \u2014 the MC dep\n    # above is templated from gradle.properties; this row is hand-edited per line)\n    versionRange=\"[21.10,)\"\n    ordering=\"NONE\"\n    side=\"BOTH\"\n\n[[dependencies.lss]]\n    modId=\"minecraft\"\n    type=\"required\"\n    versionRange=\"[1.21.10]\"\n    ordering=\"NONE\"\n    side=\"BOTH\"\n",
+    "jarjar": {
+      "jars": [
+        {
+          "identifier": {
+            "group": "org.xerial",
+            "artifact": "sqlite-jdbc"
+          },
+          "version": {
+            "range": "[3.49.1.0,4.0.0.0)",
+            "artifactVersion": "3.49.1.0"
+          },
+          "path": "META-INF/jarjar/sqlite-jdbc-3.49.1.0.jar",
+          "isObfuscated": false
+        },
+        {
+          "identifier": {
+            "group": "com.github.luben",
+            "artifact": "zstd-jni"
+          },
+          "version": {
+            "range": "[1.5.7-3,2.0.0.0)",
+            "artifactVersion": "1.5.7-3"
+          },
+          "path": "META-INF/jarjar/zstd-jni-1.5.7-3.jar",
+          "isObfuscated": false
+        }
+      ]
+    },
+    "forbidden_flat_native_libs": false
+  },
+  {
+    "line": "1.21.1",
+    "loader": "fabric",
+    "sha256": "358122fbe4250e0c4697837ad8425c59722ad0391ab85b83adf9a851b12edb86",
+    "class_majors": {
+      "65": 265
+    },
+    "wire_classes_identical": true,
+    "manifest": "Manifest-Version: 1.0\r\nFabric-Jar-Type: classes\r\nFabric-Loom-Mixin-Remap-Type: static\r\nFabric-Gradle-Version: 9.5.1\r\nFabric-Loom-Version: 1.17.13\r\nFabric-Mixin-Compile-Extensions-Version: 0.6.0\r\nFabric-Minecraft-Version: 1.21.1\r\nFabric-Tiny-Remapper-Version: 0.14.0\r\nFabric-Loader-Version: 0.19.3\r\nFabric-Mixin-Version: 0.17.3+mixin.0.8.7\r\nFabric-Mixin-Group: net.fabricmc\r\nFabric-Mapping-Namespace: intermediary\r\n\r\n",
+    "nested": [
+      {
+        "path": "META-INF/jars/common-0.14.0.jar",
+        "sha256": "c6d831bef645cbd8513b933060f85a3966215fb1d53120194755ce1ebf199e21",
+        "class_count": 175,
+        "native_count": 0
+      },
+      {
+        "path": "META-INF/jars/sqlite-jdbc-slim.jar",
+        "sha256": "9732cd719b09a985e63d4e540ef7d962cba77768cd47043c4c8777a049bb4038",
+        "class_count": 129,
+        "native_count": 8
+      },
+      {
+        "path": "META-INF/jars/zstd-jni-slim.jar",
+        "sha256": "3ba198f387c2166e75cd2761e223c7d1ff0e17a8e062a21f37b9da157110e304",
+        "class_count": 37,
+        "native_count": 6
+      }
+    ],
+    "metadata": {
+      "schemaVersion": 1,
+      "id": "lss",
+      "version": "0.14.0",
+      "name": "LOD Server Support",
+      "description": "Voxy multiplayer support (unofficial). Enables players with Voxy to see fully rendered terrain out to hundreds of chunks on multiplayer servers without needing to explore the world first.",
+      "authors": [
+        "VoX"
+      ],
+      "contact": {
+        "sources": "https://github.com/VoX/lod-server-support"
+      },
+      "license": "MIT",
+      "icon": "assets/lss/icon.png",
+      "accessWidener": "lss.accesswidener",
+      "environment": "*",
+      "entrypoints": {
+        "main": [
+          "dev.vox.lss.LSSMod"
+        ],
+        "client": [
+          "dev.vox.lss.LSSClient"
+        ],
+        "sodium:config_api_user": [
+          "dev.vox.lss.config.LSSConfigMenu"
+        ],
+        "modmenu": [
+          "dev.vox.lss.config.LSSModMenuIntegration"
+        ]
+      },
+      "mixins": [
+        "lss.mixins.json",
+        "lss-trace.mixins.json",
+        "lss-sodium-legacy.mixins.json"
+      ],
+      "jars": [
+        {
+          "file": "META-INF/jars/sqlite-jdbc-slim.jar"
+        },
+        {
+          "file": "META-INF/jars/zstd-jni-slim.jar"
+        },
+        {
+          "file": "META-INF/jars/common-0.14.0.jar"
+        }
+      ],
+      "depends": {
+        "minecraft": "1.21.1",
+        "fabricloader": ">=0.18.4",
+        "fabric-api": ">=0.100.0"
+      },
+      "suggests": {
+        "sodium": "*",
+        "modmenu": "*",
+        "xaeroworldmap": "*"
+      }
+    },
+    "forbidden_flat_native_libs": null
+  },
+  {
+    "line": "1.21.1",
+    "loader": "paper",
+    "sha256": "58d21f39ff799428b63f3878a2e8206032eb6d14fceedc54b934fcf362d79b1d",
+    "class_majors": {
+      "65": 250
+    },
+    "wire_classes_identical": true,
+    "manifest": "Manifest-Version: 1.0\r\npaperweight-mappings-namespace: mojang\r\nMulti-Release: true\r\n\r\n",
+    "nested": [],
+    "metadata": "name: LodServerSupport\nversion: '0.14.0'\nmain: dev.vox.lss.paper.LSSPaperPlugin\napi-version: '1.21.1'\n# 1.21.1 line: folia-supported is ABSENT \u2014 Folia never published a 1.21.1 build (its 1.21\n# family starts at 1.21.4; fill.papermc.io verified 2026-08-15), so declaring the flag\n# would claim support for a platform that does not exist (the pre-26.2 precedent).\n# PluginYmlContractTest + release_check.py pin the ABSENCE on this line (surfaces row 7 \u2014\n# the fresh cut re-derives the direction; the Folia code paths stay in the jar, inert).\n# C5 (XVER \u00a77): the Via mismatch guard reflectively reads ViaVersion's API when the\n# plugin is present. softdepend keeps Spigot's classloader from logging the one-time\n# \"loaded class ... which is not a depend/softdepend\" warning on the first handshake \u2014\n# noise that reads like an LSS bug. No hard dependency: without Via the probe is a\n# silent no-signal. LibsDisguises (issue #282): the far-player privacy ladder reads\n# DisguiseAPI reflectively to hide disguised players \u2014 same precedent (load ORDER +\n# classloader visibility, never a hard depend; absent = the rung is skipped).\nsoftdepend: [ViaVersion, LibsDisguises]\ndescription: Voxy multiplayer support (unofficial). Enables players with Voxy to see fully rendered terrain out to hundreds of chunks on multiplayer servers without needing to explore the world first.\nauthor: VoX\nwebsite: https://modrinth.com/plugin/lod-server-support\ncommands:\n  lsslod:\n    description: LOD Server Support admin commands\n    usage: /lsslod <stats|diag|store|set|help>\n    permission: lss.admin\npermissions:\n  lss.admin:\n    description: Access to LSS admin commands\n    default: op\n  # Far players (v0.11.0 E1): server-side privacy lever \u2014 holders are never served as\n  # far players regardless of the farPlayers mode (FARP \u00a73.2). BOTH brand spellings are\n  # declared (default false) and the enforcement honors either: Bukkit resolves an\n  # UNDECLARED node to the op default, so a single-brand declaration plus a cross-brand\n  # check would silently hide every op \u2014 and declaring both keeps the privacy grant\n  # working across an LSS<->VSS jar swap.\n  lss.farplayers.hidden:\n    description: Players with this permission are never shown as far players\n    default: false\n  vss.farplayers.hidden:\n    description: Players with this permission are never shown as far players (VSS spelling)\n    default: false\n  # Service gate (requireServicePermission, default false): with the config key on, only\n  # holders are served LOD data \u2014 a handshake from anyone else is answered with an\n  # enabled=false SessionConfig and no session. BOTH brand spellings are declared for the\n  # reason spelled out on lss.farplayers.hidden above (Bukkit resolves an UNDECLARED node to\n  # the op default, so a single-brand declaration plus a cross-brand check goes silently\n  # wrong, and declaring both keeps grants alive across an LSS<->VSS jar swap).\n  #\n  # `default: true`, NOT op: everyone holds these unless an admin says otherwise, so arming\n  # the gate on its own changes nothing for anybody \u2014 the original behavior, preserved. The\n  # gate is a DENY tool: the only thing that takes LOD away is an explicit negative grant in\n  # the permission plugin (e.g. LuckPerms `group default permission set lss.use false`).\n  #\n  # Enforcement requires BOTH spellings, so a negative grant on EITHER one denies \u2014 the De\n  # Morgan mirror of the privacy nodes above (grant model: hold EITHER; deny model: lose\n  # EITHER). An OR here would be inert: the spelling the admin did NOT touch still resolves\n  # to its declared `true` and would out-vote the single negative grant.\n  #\n  # That direction is also why losing either declaration is dangerous: an undeclared node\n  # falls back to Bukkit's op default, silently turning \"everyone\" into \"ops only\".\n  lss.use:\n    description: Receive LOD data when requireServicePermission is enabled\n    default: true\n  vss.use:\n    description: Receive LOD data when requireServicePermission is enabled (VSS spelling)\n    default: true\n",
+    "forbidden_flat_native_libs": null
+  },
+  {
+    "line": "1.21.1",
+    "loader": "neoforge",
+    "sha256": "53aacf243927cdeaaa0e2daa297ac58914cc0d39d9da4e6431dbe05f7c4d8b9e",
+    "class_majors": {
+      "65": 432
+    },
+    "wire_classes_identical": true,
+    "manifest": "Manifest-Version: 1.0\r\nMulti-Release: true\r\n\r\n",
+    "nested": [
+      {
+        "path": "META-INF/jarjar/sqlite-jdbc-3.49.1.0.jar",
+        "sha256": "5c8609d2ca341deb8c6f71778974b5ba4995c7d32d7c7c89d9392a3e72c39291",
+        "class_count": 129,
+        "native_count": 24
+      },
+      {
+        "path": "META-INF/jarjar/zstd-jni-1.5.7-3.jar",
+        "sha256": "a38a4a97f1b43b878c91e0dd7f1e3d17f0e70beec71d95bacaf56a2f207624a3",
+        "class_count": 37,
+        "native_count": 18
+      }
+    ],
+    "metadata": "modLoader=\"javafml\"\nloaderVersion=\"[4,)\"\nlicense=\"MIT\"\nissueTrackerURL=\"https://github.com/VoX/lod-server-support/issues\"\n\n[[mods]]\nmodId=\"lss\"\nversion=\"0.14.0\"\ndisplayName=\"LOD Server Support\"\nauthors=\"VoX\"\nlogoFile=\"assets/lss/icon.png\"\ndescription='''Voxy multiplayer support (unofficial). Enables players with Voxy to see fully rendered terrain out to hundreds of chunks on multiplayer servers without needing to explore the world first. Server-side works with any LSS/VSS client; the client half needs a community Voxy build for NeoForge.'''\n\n[[mixins]]\nconfig=\"lss.neoforge.mixins.json\"\n\n[[mixins]]\nconfig=\"lss-sodium-legacy.mixins.json\"\n\n[[dependencies.lss]]\n    modId=\"neoforge\"\n    type=\"required\"\n    # LINE DATA: per-line NeoForge loader floor (round-3 review NIT \u2014 the MC dep\n    # above is templated from gradle.properties; this row is hand-edited per line)\n    versionRange=\"[21.1,)\"\n    ordering=\"NONE\"\n    side=\"BOTH\"\n\n[[dependencies.lss]]\n    modId=\"minecraft\"\n    type=\"required\"\n    versionRange=\"[1.21.1]\"\n    ordering=\"NONE\"\n    side=\"BOTH\"\n\n# Sodium 0.8+ options page (sodium-options-page-generations-plan.md, NeoForge\n# amendment): sodium-neoforge's ConfigLoaderForge reads this property from every\n# mod and instantiates the named ConfigEntryPoint \u2014 the same key Fabric declares\n# as an entrypoint. Harmless when Sodium is absent or pre-0.8.\n[modproperties.lss]\n\"sodium:config_api_user\"=\"dev.vox.lss.config.LSSConfigMenu\"\n",
+    "jarjar": {
+      "jars": [
+        {
+          "identifier": {
+            "group": "org.xerial",
+            "artifact": "sqlite-jdbc"
+          },
+          "version": {
+            "range": "[3.49.1.0,4.0.0.0)",
+            "artifactVersion": "3.49.1.0"
+          },
+          "path": "META-INF/jarjar/sqlite-jdbc-3.49.1.0.jar",
+          "isObfuscated": false
+        },
+        {
+          "identifier": {
+            "group": "com.github.luben",
+            "artifact": "zstd-jni"
+          },
+          "version": {
+            "range": "[1.5.7-3,2.0.0.0)",
+            "artifactVersion": "1.5.7-3"
+          },
+          "path": "META-INF/jarjar/zstd-jni-1.5.7-3.jar",
+          "isObfuscated": false
+        }
+      ]
+    },
+    "forbidden_flat_native_libs": false
+  }
+]

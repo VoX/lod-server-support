@@ -1,0 +1,66 @@
+Compiled from "LevelChunkSection.java"
+class net.minecraft.world.level.chunk.LevelChunkSection$1BlockCounter implements net.minecraft.world.level.chunk.PalettedContainer$CountConsumer<net.minecraft.world.level.block.state.BlockState> {
+  public int nonEmptyBlockCount;
+
+  public int tickingBlockCount;
+
+  public int tickingFluidCount;
+
+  net.minecraft.world.level.chunk.LevelChunkSection$1BlockCounter(net.minecraft.world.level.chunk.LevelChunkSection);
+    Code:
+         0: aload_0
+         1: invokespecial #26                 // Method java/lang/Object."<init>":()V
+         4: return
+
+  public void accept(net.minecraft.world.level.block.state.BlockState, int);
+    Code:
+         0: aload_1
+         1: invokevirtual #39                 // Method net/minecraft/world/level/block/state/BlockState.getFluidState:()Lnet/minecraft/world/level/material/FluidState;
+         4: astore_3
+         5: aload_1
+         6: invokevirtual #43                 // Method net/minecraft/world/level/block/state/BlockState.isAir:()Z
+         9: ifne          39
+        12: aload_0
+        13: dup
+        14: getfield      #45                 // Field nonEmptyBlockCount:I
+        17: iload_2
+        18: iadd
+        19: putfield      #45                 // Field nonEmptyBlockCount:I
+        22: aload_1
+        23: invokevirtual #48                 // Method net/minecraft/world/level/block/state/BlockState.isRandomlyTicking:()Z
+        26: ifeq          39
+        29: aload_0
+        30: dup
+        31: getfield      #50                 // Field tickingBlockCount:I
+        34: iload_2
+        35: iadd
+        36: putfield      #50                 // Field tickingBlockCount:I
+        39: aload_3
+        40: invokevirtual #55                 // Method net/minecraft/world/level/material/FluidState.isEmpty:()Z
+        43: ifne          73
+        46: aload_0
+        47: dup
+        48: getfield      #45                 // Field nonEmptyBlockCount:I
+        51: iload_2
+        52: iadd
+        53: putfield      #45                 // Field nonEmptyBlockCount:I
+        56: aload_3
+        57: invokevirtual #56                 // Method net/minecraft/world/level/material/FluidState.isRandomlyTicking:()Z
+        60: ifeq          73
+        63: aload_0
+        64: dup
+        65: getfield      #58                 // Field tickingFluidCount:I
+        68: iload_2
+        69: iadd
+        70: putfield      #58                 // Field tickingFluidCount:I
+        73: return
+
+  public void accept(java.lang.Object, int);
+    Code:
+         0: aload_0
+         1: aload_1
+         2: checkcast     #35                 // class net/minecraft/world/level/block/state/BlockState
+         5: iload_2
+         6: invokevirtual #65                 // Method accept:(Lnet/minecraft/world/level/block/state/BlockState;I)V
+         9: return
+}

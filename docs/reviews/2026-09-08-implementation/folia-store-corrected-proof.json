@@ -1,0 +1,160 @@
+{
+  "fresh-backfill-folia-20260908T232131Z": {
+    "verdict": {
+      "scenario": "fresh-backfill",
+      "passed": true,
+      "violations": [],
+      "warnings": [],
+      "windows_evaluated": 40,
+      "client_windows_evaluated": 39,
+      "quiescent_snapshots": 40
+    },
+    "gamerule_proof_rows": [
+      {
+        "event": "command",
+        "wallMs": 1788909722607,
+        "tick": 398,
+        "cmd": "gamerule minecraft:random_tick_speed 0",
+        "anchor": 1,
+        "at": 2,
+        "ok": true,
+        "validation": "gamerule-readback"
+      },
+      {
+        "event": "command",
+        "wallMs": 1788909722611,
+        "tick": 398,
+        "cmd": "gamerule minecraft:spawn_mobs false",
+        "anchor": 1,
+        "at": 2,
+        "ok": true,
+        "validation": "gamerule-readback"
+      },
+      {
+        "event": "command",
+        "wallMs": 1788909722613,
+        "tick": 398,
+        "cmd": "gamerule minecraft:mob_griefing false",
+        "anchor": 1,
+        "at": 2,
+        "ok": true,
+        "validation": "gamerule-readback"
+      },
+      {
+        "event": "command",
+        "wallMs": 1788909723600,
+        "tick": 418,
+        "cmd": "gamerule minecraft:fire_spread_radius_around_player 0",
+        "anchor": 1,
+        "at": 3,
+        "ok": true,
+        "validation": "gamerule-readback"
+      },
+      {
+        "event": "command",
+        "wallMs": 1788909723603,
+        "tick": 418,
+        "cmd": "gamerule minecraft:advance_time false",
+        "anchor": 1,
+        "at": 3,
+        "ok": true,
+        "validation": "gamerule-readback"
+      }
+    ],
+    "terminal_event": {
+      "event": "end",
+      "wallMs": 1788909965726,
+      "tick": 5458,
+      "reason": "timeline-complete"
+    },
+    "artifact_sha256": {
+      "client-run1.jsonl": "6f6ce1309ecf873a512987bc05f0fdc992e24cde06e396ab6ecd77e3e08e1f4f",
+      "client-run1.log": "cf8ea9acd2ce454f1f4dde3bdac4f62bbe2fcbe907bfd2db5739c53f20b8a94b",
+      "cpu.jsonl": "5b38cfb022b867ff8ab9fed3eadac61bef4dd068a0de6fe523f924d73a43ed60",
+      "fresh-backfill.json": "72b1a328f09a11a771687480cc5d1457d9e8632fadeb46d39b07d15043bfdb50",
+      "report.md": "a0a24ad8ab04a64539a24a360c8e8714d0efb4f6eb46feabd0e4b4c4fe3f0f7b",
+      "server.jsonl": "48271f028187c093905a76022f94437acc7d67db48852835dcf14f6482a285f2",
+      "server.log": "d5e59f7587210f88f48f07b1de3b0946182cd5c35def66cddc5e0267fb7c7c99",
+      "verdict.json": "8486e685ecd8540ca1a9d29e4c82ae155ea71c8fd68d97a5fe825e4c8bd17769"
+    }
+  },
+  "store-second-join-folia-20260908T232618Z": {
+    "verdict": {
+      "scenario": "store-second-join",
+      "passed": true,
+      "violations": [],
+      "warnings": [],
+      "windows_evaluated": 29,
+      "client_windows_evaluated": 27,
+      "quiescent_snapshots": 29
+    },
+    "gamerule_proof_rows": [
+      {
+        "event": "command",
+        "wallMs": 1788910006495,
+        "tick": 354,
+        "cmd": "gamerule minecraft:random_tick_speed 0",
+        "anchor": 1,
+        "at": 2,
+        "ok": true,
+        "validation": "gamerule-readback"
+      },
+      {
+        "event": "command",
+        "wallMs": 1788910006499,
+        "tick": 354,
+        "cmd": "gamerule minecraft:spawn_mobs false",
+        "anchor": 1,
+        "at": 2,
+        "ok": true,
+        "validation": "gamerule-readback"
+      },
+      {
+        "event": "command",
+        "wallMs": 1788910006502,
+        "tick": 354,
+        "cmd": "gamerule minecraft:mob_griefing false",
+        "anchor": 1,
+        "at": 2,
+        "ok": true,
+        "validation": "gamerule-readback"
+      },
+      {
+        "event": "command",
+        "wallMs": 1788910007487,
+        "tick": 374,
+        "cmd": "gamerule minecraft:fire_spread_radius_around_player 0",
+        "anchor": 1,
+        "at": 3,
+        "ok": true,
+        "validation": "gamerule-readback"
+      },
+      {
+        "event": "command",
+        "wallMs": 1788910007489,
+        "tick": 374,
+        "cmd": "gamerule minecraft:advance_time false",
+        "anchor": 1,
+        "at": 3,
+        "ok": true,
+        "validation": "gamerule-readback"
+      }
+    ],
+    "terminal_event": {
+      "event": "end",
+      "wallMs": 1788910149563,
+      "tick": 3314,
+      "reason": "timeline-complete"
+    },
+    "artifact_sha256": {
+      "client-run1.jsonl": "90abc95804391dfc72b5d91d75f47a9096742725eca3c8bdfe627671c13600a7",
+      "client-run1.log": "42032845d4d89a676490d3ef9de52f09dc9b0b45e51ea35f5cdf74d9da6ac809",
+      "cpu.jsonl": "454c824c3db614e717e80a53b159254386b71d28a718d3c05266879aab9041d5",
+      "report.md": "a678d4665a57fc46c52390e98b1b2d10e06dbf29ff0e3e20d31cd0952ab87760",
+      "server.jsonl": "7ca18a1b36ddcea54b98e99bceb8d3b380267c66a20fdb0ad9fcfec41e962706",
+      "server.log": "fadd362a15796f86bd2af157ca5ad014be94913bef17941341f6ddf93e3d4696",
+      "store-second-join.json": "e86d31ca4f88de13fd258bfe52ac2d70b68a2b84b8ee08551e775e895708b3e6",
+      "verdict.json": "2aa53632f7d7badc56a56e1ace82553232e881445ab36015cd98b6a1553649b8"
+    }
+  }
+}

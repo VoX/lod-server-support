@@ -1,0 +1,134 @@
+[
+  {
+    "id": "ST-01",
+    "priority": "P1",
+    "title": "Interrupted mask-policy cleanup stamps incomplete work as complete",
+    "report": "03-storage-parent.md",
+    "validation": "Reproduced",
+    "work_package": 1
+  },
+  {
+    "id": "ST-02",
+    "priority": "P2",
+    "title": "Legacy migration replaces checksums without verifying old integrity",
+    "report": "03-storage-parent.md",
+    "validation": "Reproduced with normal-read control",
+    "work_package": 7
+  },
+  {
+    "id": "S1",
+    "priority": "P2",
+    "title": "Late disk and buffered generation results cross replacement session ownership",
+    "report": "02-server.md",
+    "validation": "Three methods reproduce disk queue transfer, stale/done/up_to_date and buffered generation delivery/done",
+    "reports": [
+      "02-server.md",
+      "09-paper.md"
+    ],
+    "work_package": 2
+  },
+  {
+    "id": "C1",
+    "priority": "P2",
+    "title": "Master LOD toggle does not transition acquisition session",
+    "report": "04-client.md",
+    "validation": "Reproduced downloads while off and parked position after on",
+    "work_package": 3
+  },
+  {
+    "id": "FRESH-1",
+    "priority": "P2",
+    "title": "Doubt summary does not revoke older summary-owned proof",
+    "report": "05-freshness.md",
+    "validation": "Frame transition reproduced; gameplay schedule inferred",
+    "work_package": 4
+  },
+  {
+    "id": "X1",
+    "priority": "P2",
+    "title": "Xaero old debt can cross disconnect into next server session",
+    "report": "06-xaero.md",
+    "validation": "Reproduced; companion owed=-1 race also reproduced",
+    "work_package": 5
+  },
+  {
+    "id": "FP0",
+    "priority": "P2",
+    "title": "Runtime farPlayers off leaves previously published players frozen",
+    "report": "07-farplayers.md",
+    "validation": "Reproduced broadcaster-to-client",
+    "work_package": 6
+  },
+  {
+    "id": "FP1",
+    "priority": "P2 robustness",
+    "title": "Roster index rebinding leaks drawable identities and exceeds cap",
+    "report": "07-farplayers.md",
+    "validation": "Reproduced; stock broadcaster does not emit sequence",
+    "work_package": 8
+  },
+  {
+    "id": "FP2",
+    "priority": "P3",
+    "title": "Seated renderer failure misses per-proxy pose restoration",
+    "report": "07-farplayers.md",
+    "validation": "Source+vanilla render path validated; no live render probe",
+    "work_package": 9
+  },
+  {
+    "id": "CFG1",
+    "priority": "P3 improvement",
+    "title": "Command cannot distinguish applied-but-not-saved settings",
+    "report": "11-config.md",
+    "validation": "Source validated; nonfatal save is intentional",
+    "work_package": 10
+  },
+  {
+    "id": "PRIV1",
+    "priority": "P2 conditional",
+    "title": "Single-plugin disguise reload binds old API class",
+    "report": "08-permissions.md",
+    "validation": "Production default resolver reproduced with isolated loaders; no live plugin reload",
+    "work_package": 11
+  },
+  {
+    "id": "COMPAT1",
+    "priority": "P2 conditional",
+    "title": "Verified Voxy holder and namespaced reset method combination missing",
+    "report": "10-compat.md",
+    "validation": "Actual1.21.1 artifact member inspection and resolution probe; ingestion not implicated",
+    "work_package": 12
+  },
+  {
+    "id": "VALID-1",
+    "priority": "P2",
+    "title": "Soak mutates shared resources before occupied-port refusal",
+    "report": "12-validation.md",
+    "validation": "Source ordering verified on all five lines; destructive trigger not executed",
+    "work_package": 13
+  },
+  {
+    "id": "VALID-2",
+    "priority": "P2",
+    "title": "Direct benchmark can reuse stale destination results after failed run",
+    "report": "12-validation.md",
+    "validation": "Source/control flow verified; wrappers independently clear destinations",
+    "work_package": 13
+  },
+  {
+    "id": "REL-1",
+    "priority": "P3 improvement",
+    "title": "C2ME1.21.11 validation pins differ; operational coverage/prose needs clarity",
+    "report": "15-cross-release.md",
+    "validation": "Actual pin comparison and artifact/rig metadata inspection; no incompatibility claim",
+    "work_package": 14
+  },
+  {
+    "id": "CROSS-RENDER-1",
+    "priority": "P2 cosmetic",
+    "title": "Fabric1.21.10 and1.21.11 proxy wings never advance animation state",
+    "report": "14-cross-loaders.md",
+    "validation": "Production source and full real MC bytecode dependency chain; no live graphics run",
+    "work_package": 15
+  }
+]

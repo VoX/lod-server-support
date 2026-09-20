@@ -1,5 +1,7 @@
 package dev.vox.lss.paper;
 
+import dev.vox.lss.common.processing.RequestRegistration;
+
 import dev.vox.lss.common.PositionUtil;
 import dev.vox.lss.common.processing.IncomingBatch;
 import dev.vox.lss.common.processing.IncomingRequest;
@@ -97,7 +99,7 @@ class PaperRequestProcessingServiceTest {
         }
 
         @Override
-        public void notifyPlayerRemoved(UUID uuid) {
+        public void notifyPlayerRemoved(UUID uuid, RequestRegistration registration) {
             removals.add(uuid);
         }
 
@@ -107,7 +109,7 @@ class PaperRequestProcessingServiceTest {
         }
 
         @Override
-        public void feedGenerationFailure(UUID playerUuid, int cx, int cz, String dimension,
+        public void feedGenerationFailure(UUID playerUuid, RequestRegistration registration, int cx, int cz, String dimension,
                                           long submissionOrder, boolean transientFailure) {
             genFailures.add(new GenFailure(playerUuid, cx, cz, dimension, submissionOrder, transientFailure));
         }
@@ -156,7 +158,7 @@ class PaperRequestProcessingServiceTest {
         }
 
         @Override
-        public boolean submitGeneration(UUID playerUuid, ServerLevel level, int cx, int cz, long submissionOrder) {
+        public boolean submitGeneration(UUID playerUuid, RequestRegistration registration, ServerLevel level, int cx, int cz, long submissionOrder) {
             submitted.add(new Submitted(playerUuid, cx, cz, submissionOrder));
             return accept;
         }
@@ -169,9 +171,9 @@ class PaperRequestProcessingServiceTest {
         }
 
         @Override
-        public void removePlayer(UUID playerUuid) {
+        public void removePlayer(UUID playerUuid, RequestRegistration registration) {
             removedPlayers.add(playerUuid);
-            super.removePlayer(playerUuid);
+            super.removePlayer(playerUuid, registration);
         }
 
         @Override
@@ -549,7 +551,7 @@ class PaperRequestProcessingServiceTest {
         var player = playerIn(uuid, level(Level.OVERWORLD));
         service.registerPlayer(player, 1);
         processor.ticketQueue.add(new OffThreadProcessor.GenerationTicketRequest(
-                uuid, 5, 5, "minecraft:the_end", 9L));
+                uuid, service.getPlayers().get(uuid).registration(), 5, 5, "minecraft:the_end", 9L));
 
         service.tick();
 
@@ -565,7 +567,7 @@ class PaperRequestProcessingServiceTest {
         service.registerPlayer(player, 1);
         genService.accept = false;
         processor.ticketQueue.add(new OffThreadProcessor.GenerationTicketRequest(
-                uuid, 5, 5, "minecraft:overworld", 9L));
+                uuid, service.getPlayers().get(uuid).registration(), 5, 5, "minecraft:overworld", 9L));
 
         service.tick();
 
@@ -585,13 +587,38 @@ class PaperRequestProcessingServiceTest {
         when(player.isRemoved()).thenReturn(true);
         when(playerList.getPlayer(uuid)).thenReturn(player); // respawn-swap keeps the same (removed) handle
         processor.ticketQueue.add(new OffThreadProcessor.GenerationTicketRequest(
-                uuid, 6, 6, "minecraft:overworld", 11L));
+                uuid, service.getPlayers().get(uuid).registration(), 6, 6, "minecraft:overworld", 11L));
 
         service.tick();
 
         assertTrue(genService.submitted.isEmpty(), "isRemoved short-circuits before submitGeneration");
         assertEquals(List.of(new RecordingProcessor.GenFailure(uuid, 6, 6, "minecraft:overworld", 11L, true)),
                 processor.genFailures);
+    }
+
+    @Test
+    void queuedTicketFromRetiredRegistrationCannotEnterReplacementGeneration() {
+        var uuid = UUID.randomUUID();
+        var player = playerIn(uuid, level(Level.OVERWORLD));
+        var old = service.registerPlayer(player, 1);
+        var oldTicket = new OffThreadProcessor.GenerationTicketRequest(
+                uuid, old.registration(), 5, 5, "minecraft:overworld", 9L);
+        processor.ticketQueue.add(oldTicket);
+        service.removePlayer(uuid);
+        var fresh = service.registerPlayer(player, 1);
+        assertNotSame(old.registration(), fresh.registration());
+        assertSame(fresh.registration(), service.registerPlayer(player, 1).registration(),
+                "repeat handshake preserves the active registration");
+        genService.accept = false;
+        service.tick();
+        assertTrue(genService.submitted.isEmpty(), "obsolete ticket must not reach platform generation");
+        assertTrue(processor.genFailures.isEmpty(), "obsolete ticket cannot fail a replacement pending");
+        processor.ticketQueue.add(new OffThreadProcessor.GenerationTicketRequest(
+                uuid, fresh.registration(), 6, 6, "minecraft:overworld", 10L));
+        genService.accept = true;
+        service.tick();
+        assertEquals(List.of(new RecordingGenService.Submitted(uuid,6,6,10L)), genService.submitted,
+                "fresh same-dimension registration still submits");
     }
 
     // ---- PP-008: enabled=false tick is a full freeze ----
@@ -607,7 +634,7 @@ class PaperRequestProcessingServiceTest {
         offer(state, new IncomingRequest(1, 1, -1L));
         publish(state, new IncomingRequest(1, 1, -1L));
         processor.ticketQueue.add(new OffThreadProcessor.GenerationTicketRequest(
-                uuid, 5, 5, "minecraft:overworld", 9L));
+                uuid, service.getPlayers().get(uuid).registration(), 5, 5, "minecraft:overworld", 9L));
 
         service.tick();
 
@@ -728,13 +755,31 @@ class PaperRequestProcessingServiceTest {
     }
 
     @Test
+    void retiredGenerationOutcomeDoesNotSuppressReplacementLoadedProbe() {
+        var uuid = UUID.randomUUID();
+        var player = playerIn(uuid, level(Level.OVERWORLD));
+        var old = service.registerPlayer(player, 1);
+        var outcome = new TickSnapshot.GenerationReadyData(uuid,old.registration(),7,7,
+                "minecraft:overworld",null,0,1);
+        service.removePlayer(uuid);
+        var fresh = service.registerPlayer(player, 1);
+        publish(fresh,new IncomingRequest(7,7,-1));
+        genService.nextTick = List.of(outcome);
+        var probed = new ArrayList<Long>();
+        service.setLoadedColumnProbe((lvl,cx,cz) -> { probed.add(PositionUtil.packPosition(cx,cz)); return null; });
+        service.tick();
+        assertEquals(List.of(PositionUtil.packPosition(7,7)),probed,
+                "only generation outcomes belonging to this registration suppress its probes");
+    }
+
+    @Test
     void probeSkipsSameTickGenerationCompletions() {
         var uuid = UUID.randomUUID();
         var player = playerIn(uuid, level(Level.OVERWORLD));
         var state = service.registerPlayer(player, 1);
         publish(state, new IncomingRequest(7, 7, 0L), new IncomingRequest(8, 8, -1L));
         genService.nextTick = List.of(new TickSnapshot.GenerationReadyData(
-                uuid, 7, 7, "minecraft:overworld", null, 0L, 1L));
+                uuid, service.getPlayers().get(uuid).registration(), 7, 7, "minecraft:overworld", null, 0L, 1L));
 
         var probedPositions = new ArrayList<Long>();
         service.setLoadedColumnProbe((lvl, cx, cz) -> {
@@ -829,7 +874,7 @@ class PaperRequestProcessingServiceTest {
         var state = service.registerPlayer(player, 1);
         offer(state, new IncomingRequest(1, 1, -1L));
         processor.ticketQueue.add(new OffThreadProcessor.GenerationTicketRequest(
-                uuid, 5, 5, "minecraft:overworld", 9L));
+                uuid, service.getPlayers().get(uuid).registration(), 5, 5, "minecraft:overworld", 9L));
 
         assertDoesNotThrow(service::shutdown);
         assertTrue(service.getPlayers().isEmpty());
@@ -837,7 +882,7 @@ class PaperRequestProcessingServiceTest {
         // A disk read racing the shutdown (async callback shape) must be a no-op:
         // no result queue exists and the submit must not throw into the caller.
         diskReader.setReadOverride((cx, cz) -> CompletableFuture.completedFuture(Optional.empty()));
-        assertDoesNotThrow(() -> diskReader.submitReadDirect(uuid, "minecraft:overworld", level, 1, 1, 1L, 0L));
+        assertDoesNotThrow(() -> diskReader.submitReadDirect(uuid, state.registration(), "minecraft:overworld", level, 1, 1, 1L, 0L));
         assertNull(diskReader.getPlayerQueue(uuid));
         assertEquals(0, diskReader.getDiag().getSubmittedCount(),
                 "post-shutdown submits are rejected before they are counted");
@@ -1352,7 +1397,9 @@ class PaperRequestProcessingServiceTest {
         var state = service.registerPlayer(playerIn(UUID.randomUUID(), level(Level.OVERWORLD)),
                 LSSConstants.CAPABILITY_VOXEL_COLUMNS);
         int boot = state.getGenSlotCap();
+        config.generationConcurrencyLimitGlobal = boot + 5;
         config.generationConcurrencyLimitPerPlayer = boot + 5;
+        config.validate(); // publish the validated pair, as the runtime command does
         service.tick();
         assertEquals(boot + 5, state.getGenSlotCap(),
                 "the per-player cap must follow config on the next tick for EXISTING states");

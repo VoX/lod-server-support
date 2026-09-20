@@ -728,9 +728,17 @@ class VoxyCompat {
                         .asType(MethodType.methodType(Object.class));
             } catch (ClassNotFoundException | NoSuchMethodException | IllegalAccessException e) {
                 holderClass = classResolver.resolve("me.cortex.voxy.client.core.IGetVoxyRenderSystem");
-                holderShutdownH = lookup.findVirtual(holderClass, "shutdownRenderer",
-                        MethodType.methodType(void.class))
-                        .asType(MethodType.methodType(void.class, Object.class));
+                try {
+                    holderShutdownH = lookup.findVirtual(holderClass, "shutdownRenderer",
+                            MethodType.methodType(void.class))
+                            .asType(MethodType.methodType(void.class, Object.class));
+                } catch (NoSuchMethodException missingPlainMethod) {
+                    // Community 1.21.1 port: old holder interface, namespaced method.
+                    // The carrier is still LevelRenderer, not getNullable()'s engine.
+                    holderShutdownH = lookup.findVirtual(holderClass, "voxy$shutdownRenderer",
+                            MethodType.methodType(void.class))
+                            .asType(MethodType.methodType(void.class, Object.class));
+                }
             }
             // Assign only once ALL resolved — a partial chain must read as absent.
             resetGetInstance = getInstanceH;
