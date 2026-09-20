@@ -1,0 +1,3153 @@
+{
+  "artifacts": [
+    {
+      "enabled": true,
+      "file": "client-002.jar",
+      "id": "library-724bc06727771fd0",
+      "kind": "library",
+      "metadata": {},
+      "sha256": "724bc06727771fd0c2002d0684837ce603ad8350686750ce46cd2ed50f25defc",
+      "source": "local-cache:sha256:724bc06727771fd0c2002d0684837ce603ad8350686750ce46cd2ed50f25defc",
+      "version": "locked"
+    },
+    {
+      "enabled": true,
+      "file": "client-004.jar",
+      "id": "library-ed825d10ab1399c8",
+      "kind": "library",
+      "metadata": {},
+      "sha256": "ed825d10ab1399c8c0cb669e688cf0c8c82629b4c8399b58352b68e92ca10fcb",
+      "source": "local-cache:sha256:ed825d10ab1399c8c0cb669e688cf0c8c82629b4c8399b58352b68e92ca10fcb",
+      "version": "locked"
+    },
+    {
+      "enabled": true,
+      "file": "client-005.jar",
+      "id": "library-dede75a21306b659",
+      "kind": "library",
+      "metadata": {},
+      "sha256": "dede75a21306b65974ecd8f87114ff6970f09fb794157a4ca09ab25c888c2bfc",
+      "source": "local-cache:sha256:dede75a21306b65974ecd8f87114ff6970f09fb794157a4ca09ab25c888c2bfc",
+      "version": "locked"
+    },
+    {
+      "enabled": true,
+      "file": "client-006.jar",
+      "id": "library-6d0abefb7cbf972e",
+      "kind": "library",
+      "metadata": {},
+      "sha256": "6d0abefb7cbf972ea16edb37ec14835372505063a45f976ab7ea889ed9497895",
+      "source": "local-cache:sha256:6d0abefb7cbf972ea16edb37ec14835372505063a45f976ab7ea889ed9497895",
+      "version": "locked"
+    },
+    {
+      "enabled": true,
+      "file": "client-007.jar",
+      "id": "library-3dfb0d5b6a106cd4",
+      "kind": "library",
+      "metadata": {},
+      "sha256": "3dfb0d5b6a106cd40b5b250e39935fbf2f927f4477546a5369a3ac609cf0506b",
+      "source": "local-cache:sha256:3dfb0d5b6a106cd40b5b250e39935fbf2f927f4477546a5369a3ac609cf0506b",
+      "version": "locked"
+    },
+    {
+      "enabled": true,
+      "file": "client-008.jar",
+      "id": "library-1bb99d091fba2597",
+      "kind": "library",
+      "metadata": {},
+      "sha256": "1bb99d091fba2597dc6d51193e9bbcf0d8447e7ed96bd8f0198b18152f09655c",
+      "source": "local-cache:sha256:1bb99d091fba2597dc6d51193e9bbcf0d8447e7ed96bd8f0198b18152f09655c",
+      "version": "locked"
+    },
+    {
+      "enabled": true,
+      "file": "client-009.jar",
+      "id": "library-9e90efec71d2bad5",
+      "kind": "library",
+      "metadata": {},
+      "sha256": "9e90efec71d2bad5b96c9089f019d14a8603227d3c5f408d12f53fae89d99d41",
+      "source": "local-cache:sha256:9e90efec71d2bad5b96c9089f019d14a8603227d3c5f408d12f53fae89d99d41",
+      "version": "locked"
+    },
+    {
+      "enabled": true,
+      "file": "client-010.jar",
+      "id": "mixinextras",
+      "kind": "mod",
+      "metadata": {
+        "fabric": {
+          "authors": [
+            "LlamaLad7"
+          ],
+          "contact": {
+            "homepage": "https://github.com/LlamaLad7/MixinExtras",
+            "sources": "https://github.com/LlamaLad7/MixinExtras"
+          },
+          "custom": {
+            "modmenu": {
+              "badges": [
+                "library"
+              ]
+            }
+          },
+          "depends": {
+            "fabricloader": ">=0.14.25"
+          },
+          "description": "Companion library to Mixin with lots of features to improve the compatibility and concision of your mixins!",
+          "environment": "*",
+          "id": "mixinextras",
+          "license": "MIT",
+          "mixins": [
+            "mixinextras.init.mixins.json"
+          ],
+          "name": "MixinExtras",
+          "provides": [
+            "com_github_llamalad7_mixinextras"
+          ],
+          "schemaVersion": 1,
+          "version": "0.5.4"
+        }
+      },
+      "sha256": "bd79ddb2f54b39a08deeb50cb12439bba01481264dd5a9f5ea830551bfef31ff",
+      "source": "local-cache:sha256:bd79ddb2f54b39a08deeb50cb12439bba01481264dd5a9f5ea830551bfef31ff",
+      "version": "0.5.4"
+    },
+    {
+      "enabled": true,
+      "file": "client-011.jar",
+      "id": "library-5c8609d2ca341deb",
+      "kind": "library",
+      "metadata": {},
+      "sha256": "5c8609d2ca341deb8c6f71778974b5ba4995c7d32d7c7c89d9392a3e72c39291",
+      "source": "local-cache:sha256:5c8609d2ca341deb8c6f71778974b5ba4995c7d32d7c7c89d9392a3e72c39291",
+      "version": "locked"
+    },
+    {
+      "enabled": true,
+      "file": "client-012.jar",
+      "id": "library-a38a4a97f1b43b87",
+      "kind": "library",
+      "metadata": {},
+      "sha256": "a38a4a97f1b43b878c91e0dd7f1e3d17f0e70beec71d95bacaf56a2f207624a3",
+      "source": "local-cache:sha256:a38a4a97f1b43b878c91e0dd7f1e3d17f0e70beec71d95bacaf56a2f207624a3",
+      "version": "locked"
+    },
+    {
+      "enabled": true,
+      "file": "client-013.jar",
+      "id": "library-63bebba2a134d891",
+      "kind": "library",
+      "metadata": {},
+      "sha256": "63bebba2a134d891ac9ac1fec6746ae055cbb19a187e2e2e05a0b9ea857952d8",
+      "source": "local-cache:sha256:63bebba2a134d891ac9ac1fec6746ae055cbb19a187e2e2e05a0b9ea857952d8",
+      "version": "locked"
+    },
+    {
+      "enabled": true,
+      "file": "client-014.jar",
+      "id": "library-538e845a086d5830",
+      "kind": "library",
+      "metadata": {},
+      "sha256": "538e845a086d58301b7dfb2135db52213666374ee9a23f0d9dc776c6e37c25b2",
+      "source": "local-cache:sha256:538e845a086d58301b7dfb2135db52213666374ee9a23f0d9dc776c6e37c25b2",
+      "version": "locked"
+    },
+    {
+      "enabled": true,
+      "file": "client-015.jar",
+      "id": "library-fef001a7a13515c2",
+      "kind": "library",
+      "metadata": {},
+      "sha256": "fef001a7a13515c273f30915915580782afbc45273cc07aa15994e51563ef310",
+      "source": "local-cache:sha256:fef001a7a13515c273f30915915580782afbc45273cc07aa15994e51563ef310",
+      "version": "locked"
+    },
+    {
+      "enabled": true,
+      "file": "client-016.jar",
+      "id": "library-4241c14a7727c34f",
+      "kind": "library",
+      "metadata": {},
+      "sha256": "4241c14a7727c34feea6507ec801318a3d4a90f070e4525681079fb94ee4c593",
+      "source": "local-cache:sha256:4241c14a7727c34feea6507ec801318a3d4a90f070e4525681079fb94ee4c593",
+      "version": "locked"
+    },
+    {
+      "enabled": true,
+      "file": "client-017.jar",
+      "id": "library-a171ee4c734dd2da",
+      "kind": "library",
+      "metadata": {},
+      "sha256": "a171ee4c734dd2da837e4b16be9df4661afab72a41adaf31eb84dfdaf936ca26",
+      "source": "local-cache:sha256:a171ee4c734dd2da837e4b16be9df4661afab72a41adaf31eb84dfdaf936ca26",
+      "version": "locked"
+    },
+    {
+      "enabled": true,
+      "file": "client-018.jar",
+      "id": "library-bc65dea7cfd9e4da",
+      "kind": "library",
+      "metadata": {},
+      "sha256": "bc65dea7cfd9e4dacf8419d8af0e741655857d27885bb35d943d7187fc3a8fce",
+      "source": "local-cache:sha256:bc65dea7cfd9e4dacf8419d8af0e741655857d27885bb35d943d7187fc3a8fce",
+      "version": "locked"
+    },
+    {
+      "enabled": true,
+      "file": "client-019.jar",
+      "id": "library-29280822f4b0796a",
+      "kind": "library",
+      "metadata": {},
+      "sha256": "29280822f4b0796acef1f79b90b1d0c1edd86c10e876a848e04b8a6298a16bf9",
+      "source": "local-cache:sha256:29280822f4b0796acef1f79b90b1d0c1edd86c10e876a848e04b8a6298a16bf9",
+      "version": "locked"
+    },
+    {
+      "enabled": true,
+      "file": "client-020.jar",
+      "id": "library-319ea7b53b5e52f6",
+      "kind": "library",
+      "metadata": {},
+      "sha256": "319ea7b53b5e52f62ad3e2b81e9db7f0751240edac548bd74f5f19e35dc21a3b",
+      "source": "local-cache:sha256:319ea7b53b5e52f62ad3e2b81e9db7f0751240edac548bd74f5f19e35dc21a3b",
+      "version": "locked"
+    },
+    {
+      "enabled": true,
+      "file": "client-021.jar",
+      "id": "library-830bfd639c8db492",
+      "kind": "library",
+      "metadata": {},
+      "sha256": "830bfd639c8db49236bbd8e45d3a2b8c96c56ff654a10118654958a6235d4c44",
+      "source": "local-cache:sha256:830bfd639c8db49236bbd8e45d3a2b8c96c56ff654a10118654958a6235d4c44",
+      "version": "locked"
+    },
+    {
+      "enabled": true,
+      "file": "client-022.jar",
+      "id": "library-c8ee4136e474ac77",
+      "kind": "library",
+      "metadata": {},
+      "sha256": "c8ee4136e474ac7723ca2b432ec8d1a2bc88ef7d1ec57c314ba9e33cdc83dd75",
+      "source": "local-cache:sha256:c8ee4136e474ac7723ca2b432ec8d1a2bc88ef7d1ec57c314ba9e33cdc83dd75",
+      "version": "locked"
+    },
+    {
+      "enabled": true,
+      "file": "client-023.jar",
+      "id": "library-ffc138bc2596c291",
+      "kind": "library",
+      "metadata": {},
+      "sha256": "ffc138bc2596c291781b0d5e211ccac51f0f2345f27fc2742f335cedf7e2870d",
+      "source": "local-cache:sha256:ffc138bc2596c291781b0d5e211ccac51f0f2345f27fc2742f335cedf7e2870d",
+      "version": "locked"
+    },
+    {
+      "enabled": true,
+      "file": "client-024.jar",
+      "id": "library-3dc3190204bac5f4",
+      "kind": "library",
+      "metadata": {},
+      "sha256": "3dc3190204bac5f4184d8405bfe1f724f73a6a15a0d3f36ec7f69e6872c1a76c",
+      "source": "local-cache:sha256:3dc3190204bac5f4184d8405bfe1f724f73a6a15a0d3f36ec7f69e6872c1a76c",
+      "version": "locked"
+    },
+    {
+      "enabled": true,
+      "file": "client-025.jar",
+      "id": "library-16d70e7968b45caf",
+      "kind": "library",
+      "metadata": {},
+      "sha256": "16d70e7968b45caffc81576268eb000f473fb60bf257182d3447dea8ec919d5a",
+      "source": "local-cache:sha256:16d70e7968b45caffc81576268eb000f473fb60bf257182d3447dea8ec919d5a",
+      "version": "locked"
+    },
+    {
+      "enabled": true,
+      "file": "client-026.jar",
+      "id": "library-c2a95b499e76fada",
+      "kind": "library",
+      "metadata": {},
+      "sha256": "c2a95b499e76fada7dd63e9b0ec797b678d411c2b0ee6f37f4dc674662bfb0af",
+      "source": "local-cache:sha256:c2a95b499e76fada7dd63e9b0ec797b678d411c2b0ee6f37f4dc674662bfb0af",
+      "version": "locked"
+    },
+    {
+      "enabled": true,
+      "file": "client-027.jar",
+      "id": "library-56595fb20b0b85bc",
+      "kind": "library",
+      "metadata": {},
+      "sha256": "56595fb20b0b85bc91d0d503dad50bb7f1b9afc0eed5dffa6cbb25929000484d",
+      "source": "local-cache:sha256:56595fb20b0b85bc91d0d503dad50bb7f1b9afc0eed5dffa6cbb25929000484d",
+      "version": "locked"
+    },
+    {
+      "enabled": true,
+      "file": "client-028.jar",
+      "id": "library-a58af12ee1b68cfd",
+      "kind": "library",
+      "metadata": {},
+      "sha256": "a58af12ee1b68cfd2ebb0c27caef164f084381a00ec81a48cc275fd7ea54e154",
+      "source": "local-cache:sha256:a58af12ee1b68cfd2ebb0c27caef164f084381a00ec81a48cc275fd7ea54e154",
+      "version": "locked"
+    },
+    {
+      "enabled": true,
+      "file": "client-029.jar",
+      "id": "library-daddea1ea0be0f56",
+      "kind": "library",
+      "metadata": {},
+      "sha256": "daddea1ea0be0f56978ab3006b8ac92834afeefbd9b7e4e6316fca57df0fa636",
+      "source": "local-cache:sha256:daddea1ea0be0f56978ab3006b8ac92834afeefbd9b7e4e6316fca57df0fa636",
+      "version": "locked"
+    },
+    {
+      "enabled": true,
+      "file": "client-030.jar",
+      "id": "library-a4393f5b395486cc",
+      "kind": "library",
+      "metadata": {},
+      "sha256": "a4393f5b395486cc74d0325c9b41311abb9513ba0fd7ef8cf46e9345c3bffbea",
+      "source": "local-cache:sha256:a4393f5b395486cc74d0325c9b41311abb9513ba0fd7ef8cf46e9345c3bffbea",
+      "version": "locked"
+    },
+    {
+      "enabled": true,
+      "file": "client-031.jar",
+      "id": "library-bcc96737a0f912fc",
+      "kind": "library",
+      "metadata": {},
+      "sha256": "bcc96737a0f912fcf031cf8c45ebda352a90a40437db0832caad3d5a63618b38",
+      "source": "local-cache:sha256:bcc96737a0f912fcf031cf8c45ebda352a90a40437db0832caad3d5a63618b38",
+      "version": "locked"
+    },
+    {
+      "enabled": true,
+      "file": "client-032.jar",
+      "id": "library-a8aca0c8e9347acc",
+      "kind": "library",
+      "metadata": {},
+      "sha256": "a8aca0c8e9347acc75c885ecc749195d9775369aa520b9276f2d1128210a6c17",
+      "source": "local-cache:sha256:a8aca0c8e9347acc75c885ecc749195d9775369aa520b9276f2d1128210a6c17",
+      "version": "locked"
+    },
+    {
+      "enabled": true,
+      "file": "client-033.jar",
+      "id": "library-bd4771d19149cbc9",
+      "kind": "library",
+      "metadata": {},
+      "sha256": "bd4771d19149cbc9c7464ed2d58035d79cdfed7adb59d38718b0d8e7a3dcc2de",
+      "source": "local-cache:sha256:bd4771d19149cbc9c7464ed2d58035d79cdfed7adb59d38718b0d8e7a3dcc2de",
+      "version": "locked"
+    },
+    {
+      "enabled": true,
+      "file": "client-034.jar",
+      "id": "library-38a018c6d9fb2cb1",
+      "kind": "library",
+      "metadata": {},
+      "sha256": "38a018c6d9fb2cb11b72881354782b45080bbd20b9a0ad6cde28b80d431ed0b1",
+      "source": "local-cache:sha256:38a018c6d9fb2cb11b72881354782b45080bbd20b9a0ad6cde28b80d431ed0b1",
+      "version": "locked"
+    },
+    {
+      "enabled": true,
+      "file": "client-035.jar",
+      "id": "library-ee65fa17fe65f18f",
+      "kind": "library",
+      "metadata": {},
+      "sha256": "ee65fa17fe65f18fd22269f92bddad85bfb3a263cf65eba01e116a2f30b86ff5",
+      "source": "local-cache:sha256:ee65fa17fe65f18fd22269f92bddad85bfb3a263cf65eba01e116a2f30b86ff5",
+      "version": "locked"
+    },
+    {
+      "enabled": true,
+      "file": "client-036.jar",
+      "id": "library-93b5fe8f3829dcb5",
+      "kind": "library",
+      "metadata": {},
+      "sha256": "93b5fe8f3829dcb5e033d8d40d59159366ff4cf8266c903bbd6a4aeed9e59bac",
+      "source": "local-cache:sha256:93b5fe8f3829dcb5e033d8d40d59159366ff4cf8266c903bbd6a4aeed9e59bac",
+      "version": "locked"
+    },
+    {
+      "enabled": true,
+      "file": "client-037.jar",
+      "id": "library-1e83fc9f82e5415c",
+      "kind": "library",
+      "metadata": {},
+      "sha256": "1e83fc9f82e5415cdbb688c6a5c6bbbd7d198e9fdd6fdf64b3dc5d54dd1acfd0",
+      "source": "local-cache:sha256:1e83fc9f82e5415cdbb688c6a5c6bbbd7d198e9fdd6fdf64b3dc5d54dd1acfd0",
+      "version": "locked"
+    },
+    {
+      "enabled": true,
+      "file": "client-038.jar",
+      "id": "library-412fe140257c2dda",
+      "kind": "library",
+      "metadata": {},
+      "sha256": "412fe140257c2dda5a5e15bee911298bd61928d03ee6be4db588e82c196c5dc6",
+      "source": "local-cache:sha256:412fe140257c2dda5a5e15bee911298bd61928d03ee6be4db588e82c196c5dc6",
+      "version": "locked"
+    },
+    {
+      "enabled": true,
+      "file": "client-039.jar",
+      "id": "library-197fd2d6c6b4afe6",
+      "kind": "library",
+      "metadata": {},
+      "sha256": "197fd2d6c6b4afe677d9e95bf2e36b49a0bcabdfce0583683fb73f29a3f5a407",
+      "source": "local-cache:sha256:197fd2d6c6b4afe677d9e95bf2e36b49a0bcabdfce0583683fb73f29a3f5a407",
+      "version": "locked"
+    },
+    {
+      "enabled": true,
+      "file": "client-040.jar",
+      "id": "library-b5543ee08d062d55",
+      "kind": "library",
+      "metadata": {},
+      "sha256": "b5543ee08d062d551cf0a5c9bc0fb70588b0382079029ba48941fa9c9be8a5d4",
+      "source": "local-cache:sha256:b5543ee08d062d551cf0a5c9bc0fb70588b0382079029ba48941fa9c9be8a5d4",
+      "version": "locked"
+    },
+    {
+      "enabled": true,
+      "file": "client-041.jar",
+      "id": "library-ae4caceb3840730c",
+      "kind": "library",
+      "metadata": {},
+      "sha256": "ae4caceb3840730c2537f9b7fb55a01baba580286b4122951488bcee558c2449",
+      "source": "local-cache:sha256:ae4caceb3840730c2537f9b7fb55a01baba580286b4122951488bcee558c2449",
+      "version": "locked"
+    },
+    {
+      "enabled": true,
+      "file": "client-042.jar",
+      "id": "library-34ed1e1f27fa896b",
+      "kind": "library",
+      "metadata": {},
+      "sha256": "34ed1e1f27fa896bca50dbc4e99cf3732967cec387a7a0d5e3486c09673fe8c6",
+      "source": "local-cache:sha256:34ed1e1f27fa896bca50dbc4e99cf3732967cec387a7a0d5e3486c09673fe8c6",
+      "version": "locked"
+    },
+    {
+      "enabled": true,
+      "file": "client-043.jar",
+      "id": "library-df26cc58f235f477",
+      "kind": "library",
+      "metadata": {},
+      "sha256": "df26cc58f235f477db07f753ba5a3ab243ebe5789d9f89ecf68dd62ea9a66c28",
+      "source": "local-cache:sha256:df26cc58f235f477db07f753ba5a3ab243ebe5789d9f89ecf68dd62ea9a66c28",
+      "version": "locked"
+    },
+    {
+      "enabled": true,
+      "file": "client-044.jar",
+      "id": "library-051aceb8bbcc62d0",
+      "kind": "library",
+      "metadata": {},
+      "sha256": "051aceb8bbcc62d0f5b2b8ac72c53767f9c59bfbd050151e65bef6f51c8ed9c9",
+      "source": "local-cache:sha256:051aceb8bbcc62d0f5b2b8ac72c53767f9c59bfbd050151e65bef6f51c8ed9c9",
+      "version": "locked"
+    },
+    {
+      "enabled": true,
+      "file": "client-045.jar",
+      "id": "library-7b96bf3ee68949ab",
+      "kind": "library",
+      "metadata": {},
+      "sha256": "7b96bf3ee68949abb5bc465559ac270e0551596fa34523fddf890ec418dde13c",
+      "source": "local-cache:sha256:7b96bf3ee68949abb5bc465559ac270e0551596fa34523fddf890ec418dde13c",
+      "version": "locked"
+    },
+    {
+      "enabled": true,
+      "file": "client-046.jar",
+      "id": "library-6fe9026a566c6a50",
+      "kind": "library",
+      "metadata": {},
+      "sha256": "6fe9026a566c6a5001608cf3fc32196641f6c1e5e1986d1037ccdbd5f31ef743",
+      "source": "local-cache:sha256:6fe9026a566c6a5001608cf3fc32196641f6c1e5e1986d1037ccdbd5f31ef743",
+      "version": "locked"
+    },
+    {
+      "enabled": true,
+      "file": "client-047.jar",
+      "id": "library-6c9b3dd142a09dc4",
+      "kind": "library",
+      "metadata": {},
+      "sha256": "6c9b3dd142a09dc468e23ad39aad6f75a0f2b85125104469f026e52a474e464f",
+      "source": "local-cache:sha256:6c9b3dd142a09dc468e23ad39aad6f75a0f2b85125104469f026e52a474e464f",
+      "version": "locked"
+    },
+    {
+      "enabled": true,
+      "file": "client-048.jar",
+      "id": "library-5d7beae7ff15d851",
+      "kind": "library",
+      "metadata": {},
+      "sha256": "5d7beae7ff15d8516d6517121d7f12a79a6ac180df64b5fcec55d5be21056e53",
+      "source": "local-cache:sha256:5d7beae7ff15d8516d6517121d7f12a79a6ac180df64b5fcec55d5be21056e53",
+      "version": "locked"
+    },
+    {
+      "enabled": true,
+      "file": "client-049.jar",
+      "id": "library-46dccecac556623d",
+      "kind": "library",
+      "metadata": {},
+      "sha256": "46dccecac556623d8e2ce8648496824a82951d139062a4e61148aff1a25ed18d",
+      "source": "local-cache:sha256:46dccecac556623d8e2ce8648496824a82951d139062a4e61148aff1a25ed18d",
+      "version": "locked"
+    },
+    {
+      "enabled": true,
+      "file": "client-050.jar",
+      "id": "library-1920cd69d8682c7e",
+      "kind": "library",
+      "metadata": {},
+      "sha256": "1920cd69d8682c7ef249bb407a3d0685723aa1785867cf4c53258da6bf14da97",
+      "source": "local-cache:sha256:1920cd69d8682c7ef249bb407a3d0685723aa1785867cf4c53258da6bf14da97",
+      "version": "locked"
+    },
+    {
+      "enabled": true,
+      "file": "client-051.jar",
+      "id": "library-e067f29a3701426b",
+      "kind": "library",
+      "metadata": {},
+      "sha256": "e067f29a3701426b67ed973036949c6e58ca5bb53eef7240b2e71e286d252a9e",
+      "source": "local-cache:sha256:e067f29a3701426b67ed973036949c6e58ca5bb53eef7240b2e71e286d252a9e",
+      "version": "locked"
+    },
+    {
+      "enabled": true,
+      "file": "client-052.jar",
+      "id": "library-cac9f22f83a7aa33",
+      "kind": "library",
+      "metadata": {},
+      "sha256": "cac9f22f83a7aa33eebda73c16ff5261e3cb4911b6bafcf4c79ea486099d0c9a",
+      "source": "local-cache:sha256:cac9f22f83a7aa33eebda73c16ff5261e3cb4911b6bafcf4c79ea486099d0c9a",
+      "version": "locked"
+    },
+    {
+      "enabled": true,
+      "file": "client-053.jar",
+      "id": "library-e1a7ab07106349d9",
+      "kind": "library",
+      "metadata": {},
+      "sha256": "e1a7ab07106349d9a8a68f6860b7b73b353c502b81e662aca77f931c6fdd3de8",
+      "source": "local-cache:sha256:e1a7ab07106349d9a8a68f6860b7b73b353c502b81e662aca77f931c6fdd3de8",
+      "version": "locked"
+    },
+    {
+      "enabled": true,
+      "file": "client-054.jar",
+      "id": "library-9fc63518a27b8ff1",
+      "kind": "library",
+      "metadata": {},
+      "sha256": "9fc63518a27b8ff1ab78196343710ce28e8000ce88f60be851a2d3db5beab8e9",
+      "source": "local-cache:sha256:9fc63518a27b8ff1ab78196343710ce28e8000ce88f60be851a2d3db5beab8e9",
+      "version": "locked"
+    },
+    {
+      "enabled": true,
+      "file": "client-055.jar",
+      "id": "library-bedc757fd2b1b255",
+      "kind": "library",
+      "metadata": {},
+      "sha256": "bedc757fd2b1b255146db26b74b9cbd1fcf5644b89b47b104fa721c741604259",
+      "source": "local-cache:sha256:bedc757fd2b1b255146db26b74b9cbd1fcf5644b89b47b104fa721c741604259",
+      "version": "locked"
+    },
+    {
+      "enabled": true,
+      "file": "client-056.jar",
+      "id": "library-b8306062b17741f3",
+      "kind": "library",
+      "metadata": {},
+      "sha256": "b8306062b17741f34269088751421f1ac21a597bfbbd0c6c61226301cde744b8",
+      "source": "local-cache:sha256:b8306062b17741f34269088751421f1ac21a597bfbbd0c6c61226301cde744b8",
+      "version": "locked"
+    },
+    {
+      "enabled": true,
+      "file": "client-057.jar",
+      "id": "library-e99e31269e6678a4",
+      "kind": "library",
+      "metadata": {},
+      "sha256": "e99e31269e6678a4bfc62ef24c50a481c01cbdd004861ece9a59ba12768c6516",
+      "source": "local-cache:sha256:e99e31269e6678a4bfc62ef24c50a481c01cbdd004861ece9a59ba12768c6516",
+      "version": "locked"
+    },
+    {
+      "enabled": true,
+      "file": "client-058.jar",
+      "id": "library-4e4a13d7015d4260",
+      "kind": "library",
+      "metadata": {},
+      "sha256": "4e4a13d7015d42605bbcf7ef9faead46deac6409e4377a8ed4aea815f14634b3",
+      "source": "local-cache:sha256:4e4a13d7015d42605bbcf7ef9faead46deac6409e4377a8ed4aea815f14634b3",
+      "version": "locked"
+    },
+    {
+      "enabled": true,
+      "file": "client-059.jar",
+      "id": "library-ae0e82767cacf089",
+      "kind": "library",
+      "metadata": {},
+      "sha256": "ae0e82767cacf08921f578fba9d84753ddeb00ceada0510a2b4a882be28fbf95",
+      "source": "local-cache:sha256:ae0e82767cacf08921f578fba9d84753ddeb00ceada0510a2b4a882be28fbf95",
+      "version": "locked"
+    },
+    {
+      "enabled": true,
+      "file": "client-060.jar",
+      "id": "library-9030fed928a71eac",
+      "kind": "library",
+      "metadata": {},
+      "sha256": "9030fed928a71eac2fdf4ce1643cc4ec724d8710e3b437bdce750bdc9e982b2a",
+      "source": "local-cache:sha256:9030fed928a71eac2fdf4ce1643cc4ec724d8710e3b437bdce750bdc9e982b2a",
+      "version": "locked"
+    },
+    {
+      "enabled": true,
+      "file": "client-061.jar",
+      "id": "library-5062da750e5f7ec8",
+      "kind": "library",
+      "metadata": {},
+      "sha256": "5062da750e5f7ec89e27e8b67b7d40fa8c4b16890159e35f828116ce6c8eca1e",
+      "source": "local-cache:sha256:5062da750e5f7ec89e27e8b67b7d40fa8c4b16890159e35f828116ce6c8eca1e",
+      "version": "locked"
+    },
+    {
+      "enabled": true,
+      "file": "client-062.jar",
+      "id": "library-d823a92c6a2810b5",
+      "kind": "library",
+      "metadata": {},
+      "sha256": "d823a92c6a2810b5112da304dcc6abcd4cb102706f74f7e934a223cea2051250",
+      "source": "local-cache:sha256:d823a92c6a2810b5112da304dcc6abcd4cb102706f74f7e934a223cea2051250",
+      "version": "locked"
+    },
+    {
+      "enabled": true,
+      "file": "client-063.jar",
+      "id": "library-0cff7aa46ea9d70f",
+      "kind": "library",
+      "metadata": {},
+      "sha256": "0cff7aa46ea9d70fcc20857015293ea80fbf21adcac34600c84da9b81a44ca93",
+      "source": "local-cache:sha256:0cff7aa46ea9d70fcc20857015293ea80fbf21adcac34600c84da9b81a44ca93",
+      "version": "locked"
+    },
+    {
+      "enabled": true,
+      "file": "client-064.jar",
+      "id": "library-c4489068ddc6dc44",
+      "kind": "library",
+      "metadata": {},
+      "sha256": "c4489068ddc6dc44b103071943f801a2d076634d4b74db470927f84a308219e1",
+      "source": "local-cache:sha256:c4489068ddc6dc44b103071943f801a2d076634d4b74db470927f84a308219e1",
+      "version": "locked"
+    },
+    {
+      "enabled": true,
+      "file": "client-065.jar",
+      "id": "library-ee0515054ee19a3f",
+      "kind": "library",
+      "metadata": {},
+      "sha256": "ee0515054ee19a3f4088426fee9d879eb2ee657b07e5064e4e2c851f6adcf14b",
+      "source": "local-cache:sha256:ee0515054ee19a3f4088426fee9d879eb2ee657b07e5064e4e2c851f6adcf14b",
+      "version": "locked"
+    },
+    {
+      "enabled": true,
+      "file": "client-066.jar",
+      "id": "library-a076fa05a4d17476",
+      "kind": "library",
+      "metadata": {},
+      "sha256": "a076fa05a4d174762eab5852ee72c29d14ab10a5654f27fb00664ef1b52c0c05",
+      "source": "local-cache:sha256:a076fa05a4d174762eab5852ee72c29d14ab10a5654f27fb00664ef1b52c0c05",
+      "version": "locked"
+    },
+    {
+      "enabled": true,
+      "file": "client-067.jar",
+      "id": "library-dc9c7b2d48e8396d",
+      "kind": "library",
+      "metadata": {},
+      "sha256": "dc9c7b2d48e8396d68895f8902ffa01e46253de44dfe927533ff09457ebfeec4",
+      "source": "local-cache:sha256:dc9c7b2d48e8396d68895f8902ffa01e46253de44dfe927533ff09457ebfeec4",
+      "version": "locked"
+    },
+    {
+      "enabled": true,
+      "file": "client-068.jar",
+      "id": "library-e663738c519a06f6",
+      "kind": "library",
+      "metadata": {},
+      "sha256": "e663738c519a06f6d659882fa8e4e09af7f10e921929ee5cc54a7587f62ed4c9",
+      "source": "local-cache:sha256:e663738c519a06f6d659882fa8e4e09af7f10e921929ee5cc54a7587f62ed4c9",
+      "version": "locked"
+    },
+    {
+      "enabled": true,
+      "file": "client-069.jar",
+      "id": "library-d74a3334fb351950",
+      "kind": "library",
+      "metadata": {},
+      "sha256": "d74a3334fb35195009b338a951f918203d6bbca3d1d359033dc33edd1cadc9ef",
+      "source": "local-cache:sha256:d74a3334fb35195009b338a951f918203d6bbca3d1d359033dc33edd1cadc9ef",
+      "version": "locked"
+    },
+    {
+      "enabled": true,
+      "file": "client-070.jar",
+      "id": "library-44508fd157650068",
+      "kind": "library",
+      "metadata": {},
+      "sha256": "44508fd1576500688c790b190acdd16fec4f8c79a3e0b900afd70503cf055f55",
+      "source": "local-cache:sha256:44508fd1576500688c790b190acdd16fec4f8c79a3e0b900afd70503cf055f55",
+      "version": "locked"
+    },
+    {
+      "enabled": true,
+      "file": "client-071.jar",
+      "id": "library-495c27a248ff48b8",
+      "kind": "library",
+      "metadata": {},
+      "sha256": "495c27a248ff48b8ade73625455f62d55bfd4d4217e1ecc279afc9382b54bfe5",
+      "source": "local-cache:sha256:495c27a248ff48b8ade73625455f62d55bfd4d4217e1ecc279afc9382b54bfe5",
+      "version": "locked"
+    },
+    {
+      "enabled": true,
+      "file": "client-072.jar",
+      "id": "fabricloader",
+      "kind": "mod",
+      "metadata": {
+        "fabric": {
+          "authors": [
+            "FabricMC"
+          ],
+          "contact": {
+            "homepage": "https://fabricmc.net",
+            "irc": "ircs://irc.esper.net:6697/fabric",
+            "issues": "https://github.com/FabricMC/fabric-loader/issues",
+            "sources": "https://github.com/FabricMC/fabric-loader"
+          },
+          "description": "The base mod loader.",
+          "environment": "*",
+          "icon": "assets/fabricloader/icon.png",
+          "id": "fabricloader",
+          "jars": [
+            {
+              "file": "META-INF/jars/mixinextras-fabric-0.5.4.jar"
+            }
+          ],
+          "license": "Apache-2.0",
+          "name": "Fabric Loader",
+          "schemaVersion": 1,
+          "version": "0.19.3"
+        }
+      },
+      "sha256": "73eed8c34bbad0320a2a3cba5346351e822f74f82b3f3c060574068474132958",
+      "source": "local-cache:sha256:73eed8c34bbad0320a2a3cba5346351e822f74f82b3f3c060574068474132958",
+      "version": "0.19.3"
+    },
+    {
+      "enabled": true,
+      "file": "client-073.jar",
+      "id": "fabric-api",
+      "kind": "mod",
+      "metadata": {
+        "fabric": {
+          "authors": [
+            "FabricMC"
+          ],
+          "contact": {
+            "homepage": "https://fabricmc.net",
+            "irc": "irc://irc.esper.net:6667/fabric",
+            "issues": "https://github.com/FabricMC/fabric/issues",
+            "sources": "https://github.com/FabricMC/fabric"
+          },
+          "depends": {
+            "fabricloader": ">=0.15.11",
+            "java": ">=21",
+            "minecraft": ">=1.21- <1.21.2-"
+          },
+          "description": "Core API module providing key hooks and intercompatibility features.",
+          "environment": "*",
+          "icon": "assets/fabric/icon.png",
+          "id": "fabric-api",
+          "license": "Apache-2.0",
+          "name": "Fabric API",
+          "provides": [
+            "fabric"
+          ],
+          "schemaVersion": 1,
+          "version": "0.116.15+1.21.1"
+        }
+      },
+      "sha256": "8f953ba9e7e466c3c3099e7e07926ab302ce83407bfe7128c8a42a3a4e9f0e01",
+      "source": "local-cache:sha256:8f953ba9e7e466c3c3099e7e07926ab302ce83407bfe7128c8a42a3a4e9f0e01",
+      "version": "0.116.15+1.21.1"
+    },
+    {
+      "enabled": true,
+      "file": "client-074.jar",
+      "id": "fabric-transfer-api-v1",
+      "kind": "mod",
+      "metadata": {
+        "fabric": {
+          "authors": [
+            "FabricMC"
+          ],
+          "contact": {
+            "homepage": "https://fabricmc.net",
+            "irc": "irc://irc.esper.net:6667/fabric",
+            "issues": "https://github.com/FabricMC/fabric/issues",
+            "sources": "https://github.com/FabricMC/fabric"
+          },
+          "custom": {
+            "fabric-api:module-lifecycle": "stable"
+          },
+          "depends": {
+            "fabric-api-lookup-api-v1": "*",
+            "fabric-rendering-fluids-v1": "*",
+            "fabricloader": ">=0.15.11"
+          },
+          "description": "A common API for the transfer of fluids, items and other game resources.",
+          "environment": "*",
+          "icon": "assets/fabric-transfer-api-v1/icon.png",
+          "id": "fabric-transfer-api-v1",
+          "license": "Apache-2.0",
+          "mixins": [
+            "fabric-transfer-api-v1.mixins.json"
+          ],
+          "name": "Fabric Transfer API (v1)",
+          "schemaVersion": 1,
+          "version": "5.4.4+7b3d111d19"
+        }
+      },
+      "sha256": "cc58c41d51bc6e4fff1c2f4365d2ae35c3bd374dcde5944e21a2823b92712813",
+      "source": "local-cache:sha256:cc58c41d51bc6e4fff1c2f4365d2ae35c3bd374dcde5944e21a2823b92712813",
+      "version": "5.4.4+7b3d111d19"
+    },
+    {
+      "enabled": true,
+      "file": "client-075.jar",
+      "id": "fabric-api-lookup-api-v1",
+      "kind": "mod",
+      "metadata": {
+        "fabric": {
+          "authors": [
+            "FabricMC"
+          ],
+          "contact": {
+            "homepage": "https://fabricmc.net",
+            "irc": "irc://irc.esper.net:6667/fabric",
+            "issues": "https://github.com/FabricMC/fabric/issues",
+            "sources": "https://github.com/FabricMC/fabric"
+          },
+          "custom": {
+            "fabric-api:module-lifecycle": "stable"
+          },
+          "depends": {
+            "fabric-api-base": "*",
+            "fabric-lifecycle-events-v1": "*",
+            "fabricloader": ">=0.15.11"
+          },
+          "description": "A universal way to expose and query APIs",
+          "entrypoints": {
+            "main": [
+              "net.fabricmc.fabric.impl.lookup.ApiLookupImpl"
+            ]
+          },
+          "environment": "*",
+          "icon": "assets/fabric-api-lookup-api-v1/icon.png",
+          "id": "fabric-api-lookup-api-v1",
+          "license": "Apache-2.0",
+          "mixins": [
+            "fabric-api-lookup-api-v1.mixins.json"
+          ],
+          "name": "Fabric API Lookup API (v1)",
+          "schemaVersion": 1,
+          "version": "1.6.72+7b3d111d19"
+        }
+      },
+      "sha256": "7f59850e8b2a0bb2df3104d7611f66c14ebaa74e7c729e33e84e793c362ee09a",
+      "source": "local-cache:sha256:7f59850e8b2a0bb2df3104d7611f66c14ebaa74e7c729e33e84e793c362ee09a",
+      "version": "1.6.72+7b3d111d19"
+    },
+    {
+      "enabled": true,
+      "file": "client-076.jar",
+      "id": "fabric-blockrenderlayer-v1",
+      "kind": "mod",
+      "metadata": {
+        "fabric": {
+          "authors": [
+            "FabricMC"
+          ],
+          "contact": {
+            "homepage": "https://fabricmc.net",
+            "irc": "irc://irc.esper.net:6667/fabric",
+            "issues": "https://github.com/FabricMC/fabric/issues",
+            "sources": "https://github.com/FabricMC/fabric"
+          },
+          "custom": {
+            "fabric-api:module-lifecycle": "stable"
+          },
+          "depends": {
+            "fabric-api-base": "*",
+            "fabricloader": ">=0.15.11",
+            "minecraft": ">=1.15-alpha.19.38.b"
+          },
+          "description": "Registration utility for block and fluid render layers.",
+          "environment": "client",
+          "icon": "assets/fabric-blockrenderlayer-v1/icon.png",
+          "id": "fabric-blockrenderlayer-v1",
+          "license": "Apache-2.0",
+          "mixins": [
+            "fabric-blockrenderlayer-v1.mixins.json"
+          ],
+          "name": "Fabric BlockRenderLayer Registration (v1)",
+          "schemaVersion": 1,
+          "version": "1.1.52+0af3f5a719"
+        }
+      },
+      "sha256": "87e506f9e34c771109b1de720c854e52474f175df8d5c702b81508faebfff7ef",
+      "source": "local-cache:sha256:87e506f9e34c771109b1de720c854e52474f175df8d5c702b81508faebfff7ef",
+      "version": "1.1.52+0af3f5a719"
+    },
+    {
+      "enabled": true,
+      "file": "client-077.jar",
+      "id": "fabric-client-tags-api-v1",
+      "kind": "mod",
+      "metadata": {
+        "fabric": {
+          "authors": [
+            "FabricMC"
+          ],
+          "contact": {
+            "homepage": "https://fabricmc.net",
+            "irc": "irc://irc.esper.net:6667/fabric",
+            "issues": "https://github.com/FabricMC/fabric/issues",
+            "sources": "https://github.com/FabricMC/fabric"
+          },
+          "custom": {
+            "fabric-api:module-lifecycle": "stable"
+          },
+          "depends": {
+            "fabricloader": ">=0.15.11"
+          },
+          "description": "Adds the ability to load tags from the local mods.",
+          "environment": "client",
+          "icon": "assets/fabric-client-tags-api-v1/icon.png",
+          "id": "fabric-client-tags-api-v1",
+          "license": "Apache-2.0",
+          "name": "Fabric Client Tags",
+          "schemaVersion": 1,
+          "version": "1.2.0+1eb36c0719"
+        }
+      },
+      "sha256": "d565fcd63df8f0e22d8a465e49b587b9cb420e08edb7970656147c0acc1db80f",
+      "source": "local-cache:sha256:d565fcd63df8f0e22d8a465e49b587b9cb420e08edb7970656147c0acc1db80f",
+      "version": "1.2.0+1eb36c0719"
+    },
+    {
+      "enabled": true,
+      "file": "client-078.jar",
+      "id": "fabric-command-api-v1",
+      "kind": "mod",
+      "metadata": {
+        "fabric": {
+          "authors": [
+            "FabricMC"
+          ],
+          "contact": {
+            "homepage": "https://fabricmc.net",
+            "irc": "irc://irc.esper.net:6667/fabric",
+            "issues": "https://github.com/FabricMC/fabric/issues",
+            "sources": "https://github.com/FabricMC/fabric"
+          },
+          "custom": {
+            "fabric-api:module-lifecycle": "deprecated"
+          },
+          "depends": {
+            "fabric-api-base": "*",
+            "fabric-command-api-v2": "*",
+            "fabricloader": ">=0.15.11"
+          },
+          "description": "Deprecated. Please migrate to v2",
+          "entrypoints": {
+            "main": [
+              "net.fabricmc.fabric.impl.command.v1.LegacyHandler"
+            ]
+          },
+          "environment": "*",
+          "icon": "assets/fabric-command-api-v1/icon.png",
+          "id": "fabric-command-api-v1",
+          "license": "Apache-2.0",
+          "name": "Fabric Command API (v1)",
+          "schemaVersion": 1,
+          "version": "1.2.49+f71b366f19"
+        }
+      },
+      "sha256": "7efd4cbecd5106ed9ffc711f3e4b9979ffa593447007bef2102664383d66326e",
+      "source": "local-cache:sha256:7efd4cbecd5106ed9ffc711f3e4b9979ffa593447007bef2102664383d66326e",
+      "version": "1.2.49+f71b366f19"
+    },
+    {
+      "enabled": true,
+      "file": "client-079.jar",
+      "id": "fabric-commands-v0",
+      "kind": "mod",
+      "metadata": {
+        "fabric": {
+          "authors": [
+            "FabricMC"
+          ],
+          "contact": {
+            "homepage": "https://fabricmc.net",
+            "irc": "irc://irc.esper.net:6667/fabric",
+            "issues": "https://github.com/FabricMC/fabric/issues",
+            "sources": "https://github.com/FabricMC/fabric"
+          },
+          "custom": {
+            "fabric-api:module-lifecycle": "deprecated"
+          },
+          "depends": {
+            "fabric-api-base": "*",
+            "fabric-command-api-v2": "*",
+            "fabricloader": ">=0.15.11"
+          },
+          "description": "Deprecated. Please migrate to v2",
+          "environment": "*",
+          "icon": "assets/fabric-commands-v0/icon.png",
+          "id": "fabric-commands-v0",
+          "license": "Apache-2.0",
+          "mixins": [],
+          "name": "Fabric Commands (v0)",
+          "schemaVersion": 1,
+          "version": "0.2.66+df3654b319"
+        }
+      },
+      "sha256": "ec09e89b774c5ed0e4b7a8f96c61772b1b134004005568db4b8f89ebbb7e2e49",
+      "source": "local-cache:sha256:ec09e89b774c5ed0e4b7a8f96c61772b1b134004005568db4b8f89ebbb7e2e49",
+      "version": "0.2.66+df3654b319"
+    },
+    {
+      "enabled": true,
+      "file": "client-080.jar",
+      "id": "fabric-command-api-v2",
+      "kind": "mod",
+      "metadata": {
+        "fabric": {
+          "accessWidener": "fabric-command-api-v2.accesswidener",
+          "authors": [
+            "FabricMC"
+          ],
+          "contact": {
+            "homepage": "https://fabricmc.net",
+            "irc": "irc://irc.esper.net:6667/fabric",
+            "issues": "https://github.com/FabricMC/fabric/issues",
+            "sources": "https://github.com/FabricMC/fabric"
+          },
+          "custom": {
+            "fabric-api:module-lifecycle": "stable",
+            "loom:injected_interfaces": {
+              "net/minecraft/class_2303": [
+                "net/fabricmc/fabric/api/command/v2/FabricEntitySelectorReader"
+              ]
+            }
+          },
+          "depends": {
+            "fabric-api-base": "*",
+            "fabricloader": ">=0.15.11",
+            "minecraft": ">1.19-alpha.22.11.a"
+          },
+          "description": "Adds command-related hooks.",
+          "environment": "*",
+          "icon": "assets/fabric-command-api-v2/icon.png",
+          "id": "fabric-command-api-v2",
+          "license": "Apache-2.0",
+          "mixins": [
+            "fabric-command-api-v2.mixins.json",
+            {
+              "config": "fabric-command-api-v2.client.mixins.json",
+              "environment": "client"
+            }
+          ],
+          "name": "Fabric Command API (v2)",
+          "schemaVersion": 1,
+          "version": "2.2.28+6ced4dd919"
+        }
+      },
+      "sha256": "423c536f1c67c051057e83874fc9ac90e8598049250967ceede75a732271bb0c",
+      "source": "local-cache:sha256:423c536f1c67c051057e83874fc9ac90e8598049250967ceede75a732271bb0c",
+      "version": "2.2.28+6ced4dd919"
+    },
+    {
+      "enabled": true,
+      "file": "client-081.jar",
+      "id": "fabric-content-registries-v0",
+      "kind": "mod",
+      "metadata": {
+        "fabric": {
+          "accessWidener": "fabric-content-registries-v0.accesswidener",
+          "authors": [
+            "FabricMC"
+          ],
+          "contact": {
+            "homepage": "https://fabricmc.net",
+            "irc": "irc://irc.esper.net:6667/fabric",
+            "issues": "https://github.com/FabricMC/fabric/issues",
+            "sources": "https://github.com/FabricMC/fabric"
+          },
+          "custom": {
+            "fabric-api:module-lifecycle": "stable",
+            "loom:injected_interfaces": {
+              "net/minecraft/class_1845$class_9665": [
+                "net/fabricmc/fabric/api/registry/FabricBrewingRecipeRegistryBuilder"
+              ]
+            }
+          },
+          "depends": {
+            "fabric-api-base": "*",
+            "fabric-lifecycle-events-v1": "*",
+            "fabric-resource-loader-v0": "*",
+            "fabricloader": ">=0.15.11"
+          },
+          "description": "Adds registries for vanilla mechanics that are missing them.",
+          "environment": "*",
+          "icon": "assets/fabric-content-registries-v0/icon.png",
+          "id": "fabric-content-registries-v0",
+          "license": "Apache-2.0",
+          "mixins": [
+            "fabric-content-registries-v0.mixins.json"
+          ],
+          "name": "Fabric Content Registries (v0)",
+          "schemaVersion": 1,
+          "version": "8.0.19+b559734419"
+        }
+      },
+      "sha256": "8adb2468a7c30a1c461e1c8033a598d3cb2fafded3b41fdfc15909cac426acf2",
+      "source": "local-cache:sha256:8adb2468a7c30a1c461e1c8033a598d3cb2fafded3b41fdfc15909cac426acf2",
+      "version": "8.0.19+b559734419"
+    },
+    {
+      "enabled": true,
+      "file": "client-082.jar",
+      "id": "fabric-data-generation-api-v1",
+      "kind": "mod",
+      "metadata": {
+        "fabric": {
+          "accessWidener": "fabric-data-generation-api-v1.accesswidener",
+          "authors": [
+            "FabricMC"
+          ],
+          "contact": {
+            "homepage": "https://fabricmc.net",
+            "irc": "irc://irc.esper.net:6667/fabric",
+            "issues": "https://github.com/FabricMC/fabric/issues",
+            "sources": "https://github.com/FabricMC/fabric"
+          },
+          "custom": {
+            "fabric-api:module-lifecycle": "stable",
+            "loom:injected_interfaces": {
+              "net/minecraft/class_2474$class_5124": [
+                "net/fabricmc/fabric/api/datagen/v1/provider/FabricProvidedTagBuilder<TT;>"
+              ],
+              "net/minecraft/class_7788": [
+                "net/fabricmc/fabric/api/datagen/v1/loot/FabricBlockLootTableGenerator"
+              ],
+              "net/minecraft/class_8790": [
+                "net/fabricmc/fabric/api/datagen/v1/recipe/FabricRecipeExporter"
+              ]
+            }
+          },
+          "depends": {
+            "fabricloader": ">=0.15.11"
+          },
+          "description": "Allows for automatic data generation.",
+          "environment": "*",
+          "icon": "assets/fabric-data-generation-api-v1/icon.png",
+          "id": "fabric-data-generation-api-v1",
+          "license": "Apache-2.0",
+          "mixins": [
+            "fabric-data-generation-api-v1.mixins.json",
+            {
+              "config": "fabric-data-generation-api-v1.client.mixins.json",
+              "environment": "client"
+            }
+          ],
+          "name": "Fabric Data Generation API (v1)",
+          "schemaVersion": 1,
+          "version": "20.3.0+1eb36c0719"
+        }
+      },
+      "sha256": "d14554a961de5a6f842d9b50b66ca3500fb9d1e2a2cf27f6a649b444c3cebd70",
+      "source": "local-cache:sha256:d14554a961de5a6f842d9b50b66ca3500fb9d1e2a2cf27f6a649b444c3cebd70",
+      "version": "20.3.0+1eb36c0719"
+    },
+    {
+      "enabled": true,
+      "file": "client-083.jar",
+      "id": "fabric-convention-tags-v1",
+      "kind": "mod",
+      "metadata": {
+        "fabric": {
+          "authors": [
+            "FabricMC"
+          ],
+          "contact": {
+            "homepage": "https://fabricmc.net",
+            "irc": "irc://irc.esper.net:6667/fabric",
+            "issues": "https://github.com/FabricMC/fabric/issues",
+            "sources": "https://github.com/FabricMC/fabric"
+          },
+          "custom": {
+            "fabric-api:module-lifecycle": "stable"
+          },
+          "depends": {
+            "fabricloader": ">=0.15.11",
+            "minecraft": ">=1.18.2"
+          },
+          "description": "Contains common tags used by mods for vanilla things.",
+          "entrypoints": {
+            "main": [
+              "net.fabricmc.fabric.impl.tag.convention.ConventionLogWarnings"
+            ]
+          },
+          "environment": "*",
+          "icon": "assets/fabric-convention-tags-v1/icon.png",
+          "id": "fabric-convention-tags-v1",
+          "license": "Apache-2.0",
+          "name": "Fabric Convention Tags",
+          "schemaVersion": 1,
+          "version": "2.1.7+7f945d5b19"
+        }
+      },
+      "sha256": "40505d51a3fde6327b37152a5c186db7d9b56ee1b471cee822aeaf66a1edd45f",
+      "source": "local-cache:sha256:40505d51a3fde6327b37152a5c186db7d9b56ee1b471cee822aeaf66a1edd45f",
+      "version": "2.1.7+7f945d5b19"
+    },
+    {
+      "enabled": true,
+      "file": "client-084.jar",
+      "id": "fabric-convention-tags-v2",
+      "kind": "mod",
+      "metadata": {
+        "fabric": {
+          "authors": [
+            "FabricMC"
+          ],
+          "contact": {
+            "homepage": "https://fabricmc.net",
+            "irc": "irc://irc.esper.net:6667/fabric",
+            "issues": "https://github.com/FabricMC/fabric/issues",
+            "sources": "https://github.com/FabricMC/fabric"
+          },
+          "custom": {
+            "fabric-api:module-lifecycle": "stable",
+            "loom:injected_interfaces": {
+              "net/minecraft/class_6862": [
+                "net/fabricmc/fabric/api/tag/FabricTagKey"
+              ]
+            }
+          },
+          "depends": {
+            "fabric-lifecycle-events-v1": "*",
+            "fabricloader": ">=0.15.11",
+            "minecraft": ">=1.20.5-beta.1"
+          },
+          "description": "Contains common tags used by mods for better inter-mod compatibility.",
+          "entrypoints": {
+            "main": [
+              "net.fabricmc.fabric.impl.tag.convention.v2.TranslationConventionLogWarnings"
+            ]
+          },
+          "environment": "*",
+          "icon": "assets/fabric-convention-tags-v2/icon.png",
+          "id": "fabric-convention-tags-v2",
+          "license": "Apache-2.0",
+          "mixins": [
+            "fabric-convention-tags-api-v2.mixins.json"
+          ],
+          "name": "Fabric Convention Tags (v2)",
+          "schemaVersion": 1,
+          "version": "2.12.0+c3656daa19"
+        }
+      },
+      "sha256": "0d3fcdea4380c697c9ef24da1e848092438e124e473b42aa54867f38890540b9",
+      "source": "local-cache:sha256:0d3fcdea4380c697c9ef24da1e848092438e124e473b42aa54867f38890540b9",
+      "version": "2.12.0+c3656daa19"
+    },
+    {
+      "enabled": true,
+      "file": "client-085.jar",
+      "id": "fabric-data-attachment-api-v1",
+      "kind": "mod",
+      "metadata": {
+        "fabric": {
+          "authors": [
+            "FabricMC"
+          ],
+          "contact": {
+            "homepage": "https://fabricmc.net",
+            "irc": "irc://irc.esper.net:6667/fabric",
+            "issues": "https://github.com/FabricMC/fabric/issues",
+            "sources": "https://github.com/FabricMC/fabric"
+          },
+          "custom": {
+            "fabric-api:module-lifecycle": "experimental",
+            "loom:injected_interfaces": {
+              "net/minecraft/class_1297": [
+                "net/fabricmc/fabric/api/attachment/v1/AttachmentTarget"
+              ],
+              "net/minecraft/class_1937": [
+                "net/fabricmc/fabric/api/attachment/v1/AttachmentTarget"
+              ],
+              "net/minecraft/class_2586": [
+                "net/fabricmc/fabric/api/attachment/v1/AttachmentTarget"
+              ],
+              "net/minecraft/class_2791": [
+                "net/fabricmc/fabric/api/attachment/v1/AttachmentTarget"
+              ]
+            }
+          },
+          "depends": {
+            "fabric-entity-events-v1": "*",
+            "fabric-networking-api-v1": "*",
+            "fabric-object-builder-api-v1": "*",
+            "fabricloader": ">=0.15.11"
+          },
+          "description": "Allows conveniently attaching data to existing game objects",
+          "entrypoints": {
+            "client": [
+              "net.fabricmc.fabric.impl.attachment.client.AttachmentSyncClient"
+            ],
+            "main": [
+              "net.fabricmc.fabric.impl.attachment.AttachmentEntrypoint",
+              "net.fabricmc.fabric.impl.attachment.sync.AttachmentSync"
+            ]
+          },
+          "environment": "*",
+          "icon": "assets/fabric-data-attachment-api-v1/icon.png",
+          "id": "fabric-data-attachment-api-v1",
+          "license": "Apache-2.0",
+          "mixins": [
+            "fabric-data-attachment-api-v1.mixins.json",
+            {
+              "config": "fabric-data-attachment-api-v1.client.mixins.json",
+              "environment": "client"
+            }
+          ],
+          "name": "Fabric Data Attachment API (v1)",
+          "schemaVersion": 1,
+          "version": "1.4.7+5b36e0f719"
+        }
+      },
+      "sha256": "09774fb013243537f1066df9d8a9a7479c2d644bc729fce08eff47a7cac988c1",
+      "source": "local-cache:sha256:09774fb013243537f1066df9d8a9a7479c2d644bc729fce08eff47a7cac988c1",
+      "version": "1.4.7+5b36e0f719"
+    },
+    {
+      "enabled": true,
+      "file": "client-086.jar",
+      "id": "fabric-entity-events-v1",
+      "kind": "mod",
+      "metadata": {
+        "fabric": {
+          "authors": [
+            "FabricMC"
+          ],
+          "contact": {
+            "homepage": "https://fabricmc.net",
+            "irc": "irc://irc.esper.net:6667/fabric",
+            "issues": "https://github.com/FabricMC/fabric/issues",
+            "sources": "https://github.com/FabricMC/fabric"
+          },
+          "custom": {
+            "fabric-api:module-lifecycle": "stable"
+          },
+          "depends": {
+            "fabricloader": ">=0.15.11"
+          },
+          "description": "Events to hook into entities.",
+          "environment": "*",
+          "icon": "assets/fabric-entity-events-v1/icon.png",
+          "id": "fabric-entity-events-v1",
+          "license": "Apache-2.0",
+          "mixins": [
+            "fabric-entity-events-v1.mixins.json",
+            {
+              "config": "fabric-entity-events-v1.client.mixins.json",
+              "environment": "client"
+            }
+          ],
+          "name": "Fabric Entity Events (v1)",
+          "schemaVersion": 1,
+          "version": "1.8.0+2b27e0a419"
+        }
+      },
+      "sha256": "25a869d5bf20dd6ffdba031fe2dc0a27db5d9313706c284920a5795218b7a6b2",
+      "source": "local-cache:sha256:25a869d5bf20dd6ffdba031fe2dc0a27db5d9313706c284920a5795218b7a6b2",
+      "version": "1.8.0+2b27e0a419"
+    },
+    {
+      "enabled": true,
+      "file": "client-087.jar",
+      "id": "fabric-events-interaction-v0",
+      "kind": "mod",
+      "metadata": {
+        "fabric": {
+          "authors": [
+            "FabricMC"
+          ],
+          "contact": {
+            "homepage": "https://fabricmc.net",
+            "irc": "irc://irc.esper.net:6667/fabric",
+            "issues": "https://github.com/FabricMC/fabric/issues",
+            "sources": "https://github.com/FabricMC/fabric"
+          },
+          "custom": {
+            "fabric-api:module-lifecycle": "stable"
+          },
+          "depends": {
+            "fabric-api-base": "*",
+            "fabric-networking-api-v1": "*",
+            "fabricloader": ">=0.15.11",
+            "minecraft": ">=1.15-alpha.19.37.a"
+          },
+          "description": "Events for player interaction with blocks and entities.",
+          "entrypoints": {
+            "client": [
+              "net.fabricmc.fabric.impl.event.interaction.client.InteractionEventsRouterClient"
+            ],
+            "main": [
+              "net.fabricmc.fabric.impl.event.interaction.InteractionEventsRouter"
+            ]
+          },
+          "environment": "*",
+          "icon": "assets/fabric-events-interaction-v0/icon.png",
+          "id": "fabric-events-interaction-v0",
+          "license": "Apache-2.0",
+          "mixins": [
+            "fabric-events-interaction-v0.mixins.json",
+            {
+              "config": "fabric-events-interaction-v0.client.mixins.json",
+              "environment": "client"
+            }
+          ],
+          "name": "Fabric Events Interaction (v0)",
+          "schemaVersion": 1,
+          "version": "0.7.14+ba9dae0619"
+        }
+      },
+      "sha256": "3f4a9fa0f23ee4534eea07c35a7210203f5d685527429a8356c47c8b19a99a73",
+      "source": "local-cache:sha256:3f4a9fa0f23ee4534eea07c35a7210203f5d685527429a8356c47c8b19a99a73",
+      "version": "0.7.14+ba9dae0619"
+    },
+    {
+      "enabled": true,
+      "file": "client-088.jar",
+      "id": "fabric-gametest-api-v1",
+      "kind": "mod",
+      "metadata": {
+        "fabric": {
+          "accessWidener": "fabric-gametest-api-v1.accesswidener",
+          "authors": [
+            "FabricMC"
+          ],
+          "contact": {
+            "homepage": "https://fabricmc.net",
+            "irc": "irc://irc.esper.net:6667/fabric",
+            "issues": "https://github.com/FabricMC/fabric/issues",
+            "sources": "https://github.com/FabricMC/fabric"
+          },
+          "custom": {
+            "fabric-api:module-lifecycle": "stable"
+          },
+          "depends": {
+            "fabric-resource-loader-v0": "*",
+            "fabricloader": ">=0.15.11"
+          },
+          "description": "Allows registration of custom game tests.",
+          "entrypoints": {
+            "main": [
+              "net.fabricmc.fabric.impl.gametest.FabricGameTestModInitializer"
+            ]
+          },
+          "environment": "*",
+          "icon": "assets/fabric-gametest-api-v1/icon.png",
+          "id": "fabric-gametest-api-v1",
+          "license": "Apache-2.0",
+          "mixins": [
+            "fabric-gametest-api-v1.mixins.json"
+          ],
+          "name": "Fabric Game Test API (v1)",
+          "schemaVersion": 1,
+          "version": "2.0.5+6fc22b9919"
+        }
+      },
+      "sha256": "944e28069db28e6a862c354b960d39b5471f94c6d550f82be3e9100d416a2c2b",
+      "source": "local-cache:sha256:944e28069db28e6a862c354b960d39b5471f94c6d550f82be3e9100d416a2c2b",
+      "version": "2.0.5+6fc22b9919"
+    },
+    {
+      "enabled": true,
+      "file": "client-089.jar",
+      "id": "fabric-item-api-v1",
+      "kind": "mod",
+      "metadata": {
+        "fabric": {
+          "authors": [
+            "FabricMC"
+          ],
+          "contact": {
+            "homepage": "https://fabricmc.net",
+            "irc": "irc://irc.esper.net:6667/fabric",
+            "issues": "https://github.com/FabricMC/fabric/issues",
+            "sources": "https://github.com/FabricMC/fabric"
+          },
+          "custom": {
+            "fabric-api:module-lifecycle": "stable",
+            "loom:injected_interfaces": {
+              "net/minecraft/class_1792": [
+                "net/fabricmc/fabric/api/item/v1/FabricItem"
+              ],
+              "net/minecraft/class_1792$class_1793": [
+                "net/fabricmc/fabric/api/item/v1/FabricItem$Settings"
+              ],
+              "net/minecraft/class_1799": [
+                "net/fabricmc/fabric/api/item/v1/FabricItemStack"
+              ],
+              "net/minecraft/class_1836": [
+                "net/fabricmc/fabric/api/item/v1/FabricTooltipType"
+              ],
+              "net/minecraft/class_9323$class_9324": [
+                "net/fabricmc/fabric/api/item/v1/FabricComponentMapBuilder"
+              ]
+            }
+          },
+          "depends": {
+            "fabric-api-base": "*",
+            "fabricloader": ">=0.15.11"
+          },
+          "description": "Hooks for items",
+          "environment": "*",
+          "icon": "assets/fabric-item-api-v1/icon.png",
+          "id": "fabric-item-api-v1",
+          "license": "Apache-2.0",
+          "mixins": [
+            "fabric-item-api-v1.mixins.json",
+            {
+              "config": "fabric-item-api-v1.client.mixins.json",
+              "environment": "client"
+            }
+          ],
+          "name": "Fabric Item API (v1)",
+          "schemaVersion": 1,
+          "version": "11.3.0+467044f319"
+        }
+      },
+      "sha256": "4595f061fb056b530ba94bf9a5a628df95dbaa5f5c60c1db6ca168edd4b6a1eb",
+      "source": "local-cache:sha256:4595f061fb056b530ba94bf9a5a628df95dbaa5f5c60c1db6ca168edd4b6a1eb",
+      "version": "11.3.0+467044f319"
+    },
+    {
+      "enabled": true,
+      "file": "client-090.jar",
+      "id": "fabric-item-group-api-v1",
+      "kind": "mod",
+      "metadata": {
+        "fabric": {
+          "accessWidener": "fabric-item-group-api-v1.accesswidener",
+          "authors": [
+            "FabricMC"
+          ],
+          "contact": {
+            "homepage": "https://fabricmc.net",
+            "irc": "irc://irc.esper.net:6667/fabric",
+            "issues": "https://github.com/FabricMC/fabric/issues",
+            "sources": "https://github.com/FabricMC/fabric"
+          },
+          "custom": {
+            "fabric-api:module-lifecycle": "stable",
+            "loom:injected_interfaces": {
+              "net/minecraft/class_481": [
+                "net/fabricmc/fabric/api/client/itemgroup/v1/FabricCreativeInventoryScreen"
+              ]
+            }
+          },
+          "depends": {
+            "fabric-api-base": "*",
+            "fabric-resource-loader-v0": "*",
+            "fabricloader": ">=0.15.11"
+          },
+          "description": "An API for adding custom item groups.",
+          "environment": "*",
+          "icon": "assets/fabric-item-group-api-v1/icon.png",
+          "id": "fabric-item-group-api-v1",
+          "license": "Apache-2.0",
+          "mixins": [
+            "fabric-item-group-api-v1.mixins.json",
+            {
+              "config": "fabric-item-group-api-v1.client.mixins.json",
+              "environment": "client"
+            }
+          ],
+          "name": "Fabric Item Group API (v1)",
+          "schemaVersion": 1,
+          "version": "4.1.7+def88e3a19"
+        }
+      },
+      "sha256": "9201b6388368dc2c8a5606b228619343047c412ace5d6e91258710f2a06631e7",
+      "source": "local-cache:sha256:9201b6388368dc2c8a5606b228619343047c412ace5d6e91258710f2a06631e7",
+      "version": "4.1.7+def88e3a19"
+    },
+    {
+      "enabled": true,
+      "file": "client-091.jar",
+      "id": "fabric-lifecycle-events-v1",
+      "kind": "mod",
+      "metadata": {
+        "fabric": {
+          "accessWidener": "fabric-lifecycle-events-v1.accesswidener",
+          "authors": [
+            "FabricMC"
+          ],
+          "contact": {
+            "homepage": "https://fabricmc.net",
+            "irc": "irc://irc.esper.net:6667/fabric",
+            "issues": "https://github.com/FabricMC/fabric/issues",
+            "sources": "https://github.com/FabricMC/fabric"
+          },
+          "custom": {
+            "fabric-api:module-lifecycle": "stable"
+          },
+          "depends": {
+            "fabric-api-base": "*",
+            "fabricloader": ">=0.15.11"
+          },
+          "description": "Events for the game's lifecycle.",
+          "entrypoints": {
+            "client": [
+              "net.fabricmc.fabric.impl.client.event.lifecycle.ClientLifecycleEventsImpl"
+            ],
+            "main": [
+              "net.fabricmc.fabric.impl.event.lifecycle.LifecycleEventsImpl"
+            ]
+          },
+          "environment": "*",
+          "icon": "assets/fabric-lifecycle-events-v1/icon.png",
+          "id": "fabric-lifecycle-events-v1",
+          "license": "Apache-2.0",
+          "mixins": [
+            "fabric-lifecycle-events-v1.mixins.json",
+            {
+              "config": "fabric-lifecycle-events-v1.client.mixins.json",
+              "environment": "client"
+            }
+          ],
+          "name": "Fabric Lifecycle Events (v1)",
+          "schemaVersion": 1,
+          "version": "2.6.0+0865547519"
+        }
+      },
+      "sha256": "b9f72a72520e2ea3a61a9fb89b6eda91a2923704d6ccb6af3aefa0891a90cf82",
+      "source": "local-cache:sha256:b9f72a72520e2ea3a61a9fb89b6eda91a2923704d6ccb6af3aefa0891a90cf82",
+      "version": "2.6.0+0865547519"
+    },
+    {
+      "enabled": true,
+      "file": "client-092.jar",
+      "id": "fabric-loot-api-v2",
+      "kind": "mod",
+      "metadata": {
+        "fabric": {
+          "authors": [
+            "FabricMC"
+          ],
+          "contact": {
+            "homepage": "https://fabricmc.net",
+            "irc": "irc://irc.esper.net:6667/fabric",
+            "issues": "https://github.com/FabricMC/fabric/issues",
+            "sources": "https://github.com/FabricMC/fabric"
+          },
+          "custom": {
+            "fabric-api:module-lifecycle": "deprecated"
+          },
+          "depends": {
+            "fabric-api-base": "*",
+            "fabric-resource-loader-v0": "*",
+            "fabricloader": ">=0.15.11"
+          },
+          "description": "Hooks for manipulating loot tables.",
+          "entrypoints": {
+            "main": [
+              "net.fabricmc.fabric.impl.loot.v2.LootInitializer"
+            ]
+          },
+          "environment": "*",
+          "icon": "assets/fabric-loot-api-v2/icon.png",
+          "id": "fabric-loot-api-v2",
+          "license": "Apache-2.0",
+          "mixins": [
+            "fabric-loot-api-v2.mixins.json"
+          ],
+          "name": "Fabric Loot API (v2)",
+          "schemaVersion": 1,
+          "version": "3.0.15+3f89f5a519"
+        }
+      },
+      "sha256": "5bf06463759e5bf4ad426ed675baf7551a532dbaee8692f447c8624e2815634a",
+      "source": "local-cache:sha256:5bf06463759e5bf4ad426ed675baf7551a532dbaee8692f447c8624e2815634a",
+      "version": "3.0.15+3f89f5a519"
+    },
+    {
+      "enabled": true,
+      "file": "client-093.jar",
+      "id": "fabric-loot-api-v3",
+      "kind": "mod",
+      "metadata": {
+        "fabric": {
+          "authors": [
+            "FabricMC"
+          ],
+          "contact": {
+            "homepage": "https://fabricmc.net",
+            "irc": "irc://irc.esper.net:6667/fabric",
+            "issues": "https://github.com/FabricMC/fabric/issues",
+            "sources": "https://github.com/FabricMC/fabric"
+          },
+          "custom": {
+            "fabric-api:module-lifecycle": "stable",
+            "loom:injected_interfaces": {
+              "net/minecraft/class_52$class_53": [
+                "net/fabricmc/fabric/api/loot/v3/FabricLootTableBuilder"
+              ],
+              "net/minecraft/class_55$class_56": [
+                "net/fabricmc/fabric/api/loot/v3/FabricLootPoolBuilder"
+              ]
+            }
+          },
+          "depends": {
+            "fabric-api-base": "*",
+            "fabric-resource-loader-v0": "*",
+            "fabricloader": ">=0.15.11"
+          },
+          "description": "Hooks for manipulating loot tables.",
+          "environment": "*",
+          "icon": "assets/fabric-loot-api-v3/icon.png",
+          "id": "fabric-loot-api-v3",
+          "license": "Apache-2.0",
+          "mixins": [
+            "fabric-loot-api-v3.mixins.json"
+          ],
+          "name": "Fabric Loot API (v3)",
+          "schemaVersion": 1,
+          "version": "1.0.3+3f89f5a519"
+        }
+      },
+      "sha256": "a886c20baac996edb2256cca13ec141ec3efcfcfa0fb1ffac0825ccce2be5e46",
+      "source": "local-cache:sha256:a886c20baac996edb2256cca13ec141ec3efcfcfa0fb1ffac0825ccce2be5e46",
+      "version": "1.0.3+3f89f5a519"
+    },
+    {
+      "enabled": true,
+      "file": "client-094.jar",
+      "id": "fabric-message-api-v1",
+      "kind": "mod",
+      "metadata": {
+        "fabric": {
+          "authors": [
+            "FabricMC"
+          ],
+          "contact": {
+            "homepage": "https://fabricmc.net",
+            "irc": "irc://irc.esper.net:6667/fabric",
+            "issues": "https://github.com/FabricMC/fabric/issues",
+            "sources": "https://github.com/FabricMC/fabric"
+          },
+          "custom": {
+            "fabric-api:module-lifecycle": "stable"
+          },
+          "depends": {
+            "fabric-api-base": "*",
+            "fabricloader": ">=0.15.11"
+          },
+          "description": "Adds message-related hooks.",
+          "environment": "*",
+          "icon": "assets/fabric-message-api-v1/icon.png",
+          "id": "fabric-message-api-v1",
+          "license": "Apache-2.0",
+          "mixins": [
+            "fabric-message-api-v1.mixins.json",
+            {
+              "config": "fabric-message-api-v1.client.mixins.json",
+              "environment": "client"
+            }
+          ],
+          "name": "Fabric Message API (v1)",
+          "schemaVersion": 1,
+          "version": "6.0.14+8aaf3aca19"
+        }
+      },
+      "sha256": "f83d3b3efa814ae35307130446928a6473c34d13cfefdca793809dd1219a0cc9",
+      "source": "local-cache:sha256:f83d3b3efa814ae35307130446928a6473c34d13cfefdca793809dd1219a0cc9",
+      "version": "6.0.14+8aaf3aca19"
+    },
+    {
+      "enabled": true,
+      "file": "client-095.jar",
+      "id": "fabric-model-loading-api-v1",
+      "kind": "mod",
+      "metadata": {
+        "fabric": {
+          "authors": [
+            "FabricMC"
+          ],
+          "contact": {
+            "homepage": "https://fabricmc.net",
+            "irc": "irc://irc.esper.net:6667/fabric",
+            "issues": "https://github.com/FabricMC/fabric/issues",
+            "sources": "https://github.com/FabricMC/fabric"
+          },
+          "custom": {
+            "fabric-api:module-lifecycle": "stable",
+            "loom:injected_interfaces": {
+              "net/minecraft/class_1092": [
+                "net/fabricmc/fabric/api/client/model/loading/v1/FabricBakedModelManager"
+              ]
+            }
+          },
+          "depends": {
+            "fabric-api-base": "*",
+            "fabricloader": ">=0.15.11"
+          },
+          "description": "Provides hooks for model loading.",
+          "environment": "client",
+          "icon": "assets/fabric-model-loading-api-v1/icon.png",
+          "id": "fabric-model-loading-api-v1",
+          "license": "Apache-2.0",
+          "mixins": [
+            {
+              "config": "fabric-model-loading-api-v1.mixins.json",
+              "environment": "client"
+            }
+          ],
+          "name": "Fabric Model Loading API (v1)",
+          "schemaVersion": 1,
+          "version": "2.1.0+b4d813fc19"
+        }
+      },
+      "sha256": "25da5eb56cdb4153da477f885d5084e82fcf4fcdc1528b41be14eb4a0c8a8f3f",
+      "source": "local-cache:sha256:25da5eb56cdb4153da477f885d5084e82fcf4fcdc1528b41be14eb4a0c8a8f3f",
+      "version": "2.1.0+b4d813fc19"
+    },
+    {
+      "enabled": true,
+      "file": "client-096.jar",
+      "id": "fabric-recipe-api-v1",
+      "kind": "mod",
+      "metadata": {
+        "fabric": {
+          "accessWidener": "fabric-recipe-api-v1.accesswidener",
+          "authors": [
+            "FabricMC"
+          ],
+          "contact": {
+            "homepage": "https://fabricmc.net",
+            "irc": "irc://irc.esper.net:6667/fabric",
+            "issues": "https://github.com/FabricMC/fabric/issues",
+            "sources": "https://github.com/FabricMC/fabric"
+          },
+          "custom": {
+            "fabric-api:module-lifecycle": "stable",
+            "loom:injected_interfaces": {
+              "net/minecraft/class_1856": [
+                "net/fabricmc/fabric/api/recipe/v1/ingredient/FabricIngredient"
+              ]
+            }
+          },
+          "depends": {
+            "fabric-networking-api-v1": "*",
+            "fabricloader": ">=0.15.11"
+          },
+          "description": "Recipe extensions such as creation of new types of recipe ingredients.",
+          "entrypoints": {
+            "client": [
+              "net.fabricmc.fabric.impl.recipe.ingredient.client.CustomIngredientSyncClient"
+            ],
+            "main": [
+              "net.fabricmc.fabric.impl.recipe.ingredient.CustomIngredientInit",
+              "net.fabricmc.fabric.impl.recipe.ingredient.CustomIngredientSync"
+            ]
+          },
+          "environment": "*",
+          "icon": "assets/fabric-recipe-api-v1/icon.png",
+          "id": "fabric-recipe-api-v1",
+          "license": "Apache-2.0",
+          "mixins": [
+            "fabric-recipe-api-v1.mixins.json"
+          ],
+          "name": "Fabric Recipe API (v1)",
+          "schemaVersion": 1,
+          "version": "5.0.16+2475392c19"
+        }
+      },
+      "sha256": "94929fabc258e516921aba0af8b065cef847acb791e9283f22018075ba54cbec",
+      "source": "local-cache:sha256:94929fabc258e516921aba0af8b065cef847acb791e9283f22018075ba54cbec",
+      "version": "5.0.16+2475392c19"
+    },
+    {
+      "enabled": true,
+      "file": "client-097.jar",
+      "id": "fabric-screen-handler-api-v1",
+      "kind": "mod",
+      "metadata": {
+        "fabric": {
+          "accessWidener": "fabric-screen-handler-api-v1.accesswidener",
+          "authors": [
+            "FabricMC"
+          ],
+          "contact": {
+            "homepage": "https://fabricmc.net",
+            "irc": "irc://irc.esper.net:6667/fabric",
+            "issues": "https://github.com/FabricMC/fabric/issues",
+            "sources": "https://github.com/FabricMC/fabric"
+          },
+          "custom": {
+            "fabric-api:module-lifecycle": "stable",
+            "loom:injected_interfaces": {
+              "net/minecraft/class_3908": [
+                "net/fabricmc/fabric/api/screenhandler/v1/FabricScreenHandlerFactory"
+              ]
+            }
+          },
+          "depends": {
+            "fabric-api-base": "*",
+            "fabric-networking-api-v1": "*",
+            "fabricloader": ">=0.15.11"
+          },
+          "description": "Hooks and extensions for creating screen handlers.",
+          "entrypoints": {
+            "client": [
+              "net.fabricmc.fabric.impl.screenhandler.client.ClientNetworking"
+            ],
+            "main": [
+              "net.fabricmc.fabric.impl.screenhandler.Networking"
+            ]
+          },
+          "environment": "*",
+          "icon": "assets/fabric-screen-handler-api-v1/icon.png",
+          "id": "fabric-screen-handler-api-v1",
+          "license": "Apache-2.0",
+          "mixins": [
+            "fabric-screen-handler-api-v1.mixins.json"
+          ],
+          "name": "Fabric Screen Handler API (v1)",
+          "schemaVersion": 1,
+          "version": "1.3.91+b559734419"
+        }
+      },
+      "sha256": "9cec4adca08ee823696f4c7d3fb7ef0f3d683111a21ab372b9a6aa8d76cd0543",
+      "source": "local-cache:sha256:9cec4adca08ee823696f4c7d3fb7ef0f3d683111a21ab372b9a6aa8d76cd0543",
+      "version": "1.3.91+b559734419"
+    },
+    {
+      "enabled": true,
+      "file": "client-098.jar",
+      "id": "fabric-registry-sync-v0",
+      "kind": "mod",
+      "metadata": {
+        "fabric": {
+          "accessWidener": "fabric-registry-sync-v0.accesswidener",
+          "authors": [
+            "FabricMC"
+          ],
+          "contact": {
+            "homepage": "https://fabricmc.net",
+            "irc": "irc://irc.esper.net:6667/fabric",
+            "issues": "https://github.com/FabricMC/fabric/issues",
+            "sources": "https://github.com/FabricMC/fabric"
+          },
+          "custom": {
+            "fabric-api:module-lifecycle": "stable",
+            "loom:injected_interfaces": {
+              "net/minecraft/class_2378": [
+                "net/fabricmc/fabric/api/event/registry/FabricRegistry"
+              ]
+            }
+          },
+          "depends": {
+            "fabric-api-base": "*",
+            "fabric-networking-api-v1": "*",
+            "fabricloader": ">=0.15.11"
+          },
+          "description": "Syncs registry mappings.",
+          "entrypoints": {
+            "client": [
+              "net.fabricmc.fabric.impl.client.registry.sync.FabricRegistryClientInit"
+            ],
+            "main": [
+              "net.fabricmc.fabric.impl.registry.sync.FabricRegistryInit"
+            ]
+          },
+          "environment": "*",
+          "icon": "assets/fabric-registry-sync-v0/icon.png",
+          "id": "fabric-registry-sync-v0",
+          "license": "Apache-2.0",
+          "mixins": [
+            "fabric-registry-sync-v0.mixins.json",
+            {
+              "config": "fabric-registry-sync-v0.client.mixins.json",
+              "environment": "client"
+            }
+          ],
+          "name": "Fabric Registry Sync (v0)",
+          "schemaVersion": 1,
+          "version": "5.3.2+e3eddc2119"
+        }
+      },
+      "sha256": "0e8404087f029479a3df61c64d29a6ce135db5b009281388c78c8206e5f0dccc",
+      "source": "local-cache:sha256:0e8404087f029479a3df61c64d29a6ce135db5b009281388c78c8206e5f0dccc",
+      "version": "5.3.2+e3eddc2119"
+    },
+    {
+      "enabled": true,
+      "file": "client-099.jar",
+      "id": "fabric-networking-api-v1",
+      "kind": "mod",
+      "metadata": {
+        "fabric": {
+          "accessWidener": "fabric-networking-api-v1.accesswidener",
+          "authors": [
+            "FabricMC"
+          ],
+          "contact": {
+            "homepage": "https://fabricmc.net",
+            "irc": "irc://irc.esper.net:6667/fabric",
+            "issues": "https://github.com/FabricMC/fabric/issues",
+            "sources": "https://github.com/FabricMC/fabric"
+          },
+          "custom": {
+            "fabric-api:module-lifecycle": "stable",
+            "loom:injected_interfaces": {
+              "net/minecraft/class_8610": [
+                "net/fabricmc/fabric/api/networking/v1/FabricServerConfigurationNetworkHandler"
+              ]
+            }
+          },
+          "depends": {
+            "fabric-api-base": "*",
+            "fabricloader": ">=0.15.11"
+          },
+          "description": "Low-level, vanilla protocol oriented networking hooks.",
+          "entrypoints": {
+            "client": [
+              "net.fabricmc.fabric.impl.networking.client.ClientNetworkingImpl::clientInit"
+            ],
+            "main": [
+              "net.fabricmc.fabric.impl.networking.CommonPacketsImpl::init",
+              "net.fabricmc.fabric.impl.networking.NetworkingImpl::init"
+            ]
+          },
+          "environment": "*",
+          "icon": "assets/fabric-networking-api-v1/icon.png",
+          "id": "fabric-networking-api-v1",
+          "license": "Apache-2.0",
+          "mixins": [
+            "fabric-networking-api-v1.mixins.json",
+            {
+              "config": "fabric-networking-api-v1.client.mixins.json",
+              "environment": "client"
+            }
+          ],
+          "name": "Fabric Networking API (v1)",
+          "schemaVersion": 1,
+          "version": "4.3.1+d30f6a7919"
+        }
+      },
+      "sha256": "9384c1a97b1c71158a783b4fc6cdf860cc216b7f46b7c79d6ae5a62e482c2b56",
+      "source": "local-cache:sha256:9384c1a97b1c71158a783b4fc6cdf860cc216b7f46b7c79d6ae5a62e482c2b56",
+      "version": "4.3.1+d30f6a7919"
+    },
+    {
+      "enabled": true,
+      "file": "client-100.jar",
+      "id": "fabric-object-builder-api-v1",
+      "kind": "mod",
+      "metadata": {
+        "fabric": {
+          "accessWidener": "fabric-object-builder-api-v1.accesswidener",
+          "authors": [
+            "FabricMC"
+          ],
+          "contact": {
+            "homepage": "https://fabricmc.net",
+            "irc": "irc://irc.esper.net:6667/fabric",
+            "issues": "https://github.com/FabricMC/fabric/issues",
+            "sources": "https://github.com/FabricMC/fabric"
+          },
+          "custom": {
+            "fabric-api:module-lifecycle": "stable",
+            "loom:injected_interfaces": {
+              "net/minecraft/class_1299$class_1300": [
+                "net/fabricmc/fabric/api/object/builder/v1/entity/FabricEntityType$Builder<TT;>"
+              ],
+              "net/minecraft/class_2591": [
+                "net/fabricmc/fabric/api/object/builder/v1/block/entity/FabricBlockEntityType"
+              ],
+              "net/minecraft/class_2591$class_2592": [
+                "net/fabricmc/fabric/api/object/builder/v1/block/entity/FabricBlockEntityType$Builder<TT;>"
+              ]
+            }
+          },
+          "depends": {
+            "fabric-api-base": "*",
+            "fabricloader": ">=0.15.11"
+          },
+          "description": "Builders for objects vanilla has locked down.",
+          "environment": "*",
+          "icon": "assets/fabric-object-builder-api-v1/icon.png",
+          "id": "fabric-object-builder-api-v1",
+          "license": "Apache-2.0",
+          "mixins": [
+            "fabric-object-builder-v1.mixins.json",
+            {
+              "config": "fabric-object-builder-v1.client.mixins.json",
+              "environment": "client"
+            }
+          ],
+          "name": "Fabric Object Builder API (v1)",
+          "schemaVersion": 1,
+          "version": "15.2.1+40875a9319"
+        }
+      },
+      "sha256": "bfb66df5684dbc34436fcdb0c7e7723d68f768e9900731acb37ee8812a24e14b",
+      "source": "local-cache:sha256:bfb66df5684dbc34436fcdb0c7e7723d68f768e9900731acb37ee8812a24e14b",
+      "version": "15.2.1+40875a9319"
+    },
+    {
+      "enabled": true,
+      "file": "client-101.jar",
+      "id": "fabric-particles-v1",
+      "kind": "mod",
+      "metadata": {
+        "fabric": {
+          "accessWidener": "fabric-particles-v1.accesswidener",
+          "authors": [
+            "FabricMC"
+          ],
+          "contact": {
+            "homepage": "https://fabricmc.net",
+            "irc": "irc://irc.esper.net:6667/fabric",
+            "issues": "https://github.com/FabricMC/fabric/issues",
+            "sources": "https://github.com/FabricMC/fabric"
+          },
+          "custom": {
+            "fabric-api:module-lifecycle": "stable"
+          },
+          "depends": {
+            "fabricloader": ">=0.15.11"
+          },
+          "description": "Hooks for registering custom particles.",
+          "environment": "*",
+          "icon": "assets/fabric-particles-v1/icon.png",
+          "id": "fabric-particles-v1",
+          "license": "Apache-2.0",
+          "mixins": [
+            {
+              "config": "fabric-particles-v1.client.mixins.json",
+              "environment": "client"
+            }
+          ],
+          "name": "Fabric Particles (v1)",
+          "schemaVersion": 1,
+          "version": "4.0.2+6573ed8c19"
+        }
+      },
+      "sha256": "5d6cc8f42bca6d404351aeaeee3d708fd19a4bd6f30e618c1fc54d9412ef860c",
+      "source": "local-cache:sha256:5d6cc8f42bca6d404351aeaeee3d708fd19a4bd6f30e618c1fc54d9412ef860c",
+      "version": "4.0.2+6573ed8c19"
+    },
+    {
+      "enabled": true,
+      "file": "client-102.jar",
+      "id": "fabric-renderer-indigo",
+      "kind": "mod",
+      "metadata": {
+        "fabric": {
+          "accessWidener": "fabric-renderer-indigo.accesswidener",
+          "authors": [
+            "FabricMC"
+          ],
+          "contact": {
+            "homepage": "https://fabricmc.net",
+            "irc": "irc://irc.esper.net:6667/fabric",
+            "issues": "https://github.com/FabricMC/fabric/issues",
+            "sources": "https://github.com/FabricMC/fabric"
+          },
+          "custom": {
+            "fabric-api:module-lifecycle": "stable"
+          },
+          "depends": {
+            "fabric-api-base": "*",
+            "fabric-renderer-api-v1": "*",
+            "fabricloader": ">=0.15.11",
+            "minecraft": ">=1.15-alpha.19.39.a"
+          },
+          "description": "Default implementation of the Fabric Renderer API.",
+          "entrypoints": {
+            "client": [
+              "net.fabricmc.fabric.impl.client.indigo.Indigo"
+            ]
+          },
+          "environment": "client",
+          "icon": "assets/fabric-renderer-indigo/icon.png",
+          "id": "fabric-renderer-indigo",
+          "license": "Apache-2.0",
+          "mixins": [
+            "fabric-renderer-indigo.mixins.json"
+          ],
+          "name": "Fabric Renderer - Indigo",
+          "schemaVersion": 1,
+          "version": "1.7.1+c705a49c19"
+        }
+      },
+      "sha256": "820dde2d806b851656957c010b1203d1da3331215c13ff6e9940abbf776719dd",
+      "source": "local-cache:sha256:820dde2d806b851656957c010b1203d1da3331215c13ff6e9940abbf776719dd",
+      "version": "1.7.1+c705a49c19"
+    },
+    {
+      "enabled": true,
+      "file": "client-103.jar",
+      "id": "fabric-renderer-api-v1",
+      "kind": "mod",
+      "metadata": {
+        "fabric": {
+          "authors": [
+            "FabricMC"
+          ],
+          "contact": {
+            "homepage": "https://fabricmc.net",
+            "irc": "irc://irc.esper.net:6667/fabric",
+            "issues": "https://github.com/FabricMC/fabric/issues",
+            "sources": "https://github.com/FabricMC/fabric"
+          },
+          "custom": {
+            "fabric-api:module-lifecycle": "stable",
+            "loom:injected_interfaces": {
+              "net/minecraft/class_1087": [
+                "net/fabricmc/fabric/api/renderer/v1/model/FabricBakedModel"
+              ]
+            }
+          },
+          "depends": {
+            "fabric-api-base": "*",
+            "fabricloader": ">=0.15.11",
+            "minecraft": ">=1.15-alpha.19.39.a"
+          },
+          "description": "Defines rendering extensions for dynamic/fancy block and item models.",
+          "environment": "client",
+          "icon": "assets/fabric-renderer-api-v1/icon.png",
+          "id": "fabric-renderer-api-v1",
+          "license": "Apache-2.0",
+          "mixins": [
+            "fabric-renderer-api-v1.mixins.json",
+            "fabric-renderer-api-v1.debughud.mixins.json"
+          ],
+          "name": "Fabric Renderer API (v1)",
+          "schemaVersion": 1,
+          "version": "3.4.1+b4d813fc19"
+        }
+      },
+      "sha256": "798bf6c9eca0247da252a8eb78c54f11f3e0437820445b875806c3695a728dcb",
+      "source": "local-cache:sha256:798bf6c9eca0247da252a8eb78c54f11f3e0437820445b875806c3695a728dcb",
+      "version": "3.4.1+b4d813fc19"
+    },
+    {
+      "enabled": true,
+      "file": "client-104.jar",
+      "id": "fabric-rendering-fluids-v1",
+      "kind": "mod",
+      "metadata": {
+        "fabric": {
+          "authors": [
+            "FabricMC"
+          ],
+          "contact": {
+            "homepage": "https://fabricmc.net",
+            "irc": "irc://irc.esper.net:6667/fabric",
+            "issues": "https://github.com/FabricMC/fabric/issues",
+            "sources": "https://github.com/FabricMC/fabric"
+          },
+          "custom": {
+            "fabric-api:module-lifecycle": "stable"
+          },
+          "depends": {
+            "fabric-api-base": "*",
+            "fabricloader": ">=0.15.11"
+          },
+          "description": "Hooks for registering fluid renders.",
+          "icon": "assets/fabric-rendering-fluids-v1/icon.png",
+          "id": "fabric-rendering-fluids-v1",
+          "license": "Apache-2.0",
+          "mixins": [
+            {
+              "config": "fabric-rendering-fluids-v1.mixins.json",
+              "environment": "client"
+            }
+          ],
+          "name": "Fabric Rendering Fluids (v1)",
+          "schemaVersion": 1,
+          "version": "3.1.6+1daea21519"
+        }
+      },
+      "sha256": "e91a9393c43b05dc9f9b7d70a9b2ffab4151b49ab3561e3ee00e4897d304bb42",
+      "source": "local-cache:sha256:e91a9393c43b05dc9f9b7d70a9b2ffab4151b49ab3561e3ee00e4897d304bb42",
+      "version": "3.1.6+1daea21519"
+    },
+    {
+      "enabled": true,
+      "file": "client-105.jar",
+      "id": "fabric-renderer-registries-v1",
+      "kind": "mod",
+      "metadata": {
+        "fabric": {
+          "authors": [
+            "FabricMC"
+          ],
+          "contact": {
+            "homepage": "https://fabricmc.net",
+            "irc": "irc://irc.esper.net:6667/fabric",
+            "issues": "https://github.com/FabricMC/fabric/issues",
+            "sources": "https://github.com/FabricMC/fabric"
+          },
+          "custom": {
+            "fabric-api:module-lifecycle": "deprecated"
+          },
+          "depends": {
+            "fabric-api-base": "*",
+            "fabric-rendering-v1": "*",
+            "fabricloader": ">=0.15.11",
+            "minecraft": ">=1.15-alpha.19.39.a"
+          },
+          "description": "Registries for entity and block renderers.",
+          "environment": "client",
+          "icon": "assets/renderer-registries-v1/icon.png",
+          "id": "fabric-renderer-registries-v1",
+          "license": "Apache-2.0",
+          "name": "Fabric Renderer Registries (v1)",
+          "schemaVersion": 1,
+          "version": "3.2.69+df3654b319"
+        }
+      },
+      "sha256": "fcdce0a1f528a471728129fffaeb5cacaf537e96caf952aeda02946e96f6527d",
+      "source": "local-cache:sha256:fcdce0a1f528a471728129fffaeb5cacaf537e96caf952aeda02946e96f6527d",
+      "version": "3.2.69+df3654b319"
+    },
+    {
+      "enabled": true,
+      "file": "client-106.jar",
+      "id": "fabric-rendering-v0",
+      "kind": "mod",
+      "metadata": {
+        "fabric": {
+          "authors": [
+            "FabricMC"
+          ],
+          "contact": {
+            "homepage": "https://fabricmc.net",
+            "irc": "irc://irc.esper.net:6667/fabric",
+            "issues": "https://github.com/FabricMC/fabric/issues",
+            "sources": "https://github.com/FabricMC/fabric"
+          },
+          "custom": {
+            "fabric-api:module-lifecycle": "deprecated"
+          },
+          "depends": {
+            "fabric-api-base": "*",
+            "fabric-rendering-v1": "*",
+            "fabricloader": ">=0.15.11",
+            "minecraft": ">=1.15-alpha.19.39.a"
+          },
+          "description": "Hooks and registries for rendering-related things.",
+          "entrypoints": {
+            "client": [
+              "net.fabricmc.fabric.impl.client.rendering.v0.RenderingCallbackInvoker"
+            ]
+          },
+          "environment": "client",
+          "icon": "assets/fabric-rendering-v0/icon.png",
+          "id": "fabric-rendering-v0",
+          "license": "Apache-2.0",
+          "name": "Fabric Rendering (v0)",
+          "schemaVersion": 1,
+          "version": "1.1.72+df3654b319"
+        }
+      },
+      "sha256": "f7e6e5c18795ad28801d1bc89a960d50f838f72a8cf0684e005e72e4148f3959",
+      "source": "local-cache:sha256:f7e6e5c18795ad28801d1bc89a960d50f838f72a8cf0684e005e72e4148f3959",
+      "version": "1.1.72+df3654b319"
+    },
+    {
+      "enabled": true,
+      "file": "client-107.jar",
+      "id": "fabric-rendering-v1",
+      "kind": "mod",
+      "metadata": {
+        "fabric": {
+          "authors": [
+            "FabricMC"
+          ],
+          "contact": {
+            "homepage": "https://fabricmc.net",
+            "irc": "irc://irc.esper.net:6667/fabric",
+            "issues": "https://github.com/FabricMC/fabric/issues",
+            "sources": "https://github.com/FabricMC/fabric"
+          },
+          "custom": {
+            "fabric-api:module-lifecycle": "stable"
+          },
+          "depends": {
+            "fabric-api-base": "*",
+            "fabricloader": ">=0.15.11"
+          },
+          "description": "Hooks and registries for rendering-related things.",
+          "environment": "client",
+          "icon": "assets/fabric-rendering-v1/icon.png",
+          "id": "fabric-rendering-v1",
+          "license": "Apache-2.0",
+          "mixins": [
+            "fabric-rendering-v1.mixins.json"
+          ],
+          "name": "Fabric Rendering (v1)",
+          "schemaVersion": 1,
+          "version": "5.1.0+ab4c25a019"
+        }
+      },
+      "sha256": "5facf104623ff8ac821717438708377042fdae735d23643bff8ad9774418828a",
+      "source": "local-cache:sha256:5facf104623ff8ac821717438708377042fdae735d23643bff8ad9774418828a",
+      "version": "5.1.0+ab4c25a019"
+    },
+    {
+      "enabled": true,
+      "file": "client-108.jar",
+      "id": "fabric-screen-api-v1",
+      "kind": "mod",
+      "metadata": {
+        "fabric": {
+          "authors": [
+            "FabricMC"
+          ],
+          "contact": {
+            "homepage": "https://fabricmc.net",
+            "irc": "irc://irc.esper.net:6667/fabric",
+            "issues": "https://github.com/FabricMC/fabric/issues",
+            "sources": "https://github.com/FabricMC/fabric"
+          },
+          "custom": {
+            "fabric-api:module-lifecycle": "stable"
+          },
+          "depends": {
+            "fabric-api-base": "*",
+            "fabricloader": ">=0.15.11"
+          },
+          "description": "Adds screen related hooks.",
+          "environment": "client",
+          "icon": "assets/fabric-screen-api-v1/icon.png",
+          "id": "fabric-screen-api-v1",
+          "license": "Apache-2.0",
+          "mixins": [
+            "fabric-screen-api-v1.mixins.json"
+          ],
+          "name": "Fabric Screen API (v1)",
+          "schemaVersion": 1,
+          "version": "2.0.26+639b4c0719"
+        }
+      },
+      "sha256": "1bef9ad7c2a82e57ddc3b8f49563c3d373507265d8aa2e6d987e8179f4068318",
+      "source": "local-cache:sha256:1bef9ad7c2a82e57ddc3b8f49563c3d373507265d8aa2e6d987e8179f4068318",
+      "version": "2.0.26+639b4c0719"
+    },
+    {
+      "enabled": true,
+      "file": "client-109.jar",
+      "id": "fabric-tag-api-v1",
+      "kind": "mod",
+      "metadata": {
+        "fabric": {
+          "accessWidener": "fabric-tag-api-v1.accesswidener",
+          "authors": [
+            "FabricMC"
+          ],
+          "contact": {
+            "homepage": "https://fabricmc.net",
+            "irc": "irc://irc.esper.net:6667/fabric",
+            "issues": "https://github.com/FabricMC/fabric/issues",
+            "sources": "https://github.com/FabricMC/fabric"
+          },
+          "custom": {
+            "fabric-api:module-lifecycle": "stable",
+            "loom:injected_interfaces": {
+              "net/minecraft/class_7475": [
+                "net/fabricmc/fabric/api/tag/v1/FabricTagFile"
+              ]
+            }
+          },
+          "depends": {
+            "fabric-api-base": "*",
+            "fabric-resource-loader-v0": "*",
+            "fabricloader": ">=0.15.11"
+          },
+          "description": "Hooks for working with tags.",
+          "environment": "*",
+          "icon": "assets/fabric-tag-api-v1/icon.png",
+          "id": "fabric-tag-api-v1",
+          "license": "Apache-2.0",
+          "mixins": [
+            "fabric-tag-api-v1.mixins.json"
+          ],
+          "name": "Fabric Tag API (v1)",
+          "schemaVersion": 1,
+          "version": "1.3.0+1eb36c0719"
+        }
+      },
+      "sha256": "57d87a24942b49b307e47d1fcd76784e549ec3c247e849daf26e8edbf1aa5fe8",
+      "source": "local-cache:sha256:57d87a24942b49b307e47d1fcd76784e549ec3c247e849daf26e8edbf1aa5fe8",
+      "version": "1.3.0+1eb36c0719"
+    },
+    {
+      "enabled": true,
+      "file": "client-110.jar",
+      "id": "fabric-api-base",
+      "kind": "mod",
+      "metadata": {
+        "fabric": {
+          "authors": [
+            "FabricMC"
+          ],
+          "contact": {
+            "homepage": "https://fabricmc.net",
+            "irc": "irc://irc.esper.net:6667/fabric",
+            "issues": "https://github.com/FabricMC/fabric/issues",
+            "sources": "https://github.com/FabricMC/fabric"
+          },
+          "custom": {
+            "fabric-api:module-lifecycle": "stable"
+          },
+          "depends": {
+            "fabricloader": ">=0.15.11"
+          },
+          "description": "Contains the essentials for Fabric API modules.",
+          "environment": "*",
+          "icon": "assets/fabric-api-base/icon.png",
+          "id": "fabric-api-base",
+          "license": "Apache-2.0",
+          "name": "Fabric API Base",
+          "schemaVersion": 1,
+          "version": "0.4.42+6573ed8c19"
+        }
+      },
+      "sha256": "ddfdcccf7bfe239ce2d533f9f9ed4bdc9f51a01bec1be8f4798dfd87038cb30b",
+      "source": "local-cache:sha256:ddfdcccf7bfe239ce2d533f9f9ed4bdc9f51a01bec1be8f4798dfd87038cb30b",
+      "version": "0.4.42+6573ed8c19"
+    },
+    {
+      "enabled": true,
+      "file": "client-111.jar",
+      "id": "fabric-biome-api-v1",
+      "kind": "mod",
+      "metadata": {
+        "fabric": {
+          "accessWidener": "fabric-biome-api-v1.accesswidener",
+          "authors": [
+            "FabricMC"
+          ],
+          "contact": {
+            "homepage": "https://fabricmc.net",
+            "irc": "irc://irc.esper.net:6667/fabric",
+            "issues": "https://github.com/FabricMC/fabric/issues",
+            "sources": "https://github.com/FabricMC/fabric"
+          },
+          "custom": {
+            "fabric-api:module-lifecycle": "stable"
+          },
+          "depends": {
+            "fabricloader": ">=0.15.11",
+            "minecraft": ">=1.16.2"
+          },
+          "description": "Hooks for adding biomes to the default world generator.",
+          "environment": "*",
+          "icon": "assets/fabric-biome-api-v1/icon.png",
+          "id": "fabric-biome-api-v1",
+          "license": "Apache-2.0",
+          "mixins": [
+            "fabric-biome-api-v1.mixins.json"
+          ],
+          "name": "Fabric Biome API (v1)",
+          "schemaVersion": 1,
+          "version": "13.0.31+d527f9fd19"
+        }
+      },
+      "sha256": "8a69d0f76038ddad45987d6c890e8d1cbbc297184561f366b3c86f15a38d64a4",
+      "source": "local-cache:sha256:8a69d0f76038ddad45987d6c890e8d1cbbc297184561f366b3c86f15a38d64a4",
+      "version": "13.0.31+d527f9fd19"
+    },
+    {
+      "enabled": true,
+      "file": "client-112.jar",
+      "id": "fabric-block-api-v1",
+      "kind": "mod",
+      "metadata": {
+        "fabric": {
+          "authors": [
+            "FabricMC"
+          ],
+          "contact": {
+            "homepage": "https://fabricmc.net",
+            "irc": "irc://irc.esper.net:6667/fabric",
+            "issues": "https://github.com/FabricMC/fabric/issues",
+            "sources": "https://github.com/FabricMC/fabric"
+          },
+          "custom": {
+            "fabric-api:module-lifecycle": "stable",
+            "loom:injected_interfaces": {
+              "net/minecraft/class_2248": [
+                "net/fabricmc/fabric/api/block/v1/FabricBlock"
+              ],
+              "net/minecraft/class_2680": [
+                "net/fabricmc/fabric/api/block/v1/FabricBlockState"
+              ]
+            }
+          },
+          "depends": {
+            "fabricloader": ">=0.15.11"
+          },
+          "description": "Hooks for blocks",
+          "entrypoints": {},
+          "environment": "*",
+          "icon": "assets/fabric-block-api-v1/icon.png",
+          "id": "fabric-block-api-v1",
+          "license": "Apache-2.0",
+          "mixins": [
+            "fabric-block-api-v1.mixins.json"
+          ],
+          "name": "Fabric Block API (v1)",
+          "schemaVersion": 1,
+          "version": "1.1.0+0bc3503219"
+        }
+      },
+      "sha256": "be3f1a8244b8b85ba2b481cffa6813992314030c781f5b72a0f6b7302dedf02e",
+      "source": "local-cache:sha256:be3f1a8244b8b85ba2b481cffa6813992314030c781f5b72a0f6b7302dedf02e",
+      "version": "1.1.0+0bc3503219"
+    },
+    {
+      "enabled": true,
+      "file": "client-113.jar",
+      "id": "fabric-rendering-data-attachment-v1",
+      "kind": "mod",
+      "metadata": {
+        "fabric": {
+          "authors": [
+            "FabricMC"
+          ],
+          "contact": {
+            "homepage": "https://fabricmc.net",
+            "irc": "irc://irc.esper.net:6667/fabric",
+            "issues": "https://github.com/FabricMC/fabric/issues",
+            "sources": "https://github.com/FabricMC/fabric"
+          },
+          "custom": {
+            "fabric-api:module-lifecycle": "deprecated"
+          },
+          "depends": {
+            "fabric-block-view-api-v2": "*",
+            "fabricloader": ">=0.15.11"
+          },
+          "description": "Thread-safe hooks for block entity data use during terrain rendering.",
+          "environment": "*",
+          "icon": "assets/fabric-rendering-data-attachment-v1/icon.png",
+          "id": "fabric-rendering-data-attachment-v1",
+          "license": "Apache-2.0",
+          "mixins": [
+            "fabric-rendering-data-attachment-v1.mixins.json",
+            {
+              "config": "fabric-rendering-data-attachment-v1.client.mixins.json",
+              "environment": "client"
+            }
+          ],
+          "name": "Fabric Rendering Data Attachment (v1)",
+          "schemaVersion": 1,
+          "version": "0.3.49+73761d2e19"
+        }
+      },
+      "sha256": "62712a70b1a5de5cc5db1d34c25b9de31189c36875706e68f01bd29b0be9b007",
+      "source": "local-cache:sha256:62712a70b1a5de5cc5db1d34c25b9de31189c36875706e68f01bd29b0be9b007",
+      "version": "0.3.49+73761d2e19"
+    },
+    {
+      "enabled": true,
+      "file": "client-114.jar",
+      "id": "fabric-block-view-api-v2",
+      "kind": "mod",
+      "metadata": {
+        "fabric": {
+          "accessWidener": "fabric-block-view-api-v2.accesswidener",
+          "authors": [
+            "FabricMC"
+          ],
+          "contact": {
+            "homepage": "https://fabricmc.net",
+            "irc": "irc://irc.esper.net:6667/fabric",
+            "issues": "https://github.com/FabricMC/fabric/issues",
+            "sources": "https://github.com/FabricMC/fabric"
+          },
+          "custom": {
+            "fabric-api:module-lifecycle": "stable",
+            "loom:injected_interfaces": {
+              "net/minecraft/class_1922": [
+                "net/fabricmc/fabric/api/blockview/v2/FabricBlockView"
+              ],
+              "net/minecraft/class_2586": [
+                "net/fabricmc/fabric/api/blockview/v2/RenderDataBlockEntity"
+              ]
+            }
+          },
+          "depends": {
+            "fabricloader": ">=0.15.11"
+          },
+          "description": "Hooks for block views",
+          "environment": "*",
+          "icon": "assets/fabric-block-view-api-v2/icon.png",
+          "id": "fabric-block-view-api-v2",
+          "license": "Apache-2.0",
+          "mixins": [
+            "fabric-block-view-api-v2.mixins.json",
+            {
+              "config": "fabric-block-view-api-v2.client.mixins.json",
+              "environment": "client"
+            }
+          ],
+          "name": "Fabric BlockView API (v2)",
+          "schemaVersion": 1,
+          "version": "1.0.11+ebb2264e19"
+        }
+      },
+      "sha256": "991b00bf2769a53df33a5112b84d779af3f8629d5d7c02e0029e8568d66dbded",
+      "source": "local-cache:sha256:991b00bf2769a53df33a5112b84d779af3f8629d5d7c02e0029e8568d66dbded",
+      "version": "1.0.11+ebb2264e19"
+    },
+    {
+      "enabled": true,
+      "file": "client-115.jar",
+      "id": "fabric-crash-report-info-v1",
+      "kind": "mod",
+      "metadata": {
+        "fabric": {
+          "authors": [
+            "FabricMC"
+          ],
+          "contact": {
+            "homepage": "https://fabricmc.net",
+            "irc": "irc://irc.esper.net:6667/fabric",
+            "issues": "https://github.com/FabricMC/fabric/issues",
+            "sources": "https://github.com/FabricMC/fabric"
+          },
+          "custom": {
+            "fabric-api:module-lifecycle": "stable"
+          },
+          "depends": {
+            "fabricloader": ">=0.15.11"
+          },
+          "description": "Adds Fabric-related debug info to crash reports.",
+          "environment": "*",
+          "icon": "assets/fabric-crash-report-info-v1/icon.png",
+          "id": "fabric-crash-report-info-v1",
+          "license": "Apache-2.0",
+          "mixins": [
+            "fabric-crash-report-info-v1.mixins.json"
+          ],
+          "name": "Fabric Crash Report Info (v1)",
+          "schemaVersion": 1,
+          "version": "0.2.29+0af3f5a719"
+        }
+      },
+      "sha256": "38e2966ce96727d5c4f8948dc0f581c7fdcce07053e7850873948da472566c75",
+      "source": "local-cache:sha256:38e2966ce96727d5c4f8948dc0f581c7fdcce07053e7850873948da472566c75",
+      "version": "0.2.29+0af3f5a719"
+    },
+    {
+      "enabled": true,
+      "file": "client-116.jar",
+      "id": "fabric-dimensions-v1",
+      "kind": "mod",
+      "metadata": {
+        "fabric": {
+          "authors": [
+            "FabricMC"
+          ],
+          "contact": {
+            "homepage": "https://fabricmc.net",
+            "irc": "irc://irc.esper.net:6667/fabric",
+            "issues": "https://github.com/FabricMC/fabric/issues",
+            "sources": "https://github.com/FabricMC/fabric"
+          },
+          "custom": {
+            "fabric-api:module-lifecycle": "stable"
+          },
+          "depends": {
+            "fabric-api-base": "*",
+            "fabricloader": ">=0.15.11",
+            "minecraft": ">=1.16-rc.3"
+          },
+          "description": "Fabric Dimension API.",
+          "icon": "assets/fabric-dimensions-v1/icon.png",
+          "id": "fabric-dimensions-v1",
+          "license": "Apache-2.0",
+          "mixins": [
+            "fabric-dimensions-v1.mixins.json"
+          ],
+          "name": "Fabric Dimensions API (v1)",
+          "schemaVersion": 1,
+          "version": "4.0.1+65213ef819"
+        }
+      },
+      "sha256": "1b230c6acfe15e3068800912559b8bda9fb308f95105c2bfd2a2b3e5b8de7c53",
+      "source": "local-cache:sha256:1b230c6acfe15e3068800912559b8bda9fb308f95105c2bfd2a2b3e5b8de7c53",
+      "version": "4.0.1+65213ef819"
+    },
+    {
+      "enabled": true,
+      "file": "client-117.jar",
+      "id": "fabric-game-rule-api-v1",
+      "kind": "mod",
+      "metadata": {
+        "fabric": {
+          "accessWidener": "fabric-game-rule-api-v1.accesswidener",
+          "authors": [
+            "FabricMC"
+          ],
+          "contact": {
+            "homepage": "https://fabricmc.net",
+            "irc": "irc://irc.esper.net:6667/fabric",
+            "issues": "https://github.com/FabricMC/fabric/issues",
+            "sources": "https://github.com/FabricMC/fabric"
+          },
+          "custom": {
+            "fabric-api:module-lifecycle": "stable"
+          },
+          "depends": {
+            "fabricloader": ">=0.15.11"
+          },
+          "description": "Allows registration of custom game rules.",
+          "environment": "*",
+          "icon": "assets/fabric-game-rule-api-v1/icon.png",
+          "id": "fabric-game-rule-api-v1",
+          "license": "Apache-2.0",
+          "mixins": [
+            "fabric-game-rule-api-v1.mixins.json",
+            {
+              "config": "fabric-game-rule-api-v1.client.mixins.json",
+              "environment": "client"
+            }
+          ],
+          "name": "Fabric Game Rule API (v1)",
+          "schemaVersion": 1,
+          "version": "1.0.53+6ced4dd919"
+        }
+      },
+      "sha256": "823c9c5f969d5959c12fe3abd85bedcbc0da6aa2b8ef6409396602f99e86c32b",
+      "source": "local-cache:sha256:823c9c5f969d5959c12fe3abd85bedcbc0da6aa2b8ef6409396602f99e86c32b",
+      "version": "1.0.53+6ced4dd919"
+    },
+    {
+      "enabled": true,
+      "file": "client-118.jar",
+      "id": "fabric-keybindings-v0",
+      "kind": "mod",
+      "metadata": {
+        "fabric": {
+          "authors": [
+            "FabricMC"
+          ],
+          "contact": {
+            "homepage": "https://fabricmc.net",
+            "irc": "irc://irc.esper.net:6667/fabric",
+            "issues": "https://github.com/FabricMC/fabric/issues",
+            "sources": "https://github.com/FabricMC/fabric"
+          },
+          "custom": {
+            "fabric-api:module-lifecycle": "deprecated"
+          },
+          "depends": {
+            "fabric-key-binding-api-v1": "*",
+            "fabricloader": ">=0.15.11"
+          },
+          "description": "Keybinding registry API.",
+          "environment": "client",
+          "icon": "assets/fabric-keybindings-v0/icon.png",
+          "id": "fabric-keybindings-v0",
+          "license": "Apache-2.0",
+          "name": "Fabric Key Bindings (v0)",
+          "schemaVersion": 1,
+          "version": "0.2.45+df3654b319"
+        }
+      },
+      "sha256": "17d99a7e4fd527fe040b189af84c4e1af459f6b8f000aac38163a6a0ad6de254",
+      "source": "local-cache:sha256:17d99a7e4fd527fe040b189af84c4e1af459f6b8f000aac38163a6a0ad6de254",
+      "version": "0.2.45+df3654b319"
+    },
+    {
+      "enabled": true,
+      "file": "client-119.jar",
+      "id": "fabric-key-binding-api-v1",
+      "kind": "mod",
+      "metadata": {
+        "fabric": {
+          "authors": [
+            "FabricMC"
+          ],
+          "contact": {
+            "homepage": "https://fabricmc.net",
+            "irc": "irc://irc.esper.net:6667/fabric",
+            "issues": "https://github.com/FabricMC/fabric/issues",
+            "sources": "https://github.com/FabricMC/fabric"
+          },
+          "custom": {
+            "fabric-api:module-lifecycle": "stable"
+          },
+          "depends": {
+            "fabricloader": ">=0.15.11"
+          },
+          "description": "Key Binding registry API.",
+          "environment": "client",
+          "icon": "assets/fabric-key-binding-api-v1/icon.png",
+          "id": "fabric-key-binding-api-v1",
+          "license": "Apache-2.0",
+          "mixins": [
+            "fabric-key-binding-api-v1.mixins.json"
+          ],
+          "name": "Fabric Key Binding API (v1)",
+          "schemaVersion": 1,
+          "version": "1.0.47+0af3f5a719"
+        }
+      },
+      "sha256": "d676de7beb026944dda7463b8a1c532c44e32e39447efecdf6d40e22dac66451",
+      "source": "local-cache:sha256:d676de7beb026944dda7463b8a1c532c44e32e39447efecdf6d40e22dac66451",
+      "version": "1.0.47+0af3f5a719"
+    },
+    {
+      "enabled": true,
+      "file": "client-120.jar",
+      "id": "fabric-resource-conditions-api-v1",
+      "kind": "mod",
+      "metadata": {
+        "fabric": {
+          "accessWidener": "fabric-resource-conditions-api-v1.accesswidener",
+          "authors": [
+            "FabricMC"
+          ],
+          "contact": {
+            "homepage": "https://fabricmc.net",
+            "irc": "irc://irc.esper.net:6667/fabric",
+            "issues": "https://github.com/FabricMC/fabric/issues",
+            "sources": "https://github.com/FabricMC/fabric"
+          },
+          "custom": {
+            "fabric-api:module-lifecycle": "stable"
+          },
+          "depends": {
+            "fabricloader": ">=0.15.11"
+          },
+          "description": "Allows conditionally loading resources.",
+          "entrypoints": {
+            "main": [
+              "net.fabricmc.fabric.impl.resource.conditions.ResourceConditionsImpl"
+            ]
+          },
+          "environment": "*",
+          "icon": "assets/fabric-resource-conditions-api-v1/icon.png",
+          "id": "fabric-resource-conditions-api-v1",
+          "license": "Apache-2.0",
+          "mixins": [
+            "fabric-resource-conditions-api-v1.mixins.json"
+          ],
+          "name": "Fabric Resource Conditions API (v1)",
+          "schemaVersion": 1,
+          "version": "4.3.0+8dc279b119"
+        }
+      },
+      "sha256": "2fcf90707e26fff16b9ef839bb934018709da90edb9972a7d0e4a9e51657f4ef",
+      "source": "local-cache:sha256:2fcf90707e26fff16b9ef839bb934018709da90edb9972a7d0e4a9e51657f4ef",
+      "version": "4.3.0+8dc279b119"
+    },
+    {
+      "enabled": true,
+      "file": "client-121.jar",
+      "id": "fabric-resource-loader-v0",
+      "kind": "mod",
+      "metadata": {
+        "fabric": {
+          "accessWidener": "fabric-resource-loader-v0.accesswidener",
+          "authors": [
+            "FabricMC"
+          ],
+          "contact": {
+            "homepage": "https://fabricmc.net",
+            "irc": "irc://irc.esper.net:6667/fabric",
+            "issues": "https://github.com/FabricMC/fabric/issues",
+            "sources": "https://github.com/FabricMC/fabric"
+          },
+          "custom": {
+            "fabric-api:module-lifecycle": "stable"
+          },
+          "depends": {
+            "fabricloader": ">=0.15.11"
+          },
+          "description": "Asset and data resource loading.",
+          "environment": "*",
+          "icon": "assets/fabric-resource-loader-v0/icon.png",
+          "id": "fabric-resource-loader-v0",
+          "license": "Apache-2.0",
+          "mixins": [
+            "fabric-resource-loader-v0.mixins.json",
+            {
+              "config": "fabric-resource-loader-v0.client.mixins.json",
+              "environment": "client"
+            }
+          ],
+          "name": "Fabric Resource Loader (v0)",
+          "schemaVersion": 1,
+          "version": "1.3.1+5b5275af19"
+        }
+      },
+      "sha256": "89ef17b28e5c142d34cb9be7b91616f73cb1e096de407dcd3b8a3917c8ce0af1",
+      "source": "local-cache:sha256:89ef17b28e5c142d34cb9be7b91616f73cb1e096de407dcd3b8a3917c8ce0af1",
+      "version": "1.3.1+5b5275af19"
+    },
+    {
+      "enabled": true,
+      "file": "client-122.jar",
+      "id": "fabric-sound-api-v1",
+      "kind": "mod",
+      "metadata": {
+        "fabric": {
+          "authors": [
+            "FabricMC"
+          ],
+          "contact": {
+            "homepage": "https://fabricmc.net",
+            "irc": "irc://irc.esper.net:6667/fabric",
+            "issues": "https://github.com/FabricMC/fabric/issues",
+            "sources": "https://github.com/FabricMC/fabric"
+          },
+          "custom": {
+            "fabric-api:module-lifecycle": "stable",
+            "loom:injected_interfaces": {
+              "net/minecraft/class_1113": [
+                "net/fabricmc/fabric/api/client/sound/v1/FabricSoundInstance"
+              ]
+            }
+          },
+          "depends": {
+            "fabricloader": ">=0.15.11",
+            "minecraft": ">=1.19.2"
+          },
+          "description": "Hooks for modifying Minecraft's sound system.",
+          "environment": "client",
+          "icon": "assets/fabric-sound-api-v1/icon.png",
+          "id": "fabric-sound-api-v1",
+          "license": "Apache-2.0",
+          "mixins": [
+            {
+              "config": "fabric-sound-api-v1.mixins.json",
+              "environment": "client"
+            }
+          ],
+          "name": "Fabric Sound API (v1)",
+          "schemaVersion": 1,
+          "version": "1.0.23+6573ed8c19"
+        }
+      },
+      "sha256": "a078fb9535ec861d51e67819ad275b2ef3b2a4d1041640870e07a1c8a87a7d68",
+      "source": "local-cache:sha256:a078fb9535ec861d51e67819ad275b2ef3b2a4d1041640870e07a1c8a87a7d68",
+      "version": "1.0.23+6573ed8c19"
+    },
+    {
+      "enabled": true,
+      "file": "client-123.jar",
+      "id": "fabric-transitive-access-wideners-v1",
+      "kind": "mod",
+      "metadata": {
+        "fabric": {
+          "accessWidener": "fabric-transitive-access-wideners-v1.accesswidener",
+          "authors": [
+            "FabricMC"
+          ],
+          "contact": {
+            "homepage": "https://fabricmc.net",
+            "irc": "irc://irc.esper.net:6667/fabric",
+            "issues": "https://github.com/FabricMC/fabric/issues",
+            "sources": "https://github.com/FabricMC/fabric"
+          },
+          "custom": {
+            "fabric-api:module-lifecycle": "stable"
+          },
+          "depends": {
+            "fabricloader": ">=0.15.11"
+          },
+          "description": "Contains transitive access wideners that provide access to otherwise inaccessible Minecraft code.",
+          "environment": "*",
+          "icon": "assets/fabric-transitive-access-wideners-v1/icon.png",
+          "id": "fabric-transitive-access-wideners-v1",
+          "license": "Apache-2.0",
+          "name": "Fabric Transitive Access Wideners (v1)",
+          "schemaVersion": 1,
+          "version": "6.2.0+45b9699719"
+        }
+      },
+      "sha256": "06d6e10c722775b6ff05bae22c8cba14f1c6e0f4ada559b33d8772df7d4fd8bb",
+      "source": "local-cache:sha256:06d6e10c722775b6ff05bae22c8cba14f1c6e0f4ada559b33d8772df7d4fd8bb",
+      "version": "6.2.0+45b9699719"
+    }
+  ],
+  "capabilities": [
+    "actual-client",
+    "test-only-consumer",
+    "far-player-subject"
+  ],
+  "components": [
+    {
+      "uid": "net.minecraft",
+      "version": "1.21.1"
+    },
+    {
+      "uid": "net.fabricmc.fabric-loader",
+      "version": "0.19.3"
+    },
+    {
+      "uid": "java",
+      "version": "21"
+    }
+  ],
+  "id": "mc1211-fabric-seated-subject",
+  "limitations": [
+    "Named native client closure; no subject-side terrain renderer."
+  ],
+  "line": "1.21.1",
+  "platform": "fabric",
+  "route": "native",
+  "schema_version": 1,
+  "status": "unverified"
+}
