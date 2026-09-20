@@ -1,7 +1,7 @@
 {
   "checkpoint_utc": "2026-09-16",
-  "status": "code_complete_native_pending",
-  "scope": "Implementation, final all-five builds (2026-09-14) and all six final independent reviews (1-4 Astra 2026-09-14, 5-6 Claude 2026-09-16) are complete; review fixes are committed on all five lines as tooling/tests/docs only (no Java change after the final builds). Native matrix rows, six preset native runs, eight human assessments and the Fabric/Paper functional lanes on final bytes remain pending. Existing historical fields retain their original scope.",
+  "status": "automated_native_complete_user_signoff_and_integration_pending",
+  "scope": "Historical September 16 checkpoint fields retain their dated scope. See completion_reconciliation_2026_09_20 and the dated native progress index for completed automated execution: 46 collected passes and 8 automated-green cases awaiting actual user image decisions. User sign-off and full evidence/catalog integration remain open; offline suites and game cleanup passed, with the review gallery intentionally live. Original build heads are not relabeled as later tooling heads.",
   "source_commits": {
     "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260910/accepted-performance-v27-20260914/numeric-commits-progress.json",
     "sha256": "7da2b5fb6f970181e6470681760a0fe501f7c5c19dce9e7b0413492d75f5b0e4"
@@ -216,7 +216,8 @@
       "wi9-1.21.1"
     ],
     "fixture_builds_remaining": 11,
-    "native_hold_reason": "requires four real clients on private displays and an idle GPU; held until the machine is free"
+    "native_hold_reason": "requires four real clients on private displays and an idle GPU; held until the machine is free",
+    "scope": "Historical September 16 pending inventory, superseded for current status by completion_reconciliation_2026_09_20; preserved without retroactively rewriting evidence."
   },
   "current_functional_setup": {
     "paired_eight": "passed; all four full entry maps equal between arms",
@@ -635,6 +636,83 @@
       "1.21.11": "6a9a0da842e18b0587f96b93c153b100e965149c",
       "26.1": "6ee930c03de3f23404d9d84f8fbeb17a17977ea6",
       "26.2": "7fb85eb79bf0df85d2dbed0265df543c48798c1c"
-    }
+    },
+    "scope": "Historical September 16 Java-only comparison and heads; broader shipping-input equivalence is recorded in completion_reconciliation_2026_09_20."
+  },
+  "completion_reconciliation_2026_09_20": {
+    "status": "automated_native_complete_user_signoff_and_integration_pending",
+    "selected_fixture_families": 14,
+    "selected_fixture_artifacts": 20,
+    "successful_compile_attempts_including_superseded": 15,
+    "retained_fixture_successes": 3,
+    "fresh_fixture_successes_including_replacement": 12,
+    "fixture_version_correction": "The original 26.1 smoke fixture genuinely compiled against exact 26.1 and did not qualify runtime 26.1.2. A fresh unchanged-source build derives 26.1.2 from owning gradle.properties; compiler input and packaged metadata agree, products and guards are unchanged.",
+    "historical_fixture_artifact_provenance": {
+      "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260919/fixture14-final-artifact-provenance-index.json",
+      "sha256": "f2ba6788af527544ad1541a496d4361820dd097dcc644caa64455f9f5a72bd50"
+    },
+    "fixture_artifact_provenance": {
+      "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260919/fixture261-version-repair/artifact-provenance-index.json",
+      "sha256": "8844e41ab0ee3df89603f366f3cf08512a07991e87735ed9c0c645d6496de52c"
+    },
+    "corrected_fixture_binding": {
+      "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260919/fixture261-version-repair/binding-map.json",
+      "sha256": "586c80a891eac5a2aea766376ec9151967d68c19393babe60d2d34d95fd4e790"
+    },
+    "shipping_input_equivalence": {
+      "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260919/fixture261-version-repair/source-equivalence.json",
+      "sha256": "bd79ad5638840681fb7a80402957a523a40e2f0e15c78062b9fbae37b1e9509d"
+    },
+    "equivalence_scope": "Recorded shipping source, resources, Gradle/build and license inputs, checked against Git trees and physical worktree bytes at the recorded fixture heads; preserve original product build heads. Recheck this scope if later shipping inputs change.",
+    "completion_reviews": 3,
+    "review_reports": "docs/reviews/2026-09-19-completion/",
+    "native_contract": {
+      "required_rows": 42,
+      "supplemental_cases": 4,
+      "preset_runs": 6,
+      "additional_fabric_paper_source_runs": 2,
+      "distinct_runs": 54,
+      "folia_counted_in_required": true
+    },
+    "native_execution": {
+      "collected_passes": 46,
+      "automated_green_awaiting_user_images": 8,
+      "additional_games_planned": false,
+      "fabric_source": "28/28 passed",
+      "folia_source": "28/28 passed with owning-region evidence",
+      "paper_source": "first final attempt failed 27/28; bounded diagnostic replay passed 28/28; original failure retained, no inferred body-content diagnosis"
+    },
+    "pending": [
+      "eight actual user visual dispositions",
+      "full 54-case exact-target export/import and committed source-ref/catalog closure; partial apply remains forbidden",
+      "owned review-gallery shutdown and final overall cleanup after user review",
+      "actual user Windows usability/resource-coexistence observation (plan section 16)"
+    ],
+    "offline_gate_evidence": {
+      "rig": {
+        "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260919/offline-rig-gates/results.json",
+        "sha256": "b5640ccdd6d92952bb9b4ce64ed21e3958dc3a28342367d703ad615c3050b265"
+      },
+      "rig_tests_per_line": 628,
+      "rig_skips": 0,
+      "nonrig": {
+        "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260919/offline-nonrig-gates/results.json",
+        "sha256": "5e79346fd547815b288c9e4fa8ec892f80312707d236a66207a67a415647cded"
+      },
+      "nonrig_tests_total": 735
+    },
+    "game_cleanup_evidence": {
+      "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260919/game-cleanup-user-review-pending.json",
+      "sha256": "5775ae6af840f041570c08d7c9952577b430d42998371de3cc18aa0497227056"
+    },
+    "game_cleanup_complete": true,
+    "overall_plan_cleanup_complete": false,
+    "gallery": "intentionally live pending actual user image review",
+    "current_progress_index": "docs/implementation/native-validation-progress-2026-09-20.json",
+    "final_acceptance_not_yet_complete": true,
+    "v27_comparisons_nonduplicate": 25,
+    "statistical_independence_established": false,
+    "support_tiers_changed": false,
+    "folia_remains_experimental": true
   }
 }
