@@ -32,8 +32,8 @@
       "bound_ms": 0.1919346,
       "aggregate_is_same_server_observation": true
     },
-    "comparisons_independent": 25,
-    "independence_note": "aggregate repeats the server observation for the four tick metrics and useful throughput"
+    "comparisons_nonduplicate": 25,
+    "nonduplication_note": "Aggregate repeats the server observation for four tick metrics and useful throughput; statistical independence is not established because runs, subjects and calibrations are shared."
   },
   "settings": {
     "lodDistanceChunks": 32,
@@ -77,7 +77,7 @@
     "Frame comparisons are pacing-saturated at the 30 FPS cap (p50 33.333 ms in all nine runs); the \u00b110% frame budget only registers a drop below ~27 FPS.",
     "Tick-delay paired differences (up to \u00b111%) are about three times the calibration spread; floors were never the binding term. Passed means no regression larger than budget plus noise was demonstrated.",
     "Both arms ran at 32/4/1: it is the experiment's fixed operating point, not a value compared against the defaults or other points.",
-    "Fabric/Paper functional prerequisites ran on bytes built before the last two correctness commits; Folia correctness holds on both measured arms; no Java source changed after the final all-five builds."
+    "Fabric/Paper functional prerequisites retain their earlier artifact scope; Folia correctness holds on both measured arms. Final packaged build heads are retained separately from later harness/catalog/documentation heads; recorded shipping source, resources, Gradle/build and license inputs were byte-identical at the documented equivalence check."
   ],
   "xaero_work": {
     "measured_pairs": 3,
@@ -125,9 +125,9 @@
     "26.2": "b3498fb0a990163f602f806cf0f7e5a13e593bb5"
   },
   "remaining": [
-    "52 final native rows including six preset runs (requires the GPU/desktop; held)",
-    "eight human assessments",
-    "Fabric/Paper four-client functional lanes on the final bytes (review 06 R06-4)"
+    "Eight actual user image-bound visual assessments and the separate section 16 Windows usability/resource-coexistence observation.",
+    "Final catalog/classification reconciliation and owned-gallery shutdown after user review; full rig/non-rig suites and game cleanup already passed.",
+    "Full 54-case exact-target export/import and immutable source-ref/catalog closure; partial 46 exports remain external-only."
   ],
   "final_reviews": {
     "completed": "2026-09-16",
@@ -150,5 +150,13 @@
       "R06-1",
       "R06-2"
     ]
+  },
+  "native_validation_progress": {
+    "index": "docs/implementation/native-validation-progress-2026-09-20.json",
+    "collected_passes": 46,
+    "automated_green_awaiting_user_images": 8,
+    "source_results": "Fabric 28/28; Folia 28/28 with owning-region evidence; Paper first 27/28 failed and bounded diagnostic replay 28/28 passed. Original failure retained; no inferred body-content diagnosis.",
+    "performance_scope_expanded": false,
+    "final_acceptance_complete": false
   }
 }

@@ -871,6 +871,10 @@
       "kind": "line-local",
       "validation": "tools/compat/catalog.py validate and tools/compat/ci.py; exact schema and runtime hashes, not cross-line byte equality"
     },
+    "config/compatibility/profiles/mc1211-fabric-seated-subject.json": {
+      "kind": "line-local",
+      "validation": "tools/compat/catalog.py validate; exact retained native profile identity and named-line ownership. Profile registration is not acceptance of pending user reviews."
+    },
     "config/compatibility/profiles/mc1211-fabric-server.json": {
       "kind": "line-local",
       "validation": "tools/compat/catalog.py validate and tools/compat/ci.py; exact schema and runtime hashes, not cross-line byte equality"
@@ -894,6 +898,10 @@
     "config/compatibility/profiles/mc1211-neoforge-server-smoke.json": {
       "kind": "line-local",
       "validation": "tools/compat/catalog.py validate and tools/compat/ci.py; exact schema and runtime hashes, not cross-line byte equality"
+    },
+    "config/compatibility/profiles/mc1211-neoforge-server.json": {
+      "kind": "line-local",
+      "validation": "tools/compat/catalog.py validate; exact retained native profile identity and named-line ownership. Profile registration is not acceptance of pending user reviews."
     },
     "config/compatibility/profiles/mc1211-neoforge-xaero-no-sodium-controls.json": {
       "kind": "line-local",
@@ -1031,6 +1039,10 @@
       "kind": "line-local",
       "validation": "tools/compat/catalog.py validate and tools/compat/ci.py; exact schema and runtime hashes, not cross-line byte equality"
     },
+    "config/compatibility/profiles/mc262-fabric-source-correctness.json": {
+      "kind": "line-local",
+      "validation": "tools/compat/catalog.py validate; exact retained native profile identity and named-line ownership. Profile registration is not acceptance of pending user reviews."
+    },
     "config/compatibility/profiles/mc262-folia-server-feasibility.json": {
       "kind": "line-local",
       "validation": "tools/compat/catalog.py validate; exact profile/run/evidence schema and named-line ownership. Historical result and limitations are preserved; classification is not acceptance."
@@ -1054,6 +1066,10 @@
     "config/compatibility/profiles/mc262-paper-modern.json": {
       "kind": "line-local",
       "validation": "tools/compat/catalog.py validate and tools/compat/ci.py; exact schema and runtime hashes, not cross-line byte equality"
+    },
+    "config/compatibility/profiles/mc262-paper-source-correctness.json": {
+      "kind": "line-local",
+      "validation": "tools/compat/catalog.py validate; exact retained native profile identity and named-line ownership. Profile registration is not acceptance of pending user reviews."
     },
     "config/compatibility/source-refs.json": {
       "kind": "line-local",
