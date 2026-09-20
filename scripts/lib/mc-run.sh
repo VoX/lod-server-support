@@ -1,7 +1,8 @@
 # Shared Minecraft server/client lifecycle helpers for benchmark.sh and soak.sh.
 # Source this file — do not execute it.
 #
-# Callers must set before sourcing:
+# Callers must source harness-lock.sh and acquire ownership before using these
+# helpers. They must also set before sourcing:
 #   LOG_PREFIX    - log tag for messages, e.g. "benchmark" or "soak"
 #   PROJECT_ROOT  - repo root (gradle invocations run from here)
 #
@@ -14,6 +15,7 @@ CLIENT_PID=""
 
 # Kill any still-running server/client processes.
 mc_cleanup() {
+    harness_cleanup
     echo "[$LOG_PREFIX] Cleaning up..."
     if [[ -n "$SERVER_PID" ]] && kill -0 "$SERVER_PID" 2>/dev/null; then
         echo "[$LOG_PREFIX] Killing server (PID $SERVER_PID)"
@@ -28,25 +30,25 @@ mc_cleanup() {
 }
 
 # mc_start_server <gradle-log> <gradle-task> [gradle-args...]
-# Launches the server gradle task in the background; sets SERVER_PID.
+# Launches an owned server supervisor in the background; sets SERVER_PID.
 mc_start_server() {
-    local gradle_log="$1"
+    local gradle_log="$1" owner_pid=$BASHPID
     shift
     echo "[$LOG_PREFIX] Starting server..."
     cd "$PROJECT_ROOT"
-    ./gradlew "$@" > "$gradle_log" 2>&1 &
+    LSS_HARNESS_OWNER_PID="$owner_pid" python3 "$HARNESS_LIB_DIR/owned-process.py" -- ./gradlew --no-daemon "$@" > "$gradle_log" 2>&1 &
     SERVER_PID=$!
     echo "[$LOG_PREFIX] Server PID: $SERVER_PID"
 }
 
 # mc_start_client <gradle-log> <gradle-task> [gradle-args...]
-# Launches the client gradle task in the background; sets CLIENT_PID.
+# Launches an owned client supervisor in the background; sets CLIENT_PID.
 mc_start_client() {
-    local gradle_log="$1"
+    local gradle_log="$1" owner_pid=$BASHPID
     shift
     echo "[$LOG_PREFIX] Starting client..."
     cd "$PROJECT_ROOT"
-    ./gradlew "$@" > "$gradle_log" 2>&1 &
+    LSS_HARNESS_OWNER_PID="$owner_pid" python3 "$HARNESS_LIB_DIR/owned-process.py" -- ./gradlew --no-daemon "$@" > "$gradle_log" 2>&1 &
     CLIENT_PID=$!
     echo "[$LOG_PREFIX] Client PID: $CLIENT_PID"
 }
@@ -79,24 +81,21 @@ mc_wait_server_ready() {
     return 1
 }
 
-# mc_wait_client_exit <timeout-seconds>
-# Waits for the client process to exit; kills it if the timeout elapses.
-# Clears CLIENT_PID.
+# Return the actual client exit status, or 124 when its deadline expires.
 mc_wait_client_exit() {
-    local timeout="$1"
-    local elapsed=0
-    while [[ $elapsed -lt $timeout ]]; do
-        if ! kill -0 "$CLIENT_PID" 2>/dev/null; then
-            echo "[$LOG_PREFIX] Client exited"
-            break
-        fi
+    local timeout="$1" elapsed=0 status=0
+    while kill -0 "$CLIENT_PID" 2>/dev/null && [[ $elapsed -lt $timeout ]]; do
         sleep 1
         elapsed=$((elapsed + 1))
     done
     if kill -0 "$CLIENT_PID" 2>/dev/null; then
         echo "[$LOG_PREFIX] Client did not exit within ${timeout}s, killing"
         kill "$CLIENT_PID" 2>/dev/null || true
-        wait "$CLIENT_PID" 2>/dev/null || true
+        status=124
     fi
+    local waited=0
+    wait "$CLIENT_PID" 2>/dev/null || waited=$?
+    [[ $status -ne 0 ]] || status=$waited
     CLIENT_PID=""
+    return "$status"
 }

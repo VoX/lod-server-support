@@ -1,0 +1,83 @@
+{
+  "scope": "Sodium child status return fix; live acceptance is 1.21.1 Fabric legacy only",
+  "production_sources": "Applied across all five xplat dialects and both loader hooks",
+  "focused_control": {
+    "common": {
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "fabric": {
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "artifacts": {
+      "fabric/build/libs/lod-server-support-fabric.jar": "3d77c69eddd8ea0508b22f0df1b836206c4be064ba76102045a7ef1d0520a23e",
+      "neoforge/build/libs/lod-server-support-neoforge.jar": "3f16e1b2fc034a1cd37f0a7508a87a6cd5b784370ec5b468997fe2127843ac96"
+    }
+  },
+  "additional_compile": "26.2 Fabric and NeoForge compileJava passed; log /home/vox/.local/state/lss-project-improvements/status-parent-refresh/26.2-compile.log",
+  "live": {
+    "backend": "isolated-linux-prism",
+    "cleanup": "complete",
+    "errors": [],
+    "profile_hash": "ba08fcb6a09535012875e96e4a1d61e6acfa0c332b90846ff51aacc04502a76f",
+    "profile_id": "mc1211-fabric-legacy",
+    "run_hash": "a0786065c6c821c79ed1fd5b88c5926d9cfa38d74e24400e054ef1a41af50900",
+    "run_id": "20260909T204917Z-6dcbe118aaa8",
+    "scenario_hash": "de7904cef696c6ce338067e548c08379fd32b91ccb77329b4d717ee07eabdca6",
+    "scenario_id": "ui-apply",
+    "schema_version": 1,
+    "status": "passed"
+  },
+  "candidate_sha256": "3d77c69eddd8ea0508b22f0df1b836206c4be064ba76102045a7ef1d0520a23e",
+  "run_directory": "/home/vox/.local/state/lss-rig/runs/20260909T204917Z-6dcbe118aaa8",
+  "proof_sha256": "19bb4ec5f04070a16a98cd86a9c96f1eb794e8e7b6bd7fdd58daf49734a5b7e8",
+  "assertions": {
+    "real_ui_opened": true,
+    "setting_applied": true,
+    "effective_value_observed": true,
+    "failed_save_feedback": true,
+    "parent_binding_refreshed": true,
+    "pending_edit_preserved": true
+  },
+  "evidence_sha256": {
+    "applied-unsaved-readable.png": "d1fbb31887e142bf9c61a806609c7c2676dee6dc71a053b655b7a9e523426b5a",
+    "canonical-restored-baseline.json": "1515a48f570820ba4bb22ebec962205039c0854604ced30029068b00298fd6ea",
+    "client-original.json": "1515a48f570820ba4bb22ebec962205039c0854604ced30029068b00298fd6ea",
+    "direct-connect.png": "e9313c762545ae2368bc6b8599917c8922df8dbe74da2dffd56ae233f732d1e9",
+    "final-restored-config.json": "1515a48f570820ba4bb22ebec962205039c0854604ced30029068b00298fd6ea",
+    "final-restored-export.json": "86b7262e31de8e26c21c9f2462226a51664fb85d1dbdc280e25a8e3a397ecad9",
+    "final-restored-saved.png": "d2a0a768c3abcbd2bc39698106b185e2fbfb574379fcbe7bece280c33cfe2c9b",
+    "legacy-applied-export.png": "10c00ae7d13febc3e259f63f2723990e4a42bb54bfc2bf39c871fe8af6fbb13b",
+    "legacy-draft-applied.png": "98a0ed567367d8bf5c2a1494263ca9c2659863d132eb9fac139261090bd7da72",
+    "legacy-lss-start.png": "427b049637572d7d427f29f8286f9ad8654d725de8a6fda355738eb08d476223",
+    "legacy-real-reception-apply-on.png": "0d71e0a382a3032c8141f0d5f40863ef3dc5b1b6165d3f30708b988be3bb4e0c",
+    "legacy-reception-applied-export.json": "ced8f173c1072a68ba42e7ffe583d34392c3d6dde9597d7ae86af29212288350",
+    "legacy-reception-effective-on.png": "a904890ec393116c49b57fc0dda9b146a874af2589617ae89e5f87f5b637a2e2",
+    "legacy-settings-restored.png": "84a13cf0d8c4600be4e7a47f58a663c28728b63ae9619e133b46a1e70d5a650a",
+    "parent-refreshed-draft-preserved.png": "f0702d55bcb0bee90c6390458ec3f5b6b3d780501fdfe0ced8946f1234a131f4",
+    "parent-return-before-apply-config.json": "eae91156a8aab9156dc33088bda8bb31904358c5f690d95c1a824a45a14d272b",
+    "pending-slow-start-off.png": "41b148bf4f2620b7c890f5272cbde5f5dba6efb76a55d1802081673d085d6a38",
+    "preserved-draft-applied-config.json": "2a8c58bd3b7a1e51e4f9b916ba08b6579dd9532121a0c28f61b214da13dc619d",
+    "preserved-draft-applied-export.json": "cff66df9ca0e84af563eba252f36c20e3661d3343630e31e993fe3e7cfeac6a9",
+    "return-path-actions.json": "3d9534f7463dfde54ad0ac96708e159a7c05f441bcddc709a0798c5e823ce9e6",
+    "save-failure-after.json": "1515a48f570820ba4bb22ebec962205039c0854604ced30029068b00298fd6ea",
+    "save-failure-before.json": "1515a48f570820ba4bb22ebec962205039c0854604ced30029068b00298fd6ea",
+    "save-failure-export.json": "688a5f65bd2add3741e28b5775d5663322a41d1fce12622cd9e09cd248a13b31",
+    "status-changed-reception-off.png": "f214f32e4124800fa4db16d658dcb4da17a4f96b221cde0f7ad59d7dff82681c",
+    "status-command-readable.png": "6ca442b4822d1ee2a900306d1fbac5036919ad2bd6ec12a36878258257953e23",
+    "status-entry-open.png": "7699571104e9dd7d6fc97e3bcad980e68b86420b878822deb3d5e2037a906e54"
+  },
+  "restoration": {
+    "reception_effective": true,
+    "receiveServerLods": true,
+    "enableJoinSlowStart": true,
+    "tmp_blocker_absent": true,
+    "config_sha256": "1515a48f570820ba4bb22ebec962205039c0854604ced30029068b00298fd6ea"
+  },
+  "remaining": "Modern/Neo/sibling live acceptance remains independently scoped; this record makes no map, WI5, performance or measured preset claim."
+}

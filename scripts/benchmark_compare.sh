@@ -18,6 +18,8 @@ set -euo pipefail
 # Environment overrides: V16_REF (default v0.6.2), V16_WT (worktree path), OUT_ROOT.
 
 MAIN_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+source "$MAIN_ROOT/scripts/lib/harness-lock.sh"
+harness_acquire
 V16_REF="${V16_REF:-v0.6.2}"
 V16_WT="${V16_WT:-$(dirname "$MAIN_ROOT")/lss-bench-${V16_REF}}"
 OUT_ROOT="${OUT_ROOT:-$MAIN_ROOT/benchmark-compare-results}"
@@ -36,7 +38,7 @@ root_for_arm() {
 prebuild() {
     local root="$1"
     log "Prebuilding $root ..."
-    (cd "$root" && ./gradlew :fabric:build -x test -x runGameTest -x runClientGameTest --quiet)
+    harness_gradle_at "$root" :fabric:build -x test -x runGameTest -x runClientGameTest --quiet
 }
 
 cmd_setup() {
@@ -60,7 +62,7 @@ cmd_baseworld() {
     rm -rf "$MAIN_ROOT/fabric/build/run/benchmark-client/config/lss/cache" \
            "$MAIN_ROOT/fabric/build/run/benchmark-client/.lss/cache"  # both roots (stage D)
     log "Building base world: fresh run for ${seconds}s (generation enabled, defaults)"
-    (export BENCHMARK_CONFIG_STAGED=1; cd "$MAIN_ROOT" && ./scripts/benchmark.sh fresh "$seconds")
+    harness_run_script env BENCHMARK_CONFIG_STAGED=1 "$MAIN_ROOT/scripts/benchmark.sh" fresh "$seconds"
     log "Base world saved to benchmark-worlds/base/world"
 }
 
@@ -118,7 +120,7 @@ cmd_run() {
     fi
 
     RUN_OUT="$OUT_ROOT/$RUN_STAMP/${arm}-rep${rep}"
-    mkdir -p "$RUN_OUT"
+    python3 "$HARNESS_LIB_DIR/benchmark-results.py" prepare "$RUN_OUT"
     log "=== RUN $arm rep$rep (root=$root, duration=${duration}s, R=$LOD_R, bgRead=$bg_read) ==="
 
     # Identical base world for every arm: sync main's into the worktree.
@@ -138,22 +140,27 @@ cmd_run() {
 
     # Stale-artifact guard: benchmark.sh collects from these paths — a crashed run must
     # yield MISSING files, not silently re-collect the previous run's output.
-    rm -f "$root/benchmark-results/server.json" "$root/benchmark-results/client.json" \
+    rm -f "$root/benchmark-results/current.json" "$root/benchmark-results/server.json" "$root/benchmark-results/client.json" \
           "$root/benchmark-results/"*.jfr \
           "$root/fabric/build/run/benchmark-server/benchmark-results/server.json" \
           "$root/fabric/build/run/benchmark-client/benchmark-results/client.json" \
           "$root/fabric/build/run/benchmark-server/server-benchmark.jfr" \
           "$root/fabric/build/run/benchmark-client/client-benchmark.jfr"
 
-    "$MAIN_ROOT/scripts/lib/proc_sampler.sh" "$RUN_OUT/cpu.jsonl" $((duration + 420)) &
-    local sampler_pid=$!
+    harness_start_observer "$MAIN_ROOT/scripts/lib/proc_sampler.sh" "$RUN_OUT/cpu.jsonl" $((duration + 420))
+    local sampler_pid=$HARNESS_OBSERVER_PID
 
     local rc=0
-    (export BENCHMARK_CONFIG_STAGED=1; cd "$root" && ./scripts/benchmark.sh no-cache "$duration") \
+    harness_run_script env BENCHMARK_CONFIG_STAGED=1 "$root/scripts/benchmark.sh" no-cache "$duration" \
         > "$RUN_OUT/orchestrator.log" 2>&1 || rc=$?
 
     kill "$sampler_pid" 2>/dev/null || true
     wait "$sampler_pid" 2>/dev/null || true
+    HARNESS_OBSERVER_PID=""
+
+    if [[ $rc -eq 0 ]]; then
+        python3 "$HARNESS_LIB_DIR/benchmark-results.py" record "$root" "$RUN_OUT" legacy || rc=$?
+    fi
 
     for f in server.json client.json server.log client.log \
              server-benchmark.jfr client-benchmark.jfr; do

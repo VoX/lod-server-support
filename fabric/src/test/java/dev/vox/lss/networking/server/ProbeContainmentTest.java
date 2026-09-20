@@ -68,4 +68,29 @@ class ProbeContainmentTest {
                 (level, chunk, cx, cz) -> { throw new OutOfMemoryError("synthetic"); },
                 null, null, 0, 0, throttle));
     }
+
+    @Test
+    void capturePrecedesSerializerAndReentrantInvalidationCannotRefreshIt() throws Exception {
+        var guard=new dev.vox.lss.common.processing.LoadedProbeGuard();
+        var registration=new dev.vox.lss.common.processing.RequestRegistration();
+        long packed=dev.vox.lss.common.PositionUtil.packPosition(3,-7);
+        var captured=new java.util.concurrent.atomic.AtomicBoolean();
+        var invalidate=guard.getClass().getDeclaredMethod("invalidate",String.class,long[].class);invalidate.setAccessible(true);
+        var current=guard.getClass().getDeclaredMethod("current",LoadedColumnData.class,String.class,long.class,dev.vox.lss.common.processing.RequestRegistration.class);current.setAccessible(true);
+        var result=RequestProcessingService.serializeCapturedProbe(()->{
+            captured.set(true);return guard.capture("minecraft:overworld",packed,registration);
+        },(level,chunk,cx,cz)->{
+            assertTrue(captured.get());
+            try {invalidate.invoke(guard,"minecraft:overworld",new long[]{packed});}
+            catch(ReflectiveOperationException failure){throw new AssertionError(failure);}
+            return new LoadedColumnData(cx,cz,new byte[]{1},1);
+        },null,null,3,-7,throttle);
+        assertNotNull(result);assertNotNull(result.probeCapture());
+        assertFalse((boolean)current.invoke(guard,result,"minecraft:overworld",packed,registration));
+        var fresh=RequestProcessingService.serializeCapturedProbe(()->guard.capture("minecraft:overworld",packed,registration),
+                (level,chunk,cx,cz)->new LoadedColumnData(cx,cz,new byte[]{2},1),null,null,3,-7,throttle);
+        assertTrue((boolean)current.invoke(guard,fresh,"minecraft:overworld",packed,registration));
+        assertNull(RequestProcessingService.serializeCapturedProbe(()->guard.capture("minecraft:overworld",packed,registration),
+                (level,chunk,cx,cz)->new LoadedColumnData(cx+1,cz,new byte[]{2},1),null,null,3,-7,throttle));
+    }
 }

@@ -22,6 +22,9 @@ public enum SaveHook {
 
     public void run(LSSClientConfig cfg) {
         cfg.save();
+        if (cfg == LSSClientConfig.CONFIG) {
+            dev.vox.lss.networking.client.ClientNetGlue.reconcileClientConfig();
+        }
         if (this == SAVE_AND_PUSH_FAR_PLAYER_PREFS) {
             FarPlayerClientSupport.onClientConfigChanged();
         }

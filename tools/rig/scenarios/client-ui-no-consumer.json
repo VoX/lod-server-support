@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "id": "client-ui-no-consumer",
+  "version": 2,
+  "execution_route": "client-ui-no-consumer",
+  "checker": "client-ui-no-consumer",
+  "requires_handshake": false,
+  "timeout_seconds": 1200,
+  "required_test_count": 7,
+  "assertions": [
+    "real_ui_opened",
+    "setting_applied",
+    "effective_value_observed",
+    "failed_save_feedback",
+    "parent_binding_refreshed",
+    "pending_edit_preserved",
+    "escape_parent_preserved"
+  ],
+  "human_reviews": []
+}

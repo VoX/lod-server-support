@@ -78,6 +78,10 @@ public final class ClientNetGlue {
     }
 
     /** C6 observability: the established session's protocol version (0 pre-config). */
+    public static dev.vox.lss.common.diagnostics.ClientStatusSnapshot.Discovery discoveryStatus() {
+        return sessionGate.discoveryStatus();
+    }
+
     public static int getSessionVersion() {
         return sessionGate.getSessionVersion();
     }
@@ -128,14 +132,20 @@ public final class ClientNetGlue {
      * forgets the received-stamp and schedules a re-request. Safe from any thread.
      */
     public static void reportIngestFailure(ResourceKey<Level> dimension, int chunkX, int chunkZ) {
+        var owner = sessionGate.getRequestManager();
         var mc = Minecraft.getInstance();
         if (mc == null) return; // unit tests / very early startup — no session to repair anyway
         mc.execute(() -> {
             var manager = sessionGate.getRequestManager();
-            if (manager != null) {
+            if (manager != null && manager == owner && manager.isAcquisitionActive()) {
                 manager.onIngestFailure(dimension, PositionUtil.packPosition(chunkX, chunkZ));
             }
         });
+    }
+
+    static void executeDeliveryEvent(Runnable event) {
+        var mc = Minecraft.getInstance();
+        if (mc != null) mc.execute(event);
     }
 
     /**
@@ -155,6 +165,7 @@ public final class ClientNetGlue {
 
     public static void triggerHostHandshake() {
         Minecraft.getInstance().execute(() -> {
+            sessionGate.onHostServiceReady(); // remember publication even when downloads are OFF
             if (!LSSClientConfig.CONFIG.receiveServerLods) return;
             if (sessionGate.getRequestManager() != null) return;
             if (!LSSApi.hasVoxelConsumers()) return; // no LOD consumer -> stay silent
@@ -284,8 +295,13 @@ public final class ClientNetGlue {
     /** SessionConfig receiver body — hops to the client main thread. */
     public static void onSessionConfigFrame(SessionConfigS2CPayload payload) {
         Minecraft.getInstance().execute(() -> {
+            reconcileClientConfig();
+            var previous = sessionGate.getRequestManager();
             sessionGate.onSessionConfig(payload, LSSApi.hasVoxelConsumers(),
                     LSSClientConfig.CONFIG.enableV16ServerCompat);
+            if (previous != null && previous != sessionGate.getRequestManager()) {
+                dev.vox.lss.compat.ModCompat.retireClientAcquisition();
+            }
             // Far players (E1): the prefs frame follows the session config
             // (send-once-unless-changed, contained; no-op while the capability bit is
             // not composed — all of E1).
@@ -295,18 +311,20 @@ public final class ClientNetGlue {
 
     /** BatchResponse receiver body — hops to the client main thread. */
     public static void onBatchResponseFrame(BatchResponseS2CPayload payload) {
+        var owner = sessionGate.getRequestManager();
         Minecraft.getInstance().execute(() -> {
             var manager = sessionGate.getRequestManager();
-            if (manager == null) return;
+            if (manager == null || manager != owner || !manager.isAcquisitionActive()) return;
             dispatchBatchResponses(manager, payload);
         });
     }
 
     /** DirtyColumns receiver body — hops to the client main thread. */
     public static void onDirtyColumnsFrame(DirtyColumnsS2CPayload payload) {
+        var owner = sessionGate.getRequestManager();
         Minecraft.getInstance().execute(() -> {
             var manager = sessionGate.getRequestManager();
-            if (manager != null) {
+            if (manager != null && manager == owner && manager.isAcquisitionActive()) {
                 manager.onDirtyColumns(payload.dirtyPositions());
             }
         });
@@ -326,9 +344,10 @@ public final class ClientNetGlue {
      *  client main thread; the manager applies per-column validation (or buffers the
      *  frame until its cache load adopts). */
     public static void onRegionSummaryFrame(byte[] body) {
+        var owner = sessionGate.getRequestManager();
         Minecraft.getInstance().execute(() -> {
             var manager = sessionGate.getRequestManager();
-            if (manager != null) {
+            if (manager != null && manager == owner && manager.isAcquisitionActive()) {
                 manager.onRegionSummaryFrame(body);
             }
         });
@@ -337,9 +356,10 @@ public final class ClientNetGlue {
     /** Column-stamps receiver body (stamped-up-to-date-plan.md §4) — same hop; the
      *  manager ratchets cached stamps forward for verified-current columns. */
     public static void onColumnStampsFrame(byte[] body) {
+        var owner = sessionGate.getRequestManager();
         Minecraft.getInstance().execute(() -> {
             var manager = sessionGate.getRequestManager();
-            if (manager != null) {
+            if (manager != null && manager == owner && manager.isAcquisitionActive()) {
                 manager.onColumnStamps(body);
             }
         });
@@ -350,8 +370,14 @@ public final class ClientNetGlue {
      *  only, no ordering dependency), then the ladder runs on the client main thread. */
     public static void onVoxelColumnFrame(VoxelColumnS2CPayload payload) {
         sessionGate.recordColumnFrame(payload.estimatedBytes(), payload.wireEstimatedBytes());
-        Minecraft.getInstance().execute(() ->
-                handleVoxelColumn(sessionGate.getRequestManager(), columnProcessor, payload));
+        var owner = sessionGate.getRequestManager();
+        Minecraft.getInstance().execute(() -> {
+            reconcileClientConfig();
+            if (owner != null && owner == sessionGate.getRequestManager()
+                    && owner.isAcquisitionActive() && sessionGate.isReceptionEnabled()) {
+                handleVoxelColumn(owner, columnProcessor, payload);
+            }
+        });
     }
 
     /**
@@ -367,6 +393,7 @@ public final class ClientNetGlue {
      */
     public static void handleVoxelColumn(LodRequestManager manager, ClientColumnProcessor processor,
                                          VoxelColumnS2CPayload payload) {
+        if (manager != null && !manager.isAcquisitionActive()) return;
         long packed = PositionUtil.packPosition(payload.chunkX(), payload.chunkZ());
         boolean resync = manager != null && manager.heldContentBefore(packed);
         // Codec-gated (plan §0.8): only raw bytes can be varint-peeked here. A compliant
@@ -375,6 +402,7 @@ public final class ClientNetGlue {
         // fail-safe, it still decodes correctly at the drain.
         boolean clear = payload.codec() == LSSConstants.COLUMN_CODEC_RAW
                 && ClientColumnProcessor.isClearColumn(payload.shippedSections());
+        long preClearStamp = manager != null ? manager.contentStampBeforeDelivery(packed) : -1L;
         if (manager != null && !manager.onColumnReceived(packed, payload.columnTimestamp(),
                 payload.dimension(), clear, payload.source())) {
             // Out-of-range unsolicited drop: the state map refused the stamp, and the
@@ -384,7 +412,8 @@ public final class ClientNetGlue {
         }
         // A clear air-fills even when the held check missed (see above) — the consumer must
         // overwrite whatever it renders there with air.
-        processor.offer(payload, resync || clear);
+        processor.offer(payload, resync || clear,
+                manager == null ? null : manager.trackDelivery(payload.dimension(), packed, preClearStamp));
     }
 
     /**
@@ -425,6 +454,7 @@ public final class ClientNetGlue {
 
     /** JOIN ladder body (each loader's connection-join event calls this). */
     public static void onJoin() {
+        ClientStatus.invalidate();
         // Don't activate on singleplayer/integrated servers (unless testing)
         boolean localIntegratedServer = Minecraft.getInstance().hasSingleplayerServer()
                 && !Boolean.getBoolean("lss.test.integratedServer");
@@ -440,13 +470,31 @@ public final class ClientNetGlue {
      *  covers the manager on the next join; the processor/far-player/trace
      *  teardowns wait for the real disconnect. */
     public static void onDisconnect() {
+        ClientStatus.invalidate();
         sessionGate.onDisconnect();
         FarPlayerClientSupport.onSessionEnd();
         dev.vox.lss.compat.ModCompat.onDisconnect();
     }
 
+    /** Apply and tick share the same idempotent, client-thread option transition. */
+    public static void reconcileClientConfig() {
+        var mc = Minecraft.getInstance();
+        if (mc == null) return;
+        if (!mc.isSameThread()) {
+            mc.execute(ClientNetGlue::reconcileClientConfig);
+            return;
+        }
+        if (sessionGate.reconcileReception(LSSClientConfig.CONFIG.receiveServerLods, LSSApi.hasVoxelConsumers())
+                && !LSSClientConfig.CONFIG.receiveServerLods) {
+            // Receipt retirement/save has completed; cancel queued map work but retain
+            // texture rebuilds already committed to the still-connected native world.
+            dev.vox.lss.compat.ModCompat.retireClientAcquisition();
+        }
+    }
+
     /** End-of-client-tick body. */
     public static void onEndClientTick() {
+        reconcileClientConfig();
         // Runs even before a session: the v16-server discovery fallback (no-op on the v18
         // happy path, which disarms it before the delay elapses).
         sessionGate.tickDiscoveryLadder();
@@ -458,6 +506,7 @@ public final class ClientNetGlue {
         // The Xaero map bridge's budgeted commit pump (xaero-map-bridge-plan.md §2.4) —
         // main client thread, no-op unless Xaero is present with queued tiles.
         dev.vox.lss.compat.ModCompat.clientTick();
+        ClientStatus.tick();
     }
 
     /** Per-frame body (render thread) — the Xaero bridge's texture-rebuild slice

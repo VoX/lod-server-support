@@ -141,4 +141,34 @@ public class LSSGameTests {
         Gt.assertTrue(helper, c.generationConcurrencyLimitPerPlayer >= LSSConstants.MIN_CONCURRENCY_LIMIT && c.generationConcurrencyLimitPerPlayer <= c.generationConcurrencyLimitGlobal, "generationConcurrencyLimitPerPlayer");
         helper.succeed();
     }
+
+    /** Real engine wing state, on an entity deliberately never added/ticked in the world. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void proxyWingStateAdvancesOnlyOnNewAnimationTicks(GameTestHelper helper) {
+        var entity = new WingPoseEntity(helper.getLevel());
+        var state = new net.minecraft.world.entity.ElytraAnimationState(entity);
+        entity.gliding = true;
+        dev.vox.lss.networking.client.FarPlayerWingAnimation.advance(state, true);
+        float firstX = state.getRotX(1), firstZ = state.getRotZ(1);
+        Gt.assertTrue(helper, firstX > 0 && firstZ < 0, "zero-motion glide must spread wings");
+        dev.vox.lss.networking.client.FarPlayerWingAnimation.advance(state, false);
+        Gt.assertTrue(helper, firstX == state.getRotX(1) && firstZ == state.getRotZ(1),
+                "a second draw in the same tick must not advance interpolation");
+        for (int n = 0; n < 40; n++) dev.vox.lss.networking.client.FarPlayerWingAnimation.advance(state, true);
+        Gt.assertTrue(helper, Math.abs(state.getRotZ(1) + Math.PI / 2) < 0.001, "glide converges to full spread");
+        entity.gliding = false;
+        for (int n = 0; n < 40; n++) dev.vox.lss.networking.client.FarPlayerWingAnimation.advance(state, true);
+        Gt.assertTrue(helper, Math.abs(state.getRotZ(1) + Math.PI / 12) < 0.001, "standing folds the wings");
+        entity.crouching = true;
+        for (int n = 0; n < 40; n++) dev.vox.lss.networking.client.FarPlayerWingAnimation.advance(state, true);
+        Gt.assertTrue(helper, Math.abs(state.getRotZ(1) + Math.PI / 4) < 0.001, "crouching changes the wing pose");
+        helper.succeed();
+    }
+
+    private static final class WingPoseEntity extends net.minecraft.world.entity.decoration.ArmorStand {
+        boolean gliding, crouching;
+        WingPoseEntity(net.minecraft.world.level.Level level) { super(level, 0, 0, 0); }
+        @Override public boolean isFallFlying() { return gliding; }
+        @Override public boolean isCrouching() { return crouching; }
+    }
 }

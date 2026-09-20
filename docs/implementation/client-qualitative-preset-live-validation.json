@@ -1,0 +1,41 @@
+{
+  "scope": "Live qualitative client map-only preset preview/apply/undo and exact settings restoration only",
+  "run_id": "20260909T222438Z-543bb2ec78d0",
+  "run_hash": "7c888bc0fd572da6cdfba3dfc98899a06d3f3d34c18ecde47d9634ed14cd5752",
+  "candidate_sha256": "7aa05ef573a1ab3fdcd8a9f7c0bd291c22ca6fb66ab6cb2fcbb58581862ead20",
+  "receipt_path": "/home/vox/.local/state/lss-rig/runs/20260909T222438Z-543bb2ec78d0/evidence/client-preset-receipt.json",
+  "receipt_sha256": "b9a76c604e5aad234fe318dedb73fcf0d7ad608ed4ea4a08afd7e30bde6be35f",
+  "assertions": {
+    "preview_does_not_mutate": true,
+    "apply_only_changes_reception": true,
+    "xaero_write_preference_preserved": true,
+    "undo_restores_baseline": true,
+    "original_config_bytes_restored": true,
+    "typed_exports_match_effective_values": true
+  },
+  "evidence": {
+    "preset-1-map-only.png": "e0f5804a1b7f18732e1f91c37b3abfc61a2c45f09e629bc9187ecde732cfd5a0",
+    "preset-2-apply.png": "9139f758a47493d6a10083236c7c9777d6ce708ae0b303aa097565df3829661c",
+    "preset-3-export.png": "8f138d1894b65697a99bed651842aa4d34a43dd59cc74360d128c0023b977619",
+    "preset-4-undo.png": "a8fe30f77f8b75b2bbde78d45e50139861bbb449ae934217709aa33fc149d1da",
+    "preset-5-export.png": "70eff7de8a72636c3e582f55a81cf40e34ed7440e78db935d9bf491e62afc7bd",
+    "preset-6-status.png": "268f9d099c47164a563fe3fe740329090cc24197baf94fe20b01669bc38eab16",
+    "preset-applied-config.json": "1515a48f570820ba4bb22ebec962205039c0854604ced30029068b00298fd6ea",
+    "preset-applied-export.json": "fb1d25728d44d870360958786aa8bb773a73e6b43e79d2909fedfdec4c25f963",
+    "preset-before-config.json": "eae91156a8aab9156dc33088bda8bb31904358c5f690d95c1a824a45a14d272b",
+    "preset-final-config.json": "1515a48f570820ba4bb22ebec962205039c0854604ced30029068b00298fd6ea",
+    "preset-final-export.json": "f10a90616a42de58c4a809394d7471fbeea25741a1807d42001e9276f85f7774",
+    "preset-final-restored.png": "3fe7d80381ba60a2451b96ba8a81a513a45389478a87f43b0431718575de5ca3",
+    "preset-off-baseline.png": "c55c08dd1203cb53018db884419aa4693e18f2dd3a5214d53f0f85bbe6707673",
+    "preset-preview-config.json": "eae91156a8aab9156dc33088bda8bb31904358c5f690d95c1a824a45a14d272b",
+    "preset-undone-config.json": "eae91156a8aab9156dc33088bda8bb31904358c5f690d95c1a824a45a14d272b",
+    "preset-undone-export.json": "dce0a0bacce36afeb52c623adb3b20fc0599585908703c51be14e37e4215efe1"
+  },
+  "limitations": [
+    "Real map-only command control only; no map rendering, recipient selection, WI5 or performance claim.",
+    "This enclosing UI attempt failed invisible status foreground text; the independent native chat preset and typed export/config checks passed.",
+    "Voxy rendering was explicitly disabled while Voxy and ingestion remained enabled."
+  ],
+  "enclosing_ui_result": "failed; status text invisible on the newer native zero-alpha text API",
+  "numeric_preset_measurement": "not claimed"
+}

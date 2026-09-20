@@ -33,6 +33,8 @@ set -euo pipefail
 
 PLATFORM="${SOAK_PLATFORM:-fabric}"
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+source "$PROJECT_ROOT/scripts/lib/harness-lock.sh"
+harness_acquire
 CARRY_DIR="$PROJECT_ROOT/soak-results/summary-evicted-carry.$$"
 
 case "$PLATFORM" in
@@ -41,11 +43,11 @@ case "$PLATFORM" in
 esac
 
 log() { echo "[summary-evicted] $*"; }
-cleanup() { rm -rf "$CARRY_DIR"; }
+cleanup() { harness_cleanup; rm -rf "$CARRY_DIR"; }
 trap cleanup EXIT
 
 log "=== phase 1: warm-rejoin-summary (platform=$PLATFORM) ==="
-SOAK_PLATFORM="$PLATFORM" "$PROJECT_ROOT/scripts/soak.sh" warm-rejoin-summary
+SOAK_PLATFORM="$PLATFORM" harness_run_script "$PROJECT_ROOT/scripts/soak.sh" warm-rejoin-summary
 
 rm -rf "$CARRY_DIR"
 mkdir -p "$CARRY_DIR"
@@ -53,6 +55,6 @@ cp -r "$SERVER_RUN_DIR/world" "$CARRY_DIR/world"
 
 log "=== phase 2: evicted-tscache-rejoin (platform=$PLATFORM, carried world) ==="
 SOAK_PLATFORM="$PLATFORM" SOAK_WORLD_FROM="$CARRY_DIR" \
-    "$PROJECT_ROOT/scripts/soak.sh" evicted-tscache-rejoin
+    harness_run_script "$PROJECT_ROOT/scripts/soak.sh" evicted-tscache-rejoin
 
 log "both phases green — the header rung carried an evicted-tscache rejoin"

@@ -116,12 +116,16 @@ public final class FarPlayerBroadcastService {
         int epoch;
         final Map<UUID, Integer> indexByUuid = new HashMap<>();
         int nextIndex;
+        boolean clearPending;
+        boolean rosterPublished;
+        boolean controlFullPending;
         boolean fullRosterPending = true; // subscribe = the first full roster
         long lastFullRosterMillis;
         final Map<UUID, TargetRow> rows = new HashMap<>();
     }
 
     private final Map<UUID, ViewerState> viewers = new HashMap<>();
+    private boolean modeDisabled;
     // Target-privacy prefs retention (service-permission-gate implementation review,
     // 2026-08-27): the TARGET side of the filter reads THIS map, not ViewerState —
     // a viewer removal (the service gate's revocation composite, a NO_CONSUMER
@@ -219,12 +223,45 @@ public final class FarPlayerBroadcastService {
                 + ", bytes=" + bytesSent.get();
     }
 
+    /** Server-owned mode transition/control drain, called even between broadcast ticks.
+     *  Unlike client prefs, server withdrawals bypass the full-roster rate limit.
+     *  No world/player snapshots are needed while disabled. */
+    public boolean applyMode(String mode, FrameSender sender) {
+        boolean disabled = "off".equals(mode);
+        if (disabled != modeDisabled) {
+            modeDisabled = disabled;
+            for (var state : viewers.values()) {
+                state.clearPending = disabled && state.rosterPublished;
+                state.fullRosterPending = true;
+                state.controlFullPending = true;
+            }
+        }
+        if (!disabled) return true;
+        for (var entry : viewers.entrySet()) {
+            var state = entry.getValue();
+            if (!state.clearPending) continue;
+            int nextEpoch = state.epoch + 1;
+            byte[] frame = FarPlayerWire.encodeRoster(
+                    new FarPlayerWire.Roster(nextEpoch, true, List.of(), new int[0]));
+            if (!sender.send(entry.getKey(), LSSConstants.CHANNEL_FAR_PLAYER_ROSTER, frame)) continue;
+            state.epoch = nextEpoch;
+            state.clearPending = false;
+            state.indexByUuid.clear();
+            state.rows.clear();
+            state.nextIndex = 0;
+            state.rosterPublished = true;
+            rosterFramesSent.incrementAndGet();
+            bytesSent.addAndGet(frame.length);
+        }
+        return false;
+    }
+
     // ---- the broadcast tick ----
 
     /**
      * One broadcast pass. The platform calls this every {@code updateIntervalTicks}
-     * server ticks while {@code settings.mode() != "off"} (an "off" mode simply stops
-     * the calls — subscriptions and prefs survive a runtime mode flip).
+     * server ticks while armed. It also calls {@link #applyMode} every tick so an OFF
+     * transition can withdraw rosters without expensive world snapshots.
      *
      * @param nowMillis   wall clock (injected for the rate-bound tests)
      * @param online      every online player's snapshot, built once (O(P))
@@ -233,7 +270,7 @@ public final class FarPlayerBroadcastService {
      */
     public void tick(long nowMillis, List<PlayerSnapshot> online, Settings settings,
                      FrameSender sender) {
-        if (viewers.isEmpty() || "off".equals(settings.mode())) return;
+        if (!applyMode(settings.mode(), sender) || viewers.isEmpty()) return;
         Map<UUID, PlayerSnapshot> byUuid = new HashMap<>(online.size());
         for (var s : online) {
             byUuid.put(s.uuid(), s);
@@ -274,7 +311,8 @@ public final class FarPlayerBroadcastService {
         // at the rate bound; membership diffs are incremental frames otherwise.
         boolean fullSent = false;
         if (state.fullRosterPending
-                && nowMillis - state.lastFullRosterMillis >= FULL_ROSTER_MIN_INTERVAL_MILLIS) {
+                && (state.controlFullPending
+                    || nowMillis - state.lastFullRosterMillis >= FULL_ROSTER_MIN_INTERVAL_MILLIS)) {
             state.epoch++;
             state.indexByUuid.clear();
             state.nextIndex = 0;
@@ -295,7 +333,9 @@ public final class FarPlayerBroadcastService {
                 return;
             }
             state.fullRosterPending = false;
+            state.controlFullPending = false;
             state.lastFullRosterMillis = nowMillis;
+            state.rosterPublished = true;
             rosterFramesSent.incrementAndGet();
             bytesSent.addAndGet(frame.length);
             fullSent = true;
@@ -342,6 +382,7 @@ public final class FarPlayerBroadcastService {
                     state.indexByUuid.remove(gone);
                     state.rows.remove(gone);
                 }
+                state.rosterPublished = true;
                 rosterFramesSent.incrementAndGet();
                 bytesSent.addAndGet(frame.length);
             }

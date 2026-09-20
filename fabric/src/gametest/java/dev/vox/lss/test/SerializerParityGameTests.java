@@ -1,5 +1,7 @@
 package dev.vox.lss.test;
 
+import dev.vox.lss.common.processing.RequestRegistration;
+
 import dev.vox.lss.common.LSSConstants;
 import dev.vox.lss.common.PositionUtil;
 import dev.vox.lss.common.SharedBandwidthLimiter;
@@ -52,6 +54,12 @@ import java.util.concurrent.atomic.AtomicReference;
  * </ul>
  */
 public class SerializerParityGameTests {
+    private static final java.util.Map<UUID, RequestRegistration> TEST_REGISTRATIONS =
+            new java.util.concurrent.ConcurrentHashMap<>();
+    private static RequestRegistration registration(UUID uuid) {
+        return TEST_REGISTRATIONS.computeIfAbsent(uuid, ignored -> new RequestRegistration());
+    }
+
 
     /** Distinct far-away chunk offsets per test so concurrently running batch tests never share state. */
     private static final int PARITY_CHUNK_OFFSET = 64;
@@ -126,7 +134,7 @@ public class SerializerParityGameTests {
 
         var reader = new ChunkDiskReader(1, false);
         var readerId = UUID.randomUUID();
-        reader.registerPlayer(readerId);
+        reader.registerPlayer(readerId, registration(readerId));
         var step = new AtomicInteger();
         var diskBytes = new AtomicReference<byte[]>();
 
@@ -141,7 +149,7 @@ public class SerializerParityGameTests {
                     // The unload save may still sit in the unload queue; saveAllChunks drains it
                     // and flushes storage so the region state is final before the read.
                     level.save(null, true, false);
-                    reader.submitReadDirect(readerId, LSSConstants.DIM_STR_OVERWORLD, level, cx, cz, 0, 0L);
+                    reader.submitReadDirect(readerId, registration(readerId), LSSConstants.DIM_STR_OVERWORLD, level, cx, cz, 0, 0L);
                     step.set(1);
                     Gt.assertTrue(helper, false, "disk read submitted, awaiting result");
                 }
@@ -218,7 +226,7 @@ public class SerializerParityGameTests {
 
         var reader = new ChunkDiskReader(1, false);
         var readerId = UUID.randomUUID();
-        reader.registerPlayer(readerId);
+        reader.registerPlayer(readerId, registration(readerId));
         var step = new AtomicInteger();
         var diskBytes = new AtomicReference<byte[]>();
         var maskedLive = new AtomicReference<byte[]>();
@@ -235,7 +243,7 @@ public class SerializerParityGameTests {
                     // a throwing submit cannot leave "on" published across ticks.
                     XrayMaskManager.activate(maskedConfig);
                     try {
-                        reader.submitReadDirect(readerId, LSSConstants.DIM_STR_OVERWORLD, level, cx, cz, 0, 0L);
+                        reader.submitReadDirect(readerId, registration(readerId), LSSConstants.DIM_STR_OVERWORLD, level, cx, cz, 0, 0L);
                     } finally {
                         XrayMaskManager.activate(LSSServerConfig.CONFIG);
                     }
@@ -310,14 +318,18 @@ public class SerializerParityGameTests {
         var background = new ChunkDiskReader(1, true);
         var fgId = UUID.randomUUID();
         var bgId = UUID.randomUUID();
-        foreground.registerPlayer(fgId);
-        background.registerPlayer(bgId);
+        foreground.registerPlayer(fgId, registration(fgId));
+        background.registerPlayer(bgId, registration(bgId));
         var step = new AtomicInteger();
         // Each result is polled exactly once and cached: succeedWhen re-runs this block on every
         // retry tick, and a reader's queue is gone once it is shut down, so re-polling would turn
         // a genuine byte-mismatch failure into an NPE on the following tick.
         var fgResult = new AtomicReference<ChunkReadResult>();
         var bgResult = new AtomicReference<ChunkReadResult>();
+        var nativeSavedRead = new AtomicReference<java.util.concurrent.CompletableFuture<
+                java.util.Optional<net.minecraft.nbt.CompoundTag>>>();
+        var nativeReadyDeadline = new java.util.concurrent.atomic.AtomicLong();
+        var nativeReadyStatus = new AtomicReference<String>("not yet read");
 
         helper.succeedWhen(() -> {
             Gt.assertTrue(helper, helper.getTick() >= 6, "waiting for the ticket release");
@@ -326,10 +338,50 @@ public class SerializerParityGameTests {
                     Gt.assertTrue(helper, chunkSource.getChunkNow(cx, cz) == null,
                             "waiting for the chunk to unload");
                     level.save(null, true, false);
-                    foreground.submitReadDirect(fgId, LSSConstants.DIM_STR_OVERWORLD, level, cx, cz, 0, 0L);
-                    background.submitReadDirect(bgId, LSSConstants.DIM_STR_OVERWORLD, level, cx, cz, 0, 0L);
-                    step.set(1);
-                    Gt.assertTrue(helper, false, "foreground + background reads submitted");
+                    // C2ME can remove a loaded holder before its asynchronous save is visible.
+                    // Establish the saved-FULL premise before either LSS read, without retrying
+                    // a failed LSS result. The native readiness phase is bounded in wall time.
+                    nativeReadyDeadline.set(System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(10));
+                    step.set(10);
+                    Gt.assertTrue(helper, false, "awaiting native saved-FULL readiness");
+                }
+                case 10 -> {
+                    Gt.assertTrue(helper, System.nanoTime() < nativeReadyDeadline.get(),
+                            "native saved-FULL readiness deadline exceeded for " + cx + "," + cz
+                                    + ": " + nativeReadyStatus.get());
+                    if (nativeSavedRead.get() == null) {
+                        var map = ((dev.vox.lss.mixin.AccessorServerChunkCache) chunkSource).getChunkMap();
+                        nativeSavedRead.set(map.read(chunkPos));
+                    }
+                    var pending = nativeSavedRead.get();
+                    if (pending.isCompletedExceptionally()) {
+                        // An I/O error is not an absent save and must not be retried as readiness.
+                        try { pending.join(); }
+                        catch (java.util.concurrent.CompletionException | java.util.concurrent.CancellationException failure) {
+                            helper.fail("native saved-FULL readiness read failed: " + failure);
+                        }
+                    }
+                    if (pending.isDone()) {
+                        var tag = pending.join();
+                        String status = tag.isPresent() ? tag.get().getStringOr("Status", "missing") : "absent";
+                        nativeReadyStatus.set(status);
+                        if (tag.isPresent() && net.minecraft.world.level.chunk.status.ChunkStatus.byName(status)
+                                == net.minecraft.world.level.chunk.status.ChunkStatus.FULL) {
+                            foreground.submitReadDirect(fgId, registration(fgId), LSSConstants.DIM_STR_OVERWORLD, level, cx, cz, 0, 0L);
+                            background.submitReadDirect(bgId, registration(bgId), LSSConstants.DIM_STR_OVERWORLD, level, cx, cz, 0, 0L);
+                            step.set(1);
+                            Gt.assertTrue(helper, false, "foreground + background reads submitted");
+                        }
+                        nativeSavedRead.set(null);
+                    }
+                    // Unthrottled GameTest ticks otherwise exhaust the budget while real I/O
+                    // is still pending. This wait applies only to the native save premise.
+                    try { Thread.sleep(50); }
+                    catch (InterruptedException interrupted) {
+                        Thread.currentThread().interrupt();
+                        helper.fail("native saved-FULL readiness wait interrupted");
+                    }
+                    Gt.assertTrue(helper, false, "waiting for native saved-FULL readiness: " + nativeReadyStatus.get());
                 }
                 case 1 -> {
                     if (fgResult.get() == null) {
@@ -338,7 +390,8 @@ public class SerializerParityGameTests {
                     var fg = fgResult.get();
                     Gt.assertTrue(helper, fg != null, "waiting for the foreground read result");
                     Gt.assertTrue(helper, !fg.notFound() && !fg.saturated() && fg.sectionBytes() != null,
-                            "foreground read of the saved superflat chunk must return content");
+                            "foreground read of the saved superflat chunk must return content: " + fg
+                                    + "; reader=" + foreground.getDiagnostics());
                     // Shut down only once this reader's result is validated: shutdown() clears the
                     // player-results map, so an earlier call would strand a retried assertion.
                     foreground.shutdown();
@@ -357,11 +410,25 @@ public class SerializerParityGameTests {
                     // the SPLIT path from a silently-inert dispatcher falling back to the
                     // full-read closure — the identical bytes are the point. The counter
                     // proves the raw fetch actually served this read.
-                    Gt.assertTrue(helper, background.rawServesForTest() > 0,
-                            "the split raw path must have served the background read"
-                                    + " (raw_serves=0 means the dispatcher went inert)");
-                    Gt.assertTrue(helper, background.getDiagnostics().contains("read_path=bg-split"),
-                            "the split's diag receipt must be visible");
+                    if (net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("c2me")) {
+                        // The C2ME runtime profiles replace IOWorker: its vanilla executor
+                        // is absent, so the intended protected route is adaptive fallback.
+                        // Do not select this arm merely because the raw dispatcher is idle:
+                        // vanilla must retain the raw-path liveness receipt below.
+                        Gt.assertTrue(helper, background.adaptiveThrottleLimitOrDisabled() > 0,
+                                "C2ME's replacement IO must engage adaptive read protection: "
+                                        + background.getDiagnostics());
+                        Gt.assertTrue(helper, background.getDiagnostics().contains("read_throttle=ENGAGED")
+                                        && !background.getDiagnostics().contains("read_path=bg-split")
+                                        && background.rawServesForTest() == 0,
+                                "C2ME fallback must report its actual route: " + background.getDiagnostics());
+                    } else {
+                        Gt.assertTrue(helper, background.rawServesForTest() > 0,
+                                "the split raw path must have served the background read"
+                                        + " (raw_serves=0 means the dispatcher went inert)");
+                        Gt.assertTrue(helper, background.getDiagnostics().contains("read_path=bg-split"),
+                                "the split's diag receipt must be visible");
+                    }
                     background.shutdown();
                     Gt.assertTrue(helper, Arrays.equals(fgResult.get().sectionBytes(), bg.sectionBytes()),
                             describeMismatch(fgResult.get().sectionBytes(), bg.sectionBytes()));
@@ -505,8 +572,8 @@ public class SerializerParityGameTests {
 
         var reader = new ChunkDiskReader(1, false);
         var readerId = UUID.randomUUID();
-        reader.registerPlayer(readerId);
-        reader.submitReadDirect(readerId, LSSConstants.DIM_STR_THE_END, endLevel, cx, cz, 0, 0L);
+        reader.registerPlayer(readerId, registration(readerId));
+        reader.submitReadDirect(readerId, registration(readerId), LSSConstants.DIM_STR_THE_END, endLevel, cx, cz, 0, 0L);
 
         var result = new AtomicReference<dev.vox.lss.common.processing.ChunkReadResult>();
         helper.succeedWhen(() -> {
@@ -552,7 +619,7 @@ public class SerializerParityGameTests {
 
         var reader = new ChunkDiskReader(1, false);
         var readerId = UUID.randomUUID();
-        reader.registerPlayer(readerId);
+        reader.registerPlayer(readerId, registration(readerId));
         var step = new AtomicInteger();
         var baseline = new AtomicReference<byte[]>();
 
@@ -561,7 +628,7 @@ public class SerializerParityGameTests {
             switch (step.get()) {
                 case 0 -> {
                     level.save(null, true, false);
-                    reader.submitReadDirect(readerId, LSSConstants.DIM_STR_OVERWORLD, level, cx, cz, 0, 0L);
+                    reader.submitReadDirect(readerId, registration(readerId), LSSConstants.DIM_STR_OVERWORLD, level, cx, cz, 0, 0L);
                     step.set(1);
                     Gt.assertTrue(helper, false, "baseline read submitted");
                 }
@@ -577,7 +644,7 @@ public class SerializerParityGameTests {
                             ? Blocks.COBBLESTONE : Blocks.STONE;
                     level.setBlock(editPos, edit.defaultBlockState(), 3);
                     level.save(null, true, false);
-                    reader.submitReadDirect(readerId, LSSConstants.DIM_STR_OVERWORLD, level, cx, cz, 1, 0L);
+                    reader.submitReadDirect(readerId, registration(readerId), LSSConstants.DIM_STR_OVERWORLD, level, cx, cz, 1, 0L);
                     step.set(2);
                     Gt.assertTrue(helper, false, "post-edit read submitted");
                 }
@@ -718,7 +785,8 @@ public class SerializerParityGameTests {
             switch (step.get()) {
                 case 0 -> {
                     var chunk = level.getChunk(cx, cz);
-                    var built = SectionSerializer.serializeColumn(level, chunk, cx, cz);
+                    var capture = proc.captureLoadedProbe(dim, packed, state.registration());
+                    var built = capture.bind(SectionSerializer.serializeColumn(level, chunk, cx, cz));
                     Gt.assertTrue(helper, built.serializedSections() != null,
                             "premise: the superflat column serves non-air content first");
                     GameTestSeeding.seedRequest(state, packed, -1L);
@@ -742,14 +810,16 @@ public class SerializerParityGameTests {
                             }
                         }
                     }
-                    var chunk = level.getChunk(cx, cz);
-                    var emptied = SectionSerializer.serializeColumn(level, chunk, cx, cz);
-                    Gt.assertTrue(helper, emptied.serializedSections() == null,
-                            "premise: the stripped column must serialize as all-air");
-                    // Broadcaster-equivalent dirty events, then the client's re-request with
-                    // its stored stamp; all posted before one snapshot = one mailbox take.
+                    // Queue the completed mutation's invalidation before capturing a fresh probe.
                     proc.invalidateTimestamps(dim, new long[]{packed});
                     proc.clearDiskReadDone(uuid, new long[]{packed});
+                    var chunk = level.getChunk(cx, cz);
+                    var capture = proc.captureLoadedProbe(dim, packed, state.registration());
+                    var emptied = capture.bind(SectionSerializer.serializeColumn(level, chunk, cx, cz));
+                    Gt.assertTrue(helper, emptied.serializedSections() == null,
+                            "premise: the stripped column must serialize as all-air");
+                    // Client re-request with its stored stamp; invalidation and fresh probe
+                    // remain posted before one snapshot = one mailbox take.
                     GameTestSeeding.seedRequest(state, packed, LSSConstants.epochSeconds() + 10_000);
                     Long2ObjectMap<LoadedColumnData> probes = new Long2ObjectOpenHashMap<>();
                     probes.put(packed, emptied);
@@ -859,7 +929,7 @@ public class SerializerParityGameTests {
         var reader = new ChunkDiskReader(1, false, true);
         reader.attachStore(store);
         var readerId = UUID.randomUUID();
-        reader.registerPlayer(readerId);
+        reader.registerPlayer(readerId, registration(readerId));
         var step = new AtomicInteger();
         var nbtBytes = new AtomicReference<byte[]>();
 
@@ -880,7 +950,7 @@ public class SerializerParityGameTests {
                     // First read: the store is empty, so this is the NBT path (the
                     // deposit source in production rides the delivery path; here the
                     // test deposits the same bytes directly).
-                    reader.submitReadDirect(readerId, dim, level, cx, cz, 0, 0L);
+                    reader.submitReadDirect(readerId, registration(readerId), dim, level, cx, cz, 0, 0L);
                     step.set(1);
                     Gt.assertTrue(helper, false, "NBT read submitted, awaiting result");
                 }
@@ -899,7 +969,7 @@ public class SerializerParityGameTests {
                 case 2 -> {
                     Gt.assertTrue(helper, store.get(dim, packed) != null,
                             "waiting for the deposit to commit (batcher)");
-                    reader.submitReadDirect(readerId, dim, level, cx, cz, 1, 0L);
+                    reader.submitReadDirect(readerId, registration(readerId), dim, level, cx, cz, 1, 0L);
                     step.set(3);
                     Gt.assertTrue(helper, false, "store-rung read submitted, awaiting result");
                 }

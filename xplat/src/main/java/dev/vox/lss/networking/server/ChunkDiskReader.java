@@ -1,5 +1,7 @@
 package dev.vox.lss.networking.server;
 
+import dev.vox.lss.common.processing.RequestRegistration;
+
 import dev.vox.lss.common.Brand;
 import dev.vox.lss.common.LSSLogger;
 import dev.vox.lss.common.processing.AbstractChunkDiskReader;
@@ -101,7 +103,7 @@ public class ChunkDiskReader extends AbstractChunkDiskReader {
         this.useSelectiveNbtParse = useSelectiveNbtParse;
     }
 
-    public void submitReadDirect(UUID playerUuid, String dimension, ServerLevel level,
+    public void submitReadDirect(UUID playerUuid, RequestRegistration registration, String dimension, ServerLevel level,
                                   int chunkX, int chunkZ, long submissionOrder,
                                   long clientTimestamp) {
         var registryAccess = level.registryAccess();
@@ -115,14 +117,14 @@ public class ChunkDiskReader extends AbstractChunkDiskReader {
         // would serve this read; every other rung keeps the ChunkNbtRead ladder unchanged.
         var raw = chooseRawReadOrNull(level, chunkMap);
         if (raw != null) {
-            submitRead(playerUuid, chunkX, chunkZ, dimension, submissionOrder, clientTimestamp,
+            submitRead(playerUuid, registration, chunkX, chunkZ, dimension, submissionOrder, clientTimestamp,
                     () -> NbtSectionSerializer.readAndSerializeSections(raw, registryAccess, chunkX, chunkZ,
                             maskEntry, minSectionY, maxSectionY, this.useNbtTranscode,
                             this.useSelectiveNbtParse));
             return;
         }
         NbtSectionSerializer.ChunkNbtRead read = chooseReadPath(level, chunkMap);
-        submitRead(playerUuid, chunkX, chunkZ, dimension, submissionOrder, clientTimestamp,
+        submitRead(playerUuid, registration, chunkX, chunkZ, dimension, submissionOrder, clientTimestamp,
                 () -> NbtSectionSerializer.readAndSerializeSections(read, registryAccess, chunkX, chunkZ,
                         maskEntry, minSectionY, maxSectionY, this.useNbtTranscode));
     }

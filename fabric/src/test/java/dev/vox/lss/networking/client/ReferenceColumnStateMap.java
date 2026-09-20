@@ -340,6 +340,22 @@ class ReferenceColumnStateMap {
         return new long[]{newly, fully ? 1 : 0};
     }
 
+    /** Loss of evidence revokes only positions whose proof came from a summary. */
+    int revokeTileSummaryProof(int tileX, int tileZ, java.util.function.LongConsumer revokedOut) {
+        int count = 0;
+        var iterator = this.summaryValidated.iterator();
+        while (iterator.hasNext()) {
+            long packed = iterator.nextLong();
+            if ((PositionUtil.unpackX(packed) >> 5) != tileX
+                    || (PositionUtil.unpackZ(packed) >> 5) != tileZ) continue;
+            iterator.remove();
+            this.validated.remove(packed);
+            count++;
+            if (revokedOut != null) revokedOut.accept(packed);
+        }
+        return count;
+    }
+
     /** Twin of {@code ColumnStateMap.ratchetStamp} — pure monotonic ts advance on an
      *  existing positive, mark-free stamp (stamped-up-to-date-plan.md §4). */
     boolean ratchetStamp(long packed, long second) {

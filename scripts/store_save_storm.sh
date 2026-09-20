@@ -19,6 +19,8 @@ set -euo pipefail
 # zero-read re-serve leg + suppression pin.
 
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+source "$PROJECT_ROOT/scripts/lib/harness-lock.sh"
+harness_acquire
 RESULTS_ROOT="$PROJECT_ROOT/soak-results"
 WRAPPER_START_EPOCH="$(date +%s)"
 
@@ -35,14 +37,14 @@ latest_results() { # <scenario>
 }
 
 log "=== arm: store-save-storm (lodStore=full, gated) ==="
-"$PROJECT_ROOT/scripts/soak.sh" store-save-storm
+harness_run_script "$PROJECT_ROOT/scripts/soak.sh" store-save-storm
 ON_DIR="$(latest_results store-save-storm)"
 log "=== arm: store-save-storm-off (lodStore=off, MSPT pair) ==="
 # env -u: the burn-in lever (SOAK_LODSTORE_OVERRIDE=full) rewrites EVERY staged
 # config's lodStore — inherited here it silently turns the off arm into full-vs-full
 # and the CPU pairing measures nothing (4-agent round R4). The on arm may inherit it
 # (full is what it pins anyway); the off arm must not.
-env -u SOAK_LODSTORE_OVERRIDE -u SOAK_LODSTORE_BACKFILL_OVERRIDE "$PROJECT_ROOT/scripts/soak.sh" store-save-storm-off
+harness_run_script env -u SOAK_LODSTORE_OVERRIDE -u SOAK_LODSTORE_BACKFILL_OVERRIDE "$PROJECT_ROOT/scripts/soak.sh" store-save-storm-off
 OFF_DIR="$(latest_results store-save-storm-off)"
 
 log "paired storm-window verdict (process CPU + cadence hold)"

@@ -17,6 +17,87 @@ import java.util.concurrent.CompletableFuture;
 import java.util.function.IntSupplier;
 
 public class LodRequestManager {
+    private volatile boolean acquisitionActive = true;
+    private long deliverySequence;
+    private long deliveryDimensionGeneration;
+    // Compact receipt versions follow the same dimension/range bound as column state.
+    private final it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap deliveryVersions =
+            new it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap();
+    // Only pending receipts retain objects: the decode queue and bounded consumer leases.
+    private final java.util.Set<ColumnDelivery> pendingDeliveries =
+            java.util.concurrent.ConcurrentHashMap.newKeySet();
+    private final it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<ColumnDelivery> latestPendingDelivery =
+            new it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<>();
+    java.util.function.Consumer<Runnable> deliveryExecutor = ClientNetGlue::executeDeliveryEvent;
+
+    boolean isAcquisitionActive() { return this.acquisitionActive; }
+    void executeDeliveryEvent(Runnable event) { this.deliveryExecutor.accept(event); }
+
+    ColumnDelivery trackDelivery(ResourceKey<Level> dimension, long packed, long preClearStamp) {
+        if (!this.acquisitionActive || !dimension.equals(this.lastDimension)) return null;
+        long version = ++this.deliverySequence;
+        this.deliveryVersions.put(packed, version);
+        var receipt = new ColumnDelivery(this, dimension, packed, version,
+                this.deliveryDimensionGeneration, preClearStamp, this.serverAddress);
+        this.pendingDeliveries.add(receipt);
+        this.latestPendingDelivery.put(packed, receipt);
+        return receipt;
+    }
+
+    long contentStampBeforeDelivery(long packed) {
+        var pending = this.latestPendingDelivery.get(packed);
+        return pending != null && !pending.accepted() ? pending.preClearStamp : this.columns.timestampFor(packed);
+    }
+
+    private boolean currentDelivery(ColumnDelivery receipt) {
+        return receipt.dimensionGeneration == this.deliveryDimensionGeneration
+                && this.deliveryVersions.get(receipt.packed) == receipt.version;
+    }
+
+    void onDeliveryFailed(ColumnDelivery receipt) {
+        if (!receipt.isActive()) return; // cancellation may overtake the posted report event
+        if (currentDelivery(receipt)) {
+            onIngestFailure(receipt.dimension, receipt.packed);
+        } else if (!receipt.dimension.equals(this.lastDimension) && receipt.bucket != null) {
+            // A still-active manager may receive a deferred failure for a departed
+            // dimension. Use its captured bucket, never the current world's key.
+            ColumnCacheStore.removeAsync(receipt.bucket, receipt.dimension, receipt.packed);
+        }
+    }
+
+    void finishDelivery(ColumnDelivery receipt) {
+        if (receipt.settled()) {
+            this.pendingDeliveries.remove(receipt);
+            this.latestPendingDelivery.remove(receipt.packed, receipt);
+        }
+    }
+
+    void cancelDelivery(ColumnDelivery receipt) {
+        receipt.cancel(); // a dimension transition keeps the manager alive, not this receipt
+        if (!currentDelivery(receipt)) return;
+        this.deliveryVersions.remove(receipt.packed);
+        if (receipt.accepted()) return;
+        this.tracker.removeByPosition(receipt.packed);
+        this.columns.onIngestCancelled(receipt.packed, receipt.preClearStamp);
+        if (this.pendingCacheLoad != null) {
+            // The file-wins load must not restore the receipt that OFF just cancelled.
+            this.cancelledDuringCacheLoad.put(receipt.packed, receipt.preClearStamp);
+        }
+    }
+
+    void cancelOutstandingDeliveries() {
+        for (var receipt : this.pendingDeliveries) cancelDelivery(receipt);
+        this.pendingDeliveries.clear();
+        this.latestPendingDelivery.clear();
+    }
+
+    void retireAcquisition() {
+        this.acquisitionActive = false;
+        cancelOutstandingDeliveries(); // before cache detach, including an already-polled callback
+    }
+
+    private final it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap cancelledDuringCacheLoad =
+            new it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap();
 
     // Log-sweep hygiene (2026-08-13): per-column/per-frame failure sites aggregate to
     // one line/min — a persistent condition must not flood the client log.
@@ -452,7 +533,9 @@ public class LodRequestManager {
     }
 
     /** The explicit backpressure clear: an empty want-set replaces the server backlog with nothing. */
-    private void sendClearBatch() {
+    boolean withdrawWants() { return sendClearBatch(); }
+
+    private boolean sendClearBatch() {
         if (ClientTraceLog.enabled()) ClientTraceLog.event("clear_batch", "");
         try {
             this.batchSender.send(new BatchChunkRequestC2SPayload(new long[0], new long[0], 0));
@@ -462,6 +545,7 @@ public class LodRequestManager {
             // bypasses tickScanPhase would leave "lastSentCount == what was declared"
             // false and invite a fast re-declare storm right out of the halt.
             this.scanner.noteDeclared(0);
+            return true;
         } catch (Exception e) {
             long n = BATCH_SEND_FAIL_WARN.recordAndTryAcquire(System.nanoTime() / 1_000_000);
             if (n > 0) {
@@ -470,6 +554,7 @@ public class LodRequestManager {
                         + " tick)", e);
             }
             this.backpressureClearSent = false; // retry on the next halted tick
+            return false;
         }
     }
 
@@ -517,6 +602,8 @@ public class LodRequestManager {
                     Math.abs(playerCz - this.lastPruneChunkZ)) >= PRUNE_HYSTERESIS_CHUNKS) {
                 int pruneDistance = this.scanner.getPruneDistance();
                 this.columns.pruneOutOfRange(playerCx, playerCz, pruneDistance);
+                this.deliveryVersions.keySet().removeIf((java.util.function.LongPredicate) p ->
+                        PositionUtil.isOutOfRange(p, playerCx, playerCz, pruneDistance));
                 this.tracker.pruneOutOfRange(playerCx, playerCz, pruneDistance);
                 // Pruned in-flight requests will never get a tracked answer — drop their RTT
                 // stamps with them or they orphan toward the sampling cap.
@@ -579,6 +666,10 @@ public class LodRequestManager {
                 }
             } catch (Exception ignored) {}
             this.pendingCacheLoad = null;
+            for (var entry : this.cancelledDuringCacheLoad.long2LongEntrySet()) {
+                this.columns.onIngestCancelled(entry.getLongKey(), entry.getLongValue());
+            }
+            this.cancelledDuringCacheLoad.clear();
             if (!this.failuresDuringCacheLoad.isEmpty()) {
                 // Failures reported during the load: the load may have just resurrected their
                 // stale stamps — re-apply so the positions unstamp and re-request honestly.
@@ -881,10 +972,12 @@ public class LodRequestManager {
                     // the harness honesty legs on tiles_unknown stay sharp — a summary
                     // window legitimately covers many never-generated regions.
                     this.summaryTilesNoRegion++;
+                    this.columns.revokeTileSummaryProof(tx, tz, revokedOut);
                     continue;
                 }
                 if (stamp == dev.vox.lss.common.region.RegionSummaryWire.STAMP_NEVER_CLEAN) {
                     this.summaryTilesUnknown++;
+                    this.columns.revokeTileSummaryProof(tx, tz, revokedOut);
                     continue;
                 }
                 var outcome = this.columns.applyTileValidation(tx, tz, stamp, revokedOut);
@@ -1176,6 +1269,10 @@ public class LodRequestManager {
     }
 
     private void resetRequestState() {
+        this.deliveryDimensionGeneration++;
+        this.latestPendingDelivery.clear();
+        this.deliveryVersions.clear();
+        this.cancelledDuringCacheLoad.clear();
         this.columns.clear();
         this.tracker.clear();
         this.metrics.reset();
@@ -1191,6 +1288,7 @@ public class LodRequestManager {
     }
 
     public void disconnect() {
+        retireAcquisition();
         this.tracker.clear();
         this.governor.reset(); // the reset-family convention (teardown is self-sufficient)
         // Defensive disarm: the manager is normally dropped right after, but the session
@@ -1201,6 +1299,12 @@ public class LodRequestManager {
 
     public void saveCache() {
         if (this.serverAddress == null || this.lastDimension == null) return;
+        for (var entry : this.cancelledDuringCacheLoad.long2LongEntrySet()) {
+            if (entry.getLongValue() <= 0) {
+                ColumnCacheStore.removeAsync(this.serverAddress, this.lastDimension, entry.getLongKey());
+            }
+        }
+        this.cancelledDuringCacheLoad.clear();
         // Abandoned load window: failures buffered while this dimension's cache load was
         // still in flight were never re-applied (tickCacheGatePhase won't run for it again —
         // this save precedes a dimension change or disconnect). Their in-memory apply was

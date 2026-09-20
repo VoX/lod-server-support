@@ -1,5 +1,5 @@
 plugins {
-    // 1.21.11 line: the classic remap toolchain — the 26.x fabric-loom consumes
+    // 1.21.10 line: the classic remap toolchain — the 26.x fabric-loom consumes
     // mojang-mapped jars directly, but 1.21.x needs loom-remap + officialMojangMappings.
     id 'net.fabricmc.fabric-loom-remap' version "${loom_version}"
 }
@@ -54,9 +54,11 @@ configurations {
     }
 }
 
+apply from: rootProject.file('gradle/c2me-dev-runtime.gradle')
+
 dependencies {
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
-    // 1.21.11 line: loom-remap needs explicit mappings + mod-aware dependency scopes
+    // 1.21.10 line: loom-remap needs explicit mappings + mod-aware dependency scopes
     // (the 26.x fabric-loom consumes mojang-mapped jars directly with plain scopes).
     mappings loom.officialMojangMappings()
     modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
@@ -124,7 +126,8 @@ dependencies {
     // silently never fired there. Runtime-only: release jars and normal builds are unaffected.
     if ((findProperty('benchmark.c2me') ?: 'false').toString() == 'true') {
         // 1.21.10 line: c2me-fabric 0.3.6+alpha.0.11+1.21.10
-        localRuntime "maven.modrinth:c2me-fabric:0.3.6+alpha.0.11+1.21.10"
+        def c2meArtifact = "maven.modrinth:c2me-fabric:0.3.6+alpha.0.11+1.21.10"
+        project.addC2meDevRuntime(c2meArtifact, 21)
     }
 }
 
@@ -302,7 +305,7 @@ processResources {
 }
 
 tasks.withType(JavaCompile).configureEach {
-    // 1.21.11 line: MC 1.21.x targets Java 21 (the 26.x lines target 25).
+    // 1.21.10 line: MC 1.21.x targets Java 21 (the 26.x lines target 25).
     it.options.release = 21
 }
 
@@ -356,6 +359,9 @@ tasks.register('slimStoreDepJars') {
                         }
                         // Directory entries for stripped dirs are harmless; copy all.
                         def ne = new ZipEntry(e.name)
+                        // Two seconds past the ZIP epoch avoids the JDK minimum-date sentinel
+                        // that emits a timezone-dependent extended timestamp.
+                        ne.setTimeLocal(java.time.LocalDateTime.of(1980, 1, 1, 0, 0, 2))
                         ne.method = e.method
                         if (e.method == ZipEntry.STORED) {
                             ne.size = e.size
@@ -366,7 +372,9 @@ tasks.register('slimStoreDepJars') {
                         zf.getInputStream(e).withCloseable { is -> zos << is }
                         zos.closeEntry()
                     }
-                    zos.putNextEntry(new ZipEntry('fabric.mod.json'))
+                    def descriptorEntry = new ZipEntry('fabric.mod.json')
+                    descriptorEntry.setTimeLocal(java.time.LocalDateTime.of(1980, 1, 1, 0, 0, 2))
+                    zos.putNextEntry(descriptorEntry)
                     zos.write(groovy.json.JsonOutput.toJson([
                             schemaVersion: 1, id: modId, version: version,
                             name: "${name} (LSS LOD store)".toString(),
@@ -521,3 +529,6 @@ tasks.register('vssJar') {
 }
 
 tasks.named('build') { dependsOn 'vssJar' }
+
+// Shared pure test seam; never part of shipping artifacts.
+dependencies { testImplementation(testFixtures(project(':common'))) }

@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "id": "mc12110-neoforge-server-smoke",
+  "line": "1.21.10",
+  "platform": "neoforge",
+  "route": "native",
+  "status": "unverified",
+  "components": [
+    {
+      "uid": "net.minecraft",
+      "version": "1.21.10"
+    },
+    {
+      "uid": "net.neoforged",
+      "version": "21.10.64"
+    },
+    {
+      "uid": "java",
+      "version": "21"
+    }
+  ],
+  "artifacts": [
+    {
+      "id": "neoforge-installer",
+      "version": "21.10.64",
+      "file": "neoforge-21.10.64-installer.jar",
+      "sha256": "6adb1f063358b22b050834323a4f68df47c93d082bc49a8a0a97aec22b789427",
+      "source": "https://maven.neoforged.net/releases/net/neoforged/neoforge/21.10.64/neoforge-21.10.64-installer.jar",
+      "metadata": {},
+      "kind": "server",
+      "enabled": true
+    }
+  ],
+  "capabilities": [
+    "native-server",
+    "handshake",
+    "store"
+  ],
+  "limitations": [
+    "Production installer dependency preparation; no live smoke acceptance yet."
+  ]
+}

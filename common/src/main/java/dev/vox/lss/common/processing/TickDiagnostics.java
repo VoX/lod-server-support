@@ -35,6 +35,7 @@ public class TickDiagnostics {
     // Folia (2026-08-05 review H3 — the PaperChunkGenerationService house rule: counters
     // a command renders must be JMM-visible off the writer thread).
     private volatile long totalSectionsSent;
+    private volatile long totalCorrectiveColumnsSent;
     private volatile long totalBytesSent;
     private volatile long totalWireBytesSent;
 
@@ -105,6 +106,10 @@ public class TickDiagnostics {
     public void recordWireSent(int wireBytes) {
         this.totalWireBytesSent += wireBytes;
     }
+
+    /** Subset of actual successful column sends, never enqueue/drop counts. */
+    public void recordCorrectiveColumnSent() { this.totalCorrectiveColumnsSent++; }
+    public long getTotalCorrectiveColumnsSent() { return this.totalCorrectiveColumnsSent; }
 
     public long getTotalSectionsSent() { return this.totalSectionsSent; }
     public long getTotalBytesSent() { return this.totalBytesSent; }

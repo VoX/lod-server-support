@@ -547,7 +547,7 @@ class RegionProbeSchedulingTest {
         var state = service.registerPlayer(player, 1);
         offer(state, new IncomingRequest(3, 3, 0), new IncomingRequest(4, 4, -1));
         genService.nextTick = List.of(new TickSnapshot.GenerationReadyData(
-                uuid, 3, 3, "minecraft:overworld", column(3, 3), 1L, 1L));
+                uuid, state.registration(), 3, 3, "minecraft:overworld", column(3, 3), 1L, 1L));
 
         service.tick();
         scheduledTasks.get(0).run();
@@ -568,7 +568,7 @@ class RegionProbeSchedulingTest {
         scheduledTasks.get(0).run();       // batch = {(3,3), (4,4)}
 
         genService.nextTick = List.of(new TickSnapshot.GenerationReadyData(
-                uuid, 3, 3, "minecraft:overworld", column(3, 3), 1L, 2L));
+                uuid, state.registration(), 3, 3, "minecraft:overworld", column(3, 3), 1L, 2L));
         service.tick();
 
         var probes = probesInLastSnapshot(uuid);
@@ -722,4 +722,83 @@ class RegionProbeSchedulingTest {
                                 .containsKey(PositionUtil.packPosition(1, 0)));
         assertTrue(aServed, "the surviving player's probes still flow");
     }
+
+    private boolean currentProbe(LoadedColumnData data,PaperPlayerRequestState state) throws Exception {
+        var method=dev.vox.lss.common.processing.OffThreadProcessor.class.getDeclaredMethod("currentLoadedProbe",
+                LoadedColumnData.class,String.class,long.class,dev.vox.lss.common.processing.AbstractPlayerRequestState.class);
+        method.setAccessible(true);
+        return (boolean)method.invoke(processor,data,"minecraft:overworld",PositionUtil.packPosition(data.cx(),data.cz()),state);
+    }
+
+    @Test
+    void regionCapturePrecedesSerializationAndDoesNotRefreshAtPublication() throws Exception {
+        var uuid=UUID.randomUUID();var state=service.registerPlayer(playerIn(uuid,level(Level.OVERWORLD)),1);
+        long packed=PositionUtil.packPosition(6,6);
+        service.setLoadedColumnProbe((level,cx,cz)->{
+            processor.invalidateTimestamps("minecraft:overworld",new long[]{packed},null);
+            return column(cx,cz);
+        });
+        offer(state,new IncomingRequest(6,6,-1));service.tick();scheduledTasks.get(0).run();service.tick();
+        var data=probesInLastSnapshot(uuid).get(packed);
+        assertNotNull(data.probeCapture());assertFalse(currentProbe(data,state),"serialization-time invalidation survives publication");
+        assertNotNull(state.peekIncomingBatch(),"one-tick release remains unconditional even when probe is stale");
+    }
+
+    @Test
+    void synchronousCapturePrecedesSerializerAndFreshCaptureRemainsUsable() throws Exception {
+        service.setRegionizedProbing(false);
+        var uuid=UUID.randomUUID();var state=service.registerPlayer(playerIn(uuid,level(Level.OVERWORLD)),1);
+        long packed=PositionUtil.packPosition(6,6);
+        service.setLoadedColumnProbe((level,cx,cz)->{processor.invalidateTimestamps("minecraft:overworld",new long[]{packed},null);return column(cx,cz);});
+        offer(state,new IncomingRequest(6,6,-1));service.tick();assertFalse(currentProbe(probesInLastSnapshot(uuid).get(packed),state));
+        service.setLoadedColumnProbe((level,cx,cz)->column(cx,cz));service.tick();assertTrue(currentProbe(probesInLastSnapshot(uuid).get(packed),state));
+    }
+
+    @Test
+    void retiredCallbackCannotOverwriteSuccessorBatchWithSameUuid() throws Exception {
+        var uuid=UUID.randomUUID();var world=level(Level.OVERWORLD);
+        var old=service.registerPlayer(playerIn(uuid,world),1);service.setLoadedColumnProbe((level,cx,cz)->column(cx,cz));
+        offer(old,new IncomingRequest(6,6,-1));service.tick();var oldTask=scheduledTasks.get(0);
+        service.removePlayer(uuid);var successor=service.registerPlayer(playerIn(uuid,world),1);
+        offer(successor,new IncomingRequest(7,7,-1));service.tick();scheduledTasks.get(scheduledTasks.size()-1).run();oldTask.run();service.tick();
+        var probes=probesInLastSnapshot(uuid);assertEquals(1,probes.size());
+        var data=probes.get(PositionUtil.packPosition(7,7));assertNotNull(data);assertTrue(currentProbe(data,successor));
+    }
+
+    @Test
+    void retirementDuringSerializationCannotPublishIntoSuccessor() {
+        var uuid=UUID.randomUUID();var world=level(Level.OVERWORLD);
+        var old=service.registerPlayer(playerIn(uuid,world),1);
+        service.setLoadedColumnProbe((level,cx,cz)->{service.removePlayer(uuid);service.registerPlayer(playerIn(uuid,world),1);return column(cx,cz);});
+        offer(old,new IncomingRequest(6,6,-1));service.tick();scheduledTasks.get(0).run();service.tick();
+        var probes=probesInLastSnapshot(uuid);assertTrue(probes==null||probes.isEmpty());
+    }
+
+    @Test
+    void shutdownBeforeOwnerCallbackSkipsNativeRead() throws Exception {
+        var uuid=UUID.randomUUID();var state=service.registerPlayer(playerIn(uuid,level(Level.OVERWORLD)),1);
+        var reads=new AtomicInteger();service.setLoadedColumnProbe((level,cx,cz)->{reads.incrementAndGet();return column(cx,cz);});
+        offer(state,new IncomingRequest(6,6,-1));service.tick();
+        var flag=PaperRequestProcessingService.class.getDeclaredField("shuttingDown");flag.setAccessible(true);flag.setBoolean(service,true);
+        scheduledTasks.get(0).run();assertEquals(0,reads.get());
+    }
+    @Test
+    void actualShutdownRetiresBeforeADeferredHeldReleaseCanPublish() {
+        var uuid = UUID.randomUUID();
+        var player = playerIn(uuid, level(Level.OVERWORLD));
+        var state = service.registerPlayer(player, 1);
+        var held = new IncomingBatch(new IncomingRequest[]{new IncomingRequest(5, 7, -1)});
+        state.offerIncomingBatch(held);
+        long generation = state.offerGeneration();
+        service.tick();
+        assertNull(state.peekIncomingBatch());
+        service.shutdown();
+        assertTrue(state.registration().isRetired(), "actual service shutdown closes publication authority");
+        var ready = new it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<LoadedColumnData>();
+        ready.put(PositionUtil.packPosition(5, 7), column(5, 7));
+        assertFalse(state.republishHeldBatch(held, generation, ready), "late release cannot restore retained bytes");
+        scheduledTasks.get(0).run();
+        assertNull(state.peekIncomingBatch());
+    }
+
 }
