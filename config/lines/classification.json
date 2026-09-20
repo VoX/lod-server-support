@@ -1,10 +1,10 @@
 {
   "basis": {
-    "1.21.1": "6dfb191f5941a9ac80a98204d4f9cef51264a5c1",
-    "1.21.10": "62dee1313c941aa80ddf2d5484e9e52055c769b4",
-    "1.21.11": "40194175757beea030c05a1b93d84fdf3a58ad26",
-    "26.1": "1a5adccca520c2b65a11ac06760f6204d28a7e7c",
-    "26.2": "daff1277bcd59cffb6f1f5497546ce73a006732d"
+    "1.21.1": "38c4fa98296536f0c93efe8ad21ad3b0d5b37012",
+    "1.21.10": "5fe204026045035262c2e4218d8fd6a4e57f12a1",
+    "1.21.11": "d126b8b54f834c96b5e6123b680fd4e904c41f62",
+    "26.1": "ba5bae06216419982a4d1a299b89ce7e19219a3b",
+    "26.2": "01189132f4f7a96a7cf5882ee80275f9ff3109f8"
   },
   "files": {
     ".github/line.env": {
@@ -1491,7 +1491,7 @@
       "reviewed_blobs": {
         "1.21.1": "7d1f365e08d448be15e6b3b3160325ec7c83c387",
         "1.21.10": "ce272a90c0a68b19655af539f3c7e1c34e632cea",
-        "1.21.11": "766dfd38de1f19039644f337dfe7f3e7cc5d7dad",
+        "1.21.11": "1f26479125603c1e079cd939fd55beb11b1bcb62",
         "26.1": "9f84eb00056faa57e48a030836f0cfef0ec0585d",
         "26.2": "e80bdc3f1b67ce0d922638cab1ab297436e1c797"
       },
@@ -5126,7 +5126,7 @@
       "reviewed_blobs": {
         "1.21.1": "1be5a6e274407177c18b2e2c4412d2bbe5811ade",
         "1.21.10": "1be5a6e274407177c18b2e2c4412d2bbe5811ade",
-        "1.21.11": "1be5a6e274407177c18b2e2c4412d2bbe5811ade",
+        "1.21.11": "d214c9e985407ec52970d1c0540aac0dd3e7fc20",
         "26.1": "d214c9e985407ec52970d1c0540aac0dd3e7fc20",
         "26.2": "d214c9e985407ec52970d1c0540aac0dd3e7fc20"
       },
@@ -5218,7 +5218,7 @@
       "reviewed_blobs": {
         "1.21.1": "705751b63869a9306d4ce5b56753f8d82bbc4780",
         "1.21.10": "28540a3ed05626d1b73a439260fdb4e25bc73335",
-        "1.21.11": "c5422ce9273baef1d989dc72f7a0cd737780ca88",
+        "1.21.11": "e6376cf295a42b6f736e26c506f2d252fd9c3622",
         "26.1": "cda703f0ffc40efe185b4e07e4daadae231803a6",
         "26.2": "cda703f0ffc40efe185b4e07e4daadae231803a6"
       },
@@ -5272,13 +5272,13 @@
       "kind": "identical"
     },
     "paper/src/main/java/dev/vox/lss/paper/PaperWorldLod.java": {
-      "axes": "Dimension key accessor: identifier() on 26.x, location() on 1.21.x. Identical distance precedence/fallback behavior.",
+      "axes": "Dimension key accessor: identifier() on 1.21.11/26.x, location() on 1.21.1/1.21.10. Identical distance precedence/fallback behavior.",
       "kind": "adapted",
       "review": "v0.15.1 PR parity audit: current per-world implementation and later settings/preset changes reviewed against 26.2; only documented Minecraft API/loader seams retained. Exact-version builds and behavior gates are recorded with the release.",
       "reviewed_blobs": {
         "1.21.1": "2bddb0d737ca8e396b5f93ee8f3c7bc13a189adf",
         "1.21.10": "2bddb0d737ca8e396b5f93ee8f3c7bc13a189adf",
-        "1.21.11": "2bddb0d737ca8e396b5f93ee8f3c7bc13a189adf",
+        "1.21.11": "40d9cb701e4b6cbd9ca2776ea705ab73618b2559",
         "26.1": "40d9cb701e4b6cbd9ca2776ea705ab73618b2559",
         "26.2": "40d9cb701e4b6cbd9ca2776ea705ab73618b2559"
       },
@@ -9062,7 +9062,7 @@
       "reviewed_blobs": {
         "1.21.1": "3099f38b8c18e27185ba03a5793bca4c4afe6a94",
         "1.21.10": "3099f38b8c18e27185ba03a5793bca4c4afe6a94",
-        "1.21.11": "3099f38b8c18e27185ba03a5793bca4c4afe6a94",
+        "1.21.11": "03b0fc5888089c92f303fa2100f2a6437035865a",
         "26.1": "03b0fc5888089c92f303fa2100f2a6437035865a",
         "26.2": "03b0fc5888089c92f303fa2100f2a6437035865a"
       },
@@ -9192,7 +9192,7 @@
       "reviewed_blobs": {
         "1.21.1": "f889a5a1570e0118b46501471f6a266d52ac9b72",
         "1.21.10": "a493b05bc8d9af321a4c7d22d4a7505b6bcdd45c",
-        "1.21.11": "a493b05bc8d9af321a4c7d22d4a7505b6bcdd45c",
+        "1.21.11": "05459b887a9d9a84c0634a38f8e90af2945639ff",
         "26.1": "c3a8bbf41fc5fe7f6ad84a5ba3f54cc668c46e50",
         "26.2": "c3a8bbf41fc5fe7f6ad84a5ba3f54cc668c46e50"
       },
@@ -9245,7 +9245,7 @@
       "reviewed_blobs": {
         "1.21.1": "0341a632cdd0514186c13b40a1f720b931bf3346",
         "1.21.10": "bb719d41f4e0efc648de86067b4f0266d6515510",
-        "1.21.11": "bb719d41f4e0efc648de86067b4f0266d6515510",
+        "1.21.11": "b9228ff791ae319b71f4b444d179edd485de95f3",
         "26.1": "878f5644abc8d76c177e4d394d367394314da15a",
         "26.2": "878f5644abc8d76c177e4d394d367394314da15a"
       },
@@ -9258,13 +9258,13 @@
       ]
     },
     "xplat/src/main/java/dev/vox/lss/networking/server/ServerWorldLod.java": {
-      "axes": "Dimension key accessor: identifier() on 26.x, location() on 1.21.x. Identical distance precedence/fallback behavior.",
+      "axes": "Dimension key accessor: identifier() on 1.21.11/26.x, location() on 1.21.1/1.21.10. Identical distance precedence/fallback behavior.",
       "kind": "adapted",
       "review": "v0.15.1 PR parity audit: current per-world implementation and later settings/preset changes reviewed against 26.2; only documented Minecraft API/loader seams retained. Exact-version builds and behavior gates are recorded with the release.",
       "reviewed_blobs": {
         "1.21.1": "4b19e44fa293d8f1790b985e5ad7ac2ddcc0e0a8",
         "1.21.10": "4b19e44fa293d8f1790b985e5ad7ac2ddcc0e0a8",
-        "1.21.11": "4b19e44fa293d8f1790b985e5ad7ac2ddcc0e0a8",
+        "1.21.11": "8f4c641710eb5bb29cfd72090e22d9d48c283176",
         "26.1": "8f4c641710eb5bb29cfd72090e22d9d48c283176",
         "26.2": "8f4c641710eb5bb29cfd72090e22d9d48c283176"
       },
