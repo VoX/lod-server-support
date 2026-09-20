@@ -172,6 +172,7 @@ public final class PaperSoakMetricsExporter {
         var serviceMap = new LinkedHashMap<String, Object>();
         serviceMap.put("requests_received", diag.getTotalRequestsRouted());
         serviceMap.put("columns_sent", service.getTickDiag().getTotalSectionsSent());
+        serviceMap.put("corrective_columns_sent", service.getTickDiag().getTotalCorrectiveColumnsSent());
         serviceMap.put("bytes_sent", service.getTickDiag().getTotalBytesSent());
         // Compressed columns (protocol 19) — twin of the Fabric exporter's fields.
         serviceMap.put("wire_bytes", service.getTickDiag().getTotalWireBytesSent());

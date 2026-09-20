@@ -9,6 +9,31 @@ never a second live copy (two copies drift within one port).
 Legend: "pin" = the contract test that reds on drift; "hand" = per-line manual
 verification recorded in the port PR (no automatable pin exists).
 
+## Current loader and artifact surfaces (2026-09-08)
+
+The checked-in build/release definitions give this matrix. Shipping, terrain-consumer
+compatibility and far-player rendering are separate checks.
+
+| MC line | `LINE_SHIP_NEOFORGE` | NeoForge far-player renderer |
+| --- | --- | --- |
+| 1.21.1 | true | Live, immediate mode |
+| 1.21.10 | false | Intentional stub; module remains built/tested |
+| 1.21.11 | false | Intentional stub; module remains built/tested |
+| 26.1 | true | Intentional stub |
+| 26.2 | true | Intentional stub |
+
+On every line, `neoforge/build.gradle` shades common code and nests **both
+sqlite-jdbc and zstd-jni as stock jarJar libraries** under `META-INF/jarjar/`.
+`scripts/release_check.py` checks both metadata entries and rejects flat
+`org/sqlite/`, `com/github/luben/` and native-library entries. Paper's flat native
+packaging and Fabric's stripped nested jars are different artifact contracts.
+
+Use [the current live-profile inventory](../testing/astra-live-profiles.md) for
+candidate Voxy/Connector/Sodium/Xaero stacks and their validation limits. A renderer
+stub or a disabled shipping flag does not establish that no terrain consumer can
+run; installed metadata alone does not establish a successful live integration.
+Dated port records below describe their original checkpoints.
+
 | # | Surface | What to verify per line | Pin / hand |
 |---|---|---|---|
 | 1 | `IOWorker` priority ordinal + `consecutiveExecutor`/`storage` handles | The package-private `IOWorker$Priority` ordinal LSS hardcodes still means BACKGROUND; the accessor targets still exist (1.21.1: the executor is still `ProcessorMailbox` — a different shape, see the spike) | `SerializerParityGameTests` byte-parity (behavioral); accessor resolution is loud-fail (`defaultRequire: 1`); since V-3/S4 the ordinal + executor type + submit shape + accessor resolution live in `BackgroundIoSubmit` — the port flavors THAT file on main/1.21.1; on THIS branch (pre-V-3) the ordinal/executor handles still live in `ChunkDiskReader` |
@@ -33,3 +58,31 @@ verification recorded in the port PR (no automatable pin exists).
 | 20 | `BiomeManager.biomeZoomSeed` accessor (world-axis cache key, v0.14 port) | The private `long biomeZoomSeed` field still exists under Mojang mappings AND the login chain still hands the obfuscated login seed to the client `BiomeManager` unmodified (javap the line's artifact; the chain claim is javadoc-recorded on `AccessorBiomeManager`); the accessor is registered in BOTH loaders' mixin configs (a missing NeoForge entry fails SILENT — Fabric sub-buckets while NeoForge keeps bare buckets) | `SeedAccessorContractTest` (reflective field + type + both mixin-config registrations) |
 | 21 | Service-gate glue dialects (v0.14 port) | The gate's shared glue must be re-spelled per line where it touches pinned dialects: `Identifier` vs `ResourceLocation` in the two-axis/gate TESTS, `Level.OVERWORLD.identifier()` vs `.location()`, the gametest annotation dialect (`structure=` / `template=`) + the 1.21.10 `Gt` shim for the ServiceLifecycle append, and the `SharedConstants` data-version chain (`dataVersion().version()` vs `getDataVersion().getVersion()`). The NeoForge `PermissionNode`/gather API was verified IDENTICAL at 26.2.0.59/26.1.2.95/21.11.45/21.10.64/21.1.248 (sources jars, v0.14 port review) — re-verify only on a NEW neoforge_version | compile (all flavors are compile-loud) + `PluginYmlContractTest` gate-node pins + `release_check.py` gate-node check + `LoaderPermissionSeamContractTest` |
 | 22 | Chunk-load seam (the dirty content filter's load baseline, xaero-scatter-remediation-plan.md WI-1b) | The Fabric callback ARITY: fabric-api 4.x `ServerChunkEvents.Load.onChunkLoad(level, chunk, generated)` on 26.2 AND this line (0.151.0+26.1.2 bundles lifecycle-events 4.1.0 — javap-verified at port time, NOT the 2-arg shape the port brief assumed) vs the 2.x lifecycle module's `(level, chunk)` on the 1.21.x lines; NeoForge `ChunkEvent.Load` is line-invariant. Both fire from the FULL status task (fabric-api's `ChunkStatusTasksMixin` on 4.x and 2.6.15, the same injection under the older name `ChunkGeneratingMixin` on 2.6.9/2.6.0; the NeoForge `ChunkStatusTasks` patch). Newly GENERATED chunks are skipped: the 4.x `generated` flag, NeoForge `isNewChunk()`, and on 2.x `CHUNK_GENERATE` (fires right after `CHUNK_LOAD`) via `onChunkGenerated` — verified per line at port time; Moonrise/C2ME fire it through their platform hooks (live instrument: `seeded_load=` in `/lsslod diag`) | The lambda literal in each line's `LSSServerNetworking`; `DirtyContentFilterTest.seedLoaded*` + `check_cold_restart_resync` (marked ≤ 50 on a restart) |
+
+### Soak setup command data (2026-09-08)
+
+The shared Fabric/Paper/Folia scenario JSON has a game-version seam. On **1.21.11,
+26.1 and 26.2**, use registered gamerule identifiers: `minecraft:random_tick_speed`,
+`minecraft:spawn_mobs`, `minecraft:mob_griefing`, `minecraft:advance_time`; legacy
+`doFireTick false` becomes `minecraft:fire_spread_radius_around_player 0`. Vanilla's
+`GameRuleRegistryFix` proves that last value transformation (minus one is unrestricted
+spread distance, not disabled). The same fix removes `spawnChunkRadius`; these engines
+have no `TicketType.START` constant or registered spawn-chunk-radius rule. Remove its
+obsolete timeline step on those three lines **and 1.21.10**: the real command-tree
+regression and cached 1.21.10 GameRules/TicketType prove that this removal predates
+the gamerule rename. This is not a promise that no chunk near
+spawn can be held: player, forced, portal and temporary spawn tickets still exist, and
+the summary scenarios retain their actual offline-window/probe/convergence assertions.
+**1.21.1 and 1.21.10 retain their other legacy gamerule names**. Only 1.21.1
+retains spawnChunkRadius (its real GameRules registration and TicketType.START remain).
+
+`CommandGameTests.soakScenarioGamerulesExecuteAndReadBack` reads the actual scenario
+JSON, executes each setup rule against this line's real command tree, checks its value,
+and restores the original value in the same test callback. The excluded dev-only
+`SoakCommandExecutor` twins distinguish generic parse/dispatch acceptance from strict
+gamerule setter-plus-readback success (zero-valued success is valid). Paper preserves
+its dimension fan-out and queries the same dimension prefix. Folia's explicitly
+acknowledged save-all no-op remains separate. `check_soak.py` rejects failed commands
+and gamerule rows without semantic-readback proof; historical `ok=true` alone meant
+only did-not-throw and is not acceptable setup evidence. See
+[the correction record](../reviews/2026-09-08-implementation/soak-command-validation.md).

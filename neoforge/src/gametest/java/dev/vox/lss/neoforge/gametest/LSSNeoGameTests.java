@@ -1,5 +1,7 @@
 package dev.vox.lss.neoforge.gametest;
 
+import dev.vox.lss.common.processing.RequestRegistration;
+
 import dev.vox.lss.common.LSSConstants;
 import dev.vox.lss.config.LSSServerConfig;
 import dev.vox.lss.networking.payloads.HandshakeC2SPayload;
@@ -47,6 +49,12 @@ import java.util.function.Consumer;
  */
 @Mod("lsstest")
 public final class LSSNeoGameTests {
+    private static final java.util.Map<UUID, RequestRegistration> TEST_REGISTRATIONS =
+            new java.util.concurrent.ConcurrentHashMap<>();
+    private static RequestRegistration registration(UUID uuid) {
+        return TEST_REGISTRATIONS.computeIfAbsent(uuid, ignored -> new RequestRegistration());
+    }
+
 
     private record Smoke(String name, int maxTicks, Consumer<GameTestHelper> body) {
     }
@@ -278,7 +286,7 @@ public final class LSSNeoGameTests {
 
         var reader = new ChunkDiskReader(1, false);
         var readerId = UUID.randomUUID();
-        reader.registerPlayer(readerId);
+        reader.registerPlayer(readerId, registration(readerId));
         var step = new AtomicInteger();
         var diskBytes = new AtomicReference<byte[]>();
 
@@ -289,7 +297,7 @@ public final class LSSNeoGameTests {
                     helper.assertTrue(chunkSource.getChunkNow(cx, cz) == null,
                             "waiting for the chunk to unload");
                     level.save(null, true, false);
-                    reader.submitReadDirect(readerId, LSSConstants.DIM_STR_OVERWORLD,
+                    reader.submitReadDirect(readerId, registration(readerId), LSSConstants.DIM_STR_OVERWORLD,
                             level, cx, cz, 0, 0L);
                     step.set(1);
                     helper.assertTrue(false, "disk read submitted, awaiting result");

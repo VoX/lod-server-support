@@ -38,8 +38,14 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
     private static final int SAVE_INTERVAL_CYCLES = 6000; // ~5 min at 20 TPS
 
     /** Request for the main thread to submit a generation ticket (requires MC world state). */
-    public record GenerationTicketRequest(UUID playerUuid, int cx, int cz, String dimension,
-                                           long submissionOrder) {}
+    public record GenerationTicketRequest(UUID playerUuid, RequestRegistration registration, int cx, int cz, String dimension,
+                                           long submissionOrder) {
+        public GenerationTicketRequest {
+            java.util.Objects.requireNonNull(registration, "registration");
+        }
+    }
+
+    private record PlayerRemoval(UUID uuid, RequestRegistration registration) {}
 
     private record TimestampInvalidation(String dimension, long[] positions,
                                          Runnable onApplied) {}
@@ -47,16 +53,17 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
     /** Everything the processing thread takes from the mailbox in one cycle. */
     private record MailboxTake(TickSnapshot snapshot,
                                List<TickSnapshot.GenerationReadyData> generationReady,
-                               List<UUID> removals,
+                               List<PlayerRemoval> removals,
                                List<TimestampInvalidation> invalidations,
                                Map<UUID, ArrayList<long[]>> dirtyClears) {}
 
     // Mailbox (guarded by mailboxLock). Snapshot: latest-wins. Event buffers: lossless,
     // swapped out whole by the processing thread. Producers are main-thread-only.
     private final Object mailboxLock = new Object();
+    private final LoadedProbeGuard loadedProbeGuard = new LoadedProbeGuard();
     private TickSnapshot pendingSnapshot;
     private ArrayList<TickSnapshot.GenerationReadyData> pendingGenerationReady = new ArrayList<>();
-    private ArrayList<UUID> pendingRemovals = new ArrayList<>();
+    private ArrayList<PlayerRemoval> pendingRemovals = new ArrayList<>();
     private ArrayList<TimestampInvalidation> pendingInvalidations = new ArrayList<>();
     private HashMap<UUID, ArrayList<long[]>> pendingDirtyClears = new HashMap<>();
 
@@ -276,9 +283,64 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
     }
 
     /** Notify the processing thread that a player was removed (disconnect or dimension change). */
-    public void notifyPlayerRemoved(UUID uuid) {
+    public void notifyPlayerRemoved(UUID uuid, RequestRegistration registration) {
+        registration.retire();
         synchronized (this.mailboxLock) {
-            this.pendingRemovals.add(uuid);
+            this.pendingRemovals.add(new PlayerRemoval(uuid, registration));
+        }
+    }
+
+    /** Capture an invalidation epoch BEFORE native loaded-column serialization. */
+    public LoadedProbeGuard.Capture captureLoadedProbe(String dimension,long position,RequestRegistration registration) {
+        return this.loadedProbeGuard.capture(dimension,position,registration);
+    }
+
+    boolean currentLoadedProbe(LoadedColumnData data,String dimension,long position,PlayerState state) {
+        return this.players.get(state.getPlayerUUID())==state
+                && this.loadedProbeGuard.current(data,dimension,position,state.registration());
+    }
+
+    /** One-shot Folia late completion, after the original per-position pipeline drains.
+     * No native access and no cancellation of another recipient's shared read. */
+    private final dev.vox.lss.common.LogThrottle lateProbeFailWarn = new dev.vox.lss.common.LogThrottle(60_000);
+    void processLateProbes(PlayerState state, String dimension, int queueLimit) {
+        state.expireLateProbes(System.nanoTime());
+        int remainingBytes = AbstractPlayerRequestState.MAX_LATE_PROBE_BYTES;
+        for (int i = 0; i < AbstractPlayerRequestState.MAX_LATE_PROBES; i++) {
+            if (queueLimit > 0 && state.getSendQueueSize() >= queueLimit) return;
+            var completion = state.takeLateProbe(System.nanoTime());
+            if (completion == null) return;
+            if (!state.consumeLateProbe(completion, System.nanoTime())) return;
+            var data = completion.data();
+            int bytes = data.serializedSections() == null ? 0 : data.serializedSections().length;
+            if (bytes > remainingBytes) return; // bounded optional correction, no deferred retry loop
+            remainingBytes -= bytes;
+            long packed = PositionUtil.packPosition(data.cx(), data.cz());
+            if (!currentLoadedProbe(data, dimension, packed, state)) continue;
+            long order = this.ctx.sequence().next();
+            if (!state.beginCorrectiveEnqueue(order)) return;
+            boolean accepted = false;
+            try {
+                boolean allAir = data.serializedSections() == null || data.serializedSections().length == 0;
+                // Even an original ts<=0 requester may now hold the fallback's non-air data.
+                accepted = allAir
+                        ? sendEmptiedColumn(state, data.cx(), data.cz(), dimension, this.cycleNow,
+                                order, LSSConstants.COLUMN_SOURCE_IN_MEMORY)
+                        : enqueueLoadedColumn(state, data, this.cycleNow, order, dimension,
+                                LSSConstants.COLUMN_SOURCE_IN_MEMORY);
+                if (accepted) {
+                    if (allAir) recordAllAirResolution(dimension, packed, this.cycleNow);
+                    state.markDiskReadDone(data.cx(), data.cz());
+                    this.ctx.diagnostics().incrementInMemory();
+                }
+            } catch (Throwable failure) {
+                // Correction is optional after the original fallback; a failed encode must
+                // not abort other players' routing or claim an up-to-date result.
+                long n = this.lateProbeFailWarn.recordAndTryAcquire(System.nanoTime() / 1_000_000);
+                if (n > 0) LSSLogger.error("Late loaded-column completion failed (" + n + " failures)", failure);
+            } finally {
+                state.endCorrectiveEnqueue();
+            }
         }
     }
 
@@ -309,6 +371,7 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
             };
         }
         synchronized (this.mailboxLock) {
+            this.loadedProbeGuard.invalidate(dimension, positions);
             this.pendingInvalidations.add(new TimestampInvalidation(dimension, positions, once));
         }
     }
@@ -328,7 +391,7 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
      * for permanent unservability, which answers ColumnNotGenerated (a session-permanent
      * "stop asking" on the client).
      */
-    public void feedGenerationFailure(UUID playerUuid, int cx, int cz, String dimension,
+    public void feedGenerationFailure(UUID playerUuid, RequestRegistration registration, int cx, int cz, String dimension,
                                       long submissionOrder, boolean transientFailure) {
         synchronized (this.mailboxLock) {
             // A transient feed is always a capacity/removed-player reject: the generation was
@@ -336,7 +399,7 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
             // term (stamped on the outcome; the counter increments on the processing thread,
             // which is the diagnostics class's single writer).
             this.pendingGenerationReady.add(new TickSnapshot.GenerationReadyData(
-                    playerUuid, cx, cz, dimension, null, 0L, submissionOrder,
+                    playerUuid, registration, cx, cz, dimension, null, 0L, submissionOrder,
                     transientFailure, transientFailure));
         }
     }
@@ -527,7 +590,7 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
      * (region-summary-sync-plan.md P1): the reader's header freshness rung consults it
      * before any region IO; {@code <= 0} (acquisition) leaves the rung inert.
      */
-    protected abstract boolean submitDiskRead(UUID playerUuid, String dimension,
+    protected abstract boolean submitDiskRead(UUID playerUuid, RequestRegistration registration, String dimension,
                                             int cx, int cz,
                                             long submissionOrder, long clientTimestamp);
 
@@ -801,9 +864,9 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
         // and the attached players' pending entries, and drop its generation in-flight tracking
         // (a generation abandoned before its outcome drains would otherwise leak).
         // The removed state itself is simply dropped — its slot counts die with it.
-        for (UUID removed : take.removals()) {
-            cleanupDedupGroups(this.dedupTracker.removePlayer(removed));
-            removeGenerationTracking(removed);
+        for (var removed : take.removals()) {
+            cleanupDedupGroups(this.dedupTracker.removePlayer(removed.uuid(), removed.registration()));
+            removeGenerationTracking(removed.registration());
         }
 
         applyDirtyClears(take.dirtyClears());
@@ -812,6 +875,10 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
     /** Shared by the cycle-start apply and the late drain so the two paths cannot drift. */
     private void applyInvalidations(List<TimestampInvalidation> invalidations) {
         for (var inv : invalidations) {
+            for (var state : this.players.values()) {
+                if (inv.dimension().equals(state.registeredDimension()))
+                    for (long packed : inv.positions()) state.discardLateProbe(packed);
+            }
             // Store fan-out FIRST (plan §1 invalidation fan-out): the store's synchronous
             // removal + tombstone must land before anything can re-read the position.
             if (this.store != null) {
@@ -937,7 +1004,7 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
             int cz = PositionUtil.unpackZ(rg.packed());
             for (var attachment : rg.group().attached()) {
                 var attachedState = this.players.get(attachment.playerUuid());
-                if (attachedState != null) {
+                if (attachedState != null && attachedState.registration() == attachment.registration()) {
                     if (attachedState.removePendingByPosition(cx, cz) != null) {
                         // The read backing this pending will never deliver and no message is
                         // sent (pre-existing silent-drop path) — book it as superseded so the
@@ -964,25 +1031,25 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
 
     /** Positions with a generation ticket admitted (via disk-not-found escalation in
      *  {@link #handleDiskNotFound}, or the router's direct-generation path) but whose outcome
-     *  has not yet drained, keyed by player then dimension. Generation does NOT dedup, so —
+     *  has not yet drained, keyed by registration then dimension. Generation does NOT dedup, so —
      *  unlike the disk path, which tracks in-flight reads through their dedup group — this map
-     *  is generation's own in-flight oracle. Keyed by PLAYER so {@link #removeGenerationTracking}
+     *  is generation's own in-flight oracle. Keyed by registration so {@link #removeGenerationTracking}
      *  can sweep it on removal (disconnect / dimension change) exactly as {@link #cleanupDedupGroups}
      *  sweeps the disk path's {@link #invalidatedInFlight}: a generation abandoned before its
      *  outcome drains therefore cannot leak. Processing-thread only. */
-    private final Map<UUID, Map<String, LongOpenHashSet>> generationInFlight = new HashMap<>();
+    private final Map<RequestRegistration, Map<String, LongOpenHashSet>> generationInFlight = new HashMap<>();
 
     /** Subset of {@link #generationInFlight} positions overtaken by a dirty invalidation before
      *  their outcome drained, same keying. The generation twin of {@link #invalidatedInFlight}:
      *  a tainted outcome carries PRE-edit terrain, so it must not mark diskReadDone or re-stamp
      *  the timestamp cache. Per-player, so two players generating the same column taint
      *  independently and neither pins the other's flag. Processing-thread only. */
-    private final Map<UUID, Map<String, LongOpenHashSet>> generationStale = new HashMap<>();
+    private final Map<RequestRegistration, Map<String, LongOpenHashSet>> generationStale = new HashMap<>();
 
     /** Record an admitted generation as in-flight. Package-private so the router's direct
      *  generation path (no disk reader) registers it too — both gen-ticket producers must, or
      *  an overtaking edit on the unregistered path re-stamps pre-edit terrain as up_to_date. */
-    void addGenerationInFlight(UUID player, String dimension, long packed) {
+    void addGenerationInFlight(RequestRegistration player, String dimension, long packed) {
         this.generationInFlight
                 .computeIfAbsent(player, k -> new HashMap<>())
                 .computeIfAbsent(dimension, k -> new LongOpenHashSet())
@@ -1015,7 +1082,7 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
      *  while it was buffered. Called for every drained outcome; a generation abandoned before
      *  its outcome drains (the player disconnected or changed dimension) is retired instead by
      *  {@link #removeGenerationTracking} on the removal event, so nothing leaks. */
-    private boolean consumeGenerationInFlight(UUID player, String dimension, long packed) {
+    private boolean consumeGenerationInFlight(RequestRegistration player, String dimension, long packed) {
         boolean stale = false;
         var staleDims = this.generationStale.get(player);
         if (staleDims != null) {
@@ -1041,7 +1108,7 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
     /** Drop a departed player's generation tracking (disconnect / dimension change) so a
      *  generation abandoned before its outcome drained cannot leak — the generation analogue of
      *  {@link #cleanupDedupGroups} reclaiming the disk path's {@link #invalidatedInFlight}. */
-    private void removeGenerationTracking(UUID player) {
+    private void removeGenerationTracking(RequestRegistration player) {
         this.generationInFlight.remove(player);
         this.generationStale.remove(player);
     }
@@ -1056,11 +1123,12 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
             String dimension = entry.getValue();
 
             if (this.diskReader == null) continue;
-            var queue = this.diskReader.getPlayerQueue(state.getPlayerUUID());
+            var queue = this.diskReader.getPlayerQueue(state.getPlayerUUID(), state.registration());
             if (queue == null) continue;
 
             ChunkReadResult result;
             while ((result = queue.poll()) != null) {
+                if (state.registration().isRetired() || this.players.get(playerUuid) != state) break;
                 if (!dimension.equals(result.dimension())) {
                     // Read submitted before a dimension change: the pending entry, slot, and
                     // dedup group that backed it died with the removed state. Delivering it here
@@ -1171,7 +1239,8 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
                 if (group != null) {
                     for (var attachment : group.attached()) {
                         var attachedState = this.players.get(attachment.playerUuid());
-                        if (attachedState == null) continue;
+                        if (attachedState == null || attachedState.registration() != attachment.registration()
+                                || attachment.registration().isRetired()) continue;
                         // Same stale-snapshot session guard as the primary: an attached
                         // player's state can also be swapped mid-cycle by a dimension change.
                         String attachedRegistered = attachedState.registeredDimension();
@@ -1232,6 +1301,10 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
                         this.ctx.stampSource().stampSecond(playerUuid, dimension, packed),
                         dimension));
                 this.ctx.diagnostics().incrementUpToDate();
+                // Header freshness resolves the admitted disk request without bytes.
+                // Its already-reserved owner opportunity can still observe newer loaded
+                // content; retain that exact one-shot correction after this response.
+                state.markLateProbeDiskFallback(packed, submissionOrder);
             } else {
                 this.ctx.diagnostics().addSuperseded(1);
             }
@@ -1264,6 +1337,8 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
                 this.ctx.sendActions().add(new SendAction.ColumnUpToDate(playerUuid, packed, state));
                 this.ctx.diagnostics().incrementUpToDate();
                 this.ctx.diagnostics().incrementDiskDrained();
+                // A store answer does not exhaust the admitted Folia owner opportunity.
+                state.markLateProbeDiskFallback(packed, submissionOrder);
                 return;
             }
             try {
@@ -1280,6 +1355,7 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
                                 result.columnTimestamp(), submissionOrder,
                                 columnBytes, result.estimatedBytes(),
                                 source);
+                boolean resolvedAllAir = false;
                 if (!sent) {
                     // All-air chunk (no visible sections): a resync client (claimsData) may hold
                     // stale content here, so send an authoritative clearing 0-section column; a
@@ -1289,11 +1365,18 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
                     // stale-but-real terrain and seal the fabricated air — the terminal answer is
                     // up_to_date so the client keeps what it has.
                     boolean claimsData = pending != null && pending.claimsData();
-                    if (!(allAir && claimsData && sendEmptiedColumn(state, cx, cz, result.dimension(),
-                            result.columnTimestamp(), submissionOrder, source))) {
+                    boolean cleared = allAir && claimsData && sendEmptiedColumn(state, cx, cz, result.dimension(),
+                            result.columnTimestamp(), submissionOrder, source);
+                    if (!cleared) {
                         this.ctx.sendActions().add(new SendAction.ColumnUpToDate(playerUuid, packed, state));
                     }
+                    resolvedAllAir = allAir && (!claimsData || cleared);
                 }
+                // Body, no-data all-air response, or successful clear may still be older
+                // than the delayed loaded capture. Keep only this exact admitted attempt.
+                if (pending != null && !staleAgainstEdit && (sent || resolvedAllAir))
+                    state.markLateProbeDiskFallback(packed, submissionOrder);
+                else state.discardLateProbeDiskResult(packed, submissionOrder);
             } catch (Throwable t) {
                 // Per-delivery containment — the phase-2 twin of processGenerationReady's
                 // catch: the done-bit was marked BEFORE the payload build, so a build throw
@@ -1520,9 +1603,9 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
         }
         if (state.tryAdmit(new PendingRequest(cx, cz, SlotType.GENERATION, clientTimestamp))) {
             if (ADMISSION_TRACE) traceAdmission(state, cx, cz, via, "admit");
-            addGenerationInFlight(playerUuid, dimension, packed);
+            addGenerationInFlight(state.registration(), dimension, packed);
             this.ctx.generationTicketRequests().add(new GenerationTicketRequest(
-                    playerUuid, cx, cz, dimension, this.ctx.sequence().next()));
+                    playerUuid, state.registration(), cx, cz, dimension, this.ctx.sequence().next()));
         } else {
             // Transient: the gen slot cap is momentarily full — never a wire answer.
             if (ADMISSION_TRACE) traceAdmission(state, cx, cz, via, "slot_full");
@@ -1549,11 +1632,14 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
             // Retire the in-flight generation record for EVERY drained outcome (delivered,
             // all-air, not-generated, player gone, dimension changed); an outcome that never
             // drains because the player left is retired by removeGenerationTracking on the
-            // removal event instead. Capture whether a dirty edit overtook this buffered outcome.
-            boolean genStale = consumeGenerationInFlight(entry.playerUuid(), entry.dimension(), packed);
+            // removal event instead. This consumes ONLY the originating registration, even
+            // when its UUID now names another player state. Preserve the world miss clear
+            // above for obsolete completions; it is not a claim about that replacement.
+            boolean genStale = consumeGenerationInFlight(entry.registration(), entry.dimension(), packed);
 
             var state = this.players.get(entry.playerUuid());
-            if (state == null) continue;
+            if (state == null || state.registration() != entry.registration()
+                    || entry.registration().isRetired()) continue;
             // A dimension change replaces the player's state (removePlayer + registerPlayer,
             // same UUID). Outcomes harvested for the old session carry the old dimension —
             // skip them instead of poisoning the fresh state (their pending died with it).
@@ -1568,6 +1654,7 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
             // cycle could still string-match, but registration takes multiple ticks.)
             String registered = state.registeredDimension();
             if (registered != null && !registered.equals(entry.dimension())) continue;
+            state.discardPairedProbe(packed);
             // Completion-order evidence (diagnostics only): a successful completion while a
             // NEARER ticket is still outstanding means the platform scheduler finished
             // far-before-near. A high rate here is the C2ME-style inversion signature that

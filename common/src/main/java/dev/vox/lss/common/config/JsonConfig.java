@@ -55,8 +55,23 @@ public abstract class JsonConfig {
         } catch (ReflectiveOperationException e) {
             LSSLogger.warn("Config hidden-key filtering skipped (" + e + ")");
         }
+        if (restartBooleanOverrides != null) restartBooleanOverrides.forEach(tree::addProperty);
         return GSON.toJson(tree);
     }
+
+    // Explicit restart-only staging: persistence includes these values, while running
+    // services keep their original effective fields. Subsequent unrelated saves retain
+    // staged choices. Neither this map nor preset undo state is serialized as metadata.
+    private transient volatile java.util.Map<String, Boolean> restartBooleanOverrides = java.util.Map.of();
+    protected final boolean configuredRestartBoolean(String key, boolean effective) {
+        return restartBooleanOverrides.getOrDefault(key, effective);
+    }
+    protected final synchronized void stageRestartBoolean(String key, boolean value) {
+        var replacement = new java.util.LinkedHashMap<>(restartBooleanOverrides);
+        replacement.put(key, value);
+        restartBooleanOverrides = java.util.Map.copyOf(replacement);
+    }
+
 
     // Set by load(); transient so GSON neither serializes nor overwrites it.
     private transient Path configDir;
@@ -74,6 +89,18 @@ public abstract class JsonConfig {
         return this.activeFileName != null ? this.activeFileName : getFileName();
     }
 
+    /** Detached scratch state using the same serializer as config loading; no path,
+     * save target, restart staging or lifecycle state is retained. */
+    @SuppressWarnings("unchecked")
+    public final <C extends JsonConfig> C scratchCopy() {
+        JsonConfig scratch = GSON.fromJson(GSON.toJson(this), getClass());
+        scratch.scratchState = true;
+        return (C) scratch;
+    }
+
+    private transient boolean scratchState;
+    protected final boolean isScratchCopy() { return scratchState; }
+
     /** Override to clamp or correct field values after deserialization. */
     public void validate() {}
 
@@ -89,6 +116,12 @@ public abstract class JsonConfig {
     protected void onFreshCreate() {}
 
     public void save() {
+        trySave();
+    }
+
+    /** Nonfatal persistence outcome for interactive callers; ordinary save callers
+     *  retain the existing logged-and-contained failure behavior. */
+    public boolean trySave() {
         String name = saveFileName();
         try {
             Path path = this.configDir.resolve(name);
@@ -103,8 +136,10 @@ public abstract class JsonConfig {
             } catch (AtomicMoveNotSupportedException e) {
                 Files.move(tmp, path, StandardCopyOption.REPLACE_EXISTING);
             }
+            return true;
         } catch (Exception e) {
             LSSLogger.error("Failed to save config " + name, e);
+            return false;
         }
     }
 

@@ -1,0 +1,8 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "dev.vox.lssfixture.wi9.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "client": ["DispatcherMixin", "RendererMixin"],
+  "injectors": {"defaultRequire": 1}
+}

@@ -1,0 +1,415 @@
+{
+  "note": "Supplemental mechanical audit: removes comments/whitespace, this/session/component routing, class rename and record field-to-accessor syntax. Does not replace behavioral tests. Added queue gauge/cached diagnostics intentionally differ.",
+  "methods": [
+    {
+      "method": "static boolean init()",
+      "owner": "XaeroSession",
+      "body_preserved": true
+    },
+    {
+      "method": "static boolean initWith(ClassResolver resolver)",
+      "owner": "XaeroSession",
+      "body_preserved": true
+    },
+    {
+      "method": "static void clientTick()",
+      "owner": "XaeroSession",
+      "body_preserved": true
+    },
+    {
+      "method": "static void renderFrame()",
+      "owner": "XaeroSession",
+      "body_preserved": true
+    },
+    {
+      "method": "@SuppressWarnings(\"unchecked\") private static void reportDroppedProduction(Object dimension, int chunkX, int chunkZ)",
+      "owner": "XaeroSession",
+      "body_preserved": true
+    },
+    {
+      "method": "static void onDisconnect()",
+      "owner": "XaeroSession",
+      "body_preserved": true
+    },
+    {
+      "method": "static boolean isArmed()",
+      "owner": "XaeroSession",
+      "body_preserved": true
+    },
+    {
+      "method": "static String diagLine()",
+      "owner": "XaeroSession",
+      "body_preserved": true
+    },
+    {
+      "method": "static void resetFacadeForTest()",
+      "owner": "XaeroSession",
+      "body_preserved": true
+    },
+    {
+      "method": "void onAcquisitionEnd()",
+      "owner": "XaeroSession",
+      "body_preserved": true
+    },
+    {
+      "method": "private void retireAcquisitionWork()",
+      "owner": "XaeroAcquisitionQueue",
+      "body_preserved": true
+    },
+    {
+      "method": "static void retireClientAcquisition()",
+      "owner": "XaeroSession",
+      "body_preserved": true
+    },
+    {
+      "method": "XaeroMapCompat(Handles h, LevelOps levelOps, BooleanSupplier enabled, BooleanSupplier sessionActive, java.util.function.Consumer<VoxelColumnConsumer> registrar, java.util.function.Consumer<VoxelColumnConsumer> deregistrar, BooleanSupplier backpressureEnabled, DropReporter dropReporter)",
+      "owner": "XaeroSession",
+      "body_preserved": true
+    },
+    {
+      "method": "void maybeRegister()",
+      "owner": "XaeroSession",
+      "body_preserved": true
+    },
+    {
+      "method": "void onSessionEnd()",
+      "owner": "XaeroSession",
+      "body_preserved": true
+    },
+    {
+      "method": "private void settleSessionEnd()",
+      "owner": "XaeroSession",
+      "body_preserved": true
+    },
+    {
+      "method": "private VoxelColumnConsumer buildConsumer()",
+      "owner": "XaeroSession",
+      "body_preserved": true
+    },
+    {
+      "method": "int reportBackpressure()",
+      "owner": "XaeroSession",
+      "body_preserved": true
+    },
+    {
+      "method": "private int noSignal()",
+      "owner": "XaeroSession",
+      "body_preserved": true
+    },
+    {
+      "method": "private long nowMillis()",
+      "owner": "XaeroSession",
+      "body_preserved": true
+    },
+    {
+      "method": "void offerColumn(ResourceKey<Level> dimension, int chunkX, int chunkZ, int worldBottomY, int worldTopY, VoxelColumnData columnData)",
+      "owner": "XaeroSession",
+      "body_preserved": true
+    },
+    {
+      "method": "static int approxBytes(XaeroTileExtractor.PreparedTile tile)",
+      "owner": "XaeroSession",
+      "body_preserved": true
+    },
+    {
+      "method": "void offerPrepared(Object dimension, XaeroTileExtractor.PreparedTile tile)",
+      "owner": "XaeroAcquisitionQueue",
+      "body_preserved": true
+    },
+    {
+      "method": "private void offerPrepared(Object dimension, XaeroTileExtractor.PreparedTile tile, Origin origin)",
+      "owner": "XaeroAcquisitionQueue",
+      "body_preserved": true
+    },
+    {
+      "method": "static long regionKeyOf(int chunkX, int chunkZ)",
+      "owner": "XaeroSession",
+      "body_preserved": true
+    },
+    {
+      "method": "private static long regionKeyOfPacked(long packedChunk)",
+      "owner": "XaeroSession",
+      "body_preserved": true
+    },
+    {
+      "method": "private boolean shedToOwed(Object dimension, long packedChunk, Origin origin)",
+      "owner": "XaeroAcquisitionQueue",
+      "body_preserved": true
+    },
+    {
+      "method": "private void replaceOwedOrigin(OwedRegion region, long packed, Origin origin)",
+      "owner": "XaeroAcquisitionQueue",
+      "body_preserved": true
+    },
+    {
+      "method": "private void discardDeferredReports()",
+      "owner": "XaeroAcquisitionQueue",
+      "body_preserved": true
+    },
+    {
+      "method": "private OwedRegion owedRegionLocked(OwedKey key)",
+      "owner": "XaeroAcquisitionQueue",
+      "body_preserved": true
+    },
+    {
+      "method": "private void forgetOwed(Object dimension, long packedChunk)",
+      "owner": "XaeroAcquisitionQueue",
+      "body_preserved": true
+    },
+    {
+      "method": "private void clearOwed()",
+      "owner": "XaeroAcquisitionQueue",
+      "body_preserved": true
+    },
+    {
+      "method": "private int clearOwedCollectingReports()",
+      "owner": "XaeroAcquisitionQueue",
+      "body_preserved": true
+    },
+    {
+      "method": "private void probeOwed(Object mp, Object dimensionId, List<WaitingRegion> waiting)",
+      "owner": "XaeroAcquisitionQueue",
+      "body_preserved": true
+    },
+    {
+      "method": "private int releaseOwed(OwedKey key, OwedRegion region, int budget, Object xaeroRegion, boolean expired)",
+      "owner": "XaeroAcquisitionQueue",
+      "body_preserved": true
+    },
+    {
+      "method": "private boolean tileChunkReady(Object xaeroRegion, long packedChunk)",
+      "owner": "XaeroAcquisitionQueue",
+      "body_preserved": true
+    },
+    {
+      "method": "private void discardOwed(OwedKey key, OwedRegion region)",
+      "owner": "XaeroAcquisitionQueue",
+      "body_preserved": true
+    },
+    {
+      "method": "int owedForTest()",
+      "owner": "XaeroSession",
+      "body_preserved": true
+    },
+    {
+      "method": "java.util.Set<Long> awaitingRegionsForTest()",
+      "owner": "XaeroSession",
+      "body_preserved": true
+    },
+    {
+      "method": "private void updateOccupancyLocked()",
+      "owner": null,
+      "body_preserved": false
+    },
+    {
+      "method": "private void reportDroppedIfGoverned(Object dimension, int chunkX, int chunkZ, Origin origin)",
+      "owner": "XaeroAcquisitionQueue",
+      "body_preserved": true
+    },
+    {
+      "method": "int clearQueue()",
+      "owner": "XaeroAcquisitionQueue",
+      "body_preserved": true
+    },
+    {
+      "method": "int clearQueueCollectingReports()",
+      "owner": "XaeroAcquisitionQueue",
+      "body_preserved": true
+    },
+    {
+      "method": "private boolean removeIfCurrent(Long key, Entry entry, XaeroTileExtractor.PreparedTile tile)",
+      "owner": "XaeroAcquisitionQueue",
+      "body_preserved": true
+    },
+    {
+      "method": "int queuedForTest()",
+      "owner": "XaeroSession",
+      "body_preserved": true
+    },
+    {
+      "method": "boolean hasQueuedForTest(int chunkX, int chunkZ)",
+      "owner": "XaeroSession",
+      "body_preserved": true
+    },
+    {
+      "method": "long queuedBytesForTest()",
+      "owner": "XaeroSession",
+      "body_preserved": true
+    },
+    {
+      "method": "boolean deadForTest()",
+      "owner": "XaeroSession",
+      "body_preserved": true
+    },
+    {
+      "method": "boolean drainableForTest()",
+      "owner": "XaeroSession",
+      "body_preserved": true
+    },
+    {
+      "method": "int undrainablePumpsForTest()",
+      "owner": "XaeroSession",
+      "body_preserved": true
+    },
+    {
+      "method": "int regionsWaitingForTest()",
+      "owner": "XaeroSession",
+      "body_preserved": true
+    },
+    {
+      "method": "boolean registeredForTest()",
+      "owner": "XaeroSession",
+      "body_preserved": true
+    },
+    {
+      "method": "long counterForTest(String name)",
+      "owner": "XaeroSession",
+      "body_preserved": true
+    },
+    {
+      "method": "private String bpToken()",
+      "owner": "XaeroSession",
+      "body_preserved": true
+    },
+    {
+      "method": "String describe()",
+      "owner": "XaeroSession",
+      "body_preserved": true
+    },
+    {
+      "method": "void pump()",
+      "owner": "XaeroSession",
+      "body_preserved": true
+    },
+    {
+      "method": "private void drainDeferredReports()",
+      "owner": "XaeroAcquisitionQueue",
+      "body_preserved": true
+    },
+    {
+      "method": "private void pumpLadder() throws Throwable",
+      "owner": "XaeroSession",
+      "body_preserved": true
+    },
+    {
+      "method": "private boolean pumpLadderInner() throws Throwable",
+      "owner": "XaeroSession",
+      "body_preserved": true
+    },
+    {
+      "method": "void frameFlush()",
+      "owner": "XaeroRebuildScheduler",
+      "body_preserved": true
+    },
+    {
+      "method": "private boolean nothingDueAtHead()",
+      "owner": "XaeroRebuildScheduler",
+      "body_preserved": true
+    },
+    {
+      "method": "private void frameLadder() throws Throwable",
+      "owner": "XaeroRebuildScheduler",
+      "body_preserved": true
+    },
+    {
+      "method": "private void drainEntries(Object mp, Object saveLoad, Object world, Object dimensionId, boolean loadNew, boolean update) throws Throwable",
+      "owner": "XaeroSession",
+      "body_preserved": true
+    },
+    {
+      "method": "private void oweExpired(Object dimension, long packedChunk, long regionKey)",
+      "owner": "XaeroAcquisitionQueue",
+      "body_preserved": true
+    },
+    {
+      "method": "private void oweExpired(Object dimension, long packedChunk, long regionKey, Origin origin)",
+      "owner": "XaeroAcquisitionQueue",
+      "body_preserved": true
+    },
+    {
+      "method": "private void grantLoads(Object mp, Object saveLoad, List<WaitingRegion> waiting)",
+      "owner": "XaeroSession",
+      "body_preserved": true
+    },
+    {
+      "method": "private boolean requestRegionLoad(Object mp, Object saveLoad, long regionKey)",
+      "owner": "XaeroSession",
+      "body_preserved": true
+    },
+    {
+      "method": "private boolean nativelyWritable(Object world, int chunkX, int chunkZ)",
+      "owner": "XaeroTileWriter",
+      "body_preserved": true
+    },
+    {
+      "method": "private void reportDropped(Object dimension, int chunkX, int chunkZ, Origin origin)",
+      "owner": "XaeroAcquisitionQueue",
+      "body_preserved": true
+    },
+    {
+      "method": "private Outcome commitEntry(Object mp, Object dimensionId, XaeroTileExtractor.PreparedTile tile, boolean loadNew, boolean update)",
+      "owner": "XaeroTileWriter",
+      "body_preserved": true
+    },
+    {
+      "method": "private void commitPixels(Object mp, Object dimensionId, Object region, Object tileChunk, boolean createdTileChunk, int localTcX, int localTcZ, XaeroTileExtractor.PreparedTile tile, List<SlopeNeighbor> neighbors) throws Throwable",
+      "owner": "XaeroTileWriter",
+      "body_preserved": true
+    },
+    {
+      "method": "private List<SlopeNeighbor> slopeNeighbors(Object region, XaeroTileExtractor.PreparedTile tile) throws Throwable",
+      "owner": "XaeroTileWriter",
+      "body_preserved": true
+    },
+    {
+      "method": "private boolean hasRebuildCapacity(Object dimensionId, XaeroTileExtractor.PreparedTile tile, List<SlopeNeighbor> neighbors)",
+      "owner": "XaeroRebuildScheduler",
+      "body_preserved": true
+    },
+    {
+      "method": "private void invalidateSlope(Object tile, int x, int z) throws Throwable",
+      "owner": "XaeroTileWriter",
+      "body_preserved": true
+    },
+    {
+      "method": "private static PendingKey pendingKey(Object dimension, int tileChunkX, int tileChunkZ)",
+      "owner": "XaeroSession",
+      "body_preserved": true
+    },
+    {
+      "method": "private void notePendingUpdate(Object mp, Object dimensionId, Object region, Object tileChunk, int localTcX, int localTcZ, int tileChunkX, int tileChunkZ) throws Throwable",
+      "owner": "XaeroRebuildScheduler",
+      "body_preserved": true
+    },
+    {
+      "method": "private long rebuildBudgetWithBorrow()",
+      "owner": "XaeroRebuildScheduler",
+      "body_preserved": true
+    },
+    {
+      "method": "private void tickFlush(Object mp, Object dimensionId)",
+      "owner": "XaeroRebuildScheduler",
+      "body_preserved": true
+    },
+    {
+      "method": "private void flushPendingUpdates(Object mp, Object dimensionId, long budget, int maxRebuilds, boolean keepVisited)",
+      "owner": "XaeroRebuildScheduler",
+      "body_preserved": true
+    },
+    {
+      "method": "private void keepOwedRegionsVisited(Object mp, String worldId, Object dimensionId) throws Throwable",
+      "owner": "XaeroRebuildScheduler",
+      "body_preserved": true
+    },
+    {
+      "method": "private UpdateResult rebuildTileChunk(Object mp, PendingUpdate pu, RebuildArgs args)",
+      "owner": "XaeroRebuildScheduler",
+      "body_preserved": true
+    },
+    {
+      "method": "private void noteFailure(Throwable t)",
+      "owner": "XaeroSession",
+      "body_preserved": true
+    }
+  ]
+}

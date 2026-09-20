@@ -1,0 +1,1 @@
+{"schemaVersion":1,"id":"lss_server_smoke_client","version":"1.0.0-test-only","environment":"client","entrypoints":{"client":["dev.vox.lssfixture.smoke.SmokeClient"]},"mixins":["lss-smoke.mixins.json"],"depends":{"fabricloader":">=0.19.3","minecraft":"${minecraft}","java":">=${java}","lss":">=0.14.0"}}

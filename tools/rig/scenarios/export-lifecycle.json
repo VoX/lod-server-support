@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "id": "export-lifecycle",
+  "version": 1,
+  "timeout_seconds": 480,
+  "required_test_count": 5,
+  "assertions": [
+    "screen-held-export-retired",
+    "command-held-export-retired",
+    "native-same-dimension-replacement",
+    "fresh-screen-and-command",
+    "actual-submission-rejection-releases"
+  ],
+  "human_reviews": [],
+  "checker": "export-lifecycle"
+}

@@ -1,0 +1,1 @@
+{"schemaVersion":1,"id":"lss_rig_source_server","version":"1","name":"LSS owned source workload fixture","environment":"server","entrypoints":{"main":["dev.vox.lssfixture.concurrent.FabricSourceProbe"]},"depends":{"fabricloader":">=0.19.3","minecraft":"26.2","lss":"*","fabric-api":"*"}}

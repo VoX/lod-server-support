@@ -1,0 +1,162 @@
+{
+  "schema": "lss-public-performance-summary-v1",
+  "experiment": "V27-fixed-client-heap",
+  "date": "2026-09-14",
+  "measured_scope": {
+    "minecraft": "26.2",
+    "clients": "four Fabric clients with Xaero",
+    "server": "Folia",
+    "calibration_runs": 3,
+    "measured_pairs": 3,
+    "measured_order": [
+      "baseline",
+      "candidate",
+      "candidate",
+      "baseline",
+      "baseline",
+      "candidate"
+    ],
+    "warmup_seconds": 120,
+    "measurement_seconds": 600,
+    "drain_seconds": 120
+  },
+  "result": {
+    "status": "passed",
+    "comparisons_passed": 30,
+    "comparisons_total": 30,
+    "rule": "unchanged calibrated median and at least two of three paired comparisons",
+    "exception": {
+      "metric": "server tick-delay p99",
+      "pair": 3,
+      "candidate_minus_baseline_ms": 0.216949,
+      "bound_ms": 0.1919346,
+      "aggregate_is_same_server_observation": true
+    },
+    "comparisons_nonduplicate": 25,
+    "nonduplication_note": "Aggregate repeats the server observation for four tick metrics and useful throughput; statistical independence is not established because runs, subjects and calibrations are shared."
+  },
+  "settings": {
+    "lodDistanceChunks": 32,
+    "generationConcurrencyLimitGlobal": 4,
+    "generationConcurrencyLimitPerPlayer": 1,
+    "opt_in": true,
+    "defaults_changed": false
+  },
+  "setup": {
+    "client_heap": "Xms1500M/Xmx1500M/+AlwaysPreTouch",
+    "server_heap": "Xms2G/Xmx2G/+AlwaysPreTouch",
+    "folia_scheduler": "EDF,4 threads",
+    "client_max_fps": 30,
+    "client_inactivity_fps_limit": "minimized",
+    "client_active_processor_count": 16,
+    "cpu_placement": "owned guest CPU placement validated per run",
+    "rss_meaning": "resident process memory, not live Java heap"
+  },
+  "arms": {
+    "baseline": {
+      "artifact_hashes": {
+        "fabric": "f5732dc90aacda20a702da9089b9a2f175e440e98877d0de4efa64e8a02bd68d",
+        "paper": "c823cbecd29dc516225a31446004596ccc3f20fc34dad19c159694c70fdd16d3"
+      },
+      "source_tree": "4162bc397e7d53284ec976cefa224862040a9e75"
+    },
+    "candidate": {
+      "artifact_hashes": {
+        "fabric": "3f82f8d48bfcc49797799fb307948db283f7bb0054b1b41152133e7816872912",
+        "paper": "35f9c5ee7df91e823fc6655338c96af097196e2c4fbe4e96975ef174a58f2d71"
+      },
+      "source_tree": "d9866a3daf53b53060c4d91e0c4f33b004ab1e6f"
+    }
+  },
+  "interpretation": [
+    "Corrected reference and candidate share correctness fixes; their costs are excluded from this comparison.",
+    "Whole-client frame cadence includes waiting/pacing; no 33ms subtraction or isolated pump CPU claim.",
+    "Xaero work intervals are descriptive and add no acceptance threshold.",
+    "Prior six functional gates retain their earlier CPU-placement scope.",
+    "Measured26.2 artifacts do not qualify other lines or subsequently integrated artifacts.",
+    "Frame comparisons are pacing-saturated at the 30 FPS cap (p50 33.333 ms in all nine runs); the \u00b110% frame budget only registers a drop below ~27 FPS.",
+    "Tick-delay paired differences (up to \u00b111%) are about three times the calibration spread; floors were never the binding term. Passed means no regression larger than budget plus noise was demonstrated.",
+    "Both arms ran at 32/4/1: it is the experiment's fixed operating point, not a value compared against the defaults or other points.",
+    "Fabric/Paper functional prerequisites retain their earlier artifact scope; Folia correctness holds on both measured arms. Final packaged build heads are retained separately from later harness/catalog/documentation heads; recorded shipping source, resources, Gradle/build and license inputs were byte-identical at the documented equivalence check."
+  ],
+  "xaero_work": {
+    "measured_pairs": 3,
+    "subjects_per_arm_per_pair": 4,
+    "eligible_intervals": {
+      "baseline": 7074,
+      "candidate": 7071
+    },
+    "excluded_intervals": {
+      "boundary": 6072,
+      "absence": 0,
+      "generation": 0
+    },
+    "p95_written_delta_by_subject": {
+      "baseline": [
+        80,
+        80,
+        80,
+        81
+      ],
+      "candidate": [
+        80,
+        80,
+        80,
+        155
+      ]
+    },
+    "subject_order": [
+      "A",
+      "B",
+      "C",
+      "D"
+    ]
+  },
+  "evidence_sha256": {
+    "evaluation": "455c0101dfde3ebf22bb75f29c76d7d587741b7726df9e8d423da5be45bd4447",
+    "tested_effective_config": "5ebd6ad1b04ba7cc220b5cb41f2b86de458178364e163519947b350f672e9ac6",
+    "xaero_work": "983c61d27891dcdc1280579248e3bc707b39e1cc299dce767d384d1d4d93af49"
+  },
+  "final_integration_commits": {
+    "1.21.1": "e14d64c84bbfb4d5859c550536a6df5d6c4becb1",
+    "1.21.10": "d33592a44688361468af9362ff392865aa43efc8",
+    "1.21.11": "ccb90cfcd5ee2962859e9fa8b22a41ebd6d08c2e",
+    "26.1": "886bf68e03984691a713f720b7b6fdf26d6f4b67",
+    "26.2": "b3498fb0a990163f602f806cf0f7e5a13e593bb5"
+  },
+  "remaining": [
+    "Eight actual user image-bound visual assessments and the separate section 16 Windows usability/resource-coexistence observation.",
+    "Final catalog/classification reconciliation and owned-gallery shutdown after user review; full rig/non-rig suites and game cleanup already passed.",
+    "Full 54-case exact-target export/import and immutable source-ref/catalog closure; partial 46 exports remain external-only."
+  ],
+  "final_reviews": {
+    "completed": "2026-09-16",
+    "reports": "docs/reviews/2026-09-14-final/",
+    "findings_applied": [
+      "R04-1",
+      "R05-1",
+      "R05-2",
+      "R05-3",
+      "R05-4",
+      "R05-5"
+    ],
+    "documented_limits": [
+      "R06-3",
+      "R06-4",
+      "R06-5",
+      "R06-6"
+    ],
+    "follow_ups": [
+      "R06-1",
+      "R06-2"
+    ]
+  },
+  "native_validation_progress": {
+    "index": "docs/implementation/native-validation-progress-2026-09-20.json",
+    "collected_passes": 46,
+    "automated_green_awaiting_user_images": 8,
+    "source_results": "Fabric 28/28; Folia 28/28 with owning-region evidence; Paper first 27/28 failed and bounded diagnostic replay 28/28 passed. Original failure retained; no inferred body-content diagnosis.",
+    "performance_scope_expanded": false,
+    "final_acceptance_complete": false
+  }
+}

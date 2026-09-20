@@ -35,6 +35,7 @@ public final class FarPlayerClientTracker {
                                    String[] equipmentIdentities, int[] equipmentCounts) {}
 
     private final Map<Integer, UUID> uuidByIndex = new HashMap<>();
+    private final Map<UUID, Integer> indexByUuid = new HashMap<>();
     private final Map<UUID, String> nameByUuid = new HashMap<>();
     private final Map<UUID, TrackedFarPlayer> tracked = new HashMap<>();
     private int epoch = -1; // -1 = no roster seen; epoch 0 is never valid (server starts at 1)
@@ -59,6 +60,7 @@ public final class FarPlayerClientTracker {
     public void onRoster(FarPlayerWire.Roster roster) {
         if (roster.full()) {
             uuidByIndex.clear();
+            indexByUuid.clear();
             nameByUuid.clear();
             tracked.clear();
             epoch = roster.epoch();
@@ -67,10 +69,30 @@ public final class FarPlayerClientTracker {
             return;
         }
         for (var e : roster.added()) {
-            uuidByIndex.put(e.index(), e.uuid());
+            // A peer may rebind an occupied index or alias a UUID. Keep one live
+            // binding per identity; old motion/equipment cannot outlive its binding.
+            Integer previousIndex = indexByUuid.put(e.uuid(), e.index());
+            if (previousIndex != null && previousIndex != e.index()) {
+                uuidByIndex.remove(previousIndex);
+            }
+            UUID displaced = uuidByIndex.put(e.index(), e.uuid());
+            if (displaced != null && !displaced.equals(e.uuid())) {
+                indexByUuid.remove(displaced);
+                nameByUuid.remove(displaced);
+                tracked.remove(displaced);
+            }
             nameByUuid.put(e.uuid(), e.name());
+            var previous = tracked.get(e.uuid());
+            if (previous != null && !java.util.Objects.equals(previous.name(), e.name())) {
+                tracked.put(e.uuid(), new TrackedFarPlayer(previous.uuid(), e.name(),
+                        previous.latest(), previous.cadenceTicks(), previous.receivedAtMillis(),
+                        previous.motion(), previous.equipmentIdentities(), previous.equipmentCounts()));
+            }
         }
-        if (uuidByIndex.size() > MAX_TRACKED_IDENTITIES) {
+        if (uuidByIndex.size() > MAX_TRACKED_IDENTITIES
+                || indexByUuid.size() > MAX_TRACKED_IDENTITIES
+                || nameByUuid.size() > MAX_TRACKED_IDENTITIES
+                || tracked.size() > MAX_TRACKED_IDENTITIES) {
             clear();
             identityCapResets++;
             return;
@@ -78,6 +100,7 @@ public final class FarPlayerClientTracker {
         for (int idx : roster.removedIndices()) {
             UUID gone = uuidByIndex.remove(idx);
             if (gone != null) {
+                indexByUuid.remove(gone);
                 nameByUuid.remove(gone);
                 tracked.remove(gone);
             }
@@ -125,6 +148,7 @@ public final class FarPlayerClientTracker {
      *  the re-sent prefs trigger a bumped-epoch full roster that repopulates. */
     public void clear() {
         uuidByIndex.clear();
+        indexByUuid.clear();
         nameByUuid.clear();
         tracked.clear();
         epoch = -1;

@@ -1,0 +1,24 @@
+plugins { id 'net.fabricmc.fabric-loom-remap' version '1.17.13' }
+version = '1.0.0-test-only'
+group = 'dev.vox.lssfixture'
+base { archivesName = 'lss-wi6-transport-fixture' }
+repositories { mavenCentral() }
+dependencies {
+    minecraft 'com.mojang:minecraft:1.21.1'
+    mappings loom.officialMojangMappings()
+    modImplementation 'net.fabricmc:fabric-loader:0.19.3'
+    modCompileOnly files(providers.gradleProperty('lssFabricJar').get())
+    compileOnly files(providers.gradleProperty('lssCommonJar').get())
+}
+java { toolchain { languageVersion = JavaLanguageVersion.of(21) } }
+loom { mixin { useLegacyMixinAp = true; defaultRefmapName = 'lss-wi6-fixture-refmap.json' } }
+
+// Native NeoForge uses the named classes and no Fabric refmap.
+tasks.register('neoforgeFixtureJar', Jar) {
+    dependsOn classes
+    archiveClassifier = 'neoforge-named'
+    from(sourceSets.main.output) {
+        exclude 'fabric.mod.json', 'lss-wi6-fixture.mixins.json', '*refmap*.json'
+    }
+    from('neoforge-resources')
+}

@@ -319,7 +319,7 @@ def section_timeline(rep, d):
             # expected to be counter-inert; the tag just tells the reviewer which steps moved
             # the pipeline, so a content edit that was supposed to and didn't is spottable.
             tag = "" if moved else "  [no observable effect on server counters]"
-        okmark = "" if ok else "  [STEP THREW]"
+        okmark = "" if ok else "  [STEP FAILED VALIDATION/EXECUTION]"
         if not ok:
             rep["anomalies"] += 1
         lines.append(f"  +{c.get('at','?')}s @{wall}ms  {c.get('cmd','?')}{okmark}{tag}")

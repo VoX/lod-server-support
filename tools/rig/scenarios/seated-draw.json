@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "id": "seated-draw",
+  "version": 1,
+  "timeout_seconds": 180,
+  "required_test_count": 5,
+  "assertions": [
+    "seated_proxy_draw",
+    "fault_injected",
+    "next_proxy_draw",
+    "matrices_restored",
+    "name_tag_draw"
+  ],
+  "human_reviews": [
+    "visual_render"
+  ],
+  "checker": "seated-draw"
+}

@@ -29,6 +29,10 @@ on:
         type: boolean
         default: true
 
+# Common tests have a fixed Java 21 runtime, independent of the Minecraft build JDK.
+env:
+  COMMON_TEST_JAVA_VERSION: 21
+
 jobs:
   release:
     runs-on: ubuntu-latest
@@ -163,6 +167,12 @@ jobs:
             echo "$NOTES"
             echo "RELEASE_NOTES_EOF"
           } >> "$GITHUB_OUTPUT"
+
+      - name: Install Java 21 for common tests
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.COMMON_TEST_JAVA_VERSION }}
 
       - uses: actions/setup-java@v4
         with:

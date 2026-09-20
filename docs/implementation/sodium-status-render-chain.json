@@ -1,0 +1,97 @@
+{
+  "purpose": "Actual cached Sodium render overrides call vanilla Screen, reaching the deferred layout injection. Live placement acceptance remains separate.",
+  "rows": [
+    {
+      "jar": "/home/vox/.gradle/caches/modules-2/files-2.1/maven.modrinth/sodium/mc26.2-0.9.1-beta.3-fabric/221dcf961af1d834a54819c744c64d48aa3c6610/sodium-mc26.2-0.9.1-beta.3-fabric.jar",
+      "jar_sha256": "5c73580f53cc54f79040ed8c76f06cc2e0908a184275243f83d0d985976c3dac",
+      "class": "net/caffeinemc/mods/sodium/client/gui/VideoSettingsScreen.class",
+      "class_sha256": "9ff6489978012ad84f7cc2fc140345b4d12c4152b07924da3fb0dd13a18647ac",
+      "method": "extractRenderState(Lnet/minecraft/client/gui/GuiGraphicsExtractor;IIF)V",
+      "vanilla_screen_calls": [
+        {
+          "offset": 34,
+          "target": "net/minecraft/client/gui/screens/Screen:extractRenderState:(Lnet/minecraft/client/gui/GuiGraphicsExtractor;IIF)V"
+        }
+      ]
+    },
+    {
+      "jar": "/home/vox/.gradle/caches/modules-2/files-2.1/maven.modrinth/sodium/mc26.1.2-0.8.12-fabric/cd6c6236f0dcff03c7148414db220de32c934b5a/sodium-mc26.1.2-0.8.12-fabric.jar",
+      "jar_sha256": "e084c5c3c520dc0718dbaef1deafef0ba2c7c0d77c701ac34c07646f6ccb81df",
+      "class": "net/caffeinemc/mods/sodium/client/gui/VideoSettingsScreen.class",
+      "class_sha256": "39eae7d74c664d71566a1c0660d4a671f244ab8a1ece356b8a2d5ce3b475d1f7",
+      "method": "extractRenderState(Lnet/minecraft/client/gui/GuiGraphicsExtractor;IIF)V",
+      "vanilla_screen_calls": [
+        {
+          "offset": 34,
+          "target": "net/minecraft/client/gui/screens/Screen:extractRenderState:(Lnet/minecraft/client/gui/GuiGraphicsExtractor;IIF)V"
+        }
+      ]
+    },
+    {
+      "jar": "/home/vox/.gradle/caches/modules-2/files-2.1/maven.modrinth/sodium/mc1.21.1-0.6.13-neoforge/38af70fa4dc4b2aaac636e92fdba3bedd5a025e1/sodium-mc1.21.1-0.6.13-neoforge.jar",
+      "jar_sha256": "7acd7af2ef75ec883a6872c17494ead65e38025151eb08a1d60e36d34377f403",
+      "class": "net/caffeinemc/mods/sodium/client/gui/SodiumOptionsGUI.class",
+      "class_sha256": "eecc524426fb085bff88c84a0d434fbfccc842beac4327dce0afd3631dc26c88",
+      "method": "render(Lnet/minecraft/client/gui/GuiGraphics;IIF)V",
+      "vanilla_screen_calls": [
+        {
+          "offset": 32,
+          "target": "net/minecraft/client/gui/screens/Screen:render:(Lnet/minecraft/client/gui/GuiGraphics;IIF)V"
+        }
+      ]
+    },
+    {
+      "jar": "/home/vox/.gradle/caches/modules-2/files-2.1/maven.modrinth/sodium/mc1.21.1-0.8.12-alpha.3-fabric/eb5e840a0d0d3f480d66f53e0a78f3a7734e1729/sodium-mc1.21.1-0.8.12-alpha.3-fabric.jar",
+      "jar_sha256": "12ff5c835390af25aac16e3f1f3c38972e442dfbb8909e06698bc5f30450f7c0",
+      "class": "net/caffeinemc/mods/sodium/client/gui/VideoSettingsScreen.class",
+      "class_sha256": "41a3f0cfc1c299c616c61baa338ca88d57469130febce58012137949bbdea515",
+      "method": "method_25394(Lnet/minecraft/class_332;IIF)V",
+      "vanilla_screen_calls": [
+        {
+          "offset": 34,
+          "target": "net/minecraft/class_437:method_25394:(Lnet/minecraft/class_332;IIF)V"
+        }
+      ]
+    },
+    {
+      "jar": "/home/vox/.gradle/caches/modules-2/files-2.1/maven.modrinth/sodium/mc1.21.11-0.8.12-fabric/4d80592bef36674e7469ae2737a7704b826289ae/sodium-mc1.21.11-0.8.12-fabric.jar",
+      "jar_sha256": "009299748f192f6246fd6759a26304f0fea06f3412cff522d1d533e2b8db8176",
+      "class": "net/caffeinemc/mods/sodium/client/gui/VideoSettingsScreen.class",
+      "class_sha256": "e1e0d77a6cbc0f2f654c70fe64066810ef38372e429369adbfa7ec32711f2d27",
+      "method": "method_25394(Lnet/minecraft/class_332;IIF)V",
+      "vanilla_screen_calls": [
+        {
+          "offset": 34,
+          "target": "net/minecraft/class_437:method_25394:(Lnet/minecraft/class_332;IIF)V"
+        }
+      ]
+    },
+    {
+      "jar": "/home/vox/.gradle/caches/modules-2/files-2.1/maven.modrinth/sodium/mc1.21.1-0.8.13-beta.2-fabric/d01f2112698d08b052d042c68c1206af790e660a/sodium-mc1.21.1-0.8.13-beta.2-fabric.jar",
+      "jar_sha256": "90261fcdab301314acc94c24bba483c2db1b5d94f645d92c69b9585e3422a176",
+      "class": "net/caffeinemc/mods/sodium/client/gui/VideoSettingsScreen.class",
+      "class_sha256": "41a3f0cfc1c299c616c61baa338ca88d57469130febce58012137949bbdea515",
+      "method": "method_25394(Lnet/minecraft/class_332;IIF)V",
+      "vanilla_screen_calls": [
+        {
+          "offset": 34,
+          "target": "net/minecraft/class_437:method_25394:(Lnet/minecraft/class_332;IIF)V"
+        }
+      ]
+    },
+    {
+      "jar": "/home/vox/.local/state/lss-rig/runs/20260909T185347Z-faab6743f117/artifacts/sodium-fabric-0.8.13-beta.2+mc1.21.1.jar",
+      "jar_sha256": "90261fcdab301314acc94c24bba483c2db1b5d94f645d92c69b9585e3422a176",
+      "class": "net/caffeinemc/mods/sodium/client/gui/VideoSettingsScreen.class",
+      "class_sha256": "41a3f0cfc1c299c616c61baa338ca88d57469130febce58012137949bbdea515",
+      "method": "method_25394(Lnet/minecraft/class_332;IIF)V",
+      "vanilla_screen_calls": [
+        {
+          "offset": 34,
+          "target": "net/minecraft/class_437:method_25394:(Lnet/minecraft/class_332;IIF)V"
+        }
+      ]
+    }
+  ],
+  "modern_layout_note": "VideoSettingsScreen.rebuild registers PageListWidget, DonationButtonWidget and OptionListWidget as Screen children. ScrollableTooltip only receives setTooltipArea and is not registered as a child; there is no full-screen composite child masking every candidate hit-test point. Live collision/tooltip readability acceptance remains required."
+}

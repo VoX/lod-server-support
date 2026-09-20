@@ -1,0 +1,36 @@
+name: Compatibility and support-line contracts
+on:
+  push:
+    branches: [main, 'support/**']
+  pull_request:
+    branches: [main, 'support/**']
+permissions:
+  contents: read
+jobs:
+  catalog:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Pinned metadata parser
+        run: python3 -m pip install -r tools/compat/requirements.txt
+      - name: Offline catalog, line, rig and impact regression tests
+        run: |
+          python3 -m unittest discover -s tools/compat
+          python3 -m unittest discover -s tools/lines
+          python3 -m unittest discover -s tools/rig
+          python3 -m unittest discover -s tools/verify
+          python3 -m unittest discover -s tools/tests
+          python3 -m unittest discover -s test-fixtures/client-preset-tools
+      - name: Exact sources and candidate comparison
+        run: python3 tools/compat/ci.py --fetch
+      - uses: actions/upload-artifact@v5
+        if: always()
+        with:
+          name: compatibility-candidate-report
+          path: compatibility-candidate-report.json

@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "id": "lss_elytra_fixture",
+  "version": "1.0.0-test-only",
+  "name": "LSS Elytra observation fixture",
+  "environment": "client",
+  "mixins": [
+    "lss-elytra-fixture.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=0.18.4",
+    "minecraft": [
+      "1.21.10",
+      "1.21.11"
+    ],
+    "java": ">=21",
+    "lss": "*"
+  },
+  "entrypoints": {
+    "client": [
+      "dev.vox.lssfixture.elytra.TargetConsumer"
+    ]
+  }
+}

@@ -94,4 +94,19 @@ class LSSApiDispatchReportTest {
             LSSApi.resetReportSink();
         }
     }
+    @Test void nestedUnownedDispatchCannotCaptureTheOuterReceipt() {
+        var handle = new LSSApi.IngestFailureHandle() {
+            public void report() { throw new AssertionError("unexpected failure"); }
+            public boolean isActive() { return true; }
+            public Runnable deferAcceptance() { return () -> {}; }
+        };
+        LSSApi.withIngestFailureHandle(dim(), 1, 2, handle, () -> {
+            org.junit.jupiter.api.Assertions.assertSame(handle, LSSApi.captureIngestFailureHandle());
+            LSSApi.withIngestFailureHandle(dim(), 1, 2, null,
+                    () -> org.junit.jupiter.api.Assertions.assertNull(LSSApi.captureIngestFailureHandle()));
+            org.junit.jupiter.api.Assertions.assertSame(handle, LSSApi.captureIngestFailureHandle());
+        });
+        org.junit.jupiter.api.Assertions.assertNull(LSSApi.captureIngestFailureHandle());
+    }
+
 }

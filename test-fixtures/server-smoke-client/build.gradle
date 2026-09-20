@@ -1,0 +1,16 @@
+plugins { id 'net.fabricmc.fabric-loom' version '1.17.13' }
+version = '1.0.0-test-only'
+group = 'dev.vox.lssfixture'
+base { archivesName = 'lss-native-server-smoke-client' }
+repositories { mavenCentral() }
+def mc = providers.gradleProperty('fixtureMinecraft').get()
+def javaFloor = mc.startsWith('26.') ? 25 : 21
+dependencies {
+ minecraft "com.mojang:minecraft:${mc}"
+ implementation 'net.fabricmc:fabric-loader:0.19.3'
+ compileOnly files(providers.gradleProperty('lssCommonJar').get())
+ compileOnly files(providers.gradleProperty('lssFabricJar').get())
+}
+java { toolchain { languageVersion = JavaLanguageVersion.of(javaFloor) } }
+
+processResources { inputs.property 'minecraft',mc; inputs.property 'java',javaFloor; filesMatching('fabric.mod.json') { expand minecraft:mc, java:javaFloor } }

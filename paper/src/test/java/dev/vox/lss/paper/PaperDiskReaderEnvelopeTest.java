@@ -1,5 +1,7 @@
 package dev.vox.lss.paper;
 
+import dev.vox.lss.common.processing.RequestRegistration;
+
 import com.mojang.serialization.Lifecycle;
 import dev.vox.lss.common.processing.ChunkReadResult;
 import net.minecraft.SharedConstants;
@@ -48,6 +50,12 @@ import static org.mockito.Mockito.when;
  * notFound-shaped result, pool saturation → synchronous saturated bounce.
  */
 class PaperDiskReaderEnvelopeTest {
+    private static final java.util.Map<UUID, RequestRegistration> TEST_REGISTRATIONS =
+            new java.util.concurrent.ConcurrentHashMap<>();
+    private static RequestRegistration registration(UUID uuid) {
+        return TEST_REGISTRATIONS.computeIfAbsent(uuid, ignored -> new RequestRegistration());
+    }
+
 
     private static RegistryAccess REGISTRY_ACCESS;
 
@@ -71,7 +79,7 @@ class PaperDiskReaderEnvelopeTest {
     void buildRig() {
         reader = new PaperChunkDiskReader(1, false);
         uuid = UUID.randomUUID();
-        reader.registerPlayer(uuid);
+        reader.registerPlayer(uuid, registration(uuid));
         level = mock(ServerLevel.class);
         when(level.registryAccess()).thenReturn(REGISTRY_ACCESS);
         // Explicit world section range (R2-5 amendment 5): the submit path passes
@@ -113,7 +121,7 @@ class PaperDiskReaderEnvelopeTest {
     @Test
     void missingChunkResolvesAsNotFound() throws Exception {
         reader.setReadOverride((cx, cz) -> CompletableFuture.completedFuture(Optional.empty()));
-        reader.submitReadDirect(uuid, "minecraft:overworld", level, 3, -4, 1L, 0L);
+        reader.submitReadDirect(uuid, registration(uuid), "minecraft:overworld", level, 3, -4, 1L, 0L);
 
         var result = awaitResult();
         assertTrue(result.notFound(), "an absent region entry is notFound (escalates to generation)");
@@ -128,7 +136,7 @@ class PaperDiskReaderEnvelopeTest {
     void fullStatusChunkWithNoVisibleSectionsResolvesAsAllAirWithTimestamp() throws Exception {
         reader.setReadOverride((cx, cz) ->
                 CompletableFuture.completedFuture(Optional.of(fullButEmptyChunkNbt())));
-        reader.submitReadDirect(uuid, "minecraft:the_end", level, 0, 0, 2L, 0L);
+        reader.submitReadDirect(uuid, registration(uuid), "minecraft:the_end", level, 0, 0, 2L, 0L);
 
         var result = awaitResult();
         assertFalse(result.notFound(), "FULL-but-empty must NOT be notFound — that would loop generation forever");
@@ -142,7 +150,7 @@ class PaperDiskReaderEnvelopeTest {
     void exceptionallyCompletedReadFutureResolvesAsErrorThenNotFound() throws Exception {
         reader.setReadOverride((cx, cz) ->
                 CompletableFuture.failedFuture(new IOException("region file corrupt")));
-        reader.submitReadDirect(uuid, "minecraft:overworld", level, 5, 5, 3L, 0L);
+        reader.submitReadDirect(uuid, registration(uuid), "minecraft:overworld", level, 5, 5, 3L, 0L);
 
         var result = awaitResult();
         assertTrue(result.notFound(), "a throwing chunkMap.read future degrades to notFound, never a hang");
@@ -161,7 +169,7 @@ class PaperDiskReaderEnvelopeTest {
                 throw new TimeoutException("simulated DISK_READ_TIMEOUT_SECONDS expiry");
             }
         });
-        reader.submitReadDirect(uuid, "minecraft:overworld", level, 7, 7, 4L, 0L);
+        reader.submitReadDirect(uuid, registration(uuid), "minecraft:overworld", level, 7, 7, 4L, 0L);
 
         var result = awaitResult();
         assertTrue(result.notFound(), "a timed-out read frees the reader thread with a notFound-shaped result");
@@ -182,11 +190,11 @@ class PaperDiskReaderEnvelopeTest {
             return CompletableFuture.completedFuture(Optional.empty());
         });
         for (int i = 0; i < 33; i++) {
-            reader.submitReadDirect(uuid, "minecraft:overworld", level, i, 0, i, 0L);
+            reader.submitReadDirect(uuid, registration(uuid), "minecraft:overworld", level, i, 0, i, 0L);
         }
         assertNull(reader.getPlayerQueue(uuid).peek(), "all 33 accepted reads are still in flight");
 
-        reader.submitReadDirect(uuid, "minecraft:overworld", level, 99, 0, 99L, 0L);
+        reader.submitReadDirect(uuid, registration(uuid), "minecraft:overworld", level, 99, 0, 99L, 0L);
         var bounced = reader.getPlayerQueue(uuid).poll();
         assertTrue(bounced != null && bounced.saturated(),
                 "the 34th submit is bounced synchronously as saturated (client retries later)");

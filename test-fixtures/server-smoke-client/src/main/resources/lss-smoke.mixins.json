@@ -1,0 +1,13 @@
+{
+  "required": true,
+  "package": "dev.vox.lssfixture.smoke.mixin",
+  "compatibilityLevel": "JAVA_25",
+  "client": [
+    "TickMixin",
+    "WireMixin",
+    "DecodeWireMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

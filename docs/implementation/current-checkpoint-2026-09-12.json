@@ -1,0 +1,784 @@
+{
+  "checkpoint_utc": "2026-09-16",
+  "status": "visual-signoff-and-native-integration-complete-known-map-followups-open",
+  "scope": "Historical checkpoint/reconciliation fields retain their dated scope. Latest visual_signoff_2026_09_20 records eight actual user image approvals with known map limitations, full54 native evidence integration and complete gallery/game cleanup. The separate desktop-coexistence check is now closed by the user\u2019s actual observation. The two production map corrections remain open.",
+  "source_commits": {
+    "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260910/accepted-performance-v27-20260914/numeric-commits-progress.json",
+    "sha256": "7da2b5fb6f970181e6470681760a0fe501f7c5c19dce9e7b0413492d75f5b0e4"
+  },
+  "current_targeted_tests": {
+    "status": "passed",
+    "cases": 113,
+    "new_cases": 12,
+    "receipt": {
+      "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260910/store-late-probe-control/green-attempt-1/result.json",
+      "sha256": "6579414f51a7efcd524a31cd60c30f746433d3eb56e318d1d583ee864bce7734"
+    },
+    "scope": "26.2 six-suite targeted campaign; not all-five full qualification"
+  },
+  "prior_functionals": {
+    "status": "passed",
+    "count": 6,
+    "receipt": {
+      "path": "/home/vox/.local/state/lss-rig/source-functional-header-refusal-20260912/six-functional-completion-20260914.json",
+      "sha256": "b595b97f0d173fd8abe51a0f652f654ba8d6ea940b0f6ac9f2288cdf6038dcda"
+    },
+    "scope": "Header/refusal inputs before store/all-air correction"
+  },
+  "historical_performance": {
+    "v17": {
+      "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260910/v17-two-calibration-inconclusive-audit.json",
+      "sha256": "c482fd5d2b3352812e61ed24284c52f4c6d1f1360559043e940b300262cd7494"
+    },
+    "v18": {
+      "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260910/v18-calibration1-eight-target-audit.json",
+      "sha256": "de0127ab96bf7ff66e33181f3c6e972a789397e07c4274ed8257c1ae86b084e6"
+    },
+    "status": "unaccepted; terminal attempts preserved; no candidate measurements",
+    "v19": "unused prepared output preserved after functional coverage blocker",
+    "v20": {
+      "status": "terminal-failure",
+      "run": "/home/vox/.local/state/lss-rig/runs/20260914T101725Z-acf06df8c58a",
+      "phase": "calibration",
+      "slot": 0,
+      "reason": "joint workload readiness timeout/exit",
+      "workload_origin_recorded": false,
+      "accepted_calibrations": 0,
+      "measured_slots_started": 0,
+      "cleanup_complete": true,
+      "ownership_errors": [],
+      "owned_children_alive": [],
+      "evidence": {
+        "failure-summary.json": {
+          "path": "/home/vox/.local/state/lss-project-improvements/performance-protocol-recovery-20260910/execution-v20-sparse-trigger-20260914/calibration-0-owned/failure-summary.json",
+          "sha256": "dabd80f8f1d4b2d5e88db9e61acd091651d8c03ae69ac2414201342e14c82fef",
+          "size": 2357
+        },
+        "independent-startup-audit.json": {
+          "path": "/home/vox/.local/state/lss-project-improvements/performance-protocol-recovery-20260910/execution-v20-sparse-trigger-20260914/calibration-0-owned/independent-startup-audit.json",
+          "sha256": "a9b502b2507455e7f7ad2280a36cfed5630b7ceeac0c6ff8c23a2a511e7f196d",
+          "size": 7326
+        }
+      },
+      "causality_limit": "C product registration/native owner observation exist; first oracle-session handoff absent; exact handoff guard outcome not observed."
+    },
+    "v21": {
+      "status": "terminal-baseline-calibration-inconclusive",
+      "accepted_baseline_calibrations": 2,
+      "candidate_measured_slots": 0,
+      "original_third_run": "/home/vox/.local/state/lss-rig/runs/20260914T123254Z-401c984192e1",
+      "original_third_disposition": "original third claim stopped during startup by root calibration-instability instruction; incomplete result preserved",
+      "stop_reason": "Existing first two baseline delay p95 and p99 values make the registered 10% median spread limit mathematically unreachable for any third sample.",
+      "cleanup_remaining_owned_processes": 0,
+      "automatic_resume": false,
+      "evidence": {
+        "path": "/home/vox/.local/state/lss-project-improvements/performance-protocol-recovery-20260910/execution-v21-folia-uuid-20260914/stop-summary.json",
+        "sha256": "4064e0ca615c85f9e5a9411a54e12c7666e3546e370320620093e5ccb10da658",
+        "size": 4446
+      }
+    }
+  },
+  "new_full_qualification": {
+    "measured_candidate": "product inputs at b7f1 qualified by original executed84f633 failed-inventory manifest plus exact metadata-only supplement; later fixture/classification commits do not relabel the product build",
+    "corrected_reference": "c2283b full qualification and release passed",
+    "other_lines": "final full gates remain pending after remaining integration",
+    "evidence": {
+      "candidate_original_failed_build": {
+        "path": "/home/vox/.local/state/lss-project-improvements/final-validation-after-preset/26.2/attempt-pre-performance-store-late-20260914/manifest.json",
+        "sha256": "ce4699485a59edd6409a0ee4b369722fa47a098edc69ed18bc0b312662391a36",
+        "size": 13857
+      },
+      "candidate_inventory_supplement": {
+        "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260910/store-late-probe-control/candidate-qualification-supplement.json",
+        "sha256": "2e0bc51f5c4936ac022e2b642cf2f0b5b9118543080b4d9bf414d2d1bdc00a81",
+        "size": 3549
+      },
+      "reference_full_release": {
+        "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260910/store-late-reference-qualification/qualification.json",
+        "sha256": "c87a9487844776c6a25b98b6cfa623caf34c366aa1d1a4adb5ba3a7d5b9cceef",
+        "size": 394805
+      }
+    }
+  },
+  "performance": {
+    "experiment": "V27-fixed-client-heap",
+    "status": "accepted",
+    "calibrations": 3,
+    "measured_pairs": 3,
+    "comparisons_passed": 30,
+    "summary": "../operations/performance-v27-summary.json",
+    "evidence_sha256": {
+      "evaluation": "455c0101dfde3ebf22bb75f29c76d7d587741b7726df9e8d423da5be45bd4447",
+      "tested_effective_config": "5ebd6ad1b04ba7cc220b5cb41f2b86de458178364e163519947b350f672e9ac6",
+      "xaero_work": "983c61d27891dcdc1280579248e3bc707b39e1cc299dce767d384d1d4d93af49"
+    }
+  },
+  "numeric_preset": {
+    "values": {
+      "lodDistanceChunks": 32,
+      "generationConcurrencyLimitGlobal": 4,
+      "generationConcurrencyLimitPerPlayer": 1,
+      "opt_in": true,
+      "defaults_changed": false
+    },
+    "integration_commit_receipt": {
+      "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260910/accepted-performance-v27-20260914/numeric-commits-progress.json",
+      "sha256": "7da2b5fb6f970181e6470681760a0fe501f7c5c19dce9e7b0413492d75f5b0e4"
+    },
+    "status": "accepted values integrated and locally committed; final qualification pending"
+  },
+  "final_astra_reviews": {
+    "status": "complete",
+    "reports": "docs/reviews/2026-09-14-final/",
+    "reviews": [
+      {
+        "id": 1,
+        "scope": "settings/presets/owner publication",
+        "reviewer": "gpt-6-astra",
+        "date": "2026-09-14",
+        "findings": 0
+      },
+      {
+        "id": 2,
+        "scope": "status and diagnostics export",
+        "reviewer": "gpt-6-astra",
+        "date": "2026-09-14",
+        "findings": 0
+      },
+      {
+        "id": 3,
+        "scope": "Xaero and client lifecycle",
+        "reviewer": "gpt-6-astra",
+        "date": "2026-09-14",
+        "findings": 0
+      },
+      {
+        "id": 4,
+        "scope": "compatibility, support lines, tests, shipping",
+        "reviewer": "gpt-6-astra",
+        "date": "2026-09-14",
+        "findings": 1,
+        "disposition": "R04-1 fixed on all five lines (tools/compat/materialize.py loader-route descriptor requirement + six controls)"
+      },
+      {
+        "id": 5,
+        "scope": "rig ownership, storage, evidence",
+        "reviewer": "claude-fable-5.1",
+        "date": "2026-09-16",
+        "findings": 5,
+        "disposition": "R05-1..R05-5 fixed on all five lines (owned-process signal drain + group signal guard, private display liveness/verification, launch environment hygiene + GUI gate, metric schema pin)"
+      },
+      {
+        "id": 6,
+        "scope": "concurrent source correctness and performance",
+        "reviewer": "claude-fable-5.1",
+        "date": "2026-09-16",
+        "findings": 6,
+        "disposition": "R06-3..R06-6 documented as evidence limits (performance.md, V27 summary, preset guide); R06-1 and R06-2 recorded follow-ups, not regressions"
+      }
+    ]
+  },
+  "remaining_acceptance": {
+    "performance_slots": 0,
+    "native_rows_including_presets": 52,
+    "required_native_rows": 42,
+    "supplemental_rows": 4,
+    "preset_runs": 6,
+    "human_assessments": 8,
+    "final_astra_reviews": 0,
+    "original_migrated_suites": 67,
+    "measured_placements": 0,
+    "folia_config_placements": 0,
+    "sparse_fixture_placements": 0,
+    "scheduled_hold_checker_placements": 0,
+    "total_known_pending_placements": 0,
+    "uuid_fixture_placements": 0,
+    "classification_actions": 0,
+    "final_six_group_source_inventory_expected": 55,
+    "paired_runtime_source_inventory": 54,
+    "prior_96_preimages": {
+      "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260910/remaining-96-preflight-20260914.json",
+      "sha256": "c7aa565b8ee8c6c9a8b34414a3134d8ab56632358d8c4da3fdd30a37a45050db",
+      "size": 23803
+    },
+    "uuid_pending_preimages": {
+      "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260910/folia-uuid-final-placements.json",
+      "sha256": "219ae708ad92aa168e8c84486ee97db171f0d493fdf3b3b63227d6639c223894",
+      "size": 14187
+    },
+    "final_six_group_inventory_status": "expected55; final inventory derivation pending",
+    "numeric_integration_binding": "complete",
+    "new_junit_expected_not_executed": 82,
+    "fabric_paper_functional_on_final_bytes": "pending (R06-4)",
+    "fixture_builds_completed": [
+      "wi5-1.21.1",
+      "wi6-1.21.1",
+      "wi9-1.21.1"
+    ],
+    "fixture_builds_remaining": 11,
+    "native_hold_reason": "requires four real clients on private displays and an idle GPU; held until the machine is free",
+    "scope": "Historical September 16 pending inventory, superseded for current status by completion_reconciliation_2026_09_20; preserved without retroactively rewriting evidence."
+  },
+  "current_functional_setup": {
+    "paired_eight": "passed; all four full entry maps equal between arms",
+    "six_recipes": "all six strict functional prerequisites passed; two23056/23056 sustained and four28/28 sparse; all cleanup complete and ownership errors empty",
+    "measured_pause": "fixed160\u2013180 seconds unchanged",
+    "sparse_pause": "original target armed, actual receipt-triggered20 seconds",
+    "evidence": {
+      "fresh_paired_eight": {
+        "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260910/sparse-trigger-phase1-staging/build-20260914T085118Z/fixture-index-reproduced.json",
+        "sha256": "1bb46da352e31a5ac14e8a685355edb739de7f5ac6ee6144539566c583fccbb3",
+        "size": 172517
+      },
+      "fresh_six_recipes": {
+        "path": "/home/vox/.local/state/lss-rig/source-functional-sparse-trigger-20260914/six-recipe-index.json",
+        "sha256": "267be1e7d9d3484a7d7b13b636a2501c09a99739bdb13a349d9b2ab9e916e822",
+        "size": 18347
+      },
+      "paper_first_failure": {
+        "path": "/home/vox/.local/state/lss-rig/source-functional-store-late-20260914/paper/attempt-1/failure-summary.json",
+        "sha256": "8eba903b2179711c29e9866d9da11d764c2550e3d974f9f4fcc6111ba6ca5676",
+        "size": 8270
+      },
+      "paper_manual_retry_failure": {
+        "path": "/home/vox/.local/state/lss-rig/source-functional-store-late-20260914/paper/attempt-2/failure-summary.json",
+        "sha256": "cf764c460912d640d0b1f7834eb1ca5b6d10c59f05ddc997f87a9bd3ec93425d",
+        "size": 1102
+      }
+    },
+    "completion": {
+      "path": "/home/vox/.local/state/lss-rig/source-functional-sparse-trigger-20260914/completion.json",
+      "sha256": "0e030abfe83df2bd02ced4b5aabc6ce9da5485eeb61cb42767426d04dfa1b4c8",
+      "size": 11964
+    },
+    "runs": [
+      {
+        "lane": "paper",
+        "run": "/home/vox/.local/state/lss-rig/runs/20260914T085734Z-a63d11693c1d",
+        "status": "passed",
+        "targets": 28,
+        "committed": 28,
+        "acceptance": {
+          "path": "/home/vox/.local/state/lss-rig/source-functional-sparse-trigger-20260914/paper/attempt-1/acceptance.json",
+          "sha256": "3f08c11c8305ef8f51823139c5639f215d7e2e9d1a5cb1a909f6634c7a04475c",
+          "size": 12402
+        },
+        "cleanup": "complete",
+        "ownership_errors": []
+      },
+      {
+        "lane": "baseline-folia-sustained",
+        "run": "/home/vox/.local/state/lss-rig/runs/20260914T090830Z-f8529a095cef",
+        "status": "passed",
+        "targets": 23056,
+        "committed": 23056,
+        "acceptance": {
+          "path": "/home/vox/.local/state/lss-rig/source-functional-sparse-trigger-20260914/baseline-folia-sustained/attempt-1/acceptance.json",
+          "sha256": "cf6d726cde92f93eeff6e7c4ba953f744f2e9b713b0e4f252a8311733f334858",
+          "size": 29350037
+        },
+        "cleanup": "complete",
+        "ownership_errors": []
+      },
+      {
+        "lane": "baseline-folia-sparse",
+        "run": "/home/vox/.local/state/lss-rig/runs/20260914T092430Z-626a5ad519ad",
+        "status": "passed",
+        "targets": 28,
+        "committed": 28,
+        "acceptance": {
+          "path": "/home/vox/.local/state/lss-rig/source-functional-sparse-trigger-20260914/baseline-folia-sparse/attempt-1/acceptance.json",
+          "sha256": "58f898064d654ef3dd03f38b292539b82de442ab7c53d9e0547e3741f13cc9cf",
+          "size": 3752
+        },
+        "cleanup": "complete",
+        "ownership_errors": []
+      },
+      {
+        "lane": "fabric",
+        "run": "/home/vox/.local/state/lss-rig/runs/20260914T093507Z-8c6ac73b1dc2",
+        "status": "passed",
+        "targets": 28,
+        "committed": 28,
+        "acceptance": {
+          "path": "/home/vox/.local/state/lss-rig/source-functional-sparse-trigger-20260914/fabric/attempt-1/acceptance.json",
+          "sha256": "4111264dee85bcabbdd879f82eec39cf64bfeaf0f23925a30ef9d13e56b15933",
+          "size": 12415
+        },
+        "cleanup": "complete",
+        "ownership_errors": []
+      },
+      {
+        "lane": "folia",
+        "run": "/home/vox/.local/state/lss-rig/runs/20260914T094544Z-2025c96f7e37",
+        "status": "passed",
+        "targets": 28,
+        "committed": 28,
+        "acceptance": {
+          "path": "/home/vox/.local/state/lss-rig/source-functional-sparse-trigger-20260914/folia/attempt-1/acceptance.json",
+          "sha256": "dc5356c703b4655dfff26eed233de70512736e4417d7a5de5d12011d4ae697f7",
+          "size": 13040
+        },
+        "cleanup": "complete",
+        "ownership_errors": []
+      },
+      {
+        "lane": "folia-sustained",
+        "run": "/home/vox/.local/state/lss-rig/runs/20260914T095618Z-7825cc456493",
+        "status": "passed",
+        "targets": 23056,
+        "committed": 23056,
+        "acceptance": {
+          "path": "/home/vox/.local/state/lss-rig/source-functional-sparse-trigger-20260914/folia-sustained/attempt-1/acceptance.json",
+          "sha256": "31c7df4df39264d06d36d3dae5950e1a869077a7135b740e0460944a62513a07",
+          "size": 29364135
+        },
+        "cleanup": "complete",
+        "ownership_errors": []
+      }
+    ],
+    "retained_failed_previous_fixture_history": [
+      {
+        "path": "/home/vox/.local/state/lss-rig/source-functional-store-late-20260914/completion.json",
+        "sha256": "c6ed848a90106af108b9a518ee9debc7d6bd1c54a47bb3311889039ba9049e5d",
+        "size": 4313
+      },
+      {
+        "path": "/home/vox/.local/state/lss-rig/source-functional-store-late-20260914/continuation-completion.json",
+        "sha256": "1f6c21dd137b285e1d5cb19a58382e273a4ae4ea8d17f304bca925429c8390fb",
+        "size": 901
+      }
+    ],
+    "performance_acceptance": false,
+    "scope": "Historical V20 fixture: all six actual passes preserved; does not qualify the new Folia fixture."
+  },
+  "workspace_preservation": "All five retain preexisting tracked xaero-map-live-fixture.md edits and historical untracked 2026-09-10 evidence under docs/implementation and config/compatibility/validation; 1.21.11 also c2me-validation.md. Deliberately left uncommitted: they record runs against pre-correction artifacts.",
+  "v21_uuid_preparation": {
+    "status": "functional_prerequisites_passed_performance_terminal_inconclusive",
+    "runtime_source_count": 54,
+    "runtime_source_delta": "FoliaSourceProbe replacement plus SubjectPlayers runtime helper; helper test/runner changes separately bound",
+    "paired_eight": "passed; full arm entry parity and exact retained Fabric/Paper/client archive bytes",
+    "pure_controls": "eight existing pure Java mains passed; not eight native runs",
+    "retained_functional_gates": [
+      "fabric",
+      "paper"
+    ],
+    "prepared": {
+      "path": "/home/vox/.local/state/lss-project-improvements/performance-protocol-recovery-20260910/prepared-v21-folia-uuid/output-manifest.json",
+      "sha256": "8a6eb4dc7facf70847c65b23b867d4e3788f6a9b7494c11bf4d173dbbfc44f68",
+      "size": 1139
+    },
+    "binding": {
+      "path": "/home/vox/.local/state/lss-project-improvements/performance-protocol-recovery-20260910/binding-v21-folia-uuid-20260914.json",
+      "sha256": "f21ff92c1836136e4fc56336f128fdb605355bcdaaff6cc7fbbca6e4dc9f49b3",
+      "size": 32653
+    },
+    "accepted_calibrations": 2,
+    "measured_results": 0,
+    "evidence": {
+      "diagnosis": {
+        "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260910/v20-startup-handoff-diagnosis/diagnosis.json",
+        "sha256": "dc4fe4c05d0e19519c47d1444e2ea58ba1661bebd8273caaf0497569cfba26c0",
+        "size": 2399
+      },
+      "uuid_controls": {
+        "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260910/folia-uuid-lookup-staging/controls-result.json",
+        "sha256": "15267feced5b81fd9e6e16e0d59b791b75eabd3d3ed0648c15e9d62cde34aabe",
+        "size": 3349
+      },
+      "uuid_proposal_review": {
+        "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260910/folia-uuid-lookup-staging/root-review.json",
+        "sha256": "ed99727cd0bdb9048030c627d10d64e82ca4886190e8d90bec15f4e6ff8e3133",
+        "size": 1556
+      },
+      "uuid_final_placements": {
+        "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260910/folia-uuid-final-placements.json",
+        "sha256": "219ae708ad92aa168e8c84486ee97db171f0d493fdf3b3b63227d6639c223894",
+        "size": 14187
+      },
+      "effective54": {
+        "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260910/folia-uuid-phase1-staging/effective-source-manifest.json",
+        "sha256": "1e69e4c2ef370705a8371a4ee268f30afbecfeba6b8f6e3251c8c98c649361ee",
+        "size": 43623
+      },
+      "paired_eight": {
+        "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260910/folia-uuid-phase1-staging/build-20260914T104129Z/fixture-index-reproduced.json",
+        "sha256": "2c2ee0388e46df51def387201c505416c8b7df7b8cdbae72b30fc9bf76978ca3",
+        "size": 172955
+      },
+      "prepared_verification": {
+        "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260910/folia-uuid-corrected-selection-v1/prepared-verification.json",
+        "sha256": "2baf006ffa822edaba15b75533028b68dfd2702410f9c4861a795cba6bbc2c33",
+        "size": 5515
+      },
+      "prepared_root_review": {
+        "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260910/v21-folia-uuid-phase2-staging/root-prepared-review.json",
+        "sha256": "3d502da5f1f9a93f1842a131908c3e6e231312cfac5f710274fe9e3d23f8fec7",
+        "size": 1864
+      },
+      "six_recipes": {
+        "path": "/home/vox/.local/state/lss-rig/source-functional-folia-uuid-20260914/six-recipe-index.json",
+        "sha256": "1989c26786997df69fbd597db4f862956e24a3ac7a162725a19c5a0438962809",
+        "size": 18275
+      }
+    },
+    "causality_limit": "Unsafe name-map dependency established; actual failed C callback lookup outcome was not observed.",
+    "fresh_functional_gates_passed": [
+      "baseline-folia-sustained",
+      "baseline-folia-sparse",
+      "folia",
+      "folia-sustained"
+    ],
+    "completion": {
+      "path": "/home/vox/.local/state/lss-rig/source-functional-folia-uuid-20260914/completion.json",
+      "sha256": "b1e8a8078ebf6c3247c3f380d74823624df3869a963f066e50a959186047885a",
+      "size": 10799
+    },
+    "mixed_gate_selection": {
+      "path": "/home/vox/.local/state/lss-project-improvements/performance-protocol-recovery-20260910/functional-gates-v21-folia-uuid-20260914.json",
+      "sha256": "bf19457e030d34a233684ca40bc7e246b7c3847f801849fe2040e25a98ecc3a2",
+      "size": 2023
+    },
+    "binding_root_review": {
+      "path": "/home/vox/.local/state/lss-project-improvements/performance-protocol-recovery-20260910/binding-v21-folia-uuid-20260914-root-review.json",
+      "sha256": "43da71d0a60e0183634c61c62eb35c9db6e718d64b4a622ddd3f2b9a4a60b1bf",
+      "size": 2219
+    },
+    "released_invocation": {
+      "path": "/home/vox/.local/state/lss-project-improvements/performance-protocol-recovery-20260910/execution-v21-invocation-20260914.json",
+      "sha256": "76c885f1ed6779d9b0ac141a358d216304e74aedcbd45b6c28b9fd4e717e57b7",
+      "size": 3001
+    },
+    "functional_runs": [
+      {
+        "lane": "baseline-folia-sustained",
+        "execution": "fresh affected Folia run",
+        "run": "/home/vox/.local/state/lss-rig/runs/20260914T110252Z-ca3021b71fd1",
+        "recipe": "/home/vox/.local/state/lss-rig/source-functional-folia-uuid-20260914/baseline-folia-sustained",
+        "acceptance": {
+          "path": "/home/vox/.local/state/lss-rig/source-functional-folia-uuid-20260914/baseline-folia-sustained/attempt-1/acceptance.json",
+          "sha256": "c45f0b2d28179956968040bfd96cdd1b4dce644a7211d88daccc5a1bcc6ba272",
+          "size": 29349598
+        },
+        "source_targets": 23056,
+        "source_committed": 23056,
+        "remaining_children": 0
+      },
+      {
+        "lane": "baseline-folia-sparse",
+        "execution": "fresh affected Folia run",
+        "run": "/home/vox/.local/state/lss-rig/runs/20260914T111845Z-3fb3bfbb2ce3",
+        "recipe": "/home/vox/.local/state/lss-rig/source-functional-folia-uuid-20260914/baseline-folia-sparse",
+        "acceptance": {
+          "path": "/home/vox/.local/state/lss-rig/source-functional-folia-uuid-20260914/baseline-folia-sparse/attempt-1/acceptance.json",
+          "sha256": "f4ca8ba8dcd431f57f9cb4eb0dee863558512b2abea1d144bf5cab0c475d952b",
+          "size": 3748
+        },
+        "source_targets": 28,
+        "source_committed": 28,
+        "remaining_children": 0
+      },
+      {
+        "lane": "folia",
+        "execution": "fresh affected Folia run",
+        "run": "/home/vox/.local/state/lss-rig/runs/20260914T112927Z-e7782f12473d",
+        "recipe": "/home/vox/.local/state/lss-rig/source-functional-folia-uuid-20260914/folia",
+        "acceptance": {
+          "path": "/home/vox/.local/state/lss-rig/source-functional-folia-uuid-20260914/folia/attempt-1/acceptance.json",
+          "sha256": "fed4bff7d7d86d90c2d6b95bc8dbdf4787fefd6786fa5afc8a1e230402470504",
+          "size": 13036
+        },
+        "source_targets": 28,
+        "source_committed": 28,
+        "remaining_children": 0
+      },
+      {
+        "lane": "folia-sustained",
+        "execution": "fresh affected Folia run",
+        "run": "/home/vox/.local/state/lss-rig/runs/20260914T114017Z-b4d7984b6ae0",
+        "recipe": "/home/vox/.local/state/lss-rig/source-functional-folia-uuid-20260914/folia-sustained",
+        "acceptance": {
+          "path": "/home/vox/.local/state/lss-rig/source-functional-folia-uuid-20260914/folia-sustained/attempt-1/acceptance.json",
+          "sha256": "816de6f23aadeeff69005c95d90126cd34ab34ca2c759475bd03abdaa57703ae",
+          "size": 29361521
+        },
+        "source_targets": 23056,
+        "source_committed": 23056,
+        "remaining_children": 0
+      },
+      {
+        "lane": "fabric",
+        "execution": "retained exact unaffected run, freshly reverified",
+        "run": "/home/vox/.local/state/lss-rig/runs/20260914T093507Z-8c6ac73b1dc2",
+        "recipe": "/home/vox/.local/state/lss-rig/source-functional-sparse-trigger-20260914/fabric",
+        "acceptance": {
+          "path": "/home/vox/.local/state/lss-rig/source-functional-sparse-trigger-20260914/fabric/attempt-1/acceptance.json",
+          "sha256": "4111264dee85bcabbdd879f82eec39cf64bfeaf0f23925a30ef9d13e56b15933",
+          "size": 12415
+        },
+        "source_targets": 28,
+        "source_committed": 28,
+        "remaining_children": 0
+      },
+      {
+        "lane": "paper",
+        "execution": "retained exact unaffected run, freshly reverified",
+        "run": "/home/vox/.local/state/lss-rig/runs/20260914T085734Z-a63d11693c1d",
+        "recipe": "/home/vox/.local/state/lss-rig/source-functional-sparse-trigger-20260914/paper",
+        "acceptance": {
+          "path": "/home/vox/.local/state/lss-rig/source-functional-sparse-trigger-20260914/paper/attempt-1/acceptance.json",
+          "sha256": "3f08c11c8305ef8f51823139c5639f215d7e2e9d1a5cb1a909f6634c7a04475c",
+          "size": 12402
+        },
+        "source_targets": 28,
+        "source_committed": 28,
+        "remaining_children": 0
+      }
+    ],
+    "candidate_sustained_capacity_observation": {
+      "refusals": 32,
+      "maximum_held": 128,
+      "source_committed": 23056,
+      "source_targets": 23056,
+      "scope": "actual audited functional run; not a performance result or per-receipt content attribution"
+    },
+    "performance_terminal_summary": {
+      "path": "/home/vox/.local/state/lss-project-improvements/performance-protocol-recovery-20260910/execution-v21-folia-uuid-20260914/stop-summary.json",
+      "sha256": "4064e0ca615c85f9e5a9411a54e12c7666e3546e370320620093e5ccb10da658",
+      "size": 4446
+    }
+  },
+  "maintained_fixture_integration": {
+    "status": "applied_and_locally_committed",
+    "fixture_tool_placements": 75,
+    "classification_manifests": 5,
+    "completed_classification_actions": 2,
+    "remaining_classification_actions": 9,
+    "python_cases": 110,
+    "python_cases_per_line": 22,
+    "commit": "5060fce9ac6560f1e48e63217389349527e2a2d2",
+    "exact_commit_paths_per_line": 16,
+    "evidence": {
+      "prepared.json": {
+        "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260910/maintained-fixture-integration-20260914/prepared.json",
+        "sha256": "98776ff76b1c0a60eb7e4eea5e2cf843e4ece47ea1cfd065f72a8ab50f7f4adc",
+        "size": 62378
+      },
+      "applied.json": {
+        "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260910/maintained-fixture-integration-20260914/applied.json",
+        "sha256": "464bdd4065fac1a1db0e005a7f95d33fc87fe369587a5488bb098c3d68e83825",
+        "size": 9118
+      },
+      "python-tests.json": {
+        "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260910/maintained-fixture-integration-20260914/python-tests.json",
+        "sha256": "930a74ed590e087705d5c2a8f98934b970618bcd796cf4dbadcc88f6fa55da9a",
+        "size": 2340
+      },
+      "commits.json": {
+        "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260910/maintained-fixture-integration-20260914/commits.json",
+        "sha256": "ab5cf45c3b21b8ef45b8e9d52379f115f740dc364e440c09843947018b342593",
+        "size": 8437
+      },
+      "uuid-classification/publication/prepared.json": {
+        "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260910/maintained-fixture-integration-20260914/uuid-classification/publication/prepared.json",
+        "sha256": "730c814717f6bb2aef0471ef18a997754bdef13b6ce27979f53b8e2c30aad110",
+        "size": 9236
+      },
+      "uuid-classification/publication/applied.json": {
+        "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260910/maintained-fixture-integration-20260914/uuid-classification/publication/applied.json",
+        "sha256": "97790bae7c6116aba7a0c0dc9fdeb6ff3c7b92dc4953f5ce546197ca6df2d337",
+        "size": 456
+      }
+    },
+    "qualification_limit": "No product rebuild or whole-build qualification claimed; historical qualified products retain their original identities.",
+    "unrelated_scope_limit": "Exact75 destinations and publisher scope verified; no whole-worktree pre-batch snapshot existed.",
+    "pure_java_mains": {
+      "line": "26.2",
+      "server": 8,
+      "client": 4,
+      "total": 12,
+      "status": "passed",
+      "server_log": {
+        "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260910/maintained-fixture-integration-20260914/server-controls.log",
+        "sha256": "85b9f6cdde85973cd454c0a4f91c31e7bcf994ffc3c92c6a22bc2e835097672b",
+        "size": 553
+      },
+      "client_log": {
+        "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260910/maintained-fixture-integration-20260914/client-controls.log",
+        "sha256": "7dda0871969a0b08e1eb601cc6214a8aa7279241cd29a4d76c189985d808035b",
+        "size": 1242
+      },
+      "scope": "actual maintained pure mains; separate from110Python cases; no full-build claim"
+    },
+    "scope": "Historical fixture integration checkpoint; its nine remaining classification actions were subsequently completed by final_integration_commits."
+  },
+  "final_integration_commits": {
+    "1.21.1": "e14d64c84bbfb4d5859c550536a6df5d6c4becb1",
+    "1.21.10": "d33592a44688361468af9362ff392865aa43efc8",
+    "1.21.11": "ccb90cfcd5ee2962859e9fa8b22a41ebd6d08c2e",
+    "26.1": "886bf68e03984691a713f720b7b6fdf26d6f4b67",
+    "26.2": "b3498fb0a990163f602f806cf0f7e5a13e593bb5"
+  },
+  "historical_source_commits": {
+    "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260910/store-late-probe-control/commits.json",
+    "sha256": "570f2561485b99d034edd844ff6e75f50c8182e36cbf23448c919ac1bc4763b2"
+  },
+  "post_final_build_commits": {
+    "line": "26.1",
+    "r04_1_fix": "2ddee76d89edfe38dd28db63df929b35820f587e",
+    "r05_fix": "ea10fe020d2d87835b6003f7d672bc66c9989f93",
+    "java_unchanged_since_final_builds": true,
+    "verification": "git diff <built commit>..HEAD -- '*.java' is empty on every line",
+    "classification_commit": "6ee930c03de3f23404d9d84f8fbeb17a17977ea6",
+    "source_refs": {
+      "1.21.1": "b376718c94ca4f2fdc323590838178a23adb373b",
+      "1.21.10": "91304598ff601333500c070f89dd65b9553de0c1",
+      "1.21.11": "6a9a0da842e18b0587f96b93c153b100e965149c",
+      "26.1": "6ee930c03de3f23404d9d84f8fbeb17a17977ea6",
+      "26.2": "7fb85eb79bf0df85d2dbed0265df543c48798c1c"
+    },
+    "scope": "Historical September 16 Java-only comparison and heads; broader shipping-input equivalence is recorded in completion_reconciliation_2026_09_20."
+  },
+  "completion_reconciliation_2026_09_20": {
+    "status": "automated_native_complete_user_signoff_and_integration_pending",
+    "selected_fixture_families": 14,
+    "selected_fixture_artifacts": 20,
+    "successful_compile_attempts_including_superseded": 15,
+    "retained_fixture_successes": 3,
+    "fresh_fixture_successes_including_replacement": 12,
+    "fixture_version_correction": "The original 26.1 smoke fixture genuinely compiled against exact 26.1 and did not qualify runtime 26.1.2. A fresh unchanged-source build derives 26.1.2 from owning gradle.properties; compiler input and packaged metadata agree, products and guards are unchanged.",
+    "historical_fixture_artifact_provenance": {
+      "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260919/fixture14-final-artifact-provenance-index.json",
+      "sha256": "f2ba6788af527544ad1541a496d4361820dd097dcc644caa64455f9f5a72bd50"
+    },
+    "fixture_artifact_provenance": {
+      "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260919/fixture261-version-repair/artifact-provenance-index.json",
+      "sha256": "8844e41ab0ee3df89603f366f3cf08512a07991e87735ed9c0c645d6496de52c"
+    },
+    "corrected_fixture_binding": {
+      "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260919/fixture261-version-repair/binding-map.json",
+      "sha256": "586c80a891eac5a2aea766376ec9151967d68c19393babe60d2d34d95fd4e790"
+    },
+    "shipping_input_equivalence": {
+      "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260919/fixture261-version-repair/source-equivalence.json",
+      "sha256": "bd79ad5638840681fb7a80402957a523a40e2f0e15c78062b9fbae37b1e9509d"
+    },
+    "equivalence_scope": "Recorded shipping source, resources, Gradle/build and license inputs, checked against Git trees and physical worktree bytes at the recorded fixture heads; preserve original product build heads. Recheck this scope if later shipping inputs change.",
+    "completion_reviews": 3,
+    "review_reports": "docs/reviews/2026-09-19-completion/",
+    "native_contract": {
+      "required_rows": 42,
+      "supplemental_cases": 4,
+      "preset_runs": 6,
+      "additional_fabric_paper_source_runs": 2,
+      "distinct_runs": 54,
+      "folia_counted_in_required": true
+    },
+    "native_execution": {
+      "collected_passes": 46,
+      "automated_green_awaiting_user_images": 8,
+      "additional_games_planned": false,
+      "fabric_source": "28/28 passed",
+      "folia_source": "28/28 passed with owning-region evidence",
+      "paper_source": "first final attempt failed 27/28; bounded diagnostic replay passed 28/28; original failure retained, no inferred body-content diagnosis"
+    },
+    "pending": [
+      "eight actual user visual dispositions",
+      "full 54-case exact-target export/import and committed source-ref/catalog closure; partial apply remains forbidden",
+      "owned review-gallery shutdown and final overall cleanup after user review",
+      "actual user Windows usability/resource-coexistence observation (plan section 16)"
+    ],
+    "offline_gate_evidence": {
+      "rig": {
+        "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260919/offline-rig-gates/results.json",
+        "sha256": "b5640ccdd6d92952bb9b4ce64ed21e3958dc3a28342367d703ad615c3050b265"
+      },
+      "rig_tests_per_line": 628,
+      "rig_skips": 0,
+      "nonrig": {
+        "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260919/offline-nonrig-gates/results.json",
+        "sha256": "5e79346fd547815b288c9e4fa8ec892f80312707d236a66207a67a415647cded"
+      },
+      "nonrig_tests_total": 735
+    },
+    "game_cleanup_evidence": {
+      "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260919/game-cleanup-user-review-pending.json",
+      "sha256": "5775ae6af840f041570c08d7c9952577b430d42998371de3cc18aa0497227056"
+    },
+    "game_cleanup_complete": true,
+    "overall_plan_cleanup_complete": false,
+    "gallery": "intentionally live pending actual user image review",
+    "current_progress_index": "docs/implementation/native-validation-progress-2026-09-20.json",
+    "final_acceptance_not_yet_complete": true,
+    "v27_comparisons_nonduplicate": 25,
+    "statistical_independence_established": false,
+    "support_tiers_changed": false,
+    "folia_remains_experimental": true
+  },
+  "visual_followup_2026_09_20": {
+    "status": "map-causes-confirmed-seated-recaptured-acceptance-open",
+    "report": "docs/implementation/visual-review-followup-2026-09-20.md",
+    "index": "docs/implementation/visual-review-followup-2026-09-20.json",
+    "shipping_map_fix_applied": false,
+    "seated_recaptures": [
+      {
+        "loader": "fabric",
+        "run_id": "20260920T154926Z-a7e51c16390b",
+        "run_hash": "128f8b7360e476ab4250b6a5ae4274e20686f3edeaf7693add686fe01d63057d",
+        "automated_status": "passed",
+        "visual_status": "awaiting-user",
+        "healthy": {
+          "artifact": "seated-healthy.png",
+          "artifact_sha256": "05a8a2825c6c5e060de6248696f811a01035ffe5fef48f6dd18c56c8bb976267"
+        },
+        "recovery": {
+          "artifact": "seated-recovery.png",
+          "artifact_sha256": "5a804203c315e67a9917d01bc6e7eafdac9030c8506b51f47b909e3c9e0a42dd"
+        }
+      },
+      {
+        "loader": "neo",
+        "run_id": "20260920T155051Z-36f0d11707ae",
+        "run_hash": "2b84d3cbcc2db55a6625e6919deff967e713ee5c2c415cbbd9133be4161a3c20",
+        "automated_status": "passed",
+        "visual_status": "awaiting-user",
+        "healthy": {
+          "artifact": "seated-healthy.png",
+          "artifact_sha256": "9d726eafc402ea81a076eaa262e8b778190642787d64d4e2ac7e2bec30ddc9d0"
+        },
+        "recovery": {
+          "artifact": "seated-recovery.png",
+          "artifact_sha256": "4571a13aa76ff0bfd3ad6d49ff370c37452a944db110bf78191ffb797eaecc75"
+        }
+      }
+    ],
+    "first_recapture_failure_preserved": "20260920T153910Z-f61822c4648b",
+    "user_visual_acceptance": false,
+    "historical_progress_preserved": true
+  },
+  "visual_signoff_2026_09_20": {
+    "status": "visual-signoff-and-native-integration-complete-known-map-followups-open",
+    "visual_reviews": 8,
+    "selected_native_cases": 54,
+    "required_rows_passed": 42,
+    "overall_project_complete": false,
+    "map_product_fix_applied": false,
+    "windows_resource_coexistence": "confirmed by actual user observation; desktop remained usable without noticeable interference or disruptive slowdown",
+    "report": "docs/implementation/visual-signoff-2026-09-20.md",
+    "index": "docs/implementation/visual-signoff-2026-09-20.json",
+    "native_index": "docs/implementation/final-native-acceptance-2026-09-20.json",
+    "desktop_coexistence_observation": {
+      "path": "docs/implementation/desktop-coexistence-2026-09-20.json",
+      "sha256": "0ada9b3bc75cc90d80ebed9c475f9881d84b0cea12009322516397ff445a37f6"
+    }
+  },
+  "desktop_coexistence_2026_09_20": {
+    "status": "user-confirmed",
+    "evidence": {
+      "path": "docs/implementation/desktop-coexistence-2026-09-20.json",
+      "sha256": "0ada9b3bc75cc90d80ebed9c475f9881d84b0cea12009322516397ff445a37f6"
+    },
+    "performance_measurement": false,
+    "native_windows_rendering_validated": false
+  }
+}

@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+set -euo pipefail
+ROOT=$(cd "$(dirname "$0")/../.." && pwd)
+case "${1:-}" in
+ create|run)
+  source "$ROOT/scripts/lib/harness-lock.sh"
+  harness_acquire
+  if [[ "$1" == run ]]; then
+   harness_run --inherit-lock --rig-run-root "$2" -- python3 "$ROOT/tools/rig/rig.py" "$@"
+  else
+   harness_run_script python3 "$ROOT/tools/rig/rig.py" "$@"
+  fi
+  ;;
+ *) exec python3 "$ROOT/tools/rig/rig.py" "$@" ;;
+esac

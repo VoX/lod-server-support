@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "id": "receive-lifecycle",
+  "version": 2,
+  "timeout_seconds": 900,
+  "required_test_count": 5,
+  "assertions": [
+    "same_world_off_retires_acceptance",
+    "off_preserves_committed_rebuilds",
+    "on_resumes_fresh_bodies",
+    "replacement_rejects_old_callbacks",
+    "replacement_retires_native_world"
+  ],
+  "human_reviews": [],
+  "checker": "receive-lifecycle"
+}

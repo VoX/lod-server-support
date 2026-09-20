@@ -76,6 +76,9 @@ public final class LSSNeoClientBootstrap {
                 // xplat and shared with Fabric — do not re-hand-roll it here.
                 .then(ClientCommandActions.resetSubtree(
                         Commands::literal, LSSNeoClientBootstrap::feedback))
+                .then(ClientCommandActions.presetSubtree(Commands::literal, LSSNeoClientBootstrap::feedback))
+                .then(ClientCommandActions.statusSubtree(Commands::literal))
+                .then(ClientCommandActions.diagnosticsSubtree(Commands::literal, LSSNeoClientBootstrap::feedback))
                 .then(Commands.literal("diag")
                         .executes(context -> {
                             ClientCommandActions.showDiagnostics(feedback(context.getSource()));

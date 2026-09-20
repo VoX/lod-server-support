@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "id": "xaero-map",
+  "version": 2,
+  "timeout_seconds": 300,
+  "required_test_count": 5,
+  "assertions": [
+    "fresh_body_received",
+    "bridge_write",
+    "boundary_continuity",
+    "shading_valid",
+    "save_race_safe"
+  ],
+  "human_reviews": [
+    "visual_render"
+  ],
+  "checker": "xaero-map"
+}

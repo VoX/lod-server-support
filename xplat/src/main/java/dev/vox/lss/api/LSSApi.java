@@ -23,6 +23,46 @@ public final class LSSApi {
             new dev.vox.lss.common.LogThrottle(60_000);
     private static final List<VoxelColumnConsumer> columnConsumers = new CopyOnWriteArrayList<>();
 
+    /** A report captured during a consumer callback, safe to retain for deferred work. */
+    public interface IngestFailureHandle {
+        void report();
+        boolean isActive();
+        /** Retain only for bounded deferred work, during the callback. Run the returned
+         * release exactly when that work commits, is rejected, or is intentionally dropped.
+         * Retirement cancels unresolved acceptance without charging an ingest failure. */
+        Runnable deferAcceptance();
+    }
+
+    private record DeliveryContext(ResourceKey<Level> dimension, int x, int z,
+                                   IngestFailureHandle handle) {}
+    private static final ThreadLocal<DeliveryContext> deliveryContext = new ThreadLocal<>();
+
+    /** Returns the current delivery's report handle, or null outside an owned callback. */
+    public static IngestFailureHandle captureIngestFailureHandle() {
+        var context = deliveryContext.get();
+        return context == null ? null : context.handle();
+    }
+
+    /** Internal dispatch scope. Detached consumers must explicitly retain the handle. */
+    public static void withIngestFailureHandle(ResourceKey<Level> dimension, int x, int z,
+                                               IngestFailureHandle handle, Runnable dispatch) {
+        var previous = deliveryContext.get();
+        if (handle != null) deliveryContext.set(new DeliveryContext(dimension, x, z, handle));
+        else deliveryContext.remove();
+        try {
+            dispatch.run();
+        } finally {
+            if (previous == null) deliveryContext.remove();
+            else deliveryContext.set(previous);
+        }
+    }
+
+    private static IngestFailureHandle currentHandle(ResourceKey<Level> dimension, int x, int z) {
+        var context = deliveryContext.get();
+        return context != null && context.x() == x && context.z() == z
+                && context.dimension().equals(dimension) ? context.handle() : null;
+    }
+
     /**
      * Receives {@link #dispatchColumn}'s implicit ingest-failure reports (a throwing
      * consumer). Test seam — production default restored by {@link #resetReportSink()};
@@ -97,9 +137,20 @@ public final class LSSApi {
      * registered consumer, so consumers must tolerate duplicate deliveries (the protocol
      * is position-keyed and idempotent). Repeated failures for the same position are
      * capped per session, after which the position is parked until its content changes.
+     * Detached work should retain {@link #captureIngestFailureHandle()} during the
+     * callback instead: this tokenless overload cannot identify an old delivery after
+     * its session has been replaced.
      */
     public static void reportIngestFailure(ResourceKey<Level> dimension, int chunkX, int chunkZ) {
-        LSSClientNetworking.reportIngestFailure(dimension, chunkX, chunkZ);
+        var handle = currentHandle(dimension, chunkX, chunkZ);
+        if (handle != null) handle.report();
+        else LSSClientNetworking.reportIngestFailure(dimension, chunkX, chunkZ);
+    }
+
+    private static void reportDispatchFailure(ResourceKey<Level> dimension, int chunkX, int chunkZ) {
+        var handle = currentHandle(dimension, chunkX, chunkZ);
+        if (handle != null) handle.report();
+        else reportSink.report(dimension, chunkX, chunkZ);
     }
 
     // Warn-once latch for a throwing pendingIngestBacklog() — the poll runs at up to
@@ -154,7 +205,7 @@ public final class LSSApi {
             // drop here is a permanent hole. Report it so the manager forgets the stamp and
             // re-requests (bounded by the per-position ingest-failure cap if no consumer
             // returns).
-            reportSink.report(dimension, chunkX, chunkZ);
+            reportDispatchFailure(dimension, chunkX, chunkZ);
             return;
         }
         for (var consumer : columnConsumers) {
@@ -174,7 +225,7 @@ public final class LSSApi {
                 // permanent hole: exactly one report per failing consumer per delivery.
                 // Chronic throwers are bounded by the per-position failure cap before
                 // the position parks.
-                reportSink.report(dimension, chunkX, chunkZ);
+                reportDispatchFailure(dimension, chunkX, chunkZ);
             }
         }
     }
