@@ -428,7 +428,7 @@ public class LSSPaperPlugin extends JavaPlugin implements PluginMessageListener,
         int viaProtocol = this.lssConfig.enableViaMismatchGuard
                 ? dev.vox.lss.common.compat.ViaProbe.playerProtocol(nmsPlayer.getUUID())
                 : dev.vox.lss.common.compat.ViaProbe.NO_SIGNAL;
-        handleHandshake(data, nmsPlayer.getName().getString(), this.lssConfig, service != null,
+        handleHandshake(data, nmsPlayer.getName().getString(), nmsPlayer, this.lssConfig, service != null,
                 viaProtocol, net.minecraft.SharedConstants.getProtocolVersion(),
                 // Ticket #6: the per-player service gate. Read inline on this thread (region
                 // thread on Folia) — no scheduling, and an online player's permissible is
@@ -536,11 +536,18 @@ public class LSSPaperPlugin extends JavaPlugin implements PluginMessageListener,
     static void handleHandshake(byte[] data, String playerName, PaperConfig config,
                                 boolean servicePresent, SessionConfigSender configSender,
                                 HandshakeRegistrar registrar) {
+        handleHandshake(data, playerName, null, config, servicePresent, configSender, registrar);
+    }
+
+    static void handleHandshake(byte[] data, String playerName, ServerPlayer nmsPlayer,
+                                PaperConfig config, boolean servicePresent,
+                                SessionConfigSender configSender,
+                                HandshakeRegistrar registrar) {
         // No-Via-signal overload: every pre-C5 glue pin rides this unchanged. The
         // native slot gets 0 — a value no real MC protocol can be — never an LSS
         // protocol number (review m6: pairing NO_SIGNAL with PROTOCOL_VERSION was a
         // landmine one edit from denying everyone via 20 != <real via protocol>).
-        handleHandshake(data, playerName, config, servicePresent,
+        handleHandshake(data, playerName, nmsPlayer, config, servicePresent,
                 dev.vox.lss.common.compat.ViaProbe.NO_SIGNAL, 0,
                 configSender, registrar);
     }
@@ -552,13 +559,30 @@ public class LSSPaperPlugin extends JavaPlugin implements PluginMessageListener,
                                 boolean servicePresent, int viaProtocol, int nativeProtocol,
                                 SessionConfigSender configSender,
                                 HandshakeRegistrar registrar) {
-        handleHandshake(data, playerName, config, servicePresent, viaProtocol, nativeProtocol,
-                SERVICE_GATE_OPEN, configSender, registrar);
+        handleHandshake(data, playerName, null, config, servicePresent, viaProtocol, nativeProtocol,
+                configSender, registrar);
+    }
+
+    static void handleHandshake(byte[] data, String playerName, ServerPlayer nmsPlayer,
+                                PaperConfig config, boolean servicePresent, int viaProtocol,
+                                int nativeProtocol, SessionConfigSender configSender,
+                                HandshakeRegistrar registrar) {
+        handleHandshake(data, playerName, nmsPlayer, config, servicePresent, viaProtocol,
+                nativeProtocol, SERVICE_GATE_OPEN, configSender, registrar);
     }
 
     static void handleHandshake(byte[] data, String playerName, PaperConfig config,
                                 boolean servicePresent, int viaProtocol, int nativeProtocol,
                                 PlayerServiceGate serviceGate,
+                                SessionConfigSender configSender,
+                                HandshakeRegistrar registrar) {
+        handleHandshake(data, playerName, null, config, servicePresent, viaProtocol, nativeProtocol,
+                serviceGate, configSender, registrar);
+    }
+
+    static void handleHandshake(byte[] data, String playerName, ServerPlayer nmsPlayer,
+                                PaperConfig config, boolean servicePresent, int viaProtocol,
+                                int nativeProtocol, PlayerServiceGate serviceGate,
                                 SessionConfigSender configSender,
                                 HandshakeRegistrar registrar) {
         var handshake = PaperPayloadHandler.decodeHandshake(data);
@@ -640,9 +664,10 @@ public class LSSPaperPlugin extends JavaPlugin implements PluginMessageListener,
 
         boolean v16 = decision.dialect() == HandshakeGate.WireDialect.V16;
         boolean v18 = decision.dialect() == HandshakeGate.WireDialect.V18;
+        int lodDistance = PaperWorldLod.distance(config, nmsPlayer);
         Runnable reply = () -> configSender.send(decision.dialect(),
                 decision.effectiveEnabled(),
-                config.lodDistanceChunks,
+                lodDistance,
                 // The caps ARE the old client's pacing — the server's real admission values
                 // (ignored by the V18 sender branch; see the v16 compat design §4.1).
                 LSSConstants.SYNC_ON_LOAD_SLOT_CAP,
