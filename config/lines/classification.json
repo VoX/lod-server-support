@@ -9353,6 +9353,14 @@
     },
     "xplat/src/main/java/dev/vox/lss/trace/PlayerTraceState.java": {
       "kind": "identical"
+    },
+    "config/compatibility/profiles/mc1211-fabric-xaero-no-sodium-controls.json": {
+      "kind": "line-local",
+      "validation": "tools/compat/catalog.py validate and tools/compat/ci.py; exact schema and runtime hashes, not cross-line byte equality"
+    },
+    "config/compatibility/profiles/mc1211-neoforge-xaero-no-sodium-controls.json": {
+      "kind": "line-local",
+      "validation": "tools/compat/catalog.py validate and tools/compat/ci.py; exact schema and runtime hashes, not cross-line byte equality"
     }
   },
   "nonproduction_patterns": {

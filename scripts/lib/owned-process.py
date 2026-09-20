@@ -26,31 +26,18 @@ def children():
 RUNNER_STOP_GRACE_SECONDS = 60
 
 
-def group_members(pgid):
-    """PIDs currently in process group ``pgid`` (field 5 of /proc/<pid>/stat)."""
-    members = []
-    for entry in Path('/proc').iterdir():
-        if not entry.name.isdigit():
-            continue
-        try:
-            fields = (entry / 'stat').read_text().rsplit(')', 1)[1].split()
-        except (OSError, IndexError):
-            continue
-        if len(fields) > 2 and fields[2] == str(pgid):
-            members.append(int(entry.name))
-    return members
+def signal_group(proc, sig):
+    """Signal the owned group only while its direct leader is unreaped.
 
-
-def signal_group(pgid, sig):
-    """Signal the owned group only while it still has members.
-
-    A group id is only the reaped leader's PID once its members are gone;
-    signalling it by number alone could reach a foreign process after PID reuse.
+    A fresh poll is required: the generic waitpid loop may already have reaped
+    the leader. An unreaped leader retains its PID even if it exits before the
+    signal. After reaping, only the supervisor's adopted children authorize
+    cleanup; a reused numeric group id does not establish ownership.
     """
-    if not group_members(pgid):
+    if proc.poll() is not None:
         return False
     try:
-        os.killpg(pgid, sig)
+        os.killpg(proc.pid, sig)
     except ProcessLookupError:
         return False
     return True
@@ -164,7 +151,7 @@ def main():
         while True:
             sig = signal.SIGKILL if time.monotonic() - started >= 3 else signal.SIGTERM
             if group_signal != sig:
-                signal_group(proc.pid, sig)
+                signal_group(proc, sig)
                 group_signal = sig
             for pid in children():
                 if sent.get(pid) != sig:

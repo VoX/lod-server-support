@@ -1,0 +1,132 @@
+{
+  "artifacts": [
+    {
+      "enabled": true,
+      "file": "xaeroworldmap-neoforge-1.21.1-1.45.0.jar",
+      "id": "xaeroworldmap",
+      "kind": "mod",
+      "metadata": {
+        "jarjar": {
+          "jars": [
+            {
+              "identifier": {
+                "artifact": "xaerolib-neoforge-1.21.1",
+                "group": "xaero.lib"
+              },
+              "isObfuscated": false,
+              "path": "META-INF/jarjar/xaerolib-neoforge-1.21.1-1.7.1.jar",
+              "version": {
+                "artifactVersion": "1.7.1",
+                "range": "[1.7.0,1.8)"
+              }
+            }
+          ]
+        },
+        "neoforge": {
+          "dependencies": {
+            "xaeroworldmap": [
+              {
+                "modId": "neoforge",
+                "ordering": "NONE",
+                "side": "BOTH",
+                "type": "required",
+                "versionRange": "[21.0.110-beta, 21.2.0)"
+              },
+              {
+                "modId": "minecraft",
+                "ordering": "NONE",
+                "side": "BOTH",
+                "type": "required",
+                "versionRange": "[1.21, 1.21.2)"
+              },
+              {
+                "modId": "openpartiesandclaims",
+                "ordering": "NONE",
+                "side": "BOTH",
+                "type": "optional",
+                "versionRange": "[0.30.3,)"
+              },
+              {
+                "modId": "xaerominimap",
+                "ordering": "NONE",
+                "side": "BOTH",
+                "type": "optional",
+                "versionRange": "[26.4.0,)"
+              },
+              {
+                "modId": "xaerobetterpvp",
+                "ordering": "NONE",
+                "side": "BOTH",
+                "type": "optional",
+                "versionRange": "[26.4.0,)"
+              },
+              {
+                "modId": "xaerolib",
+                "ordering": "NONE",
+                "side": "BOTH",
+                "type": "required",
+                "versionRange": "[1.0,)"
+              }
+            ]
+          },
+          "license": "All Rights Reserved",
+          "loaderVersion": "[4,)",
+          "mixins": [
+            {
+              "config": "xaeroworldmap.mixins.json"
+            },
+            {
+              "config": "xaeroworldmap.neoforge.mixins.json"
+            }
+          ],
+          "modLoader": "javafml",
+          "mods": [
+            {
+              "authors": "xaero96",
+              "credits": "",
+              "description": "A self-writing fullscreen map which also works as an add-on to Xaero's Minimap.",
+              "displayName": "Xaero's World Map",
+              "logoFile": "xaeroworldmap.png",
+              "modId": "xaeroworldmap",
+              "version": "1.45.0"
+            }
+          ]
+        }
+      },
+      "sha256": "d60899112e84616ba52a993c1722fd891872acc4779bfac34d9b170001451c6f",
+      "source": "https://cdn.modrinth.com/data/NcUtCpym/versions/fOv9QzLO/xaeroworldmap-neoforge-1.21.1-1.45.0.jar",
+      "version": "1.45.0"
+    }
+  ],
+  "capabilities": [],
+  "components": [
+    {
+      "uid": "org.lwjgl3",
+      "version": "3.3.3"
+    },
+    {
+      "uid": "net.minecraft",
+      "version": "1.21.1"
+    },
+    {
+      "uid": "net.neoforged",
+      "version": "21.1.248"
+    },
+    {
+      "uid": "java",
+      "version": "21"
+    }
+  ],
+  "excluded_candidate_or_fixture_ids": [
+    "lss"
+  ],
+  "id": "mc1211-neoforge-xaero-no-sodium-controls",
+  "limitations": [
+    "Explicit standalone status and client preset command control; Xaero present, Sodium/Voxy/Connector absent. No renderer/performance acceptance."
+  ],
+  "line": "1.21.1",
+  "platform": "neoforge",
+  "route": "native",
+  "schema_version": 1,
+  "status": "unverified"
+}
