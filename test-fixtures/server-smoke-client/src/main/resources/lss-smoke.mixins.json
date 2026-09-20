@@ -1,0 +1,1 @@
+{"required":true,"package":"dev.vox.lssfixture.smoke.mixin","compatibilityLevel":"JAVA_21","refmap":"lss-smoke-refmap.json","client":["TickMixin","WireMixin","DecodeWireMixin"],"injectors":{"defaultRequire":1}}

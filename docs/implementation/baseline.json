@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "lines": [
+    {
+      "line": "1.21.1",
+      "source": "48268c7d7e8740a93fbc6c7cf60fb36f7b75d690",
+      "worktree": "/home/vox/projects/lss-improvements/1.21.1",
+      "status": "clean at creation",
+      "merge_base": "48268c7d7e8740a93fbc6c7cf60fb36f7b75d690"
+    },
+    {
+      "line": "1.21.10",
+      "source": "948b0bf09dd852d357176577d7ccacd589aadb7d",
+      "worktree": "/home/vox/projects/lss-improvements/1.21.10",
+      "status": "clean at creation",
+      "merge_base": "948b0bf09dd852d357176577d7ccacd589aadb7d"
+    },
+    {
+      "line": "1.21.11",
+      "source": "8ac799a901e7eb99cb9403d512b790a0b6576190",
+      "worktree": "/home/vox/projects/lss-improvements/1.21.11",
+      "status": "clean at creation",
+      "merge_base": "8ac799a901e7eb99cb9403d512b790a0b6576190"
+    },
+    {
+      "line": "26.1",
+      "source": "1e7c9a9d3507c3ba90ac511ba6b62995b8796ab2",
+      "worktree": "/home/vox/projects/lss-improvements/26.1",
+      "status": "clean at creation",
+      "merge_base": "1e7c9a9d3507c3ba90ac511ba6b62995b8796ab2"
+    },
+    {
+      "line": "26.2",
+      "source": "98b67abc82283417ad288cbb0cca2f4fb3343425",
+      "worktree": "/home/vox/projects/lss-improvements/26.2",
+      "status": "clean at creation",
+      "merge_base": "98b67abc82283417ad288cbb0cca2f4fb3343425"
+    }
+  ]
+}

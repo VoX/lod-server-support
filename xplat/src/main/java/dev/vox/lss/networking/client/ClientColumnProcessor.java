@@ -77,7 +77,8 @@ class ClientColumnProcessor {
      * was charged, never re-derived (plan §0.5). Raw-work-denominated: the payload's
      * {@code rawSize()} under the max(shipped, clamp(declared)) rule for codec-1 frames.
      */
-    private record QueuedColumn(VoxelColumnS2CPayload payload, boolean resync, int charge) {}
+    private record QueuedColumn(VoxelColumnS2CPayload payload, boolean resync, int charge,
+                                ColumnDelivery delivery) {}
 
     private final ConcurrentLinkedQueue<QueuedColumn> columnQueue = new ConcurrentLinkedQueue<>();
     private final AtomicInteger queueSize = new AtomicInteger();
@@ -129,11 +130,15 @@ class ClientColumnProcessor {
     }
 
     void offer(VoxelColumnS2CPayload payload, boolean resync) {
+        offer(payload, resync, null);
+    }
+
+    void offer(VoxelColumnS2CPayload payload, boolean resync, ColumnDelivery delivery) {
         // Null/corrupt section bytes still traverse the queue (the drain reports them):
         // count them as zero rather than NPE here.
         int payloadBytes = chargeOf(payload);
         if (admits(this.queueSize.get(), this.queuedBytes.get(), payloadBytes)) {
-            this.columnQueue.add(new QueuedColumn(payload, resync, payloadBytes));
+            this.columnQueue.add(new QueuedColumn(payload, resync, payloadBytes, delivery));
             this.queueSize.incrementAndGet();
             this.queuedBytes.addAndGet(payloadBytes);
         } else {
@@ -146,9 +151,15 @@ class ClientColumnProcessor {
             }
             // The receive handler already stamped this position received — without the
             // report the drop would never be re-requested (permanent hole).
-            this.failureReporter.report(payload.dimension(),
-                    payload.chunkX(), payload.chunkZ());
+            reportFailure(new QueuedColumn(payload, resync, payloadBytes, delivery));
+            if (delivery != null) delivery.complete();
         }
+    }
+
+    private void reportFailure(QueuedColumn queued) {
+        if (queued.delivery() != null) queued.delivery().report();
+        else this.failureReporter.report(queued.payload().dimension(),
+                queued.payload().chunkX(), queued.payload().chunkZ());
     }
 
     void scheduleProcessing(boolean serverEnabled) {
@@ -194,9 +205,8 @@ class ClientColumnProcessor {
         while ((queued = this.columnQueue.poll()) != null) {
             this.queueSize.decrementAndGet();
             this.queuedBytes.addAndGet(-queued.charge());
-            var payload = queued.payload();
-            this.failureReporter.report(payload.dimension(),
-                    payload.chunkX(), payload.chunkZ());
+            reportFailure(queued);
+            if (queued.delivery() != null) queued.delivery().complete();
         }
     }
 
@@ -290,6 +300,16 @@ class ClientColumnProcessor {
         while (epoch == this.sessionEpoch && (queued = this.columnQueue.poll()) != null) {
             this.queueSize.decrementAndGet();
             this.queuedBytes.addAndGet(-queued.charge());
+            var delivery = queued.delivery();
+            try {
+            // The epoch check and shared-queue poll are separate operations. Teardown
+            // can occur between them and admit a replacement session's receipt before
+            // this old drain polls. Reject through that receipt's owner before decoding;
+            // completing it silently would preserve a stamp for an undispatched column.
+            if (delivery != null && epoch != this.sessionEpoch) {
+                delivery.report();
+                continue;
+            }
             var payload = queued.payload();
             if (!levelDimension.equals(payload.dimension())) continue;
 
@@ -298,8 +318,7 @@ class ClientColumnProcessor {
                 // Defensive (a compliant server always writes at least the section-count
                 // varint) — but the position was stamped received at arrival, so a silent
                 // drop here would be a permanent false stamp.
-                this.failureReporter.report(payload.dimension(),
-                        payload.chunkX(), payload.chunkZ());
+                reportFailure(queued);
                 continue;
             }
 
@@ -375,8 +394,13 @@ class ClientColumnProcessor {
                             factory, brightClear);
                 }
                 var columnData = new VoxelColumnData(sections, payload.columnTimestamp());
-                dispatcher.dispatch(payload.dimension(),
-                        payload.chunkX(), payload.chunkZ(), columnData);
+                if (delivery != null && (epoch != this.sessionEpoch || !delivery.isActive())) {
+                    delivery.report(); // inactive old owners ignore this; an active receipt must retry
+                    continue;
+                }
+                LSSApi.withIngestFailureHandle(payload.dimension(), payload.chunkX(), payload.chunkZ(),
+                        delivery, () -> dispatcher.dispatch(payload.dimension(),
+                                payload.chunkX(), payload.chunkZ(), columnData));
             } catch (Throwable t) {
                 // Throwable, not Exception: an OOME allocating section buffers (or a
                 // LinkageError from MC internals) escaping here would consume the column —
@@ -391,9 +415,11 @@ class ClientColumnProcessor {
                             + payload.chunkX() + "," + payload.chunkZ() + " (" + n
                             + " failure(s) since the last report)", t);
                 }
-                this.failureReporter.report(payload.dimension(),
-                        payload.chunkX(), payload.chunkZ());
+                reportFailure(queued);
                 if (t instanceof Error err && !(t instanceof AssertionError)) throw err;
+            }
+            } finally {
+                if (delivery != null) delivery.complete();
             }
         }
     }
@@ -570,13 +596,16 @@ class ClientColumnProcessor {
      */
     void reportUndispatched(LodRequestManager manager) {
         this.sessionEpoch++;
+        manager.cancelOutstandingDeliveries();
         QueuedColumn queued;
         while ((queued = this.columnQueue.poll()) != null) {
             this.queueSize.decrementAndGet();
             this.queuedBytes.addAndGet(-queued.charge());
             var payload = queued.payload();
-            manager.onIngestFailure(payload.dimension(),
-                    PositionUtil.packPosition(payload.chunkX(), payload.chunkZ()));
+            if (queued.delivery() == null) {
+                manager.onIngestFailure(payload.dimension(),
+                        PositionUtil.packPosition(payload.chunkX(), payload.chunkZ()));
+            }
         }
     }
 

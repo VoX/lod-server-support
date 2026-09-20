@@ -54,6 +54,8 @@ configurations {
     }
 }
 
+apply from: rootProject.file('gradle/c2me-dev-runtime.gradle')
+
 dependencies {
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
     // 1.21.11 line: loom-remap needs explicit mappings + mod-aware dependency scopes
@@ -104,14 +106,21 @@ dependencies {
         // 1.21.11 line: ksbx9Ph5 = moonrise-opt 0.9.0-beta.4 (the 1.21.11 build)
         localRuntime "maven.modrinth:moonrise-opt:ksbx9Ph5"
     }
-    // Same arm for C2ME (the Modrinth version test-server.sh installs), doing double duty:
+    // C2ME validation has two named pins (docs/testing/c2me-validation.md), doing double duty:
     // the disk-read profile measures the chunk-IO-overhaul fallback path (adaptive read
     // throttle) against the vanilla IOWorker background-priority path, and the copyOf dirty
     // hook is validated through C2ME's rewritten save paths — the old ChunkMap.save hook
     // silently never fired there. Runtime-only: release jars and normal builds are unaffected.
     if ((findProperty('benchmark.c2me') ?: 'false').toString() == 'true') {
-        // 1.21.11 line: 879vA5z6 = c2me-fabric 0.4.0-alpha.0.26+1.21.11
-        localRuntime "maven.modrinth:c2me-fabric:879vA5z6"
+        // Preserve existing benchmark default; explicitly select the regular-map pin
+        // to validate the artifact installed by test-server.sh without upgrading it.
+        def c2meProfile = (findProperty('benchmark.c2meProfile') ?: 'benchmark').toString()
+        def c2mePins = ['benchmark': '879vA5z6', 'regular-map': 'MfQIu1Y0']
+        if (!c2mePins.containsKey(c2meProfile)) {
+            throw new GradleException("Unknown benchmark.c2meProfile: ${c2meProfile}")
+        }
+        def c2meArtifact = "maven.modrinth:c2me-fabric:${c2mePins[c2meProfile]}"
+        project.addC2meDevRuntime(c2meArtifact, 21)
     }
 }
 
@@ -342,6 +351,9 @@ tasks.register('slimStoreDepJars') {
                         }
                         // Directory entries for stripped dirs are harmless; copy all.
                         def ne = new ZipEntry(e.name)
+                        // Two seconds past the ZIP epoch avoids the JDK minimum-date sentinel
+                        // that emits a timezone-dependent extended timestamp.
+                        ne.setTimeLocal(java.time.LocalDateTime.of(1980, 1, 1, 0, 0, 2))
                         ne.method = e.method
                         if (e.method == ZipEntry.STORED) {
                             ne.size = e.size
@@ -352,7 +364,9 @@ tasks.register('slimStoreDepJars') {
                         zf.getInputStream(e).withCloseable { is -> zos << is }
                         zos.closeEntry()
                     }
-                    zos.putNextEntry(new ZipEntry('fabric.mod.json'))
+                    def descriptorEntry = new ZipEntry('fabric.mod.json')
+                    descriptorEntry.setTimeLocal(java.time.LocalDateTime.of(1980, 1, 1, 0, 0, 2))
+                    zos.putNextEntry(descriptorEntry)
                     zos.write(groovy.json.JsonOutput.toJson([
                             schemaVersion: 1, id: modId, version: version,
                             name: "${name} (LSS LOD store)".toString(),
@@ -507,3 +521,6 @@ tasks.register('vssJar') {
 }
 
 tasks.named('build') { dependsOn 'vssJar' }
+
+// Shared pure test seam; never part of shipping artifacts.
+dependencies { testImplementation(testFixtures(project(':common'))) }

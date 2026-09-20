@@ -1179,6 +1179,7 @@ public final class FarPlayerRenderer {
                 swim.lss$setSwimAmount(swimming ? Math.min(1.0f, swimAmount + 0.09f)
                         : Math.max(0.0f, swimAmount - 0.09f));
             }
+            FarPlayerWingAnimation.advance(this.elytraAnimationState, newTick);
             applyEquipment(tracked, itemCache);
             refreshLiftTiers(equipmentAssets);
             // WI-5: the model-parts byte (defaults to 0 = every overlay layer hidden — hat,

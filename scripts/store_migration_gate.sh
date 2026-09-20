@@ -23,12 +23,14 @@ set -euo pipefail
 # Exit nonzero on any phase failure or a missing wrapper assertion.
 
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+source "$PROJECT_ROOT/scripts/lib/harness-lock.sh"
+harness_acquire
 RESULTS_ROOT="$PROJECT_ROOT/soak-results"
 SERVER_RUN_DIR="$PROJECT_ROOT/fabric/build/run/soak-server"
 CARRY_DIR="$PROJECT_ROOT/soak-results/store-migration-carry.$$"
 
 log() { echo "[store-migration] $*"; }
-cleanup() { rm -rf "$CARRY_DIR"; }
+cleanup() { harness_cleanup; rm -rf "$CARRY_DIR"; }
 trap cleanup EXIT
 
 latest_results() { # <scenario>  (freshness-guarded, the store_offline_edit pattern)
@@ -43,7 +45,7 @@ latest_results() { # <scenario>  (freshness-guarded, the store_offline_edit patt
 WRAPPER_START_EPOCH="$(date +%s)"
 
 log "=== phase 1: store-offline-populate (charges a v20 store) ==="
-"$PROJECT_ROOT/scripts/soak.sh" store-offline-populate
+harness_run_script "$PROJECT_ROOT/scripts/soak.sh" store-offline-populate
 
 rm -rf "$CARRY_DIR"
 mkdir -p "$CARRY_DIR"
@@ -62,7 +64,7 @@ log "=== phase 2: store-migration-join (downgrade → lazy upgrade → warm 19-r
 # overlap a checked premise, not a hope.
 MIGRATION_HOLD="${SOAK_MIGRATION_HOLD_SECONDS:-90}"
 SOAK_WORLD_FROM="$CARRY_DIR" SOAK_MIGRATION_HOLD_SECONDS="$MIGRATION_HOLD" \
-    "$PROJECT_ROOT/scripts/soak.sh" store-migration-join
+    harness_run_script "$PROJECT_ROOT/scripts/soak.sh" store-migration-join
 JOIN_DIR="$(latest_results store-migration-join)"
 
 log "wrapper assertions over $JOIN_DIR/server.log"

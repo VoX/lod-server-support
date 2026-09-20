@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "id": "server-smoke",
+  "requires_handshake": true,
+  "timeout_seconds": 360,
+  "required_test_count": 3,
+  "assertions": [
+    "store_write",
+    "store_read",
+    "body_matches_expected"
+  ],
+  "subject": "RigSubjectA",
+  "client_role": "explicit-test-only-consumer",
+  "target": {
+    "dimension": "minecraft:overworld",
+    "chunk_x": 8,
+    "chunk_z": 8,
+    "expected_blocks": {
+      "128,64,128": "minecraft:diamond_block",
+      "129,64,128": "minecraft:air",
+      "128,65,128": "minecraft:air"
+    }
+  },
+  "server_config": {
+    "lodStore": "full",
+    "lodStoreBackfill": false,
+    "lodDistanceChunks": 16,
+    "enableChunkGeneration": false
+  },
+  "server_properties": {
+    "level-type": "minecraft:flat",
+    "view-distance": 2,
+    "simulation-distance": 2,
+    "online-mode": false
+  },
+  "client_config": {
+    "receiveServerLods": true,
+    "enableXaeroMapBridge": false,
+    "lodDistanceChunks": 16
+  },
+  "fixture_capabilities_required": [
+    "exact-payload-object-wire-association",
+    "active-receipt-consumer",
+    "native-v20-handshake",
+    "decoded-block-oracle",
+    "owned-reconnect-fresh-cache"
+  ],
+  "native_console_setup": [
+    "setworldspawn 0 -60 0",
+    "forceload add 128 128",
+    "setblock 128 64 128 minecraft:diamond_block",
+    "setblock 129 64 128 minecraft:air",
+    "setblock 128 65 128 minecraft:air",
+    "save-all flush",
+    "forceload remove 128 128"
+  ],
+  "phase_order": [
+    "fresh-world",
+    "seed-save-unload",
+    "read-only-store-absent",
+    "first-native-session",
+    "disk-body-and-committed-row",
+    "disconnect-and-retire",
+    "second-native-session-fresh-cache",
+    "store-body-parity",
+    "cleanup"
+  ],
+  "forbidden_shortcuts": [
+    "direct-store-deposit",
+    "direct-store-get-as-network-proof",
+    "cached-client-body",
+    "gametest-count-substitution",
+    "mock-transport",
+    "first-source-loaded",
+    "second-source-disk"
+  ],
+  "target_schema": 2,
+  "execution_route": "native-server-smoke",
+  "version": 2,
+  "human_reviews": []
+}

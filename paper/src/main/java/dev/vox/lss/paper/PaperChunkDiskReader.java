@@ -1,5 +1,7 @@
 package dev.vox.lss.paper;
 
+import dev.vox.lss.common.processing.RequestRegistration;
+
 import ca.spottedleaf.concurrentutil.util.Priority;
 import ca.spottedleaf.moonrise.patches.chunk_system.io.MoonriseRegionFileIO;
 import dev.vox.lss.common.processing.AbstractChunkDiskReader;
@@ -42,7 +44,7 @@ public class PaperChunkDiskReader extends AbstractChunkDiskReader {
         this.readOverride = read;
     }
 
-    public void submitReadDirect(UUID playerUuid, String dimension, ServerLevel level,
+    public void submitReadDirect(UUID playerUuid, RequestRegistration registration, String dimension, ServerLevel level,
                                   int chunkX, int chunkZ, long submissionOrder,
                                   long clientTimestamp) {
         var registryAccess = level.registryAccess();
@@ -61,7 +63,7 @@ public class PaperChunkDiskReader extends AbstractChunkDiskReader {
         var maskEntry = PaperXrayMaskManager.entryForActive(level);
         int minSectionY = level.getMinSectionY();
         int maxSectionY = level.getMaxSectionY();
-        submitRead(playerUuid, chunkX, chunkZ, dimension, submissionOrder, clientTimestamp,
+        submitRead(playerUuid, registration, chunkX, chunkZ, dimension, submissionOrder, clientTimestamp,
                 () -> PaperNbtSectionSerializer.readAndSerializeSections(read, registryAccess, chunkX, chunkZ,
                         maskEntry, minSectionY, maxSectionY, this.useNbtTranscode));
     }

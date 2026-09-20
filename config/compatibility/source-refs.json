@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "sources": {
+    "1.21.1": {
+      "schema_version": 1,
+      "commit": "c18c919f5823f88e7fb40c2d439c90fd531651d0"
+    },
+    "1.21.10": {
+      "schema_version": 1,
+      "commit": "c8bcd082685e7c30e4f6f4e388ae4032965e975c"
+    },
+    "1.21.11": {
+      "schema_version": 1,
+      "commit": "e7272af5678bb7a87e9801fb64c96630ccf1a546"
+    },
+    "26.1": {
+      "schema_version": 1,
+      "commit": "6a54742667ed3c7a72234ea5b980a1461994e400"
+    },
+    "26.2": {
+      "schema_version": 1,
+      "commit": "5aa731c028fd8019c35b0a2519b0f884cdce4eea"
+    }
+  }
+}

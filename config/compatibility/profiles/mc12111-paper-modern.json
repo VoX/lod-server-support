@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "id": "mc12111-paper-modern",
+  "line": "1.21.11",
+  "platform": "paper",
+  "route": "native",
+  "artifacts": [
+    {
+      "id": "paper-engine",
+      "version": "1.21.11-build.132",
+      "file": "paper-1.21.11-132.jar",
+      "sha256": "5ffef465eeeb5f2a3c23a24419d97c51afd7dbb4923ff42df9a3f58bba1ccfba",
+      "source": "https://fill-data.papermc.io/v1/objects/5ffef465eeeb5f2a3c23a24419d97c51afd7dbb4923ff42df9a3f58bba1ccfba/paper-1.21.11-132.jar",
+      "metadata": {},
+      "kind": "server",
+      "enabled": true
+    }
+  ],
+  "components": [
+    {
+      "uid": "net.minecraft",
+      "version": "1.21.11"
+    },
+    {
+      "uid": "java",
+      "version": "21"
+    }
+  ],
+  "capabilities": [
+    "handshake",
+    "store"
+  ],
+  "status": "unverified",
+  "limitations": [
+    "Dependency-only server profile. Candidate plugin and complete Paperclip runtime closure are separately bound by the disposable run; no live acceptance yet."
+  ]
+}

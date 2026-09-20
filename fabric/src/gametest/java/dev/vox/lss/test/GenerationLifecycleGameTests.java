@@ -1,5 +1,7 @@
 package dev.vox.lss.test;
 
+import dev.vox.lss.common.processing.RequestRegistration;
+
 import dev.vox.lss.common.LSSConstants;
 import dev.vox.lss.common.PositionUtil;
 import dev.vox.lss.common.processing.TickSnapshot;
@@ -64,6 +66,12 @@ import java.util.concurrent.atomic.AtomicReference;
  * world persists across runs.
  */
 public class GenerationLifecycleGameTests {
+    private static final java.util.Map<UUID, RequestRegistration> TEST_REGISTRATIONS =
+            new java.util.concurrent.ConcurrentHashMap<>();
+    private static RequestRegistration registration(UUID uuid) {
+        return TEST_REGISTRATIONS.computeIfAbsent(uuid, ignored -> new RequestRegistration());
+    }
+
 
     private static final int PIGGYBACK_CHUNK_OFFSET = 160;
     private static final int CAP_CHUNK_OFFSET = 176;
@@ -127,14 +135,14 @@ public class GenerationLifecycleGameTests {
         helper.assertTrue(lssTicketCount(tickets, cx, cz) == 0,
                 "premise: no leftover generation ticket at the test chunk");
 
-        helper.assertTrue(gen.submitGeneration(playerA, level, cx, cz, 11L),
+        helper.assertTrue(gen.submitGeneration(playerA, registration(playerA), level, cx, cz, 11L),
                 "a fresh generation service must accept the first submission");
         helper.assertTrue(gen.getTotalSubmitted() == 1, "first submission must book submitted=1");
         helper.assertTrue(gen.getActiveCount() == 1, "first submission must create one active entry");
         helper.assertTrue(lssTicketCount(tickets, cx, cz) == 1,
                 "first submission must add exactly one load ticket");
 
-        helper.assertTrue(gen.submitGeneration(playerB, level, cx, cz, 22L),
+        helper.assertTrue(gen.submitGeneration(playerB, registration(playerB), level, cx, cz, 22L),
                 "a second submission for the same in-flight chunk must piggyback (accepted)");
         helper.assertTrue(gen.getTotalSubmitted() == 1,
                 "piggyback must not double-book submitted, got " + gen.getTotalSubmitted());
@@ -188,8 +196,8 @@ public class GenerationLifecycleGameTests {
             // the per-player count held by the completed entry.
             if (slotReuse.get() == null) {
                 slotReuse.set(new boolean[]{
-                        gen.submitGeneration(playerA, level, cx + 1, cz, 33L),
-                        gen.submitGeneration(playerA, level, cx + 2, cz, 44L)});
+                        gen.submitGeneration(playerA, registration(playerA), level, cx + 1, cz, 33L),
+                        gen.submitGeneration(playerA, registration(playerA), level, cx + 2, cz, 44L)});
                 gen.shutdown();
             }
             helper.assertTrue(slotReuse.get()[0] && slotReuse.get()[1],
@@ -217,11 +225,11 @@ public class GenerationLifecycleGameTests {
         var playerE = UUID.randomUUID();
         try {
             // Per-player boundary: cap 2, global has room (2 < 4) — rejection is per-player.
-            helper.assertTrue(gen.submitGeneration(playerA, level, bx, z, 1L),
+            helper.assertTrue(gen.submitGeneration(playerA, registration(playerA), level, bx, z, 1L),
                     "submission 1 of 2 under the per-player cap must be accepted");
-            helper.assertTrue(gen.submitGeneration(playerA, level, bx + 1, z, 2L),
+            helper.assertTrue(gen.submitGeneration(playerA, registration(playerA), level, bx + 1, z, 2L),
                     "submission 2 of 2 at the per-player cap boundary must be accepted");
-            helper.assertTrue(!gen.submitGeneration(playerA, level, bx + 2, z, 3L),
+            helper.assertTrue(!gen.submitGeneration(playerA, registration(playerA), level, bx + 2, z, 3L),
                     "a third distinct-chunk submission must be rejected at per-player cap 2");
             helper.assertTrue(gen.getTotalSubmitted() == 2,
                     "a rejected submission must not book submitted, got " + gen.getTotalSubmitted());
@@ -231,11 +239,11 @@ public class GenerationLifecycleGameTests {
                     "a rejected submission must NOT leak a load ticket");
 
             // Piggyback bypasses the per-player cap: it consumes no new entry or ticket.
-            helper.assertTrue(gen.submitGeneration(playerB, level, bx, z, 4L),
+            helper.assertTrue(gen.submitGeneration(playerB, registration(playerB), level, bx, z, 4L),
                     "piggyback under cap must be accepted");
-            helper.assertTrue(gen.submitGeneration(playerB, level, bx + 3, z, 5L),
+            helper.assertTrue(gen.submitGeneration(playerB, registration(playerB), level, bx + 3, z, 5L),
                     "playerB's second submission must be accepted (global 3 of 4)");
-            helper.assertTrue(gen.submitGeneration(playerB, level, bx + 1, z, 6L),
+            helper.assertTrue(gen.submitGeneration(playerB, registration(playerB), level, bx + 1, z, 6L),
                     "a piggyback AT the per-player cap must be accepted — it consumes no new slot");
             helper.assertTrue(gen.getActiveCount() == 3 && gen.getTotalSubmitted() == 3,
                     "piggybacks must not create entries or book submissions, active="
@@ -243,13 +251,13 @@ public class GenerationLifecycleGameTests {
 
             // Global boundary: 4th entry fills the global cap; a FRESH player (count 0) is
             // rejected — unambiguously the global cap.
-            helper.assertTrue(gen.submitGeneration(playerC, level, bx + 4, z, 7L),
+            helper.assertTrue(gen.submitGeneration(playerC, registration(playerC), level, bx + 4, z, 7L),
                     "the 4th entry at the global cap boundary must be accepted");
-            helper.assertTrue(!gen.submitGeneration(playerD, level, bx + 5, z, 8L),
+            helper.assertTrue(!gen.submitGeneration(playerD, registration(playerD), level, bx + 5, z, 8L),
                     "a fresh player's submission must be rejected once the global cap is full");
             helper.assertTrue(lssTicketCount(tickets, bx + 5, z) == 0,
                     "a globally rejected submission must not leak a ticket");
-            helper.assertTrue(gen.submitGeneration(playerE, level, bx, z, 9L),
+            helper.assertTrue(gen.submitGeneration(playerE, registration(playerE), level, bx, z, 9L),
                     "a piggyback while global-full must be accepted — it consumes no new entry");
             helper.assertTrue(gen.getTotalSubmitted() == 4 && gen.getActiveCount() == 4,
                     "books after the boundary dance: submitted=" + gen.getTotalSubmitted()
@@ -275,16 +283,16 @@ public class GenerationLifecycleGameTests {
         var playerF = UUID.randomUUID();
         try {
             // A holds R0 and R1; B piggybacks R0 and holds R2.
-            helper.assertTrue(gen.submitGeneration(playerA, level, bx, z, 1L), "seed R0");
-            helper.assertTrue(gen.submitGeneration(playerA, level, bx + 1, z, 2L), "seed R1");
-            helper.assertTrue(gen.submitGeneration(playerB, level, bx, z, 3L), "piggyback R0");
-            helper.assertTrue(gen.submitGeneration(playerB, level, bx + 2, z, 4L), "seed R2");
+            helper.assertTrue(gen.submitGeneration(playerA, registration(playerA), level, bx, z, 1L), "seed R0");
+            helper.assertTrue(gen.submitGeneration(playerA, registration(playerA), level, bx + 1, z, 2L), "seed R1");
+            helper.assertTrue(gen.submitGeneration(playerB, registration(playerB), level, bx, z, 3L), "piggyback R0");
+            helper.assertTrue(gen.submitGeneration(playerB, registration(playerB), level, bx + 2, z, 4L), "seed R2");
             helper.assertTrue(gen.getActiveCount() == 3 && gen.getTotalSubmitted() == 3,
                     "premise: three active entries, three booked submissions");
 
             // Removing B must keep the shared entry R0 (A still waits on it) and its ticket;
             // releasing the ticket here would silently strand A's generation forever.
-            gen.removePlayer(playerB);
+            gen.removePlayer(playerB, registration(playerB));
             helper.assertTrue(gen.getActiveCount() == 2,
                     "removing B must drop only B's orphaned entry (R2), active=" + gen.getActiveCount());
             helper.assertTrue(lssTicketCount(tickets, bx, z) == 1,
@@ -302,7 +310,7 @@ public class GenerationLifecycleGameTests {
                     "removal must never un-book submissions");
 
             // Removing A orphans R0 and R1 — both book immediately, release via the stagger.
-            gen.removePlayer(playerA);
+            gen.removePlayer(playerA, registration(playerA));
             helper.assertTrue(gen.getActiveCount() == 0, "removing the last waiter must clear the active set");
             helper.assertTrue(gen.getTotalRemovedInFlight() == 3,
                     "each orphan-removed ENTRY books removedInFlight once, got "
@@ -311,7 +319,7 @@ public class GenerationLifecycleGameTests {
             // Cancel-and-reuse: readmitting R0 while its release is still PENDING must
             // reuse the held ticket (no second add — the completion path's single removal
             // keeps the books 1:1) and the cancelled release must never fire.
-            helper.assertTrue(gen.submitGeneration(playerF, level, bx, z, 5L),
+            helper.assertTrue(gen.submitGeneration(playerF, registration(playerF), level, bx, z, 5L),
                     "readmission against a pending deferred release must be accepted");
             gen.tick(); // drains R1's release; R0's was cancelled by the readmission
             helper.assertTrue(lssTicketCount(tickets, bx, z) == 1,
@@ -320,7 +328,7 @@ public class GenerationLifecycleGameTests {
                     "the un-readmitted orphan's ticket drains within one tick");
 
             // Removal must free capacity: a fresh player fits again.
-            helper.assertTrue(gen.submitGeneration(playerF, level, bx + 3, z, 5L),
+            helper.assertTrue(gen.submitGeneration(playerF, registration(playerF), level, bx + 3, z, 5L),
                     "capacity freed by removePlayer must be reusable");
             helper.assertTrue(gen.getTotalSubmitted() == gen.getTotalCompleted()
                             + gen.getTotalTimeouts() + gen.getTotalRemovedInFlight() + gen.getActiveCount(),
@@ -353,8 +361,8 @@ public class GenerationLifecycleGameTests {
         try {
             helper.assertTrue(level.getChunkSource().getChunkNow(cx, cz) == null,
                     "premise: the timeout chunk must not already be loaded");
-            helper.assertTrue(gen.submitGeneration(playerA, level, cx, cz, 7L), "seed the entry");
-            helper.assertTrue(gen.submitGeneration(playerB, level, cx, cz, 8L), "piggyback the entry");
+            helper.assertTrue(gen.submitGeneration(playerA, registration(playerA), level, cx, cz, 7L), "seed the entry");
+            helper.assertTrue(gen.submitGeneration(playerB, registration(playerB), level, cx, cz, 8L), "piggyback the entry");
             helper.assertTrue(lssTicketCount(tickets, cx, cz) == 1, "premise: ticket held");
 
             int timeoutTicks = LSSConstants.TICKS_PER_SECOND; // generationTimeoutSeconds = 1
@@ -441,7 +449,7 @@ public class GenerationLifecycleGameTests {
             helper.assertTrue(level.getChunkSource().getChunkNow(gx, gz) == null,
                     "premise: the in-flight generation chunk must not be loaded (it must survive "
                             + "the tick's generation pass un-completed)");
-            helper.assertTrue(gen.submitGeneration(uuid, level, gx, gz, 1L),
+            helper.assertTrue(gen.submitGeneration(uuid, oldState.registration(), level, gx, gz, 1L),
                     "premise: in-flight generation seeded");
             helper.assertTrue(lssTicketCount(overworldTickets, gx, gz) == 1,
                     "premise: generation ticket held in the old dimension");
@@ -756,7 +764,7 @@ public class GenerationLifecycleGameTests {
         var filter = new DirtyContentFilter();
         gen.setDirtyContentFilter(filter);
         var player = UUID.randomUUID();
-        helper.assertTrue(gen.submitGeneration(player, endLevel, cx, cz, 1L),
+        helper.assertTrue(gen.submitGeneration(player, registration(player), endLevel, cx, cz, 1L),
                 "premise: submission accepted");
 
         var outcomes = new AtomicReference<List<TickSnapshot.GenerationReadyData>>();
@@ -817,8 +825,8 @@ public class GenerationLifecycleGameTests {
                 });
         var playerA = UUID.randomUUID();
         var playerB = UUID.randomUUID();
-        helper.assertTrue(gen.submitGeneration(playerA, level, cx, cz, 7L), "seed the entry");
-        helper.assertTrue(gen.submitGeneration(playerB, level, cx, cz, 8L), "piggyback the entry");
+        helper.assertTrue(gen.submitGeneration(playerA, registration(playerA), level, cx, cz, 7L), "seed the entry");
+        helper.assertTrue(gen.submitGeneration(playerB, registration(playerB), level, cx, cz, 8L), "piggyback the entry");
         helper.assertTrue(lssTicketCount(tickets, cx, cz) == 1, "premise: ticket held");
 
         var outcomes = new AtomicReference<List<TickSnapshot.GenerationReadyData>>();
@@ -851,8 +859,8 @@ public class GenerationLifecycleGameTests {
                             + gen.getTotalTimeouts() + gen.getTotalRemovedInFlight() + gen.getActiveCount(),
                     "soak law A4 identity must hold after the fault");
             // The catch must also free the per-player concurrency counts (cap is 2).
-            helper.assertTrue(gen.submitGeneration(playerA, level, cx + 1, cz, 9L)
-                            && gen.submitGeneration(playerA, level, cx + 2, cz, 10L),
+            helper.assertTrue(gen.submitGeneration(playerA, registration(playerA), level, cx + 1, cz, 9L)
+                            && gen.submitGeneration(playerA, registration(playerA), level, cx + 2, cz, 10L),
                     "the fault must free the per-player concurrency counts");
             gen.shutdown();
             helper.assertTrue(lssTicketCount(tickets, cx + 1, cz) == 0
@@ -891,7 +899,7 @@ public class GenerationLifecycleGameTests {
         helper.assertTrue(level.getChunkSource().getChunkNow(cx, cz) == null,
                 "premise: the chunk must generate fresh (a reloaded chunk is not unsaved and "
                         + "the save pass would skip it)");
-        helper.assertTrue(gen.submitGeneration(player, level, cx, cz, 1L), "premise: submitted");
+        helper.assertTrue(gen.submitGeneration(player, registration(player), level, cx, cz, 1L), "premise: submitted");
 
         helper.succeedWhen(() -> {
             var ready = gen.tick();

@@ -1,0 +1,171 @@
+{
+  "schema_version": 1,
+  "id": "mc12111-c2me-a",
+  "line": "1.21.11",
+  "platform": "fabric",
+  "route": "native",
+  "artifacts": [
+    {
+      "file": "c2me-fabric-MfQIu1Y0.jar",
+      "sha256": "aacecc703d0efdff9a54fb0be6fd3b4d33724ee46576b5401d33ce18156f0bf1",
+      "metadata": {
+        "fabric": {
+          "schemaVersion": 1,
+          "id": "c2me",
+          "version": "0.4.0-alpha.0.18+1.21.11",
+          "name": "Concurrent Chunk Management Engine",
+          "description": "A Fabric mod designed to improve the chunk performance of Minecraft.",
+          "authors": [
+            "RelativityMC",
+            "ishland"
+          ],
+          "contact": {
+            "sources": "https://github.com/RelativityMC/C2ME-fabric",
+            "issues": "https://github.com/RelativityMC/C2ME-fabric/issues",
+            "discord": "https://discord.gg/Kdy8NM5HW4",
+            "homepage": "https://modrinth.com/mod/c2me-fabric"
+          },
+          "license": "MIT",
+          "icon": "assets/c2me/icon.png",
+          "environment": "*",
+          "entrypoints": {
+            "main": [
+              "com.ishland.c2me.C2MEMod"
+            ],
+            "preLaunch": [
+              "com.ishland.c2me.PreLaunchHandler"
+            ]
+          },
+          "depends": {
+            "fabricloader": ">=0.18.3",
+            "java": ">=21",
+            "minecraft": "=1.21.11",
+            "c2me-base": "*"
+          },
+          "conflicts": {
+            "dynview": "*",
+            "betterchunkloading": "*"
+          },
+          "breaks": {
+            "tic_tacs": "*",
+            "optifabric": "*"
+          },
+          "jars": [
+            {
+              "file": "META-INF/jars/asyncutil-0.1.0.jar"
+            },
+            {
+              "file": "META-INF/jars/c2me-fabric-base-mc1.21.11-0.4.0-alpha.0.18-all.jar"
+            },
+            {
+              "file": "META-INF/jars/c2me-fabric-client-uncapvd-mc1.21.11-0.4.0-alpha.0.18.jar"
+            },
+            {
+              "file": "META-INF/jars/c2me-fabric-fixes-chunkio-threading-issues-mc1.21.11-0.4.0-alpha.0.18.jar"
+            },
+            {
+              "file": "META-INF/jars/c2me-fabric-fixes-general-threading-issues-mc1.21.11-0.4.0-alpha.0.18.jar"
+            },
+            {
+              "file": "META-INF/jars/c2me-fabric-fixes-worldgen-threading-issues-mc1.21.11-0.4.0-alpha.0.18.jar"
+            },
+            {
+              "file": "META-INF/jars/c2me-fabric-fixes-worldgen-vanilla-bugs-mc1.21.11-0.4.0-alpha.0.18.jar"
+            },
+            {
+              "file": "META-INF/jars/c2me-fabric-notickvd-mc1.21.11-0.4.0-alpha.0.18.jar"
+            },
+            {
+              "file": "META-INF/jars/c2me-fabric-opts-allocs-mc1.21.11-0.4.0-alpha.0.18.jar"
+            },
+            {
+              "file": "META-INF/jars/c2me-fabric-opts-chunkio-mc1.21.11-0.4.0-alpha.0.18.jar"
+            },
+            {
+              "file": "META-INF/jars/c2me-fabric-opts-dfc-mc1.21.11-0.4.0-alpha.0.18.jar"
+            },
+            {
+              "file": "META-INF/jars/c2me-fabric-opts-math-mc1.21.11-0.4.0-alpha.0.18.jar"
+            },
+            {
+              "file": "META-INF/jars/c2me-fabric-opts-natives-math-mc1.21.11-0.4.0-alpha.0.18.jar"
+            },
+            {
+              "file": "META-INF/jars/c2me-fabric-opts-scheduling-mc1.21.11-0.4.0-alpha.0.18.jar"
+            },
+            {
+              "file": "META-INF/jars/c2me-fabric-opts-worldgen-general-mc1.21.11-0.4.0-alpha.0.18.jar"
+            },
+            {
+              "file": "META-INF/jars/c2me-fabric-opts-worldgen-vanilla-mc1.21.11-0.4.0-alpha.0.18.jar"
+            },
+            {
+              "file": "META-INF/jars/c2me-fabric-rewrites-chunk-serializer-mc1.21.11-0.4.0-alpha.0.18.jar"
+            },
+            {
+              "file": "META-INF/jars/c2me-fabric-rewrites-chunk-system-mc1.21.11-0.4.0-alpha.0.18.jar"
+            },
+            {
+              "file": "META-INF/jars/c2me-fabric-rewrites-chunkio-mc1.21.11-0.4.0-alpha.0.18.jar"
+            },
+            {
+              "file": "META-INF/jars/c2me-fabric-server-utils-mc1.21.11-0.4.0-alpha.0.18.jar"
+            },
+            {
+              "file": "META-INF/jars/c2me-fabric-threading-lighting-mc1.21.11-0.4.0-alpha.0.18.jar"
+            },
+            {
+              "file": "META-INF/jars/caffeine-3.2.1.jar"
+            },
+            {
+              "file": "META-INF/jars/core-3.6.5.jar"
+            },
+            {
+              "file": "META-INF/jars/exp4j-0.4.8.jar"
+            },
+            {
+              "file": "META-INF/jars/jctools-core-4.0.5.jar"
+            },
+            {
+              "file": "META-INF/jars/mixinsquared-fabric-0.3.7-beta.1.jar"
+            },
+            {
+              "file": "META-INF/jars/reactive-streams-1.0.4.jar"
+            },
+            {
+              "file": "META-INF/jars/rxjava-3.1.12.jar"
+            },
+            {
+              "file": "META-INF/jars/tests-mc1.21.11-0.4.0-alpha.0.18.jar"
+            },
+            {
+              "file": "META-INF/jars/toml-3.6.5.jar"
+            }
+          ]
+        }
+      },
+      "id": "c2me",
+      "version": "0.4.0-alpha.0.18+1.21.11",
+      "source": "https://cdn.modrinth.com/data/VSNURh3q/versions/MfQIu1Y0/c2me-fabric-mc1.21.11-0.4.0-alpha.0.18.jar",
+      "enabled": true
+    }
+  ],
+  "components": [
+    {
+      "uid": "net.minecraft",
+      "version": "1.21.11"
+    },
+    {
+      "uid": "net.fabricmc.fabric-loader",
+      "version": "0.18.4"
+    }
+  ],
+  "capabilities": [
+    "saved-column-content",
+    "save-hook-routing"
+  ],
+  "status": "blocked",
+  "limitations": [
+    "C2ME artifact is exact and distinct; named gametest runtime and remaining dependency closure must be bound by the runner before this scenario is launchable. Historical 2026-09-08 pass is not final candidate evidence."
+  ]
+}

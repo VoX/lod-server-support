@@ -39,6 +39,7 @@ public record TickSnapshot(
      */
     public record GenerationReadyData(
             UUID playerUuid,
+            RequestRegistration registration,
             int cx,
             int cz,
             String dimension,
@@ -48,19 +49,23 @@ public record TickSnapshot(
             boolean transientFailure,
             boolean missDropped
     ) {
+        public GenerationReadyData {
+            java.util.Objects.requireNonNull(registration, "registration");
+        }
+
         /** Success outcomes and permanent failures — both flags false. */
-        public GenerationReadyData(UUID playerUuid, int cx, int cz, String dimension,
+        public GenerationReadyData(UUID playerUuid, RequestRegistration registration, int cx, int cz, String dimension,
                                    LoadedColumnData columnData, long columnTimestamp,
                                    long submissionOrder) {
-            this(playerUuid, cx, cz, dimension, columnData, columnTimestamp, submissionOrder,
+            this(playerUuid, registration, cx, cz, dimension, columnData, columnTimestamp, submissionOrder,
                     false, false);
         }
 
         /** Timeout/extraction outcomes — the generation WAS submitted, so never a miss-drop. */
-        public GenerationReadyData(UUID playerUuid, int cx, int cz, String dimension,
+        public GenerationReadyData(UUID playerUuid, RequestRegistration registration, int cx, int cz, String dimension,
                                    LoadedColumnData columnData, long columnTimestamp,
                                    long submissionOrder, boolean transientFailure) {
-            this(playerUuid, cx, cz, dimension, columnData, columnTimestamp, submissionOrder,
+            this(playerUuid, registration, cx, cz, dimension, columnData, columnTimestamp, submissionOrder,
                     transientFailure, false);
         }
     }
@@ -71,14 +76,14 @@ public record TickSnapshot(
     }
 
     /**
-     * Group generation outcomes' packed positions by player, for skipping those positions
+     * Group generation outcomes' packed positions by registration, for skipping those positions
      * in the loaded-chunk probe pass. Returns null when there is nothing to group.
      */
-    public static Map<UUID, LongOpenHashSet> groupPositionsByPlayer(List<GenerationReadyData> generationReady) {
+    public static Map<RequestRegistration, LongOpenHashSet> groupPositionsByRegistration(List<GenerationReadyData> generationReady) {
         if (generationReady.isEmpty()) return null;
-        Map<UUID, LongOpenHashSet> grouped = new HashMap<>();
+        Map<RequestRegistration, LongOpenHashSet> grouped = new HashMap<>();
         for (var genData : generationReady) {
-            grouped.computeIfAbsent(genData.playerUuid(), k -> new LongOpenHashSet())
+            grouped.computeIfAbsent(genData.registration(), k -> new LongOpenHashSet())
                     .add(PositionUtil.packPosition(genData.cx(), genData.cz()));
         }
         return grouped;

@@ -46,6 +46,7 @@ NEOFORGE_INSTALLER_URL="https://maven.neoforged.net/releases/net/neoforged/neofo
 # --- Download URLs ---
 FABRIC_SERVER_URL="https://meta.fabricmc.net/v2/versions/loader/${FABRIC_MC_VERSION}/${FABRIC_LOADER_VERSION}/${FABRIC_INSTALLER_VERSION}/server/jar"
 FABRIC_API_URL="https://cdn.modrinth.com/data/P7dR8mSH/versions/5zJNhXV2/fabric-api-0.141.4%2B1.21.11.jar"
+# Regular-map validation pin; benchmark profile intentionally differs (docs/testing/c2me-validation.md).
 C2ME_URL="https://cdn.modrinth.com/data/VSNURh3q/versions/MfQIu1Y0/c2me-fabric-mc1.21.11-0.4.0-alpha.0.18.jar"
 # DrexHD AntiXray (Modrinth sml2FMaA), fabric-1.4.14+1.21.11 — this line's own build.
 # `run-fabric-antixray` enables it as the live gate for LSS's AntiXray compat
@@ -936,7 +937,9 @@ case "${1:-run}" in
         echo "  cosmetic; the join itself works). A Fabric client WITH LSS+Voxy gets a full"
         echo "  LOD session — the cross-loader wire is the point of this rig."
         echo "  NOTE best-effort tier: the /lsslod command tree + wire behavior should match"
-        echo "  Fabric exactly; a NEOFORGE client would run LSS inert (no Voxy build exists)."
+        echo "  Fabric exactly. NeoForge terrain needs a Voxy build matching this MC/loader."
+        echo "  Check the verified profile inventory; jar filenames alone are not compatibility proof."
+        echo "  LSS far-player rendering on this NeoForge line: not available (intentional renderer stub)."
         echo ""
         run_neoforge
         ;;

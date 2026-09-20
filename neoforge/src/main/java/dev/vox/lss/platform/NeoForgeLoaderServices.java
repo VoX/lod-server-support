@@ -24,6 +24,22 @@ import java.nio.file.Path;
  */
 public class NeoForgeLoaderServices implements LoaderServices {
 
+    private final dev.vox.lss.common.diagnostics.DiagnosticVersions diagnosticVersions = captureDiagnosticVersions();
+    @Override public dev.vox.lss.common.diagnostics.DiagnosticVersions diagnosticVersions() { return diagnosticVersions; }
+    private static dev.vox.lss.common.diagnostics.DiagnosticVersions captureDiagnosticVersions() {
+        var values = new java.util.EnumMap<dev.vox.lss.common.diagnostics.DiagnosticVersions.Component, String>(
+                dev.vox.lss.common.diagnostics.DiagnosticVersions.Component.class);
+        values.put(dev.vox.lss.common.diagnostics.DiagnosticVersions.Component.LSS, ModList.get().getModContainerById("lss").map(mod -> mod.getModInfo().getVersion().toString()).orElse("absent"));
+        values.put(dev.vox.lss.common.diagnostics.DiagnosticVersions.Component.MINECRAFT, ModList.get().getModContainerById("minecraft").map(mod -> mod.getModInfo().getVersion().toString()).orElse("absent"));
+        values.put(dev.vox.lss.common.diagnostics.DiagnosticVersions.Component.LOADER, ModList.get().getModContainerById("neoforge").map(mod -> mod.getModInfo().getVersion().toString()).orElse("absent"));
+        values.put(dev.vox.lss.common.diagnostics.DiagnosticVersions.Component.SODIUM, ModList.get().getModContainerById("sodium").map(mod -> mod.getModInfo().getVersion().toString()).orElse("absent"));
+        values.put(dev.vox.lss.common.diagnostics.DiagnosticVersions.Component.XAERO, ModList.get().getModContainerById("xaeroworldmap").map(mod -> mod.getModInfo().getVersion().toString()).orElse("absent"));
+        values.put(dev.vox.lss.common.diagnostics.DiagnosticVersions.Component.VOXY, ModList.get().getModContainerById("voxy").map(mod -> mod.getModInfo().getVersion().toString()).orElse("absent"));
+        values.put(dev.vox.lss.common.diagnostics.DiagnosticVersions.Component.CONNECTOR, ModList.get().getModContainerById("connector").map(mod -> mod.getModInfo().getVersion().toString()).orElse("absent"));
+        values.put(dev.vox.lss.common.diagnostics.DiagnosticVersions.Component.C2ME, ModList.get().getModContainerById("c2me").map(mod -> mod.getModInfo().getVersion().toString()).orElse("absent"));
+        return new dev.vox.lss.common.diagnostics.DiagnosticVersions(values);
+    }
+
     public static void installProduction() {
         LoaderServices.install(new NeoForgeLoaderServices());
     }

@@ -1261,16 +1261,17 @@ public final class SqliteLodStore implements LodStoreService {
         }
         long watermark = parseLongOr(readMetaMap().get("migrate_progress_" + dimId),
                 Long.MIN_VALUE);
-        record Row(long pos, int usize, byte[] blob) {}
+        record Row(long pos, int usize, byte[] blob, long chash, long fhash) {}
         var rows = new java.util.ArrayList<Row>(MIGRATE_ROWS_PER_BATCH);
         try (PreparedStatement ps = this.writer.prepareStatement(
-                "SELECT pos, usize, blob FROM lods_" + dimId
+                "SELECT pos, usize, blob, chash, fhash FROM lods_" + dimId
                         + " WHERE wirefmt=" + WIREFMT_NATIVE_19 + " AND pos>?"
                         + " ORDER BY pos LIMIT " + MIGRATE_ROWS_PER_BATCH)) {
             ps.setLong(1, watermark);
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
-                    rows.add(new Row(rs.getLong(1), rs.getInt(2), rs.getBytes(3)));
+                    rows.add(new Row(rs.getLong(1), rs.getInt(2), rs.getBytes(3),
+                            rs.getLong(4), rs.getLong(5)));
                 }
             }
         }
@@ -1324,7 +1325,17 @@ public final class SqliteLodStore implements LodStoreService {
                         throw new IllegalStateException("usize " + row.usize()
                                 + " out of bounds");
                     }
+                    // Legacy rows carry FNV hashes. Validate before translating and
+                    // assigning current CRC hashes, exactly as both normal read rungs do.
+                    if (LodStoreService.legacyContentHashFnv(row.blob()) != row.fhash()
+                            || this.codec.declaredContentSize(row.blob()) != row.usize()) {
+                        throw new IllegalStateException("legacy frame integrity mismatch");
+                    }
                     byte[] raw = this.codec.decompress(row.blob(), row.usize());
+                    if (raw.length != row.usize()
+                            || LodStoreService.legacyContentHashFnv(raw) != row.chash()) {
+                        throw new IllegalStateException("legacy content integrity mismatch");
+                    }
                     byte[] v20 = translator.apply(raw);
                     byte[] frame = this.codec.compress(v20);
                     up.setLong(1, contentHash(v20));
@@ -1669,12 +1680,19 @@ public final class SqliteLodStore implements LodStoreService {
                     st.executeUpdate("DELETE FROM backfill");
                 }
                 this.writer.commit();
+                boolean dropCompleted = true;
                 for (var e : List.copyOf(this.dimIds.entrySet())) {
-                    if (this.shutdown.get()) break; // same reason as inside the drop loop
+                    if (this.shutdown.get()) {
+                        dropCompleted = false;
+                        break;
+                    }
                     // dropDimensionRows publishes each batch to the sweep-drop
                     // listener and installs the O(1) drop barrier itself; it no
                     // longer needs a tombstone per position.
-                    dropDimensionRows(e.getKey(), e.getValue());
+                    if (!dropDimensionRows(e.getKey(), e.getValue()).completed()) {
+                        dropCompleted = false;
+                        break;
+                    }
                 }
                 // C4 (review m16, hardened by the v0.13.1 fix-review fold): the walk
                 // bookkeeping resets AFTER the drop loop AND ONLY when the drop ran to
@@ -1685,7 +1703,7 @@ public final class SqliteLodStore implements LodStoreService {
                 // guard, an interrupted drop keeps the meta, the walk re-arms next
                 // boot, and it simply finds fewer rows. The completed clear also
                 // retires any migrate_residual marker — zero rows means zero 19-rows.
-                if (!this.shutdown.get()) {
+                if (dropCompleted) {
                     try (Statement st = this.writer.createStatement()) {
                         st.executeUpdate("DELETE FROM meta WHERE k IN ('migrate_pending',"
                                 + " 'migrate_total', 'migrate_done', 'migrate_residual')"
@@ -2367,7 +2385,9 @@ public final class SqliteLodStore implements LodStoreService {
                 regionDir = null;
             }
             if (regionDir == null || !Files.isDirectory(regionDir)) {
-                int dropped = dropDimensionRows(dimension, dimId);
+                DropResult drop = dropDimensionRows(dimension, dimId);
+                if (!drop.completed()) throw new InterruptedException("shutdown during dimension drop");
+                int dropped = drop.rowsDeleted();
                 if (dropped > 0) {
                     LSSLogger.warn("LOD store: region directory for " + dimension
                             + " is unresolvable — dropped its " + dropped
@@ -2379,7 +2399,9 @@ public final class SqliteLodStore implements LodStoreService {
             String fp = currentMaskFingerprint(dimension);
             String storedFp = storedMaskFingerprint(dimId);
             if (!fp.equals(storedFp)) {
-                int dropped = dropDimensionRows(dimension, dimId);
+                DropResult drop = dropDimensionRows(dimension, dimId);
+                if (!drop.completed()) throw new InterruptedException("shutdown during dimension drop");
+                int dropped = drop.rowsDeleted();
                 try (PreparedStatement ps = this.writer.prepareStatement(
                         "UPDATE dims SET mask_fingerprint=? WHERE id=?")) {
                     ps.setString(1, fp);
@@ -2580,7 +2602,9 @@ public final class SqliteLodStore implements LodStoreService {
      *  suppressed for the whole dimension while the drop runs (a half-dropped
      *  dimension must not serve its survivors), and the drop barrier refuses deposits
      *  that were enqueued before it — which is exactly what those tombstones did. */
-    private int dropDimensionRows(String dimension, int dimId) throws SQLException {
+    private record DropResult(int rowsDeleted, boolean completed) {}
+
+    private DropResult dropDimensionRows(String dimension, int dimId) throws SQLException {
         this.dropBarrierNanos.put(dimension, System.nanoTime());
         this.droppingDims.add(dimension);
         int total = 0;
@@ -2594,21 +2618,20 @@ public final class SqliteLodStore implements LodStoreService {
                 // open a SECOND writer against it — breaking the single-writer discipline,
                 // and on Windows leaving held handles that fail a later drop-and-rebuild.
                 // (Round-3 review.)
-                if (this.shutdown.get()) break;
+                if (this.shutdown.get()) return new DropResult(total, false);
                 List<Long> batch = new ArrayList<>();
                 try (Statement st = this.writer.createStatement();
                      ResultSet rs = st.executeQuery("SELECT pos FROM lods_" + dimId
                              + " LIMIT " + DROP_BATCH_ROWS)) {
                     while (rs.next()) batch.add(rs.getLong(1));
                 }
-                if (batch.isEmpty()) break;
+                if (batch.isEmpty()) return new DropResult(total, true);
                 total += deleteRows(dimId, batch); // commits immediately, per the delete rule
                 notifySweepDrops(dimension, batch);
             }
         } finally {
             this.droppingDims.remove(dimension);
         }
-        return total;
     }
 
     /** One region's rows via 32 indexed range seeks on the pos PRIMARY KEY (review A1):

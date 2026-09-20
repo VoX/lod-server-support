@@ -65,7 +65,7 @@ class StampedUpToDateFlowTest {
             super(players, reader, false, null, 1, 0);
         }
         @Override
-        protected boolean submitDiskRead(UUID playerUuid, String dimension, int cx, int cz,
+        protected boolean submitDiskRead(UUID playerUuid, RequestRegistration registration, String dimension, int cx, int cz,
                                          long order, long clientTimestamp) {
             return true;
         }
@@ -95,7 +95,7 @@ class StampedUpToDateFlowTest {
             this.state.markHandshakeComplete();
             this.state.setCapabilities(LSSConstants.CAPABILITY_VOXEL_COLUMNS);
             this.players.put(this.uuid, this.state);
-            this.reader.registerPlayer(this.uuid);
+            this.reader.registerPlayer(this.uuid, this.state.registration());
             this.proc = new TestProcessor(this.players, this.reader);
         }
 

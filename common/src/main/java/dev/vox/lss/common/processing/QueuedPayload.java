@@ -18,8 +18,13 @@ package dev.vox.lss.common.processing;
  * {@code wire_bytes} diagnostics counter's input, counted at send success.
  */
 public record QueuedPayload<T>(T payload, int estimatedBytes, int wireBytes,
-                               long submissionOrder, long packedPos)
+                               long submissionOrder, long packedPos, boolean corrective)
         implements Comparable<QueuedPayload<T>> {
+
+    /** Ordinary payload builders retain their existing constructor and wire bytes. */
+    public QueuedPayload(T payload, int estimatedBytes, int wireBytes, long submissionOrder, long packedPos) {
+        this(payload, estimatedBytes, wireBytes, submissionOrder, packedPos, false);
+    }
 
     /** Pre-compression shape (wireBytes == estimatedBytes) — raw-shipping call sites
      *  and the existing test rigs. */

@@ -31,6 +31,17 @@ import java.util.function.IntConsumer;
  * </ul>
  */
 final class ClientSessionGate {
+    private boolean statusHandshakeFailed;
+    private boolean statusProtocolRejected;
+    dev.vox.lss.common.diagnostics.ClientStatusSnapshot.Discovery discoveryStatus() {
+        if (!joined) return dev.vox.lss.common.diagnostics.ClientStatusSnapshot.Discovery.NOT_CONNECTED;
+        if (statusProtocolRejected) return dev.vox.lss.common.diagnostics.ClientStatusSnapshot.Discovery.PROTOCOL_REJECTED;
+        if (sessionConfigReceived) return dev.vox.lss.common.diagnostics.ClientStatusSnapshot.Discovery.NEGOTIATED;
+        if (statusHandshakeFailed) return dev.vox.lss.common.diagnostics.ClientStatusSnapshot.Discovery.SEND_FAILED;
+        if (!receiveEnabled || localIntegratedServer || primaryAnnounce == 0) return dev.vox.lss.common.diagnostics.ClientStatusSnapshot.Discovery.DORMANT;
+        return dev.vox.lss.common.diagnostics.ClientStatusSnapshot.Discovery.AWAITING_NEGOTIATION;
+    }
+
 
     /** Builds the per-session request manager for a valid enabled config. Seam for tests. */
     @FunctionalInterface
@@ -103,6 +114,50 @@ final class ClientSessionGate {
     private final AtomicLong wireBytesReceived = new AtomicLong();
     private volatile long connectionStartMs = 0;
     private volatile LodRequestManager requestManager;
+    private volatile boolean receiveEnabled = true;
+    private boolean joined;
+    private boolean localIntegratedServer;
+    private LodRequestManager pendingWithdrawal;
+
+    boolean isReceptionEnabled() { return this.receiveEnabled; }
+
+    /** The server-side Open-to-LAN service has started; ordinary singleplayer stays silent. */
+    void onHostServiceReady() { this.localIntegratedServer = false; }
+
+    /** Local acquisition changes leave the connection, wire dialect and privacy state intact. */
+    boolean reconcileReception(boolean enabled, boolean hasConsumers) {
+        if (!this.joined) return false;
+        if (enabled == this.receiveEnabled) {
+            if (!enabled && this.pendingWithdrawal != null && this.pendingWithdrawal.withdrawWants()) {
+                this.pendingWithdrawal = null;
+            }
+            return false;
+        }
+        this.receiveEnabled = enabled; // close admission before retiring any receipt
+        if (!enabled) {
+            this.discoveryArmed = false;
+            var previous = this.requestManager;
+            this.requestManager = null;
+            if (previous != null) {
+                this.parkedGovernor = new TransferRateGovernor();
+                this.parkedGovernor.adoptFrom(previous.governor);
+                this.parkedSubKey = previous.worldSubKeySnapshot();
+                previous.retireAcquisition();
+                this.pendingWithdrawal = previous.withdrawWants() ? null : previous;
+                teardownManager(previous);
+            }
+        } else {
+            // A fresh declaration after negotiation supersedes the old want-set. An
+            // obsolete withheld empty batch must never clear the resumed manager's asks.
+            this.pendingWithdrawal = null;
+            if (!this.localIntegratedServer && hasConsumers) {
+                this.sessionConfigReceived = false;
+                this.ticksSinceHandshake = 0;
+                announce(this.sessionVersion != 0 ? this.sessionVersion : SoakDialectOverride.announceVersion());
+            }
+        }
+        return true;
+    }
 
     // Service-gate revocation park (service-permission-gate-plan.md §2.4): a valid
     // enabled=false teardown snapshots the governor + world sub-key here so a later
@@ -160,6 +215,12 @@ final class ClientSessionGate {
 
     void onJoin(boolean receiveServerLods, boolean localIntegratedServer, boolean hasConsumers,
                 boolean enableV16ServerCompat, boolean enableV19ServerCompat) {
+        this.statusHandshakeFailed = false;
+        this.statusProtocolRejected = false;
+        this.joined = true;
+        this.localIntegratedServer = localIntegratedServer;
+        this.receiveEnabled = receiveServerLods;
+        this.pendingWithdrawal = null;
         // Defensive: under Fabric's lifecycle DISCONNECT always precedes the next JOIN,
         // but if a manager ever survived to here, dropping it without teardown would lose
         // its cache save. Self-sufficiency over the lifecycle assumption.
@@ -198,6 +259,10 @@ final class ClientSessionGate {
         // Without a consumer the server would ignore our requests anyway — stay silent.
         if (!hasConsumers) return;
 
+        announce(SoakDialectOverride.announceVersion());
+    }
+
+    private void announce(int announce) {
         try {
             // Mark-before-send: the wire's legacy-dialect arming keys on the LAST version
             // this client announced (V16ClientWire.markAnnouncedVersion), and the mark must be
@@ -205,10 +270,9 @@ final class ClientSessionGate {
             // announceVersion() is PROTOCOL_VERSION in every production launch; only the
             // soak harness's -Dlss.soak.dialect legacy-emulation lever lowers it (C2/C3 —
             // under the lever the ladder simply STARTS at rung 19).
-            int announce = SoakDialectOverride.announceVersion();
             this.currentAnnounce = announce;
-            this.primaryAnnounce = announce;
-            this.announced19ThisConnection = announce == LSSConstants.V19_COMPAT_PROTOCOL_VERSION;
+            if (this.primaryAnnounce == 0) this.primaryAnnounce = announce;
+            this.announced19ThisConnection |= announce == LSSConstants.V19_COMPAT_PROTOCOL_VERSION;
             V16ClientWire.markAnnouncedVersion(announce);
             this.handshakeSender.accept(announce);
             // Arm the ladder only after the handshake actually went out AND a lower enabled
@@ -216,6 +280,7 @@ final class ClientSessionGate {
             // discover — every further rung is equally doomed.
             this.discoveryArmed = nextRung(announce) != 0;
         } catch (Exception e) {
+            this.statusHandshakeFailed = true;
             LSSLogger.debug("Handshake send failed (server likely doesn't have " + Brand.shortName() + "): " + e.getMessage());
         }
     }
@@ -303,6 +368,7 @@ final class ClientSessionGate {
         int primary = this.primaryAnnounce != 0
                 ? this.primaryAnnounce : SoakDialectOverride.announceVersion();
         if (version != primary && !v19 && !v16) {
+            this.statusProtocolRejected = true;
             LSSLogger.warn("Server has incompatible " + Brand.shortName() + " protocol version " + version
                     + " (client: " + primary + "), LOD distribution disabled");
             this.serverEnabled = false;
@@ -398,13 +464,15 @@ final class ClientSessionGate {
         // walk itself — an unclamped LOD distance is a CPU-stall vector, so it stays.
         var config = clampToProtocolBounds(payload);
 
+        this.statusProtocolRejected = false;
+        this.statusHandshakeFailed = false;
         this.serverEnabled = config.enabled();
         this.sessionConfigReceived = true;
         this.serverLodDistance = config.lodDistanceChunks();
 
         // Without a registered LSSApi consumer there is nothing to deliver columns
         // to — skip session setup entirely (capability is sampled at JOIN).
-        if (config.enabled() && hasConsumers) {
+        if (config.enabled() && hasConsumers && this.receiveEnabled) {
             // A re-sent config mid-session replaces the manager: retire the old one
             // exactly like a disconnect so its session's stamps are reported and saved,
             // not silently dropped. (A consumer rejection racing the swap reports to the
@@ -507,6 +575,7 @@ final class ClientSessionGate {
      * report → disconnect → saveCache order is load-bearing.
      */
     void teardownManager(LodRequestManager manager) {
+        manager.retireAcquisition();
         this.columnProcessor.reportUndispatched(manager);
         manager.disconnect();
         manager.saveCache();
@@ -514,17 +583,16 @@ final class ClientSessionGate {
 
     /** DISCONNECT: tear down the live manager, then zero all session state and counters. */
     void onDisconnect() {
+        this.joined = false;
+        this.pendingWithdrawal = null;
         // The service-gate park is same-connection state (the disconnect routine's
         // zero-everything contract): onJoin clears it too, this keeps the claim true.
         this.parkedGovernor = null;
         this.parkedSubKey = java.util.Optional.empty();
         var manager = this.requestManager;
         if (manager != null) {
-            // (A column the drain thread polled concurrently still dispatches; if its
-            // consumer then rejects, that single report lands after requestManager is
-            // nulled and is dropped — at most one stale stamp per disconnect, healed
-            // by the next session unless the server kept its timestamp cache. Accepted
-            // residual.)
+            // Retire queued and already-polled receipts before saving their proof.
+            // An old callback may finish, but it cannot report against a new owner.
             teardownManager(manager);
         }
         this.columnProcessor.shutdown();

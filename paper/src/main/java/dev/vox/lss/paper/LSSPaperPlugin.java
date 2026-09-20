@@ -646,7 +646,7 @@ public class LSSPaperPlugin extends JavaPlugin implements PluginMessageListener,
                 // The caps ARE the old client's pacing — the server's real admission values
                 // (ignored by the V18 sender branch; see the v16 compat design §4.1).
                 LSSConstants.SYNC_ON_LOAD_SLOT_CAP,
-                config.generationConcurrencyLimitPerPlayer,
+                config.generationLimits().perPlayer(),
                 config.enableChunkGeneration);
 
         if (decision.outcome() == HandshakeGate.Outcome.NO_CONSUMER) {

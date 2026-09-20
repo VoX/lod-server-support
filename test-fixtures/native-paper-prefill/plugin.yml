@@ -1,0 +1,5 @@
+name: LssRigNativePrefill
+version: 1.0.0-test-only
+main: dev.vox.lssfixture.prefill.PaperPrefill
+api-version: '26.2'
+description: Disposable native Paper FULL-chunk fixture construction; no clients or LSS plugin.

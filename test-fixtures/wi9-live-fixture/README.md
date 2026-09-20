@@ -1,0 +1,9 @@
+# Seated far-player draw fault fixture
+
+External Minecraft 1.21.1 observer fixture for Fabric and NeoForge. Build with Java 21, `-PlssFabricJar=<candidate>` and the project Gradle wrapper; use `build neoforgeFixtureJar`. The Fabric jar is remapped; the NeoForge named jar deliberately has no Fabric refmap. Neither artifact ships in LSS/VSS.
+
+The owned runner must bind `lss.rig.runId`, `lss.wi9.enabled=true`, and the offline names of two actual connected subjects through `lss.wi9.subjectA` and `lss.wi9.subjectB`. Arrange both beyond vanilla entity tracking, with the first observed proxy riding a real vehicle. No synthetic tracker entries or protocol packets are installed by this fixture.
+
+After observing two real proxy draws, the fixture throws once after the seated subject's native dispatcher push and translation. In that same frame it requires a second proxy draw, real name-tag completion, restored pose/normal matrices and stack identity, full outer unwind, and no crash latch. Missing premise or incomplete execution never counts as success. Logs and a separately reviewed visual artifact must be bound to the run and exact candidate. This fixture does not establish boundary/shading, lifecycle or transport acceptance.
+
+The target-only Fabric entrypoint is armed with `lss.rig.seatedTarget=true` plus the owned run ID. It registers an actual LSSApi consumer to negotiate each independent native subject; it never inserts a far-player tracker entry. The observer now additionally requires both native player entities to be absent from its world before arming the fault. `prepare_seated_targets.py` binds a separate captured Fabric subject profile and creates two distinct offline game/cache roots; `drive_seated_draw.py` uses owned native console commands to position and mount the real subjects. This new recipe still requires live validation.

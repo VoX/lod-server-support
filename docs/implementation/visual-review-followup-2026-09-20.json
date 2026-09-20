@@ -1,0 +1,199 @@
+{
+  "schema_version": 1,
+  "date": "2026-09-20",
+  "status": "map-causes-confirmed-seated-recaptured-acceptance-open",
+  "shipping_map_fix_applied": false,
+  "user_visual_acceptance": false,
+  "diagnostic_run": "20260920T152851Z-c6ffa41a10fc",
+  "seated": [
+    {
+      "loader": "fabric",
+      "run_id": "20260920T154926Z-a7e51c16390b",
+      "run_hash": "128f8b7360e476ab4250b6a5ae4274e20686f3edeaf7693add686fe01d63057d",
+      "automated_status": "passed",
+      "visual_status": "awaiting-user",
+      "healthy": {
+        "artifact": "seated-healthy.png",
+        "artifact_sha256": "05a8a2825c6c5e060de6248696f811a01035ffe5fef48f6dd18c56c8bb976267"
+      },
+      "recovery": {
+        "artifact": "seated-recovery.png",
+        "artifact_sha256": "5a804203c315e67a9917d01bc6e7eafdac9030c8506b51f47b909e3c9e0a42dd"
+      }
+    },
+    {
+      "loader": "neo",
+      "run_id": "20260920T155051Z-36f0d11707ae",
+      "run_hash": "2b84d3cbcc2db55a6625e6919deff967e713ee5c2c415cbbd9133be4161a3c20",
+      "automated_status": "passed",
+      "visual_status": "awaiting-user",
+      "healthy": {
+        "artifact": "seated-healthy.png",
+        "artifact_sha256": "9d726eafc402ea81a076eaa262e8b778190642787d64d4e2ac7e2bec30ddc9d0"
+      },
+      "recovery": {
+        "artifact": "seated-recovery.png",
+        "artifact_sha256": "4571a13aa76ff0bfd3ad6d49ff370c37452a944db110bf78191ffb797eaecc75"
+      }
+    }
+  ],
+  "first_recapture_failure_preserved": "20260920T153910Z-f61822c4648b",
+  "targeted_python_tests": {
+    "per_line": 27,
+    "lines": 5,
+    "total": 135,
+    "skips": 0
+  },
+  "evidence": [
+    {
+      "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260920-visual/seated-fix/readiness-fix/fabric-execution/ownership-result.json",
+      "sha256": "bc577a855f3bec7ed6e4a01f800388353df3e8930054bc109b2f818dd1dd141e",
+      "size": 753
+    },
+    {
+      "path": "/home/vox/.local/state/lss-rig/runs/20260920T154926Z-a7e51c16390b/manifest.json",
+      "sha256": "9f2b13f166d96b5e2466d0938ed42fc016c28d56e1c22faded562b760fd411da",
+      "size": 789223
+    },
+    {
+      "path": "/home/vox/.local/state/lss-rig/runs/20260920T154926Z-a7e51c16390b/evidence/result.json",
+      "sha256": "8ade2861f7e7601e9fad017111655bcb28541052b19ae2317c560d9fbc301d37",
+      "size": 562
+    },
+    {
+      "path": "/home/vox/.local/state/lss-rig/runs/20260920T154926Z-a7e51c16390b/proof.json",
+      "sha256": "9704538ba48ebd77dcddae1ef8844afcfed9d6fe7d9762e7c663e3033a11d903",
+      "size": 4620
+    },
+    {
+      "path": "/home/vox/.local/state/lss-rig/runs/20260920T154926Z-a7e51c16390b/evidence/seated-draw.json",
+      "sha256": "4b085e17fa5ad039c1b0cad96d73b8418018c0f30006ff02f6b94d848741fd0b",
+      "size": 3607
+    },
+    {
+      "path": "/home/vox/.local/state/lss-rig/runs/20260920T154926Z-a7e51c16390b/evidence/seated-captures.json",
+      "sha256": "e4f06642104385f816357a576a8aa80fe2a17180ea2a53a5546d2dde83f3be2e",
+      "size": 597
+    },
+    {
+      "path": "/home/vox/.local/state/lss-rig/runs/20260920T154926Z-a7e51c16390b/evidence/seated-healthy.png",
+      "sha256": "05a8a2825c6c5e060de6248696f811a01035ffe5fef48f6dd18c56c8bb976267",
+      "size": 52114
+    },
+    {
+      "path": "/home/vox/.local/state/lss-rig/runs/20260920T154926Z-a7e51c16390b/evidence/seated-recovery.png",
+      "sha256": "5a804203c315e67a9917d01bc6e7eafdac9030c8506b51f47b909e3c9e0a42dd",
+      "size": 46358
+    },
+    {
+      "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260920-visual/seated-fix/readiness-fix/neo-execution/ownership-result.json",
+      "sha256": "b6e5d0764145ab225c78b848fd0ef4bb750b5f34cf1643d9a4ee51762ad3b968",
+      "size": 750
+    },
+    {
+      "path": "/home/vox/.local/state/lss-rig/runs/20260920T155051Z-36f0d11707ae/manifest.json",
+      "sha256": "5d2b228d9bfe26bdc5d26c18d650df85bb14ad1367a76e15ff9160fd7a71b04d",
+      "size": 789057
+    },
+    {
+      "path": "/home/vox/.local/state/lss-rig/runs/20260920T155051Z-36f0d11707ae/evidence/result.json",
+      "sha256": "b4cbc4c008f319c51352779ba27b3e701ba7ad02d8a27e4338765cf6951e4b7e",
+      "size": 559
+    },
+    {
+      "path": "/home/vox/.local/state/lss-rig/runs/20260920T155051Z-36f0d11707ae/proof.json",
+      "sha256": "0a30abc26b8d3ccb5966f37568a8633d527bef59b6b490ef4ad3bad6163eae10",
+      "size": 4622
+    },
+    {
+      "path": "/home/vox/.local/state/lss-rig/runs/20260920T155051Z-36f0d11707ae/evidence/seated-draw.json",
+      "sha256": "195bd410e334ab0be4393c12dc09f24832d9c7bcd382f32f8bc303191460ae10",
+      "size": 3609
+    },
+    {
+      "path": "/home/vox/.local/state/lss-rig/runs/20260920T155051Z-36f0d11707ae/evidence/seated-captures.json",
+      "sha256": "b5c08bee2a313f73a985140841d7b1f15ba1da08f34f958578db1aa0f02c67ba",
+      "size": 597
+    },
+    {
+      "path": "/home/vox/.local/state/lss-rig/runs/20260920T155051Z-36f0d11707ae/evidence/seated-healthy.png",
+      "sha256": "9d726eafc402ea81a076eaa262e8b778190642787d64d4e2ac7e2bec30ddc9d0",
+      "size": 49959
+    },
+    {
+      "path": "/home/vox/.local/state/lss-rig/runs/20260920T155051Z-36f0d11707ae/evidence/seated-recovery.png",
+      "sha256": "4571a13aa76ff0bfd3ad6d49ff370c37452a944db110bf78191ffb797eaecc75",
+      "size": 45521
+    },
+    {
+      "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260920-visual/user-visual-feedback.json",
+      "sha256": "932e387ba0bc1a2320c4f601dd0387d0fb4c47c2b2afaaeba7f584d8ab70f578",
+      "size": 661
+    },
+    {
+      "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260920-visual/original-map-analysis.json",
+      "sha256": "9008f3baf08203b26e98ff311326345d305eb69c765ea5ed1b245d6829786796",
+      "size": 14858
+    },
+    {
+      "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260920-visual/map-coverage/diagnostic-analysis.json",
+      "sha256": "513c1b3b4a3de53cac562566e33148d112e4fe394b488cf594fec6e8a29bcd59",
+      "size": 14195
+    },
+    {
+      "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260920-visual/map-coverage/source-audit.md",
+      "sha256": "d9ce7c322a40aa9cc7e5cb38546b4ffa105031a5076188e0f77df42d72df34f6",
+      "size": 7889
+    },
+    {
+      "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260920-visual/map-coverage/independent-evidence-review.md",
+      "sha256": "372fffc9bdb3bef3ebf48fa3ba675c0001fd661b6f9c17b28eabe39dd08c2443",
+      "size": 7750
+    },
+    {
+      "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260920-visual/map-coverage/fresh-map-build/map-1.21.1/receipt/receipt.json",
+      "sha256": "2815909c888ffa20459aec2a94f6337e1167f195f0e7b73c9a342ebf9883b326",
+      "size": 118669
+    },
+    {
+      "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260920-visual/seated-fix/maintained-python-results.json",
+      "sha256": "d51c35fb0907cf9d7742c2fdc81f9ec9d60849314ff55a95f49bcc4b5dce6390",
+      "size": 1139
+    },
+    {
+      "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260920-visual/seated-fix/commits.json",
+      "sha256": "13516d12e19cc3284239917c7cd67c87f614728f20ca92bd3f52ffe5344ec9f7",
+      "size": 281
+    },
+    {
+      "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260920-visual/seated-fix/first-capture-failure.json",
+      "sha256": "f4249d819b421f67892b7db07a9d8fee441c910f4da7dd7e9b3e5d5d0c7bd3cb",
+      "size": 1120
+    },
+    {
+      "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260920-visual/seated-fix/readiness-fix/commits.json",
+      "sha256": "0afaaca043011de6e98bcf292a20c269ce47331cef6f006b394e18a6b96da21c",
+      "size": 281
+    },
+    {
+      "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260920-visual/seated-fix/readiness-fix/fresh-wi9-build/wi9-1.21.1/receipt/receipt.json",
+      "sha256": "b8479fcda8025560661d8a35f7909b0c16cb71b9dbdc43c0cb9fb2c35e7d68e9",
+      "size": 70019
+    },
+    {
+      "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260920-visual/gallery-update.json",
+      "sha256": "8d0beccd911d3967ee047314cf55f12d5f397e14efd03703759866901f009b7f",
+      "size": 397
+    },
+    {
+      "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260920-visual/seated-fix/readiness-fix/native-review.md",
+      "sha256": "2a2155adaa2c827f234bffe9edf979bd594cfde068ba00020b01acf92c22e716",
+      "size": 2578
+    },
+    {
+      "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260920-visual/seated-fix/readiness-fix/independent-terminal-audit.json",
+      "sha256": "7e898c66905e0aa412c8d7ece4c3c89e4ad7e70c0d28ae6fc391a823925d9fb5",
+      "size": 6456
+    }
+  ]
+}

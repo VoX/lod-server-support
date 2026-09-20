@@ -33,7 +33,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * The Xaero map bridge against real-package-name stubs (xaero-map-bridge-plan.md §3;
  * the {@code MoonriseReadCompatTest} stub discipline — the stubs under
  * {@code fabric/src/test/java/xaero/map} mirror exactly the public surface
- * {@code XaeroMapCompat.Handles} resolves, and their state accessors ENFORCE the
+ * {@code XaeroBindings} resolves, and their state accessors ENFORCE the
  * native monitor discipline via holdsLock checks, so dropping a synchronized block
  * fails here rather than racing a live client). Pins:
  * <ul>
@@ -88,11 +88,11 @@ class XaeroMapCompatTest {
     private long clockMillis = 1_000_000L;
     private final List<Object[]> reports = new ArrayList<>();
     private final List<dev.vox.lss.api.VoxelColumnConsumer> registered = new ArrayList<>();
-    private XaeroMapCompat bridge;
+    private XaeroSession bridge;
 
     private ResourceKey<Level> clientDimension = OVERWORLD;
 
-    private final XaeroMapCompat.LevelOps fakeLevelOps = new XaeroMapCompat.LevelOps() {
+    private final XaeroSession.LevelOps fakeLevelOps = new XaeroSession.LevelOps() {
         @Override
         public Object dimension(Object world) {
             return clientDimension;
@@ -127,8 +127,8 @@ class XaeroMapCompatTest {
         this.registered.clear();
         this.backpressureEnabled = true;
         this.reports.clear();
-        this.bridge = new XaeroMapCompat(
-                XaeroMapCompat.Handles.resolve(Class::forName),
+        this.bridge = new XaeroSession(
+                XaeroBindings.resolve(Class::forName),
                 this.fakeLevelOps,
                 () -> this.enabled,
                 () -> this.sessionActive,
@@ -146,6 +146,10 @@ class XaeroMapCompatTest {
 
     @AfterEach
     void tearDownStubStatics() {
+        synchronized (this.bridge.acquisition.queueLock) {
+            assertEquals(this.bridge.acquisition.queue.size(), this.bridge.acquisition.queuedGauge,
+                    "cached diagnostics queue gauge must match membership after every scenario");
+        }
         WorldMapSession.current = null;
         xaero.map.WorldMap.crashHandler.crashedBy = null;
         xaero.map.common.config.option.WorldMapProfiledConfigOptions.LOAD_NEW_CHUNKS.value = true;
@@ -154,7 +158,7 @@ class XaeroMapCompatTest {
         xaero.map.WorldMap.INSTANCE.configs.manager.override = null;
         xaero.map.WorldMap.INSTANCE.configs.manager.throwing = false;
         XaeroStubEvents.clear();
-        XaeroMapCompat.resetFacadeForTest();
+        XaeroSession.resetFacadeForTest();
     }
 
     @SuppressWarnings("unchecked")
@@ -179,9 +183,70 @@ class XaeroMapCompatTest {
 
     // ---- resolve / facade ----
 
+    /** A cold status read must not initialize config (which reads disk) or discover mods. */
+    @Test
+    void cachedStatusReadsOnlyCachedFields() throws Exception {
+        var node = new org.objectweb.asm.tree.ClassNode();
+        try (var bytes = XaeroSession.class.getResourceAsStream("XaeroSession.class")) {
+            assertNotNull(bytes);
+            new org.objectweb.asm.ClassReader(bytes).accept(node, 0);
+        }
+        var method = node.methods.stream().filter(m -> m.name.equals("cachedStatus"))
+                .findFirst().orElseThrow();
+        for (var instruction : method.instructions) {
+            if (instruction instanceof org.objectweb.asm.tree.MethodInsnNode call) {
+                assertEquals("dev/vox/lss/compat/ModCompat$XaeroStatus", call.owner,
+                        "cached status may only construct its immutable result");
+                assertEquals("<init>", call.name);
+            }
+            if (instruction instanceof org.objectweb.asm.tree.FieldInsnNode field) {
+                assertTrue(java.util.Set.of("dev/vox/lss/compat/XaeroSession",
+                        "dev/vox/lss/compat/XaeroAcquisitionQueue",
+                        "dev/vox/lss/compat/XaeroRebuildScheduler").contains(field.owner),
+                        "cached status must not initialize another subsystem: " + field.owner);
+            }
+        }
+    }
+
+    @Test
+    void cachedStatusDoesNotRetryBindingsAndRetirementHidesOldNativeWork() {
+        XaeroSession.resetFacadeForTest();
+        try {
+            assertEquals("unknown", XaeroSession.cachedStatus(false).resolution());
+            assertNull(XaeroSession.diagLine());
+            assertEquals("absent", XaeroSession.cachedStatus(true).resolution());
+            var resolutions = new java.util.concurrent.atomic.AtomicInteger();
+            assertFalse(XaeroSession.initWith(name -> {
+                resolutions.incrementAndGet();
+                throw new ClassNotFoundException(name);
+            }));
+            int before = resolutions.get();
+            for (int i = 0; i < 10; i++) {
+                assertEquals("unavailable", XaeroSession.cachedStatus(true).resolution());
+                assertTrue(XaeroSession.diagLine().contains("state=unavailable"));
+            }
+            assertEquals(before, resolutions.get(), "status must never retry optional resolution");
+            XaeroSession.instance = this.bridge;
+            offer(100, 100);
+            assertEquals(1, XaeroSession.cachedStatus(true).queuedColumns());
+            this.bridge.rebuilds.pendingUpdatesGauge = 3;
+            this.bridge.onAcquisitionEnd();
+            assertEquals(0, XaeroSession.cachedStatus(true).queuedColumns());
+            assertEquals(3, XaeroSession.cachedStatus(true).pendingRebuilds(),
+                    "acquisition OFF must retain visibility of committed native rebuild work");
+            this.bridge.onSessionEnd();
+            assertTrue(XaeroSession.cachedStatus(true).retiring());
+            assertEquals(0, XaeroSession.cachedStatus(true).pendingRebuilds());
+        } finally {
+            XaeroSession.resetFacadeForTest();
+        }
+    }
+
+
+
     @Test
     void resolveFailsSoftWhenAClassIsMissing() {
-        assertThrows(ClassNotFoundException.class, () -> XaeroMapCompat.Handles.resolve(name -> {
+        assertThrows(ClassNotFoundException.class, () -> XaeroBindings.resolve(name -> {
             if (name.equals("xaero.map.region.MapTile")) throw new ClassNotFoundException(name);
             return Class.forName(name);
         }));
@@ -192,7 +257,7 @@ class XaeroMapCompatTest {
         // A class of the wrong SHAPE (right name, no members) must fail resolution —
         // the all-or-nothing rule that keeps a drifted Xaero from a half-bound bridge.
         assertThrows(ReflectiveOperationException.class,
-                () -> XaeroMapCompat.Handles.resolve(name -> {
+                () -> XaeroBindings.resolve(name -> {
                     if (name.equals("xaero.map.region.MapTile")) return Object.class;
                     return Class.forName(name);
                 }));
@@ -200,7 +265,7 @@ class XaeroMapCompatTest {
 
     @Test
     void facadeIsNullSafeAndInitRegistersTheConsumer() {
-        XaeroMapCompat.resetFacadeForTest();
+        XaeroSession.resetFacadeForTest();
         assertDoesNotThrow(XaeroMapCompat::clientTick);
         assertDoesNotThrow(XaeroMapCompat::onDisconnect);
         org.junit.jupiter.api.Assertions.assertNull(XaeroMapCompat.diagLine(),
@@ -220,7 +285,7 @@ class XaeroMapCompatTest {
             XaeroMapCompat.onDisconnect();
             XaeroMapCompat.clientTick();
             cfg.enableXaeroMapBridge = old;
-            XaeroMapCompat.resetFacadeForTest();
+            XaeroSession.resetFacadeForTest();
             assertFalse(dev.vox.lss.api.LSSApi.hasVoxelConsumers(),
                     "the production consumer must not leak into other suites");
         }
@@ -230,9 +295,9 @@ class XaeroMapCompatTest {
     void aResolveFailureIsVisibleAsUnavailableInDiag() {
         // The drift case (plan §7.1's top risk) must be distinguishable from "not
         // installed": init fails → no instance → but the diag line still renders.
-        XaeroMapCompat.resetFacadeForTest();
+        XaeroSession.resetFacadeForTest();
         org.junit.jupiter.api.Assertions.assertNull(XaeroMapCompat.diagLine());
-        assertFalse(XaeroMapCompat.initWith(name -> {
+        assertFalse(XaeroSession.initWith(name -> {
             throw new ClassNotFoundException(name);
         }));
         var line = XaeroMapCompat.diagLine();
@@ -312,14 +377,14 @@ class XaeroMapCompatTest {
     @Test
     void boundedOverflowDropsTheOldestEntry() {
         offer(9999, 9999); // the oldest — must be the one evicted
-        for (int i = 0; i < XaeroMapCompat.MAX_QUEUE; i++) {
+        for (int i = 0; i < XaeroSession.MAX_QUEUE; i++) {
             offer(1000 + i, 0);
         }
-        assertEquals(XaeroMapCompat.MAX_QUEUE, this.bridge.queuedForTest());
+        assertEquals(XaeroSession.MAX_QUEUE, this.bridge.queuedForTest());
         assertTrue(this.bridge.counterForTest("dropped_overflow") >= 1);
         assertFalse(this.bridge.hasQueuedForTest(9999, 9999),
                 "eviction must take the OLDEST entry, not an arbitrary one");
-        assertTrue(this.bridge.hasQueuedForTest(1000 + XaeroMapCompat.MAX_QUEUE - 1, 0),
+        assertTrue(this.bridge.hasQueuedForTest(1000 + XaeroSession.MAX_QUEUE - 1, 0),
                 "the newest entry must survive");
     }
 
@@ -345,7 +410,7 @@ class XaeroMapCompatTest {
         assertTrue(this.bridge.queuedForTest() < 700,
                 "the byte gauge must evict before the count cap on overlay-heavy tiles"
                         + " (queued=" + this.bridge.queuedForTest() + ")");
-        assertTrue(this.bridge.queuedBytesForTest() <= XaeroMapCompat.MAX_QUEUE_BYTES);
+        assertTrue(this.bridge.queuedBytesForTest() <= XaeroSession.MAX_QUEUE_BYTES);
         assertTrue(this.bridge.counterForTest("dropped_overflow") > 0);
     }
 
@@ -544,7 +609,7 @@ class XaeroMapCompatTest {
         // The memoryless window: once requested, Xaero's own canRequestReload
         // answers false (the stub flips it like the real reloadHasBeenRequested),
         // so every further pump reads IN-FLIGHT and issues NO re-request…
-        for (int i = 0; i < XaeroMapCompat.DEFER_CAP + 50; i++) {
+        for (int i = 0; i < XaeroSession.DEFER_CAP + 50; i++) {
             this.bridge.pump();
         }
         assertEquals(1, this.processor.saveLoad.loadRequests.size(),
@@ -587,7 +652,7 @@ class XaeroMapCompatTest {
         assertEquals(1, this.processor.saveLoad.loadRequests.size(),
                 "the memoryless window still grants the load");
         // Structural: no reflective handle for the pacing surface may even exist.
-        for (var f : XaeroMapCompat.Handles.class.getDeclaredFields()) {
+        for (var f : XaeroBindings.class.getDeclaredFields()) {
             var n = f.getName().toLowerCase(java.util.Locale.ROOT);
             assertFalse(n.contains("shouldallow") || n.contains("nexttoload"),
                     "no handle for the pacing surface may exist: " + f.getName());
@@ -616,7 +681,7 @@ class XaeroMapCompatTest {
         }
         this.bridge.pump();
         var requests = this.processor.saveLoad.loadRequests;
-        assertEquals(XaeroMapCompat.MAX_OUTSTANDING_LOADS, requests.size(),
+        assertEquals(XaeroSession.MAX_OUTSTANDING_LOADS, requests.size(),
                 "one pump must batch a full window of load requests");
         assertTrue(requests.get(requests.size() - 1) == bigRegion,
                 "the region holding the most queued tiles must be issued LAST — the"
@@ -740,7 +805,7 @@ class XaeroMapCompatTest {
         region.loadState = 0;
         region.canRequestReload = false;
         this.processor.regions.put((2L << 32) | 2L, region);
-        for (int i = 0; i < XaeroMapCompat.DEFER_CAP + 10; i++) {
+        for (int i = 0; i < XaeroSession.DEFER_CAP + 10; i++) {
             this.bridge.pump();
         }
         assertTrue(this.processor.saveLoad.loadRequests.isEmpty(), "no request possible");
@@ -1015,7 +1080,7 @@ class XaeroMapCompatTest {
         offer(64, 64);
         primeDrainablePump();
         this.bridge.maxQueue = 8192; // count fraction ~0
-        this.bridge.maxQueueBytes = XaeroMapCompat.approxBytes(tile(64, 64)) * 2L;
+        this.bridge.maxQueueBytes = XaeroSession.approxBytes(tile(64, 64)) * 2L;
         this.processor.createdRegionLoadState = 0;
         offer(64, 65); // bytes ~half the cap
         int report = this.bridge.reportBackpressure();
@@ -1443,7 +1508,7 @@ class XaeroMapCompatTest {
         this.clockMillis += 5000; // inside the re-arm window, occupancy still 1.0
         this.bridge.pump();
         assertEquals(-1, this.bridge.reportBackpressure(), "still wedged inside the cycle");
-        this.clockMillis += XaeroMapCompat.BP_WEDGE_REARM_MILLIS - 5000 + 1;
+        this.clockMillis += XaeroSession.BP_WEDGE_REARM_MILLIS - 5000 + 1;
         this.bridge.pump();
         assertEquals(halt(), this.bridge.reportBackpressure(),
                 "the clock re-arms governance at occupancy 1.0 — the halt re-engages"
@@ -2043,13 +2108,13 @@ class XaeroMapCompatTest {
     @Test
     void rebuildFailuresCountTowardTheDeathLatch() {
         this.bridge.updateIdlePumps = 1;
-        for (int i = 0; i < XaeroMapCompat.THROW_LATCH; i++) {
+        for (int i = 0; i < XaeroSession.THROW_LATCH; i++) {
             offer(64 + 4 * i, 64); // five tile chunks of region (2,2)
         }
         this.bridge.pump();
-        assertEquals(XaeroMapCompat.THROW_LATCH, this.bridge.counterForTest("written"));
+        assertEquals(XaeroSession.THROW_LATCH, this.bridge.counterForTest("written"));
         var region = theRegion();
-        for (int i = 0; i < XaeroMapCompat.THROW_LATCH; i++) {
+        for (int i = 0; i < XaeroSession.THROW_LATCH; i++) {
             region.getChunk(i, 0).updateBuffersThrows = true;
         }
         this.bridge.pump();
@@ -2060,8 +2125,8 @@ class XaeroMapCompatTest {
                 + " dropped_unloaded=" + this.bridge.counterForTest("dropped_unloaded")
                 + " pending=" + this.bridge.counterForTest("pending_updates")
                 + " buffer_updates=" + this.bridge.counterForTest("buffer_updates") + ")");
-        assertTrue(this.bridge.counterForTest("commit_failures") >= XaeroMapCompat.THROW_LATCH);
-        assertEquals(XaeroMapCompat.THROW_LATCH, this.bridge.counterForTest("dropped_updates"),
+        assertTrue(this.bridge.counterForTest("commit_failures") >= XaeroSession.THROW_LATCH);
+        assertEquals(XaeroSession.THROW_LATCH, this.bridge.counterForTest("dropped_updates"),
                 "owed and never rebuilt: buffer_updates + dropped_updates accounts for every entry");
         this.bridge.pump();
         assertEquals(0, this.bridge.counterForTest("pending_updates"));
@@ -2135,11 +2200,11 @@ class XaeroMapCompatTest {
 
     @Test
     void budgetStopsAfterMaxCommitsPerPump() {
-        for (int i = 0; i < XaeroMapCompat.MAX_COMMITS_PER_PUMP + 2; i++) {
+        for (int i = 0; i < XaeroSession.MAX_COMMITS_PER_PUMP + 2; i++) {
             offer(i * 4, 0); // distinct tile chunks
         }
         this.bridge.pump();
-        assertEquals(XaeroMapCompat.MAX_COMMITS_PER_PUMP, this.bridge.counterForTest("written"));
+        assertEquals(XaeroSession.MAX_COMMITS_PER_PUMP, this.bridge.counterForTest("written"));
         assertEquals(2, this.bridge.queuedForTest(), "over-budget entries wait for the next pump");
         this.bridge.pump();
         assertEquals(0, this.bridge.queuedForTest());
@@ -2191,7 +2256,7 @@ class XaeroMapCompatTest {
         assertEquals(2, this.bridge.counterForTest("written"),
                 "siblings in other tile chunks must commit past the busy one");
         assertEquals(1, this.bridge.queuedForTest());
-        for (int i = 0; i < XaeroMapCompat.DEFER_CAP + 2; i++) {
+        for (int i = 0; i < XaeroSession.DEFER_CAP + 2; i++) {
             this.bridge.pump();
         }
         assertEquals(0, this.bridge.queuedForTest(),
@@ -2205,7 +2270,7 @@ class XaeroMapCompatTest {
     /** Queue THROW_LATCH+3 entries whose commits all throw, and pump until dead. */
     private void latchTheBridgeDead() {
         var region = new MapRegion();
-        for (int i = 0; i < XaeroMapCompat.THROW_LATCH + 3; i++) {
+        for (int i = 0; i < XaeroSession.THROW_LATCH + 3; i++) {
             offer(i * 4, 64);
             int tcX = (i * 4) >> 2;
             var tileChunk = new MapTileChunk(region, tcX, 16);
@@ -2223,11 +2288,11 @@ class XaeroMapCompatTest {
     void fiveConsecutiveCommitFailuresLatchTheBridgeDead() {
         // All eight entries land in region (0,2): pre-create it with an ARMED (throwing)
         // tile chunk at every entry's local slot, so each commit attempt fails.
-        for (int i = 0; i < XaeroMapCompat.THROW_LATCH + 3; i++) {
+        for (int i = 0; i < XaeroSession.THROW_LATCH + 3; i++) {
             offer(i * 4, 64);
         }
         var region = new MapRegion();
-        for (int i = 0; i < XaeroMapCompat.THROW_LATCH + 3; i++) {
+        for (int i = 0; i < XaeroSession.THROW_LATCH + 3; i++) {
             int tcX = (i * 4) >> 2;
             var tileChunk = new MapTileChunk(region, tcX, 16);
             tileChunk.loadState = 2;
@@ -2241,7 +2306,7 @@ class XaeroMapCompatTest {
         assertTrue(this.bridge.deadForTest(),
                 "consecutive commit failures must latch the bridge dead");
         assertEquals(0, this.bridge.queuedForTest(), "death clears the queue");
-        assertTrue(this.bridge.counterForTest("commit_failures") >= XaeroMapCompat.THROW_LATCH);
+        assertTrue(this.bridge.counterForTest("commit_failures") >= XaeroSession.THROW_LATCH);
     }
 
     @Test
@@ -2249,7 +2314,7 @@ class XaeroMapCompatTest {
         // One armed entry per pump, five pumps: a regression that resets the count on
         // a clean ladder pass (or at pump start) would never latch (review MAJOR —
         // the original latch test armed everything in one pump and could not tell).
-        for (int i = 0; i < XaeroMapCompat.THROW_LATCH; i++) {
+        for (int i = 0; i < XaeroSession.THROW_LATCH; i++) {
             offer(i * 4, 64);
             var region = this.processor.regions.computeIfAbsent(2L, k -> new MapRegion());
             int tcX = (i * 4) >> 2;
@@ -2268,7 +2333,7 @@ class XaeroMapCompatTest {
         // Alternate failing and healthy entries: the latch must never fire because
         // every successful commit resets the consecutive count.
         var region = this.processor.regions.computeIfAbsent(2L, k -> new MapRegion());
-        for (int round = 0; round < XaeroMapCompat.THROW_LATCH + 2; round++) {
+        for (int round = 0; round < XaeroSession.THROW_LATCH + 2; round++) {
             int failX = round * 8;       // tileChunk (2i, 16) armed
             int okX = round * 8 + 4;     // tileChunk (2i+1, 16) healthy
             offer(failX, 64);
@@ -2288,7 +2353,7 @@ class XaeroMapCompatTest {
     @Test
     void repeatedExtractionFailuresLatchTheBridge() {
         var consumer = this.registered.get(0);
-        for (int i = 0; i < XaeroMapCompat.THROW_LATCH; i++) {
+        for (int i = 0; i < XaeroSession.THROW_LATCH; i++) {
             // Null column data NPEs inside extraction — swallowed, counted.
             assertDoesNotThrow(() -> consumer.onVoxelColumnReceived(null, OVERWORLD, 0, 0, null));
         }
@@ -2541,21 +2606,21 @@ class XaeroMapCompatTest {
 
     @Test
     void theOptionalSurfaceIsOptional() throws Exception {
-        XaeroMapCompat.ClassResolver withoutOptional = name -> {
+        XaeroSession.ClassResolver withoutOptional = name -> {
             if (name.startsWith("xaero.lib.") || name.equals("xaero.map.WorldMap")
                     || name.equals("xaero.map.CrashHandler")) {
                 throw new ClassNotFoundException(name);
             }
             return Class.forName(name);
         };
-        var handles = XaeroMapCompat.Handles.resolve(withoutOptional);
+        var handles = XaeroBindings.resolve(withoutOptional);
         assertNull(handles.crashGate);
         assertNull(handles.settingsGate);
         // (interpretation-version and cave-layer resolve off classes the mandatory surface
         // needs, so their unbound paths are Tier-1-unreachable through a ClassResolver —
         // covered only by the owed live `optional_unbound` diag check.)
         assertEquals("crash-gate settings-gate", handles.optionalMissing);
-        var reduced = new XaeroMapCompat(handles, this.fakeLevelOps, () -> this.enabled,
+        var reduced = new XaeroSession(handles, this.fakeLevelOps, () -> this.enabled,
                 () -> this.sessionActive, this.registered::add, this.registered::remove,
                 () -> this.backpressureEnabled, (d, x, z) -> this.reports.add(new Object[]{d, x, z}));
         reduced.pumpNanosBudget = Long.MAX_VALUE;
@@ -2575,9 +2640,9 @@ class XaeroMapCompatTest {
     @Test
     void theInterpretationVersionIsReadFromXaeroNotALiteral() throws Exception {
         xaero.map.region.MapTile.CURRENT_WORLD_INTERPRETATION_VERSION = 7;
-        var handles = XaeroMapCompat.Handles.resolve(Class::forName);
+        var handles = XaeroBindings.resolve(Class::forName);
         assertEquals(7, handles.interpretationVersion);
-        var bridge7 = new XaeroMapCompat(handles, this.fakeLevelOps, () -> this.enabled,
+        var bridge7 = new XaeroSession(handles, this.fakeLevelOps, () -> this.enabled,
                 () -> this.sessionActive, this.registered::add, this.registered::remove,
                 () -> this.backpressureEnabled, (d, x, z) -> this.reports.add(new Object[]{d, x, z}));
         bridge7.pumpNanosBudget = Long.MAX_VALUE;
@@ -2624,7 +2689,7 @@ class XaeroMapCompatTest {
         offer(128, 64); // region (4,2), fresh-unloaded
         offer(129, 64);
         this.bridge.pump(); // both await their load → the pump publishes (4,2) as awaiting
-        assertTrue(this.bridge.awaitingRegionsForTest().contains(XaeroMapCompat.regionKeyOf(128, 64)),
+        assertTrue(this.bridge.awaitingRegionsForTest().contains(XaeroSession.regionKeyOf(128, 64)),
                 "the last pump's awaiting regions are the evictor's classifier");
         offer(130, 64); // evicts (128,64) — its region is awaiting: owed, silent
         assertEquals(1, this.bridge.counterForTest("dropped_overflow"), "still counted as a drop");
@@ -2647,8 +2712,8 @@ class XaeroMapCompatTest {
         offer(64, 64);  // (2,2) loaded → commits this pump
         offer(65, 64);
         this.bridge.pump();
-        assertTrue(this.bridge.awaitingRegionsForTest().contains(XaeroMapCompat.regionKeyOf(128, 64)));
-        assertFalse(this.bridge.awaitingRegionsForTest().contains(XaeroMapCompat.regionKeyOf(64, 64)));
+        assertTrue(this.bridge.awaitingRegionsForTest().contains(XaeroSession.regionKeyOf(128, 64)));
+        assertFalse(this.bridge.awaitingRegionsForTest().contains(XaeroSession.regionKeyOf(64, 64)));
         this.bridge.maxQueue = 1;
         offer(66, 64); // evicts (128,64) — awaiting: owed
         assertEquals(1, this.bridge.counterForTest("owed"));
@@ -3016,7 +3081,7 @@ class XaeroMapCompatTest {
         offer(128, 64);
         offer(129, 64);
         this.bridge.pump(); // (4,2) awaiting
-        this.bridge.maxQueueBytes = 2 * XaeroMapCompat.approxBytes(tile(0, 0)) - 1; // room for one
+        this.bridge.maxQueueBytes = 2 * XaeroSession.approxBytes(tile(0, 0)) - 1; // room for one
         offer(130, 64); // the byte loop evicts (128,64) then (129,64) to make room
         assertEquals(1, this.bridge.queuedForTest());
         assertEquals(2, this.bridge.counterForTest("dropped_overflow"));
@@ -3042,7 +3107,7 @@ class XaeroMapCompatTest {
     // ---- Edge shading + queue accounting (2026-09-06 review) ----
 
     private MapTileChunk groupAt(int cx, int cz) {
-        var region = this.processor.regions.get(XaeroMapCompat.regionKeyOf(cx, cz));
+        var region = this.processor.regions.get(XaeroSession.regionKeyOf(cx, cz));
         return region == null ? null : region.getChunk((cx >> 2) & 7, (cz >> 2) & 7);
     }
 
@@ -3215,7 +3280,7 @@ class XaeroMapCompatTest {
     @Test
     void shrinkingAndRepeatedReplacementKeepExactByteAccounting() {
         var t = overlayTile(64,64);
-        this.bridge.maxQueueBytes = XaeroMapCompat.approxBytes(t);
+        this.bridge.maxQueueBytes = XaeroSession.approxBytes(t);
         for (int i = 0; i < 3; i++) {
             this.bridge.offerPrepared(OVERWORLD, t);
             assertEquals(this.bridge.maxQueueBytes, this.bridge.queuedBytesForTest());
@@ -3277,11 +3342,11 @@ class XaeroMapCompatTest {
         offer(128,64);
         this.bridge.pump();
         this.bridge.offerColumn(OVERWORLD,129,64,-64,320,null);
-        var oweBusy = XaeroMapCompat.class.getDeclaredMethod("oweExpired", Object.class, long.class, long.class);
+        var oweBusy = XaeroSession.class.getDeclaredMethod("oweExpired", Object.class, long.class, long.class);
         oweBusy.setAccessible(true);
         long packed = (129L << 32) | 64L;
         for (int i = 0; i < 2; i++) {
-            oweBusy.invoke(this.bridge, OVERWORLD, packed, XaeroMapCompat.regionKeyOf(129,64));
+            oweBusy.invoke(this.bridge, OVERWORLD, packed, XaeroSession.regionKeyOf(129,64));
         }
         assertEquals(2, this.bridge.counterForTest("owed"), "one entry in each category");
         this.bridge.maxQueue = 2;
@@ -3304,4 +3369,103 @@ class XaeroMapCompatTest {
         assertNotNull(mapTileAt(72,66));
         assertEquals(1, this.bridge.counterForTest("skipped_settings"));
     }
+    @Test void acquisitionOffCancelsQueuedReceiptButPreservesCommittedNativeRebuild() {
+        this.bridge.updateIdlePumps = 3;
+        offer(64, 64);
+        this.bridge.pump();
+        assertEquals(1, this.bridge.counterForTest("written"));
+        assertTrue(this.bridge.counterForTest("pending_updates") > 0);
+        var owner = new dev.vox.lss.networking.client.ColumnDeliveryFixture(OVERWORLD, 128, 64);
+        owner.dispatch(7000L, () -> offer(128, 64)); // synchronous Voxy accepted; Xaero has queued bytes
+        assertEquals(1, this.bridge.queuedForTest());
+        owner.retire(); // same order as ClientNetGlue: cancel receipts before cache save/bridge retirement
+        this.bridge.onAcquisitionEnd();
+        assertEquals(-1L, owner.timestamp());
+        assertEquals(0, owner.failures());
+        assertEquals(0, this.bridge.queuedForTest());
+        assertTrue(this.bridge.counterForTest("pending_updates") > 0,
+                "the native world is still connected; do not discard committed rebuilds");
+        for (int i = 0; i < 5; i++) this.bridge.pump();
+        assertEquals(0, this.bridge.counterForTest("pending_updates"));
+        assertTrue(this.bridge.counterForTest("buffer_updates") > 0);
+        var resumed = new dev.vox.lss.networking.client.ColumnDeliveryFixture(OVERWORLD, 128, 64);
+        resumed.dispatch(7000L, () -> offer(128, 64));
+        this.bridge.pump();
+        resumed.retire();
+        assertEquals(7000L, resumed.timestamp(), "committed map work released the acceptance lease");
+        assertEquals(0, resumed.failures());
+    }
+
+    @Test void deferredReportUsesItsCapturedOwnerAndCannotAffectAReplacement() throws Exception {
+        var old = new dev.vox.lss.networking.client.ColumnDeliveryFixture(OVERWORLD, 128, 64);
+        old.dispatch(7000L, () -> offer(128, 64));
+        assertEquals(1, this.bridge.clearQueueCollectingReports());
+        old.retire();
+        var next = new dev.vox.lss.networking.client.ColumnDeliveryFixture(OVERWORLD, 128, 64);
+        next.dispatch(9000L, () -> {});
+        var drain = XaeroSession.class.getDeclaredMethod("drainDeferredReports");
+        drain.setAccessible(true);
+        drain.invoke(this.bridge);
+        assertEquals(-1L, old.timestamp());
+        assertEquals(9000L, next.timestamp());
+        assertEquals(0, old.failures());
+        assertEquals(0, next.failures());
+        assertTrue(this.reports.isEmpty(), "captured reports never fall through to the current tokenless sink");
+    }
+
+    @Test void replacementAndGovernedEvictionResolveEachReceiptOnce() {
+        this.bridge.maxQueue = 1;
+        var first = new dev.vox.lss.networking.client.ColumnDeliveryFixture(OVERWORLD, 128, 64);
+        var second = new dev.vox.lss.networking.client.ColumnDeliveryFixture(OVERWORLD, 128, 64);
+        first.dispatch(7000L, () -> offer(128, 64));
+        second.dispatch(8000L, () -> offer(128, 64));
+        first.retire();
+        assertEquals(7000L, first.timestamp(), "latest replacement releases the superseded bounded lease");
+        offer(160, 64); // unknown-region governed eviction rejects second's original owner
+        assertEquals(-1L, second.timestamp());
+        assertEquals(1, second.failures());
+        this.bridge.onAcquisitionEnd();
+        assertEquals(1, second.failures(), "teardown does not report a receipt twice");
+    }
+
+    @Test void owedWorkRetainsTheReceiptUntilRecoveryOrRetirement() {
+        this.processor.createdRegionLoadState = 0;
+        this.bridge.maxQueue = 1;
+        var owner = new dev.vox.lss.networking.client.ColumnDeliveryFixture(OVERWORLD, 128, 64);
+        owner.dispatch(7000L, () -> offer(128, 64));
+        this.bridge.pump();
+        offer(129, 64); // move original bytes into owed debt
+        assertEquals(1, this.bridge.counterForTest("owed"));
+        assertEquals(0, owner.failures());
+        owner.retire();
+        this.bridge.onAcquisitionEnd();
+        assertEquals(-1L, owner.timestamp(), "owed map bytes were still uncommitted");
+        assertEquals(0, owner.failures());
+        assertEquals(0, this.bridge.counterForTest("owed"));
+        assertTrue(this.bridge.awaitingRegionsForTest().isEmpty());
+    }
+
+    @Test void activeDeferredReportRejectsItsOriginalReceipt() throws Exception {
+        var owner = new dev.vox.lss.networking.client.ColumnDeliveryFixture(OVERWORLD, 128, 64);
+        owner.dispatch(7000L, () -> offer(128, 64));
+        this.bridge.clearQueueCollectingReports();
+        var drain = XaeroSession.class.getDeclaredMethod("drainDeferredReports");
+        drain.setAccessible(true);
+        drain.invoke(this.bridge);
+        drain.invoke(this.bridge);
+        assertEquals(-1L, owner.timestamp());
+        assertEquals(1, owner.failures());
+        assertTrue(this.reports.isEmpty(), "owned delivery uses its receipt, not the global sink");
+    }
+
+    @Test void aRetiredOwnerCannotLeaveUndrainableQueueOccupancy() {
+        var owner = new dev.vox.lss.networking.client.ColumnDeliveryFixture(OVERWORLD, 128, 64);
+        owner.dispatch(7000L, () -> offer(128, 64));
+        owner.retire();
+        this.bridge.pump();
+        assertEquals(0, this.bridge.queuedForTest());
+        assertEquals(0, this.bridge.counterForTest("written"));
+        assertEquals(0, owner.failures());
+    }
+
 }

@@ -4,8 +4,8 @@ docs/planning/soak-test-design.md
 
 Laws (evaluated as deltas between consecutive VERIFIED-QUIESCENT snapshots within
 same-client-run, same-dimension windows; dimension/join boundaries get anomaly checks only):
-  A1 requests:    d(client.requested_total) == d(responses.columns+up_to_date+not_generated) + d(server.service.duplicate_skips) + d(server.service.superseded) + d(server.service.range_filtered)
-                  [v17 want-set: requested_total counts every DECLARED entry, re-declares included]
+  A1 requests:    d(client.requested_total) == d(responses.columns+up_to_date+not_generated) - d(server.service.corrective_columns_sent) + d(server.service.duplicate_skips) + d(server.service.superseded) + d(server.service.range_filtered)
+                  [v17 want-set: every DECLARED entry; corrective subset counts actual successful sends only]
   A2 delivery:    d(server.service.columns_sent) == d(client.received_columns); d(server.service.bytes_sent) == d(client.received_bytes); d(client.dropped) == 0
   A3 sources:     d(service.columns_sent) <= d(service.in_memory + disk.successful + generation.completed)  [sanity bound, not exact]
   A4 generation:  d(generation.submitted) == d(generation.completed + generation.timeouts + generation.removed_in_flight)
@@ -462,7 +462,7 @@ KNOWN_SERVER_KEYS = {
                  "summary", "mailbox_depth_hw", "mspt_avg_window", "probe_hashes"},
     # mapped appears only on Folia runs, only when true: the driver acknowledged a timeline
     # command Folia unregisters (save-all) as a deliberate no-op instead of executing it.
-    "command": {"event", "wallMs", "tick", "cmd", "anchor", "at", "ok", "mapped"},
+    "command": {"event", "wallMs", "tick", "cmd", "anchor", "at", "ok", "mapped", "validation"},
     "join": {"event", "wallMs", "tick", "player", "joinIndex"},
     "end": {"event", "wallMs", "tick", "reason"},
 }
@@ -757,10 +757,12 @@ def window_label(ps, cs, run=None, dim=None):
 # ------------------------------------------------------------------------------- laws
 
 def law_A1(ps, cs, pc, cc, window):
-    """v17 request conservation. requested_total counts every DECLARED entry (re-declares
+    """v17 request conservation; unsolicited late corrections are separately counted at
+    actual successful send, never fabricated as declarations. requested_total counts every DECLARED entry (re-declares
     included — a position unanswered for N scans is declared N times). Each server-received
     entry ends exactly one way by the time both endpoints are quiescent (backlog == 0):
-    answered on the wire (columns / up_to_date / not_generated), duplicate-skipped (a
+    answered on the wire (columns minus successful corrective columns / up_to_date /
+    not_generated), duplicate-skipped (a
     re-declaration of a still-pending position — the DOMINANT disposition under 1 Hz
     re-declaration), superseded (silent drop, healed by re-declaration), or range-filtered
     at ingress (the movement race).
@@ -788,12 +790,29 @@ def law_A1(ps, cs, pc, cc, window):
     d_dup = delta(ps, cs, "service.duplicate_skips")
     d_sup = delta(ps, cs, "service.superseded")
     d_rf = delta(ps, cs, "service.range_filtered")
-    expected = d_resp + d_dup + d_sup + d_rf
+    # Late owner completion is an additional body, not another client declaration.
+    # Count ONLY the server's tagged successful sends. Old recordings lack this
+    # counter on both endpoints and retain their original exact equation.
+    key = "corrective_columns_sent"
+    values = [row["service"].get(key, 0) for row in (ps, cs)]
+    present = [key in row["service"] for row in (ps, cs)]
+    d_correction = 0
+    if (present[0] != present[1]
+            or any(type(value) is not int or value < 0
+                   or value > row["service"]["columns_sent"]
+                   for value, row in zip(values, (ps, cs)))):
+        return [Violation("A1", window, "invalid corrective_columns_sent accounting", {})]
+    d_correction = values[1] - values[0]
+    if (d_correction < 0 or d_correction > delta(ps, cs, "service.columns_sent")
+            or d_correction > delta(pc, cc, "responses.columns")):
+        return [Violation("A1", window, "corrective sends exceed actual column delta or decrease", {})]
+    expected = d_resp - d_correction + d_dup + d_sup + d_rf
     if d_req != expected:
         return [Violation("A1", window,
-                          "requested_total delta != responses + duplicate_skips + "
+                          "requested_total delta != responses - corrective_columns_sent + duplicate_skips + "
                           "superseded + range_filtered",
                           {"d_requested_total": d_req, "d_responses": d_resp,
+                           "d_corrective_columns_sent": d_correction,
                            "d_duplicate_skips": d_dup, "d_superseded": d_sup,
                            "d_range_filtered": d_rf,
                            "expected": expected, "actual": d_req})]
@@ -915,6 +934,15 @@ def law_A6_server(snaps):
     out = []
     for i in range(1, len(snaps)):
         prev, cur = snaps[i - 1], snaps[i]
+        key = "corrective_columns_sent"
+        if key in prev["service"] or key in cur["service"]:
+            values = [row["service"].get(key) for row in (prev, cur)]
+            if (any(type(value) is not int or value < 0
+                    or value > row["service"]["columns_sent"]
+                    for value, row in zip(values, (prev, cur)))
+                    or values[1] < values[0]):
+                out.append(Violation("A6", window_label(prev, cur),
+                                     "invalid/decreasing corrective column subset", {}))
         for path in SERVER_MONOTONIC:
             pv, cv = get_path(prev, path), get_path(cur, path)
             if cv < pv:
@@ -3779,6 +3807,19 @@ def check_global_schema(server_snaps, runs, violations):
     return ok
 
 
+def command_validation_violations(commands):
+    """Do not mistake the historical did-not-throw breadcrumb for setup proof."""
+    for row in commands:
+        command = row.get("cmd", "")
+        if row.get("ok") is not True:
+            yield Violation("command-validation", command,
+                            "scenario command failed validation or execution", {"ok": row.get("ok")})
+        elif command.lstrip("/").startswith("gamerule ") and row.get("validation") != "gamerule-readback":
+            yield Violation("command-validation", command,
+                            "gamerule setup lacks successful semantic readback (legacy dispatch-only rows are unverified)",
+                            {"validation": row.get("validation")})
+
+
 def run_checker(results_dir, scenario, expect_session_version=None, platform="fabric"):
     violations, warnings = [], []
     unknown_keys, unknown_events = set(), set()
@@ -3828,6 +3869,8 @@ def run_checker(results_dir, scenario, expect_session_version=None, platform="fa
         violations.append(Violation("run-completion", "end event",
                                     "run did not complete its timeline",
                                     {"reason": ends[-1]["reason"]}))
+
+    violations.extend(command_validation_violations(server["commands"]))
 
     cfg_path = SCENARIO_DIR / f"{scenario}-config.json"
     config = {}
@@ -4010,6 +4053,34 @@ def selftest():
     cc_bad = _cli(6000, over={"requested_total": 14, "responses.columns": 4,
                               "responses.up_to_date": 2, "responses.not_generated": 1})
     hits("A1 lost request", law_A1(ps, cs, pc, cc_bad, "selftest"), "A1")
+
+    # An ordinary extra body remains an error; only actual tagged sends balance correction.
+    corr_pc = _cli(1000)
+    corr_cc = _cli(6000, over={"requested_total": 1, "responses.columns": 2})
+    corr_ps = _srv(1000, over={"service.corrective_columns_sent": 0})
+    corr_cs = _srv(6000, over={"service.columns_sent": 2, "service.corrective_columns_sent": 1})
+    clean("A1 actual successful correction", law_A1(corr_ps, corr_cs, corr_pc, corr_cc, "selftest"))
+    hits("A1 ordinary duplicate still fails", law_A1(_srv(1000), _srv(6000,
+         over={"service.columns_sent": 2}), corr_pc, corr_cc, "selftest"), "A1")
+    for bad in (-1, 3, 1.0, True):
+        hits("A1 invalid correction count " + str(bad), law_A1(corr_ps,
+             _srv(6000, over={"service.columns_sent": 2, "service.corrective_columns_sent": bad}),
+             corr_pc, corr_cc, "selftest"), "A1")
+    hits("A1 correction field cannot disappear", law_A1(corr_ps,
+         _srv(6000, over={"service.columns_sent": 2}), corr_pc, corr_cc, "selftest"), "A1")
+    hits("A1 correction count cannot decrease", law_A1(
+         _srv(1000, over={"service.columns_sent": 2, "service.corrective_columns_sent": 1}),
+         _srv(6000, over={"service.columns_sent": 4, "service.corrective_columns_sent": 0}),
+         corr_pc, corr_cc, "selftest"), "A1")
+    hits("A1 dropped or merely enqueued correction is not a sent body", law_A1(corr_ps,
+         _srv(6000, over={"service.columns_sent": 1, "service.corrective_columns_sent": 1}),
+         corr_pc, _cli(6000, over={"requested_total": 1, "responses.columns": 1}), "selftest"), "A1")
+
+    clean("A6 valid correction subset", law_A6_server([corr_ps, corr_cs]))
+    hits("A6 rejects correction decrease outside quiescent windows", law_A6_server([
+         _srv(1000, over={"service.columns_sent": 2, "service.corrective_columns_sent": 1}),
+         _srv(6000, over={"service.columns_sent": 4, "service.corrective_columns_sent": 0})]), "A6")
+    hits("A6 rejects correction disappearance", law_A6_server([corr_ps, _srv(6000)]), "A6")
 
     # A silent server-side drop (mailbox overwrite / backlog replace) is conserved ONLY by
     # service.superseded — with no wire response, an uncounted drop is an invisible hole.
@@ -4386,6 +4457,23 @@ def selftest():
             "disconnect gate: a crashed run (no disconnect row) must fire a run-completion violation"
     finally:
         tmp_path.unlink()
+
+    # Command result=0 is a valid gamerule setter/query success. Historical ok=true
+    # without strict proof must not re-accept a recording of a rejected gamerule.
+    clean("gamerule zero-valued success", list(command_validation_violations([
+        {"cmd": "gamerule minecraft:random_tick_speed 0", "ok": True,
+         "validation": "gamerule-readback"}])))
+    hits("gamerule explicit failure", list(command_validation_violations([
+        {"cmd": "gamerule unknown 0", "ok": False, "validation": "gamerule-readback"}])),
+         "command-validation")
+    hits("legacy false-green setup is unverified", list(command_validation_violations([
+        {"cmd": "gamerule unknown 0", "ok": True}])), "command-validation")
+    hits("failed generic command", list(command_validation_violations([
+        {"cmd": "unknown", "ok": False, "validation": "dispatch"}])), "command-validation")
+    clean("idempotent generic cleanup keeps dispatch semantics", list(command_validation_violations([
+        {"cmd": "kill @e[type=minecraft:pig]", "ok": True, "validation": "dispatch"}])))
+    clean("Folia acknowledged save mapping", list(command_validation_violations([
+        {"cmd": "save-all flush", "ok": True, "mapped": True, "validation": "folia-noop"}])))
 
     # --- Folia mapped command rows are schema-known (no unknown-key warning) ---
     with tempfile.NamedTemporaryFile("w", suffix=".jsonl", delete=False) as tf:

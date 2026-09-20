@@ -1,5 +1,8 @@
 package dev.vox.lss.paper;
 
+import dev.vox.lss.common.processing.RequestRegistration;
+import dev.vox.lss.common.processing.AbstractPlayerRequestState;
+
 import dev.vox.lss.common.DiagnosticsFormatter;
 import dev.vox.lss.common.LSSConstants;
 import dev.vox.lss.common.LSSLogger;
@@ -307,7 +310,7 @@ public class PaperRequestProcessingService {
      *  dimension change between publish and consume discards the batch instead of serving
      *  old-dimension bytes under the new dimension. The probes map is mutated only inside
      *  {@code regionProbeResults.compute} (merge) and owned by the pump after {@code remove}. */
-    record RegionProbeBatch(String dimension, Long2ObjectOpenHashMap<LoadedColumnData> probes) {}
+    record RegionProbeBatch(String dimension, RequestRegistration registration, Long2ObjectOpenHashMap<LoadedColumnData> probes) {}
 
     private final ConcurrentHashMap<UUID, RegionProbeBatch> regionProbeResults = new ConcurrentHashMap<>();
 
@@ -820,8 +823,9 @@ public class PaperRequestProcessingService {
         this.offThreadProcessor.updateSweepRadius(this.config.lodDistanceChunks
                 + LSSConstants.LOD_DISTANCE_BUFFER
                 + dev.vox.lss.common.processing.OffThreadProcessor.SWEEP_RADIUS_MARGIN_CHUNKS);
-        int genGlobal = this.config.generationConcurrencyLimitGlobal;
-        int genPerPlayer = this.config.generationConcurrencyLimitPerPlayer;
+        var generationLimits = this.config.generationLimits();
+        int genGlobal = generationLimits.global();
+        int genPerPlayer = generationLimits.perPlayer();
         if (genGlobal != this.lastAppliedGenGlobal || genPerPlayer != this.lastAppliedGenPerPlayer) {
             if (this.generationService != null) {
                 this.generationService.updateCaps(genGlobal, genPerPlayer);
@@ -1088,7 +1092,8 @@ public class PaperRequestProcessingService {
         var state = this.players.computeIfAbsent(player.getUUID(), uuid -> {
             var s = new PaperPlayerRequestState(player,
                     LSSConstants.SYNC_ON_LOAD_SLOT_CAP,
-                    this.config.generationConcurrencyLimitPerPlayer);
+                    this.config.generationLimits().perPlayer());
+            if (this.regionizedProbing) s.requireProbeHandoff();
             // Session identity for the router's stale-snapshot guard (set before the map
             // publish so the processing thread never sees it null on a live state).
             s.setRegisteredDimension(player.level().dimension().identifier().toString());
@@ -1096,7 +1101,7 @@ public class PaperRequestProcessingService {
             s.setChannelPressureProbe(PaperChannelPressure.forPlayer(player));
             return s;
         });
-        this.diskReader.registerPlayer(player.getUUID());
+        this.diskReader.registerPlayer(player.getUUID(), state.registration());
         state.setCapabilities(capabilities);
         // The five-term AND (plan §2 + v18-compat §2.5) — twin of the Fabric derivation.
         // Both dialect marks run in the drain's beforeRegister (the dialectFlip, pump
@@ -1114,7 +1119,8 @@ public class PaperRequestProcessingService {
     }
 
     public void removePlayer(UUID uuid) {
-        this.players.remove(uuid);
+        var removed = this.players.remove(uuid);
+        if (removed != null) removed.registration().retire();
         this.regionProbeResults.remove(uuid);
         this.heldForProbe.remove(uuid);
         // STAMP, don't clear: a removal (dimension change on Folia, quit) makes the very
@@ -1129,18 +1135,21 @@ public class PaperRequestProcessingService {
             long cutoff = System.nanoTime() / 1_000_000L - REATTACH_PROMPT_INTERVAL_MS;
             this.reattachPromptAt.values().removeIf(stamp -> stamp < cutoff);
         }
-        this.offThreadProcessor.notifyPlayerRemoved(uuid);
-        cleanupPlayerServices(uuid);
+        if (removed != null) {
+            removed.discardProbeHandoff();
+            this.offThreadProcessor.notifyPlayerRemoved(uuid, removed.registration());
+            cleanupPlayerServices(uuid, removed.registration());
+        }
         // Resets the v16 want-set + arms the ingress grace. Identity survives (dropped only
         // by the PlayerQuit hook), mirroring how capabilities ride the dim-change
         // remove+register cycle. No-op for v18 players.
         this.v16Compat.onServiceRemove(uuid);
     }
 
-    private void cleanupPlayerServices(UUID uuid) {
-        this.diskReader.removePlayerResults(uuid);
+    private void cleanupPlayerServices(UUID uuid, RequestRegistration registration) {
+        this.diskReader.removePlayerResults(uuid, registration);
         if (this.generationService != null)
-            this.generationService.removePlayer(uuid);
+            this.generationService.removePlayer(uuid, registration);
     }
 
     /**
@@ -1205,7 +1214,7 @@ public class PaperRequestProcessingService {
         PaperPayloadHandler.sendSessionConfigV16(player.getBukkitEntity(),
                 this.config.enabled, this.config.lodDistanceChunks,
                 LSSConstants.SYNC_ON_LOAD_SLOT_CAP,
-                this.config.generationConcurrencyLimitPerPlayer,
+                this.config.generationLimits().perPlayer(),
                 this.config.enableChunkGeneration);
     }
     // Per-UUID last-prompt/last-removal stamps (millis). Concurrent: batches arrive on
@@ -1516,7 +1525,7 @@ public class PaperRequestProcessingService {
         Map<UUID, Long2ObjectMap<LoadedColumnData>> loadedChunkProbes = new HashMap<>();
 
         // Per-player set of generation-outcome positions to skip in probeLoadedChunks
-        Map<UUID, LongOpenHashSet> genReadyPositions = TickSnapshot.groupPositionsByPlayer(generationReady);
+        Map<RequestRegistration, LongOpenHashSet> genReadyPositions = TickSnapshot.groupPositionsByRegistration(generationReady);
 
         int activeCount = 0;
         int globalProbeBudget = MAX_PROBES_PER_TICK_GLOBAL;
@@ -1581,14 +1590,14 @@ public class PaperRequestProcessingService {
             playerDimensions.put(player.getUUID(), dimension);
 
             var skipPositions = genReadyPositions != null
-                    ? genReadyPositions.get(player.getUUID()) : null;
+                    ? genReadyPositions.get(state.registration()) : null;
             Long2ObjectMap<LoadedColumnData> probes;
             if (this.regionizedProbing) {
                 // Consume last tick's region-published batch, then advance the hold-release
                 // pipeline (release last tick's arrivals, park + probe this tick's). The
                 // sync probe is skipped entirely: the pump owns no chunks on Folia.
                 probes = consumeRegionProbes(player.getUUID(), dimension, skipPositions);
-                holdAndScheduleRegionProbe(state, player, level, skipPositions);
+                holdAndScheduleRegionProbe(state, player, level, skipPositions, probes);
             } else {
                 probes = this.probeLoadedChunks(state, level, skipPositions, globalProbeBudget);
                 globalProbeBudget -= probes.size();   // charge only actual serializations (pump path)
@@ -1721,9 +1730,10 @@ public class PaperRequestProcessingService {
             if (state.skipProbe(packed))
                 continue;
 
+            var capture = this.offThreadProcessor.captureLoadedProbe(level.dimension().identifier().toString(), packed, state.registration());
             var column = this.loadedColumnProbe.probe(level, req.cx(), req.cz());
             if (column != null) {
-                probes.put(packed, column);
+                probes.put(packed, capture.bind(column));
             }
             probed++;
         }
@@ -1738,6 +1748,9 @@ public class PaperRequestProcessingService {
                                                                  LongOpenHashSet skipPositions) {
         var batch = this.regionProbeResults.remove(uuid);
         if (batch == null) return null;
+        var current = this.players.get(uuid);
+        if (this.shuttingDown || current == null || current.registration() != batch.registration()
+                || batch.registration().isRetired()) return null;
         // Serialized under the dimension the player was in when the task ran; a dimension
         // change in between must not serve old-dimension bytes under the new dimension.
         if (!batch.dimension().equals(dimension)) return null;
@@ -1749,39 +1762,19 @@ public class PaperRequestProcessingService {
         return batch.probes();
     }
 
-    /** Pump only. One-tick hold-release at BATCH granularity: release last tick's held batch
-     *  back into the mailbox — but only if no newer batch arrived during the hold
-     *  (republishHeldBatch: the mailbox CAS catches a newer batch still sitting there; the
-     *  offer-generation guard catches one that passed THROUGH the mailbox — offered and
-     *  taken by the processing thread — during the hold. A lost republish means the held
-     *  batch was superseded, is counted, and is dropped, never resurrected) — otherwise
-     *  take whatever is pending now, park it with the pre-take offer generation, and hand
-     *  its positions to the player's owning region. The processing thread takes batches
-     *  only from the mailbox, so a held batch is invisible to routing until released with
-     *  its probe results already published, and no batch is ever both held and pending.
-     *
-     *  <p>Release strictly precedes the take, and a successful release ends the tick: the CAS
-     *  is {@code compareAndSet(null, held)}, so taking first would empty the mailbox and make
-     *  the CAS unconditionally succeed — resurrecting a batch the client has already
-     *  superseded while parking the newer one behind it. (The offer-generation guard now
-     *  also catches that shape, but the release-then-take order stays: it is what keeps the
-     *  pump from re-holding a batch routing is about to take.) Returning on a successful
-     *  release keeps the pump from immediately stealing back the batch it just handed to
-     *  routing.
-     *
-     *  <p><b>Known limitation.</b> The release-then-return only protects the batch for ONE
-     *  pump tick: if the processing cycle overruns and has not taken the released batch by
-     *  the NEXT pump tick, this method finds nothing held and takes it back out of the
-     *  mailbox — re-holding it for another tick (with fresh probe results) instead of
-     *  letting routing have it. A persistently slow processing thread can ping-pong a batch
-     *  this way, each bounce adding a tick of routing delay until either the processing
-     *  thread wins the race or the next 1 Hz declaration supersedes the batch. Bounded and
-     *  self-healing, but worth knowing when reading Folia soak latencies. */
+    /** Pump only. Release the previous tick's held declaration unconditionally, with
+     * currently ready, generation-filtered probes in the same atomic envelope. A late
+     * callback never extends the hold. Newer offers still defeat both generation/CAS guards.
+     * Only fresh ingress is taken below; released envelopes remain router-owned across
+     * later pump snapshots, so a slow worker cannot lose their ready probes by re-holding.
+     */
     private void holdAndScheduleRegionProbe(PaperPlayerRequestState state, ServerPlayer player,
-                                            ServerLevel level, LongOpenHashSet skipPositions) {
+                                            ServerLevel level, LongOpenHashSet skipPositions,
+                                            Long2ObjectMap<LoadedColumnData> readyProbes) {
+        state.updateLateProbeRange(this.config.lodDistanceChunks + LSSConstants.LOD_DISTANCE_BUFFER);
         var released = this.heldForProbe.remove(player.getUUID());
         if (released != null
-                && state.republishHeldBatch(released.batch(), released.offerGeneration())) {
+                && state.republishHeldBatch(released.batch(), released.offerGeneration(), readyProbes)) {
             return;
         }
 
@@ -1792,7 +1785,7 @@ public class PaperRequestProcessingService {
         // only make the eventual republish refuse spuriously (a healed drop), never let a
         // stale batch resurrect.
         long heldAtGeneration = state.offerGeneration();
-        var fresh = state.takeIncomingBatch();
+        var fresh = state.takeFreshIncomingBatchForProbe();
         if (fresh == null) {
             // The published-want-set arm (Folia review 2026-08-27 R1): before this arm
             // existed, Folia probed ONLY on a declaration's arrival tick — the probe
@@ -1807,16 +1800,29 @@ public class PaperRequestProcessingService {
             // no-fresh-batch ticks, so the one-region-task-per-player-per-tick shape
             // holds; a release-success tick returns above and the arm picks up next
             // tick.
+            var late = state.claimLateProbes(MAX_PROBES_PER_TICK_PER_PLAYER);
+            var positions = new LongOpenHashSet();
+            for (var request : late) {
+                if (skipPositions != null && skipPositions.contains(request.position()))
+                    state.cancelLateProbe(request);
+                else positions.add(request.position());
+            }
             var published = state.peekWantSet();
-            if (published == null) return; // converged player, no probe cost
-            long[] positions = snapshotProbePositions(state, published, skipPositions);
-            if (positions.length == 0) return;
+            if (published != null) {
+                for (long pos : snapshotProbePositions(state, published, skipPositions)) {
+                    if (positions.size() >= MAX_PROBES_PER_TICK_PER_PLAYER) break;
+                    positions.add(pos);
+                }
+            }
+            if (positions.isEmpty()) return;
+            long[] selected = positions.toLongArray();
             UUID uuid = player.getUUID();
             try {
                 this.regionTaskScheduler.schedule(player,
-                        () -> runRegionProbe(uuid, level, positions));
+                        () -> runRegionProbe(uuid, state, level, selected, -1, late));
             } catch (Exception e) {
-                // R5 containment — see the sibling below.
+                // A rejected schedule must not keep a claimed one-shot obligation alive.
+                for (var request : late) state.completeLateProbe(request, null);
             }
             return;
         }
@@ -1827,7 +1833,7 @@ public class PaperRequestProcessingService {
         UUID uuid = player.getUUID();
         try {
             this.regionTaskScheduler.schedule(player,
-                    () -> runRegionProbe(uuid, level, positions));
+                    () -> runRegionProbe(uuid, state, level, positions, heldAtGeneration));
         } catch (Exception e) {
             // A plugin-manager disable from a region thread can land between tick()'s
             // shuttingDown check and this schedule: the EntityScheduler then throws
@@ -1862,22 +1868,43 @@ public class PaperRequestProcessingService {
     /** Region-thread task body. Touches no pump state: reads the level behind the ownership
      *  guard, serializes matches through the shared probe seam, and publishes one batch via
      *  compute (merge under the bin lock; the pump takes ownership atomically via remove). */
-    private void runRegionProbe(UUID uuid, ServerLevel level, long[] positions) {
+    private void runRegionProbe(UUID uuid, PaperPlayerRequestState capturedState, ServerLevel level, long[] positions, long heldGeneration) {
+        runRegionProbe(uuid, capturedState, level, positions, heldGeneration,
+                new AbstractPlayerRequestState.LateProbeRequest[0]);
+    }
+
+    private void runRegionProbe(UUID uuid, PaperPlayerRequestState capturedState, ServerLevel level,
+            long[] positions, long heldGeneration, AbstractPlayerRequestState.LateProbeRequest[] late) {
+        var claims = new Long2ObjectOpenHashMap<AbstractPlayerRequestState.LateProbeRequest>();
+        for (var request : late) claims.put(request.position(), request);
+        var registration = capturedState.registration();
+        if (this.shuttingDown || registration.isRetired() || this.players.get(uuid) != capturedState) return;
         Long2ObjectOpenHashMap<LoadedColumnData> found = null;
         for (long packed : positions) {
             int cx = PositionUtil.unpackX(packed);
             int cz = PositionUtil.unpackZ(packed);
-            if (!this.regionOwnershipCheck.ownsChunk(level, cx, cz)) continue;
+            var claim = claims.get(packed);
+            if (!this.regionOwnershipCheck.ownsChunk(level, cx, cz)) {
+                if (claim != null) capturedState.completeLateProbe(claim, null);
+                continue;
+            }
+            var capture = this.offThreadProcessor.captureLoadedProbe(level.dimension().identifier().toString(), packed, registration);
             var column = this.loadedColumnProbe.probe(level, cx, cz);
             if (column != null) {
                 if (found == null) found = new Long2ObjectOpenHashMap<>();
-                found.put(packed, column);
+                var bound = capture.bind(column);
+                found.put(packed, bound);
+                if (claim != null) capturedState.completeLateProbe(claim, bound);
+                else if (heldGeneration >= 0) capturedState.publishLateProbe(heldGeneration, bound);
+            } else if (claim != null) {
+                capturedState.completeLateProbe(claim, null);
             }
         }
         if (found == null) return;
-        var batch = new RegionProbeBatch(level.dimension().identifier().toString(), found);
+        var batch = new RegionProbeBatch(level.dimension().identifier().toString(), registration, found);
         this.regionProbeResults.compute(uuid, (k, prev) -> {
-            if (prev == null || !prev.dimension().equals(batch.dimension())) return batch;
+            if (this.shuttingDown || registration.isRetired() || this.players.get(uuid) != capturedState) return prev;
+            if (prev == null || prev.registration() != registration || !prev.dimension().equals(batch.dimension())) return batch;
             prev.probes().putAll(batch.probes());
             return prev;
         });
@@ -1924,7 +1951,8 @@ public class PaperRequestProcessingService {
         OffThreadProcessor.GenerationTicketRequest req;
         while ((req = this.offThreadProcessor.pollGenerationTicketRequest()) != null) {
             var state = this.players.get(req.playerUuid());
-            if (state == null || !state.hasCompletedHandshake())
+            if (state == null || state.registration() != req.registration()
+                    || req.registration().isRetired() || !state.hasCompletedHandshake())
                 continue;
 
             var player = state.getPlayer();
@@ -1934,7 +1962,7 @@ public class PaperRequestProcessingService {
             // Ticket queued before a dimension change targets the old dimension's coordinates.
             // Dropping it leaks nothing: in the common shape the admitting state was discarded
             // by removePlayer+registerPlayer (its slot dies with it), AND that same removePlayer
-            // enqueues the removal event that sweeps the processing thread's UUID-keyed
+            // enqueues the removal event that sweeps the processing thread's registration-keyed
             // generation in-flight tracking (removeGenerationTracking) — without that sweep the
             // dropped ticket's tracking would leak (do not add a drop path that skips it).
             // Folia timing corner (review 2026-08-27 R17): a region-thread dimension flip
@@ -1944,14 +1972,14 @@ public class PaperRequestProcessingService {
             // cycle sweeps the whole state. Bounded to one tick, no leak.
             if (!dimension.equals(req.dimension())) continue;
             boolean accepted = !player.isRemoved() && this.generationService.submitGeneration(
-                    req.playerUuid(), level, req.cx(), req.cz(),
+                    req.playerUuid(), req.registration(), level, req.cx(), req.cz(),
                     req.submissionOrder());
             if (!accepted) {
                 // Capacity rejection or removed player — TRANSIENT: feed a transient outcome
                 // so the processing thread frees the pending slot silently (superseded); the
                 // client's re-declaration retries. Never NOT_GENERATED (session-permanent).
                 this.offThreadProcessor.feedGenerationFailure(
-                        req.playerUuid(), req.cx(), req.cz(), dimension, req.submissionOrder(), true);
+                        req.playerUuid(), req.registration(), req.cx(), req.cz(), dimension, req.submissionOrder(), true);
             }
         }
     }
@@ -1967,18 +1995,16 @@ public class PaperRequestProcessingService {
     private boolean farPlayerSnapshotWarned;
 
     /** Far players (E1): one broadcast pass every farPlayersUpdateIntervalTicks while
-     *  armed and subscribed — mode "off" short-circuits
-     *  before any snapshot work. Pump thread (Folia: cross-region position/equipment
+     *  armed and subscribed. Mode transitions drain control frames every tick;
+     *  mode "off" skips position and equipment snapshots. Pump thread (Folia: cross-region position/equipment
      *  reads are stale-tolerant by design — accepted for display-only data, the
      *  experimental label covers it). */
     private void tickFarPlayers() {
-        if ("off".equals(this.config.farPlayers)
-                || this.farPlayerService.subscriberCount() == 0) {
-            return;
-        }
-        if (++this.farPlayerTickCounter < this.config.farPlayersUpdateIntervalTicks) return;
-        this.farPlayerTickCounter = 0;
+        if (this.farPlayerService.subscriberCount() == 0) return;
         try {
+            if (!this.farPlayerService.applyMode(this.config.farPlayers, this::sendFarPlayerFrame)) return;
+            if (++this.farPlayerTickCounter < this.config.farPlayersUpdateIntervalTicks) return;
+            this.farPlayerTickCounter = 0;
             var online = buildFarPlayerSnapshots(this.server.getPlayerList().getPlayers());
             this.farPlayerService.tick(System.currentTimeMillis(), online,
                     new dev.vox.lss.common.farplayers.FarPlayerBroadcastService.Settings(
@@ -2121,6 +2147,10 @@ public class PaperRequestProcessingService {
             this.offThreadProcessor.shutdown();
         } catch (Exception e) {
             LSSLogger.error("Error shutting down off-thread processor", e);
+        }
+        for (var state : this.players.values()) {
+            state.registration().retire();
+            state.discardProbeHandoff();
         }
         this.players.clear();
         try {

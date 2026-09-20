@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "id": "lss_wi6_fixture",
+  "version": "1.0.0-test-only",
+  "name": "LSS WI6 isolated send-admission fixture",
+  "environment": "server",
+  "mixins": [
+    "lss-wi6-fixture.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=0.19.3",
+    "minecraft": "1.21.1",
+    "java": ">=21",
+    "lss": ">=0.14.0"
+  }
+}

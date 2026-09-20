@@ -1,0 +1,99 @@
+{
+  "schema_version": 1,
+  "id": "mc12111-neoforge-modern",
+  "line": "1.21.11",
+  "platform": "neoforge",
+  "route": "native",
+  "artifacts": [
+    {
+      "file": "sodium-mc1.21.11-0.8.12-neoforge.jar",
+      "sha256": "3277859aaed67cb5006bd517257cbf49dfb97663d56093279d5523b6da4bbd7c",
+      "metadata": {
+        "neoforge": {
+          "modLoader": "javafml",
+          "loaderVersion": "[4,)",
+          "license": "Polyform-Shield-1.0.0",
+          "mods": [
+            {
+              "modId": "sodium",
+              "version": "0.8.12+mc1.21.11",
+              "displayName": "Sodium",
+              "logoFile": "sodium-icon.png",
+              "authors": "JellySquid (jellysquid3), IMS212",
+              "credits": "bytzo, PepperCode1, FlashyReese, altrisi, Grayray75, Madis0, Johni0702, comp500, coderbot16, Moulberry, MCRcortex, Altirix, embeddedt, pajicadvance, Kroppeb, douira, burgerindividual, TwistedZero, Leo40Git, haykam821, muzikbike",
+              "description": "Sodium is a powerful rendering engine for Minecraft which improves frame rates and reduces lag spikes.\n",
+              "provides": [
+                "indium"
+              ]
+            }
+          ],
+          "modproperties": {
+            "sodium": {
+              "fabric-renderer-api-v1:contains_renderer": true
+            }
+          },
+          "mixins": [
+            {
+              "config": "sodium-common.mixins.json"
+            },
+            {
+              "config": "sodium-neoforge.mixins.json"
+            }
+          ]
+        },
+        "jarjar": {
+          "jars": [
+            {
+              "identifier": {
+                "group": "net.caffeinemc",
+                "artifact": "neoforge"
+              },
+              "version": {
+                "range": "[0.8.12+mc1.21.11,)",
+                "artifactVersion": "0.8.12+mc1.21.11"
+              },
+              "path": "META-INF/jarjar/net.caffeinemc.sodium-neoforge-0.8.12+mc1.21.11-mod.jar",
+              "isObfuscated": false
+            }
+          ]
+        }
+      },
+      "id": "sodium",
+      "version": "0.8.12+mc1.21.11",
+      "source": "https://cdn.modrinth.com/data/AANobbMI/versions/ylHOo4fY/sodium-neoforge-0.8.12%2Bmc1.21.11.jar",
+      "enabled": true,
+      "kind": "mod"
+    }
+  ],
+  "components": [
+    {
+      "uid": "org.lwjgl3",
+      "version": "3.3.3"
+    },
+    {
+      "uid": "net.minecraft",
+      "version": "1.21.11"
+    },
+    {
+      "uid": "net.neoforged",
+      "version": "21.11.45"
+    },
+    {
+      "uid": "java",
+      "version": "21"
+    }
+  ],
+  "capabilities": [
+    "sodium-ui",
+    "receive-control",
+    "status",
+    "diagnostics-export"
+  ],
+  "status": "unverified",
+  "limitations": [
+    "Minimal native UI/profile candidate; optional Foxy/Voxy/Zoomer are excluded. No runtime validation inferred. Neo far-player renderer intentionally unavailable on this line."
+  ],
+  "excluded_candidate_or_fixture_ids": [
+    "lss"
+  ]
+}

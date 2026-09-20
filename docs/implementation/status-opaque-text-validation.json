@@ -1,0 +1,82 @@
+{
+  "defect": "Status buttons remained visible but title, body and footer were absent on native Minecraft1.21.10.",
+  "failed_run_id": "20260909T222438Z-543bb2ec78d0",
+  "failed_run_hash": "7c888bc0fd572da6cdfba3dfc98899a06d3f3d34c18ecde47d9634ed14cd5752",
+  "native_contract": "Minecraft1.21.10 GuiGraphics.drawString(Font,FormattedCharSequence,int,int,int,boolean) calls ARGB.alpha(color) before rendering and returns immediately for zero alpha. Previous RGB literals had zero alpha.",
+  "fix": "Explicit opaque ARGB literals for title/body/footer on1.21.10,1.21.11,26.1,26.2; primary1.21.1 product source and validated artifacts unchanged.",
+  "controls": [
+    {
+      "line": "1.21.10",
+      "exit_code": 0,
+      "evidence": "/home/vox/.local/state/lss-project-improvements/status-alpha-refresh/1.21.10/1788993965294538999",
+      "fabric": {
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "artifacts": {
+        "/home/vox/projects/lss-improvements/1.21.10/fabric/build/libs/lod-server-support-fabric.jar": "7d02cb3c95e9660cb33e8a61fd1e0b45b86d103c883b79a5a5b561a254abd39c",
+        "/home/vox/projects/lss-improvements/1.21.10/neoforge/build/libs/lod-server-support-neoforge.jar": "87bade94f6c877fbd56fcd94b84ae3d7fb28ace95d38a2e120c4f4a3273fca23",
+        "/home/vox/projects/lss-improvements/1.21.10/paper/build/libs/lod-server-support-paper.jar": "5a5056986fd5e255ff05e095c3d45a0f44ecd0e3a57dbcd765eb9a8d888910ad"
+      }
+    },
+    {
+      "line": "1.21.11",
+      "exit_code": 0,
+      "evidence": "/home/vox/.local/state/lss-project-improvements/status-alpha-refresh/1.21.11/1788994000343330440",
+      "fabric": {
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "artifacts": {
+        "/home/vox/projects/lss-improvements/1.21.11/fabric/build/libs/lod-server-support-fabric.jar": "a4b1dc7d613dab7039d65429633c2583ab5b4dc6e22a91c42750a4a1ac18a889",
+        "/home/vox/projects/lss-improvements/1.21.11/neoforge/build/libs/lod-server-support-neoforge.jar": "c723731700489efa9f750a6eb8c38eadb6bcdcd09ab167532d1615e73be3c2a8",
+        "/home/vox/projects/lss-improvements/1.21.11/paper/build/libs/lod-server-support-paper.jar": "71ef7041b77a5939fa30eeaaf5fee3a7ac84e3e768211e4462d242763d9249a9"
+      }
+    },
+    {
+      "line": "26.1",
+      "exit_code": 0,
+      "evidence": "/home/vox/.local/state/lss-project-improvements/status-alpha-refresh/26.1/1788994024723292750",
+      "fabric": {
+        "tests": 4,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "artifacts": {
+        "/home/vox/projects/lss-improvements/26.1/fabric/build/libs/lod-server-support-fabric.jar": "faca7f9b93c9fe8abcad71154604a75686b341a4f1461cd28d8459fe91e6ca12",
+        "/home/vox/projects/lss-improvements/26.1/neoforge/build/libs/lod-server-support-neoforge.jar": "d47ae6b6ea663f660ffdec2a068d2c03635da15dbfcb93849aebaee3ed9e6347",
+        "/home/vox/projects/lss-improvements/26.1/paper/build/libs/lod-server-support-paper.jar": "e07c33493b049dcc12f762a47bed84a0e6867ee7d6da3cabe67f70c2fbc3849f"
+      }
+    },
+    {
+      "line": "26.2",
+      "exit_code": 0,
+      "evidence": "/home/vox/.local/state/lss-project-improvements/status-alpha-refresh/26.2/1788994056737494207",
+      "fabric": {
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "artifacts": {
+        "/home/vox/projects/lss-improvements/26.2/fabric/build/libs/lod-server-support-fabric.jar": "2766964bc1928c8ecc413add92c1770c842984006dbb83621ef1cfa5c7bd430d",
+        "/home/vox/projects/lss-improvements/26.2/neoforge/build/libs/lod-server-support-neoforge.jar": "66704ffda969d878bccc7011d826aee25da804c1c79f0d656939cf5832f14304",
+        "/home/vox/projects/lss-improvements/26.2/paper/build/libs/lod-server-support-paper.jar": "3c0a0f1be3cdfbb11817dfa2163e2fa5a3cd1b991fc57e73d17973ea9294577f"
+      }
+    }
+  ],
+  "live_recheck": "pending; passing compilation and bytecode controls do not establish native screen visibility",
+  "screenshots": {
+    "status-command-readable.png": "827880686302c3d9a5a889c3bff4bfc4bbafb61d083d1336096cd87037794610",
+    "status-settled.png": "38896fcbbe958424060ec4b9e9f6f49b86892edd09b8645e7fda0523142e5487"
+  },
+  "limitations": [
+    "Failed run used an explicitly renderer-disabled Voxy UI-only profile after a native indirect-draw freeze.",
+    "No map, lifecycle, far-player or performance pass is claimed."
+  ]
+}

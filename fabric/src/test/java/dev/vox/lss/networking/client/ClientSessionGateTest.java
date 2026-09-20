@@ -135,6 +135,56 @@ class ClientSessionGateTest {
         }
     }
 
+
+    @Test void localOffRetiresOnceAndLateConfigCannotRestartAcquisition() {
+        gate.onJoin(true, false, true, true);
+        gate.onSessionConfig(config(V, true), true, true);
+        var old = gate.getRequestManager();
+        var clears = new AtomicInteger();
+        old.setBatchSenderForTest(payload -> clears.incrementAndGet());
+        assertTrue(gate.reconcileReception(false, true));
+        assertFalse(old.isAcquisitionActive());
+        assertNull(gate.getRequestManager());
+        assertTrue(gate.isServerEnabled(), "local OFF preserves negotiated server identity");
+        assertFalse(gate.reconcileReception(false, true));
+        assertEquals(1, clears.get());
+        assertEquals(List.of("rebuild", "disconnect", "save"), events);
+        gate.onSessionConfig(config(V, true), true, true);
+        assertNull(gate.getRequestManager(), "late server reply cannot bypass OFF");
+        assertTrue(gate.reconcileReception(true, true));
+        assertEquals(2, handshakesSent.get());
+        assertNull(gate.getRequestManager(), "resume waits for a negotiated reply");
+        gate.onSessionConfig(config(V, true), true, true);
+        assertNotSame(old, gate.getRequestManager());
+        assertFalse(gate.reconcileReception(true, true));
+        assertEquals(2, handshakesSent.get());
+    }
+
+    @Test void offAtJoinCanBeEnabledWithoutReconnect() {
+        gate.onJoin(false, false, true, true);
+        assertEquals(0, handshakesSent.get());
+        gate.reconcileReception(true, true);
+        assertEquals(List.of(V), handshakeVersions);
+        gate.onSessionConfig(config(V, true), true, true);
+        assertNotNull(gate.getRequestManager());
+    }
+
+    @Test void withheldWithdrawalRetriesOnlyWhileOff() {
+        gate.onJoin(true, false, true, true);
+        gate.onSessionConfig(config(V, true), true, true);
+        var attempts = new AtomicInteger();
+        gate.getRequestManager().setBatchSenderForTest(payload -> {
+            attempts.incrementAndGet();
+            throw new IllegalStateException("temporarily unavailable");
+        });
+        gate.reconcileReception(false, true);
+        gate.reconcileReception(false, true);
+        assertEquals(2, attempts.get());
+        gate.reconcileReception(true, true);
+        gate.reconcileReception(true, true);
+        assertEquals(2, attempts.get(), "obsolete clears must not withdraw resumed wants");
+    }
+
     // ---- SessionConfig ladder: version gate ----
 
     @Test
@@ -1043,4 +1093,20 @@ class ClientSessionGateTest {
         assertEquals(sent + 1, handshakesSent.get(), "the guard re-announces instead");
         assertTrue(gate.isServerEnabled(), "the established session's state is untouched");
     }
+    @Test void localReceiveResumeStaysSilentUntilTheLanServiceHasStarted() {
+        gate.onJoin(false, true, true, true);
+        gate.reconcileReception(true, true);
+        assertEquals(0, handshakesSent.get(), "ordinary integrated singleplayer never negotiates");
+        gate.reconcileReception(false, true);
+        gate.onHostServiceReady(); // Open to LAN while downloads are OFF
+        gate.reconcileReception(true, true);
+        assertEquals(1, handshakesSent.get());
+        gate.onSessionConfig(config(V, true), true, true);
+        assertNotNull(gate.getRequestManager());
+        gate.getRequestManager().setBatchSenderForTest(payload -> {});
+        gate.reconcileReception(false, true);
+        gate.reconcileReception(true, true);
+        assertEquals(2, handshakesSent.get(), "an established LAN host can resume without reopening LAN");
+    }
+
 }

@@ -1,0 +1,222 @@
+#!/usr/bin/env python3
+"""Record fixed calibration and measured slots before their runtime is created."""
+import argparse
+import hashlib
+import json
+from pathlib import Path
+import secrets
+import re
+import time
+import os
+import performance
+
+FIELDS=('world_digest','profile_hash','fixture_hash','hardware_hash','jvm_hash','workload_hash')
+ORDER=('baseline','candidate','candidate','baseline','baseline','candidate')
+def digest(value):return hashlib.sha256(json.dumps(value,sort_keys=True,separators=(',',':')).encode()).hexdigest()
+def read(path):return json.loads(Path(path).read_text())
+def create_file(path,value):
+    path=Path(path)
+    with path.open('x') as stream:
+        json.dump(value,stream,indent=2,sort_keys=True);stream.write('\n');stream.flush();os.fsync(stream.fileno())
+    directory=os.open(path.parent,os.O_RDONLY | os.O_DIRECTORY)
+    try:os.fsync(directory)
+    finally:os.close(directory)
+def init(root,registration):
+    if set(registration.get('arms',{}))!={'baseline','candidate'} or any(not registration.get(field) for field in FIELDS):
+        raise ValueError('complete preregistered arms and shared input identities required')
+    if registration['arms']['baseline']==registration['arms']['candidate']:raise ValueError('arms must differ')
+    if any(not isinstance(registration[field],str) or re.fullmatch('[0-9a-f]{64}',registration[field]) is None for field in FIELDS):
+        raise ValueError('shared inputs require full SHA256 identities')
+    for identity in registration['arms'].values():
+        if not isinstance(identity.get('source_tree'),str) or re.fullmatch('[0-9a-f]{40}',identity['source_tree']) is None:
+            raise ValueError('arm requires a full Git source tree identity')
+        hashes=identity.get('artifact_hashes')
+        if not isinstance(hashes,dict) or not hashes or any(not isinstance(value,str) or re.fullmatch('[0-9a-f]{64}',value) is None for value in hashes.values()):
+            raise ValueError('arm requires full artifact SHA256 identities')
+    root.mkdir(parents=True,exist_ok=False)
+    registration=dict(registration,claim_protocol=1,experiment_root=str(root.resolve()),schema_version=1,experiment_id=secrets.token_hex(16),created_ns=time.time_ns(),calibration_runs=3,measured_order=list(ORDER))
+    create_file(root/'registration.json',registration)
+    return registration
+
+def failures(root):
+    result=[]
+    for path in sorted(root.glob('*-result.json')):
+        value=read(path)
+        if 'failure' not in value:continue
+        if digest(value['failure'])!=value.get('failure_sha256'):
+            raise ValueError('failed-slot evidence changed')
+        binding=value['failure']['measurement_context']
+        phase=binding.get('phase');slot=binding.get('slot')
+        if phase not in ('calibration','measured') or type(slot) is not int or not 0<=slot<(3 if phase=='calibration' else 6):
+            raise ValueError('invalid failed-slot phase/slot')
+        if path.name!=f'{phase}-{slot}-result.json':raise ValueError('failed-slot filename disagrees with binding')
+        if binding!=read(root/f"{binding['phase']}-{binding['slot']}-intent.json"):
+            raise ValueError('failed-slot intent changed')
+        if binding['registration_sha256']!=digest(read(root/'registration.json')):
+            raise ValueError('failed-slot registration changed')
+        from run_claim import verify as verify_claim
+        claim=verify_claim(root,value['failure']['run_root'])
+        if digest(claim)!=value['failure'].get('claim_sha256'):raise ValueError('failed-slot run claim changed')
+        result.append(value['failure'])
+    return result
+
+def require_no_failure(root):
+    if failures(root):raise ValueError('selected failed slot is terminal; no replacement or later intent permitted')
+
+def record_failure(root,run_root):
+    """Consume a selected owned run without manufacturing any metric samples."""
+    from rig import alive, regular
+    from review_state import ownership_errors
+    run_root=Path(run_root).resolve()
+    names=('manifest.json','runtime.json','profile.json','scenario.json','evidence/result.json','processes.json','supervisor.json')
+    values={name:read(regular(run_root/name)) for name in names}
+    manifest=values['manifest.json'];runtime=values['runtime.json'];collected=values['evidence/result.json']
+    if manifest.get('run_hash')!=digest(manifest.get('run_manifest',{})):
+        raise ValueError('run manifest digest changed')
+    for filename,field in (('runtime.json','runtime_hash'),('profile.json','profile_hash'),('scenario.json','scenario_hash')):
+        if digest(values[filename])!=manifest.get(field) or manifest['run_manifest'].get(field)!=manifest[field]:
+            raise ValueError('run input identity changed: '+filename)
+    for field in ('run_id','run_hash','profile_hash','scenario_hash'):
+        if not manifest.get(field) or collected.get(field)!=manifest[field]:raise ValueError('collection identity changed')
+    ownership=ownership_errors(run_root,runtime)
+    if ownership:raise ValueError('; '.join(ownership))
+    if collected.get('cleanup')!='complete' or any(alive(owner) for owner in values['processes.json']) or alive(values['supervisor.json']):
+        raise ValueError('owned run must be collected and stopped')
+    from run_claim import verify as verify_claim
+    claimed=verify_claim(root,run_root)
+    registration=read(root/'registration.json');binding=runtime.get('measurement_context',{})
+    phase=binding.get('phase');slot=binding.get('slot')
+    if phase not in ('calibration','measured') or type(slot) is not int or not 0<=slot<(3 if phase=='calibration' else 6):
+        raise ValueError('missing selected runtime intent')
+    if binding!=read(root/f'{phase}-{slot}-intent.json') or binding.get('registration_sha256')!=digest(registration):
+        raise ValueError('runtime differs from preregistered intent')
+    if phase=='measured' and binding.get('calibration_sha256')!=digest(read(root/'frozen.json')):
+        raise ValueError('measured failure does not bind frozen calibration')
+    expected_arm='baseline' if phase=='calibration' else ORDER[slot]
+    if binding.get('arm')!=expected_arm:raise ValueError('selected arm changed')
+    metadata=runtime.get('measurement',{});identity=metadata.get('artifact_identity')
+    if identity!=registration['arms'][expected_arm]:raise ValueError('failed run arm identity mismatch')
+    staged={row['target']:row['sha256'] for row in manifest['run_manifest']['staged_inputs']}
+    paths=metadata.get('artifact_paths',{})
+    if set(paths)!=set(identity['artifact_hashes']) or any(staged.get(path)!=identity['artifact_hashes'][key] for key,path in paths.items()):
+        raise ValueError('failed run staged arm binding mismatch')
+    fixtures=metadata.get('fixture_paths',[])
+    if not fixtures or len(set(fixtures))!=len(fixtures) or any(path not in staged for path in fixtures):raise ValueError('failed run fixture binding missing')
+    actual={'world_digest':runtime.get('world_digest'),'profile_hash':manifest['profile_hash'],
+            'fixture_hash':digest({path:staged[path] for path in fixtures}),
+            **{key:metadata.get(key) for key in ('hardware_hash','jvm_hash','workload_hash')}}
+    if any(actual.get(field)!=registration[field] for field in FIELDS):raise ValueError('failed run shared input mismatch')
+    require_no_failure(root)
+    for path in root.glob('*-result.json'):
+        if read(path).get('report',{}).get('run_id')==manifest['run_id']:raise ValueError('run reused')
+    status=collected.get('status');reason=None
+    if status=='failed':reason={'kind':'collected-runtime-failure','errors':collected.get('errors',[])}
+    elif status=='passed':
+        from assemble_run import assemble_run
+        try:report=assemble_run(run_root)
+        except (ValueError,OSError,KeyError,TypeError) as error:
+            reason={'kind':'report-assembly-failure','exception_type':type(error).__name__,'message':str(error)}
+        else:
+            errors=performance.correctness(report)+performance.sample_errors(report)
+            if errors:reason={'kind':'assembled-report-rejected','errors':errors}
+            else:raise ValueError('valid assembled report must use record, not failure')
+    else:raise ValueError('collection is not a completed success/failure')
+    if manifest.get('launch_journal_version'):
+        names+=('owner.json','launch-journal.json','supervisor-cleanup.json')
+    failure={'schema_version':1,'run_root':str(run_root),'claim_sha256':digest(claimed),'measurement_context':binding,'run_id':manifest['run_id'],'run_hash':manifest['run_hash'],
+             'artifact_identity':identity,**actual,'reason':reason,
+             'evidence_sha256':{name:hashlib.sha256((run_root/name).read_bytes()).hexdigest() for name in names},
+             'artifact_attribution':'Manifest-bound intended inputs only; changed or missing staged bytes may be the failure itself. No immutable-byte success claimed.',
+             'scope':'Selected attempt failed; no metric values or successful measurement claimed.'}
+    value={'failure':failure,'failure_sha256':digest(failure),'recorded_ns':time.time_ns()}
+    create_file(root/f'{phase}-{slot}-result.json',value)
+    return value
+
+def intent(root,phase):
+    require_no_failure(root)
+    registration=read(root/'registration.json')
+    if phase not in ('calibration','measured'):raise ValueError('unknown experiment phase')
+    if phase=='calibration' and (root/'frozen.json').exists():raise ValueError('calibration already frozen')
+    if phase=='measured' and not (root/'frozen.json').exists():raise ValueError('calibration must be frozen first')
+    limit=3 if phase=='calibration' else 6
+    for slot in range(limit):
+        if (root/f'{phase}-{slot}-result.json').exists():continue
+        pending=root/f'{phase}-{slot}-intent.json'
+        if pending.exists():return read(pending)
+        value={'schema_version':1,'experiment_id':registration['experiment_id'],'registration_sha256':digest(registration),
+               'phase':phase,'slot':slot,'arm':'baseline' if phase=='calibration' else ORDER[slot],
+               'created_ns':time.time_ns(),'nonce':secrets.token_hex(16)}
+        if phase=='measured':value['calibration_sha256']=digest(read(root/'frozen.json'))
+        create_file(pending,value);return value
+    raise ValueError('all fixed slots already recorded')
+
+def record(root,report):
+    require_no_failure(root)
+    binding=report.get('measurement_context',{});phase=binding.get('phase');slot=binding.get('slot')
+    if phase not in ('calibration','measured') or not isinstance(slot,int) or isinstance(slot,bool):raise ValueError('missing runtime-bound measurement intent')
+    pending=root/f'{phase}-{slot}-intent.json'
+    if not pending.exists() or read(pending)!=binding:raise ValueError('runtime differs from preregistered intent')
+    registration=read(root/'registration.json')
+    if binding['registration_sha256']!=digest(registration):raise ValueError('registration changed after intent')
+    if report.get('artifact_identity')!=registration['arms'][binding['arm']]:raise ValueError('arm artifact identity mismatch')
+    for field in FIELDS:
+        if report.get(field)!=registration[field]:raise ValueError('shared experiment input changed: '+field)
+    if not report.get('run_id') or not report.get('run_hash'):raise ValueError('run identity missing')
+    for existing in root.glob('*-result.json'):
+        if read(existing)['report']['run_id']==report['run_id']:raise ValueError('run reused')
+    from run_claim import verify_report
+    verify_report(root,report)
+    # Record failures too. A failed selected run cannot be silently replaced.
+    value={'report':report,'report_sha256':digest(report),'recorded_ns':time.time_ns()}
+    create_file(root/f'{phase}-{slot}-result.json',value)
+    return value
+
+def freeze(root):
+    require_no_failure(root)
+    registration=read(root/'registration.json');runs=[];hashes=[]
+    for slot in range(3):
+        value=read(root/f'calibration-{slot}-result.json')
+        if digest(value['report'])!=value['report_sha256']:raise ValueError('calibration report changed')
+        from run_claim import verify_report
+        verify_report(root,value['report'])
+        runs.append(value['report']);hashes.append(value['report_sha256'])
+    floors=performance.calibrate(runs)
+    result={'schema_version':1,'registration_sha256':digest(registration),'calibration_report_hashes':hashes,
+            'absolute_floors':floors,'frozen_ns':time.time_ns()}
+    create_file(root/'frozen.json',result);return result
+
+def evaluate(root):
+    failed=failures(root)
+    if failed:return {"result":{"status":"failed","errors":["selected failed slot; experiment cannot pass"],"failed_attempts":failed}}
+    registration=read(root/'registration.json');frozen=read(root/'frozen.json')
+    if frozen['registration_sha256']!=digest(registration):raise ValueError('registration changed after calibration')
+    calibration=[read(root/f'calibration-{slot}-result.json') for slot in range(3)]
+    if [digest(value['report']) for value in calibration]!=frozen['calibration_report_hashes']:
+        raise ValueError('frozen calibration evidence changed')
+    if performance.calibrate([value['report'] for value in calibration])!=frozen['absolute_floors']:
+        raise ValueError('absolute floors changed after calibration')
+    from run_claim import verify_report
+    for value in calibration:verify_report(root,value['report'])
+    runs=[]
+    for slot,arm in enumerate(ORDER):
+        value=read(root/f'measured-{slot}-result.json');report=value['report'];binding=report['measurement_context']
+        if value['report_sha256']!=digest(report) or binding!=read(root/f'measured-{slot}-intent.json'):
+            raise ValueError('measured report/intent changed')
+        if binding.get('calibration_sha256')!=digest(frozen) or binding['arm']!=arm:
+            raise ValueError('measurement preceded frozen calibration or order changed')
+        verify_report(root,report)
+        runs.append(report)
+    experiment={**registration,'preregistered':True,'calibration_frozen_before_candidate':True,'absolute_floors':frozen['absolute_floors'],'pairs':[]}
+    for index in range(3):
+        order=list(ORDER[index*2:index*2+2]);experiment['pairs'].append({'order':order,order[0]:runs[index*2],order[1]:runs[index*2+1]})
+    return {'experiment':experiment,'result':performance.evaluate(experiment)}
+
+if __name__=='__main__':
+    parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('command',choices=['init','intent','record','record-failure','freeze','evaluate']);parser.add_argument('directory',type=Path);parser.add_argument('--input',type=Path);parser.add_argument('--phase',choices=['calibration','measured']);args=parser.parse_args()
+    if args.command=='init':result=init(args.directory,read(args.input))
+    elif args.command=='intent':result=intent(args.directory,args.phase)
+    elif args.command=='record':result=record(args.directory,read(args.input))
+    elif args.command=='record-failure':result=record_failure(args.directory,args.input)
+    elif args.command=='freeze':result=freeze(args.directory)
+    else:result=evaluate(args.directory)
+    print(json.dumps(result,indent=2,sort_keys=True))

@@ -634,6 +634,28 @@ class ClientColumnProcessorTest {
                 "the post-bump straggler is never polled by the stale drain");
     }
 
+
+    @Test void ownedAlreadyPolledCallbackIsRetiredBeforeItsCompletion() {
+        var manager = managedManager();
+        manager.deliveryExecutor = Runnable::run;
+        long packed = PositionUtil.packPosition(1, 1);
+        manager.onColumnReceived(packed, 5000L, dim);
+        var receipt = manager.trackDelivery(dim, packed, -1L);
+        processor.offer(new VoxelColumnS2CPayload(1, 1, dim, 5000L, sectionWire(1, 1)), false, receipt);
+        processor.drainColumnQueue(dim, LEVEL_SECTIONS, MIN_SECTION_Y, false, FACTORY,
+                (d, x, z, data) -> {
+                    assertSame(receipt, dev.vox.lss.api.LSSApi.captureIngestFailureHandle());
+                    manager.retireAcquisition();
+                    processor.reportUndispatched(manager);
+                    assertEquals(-1L, manager.getColumnTimestamp(1, 1),
+                            "retirement accounts for a receipt already outside the queue");
+                    receipt.report(); // late callback cannot charge intentional retirement
+                }, processor.sessionEpochForTest());
+        assertEquals(-1L, manager.getColumnTimestamp(1, 1));
+        assertEquals(0, manager.getTotalIngestFailures());
+        assertEquals(0, processor.getQueuedCount());
+    }
+
     // ---- CL-044: the three clear paths report instead of silently dropping (D2) ----
 
     @Test
@@ -775,6 +797,43 @@ class ClientColumnProcessorTest {
                 processor.sessionEpochForTest());
         assertEquals(List.of(new Dispatched(2, 2, 1)), dispatches,
                 "only the epoch gates the drain — a current-epoch drain still serves");
+    }
+
+    @Test
+    void teardownBetweenEpochCheckAndPollCannotAcceptANewSessionColumn() throws Exception {
+        var replacement = managedManager();
+        replacement.deliveryExecutor = Runnable::run;
+        long packed = PositionUtil.packPosition(9, 9);
+        var queueField = ClientColumnProcessor.class.getDeclaredField("columnQueue");
+        queueField.setAccessible(true);
+        // Force the real check/poll interleaving without timing or a production test hook.
+        // The teardown's recursive poll sees an empty queue; only afterward does the new
+        // owner admit a receipt into the lifetime processor's shared queue.
+        queueField.set(processor, new java.util.concurrent.ConcurrentLinkedQueue<Object>() {
+            private boolean firstPoll = true;
+            @Override public Object poll() {
+                if (firstPoll) {
+                    firstPoll = false;
+                    processor.shutdown();
+                    replacement.onColumnReceived(packed, 5000L, dim);
+                    var receipt = replacement.trackDelivery(dim, packed, -1L);
+                    processor.offer(new VoxelColumnS2CPayload(9, 9, dim, 5000L,
+                            sectionWire(1, 1)), false, receipt);
+                }
+                return super.poll();
+            }
+        });
+
+        int oldEpoch = processor.sessionEpochForTest();
+        processor.drainColumnQueue(dim, LEVEL_SECTIONS, MIN_SECTION_Y, false, FACTORY,
+                recordingDispatcher, oldEpoch);
+
+        assertTrue(dispatches.isEmpty(), "an old drain must not dispatch into its replacement");
+        assertEquals(-1L, replacement.getColumnTimestamp(9, 9),
+                "a new receipt stolen by the old drain must be re-requested, never accepted silently");
+        assertEquals(1, replacement.getTotalIngestFailures());
+        assertEquals(0, processor.getQueuedCount());
+        assertEquals(0L, processor.getQueuedBytes());
     }
 
     // ---- CL-047: a decode-failure unstamp survives the disconnect cache flush ----

@@ -64,6 +64,15 @@ jobs:
             ./gradlew :neoforge:runGameTestServer
           }
 
+      - name: Isolated harness ownership + result fixtures
+        run: |
+          python3 scripts/test_harness.py
+          bash -n scripts/lib/harness-lock.sh
+          bash -n scripts/lib/mc-run.sh
+          for script in soak benchmark benchmark_compare profile_disk_read backfill_profile store_gate compress_gate store_offline_edit store_migration_gate summary_evicted stamp_heal store_save_storm; do
+            bash -n "scripts/$script.sh"
+          done
+
       - name: Soak checker + report selftests
         run: |
           python3 scripts/check_soak.py --selftest
@@ -74,6 +83,11 @@ jobs:
 
       - name: Release-jar safety gate
         run: python3 scripts/release_check.py
+
+      - name: Verify fixture classes stay out of maintained artifacts
+        run: |
+          python3 tools/tests/inventory.py validate-moves
+          python3 tools/tests/check_artifacts.py
 
       - name: Upload flake evidence (first attempt of a retried gametest)
         if: always()
@@ -93,6 +107,7 @@ jobs:
             fabric/build/run/*/logs/
             fabric/build/run/*/crash-reports/
             fabric/build/reports/
+            common/build/test-results/
             fabric/build/test-results/
             paper/build/reports/
             paper/build/test-results/

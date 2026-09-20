@@ -1,5 +1,7 @@
 package dev.vox.lss.networking.server;
 
+import dev.vox.lss.common.processing.RequestRegistration;
+
 import dev.vox.lss.common.DiagnosticsFormatter;
 import dev.vox.lss.common.LSSConstants;
 import dev.vox.lss.common.LSSLogger;
@@ -472,7 +474,7 @@ public class RequestProcessingService {
         }
         var state = this.players.computeIfAbsent(player.getUUID(), uuid -> {
             var s = new PlayerRequestState(player, LSSConstants.SYNC_ON_LOAD_SLOT_CAP,
-                    config.generationConcurrencyLimitPerPlayer);
+                    config.generationLimits().perPlayer());
             // Session identity for the router's stale-snapshot guard (set before the map
             // publish so the processing thread never sees it null on a live state).
             s.setRegisteredDimension(player.level().dimension().identifier().toString());
@@ -483,7 +485,7 @@ public class RequestProcessingService {
             s.setChannelPressureProbe(FabricChannelPressure.forPlayer(player));
             return s;
         });
-        this.diskReader.registerPlayer(player.getUUID());
+        this.diskReader.registerPlayer(player.getUUID(), state.registration());
         state.setCapabilities(capabilities);
         // The five-term AND (plan §2 + v18-compat §2.5): capability bit x config+native
         // latch x NOT-v16 x NOT-v18. Both dialect marks land BEFORE registerPlayer on the
@@ -506,9 +508,12 @@ public class RequestProcessingService {
     }
 
     public void removePlayer(UUID uuid) {
-        this.players.remove(uuid);
-        this.offThreadProcessor.notifyPlayerRemoved(uuid);
-        cleanupPlayerServices(uuid);
+        var removed = this.players.remove(uuid);
+        if (removed != null) removed.registration().retire();
+        if (removed != null) {
+            this.offThreadProcessor.notifyPlayerRemoved(uuid, removed.registration());
+            cleanupPlayerServices(uuid, removed.registration());
+        }
         // Resets the v16 want-set + arms the ingress grace. Identity survives (dropped only
         // by the network DISCONNECT hook), mirroring how capabilities ride the dim-change
         // remove+register cycle. No-op for v18 players.
@@ -537,9 +542,9 @@ public class RequestProcessingService {
         return this.serviceGateState;
     }
 
-    private void cleanupPlayerServices(UUID uuid) {
-        this.diskReader.removePlayerResults(uuid);
-        if (this.generationService != null) this.generationService.removePlayer(uuid);
+    private void cleanupPlayerServices(UUID uuid, RequestRegistration registration) {
+        this.diskReader.removePlayerResults(uuid, registration);
+        if (this.generationService != null) this.generationService.removePlayer(uuid, registration);
     }
 
     public void handleBatchRequest(ServerPlayer player, BatchChunkRequestC2SPayload payload) {
@@ -717,15 +722,14 @@ public class RequestProcessingService {
     }
 
     /** Far players (E1): one broadcast pass every {@code farPlayersUpdateIntervalTicks}
-     *  while the mode is armed and anyone subscribed. Mode "off" short-circuits
-     *  before any snapshot work — a disabled server's path is free. */
+     *  while the mode is armed and anyone subscribed. Mode transitions drain control
+     *  frames every tick; mode "off" skips position and equipment snapshots. */
     private void tickFarPlayers(LSSServerConfig config) {
-        if ("off".equals(config.farPlayers) || this.farPlayerService.subscriberCount() == 0) {
-            return;
-        }
-        if (++this.farPlayerTickCounter < config.farPlayersUpdateIntervalTicks) return;
-        this.farPlayerTickCounter = 0;
+        if (this.farPlayerService.subscriberCount() == 0) return;
         try {
+            if (!this.farPlayerService.applyMode(config.farPlayers, this::sendFarPlayerFrame)) return;
+            if (++this.farPlayerTickCounter < config.farPlayersUpdateIntervalTicks) return;
+            this.farPlayerTickCounter = 0;
             var online = new java.util.ArrayList<dev.vox.lss.common.farplayers
                     .FarPlayerBroadcastService.PlayerSnapshot>();
             for (var p : this.server.getPlayerList().getPlayers()) {
@@ -781,8 +785,9 @@ public class RequestProcessingService {
         this.diskReader.reapplyGateCapacity(config);
         this.offThreadProcessor.updateSweepRadius(config.lodDistanceChunks
                 + LSSConstants.LOD_DISTANCE_BUFFER + OffThreadProcessor.SWEEP_RADIUS_MARGIN_CHUNKS);
-        int genGlobal = config.generationConcurrencyLimitGlobal;
-        int genPerPlayer = config.generationConcurrencyLimitPerPlayer;
+        var generationLimits = config.generationLimits();
+        int genGlobal = generationLimits.global();
+        int genPerPlayer = generationLimits.perPlayer();
         if (genGlobal != this.lastAppliedGenGlobal || genPerPlayer != this.lastAppliedGenPerPlayer) {
             if (this.generationService != null) {
                 this.generationService.updateCaps(genGlobal, genPerPlayer);
@@ -1021,7 +1026,7 @@ public class RequestProcessingService {
         var buffers = SnapshotBuffers.newPerTick();
 
         // Per-player set of generation-outcome positions to skip in probeLoadedChunks
-        Map<UUID, LongOpenHashSet> genReadyPositions = TickSnapshot.groupPositionsByPlayer(generationReady);
+        Map<RequestRegistration, LongOpenHashSet> genReadyPositions = TickSnapshot.groupPositionsByRegistration(generationReady);
 
         int activeCount = 0;
         int globalProbeBudget = MAX_PROBES_PER_TICK_GLOBAL;
@@ -1085,7 +1090,7 @@ public class RequestProcessingService {
             buffers.playerDimensions().put(player.getUUID(), dimension);
 
             var skipPositions = genReadyPositions != null
-                    ? genReadyPositions.get(player.getUUID()) : null;
+                    ? genReadyPositions.get(state.registration()) : null;
             var probes = this.probeLoadedChunks(state, level, skipPositions, globalProbeBudget);
             globalProbeBudget -= probes.size();   // charge only actual serializations
             if (!probes.isEmpty()) {
@@ -1437,7 +1442,8 @@ public class RequestProcessingService {
                 // would make that save hash equal — silencing the dirty broadcast every OTHER
                 // client holding the old column needs. Only generation serves seed (freshly
                 // generated content cannot be stale-held by anyone).
-                var data = serializeProbeContained(SectionSerializer::serializeColumn,
+                var data = serializeCapturedProbe(
+                        () -> this.offThreadProcessor.captureLoadedProbe(level.dimension().identifier().toString(), packed, state.registration()), SectionSerializer::serializeColumn,
                         level, chunk, req.cx(), req.cz(), this.probeFailureWarn);
                 if (data != null) {
                     probes.put(packed, data);
@@ -1454,6 +1460,17 @@ public class RequestProcessingService {
     @FunctionalInterface
     interface ProbeColumnSerializer {
         LoadedColumnData serialize(ServerLevel level, LevelChunk chunk, int cx, int cz);
+    }
+
+    /** Production capture seam: the token is acquired before the serializer, including reentrant invalidation. */
+    static LoadedColumnData serializeCapturedProbe(
+            java.util.function.Supplier<dev.vox.lss.common.processing.LoadedProbeGuard.Capture> capture,
+            ProbeColumnSerializer serializer, ServerLevel level, LevelChunk chunk,
+            int cx, int cz, LogThrottle warnThrottle) {
+        return serializeProbeContained((l,c,x,z) -> {
+            var before = capture.get();
+            return before.bind(serializer.serialize(l,c,x,z));
+        }, level, chunk, cx, cz, warnThrottle);
     }
 
     /**
@@ -1495,7 +1512,8 @@ public class RequestProcessingService {
         OffThreadProcessor.GenerationTicketRequest req;
         while ((req = this.offThreadProcessor.pollGenerationTicketRequest()) != null) {
             var state = this.players.get(req.playerUuid());
-            if (state == null || !state.hasCompletedHandshake()) continue;
+            if (state == null || state.registration() != req.registration()
+                    || req.registration().isRetired() || !state.hasCompletedHandshake()) continue;
 
             var player = state.getPlayer();
             var level = player.level();
@@ -1504,19 +1522,19 @@ public class RequestProcessingService {
             // Ticket queued before a dimension change targets the old dimension's coordinates.
             // Dropping it leaks nothing: the admitting state was discarded by
             // removePlayer+registerPlayer (its slot dies with it), AND that same removePlayer
-            // enqueues the removal event that sweeps the processing thread's UUID-keyed
+            // enqueues the removal event that sweeps the processing thread's registration-keyed
             // generation in-flight tracking (removeGenerationTracking) — without that sweep the
             // dropped ticket's tracking would leak (do not add a drop path that skips it).
             if (!dimension.equals(req.dimension())) continue;
             boolean accepted = !player.isRemoved() && this.generationService.submitGeneration(
-                    req.playerUuid(), level, req.cx(), req.cz(),
+                    req.playerUuid(), req.registration(), level, req.cx(), req.cz(),
                     req.submissionOrder());
             if (!accepted) {
                 // Capacity rejection or removed player — TRANSIENT: feed a transient outcome
                 // so the processing thread frees the pending slot silently (superseded); the
                 // client's re-declaration retries. Never NOT_GENERATED (session-permanent).
                 this.offThreadProcessor.feedGenerationFailure(
-                        req.playerUuid(), req.cx(), req.cz(), dimension, req.submissionOrder(), true);
+                        req.playerUuid(), req.registration(), req.cx(), req.cz(), dimension, req.submissionOrder(), true);
             }
         }
     }

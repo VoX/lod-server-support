@@ -4,6 +4,8 @@ import dev.vox.lss.api.LSSApi;
 import dev.vox.lss.api.VoxelColumnConsumer;
 import dev.vox.lss.api.VoxelColumnData;
 import dev.vox.lss.config.LSSServerConfig;
+import dev.vox.lss.config.LSSClientConfig;
+import dev.vox.lss.config.menu.SaveHook;
 import dev.vox.lss.networking.client.LSSClientNetworking;
 import dev.vox.lss.networking.server.LSSServerNetworking;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
@@ -72,7 +74,7 @@ public class LSSClientGameTests implements FabricClientGameTest {
         });
 
         runMainFlowTest(context, recorder, rejector, thrower);
-        runLanPublishActivationTest(context);
+        runLanPublishActivationTest(context, recorder);
     }
 
     private static void runMainFlowTest(ClientGameTestContext context, RecordingColumnConsumer recorder,
@@ -424,10 +426,18 @@ public class LSSClientGameTests implements FabricClientGameTest {
     /**
      * LAN-publish activation path. The gametest JVM forces {@code lss.test.integratedServer};
      * clear it so this world exercises the real singleplayer gating, and restore it afterwards
-     * for anything else that runs in this JVM.
+     * for anything else that runs in this JVM. Also exercises actual SaveHook Apply:
+     * publish while OFF, ON cold activation, then OFF/ON with one uncommitted receipt.
      */
-    private static void runLanPublishActivationTest(ClientGameTestContext context) {
+    private static void runLanPublishActivationTest(ClientGameTestContext context, RecordingColumnConsumer recorder) {
         String override = System.clearProperty("lss.test.integratedServer");
+        boolean previousReceive = context.computeOnClient(client -> LSSClientConfig.CONFIG.receiveServerLods);
+        // C10 deliberately future-stamps this coordinate; both integrated worlds can
+        // share the local cache bucket, so it cannot establish an unheld replay premise.
+        var fallbackTarget = recorder.snapshot().stream()
+                .filter(record -> record.dimension().equals(Level.OVERWORLD)).findFirst().orElseThrow();
+        var deferred = new ToggleDeferredConsumer(fallbackTarget.chunkX(), fallbackTarget.chunkZ());
+        LSSApi.registerColumnConsumer(deferred);
         try (TestSingleplayerContext ignored = context.worldBuilder().create()) {
             // A (buggy) join-time handshake + session config roundtrip would land well within
             // this window, so the negative assertions below are meaningful.
@@ -442,6 +452,12 @@ public class LSSClientGameTests implements FabricClientGameTest {
             if (LSSClientNetworking.getRequestManager() != null) {
                 throw new AssertionError("No LodRequestManager may exist before LAN publish");
             }
+
+            // Retain the private-singleplayer ON controls above, then exercise the host
+            // service starting while reception is OFF. Apply uses the same hook as Sodium.
+            context.runOnClient(client -> deferred.setViewBoundary(client.player.getBlockX() >> 4,
+                    client.player.getBlockZ() >> 4, client.options.renderDistance().get() + 2));
+            applyReception(context, false);
 
             // Publish from the client thread, exactly like ShareToLanScreen does on this
             // line. 1.21.11 FLAVOR: this line has the single (GameType, boolean, int)
@@ -461,6 +477,13 @@ public class LSSClientGameTests implements FabricClientGameTest {
             waitForOrFail(context, () -> LSSServerNetworking.getRequestService() != null, 100,
                     "LAN publish must start the request processing service");
 
+            context.waitTicks(40);
+            if (LSSClientNetworking.hasReceivedSessionConfig()
+                    || LSSClientNetworking.getRequestManager() != null) {
+                throw new AssertionError("publishing while receive is OFF must not activate the host client");
+            }
+            applyReception(context, true);
+
             // Host handshake: triggerHostHandshake -> C2S handshake -> SessionConfig -> manager.
             waitForOrFail(context, LSSClientNetworking::isServerEnabled, 400,
                     "host handshake after LAN publish never completed (no SessionConfig applied)");
@@ -478,10 +501,141 @@ public class LSSClientGameTests implements FabricClientGameTest {
                 throw new AssertionError("LAN host must be registered for request processing, got "
                         + registered + " registered players");
             }
+
+            // A bounded real consumer rejects one non-vanilla position once, then holds
+            // its re-delivery. This establishes an honestly unheld stamp even in a warm
+            // local cache; OFF must cancel it without adding another failure strike.
+            waitForToggleDelivery(context, deferred, 0, "LAN ON produced no decoded terrain");
+            var oldManager = context.computeOnClient(client -> LSSClientNetworking.getRequestManager());
+            var oldLevel = context.computeOnClient(client -> client.level);
+            long failuresBefore = oldManager.getTotalIngestFailures();
+            if (failuresBefore != 1) {
+                throw new AssertionError("setup must establish exactly one genuine consumer rejection, got "
+                        + failuresBefore);
+            }
+            applyReception(context, false);
+            if (context.computeOnClient(client -> LSSClientNetworking.getRequestManager()) != null) {
+                throw new AssertionError("SaveHook OFF must retire the acquisition manager immediately");
+            }
+            if (!LSSClientNetworking.isServerEnabled()) {
+                throw new AssertionError("local OFF must preserve the negotiated server session");
+            }
+            if (!dev.vox.lss.networking.client.ClientNetGlue.awaitDecodeIdle(10_000)) {
+                throw new AssertionError("decode did not retire after receive OFF");
+            }
+            if (deferred.currentHandle().isActive()) {
+                throw new AssertionError("OFF left the deferred receipt active: " + deferred.describe());
+            }
+            context.runOnClient(client -> deferred.release());
+            int beforeResume = deferred.deliveries();
+            long declarationsAfterOff = oldManager.getTotalPositionsRequested();
+            context.waitTicks(20);
+            if (deferred.deliveries() != beforeResume
+                    || oldManager.getTotalPositionsRequested() != declarationsAfterOff) {
+                throw new AssertionError("OFF continued acquisition after the decode drain retired");
+            }
+            if (oldManager.getTotalIngestFailures() != failuresBefore) {
+                throw new AssertionError("intentional OFF charged an ingest failure");
+            }
+            applyReception(context, true);
+            waitForOrFail(context, () -> LSSClientNetworking.getRequestManager() != null
+                            && LSSClientNetworking.getRequestManager() != oldManager, 400,
+                    "LAN OFF->ON did not negotiate a replacement acquisition manager");
+            if (context.computeOnClient(client -> client.level) != oldLevel) {
+                throw new AssertionError("receive toggle must retain the connected client world");
+            }
+            waitForToggleDelivery(context, deferred, beforeResume,
+                    "LAN OFF->ON did not re-deliver its cancelled position");
+            var resumed = context.computeOnClient(client -> LSSClientNetworking.getRequestManager());
+            if (resumed.getTotalIngestFailures() != 0 || resumed.getIngestParkedCount() != 0) {
+                throw new AssertionError("resumed acquisition burned the retry cap for intentional retirement");
+            }
         } finally {
+            context.runOnClient(client -> deferred.release());
+            LSSApi.removeColumnConsumer(deferred);
+            applyReception(context, previousReceive);
             if (override != null) {
                 System.setProperty("lss.test.integratedServer", override);
             }
+        }
+    }
+
+    private static void applyReception(ClientGameTestContext context, boolean enabled) {
+        context.runOnClient(client -> {
+            LSSClientConfig.CONFIG.receiveServerLods = enabled;
+            SaveHook.SAVE.run(LSSClientConfig.CONFIG);
+        });
+    }
+
+    private static void waitForToggleDelivery(ClientGameTestContext context,
+                                             ToggleDeferredConsumer consumer, int prior, String message) {
+        try {
+            waitForOrFail(context, () -> consumer.deliveries() > prior, 600, message);
+        } catch (AssertionError timeout) {
+            String live = context.computeOnClient(client -> {
+                var manager = LSSClientNetworking.getRequestManager();
+                return "serverEnabled=" + LSSClientNetworking.isServerEnabled()
+                        + " manager=" + (manager == null ? "null" : "asks=" + manager.getTotalPositionsRequested()
+                        + " columns=" + manager.getTotalColumnsReceived()
+                        + " upToDate=" + manager.getTotalUpToDate())
+                        + " target=" + consumer.describe() + " deliveries=" + consumer.deliveries();
+            });
+            throw new AssertionError(message + " (" + live + ")", timeout);
+        }
+    }
+
+    /** Keeps only one chosen position's latest lease; duplicate deliveries replace it. */
+    private static final class ToggleDeferredConsumer implements VoxelColumnConsumer {
+        private record Target(ResourceKey<Level> dimension, int x, int z) {}
+        private final java.util.concurrent.atomic.AtomicReference<Target> target =
+                new java.util.concurrent.atomic.AtomicReference<>();
+        private final java.util.concurrent.atomic.AtomicReference<Runnable> release =
+                new java.util.concurrent.atomic.AtomicReference<>();
+        private final AtomicInteger delivered = new AtomicInteger();
+        private volatile LSSApi.IngestFailureHandle handle;
+        private final int fallbackX, fallbackZ;
+        private int centerX, centerZ, viewBoundary = Integer.MAX_VALUE;
+        private boolean rejected;
+
+        ToggleDeferredConsumer(int fallbackX, int fallbackZ) {
+            this.fallbackX = fallbackX;
+            this.fallbackZ = fallbackZ;
+        }
+
+        void setViewBoundary(int x, int z, int radius) {
+            this.centerX = x;
+            this.centerZ = z;
+            this.viewBoundary = radius;
+        }
+
+        @Override
+        public void onVoxelColumnReceived(ClientLevel level, ResourceKey<Level> dimension,
+                                          int chunkX, int chunkZ, VoxelColumnData data) {
+            if (data.sections().length == 0
+                    || (chunkX == this.fallbackX && chunkZ == this.fallbackZ)
+                    || Math.max(Math.abs(chunkX - this.centerX), Math.abs(chunkZ - this.centerZ)) <= this.viewBoundary) return;
+            var position = new Target(dimension, chunkX, chunkZ);
+            this.target.compareAndSet(null, position);
+            if (!position.equals(this.target.get())) return;
+            var captured = LSSApi.captureIngestFailureHandle();
+            if (captured == null) throw new AssertionError("actual client dispatch lacked an owner receipt");
+            if (!this.rejected) {
+                this.rejected = true;
+                captured.report(); // one real setup rejection; the next receipt must request without proof
+                return;
+            }
+            Runnable previous = this.release.getAndSet(captured.deferAcceptance());
+            this.handle = captured;
+            if (previous != null) previous.run();
+            this.delivered.incrementAndGet();
+        }
+
+        int deliveries() { return this.delivered.get(); }
+        LSSApi.IngestFailureHandle currentHandle() { return this.handle; }
+        String describe() { return String.valueOf(this.target.get()); }
+        void release() {
+            Runnable held = this.release.getAndSet(null);
+            if (held != null) held.run();
         }
     }
 

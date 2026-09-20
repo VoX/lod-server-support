@@ -12,3 +12,12 @@ tasks.register('vssJars') {
     group = 'build'
     dependsOn ':fabric:vssJar', ':paper:vssJar', ':neoforge:vssJar'
 }
+
+// Platform builds retain the pure-Java cases moved out of Fabric's test task.
+subprojects { subproject ->
+    if (subproject.name in ['fabric', 'paper', 'neoforge']) {
+        subproject.tasks.matching { it.name == 'check' }.configureEach {
+            dependsOn ':common:test'
+        }
+    }
+}

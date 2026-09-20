@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "id": "send-admission",
+  "version": 2,
+  "timeout_seconds": 180,
+  "required_test_count": 4,
+  "assertions": [
+    "adapter_denial_exercised",
+    "unaffected_subject_progress",
+    "bounded_retry",
+    "debt_released"
+  ],
+  "human_reviews": [],
+  "checker": "send-admission"
+}
