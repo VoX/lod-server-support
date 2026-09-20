@@ -1,7 +1,7 @@
 {
   "checkpoint_utc": "2026-09-16",
-  "status": "map-causes-confirmed-seated-recaptured-acceptance-open",
-  "scope": "Historical checkpoint fields and the earlier September 20 completion reconciliation retain their dated scope. The latest visual_followup_2026_09_20 supersedes sign-off-only completion: two map causes confirmed, product corrections pending, healthy seated captures repaired and recaptured. User acceptance and final evidence integration remain open.",
+  "status": "visual-signoff-and-native-integration-complete-known-map-followups-open",
+  "scope": "Historical checkpoint/reconciliation fields retain their dated scope. Latest visual_signoff_2026_09_20 records eight actual user image approvals with known map limitations, full54 native evidence integration and complete gallery/game cleanup. Map production corrections and the separate Windows resource-coexistence observation remain open.",
   "source_commits": {
     "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260910/accepted-performance-v27-20260914/numeric-commits-progress.json",
     "sha256": "7da2b5fb6f970181e6470681760a0fe501f7c5c19dce9e7b0413492d75f5b0e4"
@@ -755,5 +755,17 @@
     "first_recapture_failure_preserved": "20260920T153910Z-f61822c4648b",
     "user_visual_acceptance": false,
     "historical_progress_preserved": true
+  },
+  "visual_signoff_2026_09_20": {
+    "status": "visual-signoff-and-native-integration-complete-known-map-followups-open",
+    "visual_reviews": 8,
+    "selected_native_cases": 54,
+    "required_rows_passed": 42,
+    "overall_project_complete": false,
+    "map_product_fix_applied": false,
+    "windows_resource_coexistence": "unobserved; separately requested, not inferred from visual sign-off",
+    "report": "docs/implementation/visual-signoff-2026-09-20.md",
+    "index": "docs/implementation/visual-signoff-2026-09-20.json",
+    "native_index": "docs/implementation/final-native-acceptance-2026-09-20.json"
   }
 }

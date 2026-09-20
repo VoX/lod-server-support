@@ -1,0 +1,142 @@
+{
+  "evidence_index": {
+    "evidence/result.json": "7a4a7909791528aff8f18bfe7fad64ffd4183b9d271891867453f7e63848ae5d",
+    "evidence/seated-captures.json": "e4f06642104385f816357a576a8aa80fe2a17180ea2a53a5546d2dde83f3be2e",
+    "evidence/seated-draw.json": "4b085e17fa5ad039c1b0cad96d73b8418018c0f30006ff02f6b94d848741fd0b",
+    "evidence/seated-healthy-captured.txt": "7eb7ec0712ea7b66238eeaeb5b37407a6b2da90b24fe99aba5e9800918d3c418",
+    "evidence/seated-healthy.png": "05a8a2825c6c5e060de6248696f811a01035ffe5fef48f6dd18c56c8bb976267",
+    "evidence/seated-recovery.png": "5a804203c315e67a9917d01bc6e7eafdac9030c8506b51f47b909e3c9e0a42dd",
+    "launch-journal.json": "82e6f38a37a7ea52b02ab12add606a023d09ad88b35b49328cccd6ed2053c87c",
+    "owner.json": "57f57ace844984fc33bf7d726520792e1b5f76f52cc96ded4f9a8d2b72db4fd1",
+    "processes.json": "faa2442954ddba0a6da528530aff7e9a68b91f72a2cdc5790a54e64030e66a10",
+    "proof.json": "2c5d3c65d91c18c006a0d5e2cd0590a29fd3c11939c23bbf6f03224889d71355",
+    "supervisor-cleanup.json": "355f269124f53f6a8830a30826b43ab202e2e060092543c081eec9cc45d6c3f4",
+    "supervisor.json": "dccf309096f82b469e2576e2521be6e903c78ede38a5e41e551c7fa5fa9c5159"
+  },
+  "evidence_sha256": "b6f06d6af140f6dd5482b2d172cc594149a115ab8a6b00cc9211b5fd8842a4a6",
+  "feature": "seated-draw",
+  "limitations": [
+    "Exact retained functional run and artifact identities only; no performance claim.",
+    "Healthy seated pose captured before fault through a real spyglass; recovery separately shows the affected left rider standing while the second rider remains seated. Both subjects exceed 128 blocks and are absent from native player tracking."
+  ],
+  "profile_hash": "55683755e52eb8c92f992144db988edf7409e369322662bd9dc7d5c0d7a2e4f8",
+  "profile_id": "mc1211-fabric-modern",
+  "result": "pass",
+  "run_hash": "dfc2c422e7c605e50444dd36c1a777253aae5e5f1b300dbefa3d94f686c43ed4",
+  "run_id": "20260920T154926Z-a7e51c16390b",
+  "run_manifest": {
+    "backend": "isolated-linux-prism",
+    "candidate_artifacts": {
+      "instances/lss-rig-client/minecraft/mods/lod-server-support-fabric.jar": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c",
+      "seated-target-a/mods/lod-server-support-fabric.jar": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c",
+      "seated-target-b/mods/lod-server-support-fabric.jar": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c",
+      "server/mods/lod-server-support-fabric.jar": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c"
+    },
+    "candidate_sha256": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c",
+    "candidate_target": "instances/lss-rig-client/minecraft/mods/lod-server-support-fabric.jar",
+    "checker_sha256": "d5f9c98f3c9218282dbd20b48351567fd4a4fd121e1dd86411feefaf61585947",
+    "effective_config": {
+      "initial_generated_config_hash": "16ab3efedde86fe4d4c65bc9ecec589fae29e14be6cf3b4378181e168f99dadf"
+    },
+    "fixture_artifacts": {
+      "instances/lss-rig-client/minecraft/mods/lss-wi5-live-fixture-1.0.0-test-only.jar": "5d6dbe1b6a1022cc91b2447e95aaf04146c8e395c53eb2444686fd06b89a5307",
+      "instances/lss-rig-client/minecraft/mods/lss-wi9-live-fixture-1.0.0-test-only.jar": "c0346db2728835b6d934fdb3fa28fd333daa87fabb4c5ed8c87d42124910dd9a",
+      "seated-target-a/mods/lss-wi9-fixture.jar": "c0346db2728835b6d934fdb3fa28fd333daa87fabb4c5ed8c87d42124910dd9a",
+      "seated-target-b/mods/lss-wi9-fixture.jar": "c0346db2728835b6d934fdb3fa28fd333daa87fabb4c5ed8c87d42124910dd9a"
+    },
+    "fixture_sha256": "96cdb540048fdbe798cfc69e563d2b101ef1bc4afedca89f276ff272e09028a5",
+    "jvm_flags": {
+      "launch_memory_flags": {
+        "client": [],
+        "seated-controller": [],
+        "seated-target-a": [
+          "-Xms256M",
+          "-Xmx1500M"
+        ],
+        "seated-target-b": [
+          "-Xms256M",
+          "-Xmx1500M"
+        ],
+        "server": [
+          "-Xms512M",
+          "-Xmx2G"
+        ]
+      },
+      "prism_memory_mib": {
+        "MaxMemAlloc": 3072,
+        "MinMemAlloc": 512
+      }
+    },
+    "participant_profiles": {
+      "seated-target-a": {
+        "id": "mc1211-fabric-seated-subject",
+        "profile_hash": "514793efafe9d45e5d120fa4f7e705edb54bcbcfca99b242399c18806d129bd8"
+      },
+      "seated-target-b": {
+        "id": "mc1211-fabric-seated-subject",
+        "profile_hash": "514793efafe9d45e5d120fa4f7e705edb54bcbcfca99b242399c18806d129bd8"
+      },
+      "server": {
+        "id": "mc1211-fabric-server",
+        "profile_hash": "737fc992ba97dc2cdf559980e4cbad0fa7389a7b34e60e454100d872853972d1"
+      }
+    },
+    "rig_run_hash": "128f8b7360e476ab4250b6a5ae4274e20686f3edeaf7693add686fe01d63057d",
+    "runtime_hash": "29ee84c2a50c416022fbd39070b7e89c9e130f5cd8a133064ffcf83a353c03e6",
+    "runtime_settings_sha256": "27a7d38a45e338e9f99a2f8d0982b369ff39f122d1cbc586734d986fbff9e477",
+    "runtime_settings_version": 1,
+    "runtime_tools_sha256": "b2ee0d8275487158478d3f3041fe6e8888654465b2af749f90ae421ef6389c2a",
+    "scenario_checker_sha256": "d911555241cb6c844b406266e5265f82966132db03d97a3244f3d80a9ab6519a",
+    "scenario_checker_sources": {
+      "scripts/lib/harness-lock.sh": "0e844b7de643c8bdf9ed560bcad16aec6ec6620123fa0357be0204c76d38b056",
+      "scripts/lib/owned-process.py": "9cfa024fc235604c9defe661a1fe81d7b4e50788accb4ac2260d5df423b5bc55",
+      "staged/launcher/prism-offline.py": "18589d1dc2d9b9fdef4b6332895bb7e9b00ff72f367b72f71c9256d964ccf404",
+      "tools/compat/catalog.py": "6b4628eec83baca37c5c439d171cf2daa12028d8dd24a38b7a735d9c28448432",
+      "tools/compat/loader_ranges.py": "48587c8ee57c232464817a3b05ffc1eb49290c9ddd912a87a5c50aa33851c071",
+      "tools/compat/materialize.py": "4f2f532133b6b569e4426a1c766977b24c90554ed44314f4f59e52611cb37b71",
+      "tools/compat/server_smoke_identity.py": "131a80ff43fca140576be76d25f321ea43fc49171629ebf36a1afe895b9b25e1",
+      "tools/rig/assemble_metrics.py": "e82a727f3841e50b82a4a25af331d3624e9a5bef4fbc7b67b4283cb95b79a119",
+      "tools/rig/assemble_run.py": "5f92f1e438bd105888836633654d5033ef6527069d44161885ef39e5de1733fa",
+      "tools/rig/bind_endpoints.py": "025ef49aa8c3a6307be7ee5c3ae2684a5d0707d506d4c5ae0c9173df543e43b7",
+      "tools/rig/check_concurrent_sources.py": "b59730d29c95defe3f96ef1f9e8f211d2642907ad7224581eb2794e02afeb7d1",
+      "tools/rig/check_debt.py": "54c3012c91825dd835589c0fbccfbe6f37e9a09b83870b7169de372082afbb55",
+      "tools/rig/check_measured_schedule.py": "6ae5ef22fd3496d9722c0c414c043e950493d492ad8ce92e1f6b404df10a4609",
+      "tools/rig/check_regions.py": "941ddd27ee94ef08b3d97364e5ca4992ea07a54c3ff0c5b7c131a31af93eef56",
+      "tools/rig/check_seated_draw.py": "2f11f3e3d96b9646da63976e85e8f1b08ddecac8ace4049a0a6c5fdc322b15c9",
+      "tools/rig/check_seated_run.py": "5bc6c4128e8ff95c8464eafb94cf2cf25788ca6a3eaabfa7b99abc6f1eb59bce",
+      "tools/rig/check_workload.py": "c31b0b122ee316d07392c57c07efcb57835062c586f6a890364ccf9f63bf0e3b",
+      "tools/rig/check_xaero_progress.py": "0ffbc4f4770aba92e09443d5cde0b6a2ce9610913fd487e078ce22601213d86e",
+      "tools/rig/commands.py": "504274c1cd2fc7cbec0e813c106ca2beaec364f9032457d988a90b5fa3e6696f",
+      "tools/rig/drive_seated_draw.py": "2bc79832b0dbb91d4f514a0de631a95065a325d7add8e3bdf8203783c24c0cdd",
+      "tools/rig/experiment.py": "44179899da48100518a74b9a203cb3727a8aadcfd8445e0c0ad50347743db788",
+      "tools/rig/launch_journal.py": "4a1bce5359713f6c6605fa42cdb9289784b4c166f5b34679d4527fb696619c27",
+      "tools/rig/launch_prism.py": "dbc1b2aefc93cf90e224736dcf5db09c77a2e05d510ca4fbb6119c445d2fd8d7",
+      "tools/rig/measure.py": "a33126913892e11d1172cfb243c1f1586e920070dd1ee9678e97efa119c721f3",
+      "tools/rig/measured_regions.py": "8242250cd27628d21a2fa866b6c5b9fe3b32351356176fb5ee7a7c308e295a4f",
+      "tools/rig/measurement_inputs.py": "69cd7f4d26691dad8db9266fe6f7bf1a86974cbec79f8d1cc3f4224eb6ea54ab",
+      "tools/rig/metrics.py": "5945623000072367932ac8a81a0e7199bf80b9c721d8a6ed37c2bc5370e1326c",
+      "tools/rig/native_window.py": "1134a438f5b243a3f1b7f44b9189c1176766fbea4d4d4330cde08d295587bda1",
+      "tools/rig/normalize_workload.py": "5fdf41ba91551d5f0ab144bd527cb84cfb700cf81b0c884523bb62c99a637428",
+      "tools/rig/performance.py": "2e21801b0279df5f811e58bcabfca2b102d427c8b91a8fadc0fffde77caa72ab",
+      "tools/rig/private_input.py": "1d5330562b78b5d72cebe59279bced57d8dbc2a4ec8ffae6279c14730e314a74",
+      "tools/rig/proof.py": "968771dbd553e806647be4949730f89baf9626341435f776750888ceea16ad05",
+      "tools/rig/review_state.py": "820c2992e282b8d3204485427e68422b877f3a60d3861e23452e89925feb750d",
+      "tools/rig/rig": "c0e78f2ec42d610396fc09090c571262bccb909f5215d8a9f79d8a126cf3c72e",
+      "tools/rig/rig.py": "e5503f6abd0ecb5cf51a9081c5a558d3f3082c3cdd4ee99ba596e247f2e93500",
+      "tools/rig/run_claim.py": "312ac9f283c2123286938b9930d03e4b694aa98c5c413b125ee37b6866951278",
+      "tools/rig/runtime_trees.py": "802f2f3d3539e2a132c1f1ffde26ea206547bcd8190a015e9d188d050e21690c",
+      "tools/rig/source_client_natives.py": "92bb5611462ec25e444ca95daa0ebb638bd9c274ff3436bd9b4c77d75527850c",
+      "tools/rig/storage_guard.py": "930143fab92ad0cd3d15b23881334459a51ee04fea491494cf54285de3e83bee",
+      "tools/rig/supplemental_metrics.py": "160c68eeb8f2f5dadd63dae8ed325c4e8b784fcdf6e820dda2dae015311bea1e",
+      "tools/rig/target_intervals.py": "ad22d510c1d5393c298bf311de6f49decc8266e7fe81be8885be6aeea962d4bf",
+      "tools/rig/toolchain.py": "8b41446cb2c0db52d395a4c5cb7e742160542ef2658f352196924566952a0194"
+    },
+    "scenario_hash": "83abcab34495b92688abd8d7dfb0a4340699f519f7931cdcc6093d6ed4ed3c82",
+    "scenario_version": 1,
+    "world_input_kind": "fresh generated world; initial seed/generator/configuration bound by digest",
+    "world_sha256": "c0270d9a1a0ba0dba2572b670dc5577c11d41142582a86fe1289f9f1ebd12136"
+  },
+  "scenario": "seated-draw",
+  "schema_version": 1,
+  "timestamp": "2026-09-20T15:50:26Z"
+}

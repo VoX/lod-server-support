@@ -1,0 +1,122 @@
+{
+  "evidence_index": {
+    "evidence/receive-lifecycle.json": "fa87134972aae2090a9faedfd06e655efdaf5fcbcec8fc3ccb302dfe8a099ed8",
+    "evidence/result.json": "27db2dd93c517109325e7a78eabc949aef047c9d257a9de2aabd4ac403d057a7",
+    "launch-journal.json": "75e680cebaa064d88d3ed07748005f14b218853888ef72c2df537ad78d477646",
+    "owner.json": "d0f391ca00fa28e2a5eb2cf13ac3a1e601a9a3c255729f2b821a24214f07bda7",
+    "processes.json": "87fd7cab85da4bbc0724cee5fe8b0d84d069923d12bdb646c24055981f498779",
+    "proof.json": "190f8691e69c8ef5b1ac7c38321e653e82c93b7065f1d464bea9b1031d09992b",
+    "supervisor-cleanup.json": "ccc379d8381d0cb8be7cdff83a99c9bb43860543ce05c1c7ab3e1ca87b824bc5",
+    "supervisor.json": "0a95bed22516e2b7dfa56c38a2083ab8cd1d037fcb97ced722d3700d8154632a"
+  },
+  "evidence_sha256": "7b616a9178adfe3d0499dfad89a14cebcb30b0ca35db5b20a0f86ebeb5304a21",
+  "feature": "receive-lifecycle",
+  "limitations": [
+    "Exact retained functional run and artifact identities only; no performance claim."
+  ],
+  "profile_hash": "ba08fcb6a09535012875e96e4a1d61e6acfa0c332b90846ff51aacc04502a76f",
+  "profile_id": "mc1211-fabric-legacy",
+  "result": "pass",
+  "run_hash": "16a2cf91bd520c99178c4fdf630bf800138a5e26ad6ac52769f1f499ebc2cc55",
+  "run_id": "20260920T033053Z-2120627fe584",
+  "run_manifest": {
+    "backend": "isolated-linux-prism",
+    "candidate_artifacts": {
+      "instances/lss-rig-client/minecraft/mods/lod-server-support-fabric.jar": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c",
+      "server-replacement/mods/lod-server-support-fabric.jar": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c",
+      "server/mods/lod-server-support-fabric.jar": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c"
+    },
+    "candidate_sha256": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c",
+    "candidate_target": "instances/lss-rig-client/minecraft/mods/lod-server-support-fabric.jar",
+    "checker_sha256": "d5f9c98f3c9218282dbd20b48351567fd4a4fd121e1dd86411feefaf61585947",
+    "effective_config": {
+      "initial_generated_config_hash": "071a12751b31439a4ee76ece07ef276d1b94db8deb20342030540a47e28e39aa"
+    },
+    "fixture_artifacts": {
+      "instances/lss-rig-client/minecraft/mods/lss-wi5-live-fixture-1.0.0-test-only.jar": "5d6dbe1b6a1022cc91b2447e95aaf04146c8e395c53eb2444686fd06b89a5307",
+      "server-replacement/mods/lss-wi6-transport-fixture-1.0.0-test-only.jar": "080863efe2811ab262b5ae3827c0c1beddf70ac5df22c3bb147108456d77d6a1",
+      "server/mods/lss-wi6-transport-fixture-1.0.0-test-only.jar": "080863efe2811ab262b5ae3827c0c1beddf70ac5df22c3bb147108456d77d6a1"
+    },
+    "fixture_sha256": "6a8e13cc9cfbc4fe0b12a9d2c29f2b170f97cfb938b8b8aedbc6069b0155657b",
+    "jvm_flags": {
+      "launch_memory_flags": {
+        "client": [],
+        "lifecycle-controller": [],
+        "server": [
+          "-Xms512M",
+          "-Xmx2G"
+        ],
+        "server-replacement": [
+          "-Xms512M",
+          "-Xmx2G"
+        ]
+      },
+      "prism_memory_mib": {
+        "MaxMemAlloc": 3072,
+        "MinMemAlloc": 512
+      }
+    },
+    "participant_profiles": {
+      "server": {
+        "id": "mc1211-fabric-server",
+        "profile_hash": "737fc992ba97dc2cdf559980e4cbad0fa7389a7b34e60e454100d872853972d1"
+      }
+    },
+    "rig_run_hash": "5c33d1ff003fdf0ac29af81be15fe03c186ffbf83dfe209e1563a724a03a93c8",
+    "runtime_hash": "8b2e09cef0380132ce4151eb9758e0f68147fd7ff5857d699c247d3f40a69eda",
+    "runtime_settings_sha256": "71eb8263d0f15441d42983c09e0b691b13ad7c72a94e921f047d7198e5ab14b2",
+    "runtime_settings_version": 1,
+    "runtime_tools_sha256": "80b6ed8961e8422e4c82c15e05ec5b6bcb41ee1429f1c773b77615890236f225",
+    "scenario_checker_sha256": "14e656322ed728009007681351cf5ae23ad459b2e4bc6c814a3e42036fd10ef6",
+    "scenario_checker_sources": {
+      "scripts/lib/harness-lock.sh": "0e844b7de643c8bdf9ed560bcad16aec6ec6620123fa0357be0204c76d38b056",
+      "scripts/lib/owned-process.py": "9cfa024fc235604c9defe661a1fe81d7b4e50788accb4ac2260d5df423b5bc55",
+      "staged/launcher/prism-offline.py": "18589d1dc2d9b9fdef4b6332895bb7e9b00ff72f367b72f71c9256d964ccf404",
+      "tools/compat/catalog.py": "6b4628eec83baca37c5c439d171cf2daa12028d8dd24a38b7a735d9c28448432",
+      "tools/compat/loader_ranges.py": "48587c8ee57c232464817a3b05ffc1eb49290c9ddd912a87a5c50aa33851c071",
+      "tools/compat/materialize.py": "4f2f532133b6b569e4426a1c766977b24c90554ed44314f4f59e52611cb37b71",
+      "tools/compat/server_smoke_identity.py": "131a80ff43fca140576be76d25f321ea43fc49171629ebf36a1afe895b9b25e1",
+      "tools/rig/assemble_metrics.py": "e82a727f3841e50b82a4a25af331d3624e9a5bef4fbc7b67b4283cb95b79a119",
+      "tools/rig/assemble_run.py": "5f92f1e438bd105888836633654d5033ef6527069d44161885ef39e5de1733fa",
+      "tools/rig/bind_endpoints.py": "025ef49aa8c3a6307be7ee5c3ae2684a5d0707d506d4c5ae0c9173df543e43b7",
+      "tools/rig/check_concurrent_sources.py": "b59730d29c95defe3f96ef1f9e8f211d2642907ad7224581eb2794e02afeb7d1",
+      "tools/rig/check_debt.py": "54c3012c91825dd835589c0fbccfbe6f37e9a09b83870b7169de372082afbb55",
+      "tools/rig/check_measured_schedule.py": "6ae5ef22fd3496d9722c0c414c043e950493d492ad8ce92e1f6b404df10a4609",
+      "tools/rig/check_receive_lifecycle.py": "af593e400b793c0d511d50190c6fbf48cf9d449caee7da142665097abb6c9720",
+      "tools/rig/check_receive_run.py": "2c5c4a19ad90ef2fc746f50a325abc15c094298b2ca638ab1516b94886ed805b",
+      "tools/rig/check_regions.py": "941ddd27ee94ef08b3d97364e5ca4992ea07a54c3ff0c5b7c131a31af93eef56",
+      "tools/rig/check_workload.py": "c31b0b122ee316d07392c57c07efcb57835062c586f6a890364ccf9f63bf0e3b",
+      "tools/rig/check_xaero_progress.py": "0ffbc4f4770aba92e09443d5cde0b6a2ce9610913fd487e078ce22601213d86e",
+      "tools/rig/commands.py": "504274c1cd2fc7cbec0e813c106ca2beaec364f9032457d988a90b5fa3e6696f",
+      "tools/rig/drive_receive_lifecycle.py": "c25669a6445504922a8c5c9a0c02cc9648cdc83045a64ac107c499d884077248",
+      "tools/rig/experiment.py": "44179899da48100518a74b9a203cb3727a8aadcfd8445e0c0ad50347743db788",
+      "tools/rig/launch_journal.py": "4a1bce5359713f6c6605fa42cdb9289784b4c166f5b34679d4527fb696619c27",
+      "tools/rig/launch_prism.py": "dbc1b2aefc93cf90e224736dcf5db09c77a2e05d510ca4fbb6119c445d2fd8d7",
+      "tools/rig/measure.py": "a33126913892e11d1172cfb243c1f1586e920070dd1ee9678e97efa119c721f3",
+      "tools/rig/measured_regions.py": "8242250cd27628d21a2fa866b6c5b9fe3b32351356176fb5ee7a7c308e295a4f",
+      "tools/rig/measurement_inputs.py": "69cd7f4d26691dad8db9266fe6f7bf1a86974cbec79f8d1cc3f4224eb6ea54ab",
+      "tools/rig/metrics.py": "5945623000072367932ac8a81a0e7199bf80b9c721d8a6ed37c2bc5370e1326c",
+      "tools/rig/normalize_workload.py": "5fdf41ba91551d5f0ab144bd527cb84cfb700cf81b0c884523bb62c99a637428",
+      "tools/rig/performance.py": "2e21801b0279df5f811e58bcabfca2b102d427c8b91a8fadc0fffde77caa72ab",
+      "tools/rig/private_input.py": "1d5330562b78b5d72cebe59279bced57d8dbc2a4ec8ffae6279c14730e314a74",
+      "tools/rig/proof.py": "968771dbd553e806647be4949730f89baf9626341435f776750888ceea16ad05",
+      "tools/rig/review_state.py": "820c2992e282b8d3204485427e68422b877f3a60d3861e23452e89925feb750d",
+      "tools/rig/rig": "c0e78f2ec42d610396fc09090c571262bccb909f5215d8a9f79d8a126cf3c72e",
+      "tools/rig/rig.py": "e5503f6abd0ecb5cf51a9081c5a558d3f3082c3cdd4ee99ba596e247f2e93500",
+      "tools/rig/run_claim.py": "312ac9f283c2123286938b9930d03e4b694aa98c5c413b125ee37b6866951278",
+      "tools/rig/runtime_trees.py": "802f2f3d3539e2a132c1f1ffde26ea206547bcd8190a015e9d188d050e21690c",
+      "tools/rig/source_client_natives.py": "92bb5611462ec25e444ca95daa0ebb638bd9c274ff3436bd9b4c77d75527850c",
+      "tools/rig/storage_guard.py": "930143fab92ad0cd3d15b23881334459a51ee04fea491494cf54285de3e83bee",
+      "tools/rig/supplemental_metrics.py": "160c68eeb8f2f5dadd63dae8ed325c4e8b784fcdf6e820dda2dae015311bea1e",
+      "tools/rig/target_intervals.py": "ad22d510c1d5393c298bf311de6f49decc8266e7fe81be8885be6aeea962d4bf",
+      "tools/rig/toolchain.py": "8b41446cb2c0db52d395a4c5cb7e742160542ef2658f352196924566952a0194"
+    },
+    "scenario_hash": "13e75f9deae1704ebba10316a39a58715dbac9412b6e0e5ca4858e55eef1d25a",
+    "scenario_version": 2,
+    "world_input_kind": "fresh generated world; initial seed/generator/configuration bound by digest",
+    "world_sha256": "a45d6385197175c40a5cdb043c07207decb9416cc3f2283f1a8e7cf1ab426171"
+  },
+  "scenario": "receive-lifecycle",
+  "schema_version": 1,
+  "timestamp": "2026-09-20T03:31:50Z"
+}

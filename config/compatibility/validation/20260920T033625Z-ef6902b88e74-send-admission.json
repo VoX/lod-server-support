@@ -1,0 +1,137 @@
+{
+  "evidence_index": {
+    "evidence/result.json": "932061bb47415cfea403f96fc3708090e40862035db96f17a85fa6b8b78031b8",
+    "evidence/send-admission.json": "ece094b8d3c725566b7832df2b36ef8b001c5e9492fe5e345f2312c142adb751",
+    "launch-journal.json": "968150c455076301cd8ac967ed686e7912ccc8b60b43b1faad0207d233bc8859",
+    "owner.json": "e78f52ddb08e00b999534ac88afb52e9a5286bcbb283631b436c4d3698c6b2db",
+    "processes.json": "fc9da4aecf8175a0cbcae7b338584543c3419f985241220052bc1aee773399e4",
+    "proof.json": "493df01a9d0b683223676be5be808133e79814a5d9e7f56df8e5159d77c97809",
+    "supervisor-cleanup.json": "b381e978ca29e03f566571db61c8efed1552ab54b003cbf55810e8aab945321f",
+    "supervisor.json": "a84fa0b7fcb746c09ed59418c60c4740915493a88dd2a939a74e5811e7d76dd4"
+  },
+  "evidence_sha256": "c32d1a320e4f16329b64ba7bccaed0fb51250bb81ec0663d63f4b4a414b7e97c",
+  "feature": "send-admission",
+  "limitations": [
+    "Exact retained functional run and artifact identities only; no performance claim."
+  ],
+  "profile_hash": "62937fc0c53351ca1fbfa242d04c5d66ac4d16c9765708522340d3ee931bd881",
+  "profile_id": "mc1211-neo-modern",
+  "result": "pass",
+  "run_hash": "b7f7359ba7f8df888c24b52dfeee310a19a3a06a0a67647f157bec41fa5d3ee2",
+  "run_id": "20260920T033625Z-ef6902b88e74",
+  "run_manifest": {
+    "backend": "isolated-linux-prism",
+    "candidate_artifacts": {
+      "instances/lss-rig-client/minecraft/mods/lod-server-support-neoforge.jar": "8faa03c1b21416bbd54497f2f3ffc3e053ec2179ea65aad4be6fa10d78085fd1",
+      "seated-target-a/mods/lod-server-support-fabric.jar": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c",
+      "seated-target-b/mods/lod-server-support-fabric.jar": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c",
+      "server/mods/lod-server-support-neoforge.jar": "8faa03c1b21416bbd54497f2f3ffc3e053ec2179ea65aad4be6fa10d78085fd1"
+    },
+    "candidate_sha256": "8faa03c1b21416bbd54497f2f3ffc3e053ec2179ea65aad4be6fa10d78085fd1",
+    "candidate_target": "instances/lss-rig-client/minecraft/mods/lod-server-support-neoforge.jar",
+    "checker_sha256": "d5f9c98f3c9218282dbd20b48351567fd4a4fd121e1dd86411feefaf61585947",
+    "effective_config": {
+      "initial_generated_config_hash": "110157c303634556d6f820f7853d170dd0c87eed326452be6f01f37ce9c639fd"
+    },
+    "fixture_artifacts": {
+      "instances/lss-rig-client/minecraft/mods/lss-wi5-live-fixture-1.0.0-test-only-neoforge-named.jar": "936f96d622b232855d2384a5c58b234340a7165d7441f61b1b0e9418f212dd6f",
+      "instances/lss-rig-client/minecraft/mods/lss-wi9-live-fixture-1.0.0-test-only-neoforge-named.jar": "6926c8fa5e506b2bf343e0657932681290b557a0ebfa8af2b9597b88d88e5d2c",
+      "seated-target-a/mods/lss-wi9-fixture.jar": "7dac4a1f064ba68f141823b643bef450ec44bf33ba491f2c72190a755d762f1f",
+      "seated-target-b/mods/lss-wi9-fixture.jar": "7dac4a1f064ba68f141823b643bef450ec44bf33ba491f2c72190a755d762f1f",
+      "server/mods/lss-wi6-transport-fixture-1.0.0-test-only-neoforge-named.jar": "1853d33706843ac0104d0f1e30eabbd7586b7bd59ed625e4e8e40d3e72536fe9"
+    },
+    "fixture_sha256": "190ec398dc24b5ed245b6cbfc2a63e61ca175f56829de4e8fc9f05d9e2af6ce5",
+    "jvm_flags": {
+      "launch_memory_flags": {
+        "admission-controller": [],
+        "client": [],
+        "seated-target-a": [
+          "-Xms256M",
+          "-Xmx1500M"
+        ],
+        "seated-target-b": [
+          "-Xms256M",
+          "-Xmx1500M"
+        ],
+        "server": [
+          "-Xms512M",
+          "-Xmx2G"
+        ]
+      },
+      "prism_memory_mib": {
+        "MaxMemAlloc": 3072,
+        "MinMemAlloc": 512
+      }
+    },
+    "participant_profiles": {
+      "seated-target-a": {
+        "id": "mc1211-fabric-seated-subject",
+        "profile_hash": "514793efafe9d45e5d120fa4f7e705edb54bcbcfca99b242399c18806d129bd8"
+      },
+      "seated-target-b": {
+        "id": "mc1211-fabric-seated-subject",
+        "profile_hash": "514793efafe9d45e5d120fa4f7e705edb54bcbcfca99b242399c18806d129bd8"
+      },
+      "server": {
+        "id": "mc1211-neoforge-server",
+        "profile_hash": "beb02b17d3155332cc93c3587a1a33d8a40303185644e7022dfacf38f52c49d7"
+      }
+    },
+    "rig_run_hash": "3ab87db35cc93c83574bfceddacedae60d4897dc51db3d5461f724a46b8adc58",
+    "runtime_hash": "63e21fd3543ac364b3ce9837058d3aa5bf4f0dd9aa2409062e89c0fedb286712",
+    "runtime_settings_sha256": "d48f338cfd37dd7ea13fc6f46c53cb9a10d1cf380cd655cffb8d4eb318330349",
+    "runtime_settings_version": 1,
+    "runtime_tools_sha256": "80b6ed8961e8422e4c82c15e05ec5b6bcb41ee1429f1c773b77615890236f225",
+    "scenario_checker_sha256": "306fe9d8b6c6b0445e27b344a4b48722a204f641deb25248b4a4637abc2ec6c8",
+    "scenario_checker_sources": {
+      "scripts/lib/harness-lock.sh": "0e844b7de643c8bdf9ed560bcad16aec6ec6620123fa0357be0204c76d38b056",
+      "scripts/lib/owned-process.py": "9cfa024fc235604c9defe661a1fe81d7b4e50788accb4ac2260d5df423b5bc55",
+      "staged/launcher/prism-offline.py": "18589d1dc2d9b9fdef4b6332895bb7e9b00ff72f367b72f71c9256d964ccf404",
+      "tools/compat/catalog.py": "6b4628eec83baca37c5c439d171cf2daa12028d8dd24a38b7a735d9c28448432",
+      "tools/compat/loader_ranges.py": "48587c8ee57c232464817a3b05ffc1eb49290c9ddd912a87a5c50aa33851c071",
+      "tools/compat/materialize.py": "4f2f532133b6b569e4426a1c766977b24c90554ed44314f4f59e52611cb37b71",
+      "tools/compat/server_smoke_identity.py": "131a80ff43fca140576be76d25f321ea43fc49171629ebf36a1afe895b9b25e1",
+      "tools/rig/assemble_metrics.py": "e82a727f3841e50b82a4a25af331d3624e9a5bef4fbc7b67b4283cb95b79a119",
+      "tools/rig/assemble_run.py": "5f92f1e438bd105888836633654d5033ef6527069d44161885ef39e5de1733fa",
+      "tools/rig/bind_endpoints.py": "025ef49aa8c3a6307be7ee5c3ae2684a5d0707d506d4c5ae0c9173df543e43b7",
+      "tools/rig/check_concurrent_sources.py": "b59730d29c95defe3f96ef1f9e8f211d2642907ad7224581eb2794e02afeb7d1",
+      "tools/rig/check_debt.py": "54c3012c91825dd835589c0fbccfbe6f37e9a09b83870b7169de372082afbb55",
+      "tools/rig/check_measured_schedule.py": "6ae5ef22fd3496d9722c0c414c043e950493d492ad8ce92e1f6b404df10a4609",
+      "tools/rig/check_regions.py": "941ddd27ee94ef08b3d97364e5ca4992ea07a54c3ff0c5b7c131a31af93eef56",
+      "tools/rig/check_send_admission.py": "b921bb91aa942e2ea74cd6e5da6334d582558c30f0a2db007f680206727f5d0e",
+      "tools/rig/check_send_admission_run.py": "d32857d5bec28aeb845e5e400f2beb0ae7d9544e3e62fa73d32bdf103598eb1c",
+      "tools/rig/check_workload.py": "c31b0b122ee316d07392c57c07efcb57835062c586f6a890364ccf9f63bf0e3b",
+      "tools/rig/check_xaero_progress.py": "0ffbc4f4770aba92e09443d5cde0b6a2ce9610913fd487e078ce22601213d86e",
+      "tools/rig/commands.py": "504274c1cd2fc7cbec0e813c106ca2beaec364f9032457d988a90b5fa3e6696f",
+      "tools/rig/drive_send_admission.py": "e6cc8b3302c8303589c6f9578d3af293282e40337d21a5657251db51e6269dd7",
+      "tools/rig/experiment.py": "44179899da48100518a74b9a203cb3727a8aadcfd8445e0c0ad50347743db788",
+      "tools/rig/launch_journal.py": "4a1bce5359713f6c6605fa42cdb9289784b4c166f5b34679d4527fb696619c27",
+      "tools/rig/launch_prism.py": "dbc1b2aefc93cf90e224736dcf5db09c77a2e05d510ca4fbb6119c445d2fd8d7",
+      "tools/rig/measure.py": "a33126913892e11d1172cfb243c1f1586e920070dd1ee9678e97efa119c721f3",
+      "tools/rig/measured_regions.py": "8242250cd27628d21a2fa866b6c5b9fe3b32351356176fb5ee7a7c308e295a4f",
+      "tools/rig/measurement_inputs.py": "69cd7f4d26691dad8db9266fe6f7bf1a86974cbec79f8d1cc3f4224eb6ea54ab",
+      "tools/rig/metrics.py": "5945623000072367932ac8a81a0e7199bf80b9c721d8a6ed37c2bc5370e1326c",
+      "tools/rig/normalize_workload.py": "5fdf41ba91551d5f0ab144bd527cb84cfb700cf81b0c884523bb62c99a637428",
+      "tools/rig/performance.py": "2e21801b0279df5f811e58bcabfca2b102d427c8b91a8fadc0fffde77caa72ab",
+      "tools/rig/private_input.py": "1d5330562b78b5d72cebe59279bced57d8dbc2a4ec8ffae6279c14730e314a74",
+      "tools/rig/proof.py": "968771dbd553e806647be4949730f89baf9626341435f776750888ceea16ad05",
+      "tools/rig/review_state.py": "820c2992e282b8d3204485427e68422b877f3a60d3861e23452e89925feb750d",
+      "tools/rig/rig": "c0e78f2ec42d610396fc09090c571262bccb909f5215d8a9f79d8a126cf3c72e",
+      "tools/rig/rig.py": "e5503f6abd0ecb5cf51a9081c5a558d3f3082c3cdd4ee99ba596e247f2e93500",
+      "tools/rig/run_claim.py": "312ac9f283c2123286938b9930d03e4b694aa98c5c413b125ee37b6866951278",
+      "tools/rig/runtime_trees.py": "802f2f3d3539e2a132c1f1ffde26ea206547bcd8190a015e9d188d050e21690c",
+      "tools/rig/source_client_natives.py": "92bb5611462ec25e444ca95daa0ebb638bd9c274ff3436bd9b4c77d75527850c",
+      "tools/rig/storage_guard.py": "930143fab92ad0cd3d15b23881334459a51ee04fea491494cf54285de3e83bee",
+      "tools/rig/supplemental_metrics.py": "160c68eeb8f2f5dadd63dae8ed325c4e8b784fcdf6e820dda2dae015311bea1e",
+      "tools/rig/target_intervals.py": "ad22d510c1d5393c298bf311de6f49decc8266e7fe81be8885be6aeea962d4bf",
+      "tools/rig/toolchain.py": "8b41446cb2c0db52d395a4c5cb7e742160542ef2658f352196924566952a0194"
+    },
+    "scenario_hash": "cadfcf5a6f752de75f985362a872cdf7529fbfc5c11a3fc5356659d0bdfd82c5",
+    "scenario_version": 2,
+    "world_input_kind": "fresh generated world; initial seed/generator/configuration bound by digest",
+    "world_sha256": "8af691be96302fb501e883ba341e513863e4eae11adf011343995339f0da0aa1"
+  },
+  "scenario": "send-admission",
+  "schema_version": 1,
+  "timestamp": "2026-09-20T03:37:25Z"
+}

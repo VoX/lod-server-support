@@ -1,0 +1,134 @@
+{
+  "evidence_index": {
+    "evidence/preset-report.json": "81d0f05f1723e00584ac1270ce2ed78fc0dc7ca48af7114a5daafc47ceb10c52",
+    "evidence/result.json": "62d2fcc5659ca5de735e5f65cdcf680baa621a2a21f361ec0ff5be7cde3c9690",
+    "evidence/settings-cc572009d430466f82b94ba7b7345580/after-restart.json": "01f5c0da68fde614d76650d655fdd9320f38f0e638c7fb543071321d2909a349",
+    "evidence/settings-cc572009d430466f82b94ba7b7345580/after-restart.txt": "a9107a472deb5593573be9813a32262267fd0456a931661ca7fce58dacb224a0",
+    "evidence/settings-cc572009d430466f82b94ba7b7345580/final-config.json": "434a11d45f352de7321bf0b6c69215c606de8ddc97de04823d8ee32d0160c899",
+    "evidence/settings-cc572009d430466f82b94ba7b7345580/original-config.json": "434a11d45f352de7321bf0b6c69215c606de8ddc97de04823d8ee32d0160c899",
+    "evidence/settings-cc572009d430466f82b94ba7b7345580/receipt.json": "d6d9f479f71071cb080ed41d3117e104a6ed561f552cb98f02eeb2d07887545b",
+    "launch-journal.json": "f142d371e103fb55e170d64edb556282e47195f7e6b8983e032e50f1bdea7e63",
+    "owner.json": "0f86a76262d4d3b7c9a9919a960008fb36dac7ac8f328865334a9c5596eed297",
+    "processes.json": "b6cfa3cb89e8358b4d2b336bc317dc2d88dddd3c73e2252846aa27d12892e93b",
+    "proof.json": "f742235b6b4f304ed5acff4ab4b86a3420cdfa422e3eacbc27f7b70753210d62",
+    "supervisor-cleanup.json": "fdb59e93a67ccf072bd2f0b8061714e235f55fde8b112267e8c59f0ff66fb58b",
+    "supervisor.json": "d5da2ca32a94cdb60ea2582286068a927b998c757298a5e701029c71b969042c"
+  },
+  "evidence_sha256": "fd31ae39caab04cbbb0ee5178ff050447737f7eb74a1e2b61e1686e904e2887f",
+  "feature": "server-presets-after-restart",
+  "limitations": [
+    "Native command preset controls; no GUI or performance claim. Before-restart and after-restart evidence are paired per platform."
+  ],
+  "profile_hash": "4c84dcca1a75b06d49ec1a4c2032e2b4bf451505c7bdfebddab55816d91e790d",
+  "profile_id": "mc1211-native-smoke-client",
+  "result": "pass",
+  "run_hash": "d1a3bff593d58db211e8c612dfc18ce1edb2690b0f3f45d2de05d64899a08451",
+  "run_id": "20260920T020623Z-ba3ddd9108f5",
+  "run_manifest": {
+    "backend": "linux-headless",
+    "candidate_artifacts": {
+      "server/mods/lod-server-support-fabric.jar": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c",
+      "smoke-first/mods/lod-server-support-fabric.jar": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c",
+      "smoke-second/mods/lod-server-support-fabric.jar": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c"
+    },
+    "candidate_sha256": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c",
+    "candidate_target": "server/mods/lod-server-support-fabric.jar",
+    "checker_sha256": "d5f9c98f3c9218282dbd20b48351567fd4a4fd121e1dd86411feefaf61585947",
+    "effective_config": {
+      "initial_generated_config_hash": "7821c691806e97cfe5e155f7fc31ba605ec07b6a14e0490463c1444b078bd8b9"
+    },
+    "fixture_artifacts": {
+      "smoke-first/mods/lss-server-smoke-client.jar": "6ac5ebdb85482aaed87ee1cb1c0305b9dd53914b051e159854afd33a682517e8",
+      "smoke-second/mods/lss-server-smoke-client.jar": "6ac5ebdb85482aaed87ee1cb1c0305b9dd53914b051e159854afd33a682517e8"
+    },
+    "fixture_sha256": "9cf9814a0825d475b5d0cf36359c0a7f7fb33bacc599cef9a4c1622ceb516b01",
+    "jvm_flags": {
+      "launch_memory_flags": {
+        "preset-client": [
+          "-Xms256M",
+          "-Xmx1500M"
+        ],
+        "preset-driver": [],
+        "server": [
+          "-Xms512M",
+          "-Xmx2G"
+        ]
+      },
+      "prism_memory_mib": {}
+    },
+    "participant_profiles": {
+      "server": {
+        "id": "mc1211-fabric-server",
+        "profile_hash": "737fc992ba97dc2cdf559980e4cbad0fa7389a7b34e60e454100d872853972d1"
+      }
+    },
+    "rig_run_hash": "29efc63d1d169d44ca4c688e3f0cfa15c15ade35372f7ef8cfb42766164e214e",
+    "runtime_hash": "b0a250d7fc41980b8c503c20377c785a861fd37dc79c7b83c6172f871ffeb0c4",
+    "runtime_settings_sha256": "acfdf4367e38e7a06ad2b487789f9b1f96a46a684d635e51ec0240c6beb61f82",
+    "runtime_settings_version": 1,
+    "runtime_tools_sha256": "c85cf886ad49a47a41fec6892768188c0c9434785941329067e99ac9c2a26495",
+    "scenario_checker_sha256": "915717b453326bbd3990d785dedb1ca5312078e61d6cef165a3a998b390c5cd5",
+    "scenario_checker_sources": {
+      "scripts/lib/harness-lock.sh": "0e844b7de643c8bdf9ed560bcad16aec6ec6620123fa0357be0204c76d38b056",
+      "scripts/lib/owned-process.py": "9cfa024fc235604c9defe661a1fe81d7b4e50788accb4ac2260d5df423b5bc55",
+      "staged/preset-tools/check_conservative_native.py": "ec604238755ff4ddfacf45044a692b1829f5a7ea2cc0af5de91f9f6a768e0bd6",
+      "staged/preset-tools/conservative_native.py": "11c6f6f15ac6eac8274c4006ffbd0d62a5c9b3fb1786ab63eb7666300f6bf028",
+      "staged/preset-tools/drive.py": "aa49a819d9b9e0aa3d6bf4b9b6230aed5e19c728c7a8e73c2024412f5a377887",
+      "staged/preset-tools/server_control_smoke.py": "df5f977553ea950e455de9f74f96ef7d62927b87e0fb530fc9990a839495c69f",
+      "staged/preset-tools/verify.py": "14ef32df295d3ecdcdf4584dd721e04bf341c3932f699eed2d7712ba88aceeef",
+      "staged/smoke-tools/check_server_smoke.py": "4883efe96a4da90dd533de099e8db6a7ea36ee3108169662778cfd02b5f1df29",
+      "staged/smoke-tools/check_server_smoke_report.py": "8ad618148a3a45ddebe775efe13af2fea93be59d0fef16650662c7627183b0a7",
+      "staged/smoke-tools/run_server_smoke.py": "bd9119c8fb51d4e4d4804f88b1a1906bd22482d6d7940a97edd42f9bde25903d",
+      "staged/smoke-tools/store_witness.py": "389495c6a9d90ca365ae53c5b7b36c1058d88bb90c93c551e6f375ad8ae1eb56",
+      "tools/compat/catalog.py": "6b4628eec83baca37c5c439d171cf2daa12028d8dd24a38b7a735d9c28448432",
+      "tools/compat/loader_ranges.py": "48587c8ee57c232464817a3b05ffc1eb49290c9ddd912a87a5c50aa33851c071",
+      "tools/compat/materialize.py": "4ffdcf3dcb95e5c840d466b23c9a1084df1528c7a399807d76794a44a6b0eb0e",
+      "tools/compat/server_smoke_identity.py": "131a80ff43fca140576be76d25f321ea43fc49171629ebf36a1afe895b9b25e1",
+      "tools/rig/assemble_metrics.py": "e82a727f3841e50b82a4a25af331d3624e9a5bef4fbc7b67b4283cb95b79a119",
+      "tools/rig/assemble_run.py": "5f92f1e438bd105888836633654d5033ef6527069d44161885ef39e5de1733fa",
+      "tools/rig/bind_endpoints.py": "025ef49aa8c3a6307be7ee5c3ae2684a5d0707d506d4c5ae0c9173df543e43b7",
+      "tools/rig/check_concurrent_sources.py": "b59730d29c95defe3f96ef1f9e8f211d2642907ad7224581eb2794e02afeb7d1",
+      "tools/rig/check_conservative_native.py": "ec604238755ff4ddfacf45044a692b1829f5a7ea2cc0af5de91f9f6a768e0bd6",
+      "tools/rig/check_debt.py": "54c3012c91825dd835589c0fbccfbe6f37e9a09b83870b7169de372082afbb55",
+      "tools/rig/check_measured_schedule.py": "6ae5ef22fd3496d9722c0c414c043e950493d492ad8ce92e1f6b404df10a4609",
+      "tools/rig/check_regions.py": "941ddd27ee94ef08b3d97364e5ca4992ea07a54c3ff0c5b7c131a31af93eef56",
+      "tools/rig/check_server_smoke.py": "4883efe96a4da90dd533de099e8db6a7ea36ee3108169662778cfd02b5f1df29",
+      "tools/rig/check_server_smoke_report.py": "8ad618148a3a45ddebe775efe13af2fea93be59d0fef16650662c7627183b0a7",
+      "tools/rig/check_workload.py": "c31b0b122ee316d07392c57c07efcb57835062c586f6a890364ccf9f63bf0e3b",
+      "tools/rig/check_xaero_progress.py": "0ffbc4f4770aba92e09443d5cde0b6a2ce9610913fd487e078ce22601213d86e",
+      "tools/rig/commands.py": "504274c1cd2fc7cbec0e813c106ca2beaec364f9032457d988a90b5fa3e6696f",
+      "tools/rig/conservative_native.py": "11c6f6f15ac6eac8274c4006ffbd0d62a5c9b3fb1786ab63eb7666300f6bf028",
+      "tools/rig/experiment.py": "44179899da48100518a74b9a203cb3727a8aadcfd8445e0c0ad50347743db788",
+      "tools/rig/launch_journal.py": "4a1bce5359713f6c6605fa42cdb9289784b4c166f5b34679d4527fb696619c27",
+      "tools/rig/launch_prism.py": "dbc1b2aefc93cf90e224736dcf5db09c77a2e05d510ca4fbb6119c445d2fd8d7",
+      "tools/rig/measure.py": "a33126913892e11d1172cfb243c1f1586e920070dd1ee9678e97efa119c721f3",
+      "tools/rig/measured_regions.py": "8242250cd27628d21a2fa866b6c5b9fe3b32351356176fb5ee7a7c308e295a4f",
+      "tools/rig/measurement_inputs.py": "69cd7f4d26691dad8db9266fe6f7bf1a86974cbec79f8d1cc3f4224eb6ea54ab",
+      "tools/rig/metrics.py": "5945623000072367932ac8a81a0e7199bf80b9c721d8a6ed37c2bc5370e1326c",
+      "tools/rig/normalize_workload.py": "5fdf41ba91551d5f0ab144bd527cb84cfb700cf81b0c884523bb62c99a637428",
+      "tools/rig/performance.py": "2e21801b0279df5f811e58bcabfca2b102d427c8b91a8fadc0fffde77caa72ab",
+      "tools/rig/private_input.py": "1d5330562b78b5d72cebe59279bced57d8dbc2a4ec8ffae6279c14730e314a74",
+      "tools/rig/proof.py": "968771dbd553e806647be4949730f89baf9626341435f776750888ceea16ad05",
+      "tools/rig/review_state.py": "820c2992e282b8d3204485427e68422b877f3a60d3861e23452e89925feb750d",
+      "tools/rig/rig": "c0e78f2ec42d610396fc09090c571262bccb909f5215d8a9f79d8a126cf3c72e",
+      "tools/rig/rig.py": "e5503f6abd0ecb5cf51a9081c5a558d3f3082c3cdd4ee99ba596e247f2e93500",
+      "tools/rig/run_claim.py": "312ac9f283c2123286938b9930d03e4b694aa98c5c413b125ee37b6866951278",
+      "tools/rig/run_server_smoke.py": "bd9119c8fb51d4e4d4804f88b1a1906bd22482d6d7940a97edd42f9bde25903d",
+      "tools/rig/runtime_trees.py": "802f2f3d3539e2a132c1f1ffde26ea206547bcd8190a015e9d188d050e21690c",
+      "tools/rig/server_control_smoke.py": "df5f977553ea950e455de9f74f96ef7d62927b87e0fb530fc9990a839495c69f",
+      "tools/rig/source_client_natives.py": "92bb5611462ec25e444ca95daa0ebb638bd9c274ff3436bd9b4c77d75527850c",
+      "tools/rig/storage_guard.py": "930143fab92ad0cd3d15b23881334459a51ee04fea491494cf54285de3e83bee",
+      "tools/rig/store_witness.py": "389495c6a9d90ca365ae53c5b7b36c1058d88bb90c93c551e6f375ad8ae1eb56",
+      "tools/rig/supplemental_metrics.py": "160c68eeb8f2f5dadd63dae8ed325c4e8b784fcdf6e820dda2dae015311bea1e",
+      "tools/rig/target_intervals.py": "ad22d510c1d5393c298bf311de6f49decc8266e7fe81be8885be6aeea962d4bf",
+      "tools/rig/toolchain.py": "8b41446cb2c0db52d395a4c5cb7e742160542ef2658f352196924566952a0194"
+    },
+    "scenario_hash": "53200be835cc289f83226f1525354debb035dc49c40f7e85d73dc5641d5bcb2c",
+    "scenario_version": 1,
+    "world_input_kind": "frozen snapshot",
+    "world_sha256": "27ba96e23a22bfb49f7fc56a8743e72b1d56957dfb3fd731d43210bcc582ce94"
+  },
+  "scenario": "native-server-preset-controls",
+  "schema_version": 1,
+  "timestamp": "2026-09-20T02:07:02Z"
+}
