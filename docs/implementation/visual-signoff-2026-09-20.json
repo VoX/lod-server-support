@@ -7,7 +7,7 @@
   "required_rows_passed": 42,
   "overall_project_complete": false,
   "map_product_fix_applied": false,
-  "windows_resource_coexistence": "unobserved; separately requested, not inferred from visual sign-off",
+  "windows_resource_coexistence": "confirmed by actual user observation: Windows remained usable without noticeable interference or disruptive slowdown",
   "known_map_limitations": [
     "Missing gold shading stripe at world X=512: native Xaero region-local slope fallback, also reproduced by the bridge.",
     "Eight near-player chunks are omitted between LSS acquisition exclusion and Xaero native 3x3 coverage; shipping fix remains pending."
@@ -550,5 +550,9 @@
       "sha256": "bb8caeacca4fc6feb9f06b279895dd884ddb5d6212b76484a07b7413b53701b8",
       "size": 964
     }
-  ]
+  ],
+  "desktop_coexistence_observation": {
+    "path": "docs/implementation/desktop-coexistence-2026-09-20.json",
+    "sha256": "0ada9b3bc75cc90d80ebed9c475f9881d84b0cea12009322516397ff445a37f6"
+  }
 }
