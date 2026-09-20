@@ -91,7 +91,13 @@ def run(root):
   start=time.monotonic_ns();target_driver.key('space',.08);journal['inputs'].append(dict(action='press',key='space',start_ns=start,end_ns=time.monotonic_ns(),game_root='elytra-target',window=target_window,process=target_identity));save()
   phase('gliding',True)
   from elytra_input import look_down
-  capture_start=time.monotonic_ns();target_driver.click(480,270);wait(lambda:any(r.get('mouse_grabbed')is True and r['nano_time']>=capture_start for r in rows(target_log,'LSS_ELYTRA_NATIVE')));journal['inputs'].append(dict(action='capture-mouse',x=480,y=270,button=1,start_ns=capture_start,end_ns=time.monotonic_ns(),game_root='elytra-target',window=target_window,process=target_identity));save()
+  from elytra_input import recapture_mouse
+  capture_input=dict(action='capture-mouse',x=480,y=270,button=1,start_ns=time.monotonic_ns(),game_root='elytra-target',window=target_window,process=target_identity,attempts=[])
+  journal['inputs'].append(capture_input);save()
+  def record_capture(start,end):
+   capture_input['attempts'].append(dict(start_ns=start,end_ns=end,x=480,y=270,button=1));save()
+  recapture_mouse(target_driver,lambda after:any(r.get('mouse_grabbed')is True and r['nano_time']>=after for r in rows(target_log,'LSS_ELYTRA_NATIVE')),record_capture,wait)
+  capture_input['end_ns']=time.monotonic_ns();save()
   start=time.monotonic_ns();look_down(target_driver);journal['inputs'].append(dict(action='relative-look',dx=0,dy=400,start_ns=start,end_ns=time.monotonic_ns(),game_root='elytra-target',window=target_window,process=target_identity));save()
   look_end=journal['inputs'][-1]['end_ns']
   wait(lambda:any(r['nano_time']>=look_end and r.get('mouse_grabbed')is True and r.get('pitch',0)>40 for r in rows(target_log,'LSS_ELYTRA_NATIVE')))

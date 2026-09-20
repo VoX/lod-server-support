@@ -4,14 +4,14 @@ import argparse,hashlib,io,json,os,re,sys,tempfile,tomllib,urllib.request,zipfil
 from pathlib import Path
 from catalog import Invalid,require,load,validate_profile,inspect_jar,accepts,digest
 
-def nested_metadata(path,platform=None):
+def nested_metadata(path,platform=None,native_only=False):
     """Only loader-declared nested jars count; unrelated archives do not provide mods."""
     result=[];budget=[128*1024*1024]
     def visit(data,depth=0):
         require(depth<=8,'nested jar depth exceeds bound')
         with zipfile.ZipFile(data) as z:
             names=z.namelist();nested=[]
-            if 'fabric.mod.json' in names and not (platform=='neoforge' and any(n in names for n in ('META-INF/neoforge.mods.toml','META-INF/mods.toml'))):
+            if not native_only and 'fabric.mod.json' in names and not (platform=='neoforge' and any(n in names for n in ('META-INF/neoforge.mods.toml','META-INF/mods.toml'))):
                 require(z.getinfo('fabric.mod.json').file_size<=2**20,'oversized metadata')
                 m=json.loads(z.read('fabric.mod.json'));result.append(('fabric',m))
                 nested.extend(row['file'] for row in m.get('jars',[]))
@@ -33,6 +33,34 @@ def nested_metadata(path,platform=None):
                 budget[0]-=z.getinfo(name).file_size;require(budget[0]>=0,'nested jar byte budget exceeded')
                 visit(io.BytesIO(z.read(name)),depth+1)
     visit(path);return result
+
+
+def native_mod_container(path,current):
+    """A loader-discovered native jarjar container, such as Connector's service JAR."""
+    if 'jarjar' not in current or 'fabric' in current:
+        return False
+    # Fabric-declared children cannot establish native-container admission.
+    native=nested_metadata(path,'neoforge',native_only=True)
+    if not any(dialect=='maven' and metadata.get('mods') for dialect,metadata in native):
+        return False
+    with zipfile.ZipFile(path) as archive:
+        names=archive.namelist()
+        if 'META-INF/MANIFEST.MF' in names:
+            require(archive.getinfo('META-INF/MANIFEST.MF').file_size<=2**20,'oversized metadata')
+            manifest=archive.read('META-INF/MANIFEST.MF').decode()
+            kind=re.search(r'^FMLModType:\s*(LIBRARY|GAMELIBRARY)\s*$',manifest,re.M)
+            if kind:
+                return True
+        # FML's service-layer discovery admits candidate locators before normal
+        # mod discovery. Require a declared provider that is actually packaged.
+        service='META-INF/services/net.neoforged.neoforgespi.locating.IModFileCandidateLocator'
+        if service not in names:
+            return False
+        require(archive.getinfo(service).file_size<=2**20,'oversized metadata')
+        providers=[line.partition('#')[0].strip() for line in archive.read(service).decode().splitlines()]
+        return any(re.fullmatch(r'[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*',provider) and
+                   provider.replace('.','/')+'.class' in names for provider in providers)
+
 
 def resolution(profile,cache,range_runtime=None):
     validate_profile(profile,allow_unresolved_ranges=range_runtime is not None);missing=[];resolved=[];errors=[]
@@ -80,7 +108,8 @@ def resolution(profile,cache,range_runtime=None):
             require(a.get('kind','mod')!='plugin','plugin artifact missing plugin.yml')
             require(('fabric' in current if profile['platform']=='fabric' else
                      any(k in current for k in ('neoforge','forge')) or
-                     profile['route']=='connector' and 'fabric' in current),
+                     profile['route']=='connector' and 'fabric' in current or
+                     profile['platform']=='neoforge' and native_mod_container(path,current)),
                     'artifact lacks a descriptor for the selected loader route')
             top_ids=([current['fabric']['id']] if 'fabric' in current and not (profile['platform']=='neoforge' and any(k in current for k in ('neoforge','forge'))) else [mod['modId'] for kind in ('neoforge','forge') for mod in current.get(kind,{}).get('mods',[])])
             require(not top_level_ids.intersection(top_ids),'duplicate top-level mod identity')
