@@ -346,3 +346,16 @@ Raw smoke evidence and exact mod hashes are retained privately under `~/.local/s
 7. Preserve native Windows as a separately identified coverage lane. WSL D3D12 is a different driver route and Voxy logged unavailable subgroup operations. Native Windows testing must use a proven background/in-client control or isolated guest backend; any foreground session requires a separately agreed window of desktop use. Never silently fall back to host SendKeys, cursor control, focus activation or full-desktop screenshots.
 
 Acceptance: automated negative controls reject default-desktop input, foreign window/PID, stale PID reuse, software fallback, unexpected mod hashes, missing semantic proof and incomplete cleanup. Repeat the positive smoke while the user uses Windows, and record resource interference separately from input isolation. Expand final applicability rows only from actual feature-specific results. Preserve a useful local launcher for the user after shutting down the disposable test processes.
+
+## 17. Completion reconciliation — 2026-09-19
+
+Implementation resumes from the September 16 Claude Code commits on the five improvement branches, preserving their loader-route and rig cleanup fixes, six review reports, and evidence limitations. All five draft PRs (#289–#293) passed their applicable GitHub build, game-test, compatibility and settings checks. The September 14 packaged artifacts retain their original build provenance: a comparison of the intervening commits found no changes to shipping source, resources or build definitions.
+
+The remaining execution order is:
+
+1. Finish the pending fixture builds, retaining prior successful receipts and recording source equivalence for tool-only changes. Close the Astra follow-up on signalling a reaped process group before live execution.
+2. Run the 42 required and four supplemental native rows, plus six preset runs, against the final packaged artifacts. Capture the eight visual rows early and request the user's assessment of the actual images. All automated GUI work stays on private WSL displays.
+3. Complete Fabric and Paper four-client source correctness on the final artifacts. Retain the completed V27 comparison and its documented limits; no repeat performance comparison is required by the subsequent tool-only changes.
+4. Record final native results and actual visual dispositions, reconcile generated catalog/support-line views, and stop all owned test processes. Merging and publication remain separate actions.
+
+Two additional Astra reviewers independently check the rig changes and concurrent/performance conclusions, supplementing the earlier four Astra reports and the two Claude Code reports. The September 16 value assessment is retained as feedback; its proposed scope reduction was not adopted, and does not silently remove the agreed acceptance rows. The separate September 17 Xaero memory brainstorm is a future workstream.

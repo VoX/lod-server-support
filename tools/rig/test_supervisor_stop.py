@@ -1,7 +1,7 @@
 """Signal-path ownership: a stop signal drains the runner's own protocol before escalation."""
 import importlib.util,json,os,signal,subprocess,sys,tempfile,time,unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 import rig
 
 SUPERVISOR=rig.REPO/'scripts/lib/owned-process.py'
@@ -62,12 +62,27 @@ class SupervisorStopTests(unittest.TestCase):
   module=load_supervisor()
   reaped=subprocess.Popen([sys.executable,'-c','pass'],start_new_session=True);reaped.wait()
   with patch.object(module.os,'killpg') as killpg:
-   self.assertFalse(module.signal_group(reaped.pid,signal.SIGTERM));killpg.assert_not_called()
+   self.assertFalse(module.signal_group(reaped,signal.SIGTERM));killpg.assert_not_called()
   live=subprocess.Popen([sys.executable,'-c','import time;time.sleep(30)'],start_new_session=True)
   try:
-   self.assertIn(live.pid,module.group_members(live.pid))
-   self.assertTrue(module.signal_group(live.pid,signal.SIGTERM));self.assertNotEqual(0,live.wait(timeout=10))
+   self.assertIsNone(live.poll())
+   self.assertTrue(module.signal_group(live,signal.SIGTERM));self.assertNotEqual(0,live.wait(timeout=10))
   finally:
    if live.poll() is None:live.kill();live.wait()
+
+
+ def test_reaped_leader_cannot_authorize_a_reused_foreign_group_id(self):
+  module=load_supervisor()
+  # The generic waitpid loop may reap a leader without updating Popen.returncode.
+  # Poll must refresh that state before any numeric process-group signal.
+  reaped=Mock(pid=4242,returncode=None);reaped.poll.return_value=0
+  with patch.object(module.os,'killpg') as killpg:
+   self.assertFalse(module.signal_group(reaped,signal.SIGKILL))
+   reaped.poll.assert_called_once_with();killpg.assert_not_called()
+ def test_unreaped_leader_still_authorizes_owned_group_escalation(self):
+  module=load_supervisor();live=Mock(pid=4242);live.poll.return_value=None
+  with patch.object(module.os,'killpg') as killpg:
+   self.assertTrue(module.signal_group(live,signal.SIGKILL))
+   live.poll.assert_called_once_with();killpg.assert_called_once_with(4242,signal.SIGKILL)
 
 if __name__=='__main__':unittest.main()
