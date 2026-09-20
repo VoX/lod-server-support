@@ -249,6 +249,33 @@ class DirtyColumnBroadcasterTest {
     // ---- FP-048: range gate ----
 
     @Test
+    void perWorldLodDistanceOverridesDirtyBroadcastRange() {
+        var rig = new Rig(List.of(Level.OVERWORLD, Level.NETHER));
+        rig.config.lodDistanceChunks = 8;
+        rig.config.lodDistanceChunksByWorld = new java.util.LinkedHashMap<>();
+        rig.config.lodDistanceChunksByWorld.put(LSSConstants.DIM_STR_THE_NETHER, 4);
+        var overworldPlayer = rig.addPlayer(Level.OVERWORLD, 100, 200);
+        var netherPlayer = rig.addPlayer(Level.NETHER, 100, 200);
+
+        long netherInAtBoundary = PositionUtil.packPosition(104, 200);  // Chebyshev exactly 4
+        long netherOutJustBeyond = PositionUtil.packPosition(105, 200); // Chebyshev 5
+        long overworldInAtDefault = PositionUtil.packPosition(108, 192); // Chebyshev exactly 8
+        long overworldOutAtDefault = PositionUtil.packPosition(109, 200); // Chebyshev 9
+        rig.tracker.markDirty(LSSConstants.DIM_STR_THE_NETHER, 104, 200);
+        rig.tracker.markDirty(LSSConstants.DIM_STR_THE_NETHER, 105, 200);
+        rig.tracker.markDirty(LSSConstants.DIM_STR_OVERWORLD, 108, 192);
+        rig.tracker.markDirty(LSSConstants.DIM_STR_OVERWORLD, 109, 200);
+        rig.fire();
+
+        assertArrayEquals(new long[]{netherInAtBoundary}, only(sentTo(rig, netherPlayer)),
+                "the nether override (4) must gate dirty pushes, not the default 8");
+        assertArrayEquals(new long[]{overworldInAtDefault}, only(sentTo(rig, overworldPlayer)),
+                "overworld players still use the default lodDistanceChunks");
+        assertArrayEquals(new long[]{netherInAtBoundary}, only(clearsFor(rig, netherPlayer)));
+        assertArrayEquals(new long[]{overworldInAtDefault}, only(clearsFor(rig, overworldPlayer)));
+    }
+
+    @Test
     void rangeGateUsesRawLodDistanceWithoutTheRequestGateBuffer() {
         var rig = new Rig(List.of(Level.OVERWORLD));
         rig.config.lodDistanceChunks = 8;
