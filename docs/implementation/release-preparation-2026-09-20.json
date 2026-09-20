@@ -1,0 +1,1157 @@
+{
+  "date": "2026-09-20",
+  "proposed_version": "0.15.0",
+  "scope": "Local exact-version preflight; native evidence remains bound to its original artifacts. Draft PR synchronization and CI are recorded separately. No tags, merges or publications are authorized by this record.",
+  "lines": [
+    {
+      "line": "1.21.1",
+      "candidate_source_head": "63490efefbe005386bea2dc3bef89150a4e5095a",
+      "version": "0.15.0",
+      "preflight_log": "/home/vox/.local/state/lss-project-improvements/release-prep-20260920/preflight-1.21.1.log",
+      "preflight_log_sha256": "0a91da1d6a6026b146775b9cd280fbd418345a50ad8b7b4c13d3c5f5610230eb",
+      "build_successful": true,
+      "commands": [
+        {
+          "argv": [
+            "python3",
+            "scripts/release_check.py",
+            "--version",
+            "0.15.0"
+          ],
+          "returncode": 0,
+          "log": "/home/vox/.local/state/lss-project-improvements/release-prep-20260920/1.21.1/release-check.log",
+          "sha256": "e641fda1a65478f2956e4081072ee00368a937a85b16b0933f09c07a30730fc6"
+        },
+        {
+          "argv": [
+            "python3",
+            "tools/tests/check_artifacts.py"
+          ],
+          "returncode": 0,
+          "log": "/home/vox/.local/state/lss-project-improvements/release-prep-20260920/1.21.1/artifact-exclusion.log",
+          "sha256": "aa0bdf250d221f38786c3948a573daa867567ff44825e7c41fd37e03b3c11dd3"
+        }
+      ],
+      "unit_tests": {
+        "common": {
+          "tests": 783,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "skips": [],
+          "note": "Current task XML; UP-TO-DATE status, if any, is retained in the Gradle log."
+        },
+        "fabric": {
+          "tests": 1719,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 4,
+          "skips": [
+            {
+              "class": "dev.vox.lss.networking.server.CompressedColumnsExperimentTool",
+              "test": "runExperiment()",
+              "reason": "org.opentest4j.TestAbortedException: Assumption failed: compressed-columns experiment not requested (-Dlss.store.experiment.regionDir absent)"
+            },
+            {
+              "class": "dev.vox.lss.networking.server.LodStoreExperimentTool",
+              "test": "runExperiment()",
+              "reason": "org.opentest4j.TestAbortedException: Assumption failed: store experiment not requested (-Dlss.store.experiment.regionDir absent)"
+            },
+            {
+              "class": "dev.vox.lss.networking.server.V20SettlingExperimentTool",
+              "test": "runSettlingMeasurement()",
+              "reason": "org.opentest4j.TestAbortedException: Assumption failed: settling measurement not requested (-Dlss.store.experiment.regionDir absent)"
+            },
+            {
+              "class": "dev.vox.lss.networking.server.XverLiveCorpusCaptureTool",
+              "test": "captureLiveCorpus()",
+              "reason": "org.opentest4j.TestAbortedException: Assumption failed: corpus capture not requested (-Dlss.xver.captureRegionDir absent)"
+            }
+          ],
+          "note": "Current task XML; UP-TO-DATE status, if any, is retained in the Gradle log."
+        },
+        "paper": {
+          "tests": 539,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "skips": [],
+          "note": "Current task XML; UP-TO-DATE status, if any, is retained in the Gradle log."
+        },
+        "neoforge": {
+          "tests": 23,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "skips": [],
+          "note": "Current task XML; UP-TO-DATE status, if any, is retained in the Gradle log."
+        }
+      },
+      "gametest_log_passes": [
+        8,
+        78
+      ],
+      "artifacts": [
+        {
+          "module": "fabric",
+          "brand": "lod-server-support",
+          "file": "/home/vox/.local/state/lss-project-improvements/release-prep-20260920/1.21.1/artifacts/lod-server-support-fabric-0.15.0+1.21.1.jar",
+          "sha256": "b29b67401045593e636116edd7a01b62e0317f4123b8b0ecd82c4e54fd86923c",
+          "size": 8320054,
+          "comparison": {
+            "historical_file": "/home/vox/.local/state/lss-project-improvements/final-validation-after-preset/1.21.1/attempt-final-integrated-20260914/packaged-artifacts/fabric/lod-server-support-fabric.jar",
+            "historical_sha256": "c40aad12896e704f0e14763eb0a0e72e88e7f7a78164aacad3618fbfd2be418c",
+            "changed_logical_entries": [
+              "META-INF/jars/common.jar!/fabric.mod.json",
+              "fabric.mod.json"
+            ],
+            "only_expected_version_metadata_changed": true,
+            "all_classes_and_other_logical_entries_identical": true,
+            "common_nested_jar_path_normalized": true
+          }
+        },
+        {
+          "module": "fabric",
+          "brand": "voxy-server-side",
+          "file": "/home/vox/.local/state/lss-project-improvements/release-prep-20260920/1.21.1/artifacts/voxy-server-side-fabric-0.15.0+1.21.1.jar",
+          "sha256": "62cf27ba6cb61298bba8c2a77703882d02ea517b789db5342945ee98e31c2fd6",
+          "size": 8325979
+        },
+        {
+          "module": "paper",
+          "brand": "lod-server-support",
+          "file": "/home/vox/.local/state/lss-project-improvements/release-prep-20260920/1.21.1/artifacts/lod-server-support-paper-0.15.0+1.21.1.jar",
+          "sha256": "53d53186c2814a4d751915061e8561731c1f5a89301e747043921102a744eaeb",
+          "size": 7868666,
+          "comparison": {
+            "historical_file": "/home/vox/.local/state/lss-project-improvements/final-validation-after-preset/1.21.1/attempt-final-integrated-20260914/packaged-artifacts/paper/lod-server-support-paper.jar",
+            "historical_sha256": "ce6ad3db4b31c1fc17adb6efc0fbc7e98392373f5f93496e57dbd81c05b663dd",
+            "changed_logical_entries": [
+              "plugin.yml"
+            ],
+            "only_expected_version_metadata_changed": true,
+            "all_classes_and_other_logical_entries_identical": true,
+            "common_nested_jar_path_normalized": false
+          }
+        },
+        {
+          "module": "paper",
+          "brand": "voxy-server-side",
+          "file": "/home/vox/.local/state/lss-project-improvements/release-prep-20260920/1.21.1/artifacts/voxy-server-side-paper-0.15.0+1.21.1.jar",
+          "sha256": "c798a6266ff60fba107de2669feccb919b5f9f022d349605848c004f26f1ce82",
+          "size": 7868601
+        },
+        {
+          "module": "neoforge",
+          "brand": "lod-server-support",
+          "file": "/home/vox/.local/state/lss-project-improvements/release-prep-20260920/1.21.1/artifacts/lod-server-support-neoforge-0.15.0+1.21.1.jar",
+          "sha256": "825c78206b5109dace9626182fe4424e3c6326805c7c71f7a2405d2040b8a262",
+          "size": 22781029,
+          "comparison": {
+            "historical_file": "/home/vox/.local/state/lss-project-improvements/final-validation-after-preset/1.21.1/attempt-final-integrated-20260914/packaged-artifacts/neoforge/lod-server-support-neoforge.jar",
+            "historical_sha256": "8faa03c1b21416bbd54497f2f3ffc3e053ec2179ea65aad4be6fa10d78085fd1",
+            "changed_logical_entries": [
+              "META-INF/neoforge.mods.toml"
+            ],
+            "only_expected_version_metadata_changed": true,
+            "all_classes_and_other_logical_entries_identical": true,
+            "common_nested_jar_path_normalized": false
+          }
+        },
+        {
+          "module": "neoforge",
+          "brand": "voxy-server-side",
+          "file": "/home/vox/.local/state/lss-project-improvements/release-prep-20260920/1.21.1/artifacts/voxy-server-side-neoforge-0.15.0+1.21.1.jar",
+          "sha256": "e66088f4ef1c5954bbfc3d19006bdbf39489cfa64b7dbaa18682f4ed30e7a549",
+          "size": 22786881
+        }
+      ],
+      "historical_native_product_head": "0ae20c5f5f41e9482f865b5da7faf6a1d16bfacd",
+      "historical_native_artifact_index": "/home/vox/.local/state/lss-project-improvements/recovery-20260910/final-integrated-inputs-20260914/artifact-index.json",
+      "native_retested_on_release_version": false,
+      "client_gametest": "not available (documented 1.21.1 cut)",
+      "shipping_modules": [
+        "fabric",
+        "paper",
+        "neoforge"
+      ],
+      "pr": 289,
+      "base_branch": "support/mc1.21.1",
+      "tag": "v0.15.0+mc1.21.1"
+    },
+    {
+      "line": "1.21.10",
+      "candidate_source_head": "b7f94df4805449d1b63c7efa6119996df559ee3c",
+      "version": "0.15.0",
+      "preflight_log": "/home/vox/.local/state/lss-project-improvements/release-prep-20260920/preflight-1.21.10.log",
+      "preflight_log_sha256": "5189d97a0f34f769e22a1a5dad20124be1ec01b209be6b918224f839fe48e260",
+      "build_successful": true,
+      "commands": [
+        {
+          "argv": [
+            "python3",
+            "scripts/release_check.py",
+            "--version",
+            "0.15.0"
+          ],
+          "returncode": 0,
+          "log": "/home/vox/.local/state/lss-project-improvements/release-prep-20260920/1.21.10/release-check.log",
+          "sha256": "9dd41157d8763b07261dcc69acd2865eb7e4922ebf3a8f2b0c599e529f3637eb"
+        },
+        {
+          "argv": [
+            "python3",
+            "tools/tests/check_artifacts.py"
+          ],
+          "returncode": 0,
+          "log": "/home/vox/.local/state/lss-project-improvements/release-prep-20260920/1.21.10/artifact-exclusion.log",
+          "sha256": "b000d6be839d9c14ccf2c66417533f6d202c90a5a82c69fe88ab51c590aa1f8b"
+        }
+      ],
+      "unit_tests": {
+        "common": {
+          "tests": 782,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "skips": [],
+          "note": "Current task XML; UP-TO-DATE status, if any, is retained in the Gradle log."
+        },
+        "fabric": {
+          "tests": 1716,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 6,
+          "skips": [
+            {
+              "class": "dev.vox.lss.config.menu.SodiumLegacySurfaceResolvesTest",
+              "test": "everyModernDeepLinkMemberExistsInTheLinesSodium()",
+              "reason": "org.opentest4j.TestAbortedException: Assumption failed: lss.sodiumModernGoldenJar not resolved (offline?) \u2014 skipping the real-bytecode check"
+            },
+            {
+              "class": "dev.vox.lss.config.menu.SodiumLegacySurfaceResolvesTest",
+              "test": "modernStatusReturnMembersExistInActualSodium()",
+              "reason": "org.opentest4j.TestAbortedException: Assumption failed: lss.sodiumModernGoldenJar not resolved (offline?) \u2014 skipping the real-bytecode check"
+            },
+            {
+              "class": "dev.vox.lss.networking.server.CompressedColumnsExperimentTool",
+              "test": "runExperiment()",
+              "reason": "org.opentest4j.TestAbortedException: Assumption failed: compressed-columns experiment not requested (-Dlss.store.experiment.regionDir absent)"
+            },
+            {
+              "class": "dev.vox.lss.networking.server.LodStoreExperimentTool",
+              "test": "runExperiment()",
+              "reason": "org.opentest4j.TestAbortedException: Assumption failed: store experiment not requested (-Dlss.store.experiment.regionDir absent)"
+            },
+            {
+              "class": "dev.vox.lss.networking.server.V20SettlingExperimentTool",
+              "test": "runSettlingMeasurement()",
+              "reason": "org.opentest4j.TestAbortedException: Assumption failed: settling measurement not requested (-Dlss.store.experiment.regionDir absent)"
+            },
+            {
+              "class": "dev.vox.lss.networking.server.XverLiveCorpusCaptureTool",
+              "test": "captureLiveCorpus()",
+              "reason": "org.opentest4j.TestAbortedException: Assumption failed: corpus capture not requested (-Dlss.xver.captureRegionDir absent)"
+            }
+          ],
+          "note": "Current task XML; UP-TO-DATE status, if any, is retained in the Gradle log."
+        },
+        "paper": {
+          "tests": 539,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "skips": [],
+          "note": "Current task XML; UP-TO-DATE status, if any, is retained in the Gradle log."
+        },
+        "neoforge": {
+          "tests": 19,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "skips": [],
+          "note": "Current task XML; UP-TO-DATE status, if any, is retained in the Gradle log."
+        }
+      },
+      "gametest_log_passes": [
+        80,
+        8
+      ],
+      "artifacts": [
+        {
+          "module": "fabric",
+          "brand": "lod-server-support",
+          "file": "/home/vox/.local/state/lss-project-improvements/release-prep-20260920/1.21.10/artifacts/lod-server-support-fabric-0.15.0+1.21.10.jar",
+          "sha256": "9c7324813ad1246790ff569db6a7f5d3c21a36da816c64e709c56c7f3f94af08",
+          "size": 8314791,
+          "comparison": {
+            "historical_file": "/home/vox/.local/state/lss-project-improvements/final-validation-after-preset/1.21.10/attempt-final-integrated-20260914/packaged-artifacts/fabric/lod-server-support-fabric.jar",
+            "historical_sha256": "b1d4121d5dab5d90cf708e9db44a0d20d2528e4205d7a7d323f06e4fbea0245d",
+            "changed_logical_entries": [
+              "META-INF/jars/common.jar!/fabric.mod.json",
+              "fabric.mod.json"
+            ],
+            "only_expected_version_metadata_changed": true,
+            "all_classes_and_other_logical_entries_identical": true,
+            "common_nested_jar_path_normalized": true
+          }
+        },
+        {
+          "module": "fabric",
+          "brand": "voxy-server-side",
+          "file": "/home/vox/.local/state/lss-project-improvements/release-prep-20260920/1.21.10/artifacts/voxy-server-side-fabric-0.15.0+1.21.10.jar",
+          "sha256": "dacd8c09043f1cb7f6a15abe7049298d5f4f09fe87de4e6e2cb8cc82b1ba1d38",
+          "size": 8320714
+        },
+        {
+          "module": "paper",
+          "brand": "lod-server-support",
+          "file": "/home/vox/.local/state/lss-project-improvements/release-prep-20260920/1.21.10/artifacts/lod-server-support-paper-0.15.0+1.21.10.jar",
+          "sha256": "3d6d8587cc47637f3fa73c4f886b0621611129dff517432aa341c22938ec2026",
+          "size": 7868209,
+          "comparison": {
+            "historical_file": "/home/vox/.local/state/lss-project-improvements/final-validation-after-preset/1.21.10/attempt-final-integrated-20260914/packaged-artifacts/paper/lod-server-support-paper.jar",
+            "historical_sha256": "9b509cb444c82c5ccf6b9a7ed36df6dcfe66b7d824349acbf138faace9e964ef",
+            "changed_logical_entries": [
+              "plugin.yml"
+            ],
+            "only_expected_version_metadata_changed": true,
+            "all_classes_and_other_logical_entries_identical": true,
+            "common_nested_jar_path_normalized": false
+          }
+        },
+        {
+          "module": "paper",
+          "brand": "voxy-server-side",
+          "file": "/home/vox/.local/state/lss-project-improvements/release-prep-20260920/1.21.10/artifacts/voxy-server-side-paper-0.15.0+1.21.10.jar",
+          "sha256": "fa6a6dcba2812cbee62ff851a821c5f89808315ce526fd1d7c8721f2da0c60ed",
+          "size": 7868148
+        },
+        {
+          "module": "neoforge",
+          "brand": "lod-server-support",
+          "file": "/home/vox/.local/state/lss-project-improvements/release-prep-20260920/1.21.10/artifacts/lod-server-support-neoforge-0.15.0+1.21.10.jar",
+          "sha256": "e5efbb2139855e9aefcbeea210549dabd8e6f5dcd5342bd4d0c855e13e8ac366",
+          "size": 22747699,
+          "comparison": {
+            "historical_file": "/home/vox/.local/state/lss-project-improvements/final-validation-after-preset/1.21.10/attempt-final-integrated-20260914/packaged-artifacts/neoforge/lod-server-support-neoforge.jar",
+            "historical_sha256": "f5dcb80bdca9103f4b046be933300837b54d7b2573b9b4664981354f1f216309",
+            "changed_logical_entries": [
+              "META-INF/neoforge.mods.toml"
+            ],
+            "only_expected_version_metadata_changed": true,
+            "all_classes_and_other_logical_entries_identical": true,
+            "common_nested_jar_path_normalized": false
+          }
+        },
+        {
+          "module": "neoforge",
+          "brand": "voxy-server-side",
+          "file": "/home/vox/.local/state/lss-project-improvements/release-prep-20260920/1.21.10/artifacts/voxy-server-side-neoforge-0.15.0+1.21.10.jar",
+          "sha256": "98454cfd2807e12af880af5e9c880c3dfd7ebfdf2eb24a6c71b9cf002350602e",
+          "size": 22753554
+        }
+      ],
+      "historical_native_product_head": "8a6457bd4250b495d523f9382ff3f73a1c5e7353",
+      "historical_native_artifact_index": "/home/vox/.local/state/lss-project-improvements/recovery-20260910/final-integrated-inputs-20260914/artifact-index.json",
+      "native_retested_on_release_version": false,
+      "client_gametest": "passed; explicitly invoked in this preflight",
+      "shipping_modules": [
+        "fabric",
+        "paper"
+      ],
+      "pr": 290,
+      "base_branch": "support/mc1.21.10",
+      "tag": "v0.15.0+mc1.21.10"
+    },
+    {
+      "line": "1.21.11",
+      "candidate_source_head": "307fffef8c7248ae5146cef5f48c17640ba88855",
+      "version": "0.15.0",
+      "preflight_log": "/home/vox/.local/state/lss-project-improvements/release-prep-20260920/preflight-1.21.11.log",
+      "preflight_log_sha256": "2b98130676bda3e0dd016be041b2b077ba7291b6ace406c70c4160cf4c74e4d3",
+      "build_successful": true,
+      "commands": [
+        {
+          "argv": [
+            "python3",
+            "scripts/release_check.py",
+            "--version",
+            "0.15.0"
+          ],
+          "returncode": 0,
+          "log": "/home/vox/.local/state/lss-project-improvements/release-prep-20260920/1.21.11/release-check.log",
+          "sha256": "9dd41157d8763b07261dcc69acd2865eb7e4922ebf3a8f2b0c599e529f3637eb"
+        },
+        {
+          "argv": [
+            "python3",
+            "tools/tests/check_artifacts.py"
+          ],
+          "returncode": 0,
+          "log": "/home/vox/.local/state/lss-project-improvements/release-prep-20260920/1.21.11/artifact-exclusion.log",
+          "sha256": "bbbf1ed3c552f1ff8d5a71c4b14665cd30f5432901756586fee36b5d1133d8e7"
+        }
+      ],
+      "unit_tests": {
+        "common": {
+          "tests": 782,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "skips": [],
+          "note": "Current task XML; UP-TO-DATE status, if any, is retained in the Gradle log."
+        },
+        "fabric": {
+          "tests": 1720,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 4,
+          "skips": [
+            {
+              "class": "dev.vox.lss.networking.server.CompressedColumnsExperimentTool",
+              "test": "runExperiment()",
+              "reason": "org.opentest4j.TestAbortedException: Assumption failed: compressed-columns experiment not requested (-Dlss.store.experiment.regionDir absent)"
+            },
+            {
+              "class": "dev.vox.lss.networking.server.LodStoreExperimentTool",
+              "test": "runExperiment()",
+              "reason": "org.opentest4j.TestAbortedException: Assumption failed: store experiment not requested (-Dlss.store.experiment.regionDir absent)"
+            },
+            {
+              "class": "dev.vox.lss.networking.server.V20SettlingExperimentTool",
+              "test": "runSettlingMeasurement()",
+              "reason": "org.opentest4j.TestAbortedException: Assumption failed: settling measurement not requested (-Dlss.store.experiment.regionDir absent)"
+            },
+            {
+              "class": "dev.vox.lss.networking.server.XverLiveCorpusCaptureTool",
+              "test": "captureLiveCorpus()",
+              "reason": "org.opentest4j.TestAbortedException: Assumption failed: corpus capture not requested (-Dlss.xver.captureRegionDir absent)"
+            }
+          ],
+          "note": "Current task XML; UP-TO-DATE status, if any, is retained in the Gradle log."
+        },
+        "paper": {
+          "tests": 539,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "skips": [],
+          "note": "Current task XML; UP-TO-DATE status, if any, is retained in the Gradle log."
+        },
+        "neoforge": {
+          "tests": 23,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "skips": [],
+          "note": "Current task XML; UP-TO-DATE status, if any, is retained in the Gradle log."
+        }
+      },
+      "gametest_log_passes": [
+        80,
+        8
+      ],
+      "artifacts": [
+        {
+          "module": "fabric",
+          "brand": "lod-server-support",
+          "file": "/home/vox/.local/state/lss-project-improvements/release-prep-20260920/1.21.11/artifacts/lod-server-support-fabric-0.15.0+1.21.11.jar",
+          "sha256": "b182ce5432527ab8d2628d72befbffbcfcf9573d14225b030e6b0c9bf4990a6a",
+          "size": 8320717,
+          "comparison": {
+            "historical_file": "/home/vox/.local/state/lss-project-improvements/final-validation-after-preset/1.21.11/attempt-final-integrated-20260914/packaged-artifacts/fabric/lod-server-support-fabric.jar",
+            "historical_sha256": "04770ac9857022d307bdcdee299ab87ab8e507a795f06f3fd8569c3982ed2fe6",
+            "changed_logical_entries": [
+              "META-INF/jars/common.jar!/fabric.mod.json",
+              "fabric.mod.json"
+            ],
+            "only_expected_version_metadata_changed": true,
+            "all_classes_and_other_logical_entries_identical": true,
+            "common_nested_jar_path_normalized": true
+          }
+        },
+        {
+          "module": "fabric",
+          "brand": "voxy-server-side",
+          "file": "/home/vox/.local/state/lss-project-improvements/release-prep-20260920/1.21.11/artifacts/voxy-server-side-fabric-0.15.0+1.21.11.jar",
+          "sha256": "1193b7f96c41855580a3abf60efaa1243a95187d84c9af62ee114e699f89e004",
+          "size": 8326642
+        },
+        {
+          "module": "paper",
+          "brand": "lod-server-support",
+          "file": "/home/vox/.local/state/lss-project-improvements/release-prep-20260920/1.21.11/artifacts/lod-server-support-paper-0.15.0+1.21.11.jar",
+          "sha256": "11f38d0cd1d5061edc9ad1c54e5ccc2eb9b96d1688dabbf8299f7be67eb02460",
+          "size": 7868138,
+          "comparison": {
+            "historical_file": "/home/vox/.local/state/lss-project-improvements/final-validation-after-preset/1.21.11/attempt-final-integrated-20260914/packaged-artifacts/paper/lod-server-support-paper.jar",
+            "historical_sha256": "131c6d618d3ff40bb84dcf3683bdf0438759980ad63cc0cbe0edf441e7562a6e",
+            "changed_logical_entries": [
+              "plugin.yml"
+            ],
+            "only_expected_version_metadata_changed": true,
+            "all_classes_and_other_logical_entries_identical": true,
+            "common_nested_jar_path_normalized": false
+          }
+        },
+        {
+          "module": "paper",
+          "brand": "voxy-server-side",
+          "file": "/home/vox/.local/state/lss-project-improvements/release-prep-20260920/1.21.11/artifacts/voxy-server-side-paper-0.15.0+1.21.11.jar",
+          "sha256": "8afedb8569e1f41e77121f6fa54194788dc6d43454639a64f10ea16ee9bbe23f",
+          "size": 7868077
+        },
+        {
+          "module": "neoforge",
+          "brand": "lod-server-support",
+          "file": "/home/vox/.local/state/lss-project-improvements/release-prep-20260920/1.21.11/artifacts/lod-server-support-neoforge-0.15.0+1.21.11.jar",
+          "sha256": "53d28c4c71cd81d126b45e771cd771020fcdd0e071296721521377db4a8eedd9",
+          "size": 22753871,
+          "comparison": {
+            "historical_file": "/home/vox/.local/state/lss-project-improvements/final-validation-after-preset/1.21.11/attempt-final-integrated-20260914/packaged-artifacts/neoforge/lod-server-support-neoforge.jar",
+            "historical_sha256": "fd68604915ca0e84b2af9789f3c87c2d5b3d6adb8ce218667d17ba41b94a884c",
+            "changed_logical_entries": [
+              "META-INF/neoforge.mods.toml"
+            ],
+            "only_expected_version_metadata_changed": true,
+            "all_classes_and_other_logical_entries_identical": true,
+            "common_nested_jar_path_normalized": false
+          }
+        },
+        {
+          "module": "neoforge",
+          "brand": "voxy-server-side",
+          "file": "/home/vox/.local/state/lss-project-improvements/release-prep-20260920/1.21.11/artifacts/voxy-server-side-neoforge-0.15.0+1.21.11.jar",
+          "sha256": "a4727ecbc98e3245370352603b216a1000e3c96d09746df4d196213610a8b634",
+          "size": 22759722
+        }
+      ],
+      "historical_native_product_head": "b8828f5ad550c73e26de158b3c56c877cc6e5d8a",
+      "historical_native_artifact_index": "/home/vox/.local/state/lss-project-improvements/recovery-20260910/final-integrated-inputs-20260914/artifact-index.json",
+      "native_retested_on_release_version": false,
+      "client_gametest": "passed; explicitly invoked in this preflight",
+      "shipping_modules": [
+        "fabric",
+        "paper"
+      ],
+      "pr": 291,
+      "base_branch": "support/mc1.21.11-v0.14",
+      "tag": "v0.15.0+mc1.21.11"
+    },
+    {
+      "line": "26.1",
+      "candidate_source_head": "8759d07ab8035a13f62ffb6afd578cbd12312457",
+      "version": "0.15.0",
+      "preflight_log": "/home/vox/.local/state/lss-project-improvements/release-prep-20260920/preflight-26.1.log",
+      "preflight_log_sha256": "074bda7b7cc509af3f9b7e40459202a1d135bf6c4579b96da75303d94b1bcdf4",
+      "build_successful": true,
+      "commands": [
+        {
+          "argv": [
+            "python3",
+            "scripts/release_check.py",
+            "--version",
+            "0.15.0"
+          ],
+          "returncode": 0,
+          "log": "/home/vox/.local/state/lss-project-improvements/release-prep-20260920/26.1/release-check.log",
+          "sha256": "e641fda1a65478f2956e4081072ee00368a937a85b16b0933f09c07a30730fc6"
+        },
+        {
+          "argv": [
+            "python3",
+            "tools/tests/check_artifacts.py"
+          ],
+          "returncode": 0,
+          "log": "/home/vox/.local/state/lss-project-improvements/release-prep-20260920/26.1/artifact-exclusion.log",
+          "sha256": "15e5fcf2abc48a47d0f9be53da798db9760784bc373cddf923d5c0963db2fa23"
+        }
+      ],
+      "unit_tests": {
+        "common": {
+          "tests": 782,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "skips": [],
+          "note": "Current task XML; UP-TO-DATE status, if any, is retained in the Gradle log."
+        },
+        "fabric": {
+          "tests": 1727,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 4,
+          "skips": [
+            {
+              "class": "dev.vox.lss.networking.server.CompressedColumnsExperimentTool",
+              "test": "runExperiment()",
+              "reason": "org.opentest4j.TestAbortedException: Assumption failed: compressed-columns experiment not requested (-Dlss.store.experiment.regionDir absent)"
+            },
+            {
+              "class": "dev.vox.lss.networking.server.LodStoreExperimentTool",
+              "test": "runExperiment()",
+              "reason": "org.opentest4j.TestAbortedException: Assumption failed: store experiment not requested (-Dlss.store.experiment.regionDir absent)"
+            },
+            {
+              "class": "dev.vox.lss.networking.server.V20SettlingExperimentTool",
+              "test": "runSettlingMeasurement()",
+              "reason": "org.opentest4j.TestAbortedException: Assumption failed: settling measurement not requested (-Dlss.store.experiment.regionDir absent)"
+            },
+            {
+              "class": "dev.vox.lss.networking.server.XverLiveCorpusCaptureTool",
+              "test": "captureLiveCorpus()",
+              "reason": "org.opentest4j.TestAbortedException: Assumption failed: corpus capture not requested (-Dlss.xver.captureRegionDir absent)"
+            }
+          ],
+          "note": "Current task XML; UP-TO-DATE status, if any, is retained in the Gradle log."
+        },
+        "paper": {
+          "tests": 539,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "skips": [],
+          "note": "Current task XML; UP-TO-DATE status, if any, is retained in the Gradle log."
+        },
+        "neoforge": {
+          "tests": 23,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "skips": [],
+          "note": "Current task XML; UP-TO-DATE status, if any, is retained in the Gradle log."
+        }
+      },
+      "gametest_log_passes": [
+        79,
+        8
+      ],
+      "artifacts": [
+        {
+          "module": "fabric",
+          "brand": "lod-server-support",
+          "file": "/home/vox/.local/state/lss-project-improvements/release-prep-20260920/26.1/artifacts/lod-server-support-fabric-0.15.0+26.1.2.jar",
+          "sha256": "bf43b7164f32607839dbc330f3c0aa8cab6d23b783aa5e42494ff9c653ee556f",
+          "size": 8323622,
+          "comparison": {
+            "historical_file": "/home/vox/.local/state/lss-project-improvements/final-validation-after-preset/26.1/attempt-final-integrated-20260914/packaged-artifacts/fabric/lod-server-support-fabric.jar",
+            "historical_sha256": "f5bc3c0dcf1823d46437fc80c4f7d8896d32f458096ff8dbc09f9660e068feae",
+            "changed_logical_entries": [
+              "fabric.mod.json",
+              "META-INF/jars/common.jar!/fabric.mod.json"
+            ],
+            "only_expected_version_metadata_changed": true,
+            "all_classes_and_other_logical_entries_identical": true,
+            "common_nested_jar_path_normalized": true
+          }
+        },
+        {
+          "module": "fabric",
+          "brand": "voxy-server-side",
+          "file": "/home/vox/.local/state/lss-project-improvements/release-prep-20260920/26.1/artifacts/voxy-server-side-fabric-0.15.0+26.1.2.jar",
+          "sha256": "ab5208601c115fba137587a6e58b9ef88072848fcf725387bdd4bb0c4380ec3e",
+          "size": 8329546
+        },
+        {
+          "module": "paper",
+          "brand": "lod-server-support",
+          "file": "/home/vox/.local/state/lss-project-improvements/release-prep-20260920/26.1/artifacts/lod-server-support-paper-0.15.0+26.1.2.jar",
+          "sha256": "0805df7e538404961f6df469a59c22fdec26a21674ed859540b4abc9dc5be081",
+          "size": 7868039,
+          "comparison": {
+            "historical_file": "/home/vox/.local/state/lss-project-improvements/final-validation-after-preset/26.1/attempt-final-integrated-20260914/packaged-artifacts/paper/lod-server-support-paper.jar",
+            "historical_sha256": "71af700ff64dc15f60b15a8d0d914c98e8379c1be477bf831069b4dcdc9e5ef3",
+            "changed_logical_entries": [
+              "plugin.yml"
+            ],
+            "only_expected_version_metadata_changed": true,
+            "all_classes_and_other_logical_entries_identical": true,
+            "common_nested_jar_path_normalized": false
+          }
+        },
+        {
+          "module": "paper",
+          "brand": "voxy-server-side",
+          "file": "/home/vox/.local/state/lss-project-improvements/release-prep-20260920/26.1/artifacts/voxy-server-side-paper-0.15.0+26.1.2.jar",
+          "sha256": "9533388c551bc342d405934139d872495596447c9301936c0d7bb9a1cd1e290c",
+          "size": 7867978
+        },
+        {
+          "module": "neoforge",
+          "brand": "lod-server-support",
+          "file": "/home/vox/.local/state/lss-project-improvements/release-prep-20260920/26.1/artifacts/lod-server-support-neoforge-0.15.0+26.1.2.jar",
+          "sha256": "131101da6fd8e761923ee4496e756811b716b28026d0a97544d0e74918b75cf2",
+          "size": 22756155,
+          "comparison": {
+            "historical_file": "/home/vox/.local/state/lss-project-improvements/final-validation-after-preset/26.1/attempt-final-integrated-20260914/packaged-artifacts/neoforge/lod-server-support-neoforge.jar",
+            "historical_sha256": "5572512d6f05c2842d3b3e2e9a6c654ef6f19754d0a10e29853ed7d16b8cfeae",
+            "changed_logical_entries": [
+              "META-INF/neoforge.mods.toml"
+            ],
+            "only_expected_version_metadata_changed": true,
+            "all_classes_and_other_logical_entries_identical": true,
+            "common_nested_jar_path_normalized": false
+          }
+        },
+        {
+          "module": "neoforge",
+          "brand": "voxy-server-side",
+          "file": "/home/vox/.local/state/lss-project-improvements/release-prep-20260920/26.1/artifacts/voxy-server-side-neoforge-0.15.0+26.1.2.jar",
+          "sha256": "255efc2f75501a90dfa9d0c62c869fedc163a879a3ad5975b9d40022e3fa6b1a",
+          "size": 22762006
+        }
+      ],
+      "historical_native_product_head": "f8f31bb68432db75b32908c83890587cc0ee0dd6",
+      "historical_native_artifact_index": "/home/vox/.local/state/lss-project-improvements/recovery-20260910/final-integrated-inputs-20260914/artifact-index.json",
+      "native_retested_on_release_version": false,
+      "client_gametest": "passed; explicitly invoked in this preflight",
+      "shipping_modules": [
+        "fabric",
+        "paper",
+        "neoforge"
+      ],
+      "pr": 292,
+      "base_branch": "support/mc26.1-v0.14",
+      "tag": "v0.15.0+mc26.1"
+    },
+    {
+      "line": "26.2",
+      "candidate_source_head": "48b5fae55ede72ee1a4b2e5266f4b8e3964b4ea8",
+      "version": "0.15.0",
+      "preflight_log": "/home/vox/.local/state/lss-project-improvements/release-prep-20260920/preflight-26.2.log",
+      "preflight_log_sha256": "807371e7f1c4dfd50642f62712cedf9dd3e132f91594e7d96647c48b208bada1",
+      "build_successful": true,
+      "commands": [
+        {
+          "argv": [
+            "python3",
+            "scripts/release_check.py",
+            "--version",
+            "0.15.0"
+          ],
+          "returncode": 0,
+          "log": "/home/vox/.local/state/lss-project-improvements/release-prep-20260920/26.2/release-check.log",
+          "sha256": "e641fda1a65478f2956e4081072ee00368a937a85b16b0933f09c07a30730fc6"
+        },
+        {
+          "argv": [
+            "python3",
+            "tools/tests/check_artifacts.py"
+          ],
+          "returncode": 0,
+          "log": "/home/vox/.local/state/lss-project-improvements/release-prep-20260920/26.2/artifact-exclusion.log",
+          "sha256": "40ad2fbfc68aee70d630e2cf236cb0d2659a390f69de99d58758a50964a78e33"
+        }
+      ],
+      "unit_tests": {
+        "common": {
+          "tests": 789,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "skips": [],
+          "note": "Current task XML; UP-TO-DATE status, if any, is retained in the Gradle log."
+        },
+        "fabric": {
+          "tests": 1732,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 4,
+          "skips": [
+            {
+              "class": "dev.vox.lss.networking.server.CompressedColumnsExperimentTool",
+              "test": "runExperiment()",
+              "reason": "org.opentest4j.TestAbortedException: Assumption failed: compressed-columns experiment not requested (-Dlss.store.experiment.regionDir absent)"
+            },
+            {
+              "class": "dev.vox.lss.networking.server.LodStoreExperimentTool",
+              "test": "runExperiment()",
+              "reason": "org.opentest4j.TestAbortedException: Assumption failed: store experiment not requested (-Dlss.store.experiment.regionDir absent)"
+            },
+            {
+              "class": "dev.vox.lss.networking.server.V20SettlingExperimentTool",
+              "test": "runSettlingMeasurement()",
+              "reason": "org.opentest4j.TestAbortedException: Assumption failed: settling measurement not requested (-Dlss.store.experiment.regionDir absent)"
+            },
+            {
+              "class": "dev.vox.lss.networking.server.XverLiveCorpusCaptureTool",
+              "test": "captureLiveCorpus()",
+              "reason": "org.opentest4j.TestAbortedException: Assumption failed: corpus capture not requested (-Dlss.xver.captureRegionDir absent)"
+            }
+          ],
+          "note": "Current task XML; UP-TO-DATE status, if any, is retained in the Gradle log."
+        },
+        "paper": {
+          "tests": 549,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "skips": [],
+          "note": "Current task XML; UP-TO-DATE status, if any, is retained in the Gradle log."
+        },
+        "neoforge": {
+          "tests": 23,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "skips": [],
+          "note": "Current task XML; UP-TO-DATE status, if any, is retained in the Gradle log."
+        }
+      },
+      "gametest_log_passes": [
+        79,
+        8
+      ],
+      "artifacts": [
+        {
+          "module": "fabric",
+          "brand": "lod-server-support",
+          "file": "/home/vox/.local/state/lss-project-improvements/release-prep-20260920/26.2/artifacts/lod-server-support-fabric-0.15.0+26.2.jar",
+          "sha256": "f7b7ed53fe0c3103504237f2e1ab69c3c5991434390d3536cc45a81cdc502ccc",
+          "size": 8329780,
+          "comparison": {
+            "historical_file": "/home/vox/.local/state/lss-project-improvements/final-validation-after-preset/26.2/attempt-final-integrated-20260914/packaged-artifacts/fabric/lod-server-support-fabric.jar",
+            "historical_sha256": "cfb13bb52d8c94db42b357ac3e335f2548077bba6153e23dd5ddedf238ce89b1",
+            "changed_logical_entries": [
+              "fabric.mod.json",
+              "META-INF/jars/common.jar!/fabric.mod.json"
+            ],
+            "only_expected_version_metadata_changed": true,
+            "all_classes_and_other_logical_entries_identical": true,
+            "common_nested_jar_path_normalized": true
+          }
+        },
+        {
+          "module": "fabric",
+          "brand": "voxy-server-side",
+          "file": "/home/vox/.local/state/lss-project-improvements/release-prep-20260920/26.2/artifacts/voxy-server-side-fabric-0.15.0+26.2.jar",
+          "sha256": "bf27fc294b142e1a11a63923e24c8174ce7aaa739f9456a3dce432daefa07b8f",
+          "size": 8335708
+        },
+        {
+          "module": "paper",
+          "brand": "lod-server-support",
+          "file": "/home/vox/.local/state/lss-project-improvements/release-prep-20260920/26.2/artifacts/lod-server-support-paper-0.15.0+26.2.jar",
+          "sha256": "f8a678e3085a6c1df36a10f66dc1b9911a98d573a87b33885edaf5b5a224e7e3",
+          "size": 7873485,
+          "comparison": {
+            "historical_file": "/home/vox/.local/state/lss-project-improvements/final-validation-after-preset/26.2/attempt-final-integrated-20260914/packaged-artifacts/paper/lod-server-support-paper.jar",
+            "historical_sha256": "98a090950229e53d8693fe93c821e15a5790f3e0e1aff7f35cdae41e5dea55d9",
+            "changed_logical_entries": [
+              "plugin.yml"
+            ],
+            "only_expected_version_metadata_changed": true,
+            "all_classes_and_other_logical_entries_identical": true,
+            "common_nested_jar_path_normalized": false
+          }
+        },
+        {
+          "module": "paper",
+          "brand": "voxy-server-side",
+          "file": "/home/vox/.local/state/lss-project-improvements/release-prep-20260920/26.2/artifacts/voxy-server-side-paper-0.15.0+26.2.jar",
+          "sha256": "3f32d4c9d3c094304977972beaa5cb85be73cc18e3ad01df76766dcc56c418b7",
+          "size": 7873425
+        },
+        {
+          "module": "neoforge",
+          "brand": "lod-server-support",
+          "file": "/home/vox/.local/state/lss-project-improvements/release-prep-20260920/26.2/artifacts/lod-server-support-neoforge-0.15.0+26.2.jar",
+          "sha256": "1689503ec2339af367dab024e98c2ffd5dbd906ac3f5cb53aab7cb5cd56d2c7e",
+          "size": 22761799,
+          "comparison": {
+            "historical_file": "/home/vox/.local/state/lss-project-improvements/final-validation-after-preset/26.2/attempt-final-integrated-20260914/packaged-artifacts/neoforge/lod-server-support-neoforge.jar",
+            "historical_sha256": "21f4ca9082ba0b38873e28fc0c70aa0c8fe02dfc29b7f0ef153c96ad0b9a766e",
+            "changed_logical_entries": [
+              "META-INF/neoforge.mods.toml"
+            ],
+            "only_expected_version_metadata_changed": true,
+            "all_classes_and_other_logical_entries_identical": true,
+            "common_nested_jar_path_normalized": false
+          }
+        },
+        {
+          "module": "neoforge",
+          "brand": "voxy-server-side",
+          "file": "/home/vox/.local/state/lss-project-improvements/release-prep-20260920/26.2/artifacts/voxy-server-side-neoforge-0.15.0+26.2.jar",
+          "sha256": "ca2c2d4d527921f6dd5d77e4b41e981015070fa8a9349203af1451be7aaedb3e",
+          "size": 22767653
+        }
+      ],
+      "historical_native_product_head": "6f7081101b4fbbdb946b6160618bc71cd8d20b44",
+      "historical_native_artifact_index": "/home/vox/.local/state/lss-project-improvements/recovery-20260910/final-integrated-inputs-20260914/artifact-index.json",
+      "native_retested_on_release_version": false,
+      "client_gametest": "passed; explicitly invoked in this preflight",
+      "shipping_modules": [
+        "fabric",
+        "paper",
+        "neoforge"
+      ],
+      "pr": 293,
+      "base_branch": "main",
+      "tag": "v0.15.0"
+    }
+  ],
+  "remote_pr_snapshot_before_preparation": [
+    {
+      "baseRefName": "main",
+      "headRefName": "feat/project-improvements-mc26.2",
+      "headRefOid": "d3a5bcd03498b2e80e484a28da78a2b08682d560",
+      "isDraft": true,
+      "mergeable": "MERGEABLE",
+      "number": 293,
+      "statusCheckRollup": [
+        {
+          "__typename": "CheckRun",
+          "completedAt": "2026-09-16T18:13:23Z",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/VoX/lod-server-support/actions/runs/35132284813/job/104915939602",
+          "name": "Build + Unit Tests + Server GameTests",
+          "startedAt": "2026-09-16T18:06:12Z",
+          "status": "COMPLETED",
+          "workflowName": "Build"
+        },
+        {
+          "__typename": "CheckRun",
+          "completedAt": "2026-09-16T18:06:56Z",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/VoX/lod-server-support/actions/runs/35132284827/job/104915939221",
+          "name": "catalog",
+          "startedAt": "2026-09-16T18:06:11Z",
+          "status": "COMPLETED",
+          "workflowName": "Compatibility and support-line contracts"
+        },
+        {
+          "__typename": "CheckRun",
+          "completedAt": "2026-09-16T18:06:18Z",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/VoX/lod-server-support/actions/runs/35132284986/job/104915939774",
+          "name": "settings",
+          "startedAt": "2026-09-16T18:06:11Z",
+          "status": "COMPLETED",
+          "workflowName": "Settings reference"
+        },
+        {
+          "__typename": "CheckRun",
+          "completedAt": "2026-09-16T18:09:23Z",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/VoX/lod-server-support/actions/runs/35132284813/job/104915939230",
+          "name": "Client GameTests",
+          "startedAt": "2026-09-16T18:06:12Z",
+          "status": "COMPLETED",
+          "workflowName": "Build"
+        }
+      ],
+      "title": "Project improvements program (P1\u2013P7) \u2014 26.2"
+    },
+    {
+      "baseRefName": "support/mc26.1-v0.14",
+      "headRefName": "feat/project-improvements-mc26.1",
+      "headRefOid": "3eaa2b9a439180e5ec08e3ee8ad6013037a74924",
+      "isDraft": true,
+      "mergeable": "MERGEABLE",
+      "number": 292,
+      "statusCheckRollup": [
+        {
+          "__typename": "CheckRun",
+          "completedAt": "2026-09-16T18:12:38Z",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/VoX/lod-server-support/actions/runs/35132279041/job/104915920332",
+          "name": "Build + Unit Tests + Server GameTests",
+          "startedAt": "2026-09-16T18:06:08Z",
+          "status": "COMPLETED",
+          "workflowName": "Build"
+        },
+        {
+          "__typename": "CheckRun",
+          "completedAt": "2026-09-16T18:06:45Z",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/VoX/lod-server-support/actions/runs/35132279093/job/104915920479",
+          "name": "catalog",
+          "startedAt": "2026-09-16T18:06:08Z",
+          "status": "COMPLETED",
+          "workflowName": "Compatibility and support-line contracts"
+        },
+        {
+          "__typename": "CheckRun",
+          "completedAt": "2026-09-16T18:06:48Z",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/VoX/lod-server-support/actions/runs/35132279014/job/104915920396",
+          "name": "settings",
+          "startedAt": "2026-09-16T18:06:44Z",
+          "status": "COMPLETED",
+          "workflowName": "Settings reference"
+        },
+        {
+          "__typename": "CheckRun",
+          "completedAt": "2026-09-16T18:09:59Z",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/VoX/lod-server-support/actions/runs/35132279041/job/104915920664",
+          "name": "Client GameTests",
+          "startedAt": "2026-09-16T18:06:08Z",
+          "status": "COMPLETED",
+          "workflowName": "Build"
+        }
+      ],
+      "title": "Project improvements program (P1\u2013P7) \u2014 26.1"
+    },
+    {
+      "baseRefName": "support/mc1.21.11-v0.14",
+      "headRefName": "feat/project-improvements-mc1.21.11",
+      "headRefOid": "50f518365fc04bb4447b38b4306f39cdeea84e0c",
+      "isDraft": true,
+      "mergeable": "MERGEABLE",
+      "number": 291,
+      "statusCheckRollup": [
+        {
+          "__typename": "CheckRun",
+          "completedAt": "2026-09-16T18:13:24Z",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/VoX/lod-server-support/actions/runs/35132273582/job/104915903691",
+          "name": "Build + Unit Tests + Server GameTests",
+          "startedAt": "2026-09-16T18:06:06Z",
+          "status": "COMPLETED",
+          "workflowName": "Build"
+        },
+        {
+          "__typename": "CheckRun",
+          "completedAt": "2026-09-16T18:06:42Z",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/VoX/lod-server-support/actions/runs/35132273540/job/104915907910",
+          "name": "catalog",
+          "startedAt": "2026-09-16T18:06:06Z",
+          "status": "COMPLETED",
+          "workflowName": "Compatibility and support-line contracts"
+        },
+        {
+          "__typename": "CheckRun",
+          "completedAt": "2026-09-16T18:06:10Z",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/VoX/lod-server-support/actions/runs/35132273613/job/104915903355",
+          "name": "settings",
+          "startedAt": "2026-09-16T18:06:05Z",
+          "status": "COMPLETED",
+          "workflowName": "Settings reference"
+        },
+        {
+          "__typename": "CheckRun",
+          "completedAt": "2026-09-16T18:09:12Z",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/VoX/lod-server-support/actions/runs/35132273582/job/104915904026",
+          "name": "Client GameTests",
+          "startedAt": "2026-09-16T18:06:05Z",
+          "status": "COMPLETED",
+          "workflowName": "Build"
+        }
+      ],
+      "title": "Project improvements program (P1\u2013P7) \u2014 1.21.11"
+    },
+    {
+      "baseRefName": "support/mc1.21.10",
+      "headRefName": "feat/project-improvements-mc1.21.10",
+      "headRefOid": "bdc1f69ec2ef3c77a102269e773d562226da7024",
+      "isDraft": true,
+      "mergeable": "MERGEABLE",
+      "number": 290,
+      "statusCheckRollup": [
+        {
+          "__typename": "CheckRun",
+          "completedAt": "2026-09-16T18:13:26Z",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/VoX/lod-server-support/actions/runs/35132270194/job/104915891679",
+          "name": "Build + Unit Tests + Server GameTests",
+          "startedAt": "2026-09-16T18:06:04Z",
+          "status": "COMPLETED",
+          "workflowName": "Build"
+        },
+        {
+          "__typename": "CheckRun",
+          "completedAt": "2026-09-16T18:06:37Z",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/VoX/lod-server-support/actions/runs/35132270375/job/104915892173",
+          "name": "catalog",
+          "startedAt": "2026-09-16T18:06:03Z",
+          "status": "COMPLETED",
+          "workflowName": "Compatibility and support-line contracts"
+        },
+        {
+          "__typename": "CheckRun",
+          "completedAt": "2026-09-16T18:06:07Z",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/VoX/lod-server-support/actions/runs/35132270427/job/104915892946",
+          "name": "settings",
+          "startedAt": "2026-09-16T18:06:03Z",
+          "status": "COMPLETED",
+          "workflowName": "Settings reference"
+        },
+        {
+          "__typename": "CheckRun",
+          "completedAt": "2026-09-16T18:09:11Z",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/VoX/lod-server-support/actions/runs/35132270194/job/104915892035",
+          "name": "Client GameTests",
+          "startedAt": "2026-09-16T18:06:03Z",
+          "status": "COMPLETED",
+          "workflowName": "Build"
+        }
+      ],
+      "title": "Project improvements program (P1\u2013P7) \u2014 1.21.10"
+    },
+    {
+      "baseRefName": "support/mc1.21.1",
+      "headRefName": "feat/project-improvements-mc1.21.1",
+      "headRefOid": "2e4790aae752486d8d745d91c6ac1ca39b4fcb13",
+      "isDraft": true,
+      "mergeable": "MERGEABLE",
+      "number": 289,
+      "statusCheckRollup": [
+        {
+          "__typename": "CheckRun",
+          "completedAt": "2026-09-16T18:12:50Z",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/VoX/lod-server-support/actions/runs/35132264936/job/104915873411",
+          "name": "Build + Unit Tests + Server GameTests",
+          "startedAt": "2026-09-16T18:06:00Z",
+          "status": "COMPLETED",
+          "workflowName": "Build"
+        },
+        {
+          "__typename": "CheckRun",
+          "completedAt": "2026-09-16T18:06:43Z",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/VoX/lod-server-support/actions/runs/35132265132/job/104915874000",
+          "name": "catalog",
+          "startedAt": "2026-09-16T18:06:00Z",
+          "status": "COMPLETED",
+          "workflowName": "Compatibility and support-line contracts"
+        },
+        {
+          "__typename": "CheckRun",
+          "completedAt": "2026-09-16T18:06:05Z",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/VoX/lod-server-support/actions/runs/35132265009/job/104915873175",
+          "name": "settings",
+          "startedAt": "2026-09-16T18:06:00Z",
+          "status": "COMPLETED",
+          "workflowName": "Settings reference"
+        }
+      ],
+      "title": "Project improvements program (P1\u2013P7) \u2014 1.21.1"
+    }
+  ],
+  "native_acceptance": "docs/implementation/final-native-acceptance-2026-09-20.json",
+  "user_visual_signoff": "docs/implementation/visual-signoff-2026-09-20.json",
+  "desktop_coexistence": "docs/implementation/desktop-coexistence-2026-09-20.json",
+  "deferred": [
+    "Xaero-specific near-player acquisition supplement",
+    "Xaero region-boundary shading workaround"
+  ],
+  "totals": {
+    "unit_test_identities": 15348,
+    "unit_tests_skipped": 22,
+    "unit_tests_failed": 0,
+    "server_gametests": 436,
+    "client_gametest_tasks": 4,
+    "artifacts": 30
+  }
+}
