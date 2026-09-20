@@ -379,3 +379,11 @@ Cleanup covers 61 retained native run inventories and 349 recorded identities; t
 ## 20. Desktop coexistence confirmed — 2026-09-20
 
 The user separately confirmed “Desktop stayed usable; no noticeable interference” and “Yes, Windows remained usable” when asked about the recent private WSL runs and disruptive slowdowns. This closes the section 16 desktop-coexistence acceptance check. The [observation record](../implementation/desktop-coexistence-2026-09-20.json) preserves both actual replies. It is subjective usability evidence, separate from performance measurements; V27 retains its original scope and native Windows rendering remains unverified. The two known production map corrections remain open.
+
+## 21. Map follow-up research and implementation plan — 2026-09-20
+
+The user requested research and planning for the accepted map limitations. The [coverage and boundary-shading plan](2026-09-20-xaero-map-coverage-and-shading-plan.md) records the bounded Xaero acquisition correction and a separately gated shading prototype, including the upstream approximation policy, inspected artifacts, lifecycle constraints and support-line validation. It does not change the accepted image/desktop dispositions or claim either production fix is implemented.
+
+## 22. Release scope and deferred map work — 2026-09-20
+
+After reviewing the proposed complexity, the user accepted deferring the Xaero-specific acquisition supplement and region-boundary shading workaround and requested release preparation for the completed work. These remain documented limitations, not release-blocking implementation promises or claimed fixes. The [proposed 0.15.0 notes](release-notes-v0.15.0-proposed.md) describe the actual changes since this line’s 0.14.0 release; exact release preflight and integration status are recorded in the [release preparation](2026-09-20-release-preparation.md).
