@@ -24,7 +24,7 @@ final class ServerWorldLod {
             var level = player.level();
             if (level == null) return null;
             var dim = level.dimension();
-            return dim == null ? null : dim.location().toString();
+            return dim == null ? null : dim.identifier().toString();
         } catch (Throwable ignored) {
             return null;
         }

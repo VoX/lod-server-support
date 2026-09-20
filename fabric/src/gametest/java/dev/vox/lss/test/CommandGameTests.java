@@ -275,7 +275,7 @@ public class CommandGameTests {
         var lines = new ArrayList<String>();
         var source = new CommandSourceStack(recorder(lines), Vec3.ZERO, Vec2.ZERO, level,
                 PermissionSet.ALL_PERMISSIONS, "lss-test", Component.literal("lss-test"), server, null);
-        String world = level.dimension().location().toString();
+        String world = level.dimension().identifier().toString();
         var replies = new ArrayList<dev.vox.lss.networking.payloads.SessionConfigS2CPayload>();
         var handshake = new dev.vox.lss.networking.payloads.HandshakeC2SPayload(
                 LSSConstants.PROTOCOL_VERSION, LSSConstants.CAPABILITY_VOXEL_COLUMNS);

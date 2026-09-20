@@ -69,7 +69,7 @@ class PaperDirtyColumnBroadcaster {
         Set<UUID> failedPlayers = null;
 
         for (ServerLevel level : this.server.getAllLevels()) {
-            String dimensionStr = level.dimension().location().toString();
+            String dimensionStr = level.dimension().identifier().toString();
             long[] dirty = this.dirtyTracker.drainDirty(dimensionStr);
             if (dirty == null || dirty.length == 0) continue;
 

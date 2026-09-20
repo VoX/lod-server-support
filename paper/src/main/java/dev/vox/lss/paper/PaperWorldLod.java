@@ -47,7 +47,7 @@ final class PaperWorldLod {
             // fall through to the dim-id key
         }
         if (level != null) return distance(config, level);
-        return config.lodDistanceForWorld(key.location().toString());
+        return config.lodDistanceForWorld(key.identifier().toString());
     }
 
     private static ServerLevel levelOf(ServerPlayer player) {
@@ -70,7 +70,7 @@ final class PaperWorldLod {
     static String dimensionId(ServerLevel level) {
         try {
             var dim = level.dimension();
-            return dim == null ? null : dim.location().toString();
+            return dim == null ? null : dim.identifier().toString();
         } catch (Throwable ignored) {
             return null;
         }

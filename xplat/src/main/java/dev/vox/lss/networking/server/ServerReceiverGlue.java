@@ -97,7 +97,7 @@ public final class ServerReceiverGlue {
         if (skipDirtyHash(service.hasEverRegisteredPlayer(), service.getLodStore() != null,
                 service.timestampCacheBootedEmpty())) return;
         String dimension = DIMENSION_STRINGS.computeIfAbsent(level.dimension(),
-                key -> key.location().toString());
+                key -> key.identifier().toString());
         var obs = service.getDirtyContentFilter().observeSave(level, levelChunk, dimension);
         if (obs.changed()) {
             service.getDirtyTracker().markDirty(dimension, chunk.getPos().x, chunk.getPos().z);
@@ -155,7 +155,7 @@ public final class ServerReceiverGlue {
             return;
         }
         String dimension = DIMENSION_STRINGS.computeIfAbsent(level.dimension(),
-                key -> key.location().toString());
+                key -> key.identifier().toString());
         service.getDirtyContentFilter().seedLoaded(level, levelChunk, dimension);
     }
 
@@ -179,7 +179,7 @@ public final class ServerReceiverGlue {
         }
         if (service == null || !LSSServerConfig.CONFIG.enabled) return;
         String dimension = DIMENSION_STRINGS.computeIfAbsent(level.dimension(),
-                key -> key.location().toString());
+                key -> key.identifier().toString());
         service.getDirtyContentFilter().forget(dimension, cx, cz);
     }
 
@@ -245,7 +245,7 @@ public final class ServerReceiverGlue {
             ServerLevel level = server.getLevel(e.getKey());
             if (level == null) continue;
             String dimension = DIMENSION_STRINGS.computeIfAbsent(e.getKey(),
-                    key -> key.location().toString());
+                    key -> key.identifier().toString());
             var it = e.getValue().iterator();
             while (it.hasNext()) {
                 long packed = it.nextLong();

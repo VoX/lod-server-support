@@ -97,7 +97,7 @@ class DirtyColumnBroadcaster {
         Set<UUID> failedPlayers = null;
 
         for (var dimension : this.dimensions.get()) {
-            String dimensionStr = dimension.location().toString();
+            String dimensionStr = dimension.identifier().toString();
             long[] dirty = this.dirtyTracker.drainDirty(dimensionStr);
             if (dirty == null || dirty.length == 0) continue;
 
