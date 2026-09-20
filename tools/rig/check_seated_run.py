@@ -37,6 +37,22 @@ def inspect(run,manifest):
         result['errors'].append('native proxies differ from the two exact owned subjects')
     handshake=bool(re.search(r'Server session config received \(protocol v20, LOD distance: \d+ chunks, enabled: true\)',text))
     if not handshake:result['errors'].append('actual enabled v20 negotiation absent')
+    if runtime.get('seated_capture_version')==2:
+        from rig import sha
+        if not any('[WI9-FIXTURE] HEALTHY_READY ' in row for row in rows):
+            result['errors'].append('healthy scoped native draw premise absent')
+        captures=read(regular(inside(run,'evidence/seated-captures.json')))
+        if any(captures.get(key)!=manifest[key] for key in ('run_id','run_hash')):
+            result['errors'].append('seated native captures belong to another run')
+        for phase in ('healthy','recovery'):
+            declared=captures.get(phase,{})
+            expected='seated-'+phase+'.png'
+            if declared.get('artifact')!=expected or declared.get('artifact_sha256')!=sha(regular(inside(run,'evidence/'+expected))):
+                result['errors'].append('seated native capture changed: '+phase)
+        gate=regular(inside(run,'evidence/seated-healthy-captured.txt'))
+        if gate.read_text()!=manifest['run_id']+'\n' or sha(gate)!=captures.get('gate_sha256'):
+            result['errors'].append('healthy native capture gate differs')
+        result['captures']=captures
     result['passed']=not result['errors']
     result['assertions']={name:result['passed'] for name in result['assertions']}
     return dict(result,run_id=manifest['run_id'],run_hash=manifest['run_hash'],handshake=handshake,
@@ -67,5 +83,7 @@ def check_report(proof,manifest,root):
         actual=inspect(root,manifest)
         if read(path)!=actual:return ['seated retained report differs from native evidence']
         if proof.get('seated_report')!=actual:return ['seated raw report changed or missing']
+        if 'captures' in actual and proof.get('review_artifacts',{}).get('visual_render')!=actual['captures']['healthy']:
+            return ['human review must bind the healthy pre-fault native capture']
         return actual['errors']
     except (ValueError,OSError,KeyError,TypeError) as error:return ['seated report invalid: '+str(error)]

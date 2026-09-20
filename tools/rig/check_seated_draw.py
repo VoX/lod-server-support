@@ -52,4 +52,14 @@ def check(text):
             errors.append('independent subsequent proxy identity missing')
         if selected['ARMED'][2].get('first_seated')!=first or selected['ARMED'][2].get('second')!=second:
             errors.append('draw identities differ from armed premise')
+    healthy=[(i,frame,fields) for i,(name,frame,fields) in enumerate(rows) if name=='HEALTHY_READY']
+    if healthy:
+        if len(healthy)!=1:errors.append('duplicate healthy native draw premise')
+        i,frame,fields=healthy[0]
+        if any(fields.get(key)!='true' for key in ('both_seated_returns','native_players_absent','beyond_128','scoping')):
+            errors.append('healthy native capture premise failed')
+        armed=selected.get('ARMED')
+        if armed and (i>=armed[0] or frame>armed[1]
+                or any(fields.get(key)!=armed[2].get(key) for key in ('first_seated','second'))):
+            errors.append('healthy native capture did not precede matching armed subjects')
     return {'passed':not errors,'errors':errors,'assertions':{key:not errors for key in ASSERTIONS}}

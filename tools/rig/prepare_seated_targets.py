@@ -8,7 +8,7 @@ a=p.parse_args();source=Path(a.source_worktree).resolve();capture=Path(a.capture
 sys.path.insert(0,str(source/'tools/rig'));from rig import require_lock,digest
 require_lock()
 out.mkdir(parents=True,exist_ok=False);cache=out/'cache';cache.mkdir()
-d=json.loads(Path(a.runtime).read_text());rows=json.loads((capture/'runtime-classpath.json').read_text())
+d=json.loads(Path(a.runtime).read_text());d['seated_capture_version']=2;rows=json.loads((capture/'runtime-classpath.json').read_text())
 hashfile=lambda path:hashlib.sha256(Path(path).read_bytes()).hexdigest()
 for row in rows:
  path=Path(row['path'])
@@ -111,9 +111,9 @@ for role in ('seated-target-a','seated-target-b'):
  d.setdefault('client_profiles',[]).append(dict(role=role,path=str(subject_path),id=subject_profile['id'],profile_hash=digest(subject_profile),candidate_artifacts=subject_candidates))
 for name,value in list(d['generated_files'].items()):
  if name.startswith('instances/') and name.endswith('/instance.cfg'):
-  d['generated_files'][name]=value.replace('JvmArgs=', 'JvmArgs=-Dlss.wi9.enabled=true -Dlss.wi9.subjectA=SeatedSubjectA -Dlss.wi9.subjectB=SeatedSubjectB ')
+  d['generated_files'][name]=value.replace('JvmArgs=', 'JvmArgs=-Dlss.wi9.enabled=true -Dlss.wi9.captureGate={run}/evidence/seated-healthy-captured.txt -Dlss.wi9.subjectA=SeatedSubjectA -Dlss.wi9.subjectB=SeatedSubjectB ')
  if name.startswith('instances/') and name.endswith('/options.txt'):
-  d['generated_files'][name]=value+'fov:-1.0\n'
+  d['generated_files'][name]=value+'fov:-1.0\nfovEffectScale:1.0\n'
  if name.startswith('instances/') and name.endswith('/config/lss-client-config.json'):
   cfg=json.loads(value);cfg.update(farPlayersEnabled=True,farPlayersShareSelf=True);d['generated_files'][name]=json.dumps(cfg)+'\n'
 for name in ('runtime-classpath.json','launch-settings.json','target-components.json','dli-config.txt','jvm-argfile.txt'):stage(capture/name,'evidence/target-'+name)
