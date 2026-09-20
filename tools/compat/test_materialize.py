@@ -130,4 +130,55 @@ class MaterializeTests(unittest.TestCase):
   profile=self.profile(a);profile['platform']='neoforge'
   self.assertTrue(resolution(profile,{a['sha256']:str(p)})['ready'])
 
+
+ def native_container(self,nested_files,discovery='manifest',declared=True,outer_fabric=False):
+  body=io.BytesIO()
+  with zipfile.ZipFile(body,'w') as nested:
+   for name,data in nested_files.items():nested.writestr(name,data)
+  files={'META-INF/jarjar/metadata.json':json.dumps({'jars':[{'path':'META-INF/jarjar/mod.jar'}] if declared else []}),'META-INF/jarjar/mod.jar':body.getvalue()}
+  if discovery=='manifest':files['META-INF/MANIFEST.MF']='Manifest-Version: 1.0\nFMLModType: GAMELIBRARY\n'
+  if discovery in ('service','missing-provider'):
+   files['META-INF/services/net.neoforged.neoforgespi.locating.IModFileCandidateLocator']='example.NativeLocator # declared provider\n'
+   if discovery=='service':files['example/NativeLocator.class']=b'fixture-class'
+  if outer_fabric:files['fabric.mod.json']=json.dumps({'id':'outer','version':'1','jars':[{'file':'META-INF/jarjar/mod.jar'}]})
+  return self.locked_zip('native-container.jar',files)
+ def test_native_declared_container_provides_nested_mod(self):
+  for discovery in ('manifest','service'):
+   with self.subTest(discovery=discovery):
+    p,a=self.native_container({'META-INF/neoforge.mods.toml':'[[mods]]\nmodId="nested"\nversion="1"\n'},discovery)
+    profile=self.profile(a);profile['platform']='neoforge'
+    self.assertTrue(resolution(profile,{a['sha256']:str(p)})['ready'])
+    for wrong in ('fabric','paper','folia'):
+     profile['platform']=wrong
+     self.assertFalse(resolution(profile,{a['sha256']:str(p)})['ready'])
+ def test_native_container_requires_native_mod_and_discovery(self):
+  cases=[({'META-INF/neoforge.mods.toml':'[[mods]]\nmodId="nested"\nversion="1"\n'},'none',True,False),
+         ({'META-INF/neoforge.mods.toml':'[[mods]]\nmodId="nested"\nversion="1"\n'},'missing-provider',True,False),
+         ({'META-INF/neoforge.mods.toml':'[[mods]]\nmodId="nested"\nversion="1"\n'},'manifest',False,False),
+         ({'META-INF/neoforge.mods.toml':'modLoader="javafml"\n'},'manifest',True,False),
+         ({'fabric.mod.json':json.dumps({'id':'nested','version':'1'})},'manifest',True,False),
+         ({'META-INF/neoforge.mods.toml':'[[mods]]\nmodId="nested"\nversion="1"\n'},'manifest',True,True)]
+  for files,discovery,declared,fabric in cases:
+   with self.subTest(files=list(files),discovery=discovery,declared=declared,fabric=fabric):
+    p,a=self.native_container(files,discovery,declared,fabric)
+    profile=self.profile(a);profile['platform']='neoforge'
+    if fabric:
+     with self.assertRaises(Invalid):resolution(profile,{a['sha256']:str(p)})
+    else:self.assertFalse(resolution(profile,{a['sha256']:str(p)})['ready'])
+ def test_fabric_declared_grandchild_cannot_establish_native_container(self):
+  child=io.BytesIO()
+  with zipfile.ZipFile(child,'w') as z:z.writestr('META-INF/neoforge.mods.toml','[[mods]]\nmodId="nested"\nversion="1"\n')
+  p,a=self.native_container({'fabric.mod.json':json.dumps({'id':'fabric_wrapper','version':'1','jars':[{'file':'child.jar'}]}),'child.jar':child.getvalue()})
+  profile=self.profile(a);profile['platform']='neoforge'
+  self.assertFalse(resolution(profile,{a['sha256']:str(p)})['ready'])
+ def test_service_container_retains_connector_and_bundled_fabric_loader_identity(self):
+  p,a=self.native_container({'META-INF/neoforge.mods.toml':'[[mods]]\nmodId="connector"\nversion="1"\n'},'service')
+  with zipfile.ZipFile(p,'a') as z:
+   z.writestr('META-INF/MANIFEST.MF','Manifest-Version: 1.0\nFabric-Loader-Version: 0.18.4\n')
+   z.writestr('net/fabricmc/loader/impl/FabricLoaderImpl.class',b'fixture-class')
+  a=inspect_jar(p)|{k:a[k] for k in ('id','version','source','enabled')}
+  q,b=self.jar('fabric-dependent.jar',{'id':'dependent','version':'1','depends':{'connector':'1','fabricloader':'>=0.18'}})
+  profile=self.profile(a);profile.update(platform='neoforge',route='connector');profile['artifacts'].append(b)
+  self.assertTrue(resolution(profile,{a['sha256']:str(p),b['sha256']:str(q)})['ready'])
+
 if __name__=='__main__':unittest.main()

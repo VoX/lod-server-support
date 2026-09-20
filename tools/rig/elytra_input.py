@@ -10,3 +10,17 @@ def look_down(driver):
   driver.x.XFlush(driver.display)
   time.sleep(.06)
   driver.verify()
+
+
+def recapture_mouse(driver,observed,record,wait,now=time.monotonic_ns,settle=time.sleep):
+ """Retry real capture clicks; caller retains its owner and scenario deadline."""
+ attempts=0;after=0;retry_at=0
+ def ready():
+  nonlocal attempts,after,retry_at
+  if attempts and observed(after):return True
+  if now()<retry_at:return False
+  if attempts==6:raise ValueError('native mouse capture absent after six verified clicks')
+  start=now();driver.focus();settle(.2);driver.click(480,270)
+  after=now();attempts+=1;record(start,after);retry_at=after+300_000_000
+  return False
+ wait(ready)
