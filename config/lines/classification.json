@@ -521,20 +521,20 @@
       "review": "Exact staged all-five source identity; final independent implementation review remains pending."
     },
     "common/src/test/java/dev/vox/lss/common/config/ConservativePresetWorldScopeTest.java": {
-      "kind": "adapted",
-      "surface": "conservative-preset-world-scope-26.2",
       "axes": "Test uses the existing26.2 world-distance API; deliberately absent from four support lines.",
-      "tests": [
-        "ConservativePresetWorldScopeTest.worldEditAfterPreviewSurvivesGlobalApplyUndoAndKeepsNameDimensionPrecedence",
-        "ConservativePresetWorldScopeTest.laterWorldRemovalIsNotResurrectedByGlobalUndo"
-      ],
+      "kind": "adapted",
       "reviewed_blobs": {
         "1.21.1": null,
         "1.21.10": null,
         "1.21.11": null,
         "26.1": null,
         "26.2": "39767ac8be833b4797b367a7bcf0cbe0572282e7"
-      }
+      },
+      "surface": "conservative-preset-world-scope-26.2",
+      "tests": [
+        "ConservativePresetWorldScopeTest.worldEditAfterPreviewSurvivesGlobalApplyUndoAndKeepsNameDimensionPrecedence",
+        "ConservativePresetWorldScopeTest.laterWorldRemovalIsNotResurrectedByGlobalUndo"
+      ]
     },
     "common/src/test/java/dev/vox/lss/common/config/ExternalOptionRefreshTest.java": {
       "kind": "identical"
@@ -875,6 +875,10 @@
       "kind": "line-local",
       "validation": "tools/compat/catalog.py validate and tools/compat/ci.py; exact schema and runtime hashes, not cross-line byte equality"
     },
+    "config/compatibility/profiles/mc1211-fabric-xaero-no-sodium-controls.json": {
+      "kind": "line-local",
+      "validation": "tools/compat/catalog.py validate and tools/compat/ci.py; exact schema and runtime hashes, not cross-line byte equality"
+    },
     "config/compatibility/profiles/mc1211-native-smoke-client.json": {
       "kind": "line-local",
       "validation": "tools/compat/catalog.py validate and tools/compat/ci.py; exact schema and runtime hashes, not cross-line byte equality"
@@ -888,6 +892,10 @@
       "validation": "tools/compat/catalog.py validate and tools/compat/ci.py; exact schema and runtime hashes, not cross-line byte equality"
     },
     "config/compatibility/profiles/mc1211-neoforge-server-smoke.json": {
+      "kind": "line-local",
+      "validation": "tools/compat/catalog.py validate and tools/compat/ci.py; exact schema and runtime hashes, not cross-line byte equality"
+    },
+    "config/compatibility/profiles/mc1211-neoforge-xaero-no-sodium-controls.json": {
       "kind": "line-local",
       "validation": "tools/compat/catalog.py validate and tools/compat/ci.py; exact schema and runtime hashes, not cross-line byte equality"
     },
@@ -7382,13 +7390,13 @@
     "tools/compat/materialize.py": {
       "axes": "Current implementation is byte-identical across all five lines; exact source refs, profile data and explicit target inputs carry line variation. No normalization or residual shared-logic exemption.",
       "kind": "adapted",
-      "review": "Full source review: exact cache hashes and embedded metadata, declared nested loader graph, dependency intersection/conflict checks and explicit fetch separation. CI uses explicit source commits and exact candidate port-batch blobs; it does not promote ready candidates to native acceptance. Original plan baseline lacks this path: full addition reviewed, not unavailable intermediate blobs. Final independent review 04 (2026-09-14) found R04-1: native/jarjar metadata was traversed for every loader and a wrong-loader jar could make a Fabric/Paper profile ready; fixed 2026-09-16 with a selected-loader-route descriptor requirement and six negative/positive controls (docs/reviews/2026-09-14-final/04-lines.md).",
+      "review": "Full source review: exact cache hashes and embedded metadata, declared nested loader graph, dependency intersection/conflict checks and explicit fetch separation. CI uses explicit source commits and exact candidate port-batch blobs; it does not promote ready candidates to native acceptance. Original plan baseline lacks this path: full addition reviewed, not unavailable intermediate blobs. Final independent review 04 (2026-09-14) found R04-1: native/jarjar metadata was traversed for every loader and a wrong-loader jar could make a Fabric/Paper profile ready; fixed 2026-09-16 with a selected-loader-route descriptor requirement and six negative/positive controls (docs/reviews/2026-09-14-final/04-lines.md). September 19 Astra native follow-up review: admit only a loader-discovered NeoForge container with declared native children; FML library discovery reads main manifest attributes only. Exact supported Connector range resolution and native map/seated checks passed; 26 materializer tests cover wrong-loader, missing discovery, invalid nested routes and all manifest section/line-ending controls. Applied disposition: docs/reviews/2026-09-19-completion/astra-rig-review.md.",
       "reviewed_blobs": {
-        "1.21.1": "68b981659267da7f185ae7931e7ec3c1ec39480b",
-        "1.21.10": "68b981659267da7f185ae7931e7ec3c1ec39480b",
-        "1.21.11": "68b981659267da7f185ae7931e7ec3c1ec39480b",
-        "26.1": "68b981659267da7f185ae7931e7ec3c1ec39480b",
-        "26.2": "68b981659267da7f185ae7931e7ec3c1ec39480b"
+        "1.21.1": "59fc22406a61df85866b9b5dfd19142e22cf5d24",
+        "1.21.10": "59fc22406a61df85866b9b5dfd19142e22cf5d24",
+        "1.21.11": "59fc22406a61df85866b9b5dfd19142e22cf5d24",
+        "26.1": "59fc22406a61df85866b9b5dfd19142e22cf5d24",
+        "26.2": "59fc22406a61df85866b9b5dfd19142e22cf5d24"
       },
       "surface": "line-adaptation:tools/compat/materialize.py",
       "tests": [
@@ -7432,13 +7440,13 @@
     "tools/compat/test_materialize.py": {
       "axes": "Current implementation is byte-identical across all five lines; exact source refs, profile data and explicit target inputs carry line variation. No normalization or residual shared-logic exemption.",
       "kind": "adapted",
-      "review": "Full source review: exact cache hashes and embedded metadata, declared nested loader graph, dependency intersection/conflict checks and explicit fetch separation. CI uses explicit source commits and exact candidate port-batch blobs; it does not promote ready candidates to native acceptance. Original plan baseline lacks this path: full addition reviewed, not unavailable intermediate blobs. Final independent review 04 (2026-09-14) found R04-1: native/jarjar metadata was traversed for every loader and a wrong-loader jar could make a Fabric/Paper profile ready; fixed 2026-09-16 with a selected-loader-route descriptor requirement and six negative/positive controls (docs/reviews/2026-09-14-final/04-lines.md).",
+      "review": "Full source review: exact cache hashes and embedded metadata, declared nested loader graph, dependency intersection/conflict checks and explicit fetch separation. CI uses explicit source commits and exact candidate port-batch blobs; it does not promote ready candidates to native acceptance. Original plan baseline lacks this path: full addition reviewed, not unavailable intermediate blobs. Final independent review 04 (2026-09-14) found R04-1: native/jarjar metadata was traversed for every loader and a wrong-loader jar could make a Fabric/Paper profile ready; fixed 2026-09-16 with a selected-loader-route descriptor requirement and six negative/positive controls (docs/reviews/2026-09-14-final/04-lines.md). September 19 Astra native follow-up review: admit only a loader-discovered NeoForge container with declared native children; FML library discovery reads main manifest attributes only. Exact supported Connector range resolution and native map/seated checks passed; 26 materializer tests cover wrong-loader, missing discovery, invalid nested routes and all manifest section/line-ending controls. Applied disposition: docs/reviews/2026-09-19-completion/astra-rig-review.md.",
       "reviewed_blobs": {
-        "1.21.1": "501d120a7ed20d8d99bcaa24a37782c4d7567b27",
-        "1.21.10": "501d120a7ed20d8d99bcaa24a37782c4d7567b27",
-        "1.21.11": "501d120a7ed20d8d99bcaa24a37782c4d7567b27",
-        "26.1": "501d120a7ed20d8d99bcaa24a37782c4d7567b27",
-        "26.2": "501d120a7ed20d8d99bcaa24a37782c4d7567b27"
+        "1.21.1": "ff780dbf92fab480274aa2d1c27de06a994bd286",
+        "1.21.10": "ff780dbf92fab480274aa2d1c27de06a994bd286",
+        "1.21.11": "ff780dbf92fab480274aa2d1c27de06a994bd286",
+        "26.1": "ff780dbf92fab480274aa2d1c27de06a994bd286",
+        "26.2": "ff780dbf92fab480274aa2d1c27de06a994bd286"
       },
       "surface": "line-adaptation:tools/compat/test_materialize.py",
       "tests": [
@@ -9353,14 +9361,6 @@
     },
     "xplat/src/main/java/dev/vox/lss/trace/PlayerTraceState.java": {
       "kind": "identical"
-    },
-    "config/compatibility/profiles/mc1211-fabric-xaero-no-sodium-controls.json": {
-      "kind": "line-local",
-      "validation": "tools/compat/catalog.py validate and tools/compat/ci.py; exact schema and runtime hashes, not cross-line byte equality"
-    },
-    "config/compatibility/profiles/mc1211-neoforge-xaero-no-sodium-controls.json": {
-      "kind": "line-local",
-      "validation": "tools/compat/catalog.py validate and tools/compat/ci.py; exact schema and runtime hashes, not cross-line byte equality"
     }
   },
   "nonproduction_patterns": {
