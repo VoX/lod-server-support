@@ -29,7 +29,9 @@ public final class CommandHelp {
         out.add("/" + rootLabel + " set — list runtime-settable config keys with current"
                 + " values");
         out.add("/" + rootLabel + " set <key> <value> — apply + persist a config change"
-                + " at runtime (values are clamped like the config file)");
+                + " at runtime (values are clamped like the config file). "
+                + "lodDistanceChunks also accepts `<world> <n>` for a per-world "
+                + "override and `<world> default` to clear it");
         out.add("/" + rootLabel + " set keys: " + dev.vox.lss.common.config.RuntimeSettings.keys().stream().map(dev.vox.lss.common.config.RuntimeSettings.SettingKey::descriptor)
                 .filter(d -> d.exposure() == dev.vox.lss.common.config.SettingDescriptor.Exposure.RUNTIME)
                 .map(dev.vox.lss.common.config.SettingDescriptor::key).collect(java.util.stream.Collectors.joining(", ")));

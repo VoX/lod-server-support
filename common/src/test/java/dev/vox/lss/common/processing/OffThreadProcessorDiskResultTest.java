@@ -484,6 +484,13 @@ class OffThreadProcessorDiskResultTest {
             waitFor(() -> rig.proc.enqueuedColumns.stream().anyMatch(c -> c.cx() == 5),
                     "generation outcome delivered in the failed cycle's phase 3");
 
+            // Phase 3 publishes the column before phase 4 takes the request batch. Wait
+            // for the injected submit to be consumed before replacing that batch: enqueue
+            // is latest-wins, so an early (8,8) would replace (6,6), take the injected throw,
+            // and leave no recovery request for the next cycle. The volatile flag is set
+            // false only after the failed cycle has taken its original request.
+            waitFor(() -> !rig.proc.throwOnNextSubmit, "phase-4 routing failure consumed");
+
             // Drive a recovery cycle (the one-shot throw has cleared). A re-queued outcome would
             // re-deliver a SECOND (5,5) column here; the (8,8) submit signals the cycle ran.
             rig.state.enqueue(new IncomingRequest(8, 8, -1L));
