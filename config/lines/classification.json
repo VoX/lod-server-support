@@ -1347,6 +1347,222 @@
       "kind": "line-local",
       "validation": "tools/compat/catalog.py validate; exact profile/run/evidence schema and named-line ownership. Historical result and limitations are preserved; classification is not acceptance."
     },
+    "config/compatibility/validation/20260920T020135Z-07a443c42a7a-c2me-save-read.json": {
+      "kind": "line-local",
+      "validation": "tools/compat/catalog.py validate and tools/compat/ci.py; exact immutable run/profile/evidence hashes owned by 1.21.11. Preserve recorded limitations; classification does not waive checks."
+    },
+    "config/compatibility/validation/20260920T020219Z-027f62df643a-c2me-save-read.json": {
+      "kind": "line-local",
+      "validation": "tools/compat/catalog.py validate and tools/compat/ci.py; exact immutable run/profile/evidence hashes owned by 1.21.11. Preserve recorded limitations; classification does not waive checks."
+    },
+    "config/compatibility/validation/20260920T020312Z-d89cdea51424-server-presets-before-restart.json": {
+      "kind": "line-local",
+      "validation": "tools/compat/catalog.py validate and tools/compat/ci.py; exact immutable run/profile/evidence hashes owned by 1.21.1. Preserve recorded limitations; classification does not waive checks."
+    },
+    "config/compatibility/validation/20260920T020623Z-ba3ddd9108f5-server-presets-after-restart.json": {
+      "kind": "line-local",
+      "validation": "tools/compat/catalog.py validate and tools/compat/ci.py; exact immutable run/profile/evidence hashes owned by 1.21.1. Preserve recorded limitations; classification does not waive checks."
+    },
+    "config/compatibility/validation/20260920T020841Z-7ae10cb80a8e-server-presets-before-restart.json": {
+      "kind": "line-local",
+      "validation": "tools/compat/catalog.py validate and tools/compat/ci.py; exact immutable run/profile/evidence hashes owned by 1.21.1. Preserve recorded limitations; classification does not waive checks."
+    },
+    "config/compatibility/validation/20260920T021007Z-f18646291546-server-presets-after-restart.json": {
+      "kind": "line-local",
+      "validation": "tools/compat/catalog.py validate and tools/compat/ci.py; exact immutable run/profile/evidence hashes owned by 1.21.1. Preserve recorded limitations; classification does not waive checks."
+    },
+    "config/compatibility/validation/20260920T021044Z-076bfc109146-server-presets-before-restart.json": {
+      "kind": "line-local",
+      "validation": "tools/compat/catalog.py validate and tools/compat/ci.py; exact immutable run/profile/evidence hashes owned by 1.21.1. Preserve recorded limitations; classification does not waive checks."
+    },
+    "config/compatibility/validation/20260920T021207Z-5fc5e9755036-server-presets-after-restart.json": {
+      "kind": "line-local",
+      "validation": "tools/compat/catalog.py validate and tools/compat/ci.py; exact immutable run/profile/evidence hashes owned by 1.21.1. Preserve recorded limitations; classification does not waive checks."
+    },
+    "config/compatibility/validation/20260920T021346Z-b91bc348f76a-xaero-map.json": {
+      "kind": "line-local",
+      "validation": "tools/compat/catalog.py validate and tools/compat/ci.py; exact immutable run/profile/evidence hashes owned by 1.21.1. Preserve recorded limitations; classification does not waive checks."
+    },
+    "config/compatibility/validation/20260920T021655Z-1aa7e001e6ba-xaero-map.json": {
+      "kind": "line-local",
+      "validation": "tools/compat/catalog.py validate and tools/compat/ci.py; exact immutable run/profile/evidence hashes owned by 1.21.1. Preserve recorded limitations; classification does not waive checks."
+    },
+    "config/compatibility/validation/20260920T022023Z-33a9bd85215a-xaero-map.json": {
+      "kind": "line-local",
+      "validation": "tools/compat/catalog.py validate and tools/compat/ci.py; exact immutable run/profile/evidence hashes owned by 1.21.1. Preserve recorded limitations; classification does not waive checks."
+    },
+    "config/compatibility/validation/20260920T022211Z-6d1eb705d803-elytra.json": {
+      "kind": "line-local",
+      "validation": "tools/compat/catalog.py validate and tools/compat/ci.py; exact immutable run/profile/evidence hashes owned by 1.21.10. Preserve recorded limitations; classification does not waive checks."
+    },
+    "config/compatibility/validation/20260920T022818Z-be9d7acf6ac1-xaero-map.json": {
+      "kind": "line-local",
+      "validation": "tools/compat/catalog.py validate and tools/compat/ci.py; exact immutable run/profile/evidence hashes owned by 1.21.1. Preserve recorded limitations; classification does not waive checks."
+    },
+    "config/compatibility/validation/20260920T023146Z-414c502c3bf9-ui-apply.json": {
+      "kind": "line-local",
+      "validation": "tools/compat/catalog.py validate and tools/compat/ci.py; exact immutable run/profile/evidence hashes owned by 1.21.1. Preserve recorded limitations; classification does not waive checks."
+    },
+    "config/compatibility/validation/20260920T023835Z-6bfbbf2347f8-elytra.json": {
+      "kind": "line-local",
+      "validation": "tools/compat/catalog.py validate and tools/compat/ci.py; exact immutable run/profile/evidence hashes owned by 1.21.11. Preserve recorded limitations; classification does not waive checks."
+    },
+    "config/compatibility/validation/20260920T024111Z-4df2cfe2e347-ui-apply.json": {
+      "kind": "line-local",
+      "validation": "tools/compat/catalog.py validate and tools/compat/ci.py; exact immutable run/profile/evidence hashes owned by 1.21.1. Preserve recorded limitations; classification does not waive checks."
+    },
+    "config/compatibility/validation/20260920T024616Z-5e9290553fb2-ui-apply.json": {
+      "kind": "line-local",
+      "validation": "tools/compat/catalog.py validate and tools/compat/ci.py; exact immutable run/profile/evidence hashes owned by 1.21.1. Preserve recorded limitations; classification does not waive checks."
+    },
+    "config/compatibility/validation/20260920T024929Z-49d6ded8ee12-ui-apply.json": {
+      "kind": "line-local",
+      "validation": "tools/compat/catalog.py validate and tools/compat/ci.py; exact immutable run/profile/evidence hashes owned by 1.21.1. Preserve recorded limitations; classification does not waive checks."
+    },
+    "config/compatibility/validation/20260920T025240Z-6044a39c9a94-ui-apply.json": {
+      "kind": "line-local",
+      "validation": "tools/compat/catalog.py validate and tools/compat/ci.py; exact immutable run/profile/evidence hashes owned by 1.21.10. Preserve recorded limitations; classification does not waive checks."
+    },
+    "config/compatibility/validation/20260920T025553Z-b859f593316b-client-ui-no-consumer.json": {
+      "kind": "line-local",
+      "validation": "tools/compat/catalog.py validate and tools/compat/ci.py; exact immutable run/profile/evidence hashes owned by 1.21.10. Preserve recorded limitations; classification does not waive checks."
+    },
+    "config/compatibility/validation/20260920T025853Z-6992f848310b-ui-apply.json": {
+      "kind": "line-local",
+      "validation": "tools/compat/catalog.py validate and tools/compat/ci.py; exact immutable run/profile/evidence hashes owned by 1.21.11. Preserve recorded limitations; classification does not waive checks."
+    },
+    "config/compatibility/validation/20260920T030208Z-0292e950bf48-client-ui-no-consumer.json": {
+      "kind": "line-local",
+      "validation": "tools/compat/catalog.py validate and tools/compat/ci.py; exact immutable run/profile/evidence hashes owned by 1.21.11. Preserve recorded limitations; classification does not waive checks."
+    },
+    "config/compatibility/validation/20260920T030525Z-18dba2a74a18-ui-apply.json": {
+      "kind": "line-local",
+      "validation": "tools/compat/catalog.py validate and tools/compat/ci.py; exact immutable run/profile/evidence hashes owned by 26.1. Preserve recorded limitations; classification does not waive checks."
+    },
+    "config/compatibility/validation/20260920T031212Z-970ebd0f58e8-client-ui-no-consumer.json": {
+      "kind": "line-local",
+      "validation": "tools/compat/catalog.py validate and tools/compat/ci.py; exact immutable run/profile/evidence hashes owned by 26.1. Preserve recorded limitations; classification does not waive checks."
+    },
+    "config/compatibility/validation/20260920T031523Z-2ebe138d6f73-ui-apply.json": {
+      "kind": "line-local",
+      "validation": "tools/compat/catalog.py validate and tools/compat/ci.py; exact immutable run/profile/evidence hashes owned by 26.2. Preserve recorded limitations; classification does not waive checks."
+    },
+    "config/compatibility/validation/20260920T031845Z-f60e4ddcb221-ui-apply.json": {
+      "kind": "line-local",
+      "validation": "tools/compat/catalog.py validate and tools/compat/ci.py; exact immutable run/profile/evidence hashes owned by 26.2. Preserve recorded limitations; classification does not waive checks."
+    },
+    "config/compatibility/validation/20260920T032225Z-d40043cc53c3-client-standalone-preset-controls.json": {
+      "kind": "line-local",
+      "validation": "tools/compat/catalog.py validate and tools/compat/ci.py; exact immutable run/profile/evidence hashes owned by 1.21.1. Preserve recorded limitations; classification does not waive checks."
+    },
+    "config/compatibility/validation/20260920T032535Z-1ac3ce5ff80d-client-standalone-preset-controls.json": {
+      "kind": "line-local",
+      "validation": "tools/compat/catalog.py validate and tools/compat/ci.py; exact immutable run/profile/evidence hashes owned by 1.21.1. Preserve recorded limitations; classification does not waive checks."
+    },
+    "config/compatibility/validation/20260920T033053Z-2120627fe584-receive-lifecycle.json": {
+      "kind": "line-local",
+      "validation": "tools/compat/catalog.py validate and tools/compat/ci.py; exact immutable run/profile/evidence hashes owned by 1.21.1. Preserve recorded limitations; classification does not waive checks."
+    },
+    "config/compatibility/validation/20260920T033158Z-90fbfe2f6130-receive-lifecycle.json": {
+      "kind": "line-local",
+      "validation": "tools/compat/catalog.py validate and tools/compat/ci.py; exact immutable run/profile/evidence hashes owned by 1.21.1. Preserve recorded limitations; classification does not waive checks."
+    },
+    "config/compatibility/validation/20260920T033306Z-b9d13e67c579-send-admission.json": {
+      "kind": "line-local",
+      "validation": "tools/compat/catalog.py validate and tools/compat/ci.py; exact immutable run/profile/evidence hashes owned by 1.21.1. Preserve recorded limitations; classification does not waive checks."
+    },
+    "config/compatibility/validation/20260920T033411Z-336978ba1282-receive-lifecycle.json": {
+      "kind": "line-local",
+      "validation": "tools/compat/catalog.py validate and tools/compat/ci.py; exact immutable run/profile/evidence hashes owned by 1.21.1. Preserve recorded limitations; classification does not waive checks."
+    },
+    "config/compatibility/validation/20260920T033515Z-5a6dc1b8bc4e-receive-lifecycle.json": {
+      "kind": "line-local",
+      "validation": "tools/compat/catalog.py validate and tools/compat/ci.py; exact immutable run/profile/evidence hashes owned by 1.21.1. Preserve recorded limitations; classification does not waive checks."
+    },
+    "config/compatibility/validation/20260920T033625Z-ef6902b88e74-send-admission.json": {
+      "kind": "line-local",
+      "validation": "tools/compat/catalog.py validate and tools/compat/ci.py; exact immutable run/profile/evidence hashes owned by 1.21.1. Preserve recorded limitations; classification does not waive checks."
+    },
+    "config/compatibility/validation/20260920T033732Z-29e4deea025b-server-smoke.json": {
+      "kind": "line-local",
+      "validation": "tools/compat/catalog.py validate and tools/compat/ci.py; exact immutable run/profile/evidence hashes owned by 1.21.1. Preserve recorded limitations; classification does not waive checks."
+    },
+    "config/compatibility/validation/20260920T033826Z-43a695805387-server-smoke.json": {
+      "kind": "line-local",
+      "validation": "tools/compat/catalog.py validate and tools/compat/ci.py; exact immutable run/profile/evidence hashes owned by 1.21.10. Preserve recorded limitations; classification does not waive checks."
+    },
+    "config/compatibility/validation/20260920T033921Z-e81a49ada1c6-server-smoke.json": {
+      "kind": "line-local",
+      "validation": "tools/compat/catalog.py validate and tools/compat/ci.py; exact immutable run/profile/evidence hashes owned by 1.21.10. Preserve recorded limitations; classification does not waive checks."
+    },
+    "config/compatibility/validation/20260920T034013Z-7daf47b84f7e-server-smoke.json": {
+      "kind": "line-local",
+      "validation": "tools/compat/catalog.py validate and tools/compat/ci.py; exact immutable run/profile/evidence hashes owned by 1.21.10. Preserve recorded limitations; classification does not waive checks."
+    },
+    "config/compatibility/validation/20260920T034106Z-d96c3cc3ac37-server-smoke.json": {
+      "kind": "line-local",
+      "validation": "tools/compat/catalog.py validate and tools/compat/ci.py; exact immutable run/profile/evidence hashes owned by 1.21.11. Preserve recorded limitations; classification does not waive checks."
+    },
+    "config/compatibility/validation/20260920T034201Z-2dbc805a213b-server-smoke.json": {
+      "kind": "line-local",
+      "validation": "tools/compat/catalog.py validate and tools/compat/ci.py; exact immutable run/profile/evidence hashes owned by 1.21.11. Preserve recorded limitations; classification does not waive checks."
+    },
+    "config/compatibility/validation/20260920T034253Z-a3d38547fff5-server-smoke.json": {
+      "kind": "line-local",
+      "validation": "tools/compat/catalog.py validate and tools/compat/ci.py; exact immutable run/profile/evidence hashes owned by 1.21.11. Preserve recorded limitations; classification does not waive checks."
+    },
+    "config/compatibility/validation/20260920T034843Z-082afc602862-server-smoke.json": {
+      "kind": "line-local",
+      "validation": "tools/compat/catalog.py validate and tools/compat/ci.py; exact immutable run/profile/evidence hashes owned by 26.1. Preserve recorded limitations; classification does not waive checks."
+    },
+    "config/compatibility/validation/20260920T034928Z-0200e1a3f501-server-smoke.json": {
+      "kind": "line-local",
+      "validation": "tools/compat/catalog.py validate and tools/compat/ci.py; exact immutable run/profile/evidence hashes owned by 26.1. Preserve recorded limitations; classification does not waive checks."
+    },
+    "config/compatibility/validation/20260920T035013Z-ecd8bc7e8d51-server-smoke.json": {
+      "kind": "line-local",
+      "validation": "tools/compat/catalog.py validate and tools/compat/ci.py; exact immutable run/profile/evidence hashes owned by 26.1. Preserve recorded limitations; classification does not waive checks."
+    },
+    "config/compatibility/validation/20260920T035058Z-a436f7567600-server-smoke.json": {
+      "kind": "line-local",
+      "validation": "tools/compat/catalog.py validate and tools/compat/ci.py; exact immutable run/profile/evidence hashes owned by 26.2. Preserve recorded limitations; classification does not waive checks."
+    },
+    "config/compatibility/validation/20260920T035143Z-8d92d685ec2a-server-smoke.json": {
+      "kind": "line-local",
+      "validation": "tools/compat/catalog.py validate and tools/compat/ci.py; exact immutable run/profile/evidence hashes owned by 26.2. Preserve recorded limitations; classification does not waive checks."
+    },
+    "config/compatibility/validation/20260920T035229Z-9fe471bc4df1-server-smoke.json": {
+      "kind": "line-local",
+      "validation": "tools/compat/catalog.py validate and tools/compat/ci.py; exact immutable run/profile/evidence hashes owned by 26.2. Preserve recorded limitations; classification does not waive checks."
+    },
+    "config/compatibility/validation/20260920T035313Z-a66b788c69b0-export-lifecycle.json": {
+      "kind": "line-local",
+      "validation": "tools/compat/catalog.py validate and tools/compat/ci.py; exact immutable run/profile/evidence hashes owned by 1.21.1. Preserve recorded limitations; classification does not waive checks."
+    },
+    "config/compatibility/validation/20260920T035413Z-be961fb1b828-export-lifecycle.json": {
+      "kind": "line-local",
+      "validation": "tools/compat/catalog.py validate and tools/compat/ci.py; exact immutable run/profile/evidence hashes owned by 1.21.1. Preserve recorded limitations; classification does not waive checks."
+    },
+    "config/compatibility/validation/20260920T035610Z-1f71305d69b6-fabric-four-client-source-correctness.json": {
+      "kind": "line-local",
+      "validation": "tools/compat/catalog.py validate and tools/compat/ci.py; exact immutable run/profile/evidence hashes owned by 26.2. Preserve recorded limitations; classification does not waive checks."
+    },
+    "config/compatibility/validation/20260920T041631Z-b61f9e90be34-folia-four-client-source-correctness.json": {
+      "kind": "line-local",
+      "validation": "tools/compat/catalog.py validate and tools/compat/ci.py; exact immutable run/profile/evidence hashes owned by 26.2. Preserve recorded limitations; classification does not waive checks."
+    },
+    "config/compatibility/validation/20260920T042642Z-c80ce612cd66-paper-four-client-source-correctness.json": {
+      "kind": "line-local",
+      "validation": "tools/compat/catalog.py validate and tools/compat/ci.py; exact immutable run/profile/evidence hashes owned by 26.2. Preserve recorded limitations; classification does not waive checks."
+    },
+    "config/compatibility/validation/20260920T154926Z-a7e51c16390b-seated-draw.json": {
+      "kind": "line-local",
+      "validation": "tools/compat/catalog.py validate and tools/compat/ci.py; exact immutable run/profile/evidence hashes owned by 1.21.1. Preserve recorded limitations; classification does not waive checks."
+    },
+    "config/compatibility/validation/20260920T155051Z-36f0d11707ae-seated-draw.json": {
+      "kind": "line-local",
+      "validation": "tools/compat/catalog.py validate and tools/compat/ci.py; exact immutable run/profile/evidence hashes owned by 1.21.1. Preserve recorded limitations; classification does not waive checks."
+    },
     "config/compatibility/validation/mc12111-c2me-a-broad-80-failed-20260909.json": {
       "kind": "line-local",
       "validation": "tools/compat/catalog.py validate; exact profile/run/evidence schema and named-line ownership. Historical result and limitations are preserved; classification is not acceptance."
