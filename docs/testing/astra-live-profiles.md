@@ -20,3 +20,7 @@ The Prism root is `/mnt/c/Users/Ian/AppData/Roaming/PrismLauncher/instances`; ac
 Current `.github/line.env` ships NeoForge on1.21.1,26.1 and26.2;1.21.10/1.21.11 builds remain maintained but not shipped. This does not rewrite historical release decisions. There is no Folia1.21.1 build, and no Tier3 client gametest on that line. A successful unit, bytecode or artifact check must not be labeled a live UI/rendering result.
 
 For live gates record: commit, installed jar SHA256, instance/clone path, actual launch mod list, loader/MC versions, server fixture path/port, action timeline, expected observation and outcome. Do not record account credentials or launcher authentication arguments. Preserve the normal real-map server and treat its world as nondisposable.
+
+## Historical Roxy report
+
+[PR #266](https://github.com/VoX/lod-server-support/pull/266) records a 2026-08-28 NeoForge 1.21.1 setup using Roxy 0.2.0, Fabric Voxy 0.2.16-beta targeting 1.21.11, Sodium 0.8.12 and Forgified Fabric API 0.116.15. That is a separate compatibility route from the Connector profile above. The later inventory did not establish that exact Roxy stack as a validated candidate; its cross-version Voxy metadata must be assessed with the compatibility layer present. Preserve the report without treating it as current certification or mixing its dependencies into the independently validated profiles.

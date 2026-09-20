@@ -1,7 +1,12 @@
 package dev.vox.lss.common.config;
 
+import dev.vox.lss.common.LSSConstants;
+
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 
@@ -43,7 +48,7 @@ public final class RuntimeSettings {
             return new SettingDescriptor(name, stored.type(), stored.units(), "server." + name,
                     stored.defaultPolicy(), stored.domain() + parser,
                     "RuntimeSettings.byName(\"" + name + "\").apply; ServerConfigBase.validate",
-                    java.util.Set.of(SettingDescriptor.Scope.SERVER), "global only",
+                    name.equals("lodDistanceChunks") ? java.util.Set.of(SettingDescriptor.Scope.SERVER, SettingDescriptor.Scope.WORLD_DISTANCE) : java.util.Set.of(SettingDescriptor.Scope.SERVER), name.equals("lodDistanceChunks") ? "Paper: world name, dimension, global; Fabric/Neo: dimension, global" : "global only",
                     "all server platforms", applyNote, false, "applyWithPersistenceOutcome + platform reconcile",
                     SettingDescriptor.Exposure.RUNTIME);
         }
@@ -82,13 +87,16 @@ public final class RuntimeSettings {
             new SettingKey("lodDistanceChunks",
                     c -> String.valueOf(c.lodDistanceChunks),
                     (c, raw) -> {
-                        c.lodDistanceChunks = ServerConfigBase.clampLodDistance(parseInt(raw));
+                        applyLodDistance(c, raw);
                         return null;
                     },
                     "applies now server-side; current-protocol clients get a config re-push"
                             + " (legacy clients update on rejoin — a SHRINK leaves them"
                             + " re-asking beyond the new distance until rejoin); the AUTO"
-                            + " timestamp cache stays at boot sizing until restart"),
+                            + " timestamp cache stays at boot sizing until restart; "
+                            + "`<world> <n>` sets a per-world override (Paper: Bukkit "
+                            + "world name, Fabric/NeoForge: dimension id) and "
+                            + "`<world> default` clears it"),
             new SettingKey("generationConcurrencyLimitGlobal",
                     c -> String.valueOf(c.generationConcurrencyLimitGlobal),
                     (c, raw) -> {
@@ -243,14 +251,29 @@ public final class RuntimeSettings {
         return KEYS.stream().map(SettingKey::name).toList();
     }
 
+    /** Result of {@link #applyAndPersist}. {@code display} is the value text as the row
+     *  produces it: the BARE effective value for most keys, or the fully-rendered
+     *  per-world text (own clamp note baked) for lodDistanceChunks — use
+     *  {@link #renderReplyValue} to turn it into a reply, so the bare/baked split lives in
+     *  ONE place, not duplicated across the platform command surfaces. {@code repush} is
+     *  whether the apply owes a live SessionConfig re-push: only a real lodDistance
+     *  mutation (scalar OR a per-world put/remove) sets it, and the command surfaces
+     *  re-push on THIS, never on a reply-string comparison (which a per-world set, whose
+     *  scalar is unchanged, would silently fail). */
+    public record ApplyResult(String display, boolean repush, boolean persisted) {
+        public String persistenceNote() {
+            return persisted ? "" : "; applied, but not saved — see server log";
+        }
+    }
+
     /**
      * The full apply sequence minus the platform-specific reply/re-push: parse+clamp+
      * assign-once via the row, then validate() (cross-field work) and save(). Returns
-     * the post-validate effective value. Throws IllegalArgumentException on a malformed
-     * value (nothing assigned).
+     * the reply's value text plus whether a re-push is owed. Throws
+     * IllegalArgumentException on a malformed value (nothing assigned).
      */
-    public static String applyAndPersist(ServerConfigBase config, SettingKey key, String rawValue) {
-        return applyWithPersistenceOutcome(config, key, rawValue).effectiveValue();
+    public static ApplyResult applyAndPersist(ServerConfigBase config, SettingKey key, String rawValue) {
+        return applyWithPersistenceOutcome(config, key, rawValue);
     }
 
     /** Prepare a validated patch without touching ingress-visible config or persistence.
@@ -268,6 +291,8 @@ public final class RuntimeSettings {
         for (var entry : requested.entrySet()) {
             var key = byName(entry.getKey());
             if (key == null || !allowed.contains(key.name())) throw new IllegalArgumentException("protected or out-of-scope key");
+            // This API selects SERVER GLOBAL. Existing explicit world commands retain their own map-aware path.
+            if (key.name().equals("lodDistanceChunks")) parseInt(entry.getValue());
             if (normalized.putIfAbsent(key.name(), entry.getValue()) != null)
                 throw new IllegalArgumentException("duplicate setting after case normalization");
         }
@@ -325,24 +350,43 @@ public final class RuntimeSettings {
         return config.trySave();
     }
 
-    public record ApplyResult(String effectiveValue, boolean persisted) {
-        public String persistenceNote() {
-            return persisted ? "" : "; applied, but not saved — see server log";
-        }
-    }
-
-    /** Runtime application remains successful when persistence fails. */
+    /** Runtime application and per-world repush survive a persistence failure. */
     public static ApplyResult applyWithPersistenceOutcome(ServerConfigBase config,
                                                           SettingKey key, String rawValue) {
+        boolean isLod = key.name().equals("lodDistanceChunks");
+        int beforeScalar = isLod ? config.lodDistanceChunks : 0;
+        Map<String, Integer> beforeMap = isLod ? snapshotByWorld(config) : null;
         key.apply().apply(config, rawValue);
         config.validate();
         boolean persisted = config.trySave();
-        return new ApplyResult(key.current().apply(config), persisted);
+        if (isLod) {
+            boolean repush = beforeScalar != config.lodDistanceChunks
+                    || !beforeMap.equals(snapshotByWorld(config));
+            return new ApplyResult(lodDistanceDisplay(config, rawValue), repush, persisted);
+        }
+        return new ApplyResult(key.current().apply(config), false, persisted);
+    }
+
+    /** The reply's value text: lodDistanceChunks bakes its own per-world-aware clamp note
+     *  into {@code display}, so it renders verbatim; every other key gets the pure-numeric
+     *  {@link #clampedSuffix} appended here. ONE home for the split — both command surfaces
+     *  call this, so they cannot drift. */
+    public static String renderReplyValue(SettingKey key, ApplyResult result, String rawValue) {
+        return key.name().equals("lodDistanceChunks")
+                ? result.display()
+                : result.display() + clampedSuffix(result.display(), rawValue);
+    }
+
+    private static Map<String, Integer> snapshotByWorld(ServerConfigBase config) {
+        return new LinkedHashMap<>(config.lodDistanceChunksByWorld == null
+                ? Map.of() : config.lodDistanceChunksByWorld);
     }
 
     /** The reply's "(clamped from 'raw')" suffix, or "" when the value was accepted
-     *  as given. Numeric-aware (review F3): "25" rendering back as "25.0" is a formatting
-     *  difference, not a clamp — compare parsed values when both sides parse. */
+     *  as given. PURELY numeric (review F3): "25" rendering back as "25.0" is a
+     *  formatting difference, not a clamp — compare parsed values when both sides parse.
+     *  The per-world form does its own token-level clamp note in
+     *  {@link #lodDistanceDisplay}, so this method stays per-world-agnostic. */
     public static String clampedSuffix(String effective, String rawValue) {
         String raw = rawValue.trim();
         if (effective.equals(raw)) return "";
@@ -354,11 +398,89 @@ public final class RuntimeSettings {
         return " (clamped from '" + raw + "')";
     }
 
-    /** The no-args `set` listing: one "key = value" line per registry row. */
+    /** The no-args {@code set} listing: one "key = value" line per registry row,
+     *  plus one {@code lodDistanceChunks[world] = n} line per per-world override. */
     public static List<String> listLines(ServerConfigBase config) {
-        return KEYS.stream()
-                .map(k -> k.name() + " = " + k.current().apply(config))
-                .toList();
+        List<String> lines = new ArrayList<>();
+        for (var k : KEYS) {
+            lines.add(k.name() + " = " + k.current().apply(config));
+            if (k.name().equals("lodDistanceChunks") && config.lodDistanceChunksByWorld != null) {
+                for (var e : config.lodDistanceChunksByWorld.entrySet()) {
+                    lines.add("lodDistanceChunks[" + e.getKey() + "] = " + e.getValue());
+                }
+            }
+        }
+        return lines;
+    }
+
+    /**
+     * {@code <n>} sets the default; {@code <world> <n>} sets a per-world override;
+     * {@code <world> default} (also {@code clear}/{@code -}) removes it. Parse
+     * happens BEFORE any assign so a malformed value leaves the config untouched
+     * (the existing command-surface pin).
+     */
+    static void applyLodDistance(ServerConfigBase c, String raw) {
+        String s = raw.trim();
+        // Split at the LAST whitespace so the value is always the final token and a world
+        // KEY may contain spaces (a Bukkit/Multiverse name like "my world" → key "my
+        // world", value the trailing token). A single token is the scalar-default form.
+        int split = lastWhitespace(s);
+        if (split < 0) {
+            c.lodDistanceChunks = ServerConfigBase.clampLodDistance(parseInt(s));
+            return;
+        }
+        String world = s.substring(0, split).trim();
+        String val = s.substring(split + 1).trim();
+        if (world.isEmpty() || val.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "expected <distance> or <world> <distance>");
+        }
+        if (world.length() > LSSConstants.MAX_DIMENSION_STRING_LENGTH) {
+            throw new IllegalArgumentException("world key too long (max "
+                    + LSSConstants.MAX_DIMENSION_STRING_LENGTH + " chars)");
+        }
+        Map<String, Integer> map = new LinkedHashMap<>(
+                c.lodDistanceChunksByWorld == null ? Map.of() : c.lodDistanceChunksByWorld);
+        if (isLodDistanceClearToken(val)) {
+            map.remove(world);
+        } else {
+            map.put(world, ServerConfigBase.clampLodDistance(parseInt(val)));
+        }
+        c.lodDistanceChunksByWorld = map;
+    }
+
+    /** The reply's value text for a lodDistance apply: the scalar (with its numeric
+     *  clamp note) for {@code <n>}, or {@code world=n} / {@code world=default} for the
+     *  per-world forms, with a clamp note comparing the distance token only. All
+     *  per-world formatting lives HERE, keeping {@link #clampedSuffix} pure-numeric. */
+    static String lodDistanceDisplay(ServerConfigBase config, String rawValue) {
+        String raw = rawValue.trim();
+        int split = lastWhitespace(raw);
+        if (split < 0) {
+            String v = String.valueOf(config.lodDistanceChunks);
+            return v + clampedSuffix(v, raw);
+        }
+        String world = raw.substring(0, split).trim();
+        String val = raw.substring(split + 1).trim();
+        if (isLodDistanceClearToken(val)
+                || config.lodDistanceChunksByWorld == null
+                || !config.lodDistanceChunksByWorld.containsKey(world)) {
+            return world + "=default";
+        }
+        String eff = String.valueOf(config.lodDistanceChunksByWorld.get(world));
+        return world + "=" + eff + clampedSuffix(eff, val);
+    }
+
+    private static boolean isLodDistanceClearToken(String val) {
+        return val.equals("-") || val.equalsIgnoreCase("default")
+                || val.equalsIgnoreCase("clear");
+    }
+
+    private static int lastWhitespace(String s) {
+        for (int i = s.length() - 1; i >= 0; i--) {
+            if (Character.isWhitespace(s.charAt(i))) return i;
+        }
+        return -1;
     }
 
     private RuntimeSettings() {}

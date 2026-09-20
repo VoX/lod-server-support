@@ -69,7 +69,7 @@ class PaperDirtyColumnBroadcaster {
         Set<UUID> failedPlayers = null;
 
         for (ServerLevel level : this.server.getAllLevels()) {
-            String dimensionStr = level.dimension().identifier().toString();
+            String dimensionStr = level.dimension().location().toString();
             long[] dirty = this.dirtyTracker.drainDirty(dimensionStr);
             if (dirty == null || dirty.length == 0) continue;
 
@@ -91,7 +91,10 @@ class PaperDirtyColumnBroadcaster {
                 if (player.isRemoved()) continue;
                 int playerCx = player.getBlockX() >> 4;
                 int playerCz = player.getBlockZ() >> 4;
-                int lodDist = config.lodDistanceChunks;
+                // Resolve from the loop's LEVEL, not the live player: the player is
+                // filtered to THIS dimension above, and a mid-transit player.level() read
+                // could disagree with the loop key. (Level-keyed twin of the Fabric side.)
+                int lodDist = PaperWorldLod.distance(config, level);
 
                 // Paginate (twin of the Fabric broadcaster): a single dirty-columns frame caps
                 // at MAX_POSITIONS, so when a player has more in-range dirty positions than the

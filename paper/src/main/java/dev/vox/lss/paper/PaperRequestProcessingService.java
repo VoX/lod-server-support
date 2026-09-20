@@ -419,7 +419,7 @@ public class PaperRequestProcessingService {
         this.regionSummaries = this.regionStamps == null ? null
                 : new dev.vox.lss.common.region.RegionSummaryService(
                         this.regionStamps::tileStampSeconds,
-                        () -> this.config.lodDistanceChunks);
+                        this.config::maxConfiguredLodDistanceChunks);
         // Null in test wiring: the guarded retract at shutdown must clear only a
         // manager this service actually published.
         this.xrayMasks = wiring.xrayMasks();
@@ -483,7 +483,7 @@ public class PaperRequestProcessingService {
         var offThreadProcessor = new PaperOffThreadProcessor(
                 players, diskReader, generationService != null, dataDir,
                 config.effectiveTimestampCacheMB(), config.missMemoTtlSeconds,
-                config.lodDistanceChunks + LSSConstants.LOD_DISTANCE_BUFFER
+                config.maxConfiguredLodDistanceChunks() + LSSConstants.LOD_DISTANCE_BUFFER
                         + OffThreadProcessor.SWEEP_RADIUS_MARGIN_CHUNKS);
 
         // Compressed-column shipping (protocol 19, plan §0.11) — twin of the Fabric
@@ -548,7 +548,7 @@ public class PaperRequestProcessingService {
         if (storeMode != dev.vox.lss.common.store.LodStoreMode.OFF) {
             var maskFingerprints = new java.util.HashMap<String, String>();
             for (ServerLevel level : server.getAllLevels()) {
-                String dim = level.dimension().identifier().toString();
+                String dim = level.dimension().location().toString();
                 var maskEntry = PaperXrayMaskManager.entryForActive(level);
                 maskFingerprints.put(dim, maskEntry == null ? "off"
                         : maskEntry.sourceLabel() + ":"
@@ -630,7 +630,7 @@ public class PaperRequestProcessingService {
             // escaped the belt and killed start — capture the name first).
             String dim = null;
             try {
-                dim = level.dimension().identifier().toString();
+                dim = level.dimension().location().toString();
                 // 1.21.x line (row 17): Bukkit legacy SPLIT world dirs — re-root PER
                 // LEVEL via the Bukkit world's own folder (the unified-layout
                 // worldRoot resolved world/DIM-1 here, which does not exist, and the
@@ -820,7 +820,7 @@ public class PaperRequestProcessingService {
     private void applyRuntimeConfig() {
         this.bandwidthLimiter.reconfigure(this.config.bytesPerSecondGlobal());
         this.diskReader.reapplyGateCapacity(this.config);
-        this.offThreadProcessor.updateSweepRadius(this.config.lodDistanceChunks
+        this.offThreadProcessor.updateSweepRadius(this.config.maxConfiguredLodDistanceChunks()
                 + LSSConstants.LOD_DISTANCE_BUFFER
                 + dev.vox.lss.common.processing.OffThreadProcessor.SWEEP_RADIUS_MARGIN_CHUNKS);
         var generationLimits = this.config.generationLimits();
@@ -862,7 +862,7 @@ public class PaperRequestProcessingService {
     private SessionConfigSender sessionConfigSender = (player, cfg, enabled) ->
             PaperPayloadHandler.sendSessionConfig(player.getBukkitEntity(),
                     LSSConstants.PROTOCOL_VERSION, enabled,
-                    cfg.lodDistanceChunks, cfg.enableChunkGeneration);
+                    PaperWorldLod.distance(cfg, player), cfg.enableChunkGeneration);
 
     void setSessionConfigSender(SessionConfigSender sender) {
         this.sessionConfigSender = sender;
@@ -1096,7 +1096,7 @@ public class PaperRequestProcessingService {
             if (this.regionizedProbing) s.requireProbeHandoff();
             // Session identity for the router's stale-snapshot guard (set before the map
             // publish so the processing thread never sees it null on a live state).
-            s.setRegisteredDimension(player.level().dimension().identifier().toString());
+            s.setRegisteredDimension(player.level().dimension().location().toString());
             // Transport-pressure gauge (elytra-wall §8.3), Fabric-parity.
             s.setChannelPressureProbe(PaperChannelPressure.forPlayer(player));
             return s;
@@ -1212,7 +1212,7 @@ public class PaperRequestProcessingService {
         // one prompt per REATTACH_PROMPT_INTERVAL, which the guard's INFO line makes
         // visible; a rejoin heals it.
         PaperPayloadHandler.sendSessionConfigV16(player.getBukkitEntity(),
-                this.config.enabled, this.config.lodDistanceChunks,
+                this.config.enabled, PaperWorldLod.distance(this.config, player),
                 LSSConstants.SYNC_ON_LOAD_SLOT_CAP,
                 this.config.generationLimits().perPlayer(),
                 this.config.enableChunkGeneration);
@@ -1279,7 +1279,7 @@ public class PaperRequestProcessingService {
     public void handleBatchRequest(ServerPlayer player, PaperPayloadHandler.DecodedBatchChunkRequest batch) {
         int playerCx = player.getBlockX() >> 4;
         int playerCz = player.getBlockZ() >> 4;
-        int maxDist = this.config.lodDistanceChunks + LSSConstants.LOD_DISTANCE_BUFFER;
+        int maxDist = PaperWorldLod.distance(this.config, player) + LSSConstants.LOD_DISTANCE_BUFFER;
 
         // v16 compat branch: legacy drip batches MERGE into the synthetic want-set (the 1 Hz
         // pump tick is the sole declarer) instead of replacing the backlog. Placed before the
@@ -1495,10 +1495,10 @@ public class PaperRequestProcessingService {
      *  probe (or, on Folia, the hold-release take) reads it, giving shim batches the same
      *  arrival-tick probe alignment a network-received client batch gets. */
     private void tickV16Compat() {
-        int maxDist = this.config.lodDistanceChunks + LSSConstants.LOD_DISTANCE_BUFFER;
         for (var state : this.players.values()) {
             if (!state.hasCompletedHandshake()) continue;
             var player = state.getPlayer();
+            int maxDist = PaperWorldLod.distance(this.config, player) + LSSConstants.LOD_DISTANCE_BUFFER;
             this.v16Compat.tickPlayer(player.getUUID(), state,
                     player.chunkPosition().x, player.chunkPosition().z, maxDist);
         }
@@ -1561,6 +1561,8 @@ public class PaperRequestProcessingService {
             // Counted AFTER the removal check (R2-11) — see the Fabric twin.
             activeCount++;
 
+            // Captured BEFORE checkDimensionChange() mutates the stored dimension.
+            var prevDim = state.getLastDimension();
             if (state.checkDimensionChange()) {
                 // A dimension change abandons all in-flight work. Reuse the (well-tested)
                 // disconnect teardown + a fresh registration instead of a second, hand-rolled
@@ -1573,6 +1575,21 @@ public class PaperRequestProcessingService {
                 // Far players: identity SURVIVES the cycle (v18-rung checklist); the
                 // roster does not — a bumped-epoch full roster follows.
                 this.farPlayerService.onViewerDimensionChange(changed.getUUID());
+                // Re-push ONLY when the new world's distance differs — the client rebuilds
+                // its whole request manager on any SessionConfig, so an unconditional push
+                // would tax every portal even with no overrides (see the Fabric twin). The
+                // previous world's distance resolves from its ResourceKey via the loaded
+                // level so a Bukkit-name-keyed override still matches.
+                int newDist = PaperWorldLod.distance(this.config, changed);
+                int prevDist = PaperWorldLod.distanceForDimKey(this.config, this.server, prevDim);
+                if (newDist != prevDist && this.dialects.isCurrent(changed.getUUID())) {
+                    try {
+                        this.sessionConfigSender.send(changed, this.config, this.config.enabled);
+                    } catch (Exception e) {
+                        LSSLogger.error("Session-config dimension-change push failed for "
+                                + changed.getName().getString(), e);
+                    }
+                }
                 continue;
             }
 
@@ -1583,7 +1600,7 @@ public class PaperRequestProcessingService {
             // which wedged the gate — see AbstractPlayerRequestState.updatePlayerChunk).
             state.updatePlayerChunk(player.chunkPosition().x, player.chunkPosition().z);
             String dimension = this.dimensionStringCache.computeIfAbsent(level.dimension(),
-                    k -> k.identifier().toString());
+                    k -> k.location().toString());
 
             this.offThreadProcessor.updateDimensionContext(dimension, level);
 
@@ -1651,7 +1668,8 @@ public class PaperRequestProcessingService {
                     this.config.lodYieldsToVanillaTransport,
                     // Prune gated on the yield (review B-2) — the Fabric twin's comment.
                     this.config.lodYieldsToVanillaTransport
-                            ? this.config.lodDistanceChunks + LSSConstants.LOD_DISTANCE_BUFFER
+                            ? this.config.maxConfiguredLodDistanceChunks()
+                                    + LSSConstants.LOD_DISTANCE_BUFFER
                                     + OffThreadProcessor.SWEEP_RADIUS_MARGIN_CHUNKS
                             : 0,
                     this.config.enableSendPacing);
@@ -1730,7 +1748,7 @@ public class PaperRequestProcessingService {
             if (state.skipProbe(packed))
                 continue;
 
-            var capture = this.offThreadProcessor.captureLoadedProbe(level.dimension().identifier().toString(), packed, state.registration());
+            var capture = this.offThreadProcessor.captureLoadedProbe(level.dimension().location().toString(), packed, state.registration());
             var column = this.loadedColumnProbe.probe(level, req.cx(), req.cz());
             if (column != null) {
                 probes.put(packed, capture.bind(column));
@@ -1771,7 +1789,7 @@ public class PaperRequestProcessingService {
     private void holdAndScheduleRegionProbe(PaperPlayerRequestState state, ServerPlayer player,
                                             ServerLevel level, LongOpenHashSet skipPositions,
                                             Long2ObjectMap<LoadedColumnData> readyProbes) {
-        state.updateLateProbeRange(this.config.lodDistanceChunks + LSSConstants.LOD_DISTANCE_BUFFER);
+        state.updateLateProbeRange(PaperWorldLod.distance(this.config, level) + LSSConstants.LOD_DISTANCE_BUFFER);
         var released = this.heldForProbe.remove(player.getUUID());
         if (released != null
                 && state.republishHeldBatch(released.batch(), released.offerGeneration(), readyProbes)) {
@@ -1888,7 +1906,7 @@ public class PaperRequestProcessingService {
                 if (claim != null) capturedState.completeLateProbe(claim, null);
                 continue;
             }
-            var capture = this.offThreadProcessor.captureLoadedProbe(level.dimension().identifier().toString(), packed, registration);
+            var capture = this.offThreadProcessor.captureLoadedProbe(level.dimension().location().toString(), packed, registration);
             var column = this.loadedColumnProbe.probe(level, cx, cz);
             if (column != null) {
                 if (found == null) found = new Long2ObjectOpenHashMap<>();
@@ -1901,7 +1919,7 @@ public class PaperRequestProcessingService {
             }
         }
         if (found == null) return;
-        var batch = new RegionProbeBatch(level.dimension().identifier().toString(), registration, found);
+        var batch = new RegionProbeBatch(level.dimension().location().toString(), registration, found);
         this.regionProbeResults.compute(uuid, (k, prev) -> {
             if (this.shuttingDown || registration.isRetired() || this.players.get(uuid) != capturedState) return prev;
             if (prev == null || prev.registration() != registration || !prev.dimension().equals(batch.dimension())) return batch;
@@ -1958,7 +1976,7 @@ public class PaperRequestProcessingService {
             var player = state.getPlayer();
             var level = player.level();
             String dimension = this.dimensionStringCache.computeIfAbsent(level.dimension(),
-                    k -> k.identifier().toString());
+                    k -> k.location().toString());
             // Ticket queued before a dimension change targets the old dimension's coordinates.
             // Dropping it leaks nothing: in the common shape the admitting state was discarded
             // by removePlayer+registerPlayer (its slot dies with it), AND that same removePlayer
