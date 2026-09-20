@@ -1,5 +1,7 @@
 # Visual review follow-up — 2026-09-20
 
+**Later disposition:** the user accepted the current images with the disclosed map limitations. See [sign-off and native integration](visual-signoff-2026-09-20.md). The diagnostic and capture-time states below are historical; the map corrections remain open.
+
 The user's image review identified two distinct map defects and an inadequate seated-player capture. Both map causes are established for the recorded Minecraft 1.21.1 / Xaero 1.45.0 profiles. No shipping map correction has been applied. The previous automated-green results establish their recorded assertions, not visual acceptance. The earlier 54-case progress index remains a dated historical selection; these findings supersede its “only sign-off remains” interpretation.
 
 ## Gold ramp: missing shading at a region boundary

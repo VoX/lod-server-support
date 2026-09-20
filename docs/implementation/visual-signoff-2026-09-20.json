@@ -1,0 +1,554 @@
+{
+  "schema_version": 1,
+  "status": "visual-signoff-and-native-integration-complete-known-map-followups-open",
+  "user_message": "ok then everything looks as correct as it can be to me.",
+  "visual_reviews": 8,
+  "selected_native_cases": 54,
+  "required_rows_passed": 42,
+  "overall_project_complete": false,
+  "map_product_fix_applied": false,
+  "windows_resource_coexistence": "unobserved; separately requested, not inferred from visual sign-off",
+  "known_map_limitations": [
+    "Missing gold shading stripe at world X=512: native Xaero region-local slope fallback, also reproduced by the bridge.",
+    "Eight near-player chunks are omitted between LSS acquisition exclusion and Xaero native 3x3 coverage; shipping fix remains pending."
+  ],
+  "reviews": [
+    {
+      "argv": [
+        "/usr/bin/python3",
+        "/home/vox/.local/state/lss-rig/runs/20260920T021346Z-b91bc348f76a/tool-sources/tools/rig/rig.py",
+        "review",
+        "/home/vox/.local/state/lss-rig/runs/20260920T021346Z-b91bc348f76a"
+      ],
+      "cleanup": "complete",
+      "errors": [],
+      "proof": {
+        "path": "/home/vox/.local/state/lss-rig/runs/20260920T021346Z-b91bc348f76a/proof.json",
+        "sha256": "a8d66e0e9ffa9c2d4f169bbce14ab81fa6a216492389b5f7f4608ca22f128dd0",
+        "size": 2853
+      },
+      "result": {
+        "path": "/home/vox/.local/state/lss-rig/runs/20260920T021346Z-b91bc348f76a/evidence/result.json",
+        "sha256": "e969e1170b30c51133389b06921a903027f66a1a2e193f7603dc6e1f32a13b5d",
+        "size": 496
+      },
+      "returncode": 0,
+      "run_id": "20260920T021346Z-b91bc348f76a",
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "/usr/bin/python3",
+        "/home/vox/.local/state/lss-rig/runs/20260920T021655Z-1aa7e001e6ba/tool-sources/tools/rig/rig.py",
+        "review",
+        "/home/vox/.local/state/lss-rig/runs/20260920T021655Z-1aa7e001e6ba"
+      ],
+      "cleanup": "complete",
+      "errors": [],
+      "proof": {
+        "path": "/home/vox/.local/state/lss-rig/runs/20260920T021655Z-1aa7e001e6ba/proof.json",
+        "sha256": "9b8c756c6905e7335c26d9126b64d5dacb09344c68e13bca847a5deb86d1afba",
+        "size": 2853
+      },
+      "result": {
+        "path": "/home/vox/.local/state/lss-rig/runs/20260920T021655Z-1aa7e001e6ba/evidence/result.json",
+        "sha256": "1fa85ce23d26bc0e2c321e4a1bfa11f2a9af22fc4d6ac861ebbf3770845fab88",
+        "size": 496
+      },
+      "returncode": 0,
+      "run_id": "20260920T021655Z-1aa7e001e6ba",
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "/usr/bin/python3",
+        "/home/vox/.local/state/lss-rig/runs/20260920T022818Z-be9d7acf6ac1/tool-sources/tools/rig/rig.py",
+        "review",
+        "/home/vox/.local/state/lss-rig/runs/20260920T022818Z-be9d7acf6ac1"
+      ],
+      "cleanup": "complete",
+      "errors": [],
+      "proof": {
+        "path": "/home/vox/.local/state/lss-rig/runs/20260920T022818Z-be9d7acf6ac1/proof.json",
+        "sha256": "f54384e9169e034f4207f78f73f5216a9d6f4e858d68ccd487df309dc339e5b3",
+        "size": 2853
+      },
+      "result": {
+        "path": "/home/vox/.local/state/lss-rig/runs/20260920T022818Z-be9d7acf6ac1/evidence/result.json",
+        "sha256": "36867cd0277eefa917fa51a0eed7a772ee32a9063410f8afab27fa69421a25ed",
+        "size": 493
+      },
+      "returncode": 0,
+      "run_id": "20260920T022818Z-be9d7acf6ac1",
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "/usr/bin/python3",
+        "/home/vox/.local/state/lss-rig/runs/20260920T022023Z-33a9bd85215a/tool-sources/tools/rig/rig.py",
+        "review",
+        "/home/vox/.local/state/lss-rig/runs/20260920T022023Z-33a9bd85215a"
+      ],
+      "cleanup": "complete",
+      "errors": [],
+      "proof": {
+        "path": "/home/vox/.local/state/lss-rig/runs/20260920T022023Z-33a9bd85215a/proof.json",
+        "sha256": "b34bd73b270ef777c5e8de2709090218266e8eae0852f00b1f36d508a126f130",
+        "size": 2853
+      },
+      "result": {
+        "path": "/home/vox/.local/state/lss-rig/runs/20260920T022023Z-33a9bd85215a/evidence/result.json",
+        "sha256": "1cb4adcc8f49d4558afbd0ec4341caf66364546785e40ca765bd0825a8fd1c79",
+        "size": 499
+      },
+      "returncode": 0,
+      "run_id": "20260920T022023Z-33a9bd85215a",
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "/usr/bin/python3",
+        "/home/vox/.local/state/lss-rig/runs/20260920T154926Z-a7e51c16390b/tool-sources/tools/rig/rig.py",
+        "review",
+        "/home/vox/.local/state/lss-rig/runs/20260920T154926Z-a7e51c16390b"
+      ],
+      "cleanup": "complete",
+      "errors": [],
+      "proof": {
+        "path": "/home/vox/.local/state/lss-rig/runs/20260920T154926Z-a7e51c16390b/proof.json",
+        "sha256": "2c5d3c65d91c18c006a0d5e2cd0590a29fd3c11939c23bbf6f03224889d71355",
+        "size": 5377
+      },
+      "result": {
+        "path": "/home/vox/.local/state/lss-rig/runs/20260920T154926Z-a7e51c16390b/evidence/result.json",
+        "sha256": "7a4a7909791528aff8f18bfe7fad64ffd4183b9d271891867453f7e63848ae5d",
+        "size": 498
+      },
+      "returncode": 0,
+      "run_id": "20260920T154926Z-a7e51c16390b",
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "/usr/bin/python3",
+        "/home/vox/.local/state/lss-rig/runs/20260920T155051Z-36f0d11707ae/tool-sources/tools/rig/rig.py",
+        "review",
+        "/home/vox/.local/state/lss-rig/runs/20260920T155051Z-36f0d11707ae"
+      ],
+      "cleanup": "complete",
+      "errors": [],
+      "proof": {
+        "path": "/home/vox/.local/state/lss-rig/runs/20260920T155051Z-36f0d11707ae/proof.json",
+        "sha256": "15e34358d6c5904f83ca03dbaa9702e3c4d1076c75c228cc6a4aaa00fe8286c3",
+        "size": 5379
+      },
+      "result": {
+        "path": "/home/vox/.local/state/lss-rig/runs/20260920T155051Z-36f0d11707ae/evidence/result.json",
+        "sha256": "f7bba0c55da94eacf60e5d00ed9b0e7e62aca3669396944bf3483ee61b6be26f",
+        "size": 495
+      },
+      "returncode": 0,
+      "run_id": "20260920T155051Z-36f0d11707ae",
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "/usr/bin/python3",
+        "/home/vox/.local/state/lss-rig/runs/20260920T022211Z-6d1eb705d803/tool-sources/tools/rig/rig.py",
+        "review",
+        "/home/vox/.local/state/lss-rig/runs/20260920T022211Z-6d1eb705d803"
+      ],
+      "cleanup": "complete",
+      "errors": [],
+      "proof": {
+        "path": "/home/vox/.local/state/lss-rig/runs/20260920T022211Z-6d1eb705d803/proof.json",
+        "sha256": "982d24286bbfd5696745aea94f959221ff5adf15cf5e20f4b1b64d3cd0ed0e60",
+        "size": 1816
+      },
+      "result": {
+        "path": "/home/vox/.local/state/lss-rig/runs/20260920T022211Z-6d1eb705d803/evidence/result.json",
+        "sha256": "c9050e04a9ebc2c878c590f2572368d841b1051b5204752d8d9ee6babc8ad0de",
+        "size": 494
+      },
+      "returncode": 0,
+      "run_id": "20260920T022211Z-6d1eb705d803",
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "/usr/bin/python3",
+        "/home/vox/.local/state/lss-rig/runs/20260920T023835Z-6bfbbf2347f8/tool-sources/tools/rig/rig.py",
+        "review",
+        "/home/vox/.local/state/lss-rig/runs/20260920T023835Z-6bfbbf2347f8"
+      ],
+      "cleanup": "complete",
+      "errors": [],
+      "proof": {
+        "path": "/home/vox/.local/state/lss-rig/runs/20260920T023835Z-6bfbbf2347f8/proof.json",
+        "sha256": "e601129614ff8ad5b34ecb325adb374d14cdc95ea639c0b654d6b984125cac60",
+        "size": 1816
+      },
+      "result": {
+        "path": "/home/vox/.local/state/lss-rig/runs/20260920T023835Z-6bfbbf2347f8/evidence/result.json",
+        "sha256": "746ef4de4325285c2dfe6315a6af988818ab7363cd15132139e10e28505103cb",
+        "size": 494
+      },
+      "returncode": 0,
+      "run_id": "20260920T023835Z-6bfbbf2347f8",
+      "status": "passed"
+    }
+  ],
+  "historical_review_snapshots": {
+    "files": [
+      {
+        "before_sha256": "cb4cee95fc367a3f57feb472b7e0cc2ba4540078ce98674ca32816cacf5101d4",
+        "original_path": "/home/vox/.local/state/lss-rig/runs/20260920T021346Z-b91bc348f76a/manifest.json",
+        "snapshot": {
+          "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260920-signoff/before-review/20260920T021346Z-b91bc348f76a/manifest.json",
+          "sha256": "cb4cee95fc367a3f57feb472b7e0cc2ba4540078ce98674ca32816cacf5101d4",
+          "size": 26173
+        }
+      },
+      {
+        "before_sha256": "aac643ee1b40986a1b1d1f1baf875bc796d0b2b7daa1227b7980fac05ba79bc1",
+        "original_path": "/home/vox/.local/state/lss-rig/runs/20260920T021346Z-b91bc348f76a/proof.json",
+        "snapshot": {
+          "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260920-signoff/before-review/20260920T021346Z-b91bc348f76a/proof.json",
+          "sha256": "aac643ee1b40986a1b1d1f1baf875bc796d0b2b7daa1227b7980fac05ba79bc1",
+          "size": 2092
+        }
+      },
+      {
+        "before_sha256": "6d0628559e4f71ce228ed0fecc076724b0d622cea464afe1c1ca93be92f73d7c",
+        "original_path": "/home/vox/.local/state/lss-rig/runs/20260920T021346Z-b91bc348f76a/evidence/result.json",
+        "snapshot": {
+          "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260920-signoff/before-review/20260920T021346Z-b91bc348f76a/evidence/result.json",
+          "sha256": "6d0628559e4f71ce228ed0fecc076724b0d622cea464afe1c1ca93be92f73d7c",
+          "size": 560
+        }
+      },
+      {
+        "before_sha256": "dcace3192a47d5449514a545c109ba6af3ed703b0ed20326f8d92ca8d07f0918",
+        "original_path": "/home/vox/.local/state/lss-rig/runs/20260920T021655Z-1aa7e001e6ba/manifest.json",
+        "snapshot": {
+          "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260920-signoff/before-review/20260920T021655Z-1aa7e001e6ba/manifest.json",
+          "sha256": "dcace3192a47d5449514a545c109ba6af3ed703b0ed20326f8d92ca8d07f0918",
+          "size": 25355
+        }
+      },
+      {
+        "before_sha256": "d3cd834a6e3dcdd2175045ae0910d00982dc2b249da34186d65e3fc0ed084e27",
+        "original_path": "/home/vox/.local/state/lss-rig/runs/20260920T021655Z-1aa7e001e6ba/proof.json",
+        "snapshot": {
+          "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260920-signoff/before-review/20260920T021655Z-1aa7e001e6ba/proof.json",
+          "sha256": "d3cd834a6e3dcdd2175045ae0910d00982dc2b249da34186d65e3fc0ed084e27",
+          "size": 2092
+        }
+      },
+      {
+        "before_sha256": "a6e435b467d7fd5e2237215285e635f1c5a979787b7eb1f3ee23f72ede69f3a5",
+        "original_path": "/home/vox/.local/state/lss-rig/runs/20260920T021655Z-1aa7e001e6ba/evidence/result.json",
+        "snapshot": {
+          "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260920-signoff/before-review/20260920T021655Z-1aa7e001e6ba/evidence/result.json",
+          "sha256": "a6e435b467d7fd5e2237215285e635f1c5a979787b7eb1f3ee23f72ede69f3a5",
+          "size": 560
+        }
+      },
+      {
+        "before_sha256": "6a6184e29ae660451c28938a4c5b22d092dc4c835cd0c1acf4929d766f62c199",
+        "original_path": "/home/vox/.local/state/lss-rig/runs/20260920T022818Z-be9d7acf6ac1/manifest.json",
+        "snapshot": {
+          "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260920-signoff/before-review/20260920T022818Z-be9d7acf6ac1/manifest.json",
+          "sha256": "6a6184e29ae660451c28938a4c5b22d092dc4c835cd0c1acf4929d766f62c199",
+          "size": 25978
+        }
+      },
+      {
+        "before_sha256": "d84895aa79839abd30cc444f372064876e0d6402375aba10e479401189d06584",
+        "original_path": "/home/vox/.local/state/lss-rig/runs/20260920T022818Z-be9d7acf6ac1/proof.json",
+        "snapshot": {
+          "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260920-signoff/before-review/20260920T022818Z-be9d7acf6ac1/proof.json",
+          "sha256": "d84895aa79839abd30cc444f372064876e0d6402375aba10e479401189d06584",
+          "size": 2092
+        }
+      },
+      {
+        "before_sha256": "401781a394d11ea2c94d5ba824ab6b5ed30f02d103a39529faf456038b97bd06",
+        "original_path": "/home/vox/.local/state/lss-rig/runs/20260920T022818Z-be9d7acf6ac1/evidence/result.json",
+        "snapshot": {
+          "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260920-signoff/before-review/20260920T022818Z-be9d7acf6ac1/evidence/result.json",
+          "sha256": "401781a394d11ea2c94d5ba824ab6b5ed30f02d103a39529faf456038b97bd06",
+          "size": 557
+        }
+      },
+      {
+        "before_sha256": "943a8ce21086820b08143a68c48f1cd46e70b0ea1ea82fefab22c5d32dfa2835",
+        "original_path": "/home/vox/.local/state/lss-rig/runs/20260920T022023Z-33a9bd85215a/manifest.json",
+        "snapshot": {
+          "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260920-signoff/before-review/20260920T022023Z-33a9bd85215a/manifest.json",
+          "sha256": "943a8ce21086820b08143a68c48f1cd46e70b0ea1ea82fefab22c5d32dfa2835",
+          "size": 25379
+        }
+      },
+      {
+        "before_sha256": "7a024954d1669734f511fa0b6a1ee002d536b8924039d318eef00ac90126468c",
+        "original_path": "/home/vox/.local/state/lss-rig/runs/20260920T022023Z-33a9bd85215a/proof.json",
+        "snapshot": {
+          "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260920-signoff/before-review/20260920T022023Z-33a9bd85215a/proof.json",
+          "sha256": "7a024954d1669734f511fa0b6a1ee002d536b8924039d318eef00ac90126468c",
+          "size": 2092
+        }
+      },
+      {
+        "before_sha256": "6f0db5f764e4e67a9f9192acaa8548ad9d9c2d001ccd319e481d20dafa31481d",
+        "original_path": "/home/vox/.local/state/lss-rig/runs/20260920T022023Z-33a9bd85215a/evidence/result.json",
+        "snapshot": {
+          "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260920-signoff/before-review/20260920T022023Z-33a9bd85215a/evidence/result.json",
+          "sha256": "6f0db5f764e4e67a9f9192acaa8548ad9d9c2d001ccd319e481d20dafa31481d",
+          "size": 563
+        }
+      },
+      {
+        "before_sha256": "9f2b13f166d96b5e2466d0938ed42fc016c28d56e1c22faded562b760fd411da",
+        "original_path": "/home/vox/.local/state/lss-rig/runs/20260920T154926Z-a7e51c16390b/manifest.json",
+        "snapshot": {
+          "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260920-signoff/before-review/20260920T154926Z-a7e51c16390b/manifest.json",
+          "sha256": "9f2b13f166d96b5e2466d0938ed42fc016c28d56e1c22faded562b760fd411da",
+          "size": 789223
+        }
+      },
+      {
+        "before_sha256": "9704538ba48ebd77dcddae1ef8844afcfed9d6fe7d9762e7c663e3033a11d903",
+        "original_path": "/home/vox/.local/state/lss-rig/runs/20260920T154926Z-a7e51c16390b/proof.json",
+        "snapshot": {
+          "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260920-signoff/before-review/20260920T154926Z-a7e51c16390b/proof.json",
+          "sha256": "9704538ba48ebd77dcddae1ef8844afcfed9d6fe7d9762e7c663e3033a11d903",
+          "size": 4620
+        }
+      },
+      {
+        "before_sha256": "8ade2861f7e7601e9fad017111655bcb28541052b19ae2317c560d9fbc301d37",
+        "original_path": "/home/vox/.local/state/lss-rig/runs/20260920T154926Z-a7e51c16390b/evidence/result.json",
+        "snapshot": {
+          "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260920-signoff/before-review/20260920T154926Z-a7e51c16390b/evidence/result.json",
+          "sha256": "8ade2861f7e7601e9fad017111655bcb28541052b19ae2317c560d9fbc301d37",
+          "size": 562
+        }
+      },
+      {
+        "before_sha256": "5d2b228d9bfe26bdc5d26c18d650df85bb14ad1367a76e15ff9160fd7a71b04d",
+        "original_path": "/home/vox/.local/state/lss-rig/runs/20260920T155051Z-36f0d11707ae/manifest.json",
+        "snapshot": {
+          "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260920-signoff/before-review/20260920T155051Z-36f0d11707ae/manifest.json",
+          "sha256": "5d2b228d9bfe26bdc5d26c18d650df85bb14ad1367a76e15ff9160fd7a71b04d",
+          "size": 789057
+        }
+      },
+      {
+        "before_sha256": "0a30abc26b8d3ccb5966f37568a8633d527bef59b6b490ef4ad3bad6163eae10",
+        "original_path": "/home/vox/.local/state/lss-rig/runs/20260920T155051Z-36f0d11707ae/proof.json",
+        "snapshot": {
+          "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260920-signoff/before-review/20260920T155051Z-36f0d11707ae/proof.json",
+          "sha256": "0a30abc26b8d3ccb5966f37568a8633d527bef59b6b490ef4ad3bad6163eae10",
+          "size": 4622
+        }
+      },
+      {
+        "before_sha256": "b4cbc4c008f319c51352779ba27b3e701ba7ad02d8a27e4338765cf6951e4b7e",
+        "original_path": "/home/vox/.local/state/lss-rig/runs/20260920T155051Z-36f0d11707ae/evidence/result.json",
+        "snapshot": {
+          "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260920-signoff/before-review/20260920T155051Z-36f0d11707ae/evidence/result.json",
+          "sha256": "b4cbc4c008f319c51352779ba27b3e701ba7ad02d8a27e4338765cf6951e4b7e",
+          "size": 559
+        }
+      },
+      {
+        "before_sha256": "5096a3bd26b48cb338d59a4ade22c0bf86bbef270c738d2232c204665e03e4ea",
+        "original_path": "/home/vox/.local/state/lss-rig/runs/20260920T022211Z-6d1eb705d803/manifest.json",
+        "snapshot": {
+          "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260920-signoff/before-review/20260920T022211Z-6d1eb705d803/manifest.json",
+          "sha256": "5096a3bd26b48cb338d59a4ade22c0bf86bbef270c738d2232c204665e03e4ea",
+          "size": 888580
+        }
+      },
+      {
+        "before_sha256": "4082d364f88a8b7d38534490357d1793db6587b51ca78d9b7bec6f85015deaa3",
+        "original_path": "/home/vox/.local/state/lss-rig/runs/20260920T022211Z-6d1eb705d803/proof.json",
+        "snapshot": {
+          "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260920-signoff/before-review/20260920T022211Z-6d1eb705d803/proof.json",
+          "sha256": "4082d364f88a8b7d38534490357d1793db6587b51ca78d9b7bec6f85015deaa3",
+          "size": 1042
+        }
+      },
+      {
+        "before_sha256": "624642b6a51c474354aef5a08d2fe27f1ee2804854148932baf53d754af9e62d",
+        "original_path": "/home/vox/.local/state/lss-rig/runs/20260920T022211Z-6d1eb705d803/evidence/result.json",
+        "snapshot": {
+          "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260920-signoff/before-review/20260920T022211Z-6d1eb705d803/evidence/result.json",
+          "sha256": "624642b6a51c474354aef5a08d2fe27f1ee2804854148932baf53d754af9e62d",
+          "size": 558
+        }
+      },
+      {
+        "before_sha256": "e87a0a14abe90990095b798060e0f2ef3607e1663016c0abf8229a6a9ab39902",
+        "original_path": "/home/vox/.local/state/lss-rig/runs/20260920T023835Z-6bfbbf2347f8/manifest.json",
+        "snapshot": {
+          "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260920-signoff/before-review/20260920T023835Z-6bfbbf2347f8/manifest.json",
+          "sha256": "e87a0a14abe90990095b798060e0f2ef3607e1663016c0abf8229a6a9ab39902",
+          "size": 922010
+        }
+      },
+      {
+        "before_sha256": "cb0faf5bff24a9895892c8d02faccdf5e4076e712c617c7b4fa6ae1cb16e7fd2",
+        "original_path": "/home/vox/.local/state/lss-rig/runs/20260920T023835Z-6bfbbf2347f8/proof.json",
+        "snapshot": {
+          "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260920-signoff/before-review/20260920T023835Z-6bfbbf2347f8/proof.json",
+          "sha256": "cb0faf5bff24a9895892c8d02faccdf5e4076e712c617c7b4fa6ae1cb16e7fd2",
+          "size": 1042
+        }
+      },
+      {
+        "before_sha256": "9712789756c52596711fa7b8056574ec568a95f19f38060e7afa8e121fe17348",
+        "original_path": "/home/vox/.local/state/lss-rig/runs/20260920T023835Z-6bfbbf2347f8/evidence/result.json",
+        "snapshot": {
+          "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260920-signoff/before-review/20260920T023835Z-6bfbbf2347f8/evidence/result.json",
+          "sha256": "9712789756c52596711fa7b8056574ec568a95f19f38060e7afa8e121fe17348",
+          "size": 558
+        }
+      }
+    ],
+    "scope": "Pre-review mutable state preserved byte-for-byte; historical evidence hashes resolve to these snapshots after the explicit review transition."
+  },
+  "cleanup": {
+    "status": "passed",
+    "selected_passes": 54,
+    "retained_failed_attempts": 4,
+    "unselected_pending_historical_runs": 3,
+    "distinct_run_inventories": 61,
+    "recorded_identities_checked": 349,
+    "gallery_stopped": true,
+    "retained_unselected": [
+      {
+        "id": "superseded-seated-fabric",
+        "run": "/home/vox/.local/state/lss-rig/runs/20260920T021549Z-945a977bb457",
+        "status": "awaiting-review",
+        "cleanup": "complete",
+        "review_decision": "pending; never promoted by this observer",
+        "identities_checked": 8,
+        "bind_endpoints": [
+          "[::1]:25572"
+        ],
+        "evidence_sha256": {
+          "manifest.json": "1f76b157016ee6245ba7fce3a397a0d42baac992088373838ff9706b9c6576d4",
+          "runtime.json": "0bb02c0545e7deeeb59e78a55c2b13ef48e31e2d255f03b9fff6990324b52d35",
+          "scenario.json": "b7ee14875fd3c40355d383efd7654251b6809e54dbec9d11a34d93171be6db07",
+          "proof.json": "58f20d4c8dff6dfe4bf88d49157167d36af9ccd24f3b6bb817ab2e8451f50456",
+          "evidence/result.json": "9083694f4b2082eed219fbf7009718d5058bd4d14c9c1043cf68c3aca4255a33",
+          "owner.json": "075d5918800a3fa0a65281d57a5baf7f7cd02f38df2315345715b5ffc2364f05",
+          "supervisor.json": "f228f616b24374a96556c7e374474b5106470dfe62fd3aabd1b5eb7e6014f268",
+          "processes.json": "5e6c1c2e1ee9793e94c0debef06a96670fbf48f9ca5a1a228db55c176833adec",
+          "launch-journal.json": "890fdea8b11e351950fdbd2666fe66c77c4a457b616785b11ecbd51cc661cc0b",
+          "supervisor-cleanup.json": "8d8b74d60c92959ba20f49c77db1034f7df1d152f8f06debd50c0fdc5b5eb08f"
+        }
+      },
+      {
+        "id": "superseded-seated-neo",
+        "run": "/home/vox/.local/state/lss-rig/runs/20260920T023019Z-a4e1d5945d76",
+        "status": "awaiting-review",
+        "cleanup": "complete",
+        "review_decision": "pending; never promoted by this observer",
+        "identities_checked": 8,
+        "bind_endpoints": [
+          "[::1]:25572"
+        ],
+        "evidence_sha256": {
+          "manifest.json": "400a66f97769330ac37d4e8ffa8aa2211bcdd8acef161fac848b4b988b7700ee",
+          "runtime.json": "72bea79fe1db27af46638b95a3e8b7ed0cb550d04f276d0631b99bc7b19abc3e",
+          "scenario.json": "b7ee14875fd3c40355d383efd7654251b6809e54dbec9d11a34d93171be6db07",
+          "proof.json": "f0995d134a5e6b24b7d8503bd2c5e1e77102803b9e9c115b8b801e6a64e34f3e",
+          "evidence/result.json": "5c4946fdcaabc5618e89e78fcf73b2eb0d0df21f03063c0438ac1a602acdaf83",
+          "owner.json": "274ab9f755b6eb8042bbdbdaa62ea1198a9b0d3c14b33dac1df7779121983dda",
+          "supervisor.json": "98297f4f45df4865d8f3cc585f28e825d0869e7664a5a25e2d5ee3976a58f052",
+          "processes.json": "0f1b329d29c4b96169bac69477a05e1f4cbe97a295304d83fd4377c850b50188",
+          "launch-journal.json": "58e1bd91e2c0050991cdde1bd4f4730706ef6acae20922bdd41e1f17f0103f95",
+          "supervisor-cleanup.json": "b4240cfad7d7c5e7a25c233b5662803b82415eefa4e2869deba8c575b76d4f44"
+        }
+      },
+      {
+        "id": "map-coverage-diagnostic",
+        "run": "/home/vox/.local/state/lss-rig/runs/20260920T152851Z-c6ffa41a10fc",
+        "status": "awaiting-review",
+        "cleanup": "complete",
+        "review_decision": "pending; never promoted by this observer",
+        "identities_checked": 6,
+        "bind_endpoints": [
+          "[::1]:25572"
+        ],
+        "evidence_sha256": {
+          "manifest.json": "4d7ec3887c0376727bc8e4e6787bdd5b7bfb74a92ed082a890df140bedd1d5b8",
+          "runtime.json": "bc8e945837370ac938107c64562f513049f732b8e5e76582e12877b3c04f0211",
+          "scenario.json": "d988ef4891a482a3d4d83eb1dcd506bd5e870398b621c47594b15b41b2f80bfd",
+          "proof.json": "d72cfa6077a90b92bd826d3abb14f4c88080e746472fc0bea287e606ed2dc094",
+          "evidence/result.json": "38927533d7b503c73dbae3bed154e66ae3bc16cba617df9e8d40220f6e7c758b",
+          "owner.json": "36f2774fa7420163fe792e39db438caa53c0f8f8fb136417a4d0467904bfe655",
+          "supervisor.json": "df74da325a83e7a0f55371b3f3b7a63e1fb80efb701f4ce07eb6172bf3f7dbbe",
+          "processes.json": "8316b82e542b8798a70da870836f568867edd0b29fce7c66a7469b31996b2ad8",
+          "launch-journal.json": "b01dd9f4a8cd6f7512c1d78666a8726d1ed107a28b7b83ee1479694f6fc94764",
+          "supervisor-cleanup.json": "aaf347dd15590964bb2039ae7540e0b44fef074fa3116c9a58066800cf19db18"
+        }
+      }
+    ],
+    "base_cleanup": {
+      "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260920-signoff/final-cleanup54-plus-failures.json",
+      "sha256": "e9815ce863061b768ac2e55d6262f66aeffe872ebf0d8cc85435b45ff98f417f"
+    },
+    "scope": "All61 retained native run inventories cleaned up; historical/unselected runs stay unaccepted. No process signals beyond exact-owner gallery termination."
+  },
+  "evidence": [
+    {
+      "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260920-signoff/user-message.json",
+      "sha256": "22ffee95ba878f42aea81bc5757f2c4fd9007abf6c85d0cb301009557a037d4e",
+      "size": 1090
+    },
+    {
+      "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260920-signoff/review-finalization.json",
+      "sha256": "b389a1d21c2a921bdc9a6167a374bb626435028b67c28c75fe888b7e97ce219c",
+      "size": 7622
+    },
+    {
+      "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260920-signoff/historical-review-snapshots.json",
+      "sha256": "46e3f6f3fc3976502a9e5cd15b20622729e6492c7306c8f419142cd5981c5141",
+      "size": 12148
+    },
+    {
+      "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260920-signoff/selection54.json",
+      "sha256": "9008bfe14a807de045af60a1799c8de4dc203404ec0553fd312b29bbf208432d",
+      "size": 15084
+    },
+    {
+      "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260920-signoff/full54-review3/integration-plan.json",
+      "sha256": "7c0e74e5a65e5ab4621699255c7d74330baedae11590e15cb31f7b43290ff229",
+      "size": 31223
+    },
+    {
+      "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260920-signoff/root-integration-review.json",
+      "sha256": "46827ef0ade970b2f04e56acdc22c4f15f807d42f902da1174211e203b954f2b",
+      "size": 286
+    },
+    {
+      "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260920-signoff/independent-integration-review.json",
+      "sha256": "117cccc81862942f7010a0ff65d1e022375aae66cbe74204a06fca99b676cfbb",
+      "size": 1000
+    },
+    {
+      "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260920-signoff/complete-cleanup.json",
+      "sha256": "262283791f51d2f9b99f983ef917aae7325920c7fc42e3a1d363859aa4e3fe7b",
+      "size": 4666
+    },
+    {
+      "path": "/home/vox/.local/state/lss-project-improvements/recovery-20260920-signoff/gallery-cleanup.json",
+      "sha256": "bb8caeacca4fc6feb9f06b279895dd884ddb5d6212b76484a07b7413b53701b8",
+      "size": 964
+    }
+  ]
+}
