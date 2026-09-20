@@ -1,0 +1,132 @@
+{
+  "evidence_index": {
+    "evidence/elytra-gliding.png": "9d810403b66393cd8f20bf42a2f0d7dd7f53b0a9512c8ce55f7fb75437343dd2",
+    "evidence/elytra-report.json": "bc0689e516e259a09b22754c6cbaa79b1233c2973fcffddd35df204627e2ffdc",
+    "evidence/result.json": "c9050e04a9ebc2c878c590f2572368d841b1051b5204752d8d9ee6babc8ad0de",
+    "launch-journal.json": "077e13d02017838eb906610c2cb159d1e7a5325e258ef4e192b50b7f02c6a430",
+    "owner.json": "ccf90761b44a341109bc428c56eff80c6f42ddfd5ecc6733ae37a2f71819ee73",
+    "processes.json": "9eaa2826e67c936fce5181c149cffa92dc9342625ca84553ec15dfeec25f1c4b",
+    "proof.json": "982d24286bbfd5696745aea94f959221ff5adf15cf5e20f4b1b64d3cd0ed0e60",
+    "supervisor-cleanup.json": "233125b71f6e4335c2bae3fab82de4c3b20a29772a9004c2df13ca3912da9a64",
+    "supervisor.json": "7ee81a0c6a0a72942213902103e2656ffd356da8aa39657bb140cc04789a95fc"
+  },
+  "evidence_sha256": "7b6aae1f1416b075ab3f6cf2fd8133821e9676cfc7d8621f8b051d5b99454319",
+  "feature": "elytra",
+  "limitations": [
+    "Exact retained functional run and artifact identities only; no performance claim."
+  ],
+  "profile_hash": "4680972c8cfe0cb4febf1a59b9f109ad1f3ac4a571a571ad239a0e365bb730f2",
+  "profile_id": "mc12110-fabric-legacy",
+  "result": "pass",
+  "run_hash": "2863f1b1200b766b15a275c83af3b18e8599634ffe7f6239d17884a36a3f40d8",
+  "run_id": "20260920T022211Z-6d1eb705d803",
+  "run_manifest": {
+    "backend": "isolated-linux-prism",
+    "candidate_artifacts": {
+      "elytra-target/mods/lod-server-support-fabric.jar": "b1d4121d5dab5d90cf708e9db44a0d20d2528e4205d7a7d323f06e4fbea0245d",
+      "instances/lss-rig-client/minecraft/mods/lod-server-support-fabric.jar": "b1d4121d5dab5d90cf708e9db44a0d20d2528e4205d7a7d323f06e4fbea0245d",
+      "server/mods/lod-server-support-fabric.jar": "b1d4121d5dab5d90cf708e9db44a0d20d2528e4205d7a7d323f06e4fbea0245d"
+    },
+    "candidate_sha256": "b1d4121d5dab5d90cf708e9db44a0d20d2528e4205d7a7d323f06e4fbea0245d",
+    "candidate_target": "instances/lss-rig-client/minecraft/mods/lod-server-support-fabric.jar",
+    "checker_sha256": "d5f9c98f3c9218282dbd20b48351567fd4a4fd121e1dd86411feefaf61585947",
+    "effective_config": {
+      "initial_generated_config_hash": "355ae70f4d1212e9c9aef70706159b369a507ad87c8021bc78cc5e0a55eb3d85"
+    },
+    "fixture_artifacts": {
+      "elytra-target/mods/lss-elytra-fixture.jar": "df947c4e1e4592b80598183d70006b5207e91e039c1658f27657f6a213f0ef5a",
+      "instances/lss-rig-client/minecraft/mods/lss-elytra-live-fixture-1.0.0-test-only.jar": "df947c4e1e4592b80598183d70006b5207e91e039c1658f27657f6a213f0ef5a"
+    },
+    "fixture_sha256": "2393e80e59db560f6aca55fa3ca78502846c40b19c2acefb47733e5f5eabc89f",
+    "jvm_flags": {
+      "launch_memory_flags": {
+        "client": [],
+        "elytra-controller": [],
+        "elytra-target": [
+          "-Xms256M",
+          "-Xmx1500M"
+        ],
+        "server": [
+          "-Xms512M",
+          "-Xmx2G"
+        ]
+      },
+      "prism_memory_mib": {
+        "MaxMemAlloc": 3072,
+        "MinMemAlloc": 512
+      }
+    },
+    "participant_profiles": {
+      "elytra-target": {
+        "id": "mc12110-elytra-target",
+        "profile_hash": "b94cc5851905425c9e2f9fdcbdf02fb46ea6c2077dec753b471474c500ddb144"
+      },
+      "server": {
+        "id": "mc12110-fabric-server",
+        "profile_hash": "28da3f40a1e441614f502a41dff32937e35742b5a58c1d10bd90dacb65136e18"
+      }
+    },
+    "rig_run_hash": "f8272c6a802b3fd8ca0cab008fec6294a97923fd7f83dcde2c35d81008ae9d09",
+    "runtime_hash": "488a950fb36c479169f5f47b18f1e015ce79120bc9ea078a0a2adf924671d87a",
+    "runtime_settings_sha256": "87d733da4ff1ae5a7d78b494edeb7d6ec798676dd8d872089007982646ccf3e8",
+    "runtime_settings_version": 1,
+    "runtime_tools_sha256": "c85cf886ad49a47a41fec6892768188c0c9434785941329067e99ac9c2a26495",
+    "scenario_checker_sha256": "8615d53ec898f4ac851c64fde9c3529b41660e33ca5b5372c6918f7fb6fd701f",
+    "scenario_checker_sources": {
+      "scripts/lib/harness-lock.sh": "0e844b7de643c8bdf9ed560bcad16aec6ec6620123fa0357be0204c76d38b056",
+      "scripts/lib/owned-process.py": "9cfa024fc235604c9defe661a1fe81d7b4e50788accb4ac2260d5df423b5bc55",
+      "staged/launcher/prism-offline.py": "18589d1dc2d9b9fdef4b6332895bb7e9b00ff72f367b72f71c9256d964ccf404",
+      "tools/compat/catalog.py": "6b4628eec83baca37c5c439d171cf2daa12028d8dd24a38b7a735d9c28448432",
+      "tools/compat/loader_ranges.py": "48587c8ee57c232464817a3b05ffc1eb49290c9ddd912a87a5c50aa33851c071",
+      "tools/compat/materialize.py": "4ffdcf3dcb95e5c840d466b23c9a1084df1528c7a399807d76794a44a6b0eb0e",
+      "tools/compat/server_smoke_identity.py": "131a80ff43fca140576be76d25f321ea43fc49171629ebf36a1afe895b9b25e1",
+      "tools/rig/assemble_metrics.py": "e82a727f3841e50b82a4a25af331d3624e9a5bef4fbc7b67b4283cb95b79a119",
+      "tools/rig/assemble_run.py": "5f92f1e438bd105888836633654d5033ef6527069d44161885ef39e5de1733fa",
+      "tools/rig/bind_endpoints.py": "025ef49aa8c3a6307be7ee5c3ae2684a5d0707d506d4c5ae0c9173df543e43b7",
+      "tools/rig/check_client_ui.py": "a44c169084cf304622b7e7543cb0fbf5f23eeb3553d03301b3961bb0d44fc54f",
+      "tools/rig/check_concurrent_sources.py": "b59730d29c95defe3f96ef1f9e8f211d2642907ad7224581eb2794e02afeb7d1",
+      "tools/rig/check_debt.py": "54c3012c91825dd835589c0fbccfbe6f37e9a09b83870b7169de372082afbb55",
+      "tools/rig/check_elytra_run.py": "83469b0f41330a9366a22ff20fc737a7433b3123bd8ca239b9c9f689d49e3fb4",
+      "tools/rig/check_elytra_strict.py": "561e82d810eb4b68ea641227ffabe3c26713dbf77fdd4c38d4ee48cef7be6530",
+      "tools/rig/check_measured_schedule.py": "6ae5ef22fd3496d9722c0c414c043e950493d492ad8ce92e1f6b404df10a4609",
+      "tools/rig/check_regions.py": "941ddd27ee94ef08b3d97364e5ca4992ea07a54c3ff0c5b7c131a31af93eef56",
+      "tools/rig/check_workload.py": "c31b0b122ee316d07392c57c07efcb57835062c586f6a890364ccf9f63bf0e3b",
+      "tools/rig/check_xaero_progress.py": "0ffbc4f4770aba92e09443d5cde0b6a2ce9610913fd487e078ce22601213d86e",
+      "tools/rig/commands.py": "504274c1cd2fc7cbec0e813c106ca2beaec364f9032457d988a90b5fa3e6696f",
+      "tools/rig/drive_elytra.py": "14ba4fda14fe292d1116eb44cff30ee8a54069e206e9f7a7b302a9212a4d4931",
+      "tools/rig/elytra_camera.py": "e5105b0758448e5bdb78f4e1da1553d492913822d192edbd3c5f4e374ad578fb",
+      "tools/rig/elytra_contract.py": "aa221d9521a3dcbc245a92e5d215f6389b0cfa5b4a6a2b8f5251bd5da5797cec",
+      "tools/rig/elytra_input.py": "2c31f1a30ecf89a56c856788bb1d45517508782c3ab8a3c43362f3ea0a10d6f4",
+      "tools/rig/elytra_phase_barrier.py": "d2de4248a8ba740408a88c5faa9141a63f518c8f47af374fed4d9dd902e4b846",
+      "tools/rig/experiment.py": "44179899da48100518a74b9a203cb3727a8aadcfd8445e0c0ad50347743db788",
+      "tools/rig/launch_journal.py": "4a1bce5359713f6c6605fa42cdb9289784b4c166f5b34679d4527fb696619c27",
+      "tools/rig/launch_prism.py": "dbc1b2aefc93cf90e224736dcf5db09c77a2e05d510ca4fbb6119c445d2fd8d7",
+      "tools/rig/measure.py": "a33126913892e11d1172cfb243c1f1586e920070dd1ee9678e97efa119c721f3",
+      "tools/rig/measured_regions.py": "8242250cd27628d21a2fa866b6c5b9fe3b32351356176fb5ee7a7c308e295a4f",
+      "tools/rig/measurement_inputs.py": "69cd7f4d26691dad8db9266fe6f7bf1a86974cbec79f8d1cc3f4224eb6ea54ab",
+      "tools/rig/metrics.py": "5945623000072367932ac8a81a0e7199bf80b9c721d8a6ed37c2bc5370e1326c",
+      "tools/rig/native_window.py": "1134a438f5b243a3f1b7f44b9189c1176766fbea4d4d4330cde08d295587bda1",
+      "tools/rig/normalize_workload.py": "5fdf41ba91551d5f0ab144bd527cb84cfb700cf81b0c884523bb62c99a637428",
+      "tools/rig/performance.py": "2e21801b0279df5f811e58bcabfca2b102d427c8b91a8fadc0fffde77caa72ab",
+      "tools/rig/private_input.py": "1d5330562b78b5d72cebe59279bced57d8dbc2a4ec8ffae6279c14730e314a74",
+      "tools/rig/proof.py": "968771dbd553e806647be4949730f89baf9626341435f776750888ceea16ad05",
+      "tools/rig/review_state.py": "820c2992e282b8d3204485427e68422b877f3a60d3861e23452e89925feb750d",
+      "tools/rig/rig": "c0e78f2ec42d610396fc09090c571262bccb909f5215d8a9f79d8a126cf3c72e",
+      "tools/rig/rig.py": "e5503f6abd0ecb5cf51a9081c5a558d3f3082c3cdd4ee99ba596e247f2e93500",
+      "tools/rig/run_claim.py": "312ac9f283c2123286938b9930d03e4b694aa98c5c413b125ee37b6866951278",
+      "tools/rig/runtime_trees.py": "802f2f3d3539e2a132c1f1ffde26ea206547bcd8190a015e9d188d050e21690c",
+      "tools/rig/source_client_natives.py": "92bb5611462ec25e444ca95daa0ebb638bd9c274ff3436bd9b4c77d75527850c",
+      "tools/rig/storage_guard.py": "930143fab92ad0cd3d15b23881334459a51ee04fea491494cf54285de3e83bee",
+      "tools/rig/supplemental_metrics.py": "160c68eeb8f2f5dadd63dae8ed325c4e8b784fcdf6e820dda2dae015311bea1e",
+      "tools/rig/target_intervals.py": "ad22d510c1d5393c298bf311de6f49decc8266e7fe81be8885be6aeea962d4bf",
+      "tools/rig/toolchain.py": "8b41446cb2c0db52d395a4c5cb7e742160542ef2658f352196924566952a0194"
+    },
+    "scenario_hash": "6b44d041b767e31c6d73373d8d97fe54d854b5ac53db2b7639ca250844874ec5",
+    "scenario_version": 2,
+    "world_input_kind": "fresh generated world; initial seed/generator/configuration bound by digest",
+    "world_sha256": "d609a7c2a120fcd3cb7f66ef3da4b88a27e404c3c12ee9a65df99b4dfa01a43c"
+  },
+  "scenario": "elytra",
+  "schema_version": 1,
+  "timestamp": "2026-09-20T02:23:20Z"
+}

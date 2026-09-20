@@ -1,0 +1,15 @@
+# User visual sign-off and native integration — 2026-09-20
+
+The user reviewed the current eight-image gallery and replied: “ok then everything looks as correct as it can be to me.” This accepts the displayed current behavior with the two already disclosed map defects. It does not establish that those defects are fixed or that Windows resource coexistence was observed.
+
+All eight original-tool review finalizations passed against the exact run/profile/image identities. The accepted seated captures are the healthy, closer replacements from runs `20260920T154926Z-a7e51c16390b` and `20260920T155051Z-36f0d11707ae`. Their recovery images, capture receipts and gates are also indexed. The older seated captures, failed setup attempt and diagnostic map run were not promoted by this response.
+
+The [native acceptance index](final-native-acceptance-2026-09-20.json) now integrates all 54 selected cases: 42 required rows, four supplemental cases, six preset cases and two additional Fabric/Paper source checks, with Folia counted once. Every required row matches its full, previously declared artifact/scenario/runtime target. The four map records expressly retain the missing X=512 shading stripe and near-player acquisition gap. These passes certify the recorded checks and user visual disposition under those limitations; the index explicitly does not claim overall project completion.
+
+The [map diagnosis and correction design](visual-review-followup-2026-09-20.md) remain open production follow-ups. The gold stripe comes from Xaero's native region-local shading fallback; the eight holes come from LSS exclusion versus Xaero's complete-neighborhood requirement. No shipping map fix or new shipping build was performed during sign-off. V27 and the September 14 product builds retain their original identities and limits.
+
+Cleanup passed for 61 retained native run inventories and 349 recorded process identities: 54 selected passes, four retained failures and three unselected historical/diagnostic cases. The exact owned gallery process was stopped through its verified process handle after user review. The screenshots and review evidence remain retained locally. Normal launchers, accounts and worlds were preserved.
+
+The earlier progress and visual-follow-up indexes describe pre-review state. Their manifest/proof/result hashes resolve to the 24 byte-for-byte snapshots retained in the [sign-off evidence index](visual-signoff-2026-09-20.json). Explicit review changed only the allowed reviews field and collection state; historical failures, semantic assertions and expected targets were not rewritten. Two offline preparation errors were retained and corrected by selecting run-relative supplemental evidence paths and the actual previously executed 1.21.11 Elytra recapture recipe; no checker or target-match guard was relaxed.
+
+The separate Windows usability/resource-coexistence question remains unanswered. Visual sign-off is not a substitute for that observation. Native Windows rendering remains unverified. Merging, deployment and publication remain separate actions.

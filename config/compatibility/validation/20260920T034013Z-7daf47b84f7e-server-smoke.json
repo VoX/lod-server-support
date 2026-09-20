@@ -1,0 +1,140 @@
+{
+  "evidence_index": {
+    "evidence/native-server-smoke.json": "e88d175ce7894b2ebbf1a1cc8e4b940c09cb0742b1160e9a5c19ed9f16cdf66e",
+    "evidence/result.json": "05a156739fa7657c389cb26576c8db1959c759f2dc281846ad64df1937c3403d",
+    "launch-journal.json": "cc767d172fd51d9470382b8c3c56acfbf9683bd3584b24d43f5b49f0149bb83a",
+    "owner.json": "ef42d96e5ab1ab58ae2c2beabbf65cd13ff49b5eff5ff8f12dbe2132f10b7b1f",
+    "processes.json": "fe44a2633c7eefc367bab1f86f7dda276a9febf997f0a73b06a0f8a067e9c5d6",
+    "proof.json": "c12bd7873d5c9aaf9b61e37988083b2a9c99e70c822a79c1b7ce0671bdbf2847",
+    "supervisor-cleanup.json": "efe2c3973c3dda32e9fadb12a37769bedeabc3b5605f59811d704972c15140f4",
+    "supervisor.json": "6a4a48231555f68f42190254da16cd7725a8909afdf0dff151a6003d4b6072b2"
+  },
+  "evidence_sha256": "e9e48cf03c4d3c1b81ade0368d99bacaed9f5f2e0c59b65930ecc1c5809e0e66",
+  "feature": "server-smoke",
+  "limitations": [
+    "Exact retained functional run and artifact identities only; no performance claim."
+  ],
+  "profile_hash": "d38a5df315044985e16a36bb5f4f2eb4726fbf45ef1e220e1a34da9fd697af8d",
+  "profile_id": "mc12110-native-smoke-client",
+  "result": "pass",
+  "run_hash": "cf2b02af9b472a85ac1151bf571be1e8e3d3fced1d9ef783c973336ec0ee3f85",
+  "run_id": "20260920T034013Z-7daf47b84f7e",
+  "run_manifest": {
+    "backend": "linux-headless",
+    "candidate_artifacts": {
+      "server/plugins/lod-server-support-paper.jar": "9b509cb444c82c5ccf6b9a7ed36df6dcfe66b7d824349acbf138faace9e964ef",
+      "smoke-first/mods/lod-server-support-fabric.jar": "b1d4121d5dab5d90cf708e9db44a0d20d2528e4205d7a7d323f06e4fbea0245d",
+      "smoke-second/mods/lod-server-support-fabric.jar": "b1d4121d5dab5d90cf708e9db44a0d20d2528e4205d7a7d323f06e4fbea0245d"
+    },
+    "candidate_sha256": "9b509cb444c82c5ccf6b9a7ed36df6dcfe66b7d824349acbf138faace9e964ef",
+    "candidate_target": "server/plugins/lod-server-support-paper.jar",
+    "checker_sha256": "d5f9c98f3c9218282dbd20b48351567fd4a4fd121e1dd86411feefaf61585947",
+    "client_candidate_artifacts": {
+      "smoke-first/mods/lod-server-support-fabric.jar": "b1d4121d5dab5d90cf708e9db44a0d20d2528e4205d7a7d323f06e4fbea0245d",
+      "smoke-second/mods/lod-server-support-fabric.jar": "b1d4121d5dab5d90cf708e9db44a0d20d2528e4205d7a7d323f06e4fbea0245d"
+    },
+    "client_fixture_artifacts": {
+      "smoke-first/mods/lss-server-smoke-client.jar": "89497f24bed6c5b333b3d3b0599db3de3889e47f02d6712d48fcf7412de68bbc",
+      "smoke-second/mods/lss-server-smoke-client.jar": "89497f24bed6c5b333b3d3b0599db3de3889e47f02d6712d48fcf7412de68bbc"
+    },
+    "effective_config": {
+      "initial_generated_config_hash": "55140526f9791da0956a7bc4b71a5c695bae9442e31d445f00266a43be503663"
+    },
+    "execution_route": "native-server-smoke",
+    "fixture_artifacts": {
+      "smoke-first/mods/lss-server-smoke-client.jar": "89497f24bed6c5b333b3d3b0599db3de3889e47f02d6712d48fcf7412de68bbc",
+      "smoke-second/mods/lss-server-smoke-client.jar": "89497f24bed6c5b333b3d3b0599db3de3889e47f02d6712d48fcf7412de68bbc"
+    },
+    "fixture_sha256": "9cf18ebd67bb55ada07b65de4d6bb80e6b13a34354a6c10c1277f7d8f37f3ffc",
+    "jvm_flags": {
+      "launch_memory_flags": {
+        "server": []
+      },
+      "prism_memory_mib": {}
+    },
+    "native_launch_memory_flags": {
+      "first": [
+        "-Xms256M",
+        "-Xmx1500M"
+      ],
+      "second": [
+        "-Xms256M",
+        "-Xmx1500M"
+      ],
+      "server": [
+        "-Xms512M",
+        "-Xmx2G"
+      ]
+    },
+    "participant_profiles": {
+      "server": {
+        "id": "mc12110-paper-legacy",
+        "profile_hash": "25164038d343304a7141b6a6abd72e10ba86908f074e92b25ba32f82fbb57b88"
+      }
+    },
+    "rig_run_hash": "58f3aaf763afa5fca1254cad754e37196e73e703f2c0dbeedd0cbb69541db5bb",
+    "runtime_hash": "3ae34c4e4ffc2cdbc3c60255f55d731fa95f3b0634e66a9d8670f603aa615ae2",
+    "runtime_settings_sha256": "d5ad13d839cc1ccf3bd8b0f515c3733dbb161941e424bad9353a6b2fa5ed220b",
+    "runtime_settings_version": 1,
+    "runtime_tools_sha256": "80b6ed8961e8422e4c82c15e05ec5b6bcb41ee1429f1c773b77615890236f225",
+    "scenario_checker_sha256": "b0945cfee824e0d5f34715dfd0c98cf35988a7c57e35db723b3f663fc2171500",
+    "scenario_checker_sources": {
+      "scripts/lib/harness-lock.sh": "0e844b7de643c8bdf9ed560bcad16aec6ec6620123fa0357be0204c76d38b056",
+      "scripts/lib/owned-process.py": "9cfa024fc235604c9defe661a1fe81d7b4e50788accb4ac2260d5df423b5bc55",
+      "staged/smoke-tools/check_server_smoke.py": "4883efe96a4da90dd533de099e8db6a7ea36ee3108169662778cfd02b5f1df29",
+      "staged/smoke-tools/check_server_smoke_report.py": "8ad618148a3a45ddebe775efe13af2fea93be59d0fef16650662c7627183b0a7",
+      "staged/smoke-tools/run_server_smoke.py": "bd9119c8fb51d4e4d4804f88b1a1906bd22482d6d7940a97edd42f9bde25903d",
+      "staged/smoke-tools/store_witness.py": "389495c6a9d90ca365ae53c5b7b36c1058d88bb90c93c551e6f375ad8ae1eb56",
+      "tools/compat/catalog.py": "6b4628eec83baca37c5c439d171cf2daa12028d8dd24a38b7a735d9c28448432",
+      "tools/compat/loader_ranges.py": "48587c8ee57c232464817a3b05ffc1eb49290c9ddd912a87a5c50aa33851c071",
+      "tools/compat/materialize.py": "4f2f532133b6b569e4426a1c766977b24c90554ed44314f4f59e52611cb37b71",
+      "tools/compat/server_smoke_identity.py": "131a80ff43fca140576be76d25f321ea43fc49171629ebf36a1afe895b9b25e1",
+      "tools/rig/assemble_metrics.py": "e82a727f3841e50b82a4a25af331d3624e9a5bef4fbc7b67b4283cb95b79a119",
+      "tools/rig/assemble_run.py": "5f92f1e438bd105888836633654d5033ef6527069d44161885ef39e5de1733fa",
+      "tools/rig/bind_endpoints.py": "025ef49aa8c3a6307be7ee5c3ae2684a5d0707d506d4c5ae0c9173df543e43b7",
+      "tools/rig/check_concurrent_sources.py": "b59730d29c95defe3f96ef1f9e8f211d2642907ad7224581eb2794e02afeb7d1",
+      "tools/rig/check_debt.py": "54c3012c91825dd835589c0fbccfbe6f37e9a09b83870b7169de372082afbb55",
+      "tools/rig/check_measured_schedule.py": "6ae5ef22fd3496d9722c0c414c043e950493d492ad8ce92e1f6b404df10a4609",
+      "tools/rig/check_regions.py": "941ddd27ee94ef08b3d97364e5ca4992ea07a54c3ff0c5b7c131a31af93eef56",
+      "tools/rig/check_server_smoke.py": "4883efe96a4da90dd533de099e8db6a7ea36ee3108169662778cfd02b5f1df29",
+      "tools/rig/check_server_smoke_report.py": "8ad618148a3a45ddebe775efe13af2fea93be59d0fef16650662c7627183b0a7",
+      "tools/rig/check_workload.py": "c31b0b122ee316d07392c57c07efcb57835062c586f6a890364ccf9f63bf0e3b",
+      "tools/rig/check_xaero_progress.py": "0ffbc4f4770aba92e09443d5cde0b6a2ce9610913fd487e078ce22601213d86e",
+      "tools/rig/commands.py": "504274c1cd2fc7cbec0e813c106ca2beaec364f9032457d988a90b5fa3e6696f",
+      "tools/rig/experiment.py": "44179899da48100518a74b9a203cb3727a8aadcfd8445e0c0ad50347743db788",
+      "tools/rig/launch_journal.py": "4a1bce5359713f6c6605fa42cdb9289784b4c166f5b34679d4527fb696619c27",
+      "tools/rig/launch_prism.py": "dbc1b2aefc93cf90e224736dcf5db09c77a2e05d510ca4fbb6119c445d2fd8d7",
+      "tools/rig/measure.py": "a33126913892e11d1172cfb243c1f1586e920070dd1ee9678e97efa119c721f3",
+      "tools/rig/measured_regions.py": "8242250cd27628d21a2fa866b6c5b9fe3b32351356176fb5ee7a7c308e295a4f",
+      "tools/rig/measurement_inputs.py": "69cd7f4d26691dad8db9266fe6f7bf1a86974cbec79f8d1cc3f4224eb6ea54ab",
+      "tools/rig/metrics.py": "5945623000072367932ac8a81a0e7199bf80b9c721d8a6ed37c2bc5370e1326c",
+      "tools/rig/normalize_workload.py": "5fdf41ba91551d5f0ab144bd527cb84cfb700cf81b0c884523bb62c99a637428",
+      "tools/rig/performance.py": "2e21801b0279df5f811e58bcabfca2b102d427c8b91a8fadc0fffde77caa72ab",
+      "tools/rig/private_input.py": "1d5330562b78b5d72cebe59279bced57d8dbc2a4ec8ffae6279c14730e314a74",
+      "tools/rig/proof.py": "968771dbd553e806647be4949730f89baf9626341435f776750888ceea16ad05",
+      "tools/rig/review_state.py": "820c2992e282b8d3204485427e68422b877f3a60d3861e23452e89925feb750d",
+      "tools/rig/rig": "c0e78f2ec42d610396fc09090c571262bccb909f5215d8a9f79d8a126cf3c72e",
+      "tools/rig/rig.py": "e5503f6abd0ecb5cf51a9081c5a558d3f3082c3cdd4ee99ba596e247f2e93500",
+      "tools/rig/run_claim.py": "312ac9f283c2123286938b9930d03e4b694aa98c5c413b125ee37b6866951278",
+      "tools/rig/run_server_smoke.py": "bd9119c8fb51d4e4d4804f88b1a1906bd22482d6d7940a97edd42f9bde25903d",
+      "tools/rig/runtime_trees.py": "802f2f3d3539e2a132c1f1ffde26ea206547bcd8190a015e9d188d050e21690c",
+      "tools/rig/source_client_natives.py": "92bb5611462ec25e444ca95daa0ebb638bd9c274ff3436bd9b4c77d75527850c",
+      "tools/rig/storage_guard.py": "930143fab92ad0cd3d15b23881334459a51ee04fea491494cf54285de3e83bee",
+      "tools/rig/store_witness.py": "389495c6a9d90ca365ae53c5b7b36c1058d88bb90c93c551e6f375ad8ae1eb56",
+      "tools/rig/supplemental_metrics.py": "160c68eeb8f2f5dadd63dae8ed325c4e8b784fcdf6e820dda2dae015311bea1e",
+      "tools/rig/target_intervals.py": "ad22d510c1d5393c298bf311de6f49decc8266e7fe81be8885be6aeea962d4bf",
+      "tools/rig/toolchain.py": "8b41446cb2c0db52d395a4c5cb7e742160542ef2658f352196924566952a0194"
+    },
+    "scenario_hash": "729dae58b02b86fd6826bf2bc5506fbb74f3b6a4df89a64b0e877dda7a13a408",
+    "scenario_version": 2,
+    "server_candidate_target": "server/plugins/lod-server-support-paper.jar",
+    "server_platform": "paper",
+    "server_profile_hash": "25164038d343304a7141b6a6abd72e10ba86908f074e92b25ba32f82fbb57b88",
+    "server_profile_id": "mc12110-paper-legacy",
+    "world_input_kind": "fresh generated world; initial seed/generator/configuration bound by digest",
+    "world_sha256": "700ac9e5eb21fb4f68fea5fa454e57d60a0a0fca4e9127db9bea70df3a89279f"
+  },
+  "scenario": "server-smoke",
+  "schema_version": 1,
+  "timestamp": "2026-09-20T03:41:01Z"
+}
