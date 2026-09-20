@@ -1,10 +1,10 @@
 {
   "basis": {
-    "1.21.1": "d37b69424f7cc9da7edd5564d02b084e5e39cee9",
-    "1.21.10": "f6120fdfb9487313723fa4c146da46c9c227f5d2",
-    "1.21.11": "48eba9a25799061b91531b7fde95ed1d06aa6113",
-    "26.1": "6853f5461cda19714a3b6be2383e84f38f0e7e39",
-    "26.2": "6c038978b255ca1a4c0b32b9de44e0193150b788"
+    "1.21.1": "6dfb191f5941a9ac80a98204d4f9cef51264a5c1",
+    "1.21.10": "62dee1313c941aa80ddf2d5484e9e52055c769b4",
+    "1.21.11": "40194175757beea030c05a1b93d84fdf3a58ad26",
+    "26.1": "1a5adccca520c2b65a11ac06760f6204d28a7e7c",
+    "26.2": "daff1277bcd59cffb6f1f5497546ce73a006732d"
   },
   "files": {
     ".github/line.env": {
@@ -99,20 +99,7 @@
       "kind": "identical"
     },
     "common/src/main/java/dev/vox/lss/common/CommandHelp.java": {
-      "axes": "Exact file flavor; residual shared logic is not normalized or exempted.",
-      "kind": "adapted",
-      "review": "Implementation candidate; independent final change review must cover residual logic before handoff.",
-      "reviewed_blobs": {
-        "1.21.1": "34fe012d01895bd2e6004cd159a4161655749362",
-        "1.21.10": "34fe012d01895bd2e6004cd159a4161655749362",
-        "1.21.11": "34fe012d01895bd2e6004cd159a4161655749362",
-        "26.1": "34fe012d01895bd2e6004cd159a4161655749362",
-        "26.2": "f1d0c47944c826c20d5ce6ae13ecaa8a228ff4e9"
-      },
-      "surface": "line-adaptation:common/src/main/java/dev/vox/lss/common/CommandHelp.java",
-      "tests": [
-        "Full platform build and existing version-surface/behavior contracts"
-      ]
+      "kind": "identical"
     },
     "common/src/main/java/dev/vox/lss/common/DiagnosticsFormatter.java": {
       "kind": "identical"
@@ -157,20 +144,7 @@
       "kind": "identical"
     },
     "common/src/main/java/dev/vox/lss/common/compat/WireDialectTracker.java": {
-      "axes": "Exact file flavor; residual shared logic is not normalized or exempted.",
-      "kind": "adapted",
-      "review": "Implementation candidate; independent final change review must cover residual logic before handoff.",
-      "reviewed_blobs": {
-        "1.21.1": "03b268dc0ec83d6bdb713423d6c4ac62b035df6c",
-        "1.21.10": "03b268dc0ec83d6bdb713423d6c4ac62b035df6c",
-        "1.21.11": "03b268dc0ec83d6bdb713423d6c4ac62b035df6c",
-        "26.1": "03b268dc0ec83d6bdb713423d6c4ac62b035df6c",
-        "26.2": "55295d436f5df5e55c08461f029d5c0586e05256"
-      },
-      "surface": "line-adaptation:common/src/main/java/dev/vox/lss/common/compat/WireDialectTracker.java",
-      "tests": [
-        "Full platform build and existing version-surface/behavior contracts"
-      ]
+      "kind": "identical"
     },
     "common/src/main/java/dev/vox/lss/common/config/ClientSerializedSettings.java": {
       "kind": "identical"
@@ -185,55 +159,13 @@
       "kind": "identical"
     },
     "common/src/main/java/dev/vox/lss/common/config/RuntimeSettings.java": {
-      "axes": "26.2 world-distance command flavor, line-specific runtime key inventories; correlated limit snapshot invariant shared.",
-      "kind": "adapted",
-      "review": "Implementation candidate; independent final change review must cover residual logic before handoff.",
-      "reviewed_blobs": {
-        "1.21.1": "86b105dd52aa9f85dc7d45cd69f21a8b17c5bba3",
-        "1.21.10": "86b105dd52aa9f85dc7d45cd69f21a8b17c5bba3",
-        "1.21.11": "86b105dd52aa9f85dc7d45cd69f21a8b17c5bba3",
-        "26.1": "86b105dd52aa9f85dc7d45cd69f21a8b17c5bba3",
-        "26.2": "d8027dca7e7f5e95437df8d6509575c535120836"
-      },
-      "surface": "runtime-settings-world-scope",
-      "tests": [
-        "RuntimeSettingsTest",
-        "SettingsPatchTest"
-      ]
+      "kind": "identical"
     },
     "common/src/main/java/dev/vox/lss/common/config/ServerConfigBase.java": {
-      "axes": "Exact file flavor; residual shared logic is not normalized or exempted.",
-      "kind": "adapted",
-      "review": "Implementation candidate; independent final change review must cover residual logic before handoff.",
-      "reviewed_blobs": {
-        "1.21.1": "6de06e1d0d3446eed0835df9552606370d2403ae",
-        "1.21.10": "6de06e1d0d3446eed0835df9552606370d2403ae",
-        "1.21.11": "6de06e1d0d3446eed0835df9552606370d2403ae",
-        "26.1": "6de06e1d0d3446eed0835df9552606370d2403ae",
-        "26.2": "6d38ebcd3b42cb29090b553523fc3a88e2bc07e7"
-      },
-      "surface": "line-adaptation:common/src/main/java/dev/vox/lss/common/config/ServerConfigBase.java",
-      "tests": [
-        "Full platform build and existing version-surface/behavior contracts"
-      ]
+      "kind": "identical"
     },
     "common/src/main/java/dev/vox/lss/common/config/ServerSerializedSettings.java": {
-      "axes": "Per-line source inventory and defaults; generated from actual fields.",
-      "kind": "adapted",
-      "review": "Implementation candidate; independent final change review must cover residual logic before handoff.",
-      "reviewed_blobs": {
-        "1.21.1": "bb8ffaeb66cffa3347579aaea3ac3436ba571062",
-        "1.21.10": "bb8ffaeb66cffa3347579aaea3ac3436ba571062",
-        "1.21.11": "bb8ffaeb66cffa3347579aaea3ac3436ba571062",
-        "26.1": "bb8ffaeb66cffa3347579aaea3ac3436ba571062",
-        "26.2": "d54861ec4ad91bc52e4f1da101c76b25f97942ad"
-      },
-      "surface": "serialized-setting-inventory",
-      "tests": [
-        "SettingInventoryTest",
-        "tools/settings/inventory.py",
-        "tools/settings/reference.py --check"
-      ]
+      "kind": "identical"
     },
     "common/src/main/java/dev/vox/lss/common/config/SettingBinding.java": {
       "kind": "identical"
@@ -501,99 +433,33 @@
       "kind": "identical"
     },
     "common/src/test/java/dev/vox/lss/common/compat/WireDialectTrackerTest.java": {
-      "axes": "Exact file flavor; residual shared logic is not normalized or exempted.",
-      "kind": "adapted",
-      "review": "Implementation candidate; independent final change review must cover residual logic before handoff.",
-      "reviewed_blobs": {
-        "1.21.1": "44f7bcbf5a759a58a77b41fc188deca00a01fdec",
-        "1.21.10": "44f7bcbf5a759a58a77b41fc188deca00a01fdec",
-        "1.21.11": "44f7bcbf5a759a58a77b41fc188deca00a01fdec",
-        "26.1": "44f7bcbf5a759a58a77b41fc188deca00a01fdec",
-        "26.2": "061d66d2267bf6aa2d1bb9e3f4d68975861513ba"
-      },
-      "surface": "line-adaptation:common/src/test/java/dev/vox/lss/common/compat/WireDialectTrackerTest.java",
-      "tests": [
-        "Full platform build and existing version-surface/behavior contracts"
-      ]
+      "kind": "identical"
     },
     "common/src/test/java/dev/vox/lss/common/config/ConservativePresetTest.java": {
       "kind": "identical",
       "review": "Exact staged all-five source identity; final independent implementation review remains pending."
     },
     "common/src/test/java/dev/vox/lss/common/config/ConservativePresetWorldScopeTest.java": {
-      "axes": "Test uses the existing26.2 world-distance API; deliberately absent from four support lines.",
-      "kind": "adapted",
-      "reviewed_blobs": {
-        "1.21.1": null,
-        "1.21.10": null,
-        "1.21.11": null,
-        "26.1": null,
-        "26.2": "39767ac8be833b4797b367a7bcf0cbe0572282e7"
-      },
-      "surface": "conservative-preset-world-scope-26.2",
-      "tests": [
-        "ConservativePresetWorldScopeTest.worldEditAfterPreviewSurvivesGlobalApplyUndoAndKeepsNameDimensionPrecedence",
-        "ConservativePresetWorldScopeTest.laterWorldRemovalIsNotResurrectedByGlobalUndo"
-      ]
+      "kind": "identical"
     },
     "common/src/test/java/dev/vox/lss/common/config/ExternalOptionRefreshTest.java": {
       "kind": "identical"
     },
     "common/src/test/java/dev/vox/lss/common/config/RuntimeBatchTest.java": {
-      "axes": "Exact file flavor; residual shared logic is not normalized or exempted.",
-      "kind": "adapted",
-      "review": "Implementation candidate; independent final change review must cover residual logic before handoff.",
-      "reviewed_blobs": {
-        "1.21.1": "8d05172073d22901210c8d3171e5c5868ac63ce3",
-        "1.21.10": "8d05172073d22901210c8d3171e5c5868ac63ce3",
-        "1.21.11": "8d05172073d22901210c8d3171e5c5868ac63ce3",
-        "26.1": "8d05172073d22901210c8d3171e5c5868ac63ce3",
-        "26.2": "550b19053f69586a34af5dc9098e18cbfe0502a4"
-      },
-      "surface": "line-adaptation:common/src/test/java/dev/vox/lss/common/config/RuntimeBatchTest.java",
-      "tests": [
-        "Full platform build and existing version-surface/behavior contracts"
-      ]
+      "kind": "identical"
     },
     "common/src/test/java/dev/vox/lss/common/config/RuntimeBatchUndoTest.java": {
       "kind": "identical",
       "review": "Exact staged all-five source identity; final independent implementation review remains pending."
     },
     "common/src/test/java/dev/vox/lss/common/config/RuntimeSettingsTest.java": {
-      "axes": "26.2 world-distance command flavor, line-specific runtime key inventories; correlated limit snapshot invariant shared.",
-      "kind": "adapted",
-      "review": "Implementation candidate; independent final change review must cover residual logic before handoff.",
-      "reviewed_blobs": {
-        "1.21.1": "840d75105723cb5bbc0070572e9bec12160600c6",
-        "1.21.10": "840d75105723cb5bbc0070572e9bec12160600c6",
-        "1.21.11": "840d75105723cb5bbc0070572e9bec12160600c6",
-        "26.1": "840d75105723cb5bbc0070572e9bec12160600c6",
-        "26.2": "8854f300fb828c8a621d7e5efe59034ec2c5ec3c"
-      },
-      "surface": "runtime-settings-world-scope",
-      "tests": [
-        "RuntimeSettingsTest",
-        "SettingsPatchTest"
-      ]
+      "kind": "identical"
     },
     "common/src/test/java/dev/vox/lss/common/config/ServerPresetTest.java": {
       "kind": "identical"
     },
     "common/src/test/java/dev/vox/lss/common/config/SettingMetadataTest.java": {
-      "axes": "Exact file flavor; residual shared logic is not normalized or exempted.",
-      "kind": "adapted",
-      "review": "Implementation candidate; independent final change review must cover residual logic before handoff.",
-      "reviewed_blobs": {
-        "1.21.1": "94cb961840997ad73adbb9d670cadab1f81972d2",
-        "1.21.10": "94cb961840997ad73adbb9d670cadab1f81972d2",
-        "1.21.11": "94cb961840997ad73adbb9d670cadab1f81972d2",
-        "26.1": "94cb961840997ad73adbb9d670cadab1f81972d2",
-        "26.2": "a3bc38c95580acf73fa773eeac61afc5f8d28219"
-      },
-      "surface": "line-adaptation:common/src/test/java/dev/vox/lss/common/config/SettingMetadataTest.java",
-      "tests": [
-        "Full platform build and existing version-surface/behavior contracts"
-      ]
+      "kind": "identical"
     },
     "common/src/test/java/dev/vox/lss/common/config/SettingsPatchTest.java": {
       "kind": "identical"
@@ -1619,19 +1485,22 @@
       ]
     },
     "fabric/src/gametest/java/dev/vox/lss/test/CommandGameTests.java": {
-      "axes": "Exact file flavor; residual shared logic is not normalized or exempted.",
+      "axes": "Existing gametest annotations, command permission types, Gt assertion adapter and identifier/location APIs. The per-world command/handshake/boundary/clear regression is required on every line.",
       "kind": "adapted",
-      "review": "Implementation candidate; independent final change review must cover residual logic before handoff.",
+      "review": "v0.15.1 PR parity audit: current per-world implementation and later settings/preset changes reviewed against 26.2; only documented Minecraft API/loader seams retained. Exact-version builds and behavior gates are recorded with the release.",
       "reviewed_blobs": {
-        "1.21.1": "9fd14843bc748f19b64c091a9974911626981552",
-        "1.21.10": "86896f3419b741a1bb3e16cdf6f53853306f649a",
-        "1.21.11": "acadf82a92f7d46a3f7db518a56243be925abcda",
-        "26.1": "85bcf6baf75a1d32b92a49d49dac9d4738ce03aa",
-        "26.2": "ebf0d9ce18fea6d8890557a7c8682f0e441ca781"
+        "1.21.1": "7d1f365e08d448be15e6b3b3160325ec7c83c387",
+        "1.21.10": "ce272a90c0a68b19655af539f3c7e1c34e632cea",
+        "1.21.11": "766dfd38de1f19039644f337dfe7f3e7cc5d7dad",
+        "26.1": "9f84eb00056faa57e48a030836f0cfef0ec0585d",
+        "26.2": "e80bdc3f1b67ce0d922638cab1ab297436e1c797"
       },
       "surface": "line-adaptation:fabric/src/gametest/java/dev/vox/lss/test/CommandGameTests.java",
       "tests": [
-        "Full platform build and existing version-surface/behavior contracts"
+        "CommandGameTests.setWorldLodDistanceUpdatesHandshakeAndRangeWithoutChangingDefault",
+        "Full platform build and existing version-surface/behavior contracts",
+        "PaperRequestProcessingServiceTest",
+        "RuntimeSettingsTest"
       ]
     },
     "fabric/src/gametest/java/dev/vox/lss/test/GameTestSeeding.java": {
@@ -2695,36 +2564,10 @@
       "kind": "identical"
     },
     "fabric/src/test/java/dev/vox/lss/config/ConfigValidationTest.java": {
-      "axes": "Exact file flavor; residual shared logic is not normalized or exempted.",
-      "kind": "adapted",
-      "review": "Implementation candidate; independent final change review must cover residual logic before handoff.",
-      "reviewed_blobs": {
-        "1.21.1": "8a3bd4acc3e8384fdb4528e14a98b97debb19fc7",
-        "1.21.10": "8a3bd4acc3e8384fdb4528e14a98b97debb19fc7",
-        "1.21.11": "8a3bd4acc3e8384fdb4528e14a98b97debb19fc7",
-        "26.1": "8a3bd4acc3e8384fdb4528e14a98b97debb19fc7",
-        "26.2": "2eafe75dc554e878592d3f6219a00f4a7fb009b8"
-      },
-      "surface": "line-adaptation:fabric/src/test/java/dev/vox/lss/config/ConfigValidationTest.java",
-      "tests": [
-        "Full platform build and existing version-surface/behavior contracts"
-      ]
+      "kind": "identical"
     },
     "fabric/src/test/java/dev/vox/lss/config/JsonConfigLoadTest.java": {
-      "axes": "Exact file flavor; residual shared logic is not normalized or exempted.",
-      "kind": "adapted",
-      "review": "Implementation candidate; independent final change review must cover residual logic before handoff.",
-      "reviewed_blobs": {
-        "1.21.1": "0b98ff0a5d8700ca8512f4bb287c93682cf7a6e3",
-        "1.21.10": "0b98ff0a5d8700ca8512f4bb287c93682cf7a6e3",
-        "1.21.11": "0b98ff0a5d8700ca8512f4bb287c93682cf7a6e3",
-        "26.1": "0b98ff0a5d8700ca8512f4bb287c93682cf7a6e3",
-        "26.2": "1ba9e47d112293884fec3a82b071c0c80dd61ddf"
-      },
-      "surface": "line-adaptation:fabric/src/test/java/dev/vox/lss/config/JsonConfigLoadTest.java",
-      "tests": [
-        "Full platform build and existing version-surface/behavior contracts"
-      ]
+      "kind": "identical"
     },
     "fabric/src/test/java/dev/vox/lss/config/LSSConfigMenuTest.java": {
       "axes": "Exact file flavor; residual shared logic is not normalized or exempted.",
@@ -3279,20 +3122,7 @@
       "kind": "identical"
     },
     "fabric/src/test/java/dev/vox/lss/networking/server/DirtyColumnBroadcasterTest.java": {
-      "axes": "Exact file flavor; residual shared logic is not normalized or exempted.",
-      "kind": "adapted",
-      "review": "Implementation candidate; independent final change review must cover residual logic before handoff.",
-      "reviewed_blobs": {
-        "1.21.1": "7d7765f3e066066b89ce0aafadcd2384dfc04f7e",
-        "1.21.10": "7d7765f3e066066b89ce0aafadcd2384dfc04f7e",
-        "1.21.11": "7d7765f3e066066b89ce0aafadcd2384dfc04f7e",
-        "26.1": "7d7765f3e066066b89ce0aafadcd2384dfc04f7e",
-        "26.2": "f399391e8fb6f591c081bd1652a4f6a7e69f6347"
-      },
-      "surface": "line-adaptation:fabric/src/test/java/dev/vox/lss/networking/server/DirtyColumnBroadcasterTest.java",
-      "tests": [
-        "Full platform build and existing version-surface/behavior contracts"
-      ]
+      "kind": "identical"
     },
     "fabric/src/test/java/dev/vox/lss/networking/server/DirtyContentFilterTest.java": {
       "kind": "identical"
@@ -4556,17 +4386,20 @@
     "gradle.properties": {
       "axes": "Exact file flavor; residual shared logic is not normalized or exempted.",
       "kind": "adapted",
-      "review": "Implementation candidate; independent final change review must cover residual logic before handoff.",
+      "review": "v0.15.1 PR parity audit: current per-world implementation and later settings/preset changes reviewed against 26.2; only documented Minecraft API/loader seams retained. Exact-version builds and behavior gates are recorded with the release.",
       "reviewed_blobs": {
-        "1.21.1": "48507a95947fdff2dbe271c70070d8367a98b2c8",
-        "1.21.10": "01d6402653bb736cb678c99a96dc2a6310987035",
-        "1.21.11": "d0694641e194d00cd032a2c577d76801d9e17166",
-        "26.1": "b6b318efb99b1d0af6b5ac9a78578773154a0131",
-        "26.2": "9c5fc0d9a76185d51ea37efe7eeed3088b7e5a5b"
+        "1.21.1": "77edecd284d176d13b073540e3a61d02f37c1358",
+        "1.21.10": "676e43c419ead754907340c607ec8cc8d583f656",
+        "1.21.11": "b3584a9bf76412ff2637ded57ccdb13340ad2235",
+        "26.1": "89f1771711e62301c25d4396c9107ea02316b430",
+        "26.2": "8b7b2387634689df8049ca069e95fc9b2cb594d3"
       },
       "surface": "build-toolchain",
       "tests": [
-        "Full platform build and existing version-surface/behavior contracts"
+        "CommandGameTests.setWorldLodDistanceUpdatesHandshakeAndRangeWithoutChangingDefault",
+        "Full platform build and existing version-surface/behavior contracts",
+        "PaperRequestProcessingServiceTest",
+        "RuntimeSettingsTest"
       ]
     },
     "gradle/c2me-dev-runtime.gradle": {
@@ -5240,20 +5073,7 @@
       "kind": "identical"
     },
     "paper/src/main/java/dev/vox/lss/paper/LSSPaperPlugin.java": {
-      "axes": "Exact file flavor; residual shared logic is not normalized or exempted.",
-      "kind": "adapted",
-      "review": "Implementation candidate; independent final change review must cover residual logic before handoff.",
-      "reviewed_blobs": {
-        "1.21.1": "c87d2053233cc06a84770c774184497e821c6923",
-        "1.21.10": "c87d2053233cc06a84770c774184497e821c6923",
-        "1.21.11": "c87d2053233cc06a84770c774184497e821c6923",
-        "26.1": "c87d2053233cc06a84770c774184497e821c6923",
-        "26.2": "d727ecc62164c8f01cb043f324d631c74e7f2ed6"
-      },
-      "surface": "line-adaptation:paper/src/main/java/dev/vox/lss/paper/LSSPaperPlugin.java",
-      "tests": [
-        "Full platform build and existing version-surface/behavior contracts"
-      ]
+      "kind": "identical"
     },
     "paper/src/main/java/dev/vox/lss/paper/LibsDisguisesBridge.java": {
       "kind": "identical"
@@ -5294,20 +5114,7 @@
       ]
     },
     "paper/src/main/java/dev/vox/lss/paper/PaperCommands.java": {
-      "axes": "Exact file flavor; residual shared logic is not normalized or exempted.",
-      "kind": "adapted",
-      "review": "Implementation candidate; independent final change review must cover residual logic before handoff.",
-      "reviewed_blobs": {
-        "1.21.1": "57a3ba739cb0cefb346f5e839ef62c22b2196a9b",
-        "1.21.10": "57a3ba739cb0cefb346f5e839ef62c22b2196a9b",
-        "1.21.11": "57a3ba739cb0cefb346f5e839ef62c22b2196a9b",
-        "26.1": "57a3ba739cb0cefb346f5e839ef62c22b2196a9b",
-        "26.2": "caf49c700ad7a357b87cd8fc93b3e5b3fbccaf5b"
-      },
-      "surface": "line-adaptation:paper/src/main/java/dev/vox/lss/paper/PaperCommands.java",
-      "tests": [
-        "Full platform build and existing version-surface/behavior contracts"
-      ]
+      "kind": "identical"
     },
     "paper/src/main/java/dev/vox/lss/paper/PaperConfig.java": {
       "kind": "identical"
@@ -5315,17 +5122,20 @@
     "paper/src/main/java/dev/vox/lss/paper/PaperDirtyColumnBroadcaster.java": {
       "axes": "Exact file flavor; residual shared logic is not normalized or exempted.",
       "kind": "adapted",
-      "review": "Implementation candidate; independent final change review must cover residual logic before handoff.",
+      "review": "v0.15.1 PR parity audit: current per-world implementation and later settings/preset changes reviewed against 26.2; only documented Minecraft API/loader seams retained. Exact-version builds and behavior gates are recorded with the release.",
       "reviewed_blobs": {
-        "1.21.1": "84017099d0625f3784663f072bd3a53280ed8b8e",
-        "1.21.10": "84017099d0625f3784663f072bd3a53280ed8b8e",
-        "1.21.11": "edeab3baff4ea3bf845aeb5b9dccd30df46e45d4",
-        "26.1": "edeab3baff4ea3bf845aeb5b9dccd30df46e45d4",
+        "1.21.1": "1be5a6e274407177c18b2e2c4412d2bbe5811ade",
+        "1.21.10": "1be5a6e274407177c18b2e2c4412d2bbe5811ade",
+        "1.21.11": "1be5a6e274407177c18b2e2c4412d2bbe5811ade",
+        "26.1": "d214c9e985407ec52970d1c0540aac0dd3e7fc20",
         "26.2": "d214c9e985407ec52970d1c0540aac0dd3e7fc20"
       },
       "surface": "line-adaptation:paper/src/main/java/dev/vox/lss/paper/PaperDirtyColumnBroadcaster.java",
       "tests": [
-        "Full platform build and existing version-surface/behavior contracts"
+        "CommandGameTests.setWorldLodDistanceUpdatesHandshakeAndRangeWithoutChangingDefault",
+        "Full platform build and existing version-surface/behavior contracts",
+        "PaperRequestProcessingServiceTest",
+        "RuntimeSettingsTest"
       ]
     },
     "paper/src/main/java/dev/vox/lss/paper/PaperFarPlayerSnapshots.java": {
@@ -5404,17 +5214,20 @@
     "paper/src/main/java/dev/vox/lss/paper/PaperRequestProcessingService.java": {
       "axes": "Exact file flavor; residual shared logic is not normalized or exempted.",
       "kind": "adapted",
-      "review": "Implementation candidate; independent final change review must cover residual logic before handoff.",
+      "review": "v0.15.1 PR parity audit: current per-world implementation and later settings/preset changes reviewed against 26.2; only documented Minecraft API/loader seams retained. Exact-version builds and behavior gates are recorded with the release.",
       "reviewed_blobs": {
-        "1.21.1": "0d21429a2299bb883638a991a6b5166fd6829c67",
-        "1.21.10": "bcab093398e2d025b13a886fb6b16043687df235",
-        "1.21.11": "5965bffa0d04b27d79d6e117da0753ce2a4a37d9",
-        "26.1": "d11f66b0f4a3debe8c6ad45c811871df460f66e5",
+        "1.21.1": "705751b63869a9306d4ce5b56753f8d82bbc4780",
+        "1.21.10": "28540a3ed05626d1b73a439260fdb4e25bc73335",
+        "1.21.11": "c5422ce9273baef1d989dc72f7a0cd737780ca88",
+        "26.1": "cda703f0ffc40efe185b4e07e4daadae231803a6",
         "26.2": "cda703f0ffc40efe185b4e07e4daadae231803a6"
       },
       "surface": "line-adaptation:paper/src/main/java/dev/vox/lss/paper/PaperRequestProcessingService.java",
       "tests": [
-        "Full platform build and existing version-surface/behavior contracts"
+        "CommandGameTests.setWorldLodDistanceUpdatesHandshakeAndRangeWithoutChangingDefault",
+        "Full platform build and existing version-surface/behavior contracts",
+        "PaperRequestProcessingServiceTest",
+        "RuntimeSettingsTest"
       ]
     },
     "paper/src/main/java/dev/vox/lss/paper/PaperSectionConstruction.java": {
@@ -5459,19 +5272,22 @@
       "kind": "identical"
     },
     "paper/src/main/java/dev/vox/lss/paper/PaperWorldLod.java": {
-      "axes": "Exact file flavor; residual shared logic is not normalized or exempted.",
+      "axes": "Dimension key accessor: identifier() on 26.x, location() on 1.21.x. Identical distance precedence/fallback behavior.",
       "kind": "adapted",
-      "review": "Implementation candidate; independent final change review must cover residual logic before handoff.",
+      "review": "v0.15.1 PR parity audit: current per-world implementation and later settings/preset changes reviewed against 26.2; only documented Minecraft API/loader seams retained. Exact-version builds and behavior gates are recorded with the release.",
       "reviewed_blobs": {
-        "1.21.1": null,
-        "1.21.10": null,
-        "1.21.11": null,
-        "26.1": null,
+        "1.21.1": "2bddb0d737ca8e396b5f93ee8f3c7bc13a189adf",
+        "1.21.10": "2bddb0d737ca8e396b5f93ee8f3c7bc13a189adf",
+        "1.21.11": "2bddb0d737ca8e396b5f93ee8f3c7bc13a189adf",
+        "26.1": "40d9cb701e4b6cbd9ca2776ea705ab73618b2559",
         "26.2": "40d9cb701e4b6cbd9ca2776ea705ab73618b2559"
       },
       "surface": "line-adaptation:paper/src/main/java/dev/vox/lss/paper/PaperWorldLod.java",
       "tests": [
-        "Full platform build and existing version-surface/behavior contracts"
+        "CommandGameTests.setWorldLodDistanceUpdatesHandshakeAndRangeWithoutChangingDefault",
+        "Full platform build and existing version-surface/behavior contracts",
+        "PaperRequestProcessingServiceTest",
+        "RuntimeSettingsTest"
       ]
     },
     "paper/src/main/java/dev/vox/lss/paper/PaperXrayMaskFilter.java": {
@@ -5566,20 +5382,7 @@
       "kind": "identical"
     },
     "paper/src/test/java/dev/vox/lss/paper/LSSPaperPluginGlueTest.java": {
-      "axes": "Exact file flavor; residual shared logic is not normalized or exempted.",
-      "kind": "adapted",
-      "review": "Implementation candidate; independent final change review must cover residual logic before handoff.",
-      "reviewed_blobs": {
-        "1.21.1": "bd8c07094a1eace5d7a776255521e8f050fc917f",
-        "1.21.10": "bd8c07094a1eace5d7a776255521e8f050fc917f",
-        "1.21.11": "bd8c07094a1eace5d7a776255521e8f050fc917f",
-        "26.1": "bd8c07094a1eace5d7a776255521e8f050fc917f",
-        "26.2": "da90ea675a4c96debc56eb9e59768cba4f27ecb0"
-      },
-      "surface": "line-adaptation:paper/src/test/java/dev/vox/lss/paper/LSSPaperPluginGlueTest.java",
-      "tests": [
-        "Full platform build and existing version-surface/behavior contracts"
-      ]
+      "kind": "identical"
     },
     "paper/src/test/java/dev/vox/lss/paper/LibsDisguisesBridgeTest.java": {
       "kind": "identical"
@@ -5629,20 +5432,7 @@
       ]
     },
     "paper/src/test/java/dev/vox/lss/paper/PaperCommandsTest.java": {
-      "axes": "Exact file flavor; residual shared logic is not normalized or exempted.",
-      "kind": "adapted",
-      "review": "Implementation candidate; independent final change review must cover residual logic before handoff.",
-      "reviewed_blobs": {
-        "1.21.1": "452b508910607d5c71927c87fe263ed0a17e53f6",
-        "1.21.10": "452b508910607d5c71927c87fe263ed0a17e53f6",
-        "1.21.11": "452b508910607d5c71927c87fe263ed0a17e53f6",
-        "26.1": "452b508910607d5c71927c87fe263ed0a17e53f6",
-        "26.2": "3751b1c63470999b2d9ee71dfec0fdc924de0965"
-      },
-      "surface": "line-adaptation:paper/src/test/java/dev/vox/lss/paper/PaperCommandsTest.java",
-      "tests": [
-        "Full platform build and existing version-surface/behavior contracts"
-      ]
+      "kind": "identical"
     },
     "paper/src/test/java/dev/vox/lss/paper/PaperConfigLoadTest.java": {
       "kind": "identical"
@@ -5655,20 +5445,7 @@
       "review": "Exact staged all-five source identity; final independent implementation review remains pending."
     },
     "paper/src/test/java/dev/vox/lss/paper/PaperDirtyColumnBroadcasterTest.java": {
-      "axes": "Exact file flavor; residual shared logic is not normalized or exempted.",
-      "kind": "adapted",
-      "review": "Implementation candidate; independent final change review must cover residual logic before handoff.",
-      "reviewed_blobs": {
-        "1.21.1": "17a5462f9a6ec75f805eb7b31a7632e7e9faec7c",
-        "1.21.10": "17a5462f9a6ec75f805eb7b31a7632e7e9faec7c",
-        "1.21.11": "17a5462f9a6ec75f805eb7b31a7632e7e9faec7c",
-        "26.1": "17a5462f9a6ec75f805eb7b31a7632e7e9faec7c",
-        "26.2": "0738c25d59044a7f8aeab171c619062a112eb688"
-      },
-      "surface": "line-adaptation:paper/src/test/java/dev/vox/lss/paper/PaperDirtyColumnBroadcasterTest.java",
-      "tests": [
-        "Full platform build and existing version-surface/behavior contracts"
-      ]
+      "kind": "identical"
     },
     "paper/src/test/java/dev/vox/lss/paper/PaperDiskReaderEnvelopeTest.java": {
       "axes": "Exact file flavor; residual shared logic is not normalized or exempted.",
@@ -5740,20 +5517,7 @@
       ]
     },
     "paper/src/test/java/dev/vox/lss/paper/PaperRequestProcessingServiceTest.java": {
-      "axes": "Exact file flavor; residual shared logic is not normalized or exempted.",
-      "kind": "adapted",
-      "review": "Implementation candidate; independent final change review must cover residual logic before handoff.",
-      "reviewed_blobs": {
-        "1.21.1": "ae414694501d39eddc7d7f6d4778ea9701303acf",
-        "1.21.10": "ae414694501d39eddc7d7f6d4778ea9701303acf",
-        "1.21.11": "ae414694501d39eddc7d7f6d4778ea9701303acf",
-        "26.1": "ae414694501d39eddc7d7f6d4778ea9701303acf",
-        "26.2": "a8b1d6a5f8619f68bcf96d4fe592f4caa58096e1"
-      },
-      "surface": "line-adaptation:paper/src/test/java/dev/vox/lss/paper/PaperRequestProcessingServiceTest.java",
-      "tests": [
-        "Full platform build and existing version-surface/behavior contracts"
-      ]
+      "kind": "identical"
     },
     "paper/src/test/java/dev/vox/lss/paper/PaperSerializerParityTest.java": {
       "axes": "Exact file flavor; residual shared logic is not normalized or exempted.",
@@ -9294,17 +9058,20 @@
     "xplat/src/main/java/dev/vox/lss/networking/server/DirtyColumnBroadcaster.java": {
       "axes": "Exact file flavor; residual shared logic is not normalized or exempted.",
       "kind": "adapted",
-      "review": "Implementation candidate; independent final change review must cover residual logic before handoff.",
+      "review": "v0.15.1 PR parity audit: current per-world implementation and later settings/preset changes reviewed against 26.2; only documented Minecraft API/loader seams retained. Exact-version builds and behavior gates are recorded with the release.",
       "reviewed_blobs": {
-        "1.21.1": "00920b3c86f9a4fa97f03eba293808568d53f73f",
-        "1.21.10": "00920b3c86f9a4fa97f03eba293808568d53f73f",
-        "1.21.11": "40bf0406f34ec4e6146f5c4abf0acb8541967d86",
-        "26.1": "40bf0406f34ec4e6146f5c4abf0acb8541967d86",
+        "1.21.1": "3099f38b8c18e27185ba03a5793bca4c4afe6a94",
+        "1.21.10": "3099f38b8c18e27185ba03a5793bca4c4afe6a94",
+        "1.21.11": "3099f38b8c18e27185ba03a5793bca4c4afe6a94",
+        "26.1": "03b0fc5888089c92f303fa2100f2a6437035865a",
         "26.2": "03b0fc5888089c92f303fa2100f2a6437035865a"
       },
       "surface": "line-adaptation:xplat/src/main/java/dev/vox/lss/networking/server/DirtyColumnBroadcaster.java",
       "tests": [
-        "Full platform build and existing version-surface/behavior contracts"
+        "CommandGameTests.setWorldLodDistanceUpdatesHandshakeAndRangeWithoutChangingDefault",
+        "Full platform build and existing version-surface/behavior contracts",
+        "PaperRequestProcessingServiceTest",
+        "RuntimeSettingsTest"
       ]
     },
     "xplat/src/main/java/dev/vox/lss/networking/server/DirtyContentFilter.java": {
@@ -9364,17 +9131,20 @@
     "xplat/src/main/java/dev/vox/lss/networking/server/LSSServerCommands.java": {
       "axes": "Exact file flavor; residual shared logic is not normalized or exempted.",
       "kind": "adapted",
-      "review": "Implementation candidate; independent final change review must cover residual logic before handoff.",
+      "review": "v0.15.1 PR parity audit: current per-world implementation and later settings/preset changes reviewed against 26.2; only documented Minecraft API/loader seams retained. Exact-version builds and behavior gates are recorded with the release.",
       "reviewed_blobs": {
-        "1.21.1": "9c168563a1ac860d60ce2878852d6548432c1011",
-        "1.21.10": "8ae662e428a818e573ba33207ab5d5b51ba6e2f0",
-        "1.21.11": "0c36716172507ec51a3227da27249289420aa0c2",
-        "26.1": "0c36716172507ec51a3227da27249289420aa0c2",
+        "1.21.1": "e0cf5e7ddf673494c809a6d1c81e2fa454a68f14",
+        "1.21.10": "793a4cd3aae56d8ccb5ebc0190538c601f19aefd",
+        "1.21.11": "b0e967708fe52ace2d0367ba109b08410502e9d1",
+        "26.1": "b0e967708fe52ace2d0367ba109b08410502e9d1",
         "26.2": "b0e967708fe52ace2d0367ba109b08410502e9d1"
       },
       "surface": "line-adaptation:xplat/src/main/java/dev/vox/lss/networking/server/LSSServerCommands.java",
       "tests": [
-        "Full platform build and existing version-surface/behavior contracts"
+        "CommandGameTests.setWorldLodDistanceUpdatesHandshakeAndRangeWithoutChangingDefault",
+        "Full platform build and existing version-surface/behavior contracts",
+        "PaperRequestProcessingServiceTest",
+        "RuntimeSettingsTest"
       ]
     },
     "xplat/src/main/java/dev/vox/lss/networking/server/MemoizedNbtCodec.java": {
@@ -9416,21 +9186,24 @@
       ]
     },
     "xplat/src/main/java/dev/vox/lss/networking/server/RequestProcessingService.java": {
-      "axes": "Existing 26.2 world-distance and conditional session repush versus support global distance; existing identifier/location, ChunkPos and 1.21.1 spawn/data-version/registry API mappings. Atomic generation-limit snapshots and guarded probes are shared.",
+      "axes": "Shared per-world distance and conditional session repush. Existing identifier/location, ChunkPos and 1.21.1 spawn/data-version/registry APIs are line-specific; atomic generation limits and guarded probes remain shared.",
       "kind": "adapted",
-      "review": "Independent source review by recover_export_fix against original plan baselines and all line variants: Original baseline delta is correlated generationLimits reads and capture-before-serialization within existing contained probe path. Reentrant invalidation/currentness/wrong-position and VMError containment pins preserved. Final independent review remains pending; no native/UI execution claim.",
+      "review": "v0.15.1 PR parity audit: current per-world implementation and later settings/preset changes reviewed against 26.2; only documented Minecraft API/loader seams retained. Exact-version builds and behavior gates are recorded with the release.",
       "reviewed_blobs": {
-        "1.21.1": "1443d3607a620d0978134e4d05ae371f422ea1d5",
-        "1.21.10": "04fb2567eb6aa0694688935e26f5ae51da7cfea4",
-        "1.21.11": "9adc951edde8b4a39c3ec866e449bbb003c27122",
-        "26.1": "3a1b5661ee9885c1c0ce28f5fcadb31c889ca5c9",
+        "1.21.1": "f889a5a1570e0118b46501471f6a266d52ac9b72",
+        "1.21.10": "a493b05bc8d9af321a4c7d22d4a7505b6bcdd45c",
+        "1.21.11": "a493b05bc8d9af321a4c7d22d4a7505b6bcdd45c",
+        "26.1": "c3a8bbf41fc5fe7f6ad84a5ba3f54cc668c46e50",
         "26.2": "c3a8bbf41fc5fe7f6ad84a5ba3f54cc668c46e50"
       },
       "surface": "line-adaptation:xplat/src/main/java/dev/vox/lss/networking/server/RequestProcessingService.java",
       "tests": [
+        "CommandGameTests.setWorldLodDistanceUpdatesHandshakeAndRangeWithoutChangingDefault",
         "Full platform build and existing version-surface/behavior contracts",
+        "PaperRequestProcessingServiceTest",
+        "ProbeContainmentTest",
         "RuntimeBatchTest",
-        "ProbeContainmentTest"
+        "RuntimeSettingsTest"
       ]
     },
     "xplat/src/main/java/dev/vox/lss/networking/server/SectionSerializer.java": {
@@ -9468,33 +9241,39 @@
     "xplat/src/main/java/dev/vox/lss/networking/server/ServerReceiverGlue.java": {
       "axes": "Exact file flavor; residual shared logic is not normalized or exempted.",
       "kind": "adapted",
-      "review": "Implementation candidate; independent final change review must cover residual logic before handoff.",
+      "review": "v0.15.1 PR parity audit: current per-world implementation and later settings/preset changes reviewed against 26.2; only documented Minecraft API/loader seams retained. Exact-version builds and behavior gates are recorded with the release.",
       "reviewed_blobs": {
-        "1.21.1": "dfeb1f2cfeb3f121539801fcf7da756b8be3c0a5",
-        "1.21.10": "c738ce77bf86b33f556ebe4a1a833da8cce2baec",
-        "1.21.11": "647ec800cc9181df15bb54e925941ae3c4848621",
-        "26.1": "b55ba998743a91386b08effb914640b1d5f4d869",
+        "1.21.1": "0341a632cdd0514186c13b40a1f720b931bf3346",
+        "1.21.10": "bb719d41f4e0efc648de86067b4f0266d6515510",
+        "1.21.11": "bb719d41f4e0efc648de86067b4f0266d6515510",
+        "26.1": "878f5644abc8d76c177e4d394d367394314da15a",
         "26.2": "878f5644abc8d76c177e4d394d367394314da15a"
       },
       "surface": "line-adaptation:xplat/src/main/java/dev/vox/lss/networking/server/ServerReceiverGlue.java",
       "tests": [
-        "Full platform build and existing version-surface/behavior contracts"
+        "CommandGameTests.setWorldLodDistanceUpdatesHandshakeAndRangeWithoutChangingDefault",
+        "Full platform build and existing version-surface/behavior contracts",
+        "PaperRequestProcessingServiceTest",
+        "RuntimeSettingsTest"
       ]
     },
     "xplat/src/main/java/dev/vox/lss/networking/server/ServerWorldLod.java": {
-      "axes": "Exact file flavor; residual shared logic is not normalized or exempted.",
+      "axes": "Dimension key accessor: identifier() on 26.x, location() on 1.21.x. Identical distance precedence/fallback behavior.",
       "kind": "adapted",
-      "review": "Implementation candidate; independent final change review must cover residual logic before handoff.",
+      "review": "v0.15.1 PR parity audit: current per-world implementation and later settings/preset changes reviewed against 26.2; only documented Minecraft API/loader seams retained. Exact-version builds and behavior gates are recorded with the release.",
       "reviewed_blobs": {
-        "1.21.1": null,
-        "1.21.10": null,
-        "1.21.11": null,
-        "26.1": null,
+        "1.21.1": "4b19e44fa293d8f1790b985e5ad7ac2ddcc0e0a8",
+        "1.21.10": "4b19e44fa293d8f1790b985e5ad7ac2ddcc0e0a8",
+        "1.21.11": "4b19e44fa293d8f1790b985e5ad7ac2ddcc0e0a8",
+        "26.1": "8f4c641710eb5bb29cfd72090e22d9d48c283176",
         "26.2": "8f4c641710eb5bb29cfd72090e22d9d48c283176"
       },
       "surface": "line-adaptation:xplat/src/main/java/dev/vox/lss/networking/server/ServerWorldLod.java",
       "tests": [
-        "Full platform build and existing version-surface/behavior contracts"
+        "CommandGameTests.setWorldLodDistanceUpdatesHandshakeAndRangeWithoutChangingDefault",
+        "Full platform build and existing version-surface/behavior contracts",
+        "PaperRequestProcessingServiceTest",
+        "RuntimeSettingsTest"
       ]
     },
     "xplat/src/main/java/dev/vox/lss/networking/server/SoakProbeBridge.java": {
