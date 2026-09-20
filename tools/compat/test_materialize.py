@@ -181,4 +181,20 @@ class MaterializeTests(unittest.TestCase):
   profile=self.profile(a);profile.update(platform='neoforge',route='connector');profile['artifacts'].append(b)
   self.assertTrue(resolution(profile,{a['sha256']:str(p),b['sha256']:str(q)})['ready'])
 
+
+ def test_native_container_discovery_uses_only_main_manifest_attributes(self):
+  for ending in ('\n','\r\n','\r'):
+   for kind in ('LIBRARY','GAMELIBRARY'):
+    for main in (True,False):
+     with self.subTest(ending=repr(ending),kind=kind,main=main):
+      p,a=self.native_container({'META-INF/neoforge.mods.toml':'[[mods]]\nmodId="nested"\nversion="1"\n'},'none')
+      lines=['Manifest-Version: 1.0']
+      if main:lines.append('FMLModType: '+kind)
+      lines+=['','Name: unrelated-resource.bin']
+      if not main:lines.append('FMLModType: '+kind)
+      with zipfile.ZipFile(p,'a') as z:z.writestr('META-INF/MANIFEST.MF',ending.join(lines+['','']))
+      a=inspect_jar(p)|{k:a[k] for k in ('id','version','source','enabled')}
+      profile=self.profile(a);profile['platform']='neoforge'
+      self.assertEqual(main,resolution(profile,{a['sha256']:str(p)})['ready'])
+
 if __name__=='__main__':unittest.main()

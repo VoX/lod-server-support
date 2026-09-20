@@ -48,7 +48,12 @@ def native_mod_container(path,current):
         if 'META-INF/MANIFEST.MF' in names:
             require(archive.getinfo('META-INF/MANIFEST.MF').file_size<=2**20,'oversized metadata')
             manifest=archive.read('META-INF/MANIFEST.MF').decode()
-            kind=re.search(r'^FMLModType:\s*(LIBRARY|GAMELIBRARY)\s*$',manifest,re.M)
+            # FML reads getMainAttributes(), never named-entry attributes.
+            main=[]
+            for line in re.split(r'\r\n|\r|\n',manifest):
+                if not line:break
+                main.append(line)
+            kind=re.search(r'^FMLModType:[ \t]*(LIBRARY|GAMELIBRARY)[ \t]*$','\n'.join(main),re.M)
             if kind:
                 return True
         # FML's service-layer discovery admits candidate locators before normal
