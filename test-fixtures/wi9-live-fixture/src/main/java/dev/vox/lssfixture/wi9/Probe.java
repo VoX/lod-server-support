@@ -9,6 +9,8 @@ import org.slf4j.LoggerFactory;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.UUID;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -24,6 +26,7 @@ public final class Probe {
     private static final List<UUID> seated = new ArrayList<>();
     private static final List<UUID> healthyReturns = new ArrayList<>();
     private static boolean healthyReady;
+    private static final Set<UUID> waitingPremise = new HashSet<>();
     private static UUID armed, fault;
     private static boolean inPass, fired, faultThisPass, failed;
     private static int pass, nextStarts, nextReturns, tagStarts, tagReturns;
@@ -67,10 +70,20 @@ public final class Probe {
         UUID id = entity.getUUID();
         var world = net.minecraft.client.Minecraft.getInstance().level;
         var observer = net.minecraft.client.Minecraft.getInstance().player;
-        if (world == null || world.getPlayerByUUID(id) != null || observer == null
-                || observer.distanceTo(entity) <= 128.0F) {
+        double distance = observer == null ? Double.NaN : observer.distanceTo(entity);
+        boolean nativePresent = world != null && world.getPlayerByUUID(id) != null;
+        if (world == null || observer == null || nativePresent
+                || !Double.isFinite(distance) || distance <= 128.0) {
+            String detail = "uuid=" + id + " distance=" + distance + " native_present=" + nativePresent
+                    + " world_present=" + (world != null) + " observer_present=" + (observer != null);
+            // Teleports, tracking removal and interpolation settle during setup.
+            // Before any healthy frame this is readiness, never a successful draw.
+            if (!healthyReady) {
+                if (waitingPremise.add(id)) log("WAITING_PREMISE", detail);
+                return;
+            }
             failed = true;
-            log("PREMISE_FAILED", "native_player_still_tracked_or_subject_not_far=true");
+            log("PREMISE_FAILED", detail);
             return;
         }
         if (!order.contains(id)) order.add(id);
