@@ -8126,6 +8126,9 @@
     "tools/rig/test_scenario_scope.py": {
       "kind": "identical"
     },
+    "tools/rig/test_seated_captures.py": {
+      "kind": "identical"
+    },
     "tools/rig/test_seated_draw.py": {
       "kind": "identical"
     },

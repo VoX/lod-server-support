@@ -10,6 +10,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.nio.file.Files;
+import java.nio.file.Path;
 
 /** External, one-shot visual fixture. No product hook or synthetic network state. */
 public final class Probe {
@@ -20,6 +22,8 @@ public final class Probe {
     private static final String PROXY = "dev.vox.lss.networking.client.FarPlayerRenderer$Proxy";
     private static final List<UUID> order = new ArrayList<>();
     private static final List<UUID> seated = new ArrayList<>();
+    private static final List<UUID> healthyReturns = new ArrayList<>();
+    private static boolean healthyReady;
     private static UUID armed, fault;
     private static boolean inPass, fired, faultThisPass, failed;
     private static int pass, nextStarts, nextReturns, tagStarts, tagReturns;
@@ -42,7 +46,7 @@ public final class Probe {
     public static void begin() {
         if (!ENABLED) return;
         inPass = true; pass++; faultThisPass = false;
-        order.clear(); seated.clear(); stack = null; mark = null; parent = null;
+        order.clear(); seated.clear(); healthyReturns.clear(); stack = null; mark = null; parent = null;
         nextStarts = nextReturns = tagStarts = tagReturns = 0;
     }
     public static void beforeMark(PoseStack poses) {
@@ -62,9 +66,11 @@ public final class Probe {
         if (!subject(entity)) return;
         UUID id = entity.getUUID();
         var world = net.minecraft.client.Minecraft.getInstance().level;
-        if (world == null || world.getPlayerByUUID(id) != null) {
+        var observer = net.minecraft.client.Minecraft.getInstance().player;
+        if (world == null || world.getPlayerByUUID(id) != null || observer == null
+                || observer.distanceTo(entity) <= 128.0F) {
             failed = true;
-            log("PREMISE_FAILED", "native_player_still_tracked=true");
+            log("PREMISE_FAILED", "native_player_still_tracked_or_subject_not_far=true");
             return;
         }
         if (!order.contains(id)) order.add(id);
@@ -89,6 +95,8 @@ public final class Probe {
         throw new IllegalStateException("WI9 isolated one-shot seated dispatcher fixture");
     }
     public static void dispatcherReturn(Entity entity) {
+        if (subject(entity) && entity.isPassenger() && !faultThisPass
+                && !healthyReturns.contains(entity.getUUID())) healthyReturns.add(entity.getUUID());
         if (subject(entity) && faultThisPass && !entity.getUUID().equals(fault)) {
             nextReturns++; log("NEXT_PROXY_RETURN", "uuid=" + entity.getUUID());
         }
@@ -103,6 +111,20 @@ public final class Probe {
         if (!ENABLED || !inPass || !faultThisPass) return;
         tagReturns++;
     }
+    private static boolean scoping() {
+        var client = net.minecraft.client.Minecraft.getInstance();
+        return client.player != null && client.player.isScoping()
+                && client.options.getCameraType().isFirstPerson();
+    }
+    private static boolean captureGateOpen() {
+        String value = System.getProperty("lss.wi9.captureGate", "");
+        if (value.isBlank()) return false;
+        Path path = Path.of(value);
+        try {
+            return !Files.isSymbolicLink(path) && Files.isRegularFile(path) && Files.size(path) <= 128
+                    && Files.readString(path).equals(System.getProperty("lss.rig.runId") + "\n");
+        } catch (java.io.IOException ignored) { return false; }
+    }
     public static void end(boolean crashLatched) {
         if (!ENABLED || !inPass) return;
         if (faultThisPass) {
@@ -113,9 +135,19 @@ public final class Probe {
             log(ok ? "PASS_SAME_FRAME" : "FAIL_OR_INCONCLUSIVE", "next_starts=" + nextStarts
                     + " next_returns=" + nextReturns + " tag_starts=" + tagStarts + " tag_returns=" + tagReturns
                     + " outer_unwind=" + unwound + " crash_latched=" + crashLatched + " assertion_failed=" + failed);
-        } else if (!fired && armed == null && order.size() == 2 && seated.contains(order.getFirst())) {
-            armed = order.getFirst();
-            log("ARMED", "observed_two_real_proxy_draws=true native_players_absent=true first_seated=" + armed + " second=" + order.get(1));
+        } else if (!fired && armed == null && !failed && order.size() == 2
+                && seated.containsAll(order) && healthyReturns.containsAll(order) && scoping()) {
+            if (!healthyReady) {
+                healthyReady = true;
+                log("HEALTHY_READY", "both_seated_returns=true native_players_absent=true beyond_128=true scoping=true first_seated="
+                        + order.getFirst() + " second=" + order.get(1));
+            }
+            // The owned controller writes this gate ONLY after the healthy native PNG.
+            // Recheck both seated returns and real spyglass use in this current frame.
+            if (captureGateOpen()) {
+                armed = order.getFirst();
+                log("ARMED", "observed_two_real_proxy_draws=true native_players_absent=true first_seated=" + armed + " second=" + order.get(1));
+            }
         }
         inPass = false;
     }
