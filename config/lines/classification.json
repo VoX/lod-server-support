@@ -1,10 +1,10 @@
 {
   "basis": {
-    "1.21.1": "38c4fa98296536f0c93efe8ad21ad3b0d5b37012",
-    "1.21.10": "5fe204026045035262c2e4218d8fd6a4e57f12a1",
-    "1.21.11": "d126b8b54f834c96b5e6123b680fd4e904c41f62",
-    "26.1": "ba5bae06216419982a4d1a299b89ce7e19219a3b",
-    "26.2": "01189132f4f7a96a7cf5882ee80275f9ff3109f8"
+    "1.21.1": "22085da6a75f94bfda272a7e7fd7a7d28e49155e",
+    "1.21.10": "127cd0aa58ab700aafdab956bba1ee5660422e69",
+    "1.21.11": "c707178ec30c39efd6b6e842a6314f3a4b8b9d15",
+    "26.1": "520f5d16d5121fd8a055abf90153bef5196fce80",
+    "26.2": "6a88cf3e78a2e0855947eef6ae26569f03efa25e"
   },
   "files": {
     ".github/line.env": {
@@ -620,13 +620,13 @@
     "common/src/test/java/dev/vox/lss/common/region/RegionSummaryServiceTest.java": {
       "axes": "Exact file flavor; residual shared logic is not normalized or exempted.",
       "kind": "adapted",
-      "review": "Implementation candidate; independent final change review must cover residual logic before handoff.",
+      "review": "2026-09-20: identical DROP-test ordering fix on every line; retain RETRY until assembly is observable, then test DROP. Controlled fast-assembly red/green proof retained with v0.15.1 release evidence. Existing line-specific tests remain intact.",
       "reviewed_blobs": {
-        "1.21.1": "320a0ac4b16ca88338bd05dd83fe3971ae413f04",
-        "1.21.10": "7373424b00a2a361fa067c316a326c19825ca40f",
-        "1.21.11": "320a0ac4b16ca88338bd05dd83fe3971ae413f04",
-        "26.1": "320a0ac4b16ca88338bd05dd83fe3971ae413f04",
-        "26.2": "320a0ac4b16ca88338bd05dd83fe3971ae413f04"
+        "1.21.1": "211d2209c6a40fc1f6472d03744e0b923ad716be",
+        "1.21.10": "19de63f175263b0de3a5829c0985a06e795ab48b",
+        "1.21.11": "211d2209c6a40fc1f6472d03744e0b923ad716be",
+        "26.1": "211d2209c6a40fc1f6472d03744e0b923ad716be",
+        "26.2": "211d2209c6a40fc1f6472d03744e0b923ad716be"
       },
       "surface": "line-adaptation:common/src/test/java/dev/vox/lss/common/region/RegionSummaryServiceTest.java",
       "tests": [
