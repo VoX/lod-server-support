@@ -18,6 +18,16 @@ class RuntimeBatchTest {
         assertEquals(500, config.farPlayersMinDistanceBlocks);
     }
 
+    @org.junit.jupiter.api.Test void globalBatchRejectsWorldDistanceSyntaxWithoutMutation() {
+        var config = new Config();
+        config.validate();
+        var before = java.util.Map.copyOf(config.lodDistanceChunksByWorld);
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () ->
+                RuntimeSettings.previewBatch(config, java.util.Map.of("lodDistanceChunks", "world 200"),
+                        java.util.Set.of("lodDistanceChunks")));
+        org.junit.jupiter.api.Assertions.assertEquals(before, config.lodDistanceChunksByWorld);
+    }
+
     public static class Config extends ServerConfigBase {
         transient CountDownLatch entered, release;
         transient int saves;

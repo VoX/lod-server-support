@@ -20,7 +20,7 @@ class SettingMetadataTest {
         assertTrue(RuntimeSettings.byName("dirtyBroadcastIntervalSeconds").descriptor().domain().contains("disables"));
         for (var key : RuntimeSettings.keys()) {
             assertFalse(key.descriptor().restartRequired());
-            assertFalse(key.descriptor().supports(SettingDescriptor.Scope.WORLD_DISTANCE));
+            assertEquals(key.name().equals("lodDistanceChunks"), key.descriptor().supports(SettingDescriptor.Scope.WORLD_DISTANCE));
             assertEquals(key.applyNote(), key.descriptor().applyTiming());
         }
     }

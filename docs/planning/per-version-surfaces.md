@@ -86,3 +86,7 @@ acknowledged save-all no-op remains separate. `check_soak.py` rejects failed com
 and gamerule rows without semantic-readback proof; historical `ok=true` alone meant
 only did-not-throw and is not acceptable setup evidence. See
 [the correction record](../reviews/2026-09-08-implementation/soak-command-validation.md).
+
+### Per-world LOD distance (v0.15.1)
+
+`lodDistanceChunksByWorld` and its runtime commands are available on every support line. Common config, settings, preset isolation and wire-dialect guards are identical. `ServerWorldLod` and `PaperWorldLod` adapt only the dimension accessor (`identifier()` on 1.21.11/26.x, `location()` on 1.21.1/1.21.10); request-service code retains the existing data-version and world-layout seams. Global sizing uses the largest configured radius, while handshake, ingress and dirty broadcasts resolve the current world. The cross-line PR audit is [recorded here](../implementation/v0.15.1-pr-parity-audit.md).

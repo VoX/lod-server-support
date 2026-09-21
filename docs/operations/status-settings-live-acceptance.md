@@ -120,7 +120,7 @@ The preview must explicitly say **SERVER GLOBAL**, generation false for restart,
 
 Run `/lsslod preset undo` before restart in one attempt: it restores only the generation choice. In another attempt, stage and save again, stop through the owning runner, and restart the same disposable server state with a new run identity. Both generation fields must now be false, the restart-pending note absent, and old undo unavailable. A save-failure attempt must keep the configured restart choice distinct from the unchanged on-disk value.
 
-On 26.2 only, exercise the existing world-distance command separately:
+On every support line, exercise the world-distance command separately:
 
 ```text
 /lsslod set lodDistanceChunks minecraft:overworld 256
