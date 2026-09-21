@@ -252,10 +252,12 @@ class RegionSummaryServiceTest {
         var rig = new Rig((dim, tx, tz) -> NOW);
         try {
             var player = UUID.randomUUID();
-            rig.senderOutcome = RegionSummaryService.SendOutcome.DROP;
+            // Admission and drain share one pump: retain even if assembly wins the race.
+            rig.senderOutcome = RegionSummaryService.SendOutcome.RETRY;
             rig.service.offerRequest(player, new RegionSummaryWire.Request(DIM, 0, 0, 0));
             rig.pump(rig.anchorsAt(player, DIM, 0, 0)); // admit
             awaitAssembly(rig);
+            rig.senderOutcome = RegionSummaryService.SendOutcome.DROP;
             rig.pump(rig.anchorsAt(player, DIM, 0, 0));
             assertEquals(0, rig.service.readyCountForTest(), "the frame was drained");
             assertEquals(0, rig.service.diagnostics().getFrames(),
