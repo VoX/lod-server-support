@@ -207,7 +207,8 @@ class SkyLightEstimateTest {
         byte[] surface = estimate.layer(1);
         for (int i = 0; i < 2048; i++) assertEquals(i < 1024 ? 0 : (byte) 0xFF, surface[i]);
         assertNull(estimate.layer(2), "a section that received nothing has no layer");
-        assertEquals(0, estimate.steps(), "nothing to spread: every source cell has lit or solid neighbours");
+        assertEquals(256 * 9, estimate.work(), "the work is those reads: every source cell has lit or solid"
+                + " neighbours, so nothing is spread");
         // Each column reads its 8 air cells and the stone that stops it, in the surface section only.
         assertEquals(256 * 9, grid.lookups, "an ordinary surface column must not read below its surface");
     }
@@ -418,7 +419,8 @@ class SkyLightEstimateTest {
             assertEquals(15, light(estimate, grid, x, 21, 6));
         }
         assertEquals(15, light(estimate, grid, 8, 4, 6));
-        assertTrue(estimate.steps() > 0);
+        // The source pass reads 12 cells per roofed run and 16 + 13 per open one.
+        assertTrue(estimate.work() > 128 * 12 + 128 * 29, "the spread under the overhang is work on top of the source reads");
     }
 
     @Test void aCaveMouthLightsTheTunnelByDistanceFromTheShaft() {
@@ -446,27 +448,167 @@ class SkyLightEstimateTest {
 
     // ---- bounds and reuse ----
 
-    @Test void theSpreadBudgetStopsTheSpreadAndLeavesTheResultDarkerNeverBrighter() {
-        var grid = new Grid(4).layers(0, 3, STONE).box(0, 7, 60, 60, 0, 15, STONE);
-        byte[] exact = reference(grid);
-        var capped = new SkyLightEstimate(40);
-        assertTrue(capped.estimate(grid, 4));
-        assertTrue(capped.exhausted());
-        assertEquals(41, capped.steps());
-        boolean darker = false;
-        for (int section = 0; section < 4; section++) {
+    // The overhang column of four sections: its source pass reads 4,224 cells
+    // (x < 8: 4 per run in the top section; x >= 8: 16 there and 13 in the bottom section).
+    private static Grid tallOverhang() {
+        return new Grid(4).layers(0, 3, STONE).box(0, 7, 60, 60, 0, 15, STONE);
+    }
+
+    private static void assertNeverBrighter(SkyLightEstimate capped, byte[] full, Grid grid, String label) {
+        for (int section = 0; section < grid.sections; section++) {
             for (int cell = 0; cell < 4096; cell++) {
-                int got = capped.lightAt(section, cell), want = exact[(3 - section) << 12 | cell];
-                assertTrue(got <= want, "never brighter than the full result");
-                darker |= got < want;
+                int got = capped.lightAt(section, cell), want = full[(grid.sections - 1 - section) << 12 | cell];
+                if (got > want) {
+                    assertEquals(want, got, label + ": brighter than the full result, section " + section + " cell " + cell);
+                }
             }
         }
+    }
+
+    @Test void theBudgetCountsTheSourcePassAndStopsItWithWhatIsComputed() {
+        var grid = tallOverhang();
+        byte[] exact = reference(grid);
+        var capped = new SkyLightEstimate(100);
+        assertTrue(capped.estimate(grid, 4));
+        assertTrue(capped.exhausted());
+        assertTrue(capped.work() > 100 && capped.work() <= 100 + 16, "the stop comes within one run of the budget: " + capped.work());
+        assertNeverBrighter(capped, exact, grid, "budget 100");
+        assertEquals(15, light(capped, grid, 0, 63, 0), "a run that was walked keeps its light");
+        assertEquals(15, light(capped, grid, 0, 61, 0));
+        assertEquals(0, light(capped, grid, 0, 60, 0));
+        assertEquals(0, light(capped, grid, 12, 63, 15), "a run that was not reached stays dark");
+        assertEquals(15, exact[63 << 8 | 15 << 4 | 12], "(it is lit in the full result)");
+        assertNull(capped.layer(1), "nothing below the section where the pass stopped");
+        assertNull(capped.layer(3));
+    }
+
+    @Test void theBudgetStopsTheSpreadAndKeepsEverySourceCell() {
+        var grid = tallOverhang();
+        byte[] exact = reference(grid);
+        var capped = new SkyLightEstimate(4224 + 500);
+        assertTrue(capped.estimate(grid, 4));
+        assertTrue(capped.exhausted());
+        assertTrue(capped.work() > 4724 && capped.work() <= 4724 + 16, "work " + capped.work());
+        assertNeverBrighter(capped, exact, grid, "budget 4724");
+        boolean darker = false;
+        for (int section = 0; section < 4; section++) {
+            for (int cell = 0; cell < 4096; cell++) darker |= capped.lightAt(section, cell) < exact[(3 - section) << 12 | cell];
+        }
         assertTrue(darker, "the cut must be visible in this column");
-        assertEquals(15, light(capped, grid, 12, 30, 3), "the source pass is not part of the budget");
+        assertEquals(15, light(capped, grid, 12, 30, 3), "the source pass was complete");
+        assertEquals(15, light(capped, grid, 12, 4, 3));
 
         var full = new SkyLightEstimate();
         assertMatchesReference(grid, full);
-        assertTrue(full.steps() < SkyLightEstimate.DEFAULT_SPREAD_BUDGET);
+        assertTrue(full.work() < SkyLightEstimate.DEFAULT_BUDGET);
+    }
+
+    /** Review fold: wherever the budget stops the work, no cell may be brighter than without a budget. */
+    @Test void noBudgetStopIsEverBrighterThanTheFullResult() {
+        var random = new Random(383);
+        var grids = new java.util.ArrayList<Grid>(java.util.List.of(
+                tallOverhang(),
+                new Grid(3).layers(0, 39, STONE).box(8, 8, 20, 39, 8, 8, AIR).box(4, 12, 16, 19, 8, 8, AIR),
+                new Grid(2).layers(0, 3, STONE).box(0, 7, 20, 22, 0, 15, LEAVES),
+                new Grid(2).layers(0, 3, STONE).layers(20, 20, TOP_SLAB).put(8, 20, 8, AIR),
+                new Grid(2).layers(0, 3, STONE).layers(20, 20, SkyLightEstimate.withIdentity(TOP_SLAB, 3)).put(8, 20, 8, AIR),
+                new Grid(2).layers(0, 3, STONE).layers(17, 17, WEST_HALF).layers(16, 16, WEST_HALF),
+                new Grid(3).layers(0, 3, STONE).layers(32, 32, BOTTOM_SLAB)));
+        for (int i = 0; i < 12; i++) grids.add(randomGrid(random));
+        int[] budgets = {0, 1, 17, 100, 255, 1000, 2500, 4224, 5000, 9000, 20000, 60000};
+        for (int g = 0; g < grids.size(); g++) {
+            var grid = grids.get(g);
+            var full = new SkyLightEstimate(Integer.MAX_VALUE);
+            full.estimate(grid, grid.sections);
+            assertFalse(full.exhausted());
+            byte[] exact = new byte[grid.height() << 8];
+            for (int section = 0; section < grid.sections; section++) {
+                for (int cell = 0; cell < 4096; cell++) {
+                    exact[(grid.sections - 1 - section) << 12 | cell] = (byte) full.lightAt(section, cell);
+                }
+            }
+            for (int budget : budgets) {
+                var capped = new SkyLightEstimate(budget);
+                capped.estimate(grid, grid.sections);
+                String label = "grid " + g + " budget " + budget;
+                assertNeverBrighter(capped, exact, grid, label);
+                if (budget >= full.work()) {
+                    assertFalse(capped.exhausted(), label + ": enough budget for the whole column");
+                    for (int section = 0; section < grid.sections; section++) {
+                        for (int cell = 0; cell < 4096; cell++) {
+                            assertEquals(exact[(grid.sections - 1 - section) << 12 | cell], capped.lightAt(section, cell), label);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // ---- the pair memo ----
+
+    @Test void aPairOfPartialFacesIsDecidedOncePerPairOfIdentitiesAndAxis() {
+        int slab = SkyLightEstimate.withIdentity(TOP_SLAB, 7);
+        var known = new Grid(2).layers(0, 3, STONE).layers(20, 20, slab).put(8, 20, 8, AIR);
+        var estimate = estimateAndCompare(known);
+        assertEquals(13, light(estimate, known, 6, 20, 8), "the light still passes from slab to slab");
+        assertEquals(2, known.partialQueries, "slab beside slab is asked once along x and once along z");
+        int knownWork = estimate.work();
+
+        var anonymous = new Grid(2).layers(0, 3, STONE).layers(20, 20, TOP_SLAB).put(8, 20, 8, AIR);
+        assertMatchesReference(anonymous, estimate);
+        assertTrue(anonymous.partialQueries > 100, "without an identity every pair is asked: " + anonymous.partialQueries);
+        assertEquals(knownWork - 2 * SkyLightEstimate.PAIR_COST - (anonymous.partialQueries - 2)
+                        + anonymous.partialQueries * SkyLightEstimate.PAIR_COST, estimate.work(),
+                "a remembered pair costs one unit, an asked pair " + SkyLightEstimate.PAIR_COST);
+    }
+
+    @Test void theSamePairSeenFromTheOtherSideIsTheSameDecision() {
+        // A tunnel one block high between two shafts (x = 0 and x = 9). From the west the
+        // light crosses two dense blocks and one top slab (identity 1): 12, 9, 8. From the
+        // east it crosses five bottom slabs (identity 2): 14 down to 10. The top slab and
+        // the bottom slab beside it close the gap. The dim west light gets to that seam
+        // first and asks about it as (top, bottom, east); the brighter east light arrives
+        // later and meets the same seam as (bottom, top, west).
+        int top = SkyLightEstimate.withIdentity(TOP_SLAB, 1), bottom = SkyLightEstimate.withIdentity(BOTTOM_SLAB, 2);
+        var grid = new Grid(1).layers(0, 11, STONE)
+                .box(0, 0, 10, 11, 5, 5, AIR).box(9, 9, 10, 11, 5, 5, AIR)
+                .box(1, 2, 10, 10, 5, 5, DENSE).put(3, 10, 5, top).box(4, 8, 10, 10, 5, 5, bottom);
+        var estimate = estimateAndCompare(grid);
+        assertEquals(12, light(estimate, grid, 1, 10, 5));
+        assertEquals(8, light(estimate, grid, 3, 10, 5), "the top slab keeps the west light");
+        assertEquals(10, light(estimate, grid, 4, 10, 5), "the bottom slab beside it keeps the east light");
+        assertEquals(14, light(estimate, grid, 8, 10, 5));
+        assertEquals(2, grid.partialQueries, "bottom slab beside bottom slab once, and the seam once for both sides");
+    }
+
+    @Test void cellsWithoutAnIdentityAreAskedEveryTime() {
+        // One descriptor for every slab, but the answer depends on where the pair is: a
+        // seam at x = 5 that only the caller knows. Remembering the first answer would be wrong.
+        var cells = new Grid(1).layers(0, 9, STONE).layers(10, 10, TOP_SLAB).put(8, 10, 8, AIR);
+        SkyLightEstimate.Column seam = new SkyLightEstimate.Column() {
+            @Override public boolean allAir(int section) { return cells.allAir(section); }
+            @Override public int descriptor(int section, int cell) { return cells.descriptor(section, cell); }
+            @Override public boolean partialFacesClose(int sectionA, int cellA, int sectionB, int cellB, int direction) {
+                return (cellA & 15) == 5 || (cellB & 15) == 5;
+            }
+        };
+        var estimate = new SkyLightEstimate();
+        assertTrue(estimate.estimate(seam, 1));
+        assertEquals(14, light(estimate, cells, 7, 10, 8));
+        assertEquals(13, light(estimate, cells, 6, 10, 8));
+        assertEquals(0, light(estimate, cells, 5, 10, 8), "the seam is closed although the first pairs were open");
+        assertEquals(0, light(estimate, cells, 4, 10, 8));
+        assertEquals(12, light(estimate, cells, 6, 10, 7), "and the open pairs beside it stay open");
+    }
+
+    @Test void anIdentityOutsideItsRangeIsNoIdentity() {
+        assertEquals(TOP_SLAB, SkyLightEstimate.withIdentity(TOP_SLAB, 0));
+        assertEquals(TOP_SLAB, SkyLightEstimate.withIdentity(TOP_SLAB, -4));
+        assertEquals(TOP_SLAB, SkyLightEstimate.withIdentity(TOP_SLAB, SkyLightEstimate.MAX_IDENTITY + 1));
+        int known = SkyLightEstimate.withIdentity(TOP_SLAB, SkyLightEstimate.MAX_IDENTITY);
+        assertEquals(TOP_SLAB, known & 0xFFFF, "the light properties are kept");
+        assertEquals(SkyLightEstimate.MAX_IDENTITY, known >>> 16);
+        assertEquals(SkyLightEstimate.withIdentity(TOP_SLAB, 9), SkyLightEstimate.withIdentity(known, 9), "a new identity replaces the old");
     }
 
     @Test void oneInstanceGivesEachColumnItsOwnResult() {
@@ -509,26 +651,29 @@ class SkyLightEstimateTest {
 
     // ---- random terrain against the reference ----
 
+    private static final int[] RANDOM_PALETTE = {STONE, STONE, STONE, LEAVES, WATER, DENSE, BOTTOM_SLAB, TOP_SLAB, AIR};
+
+    private static Grid randomGrid(Random random) {
+        int sections = 1 + random.nextInt(4);
+        var grid = new Grid(sections);
+        int base = random.nextInt(grid.height());
+        for (int x = 0; x < 16; x++) for (int z = 0; z < 16; z++) {
+            int surface = Math.max(0, Math.min(grid.height() - 1, base + random.nextInt(9) - 4));
+            for (int y = 0; y <= surface; y++) grid.put(x, y, z, STONE);
+        }
+        // caves, overhangs, canopies, pools and odd blocks
+        for (int feature = 0; feature < 12; feature++) {
+            int x0 = random.nextInt(16), z0 = random.nextInt(16), y0 = random.nextInt(grid.height());
+            int x1 = Math.min(15, x0 + random.nextInt(8)), z1 = Math.min(15, z0 + random.nextInt(8));
+            int y1 = Math.min(grid.height() - 1, y0 + random.nextInt(6));
+            grid.box(x0, x1, y0, y1, z0, z1, RANDOM_PALETTE[random.nextInt(RANDOM_PALETTE.length)]);
+        }
+        return grid;
+    }
+
     @Test void randomColumnsMatchTheReferenceCellForCell() {
         var random = new Random(382);
         var estimate = new SkyLightEstimate();
-        int[] palette = {STONE, STONE, STONE, LEAVES, WATER, DENSE, BOTTOM_SLAB, TOP_SLAB, AIR};
-        for (int round = 0; round < 60; round++) {
-            int sections = 1 + random.nextInt(4);
-            var grid = new Grid(sections);
-            int base = random.nextInt(grid.height());
-            for (int x = 0; x < 16; x++) for (int z = 0; z < 16; z++) {
-                int surface = Math.max(0, Math.min(grid.height() - 1, base + random.nextInt(9) - 4));
-                for (int y = 0; y <= surface; y++) grid.put(x, y, z, STONE);
-            }
-            // caves, overhangs, canopies, pools and odd blocks
-            for (int feature = 0; feature < 12; feature++) {
-                int x0 = random.nextInt(16), z0 = random.nextInt(16), y0 = random.nextInt(grid.height());
-                int x1 = Math.min(15, x0 + random.nextInt(8)), z1 = Math.min(15, z0 + random.nextInt(8));
-                int y1 = Math.min(grid.height() - 1, y0 + random.nextInt(6));
-                grid.box(x0, x1, y0, y1, z0, z1, palette[random.nextInt(palette.length)]);
-            }
-            assertMatchesReference(grid, estimate);
-        }
+        for (int round = 0; round < 60; round++) assertMatchesReference(randomGrid(random), estimate);
     }
 }
