@@ -3,13 +3,16 @@ package dev.vox.lss.paper;
 import com.mojang.serialization.Codec;
 import dev.vox.lss.common.LSSConstants;
 import dev.vox.lss.common.LSSLogger;
+import dev.vox.lss.common.processing.ColumnDecodeNotes;
 import io.netty.buffer.Unpooled;
 import net.minecraft.core.Holder;
 import net.minecraft.core.IdMap;
 import net.minecraft.core.Registry;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.Registries;
+import net.minecraft.nbt.ByteArrayTag;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.NbtOps;
 import net.minecraft.nbt.Tag;
 import net.minecraft.nbt.StringTag;
@@ -85,11 +88,25 @@ final class PaperNbtSectionSerializer {
                                             PaperXrayMaskManager.MaskEntry maskEntry,
                                             int minSectionY, int maxSectionY,
                                             boolean useNbtTranscode) throws Exception {
+        return readAndSerializeSections(read, registryAccess, cx, cz, maskEntry, minSectionY,
+                maxSectionY, useNbtTranscode, null);
+    }
+
+    /** The read with the reader's {@link ColumnDecodeNotes} (nullable): null bytes with
+     *  the notes marked means the column is UNDECODABLE (see {@link
+     *  #serializeChunkNbt(CompoundTag, RegistryAccess, PaperXrayMaskManager.MaskEntry,
+     *  int, int, boolean, ColumnDecodeNotes)}), never a plain miss. */
+    static byte[] readAndSerializeSections(ChunkNbtRead read, RegistryAccess registryAccess,
+                                            int cx, int cz,
+                                            PaperXrayMaskManager.MaskEntry maskEntry,
+                                            int minSectionY, int maxSectionY,
+                                            boolean useNbtTranscode,
+                                            ColumnDecodeNotes notes) throws Exception {
         var future = read.read(cx, cz);
         var optionalTag = future.get(LSSConstants.DISK_READ_TIMEOUT_SECONDS, TimeUnit.SECONDS);
         if (optionalTag.isEmpty()) return null;
         return serializeChunkNbt(optionalTag.get(), registryAccess, maskEntry, minSectionY,
-                maxSectionY, useNbtTranscode);
+                maxSectionY, useNbtTranscode, notes);
     }
 
     /** Unmasked flavor — the shape the pre-masking tests and corpus pin. */
@@ -202,6 +219,27 @@ final class PaperNbtSectionSerializer {
      * serve nor condemn the column (vanilla saves light-only entries at blockRange±1; the
      * range-free overload above stays unbounded for the corpus goldens).
      */
+    static byte[] serializeChunkNbt(CompoundTag chunkNbt, RegistryAccess registryAccess,
+                                    PaperXrayMaskManager.MaskEntry maskEntry,
+                                    int minSectionY, int maxSectionY, boolean useNbtTranscode) {
+        return serializeChunkNbt(chunkNbt, registryAccess, maskEntry, minSectionY, maxSectionY,
+                useNbtTranscode, null);
+    }
+
+    /**
+     * The serializer with the caller's {@link ColumnDecodeNotes} (nullable). An
+     * UNDECODABLE column returns {@code null}, like a missing or unparseable chunk, so a
+     * caller that passes no notes (the store backfill, the range-free test flavors) just
+     * skips the chunk and can never store air; a caller that passes notes (the disk
+     * reader) also learns WHY, and must not escalate the miss to generation. Undecodable
+     * means: at least one block palette entry that a cell actually uses was a hard decode
+     * error, and either no in-range section has a non-air cell left, or a section is
+     * truly unparseable (the column would otherwise be a plain, generation-escalating
+     * miss). Before this rule the first shape serialized as all-air (or as lit air
+     * sections): stamped, stored, and sent as a clear over the client's cached terrain.
+     * A column with a decoded block and no unparseable section keeps the vanilla
+     * leniency exactly (unknown entries substitute air in place).
+     */
     // LevelChunkSection.write(buf) is @Deprecated on Paper (an anti-xray overload was added),
     // but the 1-arg form is the canonical vanilla serialization and is byte-identical to the
     // Fabric path. The wire format must match Fabric exactly, so the MASKED branch keeps this
@@ -209,7 +247,8 @@ final class PaperNbtSectionSerializer {
     @SuppressWarnings("deprecation")
     static byte[] serializeChunkNbt(CompoundTag chunkNbt, RegistryAccess registryAccess,
                                     PaperXrayMaskManager.MaskEntry maskEntry,
-                                    int minSectionY, int maxSectionY, boolean useNbtTranscode) {
+                                    int minSectionY, int maxSectionY, boolean useNbtTranscode,
+                                    ColumnDecodeNotes notes) {
         // 1.21.1 line: old-family CompoundTag getters (defaulting, not Optional-returning).
         var statusStr = chunkNbt.getString("Status");
         if (statusStr.isEmpty() || ChunkStatus.byName(statusStr) != ChunkStatus.FULL) return null;
@@ -231,6 +270,9 @@ final class PaperNbtSectionSerializer {
         var parsed = new java.util.ArrayList<ParsedSection>(sectionsList.size());
 
         int[] unparseable = {0};
+        // The first hard-error palette entry that a CELL uses, across the in-range
+        // sections (null = none): the undecodable-column gate below reads it.
+        String[] usedHardError = {null};
         boolean[] fallback = {false};
         for (var sectionElement : sectionsList) {
             var sectionTag = (CompoundTag) sectionElement;
@@ -247,18 +289,34 @@ final class PaperNbtSectionSerializer {
             if (useNbtTranscode) {
                 fallback[0] = false;
                 result = transcodeSection(sectionTag, sectionY, scoped.biomeResolver(),
-                        maskEntry, blockLightData, skyLightData, fallback);
+                        maskEntry, blockLightData, skyLightData, fallback, usedHardError);
                 if (fallback[0]) {
                     result = parseSection(sectionTag, sectionY, blockStateCodec, biomeCodec,
-                            factory, blockLightData, skyLightData, unparseable);
+                            factory, blockLightData, skyLightData, unparseable, usedHardError);
                 }
             } else {
                 result = parseSection(sectionTag, sectionY, blockStateCodec, biomeCodec,
-                        factory, blockLightData, skyLightData, unparseable);
+                        factory, blockLightData, skyLightData, unparseable, usedHardError);
             }
             if (result != null) {
                 parsed.add(result);
             }
+        }
+        if (usedHardError[0] != null && (unparseable[0] > 0 || !hasNonAirCell(parsed))) {
+            // Undecodable column: cells point at palette entries that failed to decode,
+            // and either
+            //  - nothing else in the column decoded to a block: everything LSS could say
+            //    about it would be substituted air, so it says nothing (light does not
+            //    matter — a lit column of substituted air is the same lie); or
+            //  - a section is truly unparseable, so the rung below would condemn the
+            //    column as a plain miss. That miss may escalate to generation, and a
+            //    chunk whose cells use blocks this server does not know must never be
+            //    loaded by LSS (vanilla turns them into air on load and may save the
+            //    chunk) — whatever else in it decoded.
+            // Null either way, and the notes (when the caller passed them) carry the
+            // reason. Checked BEFORE the unparseable rung for that second case.
+            if (notes != null) notes.markUndecodable(usedHardError[0]);
+            return null;
         }
         if (unparseable[0] > 0) {
             // Authoritative miss (null) — see the Fabric twin: a truly-unparseable section
@@ -280,6 +338,12 @@ final class PaperNbtSectionSerializer {
         }
         final boolean noContent = minContent == Integer.MAX_VALUE;
         final int lo = minContent - 1, hi = maxContent + 1;
+        // Diagnostics only — the bytes below do not depend on it: a column with blocks
+        // whose chunk carries no sky light anywhere. Asked before the band filter, while
+        // every in-range sky-lit section is still in the list.
+        if (notes != null && !noContent && savedWithoutSkyLight(parsed, sectionsList)) {
+            notes.markLightless();
+        }
         parsed.removeIf(p -> p.nonEmptyCount() == 0
                 && !p.litByBlock()
                 && (noContent || p.sectionY() < lo || p.sectionY() > hi));
@@ -408,7 +472,8 @@ final class PaperNbtSectionSerializer {
      */
     private static ParsedSection transcodeSection(CompoundTag sectionTag, int sectionY,
             BiomeIdResolver biomeResolver, PaperXrayMaskManager.MaskEntry maskEntry,
-            byte[] blockLightData, byte[] skyLightData, boolean[] fallback) {
+            byte[] blockLightData, byte[] skyLightData, boolean[] fallback,
+            String[] usedHardError) {
 
         // ---- blocks: palette ids + the two count headers off the raw long array ----
         int blockBits = 0;
@@ -566,6 +631,10 @@ final class PaperNbtSectionSerializer {
         }
 
         if (hardErrors > 0) {
+            // Which failed entries do cells actually use? Recorded HERE, after every
+            // fallback return above: a section that falls back is decided by the object
+            // path alone, through the same helper, so the two routes cannot disagree.
+            if (usedHardError[0] == null) usedHardError[0] = firstUsedHardError(sectionTag);
             // The object path's resultOrPartial warn, mirrored for the air-substitution
             // case the transcoder owns (fallback shapes warn from the object path).
             long released = PARSE_WARN_THROTTLE.recordAndTryAcquire(System.nanoTime() / 1_000_000);
@@ -601,7 +670,8 @@ final class PaperNbtSectionSerializer {
             Codec<PalettedContainer<BlockState>> blockStateCodec,
             Codec<PalettedContainerRO<Holder<Biome>>> biomeCodec,
             Registry<Biome> factory, // 1.21.1 line: the seam parameter is the biome registry
-            byte[] blockLightData, byte[] skyLightData, int[] unparseable) {
+            byte[] blockLightData, byte[] skyLightData, int[] unparseable,
+            String[] usedHardError) {
 
         boolean hasBlockStates = sectionTag.contains("block_states", Tag.TAG_COMPOUND);
         PalettedContainer<BlockState> blockStates;
@@ -618,7 +688,9 @@ final class PaperNbtSectionSerializer {
             // Vanilla-lenient (resultOrPartial) — see the Fabric twin: a recoverable
             // palette error (pre-DFU block rename) substitutes air and KEEPS the section;
             // only a no-partial parse counts unparseable.
+            boolean[] partial = {false};
             blockStates = blockStatesResult.resultOrPartial(err -> {
+                partial[0] = true;
                 long released = PARSE_WARN_THROTTLE.recordAndTryAcquire(System.nanoTime() / 1_000_000);
                 if (released > 0) {
                     String suffix = released > 1 ? " (+" + (released - 1) + " more suppressed)" : "";
@@ -629,6 +701,12 @@ final class PaperNbtSectionSerializer {
             if (blockStates == null) {
                 unparseable[0]++;
                 return null;
+            }
+            // A partial: some entry substituted air. Record whether cells use a failed
+            // entry BEFORE the empty-section return below (an all-failed section is
+            // exactly the one that return drops).
+            if (partial[0] && usedHardError[0] == null) {
+                usedHardError[0] = firstUsedHardError(sectionTag);
             }
         }
 
@@ -655,6 +733,96 @@ final class PaperNbtSectionSerializer {
 
         return new ParsedSection(sectionY, null, blockStates, biomes, nonEmpty, fluid,
                 blockLightData, skyLightData, litByBlock, litBySky);
+    }
+
+    /**
+     * True when no section entry of the chunk carries a sky-light layer with a non-zero
+     * nibble: the chunk is saved without sky light (lightless-chunks plan, fold item 7 —
+     * a diagnostics fact for the reader's notes; it never changes a byte). Every entry
+     * counts, whatever its Y: vanilla saves a fully lit light-only entry above the block
+     * range, and an entry the range gate or the content band drops from the wire still
+     * proves the chunk was lit. A layer is one the serializer itself would accept (2048
+     * bytes). Cheap by construction: a served section that is sky-lit answers from the
+     * flag its parse already computed, so a lit chunk reads no array here at all;
+     * otherwise the entries are scanned top first with the vectorized zero compare,
+     * which stops at the first non-zero byte. Nothing is allocated, copied or written.
+     */
+    private static boolean savedWithoutSkyLight(java.util.List<ParsedSection> parsed,
+                                                ListTag sections) {
+        for (var p : parsed) {
+            if (p.litBySky()) return false;
+        }
+        for (int i = sections.size() - 1; i >= 0; i--) {
+            if (sections.get(i) instanceof CompoundTag section
+                    && section.get("SkyLight") instanceof ByteArrayTag sky) {
+                byte[] layer = sky.getAsByteArray();
+                if (layer.length == 2048 && hasNonZeroNibble(layer)) return false;
+            }
+        }
+        return true;
+    }
+
+    /** True when any parsed section still has a non-air cell (the column has content). */
+    private static boolean hasNonAirCell(java.util.List<ParsedSection> parsed) {
+        for (var p : parsed) {
+            if (p.nonEmptyCount() != 0) return true;
+        }
+        return false;
+    }
+
+    /**
+     * The decode message of the first hard-error block palette entry that at least one
+     * CELL of this section uses, or null when there is none. Counting cells, not palette
+     * entries: a leftover entry no cell points at changes nothing on screen, and must
+     * not turn a truly empty column into an undecodable one. Shared by both routes (the
+     * transcoder and the object path), reading the raw NBT and the palette memo only, so
+     * they agree by construction and the walk is the same text on every Minecraft line.
+     * Runs only for a section that already had a hard error (the memo lookups are hits).
+     */
+    private static String firstUsedHardError(CompoundTag sectionTag) {
+        if (!(sectionTag.get("block_states") instanceof CompoundTag bs)
+                || !(bs.get("palette") instanceof ListTag palette)) {
+            return null;
+        }
+        int n = palette.size();
+        String[] failed = null;
+        for (int i = 0; i < n; i++) {
+            String error = BlockCodecHolder.ELEMENT.resolve(palette.get(i)).hardError();
+            if (error != null) {
+                if (failed == null) failed = new String[n];
+                failed[i] = error;
+            }
+        }
+        if (failed == null) return null;
+        if (n == 1) return failed[0]; // a single-entry palette: every cell uses it
+        // The disk index width for n entries (4 bits up to 16 entries, then
+        // ceil(log2 n)), read through the ops accessor the container codec itself uses
+        // (a long array, or a list of longs).
+        int bits = n <= 16 ? 4 : 32 - Integer.numberOfLeadingZeros(n - 1);
+        int vpl = 64 / bits;
+        var dataTag = bs.get("data");
+        long[] data = dataTag == null ? null : NbtOps.INSTANCE.getLongStream(dataTag)
+                .result().map(java.util.stream.LongStream::toArray).orElse(null);
+        if (data == null || data.length != (4096 + vpl - 1) / vpl) {
+            // Belt only: both callers get here for a section whose data the codec (or the
+            // transcoder's own length check) accepted. If the cells cannot be read, a
+            // failed entry counts as used: the safe side is "do not serve air".
+            for (String error : failed) {
+                if (error != null) return error;
+            }
+            return null;
+        }
+        long mask = (1L << bits) - 1;
+        int count = 0;
+        for (long cell : data) {
+            for (int j = 0; j < vpl; j++) {
+                int index = (int) (cell & mask);
+                if (index < n && failed[index] != null) return failed[index];
+                cell >>>= bits;
+                if (++count == 4096) return null;
+            }
+        }
+        return null;
     }
 
     /**
