@@ -630,10 +630,10 @@ Files: `common/.../voxel/SkyLightEstimate.java` (the rule, no Minecraft types),
 - **The result is exactly vanilla's for the column alone.** `ClientSkyLightEstimatorTest` lights
   the same chunk with vanilla's `LevelLightEngine` (one chunk, no neighbours; the unit-test
   classpath can run it on a `ProtoChunk` without a world) and compares every stored sky layer
-  nibble for nibble: 17 hand-built shapes and 40 random chunks built from 42 block states. To get there
-  the routine also copies one vanilla quirk: `ChunkSkyLightSources.findLowestSourceY` passes an
-  all-air section without the face check, so a bottom slab on a section's lowest layer over an
-  all-air section lets the light through.
+  nibble for nibble: 17 hand-built shapes and 40 random chunks built from 42 block states. To
+  get there the routine also copies one vanilla quirk: `ChunkSkyLightSources.findLowestSourceY`
+  passes an all-air section without the face check, so a bottom slab on a section's lowest
+  layer over an all-air section lets the light through.
 - **The band** is every section that was sent plus one section of air above the top content
   section and one below the bottom one. Those two take part in the spread even when they lie
   outside the level (vanilla's light engine has them too); a layer is only ever added inside
@@ -741,7 +741,20 @@ File: `DhColumnConverter` (`carryLoss`, `carriedLight`, one changed line in `con
   mutations were first caught only by the random comparison, so each got a named case
   (a full face stopping the sideways spread; partial faces above each other).
 
-### 14.4 Left open
+### 14.4 Gates on the 26.3 line (2026-11-12, no retries)
+
+- `run-gradle.sh build`: green. Unit tests: common 1,196, fabric 2,195 (5 self-skipping
+  tools), paper 592, neoforge 25, sponge 25; Fabric server gametests 94 of 94.
+- `verify.py integration --run` on the private Xvfb display: green. Fabric server gametests
+  94 of 94, NeoForge gametests 8 of 8, Fabric client gametests passed (the client came up on
+  Vulkan llvmpipe after the OpenGL backend found no GLX visual, as this line expects).
+- `tools/tests/inventory.py validate-moves`, `tools/tests/check_artifacts.py`,
+  `tools/compat/catalog.py validate` and `render --check`: green.
+- `tools/compat/ci.py`: red, as expected before the six-line port and re-pin. Every issue is a
+  file of this change: the three shared `common` files that the other lines do not have yet,
+  the eight adapted files, and the eight new files that are not classified.
+
+### 14.5 Left open
 
 - Voxy on a private display: a stripped real-terrain world against the same area with real
   light (forest, cliffs and overhangs, ocean, a village, a cave mouth), and the DH 3.3.3 rig
