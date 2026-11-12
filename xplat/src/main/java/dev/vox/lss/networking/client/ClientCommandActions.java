@@ -33,23 +33,76 @@ public final class ClientCommandActions {
     private ClientCommandActions() {
     }
 
-    /** /lss clearcache. */
+    /**
+     * What {@code clearcache} clears right now. It follows the CONNECTION, never the request
+     * manager alone: Receive OFF, a map-policy park, a server-side disable and the moment
+     * before the session config all leave no manager while the player is on a server, and
+     * clearing every server's records from inside one is wider than anyone asked for
+     * (docs/planning/2026-11-12-redownload-terrain-button-plan.md, decision 2).
+     */
+    public enum ClearCacheScope {
+        /** An LSS session, or a DH connection that can download, is live: this server's records. */
+        CURRENT_SERVER,
+        /** On a remote server that cannot send the terrain again right now: nothing is cleared. */
+        NOT_RECEIVING,
+        /** Singleplayer, or not in a world: every server's records. */
+        ALL_SERVERS;
+
+        /** The whole rule. {@code ALL_SERVERS} is never the answer on a remote server. */
+        static ClearCacheScope of(boolean lssSession, boolean dhTerrain, boolean connected,
+                                  boolean integratedServer) {
+            if (lssSession || dhTerrain) return CURRENT_SERVER;
+            return connected && !integratedServer ? NOT_RECEIVING : ALL_SERVERS;
+        }
+    }
+
+    /** The scope {@link #clearCache} would act on now; the Re-download Terrain dialog shows it
+     *  before asking and checks it again on confirm. */
+    public static ClearCacheScope clearCacheScope() {
+        return clearCacheScope(ClientNetGlue.getRequestManager());
+    }
+
+    /** {@code manager} is the session gate's request manager (null without an LSS session).
+     *  A DH connection counts only while it can download: the server has negotiated DH
+     *  ({@code dhServerConnection}, the rule {@code reset} uses) AND {@code canAcquire()} holds.
+     *  DH merely being allowed, an unanswered hello, a stopped source, a failed Voxy bridge, a
+     *  level or connection in mid-switch, and a server that offers neither sync nor generation
+     *  (pushes only) cannot send the terrain again, so the scope never says they will: clearing
+     *  there would cost the records and promise a download that does not come. */
+    static ClearCacheScope clearCacheScope(LodRequestManager manager) {
+        var client = net.minecraft.client.Minecraft.getInstance();
+        return ClearCacheScope.of(manager != null,
+                DhClientSession.dhServerConnection() && DhClientSession.canAcquire()
+                        && client.getCurrentServer() != null,
+                client.getConnection() != null, client.hasSingleplayerServer());
+    }
+
+    /** /lss clearcache, and the Re-download Terrain button. */
     public static void clearCache(Consumer<Component> feedback) {
+        clearCache(feedback, ClientNetGlue.getRequestManager());
+    }
+
+    /** One read of the manager decides the scope and is the manager that gets flushed, so the
+     *  scope and the clear cannot disagree. Package-private: the unit tests pass a manager. */
+    static void clearCache(Consumer<Component> feedback, LodRequestManager manager) {
+        ClearCacheScope scope = clearCacheScope(manager);
+        if (scope == ClearCacheScope.NOT_RECEIVING) {
+            feedback.accept(Component.literal(Brand.shortName()
+                    + " is not downloading distant terrain from this server right now. Nothing was cleared."));
+            return;
+        }
         boolean dhContext=DhClientSession.selected() && net.minecraft.client.Minecraft.getInstance().getConnection()!=null;
-        boolean dhActive=DhClientSession.canAcquire();
         if (dhContext || DhClientSession.ownsWork()) DhClientSession.drainForReset();
-        var manager = ClientNetGlue.getRequestManager();
-        if (manager != null) {
-            manager.flushCache();
-            feedback.accept(Component.literal(
-                    Brand.shortName() + " column cache cleared for current server. Chunks will be re-requested."));
-        } else if(dhContext && net.minecraft.client.Minecraft.getInstance().getCurrentServer()!=null) {
-            feedback.accept(Component.literal(Brand.shortName() + " column cache cleared for current server. "
-                    + (dhActive?"Chunks will be re-requested.":"No active DH download service; acquisition remains paused.")));
-        } else {
+        if (scope == ClearCacheScope.ALL_SERVERS) {
             ColumnCacheStore.clearAll();
             feedback.accept(Component.literal(
                     Brand.shortName() + " column cache cleared for all servers."));
+        } else {
+            // CURRENT_SERVER: an LSS session, or a DH connection the scope found able to download
+            // (the drain above cleared its receipts). Either way the terrain is requested again.
+            if (manager != null) manager.flushCache();
+            feedback.accept(Component.literal(
+                    Brand.shortName() + " column cache cleared for current server. Chunks will be re-requested."));
         }
         if (dhContext) DhClientSession.resumeAfterReset();
     }

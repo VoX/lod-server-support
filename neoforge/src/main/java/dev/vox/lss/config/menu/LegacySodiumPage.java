@@ -78,15 +78,19 @@ public final class LegacySodiumPage {
     public record Member(String owner, MemberKind kind, String name, int arity) {
     }
 
-    /** Every member the legacy STACK binds by name — this builder, the constructor hook
-     *  and the ModMenu deep-link — the resolves-test's checklist against real bytecode. */
+    /** Every member the legacy STACK binds by name — this builder, the constructor hook,
+     *  the ModMenu deep-link and the tab fitting — the resolves-test's checklist against
+     *  real bytecode. */
     public static final List<Member> SURFACE = List.of(
             new Member(OPTIONS_SCREEN, MemberKind.FIELD, "pages", 0),
             new Member(OPTIONS_SCREEN, MemberKind.FIELD, "currentPage", 0),
             new Member(OPTIONS_SCREEN, MemberKind.FIELD, "donateButton", 0),
             new Member(OPTIONS_SCREEN, MemberKind.FIELD, "hideDonateButton", 0),
             new Member(OPTIONS_SCREEN, MemberKind.PRIVATE_METHOD, "rebuildGUI", 0),
+            new Member(OPTIONS_SCREEN, MemberKind.METHOD, "setPage", 1),
+            new Member(".client.gui.widgets.FlatButtonWidget", MemberKind.CONSTRUCTOR, "<init>", 3),
             new Member(".client.gui.widgets.FlatButtonWidget", MemberKind.FIELD, "dim", 0),
+            new Member(".client.gui.widgets.FlatButtonWidget", MemberKind.FIELD, "visible", 0),
             new Member(".client.gui.widgets.FlatButtonWidget", MemberKind.METHOD, "setVisible", 1),
             new Member(".client.util.Dim2i", MemberKind.CONSTRUCTOR, "<init>", 4),
             new Member(".client.util.Dim2i", MemberKind.METHOD, "x", 0),
