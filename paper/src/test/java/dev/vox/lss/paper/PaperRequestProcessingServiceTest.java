@@ -674,14 +674,17 @@ class PaperRequestProcessingServiceTest {
                         0, 0, 0, false, false, true, false, true, 0L, null, null, null));
         dev.vox.lss.common.farplayers.FarPlayerBroadcastService.FrameSender frames = (to, channel, body) -> true;
 
-        // The player list does not hold the player yet (the mock answers null).
+        // Two consecutive "not a holder" reads confirm the override; the player list does
+        // not hold the player yet (the mock answers null).
         fp.tick(1_000_000L, online, settings, frames);
+        fp.tick(1_000_500L, online, settings, frames);
+        assertEquals(1, fp.lastPassOverridden(), "premise: the override is live");
         assertTrue(told.isEmpty(), "an unreachable player is not sent anything");
         assertFalse(fp.hasRequiredSharingNotice(optedOut), "and the line is not marked as sent");
 
         when(playerList.getPlayer(optedOut)).thenReturn(optedOutPlayer);
-        fp.tick(1_000_500L, online, settings, frames);
         fp.tick(1_001_000L, online, settings, frames);
+        fp.tick(1_001_500L, online, settings, frames);
         assertEquals(List.of(optedOut + "|"
                         + dev.vox.lss.common.farplayers.FarPlayerBroadcastService.requiredSharingNotice()),
                 told, "exactly one system chat line, to the overridden player only");
