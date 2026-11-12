@@ -20,6 +20,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * <p>Both cores build exactly one {@code FarPlayerBroadcastService.Settings} per pass, and
  * its last argument is the config read at that moment (the tick-poll pattern, so a reload
  * takes effect on the next pass with no restart).
+ *
+ * <p>The same holds for mode {@code required}'s notice (plan §2b): the core can only tell a
+ * player their Share My Position choice is overridden through the chat lane each server
+ * core hands it. A core built without one would show an opted-out player to everyone and
+ * say nothing — the exact dishonesty the notice exists to prevent — with every test green.
  */
 class FarPlayerHidePermissionWiringContractTest {
 
@@ -47,6 +52,37 @@ class FarPlayerHidePermissionWiringContractTest {
         assertTrue(code.contains("this.config.farPlayersUpdateIntervalTicks(),"
                         + " this.config.farPlayersHidePermissionHolders()), this::sendFarPlayerFrame);"),
                 "the pass must read far_players.hide_permission_holders from the config each time");
+    }
+
+    @Test
+    void bothServerCoresGiveTheBroadcastCoreAChatLaneThatSendsASystemMessage() throws IOException {
+        // The shared core (Fabric, NeoForge, Sponge): the constructor's last two arguments.
+        String shared = code("xplat/src/main/java/dev/vox/lss/networking/server/RequestProcessingService.java");
+        assertEquals(1, shared.split("new dev\\.vox\\.lss\\.common\\.farplayers\\.FarPlayerBroadcastService\\(", -1).length - 1,
+                "one broadcast core per service");
+        assertTrue(shared.contains("vanish.canSee(server, observer, target); }, LSSLogger::info,"
+                        + " this::sendFarPlayerNotice);"),
+                "the shared core must be built with the chat lane");
+        // Paper/Folia.
+        String paper = code("paper/src/main/java/dev/vox/lss/paper/PaperRequestProcessingService.java");
+        assertEquals(1, paper.split("new dev\\.vox\\.lss\\.common\\.farplayers\\.FarPlayerBroadcastService\\(", -1).length - 1,
+                "one broadcast core per service");
+        assertTrue(paper.contains("new dev.vox.lss.common.farplayers.FarPlayerBroadcastService(null,"
+                        + " LSSLogger::info, this::sendFarPlayerNotice);"),
+                "the Paper core must be built with the chat lane");
+        for (String core : new String[]{shared, paper}) {
+            // An ordinary system message: it reaches every client version, with no LSS
+            // channel, capability bit or session flag involved.
+            assertTrue(core.contains("farPlayerNoticeSender = (player, text) -> player.sendSystemMessage("
+                            + " net.minecraft.network.chat.Component.literal(text));"),
+                    "the lane's production send is a system chat message");
+            assertTrue(java.util.regex.Pattern.compile(
+                            "private boolean sendFarPlayerNotice\\(UUID uuid, String text\\) \\{.{0,260}?"
+                                    + "getPlayer\\(uuid\\);.{0,40}?if \\(player == null\\) return false;"
+                                    + " this\\.farPlayerNoticeSender\\.accept\\(player, text\\); return true; \\}")
+                            .matcher(core).find(),
+                    "an unreachable player answers false (the core retries); a reachable one is sent the line");
+        }
     }
 
     @Test

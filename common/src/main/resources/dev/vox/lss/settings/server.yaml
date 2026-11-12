@@ -160,10 +160,17 @@ privacy:
 # Sends lightweight distant-player snapshots beyond normal entity tracking range.
 # This does not keep distant entities ticking. Larger ranges and more frequent
 # updates can increase server work, traffic and client rendering work.
-# "opt_in" shares only targets whose clients explicitly allow sharing; "on" can
-# also include vanilla players. Exclusions, visibility rules and opt-outs still apply.
+# Modes:
+#   "off"      - nobody is shown.
+#   "opt_in"   - only players whose own client shares their position are shown.
+#   "on"       - everyone is shown, players without the mod too; a player can hide
+#                with Share My Position.
+#   "required" - everyone is shown and cannot opt out, except players who hold the
+#                lss.farplayers.hidden (vss.farplayers.hidden) permission. A player
+#                whose choice is overridden is told so once in chat.
+# Exclusions, spectator and invisibility rules, vanish and disguises apply in every mode.
 far_players:
-  mode: "on" # "off", "opt_in" or "on"; all modes honor exclusions and sharing opt-outs.
+  mode: "on" # "off", "opt_in", "on" (players may opt out) or "required" (only permission holders may).
   update_interval_ticks: 10 # 10 ticks = two updates/second at 20 TPS; range 2–100.
   distance:
     min_blocks: 0 # 0 = no additional inner ring; cannot exceed max_blocks.
@@ -171,7 +178,8 @@ far_players:
   send_spectators: false # Include spectator targets if other privacy checks allow them.
   excluded_players: [] # Player names or UUIDs never shared; kept out of diagnostic exports.
   # Hide every player who holds the lss.farplayers.hidden (vss.farplayers.hidden)
-  # permission (the behaviour before 0.21.0). A grant of every permission ("*")
-  # includes it, so this can hide all your admins. Off: the permission hides nobody
-  # by itself; players choose with Share My Position.
+  # permission, in every mode (the behaviour before 0.21.0). A grant of every
+  # permission ("*") includes it, so this can hide all your admins. Off: the
+  # permission hides nobody by itself; players choose with Share My Position
+  # (in mode "required", only holders can).
   hide_permission_holders: false # Hide every player who holds the far-player hide permission.

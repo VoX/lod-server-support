@@ -79,6 +79,10 @@ public class ServerConfigBase {
     public final boolean farPlayersHidePermissionHolders() { return snapshot().farPlayers().hidePermissionHolders(); }
     public final List<String> updateEvents() { return snapshot().paper().updateEvents(); }
     public final String lodStore() { return snapshot().storage().lodStore().enabled() ? "on" : "off"; }
+    /** {@code far_players.mode} as the broadcast core reads it: {@code off},
+     *  {@code opt-in} (the YAML spelling is {@code opt_in}), {@code on} or
+     *  {@code required} (0.21.0: everyone is shown and only holders of the hide
+     *  permission may opt out). */
     public final String farPlayers() {
         String mode = snapshot().farPlayers().mode();
         return mode.equals("opt_in") ? "opt-in" : mode;
@@ -263,6 +267,7 @@ public class ServerConfigBase {
         return switch (v.trim().toLowerCase(java.util.Locale.ROOT)) {
             case "on" -> "on";
             case "opt-in", "optin", "opt_in" -> "opt-in";
+            case "required" -> "required";
             default -> "off";
         };
     }

@@ -1644,6 +1644,66 @@ public class ServiceLifecycleGameTests {
     }
 
     /**
+     * Mode "required" (hide-permission plan §2b) through the REAL broadcast pass of the
+     * shared core (Fabric, NeoForge and Sponge run it): a player who turned Share My
+     * Position off is told once, in chat, that it does not apply on this server; a player
+     * who shares is told nothing; mode "on" tells nobody. The exact filter arithmetic and
+     * the once-per-connection latch are Tier 1's job (FarPlayerBroadcastServiceTest); this
+     * tier pins that the service's own tick builds the snapshots, reads the live mode and
+     * reaches the player through the system-message lane.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void requiredModeTellsAnOverriddenPlayerOnceInChat(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        var server = level.getServer();
+        var viewer = placeMockServerPlayer(helper);
+        var optedOut = placeMockServerPlayer(helper);
+        var sharer = placeMockServerPlayer(helper);
+        var config = new ServiceSettingsFixture();
+        var service = new RequestProcessingService(server, config);
+        String savedMode = config.farPlayers().equals("opt-in") ? "opt_in" : config.farPlayers();
+        int savedInterval = config.farPlayersUpdateIntervalTicks();
+        try {
+            optedOut.setPos(viewer.getX() + 500, viewer.getY(), viewer.getZ());
+            sharer.setPos(viewer.getX() + 600, viewer.getY(), viewer.getZ());
+            var told = new ArrayList<String>();
+            service.setFarPlayerNoticeSenderForTest((player, text) -> told.add(player.getUUID() + "|" + text));
+            LSSServerNetworking.handleHandshake(
+                    new HandshakeC2SPayload(LSSConstants.PROTOCOL_VERSION,
+                            LSSConstants.CAPABILITY_VOXEL_COLUMNS | LSSConstants.CAPABILITY_FAR_PLAYERS),
+                    viewer, service, reply -> { });
+            var fp = service.getFarPlayerService();
+            fp.onPrefs(viewer.getUUID(), new dev.vox.lss.common.farplayers.FarPlayerWire.Prefs(true, 0, 0, true, 0));
+            fp.onPrefs(optedOut.getUUID(), new dev.vox.lss.common.farplayers.FarPlayerWire.Prefs(true, 0, 0, false, 0));
+            fp.onPrefs(sharer.getUUID(), new dev.vox.lss.common.farplayers.FarPlayerWire.Prefs(true, 0, 0, true, 0));
+            config.set("far_players.update_interval_ticks", 2); // the clamp floor — 2 service ticks
+
+            config.set("far_players.mode", "on");
+            service.tick();
+            service.tick();
+            helper.assertTrue(told.isEmpty(), "mode on honors the opt-out: nobody is told, got " + told);
+            helper.assertTrue(!fp.diagLine().contains("overridden="), "mode on: " + fp.diagLine());
+
+            config.set("far_players.mode", "required");
+            for (int i = 0; i < 6; i++) service.tick();
+            String expected = optedOut.getUUID() + "|"
+                    + dev.vox.lss.common.farplayers.FarPlayerBroadcastService.requiredSharingNotice();
+            helper.assertTrue(told.equals(java.util.List.of(expected)),
+                    "exactly one chat line, to the opted-out player only, got " + told);
+            helper.assertTrue(fp.diagLine().contains("overridden=1"),
+                    "the diag line counts the overridden player: " + fp.diagLine());
+            helper.assertTrue(fp.hasRequiredSharingNotice(optedOut.getUUID())
+                            && !fp.hasRequiredSharingNotice(sharer.getUUID()),
+                    "the per-connection latch holds the overridden player only");
+        } finally {
+            config.set("far_players.mode", savedMode);
+            config.set("far_players.update_interval_ticks", savedInterval);
+            service.shutdown();
+        }
+        helper.succeed();
+    }
+
+    /**
      * Region freshness against REAL game-written region files (region-summary-sync-
      * plan.md P1/P2 — the review's live-coverage gap): every Tier-1 pin reads headers
      * the tests themselves crafted, so this is the one place the z-major header layout,

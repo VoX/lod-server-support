@@ -47,9 +47,10 @@ class FarPlayerHidePermissionSettingsTest {
             assertTrue(key > 0, "template key, paper=" + paper);
             String before = template.substring(template.lastIndexOf("\nfar_players:", key), key);
             assertTrue(before.contains("lss.farplayers.hidden (vss.farplayers.hidden)"), before);
-            assertTrue(before.contains("the behaviour before 0.21.0"), before);
-            assertTrue(before.contains("Off: the permission hides nobody"), before);
+            assertTrue(before.contains("in every mode (the behaviour before 0.21.0)"), before);
+            assertTrue(before.contains("Off: the\n  # permission hides nobody"), before);
             assertTrue(before.contains("Share My Position"), before);
+            assertTrue(before.contains("(in mode \"required\", only holders can)"), before);
             // The VSS file names the same two nodes (both spellings are declared in both jars).
             String vss = new String(new YamlSettingsCodec<>(SettingsSchema.server(paper), "vss").defaults(),
                     StandardCharsets.UTF_8);

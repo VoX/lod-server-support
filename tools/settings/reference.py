@@ -56,7 +56,14 @@ def render(data: dict | None = None) -> str:
               "upgraded file gains the key only when the setting is changed. **Server downgrade",
               "exception:** LSS 0.20 and older reject unknown keys, so a server file that carries the",
               "key (every file a newer build creates) loads there only after deleting that line (or the",
-              "file).", ""]
+              "file).", "",
+              "`far_players.mode` takes four values, applied by a reload: `off` (nobody is shown),",
+              "`opt_in` (only players whose own client shares their position), `on` (the default:",
+              "everyone, and a player can hide with Share My Position) and, new in 0.21.0, `required`",
+              "(everyone is shown and cannot opt out, except holders of `lss.farplayers.hidden` /",
+              "`vss.farplayers.hidden`; a player whose choice is overridden is told so once in chat).",
+              "**Server downgrade exception:** LSS 0.20 and older reject the value `required`, so a",
+              "server file that says `mode: \"required\"` loads there only after changing it.", ""]
     for key, title in [("server", "Fabric / NeoForge / Sponge server"), ("paper", "Paper / Folia server"), ("client", "Client")]:
         schema = data[key]
         output += ["## " + title, "", "| YAML path | Type | Default | Range / units | Timing | Applicability |", "| --- | --- | --- | --- | --- | --- |"]
