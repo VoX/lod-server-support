@@ -1849,17 +1849,118 @@ class DhClientSessionTest {
         var current=new DhReceiptStore(ColumnCacheStore.cacheRoot(),new DhReceiptStore.Key(minecraft.server.ip,"server","world",DIMENSION,8,DhProfile.OFFICIAL_16,shape));
         var retained=new DhReceiptStore(ColumnCacheStore.cacheRoot(),new DhReceiptStore.Key(other,"server","world",DIMENSION,8,DhProfile.OFFICIAL_16,shape));
         var entry=Map.of(POSITION,new DhReceiptStore.Entry(123,DhReceiptStore.CONVERSION_VERSION));
-        current.save(entry);retained.save(entry);var s=session();
-        write(s,SESSION,"config",new DhMessage.SessionConfig(DhMessage.GeneratorPlan.DISABLED,0,0,0,0,0,true,32,true,32,50,500));
-        assertTrue(DhClientSession.dhServerConnection());
+        current.save(entry);retained.save(entry);var s=updateSession();
+        assertTrue(DhClientSession.dhServerConnection());assertTrue(DhClientSession.canAcquire());
         assertEquals(ClientCommandActions.ClearCacheScope.CURRENT_SERVER,ClientCommandActions.clearCacheScope());
         var feedback=new ArrayList<net.minecraft.network.chat.Component>();
         try {
             ClientCommandActions.clearCache(feedback::add);
             assertFalse(active(s));assertTrue(current.load().isEmpty());assertEquals(1,retained.load().size());
-            assertEquals(1,feedback.size());assertTrue(feedback.getFirst().getString().contains("current server"));
+            assertEquals(1,feedback.size());
+            String line=feedback.getFirst().getString();
+            assertTrue(line.contains("current server")&&line.contains("Chunks will be re-requested"),line);
         } finally {ColumnCacheStore.clearDhReceipts(other);}
     }
+    /** Review fold: a negotiated DH connection that cannot download right now must not promise a re-download.
+     *  Every cause that leaves canAcquire() false is "not receiving": nothing is cleared, the session is left
+     *  alone, and the command says so (the dialog and the toast follow the same scope). */
+    @Test void clearCacheOnADhConnectionThatCannotDownloadClearsNothing() throws Exception {
+        var current=new DhReceiptStore(ColumnCacheStore.cacheRoot(),new DhReceiptStore.Key(minecraft.server.ip,"server","world",DIMENSION,8,
+                DhProfile.OFFICIAL_16,new DhTerrainTile.WorldShape(-64,384,true)));
+        current.save(Map.of(POSITION,new DhReceiptStore.Entry(123,DhReceiptStore.CONVERSION_VERSION)));
+        var s=updateSession();var working=read(s,SESSION,"config");
+        var dead=(java.util.concurrent.atomic.AtomicBoolean)read(null,Class.forName("dev.vox.lss.compat.VoxyCompat"),"dhBridgeDead");
+        boolean wasDead=dead.get();var held=minecraft.level;
+        try {
+            assertTrue(DhClientSession.canAcquire());
+            // The server offers neither sync nor generation: real-time pushes only.
+            write(s,SESSION,"config",new DhMessage.SessionConfig(DhMessage.GeneratorPlan.DISABLED,0,0,0,0,0,true,32,false,0,0,500));
+            assertNothingCleared("push-only server config",s,current);
+            write(s,SESSION,"config",working);
+            // The same, chosen locally: sync on load is off in the client settings.
+            setting(Map.of("lod.dh.sync_on_load",false));
+            assertNothingCleared("sync on load off",s,current);
+            setting(Map.of("lod.dh.sync_on_load",true));
+            // The level is switching: the session still belongs to the level being left.
+            minecraft.level=mcMock(ClientLevel.class);
+            assertNothingCleared("level switch",s,current);
+            minecraft.level=held;
+            // The connection is switching.
+            write(minecraft.player,LocalPlayer.class,"connection",mcMock(ClientPacketListener.class));
+            assertNothingCleared("connection switch",s,current);
+            write(minecraft.player,LocalPlayer.class,"connection",connection);
+            // The Voxy bridge failed: nothing can take the terrain.
+            dead.set(true);
+            assertNothingCleared("Voxy bridge failed",s,current);
+            dead.set(wasDead);
+            // Downloading again: this server, as before.
+            assertTrue(DhClientSession.canAcquire());
+            assertEquals(ClientCommandActions.ClearCacheScope.CURRENT_SERVER,ClientCommandActions.clearCacheScope());
+        } finally {
+            dead.set(wasDead);minecraft.level=held;ColumnCacheStore.clearDhReceipts(minecraft.server.ip);
+        }
+    }
+    private void assertNothingCleared(String why,Object s,DhReceiptStore receipts) throws Exception {
+        assertTrue(DhClientSession.dhServerConnection(),why+": still a negotiated DH connection");
+        assertFalse(DhClientSession.canAcquire(),why+": but nothing can be downloaded");
+        assertEquals(ClientCommandActions.ClearCacheScope.NOT_RECEIVING,ClientCommandActions.clearCacheScope(),why);
+        var feedback=new ArrayList<net.minecraft.network.chat.Component>();
+        ClientCommandActions.clearCache(feedback::add);
+        assertTrue(active(s),why+": the session is left alone");assertSame(s,read(null,DhClientSession.class,"session"),why);
+        assertEquals(1,receipts.load().size(),why+": the saved receipts stay");
+        assertEquals(1,feedback.size(),why);
+        assertTrue(feedback.getFirst().getString().contains("Nothing was cleared"),why+": "+feedback.getFirst().getString());
+    }
+    /** A negotiated session that then stopped (config kept, no longer active) is not a download either. */
+    @Test void clearCacheOnAStoppedDhSourceClearsNothing() throws Exception {
+        var current=new DhReceiptStore(ColumnCacheStore.cacheRoot(),new DhReceiptStore.Key(minecraft.server.ip,"server","world",DIMENSION,8,
+                DhProfile.OFFICIAL_16,new DhTerrainTile.WorldShape(-64,384,true)));
+        current.save(Map.of(POSITION,new DhReceiptStore.Entry(123,DhReceiptStore.CONVERSION_VERSION)));
+        var s=updateSession();
+        invoke(s,"fail",new Class<?>[]{String.class,DhStatusSnapshot.Reason.class},"test stop",DhStatusSnapshot.Reason.SOURCE_STOPPED);
+        try {
+            assertFalse(active(s));assertNotNull(read(s,SESSION,"config"));
+            assertEquals(DhStatusSnapshot.State.STOPPED,DhClientSession.diagnostics().state());
+            assertEquals(ClientCommandActions.ClearCacheScope.NOT_RECEIVING,ClientCommandActions.clearCacheScope());
+            var feedback=new ArrayList<net.minecraft.network.chat.Component>();
+            ClientCommandActions.clearCache(feedback::add);
+            assertSame(s,read(null,DhClientSession.class,"session"),"clearcache does not restart a stopped source");
+            assertEquals(DhStatusSnapshot.State.STOPPED,DhClientSession.diagnostics().state());
+            assertEquals(1,current.load().size(),"The saved receipts stay");
+            assertEquals(1,feedback.size());assertTrue(feedback.getFirst().getString().contains("Nothing was cleared"),feedback::toString);
+        } finally {ColumnCacheStore.clearDhReceipts(minecraft.server.ip);}
+    }
+    /** What the "stopped" status text tells the player to do. With a working Voxy bridge a stopped source
+     *  stays stopped by itself (clearcache no longer restarts it either); turning Receive Server LODs off
+     *  drops it, so turning it on again starts a fresh session, and so does reconnecting. */
+    @Test void aStoppedDhSourceStaysStoppedUntilReceiveIsToggledOrThePlayerReconnects() throws Exception {
+        Object voxy=read(null,ModCompat.class,"voxyLoaded");
+        write(null,ModCompat.class,"voxyLoaded",true);
+        try {
+            var s=updateSession();
+            invoke(s,"fail",new Class<?>[]{String.class,DhStatusSnapshot.Reason.class},"test stop",DhStatusSnapshot.Reason.SOURCE_STOPPED);
+            DhClientSession.tick();DhClientSession.tick();
+            assertSame(s,read(null,DhClientSession.class,"session"),"time alone does not restart a stopped source");
+            assertEquals(DhStatusSnapshot.State.STOPPED,DhClientSession.diagnostics().state());
+
+            setting(Map.of("lod.receive",false));DhClientSession.tick();
+            assertNull(read(null,DhClientSession.class,"session"),"Receive off drops the stopped session");
+            assertEquals(DhStatusSnapshot.State.PAUSED,DhClientSession.diagnostics().state());
+            setting(Map.of("lod.receive",true));
+            assertFalse((boolean)read(null,DhClientSession.class,"resetFailed"));
+            assertEquals(DhStatusSnapshot.State.BETWEEN_SESSIONS,DhClientSession.diagnostics().state(),
+                    "Receive on again: nothing is stopped or blocked, so the next tick starts a session");
+
+            var again=updateSession();
+            invoke(again,"fail",new Class<?>[]{String.class,DhStatusSnapshot.Reason.class},"test stop",DhStatusSnapshot.Reason.SOURCE_STOPPED);
+            assertEquals(DhStatusSnapshot.State.STOPPED,DhClientSession.diagnostics().state());
+            DhClientSession.disconnect();DhClientSession.onJoin();
+            assertNull(read(null,DhClientSession.class,"session"),"a reconnect drops the stopped session");
+            assertEquals(DhStatusSnapshot.State.BETWEEN_SESSIONS,DhClientSession.diagnostics().state(),
+                    "after reconnecting the next tick starts a session");
+        } finally {write(null,ModCompat.class,"voxyLoaded",voxy);}
+    }
+
     /** Re-download plan, decision 2: a session still waiting for a DH reply (official 3.2.x, or the first
      *  moment after joining) cannot send the terrain again, so clearcache clears nothing and leaves it alone. */
     @Test void clearCacheWhileWaitingForADhReplyClearsNothingAndKeepsTheSession() throws Exception {

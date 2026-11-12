@@ -41,9 +41,9 @@ public final class ClientCommandActions {
      * (docs/planning/2026-11-12-redownload-terrain-button-plan.md, decision 2).
      */
     public enum ClearCacheScope {
-        /** An LSS session or a negotiated DH terrain session is live: this server's records. */
+        /** An LSS session, or a DH connection that can download, is live: this server's records. */
         CURRENT_SERVER,
-        /** On a remote server that is sending no distant terrain: nothing is cleared. */
+        /** On a remote server that cannot send the terrain again right now: nothing is cleared. */
         NOT_RECEIVING,
         /** Singleplayer, or not in a world: every server's records. */
         ALL_SERVERS;
@@ -63,13 +63,17 @@ public final class ClientCommandActions {
     }
 
     /** {@code manager} is the session gate's request manager (null without an LSS session).
-     *  A DH terrain connection is one the server has negotiated ({@code dhServerConnection},
-     *  the rule {@code reset} uses): DH merely being allowed, an unanswered hello or a stopped
-     *  source cannot send the terrain again, so they do not count. */
+     *  A DH connection counts only while it can download: the server has negotiated DH
+     *  ({@code dhServerConnection}, the rule {@code reset} uses) AND {@code canAcquire()} holds.
+     *  DH merely being allowed, an unanswered hello, a stopped source, a failed Voxy bridge, a
+     *  level or connection in mid-switch, and a server that offers neither sync nor generation
+     *  (pushes only) cannot send the terrain again, so the scope never says they will: clearing
+     *  there would cost the records and promise a download that does not come. */
     static ClearCacheScope clearCacheScope(LodRequestManager manager) {
         var client = net.minecraft.client.Minecraft.getInstance();
         return ClearCacheScope.of(manager != null,
-                DhClientSession.dhServerConnection() && client.getCurrentServer() != null,
+                DhClientSession.dhServerConnection() && DhClientSession.canAcquire()
+                        && client.getCurrentServer() != null,
                 client.getConnection() != null, client.hasSingleplayerServer());
     }
 
@@ -84,23 +88,21 @@ public final class ClientCommandActions {
         ClearCacheScope scope = clearCacheScope(manager);
         if (scope == ClearCacheScope.NOT_RECEIVING) {
             feedback.accept(Component.literal(Brand.shortName()
-                    + " is not receiving distant terrain from this server right now. Nothing was cleared."));
+                    + " is not downloading distant terrain from this server right now. Nothing was cleared."));
             return;
         }
         boolean dhContext=DhClientSession.selected() && net.minecraft.client.Minecraft.getInstance().getConnection()!=null;
-        boolean dhActive=DhClientSession.canAcquire();
         if (dhContext || DhClientSession.ownsWork()) DhClientSession.drainForReset();
         if (scope == ClearCacheScope.ALL_SERVERS) {
             ColumnCacheStore.clearAll();
             feedback.accept(Component.literal(
                     Brand.shortName() + " column cache cleared for all servers."));
-        } else if (manager != null) {
-            manager.flushCache();
+        } else {
+            // CURRENT_SERVER: an LSS session, or a DH connection the scope found able to download
+            // (the drain above cleared its receipts). Either way the terrain is requested again.
+            if (manager != null) manager.flushCache();
             feedback.accept(Component.literal(
                     Brand.shortName() + " column cache cleared for current server. Chunks will be re-requested."));
-        } else {
-            feedback.accept(Component.literal(Brand.shortName() + " column cache cleared for current server. "
-                    + (dhActive?"Chunks will be re-requested.":"No active DH download service; acquisition remains paused.")));
         }
         if (dhContext) DhClientSession.resumeAfterReset();
     }
