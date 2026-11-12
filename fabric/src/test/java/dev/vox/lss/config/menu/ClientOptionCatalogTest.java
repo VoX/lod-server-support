@@ -132,6 +132,36 @@ class ClientOptionCatalogTest {
         }
     }
 
+    /** A translation that drops a format argument loses the value it carried (the command root
+     *  in the re-download dialog's reset hint), and one that adds an argument shows a raw
+     *  {@code %s}. Key by key, every locale must carry exactly en_us's placeholders. */
+    @Test
+    void everyLocaleKeepsTheFormatPlaceholdersOfEnglish() throws IOException {
+        assertEquals(List.of("%s"), placeholders(lang.get("lss.redownload.saved_terrain").getAsString()),
+                "the reset hint takes the command root as its one argument");
+        int withArguments = 0;
+        for (String locale : new String[] {"zh_cn", "zh_tw"}) {
+            JsonObject other = JsonParser.parseString(Files.readString(
+                    locate("fabric/src/main/resources/assets/lss/lang/" + locale + ".json"))).getAsJsonObject();
+            for (String key : lang.keySet()) {
+                List<String> expected = placeholders(lang.get(key).getAsString());
+                if (!expected.isEmpty()) withArguments++;
+                assertEquals(expected, placeholders(other.get(key).getAsString()),
+                        locale + ".json: " + key + " must keep en_us.json's format placeholders");
+            }
+        }
+        assertTrue(withArguments > 0, "the scan must see keys that take arguments");
+    }
+
+    /** The format specifiers of a lang value, sorted: positional order may differ per language. */
+    private static List<String> placeholders(String value) {
+        List<String> found = new ArrayList<>();
+        var specifier = java.util.regex.Pattern.compile("%(?:\\d+\\$)?[a-zA-Z%]").matcher(value);
+        while (specifier.find()) found.add(specifier.group());
+        found.sort(null);
+        return found;
+    }
+
     @Test
     void declaredDefaultsEqualAFreshConfig() {
         var fresh = draft();
