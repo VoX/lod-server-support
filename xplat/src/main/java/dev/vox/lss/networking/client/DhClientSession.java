@@ -484,8 +484,11 @@ public final class DhClientSession {
         void notifyStopped(Reason why) {
             var mc = Minecraft.getInstance();
             if (mc.getConnection() != connection || notified.putIfAbsent(connection, Boolean.TRUE) != null) return;
+            // The command root is an argument: the VSS jar rewrites "LSS" in lang values but
+            // not a lowercase command, so a literal there told VSS players to run /lss.
             notice.accept(Component.translatable("lss.status.dh.notice.stopped",
-                    Component.translatable("lss.status.dh.reason." + why.name().toLowerCase(Locale.ROOT))));
+                    Component.translatable("lss.status.dh.reason." + why.name().toLowerCase(Locale.ROOT)),
+                    dev.vox.lss.common.Brand.clientCommand()));
         }
         void beginRetire() { beginRetire(true); }
         void beginRetire(boolean withdraw) {
