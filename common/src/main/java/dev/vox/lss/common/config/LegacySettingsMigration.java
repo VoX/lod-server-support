@@ -24,7 +24,7 @@ public final class LegacySettingsMigration {
                     ||path.equals("storage.lod_store.enabled")||path.endsWith("mib_per_second"))continue;
             if(path.equals("far_players.mode")) {
                 String mode=value instanceof String s?s.trim().toLowerCase(Locale.ROOT):"off";
-                value=switch(mode) { case "opt-in","optin","opt_in"->"opt_in"; case "on"->"on"; default->"off"; };
+                value=switch(mode) { case "opt-in","optin","opt_in"->"opt_in"; case "on"->"on"; case "required"->"required"; default->"off"; };
             } else if(path.equals("privacy.xray.mode")) {
                 String mode=value instanceof String s?s.trim().toLowerCase(Locale.ROOT):"auto";
                 value=Set.of("auto","on","off").contains(mode)?mode:"auto";

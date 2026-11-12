@@ -33,17 +33,21 @@ permissions:
   lss.admin:
     description: Access to LSS admin commands
     default: op
-  # Far players (v0.11.0 E1): server-side privacy lever — holders are never served as
-  # far players regardless of the farPlayers mode (FARP §3.2). BOTH brand spellings are
-  # declared (default false) and the enforcement honors either: Bukkit resolves an
-  # UNDECLARED node to the op default, so a single-brand declaration plus a cross-brand
-  # check would silently hide every op — and declaring both keeps the privacy grant
-  # working across an LSS<->VSS jar swap.
+  # Far players: since 0.21.0 this permission hides nobody by itself. A grant of every
+  # permission ("*") includes it, which used to hide every admin; players now hide
+  # themselves with Share My Position in their own settings. Holders are hidden only
+  # while the server sets far_players.hide_permission_holders: true (the behaviour
+  # before 0.21.0). In far_players.mode "required" nobody can opt out of being shown
+  # except a holder: there the permission is what lets a player hide with Share My
+  # Position. BOTH brand spellings are declared (default false) and either one
+  # counts: Bukkit resolves an UNDECLARED node to the op default, so a single-brand
+  # declaration plus a cross-brand check would silently make every op a holder — and
+  # declaring both keeps the grant working across an LSS<->VSS jar swap.
   lss.farplayers.hidden:
-    description: Players with this permission are never shown as far players
+    description: Hides the player from far-player rendering, only while far_players.hide_permission_holders is true (off by default). In far_players.mode required it is what lets the player hide with Share My Position (in mode on every player can)
     default: false
   vss.farplayers.hidden:
-    description: Players with this permission are never shown as far players (VSS spelling)
+    description: Hides the player from far-player rendering, only while far_players.hide_permission_holders is true. In far_players.mode required it is what lets the player hide with Share My Position (VSS spelling)
     default: false
   # Service gate (requireServicePermission, default false): with the config key on, only
   # holders are served LOD data — a handshake from anyone else is answered with an

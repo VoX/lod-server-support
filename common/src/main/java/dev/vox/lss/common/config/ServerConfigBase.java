@@ -73,8 +73,27 @@ public class ServerConfigBase {
     public final int farPlayersMinDistanceBlocks() { return snapshot().farPlayers().distance().minBlocks(); }
     public final boolean farPlayersSendSpectators() { return snapshot().farPlayers().sendSpectators(); }
     public final List<String> farPlayersExclude() { return snapshot().farPlayers().excludedPlayers(); }
+    /** {@code far_players.hide_permission_holders} (hide-permission plan §2): while on, every
+     *  holder of the far-player hide permission is withheld as a far player (the behaviour
+     *  before 0.21.0); off, the permission hides nobody by itself. */
+    public final boolean farPlayersHidePermissionHolders() { return snapshot().farPlayers().hidePermissionHolders(); }
+    /** Whether the loaded settings file itself sets {@code path}, as opposed to the value
+     *  coming from the schema default. A view with no file behind it (a detached snapshot,
+     *  a test fixture, a failed startup) answers true: nothing is known to be unset. */
+    public boolean settingDeclared(String path) { return true; }
+    /** The operator has not chosen yet: the loaded file predates 0.21.0 and never set
+     *  {@code far_players.hide_permission_holders} (every file 0.21.0 creates carries the
+     *  key). Only then are holders of the hide permission told in game that it no longer
+     *  hides them; writing the key with either value and reloading ends that. */
+    public final boolean farPlayersHidePermissionHoldersUndecided() {
+        return !settingDeclared("far_players.hide_permission_holders");
+    }
     public final List<String> updateEvents() { return snapshot().paper().updateEvents(); }
     public final String lodStore() { return snapshot().storage().lodStore().enabled() ? "on" : "off"; }
+    /** {@code far_players.mode} as the broadcast core reads it: {@code off},
+     *  {@code opt-in} (the YAML spelling is {@code opt_in}), {@code on} or
+     *  {@code required} (0.21.0: everyone is shown and only holders of the hide
+     *  permission may opt out). */
     public final String farPlayers() {
         String mode = snapshot().farPlayers().mode();
         return mode.equals("opt_in") ? "opt-in" : mode;
@@ -259,6 +278,7 @@ public class ServerConfigBase {
         return switch (v.trim().toLowerCase(java.util.Locale.ROOT)) {
             case "on" -> "on";
             case "opt-in", "optin", "opt_in" -> "opt-in";
+            case "required" -> "required";
             default -> "off";
         };
     }
