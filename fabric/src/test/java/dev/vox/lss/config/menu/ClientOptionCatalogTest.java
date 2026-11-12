@@ -18,6 +18,7 @@ import java.util.Set;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -320,6 +321,82 @@ class ClientOptionCatalogTest {
 
     private static List<OptionSpec> allOptions() {
         return ClientOptionCatalog.pages().stream().flatMap(p -> p.options().stream()).toList();
+    }
+
+    private static List<ActionSpec> allActions() {
+        return ClientOptionCatalog.pages().stream().flatMap(p -> p.actions().stream()).toList();
+    }
+
+    // ---- actions: the pages' buttons. Not options and not settings (re-download plan §2.1). ----
+
+    @Test
+    void theShippedActionsArePinned() {
+        assertEquals(List.of("lss:redownload_terrain"),
+                ClientOptionCatalog.pages().get(0).actions().stream().map(ActionSpec::id).toList(),
+                "the General page carries the one button");
+        assertTrue(ClientOptionCatalog.pages().get(1).actions().isEmpty(), "Far Players has no buttons");
+        ActionSpec redownload = ClientOptionCatalog.pages().get(0).actions().get(0);
+        assertEquals(ClientOptionCatalog.ID_REDOWNLOAD_TERRAIN, redownload.id());
+        assertEquals(ActionSpec.Action.REDOWNLOAD_TERRAIN, redownload.action());
+        assertEquals("lss.config.redownload_terrain", redownload.nameKey());
+        assertEquals("lss.config.redownload_terrain.tooltip", redownload.tooltipKey());
+    }
+
+    /** Sodium 0.8+ keeps an external button in the same map as real options, and the draft
+     *  refresh passes every key of that map through {@code find}: an action that resolved
+     *  there would be treated as a setting with a value. */
+    @Test
+    void actionIdsAreUniqueNamespacedAndNeverResolveAsOptions() {
+        Set<String> optionIds = new HashSet<>();
+        allOptions().forEach(o -> optionIds.add(o.id()));
+        Set<String> seen = new HashSet<>();
+        for (ActionSpec a : allActions()) {
+            assertTrue(a.id().startsWith("lss:"), a.id());
+            assertTrue(seen.add(a.id()), "duplicate action id " + a.id());
+            assertFalse(optionIds.contains(a.id()), a.id() + " is also an option id");
+            assertTrue(ClientOptionCatalog.find(a.id()).isEmpty(), a.id() + ": find(id) is options-only");
+        }
+        assertFalse(seen.isEmpty());
+        assertThrows(IllegalArgumentException.class,
+                () -> new ActionSpec("redownload_terrain", "name", "tooltip", ActionSpec.Action.REDOWNLOAD_TERRAIN),
+                "an action id without the lss: namespace is refused");
+    }
+
+    /** Sodium refuses a blank name or tooltip when it builds the page, after the mod's entry
+     *  point has returned, and that failure stops the game. The key-set test above only proves
+     *  the keys exist; this proves each locale gives them text. */
+    @Test
+    void everyActionNameAndTooltipHasTextInEveryLocale() throws IOException {
+        for (String locale : new String[] {"en_us", "zh_cn", "zh_tw"}) {
+            JsonObject file = JsonParser.parseString(Files.readString(
+                    locate("fabric/src/main/resources/assets/lss/lang/" + locale + ".json"))).getAsJsonObject();
+            for (ActionSpec a : allActions()) {
+                for (String key : List.of(a.nameKey(), a.tooltipKey())) {
+                    assertTrue(file.has(key), locale + ".json lacks " + key);
+                    assertFalse(file.get(key).getAsString().isBlank(), locale + ".json: " + key + " is blank");
+                }
+            }
+        }
+    }
+
+    /** The VSS jar rewrites "LSS" in lang VALUES but not a lowercase command, so the button and
+     *  dialog text must never spell one: the command root is a {@code %s} argument filled from
+     *  the brand. Scoped to this feature's keys. */
+    @Test
+    void theRedownloadTextSpellsNoCommandRoot() throws IOException {
+        var commandRoot = java.util.regex.Pattern.compile("/(?:lss|vss)\\b");
+        int checked = 0;
+        for (String locale : new String[] {"en_us", "zh_cn", "zh_tw"}) {
+            JsonObject file = JsonParser.parseString(Files.readString(
+                    locate("fabric/src/main/resources/assets/lss/lang/" + locale + ".json"))).getAsJsonObject();
+            for (String key : file.keySet()) {
+                if (!key.startsWith("lss.config.redownload_terrain") && !key.startsWith("lss.redownload.")) continue;
+                checked++;
+                assertFalse(commandRoot.matcher(file.get(key).getAsString()).find(),
+                        locale + ".json: " + key + " names a command root; use /%s");
+            }
+        }
+        assertTrue(checked >= 6, "the scan must see the button's keys in all three locales");
     }
 
     /** D-25: display-time resolution reads the current context for every context-dependent

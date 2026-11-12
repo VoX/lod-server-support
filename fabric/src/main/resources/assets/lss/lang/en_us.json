@@ -28,6 +28,8 @@
   "lss.config.far_players_render_distance.server": "Server limit",
   "lss.config.far_players_extend_far_plane": "Extend Far Player Draw Range",
   "lss.config.far_players_extend_far_plane.tooltip": "Draw far players past the game's normal draw limit, out to the farthest far player. Only visible with an LOD mod such as Voxy. Fog can still hide very distant players; if they fade out, turn off fog in your LOD mod. Not used while a shader pack is on.",
+  "lss.config.redownload_terrain": "Re-download Terrain",
+  "lss.config.redownload_terrain.tooltip": "Use this if distant terrain looks wrong or has gaps. It clears the download records so the server sends the terrain again. Terrain your LOD mod has already saved is not deleted.",
   "lss.status.title": "LOD status",
   "lss.status.export": "Export",
   "lss.status.more": "More",

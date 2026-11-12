@@ -42,6 +42,9 @@ public final class ClientOptionCatalog {
     public static final String ID_FAR_PLAYERS_RENDER_DISTANCE = "lss:far_players_render_distance";
     public static final String ID_FAR_PLAYERS_EXTEND_FAR_PLANE = "lss:far_players_extend_far_plane";
 
+    /** A button, not a setting ({@link ActionSpec}): {@link #find} never resolves it. */
+    public static final String ID_REDOWNLOAD_TERRAIN = "lss:redownload_terrain";
+
     public static final String PAGE_GENERAL = "general";
     public static final String PAGE_FAR_PLAYERS = "far_players";
 
@@ -56,6 +59,8 @@ public final class ClientOptionCatalog {
         return PAGES;
     }
 
+    /** Options only. A page's buttons ({@link PageSpec#actions()}) have ids too and never
+     *  resolve here: the draft refresh passes every key of Sodium's option map through this. */
     public static Optional<OptionSpec> find(String id) {
         return PAGES.stream().flatMap(p -> p.options().stream())
                 .filter(o -> o.id().equals(id)).findFirst();
@@ -213,11 +218,21 @@ public final class ClientOptionCatalog {
                 .enabledBy(ID_RECEIVE_SERVER_LODS)
                 .build();
 
-        return PageSpec.of(PAGE_GENERAL, "lss.config.page",
-                GroupSpec.of(receive),
-                GroupSpec.of(distance),
-                GroupSpec.of(rate, slowStart),
-                GroupSpec.of(maps, source));
+        // Re-download Terrain (re-download plan, decision 1): what /lss clearcache does, where
+        // players look for it. It clears the download records so the server sends the terrain
+        // again; terrain the LOD mod already saved stays. Always enabled: the confirm screen
+        // says what it will do for the current connection.
+        var redownload = new ActionSpec(ID_REDOWNLOAD_TERRAIN,
+                "lss.config.redownload_terrain",
+                "lss.config.redownload_terrain.tooltip",
+                ActionSpec.Action.REDOWNLOAD_TERRAIN);
+
+        return new PageSpec(PAGE_GENERAL, "lss.config.page",
+                List.of(GroupSpec.of(receive),
+                        GroupSpec.of(distance),
+                        GroupSpec.of(rate, slowStart),
+                        GroupSpec.of(maps, source)),
+                List.of(redownload));
     }
 
     /** Include ancestors so source-specific controls also follow the reception master. */

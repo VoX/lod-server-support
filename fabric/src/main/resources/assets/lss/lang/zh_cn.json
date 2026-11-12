@@ -28,6 +28,8 @@
   "lss.config.far_players_render_distance.server": "服务器限制",
   "lss.config.far_players_extend_far_plane": "扩展远处玩家绘制范围",
   "lss.config.far_players_extend_far_plane.tooltip": "在游戏常规绘制上限之外继续绘制远处玩家，直到最远的那一位。仅在安装 Voxy 等远景模组时可见。雾仍可能遮住很远的玩家；如果他们逐渐消失，请在远景模组中关闭雾。启用光影包时不生效。",
+  "lss.config.redownload_terrain": "重新下载地形",
+  "lss.config.redownload_terrain.tooltip": "远景地形显示异常或有缺口时使用。它会清除下载记录，让服务器重新发送地形。远景模组已保存的地形不会被删除。",
   "lss.status.title": "LOD 状态",
   "lss.status.export": "导出",
   "lss.status.more": "更多",
