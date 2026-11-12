@@ -657,7 +657,8 @@ class PaperRequestProcessingServiceTest {
         var holder = UUID.randomUUID();
         var optedOutPlayer = playerIn(optedOut, level(Level.OVERWORLD));
         var told = new ArrayList<String>();
-        service.setFarPlayerNoticeSender((player, text) -> told.add(player.getUUID() + "|" + text));
+        service.setFarPlayerNoticeSender((player, line) ->
+                told.add(player.getUUID() + "|" + line.translationKey() + "|" + line.fallback()));
         var fp = service.getFarPlayerService();
         fp.subscribeViewer(viewer);
         fp.onPrefs(viewer, new dev.vox.lss.common.farplayers.FarPlayerWire.Prefs(true, 0, 0, true, 0));
@@ -674,16 +675,19 @@ class PaperRequestProcessingServiceTest {
                         0, 0, 0, false, false, true, false, true, 0L, null, null, null));
         dev.vox.lss.common.farplayers.FarPlayerBroadcastService.FrameSender frames = (to, channel, body) -> true;
 
-        // The player list does not hold the player yet (the mock answers null).
+        // Two consecutive "not a holder" reads confirm the override; the player list does
+        // not hold the player yet (the mock answers null).
         fp.tick(1_000_000L, online, settings, frames);
+        fp.tick(1_000_500L, online, settings, frames);
+        assertEquals(1, fp.lastPassOverridden(), "premise: the override is live");
         assertTrue(told.isEmpty(), "an unreachable player is not sent anything");
         assertFalse(fp.hasRequiredSharingNotice(optedOut), "and the line is not marked as sent");
 
         when(playerList.getPlayer(optedOut)).thenReturn(optedOutPlayer);
-        fp.tick(1_000_500L, online, settings, frames);
         fp.tick(1_001_000L, online, settings, frames);
-        assertEquals(List.of(optedOut + "|"
-                        + dev.vox.lss.common.farplayers.FarPlayerBroadcastService.requiredSharingNotice()),
+        fp.tick(1_001_500L, online, settings, frames);
+        var notice = dev.vox.lss.common.farplayers.FarPlayerBroadcastService.requiredSharingNotice();
+        assertEquals(List.of(optedOut + "|" + notice.translationKey() + "|" + notice.fallback()),
                 told, "exactly one system chat line, to the overridden player only");
         assertFalse(fp.hasRequiredSharingNotice(holder), "a holder's opt-out is honored: nothing to say");
     }

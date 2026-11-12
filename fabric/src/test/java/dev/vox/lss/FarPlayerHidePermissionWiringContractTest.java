@@ -40,8 +40,10 @@ class FarPlayerHidePermissionWiringContractTest {
         assertEquals(1, code.split("FarPlayerBroadcastService\\.Settings\\(", -1).length - 1,
                 "one Settings construction: the broadcast pass");
         assertTrue(code.contains("config.farPlayersUpdateIntervalTicks(),"
-                        + " config.farPlayersHidePermissionHolders()), this::sendFarPlayerFrame);"),
-                "the pass must read far_players.hide_permission_holders from the config each time");
+                        + " config.farPlayersHidePermissionHolders(),"
+                        + " config.farPlayersHidePermissionHoldersUndecided()), this::sendFarPlayerFrame);"),
+                "the pass must read far_players.hide_permission_holders, and whether the file ever"
+                        + " set it, from the config each time");
     }
 
     @Test
@@ -50,8 +52,10 @@ class FarPlayerHidePermissionWiringContractTest {
         assertEquals(1, code.split("FarPlayerBroadcastService\\.Settings\\(", -1).length - 1,
                 "one Settings construction: the broadcast pass");
         assertTrue(code.contains("this.config.farPlayersUpdateIntervalTicks(),"
-                        + " this.config.farPlayersHidePermissionHolders()), this::sendFarPlayerFrame);"),
-                "the pass must read far_players.hide_permission_holders from the config each time");
+                        + " this.config.farPlayersHidePermissionHolders(),"
+                        + " this.config.farPlayersHidePermissionHoldersUndecided()), this::sendFarPlayerFrame);"),
+                "the pass must read far_players.hide_permission_holders, and whether the file ever"
+                        + " set it, from the config each time");
     }
 
     @Test
@@ -60,26 +64,31 @@ class FarPlayerHidePermissionWiringContractTest {
         String shared = code("xplat/src/main/java/dev/vox/lss/networking/server/RequestProcessingService.java");
         assertEquals(1, shared.split("new dev\\.vox\\.lss\\.common\\.farplayers\\.FarPlayerBroadcastService\\(", -1).length - 1,
                 "one broadcast core per service");
-        assertTrue(shared.contains("vanish.canSee(server, observer, target); }, LSSLogger::info,"
+        assertTrue(shared.contains("vanish.canSee(server, observer, target); }, LSSLogger::warn,"
                         + " this::sendFarPlayerNotice);"),
-                "the shared core must be built with the chat lane");
+                "the shared core must be built with the chat lane, and log the upgrade line at WARN");
         // Paper/Folia.
         String paper = code("paper/src/main/java/dev/vox/lss/paper/PaperRequestProcessingService.java");
         assertEquals(1, paper.split("new dev\\.vox\\.lss\\.common\\.farplayers\\.FarPlayerBroadcastService\\(", -1).length - 1,
                 "one broadcast core per service");
         assertTrue(paper.contains("new dev.vox.lss.common.farplayers.FarPlayerBroadcastService(null,"
-                        + " LSSLogger::info, this::sendFarPlayerNotice);"),
-                "the Paper core must be built with the chat lane");
+                        + " LSSLogger::warn, this::sendFarPlayerNotice);"),
+                "the Paper core must be built with the chat lane, and log the upgrade line at WARN");
         for (String core : new String[]{shared, paper}) {
             // An ordinary system message: it reaches every client version, with no LSS
-            // channel, capability bit or session flag involved.
-            assertTrue(core.contains("farPlayerNoticeSender = (player, text) -> player.sendSystemMessage("
-                            + " net.minecraft.network.chat.Component.literal(text));"),
-                    "the lane's production send is a system chat message");
+            // channel, capability bit or session flag involved. Translatable WITH the
+            // English fallback (review fold B): a 0.21.0 client shows its own language,
+            // every other client the fallback. A bare translatable would show the raw key
+            // to a client without the mod; a literal would never be translated.
+            assertTrue(core.contains("farPlayerNoticeSender = (player, line) -> player.sendSystemMessage("
+                            + " net.minecraft.network.chat.Component.translatableWithFallback("
+                            + " line.translationKey(), line.fallback()));"),
+                    "the lane's production send is a translatable system chat message with its fallback");
             assertTrue(java.util.regex.Pattern.compile(
-                            "private boolean sendFarPlayerNotice\\(UUID uuid, String text\\) \\{.{0,260}?"
+                            "private boolean sendFarPlayerNotice\\(UUID uuid,"
+                                    + " dev\\.vox\\.lss\\.common\\.farplayers\\.FarPlayerBroadcastService\\.ChatLine line\\) \\{.{0,260}?"
                                     + "getPlayer\\(uuid\\);.{0,40}?if \\(player == null\\) return false;"
-                                    + " this\\.farPlayerNoticeSender\\.accept\\(player, text\\); return true; \\}")
+                                    + " this\\.farPlayerNoticeSender\\.accept\\(player, line\\); return true; \\}")
                             .matcher(core).find(),
                     "an unreachable player answers false (the core retries); a reachable one is sent the line");
         }

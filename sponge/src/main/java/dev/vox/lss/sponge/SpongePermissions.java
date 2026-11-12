@@ -20,8 +20,9 @@ import java.util.List;
  *       it changes nothing until an admin grants a negative.</li>
  *   <li>{@code lss.farplayers.hidden} / {@code vss.farplayers.hidden}: FALSE — a grant
  *       model; since 0.21.0 a holder is hidden from far-player rendering only while the
- *       server sets {@code far_players.hide_permission_holders: true} (hide-permission
- *       plan §2); both spellings, for the LSS↔VSS jar swap.</li>
+ *       server sets {@code far_players.hide_permission_holders: true}, and in mode
+ *       {@code required} the node is what lets a player hide with Share My Position
+ *       (hide-permission plan §2/§2b); both spellings, for the LSS↔VSS jar swap.</li>
  *   <li>{@code lss.map_ingestion} / {@code vss.map_ingestion}: FALSE — the grant-model
  *       exemption from {@code privacy.request_no_map_ingestion} (map-ingestion permission
  *       plan §2); both spellings.</li>
@@ -43,11 +44,13 @@ public final class SpongePermissions {
                         "Access to " + Brand.shortName() + " admin commands", null),
                 new Node(LSSPermissions.FARPLAYERS_HIDDEN_LSS,
                         "Hides the player from far-player rendering, only while far_players.hide_permission_holders"
-                                + " is true (off by default; players hide themselves with Share My Position)",
+                                + " is true (off by default). In far_players.mode required it is what lets the"
+                                + " player hide with Share My Position (in mode on every player can)",
                         Tristate.FALSE),
                 new Node(LSSPermissions.FARPLAYERS_HIDDEN_VSS,
                         "Hides the player from far-player rendering, only while far_players.hide_permission_holders"
-                                + " is true (VSS spelling)", Tristate.FALSE),
+                                + " is true. In far_players.mode required it is what lets the player hide with"
+                                + " Share My Position (VSS spelling)", Tristate.FALSE),
                 new Node(LSSPermissions.SERVICE_LSS,
                         "Receive LOD data when requireServicePermission is enabled", Tristate.TRUE),
                 new Node(LSSPermissions.SERVICE_VSS,

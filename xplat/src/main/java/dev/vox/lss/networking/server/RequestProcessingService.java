@@ -315,7 +315,7 @@ public class RequestProcessingService {
                     var observer = server.getPlayerList().getPlayer(viewer);
                     return observer != null
                             && vanish.canSee(server, observer, target);
-                }, LSSLogger::info, this::sendFarPlayerNotice);
+                }, LSSLogger::warn, this::sendFarPlayerNotice);
 
         // Publishes the per-world x-ray mask decisions the (static) serializer choke
         // points consult — before any serve can run. The reference is kept so shutdown's
@@ -1083,7 +1083,8 @@ public class RequestProcessingService {
                             config.farPlayers(), config.farPlayersMaxDistanceBlocks(),
                             config.farPlayersMinDistanceBlocks(), config.farPlayersSendSpectators(),
                             config.farPlayersExclude(), config.farPlayersUpdateIntervalTicks(),
-                            config.farPlayersHidePermissionHolders()),
+                            config.farPlayersHidePermissionHolders(),
+                            config.farPlayersHidePermissionHoldersUndecided()),
                     this::sendFarPlayerFrame);
         } catch (Exception e) {
             // Containment (review): END_SERVER_TICK has no catch of its own — a
@@ -1117,28 +1118,35 @@ public class RequestProcessingService {
         return true;
     }
 
-    /** The far-player notice's chat-line send (hide-permission plan §2b; the map-policy
+    /** The far-player notices' chat-line send (hide-permission plan §2b; the map-policy
      *  chat line's shape): an ordinary system message on the server thread, so it reaches
-     *  every client version. Seam-injected for tests (gametest mock players have no client). */
-    private java.util.function.BiConsumer<ServerPlayer, String> farPlayerNoticeSender =
-            (player, text) -> player.sendSystemMessage(
-                    net.minecraft.network.chat.Component.literal(text));
+     *  every client version. Translatable with the English text as its fallback: a client
+     *  whose lang files carry the key shows its own language, every other client (an
+     *  older mod, no mod) shows the fallback. Seam-injected for tests (gametest mock
+     *  players have no client). */
+    private java.util.function.BiConsumer<ServerPlayer,
+            dev.vox.lss.common.farplayers.FarPlayerBroadcastService.ChatLine> farPlayerNoticeSender =
+            (player, line) -> player.sendSystemMessage(
+                    net.minecraft.network.chat.Component.translatableWithFallback(
+                            line.translationKey(), line.fallback()));
 
     /** Test seam; {@code null} restores the production send. */
-    public void setFarPlayerNoticeSenderForTest(
-            java.util.function.BiConsumer<ServerPlayer, String> sender) {
+    public void setFarPlayerNoticeSenderForTest(java.util.function.BiConsumer<ServerPlayer,
+            dev.vox.lss.common.farplayers.FarPlayerBroadcastService.ChatLine> sender) {
         this.farPlayerNoticeSender = sender != null ? sender
-                : (player, text) -> player.sendSystemMessage(
-                        net.minecraft.network.chat.Component.literal(text));
+                : (player, line) -> player.sendSystemMessage(
+                        net.minecraft.network.chat.Component.translatableWithFallback(
+                                line.translationKey(), line.fallback()));
     }
 
     /** The broadcast core's {@code PlayerNotifier}: one system chat line to an online
-     *  player (mode "required" overriding their Share My Position choice). False = not
-     *  online right now, so the core retries on a later pass. */
-    private boolean sendFarPlayerNotice(UUID uuid, String text) {
+     *  player (mode "required" overriding their Share My Position choice, or the holder
+     *  notice). False = not online right now, so the core retries on a later pass. */
+    private boolean sendFarPlayerNotice(UUID uuid,
+            dev.vox.lss.common.farplayers.FarPlayerBroadcastService.ChatLine line) {
         var player = this.server.getPlayerList().getPlayer(uuid);
         if (player == null) return false;
-        this.farPlayerNoticeSender.accept(player, text);
+        this.farPlayerNoticeSender.accept(player, line);
         return true;
     }
 

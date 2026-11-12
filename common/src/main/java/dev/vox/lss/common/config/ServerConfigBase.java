@@ -77,6 +77,17 @@ public class ServerConfigBase {
      *  holder of the far-player hide permission is withheld as a far player (the behaviour
      *  before 0.21.0); off, the permission hides nobody by itself. */
     public final boolean farPlayersHidePermissionHolders() { return snapshot().farPlayers().hidePermissionHolders(); }
+    /** Whether the loaded settings file itself sets {@code path}, as opposed to the value
+     *  coming from the schema default. A view with no file behind it (a detached snapshot,
+     *  a test fixture, a failed startup) answers true: nothing is known to be unset. */
+    public boolean settingDeclared(String path) { return true; }
+    /** The operator has not chosen yet: the loaded file predates 0.21.0 and never set
+     *  {@code far_players.hide_permission_holders} (every file 0.21.0 creates carries the
+     *  key). Only then are holders of the hide permission told in game that it no longer
+     *  hides them; writing the key with either value and reloading ends that. */
+    public final boolean farPlayersHidePermissionHoldersUndecided() {
+        return !settingDeclared("far_players.hide_permission_holders");
+    }
     public final List<String> updateEvents() { return snapshot().paper().updateEvents(); }
     public final String lodStore() { return snapshot().storage().lodStore().enabled() ? "on" : "off"; }
     /** {@code far_players.mode} as the broadcast core reads it: {@code off},

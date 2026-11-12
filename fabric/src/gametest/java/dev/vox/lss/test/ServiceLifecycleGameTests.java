@@ -1667,7 +1667,8 @@ public class ServiceLifecycleGameTests {
             optedOut.setPos(viewer.getX() + 500, viewer.getY(), viewer.getZ());
             sharer.setPos(viewer.getX() + 600, viewer.getY(), viewer.getZ());
             var told = new ArrayList<String>();
-            service.setFarPlayerNoticeSenderForTest((player, text) -> told.add(player.getUUID() + "|" + text));
+            service.setFarPlayerNoticeSenderForTest((player, line) ->
+                    told.add(player.getUUID() + "|" + line.fallback()));
             LSSServerNetworking.handleHandshake(
                     new HandshakeC2SPayload(LSSConstants.PROTOCOL_VERSION,
                             LSSConstants.CAPABILITY_VOXEL_COLUMNS | LSSConstants.CAPABILITY_FAR_PLAYERS),
@@ -1687,7 +1688,7 @@ public class ServiceLifecycleGameTests {
             config.set("far_players.mode", "required");
             for (int i = 0; i < 6; i++) service.tick();
             String expected = optedOut.getUUID() + "|"
-                    + dev.vox.lss.common.farplayers.FarPlayerBroadcastService.requiredSharingNotice();
+                    + dev.vox.lss.common.farplayers.FarPlayerBroadcastService.requiredSharingNotice().fallback();
             helper.assertTrue(told.equals(java.util.List.of(expected)),
                     "exactly one chat line, to the opted-out player only, got " + told);
             helper.assertTrue(fp.diagLine().contains("overridden=1"),
