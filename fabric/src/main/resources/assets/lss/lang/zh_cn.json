@@ -179,5 +179,5 @@
   "lss.status.dh.activity.waiting_voxy": "等待 Voxy",
   "lss.status.dh.activity.idle": "空闲；范围内地形已是最新",
   "lss.status.dh.activity.stopped": "已停止",
-  "lss.status.dh.notice.stopped": "Distant Horizons 地形已停止：%s。运行 /lss diag 查看详情。"
+  "lss.status.dh.notice.stopped": "Distant Horizons 地形已停止：%s。运行 /%s diag 查看详情。"
 }
