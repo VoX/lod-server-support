@@ -1525,27 +1525,140 @@ class NbtSectionSerializerTest {
     }
 
     @Test
-    void unparseableSibling_neverTurnsAnUndecodableColumnIntoAPlainMiss() {
-        // A plain miss may escalate to a generation ticket; an undecodable column must not
-        // (loading it through Minecraft turns its unknown blocks into air). So the
-        // undecodable verdict wins over a truly-unparseable sibling section...
+    void unparseableSection_besideUsedUnknownBlocks_isUndecodableNeverAPlainMiss() {
+        // A plain miss may escalate to a generation ticket; a chunk whose cells use blocks
+        // this server does not know must never be loaded by LSS (vanilla turns them into
+        // air on load and may save the chunk). So wherever the unparseable-section rung
+        // would condemn the column, a USED unknown entry turns the verdict into undecodable.
         var bad = new CompoundTag();
         bad.putInt("Y", 1);
         var badStates = new CompoundTag();
         badStates.putInt("palette", 7); // not even a list — no partial recoverable
         bad.put("block_states", badStates);
+
+        // (a) nothing decoded at all beside the corrupt section.
         var unknown = sectionNbt(2, true, true, null, null);
         assertEquals(1, renamePaletteEntry(blockPaletteOf(unknown), "minecraft:stone", "lss:gone_beside_corrupt"));
         assertUndecodableOnBothRoutes(chunkNbt("minecraft:full", bad, unknown),
                 "an all-unknown section beside an unparseable one");
 
-        // ...while an unparseable section beside DECODED content is today's plain miss.
-        for (boolean transcode : new boolean[]{true, false}) {
-            var notes = new ColumnDecodeNotes();
-            assertNull(serializeWithNotes(
-                    chunkNbt("minecraft:full", bad, sectionNbt(2, true, true, null, null)), transcode, notes));
-            assertFalse(notes.undecodable(),
-                    "an unparseable section beside decoded content stays the plain authoritative miss");
+        // (b) decoded blocks AND used unknown ones beside the corrupt section: without the
+        // corrupt section this column serves (unknown shown as air); with it, it must not
+        // become the generation-escalating miss.
+        var sec = new LevelChunkSection(FACTORY);
+        sec.setBlockState(0, 0, 0, Blocks.STONE.defaultBlockState());
+        sec.setBlockState(1, 0, 0, Blocks.DIRT.defaultBlockState());
+        var mixed = sectionNbtFor(2, sec);
+        assertEquals(1, renamePaletteEntry(blockPaletteOf(mixed), "minecraft:dirt", "lss:gone_in_mixed"));
+        assertServesAndReportsNothing(chunkNbt("minecraft:full", mixed),
+                "premise: decoded and unknown blocks without a corrupt section");
+        assertUndecodableOnBothRoutes(chunkNbt("minecraft:full", bad, mixed),
+                "decoded and used unknown blocks beside an unparseable section");
+
+        // (c) the unknown blocks in a SIBLING of the decoded content.
+        var decoded = sectionNbt(3, true, true, null, null);
+        var gone = sectionNbt(4, true, true, null, null);
+        assertEquals(1, renamePaletteEntry(blockPaletteOf(gone), "minecraft:stone", "lss:gone_sibling"));
+        assertUndecodableOnBothRoutes(chunkNbt("minecraft:full", bad, decoded, gone),
+                "unknown blocks in a sibling of decoded content, beside an unparseable section");
+    }
+
+    @Test
+    void unparseableSection_withoutUsedUnknownBlocks_staysThePlainMiss() {
+        // No unknown block in use: today's behaviour, pinned by
+        // trulyUnparseableSection_condemnsTheColumnAsAuthoritativeMiss. Generation may
+        // repair such a chunk, and loading it destroys nothing.
+        var bad = new CompoundTag();
+        bad.putInt("Y", 1);
+        var badStates = new CompoundTag();
+        badStates.putInt("palette", 7);
+        bad.put("block_states", badStates);
+
+        // An UNUSED unknown palette entry does not count (cells, not entries).
+        var states = FACTORY.createForBlockStates();
+        states.set(15, 15, 15, Blocks.STONE.defaultBlockState());
+        var leftover = sectionFrom(3, states, FACTORY.createForBiomes());
+        var bs = leftover.getCompound("block_states").orElseThrow();
+        bs.putLongArray("data", new long[bs.getLongArray("data").orElseThrow().length]);
+        assertEquals(1, renamePaletteEntry(blockPaletteOf(leftover), "minecraft:stone", "lss:unused_beside_corrupt"));
+
+        for (var chunk : List.of(
+                chunkNbt("minecraft:full", bad, sectionNbt(2, true, true, null, null)),
+                chunkNbt("minecraft:full", bad, sectionNbt(2, true, true, null, null), leftover))) {
+            for (boolean transcode : new boolean[]{true, false}) {
+                var notes = new ColumnDecodeNotes();
+                assertNull(serializeWithNotes(chunk, transcode, notes),
+                        "the unparseable section still condemns the column (transcode=" + transcode + ")");
+                assertFalse(notes.undecodable(),
+                        "with no unknown block in use it stays the plain authoritative miss (transcode="
+                                + transcode + ")");
+            }
+        }
+    }
+
+    /** A section whose block palette is hand-built: {@code entries} in order, every cell
+     *  on entry 0 except cell 1, which is on {@code cellOneEntry}. The data is packed at
+     *  the disk width for that palette size (4 bits up to 16 entries, then ceil(log2 n)). */
+    private CompoundTag craftedPaletteSection(int y, List<net.minecraft.nbt.Tag> entries, int cellOneEntry) {
+        int n = entries.size();
+        int bits = n <= 16 ? 4 : 32 - Integer.numberOfLeadingZeros(n - 1);
+        int valuesPerLong = 64 / bits;
+        long[] data = new long[(4096 + valuesPerLong - 1) / valuesPerLong];
+        data[0] = ((long) cellOneEntry) << bits; // cell 1 sits in the second slot of word 0
+        var palette = new ListTag();
+        palette.addAll(entries);
+        var blockStates = new CompoundTag();
+        blockStates.put("palette", palette);
+        blockStates.putLongArray("data", data);
+        var section = sectionFrom(y, FACTORY.createForBlockStates(), FACTORY.createForBiomes());
+        section.put("block_states", blockStates);
+        return section;
+    }
+
+    private static net.minecraft.nbt.Tag paletteEntry(net.minecraft.world.level.block.state.BlockState state) {
+        return net.minecraft.world.level.block.state.BlockState.CODEC
+                .encodeStart(NbtOps.INSTANCE, state).getOrThrow();
+    }
+
+    private static net.minecraft.nbt.Tag unknownPaletteEntry(String name) {
+        var entry = new CompoundTag();
+        entry.putString("Name", name);
+        return entry;
+    }
+
+    @Test
+    void usedEntryWalk_readsWidePalettesAtTheirOwnBitWidth() {
+        // The "is the failed entry used by a cell" walk must read the cell indices at the
+        // palette's own width. Two tiers beyond the 4-bit one: 20 entries (5 bits, the
+        // transcoder's route) and 300 entries (9 bits, the object route). In each, cell 1
+        // holds the LAST entry, a value whose bits read as other entries at any other width.
+        for (int size : new int[]{20, 300}) {
+            // (a) every entry between air and the last is unknown and UNUSED; the cells
+            // use air and cave air only. A truly empty column: served as the empty array,
+            // nothing reported. A wrong width lands on an unknown entry and reports it.
+            var unusedUnknown = new ArrayList<net.minecraft.nbt.Tag>();
+            unusedUnknown.add(paletteEntry(Blocks.AIR.defaultBlockState()));
+            for (int i = 1; i < size - 1; i++) unusedUnknown.add(unknownPaletteEntry("lss:width_unused_" + size + "_" + i));
+            unusedUnknown.add(paletteEntry(Blocks.CAVE_AIR.defaultBlockState()));
+            byte[] wire = assertServesAndReportsNothing(
+                    chunkNbt("minecraft:full", craftedPaletteSection(0, unusedUnknown, size - 1)),
+                    size + " entries, unknown entries unused");
+            assertEquals(0, wire.length, size + " entries: air and cave air only is the empty array");
+
+            // (b) the LAST entry is unknown and USED by cell 1; every entry between is a
+            // real block no cell uses. Undecodable. A wrong width lands on a real entry
+            // (or past the palette) and misses it.
+            var usedUnknown = new ArrayList<net.minecraft.nbt.Tag>();
+            usedUnknown.add(paletteEntry(Blocks.AIR.defaultBlockState()));
+            for (var state : Block.BLOCK_STATE_REGISTRY) {
+                if (usedUnknown.size() == size - 1) break;
+                if (!state.isAir()) usedUnknown.add(paletteEntry(state));
+            }
+            assertEquals(size - 1, usedUnknown.size(), "premise: enough real block states");
+            usedUnknown.add(unknownPaletteEntry("lss:width_used_" + size));
+            assertUndecodableOnBothRoutes(
+                    chunkNbt("minecraft:full", craftedPaletteSection(0, usedUnknown, size - 1)),
+                    size + " entries, the last one unknown and used");
         }
     }
 

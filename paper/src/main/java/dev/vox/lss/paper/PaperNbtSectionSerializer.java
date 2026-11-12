@@ -227,10 +227,12 @@ final class PaperNbtSectionSerializer {
      * skips the chunk and can never store air; a caller that passes notes (the disk
      * reader) also learns WHY, and must not escalate the miss to generation. Undecodable
      * means: at least one block palette entry that a cell actually uses was a hard decode
-     * error, and no in-range section has a non-air cell left. Before this rule such a
-     * column serialized as all-air (or as lit air sections): stamped, stored, and sent as
-     * a clear over the client's cached terrain. A column with ANY decoded block keeps the
-     * vanilla leniency exactly (unknown entries substitute air in place).
+     * error, and either no in-range section has a non-air cell left, or a section is
+     * truly unparseable (the column would otherwise be a plain, generation-escalating
+     * miss). Before this rule the first shape serialized as all-air (or as lit air
+     * sections): stamped, stored, and sent as a clear over the client's cached terrain.
+     * A column with a decoded block and no unparseable section keeps the vanilla
+     * leniency exactly (unknown entries substitute air in place).
      */
     // LevelChunkSection.write(buf) is @Deprecated on Paper (an anti-xray overload was added),
     // but the 1-arg form is the canonical vanilla serialization and is byte-identical to the
@@ -292,15 +294,19 @@ final class PaperNbtSectionSerializer {
                 parsed.add(result);
             }
         }
-        if (usedHardError[0] != null && !hasNonAirCell(parsed)) {
+        if (usedHardError[0] != null && (unparseable[0] > 0 || !hasNonAirCell(parsed))) {
             // Undecodable column: cells point at palette entries that failed to decode,
-            // and nothing else in the column decoded to a block. Everything LSS could say
-            // about it would be substituted air, so it says nothing: null, and the notes
-            // (when the caller passed them) carry the reason. Light does not matter (a
-            // lit column of substituted air is the same lie). Checked BEFORE the
-            // unparseable rung on purpose: that rung's miss may escalate to generation,
-            // and a chunk whose blocks this server does not know must never be loaded by
-            // LSS (vanilla turns them into air on load and may save the chunk).
+            // and either
+            //  - nothing else in the column decoded to a block: everything LSS could say
+            //    about it would be substituted air, so it says nothing (light does not
+            //    matter — a lit column of substituted air is the same lie); or
+            //  - a section is truly unparseable, so the rung below would condemn the
+            //    column as a plain miss. That miss may escalate to generation, and a
+            //    chunk whose cells use blocks this server does not know must never be
+            //    loaded by LSS (vanilla turns them into air on load and may save the
+            //    chunk) — whatever else in it decoded.
+            // Null either way, and the notes (when the caller passed them) carry the
+            // reason. Checked BEFORE the unparseable rung for that second case.
             if (notes != null) notes.markUndecodable(usedHardError[0]);
             return null;
         }
