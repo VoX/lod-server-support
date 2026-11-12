@@ -509,6 +509,9 @@ class DhColumnConverterTest {
                 .setValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.WATERLOGGED,true)),"waterlogged leaves are a fluid to DH");
         assertEquals(0,DhColumnConverter.carryLoss(net.minecraft.world.level.block.Blocks.STONE.defaultBlockState()));
         assertEquals(0,DhColumnConverter.carryLoss(net.minecraft.world.level.block.Blocks.OAK_LOG.defaultBlockState()));
+        assertEquals(0,DhColumnConverter.carryLoss(net.minecraft.world.level.block.Blocks.OAK_SLAB.defaultBlockState()),
+                "a slab has no dampening but occludes by shape: light does not go down through it");
+        assertEquals(0,DhColumnConverter.carryLoss(net.minecraft.world.level.block.Blocks.OAK_STAIRS.defaultBlockState()));
         assertEquals(0,DhColumnConverter.carryLoss(net.minecraft.world.level.block.Blocks.TINTED_GLASS.defaultBlockState()),"blocks all light");
     }
     /** Receipts written by an older conversion download once again, so stored dark crowns are replaced. */
