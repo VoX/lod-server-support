@@ -25,7 +25,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * region storage. On this line the default read fetches the raw record and inflates it on
  * the reader pool, where the garbage fails ({@code ZipException}) and the read resolves
  * as ERROR; other read rungs and other Minecraft lines can label the same read not-found.
- * (Until 2026-11-12 the file was staged under {@code <world>/region}, which 26.2 and later
+ * (Until 2026-11-12 the file was staged under {@code <world>/region}, which 26.1 and later
  * never read: the "corrupt" read was a missing region, resolved not-found, and exercised
  * no corruption at all. The not-found label recorded for 26.x came from that.)
  * What FP-027 actually guarantees, and what this test pins, is CONTAINMENT: the corrupt
@@ -94,7 +94,7 @@ public class RegionFaultGameTests {
         long corruptPacked = PositionUtil.packPosition(corruptCx, corruptCz);
         try {
             // The level's own region folder. (This used to be <world>/region, which is
-            // where the Overworld's regions lived before 26.2 moved them under
+            // where the Overworld's regions lived before 26.1 moved them under
             // dimensions/: on this line the file was then never read, the "corrupt" read
             // was a plain missing region, and the test pinned nothing about corruption.
             // The raw-serves assertion below fails if that ever happens again.)
@@ -259,7 +259,7 @@ public class RegionFaultGameTests {
             bytes.put(payload);
             staged = bytes.array();
             // The level's own region folder (the Overworld moved under dimensions/ in
-            // 26.2): a file staged anywhere else is never read, and the read would
+            // 26.1): a file staged anywhere else is never read, and the read would
             // resolve as a plain missing chunk.
             var regionDir = net.minecraft.world.level.dimension.DimensionType
                     .getStorageFolder(level.dimension(),
