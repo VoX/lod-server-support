@@ -1,6 +1,8 @@
 package dev.vox.lss.networking.client;
 
 import com.mojang.serialization.Lifecycle;
+import dev.vox.lss.api.VoxelColumnData;
+import dev.vox.lss.common.voxel.SkyLightEstimate;
 import dev.vox.lss.networking.server.DiskSerializerTestAccess;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.MappedRegistry;
@@ -12,7 +14,16 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtAccounter;
 import net.minecraft.nbt.NbtIo;
 import net.minecraft.server.Bootstrap;
+import net.minecraft.core.Direction;
 import net.minecraft.world.level.biome.Biome;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.SlabBlock;
+import net.minecraft.world.level.block.StairBlock;
+import net.minecraft.world.level.block.piston.PistonHeadBlock;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.Half;
+import net.minecraft.world.level.block.state.properties.SlabType;
+import net.minecraft.world.level.chunk.LevelChunkSection;
 import net.minecraft.world.level.chunk.PalettedContainerFactory;
 import org.junit.jupiter.api.Test;
 
@@ -43,12 +54,15 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  * serialized through the production disk path, and decoded by the client. Timed per
  * column, after one warm-up pass: the decode itself, and what the estimate adds to it
  * (the predicate plus the estimate). Also timed: the predicate alone on the same columns
- * with their light left in, which is what every ordinary column pays. Results are printed
+ * with their light left in, which is what every ordinary column pays. Two synthetic
+ * pathological columns follow (stairs and slabs, and piston heads, through the full height).
+ * Results are printed
  * and, when {@code LSS_SKY_ESTIMATE_OUT} names a file, written there;
  * {@code LSS_SKY_ESTIMATE_PROFILE=1} adds a crude stack-sample breakdown.
  */
 class SkyLightEstimateTimingTool {
     private static final int MIN_SECTION = -4, MAX_SECTION = 19, SECTIONS = 24, ROUNDS = 3;
+    private static final int PATHOLOGICAL_WARMUP = 10, PATHOLOGICAL_RUNS = 60;
 
     private static final class Series {
         private long[] v = new long[4096];
@@ -165,6 +179,31 @@ class SkyLightEstimateTimingTool {
             }
         }
 
+        // Pathological columns (not terrain): what an unlucky or hostile column can cost.
+        var pathological = new StringBuilder();
+        var columns = new ArrayList<Pathological>();
+        columns.add(stairsAndSlabs(factory));
+        var heads = partialTopsAndBottoms(factory);
+        if (heads != null) columns.add(heads);
+        else pathological.append("pathological: no state with partial top and bottom faces found, column skipped\n");
+        for (var column : columns) {
+            var ns = new Series();
+            ClientSkyLightEstimator.Result last = null;
+            for (int i = 0; i < PATHOLOGICAL_WARMUP + PATHOLOGICAL_RUNS; i++) {
+                long t0 = System.nanoTime();
+                ClientSkyLightEstimator.Result result = null;
+                if (ClientSkyLightEstimator.lacksSkyLight(column.sections())) {
+                    result = estimator.estimate(column.sections(), SECTIONS, MIN_SECTION, factory);
+                }
+                long t1 = System.nanoTime();
+                if (i >= PATHOLOGICAL_WARMUP) ns.add(t1 - t0);
+                last = result;
+            }
+            pathological.append(ns.line("pathological: " + column.name())).append('\n');
+            pathological.append(last == null ? "    (no light)\n" : String.format("    spread steps=%d capped=%s lit sections=%d%n",
+                    last.spreadSteps(), last.capped(), last.litSections()));
+        }
+
         var report = new StringBuilder();
         report.append("Sky-light estimate timing, regions ").append(dir).append('\n');
         report.append("java ").append(System.getProperty("java.version")).append(", ")
@@ -181,10 +220,66 @@ class SkyLightEstimateTimingTool {
                 litSections.pct(0.5), litSections.pct(1.0), addedSections.pct(0.5), addedSections.pct(1.0)));
         report.append(String.format("spread steps per column: median=%d p90=%d p99=%d max=%d (budget %d)%n",
                 spreadSteps.pct(0.5), spreadSteps.pct(0.9), spreadSteps.pct(0.99), spreadSteps.pct(1.0), 1 << 17));
+        report.append(pathological);
         if (sampler != null) report.append(sampler.finish());
         System.out.print(report);
         String out = System.getenv("LSS_SKY_ESTIMATE_OUT");
         if (out != null && !out.isBlank()) Files.writeString(Path.of(out), report.toString());
+    }
+
+    private record Pathological(String name, VoxelColumnData.SectionData[] sections) {}
+
+    private interface CellState {
+        BlockState at(int x, int y, int z);
+    }
+
+    /** A column of the level's full height, every cell from {@code cells} (y counts from the level bottom). */
+    private static VoxelColumnData.SectionData[] fullHeight(PalettedContainerFactory factory, CellState cells) {
+        var sections = new VoxelColumnData.SectionData[SECTIONS];
+        for (int i = 0; i < SECTIONS; i++) {
+            var section = new LevelChunkSection(factory);
+            for (int y = 0; y < 16; y++) for (int z = 0; z < 16; z++) for (int x = 0; x < 16; x++) {
+                section.setBlockState(x, y, z, cells.at(x, i * 16 + y, z), false);
+            }
+            sections[i] = new VoxelColumnData.SectionData(MIN_SECTION + i, section, null, null);
+        }
+        return sections;
+    }
+
+    /**
+     * Stairs and slabs alternating through the full height, behind one open plane of air at
+     * x = 0: the sky reaches every height there and the light then has to work its way
+     * through partial faces, pair by pair.
+     */
+    private static Pathological stairsAndSlabs(PalettedContainerFactory factory) {
+        var air = Blocks.AIR.defaultBlockState();
+        return new Pathological("stairs and slabs, full height", fullHeight(factory, (x, y, z) -> {
+            if (x == 0) return air;
+            if (((x + y + z) & 1) == 0) {
+                return Blocks.OAK_STAIRS.defaultBlockState()
+                        .setValue(StairBlock.FACING, Direction.from2DDataValue((x + z) & 3))
+                        .setValue(StairBlock.HALF, ((y >> 1) & 1) == 0 ? Half.BOTTOM : Half.TOP);
+            }
+            return Blocks.OAK_SLAB.defaultBlockState()
+                    .setValue(SlabBlock.TYPE, ((x + (y >> 1)) & 1) == 0 ? SlabType.BOTTOM : SlabType.TOP);
+        }));
+    }
+
+    /**
+     * A solid block of piston heads facing sideways: no dampening, and the top and bottom
+     * faces are both partial, so the source pass runs down the full height and has to
+     * decide a pair of partial faces for every cell it enters. Null when this line's piston
+     * head does not have that shape.
+     */
+    private static Pathological partialTopsAndBottoms(PalettedContainerFactory factory) {
+        var head = Blocks.PISTON_HEAD.defaultBlockState();
+        int descriptor = ClientSkyLightEstimator.describe(head.setValue(PistonHeadBlock.FACING, Direction.EAST),
+                ClientSkyLightEstimator.VANILLA);
+        boolean partialTopAndBottom = (descriptor & 15) == 0
+                && (descriptor >>> 10 + SkyLightEstimate.UP & 1) != 0 && (descriptor >>> 10 + SkyLightEstimate.DOWN & 1) != 0;
+        if (!partialTopAndBottom) return null;
+        return new Pathological("piston heads, full height", fullHeight(factory, (x, y, z) ->
+                head.setValue(PistonHeadBlock.FACING, Direction.from2DDataValue((x + y + z) & 3))));
     }
 
     /** A crude stack sampler ({@code LSS_SKY_ESTIMATE_PROFILE=1}): where the measured thread is, every millisecond. */
