@@ -877,6 +877,243 @@ class ClientColumnProcessorTest {
         }
     }
 
+    // ---- issue #382: sky light for a column that arrived without any ----
+    // A chunk saved without light (vanilla's ChunkDeleteLightFix strips it on a world upgrade)
+    // is served from disk as ordinary terrain with no light layers; every consumer drew it
+    // black (reproduced live 2026-11-12: all 2143 stripped far columns dark). The drain now
+    // estimates sky light for a column that has blocks and not one non-zero sky nibble.
+    // The light rule itself is pinned in SkyLightEstimateTest (common) and against vanilla's
+    // engine in ClientSkyLightEstimatorTest; these pin WHEN it runs and where in the drain.
+
+    /** The taller test level these cases use: section Ys -4..3. */
+    private static final int TALL_SECTIONS = 8;
+
+    private record WireSection(int y, LevelChunkSection section, byte[] blockLight, byte[] skyLight) {}
+
+    private static WireSection at(int y, LevelChunkSection section) {
+        return new WireSection(y, section, null, null);
+    }
+
+    /** A section of stone from its bottom up to local {@code topY} (15 = solid). */
+    private static LevelChunkSection stoneUpTo(int topY) {
+        var section = new LevelChunkSection(FACTORY);
+        var stone = net.minecraft.world.level.block.Blocks.STONE.defaultBlockState();
+        for (int y = 0; y <= topY; y++) for (int z = 0; z < 16; z++) for (int x = 0; x < 16; x++) {
+            section.setBlockState(x, y, z, stone, false);
+        }
+        return section;
+    }
+
+    /** A one-block stone platform at local y=8 over the west half (x 0..7), air elsewhere. */
+    private static LevelChunkSection halfPlatform() {
+        var section = new LevelChunkSection(FACTORY);
+        var stone = net.minecraft.world.level.block.Blocks.STONE.defaultBlockState();
+        for (int z = 0; z < 16; z++) for (int x = 0; x < 8; x++) section.setBlockState(x, 8, z, stone, false);
+        return section;
+    }
+
+    private static byte[] columnWire(int claimed, WireSection... sections) {
+        var buf = new FriendlyByteBuf(Unpooled.buffer());
+        try {
+            buf.writeVarInt(claimed);
+            for (var s : sections) {
+                buf.writeByte(s.y());
+                s.section().write(buf);
+                buf.writeBoolean(s.blockLight() != null);
+                if (s.blockLight() != null) buf.writeBytes(s.blockLight());
+                buf.writeBoolean(s.skyLight() != null);
+                if (s.skyLight() != null) buf.writeBytes(s.skyLight());
+            }
+            return drainToArray(buf);
+        } finally {
+            buf.release();
+        }
+    }
+
+    private static byte[] columnWire(WireSection... sections) {
+        return columnWire(sections.length, sections);
+    }
+
+    private java.util.Map<Integer, VoxelColumnData.SectionData> drainTall(byte[] wire, boolean resync,
+                                                                         boolean hasSkyLight) {
+        captured.clear();
+        processor.offer(new VoxelColumnS2CPayload(0, 0, dim, 1L, wire), resync);
+        processor.drainColumnQueue(dim, TALL_SECTIONS, MIN_SECTION_Y, hasSkyLight, FACTORY,
+                capturingDispatcher, processor.sessionEpochForTest());
+        assertEquals(1, captured.size(), "exactly one column dispatched");
+        assertEquals(List.of(), reports, "no ingest failure");
+        var byY = new java.util.HashMap<Integer, VoxelColumnData.SectionData>();
+        for (var s : captured.get(0).sections()) byY.put(s.sectionY(), s);
+        return byY;
+    }
+
+    private static void assertFullBright(VoxelColumnData.SectionData section, String what) {
+        assertNotNull(section, what);
+        assertTrue(section.section().hasOnlyAir(), what + ": all-air");
+        assertNotNull(section.skyLight(), what + ": carries sky light");
+        for (byte b : section.skyLight().getData()) assertEquals((byte) 0xFF, b, what + ": sky 15");
+    }
+
+    /** Stone up to local y=7 under open sky: 15 above the surface, 0 inside the stone. */
+    private static void assertLitSurface(VoxelColumnData.SectionData section) {
+        assertNotNull(section.skyLight(), "the surface section must carry the estimated sky layer");
+        for (int y = 0; y < 16; y++) for (int z = 0; z < 16; z++) for (int x = 0; x < 16; x++) {
+            assertEquals(y >= 8 ? 15 : 0, section.skyLight().get(x, y, z), "x=" + x + " y=" + y + " z=" + z);
+        }
+    }
+
+    @Test
+    void aContentColumnWithoutSkyLightIsLitByTheEstimate() {
+        var byY = drainTall(columnWire(at(-4, stoneUpTo(15)), at(-3, stoneUpTo(7))), false, true);
+
+        assertEquals(java.util.Set.of(-4, -3, -2, -1, 0, 1, 2, 3), byY.keySet(),
+                "the two served sections, the air section above the surface, and the implicit sky above that");
+        assertLitSurface(byY.get(-3));
+        assertFalse(byY.get(-3).section().hasOnlyAir(), "the decoded terrain is kept");
+        assertNull(byY.get(-3).blockLight(), "no block light is invented");
+        assertNull(byY.get(-4).skyLight(), "solid stone under the surface receives nothing and stays without a layer");
+        for (int y = -2; y <= 3; y++) assertFullBright(byY.get(y), "air section " + y);
+        assertEquals(1, processor.getSkyEstimatedColumns());
+    }
+
+    @Test
+    void skyLayersThatArePresentButAllZeroCountAsNoSkyLight() {
+        // Older saves and servers ship allocated-but-dark layers; they are not real light.
+        var wire = columnWire(new WireSection(-4, stoneUpTo(15), null, new byte[2048]),
+                new WireSection(-3, stoneUpTo(7), null, new byte[2048]));
+        var byY = drainTall(wire, false, true);
+
+        assertLitSurface(byY.get(-3));
+        assertNotNull(byY.get(-4).skyLight(), "the dark layer that was sent stays");
+        for (byte b : byY.get(-4).skyLight().getData()) assertEquals(0, b);
+        assertFullBright(byY.get(-2), "the air section above the surface");
+        assertEquals(1, processor.getSkyEstimatedColumns());
+    }
+
+    @Test
+    void oneNonZeroSkyNibbleAnywhereLeavesTheColumnExactlyAsSent() {
+        // Real light must never be replaced: a lit column's caves and overhangs stay as
+        // the server sent them. One nibble, on the deepest section, is enough.
+        byte[] almostDark = new byte[2048];
+        almostDark[5] = 0x01;
+        var wire = columnWire(new WireSection(-4, stoneUpTo(15), null, almostDark), at(-3, stoneUpTo(7)));
+        var byY = drainTall(wire, false, true);
+
+        assertNull(byY.get(-3).skyLight(), "the section without a layer keeps none");
+        assertArrayEquals(almostDark, byY.get(-4).skyLight().getData());
+        assertFullBright(byY.get(-2), "the implicit-sky fill still runs above the served top");
+        assertEquals(0, processor.getSkyEstimatedColumns());
+    }
+
+    @Test
+    void noSkyEstimateInADimensionWithoutSkyLight() {
+        // The H-12 class must not return: Nether terrain lit as daylight.
+        var byY = drainTall(columnWire(at(-4, stoneUpTo(15)), at(-3, stoneUpTo(7))), false, false);
+
+        assertEquals(java.util.Set.of(-4, -3), byY.keySet());
+        assertNull(byY.get(-3).skyLight());
+        assertNull(byY.get(-4).skyLight());
+        assertEquals(0, processor.getSkyEstimatedColumns());
+    }
+
+    @Test
+    void noSkyEstimateForAnAllAirColumnOrAClear() {
+        var air = drainTall(columnWire(at(-3, new LevelChunkSection(FACTORY))), false, true);
+        assertNull(air.get(-3).skyLight(), "a served all-air section is untouched");
+        assertEquals(0, processor.getSkyEstimatedColumns());
+
+        var clear = drainTall(columnWire(), true, true);
+        assertEquals(TALL_SECTIONS, clear.size(), "the clear keeps its own bright air-fill");
+        assertEquals(0, processor.getSkyEstimatedColumns());
+    }
+
+    @Test
+    void noSkyEstimateAfterATruncatedDecode() {
+        // The wire carries one section more than the client level has, and that section is
+        // a solid lid over everything. The decode drops it; light derived from the rest
+        // would show daylight where the server's world has none.
+        var sections = new WireSection[TALL_SECTIONS + 1];
+        for (int i = 0; i < TALL_SECTIONS - 1; i++) sections[i] = at(MIN_SECTION_Y + i, stoneUpTo(15));
+        sections[TALL_SECTIONS - 1] = at(MIN_SECTION_Y + TALL_SECTIONS - 1, stoneUpTo(7));
+        sections[TALL_SECTIONS] = at(MIN_SECTION_Y + TALL_SECTIONS, stoneUpTo(15));
+
+        var truncated = drainTall(columnWire(sections), false, true);
+        assertEquals(TALL_SECTIONS, truncated.size(), "premise: the ninth section was cut off");
+        for (var s : truncated.values()) assertNull(s.skyLight(), "no light is derived from a truncated column");
+        assertEquals(0, processor.getSkyEstimatedColumns());
+
+        // Control: the same eight sections, sent as a column of eight, are estimated.
+        var whole = drainTall(columnWire(java.util.Arrays.copyOf(sections, TALL_SECTIONS)), false, true);
+        assertLitSurface(whole.get(MIN_SECTION_Y + TALL_SECTIONS - 1));
+        assertEquals(1, processor.getSkyEstimatedColumns());
+    }
+
+    @Test
+    void decodeReportsWhetherTheSectionCountWasTruncated() {
+        assertFalse(ClientColumnProcessor.decodeColumn(sectionWire(4, 4), LEVEL_SECTIONS, FACTORY).truncated());
+        assertFalse(ClientColumnProcessor.decodeColumn(sectionWire(0, 0), LEVEL_SECTIONS, FACTORY).truncated());
+        assertFalse(ClientColumnProcessor.decodeColumn(sectionWire(-3, 0), LEVEL_SECTIONS, FACTORY).truncated());
+        var cut = ClientColumnProcessor.decodeColumn(sectionWire(6, 6), LEVEL_SECTIONS, FACTORY);
+        assertTrue(cut.truncated(), "more sections claimed than the level has");
+        assertEquals(LEVEL_SECTIONS, cut.sections().length);
+        assertTrue(ClientColumnProcessor.decodeColumn(sectionWire(1_000_000, LEVEL_SECTIONS), LEVEL_SECTIONS, FACTORY)
+                .truncated(), "a hostile count is a truncation too");
+    }
+
+    @Test
+    void theSkyEstimateRunsBeforeTheImplicitSkyFillAndTheResyncAirFill() {
+        // A floating platform in section -2, nothing else, re-served (resync). Order pinned:
+        //  1. estimate: lights section -2, adds the air sections directly above (-1) and below (-3);
+        //  2. implicit-sky fill: everything above the top present section (0..3) full-bright;
+        //  3. resync air-fill: what is still absent (-4) becomes DARK air.
+        // Run after (2) the estimate would see the fill's light and not fire; run after (3)
+        // it would treat the fill's dark air as part of the column and light section -4.
+        var byY = drainTall(columnWire(at(-2, halfPlatform())), true, true);
+
+        assertEquals(java.util.Set.of(-4, -3, -2, -1, 0, 1, 2, 3), byY.keySet());
+        var platform = byY.get(-2).skyLight();
+        assertNotNull(platform, "the platform's section is estimated");
+        assertEquals(15, platform.get(3, 9, 5), "on top of the platform");
+        assertEquals(0, platform.get(3, 8, 5), "the platform itself");
+        assertEquals(15, platform.get(12, 3, 5), "beside it, open to the sky");
+        assertEquals(14, platform.get(7, 3, 5), "under its edge, lit from the side");
+        assertEquals(7, platform.get(0, 3, 5), "eight blocks in");
+        assertFullBright(byY.get(-1), "the air section above the platform");
+        var below = byY.get(-3);
+        assertTrue(below.section().hasOnlyAir());
+        assertNotNull(below.skyLight(), "the air section directly below the platform is added with its light");
+        assertEquals(15, below.skyLight().get(12, 5, 5));
+        assertEquals(14, below.skyLight().get(7, 5, 5));
+        for (int y = 0; y <= 3; y++) assertFullBright(byY.get(y), "implicit sky, section " + y);
+        assertTrue(byY.get(-4).section().hasOnlyAir());
+        assertNull(byY.get(-4).skyLight(), "the resync fill below the estimated band stays dark air");
+        assertEquals(1, processor.getSkyEstimatedColumns());
+
+        // A first serve has no air-fill: the section the estimate did not add stays absent.
+        var first = drainTall(columnWire(at(-2, halfPlatform())), false, true);
+        assertEquals(java.util.Set.of(-3, -2, -1, 0, 1, 2, 3), first.keySet());
+    }
+
+    @Test
+    void theSkyEstimateKeepsBlockLightAsSent() {
+        byte[] blockLight = new byte[2048];
+        for (int i = 0; i < blockLight.length; i++) blockLight[i] = (byte) (i * 31);
+        var wire = columnWire(new WireSection(-3, stoneUpTo(7), blockLight, null));
+        var byY = drainTall(wire, false, true);
+
+        assertLitSurface(byY.get(-3));
+        assertArrayEquals(blockLight, byY.get(-3).blockLight().getData());
+        assertNull(byY.get(-2).blockLight(), "the added air section has no block light");
+    }
+
+    @Test
+    void resetStatsClearsTheSkyEstimateCounter() {
+        drainTall(columnWire(at(-3, stoneUpTo(7))), false, true);
+        assertEquals(1, processor.getSkyEstimatedColumns());
+        processor.resetStats();
+        assertEquals(0, processor.getSkyEstimatedColumns());
+    }
+
     /** Source-regex pin (review C1-6, the dialectFlipFor precedent): the PRODUCTION
      *  ClientLevel drain must route bodies through the v20 translation (with the v16
      *  native-body gate) — a refactor onto the 7-arg identity-overload compiles clean
