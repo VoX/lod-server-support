@@ -410,24 +410,24 @@ class ClientOptionCatalogTest {
         }
     }
 
-    /** The VSS jar rewrites "LSS" in lang VALUES but not a lowercase command, so the button and
-     *  dialog text must never spell one: the command root is a {@code %s} argument filled from
-     *  the brand. Scoped to this feature's keys. */
+    /** The VSS jar rewrites "LSS" in lang VALUES but not a lowercase command, so no value may
+     *  spell one: the command root is a {@code %s} argument filled from the brand. Every key
+     *  in every locale (the Distant Horizons stopped notice named {@code /lss diag} until
+     *  0.21.0, which told VSS players to run a command they do not have). */
     @Test
-    void theRedownloadTextSpellsNoCommandRoot() throws IOException {
-        var commandRoot = java.util.regex.Pattern.compile("/(?:lss|vss)\\b");
+    void noLangValueSpellsACommandRoot() throws IOException {
+        var commandRoot = java.util.regex.Pattern.compile("/(?:lss|vss)(?:lod)?\\b");
         int checked = 0;
         for (String locale : new String[] {"en_us", "zh_cn", "zh_tw"}) {
             JsonObject file = JsonParser.parseString(Files.readString(
                     locate("fabric/src/main/resources/assets/lss/lang/" + locale + ".json"))).getAsJsonObject();
             for (String key : file.keySet()) {
-                if (!key.startsWith("lss.config.redownload_terrain") && !key.startsWith("lss.redownload.")) continue;
                 checked++;
                 assertFalse(commandRoot.matcher(file.get(key).getAsString()).find(),
                         locale + ".json: " + key + " names a command root; use /%s");
             }
         }
-        assertTrue(checked >= 6, "the scan must see the button's keys in all three locales");
+        assertTrue(checked >= 300, "the scan must see every key in all three locales");
     }
 
     /** D-25: display-time resolution reads the current context for every context-dependent
