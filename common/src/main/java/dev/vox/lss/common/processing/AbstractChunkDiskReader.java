@@ -19,8 +19,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 /**
  * Base class for async chunk disk readers. Provides executor setup, per-player result
  * queues, diagnostics, the full submit/triage envelope (saturation, errors, all-air,
- * not-found), and shutdown logic. Subclasses supply only the platform-specific
- * {@link ReadOperation} that produces serialized section bytes.
+ * not-found, undecodable), and shutdown logic. Subclasses supply only the
+ * platform-specific {@link ReadOperation} (or {@link NotedReadOperation}) that produces
+ * serialized section bytes.
  */
 public abstract class AbstractChunkDiskReader {
 
@@ -29,6 +30,18 @@ public abstract class AbstractChunkDiskReader {
     @FunctionalInterface
     public interface ReadOperation {
         byte[] read() throws Exception;
+    }
+
+    /**
+     * The same hook for a platform reader whose serializer can report an undecodable
+     * column: the reader hands in a fresh {@link ColumnDecodeNotes} per read. {@code null}
+     * with the notes marked undecodable resolves as the UNSERVABLE flavor
+     * ({@link ChunkReadResult#notFoundUnservable}: never memoized, never generated);
+     * {@code null} with untouched notes stays the plain authoritative miss.
+     */
+    @FunctionalInterface
+    public interface NotedReadOperation {
+        byte[] read(ColumnDecodeNotes notes) throws Exception;
     }
 
     private static final AtomicInteger THREAD_COUNTER = new AtomicInteger();
@@ -81,7 +94,7 @@ public abstract class AbstractChunkDiskReader {
     // entries (same staleness/dedup/shutdown story: pendings hold, late delivery is
     // idempotent, isShutdown() short-circuits).
     private record ParkedRead(UUID playerUuid, RequestRegistration registration, int chunkX, int chunkZ, String dimension,
-                              long submissionOrder, ReadOperation operation) {}
+                              long submissionOrder, NotedReadOperation operation) {}
     private final ConcurrentLinkedQueue<ParkedRead> gateParked = new ConcurrentLinkedQueue<>();
     private final AtomicInteger gateParkedCount = new AtomicInteger();
     private final int gateParkCapacity;
@@ -247,6 +260,33 @@ public abstract class AbstractChunkDiskReader {
         }
     }
 
+    // Undecodable columns (undecodable-chunks plan): ONE WARN per reader instance. The
+    // reader is rebuilt with its service, so the latch and the undecodable= counter reset
+    // together; the cause is a property of the world (a removed mod, an unread chunk
+    // format), so one line names it and the diag token carries the running total.
+    private final AtomicBoolean undecodableWarned = new AtomicBoolean();
+
+    private void warnUndecodableOnce(String dimension, int chunkX, int chunkZ,
+                                     String firstDecodeError) {
+        if (!this.undecodableWarned.compareAndSet(false, true)) return;
+        warnUndecodable("Chunk [" + chunkX + ", " + chunkZ + "] in " + dimension
+                + " could not be decoded: every block it uses is unknown to this server"
+                + " (first error: " + firstDecodeError + "). " + Brand.shortName()
+                + " is not sending or storing terrain for chunks like this, and it will not"
+                + " load them itself, so they stay exactly as they are on disk. This happens"
+                + " when chunks were saved with a mod that is no longer installed, or by"
+                + " another Minecraft version and never upgraded. To get this terrain back,"
+                + " put the missing mod back, or let the world upgrade to this Minecraft"
+                + " version. The running count is undecodable= in /" + Brand.serverCommand()
+                + " diag. (Logged once per session.)");
+    }
+
+    /** Emits the latched undecodable-column WARN. Overridable so tests can pin the text
+     *  and its once-ness without log capture. */
+    protected void warnUndecodable(String message) {
+        LSSLogger.warn(message);
+    }
+
     /** Latch observability for the Tier 1 episode-detector pins. */
     boolean gateStopWarnLatchedForTest() {
         return this.gateStopWarnLatched;
@@ -355,10 +395,29 @@ public abstract class AbstractChunkDiskReader {
                 dimension, submissionOrder, clientTimestamp, operation);
     }
 
+    /** Standalone admission for an operation that reports through {@link ColumnDecodeNotes}. */
+    protected final void submitRead(UUID playerUuid, int chunkX, int chunkZ, String dimension,
+                                    long submissionOrder, long clientTimestamp,
+                                    NotedReadOperation operation) {
+        var registration = this.playerResults.get(playerUuid);
+        if (registration != null) submitRead(playerUuid, registration, chunkX, chunkZ,
+                dimension, submissionOrder, clientTimestamp, operation);
+    }
+
     /** Platform admission carries the originating player state, never a completion-time UUID lookup. */
     protected final void submitRead(UUID playerUuid, RequestRegistration registration,
                                     int chunkX, int chunkZ, String dimension, long submissionOrder,
                                     long clientTimestamp, ReadOperation operation) {
+        // An operation that takes no notes can never report an undecodable column: its
+        // null stays the plain authoritative miss.
+        submitRead(playerUuid, registration, chunkX, chunkZ, dimension, submissionOrder,
+                clientTimestamp, (NotedReadOperation) notes -> operation.read());
+    }
+
+    /** Platform admission for an operation that reports through {@link ColumnDecodeNotes}. */
+    protected final void submitRead(UUID playerUuid, RequestRegistration registration,
+                                    int chunkX, int chunkZ, String dimension, long submissionOrder,
+                                    long clientTimestamp, NotedReadOperation operation) {
         if (isShutdown() || registration.isRetired()) return;
 
         try {
@@ -601,7 +660,7 @@ public abstract class AbstractChunkDiskReader {
 
     private void readAndDeliver(UUID playerUuid, RequestRegistration registration, int chunkX, int chunkZ, String dimension,
                                  long submissionOrder, long clientTimestamp,
-                                 ReadOperation operation) {
+                                 NotedReadOperation operation) {
         if (isShutdown()) return;
         // Header freshness rung (region-summary-sync-plan.md P1) — FIRST: cheaper than
         // the store rung once memoized (pure memory vs a b-tree row fetch) and it makes
@@ -725,7 +784,7 @@ public abstract class AbstractChunkDiskReader {
 
     /** The expensive phase — every path through here holds a gate permit. */
     private void gatedReadAndDeliver(UUID playerUuid, RequestRegistration registration, int chunkX, int chunkZ, String dimension,
-                                     long submissionOrder, ReadOperation operation) {
+                                     long submissionOrder, NotedReadOperation operation) {
         long startNs = System.nanoTime();
         // Freshness stamp at READ START (R1-M2): the bytes the read produces reflect
         // region state no earlier than this second, so any save landing during the read
@@ -735,8 +794,11 @@ public abstract class AbstractChunkDiskReader {
         this.diag.recordSubmitted(); // the NBT path begins here — store hits never count
 
         byte[] serializedSections;
+        // One per read, confined to this thread: the serializer marks it when it returns
+        // null for an undecodable column (never touched on any other outcome).
+        var notes = new ColumnDecodeNotes();
         try {
-            serializedSections = operation.read();
+            serializedSections = operation.read(notes);
         } catch (Throwable e) {
             // Failure shapes here arrive BOTH wrapped (fetch failures in
             // ExecutionException from future.get) and unwrapped (the B3 split's
@@ -779,6 +841,20 @@ public abstract class AbstractChunkDiskReader {
         }
 
         if (serializedSections == null) {
+            if (notes.undecodable()) {
+                // The chunk exists and is FULL, but every block its cells use failed to
+                // decode. NOT the authoritative miss below: that one seeds the miss memo
+                // and escalates to a generation ticket, which would load the chunk
+                // through Minecraft (unknown blocks become air on load, and the chunk may
+                // be saved that way). The unservable flavor is answered "not available"
+                // and nothing else. Counted under not_found too (recordUndecodable), so
+                // the at-rest partition and law A5 hold as they are.
+                this.diag.recordUndecodable();
+                warnUndecodableOnce(dimension, chunkX, chunkZ, notes.firstDecodeError());
+                recordRealCompletion(System.nanoTime() - startNs);
+                addResult(registration, ChunkReadResult.notFoundUnservable(playerUuid, chunkX, chunkZ, dimension, submissionOrder));
+                return;
+            }
             this.diag.recordNotFound();
             recordRealCompletion(System.nanoTime() - startNs);
             addResult(registration, ChunkReadResult.notFoundAuthoritative(playerUuid, chunkX, chunkZ, dimension, submissionOrder));
@@ -887,6 +963,11 @@ public abstract class AbstractChunkDiskReader {
                 + ", gate_parked=" + this.gateParkedCount.get()
                 + ", gate_stops=" + this.diag.getGateStopsCount()
                 + ", gated=" + this.diag.getGatedCount();
+        // Rendered only when non-zero (the read_throttle/read_path precedent): a clean
+        // server's line is byte-identical to before, and the token appearing at all is
+        // the signal that chunks on disk could not be decoded (see warnUndecodableOnce).
+        long undecodable = this.diag.getUndecodableCount();
+        if (undecodable > 0) base += ", undecodable=" + undecodable;
         // The throttle is engaged only on the Fabric A-incompatible fallback path (a chunk-IO mod
         // replaced vanilla IO). On the normal working-A path it is null and the line is unchanged,
         // so existing diagnostics goldens do not move; when engaged it makes the fallback observable

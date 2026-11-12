@@ -39,6 +39,19 @@ class AbstractChunkDiskReaderTest {
         void enableThrottle() {
             enableAdaptiveThrottleFallback(); // protected in the base; exposed for the wiring test
         }
+
+        /** A read whose serializer reports through {@link ColumnDecodeNotes}. */
+        void submitNoted(UUID player, int cx, int cz, long order, NotedReadOperation op) {
+            submitRead(player, cx, cz, DIM, order, 0L, op);
+        }
+
+        /** The latched undecodable WARN, captured instead of logged. */
+        final List<String> undecodableWarns = new java.util.concurrent.CopyOnWriteArrayList<>();
+
+        @Override
+        protected void warnUndecodable(String message) {
+            this.undecodableWarns.add(message);
+        }
     }
 
     private final UUID player = UUID.randomUUID();
@@ -136,6 +149,144 @@ class AbstractChunkDiskReaderTest {
         assertEquals(0L, r.columnTimestamp());
         assertEquals(1, reader.getDiag().getNotFoundCount());
         assertEquals(0, reader.getDiag().getErrorCount(), "a clean miss is not an error");
+    }
+
+    // ---- Undecodable columns (undecodable-chunks plan, 2026-11-12) ----
+
+    /** A serializer's report of an undecodable column: null bytes plus the marked notes. */
+    private static AbstractChunkDiskReader.NotedReadOperation undecodable(String firstError) {
+        return notes -> {
+            notes.markUndecodable(firstError);
+            return null;
+        };
+    }
+
+    /** {@link #runWithBarrier} for a notes-taking operation. */
+    private ChunkReadResult runNotedWithBarrier(int cx, int cz, long order,
+                                                AbstractChunkDiskReader.NotedReadOperation op)
+            throws InterruptedException {
+        reader.submitNoted(player, cx, cz, order, op);
+        reader.submit(player, 999, 999, Long.MAX_VALUE, () -> new byte[0]);
+        var results = awaitResults(2);
+        assertNull(reader.getPlayerQueue(player).poll(), "exactly one result per submit");
+        assertEquals(999, results.get(1).chunkX(), "barrier result must arrive second (FIFO)");
+        var first = results.get(0);
+        assertEquals(player, first.playerUuid());
+        assertEquals(cx, first.chunkX());
+        assertEquals(cz, first.chunkZ());
+        assertEquals(DIM, first.dimension());
+        assertEquals(order, first.submissionOrder());
+        return first;
+    }
+
+    @Test
+    void undecodableColumnResolvesAsUnservableNeverAsAPlainMissOrAir() throws Exception {
+        // The serializer returned null AND marked the notes: every block the chunk's cells
+        // use failed to decode. A plain authoritative miss here would seed the miss memo and
+        // escalate to a generation ticket, loading (and possibly re-saving) a chunk whose
+        // unknown blocks vanilla turns into air; an all-air result would stamp, store and
+        // send blank terrain. It must be the third flavor.
+        var r = runNotedWithBarrier(3, 4, 9L, undecodable("Unknown registry key: lss:gone"));
+
+        assertTrue(r.notFound(), "not-found shaped: nothing can be served");
+        assertTrue(r.unservable(), "the unservable flavor — never memoized, never generated");
+        assertFalse(r.authoritativeMiss(),
+                "authoritativeMiss means 'may seed the memo, generation is correct' — neither"
+                        + " holds for a chunk the server must never load");
+        assertFalse(r.saturated());
+        assertNull(r.sectionBytes(), "no bytes: never an air answer");
+        assertNull(r.frameBytes());
+        assertEquals(0L, r.columnTimestamp(), "nothing was served, so nothing is stamped");
+
+        var d = reader.getDiag();
+        assertEquals(1, d.getUndecodableCount());
+        assertEquals(1, d.getNotFoundCount(),
+                "an undecodable column also counts under not_found, so the completion"
+                        + " partition and soak law A5 hold with no new term");
+        assertEquals(1, d.getAllAirCount(), "only the barrier read is all-air");
+        assertEquals(0, d.getErrorCount(), "a decode refusal is deterministic, not an error");
+        assertEquals(2, d.getCompletedCount());
+        assertEquals(d.getCompletedCount(),
+                d.getSuccessfulReadCount() + d.getNotFoundCount() + d.getAllAirCount()
+                        + d.getErrorCount() + d.getSaturationCount());
+    }
+
+    @Test
+    void nullReadWithUntouchedNotesStaysAPlainAuthoritativeMiss() throws Exception {
+        // The notes-taking hook must not change what a plain null means: a missing chunk, a
+        // non-FULL chunk and an unparseable section all leave the notes untouched.
+        var r = runNotedWithBarrier(3, 4, 9L, notes -> null);
+
+        assertTrue(r.notFound());
+        assertTrue(r.authoritativeMiss());
+        assertFalse(r.unservable());
+        assertEquals(1, reader.getDiag().getNotFoundCount());
+        assertEquals(0, reader.getDiag().getUndecodableCount());
+        assertTrue(reader.undecodableWarns.isEmpty());
+    }
+
+    @Test
+    void undecodableTokenRendersOnlyWhenNonZeroAndACleanLineIsUnchanged() throws Exception {
+        // The conditional-token rule: a server with no undecodable chunks prints exactly
+        // the line it printed before this counter existed.
+        String clean = "submitted=0, completed=0, not_found=0, all_air=0, errors=0, saturated=0,"
+                + " header_hits=0, avg_read=" + String.format("%.1f", 0.0) + "ms, pending=0,"
+                + " read_gate=0/1, gate_parked=0, gate_stops=0, gated=0";
+        assertEquals(clean, reader.getDiagnostics(),
+                "a clean reader's disk line is byte-identical to the pre-counter line");
+
+        runNotedWithBarrier(1, 1, 1L, notes -> null);
+        assertFalse(reader.getDiagnostics().contains("undecodable"),
+                "a plain miss never renders the token: " + reader.getDiagnostics());
+
+        runNotedWithBarrier(3, 4, 9L, undecodable("Unknown registry key: lss:gone"));
+        String line = reader.getDiagnostics();
+        assertTrue(line.contains("not_found=2,"), "counted under not_found too: " + line);
+        assertTrue(line.endsWith(", gated=0, undecodable=1"),
+                "the token follows the gate tokens: " + line);
+
+        reader.enableThrottle();
+        assertTrue(reader.getDiagnostics().endsWith(", undecodable=1, read_throttle=ENGAGED(33/33)"),
+                "later conditional tokens still append after it: " + reader.getDiagnostics());
+    }
+
+    @Test
+    void undecodableWarnIsLatchedOncePerReaderAndSaysWhatToDo() throws Exception {
+        runNotedWithBarrier(3, -4, 1L, undecodable("Unknown registry key: lss:gone_first"));
+        runNotedWithBarrier(5, 6, 2L, undecodable("Unknown registry key: lss:gone_second"));
+        runNotedWithBarrier(7, 8, 3L, undecodable("Unknown registry key: lss:gone_third"));
+
+        assertEquals(3, reader.getDiag().getUndecodableCount(), "every column is counted");
+        assertEquals(1, reader.undecodableWarns.size(),
+                "one WARN per reader instance, however many columns fail: " + reader.undecodableWarns);
+        String warn = reader.undecodableWarns.get(0);
+        assertTrue(warn.contains("[3, -4]"), "names the chunk: " + warn);
+        assertTrue(warn.contains(DIM), "names the dimension: " + warn);
+        assertTrue(warn.contains("Unknown registry key: lss:gone_first"),
+                "carries the first decode message: " + warn);
+        assertTrue(warn.contains("not sending or storing"), "says what LSS does instead: " + warn);
+        assertTrue(warn.contains("will not load them itself"),
+                "says LSS never loads these chunks: " + warn);
+        assertTrue(warn.contains("put the missing mod back"), "action 1: " + warn);
+        assertTrue(warn.contains("let the world upgrade to this Minecraft version"),
+                "action 2: " + warn);
+        assertTrue(warn.contains("undecodable="), "points at the diag token: " + warn);
+
+        // The latch is per reader, so it resets with the service that owns the reader.
+        var second = new TestDiskReader();
+        try {
+            second.registerPlayer(player);
+            second.submitNoted(player, 1, 1, 1L, undecodable("Unknown registry key: lss:other"));
+            long deadline = System.nanoTime() + 5_000_000_000L;
+            while (second.getPlayerQueue(player).peek() == null) {
+                if (System.nanoTime() > deadline) fail("timed out waiting for the second reader");
+                Thread.sleep(5);
+            }
+            assertEquals(1, second.undecodableWarns.size(), "a new reader warns again");
+            assertEquals(1, second.getDiag().getUndecodableCount(), "and counts from zero");
+        } finally {
+            second.shutdown();
+        }
     }
 
     @Test

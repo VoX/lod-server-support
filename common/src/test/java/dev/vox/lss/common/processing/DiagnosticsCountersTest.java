@@ -32,6 +32,29 @@ class DiagnosticsCountersTest {
     }
 
     @Test
+    void undecodableReadsCountUnderNotFoundSoThePartitionNeedsNoNewTerm() {
+        // An undecodable column (the unservable flavor) is a SUBSET of not_found: one
+        // record call bumps both, so the at-rest partition above and soak law A5
+        // (disk.not_found == generation.submitted + not_generated + miss_dropped) keep
+        // their terms. A separate outcome counter would need a new term in both.
+        var d = new DiskReaderDiagnostics();
+        for (int i = 0; i < 4; i++) d.recordCompleted(1_000_000);
+        d.recordSuccess();
+        d.recordNotFound();
+        d.recordUndecodable();
+        d.recordUndecodable();
+
+        assertEquals(2, d.getUndecodableCount());
+        assertEquals(3, d.getNotFoundCount(), "1 plain miss + 2 undecodable");
+        assertEquals(d.getCompletedCount(),
+                d.getSuccessfulReadCount() + d.getNotFoundCount() + d.getAllAirCount()
+                        + d.getErrorCount() + d.getSaturationCount());
+        assertTrue(d.formatDiagnostics(0).contains("not_found=3,"));
+        assertFalse(d.formatDiagnostics(0).contains("undecodable"),
+                "the base format is unchanged; the reader appends the token only when non-zero");
+    }
+
+    @Test
     void saturatedReadsAreNotCountedSuccessful() {
         var d = new DiskReaderDiagnostics();
         d.recordCompleted(0);
