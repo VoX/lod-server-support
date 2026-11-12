@@ -309,18 +309,4 @@ class LSSConfigMenuTest {
     private static final class ParentScreen extends Screen {
         private ParentScreen() { super(null); }
     }
-
-    @SuppressWarnings("unchecked")
-
-    private static RecordedOption<?> find(RecordingConfigBuilder builder, String id) {
-        for (var p : builder.mods.get(0).pages) {
-            for (var g : p.groups) {
-                for (var o : g.options) {
-                    var s = (RecordedOption<?>) o;
-                    if (s.id.toString().equals(id)) return s;
-                }
-            }
-        }
-        throw new AssertionError("option not built: " + id);
-    }
 }

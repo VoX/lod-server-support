@@ -28,7 +28,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * in {@code en_us.json} (tooltips through {@link Tooltip#keys()}, labels over the whole
  * slider domain); each option's declared default EQUALS a fresh config's field value
  * (the v0.11/v0.12 pages duplicated defaults by hand with no pin); bindings round-trip;
- * {@code enabledBy} names a tick box in the shared catalog; the far-player page pushes prefs
+ * {@code enabledBy} names a tick box in the shared catalog; every page saves only a disk
+ * draft; and a page's buttons ({@link ActionSpec}) are neither options nor settings.
  */
 class ClientOptionCatalogTest {
     @Test
