@@ -189,7 +189,8 @@ public class PaperRequestProcessingService {
     // the quit-originated mailbox Remove, notified (never removed) on dimension change.
     // Vanish bridge seam null until the reflective ladder lands (E2/E3).
     private final dev.vox.lss.common.farplayers.FarPlayerBroadcastService farPlayerService =
-            new dev.vox.lss.common.farplayers.FarPlayerBroadcastService(null);
+            new dev.vox.lss.common.farplayers.FarPlayerBroadcastService(null,
+                    LSSLogger::info, this::sendFarPlayerNotice);
     private int farPlayerTickCounter;
 
     private final long startTimeNanos = System.nanoTime();
@@ -2645,7 +2646,8 @@ public class PaperRequestProcessingService {
                             this.config.farPlayersMinDistanceBlocks(),
                             this.config.farPlayersSendSpectators(),
                             this.config.farPlayersExclude(),
-                            this.config.farPlayersUpdateIntervalTicks()),
+                            this.config.farPlayersUpdateIntervalTicks(),
+                            this.config.farPlayersHidePermissionHolders()),
                     this::sendFarPlayerFrame);
         } catch (Exception e) {
             // Containment (review): a snapshot/encode bug must degrade far players,
@@ -2661,7 +2663,7 @@ public class PaperRequestProcessingService {
 
     /** One snapshot per online player, CONTAINED per player (Folia review 2026-08-27
      *  R2): one raced cross-region read (equipment, vehicle, a throwing permissible
-     *  the hiddenFor belt did not cover) must not abort the pass for every other
+     *  the privacyFor belt did not cover) must not abort the pass for every other
      *  player — the pre-fix shape, where the only catch was around the whole pass.
      *  The skipped player reads as absent this interval; the roster reconciles next
      *  tick (stale-tolerant by the same doctrine as the reads themselves). The
@@ -2702,6 +2704,29 @@ public class PaperRequestProcessingService {
                         FAR_PLAYER_CHANNEL_IDS.computeIfAbsent(channel,
                                 net.minecraft.resources.Identifier::parse), body)));
         this.bandwidthLimiter.recordSend(body.length);
+        return true;
+    }
+
+    /** The far-player notice's chat-line send (hide-permission plan §2b; the map-policy
+     *  chat line's shape): NMS {@code sendSystemMessage} on the pump, an ordinary system
+     *  message, so it reaches every client version. Seam-injected for tests. */
+    private java.util.function.BiConsumer<ServerPlayer, String> farPlayerNoticeSender =
+            (player, text) -> player.sendSystemMessage(
+                    net.minecraft.network.chat.Component.literal(text));
+
+    /** Test seam. */
+    void setFarPlayerNoticeSender(java.util.function.BiConsumer<ServerPlayer, String> sender) {
+        this.farPlayerNoticeSender = sender;
+    }
+
+    /** The broadcast core's {@code PlayerNotifier}: one system chat line to an online
+     *  player (mode "required" overriding their Share My Position choice). False = the
+     *  player list no longer holds the player, so the core retries on a later pass. */
+    private boolean sendFarPlayerNotice(UUID uuid, String text) {
+        var playerList = this.server == null ? null : this.server.getPlayerList();
+        var player = playerList == null ? null : playerList.getPlayer(uuid);
+        if (player == null) return false;
+        this.farPlayerNoticeSender.accept(player, text);
         return true;
     }
 

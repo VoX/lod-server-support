@@ -54,6 +54,10 @@ final class SettingsSchemaSpecs {
         server.add(new Spec("far_players.distance.max_blocks", "farPlayersMaxDistanceBlocks", Kind.INTEGER, Timing.H, Platform.ALL, false));
         server.add(new Spec("far_players.send_spectators", "farPlayersSendSpectators", Kind.BOOLEAN, Timing.H, Platform.ALL, false));
         server.add(new Spec("far_players.excluded_players", "farPlayersExclude", Kind.STRING_LIST, Timing.H, Platform.ALL, true));
+        // Hide-permission plan §2 (0.21.0): the hide permission hides a holder only while this
+        // is on. Hot via reload; the legacy JSON name never existed, so a JSON migration reads
+        // it absent = false.
+        server.add(new Spec("far_players.hide_permission_holders", "farPlayersHidePermissionHolders", Kind.BOOLEAN, Timing.H, Platform.ALL, false));
         server.add(new Spec("paper.update_events", "updateEvents", Kind.STRING_LIST, Timing.R, Platform.PAPER, false));
         client.add(new Spec("lod.source", "dhTerrainSource", Kind.STRING, Timing.S, Platform.ALL, false));
         client.add(new Spec("lod.dh.sync_on_load", "dhSynchronizeOnLoad", Kind.BOOLEAN, Timing.H, Platform.ALL, false));

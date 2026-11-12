@@ -315,7 +315,7 @@ public class RequestProcessingService {
                     var observer = server.getPlayerList().getPlayer(viewer);
                     return observer != null
                             && vanish.canSee(server, observer, target);
-                });
+                }, LSSLogger::info, this::sendFarPlayerNotice);
 
         // Publishes the per-world x-ray mask decisions the (static) serializer choke
         // points consult — before any serve can run. The reference is kept so shutdown's
@@ -1082,7 +1082,8 @@ public class RequestProcessingService {
                     new dev.vox.lss.common.farplayers.FarPlayerBroadcastService.Settings(
                             config.farPlayers(), config.farPlayersMaxDistanceBlocks(),
                             config.farPlayersMinDistanceBlocks(), config.farPlayersSendSpectators(),
-                            config.farPlayersExclude(), config.farPlayersUpdateIntervalTicks()),
+                            config.farPlayersExclude(), config.farPlayersUpdateIntervalTicks(),
+                            config.farPlayersHidePermissionHolders()),
                     this::sendFarPlayerFrame);
         } catch (Exception e) {
             // Containment (review): END_SERVER_TICK has no catch of its own — a
@@ -1113,6 +1114,31 @@ public class RequestProcessingService {
                         : new dev.vox.lss.networking.payloads.FarPlayerUpdatesS2CPayload(body);
         dev.vox.lss.platform.LoaderServices.get().sendToPlayer(player, payload);
         this.bandwidthLimiter.recordSend(body.length);
+        return true;
+    }
+
+    /** The far-player notice's chat-line send (hide-permission plan §2b; the map-policy
+     *  chat line's shape): an ordinary system message on the server thread, so it reaches
+     *  every client version. Seam-injected for tests (gametest mock players have no client). */
+    private java.util.function.BiConsumer<ServerPlayer, String> farPlayerNoticeSender =
+            (player, text) -> player.sendSystemMessage(
+                    net.minecraft.network.chat.Component.literal(text));
+
+    /** Test seam; {@code null} restores the production send. */
+    public void setFarPlayerNoticeSenderForTest(
+            java.util.function.BiConsumer<ServerPlayer, String> sender) {
+        this.farPlayerNoticeSender = sender != null ? sender
+                : (player, text) -> player.sendSystemMessage(
+                        net.minecraft.network.chat.Component.literal(text));
+    }
+
+    /** The broadcast core's {@code PlayerNotifier}: one system chat line to an online
+     *  player (mode "required" overriding their Share My Position choice). False = not
+     *  online right now, so the core retries on a later pass. */
+    private boolean sendFarPlayerNotice(UUID uuid, String text) {
+        var player = this.server.getPlayerList().getPlayer(uuid);
+        if (player == null) return false;
+        this.farPlayerNoticeSender.accept(player, text);
         return true;
     }
 

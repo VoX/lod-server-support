@@ -53,6 +53,28 @@ LOD Server Support is backwards and forwards compatible from v0.4.0 through the 
 
 **Far players.** Players beyond your normal render distance are drawn as player models in the LOD terrain (Fabric client), lit as if under open sky (or at full brightness, mounts included, with the "Full Bright Far Players" option / `far_players.full_bright` in `lss-client-config.yaml`), with their name tags (also drawn over players still in normal range once they are past the game's own name-tag distance) and, within about 80 blocks, their skin overlay layers (farther out the depth buffer cannot separate that thin shell from the body). Two limits worth knowing: players past the game's far plane (your render distance × 64 blocks, or the cloud distance when that is larger) are not drawn unless you turn on "Extend Far Player Draw Range" (`far_players.extend_far_plane`, kept in `lss-client-experimental.yaml`), which is only visible with an LOD mod such as Voxy and is not used while a shader pack is on (fog can still hide very distant players: if they fade out, turn off your LOD mod's fog); and with Iris shaders, packs whose Voxy integration keeps LOD depth out of the vanilla depth buffer (Complementary, for one) draw far players on top of LOD terrain instead of behind it.
 
+*Who is shown.* The server's `far_players.mode` decides:
+
+- `off`: nobody.
+- `opt_in`: only players whose own client shares their position.
+- `on` (the default): every player in your dimension within the server's range (`far_players.distance.max_blocks`, 2048 blocks unless changed), including players without the mod. A player can hide with Share My Position.
+- `required` (new in 0.21.0): every player is shown as a far player and cannot opt out, except holders of `lss.farplayers.hidden` (`vss.farplayers.hidden`). Players whose choice is overridden are told in chat.
+
+Never sent, in any mode: spectators (unless `far_players.send_spectators` is on), invisible players, vanished players (the vanish plugins and mods LSS reads), players disguised with LibsDisguises, and anyone listed in `far_players.excluded_players`.
+
+*How a player hides.* Turn off "Share My Position" on the Far Players page of the LSS options (`far_players.sharing.enabled` in `lss-client-config.yaml`); `far_players.sharing.max_distance_blocks` limits how far away others may see you instead of hiding you completely. The server honors both for every player in modes `on` and `opt_in`. In mode `required` it honors them only for players who hold the hide permission. Anyone else who has Share My Position off or a share distance set is told so in chat, once per connection: "This server requires position sharing: other players can see where you are from far away, and your Share My Position setting does not apply here." The server sends that line itself, so it also reaches older versions of the mod.
+
+*Changed in 0.21.0: the hide permission.* The `lss.farplayers.hidden` (`vss.farplayers.hidden`) permission no longer hides a player by itself. A grant of every permission (`*`) includes it, so it used to hide every admin from everyone without saying so. The permission now means "may be hidden": automatically if the server sets `far_players.hide_permission_holders: true` (every holder is hidden in every mode, as before 0.21.0), by the player's own choice on a `required` server, and with no effect in mode `on`, where everyone may hide. Both settings apply with `/lsslod reload` (no restart). While `hide_permission_holders` is off, the server logs one line after each start, the first time it sees a player who holds the permission. An upgraded settings file gains the `hide_permission_holders` key only when you change the setting. A file that carries the key (every file 0.21.0 or newer creates) or says `mode: "required"` loads on LSS 0.20 and older only after deleting that line or changing the mode.
+
+*Far players don't show up?* Check in this order:
+
+1. **Server mode and range.** `far_players.mode` is `on` or `required` (with `opt_in` the other player must be sharing), you are in the same dimension, and the other player is within `far_players.distance.max_blocks` and beyond `min_blocks`.
+2. **The other player's Share My Position** is on (it is by default; on a `required` server it only matters for players who hold the hide permission), and they are not a spectator, invisible, vanished, disguised or in `excluded_players`.
+3. **The setting and the permission.** With `far_players.hide_permission_holders: true`, everyone who holds the hide permission is hidden, and admins with `*` hold it. On the server, the `FarPlayers:` line of `/lsslod diag` adds `hidden=<n>` (players withheld by vanish, a disguise or that setting in the last update), `perm_holders=<n>` (holders who are shown because the setting is off) and `overridden=<n>` (players whose own sharing choice a `required` server is overriding).
+4. **What your client receives.** `/lss status` shows "Far players sent by this server". 0 means the server sends you nobody, so the cause is one of the three above. Any other number means they arrive and your client is not drawing them:
+5. **Fog.** On Minecraft 26.x, with your LOD mod's fog on (Voxy's default), far players past about 900 blocks fade into the fog. Turn the LOD mod's fog off.
+6. **Draw range.** Players past the game's far plane need "Extend Far Player Draw Range"; also check that "Show Far Players" is on, that "Far Player Render Limit" is 0 or large enough, and that `/lss status` does not say the far-player renderer is unavailable on your loader.
+
 [Voxy Server Side](https://modrinth.com/plugin/voxy-server-side) is the same mod. Voxy Server Side clients are compatible with LOD Server Support servers and vice versa.
 
 ## Installation
@@ -114,7 +136,7 @@ restart or reconnect; it does not rewrite comments or normalized values.
 | `storage.lod_store` | Cache processed columns to save repeated parsing/serialization CPU, using additional disk space that can be comparable to the world itself. Cap, resweep and backfill controls reload; enabling the store requires a restart. |
 | `privacy.xray` | Anti-xray policy and fallback masking. Changes require a restart. |
 | `privacy.request_no_map_ingestion` | Ask players' clients not to copy LOD terrain into map mods (below). Reloads. |
-| `far_players` | Distant player display/sharing policies and distances in blocks. Players control local rendering manually. |
+| `far_players` | Distant player display/sharing policies and distances in blocks. Players control local rendering manually. `mode` is `off`, `opt_in`, `on` or `required` (everyone is shown; only holders of the far-player hide permission can opt out). `hide_permission_holders` (off by default) hides every player who holds that permission, as before 0.21.0. |
 
 **Paper: use the jar for your Minecraft version.** Paper only refuses a plugin built for a
 *newer* Minecraft version, so from 0.20.0 the Paper/Folia plugin checks for itself: on a
