@@ -396,12 +396,11 @@ public class PaperRequestProcessingService {
     private final ConcurrentHashMap<UUID, RegionProbeBatch> regionProbeResults = new ConcurrentHashMap<>();
 
     /** Pump-only. The batch taken at tick T, released back into the mailbox at T+1 once its
-     *  probe task has had a region tick to publish — carrying the offer generation recorded
-     *  BEFORE the take, so the release can refuse a batch that was passed-through during the
-     *  hold (see {@code AbstractPlayerRequestState.republishHeldBatch}). */
-    private record HeldBatch(IncomingBatch batch, long offerGeneration) {}
-
-    private final Map<UUID, HeldBatch> heldForProbe = new HashMap<>();
+     *  probe task has had a region tick to publish — carrying the generation of the offer
+     *  that wrote it, handed out by the same atomic take, so the release can refuse a batch
+     *  that was passed-through during the hold (see
+     *  {@code AbstractPlayerRequestState.republishHeldBatch}). */
+    private final Map<UUID, AbstractPlayerRequestState.HeldIncomingBatch> heldForProbe = new HashMap<>();
 
     /** Collaborator set for the package-private constructor. Tests build it over recording
      *  collaborators; production wiring lives in {@link #productionWiring} only. */
@@ -2421,12 +2420,12 @@ public class PaperRequestProcessingService {
         // Either nothing was held, or the held batch lost the republish (a newer arrival in
         // the mailbox, or a pass-through the offer-generation guard caught — dropped and
         // counted superseded either way). Whatever is pending now is the newest declaration.
-        // The generation is recorded BEFORE the take: an offer slipping between the two can
-        // only make the eventual republish refuse spuriously (a healed drop), never let a
-        // stale batch resurrect.
-        long heldAtGeneration = state.offerGeneration();
-        var fresh = state.takeFreshIncomingBatchForProbe();
-        if (fresh == null) {
+        // The take hands the batch out with ITS OWN offer generation. A counter read beside
+        // the take can land inside a newer offer's bump-to-write window and label the older
+        // batch still resting there with the newer generation, which both release guards
+        // then pass once the newer declaration has passed through.
+        var held = state.takeFreshIncomingBatchForProbe();
+        if (held == null) {
             // The published-want-set arm (Folia review 2026-08-27 R1): before this arm
             // existed, Folia probed ONLY on a declaration's arrival tick — the probe
             // window advanced at the client's 1-4 Hz cadence instead of every tick, so
@@ -2466,9 +2465,10 @@ public class PaperRequestProcessingService {
             }
             return;
         }
-        this.heldForProbe.put(player.getUUID(), new HeldBatch(fresh, heldAtGeneration));
+        this.heldForProbe.put(player.getUUID(), held);
+        long heldAtGeneration = held.offerGeneration();
 
-        long[] positions = snapshotProbePositions(state, fresh, skipPositions);
+        long[] positions = snapshotProbePositions(state, held.batch(), skipPositions);
         if (positions.length == 0) return;
         UUID uuid = player.getUUID();
         try {
