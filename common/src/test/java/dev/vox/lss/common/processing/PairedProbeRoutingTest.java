@@ -55,7 +55,7 @@ class PairedProbeRoutingTest {
         void release(LoadedColumnData probe) {
             var batch = new IncomingBatch(new IncomingRequest[]{new IncomingRequest(5, 7, -1)});
             state.offerIncomingBatch(batch); long generation = state.offerGeneration();
-            assertSame(batch, state.takeFreshIncomingBatchForProbe());
+            assertSame(batch, state.takeFreshIncomingBatchForProbe().batch());
             var probes = new Long2ObjectOpenHashMap<LoadedColumnData>(); probes.put(KEY, probe);
             assertTrue(state.republishHeldBatch(batch, generation, probes));
         }
