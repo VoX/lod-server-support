@@ -28,6 +28,14 @@ import java.util.Arrays;
  * has no face bits; its dampening alone decides. This class has no Minecraft types; the
  * caller supplies the descriptors.
  *
+ * <p><b>Bounded work.</b> One column may spend {@link #DEFAULT_BUDGET} units: one per cell
+ * read (source pass and spread alike), one per spread step, and {@link #PAIR_COST} for
+ * every pair of partial faces the caller has to decide. A pair that carries identities
+ * ({@link #withIdentity}) is decided once per column and remembered. When the budget is
+ * used up the work stops where it is: every value written so far stands, the rest stays
+ * dark. A stopped result is darker than the full one, never brighter, because it only
+ * holds source cells the full pass also finds and spread steps the full spread also takes.
+ *
  * <p>Not thread-safe: one instance holds the working buffers and is reused column after
  * column by one thread. Nothing is allocated per cell; a layer array is allocated only for
  * a section the caller asks for with {@link #layer(int)}.
@@ -44,19 +52,28 @@ public final class SkyLightEstimate {
     public static final int LAYER_BYTES = 2048;
     /** Most sections one call accepts (a level is at most 254 sections tall). */
     public static final int MAX_SECTIONS = 512;
+    /** The largest identity {@link #withIdentity} can carry. */
+    public static final int MAX_IDENTITY = (1 << 14) - 1;
     /**
-     * Spread steps one column may take. Real terrain needs a few thousand at most (see the
-     * measurement in the plan's as-built section); a hostile column of maximum height and a
-     * comb of shadows would otherwise cost a million. Past the budget the spread stops:
-     * what is lit so far stays, the rest stays dark.
+     * Work units one column may spend (see the class comment). Real terrain needs a few
+     * tens of thousands at most (the measurement is in the plan's as-built section); a
+     * column of stairs or piston heads through the full height would otherwise cost
+     * hundreds of thousands of cell reads and shape comparisons on the one decode thread.
      */
-    static final int DEFAULT_SPREAD_BUDGET = 1 << 17;
+    public static final int DEFAULT_BUDGET = 1 << 17;
+    /** What deciding one pair of partial faces costs, in cell reads: the caller compares
+     *  two shapes, which is two orders of magnitude slower than reading a cell. */
+    static final int PAIR_COST = 64;
 
     private static final int CELLS = 4096;
     private static final int FULL_SHIFT = 4, PARTIAL_SHIFT = 10;
     private static final int FACES = 0xFFF0;
     private static final int ALL_DIRECTIONS = 0x3F;
+    private static final int IDENTITY_SHIFT = 16;
     private static final int INITIAL_QUEUE = 1024, RETAINED_QUEUE = 1 << 16;
+    /** The pair memo: open addressing, at most half full. Its limit is the number of pairs
+     *  the budget can pay for, so a full memo and a spent budget come together. */
+    private static final int MEMO_SLOTS = 4096, MEMO_LIMIT = DEFAULT_BUDGET / PAIR_COST;
 
     /** The cells of one column, sections counted from the top (0) down. */
     public interface Column {
@@ -71,6 +88,8 @@ public final class SkyLightEstimate {
          * Whether two PARTIAL faces that touch close the gap between cell A and its
          * neighbour B in {@code direction} (from A to B). Asked only when both touching
          * faces are partial. The default says closed, which can only make a result darker.
+         * When both descriptors carry an identity the answer is remembered for the column
+         * and this is not asked again for the same two identities on the same axis.
          */
         default boolean partialFacesClose(int sectionA, int cellA, int sectionB, int cellB, int direction) {
             return true;
@@ -88,12 +107,26 @@ public final class SkyLightEstimate {
                 | (partialFaces & ALL_DIRECTIONS & ~full) << PARTIAL_SHIFT;
     }
 
+    /**
+     * The descriptor with an identity: a number from 1 to {@link #MAX_IDENTITY} the caller
+     * gives to one block state for the length of a column. Two cells with the same identity
+     * must be the same block state, so a decision about their partial faces holds for every
+     * such pair. Any other number means "no identity": such a cell's pairs are always asked.
+     */
+    public static int withIdentity(int descriptor, int identity) {
+        int kept = identity >= 1 && identity <= MAX_IDENTITY ? identity : 0;
+        return descriptor & (1 << IDENTITY_SHIFT) - 1 | kept << IDENTITY_SHIFT;
+    }
+
     /** Cell index inside a section, the order of vanilla's {@code DataLayer}. */
     public static int cell(int x, int y, int z) {
         return y << 8 | z << 4 | x;
     }
 
-    private final int spreadBudget;
+    private final int budget;
+    private final long[] memoKeys = new long[MEMO_SLOTS];
+    private final boolean[] memoClosed = new boolean[MEMO_SLOTS];
+    private int memoCount;
     /** One byte per cell, slot 0 = the BOTTOM section, so a step down is {@code -256}. */
     private byte[] light = new byte[0];
     /** Pending spread steps: {@code index << 10 | directions << 4 | level}. */
@@ -108,15 +141,15 @@ public final class SkyLightEstimate {
     private int sections;
     /** Slots at or above this one hold this column's values; lower slots are stale. */
     private int cleared;
-    private int head, tail, steps;
+    private int head, tail, work;
     private boolean exhausted;
 
     public SkyLightEstimate() {
-        this(DEFAULT_SPREAD_BUDGET);
+        this(DEFAULT_BUDGET);
     }
 
-    SkyLightEstimate(int spreadBudget) {
-        this.spreadBudget = spreadBudget;
+    SkyLightEstimate(int budget) {
+        this.budget = budget;
     }
 
     /**
@@ -133,8 +166,12 @@ public final class SkyLightEstimate {
         this.column = column;
         this.sections = sectionCount;
         this.cleared = sectionCount;
-        this.head = this.tail = this.steps = 0;
+        this.head = this.tail = this.work = 0;
         this.exhausted = false;
+        if (this.memoCount > 0) {
+            Arrays.fill(this.memoKeys, 0L);
+            this.memoCount = 0;
+        }
         if (this.queue.length > RETAINED_QUEUE) this.queue = new long[INITIAL_QUEUE];
         if (this.light.length < sectionCount * CELLS) {
             this.light = new byte[sectionCount * CELLS];
@@ -144,8 +181,10 @@ public final class SkyLightEstimate {
         Arrays.fill(this.lit, 0, sectionCount, false);
         for (int section = 0; section < sectionCount; section++) this.air[section] = column.allAir(section);
         if (!sources()) return false;
-        seedSides();
-        spread();
+        if (!this.exhausted) {
+            seedSides();
+            spread();
+        }
         return true;
     }
 
@@ -167,14 +206,14 @@ public final class SkyLightEstimate {
         return slot >= this.cleared ? this.light[slot << 12 | cell] : 0;
     }
 
-    /** True when the last column used up the spread budget and may be darker than the rule gives. */
+    /** True when the last column used up its budget and may be darker than the rule gives. */
     public boolean exhausted() {
         return this.exhausted;
     }
 
-    /** Spread steps the last column took. */
-    public int steps() {
-        return this.steps;
+    /** Work units the last column took (see the class comment). */
+    public int work() {
+        return this.work;
     }
 
     /** The source pass. Fills {@link #lowest} and takes the one step down from each lowest source. */
@@ -205,9 +244,22 @@ public final class SkyLightEstimate {
             Arrays.fill(this.light, base, base + CELLS, (byte) 0);
             for (int c = 0; c < 256; c++) {
                 if (this.lowest[c] >= 0) continue;
+                if (this.work > this.budget) {
+                    // Out of budget. A run that came through this section already ends at
+                    // its bottom; the runs not walked yet end above it.
+                    this.exhausted = true;
+                    for (int walked = 0; walked < c; walked++) {
+                        if (this.lowest[walked] < 0) this.lowest[walked] = slot << 4;
+                    }
+                    for (int rest = c; rest < 256; rest++) {
+                        if (this.lowest[rest] < 0) this.lowest[rest] = slot + 1 << 4;
+                    }
+                    return any;
+                }
                 int up = this.above[c], y = 15, entered = AIR;
                 boolean closed = false;
                 for (; y >= 0; y--) {
+                    this.work++;
                     entered = this.column.descriptor(section, y << 8 | c);
                     if ((entered & 15) != 0) break;
                     if (closedBelow(up, entered, section, y << 8 | c)) {
@@ -249,8 +301,39 @@ public final class SkyLightEstimate {
         if ((up >>> FULL_SHIFT + DOWN & 1) != 0 || (entered >>> FULL_SHIFT + UP & 1) != 0) return true;
         if ((up >>> PARTIAL_SHIFT + DOWN & 1) == 0 || (entered >>> PARTIAL_SHIFT + UP & 1) == 0) return false;
         boolean sameSection = cell < 15 << 8;
-        return this.column.partialFacesClose(sameSection ? section : section - 1,
-                sameSection ? cell + 256 : cell & 255, section, cell, DOWN);
+        return partialFacesClose(up, sameSection ? section : section - 1,
+                sameSection ? cell + 256 : cell & 255, entered, section, cell, DOWN);
+    }
+
+    /**
+     * The caller's decision for two touching partial faces, remembered per column for a
+     * pair that carries identities. The key is the two descriptors and the axis: a pair
+     * seen from B is the same pair seen from A in the opposite direction.
+     */
+    private boolean partialFacesClose(int from, int fromSection, int fromCell,
+                                      int entered, int toSection, int toCell, int direction) {
+        boolean known = from >>> IDENTITY_SHIFT != 0 && entered >>> IDENTITY_SHIFT != 0;
+        long key = 0;
+        int slot = 0;
+        if (known) {
+            boolean forward = (direction & 1) == 0;
+            key = (long) (forward ? from : entered) << 32 | (long) (forward ? entered : from) << 2 | direction >> 1;
+            slot = (int) (key * 0x9E3779B97F4A7C15L >>> 52);
+            for (long stored; (stored = this.memoKeys[slot]) != 0; slot = slot + 1 & MEMO_SLOTS - 1) {
+                if (stored == key) {
+                    this.work++;
+                    return this.memoClosed[slot];
+                }
+            }
+        }
+        this.work += PAIR_COST;
+        boolean closed = this.column.partialFacesClose(fromSection, fromCell, toSection, toCell, direction);
+        if (known && this.memoCount < MEMO_LIMIT) {
+            this.memoKeys[slot] = key;
+            this.memoClosed[slot] = closed;
+            this.memoCount++;
+        }
+        return closed;
     }
 
     /**
@@ -280,10 +363,11 @@ public final class SkyLightEstimate {
             long entry = this.queue[this.head++];
             int index = (int) (entry >>> 10), level = (int) (entry & 15), directions = (int) (entry >>> 4) & 63;
             if (this.light[index] != level) continue;   // raised since it was queued
-            if (++this.steps > this.spreadBudget) {
+            if (this.work > this.budget) {
                 this.exhausted = true;
                 return;
             }
+            this.work++;
             int from = -1;
             for (int direction = 0; direction < 6; direction++) {
                 if ((directions & 1 << direction) == 0) continue;
@@ -321,7 +405,9 @@ public final class SkyLightEstimate {
 
     private int descriptorAt(int index) {
         int section = this.sections - 1 - (index >>> 12);
-        return this.air[section] ? AIR : this.column.descriptor(section, index & 4095);
+        if (this.air[section]) return AIR;
+        this.work++;
+        return this.column.descriptor(section, index & 4095);
     }
 
     private boolean closed(int from, int direction, int entered, int fromIndex, int toIndex) {
@@ -329,8 +415,8 @@ public final class SkyLightEstimate {
         int opposite = direction ^ 1;
         if ((from >>> FULL_SHIFT + direction & 1) != 0 || (entered >>> FULL_SHIFT + opposite & 1) != 0) return true;
         if ((from >>> PARTIAL_SHIFT + direction & 1) == 0 || (entered >>> PARTIAL_SHIFT + opposite & 1) == 0) return false;
-        return this.column.partialFacesClose(this.sections - 1 - (fromIndex >>> 12), fromIndex & 4095,
-                this.sections - 1 - (toIndex >>> 12), toIndex & 4095, direction);
+        return partialFacesClose(from, this.sections - 1 - (fromIndex >>> 12), fromIndex & 4095,
+                entered, this.sections - 1 - (toIndex >>> 12), toIndex & 4095, direction);
     }
 
     private void push(int index, int level, int directions) {

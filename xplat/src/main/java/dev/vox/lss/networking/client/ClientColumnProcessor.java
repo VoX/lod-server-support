@@ -88,8 +88,20 @@ class ClientColumnProcessor {
     /** Columns that arrived with terrain and no sky light and were given an estimate
      *  (issue #382). Non-zero means the server holds chunks saved without light. */
     private final AtomicLong skyEstimatedColumns = new AtomicLong();
+    /** Columns whose estimate failed and were delivered as they arrived. */
+    private final AtomicLong skyEstimateFailures = new AtomicLong();
+    private final AtomicBoolean skyEstimateFailureLogged = new AtomicBoolean();
+
+    /** The sky-light estimate as the drain calls it. Test seam; production is
+     *  {@link ClientSkyLightEstimator#estimate}. */
+    @FunctionalInterface
+    interface SkyEstimator {
+        ClientSkyLightEstimator.Result estimate(VoxelColumnData.SectionData[] sections, int levelSectionCount,
+                                               int minSectionY, PalettedContainerFactory factory);
+    }
+
     /** Drain-thread only (one drain runs at a time, see {@link #processing}). */
-    private final ClientSkyLightEstimator skyLightEstimator = new ClientSkyLightEstimator();
+    private final SkyEstimator skyEstimator;
 
     // Off-thread column processing: one executor for the singleton's lifetime. A session
     // epoch (bumped on disconnect) makes any in-flight drain self-terminate instead of
@@ -108,8 +120,15 @@ class ClientColumnProcessor {
 
     /** Seam constructor for tests; the no-arg constructor is the production wiring. */
     ClientColumnProcessor(FailureReporter failureReporter, Supplier<ClientLevel> levelSupplier) {
+        this(failureReporter, levelSupplier, new ClientSkyLightEstimator()::estimate);
+    }
+
+    /** Seam constructor with the sky-light estimate replaced. */
+    ClientColumnProcessor(FailureReporter failureReporter, Supplier<ClientLevel> levelSupplier,
+                          SkyEstimator skyEstimator) {
         this.failureReporter = failureReporter;
         this.levelSupplier = levelSupplier;
+        this.skyEstimator = skyEstimator;
     }
 
     private static ClientLevel liveClientLevel() {
@@ -363,8 +382,7 @@ class ClientColumnProcessor {
                     sb.append(']');
                     ClientTraceLog.event("col_light", sb.toString());
                 }
-                if (hasSkyLight && !decoded.truncated()
-                        && ClientSkyLightEstimator.lacksSkyLight(sections)) {
+                if (hasSkyLight && !decoded.truncated()) {
                     // Sky-light estimate (issue #382): a chunk saved without light (vanilla's
                     // ChunkDeleteLightFix strips it on a world upgrade) is served from disk as
                     // ordinary terrain with no light layers, and every consumer drew it black.
@@ -376,14 +394,31 @@ class ClientColumnProcessor {
                     // it adds the air section above the terrain, which the implicit-sky fill
                     // then takes as the column's top, and the resync air-fill must still find
                     // the unlit gaps absent.
-                    var estimated = this.skyLightEstimator.estimate(sections, levelSectionCount,
-                            minSectionY, factory);
-                    if (estimated != null) {
-                        this.skyEstimatedColumns.incrementAndGet();
-                        if (ClientTraceLog.enabled()) {
-                            traceSkyEstimate(payload.chunkX(), payload.chunkZ(), sections, estimated);
+                    // The estimate is an improvement, never a condition for delivery. Left
+                    // to the outer catch a failure would be an ingest failure: the server
+                    // sends the column again, it fails again, and the failure cap parks it,
+                    // so the terrain is lost instead of delivered dark. So it is contained
+                    // here and the column goes on exactly as it arrived.
+                    try {
+                        if (ClientSkyLightEstimator.lacksSkyLight(sections)) {
+                            var estimated = this.skyEstimator.estimate(sections, levelSectionCount,
+                                    minSectionY, factory);
+                            if (estimated != null) {
+                                if (ClientTraceLog.enabled()) {
+                                    traceSkyEstimate(payload.chunkX(), payload.chunkZ(), sections, estimated);
+                                }
+                                this.skyEstimatedColumns.incrementAndGet();
+                                sections = estimated.sections();
+                            }
                         }
-                        sections = estimated.sections();
+                    } catch (RuntimeException e) {
+                        this.skyEstimateFailures.incrementAndGet();
+                        if (this.skyEstimateFailureLogged.compareAndSet(false, true)) {
+                            LSSLogger.warn("The sky-light estimate failed for the column at "
+                                    + payload.chunkX() + "," + payload.chunkZ() + "; it is delivered"
+                                    + " without the estimate. Further failures this session are"
+                                    + " counted, not logged (client diagnostics, sky_estimate_failed)", e);
+                        }
                     }
                 }
                 if (hasSkyLight) {
@@ -574,15 +609,15 @@ class ClientColumnProcessor {
     /**
      * The {@code col_light_est} trace event, beside {@code col_light} (which shows the
      * column as it arrived): every section that now carries an estimated sky layer as
-     * {@code [sectionY, hasOnlyAir, added]}; {@code steps} is the work the sideways
-     * spread took and {@code capped} is set when it ran into its budget.
+     * {@code [sectionY, hasOnlyAir, added]}; {@code work} is what the estimate cost in
+     * its own units and {@code capped} is set when it ran into its budget.
      */
     private static void traceSkyEstimate(int chunkX, int chunkZ, VoxelColumnData.SectionData[] arrived,
                                          ClientSkyLightEstimator.Result estimated) {
         var out = estimated.sections();
         var sb = new StringBuilder(64 + estimated.litSections() * 12);
         sb.append("\"pos\":[").append(chunkX).append(',').append(chunkZ)
-                .append("],\"steps\":").append(estimated.spreadSteps())
+                .append("],\"work\":").append(estimated.work())
                 .append(",\"capped\":").append(estimated.capped() ? 1 : 0).append(",\"sections\":[");
         boolean first = true;
         for (int i = 0; i < out.length; i++) {
@@ -713,6 +748,7 @@ class ClientColumnProcessor {
         }
         this.identityResolver = null;
         this.identityResolverKey = null;
+        this.skyEstimateFailureLogged.set(false);   // the next session logs its first failure again
         this.sessionEpoch++;
         // Drain with the same poll+decrement discipline as the decode loop rather than
         // clear()+set(0): a set(0) races a decode iteration that already polled an item but
@@ -730,6 +766,9 @@ class ClientColumnProcessor {
     long getQueuedBytes() { return this.queuedBytes.get(); }
     long getColumnsDropped() { return this.columnsDropped.get(); }
     long getSkyEstimatedColumns() { return this.skyEstimatedColumns.get(); }
+    long getSkyEstimateFailures() { return this.skyEstimateFailures.get(); }
+    /** Whether this session has already logged a failed estimate (the log is once per session). */
+    boolean skyEstimateFailureLogged() { return this.skyEstimateFailureLogged.get(); }
 
     /** Current session epoch, for tests driving the drain loop directly. */
     int sessionEpochForTest() { return this.sessionEpoch; }
@@ -737,6 +776,7 @@ class ClientColumnProcessor {
     void resetStats() {
         this.columnsDropped.set(0);
         this.skyEstimatedColumns.set(0);
+        this.skyEstimateFailures.set(0);
         this.lastDropWarnMs = 0;
     }
 }
