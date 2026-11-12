@@ -1,6 +1,8 @@
 package dev.vox.lss.config;
 
 import dev.vox.lss.common.LSSConstants;
+import dev.vox.lss.config.menu.ActionSpec;
+import dev.vox.lss.config.menu.ClientMenuActions;
 import dev.vox.lss.config.menu.ClientOptionCatalog;
 import dev.vox.lss.config.menu.GroupSpec;
 import dev.vox.lss.config.menu.Label;
@@ -14,16 +16,21 @@ import net.caffeinemc.mods.sodium.api.config.option.OptionImpact;
 import net.caffeinemc.mods.sodium.api.config.option.Range;
 import net.caffeinemc.mods.sodium.api.config.structure.ConfigBuilder;
 import net.caffeinemc.mods.sodium.api.config.structure.OptionBuilder;
+import net.caffeinemc.mods.sodium.api.config.structure.OptionPageBuilder;
 import net.caffeinemc.mods.sodium.api.config.structure.StatefulOptionBuilder;
 import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.ModContainer;
+import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 
+import java.util.ArrayList;
 import java.util.EnumMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.BiConsumer;
 
 /**
  * The Sodium 0.8+ config-API renderer (sodium-options-page-generations-plan.md D3): a
@@ -40,10 +47,13 @@ import java.util.Optional;
 public class LSSConfigMenu implements ConfigEntryPoint {
     @Override
     public void registerConfigLate(ConfigBuilder builder) {
-        registerDraft(builder, LSSClientConfig.CONFIG.edits(), MenuContext.current());
+        registerDraft(builder, LSSClientConfig.CONFIG.edits(), MenuContext.current(), ClientMenuActions::open);
     }
 
-    void registerDraft(ConfigBuilder builder, dev.vox.lss.config.menu.ClientSettingsEditSession cfg, MenuContext ctx) {
+    /** {@code actions} opens a page button's screen over the settings screen it was pressed on;
+     *  a parameter so the walker test can press the recorded button. */
+    void registerDraft(ConfigBuilder builder, dev.vox.lss.config.menu.ClientSettingsEditSession cfg, MenuContext ctx,
+                       BiConsumer<ActionSpec.Action, Screen> actions) {
 
         var container = FabricLoader.getInstance().getModContainer(LSSConstants.MOD_ID);
         var version = container
@@ -83,7 +93,52 @@ public class LSSConfigMenu implements ConfigEntryPoint {
                     page.addOptionGroup(group);
                 }
             }
+            addActions(builder, page, pageSpec, actions);
             mod.addPage(page);
+        }
+    }
+
+    /** The tooltip a button gets when its translation is blank: Sodium refuses a blank one. */
+    private static final String ACTION_TOOLTIP_FALLBACK = "Opens a screen for this action.";
+
+    /**
+     * The page's buttons ({@link PageSpec#actions()}) as one more group after its options.
+     * Sodium checks every builder AFTER this entry point has returned and stops the game on a
+     * bad one (a missing or blank name or tooltip, no screen consumer). So each button is
+     * checked here and built completely before anything is attached to the page, and whatever
+     * goes wrong costs the buttons, never the page or the game.
+     */
+    private static void addActions(ConfigBuilder builder, OptionPageBuilder page, PageSpec pageSpec,
+                                   BiConsumer<ActionSpec.Action, Screen> actions) {
+        if (pageSpec.actions().isEmpty()) {
+            return;
+        }
+        try {
+            Objects.requireNonNull(actions, "action dispatcher");
+            List<OptionBuilder> buttons = new ArrayList<>();
+            for (ActionSpec spec : pageSpec.actions()) {
+                Component name = Component.translatable(spec.nameKey());
+                if (name.getString().isBlank()) {
+                    throw new IllegalStateException(spec.id() + " has a blank name");
+                }
+                Component tooltip = Component.translatable(spec.tooltipKey());
+                if (tooltip.getString().isBlank()) {
+                    tooltip = Component.literal(ACTION_TOOLTIP_FALLBACK);
+                }
+                ActionSpec.Action action = spec.action();
+                buttons.add(builder.createExternalButtonOption(Identifier.parse(spec.id()))
+                        .setName(name)
+                        .setTooltip(tooltip)
+                        .setScreenConsumer(parent -> actions.accept(action, parent)));
+            }
+            var group = builder.createOptionGroup();
+            for (OptionBuilder button : buttons) {
+                group.addOption(button);
+            }
+            page.addOptionGroup(group);
+        } catch (Throwable failure) {
+            dev.vox.lss.common.LSSLogger.warn(dev.vox.lss.common.Brand.shortName() + " options page: the buttons of the "
+                    + pageSpec.id() + " page were left out (" + failure + ")");
         }
     }
 

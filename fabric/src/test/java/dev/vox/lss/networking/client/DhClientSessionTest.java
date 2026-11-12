@@ -1843,18 +1843,38 @@ class DhClientSessionTest {
         assertTrue(active(s));assertSame(s,read(null,DhClientSession.class,"session"));
         assertTrue(feedback.getFirst().getString().contains("reset confirm"),feedback::toString);
     }
+    /** A DH terrain connection (the server negotiated DH) is this server for clearcache, as it is for reset. */
     @Test void clearCacheInDhModeClearsOnlyTheCurrentRemoteAddressReceipts() throws Exception {
         var shape=new DhTerrainTile.WorldShape(-64,384,true);String other="other-dh-"+UUID.randomUUID();
         var current=new DhReceiptStore(ColumnCacheStore.cacheRoot(),new DhReceiptStore.Key(minecraft.server.ip,"server","world",DIMENSION,8,DhProfile.OFFICIAL_16,shape));
         var retained=new DhReceiptStore(ColumnCacheStore.cacheRoot(),new DhReceiptStore.Key(other,"server","world",DIMENSION,8,DhProfile.OFFICIAL_16,shape));
         var entry=Map.of(POSITION,new DhReceiptStore.Entry(123,DhReceiptStore.CONVERSION_VERSION));
         current.save(entry);retained.save(entry);var s=session();
+        write(s,SESSION,"config",new DhMessage.SessionConfig(DhMessage.GeneratorPlan.DISABLED,0,0,0,0,0,true,32,true,32,50,500));
+        assertTrue(DhClientSession.dhServerConnection());
+        assertEquals(ClientCommandActions.ClearCacheScope.CURRENT_SERVER,ClientCommandActions.clearCacheScope());
         var feedback=new ArrayList<net.minecraft.network.chat.Component>();
         try {
             ClientCommandActions.clearCache(feedback::add);
             assertFalse(active(s));assertTrue(current.load().isEmpty());assertEquals(1,retained.load().size());
             assertEquals(1,feedback.size());assertTrue(feedback.getFirst().getString().contains("current server"));
         } finally {ColumnCacheStore.clearDhReceipts(other);}
+    }
+    /** Re-download plan, decision 2: a session still waiting for a DH reply (official 3.2.x, or the first
+     *  moment after joining) cannot send the terrain again, so clearcache clears nothing and leaves it alone. */
+    @Test void clearCacheWhileWaitingForADhReplyClearsNothingAndKeepsTheSession() throws Exception {
+        var shape=new DhTerrainTile.WorldShape(-64,384,true);
+        var current=new DhReceiptStore(ColumnCacheStore.cacheRoot(),new DhReceiptStore.Key(minecraft.server.ip,"server","world",DIMENSION,8,DhProfile.OFFICIAL_16,shape));
+        current.save(Map.of(POSITION,new DhReceiptStore.Entry(123,DhReceiptStore.CONVERSION_VERSION)));
+        var s=session();assertFalse(DhClientSession.dhServerConnection());
+        assertEquals(ClientCommandActions.ClearCacheScope.NOT_RECEIVING,ClientCommandActions.clearCacheScope());
+        var feedback=new ArrayList<net.minecraft.network.chat.Component>();
+        try {
+            ClientCommandActions.clearCache(feedback::add);
+            assertTrue(active(s));assertSame(s,read(null,DhClientSession.class,"session"));
+            assertEquals(1,current.load().size(),"The saved receipts stay");
+            assertEquals(1,feedback.size());assertTrue(feedback.getFirst().getString().contains("Nothing was cleared"),feedback::toString);
+        } finally {ColumnCacheStore.clearDhReceipts(minecraft.server.ip);}
     }
 
     /** X-12 / X-13: sync-on-load is debounced per connection; resuming reception is a load. */

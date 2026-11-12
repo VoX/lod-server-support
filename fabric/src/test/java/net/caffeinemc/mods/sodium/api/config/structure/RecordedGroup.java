@@ -4,11 +4,12 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class RecordedGroup implements OptionGroupBuilder {
-    public final List<RecordedOption<?>> options = new ArrayList<>();
+    /** Everything added, in order: {@link RecordedOption}s and {@link RecordedExternalButton}s. */
+    public final List<OptionBuilder> options = new ArrayList<>();
 
     @Override
     public OptionGroupBuilder addOption(OptionBuilder option) {
-        options.add((RecordedOption<?>) option);
+        options.add(option);
         return this;
     }
 }
