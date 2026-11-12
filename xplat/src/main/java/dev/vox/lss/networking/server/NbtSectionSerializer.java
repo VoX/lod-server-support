@@ -287,9 +287,13 @@ final class NbtSectionSerializer {
         return serializeChunkNbt(chunkNbt, registryAccess, maskEntry, minSectionY, maxSectionY, true);
     }
 
-    // Unparseable-section warns are throttled: on the mainstream trigger (an upgraded
-    // world's pre-DFU chunks) every affected column re-reads at ~1 Hz until its
-    // generation ticket serves it — unthrottled, that is a #32-class console flood.
+    // Section block_states warns are throttled. The mainstream trigger is an upgraded
+    // world: this path reads raw region NBT (no DataFixer runs), so every chunk the game
+    // has not re-saved yet and that still carries a renamed block id warns for each
+    // affected section it reads. Since the vanilla-lenient parse (R2-1) such a section
+    // is kept with air substituted, so nothing re-reads in a loop any more, but an
+    // upgraded world has thousands of these chunks — unthrottled, that is a #32-class
+    // console flood.
     private static final dev.vox.lss.common.LogThrottle PARSE_WARN_THROTTLE =
             new dev.vox.lss.common.LogThrottle(60_000);
 

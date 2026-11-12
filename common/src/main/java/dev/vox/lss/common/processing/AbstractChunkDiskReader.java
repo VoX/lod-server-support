@@ -44,6 +44,15 @@ public abstract class AbstractChunkDiskReader {
         byte[] read(ColumnDecodeNotes notes) throws Exception;
     }
 
+    /**
+     * The serializer switches a platform reader applies to a read: NBT transcode and the
+     * selective root parse. A reader publishes one immutable instance and captures it
+     * once per submit, so a reload never changes the policy of a read already queued.
+     * Declared here because both platform readers use it (Paper has no selective parse
+     * and always passes {@code false}).
+     */
+    public record SerializationPolicy(boolean transcode, boolean selective) {}
+
     private static final AtomicInteger THREAD_COUNTER = new AtomicInteger();
     private static final int QUEUE_CAPACITY_PER_THREAD = 32;
 

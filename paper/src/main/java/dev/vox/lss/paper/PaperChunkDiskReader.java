@@ -27,7 +27,6 @@ public class PaperChunkDiskReader extends AbstractChunkDiskReader {
     private final boolean useBackgroundReadPriority;
 
     private volatile SerializationPolicy serializationPolicy;
-    public record SerializationPolicy(boolean transcode, boolean selective) {}
     public void updateSerializationPolicy(boolean transcode, boolean selective) {
         this.serializationPolicy = new SerializationPolicy(transcode, selective);
     }

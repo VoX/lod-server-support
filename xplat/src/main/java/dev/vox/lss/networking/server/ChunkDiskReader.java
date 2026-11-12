@@ -54,7 +54,6 @@ public class ChunkDiskReader extends AbstractChunkDiskReader {
     private final AtomicBoolean moonriseIncompatibleWarned = new AtomicBoolean();
 
     private volatile SerializationPolicy serializationPolicy;
-    public record SerializationPolicy(boolean transcode, boolean selective) {}
     public void updateSerializationPolicy(boolean transcode, boolean selective) {
         this.serializationPolicy = new SerializationPolicy(transcode, selective);
     }
