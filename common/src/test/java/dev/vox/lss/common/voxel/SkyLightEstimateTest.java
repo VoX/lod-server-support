@@ -39,6 +39,9 @@ class SkyLightEstimateTest {
     private static final int DENSE = descriptor(3, 0, 0);
     private static final int BOTTOM_SLAB = descriptor(0, 1 << DOWN, SIDES);
     private static final int TOP_SLAB = descriptor(0, 1 << UP, SIDES);
+    /** Half a cell, split vertically: the west half and the east half. Top and bottom faces are partial. */
+    private static final int WEST_HALF = descriptor(0, 1 << WEST, 1 << UP | 1 << DOWN | 1 << NORTH | 1 << SOUTH);
+    private static final int EAST_HALF = descriptor(0, 1 << EAST, 1 << UP | 1 << DOWN | 1 << NORTH | 1 << SOUTH);
 
     /** A column of descriptors; a section nothing was put into is all air. */
     private static final class Grid implements SkyLightEstimate.Column {
@@ -327,6 +330,23 @@ class SkyLightEstimateTest {
         assertEquals(15, light(estimate, grid, 8, 10, 4), "the bottom slab is open to the sky");
         assertEquals(0, light(estimate, grid, 7, 10, 4), "and cannot pass it sideways into the top slab");
         assertEquals(0, light(estimate, grid, 7, 9, 4));
+    }
+
+    @Test void partialFacesAboveEachOtherAreDecidedInTheSourcePassToo() {
+        // y=17 over y=16 lies inside one section, y=16 over y=15 straddles two.
+        for (int upper : new int[]{17, 16}) {
+            var same = new Grid(2).layers(0, 3, STONE).layers(upper, upper, WEST_HALF).layers(upper - 1, upper - 1, WEST_HALF);
+            var estimate = estimateAndCompare(same);
+            assertEquals(15, light(estimate, same, 6, upper - 1, 6), "two equal halves leave the other half open");
+            assertEquals(15, light(estimate, same, 6, 4, 6), "and the light goes on down");
+            assertTrue(same.partialQueries > 0);
+
+            var opposite = new Grid(2).layers(0, 3, STONE).layers(upper, upper, WEST_HALF).layers(upper - 1, upper - 1, EAST_HALF);
+            assertMatchesReference(opposite, estimate);
+            assertEquals(15, light(estimate, opposite, 6, upper, 6), "the upper half-block is open to the sky");
+            assertEquals(0, light(estimate, opposite, 6, upper - 1, 6), "the two halves together close the gap below it");
+            assertEquals(0, light(estimate, opposite, 6, 4, 6));
+        }
     }
 
     @Test void undecidedPartialFacesAreTreatedAsClosed() {
