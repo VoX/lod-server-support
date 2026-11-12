@@ -115,6 +115,10 @@ class PluginYmlContractTest {
                     node + "'s description must name the setting that makes it hide: " + description);
             assertFalse(description.contains("never shown"),
                     node + "'s description must not promise the pre-0.21.0 behaviour: " + description);
+            // Mode "required" (plan §2b): there the node is the only way to opt out.
+            assertTrue(description.contains("In far_players.mode required it is what lets the player"
+                            + " hide with Share My Position"),
+                    node + "'s description must say what the node does in mode required: " + description);
         }
         // The constants' HOME is common since far-player-render-hardening-plan.md WI-7a (the
         // Fabric/NeoForge snapshot reads and the NeoForge node registration enforce the same

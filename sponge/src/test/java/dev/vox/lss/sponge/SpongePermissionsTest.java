@@ -57,6 +57,10 @@ class SpongePermissionsTest {
                     node.id() + ": " + node.description());
             org.junit.jupiter.api.Assertions.assertFalse(node.description().contains("never shown"),
                     node.id() + ": " + node.description());
+            org.junit.jupiter.api.Assertions.assertTrue(node.description()
+                            .contains("In far_players.mode required it is what lets the player hide with"
+                                    + " Share My Position"),
+                    node.id() + ": " + node.description());
         }
         assertEquals(2, seen, "both brand spellings are registered");
     }
