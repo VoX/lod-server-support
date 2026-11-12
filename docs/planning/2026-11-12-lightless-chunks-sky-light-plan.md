@@ -608,3 +608,29 @@ fluid, dampening below 15, and DH-opaque. That set is leaves plus a few others.
 - new `fabric/src/test/java/dev/vox/lss/networking/server/LightlessReproServerBridge.java`
 - new `fabric/src/test/java/dev/vox/lss/compat/LightlessReproVoxyBridge.java`
 - ignored build output, including `fabric/build/run/soak-server` and `soak-client`
+
+## As built: server counter
+
+Fold item 7, implemented on `feat/undecodable-mc26.3` (main, 26.3). No bytes change: the
+serializer goldens and the disk/live parity pins are untouched.
+
+- **Serializer twins** (`NbtSectionSerializer`, `PaperNbtSectionSerializer`, same text): when a
+  column has blocks and the caller passed notes, `savedWithoutSkyLight` asks whether any section
+  entry of the chunk carries a sky-light layer (2048 bytes) with a non-zero nibble, and marks
+  `ColumnDecodeNotes.lightless` if none does. Every entry counts, whatever its Y: the light-only
+  entry vanilla saves above the block range, and sky-lit air the content band drops from the
+  wire, both show the chunk was saved lit. A served section that is sky-lit answers from the
+  flag its parse already computed, so a lit chunk reads no array for this; otherwise the entries
+  are scanned top first with the vectorized zero compare. Nothing is allocated, copied or
+  written. The store backfill passes no notes and does not count.
+- **Shared reader** (`AbstractChunkDiskReader`): the platform readers capture
+  `level.dimensionType().hasSkyLight()` at submit time and pass it with the read. A lightless
+  column in a sky dimension bumps `DiskReaderDiagnostics.lightless`, which renders as
+  `, lightless=<n>` after `undecodable=` only when non-zero, and logs one INFO per reader
+  instance. It is an observation beside the read's ordinary outcome: the result flavor, the
+  `not_found` counter and the completion partition are unchanged.
+- **Accepted false positive:** a column that is solid to the top of the world and whose chunk has
+  only zeroed sky arrays is counted too.
+- **Narrower than the client predicate on purpose:** the client estimates when no *served*
+  section is sky-lit; the server counts only when the *chunk* has no sky light at all, so the
+  number means "saved without sky light" and not "dark at this spot".
