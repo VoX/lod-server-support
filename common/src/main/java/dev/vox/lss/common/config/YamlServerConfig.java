@@ -65,6 +65,10 @@ public class YamlServerConfig extends ServerConfigBase implements AutoCloseable 
         var current = context;
         return current == null || current.handle() == null ? snapshot() : current.handle().state().configured();
     }
+    @Override public boolean settingDeclared(String path) {
+        var current = context;
+        return current == null || current.handle() == null || current.handle().declares(path);
+    }
     /** Retains the schema-1 diagnostic accessor name; generation policy itself reloads live. */
     @Override public boolean generationConfiguredForRestart() { return configuredSnapshot().generation().enabled(); }
     public final Path settingsPath() { return context.path(); }

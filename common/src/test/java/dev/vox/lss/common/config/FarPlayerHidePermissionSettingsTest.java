@@ -142,6 +142,88 @@ class FarPlayerHidePermissionSettingsTest {
         }
     }
 
+    /** Review fold A.2: holders are told in game only while the server has not chosen, i.e.
+     *  the LOADED file never set the key. The question is answered from the file the
+     *  reload accepted, and a reload that writes the key (either value) ends it without a
+     *  restart, even when no value changed. */
+    @Test void onlyAFileThatNeverSetTheKeyCountsAsUndecided() throws Exception {
+        for (boolean paper : new boolean[]{false, true}) {
+            String template = SettingsSchema.server(paper).template();
+            int comment = template.indexOf("  # Hide every player who holds");
+            int keyEnd = template.indexOf('\n', template.indexOf("  hide_permission_holders: false")) + 1;
+            String upgraded = template.substring(0, comment) + template.substring(keyEnd);
+
+            // A file from before 0.21.0.
+            Path target = Files.createDirectories(directory.resolve(paper ? "paper-upgraded" : "mod-upgraded"));
+            Files.writeString(target.resolve("lss-server-config.yaml"), upgraded);
+            try (var config = new YamlServerConfig(target, paper, s -> {})) {
+                assertFalse(config.farPlayersHidePermissionHolders());
+                assertFalse(config.settingDeclared(PATH), "the file does not set the key");
+                assertTrue(config.settingDeclared("far_players.mode"), "it does set the keys it carries");
+                assertTrue(config.farPlayersHidePermissionHoldersUndecided(), "paper=" + paper);
+
+                // An unrelated edit and reload: still no choice.
+                var store = config.settingsHandle().store();
+                store.saveDraft(store.read().hash(), Map.of("far_players.send_spectators", true));
+                config.reload(Runnable::run, (a, b, r) -> CompletableFuture.completedFuture(null)).get(30, TimeUnit.SECONDS);
+                assertTrue(config.farPlayersHidePermissionHoldersUndecided(), "an unrelated reload is not a choice");
+
+                // The operator writes the key by hand with the value it already has, and reloads.
+                String text = Files.readString(config.settingsPath());
+                assertFalse(text.contains("hide_permission_holders"));
+                Files.writeString(config.settingsPath(), text.replace("\nfar_players:\n",
+                        "\nfar_players:\n  hide_permission_holders: false\n"));
+                assertTrue(config.farPlayersHidePermissionHoldersUndecided(), "a disk edit alone changes nothing");
+                var outcome = config.reload(Runnable::run,
+                        (a, b, r) -> CompletableFuture.completedFuture(null)).get(30, TimeUnit.SECONDS);
+                assertEquals(SettingsReload.Status.UNCHANGED, outcome.status(), "premise: no value changed");
+                assertFalse(config.farPlayersHidePermissionHolders());
+                assertFalse(config.farPlayersHidePermissionHoldersUndecided(),
+                        "writing the key is the choice: no restart, even with the same value");
+                assertTrue(config.settingDeclared(PATH));
+            }
+
+            // The key written true on an upgraded file: a choice too.
+            Path chosen = Files.createDirectories(directory.resolve(paper ? "paper-true" : "mod-true"));
+            Files.writeString(chosen.resolve("lss-server-config.yaml"), upgraded.replace("\nfar_players:\n",
+                    "\nfar_players:\n  hide_permission_holders: true\n"));
+            try (var config = new YamlServerConfig(chosen, paper, s -> {})) {
+                assertTrue(config.farPlayersHidePermissionHolders());
+                assertFalse(config.farPlayersHidePermissionHoldersUndecided());
+            }
+
+            // A file 0.21.0 creates carries the key from the template: never undecided.
+            Path fresh = Files.createDirectories(directory.resolve(paper ? "paper-fresh" : "mod-fresh"));
+            try (var config = new YamlServerConfig(fresh, paper, s -> {})) {
+                assertFalse(config.farPlayersHidePermissionHolders());
+                assertFalse(config.farPlayersHidePermissionHoldersUndecided(), "a new file has the key");
+            }
+
+            // So does a file migrated from the old JSON settings.
+            Path migrated = Files.createDirectories(directory.resolve(paper ? "paper-json" : "mod-json"));
+            Files.writeString(migrated.resolve("lss-server-config.json"), "{\"lodDistanceChunks\":128}");
+            try (var config = new YamlServerConfig(migrated, paper, s -> {})) {
+                assertFalse(config.farPlayersHidePermissionHoldersUndecided(), "the migration writes the template's keys");
+            }
+
+            // A view with no file behind it never reports an unset key.
+            assertFalse(new ServerConfigBase(SettingsSchema.server(paper).defaults(), paper)
+                    .farPlayersHidePermissionHoldersUndecided());
+        }
+    }
+
+    @Test void theDocumentReportsExactlyThePathsItSets() {
+        var schema = SettingsSchema.server(false);
+        var codec = new YamlSettingsCodec<>(schema);
+        var document = codec.parse(("config_version: 1\nfar_players:\n  mode: \"on\"\n"
+                + "  distance:\n    max_blocks: 4096\n").getBytes(StandardCharsets.UTF_8));
+        assertEquals(java.util.Set.of("far_players.mode", "far_players.distance.max_blocks"),
+                document.declaredPaths(schema.descriptorsByPath().keySet()));
+        var full = codec.parse(codec.defaults());
+        assertTrue(full.declaredPaths(schema.descriptorsByPath().keySet()).contains(PATH),
+                "the template sets the key");
+    }
+
     @Test void configVersionStaysOne() {
         assertTrue(SettingsSchema.server(false).template().contains("config_version: 1 "),
                 "no schema version bump for one key");
