@@ -34,7 +34,7 @@
   "lss.redownload.title.not_receiving": "没有可重新下载的地形",
   "lss.redownload.this_server": "此服务器的远景地形将重新下载。这可能需要一些时间，并会占用网络流量。",
   "lss.redownload.all_servers": "你当前不在多人服务器中，因此这会清除所有服务器的下载记录。下次加入某个服务器时，它会重新发送远景地形，这可能需要一些时间，并会占用网络流量。",
-  "lss.redownload.not_receiving": "目前没有从此服务器接收远景地形，因此无法清除任何内容。请在地形开始下载后再试。",
+  "lss.redownload.not_receiving": "目前没有从此服务器下载远景地形，因此无法清除任何内容。请在地形开始下载后再试。",
   "lss.redownload.saved_terrain": "远景模组已保存的地形不会被删除。如需删除已保存的地形，请使用 /%s reset。",
   "lss.redownload.confirm": "重新下载",
   "lss.redownload.toast.this_server": "此服务器将重新发送远景地形。",

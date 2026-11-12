@@ -38,12 +38,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * {@code clearcache} follows the connection (re-download plan, decision 2). The command and
  * the Re-download Terrain button share {@link ClientCommandActions#clearCacheScope}: an LSS
- * session or a DH terrain connection clears this server; a remote server that is sending
+ * session or a DH connection that can download clears this server; a remote server that is sending
  * nothing clears NOTHING (it used to clear every server: Receive OFF, the map-policy park, a
  * server-side disable and the moment before the session config all leave no request manager);
  * singleplayer and the title screen clear every server. Every state runs the real
  * {@code clearCache} against a scratch cache root and a constructor-free {@link Minecraft};
- * the DH terrain connection is driven in {@code DhClientSessionTest}, which owns that harness.
+ * the DH states (downloading, unable to download, waiting, stopped) are driven in
+ * {@code DhClientSessionTest}, which owns that harness.
  */
 class ClearCacheScopeTest {
 
@@ -162,7 +163,7 @@ class ClearCacheScopeTest {
         assertTrue(Files.exists(thisServer) && Files.exists(otherServer), "nothing is cleared");
         assertEquals(1, feedback.size());
         String line = feedback.get(0).getString();
-        assertTrue(line.contains("not receiving distant terrain from this server"), line);
+        assertTrue(line.contains("not downloading distant terrain from this server"), line);
         assertTrue(line.contains("Nothing was cleared"), line);
     }
 
