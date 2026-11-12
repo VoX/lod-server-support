@@ -163,6 +163,11 @@ far_players:
     max_blocks: 2048 # Server visibility ceiling; range 128–16384 blocks.
   send_spectators: false # Include spectator targets if other privacy checks allow them.
   excluded_players: [] # Player names or UUIDs never shared; kept out of diagnostic exports.
+  # Hide every player who holds the lss.farplayers.hidden (vss.farplayers.hidden)
+  # permission (the behaviour before 0.21.0). A grant of every permission ("*")
+  # includes it, so this can hide all your admins. Off: the permission hides nobody
+  # by itself; players choose with Share My Position.
+  hide_permission_holders: false # Hide every player who holds the far-player hide permission.
 
 # Bukkit event hooks invalidate cached LODs after world edits. Adding frequent
 # events can improve coverage but increase work; edits without a matching event

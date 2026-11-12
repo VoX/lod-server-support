@@ -73,6 +73,10 @@ public class ServerConfigBase {
     public final int farPlayersMinDistanceBlocks() { return snapshot().farPlayers().distance().minBlocks(); }
     public final boolean farPlayersSendSpectators() { return snapshot().farPlayers().sendSpectators(); }
     public final List<String> farPlayersExclude() { return snapshot().farPlayers().excludedPlayers(); }
+    /** {@code far_players.hide_permission_holders} (hide-permission plan §2): while on, every
+     *  holder of the far-player hide permission is withheld as a far player (the behaviour
+     *  before 0.21.0); off, the permission hides nobody by itself. */
+    public final boolean farPlayersHidePermissionHolders() { return snapshot().farPlayers().hidePermissionHolders(); }
     public final List<String> updateEvents() { return snapshot().paper().updateEvents(); }
     public final String lodStore() { return snapshot().storage().lodStore().enabled() ? "on" : "off"; }
     public final String farPlayers() {

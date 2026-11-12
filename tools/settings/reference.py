@@ -49,7 +49,14 @@ def render(data: dict | None = None) -> str:
               "`map_ingestion:` back to `xaero_map:` under `integrations:` (or deleting the file).", "",
               "`privacy.request_no_map_ingestion` (0.19.0) is applied by a reload. **Server downgrade",
               "exception:** LSS 0.18 and older reject unknown keys, so a server file created by a newer",
-              "build loads there only after deleting that line (or the file).", ""]
+              "build loads there only after deleting that line (or the file).", "",
+              "`far_players.hide_permission_holders` (0.21.0) is applied by a reload. Off (the default),",
+              "the `lss.farplayers.hidden` / `vss.farplayers.hidden` permission hides nobody by itself and",
+              "players choose with Share My Position; on, every holder is hidden, as before 0.21.0. An",
+              "upgraded file gains the key only when the setting is changed. **Server downgrade",
+              "exception:** LSS 0.20 and older reject unknown keys, so a server file that carries the",
+              "key (every file a newer build creates) loads there only after deleting that line (or the",
+              "file).", ""]
     for key, title in [("server", "Fabric / NeoForge / Sponge server"), ("paper", "Paper / Folia server"), ("client", "Client")]:
         schema = data[key]
         output += ["## " + title, "", "| YAML path | Type | Default | Range / units | Timing | Applicability |", "| --- | --- | --- | --- | --- | --- |"]
