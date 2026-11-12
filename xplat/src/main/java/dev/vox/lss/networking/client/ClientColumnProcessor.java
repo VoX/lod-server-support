@@ -86,6 +86,23 @@ class ClientColumnProcessor {
     private final AtomicLong queuedBytes = new AtomicLong();
     private final AtomicLong columnsDropped = new AtomicLong();
     private volatile long lastDropWarnMs = 0;
+    /** Columns that arrived with terrain and no sky light and were given an estimate
+     *  (issue #382). Non-zero means the server holds chunks saved without light. */
+    private final AtomicLong skyEstimatedColumns = new AtomicLong();
+    /** Columns whose estimate failed and were delivered as they arrived. */
+    private final AtomicLong skyEstimateFailures = new AtomicLong();
+    private final AtomicBoolean skyEstimateFailureLogged = new AtomicBoolean();
+
+    /** The sky-light estimate as the drain calls it. Test seam; production is
+     *  {@link ClientSkyLightEstimator#estimate}. */
+    @FunctionalInterface
+    interface SkyEstimator {
+        ClientSkyLightEstimator.Result estimate(VoxelColumnData.SectionData[] sections, int levelSectionCount,
+                                               int minSectionY, Registry<Biome> factory);
+    }
+
+    /** Drain-thread only (one drain runs at a time, see {@link #processing}). */
+    private final SkyEstimator skyEstimator;
 
     // Off-thread column processing: one executor for the singleton's lifetime. A session
     // epoch (bumped on disconnect) makes any in-flight drain self-terminate instead of
@@ -104,8 +121,15 @@ class ClientColumnProcessor {
 
     /** Seam constructor for tests; the no-arg constructor is the production wiring. */
     ClientColumnProcessor(FailureReporter failureReporter, Supplier<ClientLevel> levelSupplier) {
+        this(failureReporter, levelSupplier, new ClientSkyLightEstimator()::estimate);
+    }
+
+    /** Seam constructor with the sky-light estimate replaced. */
+    ClientColumnProcessor(FailureReporter failureReporter, Supplier<ClientLevel> levelSupplier,
+                          SkyEstimator skyEstimator) {
         this.failureReporter = failureReporter;
         this.levelSupplier = levelSupplier;
+        this.skyEstimator = skyEstimator;
     }
 
     private static ClientLevel liveClientLevel() {
@@ -340,7 +364,8 @@ class ClientColumnProcessor {
                 // the ladder has since re-established a different dialect.
                 byte[] nativeBytes = payload.nativeBodyAtDecode()
                         ? decompressed : v20ToNative.apply(decompressed);
-                var sections = decodeSections(nativeBytes, levelSectionCount, factory);
+                var decoded = decodeColumn(nativeBytes, levelSectionCount, factory);
+                var sections = decoded.sections();
                 if (ClientTraceLog.enabled()) {
                     // Per-section light presence — the boundary-lighting instrument (black
                     // leaf-face investigation 2026-07-27): [sectionY, hasBlockLight,
@@ -358,6 +383,45 @@ class ClientColumnProcessor {
                     }
                     sb.append(']');
                     ClientTraceLog.event("col_light", sb.toString());
+                }
+                if (hasSkyLight && !decoded.truncated()) {
+                    // Sky-light estimate (issue #382): a chunk saved without light (vanilla's
+                    // ChunkDeleteLightFix strips it on a world upgrade) is served from disk as
+                    // ordinary terrain with no light layers, and every consumer drew it black.
+                    // A column that has blocks and not one non-zero sky nibble gets vanilla's
+                    // own rule applied inside the column. Real light never passes through
+                    // here: one non-zero nibble anywhere and the column is left exactly as
+                    // sent. Not after a truncated decode: the sections that were cut off may
+                    // be the ones that shade the rest. MUST run before the two fills below:
+                    // it adds the air section above the terrain, which the implicit-sky fill
+                    // then takes as the column's top, and the resync air-fill must still find
+                    // the unlit gaps absent.
+                    // The estimate is an improvement, never a condition for delivery. Left
+                    // to the outer catch a failure would be an ingest failure: the server
+                    // sends the column again, it fails again, and the failure cap parks it,
+                    // so the terrain is lost instead of delivered dark. So it is contained
+                    // here and the column goes on exactly as it arrived.
+                    try {
+                        if (ClientSkyLightEstimator.lacksSkyLight(sections)) {
+                            var estimated = this.skyEstimator.estimate(sections, levelSectionCount,
+                                    minSectionY, factory);
+                            if (estimated != null) {
+                                if (ClientTraceLog.enabled()) {
+                                    traceSkyEstimate(payload.chunkX(), payload.chunkZ(), sections, estimated);
+                                }
+                                this.skyEstimatedColumns.incrementAndGet();
+                                sections = estimated.sections();
+                            }
+                        }
+                    } catch (RuntimeException e) {
+                        this.skyEstimateFailures.incrementAndGet();
+                        if (this.skyEstimateFailureLogged.compareAndSet(false, true)) {
+                            LSSLogger.warn("The sky-light estimate failed for the column at "
+                                    + payload.chunkX() + "," + payload.chunkZ() + "; it is delivered"
+                                    + " without the estimate. Further failures this session are"
+                                    + " counted, not logged (client diagnostics, sky_estimate_failed)", e);
+                        }
+                    }
                 }
                 if (hasSkyLight) {
                     // Implicit-sky fill (2026-07-27, black-boundary-faces fix): vanilla
@@ -545,18 +609,57 @@ class ClientColumnProcessor {
     }
 
     /**
+     * The {@code col_light_est} trace event, beside {@code col_light} (which shows the
+     * column as it arrived): every section that now carries an estimated sky layer as
+     * {@code [sectionY, hasOnlyAir, added]}; {@code work} is what the estimate cost in
+     * its own units and {@code capped} is set when it ran into its budget.
+     */
+    private static void traceSkyEstimate(int chunkX, int chunkZ, VoxelColumnData.SectionData[] arrived,
+                                         ClientSkyLightEstimator.Result estimated) {
+        var out = estimated.sections();
+        var sb = new StringBuilder(64 + estimated.litSections() * 12);
+        sb.append("\"pos\":[").append(chunkX).append(',').append(chunkZ)
+                .append("],\"work\":").append(estimated.work())
+                .append(",\"capped\":").append(estimated.capped() ? 1 : 0).append(",\"sections\":[");
+        boolean first = true;
+        for (int i = 0; i < out.length; i++) {
+            boolean added = i >= arrived.length;
+            if (!added && out[i] == arrived[i]) continue;   // kept as sent: no estimated layer
+            if (!first) sb.append(',');
+            first = false;
+            sb.append('[').append(out[i].sectionY())
+                    .append(',').append(out[i].section().hasOnlyAir() ? 1 : 0)
+                    .append(',').append(added ? 1 : 0).append(']');
+        }
+        sb.append(']');
+        ClientTraceLog.event("col_light_est", sb.toString());
+    }
+
+    /** A decoded column; {@code truncated} when the wire claimed more sections than the
+     *  client level has and the rest was left unread. */
+    record DecodedColumn(VoxelColumnData.SectionData[] sections, boolean truncated) {}
+
+    /** The sections of {@link #decodeColumn}, for callers that do not need the truncation flag. */
+    static VoxelColumnData.SectionData[] decodeSections(byte[] decompressed, int levelSectionCount,
+                                                        Registry<Biome> factory) {
+        return decodeColumn(decompressed, levelSectionCount, factory).sections();
+    }
+
+    /**
      * Decode one column's wire bytes into section data. The claimed section count never
      * sizes the allocation: it is clamped to {@code [0, levelSectionCount]} — supporting
      * tall/modded worlds up to the client level's height while capping what a hostile
      * peer can make us allocate. Sections beyond the clamp are silently truncated (their
      * bytes are left unread). Bytes that lie about their own content throw, which the
-     * drain converts into an ingest-failure report for the column.
+     * drain converts into an ingest-failure report for the column. The truncation is
+     * reported in the result: a column missing sections must not have light derived from it.
      */
-    static VoxelColumnData.SectionData[] decodeSections(byte[] decompressed, int levelSectionCount,
-                                                        Registry<Biome> factory) {
+    static DecodedColumn decodeColumn(byte[] decompressed, int levelSectionCount,
+                                      Registry<Biome> factory) {
         var buf = new FriendlyByteBuf(Unpooled.wrappedBuffer(decompressed));
         try {
-            int sectionCount = Math.max(0, Math.min(buf.readVarInt(), levelSectionCount));
+            int claimed = buf.readVarInt();
+            int sectionCount = Math.max(0, Math.min(claimed, levelSectionCount));
             var sectionDatas = new VoxelColumnData.SectionData[sectionCount];
 
             for (int i = 0; i < sectionCount; i++) {
@@ -582,7 +685,7 @@ class ClientColumnProcessor {
                 sectionDatas[i] = new VoxelColumnData.SectionData(
                         sectionY, section, blockLight, skyLight);
             }
-            return sectionDatas;
+            return new DecodedColumn(sectionDatas, claimed > levelSectionCount);
         } finally {
             buf.release();
         }
@@ -647,6 +750,7 @@ class ClientColumnProcessor {
         }
         this.identityResolver = null;
         this.identityResolverKey = null;
+        this.skyEstimateFailureLogged.set(false);   // the next session logs its first failure again
         this.sessionEpoch++;
         // Drain with the same poll+decrement discipline as the decode loop rather than
         // clear()+set(0): a set(0) races a decode iteration that already polled an item but
@@ -663,12 +767,18 @@ class ClientColumnProcessor {
     int getQueuedCount() { return this.queueSize.get(); }
     long getQueuedBytes() { return this.queuedBytes.get(); }
     long getColumnsDropped() { return this.columnsDropped.get(); }
+    long getSkyEstimatedColumns() { return this.skyEstimatedColumns.get(); }
+    long getSkyEstimateFailures() { return this.skyEstimateFailures.get(); }
+    /** Whether this session has already logged a failed estimate (the log is once per session). */
+    boolean skyEstimateFailureLogged() { return this.skyEstimateFailureLogged.get(); }
 
     /** Current session epoch, for tests driving the drain loop directly. */
     int sessionEpochForTest() { return this.sessionEpoch; }
 
     void resetStats() {
         this.columnsDropped.set(0);
+        this.skyEstimatedColumns.set(0);
+        this.skyEstimateFailures.set(0);
         this.lastDropWarnMs = 0;
     }
 }
