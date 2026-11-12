@@ -35,8 +35,9 @@ import java.util.UUID;
  * may save that, destroying a temporarily removed mod's blocks in a chunk no player
  * visited. So an unservable result never seeds the miss memo and never becomes a
  * generation ticket, whether generation is available or not: the requester gets
- * {@code ColumnNotGenerated}, the column's stamps are invalidated and any store row is
- * deleted (as for an authoritative miss), and nothing is deposited.
+ * {@code ColumnNotGenerated} (or, when an edit overtook the read, no answer and a
+ * re-read on the next declaration), the column's stamps are invalidated and any store
+ * row is deleted (as for an authoritative miss), and nothing is deposited.
  * {@code authoritativeMiss} is deliberately {@code false} on this flavor, so the flag
  * keeps its one meaning ("may seed the memo, generation is correct").
  */

@@ -1319,10 +1319,13 @@ class OffThreadProcessorDiskResultTest {
     }
 
     @Test
-    void editOvertakenUnservableStillNeverGenerates() throws Exception {
-        // An invalidation that overtakes the read strips the authoritative flag from a
-        // plain miss and lets it escalate. An unservable result has no such downgrade: the
-        // bytes the read saw could not be decoded, and LSS does not load on a guess.
+    void editOvertakenUnservableTakesTheTransientDropAndNeverGenerates() throws Exception {
+        // An edit overtook the read (a player loaded the chunk, vanilla replaced its unknown
+        // blocks and saved it while the read of the old bytes was in flight). Answering
+        // NOT_GENERATED off those stale bytes would park the position for the whole
+        // session, and a chunk load is not necessarily a dirty broadcast that revives it.
+        // So: no wire answer, the ghost-style transient drop (superseded + miss_dropped),
+        // still no memo and no ticket, and the next declaration re-reads the disk.
         var rig = new Rig(true, 4, 4, 30);
         try {
             rig.state.enqueue(new IncomingRequest(7, 0, -1L));
@@ -1334,11 +1337,27 @@ class OffThreadProcessorDiskResultTest {
             rig.inject(ChunkReadResult.notFoundUnservable(rig.uuid, 7, 0, DIM, 1L));
             rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
 
-            drainUntil(rig.proc, received(rig.uuid, LSSConstants.RESPONSE_NOT_GENERATED, packed));
+            waitFor(() -> rig.proc.getDiagnostics().getTotalMissDropped() == 1,
+                    "the stale unservable delivery is booked as a miss-drop");
+            assertEquals(1, rig.proc.getDiagnostics().getTotalSuperseded(),
+                    "and as superseded: the transient drop");
+            assertTrue(drainSendActions(rig.proc).isEmpty(),
+                    "an edit-overtaken unservable result answers NOTHING: NOT_GENERATED is"
+                            + " session-permanent and the bytes it speaks for are stale");
             assertNull(rig.proc.pollGenerationTicketRequest(),
-                    "an edit-overtaken unservable result must not escalate either");
+                    "and it must not escalate to generation either");
             assertEquals(0, rig.state.getHeldGenSlots());
+            assertEquals(0, rig.state.getHeldSyncSlots(), "the delivery frees the sync slot");
+            assertFalse(rig.state.hasPendingRequest(7, 0));
+            assertFalse(rig.state.hasDiskReadDone(7, 0));
             assertEquals(0, rig.proc.timestampCacheForTest().missCount());
+
+            rig.state.enqueue(new IncomingRequest(7, 0, -1L));
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
+            waitFor(() -> rig.proc.diskSubmits.size() == 2,
+                    "the next declaration re-reads the now-current bytes");
+            assertEquals(0, rig.proc.getDiagnostics().getTotalMemoHits());
+            assertNull(rig.proc.pollGenerationTicketRequest());
         } finally {
             rig.proc.shutdown();
         }
