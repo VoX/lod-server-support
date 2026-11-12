@@ -127,6 +127,24 @@ public final class ViaProbe {
         return viaProtocol > 0 && viaProtocol != nativeProtocol;
     }
 
+    /** The log line for a refused legacy announce across Minecraft versions, shared by both
+     *  platforms' call sites so the wording cannot drift. It must not tell the operator the
+     *  client is out of date: the usual cause is a current client whose discovery ladder
+     *  stepped down because the reply to its first announce was slow, and its protocol-20
+     *  session (which this refusal leaves registered) carries on once that reply lands.
+     *  "Minecraft protocol" keeps the number space distinct from the LOD protocol number. */
+    public static String legacyAnnounceRefusedLine(String brand, String playerName,
+                                                   int announcedProtocol, int viaProtocol,
+                                                   int nativeProtocol) {
+        return "Ignored a protocol v" + announcedProtocol + " announce from " + playerName
+                + ": Via reports client Minecraft protocol " + viaProtocol + " vs server "
+                + nativeProtocol + ", and sessions older than the current protocol cannot be"
+                + " served across Minecraft versions. A current-protocol session " + playerName
+                + " already has is kept; this is usually a retry sent because the reply to"
+                + " the first announce was slow. A client that only speaks the older protocol"
+                + " needs a newer " + brand + ".";
+    }
+
     /** Production probe read — call sites capture this once per handshake (the log
      *  line wants the real number), apply {@link #isMismatch}, and additionally gate
      *  on {@code enableViaMismatchGuard} BEFORE consulting (a disabled guard must
