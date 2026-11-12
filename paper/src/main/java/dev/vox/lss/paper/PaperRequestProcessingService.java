@@ -2645,7 +2645,8 @@ public class PaperRequestProcessingService {
                             this.config.farPlayersMinDistanceBlocks(),
                             this.config.farPlayersSendSpectators(),
                             this.config.farPlayersExclude(),
-                            this.config.farPlayersUpdateIntervalTicks()),
+                            this.config.farPlayersUpdateIntervalTicks(),
+                            this.config.farPlayersHidePermissionHolders()),
                     this::sendFarPlayerFrame);
         } catch (Exception e) {
             // Containment (review): a snapshot/encode bug must degrade far players,
@@ -2661,7 +2662,7 @@ public class PaperRequestProcessingService {
 
     /** One snapshot per online player, CONTAINED per player (Folia review 2026-08-27
      *  R2): one raced cross-region read (equipment, vehicle, a throwing permissible
-     *  the hiddenFor belt did not cover) must not abort the pass for every other
+     *  the privacyFor belt did not cover) must not abort the pass for every other
      *  player — the pre-fix shape, where the only catch was around the whole pass.
      *  The skipped player reads as absent this interval; the roster reconciles next
      *  tick (stale-tolerant by the same doctrine as the reads themselves). The

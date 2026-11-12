@@ -1082,7 +1082,8 @@ public class RequestProcessingService {
                     new dev.vox.lss.common.farplayers.FarPlayerBroadcastService.Settings(
                             config.farPlayers(), config.farPlayersMaxDistanceBlocks(),
                             config.farPlayersMinDistanceBlocks(), config.farPlayersSendSpectators(),
-                            config.farPlayersExclude(), config.farPlayersUpdateIntervalTicks()),
+                            config.farPlayersExclude(), config.farPlayersUpdateIntervalTicks(),
+                            config.farPlayersHidePermissionHolders()),
                     this::sendFarPlayerFrame);
         } catch (Exception e) {
             // Containment (review): END_SERVER_TICK has no catch of its own — a

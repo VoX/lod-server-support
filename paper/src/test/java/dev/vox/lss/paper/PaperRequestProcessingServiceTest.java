@@ -642,7 +642,7 @@ class PaperRequestProcessingServiceTest {
             UUID uuid, String dimension) {
         return new dev.vox.lss.common.farplayers.FarPlayerBroadcastService.PlayerSnapshot(
                 uuid, "viewer", dimension, 0, 64, 0, 0f, 0f, 0f, (byte) 0, 0, 0, 0,
-                false, false, true, false, 0L, new String[0], new int[0], null);
+                false, false, true, false, false, 0L, new String[0], new int[0], null);
     }
 
     @Test
@@ -666,7 +666,7 @@ class PaperRequestProcessingServiceTest {
             return true;
         };
         var settings = new dev.vox.lss.common.farplayers.FarPlayerBroadcastService.Settings(
-                "on", 2048, 0, false, List.of(), 10);
+                "on", 2048, 0, false, List.of(), 10, false);
         var online = List.of(viewerSnapshot(uuid, "minecraft:the_nether"));
         long now = 1_000_000L;
         fp.tick(now, online, settings, sender);
