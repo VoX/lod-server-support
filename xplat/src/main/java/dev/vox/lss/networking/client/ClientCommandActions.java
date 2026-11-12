@@ -289,6 +289,12 @@ public final class ClientCommandActions {
         }));
     }
 
+    /** The conditional {@code Light:} diagnostics line, or null when both counters are zero. */
+    static String lightLine(long estimated, long failed) {
+        if (estimated <= 0 && failed <= 0) return null;
+        return "Light: sky_estimated=" + estimated + (failed > 0 ? ", sky_estimate_failed=" + failed : "");
+    }
+
     /** /lss diag. */
     public static void showDiagnostics(Consumer<Component> feedback) {
         var snapshot = ClientStatus.latest();
@@ -339,10 +345,11 @@ public final class ClientCommandActions {
         // Light line (issue #382, conditional slot): columns that arrived with terrain
         // and no sky light and were lit by the client's estimate. Non-zero means the
         // server holds chunks saved without light (a world upgrade strips it).
-        if (details.getSkyEstimatedColumns() > 0) {
-            feedback.accept(Component.literal(String.format(
-                    "Light: sky_estimated=%d", details.getSkyEstimatedColumns()
-            )).withStyle(ChatFormatting.GRAY));
+        // sky_estimate_failed, only when non-zero: columns whose estimate threw and that
+        // were delivered as they arrived (dark); the first one per session is in the log.
+        String lightLine = lightLine(details.getSkyEstimatedColumns(), details.getSkyEstimateFailures());
+        if (lightLine != null) {
+            feedback.accept(Component.literal(lightLine).withStyle(ChatFormatting.GRAY));
         }
 
         // Responses line

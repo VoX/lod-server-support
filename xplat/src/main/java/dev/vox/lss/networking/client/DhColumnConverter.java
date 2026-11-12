@@ -146,6 +146,13 @@ final class DhColumnConverter {
      * carried through it. {@link dev.vox.lss.common.dh.DhSkyLightBake} stays DH's own rule;
      * this runs on its result, for stored replies and baked pushes alike.
      *
+     * <p>A span DH lit holds ONE value for all its voxels, however tall it is; in vanilla
+     * the light falls by the dampening with every voxel of it. The carry therefore starts
+     * from what the lit span's BOTTOM voxel would hold by that rule (its value minus the
+     * dampening for each voxel above the bottom one), not from the span's value: under a
+     * lit leaf span four blocks tall the next span starts at 15 - 3 - 1, not at 14. The lit
+     * span's own bytes stay as DH has them.
+     *
      * <p>DH's hidden-block culling merges ground it cannot see into the datapoint above it,
      * so a dark leaf span under a crown can reach down to bedrock. Such a span fades out
      * after at most 14 voxels and stays dark below, which suits what it really is.
@@ -189,7 +196,7 @@ final class DhColumnConverter {
                 if(carried==null)carried=new int[count];
                 carried[i]=carry;
                 carry=Math.max(0,carry-loss*span.height());
-            } else carry=span.skyLight();
+            } else carry=Math.max(0,span.skyLight()-loss*(span.height()-1));
         }
         return carried;
     }

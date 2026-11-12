@@ -379,23 +379,48 @@ class DhColumnConverterTest {
             var data=new DhColumnConverter(biomes).convert(tile,0);
             assertEquals(net.minecraft.world.level.block.Blocks.BIRCH_LEAVES,blockAt(data,48));
             assertEquals(15,skyAt(data,49));assertEquals(15,skyAt(data,48),"a lit span stays uniform, as DH stores it");
-            assertEquals(14,skyAt(data,47));assertEquals(13,skyAt(data,46));
-            assertEquals(12,skyAt(data,45),"the third span continues where the second ended");
-            assertEquals(11,skyAt(data,44));assertEquals(10,skyAt(data,43));
+            assertEquals(13,skyAt(data,47),"the lit span is two leaves tall: its bottom leaf stands for 14");
+            assertEquals(12,skyAt(data,46));
+            assertEquals(11,skyAt(data,45),"the third span continues where the second ended");
+            assertEquals(10,skyAt(data,44));assertEquals(9,skyAt(data,43));
             assertEquals(9,skyAt(data,42),"air under the crown: its floor's light");
         }
         assertEquals(0,budget.used());
     }
     /** DH's hidden-block culling stores the ground under a crown as one tall "leaf" span. */
-    @Test void aTallDarkLeafSpanFadesOutAfterFourteenBlocksAndStaysDarkBelow() throws Exception {
+    /** Review fold: a lit span holds one value however tall it is; vanilla would have faded inside it. */
+    @Test void theCarryStartsFromTheLitSpansBottomVoxelNotFromItsUniformValue() throws Exception {
+        var budget=new DhMemoryBudget(DhLimits.DEFAULT.ownedBytes());
+        var materials=List.of(block("air"),leaves("oak",1),leaves("oak",2),block("stone"));
+        // a lit leaf span three blocks tall, then a dark one
+        try(var tile=crownTile(true,budget,materials,
+                span(0,50,46,15),span(1,47,3,15),span(2,43,4,0),span(3,0,43,0))) {
+            var data=new DhColumnConverter(biomes).convert(tile,0);
+            for(int y=47;y<50;y++)assertEquals(15,skyAt(data,y),"the lit span keeps DH's bytes, y="+y);
+            assertEquals(12,skyAt(data,46),"its bottom leaf stands for 15 - 2, so the next leaf is 12, not 14");
+            assertEquals(11,skyAt(data,45));assertEquals(10,skyAt(data,44));assertEquals(9,skyAt(data,43));
+            assertEquals(0,skyAt(data,42));
+        }
+        // a dimly lit span taller than its light: nothing is left to carry
+        try(var tile=crownTile(true,budget,materials,
+                span(0,50,46,15),span(1,45,5,3),span(2,43,2,0),span(3,0,43,0))) {
+            var data=new DhColumnConverter(biomes).convert(tile,0);
+            assertEquals(3,skyAt(data,45),"the lit span keeps DH's bytes");
+            assertEquals(0,skyAt(data,44),"3 - 4 leaves nothing for the span below");
+            assertEquals(0,skyAt(data,43));
+        }
+        assertEquals(0,budget.used());
+    }
+    @Test void aTallDarkLeafSpanFadesOutAndStaysDarkBelow() throws Exception {
         var budget=new DhMemoryBudget(DhLimits.DEFAULT.ownedBytes());
         var materials=List.of(block("air"),leaves("oak",2),block("bedrock"));
         try(var tile=crownTile(true,budget,materials,
                 span(0,64,32,15),span(1,60,4,15),span(1,1,59,0),span(2,0,1,0))) {
             var data=new DhColumnConverter(biomes).convert(tile,0);
             for(int y=60;y<64;y++)assertEquals(15,skyAt(data,y));
-            for(int depth=1;depth<=14;depth++)assertEquals(15-depth,skyAt(data,60-depth),"depth "+depth);
-            for(int y=1;y<=45;y++)assertEquals(0,skyAt(data,y),"below the fade, y="+y);
+            // The lit span is four leaves tall (its bottom leaf stands for 12), so 11 is left.
+            for(int depth=1;depth<=11;depth++)assertEquals(12-depth,skyAt(data,60-depth),"depth "+depth);
+            for(int y=1;y<=48;y++)assertEquals(0,skyAt(data,y),"below the fade, y="+y);
             assertEquals(0,skyAt(data,0));
         }
         assertEquals(0,budget.used());
