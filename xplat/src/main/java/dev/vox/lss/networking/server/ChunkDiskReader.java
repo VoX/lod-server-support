@@ -107,17 +107,20 @@ public class ChunkDiskReader extends AbstractChunkDiskReader {
         // Phase 3 split dispatch: raw fetch + pool parse when the vanilla BACKGROUND rung
         // would serve this read; every other rung keeps the ChunkNbtRead ladder unchanged.
         var raw = chooseRawReadOrNull(level, chunkMap);
+        // Both rungs pass the shared reader's per-read notes through, so an undecodable
+        // column resolves as the unservable flavor instead of a plain (generation-
+        // escalating) miss. The backfill below passes none: its null is a skip.
         if (raw != null) {
             submitRead(playerUuid, registration, chunkX, chunkZ, dimension, submissionOrder, clientTimestamp,
-                    () -> NbtSectionSerializer.readAndSerializeSections(raw, registryAccess, chunkX, chunkZ,
+                    notes -> NbtSectionSerializer.readAndSerializeSections(raw, registryAccess, chunkX, chunkZ,
                             maskEntry, minSectionY, maxSectionY, readPolicy.transcode(),
-                            readPolicy.selective()));
+                            readPolicy.selective(), notes));
             return;
         }
         NbtSectionSerializer.ChunkNbtRead read = chooseReadPath(level, chunkMap);
         submitRead(playerUuid, registration, chunkX, chunkZ, dimension, submissionOrder, clientTimestamp,
-                () -> NbtSectionSerializer.readAndSerializeSections(read, registryAccess, chunkX, chunkZ,
-                        maskEntry, minSectionY, maxSectionY, readPolicy.transcode()));
+                notes -> NbtSectionSerializer.readAndSerializeSections(read, registryAccess, chunkX, chunkZ,
+                        maskEntry, minSectionY, maxSectionY, readPolicy.transcode(), notes));
     }
 
     /**

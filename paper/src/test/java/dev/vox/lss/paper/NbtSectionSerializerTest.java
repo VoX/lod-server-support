@@ -1,6 +1,7 @@
 package dev.vox.lss.paper;
 
 import com.mojang.serialization.Lifecycle;
+import dev.vox.lss.common.processing.ColumnDecodeNotes;
 import io.netty.buffer.Unpooled;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.HolderLookup;
@@ -243,8 +244,17 @@ class NbtSectionSerializerTest {
             }
             assertTrue(sawProperties, "premise: a non-default state carries legacy Properties");
             byte[] expected = PaperNbtSectionSerializer.serializeChunkNbt(chunkNbt("minecraft:full", current), REGISTRY_ACCESS);
-            byte[] actual = PaperNbtSectionSerializer.serializeChunkNbt(chunkNbt("minecraft:full", legacy), REGISTRY_ACCESS);
+            // Port gate (undecodable-chunks plan): the reader's notes must report nothing for
+            // a legacy-format chunk. If a future port misses a format mirror like this one,
+            // every entry fails and the column turns undecodable, so this is a red test
+            // here instead of terrain that silently stops serving.
+            var notes = new ColumnDecodeNotes();
+            byte[] actual = PaperNbtSectionSerializer.serializeChunkNbt(chunkNbt("minecraft:full", legacy), REGISTRY_ACCESS,
+                    null, Integer.MIN_VALUE, Integer.MAX_VALUE, true, notes);
             assertNotNull(expected, "premise: the current-format section serves");
+            assertFalse(notes.undecodable(),
+                    "a pre-26.3 palette (" + palette.size() + " entries) must not be reported undecodable: "
+                            + notes.firstDecodeError());
             assertArrayEquals(expected, actual,
                     "a pre-26.3 palette (" + palette.size() + " entries) must serve the current-format bytes");
         }
@@ -1353,6 +1363,253 @@ class NbtSectionSerializerTest {
                 null, Integer.MIN_VALUE, Integer.MAX_VALUE, true));
         assertNull(PaperNbtSectionSerializer.serializeChunkNbt(chunk, REGISTRY_ACCESS,
                 null, Integer.MIN_VALUE, Integer.MAX_VALUE, false));
+    }
+
+    // ---- Undecodable columns (undecodable-chunks plan, 2026-11-12) ----
+    //
+    // A column whose cells use only block palette entries that failed to decode (a removed
+    // mod's blocks, a chunk format this build cannot read) used to serialize as all-air, or
+    // as lit air sections: stamped, stored, and sent as a clear over the client's cached
+    // terrain. It is null now, with the caller's notes marked so the reader does not
+    // escalate it to generation. Same text in the Fabric and Paper twins.
+
+    private static net.minecraft.nbt.ListTag blockPaletteOf(CompoundTag section) {
+        return section.getCompound("block_states").orElseThrow().getList("palette").orElseThrow();
+    }
+
+    /** Makes EVERY palette entry an unknown block, whatever shape the line writes (a bare
+     *  string, {id, ...} or {Name, ...}); returns how many entries it changed. */
+    private static int makeEveryPaletteEntryUnknown(net.minecraft.nbt.ListTag palette, String prefix) {
+        for (int i = 0; i < palette.size(); i++) {
+            String unknown = "lss:" + prefix + "_" + i;
+            if (palette.get(i) instanceof CompoundTag entry) {
+                entry.putString(entry.contains("id") ? "id" : "Name", unknown);
+            } else {
+                palette.set(i, StringTag.valueOf(unknown));
+            }
+        }
+        return palette.size();
+    }
+
+    private static byte[] serializeWithNotes(CompoundTag chunk, boolean transcode, ColumnDecodeNotes notes) {
+        return PaperNbtSectionSerializer.serializeChunkNbt(chunk, REGISTRY_ACCESS, null,
+                Integer.MIN_VALUE, Integer.MAX_VALUE, transcode, notes);
+    }
+
+    /** Undecodable on BOTH routes: null bytes, the notes marked with a decode message,
+     *  and a caller that passes no notes (the store backfill) sees a plain null = skip. */
+    private static void assertUndecodableOnBothRoutes(CompoundTag chunk, String what) {
+        for (boolean transcode : new boolean[]{true, false}) {
+            String route = what + " (transcode=" + transcode + ")";
+            var notes = new ColumnDecodeNotes();
+            assertNull(serializeWithNotes(chunk, transcode, notes), route + ": never air, never bytes");
+            assertTrue(notes.undecodable(), route + ": the notes report the column undecodable");
+            assertNotNull(notes.firstDecodeError(), route + ": with the first decode message");
+            assertNull(PaperNbtSectionSerializer.serializeChunkNbt(chunk, REGISTRY_ACCESS, null,
+                            Integer.MIN_VALUE, Integer.MAX_VALUE, transcode),
+                    route + ": a caller without notes skips the chunk");
+        }
+    }
+
+    /** Serves identically on both routes and reports nothing; returns the bytes. */
+    private static byte[] assertServesAndReportsNothing(CompoundTag chunk, String what) {
+        var transcodedNotes = new ColumnDecodeNotes();
+        var objectNotes = new ColumnDecodeNotes();
+        byte[] transcoded = serializeWithNotes(chunk, true, transcodedNotes);
+        byte[] object = serializeWithNotes(chunk, false, objectNotes);
+        assertNotNull(transcoded, what + ": served, not a miss");
+        assertArrayEquals(object, transcoded, what + ": both routes agree");
+        for (var notes : List.of(transcodedNotes, objectNotes)) {
+            assertFalse(notes.undecodable(), what + ": nothing reported undecodable");
+            assertNull(notes.firstDecodeError(), what + ": no decode message");
+        }
+        return transcoded;
+    }
+
+    @Test
+    void everyUsedBlockEntryUnknown_columnIsUndecodableNeverAir() {
+        // A single-entry palette (a full section of one block) and a multi-entry palette
+        // with data, every entry unknown: the wholesale shape (a chunk format this build
+        // cannot read fails every entry, air included).
+        var full = FACTORY.createForBlockStates();
+        for (int y = 0; y < 16; y++)
+            for (int z = 0; z < 16; z++)
+                for (int x = 0; x < 16; x++)
+                    full.set(x, y, z, Blocks.STONE.defaultBlockState());
+        var mixed = FACTORY.createForBlockStates();
+        mixed.set(0, 0, 0, Blocks.STONE.defaultBlockState());
+        mixed.set(1, 0, 0, Blocks.DIRT.defaultBlockState());
+        var single = sectionFrom(0, full, FACTORY.createForBiomes());
+        var multi = sectionFrom(1, mixed, FACTORY.createForBiomes());
+        var chunk = chunkNbt("minecraft:full", single, multi);
+        assertEquals(2, decode(PaperNbtSectionSerializer.serializeChunkNbt(chunk, REGISTRY_ACCESS)).size(),
+                "premise: both sections serve before their palettes are broken");
+        assertEquals(1, makeEveryPaletteEntryUnknown(blockPaletteOf(single), "gone_single"));
+        assertTrue(makeEveryPaletteEntryUnknown(blockPaletteOf(multi), "gone_multi") >= 3,
+                "premise: the multi-entry palette carries air, stone and dirt");
+        assertUndecodableOnBothRoutes(chunk, "every entry unknown");
+
+        // The removed-mod shape: real air still decodes, every BLOCK entry is unknown.
+        var removed = FACTORY.createForBlockStates();
+        removed.set(0, 0, 0, Blocks.STONE.defaultBlockState());
+        removed.set(1, 0, 0, Blocks.DIRT.defaultBlockState());
+        var section = sectionFrom(3, removed, FACTORY.createForBiomes());
+        var palette = blockPaletteOf(section);
+        assertEquals(2, renamePaletteEntry(palette, "minecraft:stone", "lss:removed_one")
+                + renamePaletteEntry(palette, "minecraft:dirt", "lss:removed_two"),
+                "premise: both block entries were renamed, air left alone");
+        assertUndecodableOnBothRoutes(chunkNbt("minecraft:full", section),
+                "every block entry unknown beside decodable air");
+    }
+
+    @Test
+    void everyUsedBlockEntryUnknown_withSkyOrBlockLight_isStillUndecodable() {
+        // Light changes nothing: sky-lit substituted air was dropped to the empty array, and
+        // block-lit substituted air was served as real lit air sections. Both are the same
+        // blank answer over terrain the server could not read.
+        byte[] sky = new byte[2048];
+        Arrays.fill(sky, (byte) 0xFF);
+        byte[] block = light(7, (byte) 5);
+        var lit = List.of(
+                sectionNbt(0, true, true, null, sky),
+                sectionNbt(0, true, true, block, null),
+                sectionNbt(0, true, true, block, sky));
+        for (int i = 0; i < lit.size(); i++) {
+            var section = lit.get(i);
+            assertEquals(1, renamePaletteEntry(blockPaletteOf(section), "minecraft:stone", "lss:lit_gone_" + i),
+                    "premise: the stone entry was renamed");
+            assertUndecodableOnBothRoutes(chunkNbt("minecraft:full", section), "lit variant " + i);
+        }
+    }
+
+    @Test
+    void rejectedKeyShapeEntry_columnIsUndecodable() {
+        // An entry the codec rejects outright (neither id nor Name): the shape of a format
+        // change this build has no mirror for.
+        var full = FACTORY.createForBlockStates();
+        for (int y = 0; y < 16; y++)
+            for (int z = 0; z < 16; z++)
+                for (int x = 0; x < 16; x++)
+                    full.set(x, y, z, Blocks.STONE.defaultBlockState());
+        var section = sectionFrom(0, full, FACTORY.createForBiomes());
+        var palette = blockPaletteOf(section);
+        assertEquals(1, palette.size(), "premise: a single-entry palette");
+        var rejected = new CompoundTag();
+        rejected.putString("lss_unreadable_key", "minecraft:stone");
+        palette.set(0, rejected);
+        assertUndecodableOnBothRoutes(chunkNbt("minecraft:full", section), "rejected key shape");
+    }
+
+    @Test
+    void unknownEntriesBesideADecodedBlock_stillServeAndReportNothing() {
+        // The pinned leniency (R2-1) is untouched: one decoded block anywhere in the column
+        // keeps today's behaviour exactly, unknown entries showing as air in place.
+        var unknown = sectionNbt(1, true, true, null, null);
+        assertEquals(1, renamePaletteEntry(blockPaletteOf(unknown), "minecraft:stone", "lss:beside_gone"));
+        byte[] wire = assertServesAndReportsNothing(
+                chunkNbt("minecraft:full", unknown, sectionNbt(2, true, true, null, null)),
+                "an all-unknown section beside a stone section");
+        var sections = decode(wire);
+        assertEquals(1, sections.size(), "the all-unknown section drops as air, the sibling serves");
+        assertEquals(2, sections.get(0).y());
+        assertEquals(Blocks.STONE.defaultBlockState(), sections.get(0).section().getBlockState(0, 0, 0));
+
+        // Same section: an unknown entry beside a decoded one.
+        var sec = new LevelChunkSection(FACTORY);
+        sec.setBlockState(0, 0, 0, Blocks.STONE.defaultBlockState());
+        sec.setBlockState(1, 0, 0, Blocks.DIRT.defaultBlockState());
+        var same = sectionNbtFor(1, sec);
+        assertEquals(1, renamePaletteEntry(blockPaletteOf(same), "minecraft:dirt", "lss:beside_gone_too"));
+        var kept = decode(assertServesAndReportsNothing(chunkNbt("minecraft:full", same),
+                "an unknown entry beside a decoded one in the same section"));
+        assertEquals(Blocks.STONE.defaultBlockState(), kept.get(0).section().getBlockState(0, 0, 0));
+        assertEquals(Blocks.AIR.defaultBlockState(), kept.get(0).section().getBlockState(1, 0, 0));
+    }
+
+    @Test
+    void realAir_isStillTheEmptyArrayAndReportsNothing() {
+        byte[] sky = new byte[2048];
+        Arrays.fill(sky, (byte) 0xFF);
+        for (var section : List.of(
+                sectionNbt(0, false, true, null, null),
+                sectionNbt(0, false, true, null, sky))) {
+            byte[] wire = assertServesAndReportsNothing(chunkNbt("minecraft:full", section), "real air");
+            assertEquals(0, wire.length, "a truly empty column is still the empty array, not a miss");
+        }
+    }
+
+    @Test
+    void unusedUnknownPaletteEntry_inAnAllAirColumn_isStillTheEmptyArray() {
+        // Cells are counted, not palette entries: a leftover entry no cell points at changes
+        // nothing on screen and must not turn a truly empty column into an undecodable one.
+        var states = FACTORY.createForBlockStates();
+        states.set(15, 15, 15, Blocks.STONE.defaultBlockState()); // last cell: air packs first
+        var section = sectionFrom(0, states, FACTORY.createForBiomes());
+        var bs = section.getCompound("block_states").orElseThrow();
+        assertEquals(2, blockPaletteOf(section).size(), "premise: an [air, stone] palette");
+        bs.putLongArray("data", new long[bs.getLongArray("data").orElseThrow().length]); // every cell -> entry 0
+        var chunk = chunkNbt("minecraft:full", section);
+        assertEquals(0, PaperNbtSectionSerializer.serializeChunkNbt(chunk, REGISTRY_ACCESS).length,
+                "premise: with every cell on entry 0 the column is all air, the stone entry unused");
+
+        assertEquals(1, renamePaletteEntry(blockPaletteOf(section), "minecraft:stone", "lss:unused_gone"),
+                "premise: the unused entry is now unknown");
+        byte[] wire = assertServesAndReportsNothing(chunk, "an unused unknown palette entry");
+        assertEquals(0, wire.length, "still the empty array");
+    }
+
+    @Test
+    void fallbackSections_decideUndecodableExactlyLikeTranscodedOnes() {
+        // The transcoder hands some shapes to the object path per section. The decision
+        // must not depend on which route parsed the section.
+        // (a) a >256-entry palette (Global config): the transcoder never counts it.
+        var wide = FACTORY.createForBlockStates();
+        int i = 0;
+        for (var state : Block.BLOCK_STATE_REGISTRY) {
+            if (i == 300) break;
+            wide.set(i & 15, (i >> 8) & 15, (i >> 4) & 15, state);
+            i++;
+        }
+        var wideSection = sectionFrom(0, wide, FACTORY.createForBiomes());
+        assertTrue(makeEveryPaletteEntryUnknown(blockPaletteOf(wideSection), "gone_wide") > 256,
+                "premise: a palette past the transcoder's 256-entry bound");
+        assertUndecodableOnBothRoutes(chunkNbt("minecraft:full", wideSection), "wide palette");
+
+        // (b) an empty biome palette: the transcoder resolves the block palette first and
+        // falls back afterwards.
+        byte[] sky = new byte[2048];
+        Arrays.fill(sky, (byte) 0xFF);
+        var biomeFallback = sectionNbt(0, true, true, null, sky);
+        assertEquals(1, renamePaletteEntry(blockPaletteOf(biomeFallback), "minecraft:stone", "lss:gone_biome_fallback"));
+        var emptyBiomes = new CompoundTag();
+        emptyBiomes.put("palette", new ListTag());
+        biomeFallback.put("biomes", emptyBiomes);
+        assertUndecodableOnBothRoutes(chunkNbt("minecraft:full", biomeFallback), "biome fallback");
+    }
+
+    @Test
+    void unparseableSibling_neverTurnsAnUndecodableColumnIntoAPlainMiss() {
+        // A plain miss may escalate to a generation ticket; an undecodable column must not
+        // (loading it through Minecraft turns its unknown blocks into air). So the
+        // undecodable verdict wins over a truly-unparseable sibling section...
+        var bad = new CompoundTag();
+        bad.putInt("Y", 1);
+        var badStates = new CompoundTag();
+        badStates.putInt("palette", 7); // not even a list — no partial recoverable
+        bad.put("block_states", badStates);
+        var unknown = sectionNbt(2, true, true, null, null);
+        assertEquals(1, renamePaletteEntry(blockPaletteOf(unknown), "minecraft:stone", "lss:gone_beside_corrupt"));
+        assertUndecodableOnBothRoutes(chunkNbt("minecraft:full", bad, unknown),
+                "an all-unknown section beside an unparseable one");
+
+        // ...while an unparseable section beside DECODED content is today's plain miss.
+        for (boolean transcode : new boolean[]{true, false}) {
+            var notes = new ColumnDecodeNotes();
+            assertNull(serializeWithNotes(
+                    chunkNbt("minecraft:full", bad, sectionNbt(2, true, true, null, null)), transcode, notes));
+            assertFalse(notes.undecodable(),
+                    "an unparseable section beside decoded content stays the plain authoritative miss");
+        }
     }
 
     @Test

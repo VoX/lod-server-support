@@ -118,6 +118,105 @@ class PaperDiskReaderEnvelopeTest {
         return tag;
     }
 
+    /** FULL-status chunk whose one section is a single block this server does not know (a
+     *  removed mod's block, or a format this build cannot read): nothing decodes. */
+    private static CompoundTag undecodableChunkNbt() {
+        var tag = new CompoundTag();
+        tag.putString("Status", "minecraft:full");
+        var section = new CompoundTag();
+        section.putByte("Y", (byte) 0);
+        var blocks = new CompoundTag();
+        var palette = new ListTag();
+        var unknown = new CompoundTag();
+        unknown.putString("Name", "lss:removed_mod_block");
+        palette.add(unknown);
+        blocks.put("palette", palette);
+        section.put("block_states", blocks);
+        var biomes = new CompoundTag();
+        var biomePalette = new ListTag();
+        biomePalette.add(net.minecraft.nbt.StringTag.valueOf("minecraft:plains"));
+        biomes.put("palette", biomePalette);
+        section.put("biomes", biomes);
+        var sections = new ListTag();
+        sections.add(section);
+        tag.put("sections", sections);
+        return tag;
+    }
+
+    private static final String CLEAN_DISK_LINE =
+            "submitted=0, completed=0, not_found=0, all_air=0, errors=0, saturated=0,"
+                    + " header_hits=0, avg_read=" + String.format("%.1f", 0.0) + "ms, pending=0,"
+                    + " read_gate=0/1, gate_parked=0, gate_stops=0, gated=0";
+
+    @Test
+    void undecodableChunkResolvesAsUnservableThroughTheRealSubmitPath() throws Exception {
+        // The Paper glue end to end: the REAL serializer reports the column through the
+        // notes the shared reader handed to submitReadDirect's operation. Before the fix
+        // this chunk resolved as ALL-AIR (found, stamped, stored, sent as a clear); a
+        // plain not-found would be wrong too (it escalates to a generation ticket that
+        // loads the chunk and lets vanilla turn the unknown block into air).
+        var warns = new java.util.concurrent.CopyOnWriteArrayList<String>();
+        reader.shutdown();
+        reader = new PaperChunkDiskReader(1, false) {
+            @Override
+            protected void warnUndecodable(String message) {
+                warns.add(message);
+            }
+        };
+        reader.registerPlayer(uuid, registration(uuid));
+        assertEquals(CLEAN_DISK_LINE, reader.getDiagnostics(),
+                "a clean reader's disk line is byte-identical to the pre-counter line");
+
+        reader.setReadOverride((cx, cz) ->
+                CompletableFuture.completedFuture(Optional.of(undecodableChunkNbt())));
+        reader.submitReadDirect(uuid, registration(uuid), "minecraft:overworld", level, 3, -4, 1L, 0L);
+
+        var result = awaitResult();
+        assertTrue(result.notFound(), "nothing can be served from an undecodable chunk");
+        assertTrue(result.unservable(), "the unservable flavor: never memoized, never generated");
+        assertFalse(result.authoritativeMiss(), "not the memo-seeding, generation-escalating miss");
+        assertFalse(result.saturated());
+        assertNull(result.sectionBytes(), "never an air answer");
+        assertEquals(3, result.chunkX());
+        assertEquals(-4, result.chunkZ());
+        assertEquals(1L, reader.getDiag().getUndecodableCount());
+        assertEquals(1L, reader.getDiag().getNotFoundCount(), "also counted under not_found");
+        assertEquals(0L, reader.getDiag().getAllAirCount(), "never booked as an all-air chunk");
+        assertEquals(0L, reader.getDiag().getErrorCount());
+        assertEquals(1L, reader.getDiag().getCompletedCount());
+        assertTrue(reader.getDiagnostics().endsWith(", gated=0, undecodable=1"),
+                "the disk line carries the token: " + reader.getDiagnostics());
+
+        reader.submitReadDirect(uuid, registration(uuid), "minecraft:overworld", level, 5, 6, 2L, 0L);
+        assertTrue(awaitResult().unservable());
+        assertEquals(2L, reader.getDiag().getUndecodableCount());
+        assertEquals(1, warns.size(), "one WARN per reader, however many chunks fail: " + warns);
+        assertTrue(warns.get(0).contains("[3, -4]") && warns.get(0).contains("minecraft:overworld"),
+                "the WARN names the first chunk and its dimension: " + warns.get(0));
+        assertTrue(warns.get(0).contains("lss:removed_mod_block"),
+                "and carries the serializer's first decode message: " + warns.get(0));
+    }
+
+    @Test
+    void plainMissAndAllAirNeverRenderTheUndecodableToken() throws Exception {
+        reader.setReadOverride((cx, cz) -> CompletableFuture.completedFuture(Optional.empty()));
+        reader.submitReadDirect(uuid, registration(uuid), "minecraft:overworld", level, 3, -4, 1L, 0L);
+        var miss = awaitResult();
+        assertTrue(miss.notFound() && miss.authoritativeMiss() && !miss.unservable(),
+                "a missing chunk stays the plain authoritative miss");
+
+        reader.setReadOverride((cx, cz) ->
+                CompletableFuture.completedFuture(Optional.of(fullButEmptyChunkNbt())));
+        reader.submitReadDirect(uuid, registration(uuid), "minecraft:overworld", level, 0, 0, 2L, 0L);
+        var air = awaitResult();
+        assertFalse(air.notFound(), "real air is still found");
+        assertFalse(air.unservable());
+
+        assertEquals(0L, reader.getDiag().getUndecodableCount());
+        assertFalse(reader.getDiagnostics().contains("undecodable"),
+                "no token on a reader that met no undecodable chunk: " + reader.getDiagnostics());
+    }
+
     @Test
     void missingChunkResolvesAsNotFound() throws Exception {
         reader.setReadOverride((cx, cz) -> CompletableFuture.completedFuture(Optional.empty()));
