@@ -179,5 +179,5 @@
   "lss.status.dh.activity.waiting_voxy": "waiting for Voxy",
   "lss.status.dh.activity.idle": "idle; terrain in range is current",
   "lss.status.dh.activity.stopped": "stopped",
-  "lss.status.dh.notice.stopped": "Distant Horizons terrain stopped: %s. Run /lss diag for details."
+  "lss.status.dh.notice.stopped": "Distant Horizons terrain stopped: %s. Run /%s diag for details."
 }
