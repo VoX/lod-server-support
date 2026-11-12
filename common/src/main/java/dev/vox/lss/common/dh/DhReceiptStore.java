@@ -27,7 +27,7 @@ public final class DhReceiptStore {
     /** Pre-2026-10-10 dev builds stored source DTOs here; reclaimed on first use. */
     static final List<String> LEGACY_TERRAIN_DIRECTORIES = List.of("!dh-terrain-v1", "dh-terrain-v1");
     /** Bump whenever DhColumnConverter output changes; older receipts then re-download. */
-    public static final int CONVERSION_VERSION = 6;
+    public static final int CONVERSION_VERSION = 7;
     public static final int MAX_ENTRIES = 65_536;
     public static final int MAX_BUCKETS = 64;
     private static final int MAGIC = 0x44485243, VERSION = 1, ENTRY_BYTES = 20, HEADER_BYTES = 44;
