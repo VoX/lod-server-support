@@ -1,6 +1,7 @@
 # Never serve or store air for a chunk that failed to decode
 
-Status: decided 2026-11-12 (maintainer decision, reviewed); implementation on the 0.21.0 train. Researched on
+Status: decided 2026-11-12 (maintainer decision, reviewed); implemented on main (26.3) the same day, see
+"As built"; the five support lines follow on the 0.21.0 train. Researched on
 main at f12fe59da and the five support
 lines by `git show`.
 
@@ -46,6 +47,94 @@ Decisions:
 8. Existing all-air store rows are left alone; no `DataVersion` read.
 
 Release note: "Servers no longer send or store blank terrain for chunks they can't read; the log says why."
+
+## As built (2026-11-12, main / 26.3)
+
+Implemented on `feat/undecodable-mc26.3` as the fold above decided. Where the body below
+still says "authoritative miss", "static counter in each serializer twin" or "generation
+loads it", read this section instead.
+
+**Rule (both serializer twins, same text).** `serializeChunkNbt` gained a core overload with a
+nullable `ColumnDecodeNotes` (new, `common/.../processing`). A column is undecodable when a block
+palette entry that at least one cell uses was a hard decode error (`MemoizedNbtCodec` cached
+`hardError() != null`) and no in-range section has a non-air cell left. Then the serializer
+returns `null` and marks the notes with the first decode message. Details:
+
+- One helper, `firstUsedHardError(sectionTag)`, decides "used" for both routes. It reads the raw
+  NBT (`block_states.palette`, `data` through `NbtOps.getLongStream`) and the palette memo only,
+  so the transcode and object routes agree by construction and the walk is the same text on
+  every Minecraft line (it names no container or identifier type).
+- The transcoder calls it where its section WARN is, after every fallback return. The object
+  route calls it when `resultOrPartial` reported a partial, before the empty-section return. A
+  section that falls back is decided by the object route alone.
+- Single-entry palette: every cell uses the entry. Otherwise the cell indices are walked; a
+  leftover entry no cell points at never counts.
+- **Difference from the body (§2.2):** the undecodable check runs BEFORE the unparseable-section
+  rung, not after it. A column with a truly-unparseable section AND used unknown entries AND
+  nothing decoded is undecodable, not a plain miss, because the plain miss may escalate to
+  generation (decision 1). An unparseable section beside decoded content is still today's plain
+  miss.
+- Callers without notes (the store backfill, the old overloads, the range-free test flavors) get a
+  plain `null` and skip the chunk, as for an unparseable one.
+
+**Reader (`AbstractChunkDiskReader`, shared).** New hook `NotedReadOperation` (the reader hands a
+fresh `ColumnDecodeNotes` to each read); the existing `ReadOperation` overloads wrap into it and can
+never report undecodable. `null` with the notes marked delivers `ChunkReadResult.notFoundUnservable`
+(new record component `unservable`; `notFound = true`, `authoritativeMiss = false`, so the old flag
+keeps its one meaning; every earlier constructor and factory still compiles). The reader counts it
+with `DiskReaderDiagnostics.recordUndecodable()`, which bumps `not_found` and `undecodable`
+together, renders `, undecodable=<n>` after the gate tokens only when non-zero, and logs one WARN
+per reader instance through the overridable `warnUndecodable` (dimension, chunk, first decode
+message, what LSS does, the two operator actions). `ChunkDiskReader` and `PaperChunkDiskReader`
+pass the notes through in `submitReadDirect`; the backfill read passes none.
+
+**Disposition (`OffThreadProcessor`).** `deliverDiskResult` passes `result.unservable()` to
+`handleDiskNotFound`. After the unchanged ghost branch (no live pending: superseded +
+miss_dropped), an unservable result adds `ColumnNotGenerated` and returns, before the memo write
+and before `escalateMissToGeneration`, whether generation is available or not and whether or not
+an edit overtook the read. In the drain block the stamp invalidation already runs for every
+not-found flavor; the store-row delete gate became `authoritativeMiss() || unservable()`. Nothing
+is deposited (deposits need `!notFound`).
+
+**Why the row delete and stamp invalidation stay.** The store rung runs before any region read,
+so a row that still exists when an unservable result drains was not served (a failed or racing
+row); it must not outlive an answer that says the server cannot read the chunk. The worst case
+is one re-deposit, and it can never cause a chunk load. A stale stamp would keep answering
+`up_to_date` for a column the server can no longer vouch for.
+
+**Laws.** `undecodable` is a subset of `not_found`, so the reader's completion partition is
+unchanged. Soak law A5 needs no new term: the miss is answered (`responses.not_generated`), or
+`miss_dropped` for a ghost, exactly like a generation-off miss; the documented multi-recipient
+latent (one `not_found`, one answer per dedup recipient) is the same one. No exporter field was
+added.
+
+**Tests.** Serializer: both `NbtSectionSerializerTest`s (same text), including the port gate in
+`legacyNamePropertiesPaletteEntriesSerializeIdenticallyToTheCurrentFormat`. Reader:
+`AbstractChunkDiskReaderTest`, `PaperDiskReaderEnvelopeTest`, `ChunkDiskReaderTest` (the Fabric
+`submitReadDirect` glue through a mocked level). Processor: `OffThreadProcessorDiskResultTest`,
+`OffThreadProcessorStoreTest`, `DedupFanoutTest`, `DiagnosticsCountersTest`. Gametest:
+`RegionFaultGameTests.undecodableChunkIsNeverServedAsAirNorGenerated` (a staged region file; also
+asserts the chunk is never loaded and the region file stays byte-identical). It has its own
+test environment (`lss:undecodable_chunk`), so its own batch, and stages the file in the
+level's real region folder (`DimensionType.getStorageFolder`). The gametest tiers run with the
+LOD store off, so "no store row" is pinned at the processor. Every new pin was mutation-checked
+(the fix broken one piece at a time, red seen, restored).
+
+**Found on the way, not changed.**
+- `RegionFaultGameTests.corruptRegionChunkResolvesAsContainedErrorAndReaderSurvives` stages its
+  corrupt file under `<world>/region`. Since 26.2 the Overworld's regions live under
+  `<world>/dimensions/minecraft/overworld/region`, so on the 26.x lines that file is never read
+  and the test's "corrupt" read is a plain missing region. Its containment claim is not
+  exercised there.
+- `BacklogReplaceTest.concurrentHoldReleaseNeverRestsAStaleBatchAndBalancesAccounting` failed
+  once in the full gate (round 3589 of 25000, "a STALE batch ... RESTED in the mailbox"). The
+  code it tests is untouched by this change. Likely mechanism: `offerIncomingBatch` bumps the
+  offer generation before it writes the mailbox, so a pump that reads the generation inside
+  that window and then takes the older batch still resting there holds an old batch under the
+  new generation, and both republish guards pass. Not in the flake catalog.
+
+**Not done here.** The five support lines, the classification entries and the six-line re-pin
+(`ColumnDecodeNotes.java` is a new common file).
 
 ## 0. Verdict and summary (draft as reviewed)
 
