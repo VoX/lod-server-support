@@ -124,7 +124,10 @@ public final class ClientStatus {
                 xaero.pendingRebuilds(), ClientNetGlue.discoveryStatus(), availability,
                 active ? captureDetails(manager) : null,
                 dev.vox.lss.platform.LoaderServices.get().diagnosticVersions(), cfg.diagnosticSettings(),DhClientSession.fallbackEnabled()?DhClientSession.diagnostics():null,
-                journeyMapAvailability, journeyMap.pendingColumns());
+                journeyMapAvailability, journeyMap.pendingColumns(),
+                // How many far players the server is sending right now (a count only): 0 means
+                // the server sends none, so the cause is on the server side or the other player's.
+                FarPlayerClientSupport.tracker().trackedCount());
         lastRateGated = rateGated;
         CACHE.publish(lifecycle, snapshot);
     }
