@@ -17,7 +17,9 @@ import java.util.*;
 
 /** Worker-only expansion; containers and light arrays are never reused after handoff. */
 final class DhColumnConverter {
-    private record Material(BlockState state, Holder<Biome> biome, int waterSkyLoss) {}
+    /** {@code carryLoss}: 0, or the sky light one voxel of this block costs when light is
+     *  carried down through it (see {@link #carryLoss(BlockState)}). */
+    private record Material(BlockState state, Holder<Biome> biome, int waterSkyLoss, int carryLoss) {}
     private final net.minecraft.core.Registry<Biome> biomes;
     // 26.x section-construction flavor: empty sections come from a PalettedContainerFactory
     // (the 1.21.x lines pass the Registry<Biome> to SectionConstruction instead).
@@ -67,8 +69,10 @@ final class DhColumnConverter {
                 tile.world().minY()/16+sy, SectionConstruction.empty(factory), new DataLayer(), new DataLayer());
         for(int x=0;x<16;x++) for(int z=0;z<16;z++) {
             int index=(tx+x)*64+tz+z;
+            int[] carried=carriedLight(tile,index,materials);
             for(int i=0;i<tile.spanCount(index);i++) {
                 var span=tile.span(index,i); var material=materials.get(span.material());
+                int carry=carried==null?0:carried[i];
                 // DH renders a side face exposed through an air run with the sky light of
                 // the floor below it; Voxy lights faces from the neighbouring air voxel.
                 // Give the whole run the floor's sky light (identical for official DH,
@@ -78,7 +82,9 @@ final class DhColumnConverter {
                     var section=sections[y/16];
                     section.section().setBlockState(x,y&15,z,material.state,false);
                     section.blockLight().set(x,y&15,z,span.blockLight());
-                    section.skyLight().set(x,y&15,z,floor>=0?floor&15:sky(tile,span,material,y));
+                    section.skyLight().set(x,y&15,z,floor>=0?floor&15
+                            :carry>0?Math.max(0,carry-material.carryLoss*(span.bottom()+span.height()-y))
+                            :sky(tile,span,material,y));
                     // Sample the (2,2,2) voxel at each 4x4x4 biome-cell center.
                     if((x&3)==2 && (z&3)==2 && (y&3)==2)
                         ((PalettedContainer<Holder<Biome>>)section.section().getBiomes())
@@ -103,7 +109,7 @@ final class DhColumnConverter {
             int waterSkyLoss=!state.getFluidState().isEmpty()
                     ?Math.max(1,state.getLightDampening()):0;
             materials.add(new Material(state,
-                    biomes.asHolderIdMap().byId(resolver.biomeIdFor(m.biome())),waterSkyLoss));
+                    biomes.asHolderIdMap().byId(resolver.biomeIdFor(m.biome())),waterSkyLoss,carryLoss(state)));
         }
         return materials;
     }
@@ -114,6 +120,78 @@ final class DhColumnConverter {
         if(!state.getFluidState().isEmpty() && !occludes) return 1;
         if(state.propagatesSkylightDown() && !occludes) return 0;
         return 16;
+    }
+    /**
+     * The sky light one voxel of {@code state} costs when light is carried down through it,
+     * or 0 when the block is outside the carrying set. The set is what DH's lighting treats
+     * as opaque although vanilla lets sky light through it: opaque to DH, not occluding, no
+     * fluid, light dampening below 15. That is leaves, and a few others (ice, slime and
+     * honey blocks, mangrove roots, cobweb, spawners, powder snow, copper grates).
+     */
+    static int carryLoss(BlockState state) {
+        if(dhOpacity(state)!=16 || state.canOcclude() || !state.getFluidState().isEmpty())return 0;
+        int dampening=state.getLightDampening();
+        return dampening>=15?0:Math.max(1,dampening);
+    }
+    /**
+     * Dark tree crowns (issue #383). DH lights a non-transparent span only when the span
+     * above it is transparent, and leaves are opaque to it: under a crown's top leaf span
+     * every further leaf span is stored with sky 0, and a face lit from such a voxel renders
+     * black (inner leaf faces with a better-leaves resource pack, the side faces of logs).
+     *
+     * <p>Walking the column top-down: a span DH left at sky 0 that is in the carrying set
+     * and sits directly under another carrying-set span takes that span's light, minus the
+     * block's dampening for each voxel going down. Every span DH lit keeps its value; a span
+     * outside the carrying set (air, fluids, stone, logs) keeps DH's value and nothing is
+     * carried through it. {@link dev.vox.lss.common.dh.DhSkyLightBake} stays DH's own rule;
+     * this runs on its result, for stored replies and baked pushes alike.
+     *
+     * <p>DH's hidden-block culling merges ground it cannot see into the datapoint above it,
+     * so a dark leaf span under a crown can reach down to bedrock. Such a span fades out
+     * after at most 14 voxels and stays dark below, which suits what it really is.
+     *
+     * <p>Only called for a column the decoder marked COMPLETE: its spans tile the world
+     * height without gaps or overlaps, so the next span down always touches the one above.
+     * In a world without sky light the decoder zeroes every span's sky light, so nothing
+     * is ever carried there.
+     *
+     * @return per span index, the light of the voxel just above a span that takes carried
+     *         light (0 for every other span); null when no span in the column does
+     */
+    private static int[] carriedLight(DhTerrainTile tile,int column,List<Material> materials) {
+        int count=tile.spanCount(column);
+        boolean candidate=false,ordered=true;
+        int previousBottom=Integer.MAX_VALUE;
+        for(int i=0;i<count;i++) {
+            var span=tile.span(column,i);
+            candidate|=span.skyLight()==0 && materials.get(span.material()).carryLoss>0;
+            ordered&=span.bottom()<previousBottom;
+            previousBottom=span.bottom();
+        }
+        if(!candidate)return null;
+        // DH sends spans top-down; any other order is put in that order by index.
+        int[] order=null;
+        if(!ordered) {
+            long[] keys=new long[count];
+            for(int i=0;i<count;i++)keys[i]=(long)tile.span(column,i).bottom()<<32|i;
+            Arrays.sort(keys);
+            order=new int[count];
+            for(int i=0;i<count;i++)order[i]=(int)keys[count-1-i];
+        }
+        int[] carried=null;
+        int carry=0;
+        for(int k=0;k<count;k++) {
+            int i=order==null?k:order[k];
+            var span=tile.span(column,i);
+            int loss=materials.get(span.material()).carryLoss;
+            if(loss==0){carry=0;continue;}
+            if(span.skyLight()==0 && carry>0) {
+                if(carried==null)carried=new int[count];
+                carried[i]=carry;
+                carry=Math.max(0,carry-loss*span.height());
+            } else carry=span.skyLight();
+        }
+        return carried;
     }
     private static int sky(DhTerrainTile tile,DhTerrainTile.Span span,Material material,int y) {
         // DH merges water despite changing light; Voxy lights faces from the neighboring voxel.

@@ -190,6 +190,7 @@ public final class ClientStatus {
                 ClientNetGlue.getColumnsReceived(),
                 ClientNetGlue.getBytesReceived(),
                 ClientNetGlue.getColumnsDropped(),
+                ClientNetGlue.getSkyEstimatedColumns(),
                 ClientNetGlue.getConnectionStartMs(),
                 ClientNetGlue.getQueuedColumnCount(),
                 LSSClientConfig.CONFIG.lodColumnsPerSecondLimit(),

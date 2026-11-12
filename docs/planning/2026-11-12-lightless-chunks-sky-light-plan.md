@@ -608,3 +608,161 @@ fluid, dampening below 15, and DH-opaque. That set is leaves plus a few others.
 - new `fabric/src/test/java/dev/vox/lss/networking/server/LightlessReproServerBridge.java`
 - new `fabric/src/test/java/dev/vox/lss/compat/LightlessReproVoxyBridge.java`
 - ignored build output, including `fabric/build/run/soak-server` and `soak-client`
+
+## 14. As built (2026-11-12, 26.3 line)
+
+Branch `feat/sky-light-estimate-mc26.3`. Both fixes are client-side; the wire, the protocol,
+the settings and the server are untouched. What follows is where the code differs from the
+sections above, and what was measured.
+
+### 14.1 Sky-light estimate (#382)
+
+Files: `common/.../voxel/SkyLightEstimate.java` (the rule, no Minecraft types),
+`xplat/.../networking/client/ClientSkyLightEstimator.java` (the Minecraft side),
+`ClientColumnProcessor.drainColumnQueue` (the call).
+
+- **Faces have three classes, not one bit.** A cell's descriptor carries its dampening and, per
+  face, whether the occlusion shape fills the face or covers part of it. A full face closes the
+  gap by itself. Two partial faces that touch are decided by the caller, which asks vanilla's
+  `Shapes.faceShapeOccludes` for the two states (a bottom stair beside the matching top stair
+  closes; two equal slabs do not). Without that the result would be brighter than vanilla for
+  such pairs. The routine's default for an undecided pair is "closed".
+- **The result is exactly vanilla's for the column alone.** `ClientSkyLightEstimatorTest` lights
+  the same chunk with vanilla's `LevelLightEngine` (one chunk, no neighbours; the unit-test
+  classpath can run it on a `ProtoChunk` without a world) and compares every stored sky layer
+  nibble for nibble: 17 hand-built shapes and 40 random chunks built from 42 block states. To
+  get there the routine also copies one vanilla quirk: `ChunkSkyLightSources.findLowestSourceY`
+  passes an all-air section without the face check, so a bottom slab on a section's lowest
+  layer over an all-air section lets the light through.
+- **The band** is every section that was sent plus one section of air above the top content
+  section and one below the bottom one. Those two take part in the spread even when they lie
+  outside the level (vanilla's light engine has them too); a layer is only ever added inside
+  the level, and only directly above or below a content section.
+- **Opacity lookup.** Vanilla's section API gives block states, not palette indices, so the
+  cache is keyed by the `BlockState` object and lives for one column (not per section palette
+  entry). Nothing is indexed by state id. The three calls on a state are one small interface
+  (`ClientSkyLightEstimator.StateLight`, constant `VANILLA`); that constant is the whole
+  per-line surface of the estimate.
+- **Nothing lit, nothing changed.** A column that has blocks and no sky light but receives none
+  from the estimate (solid to the level top) is dispatched exactly as it arrived and is not
+  counted.
+- **Spread budget.** 131,072 steps per column; past it the spread stops and the column stays
+  darker. Real terrain used at most 12,887 (below).
+- **Signals.** Trace event `col_light_est`:
+  `"pos":[x,z],"steps":n,"capped":0|1,"sections":[[sectionY,hasOnlyAir,added],…]`. Client
+  diagnostics show `Light: sky_estimated=<n>` when non-zero, and the diagnostics export carries
+  `getSkyEstimatedColumns` among its counters (one new field in `ClientDiagnosticSnapshot`).
+  The diagnostics line itself has no test (there is no seam for that output).
+- **Truncation.** `ClientColumnProcessor.decodeColumn` returns the sections and a `truncated`
+  flag; `decodeSections` is kept for the callers that only need the sections.
+- **Consumers.** Checked in code: the drain builds one `VoxelColumnData` and
+  `LSSApi.dispatchColumn` hands that object to every registered consumer (Voxy, Xaero's World
+  Map, JourneyMap). The Distant Horizons adapter goes `DhClientSession` →
+  `DhColumnConverter.convertTile` → `VoxyCompat.ingestDistantColumn` and never enters this drain.
+- `VoxyCompat`: comment only.
+
+Measured on this machine (16 cores, Java 25), tool `SkyLightEstimateTimingTool`, 1,667 FULL
+chunks of real Overworld terrain (`benchmark-worlds/base`, four region files), every chunk
+stripped of its light, three measured rounds after one warm-up round (5,001 samples):
+
+| Per column | median | p90 | p99 |
+|---|---|---|---|
+| decode alone | 6.3 µs | 8.5 µs | 13.4 µs |
+| predicate + estimate | 92.6 µs | 165.7 µs | 258.7 µs |
+| predicate alone, on the same columns with their light | 0.13 µs | 0.19 µs | 0.37 µs |
+
+All 1,667 columns were estimated, none capped; three sections per column carry an estimated
+layer at the median (at most eight), one of them an added air section. Spread steps per
+column: median 1,084, p99 4,405, maximum 12,887. A stack sample puts about three quarters of
+the estimate's time in vanilla's `PalettedContainer.get`, one call per cell read.
+
+What that means: a fully lightless world costs the decode thread about 0.1 ms per column, so
+it can still take roughly 9,000 columns a second here, against a few hundred a second that
+arrive in practice. An ordinary lit column pays 0.13 µs. If a slow client ever shows the
+decode queue growing on such a world, the next step is to read palette indices in bulk from
+the native section bytes (`WireSectionCursor`) instead of cell by cell; estimated at three
+times faster, not done because it ties the estimate to the wire layout.
+
+Not measured here, still to be seen: ingest-queue behaviour on a stripped real-terrain world
+at radius 256 on a live client, and the picture in Voxy (below).
+
+### 14.2 Distant Horizons tree crowns (#383)
+
+File: `DhColumnConverter` (`carryLoss`, `carriedLight`, one changed line in `convert`).
+`DhSkyLightBake` is untouched. `CONVERSION_VERSION` is 7.
+
+- **Rule as built.** Top-down per column: a span in the carrying set (opaque to DH, not
+  occluding, no fluid, dampening below 15) that DH left at sky 0 and that sits under another
+  carrying-set span takes that span's light minus `max(1, dampening)` per voxel. A carrying-set
+  span DH lit passes its own value down. Every other span (air, glass, fluids, stone, logs)
+  keeps DH's value and resets the carry. So "the light-passing span above" is always a
+  carrying-set span: a dark leaf span under air or water does not occur with light above it,
+  because DH itself lights a span under a transparent or translucent one.
+- **No adjacency check and no sky gate in the code.** The decoder already guarantees both: a
+  converted column is COMPLETE (its spans tile the world height, overlaps are rejected), and
+  in a world without sky light it zeroes every span's sky light, so no carry can start. The
+  no-sky case is pinned by a test through the decoder.
+- **Span order.** DH sends spans top-down; a column in any other order is walked through a
+  sorted index (pinned).
+- **The 284 leaf spans taller than 14 blocks are real data, not a scan artefact.** They are DH's
+  hidden-block culling (`FullDataOcclusionCuller`, on by default as world compression
+  `VISUALLY_EQUAL`): a datapoint whose four neighbours are opaque is removed and the datapoint
+  above it is stretched over it. Under a crown the datapoint above the hidden ground is the
+  lowest dark leaf, so the stored "leaf" span runs down to the next visible change or to
+  bedrock (94 of the 284 end on bedrock, bottoms cluster at y 1–5; e.g. `y 1..204 oak_leaves`
+  under `y 205..208 oak_leaves sky 15`). The decode is right: the scan's 62×62 columns are the
+  tile's interior, the border strips are separate blobs. No floor value is used: such a span
+  fades from 14 to 0 over its top 14 voxels and stays dark below, which is right for ground
+  nobody sees.
+- **Face scan before and after** (the earlier `DhFaces` tool on the same 66 stored tiles, with
+  the carry added to its converter emulation; 38,624 spans took carried light):
+
+  | Face (block → cell it is lit from) | drawn | black before | black after |
+  |---|---|---|---|
+  | leaf → leaf, side | 446,010 | 170,461 (38.2 %) | 30,190 (6.8 %) |
+  | leaf → leaf, down | 141,987 | 77,557 (54.6 %) | 23,027 (16.2 %) |
+  | leaf → leaf, up | 141,987 | 46,530 (32.8 %) | 22,742 (16.0 %) |
+  | log → leaf, side | 32,097 | 25,579 (79.7 %) | 3,127 (9.7 %) |
+  | solid → leaf, side | 148,604 | 66,794 (44.9 %) | 57,747 (38.9 %) |
+  | all 25 classes | | 392,009 | 141,289 |
+
+  What stays black is almost entirely inside the culled-ground spans (the 22,937 voxels below
+  their fade) and the 50 leaf spans under logs.
+
+### 14.3 Tests
+
+- `common`: `SkyLightEstimateTest` (24 cases).
+- `fabric`: `ClientSkyLightEstimatorTest` (9), `ClientColumnProcessorTest` (10 new),
+  `LightlessChunkDeliveryTest` (4; the 2026-11-12 reproduction made permanent, with the two
+  test doors `DiskSerializerTestAccess` and `VoxyBridgeTestAccess`), `DhColumnConverterTest`
+  (11 new), `SkyLightEstimateTimingTool` (self-skipping).
+- Every new pin was mutation-checked (break the fix, see the named test red, restore): 12
+  mutations of the routine in `common`, 22 of the client and DH code in seven runs. Two
+  mutations were first caught only by the random comparison, so each got a named case
+  (a full face stopping the sideways spread; partial faces above each other).
+
+### 14.4 Gates on the 26.3 line (2026-11-12, no retries)
+
+- `run-gradle.sh build`: green. Unit tests: common 1,196, fabric 2,195 (5 self-skipping
+  tools), paper 592, neoforge 25, sponge 25; Fabric server gametests 94 of 94.
+- `verify.py integration --run` on the private Xvfb display: green. Fabric server gametests
+  94 of 94, NeoForge gametests 8 of 8, Fabric client gametests passed (the client came up on
+  Vulkan llvmpipe after the OpenGL backend found no GLX visual, as this line expects).
+- `tools/tests/inventory.py validate-moves`, `tools/tests/check_artifacts.py`,
+  `tools/compat/catalog.py validate` and `render --check`: green.
+- `tools/compat/ci.py`: red, as expected before the six-line port and re-pin. Every issue is a
+  file of this change: the three shared `common` files that the other lines do not have yet,
+  the eight adapted files, and the eight new files that are not classified.
+
+### 14.5 Left open
+
+- Voxy on a private display: a stripped real-terrain world against the same area with real
+  light (forest, cliffs and overhangs, ocean, a village, a cave mouth), and the DH 3.3.3 rig
+  with and without a better-leaves pack.
+- Block light in lightless chunks, lightless chunks in dimensions without sky light, and
+  moving a client from estimated to exact light after vanilla relights a chunk: unchanged
+  follow-ups from the decisions above.
+- The server's `lightless=` diagnostics counter is a separate task.
+- The other five lines: `SkyLightEstimate` and its test are the same text everywhere; the rest
+  needs each line's flavor (the three state calls, the section constructor seam, the test
+  fixtures).

@@ -135,6 +135,11 @@ public final class ClientNetGlue {
         return columnProcessor.getColumnsDropped();
     }
 
+    /** Columns given an estimated sky light this session (they arrived without any). */
+    public static long getSkyEstimatedColumns() {
+        return columnProcessor.getSkyEstimatedColumns();
+    }
+
     public static long getConnectionStartMs() {
         return sessionGate.getConnectionStartMs();
     }
