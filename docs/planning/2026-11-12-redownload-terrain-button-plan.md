@@ -494,13 +494,13 @@ no catalog-level `actions()` and no `findAction`: nothing in production needs th
 `clearCache` was restructured around it (the body said "not restructured"). One read of the
 request manager decides the scope and is the manager that gets flushed.
 - `CURRENT_SERVER`: a request manager exists, or `DhClientSession.dhServerConnection()` on a
-  remote server. That is the predicate `/lss reset` already uses for "a DH session that can
+  remote server (narrowed by the review fold below to connections that can also download). That is the predicate `/lss reset` already uses for "a DH session that can
   refill": the server has negotiated DH. The old test (`DhClientSession.selected()` and a
   connection) is true on every server without native LSS while "Allow DH Server Terrain" is
   on, which is the default, so it would have promised a re-download on servers that send
   nothing.
 - `NOT_RECEIVING`: connected, not the integrated server, neither of the above. The command
-  prints "... is not receiving distant terrain from this server right now. Nothing was
+  prints "... is not downloading distant terrain from this server right now. Nothing was
   cleared."
 - `ALL_SERVERS`: no connection, or `hasSingleplayerServer()`.
 
@@ -561,6 +561,31 @@ Three stale comments fixed.
 - `ClearCacheScopeTest` and the `DhClientSessionTest` cases use `hasSingleplayerServer()`,
   `LocalPlayer.connection` and `ServerData.ip` through a constructor-free `Minecraft`; check
   those names per line.
+
+**Review fold (2026-11-12, after the merge into the release branch).**
+1. *A DH connection that cannot download no longer promises a re-download.* The DH arm of the
+   scope is `dhServerConnection() && canAcquire()`. A negotiated connection where the server
+   offers neither sync nor generation (pushes only), where sync on load is off locally, where
+   the Voxy bridge failed, or whose level or connection is in mid-switch is `NOT_RECEIVING`:
+   nothing is cleared, the session is left alone, and the dialog shows the Back-only variant.
+   The other shape (clear the receipts anyway, with its own text) was not taken: the
+   mid-switch state lasts less than a client tick, and right after a dimension change the new
+   session is already "not receiving" until its config arrives, so a fourth dialog variant
+   would not have spared the player that answer. With this rule "will be downloaded again" is
+   true whenever it is shown, and the command's "No active DH download service" sentence is
+   gone because that state no longer clears anything.
+2. Because a push-only server does send terrain updates, the not-receiving texts now say
+   "not being **downloaded**" (dialog) and "is not downloading distant terrain from this
+   server right now. Nothing was cleared." (command).
+3. `lss.status.dh.state.stopped` names the way back: reconnect, or turn Receive Server LODs
+   off and on. Both were checked: a stopped session stays installed tick after tick; Receive
+   off drops it, and so does a disconnect, after which the status is "waiting for the next DH
+   session".
+4. `lss.redownload.all_servers` no longer says "not on a multiplayer server" (untrue for a
+   LAN host): "You are not connected to a server that sends distant terrain, ...".
+5. Tests: the three cannot-download causes, a negotiated-then-stopped session and the
+   restart paths in `DhClientSessionTest`; every locale keeps en_us's format placeholders,
+   key by key, in `ClientOptionCatalogTest`.
 
 **Not verified here.** No real Sodium ran. The row on the General page, the dialog over
 Sodium's screen, a staged slider surviving the round trip, the toast and the Receive-OFF case
