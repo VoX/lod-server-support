@@ -794,16 +794,20 @@ File: `DhColumnConverter` (`carryLoss`, `carriedLight`, one changed line in `con
 
 ### 14.4 Gates on the 26.3 line (2026-11-12, no retries)
 
-- `run-gradle.sh build`: green. Unit tests: common 1,196, fabric 2,195 (5 self-skipping
-  tools), paper 592, neoforge 25, sponge 25; Fabric server gametests 94 of 94.
+Run again after the review fold, on top of `release/v0.21.0-mc26.3` (the branch was
+fast-forwarded onto it first), so the counts include the train's other changes.
+
+- `run-gradle.sh build`: green. Unit tests: common 1,256, fabric 2,240 (5 self-skipping
+  tools), paper 610, neoforge 25, sponge 26; Fabric server gametests 96 of 96.
 - `verify.py integration --run` on the private Xvfb display: green. Fabric server gametests
-  94 of 94, NeoForge gametests 8 of 8, Fabric client gametests passed (the client came up on
+  96 of 96, NeoForge gametests 8 of 8, Fabric client gametests passed (the client came up on
   Vulkan llvmpipe after the OpenGL backend found no GLX visual, as this line expects).
 - `tools/tests/inventory.py validate-moves`, `tools/tests/check_artifacts.py`,
   `tools/compat/catalog.py validate` and `render --check`: green.
-- `tools/compat/ci.py`: red, as expected before the six-line port and re-pin. Every issue is a
-  file of this change: the three shared `common` files that the other lines do not have yet,
-  the eight adapted files, and the eight new files that are not classified.
+- `tools/compat/ci.py`: red, as expected before the six-line port and re-pin. 19 of its 120
+  issues are files of this change: the three shared `common` files that differ from the other
+  lines, the eight adapted files, and the eight new files that are not classified. The other
+  101 belong to the rest of the 0.21.0 train.
 
 ### 14.5 Left open
 
