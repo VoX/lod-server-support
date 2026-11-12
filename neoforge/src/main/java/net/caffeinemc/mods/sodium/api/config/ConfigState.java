@@ -7,6 +7,4 @@ public interface ConfigState {
     boolean readBooleanOption(Identifier id);
 
     int readIntOption(Identifier id);
-
-    <E extends Enum<E>> E readEnumOption(Identifier id, Class<E> enumClass);
 }
