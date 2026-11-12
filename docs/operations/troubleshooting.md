@@ -19,10 +19,33 @@ Start with `/lss status` and `/lss diag`. They work without an active request ma
 | Dark LOD terrain on a world upgraded with `--forceUpgrade`, "Optimize World" or `--eraseCache` | Those tools strip the stored light from chunks last saved before Minecraft 1.21.9 (and `--eraseCache` from every chunk); the game relights a chunk only when it loads it, and LSS serves what is on disk. Pre-load the area once (for example with Chunky) so the game relights and re-saves it; LSS then re-sends the relit terrain. Avoid `--eraseCache` on a served world. |
 | Distant terrain looks wrong or has gaps | Run `/lss clearcache` or press Re-download Terrain while connected: it clears this server's download records and the server sends the terrain again (terrain Voxy already saved stays; `/lss reset` deletes that too). "Not receiving distant terrain from this server right now. Nothing was cleared." means there is no active download to restart: check the rows above (Reception OFF, negotiation, server disabled) first. In singleplayer or at the title screen the same action clears the records of every server. |
 | Missing terrain with generation disabled | Verify that the requested terrain exists. Disabling generation does not scan or certify the world's coverage. |
+| No distant terrain in part of a world, and the server shows `undecodable=` or logs "could not be decoded" | The server found chunks whose blocks it does not know. See [chunks the server cannot decode](#chunks-the-server-cannot-decode). |
 
 Use `/lss diagnostics export` for a client report or `/lsslod diagnostics export` as an operator. The command displays the local JSON path; the adjacent text file is its summary. Reports exclude addresses, player identities, world keys, seeds, aliases, personal paths and raw exception messages. No upload occurs. The full local `/lss diag` and ordinary logs can contain identifying context, so they are not equivalent to the allowlisted export. See [export behavior](status-and-presets.md).
 
 For a setting change, inspect its [apply timing](../reference/settings.md). Sodium Apply saves and automatically reloads client settings; wait for completion and reconnect if requested. Direct YAML edits require `/lss reload` for client settings or `/lsslod reload` for server settings. If saving fails, recover the retained draft and repair the target file's permissions or disk space before retrying. Server reports distinguish the owner's generation admission gate from the accepted configured value; generation changes apply through reload. Restart is required only for paths explicitly reported as pending. The schema-1 JSON field `generationConfiguredForRestart` retains its historical name for compatibility and now means the accepted configured generation flag. Do not use cache resets, store invalidation, privacy changes or anti-xray changes as an automatic response to a slow download. See [performance diagnosis](performance.md).
+
+## Chunks the server cannot decode
+
+Two signs, both on the server:
+
+- `/lsslod diag` shows `undecodable=<n>` at the end of the gate counters on its `DiskReader:` line. The token is absent while the count is zero.
+- The log has one warning per LSS service start: `Chunk [x, z] in <dimension> could not be decoded: every block it uses is unknown to this server (first error: …)`. It names the first chunk only; the counter carries the total.
+
+What it means: the chunk is saved on disk, but none of the blocks in it can be read by this server. The usual causes are a mod that was removed (the chunk holds only that mod's blocks) and chunks saved by another Minecraft version that this server has not upgraded yet. The first error in the warning names the block or key that failed.
+
+What LSS does: it does not send or store terrain for those chunks, and it does not load them. Players see no distant terrain there and keep whatever their client already had. LSS leaves the chunks alone on purpose: when Minecraft loads a chunk with unknown blocks it replaces them with air, and it may save the chunk that way, which would delete a temporarily removed mod's blocks from chunks nobody visited.
+
+What to do:
+
+- **Put the missing mod back.** After the restart the chunks read normally and their terrain is served.
+- **Or let the world upgrade to this Minecraft version.** Minecraft upgrades a chunk when it loads it. LSS serves a chunk while the game has it loaded, and reads it from disk again once the game has saved it in the current format. Players visiting the area do this chunk by chunk; a world upgrade such as `--forceUpgrade` does it for the whole world. Back the world up first: an upgrade while a mod is missing removes that mod's blocks for good.
+
+Notes:
+
+- A chunk that has some unknown blocks beside known ones is still served, with air where the unknown blocks were, as Minecraft itself shows it. It is not counted.
+- The counter counts reads, not chunks: a chunk is read again for each client session that asks for it. It is also included in `not_found=`.
+- LSS 0.20 and older sent and stored such chunks as empty terrain. This version stops doing that but does not repair what is already there. If empty terrain remains after the cause is fixed, an operator can drop the stored rows with `/lsslod store invalidate all` (the store refills as terrain is served again), and each client clears its own copy with `/lss clearcache`.
 
 ## Private SQLite store runtime
 

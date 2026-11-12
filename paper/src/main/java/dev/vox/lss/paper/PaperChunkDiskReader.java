@@ -27,7 +27,6 @@ public class PaperChunkDiskReader extends AbstractChunkDiskReader {
     private final boolean useBackgroundReadPriority;
 
     private volatile SerializationPolicy serializationPolicy;
-    public record SerializationPolicy(boolean transcode, boolean selective) {}
     public void updateSerializationPolicy(boolean transcode, boolean selective) {
         this.serializationPolicy = new SerializationPolicy(transcode, selective);
     }
@@ -68,9 +67,11 @@ public class PaperChunkDiskReader extends AbstractChunkDiskReader {
         var maskEntry = PaperXrayMaskManager.entryForActive(level);
         int minSectionY = level.getMinSectionY();
         int maxSectionY = level.getMaxSectionY();
+        // The shared reader's per-read notes go through, so an undecodable column
+        // resolves as the unservable flavor instead of a plain (generation-escalating) miss.
         submitRead(playerUuid, registration, chunkX, chunkZ, dimension, submissionOrder, clientTimestamp,
-                () -> PaperNbtSectionSerializer.readAndSerializeSections(read, registryAccess, chunkX, chunkZ,
-                        maskEntry, minSectionY, maxSectionY, readPolicy.transcode()));
+                notes -> PaperNbtSectionSerializer.readAndSerializeSections(read, registryAccess, chunkX, chunkZ,
+                        maskEntry, minSectionY, maxSectionY, readPolicy.transcode(), notes));
     }
 
     /**

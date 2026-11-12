@@ -15,6 +15,7 @@ public class DiskReaderDiagnostics {
     private final AtomicLong gatedCount = new AtomicLong();
     private final AtomicLong gateStopsCount = new AtomicLong();
     private final AtomicLong headerHitsCount = new AtomicLong();
+    private final AtomicLong undecodableCount = new AtomicLong();
     private final AtomicLong totalReadTimeNanos = new AtomicLong();
 
     public void recordSubmitted() { this.submittedCount.incrementAndGet(); }
@@ -49,6 +50,17 @@ public class DiskReaderDiagnostics {
      *  precedent — law A5's partitions see no read here) and never fed to the throttle
      *  EWMA (no IO was measured). A mechanism counter like {@code memo_hits}. */
     public void recordHeaderHit() { this.headerHitsCount.incrementAndGet(); }
+    /** A FULL chunk whose cells use only blocks that failed to decode (undecodable-chunks
+     *  plan): resolved as the UNSERVABLE not-found flavor. A SUBSET of {@code not_found}
+     *  by construction: this bumps both (not_found first, so a concurrent reader never
+     *  sees {@code undecodable > not_found}), which keeps the at-rest completion partition
+     *  and soak law A5 exact with no new term (the miss is answered {@code not_generated},
+     *  or miss-dropped for a ghost, like a generation-off miss). Call INSTEAD of
+     *  {@link #recordNotFound()}, never in addition. */
+    public void recordUndecodable() {
+        this.notFoundCount.incrementAndGet();
+        this.undecodableCount.incrementAndGet();
+    }
 
     public String formatDiagnostics(int pendingCount) {
         long completed = this.completedCount.get();
@@ -73,6 +85,7 @@ public class DiskReaderDiagnostics {
     public long getGatedCount() { return this.gatedCount.get(); }
     public long getGateStopsCount() { return this.gateStopsCount.get(); }
     public long getHeaderHitsCount() { return this.headerHitsCount.get(); }
+    public long getUndecodableCount() { return this.undecodableCount.get(); }
     public long getSubmittedCount() { return this.submittedCount.get(); }
     public long getCompletedCount() { return this.completedCount.get(); }
     public long getNotFoundCount() { return this.notFoundCount.get(); }
