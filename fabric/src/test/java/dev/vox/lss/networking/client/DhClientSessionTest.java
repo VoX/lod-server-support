@@ -1930,6 +1930,37 @@ class DhClientSessionTest {
             assertEquals(1,feedback.size());assertTrue(feedback.getFirst().getString().contains("Nothing was cleared"),feedback::toString);
         } finally {ColumnCacheStore.clearDhReceipts(minecraft.server.ip);}
     }
+    /** What the "stopped" status text tells the player to do. With a working Voxy bridge a stopped source
+     *  stays stopped by itself (clearcache no longer restarts it either); turning Receive Server LODs off
+     *  drops it, so turning it on again starts a fresh session, and so does reconnecting. */
+    @Test void aStoppedDhSourceStaysStoppedUntilReceiveIsToggledOrThePlayerReconnects() throws Exception {
+        Object voxy=read(null,ModCompat.class,"voxyLoaded");
+        write(null,ModCompat.class,"voxyLoaded",true);
+        try {
+            var s=updateSession();
+            invoke(s,"fail",new Class<?>[]{String.class,DhStatusSnapshot.Reason.class},"test stop",DhStatusSnapshot.Reason.SOURCE_STOPPED);
+            DhClientSession.tick();DhClientSession.tick();
+            assertSame(s,read(null,DhClientSession.class,"session"),"time alone does not restart a stopped source");
+            assertEquals(DhStatusSnapshot.State.STOPPED,DhClientSession.diagnostics().state());
+
+            setting(Map.of("lod.receive",false));DhClientSession.tick();
+            assertNull(read(null,DhClientSession.class,"session"),"Receive off drops the stopped session");
+            assertEquals(DhStatusSnapshot.State.PAUSED,DhClientSession.diagnostics().state());
+            setting(Map.of("lod.receive",true));
+            assertFalse((boolean)read(null,DhClientSession.class,"resetFailed"));
+            assertEquals(DhStatusSnapshot.State.BETWEEN_SESSIONS,DhClientSession.diagnostics().state(),
+                    "Receive on again: nothing is stopped or blocked, so the next tick starts a session");
+
+            var again=updateSession();
+            invoke(again,"fail",new Class<?>[]{String.class,DhStatusSnapshot.Reason.class},"test stop",DhStatusSnapshot.Reason.SOURCE_STOPPED);
+            assertEquals(DhStatusSnapshot.State.STOPPED,DhClientSession.diagnostics().state());
+            DhClientSession.disconnect();DhClientSession.onJoin();
+            assertNull(read(null,DhClientSession.class,"session"),"a reconnect drops the stopped session");
+            assertEquals(DhStatusSnapshot.State.BETWEEN_SESSIONS,DhClientSession.diagnostics().state(),
+                    "after reconnecting the next tick starts a session");
+        } finally {write(null,ModCompat.class,"voxyLoaded",voxy);}
+    }
+
     /** Re-download plan, decision 2: a session still waiting for a DH reply (official 3.2.x, or the first
      *  moment after joining) cannot send the terrain again, so clearcache clears nothing and leaves it alone. */
     @Test void clearCacheWhileWaitingForADhReplyClearsNothingAndKeepsTheSession() throws Exception {
