@@ -57,6 +57,25 @@ public class RegionFaultGameTests {
         return helper.makeMockServerPlayerInLevel();
     }
 
+    /** How many batch-response statuses of {@code type} for {@code packed} were written
+     *  to the mock player's (embedded) channel. */
+    private static int countStatuses(net.minecraft.server.level.ServerPlayer player, byte type, long packed) {
+        var connection = ((dev.vox.lss.mixin.AccessorServerCommonPacketListener) player.connection)
+                .lss$getConnection();
+        var channel = (io.netty.channel.embedded.EmbeddedChannel)
+                ((dev.vox.lss.mixin.AccessorConnection) connection).lss$getChannel();
+        int count = 0;
+        for (Object message : channel.outboundMessages()) {
+            if (message instanceof net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket packet
+                    && packet.payload() instanceof dev.vox.lss.networking.payloads.BatchResponseS2CPayload batch) {
+                for (int i = 0; i < batch.count(); i++) {
+                    if (batch.responseTypes()[i] == type && batch.packedPositions()[i] == packed) count++;
+                }
+            }
+        }
+        return count;
+    }
+
     // Own batch: unrelated generation/save traffic must not consume the disk-read deadline.
     @GameTest(environment = "lss:region_fault", structure = "fabric-gametest-api-v1:empty", maxTicks = 1200)
     public void corruptRegionChunkResolvesAsContainedErrorAndReaderSurvives(GameTestHelper helper) {
@@ -304,6 +323,13 @@ public class RegionFaultGameTests {
                             + state.getTotalSectionsSent() + " up_to_date=" + diag.getTotalUpToDate() + ")");
             helper.assertTrue(diag.getTotalSuperseded() == 0 && diag.getTotalMissDropped() == 0,
                     "the miss was ANSWERED (not available), not dropped");
+            // ...and answered exactly once, with exactly that: read off the wire the mock
+            // player's channel recorded (the server keeps no not_generated counter).
+            int notGenerated = countStatuses(mock, LSSConstants.RESPONSE_NOT_GENERATED, packed);
+            int upToDate = countStatuses(mock, LSSConstants.RESPONSE_UP_TO_DATE, packed);
+            helper.assertTrue(notGenerated == 1 && upToDate == 0,
+                    "exactly one NOT_GENERATED status for the position and no up_to_date"
+                            + " (not_generated=" + notGenerated + " up_to_date=" + upToDate + ")");
             helper.assertTrue(service.getGenerationService().getTotalSubmitted() == 0
                             && state.getHeldGenSlots() == 0,
                     "an undecodable chunk must never become a generation ticket (submitted="
