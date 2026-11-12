@@ -63,8 +63,8 @@ class ClientMenuEntrypointContractTest {
         assertTrue(buttons > 0 && buttons < src.indexOf("mod.addPage(page);"),
                 "each page's buttons are added before the page is registered");
         assertTrue(src.contains("for (ActionSpec spec : pageSpec.actions())"), "the walker must iterate the page's actions");
-        assertTrue(src.contains("createExternalButtonOption(Identifier.parse(spec.id()))"),
-                "a button is Sodium's external button, keyed by the catalog id");
+        assertTrue(java.util.regex.Pattern.compile("createExternalButtonOption\\(\\w+\\.parse\\(spec\\.id\\(\\)\\)\\)")
+                        .matcher(src).find(), "a button is Sodium's external button, keyed by the catalog id");
         assertTrue(src.contains("ClientMenuActions::open"), "production opens buttons through the dispatcher");
         assertTrue(src.contains("catch (Throwable"), "a button that cannot be built must not cost the page");
     }

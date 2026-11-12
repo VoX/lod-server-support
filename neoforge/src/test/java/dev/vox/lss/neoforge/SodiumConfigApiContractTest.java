@@ -104,8 +104,8 @@ class SodiumConfigApiContractTest {
         String fabric = stripComments(Files.readString(
                 locate("fabric/src/main/java/dev/vox/lss/config/LSSConfigMenu.java")));
         assertEquals(actionWalk(fabric), actionWalk(src), "the NeoForge twin's button walk drifted from Fabric's");
-        assertTrue(src.contains("createExternalButtonOption(Identifier.parse(spec.id()))"),
-                "a button is Sodium's external button, keyed by the catalog id");
+        assertTrue(java.util.regex.Pattern.compile("createExternalButtonOption\\(\\w+\\.parse\\(spec\\.id\\(\\)\\)\\)")
+                        .matcher(src).find(), "a button is Sodium's external button, keyed by the catalog id");
         assertTrue(src.contains("ClientMenuActions::open"), "production opens buttons through the dispatcher");
         assertTrue(src.contains("catch (Throwable"), "a button that cannot be built must not cost the page");
     }
