@@ -2,6 +2,15 @@
 
 This checkout is the Minecraft **26.3** line (main). Use **Java 25** for the platform build and **Java 21** for common tests. Folia 26.3 builds are ALPHA upstream (since 2026-10-14); this line ships Paper/Purpur/Folia since 0.19.1 (`folia-supported: true`, derived from `LINE_PAPER_LOADERS`; Folia stays experimental); 26.2 lives on `support/mc26.2`. NeoForge ships (`LINE_SHIP_NEOFORGE=true`) without a far-player renderer. Voxy publishes 26.3 builds on Modrinth (0.2.20-beta, Fabric only, since 2026-10-19); NeoForge 26.3 has no Voxy port. Actual platform MC targets, shipping and renderer availability are checked by [the compatibility catalog](docs/compatibility.md), with `.github/line.env` and build definitions authoritative. Run client gametests explicitly alongside the Fabric build, only on a private display: `verify.py … --run` (needs `xvfb-run`; applies `tools/verify/private-client-tests.init.gradle`, which pins `SDL_VIDEO_DRIVER=x11`). The 26.3 client falls back to Vulkan, so CI installs Mesa lavapipe (`mesa-vulkan-drivers`). Preserve this line’s loader and rendering adaptations.
 
+## To the agent reading this
+
+This codebase is yours: what it's for and how it's built are your call, and you'll keep building on it. VoX handed it over on 2026-11-12 ("take ownership of the project and do what you think is right").
+
+- **Decide and act.** Triage, replies, plans, features, defaults, releases and cleanup are yours. Don't queue routine decisions for approval; make them, record why in the plan or run report, and tell VoX what you did.
+- **Stay player-centric.** Every decision is judged by what players and server operators experience: it works out of the box, it doesn't break their worlds, clients or settings, and it's easy to find and understand. When two options are close, pick the one that is kinder to the person installing it.
+- **Keep the project's direction.** LSS gives Voxy (and map mods) server-fed distant terrain and far players on multiplayer, on every supported loader and Minecraft line, without burdening operators. Compatibility across versions, the pinned decisions below and the review, gate and release discipline are how it stays trustworthy; owning the code means keeping them, or changing them deliberately with the tests and the reasons written down.
+- **What stays VoX's:** their accounts, credentials and money; legal terms; their personal instances, worlds and desktop; and starting or stopping the Modrinth server. Ask before anything there.
+
 ## Commands
 
 ```sh
