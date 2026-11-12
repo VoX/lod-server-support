@@ -197,6 +197,76 @@ class PaperDiskReaderEnvelopeTest {
                 "and carries the serializer's first decode message: " + warns.get(0));
     }
 
+    /** FULL-status chunk with one stone section and no light arrays: what a world upgrade
+     *  leaves on disk. */
+    private static CompoundTag chunkSavedWithoutLight() {
+        var tag = new CompoundTag();
+        tag.putString("Status", "minecraft:full");
+        var section = new CompoundTag();
+        section.putByte("Y", (byte) 0);
+        var blocks = new CompoundTag();
+        var palette = new ListTag();
+        var stone = new CompoundTag();
+        stone.putString("Name", "minecraft:stone");
+        palette.add(stone);
+        blocks.put("palette", palette);
+        section.put("block_states", blocks);
+        var sections = new ListTag();
+        sections.add(section);
+        tag.put("sections", sections);
+        return tag;
+    }
+
+    private void dimensionHasSkyLight(boolean hasSkyLight) {
+        var type = mock(net.minecraft.world.level.dimension.DimensionType.class);
+        when(type.hasSkyLight()).thenReturn(hasSkyLight);
+        when(level.dimensionType()).thenReturn(type);
+    }
+
+    @Test
+    void columnSavedWithoutSkyLightIsCountedOnlyWhereTheDimensionTypeHasSkyLight() throws Exception {
+        // The Paper glue for the lightless counter: the REAL serializer marks the notes,
+        // and submitReadDirect captures the sky-light fact from the level's dimension
+        // type (never from the dimension's name). The served bytes are the same either way.
+        var infos = new java.util.concurrent.CopyOnWriteArrayList<String>();
+        reader.shutdown();
+        reader = new PaperChunkDiskReader(1, false) {
+            @Override
+            protected void infoLightless(String message) {
+                infos.add(message);
+            }
+        };
+        reader.registerPlayer(uuid, registration(uuid));
+        reader.setReadOverride((cx, cz) ->
+                CompletableFuture.completedFuture(Optional.of(chunkSavedWithoutLight())));
+
+        // Same dimension NAME throughout: only the dimension type's answer changes.
+        dimensionHasSkyLight(false);
+        reader.submitReadDirect(uuid, registration(uuid), "minecraft:the_end", level, 1, 1, 1L, 0L);
+        var noSky = awaitResult();
+        assertFalse(noSky.notFound(), "the column is served");
+        assertEquals(0L, reader.getDiag().getLightlessCount(),
+                "a dimension type without sky light never counts");
+        assertFalse(reader.getDiagnostics().contains("lightless"),
+                "and the disk line carries no token: " + reader.getDiagnostics());
+
+        dimensionHasSkyLight(true);
+        reader.submitReadDirect(uuid, registration(uuid), "minecraft:the_end", level, 3, -4, 2L, 0L);
+        var sky = awaitResult();
+        assertFalse(sky.notFound());
+        assertFalse(sky.unservable());
+        org.junit.jupiter.api.Assertions.assertArrayEquals(noSky.sectionBytes(), sky.sectionBytes(),
+                "the bytes do not depend on the counter");
+        assertEquals(1L, reader.getDiag().getLightlessCount());
+        assertEquals(2L, reader.getDiag().getSuccessfulReadCount(), "an ordinary successful read");
+        assertEquals(0L, reader.getDiag().getNotFoundCount());
+        assertTrue(reader.getDiagnostics().endsWith(", gated=0, lightless=1"),
+                "the disk line carries the token: " + reader.getDiagnostics());
+        assertEquals(1, infos.size(), "one INFO: " + infos);
+        assertTrue(infos.get(0).contains("[3, -4]") && infos.get(0).contains("minecraft:the_end"),
+                "naming the chunk and the dimension: " + infos.get(0));
+    }
+
     @Test
     void plainMissAndAllAirNeverRenderTheUndecodableToken() throws Exception {
         reader.setReadOverride((cx, cz) -> CompletableFuture.completedFuture(Optional.empty()));

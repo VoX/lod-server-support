@@ -11,6 +11,7 @@ import net.minecraft.core.IdMap;
 import net.minecraft.core.Registry;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.Registries;
+import net.minecraft.nbt.ByteArrayTag;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.NbtOps;
@@ -495,6 +496,12 @@ final class NbtSectionSerializer {
         }
         final boolean noContent = minContent == Integer.MAX_VALUE;
         final int lo = minContent - 1, hi = maxContent + 1;
+        // Diagnostics only — the bytes below do not depend on it: a column with blocks
+        // whose chunk carries no sky light anywhere. Asked before the band filter, while
+        // every in-range sky-lit section is still in the list.
+        if (notes != null && !noContent && savedWithoutSkyLight(parsed, sectionsList)) {
+            notes.markLightless();
+        }
         parsed.removeIf(p -> p.nonEmptyCount() == 0
                 && !p.litByBlock()
                 && (noContent || p.sectionY() < lo || p.sectionY() > hi));
@@ -900,6 +907,33 @@ final class NbtSectionSerializer {
 
         return new ParsedSection(sectionY, null, blockStates, biomes, nonEmpty, fluid,
                 blockLightData, skyLightData, litByBlock, litBySky);
+    }
+
+    /**
+     * True when no section entry of the chunk carries a sky-light layer with a non-zero
+     * nibble: the chunk is saved without sky light (lightless-chunks plan, fold item 7 —
+     * a diagnostics fact for the reader's notes; it never changes a byte). Every entry
+     * counts, whatever its Y: vanilla saves a fully lit light-only entry above the block
+     * range, and an entry the range gate or the content band drops from the wire still
+     * proves the chunk was lit. A layer is one the serializer itself would accept (2048
+     * bytes). Cheap by construction: a served section that is sky-lit answers from the
+     * flag its parse already computed, so a lit chunk reads no array here at all;
+     * otherwise the entries are scanned top first with the vectorized zero compare,
+     * which stops at the first non-zero byte. Nothing is allocated, copied or written.
+     */
+    private static boolean savedWithoutSkyLight(java.util.List<ParsedSection> parsed,
+                                                ListTag sections) {
+        for (var p : parsed) {
+            if (p.litBySky()) return false;
+        }
+        for (int i = sections.size() - 1; i >= 0; i--) {
+            if (sections.get(i) instanceof CompoundTag section
+                    && section.get("SkyLight") instanceof ByteArrayTag sky) {
+                byte[] layer = sky.getAsByteArray();
+                if (layer.length == 2048 && hasNonZeroNibble(layer)) return false;
+            }
+        }
+        return true;
     }
 
     /** True when any parsed section still has a non-air cell (the column has content). */

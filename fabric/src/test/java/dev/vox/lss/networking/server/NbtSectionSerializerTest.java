@@ -1549,6 +1549,103 @@ class NbtSectionSerializerTest {
         }
     }
 
+    // ---- Columns saved without sky light (lightless-chunks plan, fold item 7) ----
+    //
+    // A diagnostics flag on the caller's notes and never a byte: the reader counts it for
+    // dimensions that have sky light, so operators can see that a world was saved without
+    // light (the client estimates the light). Same text in the Fabric and Paper twins.
+
+    /** Serializes on both routes with notes. The routes must agree with each other and
+     *  with the no-notes overload byte for byte (the flag never changes the bytes) and
+     *  must report the same; returns whether the column was reported lightless. */
+    private static boolean reportsLightless(CompoundTag chunk, int minSectionY, int maxSectionY, String what) {
+        var transcodedNotes = new ColumnDecodeNotes();
+        var objectNotes = new ColumnDecodeNotes();
+        byte[] transcoded = NbtSectionSerializer.serializeChunkNbt(chunk, REGISTRY_ACCESS, null,
+                minSectionY, maxSectionY, true, transcodedNotes);
+        byte[] object = NbtSectionSerializer.serializeChunkNbt(chunk, REGISTRY_ACCESS, null,
+                minSectionY, maxSectionY, false, objectNotes);
+        assertArrayEquals(object, transcoded, what + ": both routes agree");
+        assertArrayEquals(NbtSectionSerializer.serializeChunkNbt(chunk, REGISTRY_ACCESS, null,
+                        minSectionY, maxSectionY, true),
+                transcoded, what + ": passing notes never changes the bytes");
+        assertEquals(transcodedNotes.lightless(), objectNotes.lightless(),
+                what + ": both routes report the same");
+        assertFalse(transcodedNotes.undecodable(), what + ": not an undecodable column");
+        return transcodedNotes.lightless();
+    }
+
+    private static boolean reportsLightless(CompoundTag chunk, String what) {
+        return reportsLightless(chunk, Integer.MIN_VALUE, Integer.MAX_VALUE, what);
+    }
+
+    @Test
+    void litChunk_isNotReportedLightless() {
+        byte[] sky = new byte[2048];
+        Arrays.fill(sky, (byte) 0xFF);
+        assertFalse(reportsLightless(chunkNbt("minecraft:full",
+                sectionNbt(0, true, true, null, sky)), "a sky-lit content section"));
+        assertFalse(reportsLightless(chunkNbt("minecraft:full",
+                        sectionNbt(0, true, true, null, light(2047, (byte) 0x10))),
+                "one non-zero nibble at the very end of the layer"));
+        // The lit entry need not be one that is served: sky-lit air far above dark content
+        // is dropped from the wire by the content band, and still proves the chunk is lit.
+        assertFalse(reportsLightless(chunkNbt("minecraft:full",
+                        sectionNbt(0, true, true, null, null),
+                        sectionNbt(6, false, true, null, sky)),
+                "dark content below sky-lit air outside the content band"));
+    }
+
+    @Test
+    void chunkSavedWithoutSkyLight_isReportedLightless() {
+        // The shape a world upgrade leaves: blocks, and no light arrays at all.
+        assertTrue(reportsLightless(chunkNbt("minecraft:full",
+                        sectionNbt(0, true, true, null, null),
+                        sectionNbt(1, true, true, null, null)),
+                "blocks and no light arrays"));
+        assertTrue(reportsLightless(chunkNbt("minecraft:full",
+                        sectionNbt(0, true, true, light(3, (byte) 7), null)),
+                "block light is not sky light"));
+        // Allocated-but-zeroed sky arrays carry no sky light either. A column that is solid
+        // to the top of the world looks like this too and is reported; that is accepted.
+        assertTrue(reportsLightless(chunkNbt("minecraft:full",
+                        sectionNbt(0, true, true, new byte[2048], new byte[2048]),
+                        sectionNbt(1, true, true, null, new byte[2048])),
+                "zeroed sky arrays"));
+        byte[] missized = new byte[100];
+        Arrays.fill(missized, (byte) 0xFF);
+        assertTrue(reportsLightless(chunkNbt("minecraft:full",
+                        sectionNbt(0, true, true, null, missized)),
+                "a mis-sized sky array is not a layer the serializer would send"));
+    }
+
+    @Test
+    void allAirChunk_isNeverReportedLightless() {
+        // No blocks, nothing to light: an empty column (or lit air) is not the condition.
+        assertFalse(reportsLightless(chunkNbt("minecraft:full",
+                sectionNbt(0, false, true, null, null)), "all air, no light"));
+        assertFalse(reportsLightless(chunkNbt("minecraft:full",
+                        sectionNbt(0, false, true, light(1, (byte) 1), null)),
+                "block-lit air, no blocks"));
+    }
+
+    @Test
+    void skyLightOnlyInAnOutOfRangeEntry_isNotReportedLightless() {
+        // Vanilla saves a fully lit light-only entry one section above the block range. The
+        // range gate drops it before parsing, but it still shows the chunk was saved lit.
+        byte[] sky = new byte[2048];
+        Arrays.fill(sky, (byte) 0xFF);
+        var capEntry = new CompoundTag();
+        capEntry.putInt("Y", 5);
+        capEntry.putByteArray("SkyLight", sky);
+        assertFalse(reportsLightless(chunkNbt("minecraft:full",
+                        sectionNbt(4, true, true, null, null), capEntry), 0, 4,
+                "sky light only in the entry above the block range"));
+        assertTrue(reportsLightless(chunkNbt("minecraft:full",
+                        sectionNbt(4, true, true, null, null)), 0, 4,
+                "premise: the same column without that entry is lightless"));
+    }
+
     @Test
     void strayDataOnASingleEntryPaletteIsIgnoredOnBothPaths() {
         // ZeroBitStorage: a 1-entry palette ignores any data tag on disk (the bits-0

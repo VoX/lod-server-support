@@ -103,6 +103,9 @@ public class ChunkDiskReader extends AbstractChunkDiskReader {
         var maskEntry = XrayMaskManager.entryForActive(level);
         int minSectionY = level.getMinSectionY();
         int maxSectionY = level.getMaxSectionY();
+        // Whether this dimension has sky light at all — from its dimension type, captured
+        // here like the facts above. The shared reader counts a lightless column only then.
+        boolean skyLit = hasSkyLight(level);
         // Phase 3 split dispatch: raw fetch + pool parse when the vanilla BACKGROUND rung
         // would serve this read; every other rung keeps the ChunkNbtRead ladder unchanged.
         var raw = chooseRawReadOrNull(level, chunkMap);
@@ -111,6 +114,7 @@ public class ChunkDiskReader extends AbstractChunkDiskReader {
         // escalating) miss. The backfill below passes none: its null is a skip.
         if (raw != null) {
             submitRead(playerUuid, registration, chunkX, chunkZ, dimension, submissionOrder, clientTimestamp,
+                    skyLit,
                     notes -> NbtSectionSerializer.readAndSerializeSections(raw, registryAccess, chunkX, chunkZ,
                             maskEntry, minSectionY, maxSectionY, readPolicy.transcode(),
                             readPolicy.selective(), notes));
@@ -118,8 +122,18 @@ public class ChunkDiskReader extends AbstractChunkDiskReader {
         }
         NbtSectionSerializer.ChunkNbtRead read = chooseReadPath(level, chunkMap);
         submitRead(playerUuid, registration, chunkX, chunkZ, dimension, submissionOrder, clientTimestamp,
+                skyLit,
                 notes -> NbtSectionSerializer.readAndSerializeSections(read, registryAccess, chunkX, chunkZ,
                         maskEntry, minSectionY, maxSectionY, readPolicy.transcode(), notes));
+    }
+
+    /** The level's dimension type decides, never a list of dimension names (The End has
+     *  sky light on some Minecraft lines and not on others; datapacks add their own). A
+     *  level without a dimension type exists only as a test double and reads as "no sky
+     *  light", so nothing is counted for it. */
+    private static boolean hasSkyLight(ServerLevel level) {
+        var type = level.dimensionType();
+        return type != null && type.hasSkyLight();
     }
 
     /**
