@@ -54,6 +54,8 @@
   "lss.settings.privacy_sent": "共享偏好已发送到服务器。",
   "lss.settings.privacy_no_channel": "共享偏好未发送：没有协商成功的服务器通道。",
   "lss.settings.privacy_pending": "共享偏好尚未发送；将在当前连接上重试。",
+  "lss.far_players.sharing_required": "此服务器要求共享位置：其他玩家可以从远处看到你的位置，你的“共享我的位置”设置在这里不生效。",
+  "lss.far_players.permission_no_longer_hides": "你拥有 lss.farplayers.hidden 权限。自 0.21.0 起，该权限本身不再让你对远处玩家隐藏：关闭“共享我的位置”即可隐藏。服主：在服务器配置中设置 far_players.hide_permission_holders（true 像以前一样隐藏持有者，false 保持现状）即可不再显示此消息。",
   "lss.settings.save_failed": "设置草稿未保存",
   "lss.settings.retry": "重试保存",
   "lss.settings.rebase": "合并并保存",

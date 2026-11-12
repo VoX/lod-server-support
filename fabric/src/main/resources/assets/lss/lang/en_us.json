@@ -54,6 +54,8 @@
   "lss.settings.privacy_sent": "Sharing preference sent to the server.",
   "lss.settings.privacy_no_channel": "Sharing preference not sent: no negotiated server channel.",
   "lss.settings.privacy_pending": "Sharing preference not sent yet; retrying on this connection.",
+  "lss.far_players.sharing_required": "This server requires position sharing: other players can see where you are from far away, and your Share My Position setting does not apply here.",
+  "lss.far_players.permission_no_longer_hides": "You have the lss.farplayers.hidden permission. Since 0.21.0 it no longer hides you from far players by itself: turn off Share My Position to hide. Server owners: set far_players.hide_permission_holders in the server config (true hides holders as before, false keeps this) to stop this message.",
   "lss.settings.save_failed": "Settings draft was not saved",
   "lss.settings.retry": "Retry save",
   "lss.settings.rebase": "Rebase and save",

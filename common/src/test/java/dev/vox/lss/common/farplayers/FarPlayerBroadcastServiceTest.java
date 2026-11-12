@@ -571,6 +571,7 @@ class FarPlayerBroadcastServiceTest {
         assertTrue(line.contains("0.21.0"), line);
         assertTrue(line.contains("Share My Position"), line);
         assertTrue(line.contains("far_players.hide_permission_holders: true"), line);
+        assertTrue(line.contains("far_players.excluded_players"), "the other way to hide named players: " + line);
 
         for (int i = 0; i < 5; i++) {
             svc.tick(11_000 + i * 500, withHolders, settings("on", false), sender());
@@ -812,7 +813,7 @@ class FarPlayerBroadcastServiceTest {
 
     // ---- hide-permission plan §2b (0.21.0): mode "required" and the honest notice ----
 
-    private record Told(UUID player, String message) {}
+    private record Told(UUID player, FarPlayerBroadcastService.ChatLine line) {}
 
     private final List<Told> told = new ArrayList<>();
     private boolean reachable = true;
@@ -820,10 +821,10 @@ class FarPlayerBroadcastServiceTest {
 
     /** A service whose chat lane records what each player was told; nobody is subscribed. */
     private FarPlayerBroadcastService unsubscribedToldService(FarPlayerBroadcastService.VanishBridge bridge) {
-        return new FarPlayerBroadcastService(bridge, line -> { }, (player, message) -> {
+        return new FarPlayerBroadcastService(bridge, logged -> { }, (player, line) -> {
             if (notifierFailure != null) throw notifierFailure;
             if (!reachable) return false;
-            told.add(new Told(player, message));
+            told.add(new Told(player, line));
             return true;
         });
     }
@@ -868,8 +869,10 @@ class FarPlayerBroadcastServiceTest {
         return currentRoster(VIEWER);
     }
 
+    /** The players sent the required-mode line, in order. */
     private List<UUID> toldPlayers() {
-        return told.stream().map(Told::player).toList();
+        return told.stream().filter(t -> t.line().equals(FarPlayerBroadcastService.requiredSharingNotice()))
+                .map(Told::player).toList();
     }
 
     @Test
@@ -1095,11 +1098,12 @@ class FarPlayerBroadcastServiceTest {
                 holderSnap(T2, "HolderOptedOut", 600, 0), snap(T3, "Sharer", 700, 0),
                 snap(T4, "Vanilla", 800, 0));
         twoPasses(svc, 10_000, world, settings("required"));
-        assertEquals(List.of(new Told(T1, "This server requires position sharing: other players can"
-                        + " see where you are from far away, and your Share My Position setting does"
-                        + " not apply here.")), told,
-                "exactly the overridden player, exactly the approved wording");
-        assertEquals(FarPlayerBroadcastService.requiredSharingNotice(), told.get(0).message());
+        assertEquals(List.of(new Told(T1, FarPlayerBroadcastService.requiredSharingNotice())), told,
+                "exactly the overridden player");
+        assertEquals("This server requires position sharing: other players can see where you are"
+                        + " from far away, and your Share My Position setting does not apply here.",
+                told.get(0).line().fallback(), "exactly the approved wording, as the fallback");
+        assertEquals("lss.far_players.sharing_required", told.get(0).line().translationKey());
         assertTrue(svc.hasRequiredSharingNotice(T1));
         assertFalse(svc.hasRequiredSharingNotice(T2));
 
@@ -1395,5 +1399,237 @@ class FarPlayerBroadcastServiceTest {
         assertTrue(cleared.full() && cleared.added().isEmpty(), "off withdraws the roster");
         svc.tick(10_001, world, settings("required"), sender());
         assertEquals(T1, rosters().get(rosters().size() - 1).added().get(0).uuid());
+    }
+
+    // ---- review fold A: the holder notice on a server that has not chosen yet ----
+
+    /** Settings as an UPGRADED server reads them: its file never set
+     *  far_players.hide_permission_holders, so the effective value is the default (off). */
+    private static FarPlayerBroadcastService.Settings undecided(String mode) {
+        return new FarPlayerBroadcastService.Settings(mode, 2048, 0, false, List.of(), 10, false, true);
+    }
+
+    private List<UUID> toldHolders() {
+        return told.stream().filter(t -> t.line().equals(FarPlayerBroadcastService.holderNotice()))
+                .map(Told::player).toList();
+    }
+
+    @Test
+    void aHolderOnAServerThatHasNotChosenIsToldOncePerConnection() {
+        var svc = toldService(null);
+        var world = List.of(snap(VIEWER, "Viewer", 0, 0), holderSnap(T1, "Admin", 500, 0),
+                snap(T2, "Plain", 600, 0));
+        svc.tick(10_000, world, undecided("on"), sender());
+        assertTrue(told.isEmpty(), "one 'holder' read is not acted on");
+        svc.tick(10_500, world, undecided("on"), sender());
+        assertEquals(List.of(new Told(T1, FarPlayerBroadcastService.holderNotice())), told,
+                "the holder, and only the holder");
+        assertEquals("You have the lss.farplayers.hidden permission. Since 0.21.0 it no longer hides"
+                        + " you from far players by itself: turn off Share My Position to hide. Server"
+                        + " owners: set far_players.hide_permission_holders in the server config (true"
+                        + " hides holders as before, false keeps this) to stop this message.",
+                told.get(0).line().fallback(), "the approved wording");
+        assertEquals("lss.far_players.permission_no_longer_hides", told.get(0).line().translationKey());
+        assertTrue(svc.hasHolderNotice(T1));
+        assertFalse(svc.hasHolderNotice(T2));
+        assertEquals(List.of(T1, T2), currentRoster(), "the holder is shown: that is what the line explains");
+
+        for (int i = 2; i <= 5; i++) svc.tick(10_000 + i * 500, world, undecided("on"), sender());
+        svc.onPrefs(T1, prefs(true, true));
+        svc.removeViewer(T1);                               // a same-connection shed
+        twoPasses(svc, 15_000, world, undecided("on"));
+        assertEquals(1, told.size(), "one line per connection");
+
+        svc.onDisconnect(T1);                               // the connection ended
+        assertFalse(svc.hasHolderNotice(T1));
+        twoPasses(svc, 16_000, world, undecided("on"));
+        assertEquals(List.of(T1, T1), toldHolders(), "told again on the next connection");
+    }
+
+    @Test
+    void noHolderNoticeOnceTheOperatorHasChosenEitherWay() {
+        var world = List.of(snap(VIEWER, "Viewer", 0, 0), holderSnap(T1, "Admin", 500, 0));
+        var chosen = new java.util.LinkedHashMap<String, FarPlayerBroadcastService.Settings>();
+        chosen.put("the key written false", settings("on", false));
+        chosen.put("the key written true", settings("on", true));
+        chosen.put("a fresh 0.21.0 file (the template carries the key)",
+                new FarPlayerBroadcastService.Settings("on", 2048, 0, false, List.of(), 10, false, false));
+        // Cannot come from a file (an unset key reads false), but the rule must not depend on that.
+        chosen.put("hiding on, whatever the file says",
+                new FarPlayerBroadcastService.Settings("on", 2048, 0, false, List.of(), 10, true, true));
+        for (var choice : chosen.entrySet()) {
+            told.clear();
+            var svc = toldService(null);
+            twoPasses(svc, 10_000, world, choice.getValue());
+            svc.tick(11_000, world, choice.getValue(), sender());
+            assertTrue(told.isEmpty(), choice.getKey() + ": " + told);
+            assertFalse(svc.hasHolderNotice(T1), choice.getKey());
+        }
+    }
+
+    @Test
+    void theHolderNoticeStopsForEveryoneOnTheReloadThatWritesTheKey() {
+        var svc = toldService(null);
+        var viewer = snap(VIEWER, "Viewer", 0, 0);
+        twoPasses(svc, 10_000, List.of(viewer, holderSnap(T1, "AdminOne", 500, 0)), undecided("on"));
+        assertEquals(List.of(T1), toldHolders());
+
+        // The operator writes the key (false keeps the new behaviour) and reloads; a second
+        // holder joins afterwards.
+        var world = List.of(viewer, holderSnap(T1, "AdminOne", 500, 0), holderSnap(T2, "AdminTwo", 600, 0));
+        twoPasses(svc, 11_000, world, settings("on", false));
+        svc.tick(12_000, world, settings("on", false), sender());
+        assertEquals(List.of(T1), toldHolders(), "nobody else is told once the server has chosen");
+        assertEquals(List.of(T1, T2), currentRoster(), "and the choice 'false' keeps holders shown");
+    }
+
+    @Test
+    void aSingleHolderReadNeverMessagesANonHolder() {
+        // The same two-consecutive-reads rule as mode "required": one wrong read must not
+        // tell a player they hold a permission they do not.
+        var svc = toldService(null);
+        var viewer = snap(VIEWER, "Viewer", 0, 0);
+        var notAHolder = List.of(viewer, snap(T1, "P", 500, 0));
+        var wrongTrue = List.of(viewer, holderSnap(T1, "P", 500, 0));
+        var failedRead = List.of(viewer, privacySnap(T1, "P", 500, 0, true, true));
+        long now = 10_000;
+        for (var world : List.of(notAHolder, wrongTrue, notAHolder, wrongTrue, failedRead, wrongTrue, notAHolder)) {
+            svc.tick(now += 500, world, undecided("on"), sender());
+            assertTrue(told.isEmpty(), "never told on a single read, at " + now + ": " + told);
+        }
+        twoPasses(svc, now + 500, wrongTrue, undecided("on"));
+        assertEquals(List.of(T1), toldHolders(), "two consecutive holder reads are a holder");
+    }
+
+    @Test
+    void aHolderWhoOptedOutIsNotToldUntilTheyShareAgain() {
+        // Share My Position already off: hidden by their own choice, nothing to explain.
+        var svc = toldService(null);
+        var world = List.of(snap(VIEWER, "Viewer", 0, 0), holderSnap(T1, "Admin", 500, 0));
+        svc.onPrefs(T1, prefs(true, false));
+        twoPasses(svc, 10_000, world, undecided("on"));
+        svc.tick(11_000, world, undecided("on"), sender());
+        assertTrue(told.isEmpty(), told.toString());
+        svc.onPrefs(T1, prefs(true, true));                 // they turn sharing back on
+        svc.tick(11_500, world, undecided("on"), sender());
+        assertEquals(List.of(T1), toldHolders(), "now the permission is all that stood between them and being shown");
+    }
+
+    @Test
+    void anExcludedHolderIsNotTold() {
+        // Listed in excluded_players: never shown, whatever the permission says.
+        var svc = toldService(null);
+        var excluding = new FarPlayerBroadcastService.Settings("on", 2048, 0, false,
+                List.of("admin"), 10, false, true);
+        var world = List.of(snap(VIEWER, "Viewer", 0, 0), holderSnap(T1, "Admin", 500, 0),
+                holderSnap(T2, "Other", 600, 0));
+        twoPasses(svc, 10_000, world, excluding);
+        svc.tick(11_000, world, excluding, sender());
+        assertEquals(List.of(T2), toldHolders(), "the holder who is not excluded is told; the excluded one never");
+    }
+
+    @Test
+    void aLadderHiddenHolderIsNotToldAndAHiddenReadIsNoPermissionRead() {
+        // Vanished (the ladder): not shown. On Paper/Folia a raced read looks the same and
+        // carries no permission fact, so it never counts toward the two reads.
+        var svc = toldService(null);
+        var viewer = snap(VIEWER, "Viewer", 0, 0);
+        var vanished = List.of(viewer, privacySnap(T1, "Admin", 500, 0, true, true));
+        var visible = List.of(viewer, holderSnap(T1, "Admin", 500, 0));
+        twoPasses(svc, 10_000, vanished, undecided("on"));
+        svc.tick(11_000, vanished, undecided("on"), sender());
+        assertTrue(told.isEmpty(), "never while the ladder hides them: " + told);
+        svc.tick(11_500, visible, undecided("on"), sender());
+        assertTrue(told.isEmpty(), "the first clean read after vanish is one read: " + told);
+        svc.tick(12_000, visible, undecided("on"), sender());
+        assertEquals(List.of(T1), toldHolders());
+    }
+
+    @Test
+    void inModeOptInOnlyAHolderWhoSharesIsTold() {
+        // Mode opt-in shows only explicit sharers: a holder who never sent preferences, or
+        // who does not share, is not shown and is told nothing.
+        var svc = toldService(null);
+        svc.onPrefs(T2, prefs(true, true));
+        svc.onPrefs(T3, prefs(true, false));
+        var world = List.of(snap(VIEWER, "Viewer", 0, 0), holderSnap(T1, "Silent", 500, 0),
+                holderSnap(T2, "Sharing", 600, 0), holderSnap(T3, "NotSharing", 700, 0));
+        twoPasses(svc, 10_000, world, undecided("opt-in"));
+        svc.tick(11_000, world, undecided("opt-in"), sender());
+        assertEquals(List.of(T2), toldHolders());
+        assertEquals(1, told.size(), told.toString());
+    }
+
+    @Test
+    void aHolderWithoutTheModIsToldInModeOnAndRequired() {
+        // No preferences at all (no client mod): modes on and required show them, so the
+        // line reaches them too (it is ordinary chat).
+        for (String mode : List.of("on", "required")) {
+            told.clear();
+            var svc = toldService(null);
+            twoPasses(svc, 10_000, List.of(snap(VIEWER, "Viewer", 0, 0), holderSnap(T1, "Admin", 500, 0)),
+                    undecided(mode));
+            assertEquals(List.of(T1), toldHolders(), mode);
+            assertEquals(1, told.size(), mode + ": " + told);
+        }
+    }
+
+    @Test
+    void aHolderReadFromBeforeAGapWithNoPassDoesNotCount() {
+        // Mode off (or nobody subscribed) runs no pass: a read from before it is not
+        // adjacent to the next one, whatever the pass counter says.
+        var world = List.of(snap(VIEWER, "Viewer", 0, 0), holderSnap(T1, "Admin", 500, 0));
+        var off = toldService(null);
+        off.tick(10_000, world, undecided("on"), sender());
+        off.applyMode("off", sender());
+        off.tick(10_500, world, undecided("on"), sender());
+        assertTrue(told.isEmpty(), "one read, a gap, one read: " + told);
+        off.tick(11_000, world, undecided("on"), sender());
+        assertEquals(List.of(T1), toldHolders());
+
+        told.clear();
+        var unsubscribed = toldService(null);
+        unsubscribed.tick(10_000, world, undecided("on"), sender());
+        unsubscribed.removeViewer(VIEWER);
+        unsubscribed.tick(10_500, world, undecided("on"), sender());   // no subscriber: no pass
+        unsubscribed.subscribeViewer(VIEWER);
+        unsubscribed.onPrefs(VIEWER, prefs(true, true));
+        unsubscribed.tick(11_000, world, undecided("on"), sender());
+        assertTrue(told.isEmpty(), "one read, a gap, one read: " + told);
+        unsubscribed.tick(11_500, world, undecided("on"), sender());
+        assertEquals(List.of(T1), toldHolders());
+    }
+
+    @Test
+    void noHolderNoticeInModeOff() {
+        // Mode off: nobody is shown and no pass runs.
+        var svc = toldService(null);
+        var world = List.of(snap(VIEWER, "Viewer", 0, 0), holderSnap(T1, "Admin", 500, 0));
+        twoPasses(svc, 10_000, world, undecided("off"));
+        svc.tick(11_000, world, undecided("off"), sender());
+        assertTrue(told.isEmpty(), told.toString());
+        assertFalse(svc.hasHolderNotice(T1));
+    }
+
+    @Test
+    void theTwoNoticesHaveSeparateLatches() {
+        // Mode required on a server that has not chosen: the holder line goes to the holder,
+        // the required line to the opted-out non-holder, each once. A holder who then loses
+        // the permission while opted out is told the required line as well.
+        var svc = toldService(null);
+        var viewer = snap(VIEWER, "Viewer", 0, 0);
+        svc.onPrefs(T2, prefs(true, false));
+        var world = List.of(viewer, holderSnap(T1, "Admin", 500, 0), snap(T2, "OptedOut", 600, 0));
+        twoPasses(svc, 10_000, world, undecided("required"));
+        svc.tick(11_000, world, undecided("required"), sender());
+        assertEquals(List.of(T1), toldHolders());
+        assertEquals(List.of(T2), toldPlayers());
+        assertEquals(2, told.size());
+
+        svc.onPrefs(T1, prefs(true, false));                // the former holder opts out...
+        var demoted = List.of(viewer, snap(T1, "Admin", 500, 0), snap(T2, "OptedOut", 600, 0));
+        twoPasses(svc, 11_500, demoted, undecided("required"));   // ...and has lost the permission
+        assertEquals(List.of(T2, T1), toldPlayers(), "a different line, so its own latch");
+        assertEquals(List.of(T1), toldHolders());
     }
 }

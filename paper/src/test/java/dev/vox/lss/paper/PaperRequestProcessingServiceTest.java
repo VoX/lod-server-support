@@ -657,7 +657,8 @@ class PaperRequestProcessingServiceTest {
         var holder = UUID.randomUUID();
         var optedOutPlayer = playerIn(optedOut, level(Level.OVERWORLD));
         var told = new ArrayList<String>();
-        service.setFarPlayerNoticeSender((player, text) -> told.add(player.getUUID() + "|" + text));
+        service.setFarPlayerNoticeSender((player, line) ->
+                told.add(player.getUUID() + "|" + line.translationKey() + "|" + line.fallback()));
         var fp = service.getFarPlayerService();
         fp.subscribeViewer(viewer);
         fp.onPrefs(viewer, new dev.vox.lss.common.farplayers.FarPlayerWire.Prefs(true, 0, 0, true, 0));
@@ -685,8 +686,8 @@ class PaperRequestProcessingServiceTest {
         when(playerList.getPlayer(optedOut)).thenReturn(optedOutPlayer);
         fp.tick(1_001_000L, online, settings, frames);
         fp.tick(1_001_500L, online, settings, frames);
-        assertEquals(List.of(optedOut + "|"
-                        + dev.vox.lss.common.farplayers.FarPlayerBroadcastService.requiredSharingNotice()),
+        var notice = dev.vox.lss.common.farplayers.FarPlayerBroadcastService.requiredSharingNotice();
+        assertEquals(List.of(optedOut + "|" + notice.translationKey() + "|" + notice.fallback()),
                 told, "exactly one system chat line, to the overridden player only");
         assertFalse(fp.hasRequiredSharingNotice(holder), "a holder's opt-out is honored: nothing to say");
     }
