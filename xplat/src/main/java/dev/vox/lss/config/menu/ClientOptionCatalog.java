@@ -11,9 +11,9 @@ import java.util.Optional;
 /**
  * THE in-game options catalog — the single source of truth for what the LSS settings
  * pages contain (sodium-options-page-generations-plan.md D1). Every renderer walks
- * this list: the Sodium 0.8+ config-API walker ({@code LSSConfigMenu}, fabric), the
- * legacy Sodium 0.6/0.7 reflective builder ({@code LegacySodiumPage}, per-loader
- * twins). Adding or changing an option is an edit HERE and in the lang file — never in
+ * this list: the Sodium 0.8+ config-API walker ({@code LSSConfigMenu}, per-loader
+ * twins), the legacy Sodium 0.6/0.7 reflective builder ({@code LegacySodiumPage},
+ * per-loader twins). Adding or changing an option is an edit HERE and in the lang file — never in
  * a renderer, which is what keeps the pages identical across Sodium generations and
  * makes the change cherry-pick to every support line unchanged.
  *
@@ -42,6 +42,9 @@ public final class ClientOptionCatalog {
     public static final String ID_FAR_PLAYERS_RENDER_DISTANCE = "lss:far_players_render_distance";
     public static final String ID_FAR_PLAYERS_EXTEND_FAR_PLANE = "lss:far_players_extend_far_plane";
 
+    /** A button, not a setting ({@link ActionSpec}): {@link #find} never resolves it. */
+    public static final String ID_REDOWNLOAD_TERRAIN = "lss:redownload_terrain";
+
     public static final String PAGE_GENERAL = "general";
     public static final String PAGE_FAR_PLAYERS = "far_players";
 
@@ -56,6 +59,8 @@ public final class ClientOptionCatalog {
         return PAGES;
     }
 
+    /** Options only. A page's buttons ({@link PageSpec#actions()}) have ids too and never
+     *  resolve here: the draft refresh passes every key of Sodium's option map through this. */
     public static Optional<OptionSpec> find(String id) {
         return PAGES.stream().flatMap(p -> p.options().stream())
                 .filter(o -> o.id().equals(id)).findFirst();
@@ -97,28 +102,6 @@ public final class ClientOptionCatalog {
         return serializedDescriptors().stream().map(descriptor ->
                 new dev.vox.lss.common.config.SettingBinding<dev.vox.lss.config.LSSClientConfig>(descriptor,
                         config -> config.snapshot().values().get(descriptor.key()))).toList();
-    }
-
-    /** Metadata is derived from the same typed rows used by both Sodium generations. */
-    public static dev.vox.lss.common.config.SettingDescriptor descriptor(OptionSpec option) {
-        var type = option instanceof BoolSpec ? dev.vox.lss.common.config.SettingDescriptor.Type.BOOLEAN
-                : option instanceof IntSpec ? dev.vox.lss.common.config.SettingDescriptor.Type.INTEGER
-                : dev.vox.lss.common.config.SettingDescriptor.Type.STRING;
-        String domain = switch(option) {
-            case BoolSpec b -> "true | false";
-            case IntSpec i -> i.min()+".."+i.max()+" (UI indices)";
-        };
-        String defaults = switch(option) {
-            case BoolSpec b -> Boolean.toString(b.defaultValue());
-            case IntSpec i -> Integer.toString(i.defaultValue());
-        };
-        return new dev.vox.lss.common.config.SettingDescriptor(option.id(), type,
-                option.id().equals(ID_COLUMN_RATE_LIMIT) ? "slider index -> columns/s; 0 unlimited"
-                        : option.id().equals(ID_LOD_DISTANCE) ? "chunks; 0 server default" : "option value",
-                option.nameKey(), defaults, domain, "OptionSpec typed binding + SettingsSchema.client",
-                java.util.Set.of(dev.vox.lss.common.config.SettingDescriptor.Scope.CLIENT), "client-global",
-                option.visibility().name(), "save draft; explicit reload; " + option.saveHook().name(), false,
-                option.saveHook().name(), dev.vox.lss.common.config.SettingDescriptor.Exposure.UI);
     }
 
     private static PageSpec generalPage() {
@@ -213,11 +196,21 @@ public final class ClientOptionCatalog {
                 .enabledBy(ID_RECEIVE_SERVER_LODS)
                 .build();
 
-        return PageSpec.of(PAGE_GENERAL, "lss.config.page",
-                GroupSpec.of(receive),
-                GroupSpec.of(distance),
-                GroupSpec.of(rate, slowStart),
-                GroupSpec.of(maps, source));
+        // Re-download Terrain (re-download plan, decision 1): what /lss clearcache does, where
+        // players look for it. It clears the download records so the server sends the terrain
+        // again; terrain the LOD mod already saved stays. Always enabled: the confirm screen
+        // says what it will do for the current connection.
+        var redownload = new ActionSpec(ID_REDOWNLOAD_TERRAIN,
+                "lss.config.redownload_terrain",
+                "lss.config.redownload_terrain.tooltip",
+                ActionSpec.Action.REDOWNLOAD_TERRAIN);
+
+        return new PageSpec(PAGE_GENERAL, "lss.config.page",
+                List.of(GroupSpec.of(receive),
+                        GroupSpec.of(distance),
+                        GroupSpec.of(rate, slowStart),
+                        GroupSpec.of(maps, source)),
+                List.of(redownload));
     }
 
     /** Include ancestors so source-specific controls also follow the reception master. */

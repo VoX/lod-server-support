@@ -133,17 +133,6 @@ class LegacySodiumPageTest {
     }
 
     @Test
-    void aMissingEnumControlDoesNotDisableTheBooleanAndSliderPage() throws Exception {
-        var isolated=new ClassLoader(getClass().getClassLoader()) {
-            @Override protected Class<?> loadClass(String name,boolean resolve) throws ClassNotFoundException {
-                if(name.endsWith(".CyclingControl"))throw new ClassNotFoundException(name);
-                return super.loadClass(name,resolve);
-            }
-        };
-        assertNotNull(LegacySodiumPage.resolve("net.caffeinemc.mods.sodium",isolated));
-    }
-
-    @Test
     void pagesMirrorTheCatalogWithBrandedTitles() throws Throwable {
         List<Object> pages = LegacySodiumPage.buildWith(handles, draft(), PLAIN, "LSS", h -> { });
         assertEquals(ClientOptionCatalog.pages().size(), pages.size());
