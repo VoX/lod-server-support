@@ -1106,6 +1106,83 @@ class ClientColumnProcessorTest {
         assertNull(byY.get(-2).blockLight(), "the added air section has no block light");
     }
 
+    // ---- review fold (2026-11-12): robustness of the estimate ----
+
+    @Test
+    void aSectionWithBlocksAndAZeroBlockCountShadesTheColumnInTheDrain() {
+        // The block count in a section's header comes from the wire. A solid layer whose
+        // header says "empty" must still be a roof: the terrain under it stays dark.
+        var roof = new LevelChunkSection(FACTORY);
+        var stone = net.minecraft.world.level.block.Blocks.STONE.defaultBlockState();
+        for (int z = 0; z < 16; z++) for (int x = 0; x < 16; x++) roof.setBlockState(x, 5, z, stone, false);
+        var buf = new FriendlyByteBuf(Unpooled.buffer());
+        byte[] wire;
+        try {
+            buf.writeVarInt(3);
+            for (var s : new WireSection[]{at(-4, stoneUpTo(15)), at(-3, stoneUpTo(7)), at(-1, roof)}) {
+                buf.writeByte(s.y());
+                int header = buf.writerIndex();
+                s.section().write(buf);
+                if (s.section() == roof) buf.setShort(header, 0);   // the lie: no non-empty blocks
+                buf.writeBoolean(false);
+                buf.writeBoolean(false);
+            }
+            wire = drainToArray(buf);
+        } finally {
+            buf.release();
+        }
+        var byY = drainTall(wire, false, true);
+
+        assertTrue(byY.get(-1).section().hasOnlyAir(), "premise: the decoded header says the roof section is empty");
+        assertEquals(stone, byY.get(-1).section().getBlockState(4, 5, 4), "premise: its blocks are there");
+        assertNull(byY.get(-3).skyLight(), "the surface under the roof receives no sky light");
+        assertNull(byY.get(-4).skyLight());
+        assertEquals(15, byY.get(-1).skyLight().get(4, 6, 4), "the roof section is lit above its blocks");
+        assertEquals(0, byY.get(-1).skyLight().get(4, 4, 4), "and dark under them");
+        assertFalse(byY.containsKey(-2), "no lit air section appears between roof and terrain");
+        assertEquals(1, processor.getSkyEstimatedColumns());
+    }
+
+    @Test
+    void aFailingSkyEstimateDeliversTheColumnAsItArrived() {
+        // The estimate is an improvement, never a condition: left to the drain's general
+        // catch, a throw would be an ingest failure, re-served and failed again until the
+        // failure cap parks the position, and the terrain would be lost instead of dark.
+        processor = new ClientColumnProcessor(
+                (d, cx, cz) -> reports.add(new Report(d, cx, cz)), () -> null,
+                (sections, levelSectionCount, minSectionY, factory) -> {
+                    throw new IllegalStateException("estimate failed");
+                });
+        var byY = drainTall(columnWire(at(-4, stoneUpTo(15)), at(-3, stoneUpTo(7))), false, true);
+
+        assertEquals(java.util.Set.of(-4, -3, -2, -1, 0, 1, 2, 3), byY.keySet(),
+                "the column is dispatched: its two sections and the implicit sky above them");
+        assertFalse(byY.get(-3).section().hasOnlyAir());
+        assertNull(byY.get(-3).skyLight(), "as it arrived: without sky light");
+        assertNull(byY.get(-4).skyLight());
+        assertFullBright(byY.get(-2), "the implicit-sky fill still runs");
+        assertEquals(List.of(), reports, "no ingest failure: the position must not be re-requested or parked");
+        assertEquals(1, processor.getSkyEstimateFailures());
+        assertEquals(0, processor.getSkyEstimatedColumns());
+        assertTrue(processor.skyEstimateFailureLogged(), "the first failure of a session is logged");
+
+        drainTall(columnWire(at(-3, stoneUpTo(7))), true, true);
+        assertEquals(2, processor.getSkyEstimateFailures(), "every failed column is counted");
+        assertEquals(List.of(), reports);
+        processor.resetStats();
+        assertEquals(0, processor.getSkyEstimateFailures());
+        processor.shutdown();
+        assertFalse(processor.skyEstimateFailureLogged(), "the next session logs its first failure again");
+    }
+
+    @Test
+    void theLightDiagnosticsLineShowsTheFailureCounterOnlyWhenNonZero() {
+        assertNull(ClientCommandActions.lightLine(0, 0), "no line on a server without lightless chunks");
+        assertEquals("Light: sky_estimated=5", ClientCommandActions.lightLine(5, 0));
+        assertEquals("Light: sky_estimated=5, sky_estimate_failed=2", ClientCommandActions.lightLine(5, 2));
+        assertEquals("Light: sky_estimated=0, sky_estimate_failed=3", ClientCommandActions.lightLine(0, 3));
+    }
+
     @Test
     void resetStatsClearsTheSkyEstimateCounter() {
         drainTall(columnWire(at(-3, stoneUpTo(7))), false, true);

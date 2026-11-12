@@ -386,6 +386,87 @@ class ClientSkyLightEstimatorTest {
         assertFalse(lit.containsKey(1), "no air section is added under it either: it received nothing");
     }
 
+    // ---- review fold: the wire's block count is not trusted ----
+
+    /** The same blocks with the header's block count set to zero, as a faulty server could send them. */
+    private static LevelChunkSection withZeroBlockCount(LevelChunkSection section) {
+        var buf = new net.minecraft.network.FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
+        try {
+            section.write(buf);
+            buf.setShort(0, 0);   // the header starts with the non-empty block count
+            var lying = new LevelChunkSection(FACTORY);
+            lying.read(buf);
+            return lying;
+        } finally {
+            buf.release();
+        }
+    }
+
+    @Test
+    void aSectionWithBlocksAndAZeroBlockCountIsNotLitThrough() {
+        var roof = new LevelChunkSection(FACTORY);
+        for (int z = 0; z < 16; z++) for (int x = 0; x < 16; x++) roof.setBlockState(x, 5, z, STONE, false);
+        var lying = withZeroBlockCount(roof);
+        assertTrue(lying.hasOnlyAir(), "premise: the header says the section is empty");
+        assertEquals(STONE, lying.getBlockState(3, 5, 3), "premise: the blocks are there");
+        assertFalse(ClientSkyLightEstimator.holdsOnlyAir(lying));
+        assertTrue(ClientSkyLightEstimator.holdsOnlyAir(new LevelChunkSection(FACTORY)));
+
+        // Ground in sections -2..0 and the roof two sections above it.
+        var served = new ArrayList<>(List.of(new Chunk().layers(MIN_Y, 3, STONE).served()));
+        served.add(new VoxelColumnData.SectionData(2, lying, null, null));
+        var sections = served.toArray(new VoxelColumnData.SectionData[0]);
+        var lit = byY(new ClientSkyLightEstimator().estimate(sections, SECTIONS, MIN_SECTION, FACTORY).sections());
+        assertEquals(15, lit.get(2).skyLight().get(3, 6, 3), "above the roof");
+        assertEquals(0, lit.get(2).skyLight().get(3, 5, 3), "the roof");
+        assertEquals(0, lit.get(2).skyLight().get(3, 4, 3), "under it");
+        assertNull(lit.get(0).skyLight(), "the ground under the roof stays dark: the sky does not come through it");
+        assertFalse(lit.containsKey(1), "and no lit air section is added between them");
+
+        // The predicate agrees: a column whose only blocks hide behind a zero count has blocks.
+        assertTrue(ClientSkyLightEstimator.lacksSkyLight(new VoxelColumnData.SectionData[]{
+                new VoxelColumnData.SectionData(2, lying, null, null)}));
+    }
+
+    @Test
+    void anEmptySectionWhosePaletteStillListsABlockIsReadCellByCellAndStaysAir() {
+        // A block set and removed again: the count is back at zero, the palette keeps the entry.
+        var emptied = new LevelChunkSection(FACTORY);
+        emptied.setBlockState(1, 1, 1, STONE, false);
+        emptied.setBlockState(1, 1, 1, AIR, false);
+        assertTrue(emptied.hasOnlyAir());
+        assertFalse(ClientSkyLightEstimator.holdsOnlyAir(emptied), "the palette cannot rule a block out");
+        var served = new ArrayList<>(List.of(new Chunk().layers(MIN_Y, 3, STONE).served()));
+        served.add(new VoxelColumnData.SectionData(2, emptied, null, null));
+        var lit = byY(new ClientSkyLightEstimator().estimate(served.toArray(new VoxelColumnData.SectionData[0]),
+                SECTIONS, MIN_SECTION, FACTORY).sections());
+        assertEquals(15, lit.get(0).skyLight().get(3, 4, 3), "the light still reaches the ground: every cell of it is air");
+        for (byte b : lit.get(2).skyLight().getData()) assertEquals((byte) 0xFF, b);
+    }
+
+    // ---- review fold: a pair of partial faces is compared once per pair of states ----
+
+    @Test
+    void touchingPartialFacesAreComparedOncePerPairOfStatesInAColumn() {
+        var faceCalls = new int[1];
+        var counting = new ClientSkyLightEstimator.StateLight() {
+            @Override public int dampening(BlockState state) { return ClientSkyLightEstimator.VANILLA.dampening(state); }
+            @Override public boolean occludesByShape(BlockState state) { return ClientSkyLightEstimator.VANILLA.occludesByShape(state); }
+            @Override public VoxelShape faceShape(BlockState state, Direction direction) {
+                faceCalls[0]++;
+                return ClientSkyLightEstimator.VANILLA.faceShape(state, direction);
+            }
+        };
+        // A top-slab roof with one hole: the light walks from slab to slab, hundreds of pairs.
+        var chunk = new Chunk().layers(MIN_Y, 3, STONE).layers(20, 20, slab(SlabType.TOP)).set(8, 20, 8, AIR);
+        var result = new ClientSkyLightEstimator(counting).estimate(chunk.served(), SECTIONS, MIN_SECTION, FACTORY);
+        var lit = byY(result.sections());
+        assertEquals(13, lit.get(1).skyLight().get(6, 4, 8), "premise: slab to slab is open (y=20 is local 4 of section 1)");
+        // Six faces to describe the slab, then two faces for each decided pair: slab beside
+        // slab along x, and along z. Stone and air have no light-occluding shape.
+        assertEquals(6 + 2 * 2, faceCalls[0], "every further pair of slabs is remembered, not compared again");
+    }
+
     @Test
     void lacksSkyLightLooksForOneNonZeroNibbleInAColumnWithBlocks() {
         var ground = new Chunk().layers(MIN_Y, 3, STONE).served();

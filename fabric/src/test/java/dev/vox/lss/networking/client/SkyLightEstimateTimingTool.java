@@ -53,7 +53,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  * Every FULL chunk is stripped of its light as vanilla's {@code ChunkDeleteLightFix} does,
  * serialized through the production disk path, and decoded by the client. Timed per
  * column, after one warm-up pass: the decode itself, and what the estimate adds to it
- * (the predicate plus the estimate). Also timed: the predicate alone on the same columns
+ * (the predicate plus the estimate, and its work in the routine's units). Also timed: the predicate alone on the same columns
  * with their light left in, which is what every ordinary column pays. Two synthetic
  * pathological columns follow (stairs and slabs, and piston heads, through the full height).
  * Results are printed
@@ -143,7 +143,7 @@ class SkyLightEstimateTimingTool {
         var predicateNs = new Series();
         var litSections = new Series();
         var addedSections = new Series();
-        var spreadSteps = new Series();
+        var work = new Series();
         var sampler = Sampler.startIfRequested(Thread.currentThread());
         int estimated = 0, capped = 0, unlitColumns = 0, litColumnsThatLackLight = 0;
         for (int round = 0; round <= ROUNDS; round++) {
@@ -167,7 +167,7 @@ class SkyLightEstimateTimingTool {
                         if (result.capped()) capped++;
                         litSections.add(result.litSections());
                         addedSections.add(result.addedSections());
-                        spreadSteps.add(result.spreadSteps());
+                        work.add(result.work());
                     }
                 }
                 var withLight = ClientColumnProcessor.decodeColumn(lit.get(i), SECTIONS, factory);
@@ -200,8 +200,8 @@ class SkyLightEstimateTimingTool {
                 last = result;
             }
             pathological.append(ns.line("pathological: " + column.name())).append('\n');
-            pathological.append(last == null ? "    (no light)\n" : String.format("    spread steps=%d capped=%s lit sections=%d%n",
-                    last.spreadSteps(), last.capped(), last.litSections()));
+            pathological.append(last == null ? "    (no light)\n" : String.format("    work=%d capped=%s lit sections=%d%n",
+                    last.work(), last.capped(), last.litSections()));
         }
 
         var report = new StringBuilder();
@@ -218,8 +218,8 @@ class SkyLightEstimateTimingTool {
         report.append(String.format("estimate / decode, total time: %.2f%n", (double) estimateNs.total() / Math.max(1, decodeNs.total())));
         report.append(String.format("sections with an estimated layer per column: median=%d max=%d; added air sections: median=%d max=%d%n",
                 litSections.pct(0.5), litSections.pct(1.0), addedSections.pct(0.5), addedSections.pct(1.0)));
-        report.append(String.format("spread steps per column: median=%d p90=%d p99=%d max=%d (budget %d)%n",
-                spreadSteps.pct(0.5), spreadSteps.pct(0.9), spreadSteps.pct(0.99), spreadSteps.pct(1.0), 1 << 17));
+        report.append(String.format("work units per column: median=%d p90=%d p99=%d max=%d (budget %d)%n",
+                work.pct(0.5), work.pct(0.9), work.pct(0.99), work.pct(1.0), SkyLightEstimate.DEFAULT_BUDGET));
         report.append(pathological);
         if (sampler != null) report.append(sampler.finish());
         System.out.print(report);

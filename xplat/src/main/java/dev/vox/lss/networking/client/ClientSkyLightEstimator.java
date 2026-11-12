@@ -36,11 +36,12 @@ import java.util.Arrays;
 final class ClientSkyLightEstimator implements SkyLightEstimate.Column {
     /**
      * What {@link #estimate} did to a column. {@code sections} is the column to use;
-     * {@code spreadSteps} is the work the sideways spread took and {@code capped} says it
-     * ran into its budget (the column may then be darker than the rule gives).
+     * {@code work} is what the estimate cost in {@link SkyLightEstimate}'s units and
+     * {@code capped} says it ran into its budget (the column may then be darker than the
+     * rule gives).
      */
     record Result(VoxelColumnData.SectionData[] sections, int litSections, int addedSections,
-                  int spreadSteps, boolean capped) {}
+                  int work, boolean capped) {}
 
     /** What vanilla's light engine reads from a block state. */
     interface StateLight {
@@ -70,6 +71,7 @@ final class ClientSkyLightEstimator implements SkyLightEstimate.Column {
     };
 
     private static final Direction[] DIRECTIONS = directionsByDataValue();
+    private static final java.util.function.Predicate<BlockState> NOT_AIR = state -> !state.isAir();
     private static final byte[] DARK_LAYER = new byte[SkyLightEstimate.LAYER_BYTES];
     private static final int UNKNOWN = -1;
 
@@ -93,6 +95,18 @@ final class ClientSkyLightEstimator implements SkyLightEstimate.Column {
     }
 
     /**
+     * Whether a section really holds only air. {@code hasOnlyAir()} is the block count in
+     * the section's header, and that came from the wire: a section with blocks and a count
+     * of zero (a faulty or hostile server, a store row from an odd build) would pass for
+     * air and let the sky through a roof. So a zero count is confirmed against the block
+     * container's palette. The palette can list a state no cell uses; such a section is
+     * then read cell by cell, which costs time and nothing else.
+     */
+    static boolean holdsOnlyAir(LevelChunkSection section) {
+        return section.hasOnlyAir() && !section.getStates().maybeHas(NOT_AIR);
+    }
+
+    /**
      * True when the column has blocks and none of its sections carries a non-zero sky
      * nibble. A layer that is present and all zero counts as none: a correctly lit column
      * with any open-sky cell has a non-zero nibble somewhere, so a column without one is
@@ -103,7 +117,7 @@ final class ClientSkyLightEstimator implements SkyLightEstimate.Column {
         for (var s : sections) {
             var sky = s.skyLight();
             if (sky != null && !Arrays.equals(sky.getData(), DARK_LAYER)) return false;
-            content |= !s.section().hasOnlyAir();
+            content |= !holdsOnlyAir(s.section());
         }
         return content;
     }
@@ -121,7 +135,7 @@ final class ClientSkyLightEstimator implements SkyLightEstimate.Column {
         int top = Integer.MIN_VALUE, bottom = Integer.MAX_VALUE;
         for (var s : sections) {
             int y = s.sectionY();
-            boolean content = !s.section().hasOnlyAir();
+            boolean content = !holdsOnlyAir(s.section());
             // One section of air above and below the content takes part in the spread.
             top = Math.max(top, content ? y + 1 : y);
             bottom = Math.min(bottom, content ? y - 1 : y);
@@ -137,7 +151,7 @@ final class ClientSkyLightEstimator implements SkyLightEstimate.Column {
         for (var s : sections) {
             int slot = top - s.sectionY();
             this.present[slot] = true;
-            if (!s.section().hasOnlyAir()) this.slots[slot] = s.section();
+            if (!holdsOnlyAir(s.section())) this.slots[slot] = s.section();
         }
         this.descriptors.clear();
         this.lastState = null;
@@ -170,7 +184,7 @@ final class ClientSkyLightEstimator implements SkyLightEstimate.Column {
             // Light only in air that is not sent (a column solid up to the level top): unchanged.
             if (lit == 0) return null;
             return new Result(out.toArray(new VoxelColumnData.SectionData[0]), lit, added,
-                    this.estimate.steps(), this.estimate.exhausted());
+                    this.estimate.work(), this.estimate.exhausted());
         } finally {
             Arrays.fill(this.slots, 0, count, null);   // do not pin the column's sections
             this.lastState = null;
@@ -188,7 +202,9 @@ final class ClientSkyLightEstimator implements SkyLightEstimate.Column {
         if (state == this.lastState) return this.lastDescriptor;
         int descriptor = this.descriptors.getInt(state);
         if (descriptor == UNKNOWN) {
-            descriptor = describe(state, this.stateLight);
+            // The state's place in this column's map is its identity: the routine then
+            // decides a pair of partial faces once per pair of states and axis.
+            descriptor = SkyLightEstimate.withIdentity(describe(state, this.stateLight), this.descriptors.size() + 1);
             this.descriptors.put(state, descriptor);
         }
         this.lastState = state;

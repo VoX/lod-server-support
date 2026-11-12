@@ -140,6 +140,11 @@ public final class ClientNetGlue {
         return columnProcessor.getSkyEstimatedColumns();
     }
 
+    /** Columns whose sky-light estimate failed this session (delivered as they arrived). */
+    public static long getSkyEstimateFailures() {
+        return columnProcessor.getSkyEstimateFailures();
+    }
+
     public static long getConnectionStartMs() {
         return sessionGate.getConnectionStartMs();
     }
