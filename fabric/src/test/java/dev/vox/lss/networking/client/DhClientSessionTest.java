@@ -34,7 +34,6 @@ import me.cortex.voxy.commonImpl.VoxyInstance;
 import me.cortex.voxy.commonImpl.WorldIdentifier;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.io.TempDir;
-import org.mockito.MockMakers;
 import org.objenesis.ObjenesisStd;
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
@@ -70,7 +69,6 @@ class DhClientSessionTest {
     private ClientLevel level;
     private ClientPacketListener connection;
     private Object previousMinecraft,previousHandle,previousSender,previousUnavailable,previousNativeAvailability,previousChannelAvailability,previousTransportReason;
-    private ClassLoader previousContextLoader;
     private SettingsHandle<ClientSettings> settings;
     private final LinkedBlockingQueue<Runnable> mainTasks=new LinkedBlockingQueue<>();
     private final List<byte[]> sent=new ArrayList<>();
@@ -87,11 +85,6 @@ class DhClientSessionTest {
     }
 
     @BeforeEach void setup() throws Exception {
-        // Mockito resolves an explicit maker through TCCL. fabric-loader-junit
-        // loads this test and Mockito in Knot while its thread starts with the
-        // parent loader; that would produce two incompatible MockMaker types.
-        previousContextLoader=Thread.currentThread().getContextClassLoader();
-        Thread.currentThread().setContextClassLoader(getClass().getClassLoader());
         previousMinecraft=read(null,Minecraft.class,"instance");
         previousCacheRoot=read(null,ColumnCacheStore.class,"cacheDir");write(null,ColumnCacheStore.class,"cacheDir",dir.resolve("column-cache"));
         previousHandle=read(LSSClientConfig.CONFIG,LSSClientConfig.class,"handle");
@@ -156,7 +149,6 @@ class DhClientSessionTest {
             write(null,DhClientSession.class,"notice",previousNotice);
             write(null,Minecraft.class,"instance",previousMinecraft);
             write(null,ColumnCacheStore.class,"cacheDir",previousCacheRoot);
-            Thread.currentThread().setContextClassLoader(previousContextLoader);
         }
     }
 
@@ -1009,10 +1001,7 @@ class DhClientSessionTest {
     public static final class DestinationBiome {public final String biome;DestinationBiome(String biome){this.biome=biome;}}
     private static final DhPosition CONTENT_POSITION=new DhPosition(6,-3,0);
     private Object deliverySession(int minY,int height) throws Exception {
-        // Other suites may already have instrumented ClientLevel's final
-        // accessors. Use the explicit inline maker here in isolated and whole
-        // runs alike, rather than relying on a final method falling through.
-        level=mock(ClientLevel.class,withSettings().mockMaker(MockMakers.INLINE));
+        level=mcMock(ClientLevel.class);
         minecraft.level=level;
         doReturn(Level.OVERWORLD).when(level).dimension();
         doReturn(new RegistryAccess.ImmutableRegistryAccess(List.of(biomes)).freeze()).when(level).registryAccess();
@@ -1280,7 +1269,10 @@ class DhClientSessionTest {
         var ctor=SESSION.getDeclaredConstructor(ClientLevel.class,boolean.class);ctor.setAccessible(true);
         Object s=ctor.newInstance(level,false);sessions.add(s);write(null,DhClientSession.class,"session",s);return s;
     }
-    private static <T> T mcMock(Class<T> type) {return mock(type,withSettings().mockMaker(MockMakers.SUBCLASS));}
+    // Mockito's default maker, like every other double in this JVM. Naming a
+    // second one here made later default-maker mocks of abstract types throw
+    // by hash order (SingleMockMakerContractTest).
+    private static <T> T mcMock(Class<T> type) {return mock(type);}
     private static final class TestMinecraft extends Minecraft {
         private LinkedBlockingQueue<Runnable> mainTasks;
         private ServerData server;
