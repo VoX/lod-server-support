@@ -21,12 +21,13 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * FP-027: real corrupt-region-file tolerance through the live disk-read pipeline. A region
- * file with a VALID header but garbage zlib chunk data is read by vanilla's
- * {@code RegionFileStorage}. On 26.x the inflate failure is caught upstream and surfaces
- * as an empty/absent chunk (not-found, the label this line normally produces); on the
- * 1.21.x lines vanilla PROPAGATES the ZipException and the SAME read resolves as ERROR —
- * and even ON this line, constrained/WSL2 boxes have produced the errors=1/not_found=0
- * shape environmentally (the CLAUDE.md flake-catalog entry this test used to red on).
+ * file with a VALID header but garbage zlib chunk data is read through the server's own
+ * region storage. On this line the default read fetches the raw record and inflates it on
+ * the reader pool, where the garbage fails ({@code ZipException}) and the read resolves
+ * as ERROR; other read rungs and other Minecraft lines can label the same read not-found.
+ * (Until 2026-11-12 the file was staged under {@code <world>/region}, which 26.2 and later
+ * never read: the "corrupt" read was a missing region, resolved not-found, and exercised
+ * no corruption at all. The not-found label recorded for 26.x came from that.)
  * What FP-027 actually guarantees, and what this test pins, is CONTAINMENT: the corrupt
  * read completes through the pool without going thread-fatal, frees its slot, leaks
  * nothing, and the SAME reader pool then serves a valid disk read. The
@@ -73,7 +74,15 @@ public class RegionFaultGameTests {
         int corruptCz = ((pcz >> 5) + 60) << 5;
         long corruptPacked = PositionUtil.packPosition(corruptCx, corruptCz);
         try {
-            var regionDir = server.getWorldPath(LevelResource.ROOT).resolve("region");
+            // The level's own region folder. (This used to be <world>/region, which is
+            // where the Overworld's regions lived before 26.2 moved them under
+            // dimensions/: on this line the file was then never read, the "corrupt" read
+            // was a plain missing region, and the test pinned nothing about corruption.
+            // The raw-serves assertion below fails if that ever happens again.)
+            var regionDir = net.minecraft.world.level.dimension.DimensionType
+                    .getStorageFolder(level.dimension(),
+                            server.getWorldPath(LevelResource.ROOT).normalize())
+                    .resolve("region");
             Files.createDirectories(regionDir);
             var regionFile = regionDir.resolve(
                     "r." + (corruptCx >> 5) + "." + (corruptCz >> 5) + ".mca");
@@ -123,9 +132,9 @@ public class RegionFaultGameTests {
             service.tick();
             var diskDiag = service.getDiskReader().getDiag();
             // Containment: both reads ran through the same pool to completion; the corrupt one
-            // resolved not-found (vanilla swallowed the inflate failure) WITHOUT erroring or
-            // saturating, and the valid read still served — proof the pool survived the corrupt
-            // read intact. This is the FP-027 guarantee; the not-found vs error label is vanilla's.
+            // resolved empty (error or not-found) without saturating, and the valid read still
+            // served — proof the pool survived the corrupt read intact. This is the FP-027
+            // guarantee; the not-found vs error label depends on the read rung and the line.
             helper.assertTrue(diskDiag.getSubmittedCount() == 2 && diskDiag.getCompletedCount() == 2
                             && diskDiag.getSuccessfulReadCount() == 1 && state.getTotalSectionsSent() == 1
                             && (diskDiag.getNotFoundCount() + diskDiag.getErrorCount()) == 1
@@ -138,6 +147,14 @@ public class RegionFaultGameTests {
                             + " completed=" + diskDiag.getCompletedCount()
                             + " not_found=" + diskDiag.getNotFoundCount()
                             + " saturated=" + diskDiag.getSaturationCount() + ")");
+            // The corrupt record was really READ: the raw-path counter moves only for a
+            // record that is present in the region file, so 2 is the valid chunk plus the
+            // corrupt one. A corrupt file staged where the server does not look leaves it
+            // at 1 while every assertion above still holds.
+            helper.assertTrue(service.getDiskReader().rawServesForTest() == 2,
+                    "both the valid and the CORRUPT record must be fetched from their region"
+                            + " files (raw_serves=" + service.getDiskReader().rawServesForTest()
+                            + "): the corrupt file must sit where the server reads it");
             helper.assertTrue(!state.hasDiskReadDone(corruptCx, corruptCz),
                     "a not-found read must not mark the position done — the client's "
                             + "NOT_GENERATED retry path must stay open");
