@@ -1,13 +1,20 @@
 package dev.vox.lss.common.farplayers;
 
 import dev.vox.lss.common.LSSConstants;
+import dev.vox.lss.common.LSSLogger;
+import dev.vox.lss.common.LSSPermissions;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Consumer;
 
 /**
  * The far-player broadcast core (v0.11.0 stage E1 — far-player-proxies-plan.md §3.2 as
@@ -51,14 +58,25 @@ public final class FarPlayerBroadcastService {
 
     /** One online player's per-tick snapshot, built once by the platform adapter.
      *  {@code vehicle} is pre-quantized ({@link FarPlayerWire.Vehicle}); equipment
-     *  identity strings are version-neutral registry identities (R-7). */
+     *  identity strings are version-neutral registry identities (R-7).
+     *
+     *  <p>Two separate privacy facts (hide-permission plan §3, 0.21.0):
+     *  {@code hidden} is the UNCONDITIONAL ladder (vanish metadata, a disguise, a failed or
+     *  raced privacy read) and always withholds the player; {@code holdsHidePermission} is
+     *  only the fact that the player holds {@code lss.farplayers.hidden} or
+     *  {@code vss.farplayers.hidden}, and withholds the player only while
+     *  {@link Settings#hidePermissionHolders} is on. In mode {@code required} the same
+     *  fact decides whose own sharing choice still binds (a holder may opt out; nobody
+     *  else can), and there "not a holder" counts only once two consecutive passes read
+     *  it (see {@link #PERMISSION_CONFIRMING_PASSES}). A platform that could not read the
+     *  permission reports {@code hidden=true}, never a guessed permission fact. */
     public record PlayerSnapshot(UUID uuid, String name, String dimension,
                                  double x, double y, double z,
                                  float yaw, float headYaw, float pitch,
                                  byte poseFlags,
                                  double velXPerSecond, double velYPerSecond, double velZPerSecond,
                                  boolean spectator, boolean invisible, boolean alive,
-                                 boolean hidden,
+                                 boolean hidden, boolean holdsHidePermission,
                                  long equipmentHash,
                                  String[] equipmentIdentities, int[] equipmentCounts,
                                  FarPlayerWire.Vehicle vehicle) {}
@@ -77,18 +95,98 @@ public final class FarPlayerBroadcastService {
      *  ({@code dev.vox.lss.compat.MeliusVanishBridge}, far-player-render-hardening-plan.md
      *  WI-7b — absent mod = visible, present-but-throwing = HIDDEN) since 2026-09-04, and
      *  their snapshots read the lss./vss.farplayers.hidden nodes through the loader seam
-     *  (WI-7a), so the exclude LIST is no longer the only lever there. */
+     *  (WI-7a) as {@link PlayerSnapshot#holdsHidePermission}, which hides a holder only
+     *  while {@link Settings#hidePermissionHolders} is on (0.21.0). */
     @FunctionalInterface
     public interface VanishBridge {
         boolean canSee(UUID viewer, UUID target);
     }
 
+    /** One server chat line: a translation key the 0.21.0 lang files carry, and the
+     *  English text every other client shows (an older mod, no mod). The fallback is
+     *  the en_us value, word for word, and takes no arguments. */
+    public record ChatLine(String translationKey, String fallback) {}
+
+    /** One system chat line to an online player (the two notices below). The platform
+     *  resolves the player and sends an ordinary system message as a translatable
+     *  component with the fallback, so it reaches every client version (no channel,
+     *  capability or session flag is involved). {@code false} = the player cannot be
+     *  reached right now; the claim is released and a later pass tries again. */
+    @FunctionalInterface
+    public interface PlayerNotifier {
+        boolean send(UUID player, ChatLine line);
+    }
+
+    /** The server mode in which a player's own sharing choice binds only for holders of
+     *  the hide permission ({@code far_players.mode: required}, hide-permission plan §2b). */
+    public static final String MODE_REQUIRED = "required";
+
+    /** A permission read is acted on in a player-facing way only after this many
+     *  CONSECUTIVE broadcast passes agree. Mode {@code required} overrides a player's
+     *  own sharing choice, and tells them so, only after that many passes read "not a
+     *  holder"; until then their choice binds as a holder's would. One such read is not
+     *  evidence: on Folia the pump can read a permissible while its owner's region thread
+     *  is rebuilding it (no throw, the node's default {@code false}), and the
+     *  Fabric/NeoForge/Sponge seam answers "not a holder" on any doubt. Acting on it
+     *  would show an opted-out holder for an interval and send them a false notice,
+     *  latched for the connection. The cost is the safe direction: a non-holder who
+     *  opted out stays hidden for one extra interval. The same rule guards the holder
+     *  notice: one "holder" read never messages a player. */
+    static final int PERMISSION_CONFIRMING_PASSES = 2;
+
+    private static final ChatLine REQUIRED_SHARING_NOTICE = new ChatLine(
+            "lss.far_players.sharing_required",
+            "This server requires position sharing: other players can see where you are"
+                    + " from far away, and your Share My Position setting does not apply here.");
+
+    private static final ChatLine HOLDER_NOTICE = new ChatLine(
+            "lss.far_players.permission_no_longer_hides",
+            "You have the lss.farplayers.hidden permission. Since 0.21.0 it no longer hides"
+                    + " you from far players by itself: turn off Share My Position to hide."
+                    + " Server owners: set far_players.hide_permission_holders in the server"
+                    + " config (true hides holders as before, false keeps this) to stop this"
+                    + " message.");
+
+    /** The once-per-connection chat line to a player whose Share My Position opt-out or
+     *  share distance mode {@code required} is overriding (project owner's wording,
+     *  2026-11-12). A player must never believe they are hidden when they are not.
+     *  Unbranded: it names the option by its label, which is the same in both brands. */
+    public static ChatLine requiredSharingNotice() {
+        return REQUIRED_SHARING_NOTICE;
+    }
+
+    /** The once-per-connection chat line to a holder of the hide permission on a server
+     *  that has not chosen yet (its settings file predates 0.21.0 and never set
+     *  {@code far_players.hide_permission_holders}): the permission used to hide them
+     *  and no longer does. Writing the key with either value stops it for everyone. The
+     *  node is the literal the server checks (the VSS lang rewrite only touches the
+     *  standalone word in capitals, so it survives in both brands). */
+    public static ChatLine holderNotice() {
+        return HOLDER_NOTICE;
+    }
+
     /** Per-viewer configuration snapshot the platform passes each tick (config is
-     *  runtime-mutable via /lsslod set — R-9 — so it is re-read per tick, the
-     *  tick-poll pattern). */
+     *  runtime-mutable via /lsslod reload — R-9 — so it is re-read per tick, the
+     *  tick-poll pattern). {@code hidePermissionHolders} is
+     *  {@code far_players.hide_permission_holders}: while on, every
+     *  {@link PlayerSnapshot#holdsHidePermission} target is withheld (the behaviour
+     *  before 0.21.0); off, the permission hides nobody by itself. {@code mode} is one
+     *  of {@code off}, {@code opt-in}, {@code on} or {@link #MODE_REQUIRED}.
+     *  {@code hidePermissionHoldersUndecided} is true while the loaded settings file
+     *  does not set that key at all (a file from before 0.21.0): only then are holders
+     *  told in game that the permission no longer hides them ({@link #holderNotice}). */
     public record Settings(String mode, int maxDistanceBlocks, int minDistanceBlocks,
                            boolean sendSpectators, List<String> exclude,
-                           int updateIntervalTicks) {}
+                           int updateIntervalTicks, boolean hidePermissionHolders,
+                           boolean hidePermissionHoldersUndecided) {
+        /** No settings file to ask (tests, tools): the operator counts as having chosen. */
+        public Settings(String mode, int maxDistanceBlocks, int minDistanceBlocks,
+                        boolean sendSpectators, List<String> exclude,
+                        int updateIntervalTicks, boolean hidePermissionHolders) {
+            this(mode, maxDistanceBlocks, minDistanceBlocks, sendSpectators, exclude,
+                    updateIntervalTicks, hidePermissionHolders, false);
+        }
+    }
 
     private static final class TargetRow {
         int quantX, quantY, quantZ;
@@ -145,8 +243,66 @@ public final class FarPlayerBroadcastService {
     private final AtomicLong suppressedUnchanged = new AtomicLong();
     private final AtomicLong bytesSent = new AtomicLong();
 
+    // Last-pass privacy counts for the diag line (hide-permission plan §3): written by the
+    // owning tick thread, read by the command thread, so volatile. Counted once per ONLINE
+    // player per pass (never per viewer×target pair) and zeroed whenever no pass can run.
+    private volatile int lastPassHidden;
+    private volatile int lastPassPermissionHolders;
+    private volatile int lastPassOverridden;
+    // The upgrade notice: ONE warn line per service instance (= per server start), the
+    // first time a holder is seen while far_players.hide_permission_holders is off.
+    private final AtomicBoolean holderNoticeLogged = new AtomicBoolean();
+    private final Consumer<String> notice;
+    // The two chat notices: players already told on THIS connection (the map-policy chat
+    // line's once-per-connection pattern), one latch each. They live beside retainedPrefs
+    // and are swept with it at onDisconnect only, so a same-connection viewer shed, a
+    // mode change or a dimension change never repeats a line; a reconnect re-arms it.
+    private final Set<UUID> overrideNoticed = new HashSet<>();
+    private final Set<UUID> holderNoticed = new HashSet<>();
+    private final PlayerNotifier playerNotifier;
+    // One WARN per service instance (= per server start), like the upgrade notice above.
+    private boolean chatLineFailureWarned;
+
+    /** One player's run of agreeing, clean permission reads. One object per player for
+     *  the life of its connection (or until no pass can run): the per-pass update only
+     *  writes its three fields. */
+    private static final class PermissionRead {
+        /** What the current run reads. */
+        boolean holder;
+        /** Its length in consecutive passes, capped at
+         *  {@link #PERMISSION_CONFIRMING_PASSES}; 0 after a failed ({@code hidden}) read. */
+        int passes;
+        /** The pass of the latest read: a run continues only from the pass before. */
+        long lastPass;
+    }
+
+    // Beside retainedPrefs: restarted by a different or failed read and by a pass that
+    // skipped the player, cleared when no pass can run, removed at onDisconnect.
+    private final Map<UUID, PermissionRead> permissionReads = new HashMap<>();
+    // Counts the broadcast passes that ran, so "consecutive" means adjacent passes.
+    private long passCounter;
+    // Consecutive passes in mode "required" (capped): a read under another mode never
+    // counts toward overriding a player's choice.
+    private int requiredPasses;
+
+    /** No chat lane: for tests and tools that never tell a player anything. Production
+     *  cores use the three-argument form (pinned by the wiring contract test). */
     public FarPlayerBroadcastService(VanishBridge vanishBridge) {
+        this(vanishBridge, LSSLogger::warn);
+    }
+
+    /** {@code notice} receives the once-per-instance upgrade line (tests observe it;
+     *  production logs it at WARN). */
+    public FarPlayerBroadcastService(VanishBridge vanishBridge, Consumer<String> notice) {
+        this(vanishBridge, notice, (player, message) -> false);
+    }
+
+    /** {@code playerNotifier} delivers a chat notice to one player. */
+    public FarPlayerBroadcastService(VanishBridge vanishBridge, Consumer<String> notice,
+                                     PlayerNotifier playerNotifier) {
         this.vanishBridge = vanishBridge == null ? (v, t) -> true : vanishBridge;
+        this.notice = Objects.requireNonNull(notice);
+        this.playerNotifier = Objects.requireNonNull(playerNotifier);
     }
 
     // ---- lifecycle (single-threaded, see the class contract) ----
@@ -169,12 +325,28 @@ public final class FarPlayerBroadcastService {
      *  keep being honored. Connection ends call {@link #onDisconnect} instead. */
     public void removeViewer(UUID viewer) {
         viewers.remove(viewer);
+        if (viewers.isEmpty()) clearLastPassCounts();
     }
 
-    /** The connection died: subscription AND retained prefs go with it. */
+    /** The connection died: subscription AND retained prefs go with it, and both chat
+     *  notices are re-armed for the player's next connection. */
     public void onDisconnect(UUID viewer) {
         viewers.remove(viewer);
         retainedPrefs.remove(viewer);
+        overrideNoticed.remove(viewer);
+        holderNoticed.remove(viewer);
+        permissionReads.remove(viewer);
+        if (viewers.isEmpty()) clearLastPassCounts();
+    }
+
+    /** No broadcast pass can run (no subscriber, or mode off): the last-pass counts
+     *  must not linger on the diag line, and a permission read from before the gap must
+     *  not count toward a confirmation after it. */
+    private void clearLastPassCounts() {
+        lastPassHidden = 0;
+        lastPassPermissionHolders = 0;
+        lastPassOverridden = 0;
+        permissionReads.clear();
     }
 
     /** ANY prefs receipt — changed or byte-identical — queues a full roster (R-3).
@@ -211,15 +383,51 @@ public final class FarPlayerBroadcastService {
     public long suppressedUnchanged() { return suppressedUnchanged.get(); }
     public long bytesSent() { return bytesSent.get(); }
 
+    /** Online players the last broadcast pass withheld for privacy: the unconditional
+     *  ladder ({@link PlayerSnapshot#hidden}) or the hide permission while
+     *  {@code far_players.hide_permission_holders} is on. */
+    public int lastPassHidden() { return lastPassHidden; }
+
+    /** Hide-permission holders the last broadcast pass saw while
+     *  {@code far_players.hide_permission_holders} was off (the permission did not hide
+     *  them); always 0 while the setting is on. */
+    public int lastPassPermissionHolders() { return lastPassPermissionHolders; }
+
+    /** Players whose own Share My Position opt-out or share distance mode
+     *  {@code required} overrode in the last broadcast pass and who could be shown to
+     *  someone (the players the notice is for); always 0 in other modes. */
+    public int lastPassOverridden() { return lastPassOverridden; }
+
+    /** Whether {@code player} was already sent the required-mode notice on this
+     *  connection (tests/diagnostics). */
+    public boolean hasRequiredSharingNotice(UUID player) {
+        return overrideNoticed.contains(player);
+    }
+
+    /** Whether {@code player} was already sent the holder notice on this connection
+     *  (tests/diagnostics). */
+    public boolean hasHolderNotice(UUID player) {
+        return holderNoticed.contains(player);
+    }
+
     /** The /lsslod diag line (rendered only while subscribers exist or counters moved —
-     *  the conditional-slot convention). */
+     *  the conditional-slot convention). {@code hidden=}, {@code perm_holders=} and
+     *  {@code overridden=} are appended only when non-zero, so the line is unchanged on
+     *  a server with none of them. */
     public String diagLine() {
-        return "FarPlayers: subs=" + viewers.size()
-                + ", rosters=" + rosterFramesSent.get()
-                + ", updates=" + updateFramesSent.get()
-                + ", entries=" + entriesSent.get()
-                + ", suppressed=" + suppressedUnchanged.get()
-                + ", bytes=" + bytesSent.get();
+        var line = new StringBuilder("FarPlayers: subs=").append(viewers.size())
+                .append(", rosters=").append(rosterFramesSent.get())
+                .append(", updates=").append(updateFramesSent.get())
+                .append(", entries=").append(entriesSent.get())
+                .append(", suppressed=").append(suppressedUnchanged.get())
+                .append(", bytes=").append(bytesSent.get());
+        int hidden = lastPassHidden;
+        int holders = lastPassPermissionHolders;
+        int overridden = lastPassOverridden;
+        if (hidden > 0) line.append(", hidden=").append(hidden);
+        if (holders > 0) line.append(", perm_holders=").append(holders);
+        if (overridden > 0) line.append(", overridden=").append(overridden);
+        return line.toString();
     }
 
     /** Server-owned mode transition/control drain, called even between broadcast ticks.
@@ -236,6 +444,7 @@ public final class FarPlayerBroadcastService {
             }
         }
         if (!disabled) return true;
+        clearLastPassCounts();
         for (var entry : viewers.entrySet()) {
             var state = entry.getValue();
             if (!state.clearPending) continue;
@@ -269,11 +478,44 @@ public final class FarPlayerBroadcastService {
      */
     public void tick(long nowMillis, List<PlayerSnapshot> online, Settings settings,
                      FrameSender sender) {
-        if (!applyMode(settings.mode(), sender) || viewers.isEmpty()) return;
+        if (!applyMode(settings.mode(), sender)) return; // off: counts already cleared
+        if (viewers.isEmpty()) {
+            clearLastPassCounts();
+            return;
+        }
         Map<UUID, PlayerSnapshot> byUuid = new HashMap<>(online.size());
+        boolean hideHolders = settings.hidePermissionHolders();
+        boolean required = MODE_REQUIRED.equals(settings.mode());
+        passCounter++;
+        requiredPasses = required ? Math.min(requiredPasses + 1, PERMISSION_CONFIRMING_PASSES) : 0;
+        boolean tellHolders = !hideHolders && settings.hidePermissionHoldersUndecided();
+        int hidden = 0;
+        int holders = 0;
+        int overridden = 0;
         for (var s : online) {
             byUuid.put(s.uuid(), s);
+            notePermissionRead(s);
+            if (withheldForPrivacy(s, hideHolders)) hidden++;
+            if (s.holdsHidePermission() && !hideHolders) {
+                holders++;
+                noteHolderNotHidden(s);
+            }
+            // The server has not chosen yet (and so shows holders): tell each holder it
+            // shows, in game, once per connection.
+            if (tellHolders && holderShownDespitePermission(s, settings)) {
+                tellOnce(holderNoticed, s, HOLDER_NOTICE);
+            }
+            // Once per ONLINE player per pass, where the target's own preferences are
+            // evaluated: covers preferences arriving under "required", the mode switching
+            // to it at runtime, and a player losing the permission while opted out.
+            if (required && ownChoiceOverridden(s, settings)) {
+                overridden++;
+                tellOnce(overrideNoticed, s, REQUIRED_SHARING_NOTICE);
+            }
         }
+        lastPassHidden = hidden;
+        lastPassPermissionHolders = holders;
+        lastPassOverridden = overridden;
         for (var entry : viewers.entrySet()) {
             var viewerUuid = entry.getKey();
             var state = entry.getValue();
@@ -550,27 +792,158 @@ public final class FarPlayerBroadcastService {
         if (distSq > (double) max * max) return false;
         if (min > 0 && distSq < (double) min * min) return false;
 
-        // Server-authoritative privacy (the ESP-oracle fix). hidden = the platform's
-        // permission lever (Paper: lss.farplayers.hidden) — enforced HERE, not just
-        // declared (stage-E1 review MAJOR).
-        if (target.hidden()) return false;
+        // Server-authoritative privacy (the ESP-oracle fix) — enforced HERE, not just
+        // declared (stage-E1 review MAJOR). The ladder (vanish, disguise, a failed read)
+        // always withholds; the hide permission withholds only while
+        // far_players.hide_permission_holders is on (hide-permission plan §2).
+        if (withheldForPrivacy(target, settings.hidePermissionHolders())) return false;
         if (isExcluded(target, settings.exclude())) return false;
         // The TARGET side reads the retained map — an opt-out survives viewer sheds
         // (gate revocation, NO_CONSUMER downgrade) for as long as the player is online.
         var targetPrefs = retainedPrefs.get(target.uuid());
+        // Mode "required" (hide-permission plan §2b): the target's OWN sharing choices
+        // (opt-out, share distance) bind for a holder of the hide permission, and for
+        // anyone not yet CONFIRMED as "not a holder" (two consecutive reads). Every
+        // other mode honors them for everyone, exactly as before. Nothing above this
+        // line is affected: "required" overrides only the target's own choice.
+        boolean ownChoiceBinds = !MODE_REQUIRED.equals(settings.mode())
+                || !confirmedNonHolder(target);
         if ("opt-in".equals(settings.mode())) {
             // Only targets whose own client said shareSelf=true are served at all.
             if (targetPrefs == null || !targetPrefs.shareSelf()) return false;
-        } else if (targetPrefs != null && !targetPrefs.shareSelf()) {
-            // Mode "on": a target that EXPLICITLY opted out is honored.
+        } else if (ownChoiceBinds && targetPrefs != null && !targetPrefs.shareSelf()) {
+            // Mode "on" (and a holder in "required"): an EXPLICIT opt-out is honored.
             return false;
         }
-        if (targetPrefs != null && targetPrefs.shareDistanceBlocks() > 0
+        if (ownChoiceBinds && targetPrefs != null && targetPrefs.shareDistanceBlocks() > 0
                 && distSq > (double) targetPrefs.shareDistanceBlocks()
                         * targetPrefs.shareDistanceBlocks()) {
             return false;
         }
         return true;
+    }
+
+    /** The one privacy decision the filter ladder and the diag count share: the
+     *  unconditional ladder, OR the hide permission while the server setting is on. */
+    private static boolean withheldForPrivacy(PlayerSnapshot target, boolean hidePermissionHolders) {
+        return target.hidden() || (hidePermissionHolders && target.holdsHidePermission());
+    }
+
+    /** The upgrade notice (hide-permission plan §2): servers that granted the node on
+     *  purpose see those players again after updating, and that must not be silent. One
+     *  line per service instance; the latch read is the only per-tick cost. */
+    private void noteHolderNotHidden(PlayerSnapshot holder) {
+        if (holderNoticeLogged.get() || !holderNoticeLogged.compareAndSet(false, true)) return;
+        notice.accept("Far players: " + holder.name() + " holds the "
+                + LSSPermissions.FARPLAYERS_HIDDEN_LSS + " (or "
+                + LSSPermissions.FARPLAYERS_HIDDEN_VSS + ") permission."
+                + " Since 0.21.0 that permission no longer hides a player by itself; players"
+                + " hide themselves with Share My Position. Set"
+                + " far_players.hide_permission_holders: true in the server settings to hide"
+                + " every holder as before, or list players in far_players.excluded_players"
+                + " to hide them whatever their permissions.");
+    }
+
+    /** Whether a holder is shown (or would be, to a viewer in range) although they hold
+     *  the hide permission: a CONFIRMED holder (two consecutive reads; a failed read is
+     *  no read) whom neither {@code excluded_players} nor their own Share My Position
+     *  choice hides. Callers check that the setting is off and the server undecided. */
+    private boolean holderShownDespitePermission(PlayerSnapshot holder, Settings settings) {
+        if (!confirmedRead(holder, true)) return false;
+        if (isExcluded(holder, settings.exclude())) return false;
+        var prefs = retainedPrefs.get(holder.uuid());
+        if ("opt-in".equals(settings.mode())) return prefs != null && prefs.shareSelf();
+        return prefs == null || prefs.shareSelf();
+    }
+
+    /** Records this pass's permission read. A failed read ({@code hidden}: on
+     *  Paper/Folia a raced read carries no permission fact) ends the run; a clean read
+     *  extends it only when the previous pass read the same, so a different read or a
+     *  pass that skipped the player starts it again. */
+    private void notePermissionRead(PlayerSnapshot target) {
+        var read = permissionReads.get(target.uuid());
+        if (target.hidden()) {
+            if (read != null) read.passes = 0;
+            return;
+        }
+        if (read == null) {
+            read = new PermissionRead();
+            permissionReads.put(target.uuid(), read);
+        }
+        boolean holder = target.holdsHidePermission();
+        boolean continues = read.passes > 0 && read.holder == holder
+                && read.lastPass == passCounter - 1;
+        read.passes = continues ? Math.min(read.passes + 1, PERMISSION_CONFIRMING_PASSES) : 1;
+        read.holder = holder;
+        read.lastPass = passCounter;
+    }
+
+    /** Whether {@code target} read {@code holder} cleanly in this pass AND in the pass
+     *  before it ({@link #PERMISSION_CONFIRMING_PASSES}). */
+    private boolean confirmedRead(PlayerSnapshot target, boolean holder) {
+        if (target.hidden() || target.holdsHidePermission() != holder) return false;
+        var read = permissionReads.get(target.uuid());
+        return read != null && read.holder == holder && read.lastPass == passCounter
+                && read.passes >= PERMISSION_CONFIRMING_PASSES;
+    }
+
+    /** Whether mode {@code required} may treat {@code target} as "not a holder": two
+     *  consecutive passes, both in mode {@code required}, read it so. Anything less
+     *  binds like a holder. */
+    private boolean confirmedNonHolder(PlayerSnapshot target) {
+        return requiredPasses >= PERMISSION_CONFIRMING_PASSES && confirmedRead(target, false);
+    }
+
+    /** Whether mode {@code required} is overriding this player's own sharing choice AND
+     *  the player can be shown to someone, so that "other players can see where you
+     *  are" is true when it is said: a confirmed NON-holder who opted out or set a share
+     *  distance, whom no unconditional rung withholds (not ladder-hidden, alive, not
+     *  invisible, not a spectator the server does not send, not excluded), and whom the
+     *  vanish bridge lets at least one other receiving viewer see. Dimension and range
+     *  are deliberately not part of it: they change as players move, and the player
+     *  should know before someone comes into range. Callers check the mode. */
+    private boolean ownChoiceOverridden(PlayerSnapshot target, Settings settings) {
+        var prefs = retainedPrefs.get(target.uuid());
+        if (prefs == null || (prefs.shareSelf() && prefs.shareDistanceBlocks() <= 0)) return false;
+        if (!confirmedNonHolder(target)) return false; // also: a holder, a failed read
+        if (!target.alive() || target.invisible()) return false;
+        if (target.spectator() && !settings.sendSpectators()) return false;
+        if (isExcluded(target, settings.exclude())) return false;
+        return someViewerMaySee(target.uuid());
+    }
+
+    /** The vanish bridge is per (viewer, target): true when some OTHER viewer that
+     *  receives far players passes it for {@code target}. A player the bridge hides
+     *  from everyone (the only vanish source on Fabric, NeoForge and Sponge), or one
+     *  with nobody else receiving far players, is shown to nobody. */
+    private boolean someViewerMaySee(UUID target) {
+        for (var entry : viewers.entrySet()) {
+            if (entry.getKey().equals(target)) continue;
+            var prefs = entry.getValue().prefs;
+            if (prefs == null || !prefs.enabled()) continue;
+            if (vanishBridge.canSee(entry.getKey(), target)) return true;
+        }
+        return false;
+    }
+
+    /** One chat line per CONNECTION to a player ({@code latch} holds who was told): the
+     *  honest notice of mode {@code required} (hide-permission plan §2b) and the holder
+     *  notice. Claimed before the send, like the map-policy line: a send that throws is
+     *  contained and never retried (it may have delivered, and a retry every pass would
+     *  spam the player); a player who cannot be reached right now releases the claim, so
+     *  a later pass tries again. */
+    private void tellOnce(Set<UUID> latch, PlayerSnapshot target, ChatLine line) {
+        UUID uuid = target.uuid();
+        if (!latch.add(uuid)) return;
+        try {
+            if (!playerNotifier.send(uuid, line)) latch.remove(uuid);
+        } catch (RuntimeException e) {
+            if (!chatLineFailureWarned) {
+                chatLineFailureWarned = true;
+                LSSLogger.warn("Far-player chat notice to " + target.name()
+                        + " failed (contained; one warn per server start): " + e);
+            }
+        }
     }
 
     private static boolean isExcluded(PlayerSnapshot target, List<String> exclude) {

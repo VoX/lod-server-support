@@ -19,6 +19,11 @@ import static org.mockito.Mockito.when;
  * player and fails HIDDEN (a raced/throwing read must never leak a hidden or vanished
  * player's position, and one broken permissible must not abort the snapshot pass for
  * everyone — the pre-fix shape). First paper-module coverage of this class.
+ *
+ * <p>Since 0.21.0 (hide-permission plan §3) the hide permission is reported as its own
+ * FACT ({@code holdsHidePermission}) beside the unconditional verdict ({@code hidden}:
+ * vanish, a disguise, any failed read). Holding the node no longer sets {@code hidden};
+ * a THROWING permission read still does.
  */
 class PaperFarPlayerSnapshotsTest {
 
@@ -51,16 +56,37 @@ class PaperFarPlayerSnapshotsTest {
     void aCleanUnprivilegedPlayerIsVisible() {
         assertFalse(PaperFarPlayerSnapshots.hiddenFor(bukkit()),
                 "no node, no vanish: visible (the mode default)");
+        assertFalse(PaperFarPlayerSnapshots.privacyFor(bukkit()).holdsHidePermission(),
+                "and not a holder: the node is declared default false");
     }
 
     @Test
-    void eitherBrandSpellingHides() {
+    void eitherBrandSpellingIsReportedAsTheHolderFactAndNoLongerHidesByItself() {
+        // Hide-permission plan §2: a wildcard grant resolves the node true, so the node
+        // must not be a verdict. The service hides a holder only while
+        // far_players.hide_permission_holders is on.
         for (String node : new String[]{"lss.farplayers.hidden", "vss.farplayers.hidden"}) {
             var p = bukkit();
             when(p.hasPermission(node)).thenReturn(true);
-            assertTrue(PaperFarPlayerSnapshots.hiddenFor(p),
-                    node + " must hide (grant model: EITHER spelling takes effect)");
+            var privacy = PaperFarPlayerSnapshots.privacyFor(p);
+            assertTrue(privacy.holdsHidePermission(),
+                    node + " must be reported (grant model: EITHER spelling counts)");
+            assertFalse(privacy.hidden(),
+                    node + " alone must not set the unconditional verdict");
+            assertFalse(PaperFarPlayerSnapshots.hiddenFor(p));
         }
+    }
+
+    @Test
+    void aVanishedHolderIsBothHiddenAndAHolder() {
+        var p = bukkit();
+        var plugin = mock(org.bukkit.plugin.Plugin.class);
+        when(p.hasPermission("lss.farplayers.hidden")).thenReturn(true);
+        when(p.getMetadata("vanished"))
+                .thenReturn(List.<MetadataValue>of(new FixedMetadataValue(plugin, true)));
+        var privacy = PaperFarPlayerSnapshots.privacyFor(p);
+        assertTrue(privacy.hidden(), "vanish hides a holder like anyone else");
+        assertTrue(privacy.holdsHidePermission());
     }
 
     @Test
@@ -82,6 +108,31 @@ class PaperFarPlayerSnapshotsTest {
         when(p.hasPermission(anyString())).thenThrow(new IllegalStateException("raced"));
         assertTrue(PaperFarPlayerSnapshots.hiddenFor(p),
                 "a throwing privacy read must HIDE, never leak");
+        // 0.21.0: the permission is only a fact now, but a THROWING permission read is
+        // still the unconditional verdict — whatever far_players.hide_permission_holders
+        // says (the snapshot builder never sees the setting), and no fact is guessed.
+        var privacy = PaperFarPlayerSnapshots.privacyFor(p);
+        assertTrue(privacy.hidden(), "a throwing permission read sets the unconditional verdict");
+        assertFalse(privacy.holdsHidePermission(), "and claims no permission fact");
+    }
+
+    @Test
+    void aThrowOnTheSecondSpellingStillHides() {
+        // The LSS spelling answers false, so the OR reaches the VSS read — which races.
+        var p = bukkit();
+        when(p.hasPermission("vss.farplayers.hidden")).thenThrow(new IllegalStateException("raced"));
+        assertTrue(PaperFarPlayerSnapshots.privacyFor(p).hidden(),
+                "a throw on either spelling's read must HIDE");
+    }
+
+    @Test
+    void aHolderWhoseVanishReadThrowsIsHidden() {
+        // The permission read succeeded (holder); the ladder read after it raced.
+        var p = bukkit();
+        when(p.hasPermission("lss.farplayers.hidden")).thenReturn(true);
+        when(p.getMetadata("vanished")).thenThrow(new IllegalStateException("region-owned"));
+        assertTrue(PaperFarPlayerSnapshots.privacyFor(p).hidden(),
+                "a holder is not exempt from the fail-hidden direction");
     }
 
     @Test
@@ -165,25 +216,41 @@ class PaperFarPlayerSnapshotsTest {
     }
 
     @Test
-    void theLadderOrderIsPermissionThenVanishThenDisguise() {
-        // A throwing disguise read is armed; the earlier rungs must answer HIDDEN without
-        // ever consulting it (their verdict is final, and the stub's call count proves it).
+    void theLadderOrderIsVanishThenDisguiseAndAHolderStillReachesIt() {
+        // A throwing disguise read is armed; the vanish rung must answer HIDDEN without
+        // ever consulting it (its verdict is final, and the stub's call count proves it).
         LibsDisguisesBridge.pluginProbe = () -> DISGUISE_PLUGIN;
         me.libraryaddict.disguise.DisguiseAPI.THROW = new IllegalStateException("must not be reached");
-        var byNode = bukkit();
-        when(byNode.hasPermission("lss.farplayers.hidden")).thenReturn(true);
-        assertTrue(PaperFarPlayerSnapshots.hiddenFor(byNode));
         var byVanish = bukkit();
         var plugin = mock(org.bukkit.plugin.Plugin.class);
         when(byVanish.getMetadata("vanished"))
                 .thenReturn(List.<MetadataValue>of(new FixedMetadataValue(plugin, true)));
         assertTrue(PaperFarPlayerSnapshots.hiddenFor(byVanish));
         org.junit.jupiter.api.Assertions.assertEquals(0, me.libraryaddict.disguise.DisguiseAPI.CALLS,
-                "permission and vanish short-circuit BEFORE the disguise read");
+                "vanish short-circuits BEFORE the disguise read");
+        // 0.21.0: the permission is a fact, not a rung — a holder no longer short-circuits,
+        // so a DISGUISED (or here: unreadable) holder is still caught by the ladder.
+        var byNode = bukkit();
+        when(byNode.hasPermission("lss.farplayers.hidden")).thenReturn(true);
+        assertTrue(PaperFarPlayerSnapshots.hiddenFor(byNode),
+                "a holder reaches the (throwing) disguise rung: HIDDEN");
+        org.junit.jupiter.api.Assertions.assertEquals(1, me.libraryaddict.disguise.DisguiseAPI.CALLS,
+                "the holder's ladder was read");
         assertTrue(PaperFarPlayerSnapshots.hiddenFor(bukkit()),
                 "a clean player reaches the (throwing) disguise rung: HIDDEN");
-        org.junit.jupiter.api.Assertions.assertEquals(1, me.libraryaddict.disguise.DisguiseAPI.CALLS);
+        org.junit.jupiter.api.Assertions.assertEquals(2, me.libraryaddict.disguise.DisguiseAPI.CALLS);
         me.libraryaddict.disguise.DisguiseAPI.THROW = null;
+    }
+
+    @Test
+    void aDisguisedHolderIsHidden() {
+        LibsDisguisesBridge.pluginProbe = () -> DISGUISE_PLUGIN;
+        var p = bukkit();
+        when(p.hasPermission("vss.farplayers.hidden")).thenReturn(true);
+        me.libraryaddict.disguise.DisguiseAPI.DISGUISED.add(p);
+        var privacy = PaperFarPlayerSnapshots.privacyFor(p);
+        assertTrue(privacy.hidden(), "holding the node must not skip the disguise rung");
+        assertTrue(privacy.holdsHidePermission());
     }
 
     @Test
@@ -255,7 +322,9 @@ class PaperFarPlayerSnapshotsTest {
         var uuid = java.util.UUID.randomUUID();
         var p = healthyNms(uuid, "steve");
         var bukkit = (org.bukkit.entity.Player) p.getBukkitEntity();
-        when(bukkit.hasPermission("lss.farplayers.hidden")).thenReturn(true);
+        var plugin = mock(org.bukkit.plugin.Plugin.class);
+        when(bukkit.getMetadata("vanished"))
+                .thenReturn(List.<MetadataValue>of(new FixedMetadataValue(plugin, true)));
 
         var snap = PaperFarPlayerSnapshots.snapshot(p);
 
@@ -263,7 +332,34 @@ class PaperFarPlayerSnapshotsTest {
         org.junit.jupiter.api.Assertions.assertEquals("steve", snap.name());
         org.junit.jupiter.api.Assertions.assertEquals("minecraft:overworld", snap.dimension());
         assertTrue(snap.hidden(), "the privacy ladder's verdict rides the snapshot");
+        assertFalse(snap.holdsHidePermission(), "vanish is not the permission fact");
         assertTrue(snap.alive());
+    }
+
+    @Test
+    void aHoldersSnapshotCarriesThePermissionFactAndIsNotHidden() {
+        // The two record components must not be swapped or folded back together: a
+        // holder's snapshot is (hidden=false, holdsHidePermission=true).
+        var p = healthyNms(java.util.UUID.randomUUID(), "admin");
+        var bukkit = (org.bukkit.entity.Player) p.getBukkitEntity();
+        when(bukkit.hasPermission("lss.farplayers.hidden")).thenReturn(true);
+
+        var snap = PaperFarPlayerSnapshots.snapshot(p);
+
+        assertTrue(snap.holdsHidePermission(), "the permission fact rides the snapshot");
+        assertFalse(snap.hidden(), "and the permission alone is not the unconditional verdict");
+    }
+
+    @Test
+    void aThrowingPermissionReadReachesTheSnapshotAsHidden() {
+        var p = healthyNms(java.util.UUID.randomUUID(), "raced");
+        var bukkit = (org.bukkit.entity.Player) p.getBukkitEntity();
+        when(bukkit.hasPermission(anyString())).thenThrow(new IllegalStateException("raced"));
+
+        var snap = PaperFarPlayerSnapshots.snapshot(p);
+
+        assertTrue(snap.hidden(), "a raced permission read must hide the player in the snapshot");
+        assertFalse(snap.holdsHidePermission());
     }
 
     @Test
@@ -276,6 +372,7 @@ class PaperFarPlayerSnapshotsTest {
         var snap = PaperFarPlayerSnapshots.snapshot(p);
         org.junit.jupiter.api.Assertions.assertFalse(snap.hidden(),
                 "a clean player is NOT hidden — the false direction of the privacy verdict");
+        assertFalse(snap.holdsHidePermission(), "and NOT a holder — the false direction of the fact");
         assertTrue(snap.alive());
     }
 }

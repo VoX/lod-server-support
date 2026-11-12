@@ -189,7 +189,8 @@ public class PaperRequestProcessingService {
     // the quit-originated mailbox Remove, notified (never removed) on dimension change.
     // Vanish bridge seam null until the reflective ladder lands (E2/E3).
     private final dev.vox.lss.common.farplayers.FarPlayerBroadcastService farPlayerService =
-            new dev.vox.lss.common.farplayers.FarPlayerBroadcastService(null);
+            new dev.vox.lss.common.farplayers.FarPlayerBroadcastService(null,
+                    LSSLogger::warn, this::sendFarPlayerNotice);
     private int farPlayerTickCounter;
 
     private final long startTimeNanos = System.nanoTime();
@@ -2653,7 +2654,9 @@ public class PaperRequestProcessingService {
                             this.config.farPlayersMinDistanceBlocks(),
                             this.config.farPlayersSendSpectators(),
                             this.config.farPlayersExclude(),
-                            this.config.farPlayersUpdateIntervalTicks()),
+                            this.config.farPlayersUpdateIntervalTicks(),
+                            this.config.farPlayersHidePermissionHolders(),
+                            this.config.farPlayersHidePermissionHoldersUndecided()),
                     this::sendFarPlayerFrame);
         } catch (Exception e) {
             // Containment (review): a snapshot/encode bug must degrade far players,
@@ -2669,7 +2672,7 @@ public class PaperRequestProcessingService {
 
     /** One snapshot per online player, CONTAINED per player (Folia review 2026-08-27
      *  R2): one raced cross-region read (equipment, vehicle, a throwing permissible
-     *  the hiddenFor belt did not cover) must not abort the pass for every other
+     *  the privacyFor belt did not cover) must not abort the pass for every other
      *  player — the pre-fix shape, where the only catch was around the whole pass.
      *  The skipped player reads as absent this interval; the roster reconciles next
      *  tick (stale-tolerant by the same doctrine as the reads themselves). The
@@ -2710,6 +2713,37 @@ public class PaperRequestProcessingService {
                         FAR_PLAYER_CHANNEL_IDS.computeIfAbsent(channel,
                                 net.minecraft.resources.ResourceLocation::parse), body)));
         this.bandwidthLimiter.recordSend(body.length);
+        return true;
+    }
+
+    /** The far-player notices' chat-line send (hide-permission plan §2b; the map-policy
+     *  chat line's shape): NMS {@code sendSystemMessage} on the pump, an ordinary system
+     *  message, so it reaches every client version. Translatable with the English text
+     *  as its fallback: a client whose lang files carry the key shows its own language,
+     *  every other client (an older mod, no mod) shows the fallback. Seam-injected for
+     *  tests. */
+    private java.util.function.BiConsumer<ServerPlayer,
+            dev.vox.lss.common.farplayers.FarPlayerBroadcastService.ChatLine> farPlayerNoticeSender =
+            (player, line) -> player.sendSystemMessage(
+                    net.minecraft.network.chat.Component.translatableWithFallback(
+                            line.translationKey(), line.fallback()));
+
+    /** Test seam. */
+    void setFarPlayerNoticeSender(java.util.function.BiConsumer<ServerPlayer,
+            dev.vox.lss.common.farplayers.FarPlayerBroadcastService.ChatLine> sender) {
+        this.farPlayerNoticeSender = sender;
+    }
+
+    /** The broadcast core's {@code PlayerNotifier}: one system chat line to an online
+     *  player (mode "required" overriding their Share My Position choice, or the holder
+     *  notice). False = the player list no longer holds the player, so the core retries
+     *  on a later pass. */
+    private boolean sendFarPlayerNotice(UUID uuid,
+            dev.vox.lss.common.farplayers.FarPlayerBroadcastService.ChatLine line) {
+        var playerList = this.server == null ? null : this.server.getPlayerList();
+        var player = playerList == null ? null : playerList.getPlayer(uuid);
+        if (player == null) return false;
+        this.farPlayerNoticeSender.accept(player, line);
         return true;
     }
 
