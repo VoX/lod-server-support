@@ -96,15 +96,32 @@ class PluginYmlContractTest {
 
     @Test
     void bothFarPlayerPrivacyNodesAreDeclaredDefaultFalse() {
-        // Review-wave V-M1 (the load-bearing dual declaration): the enforcement
-        // dual-checks lss.* OR vss.*, and Bukkit resolves an UNDECLARED node to the op
-        // default — deleting EITHER declaration (or flipping a default) silently hides
-        // every op from far players on the jars where that spelling is undeclared.
-        // Both spellings ship in BOTH jars; the vssJar rewrite must not rename them.
+        // Review-wave V-M1 (the load-bearing dual declaration): the read dual-checks
+        // lss.* OR vss.*, and Bukkit resolves an UNDECLARED node to the op default —
+        // deleting EITHER declaration (or flipping a default) silently makes every op a
+        // holder on the jars where that spelling is undeclared: hidden as a far player the
+        // moment far_players.hide_permission_holders is on, and a false upgrade notice
+        // before that. Both spellings ship in BOTH jars; the vssJar rewrite must not
+        // rename them.
         assertEquals("false", yml.getString("permissions/lss.farplayers.hidden/default"),
                 "lss.farplayers.hidden must be declared default false");
         assertEquals("false", yml.getString("permissions/vss.farplayers.hidden/default"),
                 "vss.farplayers.hidden must be declared default false");
+        // Hide-permission plan §2 (0.21.0): the node hides nobody by itself, and the
+        // description a permission plugin shows must say so and name the setting that
+        // restores the old behaviour — "never shown as far players" was the trap.
+        for (String node : new String[]{"lss.farplayers.hidden", "vss.farplayers.hidden"}) {
+            String description = yml.getString("permissions/" + node + "/description");
+            assertNotNull(description, node + " must say what it does");
+            assertTrue(description.contains("only while far_players.hide_permission_holders is true"),
+                    node + "'s description must name the setting that makes it hide: " + description);
+            assertFalse(description.contains("never shown"),
+                    node + "'s description must not promise the pre-0.21.0 behaviour: " + description);
+            // Mode "required" (plan §2b): there the node is the only way to opt out.
+            assertTrue(description.contains("In far_players.mode required it is what lets the player"
+                            + " hide with Share My Position"),
+                    node + "'s description must say what the node does in mode required: " + description);
+        }
         // The constants' HOME is common since far-player-render-hardening-plan.md WI-7a (the
         // Fabric/NeoForge snapshot reads and the NeoForge node registration enforce the same
         // strings) — this is the one pin tying the declaration to all three modules.

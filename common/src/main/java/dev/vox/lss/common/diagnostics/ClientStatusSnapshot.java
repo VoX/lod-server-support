@@ -10,11 +10,30 @@ public record ClientStatusSnapshot(int schemaVersion, long lifecycle, long captu
         int effectiveDistance, long receivedColumns, long receivedBytes, int queuedColumns,
         int ingestBacklog, long ingestFailures, int rateCap, long rateGatedTicks,
         int xaeroPendingRebuilds, Discovery discovery, Availability xaeroAvailability, ClientDiagnosticSnapshot details, DiagnosticVersions versions, ClientSettingsStatus settings, DhStatusSnapshot dh,
-        Availability journeyMapAvailability, int journeyMapPending) {
+        Availability journeyMapAvailability, int journeyMapPending, int farPlayersFromServer) {
     /** 4: settings.mapIngestionEnabled (was xaeroMapEnabled) and the JourneyMap fields.
      *  5: {@link Availability#SERVER_BLOCKED} (the server's map-ingestion request,
-     *  map-policy plan A4). */
-    public static final int SCHEMA_VERSION = 5;
+     *  map-policy plan A4).
+     *  6: {@code farPlayersFromServer} — how many far players the server is currently
+     *  sending this client (hide-permission plan §3): 0 means the server sends none
+     *  (its mode, a permission or setting, the other players' sharing choice, distance),
+     *  anything else means a missing far player is a client drawing question (fog, the
+     *  draw range). A count only; never names or positions. */
+    public static final int SCHEMA_VERSION = 6;
+    /** Callers with no far-player observation (none received). */
+    public ClientStatusSnapshot(int schemaVersion, long lifecycle, long capturedAtMillis,
+            boolean connected, boolean negotiated, boolean receptionEnabled, boolean serverEnabled,
+            boolean consumerAvailable, boolean rendererAvailable, int protocol, int serverDistance,
+            int effectiveDistance, long receivedColumns, long receivedBytes, int queuedColumns,
+            int ingestBacklog, long ingestFailures, int rateCap, long rateGatedTicks,
+            int xaeroPendingRebuilds, Discovery discovery, Availability xaeroAvailability,
+            ClientDiagnosticSnapshot details, DiagnosticVersions versions, ClientSettingsStatus settings,
+            DhStatusSnapshot dh, Availability journeyMapAvailability, int journeyMapPending) {
+        this(schemaVersion,lifecycle,capturedAtMillis,connected,negotiated,receptionEnabled,serverEnabled,
+                consumerAvailable,rendererAvailable,protocol,serverDistance,effectiveDistance,receivedColumns,
+                receivedBytes,queuedColumns,ingestBacklog,ingestFailures,rateCap,rateGatedTicks,xaeroPendingRebuilds,
+                discovery,xaeroAvailability,details,versions,settings,dh,journeyMapAvailability,journeyMapPending,0);
+    }
     /** Callers with no JourneyMap observation (JourneyMap UNKNOWN, nothing pending). */
     public ClientStatusSnapshot(int schemaVersion, long lifecycle, long capturedAtMillis,
             boolean connected, boolean negotiated, boolean receptionEnabled, boolean serverEnabled,
@@ -118,6 +137,7 @@ public record ClientStatusSnapshot(int schemaVersion, long lifecycle, long captu
                 "Xaero integration: " + xaeroAvailability,
                 "JourneyMap integration: " + journeyMapAvailability,
                 "Far-player renderer: " + (rendererAvailable ? "available" : "unavailable on this loader/line"),
+                "Far players sent by this server: " + farPlayersFromServer,
                 "Observed conditions (queue presence alone does not establish a bottleneck): " + reasons(),
                 "Progress since this world status began: " + receivedColumns + " columns, " + receivedBytes + " bytes; distance " + effectiveDistance + "/" + serverDistance,
                 "Rate gate events in this sample: " + rateGatedTicks + "; configured manual cap " + rateCap + " columns/s (0 unlimited; adaptive cap may also bind)",
