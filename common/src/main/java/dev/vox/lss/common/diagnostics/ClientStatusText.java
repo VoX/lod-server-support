@@ -43,6 +43,7 @@ public final class ClientStatusText {
         lines.add(text("xaero", enumText("availability", s.xaeroAvailability())));
         lines.add(text("journeymap", enumText("availability", s.journeyMapAvailability())));
         lines.add(text("renderer", text(s.rendererAvailable() ? "available" : "renderer_unavailable")));
+        lines.add(text("far_players", s.farPlayersFromServer()));
         List<Message> reasons = s.reasons().stream().map(reason -> enumText("reason", reason)).toList();
         lines.add(text("conditions", reasons.isEmpty() ? text("none") : reasons));
         lines.add(text("progress", s.receivedColumns(), s.receivedBytes(), s.effectiveDistance(), s.serverDistance()));
