@@ -646,13 +646,36 @@ Files: `common/.../voxel/SkyLightEstimate.java` (the rule, no Minecraft types),
 - **Nothing lit, nothing changed.** A column that has blocks and no sky light but receives none
   from the estimate (solid to the level top) is dispatched exactly as it arrived and is not
   counted.
-- **Spread budget.** 131,072 steps per column; past it the spread stops and the column stays
-  darker. Real terrain used at most 12,887 (below).
+- **Work budget** (review fold). 131,072 units per column: one per cell read, in the source
+  pass and in the spread alike, one per spread step, and 64 for each pair of partial faces the
+  caller has to compare (one when the pair is remembered). When it is used up the work stops
+  where it is. In the source pass, a run of open sky that came through the section being
+  walked ends at that section's bottom, a run not walked yet ends above the section, and the
+  spread is not started; in the spread, what is lit so far stays. A stopped column is darker
+  than the full one, never brighter (pinned over 19 columns and 12 budgets). Real terrain
+  used at most 45,005 units (below).
+- **Pairs of partial faces are compared once** (review fold). Each block state gets an identity
+  for the length of a column (its place in the column's state map, carried in the
+  descriptor's upper bits). The routine remembers the answer per pair of identities and axis,
+  the same pair seen from the other side included. A descriptor without an identity is
+  asked every time.
+- **A section is air only when its block container agrees** (review fold). `hasOnlyAir()` is
+  the block count from the section's wire header. A section with blocks and a count of zero
+  passed for air and let the sky through a roof. A zero count is now confirmed against the
+  container's palette (`ClientSkyLightEstimator.holdsOnlyAir`), in the predicate and in the
+  estimate. A palette that still lists a block no cell uses makes the section be read cell by
+  cell; the result is the same.
+- **A failing estimate never costs the column** (review fold). The call sits in its own
+  `catch (RuntimeException)`: the column goes on exactly as it arrived (the two fills still
+  run), `sky_estimate_failed` counts it, and the first failure of a session is logged. Left
+  to the drain's general catch it was an ingest failure, re-served and failed again until the
+  failure cap parked the position.
 - **Signals.** Trace event `col_light_est`:
-  `"pos":[x,z],"steps":n,"capped":0|1,"sections":[[sectionY,hasOnlyAir,added],…]`. Client
-  diagnostics show `Light: sky_estimated=<n>` when non-zero, and the diagnostics export carries
-  `getSkyEstimatedColumns` among its counters (one new field in `ClientDiagnosticSnapshot`).
-  The diagnostics line itself has no test (there is no seam for that output).
+  `"pos":[x,z],"work":n,"capped":0|1,"sections":[[sectionY,hasOnlyAir,added],…]`. Client
+  diagnostics show `Light: sky_estimated=<n>` when either counter is non-zero, with
+  `, sky_estimate_failed=<n>` appended only when that one is. The diagnostics export carries
+  `getSkyEstimatedColumns` and `getSkyEstimateFailures` among its counters (two new fields in
+  `ClientDiagnosticSnapshot`). The line's text is pinned (`ClientCommandActions.lightLine`).
 - **Truncation.** `ClientColumnProcessor.decodeColumn` returns the sections and a `truncated`
   flag; `decodeSections` is kept for the callers that only need the sections.
 - **Consumers.** Checked in code: the drain builds one `VoxelColumnData` and
@@ -672,9 +695,24 @@ stripped of its light, three measured rounds after one warm-up round (5,001 samp
 | predicate alone, on the same columns with their light | 0.13 µs | 0.19 µs | 0.37 µs |
 
 All 1,667 columns were estimated, none capped; three sections per column carry an estimated
-layer at the median (at most eight), one of them an added air section. Spread steps per
-column: median 1,084, p99 4,405, maximum 12,887. A stack sample puts about three quarters of
-the estimate's time in vanilla's `PalettedContainer.get`, one call per cell read.
+layer at the median (at most eight), one of them an added air section. Work per column:
+median 7,155 units, p99 19,482, maximum 45,005 of the 131,072 allowed. A stack sample puts
+about three quarters of the estimate's time in vanilla's `PalettedContainer.get`, one call per
+cell read. The same run after the review fold measured about the same cost for terrain
+(median 96.8 µs, p99 275.8 µs, on a busier machine).
+
+Two synthetic columns of the level's full height show the worst case (60 runs each after 10
+warm-up runs), before and after the review fold:
+
+| Pathological column | before: median | before: p99 | after: median | after: p99 |
+|---|---|---|---|---|
+| stairs and slabs behind one open plane of air | 30.5 ms | 45.8 ms | 1.42 ms | 1.79 ms |
+| a solid block of sideways piston heads (partial top and bottom faces) | 147.4 ms | 161.8 ms | 1.21 ms | 1.39 ms |
+
+Before, the first spent its time comparing shapes pair by pair in the spread (61,272 steps,
+under the old budget), the second in the source pass, which no budget counted. After, both
+stop at the budget and are darker than the rule gives: the first loses part of its sideways
+spread, the second is lit in its top 17 of 24 sections. No vanilla terrain looks like either.
 
 What that means: a fully lightless world costs the decode thread about 0.1 ms per column, so
 it can still take roughly 9,000 columns a second here, against a few hundred a second that
@@ -694,16 +732,22 @@ File: `DhColumnConverter` (`carryLoss`, `carriedLight`, one changed line in `con
 - **Rule as built.** Top-down per column: a span in the carrying set (opaque to DH, not
   occluding, no fluid, dampening below 15) that DH left at sky 0 and that sits under another
   carrying-set span takes that span's light minus `max(1, dampening)` per voxel. A carrying-set
-  span DH lit passes its own value down. Every other span (air, glass, fluids, stone, logs)
-  keeps DH's value and resets the carry. So "the light-passing span above" is always a
-  carrying-set span: a dark leaf span under air or water does not occur with light above it,
-  because DH itself lights a span under a transparent or translucent one.
+  span DH lit passes its light down (from its bottom voxel, see below). Every other span (air,
+  glass, fluids, stone, logs) keeps DH's value and resets the carry. So "the light-passing
+  span above" is always a carrying-set span: a dark leaf span under air or water does not
+  occur with light above it, because DH itself lights a span under a transparent or
+  translucent one.
 - **No adjacency check and no sky gate in the code.** The decoder already guarantees both: a
   converted column is COMPLETE (its spans tile the world height, overlaps are rejected), and
   in a world without sky light it zeroes every span's sky light, so no carry can start. The
   no-sky case is pinned by a test through the decoder.
 - **Span order.** DH sends spans top-down; a column in any other order is walked through a
   sorted index (pinned).
+- **Where the carry starts** (review fold). A span DH lit holds one value for all its voxels,
+  however tall it is. The carry now starts from what the lit span's bottom voxel would hold
+  by vanilla's rule, the value minus the dampening for each voxel above the bottom one, so
+  the dark span under a lit leaf span four blocks tall starts at 15 - 3 - 1 = 11, not at 14.
+  The lit span's own bytes stay as DH has them.
 - **The 284 leaf spans taller than 14 blocks are real data, not a scan artefact.** They are DH's
   hidden-block culling (`FullDataOcclusionCuller`, on by default as world compression
   `VISUALLY_EQUAL`): a datapoint whose four neighbours are opaque is removed and the datapoint
@@ -712,34 +756,41 @@ File: `DhColumnConverter` (`carryLoss`, `carriedLight`, one changed line in `con
   bedrock (94 of the 284 end on bedrock, bottoms cluster at y 1–5; e.g. `y 1..204 oak_leaves`
   under `y 205..208 oak_leaves sky 15`). The decode is right: the scan's 62×62 columns are the
   tile's interior, the border strips are separate blobs. No floor value is used: such a span
-  fades from 14 to 0 over its top 14 voxels and stays dark below, which is right for ground
+  fades to 0 over at most its top 14 voxels and stays dark below, which is right for ground
   nobody sees.
 - **Face scan before and after** (the earlier `DhFaces` tool on the same 66 stored tiles, with
-  the carry added to its converter emulation; 38,624 spans took carried light):
+  the carry added to its converter emulation; 38,624 spans took carried light; "after" is the
+  rule as it is now, with the review fold's carry start):
 
   | Face (block → cell it is lit from) | drawn | black before | black after |
   |---|---|---|---|
-  | leaf → leaf, side | 446,010 | 170,461 (38.2 %) | 30,190 (6.8 %) |
-  | leaf → leaf, down | 141,987 | 77,557 (54.6 %) | 23,027 (16.2 %) |
-  | leaf → leaf, up | 141,987 | 46,530 (32.8 %) | 22,742 (16.0 %) |
+  | leaf → leaf, side | 446,010 | 170,461 (38.2 %) | 30,322 (6.8 %) |
+  | leaf → leaf, down | 141,987 | 77,557 (54.6 %) | 23,134 (16.3 %) |
+  | leaf → leaf, up | 141,987 | 46,530 (32.8 %) | 22,848 (16.1 %) |
   | log → leaf, side | 32,097 | 25,579 (79.7 %) | 3,127 (9.7 %) |
-  | solid → leaf, side | 148,604 | 66,794 (44.9 %) | 57,747 (38.9 %) |
-  | all 25 classes | | 392,009 | 141,289 |
+  | solid → leaf, side | 148,604 | 66,794 (44.9 %) | 58,029 (39.0 %) |
+  | all 25 classes | | 392,009 | 141,917 |
 
-  What stays black is almost entirely inside the culled-ground spans (the 22,937 voxels below
-  their fade) and the 50 leaf spans under logs.
+  With the first carry rule the total was 141,289: the lower start leaves 628 more faces
+  black, all under lit spans more than one block tall (the only place the rule changed).
+
+  What stays black is almost entirely inside the culled-ground spans (the voxels below their
+  fade; 22,937 with the first carry rule) and the 50 leaf spans under logs.
 
 ### 14.3 Tests
 
-- `common`: `SkyLightEstimateTest` (24 cases).
-- `fabric`: `ClientSkyLightEstimatorTest` (9), `ClientColumnProcessorTest` (10 new),
+- `common`: `SkyLightEstimateTest` (31 cases).
+- `fabric`: `ClientSkyLightEstimatorTest` (12), `ClientColumnProcessorTest` (13 new),
   `LightlessChunkDeliveryTest` (4; the 2026-11-12 reproduction made permanent, with the two
   test doors `DiskSerializerTestAccess` and `VoxyBridgeTestAccess`), `DhColumnConverterTest`
-  (11 new), `SkyLightEstimateTimingTool` (self-skipping).
+  (12 new), `SkyLightEstimateTimingTool` (self-skipping; it also times the two pathological
+  columns).
 - Every new pin was mutation-checked (break the fix, see the named test red, restore): 12
   mutations of the routine in `common`, 22 of the client and DH code in seven runs. Two
   mutations were first caught only by the random comparison, so each got a named case
-  (a full face stopping the sideways spread; partial faces above each other).
+  (a full face stopping the sideways spread; partial faces above each other). The review
+  fold's pins were checked the same way: first all four fixes off (11 named tests red), then
+  19 single mutations in twelve runs.
 
 ### 14.4 Gates on the 26.3 line (2026-11-12, no retries)
 

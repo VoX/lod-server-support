@@ -24,7 +24,11 @@ import java.util.Arrays;
  * <p>A block state's properties are asked from the state itself, once per state and column.
  * They are never kept in a table indexed by state id: client ids are remapped by registry
  * sync, and a state's cached light values are rebuilt when tags reload. A state whose own
- * light or shape method throws is treated as opaque.
+ * light or shape method throws is treated as opaque. Each state also gets an identity for
+ * the length of the column (its place in the column's map), so the routine compares two
+ * touching partial faces once per pair of states and axis, not once per pair of cells.
+ *
+ * <p>Nothing here trusts a section's block count: see {@link #holdsOnlyAir}.
  *
  * <p>One instance per decode thread (it holds the working buffers).
  *
