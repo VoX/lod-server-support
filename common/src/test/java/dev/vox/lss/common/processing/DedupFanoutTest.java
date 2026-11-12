@@ -615,6 +615,62 @@ class DedupFanoutTest {
         }
     }
 
+    @Test
+    void unservableFanoutAnswersNotGeneratedToEveryRecipientAndNeverGenerates() throws Exception {
+        // The undecodable-chunk flavor through the fan-out, generation AVAILABLE: every
+        // recipient of the shared read gets the permanent answer and its slot back; nobody
+        // takes a generation slot or a ticket (a ticket would load the chunk through
+        // Minecraft, which turns its unknown blocks into air).
+        var u1 = UUID.randomUUID();
+        var u2 = UUID.randomUUID();
+        var p1 = newPlayer(u1);
+        var p2 = newPlayer(u2);
+        var players = new ConcurrentHashMap<UUID, TestState>();
+        players.put(u1, p1);
+        players.put(u2, p2);
+        var reader = new GatedDiskReader();
+        reader.registerPlayer(u1, p1.registration());
+        reader.registerPlayer(u2, p2.registration());
+        var proc = new TestProcessor(players, reader, Map.of(OVERWORLD, new byte[]{9}), true);
+        var dims = Map.of(u1, OVERWORLD, u2, OVERWORLD);
+        try {
+            proc.start();
+            p1.enqueue(new IncomingRequest(7, 7, 1L));
+            pumpUntil(proc, dims, () -> p1.getHeldSyncSlots() == 1 && proc.diskSubmits.get() == 1,
+                    "primary admitted");
+            p2.enqueue(new IncomingRequest(7, 7, 0L));
+            pumpUntil(proc, dims, () -> p2.getHeldSyncSlots() == 1, "second request attached");
+
+            reader.getPlayerQueue(u1).add(ChunkReadResult.notFoundUnservable(u1, 7, 7, OVERWORLD, 0L));
+            long packed = PositionUtil.packPosition(7, 7);
+            var responses = new ArrayList<Response>();
+            pumpUntil(proc, dims, () -> {
+                responses.addAll(drainResponses(proc));
+                return responses.size() >= 2;
+            }, "both recipients answered");
+
+            assertEquals(2, responses.size(), "exactly one answer per recipient: " + responses);
+            for (var uuid : List.of(u1, u2)) {
+                assertTrue(responses.contains(
+                                new Response(uuid, LSSConstants.RESPONSE_NOT_GENERATED, packed)),
+                        "every recipient gets NOT_GENERATED: " + responses);
+            }
+            assertNull(proc.pollGenerationTicketRequest(), "no recipient may take a generation ticket");
+            for (var state : List.of(p1, p2)) {
+                assertEquals(0, state.getHeldGenSlots(), "no generation slot");
+                assertEquals(0, state.getHeldSyncSlots(), "the sync slot is released");
+                assertFalse(state.hasPendingRequest(7, 7));
+                assertFalse(state.hasDiskReadDone(7, 7));
+            }
+            assertEquals(0, proc.getDiagnostics().getTotalSuperseded(),
+                    "answered, not dropped: nothing booked superseded");
+        } finally {
+            reader.gate.countDown();
+            proc.shutdown();
+            reader.shutdown();
+        }
+    }
+
     // ---- DedupTracker map hygiene (direct, same package) ----
 
     @Test

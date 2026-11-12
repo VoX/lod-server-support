@@ -256,6 +256,32 @@ class OffThreadProcessorStoreTest {
     }
 
     @Test
+    void unservableResultDeletesTheStoreRowAndDepositsNothing() {
+        // An undecodable chunk is a positive answer about the bytes on disk, like an
+        // authoritative miss, so the row cleanup is the same: a row that survived to this
+        // read was not served by the store rung (the rung runs first), and it must not
+        // outlive the answer. And nothing is ever deposited for it: an all-air row is
+        // exactly the poison this flavor exists to prevent. Same with generation on.
+        for (boolean generationAvailable : new boolean[]{false, true}) {
+            var rig = new Rig(generationAvailable);
+            rig.admit(12, 12, -1);
+            rig.reader.getPlayerQueue(rig.uuid).add(
+                    ChunkReadResult.notFoundUnservable(rig.uuid, 12, 12, DIM, 9));
+            rig.await(() -> !rig.store.deletes.isEmpty(),
+                    "unservable row delete (generation=" + generationAvailable + ")");
+            assertEquals(PositionUtil.packPosition(12, 12), rig.store.deletes.poll());
+            rig.await(() -> !rig.state.hasPendingRequest(12, 12),
+                    "unservable drain leaves nothing pending (generation="
+                            + generationAvailable + ")");
+            assertTrue(rig.store.deposits.isEmpty(),
+                    "an undecodable column is never deposited");
+            assertTrue(rig.proc.enqueued.isEmpty(), "and never sent");
+            assertNull(rig.proc.pollGenerationTicketRequest(), "and never generated");
+            rig.shutdown();
+        }
+    }
+
+    @Test
     void generationOutcomeDepositsAfterTheStaleGuard() {
         var rig = new Rig(true);
         long packed = PositionUtil.packPosition(20, 20);

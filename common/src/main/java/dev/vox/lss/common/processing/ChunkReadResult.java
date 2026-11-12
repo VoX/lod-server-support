@@ -25,6 +25,20 @@ import java.util.UUID;
  * {@code notFound} means an error/timeout was TRIAGED down the not-found ladder (law A5's
  * {@code disk.errors} fold) — it says nothing about existence and must never be memoized,
  * or an existing chunk's reads would be suppressed for the memo TTL.
+ *
+ * <p>{@code unservable} is the third reason {@code notFound} can be set (undecodable-chunks
+ * plan, 2026-11-12): the chunk exists and is FULL, but every block its cells use failed
+ * to decode (a removed mod's blocks, a chunk format this build cannot read), so nothing
+ * can be served from it. It is a positive answer about the bytes on disk, like an
+ * authoritative miss, with one difference that decides the disposition: generation is
+ * the WRONG answer. Loading the chunk through Minecraft turns unknown blocks into air and
+ * may save that, destroying a temporarily removed mod's blocks in a chunk no player
+ * visited. So an unservable result never seeds the miss memo and never becomes a
+ * generation ticket, whether generation is available or not: the requester gets
+ * {@code ColumnNotGenerated}, the column's stamps are invalidated and any store row is
+ * deleted (as for an authoritative miss), and nothing is deposited.
+ * {@code authoritativeMiss} is deliberately {@code false} on this flavor, so the flag
+ * keeps its one meaning ("may seed the memo, generation is correct").
  */
 public record ChunkReadResult(UUID playerUuid, int chunkX, int chunkZ,
                               byte[] sectionBytes, String dimension, int estimatedBytes,
@@ -35,7 +49,22 @@ public record ChunkReadResult(UUID playerUuid, int chunkX, int chunkZ,
                               long submissionOrder,
                               long srcStampSeconds,
                               byte[] frameBytes, int frameRawSize,
-                              boolean headerFresh) {
+                              boolean headerFresh,
+                              boolean unservable) {
+
+    /** Pre-unservable full signature ({@code unservable = false}): every result that
+     *  is not the undecodable-chunk flavor, and every rig written before it existed. */
+    public ChunkReadResult(UUID playerUuid, int chunkX, int chunkZ,
+                           byte[] sectionBytes, String dimension, int estimatedBytes,
+                           long columnTimestamp, boolean notFound, boolean saturated,
+                           boolean authoritativeMiss, boolean fromStore,
+                           long submissionOrder, long srcStampSeconds,
+                           byte[] frameBytes, int frameRawSize, boolean headerFresh) {
+        this(playerUuid, chunkX, chunkZ, sectionBytes, dimension, estimatedBytes,
+                columnTimestamp, notFound, saturated, authoritativeMiss, fromStore,
+                submissionOrder, srcStampSeconds, frameBytes, frameRawSize, headerFresh,
+                false);
+    }
 
     /**
      * Pre-store signature (fromStore = false, srcStampSeconds = 0) — the shape every
@@ -117,6 +146,16 @@ public record ChunkReadResult(UUID playerUuid, int chunkX, int chunkZ,
                                                     String dimension, long submissionOrder) {
         return new ChunkReadResult(playerUuid, chunkX, chunkZ, null, dimension, 0, 0L,
                 true, false, false, submissionOrder);
+    }
+
+    /**
+     * The chunk exists but cannot be decoded (see the class javadoc): not-found shaped,
+     * never memoized, never escalated to generation.
+     */
+    public static ChunkReadResult notFoundUnservable(UUID playerUuid, int chunkX, int chunkZ,
+                                                     String dimension, long submissionOrder) {
+        return new ChunkReadResult(playerUuid, chunkX, chunkZ, null, dimension, 0, 0L,
+                true, false, false, false, submissionOrder, 0L, null, 0, false, true);
     }
 
     public static ChunkReadResult saturated(UUID playerUuid, int chunkX, int chunkZ, String dimension, long submissionOrder) {
