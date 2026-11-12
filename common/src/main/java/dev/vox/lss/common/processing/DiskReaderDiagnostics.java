@@ -16,6 +16,7 @@ public class DiskReaderDiagnostics {
     private final AtomicLong gateStopsCount = new AtomicLong();
     private final AtomicLong headerHitsCount = new AtomicLong();
     private final AtomicLong undecodableCount = new AtomicLong();
+    private final AtomicLong lightlessCount = new AtomicLong();
     private final AtomicLong totalReadTimeNanos = new AtomicLong();
 
     public void recordSubmitted() { this.submittedCount.incrementAndGet(); }
@@ -61,6 +62,12 @@ public class DiskReaderDiagnostics {
         this.notFoundCount.incrementAndGet();
         this.undecodableCount.incrementAndGet();
     }
+    /** A column served from disk that has blocks but was saved without sky light, in a
+     *  dimension that has sky light (lightless-chunks plan, fold item 7). An OBSERVATION
+     *  beside the read's ordinary outcome, never an outcome itself: the read is counted
+     *  successful as always, nothing is counted under {@code not_found}, and no law or
+     *  partition includes this counter. */
+    public void recordLightless() { this.lightlessCount.incrementAndGet(); }
 
     public String formatDiagnostics(int pendingCount) {
         long completed = this.completedCount.get();
@@ -86,6 +93,7 @@ public class DiskReaderDiagnostics {
     public long getGateStopsCount() { return this.gateStopsCount.get(); }
     public long getHeaderHitsCount() { return this.headerHitsCount.get(); }
     public long getUndecodableCount() { return this.undecodableCount.get(); }
+    public long getLightlessCount() { return this.lightlessCount.get(); }
     public long getSubmittedCount() { return this.submittedCount.get(); }
     public long getCompletedCount() { return this.completedCount.get(); }
     public long getNotFoundCount() { return this.notFoundCount.get(); }

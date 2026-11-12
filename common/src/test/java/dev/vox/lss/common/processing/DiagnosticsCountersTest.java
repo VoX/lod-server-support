@@ -55,6 +55,26 @@ class DiagnosticsCountersTest {
     }
 
     @Test
+    void lightlessIsAnObservationOutsideThePartition() {
+        // A column saved without sky light is served like any other; the counter sits
+        // beside the read's outcome and belongs to no partition or law.
+        var d = new DiskReaderDiagnostics();
+        d.recordCompleted(1_000_000);
+        d.recordSuccess();
+        d.recordLightless();
+
+        assertEquals(1, d.getLightlessCount());
+        assertEquals(1, d.getSuccessfulReadCount());
+        assertEquals(0, d.getNotFoundCount(), "never under not_found");
+        assertEquals(0, d.getUndecodableCount());
+        assertEquals(d.getCompletedCount(),
+                d.getSuccessfulReadCount() + d.getNotFoundCount() + d.getAllAirCount()
+                        + d.getErrorCount() + d.getSaturationCount());
+        assertFalse(d.formatDiagnostics(0).contains("lightless"),
+                "the base format is unchanged; the reader appends the token only when non-zero");
+    }
+
+    @Test
     void saturatedReadsAreNotCountedSuccessful() {
         var d = new DiskReaderDiagnostics();
         d.recordCompleted(0);
