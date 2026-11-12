@@ -474,3 +474,95 @@ Line-local: docs.
 - Open decisions: (1) phase B in or out; (2) always enabled with scope text, versus disabled when
   not connected; (3) toast + chat, versus chat only; (4) fix the 26.3 Escape constant here or
   separately.
+
+## 9. As built (26.3, 2026-11-12)
+
+Implemented on `feat/redownload-button-mc26.3` as folded above. What differs from the body and
+from the fold, and why:
+
+**Names.** The screen is `RedownloadTerrainConfirmScreen`, the action `REDOWNLOAD_TERRAIN`, the
+id `lss:redownload_terrain`. Lang keys: `lss.config.redownload_terrain`, `.tooltip`, and
+`lss.redownload.title`, `.title.not_receiving`, `.this_server`, `.all_servers`,
+`.not_receiving`, `.saved_terrain` (carries `/%s reset`), `.confirm`, `.toast.this_server`,
+`.toast.all_servers`, `.failed` (12 keys, three locales).
+
+**Model.** `PageSpec` is a four-component record (`actions` last). `PageSpec.of(...)` builds an
+option-only page; the General page uses the canonical constructor. There is no `withActions`,
+no catalog-level `actions()` and no `findAction`: nothing in production needs them.
+
+**Scope (§3.4 is replaced).** `ClientCommandActions.ClearCacheScope` and `clearCacheScope()`;
+`clearCache` was restructured around it (the body said "not restructured"). One read of the
+request manager decides the scope and is the manager that gets flushed.
+- `CURRENT_SERVER`: a request manager exists, or `DhClientSession.dhServerConnection()` on a
+  remote server. That is the predicate `/lss reset` already uses for "a DH session that can
+  refill": the server has negotiated DH. The old test (`DhClientSession.selected()` and a
+  connection) is true on every server without native LSS while "Allow DH Server Terrain" is
+  on, which is the default, so it would have promised a re-download on servers that send
+  nothing.
+- `NOT_RECEIVING`: connected, not the integrated server, neither of the above. The command
+  prints "... is not receiving distant terrain from this server right now. Nothing was
+  cleared."
+- `ALL_SERVERS`: no connection, or `hasSingleplayerServer()`.
+
+Resulting changes to the typed command, all intended:
+1. On an LSS server without a request manager (Receive OFF, map-policy park, server-side
+   disable, before the session config) it clears nothing. It used to clear every server.
+2. On a remote server where DH is allowed but not negotiated (no LSS and no DH, or a DH
+   channel that has not answered, e.g. official DH 3.2.x) it clears nothing. It used to clear
+   that server's records and report "No active DH download service".
+3. A DH source that has stopped (a failed session or a failed reset) counts as not receiving,
+   so `clearcache` no longer restarts it. Reconnecting, turning Receive off and on, or
+   `/lss reset confirm` do.
+`clearCacheInDhModeClearsOnlyTheCurrentRemoteAddressReceipts` now negotiates first, and
+`clearCacheWhileWaitingForADhReplyClearsNothingAndKeepsTheSession` pins case 2.
+
+**Confirm screen.**
+- `open(parent)` is itself contained (`catch (RuntimeException)`, one WARN): a failure to
+  build the dialog must not crash the client from a settings click either.
+- The not-receiving variant has its own title ("Nothing to re-download") and overrides
+  vanilla's `addButtons(LinearLayout)` to add only Back.
+- The toast title is the button's name; the body is `lss.redownload.toast.*` or
+  `lss.redownload.failed`. On failure the same failure line also goes to chat.
+- A second answer on the same instance is ignored.
+- The scope read and the clear are constructor parameters (`create(parent, scope, clear)`,
+  public for the gametest); production passes `ClientCommandActions`.
+
+**Walker.** `addActions(builder, page, pageSpec, actions)` in both twins. A blank translated
+tooltip becomes the literal "Opens a screen for this action." (generic on purpose: the walker
+knows nothing about individual actions). A blank name, a missing dispatcher or any `Throwable`
+drops the page's buttons with one WARN; the page keeps its options.
+
+**Tests.** As §5, with these differences: the scope tests are `ClearCacheScopeTest`
+(`fabric/.../networking/client`, next to the package-private seams) plus the two DH cases in
+`DhClientSessionTest`; the screen's source pins are `RedownloadTerrainConfirmScreenContractTest`;
+`ScreenEscapeKeyContractTest` finds every screen that owns a `ScreenEscapeRelease` and pins
+`event.isEscape()` (the 26.3 fix, and this screen); the NeoForge contract test also compares the
+twin's `addActions` with Fabric's as text; `LSSConfigMenuTest` covers the blank-tooltip
+fallback, a blank name, a missing API (`NoSuchMethodError`) and a missing dispatcher; the
+client gametest also covers a changed scope, the Back-only variant and a throwing clear.
+
+**Cleanup in the same branch.** Removed `ClientOptionCatalog.descriptor(OptionSpec)` (no
+caller), the unused `find` helper in `LSSConfigMenuTest`, the unused `readEnumOption` in the
+NeoForge `ConfigState` stub, and the `CyclingControl` test in `LegacySodiumPageTest` (production
+has no such path). `LegacySodiumPage.SURFACE` gained `SodiumOptionsGUI.setPage/1`,
+`FlatButtonWidget.<init>/3` and `FlatButtonWidget.visible` (present in 0.6.13 and 0.7.3).
+Three stale comments fixed.
+
+**Port notes.**
+- Same text on every line: `ActionSpec`, `PageSpec`, `ClientMenuActions`, the
+  `ClearCacheScope` rule and `clearCache`, the lang keys (added to each line's own files),
+  `ClearCacheScopeTest` apart from its harness, the docs.
+- `RedownloadTerrainConfirmScreen`: per line as in §3.2, plus `addButtons(LinearLayout)` and
+  the `yesButton`/`noButton` fields, which must be checked against each line's `ConfirmScreen`.
+- `ScreenEscapeKeyContractTest` and the Escape fix: the five `KeyEvent` lines; 1.21.1 keeps
+  `(int,int,int)` and `keyCode == 256`, so its pin needs the opposite flavor.
+- The walker, its stubs, `LSSConfigMenuTest` and the two source pins: `ResourceLocation` on
+  1.21.1, absent on 1.21.10.
+- `ClearCacheScopeTest` and the `DhClientSessionTest` cases use `hasSingleplayerServer()`,
+  `LocalPlayer.connection` and `ServerData.ip` through a constructor-free `Minecraft`; check
+  those names per line.
+
+**Not verified here.** No real Sodium ran. The row on the General page, the dialog over
+Sodium's screen, a staged slider surviving the round trip, the toast and the Receive-OFF case
+remain the live checks listed in the fold section.
+
