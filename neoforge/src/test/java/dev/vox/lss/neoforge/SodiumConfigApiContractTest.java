@@ -93,6 +93,29 @@ class SodiumConfigApiContractTest {
                 "translation keys come from the catalog, never literals");
         assertTrue(!src.replace("\"lss:icon.png\"", "").contains(".parse(\"lss:"),
                 "option ids come from the catalog (the icon fallback is the one literal)");
+        // The page buttons (re-download plan): the twin must not drop them. Same walk, same
+        // dispatcher and the same containment as the Fabric walker.
+        int buttons = src.indexOf("addActions(builder, page, pageSpec, actions);");
+        assertTrue(buttons > 0 && buttons < src.indexOf("mod.addPage(page);"),
+                "each page's buttons are added before the page is registered");
+        assertTrue(src.contains("for (ActionSpec spec : pageSpec.actions())"), "the twin must iterate the page's actions");
+        // …and it is the SAME walk: the button code is not loader-specific, so the twins' copies
+        // are compared as text (the Fabric copy is the one LSSConfigMenuTest runs).
+        String fabric = stripComments(Files.readString(
+                locate("fabric/src/main/java/dev/vox/lss/config/LSSConfigMenu.java")));
+        assertEquals(actionWalk(fabric), actionWalk(src), "the NeoForge twin's button walk drifted from Fabric's");
+        assertTrue(src.contains("createExternalButtonOption(Identifier.parse(spec.id()))"),
+                "a button is Sodium's external button, keyed by the catalog id");
+        assertTrue(src.contains("ClientMenuActions::open"), "production opens buttons through the dispatcher");
+        assertTrue(src.contains("catch (Throwable"), "a button that cannot be built must not cost the page");
+    }
+
+    /** The walker's button method, from its declaration to the next method. */
+    private static String actionWalk(String src) {
+        int start = src.indexOf("private static void addActions(");
+        int end = src.indexOf("private static OptionBuilder buildOption(");
+        assertTrue(start > 0 && end > start, "the walker must carry addActions before buildOption");
+        return src.substring(start, end).strip();
     }
 
     private static ClassfileSurface.Surface parse(String resource) throws IOException {

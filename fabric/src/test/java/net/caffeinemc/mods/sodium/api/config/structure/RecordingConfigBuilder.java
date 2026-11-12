@@ -35,4 +35,9 @@ public class RecordingConfigBuilder implements ConfigBuilder {
     public IntegerOptionBuilder createIntegerOption(Identifier id) {
         return new RecordedInteger(id);
     }
+
+    @Override
+    public ExternalButtonOptionBuilder createExternalButtonOption(Identifier id) {
+        return new RecordedExternalButton(id);
+    }
 }
