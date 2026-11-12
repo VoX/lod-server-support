@@ -1247,6 +1247,178 @@ class OffThreadProcessorDiskResultTest {
         }
     }
 
+    // ---- unservable (undecodable chunk): never memoized, never generated ----
+
+    /** Routes one acquisition request and delivers an UNSERVABLE result for it. */
+    private static void deliverUnservable(Rig rig, int cx, int cz) throws InterruptedException {
+        int before = rig.proc.diskSubmits.size();
+        rig.state.enqueue(new IncomingRequest(cx, cz, -1L));
+        rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
+        waitFor(() -> rig.proc.diskSubmits.size() == before + 1, "cold read");
+        rig.inject(ChunkReadResult.notFoundUnservable(rig.uuid, cx, cz, DIM, 1L));
+        rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
+    }
+
+    @Test
+    void unservableAnswersNotGeneratedAndNeverGeneratesWithGenerationOn() throws Exception {
+        // An undecodable chunk must never be loaded through Minecraft: vanilla turns
+        // unknown blocks into air on load and may save the chunk, destroying a temporarily
+        // removed mod's blocks in a chunk no player visited. So with generation AVAILABLE
+        // and the miss memo ON, the result still gets the one permanent answer and leaves
+        // nothing behind that could become a ticket (the memo rung is the other road to
+        // one).
+        var rig = new Rig(true, 4, 4, 30);
+        try {
+            deliverUnservable(rig, 7, 0);
+            long packed = PositionUtil.packPosition(7, 0);
+            drainUntil(rig.proc, received(rig.uuid, LSSConstants.RESPONSE_NOT_GENERATED, packed));
+
+            assertNull(rig.proc.pollGenerationTicketRequest(),
+                    "an unservable column must NEVER become a generation ticket");
+            assertEquals(0, rig.state.getHeldGenSlots(), "no generation slot taken");
+            assertEquals(0, rig.state.getHeldSyncSlots(), "the delivery frees the sync slot");
+            assertFalse(rig.state.hasPendingRequest(7, 0), "nothing left pending");
+            assertFalse(rig.state.hasDiskReadDone(7, 0), "nothing was served");
+            assertTrue(rig.proc.enqueuedColumns.isEmpty(), "never an air (or any) column");
+            assertEquals(0, rig.proc.timestampCacheForTest().missCount(),
+                    "an unservable result never writes the miss memo");
+            assertEquals(0, rig.proc.getDiagnostics().getTotalMissDropped(),
+                    "law A5: the miss was ANSWERED (not_generated), not dropped");
+            assertEquals(0, rig.proc.getDiagnostics().getTotalSuperseded());
+
+            // The re-declaration must READ again: a memo hit would escalate straight to a
+            // generation ticket without touching the reader.
+            rig.state.enqueue(new IncomingRequest(7, 0, -1L));
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
+            waitFor(() -> rig.proc.diskSubmits.size() == 2, "the re-declaration reads the disk again");
+            assertEquals(0, rig.proc.getDiagnostics().getTotalMemoHits());
+            assertNull(rig.proc.pollGenerationTicketRequest());
+        } finally {
+            rig.proc.shutdown();
+        }
+    }
+
+    @Test
+    void unservableAnswersNotGeneratedWithGenerationOff() throws Exception {
+        var rig = new Rig(false, 4, 4, 30);
+        try {
+            deliverUnservable(rig, 7, 0);
+            long packed = PositionUtil.packPosition(7, 0);
+            drainUntil(rig.proc, received(rig.uuid, LSSConstants.RESPONSE_NOT_GENERATED, packed));
+
+            assertEquals(0, rig.state.getHeldSyncSlots(), "the delivery frees the sync slot");
+            assertEquals(0, rig.state.getHeldGenSlots());
+            assertFalse(rig.state.hasDiskReadDone(7, 0), "nothing was served");
+            assertTrue(rig.proc.enqueuedColumns.isEmpty(), "never an air (or any) column");
+            assertEquals(0, rig.proc.timestampCacheForTest().missCount());
+            assertEquals(0, rig.proc.getDiagnostics().getTotalMissDropped());
+            assertEquals(0, rig.proc.getDiagnostics().getTotalSuperseded());
+        } finally {
+            rig.proc.shutdown();
+        }
+    }
+
+    @Test
+    void editOvertakenUnservableTakesTheTransientDropAndNeverGenerates() throws Exception {
+        // An edit overtook the read (a player loaded the chunk, vanilla replaced its unknown
+        // blocks and saved it while the read of the old bytes was in flight). Answering
+        // NOT_GENERATED off those stale bytes would park the position for the whole
+        // session, and a chunk load is not necessarily a dirty broadcast that revives it.
+        // So: no wire answer, the ghost-style transient drop (superseded + miss_dropped),
+        // still no memo and no ticket, and the next declaration re-reads the disk.
+        var rig = new Rig(true, 4, 4, 30);
+        try {
+            rig.state.enqueue(new IncomingRequest(7, 0, -1L));
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
+            waitFor(() -> rig.proc.diskSubmits.size() == 1, "cold read in flight");
+
+            long packed = PositionUtil.packPosition(7, 0);
+            rig.proc.invalidateTimestamps(DIM, new long[]{packed});
+            rig.inject(ChunkReadResult.notFoundUnservable(rig.uuid, 7, 0, DIM, 1L));
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
+
+            waitFor(() -> rig.proc.getDiagnostics().getTotalMissDropped() == 1,
+                    "the stale unservable delivery is booked as a miss-drop");
+            assertEquals(1, rig.proc.getDiagnostics().getTotalSuperseded(),
+                    "and as superseded: the transient drop");
+            assertTrue(drainSendActions(rig.proc).isEmpty(),
+                    "an edit-overtaken unservable result answers NOTHING: NOT_GENERATED is"
+                            + " session-permanent and the bytes it speaks for are stale");
+            assertNull(rig.proc.pollGenerationTicketRequest(),
+                    "and it must not escalate to generation either");
+            assertEquals(0, rig.state.getHeldGenSlots());
+            assertEquals(0, rig.state.getHeldSyncSlots(), "the delivery frees the sync slot");
+            assertFalse(rig.state.hasPendingRequest(7, 0));
+            assertFalse(rig.state.hasDiskReadDone(7, 0));
+            assertEquals(0, rig.proc.timestampCacheForTest().missCount());
+
+            rig.state.enqueue(new IncomingRequest(7, 0, -1L));
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
+            waitFor(() -> rig.proc.diskSubmits.size() == 2,
+                    "the next declaration re-reads the now-current bytes");
+            assertEquals(0, rig.proc.getDiagnostics().getTotalMemoHits());
+            assertNull(rig.proc.pollGenerationTicketRequest());
+        } finally {
+            rig.proc.shutdown();
+        }
+    }
+
+    @Test
+    void ghostUnservableWithoutPendingDropsSilently() throws Exception {
+        // The ghost branch is unchanged: no live pending, no wire answer (NOT_GENERATED is
+        // session-permanent on the client), booked superseded + miss_dropped for law A5.
+        var rig = new Rig(true, 4, 4, 30);
+        try {
+            rig.inject(ChunkReadResult.notFoundUnservable(rig.uuid, 3, 3, DIM, 1L));
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
+
+            waitFor(() -> rig.proc.getDiagnostics().getTotalSuperseded() == 1,
+                    "the ghost delivery is booked as superseded");
+            assertEquals(1, rig.proc.getDiagnostics().getTotalMissDropped(),
+                    "a ghost unservable is a miss-drop (law A5's dedicated term)");
+            assertTrue(drainSendActions(rig.proc).isEmpty(),
+                    "a pending-less unservable answers NOTHING");
+            assertNull(rig.proc.pollGenerationTicketRequest());
+            assertEquals(0, rig.state.getHeldGenSlots());
+        } finally {
+            rig.proc.shutdown();
+        }
+    }
+
+    @Test
+    void unservableInvalidatesAStaleTimestampStamp() throws Exception {
+        // The stamp half of the authoritative miss's cleanup applies here too: a column
+        // that was served (and stamped) once and is undecodable now must not keep
+        // answering up_to_date off the old stamp, because the server can no longer vouch
+        // for what the client holds.
+        var rig = new Rig(true);
+        try {
+            long packed = PositionUtil.packPosition(12, 12);
+            rig.state.enqueue(new IncomingRequest(12, 12, -1L));
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
+            waitFor(() -> rig.proc.diskSubmits.size() == 1, "first disk submit");
+            rig.inject(dataResult(rig.uuid, 12, 12, DIM, new byte[]{1}, COLUMN_TS, 1L));
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
+            waitFor(() -> !rig.proc.enqueuedColumns.isEmpty(), "column served + stamped");
+
+            rig.proc.clearDiskReadDone(rig.uuid, new long[]{packed});
+            rig.state.enqueue(new IncomingRequest(12, 12, COLUMN_TS - 1));
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
+            waitFor(() -> rig.proc.diskSubmits.size() == 2, "re-read submitted");
+            rig.inject(ChunkReadResult.notFoundUnservable(rig.uuid, 12, 12, DIM, 2L));
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
+            drainUntil(rig.proc, received(LSSConstants.RESPONSE_NOT_GENERATED, packed));
+
+            rig.state.enqueue(new IncomingRequest(12, 12, COLUMN_TS));
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
+            waitFor(() -> rig.proc.diskSubmits.size() == 3,
+                    "the unservable position must re-read, not answer up_to_date");
+            assertNull(rig.proc.pollGenerationTicketRequest());
+        } finally {
+            rig.proc.shutdown();
+        }
+    }
+
     // ---- stale-dimension inertness ----
 
     @Test
