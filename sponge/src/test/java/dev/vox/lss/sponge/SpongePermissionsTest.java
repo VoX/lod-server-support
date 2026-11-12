@@ -42,4 +42,22 @@ class SpongePermissionsTest {
         assertEquals("false", paperDefaults().get("lss.map_ingestion"));
         assertEquals("false", paperDefaults().get("vss.map_ingestion"));
     }
+
+    /** Hide-permission plan §2 (0.21.0): the far-player hide nodes stay registered default
+     *  FALSE, and their descriptions say the node hides only while the server setting is on. */
+    @Test
+    void theFarPlayerHideNodesSayTheyNeedTheServerSetting() {
+        int seen = 0;
+        for (var node : SpongePermissions.nodes()) {
+            if (!node.id().endsWith(".farplayers.hidden")) continue;
+            seen++;
+            assertEquals(Tristate.FALSE, node.defaultValue(), node.id());
+            org.junit.jupiter.api.Assertions.assertTrue(node.description()
+                            .contains("only while far_players.hide_permission_holders is true"),
+                    node.id() + ": " + node.description());
+            org.junit.jupiter.api.Assertions.assertFalse(node.description().contains("never shown"),
+                    node.id() + ": " + node.description());
+        }
+        assertEquals(2, seen, "both brand spellings are registered");
+    }
 }
