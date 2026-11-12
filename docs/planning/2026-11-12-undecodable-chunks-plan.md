@@ -143,8 +143,8 @@ LOD store off, so "no store row" is pinned at the processor. Every new pin was m
 
 **Found on the way.**
 - `RegionFaultGameTests.corruptRegionChunkResolvesAsContainedErrorAndReaderSurvives` staged its
-  corrupt file under `<world>/region`. Since 26.2 the Overworld's regions live under
-  `<world>/dimensions/minecraft/overworld/region`, so on 26.2 and 26.3 that file was never read
+  corrupt file under `<world>/region`. Since 26.1 the Overworld's regions live under
+  `<world>/dimensions/minecraft/overworld/region`, so on 26.1, 26.2 and 26.3 that file was never read
   and the test's "corrupt" read was a plain missing region. Fixed on main in a follow-up commit:
   the file is staged in the level's own region folder and the test asserts `raw_serves == 2`.
 - `BacklogReplaceTest.concurrentHoldReleaseNeverRestsAStaleBatchAndBalancesAccounting` failed
