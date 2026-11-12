@@ -1319,15 +1319,18 @@ def check_vss_pair_paper(lss_jar, vss_jar, problems):
     # present (in the VSS jar) — lss.farplayers.hidden was never pinned in either jar. A widened
     # rewrite that RENAMED lss.farplayers.hidden -> vss.farplayers.hidden (mirroring the
     # lss.admin rename rule) would drop the lss. spelling from the VSS jar; undeclared, it
-    # resolves to Bukkit's OP default (TRUE), and hiddenFor's OR-check then hides every OP as a
-    # far player. Require BOTH spellings present in BOTH jars, symmetric with the service gate.
+    # resolves to Bukkit's OP default (TRUE), and the snapshot's OR-read then makes every OP a
+    # holder: hidden as a far player once far_players.hide_permission_holders is on (and, since
+    # 0.21.0, named by the upgrade notice before that). Require BOTH spellings present in BOTH
+    # jars, symmetric with the service gate.
     for jar_text, jar_name in ((ltext, os.path.basename(lss_jar)), (vtext, vbase)):
         for tok in ("lss.farplayers.hidden", "vss.farplayers.hidden"):
             if tok not in jar_text:
                 problems.append(f"{jar_name}: plugin.yml is missing the far-player privacy node "
                                 f"{tok!r} — BOTH brand spellings must be declared in BOTH jars "
                                 "(an undeclared node resolves to Bukkit's op default TRUE, so a "
-                                "dropped declaration silently hides every op as a far player)")
+                                "dropped declaration silently makes every op a holder, hidden as a "
+                                "far player once far_players.hide_permission_holders is on)")
     # The map-ingestion exemption nodes (map-ingestion permission plan §6): the same dual-jar
     # belt — a widened rewrite renaming lss.map_ingestion -> vss.map_ingestion would leave the
     # VSS jar's lss. spelling undeclared, i.e. op-default TRUE, and the OR-read would then
