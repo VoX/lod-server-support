@@ -332,6 +332,23 @@ class SkyLightEstimateTest {
         assertEquals(0, light(estimate, grid, 7, 9, 4));
     }
 
+    @Test void aFullFaceStopsTheSidewaysSpreadFromThatSideOnly() {
+        // A room under a stone roof (x 0..9), open to the sky at x >= 10, with a wall of
+        // half-blocks at x = 6. Light arrives from the east: 14 at x=9, 13, 12 at x=7.
+        var closedTowardsTheLight = new Grid(1).layers(0, 3, STONE).box(0, 9, 12, 12, 0, 15, STONE)
+                .box(6, 6, 4, 11, 0, 15, EAST_HALF);
+        var estimate = estimateAndCompare(closedTowardsTheLight);
+        assertEquals(12, light(estimate, closedTowardsTheLight, 7, 8, 5));
+        assertEquals(0, light(estimate, closedTowardsTheLight, 6, 8, 5), "the wall's full east face keeps the light out");
+        assertEquals(0, light(estimate, closedTowardsTheLight, 5, 8, 5), "and the room behind it dark");
+
+        var openTowardsTheLight = new Grid(1).layers(0, 3, STONE).box(0, 9, 12, 12, 0, 15, STONE)
+                .box(6, 6, 4, 11, 0, 15, WEST_HALF);
+        assertMatchesReference(openTowardsTheLight, estimate);
+        assertEquals(11, light(estimate, openTowardsTheLight, 6, 8, 5), "light enters the half-block through its open east side");
+        assertEquals(0, light(estimate, openTowardsTheLight, 5, 8, 5), "and cannot leave through its full west face");
+    }
+
     @Test void partialFacesAboveEachOtherAreDecidedInTheSourcePassToo() {
         // y=17 over y=16 lies inside one section, y=16 over y=15 straddles two.
         for (int upper : new int[]{17, 16}) {
