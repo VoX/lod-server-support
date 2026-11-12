@@ -503,6 +503,17 @@ class SkyLightEstimateTest {
         assertTrue(full.work() < SkyLightEstimate.DEFAULT_BUDGET);
     }
 
+    @Test void everyCellReadCountsAsWorkInTheSpreadToo() {
+        // One section, so no read is free: the overhang's shadow is lit by the spread alone.
+        var grid = new Grid(1).layers(0, 3, STONE).box(0, 7, 12, 12, 0, 15, STONE);
+        var estimate = new SkyLightEstimate();
+        assertTrue(estimate.estimate(grid, 1));
+        assertEquals(14, light(estimate, grid, 7, 8, 5), "premise: the spread ran");
+        int sourceReads = 128 * 4 + 128 * 13;
+        assertTrue(grid.lookups > sourceReads + 1000, "premise: the spread read many cells: " + grid.lookups);
+        assertTrue(estimate.work() >= grid.lookups, "work " + estimate.work() + " must cover all " + grid.lookups + " reads");
+    }
+
     /** Review fold: wherever the budget stops the work, no cell may be brighter than without a budget. */
     @Test void noBudgetStopIsEverBrighterThanTheFullResult() {
         var random = new Random(383);

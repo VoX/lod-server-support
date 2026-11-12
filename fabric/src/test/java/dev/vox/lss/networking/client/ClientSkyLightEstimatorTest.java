@@ -422,6 +422,8 @@ class ClientSkyLightEstimatorTest {
         assertEquals(0, lit.get(2).skyLight().get(3, 4, 3), "under it");
         assertNull(lit.get(0).skyLight(), "the ground under the roof stays dark: the sky does not come through it");
         assertFalse(lit.containsKey(1), "and no lit air section is added between them");
+        assertTrue(lit.get(3).section().hasOnlyAir(), "the air section above the roof is added, as above any content");
+        for (byte b : lit.get(3).skyLight().getData()) assertEquals((byte) 0xFF, b);
 
         // The predicate agrees: a column whose only blocks hide behind a zero count has blocks.
         assertTrue(ClientSkyLightEstimator.lacksSkyLight(new VoxelColumnData.SectionData[]{
