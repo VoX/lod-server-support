@@ -334,6 +334,15 @@ public final class ClientCommandActions {
                 details.getIngestParkedCount()
         )).withStyle(ChatFormatting.GRAY));
 
+        // Light line (issue #382, conditional slot): columns that arrived with terrain
+        // and no sky light and were lit by the client's estimate. Non-zero means the
+        // server holds chunks saved without light (a world upgrade strips it).
+        if (details.getSkyEstimatedColumns() > 0) {
+            feedback.accept(Component.literal(String.format(
+                    "Light: sky_estimated=%d", details.getSkyEstimatedColumns()
+            )).withStyle(ChatFormatting.GRAY));
+        }
+
         // Responses line
         feedback.accept(Component.literal(String.format(
                 "Responses: columns=%d, up_to_date=%d, not_generated=%d",

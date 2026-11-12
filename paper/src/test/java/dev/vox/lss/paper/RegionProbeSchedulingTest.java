@@ -400,8 +400,8 @@ class RegionProbeSchedulingTest {
         // by the processing thread during the hold leaves the mailbox EMPTY, so the plain
         // CAS(null, held) found nothing and republished the STALE batch over the newer
         // declaration's already-applied backlog — resurrecting wants the client had
-        // already dropped. The offer-generation guard (recorded before the hold's take)
-        // refuses the republish.
+        // already dropped. The offer-generation guard (the held batch's own generation
+        // against the counter) refuses the republish.
         service.setLoadedColumnProbe((level, cx, cz) -> column(cx, cz));
         var uuid = UUID.randomUUID();
         var player = playerIn(uuid, level(Level.OVERWORLD));
@@ -422,6 +422,52 @@ class RegionProbeSchedulingTest {
         assertFalse(hasPendingBatch(state),
                 "the stale held batch must NOT be republished over B's already-applied "
                         + "backlog — latest-wins survives the pass-through shape");
+        assertEquals(2, state.drainPendingSuperseded(),
+                "the killed held batch is counted superseded (law A1)");
+    }
+
+    @Test
+    void aHoldTakenInsideANewerOffersBumpToWriteWindowDiesAtTheRelease() {
+        // The straddle pin (2026-11-12: BacklogReplaceTest's stress went red on it once).
+        // An offer bumps the offer generation BEFORE it writes the mailbox. A pump tick
+        // landing inside that window holds the OLDER batch still resting there. The pump
+        // used to label the hold with a counter read beside the take — the NEWER offer's
+        // generation — so once the newer declaration had passed through, both release
+        // guards passed and the stale batch came back. The hold now carries the batch's
+        // own offer generation (takeFreshIncomingBatchForProbe hands out both at once).
+        var uuid = UUID.randomUUID();
+        var player = playerIn(uuid, level(Level.OVERWORLD));
+        class StraddleState extends PaperPlayerRequestState {
+            boolean armed;
+            StraddleState() { super(player, 4, 4); }
+            @Override protected void beforeOfferWrite() {
+                if (!armed) return;
+                armed = false;
+                service.tick();            // batch A held, inside batch B's offer
+            }
+        }
+        var straddle = new StraddleState();
+        straddle.requireProbeHandoff();    // what registerPlayer does for a regionized state
+        players.put(uuid, straddle);       // registerPlayer adopts a present state
+        var state = service.registerPlayer(player, 1);
+        assertTrue(state == straddle, "premise: the service runs on the seamed state");
+        offer(state, new IncomingRequest(1, 1, -1), new IncomingRequest(2, 2, -1));
+
+        straddle.armed = true;
+        offer(state, new IncomingRequest(9, 9, -1));   // bump … [tick: A held] … write B
+        assertFalse(straddle.armed, "premise: a pump tick ran inside B's offer");
+        assertEquals(0, state.drainPendingSuperseded(),
+                "premise: that tick HELD batch A — B's write found the mailbox empty");
+
+        // B passes THROUGH, as in the sibling pin above.
+        assertEquals(9, state.takeIncomingBatch().requests()[0].cx());
+        assertFalse(hasPendingBatch(state), "premise: the pass-through left the mailbox empty");
+
+        service.tick();                    // the release tick
+
+        assertFalse(hasPendingBatch(state),
+                "a hold taken while a newer offer was in flight must NOT be republished "
+                        + "over that offer's declaration");
         assertEquals(2, state.drainPendingSuperseded(),
                 "the killed held batch is counted superseded (law A1)");
     }
