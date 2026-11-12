@@ -1,0 +1,330 @@
+{
+ "lines": {
+  "1.21.1": {
+   "base": "support/mc1.21.1",
+   "gametests_passed": [
+    8,
+    95
+   ],
+   "gated_head": "8ef51f69c70143a89e5c946cef3a6c7387fbff25",
+   "jars_sha256": {
+    "lod-server-support-fabric-0.21.0+1.21.1.jar": "e61d6caadb7c317b3a3dfc10f8f765ac0973f4f9cbb92c30617a4ab71608b46b",
+    "lod-server-support-neoforge-0.21.0+1.21.1.jar": "c50508a840985a4b427c63abb305b1a613504901e6075d65a244ada0d725733d",
+    "lod-server-support-paper-0.21.0+1.21.1.jar": "cc461cfffae6b243f9d4d45faf463347663704bad7d6c4a5e94d501de17d5c39",
+    "lod-server-support-sponge-0.21.0+1.21.1.jar": "99e79e6be7114dbd10d38d0aad03c5b99189fb6213ec11d3e3d2596f9e137c0e",
+    "paper-0.21.0.jar": "b3b86504552004840a2bf31a10f5a26d4580ea9d6366110730cf3e4f238aa190",
+    "voxy-server-side-fabric-0.21.0+1.21.1.jar": "87877a184b6995c4505840c03bd70f53dbbce5aabd996f308fa242f367860392",
+    "voxy-server-side-neoforge-0.21.0+1.21.1.jar": "790e1bf6dd15877d245dac256b0d5439943e5861d94d3c03ce685c4e0aae8239",
+    "voxy-server-side-paper-0.21.0+1.21.1.jar": "6a6dee80b66a7051da3c161e8370a7f79e3f5617d81060f8432d6f4c8c1a9ccf",
+    "voxy-server-side-sponge-0.21.0+1.21.1.jar": "a0cff0b4d1d5090c07d2c94ef9373dfd04c15bb9bf796c60d68bd3db2c0196eb"
+   },
+   "junit": {
+    "common": {
+     "errors": 0,
+     "failures": 0,
+     "skipped": 0,
+     "tests": 1284
+    },
+    "fabric": {
+     "errors": 0,
+     "failures": 0,
+     "skipped": 5,
+     "tests": 2255
+    },
+    "neoforge": {
+     "errors": 0,
+     "failures": 0,
+     "skipped": 0,
+     "tests": 25
+    },
+    "paper": {
+     "errors": 0,
+     "failures": 0,
+     "skipped": 0,
+     "tests": 614
+    },
+    "sponge": {
+     "errors": 0,
+     "failures": 0,
+     "skipped": 0,
+     "tests": 26
+    }
+   },
+   "pin": "8ef51f69c70143a89e5c946cef3a6c7387fbff25",
+   "release_branch": "release/v0.21.0-mc1.21.1"
+  },
+  "1.21.10": {
+   "base": "support/mc1.21.10",
+   "gametests_passed": [
+    8,
+    97
+   ],
+   "gated_head": "dec61c8e17fd624247986d97073e7584982b9cae",
+   "jars_sha256": {
+    "lod-server-support-fabric-0.21.0+1.21.10.jar": "a25f31d7075ec78ce680dc3b65b2e17a4754f029b3be2cb64b3bd41ec059308f",
+    "lod-server-support-neoforge-0.21.0+1.21.10.jar": "0d6a709b780c2d708278daa75397fc51f46f532fa53b5dbdbdc53db651803d28",
+    "lod-server-support-paper-0.21.0+1.21.10.jar": "1e79c27401eb7495022a97fb3d8e6de37d8a2522553f9db80840c228fd1b0efd",
+    "lod-server-support-sponge-0.21.0+1.21.10.jar": "97816dcc86a91ea02556550ea83b454319a9149d6d44f1ccfff5a68094c9a9ad",
+    "paper-0.21.0.jar": "a57ec9f0394c2ca2ceeaa77e00d6e6c90d356a4031b9eb5908190b7f4d1bfa2c",
+    "voxy-server-side-fabric-0.21.0+1.21.10.jar": "bc896cd6c849c2b53e902e46bd3ae33c3967065e1813500363d47035c0c56607",
+    "voxy-server-side-neoforge-0.21.0+1.21.10.jar": "c63372dbedcc51b89584cb73b17f65f06835fe27bb2006ef415b8c4805162a7c",
+    "voxy-server-side-paper-0.21.0+1.21.10.jar": "d4c90e63e1ccbc579b18174ac663c46c81298204032a08220c294d9a1e7489be",
+    "voxy-server-side-sponge-0.21.0+1.21.10.jar": "72c2ae5880b558b1c5aae13bba03e74e27c1cbd1241425d243a237828fc9038e"
+   },
+   "junit": {
+    "common": {
+     "errors": 0,
+     "failures": 0,
+     "skipped": 0,
+     "tests": 1283
+    },
+    "fabric": {
+     "errors": 0,
+     "failures": 0,
+     "skipped": 7,
+     "tests": 2239
+    },
+    "neoforge": {
+     "errors": 0,
+     "failures": 0,
+     "skipped": 0,
+     "tests": 21
+    },
+    "paper": {
+     "errors": 0,
+     "failures": 0,
+     "skipped": 0,
+     "tests": 614
+    },
+    "sponge": {
+     "errors": 0,
+     "failures": 0,
+     "skipped": 0,
+     "tests": 26
+    }
+   },
+   "pin": "dec61c8e17fd624247986d97073e7584982b9cae",
+   "release_branch": "release/v0.21.0-mc1.21.10"
+  },
+  "1.21.11": {
+   "base": "support/mc1.21.11-v0.14",
+   "gametests_passed": [
+    8,
+    97
+   ],
+   "gated_head": "d5c0092dc789038ae1f91ce4a474741aca5dc07c",
+   "jars_sha256": {
+    "lod-server-support-fabric-0.21.0+1.21.11.jar": "7bc2e3b9e51bb7be693e2ece6f30bfc4d78c1a72ba9282f8c78502b0fa7138c8",
+    "lod-server-support-neoforge-0.21.0+1.21.11.jar": "08ddd37e4936f598ed5a2edeb4406225a44270edd0e28e2ddf48ec6f0272fe9a",
+    "lod-server-support-paper-0.21.0+1.21.11.jar": "b68e7681f57562fa6c130fe5c8a13e80e83a7860cb0829e9ff8cef08b9f5fba8",
+    "lod-server-support-sponge-0.21.0+1.21.11.jar": "d0d019880831e89b9188a44a1a784a898fe926c1df3908297553f0c6670cf642",
+    "paper-0.21.0.jar": "b58015f8b2aeaed5781171623298b96469f7719544eae24495183ac112c70198",
+    "voxy-server-side-fabric-0.21.0+1.21.11.jar": "3766d46885a82ae5bdb2677c94bdf29c300605229c68fbe174f50a8084f2b927",
+    "voxy-server-side-neoforge-0.21.0+1.21.11.jar": "91046b9a5d1a627197d7e0daaee3cf9b303890e51f84fd198c13fa19fc9fcbb1",
+    "voxy-server-side-paper-0.21.0+1.21.11.jar": "daecea740882efb1a8912355bfb844ebdea6753c5143534b8d87a465cfb07d20",
+    "voxy-server-side-sponge-0.21.0+1.21.11.jar": "1bee94cb70d66411caff416ac97027dee4b0b08e0a5a6f978e67582ee1cfc8da"
+   },
+   "junit": {
+    "common": {
+     "errors": 0,
+     "failures": 0,
+     "skipped": 0,
+     "tests": 1283
+    },
+    "fabric": {
+     "errors": 0,
+     "failures": 0,
+     "skipped": 5,
+     "tests": 2248
+    },
+    "neoforge": {
+     "errors": 0,
+     "failures": 0,
+     "skipped": 0,
+     "tests": 25
+    },
+    "paper": {
+     "errors": 0,
+     "failures": 0,
+     "skipped": 0,
+     "tests": 614
+    },
+    "sponge": {
+     "errors": 0,
+     "failures": 0,
+     "skipped": 0,
+     "tests": 26
+    }
+   },
+   "pin": "d5c0092dc789038ae1f91ce4a474741aca5dc07c",
+   "release_branch": "release/v0.21.0-mc1.21.11"
+  },
+  "26.1": {
+   "base": "support/mc26.1-v0.14",
+   "gametests_passed": [
+    8,
+    96
+   ],
+   "gated_head": "f974a736a970659cfe413945bd396fd6fe792577",
+   "jars_sha256": {
+    "lod-server-support-fabric-0.21.0+26.1.2.jar": "6b474b7b99eb2ce07f283609a8e0144cb83db4193843ae1516aadaf1269267ac",
+    "lod-server-support-neoforge-0.21.0+26.1.2.jar": "fa0f42c6c097fb5ba899127c3530ce5f384915b0979e491bc566be0f251de4c4",
+    "lod-server-support-paper-0.21.0+26.1.2.jar": "256296750dd57b8f61920bac576e1e88902f915974e036cc28bbd247c2031344",
+    "lod-server-support-sponge-0.21.0+26.1.2.jar": "2037532735e1e9d6de032e90bb77a8bcca2e011aee724e133bde5febde77fd47",
+    "paper-0.21.0.jar": "afb43a13e85099ed3b836338122480d7504de0145cafe97c6e0e1b54c5a4ec4b",
+    "voxy-server-side-fabric-0.21.0+26.1.2.jar": "c8549d19ab85b4c5e736bc4033199d45aefed6d9b3ff17877f62a96f88ddd297",
+    "voxy-server-side-neoforge-0.21.0+26.1.2.jar": "cf3c56cadf459347e1348507bfc7239e15d5df94c9fb2deffaccd9dbee687231",
+    "voxy-server-side-paper-0.21.0+26.1.2.jar": "a5dee00574cedb52a5f16ed9886f0483c7ba69df1f3974829bbb599a0eccd4d8",
+    "voxy-server-side-sponge-0.21.0+26.1.2.jar": "fea466568896a15d711f2624b3b63892ba5ada758745372121ba7a35b1ad0216"
+   },
+   "junit": {
+    "common": {
+     "errors": 0,
+     "failures": 0,
+     "skipped": 0,
+     "tests": 1283
+    },
+    "fabric": {
+     "errors": 0,
+     "failures": 0,
+     "skipped": 5,
+     "tests": 2255
+    },
+    "neoforge": {
+     "errors": 0,
+     "failures": 0,
+     "skipped": 0,
+     "tests": 25
+    },
+    "paper": {
+     "errors": 0,
+     "failures": 0,
+     "skipped": 0,
+     "tests": 614
+    },
+    "sponge": {
+     "errors": 0,
+     "failures": 0,
+     "skipped": 0,
+     "tests": 26
+    }
+   },
+   "pin": "f974a736a970659cfe413945bd396fd6fe792577",
+   "release_branch": "release/v0.21.0-mc26.1"
+  },
+  "26.2": {
+   "base": "support/mc26.2",
+   "gametests_passed": [
+    8,
+    96
+   ],
+   "gated_head": "4a8012d6e652a06ee660c89a769450659fb41ba1",
+   "jars_sha256": {
+    "lod-server-support-fabric-0.21.0+26.2.jar": "16f361f571b9006be73f97e8dcfc16757e658af0c3343c0046636e8123d697ea",
+    "lod-server-support-neoforge-0.21.0+26.2.jar": "6e48e504dabe4d9d906ce0b4108a0594daf1852965f544d1d96d53ad282f6290",
+    "lod-server-support-paper-0.21.0+26.2.jar": "787070454e514234f9e22ecfdd5561a57a16dca3bafb35341c19b46fc916b90a",
+    "lod-server-support-sponge-0.21.0+26.2.jar": "1f1034ce2693a5dbf31ac53d9bf8dcadbcebf7d5a8cb70235d8f7b454329560b",
+    "paper-0.21.0.jar": "844cc2de1aea9d482d5037f3707b82b70be740ed73c499a273d2c3e7a51633de",
+    "voxy-server-side-fabric-0.21.0+26.2.jar": "fb26f2c68c605835577a0b20cd41fb77e59ee49a61108d4ad12b9f5ac7a72bd7",
+    "voxy-server-side-neoforge-0.21.0+26.2.jar": "b3408ec6285befa37be70853642409d5860ad798c26758303251ee025766dbcd",
+    "voxy-server-side-paper-0.21.0+26.2.jar": "e0987c3bcb1cfe5d8e432f931ba395e729f085d0cc390ad30486ade90af51090",
+    "voxy-server-side-sponge-0.21.0+26.2.jar": "2b32f32ead264fa61d81342f93e27aae7edeca1f990c6cee5646ae3b76d4b646"
+   },
+   "junit": {
+    "common": {
+     "errors": 0,
+     "failures": 0,
+     "skipped": 0,
+     "tests": 1284
+    },
+    "fabric": {
+     "errors": 0,
+     "failures": 0,
+     "skipped": 5,
+     "tests": 2253
+    },
+    "neoforge": {
+     "errors": 0,
+     "failures": 0,
+     "skipped": 0,
+     "tests": 25
+    },
+    "paper": {
+     "errors": 0,
+     "failures": 0,
+     "skipped": 0,
+     "tests": 616
+    },
+    "sponge": {
+     "errors": 0,
+     "failures": 0,
+     "skipped": 0,
+     "tests": 26
+    }
+   },
+   "pin": "4a8012d6e652a06ee660c89a769450659fb41ba1",
+   "release_branch": "release/v0.21.0-mc26.2"
+  },
+  "26.3": {
+   "base": "main",
+   "gametests_passed": [
+    8,
+    96
+   ],
+   "gated_head": "807fe7342cb5159b7e7facb1db55346ee4972fdf",
+   "jars_sha256": {
+    "lod-server-support-fabric-0.21.0+26.3.jar": "fbf264a4001df1fe41845d6588e13a1487834f37b92dd204826f2ccb44af3486",
+    "lod-server-support-neoforge-0.21.0+26.3.jar": "312b5147022976ff30c17a5124767326cac6ddd4a68654affc58b248a57ae574",
+    "lod-server-support-paper-0.21.0+26.3.jar": "12e94a0f7a912e46854bd2ba2397427ab69af2367f803bb430cb55a1ed0d8403",
+    "lod-server-support-sponge-0.21.0+26.3.jar": "58338e49950099795a10a210457b0745347e0abe193284231dec2ef151e5225c",
+    "paper-0.21.0.jar": "9db418e56a789c02ee16dda82a87c7859433b29f631c3a017e1176d4edf4dc1a",
+    "voxy-server-side-fabric-0.21.0+26.3.jar": "d7131961483163a462a4eb254c6ea4b97d6e7fdaec7a6d63a070ec93bbb9e397",
+    "voxy-server-side-neoforge-0.21.0+26.3.jar": "57a09d52058b38c3d335978bc60810c1ebd90c111253beae6fb62f01da5ab186",
+    "voxy-server-side-paper-0.21.0+26.3.jar": "a71761edf418448a19c186d35a60f518a69b4abfb49aec0070254b739638057c",
+    "voxy-server-side-sponge-0.21.0+26.3.jar": "24111103fcdbced9371d90befd85075e1efbd5907c993f83780d8be186c03c99"
+   },
+   "junit": {
+    "common": {
+     "errors": 0,
+     "failures": 0,
+     "skipped": 0,
+     "tests": 1284
+    },
+    "fabric": {
+     "errors": 0,
+     "failures": 0,
+     "skipped": 5,
+     "tests": 2254
+    },
+    "neoforge": {
+     "errors": 0,
+     "failures": 0,
+     "skipped": 0,
+     "tests": 25
+    },
+    "paper": {
+     "errors": 0,
+     "failures": 0,
+     "skipped": 0,
+     "tests": 617
+    },
+    "sponge": {
+     "errors": 0,
+     "failures": 0,
+     "skipped": 0,
+     "tests": 26
+    }
+   },
+   "pin": "807fe7342cb5159b7e7facb1db55346ee4972fdf",
+   "release_branch": "release/v0.21.0-mc26.3"
+  }
+ },
+ "merged": false,
+ "published": false,
+ "schema_version": 1,
+ "scope": "all six lines",
+ "sponge": true,
+ "status": "prepared",
+ "tagged": false,
+ "version": "0.21.0"
+}
