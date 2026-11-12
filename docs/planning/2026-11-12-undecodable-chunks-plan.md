@@ -70,10 +70,10 @@ returns `null` and marks the notes with the first decode message. Details:
 - Single-entry palette: every cell uses the entry. Otherwise the cell indices are walked; a
   leftover entry no cell points at never counts.
 - **Difference from the body (§2.2):** the undecodable check runs BEFORE the unparseable-section
-  rung, not after it. A column with a truly-unparseable section AND used unknown entries AND
-  nothing decoded is undecodable, not a plain miss, because the plain miss may escalate to
-  generation (decision 1). An unparseable section beside decoded content is still today's plain
-  miss.
+  rung, not after it, and it also fires whenever that rung would condemn the column while a cell
+  uses an unknown entry, whatever else decoded (review fold, below). The plain miss may escalate
+  to generation (decision 1). An unparseable section in a column with no used unknown entry is
+  still today's plain miss.
 - Callers without notes (the store backfill, the old overloads, the range-free test flavors) get a
   plain `null` and skip the chunk, as for an unparseable one.
 
@@ -91,8 +91,9 @@ pass the notes through in `submitReadDirect`; the backfill read passes none.
 **Disposition (`OffThreadProcessor`).** `deliverDiskResult` passes `result.unservable()` to
 `handleDiskNotFound`. After the unchanged ghost branch (no live pending: superseded +
 miss_dropped), an unservable result adds `ColumnNotGenerated` and returns, before the memo write
-and before `escalateMissToGeneration`, whether generation is available or not and whether or not
-an edit overtook the read. In the drain block the stamp invalidation already runs for every
+and before `escalateMissToGeneration`, whether generation is available or not (an edit that
+overtook the read changes the answer, never the ticket: see the review fold below). In the drain
+block the stamp invalidation already runs for every
 not-found flavor; the store-row delete gate became `authoritativeMiss() || unservable()`. Nothing
 is deposited (deposits need `!notFound`).
 
@@ -120,18 +121,39 @@ level's real region folder (`DimensionType.getStorageFolder`). The gametest tier
 LOD store off, so "no store row" is pinned at the processor. Every new pin was mutation-checked
 (the fix broken one piece at a time, red seen, restored).
 
-**Found on the way, not changed.**
-- `RegionFaultGameTests.corruptRegionChunkResolvesAsContainedErrorAndReaderSurvives` stages its
+**Review fold (2026-11-12, after the first merge into the 0.21.0 train).**
+- *An edit that overtook the read.* An unservable delivery that is stale against an edit is no
+  longer answered. It takes the ghost-style transient drop (superseded + miss_dropped, no wire
+  answer), so the next want-set re-reads the bytes that are on disk now. Reason: a player loads
+  the chunk, vanilla replaces the unknown blocks and saves while the read of the old bytes is in
+  flight; `ColumnNotGenerated` off those bytes would park the position for the session, and a
+  chunk load is not necessarily a dirty broadcast that revives it. Still no memo, no ticket; law
+  A5 balances through `miss_dropped`. (`handleDiskNotFound` now takes `staleAgainstEdit`.)
+- *An unparseable section beside used unknown blocks.* The serializer gate is
+  `usedHardError != null && (unparseable > 0 || no non-air cell)`: a column with decoded blocks,
+  used unknown blocks and one structurally corrupt section is undecodable, not the plain miss
+  that would let generation load it. No unknown block in use: unchanged
+  (`trulyUnparseableSection_condemnsTheColumnAsAuthoritativeMiss`).
+- *Test gaps.* `usedEntryWalk_readsWidePalettesAtTheirOwnBitWidth` hand-builds 20-entry (5-bit)
+  and 300-entry (9-bit) palettes with the unknown entry unused, and used at the last index, so a
+  wrong index width in `firstUsedHardError` is caught (the earlier wide test marked every entry
+  used). The gametest counts the batch-response statuses written to the mock player's channel:
+  exactly one `NOT_GENERATED` for the position and no `up_to_date` (the server keeps no
+  not_generated counter).
+
+**Found on the way.**
+- `RegionFaultGameTests.corruptRegionChunkResolvesAsContainedErrorAndReaderSurvives` staged its
   corrupt file under `<world>/region`. Since 26.2 the Overworld's regions live under
-  `<world>/dimensions/minecraft/overworld/region`, so on the 26.x lines that file is never read
-  and the test's "corrupt" read is a plain missing region. Its containment claim is not
-  exercised there.
+  `<world>/dimensions/minecraft/overworld/region`, so on 26.2 and 26.3 that file was never read
+  and the test's "corrupt" read was a plain missing region. Fixed on main in a follow-up commit:
+  the file is staged in the level's own region folder and the test asserts `raw_serves == 2`.
 - `BacklogReplaceTest.concurrentHoldReleaseNeverRestsAStaleBatchAndBalancesAccounting` failed
   once in the full gate (round 3589 of 25000, "a STALE batch ... RESTED in the mailbox"). The
   code it tests is untouched by this change. Likely mechanism: `offerIncomingBatch` bumps the
   offer generation before it writes the mailbox, so a pump that reads the generation inside
   that window and then takes the older batch still resting there holds an old batch under the
-  new generation, and both republish guards pass. Not in the flake catalog.
+  new generation, and both republish guards pass. Not in the flake catalog; handed to a
+  separate investigation.
 
 **Not done here.** The five support lines, the classification entries and the six-line re-pin
 (`ColumnDecodeNotes.java` is a new common file).

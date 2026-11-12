@@ -67,11 +67,24 @@ public class PaperChunkDiskReader extends AbstractChunkDiskReader {
         var maskEntry = PaperXrayMaskManager.entryForActive(level);
         int minSectionY = level.getMinSectionY();
         int maxSectionY = level.getMaxSectionY();
+        // Whether this dimension has sky light at all — from its dimension type, captured
+        // here like the facts above. The shared reader counts a lightless column only then.
+        boolean skyLit = hasSkyLight(level);
         // The shared reader's per-read notes go through, so an undecodable column
         // resolves as the unservable flavor instead of a plain (generation-escalating) miss.
         submitRead(playerUuid, registration, chunkX, chunkZ, dimension, submissionOrder, clientTimestamp,
+                skyLit,
                 notes -> PaperNbtSectionSerializer.readAndSerializeSections(read, registryAccess, chunkX, chunkZ,
                         maskEntry, minSectionY, maxSectionY, readPolicy.transcode(), notes));
+    }
+
+    /** The level's dimension type decides, never a list of dimension names (The End has
+     *  sky light on some Minecraft lines and not on others; datapacks add their own). A
+     *  level without a dimension type exists only as a test double and reads as "no sky
+     *  light", so nothing is counted for it. */
+    private static boolean hasSkyLight(ServerLevel level) {
+        var type = level.dimensionType();
+        return type != null && type.hasSkyLight();
     }
 
     /**

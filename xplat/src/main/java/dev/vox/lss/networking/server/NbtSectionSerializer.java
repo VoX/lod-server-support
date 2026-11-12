@@ -11,6 +11,7 @@ import net.minecraft.core.IdMap;
 import net.minecraft.core.Registry;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.Registries;
+import net.minecraft.nbt.ByteArrayTag;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.NbtOps;
@@ -397,10 +398,12 @@ final class NbtSectionSerializer {
      * skips the chunk and can never store air; a caller that passes notes (the disk
      * reader) also learns WHY, and must not escalate the miss to generation. Undecodable
      * means: at least one block palette entry that a cell actually uses was a hard decode
-     * error, and no in-range section has a non-air cell left. Before this rule such a
-     * column serialized as all-air (or as lit air sections): stamped, stored, and sent as
-     * a clear over the client's cached terrain. A column with ANY decoded block keeps the
-     * vanilla leniency exactly (unknown entries substitute air in place).
+     * error, and either no in-range section has a non-air cell left, or a section is
+     * truly unparseable (the column would otherwise be a plain, generation-escalating
+     * miss). Before this rule the first shape serialized as all-air (or as lit air
+     * sections): stamped, stored, and sent as a clear over the client's cached terrain.
+     * A column with a decoded block and no unparseable section keeps the vanilla
+     * leniency exactly (unknown entries substitute air in place).
      */
     static byte[] serializeChunkNbt(CompoundTag chunkNbt, RegistryAccess registryAccess,
                                     XrayMaskManager.MaskEntry maskEntry,
@@ -458,15 +461,19 @@ final class NbtSectionSerializer {
                 parsed.add(result);
             }
         }
-        if (usedHardError[0] != null && !hasNonAirCell(parsed)) {
+        if (usedHardError[0] != null && (unparseable[0] > 0 || !hasNonAirCell(parsed))) {
             // Undecodable column: cells point at palette entries that failed to decode,
-            // and nothing else in the column decoded to a block. Everything LSS could say
-            // about it would be substituted air, so it says nothing: null, and the notes
-            // (when the caller passed them) carry the reason. Light does not matter (a
-            // lit column of substituted air is the same lie). Checked BEFORE the
-            // unparseable rung on purpose: that rung's miss may escalate to generation,
-            // and a chunk whose blocks this server does not know must never be loaded by
-            // LSS (vanilla turns them into air on load and may save the chunk).
+            // and either
+            //  - nothing else in the column decoded to a block: everything LSS could say
+            //    about it would be substituted air, so it says nothing (light does not
+            //    matter — a lit column of substituted air is the same lie); or
+            //  - a section is truly unparseable, so the rung below would condemn the
+            //    column as a plain miss. That miss may escalate to generation, and a
+            //    chunk whose cells use blocks this server does not know must never be
+            //    loaded by LSS (vanilla turns them into air on load and may save the
+            //    chunk) — whatever else in it decoded.
+            // Null either way, and the notes (when the caller passed them) carry the
+            // reason. Checked BEFORE the unparseable rung for that second case.
             if (notes != null) notes.markUndecodable(usedHardError[0]);
             return null;
         }
@@ -495,6 +502,12 @@ final class NbtSectionSerializer {
         }
         final boolean noContent = minContent == Integer.MAX_VALUE;
         final int lo = minContent - 1, hi = maxContent + 1;
+        // Diagnostics only — the bytes below do not depend on it: a column with blocks
+        // whose chunk carries no sky light anywhere. Asked before the band filter, while
+        // every in-range sky-lit section is still in the list.
+        if (notes != null && !noContent && savedWithoutSkyLight(parsed, sectionsList)) {
+            notes.markLightless();
+        }
         parsed.removeIf(p -> p.nonEmptyCount() == 0
                 && !p.litByBlock()
                 && (noContent || p.sectionY() < lo || p.sectionY() > hi));
@@ -900,6 +913,33 @@ final class NbtSectionSerializer {
 
         return new ParsedSection(sectionY, null, blockStates, biomes, nonEmpty, fluid,
                 blockLightData, skyLightData, litByBlock, litBySky);
+    }
+
+    /**
+     * True when no section entry of the chunk carries a sky-light layer with a non-zero
+     * nibble: the chunk is saved without sky light (lightless-chunks plan, fold item 7 —
+     * a diagnostics fact for the reader's notes; it never changes a byte). Every entry
+     * counts, whatever its Y: vanilla saves a fully lit light-only entry above the block
+     * range, and an entry the range gate or the content band drops from the wire still
+     * proves the chunk was lit. A layer is one the serializer itself would accept (2048
+     * bytes). Cheap by construction: a served section that is sky-lit answers from the
+     * flag its parse already computed, so a lit chunk reads no array here at all;
+     * otherwise the entries are scanned top first with the vectorized zero compare,
+     * which stops at the first non-zero byte. Nothing is allocated, copied or written.
+     */
+    private static boolean savedWithoutSkyLight(java.util.List<ParsedSection> parsed,
+                                                ListTag sections) {
+        for (var p : parsed) {
+            if (p.litBySky()) return false;
+        }
+        for (int i = sections.size() - 1; i >= 0; i--) {
+            if (sections.get(i) instanceof CompoundTag section
+                    && section.get("SkyLight") instanceof ByteArrayTag sky) {
+                byte[] layer = sky.getAsByteArray();
+                if (layer.length == 2048 && hasNonZeroNibble(layer)) return false;
+            }
+        }
+        return true;
     }
 
     /** True when any parsed section still has a non-air cell (the column has content). */

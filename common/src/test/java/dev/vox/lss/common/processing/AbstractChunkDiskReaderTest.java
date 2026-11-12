@@ -52,6 +52,20 @@ class AbstractChunkDiskReaderTest {
         protected void warnUndecodable(String message) {
             this.undecodableWarns.add(message);
         }
+
+        /** A notes-taking read with the dimension's sky-light fact, as platform readers submit. */
+        void submitNoted(UUID player, int cx, int cz, long order, boolean dimensionHasSkyLight,
+                         NotedReadOperation op) {
+            submitRead(player, cx, cz, DIM, order, 0L, dimensionHasSkyLight, op);
+        }
+
+        /** The latched lightless INFO, captured instead of logged. */
+        final List<String> lightlessInfos = new java.util.concurrent.CopyOnWriteArrayList<>();
+
+        @Override
+        protected void infoLightless(String message) {
+            this.lightlessInfos.add(message);
+        }
     }
 
     private final UUID player = UUID.randomUUID();
@@ -284,6 +298,129 @@ class AbstractChunkDiskReaderTest {
             }
             assertEquals(1, second.undecodableWarns.size(), "a new reader warns again");
             assertEquals(1, second.getDiag().getUndecodableCount(), "and counts from zero");
+        } finally {
+            second.shutdown();
+        }
+    }
+
+    // ---- Columns saved without sky light (lightless-chunks plan, fold item 7) ----
+
+    /** A serializer's report of a served column saved without sky light: bytes plus the mark. */
+    private static AbstractChunkDiskReader.NotedReadOperation lightless(byte[] bytes) {
+        return notes -> {
+            notes.markLightless();
+            return bytes;
+        };
+    }
+
+    /** {@link #runNotedWithBarrier} with the dimension's sky-light fact. */
+    private ChunkReadResult runSkyNotedWithBarrier(int cx, int cz, long order, boolean dimensionHasSkyLight,
+                                                   AbstractChunkDiskReader.NotedReadOperation op)
+            throws InterruptedException {
+        reader.submitNoted(player, cx, cz, order, dimensionHasSkyLight, op);
+        reader.submit(player, 999, 999, Long.MAX_VALUE, () -> new byte[0]);
+        var results = awaitResults(2);
+        assertNull(reader.getPlayerQueue(player).poll(), "exactly one result per submit");
+        assertEquals(999, results.get(1).chunkX(), "barrier result must arrive second (FIFO)");
+        return results.get(0);
+    }
+
+    @Test
+    void lightlessColumnIsCountedBesideItsOrdinaryOutcomeAndOnlyInASkyDimension() throws Exception {
+        // An observation, not an outcome: the column is served exactly as before (same
+        // flavor, same bytes, counted successful, nothing under not_found). It is counted
+        // only when the dimension has sky light: no sky light is the normal state of one
+        // that has none.
+        byte[] bytes = {10, 20, 30};
+        var r = runSkyNotedWithBarrier(3, 4, 9L, true, lightless(bytes));
+        assertFalse(r.notFound(), "a lightless column is served");
+        assertFalse(r.unservable());
+        assertFalse(r.saturated());
+        assertArrayEquals(bytes, r.sectionBytes(), "with exactly the serializer's bytes");
+        assertTrue(r.columnTimestamp() > 0);
+
+        var d = reader.getDiag();
+        assertEquals(1, d.getLightlessCount());
+        assertEquals(1, d.getSuccessfulReadCount(), "its ordinary outcome is unchanged");
+        assertEquals(0, d.getNotFoundCount(), "never counted under not_found");
+        assertEquals(0, d.getUndecodableCount());
+
+        var noSky = runSkyNotedWithBarrier(5, 6, 10L, false, lightless(bytes));
+        assertArrayEquals(bytes, noSky.sectionBytes());
+        assertEquals(1, d.getLightlessCount(), "a dimension without sky light never counts");
+
+        runNotedWithBarrier(7, 8, 11L, lightless(bytes));
+        assertEquals(1, d.getLightlessCount(),
+                "an admission that states no sky-light fact never counts either");
+
+        assertEquals(3, d.getSuccessfulReadCount());
+        assertEquals(d.getCompletedCount(),
+                d.getSuccessfulReadCount() + d.getNotFoundCount() + d.getAllAirCount()
+                        + d.getErrorCount() + d.getSaturationCount(),
+                "the completion partition has no lightless term");
+        assertTrue(reader.undecodableWarns.isEmpty());
+    }
+
+    @Test
+    void lightlessTokenRendersOnlyWhenNonZeroAndFollowsUndecodable() throws Exception {
+        String clean = "submitted=0, completed=0, not_found=0, all_air=0, errors=0, saturated=0,"
+                + " header_hits=0, avg_read=" + String.format("%.1f", 0.0) + "ms, pending=0,"
+                + " read_gate=0/1, gate_parked=0, gate_stops=0, gated=0";
+        assertEquals(clean, reader.getDiagnostics(),
+                "a clean reader's disk line is byte-identical to the pre-counter line");
+
+        runSkyNotedWithBarrier(1, 1, 1L, false, lightless(new byte[]{1}));
+        runSkyNotedWithBarrier(2, 2, 2L, true, notes -> new byte[]{1});
+        assertFalse(reader.getDiagnostics().contains("lightless"),
+                "no token while nothing was counted: " + reader.getDiagnostics());
+
+        runSkyNotedWithBarrier(3, 4, 3L, true, lightless(new byte[]{1}));
+        assertTrue(reader.getDiagnostics().endsWith(", gated=0, lightless=1"),
+                "the token follows the gate tokens: " + reader.getDiagnostics());
+
+        runNotedWithBarrier(5, 6, 4L, undecodable("Unknown registry key: lss:gone"));
+        assertTrue(reader.getDiagnostics().endsWith(", gated=0, undecodable=1, lightless=1"),
+                "after undecodable= when both are present: " + reader.getDiagnostics());
+    }
+
+    @Test
+    void lightlessInfoIsLatchedOncePerReaderAndSaysWhatItMeans() throws Exception {
+        runSkyNotedWithBarrier(9, 9, 1L, false, lightless(new byte[]{1}));
+        assertTrue(reader.lightlessInfos.isEmpty(),
+                "a dimension without sky light neither logs nor uses up the latch");
+
+        runSkyNotedWithBarrier(3, -4, 2L, true, lightless(new byte[]{1}));
+        runSkyNotedWithBarrier(5, 6, 3L, true, lightless(new byte[]{1}));
+        runSkyNotedWithBarrier(7, 8, 4L, true, lightless(new byte[]{1}));
+
+        assertEquals(3, reader.getDiag().getLightlessCount(), "every column is counted");
+        assertEquals(1, reader.lightlessInfos.size(),
+                "one INFO per reader instance, however many columns: " + reader.lightlessInfos);
+        String info = reader.lightlessInfos.get(0);
+        assertTrue(info.contains("[3, -4]"), "names the first chunk: " + info);
+        assertTrue(info.contains(DIM), "names the dimension: " + info);
+        assertTrue(info.contains("saved without sky light"), "says what was found: " + info);
+        assertTrue(info.contains("upgraded or optimised from an older Minecraft version"),
+                "says where it typically comes from: " + info);
+        assertTrue(info.contains("clients on 0.21.0 or newer light it themselves"),
+                "says new clients handle it: " + info);
+        assertTrue(info.contains("older clients show it dark"), "and old clients do not: " + info);
+        assertTrue(info.contains("Loading the area in game makes Minecraft relight and save it"),
+                "says what repairs it: " + info);
+        assertTrue(info.contains("lightless="), "points at the diag token: " + info);
+        assertTrue(reader.undecodableWarns.isEmpty(), "not the undecodable WARN");
+
+        var second = new TestDiskReader();
+        try {
+            second.registerPlayer(player);
+            second.submitNoted(player, 1, 1, 1L, true, lightless(new byte[]{1}));
+            long deadline = System.nanoTime() + 5_000_000_000L;
+            while (second.getPlayerQueue(player).peek() == null) {
+                if (System.nanoTime() > deadline) fail("timed out waiting for the second reader");
+                Thread.sleep(5);
+            }
+            assertEquals(1, second.lightlessInfos.size(), "a new reader logs again");
+            assertEquals(1, second.getDiag().getLightlessCount(), "and counts from zero");
         } finally {
             second.shutdown();
         }

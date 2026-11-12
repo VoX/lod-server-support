@@ -103,7 +103,8 @@ public abstract class AbstractChunkDiskReader {
     // entries (same staleness/dedup/shutdown story: pendings hold, late delivery is
     // idempotent, isShutdown() short-circuits).
     private record ParkedRead(UUID playerUuid, RequestRegistration registration, int chunkX, int chunkZ, String dimension,
-                              long submissionOrder, NotedReadOperation operation) {}
+                              long submissionOrder, boolean dimensionHasSkyLight,
+                              NotedReadOperation operation) {}
     private final ConcurrentLinkedQueue<ParkedRead> gateParked = new ConcurrentLinkedQueue<>();
     private final AtomicInteger gateParkedCount = new AtomicInteger();
     private final int gateParkCapacity;
@@ -296,6 +297,29 @@ public abstract class AbstractChunkDiskReader {
         LSSLogger.warn(message);
     }
 
+    // Columns saved without sky light (lightless-chunks plan, fold item 7): ONE INFO per
+    // reader instance, the first time it is seen. Not a fault of this server and nothing
+    // an operator must act on, so INFO; the lightless= diag token carries the total.
+    private final AtomicBoolean lightlessLogged = new AtomicBoolean();
+
+    private void infoLightlessOnce(String dimension, int chunkX, int chunkZ) {
+        if (!this.lightlessLogged.compareAndSet(false, true)) return;
+        infoLightless("Chunk [" + chunkX + ", " + chunkZ + "] in " + dimension
+                + " is saved without sky light. That is typical after a world was upgraded"
+                + " or optimised from an older Minecraft version, or converted. "
+                + Brand.shortName() + " sends such terrain as it is saved: clients on 0.21.0"
+                + " or newer light it themselves, older clients show it dark. Loading the"
+                + " area in game makes Minecraft relight and save it. The running count is"
+                + " lightless= in /" + Brand.serverCommand() + " diag. (Logged once per"
+                + " session.)");
+    }
+
+    /** Emits the latched lightless-column INFO. Overridable so tests can pin the text and
+     *  its once-ness without log capture. */
+    protected void infoLightless(String message) {
+        LSSLogger.info(message);
+    }
+
     /** Latch observability for the Tier 1 episode-detector pins. */
     boolean gateStopWarnLatchedForTest() {
         return this.gateStopWarnLatched;
@@ -408,9 +432,18 @@ public abstract class AbstractChunkDiskReader {
     protected final void submitRead(UUID playerUuid, int chunkX, int chunkZ, String dimension,
                                     long submissionOrder, long clientTimestamp,
                                     NotedReadOperation operation) {
+        submitRead(playerUuid, chunkX, chunkZ, dimension, submissionOrder, clientTimestamp,
+                false, operation);
+    }
+
+    /** Standalone admission with the dimension's sky-light fact (see the platform
+     *  admission below). */
+    protected final void submitRead(UUID playerUuid, int chunkX, int chunkZ, String dimension,
+                                    long submissionOrder, long clientTimestamp,
+                                    boolean dimensionHasSkyLight, NotedReadOperation operation) {
         var registration = this.playerResults.get(playerUuid);
         if (registration != null) submitRead(playerUuid, registration, chunkX, chunkZ,
-                dimension, submissionOrder, clientTimestamp, operation);
+                dimension, submissionOrder, clientTimestamp, dimensionHasSkyLight, operation);
     }
 
     /** Platform admission carries the originating player state, never a completion-time UUID lookup. */
@@ -423,10 +456,27 @@ public abstract class AbstractChunkDiskReader {
                 clientTimestamp, (NotedReadOperation) notes -> operation.read());
     }
 
-    /** Platform admission for an operation that reports through {@link ColumnDecodeNotes}. */
+    /** Platform admission for an operation that reports through {@link ColumnDecodeNotes},
+     *  without the sky-light fact: a lightless column is then never counted. */
     protected final void submitRead(UUID playerUuid, RequestRegistration registration,
                                     int chunkX, int chunkZ, String dimension, long submissionOrder,
                                     long clientTimestamp, NotedReadOperation operation) {
+        submitRead(playerUuid, registration, chunkX, chunkZ, dimension, submissionOrder,
+                clientTimestamp, false, operation);
+    }
+
+    /**
+     * Platform admission for an operation that reports through {@link ColumnDecodeNotes}.
+     * {@code dimensionHasSkyLight} is a per-read fact the platform reader captures at
+     * submit time from the level's dimension type (never from a list of dimension names:
+     * which dimensions have sky light differs per Minecraft line and per datapack). It
+     * gates the lightless counter only: a column without sky light is the normal state
+     * of a dimension that has none.
+     */
+    protected final void submitRead(UUID playerUuid, RequestRegistration registration,
+                                    int chunkX, int chunkZ, String dimension, long submissionOrder,
+                                    long clientTimestamp, boolean dimensionHasSkyLight,
+                                    NotedReadOperation operation) {
         if (isShutdown() || registration.isRetired()) return;
 
         try {
@@ -435,7 +485,7 @@ public abstract class AbstractChunkDiskReader {
                 try {
                     if (!isShutdown()) {
                         readAndDeliver(playerUuid, registration, chunkX, chunkZ, dimension, submissionOrder,
-                                clientTimestamp, operation);
+                                clientTimestamp, dimensionHasSkyLight, operation);
                     }
                 } catch (Throwable t) {
                     // Last-resort containment (Phase 1 review MAJOR-1): every expected
@@ -669,7 +719,7 @@ public abstract class AbstractChunkDiskReader {
 
     private void readAndDeliver(UUID playerUuid, RequestRegistration registration, int chunkX, int chunkZ, String dimension,
                                  long submissionOrder, long clientTimestamp,
-                                 NotedReadOperation operation) {
+                                 boolean dimensionHasSkyLight, NotedReadOperation operation) {
         if (isShutdown()) return;
         // Header freshness rung (region-summary-sync-plan.md P1) — FIRST: cheaper than
         // the store rung once memoized (pure memory vs a b-tree row fetch) and it makes
@@ -737,14 +787,15 @@ public abstract class AbstractChunkDiskReader {
                 return;
             }
             this.gateParked.add(new ParkedRead(playerUuid, registration, chunkX, chunkZ, dimension,
-                    submissionOrder, operation));
+                    submissionOrder, dimensionHasSkyLight, operation));
             // Missed-wakeup guard: a release between our failed acquire and the add
             // found an empty park list and drained nothing — re-check ourselves.
             drainGateParked();
             return;
         }
         try {
-            gatedReadAndDeliver(playerUuid, registration, chunkX, chunkZ, dimension, submissionOrder, operation);
+            gatedReadAndDeliver(playerUuid, registration, chunkX, chunkZ, dimension, submissionOrder,
+                    dimensionHasSkyLight, operation);
         } finally {
             // Release on EVERY outcome — including the timeout triage, where future.get
             // throws at DISK_READ_TIMEOUT_SECONDS and the orphaned downstream fetch keeps
@@ -784,7 +835,8 @@ public abstract class AbstractChunkDiskReader {
             this.gateParkedCount.decrementAndGet();
             try {
                 gatedReadAndDeliver(parked.playerUuid(), parked.registration(), parked.chunkX(), parked.chunkZ(),
-                        parked.dimension(), parked.submissionOrder(), parked.operation());
+                        parked.dimension(), parked.submissionOrder(), parked.dimensionHasSkyLight(),
+                        parked.operation());
             } finally {
                 this.readGate.release();
             }
@@ -793,7 +845,8 @@ public abstract class AbstractChunkDiskReader {
 
     /** The expensive phase — every path through here holds a gate permit. */
     private void gatedReadAndDeliver(UUID playerUuid, RequestRegistration registration, int chunkX, int chunkZ, String dimension,
-                                     long submissionOrder, NotedReadOperation operation) {
+                                     long submissionOrder, boolean dimensionHasSkyLight,
+                                     NotedReadOperation operation) {
         long startNs = System.nanoTime();
         // Freshness stamp at READ START (R1-M2): the bytes the read produces reflect
         // region state no earlier than this second, so any save landing during the read
@@ -868,6 +921,15 @@ public abstract class AbstractChunkDiskReader {
             recordRealCompletion(System.nanoTime() - startNs);
             addResult(registration, ChunkReadResult.notFoundAuthoritative(playerUuid, chunkX, chunkZ, dimension, submissionOrder));
             return;
+        }
+
+        if (dimensionHasSkyLight && notes.lightless()) {
+            // The column has blocks but its chunk was saved without sky light, in a
+            // dimension that has it. An observation beside the outcome below, which is
+            // exactly what it would be without it: counted for operators and support,
+            // logged once. (The client estimates the light; the bytes are untouched.)
+            this.diag.recordLightless();
+            infoLightlessOnce(dimension, chunkX, chunkZ);
         }
 
         long columnTimestamp = LSSConstants.epochSeconds();
@@ -977,6 +1039,9 @@ public abstract class AbstractChunkDiskReader {
         // the signal that chunks on disk could not be decoded (see warnUndecodableOnce).
         long undecodable = this.diag.getUndecodableCount();
         if (undecodable > 0) base += ", undecodable=" + undecodable;
+        // Same rule for columns saved without sky light (see infoLightlessOnce).
+        long lightless = this.diag.getLightlessCount();
+        if (lightless > 0) base += ", lightless=" + lightless;
         // The throttle is engaged only on the Fabric A-incompatible fallback path (a chunk-IO mod
         // replaced vanilla IO). On the normal working-A path it is null and the line is unchanged,
         // so existing diagnostics goldens do not move; when engaged it makes the fallback observable

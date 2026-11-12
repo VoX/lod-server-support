@@ -1,8 +1,10 @@
 package dev.vox.lss.common.processing;
 
 /**
- * What a platform serializer reports to the disk reader about ONE column it refused to
- * serialize (undecodable-chunks plan, 2026-11-12).
+ * What a platform serializer reports to the disk reader about ONE column, beside the
+ * bytes: that it refused to serialize it ({@link #undecodable()}, undecodable-chunks plan,
+ * 2026-11-12), or that it serialized a column saved without sky light
+ * ({@link #lightless()}, lightless-chunks plan, same day: a diagnostics fact only).
  *
  * <p>The serializer twins only detect: when every block the column's cells use failed to
  * decode (a removed mod's blocks, a chunk format this build cannot read) they return
@@ -19,6 +21,7 @@ package dev.vox.lss.common.processing;
 public final class ColumnDecodeNotes {
     private boolean undecodable;
     private String firstDecodeError;
+    private boolean lightless;
 
     /**
      * The column decoded to nothing because block palette entries its cells use failed to
@@ -36,5 +39,20 @@ public final class ColumnDecodeNotes {
     /** The first failed entry's decode message; {@code null} unless {@link #undecodable()}. */
     public String firstDecodeError() {
         return this.firstDecodeError;
+    }
+
+    /**
+     * The column was serialized (it has blocks), but no section entry of the chunk carries
+     * a sky-light layer with a non-zero nibble: the chunk is saved without sky light, as
+     * world upgrades and conversions leave it. The bytes are exactly what they would be
+     * without this mark; the reader only counts it, and only for a dimension that has
+     * sky light.
+     */
+    public void markLightless() {
+        this.lightless = true;
+    }
+
+    public boolean lightless() {
+        return this.lightless;
     }
 }

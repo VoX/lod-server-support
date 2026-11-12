@@ -182,6 +182,95 @@ class ChunkDiskReaderTest {
         }
     }
 
+    /**
+     * The Fabric glue for the lightless counter: the real serializer marks the notes for a
+     * chunk saved with blocks and no sky light, and {@code submitReadDirect} captures the
+     * sky-light fact from the level's dimension type (never from the dimension's name).
+     */
+    @Test
+    void columnSavedWithoutSkyLightIsCountedOnlyWhereTheDimensionTypeHasSkyLight() throws Exception {
+        net.minecraft.SharedConstants.tryDetectVersion();
+        net.minecraft.server.Bootstrap.bootStrap();
+        XrayMaskManager.deactivate(XrayMaskManager.current());
+
+        var chunk = new CompoundTag();
+        chunk.putString("Status", "minecraft:full");
+        var section = new CompoundTag();
+        section.putByte("Y", (byte) 0);
+        var blocks = new CompoundTag();
+        var palette = new net.minecraft.nbt.ListTag();
+        var stone = new CompoundTag();
+        stone.putString("Name", "minecraft:stone");
+        palette.add(stone);
+        blocks.put("palette", palette);
+        section.put("block_states", blocks);
+        var sections = new net.minecraft.nbt.ListTag();
+        sections.add(section);
+        chunk.put("sections", sections);
+
+        var level = org.mockito.Mockito.mock(net.minecraft.server.level.ServerLevel.class);
+        var accessor = dev.vox.lss.mixin.AccessorServerChunkCache.class;
+        var cacheClass = net.minecraft.server.level.ServerChunkCache.class;
+        var chunkSource = accessor.isAssignableFrom(cacheClass)
+                ? org.mockito.Mockito.mock(cacheClass)
+                : org.mockito.Mockito.mock(cacheClass,
+                        org.mockito.Mockito.withSettings().extraInterfaces(accessor));
+        org.mockito.Mockito.when(level.getChunkSource()).thenReturn(chunkSource);
+        org.mockito.Mockito.when(level.registryAccess()).thenReturn(CorpusRegistryAccess.build());
+        org.mockito.Mockito.when(level.getMinSectionY()).thenReturn(-4);
+        org.mockito.Mockito.when(level.getMaxSectionY()).thenReturn(19);
+        var noSkyType = org.mockito.Mockito.mock(net.minecraft.world.level.dimension.DimensionType.class);
+        org.mockito.Mockito.when(noSkyType.hasSkyLight()).thenReturn(false);
+        var skyType = org.mockito.Mockito.mock(net.minecraft.world.level.dimension.DimensionType.class);
+        org.mockito.Mockito.when(skyType.hasSkyLight()).thenReturn(true);
+
+        var infos = new java.util.concurrent.CopyOnWriteArrayList<String>();
+        var reader = new ChunkDiskReader(1, false) {
+            @Override
+            NbtSectionSerializer.ChunkNbtRead foregroundRead(ChunkMap chunkMap) {
+                return (cx, cz) -> CompletableFuture.completedFuture(Optional.of(chunk));
+            }
+
+            @Override
+            protected void infoLightless(String message) {
+                infos.add(message);
+            }
+        };
+        var uuid = java.util.UUID.randomUUID();
+        var registration = new dev.vox.lss.common.processing.RequestRegistration();
+        try {
+            reader.registerPlayer(uuid, registration);
+
+            // Same dimension NAME throughout: only the dimension type's answer changes.
+            org.mockito.Mockito.when(level.dimensionType()).thenReturn(noSkyType);
+            reader.submitReadDirect(uuid, registration, "minecraft:the_end", level, 1, 1, 1L, 0L);
+            var noSky = awaitResult(reader, uuid);
+            assertFalse(noSky.notFound(), "the column is served");
+            assertEquals(0L, reader.getDiag().getLightlessCount(),
+                    "a dimension type without sky light never counts");
+            assertFalse(reader.getDiagnostics().contains("lightless"),
+                    "and the disk line carries no token: " + reader.getDiagnostics());
+
+            org.mockito.Mockito.when(level.dimensionType()).thenReturn(skyType);
+            reader.submitReadDirect(uuid, registration, "minecraft:the_end", level, 3, -4, 2L, 0L);
+            var sky = awaitResult(reader, uuid);
+            assertFalse(sky.notFound());
+            assertFalse(sky.unservable());
+            org.junit.jupiter.api.Assertions.assertArrayEquals(noSky.sectionBytes(), sky.sectionBytes(),
+                    "the bytes do not depend on the counter");
+            assertEquals(1L, reader.getDiag().getLightlessCount());
+            assertEquals(2L, reader.getDiag().getSuccessfulReadCount(), "an ordinary successful read");
+            assertEquals(0L, reader.getDiag().getNotFoundCount());
+            assertTrue(reader.getDiagnostics().endsWith(", gated=0, lightless=1"),
+                    "the Fabric disk line carries the token: " + reader.getDiagnostics());
+            assertEquals(1, infos.size(), "one INFO: " + infos);
+            assertTrue(infos.get(0).contains("[3, -4]") && infos.get(0).contains("minecraft:the_end"),
+                    "naming the chunk and the dimension: " + infos.get(0));
+        } finally {
+            reader.shutdown();
+        }
+    }
+
     /** The token sits in the shared base line, so every return path of the Fabric
      *  override (read_path suffixes included) carries it, and only when non-zero. */
     @Test
