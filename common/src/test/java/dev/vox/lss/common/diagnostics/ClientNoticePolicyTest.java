@@ -120,6 +120,25 @@ class ClientNoticePolicyTest {
     }
 
     @Test
+    void theFifthCounterSurvivesARestartAndAFileFromBeforeItReadsAsNotSaid(@TempDir Path dir) throws Exception {
+        // 0.23.0: "the LOD renderer cannot run here" has its own once-ever counter.
+        Path file = dir.resolve("notices.properties");
+        Caps said = new Caps(1, false, 0, 2, true);
+        assertTrue(ClientNoticeCapsFile.save(file, said));
+        assertEquals(said, ClientNoticeCapsFile.load(file));
+        assertTrue(Files.readString(file).contains("renderer_unsupported=true\n"));
+        // A file written by 0.22 has four keys: complete, and the new notice was never said.
+        Files.writeString(file, "no_support=3\nnothing_to_show=true\nserver_off=3\nversion_mismatch=3\n");
+        Caps old = ClientNoticeCapsFile.load(file);
+        assertEquals(new Caps(3, true, 3, 3, false), old);
+        assertTrue(old.allows(ClientVerdict.RENDERER_UNSUPPORTED));
+        assertFalse(old.allows(ClientVerdict.NOTHING_TO_SHOW));
+        // A pack maker silences it with its own line.
+        Files.writeString(file, "no_support=3\nnothing_to_show=true\nserver_off=3\nversion_mismatch=3\nrenderer_unsupported=true\n");
+        assertEquals(Caps.EXHAUSTED, ClientNoticeCapsFile.load(file));
+    }
+
+    @Test
     void theCountsSurviveARestartAndABrokenFileSaysNothing(@TempDir Path dir) throws Exception {
         Path file = dir.resolve("state").resolve("notices.properties");
         assertEquals(Caps.NONE, ClientNoticeCapsFile.load(file), "no file yet: nothing was said");
