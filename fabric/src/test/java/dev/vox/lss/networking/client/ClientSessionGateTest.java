@@ -1244,6 +1244,34 @@ class ClientSessionGateTest {
     }
 
     @Test
+    void aFailedSendIsForgottenOnceALaterAnnounceGoesOutAndAnOpenedWorldStaysTheOwnWorld() {
+        var sendFailed = dev.vox.lss.common.diagnostics.ClientStatusSnapshot.Discovery.SEND_FAILED;
+        var local = dev.vox.lss.common.diagnostics.ClientStatusSnapshot.Discovery.LOCAL;
+        var fail = new java.util.concurrent.atomic.AtomicBoolean(true);
+        var flaky = new ClientSessionGate(processor, v -> {
+            if (fail.get()) throw new IllegalStateException("not in game");
+        }, cfg -> new RecordingManager(events));
+        flaky.onJoin(true, false, true, true);
+        assertEquals(sendFailed, flaky.discoveryStatus(), "the first announce could not be sent");
+        // Receiving is toggled off and on once the client is in the world: the announce goes out.
+        fail.set(false);
+        flaky.reconcileReception(false, true);
+        flaky.reconcileReception(true, true);
+        assertEquals(AWAITING, flaky.discoveryStatus(), "the old failure no longer describes this connection");
+
+        // The player's own world stays "your own world" after Open to LAN, whether or not the
+        // host asks its own server for anything.
+        gate.installChannelProbe(() -> false);
+        gate.onJoin(true, true, false, true);
+        gate.onHostServiceReady();
+        tickDiscovery(3000);
+        assertEquals(local, gate.discoveryStatus());
+        gate.onDisconnect();
+        gate.onJoin(true, false, true, true);
+        assertEquals(AWAITING, gate.discoveryStatus(), "the next connection is a server again");
+    }
+
+    @Test
     void aNewConnectionStartsTheSilenceCountsAgain() {
         gate.installChannelProbe(() -> false);
         gate.onJoin(true, false, true, true);

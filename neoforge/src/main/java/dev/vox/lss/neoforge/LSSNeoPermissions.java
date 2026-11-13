@@ -91,7 +91,7 @@ public final class LSSNeoPermissions {
         } catch (Throwable t) {
             if (t instanceof VirtualMachineError vme) throw vme;
             FaultCounters.global().record(FaultCounters.Site.PERMISSION_CHECK,
-                    "NeoForge PermissionAPI query threw; answering the default (" + defaultValue + ") for "
+                    () -> "NeoForge PermissionAPI query threw; answering the default (" + defaultValue + ") for "
                             + nodeName + " (" + t + ")");
             return defaultValue;
         }

@@ -78,7 +78,7 @@ public final class FabricPermissionsBridge {
         } catch (Throwable t) {
             if (t instanceof VirtualMachineError vme) throw vme;
             FaultCounters.global().record(FaultCounters.Site.PERMISSION_CHECK,
-                    "fabric-permissions-api check threw; answering the default (" + defaultValue + ") for "
+                    () -> "fabric-permissions-api check threw; answering the default (" + defaultValue + ") for "
                             + node + " (" + t + ")");
             return defaultValue;
         }

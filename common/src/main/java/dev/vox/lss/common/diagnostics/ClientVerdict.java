@@ -39,6 +39,12 @@ public enum ClientVerdict {
     /** An LOD renderer is installed and the bridge to it did not start (its internals changed):
      *  the player has the mod the "nothing to show" advice names, so that advice would be wrong. */
     RENDERER_NOT_CONNECTED,
+    /** A map mod is installed and the bridge to it did not start, and nothing else here can
+     *  show the terrain. */
+    MAP_NOT_CONNECTED,
+    /** A map mod is installed, the player switched map writing off, and nothing else here can
+     *  show the terrain. The player's own choice: never announced. */
+    MAP_WRITING_OFF,
     /** The map mods are the only thing that could show the terrain, and the server asks
      *  clients not to write it into maps. */
     MAPS_BLOCKED,
@@ -56,8 +62,24 @@ public enum ClientVerdict {
      *  registered for the whole launch once the bridge starts, so installed without a consumer
      *  means the bridge failed. */
     private static boolean rendererInstalled(ClientStatusSnapshot s) {
+        // "redacted" is an installed mod whose version string the status will not print.
         String voxy = s.versions().components().get(DiagnosticVersions.Component.VOXY);
-        return voxy != null && !voxy.equals("absent") && !voxy.equals("unknown") && !voxy.equals("redacted");
+        return voxy != null && !voxy.equals("absent") && !voxy.equals("unknown");
+    }
+
+    /** Why nothing on this client can show the terrain: the nearest fix first. */
+    private static ClientVerdict nothingShows(ClientStatusSnapshot s) {
+        if (rendererInstalled(s)) return RENDERER_NOT_CONNECTED;
+        var xaero = s.xaeroAvailability();
+        var journeyMap = s.journeyMapAvailability();
+        var off = ClientStatusSnapshot.Availability.DISABLED;
+        if (xaero == off || journeyMap == off) return MAP_WRITING_OFF;
+        if (unconnected(xaero) || unconnected(journeyMap)) return MAP_NOT_CONNECTED;
+        return NOTHING_TO_SHOW;
+    }
+
+    private static boolean unconnected(ClientStatusSnapshot.Availability map) {
+        return map == ClientStatusSnapshot.Availability.UNAVAILABLE || map == ClientStatusSnapshot.Availability.FAILED;
     }
 
     /** The server's map request stops every map mod this client could write to. */
@@ -95,12 +117,17 @@ public enum ClientVerdict {
                     // A Distant Horizons server answered and the LOD renderer is still starting.
                     if (dh.activity() == DhStatusSnapshot.Activity.WAITING_VOXY) return WAITING;
                     break;
+                case NEED_TRANSPORT:
+                    // The player runs the Distant Horizons client mod, which shows this server's
+                    // Distant Horizons terrain itself: "nothing is arriving" would be untrue.
+                    if (dh.reason() == DhStatusSnapshot.Reason.CLIENT_MOD_CONFLICT) return SOURCE_NOT_RUNNING;
+                    break;
                 // No Distant Horizons terrain here, or this source cannot run on this client
                 // (it feeds an LOD renderer only): the native answer decides.
-                case NO_SERVICE: case NEED_TRANSPORT: break;
+                case NO_SERVICE: break;
             }
         }
-        if (!s.consumerAvailable()) return rendererInstalled(s) ? RENDERER_NOT_CONNECTED : NOTHING_TO_SHOW;
+        if (!s.consumerAvailable()) return nothingShows(s);
         return switch (s.discovery()) {
             case NOT_CONNECTED -> NOT_CONNECTED;
             case LOCAL -> LOCAL_WORLD;
@@ -108,14 +135,20 @@ public enum ClientVerdict {
             // answered above): the first seconds of a connection, before the channel settles.
             case DORMANT -> WAITING;
             case AWAITING_NEGOTIATION -> WAITING;
-            case SEND_FAILED, NO_CHANNEL -> NO_SUPPORT;
+            // The handshake could not be sent from this client (not in the world yet): that
+            // says nothing about the server.
+            case SEND_FAILED -> WAITING;
+            case NO_CHANNEL -> NO_SUPPORT;
             case NO_ANSWER -> NO_ANSWER;
             // The snapshot carries the version the server answered with.
             case PROTOCOL_REJECTED -> s.protocol() > dev.vox.lss.common.LSSConstants.PROTOCOL_VERSION
                     ? CLIENT_OUTDATED
                     : s.protocol() > 0 && s.protocol() < dev.vox.lss.common.LSSConstants.PROTOCOL_VERSION
                             ? SERVER_OUTDATED : VERSION_MISMATCH;
-            case NEGOTIATED -> !s.serverEnabled() ? SERVER_OFF : s.mapOnly() && mapsBlocked(s) ? MAPS_BLOCKED : WORKING;
+            case NEGOTIATED -> !s.serverEnabled() ? SERVER_OFF
+                    // Terrain reaches the maps, but the LOD renderer the player installed gets none.
+                    : s.mapOnly() && rendererInstalled(s) ? RENDERER_NOT_CONNECTED
+                    : s.mapOnly() && mapsBlocked(s) ? MAPS_BLOCKED : WORKING;
         };
     }
 }

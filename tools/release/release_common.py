@@ -38,15 +38,27 @@ def line_key(line):
     return tuple(int(part) for part in line.split('.'))
 
 
+VERSION_FORM = re.compile(r'[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)\.[0-9]+)?')
+
+
+def check_version(version):
+    """The one rule for version strings, shared with release.yml: X.Y.Z, or X.Y.Z-alpha.N,
+    -beta.N or -rc.N. Anything else is refused before a tool acts on it."""
+    if not VERSION_FORM.fullmatch(version):
+        raise SystemExit('version ' + repr(version) + ' is not X.Y.Z or X.Y.Z-(alpha|beta|rc).N')
+    return version
+
+
 def is_prerelease(version):
     """0.22.0-beta.1 and 0.22.0-rc.1 are prereleases; 0.22.0 is not."""
     return '-' in version
 
 
 def modrinth_version_type(version):
+    """What release.yml publishes: alpha for -alpha.N, beta for -beta.N and -rc.N."""
     if not is_prerelease(version):
         return 'release'
-    return 'alpha' if '-alpha' in version else 'beta'
+    return 'alpha' if '-alpha.' in version else 'beta'
 
 
 def git(*args, repo=REPO_ROOT, check=True):
@@ -179,6 +191,7 @@ def add_common_arguments(parser):
 
 def resolve(args):
     """Fill the defaults that depend on the version, and create the state directory."""
+    check_version(args.version)
     args.state = args.state or default_state(args.version)
     args.gates = args.gates or default_gates(args.version)
     args.state.mkdir(parents=True, exist_ok=True)

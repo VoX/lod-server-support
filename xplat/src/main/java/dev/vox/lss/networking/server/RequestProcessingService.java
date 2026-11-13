@@ -155,38 +155,6 @@ public class RequestProcessingService {
         this.adoptedMapPolicy = armed;
     }
 
-    /** The permission line's send (0.22.0 plan §1): a system message, translatable with the
-     *  English fallback, so every client version shows it. Seam-injected for tests. */
-    private java.util.function.Consumer<ServerPlayer> permissionNoticeSender =
-            RequestProcessingService::sendPermissionNotice;
-
-    private static void sendPermissionNotice(ServerPlayer player) {
-        player.sendSystemMessage(net.minecraft.network.chat.Component.translatableWithFallback(
-                dev.vox.lss.common.TerrainRefusalNotice.KEY,
-                dev.vox.lss.common.TerrainRefusalNotice.FALLBACK));
-    }
-
-    /** Test seam; {@code null} restores the production send. */
-    public void setPermissionNoticeSenderForTest(java.util.function.Consumer<ServerPlayer> sender) {
-        this.permissionNoticeSender = sender != null ? sender
-                : RequestProcessingService::sendPermissionNotice;
-    }
-
-    /**
-     * Tells a player refused for lack of permission why no distant terrain arrives: once per
-     * server start per player, and again on a revocation (a served player who stops being
-     * served). The grant sweep's replays re-enter here and find the claim taken. A send
-     * failure is contained: the line is a courtesy, the refusal already happened. Server thread.
-     */
-    public void noticePermissionRefusal(ServerPlayer player, boolean revocation) {
-        if (!this.serviceGateState.claimPermissionNotice(player.getUUID(), revocation)) return;
-        try {
-            this.permissionNoticeSender.accept(player);
-        } catch (Exception e) {
-            LSSLogger.warn("Permission notice to " + player.getName().getString() + " failed: " + e);
-        }
-    }
-
     /**
      * Sends the map policy's once-per-CONNECTION chat line to a refused player (map-policy
      * plan A3.3) — from the handshake refusal, the arm sweep, and a grant-sweep replay
@@ -1390,7 +1358,6 @@ public class RequestProcessingService {
                 gateState.rememberDenied(uuid, state.getPlayerName(),
                         LSSConstants.PROTOCOL_VERSION, state.getCapabilities());
                 unregisterForServiceGate(uuid);
-                noticePermissionRefusal(player, true);
                 LSSLogger.info("LOD service revoked for " + state.getPlayerName()
                         + ": requireServicePermission is on and a permission recheck found "
                         + "a negative grant on " + dev.vox.lss.common.LSSPermissions.SERVICE_LSS

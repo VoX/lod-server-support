@@ -2034,15 +2034,11 @@ public class ServiceLifecycleGameTests {
 
             config.set("service.require_permission", true);
             service.setPermissionProbeForTest((p, node) -> !denying.get());
-            // 0.22.0 plan §1: the revoked player is told why, once.
-            var told = new ArrayList<java.util.UUID>();
-            service.setPermissionNoticeSenderForTest(player -> told.add(player.getUUID()));
             denying.set(true);
 
             service.runServiceGateSweeps(config);
             helper.assertTrue(service.getPlayers().get(uuid) != null,
                     "one failing sweep never revokes (flap hysteresis)");
-            helper.assertTrue(told.isEmpty(), "…and tells nobody");
 
             service.runServiceGateSweeps(config);
             helper.assertTrue(service.getPlayers().get(uuid) == null,
@@ -2057,13 +2053,6 @@ public class ServiceLifecycleGameTests {
                     "the memo carries the LIVE session's version+capabilities");
             helper.assertTrue(service.getServiceGateState().permissionDeniedTotal() == 1,
                     "one revocation = one counted transition");
-            helper.assertTrue(told.equals(java.util.List.of(uuid)),
-                    "the revocation tells the player once; the same sweep's replay through the "
-                            + "production glue finds the claim taken: " + told);
-            service.runServiceGateSweeps(config);
-            service.runServiceGateSweeps(config);
-            helper.assertTrue(told.size() == 1 && service.getPlayers().get(uuid) == null,
-                    "still refused, still told once: " + told);
 
             // The grant: the next sweep replays the stored handshake through the FULL
             // production ladder and the player re-registers, far viewer included.
@@ -2289,8 +2278,6 @@ public class ServiceLifecycleGameTests {
         var service = new RequestProcessingService(server, config);
         var notices = new ArrayList<String>();
         service.setMapPolicyNoticeSenderForTest((player, text) -> notices.add(text));
-        // The permission revocation below has its own line; this test counts the policy's.
-        service.setPermissionNoticeSenderForTest(player -> { });
         var gateState = service.getServiceGateState();
         var denying = new java.util.concurrent.atomic.AtomicBoolean(false);
         try {

@@ -86,10 +86,15 @@ jobs:
               *) echo "::error::tag '${GITHUB_REF_NAME}' does not derive a numeric mod version ('$MV') — refusing to publish"; exit 1 ;;
             esac
             echo "MOD_VERSION=$MV" >> "$GITHUB_ENV"
-            # A hyphenated version (0.22.0-beta.1) is a prerelease (docs/decisions/0002): a
-            # Modrinth beta and a GitHub prerelease, never Latest and not featured.
+            # A hyphenated version is a prerelease (docs/decisions/0002): a GitHub prerelease,
+            # never Latest and not featured. One rule for its forms, shared with the
+            # previous-tag lookup below and tools/release: -alpha.N, -beta.N or -rc.N. Any other
+            # hyphenated tag is refused (it would publish as a prerelease and later be taken
+            # for the previous stable tag).
             case "$MV" in
-              *-*) { echo "RELEASE_CHANNEL=beta"; echo "PRERELEASE=true"; echo "MAKE_LATEST=false"; echo "FEATURED=false"; } >> "$GITHUB_ENV" ;;
+              *-alpha.[0-9]*) { echo "RELEASE_CHANNEL=alpha"; echo "PRERELEASE=true"; echo "MAKE_LATEST=false"; echo "FEATURED=false"; } >> "$GITHUB_ENV" ;;
+              *-beta.[0-9]*|*-rc.[0-9]*) { echo "RELEASE_CHANNEL=beta"; echo "PRERELEASE=true"; echo "MAKE_LATEST=false"; echo "FEATURED=false"; } >> "$GITHUB_ENV" ;;
+              *-*) echo "::error::tag '${GITHUB_REF_NAME}' has an unknown prerelease form (use -alpha.N, -beta.N or -rc.N) — refusing to publish"; exit 1 ;;
               *)   { echo "RELEASE_CHANNEL=release"; echo "PRERELEASE=false"; echo "MAKE_LATEST=${LINE_MAKE_LATEST}"; echo "FEATURED=true"; } >> "$GITHUB_ENV" ;;
             esac
           else

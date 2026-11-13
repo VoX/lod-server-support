@@ -32,7 +32,7 @@ class FaultCountersTest {
     }
 
     @Test
-    void theFirstFailureIsLoggedAtOnceAndARepeatingOneAtMostOnceAMinutePerSite() {
+    void theFirstFailureIsLoggedAtOnceAndARepeatingOneAtMostOnceEveryTenMinutesPerSite() {
         this.counters.record(FaultCounters.Site.STORE_MAINTENANCE, "first");
         for (int i = 0; i < 50; i++) {
             this.now.addAndGet(1_000);
@@ -45,11 +45,40 @@ class FaultCountersTest {
         this.counters.record(FaultCounters.Site.VANISH_CHECK, "other site");
         assertEquals(2, this.logged.size());
 
+        this.now.addAndGet(540_000);
+        this.counters.record(FaultCounters.Site.STORE_MAINTENANCE, "still inside the window");
+        assertEquals(2, this.logged.size(), "590 seconds: a backend that fails on every call is not a line a minute");
         this.now.addAndGet(10_000);
-        this.counters.record(FaultCounters.Site.STORE_MAINTENANCE, "after the minute");
+        this.counters.record(FaultCounters.Site.STORE_MAINTENANCE, "after the window");
         assertEquals(3, this.logged.size());
-        assertTrue(this.logged.get(2).contains("(51 since the last report)"), this.logged.get(2));
-        assertTrue(this.logged.get(2).contains("Total so far: 52"), this.logged.get(2));
-        assertEquals(52, this.counters.count(FaultCounters.Site.STORE_MAINTENANCE));
+        assertTrue(this.logged.get(2).contains("(52 since the last report)"), this.logged.get(2));
+        assertTrue(this.logged.get(2).contains("Total so far: 53"), this.logged.get(2));
+        assertEquals(53, this.counters.count(FaultCounters.Site.STORE_MAINTENANCE));
+    }
+
+    @Test
+    void aDescriptionIsBuiltOnlyForALineThatIsWrittenAndACauseThatCannotBePrintedNeverEscapes() {
+        var built = new java.util.concurrent.atomic.AtomicInteger();
+        for (int i = 0; i < 1000; i++) {
+            this.counters.record(FaultCounters.Site.PERMISSION_CHECK, () -> "check " + built.incrementAndGet());
+        }
+        assertEquals(1, built.get(), "a check that throws on every call must not build a string per call");
+        assertEquals(1000, this.counters.count(FaultCounters.Site.PERMISSION_CHECK));
+
+        // The dirty listener's catch used to swallow everything; counting must not change that.
+        var unprintable = new RuntimeException() {
+            @Override
+            public String toString() {
+                throw new IllegalStateException("toString failed");
+            }
+        };
+        this.counters.record(FaultCounters.Site.DIRTY_LISTENER, unprintable);
+        this.counters.record(FaultCounters.Site.VANISH_CHECK, () -> {
+            throw new IllegalStateException("supplier failed");
+        });
+        assertEquals(1, this.counters.count(FaultCounters.Site.DIRTY_LISTENER));
+        assertTrue(this.logged.stream().anyMatch(line -> line.contains("dirty") && !line.contains("toString failed")),
+                this.logged.toString());
+        assertTrue(this.logged.stream().anyMatch(line -> line.contains("could not be described")), this.logged.toString());
     }
 }

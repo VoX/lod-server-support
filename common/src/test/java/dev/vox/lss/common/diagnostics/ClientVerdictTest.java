@@ -69,7 +69,8 @@ class ClientVerdictTest {
         assertEquals(ClientVerdict.WAITING, nativeVerdict(Discovery.AWAITING_NEGOTIATION, false));
         assertEquals(ClientVerdict.WAITING, nativeVerdict(Discovery.DORMANT, false));
         assertEquals(ClientVerdict.NO_SUPPORT, nativeVerdict(Discovery.NO_CHANNEL, false));
-        assertEquals(ClientVerdict.NO_SUPPORT, nativeVerdict(Discovery.SEND_FAILED, false));
+        // A handshake this client could not send says nothing about the server.
+        assertEquals(ClientVerdict.WAITING, nativeVerdict(Discovery.SEND_FAILED, false));
     }
 
     @Test
@@ -108,12 +109,21 @@ class ClientVerdictTest {
         for (Discovery discovery : new Discovery[]{Discovery.DORMANT, Discovery.NO_CHANNEL, Discovery.NEGOTIATED}) {
             assertEquals(ClientVerdict.RENDERER_NOT_CONNECTED,
                     ClientVerdict.of(noConsumer(discovery, "0.2.20-beta")), discovery.name());
-            // Not installed, or the version could not be read: the plain advice.
-            for (String version : new String[]{"absent", "unknown", "not a version!"}) {
+            // Installed with a version string the status will not print: still installed.
+            assertEquals(ClientVerdict.RENDERER_NOT_CONNECTED,
+                    ClientVerdict.of(noConsumer(discovery, "not a version!")), discovery.name());
+            // Not installed, or the loader did not say: the plain advice.
+            for (String version : new String[]{"absent", "unknown"}) {
                 assertEquals(ClientVerdict.NOTHING_TO_SHOW,
                         ClientVerdict.of(noConsumer(discovery, version)), discovery + " " + version);
             }
         }
+        // Terrain reaches the maps, but the Voxy the player installed gets none: not "Working".
+        var versions = new DiagnosticVersions(Map.of(DiagnosticVersions.Component.VOXY, "0.2.20-beta"));
+        assertEquals(ClientVerdict.RENDERER_NOT_CONNECTED, ClientVerdict.of(new ClientStatusSnapshot(
+                ClientStatusSnapshot.SCHEMA_VERSION, 1, 0, true, true, true, true, true, true, V, 512, 0, 0, 0, 0,
+                -1, 0, 0, 0, 0, Discovery.NEGOTIATED, Availability.AVAILABLE, null, versions, null, null,
+                Availability.ABSENT, 0, 0, true)));
         // The same once-ever nudge as "nothing to show": never both.
         assertTrue(Caps.NONE.allows(ClientVerdict.RENDERER_NOT_CONNECTED));
         assertFalse(Caps.NONE.after(ClientVerdict.NOTHING_TO_SHOW).allows(ClientVerdict.RENDERER_NOT_CONNECTED));
@@ -125,6 +135,34 @@ class ClientVerdictTest {
         return new ClientStatusSnapshot(ClientStatusSnapshot.SCHEMA_VERSION, 1, 0, true,
                 discovery == Discovery.NEGOTIATED, true, true, false, true, V, 512, 0, 0, 0, 0, -1, 0, 0, 0, 0,
                 discovery, Availability.UNKNOWN, null, versions, null, null);
+    }
+
+    @Test
+    void aPlayerWhoHasAMapModIsNotToldToAddOne() {
+        // No consumer and no Voxy. The map mod is installed: say what is in the way.
+        var off = Availability.DISABLED;
+        assertEquals(ClientVerdict.MAP_WRITING_OFF, ClientVerdict.of(noConsumerMaps(off, Availability.ABSENT)));
+        assertEquals(ClientVerdict.MAP_WRITING_OFF, ClientVerdict.of(noConsumerMaps(Availability.ABSENT, off)));
+        // The switch is the nearest fix, so it wins over a second map mod's broken bridge.
+        assertEquals(ClientVerdict.MAP_WRITING_OFF, ClientVerdict.of(noConsumerMaps(off, Availability.FAILED)));
+        for (Availability broken : new Availability[]{Availability.UNAVAILABLE, Availability.FAILED}) {
+            assertEquals(ClientVerdict.MAP_NOT_CONNECTED, ClientVerdict.of(noConsumerMaps(broken, Availability.ABSENT)));
+            assertEquals(ClientVerdict.MAP_NOT_CONNECTED, ClientVerdict.of(noConsumerMaps(Availability.UNKNOWN, broken)));
+        }
+        for (Availability none : new Availability[]{Availability.ABSENT, Availability.UNKNOWN}) {
+            assertEquals(ClientVerdict.NOTHING_TO_SHOW, ClientVerdict.of(noConsumerMaps(none, none)));
+        }
+        // The player's own switch is never announced; a broken bridge shares the once-ever nudge.
+        assertFalse(Caps.NONE.allows(ClientVerdict.MAP_WRITING_OFF));
+        assertTrue(Caps.NONE.allows(ClientVerdict.MAP_NOT_CONNECTED));
+        assertFalse(Caps.NONE.after(ClientVerdict.MAP_NOT_CONNECTED).allows(ClientVerdict.NOTHING_TO_SHOW));
+    }
+
+    private static ClientStatusSnapshot noConsumerMaps(Availability xaero, Availability journeyMap) {
+        return new ClientStatusSnapshot(ClientStatusSnapshot.SCHEMA_VERSION, 1, 0, true, false, true, false, false,
+                true, 0, 0, 0, 0, 0, 0, -1, 0, 0, 0, 0, Discovery.NO_CHANNEL, xaero, null,
+                new DiagnosticVersions(Map.of(DiagnosticVersions.Component.VOXY, "absent")), null, null,
+                journeyMap, 0, 0, false);
     }
 
     @Test
@@ -177,6 +215,10 @@ class ClientVerdictTest {
         // mod: the player HAS something to show terrain, so the answer is the server's.
         assertEquals(ClientVerdict.NO_SUPPORT, dhVerdict(State.NEED_VOXY, Activity.IDLE, true, Discovery.NO_CHANNEL));
         assertEquals(ClientVerdict.NO_SUPPORT, dhVerdict(State.NEED_TRANSPORT, Activity.IDLE, true, Discovery.NO_CHANNEL));
+        // The player runs the Distant Horizons client mod, which shows this server's Distant
+        // Horizons terrain itself: "this server isn't sending distant terrain" would be untrue.
+        assertEquals(ClientVerdict.SOURCE_NOT_RUNNING, ClientVerdict.of(snapshot(true, true, false, true,
+                Discovery.NO_CHANNEL, 0, dh(State.NEED_TRANSPORT, Reason.CLIENT_MOD_CONFLICT, Activity.IDLE))));
         // The same client with nothing to show it.
         assertEquals(ClientVerdict.NOTHING_TO_SHOW, dhVerdict(State.NEED_VOXY, Activity.IDLE, false, Discovery.NO_CHANNEL));
         // Before the channel fact settles: waiting, never a claim.
@@ -212,7 +254,11 @@ class ClientVerdictTest {
                     String value = locale.getValue().get(key).getAsString();
                     if (value.isBlank()) problems.add(where + ": blank");
                     if (value.contains("%")) problems.add(where + ": the line is shown without arguments");
-                    if (value.matches(".*\\bLSS\\b.*")) problems.add(where + ": use the full name, the short one is the prefix");
+                    // The notices and verdicts say "this mod": a VSS client on an LSS server (or
+                    // the reverse) must not name the server's copy by the client's brand.
+                    if (value.matches("(?s).*(\\bLSS\\b|\\bVSS\\b|LOD Server Support|Voxy Server Side).*")) {
+                        problems.add(where + ": names a brand; say \"this mod\"");
+                    }
                     if (!locale.getKey().equals("en_us")
                             && value.equals(locales.get("en_us").get(key).getAsString())) {
                         problems.add(where + ": not translated");

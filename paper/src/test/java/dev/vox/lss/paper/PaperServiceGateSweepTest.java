@@ -161,46 +161,6 @@ class PaperServiceGateSweepTest {
     }
 
     @Test
-    void theRefusedPlayerIsToldOnceOnARevocationAndOncePerServerRunOtherwise() {
-        // 0.22.0 plan §1: "This server gives distant terrain only to some players…".
-        var told = new ArrayList<UUID>();
-        service.setPermissionNoticeSenderForTest(player -> told.add(player.getUUID()));
-        MutablePaperSettings.set(config, "service.require_permission", true);
-        var uuid = UUID.randomUUID();
-        var p = registerCurrent(uuid, 5);
-        when(playerList.getPlayer(uuid)).thenReturn(p);
-        denied.add(uuid);
-
-        service.runServiceGateSweeps();
-        assertEquals(List.of(), told, "one failing sweep revokes nobody and tells nobody");
-        service.runServiceGateSweeps();
-        assertEquals(List.of(uuid), told, "the revocation tells the player");
-        // The handshake's denial hook (the grant sweep's replays re-enter it) finds the claim taken.
-        service.noticePermissionRefusal(p, false);
-        for (int i = 0; i < 5; i++) service.runServiceGateSweeps();
-        assertEquals(List.of(uuid), told, "still once, however long the player stays refused");
-
-        // A player the player list no longer holds (quit before the pump drained): skipped,
-        // and the claim is not spent on a connection that is gone.
-        var gone = UUID.randomUUID();
-        var q = playerIn(gone);
-        service.noticePermissionRefusal(q, false);
-        assertEquals(List.of(uuid), told);
-        when(playerList.getPlayer(gone)).thenReturn(q);
-        service.noticePermissionRefusal(q, false);
-        service.noticePermissionRefusal(q, false);
-        assertEquals(List.of(uuid, gone), told, "a refusal at join: once per server run");
-
-        // The line is a courtesy: a failing send is contained.
-        service.setPermissionNoticeSenderForTest(player -> { throw new IllegalStateException("closed"); });
-        var third = UUID.randomUUID();
-        var r = playerIn(third);
-        when(playerList.getPlayer(third)).thenReturn(r);
-        service.noticePermissionRefusal(r, false);
-        assertEquals(List.of(uuid, gone), told);
-    }
-
-    @Test
     void aFlappingGrantNeverRevokes() {
         MutablePaperSettings.set(config, "service.require_permission", true);
         var uuid = UUID.randomUUID();

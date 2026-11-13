@@ -201,8 +201,8 @@ public final class WireDialectTracker {
         }
         long hours = minutes / 60;
         if (hours < 24) {
-            return hours + "h" + String.format("%02d", minutes % 60) + "m";
+            return hours + "h" + String.format(java.util.Locale.ROOT, "%02d", minutes % 60) + "m";
         }
-        return hours / 24 + "d" + String.format("%02d", hours % 24) + "h";
+        return hours / 24 + "d" + String.format(java.util.Locale.ROOT, "%02d", hours % 24) + "h";
     }
 }

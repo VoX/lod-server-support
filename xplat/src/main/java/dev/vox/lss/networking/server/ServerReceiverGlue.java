@@ -396,9 +396,6 @@ public final class ServerReceiverGlue {
                 if (service == null) return; // unreachable: the conjunction requires servicePresent
                 service.getServiceGateState().rememberDenied(player.getUUID(),
                         player.getName().getString(), protocolVersion, capabilities);
-                // The player is told why, once per server start (the sweep's replays
-                // re-enter here and find the claim taken).
-                service.noticePermissionRefusal(player, false);
                 // A live registration does not survive a permission denial (an ADMIN
                 // fact, unlike the protocol facts the keeps-registration rungs cover):
                 // the enabled=false reply just sent is the client's disarm, and the

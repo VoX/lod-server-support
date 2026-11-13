@@ -33,6 +33,9 @@ import java.util.function.IntConsumer;
 final class ClientSessionGate {
     private boolean statusHandshakeFailed;
     private boolean statusProtocolRejected;
+    /** Status only: this connection is to the client's own integrated server. Unlike
+     *  {@code localIntegratedServer} it stays set once the world is opened to LAN. */
+    private boolean ownWorld;
     /** The version a rejected SessionConfig carried: the status says which side is older. */
     private int rejectedVersion;
     /** The protocol number for the status: the established session's, or the rejected one. */
@@ -44,7 +47,8 @@ final class ClientSessionGate {
         if (statusProtocolRejected) return dev.vox.lss.common.diagnostics.ClientStatusSnapshot.Discovery.PROTOCOL_REJECTED;
         if (sessionConfigReceived) return dev.vox.lss.common.diagnostics.ClientStatusSnapshot.Discovery.NEGOTIATED;
         if (statusHandshakeFailed) return dev.vox.lss.common.diagnostics.ClientStatusSnapshot.Discovery.SEND_FAILED;
-        if (localIntegratedServer) return dev.vox.lss.common.diagnostics.ClientStatusSnapshot.Discovery.LOCAL;
+        // The player's own world, also once it is open to LAN: nothing is downloaded there.
+        if (localIntegratedServer || ownWorld) return dev.vox.lss.common.diagnostics.ClientStatusSnapshot.Discovery.LOCAL;
         // The stronger fact first: a server that never registered the channel does not run
         // the mod, whether or not this client asked (another source may be selected).
         if (noChannelTicks >= NO_CHANNEL_TICKS) return dev.vox.lss.common.diagnostics.ClientStatusSnapshot.Discovery.NO_CHANNEL;
@@ -289,6 +293,7 @@ final class ClientSessionGate {
         this.silentTicksAfterLadder = 0;
         this.joined = true;
         this.localIntegratedServer = localIntegratedServer;
+        this.ownWorld = localIntegratedServer;
         this.receiveEnabled = receiveServerLods;
         this.pendingWithdrawal = null;
         // Defensive: under Fabric's lifecycle DISCONNECT always precedes the next JOIN,
@@ -350,6 +355,9 @@ final class ClientSessionGate {
             this.announced19ThisConnection |= announce == LSSConstants.V19_COMPAT_PROTOCOL_VERSION;
             V16ClientWire.markAnnouncedVersion(announce);
             this.handshakeSender.accept(announce);
+            // Status only: an earlier send that failed (the client was not in the world yet)
+            // no longer describes this connection.
+            this.statusHandshakeFailed = false;
             // Arm the ladder only after the handshake actually went out AND a lower enabled
             // rung exists. On a send throw (vanilla / no-LSS server) there is nothing to
             // discover — every further rung is equally doomed.
@@ -750,6 +758,7 @@ final class ClientSessionGate {
     /** DISCONNECT: tear down the live manager, then zero all session state and counters. */
     void onDisconnect() {
         this.joined = false;
+        this.ownWorld = false;
         this.noChannelTicks = 0;
         this.silentTicksAfterLadder = 0;
         this.pendingWithdrawal = null;

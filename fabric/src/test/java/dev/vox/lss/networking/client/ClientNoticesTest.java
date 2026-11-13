@@ -45,24 +45,47 @@ class ClientNoticesTest {
     }
 
     @Test
-    void thePlayersOwnWorldGetsNoNoticeAndACountIsSavedBeforeTheLineIsSpoken() throws IOException {
+    void thePlayersOwnWorldGetsNoNoticeAndTheBookDecidesTheRest() throws IOException {
         String source = normalized("xplat/src/main/java/dev/vox/lss/networking/client/ClientNotices.java");
         assertTrue(source.contains("mc.hasSingleplayerServer()) return;"),
                 "singleplayer and a LAN host get no notice");
-        int save = source.indexOf("if (!ClientNoticeCapsFile.save(file.get(), after)) return;");
-        int speak = source.indexOf("sink.accept(line(announce));");
-        assertTrue(save > 0 && speak > save,
-                "count first, speak second: an unsaved count would repeat the line every game start");
+        assertTrue(source.contains("ClientVerdict announce = BOOK.tick(ClientVerdict.of(snapshot)); "
+                        + "if (announce != null) sink.accept(line(announce));"),
+                "when and how often is the book's (ClientNoticeBookTest), from the same verdict the status shows");
+        assertTrue(source.contains("ColumnCacheStore.cacheRoot().resolveSibling(\"notices.properties\")"),
+                "the counters live beside the terrain cache");
     }
 
     @Test
-    void theClientTickDrivesTheNoticesAfterTheStatusAndEveryJoinStartsAFreshWatch() throws IOException {
+    void theClientTickDrivesTheNoticesAfterTheStatusAndTheConnectionsEdgesReachTheBook() throws IOException {
         String glue = normalized("xplat/src/main/java/dev/vox/lss/networking/client/ClientNetGlue.java");
         assertTrue(glue.contains("ClientStatus.tick(); ClientNotices.tick();"),
                 "the notice reads the status the same tick published");
         assertTrue(glue.contains("LSSClientConfig.CONFIG.enableV19ServerCompat()); ClientNotices.onJoin();"),
                 "a join (the one event that brackets a play session) resets the watch");
+        assertTrue(glue.contains("sessionGate.onDisconnect(); ClientNotices.onDisconnect();"),
+                "a real disconnect ends the \"this connection has seen the mod work\" memory");
         assertTrue(glue.contains("sessionGate.installChannelProbe(DhClientSession::nativeChannelPresent);"),
                 "without the probe a server without the mod is never named");
+    }
+
+    @Test
+    void bothStatusSnapshotsCarryTheGatesAnswerAndTheChannelFactWaitsForTheWorld() throws IOException {
+        // The verdict tests build snapshots by hand. If the capture stopped passing the gate's
+        // discovery state (the Distant Horizons branch is the easy one to miss), a map-only
+        // client on a server without the mod would read "not ready yet" forever.
+        String status = normalized("xplat/src/main/java/dev/vox/lss/networking/client/ClientStatus.java");
+        assertEquals(2, status.split("ClientNetGlue\\.discoveryStatus\\(\\)", -1).length - 1,
+                "the Distant Horizons snapshot and the native one");
+        assertEquals(2, status.split("ClientNetGlue\\.statusProtocol\\(\\)", -1).length - 1,
+                "both carry the protocol number a rejected server answered with");
+        // A plugin server sends its channel list after the login packet and before any chunk:
+        // "no channel" counts only once the player's own chunk is here.
+        String session = normalized("xplat/src/main/java/dev/vox/lss/networking/client/DhClientSession.java");
+        assertTrue(session.contains("if (nativeAvailable.getAsBoolean()) return true;"), "present is present at once");
+        assertTrue(session.contains("return player == null || level == null || !loaded(level, "
+                        + "net.minecraft.core.SectionPos.blockToSectionCoord(player.getBlockX()), "
+                        + "net.minecraft.core.SectionPos.blockToSectionCoord(player.getBlockZ()));"),
+                "absent is believed only once the world around the player has arrived");
     }
 }

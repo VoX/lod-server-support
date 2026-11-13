@@ -24,7 +24,13 @@ by version:
 
 - Off was the default and was never stored, so every player moves to on. A player who wants it off
   sets it and that is stored.
-- The extension is a grow-only latch: the frame is vanilla until a far player is beyond the plane.
+- The extension is a grow-only latch: the frame is vanilla until a far player comes within 32
+  blocks of the plane (room for the model and the name tag). It does nothing while a shader pack
+  is on.
+- Downgrades: a player who turns it off gets `false` written to the experimental settings file.
+  0.19 and older do not know the key and ignore that whole file (the Distant Horizons settings fall
+  back to their defaults, with a warning). A player who had turned it on under 0.20 or 0.21 loses
+  the stored `true` at the next save, so going back to 0.21 turns it off.
 - It is client-side rendering only. It does not change who is shown.
 
 ## Open

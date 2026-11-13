@@ -249,22 +249,4 @@ class ServiceGateStateTest {
         assertEquals(0, state.mapPolicyExemptCount());
         assertNull(state.lastMapFlagsSent(uuid), "server stop clears everything");
     }
-
-    @Test
-    void thePermissionLineIsClaimedOncePerServerRunAndAgainOnARevocation() {
-        // 0.22.0 plan §1: a refused player who rejoins ten times is told once.
-        assertTrue(state.claimPermissionNotice(uuid, false), "the first refusal");
-        assertFalse(state.claimPermissionNotice(uuid, false), "the grant sweep's replay");
-        state.onDisconnect(uuid);
-        assertFalse(state.claimPermissionNotice(uuid, false), "a rejoin in the same server run");
-        state.onRegistered(uuid);
-        assertFalse(state.claimPermissionNotice(uuid, false), "granted, served, refused again at a later join");
-        // A served player who stops being served is told, whatever they were told before.
-        assertTrue(state.claimPermissionNotice(uuid, true), "a revocation");
-        UUID other = UUID.randomUUID();
-        assertTrue(state.claimPermissionNotice(other, true), "a revocation also takes the claim");
-        assertFalse(state.claimPermissionNotice(other, false), "so the replay that follows it is silent");
-        state.clear();
-        assertTrue(state.claimPermissionNotice(uuid, false), "a new server run");
-    }
 }

@@ -122,9 +122,9 @@ public final class MeliusVanishBridge {
 
     private static void warnInvoke(Throwable t) {
         // Fail-safe direction: a vanished player must never leak, so the target is treated as
-        // hidden. Counted and logged at most once a minute.
+        // hidden. Counted, and logged at most once every ten minutes.
         FaultCounters.global().record(FaultCounters.Site.VANISH_CHECK,
-                "Melius Vanish query threw; treating the player as hidden from far players (" + t + ")");
+                () -> "Melius Vanish query threw; treating the player as hidden from far players (" + t + ")");
     }
 
     private static void resolve() {

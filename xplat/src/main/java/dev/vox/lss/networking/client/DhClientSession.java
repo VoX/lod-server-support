@@ -82,8 +82,19 @@ public final class DhClientSession {
      *  into "this server does not run the mod", which must rest on evidence. */
     public static boolean nativeChannelPresent() {
         if (!nativeProbeInstalled) return true;
-        try { return nativeAvailable.getAsBoolean(); }
-        catch (RuntimeException | LinkageError unknown) { return true; }
+        try {
+            if (nativeAvailable.getAsBoolean()) return true;
+            // "No channel" counts only once the world around the player has arrived. A plugin
+            // server sends its channel list right after the login packet and before any chunk,
+            // and the stream is ordered: by the time the player's own chunk is here the list
+            // has been read, however slow the link.
+            var mc = Minecraft.getInstance();
+            var player = mc.player;
+            var level = mc.level;
+            return player == null || level == null || !loaded(level,
+                    net.minecraft.core.SectionPos.blockToSectionCoord(player.getBlockX()),
+                    net.minecraft.core.SectionPos.blockToSectionCoord(player.getBlockZ()));
+        } catch (RuntimeException | LinkageError unknown) { return true; }
     }
     public static void installChannelAvailability(BooleanSupplier available) { channelAvailable = available; }
     private static boolean hasDhChannel() {

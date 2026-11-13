@@ -47,15 +47,26 @@ public final class ClientNoticeCapsFile {
         }
     }
 
-    /** Writes the caps (a sibling temp file, then a move). False when it could not be saved. */
+    private static final java.util.Set<String> OWN_KEYS =
+            java.util.Set.of("no_support", "nothing_to_show", "server_off", "version_mismatch");
+
+    /** Writes the caps (a sibling temp file, then a move), keeping any counter this version does
+     *  not know. False when it could not be saved. */
     public static boolean save(Path file, Caps caps) {
         try {
             Files.createDirectories(file.toAbsolutePath().getParent());
+            var kept = new StringBuilder();
+            if (Files.exists(file)) {
+                for (String line : Files.readAllLines(file, StandardCharsets.UTF_8)) {
+                    int at = line.indexOf('=');
+                    if (at > 0 && !OWN_KEYS.contains(line.substring(0, at).trim())) kept.append(line).append('\n');
+                }
+            }
             Path temp = file.resolveSibling(file.getFileName() + ".tmp");
             Files.writeString(temp, "no_support=" + caps.noSupportShown() + "\n"
                     + "nothing_to_show=" + caps.nothingToShowShown() + "\n"
                     + "server_off=" + caps.serverOffShown() + "\n"
-                    + "version_mismatch=" + caps.versionMismatchShown() + "\n", StandardCharsets.UTF_8);
+                    + "version_mismatch=" + caps.versionMismatchShown() + "\n" + kept, StandardCharsets.UTF_8);
             Files.move(temp, file, StandardCopyOption.REPLACE_EXISTING);
             return true;
         } catch (IOException | RuntimeException failure) {

@@ -9,7 +9,7 @@ import java.util.function.LongSupplier;
 /**
  * Counts failures the mod deliberately survives, so they show up in diagnostics instead of
  * vanishing. A site that catches and carries on calls {@link #record}: the failure is counted
- * under the site's name and logged at most once a minute per site.
+ * under the site's name and logged at most once every ten minutes per site.
  *
  * <p>Invariant: a swallowed failure is always visible in {@code diag}. Without this, a store that
  * stopped evicting or a permission plugin that started throwing looked exactly like a healthy
@@ -35,7 +35,9 @@ public final class FaultCounters {
         }
     }
 
-    private static final long LOG_INTERVAL_MS = 60_000;
+    /** Ten minutes: several of these sites used to warn once ever, and a backend that fails on
+     *  every call must not write a line a minute into a server log. The count is in diagnostics. */
+    private static final long LOG_INTERVAL_MS = 600_000;
     private static final FaultCounters GLOBAL = new FaultCounters(
             () -> System.nanoTime() / 1_000_000, LSSLogger::warn);
 
@@ -61,17 +63,34 @@ public final class FaultCounters {
 
     /** Counts one survived failure and logs it, rate-limited per site. */
     public void record(Site site, Throwable cause) {
-        record(site, cause == null ? "no cause given" : cause.toString());
+        record(site, () -> describe(cause));
     }
 
     /** Counts one survived failure described in words. */
     public void record(Site site, String what) {
+        record(site, () -> what);
+    }
+
+    /** Counts one survived failure; the description is built only when a line is written. */
+    public void record(Site site, java.util.function.Supplier<String> what) {
         this.counts.get(site).increment();
         long released = this.throttles.get(site).recordAndTryAcquire(this.clockMs.getAsLong());
         if (released > 0) {
+            String described;
+            try {
+                described = what.get();
+            } catch (RuntimeException | LinkageError unprintable) {
+                described = "a failure that could not be described";
+            }
             this.log.accept("Survived a failure in " + site.label + (released > 1 ? " (" + released + " since the last report)" : "")
-                    + ": " + what + ". Total so far: " + count(site) + ".");
+                    + ": " + described + ". Total so far: " + count(site) + ".");
         }
+    }
+
+    /** A cause in words. Called inside the supplier guard above: a failing {@code toString}
+     *  never escapes a caller that survives everything else. */
+    private static String describe(Throwable cause) {
+        return cause == null ? "no cause given" : cause.toString();
     }
 
     public long count(Site site) {

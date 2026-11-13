@@ -209,18 +209,6 @@ public final class ServiceGateState {
         return this.mapPolicyNoticed.put(uuid, connection) != connection;
     }
 
-    /** Players told, this server run, that distant terrain is for some players only. NOT
-     *  cleared at disconnect or registration: a refused player who rejoins ten times is told
-     *  once. One UUID per refused player per run. */
-    private final java.util.Set<UUID> permissionNoticed = ConcurrentHashMap.newKeySet();
-
-    /** The permission line's claim ({@link TerrainRefusalNotice}): true the first time a
-     *  player is refused in this server run, and always for a {@code revocation} (a served
-     *  player who stops being served is told, whatever they were told before). */
-    public boolean claimPermissionNotice(UUID uuid, boolean revocation) {
-        return this.permissionNoticed.add(uuid) || revocation;
-    }
-
     /** Whether any connection holds the chat-line claim for {@code uuid} (tests/diag). */
     public boolean hasMapPolicyNotice(UUID uuid) {
         return this.mapPolicyNoticed.containsKey(uuid);
@@ -258,7 +246,6 @@ public final class ServiceGateState {
         this.revocationStreaks.clear();
         this.mapFlagsSent.clear();
         this.mapPolicyExemptAdmissions.clear();
-        this.permissionNoticed.clear();
         this.mapPolicyExemptCount = 0;
     }
 

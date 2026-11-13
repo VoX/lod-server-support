@@ -19,7 +19,9 @@ because the session gate matches exact versions.
 ## Consequences
 
 - Nothing about wire behaviour changes. Wire fidelity is never tiered.
-- The counters are in memory and local to each server. Nothing is written or uploaded.
+- The counters are in memory and local to each server. Nothing is written or uploaded. They
+  reset at restart, so a count covers one uptime, which is printed beside it; a server that
+  restarts daily shows a day.
 - The test server alone cannot answer the question: it attracts players on the newest build.
   Modrinth's downloads per version (how many clients older than a protocol are still being
   installed) and diagnostics pasted into issue reports are the other two sources.

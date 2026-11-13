@@ -87,7 +87,7 @@ NeoForge ships on MC 1.21.1, 26.1, 26.2 and 26.3; the 1.21.10/1.21.11 modules re
 
 On SpongeVanilla, put the Sponge jar in the server's `mods/` folder. At startup Sponge prints a notice that the plugin uses Mixins; that is expected.
 
-**Nothing loading?** Run `/lss status` on the client. Since 0.22.0 its first line says whether distant terrain is working here and, if not, why: the server doesn't run the mod, has it switched off (for everyone, for this world or for you), runs a different version, or nothing you have installed can show the terrain. The first few times this happens the client also says so once in chat, in grey.
+**Nothing loading?** Run `/lss status` on the client. Since 0.22.0 its first line says whether distant terrain is working here and, if not, why: the server doesn't run the mod, has it switched off (for everyone, for this world or for you), runs a different version, or nothing you have installed can show the terrain. The first few times this happens the client also says so once in chat, in grey (each kind at most three times ever). Pack makers who want no such lines can ship `notices.properties` in the mod's folder in the game directory (`.lss`, or `.vss` for Voxy Server Side) containing `no_support=3`, `nothing_to_show=true`, `server_off=3` and `version_mismatch=3`.
 
 ## Commands
 

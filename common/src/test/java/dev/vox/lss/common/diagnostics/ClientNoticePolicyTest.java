@@ -135,9 +135,14 @@ class ClientNoticePolicyTest {
         for (ClientVerdict verdict : ClientVerdict.values()) {
             assertFalse(Caps.EXHAUSTED.allows(verdict), verdict.name());
         }
-        // A counter a newer version added is kept out of the way, not treated as damage.
+        // A counter a newer version added is kept out of the way, not treated as damage, and
+        // survives this version's save (or that version's notices would start over).
         Files.writeString(file, "no_support=1\nnothing_to_show=false\nserver_off=0\nversion_mismatch=2\nlater=9\n");
         assertEquals(new Caps(1, false, 0, 2), ClientNoticeCapsFile.load(file));
+        assertTrue(ClientNoticeCapsFile.save(file, new Caps(2, false, 0, 2)));
+        assertTrue(Files.readString(file).contains("later=9\n"), Files.readString(file));
+        assertEquals(new Caps(2, false, 0, 2), ClientNoticeCapsFile.load(file));
+        assertEquals(1, Files.readString(file).split("no_support=", -1).length - 1, "its own keys are written once");
         // A place that cannot be written: the caller must not speak (the count would not stick).
         Path blocked = dir.resolve("a-file");
         Files.writeString(blocked, "x");

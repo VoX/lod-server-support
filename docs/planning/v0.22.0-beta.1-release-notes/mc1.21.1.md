@@ -1,12 +1,12 @@
 ### Changed
 
-- **Far players at full range** — "Extend Far Player Draw Range" is now on by default, so with an LOD mod such as Voxy far players are drawn as far as the server sends them. Turn it off on the mod's settings page if you prefer the old behaviour.
+- **Far players past the draw limit** — "Extend Far Player Draw Range" is now on by default: with an LOD mod such as Voxy, far players beyond the game's normal draw limit are drawn. It does nothing while a shader pack is on, and you can turn it off on the mod's settings page.
+- **Sharing setting message** — When "Share My Position" is saved but no server has received it, the message now says so plainly, and that the server may still show your position until it does.
 
 ### New Features
 
-- **Says why nothing is loading** — `/lss status` and the status screen now start with one line: working, or not working and why (the server doesn't run the mod, has it switched off, runs a different version, or nothing you have installed can show the terrain).
-- **Chat notice** — The first few times you join a server where distant terrain can't work, one grey line in chat says why.
-- **Permission notice** — Servers that give distant terrain only to some players now tell the others, once.
+- **Says why nothing is loading** — `/lss status` and the status screen now start with one line: working, or not working and why (the server doesn't have the mod, has it switched off, hasn't answered, or nothing you have installed can show the terrain).
+- **Chat notice** — The first few times you join a server where distant terrain can't work, one grey line in chat says why. It never repeats more than three times and there is nothing to configure.
 - **Server diagnostics** — `/lsslod diag` now lists errors the mod recovered from and how many sessions used each protocol version.
 
 ### Support
