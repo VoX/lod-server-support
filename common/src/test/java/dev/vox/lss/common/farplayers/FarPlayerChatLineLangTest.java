@@ -76,6 +76,19 @@ class FarPlayerChatLineLangTest {
     }
 
     @Test
+    void theNotSentMessageNamesTheOptionBecauseItFollowsEverySettingsSave() throws Exception {
+        // The line is printed after every save and reload, whatever was changed. Without the
+        // option's name a player who changed the LOD distance reads a warning about their
+        // position with no idea what it refers to.
+        for (var locale : locales().entrySet()) {
+            String label = locale.getValue().get("lss.config.far_players_share_self").getAsString();
+            String value = locale.getValue().get("lss.settings.privacy_no_channel").getAsString();
+            assertTrue(value.contains(label), locale.getKey() + " must name the option as '" + label + "': " + value);
+            assertTrue(value.indexOf(label) < 3, locale.getKey() + " must open with it: " + value);
+        }
+    }
+
+    @Test
     void bothLinesNameTheOptionByItsLabelInThatLocale() throws Exception {
         // "Share My Position" is the option's label; a player looks for those exact words.
         for (var locale : locales().entrySet()) {

@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "reference_commit": "9d821b7237d0d10bb4ff7a5e0dc1eebd85d12832",
+  "reference_commit": "705c7be2c32fc87814a82fc527da217f470100c3",
   "adapted": [
     ".github/line.env",
     ".github/workflows/build.yml",

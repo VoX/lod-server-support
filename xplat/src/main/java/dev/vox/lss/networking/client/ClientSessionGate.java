@@ -46,12 +46,14 @@ final class ClientSessionGate {
         if (!joined) return dev.vox.lss.common.diagnostics.ClientStatusSnapshot.Discovery.NOT_CONNECTED;
         if (statusProtocolRejected) return dev.vox.lss.common.diagnostics.ClientStatusSnapshot.Discovery.PROTOCOL_REJECTED;
         if (sessionConfigReceived) return dev.vox.lss.common.diagnostics.ClientStatusSnapshot.Discovery.NEGOTIATED;
-        if (statusHandshakeFailed) return dev.vox.lss.common.diagnostics.ClientStatusSnapshot.Discovery.SEND_FAILED;
         // The player's own world, also once it is open to LAN: nothing is downloaded there.
         if (localIntegratedServer || ownWorld) return dev.vox.lss.common.diagnostics.ClientStatusSnapshot.Discovery.LOCAL;
         // The stronger fact first: a server that never registered the channel does not run
-        // the mod, whether or not this client asked (another source may be selected).
+        // the mod, whether or not this client asked (another source may be selected) and
+        // whether or not its one announce could be sent (a failed send arms no retry, so
+        // nothing would ever replace "send failed" on such a server).
         if (noChannelTicks >= NO_CHANNEL_TICKS) return dev.vox.lss.common.diagnostics.ClientStatusSnapshot.Discovery.NO_CHANNEL;
+        if (statusHandshakeFailed) return dev.vox.lss.common.diagnostics.ClientStatusSnapshot.Discovery.SEND_FAILED;
         if (!receiveEnabled || primaryAnnounce == 0) return dev.vox.lss.common.diagnostics.ClientStatusSnapshot.Discovery.DORMANT;
         if (silentTicksAfterLadder >= V16_DISCOVERY_DELAY_TICKS) return dev.vox.lss.common.diagnostics.ClientStatusSnapshot.Discovery.NO_ANSWER;
         return dev.vox.lss.common.diagnostics.ClientStatusSnapshot.Discovery.AWAITING_NEGOTIATION;

@@ -1259,6 +1259,15 @@ class ClientSessionGateTest {
         flaky.reconcileReception(true, true);
         assertEquals(AWAITING, flaky.discoveryStatus(), "the old failure no longer describes this connection");
 
+        // A failed send arms no retry. On a server that really lacks the channel the status
+        // must still reach "no channel", not stay on the failed send forever.
+        fail.set(true);
+        flaky.installChannelProbe(() -> false);
+        flaky.onJoin(true, false, true, true);
+        assertEquals(sendFailed, flaky.discoveryStatus());
+        for (int i = 0; i < ClientSessionGate.NO_CHANNEL_TICKS; i++) flaky.tickDiscoveryLadder();
+        assertEquals(NO_CHANNEL, flaky.discoveryStatus(), "the evidence about the server outranks the failed send");
+
         // The player's own world stays "your own world" after Open to LAN, whether or not the
         // host asks its own server for anything.
         gate.installChannelProbe(() -> false);
