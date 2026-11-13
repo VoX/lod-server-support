@@ -519,6 +519,59 @@ def check_no_columns(diag_text: str, diag_polls: list[dict], player: str) -> Che
                        'end of the observation window', evidence)
 
 
+def check_no_handshake(server_log: str, diag_text: str, player: str) -> CheckResult:
+    """The player was on the server and never opened an LSS session: the server logged the
+    join, logged no handshake from the player, and its final diag, taken with the player still
+    online, counts no session on any protocol, neither live nor ever started."""
+    server = parse_entries(server_log)
+    name = 'no_handshake'
+    joined = [entry for entry in server if entry.message == PLAYER_JOINED.format(player=player)]
+    if not joined:
+        return CheckResult(name, False, f'the server never logged "{player} joined the game"')
+    evidence = [joined[0].first_line()]
+    handshakes = [entry.first_line() for entry, match in all_matches(server, SERVER_HANDSHAKE)
+                  if match.group('name') == player]
+    if handshakes:
+        return CheckResult(name, False, f'the server received an LSS handshake from {player}',
+                           evidence + handshakes)
+    diag = parse_diag(diag_text)
+    if not diag['present']:
+        return CheckResult(name, False, 'no lsslod diag output was captured', evidence)
+    dialects = diag['fields'].get('Dialects')
+    if dialects is None:
+        return CheckResult(name, False, 'the diag has no Dialects line', evidence)
+    evidence.append('diag Dialects: ' + dialects)
+    live = [int(count) for count in re.findall(r'\bv\d+=(\d+)', dialects)]
+    started = re.search(r'\bstarted=([\d/]+)', dialects)
+    if not live or started is None:
+        return CheckResult(name, False, 'the Dialects line has no session counters', evidence)
+    if any(live) or any(int(count) for count in started.group(1).split('/')):
+        return CheckResult(name, False, 'the server counts an LSS session', evidence)
+    return CheckResult(name, True, f'{player} joined and the server saw no LSS handshake: it '
+                       'counts no session, live or started', evidence)
+
+
+def check_opted_out(diag_text: str) -> CheckResult:
+    """The server holds exactly one "do not share my position" preference: the FarPlayers line
+    of the final diag, taken with the player still online, says opted_out=1. The server prints
+    that line, and that field, only once a player has opted out."""
+    diag = parse_diag(diag_text)
+    name = 'opted_out'
+    if not diag['present']:
+        return CheckResult(name, False, 'no lsslod diag output was captured')
+    line = diag['fields'].get('FarPlayers')
+    if line is None:
+        return CheckResult(name, False, 'the diag has no FarPlayers line: no opt-out reached '
+                           'the server', diag['lines'][:1])
+    evidence = ['diag FarPlayers: ' + line]
+    count = counter(line, 'opted_out')
+    if count != 1:
+        return CheckResult(name, False, f'the FarPlayers line says opted_out={count}, expected 1',
+                           evidence)
+    return CheckResult(name, True, 'the server holds the player\'s "do not share my position" '
+                       '(opted_out=1)', evidence)
+
+
 def check_screenshot(shot: dict | None) -> CheckResult:
     """A screenshot of the private display was saved. The picture is not judged in this version;
     the check only proves that a real image of the right size was captured while a Minecraft
@@ -568,6 +621,8 @@ def run_checks(names: list[str], material: dict) -> list[CheckResult]:
         'handshake_off': lambda: check_handshake_off(server_log, client_log, diag, player,
                                                      material['protocol']),
         'no_columns': lambda: check_no_columns(diag, material.get('diag_polls', []), player),
+        'no_handshake': lambda: check_no_handshake(server_log, diag, player),
+        'opted_out': lambda: check_opted_out(diag),
     }
     return [table[name]() for name in names]
 

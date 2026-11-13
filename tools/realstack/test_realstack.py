@@ -533,6 +533,18 @@ class SettingsTest(OfflineCase):
                                    '    by_world:\n      world: 64')
         self.assertFalse(settings.is_empty_or_absent(block, BY_WORLD))
 
+    def test_staged_client_file(self) -> None:
+        text = settings.render(realstack.SCENARIOS['client-receives-nothing']['client_settings'])
+        self.assertEqual(text, 'config_version: 1\nlod:\n  receive: false\nfar_players:\n'
+                               '  sharing:\n    enabled: false\n')
+        self.assertEqual(settings.value_of(text, ('lod', 'receive')), 'false')
+        self.assertEqual(settings.value_of(text, ('far_players', 'sharing', 'enabled')), 'false')
+        self.assertEqual(settings.value_of(text, ('config_version',)), '1')
+        self.assertEqual(settings.render({'a': {'b': 'word', 'c': 7}}), 'a:\n  b: word\n  c: 7\n')
+        for bad in ({'a': 'two words'}, {'a': 1.5}, {'a b': 1}, {'a': [1]}, {'a': None}):
+            with self.assertRaises(settings.SettingsError):
+                settings.render(bad)
+
 
 class LogParsingTest(OfflineCase):
     """Splitting logs into records and reading an `lsslod diag` block."""
@@ -837,7 +849,8 @@ class CheckTest(OfflineCase):
         self.assertIn('client_notice', judged['checks'])
         self.assertEqual(row['checks'], ['server_started', 'handshake'], 'the row itself is untouched')
         for scenario in realstack.SCENARIOS.values():
-            self.assertIn(scenario['notice'], checks.NOTICE_TEXTS)
+            if 'notice' in scenario:
+                self.assertIn(scenario['notice'], checks.NOTICE_TEXTS)
 
     def test_the_other_brand_is_asked_and_watched_under_its_own_name(self) -> None:
         # A run on the VSS build once asked `lsslod diag` and read "Unknown command" as a dead
@@ -1018,6 +1031,59 @@ class ScenarioCheckTest(OfflineCase):
             line + '\n' for line in material['client_log'].splitlines() if '[CHAT] [LSS]' in line)
         self.assertIn('at most one', notice(twice, 'server_off_world', 'LSS').message)
 
+    def test_receives_nothing_runs_pass(self) -> None:
+        for prefix in ('fabric-26.3-receives-nothing', 'paper-26.3-receives-nothing'):
+            for name, result in self.judged('client-receives-nothing', self.material(prefix)).items():
+                self.assertTrue(result.passed, (prefix, name, result.message))
+                self.assertTrue(result.evidence, (prefix, name))
+
+    def test_a_normal_run_fails_the_receives_nothing_checks(self) -> None:
+        results = self.judged('client-receives-nothing', CheckTest.material(self, 'fabric-26.3'))
+        self.assertIn('received an LSS handshake', results['no_handshake'].message)
+        self.assertIn('opted_out=None', results['opted_out'].message)
+        # A client without the mod sends no handshake either, and no preference: one red check.
+        results = self.judged('client-receives-nothing', CheckTest.material(self, 'fabric-26.3-nolss'))
+        self.assertTrue(results['no_handshake'].passed)
+        self.assertIn('no FarPlayers line', results['opted_out'].message)
+
+    def test_no_handshake_needs_each_witness(self) -> None:
+        for prefix in ('fabric-26.3-receives-nothing', 'paper-26.3-receives-nothing'):
+            material = self.material(prefix)
+            log, diag = material['server_log'], material['diag']
+            self.assertTrue(checks.check_no_handshake(log, diag, PLAYER).passed)
+            self.assertIn('joined the game', checks.check_no_handshake(
+                log.replace('joined the game', 'tried'), diag, PLAYER).message)
+            self.assertIn('no lsslod diag', checks.check_no_handshake(log, '', PLAYER).message)
+            self.assertIn('no Dialects line', checks.check_no_handshake(
+                log, re.sub(r'.*Dialects: .*\n', '', diag), PLAYER).message)
+            self.assertIn('counts an LSS session', checks.check_no_handshake(
+                log, diag.replace('v20=0', 'v20=1'), PLAYER).message)
+            self.assertIn('counts an LSS session', checks.check_no_handshake(
+                log, diag.replace('started=0/0/0/0', 'started=0/1/0/0'), PLAYER).message)
+            self.assertIn('no session counters', checks.check_no_handshake(
+                log, re.sub(r'(Dialects: ).*', r'\1unreadable', diag), PLAYER).message)
+        fabric = self.material('fabric-26.3-receives-nothing')
+        shook = fabric['server_log'] + ('[10:00:00] [Server thread/INFO]: LSS handshake received from '
+                                        f'{PLAYER} (protocol v19, capabilities=15)\n')
+        self.assertIn('received an LSS handshake',
+                      checks.check_no_handshake(shook, fabric['diag'], PLAYER).message)
+        other = shook.replace(f'received from {PLAYER}', 'received from Somebody')
+        self.assertTrue(checks.check_no_handshake(other, fabric['diag'], PLAYER).passed)
+
+    def test_opted_out_reads_the_far_players_line(self) -> None:
+        for prefix in ('fabric-26.3-receives-nothing', 'paper-26.3-receives-nothing'):
+            diag = self.material(prefix)['diag']
+            passed = checks.check_opted_out(diag)
+            self.assertTrue(passed.passed, passed.message)
+            self.assertIn('opted_out=1', passed.evidence[0])
+            self.assertIn('opted_out=2', checks.check_opted_out(
+                diag.replace('opted_out=1', 'opted_out=2')).message)
+            self.assertIn('opted_out=None', checks.check_opted_out(
+                diag.replace(', opted_out=1', '')).message)
+            self.assertIn('no FarPlayers line', checks.check_opted_out(
+                re.sub(r'.*FarPlayers: .*\n', '', diag)).message)
+            self.assertIn('no lsslod diag', checks.check_opted_out('').message)
+
     def saved_run(self, prefix: str, scenario: str) -> Path:
         """A run directory as a scenario run leaves it, built from captured excerpts."""
         material = self.material(prefix)
@@ -1048,7 +1114,9 @@ class ScenarioCheckTest(OfflineCase):
 
     def test_replay_judges_saved_scenario_runs(self) -> None:
         for prefix, scenario in (('fabric-26.3-off-in-world', 'off-in-world'),
-                                 ('paper-26.3-off-in-world', 'off-in-world')):
+                                 ('paper-26.3-off-in-world', 'off-in-world'),
+                                 ('fabric-26.3-receives-nothing', 'client-receives-nothing'),
+                                 ('paper-26.3-receives-nothing', 'client-receives-nothing')):
             directory = self.saved_run(prefix, scenario)
             code, verdict = self.replay(directory)
             self.assertEqual((code, verdict['failed_checks']), (0, []), prefix)
@@ -1059,6 +1127,11 @@ class ScenarioCheckTest(OfflineCase):
         (directory / 'evidence' / 'server-settings.yaml').unlink()
         code, verdict = self.replay(directory)
         self.assertEqual((code, verdict['failed_checks']), (1, ['server_settings']))
+        directory = self.saved_run('fabric-26.3-receives-nothing', 'client-receives-nothing')
+        (directory / 'evidence' / 'server-diag-final.txt').write_text('')
+        code, verdict = self.replay(directory)
+        self.assertEqual((code, verdict['failed_checks']), (1, ['server_started', 'no_handshake',
+                                                               'opted_out']))
 
 
 class VerdictTest(OfflineCase):
@@ -1205,6 +1278,18 @@ class RunStagingTest(OfflineCase):
         self.assertFalse((run.server_dir / 'cache').exists())
         self.assertEqual(run.facts['paper_cache_seeded'], [])
 
+    def test_scenario_stages_client_settings(self) -> None:
+        run = self.run_for('fabric-26.3-sodium-voxy-xaero', '--scenario', 'client-receives-nothing')
+        self.staged(run)
+        expected = ('config_version: 1\nlod:\n  receive: false\nfar_players:\n  sharing:\n'
+                    '    enabled: false\n')
+        self.assertEqual((run.client_dir / 'config' / 'lss-client-config.yaml').read_text(), expected)
+        self.assertEqual((run.evidence / 'client-settings.yaml').read_text(), expected)
+        self.assertEqual(run.facts['client_settings'],
+                         {'file': 'config/lss-client-config.yaml', 'text': expected})
+        self.assertTrue((run.server_dir / 'mods' / 'lod-server-support-server.jar').is_file(),
+                        'the server keeps the mod in this scenario')
+
     def test_server_without_lss_still_leaves_the_mod_out(self) -> None:
         run = self.run_for('fabric-26.3-sodium-voxy-xaero', '--scenario', 'server-without-lss')
         self.staged(run)
@@ -1288,7 +1373,8 @@ class RunStagingTest(OfflineCase):
         self.assertIn('did not create', str(caught.exception))
 
     def test_runs_without_server_settings_skip_the_hook(self) -> None:
-        for arguments in ((), ('--scenario', 'server-without-lss')):
+        for arguments in ((), ('--scenario', 'client-receives-nothing'),
+                          ('--scenario', 'server-without-lss')):
             run = self.run_for('fabric-26.3-sodium-voxy-xaero', *arguments)
             run.console = no_network
             run.wait_for_line = no_network
@@ -1391,6 +1477,8 @@ class LaunchTest(OfflineCase):
                          Path('plugins/LodServerSupport/lss-server-config.yaml'))
         self.assertEqual(launch.server_settings_path('paper', 'vss'),
                          Path('plugins/VoxyServerSide/vss-server-config.yaml'))
+        self.assertEqual(launch.client_settings_path('lss'), Path('config/lss-client-config.yaml'))
+        self.assertEqual(launch.client_settings_path('vss'), Path('config/vss-client-config.yaml'))
         self.assertEqual(set(launch.PAPER_PLUGIN_FOLDERS), set(realstack.BRAND_PREFIXES))
 
     def test_paper_download_list(self) -> None:

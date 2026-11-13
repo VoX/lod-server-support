@@ -60,6 +60,8 @@ FAULTS = ('client-without-lss',)
 #                    has created it, then applied with a reload, all before the client joins
 #   server_settings_empty  map settings that must have no entries in the generated file,
 #                    because an entry there would take priority over what the scenario sets
+#   client_settings  a settings file the client is staged with
+#   diag_witness     (line, counter) in the server's diag that ends the wait when it shows
 SCENARIOS = {
     'server-without-lss': {
         'checks': ['server_ready', 'client_joined', 'client_notice', 'client_clean', 'screenshot'],
@@ -73,8 +75,15 @@ SCENARIOS = {
         'server_settings': [(('lod', 'distance', 'by_dimension', 'minecraft:overworld'), '0')],
         'server_settings_empty': [('lod', 'distance', 'by_world')],
     },
+    'client-receives-nothing': {
+        'checks': ['server_started', 'client_joined', 'no_handshake', 'opted_out', 'client_clean',
+                   'screenshot'],
+        'client_settings': {'config_version': 1, 'lod': {'receive': False},
+                            'far_players': {'sharing': {'enabled': False}}},
+        'diag_witness': ('FarPlayers', 'opted_out'),
+    },
 }
-NOTICE_SECONDS = 150         # how long after the join the client's chat notice may take
+NOTICE_SECONDS = 150         # how long after the join a scenario's notice or diag witness may take
 SETTLE_SECONDS = 20          # how long the client stays after it, to catch a second notice
 BRAND_PREFIXES = {'lss': 'lod-server-support-', 'vss': 'voxy-server-side-'}
 SERVER_COMMANDS = {'lss': 'lsslod', 'vss': 'vsslod'}   # each build's own server command root
@@ -415,6 +424,13 @@ class Run:
             (self.server_dir / 'libraries').symlink_to(libraries, target_is_directory=True)
         if platform == 'paper':
             self.seed_paper_cache(provisioned)
+        if scenario.get('client_settings'):
+            relative = launch.client_settings_path(self.options.brand)
+            text = settings.render(scenario['client_settings'])
+            (self.client_dir / relative).parent.mkdir(parents=True, exist_ok=True)
+            (self.client_dir / relative).write_text(text)
+            (self.evidence / 'client-settings.yaml').write_text(text)
+            self.facts['client_settings'] = {'file': str(relative), 'text': text}
 
     def seed_paper_cache(self, provisioned: dict) -> None:
         """Give the Paper jar the game jar it would otherwise download on its first start:
@@ -585,11 +601,14 @@ class Run:
         self.take_screenshot(display)
 
     def observe_scenario(self, display: int) -> None:
-        """A scenario's window: keep the client in the world until it has spoken its chat notice
-        and the notice has had SETTLE_SECONDS to repeat itself, or the deadline passes. A server
-        that runs the mod is asked for its diag on every round, the client stays the usual
-        minimum, and the last diag is taken at the very end."""
-        with_diag = self.scenario.get('server_lss', True)
+        """A scenario's window: keep the client in the world until the scenario's witness has
+        shown and has had SETTLE_SECONDS to repeat itself, or the deadline passes. The witness
+        is the client's chat notice, or a counter in the server's diag. A server that runs
+        the mod is asked for its diag on every round, the client stays the usual minimum, and
+        the last diag is taken at the very end."""
+        scenario = self.scenario
+        with_diag = scenario.get('server_lss', True)
+        witness = scenario.get('diag_witness')
         joined = time.monotonic()
         stay_until = self.remaining(self.options.observe) if with_diag else joined
         give_up = self.remaining(NOTICE_SECONDS)
@@ -599,12 +618,20 @@ class Run:
             diag = self.poll_diag(joined) if with_diag else None
             spoken = len(checks.all_matches(checks.parse_entries(self.log_text(self.client_log)),
                                             checks.NOTICE))
-            say(f'  {elapsed:>3} s after join: {spoken} notice(s) in the client log'
-                + (f', diag {"ok" if diag["present"] else "MISSING"}' if diag else ''))
+            if witness:
+                count = checks.counter(diag['fields'].get(witness[0]), witness[1])
+                shown = bool(count)
+                say(f'  {elapsed:>3} s after join: diag {witness[0]} {witness[1]}={count}, '
+                    f'{spoken} notice(s) in the client log')
+            else:
+                shown = spoken > 0
+                say(f'  {elapsed:>3} s after join: {spoken} notice(s) in the client log'
+                    + (f', diag {"ok" if diag["present"] else "MISSING"}' if diag else ''))
             now = time.monotonic()
-            if spoken and seen_at is None:
+            if shown and seen_at is None:
                 seen_at = now
-                self.facts['notice_seconds_after_join'] = elapsed
+                self.facts['witness_seconds_after_join' if witness
+                           else 'notice_seconds_after_join'] = elapsed
             client_gone = self.client is not None and self.client.poll() is not None
             settled = seen_at is not None and now - seen_at >= SETTLE_SECONDS and now >= stay_until
             if client_gone or now >= give_up or settled:
@@ -767,8 +794,8 @@ def verdict_context(row: dict, facts: dict) -> dict:
             for side in ('server', 'client')}
     keys = ('rig_id', 'started', 'run_seconds', 'lock_wait_seconds', 'server_start_seconds',
             'client_join_seconds', 'port', 'display', 'java', 'fault', 'scenario', 'brand',
-            'notice_seconds_after_join', 'server_settings', 'lss_selector', 'lss', 'diag_polls',
-            'stop_report')
+            'notice_seconds_after_join', 'witness_seconds_after_join', 'server_settings',
+            'client_settings', 'lss_selector', 'lss', 'diag_polls', 'stop_report')
     context = {key: facts.get(key) for key in keys}
     context.update({'minecraft': row['minecraft'], 'pins': pins,
                     'server_platform': loader_label(row['server'], 'platform'),

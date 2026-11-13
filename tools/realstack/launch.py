@@ -115,6 +115,11 @@ def server_settings_path(platform: str, brand: str) -> Path:
     return Path('config') / name
 
 
+def client_settings_path(brand: str) -> Path:
+    """The mod's client settings file, relative to the game directory."""
+    return Path('config') / f'{brand}-client-config.yaml'
+
+
 def client_options() -> str:
     """options.txt for an unattended client: no tutorial, no narrator, small render distance."""
     return ''.join(f'{key}:{value}\n' for key, value in CLIENT_OPTIONS.items())

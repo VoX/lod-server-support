@@ -37,6 +37,7 @@ Each run has its own directory, `<runs>/<UTC time>-<row>/`:
 - `evidence/`: server console log, client log, the final `lsslod diag`, `client.png`, the staged
   jar list with hashes, the server's settings file, and what was left running (nothing). A
   scenario that changes the server's settings also keeps the file as the server generated it.
+  A scenario that stages client settings also keeps that file.
 - `facts.json`: port, display, timings, command lines, the diag polls.
 
 `realstack.py replay <run directory>` judges a saved run again from its evidence.
@@ -66,6 +67,7 @@ runs `client_clean` and `screenshot`.
 | --- | --- | --- |
 | `server-without-lss` | the server without LSS | `server_ready`, `client_joined`, `client_notice` (the "this server doesn't seem to have this mod" notice) |
 | `off-in-world` | the server setting `lod.distance.by_dimension."minecraft:overworld": 0` | `server_started`, `server_settings`, `client_joined`, `handshake_off`, `no_columns`, `client_notice` (the "switched off in this world" notice) |
+| `client-receives-nothing` | a client settings file with `lod.receive: false` and `far_players.sharing.enabled: false` | `server_started`, `client_joined`, `no_handshake`, `opted_out` |
 
 | Scenario check | Passes when |
 | --- | --- |
@@ -75,6 +77,8 @@ runs `client_clean` and `screenshot`.
 | `server_settings` | the saved settings file holds each value the scenario set, and the server logged that a reload applied a setting (and no line that says the setting was not applied) |
 | `handshake_off` | the server logged the join and the handshake on the current protocol, and every session config the client logged says that protocol and `enabled: false` |
 | `no_columns` | the final diag, taken at the end of the window with the player online, says `sent=0` server-wide, and for the player where the server lists the player |
+| `no_handshake` | the server logged the join and no handshake from the player, and the final diag's `Dialects` line counts no session, live or started |
+| `opted_out` | the `FarPlayers` line of the final diag says `opted_out=1` (the server prints the field only above zero) |
 
 Server settings: the settings file (`plugins/LodServerSupport/lss-server-config.yaml` on Paper,
 `config/lss-server-config.yaml` elsewhere) exists only after the first start has created it. So
@@ -86,6 +90,10 @@ took the value. A key that is missing, commented out or a block, a reload that f
 nothing, and a setting that needs a restart all end the run with the reason. On Paper a
 world-name entry under `lod.distance.by_world` would win over the dimension entry, so
 `off-in-world` also refuses to run when the generated file has one.
+
+Client settings: `client-receives-nothing` writes `config/lss-client-config.yaml` before the
+client starts. The file holds only the keys the scenario sets; the mod takes its defaults for the
+rest.
 
 `--brand vss` takes the Voxy Server Side build of the same jars from a gate's `jars/` directory
 (`--lss dir:` only). The server is then asked for `vsslod diag`, and the notice check expects

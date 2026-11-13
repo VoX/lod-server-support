@@ -113,3 +113,31 @@ def set_value(text: str, path: tuple[str, ...], value: str) -> str:
 def is_empty_or_absent(text: str, path: tuple[str, ...]) -> bool:
     """True when a map setting has no entries: the key is missing, or it is written `{}`."""
     return value_of(text, path) in (None, '{}')
+
+
+def render(document: dict) -> str:
+    """A small settings file as nested block YAML. Only what a staged file needs: nested
+    maps with plain keys, and true, false, whole numbers and plain words as values."""
+    lines: list[str] = []
+
+    def scalar(value) -> str:
+        """One value as YAML text."""
+        if isinstance(value, bool):
+            return 'true' if value else 'false'
+        if isinstance(value, int) or (isinstance(value, str) and PLAIN.match(value)):
+            return str(value)
+        raise SettingsError(f'cannot write {value!r} into a settings file')
+
+    def block(mapping: dict, depth: int) -> None:
+        """Write one map, two spaces deeper per level."""
+        for key, value in mapping.items():
+            if not isinstance(key, str) or not PLAIN.match(key):
+                raise SettingsError(f'not a plain settings key: {key!r}')
+            if isinstance(value, dict) and value:
+                lines.append(f'{"  " * depth}{key}:')
+                block(value, depth + 1)
+            else:
+                lines.append(f'{"  " * depth}{key}: {scalar(value)}')
+
+    block(document, 0)
+    return '\n'.join(lines) + '\n'
