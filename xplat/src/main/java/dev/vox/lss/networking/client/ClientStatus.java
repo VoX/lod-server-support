@@ -103,7 +103,7 @@ public final class ClientStatus {
             CACHE.publish(lifecycle, new ClientStatusSnapshot(ClientStatusSnapshot.SCHEMA_VERSION, lifecycle, System.currentTimeMillis(),
                     mc.getConnection() != null, ClientNetGlue.hasReceivedSessionConfig(), cfg.receiveServerLods(),
                     ClientNetGlue.isServerEnabled(), LSSApi.hasVoxelConsumers(), FarPlayerRenderer.RENDER_AVAILABLE,
-                    ClientNetGlue.getSessionVersion(), ClientNetGlue.getServerLodDistance(), 0, 0, 0, 0,
+                    ClientNetGlue.statusProtocol(), ClientNetGlue.getServerLodDistance(), 0, 0, 0, 0,
                     dev.vox.lss.compat.DhVoxyBridge.backlog(), 0, cfg.lodColumnsPerSecondLimit(), 0,
                     xaero.pendingRebuilds(), ClientNetGlue.discoveryStatus(), availability, null,
                     dev.vox.lss.platform.LoaderServices.get().diagnosticVersions(), cfg.diagnosticSettings(),
@@ -113,7 +113,7 @@ public final class ClientStatus {
         var snapshot = new ClientStatusSnapshot(ClientStatusSnapshot.SCHEMA_VERSION, lifecycle, System.currentTimeMillis(),
                 mc.getConnection() != null, ClientNetGlue.hasReceivedSessionConfig(),
                 cfg.receiveServerLods(), ClientNetGlue.isServerEnabled(), LSSApi.hasVoxelConsumers(),
-                FarPlayerRenderer.RENDER_AVAILABLE, ClientNetGlue.getSessionVersion(),
+                FarPlayerRenderer.RENDER_AVAILABLE, ClientNetGlue.statusProtocol(),
                 ClientNetGlue.getServerLodDistance(), active ? manager.getEffectiveLodDistanceChunks() : 0,
                 active ? Math.max(0, ClientNetGlue.getColumnsReceived() - baseColumns) : 0,
                 active ? Math.max(0, ClientNetGlue.getBytesReceived() - baseBytes) : 0,
@@ -127,7 +127,10 @@ public final class ClientStatus {
                 journeyMapAvailability, journeyMap.pendingColumns(),
                 // How many far players the server is sending right now (a count only): 0 means
                 // the server sends none, so the cause is on the server side or the other player's.
-                FarPlayerClientSupport.tracker().trackedCount());
+                FarPlayerClientSupport.tracker().trackedCount(),
+                // The map mods are the only consumers: with the server's map request armed,
+                // nothing here can show the terrain (the verdict says so).
+                dev.vox.lss.compat.ModCompat.isMapOnlyIngestion());
         lastRateGated = rateGated;
         CACHE.publish(lifecycle, snapshot);
     }

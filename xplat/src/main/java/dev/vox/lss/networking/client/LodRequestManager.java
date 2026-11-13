@@ -1,5 +1,6 @@
 package dev.vox.lss.networking.client;
 
+import dev.vox.lss.common.FaultCounters;
 import dev.vox.lss.api.LSSApi;
 import dev.vox.lss.common.LSSConstants;
 import dev.vox.lss.common.LSSLogger;
@@ -664,7 +665,10 @@ public class LodRequestManager {
                 if (loaded != null && this.lastDimension != null) {
                     this.columns.adoptLoaded(loaded);
                 }
-            } catch (Exception ignored) {}
+            } catch (Exception e) {
+                // The session goes on without its saved progress and downloads again.
+                FaultCounters.global().record(FaultCounters.Site.CLIENT_CACHE_LOAD, e);
+            }
             this.pendingCacheLoad = null;
             for (var entry : this.cancelledDuringCacheLoad.long2LongEntrySet()) {
                 this.columns.onIngestCancelled(entry.getLongKey(), entry.getLongValue());

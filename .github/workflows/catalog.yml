@@ -43,6 +43,8 @@ jobs:
           python3 -m unittest discover -s tools/verify
           python3 -m unittest discover -s tools/tests
           python3 -m unittest discover -s test-fixtures/client-preset-tools
+          # The real-stack matrix lives on main only (one matrix covers every line's rows).
+          if [ -d tools/realstack ]; then python3 -m unittest discover -s tools/realstack; fi
       # Every line: its facts and its role. A support line also proves it is in step with main,
       # and the change itself is checked against where it started (the target branch for a pull
       # request, the previous tip for a push). docs/operations/support-lines.md has the rules.

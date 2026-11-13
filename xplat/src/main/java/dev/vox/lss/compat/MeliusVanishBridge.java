@@ -1,5 +1,6 @@
 package dev.vox.lss.compat;
 
+import dev.vox.lss.common.FaultCounters;
 import dev.vox.lss.common.LSSLogger;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
@@ -48,7 +49,6 @@ public final class MeliusVanishBridge {
     private static volatile int state;
     private static MethodHandle isVanishedHandle;   // (MinecraftServer, UUID) -> boolean
     private static MethodHandle canSeePlayerHandle; // (MinecraftServer, UUID actor, ServerPlayer observer) -> boolean
-    private static volatile boolean invokeWarned;
 
     private MeliusVanishBridge() {
     }
@@ -69,7 +69,6 @@ public final class MeliusVanishBridge {
     /** Test seam: forget the resolution (lazy resolve reruns). */
     static void resetForTest() {
         state = 0;
-        invokeWarned = false;
         classResolver = Class::forName;
     }
 
@@ -122,12 +121,10 @@ public final class MeliusVanishBridge {
     }
 
     private static void warnInvoke(Throwable t) {
-        if (!invokeWarned) {
-            invokeWarned = true;
-            LSSLogger.warn("Melius Vanish query threw — treating the target as HIDDEN from"
-                    + " far players (the fail-safe direction; a vanished player must never"
-                    + " leak). One warn per session (" + t + ")");
-        }
+        // Fail-safe direction: a vanished player must never leak, so the target is treated as
+        // hidden. Counted, and logged at most once every ten minutes.
+        FaultCounters.global().record(FaultCounters.Site.VANISH_CHECK,
+                () -> "Melius Vanish query threw; treating the player as hidden from far players (" + t + ")");
     }
 
     private static void resolve() {

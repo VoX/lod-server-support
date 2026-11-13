@@ -237,7 +237,8 @@ class PaperCommandsTest {
         when(service.getPlayers()).thenReturn(Map.of());
 
         assertTrue(run(commands(service, new PaperConfig()), "diag"));
-        assertTrue(messages.contains("Dialects: v20=0, v19=0, v18=1, v16=0, started=0/0/1/0"),
+        assertTrue(messages.stream().anyMatch(m ->
+                        m.startsWith("Dialects: v20=0, v19=0, v18=1, v16=0, started=0/0/1/0, ended=0/0/0/0 in ")),
                 "a live v18 session must render the Dialects line through the command: " + messages);
     }
 
@@ -316,7 +317,7 @@ class PaperCommandsTest {
         assertTrue(messages.stream().anyMatch(m -> m.equals("Xray: active=off, masked_sections=0")),
                 "no active mask manager renders the off xray line: " + messages);
         assertTrue(messages.stream().anyMatch(m ->
-                        m.equals("Dialects: v20=0, v19=0, v18=0, v16=0, started=0/0/0/0")),
+                        m.startsWith("Dialects: v20=0, v19=0, v18=0, v16=0, started=0/0/0/0, ended=0/0/0/0 in ")),
                 "the Dialects line renders unconditionally (the v20 count IS the live"
                         + " LOD-session count): " + messages);
         assertTrue(messages.stream().anyMatch(m ->

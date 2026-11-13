@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "reference_commit": "21c09890c1154820c89dd08deb21b45d88cf071f",
+  "reference_commit": "e0208edb3583426f2bc0b20f7f07bc8cbc55e912",
   "adapted": [
     ".github/line.env",
     ".github/workflows/build.yml",
@@ -205,5 +205,7 @@
     "xplat/src/main/java/dev/vox/lss/networking/server/SelectiveChunkNbtLoader.java",
     "xplat/src/main/java/dev/vox/lss/networking/server/ServerReceiverGlue.java"
   ],
-  "absent": []
+  "absent": [
+    "tools/realstack/*"
+  ]
 }

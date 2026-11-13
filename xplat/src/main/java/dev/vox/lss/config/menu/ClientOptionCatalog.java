@@ -297,7 +297,7 @@ public final class ClientOptionCatalog {
                 .name("lss.config.far_players_extend_far_plane")
                 .tooltip("lss.config.far_players_extend_far_plane.tooltip")
                 .impact(Impact.LOW)
-                .defaultValue(false)
+                .defaultValue(true)
                 .bind(c -> c.bool("far_players.extend_far_plane"), (c, v) -> c.set("far_players.extend_far_plane", v))
                 .enabledBy(ID_FAR_PLAYERS_ENABLED)
                 .saveHook(save)

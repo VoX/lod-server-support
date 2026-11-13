@@ -75,7 +75,7 @@ Never sent, in any mode: spectators (unless `far_players.send_spectators` is on)
 3. **The setting and the permission.** With `far_players.hide_permission_holders: true`, everyone who holds the hide permission is hidden, and admins with `*` hold it. On the server, the `FarPlayers:` line of `/lsslod diag` adds `hidden=<n>` (players withheld by vanish, a disguise or that setting in the last update), `perm_holders=<n>` (holders online while the setting is off, including ones hidden for another reason or in another dimension) and `overridden=<n>` (players whose own sharing choice a `required` server is overriding).
 4. **What your client receives.** `/lss status` shows "Far players sent by this server". 0 means the server sends you nobody, so the cause is one of the three above. Any other number means they arrive and your client is not drawing them:
 5. **Fog.** With your LOD mod's fog on, very distant far players can fade into the fog. If they do, turn the LOD mod's fog off.
-6. **Draw range.** Players past the game's far plane need "Extend Far Player Draw Range"; also check that "Show Far Players" is on, that "Far Player Render Limit" is 0 or large enough, and that `/lss status` does not say the far-player renderer is unavailable on your loader.
+6. **Draw range.** Players past the game's far plane are drawn while "Extend Far Player Draw Range" is on (the default since 0.22.0) and an LOD mod such as Voxy is drawing; also check that "Show Far Players" is on, that "Far Player Render Limit" is 0 or large enough, and that `/lss status` does not say the far-player renderer is unavailable on your loader.
 
 [Voxy Server Side](https://modrinth.com/plugin/voxy-server-side) is the same mod. Voxy Server Side clients are compatible with LOD Server Support servers and vice versa.
 
@@ -86,6 +86,8 @@ Install **LOD Server Support** on **both** the **server** (Fabric, Paper, NeoFor
 NeoForge ships on MC 1.21.1, 26.1, 26.2 and 26.3; the 1.21.10/1.21.11 modules remain maintained builds. NeoForge far-player rendering is live on 1.21.1 and remains an intentional stub on the other lines. See the [loader/artifact matrix](docs/planning/per-version-surfaces.md#current-loader-and-artifact-surfaces-2026-09-08) and [validation profiles](docs/testing/astra-live-profiles.md) for the separate packaging, consumer and live-test boundaries.
 
 On SpongeVanilla, put the Sponge jar in the server's `mods/` folder. At startup Sponge prints a notice that the plugin uses Mixins; that is expected.
+
+**Nothing loading?** Run `/lss status` on the client. Since 0.22.0 its first line says whether distant terrain is working here and, if not, why: the server doesn't run the mod, has it switched off (for everyone, for this world or for you), runs a different version, or nothing you have installed can show the terrain. The first few times this happens the client also says so once in chat, in grey (each kind at most three times ever). Pack makers who want no such lines can ship a `notices.properties` containing `no_support=3`, `nothing_to_show=true`, `server_off=3` and `version_mismatch=3`. It goes beside the mod's `cache` folder: `.lss` in the game directory (`.vss` for Voxy Server Side), or `config/lss` in an instance that still has its cache there.
 
 ## Commands
 
@@ -100,6 +102,7 @@ On SpongeVanilla, put the Sponge jar in the server's `mods/` folder. At startup 
 
 ### Client (Fabric and supported NeoForge clients)
 
+- `/lss status` - Say whether distant terrain is working here and, if not, why; then the details (connection, map mods, far players)
 - `/lss reload` - Read saved client YAML and apply supported changes; report reconnect requirements
 
 - `/lss clearcache` - Clear this server's download records so the server sends its distant terrain again (a full re-download). Terrain your LOD mod has already saved is not deleted; `/lss reset` does that. The **Re-download Terrain** button on the General page of the mod's entry in Sodium's video settings (Sodium 0.8 or newer) does the same after a confirm screen. In singleplayer or at the title screen it clears the records of every server. On a server that is not sending distant terrain at that moment (for example with Receive Server LODs off) it clears nothing and says so
