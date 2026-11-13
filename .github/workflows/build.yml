@@ -41,18 +41,20 @@ jobs:
       - name: Build Fabric + Tier 1 tests
         run: ./gradlew :fabric:build -x runGameTest -x runClientGameTest
 
-      # Tier 2 runs a real dedicated server; on starved 2-core runners the documented
-      # flaky classes (CLAUDE.md "Known Test Flakes") can miss timing windows. One retry
-      # contains them; the ::warning:: keeps every retry visible in the run summary so a
-      # rising flake rate is never silently masked, and the first attempt's evidence is
-      # snapshotted before the retry clobbers the run dir.
-      - name: Tier 2 server gametests (retry once on flake)
+      # A red is explained, not retried. The one exception is a failure whose cause is named
+      # in config/test-flakes.json (open, unexpired): tools/verify/flake_gate.py allows one
+      # retry only when every failure of the first attempt matches such an entry. The first
+      # attempt's evidence is always kept.
+      - name: Tier 2 server gametests
         run: |
-          ./gradlew :fabric:runGameTest || {
-            echo "::warning title=Tier 2 gametest flake::runGameTest failed once; retrying (first-attempt logs in the gametest-flake-evidence-server artifact)"
+          set -o pipefail
+          ./gradlew :fabric:runGameTest 2>&1 | tee first-attempt-tier2.log || {
             mkdir -p flake-evidence/tier2
+            cp first-attempt-tier2.log flake-evidence/tier2/ 2>/dev/null || true
             cp -r fabric/build/run/gameTest/logs flake-evidence/tier2/logs 2>/dev/null || true
             cp -r fabric/build/run/gameTest/crash-reports flake-evidence/tier2/crash-reports 2>/dev/null || true
+            python3 tools/verify/flake_gate.py --scope tier2 --log first-attempt-tier2.log || exit 1
+            echo "::warning title=Known Tier 2 flake retried::see the gametest-flake-evidence-server artifact"
             ./gradlew :fabric:runGameTest
           }
 
@@ -65,17 +67,20 @@ jobs:
       # Stage N: the NeoForge module (best-effort tier — CLAUDE.md "Support tiers").
       # build = compile (xplat under MDG — the twin-contract enforcement) + the contract
       # suite + shadowJar + the VSS repackage; the gametest smoke runs the 8-test subset
-      # with the same retry-once + evidence pattern as the fabric tiers.
+      # under the same retry rule as the fabric tiers.
       - name: Build NeoForge + contract tests
         run: ./gradlew :neoforge:build
 
-      - name: NeoForge gametest smoke (retry once on flake)
+      - name: NeoForge gametest smoke
         run: |
-          ./gradlew :neoforge:runGameTestServer || {
-            echo "::warning title=NeoForge gametest flake::runGameTestServer failed once; retrying (first-attempt logs in the gametest-flake-evidence-server artifact under neoforge/)"
+          set -o pipefail
+          ./gradlew :neoforge:runGameTestServer 2>&1 | tee first-attempt-neoforge.log || {
             mkdir -p flake-evidence/neoforge
+            cp first-attempt-neoforge.log flake-evidence/neoforge/ 2>/dev/null || true
             cp -r neoforge/run/logs flake-evidence/neoforge/logs 2>/dev/null || true
             cp -r neoforge/run/crash-reports flake-evidence/neoforge/crash-reports 2>/dev/null || true
+            python3 tools/verify/flake_gate.py --scope neoforge --log first-attempt-neoforge.log || exit 1
+            echo "::warning title=Known NeoForge flake retried::see the gametest-flake-evidence-server artifact under neoforge/"
             ./gradlew :neoforge:runGameTestServer
           }
 
@@ -88,21 +93,24 @@ jobs:
       # SpongeVanilla server — hooks fire, a disk-read serve, the permission defaults.
       # The server jar + its first-boot library closure are cached per pinned build; an
       # expired RC/snapshot pin is a "refresh the pin" failure, never a re-run (flake
-      # catalog). Same retry-once + first-attempt evidence pattern as the gametests.
+      # catalog). Same retry rule and first-attempt evidence as the gametests.
       - name: Cache the pinned SpongeVanilla server
         uses: actions/cache@v4
         with:
           path: ~/.cache/lss-sponge
           key: spongevanilla-${{ hashFiles('gradle.properties') }}
 
-      - name: Sponge boot smoke (retry once on flake)
+      - name: Sponge boot smoke
         run: |
-          ./gradlew :sponge:bootSmoke || {
-            echo "::warning title=Sponge boot smoke flake::bootSmoke failed once; retrying (first-attempt logs in the gametest-flake-evidence-server artifact under sponge/)"
+          set -o pipefail
+          ./gradlew :sponge:bootSmoke 2>&1 | tee first-attempt-sponge.log || {
             mkdir -p flake-evidence/sponge
+            cp first-attempt-sponge.log flake-evidence/sponge/ 2>/dev/null || true
             # Logs + verdicts only: the run dir's libraries/ symlinks the ~150 MB cached
             # SpongeVanilla closure, and the world is regenerated per run.
             rsync -a --exclude libraries --exclude world sponge/build/sponge-smoke flake-evidence/sponge/ 2>/dev/null || true
+            python3 tools/verify/flake_gate.py --scope sponge --log first-attempt-sponge.log || exit 1
+            echo "::warning title=Known Sponge boot flake retried::see the gametest-flake-evidence-server artifact under sponge/"
             ./gradlew :sponge:bootSmoke
           }
 
@@ -133,7 +141,7 @@ jobs:
           python3 tools/tests/inventory.py validate-moves
           python3 tools/tests/check_artifacts.py
 
-      - name: Upload flake evidence (first attempt of a retried gametest)
+      - name: Upload first-attempt evidence of a failed gametest
         if: always()
         uses: actions/upload-artifact@v5
         with:
@@ -245,15 +253,19 @@ jobs:
       - name: Install Mesa Vulkan (lavapipe) for the 26.3 client
         run: sudo apt-get update -qq && sudo apt-get install -y -qq mesa-vulkan-drivers
 
-      # Retry-once for the same reason as Tier 2 above — this tier additionally sees the
-      # vanilla 26.2 TicketStorage purge crash under ticket churn (CLAUDE.md flake catalog).
-      - name: Tier 3 client gametests (retry once on flake)
+      # The same retry rule as Tier 2. The one named cause on this tier is the vanilla
+      # TicketStorage purge crash under ticket churn (config/test-flakes.json).
+      - name: Tier 3 client gametests
         run: |
-          ./gradlew :fabric:runClientGameTest || {
-            echo "::warning title=Tier 3 gametest flake::runClientGameTest failed once; retrying (first-attempt logs in the gametest-flake-evidence-client artifact)"
+          set -o pipefail
+          ./gradlew :fabric:runClientGameTest 2>&1 | tee first-attempt-tier3.log || {
             mkdir -p flake-evidence/tier3
+            cp first-attempt-tier3.log flake-evidence/tier3/ 2>/dev/null || true
             cp -r fabric/build/run/clientGameTest/logs flake-evidence/tier3/logs 2>/dev/null || true
             cp -r fabric/build/run/clientGameTest/crash-reports flake-evidence/tier3/crash-reports 2>/dev/null || true
+            cat flake-evidence/tier3/crash-reports/*.txt >> first-attempt-tier3.log 2>/dev/null || true
+            python3 tools/verify/flake_gate.py --scope tier3 --log first-attempt-tier3.log || exit 1
+            echo "::warning title=Known Tier 3 flake retried::see the gametest-flake-evidence-client artifact"
             ./gradlew :fabric:runClientGameTest
           }
         timeout-minutes: 35
@@ -261,7 +273,7 @@ jobs:
           MESA_GL_VERSION_OVERRIDE: "4.5"
           GALLIUM_DRIVER: llvmpipe
 
-      - name: Upload flake evidence (first attempt of a retried gametest)
+      - name: Upload first-attempt evidence of a failed gametest
         if: always()
         uses: actions/upload-artifact@v5
         with:
