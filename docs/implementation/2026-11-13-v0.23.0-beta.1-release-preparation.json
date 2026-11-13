@@ -6,17 +6,17 @@
         8,
         95
       ],
-      "gated_head": "67a0d342a01e61d5a7ee12989e1c6533e53f47b7",
+      "gated_head": "b5516018dc0d154a787d70dc14c5a1d418536afa",
       "jars_sha256": {
-        "lod-server-support-fabric-0.23.0-beta.1+1.21.1.jar": "2c59f1c4e4181c09105bfbe564ef0f5f9f6afe13f98a6d7b403a46d20f38b5e2",
-        "lod-server-support-neoforge-0.23.0-beta.1+1.21.1.jar": "0a53bcd3eaa2a17cf5aea05e4f3f0075f43764a6d6458e523eabb9584484f6a6",
-        "lod-server-support-paper-0.23.0-beta.1+1.21.1.jar": "b0a3878881115bd168f00d5ea1bc4207cb838858fa6674c68575f44b1478d781",
-        "lod-server-support-sponge-0.23.0-beta.1+1.21.1.jar": "4ff23eec0d96193062fd4e6721bfa8925a241b0729e231a56d71e59698475d49",
+        "lod-server-support-fabric-0.23.0-beta.1+1.21.1.jar": "e2ddf811a8edf182f9f661a20dac9d55b393d9560c0580644c0dcd08a11b2b1b",
+        "lod-server-support-neoforge-0.23.0-beta.1+1.21.1.jar": "568660459f3f631a315b7164722369b63faf21c1d5ff71e6ada8b66951b6ef67",
+        "lod-server-support-paper-0.23.0-beta.1+1.21.1.jar": "e99a6d3c29f21f37ce8c80633208cff6f1a69fde4a2e2813a62235da4e78983f",
+        "lod-server-support-sponge-0.23.0-beta.1+1.21.1.jar": "edb59f52cc3687f0adde1a2867d140f33f3ef3aa674baa86b9d255d56f3e53c5",
         "paper-0.23.0-beta.1.jar": "b6bbdaa9ed62b3ac49f6a1129a54c147b91ca17ecf5cc5b4c25f409dcb47fb08",
-        "voxy-server-side-fabric-0.23.0-beta.1+1.21.1.jar": "cdaeceddcc1397844b33b03581c088d83709bca752b3c9b74bffa0f3273fcdc1",
-        "voxy-server-side-neoforge-0.23.0-beta.1+1.21.1.jar": "11cf87614e249519b52e2257478302b7547ee9df745c8306ca75b7e7d0b65074",
-        "voxy-server-side-paper-0.23.0-beta.1+1.21.1.jar": "c811300a9801a75b2a6399843753b3cb6e0a219e80d52f8eec399aafef6a87d0",
-        "voxy-server-side-sponge-0.23.0-beta.1+1.21.1.jar": "626e0d8c67cfdd0e1d9e980b15a41ae585819efb7cee0e95699d6e65d2ca89e8"
+        "voxy-server-side-fabric-0.23.0-beta.1+1.21.1.jar": "eaace35a0545a101de847154f946a1ae71d42ccaa314988fed5cf2474ec33266",
+        "voxy-server-side-neoforge-0.23.0-beta.1+1.21.1.jar": "d61aef18be31ec5777d9709ba128bc32ce09a82c336b14487222ca3f88e46e70",
+        "voxy-server-side-paper-0.23.0-beta.1+1.21.1.jar": "565e2e4940748926af253f7865067e4c2b9feeafb3b9fb16ec9f43c2e7fe881b",
+        "voxy-server-side-sponge-0.23.0-beta.1+1.21.1.jar": "d6115e569bdaf5ee926e4566fb45eb544765adf577c6c3732c12d8f08ba99b66"
       },
       "junit": {
         "common": {
@@ -51,7 +51,7 @@
         }
       },
       "red_steps": {
-        "compat-ci": "not-on-main: the sync point aec9b495f is not on origin/main (main merges before a port); expected for a trial"
+        "compat-ci": "not-on-main: the sync point dcba6e252 is not on origin/main (main merges before a port); expected for a trial"
       },
       "status": "trial port from the feature branch head; the real port follows the merge to main"
     },
@@ -61,17 +61,17 @@
         8,
         96
       ],
-      "gated_head": "aec9b495faeb9b720453d0330db1620d2812aa2f",
+      "gated_head": "dcba6e2529542b60cdcf40dc33e9e5b09bb7f5c4",
       "jars_sha256": {
-        "lod-server-support-fabric-0.23.0-beta.1+26.3.jar": "8574d6ba39b17d10d738d6388a750278c5a4d962da048c8e5104184ac0c9b469",
-        "lod-server-support-neoforge-0.23.0-beta.1+26.3.jar": "1c33454aac83d46f5a1afb69e00babb1936f4dbbb53b2cff25be8fd3d3afdbe1",
-        "lod-server-support-paper-0.23.0-beta.1+26.3.jar": "1eaae0344e0793f9159ea77a635bda2f1a06f434ce2d6248b67dd8b5b3be1598",
-        "lod-server-support-sponge-0.23.0-beta.1+26.3.jar": "c58259577ed318b029215898a8e883134b69f0f9e7344c1f01e5ae67c4a9428e",
+        "lod-server-support-fabric-0.23.0-beta.1+26.3.jar": "b94b4f11e919547f5c2556fd1b83e5f42faefff9eb9d4bed550840c0a47cdad1",
+        "lod-server-support-neoforge-0.23.0-beta.1+26.3.jar": "9e09c1b4b7a4c2943d0ce72b6f83d3d20c9db0f254f334e0aa1ab58e1f73c1cf",
+        "lod-server-support-paper-0.23.0-beta.1+26.3.jar": "2f6aebfa414c91546c537dface9c60e6d74cb6a311148ccc20b1a6992c50cf7d",
+        "lod-server-support-sponge-0.23.0-beta.1+26.3.jar": "095e84127b013f55ff3a7eb4c8afc7a4b4408ec50844cfdf42c81b09d388225c",
         "paper-0.23.0-beta.1.jar": "84bfad1e73050407811225ada78603918221e81188397ddd249b4611d2007eba",
-        "voxy-server-side-fabric-0.23.0-beta.1+26.3.jar": "200871ba4969a75926a0c5acd9307c554b6c5e19edb3c3dac1286ad399e62edc",
-        "voxy-server-side-neoforge-0.23.0-beta.1+26.3.jar": "cffac80ca1903016428fe40a3687b966877b94e08e43f94bfa49d43a5feea4c4",
-        "voxy-server-side-paper-0.23.0-beta.1+26.3.jar": "bd9975fa3d3bb66a5136d7bd457606912098870cfab2373df9583a793018521d",
-        "voxy-server-side-sponge-0.23.0-beta.1+26.3.jar": "0267d071bfdd09975547ba6a519c91c20c9eb6bab5f2c4904ab2711b6d6732e5"
+        "voxy-server-side-fabric-0.23.0-beta.1+26.3.jar": "d0dd97e095bb50ec9e132addd5395ebfc06acaf7d97ef31605179c9a8c47fd42",
+        "voxy-server-side-neoforge-0.23.0-beta.1+26.3.jar": "be430a68254c041fbced3a3c8e76ef8073fe8c812ee67a5ee7c9a68cf3cb2075",
+        "voxy-server-side-paper-0.23.0-beta.1+26.3.jar": "b055c5b37d40f2fdd4b32d5174b4ef0adb4247cd66b2c8b95e30d792f3a4a89a",
+        "voxy-server-side-sponge-0.23.0-beta.1+26.3.jar": "d348c6f95011b8fd9f6c39cecfdbcdfcea8204d6a9c1681bb74977cb401e655f"
       },
       "junit": {
         "common": {
@@ -111,36 +111,41 @@
   },
   "merged": false,
   "mutation_checks": {
+    "changed_default": 3,
     "equivalent": 1,
     "features": 49,
     "review_fold": 16,
     "voxy_and_visual_pass_items": 14
+  },
+  "owner_decisions_2026_11_13": {
+    "send \"Share My Position: on\" without a session": "no",
+    "service.show_permission_refusal default": "on"
   },
   "prepared": "2026-11-13",
   "published": false,
   "realstack": [
     {
       "brand": "LSS",
-      "columns_sent": 2961,
+      "columns_sent": 2831,
       "jars": "the 26.3 gate",
       "passed": true,
       "row": "fabric-26.3-sodium-voxy-xaero",
-      "run": "20261113T165300Z"
+      "run": "20261113T180440Z"
     },
     {
       "brand": "VSS",
-      "columns_sent": 2921,
+      "columns_sent": 2788,
       "jars": "the 26.3 gate",
       "passed": true,
       "row": "fabric-26.3-sodium-voxy-xaero",
-      "run": "20261113T165433Z"
+      "run": "20261113T180611Z"
     },
     {
       "brand": "LSS",
       "jars": "the 26.3 gate",
       "passed": true,
       "row": "fabric-26.3-sodium-voxy-xaero",
-      "run": "20261113T165604Z",
+      "run": "20261113T180743Z",
       "scenario": "server-without-lss"
     },
     {
@@ -148,7 +153,7 @@
       "jars": "the 26.3 gate",
       "passed": true,
       "row": "fabric-26.3-sodium-voxy-xaero",
-      "run": "20261113T165731Z",
+      "run": "20261113T180909Z",
       "scenario": "server-without-lss"
     },
     {
@@ -156,7 +161,7 @@
       "jars": "the 26.3 gate",
       "passed": true,
       "row": "fabric-26.3-sodium-voxy-xaero",
-      "run": "20261113T165858Z",
+      "run": "20261113T181036Z",
       "scenario": "off-in-world"
     },
     {
@@ -164,7 +169,7 @@
       "jars": "the 26.3 gate",
       "passed": true,
       "row": "fabric-26.3-sodium-voxy-xaero",
-      "run": "20261113T170030Z",
+      "run": "20261113T181208Z",
       "scenario": "off-in-world"
     },
     {
@@ -172,7 +177,7 @@
       "jars": "the 26.3 gate",
       "passed": true,
       "row": "fabric-26.3-sodium-voxy-xaero",
-      "run": "20261113T170202Z",
+      "run": "20261113T181340Z",
       "scenario": "client-receives-nothing"
     },
     {
@@ -180,31 +185,31 @@
       "jars": "the 26.3 gate",
       "passed": true,
       "row": "fabric-26.3-sodium-voxy-xaero",
-      "run": "20261113T170335Z",
+      "run": "20261113T181513Z",
       "scenario": "client-receives-nothing"
     },
     {
       "brand": "LSS",
-      "columns_sent": 2351,
+      "columns_sent": 2302,
       "jars": "the 26.3 gate",
       "passed": true,
       "row": "paper-26.3-fabric-client",
-      "run": "20261113T170506Z"
+      "run": "20261113T181646Z"
     },
     {
       "brand": "VSS",
-      "columns_sent": 2424,
+      "columns_sent": 2308,
       "jars": "the 26.3 gate",
       "passed": true,
       "row": "paper-26.3-fabric-client",
-      "run": "20261113T170637Z"
+      "run": "20261113T181837Z"
     },
     {
       "brand": "LSS",
       "jars": "the 26.3 gate",
       "passed": true,
       "row": "paper-26.3-fabric-client",
-      "run": "20261113T170810Z",
+      "run": "20261113T182025Z",
       "scenario": "off-in-world"
     },
     {
@@ -212,7 +217,7 @@
       "jars": "the 26.3 gate",
       "passed": true,
       "row": "paper-26.3-fabric-client",
-      "run": "20261113T170944Z",
+      "run": "20261113T182211Z",
       "scenario": "off-in-world"
     },
     {
@@ -220,31 +225,31 @@
       "jars": "the 26.3 gate",
       "passed": true,
       "row": "paper-26.3-fabric-client",
-      "run": "20261113T171118Z",
+      "run": "20261113T182357Z",
       "scenario": "client-receives-nothing"
     },
     {
       "brand": "LSS",
-      "columns_sent": 3510,
+      "columns_sent": 3496,
       "jars": "the 1.21.1 trial gate",
       "passed": true,
       "row": "neoforge-1.21.1-c2me-scalablelux",
-      "run": "20261113T172438Z"
+      "run": "20261113T183305Z"
     },
     {
       "brand": "VSS",
-      "columns_sent": 3251,
+      "columns_sent": 3316,
       "jars": "the 1.21.1 trial gate",
       "passed": true,
       "row": "neoforge-1.21.1-c2me-scalablelux",
-      "run": "20261113T172611Z"
+      "run": "20261113T183448Z"
     },
     {
       "brand": "LSS",
       "jars": "the 1.21.1 trial gate",
       "passed": true,
       "row": "neoforge-1.21.1-c2me-scalablelux",
-      "run": "20261113T172746Z",
+      "run": "20261113T183633Z",
       "scenario": "off-in-world"
     },
     {
@@ -252,23 +257,22 @@
       "jars": "the 1.21.1 trial gate",
       "passed": true,
       "row": "neoforge-1.21.1-c2me-scalablelux",
-      "run": "20261113T172920Z",
+      "run": "20261113T183820Z",
       "scenario": "client-receives-nothing"
     },
     {
       "brand": "LSS",
-      "columns_sent": 3022,
+      "columns_sent": 2274,
       "jars": "the 1.21.1 trial gate",
       "passed": true,
       "row": "neoforge-client-fabric-server-1.21.1",
-      "run": "20261113T173052Z"
+      "run": "20261113T184003Z"
     }
   ],
   "schema_version": 1,
   "scope": "beta: 26.3 and 1.21.1",
   "version": "0.23.0-beta.1",
   "waits_for": [
-    "the 0.22.0 tags (soak ends 2026-11-16T07:26Z)",
-    "VoX's answers to plan section 8"
+    "the 0.22.0 tags (soak ends 2026-11-16T07:26Z)"
   ]
 }
