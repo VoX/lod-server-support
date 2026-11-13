@@ -26,6 +26,11 @@ public final class Brand {
     private static volatile String displayName = "LOD Server Support";
     private static volatile String clientCommand = "lss";
     private static volatile String serverCommand = "lsslod";
+    /** A second client command name this build also answers to, or "" (0.23.0 plan §4): the
+     *  Voxy Server Side client registers {@code /lss} beside {@code /vss}, because every
+     *  player-facing document says {@code /lss status}. Data, not code: the two builds' classes
+     *  stay byte-identical. */
+    private static volatile String alsoClientCommand = "";
 
     private Brand() {}
 
@@ -41,10 +46,17 @@ public final class Brand {
             props.load(in);
             apply(props.getProperty("shortName"), props.getProperty("displayName"),
                     props.getProperty("clientCommand"), props.getProperty("serverCommand"));
+            String also = props.getProperty("alsoClientCommand");
+            alsoClientCommand = also == null ? "" : also.trim();
         } catch (Exception e) {
             // Branding is cosmetic — a read failure must never break startup. Keep defaults.
             LSSLogger.warn("Could not read " + RESOURCE + "; using default branding");
         }
+    }
+
+    /** Test seam: the second client command name ("" for none). */
+    static void applyAlsoClientCommand(String also) {
+        alsoClientCommand = also == null ? "" : also.trim();
     }
 
     /** Test seam: set branding directly without a resource. */
@@ -71,6 +83,13 @@ public final class Brand {
     /** Fabric client command literal (no leading slash): {@code "lss"} or {@code "vss"}.
      *  Local only — never sent over the network. */
     public static String clientCommand() { return clientCommand; }
+
+    /** Every client command name this build answers to: its own first (the one its help and
+     *  messages print), then the extra one when the build has one and it differs. */
+    public static java.util.List<String> clientCommands() {
+        String own = clientCommand, also = alsoClientCommand;
+        return also.isBlank() || also.equals(own) ? java.util.List.of(own) : java.util.List.of(own, also);
+    }
 
     /** Server admin command literal (no leading slash): {@code "lsslod"} or {@code "vsslod"}.
      *  Used by the Fabric dedicated-server command; Paper reads its own from plugin.yml.

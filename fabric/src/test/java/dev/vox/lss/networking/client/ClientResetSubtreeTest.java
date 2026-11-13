@@ -102,8 +102,12 @@ class ClientResetSubtreeTest {
                 "neoforge/src/main/java/dev/vox/lss/neoforge/LSSNeoClientBootstrap.java")) {
             String source = java.nio.file.Files.readString(
                     dev.vox.lss.testutil.SourcePaths.repoFile(file));
-            assertTrue(source.contains("ClientCommandActions.resetSubtree("),
-                    file + " must build its reset tree through the shared subtree");
+            // Since 0.23.0 the whole tree is the shared one (it is registered under more than
+            // one name on the Voxy Server Side client), and that tree hangs the shared subtree.
+            assertTrue(source.contains("ClientCommandActions.tree(") || source.contains("ClientCommandActions.<"),
+                    file + " must build its command tree through the shared builder");
+            assertFalse(source.contains("literal(\"reset\")") || source.contains("literal(\"clearcache\")"),
+                    file + " must not hand-roll the tree beside the shared builder");
             assertFalse(source.contains("literal(\"voxy-force\")"),
                     file + " must not hand-roll the voxy-force literal beside the "
                             + "shared builder");
