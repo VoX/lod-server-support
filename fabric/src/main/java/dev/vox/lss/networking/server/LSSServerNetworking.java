@@ -215,29 +215,52 @@ public class LSSServerNetworking {
                 (dispatcher, registryAccess, environment) ->
                         LSSServerCommands.register(dispatcher));
 
+        // Fabric fires DISCONNECT from whichever comes first: netty's channelInactive (the other
+        // end closed the socket, or a kick's close went through) or the server thread's own
+        // disconnect handling. Everything the cleanup touches belongs to the server thread:
+        // the generation service's active map, the far-player and region-summary state, the
+        // service gate. Run from a netty thread it raced the tick, and a real-stack run on
+        // 2026-11-13 crashed the server there (ConcurrentModificationException in
+        // ChunkGenerationService.tick, a player kicked with 40 generations in flight). So the
+        // event body reads the id and hands the rest to the server thread. execute() runs it
+        // there: at once when called on that thread outside a task, queued otherwise. It has
+        // run before the same player can be back, because vanilla holds a second login of a
+        // profile until the first is out of the player list. Once the server has stopped,
+        // execute() runs a task on the thread that called it: see onDisconnect.
         ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
-            var service = requestService;
-            if (service != null) {
-                service.removePlayer(handler.getPlayer().getUUID());
-                // Network-level: the disconnect drops the compat session identities
-                // (removePlayer above only reset the v16 want-set and touches neither
-                // membership — dim changes reuse that path and must keep both).
-                service.getV16CompatManager().onDisconnect(handler.getPlayer().getUUID());
-                service.getDialectTracker().onDisconnect(handler.getPlayer().getUUID());
-                // Far players: the subscription AND the retained target prefs die with
-                // the CONNECTION, never with the dimension-change remove+register cycle
-                // (the v18-rung checklist).
-                service.getFarPlayerService().onDisconnect(handler.getPlayer().getUUID());
-                // Region summaries: same connection-scoped cleanup (pending request,
-                // queued job, and the re-sweep cooldown mark die here).
-                service.getRegionSummaries().removePlayer(handler.getPlayer().getUUID());
-                // Service gate: the denied-handshake memo, the denial-log latch, and any
-                // revocation streak are session-scoped — swept beside the client-info fact.
-                service.getServiceGateState().onDisconnect(handler.getPlayer().getUUID());
-            }
-            // Service-independent: the sidecar fact is recorded at the network level
-            // (possibly before any service exists) and must die with the connection.
-            ServerReceiverGlue.sweepClientInfo(handler.getPlayer().getUUID());
+            java.util.UUID uuid = handler.getPlayer().getUUID();
+            server.execute(() -> onDisconnect(server, uuid));
         });
+    }
+
+    /**
+     * The connection of {@code uuid} ended (see the DISCONNECT registration). On the server
+     * thread, with one exception: a stopped server runs the task on the calling network
+     * thread. The service is then shutting down, or shut down, on the server thread and drops
+     * every player's state itself, so only the thread-safe sweep runs here.
+     */
+    private static void onDisconnect(net.minecraft.server.MinecraftServer server, java.util.UUID uuid) {
+        var service = server.isSameThread() ? requestService : null;
+        if (service != null) {
+            service.removePlayer(uuid);
+            // Network-level: the disconnect drops the compat session identities
+            // (removePlayer above only reset the v16 want-set and touches neither
+            // membership — dim changes reuse that path and must keep both).
+            service.getV16CompatManager().onDisconnect(uuid);
+            service.getDialectTracker().onDisconnect(uuid);
+            // Far players: the subscription AND the retained target prefs die with
+            // the CONNECTION, never with the dimension-change remove+register cycle
+            // (the v18-rung checklist).
+            service.getFarPlayerService().onDisconnect(uuid);
+            // Region summaries: same connection-scoped cleanup (pending request,
+            // queued job, and the re-sweep cooldown mark die here).
+            service.getRegionSummaries().removePlayer(uuid);
+            // Service gate: the denied-handshake memo, the denial-log latch, and any
+            // revocation streak are session-scoped — swept beside the client-info fact.
+            service.getServiceGateState().onDisconnect(uuid);
+        }
+        // Service-independent: the sidecar fact is recorded at the network level
+        // (possibly before any service exists) and must die with the connection.
+        ServerReceiverGlue.sweepClientInfo(uuid);
     }
 }
