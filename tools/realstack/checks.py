@@ -30,6 +30,15 @@ CLIENT_SESSION = re.compile(r'^Server session config received \(protocol v(?P<pr
                             r'LOD distance: (?P<distance>\d+) chunks, enabled: (?P<enabled>\w+)\)')
 CLIENT_SAVED = re.compile(r'^Saved (?P<count>\d+) cached column entries')
 CLIENT_CONSUMER = re.compile(r'^Registered voxel column consumer: (?P<name>\S+)')
+PLAYER_JOINED = '{player} joined the game'
+# The client's own chat line, as the game logs it: "[System] [CHAT] [LSS] ...". The prefix is the
+# brand's short name and the sentence carries its full name; the two must belong together.
+NOTICE = re.compile(r'^(?:\[System\] )?\[CHAT\] \[(?P<short>LSS|VSS)\] (?P<text>.*)$')
+BRANDS = {'LSS': 'LOD Server Support', 'VSS': 'Voxy Server Side'}
+NOTICE_TEXTS = {
+    'no_support': "This server isn't sending distant terrain. It probably doesn't run {brand}. "
+                  "Nothing is wrong with your game.",
+}
 CRASH_MARKERS = ('---- Minecraft Crash Report ----', '#@!@# Game crashed!',
                  'A fatal error has been detected by the Java Runtime Environment')
 MAX_EVIDENCE_CHARS = 400
@@ -325,6 +334,48 @@ def check_client_clean(client_log: str, crash_files: list[str], client_alive_at_
                        'stayed connected for the whole observation window', evidence, notes)
 
 
+def check_server_ready(server_log: str) -> CheckResult:
+    """The server finished starting. For scenarios whose server has no LSS to ask."""
+    name = 'server_ready'
+    found = first_match(parse_entries(server_log), SERVER_READY)
+    if not found:
+        return CheckResult(name, False, 'the server never logged its "Done" line')
+    return CheckResult(name, True, 'the server started', [found[0].first_line()])
+
+
+def check_client_joined(observed_server_log: str, player: str) -> CheckResult:
+    """The server logged the player's join during the observation window."""
+    name = 'client_joined'
+    wanted = PLAYER_JOINED.format(player=player)
+    joined = [entry.first_line() for entry in parse_entries(observed_server_log)
+              if entry.message.startswith(wanted)]
+    if not joined:
+        return CheckResult(name, False, f'the server never logged "{wanted}"')
+    return CheckResult(name, True, 'the player joined', joined[:1])
+
+
+def check_client_notice(client_log: str, kind: str, brand: str) -> CheckResult:
+    """The client told the player, in chat and exactly once, why no distant terrain is arriving.
+    The line must carry the expected brand twice: its short name as the prefix and its full name
+    in the sentence (the VSS build rewrites the sentence; a half-rewritten line fails here)."""
+    name = 'client_notice'
+    notices = [(entry, match) for entry, match in all_matches(parse_entries(client_log), NOTICE)]
+    evidence = [entry.first_line() for entry, _match in notices]
+    if not notices:
+        return CheckResult(name, False, 'the client logged no chat notice of its own', evidence)
+    if len(notices) > 1:
+        return CheckResult(name, False, f'{len(notices)} notices on one connection; the rule is '
+                           'at most one', evidence)
+    match = notices[0][1]
+    expected = NOTICE_TEXTS[kind].format(brand=BRANDS[brand])
+    if match.group('short') != brand:
+        return CheckResult(name, False, f'the notice is prefixed [{match.group("short")}], '
+                           f'expected [{brand}]', evidence)
+    if match.group('text').strip() != expected:
+        return CheckResult(name, False, f'the notice does not read: {expected}', evidence)
+    return CheckResult(name, True, f'one notice, in the {brand} build\'s words', evidence)
+
+
 def check_screenshot(shot: dict | None) -> CheckResult:
     """A screenshot of the private display was saved. The picture is not judged in this version;
     the check only proves that a real image of the right size was captured while a Minecraft
@@ -363,6 +414,10 @@ def run_checks(names: list[str], material: dict) -> list[CheckResult]:
                                                    material.get('observed_server_log', ''),
                                                    own_paths),
         'screenshot': lambda: check_screenshot(material.get('screenshot')),
+        'server_ready': lambda: check_server_ready(server_log),
+        'client_joined': lambda: check_client_joined(material.get('observed_server_log', ''), player),
+        'client_notice': lambda: check_client_notice(client_log, material.get('notice', 'no_support'),
+                                                     material.get('brand', 'LSS')),
     }
     return [table[name]() for name in names]
 

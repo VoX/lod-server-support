@@ -47,6 +47,16 @@ DIAG_INTERVAL = 10
 CONSOLE_REPLY_SECONDS = 8
 INSTALLER_SECONDS = 900
 FAULTS = ('client-without-lss',)
+# A scenario replaces the row's checks: it stages a situation a player meets and reads what the
+# client says about it. `notice` is the chat line the client must speak (checks.NOTICE_TEXTS).
+SCENARIOS = {
+    'server-without-lss': {
+        'checks': ['server_ready', 'client_joined', 'client_notice', 'client_clean', 'screenshot'],
+        'notice': 'no_support',
+    },
+}
+NOTICE_SECONDS = 150         # how long after the join the client's chat notice may take
+BRAND_PREFIXES = {'lss': 'lod-server-support-', 'vss': 'voxy-server-side-'}
 KEEP_AFTER_RUN = ('logs', 'crash-reports', 'config', 'console.log', 'console.in', 'stdout.log',
                   'server.properties', 'options.txt', 'eula.txt')
 
@@ -212,9 +222,21 @@ def provision(row: dict, cache: Path) -> dict:
     return result
 
 
-def resolve_lss(document: dict, row: dict, selector: str, cache: Path) -> dict:
-    """Resolve the `--lss` selector to one jar per side, hash-verified or hashed."""
+def branded_prefix(jar_prefix: str, brand: str) -> str:
+    """A row's jar prefix under a brand: the Voxy Server Side build of the same jar is named
+    voxy-server-side-<loader>."""
+    lss = BRAND_PREFIXES['lss']
+    if not jar_prefix.startswith(lss):
+        raise stackfile.StackError(f'jar prefix {jar_prefix} does not start with {lss}')
+    return BRAND_PREFIXES[brand] + jar_prefix[len(lss):]
+
+
+def resolve_lss(document: dict, row: dict, selector: str, cache: Path, brand: str = 'lss') -> dict:
+    """Resolve the `--lss` selector to one jar per side, hash-verified or hashed. The VSS brand
+    exists only as locally built jars (`dir:`); its published files live in another project."""
     kind, value = stackfile.parse_lss_selector(selector)
+    if brand != 'lss' and kind == 'published':
+        raise stackfile.StackError('--brand vss needs --lss dir:<gate jars>')
     resolved = {}
     for side in ('server', 'client'):
         wanted = row[side]['lss']
@@ -228,7 +250,8 @@ def resolve_lss(document: dict, row: dict, selector: str, cache: Path) -> dict:
             if not directory.is_dir():
                 raise stackfile.StackError(f'--lss dir: {directory} is not a directory')
             names = [entry.name for entry in directory.iterdir() if entry.is_file()]
-            name = stackfile.choose_built_jar(names, wanted['jar_prefix'], row['minecraft'])
+            name = stackfile.choose_built_jar(names, branded_prefix(wanted['jar_prefix'], brand),
+                                              row['minecraft'])
             path = directory / name
             resolved[side] = {'path': str(path), 'file': name, 'source': selector,
                               'sha512': fetch.file_digest(path, 'sha512')}
@@ -260,7 +283,10 @@ class Run:
         self.server: subprocess.Popen | None = None
         self.client: subprocess.Popen | None = None
         self.deadline = 0.0
+        self.scenario = SCENARIOS.get(options.scenario or '')
         self.facts: dict = {'rig_id': self.rig_id, 'player': launch.PLAYER, 'fault': options.fault,
+                            'scenario': options.scenario, 'brand': options.brand.upper(),
+                            'notice': self.scenario['notice'] if self.scenario else None,
                             'own_paths': [str(self.cache), str(self.directory)], 'diag_polls': []}
         self.final_diag = ''
 
@@ -337,6 +363,8 @@ class Run:
                        for mod in provisioned[side]['mods']]
             if side == 'client' and self.options.fault == 'client-without-lss':
                 staged.append({'side': side, 'mod': 'lss', 'left_out_by_fault': self.options.fault})
+            elif side == 'server' and self.options.scenario == 'server-without-lss':
+                staged.append({'side': side, 'mod': 'lss', 'left_out_by_scenario': self.options.scenario})
             else:
                 sources.append((Path(lss[side]['path']), lss[side]['sha512'], 'lss'))
             for source, sha512, slug in sources:
@@ -434,8 +462,35 @@ class Run:
         self.facts['client_join_seconds'] = round(time.monotonic() - started, 1)
         say(f'client joined after {self.facts["client_join_seconds"]} s')
 
+    def observe_notice(self, display: int) -> None:
+        """A scenario's window: keep the client in the world until it has spoken its chat notice
+        (plus a few seconds, to catch a second one) or the notice deadline passes."""
+        joined = time.monotonic()
+        give_up = self.remaining(NOTICE_SECONDS)
+        seen_at = None
+        while True:
+            spoken = len(checks.all_matches(checks.parse_entries(self.log_text(self.client_log)),
+                                            checks.NOTICE))
+            elapsed = round(time.monotonic() - joined)
+            say(f'  {elapsed:>3} s after join: {spoken} notice(s) in the client log')
+            now = time.monotonic()
+            if spoken and seen_at is None:
+                seen_at = now
+                self.facts['notice_seconds_after_join'] = elapsed
+            client_gone = self.client is not None and self.client.poll() is not None
+            if client_gone or now >= give_up or (seen_at is not None and now - seen_at >= 20):
+                break
+            time.sleep(DIAG_INTERVAL)
+        (self.evidence / 'server-diag-final.txt').write_text('')
+        self.facts['client_alive_at_end'] = self.client is not None and self.client.poll() is None
+        self.facts['observation_end_offset'] = self.console_log.stat().st_size
+        self.take_screenshot(display)
+
     def observe(self, display: int) -> None:
         """Keep the client in the world for the observation window, polling `lsslod diag`."""
+        if self.scenario:
+            self.observe_notice(display)
+            return
         joined = time.monotonic()
         stay_until = self.remaining(self.options.observe)
         give_up = self.remaining(max(self.options.observe, self.options.columns_deadline))
@@ -525,10 +580,11 @@ class Run:
 
     def execute(self) -> dict:
         """The whole run. Always stops what it started and always writes verdict.json."""
-        say(f'row {self.row["id"]}, LSS {self.selector}'
-            + (f', FAULT {self.options.fault}' if self.options.fault else ''))
+        say(f'row {self.row["id"]}, {self.options.brand.upper()} {self.selector}'
+            + (f', FAULT {self.options.fault}' if self.options.fault else '')
+            + (f', SCENARIO {self.options.scenario}' if self.options.scenario else ''))
         provisioned = provision(self.row, self.cache)
-        lss = resolve_lss(self.document, self.row, self.selector, self.cache)
+        lss = resolve_lss(self.document, self.row, self.selector, self.cache, self.options.brand)
         fetch.require_free_space()
         if self.directory.exists():
             raise launch.LaunchError(f'{self.directory} exists; every attempt keeps its own directory')
@@ -566,13 +622,21 @@ class Run:
         finally:
             lock.release()
         material = self.collect()
-        results = checks.run_checks(self.row['checks'], material)
+        judged = judged_row(self.row, self.facts.get('scenario'))
+        results = checks.run_checks(judged['checks'], material)
         context = verdict_context(self.row, self.facts)
         context['aborted'] = aborted
-        verdict = checks.assemble_verdict(self.row, results, context)
+        verdict = checks.assemble_verdict(judged, results, context)
         (self.directory / 'verdict.json').write_text(json.dumps(verdict, indent=1) + '\n')
         self.prune()
         return verdict
+
+
+def judged_row(row: dict, scenario: str | None) -> dict:
+    """The row as it is judged: a scenario brings its own checks."""
+    if not scenario:
+        return row
+    return {**row, 'checks': SCENARIOS[scenario]['checks']}
 
 
 def verdict_context(row: dict, facts: dict) -> dict:
@@ -580,8 +644,8 @@ def verdict_context(row: dict, facts: dict) -> dict:
     pins = {side: [f'{mod["slug"]} {mod["version_number"]}' for mod in row[side]['mods']]
             for side in ('server', 'client')}
     keys = ('rig_id', 'started', 'run_seconds', 'lock_wait_seconds', 'server_start_seconds',
-            'client_join_seconds', 'port', 'display', 'java', 'fault', 'lss_selector', 'lss',
-            'diag_polls', 'stop_report')
+            'client_join_seconds', 'port', 'display', 'java', 'fault', 'scenario', 'brand',
+            'notice_seconds_after_join', 'lss_selector', 'lss', 'diag_polls', 'stop_report')
     context = {key: facts.get(key) for key in keys}
     context.update({'minecraft': row['minecraft'], 'pins': pins,
                     'server_platform': loader_label(row['server'], 'platform'),
@@ -621,7 +685,8 @@ def load_material(directory: Path, document: dict) -> dict:
             'player': facts.get('player', launch.PLAYER), 'protocol': document['lss']['protocol'],
             'crash_files': facts.get('crash_files', []),
             'client_alive_at_end': facts.get('client_alive_at_end', False),
-            'screenshot': screenshot, 'own_paths': facts.get('own_paths', [])}
+            'screenshot': screenshot, 'own_paths': facts.get('own_paths', []),
+            'notice': facts.get('notice') or 'no_support', 'brand': facts.get('brand') or 'LSS'}
 
 
 def print_verdict(verdict: dict, where: Path) -> None:
@@ -705,6 +770,9 @@ def command_run(options: argparse.Namespace) -> int:
         print(f'row {row["id"]} is blocked: {row["blocked_reason"]}', file=sys.stderr)
         return 2
     stackfile.parse_lss_selector(options.lss)
+    if options.fault and options.scenario:
+        print('--fault and --scenario cannot be combined', file=sys.stderr)
+        return 2
     run = Run(document, row, options.lss, options)
     verdict = run.execute()
     print_verdict(verdict, run.directory)
@@ -718,11 +786,12 @@ def command_replay(options: argparse.Namespace) -> int:
     facts = json.loads((directory / 'facts.json').read_text())
     row = stackfile.find_row(document, facts['row'])
     material = load_material(directory, document)
-    results = checks.run_checks(row['checks'], material)
+    judged = judged_row(row, facts.get('scenario'))
+    results = checks.run_checks(judged['checks'], material)
     context = verdict_context(row, facts)
     context['aborted'] = None
     context['replayed_from'] = str(directory)
-    verdict = checks.assemble_verdict(row, results, context)
+    verdict = checks.assemble_verdict(judged, results, context)
     (directory / 'verdict.replay.json').write_text(json.dumps(verdict, indent=1) + '\n')
     print_verdict(verdict, directory)
     return 0 if verdict['passed'] else 1
@@ -772,6 +841,10 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument('--lss', required=True, help='published:<version> or dir:<path>')
     run_parser.add_argument('--fault', choices=FAULTS,
                             help='inject a known fault to prove the checks can fail')
+    run_parser.add_argument('--scenario', choices=sorted(SCENARIOS),
+                            help='stage a situation a player meets and judge what the client says')
+    run_parser.add_argument('--brand', choices=sorted(BRAND_PREFIXES), default='lss',
+                            help='which build of the jars under test (vss needs --lss dir:)')
     run_parser.add_argument('--port', type=int, help='server port (default: first free candidate)')
     run_parser.add_argument('--display', type=int, help='private X display number (never 0)')
     run_parser.add_argument('--observe', type=int, default=OBSERVE_SECONDS,

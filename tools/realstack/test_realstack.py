@@ -538,6 +538,58 @@ class CheckTest(OfflineCase):
         self.assertTrue(any('Background-priority disk reads unavailable' in note
                             for note in result.notes))
 
+    def test_scenario_checks(self) -> None:
+        """The "server without the mod" scenario: one notice, in the right brand's words."""
+        def log(*messages: str) -> str:
+            return ''.join(f'[10:00:{second:02d}] [Render thread/INFO]: {message}\n'
+                           for second, message in enumerate(messages))
+        lss = ("[System] [CHAT] [LSS] This server isn't sending distant terrain. It probably "
+               "doesn't run LOD Server Support. Nothing is wrong with your game.")
+        vss = lss.replace('[LSS]', '[VSS]').replace('LOD Server Support', 'Voxy Server Side')
+        notice = checks.check_client_notice
+        self.assertTrue(notice(log('Connecting to 127.0.0.1, 25900', lss), 'no_support', 'LSS').passed)
+        self.assertTrue(notice(log(vss), 'no_support', 'VSS').passed)
+        # NeoForge names the logger; other chat is not a notice.
+        neoforge = f'[10:00:00] [Render thread/INFO] [minecraft/ChatComponent]: {lss}\n'
+        self.assertTrue(notice(neoforge, 'no_support', 'LSS').passed)
+        other = '[System] [CHAT] RealStack joined the game'
+        self.assertIn('no chat notice', notice(log(other), 'no_support', 'LSS').message)
+        # One per connection, and the brand's two names belong together.
+        self.assertIn('at most one', notice(log(lss, lss), 'no_support', 'LSS').message)
+        self.assertIn('prefixed [LSS]', notice(log(lss), 'no_support', 'VSS').message)
+        half = lss.replace('[LSS]', '[VSS]')
+        self.assertIn('does not read', notice(log(half), 'no_support', 'VSS').message)
+        self.assertIn('does not read', notice(log(lss.replace('Nothing is wrong', 'Something is wrong')),
+                                              'no_support', 'LSS').message)
+
+        server = fixture('fabric-26.3-nolss-server.log')
+        self.assertTrue(checks.check_server_ready(server).passed)
+        self.assertFalse(checks.check_server_ready('').passed)
+        self.assertTrue(checks.check_client_joined(server, PLAYER).passed)
+        self.assertFalse(checks.check_client_joined(server, 'Somebody').passed)
+
+        # A scenario replaces the row's checks, in a run and in a replay.
+        row = {'id': 'x', 'checks': ['server_started', 'handshake']}
+        self.assertEqual(realstack.judged_row(row, None), row)
+        judged = realstack.judged_row(row, 'server-without-lss')
+        self.assertEqual(judged['checks'], realstack.SCENARIOS['server-without-lss']['checks'])
+        self.assertIn('client_notice', judged['checks'])
+        self.assertEqual(row['checks'], ['server_started', 'handshake'], 'the row itself is untouched')
+        for scenario in realstack.SCENARIOS.values():
+            self.assertIn(scenario['notice'], checks.NOTICE_TEXTS)
+
+    def test_brand_selects_the_other_build_of_the_same_jar(self) -> None:
+        self.assertEqual(realstack.branded_prefix('lod-server-support-fabric', 'lss'),
+                         'lod-server-support-fabric')
+        self.assertEqual(realstack.branded_prefix('lod-server-support-neoforge', 'vss'),
+                         'voxy-server-side-neoforge')
+        with self.assertRaises(stackfile.StackError):
+            realstack.branded_prefix('something-else', 'vss')
+        names = ['lod-server-support-fabric-0.22.0-beta.1+26.3.jar',
+                 'voxy-server-side-fabric-0.22.0-beta.1+26.3.jar']
+        self.assertEqual(stackfile.choose_built_jar(names, 'voxy-server-side-fabric', '26.3'), names[1])
+        self.assertEqual(stackfile.choose_built_jar(names, 'lod-server-support-fabric', '26.3'), names[0])
+
     def test_screenshot(self) -> None:
         good = self.material('fabric-26.3')['screenshot']
         self.assertTrue(checks.check_screenshot(good).passed)

@@ -55,6 +55,17 @@ A check passes on positive evidence, never on the absence of an error alone. To 
 fail, run a row with `--fault client-without-lss`: the client is staged without the LSS jar and the
 handshake check must go red.
 
+## Scenarios and the other brand
+
+`run <row> --scenario server-without-lss` stages the server without LSS and judges what the client
+tells the player: the server started, the player joined, the client spoke its chat notice exactly
+once and in the expected words, stayed up, and a screenshot was saved. A scenario brings its own
+checks; the row's are not run.
+
+`--brand vss` takes the Voxy Server Side build of the same jars from a gate's `jars/` directory
+(`--lss dir:` only). The notice check then expects that brand's short name as the prefix and its
+full name in the sentence, so a half-rewritten line fails.
+
 ## Add a row
 
 1. `realstack.py pin <modrinth project> --minecraft <version> --loader <loader>` prints the entry
