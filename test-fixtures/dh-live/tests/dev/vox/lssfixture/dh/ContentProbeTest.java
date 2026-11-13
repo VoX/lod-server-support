@@ -9,7 +9,6 @@ import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.world.level.block.Blocks;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.io.TempDir;
-import org.mockito.MockMakers;
 import org.objenesis.ObjenesisStd;
 import java.lang.reflect.Field;
 import java.nio.file.Path;
@@ -26,7 +25,7 @@ class ContentProbeTest {
     @BeforeEach void setup() throws Exception {
         context=Thread.currentThread().getContextClassLoader();Thread.currentThread().setContextClassLoader(getClass().getClassLoader());
         Field field=Minecraft.class.getDeclaredField("instance");field.setAccessible(true);previous=field.get(null);
-        var mc=new ObjenesisStd().newInstance(Minecraft.class);var level=mock(ClientLevel.class,withSettings().mockMaker(MockMakers.SUBCLASS));
+        var mc=new ObjenesisStd().newInstance(Minecraft.class);var level=mock(ClientLevel.class);
         doReturn(ContentProbe.DIM).when(level).dimension();mc.level=level;field.set(null,mc);
         ContentProbe.callbackFailure.set(null);ContentProbe.captureBuffers.clear();ContentProbe.captureSequence.set(0);
         capture=System.getProperty("lss.rig.captureDir");System.setProperty("lss.rig.captureDir",dir.toString());

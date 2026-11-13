@@ -13,4 +13,6 @@ public interface ConfigBuilder {
     BooleanOptionBuilder createBooleanOption(ResourceLocation id);
 
     IntegerOptionBuilder createIntegerOption(ResourceLocation id);
+
+    ExternalButtonOptionBuilder createExternalButtonOption(ResourceLocation id);
 }

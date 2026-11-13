@@ -56,8 +56,9 @@ public interface LoaderServices {
      * absent/unresolvable permission provider answers — the service gate always
      * passes TRUE (its nodes are default-true everywhere), so no provider = serve
      * everyone, the pre-gate behavior; the far-player HIDE nodes pass FALSE (a
-     * grant-model deny-me lever — far-player-render-hardening-plan.md WI-7a), so no
-     * provider = nobody hidden. Implementations NEVER throw; doubt answers
+     * grant model — far-player-render-hardening-plan.md WI-7a; since 0.21.0 a holder
+     * is hidden only while {@code far_players.hide_permission_holders} is on), so no
+     * provider = nobody is a holder. Implementations NEVER throw; doubt answers
      * the default (which is why the hide read is fail-VISIBLE here, unlike Paper's
      * Folia-motivated fail-hidden). Fabric overrides via the reflective fabric-permissions-api
      * bridge; NeoForge via its native PermissionAPI nodes; Paper does not route

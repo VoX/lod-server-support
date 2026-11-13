@@ -1417,7 +1417,7 @@ public class ServiceLifecycleGameTests {
             java.util.UUID uuid, String dimension) {
         return new dev.vox.lss.common.farplayers.FarPlayerBroadcastService.PlayerSnapshot(
                 uuid, "viewer", dimension, 0, 64, 0, 0f, 0f, 0f, (byte) 0, 0, 0, 0,
-                false, false, true, false, 0L, new String[0], new int[0], null);
+                false, false, true, false, false, 0L, new String[0], new int[0], null);
     }
 
     /**
@@ -1457,7 +1457,7 @@ public class ServiceLifecycleGameTests {
                 return true;
             };
             var settings = new dev.vox.lss.common.farplayers.FarPlayerBroadcastService.Settings(
-                    "on", 2048, 0, false, java.util.List.of(), 10);
+                    "on", 2048, 0, false, java.util.List.of(), 10, false);
             var online = java.util.List.of(viewerSnapshot(viewer.getUUID(), world));
             long now = 1_000_000L;
             fp.tick(now, online, settings, sender);
@@ -1640,6 +1640,67 @@ public class ServiceLifecycleGameTests {
             helper.assertTrue(fp.entriesSent() >= 1,
                     "at least the in-range target is served, entries=" + fp.entriesSent());
             helper.assertTrue(fp.bytesSent() > 0, "the dedicated lane counted its bytes");
+        } finally {
+            config.set("far_players.mode", savedMode);
+            config.set("far_players.update_interval_ticks", savedInterval);
+            service.shutdown();
+        }
+        helper.succeed();
+    }
+
+    /**
+     * Mode "required" (hide-permission plan §2b) through the REAL broadcast pass of the
+     * shared core (Fabric, NeoForge and Sponge run it): a player who turned Share My
+     * Position off is told once, in chat, that it does not apply on this server; a player
+     * who shares is told nothing; mode "on" tells nobody. The exact filter arithmetic and
+     * the once-per-connection latch are Tier 1's job (FarPlayerBroadcastServiceTest); this
+     * tier pins that the service's own tick builds the snapshots, reads the live mode and
+     * reaches the player through the system-message lane.
+     */
+    @GameTest(template = "fabric-gametest-api-v1:empty")
+    public void requiredModeTellsAnOverriddenPlayerOnceInChat(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        var server = level.getServer();
+        var viewer = placeMockServerPlayer(helper);
+        var optedOut = placeMockServerPlayer(helper);
+        var sharer = placeMockServerPlayer(helper);
+        var config = new ServiceSettingsFixture();
+        var service = new RequestProcessingService(server, config);
+        String savedMode = config.farPlayers().equals("opt-in") ? "opt_in" : config.farPlayers();
+        int savedInterval = config.farPlayersUpdateIntervalTicks();
+        try {
+            optedOut.setPos(viewer.getX() + 500, viewer.getY(), viewer.getZ());
+            sharer.setPos(viewer.getX() + 600, viewer.getY(), viewer.getZ());
+            var told = new ArrayList<String>();
+            service.setFarPlayerNoticeSenderForTest((player, line) ->
+                    told.add(player.getUUID() + "|" + line.fallback()));
+            LSSServerNetworking.handleHandshake(
+                    new HandshakeC2SPayload(LSSConstants.PROTOCOL_VERSION,
+                            LSSConstants.CAPABILITY_VOXEL_COLUMNS | LSSConstants.CAPABILITY_FAR_PLAYERS),
+                    viewer, service, reply -> { });
+            var fp = service.getFarPlayerService();
+            fp.onPrefs(viewer.getUUID(), new dev.vox.lss.common.farplayers.FarPlayerWire.Prefs(true, 0, 0, true, 0));
+            fp.onPrefs(optedOut.getUUID(), new dev.vox.lss.common.farplayers.FarPlayerWire.Prefs(true, 0, 0, false, 0));
+            fp.onPrefs(sharer.getUUID(), new dev.vox.lss.common.farplayers.FarPlayerWire.Prefs(true, 0, 0, true, 0));
+            config.set("far_players.update_interval_ticks", 2); // the clamp floor — 2 service ticks
+
+            config.set("far_players.mode", "on");
+            service.tick();
+            service.tick();
+            helper.assertTrue(told.isEmpty(), "mode on honors the opt-out: nobody is told, got " + told);
+            helper.assertTrue(!fp.diagLine().contains("overridden="), "mode on: " + fp.diagLine());
+
+            config.set("far_players.mode", "required");
+            for (int i = 0; i < 6; i++) service.tick();
+            String expected = optedOut.getUUID() + "|"
+                    + dev.vox.lss.common.farplayers.FarPlayerBroadcastService.requiredSharingNotice().fallback();
+            helper.assertTrue(told.equals(java.util.List.of(expected)),
+                    "exactly one chat line, to the opted-out player only, got " + told);
+            helper.assertTrue(fp.diagLine().contains("overridden=1"),
+                    "the diag line counts the overridden player: " + fp.diagLine());
+            helper.assertTrue(fp.hasRequiredSharingNotice(optedOut.getUUID())
+                            && !fp.hasRequiredSharingNotice(sharer.getUUID()),
+                    "the per-connection latch holds the overridden player only");
         } finally {
             config.set("far_players.mode", savedMode);
             config.set("far_players.update_interval_ticks", savedInterval);
