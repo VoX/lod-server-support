@@ -1,38 +1,74 @@
-# Compatibility and support-line maintenance
+# Support lines
 
-Run from the repository root with Python 3.11 or newer:
+Main (Minecraft 26.3) is the reference. Each support line is a branch that follows main and records
+the main commit it is synced to. The tiers and why: [decision 0001](../decisions/0001-line-tiers.md).
+The design and its review: [plan](../planning/2026-11-13-line-tiers-and-sync-plan.md).
 
-```sh
-python3 tools/compat/catalog.py validate
-python3 tools/compat/catalog.py render --check
-python3 tools/compat/catalog.py inspect path/to/mod.jar
-python3 tools/lines/lines.py inventory --output /tmp/line-inventory.json
-python3 tools/lines/lines.py check
-python3 tools/lines/lines.py plan path/to/reviewed-batch.json
-python3 tools/verify/verify.py fast common/src/main/java/example.java
+| Role | Lines | Carries | Checked by `tools/compat/ci.py` |
+| --- | --- | --- | --- |
+| reference | 26.3 (`main`) | `config/lines/lines.json` | its own facts, the line table |
+| follower | 1.21.1, 26.2, 1.21.11 | `config/lines/sync.json` | its own facts, and that it is in step with main |
+| frozen | 26.1, 1.21.10 | neither | its own facts |
+
+A line's role is written in its `config/compatibility/line.json` and must agree with the file it
+carries. A follower without `sync.json` is an error, not a frozen line.
+
+## What a follower must keep true
+
+- Every file equals main at the sync point, unless it is listed under `adapted` in `sync.json` or
+  is line-local (`*.md`, `LICENSE`, `docs/`, `config/compatibility/`, `config/lines/`).
+- Every listed file really differs. `lines.py tidy` drops entries that are identical again.
+- Paths under main's `must_match` prefixes (the line tools, the release tools, most of `common`)
+  can never be adapted.
+- The sync point is a commit on main, and only moves forward. Main merges before a port.
+- A fix a follower needs in a shared file goes to main first; then the line syncs. `adapt` is for
+  behaviour that must differ, never for a fix main lacks.
+
+Three things need a written reason, as a commit trailer on the line's branch:
+
+```
+Adapted: <path>: <why>              a shared file becomes line-specific
+Not-ported: <path>: <why>           main changed an adapted file and the line left it alone
+Corpus-regenerated: <path>: <why>   a captured wire corpus changed and main's did not
 ```
 
-`config/compatibility/line.json` belongs to this line. Its facts are checked against `.github/line.env`, Gradle properties and the actual renderer constant. Shipping is not rendering, consumer availability, a support tier, or proof of a live test. `source-refs.json` pins exact commits for all six lines; generated documentation uses this snapshot, never moving branch tips. Fetch missing objects explicitly before offline validation. Before opening a cross-line port PR, make every referenced commit available on the remote; CI refuses unavailable snapshot objects. Creating local implementation branches does not publish them. A current candidate comparison is a separate report and must not put its containing commit ID into a checked-in generated file.
+## Porting
 
-Profiles are immutable dependency candidates. They exclude candidate LSS and fixture artifacts, which are part of a separate run identity. `blocked` means dependency resolution or metadata review remains necessary. A hash or filename alone cannot establish a compatible loader route. Unsupported range syntax requires review rather than guessing. Inspection reads embedded Fabric/Neo metadata and hashes the actual bytes without network activity. Installed historical inventories carry no current pass claim. Validation records must identify the exact feature/scenario and run digest; the newest attempt wins even when older successful evidence is reimported.
-
-The file classification catalog is explicit for production/build/tooling paths. New unclassified files fail checking. Identical files must match across every specified source. Adapted files retain an exact reviewed blob per line: a familiar axis token cannot conceal deleted shared logic. Corpus rows preserve their separate provenance; do not regenerate cross-version capture corpora during a port.
-
-A port batch is JSON with `schema_version: 1`, explicit `targets` mapping line IDs to refs, and an ordered `commits` array of full `commit` SHAs and `prerequisites` SHAs. Merge entries also require a reviewed `mainline` parent index. Planning is read-only. To create a reviewed isolated port:
+In the follower's worktree, on a branch from the support branch:
 
 ```sh
-python3 tools/lines/lines.py prepare reviewed-batch.json \
-  --target 1.21.1 --destination /tmp/lss-reviewed-port --branch port/reviewed-batch
+python3 tools/lines/lines.py port --to <main commit> --dry   # classify only
+python3 tools/lines/lines.py port --to <main commit>         # apply, move the sync point
+python3 tools/lines/lines.py status                          # what still differs
 ```
 
-Preparation refuses dirty sources and existing destinations, never merges target branches, and stops with conflicts intact. Its Git-worktree administrative directory retains `lss-port-state.json` containing original source/target identities, completed picks, and conflict paths. Resolve conflicts with normal Git review, re-run semantic gates, and compare the saved identities before continuing; do not reinterpret an adapted patch as already applied merely from its subject. No push or deployment occurs.
+`port` three-way merges each file main changed into the line's own version. Read every
+`merged_clean` file: a clean merge can still be wrong. Resolve `conflict` files by hand, decide
+each `target_missing` file, then run the line's tests. `status` must be clean before the PR.
 
-The optional CI allowance file, `config/lines/port-batch.json`, serves a different purpose from the ordered cherry-pick proposal above. It requires `schema_version: 1`, `baseline` exactly matching the catalog snapshot, all six `required_targets`, explicit per-target `prerequisites`, and `reviewed_candidate_blobs` mapping each target's changed paths to full Git blob IDs (or JSON null for a reviewed deletion). `final_shared_invariants` lists paths whose reviewed final blobs must be present and identical on every target. Prerequisites must be acyclic. A candidate cannot waive another line's adaptation, a newly unclassified path, or bytes changed after review. A candidate report always leaves `batch_complete` false: after every target is ready, record their fixed source snapshots and run the full explicit-ref cross-line check. Build and live acceptance remain separate gates.
+CI then checks the PR against its target branch. For every adapted file main changed, it replays
+main's change mechanically onto the line's old version. A port that equals the replay passes
+silently. A hand-edited port passes and its difference from the replay is printed in the CI log
+for the reviewer. A file the port left untouched fails unless a `Not-ported:` trailer says why.
 
-`tools/verify/verify.py` provides `fast`, `platform`, `integration` and `full` entry points; add `--run` to execute. Fast selection is advisory. Unknown and shared source/tooling impact choose full platform validation and report that all configured lines require validation. `--run` executes the selected checkout only; repeat the reported gates in the other isolated line checkouts to close cross-line acceptance. Java 21 is required on 1.21.x, Java 25 on 26.x; common tests always use Java 21. Full existing CI/release checks remain required regardless of fast selection.
+## Releases
 
-Full and unknown-impact validation explicitly include the real client-gametest task on all five newer lines; it remains absent on 1.21.1. On Linux, `verify --run` requires `xvfb-run` for that task and explicitly enables Loom’s private-display setting while removing inherited desktop display/authority variables. Loom’s default only chooses Xvfb in CI, so local automation must not rely on that default. The client test uses the null audio backend to avoid the recorded WSL device-open stall; audio behavior is outside this lane. This headless correctness lane does not establish GPU performance.
+A release ships a follower only when its sync point is the release commit on main or a later one;
+`tools/release/tag_chain.sh` refuses to push a follower's tag otherwise. See
+[the release tools](../../tools/release/README.md).
 
-Verification with `--run` takes the existing coarse harness lock before Gradle starts. It refuses an occupied rig or server and uses the owned-process supervisor for cleanup.
+## Frozen lines
 
-The Sponge module (`sponge/`) is built and boot-smoked on every line regardless of its ship flag. Its per-line facts (SpongeVanilla pin, compile API, VanillaGradle version, command elevation) are in [per-version surfaces §Sponge](../planning/per-version-surfaces.md); everything else under `sponge/` is byte-identical across the lines except the two same-FQN twins (`ScopedCarrier`, byte-identical to the line's Fabric copy, and `ChunkSaveDataHook`, the line's save-hook target). A Sponge ship-flag flip touches four files together: `.github/line.env`, the `release_check.py` derivation (26.3 and 26.2) or hand mirror (older support lines), the `ReleaseWorkflowContractTest` value pin, and `config/compatibility/line.json`.
+26.1 and 1.21.10 keep their 0.21.0 branches, tags and published files. They are not synced. A
+crash or security fix is made on the frozen branch itself. Those branches still carry the tooling
+of their time; the first fix on one removes the old cross-line step from its `catalog.yml` and
+sets `"role": "frozen"`, `"support_tier": "frozen"` in its `line.json`.
+
+## Other tools
+
+`python3 tools/compat/catalog.py validate` checks this line's facts against `.github/line.env`,
+Gradle properties and the renderer constant. `catalog.py inspect <jar>` reads a mod jar's embedded
+metadata and hashes its bytes. `tools/verify/verify.py` selects test tasks (`fast`, `platform`,
+`integration`, `full`; add `--run` to execute; a fast selection is advisory). Java 21 builds the
+1.21.x lines and Java 25 the 26.x lines; common tests always run on Java 21. Client gametests run
+on a private display (`xvfb-run`) and are absent on 1.21.1.

@@ -1,5 +1,40 @@
 # Known test flakes and environmental failures
 
+## The rule
+
+A red is explained, not retried. No retry, longer deadline or looser assertion goes in without a
+named mechanism and a test that is red without the fix. 22 of the first 36 entries below ended in a
+code fix, three of them in the mod itself, and a loosened assertion once hid a test that tested
+nothing for three months.
+
+CI retries a failed step once only when every failure of the first attempt matches an open entry in
+`config/test-flakes.json` (`tools/verify/flake_gate.py`). An entry names a cause that cannot be
+fixed in this repository yet and carries an expiry date; past it, the entry allows nothing until the
+cause is fixed or the entry is renewed with a reason. The first attempt's logs are always kept.
+Everything below is the record of what each signature turned out to be.
+
+## Entries
+
+- **`XaeroBandFillTest.aCancelledJobLandsNoTile` (Fabric, Tier 1): a test baseline race, FIXED 2026-11-13. Not a flake: one red on the 1.21.1 line's CI (PR #394, second run).**
+  - **Signature.** `no fill offer: XaeroMap: state=active, queued=2, … band_fill_last=5 0/4 running` after 10 s (`awaitOffered`).
+  - **Mechanism.** `switchTo` starts the band-fill worker on its own thread. `awaitOffered(n)` then read the offer counter as its baseline and waited for `n` more. When the worker had already offered before that read, the target was out of reach: these tests set the queue mark equal to the number they wait for, so the worker stops at the mark and never offers the extra tiles.
+  - **Reach.** Tests only; four tests in the class share the shape (`aSwitchADimensionChangeADenyAndASessionEndCancelTheJob`, `fillOffersWaitBelowTheQueueMarkAndLiveArrivalsStillEnqueue`, `fillTilesAreLeaseFreeAndNeverReadAsBackpressure`).
+  - **Fix.** `switchTo` records the baseline before it switches, and `awaitOffered` counts from it.
+  - **Rate.** A 300 ms diagnostic pause before the baseline read made all four fail on the first run with this message; with the fix the same paused run passed 32 of 32. The pause is not in the tree.
+  - **Action.** A red with this signature now means the worker really stopped offering. Do not re-run it away.
+  - **Evidence.** `~/.local/state/lss-program-2026-11/evidence/pr394-second-attempt/`.
+
+- **`:fabric:compileJava` "Could not find com.google.guava:guava-parent:…" (or another parent POM) while resolving the compile classpath: the dependency repository failed on the runner, environmental (2026-11-13, PR #397, 1.21.11).** The parent POMs named in the error existed on Maven Central (HTTP 200 minutes later) and the same branch had built an hour earlier with the same dependencies. Action: confirm the named POM answers 200 from `repo.maven.apache.org`, then re-run the job; if it answers 404, a dependency pin is wrong and that is a real failure.
+
+- **`OffThreadProcessorDiskResultTest.notFoundInvalidatesAStaleTimestampStamp` (common, Tier 1): a test phase-order race, FIXED 2026-11-13. Not a flake: one red on the 1.21.1 line's CI (PR #394, a change that touched no Java).**
+  - **Signature.** `timed out waiting for: re-read submitted` after the full 30 s (`waitFor`, `OffThreadProcessorDiskResultTest.java:240`).
+  - **Mechanism.** A processing cycle runs: phase-1 events, disk results (the column is enqueued here), generation outcomes, the late drain of dirty events, then routing. The test waited for the enqueued column, then from its own thread queued the done-bit clear and enqueued the reopening request. When both landed between that same cycle's late drain and its routing, the request routed against the still-set done-bit, no disk read was submitted, and nothing asked again, so the wait could never finish.
+  - **Reach.** Tests only. In production the dirty broadcast makes the client ask again after the clear. The same shape was in `unservableInvalidatesAStaleTimestampStamp` (added in 0.21.0) and is fixed with it.
+  - **Fix.** Both tests issue the clear and the request through `beforeRouteAction`, which runs on the processing thread ahead of a cycle's late drain, so the clear is always applied before the request routes, whichever cycle picks the action up.
+  - **Rate.** A 150 ms diagnostic pause between the late drain and routing reproduced the exact timeout on the first run; with the fix the same paused control passed (0.65 s). The pause is not in the tree.
+  - **Action.** A red with this signature now means the done-bit clear or the late drain regressed. Do not re-run it away.
+  - **Evidence.** `~/.local/state/lss-program-2026-11/evidence/pr394-first-attempt/` (the CI test report).
+
 - **`XaeroLoadPixelParityTest` (16 tests) and `JourneyMapDecoderParityTest` (3 tests), `AssertionError` in Mockito's `MockUtil.getMockHandlerOrNull` (Fabric, Tier 1): a second mock maker in the test JVM, FIXED 2026-11-12 (0.21.0 train). Not a flake: 19 reds in one 26.1 full gate, green on the re-run.**
   - **Signature.** `java.lang.AssertionError` with no message at `org.mockito.internal.util.MockUtil.getMockHandlerOrNull(MockUtil.java:160)`, reached from the first `thenReturn` on a mocked `Level` (`XaeroLoadPixelParityTest.assertParity`, `JourneyMapDecoderParityTest.decode`). Every test that stubs a `Level` fails and nothing else does.
   - **Mechanism.** `DhClientSessionTest` built its Minecraft doubles with `withSettings().mockMaker(MockMakers.SUBCLASS)`. Naming a maker registers it for the whole JVM, beside the default inline maker. To find a mock's handler, Mockito 5.20.0 asks each registered maker in the iteration order of a hash map keyed by the maker's `Class`, and asserts that the first maker to recognise the mock is the one that made it. The subclass maker recognises every generated subclass (`mock instanceof MockAccess`), and a generated subclass is what the inline maker builds for an abstract type or an interface. `Level` is abstract. Once the subclass maker was registered, a stubbing on `mock(Level.class)` threw when that maker was walked first and passed when it was not: the identity hashes of two `Class` objects decide. A mock of a concrete class is an instance of that class, which the subclass maker does not recognise, so `VoxyVanillaCoverageTest` and `ChunkDiskReaderTest` stayed green in the same JVM.
