@@ -37,8 +37,8 @@ PLAYER_JOINED = '{player} joined the game'
 NOTICE = re.compile(r'^(?:\[System\] )?\[CHAT\] \[(?P<short>LSS|VSS)\] (?P<text>.*)$')
 BRANDS = {'LSS': 'LOD Server Support', 'VSS': 'Voxy Server Side'}
 NOTICE_TEXTS = {
-    'no_support': "This server isn't sending distant terrain. It probably doesn't have this mod "
-                  "installed. Nothing is wrong with your game.",
+    'no_support': "This server doesn't seem to have this mod installed, so there is nothing for "
+                  "it to show here. Nothing is wrong with your game.",
 }
 CRASH_MARKERS = ('---- Minecraft Crash Report ----', '#@!@# Game crashed!',
                  'A fatal error has been detected by the Java Runtime Environment')
