@@ -30,12 +30,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * The cleanup ran there, against state the client thread was still ticking and drawing with:
  * the request manager's maps, the far-player proxies, the Distant Horizons session. So the
  * Fabric client no longer listens to that event. {@code ClientDisconnectHook} runs the cleanup
- * from {@code ClientPacketListener.close()}, which the game calls on the client thread on every
- * way out of a server, where NeoForge posts its logged-out event too.
+ * at the head of {@code Minecraft.disconnect}, which the game calls on the client thread on
+ * every way out of a server and where NeoForge posts its logged-out event too.
  *
  * <p>The mixin source is read as text (mixin-package classes refuse direct classloading under
  * the mixin bootstrap); the game's side is read from its classes, so a Minecraft update that
- * moves the call turns this red instead of silently unhooking the cleanup.
+ * changes the overloads turns this red instead of silently unhooking the cleanup.
  */
 class ClientDisconnectHookContractTest {
 
@@ -43,6 +43,7 @@ class ClientDisconnectHookContractTest {
     private static final String MINECRAFT = "net/minecraft/client/Minecraft";
     private static final Pattern INJECT =
             Pattern.compile("@Inject\\(((?:[^()]|\\([^()]*\\))*)\\)", Pattern.DOTALL);
+    private static final Pattern METHOD = Pattern.compile("method = \"(disconnect\\([^\"]*\\)V)\"");
 
     private static String source(String repoPath) throws IOException {
         return Files.readString(SourcePaths.repoFile(repoPath));
@@ -58,51 +59,71 @@ class ClientDisconnectHookContractTest {
         return node;
     }
 
-    @Test
-    void theHookIsAtTheHeadOfTheListenersClose() throws IOException {
+    /** The descriptor the mixin injects into, as written in its source. */
+    private static String hookedMethod() throws IOException {
         String mixin = source("fabric/src/main/java/dev/vox/lss/mixin/ClientDisconnectHook.java");
-        assertTrue(mixin.contains("@Mixin(ClientPacketListener.class)"));
+        assertTrue(mixin.contains("@Mixin(Minecraft.class)"));
         var inject = INJECT.matcher(mixin);
         assertTrue(inject.find(), "one @Inject");
         String body = inject.group(1).replaceAll("\\s+", " ");
         assertFalse(inject.find(), "exactly one @Inject");
-        assertTrue(body.contains("method = \"close()V\""), body);
         assertTrue(body.contains("at = @At(\"HEAD\")"), body);
         assertTrue(mixin.contains("LSSClientNetworking.onConnectionClosing();"));
-
-        assertTrue(gameClass(LISTENER).methods.stream()
-                        .anyMatch(m -> m.name.equals("close") && m.desc.equals("()V")),
-                "ClientPacketListener.close() is gone: re-derive where the game closes its play connection");
+        var method = METHOD.matcher(body);
+        assertTrue(method.find(), "a full descriptor, so resolution cannot drift to another overload: " + body);
+        return method.group(1);
     }
 
-    /** One caller, the game's own disconnect, and the call comes before the level is cleared. */
+    /**
+     * The game has several {@code disconnect} overloads that funnel into one. The hook must be
+     * on that one: on an outer overload it would miss the callers of the inner one, and on
+     * every overload it would run the cleanup several times per disconnect.
+     */
     @Test
-    void theGameClosesTheListenerOnlyFromItsDisconnectAndBeforeTheLevelIsCleared() throws IOException {
-        ClassNode minecraft = gameClass(MINECRAFT);
-        List<String> callers = new ArrayList<>();
-        for (MethodNode method : minecraft.methods) {
-            List<AbstractInsnNode> insns = List.of(method.instructions.toArray());
-            int close = -1, levelCleared = -1;
-            for (int i = 0; i < insns.size(); i++) {
-                AbstractInsnNode insn = insns.get(i);
-                if (insn instanceof MethodInsnNode call && call.owner.equals(LISTENER)
-                        && call.name.equals("close") && call.desc.equals("()V")) {
-                    assertEquals(-1, close, "one close() in " + method.name + method.desc);
-                    close = i;
-                }
-                if (levelCleared < 0 && insn instanceof FieldInsnNode put && put.getOpcode() == Opcodes.PUTFIELD
-                        && put.owner.equals(MINECRAFT) && put.name.equals("level")) {
-                    levelCleared = i;
+    void theHookIsAtTheHeadOfTheOverloadTheOthersReach() throws IOException {
+        String hooked = hookedMethod();
+        List<String> innermost = new ArrayList<>();
+        List<String> delegating = new ArrayList<>();
+        for (MethodNode method : gameClass(MINECRAFT).methods) {
+            if (!method.name.equals("disconnect")) continue;
+            boolean callsAnotherDisconnect = false;
+            for (AbstractInsnNode insn : method.instructions.toArray()) {
+                if (insn instanceof MethodInsnNode call && call.owner.equals(MINECRAFT)
+                        && call.name.equals("disconnect")) {
+                    callsAnotherDisconnect = true;
                 }
             }
-            if (close < 0) continue;
-            callers.add(method.name + method.desc);
-            assertEquals("disconnect", method.name, "close() is called from the game's disconnect");
-            assertTrue(levelCleared > close,
-                    "the level is cleared after close() in " + method.name + method.desc
-                            + ": the cleanup needs the level it was working for");
+            (callsAnotherDisconnect ? delegating : innermost).add(method.name + method.desc);
         }
-        assertEquals(1, callers.size(), "one caller of ClientPacketListener.close(): " + callers);
+        assertEquals(List.of(hooked), innermost,
+                "exactly one disconnect overload does the work, and it is the hooked one; the others ("
+                        + delegating + ") only call on");
+    }
+
+    /** The hooked overload is the real teardown: it closes the play listener and clears the level. */
+    @Test
+    void theHookedOverloadClosesTheListenerAndClearsTheLevel() throws IOException {
+        String hooked = hookedMethod();
+        ClassNode minecraft = gameClass(MINECRAFT);
+        List<String> closers = new ArrayList<>();
+        for (MethodNode method : minecraft.methods) {
+            boolean closes = false, clearsLevel = false;
+            for (AbstractInsnNode insn : method.instructions.toArray()) {
+                if (insn instanceof MethodInsnNode call && call.owner.equals(LISTENER)
+                        && call.name.equals("close") && call.desc.equals("()V")) {
+                    closes = true;
+                }
+                if (insn instanceof FieldInsnNode put && put.getOpcode() == Opcodes.PUTFIELD
+                        && put.owner.equals(MINECRAFT) && put.name.equals("level")) {
+                    clearsLevel = true;
+                }
+            }
+            if (!closes) continue;
+            closers.add(method.name + method.desc);
+            assertTrue(clearsLevel, method.name + method.desc + " also clears the level");
+        }
+        assertEquals(List.of(hooked), closers,
+                "the play listener is closed from the hooked overload and nowhere else in Minecraft");
     }
 
     @Test

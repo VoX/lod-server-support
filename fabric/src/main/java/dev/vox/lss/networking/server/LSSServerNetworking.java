@@ -217,19 +217,26 @@ public class LSSServerNetworking {
         // the generation service's active map, the far-player and region-summary state, the
         // service gate. Run from a netty thread it raced the tick, and a real-stack run on
         // 2026-11-13 crashed the server there (ConcurrentModificationException in
-        // ChunkGenerationService.tick, a player kicked with 40 generations in flight). So it
-        // always runs on the server thread; execute() runs it at once when already there.
-        // Tasks run in order, so the cleanup still precedes anything a later connection of
-        // the same player does.
+        // ChunkGenerationService.tick, a player kicked with 40 generations in flight). So the
+        // event body reads the id and hands the rest to the server thread. execute() runs it
+        // there: at once when called on that thread outside a task, queued otherwise. It has
+        // run before the same player can be back, because vanilla holds a second login of a
+        // profile until the first is out of the player list. Once the server has stopped,
+        // execute() runs a task on the thread that called it: see onDisconnect.
         ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
             java.util.UUID uuid = handler.getPlayer().getUUID();
-            server.execute(() -> onDisconnect(uuid));
+            server.execute(() -> onDisconnect(server, uuid));
         });
     }
 
-    /** The connection of {@code uuid} ended. Server thread only (see the DISCONNECT registration). */
-    private static void onDisconnect(java.util.UUID uuid) {
-        var service = requestService;
+    /**
+     * The connection of {@code uuid} ended (see the DISCONNECT registration). On the server
+     * thread, with one exception: a stopped server runs the task on the calling network
+     * thread. The service is then shutting down, or shut down, on the server thread and drops
+     * every player's state itself, so only the thread-safe sweep runs here.
+     */
+    private static void onDisconnect(net.minecraft.server.MinecraftServer server, java.util.UUID uuid) {
+        var service = server.isSameThread() ? requestService : null;
         if (service != null) {
             service.removePlayer(uuid);
             // Network-level: the disconnect drops the compat session identities

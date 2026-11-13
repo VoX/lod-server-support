@@ -3043,31 +3043,41 @@ public class ServiceLifecycleGameTests {
         var live = LSSServerNetworking.getRequestService();
         helper.assertTrue(live != null, "live service required: the event handler cleans it");
         var mock = placeMockServerPlayer(helper);
-        // Connection-scoped state the cleanup drops: a kept "do not share my position".
         int before = live.getFarPlayerService().optedOut();
-        live.getFarPlayerService().onPrefs(mock.getUUID(),
-                new dev.vox.lss.common.farplayers.FarPlayerWire.Prefs(true, 0, 0, false, 0));
-        helper.assertTrue(live.getFarPlayerService().optedOut() == before + 1, "premise: the preference is kept");
-
-        var failure = new java.util.concurrent.atomic.AtomicReference<Throwable>();
-        var otherThread = new Thread(() -> {
-            try {
-                net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents.DISCONNECT.invoker()
-                        .onPlayDisconnect(mock.connection, server);
-            } catch (Throwable t) {
-                failure.set(t);
-            }
-        }, "lss-test-network-thread");
-        otherThread.start();
+        boolean handedOver = false;
         try {
-            otherThread.join(10_000);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
+            // Connection-scoped state the cleanup drops: a kept "do not share my position".
+            live.getFarPlayerService().onPrefs(mock.getUUID(),
+                    new dev.vox.lss.common.farplayers.FarPlayerWire.Prefs(true, 0, 0, false, 0));
+            helper.assertTrue(live.getFarPlayerService().optedOut() == before + 1, "premise: the preference is kept");
+
+            var failure = new java.util.concurrent.atomic.AtomicReference<Throwable>();
+            var otherThread = new Thread(() -> {
+                try {
+                    net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents.DISCONNECT.invoker()
+                            .onPlayDisconnect(mock.connection, server);
+                } catch (Throwable t) {
+                    failure.set(t);
+                }
+            }, "lss-test-network-thread");
+            otherThread.start();
+            try {
+                otherThread.join(10_000);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            helper.assertTrue(!otherThread.isAlive() && failure.get() == null, "the event returned: " + failure.get());
+            // The server thread is right here, inside this test: nothing it owns may have changed.
+            helper.assertTrue(live.getFarPlayerService().optedOut() == before + 1,
+                    "the cleanup must not run on the thread that fired the event");
+            handedOver = true;
+        } finally {
+            if (!handedOver) {
+                // A failed assertion must not leave the mock or its preference in the shared server.
+                live.getFarPlayerService().onDisconnect(mock.getUUID());
+                server.getPlayerList().remove(mock);
+            }
         }
-        helper.assertTrue(!otherThread.isAlive() && failure.get() == null, "the event returned: " + failure.get());
-        // The server thread is right here, inside this test: nothing it owns may have changed.
-        helper.assertTrue(live.getFarPlayerService().optedOut() == before + 1,
-                "the cleanup must not run on the thread that fired the event");
         helper.runAfterDelay(3, () -> {
             try {
                 helper.assertTrue(live.getFarPlayerService().optedOut() == before,

@@ -159,10 +159,11 @@ public class LSSClientNetworking {
     }
 
     /**
-     * The client is closing its play connection ({@code ClientDisconnectHook}): the disconnect
-     * cleanup, on the client thread, before the level is torn down. Contained, because it runs
-     * inside the game's own disconnect: a failure here is logged and the player still gets
-     * out; the next join's defensive teardown covers what was left.
+     * The client is leaving its server or world ({@code ClientDisconnectHook}, at the head of
+     * the game's own disconnect): the disconnect cleanup, on the client thread, before the
+     * level is torn down. Also called when there was no session; the cleanup is a no-op then.
+     * Contained, because it runs inside the game's disconnect: a failure here is logged and
+     * the player still gets out; the next join's defensive teardown covers what was left.
      */
     public static void onConnectionClosing() {
         try {

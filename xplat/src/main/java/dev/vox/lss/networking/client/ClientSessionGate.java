@@ -302,9 +302,10 @@ final class ClientSessionGate {
         this.ownWorld = localIntegratedServer;
         this.receiveEnabled = receiveServerLods;
         this.pendingWithdrawal = null;
-        // Defensive: under Fabric's lifecycle DISCONNECT always precedes the next JOIN,
-        // but if a manager ever survived to here, dropping it without teardown would lose
-        // its cache save. Self-sufficiency over the lifecycle assumption.
+        // Defensive: the disconnect cleanup normally precedes the next JOIN, but a proxy
+        // moving the player between servers runs none (play → configuration → play), and
+        // dropping a manager that survived to here without teardown would lose its cache
+        // save. Self-sufficiency over the lifecycle assumption.
         if (this.requestManager != null) {
             teardownManager(this.requestManager);
         }

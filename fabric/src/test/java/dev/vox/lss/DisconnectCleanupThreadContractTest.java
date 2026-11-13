@@ -22,8 +22,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * {@code ChunkGenerationService.tick}, a player kicked with 40 generations in flight). The
  * handler had run where the event fired since the first release.
  *
- * <p>Source-flavored: the event needs a live server and a real connection. NeoForge's
- * logged-out event and Paper's quit mailbox already run their cleanup on the owning thread.
+ * <p>One exception, and it is deliberate: once the server has stopped, {@code execute} runs a
+ * task on the thread that called it. The cleanup then leaves the service alone (its shutdown,
+ * on the server thread, drops every player's state) and only runs the thread-safe sweep.
+ *
+ * <p>Source-flavored: the event needs a live server and a real connection; the gametest
+ * {@code aDisconnectFiredOffTheServerThreadIsCleanedUpOnIt} fires it from another thread.
+ * NeoForge's logged-out event and Paper's quit mailbox already run their cleanup on the owning
+ * thread.
  */
 class DisconnectCleanupThreadContractTest {
 
@@ -36,13 +42,14 @@ class DisconnectCleanupThreadContractTest {
         String source = normalized("fabric/src/main/java/dev/vox/lss/networking/server/LSSServerNetworking.java");
         String registration = "ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> { "
                 + "java.util.UUID uuid = handler.getPlayer().getUUID(); "
-                + "server.execute(() -> onDisconnect(uuid)); });";
+                + "server.execute(() -> onDisconnect(server, uuid)); });";
         assertTrue(source.contains(registration),
                 "the event body reads the id and hands everything else to the server thread");
         assertEquals(1, source.split("ServerPlayConnectionEvents\\.DISCONNECT\\.register", -1).length - 1,
                 "one registration");
         // Everything that mutates the service is inside onDisconnect, which only that task calls.
-        int method = source.indexOf("private static void onDisconnect(java.util.UUID uuid) {");
+        int method = source.indexOf(
+                "private static void onDisconnect(net.minecraft.server.MinecraftServer server, java.util.UUID uuid) {");
         assertTrue(method > source.indexOf(registration), "the cleanup is its own method");
         String cleanup = source.substring(method);
         for (String call : new String[]{"service.removePlayer(uuid);",
@@ -56,9 +63,24 @@ class DisconnectCleanupThreadContractTest {
             assertFalse(source.substring(0, method).contains(call.replace("uuid", "handler.getPlayer().getUUID()")),
                     "not in the event body: " + call);
         }
-        // A bare call (not service.x().onDisconnect(uuid)) exists once: in the server-thread task.
-        assertEquals(1, source.split("(?<![.\\w])onDisconnect\\(uuid\\)", -1).length - 1,
-                "called from the server-thread task and nowhere else");
+        assertEquals(1, source.split("(?<![.\\w])onDisconnect\\(server, uuid\\)", -1).length - 1,
+                "called from the handed-over task and nowhere else");
+    }
+
+    /** A stopped server runs the handed-over task on the calling network thread. */
+    @Test
+    void offTheServerThreadTheCleanupLeavesTheServiceAlone() throws IOException {
+        String source = normalized("fabric/src/main/java/dev/vox/lss/networking/server/LSSServerNetworking.java");
+        String cleanup = source.substring(source.indexOf(
+                "private static void onDisconnect(net.minecraft.server.MinecraftServer server, java.util.UUID uuid) {"));
+        int guard = cleanup.indexOf("var service = server.isSameThread() ? requestService : null;");
+        assertTrue(guard >= 0, "the service is only touched on the server thread");
+        assertTrue(guard < cleanup.indexOf("service.removePlayer(uuid);"), "…and the guard comes first");
+        assertEquals(1, cleanup.split("requestService", -1).length - 1, "one read of the live service");
+        // The sweep that runs on any thread is a concurrent map's remove.
+        String glue = normalized("xplat/src/main/java/dev/vox/lss/networking/server/ServerReceiverGlue.java");
+        assertTrue(glue.contains("private static final ConcurrentHashMap<java.util.UUID, Integer> CLIENT_DATA_VERSIONS"));
+        assertTrue(glue.contains("public static void sweepClientInfo(java.util.UUID uuid) { CLIENT_DATA_VERSIONS.remove(uuid); }"));
     }
 
     @Test
