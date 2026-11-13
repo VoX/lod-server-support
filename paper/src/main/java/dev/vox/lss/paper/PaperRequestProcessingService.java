@@ -1009,20 +1009,58 @@ public class PaperRequestProcessingService {
          *  caller also records as the session's last-sent flags. */
         void send(ServerPlayer player, PaperConfig config, boolean enabled, int capabilities,
                   boolean denyMapIngestion) throws Exception;
+
+        /** The same frame with the reason it says "not here" (0.23.0 plan §3): one
+         *  {@code SESSION_FLAG_OFF_*} bit or 0. The service calls this form. A sender that only
+         *  records the answer keeps implementing the form above; the production sender puts
+         *  the reason on the wire. */
+        default void send(ServerPlayer player, PaperConfig config, boolean enabled, int offReason,
+                          int capabilities, boolean denyMapIngestion) throws Exception {
+            send(player, config, enabled, capabilities, denyMapIngestion);
+        }
     }
 
-    private SessionConfigSender sessionConfigSender = (player, cfg, enabled, capabilities, denyMapIngestion) ->
+    private SessionConfigSender sessionConfigSender = new SessionConfigSender() {
+        @Override
+        public void send(ServerPlayer player, PaperConfig cfg, boolean enabled, int capabilities,
+                         boolean denyMapIngestion) {
+            send(player, cfg, enabled, 0, capabilities, denyMapIngestion);
+        }
+        @Override
+        public void send(ServerPlayer player, PaperConfig cfg, boolean enabled, int offReason,
+                         int capabilities, boolean denyMapIngestion) {
             PaperPayloadHandler.sendSessionConfig(player.getBukkitEntity(),
-                    LSSConstants.PROTOCOL_VERSION, enabled,
+                    LSSConstants.PROTOCOL_VERSION, enabled, offReason,
                     PaperWorldLod.distance(cfg, player), generationEnabledForSession(),
                     capabilities, denyMapIngestion);
+        }
+    };
 
-    /** Every service-side SessionConfig send (all version 20): the per-player decision,
-     *  the send, then the last-sent record (map-ingestion permission plan §3.3 — only on a
-     *  successful send; a no-op for a session without the bit). */
+    /** Every service-side SessionConfig send to a REGISTERED session (all version 20): the
+     *  per-player decision, the send, then the last-sent record (map-ingestion permission plan
+     *  §3.3 — only on a successful send; a no-op for a session without the bit). The reason a
+     *  registered session is told "not here" is the service switch or this world's distance
+     *  (0.23.0 plan §3); the permission gate's revocation goes through
+     *  {@link #sendGateRevocation}. */
     private void sendSessionConfig(ServerPlayer player, boolean enabled, int capabilities,
                                    boolean denyMapIngestion) throws Exception {
-        this.sessionConfigSender.send(player, this.config, enabled, capabilities, denyMapIngestion);
+        sendWithReason(player, enabled, dev.vox.lss.common.SessionOffReason.of(this.config.enabled(), false,
+                this.config.showPermissionRefusal(), PaperWorldLod.distance(this.config, player) <= 0),
+                capabilities, denyMapIngestion);
+    }
+
+    /** The permission gate took the service away: the player is told so when the operator
+     *  allows it, and nothing otherwise (never the world: this player gets no later pushes
+     *  that could correct it). */
+    private void sendGateRevocation(ServerPlayer player, int capabilities,
+                                    boolean denyMapIngestion) throws Exception {
+        sendWithReason(player, false, dev.vox.lss.common.SessionOffReason.of(this.config.enabled(), true,
+                this.config.showPermissionRefusal(), false), capabilities, denyMapIngestion);
+    }
+
+    private void sendWithReason(ServerPlayer player, boolean enabled, int offReason, int capabilities,
+                                boolean denyMapIngestion) throws Exception {
+        this.sessionConfigSender.send(player, this.config, enabled, offReason, capabilities, denyMapIngestion);
         this.serviceGateState.noteMapFlagsSent(player.getUUID(), LSSConstants.PROTOCOL_VERSION,
                 capabilities, denyMapIngestion);
     }
@@ -1124,7 +1162,7 @@ public class PaperRequestProcessingService {
                 if (!gateState.bumpRevocationStreak(uuid)) continue;
                 try {
                     boolean denyMapIngestion = denyMapIngestionFor(player);
-                    sendSessionConfig(player, false, state.getCapabilities(), denyMapIngestion);
+                    sendGateRevocation(player, state.getCapabilities(), denyMapIngestion);
                 } catch (Exception e) {
                     LSSLogger.error("Service-gate disable push failed for "
                             + player.getName().getString(), e);

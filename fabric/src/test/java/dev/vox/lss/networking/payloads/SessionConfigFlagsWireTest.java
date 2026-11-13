@@ -137,6 +137,55 @@ class SessionConfigFlagsWireTest {
         assertEquals(0, SessionConfigS2CPayload.sessionFlagsFor(BIT, false));
     }
 
+    // ---- 0.23.0 plan §3: the reason an answer says "not here" ----
+
+    @Test
+    void aReasonRidesOnlyAFrameThatAlreadyCarriesFlagsAndSaysNotHere() {
+        var off = SessionConfigS2CPayload.forSession(
+                LSSConstants.PROTOCOL_VERSION, false, 64, false, 4554, NEW_CAPS, false);
+        assertEquals(V20_OFF_64_NOGEN_DV4554 + "00", hex(off));
+        assertEquals(V20_OFF_64_NOGEN_DV4554 + "02", hex(off.withOffReason(LSSConstants.SESSION_FLAG_OFF_SERVER)));
+        assertEquals(V20_OFF_64_NOGEN_DV4554 + "04", hex(off.withOffReason(LSSConstants.SESSION_FLAG_OFF_WORLD)));
+        assertEquals(V20_OFF_64_NOGEN_DV4554 + "08", hex(off.withOffReason(LSSConstants.SESSION_FLAG_OFF_PERMISSION)));
+        assertEquals(V20_OFF_64_NOGEN_DV4554 + "05", hex(SessionConfigS2CPayload.forSession(
+                LSSConstants.PROTOCOL_VERSION, false, 64, false, 4554, NEW_CAPS, true)
+                .withOffReason(LSSConstants.SESSION_FLAG_OFF_WORLD)), "beside the map bit");
+        assertEquals(V20_OFF_64_NOGEN_DV4554 + "02", hex(off.withOffReason(0x43)),
+                "only reason bits get through; the map bit comes from the decision alone");
+        assertEquals(hex(off), hex(off.withOffReason(0)), "no reason: the same bytes");
+        // An enabled answer never carries a reason.
+        assertEquals(V20_ON_512_GEN_DV4554 + "00", hex(SessionConfigS2CPayload.forSession(
+                LSSConstants.PROTOCOL_VERSION, true, 512, true, 4554, NEW_CAPS, false)
+                .withOffReason(LSSConstants.SESSION_FLAG_OFF_SERVER)));
+        // A session without the bit, and every echo: the 0.18.0 bytes, whatever the reason.
+        for (int reason : new int[]{LSSConstants.SESSION_FLAG_OFF_SERVER, LSSConstants.SESSION_FLAG_OFF_WORLD,
+                LSSConstants.SESSION_FLAG_OFF_PERMISSION}) {
+            assertEquals(V20_OFF_64_NOGEN_DV4554, hex(SessionConfigS2CPayload.forSession(
+                    LSSConstants.PROTOCOL_VERSION, false, 64, false, 4554, OLD_CAPS, true).withOffReason(reason)),
+                    "a 0.18.0 client hard-kicks on any trailing byte");
+            assertEquals(V19_OFF_512_GEN, hex(SessionConfigS2CPayload.forSession(
+                    LSSConstants.V19_COMPAT_PROTOCOL_VERSION, false, 512, true, 4554, NEW_CAPS, false).withOffReason(reason)));
+            assertEquals(V18_OFF_512_GEN, hex(SessionConfigS2CPayload.forSession(
+                    LSSConstants.V18_COMPAT_PROTOCOL_VERSION, false, 512, true, 4554, NEW_CAPS, false).withOffReason(reason)));
+        }
+    }
+
+    @Test
+    void aClientFrom019To022ReadsTheMapBitAloneFromAReasonedFrame() {
+        // Those clients test bit 0 and nothing else (ClientSessionGate, unchanged since 0.19.0).
+        var reasoned = decode(V20_OFF_64_NOGEN_DV4554 + "0e");
+        assertEquals(0xE, reasoned.sessionFlags());
+        assertEquals(0, reasoned.sessionFlags() & LSSConstants.SESSION_FLAG_DENY_MAP_INGESTION,
+                "every reason bit set, and the map request reads as not armed");
+        assertEquals(LSSConstants.SESSION_FLAG_DENY_MAP_INGESTION,
+                decode(V20_OFF_64_NOGEN_DV4554 + "0f").sessionFlags() & LSSConstants.SESSION_FLAG_DENY_MAP_INGESTION);
+        // This client reads the reason through one function.
+        assertEquals(LSSConstants.SESSION_FLAG_OFF_WORLD, dev.vox.lss.common.SessionOffReason.read(
+                false, decode(V20_OFF_64_NOGEN_DV4554 + "05").sessionFlags()));
+        assertEquals(0, dev.vox.lss.common.SessionOffReason.read(false, decode(V20_OFF_64_NOGEN_DV4554).sessionFlags()),
+                "a frame without flags says nothing");
+    }
+
     @Test
     void decodeReadsTheFlagsAndTreatsAbsenceAsUnchanged() {
         var plain = decode(V20_ON_512_GEN_DV4554);

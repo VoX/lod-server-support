@@ -518,6 +518,45 @@ public class LSSPaperPlugin extends JavaPlugin implements PluginMessageListener,
         void send(HandshakeGate.WireDialect dialect, boolean enabled, int lodDistanceChunks,
                   int syncCap, int genCap, boolean generationEnabled, int capabilities,
                   boolean keepDialectMark);
+
+        /** The same reply with the reason it says "not here" (0.23.0 plan §3): one
+         *  {@code SESSION_FLAG_OFF_*} bit or 0. The handshake core calls this form. A sender
+         *  that only records the answer keeps implementing the form above; the production
+         *  sender is built with {@link #reasoned} and puts the reason on the wire. */
+        default void send(HandshakeGate.WireDialect dialect, boolean enabled, int offReason,
+                          int lodDistanceChunks, int syncCap, int genCap, boolean generationEnabled,
+                          int capabilities, boolean keepDialectMark) {
+            send(dialect, enabled, lodDistanceChunks, syncCap, genCap, generationEnabled, capabilities,
+                    keepDialectMark);
+        }
+
+        /** A sender whose one body takes the reason. */
+        static SessionConfigSender reasoned(ReasonedSessionConfigSender body) {
+            return new SessionConfigSender() {
+                @Override
+                public void send(HandshakeGate.WireDialect dialect, boolean enabled, int lodDistanceChunks,
+                                 int syncCap, int genCap, boolean generationEnabled, int capabilities,
+                                 boolean keepDialectMark) {
+                    body.send(dialect, enabled, 0, lodDistanceChunks, syncCap, genCap, generationEnabled,
+                            capabilities, keepDialectMark);
+                }
+                @Override
+                public void send(HandshakeGate.WireDialect dialect, boolean enabled, int offReason,
+                                 int lodDistanceChunks, int syncCap, int genCap, boolean generationEnabled,
+                                 int capabilities, boolean keepDialectMark) {
+                    body.send(dialect, enabled, offReason, lodDistanceChunks, syncCap, genCap,
+                            generationEnabled, capabilities, keepDialectMark);
+                }
+            };
+        }
+    }
+
+    /** The production handshake reply: {@link SessionConfigSender} with the reason. */
+    @FunctionalInterface
+    interface ReasonedSessionConfigSender {
+        void send(HandshakeGate.WireDialect dialect, boolean enabled, int offReason, int lodDistanceChunks,
+                  int syncCap, int genCap, boolean generationEnabled, int capabilities,
+                  boolean keepDialectMark);
     }
 
     /**
@@ -579,9 +618,10 @@ public class LSSPaperPlugin extends JavaPlugin implements PluginMessageListener,
         handleHandshake(data, nmsPlayer.getName().getString(), nmsPlayer, this.lssConfig, service != null,
                 viaProtocol, net.minecraft.SharedConstants.getProtocolVersion(),
                 serviceGate,
-                (dialect, enabled, lodDistanceChunks, syncCap, genCap, generationEnabled,
-                 capabilities, keepDialectMark) -> {
-                    if (service != null) generationEnabled = service.generationEnabledForSession();
+                SessionConfigSender.reasoned((dialect, enabled, offReason, lodDistanceChunks, syncCap, genCap,
+                 generationEnabledByConfig, capabilities, keepDialectMark) -> {
+                    boolean generationEnabled = service != null
+                            ? service.generationEnabledForSession() : generationEnabledByConfig;
                     // A cross-dialect re-handshake sheds the stale compat identities it is
                     // NOT — otherwise columns keep shipping the old dialect's shape and
                     // hard-kick the re-armed decoder. Placed on the sender seam because it
@@ -613,7 +653,7 @@ public class LSSPaperPlugin extends JavaPlugin implements PluginMessageListener,
                         int version = sessionConfigVersionFor(dialect);
                         PaperPayloadHandler.sendSessionConfig(bukkitPlayer,
                                 version,
-                                enabled, lodDistanceChunks, generationEnabled,
+                                enabled, offReason, lodDistanceChunks, generationEnabled,
                                 capabilities, denyMapIngestion);
                         if (service != null) {
                             // The last flags this session was sent (map-ingestion permission
@@ -622,7 +662,7 @@ public class LSSPaperPlugin extends JavaPlugin implements PluginMessageListener,
                                     version, capabilities, denyMapIngestion);
                         }
                     }
-                },
+                }),
                 (capabilities, dialect, replyAfterRegister) -> {
                     // The dialect flip runs on the PUMP, immediately before registerPlayer,
                     // via the mailbox's pre-register hook. Both halves of that placement are
@@ -852,6 +892,11 @@ public class LSSPaperPlugin extends JavaPlugin implements PluginMessageListener,
                     && (legacyDialect || dev.vox.lss.common.config.ServerConfigBase.servesWorld(worldLod));
             configSender.send(decision.dialect(),
                     enabledHere,
+                    // 0.23.0 plan §3: which "not here" this is (the Fabric twin). The world
+                    // reason only when the world alone took the answer away.
+                    dev.vox.lss.common.SessionOffReason.of(config.enabled(), deniedByServiceGate,
+                            config.showPermissionRefusal(),
+                            decision.effectiveEnabled() && !refusedAtSend && !enabledHere),
                     lodDistance,
                     // The caps ARE the old client's pacing — the server's real admission values
                     // (ignored by the V18 sender branch; see the v16 compat design §4.1).

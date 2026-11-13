@@ -581,6 +581,83 @@ class LSSPaperPluginGlueTest {
         assertTrue(sender.replies.get(0).enabled());
     }
 
+    // ---- 0.23.0 plan §3: the reply says which "not here" it is ----
+
+    /** Records the reason beside the answer, through the production sender's own seam. */
+    private static final class ReasonRecorder {
+        final List<Boolean> enabled = new ArrayList<>();
+        final List<Integer> reasons = new ArrayList<>();
+        final LSSPaperPlugin.SessionConfigSender sender = LSSPaperPlugin.SessionConfigSender.reasoned(
+                (dialect, on, offReason, lod, syncCap, genCap, generation, caps, keepMark) -> {
+                    enabled.add(on);
+                    reasons.add(offReason);
+                });
+    }
+
+    private static int reasonOf(PaperConfig config, net.minecraft.server.level.ServerPlayer player,
+                                dev.vox.lss.common.PlayerServiceGate gate) {
+        var recorder = new ReasonRecorder();
+        var registrar = new RecordingRegistrar();
+        LSSPaperPlugin.handleHandshake(handshakeFrame(V, VOXEL_CAPS), "Steve", player, config, true,
+                dev.vox.lss.common.compat.ViaProbe.NO_SIGNAL, 0, gate, recorder.sender, registrar);
+        registrar.runDeferredReplies();
+        assertEquals(1, recorder.reasons.size(), "one reply");
+        assertEquals(recorder.enabled.get(0), recorder.reasons.get(0) == 0 && recorder.enabled.get(0),
+                "an enabled reply never carries a reason");
+        return recorder.enabled.get(0) ? -1 : recorder.reasons.get(0);
+    }
+
+    @Test
+    void theReplyCarriesExactlyOneReasonByPrecedence() {
+        var open = LSSPaperPlugin.SERVICE_GATE_OPEN;
+        var deny = new RecordingGate(); // holds nothing
+        var netherLevel = levelOf(net.minecraft.world.level.Level.NETHER);
+        var overworldLevel = levelOf(net.minecraft.world.level.Level.OVERWORLD);
+        var nether = mockPlayer();
+        when(nether.level()).thenReturn(netherLevel);
+        var overworld = mockPlayer();
+        when(overworld.level()).thenReturn(overworldLevel);
+
+        // Working: no reason.
+        assertEquals(-1, reasonOf(config(true), overworld, open));
+        // The service is switched off.
+        assertEquals(LSSConstants.SESSION_FLAG_OFF_SERVER, reasonOf(config(false), overworld, open));
+        // This world is off (the player is registered: other worlds serve).
+        var netherOff = config(true);
+        MutablePaperSettings.dimension(netherOff, "minecraft:the_nether", 0);
+        assertEquals(LSSConstants.SESSION_FLAG_OFF_WORLD, reasonOf(netherOff, nether, open));
+        assertEquals(-1, reasonOf(netherOff, overworld, open));
+        // The permission gate denied the player.
+        assertEquals(LSSConstants.SESSION_FLAG_OFF_PERMISSION, reasonOf(gatedConfig(), overworld, deny));
+        // ... and the operator keeps that private: no reason at all.
+        var silent = gatedConfig();
+        MutablePaperSettings.set(silent, "service.show_permission_refusal", false);
+        assertEquals(0, reasonOf(silent, overworld, deny));
+        // A denied player in an off world is never told about the world: they get no later
+        // pushes, so it could not be corrected when they walk into a world that serves others.
+        var gatedNetherOff = gatedConfig();
+        MutablePaperSettings.dimension(gatedNetherOff, "minecraft:the_nether", 0);
+        assertEquals(LSSConstants.SESSION_FLAG_OFF_PERMISSION, reasonOf(gatedNetherOff, nether, deny));
+        MutablePaperSettings.set(gatedNetherOff, "service.show_permission_refusal", false);
+        assertEquals(0, reasonOf(gatedNetherOff, nether, deny));
+        // The service switch outranks both.
+        var allOff = gatedConfig();
+        MutablePaperSettings.set(allOff, "service.enabled", false);
+        MutablePaperSettings.dimension(allOff, "minecraft:the_nether", 0);
+        assertEquals(LSSConstants.SESSION_FLAG_OFF_SERVER, reasonOf(allOff, nether, deny));
+    }
+
+    @Test
+    void aSenderThatOnlyRecordsTheAnswerStillGetsEveryReply() {
+        // The reason form defaults to the plain one, so the pins that record replies keep
+        // working unchanged.
+        var sender = new RecordingSender();
+        LSSPaperPlugin.handleHandshake(handshakeFrame(V, VOXEL_CAPS), "Steve", config(false), true,
+                sender, new RecordingRegistrar());
+        assertEquals(1, sender.replies.size());
+        assertFalse(sender.replies.get(0).enabled());
+    }
+
     @Test
     void withoutTheServicePermissionTheReplyAdvertisesDisabledAndNobodyRegisters() {
         // The denial SHAPE: a SessionConfig with enabled=false, not silence. Silence would

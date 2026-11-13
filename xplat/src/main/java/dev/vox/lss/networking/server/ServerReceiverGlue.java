@@ -581,7 +581,12 @@ public final class ServerReceiverGlue {
                                 .dataVersion().version(),
                         // Map-policy plan A2: the flags ride only a v20 frame to a session
                         // that declared the bit (the encoder's guard).
-                        payload.capabilities(), denyMapIngestion);
+                        payload.capabilities(), denyMapIngestion)
+                        // 0.23.0 plan §3: which "not here" this is. The world reason only when
+                        // the world alone took the answer away (the gate passed).
+                        .withOffReason(dev.vox.lss.common.SessionOffReason.of(config.enabled(),
+                                deniedByServiceGate, config.showPermissionRefusal(),
+                                decision.effectiveEnabled() && !enabledHere));
         responder.send(reply);
         if (service != null) {
             // Map-ingestion permission plan §3.3: the last flags this session was sent (a

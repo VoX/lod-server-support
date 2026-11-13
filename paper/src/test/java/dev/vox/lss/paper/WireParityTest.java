@@ -542,6 +542,44 @@ class WireParityTest {
     }
 
     @Test
+    void aReasonJoinsTheFlagsOnPaperExactlyAsOnFabric() {
+        // 0.23.0 plan §3 (the Fabric twin: SessionConfigFlagsWireTest). enabled=false, 512, gen,
+        // the runtime data version, then the flags.
+        String off = "14008004019f27";
+        assertEquals(off + "00", hex(PaperPayloadHandler.encodeSessionConfig(
+                LSSConstants.PROTOCOL_VERSION, false, 0, 512, true, NEW_CAPS, false)));
+        assertEquals(off + "02", hex(PaperPayloadHandler.encodeSessionConfig(
+                LSSConstants.PROTOCOL_VERSION, false, LSSConstants.SESSION_FLAG_OFF_SERVER, 512, true, NEW_CAPS, false)));
+        assertEquals(off + "04", hex(PaperPayloadHandler.encodeSessionConfig(
+                LSSConstants.PROTOCOL_VERSION, false, LSSConstants.SESSION_FLAG_OFF_WORLD, 512, true, NEW_CAPS, false)));
+        assertEquals(off + "08", hex(PaperPayloadHandler.encodeSessionConfig(
+                LSSConstants.PROTOCOL_VERSION, false, LSSConstants.SESSION_FLAG_OFF_PERMISSION, 512, true, NEW_CAPS, false)));
+        assertEquals(off + "05", hex(PaperPayloadHandler.encodeSessionConfig(
+                LSSConstants.PROTOCOL_VERSION, false, LSSConstants.SESSION_FLAG_OFF_WORLD, 512, true, NEW_CAPS, true)),
+                "beside the map bit");
+        assertEquals(off + "02", hex(PaperPayloadHandler.encodeSessionConfig(
+                LSSConstants.PROTOCOL_VERSION, false, 0x43, 512, true, NEW_CAPS, false)),
+                "only reason bits get through; the map bit comes from the decision alone");
+        // An enabled answer never carries a reason.
+        assertEquals("14018004019f27" + "00", hex(PaperPayloadHandler.encodeSessionConfig(
+                LSSConstants.PROTOCOL_VERSION, true, LSSConstants.SESSION_FLAG_OFF_SERVER, 512, true, NEW_CAPS, false)));
+        // A session without the bit, and every echo: the bytes of before, whatever the reason
+        // (a 0.10 to 0.18 client is kicked by a trailing byte).
+        for (int reason : new int[]{0, LSSConstants.SESSION_FLAG_OFF_SERVER, LSSConstants.SESSION_FLAG_OFF_WORLD,
+                LSSConstants.SESSION_FLAG_OFF_PERMISSION}) {
+            assertEquals(off, hex(PaperPayloadHandler.encodeSessionConfig(
+                    LSSConstants.PROTOCOL_VERSION, false, reason, 512, true, NEW_CAPS & ~LSSConstants.CAPABILITY_MAP_POLICY, true)));
+            assertEquals("1300800401", hex(PaperPayloadHandler.encodeSessionConfig(
+                    LSSConstants.V19_COMPAT_PROTOCOL_VERSION, false, reason, 512, true, NEW_CAPS, false)));
+            assertEquals("1200800401", hex(PaperPayloadHandler.encodeSessionConfig(
+                    LSSConstants.V18_COMPAT_PROTOCOL_VERSION, false, reason, 512, true, NEW_CAPS, false)));
+            // The form without a reason is the form with reason 0.
+            assertArrayEquals(PaperPayloadHandler.encodeSessionConfig(LSSConstants.PROTOCOL_VERSION, false, 64, false, NEW_CAPS, true),
+                    PaperPayloadHandler.encodeSessionConfig(LSSConstants.PROTOCOL_VERSION, false, 0, 64, false, NEW_CAPS, true));
+        }
+    }
+
+    @Test
     void aDeclaringV20SessionGetsTheFlagsAfterTheDataVersionOnPaper() {
         assertEquals("14018004019f27" + "01", hex(PaperPayloadHandler.encodeSessionConfig(
                 LSSConstants.PROTOCOL_VERSION, true, 512, true, NEW_CAPS, true)));
