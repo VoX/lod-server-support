@@ -54,7 +54,7 @@ CORPUS = ('*-corpus/*',)
 TRAILER = re.compile(r'^(Adapted|Not-ported|Corpus-regenerated): (\S+): (\S.*)$', re.M)
 ROLES = ('reference', 'follower', 'frozen')
 PORT_CATEGORIES = ('identical_base', 'merged_clean', 'conflict', 'added', 'added_exists',
-                   'target_missing', 'deleted', 'never_ported')
+                   'target_missing', 'deleted', 'never_ported', 'absent')
 
 
 class Invalid(Exception):
@@ -320,12 +320,19 @@ def port(root, old, new, dry=False):
     root = Path(root)
     out = {category: [] for category in PORT_CATEGORIES}
     main_old, main_new = entries(root, old), entries(root, new)
+    # What the line says it never carries (the working tree's sync.json, so an entry added just
+    # before this port counts): main-only tools, for example. A port must not copy them in.
+    sync_file = root / SYNC
+    absent = json.loads(sync_file.read_text()).get('absent', []) if sync_file.exists() else []
     for path in sorted(set(main_old) | set(main_new)):
         was, now = main_old.get(path), main_new.get(path)
         if was == now:
             continue
         if matches(path, NEVER_PORTED):
             out['never_ported'].append(path)
+            continue
+        if matches(path, absent):
+            out['absent'].append(path)
             continue
         target = root / path
         if was is None:
