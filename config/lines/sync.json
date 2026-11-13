@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "reference_commit": "705c7be2c32fc87814a82fc527da217f470100c3",
+  "reference_commit": "e0208edb3583426f2bc0b20f7f07bc8cbc55e912",
   "adapted": [
     ".github/line.env",
     ".github/workflows/build.yml",
@@ -392,5 +392,7 @@
     "xplat/src/main/java/dev/vox/lss/platform/SectionConstruction.java",
     "xplat/src/main/java/dev/vox/lss/trace/MoveTraceTelemetry.java"
   ],
-  "absent": []
+  "absent": [
+    "tools/realstack/*"
+  ]
 }

@@ -216,13 +216,35 @@ class Follower(unittest.TestCase):
         self.assertEqual(dry['conflict'], ['clash.txt'])
         self.assertEqual(dry['added'], ['new.txt'])
         self.assertEqual(dry['deleted'], ['gone.txt'])
-        self.assertEqual(dry['target_missing'], ['main-only/overlay.txt'])
+        # The fixture's line lists main-only/* as absent: a change there is not this line's to take.
+        self.assertEqual(dry['absent'], ['main-only/overlay.txt'])
+        self.assertEqual(dry['target_missing'], [])
         self.assertEqual(dry['never_ported'], ['config/lines/lines.json'])
         self.assertEqual((self.root / 'shared.txt').read_text(), 'one\n')
         lines.port(self.root, base, new)
         self.assertEqual((self.root / 'shared.txt').read_text(), 'two\n')
         self.assertIn('<<<<<<< this line', (self.root / 'clash.txt').read_text())
         self.assertFalse((self.root / 'config/lines/lines.json').exists())
+
+    def test_port_never_copies_in_what_the_line_lists_as_absent(self):
+        # Main gained a main-only tool. The line lists it as absent in its working tree just
+        # before the port (the entry is not committed yet): the port must leave it out, whether
+        # main adds, changes or deletes such a file.
+        git(self.root, 'checkout', '-q', 'main')
+        base = commit(self.root, {'tools/only-main/old.py': 'old\n'}, 'main has a main-only tool')
+        new = commit(self.root, {'tools/only-main/new.py': 'new\n', 'tools/only-main/old.py': 'changed\n',
+                                 'shared.txt': 'two\n'}, 'main work')
+        git(self.root, 'checkout', '-q', 'line')
+        sync_path = self.root / 'config/lines/sync.json'
+        sync = json.loads(sync_path.read_text())
+        sync['absent'] = ['tools/only-main/*']
+        sync_path.write_text(json.dumps(sync))
+        ported = lines.port(self.root, base, new)
+        self.assertEqual(ported['absent'], ['tools/only-main/new.py', 'tools/only-main/old.py'])
+        self.assertEqual(ported['added'], [])
+        self.assertEqual(ported['target_missing'], [])
+        self.assertFalse((self.root / 'tools/only-main').exists())
+        self.assertEqual((self.root / 'shared.txt').read_text(), 'two\n', 'everything else still ports')
 
     def test_init_lists_exactly_what_differs(self):
         (self.root / 'config/lines/sync.json').unlink()

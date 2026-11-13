@@ -33,11 +33,12 @@ by version:
   the stored `true` at the next save, so going back to 0.21 turns it off.
 - It is client-side rendering only. It does not change who is shown.
 
-## Open
+## Fog stays the player's choice
 
-On 26.x the fog is the real limit. In October VoX decided far players keep vanilla fog and the
-tooltip tells players to turn their LOD mod's fog off. Exempting far players from fog while an LOD
-renderer is active would reverse that; it is VoX's to decide.
+On 26.x the fog is the real limit: far players fade out past about 900 blocks with the LOD mod's
+fog on (Voxy's default). Exempting far players from fog was put to VoX, who decided on 2026-11-13
+to leave it as it is: fog is the player's setting, and the option's tooltip and the README say to
+turn the LOD mod's fog off. Not to be re-proposed without a new reason.
 
 ## Revisit when
 
