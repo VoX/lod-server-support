@@ -27,5 +27,11 @@ class SettingInventoryTest {
         for (var binding : bindings) assertEquals(config.snapshot().values().get(binding.descriptor().key()),binding.storedValue().apply(config));
         assertEquals(12, bindings.stream().filter(b -> b.descriptor().exposure()
                 == dev.vox.lss.common.config.SettingDescriptor.Exposure.UI).count());
+        // A page's buttons are not settings: no serialized descriptor carries one.
+        for (var page : ClientOptionCatalog.pages()) for (var action : page.actions()) for (var binding : bindings) {
+            String descriptor = binding.descriptor().toString();
+            assertFalse(descriptor.contains(action.id()) || descriptor.contains(action.nameKey()),
+                    action.id() + " leaked into the settings inventory: " + descriptor);
+        }
     }
 }

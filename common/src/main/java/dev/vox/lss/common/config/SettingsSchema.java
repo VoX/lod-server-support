@@ -195,7 +195,7 @@ public final class SettingsSchema<T> {
                 if (!(value instanceof String s)) throw type(p,"string");
                 if (p.equals("lod.source") && !Set.of("lss", "distant_horizons").contains(s))
                     throw new SettingsException("lod.source must be lss or distant_horizons");
-                if (p.equals("far_players.mode")&&!Set.of("off","on","opt_in").contains(s)) throw type(p,"off, opt_in or on");
+                if (p.equals("far_players.mode")&&!Set.of("off","on","opt_in","required").contains(s)) throw type(p,"off, opt_in, on or required");
                 if (p.equals("privacy.xray.mode")&&!Set.of("auto","on","off").contains(s)) throw type(p,"auto, on or off");
                 if (p.equals("compatibility.block_fallbacks.default")&&s.isBlank()) throw type(p,"nonblank block identifier");
                 yield s;

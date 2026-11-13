@@ -10,10 +10,10 @@ public class FarPlayerModeTransitionTest {
     static final UUID VIEWER=new UUID(0,1), TARGET=new UUID(0,2);
     static FarPlayerBroadcastService.PlayerSnapshot snapshot(UUID uuid,String name,double x) {
         return new FarPlayerBroadcastService.PlayerSnapshot(uuid,name,"minecraft:overworld",x,64,0,
-                0,0,0,(byte)0,0,0,0,false,false,true,false,0,null,null,null);
+                0,0,0,(byte)0,0,0,0,false,false,true,false,false,0,null,null,null);
     }
     static FarPlayerBroadcastService.Settings settings(String mode) {
-        return new FarPlayerBroadcastService.Settings(mode,2048,0,false,List.of(),10);
+        return new FarPlayerBroadcastService.Settings(mode,2048,0,false,List.of(),10,false);
     }
     @Test
     void runtimeOffMustWithdrawAlreadyPublishedPlayersInsteadOfFreezingThem() {

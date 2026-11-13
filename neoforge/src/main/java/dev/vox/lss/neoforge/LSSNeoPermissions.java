@@ -18,8 +18,10 @@ import net.neoforged.neoforge.server.permission.nodes.PermissionTypes;
  * the gather event fires during server start before any LSS query can run
  * (verified at the plan review — the service starts at ServerStartedEvent). The two
  * far-player HIDE nodes (far-player-render-hardening-plan.md WI-7a) register beside
- * them with DEFAULT-FALSE resolvers — a grant-model "deny me" lever, the opposite
- * shape (see {@link LSSPermissions}) — and so do the two MAP-INGESTION exemption nodes
+ * them with DEFAULT-FALSE resolvers — a grant model, the opposite shape (see
+ * {@link LSSPermissions}); since 0.21.0 a holder is hidden from far-player rendering
+ * only while the server sets {@code far_players.hide_permission_holders: true}
+ * (hide-permission plan §2) — and so do the two MAP-INGESTION exemption nodes
  * (map-ingestion permission plan §2: default false, grant = exempt from
  * {@code privacy.request_no_map_ingestion}; their read passes default FALSE).
  *
@@ -27,16 +29,17 @@ import net.neoforged.neoforge.server.permission.nodes.PermissionTypes;
  * (never equal-named copies — pinned); the string-keyed {@code check} maps the
  * shared {@link LSSPermissions} constants to them, and an unknown string answers
  * {@code defaultValue} without ever querying (it would throw). Every failure shape
- * answers the caller's default — fail-open for the gate (true), fail-VISIBLE for the
+ * answers the caller's default — fail-open for the gate (true), "not a holder" for the
  * hide nodes (false): this seam cannot express "the backend threw", and a true
- * default would hide every player on a provider-less server.
+ * default would make every player a holder on a provider-less server.
  */
 public final class LSSNeoPermissions {
 
     /** The registered node instances — one per brand spelling, default-true. */
     public static final PermissionNode<Boolean> SERVICE_LSS = node(LSSPermissions.SERVICE_LSS);
     public static final PermissionNode<Boolean> SERVICE_VSS = node(LSSPermissions.SERVICE_VSS);
-    /** The far-player hide nodes — default-FALSE resolvers (grant = hidden). */
+    /** The far-player hide nodes — default-FALSE resolvers (grant = a holder; hidden only
+     *  while {@code far_players.hide_permission_holders} is on). */
     public static final PermissionNode<Boolean> FARPLAYERS_HIDDEN_LSS = denyNode(LSSPermissions.FARPLAYERS_HIDDEN_LSS);
     public static final PermissionNode<Boolean> FARPLAYERS_HIDDEN_VSS = denyNode(LSSPermissions.FARPLAYERS_HIDDEN_VSS);
     /** The map-ingestion exemption nodes — default-FALSE resolvers (grant = exempt). */
@@ -56,7 +59,7 @@ public final class LSSNeoPermissions {
                 PermissionTypes.BOOLEAN, (player, uuid, contexts) -> true);
     }
 
-    /** A deny-me node: nobody holds it until an admin grants it. */
+    /** A grant-model node: nobody holds it until an admin grants it. */
     private static PermissionNode<Boolean> denyNode(String name) {
         int dot = name.indexOf('.');
         return new PermissionNode<>(name.substring(0, dot), name.substring(dot + 1),

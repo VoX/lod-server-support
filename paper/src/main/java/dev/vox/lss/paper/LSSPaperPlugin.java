@@ -783,11 +783,9 @@ public class LSSPaperPlugin extends JavaPlugin implements PluginMessageListener,
             // mid-init) that registered legacy, then a later denial — bounded to that
             // race, healed by rejoin (the re-attach prompt loop this can enter is
             // 1/minute-bounded; see sendReattachPromptPayload).
-            LSSLogger.info("LOD unavailable for " + playerName
-                    + ": Via reports client Minecraft protocol " + viaProtocol
-                    + " vs server " + nativeProtocol + " (cross-MC legacy session"
-                    + " cannot be served) — the client must update "
-                    + Brand.shortName());
+            LSSLogger.info(dev.vox.lss.common.compat.ViaProbe.legacyAnnounceRefusedLine(
+                    Brand.shortName(), playerName,
+                    handshake.protocolVersion(), viaProtocol, nativeProtocol));
             return;
         }
         if (!decision.sendSessionConfig()) {

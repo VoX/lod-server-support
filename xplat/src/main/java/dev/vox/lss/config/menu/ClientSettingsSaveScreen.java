@@ -57,10 +57,10 @@ public final class ClientSettingsSaveScreen extends Screen {
         }
     }
     @Override public boolean keyPressed(net.minecraft.client.input.KeyEvent event) {
-        return escape.press(event.key() == 256) || super.keyPressed(event);
+        return escape.press(event.isEscape()) || super.keyPressed(event);
     }
     @Override public boolean keyReleased(net.minecraft.client.input.KeyEvent event) {
-        if (escape.release(event.key() == 256)) { onClose(); return true; }
+        if (escape.release(event.isEscape())) { onClose(); return true; }
         return super.keyReleased(event);
     }
     @Override public boolean isPauseScreen() { return false; }

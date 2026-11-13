@@ -1304,7 +1304,14 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
                     // deleted terrain forever. Gated on authoritativeMiss: an
                     // error/timeout triage says nothing about existence, and deleting a
                     // good row on a transient timeout would just cost a re-deposit.
-                    if (this.store != null && result.authoritativeMiss()) {
+                    // An UNSERVABLE result (undecodable chunk) is a positive answer about
+                    // the bytes on disk too, so it gets the same cleanup: the store rung
+                    // runs before any region read, so a row still present here was not
+                    // served (a failed or racing row), and it must not outlive an answer
+                    // that says the server cannot read this chunk. The worst case is one
+                    // re-deposit; it can never cause a chunk load. (The stamp
+                    // invalidation above already runs for every not-found flavor.)
+                    if (this.store != null && (result.authoritativeMiss() || result.unservable())) {
                         this.store.delete(result.dimension(), packed);
                     }
                 }
@@ -1385,7 +1392,8 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
             }
         } else if (result.notFound()) {
             handleDiskNotFound(playerUuid, state, packed, cx, cz, pending, dimension,
-                    result.authoritativeMiss() && !staleAgainstEdit);
+                    result.authoritativeMiss() && !staleAgainstEdit, result.unservable(),
+                    staleAgainstEdit);
         } else {
             // Store freshness rung (P1's delivery half): a store hit whose STORED
             // acquisition stamp is <= this recipient's declared stamp makes the bytes
@@ -1581,10 +1589,18 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
      *  ticket; a full slot is TRANSIENT (silent drop, counted superseded — the next
      *  want-set declaration retries the miss; a NOT_GENERATED here would blank the
      *  position for the whole session). Gen unavailable: ColumnNotGenerated — the one
-     *  permanent disposition, the client stops asking until a dirty broadcast revives it. */
+     *  permanent disposition, the client stops asking until a dirty broadcast revives it.
+     *
+     *  <p>{@code unservable} (an undecodable chunk — see {@link ChunkReadResult}) is the
+     *  exception to "a disk miss is the generation trigger": it is answered
+     *  ColumnNotGenerated whether generation is available or not, with no memo write and
+     *  no ticket on any path through here. When an edit overtook the read
+     *  ({@code staleAgainstEdit}) it is not answered at all: the transient drop, so the
+     *  next declaration re-reads what is on disk now. */
     private void handleDiskNotFound(UUID playerUuid, PlayerState state, long packed,
                                      int cx, int cz, PendingRequest pending, String dimension,
-                                     boolean authoritativeMiss) {
+                                     boolean authoritativeMiss, boolean unservable,
+                                     boolean staleAgainstEdit) {
         if (pending == null) {
             // No live pending backs this delivery (duplicate/raced result). Under permanent
             // NOT_GENERATED semantics a wire answer here could session-satisfy a position off
@@ -1592,6 +1608,32 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
             // no memo write: a raced observation is stale by construction.
             this.ctx.diagnostics().addSuperseded(1);
             this.ctx.diagnostics().addMissDropped(1); // law A5: a miss with no submit, no answer
+            return;
+        }
+        if (unservable) {
+            // The chunk exists but could not be decoded (a removed mod's blocks, a chunk
+            // format this build cannot read). LSS must never make the server load it:
+            // vanilla turns unknown blocks into air on load and may save the chunk,
+            // destroying a temporarily removed mod's blocks in a chunk no player visited.
+            // So BEFORE the memo write and the escalation below, and regardless of
+            // generationAvailable: never a ticket.
+            if (staleAgainstEdit) {
+                // An edit overtook this read, so the bytes it could not decode are not
+                // what is on disk any more (a player loaded the chunk, vanilla replaced
+                // the unknown blocks and saved it). The permanent answer would park the
+                // position for the whole session off stale bytes, and a chunk load is not
+                // necessarily a dirty broadcast that revives it. Take the ghost-style
+                // transient drop instead: no wire answer, and the next want-set re-reads
+                // the current bytes. Law A5: the miss_dropped term.
+                this.ctx.diagnostics().addSuperseded(1);
+                this.ctx.diagnostics().addMissDropped(1); // law A5: a miss with no submit, no answer
+                return;
+            }
+            // The permanent answer: the client keeps what it has and asks again next
+            // session or after a dirty broadcast (a save through the running server is
+            // what makes the chunk readable). Law A5: the reader counted this under
+            // disk.not_found, the answer is the not_generated term.
+            this.ctx.sendActions().add(new SendAction.ColumnNotGenerated(playerUuid, packed, state));
             return;
         }
         if (authoritativeMiss && this.generationAvailable) {

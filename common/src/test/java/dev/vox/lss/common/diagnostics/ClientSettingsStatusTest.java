@@ -33,7 +33,7 @@ class ClientSettingsStatusTest {
                 ClientStatusSnapshot.Discovery.NEGOTIATED, ClientStatusSnapshot.Availability.DISABLED,
                 null, DiagnosticVersions.unknown(), accepted);
         String json = DiagnosticExport.clientJson(snapshot);
-        assertTrue(json.contains("\"schemaVersion\": 5"), "the map-policy SERVER_BLOCKED availability bumped the snapshot schema to 5");
+        assertTrue(json.contains("\"schemaVersion\": 6"), "the far-player count (farPlayersFromServer) bumped the snapshot schema to 6");
         assertTrue(json.contains("pendingReconnect"));
         assertFalse(json.contains("private.example")); assertFalse(json.contains("secret.example"));
         handle.endSession(connection);
