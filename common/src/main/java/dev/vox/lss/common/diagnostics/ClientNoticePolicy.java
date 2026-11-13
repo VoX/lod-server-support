@@ -35,8 +35,10 @@ public final class ClientNoticePolicy {
             return switch (verdict) {
                 case NO_SUPPORT -> new Caps(this.noSupportShown + 1, this.nothingToShowShown,
                         this.serverOffShown, this.versionMismatchShown);
-                case NOTHING_TO_SHOW -> new Caps(this.noSupportShown, true, this.serverOffShown,
-                        this.versionMismatchShown);
+                // One count for both: "add something that shows terrain" and "the renderer
+                // you have is not connected" are the same once-ever nudge.
+                case NOTHING_TO_SHOW, RENDERER_NOT_CONNECTED -> new Caps(this.noSupportShown, true,
+                        this.serverOffShown, this.versionMismatchShown);
                 case SERVER_OFF -> new Caps(this.noSupportShown, this.nothingToShowShown,
                         this.serverOffShown + 1, this.versionMismatchShown);
                 default -> this;
@@ -48,7 +50,7 @@ public final class ClientNoticePolicy {
             if (verdict.versionMismatch()) return this.versionMismatchShown < LIFETIME_CAP;
             return switch (verdict) {
                 case NO_SUPPORT -> this.noSupportShown < LIFETIME_CAP;
-                case NOTHING_TO_SHOW -> !this.nothingToShowShown;
+                case NOTHING_TO_SHOW, RENDERER_NOT_CONNECTED -> !this.nothingToShowShown;
                 case SERVER_OFF -> this.serverOffShown < LIFETIME_CAP;
                 // Working, waiting, local, the player's own choice, and a silent server (which
                 // may be a proxy or a busy link) are never announced.
@@ -89,6 +91,7 @@ public final class ClientNoticePolicy {
     /** The verdicts that end a connection's watch, spoken or capped. */
     private static boolean announceable(ClientVerdict verdict) {
         return verdict == ClientVerdict.NO_SUPPORT || verdict == ClientVerdict.NOTHING_TO_SHOW
+                || verdict == ClientVerdict.RENDERER_NOT_CONNECTED
                 || verdict == ClientVerdict.SERVER_OFF || verdict.versionMismatch();
     }
 }

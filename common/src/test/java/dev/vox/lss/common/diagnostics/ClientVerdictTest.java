@@ -103,6 +103,31 @@ class ClientVerdictTest {
     }
 
     @Test
+    void aPlayerWhoHasVoxyIsNotToldToAddVoxy() {
+        // The bridge to Voxy did not start (its internals changed): no consumer, Voxy installed.
+        for (Discovery discovery : new Discovery[]{Discovery.DORMANT, Discovery.NO_CHANNEL, Discovery.NEGOTIATED}) {
+            assertEquals(ClientVerdict.RENDERER_NOT_CONNECTED,
+                    ClientVerdict.of(noConsumer(discovery, "0.2.20-beta")), discovery.name());
+            // Not installed, or the version could not be read: the plain advice.
+            for (String version : new String[]{"absent", "unknown", "not a version!"}) {
+                assertEquals(ClientVerdict.NOTHING_TO_SHOW,
+                        ClientVerdict.of(noConsumer(discovery, version)), discovery + " " + version);
+            }
+        }
+        // The same once-ever nudge as "nothing to show": never both.
+        assertTrue(Caps.NONE.allows(ClientVerdict.RENDERER_NOT_CONNECTED));
+        assertFalse(Caps.NONE.after(ClientVerdict.NOTHING_TO_SHOW).allows(ClientVerdict.RENDERER_NOT_CONNECTED));
+        assertFalse(Caps.NONE.after(ClientVerdict.RENDERER_NOT_CONNECTED).allows(ClientVerdict.NOTHING_TO_SHOW));
+    }
+
+    private static ClientStatusSnapshot noConsumer(Discovery discovery, String voxyVersion) {
+        var versions = new DiagnosticVersions(Map.of(DiagnosticVersions.Component.VOXY, voxyVersion));
+        return new ClientStatusSnapshot(ClientStatusSnapshot.SCHEMA_VERSION, 1, 0, true,
+                discovery == Discovery.NEGOTIATED, true, true, false, true, V, 512, 0, 0, 0, 0, -1, 0, 0, 0, 0,
+                discovery, Availability.UNKNOWN, null, versions, null, null);
+    }
+
+    @Test
     void aRejectedVersionSaysWhichSideIsOlder() {
         // The player can act on only one of the two: say which.
         assertEquals(ClientVerdict.CLIENT_OUTDATED, ClientVerdict.of(

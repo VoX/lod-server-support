@@ -87,6 +87,8 @@ NeoForge ships on MC 1.21.1, 26.1, 26.2 and 26.3; the 1.21.10/1.21.11 modules re
 
 On SpongeVanilla, put the Sponge jar in the server's `mods/` folder. At startup Sponge prints a notice that the plugin uses Mixins; that is expected.
 
+**Nothing loading?** Run `/lss status` on the client. Since 0.22.0 its first line says whether distant terrain is working here and, if not, why: the server doesn't run the mod, has it switched off (for everyone, for this world or for you), runs a different version, or nothing you have installed can show the terrain. The first few times this happens the client also says so once in chat, in grey.
+
 ## Commands
 
 ### Server (Fabric, NeoForge, Paper, and Sponge)
@@ -100,6 +102,7 @@ On SpongeVanilla, put the Sponge jar in the server's `mods/` folder. At startup 
 
 ### Client (Fabric and supported NeoForge clients)
 
+- `/lss status` - Say whether distant terrain is working here and, if not, why; then the details (connection, map mods, far players)
 - `/lss reload` - Read saved client YAML and apply supported changes; report reconnect requirements
 
 - `/lss clearcache` - Clear this server's download records so the server sends its distant terrain again (a full re-download). Terrain your LOD mod has already saved is not deleted; `/lss reset` does that. The **Re-download Terrain** button on the General page of the mod's entry in Sodium's video settings (Sodium 0.8 or newer) does the same after a confirm screen. In singleplayer or at the title screen it clears the records of every server. On a server that is not sending distant terrain at that moment (for example with Receive Server LODs off) it clears nothing and says so

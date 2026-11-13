@@ -36,6 +36,9 @@ public enum ClientVerdict {
     SERVER_OFF,
     /** No LOD renderer and no map mod: nothing can show what would be downloaded. */
     NOTHING_TO_SHOW,
+    /** An LOD renderer is installed and the bridge to it did not start (its internals changed):
+     *  the player has the mod the "nothing to show" advice names, so that advice would be wrong. */
+    RENDERER_NOT_CONNECTED,
     /** The map mods are the only thing that could show the terrain, and the server asks
      *  clients not to write it into maps. */
     MAPS_BLOCKED,
@@ -47,6 +50,14 @@ public enum ClientVerdict {
     /** The translation key suffix: {@code lss.status.verdict.<key>} and {@code lss.notice.<key>}. */
     public String key() {
         return name().toLowerCase(Locale.ROOT);
+    }
+
+    /** Voxy is installed: its version is a real one, not "absent" or unreadable. A consumer is
+     *  registered for the whole launch once the bridge starts, so installed without a consumer
+     *  means the bridge failed. */
+    private static boolean rendererInstalled(ClientStatusSnapshot s) {
+        String voxy = s.versions().components().get(DiagnosticVersions.Component.VOXY);
+        return voxy != null && !voxy.equals("absent") && !voxy.equals("unknown") && !voxy.equals("redacted");
     }
 
     /** The server's map request stops every map mod this client could write to. */
@@ -89,7 +100,7 @@ public enum ClientVerdict {
                 case NO_SERVICE: case NEED_TRANSPORT: break;
             }
         }
-        if (!s.consumerAvailable()) return NOTHING_TO_SHOW;
+        if (!s.consumerAvailable()) return rendererInstalled(s) ? RENDERER_NOT_CONNECTED : NOTHING_TO_SHOW;
         return switch (s.discovery()) {
             case NOT_CONNECTED -> NOT_CONNECTED;
             case LOCAL -> LOCAL_WORLD;

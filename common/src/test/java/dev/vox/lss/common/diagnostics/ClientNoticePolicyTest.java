@@ -72,6 +72,11 @@ class ClientNoticePolicyTest {
         this.policy.onJoin();
         assertNull(run(ClientVerdict.NOTHING_TO_SHOW, caps, 5000));
         assertEquals(new Caps(CAP, true, CAP, 0), caps);
+        this.policy.onJoin();
+        assertNull(run(ClientVerdict.RENDERER_NOT_CONNECTED, caps, 5000), "the same once-ever nudge");
+        this.policy.onJoin();
+        assertEquals(ClientVerdict.RENDERER_NOT_CONNECTED,
+                run(ClientVerdict.RENDERER_NOT_CONNECTED, new Caps(CAP, false, CAP, CAP), 1000));
     }
 
     @Test
