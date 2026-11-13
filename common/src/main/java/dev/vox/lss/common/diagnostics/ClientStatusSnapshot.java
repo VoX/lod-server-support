@@ -10,7 +10,8 @@ public record ClientStatusSnapshot(int schemaVersion, long lifecycle, long captu
         int effectiveDistance, long receivedColumns, long receivedBytes, int queuedColumns,
         int ingestBacklog, long ingestFailures, int rateCap, long rateGatedTicks,
         int xaeroPendingRebuilds, Discovery discovery, Availability xaeroAvailability, ClientDiagnosticSnapshot details, DiagnosticVersions versions, ClientSettingsStatus settings, DhStatusSnapshot dh,
-        Availability journeyMapAvailability, int journeyMapPending, int farPlayersFromServer) {
+        Availability journeyMapAvailability, int journeyMapPending, int farPlayersFromServer,
+        boolean mapOnly) {
     /** 4: settings.mapIngestionEnabled (was xaeroMapEnabled) and the JourneyMap fields.
      *  5: {@link Availability#SERVER_BLOCKED} (the server's map-ingestion request,
      *  map-policy plan A4).
@@ -20,6 +21,23 @@ public record ClientStatusSnapshot(int schemaVersion, long lifecycle, long captu
      *  anything else means a missing far player is a client drawing question (fog, the
      *  draw range). A count only; never names or positions. */
     public static final int SCHEMA_VERSION = 6;
+    /** Callers that do not say whether the map mods are this client's only consumers
+     *  ({@code mapOnly}, read by {@link ClientVerdict} alone and not exported). */
+    public ClientStatusSnapshot(int schemaVersion, long lifecycle, long capturedAtMillis,
+            boolean connected, boolean negotiated, boolean receptionEnabled, boolean serverEnabled,
+            boolean consumerAvailable, boolean rendererAvailable, int protocol, int serverDistance,
+            int effectiveDistance, long receivedColumns, long receivedBytes, int queuedColumns,
+            int ingestBacklog, long ingestFailures, int rateCap, long rateGatedTicks,
+            int xaeroPendingRebuilds, Discovery discovery, Availability xaeroAvailability,
+            ClientDiagnosticSnapshot details, DiagnosticVersions versions, ClientSettingsStatus settings,
+            DhStatusSnapshot dh, Availability journeyMapAvailability, int journeyMapPending,
+            int farPlayersFromServer) {
+        this(schemaVersion,lifecycle,capturedAtMillis,connected,negotiated,receptionEnabled,serverEnabled,
+                consumerAvailable,rendererAvailable,protocol,serverDistance,effectiveDistance,receivedColumns,
+                receivedBytes,queuedColumns,ingestBacklog,ingestFailures,rateCap,rateGatedTicks,xaeroPendingRebuilds,
+                discovery,xaeroAvailability,details,versions,settings,dh,journeyMapAvailability,journeyMapPending,
+                farPlayersFromServer,false);
+    }
     /** Callers with no far-player observation (none received). */
     public ClientStatusSnapshot(int schemaVersion, long lifecycle, long capturedAtMillis,
             boolean connected, boolean negotiated, boolean receptionEnabled, boolean serverEnabled,
@@ -77,7 +95,14 @@ public record ClientStatusSnapshot(int schemaVersion, long lifecycle, long captu
     /** {@code SERVER_BLOCKED}: installed, enabled locally, but the connected server asks
      *  clients not to write LOD terrain into map mods (map-policy plan A4). */
     public enum Availability { UNKNOWN, ABSENT, UNAVAILABLE, AVAILABLE, DISABLED, FAILED, SERVER_BLOCKED }
-    public enum Discovery { NOT_CONNECTED, DORMANT, AWAITING_NEGOTIATION, SEND_FAILED, PROTOCOL_REJECTED, NEGOTIATED }
+    /** {@code NO_CHANNEL}: the server never registered the handshake channel, so it does not
+     *  run the mod. {@code NO_ANSWER}: the channel exists but every announce went unanswered
+     *  (a proxy, a version skew, a saturated link): weaker, and never reported as "no mod".
+     *  {@code LOCAL}: the player's own world (singleplayer, before Open to LAN): nothing is
+     *  downloaded. {@code DORMANT}: connected but not asking (receiving off, another source
+     *  selected, or nothing to show the terrain). */
+    public enum Discovery { NOT_CONNECTED, DORMANT, AWAITING_NEGOTIATION, SEND_FAILED, PROTOCOL_REJECTED, NEGOTIATED,
+        NO_CHANNEL, NO_ANSWER, LOCAL }
     public ClientStatusSnapshot(int schemaVersion, long lifecycle, long capturedAtMillis,
             boolean connected, boolean negotiated, boolean receptionEnabled, boolean serverEnabled,
             boolean consumerAvailable, boolean rendererAvailable, int protocol, int serverDistance,
@@ -121,7 +146,9 @@ public record ClientStatusSnapshot(int schemaVersion, long lifecycle, long captu
     }
     public List<String> lines() {
         if(dh!=null && dh.reason()!=DhStatusSnapshot.Reason.NATIVE_OFFER && dh.reason()!=DhStatusSnapshot.Reason.NATIVE_PREFERRED) {
-            var lines=new ArrayList<>(dh.lines());
+            var lines=new ArrayList<String>();
+            lines.add("Verdict: " + ClientVerdict.of(this));
+            lines.addAll(dh.lines());
             if(settings!=null) {
                 lines.add("Settings: saved="+settings.saved()+"; configured="+settings.configured()+"; effective="+settings.effective());
                 lines.add("Pending settings: reload="+settings.pendingReload()+"; reconnect="+settings.pendingReconnect()
@@ -131,7 +158,8 @@ public record ClientStatusSnapshot(int schemaVersion, long lifecycle, long captu
             lines.add("Snapshot age: "+Math.max(0,System.currentTimeMillis()-capturedAtMillis)+" ms");
             return List.copyOf(lines);
         }
-        var lines=new ArrayList<>(List.of("Connection: " + discovery + "; protocol " + protocol,
+        var lines=new ArrayList<>(List.of("Verdict: " + ClientVerdict.of(this),
+                "Connection: " + discovery + "; protocol " + protocol,
                 "Reception: " + (receptionEnabled ? "ON" : "OFF") + "; consumer: " + (consumerAvailable ? "available" : "none"),
                 "Server: " + (discovery == Discovery.PROTOCOL_REJECTED ? "protocol rejected" : !negotiated ? "unknown" : serverEnabled ? "available" : "explicitly disabled"),
                 "Xaero integration: " + xaeroAvailability,

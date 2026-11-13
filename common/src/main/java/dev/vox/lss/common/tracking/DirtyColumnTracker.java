@@ -1,5 +1,6 @@
 package dev.vox.lss.common.tracking;
 
+import dev.vox.lss.common.FaultCounters;
 import dev.vox.lss.common.PositionUtil;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 
@@ -56,7 +57,8 @@ public class DirtyColumnTracker {
         if (listener != null) {
             try {
                 listener.onMarkDirty(dimension, cx, cz);
-            } catch (Throwable ignored) {
+            } catch (Throwable t) {
+                FaultCounters.global().record(FaultCounters.Site.DIRTY_LISTENER, t);
             }
         }
         synchronized (this) {

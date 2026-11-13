@@ -279,6 +279,9 @@ public class PaperCommands implements CommandExecutor, TabCompleter {
         }
         String offLine = service.unservedWorldsDiagLineOrNull();
         if (offLine != null) sender.sendMessage(offLine);
+        // Failures the mod survived and counted. Absent when there were none.
+        String recovered = dev.vox.lss.common.FaultCounters.global().diagLine();
+        if (!recovered.isEmpty()) sender.sendMessage(recovered);
     }
 
     private static String xrayDiagLine() {

@@ -44,7 +44,10 @@ class ClientStatusTextTest {
                         || m.key().equals("lss.status.xaero") || m.key().equals("lss.status.connection")));
                 String json=DiagnosticExport.clientJson(snapshot);
                 assertTrue(json.contains("\"dh\""));assertTrue(json.contains("\"protocol\": 0"));
-                assertTrue(snapshot.lines().getFirst().contains("Distant Horizons"));
+                // The verdict is the first line everywhere (0.22.0 plan §1); the source follows it.
+                assertTrue(snapshot.lines().getFirst().startsWith("Verdict: "), snapshot.lines().getFirst());
+                assertTrue(snapshot.lines().get(1).contains("Distant Horizons"), snapshot.lines().get(1));
+                assertTrue(ClientStatusText.lines(snapshot,200).getFirst().key().startsWith("lss.status.verdict."));
                 assertTrue(snapshot.lines().stream().anyMatch(line->line.startsWith("Activity:")));
                 assertTrue(snapshot.lines().stream().anyMatch(line->line.startsWith("Receipts:")));
                 assertTrue(snapshot.lines().stream().anyMatch(line->line.startsWith("Versions:")));

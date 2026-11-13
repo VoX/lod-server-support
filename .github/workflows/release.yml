@@ -82,8 +82,20 @@ jobs:
               *) echo "::error::tag '${GITHUB_REF_NAME}' does not derive a numeric mod version ('$MV') — refusing to publish"; exit 1 ;;
             esac
             echo "MOD_VERSION=$MV" >> "$GITHUB_ENV"
+            # A hyphenated version is a prerelease (docs/decisions/0002): a GitHub prerelease,
+            # never Latest and not featured. One rule for its forms, shared with the
+            # previous-tag lookup below and tools/release: -alpha.N, -beta.N or -rc.N. Any other
+            # hyphenated tag is refused (it would publish as a prerelease and later be taken
+            # for the previous stable tag).
+            case "$MV" in
+              *-alpha.[0-9]*) { echo "RELEASE_CHANNEL=alpha"; echo "PRERELEASE=true"; echo "MAKE_LATEST=false"; echo "FEATURED=false"; } >> "$GITHUB_ENV" ;;
+              *-beta.[0-9]*|*-rc.[0-9]*) { echo "RELEASE_CHANNEL=beta"; echo "PRERELEASE=true"; echo "MAKE_LATEST=false"; echo "FEATURED=false"; } >> "$GITHUB_ENV" ;;
+              *-*) echo "::error::tag '${GITHUB_REF_NAME}' has an unknown prerelease form (use -alpha.N, -beta.N or -rc.N) — refusing to publish"; exit 1 ;;
+              *)   { echo "RELEASE_CHANNEL=release"; echo "PRERELEASE=false"; echo "MAKE_LATEST=${LINE_MAKE_LATEST}"; echo "FEATURED=true"; } >> "$GITHUB_ENV" ;;
+            esac
           else
             echo "MOD_VERSION=0.0.0-dryrun" >> "$GITHUB_ENV"
+            { echo "RELEASE_CHANNEL=release"; echo "PRERELEASE=false"; echo "MAKE_LATEST=false"; echo "FEATURED=false"; } >> "$GITHUB_ENV"
           fi
 
       # line.env values are single-line; mc-publish wants newline lists. Space-separated
@@ -139,12 +151,14 @@ jobs:
             NOTES=""
           fi
 
-          # Fallback for lightweight tags: commit subjects as bullet list. PREV_TAG is scoped
+          # Fallback for lightweight tags: commit subjects as bullet list. PREV_TAG is the
+          # previous STABLE tag (prerelease tags are skipped, so a release and each of its
+          # betas compare against the last stable release), scoped
           # to THIS line: same-suffix tags only (main: no '+mc'; a support line: only its own
           # suffix) — version-sort would otherwise slot other lines' tags adjacent to this
           # line's and span the notes/compare across release lines.
           if [ -z "$NOTES" ]; then
-            PREV_TAG=$(git tag -l "v*${LINE_TAG_SUFFIX}" --sort=-v:refname | if [ -z "${LINE_TAG_SUFFIX}" ]; then grep -v '+mc'; else cat; fi | grep -v "^${TAG}$" | head -1 || true)
+            PREV_TAG=$(git tag -l "v*${LINE_TAG_SUFFIX}" --sort=-v:refname | if [ -z "${LINE_TAG_SUFFIX}" ]; then grep -v '+mc'; else cat; fi | grep -vE -- '-(alpha|beta|rc)[.0-9]' | grep -v "^${TAG}$" | head -1 || true)
             if [ -n "$PREV_TAG" ]; then
               NOTES=$(git log --format="- %s" "${PREV_TAG}..${TAG}")
             else
@@ -155,7 +169,7 @@ jobs:
           # Append compare link (same line scoping as above)
           # `|| true`: under `set -euo pipefail`, grep exits 1 (aborting the step) when the
           # pushed tag is the only tag on this line — i.e. the first-ever release. Tolerate it.
-          PREV_TAG=$(git tag -l "v*${LINE_TAG_SUFFIX}" --sort=-v:refname | if [ -z "${LINE_TAG_SUFFIX}" ]; then grep -v '+mc'; else cat; fi | grep -v "^${TAG}$" | head -1 || true)
+          PREV_TAG=$(git tag -l "v*${LINE_TAG_SUFFIX}" --sort=-v:refname | if [ -z "${LINE_TAG_SUFFIX}" ]; then grep -v '+mc'; else cat; fi | grep -vE -- '-(alpha|beta|rc)[.0-9]' | grep -v "^${TAG}$" | head -1 || true)
           if [ -n "$PREV_TAG" ]; then
             COMPARE="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/compare/${PREV_TAG}...${TAG}"
           else
@@ -214,8 +228,10 @@ jobs:
           # Without this, a glob matching nothing publishes an empty release silently;
           # failing here also stops the Modrinth steps from running against missing jars.
           fail_on_unmatched_files: true
-          # Data-driven (V-1): true on main (the Latest badge), false on support lines.
-          make_latest: ${{ env.LINE_MAKE_LATEST }}
+          # Data-driven (V-1): true on main (the Latest badge), false on support lines, and
+          # always false for a prerelease (MAKE_LATEST is derived beside MOD_VERSION).
+          make_latest: ${{ env.MAKE_LATEST }}
+          prerelease: ${{ env.PRERELEASE }}
           # The LSS trio only. VSS publishing is disabled as of v0.8.0 (the vssJar tasks
           # still BUILD the branded byte-copies and release_check still gates the pair —
           # only distribution is off, matching the support branches).
@@ -230,10 +246,11 @@ jobs:
         with:
           modrinth-id: lKiXKLvv
           modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
+          modrinth-featured: ${{ env.FEATURED }}
           files: fabric/build/libs/lod-server-support-fabric-*.jar
           name: v${{ env.MOD_VERSION }} - Fabric (MC ${{ env.LINE_MC_FABRIC }})
           version: v${{ env.MOD_VERSION }}+fabric+mc${{ env.LINE_MC_FABRIC }}
-          version-type: release
+          version-type: ${{ env.RELEASE_CHANNEL }}
           loaders: fabric
           game-versions: ${{ env.GV_FABRIC }}
           changelog: ${{ steps.release_notes.outputs.notes }}
@@ -244,10 +261,11 @@ jobs:
         with:
           modrinth-id: lKiXKLvv
           modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
+          modrinth-featured: ${{ env.FEATURED }}
           files: paper/build/libs/lod-server-support-paper-*.jar
           name: v${{ env.MOD_VERSION }} - Paper/Purpur/Folia (MC ${{ env.LINE_MC_PAPER }})
           version: v${{ env.MOD_VERSION }}+paper+mc${{ env.LINE_MC_PAPER }}
-          version-type: release
+          version-type: ${{ env.RELEASE_CHANNEL }}
           # The loader list is per-line data (Folia's presence has flipped per line —
           # re-added for v0.9.0 on 26.2 once Folia published 26.2-1 and the four
           # SOAK_PLATFORM=folia scenarios passed; Folia remains EXPERIMENTAL, a
@@ -269,10 +287,11 @@ jobs:
         with:
           modrinth-id: lKiXKLvv
           modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
+          modrinth-featured: ${{ env.FEATURED }}
           files: neoforge/build/libs/lod-server-support-neoforge-*.jar
           name: v${{ env.MOD_VERSION }} - ${{ env.LINE_NEOFORGE_NAME }}
           version: v${{ env.MOD_VERSION }}+neoforge+mc${{ env.LINE_MC_NEOFORGE }}
-          version-type: release
+          version-type: ${{ env.RELEASE_CHANNEL }}
           loaders: neoforge
           game-versions: ${{ env.GV_NEOFORGE }}
           changelog: ${{ steps.release_notes.outputs.notes }}
@@ -292,7 +311,7 @@ jobs:
           files: sponge/build/libs/lod-server-support-sponge-*.jar
           name: v${{ env.MOD_VERSION }} - ${{ env.LINE_SPONGE_NAME }}
           version: v${{ env.MOD_VERSION }}+sponge+mc${{ env.LINE_MC_SPONGE }}
-          version-type: release
+          version-type: ${{ env.RELEASE_CHANNEL }}
           loaders: sponge
           game-versions: ${{ env.GV_SPONGE }}
           changelog: ${{ steps.release_notes.outputs.notes }}
