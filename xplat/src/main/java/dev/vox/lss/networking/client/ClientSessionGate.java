@@ -33,13 +33,67 @@ import java.util.function.IntConsumer;
 final class ClientSessionGate {
     private boolean statusHandshakeFailed;
     private boolean statusProtocolRejected;
+    /** Status only: this connection is to the client's own integrated server. Unlike
+     *  {@code localIntegratedServer} it stays set once the world is opened to LAN. */
+    private boolean ownWorld;
+    /** The version a rejected SessionConfig carried: the status says which side is older. */
+    private int rejectedVersion;
+    /** The protocol number for the status: the established session's, or the rejected one. */
+    int statusProtocol() {
+        return this.statusProtocolRejected ? this.rejectedVersion : this.sessionVersion;
+    }
     dev.vox.lss.common.diagnostics.ClientStatusSnapshot.Discovery discoveryStatus() {
         if (!joined) return dev.vox.lss.common.diagnostics.ClientStatusSnapshot.Discovery.NOT_CONNECTED;
         if (statusProtocolRejected) return dev.vox.lss.common.diagnostics.ClientStatusSnapshot.Discovery.PROTOCOL_REJECTED;
         if (sessionConfigReceived) return dev.vox.lss.common.diagnostics.ClientStatusSnapshot.Discovery.NEGOTIATED;
         if (statusHandshakeFailed) return dev.vox.lss.common.diagnostics.ClientStatusSnapshot.Discovery.SEND_FAILED;
-        if (!receiveEnabled || localIntegratedServer || primaryAnnounce == 0) return dev.vox.lss.common.diagnostics.ClientStatusSnapshot.Discovery.DORMANT;
+        // The player's own world, also once it is open to LAN: nothing is downloaded there.
+        if (localIntegratedServer || ownWorld) return dev.vox.lss.common.diagnostics.ClientStatusSnapshot.Discovery.LOCAL;
+        // The stronger fact first: a server that never registered the channel does not run
+        // the mod, whether or not this client asked (another source may be selected).
+        if (noChannelTicks >= NO_CHANNEL_TICKS) return dev.vox.lss.common.diagnostics.ClientStatusSnapshot.Discovery.NO_CHANNEL;
+        if (!receiveEnabled || primaryAnnounce == 0) return dev.vox.lss.common.diagnostics.ClientStatusSnapshot.Discovery.DORMANT;
+        if (silentTicksAfterLadder >= V16_DISCOVERY_DELAY_TICKS) return dev.vox.lss.common.diagnostics.ClientStatusSnapshot.Discovery.NO_ANSWER;
         return dev.vox.lss.common.diagnostics.ClientStatusSnapshot.Discovery.AWAITING_NEGOTIATION;
+    }
+
+    /** Ticks without the handshake channel before the status says so (5 s). A plugin server
+     *  registers its channels just after join, so the first ticks of a connection prove
+     *  nothing; the fact is re-read every tick and withdrawn the moment the channel appears. */
+    static final int NO_CHANNEL_TICKS = 100;
+    /** Whether the server registered the handshake channel on this connection. The default
+     *  answers "yes": "no channel" is a claim about the server, made only on evidence. */
+    private java.util.function.BooleanSupplier channelProbe = () -> true;
+    private int noChannelTicks;
+    /** Ticks of silence since the LAST rung went out (ladder done, channel present, no answer).
+     *  After one more rung's worth the status reads {@code NO_ANSWER}; the ladder is unchanged. */
+    private int silentTicksAfterLadder;
+
+    void installChannelProbe(java.util.function.BooleanSupplier probe) {
+        this.channelProbe = java.util.Objects.requireNonNull(probe);
+    }
+
+    /** Status-only bookkeeping; never changes what is sent or accepted. */
+    private void tickSilence() {
+        if (!this.joined || this.sessionConfigReceived || this.statusProtocolRejected
+                || this.localIntegratedServer) {
+            this.noChannelTicks = 0;
+            this.silentTicksAfterLadder = 0;
+            return;
+        }
+        boolean channel;
+        try {
+            channel = this.channelProbe.getAsBoolean();
+        } catch (RuntimeException | LinkageError unknown) {
+            channel = true;
+        }
+        if (channel) this.noChannelTicks = 0;
+        else if (this.noChannelTicks < NO_CHANNEL_TICKS) this.noChannelTicks++;
+        if (this.discoveryArmed || this.primaryAnnounce == 0 || !this.receiveEnabled) {
+            this.silentTicksAfterLadder = 0;
+        } else if (this.silentTicksAfterLadder < V16_DISCOVERY_DELAY_TICKS) {
+            this.silentTicksAfterLadder++;
+        }
     }
 
 
@@ -235,8 +289,11 @@ final class ClientSessionGate {
                 boolean enableV16ServerCompat, boolean enableV19ServerCompat) {
         this.statusHandshakeFailed = false;
         this.statusProtocolRejected = false;
+        this.noChannelTicks = 0;
+        this.silentTicksAfterLadder = 0;
         this.joined = true;
         this.localIntegratedServer = localIntegratedServer;
+        this.ownWorld = localIntegratedServer;
         this.receiveEnabled = receiveServerLods;
         this.pendingWithdrawal = null;
         // Defensive: under Fabric's lifecycle DISCONNECT always precedes the next JOIN,
@@ -293,10 +350,14 @@ final class ClientSessionGate {
             // soak harness's -Dlss.soak.dialect legacy-emulation lever lowers it (C2/C3 —
             // under the lever the ladder simply STARTS at rung 19).
             this.currentAnnounce = announce;
+            this.silentTicksAfterLadder = 0;
             if (this.primaryAnnounce == 0) this.primaryAnnounce = announce;
             this.announced19ThisConnection |= announce == LSSConstants.V19_COMPAT_PROTOCOL_VERSION;
             V16ClientWire.markAnnouncedVersion(announce);
             this.handshakeSender.accept(announce);
+            // Status only: an earlier send that failed (the client was not in the world yet)
+            // no longer describes this connection.
+            this.statusHandshakeFailed = false;
             // Arm the ladder only after the handshake actually went out AND a lower enabled
             // rung exists. On a send throw (vanilla / no-LSS server) there is nothing to
             // discover — every further rung is equally doomed.
@@ -326,6 +387,7 @@ final class ClientSessionGate {
      * rung (20 → 19 → 16); the terminal rung disarms.
      */
     void tickDiscoveryLadder() {
+        tickSilence();
         if (!this.discoveryArmed) return;
         if (this.sessionConfigReceived) {
             this.discoveryArmed = false;
@@ -406,6 +468,7 @@ final class ClientSessionGate {
                 ? this.primaryAnnounce : SoakDialectOverride.announceVersion();
         if (version != primary && !v19 && !v16) {
             this.statusProtocolRejected = true;
+            this.rejectedVersion = version;
             LSSLogger.warn("Server has incompatible " + Brand.shortName() + " protocol version " + version
                     + " (client: " + primary + "), LOD distribution disabled");
             this.serverEnabled = false;
@@ -695,6 +758,9 @@ final class ClientSessionGate {
     /** DISCONNECT: tear down the live manager, then zero all session state and counters. */
     void onDisconnect() {
         this.joined = false;
+        this.ownWorld = false;
+        this.noChannelTicks = 0;
+        this.silentTicksAfterLadder = 0;
         this.pendingWithdrawal = null;
         // The service-gate park is same-connection state (the disconnect routine's
         // zero-everything contract): onJoin clears it too, this keeps the claim true.

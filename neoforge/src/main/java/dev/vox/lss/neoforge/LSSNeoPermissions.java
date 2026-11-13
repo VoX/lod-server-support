@@ -1,6 +1,6 @@
 package dev.vox.lss.neoforge;
 
-import dev.vox.lss.common.LSSLogger;
+import dev.vox.lss.common.FaultCounters;
 import dev.vox.lss.common.LSSPermissions;
 import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.neoforge.server.permission.PermissionAPI;
@@ -46,7 +46,6 @@ public final class LSSNeoPermissions {
     public static final PermissionNode<Boolean> MAP_INGESTION_LSS = denyNode(LSSPermissions.MAP_INGESTION_LSS);
     public static final PermissionNode<Boolean> MAP_INGESTION_VSS = denyNode(LSSPermissions.MAP_INGESTION_VSS);
 
-    private static volatile boolean queryWarned;
 
     private LSSNeoPermissions() {
     }
@@ -91,11 +90,9 @@ public final class LSSNeoPermissions {
             return PermissionAPI.getPermission(player, node);
         } catch (Throwable t) {
             if (t instanceof VirtualMachineError vme) throw vme;
-            if (!queryWarned) {
-                queryWarned = true;
-                LSSLogger.warn("NeoForge PermissionAPI query threw — answering the default ("
-                        + defaultValue + ") for " + nodeName + " (" + t + ")");
-            }
+            FaultCounters.global().record(FaultCounters.Site.PERMISSION_CHECK,
+                    () -> "NeoForge PermissionAPI query threw; answering the default (" + defaultValue + ") for "
+                            + nodeName + " (" + t + ")");
             return defaultValue;
         }
     }

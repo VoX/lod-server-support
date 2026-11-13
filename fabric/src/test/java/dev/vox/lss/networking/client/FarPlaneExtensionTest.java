@@ -17,12 +17,13 @@ class FarPlaneExtensionTest {
     @BeforeEach
     void reset() {
         FarPlaneExtension.resetForTest();
+        FarPlaneExtension.lodRenderer = () -> true;
         ClientConfigTestSupport.set("far_players.extend_far_plane", true);
     }
 
     @AfterEach
     void restore() {
-        ClientConfigTestSupport.set("far_players.extend_far_plane", false);
+        ClientConfigTestSupport.set("far_players.extend_far_plane", true); // the default
         FarPlaneExtension.resetForTest();
     }
 
@@ -64,6 +65,20 @@ class FarPlaneExtensionTest {
         frame(LEVEL, 3000);
         assertEquals(VANILLA, frame(LEVEL, 0));
         assertEquals("far_plane=512 (vanilla 512), extend=off", FarPlaneExtension.diagFragment());
+    }
+
+    @Test
+    void withoutAnLodRendererTheDefaultDoesNothingAndSaysSo() {
+        // On by default, but a far player past the vanilla plane is fully fogged without distant
+        // terrain: the plane must stay vanilla for players who only use a map mod.
+        FarPlaneExtension.lodRenderer = () -> false;
+        frame(LEVEL, 3000);
+        assertEquals(VANILLA, frame(LEVEL, 0));
+        assertEquals("far_plane=512 (vanilla 512), extend=idle (no LOD renderer)", FarPlaneExtension.diagFragment());
+        // The renderer appears (Voxy starts taking columns): the next report grows the plane.
+        FarPlaneExtension.lodRenderer = () -> true;
+        frame(LEVEL, 3000);
+        assertEquals(3072f, frame(LEVEL, 0));
     }
 
     @Test

@@ -594,7 +594,7 @@ paper:
 | far_players.name_tags | boolean | true |  | H | all |
 | far_players.full_bright | boolean | false |  | H | all |
 | far_players.render_distance_blocks | integer | 0 | 0–16384 blocks | H | all |
-| far_players.extend_far_plane | boolean | false |  | H | all |
+| far_players.extend_far_plane | boolean | true |  | H | all |
 | far_players.animation_distance_blocks | integer | 512 | 0–16384 blocks | H | all |
 | far_players.sharing.enabled | boolean | true |  | H | all |
 | far_players.sharing.max_distance_blocks | integer | 0 | 0–16384 blocks | H | all |
@@ -692,9 +692,9 @@ far_players:
   name_tags: true # Show this mod's far-player name tags.
   full_bright: false # Draw distant players at full brightness, including at night.
   render_distance_blocks: 0 # 0 = effective server/client ring; caps models and name tags.
-  # extend_far_plane (experimental file, default false) draws far players past the game's
-  # far clipping plane, out to the farthest far player; only visible with an LOD mod such
-  # as Voxy, not used while a shader pack is on. Fog can still hide very distant players:
+  # extend_far_plane (experimental file, default true) draws far players past the game's
+  # far clipping plane, out to the farthest far player; it only acts while an LOD mod such
+  # as Voxy is drawing, and not while a shader pack is on. Fog can still hide very distant players:
   # turn off your LOD mod's fog if they fade out.
   animation_distance_blocks: 512 # Animate nearby proxies; 0 = no walk animation.
   # Controls whether others may see your position through the far-player feature.

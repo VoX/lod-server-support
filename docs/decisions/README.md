@@ -8,9 +8,9 @@ plans under `docs/planning/` and in the commits.
 | --- | --- | --- |
 | [0001](0001-line-tiers.md) | Lines are tiered by who uses them | accepted 2026-11-13 |
 | [0002](0002-beta-first-releases.md) | Releases go out as a beta first | accepted 2026-11-13 |
-| [0003](0003-protocol-dialect-usage.md) | Old protocol support is measured before it is judged | accepted 2026-11-13 |
-| [0004](0004-far-plane-default.md) | Far players are drawn to their full range by default | accepted 2026-11-13 |
-| [0005](0005-command-roots.md) | Both builds accept both command names | accepted 2026-11-13 |
+| [0003](0003-protocol-dialect-usage.md) | Old protocol support is measured before it is judged | accepted 2026-11-13, amended |
+| [0004](0004-far-plane-default.md) | Far players are drawn to their full range by default | accepted 2026-11-13, corrected; one part open |
+| [0005](0005-command-roots.md) | The Voxy Server Side build also answers to the LSS names | accepted 2026-11-13, narrowed |
 | [0006](0006-one-tree-for-26x.md) | The 26.x lines share one tree | accepted 2026-11-13, not built yet |
 | [0007](0007-retry-rule.md) | A red test is explained, not retried | accepted 2026-11-13 |
 | [0008](0008-main-is-the-reference.md) | Main is the reference; support lines record one sync point | accepted 2026-11-13 |
