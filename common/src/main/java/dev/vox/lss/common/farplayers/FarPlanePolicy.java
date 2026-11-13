@@ -2,8 +2,8 @@ package dev.vox.lss.common.farplayers;
 
 /**
  * Far-plane extension sizing (far-plane plan #364 §4, pure math: no MC types, so the Tier 1
- * suite owns it). Opt-in ({@code far_players.extend_far_plane}): vanilla clips far-player
- * proxies past its far plane, so while the setting is on the plane grows to just past the
+ * suite owns it). On by default since 0.22.0 ({@code far_players.extend_far_plane}): vanilla
+ * clips far-player proxies past its far plane, so while the setting is on the plane grows to just past the
  * farthest proxy the renderer would draw.
  *
  * <p>Three steps per frame, all on the render thread:

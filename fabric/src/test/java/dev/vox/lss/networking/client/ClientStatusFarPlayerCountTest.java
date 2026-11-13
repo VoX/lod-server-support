@@ -19,10 +19,12 @@ class ClientStatusFarPlayerCountTest {
         String src = java.nio.file.Files.readString(dev.vox.lss.testutil.RepoPaths
                 .locate("xplat/src/main/java/dev/vox/lss/networking/client/ClientStatus.java"));
         String code = src.replaceAll("(?m)^\\s*//.*$", "").replaceAll("\\s+", " ");
+        // Since 0.22.0 the count is followed by the map-only fact the verdict reads.
         assertTrue(code.contains("journeyMapAvailability, journeyMap.pendingColumns(),"
-                        + " FarPlayerClientSupport.tracker().trackedCount());"),
-                "the native snapshot must end with the tracker's count");
-        assertEquals(1, code.split("FarPlayerClientSupport\\.tracker\\(\\)\\.trackedCount\\(\\)\\);", -1).length - 1,
+                        + " FarPlayerClientSupport.tracker().trackedCount(),"
+                        + " dev.vox.lss.compat.ModCompat.isMapOnlyIngestion());"),
+                "the native snapshot must carry the tracker's count, then the map-only fact");
+        assertEquals(1, code.split("FarPlayerClientSupport\\.tracker\\(\\)\\.trackedCount\\(\\)", -1).length - 1,
                 "exactly one snapshot carries it (the DH branch has no far-player service)");
         assertTrue(code.contains("DhClientSession.diagnostics(), journeyMapAvailability, 0));"),
                 "the DH snapshot keeps the constructor without a far-player observation");
