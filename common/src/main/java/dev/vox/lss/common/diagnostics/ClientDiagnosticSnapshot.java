@@ -43,6 +43,8 @@ public record ClientDiagnosticSnapshot(
         long getColumnsReceived,
         long getBytesReceived,
         long getColumnsDropped,
+        long getSkyEstimatedColumns,
+        long getSkyEstimateFailures,
         long getConnectionStartMs,
         int getQueuedColumnCount,
         int rateCap,

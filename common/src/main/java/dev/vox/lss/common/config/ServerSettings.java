@@ -26,7 +26,7 @@ public record ServerSettings(Service service, Lod lod, Generation generation, Ne
     }
     public record Privacy(PrivacyXray xray, boolean requestNoMapIngestion) {}
     public record FarPlayersDistance(int minBlocks, int maxBlocks) {}
-    public record FarPlayers(String mode, int updateIntervalTicks, FarPlayersDistance distance, boolean sendSpectators, List<String> excludedPlayers) {
+    public record FarPlayers(String mode, int updateIntervalTicks, FarPlayersDistance distance, boolean sendSpectators, List<String> excludedPlayers, boolean hidePermissionHolders) {
         public FarPlayers { excludedPlayers = List.copyOf(excludedPlayers); }
     }
     public record Paper(List<String> updateEvents) {
@@ -81,6 +81,7 @@ public record ServerSettings(Service service, Lod lod, Generation generation, Ne
         v.put("far_players.distance.max_blocks", s.farPlayers().distance().maxBlocks());
         v.put("far_players.send_spectators", s.farPlayers().sendSpectators());
         v.put("far_players.excluded_players", s.farPlayers().excludedPlayers());
+        v.put("far_players.hide_permission_holders", s.farPlayers().hidePermissionHolders());
         v.put("paper.update_events", s.paper().updateEvents());
         return Collections.unmodifiableMap(v);
     }
@@ -158,7 +159,7 @@ public record ServerSettings(Service service, Lod lod, Generation generation, Ne
     }
     @SuppressWarnings("unchecked")
     private static FarPlayers FarPlayers(Map<String,Object> v) {
-        return new FarPlayers((String)v.get("far_players.mode"), (int)v.get("far_players.update_interval_ticks"), FarPlayersDistance(v), (boolean)v.get("far_players.send_spectators"), (List<String>)v.get("far_players.excluded_players"));
+        return new FarPlayers((String)v.get("far_players.mode"), (int)v.get("far_players.update_interval_ticks"), FarPlayersDistance(v), (boolean)v.get("far_players.send_spectators"), (List<String>)v.get("far_players.excluded_players"), (boolean)v.get("far_players.hide_permission_holders"));
     }
     @SuppressWarnings("unchecked")
     private static Paper Paper(Map<String,Object> v) {

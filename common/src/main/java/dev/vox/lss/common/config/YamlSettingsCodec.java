@@ -51,6 +51,20 @@ public final class YamlSettingsCodec<T> {
         }
         @Override public byte[] bytes() { return bytes.clone(); }
         @Override public byte[] sidecar() { return sidecar == null ? null : sidecar.clone(); }
+        /** The {@code paths} this document itself sets (in the main file, or the client
+         *  sidecar), as opposed to values the schema default supplied. Exact paths only:
+         *  a renamed group's old spelling is not looked up. */
+        public Set<String> declaredPaths(Collection<String> paths) {
+            Map<String,Object> main = readTree(bytes);
+            Map<String,Object> side = Map.of();
+            // A sidecar may be comments only, or unreadable (parse then ignored it):
+            // nothing is declared there, and nothing is logged a second time.
+            if (sidecar != null) try { side = readTree(sidecar); } catch (RuntimeException ignored) { }
+            var out = new LinkedHashSet<String>();
+            for (String path : paths)
+                if (SettingsSchema.lookup(main, path) != null || SettingsSchema.lookup(side, path) != null) out.add(path);
+            return Collections.unmodifiableSet(out);
+        }
     }
     /** Main and sidecar contents to publish. A null sidecar means the file must not exist. */
     public record Output(byte[] main, byte[] sidecar) {

@@ -68,7 +68,7 @@ class BacklogReplaceTest {
         var s = new TestState();
         var held = batch(1, 2);
         s.offerIncomingBatch(held);
-        long gen = s.offerGeneration(); // the pump records this BEFORE its take
+        long gen = s.offerGeneration(); // no offer in flight: this IS the held batch's own generation
         assertSame(held, s.takeIncomingBatch());
         s.offerIncomingBatch(batch(9)); // newer batch arrives during the Folia hold
         assertFalse(s.republishHeldBatch(held, gen), "a newer batch supersedes the held one");
@@ -191,6 +191,12 @@ class BacklogReplaceTest {
      * offer/take pair hammers a pass-through while the pump republishes, with a
      * quiescent rest-check every round. The accounting invariant (received == consumed +
      * superseded, law A1's local form) is checked at the end and must balance exactly.
+     *
+     * <p>The rest-check holds only because the pump's hold carries the batch's OWN offer
+     * generation. With the old pairing (a counter read beside the take) this harness
+     * went red once, in the 2026-11-12 full gate — see
+     * {@code aHoldTakenInsideANewerOffersBumpToWriteWindowIsNeverRepublished}. A red here
+     * is a guard regression, never a flake.
      */
     @Test
     void theRetractGuardCleansAPassThroughInsideTheCasWindow() {
@@ -221,6 +227,47 @@ class BacklogReplaceTest {
         assertEquals(2, s.getTotalRequestsReceived(), "two offers received");
         assertEquals(1, s.drainPendingSuperseded(),
                 "the retracted stale batch is counted superseded exactly once");
+    }
+
+    @Test
+    void aHoldTakenInsideANewerOffersBumpToWriteWindowIsNeverRepublished() {
+        // The straddle shape — the stress test below went red on it once (2026-11-12,
+        // "round 3589: a STALE batch (id 7178 < newest consumed 7179) RESTED"). An offer
+        // bumps the generation BEFORE it writes the mailbox. A pump hold landing inside
+        // that window takes the OLDER batch still resting there; labelled with a counter
+        // read beside the take (the old pump pairing) it carried the NEWER offer's
+        // generation, so once the newer declaration had passed through, both republish
+        // guards passed and the stale batch came back. The take now hands the batch out
+        // with its own offer generation, read from the envelope it removed. The window is
+        // unreachable by any external call sequence; the beforeOfferWrite seam injects
+        // the hold into it.
+        class StraddleState extends TestState {
+            boolean armed;
+            HeldIncomingBatch held;
+            @Override protected void beforeOfferWrite() {
+                if (!armed) return;
+                armed = false;
+                held = takeFreshIncomingBatchForProbe(); // the pump's hold, inside the window
+            }
+        }
+        var s = new StraddleState();
+        var older = batch(1, 2);
+        s.offerIncomingBatch(older);
+        s.armed = true;
+        var newer = batch(9);
+        s.offerIncomingBatch(newer); // bump … [the pump holds `older`] … write
+
+        assertSame(older, s.held.batch(), "premise: the hold took the OLDER batch");
+        assertSame(newer, s.takeIncomingBatch(), "the newer declaration passes THROUGH");
+        assertNull(s.peekIncomingBatch(), "premise: the pass-through left the mailbox empty");
+
+        assertFalse(s.republishHeldBatch(s.held.batch(), s.held.offerGeneration()),
+                "a hold older than a started offer must die at the release — its own "
+                        + "generation is behind the counter");
+        assertNull(s.peekIncomingBatch(), "the stale batch is not put back");
+        assertEquals(2, s.drainPendingSuperseded(),
+                "the killed held batch is counted superseded exactly once (law A1)");
+        assertEquals(3, s.getTotalRequestsReceived(), "both offers received");
     }
 
     @Test
@@ -265,9 +312,9 @@ class BacklogReplaceTest {
             while (!stop.get()) {
                 sync.run();
                 for (int k = 0; k < 3; k++) {
-                    long gen = s.offerGeneration();
-                    var held = s.takeIncomingBatch();
-                    if (held != null) s.republishHeldBatch(held, gen);
+                    // The production pump's hold: batch and generation from ONE take.
+                    var held = s.takeFreshIncomingBatchForProbe();
+                    if (held != null) s.republishHeldBatch(held.batch(), held.offerGeneration());
                 }
                 sync.run();
             }
