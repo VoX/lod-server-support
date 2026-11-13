@@ -848,8 +848,15 @@ class OffThreadProcessorDiskResultTest {
             waitFor(() -> !rig.proc.enqueuedColumns.isEmpty(), "column served + stamped");
 
             // The dirty pipeline reopens the position; the re-read finds the region gone.
-            rig.proc.clearDiskReadDone(rig.uuid, new long[]{packed});
-            rig.state.enqueue(new IncomingRequest(12, 12, COLUMN_TS - 1));
+            // The clear and the reopening request run on the processing thread ahead of a
+            // cycle's late drain, so the clear is always applied before the request routes.
+            // Issued from this thread they raced the cycle that had just served the column:
+            // landing between its late drain and its routing, the request routed against the
+            // still-set done-bit, no read was submitted, and nothing asked again.
+            rig.proc.beforeRouteAction.set(() -> {
+                rig.proc.clearDiskReadDone(rig.uuid, new long[]{packed});
+                rig.state.enqueue(new IncomingRequest(12, 12, COLUMN_TS - 1));
+            });
             rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
             waitFor(() -> rig.proc.diskSubmits.size() == 2, "re-read submitted");
             rig.inject(ChunkReadResult.notFoundAuthoritative(rig.uuid, 12, 12, DIM, 2L));
@@ -1401,8 +1408,12 @@ class OffThreadProcessorDiskResultTest {
             rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
             waitFor(() -> !rig.proc.enqueuedColumns.isEmpty(), "column served + stamped");
 
-            rig.proc.clearDiskReadDone(rig.uuid, new long[]{packed});
-            rig.state.enqueue(new IncomingRequest(12, 12, COLUMN_TS - 1));
+            // On the processing thread, ahead of a cycle's late drain: see
+            // notFoundInvalidatesAStaleTimestampStamp for the race this ordering closes.
+            rig.proc.beforeRouteAction.set(() -> {
+                rig.proc.clearDiskReadDone(rig.uuid, new long[]{packed});
+                rig.state.enqueue(new IncomingRequest(12, 12, COLUMN_TS - 1));
+            });
             rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
             waitFor(() -> rig.proc.diskSubmits.size() == 2, "re-read submitted");
             rig.inject(ChunkReadResult.notFoundUnservable(rig.uuid, 12, 12, DIM, 2L));
