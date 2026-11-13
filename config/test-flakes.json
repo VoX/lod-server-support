@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "entries": [
+    {
+      "id": "vanilla-ticket-purge-npe",
+      "scope": "tier3",
+      "signature": "NullPointerException[\\s\\S]{0,4000}TicketStorage\\.purgeStaleTickets",
+      "expires": "2027-02-01",
+      "cause": "Minecraft fires ticket callbacks while iterating its own ticket map; every LSS ticket call is on the main thread. Not fixable in this repository.",
+      "catalog": "docs/operations/test-flakes.md: Vanilla TicketStorage.purgeStaleTickets NPE (Tier 3)"
+    }
+  ]
+}
