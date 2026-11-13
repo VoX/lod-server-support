@@ -94,7 +94,7 @@ public final class YamlSettingsCodec<T> {
             if (!schema.isClient()) throw new SettingsException("Only client settings have an experimental sidecar");
             // The experimental file must never take the main settings down: an unreadable
             // or invalid sidecar (e.g. written by a newer build) falls back to defaults.
-            try { result = schema.decode(merge(tree, sidecarTree(sidecar))); }
+            try { result = schema.decode(merge(tree, sidecarTree(sidecar, schema::booleanPath))); }
             catch (RuntimeException e) { // SettingsException, YAML syntax errors, wrong value types
                 sidecarIgnored = true;
                 dev.vox.lss.common.LSSLogger.warn("Experimental client settings file ignored: " + e.getMessage());
@@ -229,13 +229,16 @@ public final class YamlSettingsCodec<T> {
     }
     /** A sidecar may be empty (comments only). Paths other than {@link #SIDECAR_PATHS}
      *  (retired keys, or keys of a newer build) are dropped with a warning, never fatal. */
-    static Map<String,Object> sidecarTree(byte[] bytes) {
+    static Map<String,Object> sidecarTree(byte[] bytes) { return sidecarTree(bytes, null); }
+    /** @param booleanPath the settings that are switches: the experimental file accepts the same
+     *                    spellings of true and false as the main file (0.23.0 review) */
+    static Map<String,Object> sidecarTree(byte[] bytes, java.util.function.Predicate<String> booleanPath) {
         var node = composeOptional(bytes);
         // A comments-only document composes to nothing, an implicit null scalar, or (with
         // comment parsing on) an empty comment-tagged mapping.
         if (node.isEmpty() || node.get() instanceof ScalarNode scalar && Tag.NULL.equals(scalar.getTag())
                 || node.get() instanceof MappingNode map && map.getValue().isEmpty() && Tag.COMMENT.equals(map.getTag())) return Map.of();
-        Object value = value(node.get(), "");
+        Object value = value(node.get(), "", booleanPath);
         if (!(value instanceof Map<?,?> map)) throw new SettingsException("Experimental settings sidecar must be a mapping");
         @SuppressWarnings("unchecked") var tree = (Map<String,Object>) map;
         return knownSidecar(tree, "");

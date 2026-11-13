@@ -332,12 +332,15 @@ class ClientVerdictTest {
 
     @Test
     void onlyTheRendererThatCannotRunIsSaidInChat() {
-        // "Cannot run here" is the same once-ever nudge as "nothing to show".
+        // "Cannot run here" is said once ever, on its own count: the player who was told to
+        // add an LOD renderer, added one and finds it cannot run here must still be told.
         assertTrue(ClientNoticePolicy.announces(ClientVerdict.RENDERER_UNSUPPORTED));
         assertTrue(Caps.NONE.allows(ClientVerdict.RENDERER_UNSUPPORTED));
-        assertFalse(Caps.NONE.after(ClientVerdict.RENDERER_UNSUPPORTED).allows(ClientVerdict.NOTHING_TO_SHOW));
-        assertFalse(Caps.NONE.after(ClientVerdict.NOTHING_TO_SHOW).allows(ClientVerdict.RENDERER_UNSUPPORTED));
-        assertEquals(Caps.NONE.after(ClientVerdict.NOTHING_TO_SHOW), Caps.NONE.after(ClientVerdict.RENDERER_UNSUPPORTED));
+        assertTrue(Caps.NONE.after(ClientVerdict.NOTHING_TO_SHOW).allows(ClientVerdict.RENDERER_UNSUPPORTED));
+        assertTrue(Caps.NONE.after(ClientVerdict.RENDERER_UNSUPPORTED).allows(ClientVerdict.NOTHING_TO_SHOW));
+        assertFalse(Caps.NONE.after(ClientVerdict.RENDERER_UNSUPPORTED).allows(ClientVerdict.RENDERER_UNSUPPORTED));
+        assertEquals(new Caps(0, false, 0, 0, true), Caps.NONE.after(ClientVerdict.RENDERER_UNSUPPORTED));
+        assertFalse(Caps.EXHAUSTED.allows(ClientVerdict.RENDERER_UNSUPPORTED));
         // Switched off in the renderer's own settings is the player's choice: never announced.
         assertFalse(ClientNoticePolicy.announces(ClientVerdict.RENDERER_OFF));
         assertFalse(Caps.NONE.allows(ClientVerdict.RENDERER_OFF));

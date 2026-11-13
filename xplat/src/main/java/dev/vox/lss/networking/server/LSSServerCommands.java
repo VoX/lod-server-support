@@ -38,7 +38,7 @@ public class LSSServerCommands {
                 ? java.util.concurrent.CompletableFuture.completedFuture(null)
                 : service.reconcileSettings(previous, next, revision)).whenComplete((result, failure) -> {
             if (failure != null) {
-                String message = "Reload failed: " + dev.vox.lss.common.config.SettingsReload.message(failure);
+                String message = "Reload failed: " + dev.vox.lss.common.config.SettingsReload.headline(failure);
                 // Everything wrong with the file, so it is fixed once (0.23.0 plan §1).
                 var problems = dev.vox.lss.common.config.SettingsReload.problemLines(failure);
                 dev.vox.lss.common.LSSLogger.warn(message);

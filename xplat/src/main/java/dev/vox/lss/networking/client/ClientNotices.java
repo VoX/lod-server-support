@@ -41,7 +41,8 @@ public final class ClientNotices {
         if (mc.player == null || mc.getConnection() == null || mc.hasSingleplayerServer()) return;
         var snapshot = ClientStatus.latest();
         if (snapshot == null) return;
-        ClientVerdict announce = BOOK.tick(ClientVerdict.of(snapshot));
+        ClientVerdict announce = BOOK.tick(ClientVerdict.of(snapshot),
+                snapshot.negotiated() && snapshot.serverEnabled());
         if (announce != null) sink.accept(line(announce));
     }
 

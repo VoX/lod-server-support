@@ -12,9 +12,9 @@ public record ClientStatusSnapshot(int schemaVersion, long lifecycle, long captu
         int xaeroPendingRebuilds, Discovery discovery, Availability xaeroAvailability, ClientDiagnosticSnapshot details, DiagnosticVersions versions, ClientSettingsStatus settings, DhStatusSnapshot dh,
         Availability journeyMapAvailability, int journeyMapPending, int farPlayersFromServer,
         boolean mapOnly, int serverOffReason, Renderer renderer) {
-    /** What the installed LOD renderer says about itself (0.23.0 plan §6), read by
-     *  {@link ClientVerdict} alone. {@code UNKNOWN} is "not asked or could not tell" and never
-     *  changes an answer. */
+    /** What the installed LOD renderer says about itself (0.23.0 plan §6): the verdict reads
+     *  it, and the export carries it. {@code UNKNOWN} is "not asked or could not tell" and
+     *  never changes an answer. */
     public enum Renderer {
         UNKNOWN,
         /** It runs and its drawing is switched on. */
@@ -50,8 +50,12 @@ public record ClientStatusSnapshot(int schemaVersion, long lifecycle, long captu
      *  sending this client (hide-permission plan §3): 0 means the server sends none
      *  (its mode, a permission or setting, the other players' sharing choice, distance),
      *  anything else means a missing far player is a client drawing question (fog, the
-     *  draw range). A count only; never names or positions. */
-    public static final int SCHEMA_VERSION = 6;
+     *  draw range). A count only; never names or positions.
+     *  7 (0.23.0): {@code serverOffReason}, {@code renderer} and the settings file's name
+     *  and problem lines ({@code settings}). The export writes the whole record, so these
+     *  and {@code mapOnly} (since 0.22.0) are in it; the problem lines never carry a value
+     *  from the file ({@code SettingsProblems}). */
+    public static final int SCHEMA_VERSION = 7;
     /** Callers with no reason from the server for an answer that says "not here"
      *  ({@code serverOffReason}: one {@code SESSION_FLAG_OFF_*} bit or 0, read by
      *  {@link ClientVerdict} alone; 0.23.0 plan §3). */
@@ -71,7 +75,7 @@ public record ClientStatusSnapshot(int schemaVersion, long lifecycle, long captu
                 farPlayersFromServer,mapOnly,0);
     }
     /** Callers that do not say whether the map mods are this client's only consumers
-     *  ({@code mapOnly}, read by {@link ClientVerdict} alone and not exported). */
+     *  ({@code mapOnly}, read by {@link ClientVerdict} alone). */
     public ClientStatusSnapshot(int schemaVersion, long lifecycle, long capturedAtMillis,
             boolean connected, boolean negotiated, boolean receptionEnabled, boolean serverEnabled,
             boolean consumerAvailable, boolean rendererAvailable, int protocol, int serverDistance,

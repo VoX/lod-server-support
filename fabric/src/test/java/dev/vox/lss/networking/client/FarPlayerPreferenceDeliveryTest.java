@@ -53,6 +53,36 @@ class FarPlayerPreferenceDeliveryTest {
         // Off again: the server already has it.
         assertEquals(SENT,delivery.accept(connection,hidden(),prefs->{fail("already delivered");return null;}));
     }
+    @Test void aHandshakeDoesNotMakeTheClientForgetWhatTheServerHolds() {
+        // 0.23.0 review: the discovery ladder re-sends the handshake every few seconds to a
+        // server that never answers. The server still holds the opt-out it got at join, so
+        // "on" saved after such a handshake must not read "no server has received it yet".
+        var delivery=new FarPlayerPreferenceDelivery(); Object connection=new Object();
+        var sent=new ArrayList<FarPlayerWire.Prefs>();
+        delivery.joined(connection,true);
+        assertEquals(SENT,delivery.accept(connection,hidden(),prefs->{sent.add(prefs);return SENT;}));
+        delivery.handshake();
+        assertEquals(NO_CHANNEL,delivery.accept(connection,shared(),prefs->{fail("no session");return null;}));
+        assertEquals(FarPlayerPreferenceDelivery.Report.OPT_OUT_KEPT,delivery.report(shared()));
+        // The same after a session that the server then took away: it keeps what it was sent.
+        delivery.sessionReady(connection);
+        assertEquals(SENT,delivery.accept(connection,hidden(),prefs->{sent.add(prefs);return SENT;}));
+        delivery.handshake();
+        assertEquals(NO_CHANNEL,delivery.accept(connection,shared(),prefs->{fail("no session");return null;}));
+        assertEquals(FarPlayerPreferenceDelivery.Report.OPT_OUT_KEPT,delivery.report(shared()));
+        // A delivered "share" ends it; a later lost session then has nothing to report.
+        delivery.sessionReady(connection);
+        assertEquals(SENT,delivery.accept(connection,shared(),prefs->{sent.add(prefs);return SENT;}));
+        assertEquals(FarPlayerPreferenceDelivery.Report.SENT,delivery.report(shared()));
+        delivery.handshake();
+        delivery.accept(connection,shared(),prefs->{fail("no session");return null;});
+        assertEquals(FarPlayerPreferenceDelivery.Report.NOT_SENT,delivery.report(shared()));
+        assertEquals(java.util.List.of(hidden(),hidden(),shared()),sent);
+        // A new join starts clean: another server holds nothing.
+        delivery.joined(connection,true);
+        delivery.accept(connection,shared(),prefs->{fail("no session");return null;});
+        assertEquals(FarPlayerPreferenceDelivery.Report.NOT_SENT,delivery.report(shared()));
+    }
     @Test void aWaitingOptOutIsDroppedWhenSharingIsSwitchedBackOn() {
         var delivery=new FarPlayerPreferenceDelivery(); Object connection=new Object();
         delivery.joined(connection,true);

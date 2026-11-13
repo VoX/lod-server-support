@@ -627,19 +627,20 @@ class LSSPaperPluginGlueTest {
         MutablePaperSettings.dimension(netherOff, "minecraft:the_nether", 0);
         assertEquals(LSSConstants.SESSION_FLAG_OFF_WORLD, reasonOf(netherOff, nether, open));
         assertEquals(-1, reasonOf(netherOff, overworld, open));
-        // The permission gate denied the player.
-        assertEquals(LSSConstants.SESSION_FLAG_OFF_PERMISSION, reasonOf(gatedConfig(), overworld, deny));
-        // ... and the operator keeps that private: no reason at all.
-        var silent = gatedConfig();
-        MutablePaperSettings.set(silent, "service.show_permission_refusal", false);
-        assertEquals(0, reasonOf(silent, overworld, deny));
+        // The permission gate denied the player. By default the server says no reason at all
+        // (what it tells a refused player is the owner's call, plan §8.1) ...
+        assertEquals(0, reasonOf(gatedConfig(), overworld, deny));
+        // ... and names the permission where the operator switched that on.
+        var telling = gatedConfig();
+        MutablePaperSettings.set(telling, "service.show_permission_refusal", true);
+        assertEquals(LSSConstants.SESSION_FLAG_OFF_PERMISSION, reasonOf(telling, overworld, deny));
         // A denied player in an off world is never told about the world: they get no later
         // pushes, so it could not be corrected when they walk into a world that serves others.
         var gatedNetherOff = gatedConfig();
         MutablePaperSettings.dimension(gatedNetherOff, "minecraft:the_nether", 0);
-        assertEquals(LSSConstants.SESSION_FLAG_OFF_PERMISSION, reasonOf(gatedNetherOff, nether, deny));
-        MutablePaperSettings.set(gatedNetherOff, "service.show_permission_refusal", false);
         assertEquals(0, reasonOf(gatedNetherOff, nether, deny));
+        MutablePaperSettings.set(gatedNetherOff, "service.show_permission_refusal", true);
+        assertEquals(LSSConstants.SESSION_FLAG_OFF_PERMISSION, reasonOf(gatedNetherOff, nether, deny));
         // The service switch outranks both.
         var allOff = gatedConfig();
         MutablePaperSettings.set(allOff, "service.enabled", false);

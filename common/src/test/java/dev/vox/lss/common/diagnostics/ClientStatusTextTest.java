@@ -74,9 +74,12 @@ class ClientStatusTextTest {
             assertTrue(snapshot.lines().contains("Far players sent by this server: "+count),snapshot.lines().toString());
             var json=JsonParser.parseString(DiagnosticExport.clientJson(snapshot)).getAsJsonObject();
             assertEquals(count,json.get("farPlayersFromServer").getAsInt(),"a count only, in the export");
-            assertEquals(6,json.get("schemaVersion").getAsInt());
+            assertEquals(7,json.get("schemaVersion").getAsInt());
+            // The export writes the whole record: the 0.23.0 fields are in it.
+            assertEquals(0,json.get("serverOffReason").getAsInt());
+            assertEquals("UNKNOWN",json.get("renderer").getAsString());
         }
-        assertEquals(6,ClientStatusSnapshot.SCHEMA_VERSION,"a new exported field is a schema bump");
+        assertEquals(7,ClientStatusSnapshot.SCHEMA_VERSION,"a new exported field is a schema bump");
         // Callers with no far-player observation read 0, never a stale or negative count.
         var unobserved=new ClientStatusSnapshot(ClientStatusSnapshot.SCHEMA_VERSION,1,100,true,true,true,true,true,true,
                 20,512,128,0,0,0,0,0,0,0,0,ClientStatusSnapshot.Discovery.NEGOTIATED,

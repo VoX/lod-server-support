@@ -442,9 +442,9 @@ public class LSSPaperPlugin extends JavaPlugin implements PluginMessageListener,
                 // the broadcast core's single-threaded contract holds on Folia too.
                 data -> {
                     var prefs = dev.vox.lss.common.farplayers.FarPlayerWire.decodePrefs(data);
-                    var uuid = nmsPlayer.getUUID();
-                    service.enqueueRuntimeTask(
-                            () -> service.getFarPlayerService().onPrefs(uuid, prefs));
+                    // Dropped on the pump when this connection's player has gone meanwhile
+                    // (the quit sets the flag before it enqueues its Remove).
+                    service.enqueueFarPlayerPrefs(nmsPlayer.getUUID(), prefs, nmsPlayer::hasDisconnected);
                 },
                 // Region summaries (P2 §5): decode on the messenger thread (pure — a
                 // Folia region thread is fine, no entity access), offer into the

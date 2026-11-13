@@ -142,7 +142,7 @@ public final class LSSClientConfig {
         }).whenComplete((result, failure) -> owner.execute(() -> {
             try {
                 if (failure != null) {
-                    LSSLogger.warn("Client settings reload failed: " + SettingsReload.message(failure));
+                    LSSLogger.warn("Client settings reload failed: " + SettingsReload.headline(failure));
                     feedback.accept(Component.translatable("lss.settings.reload_failed"));
                     // Everything wrong with the file, so it is fixed once (0.23.0 plan §1).
                     for (String line : SettingsReload.problemLines(failure)) {

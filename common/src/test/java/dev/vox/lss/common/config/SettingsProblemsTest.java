@@ -60,16 +60,66 @@ class SettingsProblemsTest {
         assertNull(SettingsProblems.nearest(Set.of("alpha"), "omega"));
     }
 
-    @Test void aSettingOfTheOtherSideIsNamedAsSuch() {
-        assertEquals(List.of("line 3: unknown setting far_players.enabled. That is a client setting, not a server one."),
+    @Test void aSettingOfTheOtherSideIsNamedAsSuchWithTheOneThatDoesItsJobHere() {
+        // An operator who writes the client's switch to hide far players must not just delete
+        // the line and leave far players on: the hint names the server's setting.
+        assertEquals(List.of("line 3: unknown setting far_players.enabled. That is a client setting; the server's is far_players.mode."),
                 problems(server, "config_version: 1\nfar_players:\n  enabled: false\n"));
-        assertEquals(List.of("line 3: unknown setting far_players.mode. That is a server setting, not a client one."),
+        assertEquals(List.of("line 3: unknown setting far_players.mode. That is a server setting; the client's is far_players.enabled."),
                 problems(client, "config_version: 1\nfar_players:\n  mode: \"off\"\n"));
+        // No certain counterpart: the side alone.
+        assertEquals(List.of("line 3: unknown setting lod.receive. That is a client setting, not a server one."),
+                problems(server, "config_version: 1\nlod:\n  receive: false\n"));
+        // Every pair names real settings, each on its own side.
+        var serverPaths = SettingsSchema.server(false).descriptorsByPath().keySet();
+        var clientPaths = SettingsSchema.client().descriptorsByPath().keySet();
+        SettingsProblems.ON_THE_SERVER.forEach((theirs, ours) -> {
+            assertTrue(clientPaths.contains(theirs) && !serverPaths.contains(theirs), theirs);
+            assertTrue(serverPaths.contains(ours), ours);
+        });
+        SettingsProblems.ON_THE_CLIENT.forEach((theirs, ours) -> {
+            assertTrue(serverPaths.contains(theirs) && !clientPaths.contains(theirs), theirs);
+            assertTrue(clientPaths.contains(ours), ours);
+        });
+    }
+
+    @Test void aKnownNameWrittenTwiceIsSaidWithTheRest() {
+        // The strict reader stops at a duplicate, so without this a typo and a duplicate took
+        // two restarts.
+        assertEquals(List.of("line 4: service.enabled is written twice; keep one",
+                        "line 5: unknown setting service.nonsense_key. Check the spelling. If a newer version of the mod wrote this line, delete it.",
+                        "line 6: service is written twice; keep one"),
+                problems(server, "config_version: 1\nservice:\n  enabled: true\n  enabled: false\n  nonsense_key: 1\nservice:\n  enabled: true\n"));
     }
 
     @Test void aNameFromBeforeTheYamlFileIsTranslated() {
         assertEquals(List.of("line 3: unknown setting service.requireServicePermission. Its name in this file is service.require_permission."),
                 problems(server, "config_version: 1\nservice:\n  requireServicePermission: true\n"));
+    }
+
+    @Test void anOldNameThatCountedSecondsSaysTheNewOneCountsTicks() {
+        assertEquals(List.of("line 2: unknown setting generationTimeoutSeconds. Its name in this file is generation.timeout_ticks. It counts ticks: 20 for each second."),
+                problems(server, "config_version: 1\ngenerationTimeoutSeconds: 30\n"));
+        assertEquals(List.of("line 2: unknown setting dirtyBroadcastIntervalSeconds. Its name in this file is updates.dirty_broadcast_interval_ticks. It counts ticks: 20 for each second."),
+                problems(server, "config_version: 1\ndirtyBroadcastIntervalSeconds: 5\n"));
+        // Same unit: no remark.
+        assertEquals(List.of("line 2: unknown setting missMemoTtlSeconds. Its name in this file is storage.miss_memo_ttl_seconds."),
+                problems(server, "config_version: 1\nmissMemoTtlSeconds: 5\n"));
+    }
+
+    @Test void aFailedReloadsFirstLineDoesNotRepeatWhatTheListHides() {
+        // The strict reader's message names the path as typed; the reload output printed it
+        // one line above the list that masks it.
+        var refused = assertThrows(SettingsException.class, () -> server.parse(bytes(
+                "config_version: 1\nfar_players:\n  SomePlayerName: true\n")));
+        assertTrue(refused.getMessage().contains("SomePlayerName"), "the strict message is unchanged");
+        assertEquals("the file has 1 problem:", SettingsReload.headline(refused));
+        assertEquals("the file has 1 problem:", SettingsReload.headline(new java.util.concurrent.CompletionException(refused)));
+        for (String line : SettingsReload.problemLines(refused)) assertFalse(line.contains("SomePlayerName"), line);
+        // Nothing to list below it: the message itself.
+        assertEquals("disk full", SettingsReload.headline(new java.io.IOException("disk full")));
+        assertEquals("Settings file is empty", SettingsReload.headline(
+                assertThrows(SettingsException.class, () -> server.parse(bytes("")))));
     }
 
     @Test void anOldNameIsOnlyTrustedWhereItCannotBeAGuessAtANewOne() {
@@ -82,7 +132,7 @@ class SettingsProblemsTest {
     }
 
     @Test void anUnknownNameWithNoHintGetsTheDowngradeAdvice() {
-        assertEquals(List.of("line 3: unknown setting network.future_thing. If a newer version of the mod wrote this file, delete this line."),
+        assertEquals(List.of("line 3: unknown setting network.future_thing. Check the spelling. If a newer version of the mod wrote this line, delete it."),
                 problems(server, "config_version: 1\nnetwork:\n  future_thing: 1\n"));
     }
 
@@ -92,7 +142,7 @@ class SettingsProblemsTest {
         var dotted = problems(client, "config_version: 1\ncache:\n  play.example.org: [backup.example.org]\n");
         assertEquals(List.of("line 3: a name under cache contains a dot; settings are written as nested groups, one name per line"), dotted);
         var hidden = problems(client, "config_version: 1\ncache:\n  secretserver: [a]\n");
-        assertEquals(List.of("line 3: unknown setting cache.<private>. If a newer version of the mod wrote this file, delete this line."), hidden);
+        assertEquals(List.of("line 3: unknown setting cache.<private>. Check the spelling. If a newer version of the mod wrote this line, delete it."), hidden);
         var player = problems(server, "config_version: 1\nfar_players:\n  SomePlayerName: true\n");
         assertTrue(player.get(0).startsWith("line 3: unknown setting far_players.<private>."), player.get(0));
         // A wrong value is described by its type, never quoted.
@@ -188,8 +238,24 @@ class SettingsProblemsTest {
         assertThrows(SettingsException.class, () -> server.parse(bytes("config_version: 1\nlod: {distance: {default_chunks: on}}\n")));
     }
 
+    @Test void theExperimentalFileAcceptsTheSameSpellings() {
+        // 0.23.0 review: "real_time_updates: off" there made the whole file ignored, which
+        // put every experimental option back at its default.
+        byte[] main = bytes("config_version: 1\n");
+        assertTrue(client.parse(main).configured().lod().dh().realTimeUpdates(), "the default is on");
+        var spelt = client.parse(main, bytes("lod:\n  dh:\n    real_time_updates: off\n"));
+        assertFalse(spelt.sidecarIgnored());
+        assertFalse(spelt.configured().lod().dh().realTimeUpdates());
+        // Still strict about everything else: a word that is not a boolean makes the file ignored.
+        var wrong = client.parse(main, bytes("lod:\n  dh:\n    real_time_updates: maybe\n"));
+        assertTrue(wrong.sidecarIgnored());
+        assertTrue(wrong.configured().lod().dh().realTimeUpdates());
+        // A text setting in that file keeps its word.
+        assertEquals("lss", client.parse(main, bytes("lod:\n  source: lss\n")).configured().lod().source());
+    }
+
     @Test void aSpeltBooleanIsNotReportedAsAProblemOfARefusedFile() {
-        assertEquals(List.of("line 4: unknown setting service.nonsense_key. If a newer version of the mod wrote this file, delete this line."),
+        assertEquals(List.of("line 4: unknown setting service.nonsense_key. Check the spelling. If a newer version of the mod wrote this line, delete it."),
                 problems(server, "config_version: 1\nservice:\n  enabled: Yes\n  nonsense_key: 1\n"));
     }
 }

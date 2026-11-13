@@ -31,6 +31,10 @@ What strictness buys is consent: the mod never runs a configuration nobody wrote
 ## Consequences
 
 - A downgrade still needs the newer keys deleted. The message says which lines.
+- The boolean spellings (`yes`, `on`, …) are a one-way convenience: 0.22 and older refuse them,
+  one line per restart. The README's downgrade paragraph says so.
+- The hint for an unknown name starts with "check the spelling": "delete this line" alone would
+  invite doing by hand what the mod refuses to do.
 - A new server key that an older version may ignore is commented out in the template, with its
   default in code, so files created by the newer version still load on the older one.
 

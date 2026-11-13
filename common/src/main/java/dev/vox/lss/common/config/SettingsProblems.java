@@ -32,7 +32,16 @@ public final class SettingsProblems {
         public String render() { return line > 0 ? "line " + line + ": " + text : text; }
     }
 
-    private static final String NEWER_VERSION_HINT = "If a newer version of the mod wrote this file, delete this line.";
+    private static final String NEWER_VERSION_HINT = "Check the spelling. If a newer version of the mod wrote this line, delete it.";
+
+    /** A setting of the other side, and the one on this side that does its job. Only pairs
+     *  that cannot mislead: without an entry the hint just names the side. */
+    static final java.util.Map<String, String> ON_THE_SERVER = java.util.Map.of(
+            "far_players.enabled", "far_players.mode",
+            "lod.distance_chunks", "lod.distance.default_chunks");
+    static final java.util.Map<String, String> ON_THE_CLIENT = java.util.Map.of(
+            "far_players.mode", "far_players.enabled",
+            "lod.distance.default_chunks", "lod.distance_chunks");
 
     private SettingsProblems() {}
 
@@ -59,6 +68,7 @@ public final class SettingsProblems {
     }
 
     private static void walk(SettingsSchema<?> schema, MappingNode group, String prefix, List<Problem> out) {
+        var seen = new java.util.HashSet<String>();
         for (NodeTuple pair : group.getValue()) {
             int line = line(pair.getKeyNode());
             if (!(pair.getKeyNode() instanceof ScalarNode key) || !Tag.STR.equals(key.getTag())) {
@@ -72,6 +82,12 @@ public final class SettingsProblems {
             }
             String path = prefix.isEmpty() ? name : prefix + "." + name;
             if (path.equals("config_version")) continue;
+            // A second copy of a known name: the strict reader stops at it. (An unknown name
+            // written twice is reported as unknown, twice.)
+            if (!seen.add(name) && (schema.knownLeaf(path) || schema.knownGroup(path))) {
+                out.add(new Problem(line, path + " is written twice; keep one"));
+                continue;
+            }
             if (schema.knownLeaf(path)) {
                 if (!schema.descriptorsByPath().containsKey(schema.canonicalPath(path))) continue; // retired: tolerated
                 String wrong;
@@ -95,16 +111,21 @@ public final class SettingsProblems {
         if (near != null) return "unknown setting " + path + ". Did you mean " + (prefix.isEmpty() ? near : prefix + "." + near) + "?";
         String shown = privateGroups(schema).contains(topLevel(path)) && !prefix.isEmpty() ? prefix + ".<private>" : path;
         // The hints below only name settings a schema itself knows, so they print the name.
-        if (otherSide(schema).descriptorsByPath().containsKey(path))
-            return "unknown setting " + path + ". That is a " + otherSide(schema).side() + " setting, not a "
-                    + schema.side() + " one.";
+        if (otherSide(schema).descriptorsByPath().containsKey(path)) {
+            String here = (schema.isClient() ? ON_THE_CLIENT : ON_THE_SERVER).get(path);
+            return "unknown setting " + path + ". That is a " + otherSide(schema).side() + " setting"
+                    + (here == null ? ", not a " + schema.side() + " one." : "; the " + schema.side() + "'s is " + here + ".");
+        }
         // The file before YAML was flat, so an old name belongs at the top. Inside a group only
         // a camelCase name is unmistakably an old one ("enabled" was the old service switch
         // and is also a perfectly good guess at a new name).
         if (prefix.isEmpty() || !name.equals(name.toLowerCase(Locale.ROOT)))
             for (var descriptor : schema.descriptors())
                 if (name.equals(descriptor.legacyKey()))
-                    return "unknown setting " + path + ". Its name in this file is " + descriptor.path() + ".";
+                    return "unknown setting " + path + ". Its name in this file is " + descriptor.path() + "."
+                            // The old file counted seconds where this one counts ticks.
+                            + (name.endsWith("Seconds") && descriptor.path().endsWith("_ticks")
+                                    ? " It counts ticks: 20 for each second." : "");
         return "unknown setting " + shown + ". " + NEWER_VERSION_HINT;
     }
 

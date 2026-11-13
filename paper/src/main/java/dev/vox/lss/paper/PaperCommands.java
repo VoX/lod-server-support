@@ -120,7 +120,7 @@ public class PaperCommands implements CommandExecutor, TabCompleter {
                 : service.reconcileSettings(previous, next, revision)).whenComplete((result, failure) -> {
             var lines = failure == null
                     ? dev.vox.lss.common.config.ReloadFeedback.lines(config.settingsPath(), result)
-                    : java.util.List.of("Reload failed: " + dev.vox.lss.common.config.SettingsReload.message(failure));
+                    : java.util.List.of("Reload failed: " + dev.vox.lss.common.config.SettingsReload.headline(failure));
             var report = new java.util.ArrayList<>(lines);
             // Everything wrong with the file, so it is fixed once (0.23.0 plan §1).
             if (failure != null)

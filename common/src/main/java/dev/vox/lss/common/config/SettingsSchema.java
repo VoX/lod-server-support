@@ -56,8 +56,9 @@ public final class SettingsSchema<T> {
             };
             if (raw==null && spec.path().equals("lod.distance.by_world")) raw=Map.of();
             // Not in the server templates (a commented line there): a file this version creates
-            // must still load on 0.22.0. Default: a player the permission gate leaves out is told.
-            if (!client && raw==null && spec.path().equals("service.show_permission_refusal")) raw=true;
+            // must still load on 0.22.0. Default off: what a server tells a player it refuses is
+            // the owner's call (plan §8.1, not answered), so nothing more is said than in 0.22.
+            if (!client && raw==null && spec.path().equals("service.show_permission_refusal")) raw=false;
             if (paper && spec.path().equals("storage.lod_store.resweep_interval_seconds")) raw=300;
             Object value=typed(spec,raw);
             defs.put(spec.path(),value);
@@ -73,7 +74,7 @@ public final class SettingsSchema<T> {
                 default -> "";
             };
             if (!client && spec.path().equals("service.show_permission_refusal"))
-                inline="With require_permission on, a player without the permission is told \"distant terrain here needs a permission you don't have\"; false = they see the general \"switched off here\". Courtesy, not secrecy: a player can compare with a friend.";
+                inline="With require_permission on, true tells a player without the permission \"distant terrain here needs a permission you don't have\"; false (the default) = they see the general \"switched off here\". Courtesy, not secrecy: a player can compare with a friend.";
             if (inline.isEmpty()) inline=inlineComment(resource("server"),spec.path());
             if (inline.isEmpty()) inline=inlineComment(resource("paper"),spec.path());
             descs.put(spec.path(),new Descriptor(spec.path(),spec.legacyKey(),spec.kind(),value,spec.timing(),spec.platform(),spec.sensitive(),group(spec.path()),units(spec.path()),

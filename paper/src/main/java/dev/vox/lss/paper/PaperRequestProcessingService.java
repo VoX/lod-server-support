@@ -945,6 +945,26 @@ public class PaperRequestProcessingService {
         if (!this.shuttingDown) this.runtimeTasks.add(task);
     }
 
+    /**
+     * A far-player preference frame, applied on the pump (any thread may call this).
+     *
+     * <p>A frame can race its own player's quit: the quit's Remove sits in the lifecycle
+     * mailbox, which the pump drains before the runtime tasks, so the kept preference is
+     * cleared first and the frame would then put it back for a player who is gone. Nothing
+     * removes it again until that player next quits, and {@code opted_out=} would count an
+     * offline player. Since 0.23.0 every client with Share My Position off sends this frame
+     * at join, so the window matters (a join that is kicked in the same tick).
+     *
+     * @param disconnected read on the pump, when the frame is applied; true drops the frame
+     */
+    public void enqueueFarPlayerPrefs(UUID uuid, dev.vox.lss.common.farplayers.FarPlayerWire.Prefs prefs,
+                                      java.util.function.BooleanSupplier disconnected) {
+        enqueueRuntimeTask(() -> {
+            if (disconnected.getAsBoolean()) return;
+            this.farPlayerService.onPrefs(uuid, prefs);
+        });
+    }
+
     private void drainRuntimeTasks() {
         Runnable task;
         while ((task = this.runtimeTasks.poll()) != null) {

@@ -147,6 +147,14 @@ public final class SettingsReload<T> implements AutoCloseable {
         if (problems.isEmpty() || problems.size() == 1 && problems.get(0).line() == 0) return java.util.List.of();
         return SettingsProblemText.lines(problems);
     }
+    /** What follows "Reload failed: ". When the list of problems is printed below it, this is
+     *  the count alone: the strict reader's own message can repeat a name the author typed
+     *  (a mis-indented address or player name becomes a setting name), which the list takes
+     *  care never to print (0.23.0 review). */
+    public static String headline(Throwable error) {
+        var lines = problemLines(error);
+        return lines.isEmpty() ? message(error) : "the file has " + SettingsProblemText.count(problems(error).size()) + ":";
+    }
     public static String message(Throwable error) {
         while ((error instanceof CompletionException || error instanceof ExecutionException)
                 && error.getCause() != null) error = error.getCause();

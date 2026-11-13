@@ -102,8 +102,11 @@ public class YamlServerConfig extends ServerConfigBase implements AutoCloseable 
     }
     public final SettingsHandle<ServerSettings> settingsHandle() { return context.handle(); }
     private static IllegalStateException unavailable(Context current) {
+        // The count, not the strict reader's message: that one can repeat a name the author
+        // typed, and the command prints the masked list right below this line.
         return new IllegalStateException(current.startupError() == null ? "This settings view has no file"
-                : "Repair settings and restart: " + current.startupError());
+                : "Repair settings and restart: the file has "
+                        + SettingsProblemText.count(Math.max(1, current.startupProblems().size())));
     }
     public final CompletableFuture<SettingsReload.Outcome<ServerSettings>> reload(
             Executor owner, SettingsReload.Reconciler<ServerSettings> reconciler) {

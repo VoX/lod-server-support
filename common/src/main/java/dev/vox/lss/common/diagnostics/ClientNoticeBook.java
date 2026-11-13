@@ -39,8 +39,17 @@ public final class ClientNoticeBook {
     }
 
     /** One client tick. Returns the verdict to say in chat now, or null. */
-    public ClientVerdict tick(ClientVerdict verdict) {
-        if (verdict != null && verdict.working()) this.workedThisConnection = true;
+    public ClientVerdict tick(ClientVerdict verdict) { return tick(verdict, false); }
+
+    /**
+     * One client tick. Returns the verdict to say in chat now, or null.
+     *
+     * @param served a server on this connection answered and serves this player here. The
+     *               verdict can still be "the LOD renderer is not drawing"; the network has the
+     *               mod all the same, which is all the lobby rule needs to know.
+     */
+    public ClientVerdict tick(ClientVerdict verdict, boolean served) {
+        if (served || verdict != null && verdict.working()) this.workedThisConnection = true;
         ClientVerdict settled = this.policy.settle(verdict);
         if (settled == null) return null;
         if (settled == ClientVerdict.NO_SUPPORT && this.workedThisConnection) return null;

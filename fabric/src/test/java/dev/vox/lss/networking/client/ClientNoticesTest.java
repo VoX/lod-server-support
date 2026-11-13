@@ -64,7 +64,9 @@ class ClientNoticesTest {
         String source = normalized("xplat/src/main/java/dev/vox/lss/networking/client/ClientNotices.java");
         assertTrue(source.contains("mc.hasSingleplayerServer()) return;"),
                 "singleplayer and a LAN host get no notice");
-        assertTrue(source.contains("ClientVerdict announce = BOOK.tick(ClientVerdict.of(snapshot)); "
+        // The second argument is the lobby rule's "a server here serves this player" (0.23.0).
+        assertTrue(source.contains("ClientVerdict announce = BOOK.tick(ClientVerdict.of(snapshot), "
+                        + "snapshot.negotiated() && snapshot.serverEnabled()); "
                         + "if (announce != null) sink.accept(line(announce));"),
                 "when and how often is the book's (ClientNoticeBookTest), from the same verdict the status shows");
         assertTrue(source.contains("ColumnCacheStore.cacheRoot().resolveSibling(\"notices.properties\")"),

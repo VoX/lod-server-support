@@ -21,7 +21,8 @@ final class FarPlayerPreferenceDelivery {
         SENT,
         /** "Off" reached the server although no session exists. */
         OPT_OUT_SENT,
-        /** "On" is saved, and the server still holds the "off" it was sent without a session. */
+        /** "On" is saved and cannot be sent without a session, and the server still holds
+         *  the "off" it was last sent on this connection. */
         OPT_OUT_KEPT,
         /** Nothing has reached a server. */
         NOT_SENT,
@@ -33,7 +34,10 @@ final class FarPlayerPreferenceDelivery {
     private boolean ready;
     private FarPlayerWire.Prefs sent;
     private FarPlayerWire.Prefs pending;
-    private boolean optOutWithoutSession;
+    /** The last preference this server received on this join said "do not share". A server
+     *  keeps it until the connection ends, whatever happens to the session meanwhile, so
+     *  only a join or a delivered "share" changes this. */
+    private boolean serverHoldsOptOut;
     private int ticks;
     private Outcome outcome = Outcome.NO_CHANNEL;
 
@@ -53,10 +57,13 @@ final class FarPlayerPreferenceDelivery {
         connection = identity;
         // The frame after a session answer is the one the server answers with the first
         // roster: an opt-out that went out before the answer does not stand in for it.
-        if (!ready) { sent = null; optOutWithoutSession = false; }
+        if (!ready) sent = null;
         ready = identity != null;
     }
-    void handshake() { ready = false; sent = null; optOutWithoutSession = false; }
+    /** A handshake was sent (also by the discovery ladder, every few seconds, to a server
+     *  that never answers): the next session needs its own frame. What the server holds is
+     *  untouched by a handshake. */
+    void handshake() { ready = false; sent = null; }
     private boolean deliverable(FarPlayerWire.Prefs prefs) {
         return ready || (joined && !prefs.shareSelf());
     }
@@ -79,7 +86,7 @@ final class FarPlayerPreferenceDelivery {
         try { outcome = enqueue.apply(pending); }
         catch (RuntimeException failure) { outcome = Outcome.FAILED; }
         if (outcome == Outcome.SENT) {
-            optOutWithoutSession = !ready;
+            serverHoldsOptOut = !pending.shareSelf();
             sent = pending;
             pending = null;
         }
@@ -95,7 +102,7 @@ final class FarPlayerPreferenceDelivery {
     Report report(FarPlayerWire.Prefs desired) {
         if (outcome == Outcome.FAILED) return Report.RETRYING;
         if (outcome == Outcome.SENT) return ready ? Report.SENT : Report.OPT_OUT_SENT;
-        return optOutWithoutSession && !ready && desired.shareSelf() ? Report.OPT_OUT_KEPT : Report.NOT_SENT;
+        return serverHoldsOptOut && !ready && desired.shareSelf() ? Report.OPT_OUT_KEPT : Report.NOT_SENT;
     }
     boolean pending() { return pending != null; }
     void invalidateSent() { sent = null; }
@@ -105,7 +112,7 @@ final class FarPlayerPreferenceDelivery {
         ready = false;
         sent = null;
         pending = null;
-        optOutWithoutSession = false;
+        serverHoldsOptOut = false;
         ticks = 0;
         outcome = Outcome.NO_CHANNEL;
     }
