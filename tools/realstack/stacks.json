@@ -282,6 +282,71 @@
         "client_clean",
         "screenshot"
       ]
+    },
+    {
+      "id": "fabric-1.21.1-sodium-xaero",
+      "status": "ready",
+      "minecraft": "1.21.1",
+      "notes": "The Fabric client on 1.21.1: this line has no client gametest, so this row is the only automated start, join and kick of a Fabric 1.21.1 client. Xaero's World Map is the terrain consumer (no Voxy release targets Fabric 1.21.1 with this Sodium).",
+      "server": {
+        "platform": "fabric",
+        "loader_version": "0.20.1",
+        "lss": {
+          "loader": "fabric",
+          "jar_prefix": "lod-server-support-fabric"
+        },
+        "mods": [
+          {
+            "slug": "fabric-api",
+            "project_id": "P7dR8mSH",
+            "version_id": "5SwzqWUu",
+            "version_number": "0.116.18+1.21.1",
+            "file": "fabric-api-0.116.18+1.21.1.jar",
+            "sha512": "9f721c253ae2e9823cb548e8ec132c9928f80a65184e9b8dcfc489a8d632df20cbfea1e65ff8a4333bdb295c41fbe2228b43e4d41c7355d42ed4637a785840a1"
+          }
+        ]
+      },
+      "client": {
+        "loader": "fabric",
+        "loader_version": "0.20.1",
+        "lss": {
+          "loader": "fabric",
+          "jar_prefix": "lod-server-support-fabric"
+        },
+        "mods": [
+          {
+            "slug": "fabric-api",
+            "project_id": "P7dR8mSH",
+            "version_id": "5SwzqWUu",
+            "version_number": "0.116.18+1.21.1",
+            "file": "fabric-api-0.116.18+1.21.1.jar",
+            "sha512": "9f721c253ae2e9823cb548e8ec132c9928f80a65184e9b8dcfc489a8d632df20cbfea1e65ff8a4333bdb295c41fbe2228b43e4d41c7355d42ed4637a785840a1"
+          },
+          {
+            "slug": "sodium",
+            "project_id": "AANobbMI",
+            "version_id": "SMxNOGZ6",
+            "version_number": "mc1.21.1-0.8.13-fabric",
+            "file": "sodium-fabric-0.8.13+mc1.21.1.jar",
+            "sha512": "8614a374593698069a80ac74de8cd9c28f3928d16819a0e0d6320b538e823f7e54e8be06d5ea5a9c268beb0e02073209d1f831a02dede851588b972367680853"
+          },
+          {
+            "slug": "xaeros-world-map",
+            "project_id": "NcUtCpym",
+            "version_id": "XIR7GzC3",
+            "version_number": "fabric-1.21.1-1.47.0",
+            "file": "xaeroworldmap-fabric-1.21.1-1.47.0.jar",
+            "sha512": "7bdf96a45ab729ad5b8c56b1de421ab8c94006a65e62f21e45a4733a38a7a1655b8be03ef3bdfcdc52401c66894b9f4f80fc28b41d47a787a9fa45094629f5c7"
+          }
+        ]
+      },
+      "checks": [
+        "server_started",
+        "handshake",
+        "columns_sent",
+        "client_clean",
+        "screenshot"
+      ]
     }
   ]
 }
