@@ -1,5 +1,6 @@
 package dev.vox.lss.common.store;
 
+import dev.vox.lss.common.FaultCounters;
 import dev.vox.lss.common.Brand;
 import dev.vox.lss.common.LSSLogger;
 import dev.vox.lss.common.PositionUtil;
@@ -2349,8 +2350,10 @@ public final class SqliteLodStore implements LodStoreService {
                 this.writer.commit();
                 this.diag.setDbBytes(Files.exists(this.dbPath) ? Files.size(this.dbPath) : 0);
             }
-        } catch (Throwable ignored) {
-            // gauge refresh is best-effort; a failed checkpoint retries next interval
+        } catch (Throwable t) {
+            // Best-effort: a failed checkpoint, eviction or vacuum retries next interval. Counted,
+            // because a store that silently stopped evicting grows without bound.
+            FaultCounters.global().record(FaultCounters.Site.STORE_MAINTENANCE, t);
         }
     }
 

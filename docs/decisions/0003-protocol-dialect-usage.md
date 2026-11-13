@@ -1,13 +1,14 @@
 # 0003 Old protocol support is measured before it is judged
 
-Status: accepted 2026-11-13 (VoX).
+Status: accepted 2026-11-13 (VoX). Amended the same day after plan review: no file on disk.
 
 ## Decision
 
-The server counts sessions by the protocol dialect they negotiated (16, 18, 20, and Via-translated)
-and shows the totals in diagnostics. Support for protocol 16 and 18 clients stays exactly as it is.
-After a month of data VoX decides whether a retire rule is written, for example "under 1 % of
-sessions for 60 days".
+The server counts each session once, under the protocol dialect it ended with (current, 19, 18, 16),
+and shows the totals since start with the uptime they cover in diagnostics (`ended=` on the
+`Dialects:` line). Support for protocol 16 and 18 clients stays exactly as it is. After a
+month of data VoX decides whether a retire rule is written, for example "under 1 % of sessions for
+60 days".
 
 ## Why
 
@@ -18,9 +19,13 @@ because the session gate matches exact versions.
 ## Consequences
 
 - Nothing about wire behaviour changes. Wire fidelity is never tiered.
-- The counters are local to each server. Nothing is uploaded; operators who report issues paste
-  the diagnostics line as they do today.
+- The counters are in memory and local to each server. Nothing is written or uploaded. They
+  reset at restart, so a count covers one uptime, which is printed beside it; a server that
+  restarts daily shows a day.
+- The test server alone cannot answer the question: it attracts players on the newest build.
+  Modrinth's downloads per version (how many clients older than a protocol are still being
+  installed) and diagnostics pasted into issue reports are the other two sources.
 
 ## Revisit when
 
-A month of diagnostics from the test server and from issue reports exists.
+A month of those three sources exists.
