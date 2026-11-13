@@ -578,6 +578,16 @@ class CheckTest(OfflineCase):
         for scenario in realstack.SCENARIOS.values():
             self.assertIn(scenario['notice'], checks.NOTICE_TEXTS)
 
+    def test_the_other_brand_is_asked_and_watched_under_its_own_name(self) -> None:
+        # A run on the VSS build once asked `lsslod diag` and read "Unknown command" as a dead
+        # service: the build's server command is its own.
+        self.assertEqual(realstack.SERVER_COMMANDS, {'lss': 'lsslod', 'vss': 'vsslod'})
+        self.assertEqual(set(realstack.SERVER_COMMANDS), set(realstack.BRAND_PREFIXES))
+        error = '[10:00:00] [Server thread/ERROR]: [VSS] the store failed to open\n'
+        self.assertEqual(len(checks.lss_entries(checks.parse_entries(error), ('ERROR',), ())), 1)
+        other = '[10:00:00] [Server thread/ERROR]: Could not load the class ClassVSSomething\n'
+        self.assertEqual(checks.lss_entries(checks.parse_entries(other), ('ERROR',), ()), [])
+
     def test_brand_selects_the_other_build_of_the_same_jar(self) -> None:
         self.assertEqual(realstack.branded_prefix('lod-server-support-fabric', 'lss'),
                          'lod-server-support-fabric')

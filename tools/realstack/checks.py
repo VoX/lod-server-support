@@ -14,8 +14,8 @@ ANSI = re.compile(r'\x1b\[[0-9;]*[A-Za-z]')
 ENTRY = re.compile(r'^\[\d\d:\d\d:\d\d(?:\.\d+)?\] '
                    r'\[(?P<thread>.*?)/(?P<level>TRACE|DEBUG|INFO|WARN|ERROR|FATAL)\]'
                    r'(?: \[(?P<logger>[^\]]*)\])?: ?(?P<message>.*)$')
-LSS_MENTION = re.compile(r'(?<![a-z0-9])lss(?![a-z0-9])|lod[-_ ]?server[-_ ]?support|dev\.vox\.lss',
-                         re.IGNORECASE)
+LSS_MENTION = re.compile(r'(?<![a-z0-9])[lv]ss(?![a-z0-9])|lod[-_ ]?server[-_ ]?support'
+                         r'|voxy[-_ ]?server[-_ ]?side|dev\.vox\.lss', re.IGNORECASE)
 UNCAUGHT = re.compile(r'^Exception in thread "(?P<thread>[^"]*)"')
 RIG_PATH = '<rig>'
 SERVER_READY = re.compile(r'^Done \([0-9.]+s\)! For help, type "help"')

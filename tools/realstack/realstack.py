@@ -57,6 +57,7 @@ SCENARIOS = {
 }
 NOTICE_SECONDS = 150         # how long after the join the client's chat notice may take
 BRAND_PREFIXES = {'lss': 'lod-server-support-', 'vss': 'voxy-server-side-'}
+SERVER_COMMANDS = {'lss': 'lsslod', 'vss': 'vsslod'}   # each build's own server command root
 KEEP_AFTER_RUN = ('logs', 'crash-reports', 'config', 'console.log', 'console.in', 'stdout.log',
                   'server.properties', 'options.txt', 'eula.txt')
 
@@ -487,7 +488,8 @@ class Run:
         self.take_screenshot(display)
 
     def observe(self, display: int) -> None:
-        """Keep the client in the world for the observation window, polling `lsslod diag`."""
+        """Keep the client in the world for the observation window, polling the server's
+        diagnostics command (`lsslod diag`, or `vsslod diag` on the Voxy Server Side build)."""
         if self.scenario:
             self.observe_notice(display)
             return
@@ -495,7 +497,7 @@ class Run:
         stay_until = self.remaining(self.options.observe)
         give_up = self.remaining(max(self.options.observe, self.options.columns_deadline))
         while True:
-            reply = self.console('lsslod diag', expect='Bandwidth:')
+            reply = self.console(f'{SERVER_COMMANDS[self.options.brand]} diag', expect='Bandwidth:')
             diag = checks.parse_diag(reply)
             sent = checks.counter(diag['players'].get(launch.PLAYER), 'sent') or 0
             elapsed = round(time.monotonic() - joined)
