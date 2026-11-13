@@ -208,96 +208,53 @@ def latest(records):
         if key not in result or (r['timestamp'],r['run_id']) > (result[key]['timestamp'],result[key]['run_id']): result[key]=r
     return list(result.values())
 
+ROLES = ('reference', 'follower', 'frozen')
+TIERS = ('full', 'maintained', 'frozen')
+
+def validate_role(root, local):
+    """A line's role decides which cross-line file it must carry. A missing file can never turn a
+    follower into an unchecked line: the role is written in line.json and must agree."""
+    root = Path(root); role = local.get('role')
+    require(role in ROLES, 'line.json needs "role": reference, follower or frozen')
+    lines = (root/'config/lines/lines.json').exists(); sync = (root/'config/lines/sync.json').exists()
+    require(lines == (role == 'reference'), 'config/lines/lines.json belongs on the reference line only')
+    require(sync == (role == 'follower'), 'config/lines/sync.json belongs on follower lines, and every follower needs it')
+    require((local.get('support_tier') == 'frozen') == (role == 'frozen'), 'support_tier and role disagree about frozen')
+    if role == 'reference':
+        table = load(root/'config/lines/lines.json')
+        require(table.get('schema_version') == 2, 'unsupported lines.json schema')
+        require(table.get('reference') == local['facts']['line'], 'lines.json names another reference line')
+        require(isinstance(table.get('must_match'), list) and all(isinstance(p, str) and p.endswith('/') for p in table['must_match']), 'must_match must be a list of directory prefixes')
+        rows = table.get('lines'); require(isinstance(rows, dict) and table['reference'] in rows, 'lines.json must list every line, the reference included')
+        for line, row in rows.items():
+            require(set(row) == {'tier', 'branch'} and row['tier'] in TIERS and isinstance(row['branch'], str) and row['branch'], 'invalid lines.json row: ' + line)
+        require(rows[table['reference']] == {'tier': 'full', 'branch': 'main'}, 'the reference line is main, tier full')
+    return role
+
 def validate(root):
+    """This line's own contracts: authored facts equal the build definitions, the role rule, and
+    the line-local dependency profiles and validation records. Returns (rows, profiles, records)
+    with one row, this line's."""
     root=Path(root); base=root/'config/compatibility'
     local=versioned(load(base/'line.json')); actual=facts(root)
     require(local['facts']==actual,'authored line facts differ from build definitions')
+    validate_role(root, local)
     profiles={}
     for path in sorted((base/'profiles').glob('*.json')):
         p=load(path);validate_profile(p,allow_unresolved_ranges=True);require(p['line']==actual['line'],'branch owns only its profiles');require(p['id'] not in profiles,'duplicate profile');profiles[p['id']]=p
     records=[]
     for path in sorted((base/'validation').glob('*.json')):
         r=load(path);validate_record(r,profiles);records.append(r)
-    refs=versioned(load(base/'source-refs.json'))
-    require(set(refs['sources'])=={'1.21.1','1.21.10','1.21.11','26.1','26.2','26.3'},'source set must contain six lines')
-    rows=[]
-    for line, source in sorted(refs['sources'].items()):
-        require(source['schema_version']==1,'unsupported source schema')
-        row=versioned(json.loads(read_ref(root,source['commit'],'config/compatibility/line.json')))
-        require(row['facts']==facts(root,source['commit']),'pinned line data/build mismatch')
-        require(row['facts']['line']==line,'source line identity mismatch');rows.append((source['commit'],row))
-    return rows,profiles,latest(records)
-
-def snapshot_validation_records(root,rows):
-    """Aggregate only fixed snapshot evidence, never a moving sibling checkout."""
-    result=[]
-    for commit,row in rows:
-        line=row['facts']['line'];profiles={};records=[]
-        paths=git(root,'ls-tree','-r','--name-only',commit,'--','config/compatibility/profiles','config/compatibility/validation').splitlines()
-        for path in sorted(paths):
-            if not path.endswith('.json') or not path.startswith('config/compatibility/profiles/'):continue
-            profile=json.loads(read_ref(root,commit,path));validate_profile(profile,allow_unresolved_ranges=True)
-            require(profile['line']==line and profile['id'] not in profiles,'pinned profile owner/identity mismatch')
-            profiles[profile['id']]=profile
-        for path in sorted(paths):
-            if not path.endswith('.json') or not path.startswith('config/compatibility/validation/'):continue
-            record=json.loads(read_ref(root,commit,path));validate_record(record,profiles);records.append(record)
-        result.extend((line,commit,record) for record in latest(records))
-    return sorted(result,key=lambda item:(item[0],item[2]['profile_id'],item[2]['scenario'],item[2]['feature'],item[2]['timestamp'],item[2]['run_id']))
-
-def render(root,check=False):
-    root=Path(root);rows,profiles,records=validate(root)
-    out=['<!-- Generated by tools/compat/catalog.py render; do not edit. -->','# Compatibility','',
-         'This snapshot describes build capabilities. A capability is not live validation. Each source is pinned below; historical release notes remain dated records.','',
-         '| Line | Fabric / Paper / Neo / Sponge targets | Java (common) | Neo shipped | Neo far renderer | Sponge shipped | Paper loaders | Client gametests | Source |',
-         '| --- | --- | --- | --- | --- | --- | --- | --- | --- |']
-    for sha,row in rows:
-        f=row['facts'];sponge=str(f['sponge_shipping']).lower() if 'sponge_shipping' in f else '—'
-        out.append(f"| {f['line']} | {' / '.join(f['targets'].values())} | {f['java']} (21) | {str(f['neoforge_shipping']).lower()} | {f['neoforge_renderer']} | {sponge} | {', '.join(f['paper_loaders'])} | {f['fabric_client_gametests']} | `{sha}` |")
-    out+=['','Dependency locks and feature-specific validation records are line-local under `config/compatibility/`. Installed jars are unverified until an exact run identity has accepted evidence. Blocked dependency profiles cannot be launched as validated profiles.','']
-    attempts=snapshot_validation_records(root,rows)
-    out+=['## Recorded feature attempts','',
-          'These records come only from the fixed source snapshots above. A pass applies to the listed exact profile, candidate and reusable run inputs; it does not certify a newer build or another feature. Each distinct input identity retains its latest attempt, including failures. Full hashes and evidence indexes are in the source snapshot’s `config/compatibility/validation/` records.','']
-    if attempts:
-        out+=['| Line / profile | Scenario / feature | UTC date | Result | Candidate SHA256 | Profile / run SHA256 | Limitations |',
-              '| --- | --- | --- | --- | --- | --- | --- |']
-        def cell(value):return str(value).replace('|','&#124;').replace('\n',' ')
-        for line,commit,record in attempts:
-            values=(line+' / '+record['profile_id'],record['scenario']+' / '+record['feature'],record['timestamp'],record['result'],
-                    record['run_manifest']['candidate_sha256'],record['profile_hash']+' / '+record['run_hash'],'; '.join(record['limitations']) or 'None recorded')
-            out.append('| '+' | '.join(cell(value) for value in values)+' |')
-    else:out+=['No feature attempts are recorded in this pinned snapshot; live validation remains unverified.']
-    out+=['']
-    content='\n'.join(out)
-    path=root/'docs/compatibility.md'
-    if check: require(path.exists() and path.read_text()==content,'generated compatibility documentation is stale')
-    else: path.write_text(content)
-    readme=root/'README.md'; text=readme.read_text()
-    matrix_start='<!-- LSS SERVER MATRIX START -->';matrix_end='<!-- LSS SERVER MATRIX END -->'
-    matrix=[matrix_start,'| Minecraft line | Fabric / Paper | Folia | NeoForge shipping | Neo far renderer | Sponge |','| --- | --- | --- | --- | --- | --- |']
-    for _,row in rows:
-        f=row['facts'];sponge=('shipped; experimental' if f['sponge_shipping'] else 'maintained build only') if 'sponge_shipping' in f else 'not available'
-        matrix.append(f"| {f['line']} | maintained | {'experimental' if 'folia' in f['paper_loaders'] else 'unsupported'} | {'shipped; best-effort' if f['neoforge_shipping'] else 'maintained build only'} | {f['neoforge_renderer']} | {sponge} |")
-    matrix += [matrix_end]
-    block='\n'.join(matrix)
-    if matrix_start in text: text=re.sub(re.escape(matrix_start)+r'.*?'+re.escape(matrix_end),lambda _:block,text,flags=re.S)
-    else: text=re.sub(r'\| Minecraft \| Fabric \| Paper / Purpur \| Folia \| NeoForge \|\n(?:\|[^\n]*\n)+',lambda _:block+'\n',text,count=1)
-    require(matrix_start in text,'README compatibility matrix anchor absent')
-    start='<!-- LSS COMPATIBILITY START -->';end='<!-- LSS COMPATIBILITY END -->'
-    section=start+'\nCurrent platform, shipping and renderer facts: [compatibility matrix](docs/compatibility.md). Dependency locks describe candidates; dated feature evidence establishes tested combinations.\n'+end
-    new=re.sub(re.escape(start)+r'.*?'+re.escape(end),lambda _:section,text,flags=re.S) if start in text else text.rstrip()+'\n\n'+section+'\n'
-    if check: require(new==readme.read_text(),'generated README compatibility section is stale')
-    else: readme.write_text(new)
+    return [(None,local)],profiles,latest(records)
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--root',type=Path,default=ROOT)
     sub=parser.add_subparsers(dest='command',required=True)
-    sub.add_parser('validate'); p=sub.add_parser('render');p.add_argument('--check',action='store_true')
+    sub.add_parser('validate')
     p=sub.add_parser('inspect');p.add_argument('jar',type=Path)
     args=parser.parse_args()
     try:
         if args.command=='inspect': print(json.dumps(inspect_jar(args.jar),indent=2,sort_keys=True))
-        elif args.command=='render': render(args.root,args.check)
         else:
             rows,profiles,records=validate(args.root);print(json.dumps({'lines':len(rows),'profiles':len(profiles),'latest_exact_identity_records':len(records)}))
     except (Invalid,OSError,ValueError,KeyError,zipfile.BadZipFile) as e: parser.exit(1,f'compat: {e}\n')
