@@ -215,9 +215,11 @@ class ClientVerdictTest {
         // mod: the player HAS something to show terrain, so the answer is the server's.
         assertEquals(ClientVerdict.NO_SUPPORT, dhVerdict(State.NEED_VOXY, Activity.IDLE, true, Discovery.NO_CHANNEL));
         assertEquals(ClientVerdict.NO_SUPPORT, dhVerdict(State.NEED_TRANSPORT, Activity.IDLE, true, Discovery.NO_CHANNEL));
-        // The player runs the Distant Horizons client mod, which shows this server's Distant
-        // Horizons terrain itself: "this server isn't sending distant terrain" would be untrue.
-        assertEquals(ClientVerdict.SOURCE_NOT_RUNNING, ClientVerdict.of(snapshot(true, true, false, true,
+        // The player runs the Distant Horizons client mod. On a server without either mod,
+        // "remove Distant Horizons" would be useless advice: the answer is the server's. Its
+        // words speak about this mod only, so they stay true when the server does run Distant
+        // Horizons and the player's own mod is showing that terrain.
+        assertEquals(ClientVerdict.NO_SUPPORT, ClientVerdict.of(snapshot(true, true, false, true,
                 Discovery.NO_CHANNEL, 0, dh(State.NEED_TRANSPORT, Reason.CLIENT_MOD_CONFLICT, Activity.IDLE))));
         // The same client with nothing to show it.
         assertEquals(ClientVerdict.NOTHING_TO_SHOW, dhVerdict(State.NEED_VOXY, Activity.IDLE, false, Discovery.NO_CHANNEL));
@@ -258,6 +260,12 @@ class ClientVerdictTest {
                     // the reverse) must not name the server's copy by the client's brand.
                     if (value.matches("(?s).*(\\bLSS\\b|\\bVSS\\b|LOD Server Support|Voxy Server Side).*")) {
                         problems.add(where + ": names a brand; say \"this mod\"");
+                    }
+                    // "No support" is shown to players whose own Distant Horizons mod may be
+                    // showing this server's terrain: it must speak about this mod only.
+                    if (key.endsWith(".no_support") && locale.getKey().equals("en_us")
+                            && value.contains("isn't sending distant terrain")) {
+                        problems.add(where + ": claims the server sends no distant terrain at all");
                     }
                     if (!locale.getKey().equals("en_us")
                             && value.equals(locales.get("en_us").get(key).getAsString())) {
