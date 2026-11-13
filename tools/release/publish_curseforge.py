@@ -71,8 +71,7 @@ def plan(args, token):
             game_versions = ([ids[('mc', g)] for g in modrinth['game_versions']] + [ids[('Modloader', cf_name)]]
                              + [ids[('Environment', 'Client')], ids[('Environment', 'Server')]])
             meta = dict(changelog=notes, changelogType='markdown', displayName=modrinth['name'],
-                        gameVersions=game_versions,
-                        releaseType='beta' if rc.is_prerelease(args.version) else 'release')
+                        gameVersions=game_versions, releaseType='release')
             if loader == 'fabric':
                 meta['relations'] = {'projects': [{'slug': 'fabric-api', 'type': 'requiredDependency'}]}
             rows.append(dict(line=line, loader=loader, file=str(asset), filename=published['filename'],
@@ -107,6 +106,8 @@ if __name__ == '__main__':
     parser.add_argument('--project-id', type=int, default=rc.CURSEFORGE_PROJECT)
     parser.add_argument('--publish', action='store_true')
     arguments = rc.resolve(parser.parse_args())
+    if rc.is_prerelease(arguments.version):
+        raise SystemExit('CurseForge takes stable releases only')
     api_token = rc.secret('CURSEFORGE_API_TOKEN')
     planned = plan(arguments, api_token)
     (arguments.state / 'cf-publication-plan.json').write_text(json.dumps(

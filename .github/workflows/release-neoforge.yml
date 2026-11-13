@@ -57,6 +57,9 @@ jobs:
           fi
           MV="${TAG#v}"; MV="${MV%%+*}"
           case "$MV" in
+            # This backfill publishes as a normal release (version-type: release below). A
+            # prerelease tag here would put a beta on the stable channel.
+            *-*) echo "::error::'${TAG}' is a prerelease; this backfill publishes stable releases only"; exit 1 ;;
             [0-9]*) ;;
             *) echo "::error::'${TAG}' does not derive a numeric mod version ('${MV}')"; exit 1 ;;
           esac

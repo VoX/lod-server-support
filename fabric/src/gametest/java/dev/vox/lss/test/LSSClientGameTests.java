@@ -223,8 +223,10 @@ public class LSSClientGameTests implements FabricClientGameTest {
                         + LSSServerConfig.CONFIG.lodDistanceChunks() + ", got " + LSSClientNetworking.getServerLodDistance());
             }
 
-            // Far-plane extension (#364) OFF by default: the hook runs every frame and changes
+            // Far-plane extension (#364) turned OFF: the hook runs every frame and changes
             // nothing — the plane equals vanilla's max(render distance x 64, cloud range x 16).
+            applyClientSetting(context, "far_players.extend_far_plane", false);
+            context.waitTicks(2);
             boolean farPlaneHookRan = context.computeOnClient(client -> FarPlaneExtension.hookRan());
             float vanillaFar = context.computeOnClient(client ->
                     Math.max(client.options.getEffectiveRenderDistance() * 16 * 4.0f,
@@ -236,7 +238,8 @@ public class LSSClientGameTests implements FabricClientGameTest {
                         + ", vanilla=" + vanillaFar + ", hook saw " + seenFar + ", used " + usedFar);
             }
 
-            // ON path: the hooks publish and write the extension back. A synthetic report stands
+            // ON path (the default since 0.22.0; this test's column consumers stand in for
+            // the LOD renderer it needs): the hooks publish and write the extension back. A synthetic report stands
             // in for a far player (the tracker cannot be fed here); the latch only grows.
             applyClientSetting(context, "far_players.extend_far_plane", true);
             context.runOnClient(client -> FarPlaneExtension.report(3000));
@@ -250,7 +253,6 @@ public class LSSClientGameTests implements FabricClientGameTest {
                     return (float) field.get(client.gameRenderer.mainCamera());
                 } catch (ReflectiveOperationException e) { throw new AssertionError(e); }
             });
-            applyClientSetting(context, "far_players.extend_far_plane", false);
             if (!frameStartRan || extendedFar != 3072f || frameFar != 3072f) {
                 throw new AssertionError("far-plane hook (setting on, a far player at 3000): frame start ran="
                         + frameStartRan + ", active=" + extendedFar + ", the frame used " + frameFar);

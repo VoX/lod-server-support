@@ -269,12 +269,58 @@ class ReleaseWorkflowContractTest {
         // scope to THIS line's tags via LINE_TAG_SUFFIX (with main's '+mc' exclusion arm),
         // or version-sort slots another line's tag adjacent and the notes/compare span
         // across release lines.
+        // Prerelease tags are skipped: a release and each of its betas compare against the
+        // previous stable release (git would otherwise sort v0.22.0-beta.1 above v0.22.0).
         String pipeline = "git tag -l \"v*${LINE_TAG_SUFFIX}\" --sort=-v:refname | "
                 + "if [ -z \"${LINE_TAG_SUFFIX}\" ]; then grep -v '+mc'; else cat; fi | "
+                + "grep -vE -- '-(alpha|beta|rc)[.0-9]' | "
                 + "grep -v \"^${TAG}$\" | head -1 || true";
         long hits = Pattern.compile(Pattern.quote(pipeline)).matcher(releaseYml).results().count();
         assertEquals(2, hits,
                 "release.yml must keep BOTH line-scoped PREV_TAG pipelines: " + pipeline);
+    }
+
+    @Test
+    void theNeoForgeBackfillRefusesAPrereleaseTag() throws Exception {
+        // The manual backfill publishes with a hardcoded stable type; dispatched on a beta tag
+        // it would put the beta on the stable channel.
+        String backfill = stripComments(Files.readString(locate(".github/workflows/release-neoforge.yml")));
+        int refusal = backfill.indexOf("*-*) echo \"::error::'${TAG}' is a prerelease; this backfill publishes stable releases only\"; exit 1 ;;");
+        int numeric = backfill.indexOf("[0-9]*) ;;");
+        assertTrue(refusal > 0 && numeric > refusal, "the prerelease refusal must come before the numeric accept");
+        assertTrue(backfill.contains("version-type: release"), "premise: the backfill publishes as a release");
+    }
+
+    @Test
+    void aHyphenatedVersionIsABetaEverywhere() {
+        // Decision 0002: X.Y.Z-beta.N is a Modrinth beta and a GitHub prerelease, never Latest
+        // and not featured; a stable version keeps the line's make_latest and is featured.
+        String derive = stepBlock("- name: Derive mod version");
+        assertTrue(derive.contains("*-beta.[0-9]*|*-rc.[0-9]*) { echo \"RELEASE_CHANNEL=beta\"; echo \"PRERELEASE=true\"; "
+                        + "echo \"MAKE_LATEST=false\"; echo \"FEATURED=false\"; }"),
+                "a hyphenated version must derive the beta channel");
+        assertTrue(derive.contains("*)   { echo \"RELEASE_CHANNEL=release\"; echo \"PRERELEASE=false\"; "
+                        + "echo \"MAKE_LATEST=${LINE_MAKE_LATEST}\"; echo \"FEATURED=true\"; }"),
+                "a stable version must keep the line's make_latest");
+        // One rule for prerelease forms, the same one the previous-tag lookup skips and
+        // tools/release accepts. An unknown form (-pre.1) would publish as a prerelease here
+        // and later be taken for the previous stable tag.
+        assertTrue(derive.contains("*-alpha.[0-9]*) { echo \"RELEASE_CHANNEL=alpha\"; echo \"PRERELEASE=true\"; "
+                        + "echo \"MAKE_LATEST=false\"; echo \"FEATURED=false\"; }"),
+                "an alpha is published as an alpha (verify_lss.py expects that type)");
+        int known = derive.indexOf("*-beta.[0-9]*|*-rc.[0-9]*)");
+        int unknown = derive.indexOf("*-*) echo \"::error::tag '${GITHUB_REF_NAME}' has an unknown prerelease form");
+        int stable = derive.indexOf("*)   { echo \"RELEASE_CHANNEL=release\"");
+        assertTrue(known > 0 && unknown > known && stable > unknown,
+                "known forms, then the refusal of every other hyphenated tag, then stable");
+        assertTrue(derive.substring(unknown, stable).contains("exit 1"), "an unknown form must not publish");
+        assertEquals(4, count(releaseYml, "version-type: ${{ env.RELEASE_CHANNEL }}"),
+                "every Modrinth upload takes its version type from the derived channel");
+        assertEquals(0, count(releaseYml, "version-type: release"), "no upload may hardcode the release type");
+        assertEquals(3, count(releaseYml, "modrinth-featured: ${{ env.FEATURED }}"),
+                "Fabric, Paper and NeoForge are featured only for a stable release");
+        assertTrue(stepBlock("- name: Upload Sponge to Modrinth").contains("modrinth-featured: false"),
+                "Sponge is never featured");
     }
 
     // ---- publish steps ----
@@ -295,9 +341,11 @@ class ReleaseWorkflowContractTest {
                 "no VSS jar may be attached to the GitHub release");
         assertTrue(gh.contains("fail_on_unmatched_files: true"),
                 "fail_on_unmatched_files guards against publishing an empty release");
-        assertTrue(gh.contains("make_latest: ${{ env.LINE_MAKE_LATEST }}"),
-                "make_latest is line data (true on main, false on support lines) — "
-                        + "lineEnvIsLockedToTheBuildToolchain pins the value per line");
+        assertTrue(gh.contains("make_latest: ${{ env.MAKE_LATEST }}"),
+                "make_latest is derived: line data for a stable release (true on main, false on "
+                        + "support lines), always false for a prerelease");
+        assertTrue(gh.contains("prerelease: ${{ env.PRERELEASE }}"),
+                "a beta must be a GitHub prerelease");
         // The composition itself: fabric+paper unconditional, neoforge flag-guarded.
         assertTrue(releaseYml.contains("echo \"fabric/build/libs/lod-server-support-fabric-*.jar\""),
                 "RELEASE_FILES must always include the fabric jar");

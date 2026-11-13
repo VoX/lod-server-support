@@ -19,7 +19,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class WireDialectTrackerTest {
 
-    private final WireDialectTracker tracker = new WireDialectTracker();
+    private final java.util.concurrent.atomic.AtomicLong now = new java.util.concurrent.atomic.AtomicLong(1_000_000);
+    private final WireDialectTracker tracker = new WireDialectTracker(this.now::get);
     private final UUID uuid = UUID.randomUUID();
 
     @Test
@@ -57,7 +58,7 @@ class WireDialectTrackerTest {
         tracker.onHandshake(uuid, WireDialect.V18);
         tracker.onHandshake(uuid, WireDialect.V18);
         assertTrue(tracker.isV18(uuid));
-        assertEquals("Dialects: v20=0, v19=0, v18=1, v16=0, started=0/0/1/0",
+        assertEquals("Dialects: v20=0, v19=0, v18=1, v16=0, started=0/0/1/0, ended=0/0/0/0 in 0m",
                 tracker.diagLine(), "a same-dialect re-handshake must not recount started");
     }
 
@@ -66,8 +67,11 @@ class WireDialectTrackerTest {
         tracker.onHandshake(uuid, WireDialect.V18);
         tracker.onHandshake(uuid, WireDialect.CURRENT);   // client updated mid-session
         tracker.onHandshake(uuid, WireDialect.V18);       // and downgraded back
-        assertEquals("Dialects: v20=0, v19=0, v18=1, v16=0, started=1/0/2/0",
+        assertEquals("Dialects: v20=0, v19=0, v18=1, v16=0, started=1/0/2/0, ended=0/0/0/0 in 0m",
                 tracker.diagLine());
+        tracker.onDisconnect(uuid);
+        assertEquals("Dialects: v20=0, v19=0, v18=0, v16=0, started=1/0/2/0, ended=0/0/1/0 in 0m",
+                tracker.diagLine(), "a session that changed dialect is counted once, under the one it ended with");
     }
 
     @Test
@@ -103,12 +107,12 @@ class WireDialectTrackerTest {
 
     @Test
     void diagLineRendersUnconditionallyAndStartedPersistsAfterDisconnect() {
-        assertEquals("Dialects: v20=0, v19=0, v18=0, v16=0, started=0/0/0/0",
+        assertEquals("Dialects: v20=0, v19=0, v18=0, v16=0, started=0/0/0/0, ended=0/0/0/0 in 0m",
                 tracker.diagLine(), "the line renders before any session — the v20 count"
                         + " IS the live LOD-session count");
         tracker.onHandshake(uuid, WireDialect.V16);
         tracker.onDisconnect(uuid);
-        assertEquals("Dialects: v20=0, v19=0, v18=0, v16=0, started=0/0/0/1",
+        assertEquals("Dialects: v20=0, v19=0, v18=0, v16=0, started=0/0/0/1, ended=0/0/0/1 in 0m",
                 tracker.diagLine(), "history survives the last legacy client leaving");
     }
 
@@ -119,7 +123,20 @@ class WireDialectTrackerTest {
         tracker.onDisconnect(uuid);
         tracker.onHandshake(uuid, WireDialect.V18);   // rejoin: a NEW session
         tracker.onHandshake(other, WireDialect.CURRENT);
-        assertEquals("Dialects: v20=1, v19=0, v18=1, v16=0, started=1/0/2/0",
+        assertEquals("Dialects: v20=1, v19=0, v18=1, v16=0, started=1/0/2/0, ended=0/0/1/0 in 0m",
                 tracker.diagLine());
+    }
+
+    @Test
+    void endedTotalsCoverTheUptimeAndADisconnectOfAnUntrackedPlayerCountsNothing() {
+        tracker.onDisconnect(UUID.randomUUID());
+        tracker.onHandshake(uuid, WireDialect.CURRENT);
+        now.addAndGet(3 * 3_600_000L + 5 * 60_000L);
+        tracker.onDisconnect(uuid);
+        tracker.onDisconnect(uuid);
+        assertEquals("Dialects: v20=0, v19=0, v18=0, v16=0, started=1/0/0/0, ended=1/0/0/0 in 3h05m",
+                tracker.diagLine());
+        assertEquals("59m", WireDialectTracker.uptime(59 * 60_000L + 59_000));
+        assertEquals("2d03h", WireDialectTracker.uptime((2 * 24 + 3) * 3_600_000L + 40 * 60_000L));
     }
 }

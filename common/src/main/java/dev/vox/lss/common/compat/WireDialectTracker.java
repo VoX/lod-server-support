@@ -43,6 +43,28 @@ public final class WireDialectTracker {
     private final AtomicLong startedV18 = new AtomicLong();
     private final AtomicLong startedV19 = new AtomicLong();
     private final AtomicLong startedCurrent = new AtomicLong();
+    /**
+     * Sessions that ended, each counted once under the dialect it ended with (decision 0003:
+     * the figure a retire rule for an old protocol would be judged on). {@code started}
+     * counts every dialect a session passed through, so a slow client whose discovery ladder
+     * walked 20, 19, 16 and back to 20 adds to four of those counters and to one of these.
+     */
+    private final AtomicLong endedV16 = new AtomicLong();
+    private final AtomicLong endedV18 = new AtomicLong();
+    private final AtomicLong endedV19 = new AtomicLong();
+    private final AtomicLong endedCurrent = new AtomicLong();
+    private final java.util.function.LongSupplier clockMillis;
+    private final long createdAtMillis;
+
+    public WireDialectTracker() {
+        this(System::currentTimeMillis);
+    }
+
+    /** A tracker on the given wall clock (the uptime the ended totals cover). */
+    public WireDialectTracker(java.util.function.LongSupplier clockMillis) {
+        this.clockMillis = clockMillis;
+        this.createdAtMillis = clockMillis.getAsLong();
+    }
 
     /** The session's dialect, or {@code CURRENT} when untracked (an unknown session can
      *  only be served canonical shapes — never a legacy strip/translation). */
@@ -99,9 +121,12 @@ public final class WireDialectTracker {
         }
     }
 
-    /** Network disconnect — the identity dies with the connection. */
+    /** Network disconnect — the identity dies with the connection, and the session is counted. */
     public void onDisconnect(UUID uuid) {
-        this.sessions.remove(uuid);
+        WireDialect ended = this.sessions.remove(uuid);
+        if (ended != null) {
+            endedCounterFor(ended).incrementAndGet();
+        }
     }
 
     /**
@@ -136,11 +161,21 @@ public final class WireDialectTracker {
         };
     }
 
+    private AtomicLong endedCounterFor(WireDialect dialect) {
+        return switch (dialect) {
+            case V16 -> this.endedV16;
+            case V18 -> this.endedV18;
+            case V19 -> this.endedV19;
+            case CURRENT -> this.endedCurrent;
+        };
+    }
+
     /**
-     * The {@code Dialects:} diag line (replaces the {@code V18Compat:} slot): live
-     * session counts per dialect, plus cumulative started totals when any legacy
-     * session has ever existed. Always non-null — the current-dialect count alone is
-     * operationally useful (it is the "how many LOD sessions" number).
+     * The {@code Dialects:} diag line: live session counts per dialect, the started totals
+     * (every dialect a session passed through), and the ended totals (each session once,
+     * under the dialect it ended with) with the uptime they cover. All in the order
+     * v20/v19/v18/v16. Always non-null — the current-dialect count alone is operationally
+     * useful (it is the "how many LOD sessions" number). In memory only: nothing is stored.
      */
     public String diagLine() {
         return "Dialects: v20=" + sessionCount(WireDialect.CURRENT)
@@ -150,6 +185,24 @@ public final class WireDialectTracker {
                 + ", started=" + this.startedCurrent.get()
                 + "/" + this.startedV19.get()
                 + "/" + this.startedV18.get()
-                + "/" + this.startedV16.get();
+                + "/" + this.startedV16.get()
+                + ", ended=" + this.endedCurrent.get()
+                + "/" + this.endedV19.get()
+                + "/" + this.endedV18.get()
+                + "/" + this.endedV16.get()
+                + " in " + uptime(this.clockMillis.getAsLong() - this.createdAtMillis);
+    }
+
+    /** {@code 7m}, {@code 3h05m} or {@code 2d03h}. */
+    static String uptime(long millis) {
+        long minutes = Math.max(0, millis) / 60_000;
+        if (minutes < 60) {
+            return minutes + "m";
+        }
+        long hours = minutes / 60;
+        if (hours < 24) {
+            return hours + "h" + String.format(java.util.Locale.ROOT, "%02d", minutes % 60) + "m";
+        }
+        return hours / 24 + "d" + String.format(java.util.Locale.ROOT, "%02d", hours % 24) + "h";
     }
 }

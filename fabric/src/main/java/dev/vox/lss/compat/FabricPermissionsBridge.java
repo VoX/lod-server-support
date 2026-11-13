@@ -1,5 +1,6 @@
 package dev.vox.lss.compat;
 
+import dev.vox.lss.common.FaultCounters;
 import dev.vox.lss.common.LSSLogger;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
@@ -44,7 +45,6 @@ public final class FabricPermissionsBridge {
     // 0 = unresolved, 1 = resolved, -1 = absent/unresolvable.
     private static volatile int state;
     private static MethodHandle checkHandle; // (Entity, String, boolean) -> boolean
-    private static volatile boolean invokeWarned;
 
     private FabricPermissionsBridge() {
     }
@@ -52,7 +52,6 @@ public final class FabricPermissionsBridge {
     /** Test seam: forget the resolution (lazy resolve reruns). */
     static void resetForTest() {
         state = 0;
-        invokeWarned = false;
         classResolver = Class::forName;
     }
 
@@ -78,11 +77,9 @@ public final class FabricPermissionsBridge {
             return (boolean) checkHandle.invoke((Entity) player, node, defaultValue);
         } catch (Throwable t) {
             if (t instanceof VirtualMachineError vme) throw vme;
-            if (!invokeWarned) {
-                invokeWarned = true;
-                LSSLogger.warn("fabric-permissions-api check threw — answering the default ("
-                        + defaultValue + ") for " + node + " (" + t + ")");
-            }
+            FaultCounters.global().record(FaultCounters.Site.PERMISSION_CHECK,
+                    () -> "fabric-permissions-api check threw; answering the default (" + defaultValue + ") for "
+                            + node + " (" + t + ")");
             return defaultValue;
         }
     }
