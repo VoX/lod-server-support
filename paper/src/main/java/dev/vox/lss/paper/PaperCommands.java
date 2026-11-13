@@ -42,6 +42,12 @@ public class PaperCommands implements CommandExecutor, TabCompleter {
 
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+        // A settings file that did not load at startup: every use of the command opens with
+        // everything that is wrong in it (0.23.0 plan §1). Nothing when it loaded.
+        var settings = configSupplier.get();
+        if (settings != null && !settings.startupProblems().isEmpty())
+            for (String line : dev.vox.lss.common.config.SettingsProblemText.serverBlock(
+                    settings.settingsFileName(), settings.startupProblems())) sender.sendMessage(line);
         if (args.length == 0 || args[0].equalsIgnoreCase("help")) {
             // Bare /lsslod = help (v0.11.0 stage C) — shared builder, so Fabric/Paper
             // render identical lines; backfill verbs stay Fabric-only.
@@ -116,6 +122,9 @@ public class PaperCommands implements CommandExecutor, TabCompleter {
                     ? dev.vox.lss.common.config.ReloadFeedback.lines(config.settingsPath(), result)
                     : java.util.List.of("Reload failed: " + dev.vox.lss.common.config.SettingsReload.message(failure));
             var report = new java.util.ArrayList<>(lines);
+            // Everything wrong with the file, so it is fixed once (0.23.0 plan §1).
+            if (failure != null)
+                for (String line : dev.vox.lss.common.config.SettingsReload.problemLines(failure)) report.add("  " + line);
             if (failure == null && service != null
                     && result.status() != dev.vox.lss.common.config.SettingsReload.Status.UNCHANGED) {
                 // This immutable receipt was captured on the pump before reconciliation

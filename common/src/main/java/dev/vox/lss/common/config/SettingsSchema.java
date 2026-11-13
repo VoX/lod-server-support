@@ -223,6 +223,29 @@ public final class SettingsSchema<T> {
             }
         };
     }
+    /** Whether {@code path} (or the old name of it) is a true/false setting: the file reader
+     *  accepts the usual spellings of a boolean there (0.23.0 plan §1). */
+    boolean booleanPath(String path) {
+        Descriptor d=descriptors.get(canonicalPath(path));
+        return d!=null&&d.kind()==Kind.BOOLEAN;
+    }
+    /** What is wrong with {@code value} at a known path, in the strict reader's words; null
+     *  when it is acceptable. For the problem list only. */
+    String valueProblem(String path,Object value) {
+        Descriptor d=descriptors.get(canonicalPath(path));
+        try { typed(new Spec(d.path(),d.legacyKey(),d.kind(),d.timing(),d.platform(),d.sensitive()),value); return null; }
+        catch (SettingsException e) { return e.getMessage(); }
+    }
+    /** Whether {@code path} is a group that holds settings (or an accepted old group name). */
+    boolean knownGroup(String path) {
+        return descriptors.keySet().stream().anyMatch(k->k.startsWith(path+"."))
+                ||aliases.keySet().stream().anyMatch(k->k.startsWith(path+"."));
+    }
+    /** Whether the strict reader accepts {@code path} as a setting (including retired ones). */
+    boolean knownLeaf(String path) {
+        return descriptors.containsKey(path)||aliases.containsKey(path)
+                ||client&&(path.equals("lod.dh.refresh_seconds")||path.equals("lod.dh.profile"));
+    }
     private static List<String> stringList(Object value,String p) {
         if (!(value instanceof List<?> list)) throw type(p,"list of strings");
         var result=new ArrayList<String>();

@@ -133,6 +133,20 @@ public final class SettingsReload<T> implements AutoCloseable {
     }
 
     public boolean busy() { return busy.get(); }
+    /** Everything wrong with the file behind a failed read or reload; empty when the failure
+     *  is not about a file's contents. */
+    public static java.util.List<SettingsProblems.Problem> problems(Throwable error) {
+        while ((error instanceof CompletionException || error instanceof ExecutionException)
+                && error.getCause() != null) error = error.getCause();
+        return error instanceof SettingsException refused ? refused.problems() : java.util.List.of();
+    }
+    /** The lines to print under "Reload failed: …": the whole list when it says more than the
+     *  one message above it (a second problem, or where the first one is). */
+    public static java.util.List<String> problemLines(Throwable error) {
+        var problems = problems(error);
+        if (problems.isEmpty() || problems.size() == 1 && problems.get(0).line() == 0) return java.util.List.of();
+        return SettingsProblemText.lines(problems);
+    }
     public static String message(Throwable error) {
         while ((error instanceof CompletionException || error instanceof ExecutionException)
                 && error.getCause() != null) error = error.getCause();

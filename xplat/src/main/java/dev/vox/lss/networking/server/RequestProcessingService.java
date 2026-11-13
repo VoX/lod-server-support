@@ -923,7 +923,26 @@ public class RequestProcessingService {
     private final dev.vox.lss.common.config.UnservedWorldsLog unservedWorldsLog =
             new dev.vox.lss.common.config.UnservedWorldsLog();
 
+    private final dev.vox.lss.common.config.SettingsProblemAnnouncer settingsProblems =
+            new dev.vox.lss.common.config.SettingsProblemAnnouncer();
+
+    /** A settings file that did not load leaves the service disabled, so this runs before the
+     *  "disabled" return (0.23.0 plan §1). Costs one empty-list check when the file loaded. */
+    private void announceSettingsProblems() {
+        this.settingsProblems.tick(serviceConfig.startupProblems(), serviceConfig.settingsFileName(),
+                dev.vox.lss.common.Brand.shortName(), dev.vox.lss.common.Brand.serverCommand(),
+                this.server.isDedicatedServer(), () -> {
+                    var admins = new java.util.ArrayList<dev.vox.lss.common.config.SettingsProblemAnnouncer.Recipient>();
+                    for (var player : this.server.getPlayerList().getPlayers())
+                        if (LSSServerCommands.mayRun(player))
+                            admins.add(new dev.vox.lss.common.config.SettingsProblemAnnouncer.Recipient(player.getUUID(),
+                                    line -> player.sendSystemMessage(net.minecraft.network.chat.Component.literal(line))));
+                    return admins;
+                }, dev.vox.lss.common.LSSLogger::error);
+    }
+
     public void tick() {
+        announceSettingsProblems();
         if (!serviceConfig.enabled()) return;
         this.unservedWorldsLog.note(serviceConfig);
 

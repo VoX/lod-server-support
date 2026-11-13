@@ -1915,6 +1915,25 @@ public class PaperRequestProcessingService {
     private final dev.vox.lss.common.config.UnservedWorldsLog unservedWorldsLog =
             new dev.vox.lss.common.config.UnservedWorldsLog();
 
+    private final dev.vox.lss.common.config.SettingsProblemAnnouncer settingsProblems =
+            new dev.vox.lss.common.config.SettingsProblemAnnouncer();
+
+    /** A settings file that did not load leaves the service disabled, so this runs before the
+     *  "disabled" return (0.23.0 plan §1). The admin right is the command's own node. Costs one
+     *  empty-list check when the file loaded. */
+    private void announceSettingsProblems() {
+        this.settingsProblems.tick(this.config.startupProblems(), this.config.settingsFileName(),
+                dev.vox.lss.common.Brand.shortName(), dev.vox.lss.common.Brand.serverCommand(), true, () -> {
+                    var admins = new java.util.ArrayList<dev.vox.lss.common.config.SettingsProblemAnnouncer.Recipient>();
+                    String node = dev.vox.lss.common.Brand.lowerShortName() + ".admin";
+                    for (var player : Bukkit.getOnlinePlayers())
+                        if (player.hasPermission(node))
+                            admins.add(new dev.vox.lss.common.config.SettingsProblemAnnouncer.Recipient(
+                                    player.getUniqueId(), player::sendMessage));
+                    return admins;
+                }, dev.vox.lss.common.LSSLogger::error);
+    }
+
     /** The diag line naming the loaded worlds with no LOD service (resolved per world, as
      *  requests are — see {@link PaperWorldLod#unservedWorlds}), or null when all are served. */
     public String unservedWorldsDiagLineOrNull() {
@@ -1941,6 +1960,7 @@ public class PaperRequestProcessingService {
         // read the untracked-defaults-to-CURRENT dialect and push a protocol-20 config
         // at a legacy client, killing its session until rejoin).
         drainRuntimeTasks();
+        announceSettingsProblems();
         if (!this.config.enabled())
             return;
         this.unservedWorldsLog.note(this.config, () -> PaperWorldLod.unservedWorlds(this.config, this.server));
