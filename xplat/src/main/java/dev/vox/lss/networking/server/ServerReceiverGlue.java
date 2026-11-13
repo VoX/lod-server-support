@@ -485,11 +485,9 @@ public final class ServerReceiverGlue {
             // a later re-handshake denying — bounded to that race, healed by rejoin;
             // shedding here would add remove-path surface for a corner Via itself
             // closes seconds later.
-            LSSLogger.info("LOD unavailable for " + player.getName().getString()
-                    + ": Via reports client Minecraft protocol " + viaProtocol
-                    + " vs server " + nativeProtocol + " (cross-MC legacy session"
-                    + " cannot be served) — the client must update "
-                    + Brand.shortName());
+            LSSLogger.info(dev.vox.lss.common.compat.ViaProbe.legacyAnnounceRefusedLine(
+                    Brand.shortName(), player.getName().getString(),
+                    payload.protocolVersion(), viaProtocol, nativeProtocol));
             return;
         }
         if (!decision.sendSessionConfig()) {

@@ -642,7 +642,54 @@ class PaperRequestProcessingServiceTest {
             UUID uuid, String dimension) {
         return new dev.vox.lss.common.farplayers.FarPlayerBroadcastService.PlayerSnapshot(
                 uuid, "viewer", dimension, 0, 64, 0, 0f, 0f, 0f, (byte) 0, 0, 0, 0,
-                false, false, true, false, 0L, new String[0], new int[0], null);
+                false, false, true, false, false, 0L, new String[0], new int[0], null);
+    }
+
+    /**
+     * Mode "required" (hide-permission plan §2b): the broadcast core's notice reaches the
+     * overridden player through this service's system-message lane, once; a player the
+     * player list does not hold is not claimed, so a later pass still tells them.
+     */
+    @Test
+    void requiredModeTellsAnOverriddenPlayerThroughTheSystemMessageLane() {
+        var viewer = UUID.randomUUID();
+        var optedOut = UUID.randomUUID();
+        var holder = UUID.randomUUID();
+        var optedOutPlayer = playerIn(optedOut, level(Level.OVERWORLD));
+        var told = new ArrayList<String>();
+        service.setFarPlayerNoticeSender((player, line) ->
+                told.add(player.getUUID() + "|" + line.translationKey() + "|" + line.fallback()));
+        var fp = service.getFarPlayerService();
+        fp.subscribeViewer(viewer);
+        fp.onPrefs(viewer, new dev.vox.lss.common.farplayers.FarPlayerWire.Prefs(true, 0, 0, true, 0));
+        fp.onPrefs(optedOut, new dev.vox.lss.common.farplayers.FarPlayerWire.Prefs(true, 0, 0, false, 0));
+        fp.onPrefs(holder, new dev.vox.lss.common.farplayers.FarPlayerWire.Prefs(true, 0, 0, false, 0));
+        var settings = new dev.vox.lss.common.farplayers.FarPlayerBroadcastService.Settings(
+                "required", 2048, 0, false, List.of(), 10, false);
+        var online = List.of(viewerSnapshot(viewer, "minecraft:overworld"),
+                new dev.vox.lss.common.farplayers.FarPlayerBroadcastService.PlayerSnapshot(
+                        optedOut, "optedOut", "minecraft:overworld", 500, 64, 0, 0f, 0f, 0f, (byte) 0,
+                        0, 0, 0, false, false, true, false, false, 0L, null, null, null),
+                new dev.vox.lss.common.farplayers.FarPlayerBroadcastService.PlayerSnapshot(
+                        holder, "holder", "minecraft:overworld", 600, 64, 0, 0f, 0f, 0f, (byte) 0,
+                        0, 0, 0, false, false, true, false, true, 0L, null, null, null));
+        dev.vox.lss.common.farplayers.FarPlayerBroadcastService.FrameSender frames = (to, channel, body) -> true;
+
+        // Two consecutive "not a holder" reads confirm the override; the player list does
+        // not hold the player yet (the mock answers null).
+        fp.tick(1_000_000L, online, settings, frames);
+        fp.tick(1_000_500L, online, settings, frames);
+        assertEquals(1, fp.lastPassOverridden(), "premise: the override is live");
+        assertTrue(told.isEmpty(), "an unreachable player is not sent anything");
+        assertFalse(fp.hasRequiredSharingNotice(optedOut), "and the line is not marked as sent");
+
+        when(playerList.getPlayer(optedOut)).thenReturn(optedOutPlayer);
+        fp.tick(1_001_000L, online, settings, frames);
+        fp.tick(1_001_500L, online, settings, frames);
+        var notice = dev.vox.lss.common.farplayers.FarPlayerBroadcastService.requiredSharingNotice();
+        assertEquals(List.of(optedOut + "|" + notice.translationKey() + "|" + notice.fallback()),
+                told, "exactly one system chat line, to the overridden player only");
+        assertFalse(fp.hasRequiredSharingNotice(holder), "a holder's opt-out is honored: nothing to say");
     }
 
     @Test
@@ -666,7 +713,7 @@ class PaperRequestProcessingServiceTest {
             return true;
         };
         var settings = new dev.vox.lss.common.farplayers.FarPlayerBroadcastService.Settings(
-                "on", 2048, 0, false, List.of(), 10);
+                "on", 2048, 0, false, List.of(), 10, false);
         var online = List.of(viewerSnapshot(uuid, "minecraft:the_nether"));
         long now = 1_000_000L;
         fp.tick(now, online, settings, sender);

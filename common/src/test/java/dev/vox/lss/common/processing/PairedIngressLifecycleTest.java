@@ -25,7 +25,7 @@ class PairedIngressLifecycleTest {
     private static void release(State s, IncomingBatch batch, Long2ObjectOpenHashMap<LoadedColumnData> probes) {
         s.offerIncomingBatch(batch);
         long generation = s.offerGeneration();
-        assertSame(batch, s.takeFreshIncomingBatchForProbe());
+        assertSame(batch, s.takeFreshIncomingBatchForProbe().batch());
         assertTrue(s.republishHeldBatch(batch, generation, probes));
     }
     private static void apply(State s) { var b = s.takeIncomingBatchForRouting(); assertNotNull(b); s.replaceBacklogWith(b); }
@@ -83,7 +83,7 @@ class PairedIngressLifecycleTest {
         state.updatePlayerChunk(0, 0); state.updateLateProbeRange(1024);
         var offered = batch(xs); state.offerIncomingBatch(offered);
         long generation = state.offerGeneration();
-        assertSame(offered, state.takeFreshIncomingBatchForProbe());
+        assertSame(offered, state.takeFreshIncomingBatchForProbe().batch());
         assertTrue(state.republishHeldBatch(offered, generation));
         assertSame(offered, state.takeIncomingBatchForRouting());
         return state;

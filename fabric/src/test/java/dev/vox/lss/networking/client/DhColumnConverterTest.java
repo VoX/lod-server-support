@@ -314,6 +314,235 @@ class DhColumnConverterTest {
         return new DhTerrainDecoder(DhLimits.DEFAULT).decode(dto.toByteArray(),DhProfile.SUPPORT_15,position,
                 new DhTerrainTile.WorldShape(-32,32,false),budget);
     }
+    // ---- issue #383: dark tree crowns ----
+    // DH lights a non-transparent span only when the span above it is transparent, and it
+    // treats leaves as opaque. So in a crown only the top leaf span is lit; every leaf span
+    // below it is stored with sky 0 (38,727 such spans in 66 stored tiles, 2026-11-12), and a
+    // face lit from such a voxel renders black: inner leaf faces with a better-leaves
+    // resource pack, and the side faces of logs. The converter now carries the light down
+    // through spans that pass light in vanilla (leaves, ice and the like).
+
+    private static final String PLAINS="minecraft:plains";
+    private static String block(String name) {return new DhMaterial(PLAINS,"minecraft:"+name,Map.of()).serialized();}
+    private static String leaves(String tree,int distance) {
+        return new DhMaterial(PLAINS,"minecraft:"+tree+"_leaves",Map.of("distance",Integer.toString(distance))).serialized();
+    }
+    /** One DH datapoint: {@code bottom} is in blocks from the world's minimum Y. */
+    private static long span(int material,int bottom,int height,int sky) {
+        return material|(long)height<<32|(long)bottom<<44|(long)sky<<56;
+    }
+    /** A tile whose 4096 columns all hold {@code spans} (top-down); world Y -32..63. */
+    private static DhTerrainTile crownTile(boolean sky,DhMemoryBudget budget,List<String> materials,long... spans) throws Exception {
+        byte[][] blobs=new byte[8][];var raw=new ByteArrayOutputStream();var points=new DataOutputStream(raw);
+        for(int i=0;i<4096;i++) {points.writeShort(spans.length);for(long point:spans)points.writeLong(point);}
+        blobs[0]=raw.toByteArray();for(int i=1;i<=4;i++)blobs[i]=new byte[0];
+        blobs[5]=new byte[4096];Arrays.fill(blobs[5],(byte)9);blobs[6]=new byte[4096];
+        var map=new ByteArrayOutputStream();var strings=new DataOutputStream(map);strings.writeInt(materials.size());
+        for(String material:materials)strings.writeUTF(material);
+        blobs[7]=map.toByteArray();var dto=new ByteArrayOutputStream();var out=new DataOutputStream(dto);
+        var position=new DhPosition(6,-1,-1);out.writeLong(position.packed());out.writeInt(0);
+        for(var blob:blobs){out.writeInt(blob.length);out.write(blob);}
+        out.writeByte(1);out.writeByte(0);out.writeBoolean(false);out.writeBoolean(false);out.writeLong(100);out.writeLong(200);
+        return new DhTerrainDecoder(DhLimits.DEFAULT).decode(dto.toByteArray(),DhProfile.SUPPORT_15,position,
+                new DhTerrainTile.WorldShape(-32,96,sky),budget);
+    }
+    /** Sky light of the voxel at {@code y} blocks above the world's minimum Y. */
+    private static int skyAt(dev.vox.lss.api.VoxelColumnData data,int y) {return data.sections()[y/16].skyLight().get(5,y&15,9);}
+    private static net.minecraft.world.level.block.Block blockAt(dev.vox.lss.api.VoxelColumnData data,int y) {
+        return data.sections()[y/16].section().getBlockState(5,y&15,9).getBlock();
+    }
+
+    @Test void aDarkLeafSpanUnderALitLeafSpanTakesItsLightMinusOnePerBlock() throws Exception {
+        var budget=new DhMemoryBudget(DhLimits.DEFAULT.ownedBytes());
+        // air / top leaf (lit by DH) / leaves of another state (DH: 0) / air under the crown / ground
+        var materials=List.of(block("air"),leaves("oak",1),leaves("oak",2),block("stone"));
+        try(var tile=crownTile(true,budget,materials,
+                span(0,40,56,15),span(1,39,1,15),span(2,36,3,0),span(0,33,3,12),span(3,0,33,12))) {
+            var data=new DhColumnConverter(biomes).convert(tile,0);
+            assertEquals(net.minecraft.world.level.block.Blocks.OAK_LEAVES,blockAt(data,36));
+            assertEquals(15,skyAt(data,40),"air above the crown");
+            assertEquals(15,skyAt(data,39),"the top leaf span keeps DH's value");
+            assertEquals(14,skyAt(data,38),"the first leaf below it: 15 minus the leaf's dampening");
+            assertEquals(13,skyAt(data,37));
+            assertEquals(12,skyAt(data,36));
+            assertEquals(12,skyAt(data,35),"the air under the crown keeps its floor's light");
+            assertEquals(12,skyAt(data,32),"the ground keeps DH's value");
+            assertEquals(12,skyAt(data,0));
+        }
+        assertEquals(0,budget.used());
+    }
+    @Test void aCrownOfThreeLeafSpansCarriesThroughAllOfThem() throws Exception {
+        var budget=new DhMemoryBudget(DhLimits.DEFAULT.ownedBytes());
+        var materials=List.of(block("air"),leaves("birch",3),leaves("oak",2),leaves("oak",1),block("stone"));
+        try(var tile=crownTile(true,budget,materials,
+                span(0,50,46,15),span(1,48,2,15),span(2,46,2,0),span(3,43,3,0),span(0,40,3,9),span(4,0,40,9))) {
+            var data=new DhColumnConverter(biomes).convert(tile,0);
+            assertEquals(net.minecraft.world.level.block.Blocks.BIRCH_LEAVES,blockAt(data,48));
+            assertEquals(15,skyAt(data,49));assertEquals(15,skyAt(data,48),"a lit span stays uniform, as DH stores it");
+            assertEquals(13,skyAt(data,47),"the lit span is two leaves tall: its bottom leaf stands for 14");
+            assertEquals(12,skyAt(data,46));
+            assertEquals(11,skyAt(data,45),"the third span continues where the second ended");
+            assertEquals(10,skyAt(data,44));assertEquals(9,skyAt(data,43));
+            assertEquals(9,skyAt(data,42),"air under the crown: its floor's light");
+        }
+        assertEquals(0,budget.used());
+    }
+    /** DH's hidden-block culling stores the ground under a crown as one tall "leaf" span. */
+    /** Review fold: a lit span holds one value however tall it is; vanilla would have faded inside it. */
+    @Test void theCarryStartsFromTheLitSpansBottomVoxelNotFromItsUniformValue() throws Exception {
+        var budget=new DhMemoryBudget(DhLimits.DEFAULT.ownedBytes());
+        var materials=List.of(block("air"),leaves("oak",1),leaves("oak",2),block("stone"));
+        // a lit leaf span three blocks tall, then a dark one
+        try(var tile=crownTile(true,budget,materials,
+                span(0,50,46,15),span(1,47,3,15),span(2,43,4,0),span(3,0,43,0))) {
+            var data=new DhColumnConverter(biomes).convert(tile,0);
+            for(int y=47;y<50;y++)assertEquals(15,skyAt(data,y),"the lit span keeps DH's bytes, y="+y);
+            assertEquals(12,skyAt(data,46),"its bottom leaf stands for 15 - 2, so the next leaf is 12, not 14");
+            assertEquals(11,skyAt(data,45));assertEquals(10,skyAt(data,44));assertEquals(9,skyAt(data,43));
+            assertEquals(0,skyAt(data,42));
+        }
+        // a dimly lit span taller than its light: nothing is left to carry
+        try(var tile=crownTile(true,budget,materials,
+                span(0,50,46,15),span(1,45,5,3),span(2,43,2,0),span(3,0,43,0))) {
+            var data=new DhColumnConverter(biomes).convert(tile,0);
+            assertEquals(3,skyAt(data,45),"the lit span keeps DH's bytes");
+            assertEquals(0,skyAt(data,44),"3 - 4 leaves nothing for the span below");
+            assertEquals(0,skyAt(data,43));
+        }
+        assertEquals(0,budget.used());
+    }
+    @Test void aTallDarkLeafSpanFadesOutAndStaysDarkBelow() throws Exception {
+        var budget=new DhMemoryBudget(DhLimits.DEFAULT.ownedBytes());
+        var materials=List.of(block("air"),leaves("oak",2),block("bedrock"));
+        try(var tile=crownTile(true,budget,materials,
+                span(0,64,32,15),span(1,60,4,15),span(1,1,59,0),span(2,0,1,0))) {
+            var data=new DhColumnConverter(biomes).convert(tile,0);
+            for(int y=60;y<64;y++)assertEquals(15,skyAt(data,y));
+            // The lit span is four leaves tall (its bottom leaf stands for 12), so 11 is left.
+            for(int depth=1;depth<=11;depth++)assertEquals(12-depth,skyAt(data,60-depth),"depth "+depth);
+            for(int y=1;y<=48;y++)assertEquals(0,skyAt(data,y),"below the fade, y="+y);
+            assertEquals(0,skyAt(data,0));
+        }
+        assertEquals(0,budget.used());
+    }
+    @Test void leavesUnderALogStayDark() throws Exception {
+        var budget=new DhMemoryBudget(DhLimits.DEFAULT.ownedBytes());
+        var materials=List.of(block("air"),block("oak_log"),leaves("oak",1),leaves("oak",2),block("stone"));
+        try(var tile=crownTile(true,budget,materials,
+                span(0,50,46,15),span(1,48,2,15),span(2,46,2,0),span(3,44,2,0),span(0,40,4,7),span(4,0,40,7))) {
+            var data=new DhColumnConverter(biomes).convert(tile,0);
+            assertEquals(net.minecraft.world.level.block.Blocks.OAK_LOG,blockAt(data,48));
+            assertEquals(15,skyAt(data,48),"the log under open sky keeps DH's value");
+            for(int y=44;y<48;y++)assertEquals(0,skyAt(data,y),"no light comes down through a log, y="+y);
+        }
+        assertEquals(0,budget.used());
+    }
+    @Test void iceUnderLeavesReceivesLightAndWaterUnderIceDoesNot() throws Exception {
+        var budget=new DhMemoryBudget(DhLimits.DEFAULT.ownedBytes());
+        var materials=List.of(block("air"),leaves("oak",1),block("ice"),block("water"),block("stone"));
+        try(var tile=crownTile(true,budget,materials,
+                span(0,50,46,15),span(1,49,1,15),span(2,47,2,0),span(3,42,5,0),span(4,0,42,0))) {
+            var data=new DhColumnConverter(biomes).convert(tile,0);
+            assertEquals(net.minecraft.world.level.block.Blocks.ICE,blockAt(data,47));
+            assertEquals(14,skyAt(data,48),"ice passes light in vanilla and takes the carried value");
+            assertEquals(13,skyAt(data,47));
+            for(int y=42;y<47;y++)assertEquals(0,skyAt(data,y),"water is not brightened, y="+y);
+            assertEquals(0,skyAt(data,41),"nor the bed under it");
+        }
+        // An ice sheet under open sky is one lit span: unchanged.
+        try(var tile=crownTile(true,budget,List.of(block("air"),block("ice"),block("stone")),
+                span(0,40,56,15),span(1,37,3,15),span(2,0,37,0))) {
+            var data=new DhColumnConverter(biomes).convert(tile,0);
+            for(int y=37;y<40;y++)assertEquals(15,skyAt(data,y));
+            assertEquals(0,skyAt(data,36));
+        }
+        assertEquals(0,budget.used());
+    }
+    @Test void aCarryStopsAtAnySpanOutsideTheCarryingSet() throws Exception {
+        var budget=new DhMemoryBudget(DhLimits.DEFAULT.ownedBytes());
+        var materials=List.of(block("air"),leaves("oak",1),leaves("oak",2),block("stone"),block("tinted_glass"));
+        // lit leaves / dark leaves (carried) / stone / dark leaves under the stone
+        try(var tile=crownTile(true,budget,materials,
+                span(0,50,46,15),span(1,49,1,15),span(2,47,2,0),span(3,46,1,0),span(2,44,2,0),span(3,0,44,0))) {
+            var data=new DhColumnConverter(biomes).convert(tile,0);
+            assertEquals(14,skyAt(data,48));assertEquals(13,skyAt(data,47));
+            assertEquals(0,skyAt(data,46),"stone receives nothing");
+            assertEquals(0,skyAt(data,45),"and nothing is carried through it");
+            assertEquals(0,skyAt(data,44));
+        }
+        // lit leaves / an air pocket lit from the side / leaves DH left dark under a dark leaf
+        try(var tile=crownTile(true,budget,materials,
+                span(0,50,46,15),span(1,49,1,15),span(0,47,2,6),span(1,46,1,6),span(2,44,2,0),span(3,0,44,0))) {
+            var data=new DhColumnConverter(biomes).convert(tile,0);
+            assertEquals(6,skyAt(data,47),"the air pocket keeps its floor's light");
+            assertEquals(6,skyAt(data,46),"the leaf under it keeps DH's value");
+            assertEquals(5,skyAt(data,45),"and the dark span below continues from that value, not from 15");
+            assertEquals(4,skyAt(data,44));
+        }
+        // tinted glass blocks all light in vanilla: it neither receives nor carries.
+        try(var tile=crownTile(true,budget,materials,
+                span(0,50,46,15),span(1,49,1,15),span(4,48,1,0),span(2,46,2,0),span(3,0,46,0))) {
+            var data=new DhColumnConverter(biomes).convert(tile,0);
+            assertEquals(net.minecraft.world.level.block.Blocks.TINTED_GLASS,blockAt(data,48));
+            assertEquals(0,skyAt(data,48));assertEquals(0,skyAt(data,47));assertEquals(0,skyAt(data,46));
+        }
+        assertEquals(0,budget.used());
+    }
+    @Test void aCrownInAWorldWithoutSkyLightStaysDark() throws Exception {
+        var budget=new DhMemoryBudget(DhLimits.DEFAULT.ownedBytes());
+        var materials=List.of(block("air"),leaves("oak",1),leaves("oak",2),block("stone"));
+        try(var tile=crownTile(false,budget,materials,
+                span(0,40,56,15),span(1,39,1,15),span(2,36,3,0),span(0,33,3,12),span(3,0,33,12))) {
+            var data=new DhColumnConverter(biomes).convert(tile,0);
+            for(var section:data.sections())for(int y=0;y<16;y++)assertEquals(0,section.skyLight().get(5,y,9));
+        }
+        assertEquals(0,budget.used());
+    }
+    @Test void theCarryDoesNotDependOnTheOrderOfTheSpans() throws Exception {
+        var budget=new DhMemoryBudget(DhLimits.DEFAULT.ownedBytes());
+        var materials=List.of(block("air"),leaves("oak",1),leaves("oak",2),block("stone"));
+        // The same crown as the first case, bottom-up on the wire.
+        try(var tile=crownTile(true,budget,materials,
+                span(3,0,33,12),span(0,33,3,12),span(2,36,3,0),span(1,39,1,15),span(0,40,56,15))) {
+            var data=new DhColumnConverter(biomes).convert(tile,0);
+            assertEquals(15,skyAt(data,39));assertEquals(14,skyAt(data,38));
+            assertEquals(13,skyAt(data,37));assertEquals(12,skyAt(data,36));assertEquals(12,skyAt(data,35));
+        }
+        assertEquals(0,budget.used());
+    }
+    @Test void aPushedCrownIsBakedFirstAndThenCarried() throws Exception {
+        var budget=new DhMemoryBudget(DhLimits.DEFAULT.ownedBytes());
+        var materials=List.of(block("air"),leaves("oak",1),leaves("oak",2),block("stone"));
+        // A real-time push arrives with sky 0 everywhere; DH's bake lights only the top leaf span.
+        try(var tile=crownTile(true,budget,materials,
+                span(0,40,56,0),span(1,39,1,0),span(2,36,3,0),span(3,0,36,0))) {
+            var data=new DhColumnConverter(biomes).convertTile(tile,1,true)[0];
+            assertEquals(15,skyAt(data,40));assertEquals(15,skyAt(data,39));
+            assertEquals(14,skyAt(data,38));assertEquals(13,skyAt(data,37));assertEquals(12,skyAt(data,36));
+            assertEquals(0,skyAt(data,35),"stone under the crown");
+        }
+        assertEquals(0,budget.used());
+    }
+    @Test void theCarryingSetIsWhatPassesLightInVanillaButNotInDh() {
+        assertEquals(1,DhColumnConverter.carryLoss(net.minecraft.world.level.block.Blocks.OAK_LEAVES.defaultBlockState()));
+        assertEquals(1,DhColumnConverter.carryLoss(net.minecraft.world.level.block.Blocks.ICE.defaultBlockState()));
+        assertEquals(1,DhColumnConverter.carryLoss(net.minecraft.world.level.block.Blocks.MANGROVE_ROOTS.defaultBlockState()));
+        assertEquals(0,DhColumnConverter.carryLoss(net.minecraft.world.level.block.Blocks.AIR.defaultBlockState()),"DH lights air itself");
+        assertEquals(0,DhColumnConverter.carryLoss(net.minecraft.world.level.block.Blocks.GLASS.defaultBlockState()),"transparent to DH");
+        assertEquals(0,DhColumnConverter.carryLoss(net.minecraft.world.level.block.Blocks.WATER.defaultBlockState()),"fluids have their own depth rule");
+        assertEquals(0,DhColumnConverter.carryLoss(net.minecraft.world.level.block.Blocks.OAK_LEAVES.defaultBlockState()
+                .setValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.WATERLOGGED,true)),"waterlogged leaves are a fluid to DH");
+        assertEquals(0,DhColumnConverter.carryLoss(net.minecraft.world.level.block.Blocks.STONE.defaultBlockState()));
+        assertEquals(0,DhColumnConverter.carryLoss(net.minecraft.world.level.block.Blocks.OAK_LOG.defaultBlockState()));
+        assertEquals(0,DhColumnConverter.carryLoss(net.minecraft.world.level.block.Blocks.OAK_SLAB.defaultBlockState()),
+                "a slab has no dampening but occludes by shape: light does not go down through it");
+        assertEquals(0,DhColumnConverter.carryLoss(net.minecraft.world.level.block.Blocks.OAK_STAIRS.defaultBlockState()));
+        assertEquals(0,DhColumnConverter.carryLoss(net.minecraft.world.level.block.Blocks.TINTED_GLASS.defaultBlockState()),"blocks all light");
+    }
+    /** Receipts written by an older conversion download once again, so stored dark crowns are replaced. */
+    @Test void theConversionVersionMovedWithTheCrownFix() {
+        assertEquals(7,DhReceiptStore.CONVERSION_VERSION);
+    }
     private static MappedRegistry<Biome> biomes;
     @BeforeAll static void bootstrap() {
         SharedConstants.tryDetectVersion(); Bootstrap.bootStrap();

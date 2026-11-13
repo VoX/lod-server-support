@@ -39,7 +39,8 @@ public sealed interface OptionSpec permits OptionSpec.BoolSpec, OptionSpec.IntSp
 
     Visibility visibility();
 
-    /** Applies the option's current config value to a renderer-typed consumer (test helper). */
+    /** The option's current value in a draft, through its own getter. The legacy renderer
+     *  reads {@code enabledBy} dependencies with it; the catalog test pins the defaults. */
     Object read(ClientSettingsEditSession cfg);
 
     record BoolSpec(String id, String nameKey, Tooltip tooltip, Impact impact,

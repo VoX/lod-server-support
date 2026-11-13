@@ -43,6 +43,7 @@ class LegacySettingsMigrationTest {
     }
     @ParameterizedTest @ValueSource(strings={"opt-in"," optin ","OPT_IN"})
     void modeAliasesNormalizeExplicitly(String mode){assertEquals("opt_in",server("{\"farPlayers\":\""+mode+"\"}").farPlayers().mode());}
+    @Test void theRequiredModeMigratesAsItself(){assertEquals("required",server("{\"farPlayers\":\"required\"}").farPlayers().mode());}
     @Test void unknownAndNullModesStayPrivacySafe(){for(String value:List.of("null","\"unknown\"")){var s=server("{\"farPlayers\":"+value+",\"xrayObfuscation\":"+value+"}");assertEquals("off",s.farPlayers().mode());assertEquals("auto",s.privacy().xray().mode());}}
     @Test void nullPrimitiveKeepsNeighborAndMissingDefault(){var s=server("{\"enableChunkGeneration\":null,\"farPlayersSendSpectators\":true}");assertTrue(s.generation().enabled());assertTrue(s.farPlayers().sendSpectators());}
     @Test void paperNullEventsDifferFromMissing(){var schema=SettingsSchema.server(true);assertFalse(LegacySettingsMigration.migrate(bytes("{}"),schema).settings().paper().updateEvents().isEmpty());for(String value:List.of("null","[]"))assertTrue(LegacySettingsMigration.migrate(bytes("{\"updateEvents\":"+value+"}"),schema).settings().paper().updateEvents().isEmpty());assertEquals(List.of("custom.Event"),LegacySettingsMigration.migrate(bytes("{\"updateEvents\":[null,\"custom.Event\"]}"),schema).settings().paper().updateEvents());}

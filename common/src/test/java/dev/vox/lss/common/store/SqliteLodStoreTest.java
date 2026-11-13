@@ -1444,6 +1444,12 @@ class SqliteLodStoreTest {
         for (int i = 0; i < 400 && sqlRowCount(OW) > n - 1; i++) Thread.sleep(25);
         assertEquals(n - 1, sqlRowCount(OW), "exactly one delete applies per step");
 
+        // The row count drops when delete #1 applies, which is BEFORE the same step's
+        // tombstone sweep; wait for that sweep (it retires delete #1's tombstone) so the
+        // checks below read a finished step. A sweep that expired queued tombstones would
+        // pass this wait too, and then fail the equality.
+        for (int i = 0; i < 400 && store.tombstoneCountForTest(OW) > n - 1; i++) Thread.sleep(25);
+
         // The batcher is parked again, so this is a still frame, not a race: every
         // position whose delete is still queued must remain suppressed.
         for (int i = 1; i < n; i++) {

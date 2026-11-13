@@ -13,4 +13,6 @@ public interface ConfigBuilder {
     BooleanOptionBuilder createBooleanOption(Identifier id);
 
     IntegerOptionBuilder createIntegerOption(Identifier id);
+
+    ExternalButtonOptionBuilder createExternalButtonOption(Identifier id);
 }
