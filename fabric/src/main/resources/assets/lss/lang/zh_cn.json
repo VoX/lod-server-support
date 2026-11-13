@@ -53,6 +53,8 @@
   "lss.settings.pending_reconnect_notice": "部分已接受的设置正在等待重新连接。",
   "lss.settings.privacy_sent": "共享偏好已发送到服务器。",
   "lss.settings.privacy_no_channel": "“共享我的位置”：已保存，但尚未有服务器收到。在此之前，服务器会按它自己的默认设置处理，可能会显示您的位置。",
+  "lss.settings.privacy_opt_out_sent": "“共享我的位置”：已将“关闭”发送到此服务器。",
+  "lss.settings.privacy_opt_out_kept": "“共享我的位置”：“开启”已保存。在您重新连接之前，此服务器仍保留您之前的“关闭”。",
   "lss.settings.privacy_pending": "共享偏好尚未发送；将在当前连接上重试。",
   "lss.far_players.sharing_required": "此服务器要求共享位置：其他玩家可以从远处看到你的位置，你的“共享我的位置”设置在这里不生效。",
   "lss.far_players.permission_no_longer_hides": "你拥有 lss.farplayers.hidden 权限。自 0.21.0 起，该权限本身不再让你对远处玩家隐藏：关闭“共享我的位置”即可隐藏。服主：在服务器配置中设置 far_players.hide_permission_holders（true 像以前一样隐藏持有者，false 保持现状）即可不再显示此消息。",

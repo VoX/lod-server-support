@@ -249,6 +249,9 @@ public final class FarPlayerBroadcastService {
     private volatile int lastPassHidden;
     private volatile int lastPassPermissionHolders;
     private volatile int lastPassOverridden;
+    /** Online players whose kept preference says "do not share my position", session or not
+     *  (0.23.0 plan §2). Recounted where the map changes; read by the diag line. */
+    private volatile int optedOut;
     // The upgrade notice: ONE warn line per service instance (= per server start), the
     // first time a holder is seen while far_players.hide_permission_holders is off.
     private final AtomicBoolean holderNoticeLogged = new AtomicBoolean();
@@ -333,11 +336,21 @@ public final class FarPlayerBroadcastService {
     public void onDisconnect(UUID viewer) {
         viewers.remove(viewer);
         retainedPrefs.remove(viewer);
+        recountOptedOut();
         overrideNoticed.remove(viewer);
         holderNoticed.remove(viewer);
         permissionReads.remove(viewer);
         if (viewers.isEmpty()) clearLastPassCounts();
     }
+
+    private void recountOptedOut() {
+        int count = 0;
+        for (var prefs : retainedPrefs.values()) if (!prefs.shareSelf()) count++;
+        optedOut = count;
+    }
+
+    /** Online players who asked not to be shared (tests/diagnostics). */
+    public int optedOut() { return optedOut; }
 
     /** No broadcast pass can run (no subscriber, or mode off): the last-pass counts
      *  must not linger on the diag line, and a permission read from before the gap must
@@ -355,6 +368,7 @@ public final class FarPlayerBroadcastService {
      *  target filter); only the viewer-state half needs a live subscription. */
     public void onPrefs(UUID viewer, FarPlayerWire.Prefs prefs) {
         retainedPrefs.put(viewer, prefs);
+        recountOptedOut();
         var state = viewers.get(viewer);
         if (state == null) return; // no viewer session (capability bit absent, or shed)
         state.prefs = prefs;
@@ -411,9 +425,9 @@ public final class FarPlayerBroadcastService {
     }
 
     /** The /lsslod diag line (rendered only while subscribers exist or counters moved —
-     *  the conditional-slot convention). {@code hidden=}, {@code perm_holders=} and
-     *  {@code overridden=} are appended only when non-zero, so the line is unchanged on
-     *  a server with none of them. */
+     *  the conditional-slot convention). {@code opted_out=}, {@code hidden=},
+     *  {@code perm_holders=} and {@code overridden=} are appended only when non-zero, so the
+     *  line is unchanged on a server with none of them. */
     public String diagLine() {
         var line = new StringBuilder("FarPlayers: subs=").append(viewers.size())
                 .append(", rosters=").append(rosterFramesSent.get())
@@ -421,6 +435,9 @@ public final class FarPlayerBroadcastService {
                 .append(", entries=").append(entriesSent.get())
                 .append(", suppressed=").append(suppressedUnchanged.get())
                 .append(", bytes=").append(bytesSent.get());
+        // A standing count first, then the last pass's counts (their tests pin the line's end).
+        int declined = optedOut;
+        if (declined > 0) line.append(", opted_out=").append(declined);
         int hidden = lastPassHidden;
         int holders = lastPassPermissionHolders;
         int overridden = lastPassOverridden;

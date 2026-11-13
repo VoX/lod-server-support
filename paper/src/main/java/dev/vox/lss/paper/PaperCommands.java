@@ -315,6 +315,6 @@ public class PaperCommands implements CommandExecutor, TabCompleter {
             PaperRequestProcessingService service) {
         var fp = service.getFarPlayerService();
         if (fp == null) return null; // partial rigs (mocked service seams)
-        return fp.subscriberCount() > 0 || fp.rosterFramesSent() > 0 ? fp.diagLine() : null;
+        return fp.subscriberCount() > 0 || fp.rosterFramesSent() > 0 || fp.optedOut() > 0 ? fp.diagLine() : null;
     }
 }

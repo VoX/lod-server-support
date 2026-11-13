@@ -154,12 +154,7 @@ public final class LSSClientConfig {
         feedback.accept(Component.translatable(dev.vox.lss.common.diagnostics.ClientReloadText.outcomeKey(status)));
         if (!pendingReconnect().isEmpty())
             feedback.accept(Component.translatable("lss.settings.pending_reconnect", String.join(", ", pendingReconnect())));
-        var outcome = FarPlayerClientSupport.preferenceOutcome();
-        feedback.accept(Component.translatable(switch (outcome) {
-            case SENT -> "lss.settings.privacy_sent";
-            case NO_CHANNEL -> "lss.settings.privacy_no_channel";
-            case FAILED -> "lss.settings.privacy_pending";
-        }));
+        feedback.accept(Component.translatable(FarPlayerClientSupport.preferenceMessageKey()));
     }
 
     // Read-only compatibility methods keep cross-line consumers small. Capture snapshot()
