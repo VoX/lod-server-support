@@ -151,6 +151,66 @@
         "client_clean",
         "screenshot"
       ]
+    },
+    {
+      "id": "neoforge-client-fabric-server-1.21.1",
+      "status": "ready",
+      "minecraft": "1.21.1",
+      "notes": "A NeoForge client on a Fabric server: the two loaders learn each other's channels differently, and a handshake sent before the client knows the server's channels is dropped by NeoForge. The handshake check fails if the session is not the current protocol.",
+      "server": {
+        "platform": "fabric",
+        "loader_version": "0.20.1",
+        "lss": {
+          "loader": "fabric",
+          "jar_prefix": "lod-server-support-fabric"
+        },
+        "mods": [
+          {
+            "slug": "fabric-api",
+            "project_id": "P7dR8mSH",
+            "version_id": "5SwzqWUu",
+            "version_number": "0.116.18+1.21.1",
+            "file": "fabric-api-0.116.18+1.21.1.jar",
+            "sha512": "9f721c253ae2e9823cb548e8ec132c9928f80a65184e9b8dcfc489a8d632df20cbfea1e65ff8a4333bdb295c41fbe2228b43e4d41c7355d42ed4637a785840a1"
+          }
+        ]
+      },
+      "client": {
+        "loader": "neoforge",
+        "neoforge": {
+          "version": "21.1.266",
+          "installer_sha256": "4f312ec39ff935c661f4053ef398056a8f946057b04be1c1eebf0518a18b2ba2"
+        },
+        "lss": {
+          "loader": "neoforge",
+          "jar_prefix": "lod-server-support-neoforge"
+        },
+        "mods": [
+          {
+            "slug": "sodium",
+            "project_id": "AANobbMI",
+            "version_id": "uMOpc5uV",
+            "version_number": "mc1.21.1-0.8.13-neoforge",
+            "file": "sodium-neoforge-0.8.13+mc1.21.1.jar",
+            "sha512": "4f537696af95411e9daf15795fb5fcbc49913d488a96fa912fa8f1d7db408710995e8a1461190f3cd0f8217bf9e35e9539176592428ed587ca2d7aa84450a390"
+          },
+          {
+            "slug": "xaeros-world-map",
+            "project_id": "NcUtCpym",
+            "version_id": "SnQ4SoDe",
+            "version_number": "neoforge-1.21.1-1.47.0",
+            "file": "xaeroworldmap-neoforge-1.21.1-1.47.0.jar",
+            "sha512": "4d2d78bc85afa002f682ef344b7284cf1baa4903cc5a11cd1d7bd260ac63952580ae717bab47079540ead633cdd5d8e4fdf230dc99a68bcb7a269500e7dada13"
+          }
+        ]
+      },
+      "checks": [
+        "server_started",
+        "handshake",
+        "columns_sent",
+        "client_clean",
+        "screenshot"
+      ]
     }
   ]
 }
