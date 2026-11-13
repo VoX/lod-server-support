@@ -55,6 +55,9 @@ public final class SettingsSchema<T> {
                 default -> null;
             };
             if (raw==null && spec.path().equals("lod.distance.by_world")) raw=Map.of();
+            // Not in the server templates (a commented line there): a file this version creates
+            // must still load on 0.22.0. Default: a player the permission gate leaves out is told.
+            if (!client && raw==null && spec.path().equals("service.show_permission_refusal")) raw=true;
             if (paper && spec.path().equals("storage.lod_store.resweep_interval_seconds")) raw=300;
             Object value=typed(spec,raw);
             defs.put(spec.path(),value);
@@ -69,6 +72,8 @@ public final class SettingsSchema<T> {
                 case "far_players.extend_far_plane" -> "Draw far players past the game's far clipping plane, out to the farthest far player; it only acts while an LOD mod such as Voxy is drawing and not while a shader pack is on, and fog can still hide very distant players (turn off the LOD mod's fog).";
                 default -> "";
             };
+            if (!client && spec.path().equals("service.show_permission_refusal"))
+                inline="With require_permission on, a player without the permission is told \"distant terrain here needs a permission you don't have\"; false = they see the general \"switched off here\". Courtesy, not secrecy: a player can compare with a friend.";
             if (inline.isEmpty()) inline=inlineComment(resource("server"),spec.path());
             if (inline.isEmpty()) inline=inlineComment(resource("paper"),spec.path());
             descs.put(spec.path(),new Descriptor(spec.path(),spec.legacyKey(),spec.kind(),value,spec.timing(),spec.platform(),spec.sensitive(),group(spec.path()),units(spec.path()),
