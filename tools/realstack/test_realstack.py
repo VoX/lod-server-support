@@ -544,8 +544,8 @@ class CheckTest(OfflineCase):
             return ''.join(f'[10:00:{second:02d}] [Render thread/INFO]: {message}\n'
                            for second, message in enumerate(messages))
         lss = ("[System] [CHAT] [LSS] This server isn't sending distant terrain. It probably "
-               "doesn't run LOD Server Support. Nothing is wrong with your game.")
-        vss = lss.replace('[LSS]', '[VSS]').replace('LOD Server Support', 'Voxy Server Side')
+               "doesn't have this mod installed. Nothing is wrong with your game.")
+        vss = lss.replace('[LSS]', '[VSS]')
         notice = checks.check_client_notice
         self.assertTrue(notice(log('Connecting to 127.0.0.1, 25900', lss), 'no_support', 'LSS').passed)
         self.assertTrue(notice(log(vss), 'no_support', 'VSS').passed)
@@ -557,8 +557,9 @@ class CheckTest(OfflineCase):
         # One per connection, and the brand's two names belong together.
         self.assertIn('at most one', notice(log(lss, lss), 'no_support', 'LSS').message)
         self.assertIn('prefixed [LSS]', notice(log(lss), 'no_support', 'VSS').message)
-        half = lss.replace('[LSS]', '[VSS]')
-        self.assertIn('does not read', notice(log(half), 'no_support', 'VSS').message)
+        # The sentence says "this mod": the 0.22 betas' first wording named the brand.
+        branded = lss.replace("doesn't have this mod installed", "doesn't run LOD Server Support")
+        self.assertIn('does not read', notice(log(branded), 'no_support', 'LSS').message)
         self.assertIn('does not read', notice(log(lss.replace('Nothing is wrong', 'Something is wrong')),
                                               'no_support', 'LSS').message)
 

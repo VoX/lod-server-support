@@ -63,8 +63,8 @@ once and in the expected words, stayed up, and a screenshot was saved. A scenari
 checks; the row's are not run.
 
 `--brand vss` takes the Voxy Server Side build of the same jars from a gate's `jars/` directory
-(`--lss dir:` only). The notice check then expects that brand's short name as the prefix and its
-full name in the sentence, so a half-rewritten line fails.
+(`--lss dir:` only). The server is then asked for `vsslod diag`, and the notice check expects
+that build's short name as the prefix.
 
 ## Add a row
 

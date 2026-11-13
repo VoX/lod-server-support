@@ -32,12 +32,13 @@ CLIENT_SAVED = re.compile(r'^Saved (?P<count>\d+) cached column entries')
 CLIENT_CONSUMER = re.compile(r'^Registered voxel column consumer: (?P<name>\S+)')
 PLAYER_JOINED = '{player} joined the game'
 # The client's own chat line, as the game logs it: "[System] [CHAT] [LSS] ...". The prefix is the
-# brand's short name and the sentence carries its full name; the two must belong together.
+# build's short name. The sentence says "this mod" and names no brand: a Voxy Server Side client
+# on a LOD Server Support server must not name the server's copy by its own brand.
 NOTICE = re.compile(r'^(?:\[System\] )?\[CHAT\] \[(?P<short>LSS|VSS)\] (?P<text>.*)$')
 BRANDS = {'LSS': 'LOD Server Support', 'VSS': 'Voxy Server Side'}
 NOTICE_TEXTS = {
-    'no_support': "This server isn't sending distant terrain. It probably doesn't run {brand}. "
-                  "Nothing is wrong with your game.",
+    'no_support': "This server isn't sending distant terrain. It probably doesn't have this mod "
+                  "installed. Nothing is wrong with your game.",
 }
 CRASH_MARKERS = ('---- Minecraft Crash Report ----', '#@!@# Game crashed!',
                  'A fatal error has been detected by the Java Runtime Environment')
@@ -356,8 +357,8 @@ def check_client_joined(observed_server_log: str, player: str) -> CheckResult:
 
 def check_client_notice(client_log: str, kind: str, brand: str) -> CheckResult:
     """The client told the player, in chat and exactly once, why no distant terrain is arriving.
-    The line must carry the expected brand twice: its short name as the prefix and its full name
-    in the sentence (the VSS build rewrites the sentence; a half-rewritten line fails here)."""
+    The line must start with the expected build's short name and read exactly as written, with no
+    brand name in the sentence."""
     name = 'client_notice'
     notices = [(entry, match) for entry, match in all_matches(parse_entries(client_log), NOTICE)]
     evidence = [entry.first_line() for entry, _match in notices]
@@ -367,13 +368,16 @@ def check_client_notice(client_log: str, kind: str, brand: str) -> CheckResult:
         return CheckResult(name, False, f'{len(notices)} notices on one connection; the rule is '
                            'at most one', evidence)
     match = notices[0][1]
-    expected = NOTICE_TEXTS[kind].format(brand=BRANDS[brand])
+    expected = NOTICE_TEXTS[kind]
     if match.group('short') != brand:
         return CheckResult(name, False, f'the notice is prefixed [{match.group("short")}], '
                            f'expected [{brand}]', evidence)
     if match.group('text').strip() != expected:
         return CheckResult(name, False, f'the notice does not read: {expected}', evidence)
-    return CheckResult(name, True, f'one notice, in the {brand} build\'s words', evidence)
+    named = [full for full in BRANDS.values() if full in match.group('text')]
+    if named:
+        return CheckResult(name, False, f'the notice names a brand ({named[0]})', evidence)
+    return CheckResult(name, True, f'one notice, from the {brand} build', evidence)
 
 
 def check_screenshot(shot: dict | None) -> CheckResult:
