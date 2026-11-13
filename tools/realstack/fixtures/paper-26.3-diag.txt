@@ -1,0 +1,14 @@
+[11:21:07 INFO]: === LSS LOD Diagnostics ===
+[11:21:07 INFO]: Config: enabled=true, lodDist=512, bw/player=25.0 MB/s, bw/global=75.0 MB/s
+[11:21:07 INFO]: Throughput: sent=2346 (79.0 MB), rate=30 sections/s (1.0 MB/s), uptime=1m 18s
+[11:21:07 INFO]: Sources (total): in_mem=205, disk=0, up_to_date=0, gen=2144, re_resolved=0, grace_skipped=0
+[11:21:07 INFO]: Sources (tick): sent=0, disk=0/0, utd=0, gen=0, in_mem=0, skipped=0, bytes=0 B, qpeak=0/1024
+[11:21:07 INFO]: DiskReader: submitted=2210, completed=2210, not_found=2210, all_air=0, errors=0, saturated=0, header_hits=0, avg_read=0.3ms, pending=0, read_gate=0/4, gate_parked=0, gate_stops=0, gated=0, memo_hits=1671, store=full h=0 m=2210 dep=2144 drop=0 err=0 q=0 avg_read=0us
+[11:21:07 INFO]: Generation: submitted=2181, completed=2144, active=37, timeouts=0, removed=0, null_failures=0, vanished=0, order_gated=48, inversions=21
+[11:21:07 INFO]: Dialects: v20=1, v19=0, v18=0, v16=0, started=1/0/0/0, ended=0/0/0/0 in 1m
+[11:21:07 INFO]: Xray: active=off, masked_sections=0
+[11:21:07 INFO]: Yield: armed=true, ticks_total=0, bytes_withheld=0 B
+[11:21:07 INFO]: FarPlayers: subs=1, rosters=1, updates=0, entries=0, suppressed=0, bytes=4
+[11:21:07 INFO]: Summary: reqs=1, frames=1, tiles known=1 never_clean=1 no_region=1223, range_filtered=0, bytes=1257, refresh_ms_max=7, stamps=0/0
+[11:21:07 INFO]: Bandwidth: 1.4 MB/s / 75.0 MB/s global (79.0 MB total, 14.6 MB wire, cols zstd=2349 raw=0)
+[11:21:07 INFO]:   RealStack: sq=0/1024, psync=0, pgen=37, sent=2346 (79.0 MB), rate=30/s, obuf=0 B/17.9 KB, pingf=1.00, yielded=0, paced=4

@@ -71,6 +71,8 @@ that build's short name as the prefix.
 1. `realstack.py pin <modrinth project> --minecraft <version> --loader <loader>` prints the entry
    for the newest published file (project, version id, file name, sha512) and its dependencies.
    `realstack.py pin --neoforge-installer <version>` prints a NeoForge pin.
+   `realstack.py pin --paper <minecraft version>` prints a Paper pin (build, file name, sha256)
+   for the newest stable build, or for `--build <number>`.
 2. Add the row to `stacks.json`: id, Minecraft version, server platform and client loader with
    their loader pins, the pinned mods of both sides, the LSS jar of each side and the checks.
 3. `realstack.py run <row> --lss published:<current version>`. If it cannot be made to work, keep
@@ -79,9 +81,16 @@ that build's short name as the prefix.
 The client needs a terrain consumer (Voxy or a map mod); without one it requests no terrain and
 `columns_sent` has nothing to witness.
 
+Server platforms: `fabric`, `neoforge` and `paper`. A Paper row pins the server jar from the
+PaperMC download API (`"paper": {"build", "file", "sha256"}`); the mod under test and the pinned
+`mods` of the server side go into `plugins/`. The Paper jar unpacks itself in the run's server
+directory on every start. It would download the game's server jar for that; the tool puts its own
+verified copy where the Paper jar looks, when the hash is the one the Paper jar asks for. A Paper
+console names no thread and prints `[LSS]` in front of the mod's lines; the checks read both forms.
+
 ## Rules the tool keeps
 
-- Official sources only (Modrinth, Mojang, Fabric and NeoForge), every file hash-checked, a
+- Official sources only (Modrinth, Mojang, Fabric, NeoForge and PaperMC), every file hash-checked, a
   generic User-Agent, no account, token or credential of any kind. Clients start with
   `--accessToken 0` against an offline server.
 - Private Xvfb display only, never `:0`; `WAYLAND_DISPLAY` and `XAUTHORITY` are removed.

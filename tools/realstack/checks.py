@@ -14,6 +14,11 @@ ANSI = re.compile(r'\x1b\[[0-9;]*[A-Za-z]')
 ENTRY = re.compile(r'^\[\d\d:\d\d:\d\d(?:\.\d+)?\] '
                    r'\[(?P<thread>.*?)/(?P<level>TRACE|DEBUG|INFO|WARN|ERROR|FATAL)\]'
                    r'(?: \[(?P<logger>[^\]]*)\])?: ?(?P<message>.*)$')
+# Paper's console names no thread and puts a plugin's logger in front of the plugin's message:
+# "[12:00:00 INFO]: [LSS] Starting LSS LOD request processing service".
+PAPER_ENTRY = re.compile(r'^\[\d\d:\d\d:\d\d (?P<level>TRACE|DEBUG|INFO|WARN|ERROR|FATAL)\]: ?'
+                         r'(?P<message>.*)$')
+PAPER_LOGGER = re.compile(r'^\[(?P<logger>[A-Za-z0-9_.$-]+)\] (?P<message>.*)$')
 LSS_MENTION = re.compile(r'(?<![a-z0-9])[lv]ss(?![a-z0-9])|lod[-_ ]?server[-_ ]?support'
                          r'|voxy[-_ ]?server[-_ ]?side|dev\.vox\.lss', re.IGNORECASE)
 UNCAUGHT = re.compile(r'^Exception in thread "(?P<thread>[^"]*)"')
@@ -30,6 +35,7 @@ CLIENT_SESSION = re.compile(r'^Server session config received \(protocol v(?P<pr
                             r'LOD distance: (?P<distance>\d+) chunks, enabled: (?P<enabled>\w+)\)')
 CLIENT_SAVED = re.compile(r'^Saved (?P<count>\d+) cached column entries')
 CLIENT_CONSUMER = re.compile(r'^Registered voxel column consumer: (?P<name>\S+)')
+DIAG_LAST_FIELD = 'Bandwidth'
 PLAYER_JOINED = '{player} joined the game'
 # The client's own chat line, as the game logs it: "[System] [CHAT] [LSS] ...". The prefix is the
 # build's short name. The sentence says "this mod" and names no brand: a Voxy Server Side client
@@ -90,13 +96,18 @@ def parse_entries(log_text: str) -> list[Entry]:
     entries: list[Entry] = []
     for raw in strip_ansi(log_text).splitlines():
         match = ENTRY.match(raw)
+        paper = None if match else PAPER_ENTRY.match(raw)
         uncaught = UNCAUGHT.match(raw)
-        if match:
-            message = match.group('message')
+        if match or paper:
+            fields = (match or paper).groupdict()
+            message = fields['message']
             if message.startswith('System chat: '):
                 message = message[len('System chat: '):]
-            entries.append(Entry(match.group('thread'), match.group('level'),
-                                 match.group('logger') or '', message, [raw]))
+            named = PAPER_LOGGER.match(message) if paper else None
+            if named:
+                fields['logger'], message = named.group('logger'), named.group('message')
+            entries.append(Entry(fields.get('thread') or '', fields['level'],
+                                 fields.get('logger') or '', message, [raw]))
         elif uncaught:
             entries.append(Entry(uncaught.group('thread'), 'ERROR', '', raw, [raw]))
         elif entries:
@@ -146,6 +157,10 @@ def parse_diag(diag_text: str) -> dict:
 
     Returns {'present', 'fields', 'players', 'lines'}: `fields` maps a line's name ('Throughput',
     'Dialects', ...) to the rest of the line, `players` maps a player name to that player's line.
+
+    The block's lines come from one thread, so lines of other threads between them are skipped.
+    A Paper console names no thread: there, a line in the middle of the block that is not a
+    diag line is taken for another thread's and skipped, up to the block's last field.
     """
     entries = parse_entries(diag_text)
     start = None
@@ -166,6 +181,8 @@ def parse_diag(diag_text: str) -> dict:
             result['players'][player.group('name')] = player.group('value')
         elif named and not result['players']:
             result['fields'].setdefault(named.group('key'), named.group('value'))
+        elif not thread and not result['players'] and DIAG_LAST_FIELD not in result['fields']:
+            continue
         else:
             break
         result['lines'].append(entry.first_line())

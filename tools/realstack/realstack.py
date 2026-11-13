@@ -7,6 +7,7 @@
   realstack.py run <row> --lss published:<version> | dir:<path>
   realstack.py replay <run directory>
   realstack.py pin <modrinth project> --minecraft <version> --loader <loader>
+  realstack.py pin --paper <minecraft version>
 
 A row (stacks.json) names a Minecraft version, a server platform, a client loader and the pinned
 third-party mods of both sides. `run` stages a fresh offline server and a fresh production client
@@ -24,6 +25,7 @@ import signal
 import subprocess
 import sys
 import time
+import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -193,6 +195,11 @@ def provision(row: dict, cache: Path) -> dict:
         root = neoforge_install(server, 'server', java, cache)
         result['server'] = {'install_root': str(root)}
         say(f'  server: NeoForge {server["neoforge"]["version"]} installed at {root}')
+    elif server['platform'] == 'paper':
+        path, how = fetch.fetch_paper_server(row['minecraft'], server['paper'], cache)
+        result['server'] = {'paper_jar': str(path),
+                            'game_jar': str(fetch.fetch_game_jar(version_json, 'server', cache))}
+        say(f'  server: Paper {row["minecraft"]} build {server["paper"]["build"]}: {how}')
     else:
         raise fetch.FetchError(f'server platform {server["platform"]} is not implemented yet')
 
@@ -356,10 +363,13 @@ class Run:
 
     def stage(self, provisioned: dict, lss: dict) -> None:
         """Create the run directory with a fresh server directory and client game directory."""
-        for directory in (self.server_dir / 'mods', self.client_dir / 'mods'):
+        platform = self.row['server']['platform']
+        folders = {'server': self.server_dir / launch.mods_folder(platform),
+                   'client': self.client_dir / 'mods'}
+        for directory in folders.values():
             directory.mkdir(parents=True)
         staged = []
-        for side, directory in (('server', self.server_dir), ('client', self.client_dir)):
+        for side in ('server', 'client'):
             sources = [(Path(mod['path']), mod['sha512'], mod['slug'])
                        for mod in provisioned[side]['mods']]
             if side == 'client' and self.options.fault == 'client-without-lss':
@@ -369,7 +379,7 @@ class Run:
             else:
                 sources.append((Path(lss[side]['path']), lss[side]['sha512'], 'lss'))
             for source, sha512, slug in sources:
-                target = directory / 'mods' / source.name
+                target = folders[side] / source.name
                 shutil.copyfile(source, target)
                 if fetch.file_digest(target, 'sha512') != sha512:
                     raise RunAborted(f'staged {target} does not match its hash')
@@ -378,9 +388,28 @@ class Run:
         self.facts['staged'] = staged
         (self.server_dir / 'eula.txt').write_text('eula=true\n')
         (self.client_dir / 'options.txt').write_text(launch.client_options())
-        if self.row['server']['platform'] == 'neoforge':
+        if platform == 'neoforge':
             libraries = Path(provisioned['server']['install_root']) / 'libraries'
             (self.server_dir / 'libraries').symlink_to(libraries, target_is_directory=True)
+        if platform == 'paper':
+            self.seed_paper_cache(provisioned)
+
+    def seed_paper_cache(self, provisioned: dict) -> None:
+        """Give the Paper jar the game jar it would otherwise download on its first start:
+        this tool's own verified copy, when its hash is the one the Paper jar asks for.
+        Without it the Paper jar downloads the file from Mojang and checks the hash itself."""
+        with zipfile.ZipFile(provisioned['server']['paper_jar']) as archive:
+            names = archive.namelist()
+            context = (archive.read('META-INF/download-context').decode()
+                       if 'META-INF/download-context' in names else '')
+        game_jar = Path(provisioned['server']['game_jar'])
+        seeded = []
+        for wanted in launch.paperclip_downloads(context):
+            if fetch.file_matches(game_jar, 'sha256', wanted['sha256']):
+                (self.server_dir / 'cache').mkdir(exist_ok=True)
+                shutil.copyfile(game_jar, self.server_dir / 'cache' / wanted['name'])
+                seeded.append(wanted['name'])
+        self.facts['paper_cache_seeded'] = seeded
 
     def start_display(self) -> int:
         """Start the private Xvfb display for this run."""
@@ -412,6 +441,9 @@ class Run:
             command = launch.fabric_server_command(
                 java, tag, [Path(item) for item in provisioned['server']['classpath']],
                 Path(provisioned['server']['game_jar']), block.get('jvm_args', []))
+        elif block['platform'] == 'paper':
+            command = launch.paper_server_command(java, tag, Path(provisioned['server']['paper_jar']),
+                                                  block.get('jvm_args', []))
         else:
             command = launch.neoforge_server_command(java, tag, block['neoforge']['version'],
                                                      block.get('jvm_args', []))
@@ -662,6 +694,8 @@ def loader_label(block: dict, kind_key: str) -> str:
         return f'fabric (loader {block["loader_version"]})'
     if kind == 'neoforge':
         return f'neoforge {block["neoforge"]["version"]}'
+    if kind == 'paper':
+        return f'paper (build {block["paper"]["build"]})'
     return kind
 
 
@@ -800,14 +834,21 @@ def command_replay(options: argparse.Namespace) -> int:
 
 
 def command_pin(options: argparse.Namespace) -> int:
-    """Print the stacks.json entry for a Modrinth version (the newest one unless named), or the
-    sha256 of a NeoForge installer. Reads only public indexes."""
+    """Print the stacks.json entry for a Modrinth version (the newest one unless named), the
+    sha256 of a NeoForge installer, or a Paper build (the newest stable one unless named).
+    Reads only public indexes."""
+    if options.paper:
+        chosen = fetch.choose_paper_build(fetch.paper_builds(options.paper), options.build)
+        print(json.dumps(fetch.paper_pin_from_build(chosen), indent=1))
+        print(f'# Paper {options.paper} build {chosen["id"]}: channel {chosen.get("channel")}, '
+              f'published {chosen.get("time")}', file=sys.stderr)
+        return 0
     if options.neoforge_installer:
         print(json.dumps({'version': options.neoforge_installer, 'installer_sha256':
                           fetch.neoforge_published_sha256(options.neoforge_installer)}, indent=1))
         return 0
     if not (options.project and options.minecraft and options.loader):
-        print('pin needs a project with --minecraft and --loader, or --neoforge-installer',
+        print('pin needs a project with --minecraft and --loader, --neoforge-installer or --paper',
               file=sys.stderr)
         return 2
     versions = fetch.modrinth_versions(options.project, options.minecraft, options.loader)
@@ -871,6 +912,8 @@ def build_parser() -> argparse.ArgumentParser:
     pin_parser.add_argument('--loader')
     pin_parser.add_argument('--version', help='version number or id (default: newest)')
     pin_parser.add_argument('--neoforge-installer', metavar='VERSION')
+    pin_parser.add_argument('--paper', metavar='MINECRAFT', help='pin a Paper server build')
+    pin_parser.add_argument('--build', type=int, help='Paper build number (default: newest stable)')
     pin_parser.set_defaults(handler=command_pin)
     return parser
 

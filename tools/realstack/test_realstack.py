@@ -15,6 +15,7 @@ import struct
 import sys
 import tempfile
 import unittest
+import zipfile
 import zlib
 from pathlib import Path
 
@@ -74,6 +75,34 @@ class StackFileTest(OfflineCase):
         ids = [row['id'] for row in document['rows']]
         self.assertIn('fabric-26.3-sodium-voxy-xaero', ids)
         self.assertIn('neoforge-1.21.1-c2me-scalablelux', ids)
+        self.assertIn('paper-26.3-fabric-client', ids)
+
+    def test_paper_row_has_the_fabric_rows_client(self) -> None:
+        document = stackfile.load()
+        paper = stackfile.find_row(document, 'paper-26.3-fabric-client')
+        fabric = stackfile.find_row(document, 'fabric-26.3-sodium-voxy-xaero')
+        self.assertEqual(paper['client'], fabric['client'])
+        self.assertEqual(paper['minecraft'], fabric['minecraft'])
+        self.assertEqual(paper['server']['mods'], [], 'no permissions plugin, no other plugin')
+        self.assertEqual(paper['server']['lss'], {'loader': 'paper',
+                                                  'jar_prefix': 'lod-server-support-paper'})
+
+    def test_paper_needs_a_complete_pin(self) -> None:
+        good = stackfile.load()
+        cases = {
+            'paper.build': lambda paper: paper.update(build='249'),
+            'paper.build must': lambda paper: paper.update(build=True),
+            'paper.file': lambda paper: paper.update(file='../paper.jar'),
+            'paper.sha256': lambda paper: paper.update(sha256=paper['sha256'][:40]),
+        }
+        for expected, damage in cases.items():
+            document = copy.deepcopy(good)
+            damage(stackfile.find_row(document, 'paper-26.3-fabric-client')['server']['paper'])
+            problems = stackfile.validate(document)
+            self.assertTrue(any(expected in problem for problem in problems), (expected, problems))
+        document = copy.deepcopy(good)
+        del stackfile.find_row(document, 'paper-26.3-fabric-client')['server']['paper']
+        self.assertTrue(any('paper.build' in problem for problem in stackfile.validate(document)))
 
     def test_protocol_matches_the_source(self) -> None:
         source = REPO_ROOT / 'common/src/main/java/dev/vox/lss/common/LSSConstants.java'
@@ -153,6 +182,9 @@ class StackFileTest(OfflineCase):
                 'voxy-server-side-fabric-0.21.0+26.3.jar']
         self.assertEqual(stackfile.choose_built_jar(gate, 'lod-server-support-fabric', '26.3'),
                          'lod-server-support-fabric-0.21.0+26.3.jar')
+        # The gate also keeps the thin paper-<version>.jar; the plugin is the prefixed one.
+        self.assertEqual(stackfile.choose_built_jar(gate, 'lod-server-support-paper', '26.3'),
+                         'lod-server-support-paper-0.21.0+26.3.jar')
         self.assertEqual(stackfile.choose_built_jar(['lod-server-support-fabric.jar'],
                                                     'lod-server-support-fabric', '26.3'),
                          'lod-server-support-fabric.jar')
@@ -221,6 +253,8 @@ class FetchTest(OfflineCase):
     def test_only_official_hosts(self) -> None:
         fetch.check_url_allowed('https://cdn.modrinth.com/data/x/versions/y/file.jar')
         fetch.check_url_allowed('https://piston-meta.mojang.com/mc/game/version_manifest_v2.json')
+        fetch.check_url_allowed('https://fill.papermc.io/v3/projects/paper/versions/26.3/builds')
+        fetch.check_url_allowed('https://fill-data.papermc.io/v1/objects/abc/paper-26.3-249.jar')
         for url in ('http://cdn.modrinth.com/data/x.jar', 'https://example.org/mod.jar',
                     'https://cdn.modrinth.com.evil.example/x.jar', 'file:///etc/passwd'):
             with self.assertRaises(fetch.FetchError):
@@ -316,6 +350,68 @@ class FetchTest(OfflineCase):
         path, how = fetch.fetch_pinned_mod(pin, cache)
         self.assertEqual((path.read_bytes(), how), (b'sodium', 'downloaded'))
 
+    def paper_build(self, number: int, channel: str = 'STABLE', content: bytes = b'paper',
+                    name: str | None = None) -> dict:
+        """A build as the PaperMC API lists it."""
+        name = name or f'paper-26.3-{number}.jar'
+        sha256 = hashlib.sha256(content).hexdigest()
+        return {'id': number, 'channel': channel, 'time': '2026-11-11T18:01:48Z',
+                'downloads': {'server:default': {
+                    'name': name, 'checksums': {'sha256': sha256}, 'size': len(content),
+                    'url': f'https://fill-data.papermc.io/v1/objects/{sha256}/{name}'}}}
+
+    def test_paper_build_choice(self) -> None:
+        builds = [self.paper_build(250, 'BETA'), self.paper_build(249), self.paper_build(248)]
+        self.assertEqual(fetch.choose_paper_build(builds)['id'], 249, 'the newest STABLE build')
+        self.assertEqual(fetch.choose_paper_build(builds, 248)['id'], 248)
+        self.assertEqual(fetch.choose_paper_build(builds, 250)['id'], 250, 'a named build')
+        self.assertEqual(fetch.choose_paper_build(builds[:1])['id'], 250,
+                         'a version with no stable build yet')
+        for nothing in ([], builds):
+            with self.assertRaises(fetch.FetchError):
+                fetch.choose_paper_build(nothing, 7)
+        fetch.http_json = lambda url: [self.paper_build(248), self.paper_build(249)]
+        self.assertEqual([build['id'] for build in fetch.paper_builds('26.3')], [249, 248])
+
+    def test_paper_pin(self) -> None:
+        pin = fetch.paper_pin_from_build(self.paper_build(249))
+        self.assertEqual(pin, {'build': 249, 'file': 'paper-26.3-249.jar',
+                               'sha256': hashlib.sha256(b'paper').hexdigest()})
+        document = copy.deepcopy(stackfile.load())
+        stackfile.find_row(document, 'paper-26.3-fabric-client')['server']['paper'] = pin
+        self.assertEqual(stackfile.validate(document), [], 'what pin prints is a valid entry')
+        with self.assertRaises(fetch.FetchError):
+            fetch.paper_pin_from_build(self.paper_build(249, name='../../evil.jar'))
+        damaged = self.paper_build(249)
+        damaged['downloads']['server:default']['checksums']['sha256'] = 'not-a-hash'
+        with self.assertRaises(fetch.FetchError):
+            fetch.paper_pin_from_build(damaged)
+
+    def test_pinned_paper_from_cache_needs_no_network(self) -> None:
+        cache = self.temp()
+        pin = fetch.paper_pin_from_build(self.paper_build(249))
+        dest = cache / 'paper' / '26.3' / 'paper-26.3-249.jar'
+        dest.parent.mkdir(parents=True)
+        dest.write_bytes(b'paper')
+        self.assertEqual(fetch.fetch_paper_server('26.3', pin, cache), (dest, 'cached'))
+
+    def test_paper_pin_that_disagrees_with_papermc_is_refused(self) -> None:
+        cache = self.temp()
+        pin = fetch.paper_pin_from_build(self.paper_build(249))
+        asked = []
+        fetch.http_json = lambda url: asked.append(url) or self.paper_build(249, content=b'rebuilt')
+        with self.assertRaises(fetch.FetchError):
+            fetch.fetch_paper_server('26.3', pin, cache)
+        self.assertEqual(asked, ['https://fill.papermc.io/v3/projects/paper/versions/26.3/builds/249'])
+        fetch.http_json = lambda url: self.paper_build(249)
+        fetch.http_get = lambda url, timeout=180: b'tampered on the way'
+        with self.assertRaises(fetch.FetchError):
+            fetch.fetch_paper_server('26.3', pin, cache)
+        self.assertFalse((cache / 'paper' / '26.3' / 'paper-26.3-249.jar').exists())
+        fetch.http_get = lambda url, timeout=180: b'paper'
+        path, how = fetch.fetch_paper_server('26.3', pin, cache)
+        self.assertEqual((path.read_bytes(), how), (b'paper', 'downloaded'))
+
     def test_free_space_guard(self) -> None:
         with self.assertRaises(fetch.FetchError):
             fetch.require_free_space(minimum=1 << 62)
@@ -351,8 +447,56 @@ class LogParsingTest(OfflineCase):
         self.assertEqual([entry.level for entry in entries], ['INFO', 'ERROR'])
         self.assertEqual(len(checks.lss_entries(entries, ('ERROR',))), 1)
 
+    def test_paper_console_lines(self) -> None:
+        text = ('[11:11:43 INFO]: [LSS] Starting LSS LOD request processing service\n'
+                '[11:11:44 INFO]: Done (6.730s)! For help, type "help"\n'
+                '[11:11:56 INFO]: System chat: \x1b[38;5;11mRealStack joined the game\x1b[0m\n'
+                '[11:11:57 INFO]: [LSS] LSS handshake received from RealStack (protocol v20, '
+                'capabilities=15)\n'
+                '[11:12:01 INFO]: [Not Secure] <RealStack> hello\n'
+                '[11:12:02 WARN]: [LSS] Something odd\n'
+                '\tat dev.vox.lss.paper.LSSPaperPlugin.onEnable(LSSPaperPlugin.java:1)\n')
+        entries = checks.parse_entries(text)
+        self.assertEqual([(entry.thread, entry.level, entry.logger, entry.message) for entry in entries], [
+            ('', 'INFO', 'LSS', 'Starting LSS LOD request processing service'),
+            ('', 'INFO', '', 'Done (6.730s)! For help, type "help"'),
+            ('', 'INFO', '', 'RealStack joined the game'),
+            ('', 'INFO', 'LSS', 'LSS handshake received from RealStack (protocol v20, capabilities=15)'),
+            ('', 'INFO', '', '[Not Secure] <RealStack> hello'),
+            ('', 'WARN', 'LSS', 'Something odd')])
+        self.assertEqual(len(entries[-1].lines), 2)
+        self.assertTrue(checks.first_match(entries, checks.SERVER_READY))
+        self.assertTrue(checks.first_match(entries, checks.SERVICE_START))
+        self.assertEqual(len(checks.lss_entries(entries, ('WARN',))), 1)
+
+    def test_paper_console_of_a_real_run(self) -> None:
+        entries = checks.parse_entries(fixture('paper-26.3-server.log'))
+        self.assertTrue(all(entry.thread == '' for entry in entries))
+        self.assertIn('LSS', {entry.logger for entry in entries})
+        self.assertTrue(any(entry.message == f'{PLAYER} joined the game' for entry in entries))
+        handshake = checks.first_match(entries, checks.SERVER_HANDSHAKE)
+        self.assertEqual((handshake[1].group('name'), handshake[1].group('protocol')), (PLAYER, '20'))
+
+    def test_a_console_without_thread_names_skips_foreign_lines_in_a_diag(self) -> None:
+        lines = fixture('paper-26.3-diag.txt').splitlines(keepends=True)
+        foreign = '[11:13:07 INFO]: [spark] Starting background profiler...\n'
+        mixed = ''.join(lines[:4] + [foreign] + lines[4:])
+        plain, with_foreign = checks.parse_diag(''.join(lines)), checks.parse_diag(mixed)
+        self.assertTrue(plain['present'])
+        self.assertEqual(with_foreign['fields'], plain['fields'])
+        self.assertEqual(with_foreign['players'], plain['players'])
+        self.assertIn('Bandwidth', plain['fields'])
+        # After the block's last field only player lines follow; anything else ends the block.
+        after = checks.parse_diag(''.join(lines) + foreign
+                                  + f'[11:13:08 INFO]:   Somebody: sq=0/1024, sent=9\n')
+        self.assertNotIn('Somebody', after['players'])
+        # A console that names threads: a line of the same thread still ends the block.
+        fabric = fixture('fabric-26.3-diag.txt').splitlines(keepends=True)
+        cut = ''.join(fabric[:4] + ['[22:24:34] [Server thread/INFO]: Something else\n'] + fabric[4:])
+        self.assertNotIn('Bandwidth', checks.parse_diag(cut)['fields'])
+
     def test_diag_block(self) -> None:
-        for prefix in ('fabric-26.3', 'neoforge-1.21.1'):
+        for prefix in ('fabric-26.3', 'neoforge-1.21.1', 'paper-26.3'):
             diag = checks.parse_diag(fixture(f'{prefix}-diag.txt'))
             self.assertTrue(diag['present'], prefix)
             self.assertIn('enabled=true', diag['fields']['Config'])
@@ -398,7 +542,7 @@ class CheckTest(OfflineCase):
         return {result.name: result for result in checks.run_checks(names, material)}
 
     def test_real_runs_pass_every_check(self) -> None:
-        for prefix in ('fabric-26.3', 'neoforge-1.21.1'):
+        for prefix in ('fabric-26.3', 'neoforge-1.21.1', 'paper-26.3'):
             for name, result in self.results(self.material(prefix)).items():
                 self.assertTrue(result.passed, (prefix, name, result.message))
                 self.assertTrue(result.evidence, (prefix, name))
@@ -673,6 +817,90 @@ class VerdictTest(OfflineCase):
         self.assertFalse(checks.check_screenshot(material['screenshot']).passed)
 
 
+class RunStagingTest(OfflineCase):
+    """What a run puts on disk before anything starts."""
+
+    def run_for(self, row_id: str, *arguments: str) -> realstack.Run:
+        """A run of a row with its directories under a temporary folder; nothing is started."""
+        root = self.temp()
+        saved = dict(realstack.os.environ)
+        realstack.os.environ['LSS_REALSTACK_RUNS'] = str(root / 'runs')
+        realstack.os.environ['LSS_REALSTACK_CACHE'] = str(root / 'cache')
+        self.addCleanup(lambda: (realstack.os.environ.clear(), realstack.os.environ.update(saved)))
+        options = realstack.build_parser().parse_args(['run', row_id, '--lss', 'dir:/gate', *arguments])
+        document = stackfile.load()
+        run = realstack.Run(document, stackfile.find_row(document, row_id), 'dir:/gate', options)
+        run.evidence.mkdir(parents=True)
+        run.deadline = realstack.time.monotonic() + 600
+        return run
+
+    def jar(self, folder: Path, name: str, content: bytes) -> dict:
+        """A stand-in jar with its hash, as provisioning and --lss describe one."""
+        folder.mkdir(parents=True, exist_ok=True)
+        (folder / name).write_bytes(content)
+        return {'path': str(folder / name), 'file': name, 'slug': name,
+                'sha512': hashlib.sha512(content).hexdigest()}
+
+    def staged(self, run: realstack.Run, provisioned_server: dict | None = None) -> None:
+        """Stage a run from stand-in jars."""
+        source = run.directory / 'source'
+        lss = {'server': self.jar(source, 'lod-server-support-server.jar', b'server build'),
+               'client': self.jar(source, 'lod-server-support-fabric.jar', b'client build')}
+        provisioned = {'server': {'mods': [], **(provisioned_server or {})},
+                       'client': {'mods': [self.jar(source, 'sodium.jar', b'sodium')]}}
+        run.stage(provisioned, lss)
+
+    def test_fabric_server_takes_mods(self) -> None:
+        run = self.run_for('fabric-26.3-sodium-voxy-xaero')
+        self.staged(run)
+        self.assertEqual(sorted(path.name for path in (run.server_dir / 'mods').iterdir()),
+                         ['lod-server-support-server.jar'])
+        self.assertEqual(sorted(path.name for path in (run.client_dir / 'mods').iterdir()),
+                         ['lod-server-support-fabric.jar', 'sodium.jar'])
+        self.assertFalse((run.server_dir / 'plugins').exists())
+        self.assertFalse((run.client_dir / 'config').exists(), 'no client settings are staged')
+        self.assertEqual((run.server_dir / 'eula.txt').read_text(), 'eula=true\n')
+
+    def test_paper_server_takes_plugins_and_its_game_jar(self) -> None:
+        run = self.run_for('paper-26.3-fabric-client')
+        source = run.directory / 'source'
+        source.mkdir(parents=True)
+        (source / 'server.jar').write_bytes(b'the game')
+        wanted = hashlib.sha256(b'the game').hexdigest()
+        with zipfile.ZipFile(source / 'paper.jar', 'w') as archive:
+            archive.writestr('META-INF/download-context',
+                             f'{wanted}\thttps://piston-data.mojang.com/v1/objects/x/server.jar'
+                             '\tmojang_26.3.jar\n')
+        self.staged(run, {'paper_jar': str(source / 'paper.jar'), 'game_jar': str(source / 'server.jar')})
+        self.assertEqual([path.name for path in (run.server_dir / 'plugins').iterdir()],
+                         ['lod-server-support-server.jar'])
+        self.assertFalse((run.server_dir / 'mods').exists())
+        self.assertEqual((run.server_dir / 'cache' / 'mojang_26.3.jar').read_bytes(), b'the game')
+        self.assertEqual(run.facts['paper_cache_seeded'], ['mojang_26.3.jar'])
+        staged = json.loads((run.evidence / 'staged.json').read_text())
+        self.assertIn({'side': 'server', 'mod': 'lss', 'file': 'lod-server-support-server.jar',
+                       'sha512': hashlib.sha512(b'server build').hexdigest()}, staged)
+
+    def test_paper_downloads_its_game_jar_itself_when_ours_is_another(self) -> None:
+        run = self.run_for('paper-26.3-fabric-client')
+        source = run.directory / 'source'
+        source.mkdir(parents=True)
+        (source / 'server.jar').write_bytes(b'another game jar')
+        with zipfile.ZipFile(source / 'paper.jar', 'w') as archive:
+            archive.writestr('META-INF/download-context',
+                             f'{"ab" * 32}\thttps://piston-data.mojang.com/x/server.jar\tmojang_26.3.jar\n')
+        self.staged(run, {'paper_jar': str(source / 'paper.jar'), 'game_jar': str(source / 'server.jar')})
+        self.assertFalse((run.server_dir / 'cache').exists())
+        self.assertEqual(run.facts['paper_cache_seeded'], [])
+
+    def test_server_without_lss_still_leaves_the_mod_out(self) -> None:
+        run = self.run_for('fabric-26.3-sodium-voxy-xaero', '--scenario', 'server-without-lss')
+        self.staged(run)
+        self.assertEqual(list((run.server_dir / 'mods').iterdir()), [])
+        self.assertIn({'side': 'server', 'mod': 'lss', 'left_out_by_scenario': 'server-without-lss'},
+                      run.facts['staged'])
+
+
 class LaunchTest(OfflineCase):
     """Ports, displays, the private environment and the command lines."""
 
@@ -749,6 +977,27 @@ class LaunchTest(OfflineCase):
         self.assertEqual(launch.bounded(command, 900)[:4], ['timeout', '-k', '15', '900'])
         neoforge = launch.neoforge_server_command(Path('/jdk/bin/java'), tag, '21.1.266', [])
         self.assertIn('@libraries/net/neoforged/neoforge/21.1.266/unix_args.txt', neoforge)
+
+    def test_paper_server(self) -> None:
+        command = launch.paper_server_command(Path('/jdk/bin/java'), '-Dlssrig.id=x-server',
+                                              Path('/cache/paper/26.3/paper-26.3-249.jar'), ['-Dx=y'])
+        self.assertEqual(command[:2], ['/jdk/bin/java', '-Dlssrig.id=x-server'])
+        self.assertEqual(command[-4:], ['-Dx=y', '-jar', '/cache/paper/26.3/paper-26.3-249.jar', 'nogui'])
+        self.assertEqual(launch.mods_folder('paper'), 'plugins')
+        self.assertEqual(launch.mods_folder('fabric'), 'mods')
+        self.assertEqual(launch.mods_folder('neoforge'), 'mods')
+
+    def test_paper_download_list(self) -> None:
+        sha256 = 'd0' * 32
+        context = f'{sha256}\thttps://piston-data.mojang.com/v1/objects/33/server.jar\tmojang_26.3.jar\n'
+        self.assertEqual(launch.paperclip_downloads(context), [{
+            'sha256': sha256, 'url': 'https://piston-data.mojang.com/v1/objects/33/server.jar',
+            'name': 'mojang_26.3.jar'}])
+        self.assertEqual(launch.paperclip_downloads(''), [])
+        for bad in (f'{sha256}\thttps://x/server.jar\t../../escape.jar', f'short\thttps://x\ta.jar',
+                    f'{sha256} https://x/server.jar mojang_26.3.jar'):
+            with self.assertRaises(launch.LaunchError):
+                launch.paperclip_downloads(bad)
 
     def test_neoforge_client_command(self) -> None:
         profile = {'id': 'neoforge-21.1.266', 'mainClass': 'cpw.mods.bootstraplauncher.BootstrapLauncher',
