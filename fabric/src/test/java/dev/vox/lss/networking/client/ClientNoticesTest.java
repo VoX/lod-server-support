@@ -45,6 +45,21 @@ class ClientNoticesTest {
     }
 
     @Test
+    void theSettingsNoticeNamesTheBuildsOwnCommand() {
+        // 0.23.0 plan §1: the one notice that names a command. A lang value never spells a
+        // command root, so the Voxy Server Side build's line says /vss status.
+        var line = ClientNotices.line(ClientVerdict.SETTINGS_BROKEN);
+        var body = (TranslatableContents) line.getSiblings().getFirst().getContents();
+        assertEquals("lss.notice.settings_broken", body.getKey());
+        assertEquals(java.util.List.of(Brand.clientCommand()), java.util.List.of(body.getArgs()));
+        for (ClientVerdict verdict : ClientVerdict.values()) {
+            if (verdict == ClientVerdict.SETTINGS_BROKEN) continue;
+            assertEquals(0, ((TranslatableContents) ClientNotices.line(verdict).getSiblings().getFirst().getContents())
+                    .getArgs().length, verdict.name());
+        }
+    }
+
+    @Test
     void thePlayersOwnWorldGetsNoNoticeAndTheBookDecidesTheRest() throws IOException {
         String source = normalized("xplat/src/main/java/dev/vox/lss/networking/client/ClientNotices.java");
         assertTrue(source.contains("mc.hasSingleplayerServer()) return;"),

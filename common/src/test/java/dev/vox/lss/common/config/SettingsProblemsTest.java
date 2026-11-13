@@ -75,7 +75,7 @@ class SettingsProblemsTest {
     @Test void anOldNameIsOnlyTrustedWhereItCannotBeAGuessAtANewOne() {
         // "enabled" was the old name of the service switch. Under far_players it is a guess at a
         // far-player switch, and pointing it at service.enabled would be a wrong instruction.
-        var guess = problems(client, "config_version: 1\nscan:\n  enabled: false\n").get(0);
+        var guess = problems(server, "config_version: 1\nnetwork:\n  enabled: false\n").get(0);
         assertFalse(guess.contains("Its name in this file"), guess);
         assertEquals(List.of("line 2: unknown setting enabled. Its name in this file is service.enabled."),
                 problems(server, "config_version: 1\nenabled: false\n"));

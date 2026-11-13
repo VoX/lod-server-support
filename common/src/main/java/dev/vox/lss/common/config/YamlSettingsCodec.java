@@ -43,11 +43,12 @@ public final class YamlSettingsCodec<T> {
 
     /** {@code bytes} is the main file; {@code sidecar} is null when no sidecar file exists. */
     public record Document<T>(T configured, T normalized, List<SettingsSchema.Normalization> normalizations,
-                              List<String> inactivePaths, String hash, byte[] bytes, byte[] sidecar) {
+                              List<String> inactivePaths, String hash, byte[] bytes, byte[] sidecar,
+                              boolean sidecarIgnored) {
         public Document { normalizations = List.copyOf(normalizations); inactivePaths = List.copyOf(inactivePaths); bytes = bytes.clone(); sidecar = sidecar == null ? null : sidecar.clone(); }
         public Document(T configured, T normalized, List<SettingsSchema.Normalization> normalizations,
                         List<String> inactivePaths, String hash, byte[] bytes) {
-            this(configured, normalized, normalizations, inactivePaths, hash, bytes, null);
+            this(configured, normalized, normalizations, inactivePaths, hash, bytes, null, false);
         }
         @Override public byte[] bytes() { return bytes.clone(); }
         @Override public byte[] sidecar() { return sidecar == null ? null : sidecar.clone(); }
@@ -86,17 +87,21 @@ public final class YamlSettingsCodec<T> {
     private Document<T> parseStrict(byte[] bytes, byte[] sidecar) {
         Map<String,Object> tree = readTree(bytes, schema::booleanPath);
         SettingsSchema.Decoded<T> result = null;
+        // The experimental file exists and could not be used: its settings are back at their
+        // defaults, and the status says so (0.23.0 plan §1).
+        boolean sidecarIgnored = false;
         if (sidecar != null) {
             if (!schema.isClient()) throw new SettingsException("Only client settings have an experimental sidecar");
             // The experimental file must never take the main settings down: an unreadable
             // or invalid sidecar (e.g. written by a newer build) falls back to defaults.
             try { result = schema.decode(merge(tree, sidecarTree(sidecar))); }
             catch (RuntimeException e) { // SettingsException, YAML syntax errors, wrong value types
+                sidecarIgnored = true;
                 dev.vox.lss.common.LSSLogger.warn("Experimental client settings file ignored: " + e.getMessage());
             }
         }
         if (result == null) result = schema.decode(tree);
-        return new Document<>(result.configured(), result.normalized(), result.normalizations(), result.inactivePaths(), hash(bytes, sidecar), bytes, sidecar);
+        return new Document<>(result.configured(), result.normalized(), result.normalizations(), result.inactivePaths(), hash(bytes, sidecar), bytes, sidecar, sidecarIgnored);
     }
     public byte[] defaults() {
         String template = schema.template();

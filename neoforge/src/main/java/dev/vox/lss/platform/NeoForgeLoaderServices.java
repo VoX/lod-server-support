@@ -52,6 +52,12 @@ public class NeoForgeLoaderServices implements LoaderServices {
         return dev.vox.lss.neoforge.LSSNeoPermissions.check(player, node, defaultValue);
     }
 
+    /** NeoForge gates the server command on the vanilla permission level, like Fabric. */
+    @Override
+    public boolean mayRunServerCommand(net.minecraft.server.level.ServerPlayer player, boolean permissionLevelAllows) {
+        return permissionLevelAllows;
+    }
+
     @Override
     public String storePlatform() {
         return "neoforge";

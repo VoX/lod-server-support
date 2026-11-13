@@ -51,7 +51,10 @@ public enum ClientVerdict {
     /** The player turned receiving off. */
     RECEIVING_OFF,
     /** The Distant Horizons source is selected but paused, blocked or stopped; its own lines say why. */
-    SOURCE_NOT_RUNNING;
+    SOURCE_NOT_RUNNING,
+    /** This client's settings file did not load, so the mod is switched off (0.23.0 plan §1).
+     *  It comes before every other answer: while the file is broken nothing else is true. */
+    SETTINGS_BROKEN;
 
     /** The translation key suffix: {@code lss.status.verdict.<key>} and {@code lss.notice.<key>}. */
     public String key() {
@@ -102,6 +105,9 @@ public enum ClientVerdict {
 
     public static ClientVerdict of(ClientStatusSnapshot s) {
         if (s == null) return WAITING;
+        // Without this the broken file's stand-in settings (everything off) would read as
+        // "you turned receiving off", which the player did not do.
+        if (s.settings() != null && !s.settings().available()) return SETTINGS_BROKEN;
         if (!s.connected()) return NOT_CONNECTED;
         if (s.discovery() == ClientStatusSnapshot.Discovery.LOCAL) return LOCAL_WORLD;
         if (!s.receptionEnabled()) return RECEIVING_OFF;

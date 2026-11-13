@@ -148,6 +148,7 @@ public record ClientStatusSnapshot(int schemaVersion, long lifecycle, long captu
         if(dh!=null && dh.reason()!=DhStatusSnapshot.Reason.NATIVE_OFFER && dh.reason()!=DhStatusSnapshot.Reason.NATIVE_PREFERRED) {
             var lines=new ArrayList<String>();
             lines.add("Verdict: " + ClientVerdict.of(this));
+            lines.addAll(settingsFileLines());
             lines.addAll(dh.lines());
             if(settings!=null) {
                 lines.add("Settings: saved="+settings.saved()+"; configured="+settings.configured()+"; effective="+settings.effective());
@@ -175,6 +176,19 @@ public record ClientStatusSnapshot(int schemaVersion, long lifecycle, long captu
                 "Versions: " + versions.components(),
                 "Snapshot age: " + Math.max(0, System.currentTimeMillis() - capturedAtMillis) + " ms"));
         if(dh!=null)lines.add("DH fallback: "+dh.reason());
+        lines.addAll(1,settingsFileLines());
         return List.copyOf(lines);
+    }
+    /** What is wrong with the settings files, right under the verdict; empty when nothing is. */
+    private List<String> settingsFileLines() {
+        if(settings==null)return List.of();
+        var lines=new ArrayList<String>();
+        if(!settings.available()) {
+            lines.add("Settings file "+settings.fileName()+" did not load:");
+            for(String problem:settings.problems())lines.add("  "+problem);
+        }
+        if(settings.ignoredExperimentalFile()!=null)
+            lines.add("Experimental settings file ignored: "+settings.ignoredExperimentalFile());
+        return lines;
     }
 }

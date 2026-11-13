@@ -525,9 +525,9 @@ public final class ClientNetGlue {
         sessionGate.onJoin(LSSClientConfig.CONFIG.receiveServerLods(), localIntegratedServer,
                 LSSApi.hasVoxelConsumers(), LSSClientConfig.CONFIG.enableV16ServerCompat(),
                 LSSClientConfig.CONFIG.enableV19ServerCompat());
+        ClientNotices.onJoin();
         // After the gate: a handshake it sent has already reset the delivery.
         FarPlayerClientSupport.onJoin(localIntegratedServer);
-        ClientNotices.onJoin();
     }
 
     /** DISCONNECT ladder body. Known shared residual (N-3 review, pre-existing and

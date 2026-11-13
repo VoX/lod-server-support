@@ -97,10 +97,16 @@ public final class ClientNoticePolicy {
         return verdict;
     }
 
+    /** Whether {@code verdict} is ever said in chat. All but one of these are under the lifetime
+     *  caps; a settings file that did not load is said once per game start instead
+     *  ({@link ClientNoticeBook}), so the caps never allow it. */
+    public static boolean announces(ClientVerdict verdict) { return announceable(verdict); }
+
     /** The verdicts that end a connection's watch, spoken or capped. */
     private static boolean announceable(ClientVerdict verdict) {
         return verdict == ClientVerdict.NO_SUPPORT || verdict == ClientVerdict.NOTHING_TO_SHOW
                 || verdict == ClientVerdict.RENDERER_NOT_CONNECTED || verdict == ClientVerdict.MAP_NOT_CONNECTED
-                || verdict == ClientVerdict.SERVER_OFF || verdict.versionMismatch();
+                || verdict == ClientVerdict.SERVER_OFF || verdict.versionMismatch()
+                || verdict == ClientVerdict.SETTINGS_BROKEN;
     }
 }

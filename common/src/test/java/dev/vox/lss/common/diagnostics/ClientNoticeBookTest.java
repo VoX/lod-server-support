@@ -32,6 +32,29 @@ class ClientNoticeBookTest {
     }
 
     @Test
+    void aSettingsFileThatDidNotLoadIsSaidOncePerGameStartWithNoCounter(@TempDir Path dir) {
+        // 0.23.0 plan §1: the mod is off on every server and the player can fix it. A lifetime
+        // cap would make the fourth breakage silent; saying it on every join would nag.
+        var reads = new AtomicInteger();
+        Path file = dir.resolve("notices.properties");
+        var book = new ClientNoticeBook(() -> { reads.incrementAndGet(); return file; });
+        book.onJoin();
+        assertEquals(ClientVerdict.SETTINGS_BROKEN, run(book, ClientVerdict.SETTINGS_BROKEN, SETTLE + 5));
+        for (int join = 0; join < 5; join++) {
+            book.onDisconnect();
+            book.onJoin();
+            assertNull(run(book, ClientVerdict.SETTINGS_BROKEN, SETTLE + 5), "once per game start");
+        }
+        assertEquals(0, reads.get(), "no counters file is read");
+        assertFalse(Files.exists(file), "and none is written");
+        // The next game start (a new book) says it again, however often it was said before.
+        var next = new ClientNoticeBook(() -> file);
+        next.onJoin();
+        assertEquals(ClientVerdict.SETTINGS_BROKEN, run(next, ClientVerdict.SETTINGS_BROKEN, SETTLE + 5));
+        assertEquals(Caps.NONE, Caps.NONE.after(ClientVerdict.SETTINGS_BROKEN), "nothing is counted");
+    }
+
+    @Test
     void aSessionThatWorksNeverReadsTheCountersFile(@TempDir Path dir) {
         var reads = new AtomicInteger();
         var book = new ClientNoticeBook(() -> {

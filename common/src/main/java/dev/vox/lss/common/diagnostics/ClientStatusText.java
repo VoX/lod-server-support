@@ -21,7 +21,16 @@ public final class ClientStatusText {
         if (s == null) return List.of(text("waiting"));
         var lines = new ArrayList<Message>();
         // First, the answer: working, or not working and why (ClientVerdict).
-        lines.add(text("verdict." + ClientVerdict.of(s).key()));
+        ClientVerdict verdict = ClientVerdict.of(s);
+        lines.add(text("verdict." + verdict.key()));
+        if (verdict == ClientVerdict.SETTINGS_BROKEN) {
+            // The file's real name (the two builds name it differently, and a client may have
+            // adopted the other build's file), then everything that is wrong with it.
+            lines.add(text("settings.file", s.settings().fileName()));
+            for (String problem : s.settings().problems()) lines.add(text("settings.problem", problem));
+        }
+        if (s.settings() != null && s.settings().ignoredExperimentalFile() != null)
+            lines.add(text("settings.experimental_ignored", s.settings().ignoredExperimentalFile()));
         if(s.dh()!=null && s.dh().reason()!=DhStatusSnapshot.Reason.NATIVE_OFFER && s.dh().reason()!=DhStatusSnapshot.Reason.NATIVE_PREFERRED) {
             var d=s.dh();
             lines.add(text("dh.source",d.profile().name(),enumText("dh.state",d.state())));

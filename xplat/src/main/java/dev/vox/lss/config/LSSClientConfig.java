@@ -30,6 +30,8 @@ public final class LSSClientConfig {
     private final ClientMenuReload menuReload = new ClientMenuReload(reloadBusy::get,
             () -> reload(this::menuReloadFeedback));
     private volatile String error;
+    /** Everything wrong with a settings file that did not load; empty when it loaded. */
+    private volatile java.util.List<String> problems = java.util.List.of();
     private Object physicalConnection;
     private long lifecycle;
     private ClientSettingsEditSession edits;
@@ -45,8 +47,17 @@ public final class LSSClientConfig {
         inactive = ClientSettings.fromValues(values);
         try { handle = new SettingsHandle<>(store); reload = new SettingsReload<>(handle); }
         catch (Exception failure) {
-            error = failure.getMessage();
-            LSSLogger.error("Client settings inactive: " + error);
+            error = SettingsReload.message(failure);
+            var found = SettingsReload.problems(failure);
+            problems = found.isEmpty() ? java.util.List.of(error)
+                    : dev.vox.lss.common.config.SettingsProblemText.lines(found);
+            // Everything wrong with the file, at once (0.23.0 plan §1). The status verdict and
+            // one chat line per game start say the same to the player.
+            LSSLogger.error(settingsFileName() + " has "
+                    + dev.vox.lss.common.config.SettingsProblemText.count(Math.max(1, found.size()))
+                    + ", so the mod is switched off:");
+            problems.forEach(line -> LSSLogger.error("  " + line));
+            LSSLogger.error("Fix the file and restart the game. The file was not changed.");
         }
     }
 
@@ -61,12 +72,21 @@ public final class LSSClientConfig {
     public dev.vox.lss.common.diagnostics.ClientSettingsStatus diagnosticSettings() {
         var current = handle;
         if (current == null) return dev.vox.lss.common.diagnostics.ClientSettingsStatus.capture(
-                false, inactive, inactive, inactive, java.util.Set.of(), 0, 0, java.util.Set.of());
+                false, inactive, inactive, inactive, java.util.Set.of(), 0, 0, java.util.Set.of())
+                .withFile(settingsFileName(), problems, null);
         var state = current.state();
         return dev.vox.lss.common.diagnostics.ClientSettingsStatus.capture(true,
                 edits == null ? state.configured() : edits.savedSnapshot(), state.configured(), state.effective(),
                 state.pendingReconnect(), state.revision(), current.adoptedRevision(),
-                current.pendingAdoption() == null ? java.util.Set.of() : current.pendingAdoption().paths());
+                current.pendingAdoption() == null ? java.util.Set.of() : current.pendingAdoption().paths())
+                .withFile(settingsFileName(), java.util.List.of(),
+                        current.experimentalFileIgnored() ? experimentalFileName() : null);
+    }
+    /** The settings file's own name: the Voxy Server Side build's differs. */
+    public String settingsFileName() { return store.path().getFileName().toString(); }
+    private String experimentalFileName() {
+        var sidecar = store.sidecarPath();
+        return sidecar == null ? null : sidecar.getFileName().toString();
     }
     public SettingsStore<ClientSettings> store() { return store; }
     public String error() { return error; }
@@ -110,6 +130,7 @@ public final class LSSClientConfig {
         if (current == null) {
             reloadBusy.set(false);
             feedback.accept(Component.translatable("lss.settings.inactive"));
+            for (String line : problems) feedback.accept(Component.literal("  " + line));
             return;
         }
         reload.reload(owner::execute, candidate -> {
@@ -123,6 +144,11 @@ public final class LSSClientConfig {
                 if (failure != null) {
                     LSSLogger.warn("Client settings reload failed: " + SettingsReload.message(failure));
                     feedback.accept(Component.translatable("lss.settings.reload_failed"));
+                    // Everything wrong with the file, so it is fixed once (0.23.0 plan §1).
+                    for (String line : SettingsReload.problemLines(failure)) {
+                        LSSLogger.warn("  " + line);
+                        feedback.accept(Component.literal("  " + line));
+                    }
                     return;
                 }
                 error = null;

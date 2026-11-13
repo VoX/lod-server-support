@@ -14,13 +14,15 @@ import java.util.function.Supplier;
  * (most sessions never read it); a count is saved before its line is spoken, so a directory that
  * cannot be written never turns a capped notice into one repeated on every game start; and on a
  * connection where terrain already worked, "this server has no mod" is not said (a network's lobby
- * after its game server). Not thread-safe: the client tick drives it.
+ * after its game server); and a settings file that did not load is said once per game start,
+ * with no counter. Not thread-safe: the client tick drives it.
  */
 public final class ClientNoticeBook {
     private final ClientNoticePolicy policy = new ClientNoticePolicy();
     private final Supplier<Path> file;
     private Caps caps;
     private boolean workedThisConnection;
+    private boolean settingsBrokenSaid;
 
     public ClientNoticeBook(Supplier<Path> file) {
         this.file = file;
@@ -42,6 +44,14 @@ public final class ClientNoticeBook {
         ClientVerdict settled = this.policy.settle(verdict);
         if (settled == null) return null;
         if (settled == ClientVerdict.NO_SUPPORT && this.workedThisConnection) return null;
+        if (settled == ClientVerdict.SETTINGS_BROKEN) {
+            // Once per game start, and no counter on disk (0.23.0 plan §1): the mod is off on
+            // every server, the player can fix it, and a second breakage next year must not be
+            // silent because three earlier ones used up a lifetime cap.
+            if (this.settingsBrokenSaid) return null;
+            this.settingsBrokenSaid = true;
+            return settled;
+        }
         try {
             Path path = this.file.get();
             if (this.caps == null) this.caps = ClientNoticeCapsFile.load(path);

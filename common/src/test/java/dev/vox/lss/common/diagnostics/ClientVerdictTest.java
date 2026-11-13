@@ -21,6 +21,7 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** 0.22.0 plan §1: one answer to "is distant terrain working here, and if not, why?". */
@@ -51,6 +52,73 @@ class ClientVerdictTest {
     private static ClientVerdict dhVerdict(State state, Activity activity, boolean consumer, Discovery discovery) {
         return ClientVerdict.of(snapshot(true, true, false, consumer, discovery, 0,
                 dh(state, Reason.NONE, activity)));
+    }
+
+    // ---- 0.23.0 plan §1: a settings file that did not load ----
+
+    private static ClientSettingsStatus settings(boolean loaded) {
+        var defaults = dev.vox.lss.common.config.SettingsSchema.client().defaults();
+        return ClientSettingsStatus.capture(loaded, defaults, defaults, defaults, java.util.Set.of())
+                .withFile("lss-client-config.yaml", loaded ? List.of() : List.of("line 3: unknown setting lod.recieve. Did you mean lod.receive?"), null);
+    }
+
+    private static ClientStatusSnapshot withSettings(boolean connected, boolean receiving, Discovery discovery,
+                                                     ClientSettingsStatus settings) {
+        return new ClientStatusSnapshot(ClientStatusSnapshot.SCHEMA_VERSION, 1, 0, connected,
+                discovery == Discovery.NEGOTIATED, receiving, true, true, true, V, 512,
+                0, 0, 0, 0, -1, 0, 0, 0, 0, discovery, Availability.UNKNOWN, null, DiagnosticVersions.unknown(),
+                settings);
+    }
+
+    @Test
+    void aSettingsFileThatDidNotLoadIsTheAnswerInEveryStateAndNeverOtherwise() {
+        // The stand-in settings of a broken file have receiving off. Without the verdict the
+        // player reads "you turned receiving off in the settings", which they did not do.
+        for (Discovery discovery : Discovery.values())
+            for (boolean connected : new boolean[] {true, false})
+                for (boolean receiving : new boolean[] {true, false}) {
+                    assertEquals(ClientVerdict.SETTINGS_BROKEN,
+                            ClientVerdict.of(withSettings(connected, receiving, discovery, settings(false))),
+                            discovery + " connected=" + connected + " receiving=" + receiving);
+                    assertNotEquals(ClientVerdict.SETTINGS_BROKEN,
+                            ClientVerdict.of(withSettings(connected, receiving, discovery, settings(true))));
+                }
+        // No settings observation at all (older callers): not this verdict.
+        assertEquals(ClientVerdict.RECEIVING_OFF, ClientVerdict.of(withSettings(true, false, Discovery.DORMANT, null)));
+        assertFalse(ClientVerdict.SETTINGS_BROKEN.working());
+    }
+
+    @Test
+    void theStatusNamesTheFileAndListsWhatIsWrongWithIt() {
+        var broken = withSettings(true, false, Discovery.DORMANT, settings(false));
+        var lines = ClientStatusText.lines(broken, 0);
+        assertEquals("lss.status.verdict.settings_broken", lines.get(0).key());
+        assertEquals(List.of(), lines.get(0).arguments(), "a verdict line carries no arguments");
+        assertEquals("lss.status.settings.file", lines.get(1).key());
+        assertEquals(List.of("lss-client-config.yaml"), lines.get(1).arguments());
+        assertEquals("lss.status.settings.problem", lines.get(2).key());
+        assertEquals(List.of("line 3: unknown setting lod.recieve. Did you mean lod.receive?"), lines.get(2).arguments());
+        var plain = broken.lines();
+        assertEquals(List.of("Verdict: SETTINGS_BROKEN", "Settings file lss-client-config.yaml did not load:",
+                "  line 3: unknown setting lod.recieve. Did you mean lod.receive?"), plain.subList(0, 3));
+        // A file that loaded adds nothing.
+        var fine = ClientStatusText.lines(withSettings(true, true, Discovery.NEGOTIATED, settings(true)), 0);
+        assertTrue(fine.stream().noneMatch(m -> m.key().equals("lss.status.settings.file")
+                || m.key().equals("lss.status.settings.problem") || m.key().equals("lss.status.settings.experimental_ignored")));
+    }
+
+    @Test
+    void anIgnoredExperimentalFileIsALineUnderAWorkingVerdict() {
+        // The mod is working; the experimental file's options are back at their defaults (the
+        // Distant Horizons source a player had switched off, for one), and the status says so.
+        var ignored = settings(true).withFile("lss-client-config.yaml", List.of(), "lss-client-experimental.yaml");
+        var snapshot = withSettings(true, true, Discovery.NEGOTIATED, ignored);
+        assertEquals(ClientVerdict.WORKING, ClientVerdict.of(snapshot));
+        var lines = ClientStatusText.lines(snapshot, 0);
+        assertEquals("lss.status.verdict.working", lines.get(0).key());
+        assertEquals("lss.status.settings.experimental_ignored", lines.get(1).key());
+        assertEquals(List.of("lss-client-experimental.yaml"), lines.get(1).arguments());
+        assertEquals("Experimental settings file ignored: lss-client-experimental.yaml", snapshot.lines().get(1));
     }
 
     @Test
@@ -245,7 +313,10 @@ class ClientVerdictTest {
             assertTrue(keys.add(verdict.key()), verdict.key());
             assertFalse(verdict.key().isBlank());
             var needed = new ArrayList<>(List.of("lss.status.verdict." + verdict.key()));
-            if (Caps.NONE.allows(verdict)) needed.add("lss.notice." + verdict.key());
+            // Every verdict the caps allow is one the policy announces; one more is announced
+            // without a cap (a settings file that did not load).
+            assertTrue(!Caps.NONE.allows(verdict) || ClientNoticePolicy.announces(verdict), verdict.name());
+            if (ClientNoticePolicy.announces(verdict)) needed.add("lss.notice." + verdict.key());
             for (String key : needed) {
                 for (var locale : locales.entrySet()) {
                     String where = locale.getKey() + " " + key;
@@ -255,7 +326,12 @@ class ClientVerdictTest {
                     }
                     String value = locale.getValue().get(key).getAsString();
                     if (value.isBlank()) problems.add(where + ": blank");
-                    if (value.contains("%")) problems.add(where + ": the line is shown without arguments");
+                    // One notice takes one argument, the build's own command (0.23.0 plan §1);
+                    // every other line is shown as it is written.
+                    if (key.equals("lss.notice.settings_broken")) {
+                        if (!value.contains("/%s status") || value.replace("/%s status", "").contains("%"))
+                            problems.add(where + ": takes exactly the command as /%s status");
+                    } else if (value.contains("%")) problems.add(where + ": the line is shown without arguments");
                     // The notices and verdicts say "this mod": a VSS client on an LSS server (or
                     // the reverse) must not name the server's copy by the client's brand.
                     if (value.matches("(?s).*(\\bLSS\\b|\\bVSS\\b|LOD Server Support|Voxy Server Side).*")) {
@@ -280,7 +356,7 @@ class ClientVerdictTest {
             String suffix = key.substring("lss.notice.".length());
             boolean announceable = false;
             for (ClientVerdict verdict : ClientVerdict.values()) {
-                announceable |= verdict.key().equals(suffix) && Caps.NONE.allows(verdict);
+                announceable |= verdict.key().equals(suffix) && ClientNoticePolicy.announces(verdict);
             }
             if (!announceable) problems.add(key + ": a notice the policy never announces");
         }
