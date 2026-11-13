@@ -11,6 +11,15 @@ This codebase is yours: what it's for and how it's built are your call, and you'
 - **Keep the project's direction.** LSS gives Voxy (and map mods) server-fed distant terrain and far players on multiplayer, on every supported loader and Minecraft line, without burdening operators. Compatibility across versions, the pinned decisions below and the review, gate and release discipline are how it stays trustworthy; owning the code means keeping them, or changing them deliberately with the tests and the reasons written down.
 - **What stays VoX's:** their accounts, credentials and money; legal terms; their personal instances, worlds and desktop; and starting or stopping the Modrinth server. Ask before anything there.
 
+## Lines and releases
+
+- **This branch** is the Minecraft 1.21.11 line: **maintained** (every stable release: fixes, and features that port cleanly). It follows main. Every shared file equals main at the sync point recorded in `config/lines/sync.json`, unless it is listed there as adapted ([support lines](docs/operations/support-lines.md)).
+- **Porting.** In this worktree: `python3 tools/lines/lines.py port --to <main commit>`, resolve conflicts, read every clean merge, run the tests, and finish with `python3 tools/lines/lines.py status` clean. CI checks the port against a mechanical replay of main's change. A file that newly differs from main needs an `Adapted: <path>: <why>` commit trailer; an adapted file main changed and this line leaves alone needs `Not-ported: <path>: <why>`.
+- **A fix this line needs in a shared file goes to main first**, then this line syncs. Never fix a shared file here and list it as adapted.
+- **Tiers** (decision 0001 on main). Full: 26.3 (main) and 1.21.1. Maintained: 26.2 and 1.21.11. Frozen: 26.1 and 1.21.10. Sponge builds here but ships from main only.
+- **Beta first** (decision 0002). A release goes out as `X.Y.Z-beta.N` on 26.3 and 1.21.1, soaks 72 hours, then `X.Y.Z` ships on every full and maintained line.
+- **A red is explained, not retried** (decision 0007). No retry, longer deadline or looser assertion without a named mechanism and a test that is red without the fix. CI retries only what `config/test-flakes.json` names.
+
 ## Commands
 
 ```sh
@@ -21,10 +30,12 @@ python3 scripts/release_check.py --version <x.y.z>
 python3 scripts/release_check.py --selftest
 python3 tools/tests/check_artifacts.py
 python3 tools/compat/catalog.py validate
-python3 tools/compat/catalog.py render --check
 python3 tools/compat/ci.py --report /tmp/compat-report.json
 python3 tools/verify/verify.py fast path/to/changed/file
+bash tools/release/gate-locked.sh <worktree>        # the full local release gate for one line
 ```
+
+Release tools (gate, tag chain, publish verification, VSS and CurseForge): [tools/release](tools/release/README.md).
 
 Fast selection is advisory. Never weaken required build/release gates because a fast selection passed. Run heavy builds and real-server tests sequentially. Every background condition wait needs a deadline and preserved failure evidence.
 
@@ -37,9 +48,9 @@ Fast selection is advisory. Never weaken required build/release gates because a 
 - Paper/Folia refuse to enable outside `plugin.yml`'s `lss-minecraft-dependency` (templated from `minecraft_dependency`; the `EnableSteps` check right after branding). The LOD store stamps `build_mc` (the jar's `minecraft_version`, `BuildInfo`) and a first-writer `platform`: a `build_mc` outside the jar's `minecraft_dependency` drops, one inside it is kept and re-stamped; an unmarked store drops once on Paper/Folia and is stamped in place elsewhere (`LoaderServices.legacyStoreMigration()`), decided before the v0.9 lazy upgrade.
 - Receive OFF retires acquisition but preserves committed Xaero native rebuilds. Disconnect/world replacement retires native ownership. Preserve queue locks, budgets and same-dimension replacement guards.
 - Settings retain defaults, sentinels, upgrade/adoption behavior, privacy, clamps, ownership and applied-but-unsaved feedback. Correlated changes validate on scratch and publish consistently before side effects.
-- Best-effort support and Folia’s experimental correctness status are distinct. A bounded soak does not remove the experimental label. Neo shipping, terrain consumers and far-player rendering are separate capabilities.
+- A line's support tier and Folia’s experimental correctness status are distinct. A bounded soak does not remove the experimental label. Neo shipping, terrain consumers and far-player rendering are separate capabilities.
 - Never operate the user’s Windows foreground for an unattended test. Use private-display rigs, owned process identities, exact artifacts and the shared harness lock. Preserve normal servers, personal profiles/worlds and credentials. No automatic diagnostic/evidence upload.
-- A commit to any non-doc path on any line needs the six-line re-pin: identical `config/compatibility/source-refs.json`, `config/lines/classification.json` (basis + adapted `reviewed_blobs`), `config/lines/port-batch.json` baseline and rendered `docs/compatibility.md`, committed on all six lines, each pinning that line's pre-pin commit; `tools/compat/ci.py` reds on unexplained drift ([support-line tooling](docs/operations/support-lines.md)). `*.md` and `docs/*` are line-local.
+- Shared files never drift: on a support line every file equals main at its sync point unless it is listed as adapted, and the line tools, the release tools and most of `common` can never be adapted (`must_match` in `config/lines/lines.json`). `*.md`, `docs/*`, `config/compatibility/*` and `config/lines/*` are line-local.
 - Far players carry bare item ids + counts (`FarPlayerWire`): no trims, dye or glint on any line. The SeeU coexist gate is gone; the historical guide predates both.
 - The far-player hide permission (`lss.farplayers.hidden`, either spelling) hides nobody by itself (0.21.0, VoX's decision): `far_players.hide_permission_holders` forces it, and in `far_players.mode: required` it is the only opt-out. The privacy ladder (vanish, disguise, a failed read, excluded players) is unconditional in every mode. `required` acts on "not a holder" only after two consecutive reads, and a player whose choice is overridden, or a holder on a server that has not set the key, is told in chat once per connection.
 - Sky light: the server serves stored light verbatim (`lightless=` only counts). The client estimates sky light only for a column that arrives with none, by vanilla's rule inside that one column: never brighter than vanilla, bounded work, and a failing estimate delivers the column unchanged.

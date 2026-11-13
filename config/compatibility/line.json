@@ -19,9 +19,9 @@
       "folia"
     ],
     "fabric_client_gametests": true,
-    "sponge_shipping": true
+    "sponge_shipping": false
   },
-  "support_tier": "correct-not-perfect",
+  "support_tier": "maintained",
   "capability_states": [
     "available",
     "unsupported",
@@ -29,8 +29,8 @@
     "unknown"
   ],
   "notes": [
-    "NeoForge support commitment is best-effort independently of shipping and renderer capability.",
     "Folia remains experimental where present.",
-    "Sponge (SpongeVanilla server plugin) is best-effort and experimental; LINE_SHIP_SPONGE gates shipping per line."
-  ]
+    "Sponge builds here but ships from main (26.3) only since 0.22.0."
+  ],
+  "role": "follower"
 }
