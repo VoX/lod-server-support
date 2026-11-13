@@ -5,8 +5,8 @@ Status: accepted 2026-11-13 (VoX). Amended the same day after plan review: no fi
 ## Decision
 
 The server counts each session once, under the protocol dialect it ended with (current, 19, 18, 16),
-with a separate tally for Via-translated sessions, and shows the totals since start with the uptime
-they cover in diagnostics. Support for protocol 16 and 18 clients stays exactly as it is. After a
+and shows the totals since start with the uptime they cover in diagnostics (`ended=` on the
+`Dialects:` line). Support for protocol 16 and 18 clients stays exactly as it is. After a
 month of data VoX decides whether a retire rule is written, for example "under 1 % of sessions for
 60 days".
 
