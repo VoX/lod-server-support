@@ -202,7 +202,16 @@ class XaeroBandFillTest {
     }
 
     /** Switch Xaero to {@code layer} and wait out the debounce: the fill job starts. */
+    /**
+     * The fill worker's offer count when the layer last switched: the baseline {@link #awaitOffered}
+     * counts from. It is read BEFORE the switch starts the worker. Read afterwards, the worker
+     * may already have offered, and a test whose queue mark equals the number it waits for then
+     * waits for offers the mark never lets through.
+     */
+    private long offeredBaseline;
+
     private void switchTo(int layer) {
+        this.offeredBaseline = count("fill_tiles");
         show(layer);
         this.clockMillis += this.bridge.fill.debounceMillis;
         this.bridge.pump();
@@ -377,13 +386,15 @@ class XaeroBandFillTest {
         this.processor.currentMapLocked = false;
     }
 
+    /** Wait until the worker has offered {@code atLeast} tiles since the last switch (or the last wait). */
     private void awaitOffered(long atLeast) throws InterruptedException {
-        long target = count("fill_tiles") + atLeast;
+        long target = this.offeredBaseline + atLeast;
         long deadline = System.nanoTime() + 10_000_000_000L;
         while (count("fill_tiles") < target) {
             if (System.nanoTime() > deadline) throw new AssertionError("no fill offer: " + this.bridge.describe());
             Thread.sleep(2);
         }
+        this.offeredBaseline = target;
     }
 
     // ---- coverage ----
