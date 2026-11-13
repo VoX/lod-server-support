@@ -239,7 +239,7 @@ lod:
       "minecraft:the_end": 512
 ```
 
-The client cache uses `cache.use_world_sub_buckets` to separate remote worlds and
+The client cache uses `cache.split_by_world` to separate remote worlds and
 `cache.address_aliases` to group equivalent addresses. With Voxy, aliases also need
 matching LoD Mirror/storage corroboration; otherwise LSS retains separate address
 caches. Changes take effect on the next physical connection. `/lss diag` shows the

@@ -66,6 +66,24 @@ class LineFacts(unittest.TestCase):
                          ['fabric', 'paper', 'neoforge', 'sponge'])
         self.assertEqual(rc.platforms({'LINE_SHIP_NEOFORGE': 'false'}), ['fabric', 'paper'])
 
+    def test_the_paper_name_follows_the_loader_list_as_the_workflow_does(self):
+        self.assertEqual(rc.paper_display({'LINE_PAPER_LOADERS': 'paper purpur folia'}), 'Paper/Purpur/Folia')
+        self.assertEqual(rc.paper_display({'LINE_PAPER_LOADERS': 'paper purpur'}), 'Paper/Purpur')
+        self.assertEqual(rc.paper_display({}), 'Paper/Purpur')
+
+    def test_a_gametest_server_that_ran_nothing_is_not_a_pass(self):
+        neoforge = '[13:00:30] [Server thread/INFO] [minecraft/GameTestServer]: All 8 required tests passed :)\n'
+        fabric = '\x1b[m\x1b[34m[13:01:12]\x1b[m (Minecraft) \x1b[0mAll 96 required tests passed :)\n'
+        self.assertEqual(rc.gametest_counts(neoforge + fabric), ([8, 96], False))
+        self.assertIsNone(rc.gametests_problem(neoforge + fabric, 2))
+        # A server that never booted leaves no summary and Gradle can still exit 0.
+        self.assertIn('found summaries: 96', rc.gametests_problem(fabric, 2))
+        self.assertIn('found summaries: none', rc.gametests_problem('BUILD SUCCESSFUL\n', 2))
+        # A summary over zero tests is not proof either.
+        self.assertIn('0, 96', rc.gametests_problem('All 0 required tests passed :)\n' + fabric, 2))
+        self.assertEqual(rc.gametests_problem(neoforge + fabric + '1 required tests failed :(\n', 2),
+                         'a gametest server reported failed required tests')
+
     def test_env_parsing_ignores_comments_and_carriage_returns(self):
         self.assertEqual(rc.parse_env('# c\r\nA=1\r\n\r\nB = two words \r\n'), {'A': '1', 'B': 'two words'})
 

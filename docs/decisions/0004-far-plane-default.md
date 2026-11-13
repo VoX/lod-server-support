@@ -32,6 +32,13 @@ by version:
   back to their defaults, with a warning). A player who had turned it on under 0.20 or 0.21 loses
   the stored `true` at the next save, so going back to 0.21 turns it off.
 - It is client-side rendering only. It does not change who is shown.
+- The "LOD renderer is a consumer" condition is new with the default (0.22.0). Under 0.20 and 0.21
+  an explicit `true` moved the plane with no such condition. Where distant terrain is drawn by
+  something this mod does not feed (the Distant Horizons client mod, or a Voxy this mod could not
+  connect to), a player who had switched the option on no longer gets the extension. Found by the
+  regression review of 2026-11-13 and left as it is: far players beside terrain this mod does not
+  feed were never a supported combination, and a stored `true` cannot be told from the default
+  after the next save. Revisit with a three-way setting if a player reports it.
 
 ## Fog stays the player's choice
 

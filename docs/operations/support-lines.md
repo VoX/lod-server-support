@@ -53,8 +53,9 @@ for the reviewer. A file the port left untouched fails unless a `Not-ported:` tr
 
 ## Releases
 
-A release ships a follower only when its sync point is the release commit on main or a later one;
-`tools/release/tag_chain.sh` refuses to push a follower's tag otherwise. See
+A release ships a follower only when it is in step with the release commit on main: every shared
+path equal to main's at that commit. `tools/release/tag_chain.sh` refuses to push a follower's tag
+otherwise. See
 [the release tools](../../tools/release/README.md).
 
 ## Frozen lines

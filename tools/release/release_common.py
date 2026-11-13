@@ -116,6 +116,40 @@ def tag_notes(tag, repo=REPO_ROOT):
     return git('for-each-ref', '--format=%(contents)', 'refs/tags/' + tag, repo=repo).strip()
 
 
+def paper_display(env):
+    """The Paper platform's name in a Modrinth version title, derived from the loader list
+    exactly as release.yml does ("paper purpur folia" -> "Paper/Purpur/Folia")."""
+    return '/'.join(loader[:1].upper() + loader[1:] for loader in env.get('LINE_PAPER_LOADERS', 'paper purpur').split())
+
+
+_ANSI = re.compile(r'\x1b\[[0-9;]*m')
+_GAMETESTS_PASSED = re.compile(r'All (\d+) required tests passed')
+_GAMETESTS_FAILED = re.compile(r'\d+ required tests failed')
+
+
+def gametest_counts(log_text):
+    """The gametest servers' own summaries in a Gradle log: (counts that passed, any failed).
+
+    A gametest server that fails to boot can exit 0 (seen on NeoForge 1.21.1, 2026-08-21: a
+    step that ran nothing stayed green for a release), so a green Gradle step is not proof
+    that tests ran. The summary line is.
+    """
+    text = _ANSI.sub('', log_text)
+    return [int(n) for n in _GAMETESTS_PASSED.findall(text)], bool(_GAMETESTS_FAILED.search(text))
+
+
+def gametests_problem(log_text, expected):
+    """None when `expected` gametest servers each ran at least one test and none failed;
+    otherwise what is wrong, as one sentence."""
+    passed, failed = gametest_counts(log_text)
+    if failed:
+        return 'a gametest server reported failed required tests'
+    if len(passed) < expected or 0 in passed:
+        return ('expected %d gametest servers to run tests, found summaries: %s'
+                % (expected, ', '.join(map(str, passed)) or 'none'))
+    return None
+
+
 def platforms(env):
     """The LSS platforms a line ships, in release.yml's upload order."""
     out = ['fabric', 'paper']

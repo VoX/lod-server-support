@@ -55,6 +55,43 @@ class ShowPermissionRefusalSettingsTest {
             }
     }
 
+    @Test void theCommentedLineSitsAboveAKeySoARewrittenFileKeepsItsIndent() {
+        // A comment block that ends a group is re-emitted at column 0 by a migration; one that
+        // precedes a key keeps that key's indent.
+        for (boolean paper : new boolean[]{false, true}) {
+            String template = new String(new YamlSettingsCodec<>(SettingsSchema.server(paper)).defaults(), StandardCharsets.UTF_8);
+            int commented = template.indexOf("\n  #show_permission_refusal: false ");
+            int next = template.indexOf("\n  require_permission: ");
+            assertTrue(commented > 0 && next > commented, "above require_permission (paper=" + paper + ")");
+            assertTrue(template.substring(commented, next).lines().skip(1).allMatch(line -> line.startsWith("  #")),
+                    "nothing but its own comment lines in between");
+        }
+    }
+
+    @Test void aMigrationFromTheOldJsonFileDoesNotWriteTheKeyEither(@org.junit.jupiter.api.io.TempDir java.nio.file.Path directory)
+            throws Exception {
+        // Regression review, 2026-11-13: the migration wrote every schema value, this key
+        // included, so a migrated file did not load on 0.22 and the template's own
+        // instruction ("delete the #") produced a duplicate key.
+        for (boolean paper : new boolean[]{false, true}) {
+            var home = java.nio.file.Files.createDirectories(directory.resolve(paper ? "paper-json" : "mod-json"));
+            java.nio.file.Files.writeString(home.resolve("lss-server-config.json"), "{\"lodDistanceChunks\":128}");
+            try (var config = new YamlServerConfig(home, paper, s -> {})) {
+                assertTrue(config.showPermissionRefusal(), "the default still applies");
+            }
+            String migrated = java.nio.file.Files.readString(home.resolve("lss-server-config.yaml"));
+            assertFalse(migrated.matches("(?s).*(?m)^\\s*show_permission_refusal:.*"),
+                    "an uncommented key would make 0.22.0 refuse the migrated file (paper=" + paper + ")");
+            assertEquals(1, migrated.split("\n  #show_permission_refusal: false ", -1).length - 1,
+                    "the commented line survives the migration (paper=" + paper + "): "
+                            + migrated.substring(0, Math.min(migrated.length(), 900)));
+            // The template's instruction still gives a file that loads.
+            var codec = new YamlSettingsCodec<>(SettingsSchema.server(paper));
+            assertFalse(codec.parse(bytes(migrated.replace("\n  #show_permission_refusal: false ",
+                    "\n  show_permission_refusal: false "))).configured().service().showPermissionRefusal());
+        }
+    }
+
     @Test void itIsAReloadableBooleanOnEveryPlatform() {
         var descriptor = SettingsSchema.server(false).descriptorsByPath().get("service.show_permission_refusal");
         assertEquals(SettingsSchema.Kind.BOOLEAN, descriptor.kind());
