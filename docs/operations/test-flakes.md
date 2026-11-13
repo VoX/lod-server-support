@@ -15,6 +15,17 @@ Everything below is the record of what each signature turned out to be.
 
 ## Entries
 
+- **`XaeroBandFillTest.aCancelledJobLandsNoTile` (Fabric, Tier 1): a test baseline race, FIXED 2026-11-13. Not a flake: one red on the 1.21.1 line's CI (PR #394, second run).**
+  - **Signature.** `no fill offer: XaeroMap: state=active, queued=2, … band_fill_last=5 0/4 running` after 10 s (`awaitOffered`).
+  - **Mechanism.** `switchTo` starts the band-fill worker on its own thread. `awaitOffered(n)` then read the offer counter as its baseline and waited for `n` more. When the worker had already offered before that read, the target was out of reach: these tests set the queue mark equal to the number they wait for, so the worker stops at the mark and never offers the extra tiles.
+  - **Reach.** Tests only; four tests in the class share the shape (`aSwitchADimensionChangeADenyAndASessionEndCancelTheJob`, `fillOffersWaitBelowTheQueueMarkAndLiveArrivalsStillEnqueue`, `fillTilesAreLeaseFreeAndNeverReadAsBackpressure`).
+  - **Fix.** `switchTo` records the baseline before it switches, and `awaitOffered` counts from it.
+  - **Rate.** A 300 ms diagnostic pause before the baseline read made all four fail on the first run with this message; with the fix the same paused run passed 32 of 32. The pause is not in the tree.
+  - **Action.** A red with this signature now means the worker really stopped offering. Do not re-run it away.
+  - **Evidence.** `~/.local/state/lss-program-2026-11/evidence/pr394-second-attempt/`.
+
+- **`:fabric:compileJava` "Could not find com.google.guava:guava-parent:…" (or another parent POM) while resolving the compile classpath: the dependency repository failed on the runner, environmental (2026-11-13, PR #397, 1.21.11).** The parent POMs named in the error existed on Maven Central (HTTP 200 minutes later) and the same branch had built an hour earlier with the same dependencies. Action: confirm the named POM answers 200 from `repo.maven.apache.org`, then re-run the job; if it answers 404, a dependency pin is wrong and that is a real failure.
+
 - **`OffThreadProcessorDiskResultTest.notFoundInvalidatesAStaleTimestampStamp` (common, Tier 1): a test phase-order race, FIXED 2026-11-13. Not a flake: one red on the 1.21.1 line's CI (PR #394, a change that touched no Java).**
   - **Signature.** `timed out waiting for: re-read submitted` after the full 30 s (`waitFor`, `OffThreadProcessorDiskResultTest.java:240`).
   - **Mechanism.** A processing cycle runs: phase-1 events, disk results (the column is enqueued here), generation outcomes, the late drain of dirty events, then routing. The test waited for the enqueued column, then from its own thread queued the done-bit clear and enqueued the reopening request. When both landed between that same cycle's late drain and its routing, the request routed against the still-set done-bit, no disk read was submitted, and nothing asked again, so the wait could never finish.
