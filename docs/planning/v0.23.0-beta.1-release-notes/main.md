@@ -13,6 +13,7 @@
 
 ### Bug Fixes
 
+- **Leaving a server on Fabric** — The mod now cleans up on the game's main thread when you leave or are disconnected. Before, on rare occasions, the game could crash instead of showing the disconnect screen, or far players could stay hidden on the next server until you rejoined.
 - **Status details** — The details no longer show `ingest=-1` when nothing reports a backlog.
 
 ### Support

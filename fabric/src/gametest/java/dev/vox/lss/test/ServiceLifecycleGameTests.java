@@ -3028,28 +3028,28 @@ public class ServiceLifecycleGameTests {
         helper.succeed();
     }
 
-
     /**
-     * Regression review, 2026-11-13. Fabric fires its DISCONNECT event from whichever comes
-     * first: netty's channelInactive (the other end closed, or a kick's close went through) or
-     * the server thread's own disconnect handling. The cleanup touches state only the server
-     * thread may touch; run where the event fired it raced the tick, and a real-stack run
-     * crashed the server in {@code ChunkGenerationService.tick}. So the event may fire anywhere
-     * and the cleanup still happens on the server thread, a moment later.
+     * Found 2026-11-13 by a real-stack run that crashed the server. Fabric fires its DISCONNECT
+     * event from whichever comes first: netty's channelInactive (the other end closed, or a
+     * kick's close went through) or the server thread's own disconnect handling. The cleanup
+     * touches state only the server thread may touch; run where the event fired it raced the
+     * tick ({@code ConcurrentModificationException} in {@code ChunkGenerationService.tick}). So
+     * the event may fire anywhere and the cleanup still happens on the server thread, a moment
+     * later.
      */
     @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 200)
     public void aDisconnectFiredOffTheServerThreadIsCleanedUpOnIt(GameTestHelper helper) {
         var server = helper.getLevel().getServer();
-        var live = LSSServerNetworking.getRequestService();
-        helper.assertTrue(live != null, "live service required: the event handler cleans it");
+        helper.assertTrue(LSSServerNetworking.getRequestService() != null,
+                "live service required: the event handler cleans it");
         var mock = placeMockServerPlayer(helper);
-        int before = live.getFarPlayerService().optedOut();
+        var uuid = mock.getUUID();
         boolean handedOver = false;
         try {
-            // Connection-scoped state the cleanup drops: a kept "do not share my position".
-            live.getFarPlayerService().onPrefs(mock.getUUID(),
-                    new dev.vox.lss.common.farplayers.FarPlayerWire.Prefs(true, 0, 0, false, 0));
-            helper.assertTrue(live.getFarPlayerService().optedOut() == before + 1, "premise: the preference is kept");
+            // Connection-scoped state the cleanup drops: what the client said about itself.
+            dev.vox.lss.networking.server.ServerReceiverGlue.recordClientInfo(uuid, 4242);
+            helper.assertTrue(Integer.valueOf(4242).equals(LSSServerNetworking.clientDataVersion(uuid)),
+                    "premise: the fact is kept");
 
             var failure = new java.util.concurrent.atomic.AtomicReference<Throwable>();
             var otherThread = new Thread(() -> {
@@ -3067,20 +3067,20 @@ public class ServiceLifecycleGameTests {
                 Thread.currentThread().interrupt();
             }
             helper.assertTrue(!otherThread.isAlive() && failure.get() == null, "the event returned: " + failure.get());
-            // The server thread is right here, inside this test: nothing it owns may have changed.
-            helper.assertTrue(live.getFarPlayerService().optedOut() == before + 1,
+            // The server thread is right here, inside this test: the cleanup cannot have run yet.
+            helper.assertTrue(LSSServerNetworking.clientDataVersion(uuid) != null,
                     "the cleanup must not run on the thread that fired the event");
             handedOver = true;
         } finally {
             if (!handedOver) {
-                // A failed assertion must not leave the mock or its preference in the shared server.
-                live.getFarPlayerService().onDisconnect(mock.getUUID());
+                // A failed assertion must not leave the mock or its fact in the shared server.
+                dev.vox.lss.networking.server.ServerReceiverGlue.sweepClientInfo(uuid);
                 server.getPlayerList().remove(mock);
             }
         }
         helper.runAfterDelay(3, () -> {
             try {
-                helper.assertTrue(live.getFarPlayerService().optedOut() == before,
+                helper.assertTrue(LSSServerNetworking.clientDataVersion(uuid) == null,
                         "…and it runs on the server thread with its next tasks");
             } finally {
                 server.getPlayerList().remove(mock);
