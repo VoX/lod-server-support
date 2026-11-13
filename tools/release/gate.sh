@@ -21,8 +21,10 @@ java_home_var="LSS_JAVA_HOME_$java_major"
 if [ -n "${!java_home_var:-}" ]; then export JAVA_HOME="${!java_home_var}"
 elif [ -d "/usr/lib/jvm/java-$java_major-openjdk-amd64" ]; then export JAVA_HOME="/usr/lib/jvm/java-$java_major-openjdk-amd64"
 else
-  candidate="$(ls -d "$HOME"/.local/jdk/jdk-"$java_major"* 2>/dev/null | sort | tail -1)"
-  [ -n "$candidate" ] && export JAVA_HOME="$candidate"
+  # Directories only (a downloaded jdk-25.tar.gz sorts after jdk-25.0.2+10), newest first.
+  for candidate in $(ls -d "$HOME"/.local/jdk/jdk-"$java_major"*/ 2>/dev/null | sort -r); do
+    if [ -x "${candidate}bin/java" ]; then export JAVA_HOME="${candidate%/}"; break; fi
+  done
 fi
 [ -x "${JAVA_HOME:-}/bin/java" ] || { echo "no Java $java_major found; set $java_home_var" >&2; exit 2; }
 export PATH="$JAVA_HOME/bin:$PATH"
