@@ -1,0 +1,156 @@
+{
+  "schema": 1,
+  "lss": {
+    "modrinth_project": "lKiXKLvv",
+    "protocol": 20
+  },
+  "rows": [
+    {
+      "id": "fabric-26.3-sodium-voxy-xaero",
+      "status": "ready",
+      "minecraft": "26.3",
+      "notes": "Sodium is the release Voxy 0.2.20-beta names as its required version.",
+      "server": {
+        "platform": "fabric",
+        "loader_version": "0.20.1",
+        "lss": {
+          "loader": "fabric",
+          "jar_prefix": "lod-server-support-fabric"
+        },
+        "mods": [
+          {
+            "slug": "fabric-api",
+            "project_id": "P7dR8mSH",
+            "version_id": "Zns5SSRA",
+            "version_number": "0.166.2+26.3",
+            "file": "fabric-api-0.166.2+26.3.jar",
+            "sha512": "fb686a9fa923248328107a12498229d6951e316257f18b7d0e4cbd6885ba447ed50a44076a8a5ba47cfe2043b329db3587ab000aeab1face26b2587a5d4ba6b5"
+          }
+        ]
+      },
+      "client": {
+        "loader": "fabric",
+        "loader_version": "0.20.1",
+        "lss": {
+          "loader": "fabric",
+          "jar_prefix": "lod-server-support-fabric"
+        },
+        "jvm_args": [
+          "-XX:StackShadowPages=32"
+        ],
+        "mods": [
+          {
+            "slug": "fabric-api",
+            "project_id": "P7dR8mSH",
+            "version_id": "Zns5SSRA",
+            "version_number": "0.166.2+26.3",
+            "file": "fabric-api-0.166.2+26.3.jar",
+            "sha512": "fb686a9fa923248328107a12498229d6951e316257f18b7d0e4cbd6885ba447ed50a44076a8a5ba47cfe2043b329db3587ab000aeab1face26b2587a5d4ba6b5"
+          },
+          {
+            "slug": "sodium",
+            "project_id": "AANobbMI",
+            "version_id": "bAZQdGpg",
+            "version_number": "mc26.3-0.9.2-fabric",
+            "file": "sodium-fabric-0.9.2+mc26.3.jar",
+            "sha512": "f3f260f204b8ce5e8777c2c73f537956755ec61f3817b0b78b5e5568e8aa40f14891f146475075109747665c7c88a45ca0ca9a8df3c68d79c58ecdaa8d8c4b93"
+          },
+          {
+            "slug": "voxy",
+            "project_id": "fxxUqruK",
+            "version_id": "iIrM8ZKQ",
+            "version_number": "0.2.20-beta",
+            "file": "voxy-0.2.20-beta.jar",
+            "sha512": "ab502017b3241e1307717ca426ba564f1450ddb7d9d37e95759e57ee5edc7cb014aa48628f51f6010ffd2a410dadf1f4eea7ba86c0da6233059c0a6120157a01"
+          },
+          {
+            "slug": "xaeros-world-map",
+            "project_id": "NcUtCpym",
+            "version_id": "VM8lNSSM",
+            "version_number": "fabric-26.3-1.47.2",
+            "file": "xaeroworldmap-fabric-26.3-1.47.2.jar",
+            "sha512": "cac3c0fb3121ddebc7f073571dcbce5f1811ca001ea94ef03c1da667e8a3413144f570c4b593f632358eff98fa138631ed7907fd1bd5da7d43c037ea782125fb"
+          }
+        ]
+      },
+      "checks": [
+        "server_started",
+        "handshake",
+        "columns_sent",
+        "client_clean",
+        "screenshot"
+      ]
+    },
+    {
+      "id": "neoforge-1.21.1-c2me-scalablelux",
+      "status": "ready",
+      "minecraft": "1.21.1",
+      "notes": "Xaero's World Map is on the client because a client with no terrain consumer requests no terrain, so the columns check would have nothing to witness.",
+      "server": {
+        "platform": "neoforge",
+        "neoforge": {
+          "version": "21.1.266",
+          "installer_sha256": "4f312ec39ff935c661f4053ef398056a8f946057b04be1c1eebf0518a18b2ba2"
+        },
+        "lss": {
+          "loader": "neoforge",
+          "jar_prefix": "lod-server-support-neoforge"
+        },
+        "mods": [
+          {
+            "slug": "c2me-neoforge",
+            "project_id": "COlSi5iR",
+            "version_id": "VACgDPOc",
+            "version_number": "0.4.0-alpha.0.124+1.21.1",
+            "file": "c2me-neoforge-mc1.21.1-0.4.0-alpha.0.124.jar",
+            "sha512": "ad5675893a856663659b4d73285d154615e6c1924fef0f52513e3f07895ba474e3629778087aa8ec0edcfd802c21ee773f6483397bde858ff30a2b62887b208b"
+          },
+          {
+            "slug": "scalablelux",
+            "project_id": "Ps1zyz6x",
+            "version_id": "9KuFoPhC",
+            "version_number": "0.3.0-alpha.0.8+1.21.1",
+            "file": "ScalableLux-neoforge-0.3.0-alpha.0.8-all.jar",
+            "sha512": "fa7bb3ee6641cf94b957b4c30635711e7f9d2b5e66b544899ce4ac039d8a59814ca7f7d97c0f66b3a80261d59a3ec3d328ad0d9dcdfc13d77af580f702094a94"
+          }
+        ]
+      },
+      "client": {
+        "loader": "neoforge",
+        "neoforge": {
+          "version": "21.1.266",
+          "installer_sha256": "4f312ec39ff935c661f4053ef398056a8f946057b04be1c1eebf0518a18b2ba2"
+        },
+        "lss": {
+          "loader": "neoforge",
+          "jar_prefix": "lod-server-support-neoforge"
+        },
+        "mods": [
+          {
+            "slug": "sodium",
+            "project_id": "AANobbMI",
+            "version_id": "uMOpc5uV",
+            "version_number": "mc1.21.1-0.8.13-neoforge",
+            "file": "sodium-neoforge-0.8.13+mc1.21.1.jar",
+            "sha512": "4f537696af95411e9daf15795fb5fcbc49913d488a96fa912fa8f1d7db408710995e8a1461190f3cd0f8217bf9e35e9539176592428ed587ca2d7aa84450a390"
+          },
+          {
+            "slug": "xaeros-world-map",
+            "project_id": "NcUtCpym",
+            "version_id": "SnQ4SoDe",
+            "version_number": "neoforge-1.21.1-1.47.0",
+            "file": "xaeroworldmap-neoforge-1.21.1-1.47.0.jar",
+            "sha512": "4d2d78bc85afa002f682ef344b7284cf1baa4903cc5a11cd1d7bd260ac63952580ae717bab47079540ead633cdd5d8e4fdf230dc99a68bcb7a269500e7dada13"
+          }
+        ]
+      },
+      "checks": [
+        "server_started",
+        "handshake",
+        "columns_sent",
+        "client_clean",
+        "screenshot"
+      ]
+    }
+  ]
+}
