@@ -1,0 +1,19 @@
+[22:23:16] [Server thread/INFO]: Starting minecraft server version 26.3
+[22:23:16] [Server thread/WARN]: **** SERVER IS RUNNING IN OFFLINE/INSECURE MODE!
+[22:23:18] [Server thread/INFO]: Done (1.753s)! For help, type "help"
+[22:23:18] [Server thread/INFO]: Created settings /home/user/.local/state/lss-realstack/runs/20261113T032308Z-fabric-26.3-sodium-voxy-xaero/server/config/lss-server-config.yaml
+[22:23:18] [Server thread/INFO]: Starting LSS LOD request processing service
+[22:23:18] [Server thread/INFO]: LOD store active (driver=private/3.49.1.0). It stores served LOD bytes under <world>/lss-lod/ and, once fully warmed, occupies roughly as much space as the region files themselves. It is DERIVED data — deleting lss-lod/ is always safe. Set storage.lod_store.enabled to false and restart to disable; storage.lod_store.max_size_mib bounds its size after reload.
+[22:23:18] [Server thread/INFO]: Effective config: useNbtTranscode=true, diskReaderThreads=3, useCompressedColumns=true, useBackgroundReadSplit=true, useSelectiveNbtParse=true, maxConcurrentDiskReads=2
+[22:23:18] [LSS Store Backfill/INFO]: Store backfill: 1 region(s) to process, estimated ~0 MB of new deposits (uncapped)
+[22:23:18] [LSS Store Backfill/INFO]: Store backfill complete: 1 regions, 1 deposited, 0 skipped, 0 errors, 0 pauses
+[22:23:28] [Server thread/INFO]: RealStack[/127.0.0.1:44074] logged in with entity id 9 at (137.5, 64.0, 193.5)
+[22:23:28] [Server thread/INFO]: System chat: RealStack joined the game
+[22:23:29] [Server thread/INFO]: LSS handshake received from RealStack (protocol v20, capabilities=15)
+[22:23:29] [Server thread/INFO]: Player RealStack registered for LSS LOD request processing (caps=15)
+[22:24:36] [Server thread/INFO]: System chat: Kicked RealStack: Kicked by an operator
+[22:24:36] [Server thread/INFO]: RealStack lost connection: Kicked by an operator
+[22:24:36] [Server thread/INFO]: System chat: RealStack left the game
+[22:24:40] [Server thread/INFO]: System chat: Stopping the server
+[22:24:40] [Server thread/INFO]: Stopping LSS LOD request processing service
+[22:24:40] [Server thread/INFO]: Stopping server

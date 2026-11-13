@@ -1,0 +1,92 @@
+# Real-stack test matrix
+
+The unit tests and gametests run LSS alone. Players run it beside Sodium, Voxy, Xaero's World Map,
+C2ME and the rest, and most real failures involved one of those. This tool boots the stacks players
+actually run (the published mods, a real server and a real production client) and checks that LSS
+works in them. It runs locally, weekly and before a release; it is not part of GitHub CI.
+
+## Run a row
+
+```sh
+python3 tools/realstack/realstack.py doctor                 # what this machine is missing
+python3 tools/realstack/realstack.py list                   # the matrix
+python3 tools/realstack/realstack.py provision <row>        # download and verify (optional)
+python3 tools/realstack/realstack.py run <row> --lss published:0.21.0
+python3 tools/realstack/realstack.py run <row> --lss dir:<gate output>/jars
+```
+
+`--lss` chooses the mod under test: `published:<version>` downloads that version's jars for the
+row's platforms from Modrinth; `dir:<path>` takes locally built jars (a release gate's `jars/`
+directory). `run` exits 0 only when every check passed.
+
+A run waits for the shared harness lock (up to 30 minutes), then has 15 minutes: it stages a fresh
+offline server and a fresh client, starts the client on a private Xvfb display, lets it join,
+watches `lsslod diag`, takes a screenshot, stops everything it started and writes the verdict.
+
+Needs: Python 3.11+, JDK 21 and JDK 25, `Xvfb`, `xdotool`, `timeout`, 15 GiB free.
+Settings: `LSS_JAVA_HOME_21`, `LSS_JAVA_HOME_25`, `LSS_REALSTACK_CACHE` (default
+`~/.cache/lss-realstack`), `LSS_REALSTACK_RUNS` (default `~/.local/state/lss-realstack/runs`),
+`LSS_REALSTACK_SEED_ROOTS` (optional folders with `libraries/` and `assets/objects/` to copy from
+instead of downloading; a file is used only when its hash matches).
+
+## Evidence
+
+Each run has its own directory, `<runs>/<UTC time>-<row>/`:
+
+- `verdict.json`: `passed`, and for every check its message and the log lines it relied on.
+- `evidence/`: server console log, client log, the final `lsslod diag`, `client.png`, the staged
+  jar list with hashes, and what was left running (nothing).
+- `facts.json`: port, display, timings, command lines, the diag polls.
+
+`realstack.py replay <run directory>` judges a saved run again from its evidence.
+`realstack.py --stacks <file> ...` uses another matrix file (for trying a row before adding it).
+
+## Checks
+
+| Check | Passes when |
+| --- | --- |
+| `server_started` | the server logged `Done`, LSS logged that its service started, `lsslod diag` says `enabled=true`, and no ERROR record in the server log mentions LSS |
+| `handshake` | the server logged the join, the handshake on the current protocol and the registration; the client logged the session config; the diag counts a live session |
+| `columns_sent` | the server-wide and the per-player `sent=` counters in the final diag are above zero |
+| `client_clean` | no crash report, no LSS ERROR in the client log, and the client stayed alive and connected for the whole observation window |
+| `screenshot` | a picture of the private display was saved while a Minecraft window existed (the picture is not judged yet) |
+
+A check passes on positive evidence, never on the absence of an error alone. To see the checks
+fail, run a row with `--fault client-without-lss`: the client is staged without the LSS jar and the
+handshake check must go red.
+
+## Scenarios and the other brand
+
+`run <row> --scenario server-without-lss` stages the server without LSS and judges what the client
+tells the player: the server started, the player joined, the client spoke its chat notice exactly
+once and in the expected words, stayed up, and a screenshot was saved. A scenario brings its own
+checks; the row's are not run.
+
+`--brand vss` takes the Voxy Server Side build of the same jars from a gate's `jars/` directory
+(`--lss dir:` only). The server is then asked for `vsslod diag`, and the notice check expects
+that build's short name as the prefix.
+
+## Add a row
+
+1. `realstack.py pin <modrinth project> --minecraft <version> --loader <loader>` prints the entry
+   for the newest published file (project, version id, file name, sha512) and its dependencies.
+   `realstack.py pin --neoforge-installer <version>` prints a NeoForge pin.
+2. Add the row to `stacks.json`: id, Minecraft version, server platform and client loader with
+   their loader pins, the pinned mods of both sides, the LSS jar of each side and the checks.
+3. `realstack.py run <row> --lss published:<current version>`. If it cannot be made to work, keep
+   the row with `"status": "blocked"` and the exact reason in `blocked_reason`.
+
+The client needs a terrain consumer (Voxy or a map mod); without one it requests no terrain and
+`columns_sent` has nothing to witness.
+
+## Rules the tool keeps
+
+- Official sources only (Modrinth, Mojang, Fabric and NeoForge), every file hash-checked, a
+  generic User-Agent, no account, token or credential of any kind. Clients start with
+  `--accessToken 0` against an offline server.
+- Private Xvfb display only, never `:0`; `WAYLAND_DISPLAY` and `XAUTHORITY` are removed.
+- It signals only processes it started, found by name plus the run's unique `-Dlssrig.id=` tag.
+- A red check is explained, not retried ([decision 0007](../../docs/decisions/0007-retry-rule.md)).
+  Every attempt keeps its own directory.
+
+Tests: `python3 -m unittest discover -s tools/realstack` (offline).
