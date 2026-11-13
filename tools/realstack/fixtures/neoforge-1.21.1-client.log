@@ -1,0 +1,26 @@
+[22:18:12.676] [main/WARN] [mixin/]: Error loading class: net/caffeinemc/mods/sodium/client/gui/SodiumOptionsGUI (java.lang.ClassNotFoundException: net.caffeinemc.mods.sodium.client.gui.SodiumOptionsGUI) 
+[22:18:16] [modloading-worker-0/INFO] [LSS/]: Created settings /home/user/.local/state/lss-realstack/runs/20261113T031757Z-neoforge-1.21.1-c2me-scalablelux/client/config/lss-client-config.yaml
+[22:18:16] [modloading-worker-0/INFO] [LSS/]: Registered voxel column consumer: dev.vox.lss.compat.XaeroSession$2
+[22:18:16] [modloading-worker-0/INFO] [LSS/]: Xaero's World Map detected — LOD map bridge active
+[22:18:16] [modloading-worker-0/INFO] [LSS/]: LSS far players on NeoForge: rendering active (best-effort tier)
+[22:18:17] [Render thread/ERROR] [mojang/Narrator]: Error while loading the narrator
+com.mojang.text2speech.Narrator$InitializeException: Failed to load library flite
+	at MC-BOOTSTRAP/text2speech@1.17.9/com.mojang.text2speech.NarratorLinux$FliteLibrary.loadNative(NarratorLinux.java:69) ~[text2speech-1.17.9.jar%23138!/:?] {}
+	at MC-BOOTSTRAP/text2speech@1.17.9/com.mojang.text2speech.NarratorLinux.<init>(NarratorLinux.java:18) ~[text2speech-1.17.9.jar%23138!/:?] {}
+	at MC-BOOTSTRAP/text2speech@1.17.9/com.mojang.text2speech.Narrator.getNarrator(Narrator.java:41) ~[text2speech-1.17.9.jar%23138!/:?] {}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.client.GameNarrator.<init>(GameNarrator.java:21) ~[client-1.21.1-20240808.144430-srg.jar%23180!/:?] {re:classloading,pl:runtimedistcleaner:A}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.client.Minecraft.<init>(Minecraft.java:609) ~[client-1.21.1-20240808.144430-srg.jar%23180!/:?] {re:mixin,pl:runtimedistcleaner:A,re:classloading,pl:mixin:APP:sodium-common.mixins.json:core.MinecraftMixin from mod sodium,pl:mixin:APP:sodium-neoforge.mixins.json:platform.neoforge.EntrypointMixin from mod sodium,pl:mixin:APP:xaeroworldmap.mixins.json:MixinMinecraftClient fr …
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.client.main.Main.main(Main.java:214) ~[client-1.21.1-20240808.144430-srg.jar%23180!/:?] {re:classloading,pl:runtimedistcleaner:A}
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103) ~[?:?] {}
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580) ~[?:?] {}
+	at MC-BOOTSTRAP/fml_loader@4.0.45/net.neoforged.fml.loading.targets.CommonLaunchHandler.runTarget(CommonLaunchHandler.java:136) ~[loader-4.0.45.jar%2393!/:4.0] {}
+	at MC-BOOTSTRAP/fml_loader@4.0.45/net.neoforged.fml.loading.targets.CommonLaunchHandler.clientService(CommonLaunchHandler.java:124) ~[loader-4.0.45.jar%2393!/:4.0] {}
+	at MC-BOOTSTRAP/fml_loader@4.0.45/net.neoforged.fml.loading.targets.CommonClientLaunchHandler.runService(CommonClientLaunchHandler.java:32) ~[loader-4.0.45.jar%2393!/:4.0] {}
+	at MC-BOOTSTRAP/fml_loader@4.0.45/net.neoforged.fml.loading.targets.CommonLaunchHandler.lambda$launchService$4(CommonLaunchHandler.java:118) ~[loader-4.0.45.jar%2393!/:4.0] {}
+	at MC-BOOTSTRAP/cpw.mods.modlauncher@11.0.5/cpw.mods.modlauncher.LaunchServiceHandlerDecorator.launch(LaunchServiceHandlerDecorator.java:30) [modlauncher-11.0.5.jar%2398!/:?] {}
+[22:18:17] [Render thread/ERROR] [xa.ma.WorldMap/]: io exception while checking versions: Online mod data expired! Date: Fri Nov 06 07:28:29 EST 2026
+[22:18:18] [Render thread/INFO] [minecraft/ConnectScreen]: Connecting to 127.0.0.1, 25900
+[22:18:20] [Render thread/INFO] [LSS/]: Server session config received (protocol v20, LOD distance: 512 chunks, enabled: true)
+[22:18:20] [Render thread/INFO] [LSS/]: Column cache key=127.0.0.1_25900.world-e19ad5be3dc45a9e (address; world=e19ad5be3dc45a9e — live) [alias: no-group]
+[22:19:28] [LSS-CacheIO/INFO] [LSS/]: Saved 2465 cached column entries for minecraft_overworld
+[22:19:28] [Render thread/WARN] [minecraft/ClientCommonPacketListenerImpl]: Client disconnected with reason: Kicked by an operator
