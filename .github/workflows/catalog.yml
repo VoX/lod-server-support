@@ -38,12 +38,23 @@ jobs:
         run: |
           python3 -m unittest discover -s tools/compat
           python3 -m unittest discover -s tools/lines
+          python3 -m unittest discover -s tools/release
           python3 -m unittest discover -s tools/rig
           python3 -m unittest discover -s tools/verify
           python3 -m unittest discover -s tools/tests
           python3 -m unittest discover -s test-fixtures/client-preset-tools
-      - name: Exact sources and candidate comparison
-        run: python3 tools/compat/ci.py --fetch
+      # Every line: its facts and its role. A support line also proves it is in step with main,
+      # and the change itself is checked against where it started (the target branch for a pull
+      # request, the previous tip for a push). docs/operations/support-lines.md has the rules.
+      - name: Line facts, role and sync with main
+        env:
+          EVENT: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          base=""
+          if [ "$EVENT" = "pull_request" ]; then base="HEAD^1"
+          elif [ -n "$BEFORE" ] && [ "$BEFORE" != "0000000000000000000000000000000000000000" ]; then base="$BEFORE"; fi
+          python3 tools/compat/ci.py --fetch ${base:+--base "$base"}
       - uses: actions/upload-artifact@v5
         if: always()
         with:

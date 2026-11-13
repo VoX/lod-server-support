@@ -78,7 +78,7 @@ SHIP_NEOFORGE = False
 # artifacts only where the line ships Sponge (a sponge jar FOUND in build/libs gets the
 # full jar checks either way). Mirrors .github/line.env LINE_SHIP_SPONGE — flip BOTH
 # together (ReleaseWorkflowContractTest cross-pins the pair; this line predates R2-5).
-SHIP_SPONGE = True
+SHIP_SPONGE = False
 RELEASE_GLOBS = ("lod-server-support-fabric-*.jar", "lod-server-support-paper-*.jar",
                  "voxy-server-side-fabric-*.jar", "voxy-server-side-paper-*.jar") + ((
                  "lod-server-support-neoforge-*.jar",
