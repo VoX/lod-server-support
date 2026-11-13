@@ -535,13 +535,23 @@ public final class ClientNetGlue {
         FarPlayerClientSupport.onJoin(localIntegratedServer);
     }
 
-    /** DISCONNECT ladder body. Known shared residual (N-3 review, pre-existing and
-     *  loader-equivalent): a server-initiated play→config RECONFIGURATION fires
-     *  neither Fabric's DISCONNECT nor NeoForge's LoggingOut, so this body is
-     *  skipped there — {@code ClientSessionGate.onJoin}'s defensive teardown
+    /** DISCONNECT ladder body. CLIENT THREAD ONLY, and before the level is torn down: it
+     *  tears down state the tick and the render pass use without locks. Both loaders call
+     *  it from the game's own disconnect ({@code Minecraft.disconnect}): NeoForge through
+     *  its LoggingOut event, Fabric through {@code ClientDisconnectHook} (Fabric's own
+     *  DISCONNECT event fires from netty whenever the socket closes first, and must not
+     *  be used). Known shared residual (N-3 review, pre-existing and loader-equivalent):
+     *  a server-initiated play→config RECONFIGURATION goes through neither, so this body
+     *  is skipped there — {@code ClientSessionGate.onJoin}'s defensive teardown
      *  covers the manager on the next join; the processor/far-player/trace
      *  teardowns wait for the real disconnect. */
     public static void onDisconnect() {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc != null && !mc.isSameThread()) {
+            // Not a refusal: the cleanup still has to happen. But it must be seen and fixed.
+            LSSLogger.error("The disconnect cleanup ran off the client thread", new IllegalStateException(
+                    Thread.currentThread().getName()));
+        }
         ClientStatus.invalidate();
         DhClientSession.disconnect();
         sessionGate.onDisconnect();
