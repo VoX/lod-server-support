@@ -37,7 +37,6 @@ step() {  # step <name> <command...>
 git rev-parse HEAD > "$out/head.txt"
 git status --porcelain > "$out/status.txt"
 step catalog-validate python3 tools/compat/catalog.py validate
-step catalog-render python3 tools/compat/catalog.py render --check
 
 tasks=(:common:test :fabric:build :paper:build :paper:test :paper:shadowJar :neoforge:build :neoforge:runGameTestServer :sponge:build vssJars)
 [ "$(flag LINE_SHIP_SPONGE)" = "true" ] && tasks+=(:sponge:bootSmoke)

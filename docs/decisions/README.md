@@ -13,5 +13,6 @@ plans under `docs/planning/` and in the commits.
 | [0005](0005-command-roots.md) | Both builds accept both command names | accepted 2026-11-13 |
 | [0006](0006-one-tree-for-26x.md) | The 26.x lines share one tree | accepted 2026-11-13, not built yet |
 | [0007](0007-retry-rule.md) | A red test is explained, not retried | accepted 2026-11-13 |
+| [0008](0008-main-is-the-reference.md) | Main is the reference; support lines record one sync point | accepted 2026-11-13 |
 
 Status values: `proposed`, `accepted`, `superseded by NNNN`, `withdrawn`.

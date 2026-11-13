@@ -17,6 +17,9 @@ slug="${LSS_REPO_SLUG:-VoX/lod-server-support}"
 lines_arg=(); [ -n "${LSS_RELEASE_LINES:-}" ] && lines_arg=(--lines "$LSS_RELEASE_LINES")
 mapfile -t rows < <(python3 "$here/release_common.py" lines --version "$version" --repo "$repo" "${lines_arg[@]}")
 [ "${#rows[@]}" -gt 0 ] || { log "no local tags for $version"; exit 1; }
+# A support line ships only when it is in step with the release commit on main.
+problems=$(python3 "$here/release_common.py" synced --version "$version" --repo "$repo" "${lines_arg[@]}") \
+  || { log "NOT SYNCED: $problems"; exit 1; }
 started=0; [ -z "$first" ] && started=1
 for row in "${rows[@]}"; do
   set -- $row; line=$1; tag=$2

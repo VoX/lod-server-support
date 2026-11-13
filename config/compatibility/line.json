@@ -29,8 +29,8 @@
     "unknown"
   ],
   "notes": [
-    "NeoForge support commitment is best-effort independently of shipping and renderer capability.",
     "Folia remains experimental where present.",
-    "Sponge (SpongeVanilla server plugin) is best-effort and experimental; LINE_SHIP_SPONGE gates shipping per line."
-  ]
+    "Sponge (SpongeVanilla server plugin) is experimental and ships from this line only."
+  ],
+  "role": "reference"
 }

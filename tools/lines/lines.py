@@ -1,202 +1,461 @@
 #!/usr/bin/env python3
-"""Explicit-ref inventory and conservative isolated cherry-pick preparation."""
+"""Keep a support line in step with main.
+
+Main is the reference. A support line (a "follower") records the main commit it is synced to in
+config/lines/sync.json, and lists the paths that are meant to differ from main:
+
+    {"schema_version": 2,
+     "reference_commit": "<main commit>",
+     "adapted": ["path", ...],   differ from main on purpose, or exist on one side only
+     "absent":  ["glob", ...]}   main-only paths this line never carries
+
+Every other path must be identical to main at that commit. Docs and line-local config are exempt.
+
+Run these in the line's worktree:
+
+    lines.py status                 what differs from the reference right now (working tree)
+    lines.py port --to <commit>     three-way apply main's changes since the sync point
+    lines.py adapt <path>...        list paths as adapted
+    lines.py tidy                   drop adapted entries that are identical to main again
+    lines.py check [--base <ref>]   the CI check on HEAD; --base also checks the port itself
+    lines.py init --reference <commit>   write the first sync.json from a real comparison
+
+Rules a follower lives by:
+  - A fix that a follower needs in a shared file goes to main first, then the line syncs.
+    `adapt` is for behaviour that must differ, never for a fix main lacks.
+  - Main merges before a port: the sync point is always a commit on main.
+  - Three things need a written reason, as a commit trailer on the line's branch:
+        Adapted: <path>: <why>             a shared file becomes line-specific
+        Not-ported: <path>: <why>          main changed an adapted file and the line left it alone
+        Corpus-regenerated: <path>: <why>  a captured wire corpus changed and main's did not
+"""
 from __future__ import annotations
-import argparse, fnmatch, hashlib, json, os, re, subprocess, sys, tempfile
+
+import argparse
+import difflib
+import fnmatch
+import json
+import os
+import re
+import subprocess
+import sys
+import tempfile
 from pathlib import Path
-sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'compat'))
-from catalog import Invalid, require, git, load, versioned, read_ref
-ROOT=Path(__file__).resolve().parents[2]
 
-def files(root,ref): return git(root,'ls-tree','-r','--name-only',ref).splitlines()
-def sha(root,ref):
-    value=git(root,'rev-parse','--verify',ref+'^{commit}').strip()
-    require(len(value)==40,'invalid commit'); return value
+ROOT = Path(__file__).resolve().parents[2]
+SYNC = 'config/lines/sync.json'
+LINES = 'config/lines/lines.json'
+LINE = 'config/compatibility/line.json'
+# Line-local everywhere: never compared with main.
+EXEMPT = ('*.md', 'LICENSE', 'docs/*', 'config/compatibility/*', 'config/lines/*')
+# Never copied by a port, whatever main did to them.
+NEVER_PORTED = ('config/compatibility/*', 'config/lines/*')
+CORPUS = ('*-corpus/*',)
+TRAILER = re.compile(r'^(Adapted|Not-ported|Corpus-regenerated): (\S+): (\S.*)$', re.M)
+ROLES = ('reference', 'follower', 'frozen')
+PORT_CATEGORIES = ('identical_base', 'merged_clean', 'conflict', 'added', 'added_exists',
+                   'target_missing', 'deleted', 'never_ported')
 
-def classify(manifest,path):
-    if path in manifest['files']: return manifest['files'][path]
-    # New production files must be explicitly classified, not silently copied.
-    for pattern,kind in manifest.get('nonproduction_patterns',{}).items():
-        if fnmatch.fnmatchcase(path,pattern): return {'kind':kind}
-    return {'kind':'unclassified'}
 
-def validate_manifest(manifest):
-    versioned(manifest)
-    require(isinstance(manifest.get('files'),dict),'classification files must be explicit mapping')
-    for path,rule in manifest['files'].items():
-        require(not Path(path).is_absolute() and '..' not in Path(path).parts,'invalid classified path')
-        kind=rule.get('kind');require(kind in ('identical','adapted','generated','line-local'),'unknown classification kind: '+str(kind))
-        if kind in ('adapted','generated'):
-            require(isinstance(rule.get('reviewed_blobs'),dict),'missing reviewed blob identities: '+path)
-            require(all(v is None or re.fullmatch('[0-9a-f]{40}',v) for v in rule['reviewed_blobs'].values()),'invalid reviewed blob identity')
-        if kind=='adapted':require(rule.get('surface') and rule.get('tests'),'adapted path needs stable surface and semantic tests: '+path)
-        if kind=='generated':require(rule.get('provenance'),'generated path needs provenance: '+path)
-    require(all(kind=='line-local' for kind in manifest.get('nonproduction_patterns',{}).values()),'wildcards cannot bless shared source')
-    return manifest
+class Invalid(Exception):
+    pass
 
-def inventory(root,refs,manifest):
-    validate_manifest(manifest);result={}
-    for line,ref in refs.items():
-        full=sha(root,ref)
-        rows=git(root,'ls-tree','-r',full).splitlines()
-        blobs={row.split('\t',1)[1]:row.split()[2] for row in rows}
-        result[line]={'commit':full,'files':{p:classify(manifest,p) for p in blobs},'blobs':blobs}
+
+def require(condition, message):
+    if not condition:
+        raise Invalid(message)
+
+
+def run(root, *args, env=None, check=True, text=True):
+    result = subprocess.run(['git', '-C', str(root), *args], capture_output=True, text=text, env=env)
+    if check and result.returncode:
+        stderr = result.stderr if text else result.stderr.decode(errors='replace')
+        raise Invalid('git ' + ' '.join(args[:3]) + ': ' + stderr.strip()[:300])
     return result
 
-def check(root,refs,manifest):
-    inv=inventory(root,refs,manifest);issues=[]
-    paths=sorted(set().union(*(set(row['files']) for row in inv.values())))
-    for path in paths:
-        rule=classify(manifest,path);kind=rule['kind']
-        if kind=='unclassified':issues.append({'path':path,'result':'unclassified'});continue
-        blobs={line:row['blobs'].get(path) for line,row in inv.items()}
-        if kind=='identical' and len(set(blobs.values()))>1: issues.append({'path':path,'result':'shared-divergence','blobs':blobs})
-        elif kind in ('adapted','generated'):
-            # An axis token cannot bless arbitrary residual code. Exact reviewed blobs
-            # bind all shared logic; any changed byte requires semantic review.
-            for line,blob in blobs.items():
-                if blob != rule.get('reviewed_blobs',{}).get(line):
-                    issues.append({'path':path,'line':line,'result':('provenance-review-required' if kind=='generated' else 'adaptation-review-required'),'surface':rule.get('surface'),'blob':blob,'tests':rule.get('tests',[])})
-    return {'sources':{k:v['commit'] for k,v in inv.items()},'issues':issues,'passed':not issues}
 
-def patch_id(root,commit,mainline=None):
-    args=['git','-C',str(root),'diff',commit+'^'+str(mainline or 1),commit]
-    diff=subprocess.run(args,capture_output=True,check=True).stdout
-    return subprocess.run(['git','patch-id','--stable'],input=diff,capture_output=True,check=True).stdout.decode().split()[0] if diff else None
+def matches(path, patterns):
+    return any(fnmatch.fnmatchcase(path, pattern) for pattern in patterns)
 
-def plan(root,batch,manifest):
-    versioned(batch); require(batch.get('targets'),'explicit target refs required')
-    require(all(re.fullmatch(r'[a-z0-9]+(?:[.-][a-z0-9]+)*', line) for line in batch['targets']), 'invalid stable target ID')
-    commits=batch['commits']; seen=set(); ordered=[]
-    for entry in commits:
-        commit=sha(root,entry['commit']);require(commit==entry['commit'],'batch requires full commit IDs')
-        require(commit not in seen,'duplicate commit');
-        require(set(entry.get('prerequisites',[]))<=seen,'prerequisites must precede dependent commit')
-        parents=git(root,'rev-list','--parents','-n','1',commit).split()[1:]
-        require(parents,'root commits are not port batches')
-        if len(parents)>1: require(entry.get('mainline') in range(1,len(parents)+1),'merge requires reviewed mainline parent')
-        parent=parents[entry.get('mainline',1)-1]
-        paths=git(root,'diff','--name-only',parent,commit).splitlines()
-        ordered.append({'commit':commit,'mainline':entry.get('mainline'),'patch_id':patch_id(root,commit,entry.get('mainline')),'files':{p:classify(manifest,p) for p in paths},'prerequisites':entry.get('prerequisites',[])})
-        seen.add(commit)
-    targets={line:sha(root,ref) for line,ref in batch['targets'].items()}
-    return {'schema_version':1,'targets':targets,'commits':ordered,'simulation':simulate(root,targets,ordered)}
 
-def exact_patch_present(root,target,entry):
-    if subprocess.run(['git','-C',str(root),'merge-base','--is-ancestor',entry['commit'],target],capture_output=True).returncode==0: return True
-    if entry['mainline'] is not None: return False
-    # git cherry uses patch identity, not subject/path guesses. Limit the input
-    # range to this single ordinary commit; target history remains authoritative.
-    result=git(root,'cherry',target,entry['commit'],entry['commit']+'^').splitlines()
-    return any(row=='- '+entry['commit'] for row in result)
+def exempt(path):
+    return matches(path, EXEMPT)
 
-def simulate(root,targets,ordered):
-    results={}
-    # A shared bare clone reads source objects through alternates, while all
-    # private indexes, conflict blobs and any Git helper work stay in scratch.
-    # This also protects dirty/deleted caller files from implementation details
-    # of future Git versions; planning never runs an apply in the caller tree.
-    with tempfile.TemporaryDirectory(prefix='lss-port-simulation-') as tmp:
-        repository=Path(tmp)/'repository.git';worktree=Path(tmp)/'worktree';worktree.mkdir()
-        subprocess.run(['git','clone','--shared','--bare','--no-hardlinks',str(Path(root).resolve()),str(repository)],capture_output=True,check=True)
-        for line,target in targets.items():
-            steps=[];env=os.environ.copy();env['GIT_INDEX_FILE']=str(Path(tmp)/('index-'+line));env['GIT_WORK_TREE']=str(worktree)
-            subprocess.run(['git','-C',str(repository),'read-tree',target],env=env,check=True,capture_output=True)
-            for entry in ordered:
-                commit=entry['commit']
-                if exact_patch_present(repository,target,entry):
-                    steps.append({'commit':commit,'result':'exact-patch-present'});continue
-                patch=subprocess.run(['git','-C',str(repository),'diff','--binary',commit+'^'+str(entry['mainline'] or 1),commit],check=True,capture_output=True).stdout
-                result=subprocess.run(['git','-C',str(repository),'apply','--cached','--3way','--allow-empty'],input=patch,env=env,capture_output=True)
-                if result.returncode:
-                    conflicts=subprocess.run(['git','-C',str(repository),'diff','--cached','--name-only','--diff-filter=U'],env=env,check=True,capture_output=True,text=True).stdout.splitlines()
-                    steps.append({'commit':commit,'result':'conflict-or-adaptation-required','conflicts':conflicts,'diagnostic':result.stderr.decode(errors='replace')[:4096]});break
-                steps.append({'commit':commit,'result':'private-index-applies'})
-            results[line]=steps
-    return results
 
-def prepare(root,batch,manifest,target,destination,branch):
-    proposal=plan(root,batch,manifest);require(target in proposal['targets'],'unknown target')
-    destination=Path(destination).absolute();require(not destination.exists(),'destination already exists; will not overwrite')
-    require(not git(root,'status','--porcelain').strip(),'source worktree is dirty; commit/review inputs before preparing')
-    require(branch.startswith('port/'),'isolated branch must start with port/')
-    ref=proposal['targets'][target]
-    git(root,'worktree','add','-b',branch,str(destination),ref)
-    state={'schema_version':1,'proposal':proposal,'target':target,'branch':branch,'completed':[],'state':'in-progress'}
-    statepath=Path(git(destination,'rev-parse','--absolute-git-dir').strip())/'lss-port-state.json'
-    def save():statepath.write_text(json.dumps(state,indent=2)+'\n')
-    save()
-    for entry in proposal['commits']:
-        commit=entry['commit']
-        # Exact patch identity only; adapted equivalence is never inferred.
-        already=exact_patch_present(destination,'HEAD',entry)
-        if already: state['completed'].append({'commit':commit,'result':'exact-patch-present'});save();continue
-        args=['cherry-pick']
-        if entry['mainline']:args+=['-m',str(entry['mainline'])]
-        p=subprocess.run(['git','-C',str(destination),*args,commit],capture_output=True,text=True)
-        if p.returncode:
-            state.update(state='conflict',failed_commit=commit,head=sha(destination,'HEAD'),conflicts=git(destination,'diff','--name-only','--diff-filter=U').splitlines())
-            save();raise Invalid(f'port stopped; conflict and input identities preserved in {statepath}')
-        state['completed'].append({'commit':commit,'result':'picked','target_commit':sha(destination,'HEAD')});save()
-    state['state']='prepared-review-required';state['head']=sha(destination,'HEAD');save();return state
+def commit_exists(root, commit):
+    return run(root, 'cat-file', '-e', commit + '^{commit}', check=False).returncode == 0
 
-def resume(destination):
-    destination=Path(destination)
-    statepath=Path(git(destination,'rev-parse','--absolute-git-dir').strip())/'lss-port-state.json'
-    state=versioned(load(statepath))
-    require(state['state']=='conflict','only a preserved conflict can be resumed')
-    require(git(destination,'symbolic-ref','--short','HEAD').strip()==state['branch'],'port branch identity changed')
-    require(sha(destination,'HEAD')==state['head'],'HEAD changed since saved conflict; review before resuming')
-    require(not git(destination,'diff','--name-only','--diff-filter=U').strip(),'unresolved conflict files remain')
-    require(git(destination,'rev-parse','CHERRY_PICK_HEAD').strip()==state['failed_commit'],'cherry-pick identity changed')
-    for entry in state['proposal']['commits']:
-        require(sha(destination,entry['commit'])==entry['commit'],'missing original source object')
-        require(patch_id(destination,entry['commit'],entry['mainline'])==entry['patch_id'],'original input patch changed')
-    git(destination,'-c','core.editor=true','cherry-pick','--continue')
-    failed=state['failed_commit'];state['completed'].append({'commit':failed,'result':'resolved-review-required','target_commit':sha(destination,'HEAD')})
-    state['state']='in-progress'
-    pending=False
-    for entry in state['proposal']['commits']:
-        if entry['commit']==failed:pending=True;continue
-        if not pending:continue
-        # Match prepare: exact identity only, never inferred adapted equivalence.
-        if exact_patch_present(destination,'HEAD',entry):
-            state['completed'].append({'commit':entry['commit'],'result':'exact-patch-present'})
-            statepath.write_text(json.dumps(state,indent=2)+'\n')
+
+def is_ancestor(root, older, newer):
+    """None when either object is missing (git answers 128), else True or False."""
+    code = run(root, 'merge-base', '--is-ancestor', older, newer, check=False).returncode
+    return None if code not in (0, 1) else code == 0
+
+
+def entries(root, tree_ish):
+    """{path: (mode, blob)} for every file in a commit or tree."""
+    out = {}
+    for row in run(root, 'ls-tree', '-r', '-z', tree_ish).stdout.split('\0'):
+        if row:
+            meta, path = row.split('\t', 1)
+            mode, _, blob = meta.split()
+            out[path] = (mode, blob)
+    return out
+
+
+def worktree_tree(root):
+    """A tree object for the working tree as it is now, without touching the real index."""
+    with tempfile.TemporaryDirectory() as scratch:
+        env = dict(os.environ, GIT_INDEX_FILE=str(Path(scratch) / 'index'))
+        run(root, 'read-tree', 'HEAD', env=env)
+        run(root, 'add', '-A', env=env)
+        return run(root, 'write-tree', env=env).stdout.strip()
+
+
+def content(root, blob):
+    return run(root, 'cat-file', 'blob', blob, text=False).stdout
+
+
+def show(root, commit, path):
+    result = run(root, 'show', commit + ':' + path, check=False)
+    return result.stdout if result.returncode == 0 else None
+
+
+def role(root):
+    value = json.loads((Path(root) / LINE).read_text()).get('role')
+    require(value in ROLES, LINE + ' needs "role": one of ' + ', '.join(ROLES))
+    return value
+
+
+def validate_sync(sync):
+    require(isinstance(sync, dict) and sync.get('schema_version') == 2, 'unsupported sync.json schema')
+    require(re.fullmatch('[0-9a-f]{40}', str(sync.get('reference_commit', ''))), 'reference_commit must be a full commit id')
+    for key in ('adapted', 'absent'):
+        value = sync.get(key, [])
+        require(isinstance(value, list) and all(isinstance(item, str) and item for item in value),
+                key + ' must be a list of paths')
+        require(value == sorted(set(value)), key + ' must be sorted and free of duplicates')
+    require(set(sync) <= {'schema_version', 'reference_commit', 'adapted', 'absent'}, 'unknown key in sync.json')
+    return sync
+
+
+def load_sync(root):
+    path = Path(root) / SYNC
+    require(path.exists(), 'this line has no ' + SYNC)
+    return validate_sync(json.loads(path.read_text()))
+
+
+def save_sync(root, sync):
+    sync['adapted'] = sorted(set(sync.get('adapted', [])))
+    sync['absent'] = sorted(set(sync.get('absent', [])))
+    (Path(root) / SYNC).write_text(json.dumps(validate_sync(sync), indent=2) + '\n')
+
+
+def must_match(root, reference):
+    """Prefixes main forbids a line to adapt, read from main so a line cannot edit them away."""
+    text = show(root, reference, LINES)
+    return tuple(json.loads(text).get('must_match', [])) if text else ()
+
+
+def describe(on_main, here):
+    if here is None:
+        return 'only on main'
+    if on_main is None:
+        return 'only on this line'
+    return 'file mode differs' if on_main[1] == here[1] else 'content differs'
+
+
+def compare(root, sync, tree_ish):
+    """The always-on rules: every path equals main unless it is listed, and every listed path
+    really differs."""
+    reference, line = entries(root, sync['reference_commit']), entries(root, tree_ish)
+    adapted, absent = set(sync.get('adapted', [])), sync.get('absent', [])
+    locked = must_match(root, sync['reference_commit'])
+    issues = []
+    for path in sorted(set(reference) | set(line)):
+        if exempt(path):
             continue
-        args=['cherry-pick']+(['-m',str(entry['mainline'])] if entry['mainline'] else [])+[entry['commit']]
-        p=subprocess.run(['git','-C',str(destination),*args],capture_output=True,text=True)
-        if p.returncode:
-            state.update(state='conflict',failed_commit=entry['commit'],head=sha(destination,'HEAD'),conflicts=git(destination,'diff','--name-only','--diff-filter=U').splitlines())
-            statepath.write_text(json.dumps(state,indent=2)+'\n')
-            raise Invalid('next conflict preserved: '+str(statepath))
-        state['completed'].append({'commit':entry['commit'],'result':'picked','target_commit':sha(destination,'HEAD')})
-        statepath.write_text(json.dumps(state,indent=2)+'\n')
-    state.update(state='prepared-review-required',head=sha(destination,'HEAD'))
-    statepath.write_text(json.dumps(state,indent=2)+'\n');return state
+        on_main, here = reference.get(path), line.get(path)
+        if matches(path, absent):
+            if here is not None:
+                issues.append(dict(path=path, result='absent-but-present',
+                                   detail='matches an `absent` pattern but exists on this line'))
+            continue
+        if path in adapted:
+            if on_main == here:
+                issues.append(dict(path=path, result='stale-adapted',
+                                   detail='listed as adapted but identical to main; run `lines.py tidy`'))
+            elif any(path.startswith(prefix) for prefix in locked):
+                issues.append(dict(path=path, result='must-match',
+                                   detail='main forbids adapting this path (must_match in ' + LINES + ')'))
+        elif on_main != here:
+            issues.append(dict(path=path, result='differs',
+                               detail=describe(on_main, here) + '; differs from main and is not listed as adapted'))
+    for path in sorted(adapted):
+        if exempt(path):
+            issues.append(dict(path=path, result='exempt-listed', detail='exempt paths are never listed'))
+        elif path not in reference and path not in line:
+            issues.append(dict(path=path, result='stale-adapted', detail='exists on neither side; run `lines.py tidy`'))
+    return issues
 
-def main():
-    p=argparse.ArgumentParser(description=__doc__);p.add_argument('--root',type=Path,default=ROOT)
-    sub=p.add_subparsers(dest='command',required=True)
-    for command in ('inventory','check'):
-        s=sub.add_parser(command);s.add_argument('--refs',type=Path);s.add_argument('--output',type=Path)
-    for command in ('plan','prepare'):
-        s=sub.add_parser(command);s.add_argument('batch',type=Path)
-        if command=='prepare':
-            s.add_argument('--target',required=True);s.add_argument('--destination',required=True,type=Path);s.add_argument('--branch',required=True)
-    s=sub.add_parser('resume');s.add_argument('destination',type=Path)
-    a=p.parse_args()
-    try:
-        manifest=versioned(load(a.root/'config/lines/classification.json'))
-        if a.command=='resume':result=resume(a.destination)
-        elif a.command in ('inventory','check'):
-            refs=load(a.refs) if a.refs else {k:v['commit'] for k,v in load(a.root/'config/compatibility/source-refs.json')['sources'].items()}
-            result=inventory(a.root,refs,manifest) if a.command=='inventory' else check(a.root,refs,manifest)
+
+def trailers(root, base, head):
+    """{kind: {path: why}} from the commit messages of base..head."""
+    out = {'Adapted': {}, 'Not-ported': {}, 'Corpus-regenerated': {}}
+    for kind, path, why in TRAILER.findall(run(root, 'log', '--format=%B', base + '..' + head).stdout):
+        out[kind][path] = why.strip()
+    return out
+
+
+def replay(root, line_blob, main_old, main_new):
+    """(clean, bytes) of main's change applied to the line's version."""
+    with tempfile.TemporaryDirectory() as scratch:
+        ours, old, new = (Path(scratch) / name for name in ('line', 'main-old', 'main-new'))
+        ours.write_bytes(content(root, line_blob))
+        old.write_bytes(content(root, main_old))
+        new.write_bytes(content(root, main_new))
+        merged = subprocess.run(['git', 'merge-file', '-p', '-L', 'this line', '-L', 'main before',
+                                 '-L', 'main after', str(ours), str(old), str(new)], capture_output=True)
+    return merged.returncode == 0, merged.stdout
+
+
+def residue_diff(replayed, actual, limit=120):
+    rows = list(difflib.unified_diff(replayed.decode(errors='replace').splitlines(),
+                                     actual.decode(errors='replace').splitlines(),
+                                     'mechanical port', 'this line', lineterm='', n=2))
+    return rows[:limit] + (['... (' + str(len(rows) - limit) + ' more lines)'] if len(rows) > limit else [])
+
+
+def check_port(root, sync, base, head='HEAD'):
+    """The rules that need the change itself: what the branch did between base and head.
+    Returns (issues, residue, mechanical). `residue` is each adapted file's hand-made part,
+    shown as a diff against a mechanical replay of main's change, for the reviewer."""
+    issues, residue, mechanical = [], [], 0
+    notes = trailers(root, base, head)
+    line_base, line_head = entries(root, base), entries(root, head)
+    adapted = set(sync.get('adapted', []))
+    base_text = show(root, base, SYNC)
+    base_sync = json.loads(base_text) if base_text else None
+    old, new = (base_sync or {}).get('reference_commit'), sync['reference_commit']
+
+    if base_sync is not None:
+        for path in sorted(adapted - set(base_sync.get('adapted', []))):
+            if path in line_base and path not in notes['Adapted']:
+                issues.append(dict(path=path, result='adapted-without-reason',
+                                   detail='newly adapted; add a commit trailer "Adapted: ' + path + ': <why>"'))
+
+    main_changed = set()
+    if old and old != new:
+        forward = is_ancestor(root, old, new)
+        require(forward is not None, 'the previous sync point ' + old[:9] + ' is not available; fetch it')
+        if not forward:
+            issues.append(dict(path=SYNC, result='sync-moved-backwards',
+                               detail=old[:9] + ' is not an ancestor of ' + new[:9]))
         else:
-            batch=load(a.batch);result=plan(a.root,batch,manifest) if a.command=='plan' else prepare(a.root,batch,manifest,a.target,a.destination,a.branch)
-        output=json.dumps(result,indent=2,sort_keys=True)+'\n'
-        if getattr(a,'output',None):a.output.write_text(output)
-        else: print(output,end='')
-        if a.command=='check' and not result['passed']: return 1
-    except (Invalid,OSError,ValueError,KeyError,subprocess.CalledProcessError) as e:p.exit(1,f'lines: {e}\n')
-    return 0
-if __name__=='__main__':sys.exit(main())
+            main_old, main_new = entries(root, old), entries(root, new)
+            main_changed = {path for path in set(main_old) | set(main_new) if main_old.get(path) != main_new.get(path)}
+            for path in sorted(main_changed):
+                if exempt(path) or path not in adapted or path not in line_base:
+                    continue
+                before, after = line_base[path], line_head.get(path)
+                was, now = main_old.get(path), main_new.get(path)
+                mechanical_result = None
+                if was and now:
+                    clean, merged = replay(root, before[1], was[1], now[1])
+                    mechanical_result = merged if clean else None
+                if after == before:
+                    if mechanical_result is not None and mechanical_result == content(root, before[1]):
+                        continue  # main's change is already in the line's version
+                    if path not in notes['Not-ported']:
+                        issues.append(dict(path=path, result='not-ported',
+                                           detail='main changed this adapted file and the line left it alone; port it or '
+                                                  'add a commit trailer "Not-ported: ' + path + ': <why>"'))
+                elif after is None:
+                    residue.append(dict(path=path, kind='removed on this line', diff=[]))
+                elif mechanical_result is not None and content(root, after[1]) == mechanical_result:
+                    mechanical += 1
+                elif mechanical_result is not None:
+                    residue.append(dict(path=path, kind='hand-edited',
+                                        diff=residue_diff(mechanical_result, content(root, after[1]))))
+                else:
+                    residue.append(dict(path=path, kind='no mechanical port exists (conflict, or added or deleted on main)',
+                                        diff=[]))
+
+    for path in sorted(set(line_base) & set(line_head) | set(line_base) - set(line_head)):
+        if matches(path, CORPUS) and line_base.get(path) != line_head.get(path) and path not in main_changed \
+                and path not in notes['Corpus-regenerated']:
+            issues.append(dict(path=path, result='corpus-changed',
+                               detail='a captured corpus changed and main\'s did not; add a commit trailer '
+                                      '"Corpus-regenerated: ' + path + ': <why>"'))
+    return issues, residue, mechanical
+
+
+def check(root, base=None, fetch=False, head='HEAD'):
+    """The follower check. Returns the report dict; report['passed'] decides."""
+    sync = load_sync(root)
+    reference = sync['reference_commit']
+    if not commit_exists(root, reference) or fetch:
+        require(fetch or commit_exists(root, reference), 'the sync point ' + reference[:9] + ' is not in this clone; fetch main')
+        run(root, 'fetch', '--no-tags', 'origin', 'main', check=False)
+        if not commit_exists(root, reference):
+            run(root, 'fetch', '--no-tags', 'origin', reference)
+    issues = []
+    has_main = run(root, 'rev-parse', '-q', '--verify', 'origin/main', check=False).returncode == 0
+    if has_main or fetch:
+        require(has_main, 'origin/main is not available after a fetch')
+        if not is_ancestor(root, reference, 'origin/main'):
+            issues.append(dict(path=SYNC, result='not-on-main',
+                               detail='the sync point ' + reference[:9] + ' is not on origin/main; main merges before a port'))
+    issues += compare(root, sync, head)
+    residue, mechanical = [], 0
+    if base:
+        port_issues, residue, mechanical = check_port(root, sync, base, head)
+        issues += port_issues
+    return dict(reference_commit=reference, base=base, issues=issues, residue=residue,
+                mechanical_ports=mechanical, passed=not issues)
+
+
+def port(root, old, new, dry=False):
+    """Three-way apply main's old..new onto the working tree. Returns {category: [paths]}."""
+    root = Path(root)
+    out = {category: [] for category in PORT_CATEGORIES}
+    main_old, main_new = entries(root, old), entries(root, new)
+    for path in sorted(set(main_old) | set(main_new)):
+        was, now = main_old.get(path), main_new.get(path)
+        if was == now:
+            continue
+        if matches(path, NEVER_PORTED):
+            out['never_ported'].append(path)
+            continue
+        target = root / path
+        if was is None:
+            if target.exists():
+                out['added_exists'].append(path)
+            else:
+                out['added'].append(path)
+                if not dry:
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    target.write_bytes(content(root, now[1]))
+                    target.chmod(0o755 if now[0] == '100755' else 0o644)
+            continue
+        if now is None:
+            out['deleted'].append(path)
+            if not dry and target.exists() and target.read_bytes() == content(root, was[1]):
+                target.unlink()
+            continue
+        if not target.exists():
+            out['target_missing'].append(path)
+            continue
+        current = target.read_bytes()
+        if current == content(root, was[1]):
+            out['identical_base'].append(path)
+            if not dry:
+                target.write_bytes(content(root, now[1]))
+                target.chmod(0o755 if now[0] == '100755' else 0o644)
+            continue
+        if was[1] == now[1]:
+            continue  # a mode-only change on main to a file the line adapted
+        with tempfile.TemporaryDirectory() as scratch:
+            ours, older, newer = (Path(scratch) / name for name in ('line', 'main-old', 'main-new'))
+            ours.write_bytes(current)
+            older.write_bytes(content(root, was[1]))
+            newer.write_bytes(content(root, now[1]))
+            merged = subprocess.run(['git', 'merge-file', '-p', '-L', 'this line', '-L', 'main before',
+                                     '-L', 'main after', str(ours), str(older), str(newer)], capture_output=True)
+        out['merged_clean' if merged.returncode == 0 else 'conflict'].append(path)
+        if not dry:
+            target.write_bytes(merged.stdout)
+    return out
+
+
+def initial_sync(root, reference, tree_ish='HEAD'):
+    """The first sync.json: every non-exempt path that differs from main today is adapted."""
+    main, line = entries(root, reference), entries(root, tree_ish)
+    adapted = sorted(path for path in set(main) | set(line) if not exempt(path) and main.get(path) != line.get(path))
+    return dict(schema_version=2, reference_commit=reference, adapted=adapted, absent=[])
+
+
+def print_issues(issues):
+    for issue in issues:
+        print('  ' + issue['result'] + ': ' + issue['path'] + ' (' + issue['detail'] + ')')
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument('--root', type=Path, default=Path.cwd())
+    sub = parser.add_subparsers(dest='command', required=True)
+    sub.add_parser('status')
+    sub.add_parser('tidy')
+    checker = sub.add_parser('check')
+    checker.add_argument('--base')
+    checker.add_argument('--fetch', action='store_true')
+    checker.add_argument('--report', type=Path)
+    porter = sub.add_parser('port')
+    porter.add_argument('--to', required=True)
+    porter.add_argument('--from', dest='old')
+    porter.add_argument('--dry', action='store_true')
+    adapter = sub.add_parser('adapt')
+    adapter.add_argument('paths', nargs='+')
+    starter = sub.add_parser('init')
+    starter.add_argument('--reference', required=True)
+    args = parser.parse_args(argv)
+    root = args.root
+    try:
+        if args.command == 'init':
+            require(not (root / SYNC).exists(), SYNC + ' already exists')
+            reference = run(root, 'rev-parse', '--verify', args.reference + '^{commit}').stdout.strip()
+            (root / SYNC).parent.mkdir(parents=True, exist_ok=True)
+            sync = initial_sync(root, reference, worktree_tree(root))
+            save_sync(root, sync)
+            print('wrote ' + SYNC + ': ' + str(len(sync['adapted'])) + ' adapted paths against ' + reference[:9])
+            return 0
+        sync = load_sync(root)
+        if args.command == 'status':
+            issues = compare(root, sync, worktree_tree(root))
+            print('synced to main ' + sync['reference_commit'][:9] + ', ' + str(len(sync['adapted'])) + ' adapted paths')
+            print_issues(issues)
+            print('clean' if not issues else str(len(issues)) + ' to resolve')
+            return 0 if not issues else 1
+        if args.command == 'tidy':
+            reference, line = entries(root, sync['reference_commit']), entries(root, worktree_tree(root))
+            keep = [path for path in sync['adapted'] if reference.get(path) != line.get(path)]
+            print('dropped ' + str(len(sync['adapted']) - len(keep)) + ' entries')
+            sync['adapted'] = keep
+            save_sync(root, sync)
+            return 0
+        if args.command == 'adapt':
+            for path in args.paths:
+                require(not exempt(path), path + ' is exempt and is never listed')
+            sync['adapted'] = sorted(set(sync['adapted']) | set(args.paths))
+            save_sync(root, sync)
+            print('remember the commit trailer: Adapted: <path>: <why>')
+            return 0
+        if args.command == 'port':
+            old = args.old or sync['reference_commit']
+            new = run(root, 'rev-parse', '--verify', args.to + '^{commit}').stdout.strip()
+            result = port(root, old, new, args.dry)
+            for category in PORT_CATEGORIES:
+                print('## ' + category + ': ' + str(len(result[category])))
+                for path in result[category]:
+                    print('    ' + path)
+            if not args.dry:
+                sync['reference_commit'] = new
+                save_sync(root, sync)
+                print('sync point moved to ' + new[:9] + '; now run `lines.py status`')
+            return 0
+        report = check(root, args.base, args.fetch)
+        if args.report:
+            args.report.write_text(json.dumps(report, indent=2, sort_keys=True) + '\n')
+        print('synced to main ' + report['reference_commit'][:9] + '; mechanical ports: ' + str(report['mechanical_ports'])
+              + '; hand-edited: ' + str(len(report['residue'])))
+        for item in report['residue']:
+            print('  residue: ' + item['path'] + ' (' + item['kind'] + ')')
+        print_issues(report['issues'])
+        return 0 if report['passed'] else 1
+    except (Invalid, OSError, ValueError, KeyError) as error:
+        print('lines: ' + str(error), file=sys.stderr)
+        return 1
+
+
+if __name__ == '__main__':
+    sys.exit(main())

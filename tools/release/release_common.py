@@ -186,16 +186,59 @@ def resolve(args):
     return args
 
 
+def unsynced(version, repo=REPO_ROOT, only=None):
+    """{line: reason} for every support line of the release that is not in step with the release
+    commit on main. In step means: the line's recorded sync point and main's tag differ only in
+    line-local paths (docs, per-line config)."""
+    import fnmatch
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'lines'))
+    from lines import EXEMPT
+    rows = release_lines(version, repo, only)
+    _, reference = known_lines(repo)
+    main_tags = [tag for line, tag in rows if line == reference]
+    if not main_tags:
+        return {line: 'the reference line has no tag for ' + version for line, _ in rows}
+    out = {}
+    for line, tag in rows:
+        if line == reference:
+            continue
+        shown = subprocess.run(['git', '-C', str(repo), 'show', tag + ':config/lines/sync.json'],
+                               capture_output=True, text=True)
+        if shown.returncode:
+            out[line] = tag + ' has no config/lines/sync.json'
+            continue
+        synced = json.loads(shown.stdout)['reference_commit']
+        diff = subprocess.run(['git', '-C', str(repo), 'diff', '--name-only', synced, main_tags[0] + '^{commit}'],
+                              capture_output=True, text=True)
+        if diff.returncode:
+            out[line] = 'cannot compare ' + synced[:9] + ' with ' + main_tags[0]
+            continue
+        behind = [path for path in diff.stdout.splitlines()
+                  if not any(fnmatch.fnmatchcase(path, pattern) for pattern in EXEMPT)]
+        if behind:
+            out[line] = ('synced to ' + synced[:9] + ', which differs from ' + main_tags[0] + ' in '
+                         + str(len(behind)) + ' shared path(s), for example ' + behind[0])
+    return out
+
+
 def main():
-    """`release_common.py lines --version V [--lines a,b]` prints "<line> <tag>" rows in push order."""
+    """`release_common.py lines --version V [--lines a,b]` prints "<line> <tag>" rows in push order.
+    `release_common.py synced --version V` exits 1 and names each support line that is not in
+    step with the release commit on main."""
     import argparse
     parser = argparse.ArgumentParser(description=main.__doc__)
-    parser.add_argument('command', choices=['lines'])
+    parser.add_argument('command', choices=['lines', 'synced'])
     parser.add_argument('--version', required=True)
     parser.add_argument('--repo', type=Path, default=REPO_ROOT)
     parser.add_argument('--lines')
     args = parser.parse_args()
     only = set(args.lines.split(',')) if args.lines else None
+    if args.command == 'synced':
+        problems = unsynced(args.version, args.repo, only)
+        for line, reason in sorted(problems.items()):
+            print(line + ': ' + reason)
+        raise SystemExit(1 if problems else 0)
     for line, tag in release_lines(args.version, args.repo, only):
         print(line, tag)
 

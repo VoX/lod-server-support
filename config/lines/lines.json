@@ -1,0 +1,39 @@
+{
+  "schema_version": 2,
+  "reference": "26.3",
+  "must_match": [
+    "common/src/main/java/dev/vox/lss/common/config/",
+    "common/src/main/java/dev/vox/lss/common/dh/",
+    "common/src/main/java/dev/vox/lss/common/processing/",
+    "common/src/main/java/dev/vox/lss/common/store/",
+    "tools/compat/",
+    "tools/lines/",
+    "tools/release/"
+  ],
+  "lines": {
+    "26.3": {
+      "tier": "full",
+      "branch": "main"
+    },
+    "1.21.1": {
+      "tier": "full",
+      "branch": "support/mc1.21.1"
+    },
+    "26.2": {
+      "tier": "maintained",
+      "branch": "support/mc26.2"
+    },
+    "1.21.11": {
+      "tier": "maintained",
+      "branch": "support/mc1.21.11-v0.14"
+    },
+    "26.1": {
+      "tier": "frozen",
+      "branch": "support/mc26.1-v0.14"
+    },
+    "1.21.10": {
+      "tier": "frozen",
+      "branch": "support/mc1.21.10"
+    }
+  }
+}
