@@ -117,14 +117,11 @@ public enum ClientVerdict {
                     // A Distant Horizons server answered and the LOD renderer is still starting.
                     if (dh.activity() == DhStatusSnapshot.Activity.WAITING_VOXY) return WAITING;
                     break;
-                case NEED_TRANSPORT:
-                    // The player runs the Distant Horizons client mod, which shows this server's
-                    // Distant Horizons terrain itself: "nothing is arriving" would be untrue.
-                    if (dh.reason() == DhStatusSnapshot.Reason.CLIENT_MOD_CONFLICT) return SOURCE_NOT_RUNNING;
-                    break;
                 // No Distant Horizons terrain here, or this source cannot run on this client
-                // (it feeds an LOD renderer only): the native answer decides.
-                case NO_SERVICE: break;
+                // (it feeds an LOD renderer only; the player runs the Distant Horizons client
+                // mod): the native answer decides. That answer speaks about this mod only, so
+                // it stays true for a player whose own Distant Horizons mod is showing terrain.
+                case NO_SERVICE: case NEED_TRANSPORT: break;
             }
         }
         if (!s.consumerAvailable()) return nothingShows(s);
