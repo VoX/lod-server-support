@@ -75,7 +75,16 @@ public final class DhClientSession {
     public static void installTransport(Consumer<byte[]> transport, String reason, Reason diagnosticReason) {
         sender = transport; unavailable = reason; transportReason = Objects.requireNonNull(diagnosticReason);
     }
-    public static void installNativeAvailability(BooleanSupplier available) { nativeAvailable = available; }
+    public static void installNativeAvailability(BooleanSupplier available) { nativeAvailable = available; nativeProbeInstalled = true; }
+    private static volatile boolean nativeProbeInstalled;
+    /** Whether the server registered the native handshake channel on this connection. Answers
+     *  "yes" when no loader probe is installed or the probe fails: its one reader turns "no"
+     *  into "this server does not run the mod", which must rest on evidence. */
+    public static boolean nativeChannelPresent() {
+        if (!nativeProbeInstalled) return true;
+        try { return nativeAvailable.getAsBoolean(); }
+        catch (RuntimeException | LinkageError unknown) { return true; }
+    }
     public static void installChannelAvailability(BooleanSupplier available) { channelAvailable = available; }
     private static boolean hasDhChannel() {
         try { return channelAvailable.getAsBoolean(); }

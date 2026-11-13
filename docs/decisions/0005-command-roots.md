@@ -1,7 +1,8 @@
 # 0005 The Voxy Server Side build also answers to the LSS names
 
 Status: accepted 2026-11-13 (VoX approved "both builds accept both names"); narrowed to one
-direction the same day after plan review.
+direction the same day after plan review. Not built yet: scheduled for 0.23.0
+([0.22.0 plan](../planning/2026-11-13-v0.22.0-plan.md) §3).
 
 ## Decision
 

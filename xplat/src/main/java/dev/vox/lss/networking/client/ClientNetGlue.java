@@ -54,6 +54,9 @@ public final class ClientNetGlue {
                 sendClientInfoSidecar();
             },
             ClientNetGlue::createRequestManager);
+    static {
+        sessionGate.installChannelProbe(DhClientSession::nativeChannelPresent);
+    }
 
     /**
      * The ONE capability mask every handshake send declares (map-policy plan A2): the
@@ -109,6 +112,11 @@ public final class ClientNetGlue {
 
     public static int getSessionVersion() {
         return sessionGate.getSessionVersion();
+    }
+
+    /** The protocol number the status shows: the session's, or the one a rejected server sent. */
+    public static int statusProtocol() {
+        return sessionGate.statusProtocol();
     }
 
     public static boolean hasReceivedSessionConfig() {
@@ -517,6 +525,7 @@ public final class ClientNetGlue {
         sessionGate.onJoin(LSSClientConfig.CONFIG.receiveServerLods(), localIntegratedServer,
                 LSSApi.hasVoxelConsumers(), LSSClientConfig.CONFIG.enableV16ServerCompat(),
                 LSSClientConfig.CONFIG.enableV19ServerCompat());
+        ClientNotices.onJoin();
     }
 
     /** DISCONNECT ladder body. Known shared residual (N-3 review, pre-existing and
@@ -574,6 +583,7 @@ public final class ClientNetGlue {
         // main client thread, no-op unless Xaero is present with queued tiles.
         dev.vox.lss.compat.ModCompat.clientTick();
         ClientStatus.tick();
+        ClientNotices.tick();
     }
 
     /** Per-frame body (render thread) — the Xaero bridge's texture-rebuild slice

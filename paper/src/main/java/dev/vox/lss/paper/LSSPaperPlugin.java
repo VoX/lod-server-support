@@ -102,6 +102,18 @@ public class LSSPaperPlugin extends JavaPlugin implements PluginMessageListener,
                                             String playerName, ServiceGateState state,
                                             Runnable deniedWhileRegistered,
                                             Runnable mapPolicyNotice, boolean replay) {
+        return serviceGateFor(bukkitPlayer, uuid, playerName, state, deniedWhileRegistered,
+                mapPolicyNotice, replay, null);
+    }
+
+    /** @param permissionNotice the permission line to the refused player, pump-marshaled
+     *                         (the service claims its once-per-server-start latch there),
+     *                         or null */
+    static PlayerServiceGate serviceGateFor(Player bukkitPlayer, java.util.UUID uuid,
+                                            String playerName, ServiceGateState state,
+                                            Runnable deniedWhileRegistered,
+                                            Runnable mapPolicyNotice, boolean replay,
+                                            Runnable permissionNotice) {
         return new PlayerServiceGate() {
             @Override
             public boolean hasPermission(String node) {
@@ -127,6 +139,7 @@ public class LSSPaperPlugin extends JavaPlugin implements PluginMessageListener,
             public void onServiceDenied(int protocolVersion, int capabilities) {
                 if (state == null) return; // unreachable: the conjunction requires servicePresent
                 state.rememberDenied(uuid, playerName, protocolVersion, capabilities);
+                if (permissionNotice != null) permissionNotice.run();
                 if (deniedWhileRegistered != null) deniedWhileRegistered.run();
             }
 
@@ -575,7 +588,12 @@ public class LSSPaperPlugin extends JavaPlugin implements PluginMessageListener,
                         service == null ? null
                                 : () -> service.enqueueRuntimeTask(
                                         () -> service.noticeMapPolicyRefusal(nmsPlayer)),
-                        replay);
+                        replay,
+                        // The permission line (0.22.0 plan §1): on the pump, like the map
+                        // policy's; the service claims the once-per-server-start latch.
+                        service == null ? null
+                                : () -> service.enqueueRuntimeTask(
+                                        () -> service.noticePermissionRefusal(nmsPlayer, false)));
         handleHandshake(data, nmsPlayer.getName().getString(), nmsPlayer, this.lssConfig, service != null,
                 viaProtocol, net.minecraft.SharedConstants.getProtocolVersion(),
                 serviceGate,

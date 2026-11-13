@@ -836,6 +836,31 @@ class LSSPaperPluginGlueTest {
     }
 
     @Test
+    void aPermissionDenialMarshalsThePlayersLineAndAMapPolicyRefusalDoesNot() {
+        // 0.22.0 plan §1: the permission line is for the permission gate only. The map
+        // policy has its own line; sending both would explain one refusal twice, wrongly.
+        var uuid = UUID.randomUUID();
+        var bukkit = mock(org.bukkit.entity.Player.class);
+        var state = new dev.vox.lss.common.ServiceGateState();
+        var permissionLines = new java.util.concurrent.atomic.AtomicInteger();
+        var mapPolicyLines = new java.util.concurrent.atomic.AtomicInteger();
+        var gate = LSSPaperPlugin.serviceGateFor(bukkit, uuid, "Steve", state, null,
+                mapPolicyLines::incrementAndGet, false, permissionLines::incrementAndGet);
+
+        gate.onServiceDenied(20, 1);
+        assertEquals(1, permissionLines.get(), "a denial marshals the line (the service holds the latch)");
+        assertEquals(0, mapPolicyLines.get());
+        gate.onMapPolicyRefused(20, 1);
+        assertEquals(1, permissionLines.get(), "a map-policy refusal is not a permission refusal");
+        assertEquals(1, mapPolicyLines.get());
+
+        // The seven-argument form (tests, older call sites) sends no permission line.
+        var quiet = LSSPaperPlugin.serviceGateFor(bukkit, UUID.randomUUID(), "Alex", state, null, null, false);
+        quiet.onServiceDenied(20, 1);
+        assertEquals(1, permissionLines.get());
+    }
+
+    @Test
     void aThrowingBukkitPermissibleIsContainedAndServes() {
         // Fail-open doctrine (plan §3): a throwing permission backend answers TRUE with a
         // once-warn — a throw must never escape into handshake silence or a denial.

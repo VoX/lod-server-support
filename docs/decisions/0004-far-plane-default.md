@@ -6,8 +6,8 @@ Corrected the same day: the first version of this record blamed the far plane on
 ## Decision
 
 `far_players.extend_far_plane` defaults to on and takes effect while an LOD renderer (Voxy) is a
-consumer. Without one it does nothing. The client status says how many far players are sent and how
-many are beyond the far plane.
+consumer. Without one it does nothing. The client status says how many far players the server
+sends.
 
 ## Why
 

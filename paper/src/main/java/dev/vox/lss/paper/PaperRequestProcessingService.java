@@ -140,6 +140,37 @@ public class PaperRequestProcessingService {
         this.mapPolicyNoticeSender = sender;
     }
 
+    /** The permission line's send (0.22.0 plan §1, the xplat twin). Seam-injected for tests. */
+    private java.util.function.Consumer<ServerPlayer> permissionNoticeSender =
+            PaperRequestProcessingService::sendPermissionNotice;
+
+    private static void sendPermissionNotice(ServerPlayer player) {
+        player.sendSystemMessage(net.minecraft.network.chat.Component.translatableWithFallback(
+                dev.vox.lss.common.TerrainRefusalNotice.KEY,
+                dev.vox.lss.common.TerrainRefusalNotice.FALLBACK));
+    }
+
+    /** Test seam; {@code null} restores the production send. */
+    public void setPermissionNoticeSenderForTest(java.util.function.Consumer<ServerPlayer> sender) {
+        this.permissionNoticeSender = sender != null ? sender
+                : PaperRequestProcessingService::sendPermissionNotice;
+    }
+
+    /** Tells a player refused for lack of permission why no distant terrain arrives: once per
+     *  server start per player, and again on a revocation. Pump thread (the handshake's denial
+     *  hook marshals here, like the map-policy line). A player the player list no longer holds
+     *  is skipped before claiming, so the line is not spent on a connection that is gone. */
+    public void noticePermissionRefusal(ServerPlayer player, boolean revocation) {
+        var playerList = this.server == null ? null : this.server.getPlayerList();
+        if (playerList != null && playerList.getPlayer(player.getUUID()) != player) return;
+        if (!this.serviceGateState.claimPermissionNotice(player.getUUID(), revocation)) return;
+        try {
+            this.permissionNoticeSender.accept(player);
+        } catch (Exception e) {
+            LSSLogger.warn("Permission notice to " + player.getName().getString() + " failed: " + e);
+        }
+    }
+
     /** The once-per-CONNECTION chat line to a refused player (map-policy plan A3.3, the
      *  xplat twin): claims the gate state's own latch, contained send. Pump thread — the
      *  handshake's refusal hook marshals here (a grant-sweep replay only on a MAP_POLICY
@@ -1132,6 +1163,7 @@ public class PaperRequestProcessingService {
                 gateState.rememberDenied(uuid, player.getName().getString(),
                         LSSConstants.PROTOCOL_VERSION, state.getCapabilities());
                 unregisterForServiceGate(uuid);
+                noticePermissionRefusal(player, true);
                 LSSLogger.info("LOD service revoked for " + player.getName().getString()
                         + ": requireServicePermission is on and a permission recheck found "
                         + "a negative grant on " + dev.vox.lss.common.LSSPermissions.SERVICE_LSS

@@ -20,6 +20,8 @@ public final class ClientStatusText {
     public static List<Message> lines(ClientStatusSnapshot s, long nowMillis) {
         if (s == null) return List.of(text("waiting"));
         var lines = new ArrayList<Message>();
+        // First, the answer: working, or not working and why (ClientVerdict).
+        lines.add(text("verdict." + ClientVerdict.of(s).key()));
         if(s.dh()!=null && s.dh().reason()!=DhStatusSnapshot.Reason.NATIVE_OFFER && s.dh().reason()!=DhStatusSnapshot.Reason.NATIVE_PREFERRED) {
             var d=s.dh();
             lines.add(text("dh.source",d.profile().name(),enumText("dh.state",d.state())));
