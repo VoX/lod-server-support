@@ -68,7 +68,7 @@ server file that says `mode: "required"` loads there only after changing it.
 | --- | --- | --- | --- | --- | --- |
 | service.enabled | boolean | true |  | R | all |
 | service.require_permission | boolean | false |  | H | all |
-| service.show_permission_refusal | boolean | false |  | H | all |
+| service.show_permission_refusal | boolean | true |  | H | all |
 | lod.distance.default_chunks | integer | 512 | 0 sentinel; 1–2048 chunks | H | all |
 | lod.distance.by_dimension | integer_map | {"minecraft:overworld":512,"minecraft:the_nether":64,"minecraft:the_end":512} | 0 sentinel; 1–2048 | H | all |
 | lod.distance.by_world | integer_map | {} | 0 sentinel; 1–2048 | H | paper |
@@ -129,8 +129,8 @@ config_version: 1 # Local settings schema version, independent of the network pr
 service:
   enabled: true # [restart] Enable the server's LOD service.
   require_permission: false # Require both lss.use and vss.use; nodes default to allowed.
-  #show_permission_refusal: true # With require_permission on, tell a player without the permission
-  #   "distant terrain here needs a permission you don't have". Off by default: they see the
+  #show_permission_refusal: false # With require_permission on, a player without the permission
+  #   is told "distant terrain here needs a permission you don't have". false = they see the
   #   general "switched off here". Courtesy, not secrecy: a player can compare with a friend.
   #   To set it, delete the "#" in front of the name. Versions 0.22 and older do not know this
   #   setting, so take the line out again before going back to one.
@@ -316,7 +316,7 @@ far_players:
 | --- | --- | --- | --- | --- | --- |
 | service.enabled | boolean | true |  | R | all |
 | service.require_permission | boolean | false |  | H | all |
-| service.show_permission_refusal | boolean | false |  | H | all |
+| service.show_permission_refusal | boolean | true |  | H | all |
 | lod.distance.default_chunks | integer | 512 | 0 sentinel; 1–2048 chunks | H | all |
 | lod.distance.by_dimension | integer_map | {"minecraft:overworld":512,"minecraft:the_nether":64,"minecraft:the_end":512} | 0 sentinel; 1–2048 | H | all |
 | lod.distance.by_world | integer_map | {} | 0 sentinel; 1–2048 | H | paper |
@@ -377,8 +377,8 @@ config_version: 1 # Local settings schema version, independent of the network pr
 service:
   enabled: true # [restart] Enable the server's LOD service.
   require_permission: false # Require both lss.use and vss.use; nodes default to allowed.
-  #show_permission_refusal: true # With require_permission on, tell a player without the permission
-  #   "distant terrain here needs a permission you don't have". Off by default: they see the
+  #show_permission_refusal: false # With require_permission on, a player without the permission
+  #   is told "distant terrain here needs a permission you don't have". false = they see the
   #   general "switched off here". Courtesy, not secrecy: a player can compare with a friend.
   #   To set it, delete the "#" in front of the name. Versions 0.22 and older do not know this
   #   setting, so take the line out again before going back to one.

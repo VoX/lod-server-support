@@ -1,7 +1,7 @@
 ### New Features
 
 - **Settings mistakes are easy to find** — A settings file with a mistake still switches the mod off, but the mod now lists every mistake with its line number and the name you probably meant. Server admins are told in chat and by `/lsslod`; players by one chat line and `/lss status`.
-- **Says which "switched off"** — When a server on this version has distant terrain off, `/lss status` and the chat notice say whether it is off on the whole server or in this world. Server owners who require a permission can let it say that too, with `service.show_permission_refusal: true`.
+- **Says which "switched off"** — When a server on this version has distant terrain off, `/lss status` and the chat notice say whether it is off on the whole server, in this world, or needs a permission you don't have. Server owners can keep the permission reason to themselves with `service.show_permission_refusal: false`; players then see the general "switched off here".
 - **Says when Voxy is not drawing** — `/lss status` no longer says "Working" when Voxy has switched itself off because it cannot run on your computer's graphics, or is switched off in Voxy's own settings.
 - **`/lss` on Voxy Server Side** — The Voxy Server Side client now also answers to `/lss`, so instructions written for either build work.
 
