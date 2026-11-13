@@ -11,7 +11,7 @@ public record ClientStatusSnapshot(int schemaVersion, long lifecycle, long captu
         int ingestBacklog, long ingestFailures, int rateCap, long rateGatedTicks,
         int xaeroPendingRebuilds, Discovery discovery, Availability xaeroAvailability, ClientDiagnosticSnapshot details, DiagnosticVersions versions, ClientSettingsStatus settings, DhStatusSnapshot dh,
         Availability journeyMapAvailability, int journeyMapPending, int farPlayersFromServer,
-        boolean mapOnly) {
+        boolean mapOnly, int serverOffReason) {
     /** 4: settings.mapIngestionEnabled (was xaeroMapEnabled) and the JourneyMap fields.
      *  5: {@link Availability#SERVER_BLOCKED} (the server's map-ingestion request,
      *  map-policy plan A4).
@@ -21,6 +21,24 @@ public record ClientStatusSnapshot(int schemaVersion, long lifecycle, long captu
      *  anything else means a missing far player is a client drawing question (fog, the
      *  draw range). A count only; never names or positions. */
     public static final int SCHEMA_VERSION = 6;
+    /** Callers with no reason from the server for an answer that says "not here"
+     *  ({@code serverOffReason}: one {@code SESSION_FLAG_OFF_*} bit or 0, read by
+     *  {@link ClientVerdict} alone; 0.23.0 plan §3). */
+    public ClientStatusSnapshot(int schemaVersion, long lifecycle, long capturedAtMillis,
+            boolean connected, boolean negotiated, boolean receptionEnabled, boolean serverEnabled,
+            boolean consumerAvailable, boolean rendererAvailable, int protocol, int serverDistance,
+            int effectiveDistance, long receivedColumns, long receivedBytes, int queuedColumns,
+            int ingestBacklog, long ingestFailures, int rateCap, long rateGatedTicks,
+            int xaeroPendingRebuilds, Discovery discovery, Availability xaeroAvailability,
+            ClientDiagnosticSnapshot details, DiagnosticVersions versions, ClientSettingsStatus settings,
+            DhStatusSnapshot dh, Availability journeyMapAvailability, int journeyMapPending,
+            int farPlayersFromServer, boolean mapOnly) {
+        this(schemaVersion,lifecycle,capturedAtMillis,connected,negotiated,receptionEnabled,serverEnabled,
+                consumerAvailable,rendererAvailable,protocol,serverDistance,effectiveDistance,receivedColumns,
+                receivedBytes,queuedColumns,ingestBacklog,ingestFailures,rateCap,rateGatedTicks,xaeroPendingRebuilds,
+                discovery,xaeroAvailability,details,versions,settings,dh,journeyMapAvailability,journeyMapPending,
+                farPlayersFromServer,mapOnly,0);
+    }
     /** Callers that do not say whether the map mods are this client's only consumers
      *  ({@code mapOnly}, read by {@link ClientVerdict} alone and not exported). */
     public ClientStatusSnapshot(int schemaVersion, long lifecycle, long capturedAtMillis,

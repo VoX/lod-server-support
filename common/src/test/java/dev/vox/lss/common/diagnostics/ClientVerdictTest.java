@@ -54,6 +54,43 @@ class ClientVerdictTest {
                 dh(state, Reason.NONE, activity)));
     }
 
+    // ---- 0.23.0 plan §3: which "switched off" it is ----
+
+    private static ClientStatusSnapshot answered(boolean enabled, int reason) {
+        return new ClientStatusSnapshot(ClientStatusSnapshot.SCHEMA_VERSION, 1, 0, true, true, true,
+                enabled, true, true, V, 512, 0, 0, 0, 0, -1, 0, 0, 0, 0, Discovery.NEGOTIATED, Availability.UNKNOWN, null,
+                DiagnosticVersions.unknown(), null, null, Availability.UNKNOWN, 0, 0, false, reason);
+    }
+
+    @Test
+    void theServersReasonPicksTheSentenceAndNoReasonKeepsTheOldOne() {
+        assertEquals(ClientVerdict.SERVER_OFF, ClientVerdict.of(answered(false, 0)),
+                "not said: an older server, or a private reason");
+        assertEquals(ClientVerdict.SERVER_OFF_EVERYONE, ClientVerdict.of(answered(false, LSSConstants.SESSION_FLAG_OFF_SERVER)));
+        assertEquals(ClientVerdict.SERVER_OFF_WORLD, ClientVerdict.of(answered(false, LSSConstants.SESSION_FLAG_OFF_WORLD)));
+        assertEquals(ClientVerdict.SERVER_OFF_PERMISSION, ClientVerdict.of(answered(false, LSSConstants.SESSION_FLAG_OFF_PERMISSION)));
+        assertEquals(ClientVerdict.SERVER_OFF, ClientVerdict.of(answered(false, 0x40)), "an unknown bit is not a reason");
+        // A reason never turns a working session into a refusal.
+        assertEquals(ClientVerdict.WORKING, ClientVerdict.of(answered(true, LSSConstants.SESSION_FLAG_OFF_SERVER)));
+        for (ClientVerdict verdict : ClientVerdict.values())
+            assertEquals(verdict.name().startsWith("SERVER_OFF"), verdict.serverOff(), verdict.name());
+    }
+
+    @Test
+    void theFourServerOffAnswersShareOneNoticeCounter() {
+        Caps caps = Caps.NONE;
+        for (ClientVerdict verdict : List.of(ClientVerdict.SERVER_OFF_WORLD, ClientVerdict.SERVER_OFF_PERMISSION,
+                ClientVerdict.SERVER_OFF_EVERYONE)) {
+            assertTrue(caps.allows(verdict), verdict.name());
+            assertTrue(ClientNoticePolicy.announces(verdict), verdict.name());
+            caps = caps.after(verdict);
+        }
+        assertEquals(new Caps(0, false, 3, 0), caps);
+        for (ClientVerdict verdict : ClientVerdict.values())
+            if (verdict.serverOff()) assertFalse(caps.allows(verdict), "three in all, whatever the reason: " + verdict);
+        assertTrue(caps.allows(ClientVerdict.NO_SUPPORT), "another kind is unaffected");
+    }
+
     // ---- 0.23.0 plan §1: a settings file that did not load ----
 
     private static ClientSettingsStatus settings(boolean loaded) {

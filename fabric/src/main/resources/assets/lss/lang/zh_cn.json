@@ -197,6 +197,9 @@
   "lss.status.verdict.version_mismatch": "未工作：此服务器运行的本模组版本与您的不同。请更新较旧的一方。",
   "lss.status.verdict.server_outdated": "未工作：此服务器运行的本模组版本比您的旧，只有服务器能更新。",
   "lss.status.verdict.client_outdated": "未工作：您的本模组版本对此服务器来说太旧。请更新模组。",
+  "lss.status.verdict.server_off_everyone": "未工作：此服务器已关闭远处地形。",
+  "lss.status.verdict.server_off_world": "未工作：此服务器在这个世界关闭了远处地形。",
+  "lss.status.verdict.server_off_permission": "未工作：这里的远处地形需要一项您没有的权限。",
   "lss.status.verdict.server_off": "未工作：服务器在此处关闭了远处地形：对所有人、对这个世界，或对您。",
   "lss.status.verdict.nothing_to_show": "未工作：这里没有可以显示远处地形的模组。请安装 Voxy 等 LOD 模组，或 Xaero's World Map、JourneyMap 等地图模组。",
   "lss.status.verdict.renderer_not_connected": "无法配合 Voxy 工作：本模组无法连接到您的 Voxy。请更新这两个模组。",
@@ -215,5 +218,8 @@
   "lss.notice.version_mismatch": "此服务器运行的本模组版本与您的不同，因此您收不到远处地形。请更新较旧的一方。",
   "lss.notice.server_outdated": "此服务器运行的本模组版本比您的旧，因此您收不到远处地形。只有服务器能更新。",
   "lss.notice.client_outdated": "您的本模组版本对此服务器来说太旧，因此收不到远处地形。更新模组即可解决。",
+  "lss.notice.server_off_everyone": "此服务器已关闭远处地形。您的游戏没有问题。",
+  "lss.notice.server_off_world": "此服务器在这个世界关闭了远处地形。您的游戏没有问题。",
+  "lss.notice.server_off_permission": "这里的远处地形需要一项您没有的权限。您的游戏没有问题。",
   "lss.notice.server_off": "服务器在此处关闭了远处地形：对所有人、对这个世界，或对您。您的游戏没有问题。"
 }

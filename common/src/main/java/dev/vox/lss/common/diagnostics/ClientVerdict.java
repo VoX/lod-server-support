@@ -32,8 +32,16 @@ public enum ClientVerdict {
     CLIENT_OUTDATED,
     /** The server speaks an older protocol: only the server can fix it. */
     SERVER_OUTDATED,
-    /** The server answered "not for you here": off for everyone, for this world, or for this player. */
+    /** The server answered "not for you here" and did not say why (an older server, or an
+     *  operator who keeps the permission reason private): off for everyone, for this world, or
+     *  for this player. */
     SERVER_OFF,
+    /** The server said its service is switched off (0.23.0 plan §3). */
+    SERVER_OFF_EVERYONE,
+    /** The server said this world's distance is 0. */
+    SERVER_OFF_WORLD,
+    /** The server said it requires a permission this player does not hold. */
+    SERVER_OFF_PERMISSION,
     /** No LOD renderer and no map mod: nothing can show what would be downloaded. */
     NOTHING_TO_SHOW,
     /** An LOD renderer is installed and the bridge to it did not start (its internals changed):
@@ -93,6 +101,22 @@ public enum ClientVerdict {
                 && s.xaeroAvailability() != available && s.journeyMapAvailability() != available;
     }
 
+    /** Which "switched off" it is, from the one reason bit the server sent; none = not said. */
+    private static ClientVerdict serverOff(int reason) {
+        return switch (reason) {
+            case dev.vox.lss.common.LSSConstants.SESSION_FLAG_OFF_SERVER -> SERVER_OFF_EVERYONE;
+            case dev.vox.lss.common.LSSConstants.SESSION_FLAG_OFF_WORLD -> SERVER_OFF_WORLD;
+            case dev.vox.lss.common.LSSConstants.SESSION_FLAG_OFF_PERMISSION -> SERVER_OFF_PERMISSION;
+            default -> SERVER_OFF;
+        };
+    }
+
+    /** Whether this is one of the four "the server says not here" answers (one notice counter). */
+    public boolean serverOff() {
+        return this == SERVER_OFF || this == SERVER_OFF_EVERYONE || this == SERVER_OFF_WORLD
+                || this == SERVER_OFF_PERMISSION;
+    }
+
     /** Whether this is one of the three "the two sides speak different versions" answers. */
     public boolean versionMismatch() {
         return this == VERSION_MISMATCH || this == CLIENT_OUTDATED || this == SERVER_OUTDATED;
@@ -148,7 +172,7 @@ public enum ClientVerdict {
                     ? CLIENT_OUTDATED
                     : s.protocol() > 0 && s.protocol() < dev.vox.lss.common.LSSConstants.PROTOCOL_VERSION
                             ? SERVER_OUTDATED : VERSION_MISMATCH;
-            case NEGOTIATED -> !s.serverEnabled() ? SERVER_OFF
+            case NEGOTIATED -> !s.serverEnabled() ? serverOff(s.serverOffReason())
                     // Terrain reaches the maps, but the LOD renderer the player installed gets none.
                     : s.mapOnly() && rendererInstalled(s) ? RENDERER_NOT_CONNECTED
                     : s.mapOnly() && mapsBlocked(s) ? MAPS_BLOCKED : WORKING;

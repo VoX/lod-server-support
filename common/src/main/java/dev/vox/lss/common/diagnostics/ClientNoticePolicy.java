@@ -32,6 +32,11 @@ public final class ClientNoticePolicy {
                 return new Caps(this.noSupportShown, this.nothingToShowShown, this.serverOffShown,
                         this.versionMismatchShown + 1);
             }
+            // The four "the server says not here" answers are one kind of notice (0.23.0 §3).
+            if (verdict.serverOff()) {
+                return new Caps(this.noSupportShown, this.nothingToShowShown, this.serverOffShown + 1,
+                        this.versionMismatchShown);
+            }
             return switch (verdict) {
                 case NO_SUPPORT -> new Caps(this.noSupportShown + 1, this.nothingToShowShown,
                         this.serverOffShown, this.versionMismatchShown);
@@ -39,8 +44,6 @@ public final class ClientNoticePolicy {
                 // you have for that is not connected" are the same once-ever nudge.
                 case NOTHING_TO_SHOW, RENDERER_NOT_CONNECTED, MAP_NOT_CONNECTED -> new Caps(
                         this.noSupportShown, true, this.serverOffShown, this.versionMismatchShown);
-                case SERVER_OFF -> new Caps(this.noSupportShown, this.nothingToShowShown,
-                        this.serverOffShown + 1, this.versionMismatchShown);
                 default -> this;
             };
         }
@@ -48,10 +51,10 @@ public final class ClientNoticePolicy {
         /** Whether {@code verdict} may still be announced. */
         public boolean allows(ClientVerdict verdict) {
             if (verdict.versionMismatch()) return this.versionMismatchShown < LIFETIME_CAP;
+            if (verdict.serverOff()) return this.serverOffShown < LIFETIME_CAP;
             return switch (verdict) {
                 case NO_SUPPORT -> this.noSupportShown < LIFETIME_CAP;
                 case NOTHING_TO_SHOW, RENDERER_NOT_CONNECTED, MAP_NOT_CONNECTED -> !this.nothingToShowShown;
-                case SERVER_OFF -> this.serverOffShown < LIFETIME_CAP;
                 // Working, waiting, local, the player's own choice, and a silent server (which
                 // may be a proxy or a busy link) are never announced.
                 default -> false;
@@ -106,7 +109,7 @@ public final class ClientNoticePolicy {
     private static boolean announceable(ClientVerdict verdict) {
         return verdict == ClientVerdict.NO_SUPPORT || verdict == ClientVerdict.NOTHING_TO_SHOW
                 || verdict == ClientVerdict.RENDERER_NOT_CONNECTED || verdict == ClientVerdict.MAP_NOT_CONNECTED
-                || verdict == ClientVerdict.SERVER_OFF || verdict.versionMismatch()
+                || verdict.serverOff() || verdict.versionMismatch()
                 || verdict == ClientVerdict.SETTINGS_BROKEN;
     }
 }

@@ -107,7 +107,8 @@ public final class ClientStatus {
                     dev.vox.lss.compat.DhVoxyBridge.backlog(), 0, cfg.lodColumnsPerSecondLimit(), 0,
                     xaero.pendingRebuilds(), ClientNetGlue.discoveryStatus(), availability, null,
                     dev.vox.lss.platform.LoaderServices.get().diagnosticVersions(), cfg.diagnosticSettings(),
-                    DhClientSession.diagnostics(), journeyMapAvailability, 0));
+                    DhClientSession.diagnostics(), journeyMapAvailability, 0, 0, false,
+                    ClientNetGlue.serverOffReason()));
             return;
         }
         var snapshot = new ClientStatusSnapshot(ClientStatusSnapshot.SCHEMA_VERSION, lifecycle, System.currentTimeMillis(),
@@ -130,7 +131,9 @@ public final class ClientStatus {
                 FarPlayerClientSupport.tracker().trackedCount(),
                 // The map mods are the only consumers: with the server's map request armed,
                 // nothing here can show the terrain (the verdict says so).
-                dev.vox.lss.compat.ModCompat.isMapOnlyIngestion());
+                dev.vox.lss.compat.ModCompat.isMapOnlyIngestion(),
+                // Which "switched off" the server's answer was, when the server said.
+                ClientNetGlue.serverOffReason());
         lastRateGated = rateGated;
         CACHE.publish(lifecycle, snapshot);
     }

@@ -98,6 +98,11 @@ public final class ClientNetGlue {
         return sessionGate.isServerEnabled();
     }
 
+    /** Why the server answered "not here", as one {@code SESSION_FLAG_OFF_*} bit; 0 = not said. */
+    public static int serverOffReason() {
+        return sessionGate.serverOffReason();
+    }
+
     /** Whether the connected server allows LOD map ingestion (map-policy plan A4): the map
      *  backends' write gate ({@code serverAllowsWrites}), the status availability and the
      *  options tooltip. True with no connection and on every server without the policy. */

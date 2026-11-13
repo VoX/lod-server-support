@@ -197,6 +197,9 @@
   "lss.status.verdict.version_mismatch": "Not working: this server runs a different version of this mod. Update whichever is older.",
   "lss.status.verdict.server_outdated": "Not working: this server runs an older version of this mod. Only the server can update it.",
   "lss.status.verdict.client_outdated": "Not working: your version of this mod is too old for this server. Update the mod.",
+  "lss.status.verdict.server_off_everyone": "Not working: distant terrain is switched off on this server.",
+  "lss.status.verdict.server_off_world": "Not working: distant terrain is switched off in this world on this server.",
+  "lss.status.verdict.server_off_permission": "Not working: distant terrain here needs a permission you don't have.",
   "lss.status.verdict.server_off": "Not working: the server has distant terrain switched off here: for everyone, for this world, or for you.",
   "lss.status.verdict.nothing_to_show": "Not working: nothing here can show distant terrain. Add an LOD mod such as Voxy, or a map mod such as Xaero's World Map or JourneyMap.",
   "lss.status.verdict.renderer_not_connected": "Not working with Voxy: this mod could not connect to your Voxy. Update both mods.",
@@ -215,5 +218,8 @@
   "lss.notice.version_mismatch": "This server runs a different version of this mod, so you get no distant terrain. Update whichever is older.",
   "lss.notice.server_outdated": "This server runs an older version of this mod, so you get no distant terrain. Only the server can update it.",
   "lss.notice.client_outdated": "Your version of this mod is too old for this server, so you get no distant terrain. Update the mod to fix it.",
+  "lss.notice.server_off_everyone": "Distant terrain is switched off on this server. Nothing is wrong with your game.",
+  "lss.notice.server_off_world": "Distant terrain is switched off in this world on this server. Nothing is wrong with your game.",
+  "lss.notice.server_off_permission": "Distant terrain here needs a permission you don't have. Nothing is wrong with your game.",
   "lss.notice.server_off": "The server has distant terrain switched off here: for everyone, for this world, or for you. Nothing is wrong with your game."
 }
