@@ -97,6 +97,10 @@ public final class ClientStatus {
         var journeyMap = dev.vox.lss.compat.ModCompat.cachedJourneyMapStatus();
         var journeyMapAvailability = mapAvailability(journeyMap.failed(), journeyMap.resolution(),
                 cfg.mapIngestionEnabled(), serverAllowsMaps);
+        // What the LOD renderer says about itself. Only in a world: before that it has not
+        // decided, and its answer would read as "cannot run here".
+        var renderer = mc.level != null ? dev.vox.lss.compat.ModCompat.voxyDrawState()
+                : ClientStatusSnapshot.Renderer.UNKNOWN;
         if (DhClientSession.selected()) {
             // DH mode: native fields describe the (idle) native path truthfully; DH
             // acquisition lives in the dh block. Nothing is faked.
@@ -108,7 +112,7 @@ public final class ClientStatus {
                     xaero.pendingRebuilds(), ClientNetGlue.discoveryStatus(), availability, null,
                     dev.vox.lss.platform.LoaderServices.get().diagnosticVersions(), cfg.diagnosticSettings(),
                     DhClientSession.diagnostics(), journeyMapAvailability, 0, 0, false,
-                    ClientNetGlue.serverOffReason()));
+                    ClientNetGlue.serverOffReason(), renderer));
             return;
         }
         var snapshot = new ClientStatusSnapshot(ClientStatusSnapshot.SCHEMA_VERSION, lifecycle, System.currentTimeMillis(),
@@ -133,7 +137,7 @@ public final class ClientStatus {
                 // nothing here can show the terrain (the verdict says so).
                 dev.vox.lss.compat.ModCompat.isMapOnlyIngestion(),
                 // Which "switched off" the server's answer was, when the server said.
-                ClientNetGlue.serverOffReason());
+                ClientNetGlue.serverOffReason(), renderer);
         lastRateGated = rateGated;
         CACHE.publish(lifecycle, snapshot);
     }

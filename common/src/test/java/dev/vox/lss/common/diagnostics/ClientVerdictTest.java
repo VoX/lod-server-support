@@ -242,6 +242,109 @@ class ClientVerdictTest {
                 discovery, Availability.UNKNOWN, null, versions, null, null);
     }
 
+    // ---- the LOD renderer's own answer (0.23.0 plan §6) ----
+
+    private static ClientStatusSnapshot voxy(ClientStatusSnapshot.Renderer renderer, String voxyVersion,
+                                             Discovery discovery, boolean serverEnabled, boolean receiving,
+                                             boolean consumer, boolean mapOnly, DhStatusSnapshot dh) {
+        var versions = new DiagnosticVersions(Map.of(DiagnosticVersions.Component.VOXY, voxyVersion));
+        return new ClientStatusSnapshot(ClientStatusSnapshot.SCHEMA_VERSION, 1, 0, true,
+                discovery == Discovery.NEGOTIATED, receiving, serverEnabled, consumer, true, V, 512, 0, 0, 0, 0,
+                -1, 0, 0, 0, 0, discovery, mapOnly ? Availability.AVAILABLE : Availability.ABSENT, null, versions,
+                null, dh, Availability.ABSENT, 0, 0, mapOnly, 0, renderer);
+    }
+
+    private static ClientVerdict voxyVerdict(ClientStatusSnapshot.Renderer renderer) {
+        return ClientVerdict.of(voxy(renderer, "0.2.20-beta", Discovery.NEGOTIATED, true, true, true, false, null));
+    }
+
+    @Test
+    void aVoxyThatSaysItIsNotDrawingIsNotCalledWorking() {
+        var unsupported = ClientStatusSnapshot.Renderer.UNSUPPORTED;
+        var off = ClientStatusSnapshot.Renderer.SWITCHED_OFF;
+        assertEquals(ClientVerdict.RENDERER_UNSUPPORTED, voxyVerdict(unsupported));
+        assertEquals(ClientVerdict.RENDERER_OFF, voxyVerdict(off));
+        // No answer, or "drawing": nothing changes. Unknown is never a guess.
+        assertEquals(ClientVerdict.WORKING, voxyVerdict(ClientStatusSnapshot.Renderer.READY));
+        assertEquals(ClientVerdict.WORKING, voxyVerdict(ClientStatusSnapshot.Renderer.UNKNOWN));
+        assertEquals(ClientVerdict.WORKING, ClientVerdict.of(new ClientStatusSnapshot(
+                ClientStatusSnapshot.SCHEMA_VERSION, 1, 0, true, true, true, true, true, true, V, 512, 0, 0, 0, 0,
+                -1, 0, 0, 0, 0, Discovery.NEGOTIATED, Availability.ABSENT, null,
+                new DiagnosticVersions(Map.of(DiagnosticVersions.Component.VOXY, "0.2.20-beta")), null, null,
+                Availability.ABSENT, 0, 0, false, 0, null)), "a caller that passes no answer");
+        // The answer belongs to an installed renderer only.
+        for (String version : new String[]{"absent", "unknown"}) {
+            assertEquals(ClientVerdict.WORKING, ClientVerdict.of(
+                    voxy(unsupported, version, Discovery.NEGOTIATED, true, true, true, false, null)), version);
+        }
+        // Terrain still reaches a map: the Voxy the player installed draws none, so not "Working".
+        assertEquals(ClientVerdict.RENDERER_UNSUPPORTED, ClientVerdict.of(
+                voxy(unsupported, "0.2.20-beta", Discovery.NEGOTIATED, true, true, true, true, null)));
+        assertEquals(ClientVerdict.RENDERER_OFF, ClientVerdict.of(
+                voxy(off, "0.2.20-beta", Discovery.NEGOTIATED, true, true, true, true, null)));
+    }
+
+    @Test
+    void aCauseOnTheServerOrAPlayersSwitchIsNamedBeforeTheRenderer() {
+        var unsupported = ClientStatusSnapshot.Renderer.UNSUPPORTED;
+        assertEquals(ClientVerdict.NO_SUPPORT, ClientVerdict.of(
+                voxy(unsupported, "0.2.20-beta", Discovery.NO_CHANNEL, false, true, true, false, null)));
+        assertEquals(ClientVerdict.NO_ANSWER, ClientVerdict.of(
+                voxy(unsupported, "0.2.20-beta", Discovery.NO_ANSWER, false, true, true, false, null)));
+        assertEquals(ClientVerdict.SERVER_OFF, ClientVerdict.of(
+                voxy(unsupported, "0.2.20-beta", Discovery.NEGOTIATED, false, true, true, false, null)));
+        assertEquals(ClientVerdict.WAITING, ClientVerdict.of(
+                voxy(unsupported, "0.2.20-beta", Discovery.AWAITING_NEGOTIATION, false, true, true, false, null)));
+        assertEquals(ClientVerdict.RECEIVING_OFF, ClientVerdict.of(
+                voxy(unsupported, "0.2.20-beta", Discovery.NEGOTIATED, true, false, true, false, null)));
+    }
+
+    @Test
+    void aVoxyThatSaysWhyItIsIdleBeatsCouldNotConnect() {
+        var unsupported = ClientStatusSnapshot.Renderer.UNSUPPORTED;
+        // The bridge did not start and nothing else shows terrain.
+        assertEquals(ClientVerdict.RENDERER_UNSUPPORTED, ClientVerdict.of(
+                voxy(unsupported, "0.2.20-beta", Discovery.NEGOTIATED, true, true, false, false, null)));
+        assertEquals(ClientVerdict.RENDERER_NOT_CONNECTED, ClientVerdict.of(
+                voxy(ClientStatusSnapshot.Renderer.UNKNOWN, "0.2.20-beta", Discovery.NEGOTIATED, true, true, false, false, null)));
+        // The bridge did not start and the maps fill.
+        assertEquals(ClientVerdict.RENDERER_OFF, ClientVerdict.of(voxy(ClientStatusSnapshot.Renderer.SWITCHED_OFF,
+                "0.2.20-beta", Discovery.NEGOTIATED, true, true, true, true, null)));
+    }
+
+    @Test
+    void theDistantHorizonsSourceAsksTheRendererToo() {
+        // That source feeds the LOD renderer only. "Ready" with a renderer that cannot draw is
+        // not working, and "waiting for the renderer" would otherwise wait for ever.
+        var unsupported = ClientStatusSnapshot.Renderer.UNSUPPORTED;
+        var off = ClientStatusSnapshot.Renderer.SWITCHED_OFF;
+        var ready = dh(State.READY, Reason.NONE, Activity.IDLE);
+        var needVoxy = dh(State.NEED_VOXY, Reason.NONE, Activity.WAITING_VOXY);
+        assertEquals(ClientVerdict.RENDERER_UNSUPPORTED, ClientVerdict.of(
+                voxy(unsupported, "0.2.20-beta", Discovery.NO_CHANNEL, false, true, true, false, ready)));
+        assertEquals(ClientVerdict.RENDERER_OFF, ClientVerdict.of(
+                voxy(off, "0.2.20-beta", Discovery.NO_CHANNEL, false, true, true, false, needVoxy)));
+        assertEquals(ClientVerdict.WORKING_DH, ClientVerdict.of(voxy(ClientStatusSnapshot.Renderer.READY,
+                "0.2.20-beta", Discovery.NO_CHANNEL, false, true, true, false, ready)));
+        assertEquals(ClientVerdict.WAITING, ClientVerdict.of(voxy(ClientStatusSnapshot.Renderer.UNKNOWN,
+                "0.2.20-beta", Discovery.NO_CHANNEL, false, true, true, false, needVoxy)));
+    }
+
+    @Test
+    void onlyTheRendererThatCannotRunIsSaidInChat() {
+        // "Cannot run here" is the same once-ever nudge as "nothing to show".
+        assertTrue(ClientNoticePolicy.announces(ClientVerdict.RENDERER_UNSUPPORTED));
+        assertTrue(Caps.NONE.allows(ClientVerdict.RENDERER_UNSUPPORTED));
+        assertFalse(Caps.NONE.after(ClientVerdict.RENDERER_UNSUPPORTED).allows(ClientVerdict.NOTHING_TO_SHOW));
+        assertFalse(Caps.NONE.after(ClientVerdict.NOTHING_TO_SHOW).allows(ClientVerdict.RENDERER_UNSUPPORTED));
+        assertEquals(Caps.NONE.after(ClientVerdict.NOTHING_TO_SHOW), Caps.NONE.after(ClientVerdict.RENDERER_UNSUPPORTED));
+        // Switched off in the renderer's own settings is the player's choice: never announced.
+        assertFalse(ClientNoticePolicy.announces(ClientVerdict.RENDERER_OFF));
+        assertFalse(Caps.NONE.allows(ClientVerdict.RENDERER_OFF));
+        assertEquals(Caps.NONE, Caps.NONE.after(ClientVerdict.RENDERER_OFF));
+        assertFalse(ClientVerdict.RENDERER_UNSUPPORTED.working() || ClientVerdict.RENDERER_OFF.working());
+    }
+
     @Test
     void aPlayerWhoHasAMapModIsNotToldToAddOne() {
         // No consumer and no Voxy. The map mod is installed: say what is in the way.

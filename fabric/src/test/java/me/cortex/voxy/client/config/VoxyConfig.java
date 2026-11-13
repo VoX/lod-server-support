@@ -15,6 +15,14 @@ public class VoxyConfig {
     /** Default 0 maps to a 0-chunk distance, which the scanner's min-ladder ignores (voxy>0 only). */
     public float sectionRenderDistance = 0f;
 
+    /** Voxy's two switches and its own answer to "am I drawing?", as VoxyCompat.drawState reads it. */
+    public boolean enabled = true;
+    public boolean enableRendering = true;
+
+    public boolean isRenderingEnabled() {
+        return me.cortex.voxy.commonImpl.VoxyCommon.isAvailable() && this.enabled && this.enableRendering;
+    }
+
     public static void reset() {
         CONFIG = new VoxyConfig();
     }

@@ -40,9 +40,10 @@ public final class ClientNoticePolicy {
             return switch (verdict) {
                 case NO_SUPPORT -> new Caps(this.noSupportShown + 1, this.nothingToShowShown,
                         this.serverOffShown, this.versionMismatchShown);
-                // One count for the three: "add something that shows terrain" and "the mod
-                // you have for that is not connected" are the same once-ever nudge.
-                case NOTHING_TO_SHOW, RENDERER_NOT_CONNECTED, MAP_NOT_CONNECTED -> new Caps(
+                // One count for the four: "add something that shows terrain", "the mod you
+                // have for that is not connected" and "the mod you have for that cannot run
+                // here" are the same once-ever nudge.
+                case NOTHING_TO_SHOW, RENDERER_NOT_CONNECTED, MAP_NOT_CONNECTED, RENDERER_UNSUPPORTED -> new Caps(
                         this.noSupportShown, true, this.serverOffShown, this.versionMismatchShown);
                 default -> this;
             };
@@ -54,7 +55,8 @@ public final class ClientNoticePolicy {
             if (verdict.serverOff()) return this.serverOffShown < LIFETIME_CAP;
             return switch (verdict) {
                 case NO_SUPPORT -> this.noSupportShown < LIFETIME_CAP;
-                case NOTHING_TO_SHOW, RENDERER_NOT_CONNECTED, MAP_NOT_CONNECTED -> !this.nothingToShowShown;
+                case NOTHING_TO_SHOW, RENDERER_NOT_CONNECTED, MAP_NOT_CONNECTED, RENDERER_UNSUPPORTED ->
+                        !this.nothingToShowShown;
                 // Working, waiting, local, the player's own choice, and a silent server (which
                 // may be a proxy or a busy link) are never announced.
                 default -> false;
@@ -109,6 +111,7 @@ public final class ClientNoticePolicy {
     private static boolean announceable(ClientVerdict verdict) {
         return verdict == ClientVerdict.NO_SUPPORT || verdict == ClientVerdict.NOTHING_TO_SHOW
                 || verdict == ClientVerdict.RENDERER_NOT_CONNECTED || verdict == ClientVerdict.MAP_NOT_CONNECTED
+                || verdict == ClientVerdict.RENDERER_UNSUPPORTED
                 || verdict.serverOff() || verdict.versionMismatch()
                 || verdict == ClientVerdict.SETTINGS_BROKEN;
     }

@@ -47,6 +47,12 @@ public enum ClientVerdict {
     /** An LOD renderer is installed and the bridge to it did not start (its internals changed):
      *  the player has the mod the "nothing to show" advice names, so that advice would be wrong. */
     RENDERER_NOT_CONNECTED,
+    /** The LOD renderer is installed and says it cannot run on this computer (0.23.0 plan §6):
+     *  it draws nothing, so "working" would be the worst answer. */
+    RENDERER_UNSUPPORTED,
+    /** The LOD renderer, or its drawing, is switched off in its own settings. The player's own
+     *  choice: never announced. */
+    RENDERER_OFF,
     /** A map mod is installed and the bridge to it did not start, and nothing else here can
      *  show the terrain. */
     MAP_NOT_CONNECTED,
@@ -78,9 +84,21 @@ public enum ClientVerdict {
         return voxy != null && !voxy.equals("absent") && !voxy.equals("unknown");
     }
 
+    /** {@code otherwise}, unless the installed LOD renderer itself says it is not drawing. Only
+     *  asked where everything else is in order, so a server-side cause is always named first. */
+    private static ClientVerdict unlessRendererIdle(ClientStatusSnapshot s, ClientVerdict otherwise) {
+        if (!rendererInstalled(s)) return otherwise;
+        return switch (s.renderer()) {
+            case UNSUPPORTED -> RENDERER_UNSUPPORTED;
+            case SWITCHED_OFF -> RENDERER_OFF;
+            case UNKNOWN, READY -> otherwise;
+        };
+    }
+
     /** Why nothing on this client can show the terrain: the nearest fix first. */
     private static ClientVerdict nothingShows(ClientStatusSnapshot s) {
-        if (rendererInstalled(s)) return RENDERER_NOT_CONNECTED;
+        // A renderer that says why it is idle is a better answer than "could not connect".
+        if (rendererInstalled(s)) return unlessRendererIdle(s, RENDERER_NOT_CONNECTED);
         var xaero = s.xaeroAvailability();
         var journeyMap = s.journeyMapAvailability();
         var off = ClientStatusSnapshot.Availability.DISABLED;
@@ -140,12 +158,13 @@ public enum ClientVerdict {
                 && dh.reason() != DhStatusSnapshot.Reason.NATIVE_PREFERRED;
         if (dhSource) {
             switch (dh.state()) {
-                case READY: return WORKING_DH;
+                case READY: return unlessRendererIdle(s, WORKING_DH);
                 case CONNECTING: case BETWEEN_SESSIONS: case PAUSED: return WAITING;
                 case BLOCKED: case STOPPED: return SOURCE_NOT_RUNNING;
                 case NEED_VOXY:
                     // A Distant Horizons server answered and the LOD renderer is still starting.
-                    if (dh.activity() == DhStatusSnapshot.Activity.WAITING_VOXY) return WAITING;
+                    // ...or will never start: it says so itself.
+                    if (dh.activity() == DhStatusSnapshot.Activity.WAITING_VOXY) return unlessRendererIdle(s, WAITING);
                     break;
                 // No Distant Horizons terrain here, or this source cannot run on this client
                 // (it feeds an LOD renderer only; the player runs the Distant Horizons client
@@ -174,8 +193,10 @@ public enum ClientVerdict {
                             ? SERVER_OUTDATED : VERSION_MISMATCH;
             case NEGOTIATED -> !s.serverEnabled() ? serverOff(s.serverOffReason())
                     // Terrain reaches the maps, but the LOD renderer the player installed gets none.
-                    : s.mapOnly() && rendererInstalled(s) ? RENDERER_NOT_CONNECTED
-                    : s.mapOnly() && mapsBlocked(s) ? MAPS_BLOCKED : WORKING;
+                    : s.mapOnly() && rendererInstalled(s) ? unlessRendererIdle(s, RENDERER_NOT_CONNECTED)
+                    : s.mapOnly() && mapsBlocked(s) ? MAPS_BLOCKED
+                    // The terrain arrives; whether anything draws it is the renderer's to say.
+                    : unlessRendererIdle(s, WORKING);
         };
     }
 }

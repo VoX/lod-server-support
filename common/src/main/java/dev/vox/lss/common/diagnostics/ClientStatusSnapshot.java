@@ -11,7 +11,38 @@ public record ClientStatusSnapshot(int schemaVersion, long lifecycle, long captu
         int ingestBacklog, long ingestFailures, int rateCap, long rateGatedTicks,
         int xaeroPendingRebuilds, Discovery discovery, Availability xaeroAvailability, ClientDiagnosticSnapshot details, DiagnosticVersions versions, ClientSettingsStatus settings, DhStatusSnapshot dh,
         Availability journeyMapAvailability, int journeyMapPending, int farPlayersFromServer,
-        boolean mapOnly, int serverOffReason) {
+        boolean mapOnly, int serverOffReason, Renderer renderer) {
+    /** What the installed LOD renderer says about itself (0.23.0 plan §6), read by
+     *  {@link ClientVerdict} alone. {@code UNKNOWN} is "not asked or could not tell" and never
+     *  changes an answer. */
+    public enum Renderer {
+        UNKNOWN,
+        /** It runs and its drawing is switched on. */
+        READY,
+        /** It switched itself off for this computer (its graphics requirements are not met). */
+        UNSUPPORTED,
+        /** The player switched it, or its drawing, off in its own settings. */
+        SWITCHED_OFF
+    }
+    public ClientStatusSnapshot {
+        if (renderer == null) renderer = Renderer.UNKNOWN;
+    }
+    /** Callers that did not ask the LOD renderer about itself. */
+    public ClientStatusSnapshot(int schemaVersion, long lifecycle, long capturedAtMillis,
+            boolean connected, boolean negotiated, boolean receptionEnabled, boolean serverEnabled,
+            boolean consumerAvailable, boolean rendererAvailable, int protocol, int serverDistance,
+            int effectiveDistance, long receivedColumns, long receivedBytes, int queuedColumns,
+            int ingestBacklog, long ingestFailures, int rateCap, long rateGatedTicks,
+            int xaeroPendingRebuilds, Discovery discovery, Availability xaeroAvailability,
+            ClientDiagnosticSnapshot details, DiagnosticVersions versions, ClientSettingsStatus settings,
+            DhStatusSnapshot dh, Availability journeyMapAvailability, int journeyMapPending,
+            int farPlayersFromServer, boolean mapOnly, int serverOffReason) {
+        this(schemaVersion,lifecycle,capturedAtMillis,connected,negotiated,receptionEnabled,serverEnabled,
+                consumerAvailable,rendererAvailable,protocol,serverDistance,effectiveDistance,receivedColumns,
+                receivedBytes,queuedColumns,ingestBacklog,ingestFailures,rateCap,rateGatedTicks,xaeroPendingRebuilds,
+                discovery,xaeroAvailability,details,versions,settings,dh,journeyMapAvailability,journeyMapPending,
+                farPlayersFromServer,mapOnly,serverOffReason,Renderer.UNKNOWN);
+    }
     /** 4: settings.mapIngestionEnabled (was xaeroMapEnabled) and the JourneyMap fields.
      *  5: {@link Availability#SERVER_BLOCKED} (the server's map-ingestion request,
      *  map-policy plan A4).
