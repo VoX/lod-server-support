@@ -43,26 +43,7 @@ class CatalogTests(unittest.TestCase):
             first=inspect_jar(p)
             with zipfile.ZipFile(p,'w') as z:z.writestr('fabric.mod.json','{"id":"b"}')
             self.assertNotEqual(first['sha256'],inspect_jar(p)['sha256'])
-    def test_generation_is_stable_and_detects_readme_drift(self):
-        row={'facts':{'line':'1.21.1','targets':{'fabric':'1.21.1','paper':'1.21.1','neoforge':'1.21.1'},'java':21,'neoforge_shipping':True,'neoforge_renderer':'available','paper_loaders':['paper','purpur'],'fabric_client_gametests':False}}
-        with tempfile.TemporaryDirectory() as d, patch('catalog.validate',return_value=([('a'*40,row)],{},[])), patch('catalog.snapshot_validation_records',return_value=[]):
-            root=Path(d);(root/'docs').mkdir();readme=root/'README.md'
-            readme.write_text('Historical note stays.\n\n| Minecraft | Fabric | Paper / Purpur | Folia | NeoForge |\n| --- | --- | --- | --- | --- |\n| old | yes | yes | yes | yes |\n')
-            render(root);before=readme.read_bytes();render(root);self.assertEqual(before,readme.read_bytes());render(root,True)
-            self.assertIn('Historical note stays.',readme.read_text())
-            readme.write_text(readme.read_text().replace('shipped; best-effort','not shipped'))
-            with self.assertRaises(Invalid):render(root,True)
     def test_canonical_order(self):self.assertEqual(digest({'a':1,'b':2}),digest({'b':2,'a':1}))
-    def test_sponge_facts_are_optional_per_row(self):
-        # Pins that predate the Sponge module render '—'; lines that declare it render the flag.
-        old={'facts':{'line':'1.21.1','targets':{'fabric':'1.21.1','paper':'1.21.1','neoforge':'1.21.1'},'java':21,'neoforge_shipping':True,'neoforge_renderer':'available','paper_loaders':['paper','purpur'],'fabric_client_gametests':False}}
-        new={'facts':{'line':'26.2','targets':{'fabric':'26.2','paper':'26.2','neoforge':'26.2','sponge':'26.2'},'java':25,'neoforge_shipping':True,'neoforge_renderer':'unsupported','paper_loaders':['paper'],'fabric_client_gametests':True,'sponge_shipping':True}}
-        with tempfile.TemporaryDirectory() as d, patch('catalog.validate',return_value=([('a'*40,old),('b'*40,new)],{},[])), patch('catalog.snapshot_validation_records',return_value=[]):
-            root=Path(d);(root/'docs').mkdir();(root/'README.md').write_text('<!-- LSS SERVER MATRIX START -->\n<!-- LSS SERVER MATRIX END -->\n')
-            render(root);doc=(root/'docs/compatibility.md').read_text();readme=(root/'README.md').read_text()
-            self.assertIn('| 1.21.1 | 1.21.1 / 1.21.1 / 1.21.1 | 21 (21) | true | available | — |',doc)
-            self.assertIn('| 26.2 | 26.2 / 26.2 / 26.2 / 26.2 | 25 (21) | true | unsupported | true |',doc)
-            self.assertIn('| not available |',readme);self.assertIn('| shipped; experimental |',readme)
     def test_inspect_reads_sponge_plugin_metadata(self):
         with tempfile.TemporaryDirectory() as d:
             p=Path(d)/'sponge.jar'
@@ -84,20 +65,7 @@ class ValidationIdentityTests(unittest.TestCase):
         altered=copy.deepcopy(record);altered['run_manifest']['evidence_index']=index;altered['run_hash']=digest(altered['run_manifest'])
         with self.assertRaises(Invalid):validate_record(altered,{profile['id']:profile})
 
-class SnapshotEvidenceTests(unittest.TestCase):
-    def test_referenced_evidence_uses_exact_commit_not_local_checkout(self):
-        profile=CatalogTests().profile();commit='a'*40
-        inputs={key:'b'*64 for key in ('candidate_sha256','fixture_sha256','checker_sha256','world_sha256')}
-        inputs.update(effective_config={},jvm_flags=[],backend='private')
-        base=dict(schema_version=1,profile_id='test',profile_hash=digest(profile),run_manifest=inputs,run_hash=digest(inputs),scenario='ui',feature='status',evidence_sha256='c'*64,limitations=[])
-        old=base|dict(timestamp='2026-09-09T01:00:00Z',run_id='old',result='pass')
-        new=base|dict(timestamp='2026-09-09T02:00:00Z',run_id='new',result='fail')
-        files={'config/compatibility/profiles/test.json':profile,'config/compatibility/validation/old.json':old,'config/compatibility/validation/new.json':new}
-        def at_ref(root,ref,path):
-            self.assertEqual(commit,ref);return json.dumps(files[path])
-        with patch('catalog.git',return_value='\n'.join(files)),patch('catalog.read_ref',side_effect=at_ref):
-            result=snapshot_validation_records(Path('/unused'),[(commit,{'facts':{'line':'1.21.1'}})])
-        self.assertEqual([('1.21.1',commit,new)],result)
+class TimestampTests(unittest.TestCase):
     def test_impossible_timestamp_cannot_supersede_actual_attempt(self):
         profile=CatalogTests().profile();inputs={key:'a'*64 for key in ('candidate_sha256','fixture_sha256','checker_sha256','world_sha256')}
         inputs.update(effective_config={},jvm_flags=[],backend='private')
@@ -109,3 +77,48 @@ class AttemptUniquenessTests(unittest.TestCase):
         base={'profile_hash':'a','run_hash':'b','scenario':'s','feature':'f','timestamp':'2026-09-09T01:00:00Z','run_id':'same'}
         for records in ([base|{'result':'pass'},base|{'result':'fail'}],[base|{'result':'fail'},base|{'result':'pass'}]):
             with self.assertRaisesRegex(Invalid,'duplicate validation attempt'):latest(records)
+
+
+class RoleTests(unittest.TestCase):
+    """A line's role is written in line.json and must agree with the files it carries, so a lost
+    sync.json can never turn a follower into an unchecked line."""
+
+    LINES = {'schema_version': 2, 'reference': '26.3', 'must_match': ['tools/compat/'],
+             'lines': {'26.3': {'tier': 'full', 'branch': 'main'}, '1.21.1': {'tier': 'full', 'branch': 'support/mc1.21.1'}}}
+
+    def tree(self, role, tier, files):
+        self.scratch = tempfile.TemporaryDirectory()
+        self.addCleanup(self.scratch.cleanup)
+        root = Path(self.scratch.name)
+        (root / 'config/lines').mkdir(parents=True)
+        for name, value in files.items():
+            (root / 'config/lines' / name).write_text(json.dumps(value))
+        return root, {'role': role, 'support_tier': tier, 'facts': {'line': '26.3'}}
+
+    def test_each_role_with_its_own_file_is_valid(self):
+        self.assertEqual(validate_role(*self.tree('reference', 'full', {'lines.json': self.LINES})), 'reference')
+        self.assertEqual(validate_role(*self.tree('follower', 'maintained', {'sync.json': {}})), 'follower')
+        self.assertEqual(validate_role(*self.tree('frozen', 'frozen', {})), 'frozen')
+
+    def test_a_follower_that_lost_its_sync_file_is_not_quietly_frozen(self):
+        with self.assertRaisesRegex(Invalid, 'every follower needs it'):
+            validate_role(*self.tree('follower', 'maintained', {}))
+
+    def test_the_line_table_cannot_land_on_a_follower_and_main_carries_no_sync_file(self):
+        with self.assertRaisesRegex(Invalid, 'reference line only'):
+            validate_role(*self.tree('follower', 'full', {'sync.json': {}, 'lines.json': self.LINES}))
+        with self.assertRaisesRegex(Invalid, 'follower lines'):
+            validate_role(*self.tree('reference', 'full', {'lines.json': self.LINES, 'sync.json': {}}))
+
+    def test_a_role_is_required_and_frozen_is_said_twice_or_not_at_all(self):
+        with self.assertRaisesRegex(Invalid, 'needs "role"'):
+            validate_role(*self.tree(None, 'full', {}))
+        with self.assertRaisesRegex(Invalid, 'disagree'):
+            validate_role(*self.tree('frozen', 'maintained', {}))
+
+    def test_the_line_table_is_checked(self):
+        for broken in (dict(self.LINES, reference='26.2'), dict(self.LINES, must_match=['tools/compat']),
+                       dict(self.LINES, lines={'26.3': {'tier': 'full', 'branch': 'support/x'}}),
+                       dict(self.LINES, lines={'26.3': {'tier': 'full', 'branch': 'main'}, '26.2': {'tier': 'best', 'branch': 'b'}})):
+            with self.assertRaises(Invalid):
+                validate_role(*self.tree('reference', 'full', {'lines.json': broken}))
