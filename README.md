@@ -10,18 +10,18 @@ https://github.com/user-attachments/assets/721fb344-890e-4e03-ab36-539444427f7b
 
 Use the matching Fabric or shipped NeoForge artifact. Server support and renderer availability are separate; see the generated [compatibility matrix](docs/compatibility.md). Supported servers:
 
-<!-- LSS SERVER MATRIX START -->
-| Minecraft line | Fabric / Paper | Folia | NeoForge shipping | Neo far renderer | Sponge |
-| --- | --- | --- | --- | --- | --- |
-| 1.21.1 | maintained | unsupported | shipped; best-effort | available | shipped; experimental |
-| 1.21.10 | maintained | unsupported | maintained build only | unsupported | shipped; experimental |
-| 1.21.11 | maintained | experimental | maintained build only | unsupported | shipped; experimental |
-| 26.1 | maintained | experimental | shipped; best-effort | unsupported | shipped; experimental |
-| 26.2 | maintained | experimental | shipped; best-effort | unsupported | shipped; experimental |
-| 26.3 | maintained | experimental | shipped; best-effort | unsupported | shipped; experimental |
-<!-- LSS SERVER MATRIX END -->
+| Minecraft | Support | Fabric, Paper | Folia | NeoForge | Far players on a NeoForge client | Sponge |
+| --- | --- | --- | --- | --- | --- | --- |
+| 26.3 | full | yes | experimental | yes | no | experimental |
+| 1.21.1 | full | yes | no | yes | yes | up to 0.21.0 |
+| 26.2 | maintained | yes | experimental | yes | no | up to 0.21.0 |
+| 1.21.11 | maintained | yes | experimental | no | no | up to 0.21.0 |
+| 26.1 | frozen at 0.21.0 | yes | experimental | yes | no | 0.21.0 |
+| 1.21.10 | frozen at 0.21.0 | yes | no | no | no | 0.21.0 |
 
-**Sponge (experimental):** a SpongeVanilla server plugin ships on the lines the matrix marks shipped. It speaks the same wire as every other server, so any Fabric or NeoForge client with LSS joins it normally. On SpongeNeo, use the NeoForge jar instead, on lines that ship one (see the matrix). SpongeForge is not supported.
+**Support:** *full* versions get every release, including betas. *Maintained* versions get every stable release: fixes, and new features where they port cleanly. *Frozen* versions keep 0.21.0 and get crash and security fixes only. From 0.22.0 the Sponge plugin is built for 26.3 only. Details: [compatibility](docs/compatibility.md).
+
+**Sponge (experimental):** a SpongeVanilla server plugin ships for 26.3 (0.21.0 and older also shipped it for the other versions). It speaks the same wire as every other server, so any Fabric or NeoForge client with LSS joins it normally. On SpongeNeo, use the NeoForge jar instead, on lines that ship one (see the matrix). SpongeForge is not supported.
 
 NeoForge 1.21.1 has distinct native and Connector dependency routes. The recorded 2026-09-08 native Voxy 0.2.9-alpha trial was rejected; older successful reports do not establish current compatibility or its failure's upstream cause. Xaero-only legacy Sodium and the modern Connector Voxy route are separate profiles. Use the [dated profile inventory](docs/testing/astra-live-profiles.md) and exact dependency locks; do not combine their jars by filename.
 
@@ -221,8 +221,6 @@ See [current performance diagnosis and tuning](docs/operations/performance.md) f
 
 This mod is MIT-licensed, redistribution with attribution is welcome, and modpacks can reference the official Modrinth project directly. Per Modrinth's reupload policy: [XANTHA](https://modrinth.com/user/XANTHA) via [Voxy Server Side](https://modrinth.com/plugin/voxy-server-side) has the copyright holder's explicit permission to distribute this mod, and derivatives of it, on Modrinth.
 
-<!-- LSS COMPATIBILITY START -->
-Current platform, shipping and renderer facts: [compatibility matrix](docs/compatibility.md). Dependency locks describe candidates; dated feature evidence establishes tested combinations.
-<!-- LSS COMPATIBILITY END -->
+Per-version platform and support details: [compatibility](docs/compatibility.md).
 
 Thanks to SeeU for the inspiration for distant player rendering.

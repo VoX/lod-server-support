@@ -1,5 +1,20 @@
 # Known test flakes and environmental failures
 
+## The rule
+
+A red is explained, not retried. No retry, longer deadline or looser assertion goes in without a
+named mechanism and a test that is red without the fix. 22 of the first 36 entries below ended in a
+code fix, three of them in the mod itself, and a loosened assertion once hid a test that tested
+nothing for three months.
+
+CI retries a failed step once only when every failure of the first attempt matches an open entry in
+`config/test-flakes.json` (`tools/verify/flake_gate.py`). An entry names a cause that cannot be
+fixed in this repository yet and carries an expiry date; past it, the entry allows nothing until the
+cause is fixed or the entry is renewed with a reason. The first attempt's logs are always kept.
+Everything below is the record of what each signature turned out to be.
+
+## Entries
+
 - **`XaeroLoadPixelParityTest` (16 tests) and `JourneyMapDecoderParityTest` (3 tests), `AssertionError` in Mockito's `MockUtil.getMockHandlerOrNull` (Fabric, Tier 1): a second mock maker in the test JVM, FIXED 2026-11-12 (0.21.0 train). Not a flake: 19 reds in one 26.1 full gate, green on the re-run.**
   - **Signature.** `java.lang.AssertionError` with no message at `org.mockito.internal.util.MockUtil.getMockHandlerOrNull(MockUtil.java:160)`, reached from the first `thenReturn` on a mocked `Level` (`XaeroLoadPixelParityTest.assertParity`, `JourneyMapDecoderParityTest.decode`). Every test that stubs a `Level` fails and nothing else does.
   - **Mechanism.** `DhClientSessionTest` built its Minecraft doubles with `withSettings().mockMaker(MockMakers.SUBCLASS)`. Naming a maker registers it for the whole JVM, beside the default inline maker. To find a mock's handler, Mockito 5.20.0 asks each registered maker in the iteration order of a hash map keyed by the maker's `Class`, and asserts that the first maker to recognise the mock is the one that made it. The subclass maker recognises every generated subclass (`mock instanceof MockAccess`), and a generated subclass is what the inline maker builds for an abstract type or an interface. `Level` is abstract. Once the subclass maker was registered, a stubbing on `mock(Level.class)` threw when that maker was walked first and passed when it was not: the identity hashes of two `Class` objects decide. A mock of a concrete class is an instance of that class, which the subclass maker does not recognise, so `VoxyVanillaCoverageTest` and `ChunkDiskReaderTest` stayed green in the same JVM.

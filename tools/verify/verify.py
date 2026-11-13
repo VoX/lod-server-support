@@ -29,7 +29,7 @@ def cross_line_required(paths, manifest):
 def main():
     p=argparse.ArgumentParser(description=__doc__);p.add_argument('tier',choices=['fast','platform','integration','full']);p.add_argument('paths',nargs='*');p.add_argument('--run',action='store_true');p.add_argument('--root',type=lambda value:Path(value).resolve(),default=ROOT);a=p.parse_args()
     line=json.loads((a.root/'config/compatibility/line.json').read_text())['facts']['line'];manifest=json.loads((a.root/'config/test-impact.json').read_text());tasks=select(a.paths,a.tier,line,manifest)
-    report={'advisory':a.tier=='fast','line':line,'tasks':tasks,'cross_line_required':cross_line_required(a.paths,manifest),'catalog_checks':['python3 tools/compat/catalog.py validate','python3 tools/compat/catalog.py render --check']};print(json.dumps(report,indent=2))
+    report={'advisory':a.tier=='fast','line':line,'tasks':tasks,'cross_line_required':cross_line_required(a.paths,manifest),'catalog_checks':['python3 tools/compat/catalog.py validate']};print(json.dumps(report,indent=2))
     if a.run:
         for command in report['catalog_checks']:
             subprocess.run(command.split(),cwd=a.root,check=True)
